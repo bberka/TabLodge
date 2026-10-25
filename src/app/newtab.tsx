@@ -17,30 +17,27 @@ import {
 	Download,
 	ExternalLink,
 	GripVertical,
-	Link2,
 	MoreHorizontal,
 	Pencil,
 	Plus,
-	Info,
 	Search,
 	Settings2,
+	Share2,
 	Trash2,
 	PanelsTopLeft,
 	Copy,
 	FolderInput,
 	SquareArrowOutUpRight,
 	Upload,
+	Zap,
 } from 'lucide-react';
 import {
+	ActionContextMenu,
+	ActionDropdownMenu,
 	Badge,
 	Button,
 	Checkbox,
 	ConfirmationDialog,
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -48,11 +45,6 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
 	Input,
 	Label,
 	Select,
@@ -63,12 +55,13 @@ import {
 	TooltipProvider,
 	IconTooltip,
 	ExpandingSearch,
+	type MenuAction,
 } from '../shared/ui';
 import type {ButtonProps} from '../components/ui/button';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {
-	Brand,
+	AppHeader,
 	EmptyState,
 	StatusLine,
 	send,
@@ -76,7 +69,8 @@ import {
 	useTabLodgeState,
 } from './common';
 import {SessionManager} from './dashboard';
-import {BackupDialog, ImportDialog} from './data-transfer';
+import {BackupDialog, ImportDialog, useShareDialog} from './data-transfer';
+import {openLink} from './link-target';
 import type {ExportData} from './export-formats';
 import {
 	initialSearchQuery,
@@ -104,6 +98,7 @@ import {PROJECT} from './project';
 type DialogKind = 'bookmark' | 'column' | 'move';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 type BookmarkAction =
+	| 'click'
 	| 'open'
 	| 'open-new'
 	| 'edit'
@@ -144,6 +139,10 @@ type ColumnDeletion = {
 type ConfirmationRequest = {
 	title: string;
 	description: string;
+	/**
+	Small muted line naming the item (truncated).
+	*/
+	detail?: string;
 	confirmLabel?: string;
 	confirmVariant?: ButtonProps['variant'];
 	run: () => Promise<void> | void;
@@ -224,6 +223,7 @@ function NewTab() {
 	const [columnDeletionOpen, setColumnDeletionOpen] = useState(false);
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const confirmFocusRef = useRef<HTMLElement | null>(null);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
@@ -240,6 +240,11 @@ function NewTab() {
 	const bookmarksEnabled = settings.bookmarksEnabled !== false;
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
+	const urlMode = settings.urlDisplayMode ?? 'full';
+	const quickActions = settings.showBookmarkQuickActions === true;
+	const sessionsVisible = enabled && sessionsEnabled;
+	const bothVisible = sessionsVisible && bookmarksEnabled;
+	const sessionsOnTop = bothVisible && settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
 		const needle = bookmarkSearch.trim().toLocaleLowerCase();
 		return bookmarks.filter(
@@ -675,13 +680,22 @@ function NewTab() {
 	}
 
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
-		if (action === 'open') {
-			globalThis.location.assign(bookmark.url);
-			return;
-		}
+		if (['click', 'open', 'open-new'].includes(action)) {
+			try {
+				await openLink(
+					bookmark.url,
+					'bookmark',
+					state!.settings,
+					action === 'open'
+						? 'current'
+						: action === 'open-new'
+							? 'new'
+							: undefined,
+				);
+			} catch {
+				showStatus('That link could not be opened.', true);
+			}
 
-		if (action === 'open-new') {
-			await chrome.tabs.create({url: bookmark.url});
 			return;
 		}
 
@@ -711,8 +725,9 @@ function NewTab() {
 
 		if (action === 'delete') {
 			askConfirmation({
-				title: `Delete “${bookmark.title}”?`,
-				description: `This permanently removes the bookmark from ${PROJECT.name}.`,
+				title: 'Delete bookmark?',
+				description: 'This removes the bookmark. It can’t be undone.',
+				detail: bookmark.title || bookmark.url,
 				confirmLabel: 'Delete bookmark',
 				async run() {
 					const result = await send('DELETE_BOOKMARK', {
@@ -858,7 +873,7 @@ function NewTab() {
 			.filter((bookmark) => bookmark.columnId === column.id)
 			.map((bookmark) => bookmark.url);
 		if (urls.length === 0) {
-			showStatus(`“${column.name}” has no bookmarks to open.`, true);
+			showStatus('This column has no bookmarks to open.', true);
 			return;
 		}
 
@@ -876,7 +891,8 @@ function NewTab() {
 
 		askConfirmation({
 			title: `Open ${urls.length} tabs?`,
-			description: `Every bookmark in “${column.name}” opens in a background tab.`,
+			description: 'Every bookmark in this column opens in a background tab.',
+			detail: column.name,
 			confirmLabel: `Open ${urls.length} tabs`,
 			confirmVariant: 'default',
 			run: open,
@@ -890,6 +906,38 @@ function NewTab() {
 		}
 
 		setBackupData({kind: 'bookmarks', columns, bookmarks});
+	}
+
+	function shareBookmarks(column?: BookmarkColumnData) {
+		const groupFor = (entry: BookmarkColumnData | ColumnRef) => ({
+			name: entry.name,
+			tabs: bookmarks.filter((bookmark) => bookmark.columnId === entry.id),
+		});
+		const everything = [
+			...columns.map((entry) => groupFor(entry)),
+			groupFor(UNFILED_COLUMN),
+		].filter((group) => group.tabs.length > 0);
+		openShare({
+			title: column ? column.name : 'Shared bookmarks',
+			sources: [
+				...(column
+					? [
+							{
+								id: 'column',
+								label: column.name,
+								description: plural(groupFor(column).tabs.length, 'bookmark'),
+								groups: [groupFor(column)],
+							},
+						]
+					: []),
+				{
+					id: 'all',
+					label: 'All bookmarks',
+					description: plural(bookmarks.length, 'bookmark'),
+					groups: everything,
+				},
+			],
+		});
 	}
 
 	// While loading, the page stays blank (just the themed background) so new tabs open without a flash of text.
@@ -911,42 +959,244 @@ function NewTab() {
 		);
 	}
 
+	const bookmarksSection = bookmarksEnabled ? (
+		<section
+			id="bookmark-library"
+			className="scroll-mt-6"
+			aria-labelledby="bookmark-title"
+		>
+			<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+				<div className="flex items-center gap-2">
+					<h2
+						data-focus-fallback
+						id="bookmark-title"
+						tabIndex={-1}
+						className="text-lg font-semibold tracking-tight"
+					>
+						Bookmarks
+					</h2>
+					<Badge variant="accent">{bookmarks.length}</Badge>
+				</div>
+				<div className="flex flex-wrap items-center gap-1">
+					<ExpandingSearch
+						label="Search bookmarks"
+						value={bookmarkSearch}
+						onChange={setBookmarkSearch}
+					/>
+					<IconTooltip label="Add bookmark">
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-8 w-8"
+							aria-label="Add bookmark"
+							onClick={() => openBookmarkEditor()}
+						>
+							<BookmarkPlus />
+						</Button>
+					</IconTooltip>
+					<IconTooltip label="Add column">
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-8 w-8"
+							aria-label="Add column"
+							onClick={() => openColumnEditor()}
+						>
+							<Plus />
+						</Button>
+					</IconTooltip>
+					<ActionDropdownMenu
+						trigger={
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8"
+								aria-label="Import, back up and share bookmarks"
+							>
+								<MoreHorizontal />
+							</Button>
+						}
+						actions={[
+							{
+								id: 'import',
+								label: 'Import bookmarks',
+								icon: Upload,
+								onSelect: () => setImportOpen(true),
+							},
+							{
+								id: 'backup',
+								label: 'Back up bookmarks',
+								icon: Download,
+								onSelect: openBookmarkBackup,
+							},
+							{
+								id: 'share',
+								label: 'Share bookmarks',
+								icon: Share2,
+								disabled: bookmarks.length === 0,
+								onSelect: () => shareBookmarks(),
+							},
+						]}
+					/>
+				</div>
+			</div>
+			{bookmarkSearch.trim() && filteredBookmarks.length === 0 ? (
+				<EmptyState icon={Search} title="No bookmarks match">
+					Search titles, web addresses, and domains.
+				</EmptyState>
+			) : (
+				<div
+					className={`grid gap-4 sm:grid-cols-2 xl:grid-cols-3 ${stretchColumns ? 'items-stretch' : 'items-start'}`}
+				>
+					{columns.map((column, columnIndex) => (
+						<BookmarkColumn
+							key={column.id}
+							column={column}
+							index={columnIndex}
+							columns={columns}
+							bookmarks={filteredBookmarks.filter(
+								(bookmark) => bookmark.columnId === column.id,
+							)}
+							allBookmarks={bookmarks}
+							dropIndicator={
+								columnDropIndicator?.columnId === column.id
+									? columnDropIndicator
+									: null
+							}
+							urlMode={urlMode}
+							quickActions={quickActions}
+							onAction={bookmarkAction}
+							onShare={() => shareBookmarks(column)}
+							onAdd={() => openBookmarkEditor(null, column.id)}
+							onOpenAll={() => openAllInColumn(column)}
+							onEdit={() => openColumnEditor(column)}
+							onDelete={() => deleteColumn(column)}
+							onMove={(offset) => moveColumnBy(column, offset)}
+							onPointerDown={(event) =>
+								beginColumnPointerDrag(event, column.id)
+							}
+							onDropOver={setColumnDropIndicator}
+							onDrop={(event) => dropOnColumn(event, column)}
+							onDragStart={handleInternalDragStart}
+							onDragEnd={() => {
+								handleInternalDragEnd();
+								setColumnDropIndicator(null);
+							}}
+						/>
+					))}
+					{(bookmarks.some(
+						(bookmark) => bookmark.columnId === 'bookmark-unfiled',
+					) ||
+						columns.length === 0) && (
+						<section
+							data-column-id={UNFILED_COLUMN.id}
+							aria-label="Unfiled bookmarks"
+							className={`flex min-w-0 flex-col rounded-lg border border-border bg-card p-3 ${columnDropIndicator?.columnId === UNFILED_COLUMN.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+							onDragOver={(event) =>
+								previewBookmarkDrop(
+									event,
+									UNFILED_COLUMN.id,
+									setColumnDropIndicator,
+									false,
+								)
+							}
+							onDragLeave={(event) => {
+								if (
+									!event.currentTarget.contains(
+										event.relatedTarget as Node | null,
+									)
+								) {
+									setColumnDropIndicator(null);
+								}
+							}}
+							onDrop={(event) => {
+								if (!acceptsDrop(event, false)) {
+									return;
+								}
+
+								event.preventDefault();
+								void dropOnColumn(event, UNFILED_COLUMN);
+							}}
+							onDragStart={handleInternalDragStart}
+							onDragEnd={() => {
+								handleInternalDragEnd();
+								setColumnDropIndicator(null);
+							}}
+						>
+							<h3 className="mb-3 text-sm font-semibold">Unfiled</h3>
+							{filteredBookmarks.some(
+								(bookmark) => bookmark.columnId === 'bookmark-unfiled',
+							) ? (
+								<div className="space-y-1">
+									{filteredBookmarks
+										.filter(
+											(bookmark) => bookmark.columnId === 'bookmark-unfiled',
+										)
+										.map((bookmark) => {
+											const drop =
+												columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
+												columnDropIndicator.targetBookmarkId === bookmark.id
+													? columnDropIndicator
+													: null;
+											return (
+												<BookmarkCard
+													key={bookmark.id}
+													bookmark={bookmark}
+													index={0}
+													count={0}
+													dropBefore={drop?.position === 'before'}
+													dropAfter={drop?.position === 'after'}
+													dropActive={Boolean(drop)}
+													urlMode={urlMode}
+													quickActions={quickActions}
+													onAction={bookmarkAction}
+												/>
+											);
+										})}
+								</div>
+							) : (
+								<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
+									No columns yet. New bookmarks will be kept here until you add
+									a column.
+								</p>
+							)}
+						</section>
+					)}
+				</div>
+			)}
+			{bookmarks.length === 0 && (
+				<div className="mt-4 rounded-md border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground">
+					Tip: drag a link from your browser onto a column to save it.
+				</div>
+			)}
+		</section>
+	) : null;
+	const sessionsSection = sessionsVisible ? (
+		<section id="sessions" className="scroll-mt-6">
+			<SessionManager embedded initialQuery={initialQuery} />
+		</section>
+	) : null;
+
 	return (
 		<main
 			data-brand="tablodge"
 			className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8 sm:py-9"
 		>
-			<header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-				<div className="flex items-center gap-3">
-					<Brand />
-					<span className="h-5 w-px bg-border" aria-hidden="true" />
-					<span className="text-sm font-normal text-muted-foreground">
-						Dashboard
-					</span>
-				</div>
-				<div className="flex items-center gap-1.5">
-					{enabled && sessionsEnabled && (
-						<Button size="sm" disabled={busy !== ''} onClick={saveWindow}>
-							<PanelsTopLeft />
-							{busy === 'save-window' ? 'Saving…' : 'Save this window'}
-						</Button>
-					)}
-					<IconTooltip label="Help">
-						<Button asChild variant="ghost" size="icon" className="h-8 w-8">
-							<a href="help.html" aria-label="Help">
-								<Info />
-							</a>
-						</Button>
-					</IconTooltip>
-					<IconTooltip label={`${PROJECT.name} settings`}>
-						<Button asChild variant="ghost" size="icon" className="h-8 w-8">
-							<a href="options.html" aria-label={`${PROJECT.name} settings`}>
-								<Settings2 />
-							</a>
-						</Button>
-					</IconTooltip>
-				</div>
-			</header>
+			<AppHeader active="dashboard">
+				{sessionsVisible && (
+					<Button
+						size="sm"
+						disabled={busy !== ''}
+						aria-label="Save this window"
+						onClick={saveWindow}
+					>
+						<PanelsTopLeft />
+						<span className="hidden sm:inline">
+							{busy === 'save-window' ? 'Saving' : 'Save this window'}
+						</span>
+					</Button>
+				)}
+			</AppHeader>
 
 			{!enabled && (
 				<section className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-5">
@@ -962,7 +1212,7 @@ function NewTab() {
 							onClick={openDefaultNewTab}
 						>
 							{busy === 'default-page'
-								? 'Opening…'
+								? 'Opening'
 								: 'Open browser’s new-tab page'}
 						</Button>
 						<Button asChild variant="outline">
@@ -974,218 +1224,9 @@ function NewTab() {
 					</div>
 				</section>
 			)}
-			{enabled && !sessionsEnabled && (
-				<section className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-					Sessions are disabled. Your saved data is retained in local storage.
-				</section>
-			)}
-
-			{bookmarksEnabled && (
-				<section
-					id="bookmark-library"
-					className="scroll-mt-6"
-					aria-labelledby="bookmark-title"
-				>
-					<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-						<div className="flex items-center gap-2">
-							<h2
-								data-focus-fallback
-								id="bookmark-title"
-								tabIndex={-1}
-								className="text-lg font-semibold tracking-tight"
-							>
-								Bookmarks
-							</h2>
-							<Badge variant="accent">{bookmarks.length}</Badge>
-						</div>
-						<div className="flex flex-wrap items-center gap-1">
-							<ExpandingSearch
-								label="Search bookmarks"
-								value={bookmarkSearch}
-								onChange={setBookmarkSearch}
-							/>
-							<IconTooltip label="Add bookmark">
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-8 w-8"
-									aria-label="Add bookmark"
-									onClick={() => openBookmarkEditor()}
-								>
-									<BookmarkPlus />
-								</Button>
-							</IconTooltip>
-							<IconTooltip label="Add column">
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-8 w-8"
-									aria-label="Add column"
-									onClick={() => openColumnEditor()}
-								>
-									<Plus />
-								</Button>
-							</IconTooltip>
-							<DropdownMenu>
-								<IconTooltip label="Import and back up bookmarks">
-									<DropdownMenuTrigger asChild>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-8 w-8"
-											aria-label="Import and back up bookmarks"
-										>
-											<MoreHorizontal />
-										</Button>
-									</DropdownMenuTrigger>
-								</IconTooltip>
-								<DropdownMenuContent align="end">
-									<DropdownMenuItem onSelect={() => setImportOpen(true)}>
-										<Upload className="h-4 w-4" />
-										Import bookmarks…
-									</DropdownMenuItem>
-									<DropdownMenuItem onSelect={openBookmarkBackup}>
-										<Download className="h-4 w-4" />
-										Back up bookmarks…
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
-						</div>
-					</div>
-					{bookmarkSearch.trim() && filteredBookmarks.length === 0 ? (
-						<EmptyState icon={Search} title="No bookmarks match">
-							Search titles, web addresses, and domains.
-						</EmptyState>
-					) : (
-						<div
-							className={`grid gap-4 sm:grid-cols-2 xl:grid-cols-3 ${stretchColumns ? 'items-stretch' : 'items-start'}`}
-						>
-							{columns.map((column, columnIndex) => (
-								<BookmarkColumn
-									key={column.id}
-									column={column}
-									index={columnIndex}
-									columns={columns}
-									bookmarks={filteredBookmarks.filter(
-										(bookmark) => bookmark.columnId === column.id,
-									)}
-									allBookmarks={bookmarks}
-									dropIndicator={
-										columnDropIndicator?.columnId === column.id
-											? columnDropIndicator
-											: null
-									}
-									onAction={bookmarkAction}
-									onAdd={() => openBookmarkEditor(null, column.id)}
-									onOpenAll={() => openAllInColumn(column)}
-									onEdit={() => openColumnEditor(column)}
-									onDelete={() => deleteColumn(column)}
-									onMove={(offset) => moveColumnBy(column, offset)}
-									onPointerDown={(event) =>
-										beginColumnPointerDrag(event, column.id)
-									}
-									onDropOver={setColumnDropIndicator}
-									onDrop={(event) => dropOnColumn(event, column)}
-									onDragStart={handleInternalDragStart}
-									onDragEnd={() => {
-										handleInternalDragEnd();
-										setColumnDropIndicator(null);
-									}}
-								/>
-							))}
-							{(bookmarks.some(
-								(bookmark) => bookmark.columnId === 'bookmark-unfiled',
-							) ||
-								columns.length === 0) && (
-								<section
-									data-column-id={UNFILED_COLUMN.id}
-									aria-label="Unfiled bookmarks"
-									className={`flex min-w-0 flex-col rounded-lg border border-border bg-card p-3 ${columnDropIndicator?.columnId === UNFILED_COLUMN.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
-									onDragOver={(event) =>
-										previewBookmarkDrop(
-											event,
-											UNFILED_COLUMN.id,
-											setColumnDropIndicator,
-											false,
-										)
-									}
-									onDragLeave={(event) => {
-										if (
-											!event.currentTarget.contains(
-												event.relatedTarget as Node | null,
-											)
-										) {
-											setColumnDropIndicator(null);
-										}
-									}}
-									onDrop={(event) => {
-										if (!acceptsDrop(event, false)) {
-											return;
-										}
-
-										event.preventDefault();
-										void dropOnColumn(event, UNFILED_COLUMN);
-									}}
-									onDragStart={handleInternalDragStart}
-									onDragEnd={() => {
-										handleInternalDragEnd();
-										setColumnDropIndicator(null);
-									}}
-								>
-									<h3 className="mb-3 text-sm font-semibold">Unfiled</h3>
-									{filteredBookmarks.some(
-										(bookmark) => bookmark.columnId === 'bookmark-unfiled',
-									) ? (
-										<div className="space-y-1">
-											{filteredBookmarks
-												.filter(
-													(bookmark) =>
-														bookmark.columnId === 'bookmark-unfiled',
-												)
-												.map((bookmark) => {
-													const drop =
-														columnDropIndicator?.columnId ===
-															UNFILED_COLUMN.id &&
-														columnDropIndicator.targetBookmarkId === bookmark.id
-															? columnDropIndicator
-															: null;
-													return (
-														<BookmarkCard
-															key={bookmark.id}
-															bookmark={bookmark}
-															index={0}
-															count={0}
-															dropBefore={drop?.position === 'before'}
-															dropAfter={drop?.position === 'after'}
-															dropActive={Boolean(drop)}
-															onAction={bookmarkAction}
-														/>
-													);
-												})}
-										</div>
-									) : (
-										<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
-											No columns yet. New bookmarks will be kept here until you
-											add a column.
-										</p>
-									)}
-								</section>
-							)}
-						</div>
-					)}
-					{bookmarks.length === 0 && (
-						<div className="mt-4 rounded-md border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground">
-							Tip: drag a link from your browser onto a column to save it.
-						</div>
-					)}
-				</section>
-			)}
-
-			{enabled && sessionsEnabled && (
-				<section id="sessions" className="mt-10 border-t border-border pt-8">
-					<SessionManager embedded initialQuery={initialQuery} />
-				</section>
-			)}
+			{sessionsOnTop ? sessionsSection : bookmarksSection}
+			{bothVisible && <hr className="my-8 border-border" aria-hidden="true" />}
+			{sessionsOnTop ? bookmarksSection : sessionsSection}
 			<StatusLine status={error ? {message: error, error: true} : status} />
 
 			<ConfirmationDialog
@@ -1198,7 +1239,9 @@ function NewTab() {
 				restoreFocusTo={confirmFocusRef.current}
 				onOpenChange={(open) => !open && setConfirmation(null)}
 				onConfirm={runConfirmation}
-			/>
+			>
+				{confirmation?.detail && <ItemName>{confirmation.detail}</ItemName>}
+			</ConfirmationDialog>
 			<ColumnDeletionDialog
 				deletion={columnDeletion}
 				open={columnDeletionOpen}
@@ -1211,7 +1254,9 @@ function NewTab() {
 				}
 				onConfirm={confirmDeleteColumn}
 			/>
+			{shareDialog}
 			<BackupDialog
+				state={state}
 				data={backupData}
 				open={Boolean(backupData)}
 				showStatus={showStatus}
@@ -1291,7 +1336,7 @@ function NewTab() {
 											</SelectItem>
 										))}
 										<SelectItem value="bookmark-unfiled">Unfiled</SelectItem>
-										<SelectItem value={NEW_COLUMN}>New column…</SelectItem>
+										<SelectItem value={NEW_COLUMN}>New column</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
@@ -1386,13 +1431,13 @@ function NewTab() {
 				<DialogContent size="sm">
 					<form onSubmit={moveBookmarkToColumn}>
 						<DialogHeader>
-							<DialogTitle>Move bookmark</DialogTitle>
+							<DialogTitle>Move bookmark to</DialogTitle>
 							<DialogDescription>
-								Move “{moveBookmark?.title}” to another column. It goes to the
-								end of that column.
+								It goes to the end of the column you choose.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
+							<ItemName>{moveBookmark?.title}</ItemName>
 							<div className="space-y-1.5">
 								<Label htmlFor="move-bookmark-column">Column</Label>
 								<Select
@@ -1467,7 +1512,7 @@ function ColumnDeletionDialog({
 	return (
 		<ConfirmationDialog
 			open={open}
-			title={name ? `Delete “${name}”?` : 'Delete this column?'}
+			title="Delete column?"
 			description={description}
 			confirmLabel={
 				discard ? `Delete column and ${bookmarkCount(count)}` : 'Delete column'
@@ -1477,6 +1522,7 @@ function ColumnDeletionDialog({
 			onOpenChange={onOpenChange}
 			onConfirm={onConfirm}
 		>
+			{name && <ItemName>{name}</ItemName>}
 			{count > 0 && (
 				<>
 					{moving && (
@@ -1629,9 +1675,78 @@ function handleInternalDragStart(event: DragEvent<HTMLElement>) {
 		event.dataTransfer.effectAllowed = 'move';
 	} else if (card) {
 		card.classList.add('is-dragging');
+		setBookmarkDragImage(event, card);
 		event.dataTransfer.setData(BOOKMARK_DRAG_TYPE, card.dataset.bookmarkId!);
 		event.dataTransfer.effectAllowed = 'move';
 	}
+}
+
+// A compact rounded card (favicon, title, domain) replaces the browser's default drag ghost.
+function setBookmarkDragImage(
+	event: DragEvent<HTMLElement>,
+	card: HTMLElement,
+) {
+	const title = card.dataset.bookmarkTitle || '';
+	const domain = card.dataset.bookmarkDomain || '';
+	const ghost = document.createElement('div');
+	Object.assign(ghost.style, {
+		position: 'fixed',
+		top: '-1000px',
+		left: '-1000px',
+		display: 'flex',
+		alignItems: 'center',
+		gap: '10px',
+		width: '260px',
+		padding: '8px 12px',
+		borderRadius: '10px',
+		border: '1px solid rgb(var(--border))',
+		background: 'rgb(var(--card))',
+		color: 'rgb(var(--foreground))',
+		boxShadow: '0 8px 24px rgb(0 0 0 / 0.25)',
+		font: '13px/1.3 system-ui, sans-serif',
+		pointerEvents: 'none',
+	});
+	const icon = card.querySelector<HTMLImageElement>('img[data-favicon]');
+	const mark = document.createElement(icon ? 'img' : 'span');
+	if (icon && mark instanceof HTMLImageElement) {
+		mark.src = icon.src;
+	} else {
+		mark.textContent = (domain[0] || '↗').toUpperCase();
+	}
+
+	Object.assign(mark.style, {
+		width: '24px',
+		height: '24px',
+		flex: 'none',
+		objectFit: 'contain',
+		textAlign: 'center',
+		lineHeight: '24px',
+		fontWeight: '700',
+	});
+	const text = document.createElement('div');
+	text.style.minWidth = '0';
+	const strong = document.createElement('div');
+	strong.textContent = title;
+	Object.assign(strong.style, {
+		fontWeight: '600',
+		overflow: 'hidden',
+		textOverflow: 'ellipsis',
+		whiteSpace: 'nowrap',
+	});
+	const small = document.createElement('div');
+	small.textContent = domain;
+	Object.assign(small.style, {
+		fontSize: '11px',
+		color: 'rgb(var(--muted-foreground))',
+		overflow: 'hidden',
+		textOverflow: 'ellipsis',
+		whiteSpace: 'nowrap',
+	});
+	text.append(strong, small);
+	ghost.append(mark, text);
+	document.body.append(ghost);
+	event.dataTransfer.setDragImage(ghost, 24, 24);
+	setTimeout(() => ghost.remove(), 0);
 }
 
 function handleInternalDragEnd() {
@@ -1647,6 +1762,9 @@ type BookmarkColumnProps = {
 	bookmarks: Bookmark[];
 	allBookmarks: Bookmark[];
 	onAction: OnBookmarkAction;
+	urlMode: NonNullable<Settings['urlDisplayMode']>;
+	quickActions: boolean;
+	onShare: () => void;
 	onAdd: () => void;
 	onOpenAll: () => void;
 	onEdit: () => void;
@@ -1667,6 +1785,9 @@ function BookmarkColumn({
 	bookmarks,
 	allBookmarks,
 	onAction,
+	urlMode,
+	quickActions,
+	onShare,
 	onAdd,
 	onOpenAll,
 	onEdit,
@@ -1688,6 +1809,52 @@ function BookmarkColumn({
 		}
 	}
 
+	const columnActions: MenuAction[] = [
+		{
+			id: 'open-all',
+			label: 'Open all in new tabs',
+			icon: SquareArrowOutUpRight,
+			disabled: siblings.length === 0,
+			onSelect: onOpenAll,
+		},
+		{
+			id: 'add',
+			label: 'Add bookmark here',
+			icon: BookmarkPlus,
+			onSelect: onAdd,
+		},
+		{
+			id: 'share',
+			label: 'Share',
+			icon: Share2,
+			disabled: siblings.length === 0,
+			onSelect: onShare,
+		},
+		{type: 'separator'},
+		{id: 'rename', label: 'Rename column', icon: Pencil, onSelect: onEdit},
+		{
+			id: 'move-left',
+			label: 'Move column left',
+			icon: ArrowLeft,
+			disabled: index <= 0,
+			onSelect: () => onMove(-1),
+		},
+		{
+			id: 'move-right',
+			label: 'Move column right',
+			icon: ArrowRight,
+			disabled: index >= columns.length - 1,
+			onSelect: () => onMove(1),
+		},
+		{type: 'separator'},
+		{
+			id: 'delete',
+			label: 'Delete column',
+			icon: Trash2,
+			destructive: true,
+			onSelect: onDelete,
+		},
+	];
 	const bookmarkDrop =
 		dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
 	const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
@@ -1717,26 +1884,26 @@ function BookmarkColumn({
 					className={`pointer-events-none absolute inset-y-1 z-20 w-1 rounded-full bg-primary ${dropIndicator.position === 'before' ? 'left-0' : 'right-0'}`}
 				/>
 			)}
-			<header className="flex shrink-0 items-center gap-1.5 border-b border-border px-2 py-2">
-				<IconTooltip label={`Drag to reorder ${column.name} column`}>
-					<button
-						draggable
-						type="button"
-						data-drag-column={column.id}
-						aria-label={`Drag to reorder ${column.name} column`}
-						className="grid h-8 w-7 touch-none cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted active:cursor-grabbing"
-						onPointerDown={onPointerDown}
-					>
-						<GripVertical className="h-4 w-4" />
-					</button>
-				</IconTooltip>
-				<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
-					{column.name}
-				</h3>
-				<Badge>{siblings.length}</Badge>
-				<DropdownMenu>
-					<IconTooltip label={`Options for ${column.name} column`}>
-						<DropdownMenuTrigger asChild>
+			<ActionContextMenu actions={columnActions}>
+				<header className="flex shrink-0 items-center gap-1.5 border-b border-border px-2 py-2">
+					<IconTooltip label={`Drag to reorder ${column.name} column`}>
+						<button
+							draggable
+							type="button"
+							data-drag-column={column.id}
+							aria-label={`Drag to reorder ${column.name} column`}
+							className="grid h-8 w-7 touch-none cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted active:cursor-grabbing"
+							onPointerDown={onPointerDown}
+						>
+							<GripVertical className="h-4 w-4" />
+						</button>
+					</IconTooltip>
+					<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
+						{column.name}
+					</h3>
+					<Badge>{siblings.length}</Badge>
+					<ActionDropdownMenu
+						trigger={
 							<Button
 								variant="ghost"
 								size="icon"
@@ -1744,47 +1911,11 @@ function BookmarkColumn({
 							>
 								<MoreHorizontal className="h-4 w-4" />
 							</Button>
-						</DropdownMenuTrigger>
-					</IconTooltip>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							disabled={siblings.length === 0}
-							onSelect={onOpenAll}
-						>
-							<SquareArrowOutUpRight className="h-4 w-4" />
-							Open all in new tabs
-						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={onAdd}>
-							<BookmarkPlus className="h-4 w-4" />
-							Add bookmark here
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onSelect={onEdit}>
-							<Pencil className="h-4 w-4" />
-							Rename column
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							className="text-destructive focus:text-destructive"
-							onSelect={onDelete}
-						>
-							<Trash2 className="h-4 w-4" />
-							Delete column
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem disabled={index <= 0} onSelect={() => onMove(-1)}>
-							<ArrowLeft className="h-4 w-4" />
-							Move column left
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							disabled={index >= columns.length - 1}
-							onSelect={() => onMove(1)}
-						>
-							<ArrowRight className="h-4 w-4" />
-							Move column right
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-			</header>
+						}
+						actions={columnActions}
+					/>
+				</header>
+			</ActionContextMenu>
 			<div className="flex min-h-24 flex-1 flex-col p-2">
 				{bookmarks.length > 0 ? (
 					<div className="space-y-1">
@@ -1803,6 +1934,8 @@ function BookmarkColumn({
 									bookmarkDrop.position === 'after'
 								}
 								dropActive={bookmarkDrop?.targetBookmarkId === bookmark.id}
+								urlMode={urlMode}
+								quickActions={quickActions}
 								onAction={onAction}
 							/>
 						))}
@@ -1830,189 +1963,216 @@ type BookmarkCardProps = {
 	index: number;
 	count: number;
 	onAction: OnBookmarkAction;
+	urlMode: NonNullable<Settings['urlDisplayMode']>;
+	quickActions: boolean;
 	dropBefore?: boolean;
 	dropAfter?: boolean;
 	dropActive?: boolean;
 };
+
+function ItemName({children}: {children?: string}) {
+	return (
+		<p className="truncate text-xs text-muted-foreground" title={children}>
+			{children}
+		</p>
+	);
+}
+
+// The site's icon on a transparent background; a letter tile appears only when the icon fails to load.
+function Favicon({url, size}: {url: string; size: 'sm' | 'md'}) {
+	const [failed, setFailed] = useState(false);
+	const box = size === 'md' ? 'h-6 w-6' : 'h-5 w-5';
+	return failed ? (
+		<span
+			className={`grid ${box} shrink-0 place-items-center rounded bg-muted text-[11px] font-bold text-muted-foreground`}
+			aria-hidden="true"
+		>
+			{(domainName(url)[0] || '↗').toUpperCase()}
+		</span>
+	) : (
+		<img
+			data-favicon=""
+			src={localFaviconUrl(url)}
+			alt=""
+			className={`${box} shrink-0 object-contain`}
+			onError={() => setFailed(true)}
+		/>
+	);
+}
 
 function BookmarkCard({
 	bookmark,
 	index,
 	count,
 	onAction,
+	urlMode,
+	quickActions,
 	dropBefore = false,
 	dropAfter = false,
 	dropActive = false,
 }: BookmarkCardProps) {
-	const contextItems = (
-		<>
-			<ContextMenuItem onSelect={() => onAction('open', bookmark)}>
-				<ExternalLink className="h-4 w-4" />
-				Open
-			</ContextMenuItem>
-			<ContextMenuItem onSelect={() => onAction('open-new', bookmark)}>
-				<Link2 className="h-4 w-4" />
-				Open in new tab
-			</ContextMenuItem>
-			<ContextMenuSeparator />
-			<ContextMenuItem onSelect={() => onAction('edit', bookmark)}>
-				<Pencil className="h-4 w-4" />
-				Edit
-			</ContextMenuItem>
-			<ContextMenuItem onSelect={() => onAction('copy', bookmark)}>
-				<Copy className="h-4 w-4" />
-				Copy URL
-			</ContextMenuItem>
-			<ContextMenuItem onSelect={() => onAction('move', bookmark)}>
-				<FolderInput className="h-4 w-4" />
-				Move to…
-			</ContextMenuItem>
-			<ContextMenuItem
-				disabled={index <= 0}
-				onSelect={() => onAction('earlier', bookmark)}
-			>
-				<ArrowUp className="h-4 w-4" />
-				Move earlier
-			</ContextMenuItem>
-			<ContextMenuItem
-				disabled={index >= count - 1}
-				onSelect={() => onAction('later', bookmark)}
-			>
-				<ArrowDown className="h-4 w-4" />
-				Move later
-			</ContextMenuItem>
-			<ContextMenuSeparator />
-			<ContextMenuItem
-				className="text-destructive focus:text-destructive"
-				onSelect={() => onAction('delete', bookmark)}
-			>
-				<Trash2 className="h-4 w-4" />
-				Delete
-			</ContextMenuItem>
-		</>
-	);
-	return (
-		<ContextMenu>
-			<ContextMenuTrigger asChild>
-				<div
-					data-bookmark-id={bookmark.id}
-					data-column-id={bookmark.columnId}
-					className="bookmark-drop-row relative"
-				>
-					<span
-						aria-hidden="true"
-						className={`pointer-events-none absolute -top-1 left-2 right-2 z-10 h-0.5 rounded-full bg-primary ${dropBefore ? 'block' : 'hidden'}`}
-					/>
-					<article
-						draggable
-						className={`group flex min-w-0 items-center gap-2 rounded-md p-2 transition-colors hover:bg-muted/75 ${dropActive ? 'bg-primary/10' : ''}`}
-					>
-						<a
-							href={bookmark.url}
-							target="_blank"
-							rel="noopener noreferrer"
-							title={bookmark.title}
-							className="flex min-w-0 flex-1 items-start gap-2.5"
-						>
-							<span className="relative grid h-7 w-7 shrink-0 place-items-center self-start overflow-hidden rounded-md bg-muted text-xs font-bold text-muted-foreground">
-								{(domainName(bookmark.url)[0] || '↗').toUpperCase()}
-								<img
-									src={localFaviconUrl(bookmark.url)}
-									alt=""
-									className="absolute inset-0 h-full w-full bg-background object-contain"
-									onError={(event) => event.currentTarget.remove()}
-								/>
-							</span>
-							<span className="min-w-0 flex-1">
-								<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
-									{bookmark.title || domainName(bookmark.url)}
-								</strong>
-								<small className="mt-0.5 block break-all text-[11px] leading-4 text-muted-foreground">
-									{bookmark.url}
-								</small>
-							</span>
-						</a>
-						<DropdownMenu>
-							<IconTooltip label={`Actions for ${bookmark.title}`}>
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8 shrink-0 opacity-70 group-hover:opacity-100"
-										aria-label={`Actions for ${bookmark.title}`}
-									>
-										<MoreHorizontal className="h-4 w-4" />
-									</Button>
-								</DropdownMenuTrigger>
-							</IconTooltip>
-							<DropdownMenuContent align="end">
-								{dropdownItems(bookmark, index, count, onAction)}
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</article>
-					<span
-						aria-hidden="true"
-						className={`pointer-events-none absolute -bottom-1 left-2 right-2 z-10 h-0.5 rounded-full bg-primary ${dropAfter ? 'block' : 'hidden'}`}
-					/>
-				</div>
-			</ContextMenuTrigger>
-			<ContextMenuContent>{contextItems}</ContextMenuContent>
-		</ContextMenu>
-	);
-}
+	const act = (action: BookmarkAction) => () => {
+		void onAction(action, bookmark);
+	};
 
-function dropdownItems(
-	bookmark: Bookmark,
-	index: number,
-	count: number,
-	onAction: OnBookmarkAction,
-) {
+	const open: MenuAction = {
+		id: 'open',
+		label: 'Open in this tab',
+		icon: ExternalLink,
+		onSelect: act('open'),
+	};
+	const openNew: MenuAction = {
+		id: 'open-new',
+		label: 'Open in new tab',
+		icon: SquareArrowOutUpRight,
+		onSelect: act('open-new'),
+	};
+	const edit: MenuAction = {
+		id: 'edit',
+		label: 'Edit',
+		icon: Pencil,
+		onSelect: act('edit'),
+	};
+	const copy: MenuAction = {
+		id: 'copy',
+		label: 'Copy link',
+		icon: Copy,
+		onSelect: act('copy'),
+	};
+	const remove: MenuAction = {
+		id: 'delete',
+		label: 'Delete',
+		icon: Trash2,
+		destructive: true,
+		onSelect: act('delete'),
+	};
+	// One list feeds both the ⋯ menu and the right-click menu so they always match.
+	const actions: MenuAction[] = [
+		open,
+		openNew,
+		{type: 'separator'},
+		edit,
+		copy,
+		{
+			id: 'move',
+			label: 'Move to',
+			icon: FolderInput,
+			onSelect: act('move'),
+		},
+		{
+			id: 'earlier',
+			label: 'Move up',
+			icon: ArrowUp,
+			disabled: index <= 0,
+			onSelect: act('earlier'),
+		},
+		{
+			id: 'later',
+			label: 'Move down',
+			icon: ArrowDown,
+			disabled: index >= count - 1,
+			onSelect: act('later'),
+		},
+		{type: 'separator'},
+		remove,
+	];
+	const quick: MenuAction[] = [
+		open,
+		openNew,
+		copy,
+		edit,
+		{type: 'separator'},
+		remove,
+	];
+	const showUrl = urlMode !== 'none';
 	return (
-		<>
-			<DropdownMenuItem onSelect={() => onAction('open', bookmark)}>
-				<ExternalLink className="h-4 w-4" />
-				Open
-			</DropdownMenuItem>
-			<DropdownMenuItem onSelect={() => onAction('open-new', bookmark)}>
-				<Link2 className="h-4 w-4" />
-				Open in new tab
-			</DropdownMenuItem>
-			<DropdownMenuSeparator />
-			<DropdownMenuItem onSelect={() => onAction('edit', bookmark)}>
-				<Pencil className="h-4 w-4" />
-				Edit
-			</DropdownMenuItem>
-			<DropdownMenuItem onSelect={() => onAction('copy', bookmark)}>
-				<Copy className="h-4 w-4" />
-				Copy URL
-			</DropdownMenuItem>
-			<DropdownMenuItem onSelect={() => onAction('move', bookmark)}>
-				<FolderInput className="h-4 w-4" />
-				Move to…
-			</DropdownMenuItem>
-			<DropdownMenuItem
-				disabled={index <= 0}
-				onSelect={() => onAction('earlier', bookmark)}
+		<ActionContextMenu actions={actions}>
+			<div
+				data-bookmark-id={bookmark.id}
+				data-bookmark-title={bookmark.title || domainName(bookmark.url)}
+				data-bookmark-domain={domainName(bookmark.url)}
+				data-column-id={bookmark.columnId}
+				className="bookmark-drop-row relative"
 			>
-				<ArrowUp className="h-4 w-4" />
-				Move earlier
-			</DropdownMenuItem>
-			<DropdownMenuItem
-				disabled={index >= count - 1}
-				onSelect={() => onAction('later', bookmark)}
-			>
-				<ArrowDown className="h-4 w-4" />
-				Move later
-			</DropdownMenuItem>
-			<DropdownMenuSeparator />
-			<DropdownMenuItem
-				className="text-destructive focus:text-destructive"
-				onSelect={() => onAction('delete', bookmark)}
-			>
-				<Trash2 className="h-4 w-4" />
-				Delete
-			</DropdownMenuItem>
-		</>
+				<span
+					aria-hidden="true"
+					className={`pointer-events-none absolute -top-1 left-2 right-2 z-10 h-0.5 rounded-full bg-primary ${dropBefore ? 'block' : 'hidden'}`}
+				/>
+				<article
+					draggable
+					className={`group flex min-w-0 items-center gap-1 rounded-md px-2 ${showUrl ? 'py-1.5' : 'py-1'} transition-colors hover:bg-muted/75 ${dropActive ? 'bg-primary/10' : ''}`}
+				>
+					<a
+						href={bookmark.url}
+						rel="noopener noreferrer"
+						title={bookmark.title}
+						className="flex min-w-0 flex-1 items-center gap-2.5"
+						onClick={(event) => {
+							if (
+								event.button !== 0 ||
+								event.ctrlKey ||
+								event.metaKey ||
+								event.shiftKey ||
+								event.altKey
+							) {
+								return;
+							}
+
+							event.preventDefault();
+							void onAction('click', bookmark);
+						}}
+					>
+						<Favicon url={bookmark.url} size={showUrl ? 'md' : 'sm'} />
+						<span className="min-w-0 flex-1">
+							<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
+								{bookmark.title || domainName(bookmark.url)}
+							</strong>
+							{showUrl && (
+								<small className="block truncate text-[11px] leading-4 text-muted-foreground">
+									{urlMode === 'domain'
+										? domainName(bookmark.url)
+										: bookmark.url}
+								</small>
+							)}
+						</span>
+					</a>
+					{quickActions && (
+						<ActionDropdownMenu
+							actions={quick}
+							trigger={
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
+									aria-label={`Quick actions for ${bookmark.title}`}
+									title="Quick actions"
+								>
+									<Zap className="h-4 w-4" />
+								</Button>
+							}
+						/>
+					)}
+					<ActionDropdownMenu
+						actions={actions}
+						trigger={
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
+								aria-label={`Actions for ${bookmark.title}`}
+								title="Actions"
+							>
+								<MoreHorizontal className="h-4 w-4" />
+							</Button>
+						}
+					/>
+				</article>
+				<span
+					aria-hidden="true"
+					className={`pointer-events-none absolute -bottom-1 left-2 right-2 z-10 h-0.5 rounded-full bg-primary ${dropAfter ? 'block' : 'hidden'}`}
+				/>
+			</div>
+		</ActionContextMenu>
 	);
 }
 
