@@ -20,7 +20,8 @@
 		"contextMenus",
 		"unlimitedStorage",
 		"clipboardWrite",
-		"sidePanel"
+		"sidePanel",
+		"search"
 	],
 	"background": {
 		"service_worker": "service-worker.js"

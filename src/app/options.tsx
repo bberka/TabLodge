@@ -74,7 +74,7 @@ import {
 	rankByQuery,
 	scoreQuery,
 	searchTerms,
-} from './settings-search';
+} from './fuzzy';
 import {PROJECT} from './project';
 
 // Settings keys whose value has the given type, so switch rows only bind boolean settings and select rows string ones.

@@ -16,6 +16,11 @@ import {
 	BookmarkPlus,
 	Download,
 	ExternalLink,
+	FolderPlus,
+	HelpCircle,
+	Settings as SettingsIcon,
+	SunMoon,
+	HardDriveDownload,
 	MoreHorizontal,
 	Pencil,
 	Plus,
@@ -28,7 +33,6 @@ import {
 	FolderInput,
 	SquareArrowOutUpRight,
 	Upload,
-	Zap,
 } from 'lucide-react';
 import {
 	ActionContextMenu,
@@ -964,6 +968,156 @@ function NewTab() {
 			],
 		});
 	}
+
+	// The latest handlers, so the finder's command list can stay stable between renders.
+	const commandHandlersRef = useRef({} as Record<string, () => void>);
+	commandHandlersRef.current = {
+		saveWindow: () => void saveWindow(),
+		newBookmark: () => openBookmarkEditor(),
+		newColumn: () => openColumnEditor(),
+		backupBookmarks: openBookmarkBackup,
+		importData: () => setImportOpen(true),
+		toggleTheme() {
+			const dark = document.documentElement.style.colorScheme === 'dark';
+			void setTheme(dark ? 'light' : 'dark');
+		},
+	};
+	const finderActions = useMemo<FinderAction[]>(() => {
+		const h = () => commandHandlersRef.current;
+		const list: FinderAction[] = [];
+		if (sessionsVisible) {
+			list.push({
+				id: 'save-window',
+				title: 'Save this window',
+				keywords: ['session', 'tabs', 'store'],
+				icon: PanelsTopLeft,
+				run: () => h().saveWindow(),
+			});
+		}
+
+		if (bookmarksEnabled) {
+			list.push(
+				{
+					id: 'new-bookmark',
+					title: 'New bookmark',
+					keywords: ['add', 'link'],
+					icon: BookmarkPlus,
+					run: () => h().newBookmark(),
+				},
+				{
+					id: 'new-column',
+					title: 'New column',
+					keywords: ['bookmark', 'add'],
+					icon: Plus,
+					run: () => h().newColumn(),
+				},
+				{
+					id: 'backup-bookmarks',
+					title: 'Back up bookmarks…',
+					keywords: ['export', 'download', 'save'],
+					icon: Download,
+					run: () => h().backupBookmarks(),
+				},
+				{
+					id: 'import-bookmarks',
+					title: 'Import bookmarks…',
+					keywords: ['restore', 'load', 'upload'],
+					icon: Upload,
+					run: () => h().importData(),
+				},
+			);
+		}
+
+		if (sessionsVisible) {
+			list.push(
+				{
+					id: 'new-folder',
+					title: 'New session folder',
+					keywords: ['add', 'sessions'],
+					icon: FolderPlus,
+					run: () => emitFinderEvent({type: 'new-folder'}),
+				},
+				{
+					id: 'backup-sessions',
+					title: 'Back up sessions…',
+					keywords: ['export', 'download', 'save'],
+					icon: HardDriveDownload,
+					run: () => emitFinderEvent({type: 'backup-sessions'}),
+				},
+				{
+					id: 'import-sessions',
+					title: 'Import sessions…',
+					keywords: ['restore', 'load', 'upload'],
+					icon: Upload,
+					run: () => emitFinderEvent({type: 'import-sessions'}),
+				},
+			);
+		}
+
+		list.push(
+			{
+				id: 'toggle-theme',
+				title: 'Toggle light/dark theme',
+				keywords: ['appearance', 'dark mode', 'light mode'],
+				icon: SunMoon,
+				run: () => h().toggleTheme(),
+			},
+			{
+				id: 'open-settings',
+				title: 'Open Settings',
+				keywords: ['options', 'preferences'],
+				icon: SettingsIcon,
+				run: () => globalThis.location.assign('options.html'),
+			},
+			{
+				id: 'open-help',
+				title: 'Open Help',
+				keywords: ['shortcuts', 'about', 'guide'],
+				icon: HelpCircle,
+				run: () => globalThis.location.assign('help.html'),
+			},
+		);
+		return list;
+	}, [sessionsVisible, bookmarksEnabled]);
+
+	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder (or focuses the inline one).
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			const target = event.target as HTMLElement | null;
+			const typing =
+				target?.closest('input, textarea, select, [contenteditable="true"]') !==
+				null;
+			const shortcut =
+				(event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)) ||
+				(event.key === '/' &&
+					!typing &&
+					!event.ctrlKey &&
+					!event.metaKey &&
+					!event.altKey);
+			if (!shortcut || event.defaultPrevented) {
+				return;
+			}
+
+			const otherDialog = document.querySelector(
+				'[role="dialog"]:not([data-finder]), [role="alertdialog"]',
+			);
+			if (otherDialog && !document.querySelector('[data-finder]')) {
+				return;
+			}
+
+			event.preventDefault();
+			if (inlineFinder && inlineFinderRef.current) {
+				inlineFinderRef.current.focus();
+				inlineFinderRef.current.select();
+				return;
+			}
+
+			setFinderOpen((open) => !open);
+		};
+
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [inlineFinder]);
 
 	// While loading, the page stays blank (just the themed background) so new tabs open without a flash of text.
 	if (!state) {

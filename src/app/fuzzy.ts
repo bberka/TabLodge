@@ -1,4 +1,4 @@
-// Pure helpers for the Settings search box: which rows match a query, how well, and which characters to highlight.
+// Pure fuzzy-search helpers shared by Settings search and the global finder: which items match a query, how well, and which characters to highlight.
 // Matching is case-insensitive, treats hyphens, underscores and curly quotes like spaces/apostrophes, and every
 // word of the query must match somewhere. A word matches, best first, as:
 //   an exact word ("tabs" in "Include tabs")                         100
