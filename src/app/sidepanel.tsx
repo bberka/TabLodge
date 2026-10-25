@@ -15,13 +15,16 @@ import {
 	ChevronRight,
 	Copy,
 	ExternalLink,
+	History,
 	Layers,
+	MoreHorizontal,
 	MoreVertical,
 	PanelTop,
 	RotateCcw,
 	Save,
 	Search,
 	Settings2,
+	Trash2,
 	X,
 } from 'lucide-react';
 import {
@@ -49,6 +52,7 @@ import {
 	useTabLodgeState,
 } from './common';
 import {resolveLinkTarget} from './link-target';
+import {SnapshotsDialog, TrashDialog} from './recovery';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
 import {cn} from '@/lib/utils';
@@ -245,6 +249,8 @@ function SidePanel() {
 	const [closed, setClosed] = useState<Set<string>>(() => new Set());
 	const [opened, setOpened] = useState<Set<string>>(() => new Set());
 	const [selected, setSelected] = useState<Set<number>>(() => new Set());
+	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+	const [trashOpen, setTrashOpen] = useState(false);
 	const windowTabs = useWindowTabs();
 	const settings = state?.settings;
 	const search = query.trim().toLocaleLowerCase();
@@ -430,7 +436,33 @@ function SidePanel() {
 				throw new Error(result?.error || 'Could not save these tabs.');
 			}
 
-			showStatus(done);
+			const {groupId} = result;
+			if (settings?.closeOnSave !== false && groupId && result.count > 0) {
+				// Saved tabs were closed: Undo reopens them in this window from the new session.
+				showStatus(done, false, {
+					action: {
+						label: 'Undo',
+						async onClick() {
+							const reopened = await send('RESTORE_GROUP', {
+								groupId,
+								restoreTarget: 'current-window',
+								restoreMode: 'keep',
+								activate: false,
+							});
+							showStatus(
+								reopened?.ok
+									? 'Tabs reopened.'
+									: reopened?.error || 'Could not reopen the tabs.',
+								!reopened?.ok,
+								{toast: true},
+							);
+						},
+					},
+				});
+			} else {
+				showStatus(done);
+			}
+
 			setSelected(new Set());
 			await reload();
 		}, 'Could not save these tabs.');
@@ -600,12 +632,40 @@ function SidePanel() {
 			<div className="shrink-0 px-3 pt-3">
 				<header className="mb-3 flex min-w-0 items-center justify-between gap-2">
 					<Brand />
-					<Button asChild variant="ghost" size="sm" className="shrink-0">
-						<a href="options.html" target="_blank" rel="noopener noreferrer">
-							<Settings2 className="h-4 w-4" />
-							Settings
-						</a>
-					</Button>
+					<div className="flex shrink-0 items-center gap-1">
+						<Button asChild variant="ghost" size="sm">
+							<a href="options.html" target="_blank" rel="noopener noreferrer">
+								<Settings2 className="h-4 w-4" />
+								Settings
+							</a>
+						</Button>
+						<ActionDropdownMenu
+							trigger={
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									aria-label="Recovery"
+								>
+									<MoreHorizontal className="h-4 w-4" />
+								</Button>
+							}
+							actions={[
+								{
+									id: 'snapshots',
+									label: 'Recent snapshots…',
+									icon: History,
+									onSelect: () => setSnapshotsOpen(true),
+								},
+								{
+									id: 'trash',
+									label: 'Trash…',
+									icon: Trash2,
+									onSelect: () => setTrashOpen(true),
+								},
+							]}
+						/>
+					</div>
 				</header>
 				<div className="relative mb-3">
 					<Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -797,6 +857,18 @@ function SidePanel() {
 				</div>
 			)}
 			{status?.message && <StatusLine status={status} />}
+			<SnapshotsDialog
+				open={snapshotsOpen}
+				showStatus={showStatus}
+				onOpenChange={setSnapshotsOpen}
+				onSessionsChanged={reload}
+			/>
+			<TrashDialog
+				open={trashOpen}
+				showStatus={showStatus}
+				onOpenChange={setTrashOpen}
+				onChanged={reload}
+			/>
 		</main>
 	);
 }
