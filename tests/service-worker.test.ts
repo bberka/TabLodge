@@ -8329,3 +8329,17 @@ test('browser bookmark: existing TabLodge bookmarks and a disabled board are ign
 	await disabled.runTimers();
 	assert.equal(disabled.windowCreateCalls.length, 0);
 });
+
+test('a TabLodge page opened as the new tab (chrome://newtab/) is armed and closed too', async () => {
+	const harness = lodgeCloseHarness(
+		{closeLodgeAfterOpening: true},
+		{url: 'chrome://newtab/'},
+	);
+	const armed = await harness.sendMessage(
+		{type: 'ARM_LODGE_CLOSE'},
+		{tab: {id: 1, windowId: 10, url: 'chrome://newtab/'}},
+	);
+	assert.equal(armed.ok, true);
+	await harness.fire('tabActivated', {tabId: 2, windowId: 10});
+	assert.deepEqual(harness.removedTabIds, [1]);
+});

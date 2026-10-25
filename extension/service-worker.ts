@@ -7284,6 +7284,17 @@ void readSettings()
 // (tab id -> window id, in session storage so it survives worker restarts). When another tab in the same window
 // becomes active, the armed tab is closed, unless it is pinned, the last tab in its window, or no longer the dashboard.
 const LODGE_ARMED_KEY = 'lodgeCloseArmed';
+// A TabLodge page opened as the new tab reports the browser's new-tab address, not newtab.html.
+const LODGE_NEW_TAB_URL = /^(?:chrome|brave|edge):\/\/newtab\/?$/;
+
+/**
+A tab showing the TabLodge dashboard, whether opened by its own address or as the browser's new tab.
+*/
+function isDashboardPage(tab: chrome.tabs.Tab | undefined) {
+	const url = tab?.url || tab?.pendingUrl || '';
+	return url.startsWith(DASHBOARD_URL) || LODGE_NEW_TAB_URL.test(url);
+}
+
 let lodgeArmedQueue: Promise<unknown> = Promise.resolve();
 
 function lodgeArmedExclusive<T>(task: () => Promise<T>): Promise<T> {
@@ -7314,7 +7325,7 @@ async function armLodgeClose(tab: chrome.tabs.Tab | undefined): Promise<void> {
 		!tab ||
 		!isInteger(tab.id) ||
 		!isInteger(tab.windowId) ||
-		!isLodgeTab(tab)
+		!isDashboardPage(tab)
 	) {
 		return;
 	}
@@ -7361,7 +7372,7 @@ async function closeArmedLodges(activeTabId: number, windowId: number) {
 			const tabId = Number(id);
 			try {
 				const tab = await chrome.tabs.get(tabId);
-				if (!isLodgeTab(tab)) {
+				if (!isDashboardPage(tab)) {
 					gone.add(id);
 					changed = true;
 					continue;
@@ -7403,7 +7414,7 @@ chrome.tabs?.onRemoved?.addListener?.((tabId) => {
 	void disarmLodgeClose(tabId);
 });
 chrome.tabs?.onUpdated?.addListener?.((tabId, change, tab) => {
-	if (change.url !== undefined && !isLodgeTab(tab)) {
+	if (change.url !== undefined && !isDashboardPage(tab)) {
 		void disarmLodgeClose(tabId);
 	}
 });
