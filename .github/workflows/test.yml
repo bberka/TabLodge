@@ -1,15 +1,21 @@
-name: TabLodge CI
+name: Test
 
+# Runs on every push to the main branch and on pull requests: lint (XO), typecheck, tests, build.
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check:
+  test:
+    name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,6 +1,6 @@
 name: Release
 
-# Manual only: Actions → Release → Run workflow (on master).
+# Manual only: Actions → Release → Run workflow (on the default branch).
 # Version = 0.<VERSION file>.<patch>, where patch continues from the latest v0.<VERSION>.* tag
 # (see scripts/release-version.ts). Publishes a GitHub release with an unpacked-extension zip.
 on:
@@ -15,7 +15,8 @@ concurrency:
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/master'
+    name: Build and publish release zip
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

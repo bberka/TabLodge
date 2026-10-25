@@ -2,7 +2,7 @@
 
 **A cozy, local-only home for your tabs: save sessions, restore them, and keep a bookmark board on your new tab.**
 
-[![CI](https://github.com/bberka/TabLodge/actions/workflows/ci.yml/badge.svg)](https://github.com/bberka/TabLodge/actions/workflows/ci.yml)
+[![Test](https://github.com/bberka/TabLodge/actions/workflows/test.yml/badge.svg)](https://github.com/bberka/TabLodge/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Manifest V3](https://img.shields.io/badge/Chromium%20browsers-Manifest%20V3-4285F4)
 
