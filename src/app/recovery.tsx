@@ -743,7 +743,7 @@ export function RecoveryTools({
 	const [busy, setBusy] = useState('');
 	const [pending, setPending] = useState<
 		| {kind: 'snapshots' | 'trash'}
-		| {kind: 'restore' | 'delete'; backup: BackupSummary}
+		| {kind: 'restore'; backup: BackupSummary}
 		| null
 	>(null);
 	const refresh = useCallback(async () => {
@@ -951,7 +951,8 @@ export function RecoveryTools({
 								busy={busy !== ''}
 								onRestore={() => setPending({kind: 'restore', backup})}
 								onDownload={() => void download(backup)}
-								onDelete={() => setPending({kind: 'delete', backup})}
+								// A single backup is deleted at once; Undo brings it back.
+								onDelete={() => void removeBackup(backup)}
 							/>
 						))}
 					</ul>
@@ -964,27 +965,21 @@ export function RecoveryTools({
 						? 'Clear all snapshots?'
 						: pending?.kind === 'trash'
 							? 'Empty the trash bin?'
-							: pending?.kind === 'restore'
-								? 'Restore this backup?'
-								: 'Delete this backup?'
+							: 'Restore this backup?'
 				}
 				description={
 					pending?.kind === 'snapshots'
 						? 'Every recent snapshot is removed. You can undo this right after.'
 						: pending?.kind === 'trash'
 							? 'Everything in the trash bin is deleted for good. You can undo this right after.'
-							: pending?.kind === 'restore'
-								? 'Your sessions and bookmarks are replaced by this backup. A safety backup of what you have now is kept, and you can undo this right after.'
-								: 'This backup is removed. You can undo this right after.'
+							: 'Your sessions and bookmarks are replaced by this backup. A safety backup of what you have now is kept, and you can undo this right after.'
 				}
 				confirmLabel={
 					pending?.kind === 'snapshots'
 						? 'Clear snapshots'
 						: pending?.kind === 'trash'
 							? 'Empty trash bin'
-							: pending?.kind === 'restore'
-								? 'Restore'
-								: 'Delete'
+							: 'Restore'
 				}
 				onOpenChange={(open) => !open && setPending(null)}
 				onConfirm={() => {
@@ -1010,9 +1005,7 @@ export function RecoveryTools({
 						}
 
 						default: {
-							if (current) {
-								void removeBackup(current.backup);
-							}
+							break;
 						}
 					}
 				}}
