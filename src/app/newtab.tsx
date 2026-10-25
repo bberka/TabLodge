@@ -61,8 +61,9 @@ import {
 	type MenuAction,
 } from '../shared/ui';
 import type {ButtonProps} from '../components/ui/button';
+import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
 import '../../styles/extension-app.css';
-import {ThemeProvider} from '../shared/theme';
+import {ThemeProvider, useTheme} from '../shared/theme';
 import {
 	AppHeader,
 	EmptyState,
@@ -2108,102 +2109,105 @@ function BookmarkColumn({
 		dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
 	const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
 	return (
-		<section
-			data-column-id={column.id}
-			className={`bookmark-column relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card ${dropIndicator ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
-			aria-label={`${column.name} bookmark column`}
-			onDragOver={(event) =>
-				previewBookmarkDrop(event, column.id, onDropOver, true)
-			}
-			onDragLeave={leaveColumn}
-			onDrop={(event) => {
-				if (!acceptsDrop(event, true)) {
-					return;
-				}
-
-				event.preventDefault();
-				void onDrop(event);
-			}}
-			onDragStart={onDragStart}
-			onDragEnd={onDragEnd}
-		>
+		<div className="relative flex min-w-0 flex-col">
 			{dropIndicator?.kind === 'column' && (
-				<span
-					aria-hidden="true"
-					className={`pointer-events-none absolute inset-y-1 z-20 w-1 rounded-full bg-primary ${dropIndicator.position === 'before' ? 'left-0' : 'right-0'}`}
+				<InsertionLine
+					orientation="vertical"
+					className={`inset-y-0 ${dropIndicator.position === 'before' ? '-left-[9px]' : '-right-[9px]'}`}
 				/>
 			)}
-			<ActionContextMenu actions={columnActions}>
-				<header
-					draggable
-					data-drag-column={column.id}
-					title="Drag to reorder"
-					className="flex shrink-0 cursor-grab touch-none items-center gap-2 border-b border-border px-3 py-2 active:cursor-grabbing"
-					onPointerDown={(event) => {
-						// Buttons in the header (its menu) keep their own taps and clicks.
-						if (!(event.target as Element).closest('button')) {
-							onPointerDown(event);
-						}
-					}}
-				>
-					<ColumnIcon className="size-4 shrink-0 text-muted-foreground" />
-					<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
-						{column.name}
-					</h3>
-					<Badge>{siblings.length}</Badge>
-					<ActionDropdownMenu
-						trigger={
-							<Button
-								variant="ghost"
-								size="icon"
-								aria-label={`Options for ${column.name} column`}
-							>
-								<MoreHorizontal className="h-4 w-4" />
-							</Button>
-						}
-						actions={columnActions}
-					/>
-				</header>
-			</ActionContextMenu>
-			<div className="flex min-h-24 flex-1 flex-col p-2">
-				{bookmarks.length > 0 ? (
-					<div className="space-y-1">
-						{bookmarks.map((bookmark) => (
-							<BookmarkCard
-								key={bookmark.id}
-								bookmark={bookmark}
-								index={siblings.findIndex((entry) => entry.id === bookmark.id)}
-								count={siblings.length}
-								dropBefore={
-									bookmarkDrop?.targetBookmarkId === bookmark.id &&
-									bookmarkDrop.position === 'before'
-								}
-								dropAfter={
-									bookmarkDrop?.targetBookmarkId === bookmark.id &&
-									bookmarkDrop.position === 'after'
-								}
-								dropActive={bookmarkDrop?.targetBookmarkId === bookmark.id}
-								urlMode={urlMode}
-								quickActions={quickActions}
-								onAction={onAction}
-							/>
-						))}
-					</div>
-				) : (
-					<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
-						{allBookmarks.some((bookmark) => bookmark.columnId === column.id)
-							? 'No matching links.'
-							: 'Drop a bookmark here, or add one from this column’s menu.'}
-					</p>
-				)}
-				{showEndInsertion && (
-					<span
-						aria-hidden="true"
-						className="pointer-events-none block h-0.5 rounded-full bg-primary"
-					/>
-				)}
-			</div>
-		</section>
+			<section
+				data-column-id={column.id}
+				className={`bookmark-column relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card ${dropIndicator && dropIndicator.kind !== 'column' ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+				aria-label={`${column.name} bookmark column`}
+				onDragOver={(event) =>
+					previewBookmarkDrop(event, column.id, onDropOver, true)
+				}
+				onDragLeave={leaveColumn}
+				onDrop={(event) => {
+					if (!acceptsDrop(event, true)) {
+						return;
+					}
+
+					event.preventDefault();
+					void onDrop(event);
+				}}
+				onDragStart={onDragStart}
+				onDragEnd={onDragEnd}
+			>
+				<ActionContextMenu actions={columnActions}>
+					<header
+						draggable
+						data-drag-column={column.id}
+						title="Drag to reorder"
+						className="flex shrink-0 cursor-grab touch-none items-center gap-2 border-b border-border px-3 py-2 active:cursor-grabbing"
+						onPointerDown={(event) => {
+							// Buttons in the header (its menu) keep their own taps and clicks.
+							if (!(event.target as Element).closest('button')) {
+								onPointerDown(event);
+							}
+						}}
+					>
+						<ColumnIcon className="size-4 shrink-0 text-muted-foreground" />
+						<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
+							{column.name}
+						</h3>
+						<Badge>{siblings.length}</Badge>
+						<ActionDropdownMenu
+							trigger={
+								<Button
+									variant="ghost"
+									size="icon"
+									aria-label={`Options for ${column.name} column`}
+								>
+									<MoreHorizontal className="h-4 w-4" />
+								</Button>
+							}
+							actions={columnActions}
+						/>
+					</header>
+				</ActionContextMenu>
+				<div className="flex min-h-24 flex-1 flex-col p-2">
+					{bookmarks.length > 0 ? (
+						<div className="space-y-1">
+							{bookmarks.map((bookmark) => (
+								<BookmarkCard
+									key={bookmark.id}
+									bookmark={bookmark}
+									index={siblings.findIndex(
+										(entry) => entry.id === bookmark.id,
+									)}
+									count={siblings.length}
+									dropBefore={
+										bookmarkDrop?.targetBookmarkId === bookmark.id &&
+										bookmarkDrop.position === 'before'
+									}
+									dropAfter={
+										bookmarkDrop?.targetBookmarkId === bookmark.id &&
+										bookmarkDrop.position === 'after'
+									}
+									dropActive={bookmarkDrop?.targetBookmarkId === bookmark.id}
+									urlMode={urlMode}
+									quickAction={quickAction}
+									onAction={onAction}
+								/>
+							))}
+						</div>
+					) : (
+						<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
+							{allBookmarks.some((bookmark) => bookmark.columnId === column.id)
+								? 'No matching links.'
+								: 'Drop a bookmark here, or add one from this column’s menu.'}
+						</p>
+					)}
+					{showEndInsertion && (
+						<div className="relative h-0">
+							<InsertionLine className="inset-x-1 top-0.5" />
+						</div>
+					)}
+				</div>
+			</section>
+		</div>
 	);
 }
 
@@ -2338,10 +2342,7 @@ function BookmarkCard({
 				data-column-id={bookmark.columnId}
 				className="bookmark-drop-row relative"
 			>
-				<span
-					aria-hidden="true"
-					className={`pointer-events-none absolute -top-1 left-2 right-2 z-10 h-0.5 rounded-full bg-primary ${dropBefore ? 'block' : 'hidden'}`}
-				/>
+				{dropBefore && <InsertionLine className="inset-x-1 -top-[3px]" />}
 				<article
 					draggable
 					className={`group flex min-w-0 items-center gap-1 rounded-md px-2 ${showUrl ? 'py-1.5' : 'py-1'} transition-colors hover:bg-muted/75 ${dropActive ? 'bg-primary/10' : ''}`}
@@ -2408,10 +2409,7 @@ function BookmarkCard({
 						}
 					/>
 				</article>
-				<span
-					aria-hidden="true"
-					className={`pointer-events-none absolute -bottom-1 left-2 right-2 z-10 h-0.5 rounded-full bg-primary ${dropAfter ? 'block' : 'hidden'}`}
-				/>
+				{dropAfter && <InsertionLine className="inset-x-1 -bottom-[3px]" />}
 			</div>
 		</ActionContextMenu>
 	);
