@@ -227,6 +227,8 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	autoBackupKeep: 7,
 	autoBackupToDownloads: false,
 	trashRetentionDays: 30,
+	sessionNameStyle: 'date-title',
+	sessionNameTemplate: '{date} · {title}',
 });
 // Mirrors src/app/icon-ids.ts (the worker cannot import); a test keeps both lists identical.
 const ICON_IDS = new Set<unknown>([
@@ -379,6 +381,85 @@ function cleanText(value: unknown, fallback: unknown = '', max = 240) {
 		.slice(0, max);
 	return text || String(fallback).slice(0, max);
 }
+
+const SESSION_NAME_TEMPLATE_MAX = 200;
+const SESSION_NAME_STYLE_TEMPLATES: Record<string, string> = {
+	title: '{title}',
+	datetime: '{date} · {time}',
+	'date-title': '{date} · {title}',
+};
+
+type SessionNameParts = {
+	style: Settings['sessionNameStyle'];
+	template: string;
+	/**
+	Title and address of the first saved tab.
+	*/
+	title: string;
+	url: string;
+	count: number;
+	/**
+	1-based window number when saving all windows; 0 or omitted otherwise.
+	*/
+	windowNumber?: number;
+	now: Date;
+	locale: string;
+};
+
+/**
+The name for a new session. `{date}` is "Sat, Oct 25" (no year: a new session is always named for today),
+`{time}` the locale's short time, `{weekday}` a short weekday. Unknown `{...}` tokens stay as typed.
+*/
+function formatSessionName(parts: SessionNameParts): string {
+	const format = (options: Intl.DateTimeFormatOptions) => {
+		try {
+			return new Intl.DateTimeFormat(parts.locale, options).format(parts.now);
+		} catch {
+			return new Intl.DateTimeFormat('en-US', options).format(parts.now);
+		}
+	};
+
+	let host = '';
+	try {
+		host = new URL(parts.url).hostname.replace(/^www\./i, '');
+	} catch {
+		/*
+		A page without a usable address has no domain.
+		*/
+	}
+
+	const values: Record<string, () => string> = {
+		date: () => format({weekday: 'short', month: 'short', day: 'numeric'}),
+		time: () => format({timeStyle: 'short'}),
+		weekday: () => format({weekday: 'short'}),
+		title: () => cleanText(parts.title, host, 500),
+		domain: () => host,
+		count: () => String(parts.count),
+		window: () => (parts.windowNumber ? String(parts.windowNumber) : ''),
+	};
+	const template =
+		parts.style === 'custom'
+			? cleanText(
+					parts.template,
+					DEFAULT_SETTINGS.sessionNameTemplate,
+					SESSION_NAME_TEMPLATE_MAX,
+				)
+			: (SESSION_NAME_STYLE_TEMPLATES[parts.style] ??
+				SESSION_NAME_STYLE_TEMPLATES['date-title']);
+	return cleanText(
+		template
+			.replaceAll(/\{(\w+)\}/g, (token, key: string) =>
+				Object.hasOwn(values, key) ? values[key]() : token,
+			)
+			// Narrow no-break spaces from the time format, and gaps left by an empty placeholder
+			.replaceAll(/\s+/g, ' '),
+		'Saved session',
+		120,
+	);
+}
+
+const browserLocale = () =>
+	typeof navigator === 'undefined' ? 'en-US' : navigator.language || 'en-US';
 
 function normalizeUrl(value: unknown): string | null {
 	if (typeof value !== 'string' || value.length > 16_384) {
@@ -950,6 +1031,17 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		autoBackupKeep: oneOfNumbers([7, 30], raw.autoBackupKeep, 7),
 		autoBackupToDownloads: raw.autoBackupToDownloads === true,
 		trashRetentionDays: oneOfNumbers([7, 30, 90], raw.trashRetentionDays, 30),
+		sessionNameStyle: isOneOf(
+			['title', 'datetime', 'date-title', 'custom'],
+			raw.sessionNameStyle,
+		)
+			? raw.sessionNameStyle
+			: 'date-title',
+		sessionNameTemplate: cleanText(
+			raw.sessionNameTemplate,
+			DEFAULT_SETTINGS.sessionNameTemplate,
+			SESSION_NAME_TEMPLATE_MAX,
+		),
 	};
 	if (!settings.sessionsEnabled && !settings.bookmarksEnabled) {
 		settings.sessionsEnabled = true;
@@ -1351,6 +1443,7 @@ async function captureTabs(
 	folderId = DEFAULT_FOLDER_ID,
 	useNativeGroupTitle = false,
 	requestedName = '',
+	windowNumber = 0,
 ): Promise<CaptureResult | null> {
 	const timestamp = Date.now();
 	const nativeGroups = await getWindowGroups(window.id);
@@ -1486,7 +1579,17 @@ async function captureTabs(
 							(useNativeGroupTitle
 								? captured.find((tab) => tab.nativeGroup?.title)?.nativeGroup
 										?.title
-								: captured[0].title),
+								: '') ||
+							formatSessionName({
+								style: settings.sessionNameStyle,
+								template: settings.sessionNameTemplate,
+								title: captured[0].title,
+								url: captured[0].url,
+								count: captured.length,
+								windowNumber,
+								now: new Date(timestamp),
+								locale: browserLocale(),
+							}),
 						'Saved session',
 						120,
 					),
@@ -1647,7 +1750,7 @@ async function saveTabs(
 		const savedGroups: Session[] = [];
 		let skippedDuplicates = 0;
 		let limitError = '';
-		for (const win of windows) {
+		for (const [windowIndex, win] of windows.entries()) {
 			const activeTab = win.tabs.find((tab) => tab.active);
 			let inScope = win.tabs;
 			const senderInWindow = win.tabs.find((tab) => tab.id === senderTab?.id);
@@ -1740,6 +1843,7 @@ async function saveTabs(
 				scope === 'current-group' &&
 					Boolean(activeTab && activeTab.groupId >= 0),
 				options.groupName,
+				scope === 'all-windows' ? windowIndex + 1 : 0,
 			);
 			// A capture with tabs is always a stored Session.
 			if (group && 'error' in group && group.error) {
@@ -1803,6 +1907,49 @@ async function saveTabs(
 			groupId: savedGroups[0].id,
 		};
 	});
+}
+
+/**
+The name the next save would get, for the Settings preview: the same formatter, the given (unsaved) style and
+template, and the tabs of the sender's (or last-focused) window.
+*/
+async function previewSessionName(
+	request: {style?: unknown; template?: unknown},
+	senderTab?: chrome.tabs.Tab,
+): Promise<ActionResult<'PREVIEW_SESSION_NAME'>> {
+	const settings = await readSettings();
+	const style = isOneOf(
+		['title', 'datetime', 'date-title', 'custom'],
+		request.style,
+	)
+		? request.style
+		: settings.sessionNameStyle;
+	const template =
+		typeof request.template === 'string'
+			? request.template
+			: settings.sessionNameTemplate;
+	const windowId = await currentWindowId(senderTab);
+	const tabs = isInteger(windowId) ? await chrome.tabs.query({windowId}) : [];
+	const saveable = tabs.filter(
+		(tab) =>
+			(!tab.pinned || settings.includePinnedTabs) &&
+			isCapturable(tab, settings),
+	);
+	const first = saveable[0];
+	return {
+		ok: true,
+		name: formatSessionName({
+			style,
+			template,
+			title: first
+				? cleanText(first.title, normalizeUrl(first.url), 500)
+				: 'Example page',
+			url: first ? (normalizeUrl(first.url) ?? '') : 'https://example.com/',
+			count: Math.max(saveable.length, 1),
+			now: new Date(),
+			locale: browserLocale(),
+		}),
+	};
 }
 
 async function openDashboard(
@@ -6746,6 +6893,10 @@ async function handleMessage(
 					includePinned: message.includePinned === true,
 				},
 			);
+		}
+
+		case 'PREVIEW_SESSION_NAME': {
+			return previewSessionName(message, sender.tab);
 		}
 
 		case 'SAVE_CURRENT_TAB_TO_GROUP': {

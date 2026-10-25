@@ -111,6 +111,11 @@ type HarnessOptions = {
 	Chrome.alarms is missing in this browser build.
 	*/
 	noAlarms?: boolean;
+	/**
+	Freeze the worker's clock at this time and set navigator.language (default 'en-US').
+	*/
+	now?: number;
+	locale?: string;
 };
 type MenuItem = {
 	id?: string;
@@ -731,8 +736,27 @@ function createWorkerHarness(
 		return id;
 	};
 
+	const frozenNow = options.now;
+	const FrozenDate =
+		frozenNow === undefined
+			? Date
+			: class extends Date {
+					static now() {
+						return frozenNow;
+					}
+
+					constructor(...args: [] | [number | string | Date]) {
+						if (args.length === 0) {
+							super(frozenNow!);
+						} else {
+							super(...(args as [number]));
+						}
+					}
+				};
 	const context = vm.createContext({
 		chrome,
+		Date: FrozenDate,
+		navigator: {language: options.locale ?? 'en-US'},
 		URL,
 		console,
 		crypto: webcrypto,
@@ -7192,4 +7216,221 @@ test('UPDATE_TAB title and notes still apply to every saved copy of the same URL
 	});
 	assert.equal(response.shared, 1);
 	assert.equal(harness.state.groups[1].tabs[0].title, 'Shared');
+});
+
+// ---- Session name setting ----
+
+// Saturday, Oct 25 2025, 10:42 PM in the machine's time zone (the worker formats in local time).
+const NAME_NOW = new Date(2025, 9, 25, 22, 42).getTime();
+const nameTabs = (): MockTab[] => [
+	webTab(1, 10, 0, {
+		active: true,
+		url: 'https://www.flights.example/search',
+		title: 'Google Flights',
+	}),
+	webTab(2, 10, 1, {url: 'https://docs.example/a', title: 'Docs'}),
+];
+const nameHarness = (
+	settings: Record<string, unknown> = {},
+	tabs = nameTabs(),
+	options: HarnessOptions = {},
+) =>
+	createWorkerHarness(
+		stateWithSession({closeOnSave: false, ...settings}),
+		tabs,
+		{
+			now: NAME_NOW,
+			...options,
+		},
+	);
+const savedName = async (
+	settings: Record<string, unknown>,
+	message: Record<string, unknown> = {},
+) => {
+	const harness = nameHarness(settings);
+	const result = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+		...message,
+	} as never);
+	assert.equal(result.ok, true, result.error);
+	return harness.state.groups[0].name;
+};
+
+test('session names: every style, with date-title as the default', async () => {
+	assert.equal(await savedName({sessionNameStyle: 'title'}), 'Google Flights');
+	assert.equal(
+		await savedName({sessionNameStyle: 'datetime'}),
+		'Sat, Oct 25 · 10:42 PM',
+	);
+	assert.equal(
+		await savedName({sessionNameStyle: 'date-title'}),
+		'Sat, Oct 25 · Google Flights',
+	);
+	assert.equal(await savedName({}), 'Sat, Oct 25 · Google Flights');
+	assert.equal(
+		await savedName({sessionNameStyle: 'bogus'}),
+		'Sat, Oct 25 · Google Flights',
+	);
+});
+
+test('session names: the date and time follow the browser locale', async () => {
+	const harness = nameHarness({sessionNameStyle: 'datetime'}, nameTabs(), {
+		locale: 'de-DE',
+	});
+	await harness.sendMessage({type: 'SAVE_TABS', scope: 'window'});
+	assert.equal(harness.state.groups[0].name, 'Sa., 25. Okt. · 22:42');
+});
+
+test('session names: custom templates fill placeholders and keep unknown tokens', async () => {
+	assert.equal(
+		await savedName({
+			sessionNameStyle: 'custom',
+			sessionNameTemplate:
+				'{weekday} {time} - {domain} (+{count}) {title} {nope} {window}|',
+		}),
+		'Sat 10:42 PM - flights.example (+2) Google Flights {nope} |',
+	);
+	assert.equal(
+		await savedName({
+			sessionNameStyle: 'custom',
+			sessionNameTemplate: ' '.repeat(3),
+		}),
+		'Sat, Oct 25 · Google Flights',
+	);
+});
+
+test('session names: {title} falls back to the domain and names are capped', async () => {
+	const harness = nameHarness(
+		{sessionNameStyle: 'custom', sessionNameTemplate: '{title}'},
+		[
+			webTab(1, 10, 0, {
+				active: true,
+				url: 'https://www.bare.example/',
+				title: '',
+			}),
+		],
+	);
+	await harness.sendMessage({type: 'SAVE_TABS', scope: 'window'});
+	assert.equal(harness.state.groups[0].name, 'https://www.bare.example/');
+	const long = await savedName({
+		sessionNameStyle: 'custom',
+		sessionNameTemplate: 'x'.repeat(200),
+	});
+	assert.equal(long?.length, 120);
+});
+
+test('session names: {window} numbers each window when saving all windows', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({
+			closeOnSave: false,
+			sessionNameStyle: 'custom',
+			sessionNameTemplate: 'W{window} {title}',
+		}),
+		[webTab(1, 10, 0, {active: true}), webTab(2, 20, 0, {active: true})],
+		{extraWindows: [20], now: NAME_NOW},
+	);
+	const result = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'all-windows',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(
+		harness.state.groups.slice(0, 2).map((group) => group.name),
+		['W2 Site 2', 'W1 Site 1'],
+	);
+});
+
+test('session names: a tab group title and a typed name win, an untitled group uses the setting', async () => {
+	const grouped = (title: string) =>
+		nameHarness(
+			{},
+			[
+				webTab(1, 10, 0, {active: true, groupId: 7}),
+				webTab(2, 10, 1, {groupId: 7}),
+			],
+			{tabGroups: [{id: 7, title, color: 'blue', collapsed: false}]},
+		);
+	const titled = grouped('Trip');
+	await titled.sendMessage({type: 'SAVE_TABS', scope: 'current-group'});
+	assert.equal(titled.state.groups[0].name, 'Trip');
+	const untitled = grouped('');
+	await untitled.sendMessage({type: 'SAVE_TABS', scope: 'current-group'});
+	assert.equal(untitled.state.groups[0].name, 'Sat, Oct 25 · Site 1');
+	assert.equal(
+		await savedName({}, {groupName: 'My name', tabIds: [1]}),
+		'My name',
+	);
+});
+
+test('session names: Saved links keeps its name', async () => {
+	const harness = nameHarness();
+	await harness.fire(
+		'contextMenuClicked',
+		{menuItemId: 'tablodge-link-save', linkUrl: 'https://later.example/'},
+		{id: 1, windowId: 10, groupId: -1},
+	);
+	await new Promise((resolve) => {
+		setTimeout(resolve, 20);
+	});
+	assert.equal(harness.state.groups[0].name, 'Saved links');
+});
+
+test('session names: chunk suffixes follow the generated name', async () => {
+	const tabs = Array.from({length: 1500}, (_, index) =>
+		webTab(index + 1, 10, index, {active: index === 0}),
+	);
+	const harness = nameHarness({sessionNameStyle: 'datetime'}, tabs);
+	const result = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(
+		harness.state.groups.slice(0, 2).map((group) => group.name),
+		['Sat, Oct 25 · 10:42 PM (1/2)', 'Sat, Oct 25 · 10:42 PM (2/2)'],
+	);
+});
+
+test('session name settings are validated and reset', async () => {
+	const harness = nameHarness();
+	const defaults = (await harness.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(defaults.sessionNameStyle, 'date-title');
+	assert.equal(defaults.sessionNameTemplate, '{date} · {title}');
+	const bad = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			sessionNameStyle: 'weird',
+			sessionNameTemplate: ` ${'y'.repeat(300)}`,
+		} as unknown as Partial<Settings>,
+	});
+	assert.equal(bad.settings.sessionNameStyle, 'date-title');
+	assert.equal(bad.settings.sessionNameTemplate, 'y'.repeat(200));
+	const custom = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {sessionNameStyle: 'custom', sessionNameTemplate: ''},
+	});
+	assert.equal(custom.settings.sessionNameStyle, 'custom');
+	assert.equal(custom.settings.sessionNameTemplate, '{date} · {title}');
+	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.sessionNameStyle, 'date-title');
+});
+
+test('PREVIEW_SESSION_NAME formats the next save from the window tabs', async () => {
+	const harness = nameHarness({sessionNameStyle: 'title'});
+	const stored = await harness.sendMessage({
+		type: 'PREVIEW_SESSION_NAME',
+	});
+	assert.equal(stored.name, 'Google Flights');
+	const custom = await harness.sendMessage({
+		type: 'PREVIEW_SESSION_NAME',
+		style: 'custom',
+		template: '{domain} +{count}',
+	});
+	assert.equal(custom.name, 'flights.example +2');
+	const datetime = await harness.sendMessage({
+		type: 'PREVIEW_SESSION_NAME',
+		style: 'datetime',
+	});
+	assert.equal(datetime.name, 'Sat, Oct 25 · 10:42 PM');
 });
