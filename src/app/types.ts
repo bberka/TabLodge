@@ -42,6 +42,10 @@ export type Settings = {
 	openDashboardOnStartup: boolean;
 	startupBehavior: 'dashboard' | 'last-session';
 	newTabEnabled: boolean;
+	/**
+	The new-tab page opens with an always-visible search box that has focus (default off).
+	*/
+	autoFocusSearchOnNewTab: boolean;
 	actionMode: ActionMode;
 	sessionsEnabled: boolean;
 	bookmarksEnabled: boolean;

@@ -3227,8 +3227,10 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(s.bookmarkClickAction, 'current');
 	assert.equal(s.sessionLinkClickAction, 'new');
 	assert.equal(s.showBookmarkQuickActions, false);
+	assert.equal(s.bookmarkQuickAction, 'open-new');
 	assert.equal(s.sessionsOnTop, false);
 	assert.equal(s.keepLodgePinned, false);
+	assert.equal(s.autoFocusSearchOnNewTab, false);
 	assert.equal(s.urlDisplayMode, 'full');
 
 	const junk = createWorkerHarness(
@@ -3236,8 +3238,10 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 			bookmarkClickAction: 'bogus',
 			sessionLinkClickAction: 'none',
 			showBookmarkQuickActions: 'yes',
+			bookmarkQuickAction: 'explode',
 			sessionsOnTop: 1,
 			keepLodgePinned: true,
+			autoFocusSearchOnNewTab: true,
 			urlDisplayMode: 'domain',
 		}),
 	);
@@ -3245,11 +3249,14 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(j.bookmarkClickAction, 'current');
 	assert.equal(j.sessionLinkClickAction, 'none');
 	assert.equal(j.showBookmarkQuickActions, false);
+	assert.equal(j.bookmarkQuickAction, 'open-new');
 	assert.equal(j.sessionsOnTop, false);
 	assert.equal(j.keepLodgePinned, true);
+	assert.equal(j.autoFocusSearchOnNewTab, true);
 	assert.equal(j.urlDisplayMode, 'domain');
 	const reset = await junk.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.keepLodgePinned, false);
+	assert.equal(reset.settings.autoFocusSearchOnNewTab, false);
 	assert.equal(reset.settings.urlDisplayMode, 'full');
 });
 
