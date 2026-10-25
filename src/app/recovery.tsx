@@ -4,10 +4,13 @@
 import {useCallback, useEffect, useState} from 'react';
 import {
 	AppWindow,
+	Bookmark,
 	ChevronDown,
 	ChevronRight,
 	Download,
 	History,
+	LayoutGrid,
+	PanelsTopLeft,
 	RotateCcw,
 	Save,
 	Trash2,
@@ -347,6 +350,24 @@ export function SnapshotsDialog({
 const SCROLL_HEADER = '-mx-6 mb-4 border-b border-border pb-4 pl-6 pr-14';
 const SCROLL_FOOTER = '-mx-6 mt-4 border-t border-border px-6 pt-4';
 
+function FilterLabel({
+	icon: Icon,
+	count,
+	children,
+}: {
+	icon: typeof Trash2;
+	count: number;
+	children: string;
+}) {
+	return (
+		<span className="inline-flex items-center justify-center gap-1.5">
+			<Icon className="h-3.5 w-3.5" aria-hidden="true" />
+			{children}
+			<span className="tabular-nums opacity-70">{count}</span>
+		</span>
+	);
+}
+
 /**
 Which side of TabLodge a deleted item belongs to, for the Sessions / Bookmarks filter.
 */
@@ -496,14 +517,41 @@ export function TrashDialog({
 							label="Show"
 							value={filter}
 							options={[
-								{value: 'all', label: `All ${items.length}`},
+								{
+									value: 'all',
+									label: (
+										<FilterLabel icon={LayoutGrid} count={items.length}>
+											All
+										</FilterLabel>
+									),
+								},
 								{
 									value: 'sessions',
-									label: `Sessions ${items.filter((item) => trashSide(item) === 'sessions').length}`,
+									label: (
+										<FilterLabel
+											icon={PanelsTopLeft}
+											count={
+												items.filter((item) => trashSide(item) === 'sessions')
+													.length
+											}
+										>
+											Sessions
+										</FilterLabel>
+									),
 								},
 								{
 									value: 'bookmarks',
-									label: `Bookmarks ${items.filter((item) => trashSide(item) === 'bookmarks').length}`,
+									label: (
+										<FilterLabel
+											icon={Bookmark}
+											count={
+												items.filter((item) => trashSide(item) === 'bookmarks')
+													.length
+											}
+										>
+											Bookmarks
+										</FilterLabel>
+									),
 								},
 							]}
 							onValueChange={setFilter}
