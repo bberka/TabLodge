@@ -17,7 +17,6 @@ import {
 	ChevronDown,
 	ChevronRight,
 	Columns2,
-	Copy,
 	Download,
 	ExternalLink,
 	FolderPlus,
@@ -92,7 +91,6 @@ import type {ExportData} from './export-formats';
 import {
 	activateSessionTitle,
 	applyLinkDrag,
-	formatSessionLinks,
 	writeClipboard,
 } from './interaction-actions';
 import type {
@@ -762,18 +760,6 @@ export function SessionManager({
 		}
 	}
 
-	async function copySession(group: Session) {
-		const format = settings.copyFormat || 'markdown';
-		try {
-			await writeClipboard(formatSessionLinks(group, format));
-		} catch {
-			showStatus(
-				'Could not copy session links. Check clipboard permissions and try again.',
-				true,
-			);
-		}
-	}
-
 	/**
 	Deletes right away; `closeEditor` also closes the details dialog it was asked from. Undo puts the session back from the trash.
 	*/
@@ -1018,9 +1004,7 @@ export function SessionManager({
 		forceRestore: (group) => restoreGroup(group, true),
 		restoreTab,
 		updateGroup,
-		copy: copySession,
 		share: (group) => openShare({title: group.name, groups: [group]}),
-		openAll: openAllInNewTabs,
 		openTab,
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
@@ -2084,9 +2068,7 @@ type CardActions = {
 		event?: RestoreModifiers,
 	) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
-	copy: (group: Session) => void;
 	share: (group: Session) => void;
-	openAll: (tabs: SavedTabRecord[]) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
@@ -2274,19 +2256,7 @@ const GroupCard = memo(
 				icon: History,
 				items: restoreOptions,
 			},
-			{
-				id: 'open-all',
-				label: 'Open all in new tabs',
-				icon: ACTION_ICONS.openNew,
-				onSelect: () => handlers.openAll(group.tabs),
-			},
 			{type: 'separator'},
-			{
-				id: 'copy',
-				label: 'Copy links',
-				icon: Copy,
-				onSelect: () => handlers.copy(group),
-			},
 			{
 				id: 'share',
 				label: 'Share',

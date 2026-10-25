@@ -126,6 +126,9 @@ export type Settings = {
 	Keep one pinned TabLodge tab per window open; links from it open in new tabs.
 	*/
 	keepLodgePinned: boolean;
+	/**
+	Kept for stored settings and backups; no longer shown, since Share covers copying session links.
+	*/
 	copyFormat: CopyFormat;
 	dashboardBehavior: 'switch' | 'move';
 	/**
