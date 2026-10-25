@@ -231,6 +231,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	trashRetentionDays: 30,
 	sessionNameStyle: 'date-title',
 	sessionNameTemplate: '{date} · {title}',
+	sessionNameFallback: 'date-title',
 });
 // Mirrors src/app/icon-ids.ts (the worker cannot import); a test keeps both lists identical.
 const ICON_IDS = new Set<unknown>([
@@ -385,6 +386,30 @@ function cleanText(value: unknown, fallback: unknown = '', max = 240) {
 }
 
 const SESSION_NAME_TEMPLATE_MAX = 200;
+const SESSION_NAME_FALLBACKS: Array<Settings['sessionNameFallback']> = [
+	'title',
+	'datetime',
+	'date-title',
+	'custom',
+];
+const SESSION_NAME_STYLES: Array<Settings['sessionNameStyle']> = [
+	...SESSION_NAME_FALLBACKS,
+	'ask',
+];
+
+/**
+The style that builds the name: `ask` falls back to its fallback style whenever the worker has to name a session
+without asking (or the answer was left empty).
+*/
+function builtNameStyle(settings: {
+	sessionNameStyle: Settings['sessionNameStyle'];
+	sessionNameFallback: Settings['sessionNameFallback'];
+}): Settings['sessionNameFallback'] {
+	return settings.sessionNameStyle === 'ask'
+		? settings.sessionNameFallback
+		: settings.sessionNameStyle;
+}
+
 const SESSION_NAME_STYLE_TEMPLATES: Record<string, string> = {
 	title: '{title}',
 	datetime: '{date} · {time}',
@@ -392,7 +417,7 @@ const SESSION_NAME_STYLE_TEMPLATES: Record<string, string> = {
 };
 
 type SessionNameParts = {
-	style: Settings['sessionNameStyle'];
+	style: Settings['sessionNameFallback'];
 	template: string;
 	/**
 	Title and address of the first saved tab.
@@ -1038,11 +1063,14 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		autoBackupKeep: oneOfNumbers([7, 30], raw.autoBackupKeep, 7),
 		autoBackupToDownloads: raw.autoBackupToDownloads === true,
 		trashRetentionDays: oneOfNumbers([7, 30, 90], raw.trashRetentionDays, 30),
-		sessionNameStyle: isOneOf(
-			['title', 'datetime', 'date-title', 'custom'],
-			raw.sessionNameStyle,
-		)
+		sessionNameStyle: isOneOf(SESSION_NAME_STYLES, raw.sessionNameStyle)
 			? raw.sessionNameStyle
+			: 'date-title',
+		sessionNameFallback: isOneOf(
+			SESSION_NAME_FALLBACKS,
+			raw.sessionNameFallback,
+		)
+			? raw.sessionNameFallback
 			: 'date-title',
 		sessionNameTemplate: cleanText(
 			raw.sessionNameTemplate,
@@ -1588,7 +1616,7 @@ async function captureTabs(
 										?.title
 								: '') ||
 							formatSessionName({
-								style: settings.sessionNameStyle,
+								style: builtNameStyle(settings),
 								template: settings.sessionNameTemplate,
 								title: captured[0].title,
 								url: captured[0].url,
@@ -1719,6 +1747,11 @@ async function saveTabs(
 		tabIds?: number[];
 		groupName?: string;
 		includePinned?: boolean;
+		/**
+		The save has no page that could ask for a name (shortcut, right-click menu, toolbar button): with the
+		`ask` style, save with the fallback name first, then open the small name prompt window.
+		*/
+		promptName?: boolean;
 	} = {},
 ): Promise<ActionResult<'SAVE_TABS'>> {
 	return mutate(async () => {
@@ -1849,7 +1882,10 @@ async function saveTabs(
 				folderId,
 				scope === 'current-group' &&
 					Boolean(activeTab && activeTab.groupId >= 0),
-				options.groupName,
+				// A typed name for a save across several windows is numbered per window: "Name (1/3)".
+				options.groupName && scope === 'all-windows' && windows.length > 1
+					? `${cleanText(options.groupName, '', 100)} (${windowIndex + 1}/${windows.length})`
+					: options.groupName,
 				scope === 'all-windows' ? windowIndex + 1 : 0,
 			);
 			// A capture with tabs is always a stored Session.
@@ -1906,6 +1942,22 @@ async function saveTabs(
 			);
 		}
 
+		// A titled native tab group keeps its own title, so there is nothing to ask.
+		if (
+			options.promptName &&
+			!options.groupName &&
+			store.settings.sessionNameStyle === 'ask' &&
+			!(
+				scope === 'current-group' &&
+				savedGroups[0].tabs.some((tab) => tab.nativeGroup?.title)
+			)
+		) {
+			await openNamePrompt(
+				savedGroups.map((group) => group.id),
+				selectedWindow.id,
+			);
+		}
+
 		return {
 			ok: true,
 			count: savedGroups.reduce((sum, group) => sum + group.tabs.length, 0),
@@ -1916,27 +1968,114 @@ async function saveTabs(
 	});
 }
 
+const NAME_PROMPT_WIDTH = 440;
+const NAME_PROMPT_HEIGHT = 230;
+
+/**
+Opens the small "Name this session" window for sessions that were just saved with the fallback name.
+Cancelling or closing it keeps that name; a failure to open it never fails the save.
+*/
+async function openNamePrompt(
+	groupIds: string[],
+	anchorWindowId: number | undefined,
+) {
+	try {
+		const url = `${chrome.runtime.getURL('name-session.html')}?${groupIds
+			.map((id) => `groupId=${encodeURIComponent(id)}`)
+			.join('&')}`;
+		const options: chrome.windows.CreateData = {
+			type: 'popup',
+			url,
+			width: NAME_PROMPT_WIDTH,
+			height: NAME_PROMPT_HEIGHT,
+			focused: true,
+		};
+		let anchor: chrome.windows.Window | null = null;
+		try {
+			anchor = isInteger(anchorWindowId)
+				? await chrome.windows.get(anchorWindowId)
+				: null;
+		} catch {
+			/*
+			Without the window's position the browser places the prompt itself.
+			*/
+		}
+
+		if (
+			anchor &&
+			isInteger(anchor.left) &&
+			isInteger(anchor.top) &&
+			isInteger(anchor.width)
+		) {
+			// Centered near the top of the window that was saved.
+			options.left = Math.max(
+				0,
+				anchor.left + Math.round((anchor.width - NAME_PROMPT_WIDTH) / 2),
+			);
+			options.top = Math.max(0, anchor.top + 80);
+		}
+
+		await chrome.windows.create(options);
+	} catch {
+		/*
+		The sessions are saved with the fallback name; the prompt is a convenience.
+		*/
+	}
+}
+
 /**
 The name the next save would get, for the Settings preview: the same formatter, the given (unsaved) style and
 template, and the tabs of the sender's (or last-focused) window.
 */
 async function previewSessionName(
-	request: {style?: unknown; template?: unknown},
+	request: {
+		style?: unknown;
+		fallback?: unknown;
+		template?: unknown;
+		scope?: unknown;
+		tabIds?: unknown;
+	},
 	senderTab?: chrome.tabs.Tab,
 ): Promise<ActionResult<'PREVIEW_SESSION_NAME'>> {
 	const settings = await readSettings();
-	const style = isOneOf(
-		['title', 'datetime', 'date-title', 'custom'],
-		request.style,
-	)
+	const style = isOneOf(SESSION_NAME_STYLES, request.style)
 		? request.style
 		: settings.sessionNameStyle;
+	const fallback = isOneOf(SESSION_NAME_FALLBACKS, request.fallback)
+		? request.fallback
+		: settings.sessionNameFallback;
 	const template =
 		typeof request.template === 'string'
 			? request.template
 			: settings.sessionNameTemplate;
 	const windowId = await currentWindowId(senderTab);
-	const tabs = isInteger(windowId) ? await chrome.tabs.query({windowId}) : [];
+	let tabs = isInteger(windowId) ? await chrome.tabs.query({windowId}) : [];
+	// The tabs the save would capture: explicit picks, a selection, or the active tab, else the whole window.
+	if (Array.isArray(request.tabIds)) {
+		const picked = new Set<unknown>(request.tabIds);
+		tabs = tabs.filter((tab) => picked.has(tab.id));
+	} else {
+		switch (request.scope) {
+			case 'selected': {
+				tabs = tabs.filter((tab) => tab.highlighted);
+				break;
+			}
+
+			case 'selected-or-window': {
+				const highlighted = tabs.filter((tab) => tab.highlighted);
+				tabs = selectionSlots(highlighted) > 1 ? highlighted : tabs;
+				break;
+			}
+
+			case 'current-tab': {
+				tabs = tabs.filter((tab) => tab.active);
+				break;
+			}
+
+			default:
+		}
+	}
+
 	const saveable = tabs.filter(
 		(tab) =>
 			(!tab.pinned || settings.includePinnedTabs) &&
@@ -1945,8 +2084,12 @@ async function previewSessionName(
 	const first = saveable[0];
 	return {
 		ok: true,
+		asks: style === 'ask',
 		name: formatSessionName({
-			style,
+			style: builtNameStyle({
+				sessionNameStyle: style,
+				sessionNameFallback: fallback,
+			}),
 			template,
 			title: first
 				? cleanText(first.title, normalizeUrl(first.url), 500)
@@ -7354,11 +7497,11 @@ chrome.action.onClicked.addListener((tab) => {
 
 chrome.commands.onCommand.addListener((command, tab) => {
 	if (command === 'save-window') {
-		void saveTabs('window', tab);
+		void saveTabs('window', tab, DEFAULT_FOLDER_ID, {promptName: true});
 	}
 
 	if (command === 'save-selected-tabs') {
-		void saveTabs('selected', tab);
+		void saveTabs('selected', tab, DEFAULT_FOLDER_ID, {promptName: true});
 	}
 
 	if (command === 'open-dashboard') {
@@ -7583,7 +7726,9 @@ async function handleToolbarAction(tab?: chrome.tabs.Tab) {
 		return;
 	}
 
-	const result = await saveTabs(scope, tab);
+	const result = await saveTabs(scope, tab, DEFAULT_FOLDER_ID, {
+		promptName: true,
+	});
 	if (!result?.ok) {
 		console.warn(
 			result?.error ||
@@ -8539,7 +8684,7 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 	const scope = MENU_SAVE_SCOPES[id];
 	if (scope) {
 		runMenuAction(tab, `${APP_NAME} could not save these tabs.`, () =>
-			saveTabs(scope, tab),
+			saveTabs(scope, tab, DEFAULT_FOLDER_ID, {promptName: true}),
 		);
 		return;
 	}

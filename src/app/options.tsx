@@ -366,7 +366,23 @@ const settingsGroups: Array<{
 			{
 				name: 'sessionNameStyle',
 				label: 'Session name',
-				help: 'How a new session is named. A saved tab group keeps its own title, and a title typed in the popup always wins.',
+				help: 'How a new session is named. A saved tab group keeps its own title, and a title typed in the popup always wins. “Ask each time” shows a dialog to name the session before it is saved; saving with a shortcut, right-click menu or toolbar button saves first and then opens a small window to rename it.',
+				type: 'select',
+				options: [
+					['title', 'First tab title'],
+					['datetime', 'Date and time'],
+					['date-title', 'Date and first tab'],
+					['custom', 'Custom'],
+					['ask', 'Ask each time'],
+				],
+			},
+			{
+				name: 'sessionNameFallback',
+				label: 'Name to use when left empty',
+				help: 'The name a session gets when you leave the name empty, and when it is saved without a chance to ask.',
+				enabled: (current) => current.sessionNameStyle === 'ask',
+				when: (current) => current.sessionNameStyle === 'ask',
+				parent: 'sessionNameStyle',
 				type: 'select',
 				options: [
 					['title', 'First tab title'],
@@ -381,7 +397,11 @@ const settingsGroups: Array<{
 				help: 'Placeholders: {date}, {time}, {weekday}, {title}, {domain}, {count} (tabs saved), {window} (window number when saving all windows).',
 				type: 'text',
 				placeholder: '{date} · {title}',
-				when: (current) => current.sessionNameStyle === 'custom',
+				parent: 'sessionNameStyle',
+				when: (current) =>
+					current.sessionNameStyle === 'custom' ||
+					(current.sessionNameStyle === 'ask' &&
+						current.sessionNameFallback === 'custom'),
 			},
 			{
 				name: 'openDashboardAfterSave',
@@ -1581,6 +1601,9 @@ function Options() {
 																style={
 																	settings.sessionNameStyle ?? 'date-title'
 																}
+																fallback={
+																	settings.sessionNameFallback ?? 'date-title'
+																}
 																template={
 																	templateDraft ?? settings.sessionNameTemplate
 																}
@@ -2269,29 +2292,40 @@ function TextSetting({
 // "Next save: ..." line under the Session name setting; the service worker formats it with the current window's tabs.
 function SessionNamePreview({
 	style,
+	fallback,
 	template,
 }: {
 	style: Settings['sessionNameStyle'];
+	fallback: Settings['sessionNameFallback'];
 	template: string | undefined;
 }) {
 	const [name, setName] = useState('');
+	const [asks, setAsks] = useState(false);
 	useEffect(() => {
 		let current = true;
 		const timer = setTimeout(async () => {
-			const result = await send('PREVIEW_SESSION_NAME', {style, template});
-			if (current && result?.ok) {
-				setName(result.name);
+			const result = await send('PREVIEW_SESSION_NAME', {
+				style,
+				fallback,
+				template,
+			});
+			if (!current || !result?.ok) {
+				return;
 			}
+
+			setName(result.name);
+			setAsks(result.asks);
 		}, 250);
 		return () => {
 			current = false;
 			clearTimeout(timer);
 		};
-	}, [style, template]);
+	}, [style, fallback, template]);
 
 	return name ? (
 		<span className="mt-1 block text-foreground">
-			Next save: <span className="font-medium">{name}</span>
+			{asks ? 'Asked each time; left empty: ' : 'Next save: '}
+			<span className="font-medium">{name}</span>
 		</span>
 	) : null;
 }
