@@ -73,6 +73,10 @@ type HarnessOptions = {
 	withoutContextMenuShown?: boolean;
 	splitApi?: 'native' | 'missing' | 'throws';
 	misplacedCreateUrls?: string[];
+	/**
+	Fire tabs.onRemoved when the worker removes a tab (off by default so other tests stay quiet).
+	*/
+	tabEvents?: boolean;
 };
 type MenuItem = {
 	id?: string;
@@ -84,9 +88,11 @@ type MessageListener = (
 	sender: unknown,
 	sendResponse: (response: never) => void,
 ) => unknown;
-type EventListener = (...args: never[]) => unknown;
+// Tests call listeners with whatever arguments the real event would carry.
 
-// The stored `tablodge.state` as tests seed it (partial or legacy-shaped) and read it back after
+type EventListener = (...args: any[]) => unknown;
+
+// The stored `tablodge.state` as tests seed it (partial) and read it back after
 // the worker has written its normalized store.
 type StoredSession = {tabs: Array<Partial<SavedTab>>} & Partial<
 	Omit<Session, 'tabs'>
@@ -215,8 +221,16 @@ function createWorkerHarness(
 	};
 
 	const event = (name: string) => ({
+		// Several worker modules can listen to one event: all of them run, the last result is returned.
 		addListener(callback: EventListener) {
-			listeners[name] = callback;
+			const previous = listeners[name] as
+				((...args: unknown[]) => unknown) | undefined;
+			listeners[name] = previous
+				? (...args: unknown[]) => {
+						previous(...args);
+						return (callback as (...args: unknown[]) => unknown)(...args);
+					}
+				: callback;
 		},
 	});
 	const chrome = {
@@ -287,6 +301,8 @@ function createWorkerHarness(
 				lastFocusedWindowId = id;
 				return {};
 			},
+			onCreated: event('windowCreated'),
+			onFocusChanged: event('windowFocusChanged'),
 			async create(
 				properties: {
 					type?: string;
@@ -436,8 +452,18 @@ function createWorkerHarness(
 					}
 
 					reindex(tabsForWindow(removed.windowId));
+					if (options.tabEvents) {
+						(listeners.tabRemoved as unknown as (...args: unknown[]) => void)?.(
+							id,
+							{windowId: removed.windowId, isWindowClosing: false},
+						);
+					}
 				}
 			},
+			onRemoved: event('tabRemoved'),
+			onUpdated: event('tabUpdated'),
+			onAttached: event('tabAttached'),
+			onDetached: event('tabDetached'),
 			async discard(id: number) {
 				discardedTabs.push(id);
 				return tabs.find((entry) => entry.id === id);
@@ -3591,3 +3617,257 @@ const pinnedLodges = (
 		(tab) => tab.windowId === windowId && tab.url === lodgeUrl && tab.pinned,
 	);
 
+test('keepLodgePinned creates one pinned TabLodge tab per window, re-pins, and never duplicates', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({
+			keepLodgePinned: true,
+			restoreTarget: 'always-new-window',
+		}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://current.example/',
+				title: 'Current',
+			},
+		],
+		{tabEvents: true},
+	);
+	await harness.listeners.onStartup();
+	await settleLodge();
+	assert.equal(pinnedLodges(harness, 10).length, 1);
+	assert.equal(pinnedLodges(harness, 10)[0].active, false);
+
+	// A second check finds it and adds nothing.
+	harness.listeners.windowFocusChanged(10);
+	await settleLodge();
+	assert.equal(pinnedLodges(harness, 10).length, 1);
+
+	// A restore into a new window gets its own pinned tab; the restored session never contains one.
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(restored.ok, true, restored.error);
+	harness.listeners.windowCreated({id: 20, type: 'normal'});
+	await settleLodge();
+	assert.equal(pinnedLodges(harness, 20).length, 1);
+	assert.equal(pinnedLodges(harness, 10).length, 1);
+	assert.equal(
+		harness.state.groups
+			.flatMap((g) => g.tabs)
+			.some((t) => t.url?.startsWith('chrome-extension:')),
+		false,
+	);
+});
+
+test('keepLodgePinned re-pins an unpinned TabLodge tab and removes extra pinned copies', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({keepLodgePinned: true}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://current.example/',
+				title: 'Current',
+			},
+			{
+				id: 2,
+				windowId: 10,
+				index: 1,
+				active: false,
+				url: lodgeUrl,
+				pinned: false,
+			},
+		],
+		{tabEvents: true},
+	);
+	await harness.listeners.onStartup();
+	await settleLodge();
+	assert.equal(harness.tabs.find((tab) => tab.id === 2)!.pinned, true);
+	assert.equal(
+		harness.openedTabs.length,
+		0,
+		'the existing tab is re-pinned, not replaced',
+	);
+
+	harness.tabs.push({
+		id: 3,
+		windowId: 10,
+		index: 2,
+		active: false,
+		url: lodgeUrl,
+		pinned: true,
+	});
+	harness.listeners.tabAttached(3, {newWindowId: 10});
+	await settleLodge();
+	assert.equal(pinnedLodges(harness, 10).length, 1);
+});
+
+test('keepLodgePinned recreates a closed tab once, then waits for window focus when the user closes it again quickly', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({keepLodgePinned: true}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://current.example/',
+				title: 'Current',
+			},
+		],
+		{tabEvents: true},
+	);
+	await harness.listeners.onStartup();
+	await settleLodge();
+	const close = async () => {
+		const lodge = pinnedLodges(harness, 10)[0];
+		const index = harness.tabs.indexOf(lodge);
+		harness.tabs.splice(index, 1);
+		harness.listeners.tabRemoved(lodge.id, {
+			windowId: 10,
+			isWindowClosing: false,
+		});
+		await settleLodge();
+	};
+
+	await close();
+	assert.equal(
+		pinnedLodges(harness, 10).length,
+		1,
+		'recreated after the first close',
+	);
+	await close();
+	assert.equal(
+		pinnedLodges(harness, 10).length,
+		0,
+		'a quick second close is respected',
+	);
+	harness.listeners.windowFocusChanged(10);
+	await settleLodge();
+	assert.equal(
+		pinnedLodges(harness, 10).length,
+		1,
+		'focusing the window restores it',
+	);
+});
+
+test('keepLodgePinned off leaves windows alone, and enabling it adds the pinned tab', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({keepLodgePinned: false}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://current.example/',
+				title: 'Current',
+			},
+		],
+		{tabEvents: true},
+	);
+	await harness.listeners.onStartup();
+	harness.listeners.windowCreated({id: 10, type: 'normal'});
+	await settleLodge();
+	assert.equal(harness.openedTabs.length, 0);
+
+	const enabled = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {keepLodgePinned: true},
+	});
+	assert.equal(enabled.ok, true, enabled.error);
+	await settleLodge();
+	assert.equal(pinnedLodges(harness, 10).length, 1);
+});
+
+test('saving all windows, or tabs around the TabLodge tab, never saves or closes the pinned TabLodge tab', async () => {
+	const tabs: MockTab[] = [
+		{id: 1, windowId: 10, index: 0, active: false, url: lodgeUrl, pinned: true},
+		{
+			id: 2,
+			windowId: 10,
+			index: 1,
+			active: true,
+			url: 'https://one.example/',
+			title: 'One',
+		},
+		{
+			id: 3,
+			windowId: 10,
+			index: 2,
+			active: false,
+			url: 'https://two.example/',
+			title: 'Two',
+		},
+	];
+	for (const scope of [
+		'all-windows',
+		'window',
+		'left-of-tab',
+		'right-of-tab',
+		'except-this-tab',
+	] as const) {
+		const harness = createWorkerHarness(
+			stateWithSession({
+				keepLodgePinned: true,
+				closeOnSave: true,
+				includePinnedTabs: true,
+			}),
+			tabs,
+		);
+		const response = await harness.sendMessage(
+			{type: 'SAVE_TABS', scope},
+			{tab: {id: scope === 'left-of-tab' ? 3 : 2, windowId: 10}},
+		);
+		assert.equal(response.ok, true, `${scope}: ${response.error}`);
+		const saved = harness.state.groups.find((g) => g.id === response.groupId)!;
+		assert.equal(
+			saved.tabs.some((t) => t.url === lodgeUrl),
+			false,
+			scope,
+		);
+		assert.equal(harness.removedTabIds.includes(1), false, scope);
+		assert.equal(
+			harness.tabs.some((t) => t.id === 1),
+			true,
+			scope,
+		);
+	}
+});
+
+test('restoring into the current window leaves the pinned TabLodge tab in place', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({keepLodgePinned: true, restoreTarget: 'current-window'}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: false,
+				url: lodgeUrl,
+				pinned: true,
+			},
+			{
+				id: 2,
+				windowId: 10,
+				index: 1,
+				active: true,
+				url: 'https://current.example/',
+				title: 'Current',
+			},
+		],
+	);
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.removedTabIds.length, 0);
+	assert.equal(pinnedLodges(harness, 10).length, 1);
+});

@@ -1440,10 +1440,16 @@ async function openDashboard(
 ) {
 	const path = `${DASHBOARD_URL}${query}`;
 	const existingTabs = await chrome.tabs.query({});
-	let existing = existingTabs.find((tab) => tab.url?.startsWith(DASHBOARD_URL));
+	const dashboards = existingTabs.filter((tab) => isLodgeTab(tab));
+	// A pinned TabLodge tab is the window's fixed home: prefer the one in this window and never move it.
+	const pinnedHere = dashboards.find(
+		(tab) => tab.pinned && tab.windowId === windowId,
+	);
+	let existing = pinnedHere ?? dashboards[0];
 	if (existing?.id) {
 		if (
 			behavior === 'move' &&
+			!existing.pinned &&
 			isInteger(windowId) &&
 			existing.windowId !== windowId
 		) {
@@ -1469,6 +1475,159 @@ async function openDashboard(
 	const created = await chrome.tabs.create(options);
 	return created.id;
 }
+
+// ---- Keep TabLodge pinned ----
+// With "Keep TabLodge pinned" on, every normal window gets exactly one pinned TabLodge tab. Checks are
+// debounced; if the user closes or unpins it twice within LODGE_FIGHT_WINDOW_MS the window is left alone until it
+// is focused again, so the worker never fights the user.
+const LODGE_CHECK_DELAY_MS = 300;
+const LODGE_FIGHT_WINDOW_MS = 5000;
+// When the user last removed or unpinned the tab, per window (only user-triggered repairs are recorded).
+const lodgeUndoneAt = new Map<number, number>();
+const lodgeUserTriggered = new Set<number>();
+const lodgePaused = new Set<number>();
+const lodgePending = new Set<number>();
+let lodgeCheckAll = false;
+let lodgeTimer: ReturnType<typeof setTimeout> | undefined;
+
+function isLodgeTab(tab: chrome.tabs.Tab | undefined) {
+	return Boolean((tab?.url || tab?.pendingUrl)?.startsWith(DASHBOARD_URL));
+}
+
+async function ensureLodgePinned(windowId: number, userTriggered = false) {
+	return mutate(async () => {
+		if (lodgePaused.has(windowId)) {
+			return;
+		}
+
+		const store = await getStore();
+		if (!store.settings.keepLodgePinned) {
+			return;
+		}
+
+		const win = await chrome.windows.get(windowId, {populate: false});
+		if (win.type !== 'normal' || win.incognito) {
+			return;
+		}
+
+		const lodges = (await chrome.tabs.query({windowId})).filter((tab) =>
+			isLodgeTab(tab),
+		);
+		const pinned = lodges.filter((tab) => tab.pinned);
+		const extras = pinned
+			.slice(1)
+			.map((tab) => tab.id)
+			.filter(isInteger);
+		if (extras.length > 0) {
+			await chrome.tabs.remove(extras);
+		}
+
+		if (pinned.length > 0) {
+			return;
+		}
+
+		// Two user undos within LODGE_FIGHT_WINDOW_MS mean they want it gone: wait for the next window focus.
+		if (userTriggered) {
+			const undoneAt = lodgeUndoneAt.get(windowId);
+			lodgeUndoneAt.set(windowId, Date.now());
+			if (
+				undoneAt !== undefined &&
+				Date.now() - undoneAt < LODGE_FIGHT_WINDOW_MS
+			) {
+				lodgePaused.add(windowId);
+				return;
+			}
+		}
+
+		if (isInteger(lodges[0]?.id)) {
+			await chrome.tabs.update(lodges[0].id, {pinned: true});
+		} else {
+			await chrome.tabs.create({
+				windowId,
+				url: DASHBOARD_URL,
+				pinned: true,
+				active: false,
+			});
+		}
+	});
+}
+
+async function runLodgeChecks() {
+	const all = lodgeCheckAll;
+	const ids = new Set(lodgePending);
+	const triggered = new Set(lodgeUserTriggered);
+	lodgeCheckAll = false;
+	lodgePending.clear();
+	lodgeUserTriggered.clear();
+	try {
+		if (all) {
+			for (const win of await chrome.windows.getAll({
+				populate: false,
+				windowTypes: ['normal'],
+			})) {
+				if (isInteger(win.id)) {
+					ids.add(win.id);
+				}
+			}
+		}
+
+		for (const id of ids) {
+			await ensureLodgePinned(id, triggered.has(id)).catch(() => undefined);
+		}
+	} catch {
+		/*
+		A window can close while it is being checked.
+		*/
+	}
+}
+
+/**
+Queues a (debounced) check of one window, or of every normal window when no id is given.
+*/
+function scheduleLodgeCheck(windowId?: number, userTriggered = false) {
+	if (isInteger(windowId)) {
+		lodgePending.add(windowId);
+		if (userTriggered) {
+			lodgeUserTriggered.add(windowId);
+		}
+	} else {
+		lodgeCheckAll = true;
+	}
+
+	clearTimeout(lodgeTimer);
+	lodgeTimer = setTimeout(() => void runLodgeChecks(), LODGE_CHECK_DELAY_MS);
+}
+
+chrome.windows.onCreated?.addListener((win) => {
+	if (win.type === 'normal') {
+		scheduleLodgeCheck(win.id);
+	}
+});
+chrome.windows.onFocusChanged?.addListener((windowId) => {
+	if (windowId < 0) {
+		return;
+	}
+
+	lodgePaused.delete(windowId);
+	lodgeUndoneAt.delete(windowId);
+	scheduleLodgeCheck(windowId);
+});
+chrome.tabs.onRemoved?.addListener((_tabId, info) => {
+	if (!info.isWindowClosing) {
+		scheduleLodgeCheck(info.windowId, true);
+	}
+});
+chrome.tabs.onUpdated?.addListener((_tabId, change, tab) => {
+	if (change.pinned === false && isLodgeTab(tab)) {
+		scheduleLodgeCheck(tab.windowId, true);
+	}
+});
+chrome.tabs.onAttached?.addListener((_tabId, info) => {
+	scheduleLodgeCheck(info.newWindowId);
+});
+chrome.tabs.onDetached?.addListener((_tabId, info) => {
+	scheduleLodgeCheck(info.oldWindowId);
+});
 
 function findGroup(store: Store, groupId: string) {
 	return store.groups.find((group) => group.id === groupId) || null;
@@ -3495,6 +3654,12 @@ async function updateSettings(
 			await syncToolbarAction(store.settings);
 		}
 
+		if (store.settings.keepLodgePinned && !previousSettings.keepLodgePinned) {
+			lodgePaused.clear();
+			lodgeUndoneAt.clear();
+			scheduleLodgeCheck();
+		}
+
 		if (
 			contextMenuSignature(previousSettings, store.bookmarkColumns) !==
 			contextMenuSignature(store.settings, store.bookmarkColumns)
@@ -5005,6 +5170,10 @@ async function initializeExtension(openDashboardAtStartup = false) {
 	const store = await getStore();
 	await syncToolbarAction(store.settings);
 	await rebuildContextMenus(store);
+	if (store.settings.keepLodgePinned) {
+		scheduleLodgeCheck();
+	}
+
 	if (!openDashboardAtStartup || !store.settings.openDashboardOnStartup) {
 		return;
 	}
