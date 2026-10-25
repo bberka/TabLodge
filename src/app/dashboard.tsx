@@ -1368,7 +1368,9 @@ export function SessionManager({
 										Recent snapshots
 									</DropdownMenuItem>
 									<DropdownMenuItem
-										onSelect={() => emitRecoveryEvent({type: 'trash'})}
+										onSelect={() =>
+											emitRecoveryEvent({type: 'trash', filter: 'sessions'})
+										}
 									>
 										<Trash2 className="h-4 w-4" />
 										Trash bin
