@@ -11,6 +11,10 @@ export const SESSIONS_FORMAT_ID = 'tablodge-sessions';
 */
 export const BOOKMARKS_FORMAT_ID = 'tablodge';
 /**
+`format` of a full backup (sessions, bookmarks and settings in one file), written by the automatic and safety backups.
+*/
+export const BACKUP_FORMAT_ID = 'tablodge-backup';
+/**
 Version written next to the format id.
 */
 export const BACKUP_VERSION = 1;

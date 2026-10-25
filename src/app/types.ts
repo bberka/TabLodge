@@ -38,6 +38,8 @@ export type BookmarkQuickAction =
 
 export type LinkClickAction = 'none' | 'current' | 'new';
 
+export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
+
 export type Settings = {
 	closeOnSave: boolean;
 	includePinnedTabs: boolean;
@@ -135,6 +137,36 @@ export type Settings = {
 	*/
 	contextMenuActionEnabled: boolean;
 	// ---- end right-click menus ----
+	// ---- Recovery & backups (all local; nothing leaves the browser) ----
+	/**
+	Keep rolling snapshots of the open windows so a crash can be undone (default on).
+	*/
+	snapshotsEnabled: boolean;
+	/**
+	How often a snapshot is added to the history: 5, 15 (default) or 30 minutes.
+	*/
+	snapshotIntervalMinutes: number;
+	/**
+	How many history snapshots are kept: 10, 25 (default) or 50.
+	*/
+	snapshotKeep: number;
+	/**
+	Automatic local backups of sessions, bookmarks and settings (default off).
+	*/
+	autoBackup: AutoBackupSchedule;
+	/**
+	How many automatic backups are kept: 7 (default) or 30.
+	*/
+	autoBackupKeep: number;
+	/**
+	Also write each automatic backup to Downloads/TabLodge (needs the optional "downloads" permission; default off).
+	*/
+	autoBackupToDownloads: boolean;
+	/**
+	Days deleted items stay in the trash: 7, 30 (default) or 90.
+	*/
+	trashRetentionDays: number;
+	// ---- end recovery & backups ----
 };
 
 export type NativeGroup = {
@@ -232,6 +264,108 @@ export type Store = {
 };
 
 export type TabLodgeState = Store & {ok: true};
+
+// ---- Crash snapshots ----
+export type SnapshotTab = {
+	url: string;
+	title: string;
+	pinned?: boolean;
+	active?: boolean;
+	/**
+	Index into the window's `groups`.
+	*/
+	group?: number;
+	split?: SplitInfo;
+};
+export type SnapshotGroup = {
+	title: string;
+	color: TabGroupColor;
+	collapsed: boolean;
+};
+export type SnapshotWindow = {
+	focused: boolean;
+	state: string;
+	groups: SnapshotGroup[];
+	tabs: SnapshotTab[];
+};
+export type SnapshotReason =
+	'interval' | 'startup' | 'crash' | 'exit' | 'manual';
+export type Snapshot = {
+	id: string;
+	at: number;
+	reason: SnapshotReason;
+	/**
+	Hash of the windows, used to skip a snapshot identical to the previous one.
+	*/
+	sig: string;
+	/**
+	Length of the serialized windows, used to cap the history's total size.
+	*/
+	size: number;
+	windows: SnapshotWindow[];
+};
+export type SnapshotWindowSummary = {
+	tabs: number;
+	pinned: number;
+	groups: number;
+	focused: boolean;
+	/**
+	Titles of the first few tabs.
+	*/
+	titles: string[];
+};
+export type SnapshotSummary = {
+	id: string;
+	at: number;
+	reason: SnapshotReason;
+	tabs: number;
+	windows: SnapshotWindowSummary[];
+};
+export type RecoveryInfo = {
+	snapshotId: string;
+	at: number;
+	windows: number;
+	tabs: number;
+};
+
+// ---- Backups ----
+export type BackupKind = 'auto' | 'manual' | 'safety';
+export type BackupSummary = {
+	id: string;
+	at: number;
+	kind: BackupKind;
+	/**
+	Why a safety backup was taken, such as "Before erasing data".
+	*/
+	reason: string;
+	sessions: number;
+	tabs: number;
+	bookmarks: number;
+	bytes: number;
+};
+
+// ---- Trash ----
+export type TrashKind = 'session' | 'tabs' | 'bookmark' | 'column' | 'folder';
+export type TrashSummary = {
+	id: string;
+	kind: TrashKind;
+	deletedAt: number;
+	label: string;
+	/**
+	Where it came from, such as the session or column name.
+	*/
+	origin: string;
+	/**
+	Links in the item (tabs or bookmarks), 0 when not applicable.
+	*/
+	count: number;
+};
+export type StorageUsage = {
+	snapshots: number;
+	backups: number;
+	trash: number;
+	state: number;
+};
 
 export type RestoreFailure = {
 	title: string;
@@ -382,6 +516,34 @@ export type TabLodgeMessages = {
 	ERASE_DATA: {scope: EraseScope};
 	HANDOFF_NEW_TAB: {brave?: boolean};
 	OPEN_DASHBOARD: {};
+	GET_SNAPSHOTS: {};
+	/**
+	Reopens a snapshot (every window, or just `windowIndex`) in new windows.
+	*/
+	RESTORE_SNAPSHOT: {id: string; windowIndex?: number};
+	SAVE_SNAPSHOT_AS_SESSION: {id: string; windowIndex?: number};
+	DELETE_SNAPSHOT: {id: string};
+	CLEAR_SNAPSHOTS: {};
+	/**
+	Hides the "restore your last session" banner (the snapshot stays in the history).
+	*/
+	DISMISS_RECOVERY: {};
+	GET_BACKUPS: {};
+	BACKUP_NOW: {};
+	/**
+	Replaces sessions and bookmarks with a backup's (settings are kept); a safety backup of the current data comes first.
+	*/
+	RESTORE_BACKUP: {id: string};
+	DELETE_BACKUP: {id: string};
+	/**
+	The backup as JSON text in the regular export format, for downloading.
+	*/
+	GET_BACKUP_DATA: {id: string};
+	GET_TRASH: {};
+	RESTORE_TRASH: {id: string};
+	DELETE_TRASH: {id: string};
+	EMPTY_TRASH: {};
+	GET_STORAGE_USAGE: {};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -414,6 +576,10 @@ export type RestoreResult = {
 	archived: boolean;
 	splits: number;
 	splitsSeparated: number;
+	/**
+	The saved tabs a restore removed, now in the trash (for Undo).
+	*/
+	trashId?: string;
 };
 /**
 `groups`/`count`: sessions/tabs imported; `bookmarks`/`columns`: bookmarks/columns added.
@@ -443,27 +609,35 @@ export type TabLodgeResponses = {
 	SAVE_CURRENT_TAB_TO_GROUP: {count: number; skipped: number; groupId: string};
 	RESTORE_TAB: RestoreResult;
 	RESTORE_GROUP: RestoreResult;
-	DELETE_GROUP: {};
+	/**
+	`trashId`: the deleted session in the trash, for Undo.
+	*/
+	DELETE_GROUP: {trashId?: string};
 	UPDATE_GROUP: {group: Session};
 	REORDER_GROUP: {};
 	SET_GROUP_ORDER: {};
 	CREATE_FOLDER: {folder: Folder};
 	UPDATE_FOLDER: {folder: Folder};
-	DELETE_FOLDER: {};
+	DELETE_FOLDER: {trashId?: string};
 	MOVE_GROUP: {};
-	DELETE_TAB: {};
+	DELETE_TAB: {trashId?: string};
 	MOVE_TAB: {};
 	UPDATE_TAB: {shared: number};
 	ADD_BOOKMARK: {bookmark: Bookmark};
 	ADD_BOOKMARKS: {count: number; bookmarks: Bookmark[]};
 	UPDATE_BOOKMARK: {bookmark: Bookmark};
-	DELETE_BOOKMARK: {};
+	DELETE_BOOKMARK: {trashId?: string};
 	CREATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
 	UPDATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
 	/**
 	`deleted`: bookmarks removed together with the column (only when `discardBookmarks` was set).
 	*/
-	DELETE_BOOKMARK_COLUMN: {moved: number; unfiled: number; deleted: number};
+	DELETE_BOOKMARK_COLUMN: {
+		moved: number;
+		unfiled: number;
+		deleted: number;
+		trashId?: string;
+	};
 	REORDER_BOOKMARK_COLUMN: {};
 	REORDER_BOOKMARK: {};
 	IMPORT_GROUPS: ImportResult;
@@ -481,6 +655,37 @@ export type TabLodgeResponses = {
 	ERASE_DATA: {sessions: number; bookmarks: number};
 	HANDOFF_NEW_TAB: {handedOff: boolean};
 	OPEN_DASHBOARD: {};
+	GET_SNAPSHOTS: {
+		enabled: boolean;
+		snapshots: SnapshotSummary[];
+		live: SnapshotSummary | null;
+		recovery: RecoveryInfo | null;
+	};
+	RESTORE_SNAPSHOT: {windows: number; count: number; failed: number};
+	SAVE_SNAPSHOT_AS_SESSION: {groups: number; count: number};
+	DELETE_SNAPSHOT: {};
+	CLEAR_SNAPSHOTS: {count: number};
+	DISMISS_RECOVERY: {};
+	GET_BACKUPS: {
+		auto: BackupSummary[];
+		safety: BackupSummary[];
+		/**
+		Set when the last Downloads copy failed (permission missing or too large).
+		*/
+		downloadError: string;
+	};
+	BACKUP_NOW: {backup: BackupSummary};
+	RESTORE_BACKUP: {sessions: number; bookmarks: number};
+	DELETE_BACKUP: {};
+	GET_BACKUP_DATA: {filename: string; json: string};
+	GET_TRASH: {items: TrashSummary[]};
+	/**
+	`placed`: where it went, such as the session name or "Unfiled".
+	*/
+	RESTORE_TRASH: {placed: string};
+	DELETE_TRASH: {};
+	EMPTY_TRASH: {count: number};
+	GET_STORAGE_USAGE: {usage: StorageUsage};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =

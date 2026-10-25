@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import {webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -58,6 +59,8 @@ type MockWindow = {
 	focused: boolean;
 	title: string;
 	tabs: MockTab[];
+	state?: string;
+	incognito?: boolean;
 };
 type SidePanelCall = {
 	method: 'setOptions' | 'setPanelBehavior';
@@ -78,6 +81,36 @@ type HarnessOptions = {
 	Fire tabs.onRemoved when the worker removes a tab (off by default so other tests stay quiet).
 	*/
 	tabEvents?: boolean;
+	/**
+	Other chrome.* storage keys present at start (snapshots, backups, trash ...).
+	*/
+	storage?: Record<string, unknown>;
+	/**
+	Timers do not run on their own: tests run them with `runTimers()` (used for the snapshot debounce).
+	*/
+	manualTimers?: boolean;
+	/**
+	Extra normal windows (ids) that exist at start; their tabs come from `initialTabs`.
+	*/
+	extraWindows?: number[];
+	/**
+	Mark window ids as incognito.
+	*/
+	incognitoWindows?: number[];
+	tabGroups?: Array<{
+		id: number;
+		title: string;
+		color: string;
+		collapsed: boolean;
+	}>;
+	/**
+	Provide chrome.downloads and grant the optional "downloads" permission.
+	*/
+	downloads?: boolean;
+	/**
+	Chrome.alarms is missing in this browser build.
+	*/
+	noAlarms?: boolean;
 };
 type MenuItem = {
 	id?: string;
@@ -143,6 +176,18 @@ function createWorkerHarness(
 	const discardedTabs: number[] = [];
 	const menuItems: MenuItem[] = [];
 	let storageFailure: Error | null = null;
+	const extraStorage: Record<string, unknown> = structuredClone(
+		options.storage ?? {},
+	);
+	const alarms = new Map<
+		string,
+		{name: string; periodInMinutes?: number; delayInMinutes?: number}
+	>();
+	const alarmCalls: string[] = [];
+	const downloads: Array<{url: string; filename: string}> = [];
+	const windowUpdates: Array<{id: number; properties: unknown}> = [];
+	const timers = new Map<number, {callback: () => void; delay: number}>();
+	let nextTimerId = 1;
 	let nextTabId = 200;
 	let nextWindowId = 20;
 	let nextGroupId = 500;
@@ -151,6 +196,14 @@ function createWorkerHarness(
 	const tabs = structuredClone(initialTabs);
 	const windows: MockWindow[] = [
 		{id: 10, type: 'normal', focused: true, title: 'Test window', tabs},
+		...(options.extraWindows ?? []).map((id) => ({
+			id,
+			type: 'normal',
+			focused: false,
+			title: `Window ${id}`,
+			tabs: [] as MockTab[],
+			incognito: (options.incognitoWindows ?? []).includes(id),
+		})),
 	];
 	// Tab-strip order: `index` is kept contiguous per window, like Chromium's tab strip.
 	const tabsForWindow = (windowId: number) =>
@@ -256,6 +309,8 @@ function createWorkerHarness(
 					for (const key of keys) {
 						if (key === storageKey && state) {
 							out[key] = structuredClone(state);
+						} else if (Object.hasOwn(extraStorage, key)) {
+							out[key] = structuredClone(extraStorage[key]);
 						}
 					}
 
@@ -266,9 +321,25 @@ function createWorkerHarness(
 						throw storageFailure;
 					}
 
-					if (Object.hasOwn(values, storageKey)) {
-						Object.assign(state, structuredClone(values[storageKey]));
+					for (const [key, value] of Object.entries(values)) {
+						if (key === storageKey) {
+							Object.assign(state, structuredClone(value));
+						} else {
+							extraStorage[key] = structuredClone(value);
+						}
 					}
+				},
+				async remove(key: string) {
+					Reflect.deleteProperty(extraStorage, key);
+				},
+				async getBytesInUse(keys: string[]) {
+					let total = 0;
+					for (const key of keys) {
+						const value = key === storageKey ? state : extraStorage[key];
+						total += value === undefined ? 0 : JSON.stringify(value).length;
+					}
+
+					return total;
 				},
 			},
 			session: {
@@ -306,17 +377,37 @@ function createWorkerHarness(
 					id: win.id,
 					type: win.type,
 					title: win.title,
+					focused: win.focused,
+					state: win.state ?? 'normal',
+					incognito: Boolean(win.incognito),
 					...(query.populate && {
 						tabs: tabsForWindow(win.id).map((tab) => ({...tab})),
 					}),
 				}));
 			},
-			async update(id: number) {
-				lastFocusedWindowId = id;
+			async update(id: number, properties: unknown = {}) {
+				windowUpdates.push({id, properties});
+				if ((properties as {focused?: boolean}).focused !== false) {
+					lastFocusedWindowId = id;
+				}
+
 				return {};
+			},
+			async remove(id: number) {
+				const at = windows.findIndex((win) => win.id === id);
+				if (at !== -1) {
+					windows.splice(at, 1);
+				}
+
+				for (let index = tabs.length - 1; index >= 0; index -= 1) {
+					if (tabs[index].windowId === id) {
+						tabs.splice(index, 1);
+					}
+				}
 			},
 			onCreated: event('windowCreated'),
 			onFocusChanged: event('windowFocusChanged'),
+			onRemoved: event('windowRemoved'),
 			async create(
 				properties: {
 					type?: string;
@@ -475,6 +566,8 @@ function createWorkerHarness(
 				}
 			},
 			onRemoved: event('tabRemoved'),
+			onMoved: event('tabMoved'),
+			onActivated: event('tabActivated'),
 			onCreated: event('tabCreated'),
 			onUpdated: event('tabUpdated'),
 			onAttached: event('tabAttached'),
@@ -508,8 +601,11 @@ function createWorkerHarness(
 		},
 		tabGroups: {
 			async query() {
-				return [];
+				return structuredClone(options.tabGroups ?? []);
 			},
+			onCreated: event('tabGroupCreated'),
+			onUpdated: event('tabGroupUpdated'),
+			onRemoved: event('tabGroupRemoved'),
 			async update(groupId: number, properties: {collapsed?: boolean}) {
 				apiLog.push(
 					`groupUpdate:${groupId}:${properties.collapsed ? 'collapsed' : 'expanded'}`,
@@ -546,6 +642,38 @@ function createWorkerHarness(
 			},
 		},
 		commands: {onCommand: event('onCommand')},
+		...(!options.noAlarms && {
+			alarms: {
+				async create(
+					name: string,
+					info: {periodInMinutes?: number; delayInMinutes?: number},
+				) {
+					alarmCalls.push(`create:${name}:${info.periodInMinutes}`);
+					alarms.set(name, {name, ...info});
+				},
+				async get(name: string) {
+					return alarms.get(name);
+				},
+				async clear(name: string) {
+					alarmCalls.push(`clear:${name}`);
+					return alarms.delete(name);
+				},
+				onAlarm: event('alarm'),
+			},
+		}),
+		permissions: {
+			async contains() {
+				return Boolean(options.downloads);
+			},
+		},
+		...(options.downloads && {
+			downloads: {
+				async download(info: {url: string; filename: string}) {
+					downloads.push({url: info.url, filename: info.filename});
+					return downloads.length;
+				},
+			},
+		}),
 		contextMenus: {
 			async removeAll() {
 				menuItems.length = 0;
@@ -563,15 +691,28 @@ function createWorkerHarness(
 		},
 	};
 
+	const manualSetTimeout = (callback: () => void, delay = 0) => {
+		const id = nextTimerId++;
+		timers.set(id, {callback, delay});
+		return id;
+	};
+
 	const context = vm.createContext({
 		chrome,
 		URL,
 		console,
 		crypto: webcrypto,
 		structuredClone,
+		TextEncoder,
+		// eslint-disable-next-line no-restricted-globals -- the worker uses btoa, so the mock context provides it
+		btoa,
 		globalThis: null,
-		setTimeout,
-		clearTimeout,
+		setTimeout: options.manualTimers ? manualSetTimeout : setTimeout,
+		clearTimeout: options.manualTimers
+			? (id: number) => {
+					timers.delete(id);
+				}
+			: clearTimeout,
 	});
 	context.globalThis = context;
 	vm.runInContext(workerSource, context, {filename: workerPath});
@@ -587,6 +728,52 @@ function createWorkerHarness(
 		menuItems,
 		listeners,
 		tabs,
+		windows,
+		extraStorage,
+		alarms,
+		alarmCalls,
+		downloads,
+		windowUpdates,
+		timers,
+		/**
+		Runs every pending manual timer (and any they schedule), then lets the queued async work settle.
+		*/
+		async runTimers() {
+			for (let round = 0; round < 10 && timers.size > 0; round += 1) {
+				const due = [...timers];
+				timers.clear();
+				for (const [, timer] of due) {
+					timer.callback();
+				}
+			}
+
+			await settle();
+		},
+		/**
+		Fires an event listener the worker registered, then lets its async work settle.
+		*/
+		async fire(name: string, ...args: unknown[]) {
+			listeners[name]?.(...args);
+			await settle();
+		},
+		/**
+		Closes a window the way the browser does: its tabs go, then windows.onRemoved fires.
+		*/
+		async closeWindow(id: number) {
+			const at = windows.findIndex((win) => win.id === id);
+			if (at !== -1) {
+				windows.splice(at, 1);
+			}
+
+			for (let index = tabs.length - 1; index >= 0; index -= 1) {
+				if (tabs[index].windowId === id) {
+					tabs.splice(index, 1);
+				}
+			}
+
+			listeners.windowRemoved?.(id);
+			await settle();
+		},
 		apiLog,
 		tabsForWindow,
 		setStorageFailure(error: Error) {
@@ -618,6 +805,17 @@ function createWorkerHarness(
 			});
 		},
 	};
+}
+
+/**
+Lets queued promise work and storage mocks finish.
+*/
+async function settle() {
+	for (let index = 0; index < 40; index += 1) {
+		await new Promise<void>((resolve) => {
+			setImmediate(resolve);
+		});
+	}
 }
 
 function stateWithSession(settings: Record<string, unknown> = {}): StoredState {
@@ -4408,4 +4606,1390 @@ test('ADD_EXCLUDED_ORIGINS adds many websites at once and ignores repeats', asyn
 		origins: ['nonsense'],
 	});
 	assert.equal(none.ok, false);
+});
+
+// ---- Recovery: snapshots, backups, trash ----
+
+const LIVE_KEY = 'tablodge.snapshots.live';
+const HISTORY_KEY = 'tablodge.snapshots';
+const META_KEY = 'tablodge.snapshots.meta';
+const BACKUPS_KEY = 'tablodge.backups';
+const TRASH_KEY = 'tablodge.trash';
+
+type StoredSnapshot = {
+	id: string;
+	reason: string;
+	sig: string;
+	windows: Array<{
+		focused: boolean;
+		state: string;
+		groups: Array<{title: string; color: string; collapsed: boolean}>;
+		tabs: Array<{
+			url: string;
+			title: string;
+			pinned?: boolean;
+			active?: boolean;
+			group?: number;
+			split?: {id: string; position: number};
+		}>;
+	}>;
+};
+type StoredMeta = {
+	sessionOpen: boolean;
+	liveAt: number;
+	closing: {at: number; remaining: number} | null;
+	recovery: {snapshotId: string} | null;
+};
+
+const webTab = (
+	id: number,
+	windowId: number,
+	index: number,
+	extra: Partial<MockTab> = {},
+): MockTab => ({
+	id,
+	windowId,
+	index,
+	active: false,
+	url: `https://site${id}.example/`,
+	title: `Site ${id}`,
+	...extra,
+});
+const liveOf = (harness: {extraStorage: Record<string, unknown>}) =>
+	harness.extraStorage[LIVE_KEY] as StoredSnapshot | undefined;
+const historyOf = (harness: {extraStorage: Record<string, unknown>}) =>
+	(harness.extraStorage[HISTORY_KEY] as {history: StoredSnapshot[]} | undefined)
+		?.history ?? [];
+const metaOf = (harness: {extraStorage: Record<string, unknown>}) =>
+	harness.extraStorage[META_KEY] as StoredMeta | undefined;
+const recoveryHarness = (
+	settings: Record<string, unknown> = {},
+	tabs: MockTab[] = [
+		webTab(1, 10, 0, {active: true}),
+		webTab(2, 10, 1),
+		webTab(3, 20, 0, {active: true}),
+	],
+	options: HarnessOptions = {},
+) =>
+	createWorkerHarness(stateWithSession(settings), tabs, {
+		extraWindows: [20],
+		manualTimers: true,
+		...options,
+	});
+
+test('recovery settings default on and invalid values fall back', async () => {
+	const harness = createWorkerHarness({...stateWithSession(), settings: {}});
+	const defaults = (await harness.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(defaults.snapshotsEnabled, true);
+	assert.equal(defaults.snapshotIntervalMinutes, 15);
+	assert.equal(defaults.snapshotKeep, 25);
+	assert.equal(defaults.autoBackup, 'off');
+	assert.equal(defaults.autoBackupKeep, 7);
+	assert.equal(defaults.autoBackupToDownloads, false);
+	assert.equal(defaults.trashRetentionDays, 30);
+	const patched = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			snapshotIntervalMinutes: '30',
+			snapshotKeep: 99,
+			autoBackup: 'hourly',
+			autoBackupKeep: 12,
+			autoBackupToDownloads: 'yes',
+			trashRetentionDays: 'x',
+			snapshotsEnabled: false,
+		} as unknown as Partial<Settings>,
+	});
+	assert.equal(patched.ok, true, patched.error);
+	assert.equal(patched.settings.snapshotIntervalMinutes, 30);
+	assert.equal(patched.settings.snapshotKeep, 25);
+	assert.equal(patched.settings.autoBackup, 'off');
+	assert.equal(patched.settings.autoBackupKeep, 7);
+	assert.equal(patched.settings.autoBackupToDownloads, false);
+	assert.equal(patched.settings.trashRetentionDays, 30);
+	assert.equal(patched.settings.snapshotsEnabled, false);
+	const valid = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			snapshotIntervalMinutes: 5,
+			snapshotKeep: 50,
+			autoBackup: 'weekly',
+			autoBackupKeep: 30,
+			trashRetentionDays: 90,
+		},
+	});
+	assert.equal(valid.settings.snapshotIntervalMinutes, 5);
+	assert.equal(valid.settings.snapshotKeep, 50);
+	assert.equal(valid.settings.autoBackup, 'weekly');
+	assert.equal(valid.settings.autoBackupKeep, 30);
+	assert.equal(valid.settings.trashRetentionDays, 90);
+});
+
+test('snapshots capture windows with pinned tabs, groups, split pairs, active tab and focus, and skip non-web pages', async () => {
+	const harness = recoveryHarness(
+		{excludedOrigins: ['private.example']},
+		[
+			webTab(1, 10, 0, {pinned: true}),
+			webTab(2, 10, 1, {active: true, groupId: 7}),
+			webTab(3, 10, 2, {groupId: 7}),
+			webTab(4, 10, 3, {splitViewId: 5}),
+			webTab(5, 10, 4, {splitViewId: 5}),
+			webTab(6, 10, 5, {url: 'chrome://settings/'}),
+			webTab(7, 10, 6, {url: 'chrome-extension://tablodge/newtab.html'}),
+			webTab(8, 10, 7, {url: 'https://private.example/secret'}),
+			webTab(9, 20, 0, {active: true}),
+			webTab(10, 30, 0),
+		],
+		{
+			extraWindows: [20, 30],
+			incognitoWindows: [30],
+			tabGroups: [{id: 7, title: 'Research', color: 'blue', collapsed: true}],
+		},
+	);
+	await harness.fire('tabCreated', {});
+	assert.equal(
+		liveOf(harness),
+		undefined,
+		'nothing is written before the debounce',
+	);
+	await harness.runTimers();
+	const live = liveOf(harness)!;
+	assert.equal(live.windows.length, 2, 'incognito window is skipped');
+	const first = live.windows[0];
+	assert.deepEqual(
+		first.tabs.map((tab) => tab.url),
+		[
+			'https://site1.example/',
+			'https://site2.example/',
+			'https://site3.example/',
+			'https://site4.example/',
+			'https://site5.example/',
+		],
+	);
+	assert.equal(first.tabs[0].pinned, true);
+	assert.equal(first.tabs[1].active, true);
+	assert.deepEqual(first.groups, [
+		{title: 'Research', color: 'blue', collapsed: true},
+	]);
+	assert.equal(first.tabs[1].group, 0);
+	assert.equal(first.tabs[2].group, 0);
+	assert.equal(first.tabs[3].split?.position, 0);
+	assert.equal(first.tabs[4].split?.position, 1);
+	assert.equal(first.tabs[3].split?.id, first.tabs[4].split?.id);
+	assert.equal(first.focused, true);
+	assert.equal(live.windows[1].focused, false);
+	assert.equal(metaOf(harness)?.sessionOpen, true);
+});
+
+test('snapshot writes are debounced and identical captures are not rewritten or rotated twice', async () => {
+	const harness = recoveryHarness();
+	for (let index = 0; index < 5; index += 1) {
+		await harness.fire('tabUpdated', 1, {url: 'https://x.example/'}, {});
+	}
+
+	assert.equal(
+		harness.timers.size,
+		1,
+		'events coalesce into one pending timer',
+	);
+	assert.equal([...harness.timers.values()][0].delay <= 5000, true);
+	await harness.runTimers();
+	const firstLive = liveOf(harness)!;
+	assert.ok(firstLive);
+	assert.equal(historyOf(harness).length, 0, 'event captures do not rotate');
+	// Title-only updates do not schedule anything.
+	await harness.fire('tabUpdated', 1, {title: 'Renamed'}, {});
+	assert.equal(harness.timers.size, 0);
+	// An alarm rotates the live state into history.
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.equal(historyOf(harness).length, 1);
+	const rewritten = liveOf(harness)!;
+	assert.equal(rewritten.sig, firstLive.sig);
+	assert.equal(
+		rewritten.id,
+		firstLive.id,
+		'identical live snapshot is left alone',
+	);
+	// The same state again adds nothing.
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.equal(historyOf(harness).length, 1);
+	// A change adds a second entry, newest first.
+	harness.tabs.push(webTab(40, 10, 2));
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	const history = historyOf(harness);
+	assert.equal(history.length, 2);
+	assert.equal(history[0].windows[0].tabs.length, 3);
+});
+
+test('snapshot history is capped by the keep setting', async () => {
+	const harness = recoveryHarness({snapshotKeep: 10});
+	for (let index = 0; index < 14; index += 1) {
+		harness.tabs.push(webTab(100 + index, 10, 5 + index));
+		await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	}
+
+	const history = historyOf(harness);
+	assert.equal(history.length, 10);
+	assert.equal(history[0].windows[0].tabs.length, 2 + 14);
+	assert.equal(history.at(-1)!.windows[0].tabs.length, 2 + 5);
+});
+
+test('snapshots stay off when disabled and alarms follow the settings', async () => {
+	const harness = recoveryHarness({snapshotsEnabled: false});
+	await harness.fire('tabCreated', {});
+	await harness.runTimers();
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.equal(liveOf(harness), undefined);
+	assert.equal(harness.alarms.has('tablodge-snapshot'), false);
+
+	const on = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {snapshotsEnabled: true, snapshotIntervalMinutes: 5},
+	});
+	assert.equal(on.ok, true);
+	assert.equal(harness.alarms.get('tablodge-snapshot')?.periodInMinutes, 5);
+	assert.equal(harness.timers.size, 1, 'turning snapshots on captures soon');
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {snapshotIntervalMinutes: 30},
+	});
+	assert.equal(harness.alarms.get('tablodge-snapshot')?.periodInMinutes, 30);
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {snapshotsEnabled: false},
+	});
+	assert.equal(harness.alarms.has('tablodge-snapshot'), false);
+});
+
+test('snapshot capture still works without chrome.alarms', async () => {
+	const harness = recoveryHarness({}, undefined, {noAlarms: true});
+	await harness.fire('tabCreated', {});
+	await harness.runTimers();
+	assert.ok(liveOf(harness));
+});
+
+const seededSnapshot = (tabCount = 3, id = 'prev-live'): StoredSnapshot => ({
+	id,
+	reason: 'interval',
+	sig: `sig-${id}`,
+	windows: [
+		{
+			focused: true,
+			state: 'normal',
+			groups: [{title: 'Work', color: 'green', collapsed: false}],
+			tabs: Array.from({length: tabCount}, (_, index) => ({
+				url: `https://old${index}.example/`,
+				title: `Old ${index}`,
+				...(index === 0 ? {pinned: true} : {group: 0}),
+				...(index === 1 && {active: true}),
+			})),
+		},
+		{
+			focused: false,
+			state: 'maximized',
+			groups: [],
+			tabs: [{url: 'https://other.example/', title: 'Other'}],
+		},
+	],
+});
+const seededSnapshotStorage = (
+	meta: Partial<StoredMeta>,
+	live: StoredSnapshot | null = seededSnapshot(),
+) => ({
+	[LIVE_KEY]: live ? {...live, at: 1_700_000_000_000, size: 100} : undefined,
+	[META_KEY]: {
+		sessionOpen: false,
+		liveAt: 1_700_000_000_000,
+		closing: null,
+		recovery: null,
+		...meta,
+	},
+});
+const cleanStorage = (storage: Record<string, unknown>) =>
+	Object.fromEntries(
+		Object.entries(storage).filter(([, value]) => value !== undefined),
+	);
+
+test('crash detection: a run that never closed cleanly leaves a pending recovery', async () => {
+	const harness = recoveryHarness({}, undefined, {
+		storage: cleanStorage(seededSnapshotStorage({sessionOpen: true})),
+	});
+	await harness.fire('onStartup');
+	const response = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
+	assert.equal(response.ok, true);
+	assert.equal(response.recovery?.windows, 2);
+	assert.equal(response.recovery?.tabs, 4);
+	assert.equal(response.snapshots.length, 1);
+	assert.equal(response.snapshots[0].reason, 'crash');
+	assert.equal(response.recovery?.snapshotId, response.snapshots[0].id);
+	assert.equal(metaOf(harness)?.sessionOpen, true, 'the new run is open');
+});
+
+test('crash detection: clean exits, shutdowns in progress, tiny sessions and browser-restored sessions need no recovery', async () => {
+	// Clean exit: sessionOpen was cleared by the last window closing.
+	const clean = recoveryHarness({}, undefined, {
+		storage: cleanStorage(seededSnapshotStorage({sessionOpen: false})),
+	});
+	await clean.fire('onStartup');
+	const cleanResponse = await clean.sendMessage({type: 'GET_SNAPSHOTS'});
+	assert.equal(cleanResponse.recovery, null);
+	assert.equal(
+		cleanResponse.snapshots[0].reason,
+		'exit',
+		'still kept in history',
+	);
+
+	// Windows were being closed down to one and nothing was captured afterwards: a shutdown, not a crash.
+	const closing = recoveryHarness({}, undefined, {
+		storage: cleanStorage(
+			seededSnapshotStorage({
+				sessionOpen: true,
+				closing: {at: 1_700_000_005_000, remaining: 1},
+			}),
+		),
+	});
+	await closing.fire('onStartup');
+	assert.equal(
+		(await closing.sendMessage({type: 'GET_SNAPSHOTS'})).recovery,
+		null,
+	);
+
+	// A capture after the close means the session went on, so it counts as a crash.
+	const continued = recoveryHarness({}, undefined, {
+		storage: cleanStorage(
+			seededSnapshotStorage({
+				sessionOpen: true,
+				liveAt: 1_700_000_009_000,
+				closing: {at: 1_700_000_005_000, remaining: 1},
+			}),
+		),
+	});
+	await continued.fire('onStartup');
+	assert.ok((await continued.sendMessage({type: 'GET_SNAPSHOTS'})).recovery);
+
+	// Too small to be worth a banner.
+	const tiny = recoveryHarness({}, undefined, {
+		storage: cleanStorage(
+			seededSnapshotStorage(
+				{sessionOpen: true},
+				{
+					...seededSnapshot(1),
+					windows: [seededSnapshot(1).windows[0]],
+				},
+			),
+		),
+	});
+	await tiny.fire('onStartup');
+	assert.equal(
+		(await tiny.sendMessage({type: 'GET_SNAPSHOTS'})).recovery,
+		null,
+	);
+
+	// The browser reopened the same tabs itself.
+	const restored = recoveryHarness(
+		{},
+		[
+			webTab(1, 10, 0, {url: 'https://old0.example/'}),
+			webTab(2, 10, 1, {url: 'https://old1.example/'}),
+			webTab(3, 10, 2, {url: 'https://old2.example/'}),
+			webTab(4, 10, 3, {url: 'https://other.example/'}),
+		],
+		{storage: cleanStorage(seededSnapshotStorage({sessionOpen: true}))},
+	);
+	await restored.fire('onStartup');
+	assert.equal(
+		(await restored.sendMessage({type: 'GET_SNAPSHOTS'})).recovery,
+		null,
+	);
+
+	// Disabled snapshots never judge a run.
+	const disabled = recoveryHarness({snapshotsEnabled: false}, undefined, {
+		storage: cleanStorage(seededSnapshotStorage({sessionOpen: true})),
+	});
+	await disabled.fire('onStartup');
+	assert.equal(
+		(await disabled.sendMessage({type: 'GET_SNAPSHOTS'})).recovery,
+		null,
+	);
+});
+
+test('closing the last window is the clean-exit signal and files the final state under exit', async () => {
+	const harness = recoveryHarness();
+	await harness.fire('tabCreated', {});
+	await harness.runTimers();
+	assert.equal(metaOf(harness)?.sessionOpen, true);
+	await harness.closeWindow(20);
+	assert.equal(metaOf(harness)?.sessionOpen, true, 'one window is still open');
+	assert.equal(metaOf(harness)?.closing?.remaining, 1);
+	await harness.closeWindow(10);
+	assert.equal(metaOf(harness)?.sessionOpen, false);
+	assert.equal(historyOf(harness)[0].reason, 'exit');
+	assert.equal(
+		historyOf(harness)[0].windows.length,
+		2,
+		'the state before closing',
+	);
+	// Empty captures never replace the saved state.
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.equal(liveOf(harness)!.windows.length, 2);
+});
+
+test('dismissing the recovery keeps the snapshot', async () => {
+	const harness = recoveryHarness({}, undefined, {
+		storage: cleanStorage(seededSnapshotStorage({sessionOpen: true})),
+	});
+	await harness.fire('onStartup');
+	assert.ok((await harness.sendMessage({type: 'GET_SNAPSHOTS'})).recovery);
+	assert.equal(
+		(await harness.sendMessage({type: 'DISMISS_RECOVERY'})).ok,
+		true,
+	);
+	const after = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
+	assert.equal(after.recovery, null);
+	assert.equal(after.snapshots.length, 1);
+});
+
+test('RESTORE_SNAPSHOT reopens every window with pinned tabs, groups and the active tab', async () => {
+	const harness = recoveryHarness({}, undefined, {
+		storage: cleanStorage(seededSnapshotStorage({sessionOpen: true})),
+	});
+	await harness.fire('onStartup');
+	const {snapshots, recovery} = await harness.sendMessage({
+		type: 'GET_SNAPSHOTS',
+	});
+	const response = await harness.sendMessage({
+		type: 'RESTORE_SNAPSHOT',
+		id: snapshots[0].id,
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.windows, 2);
+	assert.equal(response.count, 4);
+	assert.equal(harness.createdWindows.length, 2);
+	const firstWindow = harness.createdWindows[0].id;
+	const opened = harness.openedTabs.filter(
+		(tab) => tab.windowId === firstWindow,
+	);
+	assert.deepEqual(
+		opened.map((tab) => [tab.url, tab.pinned]),
+		[
+			['https://old0.example/', true],
+			['https://old1.example/', false],
+			['https://old2.example/', false],
+		],
+	);
+	assert.ok(
+		harness.apiLog.some((entry) => entry.startsWith('group:')),
+		'the saved tab group is recreated',
+	);
+	const active = harness.tabs.find(
+		(tab) => tab.windowId === firstWindow && tab.active,
+	);
+	assert.equal(active?.url, 'https://old1.example/');
+	assert.equal(
+		harness.windowUpdates.some(
+			(entry) =>
+				entry.id === harness.createdWindows[1].id &&
+				(entry.properties as {state?: string}).state === 'maximized',
+		),
+		true,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_SNAPSHOTS'})).recovery,
+		null,
+		'restoring the pending snapshot clears the banner',
+	);
+	assert.ok(recovery);
+});
+
+test('RESTORE_SNAPSHOT with a window index restores only that window; duplicates inside a window stay', async () => {
+	const live = seededSnapshot();
+	live.windows[1].tabs.push({
+		url: 'https://other.example/',
+		title: 'Other again',
+	});
+	const harness = recoveryHarness(
+		{restoreDuplicateHandling: 'skip'},
+		undefined,
+		{
+			storage: cleanStorage(seededSnapshotStorage({sessionOpen: true}, live)),
+		},
+	);
+	await harness.fire('onStartup');
+	const {snapshots} = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
+	const response = await harness.sendMessage({
+		type: 'RESTORE_SNAPSHOT',
+		id: snapshots[0].id,
+		windowIndex: 1,
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.windows, 1);
+	assert.equal(response.count, 2, 'a repeated URL in one window still opens');
+	assert.equal(harness.createdWindows.length, 1);
+	const missing = await harness.sendMessage({
+		type: 'RESTORE_SNAPSHOT',
+		id: snapshots[0].id,
+		windowIndex: 9,
+	});
+	assert.equal(missing.ok, false);
+	const unknown = await harness.sendMessage({
+		type: 'RESTORE_SNAPSHOT',
+		id: 'nope',
+	});
+	assert.equal(unknown.ok, false);
+});
+
+test('snapshots can be saved as sessions, deleted and cleared', async () => {
+	const harness = recoveryHarness({}, undefined, {
+		storage: cleanStorage(seededSnapshotStorage({sessionOpen: true})),
+	});
+	await harness.fire('onStartup');
+	const {snapshots} = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
+	const saved = await harness.sendMessage({
+		type: 'SAVE_SNAPSHOT_AS_SESSION',
+		id: snapshots[0].id,
+	});
+	assert.equal(saved.ok, true, saved.error);
+	assert.equal(saved.groups, 2);
+	assert.equal(saved.count, 4);
+	assert.equal(harness.state.groups.length, 3);
+	const first = harness.state.groups[0];
+	assert.match(first.name ?? '', /^Snapshot .* · window 1$/);
+	assert.equal(first.tabs[0].pinned, true, 'pinned tabs are kept');
+	assert.equal(first.tabs[1].nativeGroup?.title, 'Work');
+	const one = await harness.sendMessage({
+		type: 'SAVE_SNAPSHOT_AS_SESSION',
+		id: snapshots[0].id,
+		windowIndex: 1,
+	});
+	assert.equal(one.groups, 1);
+	assert.match(harness.state.groups[0].name ?? '', /window 2$/);
+
+	assert.equal(
+		(await harness.sendMessage({type: 'DELETE_SNAPSHOT', id: snapshots[0].id}))
+			.ok,
+		true,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'DELETE_SNAPSHOT', id: snapshots[0].id}))
+			.ok,
+		false,
+	);
+	harness.tabs.push(webTab(60, 10, 9));
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	const cleared = await harness.sendMessage({type: 'CLEAR_SNAPSHOTS'});
+	assert.equal(cleared.count, 1);
+	assert.equal(liveOf(harness), undefined);
+	assert.equal(historyOf(harness).length, 0);
+});
+
+test('a 5,000-tab snapshot stays small and fast', async () => {
+	const tabs: MockTab[] = Array.from({length: 5000}, (_, index) =>
+		webTab(1000 + index, 10 + (index % 5), Math.floor(index / 5), {
+			active: index < 5,
+			url: `https://example${index % 400}.com/path/to/page/${index}?ref=tab`,
+			title: `A reasonably long page title number ${index} - Example Site`,
+		}),
+	);
+	const harness = recoveryHarness({}, tabs, {
+		extraWindows: [11, 12, 13, 14],
+	});
+	const started = performance.now();
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	const elapsed = performance.now() - started;
+	const live = liveOf(harness)!;
+	const size = JSON.stringify(live).length;
+	assert.equal(
+		live.windows.reduce((sum, win) => sum + win.tabs.length, 0),
+		5000,
+	);
+	assert.ok(size < 1_200_000, `snapshot is ${size} characters`);
+	assert.ok(elapsed < 5000, `capture took ${Math.round(elapsed)} ms`);
+	// Identical state is skipped, not rotated twice.
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.equal(historyOf(harness).length, 1);
+});
+
+type StoredBackups = {
+	auto: Array<{id: string; kind: string; reason: string; json: string}>;
+	safety: Array<{id: string; kind: string; reason: string; json: string}>;
+	downloadError: string;
+};
+const backupsOf = (harness: {extraStorage: Record<string, unknown>}) =>
+	(harness.extraStorage[BACKUPS_KEY] as StoredBackups | undefined) ?? {
+		auto: [],
+		safety: [],
+		downloadError: '',
+	};
+type StoredTrash = {
+	items: Array<{id: string; kind: string; deletedAt: number; label: string}>;
+};
+const trashOf = (harness: {extraStorage: Record<string, unknown>}) =>
+	(harness.extraStorage[TRASH_KEY] as StoredTrash | undefined)?.items ?? [];
+
+function bookmarksState(count = 3): StoredState {
+	const state = stateWithSession();
+	state.bookmarkColumns = [
+		{id: 'bookmark-default', name: 'Bookmarks', createdAt: 0, isDefault: true},
+		{id: 'col-news', name: 'News', createdAt: 1, isDefault: false},
+	];
+	state.bookmarks = Array.from({length: count}, (_, index) => ({
+		id: `bm-${index}`,
+		title: `Bookmark ${index}`,
+		url: `https://bm${index}.example/`,
+		columnId: index < 2 ? 'bookmark-default' : 'col-news',
+		createdAt: index,
+		updatedAt: index,
+	}));
+	return state;
+}
+
+test('BACKUP_NOW stores a full export that the importer reads, and keeps settings in it', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	const response = await harness.sendMessage({type: 'BACKUP_NOW'});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.backup.sessions, 1);
+	assert.equal(response.backup.tabs, 1);
+	assert.equal(response.backup.bookmarks, 3);
+	const stored = backupsOf(harness).auto[0];
+	const file = JSON.parse(stored.json) as Record<string, unknown>;
+	assert.equal(file.format, 'tablodge-backup');
+	assert.equal(Array.isArray(file.groups), true);
+	assert.equal(Array.isArray(file.bookmarks), true);
+	assert.equal(Array.isArray(file.bookmarkColumns), true);
+	assert.equal(typeof file.settings, 'object');
+	const data = await harness.sendMessage({
+		type: 'GET_BACKUP_DATA',
+		id: stored.id,
+	});
+	assert.equal(data.ok, true);
+	assert.match(data.filename, /^tablodge-backup-\d{4}-\d{2}-\d{2}\.json$/);
+	assert.equal(data.json, stored.json);
+	// The file imports into a fresh install.
+	const fresh = createWorkerHarness({
+		...stateWithSession(),
+		groups: [],
+		bookmarks: [],
+	});
+	const imported = await fresh.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: file,
+	});
+	assert.equal(imported.ok, true, imported.error);
+	assert.equal(imported.groups, 1);
+	assert.equal(imported.bookmarks, 3);
+	const listed = await harness.sendMessage({type: 'GET_BACKUPS'});
+	assert.equal(listed.auto.length, 1);
+	assert.equal('json' in listed.auto[0], false, 'listing never ships the data');
+});
+
+test('automatic backups follow the schedule, skip unchanged data, and rotate', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {});
+	assert.equal(harness.alarms.has('tablodge-backup'), false);
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily'},
+	});
+	assert.equal(harness.alarms.get('tablodge-backup')?.periodInMinutes, 1440);
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'weekly'},
+	});
+	assert.equal(harness.alarms.get('tablodge-backup')?.periodInMinutes, 10_080);
+	await harness.fire('alarm', {name: 'tablodge-backup'});
+	assert.equal(backupsOf(harness).auto.length, 1);
+	assert.equal(backupsOf(harness).auto[0].kind, 'auto');
+	await harness.fire('alarm', {name: 'tablodge-backup'});
+	assert.equal(
+		backupsOf(harness).auto.length,
+		1,
+		'unchanged data is not backed up again',
+	);
+	for (let index = 0; index < 10; index += 1) {
+		await harness.sendMessage({
+			type: 'ADD_BOOKMARK',
+			bookmark: {
+				url: `https://extra${index}.example/`,
+				title: `Extra ${index}`,
+			},
+		});
+		await harness.fire('alarm', {name: 'tablodge-backup'});
+	}
+
+	assert.equal(backupsOf(harness).auto.length, 7, 'keeps the last 7');
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'off'},
+	});
+	assert.equal(harness.alarms.has('tablodge-backup'), false);
+	const before = backupsOf(harness).auto.length;
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://late.example/', title: 'Late'},
+	});
+	await harness.fire('alarm', {name: 'tablodge-backup'});
+	assert.equal(
+		backupsOf(harness).auto.length,
+		before,
+		'off means no scheduled backups',
+	);
+});
+
+test('a missed backup is caught up at browser start', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {});
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily', autoBackupKeep: 30},
+	});
+	assert.equal(backupsOf(harness).auto.length, 0);
+	await harness.fire('onStartup');
+	assert.equal(backupsOf(harness).auto.length, 1);
+	await harness.fire('onStartup');
+	assert.equal(backupsOf(harness).auto.length, 1, 'not due again yet');
+});
+
+test('Downloads copies are written as dated JSON under TabLodge only when enabled and permitted', async () => {
+	const permitted = createWorkerHarness(bookmarksState(), undefined, {
+		downloads: true,
+	});
+	await permitted.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily', autoBackupToDownloads: true},
+	});
+	await permitted.fire('alarm', {name: 'tablodge-backup'});
+	assert.equal(permitted.downloads.length, 1);
+	assert.match(
+		permitted.downloads[0].filename,
+		/^TabLodge\/tablodge-backup-\d{4}-\d{2}-\d{2}\.json$/,
+	);
+	assert.match(permitted.downloads[0].url, /^data:application\/json;base64,/);
+	const body = Buffer.from(
+		permitted.downloads[0].url.split(',', 2)[1],
+		'base64',
+	).toString('utf8');
+	assert.equal(body, backupsOf(permitted).auto[0].json);
+	assert.equal(backupsOf(permitted).downloadError, '');
+
+	const off = createWorkerHarness(bookmarksState(), undefined, {
+		downloads: true,
+	});
+	await off.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily'},
+	});
+	await off.fire('alarm', {name: 'tablodge-backup'});
+	assert.equal(off.downloads.length, 0, 'not enabled');
+
+	const denied = createWorkerHarness(bookmarksState());
+	await denied.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily', autoBackupToDownloads: true},
+	});
+	await denied.fire('alarm', {name: 'tablodge-backup'});
+	assert.equal(
+		backupsOf(denied).auto.length,
+		1,
+		'the internal backup still happens',
+	);
+	assert.match(backupsOf(denied).downloadError, /permission/i);
+});
+
+test('oversized backups report that no Downloads copy was written', async () => {
+	const state = bookmarksState();
+	state.bookmarks = Array.from({length: 12_000}, (_, index) => ({
+		id: `big-${index}`,
+		title: `A fairly long bookmark title to inflate the backup ${index}`,
+		url: `https://big${index}.example/some/long/path/segment/${index}`,
+		columnId: 'bookmark-default',
+		createdAt: index,
+		updatedAt: index,
+	}));
+	const harness = createWorkerHarness(state, undefined, {downloads: true});
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily', autoBackupToDownloads: true},
+	});
+	await harness.fire('alarm', {name: 'tablodge-backup'});
+	assert.equal(harness.downloads.length, 0);
+	assert.match(backupsOf(harness).downloadError, /too large/i);
+});
+
+test('safety backups are taken before erase, large imports and bulk deletes, in a ring of five', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	const erased = await harness.sendMessage({
+		type: 'ERASE_DATA',
+		scope: 'bookmarks',
+	});
+	assert.equal(erased.ok, true, erased.error);
+	assert.equal(backupsOf(harness).safety.length, 1);
+	assert.equal(backupsOf(harness).safety[0].reason, 'Before erasing data');
+	assert.equal(
+		(JSON.parse(backupsOf(harness).safety[0].json) as {bookmarks: unknown[]})
+			.bookmarks.length,
+		3,
+		'the backup holds the data as it was',
+	);
+
+	const small = await harness.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: {groups: [{name: 'Few', tabs: [{url: 'https://few.example/'}]}]},
+	});
+	assert.equal(small.ok, true, small.error);
+	assert.equal(backupsOf(harness).safety.length, 1, 'small imports take none');
+	const bigImport = {
+		groups: [
+			{
+				name: 'Many',
+				tabs: Array.from({length: 60}, (_, index) => ({
+					url: `https://many${index}.example/`,
+				})),
+			},
+		],
+	};
+	const large = await harness.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: bigImport,
+	});
+	assert.equal(large.ok, true, large.error);
+	assert.equal(backupsOf(harness).safety.length, 2);
+	assert.equal(backupsOf(harness).safety[0].reason, 'Before a large import');
+
+	const columnState = bookmarksState(0);
+	columnState.bookmarks = Array.from({length: 12}, (_, index) => ({
+		id: `c-${index}`,
+		title: `Col ${index}`,
+		url: `https://col${index}.example/`,
+		columnId: 'col-news',
+		createdAt: index,
+		updatedAt: index,
+	}));
+	const columns = createWorkerHarness(columnState);
+	const dropped = await columns.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'col-news',
+		discardBookmarks: true,
+	});
+	assert.equal(dropped.ok, true, dropped.error);
+	assert.equal(
+		backupsOf(columns).safety[0].reason,
+		'Before deleting a bookmark column',
+	);
+	const moved = createWorkerHarness(columnState);
+	await moved.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'col-news',
+		targetColumnId: 'bookmark-default',
+	});
+	assert.equal(backupsOf(moved).safety.length, 0, 'moving links loses nothing');
+
+	for (let index = 0; index < 8; index += 1) {
+		await harness.sendMessage({
+			type: 'ADD_BOOKMARK',
+			bookmark: {url: `https://r${index}.example/`},
+		});
+		await harness.sendMessage({type: 'ERASE_DATA', scope: 'bookmarks'});
+	}
+
+	assert.equal(backupsOf(harness).safety.length, 5);
+});
+
+test('erasing stops when the safety backup cannot be written', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	await harness.sendMessage({type: 'GET_STATE'});
+	harness.setStorageFailure(new Error('quota'));
+	const response = await harness.sendMessage({
+		type: 'ERASE_DATA',
+		scope: 'all',
+	});
+	assert.equal(response.ok, false);
+	assert.match(response.error ?? '', /safety backup/i);
+	assert.equal(harness.state.bookmarks.length, 3);
+});
+
+test('RESTORE_BACKUP brings data back, keeps current settings, and takes its own safety backup', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	const made = await harness.sendMessage({type: 'BACKUP_NOW'});
+	await harness.sendMessage({type: 'ERASE_DATA', scope: 'all'});
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {copyFormat: 'url'},
+	});
+	assert.equal(harness.state.bookmarks.length, 0);
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_BACKUP',
+		id: made.backup.id,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.equal(restored.sessions, 1);
+	assert.equal(restored.bookmarks, 3);
+	assert.equal(harness.state.bookmarks.length, 3);
+	assert.equal(harness.state.groups[0].id, 'session-1');
+	assert.equal(harness.state.settings.copyFormat, 'url', 'settings are kept');
+	// Restoring over data that exists keeps that data as a safety backup first.
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://newer.example/', title: 'Newer'},
+	});
+	await harness.sendMessage({type: 'RESTORE_BACKUP', id: made.backup.id});
+	assert.equal(
+		backupsOf(harness).safety[0].reason,
+		'Before restoring a backup',
+	);
+	assert.equal(harness.state.bookmarks.length, 3);
+	assert.equal(
+		(await harness.sendMessage({type: 'RESTORE_BACKUP', id: 'nope'})).ok,
+		false,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'DELETE_BACKUP', id: made.backup.id})).ok,
+		true,
+	);
+	assert.equal(backupsOf(harness).auto.length, 0);
+});
+
+test('deleting a session moves it to the trash and restoring puts it back where it was', async () => {
+	const state = stateWithSession();
+	state.groups = ['a', 'b', 'c'].map((id) => ({
+		...structuredClone(state.groups[0]),
+		id: `session-${id}`,
+		name: `Session ${id}`,
+	}));
+	const harness = createWorkerHarness(state);
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_GROUP',
+		groupId: 'session-b',
+	});
+	assert.equal(deleted.ok, true, deleted.error);
+	assert.ok(deleted.trashId);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['session-a', 'session-c'],
+	);
+	const listed = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.equal(listed.items.length, 1);
+	assert.equal(listed.items[0].kind, 'session');
+	assert.equal(listed.items[0].label, 'Session b');
+	assert.equal(listed.items[0].count, 1);
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: deleted.trashId,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['session-a', 'session-b', 'session-c'],
+	);
+	assert.equal(trashOf(harness).length, 0);
+	assert.equal(
+		(await harness.sendMessage({type: 'RESTORE_TRASH', id: deleted.trashId}))
+			.ok,
+		false,
+	);
+});
+
+test('a restored session whose folder is gone lands in Unfiled', async () => {
+	const state = stateWithSession();
+	state.folders.push({
+		id: 'work',
+		name: 'Work',
+		createdAt: 5,
+		isDefault: false,
+	});
+	state.groups[0].folderId = 'work';
+	const harness = createWorkerHarness(state);
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_GROUP',
+		groupId: 'session-1',
+	});
+	const folder = await harness.sendMessage({
+		type: 'DELETE_FOLDER',
+		folderId: 'work',
+	});
+	assert.ok(folder.trashId);
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: deleted.trashId!,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.equal(restored.placed, 'Unfiled');
+	assert.equal(harness.state.groups[0].folderId, 'unfiled');
+	// Restoring the folder afterwards recreates it.
+	const back = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: folder.trashId,
+	});
+	assert.equal(back.ok, true, back.error);
+	assert.equal(
+		harness.state.folders.some((item) => item.id === 'work'),
+		true,
+	);
+});
+
+test('deleted saved links come back at their position, or recreate a vanished session', async () => {
+	const state = stateWithSession();
+	state.groups[0].tabs = ['a', 'b', 'c'].map((id, index) => ({
+		id: `tab-${id}`,
+		title: `Tab ${id}`,
+		url: `https://${id}.example/`,
+		pinned: false,
+		originalIndex: index,
+	}));
+	const harness = createWorkerHarness(state);
+	const removed = await harness.sendMessage({
+		type: 'DELETE_TAB',
+		groupId: 'session-1',
+		tabId: 'tab-b',
+	});
+	assert.ok(removed.trashId);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['tab-a', 'tab-c'],
+	);
+	const back = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: removed.trashId,
+	});
+	assert.equal(back.ok, true, back.error);
+	assert.equal(back.placed, 'Research');
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['tab-a', 'tab-b', 'tab-c'],
+	);
+
+	// Deleting the last links removes the session; undo recreates it with the same id.
+	for (const id of ['tab-a', 'tab-b']) {
+		await harness.sendMessage({
+			type: 'DELETE_TAB',
+			groupId: 'session-1',
+			tabId: id,
+		});
+	}
+
+	const last = await harness.sendMessage({
+		type: 'DELETE_TAB',
+		groupId: 'session-1',
+		tabId: 'tab-c',
+	});
+	assert.equal(harness.state.groups.length, 0);
+	const recreated = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: last.trashId!,
+	});
+	assert.equal(recreated.ok, true, recreated.error);
+	assert.equal(harness.state.groups[0].id, 'session-1');
+	assert.equal(harness.state.groups[0].name, 'Research');
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['tab-c'],
+	);
+	// With the session still there, the link joins it instead.
+	const other = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.equal(
+		other.items.length,
+		2,
+		'the two earlier deletions are still there',
+	);
+});
+
+test('bookmarks and columns restore into their old place, falling back to the first column', async () => {
+	const harness = createWorkerHarness(bookmarksState(5));
+	const removed = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK',
+		bookmarkId: 'bm-1',
+	});
+	assert.ok(removed.trashId);
+	assert.equal(harness.state.bookmarks.length, 4);
+	await harness.sendMessage({type: 'RESTORE_TRASH', id: removed.trashId});
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.id),
+		['bm-0', 'bm-1', 'bm-2', 'bm-3', 'bm-4'],
+	);
+
+	// A bookmark whose column was deleted goes to the first column.
+	const second = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK',
+		bookmarkId: 'bm-3',
+	});
+	await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'col-news',
+		targetColumnId: 'bookmark-default',
+	});
+	const fallback = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: second.trashId!,
+	});
+	assert.equal(fallback.ok, true, fallback.error);
+	assert.equal(fallback.placed, 'Bookmarks');
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.id === 'bm-3')
+			?.columnId,
+		'bookmark-default',
+	);
+
+	// Restoring the column sends its moved links back.
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	const column = trash.items.find((item) => item.kind === 'column')!;
+	const back = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: column.id,
+	});
+	assert.equal(back.ok, true, back.error);
+	assert.equal(harness.state.bookmarkColumns.at(-1)?.id, 'col-news');
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.id === 'bm-4')
+			?.columnId,
+		'col-news',
+	);
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.id === 'bm-3')
+			?.columnId,
+		'bookmark-default',
+		'a link moved by hand since stays where it is',
+	);
+});
+
+test('a column deleted with its bookmarks restores them too', async () => {
+	const harness = createWorkerHarness(bookmarksState(5));
+	const response = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'col-news',
+		discardBookmarks: true,
+	});
+	assert.equal(response.deleted, 3);
+	assert.equal(harness.state.bookmarks.length, 2);
+	const back = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: response.trashId!,
+	});
+	assert.equal(back.ok, true, back.error);
+	assert.equal(harness.state.bookmarks.length, 5);
+	assert.equal(
+		harness.state.bookmarks.filter(
+			(bookmark) => bookmark.columnId === 'col-news',
+		).length,
+		3,
+	);
+});
+
+test('trash can be emptied, items deleted permanently, and old items are purged by retention', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		storage: {
+			[TRASH_KEY]: {
+				version: 1,
+				items: [
+					{
+						id: 'old',
+						kind: 'bookmark',
+						deletedAt: Date.now() - 40 * 86_400_000,
+						label: 'Old',
+						origin: '',
+						count: 1,
+						data: {
+							bookmark: {id: 'x', url: 'https://old.example/', title: 'Old'},
+						},
+					},
+					{
+						id: 'fresh',
+						kind: 'bookmark',
+						deletedAt: Date.now() - 2 * 86_400_000,
+						label: 'Fresh',
+						origin: '',
+						count: 1,
+						data: {
+							bookmark: {
+								id: 'y',
+								url: 'https://fresh.example/',
+								title: 'Fresh',
+							},
+						},
+					},
+				],
+			},
+		},
+	});
+	const listed = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.deepEqual(
+		listed.items.map((item) => item.id),
+		['fresh'],
+		'30 days is the default retention',
+	);
+	await harness.fire('alarm', {name: 'tablodge-trash'});
+	assert.deepEqual(
+		trashOf(harness).map((item) => item.id),
+		['fresh'],
+	);
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {trashRetentionDays: 7},
+	});
+	// A new deletion prunes with the new retention too.
+	const removed = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK',
+		bookmarkId: 'bm-0',
+	});
+	assert.ok(removed.trashId);
+	assert.equal(trashOf(harness).length, 2);
+	assert.equal(
+		(await harness.sendMessage({type: 'DELETE_TRASH', id: 'fresh'})).ok,
+		true,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'DELETE_TRASH', id: 'fresh'})).ok,
+		false,
+	);
+	const emptied = await harness.sendMessage({type: 'EMPTY_TRASH'});
+	assert.equal(emptied.count, 1);
+	assert.equal(trashOf(harness).length, 0);
+});
+
+test('storage usage reports each area', async () => {
+	const harness = recoveryHarness();
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	await harness.sendMessage({type: 'BACKUP_NOW'});
+	await harness.sendMessage({type: 'DELETE_GROUP', groupId: 'session-1'});
+	const response = await harness.sendMessage({type: 'GET_STORAGE_USAGE'});
+	assert.equal(response.ok, true);
+	assert.equal(response.usage.snapshots > 0, true);
+	assert.equal(response.usage.backups > 0, true);
+	assert.equal(response.usage.trash > 0, true);
+	assert.equal(response.usage.state > 0, true);
+});
+
+test('undo paths: restore-and-remove, move between sessions and close-after-save are reversible', async () => {
+	// Restore-and-remove: the removed links sit in the trash and Undo puts them back.
+	const state = stateWithSession({
+		restoreTarget: 'current-window',
+		restoreDuplicateHandling: 'open',
+	});
+	state.groups[0].tabs.push({
+		id: 'saved-tab-2',
+		title: 'Second',
+		url: 'https://second.example/',
+		pinned: false,
+		originalIndex: 1,
+	});
+	const harness = createWorkerHarness(state, [
+		webTab(1, 10, 0, {active: true, url: 'https://current.example/'}),
+	]);
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+		forceRemove: true,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.equal(restored.removed, true);
+	assert.equal(harness.state.groups.length, 0);
+	assert.ok(restored.trashId);
+	const undone = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: restored.trashId,
+	});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(harness.state.groups[0].tabs.length, 2);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['saved-tab-1', 'saved-tab-2'],
+	);
+
+	// Single-tab restore-and-remove.
+	const single = await harness.sendMessage({
+		type: 'RESTORE_TAB',
+		groupId: 'session-1',
+		tabId: 'saved-tab-1',
+		restoreMode: 'remove',
+		restoreTarget: 'current-window',
+	});
+	assert.equal(single.ok, true, single.error);
+	assert.ok(single.trashId);
+	assert.equal(harness.state.groups[0].tabs.length, 1);
+	await harness.sendMessage({type: 'RESTORE_TRASH', id: single.trashId});
+	assert.equal(harness.state.groups[0].tabs[0].id, 'saved-tab-1');
+
+	// Moving a link and moving it back to the neighbor it sat next to.
+	const two = stateWithSession();
+	two.groups = [
+		{
+			...structuredClone(two.groups[0]),
+			id: 'from',
+			tabs: ['a', 'b', 'c'].map((id, index) => ({
+				id: `t-${id}`,
+				title: id,
+				url: `https://${id}.example/`,
+				pinned: false,
+				originalIndex: index,
+			})),
+		},
+		{...structuredClone(two.groups[0]), id: 'to'},
+	];
+	const mover = createWorkerHarness(two);
+	await mover.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'from',
+		tabId: 't-b',
+		toGroupId: 'to',
+	});
+	assert.equal(mover.state.groups[1].tabs.at(-1)?.id, 't-b');
+	await mover.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'to',
+		tabId: 't-b',
+		toGroupId: 'from',
+		targetTabId: 't-c',
+		position: 'before',
+	});
+	assert.deepEqual(
+		mover.state.groups[0].tabs.map((tab) => tab.id),
+		['t-a', 't-b', 't-c'],
+	);
+
+	// Close-after-save: restoring the saved session into the current window reopens the closed tabs.
+	const saving = createWorkerHarness(stateWithSession({closeOnSave: true}), [
+		webTab(1, 10, 0, {active: true, url: 'https://keep.example/'}),
+		webTab(2, 10, 1, {url: 'https://gone.example/'}),
+	]);
+	const saved = await saving.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+	});
+	assert.equal(saved.ok, true, saved.error);
+	assert.equal(
+		saving.tabs.some((tab) => tab.url === 'https://gone.example/'),
+		false,
+		'the saved tabs were closed',
+	);
+	const reopened = await saving.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: saved.groupId!,
+		restoreTarget: 'current-window',
+		restoreMode: 'keep',
+		activate: false,
+	});
+	assert.equal(reopened.ok, true, reopened.error);
+	assert.equal(
+		saving.tabs.some((tab) => tab.url === 'https://gone.example/'),
+		true,
+	);
+	assert.equal(
+		saving.createdWindows.length,
+		0,
+		'it reopens in the same window',
+	);
+});
+
+test('the worker writes the same backup format id and version as the pages', async () => {
+	const {BACKUP_FORMAT_ID, BACKUP_VERSION} =
+		await import('../src/app/backup-format');
+	const harness = createWorkerHarness(bookmarksState());
+	const made = await harness.sendMessage({type: 'BACKUP_NOW'});
+	const stored = backupsOf(harness).auto.find(
+		(item) => item.id === made.backup.id,
+	)!;
+	const file = JSON.parse(stored.json) as {format: string; version: number};
+	assert.equal(file.format, BACKUP_FORMAT_ID);
+	assert.equal(file.version, BACKUP_VERSION);
+});
+
+test('the manifest asks for alarms up front and Downloads only as an optional permission', () => {
+	assert.equal(manifest.permissions?.includes('alarms'), true);
+	assert.equal(manifest.permissions?.includes('downloads'), false);
+	assert.deepEqual(manifest.optional_permissions, ['downloads']);
 });

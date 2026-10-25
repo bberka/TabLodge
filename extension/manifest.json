@@ -21,8 +21,10 @@
 		"unlimitedStorage",
 		"clipboardWrite",
 		"sidePanel",
-		"search"
+		"search",
+		"alarms"
 	],
+	"optional_permissions": ["downloads"],
 	"background": {
 		"service_worker": "service-worker.js"
 	},
