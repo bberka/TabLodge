@@ -231,6 +231,10 @@ type BackupDialogProps = {
 	When given (and both systems are on), a Bookmarks/Sessions switch lets the user change what is backed up.
 	*/
 	state?: TabLodgeState | null;
+	/**
+	Opens on this choice instead of the requested kind; Settings opens on Everything.
+	*/
+	initialScope?: BackupScope;
 };
 
 /**
@@ -242,6 +246,7 @@ export function BackupDialog({
 	onOpenChange,
 	showStatus,
 	state,
+	initialScope,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
@@ -254,8 +259,8 @@ export function BackupDialog({
 
 		setFormat('json');
 		setSaving(false);
-		setSwitched(null);
-	}, [open]);
+		setSwitched(initialScope ?? null);
+	}, [open, initialScope]);
 	const canSwitch = Boolean(
 		state &&
 		requested &&
@@ -713,6 +718,10 @@ type ImportDialogProps = {
 	The kind selected when the dialog opens; the user can switch when both systems are enabled.
 	*/
 	initialKind: ImportKind;
+	/**
+	Open on Everything (restore a full backup ZIP) instead of Bookmarks or Sessions; Settings does this.
+	*/
+	initialScope?: 'everything';
 	state: TabLodgeState | null;
 	showStatus: ShowStatus;
 	/**
@@ -752,6 +761,7 @@ export function ImportDialog({
 	open,
 	onOpenChange,
 	initialKind,
+	initialScope,
 	state,
 	showStatus,
 	onImported,
@@ -759,6 +769,8 @@ export function ImportDialog({
 	const sessionsEnabled = state?.settings.sessionsEnabled !== false;
 	const bookmarksEnabled = state?.settings.bookmarksEnabled !== false;
 	const [kind, setKind] = useState<ImportKind>(initialKind);
+	// "Everything" only takes a full backup ZIP, which replaces all data and settings.
+	const [everything, setEverything] = useState(initialScope === 'everything');
 	const [source, setSource] = useState<ImportSource | null>(null);
 	const [parsed, setParsed] = useState<ParsedImport | null>(null);
 	const [full, setFull] = useState<FullBackupContents | null>(null);
@@ -787,6 +799,7 @@ export function ImportDialog({
 					? 'sessions'
 					: initialKind,
 		);
+		setEverything(initialScope === 'everything');
 		setSource(null);
 		setParsed(null);
 		setFull(null);
@@ -873,6 +886,13 @@ export function ImportDialog({
 
 				setFull(contents);
 				setSource({type: 'file', name: file.name});
+				return;
+			}
+
+			if (everything) {
+				setError(
+					`“${file.name}” is not a ${PROJECT.name} full backup (.zip). Choose Bookmarks or Sessions to import other files.`,
+				);
 				return;
 			}
 
@@ -1046,33 +1066,55 @@ export function ImportDialog({
 
 	const title = full
 		? 'Review full backup'
-		: step === 'preview'
-			? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
-			: kind === 'sessions'
-				? 'Import sessions'
-				: 'Import bookmarks';
+		: everything
+			? 'Import everything'
+			: step === 'preview'
+				? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
+				: kind === 'sessions'
+					? 'Import sessions'
+					: 'Import bookmarks';
 	const description = full
 		? 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
-		: step === 'preview'
-			? 'Nothing is saved until you choose Import.'
-			: kind === 'sessions'
-				? `Restore a backup or bring in tabs saved by another tab manager. Each group of tabs becomes a ${PROJECT.name} session.`
-				: 'Restore a backup, or bring in bookmarks from a browser or another tool. Folders become columns.';
+		: everything
+			? `Restore a ${PROJECT.name} full backup. It replaces sessions, bookmarks, and settings, and you can undo it right after.`
+			: step === 'preview'
+				? 'Nothing is saved until you choose Import.'
+				: kind === 'sessions'
+					? `Restore a backup or bring in tabs saved by another tab manager. Each group of tabs becomes a ${PROJECT.name} session.`
+					: 'Restore a backup, or bring in bookmarks from a browser or another tool. Folders become columns.';
 	const kindSwitch =
 		// A full backup restores everything, so choosing Bookmarks or Sessions would only mislead.
-		!full &&
-		sessionsEnabled &&
-		bookmarksEnabled &&
-		source?.type !== 'browser' ? (
+		!full && source?.type !== 'browser' ? (
 			<SegmentedControl
 				fullWidth
 				label="What to import"
-				value={kind}
+				value={everything ? 'everything' : kind}
 				options={[
-					{value: 'bookmarks', label: <KindLabel kind="bookmarks" />},
-					{value: 'sessions', label: <KindLabel kind="sessions" />},
+					{value: 'everything', label: <EverythingLabel />},
+					...(bookmarksEnabled
+						? [
+								{
+									value: 'bookmarks' as const,
+									label: <KindLabel kind="bookmarks" />,
+								},
+							]
+						: []),
+					...(sessionsEnabled
+						? [
+								{
+									value: 'sessions' as const,
+									label: <KindLabel kind="sessions" />,
+								},
+							]
+						: []),
 				]}
-				onValueChange={(value) => setKind(value)}
+				onValueChange={(value) => {
+					setError('');
+					setEverything(value === 'everything');
+					if (value !== 'everything') {
+						setKind(value);
+					}
+				}}
 			/>
 		) : null;
 
@@ -1134,7 +1176,9 @@ export function ImportDialog({
 										{dragging ? 'Drop the file to read it' : 'Drop a file here'}
 									</h3>
 									<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-										{SUPPORTED_FILES}
+										{everything
+											? `A ${PROJECT.name} full backup (.zip), made with Back up › Everything.`
+											: SUPPORTED_FILES}
 									</p>
 								</div>
 								<Button
@@ -1154,11 +1198,15 @@ export function ImportDialog({
 									className="hidden"
 									tabIndex={-1}
 									aria-hidden="true"
-									accept=".zip,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown"
+									accept={
+										everything
+											? '.zip,application/zip'
+											: '.zip,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown'
+									}
 									onChange={(event) => void readFile(event.target.files?.[0])}
 								/>
 							</section>
-							{kind === 'bookmarks' && (
+							{kind === 'bookmarks' && !everything && (
 								<section
 									className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center"
 									aria-labelledby="import-browser-heading"

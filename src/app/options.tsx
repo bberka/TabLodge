@@ -1192,7 +1192,7 @@ function Options() {
 			key: 'backup',
 			icon: Download,
 			label: 'Back up',
-			help: 'Save bookmarks or sessions to a file.',
+			help: 'Save everything, or only bookmarks or sessions, to a file.',
 			words: [
 				'backup',
 				'export',
@@ -1206,7 +1206,7 @@ function Options() {
 				<Button
 					variant="outline"
 					className="w-full sm:w-32"
-					disabled={!bookmarkCount && sessions.length === 0}
+					// Opens on Everything, which also holds settings, so it is never empty.
 					onClick={() =>
 						setBackupData(
 							settings.bookmarksEnabled !== false && bookmarkCount > 0
@@ -1232,7 +1232,7 @@ function Options() {
 			key: 'import',
 			icon: Upload,
 			label: 'Import',
-			help: 'Bring in bookmarks or sessions from a file or your browser.',
+			help: 'Restore a full backup, or bring in bookmarks or sessions from a file or your browser.',
 			words: [
 				'restore',
 				'load',
@@ -1872,6 +1872,7 @@ function Options() {
 				</div>
 			</ConfirmationDialog>
 			<BackupDialog
+				initialScope="everything"
 				state={state}
 				data={backupData}
 				open={Boolean(backupData)}
@@ -1893,6 +1894,7 @@ function Options() {
 				onChanged={reload}
 			/>
 			<ImportDialog
+				initialScope="everything"
 				open={importOpen}
 				initialKind={
 					settings.bookmarksEnabled === false ? 'sessions' : 'bookmarks'
