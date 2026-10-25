@@ -134,6 +134,12 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'autoFocusSearchOnNewTab',
+				label: 'Focus search when opening a new tab',
+				help: `Shows a search box at the top of the ${PROJECT.name} page and puts the cursor in it. Chromium may keep focus in the address bar on new tabs unless ${PROJECT.name} is opened as a normal tab.`,
+				type: 'switch',
+			},
+			{
 				name: 'keepLodgePinned',
 				label: `Keep ${PROJECT.name} pinned and always open`,
 				help: `Pins one ${PROJECT.name} tab per window and keeps it open. Links opened from it always open in a new tab.`,

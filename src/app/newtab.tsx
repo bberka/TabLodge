@@ -72,9 +72,16 @@ import {
 	useTabLodgeState,
 } from './common';
 import {SessionManager} from './dashboard';
+import {
+	FinderPalette,
+	FinderTrigger,
+	InlineFinder,
+	emitFinderEvent,
+	type FinderAction,
+} from './finder';
 import {BackupDialog, ImportDialog, useShareDialog} from './data-transfer';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
-import {IconPickerField} from './icon-picker';
+import {IconNameField} from './icon-picker';
 import {openLink} from './link-target';
 import type {ExportData} from './export-formats';
 import {
@@ -238,6 +245,9 @@ function NewTab() {
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
+	const [finderOpen, setFinderOpen] = useState(false);
+	const inlineFinderRef = useRef<HTMLInputElement | null>(null);
+	const {setTheme} = useTheme();
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
 	const editedBookmark = bookmarkEdit?.id
 		? state?.bookmarks.find((entry) => entry.id === bookmarkEdit.id)
@@ -250,8 +260,12 @@ function NewTab() {
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const urlMode = settings.urlDisplayMode ?? 'full';
-	const quickActions = settings.showBookmarkQuickActions === true;
+	const quickAction: BookmarkQuickAction | null =
+		settings.showBookmarkQuickActions === true
+			? (settings.bookmarkQuickAction ?? 'open-new')
+			: null;
 	const sessionsVisible = enabled && sessionsEnabled;
+	const inlineFinder = enabled && settings.autoFocusSearchOnNewTab === true;
 	const bothVisible = sessionsVisible && bookmarksEnabled;
 	const sessionsOnTop = bothVisible && settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
@@ -1362,6 +1376,7 @@ function NewTab() {
 			className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8 sm:py-9"
 		>
 			<AppHeader active="dashboard">
+				{!inlineFinder && <FinderTrigger onClick={() => setFinderOpen(true)} />}
 				{sessionsVisible && (
 					<Button
 						size="sm"
@@ -1376,6 +1391,20 @@ function NewTab() {
 					</Button>
 				)}
 			</AppHeader>
+
+			{inlineFinder && (
+				<InlineFinder
+					state={state}
+					actions={finderActions}
+					inputRef={inlineFinderRef}
+				/>
+			)}
+			<FinderPalette
+				open={finderOpen}
+				state={state}
+				actions={finderActions}
+				onOpenChange={setFinderOpen}
+			/>
 
 			{!enabled && (
 				<section className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-5">

@@ -154,6 +154,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	openDashboardOnStartup: false,
 	startupBehavior: 'dashboard',
 	newTabEnabled: true,
+	autoFocusSearchOnNewTab: false,
 	actionMode: 'popup',
 	sessionsEnabled: true,
 	bookmarksEnabled: true,
@@ -777,6 +778,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		startupBehavior:
 			raw.startupBehavior === 'last-session' ? 'last-session' : 'dashboard',
 		newTabEnabled: raw.newTabEnabled !== false,
+		autoFocusSearchOnNewTab: raw.autoFocusSearchOnNewTab === true,
 		actionMode: isOneOf(
 			[
 				'current-group',
