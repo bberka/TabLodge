@@ -7854,3 +7854,57 @@ test('Undo after deleting a folder brings the folder back with its sessions in i
 	);
 	assert.equal(harness.state.groups[0].folderId, 'work');
 });
+
+test('saving cleans notification counters from page titles unless Clean page titles is off', async () => {
+	const tabs = [
+		['(1) YouTube', 'https://youtube.example/'],
+		['(12+) Feed', 'https://feed.example/'],
+		['[3] Inbox', 'https://mail.example/'],
+		['● Draft', 'https://docs.example/'],
+		['Chapter (2) notes', 'https://book.example/'],
+		['(5)', 'https://only.example/'],
+	].map(([title, url], index) => ({
+		id: index + 1,
+		windowId: 10,
+		index,
+		active: index === 0,
+		highlighted: index === 0,
+		url,
+		title,
+	}));
+	const titlesAfterSave = async (settings: Record<string, unknown>) => {
+		const harness = createWorkerHarness(
+			stateWithSession({closeOnSave: false, ...settings}),
+			structuredClone(tabs),
+		);
+		const response = await harness.sendMessage({
+			type: 'SAVE_TABS',
+			scope: 'window',
+		});
+		assert.equal(response.ok, true, response.error);
+		return harness.state.groups[0].tabs.map((tab) => tab.title);
+	};
+
+	assert.deepEqual(await titlesAfterSave({}), [
+		'YouTube',
+		'Feed',
+		'Inbox',
+		'Draft',
+		'Chapter (2) notes',
+		'(5)',
+	]);
+	assert.deepEqual(
+		await titlesAfterSave({cleanTitles: false}),
+		tabs.map((tab) => tab.title),
+	);
+});
+
+test('bookmarking a page cleans a leading notification counter from its title', async () => {
+	const harness = createWorkerHarness(bookmarksState(0));
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: '(3) YouTube', url: 'https://youtube.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal(added.bookmark.title, 'YouTube');
+});

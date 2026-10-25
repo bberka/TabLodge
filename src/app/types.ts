@@ -103,6 +103,10 @@ export type Settings = {
 	*/
 	pasteLinkToBookmark: boolean;
 	/**
+	Remove leading notification counters such as "(1) " from page titles when saving tabs and bookmarks (default on).
+	*/
+	cleanTitles: boolean;
+	/**
 	What clicking a bookmark does (default: open in this tab).
 	*/
 	bookmarkClickAction: BookmarkClickAction;

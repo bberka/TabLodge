@@ -367,6 +367,12 @@ const settingsGroups: Array<{
 				],
 			},
 			{
+				name: 'cleanTitles',
+				label: 'Clean page titles',
+				help: 'Removes notification counts and unread markers from the start of page titles when saving tabs and bookmarks, so “(1) YouTube” is saved as “YouTube”.',
+				type: 'switch',
+			},
+			{
 				name: 'sessionNameStyle',
 				label: 'Session name',
 				help: 'How a new session is named. A saved tab group keeps its own title, and a title typed in the popup always wins. “Ask each time” shows a dialog to name the session before it is saved; saving with a shortcut, right-click menu or toolbar button saves first and then opens a small window to rename it.',

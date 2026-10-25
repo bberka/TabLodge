@@ -204,6 +204,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	expandSessionsByDefault: false,
 	stretchBookmarkColumns: true,
 	pasteLinkToBookmark: true,
+	cleanTitles: true,
 	bookmarkClickAction: 'current',
 	sessionLinkClickAction: 'new',
 	showBookmarkQuickActions: false,
@@ -383,6 +384,24 @@ function cleanText(value: unknown, fallback: unknown = '', max = 240) {
 		.trim()
 		.slice(0, max);
 	return text || String(fallback).slice(0, max);
+}
+
+// Notification counters and unread markers sites put in front of their titles: "(1) YouTube", "(12+) Feed",
+// "[3] Inbox", "● Untitled", "* Draft". Only a leading run is removed, so titles that merely contain "(2)" stay.
+const TITLE_JUNK = /^(?:\s*(?:\(\d{1,5}\+?\)|\[\d{1,5}\+?\]|[*•●✱]))+\s+/u;
+
+/**
+A tab's title as TabLodge stores it: cleaned like any text, and with leading notification counters removed unless
+"Clean page titles" is off. A title that is nothing but a counter is kept as it was.
+*/
+function pageTitle(
+	value: unknown,
+	fallback: unknown,
+	clean: boolean,
+	max = 500,
+): string {
+	const text = cleanText(value, fallback, max);
+	return clean ? text.replace(TITLE_JUNK, '').trim() || text : text;
 }
 
 const SESSION_NAME_TEMPLATE_MAX = 200;
@@ -788,14 +807,17 @@ function cleanBookmarkTitle(value: unknown, url: string) {
 				.trim();
 }
 
-async function openBookmarkTitleMap() {
+async function openBookmarkTitleMap(clean = true) {
 	const titles = new Map<string, string>();
 	try {
 		const tabs = await chrome.tabs.query({});
 		for (const tab of tabs) {
 			const url = normalizeUrl(tab.url);
 			if (url && !titles.has(url) && !bookmarkTitleIsUrl(tab.title, url)) {
-				titles.set(url, cleanText(tab.title, fallbackBookmarkTitle(url), 500));
+				titles.set(
+					url,
+					pageTitle(tab.title, fallbackBookmarkTitle(url), clean),
+				);
 			}
 		}
 	} catch {
@@ -817,12 +839,12 @@ function importedBookmarkTitle(
 		: cleanText(value, fallbackBookmarkTitle(url), 500);
 }
 
-async function bestBookmarkTitle(value: unknown, url: string) {
+async function bestBookmarkTitle(value: unknown, url: string, clean = true) {
 	if (!bookmarkTitleIsUrl(value, url)) {
-		return cleanText(value, fallbackBookmarkTitle(url), 500);
+		return pageTitle(value, fallbackBookmarkTitle(url), clean);
 	}
 
-	const openTitles = await openBookmarkTitleMap();
+	const openTitles = await openBookmarkTitleMap(clean);
 	return importedBookmarkTitle(value, url, openTitles);
 }
 
@@ -998,6 +1020,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
 		pasteLinkToBookmark: raw.pasteLinkToBookmark !== false,
+		cleanTitles: raw.cleanTitles !== false,
 		bookmarkClickAction: isOneOf(
 			['none', 'current', 'new', 'menu'],
 			raw.bookmarkClickAction,
@@ -1493,7 +1516,11 @@ async function captureTabs(
 			splitViewId: splitViewOf(tab),
 			saved: {
 				id: makeId(),
-				title: cleanText(tab.title, normalizeUrl(tab.url), 500),
+				title: pageTitle(
+					tab.title,
+					normalizeUrl(tab.url),
+					settings.cleanTitles,
+				),
 				url: normalizeUrl(tab.url),
 				notes: '',
 				pinned: Boolean(tab.pinned),
@@ -2092,7 +2119,7 @@ async function previewSessionName(
 			}),
 			template,
 			title: first
-				? cleanText(first.title, normalizeUrl(first.url), 500)
+				? pageTitle(first.title, normalizeUrl(first.url), settings.cleanTitles)
 				: 'Example page',
 			url: first ? (normalizeUrl(first.url) ?? '') : 'https://example.com/',
 			count: Math.max(saveable.length, 1),
@@ -3463,7 +3490,11 @@ async function addBookmark(
 		const now = Date.now();
 		const bookmark = {
 			id: makeId(),
-			title: await bestBookmarkTitle(fields.title, url),
+			title: await bestBookmarkTitle(
+				fields.title,
+				url,
+				store.settings.cleanTitles,
+			),
 			url,
 			columnId,
 			createdAt: now,
@@ -3509,7 +3540,11 @@ async function addBookmarks(
 
 			added.push({
 				id: makeId(),
-				title: await bestBookmarkTitle(entry?.title, url),
+				title: await bestBookmarkTitle(
+					entry?.title,
+					url,
+					store.settings.cleanTitles,
+				),
 				url,
 				columnId: targetColumnId,
 				createdAt: now,
@@ -5160,7 +5195,10 @@ async function captureSnapshotWindows(
 				continue;
 			}
 
-			const entry: SnapshotTab = {url, title: cleanText(tab.title, url, 200)};
+			const entry: SnapshotTab = {
+				url,
+				title: pageTitle(tab.title, url, settings.cleanTitles, 200),
+			};
 			if (tab.pinned) {
 				entry.pinned = true;
 			}
@@ -7610,7 +7648,7 @@ async function saveCurrentTabToFirstGroup(
 		const now = Date.now();
 		// IsCapturable above guarantees a web URL.
 		const tabUrl = normalizeUrl(tab.url)!;
-		const title = cleanText(tab.title, tabUrl, 500);
+		const title = pageTitle(tab.title, tabUrl, store.settings.cleanTitles);
 		const copies = store.groups
 			.flatMap((entry) => entry.tabs)
 			.filter((entry) => entry.url === tabUrl);
@@ -8728,7 +8766,11 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 					return {ok: false, error: 'Open a regular web page to bookmark it.'};
 				}
 
-				const title = cleanText(tab?.title, linkHost(url), 500);
+				const title = pageTitle(
+					tab?.title,
+					linkHost(url),
+					(await readSettings()).cleanTitles,
+				);
 				if (id === MENU.pageBookmarkNew) {
 					return openPrefilledBookmarkDialog(url, title, tab);
 				}
