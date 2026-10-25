@@ -25,7 +25,6 @@ import {
 	Pencil,
 	Plus,
 	Search,
-	Settings2,
 	Share2,
 	Trash2,
 	PanelsTopLeft,
@@ -106,7 +105,6 @@ import type {
 	Settings,
 	BookmarkQuickAction,
 } from './types';
-import {PROJECT} from './project';
 
 type DialogKind = 'bookmark' | 'column' | 'move';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
@@ -240,6 +238,8 @@ const plural = (count: number, noun: string) =>
 	`${count} ${count === 1 ? noun : `${noun}s`}`;
 const bookmarkCount = (count: number) => plural(count, 'bookmark');
 
+type BraveNavigator = Navigator & {brave?: {isBrave: () => Promise<boolean>}};
+
 function NewTab() {
 	const {state, error, reload} = useTabLodgeState();
 	const [status, showStatus] = useStatus();
@@ -276,7 +276,7 @@ function NewTab() {
 		: undefined;
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
 	const settings: Partial<Settings> = state?.settings || {};
-	const enabled = Boolean(settings.newTabEnabled);
+	const newTabOn = settings.newTabEnabled !== false;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
 	const bookmarksEnabled = settings.bookmarksEnabled !== false;
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
@@ -286,9 +286,9 @@ function NewTab() {
 		settings.showBookmarkQuickActions === true
 			? (settings.bookmarkQuickAction ?? 'open-new')
 			: null;
-	const sessionsVisible = enabled && sessionsEnabled;
+	const sessionsVisible = sessionsEnabled;
 	const autoOpenFinder =
-		enabled && settings.autoFocusSearchOnNewTab === true && !initialQuery;
+		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
 	const bothVisible = sessionsVisible && bookmarksEnabled;
 	const sessionsOnTop = bothVisible && settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
@@ -303,6 +303,28 @@ function NewTab() {
 				),
 		);
 	}, [bookmarks, bookmarkSearch]);
+
+	// With "Use TabLodge for new tabs" off, a tab the browser opened as a new tab is sent on to the browser's page
+	// (the service worker decides whether this tab was one); any other visit shows the dashboard as usual.
+	const [handoff, setHandoff] = useState<'idle' | 'stay'>('idle');
+	const holding = Boolean(state) && !newTabOn && handoff === 'idle';
+	useEffect(() => {
+		if (!holding) {
+			return;
+		}
+
+		void (async () => {
+			let brave = false;
+			try {
+				brave = Boolean(await (navigator as BraveNavigator).brave?.isBrave());
+			} catch {}
+
+			const result = await send('HANDOFF_NEW_TAB', {brave});
+			if (!result?.ok || !result.handedOff) {
+				setHandoff('stay');
+			}
+		})();
+	}, [holding]);
 
 	// Drops the one-time `?q=` from the address bar after the first render.
 	useEffect(() => {
@@ -381,20 +403,6 @@ function NewTab() {
 		}
 
 		await reload();
-	}
-
-	async function openDefaultNewTab() {
-		setBusy('default-page');
-		const result = await send('OPEN_DEFAULT_NEW_TAB');
-		if (result?.ok) {
-			return;
-		}
-
-		setBusy('');
-		showStatus(
-			result?.error || 'Could not open the browser’s new-tab page.',
-			true,
-		);
 	}
 
 	function openBookmarkEditor(
@@ -1179,8 +1187,8 @@ function NewTab() {
 		return () => document.removeEventListener('visibilitychange', onVisible);
 	}, [autoOpenFinder]);
 
-	// While loading, the page stays blank (just the themed background) so new tabs open without a flash of text.
-	if (!state) {
+	// While loading, and while a new tab hands off to the browser's own page, nothing renders (just the themed background).
+	if (!state || holding) {
 		return (
 			<main
 				data-brand="tablodge"
@@ -1445,32 +1453,6 @@ function NewTab() {
 				onOpenChange={setFinderOpen}
 			/>
 
-			{!enabled && (
-				<section className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-5">
-					<div>
-						<h1 className="text-xl font-bold">New tab is off</h1>
-						<p className="mt-1 text-sm text-muted-foreground">
-							{PROJECT.name}’s local page is still installed by the browser.
-						</p>
-					</div>
-					<div className="flex gap-2">
-						<Button
-							disabled={busy === 'default-page'}
-							onClick={openDefaultNewTab}
-						>
-							{busy === 'default-page'
-								? 'Opening'
-								: 'Open browser’s new-tab page'}
-						</Button>
-						<Button asChild variant="outline">
-							<a href="options.html">
-								<Settings2 />
-								Settings
-							</a>
-						</Button>
-					</div>
-				</section>
-			)}
 			{sessionsOnTop ? sessionsSection : bookmarksSection}
 			{bothVisible && <hr className="my-8 border-border" aria-hidden="true" />}
 			{sessionsOnTop ? bookmarksSection : sessionsSection}

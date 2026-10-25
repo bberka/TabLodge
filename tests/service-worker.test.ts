@@ -223,6 +223,7 @@ function createWorkerHarness(
 		},
 	};
 
+	const sessionStore: Record<string, unknown> = {};
 	const event = (name: string) => ({
 		// Several worker modules can listen to one event: all of them run, the last result is returned.
 		addListener(callback: EventListener) {
@@ -268,6 +269,16 @@ function createWorkerHarness(
 					if (Object.hasOwn(values, storageKey)) {
 						Object.assign(state, structuredClone(values[storageKey]));
 					}
+				},
+			},
+			session: {
+				async get(key: string) {
+					return Object.hasOwn(sessionStore, key)
+						? {[key]: sessionStore[key]}
+						: {};
+				},
+				async set(values: Record<string, unknown>) {
+					Object.assign(sessionStore, structuredClone(values));
 				},
 			},
 		},
@@ -464,6 +475,7 @@ function createWorkerHarness(
 				}
 			},
 			onRemoved: event('tabRemoved'),
+			onCreated: event('tabCreated'),
 			onUpdated: event('tabUpdated'),
 			onAttached: event('tabAttached'),
 			onDetached: event('tabDetached'),
@@ -1016,6 +1028,87 @@ test('unified new-tab destination is enabled by default while pinned tabs remain
 	assert.equal(response.settings.newTabEnabled, true);
 	assert.equal(response.settings.includePinnedTabs, false);
 	assert.equal(response.bookmarkColumns.length, 1);
+});
+
+test('new tab hand-off only happens for browser-opened new tabs while TabLodge new tab is off', async () => {
+	const off = createWorkerHarness(stateWithSession({newTabEnabled: false}), [
+		{id: 7, windowId: 10, index: 0, active: true, url: ''},
+	]);
+	const tab = off.tabs.find((entry) => entry.id === 7)!;
+	// Not claimed yet (an intentionally opened dashboard): nothing to hand off.
+	assert.equal(
+		(await off.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab})).handedOff,
+		false,
+	);
+	await off.listeners.tabCreated({id: 7, pendingUrl: 'chrome://newtab/'});
+	await new Promise<void>((resolve) => {
+		setTimeout(resolve, 20);
+	});
+	assert.equal(tab.url, 'chrome://new-tab-page/');
+	// The browser sent the tab back: try once more, then fall back to a blank page, then stop.
+	assert.equal(
+		(await off.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab})).handedOff,
+		true,
+	);
+	assert.equal(tab.url, 'chrome://new-tab-page/');
+	assert.equal(
+		(await off.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab})).handedOff,
+		true,
+	);
+	assert.equal(tab.url, 'about:blank');
+	assert.equal(
+		(await off.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab})).handedOff,
+		false,
+	);
+
+	const on = createWorkerHarness(stateWithSession(), [
+		{id: 8, windowId: 10, index: 0, active: true, url: ''},
+	]);
+	await on.listeners.tabCreated({id: 8, pendingUrl: 'chrome://newtab/'});
+	assert.equal(on.tabs[0].url, '');
+});
+
+test('new tab fallback settings normalize and choose the target', async () => {
+	const read = async (settings: Record<string, unknown>) =>
+		(
+			await createWorkerHarness(stateWithSession(settings)).sendMessage({
+				type: 'GET_STATE',
+			})
+		).settings;
+	assert.equal((await read({})).newTabFallback, 'browser');
+	assert.equal(
+		(await read({newTabFallback: 'nope'})).newTabFallback,
+		'browser',
+	);
+	assert.equal((await read({newTabFallback: 'blank'})).newTabFallback, 'blank');
+	assert.equal(
+		(await read({newTabFallbackUrl: 'javascript:alert(1)'})).newTabFallbackUrl,
+		'',
+	);
+	assert.equal(
+		(await read({newTabFallbackUrl: ' https://example.com/x '}))
+			.newTabFallbackUrl,
+		'https://example.com/x',
+	);
+
+	for (const [settings, url] of [
+		[{newTabFallback: 'blank'}, 'about:blank'],
+		[
+			{newTabFallback: 'custom', newTabFallbackUrl: 'https://example.com/'},
+			'https://example.com/',
+		],
+		[{newTabFallback: 'custom'}, 'chrome://new-tab-page/'],
+	] as const) {
+		const harness = createWorkerHarness(
+			stateWithSession({newTabEnabled: false, ...settings}),
+			[{id: 7, windowId: 10, index: 0, active: true, url: ''}],
+		);
+		await harness.listeners.tabCreated({id: 7, pendingUrl: 'chrome://newtab/'});
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 20);
+		});
+		assert.equal(harness.tabs[0].url, url);
+	}
 });
 
 test('settings updates never disable Sessions and Bookmarks together', async () => {

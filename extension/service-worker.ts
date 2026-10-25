@@ -111,6 +111,23 @@ const recordId = (value: unknown) =>
 	isRecord(value) && typeof value.id === 'string' ? value.id : '';
 const isInteger = (value: unknown): value is number =>
 	Number.isSafeInteger(value);
+/**
+A web address as typed, when it is a valid http(s) URL; otherwise an empty string.
+*/
+function httpUrlOrEmpty(value: unknown): string {
+	if (typeof value !== 'string') {
+		return '';
+	}
+
+	const text = value.trim().slice(0, 2048);
+	try {
+		const url = new URL(text);
+		return url.protocol === 'http:' || url.protocol === 'https:' ? text : '';
+	} catch {
+		return '';
+	}
+}
+
 function isOneOf<T extends string>(
 	values: readonly T[],
 	value: unknown,
@@ -154,6 +171,8 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	openDashboardOnStartup: false,
 	startupBehavior: 'dashboard',
 	newTabEnabled: true,
+	newTabFallback: 'browser',
+	newTabFallbackUrl: '',
 	autoFocusSearchOnNewTab: false,
 	actionMode: 'popup',
 	sessionsEnabled: true,
@@ -780,6 +799,10 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		startupBehavior:
 			raw.startupBehavior === 'last-session' ? 'last-session' : 'dashboard',
 		newTabEnabled: raw.newTabEnabled !== false,
+		newTabFallback: isOneOf(['browser', 'blank', 'custom'], raw.newTabFallback)
+			? raw.newTabFallback
+			: 'browser',
+		newTabFallbackUrl: httpUrlOrEmpty(raw.newTabFallbackUrl),
 		autoFocusSearchOnNewTab: raw.autoFocusSearchOnNewTab === true,
 		actionMode: isOneOf(
 			[
@@ -3904,24 +3927,95 @@ async function eraseData(
 	});
 }
 
-async function openBrowserNewTab(
-	senderTab?: chrome.tabs.Tab,
-): Promise<ActionResult<'OPEN_DEFAULT_NEW_TAB'>> {
-	try {
-		if (senderTab && isInteger(senderTab.id)) {
-			await chrome.tabs.update(senderTab.id, {url: 'chrome://newtab/'});
-		} else {
-			await chrome.tabs.create({url: 'chrome://newtab/', active: true});
-		}
+// ---- New tab hand-off: with "Use TabLodge for new tabs" off the override page cannot be uninstalled, so tabs the
+// browser opens as new tabs are sent straight on to the browser's own page (or a blank / custom page).
+const NEW_TAB_URL = /^(?:chrome|brave|edge):\/\/(?:newtab|new-tab-page)\/?$/;
+const CLAIMS_KEY = 'newTabClaims';
 
-		return {ok: true};
+async function readClaims(): Promise<Record<string, number>> {
+	try {
+		const stored = await chrome.storage.session?.get(CLAIMS_KEY);
+		return (stored?.[CLAIMS_KEY] as Record<string, number> | undefined) ?? {};
 	} catch {
-		return {
-			ok: false,
-			error: `This browser could not open its default new-tab page. You can switch ${APP_NAME} off in Settings.`,
-		};
+		return {};
 	}
 }
+
+async function writeClaims(claims: Record<string, number>): Promise<void> {
+	try {
+		await chrome.storage.session?.set({[CLAIMS_KEY]: claims});
+	} catch {}
+}
+
+/**
+Where a new tab goes while TabLodge's new tab is off. After one failed attempt (the browser sent the tab back
+to TabLodge) it falls back to a blank page, so a tab can never loop.
+*/
+function newTabTarget(
+	settings: Pick<Settings, 'newTabFallback' | 'newTabFallbackUrl'>,
+	attempt: number,
+	brave: boolean,
+): string {
+	if (attempt > 1 || settings.newTabFallback === 'blank') {
+		return 'about:blank';
+	}
+
+	if (settings.newTabFallback === 'custom' && settings.newTabFallbackUrl) {
+		return settings.newTabFallbackUrl;
+	}
+
+	return brave ? 'brave://newtab/' : 'chrome://new-tab-page/';
+}
+
+const looksLikeBrave = () => {
+	const brands = (
+		globalThis as {
+			navigator?: {userAgentData?: {brands?: Array<{brand: string}>}};
+		}
+	).navigator?.userAgentData?.brands;
+	return Boolean(brands?.some((entry) => /brave/i.test(entry.brand)));
+};
+
+async function handOffNewTab(
+	tabId: number,
+	brave: boolean,
+	claim: boolean,
+): Promise<boolean> {
+	const {settings} = await getStore();
+	if (settings.newTabEnabled) {
+		return false;
+	}
+
+	// `claims` counts the redirects already made for a tab; a tab the browser sends back gets a blank page.
+	const claims = await readClaims();
+	const done = claims[tabId];
+	if ((done === undefined && !claim) || (done ?? 0) >= 3) {
+		return false;
+	}
+
+	claims[tabId] = (done ?? 0) + 1;
+	await writeClaims(claims);
+	try {
+		await chrome.tabs.update(tabId, {
+			url: newTabTarget(settings, done ?? 0, brave || looksLikeBrave()),
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+chrome.tabs.onCreated?.addListener((tab) => {
+	if (isInteger(tab.id) && NEW_TAB_URL.test(tab.pendingUrl || tab.url || '')) {
+		void handOffNewTab(tab.id, false, true);
+	}
+});
+chrome.tabs.onRemoved?.addListener((tabId) => {
+	void readClaims().then((claims) => {
+		const {[String(tabId)]: gone, ...rest} = claims;
+		return gone === undefined ? undefined : writeClaims(rest);
+	});
+});
 
 async function handleMessage(
 	message: TabLodgeMessage | undefined,
@@ -4137,8 +4231,14 @@ async function handleMessage(
 			return eraseData(message.scope);
 		}
 
-		case 'OPEN_DEFAULT_NEW_TAB': {
-			return openBrowserNewTab(sender.tab);
+		case 'HANDOFF_NEW_TAB': {
+			const tabId = sender.tab?.id;
+			return {
+				ok: true,
+				handedOff:
+					isInteger(tabId) &&
+					(await handOffNewTab(tabId, message.brave === true, false)),
+			};
 		}
 
 		case 'OPEN_DASHBOARD': {
