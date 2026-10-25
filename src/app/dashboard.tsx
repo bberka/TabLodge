@@ -1,8 +1,11 @@
 import {
+	memo,
 	useEffect,
 	useMemo,
+	useCallback,
 	useRef,
 	useState,
+	useSyncExternalStore,
 	type DragEvent,
 	type MouseEvent,
 	type SyntheticEvent,
@@ -79,6 +82,9 @@ import {
 	type MenuAction,
 } from '../components/ui/action-menu';
 import {DropIndicator} from '../components/ui/drop-indicator';
+import {scrollBehavior} from '../shared/motion';
+import {LoadMore} from '../shared/load-more';
+import {useStableCallbacks} from '../shared/use-stable';
 import {
 	EmptyState,
 	LoadingLine,
@@ -90,7 +96,7 @@ import {
 	useTabLodgeState,
 	restoreFailureText,
 } from './common';
-import {BackupDialog, ImportDialog, useShareDialog} from './data-transfer';
+import {BackupDialog, ImportDialog, useShareDialog} from './lazy-dialogs';
 import type {ExportData} from './export-formats';
 import {
 	activateSessionTitle,
@@ -114,12 +120,13 @@ import type {
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {IconNameField} from './icon-picker';
+import {Favicon} from './favicon';
 import {FINDER_EVENT, type FinderEventDetail} from './finder';
 import {
 	emitRecoveryEvent,
 	offerCloseTabsUndo,
 	offerTrashUndo,
-} from './recovery';
+} from './recovery-core';
 import {openLink, resolveLinkTarget} from './link-target';
 
 /**
@@ -181,6 +188,12 @@ Stable fallbacks so memoized values and effects do not see a new array on every 
 const NO_SESSIONS: Session[] = [];
 const NO_FOLDERS: Folder[] = [];
 const NO_COLUMNS: BookmarkColumn[] = [];
+const NO_SETTINGS: Partial<Settings> = {};
+const NO_SELECTION = new Set<string>();
+/**
+Sessions rendered at first; more are added as the list is scrolled (thousands of cards at once are slow).
+*/
+const SESSION_PAGE = 40;
 const setMember = (set: Set<string>, key: string, member: boolean) => {
 	if (member) {
 		set.add(key);
@@ -233,9 +246,6 @@ function tabRuns(tabs: SavedTabRecord[]): SavedTabRecord[][] {
 	return runs;
 }
 
-const faviconUrl = (url: string) =>
-	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
-
 /**
 `initialQuery` prefills the session search (newtab.html?q=…).
 */
@@ -270,11 +280,18 @@ export function SessionManager({
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const dragItemRef = useRef<DragItem | null>(null);
-	const [dragging, setDragging] = useState<DragItem | null>(null);
-	const [dropMark, setDropMark] = useState<DropMark | null>(null);
+	// Drag state lives outside React state: only the cards a drag touches re-render, not the whole list.
+	const [dragStore] = useState(() => new DragStore());
+	const [limitState, setLimitState] = useState({
+		signature: '',
+		limit: SESSION_PAGE,
+	});
+	// Bumped to ask the list to scroll to `revealRef` once it is rendered.
+	const [revealTick, setRevealTick] = useState(0);
+	const revealRef = useRef<{id: string; focus: boolean} | null>(null);
 	const groups = state?.groups || NO_SESSIONS;
 	const folders = state?.folders || NO_FOLDERS;
-	const settings: Partial<Settings> = state?.settings || {};
+	const settings: Partial<Settings> = state?.settings || NO_SETTINGS;
 	const grid = settings.sessionLayout === 'grid';
 	// The grid collapses to one column on narrow pages; drop positions follow what is on screen.
 	const wide = useWidePage();
@@ -330,6 +347,59 @@ export function SessionManager({
 
 		return filtered;
 	}, [groups, folderId, query, sort]);
+	// A new filter, search or sort starts again from the first batch.
+	const signature = `${folderId}|${query}|${sort}`;
+	const visibleLimit =
+		limitState.signature === signature ? limitState.limit : SESSION_PAGE;
+	const showMore = useCallback(
+		() =>
+			setLimitState((old) => ({
+				signature,
+				limit:
+					(old.signature === signature ? old.limit : SESSION_PAGE) +
+					SESSION_PAGE,
+			})),
+		[signature],
+	);
+	const renderedGroups = useMemo(
+		() => visibleGroups.slice(0, visibleLimit),
+		[visibleGroups, visibleLimit],
+	);
+	const folderNames = useMemo(
+		() => new Map(folders.map((folder) => [folder.id, folder.name])),
+		[folders],
+	);
+	const folderCounts = useMemo(() => {
+		const counts = new Map<string, number>();
+		let archived = 0;
+		let all = 0;
+		for (const group of groups) {
+			if (group.archived) {
+				archived += 1;
+				continue;
+			}
+
+			all += 1;
+			counts.set(group.folderId, (counts.get(group.folderId) ?? 0) + 1);
+		}
+
+		return {all, archived, byFolder: counts};
+	}, [groups]);
+	const selectedByGroup = useMemo(() => {
+		const byGroup = new Map<string, Set<string>>();
+		for (const key of selected) {
+			const [groupId, tabId] = JSON.parse(key) as [string, string];
+			let ids = byGroup.get(groupId);
+			if (!ids) {
+				ids = new Set();
+				byGroup.set(groupId, ids);
+			}
+
+			ids.add(tabId);
+		}
+
+		return byGroup;
+	}, [selected]);
 
 	useEffect(() => {
 		if (!state) {
@@ -368,16 +438,8 @@ export function SessionManager({
 		}
 
 		setGroupOpen(focusId, true);
-		requestAnimationFrame(() =>
-			document
-				.querySelector(`#session-${CSS.escape(focusId)}`)
-				?.scrollIntoView({
-					block: 'center',
-					behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
-						? 'auto'
-						: 'smooth',
-				}),
-		);
+		revealRef.current = {id: focusId, focus: false};
+		setRevealTick((tick) => tick + 1);
 		// Focuses the session named in the URL whenever the saved state changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `state` on purpose
 	}, [state]);
@@ -397,13 +459,8 @@ export function SessionManager({
 				setFolderId(group.archived ? 'archived' : ALL);
 				setQuery('');
 				setGroupOpen(group.id, true);
-				setTimeout(
-					() =>
-						document
-							.querySelector(`#session-${CSS.escape(group.id)}`)
-							?.scrollIntoView({block: 'center', behavior: 'smooth'}),
-					60,
-				);
+				revealRef.current = {id: group.id, focus: true};
+				setRevealTick((tick) => tick + 1);
 
 				break;
 			}
@@ -441,6 +498,38 @@ export function SessionManager({
 		globalThis.addEventListener(FINDER_EVENT, onRequest);
 		return () => globalThis.removeEventListener(FINDER_EVENT, onRequest);
 	}, []);
+
+	// Scrolls to a session asked for by the URL or the palette, rendering more of the list first if it is further down.
+	useEffect(() => {
+		const reveal = revealRef.current;
+		if (!reveal) {
+			return;
+		}
+
+		const {id} = reveal;
+
+		const index = visibleGroups.findIndex((group) => group.id === id);
+		if (index === -1) {
+			return;
+		}
+
+		if (index >= visibleLimit) {
+			setLimitState({signature, limit: index + SESSION_PAGE});
+			return;
+		}
+
+		revealRef.current = null;
+		const frame = requestAnimationFrame(() => {
+			const card = document.querySelector(`#session-${CSS.escape(id)}`);
+			card?.scrollIntoView({block: 'center', behavior: scrollBehavior()});
+			if (reveal.focus) {
+				card
+					?.querySelector<HTMLElement>('button')
+					?.focus({preventScroll: true});
+			}
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [revealTick, visibleGroups, visibleLimit, signature]);
 
 	useEffect(() => {
 		if (selected.size === 0) {
@@ -864,24 +953,21 @@ export function SessionManager({
 		await reload();
 	}
 
-	const drag: DragApi = {
-		mark: dropMark,
-		dragging,
-		begin(item) {
+	const drag = {
+		begin(item: DragItem) {
 			dragItemRef.current = item;
 			// Styling the source row right away can cancel the browser's drag, so it waits a frame.
 			requestAnimationFrame(() => {
 				if (dragItemRef.current === item) {
-					setDragging(item);
+					dragStore.set({dragging: item});
 				}
 			});
 		},
 		end() {
 			dragItemRef.current = null;
-			setDragging(null);
-			setDropMark(null);
+			dragStore.set({dragging: null, mark: null});
 		},
-		over(group, event) {
+		over(group: Session, event: DragEvent<HTMLElement>) {
 			const mark = resolveDropMark(
 				group,
 				event,
@@ -897,16 +983,17 @@ export function SessionManager({
 				mark.kind !== 'session' && (event.ctrlKey || event.metaKey)
 					? 'copy'
 					: 'move';
-			setDropMark((old) =>
-				JSON.stringify(old) === JSON.stringify(mark) ? old : mark,
-			);
+			const old = dragStore.mark;
+			dragStore.set({
+				mark: JSON.stringify(old) === JSON.stringify(mark) ? old : mark,
+			});
 		},
-		leave(event) {
+		leave(event: DragEvent<HTMLElement>) {
 			if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-				setDropMark(null);
+				dragStore.set({mark: null});
 			}
 		},
-		drop(group, event) {
+		drop(group: Session, event: DragEvent<HTMLElement>) {
 			const item = dragItemRef.current;
 			const mark = resolveDropMark(group, event, item, sideBySide);
 			if (!item || !mark) {
@@ -930,6 +1017,54 @@ export function SessionManager({
 			}
 		},
 	};
+
+	// One stable object of callbacks for every card: it always calls the latest closures below, so
+	// memoized cards and rows are not re-rendered just because a handler was re-created.
+	const cardActions = useStableCallbacks<CardActions>({
+		expand: setGroupOpen,
+		restore: (group, event) => restoreGroup(group, false, event),
+		restoreTarget: (group, target) =>
+			restoreGroup(group, false, undefined, undefined, target),
+		restoreMode: (group, mode) => restoreGroup(group, false, undefined, mode),
+		forceRestore: (group) => restoreGroup(group, true),
+		restoreTab,
+		updateGroup,
+		copy: copySession,
+		share: (group) => openShare({title: group.name, groups: [group]}),
+		openAll: openAllInNewTabs,
+		openTab,
+		copyTab: copyTabLink,
+		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
+		deleteGroup: (group) => deleteGroup(group),
+		deleteTab: deleteSavedTab,
+		editTab: (group, tab) => setEditingTab({group, tab}),
+		toggleTabArchived,
+		editGroup: (group) => openGroupDetails(group),
+		editName: (group) => openGroupDetails(group, true),
+		reorder: reorderGroup,
+		bookmark: openBookmarkPicker,
+		select: changeSelection,
+		moveTargets(excludeId) {
+			const targets: Array<{id: string; name: string}> = [];
+			for (const group of groups) {
+				if (group.id === excludeId) {
+					continue;
+				}
+
+				targets.push({id: group.id, name: group.name});
+				if (targets.length === MAX_MOVE_TARGETS) {
+					break;
+				}
+			}
+
+			return targets;
+		},
+		dragBegin: drag.begin,
+		dragEnd: drag.end,
+		dragOver: drag.over,
+		dragLeave: drag.leave,
+		dragDrop: drag.drop,
+	});
 
 	async function changeSort(value: string) {
 		setSort(value);
@@ -1078,6 +1213,8 @@ export function SessionManager({
 	}
 
 	const selectedCount = selectedTabCount();
+	const reorderEnabled =
+		sort === 'custom' && !query.trim() && folderId !== 'archived';
 	const selectedFolder = folders.find((folder) => folder.id === folderId);
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
 	return (
@@ -1099,14 +1236,13 @@ export function SessionManager({
 				<section aria-labelledby="sessions-title">
 					<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
 						<div className="flex items-center gap-2">
-							<h1
-								data-focus-fallback
+							<h2
 								id="sessions-title"
 								tabIndex={-1}
 								className="text-lg font-semibold tracking-tight"
 							>
 								{folderId === 'archived' ? 'Archived sessions' : 'Sessions'}
-							</h1>
+							</h2>
 							<Badge variant="accent">{visibleGroups.length}</Badge>
 						</div>
 						<div className="flex items-center gap-1">
@@ -1246,13 +1382,10 @@ export function SessionManager({
 											aria-hidden="true"
 										/>
 										{folder.name}
-										<span className="tabular-nums opacity-70">
+										<span className="tabular-nums opacity-90">
 											{folder.id === ALL
-												? groups.filter((group) => !group.archived).length
-												: groups.filter(
-														(group) =>
-															!group.archived && group.folderId === folder.id,
-													).length}
+												? folderCounts.all
+												: (folderCounts.byFolder.get(folder.id) ?? 0)}
 										</span>
 									</button>
 								);
@@ -1269,8 +1402,8 @@ export function SessionManager({
 						>
 							<Archive className="h-3.5 w-3.5" />
 							Archived
-							<span className="tabular-nums opacity-70">
-								{groups.filter((group) => group.archived).length}
+							<span className="tabular-nums opacity-90">
+								{folderCounts.archived}
 							</span>
 						</button>
 						<span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
@@ -1398,67 +1531,36 @@ export function SessionManager({
 									? 'grid grid-cols-1 items-stretch gap-2 md:grid-cols-2'
 									: 'space-y-2'
 							}
-							aria-live="polite"
 						>
-							{visibleGroups.map((group, index) => (
+							{renderedGroups.map((group, index) => (
 								<GroupCard
 									key={group.id}
 									group={group}
-									folders={folders}
+									folderName={folderNames.get(group.folderId)}
 									settings={settings}
 									grid={grid}
 									sideBySide={sideBySide}
+									wide={wide}
 									isExpanded={isOpen(group.id)}
-									selected={selected}
+									selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
 									selectionActive={selected.size > 0}
-									displayMode={settings.urlDisplayMode}
-									reorderEnabled={
-										sort === 'custom' &&
-										!query.trim() &&
-										folderId !== 'archived'
-									}
-									index={index}
-									count={visibleGroups.length}
+									reorderEnabled={reorderEnabled}
+									isFirst={index === 0}
+									isLast={index === visibleGroups.length - 1}
 									bookmarksEnabled={bookmarksEnabled}
-									otherGroups={groups
-										.filter((other) => other.id !== group.id)
-										.map((other) => ({id: other.id, name: other.name}))}
-									drag={drag}
-									onShare={() =>
-										openShare({title: group.name, groups: [group]})
-									}
-									onOpenAll={() => void openAllInNewTabs(group.tabs)}
-									onOpenTab={(tab, requested) => void openTab(tab, requested)}
-									onCopyTab={(tab) => void copyTabLink(tab)}
-									onMoveTab={(tab, toGroupId) =>
-										void moveTab(group.id, tab.id, toGroupId)
-									}
-									onExpanded={(next) => setGroupOpen(group.id, next)}
-									onRestore={(event) => restoreGroup(group, false, event)}
-									onRestoreTarget={(target) =>
-										restoreGroup(group, false, undefined, undefined, target)
-									}
-									onRestoreMode={(mode) =>
-										restoreGroup(group, false, undefined, mode)
-									}
-									onForceRestore={() => restoreGroup(group, true)}
-									onRestoreTab={(tab, event) => restoreTab(group, tab, event)}
-									onUpdateGroup={(fields) => updateGroup(group, fields)}
-									onCopy={() => copySession(group)}
-									onDelete={() => deleteGroup(group)}
-									onDeleteTab={deleteSavedTab}
-									onEditTab={(tab) => setEditingTab({group, tab})}
-									onToggleTabArchived={(tab) => toggleTabArchived(group, tab)}
-									onEdit={() => openGroupDetails(group)}
-									onEditName={() => openGroupDetails(group, true)}
-									onReorder={(direction) => reorderGroup(group, direction)}
-									onBookmark={openBookmarkPicker}
-									onSelect={(key, checked, event) =>
-										changeSelection(key, checked, event)
-									}
+									actions={cardActions}
+									dragStore={dragStore}
 								/>
 							))}
 						</div>
+					)}
+					{visibleGroups.length > renderedGroups.length && (
+						<LoadMore
+							remaining={visibleGroups.length - renderedGroups.length}
+							step={SESSION_PAGE}
+							noun="sessions"
+							onMore={showMore}
+						/>
 					)}
 				</section>
 			)}
@@ -1774,16 +1876,80 @@ type DropMark =
 type DragItem =
 	{kind: 'session'; id: string} | {kind: 'tab'; groupId: string; tabId: string};
 /**
-Drag handlers and state the session manager shares with every card.
+The drag in progress and where it would land. Cards subscribe to just the slice they draw, so a
+drag moving over the list re-renders only the cards whose marker or dimming changed.
 */
-type DragApi = {
-	mark: DropMark | null;
-	dragging: DragItem | null;
-	begin: (item: DragItem) => void;
-	end: () => void;
-	over: (group: Session, event: DragEvent<HTMLElement>) => void;
-	leave: (event: DragEvent<HTMLElement>) => void;
-	drop: (group: Session, event: DragEvent<HTMLElement>) => void;
+class DragStore {
+	private readonly listeners = new Set<() => void>();
+	mark: DropMark | null = null;
+	dragging: DragItem | null = null;
+	subscribe = (listener: () => void) => {
+		this.listeners.add(listener);
+		return () => {
+			this.listeners.delete(listener);
+		};
+	};
+
+	set(next: {mark?: DropMark | null; dragging?: DragItem | null}) {
+		const mark = next.mark === undefined ? this.mark : next.mark;
+		const dragging =
+			next.dragging === undefined ? this.dragging : next.dragging;
+		if (mark === this.mark && dragging === this.dragging) {
+			return;
+		}
+
+		this.mark = mark;
+		this.dragging = dragging;
+		for (const listener of this.listeners) {
+			listener();
+		}
+	}
+}
+
+function useDragSlice<T>(store: DragStore, select: (store: DragStore) => T): T {
+	return useSyncExternalStore(store.subscribe, () => select(store));
+}
+
+/**
+Handlers the session manager shares with every card. The object never changes, so memoized cards
+and rows are not re-rendered by it.
+*/
+type CardActions = {
+	expand: (groupId: string, next: boolean) => void;
+	restore: (group: Session, event?: RestoreModifiers) => void;
+	restoreTarget: (group: Session, target: RestoreTarget) => void;
+	restoreMode: (group: Session, mode: RestoreMode) => void;
+	forceRestore: (group: Session) => void;
+	restoreTab: (
+		group: Session,
+		tab: SavedTabRecord,
+		event?: RestoreModifiers,
+	) => void;
+	updateGroup: (group: Session, fields: SessionFields) => void;
+	copy: (group: Session) => void;
+	share: (group: Session) => void;
+	openAll: (tabs: SavedTabRecord[]) => void;
+	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
+	copyTab: (tab: SavedTabRecord) => void;
+	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
+	deleteGroup: (group: Session) => void;
+	deleteTab: (group: Session, tab: SavedTabRecord) => void;
+	editTab: (group: Session, tab: SavedTabRecord) => void;
+	toggleTabArchived: (group: Session, tab: SavedTabRecord) => void;
+	editGroup: (group: Session) => void;
+	editName: (group: Session) => void;
+	reorder: (group: Session, direction: ReorderDirection) => void;
+	bookmark: (tab: SavedTabRecord) => void;
+	select: (key: string, checked: boolean, event: SelectionModifiers) => void;
+	/**
+	Sessions a link can be moved to (read when a menu opens, never while rendering).
+	*/
+	moveTargets: (excludeId: string) => Array<{id: string; name: string}>;
+	dragBegin: (item: DragItem) => void;
+	dragEnd: () => void;
+	dragOver: (group: Session, event: DragEvent<HTMLElement>) => void;
+	dragLeave: (event: DragEvent<HTMLElement>) => void;
+	dragDrop: (group: Session, event: DragEvent<HTMLElement>) => void;
 };
 
 /**
@@ -1843,8 +2009,7 @@ function resolveDropMark(
 
 type GroupCardProps = {
 	group: Session;
-	folders: Folder[];
-	otherGroups: Array<{id: string; name: string}>;
+	folderName?: string;
 	settings: Partial<Settings>;
 	/**
 	Two-column grid layout: the card fills its cell and drops are marked left or right.
@@ -1854,539 +2019,477 @@ type GroupCardProps = {
 	The grid currently shows two columns, so session drops are marked left or right.
 	*/
 	sideBySide: boolean;
-	isExpanded: boolean;
-	onExpanded: (next: boolean) => void;
-	onRestore: (event?: RestoreModifiers) => void;
-	onRestoreTarget: (target: RestoreTarget) => void;
-	onRestoreMode: (mode: RestoreMode) => void;
-	onForceRestore: () => void;
-	onRestoreTab: (tab: SavedTabRecord, event?: RestoreModifiers) => void;
-	onUpdateGroup: (fields: SessionFields) => void;
-	onCopy: () => void;
-	onShare: () => void;
-	onOpenAll: () => void;
-	onOpenTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
-	onCopyTab: (tab: SavedTabRecord) => void;
-	onMoveTab: (tab: SavedTabRecord, toGroupId: string) => void;
-	onDelete: () => void;
-	onDeleteTab: (group: Session, tab: SavedTabRecord) => void;
-	onEditTab: (tab: SavedTabRecord) => void;
-	onToggleTabArchived: (tab: SavedTabRecord) => void;
-	onEdit: () => void;
 	/**
-	Session title click in "edit" mode: the details dialog with the name field focused.
+	The page is wide enough for the row of preview icons on a collapsed card.
 	*/
-	onEditName: () => void;
-	onReorder: (direction: ReorderDirection) => void;
-	selected: Set<string>;
+	wide: boolean;
+	isExpanded: boolean;
+	/**
+	Ids of this session's selected links.
+	*/
+	selectedTabs: Set<string>;
 	selectionActive: boolean;
-	onSelect: (key: string, checked: boolean, event: SelectionModifiers) => void;
-	displayMode?: Settings['urlDisplayMode'];
 	reorderEnabled: boolean;
-	index: number;
-	count: number;
+	isFirst: boolean;
+	isLast: boolean;
 	bookmarksEnabled: boolean;
-	onBookmark: (tab: SavedTabRecord) => void;
-	drag: DragApi;
+	actions: CardActions;
+	dragStore: DragStore;
 };
-function GroupCard({
-	group,
-	folders,
-	otherGroups,
-	settings,
-	grid,
-	sideBySide,
-	isExpanded,
-	onExpanded,
-	onRestore,
-	onRestoreTarget,
-	onRestoreMode,
-	onForceRestore,
-	onRestoreTab,
-	onUpdateGroup,
-	onCopy,
-	onShare,
-	onOpenAll,
-	onOpenTab,
-	onCopyTab,
-	onMoveTab,
-	onDelete,
-	onDeleteTab,
-	onEditTab,
-	onToggleTabArchived,
-	onEdit,
-	onEditName,
-	onReorder,
-	selected,
-	selectionActive,
-	onSelect,
-	displayMode,
-	reorderEnabled,
-	index,
-	count,
-	bookmarksEnabled,
-	onBookmark,
-	drag,
-}: GroupCardProps) {
-	const folderName = folders.find(
-		(folder) => folder.id === group.folderId,
-	)?.name;
-	const previewTabs = group.tabs.slice(0, 6);
-	const mark = drag.mark?.groupId === group.id ? drag.mark : null;
-	const draggingSelf =
-		drag.dragging?.kind === 'session' && drag.dragging.id === group.id;
-	const draggingTabId =
-		drag.dragging?.kind === 'tab' && drag.dragging.groupId === group.id
-			? drag.dragging.tabId
-			: null;
-	const windowActions: MenuAction[] = [
-		{
-			id: 'restore-here',
-			label: 'In this window',
-			icon: PanelTop,
-			onSelect: () => onRestoreTarget('current-window'),
-		},
-		{
-			id: 'restore-new-window',
-			label: 'In a new window',
-			icon: AppWindow,
-			onSelect: () => onRestoreTarget('always-new-window'),
-		},
-	];
-	const actions: MenuAction[] = [
-		{
-			id: 'restore',
-			label: 'Restore',
-			icon: RotateCcw,
-			onSelect: () => onRestore(),
-		},
-		{
-			type: 'submenu',
-			id: 'restore-options',
-			label: 'Restore options',
-			icon: History,
-			items: [
-				...windowActions,
-				{type: 'separator'},
-				{
-					id: 'restore-keep',
-					label: 'Keep session after restoring',
-					icon: Save,
-					onSelect: () => onRestoreMode('keep'),
-				},
-				{
-					id: 'restore-remove',
-					label: 'Remove session after restoring',
-					icon: Trash2,
-					disabled: group.locked,
-					onSelect: onForceRestore,
-				},
-				{
-					id: 'restore-archive',
-					label: 'Archive after restoring',
-					icon: Archive,
-					onSelect: () => onRestoreMode('archive'),
-				},
-			],
-		},
-		{
-			id: 'open-all',
-			label: 'Open all in new tabs',
-			icon: ExternalLink,
-			onSelect: onOpenAll,
-		},
-		{type: 'separator'},
-		{id: 'copy', label: 'Copy links', icon: Copy, onSelect: onCopy},
-		{id: 'share', label: 'Share', icon: Share2, onSelect: onShare},
-		{type: 'separator'},
-		{id: 'edit', label: 'Edit details', icon: Edit3, onSelect: onEdit},
-		{
-			id: 'lock',
-			label: group.locked ? 'Unlock' : 'Lock',
-			icon: group.locked ? UnlockKeyhole : LockKeyhole,
-			onSelect: () => onUpdateGroup({locked: !group.locked}),
-		},
-		{
-			id: 'archive',
-			label: group.archived ? 'Unarchive' : 'Archive',
-			icon: Archive,
-			onSelect: () => onUpdateGroup({archived: !group.archived}),
-		},
-		{type: 'separator'},
-		{
-			id: 'up',
-			label: 'Move up',
-			icon: ArrowUp,
-			hidden: !reorderEnabled,
-			disabled: index === 0,
-			onSelect: () => onReorder('up'),
-		},
-		{
-			id: 'down',
-			label: 'Move down',
-			icon: ArrowDown,
-			hidden: !reorderEnabled,
-			disabled: index === count - 1,
-			onSelect: () => onReorder('down'),
-		},
-		{type: 'separator'},
-		{
-			id: 'delete',
-			label: 'Delete',
-			icon: Trash2,
-			destructive: true,
-			onSelect: onDelete,
-		},
-	];
-	const restoreActions = windowActions;
-	return (
-		<div className={grid ? 'relative flex min-w-0' : 'relative'}>
-			{mark?.kind === 'session' && (
-				<DropIndicator
-					orientation={sideBySide ? 'vertical' : 'horizontal'}
-					className={
-						sideBySide
-							? `inset-y-0 ${mark.position === 'before' ? '-left-[5px]' : '-right-[5px]'}`
-							: `inset-x-0 ${mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]'}`
-					}
-				/>
-			)}
-			<article
-				id={`session-${group.id}`}
-				className={`group/session overflow-hidden rounded-xl border ${grid ? 'w-full min-w-0' : ''} bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${group.archived ? 'opacity-75 grayscale' : ''} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
-				style={group.archived ? ARCHIVED_STYLE : undefined}
-				aria-label={`Session ${group.name}`}
-				onDragOver={(event) => drag.over(group, event)}
-				onDragLeave={drag.leave}
-				onDrop={(event) => drag.drop(group, event)}
-			>
-				<ActionContextMenu actions={actions}>
-					<div className="flex items-center gap-2 px-2 py-2 sm:px-3">
-						<IconTooltip
-							label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${group.name}`}
-						>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8 shrink-0"
-								aria-expanded={isExpanded}
-								aria-label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${group.name}`}
-								onClick={() => onExpanded(!isExpanded)}
+const GroupCard = memo(
+	({
+		group,
+		folderName,
+		settings,
+		grid,
+		sideBySide,
+		wide,
+		isExpanded,
+		selectedTabs,
+		selectionActive,
+		reorderEnabled,
+		isFirst,
+		isLast,
+		bookmarksEnabled,
+		actions: handlers,
+		dragStore,
+	}: GroupCardProps) => {
+		const displayMode = settings.urlDisplayMode;
+		// Screen readers read these names; a session saved without a name still needs one.
+		const name = group.name.trim() || 'Untitled session';
+		const previewTabs = group.tabs.slice(0, 6);
+		const mark = useDragSlice(dragStore, (store) =>
+			store.mark?.kind !== 'tab' && store.mark?.groupId === group.id
+				? store.mark
+				: null,
+		);
+		const draggingSelf = useDragSlice(
+			dragStore,
+			(store) =>
+				store.dragging?.kind === 'session' && store.dragging.id === group.id,
+		);
+		const onRestore = (event?: RestoreModifiers) =>
+			handlers.restore(group, event);
+		const onExpanded = (next: boolean) => handlers.expand(group.id, next);
+		const onDelete = () => handlers.deleteGroup(group);
+		const onUpdateGroup = (fields: SessionFields) =>
+			handlers.updateGroup(group, fields);
+		const windowActions: MenuAction[] = [
+			{
+				id: 'restore-here',
+				label: 'In this window',
+				icon: PanelTop,
+				onSelect: () => handlers.restoreTarget(group, 'current-window'),
+			},
+			{
+				id: 'restore-new-window',
+				label: 'In a new window',
+				icon: AppWindow,
+				onSelect: () => handlers.restoreTarget(group, 'always-new-window'),
+			},
+		];
+		// Built only when the menu opens.
+		const actions = (): MenuAction[] => [
+			{
+				id: 'restore',
+				label: 'Restore',
+				icon: RotateCcw,
+				onSelect: () => onRestore(),
+			},
+			{
+				type: 'submenu',
+				id: 'restore-options',
+				label: 'Restore options',
+				icon: History,
+				items: [
+					...windowActions,
+					{type: 'separator'},
+					{
+						id: 'restore-keep',
+						label: 'Keep session after restoring',
+						icon: Save,
+						onSelect: () => handlers.restoreMode(group, 'keep'),
+					},
+					{
+						id: 'restore-remove',
+						label: 'Remove session after restoring',
+						icon: Trash2,
+						disabled: group.locked,
+						onSelect: () => handlers.forceRestore(group),
+					},
+					{
+						id: 'restore-archive',
+						label: 'Archive after restoring',
+						icon: Archive,
+						onSelect: () => handlers.restoreMode(group, 'archive'),
+					},
+				],
+			},
+			{
+				id: 'open-all',
+				label: 'Open all in new tabs',
+				icon: ExternalLink,
+				onSelect: () => handlers.openAll(group.tabs),
+			},
+			{type: 'separator'},
+			{
+				id: 'copy',
+				label: 'Copy links',
+				icon: Copy,
+				onSelect: () => handlers.copy(group),
+			},
+			{
+				id: 'share',
+				label: 'Share',
+				icon: Share2,
+				onSelect: () => handlers.share(group),
+			},
+			{type: 'separator'},
+			{
+				id: 'edit',
+				label: 'Edit details',
+				icon: Edit3,
+				onSelect: () => handlers.editGroup(group),
+			},
+			{
+				id: 'lock',
+				label: group.locked ? 'Unlock' : 'Lock',
+				icon: group.locked ? UnlockKeyhole : LockKeyhole,
+				onSelect: () => onUpdateGroup({locked: !group.locked}),
+			},
+			{
+				id: 'archive',
+				label: group.archived ? 'Unarchive' : 'Archive',
+				icon: Archive,
+				onSelect: () => onUpdateGroup({archived: !group.archived}),
+			},
+			{type: 'separator'},
+			{
+				id: 'up',
+				label: 'Move up',
+				icon: ArrowUp,
+				hidden: !reorderEnabled,
+				disabled: isFirst,
+				onSelect: () => handlers.reorder(group, 'up'),
+			},
+			{
+				id: 'down',
+				label: 'Move down',
+				icon: ArrowDown,
+				hidden: !reorderEnabled,
+				disabled: isLast,
+				onSelect: () => handlers.reorder(group, 'down'),
+			},
+			{type: 'separator'},
+			{
+				id: 'delete',
+				label: 'Delete',
+				icon: Trash2,
+				destructive: true,
+				onSelect: onDelete,
+			},
+		];
+		return (
+			<div className={grid ? 'relative flex min-w-0' : 'relative'}>
+				{mark?.kind === 'session' && (
+					<DropIndicator
+						orientation={sideBySide ? 'vertical' : 'horizontal'}
+						className={
+							sideBySide
+								? `inset-y-0 ${mark.position === 'before' ? '-left-[5px]' : '-right-[5px]'}`
+								: `inset-x-0 ${mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]'}`
+						}
+					/>
+				)}
+				<article
+					id={`session-${group.id}`}
+					className={`tn-card-lazy group/session overflow-hidden rounded-xl border ${grid ? 'w-full min-w-0' : ''} bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${group.archived ? 'opacity-75 grayscale' : ''} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
+					style={group.archived ? ARCHIVED_STYLE : undefined}
+					aria-label={`Session ${name}`}
+					onDragOver={(event) => handlers.dragOver(group, event)}
+					onDragLeave={handlers.dragLeave}
+					onDrop={(event) => handlers.dragDrop(group, event)}
+				>
+					<ActionContextMenu actions={actions}>
+						<div className="flex items-center gap-2 px-2 py-2 sm:px-3">
+							<IconTooltip
+								label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${name}`}
 							>
-								<ChevronRight
-									className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-								/>
-							</Button>
-						</IconTooltip>
-						<button
-							draggable
-							type="button"
-							className="min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing"
-							aria-expanded={isExpanded}
-							aria-label={`${settings.groupTitleAction === 'restore' ? 'Restore' : settings.groupTitleAction === 'edit' ? 'Edit details for' : isExpanded ? 'Collapse' : 'Expand'} session ${group.name}`}
-							onDragStart={(event) => {
-								applyLinkDrag(
-									event.dataTransfer,
-									group.tabs,
-									group.name,
-									group.id,
-								);
-								event.dataTransfer.effectAllowed = 'copyMove';
-								setSessionDragImage(event.dataTransfer, group);
-								drag.begin({kind: 'session', id: group.id});
-							}}
-							onDragEnd={drag.end}
-							onClick={(event) =>
-								activateSessionTitle(
-									settings.groupTitleAction,
-									{
-										edit: onEditName,
-										restore: onRestore,
-										toggle: () => onExpanded(!isExpanded),
-									},
-									event,
-								)
-							}
-						>
-							<span className="flex min-w-0 items-center gap-2">
-								<h2
-									className="min-w-0 truncate text-sm font-semibold"
-									title={group.name}
-								>
-									{group.name}
-								</h2>
-								{group.locked && (
-									<LockKeyhole
-										className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-										aria-label="Locked"
-									/>
-								)}
-								{group.archived && <Badge variant="accent">Archived</Badge>}
-							</span>
-							<span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-								<span>
-									{group.tabs.length} {group.tabs.length === 1 ? 'tab' : 'tabs'}
-								</span>
-								<span aria-hidden="true">·</span>
-								<span>{dateText(group.createdAt)}</span>
-								{folderName && (
-									<>
-										<span aria-hidden="true">·</span>
-										<span>{folderName}</span>
-									</>
-								)}
-							</span>
-						</button>
-						{!isExpanded && !grid && (
-							<span
-								className="hidden shrink-0 items-center -space-x-1.5 md:flex"
-								aria-hidden="true"
-							>
-								{previewTabs.map((tab) => (
-									<Favicon
-										key={tab.id}
-										url={tab.url}
-										label={tab.title}
-										className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
-									/>
-								))}
-								{group.tabs.length > previewTabs.length && (
-									<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
-										+{group.tabs.length - previewTabs.length}
-									</span>
-								)}
-							</span>
-						)}
-						<div className="flex shrink-0 items-center gap-0.5">
-							<span
-								className={`items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 ${grid ? 'hidden' : 'flex'}`}
-							>
-								<IconTooltip
-									label={group.locked ? 'Unlock session' : 'Lock session'}
-								>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8 text-muted-foreground"
-										aria-label={
-											group.locked
-												? `Unlock ${group.name}`
-												: `Lock ${group.name}`
-										}
-										onClick={() => onUpdateGroup({locked: !group.locked})}
-									>
-										{group.locked ? <UnlockKeyhole /> : <LockKeyhole />}
-									</Button>
-								</IconTooltip>
-								<IconTooltip
-									label={
-										group.archived ? 'Unarchive session' : 'Archive session'
-									}
-								>
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8 text-muted-foreground"
-										aria-label={
-											group.archived
-												? `Unarchive ${group.name}`
-												: `Archive ${group.name}`
-										}
-										onClick={() => onUpdateGroup({archived: !group.archived})}
-									>
-										<Archive />
-									</Button>
-								</IconTooltip>
-								<IconTooltip label="Delete session">
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8 text-muted-foreground hover:text-destructive"
-										aria-label={`Delete session ${group.name}`}
-										onClick={onDelete}
-									>
-										<Trash2 />
-									</Button>
-								</IconTooltip>
-							</span>
-							<span className="flex items-center">
 								<Button
-									size="sm"
-									variant={isExpanded ? 'default' : 'secondary'}
-									className="rounded-r-none"
-									onClick={onRestore}
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 shrink-0"
+									aria-expanded={isExpanded}
+									aria-label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${name}`}
+									onClick={() => onExpanded(!isExpanded)}
 								>
-									<RotateCcw />
-									<span className="hidden sm:inline">Restore</span>
+									<ChevronRight
+										className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+									/>
 								</Button>
+							</IconTooltip>
+							<button
+								draggable
+								type="button"
+								className="min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing"
+								aria-expanded={
+									settings.groupTitleAction === 'restore' ||
+									settings.groupTitleAction === 'edit'
+										? undefined
+										: isExpanded
+								}
+								onDragStart={(event) => {
+									applyLinkDrag(
+										event.dataTransfer,
+										group.tabs,
+										group.name,
+										group.id,
+									);
+									event.dataTransfer.effectAllowed = 'copyMove';
+									setSessionDragImage(event.dataTransfer, group);
+									handlers.dragBegin({kind: 'session', id: group.id});
+								}}
+								onDragEnd={handlers.dragEnd}
+								onClick={(event) =>
+									activateSessionTitle(
+										settings.groupTitleAction,
+										{
+											edit: () => handlers.editName(group),
+											restore: onRestore,
+											toggle: () => onExpanded(!isExpanded),
+										},
+										event,
+									)
+								}
+							>
+								<span className="sr-only">
+									{settings.groupTitleAction === 'restore'
+										? 'Restore session'
+										: settings.groupTitleAction === 'edit'
+											? 'Edit details for session'
+											: isExpanded
+												? 'Collapse session'
+												: 'Expand session'}
+									:{' '}
+								</span>
+								<span className="flex min-w-0 items-center gap-2">
+									<h3
+										className="min-w-0 truncate text-sm font-semibold"
+										title={group.name}
+									>
+										{name}
+									</h3>
+									{group.locked && (
+										<LockKeyhole
+											className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+											aria-label="Locked"
+										/>
+									)}
+									{group.archived && <Badge variant="accent">Archived</Badge>}
+								</span>
+								<span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+									<span>
+										{group.tabs.length}{' '}
+										{group.tabs.length === 1 ? 'tab' : 'tabs'}
+									</span>
+									<span aria-hidden="true">·</span>
+									<span>{dateText(group.createdAt)}</span>
+									{folderName && (
+										<>
+											<span aria-hidden="true">·</span>
+											<span>{folderName}</span>
+										</>
+									)}
+								</span>
+							</button>
+							{!isExpanded && !grid && wide && (
+								<span
+									className="hidden shrink-0 items-center -space-x-1.5 md:flex"
+									aria-hidden="true"
+								>
+									{previewTabs.map((tab) => (
+										<Favicon
+											key={tab.id}
+											url={tab.url}
+											label={tab.title}
+											className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
+										/>
+									))}
+									{group.tabs.length > previewTabs.length && (
+										<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
+											+{group.tabs.length - previewTabs.length}
+										</span>
+									)}
+								</span>
+							)}
+							<div className="flex shrink-0 items-center gap-0.5">
+								<span
+									className={`items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 ${grid ? 'hidden' : 'flex'}`}
+								>
+									<IconTooltip
+										label={group.locked ? 'Unlock session' : 'Lock session'}
+									>
+										<Button
+											variant="ghost"
+											size="icon"
+											className="h-8 w-8 text-muted-foreground"
+											aria-label={
+												group.locked
+													? `Unlock ${group.name}`
+													: `Lock ${group.name}`
+											}
+											onClick={() => onUpdateGroup({locked: !group.locked})}
+										>
+											{group.locked ? <UnlockKeyhole /> : <LockKeyhole />}
+										</Button>
+									</IconTooltip>
+									<IconTooltip
+										label={
+											group.archived ? 'Unarchive session' : 'Archive session'
+										}
+									>
+										<Button
+											variant="ghost"
+											size="icon"
+											className="h-8 w-8 text-muted-foreground"
+											aria-label={
+												group.archived
+													? `Unarchive ${group.name}`
+													: `Archive ${group.name}`
+											}
+											onClick={() => onUpdateGroup({archived: !group.archived})}
+										>
+											<Archive />
+										</Button>
+									</IconTooltip>
+									<IconTooltip label="Delete session">
+										<Button
+											variant="ghost"
+											size="icon"
+											className="h-8 w-8 text-muted-foreground hover:text-destructive"
+											aria-label={`Delete session ${name}`}
+											onClick={onDelete}
+										>
+											<Trash2 />
+										</Button>
+									</IconTooltip>
+								</span>
+								<span className="flex items-center">
+									<Button
+										size="sm"
+										variant={isExpanded ? 'default' : 'secondary'}
+										className="rounded-r-none"
+										onClick={(event) => onRestore(event)}
+									>
+										<RotateCcw />
+										<span className="hidden sm:inline">Restore</span>
+									</Button>
+									<ActionDropdownMenu
+										actions={windowActions}
+										trigger={
+											<Button
+												size="sm"
+												variant={isExpanded ? 'default' : 'secondary'}
+												className="w-7 rounded-l-none border-l border-background/40 px-0"
+												title="Restore options"
+												aria-label={`Restore options for ${name}`}
+											>
+												<ChevronDown />
+											</Button>
+										}
+									/>
+								</span>
 								<ActionDropdownMenu
-									actions={restoreActions}
+									actions={actions}
 									trigger={
 										<Button
-											size="sm"
-											variant={isExpanded ? 'default' : 'secondary'}
-											className="w-7 rounded-l-none border-l border-background/40 px-0"
-											title="Restore options"
-											aria-label={`Restore options for ${group.name}`}
+											variant="ghost"
+											size="icon"
+											className="h-8 w-8"
+											title="More actions"
+											aria-label={`More actions for ${name}`}
 										>
-											<ChevronDown />
+											<MoreVertical />
 										</Button>
 									}
 								/>
-							</span>
-							<ActionDropdownMenu
-								actions={actions}
-								trigger={
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8"
-										title="More actions"
-										aria-label={`More actions for ${group.name}`}
-									>
-										<MoreVertical />
-									</Button>
-								}
-							/>
-						</div>
-					</div>
-				</ActionContextMenu>
-				{isExpanded && (
-					<div className="border-t border-border">
-						{(group.description || group.notes) && (
-							<div className="min-w-0 border-b border-border bg-muted/30 px-4 py-2.5 sm:pl-14">
-								{group.description && (
-									<p className="min-w-0 whitespace-pre-wrap break-words text-sm font-medium [overflow-wrap:anywhere]">
-										{group.description}
-									</p>
-								)}
-								{group.notes && (
-									<p className="mt-0.5 min-w-0 whitespace-pre-wrap break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
-										{group.notes}
-									</p>
-								)}
 							</div>
-						)}
-						<ol className="m-0 list-none p-1 sm:p-1.5">
-							{tabRuns(group.tabs).map((run) => {
-								const row = (tab: SavedTabRecord, splitBadge = false) => (
-									<SavedTab
-										key={tab.id}
-										tab={tab}
-										group={group}
-										otherGroups={otherGroups}
-										settings={settings}
-										splitBadge={splitBadge}
-										selected={selected.has(tabKey(group.id, tab.id))}
-										selectionActive={selectionActive}
-										showBookmark={bookmarksEnabled}
-										displayMode={displayMode}
-										dragging={draggingTabId === tab.id}
-										dropLine={
-											mark?.kind === 'tab' && mark.tabId === tab.id
-												? mark.position
-												: null
-										}
-										onSelect={(checked, event) =>
-											onSelect(tabKey(group.id, tab.id), checked, event)
-										}
-										onDragBegin={() =>
-											drag.begin({
-												kind: 'tab',
-												groupId: group.id,
-												tabId: tab.id,
-											})
-										}
-										onDragEnd={drag.end}
-										onRestore={(event) => onRestoreTab(tab, event)}
-										onOpen={(requested) => onOpenTab(tab, requested)}
-										onCopyLink={() => onCopyTab(tab)}
-										onMoveTo={(toGroupId) => onMoveTab(tab, toGroupId)}
-										onBookmark={() => onBookmark(tab)}
-										onDelete={() => onDeleteTab(group, tab)}
-										onEditTab={() => onEditTab(tab)}
-										onToggleArchived={() => onToggleTabArchived(tab)}
-									/>
-								);
-								if (run.length === 1) {
-									return row(run[0]);
-								}
-
-								// A split view: both rows share a tinted background, joined by a bracket in the left gutter.
-								return (
-									<li
-										key={`split-${run[0].id}`}
-										className="relative my-0.5 rounded-lg bg-muted/40 ring-1 ring-inset ring-border/70"
-									>
-										<span
-											aria-hidden="true"
-											className="pointer-events-none absolute bottom-3.5 left-[3px] top-3.5 w-[3px] rounded-full bg-primary/35"
+						</div>
+					</ActionContextMenu>
+					{isExpanded && (
+						<div className="border-t border-border">
+							{(group.description || group.notes) && (
+								<div className="min-w-0 border-b border-border bg-muted/30 px-4 py-2.5 sm:pl-14">
+									{group.description && (
+										<p className="min-w-0 whitespace-pre-wrap break-words text-sm font-medium [overflow-wrap:anywhere]">
+											{group.description}
+										</p>
+									)}
+									{group.notes && (
+										<p className="mt-0.5 min-w-0 whitespace-pre-wrap break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+											{group.notes}
+										</p>
+									)}
+								</div>
+							)}
+							<ol className="m-0 list-none p-1 sm:p-1.5">
+								{tabRuns(group.tabs).map((run) => {
+									const row = (tab: SavedTabRecord, splitBadge = false) => (
+										<SavedTab
+											key={tab.id}
+											tab={tab}
+											group={group}
+											settings={settings}
+											splitBadge={splitBadge}
+											selected={selectedTabs.has(tab.id)}
+											selectionActive={selectionActive}
+											showBookmark={bookmarksEnabled}
+											displayMode={displayMode}
+											actions={handlers}
+											dragStore={dragStore}
 										/>
-										<ol
-											className="m-0 list-none p-0"
-											aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostFor(tab.url)).join(' and ')}`}
-										>
-											{row(run[0], true)}
-											{row(run[1])}
-										</ol>
-									</li>
-								);
-							})}
-						</ol>
-					</div>
-				)}
-			</article>
-		</div>
-	);
-}
+									);
+									if (run.length === 1) {
+										return row(run[0]);
+									}
 
-function Favicon({
-	url,
-	label,
-	className = '',
-}: {
-	url: string;
-	label?: string;
-	className?: string;
-}) {
-	const [failedUrl, setFailedUrl] = useState('');
-	// The icon sits on a transparent background; the letter tile only appears when the icon cannot load.
-	return failedUrl === url ? (
-		<span
-			className={`grid shrink-0 place-items-center overflow-hidden bg-muted text-[10px] font-semibold text-muted-foreground ${className}`}
-		>
-			{(String(label || hostFor(url)).trim()[0] || '↗').toUpperCase()}
-		</span>
-	) : (
-		<img
-			className={`shrink-0 object-contain ${className}`}
-			src={faviconUrl(url)}
-			alt=""
-			onError={() => setFailedUrl(url)}
-		/>
-	);
-}
+									// A split view: both rows share a tinted background, joined by a bracket in the left gutter.
+									return (
+										<li
+											key={`split-${run[0].id}`}
+											className="relative my-0.5 rounded-lg bg-muted/40 ring-1 ring-inset ring-border/70"
+										>
+											<span
+												aria-hidden="true"
+												className="pointer-events-none absolute bottom-3.5 left-[3px] top-3.5 w-[3px] rounded-full bg-primary/35"
+											/>
+											<ol
+												className="m-0 list-none p-0"
+												aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostFor(tab.url)).join(' and ')}`}
+											>
+												{row(run[0], true)}
+												{row(run[1])}
+											</ol>
+										</li>
+									);
+								})}
+							</ol>
+						</div>
+					)}
+				</article>
+			</div>
+		);
+	},
+);
 
 type SavedTabProps = {
 	tab: SavedTabRecord;
 	group: Session;
-	otherGroups: Array<{id: string; name: string}>;
 	settings: Partial<Settings>;
 	selected: boolean;
 	selectionActive: boolean;
-	dragging: boolean;
-	dropLine: InsertPosition | null;
-	onSelect: (checked: boolean, event: SelectionModifiers) => void;
-	onDragBegin: () => void;
-	onDragEnd: () => void;
-	onRestore: (event: RestoreModifiers) => void;
-	onOpen: (requested?: 'current' | 'new') => void;
-	onCopyLink: () => void;
-	onMoveTo: (toGroupId: string) => void;
-	onBookmark: () => void;
-	onDelete: () => void;
-	onEditTab: () => void;
-	onToggleArchived: () => void;
+	actions: CardActions;
+	dragStore: DragStore;
 	showBookmark: boolean;
 	displayMode?: Settings['urlDisplayMode'];
 	/**
@@ -2397,275 +2500,297 @@ type SavedTabProps = {
 
 const MAX_MOVE_TARGETS = 30;
 
-function SavedTab({
-	tab,
-	group,
-	otherGroups,
-	settings,
-	selected,
-	selectionActive,
-	dragging,
-	dropLine,
-	onSelect,
-	onDragBegin,
-	onDragEnd,
-	onRestore,
-	onOpen,
-	onCopyLink,
-	onMoveTo,
-	onBookmark,
-	onDelete,
-	onEditTab,
-	onToggleArchived,
-	showBookmark,
-	displayMode,
-	splitBadge = false,
-}: SavedTabProps) {
-	const modifierRef = useRef<SelectionModifiers>({});
-	const label = tab.title?.trim() || hostFor(tab.url);
-	const displayUrl = urlDisplay(tab.url, displayMode);
-	const compact = displayUrl === null;
-	const action = 'h-7 w-7 text-muted-foreground hover:text-foreground';
-	const actions: MenuAction[] = [
-		{
-			id: 'open-here',
-			label: 'Open in this tab',
-			icon: ArrowUpRight,
-			onSelect: () => onOpen('current'),
-		},
-		{
-			id: 'open-new',
-			label: 'Open in new tab',
-			icon: ExternalLink,
-			onSelect: () => onOpen('new'),
-		},
-		{
-			id: 'restore',
-			label: 'Restore',
-			icon: RotateCcw,
-			onSelect: () => onRestore({}),
-		},
-		{type: 'separator'},
-		{
-			id: 'edit',
-			label: 'Edit title & notes',
-			icon: StickyNote,
-			onSelect: onEditTab,
-		},
-		{id: 'copy', label: 'Copy link', icon: Copy, onSelect: onCopyLink},
-		{
-			id: 'bookmark',
-			label: 'Bookmark',
-			icon: BookmarkPlus,
-			hidden: !showBookmark,
-			onSelect: onBookmark,
-		},
-		{
-			id: 'unarchive',
-			label: 'Unarchive',
-			icon: Archive,
-			hidden: !tab.archived,
-			onSelect: onToggleArchived,
-		},
-		{
-			id: 'move',
-			label: 'Move to session',
-			icon: FolderInput,
-			type: 'submenu',
-			items: otherGroups.slice(0, MAX_MOVE_TARGETS).map((target) => ({
-				id: `move-${target.id}`,
-				label:
-					target.name.length > 40
-						? `${target.name.slice(0, 39)}…`
-						: target.name,
-				onSelect: () => onMoveTo(target.id),
-			})),
-		},
-		{type: 'separator'},
-		{
-			id: 'remove',
-			label: 'Remove',
-			icon: X,
-			destructive: true,
-			onSelect: onDelete,
-		},
-	];
-	function handleRowClick(event: MouseEvent<HTMLLIElement>) {
-		if (
-			(event.target as Element).closest(
-				'button, input, [role="checkbox"], [role="menu"], [role="menuitem"]',
-			)
-		) {
-			return;
+const SavedTab = memo(
+	({
+		tab,
+		group,
+		settings,
+		selected,
+		selectionActive,
+		actions: handlers,
+		dragStore,
+		showBookmark,
+		displayMode,
+		splitBadge = false,
+	}: SavedTabProps) => {
+		const dragging = useDragSlice(
+			dragStore,
+			(store) =>
+				store.dragging?.kind === 'tab' &&
+				store.dragging.groupId === group.id &&
+				store.dragging.tabId === tab.id,
+		);
+		const dropLine = useDragSlice(dragStore, (store) =>
+			store.mark?.kind === 'tab' &&
+			store.mark.groupId === group.id &&
+			store.mark.tabId === tab.id
+				? store.mark.position
+				: null,
+		);
+		const onSelect = (checked: boolean, event: SelectionModifiers) =>
+			handlers.select(tabKey(group.id, tab.id), checked, event);
+		const onRestore = (event: RestoreModifiers) =>
+			handlers.restoreTab(group, tab, event);
+		const onOpen = (requested?: 'current' | 'new') =>
+			handlers.openTab(tab, requested);
+		const onDelete = () => handlers.deleteTab(group, tab);
+		const modifierRef = useRef<SelectionModifiers>({});
+		const label = tab.title?.trim() || hostFor(tab.url);
+		const displayUrl = urlDisplay(tab.url, displayMode);
+		const compact = displayUrl === null;
+		const action = 'h-7 w-7 text-muted-foreground hover:text-foreground';
+		// Built only when the menu opens.
+		const actions = (): MenuAction[] => [
+			{
+				id: 'open-here',
+				label: 'Open in this tab',
+				icon: ArrowUpRight,
+				onSelect: () => onOpen('current'),
+			},
+			{
+				id: 'open-new',
+				label: 'Open in new tab',
+				icon: ExternalLink,
+				onSelect: () => onOpen('new'),
+			},
+			{
+				id: 'restore',
+				label: 'Restore',
+				icon: RotateCcw,
+				onSelect: () => onRestore({}),
+			},
+			{type: 'separator'},
+			{
+				id: 'edit',
+				label: 'Edit title & notes',
+				icon: StickyNote,
+				onSelect: () => handlers.editTab(group, tab),
+			},
+			{
+				id: 'copy',
+				label: 'Copy link',
+				icon: Copy,
+				onSelect: () => handlers.copyTab(tab),
+			},
+			{
+				id: 'bookmark',
+				label: 'Bookmark',
+				icon: BookmarkPlus,
+				hidden: !showBookmark,
+				onSelect: () => handlers.bookmark(tab),
+			},
+			{
+				id: 'unarchive',
+				label: 'Unarchive',
+				icon: Archive,
+				hidden: !tab.archived,
+				onSelect: () => handlers.toggleTabArchived(group, tab),
+			},
+			{
+				id: 'move',
+				label: 'Move to session',
+				icon: FolderInput,
+				type: 'submenu',
+				items: handlers.moveTargets(group.id).map((target) => ({
+					id: `move-${target.id}`,
+					label:
+						target.name.length > 40
+							? `${target.name.slice(0, 39)}…`
+							: target.name,
+					onSelect: () => handlers.moveTab(group, tab, target.id),
+				})),
+			},
+			{type: 'separator'},
+			{
+				id: 'remove',
+				label: 'Remove',
+				icon: X,
+				destructive: true,
+				onSelect: onDelete,
+			},
+		];
+		function handleRowClick(event: MouseEvent<HTMLLIElement>) {
+			if (
+				(event.target as Element).closest(
+					'button, input, [role="checkbox"], [role="menu"], [role="menuitem"]',
+				)
+			) {
+				return;
+			}
+
+			const modifier = event.ctrlKey || event.metaKey;
+			if (modifier || event.shiftKey) {
+				event.preventDefault();
+				onSelect(modifier ? !selected : true, {
+					shiftKey: event.shiftKey,
+					ctrlKey: event.ctrlKey,
+					metaKey: event.metaKey,
+				});
+				return;
+			}
+
+			if (selectionActive && !(event.target as Element).closest('a')) {
+				onSelect(!selected, {});
+			}
 		}
 
-		const modifier = event.ctrlKey || event.metaKey;
-		if (modifier || event.shiftKey) {
-			event.preventDefault();
-			onSelect(modifier ? !selected : true, {
-				shiftKey: event.shiftKey,
-				ctrlKey: event.ctrlKey,
-				metaKey: event.metaKey,
-			});
-			return;
-		}
-
-		if (selectionActive && !(event.target as Element).closest('a')) {
-			onSelect(!selected, {});
-		}
-	}
-
-	return (
-		<ActionContextMenu actions={actions}>
-			<li
-				draggable
-				data-tab-id={tab.id}
-				style={tab.archived ? ARCHIVED_STYLE : undefined}
-				className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 relative rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${tab.archived ? 'opacity-60 grayscale' : ''} ${dragging ? 'opacity-40' : ''} `}
-				onClick={handleRowClick}
-				onDragStart={(event) => {
-					event.stopPropagation();
-					applyLinkDrag(event.dataTransfer, [tab]);
-					event.dataTransfer.effectAllowed = 'copyMove';
-					setLinkDragImage(event.dataTransfer, tab);
-					onDragBegin();
-				}}
-				onDragEnd={onDragEnd}
-			>
-				{dropLine && (
-					<DropIndicator
-						className={`inset-x-0 ${dropLine === 'before' ? '-top-px' : '-bottom-px'}`}
-					/>
-				)}
-				<span
-					className={`${compact ? '' : 'mt-1.5'} flex w-4 shrink-0 justify-center transition-opacity ${selected || selectionActive ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100'}`}
+		return (
+			<ActionContextMenu actions={actions}>
+				<li
+					draggable
+					data-tab-id={tab.id}
+					style={tab.archived ? ARCHIVED_STYLE : undefined}
+					className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 relative rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${tab.archived ? 'opacity-60 grayscale' : ''} ${dragging ? 'opacity-40' : ''} `}
+					onClick={handleRowClick}
+					onDragStart={(event) => {
+						event.stopPropagation();
+						applyLinkDrag(event.dataTransfer, [tab]);
+						event.dataTransfer.effectAllowed = 'copyMove';
+						setLinkDragImage(event.dataTransfer, tab);
+						handlers.dragBegin({
+							kind: 'tab',
+							groupId: group.id,
+							tabId: tab.id,
+						});
+					}}
+					onDragEnd={handlers.dragEnd}
 				>
-					<Checkbox
-						checked={selected}
-						aria-label={`Select ${label} from ${group.name}`}
-						onPointerDown={(event) => {
-							modifierRef.current = {
-								shiftKey: event.shiftKey,
-								ctrlKey: event.ctrlKey,
-								metaKey: event.metaKey,
-							};
-						}}
-						onKeyDown={(event) => {
-							modifierRef.current = {
-								shiftKey: event.shiftKey,
-								ctrlKey: event.ctrlKey,
-								metaKey: event.metaKey,
-							};
-						}}
-						onCheckedChange={(checked) =>
-							onSelect(Boolean(checked), modifierRef.current)
-						}
-					/>
-				</span>
-				<Favicon
-					url={tab.url}
-					label={label}
-					className={`${compact ? 'h-5 w-5' : 'mt-0.5 h-6 w-6'} rounded-sm`}
-				/>
-				<div className="min-w-0 flex-1">
-					<span className="flex min-w-0 items-center gap-1.5">
-						<a
-							className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
-							href={tab.url}
-							target="_blank"
-							rel="noopener noreferrer"
-							title={label}
-							onClick={(event) => {
-								if (event.ctrlKey || event.metaKey || event.shiftKey) {
-									return;
-								}
-
-								event.preventDefault();
-								if (
-									resolveLinkTarget('session', settings as Settings) === 'none'
-								) {
-									onSelect(!selected, {});
-									return;
-								}
-
-								onOpen();
+					{dropLine && (
+						<DropIndicator
+							className={`inset-x-0 ${dropLine === 'before' ? '-top-px' : '-bottom-px'}`}
+						/>
+					)}
+					<span
+						className={`${compact ? '' : 'mt-1.5'} flex w-4 shrink-0 justify-center transition-opacity ${selected || selectionActive ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100'}`}
+					>
+						<Checkbox
+							checked={selected}
+							aria-label={`Select ${label} from ${group.name.trim() || 'Untitled session'}`}
+							onPointerDown={(event) => {
+								modifierRef.current = {
+									shiftKey: event.shiftKey,
+									ctrlKey: event.ctrlKey,
+									metaKey: event.metaKey,
+								};
 							}}
-						>
-							{label}
-						</a>
-						{splitBadge && (
-							<Badge
-								className="shrink-0 gap-1 px-1.5"
-								title="Saved from a split view; restores side by side"
-							>
-								<Columns2 className="h-3 w-3" aria-hidden="true" />
-								Split
-							</Badge>
-						)}
-						{tab.pinned && <Badge>Pinned</Badge>}
-						{tab.nativeGroup?.title && (
-							<Badge
-								className="min-w-0 max-w-[12rem]"
-								title={tab.nativeGroup.title}
-							>
-								<span className="truncate">{tab.nativeGroup.title}</span>
-							</Badge>
-						)}
-						{tab.archived && <Badge variant="outline">Archived</Badge>}
+							onKeyDown={(event) => {
+								modifierRef.current = {
+									shiftKey: event.shiftKey,
+									ctrlKey: event.ctrlKey,
+									metaKey: event.metaKey,
+								};
+							}}
+							onCheckedChange={(checked) =>
+								onSelect(Boolean(checked), modifierRef.current)
+							}
+						/>
 					</span>
-					{displayUrl !== null && (
-						<p
-							className="mt-0.5 break-all text-[11px] leading-4 text-muted-foreground"
-							title={tab.url}
-						>
-							{displayUrl}
-						</p>
-					)}
-					{tab.notes && (
-						<p className="mt-1 whitespace-pre-wrap break-words text-xs italic text-muted-foreground [overflow-wrap:anywhere]">
-							{tab.notes}
-						</p>
-					)}
-				</div>
-				<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100">
-					<IconTooltip label="Restore tab">
-						<Button
-							variant="ghost"
-							size="icon"
-							className={action}
-							aria-label={`Restore ${label}`}
-							onClick={(event) => onRestore(event)}
-						>
-							<RotateCcw />
-						</Button>
-					</IconTooltip>
-					<IconTooltip label="Remove from session">
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-7 w-7 text-muted-foreground hover:text-destructive"
-							aria-label={`Remove ${label} from saved session`}
-							onClick={onDelete}
-						>
-							<X />
-						</Button>
-					</IconTooltip>
-					<ActionDropdownMenu
-						actions={actions}
-						trigger={
+					<Favicon
+						url={tab.url}
+						label={label}
+						className={`${compact ? 'h-5 w-5' : 'mt-0.5 h-6 w-6'} rounded-sm`}
+					/>
+					<div className="min-w-0 flex-1">
+						<span className="flex min-w-0 items-center gap-1.5">
+							<a
+								className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
+								href={tab.url}
+								target="_blank"
+								rel="noopener noreferrer"
+								title={label}
+								onClick={(event) => {
+									if (event.ctrlKey || event.metaKey || event.shiftKey) {
+										return;
+									}
+
+									event.preventDefault();
+									if (
+										resolveLinkTarget('session', settings as Settings) ===
+										'none'
+									) {
+										onSelect(!selected, {});
+										return;
+									}
+
+									onOpen();
+								}}
+							>
+								{label}
+							</a>
+							{splitBadge && (
+								<Badge
+									className="shrink-0 gap-1 px-1.5"
+									title="Saved from a split view; restores side by side"
+								>
+									<Columns2 className="h-3 w-3" aria-hidden="true" />
+									Split
+								</Badge>
+							)}
+							{tab.pinned && <Badge>Pinned</Badge>}
+							{tab.nativeGroup?.title && (
+								<Badge
+									className="min-w-0 max-w-[12rem]"
+									title={tab.nativeGroup.title}
+								>
+									<span className="truncate">{tab.nativeGroup.title}</span>
+								</Badge>
+							)}
+							{tab.archived && <Badge variant="outline">Archived</Badge>}
+						</span>
+						{displayUrl !== null && (
+							<p
+								className="mt-0.5 break-all text-[11px] leading-4 text-muted-foreground"
+								title={tab.url}
+							>
+								{displayUrl}
+							</p>
+						)}
+						{tab.notes && (
+							<p className="mt-1 whitespace-pre-wrap break-words text-xs italic text-muted-foreground [overflow-wrap:anywhere]">
+								{tab.notes}
+							</p>
+						)}
+					</div>
+					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100">
+						<IconTooltip label="Restore tab">
 							<Button
 								variant="ghost"
 								size="icon"
 								className={action}
-								title="More actions"
-								aria-label={`More actions for ${label}`}
+								aria-label={`Restore ${label}`}
+								onClick={(event) => onRestore(event)}
 							>
-								<MoreVertical />
+								<RotateCcw />
 							</Button>
-						}
-					/>
-				</div>
-			</li>
-		</ActionContextMenu>
-	);
-}
+						</IconTooltip>
+						<IconTooltip label="Remove from session">
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-7 w-7 text-muted-foreground hover:text-destructive"
+								aria-label={`Remove ${label} from saved session`}
+								onClick={onDelete}
+							>
+								<X />
+							</Button>
+						</IconTooltip>
+						<ActionDropdownMenu
+							actions={actions}
+							trigger={
+								<Button
+									variant="ghost"
+									size="icon"
+									className={action}
+									title="More actions"
+									aria-label={`More actions for ${label}`}
+								>
+									<MoreVertical />
+								</Button>
+							}
+						/>
+					</div>
+				</li>
+			</ActionContextMenu>
+		);
+	},
+);

@@ -64,13 +64,14 @@ import {
 	type IconComponent,
 } from './common';
 import type {ActionResult, EraseScope, Settings} from './types';
-import {BackupDialog, ImportDialog} from './data-transfer';
 import {
+	BackupDialog,
+	ImportDialog,
 	RecoveryTools,
 	SnapshotsDialog,
 	TrashDialog,
-	offerUndo,
-} from './recovery';
+} from './lazy-dialogs';
+import {offerUndo} from './recovery-core';
 import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
 import {
