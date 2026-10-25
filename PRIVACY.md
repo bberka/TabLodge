@@ -29,7 +29,7 @@ TabLodge reads tab details (URL, title, pinned state, tab group, window) only wh
 
 Snapshots, backups, and the trash are ordinary local data like everything else: they never leave your device, are capped in number and size, and can be cleared at any time from **Settings › Recovery & backups**. If you turn on **Also save a copy to Downloads**, backups are additionally written as JSON files to `Downloads/TabLodge/` on your computer; those files are yours to keep or delete, and are not uploaded anywhere by TabLodge.
 
-Data stays until you delete it: delete individual items, use **Settings › Data** to erase sessions, bookmarks, or both, or remove the extension (the browser then deletes its storage). Exported JSON and HTML files are plain, unencrypted text that you control; keep them private if their URLs, titles, or notes are sensitive.
+Data stays until you delete it: delete individual items, use **Settings › Data** to erase sessions, bookmarks, or both, or remove the extension (the browser then deletes its storage). Exported JSON, HTML, and full-backup ZIP files (which hold your sessions, bookmarks, settings, excluded sites, theme, snapshot history, and trash) are plain, unencrypted data that you control; keep them private if their URLs, titles, or notes are sensitive.
 
 When you restore a session or open a bookmark, your browser loads those web pages as usual, and those sites see a normal visit. TabLodge itself sends nothing to them.
 
