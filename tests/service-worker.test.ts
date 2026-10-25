@@ -3613,6 +3613,24 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(reset.settings.urlDisplayMode, 'full');
 });
 
+test('pasteLinkToBookmark is on by default and only an explicit false turns it off', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings
+			.pasteLinkToBookmark,
+		true,
+	);
+	const off = createWorkerHarness(
+		stateWithSession({pasteLinkToBookmark: false}),
+	);
+	assert.equal(
+		(await off.sendMessage({type: 'GET_STATE'})).settings.pasteLinkToBookmark,
+		false,
+	);
+	const reset = await off.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.pasteLinkToBookmark, true);
+});
+
 test('stretchBookmarkColumns is on by default, only an explicit false turns it off, and resets to on', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(

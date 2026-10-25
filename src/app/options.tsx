@@ -583,6 +583,12 @@ const settingsGroups: Array<{
 				help: 'Columns in the same row match the tallest one.',
 				type: 'switch',
 			},
+			{
+				name: 'pasteLinkToBookmark',
+				label: 'Paste a link to add a bookmark',
+				help: `Pasting a link anywhere on the ${PROJECT.name} page except a text field opens Add bookmark with the link and its title filled in.`,
+				type: 'switch',
+			},
 		],
 	},
 	{
