@@ -183,6 +183,7 @@ function createWorkerHarness(
 	const popupCalls: string[] = [];
 	const createdWindows: Array<Omit<MockWindow, 'tabs'> & {tabs: undefined}> =
 		[];
+	const windowCreateCalls: Array<Record<string, unknown>> = [];
 	const discardedTabs: number[] = [];
 	const menuItems: MenuItem[] = [];
 	let storageFailure: Error | null = null;
@@ -474,8 +475,11 @@ function createWorkerHarness(
 					type?: string;
 					focused?: boolean;
 					url?: string | string[];
+					width?: number;
+					height?: number;
 				} = {},
 			) {
+				windowCreateCalls.push({...properties});
 				const id = nextWindowId++;
 				const win: MockWindow = {
 					id,
@@ -809,6 +813,7 @@ function createWorkerHarness(
 		sidePanelOpened,
 		popupCalls,
 		createdWindows,
+		windowCreateCalls,
 		discardedTabs,
 		menuItems,
 		listeners,
@@ -7468,6 +7473,242 @@ test('PREVIEW_SESSION_NAME formats the next save from the window tabs', async ()
 		style: 'datetime',
 	});
 	assert.equal(datetime.name, 'Sat, Oct 25 · 10:42 PM');
+});
+
+test('session name setting: "Ask each time" and its fallback are validated and reset', async () => {
+	const harness = nameHarness();
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_STATE'})).settings
+			.sessionNameFallback,
+		'date-title',
+	);
+	const ask = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {sessionNameStyle: 'ask', sessionNameFallback: 'datetime'},
+	});
+	assert.equal(ask.settings.sessionNameStyle, 'ask');
+	assert.equal(ask.settings.sessionNameFallback, 'datetime');
+	// The fallback can never be "ask" itself.
+	const bad = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {sessionNameFallback: 'ask'} as unknown as Partial<Settings>,
+	});
+	assert.equal(bad.settings.sessionNameFallback, 'date-title');
+	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.sessionNameStyle, 'date-title');
+	assert.equal(reset.settings.sessionNameFallback, 'date-title');
+});
+
+test('with "ask", a save that was not named uses the fallback and a typed name still wins', async () => {
+	assert.equal(
+		await savedName({sessionNameStyle: 'ask'}),
+		'Sat, Oct 25 · Google Flights',
+	);
+	assert.equal(
+		await savedName({sessionNameStyle: 'ask', sessionNameFallback: 'title'}),
+		'Google Flights',
+	);
+	assert.equal(
+		await savedName(
+			{
+				sessionNameStyle: 'ask',
+				sessionNameFallback: 'custom',
+				sessionNameTemplate: '{domain} +{count}',
+			},
+			{groupName: ''},
+		),
+		'flights.example +2',
+	);
+	assert.equal(
+		await savedName({sessionNameStyle: 'ask'}, {groupName: 'Trip planning'}),
+		'Trip planning',
+	);
+	// The page-initiated save does not open the prompt window.
+	const harness = nameHarness({sessionNameStyle: 'ask'});
+	await harness.sendMessage({type: 'SAVE_TABS', scope: 'window'});
+	assert.equal(harness.windowCreateCalls.length, 0);
+});
+
+test('PREVIEW_SESSION_NAME reports "ask" with the fallback name and honours the scope', async () => {
+	const harness = nameHarness({
+		sessionNameStyle: 'ask',
+		sessionNameFallback: 'title',
+	});
+	const stored = await harness.sendMessage({type: 'PREVIEW_SESSION_NAME'});
+	assert.equal(stored.asks, true);
+	assert.equal(stored.name, 'Google Flights');
+	const picked = await harness.sendMessage({
+		type: 'PREVIEW_SESSION_NAME',
+		tabIds: [2],
+	});
+	assert.equal(picked.name, 'Docs');
+	const plain = await harness.sendMessage({
+		type: 'PREVIEW_SESSION_NAME',
+		style: 'title',
+	});
+	assert.equal(plain.asks, false);
+});
+
+test('a typed name across several windows is numbered per window', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({closeOnSave: false}),
+		[
+			webTab(1, 10, 0, {active: true, url: 'https://a.example/', title: 'A'}),
+			webTab(2, 11, 0, {active: true, url: 'https://b.example/', title: 'B'}),
+		],
+		{now: NAME_NOW, extraWindows: [11]},
+	);
+	const result = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'all-windows',
+		groupName: 'Trip',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(
+		harness.state.groups
+			.slice(0, 2)
+			.map((group) => group.name)
+			.toSorted((a, b) => String(a).localeCompare(String(b))),
+		['Trip (1/2)', 'Trip (2/2)'],
+	);
+});
+
+test('shortcut and menu saves with "ask" save first, then open the name prompt window', async () => {
+	const shortcut = nameHarness({sessionNameStyle: 'ask'});
+	(shortcut.listeners.onCommand as (c: string, t: unknown) => void)(
+		'save-window',
+		{id: 1, windowId: 10},
+	);
+	await settle();
+	assert.equal(shortcut.state.groups[0].name, 'Sat, Oct 25 · Google Flights');
+	assert.equal(shortcut.windowCreateCalls.length, 1);
+	const call = shortcut.windowCreateCalls[0] as {
+		type: string;
+		url: string;
+		focused: boolean;
+	};
+	assert.equal(call.type, 'popup');
+	assert.equal(call.focused, true);
+	assert.equal(
+		call.url,
+		`chrome-extension://tablodge/name-session.html?groupId=${shortcut.state.groups[0].id}`,
+	);
+
+	const menu = nameHarness({sessionNameStyle: 'ask'});
+	(
+		menu.listeners.contextMenuClicked as (
+			info: {menuItemId: string},
+			tab: unknown,
+		) => void
+	)({menuItemId: 'tablodge-page-save-window'}, {id: 1, windowId: 10});
+	await settle();
+	assert.equal(menu.state.groups[0].tabs.length, 2);
+	assert.equal(menu.windowCreateCalls.length, 1);
+
+	const selected = nameHarness({sessionNameStyle: 'ask'}, [
+		webTab(1, 10, 0, {
+			active: true,
+			highlighted: true,
+			url: 'https://a.example/',
+			title: 'A',
+		}),
+		webTab(2, 10, 1, {
+			highlighted: true,
+			url: 'https://b.example/',
+			title: 'B',
+		}),
+	]);
+	(selected.listeners.onCommand as (c: string, t: unknown) => void)(
+		'save-selected-tabs',
+		{id: 1, windowId: 10},
+	);
+	await settle();
+	assert.equal(selected.state.groups[0].tabs.length, 2);
+	assert.equal(selected.windowCreateCalls.length, 1);
+});
+
+test('an all-windows toolbar save asks once for every session it created', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({
+			closeOnSave: false,
+			sessionNameStyle: 'ask',
+			actionMode: 'all-windows',
+		}),
+		[
+			webTab(1, 10, 0, {active: true, url: 'https://a.example/', title: 'A'}),
+			webTab(2, 11, 0, {active: true, url: 'https://b.example/', title: 'B'}),
+		],
+		{now: NAME_NOW, extraWindows: [11]},
+	);
+	(harness.listeners.actionClicked as (tab: unknown) => void)({
+		id: 1,
+		windowId: 10,
+	});
+	await settle();
+	assert.equal(harness.windowCreateCalls.length, 1);
+	const url = new URL((harness.windowCreateCalls[0] as {url: string}).url);
+	const ids = url.searchParams.getAll('groupId');
+	assert.equal(ids.length, 2);
+	assert.deepEqual(
+		new Set(ids),
+		new Set(harness.state.groups.slice(0, 2).map((group) => group.id)),
+	);
+});
+
+test('without "ask", shortcut and menu saves never open the name prompt window', async () => {
+	for (const settings of [{}, {sessionNameStyle: 'title'}]) {
+		const harness = nameHarness(settings);
+		(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+			'save-window',
+			{id: 1, windowId: 10},
+		);
+		await settle();
+		assert.equal(harness.state.groups.length, 2);
+		assert.equal(harness.windowCreateCalls.length, 0);
+	}
+});
+
+test('the toolbar button in a direct-save mode asks after saving, except for a titled tab group', async () => {
+	const groupTab = [
+		webTab(1, 10, 0, {
+			active: true,
+			groupId: 5,
+			url: 'https://a.example/',
+			title: 'A',
+		}),
+	];
+	const click = (harness: ReturnType<typeof nameHarness>) =>
+		(harness.listeners.actionClicked as (tab: unknown) => void)({
+			id: 1,
+			windowId: 10,
+		});
+	const titled = nameHarness(
+		{sessionNameStyle: 'ask', actionMode: 'current-group'},
+		groupTab,
+		{tabGroups: [{id: 5, title: 'Research', color: 'blue', collapsed: false}]},
+	);
+	click(titled);
+	await settle();
+	assert.equal(titled.state.groups[0].name, 'Research');
+	assert.equal(titled.windowCreateCalls.length, 0);
+
+	const untitled = nameHarness(
+		{sessionNameStyle: 'ask', actionMode: 'current-group'},
+		groupTab,
+		{tabGroups: [{id: 5, title: '', color: 'blue', collapsed: false}]},
+	);
+	click(untitled);
+	await settle();
+	assert.equal(untitled.state.groups[0].name, 'Sat, Oct 25 · A');
+	assert.equal(untitled.windowCreateCalls.length, 1);
+
+	const window = nameHarness({
+		sessionNameStyle: 'ask',
+		actionMode: 'full-window',
+	});
+	click(window);
+	await settle();
+	assert.equal(window.windowCreateCalls.length, 1);
 });
 
 test('deleting a column moves its bookmarks after the target column’s own, in order', async () => {

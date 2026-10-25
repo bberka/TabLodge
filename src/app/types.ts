@@ -27,7 +27,12 @@ export type RestoreSplitTabs = 'split' | 'separate';
 /**
 For selection saves while the active tab is in a split view: keep both halves, or only the focused one.
 */
-export type SessionNameStyle = 'title' | 'datetime' | 'date-title' | 'custom';
+export type SessionNameStyle =
+	'title' | 'datetime' | 'date-title' | 'custom' | 'ask';
+/**
+The styles that build a name by themselves: what `ask` falls back to when the name is left empty or no page can ask.
+*/
+export type SessionNameFallback = Exclude<SessionNameStyle, 'ask'>;
 export type SaveSplitTabs = 'both' | 'focused';
 
 /**
@@ -186,13 +191,17 @@ export type Settings = {
 	*/
 	trashRetentionDays: number;
 	/**
-	How a new session is named: the first tab's title, the date and time, the date and first tab (default), or `sessionNameTemplate`.
+	How a new session is named: the first tab's title, the date and time, the date and first tab (default), `sessionNameTemplate`, or `ask` (a dialog asks each time; `sessionNameFallback` names it when left empty).
 	*/
 	sessionNameStyle: SessionNameStyle;
 	/**
 	Template for the `custom` style, with {date} {time} {weekday} {title} {domain} {count} {window} (default "{date} · {title}").
 	*/
 	sessionNameTemplate: string;
+	/**
+	The style used when `sessionNameStyle` is `ask` and the name is left empty (default "date-title").
+	*/
+	sessionNameFallback: SessionNameFallback;
 	// ---- end recovery & backups ----
 };
 
@@ -449,7 +458,16 @@ export type TabLodgeMessages = {
 		groupName?: string;
 		includePinned?: boolean;
 	};
-	PREVIEW_SESSION_NAME: {style?: SessionNameStyle; template?: string};
+	PREVIEW_SESSION_NAME: {
+		style?: SessionNameStyle;
+		fallback?: SessionNameFallback;
+		template?: string;
+		/**
+		Preview for the tabs a save with this scope (or these tab ids) would capture, instead of the whole window.
+		*/
+		scope?: SaveScope;
+		tabIds?: number[];
+	};
 	SAVE_CURRENT_TAB_TO_GROUP: {};
 	RESTORE_TAB: {groupId: string; tabId: string} & RestoreOptions;
 	RESTORE_GROUP: {groupId: string; forceRemove?: boolean} & RestoreOptions;
@@ -660,7 +678,10 @@ Success payload of each message (merged with `{ ok: true }`). Fields marked opti
 export type TabLodgeResponses = {
 	GET_STATE: Store;
 	SAVE_TABS: SaveResult;
-	PREVIEW_SESSION_NAME: {name: string};
+	/**
+	`asks` is true when the style is `ask`; `name` is then the name used when the answer is left empty.
+	*/
+	PREVIEW_SESSION_NAME: {name: string; asks: boolean};
 	SAVE_CURRENT_TAB_TO_GROUP: {count: number; skipped: number; groupId: string};
 	RESTORE_TAB: RestoreResult;
 	RESTORE_GROUP: RestoreResult;
