@@ -491,6 +491,7 @@ function normalizeFolder(raw: unknown): Folder | null {
 	return {
 		id,
 		name: cleanText(raw.name, 'New folder', 60),
+		...iconField(raw.icon),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
 			: Date.now(),
@@ -2371,6 +2372,7 @@ function folderNameExists(
 
 async function createFolder(
 	name: string,
+	icon?: unknown,
 ): Promise<ActionResult<'CREATE_FOLDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -2394,6 +2396,7 @@ async function createFolder(
 		const folder = {
 			id: makeId(),
 			name: folderName,
+			...iconField(icon),
 			createdAt: Date.now(),
 			isDefault: false,
 		};
@@ -2406,6 +2409,7 @@ async function createFolder(
 async function updateFolder(
 	folderId: string,
 	name: string,
+	icon?: unknown,
 ): Promise<ActionResult<'UPDATE_FOLDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -2432,6 +2436,16 @@ async function updateFolder(
 		}
 
 		folder.name = folderName;
+		// `icon` omitted keeps the current icon; "" or an unknown id resets it to the default.
+		if (icon !== undefined) {
+			const {icon: nextIcon} = iconField(icon);
+			if (nextIcon) {
+				folder.icon = nextIcon;
+			} else {
+				delete folder.icon;
+			}
+		}
+
 		await writeStore(store);
 		return {ok: true, folder};
 	});
@@ -3917,11 +3931,11 @@ async function handleMessage(
 		}
 
 		case 'CREATE_FOLDER': {
-			return createFolder(message.name);
+			return createFolder(message.name, message.icon);
 		}
 
 		case 'UPDATE_FOLDER': {
-			return updateFolder(message.folderId, message.name);
+			return updateFolder(message.folderId, message.name, message.icon);
 		}
 
 		case 'DELETE_FOLDER': {
