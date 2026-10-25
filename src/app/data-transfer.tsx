@@ -20,6 +20,7 @@ import {
 	ArrowLeft,
 	Bookmark,
 	CircleAlert,
+	Archive,
 	Download,
 	FileJson,
 	FileSpreadsheet,
@@ -94,6 +95,14 @@ import type {
 } from './types';
 import {PROJECT} from './project';
 import {fileNamePrefix} from './backup-format';
+import {
+	FullBackupError,
+	buildFullBackup,
+	fullBackupFilename,
+	looksLikeZip,
+	readFullBackup,
+	type FullBackupContents,
+} from './full-backup';
 
 const plural = (count: number, noun: string, many = `${noun}s`) =>
 	`${count.toLocaleString()} ${count === 1 ? noun : many}`;
@@ -104,7 +113,11 @@ const UNFILED_COLUMN_ID = 'bookmark-unfiled';
 /**
 Starts a download of a generated file.
 */
-export function downloadFile(content: string, mime: string, filename: string) {
+export function downloadFile(
+	content: BlobPart,
+	mime: string,
+	filename: string,
+) {
 	const url = URL.createObjectURL(new Blob([content], {type: mime}));
 	const anchor = document.createElement('a');
 	anchor.href = url;
@@ -178,6 +191,15 @@ const FORMAT_CHOICES: ReadonlyArray<{
 	},
 ];
 
+type BackupFormat = ExportFormat | 'zip';
+
+const ZIP_CHOICE = {
+	title: 'Full backup (ZIP)',
+	icon: Archive,
+	description:
+		'Everything in one file: sessions, bookmarks, all settings and excluded sites, theme, crash snapshots, and trash. Restore it with Import.',
+};
+
 const BACKUP_TITLES: Record<ExportKind, (count: number) => string> = {
 	sessions: () => 'Back up sessions',
 	bookmarks: () => 'Back up bookmarks',
@@ -209,7 +231,8 @@ export function BackupDialog({
 	state,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
-	const [format, setFormat] = useState<ExportFormat>('json');
+	const [format, setFormat] = useState<BackupFormat>('json');
+	const [saving, setSaving] = useState(false);
 	const [switched, setSwitched] = useState<'sessions' | 'bookmarks' | null>(
 		null,
 	);
@@ -219,6 +242,7 @@ export function BackupDialog({
 		}
 
 		setFormat('json');
+		setSaving(false);
 		setSwitched(null);
 	}, [open]);
 	const canSwitch = Boolean(
@@ -242,18 +266,57 @@ export function BackupDialog({
 
 	const kind = shown?.kind ?? 'sessions';
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
-	const filename = exportFilename(PROJECT.name, kind, format);
-	const summary =
-		kind === 'bookmarks'
+	const full = format === 'zip' && kind !== 'selected';
+	const filename = full
+		? fullBackupFilename(PROJECT.name)
+		: exportFilename(PROJECT.name, kind, format === 'zip' ? 'json' : format);
+	const summary = full
+		? 'All data and settings'
+		: kind === 'bookmarks'
 			? `${plural(counts.groups, 'column')} · ${plural(counts.items, 'bookmark')}`
 			: `${plural(counts.groups, 'session')} · ${plural(counts.items, 'tab')}`;
+	async function downloadFull() {
+		setSaving(true);
+		try {
+			const result = await send('GET_FULL_BACKUP', {});
+			if (!result?.ok) {
+				throw new Error(result?.error || 'Could not read your data.');
+			}
+
+			const {bytes, manifest} = buildFullBackup(result, {
+				appVersion: PROJECT.version,
+			});
+			downloadFile(new Uint8Array(bytes), 'application/zip', filename);
+			onOpenChange(false);
+			showStatus(
+				`Saved a full backup (${plural(manifest.counts.sessions, 'session')}, ${plural(manifest.counts.bookmarks, 'bookmark')}, and settings) to ${filename}.`,
+				false,
+				{toast: true},
+			);
+		} catch (reason) {
+			showStatus(
+				String(messageOf(reason) || 'Could not create the file.'),
+				true,
+			);
+		} finally {
+			setSaving(false);
+		}
+	}
+
 	function download() {
+		if (full) {
+			void downloadFull();
+			return;
+		}
+
 		if (!shown) {
 			return;
 		}
 
 		try {
-			const file = buildExport(shown, format, {appName: PROJECT.name});
+			const file = buildExport(shown, format === 'zip' ? 'json' : format, {
+				appName: PROJECT.name,
+			});
 			downloadFile(file.content, file.mime, file.filename);
 			onOpenChange(false);
 			showStatus(`Saved ${summary} to ${file.filename}.`, false, {toast: true});
@@ -292,7 +355,7 @@ export function BackupDialog({
 						label="File format"
 						value={format}
 						className="sm:grid-cols-2"
-						onValueChange={(value) => setFormat(value as ExportFormat)}
+						onValueChange={(value) => setFormat(value as BackupFormat)}
 					>
 						{FORMAT_CHOICES.map((choice) => (
 							<RadioCard
@@ -313,6 +376,15 @@ export function BackupDialog({
 								className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
 							/>
 						))}
+						{kind !== 'selected' && (
+							<RadioCard
+								value="zip"
+								icon={ZIP_CHOICE.icon}
+								title={ZIP_CHOICE.title}
+								description={ZIP_CHOICE.description}
+								className="sm:col-span-2"
+							/>
+						)}
 					</RadioCardGroup>
 					<p
 						className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-muted/70 px-3 py-2 text-xs text-muted-foreground"
@@ -335,7 +407,7 @@ export function BackupDialog({
 					</Button>
 					<Button
 						type="button"
-						disabled={!counts.items && !counts.groups}
+						disabled={saving || (!full && !counts.items && !counts.groups)}
 						onClick={download}
 					>
 						<Download />
@@ -597,7 +669,7 @@ type ImportDialogProps = {
 };
 
 const SUPPORTED_FILES =
-	'JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, and Toby.';
+	'Full backups (ZIP), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, and Toby.';
 
 function importSummary(
 	kind: ImportKind,
@@ -636,6 +708,7 @@ export function ImportDialog({
 	const [kind, setKind] = useState<ImportKind>(initialKind);
 	const [source, setSource] = useState<ImportSource | null>(null);
 	const [parsed, setParsed] = useState<ParsedImport | null>(null);
+	const [full, setFull] = useState<FullBackupContents | null>(null);
 	const [error, setError] = useState('');
 	const [reading, setReading] = useState(false);
 	const [busy, setBusy] = useState(false);
@@ -663,6 +736,7 @@ export function ImportDialog({
 		);
 		setSource(null);
 		setParsed(null);
+		setFull(null);
 		setError('');
 		setReading(false);
 		setBusy(false);
@@ -691,7 +765,7 @@ export function ImportDialog({
 				singleColumn: target === 'column',
 			})
 		: null;
-	const step = parsed && source ? 'preview' : 'source';
+	const step = (parsed || full) && source ? 'preview' : 'source';
 	// The source step's focused button unmounts when the preview appears; move focus to the Import action.
 	useEffect(() => {
 		if (open && step === 'preview') {
@@ -733,12 +807,28 @@ export function ImportDialog({
 
 		setReading(true);
 		try {
+			if (looksLikeZip(new Uint8Array(await file.slice(0, 4).arrayBuffer()))) {
+				const contents = readFullBackup(
+					new Uint8Array(await file.arrayBuffer()),
+				);
+				if (!contents) {
+					setError(
+						`“${file.name}” is a ZIP file, but not a ${PROJECT.name} full backup.`,
+					);
+					return;
+				}
+
+				setFull(contents);
+				setSource({type: 'file', name: file.name});
+				return;
+			}
+
 			const result = parseImportFile(await file.text(), file.name);
 			setParsed(result);
 			setSource({type: 'file', name: file.name});
 		} catch (reason) {
 			setError(
-				reason instanceof ImportFormatError
+				reason instanceof ImportFormatError || reason instanceof FullBackupError
 					? reason.message
 					: `Could not read “${file.name}”.`,
 			);
@@ -780,6 +870,43 @@ export function ImportDialog({
 		event.preventDefault();
 		setDragging(false);
 		void readFile(event.dataTransfer.files?.[0]);
+	}
+
+	async function runFullImport() {
+		if (!full || busy) {
+			return;
+		}
+
+		setBusy(true);
+		try {
+			const result = await send('RESTORE_FULL_BACKUP', {
+				format: full.manifest.format,
+				version: full.manifest.version,
+				state: full.state,
+				preferences: full.preferences,
+				snapshots: full.snapshots,
+				trash: full.trash,
+			});
+			if (!result?.ok) {
+				throw new Error(result?.error || 'Could not import this backup.');
+			}
+
+			onOpenChange(false);
+			await onImported?.();
+			offerUndo(
+				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.`,
+				result.undoId,
+				showStatus,
+				async () => onImported?.(),
+			);
+		} catch (reason) {
+			showStatus(
+				String(messageOf(reason) || 'Could not import this backup.'),
+				true,
+			);
+		} finally {
+			setBusy(false);
+		}
 	}
 
 	async function runImport() {
@@ -863,14 +990,16 @@ export function ImportDialog({
 		}
 	}
 
-	const title =
-		step === 'preview'
+	const title = full
+		? 'Review full backup'
+		: step === 'preview'
 			? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
 			: kind === 'sessions'
 				? 'Import sessions'
 				: 'Import bookmarks';
-	const description =
-		step === 'preview'
+	const description = full
+		? 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash. You can undo it right after.'
+		: step === 'preview'
 			? 'Nothing is saved until you choose Import.'
 			: kind === 'sessions'
 				? `Restore a backup or bring in tabs saved by another tab manager. Each group of tabs becomes a ${PROJECT.name} session.`
@@ -901,7 +1030,9 @@ export function ImportDialog({
 			<DialogContent
 				size="lg"
 				// The review step uses most of the viewport so the sample list gets the space left over.
-				className={step === 'preview' ? 'h-[min(90vh,52rem)]' : undefined}
+				className={
+					step === 'preview' && !full ? 'h-[min(90vh,52rem)]' : undefined
+				}
 			>
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
@@ -965,7 +1096,7 @@ export function ImportDialog({
 									className="hidden"
 									tabIndex={-1}
 									aria-hidden="true"
-									accept=".json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown"
+									accept=".zip,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown"
 									onChange={(event) => void readFile(event.target.files?.[0])}
 								/>
 							</section>
@@ -1021,6 +1152,73 @@ export function ImportDialog({
 								onClick={() => onOpenChange(false)}
 							>
 								Cancel
+							</Button>
+						</DialogFooter>
+					</>
+				) : full && source ? (
+					<>
+						<DialogBody>
+							<div className="flex min-w-0 items-start gap-3 rounded-lg border border-border px-3.5 py-3">
+								<span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+									<Archive className="h-4 w-4" aria-hidden="true" />
+								</span>
+								<div className="min-w-0 flex-1">
+									<p className="text-sm font-medium [overflow-wrap:anywhere]">
+										{source.type === 'file' ? source.name : ''}
+									</p>
+									<p className="mt-0.5 text-xs text-muted-foreground">
+										{fullBackupDetails(full)}
+									</p>
+								</div>
+							</div>
+							<dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+								<Stat label="Sessions" value={full.counts.sessions} />
+								<Stat label="Tabs" value={full.counts.links} />
+								<Stat label="Bookmarks" value={full.counts.bookmarks} />
+								<Stat label="Columns" value={full.counts.columns} />
+								<Stat label="Folders" value={full.counts.folders} />
+								<Stat label="Snapshots" value={full.counts.snapshots} />
+								<Stat label="Trash items" value={full.counts.trash} />
+							</dl>
+							<ul className="space-y-1 text-xs leading-5 text-muted-foreground">
+								<Note>
+									Settings, excluded sites, and the theme are replaced too.
+								</Note>
+								<Note>
+									A safety backup of your current data is taken first.
+								</Note>
+							</ul>
+						</DialogBody>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								className="mr-auto"
+								disabled={busy}
+								onClick={() => {
+									setFull(null);
+									setSource(null);
+								}}
+							>
+								<ArrowLeft />
+								Back
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								disabled={busy}
+								onClick={() => onOpenChange(false)}
+							>
+								Cancel
+							</Button>
+							<Button
+								ref={importButtonRef}
+								type="button"
+								disabled={busy}
+								data-autofocus=""
+								onClick={() => void runFullImport()}
+							>
+								{busy ? 'Importing' : 'Replace everything'}
 							</Button>
 						</DialogFooter>
 					</>
@@ -1307,6 +1505,17 @@ export function ImportDialog({
 			</DialogContent>
 		</Dialog>
 	);
+}
+
+function fullBackupDetails({manifest}: FullBackupContents) {
+	const created = new Date(manifest.createdAt);
+	const parts = [
+		Number.isNaN(created.getTime())
+			? ''
+			: `Created ${created.toLocaleString()}`,
+		manifest.appVersion ? `${PROJECT.name} ${manifest.appVersion}` : '',
+	].filter(Boolean);
+	return parts.join(' · ') || 'Full backup';
 }
 
 function Stat({
