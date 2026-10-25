@@ -53,6 +53,9 @@ export type Settings = {
 	What the toolbar icon opens: the quick popup or the browser side panel.
 	*/
 	toolbarOpens: 'popup' | 'sidepanel';
+	/**
+	Excluded sites as bare host names; an entry covers the host and all its subdomains (older versions stored origins).
+	*/
 	excludedOrigins: string[];
 	saveDuplicateHandling: 'allow' | 'reject';
 	saveDuplicateTitle: TitlePolicy;
@@ -353,6 +356,7 @@ export type TabLodgeMessages = {
 		targetColumnId?: string | null;
 	};
 	ADD_EXCLUDED_ORIGIN: {origin: string};
+	ADD_EXCLUDED_ORIGINS: {origins: string[]};
 	REMOVE_EXCLUDED_ORIGIN: {origin: string};
 	UPDATE_SETTINGS: {settings: Partial<Settings>};
 	RESET_SETTINGS: {};
@@ -451,6 +455,7 @@ export type TabLodgeResponses = {
 	IMPORT_BOOKMARKS_FILE: ImportResult;
 	IMPORT_BROWSER_BOOKMARKS: BrowserBookmarkImportResult;
 	ADD_EXCLUDED_ORIGIN: {origin: string; settings: Settings};
+	ADD_EXCLUDED_ORIGINS: {added: number; settings: Settings};
 	REMOVE_EXCLUDED_ORIGIN: {settings: Settings};
 	UPDATE_SETTINGS: {settings: Settings};
 	RESET_SETTINGS: {settings: Settings};

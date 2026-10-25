@@ -1062,8 +1062,8 @@ test('the toolbar exclude toggle adds and removes the active site and tracks the
 		tab,
 	);
 	assert.deepEqual(harness.state.settings.excludedOrigins, [
-		'https://other.example',
-		'https://current.example',
+		'other.example',
+		'current.example',
 	]);
 	assert.equal(harness.item('tablodge-action-exclude')?.checked, true);
 
@@ -1071,9 +1071,7 @@ test('the toolbar exclude toggle adds and removes the active site and tracks the
 		{menuItemId: 'tablodge-action-exclude', checked: false},
 		tab,
 	);
-	assert.deepEqual(harness.state.settings.excludedOrigins, [
-		'https://other.example',
-	]);
+	assert.deepEqual(harness.state.settings.excludedOrigins, ['other.example']);
 	assert.equal(harness.item('tablodge-action-exclude')?.checked, false);
 	assert.deepEqual(
 		harness.badges.filter((badge) => badge.text).map((badge) => badge.text),
@@ -1109,9 +1107,7 @@ test('the toolbar exclude toggle adds and removes the active site and tracks the
 	assert.deepEqual(harness.warnings, [
 		'Open a regular web page to exclude its site.',
 	]);
-	assert.deepEqual(harness.state.settings.excludedOrigins, [
-		'https://other.example',
-	]);
+	assert.deepEqual(harness.state.settings.excludedOrigins, ['other.example']);
 
 	// Exclusions changed in Settings also update the checkbox.
 	for (const entry of harness.tabs) {
