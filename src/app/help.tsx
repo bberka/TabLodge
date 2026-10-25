@@ -63,7 +63,7 @@ function Help() {
 		{
 			icon: BookOpen,
 			title: 'Bookmarks',
-			text: 'Save the current page from the popup or the right-click menus, or add a bookmark directly. Drag bookmarks between columns to reorder or move them; insertion feedback shows where the bookmark will land. Drag a browser link or a session link onto a column to save it at that position.',
+			text: 'Save the current page from the popup or the right-click menus, or add a bookmark directly. Drag bookmarks between columns to reorder or move them; insertion feedback shows where the bookmark will land. Drag a browser link or a session link onto a column to save it at that position, or paste a link anywhere on the page to open Add bookmark with it filled in.',
 			detail: `Import a bookmark JSON file or your browser bookmarks, or export bookmarks, from the ⋯ menu on the Bookmarks toolbar of the ${PROJECT.name} page. When duplicates are found, choose skip or allow for that import; title updates are also scoped to that dialog.`,
 			href: 'newtab.html#bookmark-library',
 			action: 'Open bookmarks',

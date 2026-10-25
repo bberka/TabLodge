@@ -94,6 +94,10 @@ export type Settings = {
 	*/
 	stretchBookmarkColumns: boolean;
 	/**
+	Pasting a link (Ctrl/Cmd+V outside a text field) on the TabLodge page opens the add-bookmark dialog prefilled with it (default on).
+	*/
+	pasteLinkToBookmark: boolean;
+	/**
 	What clicking a bookmark does (default: open in this tab).
 	*/
 	bookmarkClickAction: LinkClickAction;

@@ -407,6 +407,48 @@ function NewTab() {
 		};
 	}, []);
 
+	// Pasting a link outside a text field opens Add bookmark prefilled with it. The title comes from the copied
+	// link's text, then from an open tab showing that page, then the domain (no page is ever fetched).
+	const pasteToBookmark =
+		bookmarksEnabled && settings.pasteLinkToBookmark !== false;
+	useEffect(() => {
+		if (!pasteToBookmark) {
+			return;
+		}
+
+		const onPaste = (event: ClipboardEvent) => {
+			const target = event.target as HTMLElement | null;
+			if (
+				event.defaultPrevented ||
+				target?.closest(
+					'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+				) ||
+				document.querySelector('[role="dialog"], [role="alertdialog"]')
+			) {
+				return;
+			}
+
+			const link = parseDraggedBookmark(event.clipboardData);
+			if (!link) {
+				return;
+			}
+
+			event.preventDefault();
+			void pastedLinkTitle(link).then((title) => {
+				setBookmarkEdit({
+					id: null,
+					title,
+					url: link.url,
+					columnId: columns[0]?.id || 'bookmark-unfiled',
+				});
+				setDialog('bookmark');
+			});
+		};
+
+		document.addEventListener('paste', onPaste);
+		return () => document.removeEventListener('paste', onPaste);
+	}, [pasteToBookmark, columns]);
+
 	async function saveWindow() {
 		setBusy('save-window');
 		const result = await send('SAVE_TABS', {scope: 'window'});
@@ -1941,6 +1983,23 @@ function parseDraggedBookmark(
 			.trim()
 			.slice(0, 500),
 	};
+}
+
+async function pastedLinkTitle(link: LinkEntry): Promise<string> {
+	const fallback = link.title || domainName(link.url);
+	if (fallback !== domainName(link.url)) {
+		return fallback;
+	}
+
+	try {
+		const tabs = await chrome.tabs.query({});
+		const tab = tabs.find(
+			(candidate) => candidate.url === link.url && candidate.title?.trim(),
+		);
+		return tab?.title?.trim().slice(0, 500) || fallback;
+	} catch {
+		return fallback;
+	}
 }
 
 // Column, bookmark, session, and link drags are accepted by columns; Unfiled takes all but columns.

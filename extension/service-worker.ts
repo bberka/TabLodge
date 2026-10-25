@@ -193,6 +193,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionLayout: 'list',
 	expandSessionsByDefault: false,
 	stretchBookmarkColumns: true,
+	pasteLinkToBookmark: true,
 	bookmarkClickAction: 'current',
 	sessionLinkClickAction: 'new',
 	showBookmarkQuickActions: false,
@@ -870,6 +871,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		sessionLayout: raw.sessionLayout === 'grid' ? 'grid' : 'list',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
+		pasteLinkToBookmark: raw.pasteLinkToBookmark !== false,
 		bookmarkClickAction: isOneOf(
 			['none', 'current', 'new'],
 			raw.bookmarkClickAction,
