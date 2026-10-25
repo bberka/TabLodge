@@ -128,6 +128,12 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'keepLodgePinned',
+				label: `Keep ${PROJECT.name} pinned and always open`,
+				help: `Pins one ${PROJECT.name} tab per window and keeps it open. Links opened from it always open in a new tab.`,
+				type: 'switch',
+			},
+			{
 				name: 'openDashboardOnStartup',
 				label: `Open ${PROJECT.name} when the browser starts`,
 				help: `Start with your saved sessions or the local ${PROJECT.name} page.`,
