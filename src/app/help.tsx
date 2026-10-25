@@ -26,7 +26,7 @@ import {
 } from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import {PageHeader} from './common';
+import {AppHeader, openShortcutsPage} from './common';
 import {PROJECT} from './project';
 
 function Help() {
@@ -105,14 +105,7 @@ function Help() {
 			data-brand="tablodge"
 			className="mx-auto max-w-3xl px-5 py-6 sm:px-8 sm:py-9"
 		>
-			<PageHeader back title="Help">
-				<Button asChild variant="ghost" size="sm">
-					<a href="options.html">
-						<Settings2 className="h-4 w-4" />
-						Settings
-					</a>
-				</Button>
-			</PageHeader>
+			<AppHeader active="help" />
 			<div className="space-y-3">
 				{sections.map(({icon: Icon, title, text, detail, href, action}) => (
 					<Card key={title}>
