@@ -329,8 +329,10 @@ function createWorkerHarness(
 						}
 					}
 				},
-				async remove(key: string) {
-					Reflect.deleteProperty(extraStorage, key);
+				async remove(keys: string | string[]) {
+					for (const key of [keys].flat()) {
+						Reflect.deleteProperty(extraStorage, key);
+					}
 				},
 				async getBytesInUse(keys: string[]) {
 					let total = 0;
@@ -1957,12 +1959,8 @@ test('drag kinds are told apart by type, and the document guard only blocks stra
 });
 
 test('session drags carry every link for TabLodge columns while keeping plain link payloads', async () => {
-	const {
-		applyLinkDrag,
-		parseSessionDragData,
-		sessionDropPrompt,
-		SESSION_DRAG_TYPE,
-	} = await import('../src/app/interaction-actions');
+	const {applyLinkDrag, parseSessionDragData, SESSION_DRAG_TYPE} =
+		await import('../src/app/interaction-actions');
 	const written: Record<string, string> = {};
 	const dataTransfer: {
 		setData(type: string, value: string): void;
@@ -1989,14 +1987,6 @@ test('session drags carry every link for TabLodge columns while keeping plain li
 		{title: 'A', url: 'https://a.example/'},
 		{title: '', url: 'https://b.example/'},
 	]);
-	const prompt = sessionDropPrompt(session, 'Work');
-	assert.equal(prompt.title, 'Add 2 links to “Work” column?');
-	assert.equal(prompt.confirmLabel, 'Add 2 links');
-	assert.equal(
-		sessionDropPrompt({links: [{url: 'https://a.example/'}]}, 'Work').title,
-		'Add 1 link to “Work” column?',
-	);
-
 	const single: Record<string, string> = {};
 	applyLinkDrag(
 		{
@@ -2579,6 +2569,172 @@ test('ERASE_DATA sessions removes sessions and folders but keeps bookmarks and s
 	);
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
 	assert.equal(harness.state.settings.copyFormat, 'url');
+});
+
+const UNDO_KEY = 'tablodge.undo';
+const undoRecordsOf = (harness: {extraStorage: Record<string, unknown>}) =>
+	(
+		harness.extraStorage[UNDO_KEY] as
+			{records: Array<{id: string; createdAt: number}>} | undefined
+	)?.records ?? [];
+
+test('UNDO brings back erased data and drops the record', async () => {
+	const harness = createWorkerHarness(stateWithEverything());
+	const erased = await harness.sendMessage({type: 'ERASE_DATA', scope: 'all'});
+	assert.equal(erased.ok, true, erased.error);
+	assert.ok(erased.undoId);
+	assert.deepEqual(harness.state.groups, []);
+	const undone = await harness.sendMessage({type: 'UNDO', id: erased.undoId});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(harness.state.groups.length, 2);
+	assert.equal(harness.state.bookmarks.length, 3);
+	assert.equal(undoRecordsOf(harness).length, 0);
+	const again = await harness.sendMessage({type: 'UNDO', id: erased.undoId});
+	assert.equal(again.ok, false);
+});
+
+test('UNDO is refused once something else changed the same data', async () => {
+	const harness = createWorkerHarness(stateWithEverything());
+	const erased = await harness.sendMessage({
+		type: 'ERASE_DATA',
+		scope: 'sessions',
+	});
+	await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'New', url: 'https://new.example/'},
+	});
+	const undone = await harness.sendMessage({type: 'UNDO', id: erased.undoId!});
+	assert.equal(undone.ok, false);
+	assert.match(undone.error, /changed since/);
+	assert.deepEqual(harness.state.groups, []);
+});
+
+test('UNDO restores a trash that was emptied or cleared item by item', async () => {
+	const harness = recoveryHarness();
+	await harness.sendMessage({type: 'DELETE_GROUP', groupId: 'session-1'});
+	await harness.sendMessage({type: 'BACKUP_NOW'});
+	assert.equal(trashOf(harness).length, 1);
+	const emptied = await harness.sendMessage({type: 'EMPTY_TRASH'});
+	assert.ok(emptied.undoId);
+	assert.equal(trashOf(harness).length, 0);
+	assert.equal(
+		(await harness.sendMessage({type: 'UNDO', id: emptied.undoId})).ok,
+		true,
+	);
+	assert.equal(trashOf(harness).length, 1);
+	const entry = trashOf(harness)[0];
+	const removed = await harness.sendMessage({
+		type: 'DELETE_TRASH',
+		id: entry.id,
+	});
+	assert.ok(removed.undoId);
+	assert.equal(trashOf(harness).length, 0);
+	await harness.sendMessage({type: 'UNDO', id: removed.undoId});
+	assert.equal(trashOf(harness).length, 1);
+});
+
+test('UNDO brings back cleared snapshots and refuses after a new capture', async () => {
+	const harness = recoveryHarness();
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	const before = historyOf(harness).length;
+	assert.equal(before > 0, true);
+	const cleared = await harness.sendMessage({type: 'CLEAR_SNAPSHOTS'});
+	assert.ok(cleared.undoId);
+	assert.equal(historyOf(harness).length, 0);
+	assert.equal(
+		(await harness.sendMessage({type: 'UNDO', id: cleared.undoId})).ok,
+		true,
+	);
+	assert.equal(historyOf(harness).length, before);
+
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_SNAPSHOT',
+		id: historyOf(harness)[0].id,
+	});
+	assert.ok(deleted.undoId);
+	harness.tabs.push(webTab(60, 10, 9));
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	const refused = await harness.sendMessage({
+		type: 'UNDO',
+		id: deleted.undoId,
+	});
+	assert.equal(refused.ok, false);
+});
+
+test('UNDO restores a backup restore and reset settings, and resyncs settings', async () => {
+	const harness = createWorkerHarness({
+		...bookmarksState(),
+		settings: {copyFormat: 'url'},
+	});
+	const backup = await harness.sendMessage({type: 'BACKUP_NOW'});
+	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: 'bm-0'});
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_BACKUP',
+		id: backupsOf(harness).auto[0].id,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.equal(harness.state.bookmarks.length, 3);
+	assert.equal(backup.ok, true);
+	await harness.sendMessage({type: 'UNDO', id: restored.undoId!});
+	assert.equal(harness.state.bookmarks.length, 2);
+
+	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
+	assert.ok(reset.undoId);
+	assert.notEqual(harness.state.settings.copyFormat, 'url');
+	await harness.sendMessage({type: 'UNDO', id: reset.undoId});
+	assert.equal(harness.state.settings.copyFormat, 'url');
+});
+
+test('ADD_BOOKMARKS offers undo only when asked, and undo removes just those bookmarks', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	const plain = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		bookmarks: [{url: 'https://plain.example/'}],
+	});
+	assert.equal(plain.undoId, undefined);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		bookmarks: [{url: 'https://a.example/'}, {url: 'https://b.example/'}],
+		undoable: true,
+	});
+	assert.equal(added.bookmarks.length, 2);
+	assert.equal(harness.state.bookmarks.length, 6);
+	const undone = await harness.sendMessage({type: 'UNDO', id: added.undoId!});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(harness.state.bookmarks.length, 4);
+});
+
+test('undo records expire, are purged by the alarm, and only the latest few are kept', async () => {
+	const harness = createWorkerHarness(stateWithEverything(), undefined, {
+		storage: {
+			[UNDO_KEY]: {
+				version: 1,
+				records: [
+					{
+						id: 'old',
+						label: 'Old',
+						createdAt: Date.now() - 10 * 60_000,
+						keys: ['tablodge.trash'],
+						before: {},
+						after: {'tablodge.trash': 'none'},
+					},
+				],
+			},
+		},
+	});
+	const stale = await harness.sendMessage({type: 'UNDO', id: 'old'});
+	assert.equal(stale.ok, false);
+	assert.match(stale.error, /too long ago/);
+	await harness.fire('alarm', {name: 'tablodge-undo'});
+	assert.equal(undoRecordsOf(harness).length, 0);
+
+	for (let round = 0; round < 5; round += 1) {
+		await harness.sendMessage({type: 'ERASE_DATA', scope: 'sessions'});
+		await harness.sendMessage({type: 'RESTORE_BACKUP', id: 'none'});
+		await harness.sendMessage({type: 'EMPTY_TRASH'});
+	}
+
+	assert.equal(undoRecordsOf(harness).length <= 3, true);
 });
 
 test('ERASE_DATA bookmarks removes bookmarks and columns and recreates the default column', async () => {

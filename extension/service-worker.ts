@@ -2918,8 +2918,9 @@ async function addBookmarks(
 	columnId: string | null = null,
 	targetBookmarkId: string | null = null,
 	position: InsertPosition = 'after',
+	undoable = false,
 ): Promise<ActionResult<'ADD_BOOKMARKS'>> {
-	return mutate(async () => {
+	const run = async (): Promise<ActionResult<'ADD_BOOKMARKS'>> => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
 			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
@@ -2977,7 +2978,11 @@ async function addBookmarks(
 
 		await writeStore(store);
 		return {ok: true, count: added.length, bookmarks: added};
-	});
+	};
+
+	return mutate(() =>
+		undoable ? withUndo('Add bookmarks', [STORAGE_KEY], run) : run(),
+	);
 }
 
 async function importBrowserBookmarks(
@@ -3005,151 +3010,153 @@ async function importBrowserBookmarks(
 
 	const openTitles = await openBookmarkTitleMap();
 
-	return mutate(async () => {
-		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
-		}
-
-		const treeLinks = (nodes: chrome.bookmarks.BookmarkTreeNode[]): number =>
-			nodes.reduce(
-				(sum, node) =>
-					sum + (node.url ? 1 : 0) + treeLinks(node.children ?? []),
-				0,
-			);
-		if (treeLinks(Array.isArray(tree) ? tree : []) > LARGE_IMPORT_THRESHOLD) {
-			await safetyBackup(store, 'Before importing browser bookmarks');
-		}
-
-		const columnsByName = new Map(
-			store.bookmarkColumns.map((column) => [
-				column.name.toLocaleLowerCase(),
-				column,
-			]),
-		);
-		const existingUrls = new Set(
-			store.bookmarks.map((bookmark) => bookmark.url),
-		);
-		const existingBookmarks = new Map(
-			store.bookmarks.map((bookmark) => [bookmark.url, bookmark]),
-		);
-		const allowDuplicates = duplicateMode === 'allow';
-		// With a target column, folders do not become columns: every bookmark goes into that column.
-		const targetColumnId = importTargetColumn(store, requestedColumnId);
-		const now = Date.now();
-		let columnsAdded = 0;
-		let bookmarksAdded = 0;
-		let bookmarksSkipped = 0;
-		let bookmarksUpdated = 0;
-		const ensureColumn = (path: string[]) => {
-			const name = cleanText(path.join(' / '), 'Bookmarks', 60);
-			const key = name.toLocaleLowerCase();
-			let column = columnsByName.get(key);
-			if (!column && store.bookmarkColumns.length < 500) {
-				column = {id: makeId(), name, createdAt: now, isDefault: false};
-				store.bookmarkColumns.push(column);
-				columnsByName.set(key, column);
-				columnsAdded += 1;
+	return mutate(() =>
+		withUndo('Import', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			if (!store.settings.bookmarksEnabled) {
+				return {ok: false, error: 'Bookmarks are disabled in Settings.'};
 			}
 
-			return (
-				column?.id ||
-				store.bookmarkColumns.find(
-					(entry) => entry.id === DEFAULT_BOOKMARK_COLUMN_ID,
-				)?.id ||
-				store.bookmarkColumns[0]?.id ||
-				BOOKMARK_UNFILED_ID
-			);
-		};
-
-		let processed = 0;
-		const visit = (
-			node: chrome.bookmarks.BookmarkTreeNode,
-			folderPath: string[] = [],
-		) => {
-			if (!node || processed >= 10_000) {
-				return;
+			const treeLinks = (nodes: chrome.bookmarks.BookmarkTreeNode[]): number =>
+				nodes.reduce(
+					(sum, node) =>
+						sum + (node.url ? 1 : 0) + treeLinks(node.children ?? []),
+					0,
+				);
+			if (treeLinks(Array.isArray(tree) ? tree : []) > LARGE_IMPORT_THRESHOLD) {
+				await safetyBackup(store, 'Before importing browser bookmarks');
 			}
 
-			processed += 1;
-			if (typeof node.url === 'string') {
-				const url = normalizeUrl(node.url);
-				if (!url) {
+			const columnsByName = new Map(
+				store.bookmarkColumns.map((column) => [
+					column.name.toLocaleLowerCase(),
+					column,
+				]),
+			);
+			const existingUrls = new Set(
+				store.bookmarks.map((bookmark) => bookmark.url),
+			);
+			const existingBookmarks = new Map(
+				store.bookmarks.map((bookmark) => [bookmark.url, bookmark]),
+			);
+			const allowDuplicates = duplicateMode === 'allow';
+			// With a target column, folders do not become columns: every bookmark goes into that column.
+			const targetColumnId = importTargetColumn(store, requestedColumnId);
+			const now = Date.now();
+			let columnsAdded = 0;
+			let bookmarksAdded = 0;
+			let bookmarksSkipped = 0;
+			let bookmarksUpdated = 0;
+			const ensureColumn = (path: string[]) => {
+				const name = cleanText(path.join(' / '), 'Bookmarks', 60);
+				const key = name.toLocaleLowerCase();
+				let column = columnsByName.get(key);
+				if (!column && store.bookmarkColumns.length < 500) {
+					column = {id: makeId(), name, createdAt: now, isDefault: false};
+					store.bookmarkColumns.push(column);
+					columnsByName.set(key, column);
+					columnsAdded += 1;
+				}
+
+				return (
+					column?.id ||
+					store.bookmarkColumns.find(
+						(entry) => entry.id === DEFAULT_BOOKMARK_COLUMN_ID,
+					)?.id ||
+					store.bookmarkColumns[0]?.id ||
+					BOOKMARK_UNFILED_ID
+				);
+			};
+
+			let processed = 0;
+			const visit = (
+				node: chrome.bookmarks.BookmarkTreeNode,
+				folderPath: string[] = [],
+			) => {
+				if (!node || processed >= 10_000) {
 					return;
 				}
 
-				if (existingUrls.has(url) && !allowDuplicates) {
-					bookmarksSkipped += 1;
-					const existing = existingBookmarks.get(url);
-					const title = importedBookmarkTitle(node.title, url, openTitles);
-					if (
-						titlePolicy === 'latest' &&
-						existing &&
-						existing.title !== title
-					) {
-						existing.title = title;
-						existing.updatedAt = now;
-						bookmarksUpdated += 1;
+				processed += 1;
+				if (typeof node.url === 'string') {
+					const url = normalizeUrl(node.url);
+					if (!url) {
+						return;
 					}
 
+					if (existingUrls.has(url) && !allowDuplicates) {
+						bookmarksSkipped += 1;
+						const existing = existingBookmarks.get(url);
+						const title = importedBookmarkTitle(node.title, url, openTitles);
+						if (
+							titlePolicy === 'latest' &&
+							existing &&
+							existing.title !== title
+						) {
+							existing.title = title;
+							existing.updatedAt = now;
+							bookmarksUpdated += 1;
+						}
+
+						return;
+					}
+
+					const bookmark: Bookmark = {
+						id: makeId(),
+						title: importedBookmarkTitle(node.title, url, openTitles),
+						url,
+						columnId:
+							targetColumnId ||
+							(folderPath.length > 0 ? ensureColumn(folderPath) : null) ||
+							store.bookmarkColumns.find(
+								(entry) => entry.id === DEFAULT_BOOKMARK_COLUMN_ID,
+							)?.id ||
+							store.bookmarkColumns[0]?.id ||
+							BOOKMARK_UNFILED_ID,
+						createdAt: now,
+						updatedAt: now,
+					};
+					existingUrls.add(url);
+					existingBookmarks.set(url, bookmark);
+					store.bookmarks.push(bookmark);
+					bookmarksAdded += 1;
 					return;
 				}
 
-				const bookmark: Bookmark = {
-					id: makeId(),
-					title: importedBookmarkTitle(node.title, url, openTitles),
-					url,
-					columnId:
-						targetColumnId ||
-						(folderPath.length > 0 ? ensureColumn(folderPath) : null) ||
-						store.bookmarkColumns.find(
-							(entry) => entry.id === DEFAULT_BOOKMARK_COLUMN_ID,
-						)?.id ||
-						store.bookmarkColumns[0]?.id ||
-						BOOKMARK_UNFILED_ID,
-					createdAt: now,
-					updatedAt: now,
-				};
-				existingUrls.add(url);
-				existingBookmarks.set(url, bookmark);
-				store.bookmarks.push(bookmark);
-				bookmarksAdded += 1;
-				return;
+				if (!Array.isArray(node.children)) {
+					return;
+				}
+
+				const nextPath =
+					node.id === '0' || !node.title
+						? folderPath
+						: [...folderPath, cleanText(node.title, 'Bookmarks', 60)];
+				if (nextPath.length > 0 && !targetColumnId) {
+					ensureColumn(nextPath);
+				}
+
+				for (const child of node.children) {
+					visit(child, nextPath);
+				}
+			};
+
+			for (const root of Array.isArray(tree) ? tree : []) {
+				visit(root);
 			}
 
-			if (!Array.isArray(node.children)) {
-				return;
+			if (columnsAdded || bookmarksAdded || bookmarksUpdated) {
+				await writeStore(store);
 			}
 
-			const nextPath =
-				node.id === '0' || !node.title
-					? folderPath
-					: [...folderPath, cleanText(node.title, 'Bookmarks', 60)];
-			if (nextPath.length > 0 && !targetColumnId) {
-				ensureColumn(nextPath);
-			}
-
-			for (const child of node.children) {
-				visit(child, nextPath);
-			}
-		};
-
-		for (const root of Array.isArray(tree) ? tree : []) {
-			visit(root);
-		}
-
-		if (columnsAdded || bookmarksAdded || bookmarksUpdated) {
-			await writeStore(store);
-		}
-
-		return {
-			ok: true,
-			columnsAdded,
-			bookmarksAdded,
-			bookmarksSkipped,
-			bookmarksUpdated,
-		};
-	});
+			return {
+				ok: true,
+				columnsAdded,
+				bookmarksAdded,
+				bookmarksSkipped,
+				bookmarksUpdated,
+			};
+		}),
+	);
 }
 
 async function addExcludedOrigins(
@@ -3888,169 +3895,176 @@ async function importGroups(
 	importMode: 'all' | 'sessions' | 'bookmarks' = 'all',
 	options: ImportOptions = {},
 ): Promise<ActionResult<'IMPORT_GROUPS'>> {
-	return mutate(async () => {
-		const store = await getStore();
-		const incomingCandidates =
-			importMode === 'bookmarks' ? [] : importCandidates(input).slice(0, 500);
-		const candidates = store.settings.sessionsEnabled ? incomingCandidates : [];
-		const incomingBookmarkData =
-			importMode !== 'sessions' &&
-			(Array.isArray(input?.bookmarks) ||
-				Array.isArray(input?.bookmarkColumns));
-		const hasBookmarkData =
-			store.settings.bookmarksEnabled && incomingBookmarkData;
-		if (candidates.length === 0 && !hasBookmarkData) {
-			if (incomingCandidates.length > 0 && !store.settings.sessionsEnabled) {
-				return {ok: false, error: 'Sessions are disabled in Settings.'};
-			}
-
-			if (incomingBookmarkData && !store.settings.bookmarksEnabled) {
-				return {ok: false, error: 'Bookmarks are disabled in Settings.'};
-			}
-
-			return {
-				ok: false,
-				error: `Choose a ${APP_NAME} export or a JSON array of tabs.`,
-			};
-		}
-
-		const incomingItems =
-			candidates.reduce<number>(
-				(sum, candidate) =>
-					sum +
-					(isRecord(candidate) && Array.isArray(candidate.tabs)
-						? candidate.tabs.length
-						: 0),
-				0,
-			) +
-			(hasBookmarkData && Array.isArray(input?.bookmarks)
-				? input.bookmarks.length
-				: 0);
-		if (incomingItems > LARGE_IMPORT_THRESHOLD) {
-			await safetyBackup(store, 'Before a large import');
-		}
-
-		const folderMap =
-			candidates.length > 0
-				? mergeImportedFolders(store, input, candidates)
-				: new Map<string, string>();
-		const existingUrls = new Set<string>();
-		const existingRecords = new Map<string, {group: Session; tab: SavedTab}>();
-		for (const group of store.groups) {
-			for (const tab of group.tabs) {
-				existingUrls.add(tab.url);
-				existingRecords.set(tab.url, {group, tab});
-			}
-		}
-
-		const imported: Session[] = [];
-		const allowDuplicates = options.duplicateMode === 'allow';
-		let skipped = 0;
-		let updatedTitles = 0;
-		for (const candidate of candidates) {
-			if (!isRecord(candidate)) {
-				continue;
-			}
-
-			const sourceFolderId = cleanText(
-				candidate.folderId,
-				DEFAULT_FOLDER_ID,
-				100,
-			);
-			const group = normalizeGroup(
-				{
-					...candidate,
-					id: makeId(),
-					folderId: folderMap.get(sourceFolderId) || DEFAULT_FOLDER_ID,
-					createdAt: candidate.createdAt ?? candidate.timestamp ?? Date.now(),
-				},
-				Date.now(),
-				store.settings.includePinnedTabs,
-			);
-			if (!group) {
-				continue;
-			}
-
-			if (!allowDuplicates) {
-				const kept: SavedTab[] = [];
-				for (const tab of group.tabs) {
-					if (existingUrls.has(tab.url)) {
-						skipped += 1;
-						const existing = existingRecords.get(tab.url);
-						if (
-							options.titlePolicy === 'latest' &&
-							existing &&
-							tab.title !== existing.tab.title
-						) {
-							existing.tab.title = tab.title;
-							existing.tab.faviconUrl = tab.faviconUrl;
-							existing.group.updatedAt = Date.now();
-							updatedTitles += 1;
-						}
-
-						continue;
-					}
-
-					existingUrls.add(tab.url);
-					existingRecords.set(tab.url, {group, tab});
-					kept.push(tab);
+	return mutate(() =>
+		withUndo('Import', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			const incomingCandidates =
+				importMode === 'bookmarks' ? [] : importCandidates(input).slice(0, 500);
+			const candidates = store.settings.sessionsEnabled
+				? incomingCandidates
+				: [];
+			const incomingBookmarkData =
+				importMode !== 'sessions' &&
+				(Array.isArray(input?.bookmarks) ||
+					Array.isArray(input?.bookmarkColumns));
+			const hasBookmarkData =
+				store.settings.bookmarksEnabled && incomingBookmarkData;
+			if (candidates.length === 0 && !hasBookmarkData) {
+				if (incomingCandidates.length > 0 && !store.settings.sessionsEnabled) {
+					return {ok: false, error: 'Sessions are disabled in Settings.'};
 				}
 
-				group.tabs = kept;
+				if (incomingBookmarkData && !store.settings.bookmarksEnabled) {
+					return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+				}
+
+				return {
+					ok: false,
+					error: `Choose a ${APP_NAME} export or a JSON array of tabs.`,
+				};
 			}
 
-			if (group.tabs.length > 0) {
-				imported.push(group);
+			const incomingItems =
+				candidates.reduce<number>(
+					(sum, candidate) =>
+						sum +
+						(isRecord(candidate) && Array.isArray(candidate.tabs)
+							? candidate.tabs.length
+							: 0),
+					0,
+				) +
+				(hasBookmarkData && Array.isArray(input?.bookmarks)
+					? input.bookmarks.length
+					: 0);
+			if (incomingItems > LARGE_IMPORT_THRESHOLD) {
+				await safetyBackup(store, 'Before a large import');
 			}
-		}
 
-		const bookmarkResult =
-			store.settings.bookmarksEnabled && importMode !== 'sessions'
-				? await mergeImportedBookmarks(store, input, options)
-				: ({
-						columnsAdded: 0,
-						columnsReordered: false,
-						bookmarksAdded: 0,
-						bookmarksSkipped: 0,
-						bookmarksUpdated: 0,
-					} satisfies BookmarkMergeResult);
-		const groupCount = imported.reduce(
-			(sum, group) => sum + group.tabs.length,
-			0,
-		);
-		if (
-			imported.length === 0 &&
-			!bookmarkResult.bookmarksAdded &&
-			!bookmarkResult.bookmarksUpdated &&
-			!bookmarkResult.columnsAdded &&
-			!bookmarkResult.columnsReordered &&
-			!updatedTitles
-		) {
+			const folderMap =
+				candidates.length > 0
+					? mergeImportedFolders(store, input, candidates)
+					: new Map<string, string>();
+			const existingUrls = new Set<string>();
+			const existingRecords = new Map<
+				string,
+				{group: Session; tab: SavedTab}
+			>();
+			for (const group of store.groups) {
+				for (const tab of group.tabs) {
+					existingUrls.add(tab.url);
+					existingRecords.set(tab.url, {group, tab});
+				}
+			}
+
+			const imported: Session[] = [];
+			const allowDuplicates = options.duplicateMode === 'allow';
+			let skipped = 0;
+			let updatedTitles = 0;
+			for (const candidate of candidates) {
+				if (!isRecord(candidate)) {
+					continue;
+				}
+
+				const sourceFolderId = cleanText(
+					candidate.folderId,
+					DEFAULT_FOLDER_ID,
+					100,
+				);
+				const group = normalizeGroup(
+					{
+						...candidate,
+						id: makeId(),
+						folderId: folderMap.get(sourceFolderId) || DEFAULT_FOLDER_ID,
+						createdAt: candidate.createdAt ?? candidate.timestamp ?? Date.now(),
+					},
+					Date.now(),
+					store.settings.includePinnedTabs,
+				);
+				if (!group) {
+					continue;
+				}
+
+				if (!allowDuplicates) {
+					const kept: SavedTab[] = [];
+					for (const tab of group.tabs) {
+						if (existingUrls.has(tab.url)) {
+							skipped += 1;
+							const existing = existingRecords.get(tab.url);
+							if (
+								options.titlePolicy === 'latest' &&
+								existing &&
+								tab.title !== existing.tab.title
+							) {
+								existing.tab.title = tab.title;
+								existing.tab.faviconUrl = tab.faviconUrl;
+								existing.group.updatedAt = Date.now();
+								updatedTitles += 1;
+							}
+
+							continue;
+						}
+
+						existingUrls.add(tab.url);
+						existingRecords.set(tab.url, {group, tab});
+						kept.push(tab);
+					}
+
+					group.tabs = kept;
+				}
+
+				if (group.tabs.length > 0) {
+					imported.push(group);
+				}
+			}
+
+			const bookmarkResult =
+				store.settings.bookmarksEnabled && importMode !== 'sessions'
+					? await mergeImportedBookmarks(store, input, options)
+					: ({
+							columnsAdded: 0,
+							columnsReordered: false,
+							bookmarksAdded: 0,
+							bookmarksSkipped: 0,
+							bookmarksUpdated: 0,
+						} satisfies BookmarkMergeResult);
+			const groupCount = imported.reduce(
+				(sum, group) => sum + group.tabs.length,
+				0,
+			);
+			if (
+				imported.length === 0 &&
+				!bookmarkResult.bookmarksAdded &&
+				!bookmarkResult.bookmarksUpdated &&
+				!bookmarkResult.columnsAdded &&
+				!bookmarkResult.columnsReordered &&
+				!updatedTitles
+			) {
+				return {
+					ok: false,
+					error:
+						skipped || bookmarkResult.bookmarksSkipped
+							? 'Every imported URL is already saved.'
+							: 'The file contains no valid web tabs or bookmarks.',
+				};
+			}
+
+			if (imported.length > 0) {
+				store.groups = [...imported, ...store.groups];
+			}
+
+			await writeStore(store);
 			return {
-				ok: false,
-				error:
-					skipped || bookmarkResult.bookmarksSkipped
-						? 'Every imported URL is already saved.'
-						: 'The file contains no valid web tabs or bookmarks.',
+				ok: true,
+				groups: imported.length,
+				count: groupCount,
+				bookmarks: bookmarkResult.bookmarksAdded,
+				columns: bookmarkResult.columnsAdded,
+				columnsReordered: bookmarkResult.columnsReordered,
+				skipped: skipped + bookmarkResult.bookmarksSkipped,
+				updatedTitles: updatedTitles + bookmarkResult.bookmarksUpdated,
 			};
-		}
-
-		if (imported.length > 0) {
-			store.groups = [...imported, ...store.groups];
-		}
-
-		await writeStore(store);
-		return {
-			ok: true,
-			groups: imported.length,
-			count: groupCount,
-			bookmarks: bookmarkResult.bookmarksAdded,
-			columns: bookmarkResult.columnsAdded,
-			columnsReordered: bookmarkResult.columnsReordered,
-			skipped: skipped + bookmarkResult.bookmarksSkipped,
-			updatedTitles: updatedTitles + bookmarkResult.bookmarksUpdated,
-		};
-	});
+		}),
+	);
 }
 
 async function updateSettings(
@@ -4107,15 +4121,17 @@ async function updateSettings(
 }
 
 async function resetSettings(): Promise<ActionResult<'RESET_SETTINGS'>> {
-	return mutate(async () => {
-		const store = await getStore();
-		store.settings = normalizeSettings({...DEFAULT_SETTINGS});
-		await writeStore(store);
-		await syncRecoveryAlarms(store.settings);
-		await syncToolbarAction(store.settings);
-		await rebuildContextMenus(store);
-		return {ok: true, settings: store.settings};
-	});
+	return mutate(() =>
+		withUndo('Restore default settings', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			store.settings = normalizeSettings({...DEFAULT_SETTINGS});
+			await writeStore(store);
+			await syncRecoveryAlarms(store.settings);
+			await syncToolbarAction(store.settings);
+			await rebuildContextMenus(store);
+			return {ok: true, settings: store.settings};
+		}),
+	);
 }
 
 async function eraseData(
@@ -4125,37 +4141,39 @@ async function eraseData(
 		return {ok: false, error: `Choose which ${APP_NAME} data to erase.`};
 	}
 
-	return mutate(async () => {
-		const store = await getStore();
-		const fresh = normalizeStore(null);
-		const eraseSessions = scope !== 'bookmarks';
-		const eraseBookmarks = scope !== 'sessions';
-		const sessions = eraseSessions ? store.groups.length : 0;
-		const bookmarks = eraseBookmarks ? store.bookmarks.length : 0;
-		if (
-			sessions + bookmarks > 0 &&
-			!(await safetyBackup(store, 'Before erasing data'))
-		) {
-			return {
-				ok: false,
-				error: 'Could not take a safety backup first. Nothing was erased.',
-			};
-		}
+	return mutate(() =>
+		withUndo('Erase data', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			const fresh = normalizeStore(null);
+			const eraseSessions = scope !== 'bookmarks';
+			const eraseBookmarks = scope !== 'sessions';
+			const sessions = eraseSessions ? store.groups.length : 0;
+			const bookmarks = eraseBookmarks ? store.bookmarks.length : 0;
+			if (
+				sessions + bookmarks > 0 &&
+				!(await safetyBackup(store, 'Before erasing data'))
+			) {
+				return {
+					ok: false,
+					error: 'Could not take a safety backup first. Nothing was erased.',
+				};
+			}
 
-		// Erasing data keeps settings and excluded sites; only the chosen data returns to its fresh-install state.
-		if (eraseSessions) {
-			store.groups = fresh.groups;
-			store.folders = fresh.folders;
-		}
+			// Erasing data keeps settings and excluded sites; only the chosen data returns to its fresh-install state.
+			if (eraseSessions) {
+				store.groups = fresh.groups;
+				store.folders = fresh.folders;
+			}
 
-		if (eraseBookmarks) {
-			store.bookmarks = fresh.bookmarks;
-			store.bookmarkColumns = fresh.bookmarkColumns;
-		}
+			if (eraseBookmarks) {
+				store.bookmarks = fresh.bookmarks;
+				store.bookmarkColumns = fresh.bookmarkColumns;
+			}
 
-		await writeStore(store);
-		return {ok: true, sessions, bookmarks};
-	});
+			await writeStore(store);
+			return {ok: true, sessions, bookmarks};
+		}),
+	);
 }
 
 // ---- New tab hand-off: with "Use TabLodge for new tabs" off the override page cannot be uninstalled, so tabs the
@@ -4893,6 +4911,7 @@ async function restoreSnapshot(
 	let failed = 0;
 	let restoredWindows = 0;
 	let focusId: number | null = null;
+	const tabIds: number[] = [];
 	for (const win of windows) {
 		const records = snapshotRecords(win, Date.now());
 		const activeIndex = win.tabs.findIndex((tab) => tab.active);
@@ -4903,6 +4922,12 @@ async function restoreSnapshot(
 		});
 		count += result.opened.length;
 		failed += result.failures.length;
+		for (const {tabId} of result.opened) {
+			if (isInteger(tabId)) {
+				tabIds.push(tabId);
+			}
+		}
+
 		if (result.opened.length === 0) {
 			// Nothing opened: drop the empty window that was created for it.
 			if (isInteger(target.id)) {
@@ -4946,7 +4971,7 @@ async function restoreSnapshot(
 		});
 	}
 
-	return {ok: true, windows: restoredWindows, count, failed};
+	return {ok: true, windows: restoredWindows, count, failed, tabIds};
 }
 
 async function saveSnapshotAsSession(
@@ -5011,34 +5036,38 @@ async function saveSnapshotAsSession(
 }
 
 function deleteSnapshot(id: string): Promise<ActionResult<'DELETE_SNAPSHOT'>> {
-	return snapshotMutate(async () => {
-		const history = await readSnapshotHistory();
-		const next = history.filter((entry) => entry.id !== id);
-		if (next.length === history.length) {
-			return {ok: false, error: 'That snapshot no longer exists.'};
-		}
+	return snapshotMutate(() =>
+		withUndo('Delete snapshot', [SNAPSHOTS_KEY], async () => {
+			const history = await readSnapshotHistory();
+			const next = history.filter((entry) => entry.id !== id);
+			if (next.length === history.length) {
+				return {ok: false, error: 'That snapshot no longer exists.'};
+			}
 
-		await writeSnapshotHistory(next);
-		const meta = await readSnapshotMeta();
-		if (meta.recovery?.snapshotId === id) {
-			meta.recovery = null;
-			await writeSnapshotMeta(meta);
-		}
+			await writeSnapshotHistory(next);
+			const meta = await readSnapshotMeta();
+			if (meta.recovery?.snapshotId === id) {
+				meta.recovery = null;
+				await writeSnapshotMeta(meta);
+			}
 
-		return {ok: true};
-	});
+			return {ok: true};
+		}),
+	);
 }
 
 function clearSnapshots(): Promise<ActionResult<'CLEAR_SNAPSHOTS'>> {
-	return snapshotMutate(async () => {
-		const history = await readSnapshotHistory();
-		await writeSnapshotHistory([]);
-		await chrome.storage.local.remove?.(SNAPSHOT_LIVE_KEY);
-		const meta = await readSnapshotMeta();
-		meta.recovery = null;
-		await writeSnapshotMeta(meta);
-		return {ok: true, count: history.length};
-	});
+	return snapshotMutate(() =>
+		withUndo('Clear snapshots', [SNAPSHOTS_KEY], async () => {
+			const history = await readSnapshotHistory();
+			await writeSnapshotHistory([]);
+			await chrome.storage.local.remove?.(SNAPSHOT_LIVE_KEY);
+			const meta = await readSnapshotMeta();
+			meta.recovery = null;
+			await writeSnapshotMeta(meta);
+			return {ok: true, count: history.length};
+		}),
+	);
 }
 
 function dismissRecovery(): Promise<ActionResult<'DISMISS_RECOVERY'>> {
@@ -5313,39 +5342,41 @@ async function findBackup(id: string): Promise<BackupRecord | null> {
 }
 
 function restoreBackup(id: string): Promise<ActionResult<'RESTORE_BACKUP'>> {
-	return mutate(async () => {
-		const record = await findBackup(id);
-		if (!record) {
-			return {ok: false, error: 'That backup no longer exists.'};
-		}
+	return mutate(() =>
+		withUndo('Restore backup', [STORAGE_KEY], async () => {
+			const record = await findBackup(id);
+			if (!record) {
+				return {ok: false, error: 'That backup no longer exists.'};
+			}
 
-		let parsed: unknown;
-		try {
-			parsed = JSON.parse(record.json);
-		} catch {
-			return {ok: false, error: 'That backup could not be read.'};
-		}
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(record.json);
+			} catch {
+				return {ok: false, error: 'That backup could not be read.'};
+			}
 
-		const store = await getStore();
-		// Settings stay as they are; the backup brings back sessions, folders, bookmarks and columns.
-		const restored = normalizeStore({
-			...(isRecord(parsed) && parsed),
-			settings: store.settings,
-		});
-		if (!(await safetyBackup(store, 'Before restoring a backup'))) {
+			const store = await getStore();
+			// Settings stay as they are; the backup brings back sessions, folders, bookmarks and columns.
+			const restored = normalizeStore({
+				...(isRecord(parsed) && parsed),
+				settings: store.settings,
+			});
+			if (!(await safetyBackup(store, 'Before restoring a backup'))) {
+				return {
+					ok: false,
+					error: 'Could not take a safety backup first. Nothing was changed.',
+				};
+			}
+
+			await writeStore(restored);
 			return {
-				ok: false,
-				error: 'Could not take a safety backup first. Nothing was changed.',
+				ok: true,
+				sessions: restored.groups.length,
+				bookmarks: restored.bookmarks.length,
 			};
-		}
-
-		await writeStore(restored);
-		return {
-			ok: true,
-			sessions: restored.groups.length,
-			bookmarks: restored.bookmarks.length,
-		};
-	});
+		}),
+	);
 }
 
 function deleteBackup(id: string): Promise<ActionResult<'DELETE_BACKUP'>> {
@@ -5747,23 +5778,200 @@ function restoreTrash(id: string): Promise<ActionResult<'RESTORE_TRASH'>> {
 }
 
 function deleteTrash(id: string): Promise<ActionResult<'DELETE_TRASH'>> {
-	return trashMutate(async () => {
-		const items = await readTrash();
-		const next = items.filter((item) => item.id !== id);
-		if (next.length === items.length) {
-			return {ok: false, error: 'That item is no longer in the trash.'};
-		}
+	return trashMutate(() =>
+		withUndo('Delete from trash', [TRASH_KEY], async () => {
+			const items = await readTrash();
+			const next = items.filter((item) => item.id !== id);
+			if (next.length === items.length) {
+				return {ok: false, error: 'That item is no longer in the trash.'};
+			}
 
-		await writeTrash(next);
-		return {ok: true};
-	});
+			await writeTrash(next);
+			return {ok: true};
+		}),
+	);
 }
 
 function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
-	return trashMutate(async () => {
-		const items = await readTrash();
-		await writeTrash([]);
-		return {ok: true, count: items.length};
+	return trashMutate(() =>
+		withUndo('Empty trash', [TRASH_KEY], async () => {
+			const items = await readTrash();
+			await writeTrash([]);
+			return {ok: true, count: items.length};
+		}),
+	);
+}
+
+// ---- Undo: for actions the trash cannot hold (erase, empty trash, clear snapshots, restore a backup, imports),
+// the affected storage keys are copied before the action and put back by UNDO, but only briefly and only while
+// nothing else has changed those keys since.
+const UNDO_KEY = 'tablodge.undo';
+const ALARM_UNDO = 'tablodge-undo';
+const UNDO_WINDOW_MS = 120_000;
+const UNDO_KEEP = 3;
+const undoMutate = serialQueue();
+
+type UndoRecord = {
+	id: string;
+	label: string;
+	createdAt: number;
+	keys: string[];
+	// The keys' values before the action; a key missing here did not exist.
+	before: Raw;
+	// A hash of each key's value right after the action, to notice later changes.
+	after: Record<string, string>;
+};
+
+const isUndoRecord = (value: unknown): value is UndoRecord =>
+	isRecord(value) &&
+	typeof value.id === 'string' &&
+	Array.isArray(value.keys) &&
+	isRecord(value.before) &&
+	isRecord(value.after);
+
+const undoHash = (value: unknown) =>
+	value === undefined ? 'none' : hashText(JSON.stringify(value));
+
+async function readUndo(): Promise<UndoRecord[]> {
+	const raw = await readKey<Raw>(UNDO_KEY);
+	const cutoff = Date.now() - UNDO_WINDOW_MS;
+	return Array.isArray(raw?.records)
+		? raw.records.filter(
+				(record): record is UndoRecord =>
+					isUndoRecord(record) && Number(record.createdAt) > cutoff,
+			)
+		: [];
+}
+
+async function writeUndo(records: UndoRecord[]) {
+	await (records.length === 0
+		? chrome.storage.local.remove(UNDO_KEY)
+		: chrome.storage.local.set({[UNDO_KEY]: {version: 1, records}}));
+}
+
+/**
+Runs `run` and, when it succeeds and changed `keys`, stores what they held before and returns an `undoId`. Call it inside the queue that guards those keys.
+*/
+async function withUndo<K extends TabLodgeMessageType>(
+	label: string,
+	keys: string[],
+	run: () => Promise<ActionResult<K>>,
+): Promise<ActionResult<K>> {
+	const before = await chrome.storage.local.get<Raw>(keys);
+	const result = await run();
+	if (!result.ok) {
+		return result;
+	}
+
+	try {
+		const now = await chrome.storage.local.get<Raw>(keys);
+		const after = Object.fromEntries(
+			keys.map((key) => [key, undoHash(now[key])]),
+		);
+		if (keys.every((key) => after[key] === undoHash(before[key]))) {
+			return result;
+		}
+
+		const record: UndoRecord = {
+			id: makeId(),
+			label,
+			createdAt: Date.now(),
+			keys,
+			before,
+			after,
+		};
+		await undoMutate(async () => {
+			await writeUndo([record, ...(await readUndo())].slice(0, UNDO_KEEP));
+		});
+		// The copy holds user data, so it is dropped soon after the window closes.
+		await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
+		return {...result, undoId: record.id};
+	} catch {
+		// Undo is a convenience; the action itself succeeded.
+		return result;
+	}
+}
+
+function purgeUndo(): Promise<void> {
+	return undoMutate(async () => {
+		const records = await readUndo();
+		const stored = await readKey<Raw>(UNDO_KEY);
+		if (
+			stored &&
+			(!Array.isArray(stored.records) ||
+				stored.records.length !== records.length)
+		) {
+			await writeUndo(records);
+		}
+	});
+}
+
+function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
+	const run = (keys: string[], apply: () => Promise<ActionResult<'UNDO'>>) => {
+		let step = apply;
+		if (keys.includes(TRASH_KEY)) {
+			const inner = step;
+			step = () => trashMutate(inner);
+		}
+
+		if (keys.includes(SNAPSHOTS_KEY)) {
+			const inner = step;
+			step = () => snapshotMutate(inner);
+		}
+
+		return mutate(step);
+	};
+
+	return undoMutate(() => readUndo()).then((records) => {
+		const record = records.find((entry) => entry.id === id);
+		if (!record) {
+			return {
+				ok: false,
+				error: "Can't undo: it was too long ago.",
+			};
+		}
+
+		return run(record.keys, async () => {
+			const current = await chrome.storage.local.get<Raw>(record.keys);
+			if (
+				record.keys.some((key) => undoHash(current[key]) !== record.after[key])
+			) {
+				await undoMutate(async () => {
+					await writeUndo(
+						(await readUndo()).filter((entry) => entry.id !== id),
+					);
+				});
+				return {ok: false, error: "Can't undo: your data changed since."};
+			}
+
+			const restore: Raw = {};
+			const drop: string[] = [];
+			for (const key of record.keys) {
+				if (record.before[key] === undefined) {
+					drop.push(key);
+				} else {
+					restore[key] = record.before[key];
+				}
+			}
+
+			await chrome.storage.local.set(restore);
+			if (drop.length > 0) {
+				await chrome.storage.local.remove(drop);
+			}
+
+			await undoMutate(async () => {
+				await writeUndo((await readUndo()).filter((entry) => entry.id !== id));
+			});
+			if (record.keys.includes(STORAGE_KEY)) {
+				// Settings may differ from what the alarms, toolbar, and menus were last set up for.
+				const store = await getStore();
+				await syncRecoveryAlarms(store.settings);
+				await syncToolbarAction(store.settings);
+				await rebuildContextMenus(store);
+			}
+
+			return {ok: true, label: record.label};
+		});
 	});
 }
 
@@ -5852,6 +6060,7 @@ async function runStartupRecovery() {
 		const settings = await readSettings();
 		await syncRecoveryAlarms(settings);
 		await purgeTrash();
+		await purgeUndo();
 		if (await backupDue(settings)) {
 			await runScheduledBackup();
 		}
@@ -5874,7 +6083,9 @@ chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 				? runScheduledBackup()
 				: alarm.name === ALARM_TRASH
 					? purgeTrash()
-					: undefined;
+					: alarm.name === ALARM_UNDO
+						? purgeUndo()
+						: undefined;
 	void work?.catch(() => undefined);
 });
 
@@ -6027,6 +6238,7 @@ async function handleMessage(
 				message.columnId || null,
 				message.targetBookmarkId || null,
 				message.position,
+				message.undoable === true,
 			);
 		}
 
@@ -6187,6 +6399,10 @@ async function handleMessage(
 
 		case 'EMPTY_TRASH': {
 			return emptyTrash();
+		}
+
+		case 'UNDO': {
+			return undoAction(message.id);
 		}
 
 		case 'GET_STORAGE_USAGE': {

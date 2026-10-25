@@ -474,6 +474,10 @@ export type TabLodgeMessages = {
 		columnId?: string | null;
 		targetBookmarkId?: string | null;
 		position?: InsertPosition;
+		/**
+		Asks for an `undoId` in the response, which removes the added bookmarks again.
+		*/
+		undoable?: boolean;
 	};
 	UPDATE_BOOKMARK: {bookmarkId: string; fields: BookmarkFields};
 	DELETE_BOOKMARK: {bookmarkId: string};
@@ -547,6 +551,10 @@ export type TabLodgeMessages = {
 	RESTORE_TRASH: {id: string};
 	DELETE_TRASH: {id: string};
 	EMPTY_TRASH: {};
+	/**
+	Puts back what an action with an `undoId` changed, if that was under two minutes ago and nothing else has changed that data since.
+	*/
+	UNDO: {id: string};
 	GET_STORAGE_USAGE: {};
 };
 
@@ -605,6 +613,11 @@ export type BrowserBookmarkImportResult = {
 };
 
 /**
+`undoId`: set when the action can be undone with `UNDO` for a short while.
+*/
+type Undoable = {undoId?: string};
+
+/**
 Success payload of each message (merged with `{ ok: true }`). Fields marked optional are only sometimes reported.
 */
 export type TabLodgeResponses = {
@@ -628,7 +641,7 @@ export type TabLodgeResponses = {
 	MOVE_TAB: {};
 	UPDATE_TAB: {shared: number};
 	ADD_BOOKMARK: {bookmark: Bookmark};
-	ADD_BOOKMARKS: {count: number; bookmarks: Bookmark[]};
+	ADD_BOOKMARKS: {count: number; bookmarks: Bookmark[]} & Undoable;
 	UPDATE_BOOKMARK: {bookmark: Bookmark};
 	DELETE_BOOKMARK: {trashId?: string};
 	CREATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
@@ -644,19 +657,19 @@ export type TabLodgeResponses = {
 	};
 	REORDER_BOOKMARK_COLUMN: {};
 	REORDER_BOOKMARK: {};
-	IMPORT_GROUPS: ImportResult;
-	IMPORT_SESSIONS: ImportResult;
-	IMPORT_BOOKMARKS_FILE: ImportResult;
-	IMPORT_BROWSER_BOOKMARKS: BrowserBookmarkImportResult;
+	IMPORT_GROUPS: ImportResult & Undoable;
+	IMPORT_SESSIONS: ImportResult & Undoable;
+	IMPORT_BOOKMARKS_FILE: ImportResult & Undoable;
+	IMPORT_BROWSER_BOOKMARKS: BrowserBookmarkImportResult & Undoable;
 	ADD_EXCLUDED_ORIGIN: {origin: string; settings: Settings};
 	ADD_EXCLUDED_ORIGINS: {added: number; settings: Settings};
 	REMOVE_EXCLUDED_ORIGIN: {settings: Settings};
 	UPDATE_SETTINGS: {settings: Settings};
-	RESET_SETTINGS: {settings: Settings};
+	RESET_SETTINGS: {settings: Settings} & Undoable;
 	/**
 	Counts of sessions and bookmarks removed.
 	*/
-	ERASE_DATA: {sessions: number; bookmarks: number};
+	ERASE_DATA: {sessions: number; bookmarks: number} & Undoable;
 	HANDOFF_NEW_TAB: {handedOff: boolean};
 	OPEN_DASHBOARD: {};
 	GET_SNAPSHOTS: {
@@ -665,10 +678,18 @@ export type TabLodgeResponses = {
 		live: SnapshotSummary | null;
 		recovery: RecoveryInfo | null;
 	};
-	RESTORE_SNAPSHOT: {windows: number; count: number; failed: number};
+	/**
+	`tabIds`: the tabs it opened, so a page can close them again.
+	*/
+	RESTORE_SNAPSHOT: {
+		windows: number;
+		count: number;
+		failed: number;
+		tabIds: number[];
+	};
 	SAVE_SNAPSHOT_AS_SESSION: {groups: number; count: number};
-	DELETE_SNAPSHOT: {};
-	CLEAR_SNAPSHOTS: {count: number};
+	DELETE_SNAPSHOT: Undoable;
+	CLEAR_SNAPSHOTS: {count: number} & Undoable;
 	DISMISS_RECOVERY: {};
 	GET_BACKUPS: {
 		auto: BackupSummary[];
@@ -679,7 +700,7 @@ export type TabLodgeResponses = {
 		downloadError: string;
 	};
 	BACKUP_NOW: {backup: BackupSummary};
-	RESTORE_BACKUP: {sessions: number; bookmarks: number};
+	RESTORE_BACKUP: {sessions: number; bookmarks: number} & Undoable;
 	DELETE_BACKUP: {};
 	GET_BACKUP_DATA: {filename: string; json: string};
 	GET_TRASH: {items: TrashSummary[]};
@@ -687,8 +708,9 @@ export type TabLodgeResponses = {
 	`placed`: where it went, such as the session name or "Unfiled".
 	*/
 	RESTORE_TRASH: {placed: string};
-	DELETE_TRASH: {};
-	EMPTY_TRASH: {count: number};
+	DELETE_TRASH: Undoable;
+	EMPTY_TRASH: {count: number} & Undoable;
+	UNDO: {label: string};
 	GET_STORAGE_USAGE: {usage: StorageUsage};
 };
 
