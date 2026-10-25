@@ -132,6 +132,10 @@ export type Settings = {
 	*/
 	keepLodgePinned: boolean;
 	/**
+	Close a TabLodge tab once you switch away after opening links, bookmarks or sessions from it (default off).
+	*/
+	closeLodgeAfterOpening: boolean;
+	/**
 	Kept for stored settings and backups; no longer shown, since Share covers copying session links.
 	*/
 	copyFormat: CopyFormat;
@@ -570,6 +574,7 @@ export type TabLodgeMessages = {
 	ERASE_DATA: {scope: EraseScope};
 	HANDOFF_NEW_TAB: {brave?: boolean};
 	OPEN_DASHBOARD: {};
+	ARM_LODGE_CLOSE: {};
 	GET_SNAPSHOTS: {};
 	/**
 	Reopens a snapshot (every window, or just `windowIndex`) in new windows.
@@ -748,6 +753,7 @@ export type TabLodgeResponses = {
 	ERASE_DATA: {sessions: number; bookmarks: number} & Undoable;
 	HANDOFF_NEW_TAB: {handedOff: boolean};
 	OPEN_DASHBOARD: {};
+	ARM_LODGE_CLOSE: {};
 	GET_SNAPSHOTS: {
 		enabled: boolean;
 		snapshots: SnapshotSummary[];

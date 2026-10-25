@@ -234,6 +234,14 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'closeLodgeAfterOpening',
+				label: `Close ${PROJECT.name} after opening links`,
+				help: `After you open a link, bookmark or session from a ${PROJECT.name} tab, that tab closes when you switch to another tab in the same window. A pinned ${PROJECT.name} tab is never closed.`,
+				type: 'switch',
+				when: (current) => !current.keepLodgePinned,
+				parent: 'keepLodgePinned',
+			},
+			{
 				name: 'openDashboardOnStartup',
 				label: `Open ${PROJECT.name} when the browser starts`,
 				help: `Start with your saved sessions or the local ${PROJECT.name} page.`,

@@ -212,6 +212,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	bookmarkQuickAction: 'open-new',
 	sessionsOnTop: false,
 	keepLodgePinned: false,
+	closeLodgeAfterOpening: false,
 	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
@@ -1044,6 +1045,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			: 'open-new',
 		sessionsOnTop: raw.sessionsOnTop === true,
 		keepLodgePinned: raw.keepLodgePinned === true,
+		closeLodgeAfterOpening: raw.closeLodgeAfterOpening === true,
 		copyFormat: isOneOf(
 			['rich', 'title-url', 'url-title', 'url', 'markdown'],
 			raw.copyFormat,
@@ -7264,6 +7266,134 @@ void readSettings()
 	.then((settings) => syncRecoveryAlarms(settings))
 	.catch(() => undefined);
 
+// ---- Close the TabLodge tab after opening links: a dashboard tab that opened something in other tabs is "armed"
+// (tab id -> window id, in session storage so it survives worker restarts). When another tab in the same window
+// becomes active, the armed tab is closed, unless it is pinned, the last tab in its window, or no longer the dashboard.
+const LODGE_ARMED_KEY = 'lodgeCloseArmed';
+let lodgeArmedQueue: Promise<unknown> = Promise.resolve();
+
+function lodgeArmedExclusive<T>(task: () => Promise<T>): Promise<T> {
+	const run = lodgeArmedQueue.then(task, task);
+	lodgeArmedQueue = run.catch(() => undefined);
+	return run;
+}
+
+async function readLodgeArmed(): Promise<Record<string, number>> {
+	try {
+		const stored = await chrome.storage.session?.get(LODGE_ARMED_KEY);
+		return (
+			(stored?.[LODGE_ARMED_KEY] as Record<string, number> | undefined) ?? {}
+		);
+	} catch {
+		return {};
+	}
+}
+
+async function writeLodgeArmed(armed: Record<string, number>): Promise<void> {
+	try {
+		await chrome.storage.session?.set({[LODGE_ARMED_KEY]: armed});
+	} catch {}
+}
+
+async function armLodgeClose(tab: chrome.tabs.Tab | undefined): Promise<void> {
+	if (
+		!tab ||
+		!isInteger(tab.id) ||
+		!isInteger(tab.windowId) ||
+		!isLodgeTab(tab)
+	) {
+		return;
+	}
+
+	const {id, windowId} = tab;
+	if (!(await readSettings()).closeLodgeAfterOpening) {
+		return;
+	}
+
+	await lodgeArmedExclusive(async () => {
+		const armed = await readLodgeArmed();
+		armed[String(id)] = windowId;
+		await writeLodgeArmed(armed);
+	});
+}
+
+async function disarmLodgeClose(tabId: number): Promise<void> {
+	await lodgeArmedExclusive(async () => {
+		const armed = await readLodgeArmed();
+		if (armed[String(tabId)] === undefined) {
+			return;
+		}
+
+		const {[String(tabId)]: _gone, ...rest} = armed;
+		await writeLodgeArmed(rest);
+	});
+}
+
+async function closeArmedLodges(activeTabId: number, windowId: number) {
+	await lodgeArmedExclusive(async () => {
+		const armed = await readLodgeArmed();
+		const candidates = Object.entries(armed).filter(
+			([id, armedWindow]) =>
+				armedWindow === windowId && Number(id) !== activeTabId,
+		);
+		if (candidates.length === 0) {
+			return;
+		}
+
+		const enabled = (await readSettings()).closeLodgeAfterOpening;
+		const gone = new Set<string>();
+		let changed = false;
+		for (const [id] of candidates) {
+			const tabId = Number(id);
+			try {
+				const tab = await chrome.tabs.get(tabId);
+				if (!isLodgeTab(tab)) {
+					gone.add(id);
+					changed = true;
+					continue;
+				}
+
+				if (!enabled || tab.pinned) {
+					continue;
+				}
+
+				const inWindow = await chrome.tabs.query({windowId: tab.windowId});
+				if (inWindow.length <= 1) {
+					continue;
+				}
+
+				gone.add(id);
+				changed = true;
+				await chrome.tabs.remove(tabId);
+			} catch {
+				// The tab is already gone.
+				gone.add(id);
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			await writeLodgeArmed(
+				Object.fromEntries(
+					Object.entries(armed).filter(([id]) => !gone.has(id)),
+				),
+			);
+		}
+	});
+}
+
+chrome.tabs?.onActivated?.addListener?.((info) => {
+	void closeArmedLodges(info.tabId, info.windowId);
+});
+chrome.tabs?.onRemoved?.addListener?.((tabId) => {
+	void disarmLodgeClose(tabId);
+});
+chrome.tabs?.onUpdated?.addListener?.((tabId, change, tab) => {
+	if (change.url !== undefined && !isLodgeTab(tab)) {
+		void disarmLodgeClose(tabId);
+	}
+});
+
 async function handleMessage(
 	message: TabLodgeMessage | undefined,
 	sender: chrome.runtime.MessageSender,
@@ -7295,15 +7425,25 @@ async function handleMessage(
 		}
 
 		case 'RESTORE_TAB': {
-			return restoreTab(message.groupId, message.tabId, sender.tab, {
-				restoreMode: message.restoreMode,
-				restoreTarget: message.restoreTarget,
-				activate: message.activate,
-			});
+			const result = await restoreTab(
+				message.groupId,
+				message.tabId,
+				sender.tab,
+				{
+					restoreMode: message.restoreMode,
+					restoreTarget: message.restoreTarget,
+					activate: message.activate,
+				},
+			);
+			if (result.ok && result.count > 0) {
+				await armLodgeClose(sender.tab);
+			}
+
+			return result;
 		}
 
 		case 'RESTORE_GROUP': {
-			return restoreGroup(
+			const result = await restoreGroup(
 				message.groupId,
 				sender.tab,
 				Boolean(message.forceRemove),
@@ -7313,6 +7453,16 @@ async function handleMessage(
 					activate: message.activate,
 				},
 			);
+			if (result.ok && result.count > 0) {
+				await armLodgeClose(sender.tab);
+			}
+
+			return result;
+		}
+
+		case 'ARM_LODGE_CLOSE': {
+			await armLodgeClose(sender.tab);
+			return {ok: true};
 		}
 
 		case 'DELETE_GROUP': {
