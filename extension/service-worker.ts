@@ -183,7 +183,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
-	groupTitleAction: 'edit',
+	groupTitleAction: 'toggle',
 	contextMenusEnabled: true,
 	contextMenuLinksEnabled: true,
 	contextMenuPageEnabled: true,
@@ -875,7 +875,12 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		urlDisplayMode: isOneOf(['domain', 'full', 'none'], raw.urlDisplayMode)
 			? raw.urlDisplayMode
 			: 'full',
-		groupTitleAction: raw.groupTitleAction === 'restore' ? 'restore' : 'edit',
+		groupTitleAction: isOneOf(
+			['toggle', 'edit', 'restore'],
+			raw.groupTitleAction,
+		)
+			? raw.groupTitleAction
+			: 'toggle',
 		contextMenusEnabled: raw.contextMenusEnabled !== false,
 		contextMenuLinksEnabled: raw.contextMenuLinksEnabled !== false,
 		contextMenuPageEnabled: raw.contextMenuPageEnabled !== false,

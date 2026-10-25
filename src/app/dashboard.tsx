@@ -2082,7 +2082,8 @@ function GroupCard({
 							draggable
 							type="button"
 							className="min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing"
-							aria-label={`${settings.groupTitleAction === 'restore' ? 'Restore' : 'Edit details for'} session ${group.name}`}
+							aria-expanded={isExpanded}
+							aria-label={`${settings.groupTitleAction === 'restore' ? 'Restore' : settings.groupTitleAction === 'edit' ? 'Edit details for' : isExpanded ? 'Collapse' : 'Expand'} session ${group.name}`}
 							onDragStart={(event) => {
 								applyLinkDrag(
 									event.dataTransfer,
@@ -2098,7 +2099,11 @@ function GroupCard({
 							onClick={(event) =>
 								activateSessionTitle(
 									settings.groupTitleAction,
-									{edit: onEditName, restore: onRestore},
+									{
+										edit: onEditName,
+										restore: onRestore,
+										toggle: () => onExpanded(!isExpanded),
+									},
 									event,
 								)
 							}

@@ -149,10 +149,18 @@ export function sessionDropPrompt(
 
 export function activateSessionTitle<E, R>(
 	action: string | undefined,
-	handlers: {restore: (event?: E) => R; edit: (event?: E) => R},
+	handlers: {
+		restore: (event?: E) => R;
+		edit: (event?: E) => R;
+		toggle: (event?: E) => R;
+	},
 	event?: E,
 ): R {
-	return action === 'restore' ? handlers.restore(event) : handlers.edit(event);
+	if (action === 'restore') {
+		return handlers.restore(event);
+	}
+
+	return action === 'edit' ? handlers.edit(event) : handlers.toggle(event);
 }
 
 const HTML_ESCAPES: Record<string, string> = {

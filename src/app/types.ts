@@ -113,7 +113,7 @@ export type Settings = {
 	copyFormat: CopyFormat;
 	dashboardBehavior: 'switch' | 'move';
 	urlDisplayMode: 'domain' | 'full' | 'none';
-	groupTitleAction: 'edit' | 'restore';
+	groupTitleAction: 'toggle' | 'edit' | 'restore';
 	// ---- Right-click menus (context-menu agent) ----
 	/**
 	Master switch: when off, no right-click menu items are created at all.
