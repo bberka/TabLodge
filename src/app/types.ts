@@ -64,6 +64,10 @@ export type Settings = {
 	restoreMode: RestoreMode;
 	singleTabBehavior: 'stay' | 'switch';
 	unloadRestoredTabs: boolean;
+	/**
+	Background restored tabs are unloaded only when a restore opened more tabs than this (1 to 500, default 5).
+	*/
+	unloadRestoredTabsThreshold: number;
 	restoreSplitTabs: RestoreSplitTabs;
 	saveSplitTabs: SaveSplitTabs;
 	sessionSort: SessionSort;

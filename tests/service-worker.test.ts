@@ -775,7 +775,10 @@ test('single-tab restore can remain in the background or switch based on its set
 });
 
 test('background restore unloading leaves active and pinned tabs alone', async () => {
-	const state = stateWithSession({unloadRestoredTabs: true});
+	const state = stateWithSession({
+		unloadRestoredTabs: true,
+		unloadRestoredTabsThreshold: 1,
+	});
 	state.groups[0].tabs.push(
 		{
 			id: 'saved-tab-2',
@@ -2937,9 +2940,56 @@ test('restore duplicate skipping and single-tab restore open a lone half without
 	assert.deepEqual(single.apiLog, []);
 });
 
+test('restored tabs are unloaded only when the restore opened more than the threshold', async () => {
+	const restore = async (threshold: number) => {
+		const state = stateWithSession({
+			unloadRestoredTabs: true,
+			unloadRestoredTabsThreshold: threshold,
+		});
+		state.groups[0].tabs.push(
+			{id: 'extra-1', title: 'B', url: 'https://b.example/'},
+			{id: 'extra-2', title: 'C', url: 'https://c.example/'},
+		);
+		const harness = createWorkerHarness(state);
+		const response = await harness.sendMessage({
+			type: 'RESTORE_GROUP',
+			groupId: 'session-1',
+		});
+		assert.equal(response.ok, true, response.error);
+		assert.equal(harness.openedTabs.length, 3);
+		return harness.discardedTabs.length;
+	};
+
+	assert.equal(await restore(4), 0, 'below the threshold');
+	assert.equal(await restore(3), 0, 'equal to the threshold');
+	assert.equal(
+		await restore(2),
+		2,
+		'above the threshold; the active tab stays',
+	);
+});
+
+test('the unload threshold is clamped to a whole number from 1 to 500', async () => {
+	const read = async (value: unknown) =>
+		(
+			await createWorkerHarness(
+				stateWithSession({unloadRestoredTabsThreshold: value}),
+			).sendMessage({type: 'GET_STATE'})
+		).settings.unloadRestoredTabsThreshold;
+	assert.equal(await read(undefined), 5);
+	assert.equal(await read('abc'), 5);
+	assert.equal(await read(0), 1);
+	assert.equal(await read(9999), 500);
+	assert.equal(await read(7.9), 7);
+	assert.equal(await read('12'), 12);
+});
+
 test('unloading restored tabs leaves split tabs loaded', async () => {
 	const harness = createWorkerHarness(
-		stateWithSplitSession({unloadRestoredTabs: true}),
+		stateWithSplitSession({
+			unloadRestoredTabs: true,
+			unloadRestoredTabsThreshold: 1,
+		}),
 	);
 	const response = await harness.sendMessage({
 		type: 'RESTORE_GROUP',
@@ -2953,7 +3003,10 @@ test('unloading restored tabs leaves split tabs loaded', async () => {
 
 	// When the browser refused the split, the pair are ordinary background tabs again and may be unloaded.
 	const refused = createWorkerHarness(
-		stateWithSplitSession({unloadRestoredTabs: true}),
+		stateWithSplitSession({
+			unloadRestoredTabs: true,
+			unloadRestoredTabsThreshold: 1,
+		}),
 		undefined,
 		{splitApi: 'throws'},
 	);
