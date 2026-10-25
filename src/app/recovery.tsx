@@ -923,7 +923,7 @@ export function RecoveryTools({
 			</div>
 			<div>
 				<p className="text-sm font-medium">Backups</p>
-				<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+				<p className="mt-1 text-xs leading-5 text-muted-foreground">
 					Each backup holds your sessions, bookmarks and settings as a regular
 					JSON export that Import can read. Restoring replaces sessions and
 					bookmarks, keeps your current settings, and first saves a safety
