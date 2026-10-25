@@ -2605,7 +2605,7 @@ test('UNDO is refused once something else changed the same data', async () => {
 	});
 	const undone = await harness.sendMessage({type: 'UNDO', id: erased.undoId!});
 	assert.equal(undone.ok, false);
-	assert.match(undone.error, /changed since/);
+	assert.match(undone.error!, /changed since/);
 	assert.deepEqual(harness.state.groups, []);
 });
 
@@ -2724,7 +2724,7 @@ test('undo records expire, are purged by the alarm, and only the latest few are 
 	});
 	const stale = await harness.sendMessage({type: 'UNDO', id: 'old'});
 	assert.equal(stale.ok, false);
-	assert.match(stale.error, /too long ago/);
+	assert.match(stale.error!, /too long ago/);
 	await harness.fire('alarm', {name: 'tablodge-undo'});
 	assert.equal(undoRecordsOf(harness).length, 0);
 
