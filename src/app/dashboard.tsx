@@ -108,7 +108,7 @@ import type {
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {webUrl} from './import-formats';
-import {ColumnLabel, FolderLabel} from './icon-label';
+import {ColumnLabel, FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
@@ -160,6 +160,10 @@ const ALL = 'all';
 Highlight id for the New folder button while a session is dragged over it.
 */
 const NEW_FOLDER_DROP = 'new-folder';
+/**
+Folder-picker value for "New folder" in the session details dialog.
+*/
+const NEW_FOLDER = 'new-folder-choice';
 const WIDE_PAGE = '(min-width: 768px)';
 /**
 Tailwind's md breakpoint, tracked so collapsed cards know whether there is room for their preview icons.
@@ -264,6 +268,9 @@ export function SessionManager({
 	const [editingGroup, setEditingGroup] = useState<Session | null>(null);
 	// Set when a session title click opens the details dialog: the name field gets focus with its text selected.
 	const [focusGroupName, setFocusGroupName] = useState(false);
+	// Session details: the chosen folder, or NEW_FOLDER with the new folder's icon (its name is a form field).
+	const [detailsFolder, setDetailsFolder] = useState('unfiled');
+	const [newFolderIcon, setNewFolderIcon] = useState<string | undefined>();
 	const groupNameRef = useRef<HTMLInputElement>(null);
 	const [bookmarkTab, setBookmarkTab] = useState<BookmarkDraft | null>(null);
 	const [tabUrlError, setTabUrlError] = useState('');
@@ -1076,10 +1083,24 @@ export function SessionManager({
 		}
 
 		const form = new FormData(event.currentTarget);
+		let targetFolderId = detailsFolder;
+		if (targetFolderId === NEW_FOLDER) {
+			const created = await send('CREATE_FOLDER', {
+				name: String(form.get('newFolderName') || '').trim(),
+				icon: newFolderIcon,
+			});
+			if (!created?.ok) {
+				showStatus(created?.error || 'Could not create the folder.', true);
+				return;
+			}
+
+			targetFolderId = created.folder.id;
+		}
+
 		const fields: SessionFields = {
 			name: String(form.get('name') || ''),
 			description: String(form.get('description') || ''),
-			folderId: String(form.get('folderId') || 'unfiled'),
+			folderId: targetFolderId,
 		};
 		const result = await send('UPDATE_GROUP', {
 			groupId: editingGroup.id,
@@ -1097,6 +1118,8 @@ export function SessionManager({
 
 	function openGroupDetails(group: Session, focusName = false) {
 		setEditingGroup(group);
+		setDetailsFolder(group.folderId || 'unfiled');
+		setNewFolderIcon(undefined);
 		setFocusGroupName(focusName);
 		setDialog('details');
 	}
@@ -1852,10 +1875,7 @@ export function SessionManager({
 							</div>
 							<div className="min-w-0 space-y-1.5">
 								<Label htmlFor="group-folder">Folder</Label>
-								<Select
-									name="folderId"
-									defaultValue={editingGroup?.folderId || 'unfiled'}
-								>
+								<Select value={detailsFolder} onValueChange={setDetailsFolder}>
 									<SelectTrigger id="group-folder">
 										<SelectValue />
 									</SelectTrigger>
@@ -1865,9 +1885,29 @@ export function SessionManager({
 												<FolderLabel folder={folder} />
 											</SelectItem>
 										))}
+										<SelectItem value={NEW_FOLDER}>
+											<IconLabel icon={FolderPlus}>New folder</IconLabel>
+										</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
+							{detailsFolder === NEW_FOLDER && (
+								<IconNameField
+									id="group-new-folder"
+									label="New folder name"
+									nameLabel="New folder name"
+									icon={newFolderIcon}
+									defaultIcon={DEFAULT_FOLDER_ICON}
+									inputProps={{
+										required: true,
+										autoFocus: true,
+										name: 'newFolderName',
+										maxLength: 60,
+										placeholder: 'Work',
+									}}
+									onIconChange={setNewFolderIcon}
+								/>
+							)}
 						</DialogBody>
 						<DialogFooter className="justify-between">
 							{editingGroup && (
