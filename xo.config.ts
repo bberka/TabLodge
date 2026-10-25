@@ -12,6 +12,7 @@ const xoConfig: XoConfigItem[] = [
 			'docs/**',
 			'site/**',
 			'.agents/**',
+			'.claude/worktrees/**',
 			'skills-lock.json',
 		],
 	},

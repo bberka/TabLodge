@@ -34,3 +34,4 @@ Thumbs.db
 # Local AI agent skills (installed per machine)
 /.agents/
 /skills-lock.json
+/.claude/worktrees/
