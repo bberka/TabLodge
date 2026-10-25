@@ -13,6 +13,7 @@ export type ActionMode =
 export type RestoreTarget =
 	'current-window' | 'new-window-unless-only-tab' | 'always-new-window';
 export type RestoreMode = 'keep' | 'remove' | 'archive';
+export type SessionLayout = 'list' | 'grid';
 export type SessionSort = 'newest' | 'oldest' | 'name' | 'tabs' | 'custom';
 export type CopyFormat =
 	'rich' | 'title-url' | 'url-title' | 'url' | 'markdown';
@@ -59,6 +60,10 @@ export type Settings = {
 	restoreSplitTabs: RestoreSplitTabs;
 	saveSplitTabs: SaveSplitTabs;
 	sessionSort: SessionSort;
+	/**
+	Session cards in one column (list, default) or two columns on wide pages (grid).
+	*/
+	sessionLayout: SessionLayout;
 	/**
 	Session cards start expanded on the TabLodge page; each can still be collapsed during the visit.
 	*/
