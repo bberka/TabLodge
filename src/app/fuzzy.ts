@@ -1,12 +1,16 @@
 // Pure fuzzy-search helpers shared by Settings search and the global finder: which items match a query, how well, and which characters to highlight.
 // Matching is case-insensitive, treats hyphens, underscores and curly quotes like spaces/apostrophes, and every
-// word of the query must match somewhere. A word matches, best first, as:
-//   an exact word ("tabs" in "Include tabs")                         100
-//   the start of a word ("book" in "Bookmarks")                        80
-//   the initials of a label's words ("sbd" in "Show bookmark dock")    55
-//   a typo or missing letter ("bokmark", "sesions")                    ~45
-//   an abbreviation inside one word ("bkmrk" in "bookmark")            40
-// Fuzzy matches need at least three letters, so short words stay strict ("up" does not match "backup").
+// word of the query must match somewhere. Each word is scored by its best match type, best first:
+//   the whole text ("sessions" in "Sessions")                           1000
+//   a whole word ("tabs" in "Include tabs")                              900
+//   the start of a word ("book" in "Bookmarks")                          800
+//   inside a word ("side" in "inside")                                   700
+//   the initials of a label's words ("sbd" in "Show bookmark dock")      600
+//   letters in order inside one word ("bkmrk" in "bookmark")             500, less for a wide span
+//   a typo ("bokmark", "sesions"): one edit for 4+ letters (two for 7+)  200 / 150
+// A field lowers the score a little (label 0, help 15, options and keywords 30), never enough to cross into
+// the next match type. A typo is only used when the word has no other kind of match anywhere in the texts,
+// so typos can never outrank a real match. Fuzzy matches need at least three letters ("up" stays strict).
 
 /**
 Lower-cases and unifies punctuation without changing the text's length, so match offsets still fit the original.
@@ -22,17 +26,25 @@ const isWordChar = (char: string | undefined) =>
 	char !== undefined && /[\p{Letter}\p{Number}]/u.test(char);
 
 type Range = [start: number, end: number];
-type Hit = {score: number; ranges: Range[]};
+type Hit = {score: number; ranges: Range[]; typo: boolean};
 
-const EXACT = 100;
-const PREFIX = 80;
-const INITIALS = 55;
-const TYPO = 50;
-const SUBSEQUENCE = 40;
+const FULL = 1000;
+const WORD = 900;
+const PREFIX = 800;
+const INSIDE = 700;
+const INITIALS = 600;
+const SUBSEQUENCE = 500;
+const TYPO_ONE = 200;
+const TYPO_TWO = 150;
+const ORDER_BONUS = 10;
+const ADJACENT_BONUS = 10;
+const FULL_QUERY_BONUS = 40;
+
 /**
-Weight of a match in the row's label (the first searched text) versus its help and other texts.
+How much a field lowers a match: the label (first text) none, the help (second text) a little, others more.
 */
-const SECONDARY_WEIGHT = 0.75;
+const fieldPenalty = (index: number) =>
+	index === 0 ? 0 : index === 1 ? 15 : 30;
 
 /**
 Words of a query, folded; empty when the query is blank.
@@ -87,7 +99,8 @@ function editDistance(a: string, b: string, max: number): number {
 }
 
 /**
-Exact-word and word-prefix occurrences of `term` (it may contain punctuation such as an apostrophe).
+Literal occurrences of `term` (it may contain punctuation such as an apostrophe): the whole text, a whole
+word, the start of a word, or inside a word (three letters or more).
 */
 function literalHits(haystack: string, term: string): Hit[] {
 	const hits: Hit[] = [];
@@ -96,15 +109,21 @@ function literalHits(haystack: string, term: string): Hit[] {
 		at !== -1;
 		at = haystack.indexOf(term, at + 1)
 	) {
+		const end = at + term.length;
+		let score: number;
 		if (isWordChar(haystack[at - 1])) {
-			continue;
+			if (term.length < 3) {
+				continue;
+			}
+
+			score = INSIDE;
+		} else if (isWordChar(haystack[end])) {
+			score = PREFIX;
+		} else {
+			score = haystack.trim() === term ? FULL : WORD;
 		}
 
-		const end = at + term.length;
-		hits.push({
-			score: isWordChar(haystack[end]) ? PREFIX : EXACT,
-			ranges: [[at, end]],
-		});
+		hits.push({score, ranges: [[at, end]], typo: false});
 	}
 
 	return hits;
@@ -113,7 +132,7 @@ function literalHits(haystack: string, term: string): Hit[] {
 function abbreviate(
 	word: {start: number; text: string},
 	term: string,
-): Range[] | undefined {
+): Hit | undefined {
 	if (!word.text.startsWith(term[0]) || term.length * 2 < word.text.length) {
 		return undefined;
 	}
@@ -130,54 +149,55 @@ function abbreviate(
 		from = at + 1;
 	}
 
-	return ranges;
+	const width = ranges.at(-1)![1] - ranges[0][0];
+	return {
+		score: SUBSEQUENCE - Math.min(50, (width - term.length) * 8),
+		ranges,
+		typo: false,
+	};
 }
 
-function fuzzyHit(
+function fuzzyHits(
 	haystack: string,
 	term: string,
 	allowInitials: boolean,
-): Hit | undefined {
+): Hit[] {
 	if (term.length < 3 || /[^\p{Letter}\p{Number}]/u.test(term)) {
-		return undefined;
+		return [];
 	}
 
-	let best: Hit | undefined;
-	const consider = (hit: Hit) => {
-		if (!best || hit.score > best.score) {
-			best = hit;
-		}
-	};
-
+	const hits: Hit[] = [];
 	const words = wordsOf(haystack);
-	const maxEdits = term.length >= 8 ? 2 : 1;
+	const maxEdits = term.length >= 7 ? 2 : 1;
 	for (const word of words) {
 		// A typo or missing letter, compared with the word's start (so "sesion" finds "sessions").
 		if (term.length >= 4) {
 			for (const size of [term.length, term.length - 1, term.length + 1]) {
 				const part = word.text.slice(0, size);
 				const distance = editDistance(term, part, maxEdits);
-				if (distance <= maxEdits) {
-					consider({
-						score: TYPO - distance * 5,
+				if (distance >= 1 && distance <= maxEdits) {
+					hits.push({
+						score: distance === 1 ? TYPO_ONE : TYPO_TWO,
 						ranges: [[word.start, word.start + part.length]],
+						typo: true,
 					});
 				}
 			}
 		}
 
-		// An abbreviation inside one word: the same first letter, the rest in order ("bkmrk" in "bookmark").
 		const abbreviation = abbreviate(word, term);
 		if (abbreviation) {
-			consider({score: SUBSEQUENCE, ranges: abbreviation});
+			hits.push(abbreviation);
 		}
 	}
 
-	// Initials of consecutive words ("sbd" for "Show bookmark dock"), in order, skipping words is allowed.
+	// Initials of words ("sbd" for "Show bookmark dock"), in order; skipping words costs a little.
 	if (allowInitials) {
 		const ranges: Range[] = [];
 		let index = 0;
+		let skipped = 0;
 		for (const char of term) {
+			const from = index;
 			while (index < words.length && !words[index].text.startsWith(char)) {
 				index++;
 			}
@@ -187,37 +207,100 @@ function fuzzyHit(
 				break;
 			}
 
+			skipped += ranges.length > 0 ? index - from : 0;
 			ranges.push([words[index].start, words[index].start + 1]);
 			index++;
 		}
 
 		if (ranges.length === term.length) {
-			consider({score: INITIALS, ranges});
+			hits.push({
+				score: INITIALS - Math.min(30, skipped * 5),
+				ranges,
+				typo: false,
+			});
+		}
+	}
+
+	return hits;
+}
+
+/**
+Every way `term` matches the text; typos are dropped when the text has any other kind of match.
+*/
+function hitsIn(haystack: string, term: string, allowInitials: boolean): Hit[] {
+	const hits = [
+		...literalHits(haystack, term),
+		...fuzzyHits(haystack, term, allowInitials),
+	];
+	return hits.some((hit) => !hit.typo) ? hits.filter((hit) => !hit.typo) : hits;
+}
+
+/**
+The best match type of a text: the score and the ranges of every hit of that type.
+*/
+function bestHit(
+	haystack: string,
+	term: string,
+	allowInitials: boolean,
+): Hit | undefined {
+	const hits = hitsIn(haystack, term, allowInitials);
+	if (hits.length === 0) {
+		return undefined;
+	}
+
+	const score = Math.max(...hits.map((hit) => hit.score));
+	const top = hits.filter((hit) => hit.score === score);
+	return {
+		score,
+		ranges: top.flatMap((hit) => hit.ranges),
+		typo: top[0].typo,
+	};
+}
+
+type TermMatch = {score: number; field: number; start: number; end: number};
+
+/**
+The best place for a term among all texts: a typo only counts when no text has a better kind of match.
+*/
+function bestMatch(
+	folded: readonly string[],
+	term: string,
+): TermMatch | undefined {
+	let best: (TermMatch & {typo: boolean}) | undefined;
+	for (const [field, haystack] of folded.entries()) {
+		if (!haystack) {
+			continue;
+		}
+
+		const hit = bestHit(haystack, term, field === 0);
+		if (!hit) {
+			continue;
+		}
+
+		const score = hit.score - fieldPenalty(field);
+		if (
+			!best ||
+			(best.typo && !hit.typo) ||
+			(best.typo === hit.typo && score > best.score)
+		) {
+			best = {
+				score,
+				field,
+				start: hit.ranges[0][0],
+				end: hit.ranges[0][1],
+				typo: hit.typo,
+			};
 		}
 	}
 
 	return best;
 }
 
-function bestHit(
-	haystack: string,
-	term: string,
-	allowInitials: boolean,
-): Hit | undefined {
-	const literal = literalHits(haystack, term);
-	if (literal.length > 0) {
-		return {
-			score: Math.max(...literal.map((hit) => hit.score)),
-			ranges: literal.flatMap((hit) => hit.ranges),
-		};
-	}
-
-	return fuzzyHit(haystack, term, allowInitials);
-}
-
 /**
 How well the query matches the texts: 0 for no match (or a missing word), otherwise higher is better.
-The first text is the row's label and counts fully; later texts (help, options) count less. A blank query scores 1.
+The first text is the row's label, the second its help; later texts (options, keywords) count least. Matches
+are ordered by kind (see the top of this file), then by field. Each word scores its best match and the scores
+add up, with a bonus when the words appear in order or side by side. A blank query scores 1.
 */
 export function scoreQuery(
 	query: string,
@@ -229,25 +312,39 @@ export function scoreQuery(
 	}
 
 	const folded = texts.map((text) => fold(text ?? ''));
+	const matches: TermMatch[] = [];
 	let total = 0;
 	for (const term of terms) {
-		let best = 0;
-		for (const [index, haystack] of folded.entries()) {
-			if (!haystack) {
-				continue;
-			}
-
-			const hit = bestHit(haystack, term, index === 0);
-			if (hit) {
-				best = Math.max(best, hit.score * (index === 0 ? 1 : SECONDARY_WEIGHT));
-			}
-		}
-
-		if (best === 0) {
+		const match = bestMatch(folded, term);
+		if (!match) {
 			return 0;
 		}
 
-		total += best;
+		matches.push(match);
+		total += match.score;
+	}
+
+	if (terms.length > 1) {
+		const joined = terms.join(' ');
+		if (
+			folded.some(
+				(text) => text.split(/\s+/).filter(Boolean).join(' ') === joined,
+			)
+		) {
+			total += FULL_QUERY_BONUS;
+		}
+
+		const sameField = matches.every(
+			(match) => match.field === matches[0].field,
+		);
+		const gap = (i: number) => matches[i].start - matches[i - 1].end;
+		const inOrder = matches.every((_, i) => i === 0 || gap(i) >= 0);
+		if (sameField && inOrder) {
+			total += ORDER_BONUS;
+			if (matches.every((_, i) => i === 0 || gap(i) <= 1)) {
+				total += ADJACENT_BONUS;
+			}
+		}
 	}
 
 	return total;
@@ -264,7 +361,7 @@ export function matchesQuery(
 }
 
 /**
-Keeps the items that match and orders them best first (ties keep their original order).
+Keeps the items that match and orders them best first (ties: shorter label first, then original order).
 */
 export function rankByQuery<T>(
 	query: string,
@@ -276,13 +373,46 @@ export function rankByQuery<T>(
 	}
 
 	return items
-		.map((item, index) => ({
-			item,
-			index,
-			score: scoreQuery(query, textOf(item)),
-		}))
+		.map((item, index) => {
+			const texts = textOf(item);
+			return {
+				item,
+				index,
+				score: scoreQuery(query, texts),
+				length: (texts[0] ?? '').length,
+			};
+		})
 		.filter((entry) => entry.score > 0)
-		.toSorted((a, b) => b.score - a.score || a.index - b.index)
+		.toSorted(
+			(a, b) => b.score - a.score || a.length - b.length || a.index - b.index,
+		)
+		.map((entry) => entry.item);
+}
+
+/**
+Orders all items best match first, keeping the ones that do not match (after the matches, in their original order).
+*/
+export function sortByQuery<T>(
+	query: string,
+	items: readonly T[],
+	textOf: (item: T) => ReadonlyArray<string | null | undefined>,
+): T[] {
+	return items
+		.map((item, index) => {
+			const texts = textOf(item);
+			return {
+				item,
+				index,
+				score: scoreQuery(query, texts),
+				length: (texts[0] ?? '').length,
+			};
+		})
+		.toSorted(
+			(a, b) =>
+				b.score - a.score ||
+				(a.score > 0 ? a.length - b.length : 0) ||
+				a.index - b.index,
+		)
 		.map((entry) => entry.item);
 }
 

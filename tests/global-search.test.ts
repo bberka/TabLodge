@@ -173,3 +173,20 @@ test('looksLikeUrl accepts addresses and rejects ordinary searches', () => {
 		assert.equal(looksLikeUrl(text), undefined, text);
 	}
 });
+
+test('real matches outrank typo matches, within and across groups', () => {
+	const typoIndex = buildFinderIndex({
+		...sources,
+		bookmarks: [
+			bookmark('t1', 'Hide and seek', 'https://a.example/', 'c1'),
+			bookmark('t2', 'The inside story', 'https://b.example/', 'c1'),
+			bookmark('t3', 'Sidebar tips', 'https://c.example/', 'c1'),
+		],
+		tabs: [],
+		commands: [],
+	});
+	const found = flattenSections(searchFinder('side', typoIndex))
+		.filter((item) => item.kind === 'bookmark')
+		.map((item) => item.id);
+	assert.deepEqual(found, ['bookmark:t3', 'bookmark:t2', 'bookmark:t1']);
+});
