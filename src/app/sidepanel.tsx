@@ -745,7 +745,7 @@ function SidePanel() {
 					className="mb-2 grid h-9 grid-cols-3 items-stretch gap-1 rounded-lg bg-muted p-1"
 					onKeyDown={onTabListKeys}
 				>
-					{tabsDef.map(({id, label, count}) => (
+					{tabsDef.map(({id, label, count, icon: Icon}) => (
 						<button
 							key={id}
 							id={`sp-tab-${id}`}
@@ -760,6 +760,7 @@ function SidePanel() {
 							)}
 							onClick={() => setChosenPanel(id)}
 						>
+							<Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
 							<span className="truncate">{label}</span>
 							<span className="text-[10px] font-normal text-muted-foreground">
 								{count}
