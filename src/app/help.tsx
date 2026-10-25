@@ -6,6 +6,7 @@ import {
 	Bug,
 	Database,
 	Github,
+	Globe,
 	Info,
 	Keyboard,
 	Layers2,
@@ -95,6 +96,7 @@ function Help() {
 		},
 	];
 	const projectLinks = [
+		{icon: Globe, label: 'Website', href: PROJECT.websiteUrl},
 		{icon: Github, label: 'Source code', href: PROJECT.repoUrl},
 		{icon: Bug, label: 'Report an issue', href: PROJECT.issuesUrl},
 		{icon: Tag, label: 'Releases and changelog', href: PROJECT.changelogUrl},

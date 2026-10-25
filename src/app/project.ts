@@ -18,6 +18,7 @@ export const PROJECT = {
 	name: manifest.short_name ?? manifest.name,
 	version: manifest.version,
 	repoUrl,
+	websiteUrl: 'https://tablodge.bbay.dev',
 	issuesUrl: `${repoUrl}/issues`,
 	changelogUrl: `${repoUrl}/releases`,
 	license,
