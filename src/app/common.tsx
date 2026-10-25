@@ -176,12 +176,24 @@ export type Status = {
 	Set by showStatus; errors without an id (passed in directly) never time out.
 	*/
 	id?: string;
+	/**
+	A button on the toast, such as Undo. The toast stays a little longer while it has one.
+	*/
+	action?: StatusAction;
+};
+export type StatusAction = {
+	label: string;
+	onClick: () => void | Promise<void>;
 };
 export type StatusOptions = {
 	/**
 	Show a success message as a visible toast instead of only announcing it to screen readers.
 	*/
 	toast?: boolean;
+	/**
+	Adds a button to the toast (always shown as a toast), for example `{label: 'Undo', onClick}`.
+	*/
+	action?: StatusAction;
 };
 /**
  `showStatus(message)` announces a routine success to screen readers only,
@@ -202,19 +214,20 @@ export function useStatus(): [Status | null, ShowStatus] {
 				? {
 						message,
 						error: Boolean(error),
-						toast: Boolean(options.toast),
+						toast: Boolean(options.toast || options.action),
 						id: `${Date.now()}-${Math.random()}`,
+						...(options.action && {action: options.action}),
 					}
 				: null,
 		);
 	return [status, showStatus];
 }
 
-const TOAST_TIMEOUT_MS = {success: 4000, error: 10_000};
+const TOAST_TIMEOUT_MS = {success: 4000, error: 10_000, action: 6000};
 
 // Routine success messages are only announced to screen readers. Errors and success messages
 // marked `toast` appear as a small dismissible toast at the bottom center. Toasts from showStatus
-// fade after 4s (success) or 10s (error); errors passed in directly (such as a failed initial
+// fade after 4s (success), 6s (with an action such as Undo) or 10s (error); errors passed in directly (such as a failed initial
 // load) stay until dismissed.
 export function StatusLine({status}: {status: Status | null | undefined}) {
 	const [dismissed, setDismissed] = useState<string | null>(null);
@@ -228,10 +241,14 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 
 		const timer = setTimeout(
 			() => setDismissed(key),
-			visible.error ? TOAST_TIMEOUT_MS.error : TOAST_TIMEOUT_MS.success,
+			visible.error
+				? TOAST_TIMEOUT_MS.error
+				: visible.action
+					? TOAST_TIMEOUT_MS.action
+					: TOAST_TIMEOUT_MS.success,
 		);
 		return () => clearTimeout(timer);
-	}, [key, visible?.id, visible?.error]);
+	}, [key, visible?.id, visible?.error, visible?.action]);
 	const Icon = visible?.error ? CircleAlert : CircleCheck;
 	return (
 		<>
@@ -251,6 +268,18 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 					<span className="min-w-0 flex-1 break-words leading-5">
 						{visible.message}
 					</span>
+					{visible.action && (
+						<button
+							type="button"
+							className="shrink-0 rounded px-1.5 text-sm font-semibold leading-5 text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							onClick={() => {
+								setDismissed(key);
+								void visible.action!.onClick();
+							}}
+						>
+							{visible.action.label}
+						</button>
+					)}
 					<button
 						type="button"
 						aria-label="Dismiss message"
