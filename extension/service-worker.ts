@@ -5604,6 +5604,263 @@ async function getBackupData(
 		: {ok: false, error: 'That backup no longer exists.'};
 }
 
+// ---- Full backup (ZIP): the page builds and reads the archive; the worker supplies and replaces the stored values.
+// Mirrors FULL_BACKUP_FORMAT_ID and FULL_BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
+const FULL_BACKUP_FORMAT_ID = 'tablodge-full-backup';
+const FULL_BACKUP_VERSION = 1;
+// The page theme, kept in storage by the pages (src/shared/theme.tsx); the only preference outside the state.
+const UI_THEME_KEY = 'uiTheme';
+const SNAPSHOT_REASONS = new Set([
+	'interval',
+	'startup',
+	'crash',
+	'exit',
+	'manual',
+]);
+const TRASH_KINDS = new Set([
+	'session',
+	'tabs',
+	'bookmark',
+	'column',
+	'folder',
+]);
+const MAX_SNAPSHOT_WINDOWS = 50;
+const MAX_SNAPSHOT_TABS = 10_000;
+
+const asTheme = (value: unknown) =>
+	value === 'light' || value === 'dark' ? value : 'system';
+
+async function getFullBackup(): Promise<ActionResult<'GET_FULL_BACKUP'>> {
+	const store = await getStore();
+	return {
+		ok: true,
+		state: store,
+		preferences: {[UI_THEME_KEY]: asTheme(await readKey(UI_THEME_KEY))},
+		snapshots: {version: 1, history: await readSnapshotHistory()},
+		trash: {version: 1, items: await readTrash()},
+	};
+}
+
+/**
+Rebuilds an imported crash snapshot from known fields only, or null when it has no usable tab.
+*/
+function normalizeImportedSnapshot(entry: unknown): Snapshot | null {
+	if (!isRecord(entry) || !Array.isArray(entry.windows)) {
+		return null;
+	}
+
+	let tabCount = 0;
+	const windows: SnapshotWindow[] = [];
+	for (const rawWindow of entry.windows.slice(0, MAX_SNAPSHOT_WINDOWS)) {
+		if (!isRecord(rawWindow) || !Array.isArray(rawWindow.tabs)) {
+			continue;
+		}
+
+		const groups: SnapshotGroup[] = (
+			Array.isArray(rawWindow.groups) ? rawWindow.groups : []
+		)
+			.slice(0, 500)
+			.map((group: unknown) => {
+				const raw = isRecord(group) ? group : {};
+				return {
+					title: cleanText(raw.title, '', 100),
+					color: isGroupColor(raw.color) ? raw.color : 'grey',
+					collapsed: Boolean(raw.collapsed),
+				};
+			});
+		const tabs: SnapshotTab[] = [];
+		for (const rawTab of rawWindow.tabs) {
+			if (tabCount >= MAX_SNAPSHOT_TABS) {
+				break;
+			}
+
+			const url = isRecord(rawTab) ? normalizeUrl(rawTab.url) : null;
+			if (!isRecord(rawTab) || !url) {
+				continue;
+			}
+
+			const tab: SnapshotTab = {url, title: cleanText(rawTab.title, url, 200)};
+			if (rawTab.pinned === true) {
+				tab.pinned = true;
+			}
+
+			if (rawTab.active === true) {
+				tab.active = true;
+			}
+
+			if (
+				isInteger(rawTab.group) &&
+				rawTab.group >= 0 &&
+				rawTab.group < groups.length
+			) {
+				tab.group = rawTab.group;
+			}
+
+			const split = normalizeSplit(rawTab.split);
+			if (split) {
+				tab.split = split;
+			}
+
+			tabs.push(tab);
+			tabCount += 1;
+		}
+
+		if (tabs.length > 0) {
+			windows.push({
+				focused: rawWindow.focused === true,
+				state: cleanText(rawWindow.state, 'normal', 20),
+				groups,
+				tabs,
+			});
+		}
+	}
+
+	const at = Number(entry.at);
+	if (windows.length === 0 || !Number.isFinite(at)) {
+		return null;
+	}
+
+	const text = JSON.stringify(windows);
+	return {
+		id: cleanText(entry.id, makeId(), 100),
+		at,
+		reason: SNAPSHOT_REASONS.has(String(entry.reason))
+			? (entry.reason as SnapshotReason)
+			: 'manual',
+		sig: hashText(text),
+		size: text.length,
+		windows,
+	};
+}
+
+function normalizeImportedTrash(entry: unknown): TrashEntry | null {
+	if (!isTrashEntry(entry) || !TRASH_KINDS.has(entry.kind)) {
+		return null;
+	}
+
+	return {
+		id: cleanText(entry.id, makeId(), 100),
+		kind: entry.kind,
+		deletedAt: Number.isFinite(Number(entry.deletedAt))
+			? Number(entry.deletedAt)
+			: Date.now(),
+		label: cleanText(entry.label, 'Deleted item', 200),
+		origin: cleanText(entry.origin, '', 200),
+		count: Math.max(0, Math.floor(Number(entry.count)) || 0),
+		data: entry.data,
+	};
+}
+
+async function applyFullBackup(
+	input: Raw,
+): Promise<ActionResult<'RESTORE_FULL_BACKUP'>> {
+	if (input.format !== FULL_BACKUP_FORMAT_ID) {
+		return {
+			ok: false,
+			error: `This is not a ${APP_NAME} full backup.`,
+		};
+	}
+
+	const version = Number(input.version);
+	if (!Number.isSafeInteger(version) || version < 1) {
+		return {ok: false, error: 'This backup has no valid version.'};
+	}
+
+	if (version > FULL_BACKUP_VERSION) {
+		return {
+			ok: false,
+			error: 'This backup is from a newer TabLodge version.',
+		};
+	}
+
+	const data = input.state;
+	if (!isRecord(data)) {
+		return {ok: false, error: 'This backup has no data.'};
+	}
+
+	if (Number(data.schemaVersion) > SCHEMA_VERSION) {
+		return {
+			ok: false,
+			error: 'This backup is from a newer TabLodge version.',
+		};
+	}
+
+	const restored = normalizeStore(data);
+	const current = await getStore();
+	if (!(await safetyBackup(current, 'Before importing a full backup'))) {
+		return {
+			ok: false,
+			error: 'Could not take a safety backup first. Nothing was changed.',
+		};
+	}
+
+	const rawHistory =
+		isRecord(input.snapshots) && Array.isArray(input.snapshots.history)
+			? input.snapshots.history
+			: [];
+	const history = trimHistory(
+		rawHistory
+			.slice(0, 200)
+			.map((entry: unknown) => normalizeImportedSnapshot(entry))
+			.filter((entry): entry is Snapshot => entry !== null)
+			.toSorted((a, b) => b.at - a.at),
+		restored.settings.snapshotKeep,
+	);
+	const rawItems =
+		isRecord(input.trash) && Array.isArray(input.trash.items)
+			? input.trash.items
+			: [];
+	const items = rawItems
+		.slice(0, TRASH_MAX_ITEMS)
+		.map((entry: unknown) => normalizeImportedTrash(entry))
+		.filter((entry): entry is TrashEntry => entry !== null);
+	const theme = isRecord(input.preferences)
+		? asTheme(input.preferences[UI_THEME_KEY])
+		: undefined;
+
+	await writeStore(restored);
+	await writeSnapshotHistory(history);
+	await writeTrash(items);
+	if (theme) {
+		await chrome.storage.local.set({[UI_THEME_KEY]: theme});
+	}
+
+	return {
+		ok: true,
+		sessions: restored.groups.length,
+		bookmarks: restored.bookmarks.length,
+		snapshots: history.length,
+		trash: items.length,
+	};
+}
+
+function restoreFullBackup(
+	input: Raw,
+): Promise<ActionResult<'RESTORE_FULL_BACKUP'>> {
+	// Same nesting as UNDO for these keys, so the queues never wait on each other.
+	return mutate(() =>
+		snapshotMutate(() =>
+			trashMutate(() =>
+				withUndo<'RESTORE_FULL_BACKUP'>(
+					'Import full backup',
+					[STORAGE_KEY, SNAPSHOTS_KEY, TRASH_KEY, UI_THEME_KEY],
+					() => applyFullBackup(input),
+				),
+			),
+		),
+	).then(async (result) => {
+		if (result.ok) {
+			// Settings may differ from what the alarms, toolbar, and menus were set up for.
+			const store = await getStore();
+			await syncRecoveryAlarms(store.settings);
+			await syncToolbarAction(store.settings);
+			await rebuildContextMenus(store);
+		}
+
+		return result;
+	});
+}
+
 // ---- Trash
 
 type TrashEntry = {
@@ -6600,6 +6857,14 @@ async function handleMessage(
 
 		case 'GET_BACKUP_DATA': {
 			return getBackupData(message.id);
+		}
+
+		case 'GET_FULL_BACKUP': {
+			return getFullBackup();
+		}
+
+		case 'RESTORE_FULL_BACKUP': {
+			return restoreFullBackup(message);
 		}
 
 		case 'GET_TRASH': {

@@ -31,3 +31,12 @@ export function fileNamePrefix(appName: string): string {
 			.replaceAll(/^-+|-+$/g, '') || 'backup'
 	);
 }
+
+/**
+`format` in the manifest of a full-backup ZIP (everything: data, settings, preferences, snapshots, trash).
+*/
+export const FULL_BACKUP_FORMAT_ID = 'tablodge-full-backup';
+/**
+Version of the full-backup ZIP layout; a file with a higher one comes from a newer app.
+*/
+export const FULL_BACKUP_VERSION = 1;

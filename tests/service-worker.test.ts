@@ -5741,6 +5741,216 @@ test('RESTORE_BACKUP brings data back, keeps current settings, and takes its own
 	assert.equal(backupsOf(harness).auto.length, 0);
 });
 
+const fullBackupInput = (overrides: Record<string, unknown> = {}) => ({
+	type: 'RESTORE_FULL_BACKUP' as const,
+	format: 'tablodge-full-backup',
+	version: 1,
+	state: {
+		schemaVersion: 7,
+		groups: [],
+		bookmarks: [
+			{
+				id: 'in-1',
+				title: 'Imported',
+				url: 'https://imported.example/',
+				columnId: 'bookmark-default',
+				createdAt: 1,
+				updatedAt: 1,
+			},
+		],
+		settings: {copyFormat: 'url', excludedOrigins: ['skip.example']},
+	},
+	preferences: {uiTheme: 'dark'},
+	snapshots: {
+		version: 1,
+		history: [
+			{
+				id: 'snap-in',
+				at: 5,
+				reason: 'interval',
+				windows: [
+					{
+						focused: true,
+						state: 'normal',
+						groups: [],
+						tabs: [{url: 'https://snap.example/', title: 'Snap'}],
+					},
+				],
+			},
+		],
+	},
+	trash: {
+		version: 1,
+		items: [
+			{
+				id: 'trash-in',
+				kind: 'bookmark',
+				deletedAt: Date.now(),
+				label: 'Gone',
+				origin: '',
+				count: 1,
+				data: {},
+			},
+		],
+	},
+	...overrides,
+});
+
+test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the theme, after a safety backup', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		storage: {uiTheme: 'light'},
+	});
+	const result = await harness.sendMessage(fullBackupInput());
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.sessions, 0);
+	assert.equal(result.bookmarks, 1);
+	assert.equal(result.snapshots, 1);
+	assert.equal(result.trash, 1);
+	assert.ok(result.undoId);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.id),
+		['in-1'],
+	);
+	assert.equal(harness.state.groups.length, 0);
+	assert.equal(harness.state.settings.copyFormat, 'url');
+	assert.deepEqual(harness.state.settings.excludedOrigins, ['skip.example']);
+	assert.equal(harness.extraStorage.uiTheme, 'dark');
+	const {history} = harness.extraStorage[HISTORY_KEY] as {
+		history: Array<{id: string}>;
+	};
+	assert.deepEqual(
+		history.map((entry) => entry.id),
+		['snap-in'],
+	);
+	assert.deepEqual(
+		trashOf(harness).map((item) => item.id),
+		['trash-in'],
+	);
+	assert.equal(
+		backupsOf(harness).safety[0].reason,
+		'Before importing a full backup',
+	);
+});
+
+test('RESTORE_FULL_BACKUP undo brings back the previous data', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		storage: {uiTheme: 'light'},
+	});
+	const result = await harness.sendMessage(fullBackupInput());
+	assert.equal(result.ok, true, result.error);
+	const undone = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(harness.state.bookmarks.length, 3);
+	assert.equal(harness.state.groups.length, 1);
+	assert.equal(harness.extraStorage.uiTheme, 'light');
+	assert.equal(Object.hasOwn(harness.extraStorage, HISTORY_KEY), false);
+	assert.equal(trashOf(harness).length, 0);
+});
+
+test('RESTORE_FULL_BACKUP normalizes junk and drops what it cannot trust', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	const result = await harness.sendMessage(
+		fullBackupInput({
+			state: {
+				groups: 'nope',
+				bookmarks: [
+					null,
+					5,
+					{url: 'javascript:alert(1)'},
+					{url: 'https://ok.example/', title: 'Ok'},
+				],
+				settings: {snapshotKeep: 9999, excludedOrigins: [42]},
+			},
+			preferences: {uiTheme: '<script>'},
+			snapshots: {
+				history: [
+					null,
+					{id: 'a', at: 'x', windows: []},
+					{
+						id: 'b',
+						at: 3,
+						reason: 'bogus',
+						windows: [
+							{
+								tabs: [
+									{url: 'file:///etc/passwd'},
+									{url: 'https://s.example/'},
+								],
+							},
+						],
+					},
+				],
+			},
+			trash: {
+				items: [null, {id: 'k', kind: 'weird', data: {}}, {id: 'x', data: {}}],
+			},
+		}),
+	);
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.bookmarks, 1);
+	assert.equal(harness.state.bookmarks[0].url, 'https://ok.example/');
+	assert.equal(harness.state.settings.snapshotKeep, 25);
+	assert.deepEqual(harness.state.settings.excludedOrigins, []);
+	assert.equal(harness.extraStorage.uiTheme, 'system');
+	const {history} = harness.extraStorage[HISTORY_KEY] as {
+		history: Array<{
+			id: string;
+			reason: string;
+			windows: Array<{tabs: Array<{url: string}>}>;
+		}>;
+	};
+	assert.equal(history.length, 1);
+	assert.equal(history[0].reason, 'manual');
+	assert.deepEqual(
+		history[0].windows[0].tabs.map((tab) => tab.url),
+		['https://s.example/'],
+	);
+	assert.equal(trashOf(harness).length, 0);
+});
+
+test('RESTORE_FULL_BACKUP rejects a newer format, another format and missing data, changing nothing', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	const newer = await harness.sendMessage(fullBackupInput({version: 2}));
+	assert.equal(newer.ok, false);
+	assert.match(newer.error ?? '', /newer TabLodge version/);
+	const newerSchema = await harness.sendMessage(
+		fullBackupInput({state: {schemaVersion: 999}}),
+	);
+	assert.equal(newerSchema.ok, false);
+	assert.match(newerSchema.error ?? '', /newer TabLodge version/);
+	assert.equal(
+		(await harness.sendMessage(fullBackupInput({format: 'other'}))).ok,
+		false,
+	);
+	assert.equal(
+		(await harness.sendMessage(fullBackupInput({state: null}))).ok,
+		false,
+	);
+	assert.equal(harness.state.bookmarks.length, 3);
+	assert.equal(backupsOf(harness).safety.length, 0);
+});
+
+test('GET_FULL_BACKUP returns the state, theme, snapshot history and trash', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		storage: {uiTheme: 'dark'},
+	});
+	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: 'bm-0'});
+	const result = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(result.ok, true, result.error);
+	const state = result.state as {bookmarks: unknown[]; settings: unknown};
+	assert.equal(state.bookmarks.length, 2);
+	assert.equal(typeof state.settings, 'object');
+	assert.deepEqual(structuredClone(result.preferences), {
+		uiTheme: 'dark',
+	});
+	assert.deepEqual(structuredClone(result.snapshots), {
+		version: 1,
+		history: [],
+	});
+	assert.equal((result.trash as {items: unknown[]}).items.length, 1);
+	assert.equal(JSON.stringify(result).includes('tablodge.backups'), false);
+});
+
 test('deleting a session moves it to the trash and restoring puts it back where it was', async () => {
 	const state = stateWithSession();
 	state.groups = ['a', 'b', 'c'].map((id) => ({
