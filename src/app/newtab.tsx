@@ -76,6 +76,7 @@ import {
 	useTabLodgeState,
 	useTabSelection,
 } from './common';
+import {useSessionNameAsk} from './name-session-dialog';
 import {SessionManager} from './dashboard';
 import {
 	FinderPalette,
@@ -291,6 +292,7 @@ function NewTab() {
 		: undefined;
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
 	const settings: Partial<Settings> = state?.settings || {};
+	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
 	const bookmarksEnabled = settings.bookmarksEnabled !== false;
@@ -560,8 +562,16 @@ function NewTab() {
 	}
 
 	async function saveWindow() {
+		const answer = await askSessionName({scope: 'selected-or-window'});
+		if (!answer) {
+			return;
+		}
+
 		setBusy('save-window');
-		const result = await send('SAVE_TABS', {scope: 'selected-or-window'});
+		const result = await send('SAVE_TABS', {
+			scope: 'selected-or-window',
+			groupName: answer.name,
+		});
 		setBusy('');
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save this window.', true);
@@ -1636,6 +1646,7 @@ function NewTab() {
 			<StatusLine status={error ? {message: error, error: true} : status} />
 
 			{shareDialog}
+			{nameDialog}
 			<SnapshotsDialog
 				open={snapshotsOpen}
 				showStatus={showStatus}

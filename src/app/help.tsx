@@ -44,7 +44,7 @@ function Help() {
 		{
 			icon: Layers2,
 			title: 'Saving sessions',
-			text: `Save from the popup, the right-click menus, or a keyboard shortcut. Sessions retain tab titles, notes, URLs, pinned state when opted in, and Chromium tab-group metadata. New sessions are named by date and first tab by default; change that in Settings › When saving. Pinned tabs are excluded by default; when enabled, ${PROJECT.name} stores them before any close operation.`,
+			text: `Save from the popup, the right-click menus, or a keyboard shortcut. Sessions retain tab titles, notes, URLs, pinned state when opted in, and Chromium tab-group metadata. New sessions are named by date and first tab by default; change that in Settings › When saving, where “Ask each time” shows a “Name this session” dialog before saving from the popup, the dashboard or the side panel (leave it empty for the default name). Shortcuts, right-click menus and a toolbar button that saves directly save first and then open a small window to rename the session. Pinned tabs are excluded by default; when enabled, ${PROJECT.name} stores them before any close operation.`,
 			detail:
 				'The quick chooser starts with the selected tabs (or eligible tabs in the window) checked. Review the list and title before saving.',
 		},

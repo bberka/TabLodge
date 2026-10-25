@@ -59,6 +59,7 @@ import {
 } from './common';
 import type {SaveScope, Session} from './types';
 import {LinkSummary} from './favicon';
+import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 
 // The icon registry is large; the popup only loads it once the column picker renders.
@@ -89,6 +90,9 @@ function Popup() {
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
 	const [groupName, setGroupName] = useState('');
 	const [allowPinnedOnce, setAllowPinnedOnce] = useState(false);
+	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(
+		state?.settings,
+	);
 
 	const groups = state?.groups || NO_SESSIONS;
 	const tabCount = useMemo(
@@ -169,11 +173,23 @@ function Popup() {
 		scope: SaveScope,
 		options: {tabIds?: number[]; groupName?: string} = {},
 	) {
+		// "Choose tabs and title" already has a title field, so only the quick buttons ask.
+		let typedName = options.groupName;
+		if (options.tabIds === undefined) {
+			const answer = await askSessionName({scope});
+			if (!answer) {
+				return;
+			}
+
+			typedName = answer.name;
+		}
+
 		setBusy(scope);
 		const result = await send('SAVE_TABS', {
 			scope,
 			includePinned: allowPinnedOnce,
 			...options,
+			groupName: typedName,
 		});
 		setBusy('');
 		if (result?.ok) {
@@ -626,6 +642,7 @@ function Popup() {
 					Open Dashboard <ArrowRight className="h-3.5 w-3.5" />
 				</Button>
 			</footer>
+			{nameDialog}
 			<Dialog open={bookmarkOpen} onOpenChange={setBookmarkOpen}>
 				<DialogContent size="sm">
 					<form onSubmit={saveBookmark}>

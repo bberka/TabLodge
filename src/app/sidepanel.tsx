@@ -51,6 +51,7 @@ import {
 	useStatus,
 	useTabLodgeState,
 } from './common';
+import {useSessionNameAsk} from './name-session-dialog';
 import {Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
 import {InsecureMarkFor} from './insecure-mark';
@@ -269,6 +270,7 @@ function SidePanel() {
 		SECTION_PAGE,
 	);
 	const settings = state?.settings;
+	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const search = query.trim().toLocaleLowerCase();
 	const matches = (...values: Array<string | undefined>) =>
 		!search ||
@@ -473,8 +475,16 @@ function SidePanel() {
 		request: {scope?: 'window'; tabIds?: number[]},
 		done: string,
 	) {
+		const answer = await askSessionName(request);
+		if (!answer) {
+			return;
+		}
+
 		await attempt(async () => {
-			const result = await send('SAVE_TABS', request);
+			const result = await send('SAVE_TABS', {
+				...request,
+				groupName: answer.name,
+			});
 			if (!result?.ok) {
 				throw new Error(result?.error || 'Could not save these tabs.');
 			}
@@ -926,6 +936,7 @@ function SidePanel() {
 				</div>
 			)}
 			{status?.message && <StatusLine status={status} />}
+			{nameDialog}
 			<SnapshotsDialog
 				open={snapshotsOpen}
 				showStatus={showStatus}
