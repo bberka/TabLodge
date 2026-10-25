@@ -169,8 +169,13 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	restoreSplitTabs: 'split',
 	saveSplitTabs: 'both',
 	sessionSort: 'newest',
-	expandSessionsByDefault: false,
+	expandSessionsByDefault: true,
 	stretchBookmarkColumns: true,
+	bookmarkClickAction: 'current',
+	sessionLinkClickAction: 'new',
+	showBookmarkQuickActions: false,
+	sessionsOnTop: false,
+	keepLodgePinned: false,
 	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
@@ -703,8 +708,23 @@ function normalizeSettings(
 		)
 			? raw.sessionSort
 			: 'newest',
-		expandSessionsByDefault: raw.expandSessionsByDefault === true,
+		expandSessionsByDefault: raw.expandSessionsByDefault !== false,
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
+		bookmarkClickAction: isOneOf(
+			['none', 'current', 'new'],
+			raw.bookmarkClickAction,
+		)
+			? raw.bookmarkClickAction
+			: 'current',
+		sessionLinkClickAction: isOneOf(
+			['none', 'current', 'new'],
+			raw.sessionLinkClickAction,
+		)
+			? raw.sessionLinkClickAction
+			: 'new',
+		showBookmarkQuickActions: raw.showBookmarkQuickActions === true,
+		sessionsOnTop: raw.sessionsOnTop === true,
+		keepLodgePinned: raw.keepLodgePinned === true,
 		copyFormat: isOneOf(
 			['rich', 'title-url', 'url-title', 'url', 'markdown'],
 			raw.copyFormat,
@@ -716,7 +736,9 @@ function normalizeSettings(
 					? 'title-url'
 					: 'markdown',
 		dashboardBehavior: raw.dashboardBehavior === 'move' ? 'move' : 'switch',
-		urlDisplayMode: raw.urlDisplayMode === 'none' ? 'none' : 'full',
+		urlDisplayMode: isOneOf(['domain', 'full', 'none'], raw.urlDisplayMode)
+			? raw.urlDisplayMode
+			: 'full',
 		groupTitleAction: raw.groupTitleAction === 'restore' ? 'restore' : 'edit',
 		contextMenusEnabled: raw.contextMenusEnabled !== false,
 		contextMenuLinksEnabled: raw.contextMenuLinksEnabled !== false,

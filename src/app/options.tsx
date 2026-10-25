@@ -8,7 +8,7 @@ import {
 } from 'react';
 import {createRoot} from 'react-dom/client';
 import {
-	Info,
+	LayoutDashboard,
 	Moon,
 	RotateCcw,
 	Sun,
@@ -106,6 +106,12 @@ const footerLinks = [
 	{label: 'Help', href: 'help.html', external: false},
 ];
 
+const LINK_ACTIONS: Array<[string, string]> = [
+	['none', 'None'],
+	['current', 'Open in this tab'],
+	['new', 'Open in new tab'],
+];
+// `system`: the whole section collapses to a "turned off" line while that system is off.
 const settingsGroups: Array<{
 	title: string;
 	icon: IconComponent;
@@ -164,6 +170,30 @@ const settingsGroups: Array<{
 				options: [
 					['switch', 'Switch to the open dashboard'],
 					['move', 'Move it to this window'],
+				],
+			},
+		],
+	},
+	{
+		title: 'Dashboard',
+		icon: LayoutDashboard,
+		fields: [
+			{
+				name: 'sessionsOnTop',
+				systems: ['sessions', 'bookmarks'],
+				label: 'Show sessions at the top',
+				help: 'Put the sessions section above the bookmark board.',
+				type: 'switch',
+			},
+			{
+				name: 'urlDisplayMode',
+				label: 'Show URLs as',
+				help: 'How web addresses appear under bookmarks and saved session links.',
+				type: 'select',
+				options: [
+					['domain', 'Domain only'],
+					['full', 'Full URL'],
+					['none', 'Hide'],
 				],
 			},
 		],
@@ -366,9 +396,9 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
-				name: 'urlDisplayMode',
-				label: 'Show tab URLs as',
-				help: 'Show each saved tab’s complete web address under its title, or hide addresses.',
+				name: 'sessionLinkClickAction',
+				label: 'When clicking a saved session link',
+				help: 'Choose what happens when you click a link inside a saved session.',
 				type: 'select',
 				options: [
 					['full', 'Full address'],
@@ -404,6 +434,19 @@ const settingsGroups: Array<{
 		title: 'Bookmark board',
 		icon: Bookmark,
 		fields: [
+			{
+				name: 'bookmarkClickAction',
+				label: 'When clicking a bookmark',
+				help: 'Choose what happens when you click a bookmark. The bookmark menu can always open it either way.',
+				type: 'select',
+				options: LINK_ACTIONS,
+			},
+			{
+				name: 'showBookmarkQuickActions',
+				label: 'Show quick actions on bookmarks',
+				help: 'Add a small actions button next to each bookmark’s menu button for opening, copying, editing, or deleting.',
+				type: 'switch',
+			},
 			{
 				name: 'stretchBookmarkColumns',
 				label: 'Extend bookmark columns to available height',
