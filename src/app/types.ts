@@ -49,6 +49,8 @@ export type BookmarkClickAction = LinkClickAction | 'menu';
 
 export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
 
+export type BrowserBookmarkAction = 'off' | 'ask' | 'add';
+
 export type Settings = {
 	closeOnSave: boolean;
 	includePinnedTabs: boolean;
@@ -135,6 +137,14 @@ export type Settings = {
 	Close a TabLodge tab once you switch away after opening links, bookmarks or sessions from it (default off).
 	*/
 	closeLodgeAfterOpening: boolean;
+	/**
+	What to do when you bookmark the page you are on with the browser's own bookmark feature (default off).
+	*/
+	browserBookmarkAction: BrowserBookmarkAction;
+	/**
+	Column that receives such bookmarks when added automatically; falls back to the first column if it is gone.
+	*/
+	browserBookmarkColumn: string;
 	/**
 	Kept for stored settings and backups; no longer shown, since Share covers copying session links.
 	*/

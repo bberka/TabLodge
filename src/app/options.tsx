@@ -74,6 +74,7 @@ import {
 	SnapshotsDialog,
 	TrashDialog,
 } from './lazy-dialogs';
+import {ColumnLabel} from './icon-label';
 import {offerUndo} from './recovery-core';
 import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
@@ -139,6 +140,7 @@ type SettingField = {
 			*/
 			options: Array<[string, string]>;
 	  }
+	| {name: SettingKey<string>; type: 'column'}
 	| {name: SettingKey<string>; type: 'url'; placeholder: string}
 	| {name: SettingKey<string>; type: 'text'; placeholder: string}
 );
@@ -651,6 +653,27 @@ const settingsGroups: Array<{
 				label: 'Extend bookmark columns to available height',
 				help: 'Columns in the same row match the tallest one.',
 				type: 'switch',
+			},
+			{
+				name: 'browserBookmarkAction',
+				label: 'When you bookmark a page in the browser',
+				help: `Use the browser’s own bookmark button (star, Ctrl/Cmd+D) as usual and ${PROJECT.name} can offer to keep the page on the bookmark board too. Only a single bookmark for the page you are on counts; syncing, imports and pastes are ignored. Removing the browser bookmark never removes the ${PROJECT.name} one.`,
+				type: 'select',
+				systems: ['bookmarks'],
+				options: [
+					['off', 'Do nothing'],
+					['ask', `Ask to add it to ${PROJECT.name}`],
+					['add', 'Add it to a column automatically'],
+				],
+			},
+			{
+				name: 'browserBookmarkColumn',
+				label: 'Column for browser bookmarks',
+				help: 'Where automatically added bookmarks go. The first column is used if this one no longer exists.',
+				type: 'column',
+				systems: ['bookmarks'],
+				when: (current) => current.browserBookmarkAction === 'add',
+				parent: 'browserBookmarkAction',
 			},
 			{
 				name: 'pasteLinkToBookmark',
@@ -1739,6 +1762,34 @@ function Options() {
 															updateSetting(field.name, value)
 														}
 													/>
+												) : field.type === 'column' ? (
+													<Select
+														value={
+															state?.bookmarkColumns.some(
+																(column) => column.id === settings[field.name],
+															)
+																? settings[field.name]
+																: (state?.bookmarkColumns[0]?.id ?? '')
+														}
+														disabled={rowDisabled(field)}
+														onValueChange={(value) =>
+															updateSetting(field.name, value)
+														}
+													>
+														<SelectTrigger
+															className="w-full sm:w-64"
+															aria-label={field.label}
+														>
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent>
+															{(state?.bookmarkColumns ?? []).map((column) => (
+																<SelectItem key={column.id} value={column.id}>
+																	<ColumnLabel column={column} />
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
 												) : field.type === 'number-select' ? (
 													<Select
 														value={String(

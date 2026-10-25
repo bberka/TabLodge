@@ -91,6 +91,10 @@ type HarnessOptions = {
 	*/
 	manualTimers?: boolean;
 	/**
+	Chrome.storage.session values present at start (a worker that restarted).
+	*/
+	sessionStorage?: Record<string, unknown>;
+	/**
 	Extra normal windows (ids) that exist at start; their tabs come from `initialTabs`.
 	*/
 	extraWindows?: number[];
@@ -287,7 +291,9 @@ function createWorkerHarness(
 		},
 	};
 
-	const sessionStore: Record<string, unknown> = {};
+	const sessionStore: Record<string, unknown> = structuredClone(
+		options.sessionStorage ?? {},
+	);
 	// Every storage.local.get / set / remove, so tests can assert what a code path reads and writes.
 	const storageGets: string[][] = [];
 	const storageSets: string[][] = [];
@@ -412,6 +418,9 @@ function createWorkerHarness(
 				},
 				async set(values: Record<string, unknown>) {
 					Object.assign(sessionStore, structuredClone(values));
+				},
+				async remove(key: string) {
+					Reflect.deleteProperty(sessionStore, key);
 				},
 			},
 		},
@@ -684,6 +693,9 @@ function createWorkerHarness(
 			},
 		},
 		bookmarks: {
+			onCreated: event('bookmarkCreated'),
+			onImportBegan: event('bookmarkImportBegan'),
+			onImportEnded: event('bookmarkImportEnded'),
 			async getTree() {
 				return structuredClone(options.bookmarkTree || []);
 			},
@@ -8156,4 +8168,164 @@ test('restoring a session from the TabLodge page arms it', async () => {
 	assert.equal(restored.ok, true);
 	await harness.fire('tabActivated', {tabId: 2, windowId: 10});
 	assert.deepEqual(harness.removedTabIds, [1]);
+});
+
+// Browser bookmarks: the worker offers (or adds) a page the user just bookmarked with the browser's star.
+const browserColumns = [
+	{id: 'bookmark-default', name: 'Bookmarks', createdAt: 0, isDefault: true},
+	{id: 'col-2', name: 'Reading', createdAt: 1},
+];
+
+function browserBookmarkHarness(
+	settings: Partial<Settings>,
+	extra: Partial<StoredState> = {},
+	sessionStorage: Record<string, unknown> = {},
+) {
+	return createWorkerHarness(
+		{
+			...stateWithSession(settings),
+			bookmarkColumns: browserColumns,
+			...extra,
+		},
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://current.example/',
+				title: 'Current',
+			},
+		],
+		{manualTimers: true, sessionStorage},
+	);
+}
+
+const starNode = (overrides: Record<string, unknown> = {}) => ({
+	id: 'b1',
+	title: 'Starred title',
+	url: 'https://current.example/',
+	...overrides,
+});
+
+test('browser bookmark: off does nothing', async () => {
+	const harness = browserBookmarkHarness({});
+	harness.listeners.bookmarkCreated('b1', starNode());
+	await harness.runTimers();
+	assert.equal(harness.windowCreateCalls.length, 0);
+	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+test('browser bookmark: ask opens the prompt window with the browser title', async () => {
+	const harness = browserBookmarkHarness({browserBookmarkAction: 'ask'});
+	harness.listeners.bookmarkCreated('b1', starNode());
+	await harness.runTimers();
+	assert.equal(harness.windowCreateCalls.length, 1);
+	const url = new URL(String(harness.windowCreateCalls[0].url));
+	assert.match(url.pathname, /add-bookmark\.html$/);
+	assert.equal(url.searchParams.get('url'), 'https://current.example/');
+	assert.equal(url.searchParams.get('title'), 'Starred title');
+	assert.equal(url.searchParams.get('source'), 'browser');
+	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+test('browser bookmark: add puts it in the chosen column, or the first when it is gone', async () => {
+	const chosen = browserBookmarkHarness({
+		browserBookmarkAction: 'add',
+		browserBookmarkColumn: 'col-2',
+	});
+	chosen.listeners.bookmarkCreated('b1', starNode());
+	await chosen.runTimers();
+	assert.equal(chosen.state.bookmarks.length, 1);
+	assert.equal(chosen.state.bookmarks[0].columnId, 'col-2');
+	assert.equal(chosen.state.bookmarks[0].url, 'https://current.example/');
+	assert.equal(chosen.windowCreateCalls.length, 0);
+
+	const gone = browserBookmarkHarness({
+		browserBookmarkAction: 'add',
+		browserBookmarkColumn: 'deleted-column',
+	});
+	gone.listeners.bookmarkCreated('b1', starNode());
+	await gone.runTimers();
+	assert.equal(gone.state.bookmarks[0].columnId, 'bookmark-default');
+});
+
+test('browser bookmark: folders, non-web pages and other pages are ignored', async () => {
+	const harness = browserBookmarkHarness({browserBookmarkAction: 'add'});
+	harness.listeners.bookmarkCreated('f', {id: 'f', title: 'Folder'});
+	await harness.runTimers();
+	harness.listeners.bookmarkCreated('c', starNode({url: 'chrome://settings/'}));
+	await harness.runTimers();
+	harness.listeners.bookmarkCreated(
+		'o',
+		starNode({url: 'https://elsewhere.example/'}),
+	);
+	await harness.runTimers();
+	assert.equal(harness.state.bookmarks.length, 0);
+	assert.equal(harness.windowCreateCalls.length, 0);
+});
+
+test('browser bookmark: a burst of bookmarks is ignored', async () => {
+	const harness = browserBookmarkHarness({browserBookmarkAction: 'add'});
+	harness.listeners.bookmarkCreated('b1', starNode());
+	harness.listeners.bookmarkCreated(
+		'b2',
+		starNode({id: 'b2', url: 'https://two.example/'}),
+	);
+	await harness.runTimers();
+	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+test('browser bookmark: imports are ignored, also after a worker restart', async () => {
+	const harness = browserBookmarkHarness({browserBookmarkAction: 'add'});
+	harness.listeners.bookmarkImportBegan();
+	harness.listeners.bookmarkCreated('b1', starNode());
+	await harness.runTimers();
+	assert.equal(harness.state.bookmarks.length, 0);
+	harness.listeners.bookmarkImportEnded();
+	await harness.runTimers();
+	harness.listeners.bookmarkCreated('b1', starNode());
+	await harness.runTimers();
+	assert.equal(harness.state.bookmarks.length, 1);
+
+	// The import flag survives in session storage when only the in-memory state is lost.
+	const fresh = browserBookmarkHarness(
+		{browserBookmarkAction: 'add'},
+		{},
+		{
+			browserBookmarkImporting: true,
+		},
+	);
+	fresh.listeners.bookmarkCreated('b1', starNode());
+	await fresh.runTimers();
+	assert.equal(fresh.state.bookmarks.length, 0);
+});
+
+test('browser bookmark: existing TabLodge bookmarks and a disabled board are ignored', async () => {
+	const existing = browserBookmarkHarness(
+		{browserBookmarkAction: 'ask'},
+		{
+			bookmarks: [
+				{
+					id: 'x',
+					title: 'Have it',
+					url: 'https://current.example/',
+					columnId: 'bookmark-default',
+					createdAt: 1,
+					updatedAt: 1,
+				},
+			],
+		},
+	);
+	existing.listeners.bookmarkCreated('b1', starNode());
+	await existing.runTimers();
+	assert.equal(existing.windowCreateCalls.length, 0);
+
+	const disabled = browserBookmarkHarness({
+		browserBookmarkAction: 'ask',
+		bookmarksEnabled: false,
+	});
+	disabled.listeners.bookmarkCreated('b1', starNode());
+	await disabled.runTimers();
+	assert.equal(disabled.windowCreateCalls.length, 0);
 });
