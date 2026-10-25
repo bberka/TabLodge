@@ -24,6 +24,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
+	ScrollArea,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
 import {send, type ShowStatus} from './common';
@@ -287,22 +288,28 @@ export function SnapshotsDialog({
 						</p>
 					)}
 					{snapshots.length > 0 && (
-						<ul className="space-y-2" aria-label="Snapshots">
-							{snapshots.map((snapshot) => (
-								<SnapshotRow
-									key={snapshot.id}
-									snapshot={snapshot}
-									busy={busy}
-									onRestore={(windowIndex) =>
-										void restore(snapshot.id, windowIndex)
-									}
-									onSave={(windowIndex) =>
-										void saveAsSession(snapshot.id, windowIndex)
-									}
-									onDelete={() => void remove(snapshot.id)}
-								/>
-							))}
-						</ul>
+						<ScrollArea
+							type="auto"
+							className="-mx-2"
+							viewportClassName="max-h-[min(32rem,calc(100dvh-19rem))] px-2"
+						>
+							<ul className="space-y-2 py-0.5" aria-label="Snapshots">
+								{snapshots.map((snapshot) => (
+									<SnapshotRow
+										key={snapshot.id}
+										snapshot={snapshot}
+										busy={busy}
+										onRestore={(windowIndex) =>
+											void restore(snapshot.id, windowIndex)
+										}
+										onSave={(windowIndex) =>
+											void saveAsSession(snapshot.id, windowIndex)
+										}
+										onDelete={() => void remove(snapshot.id)}
+									/>
+								))}
+							</ul>
+						</ScrollArea>
 					)}
 				</DialogBody>
 				<DialogFooter>
@@ -461,49 +468,60 @@ export function TrashDialog({
 						</p>
 					)}
 					{items && items.length > 0 && (
-						<ul className="space-y-2" aria-label="Deleted items">
-							{items.map((item) => (
-								<li
-									key={item.id}
-									className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5"
-								>
-									<div className="min-w-0">
-										<p className="flex min-w-0 items-center gap-2 text-sm font-medium">
-											<span className="truncate">{item.label}</span>
-											<Badge variant="default" className="shrink-0">
-												{KIND_LABELS[item.kind]}
-											</Badge>
-										</p>
-										<p className="truncate text-xs text-muted-foreground">
-											{item.count > 1 ? `${plural(item.count, 'link')} · ` : ''}
-											{item.origin ? `from ${item.origin} · ` : ''}
-											deleted {whenText(item.deletedAt)}
-										</p>
-									</div>
-									<div className="flex gap-1">
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={busy}
-											onClick={() => void restore(item)}
-										>
-											<Undo2 className="h-4 w-4" />
-											Restore
-										</Button>
-										<Button
-											size="icon"
-											variant="ghost"
-											className="h-8 w-8 text-muted-foreground hover:text-destructive"
-											aria-label={`Delete “${item.label}” permanently`}
-											disabled={busy}
-											onClick={() => void remove(item)}
-										>
-											<Trash2 className="h-4 w-4" />
-										</Button>
-									</div>
-								</li>
-							))}
-						</ul>
+						// Only the list scrolls, so the title and the buttons stay in view however long it gets.
+						<ScrollArea
+							type="auto"
+							className="-mx-2"
+							viewportClassName="max-h-[min(32rem,calc(100dvh-19rem))] px-2"
+						>
+							<ul className="space-y-2 py-0.5" aria-label="Deleted items">
+								{items.map((item) => (
+									<li
+										key={item.id}
+										className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5"
+									>
+										<div className="min-w-0 flex-1">
+											<p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+												<span className="min-w-0 truncate" title={item.label}>
+													{item.label}
+												</span>
+												<Badge variant="default" className="shrink-0">
+													{KIND_LABELS[item.kind]}
+												</Badge>
+											</p>
+											<p className="truncate text-xs text-muted-foreground">
+												{item.count > 1
+													? `${plural(item.count, 'link')} · `
+													: ''}
+												{item.origin ? `from ${item.origin} · ` : ''}
+												deleted {whenText(item.deletedAt)}
+											</p>
+										</div>
+										<div className="flex shrink-0 gap-1">
+											<Button
+												size="sm"
+												variant="outline"
+												disabled={busy}
+												onClick={() => void restore(item)}
+											>
+												<Undo2 className="h-4 w-4" />
+												Restore
+											</Button>
+											<Button
+												size="icon"
+												variant="ghost"
+												className="h-8 w-8 text-muted-foreground hover:text-destructive"
+												aria-label={`Delete “${item.label}” permanently`}
+												disabled={busy}
+												onClick={() => void remove(item)}
+											>
+												<Trash2 className="h-4 w-4" />
+											</Button>
+										</div>
+									</li>
+								))}
+							</ul>
+						</ScrollArea>
 					)}
 				</DialogBody>
 				<DialogFooter>
