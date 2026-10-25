@@ -60,6 +60,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 	ExpandingSearch,
 	Input,
@@ -114,6 +115,7 @@ import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {IconNameField} from './icon-picker';
 import {FINDER_EVENT, type FinderEventDetail} from './finder';
+import {emitRecoveryEvent, offerTrashUndo} from './recovery';
 import {openLink, resolveLinkTarget} from './link-target';
 
 /**
@@ -593,6 +595,13 @@ export function SessionManager({
 				`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'} · ${result.failed} failed${result.failures?.[0] ? ` · ${restoreFailureText(result.failures[0])}` : ''}.`,
 				true,
 			);
+		} else if (result.trashId) {
+			offerTrashUndo(
+				`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'} and removed ${result.count === 1 ? 'it' : 'them'} from the session.`,
+				result.trashId,
+				showStatus,
+				reload,
+			);
 		} else if (result.splitsSeparated) {
 			showStatus(
 				`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'} · ${splitNote(result.splitsSeparated)}.`,
@@ -627,6 +636,13 @@ export function SessionManager({
 				restoreFailureText(result.failures?.[0]) ||
 					'This tab could not be restored.',
 				true,
+			);
+		} else if (result.trashId) {
+			offerTrashUndo(
+				'Restored the tab and removed it from the session.',
+				result.trashId,
+				showStatus,
+				reload,
 			);
 		}
 
@@ -721,7 +737,7 @@ export function SessionManager({
 	function deleteGroup(group: Session, closeEditor = false) {
 		askConfirmation({
 			title: 'Delete session?',
-			description: `This removes the session and its ${group.tabs.length} saved ${group.tabs.length === 1 ? 'link' : 'links'}. Open tabs stay open.`,
+			description: `This removes the session and its ${group.tabs.length} saved ${group.tabs.length === 1 ? 'link' : 'links'}. Open tabs stay open. You can undo it right after, or restore it from the trash.`,
 			detail: group.name,
 			confirmLabel: 'Delete session',
 			async run() {
@@ -736,6 +752,12 @@ export function SessionManager({
 				}
 
 				await reload();
+				offerTrashUndo(
+					`Session “${group.name}” deleted.`,
+					result.trashId,
+					showStatus,
+					reload,
+				);
 			},
 		});
 	}
@@ -756,6 +778,7 @@ export function SessionManager({
 				}
 
 				await reload();
+				offerTrashUndo('Link removed.', result.trashId, showStatus, reload);
 			},
 		});
 	}
@@ -823,6 +846,12 @@ export function SessionManager({
 		position?: InsertPosition,
 		copy = false,
 	) {
+		// Where the link sat, so Undo can put it back next to the same neighbor.
+		const sourceTabs = groups.find((group) => group.id === fromGroupId)?.tabs;
+		const sourceIndex = sourceTabs?.findIndex((tab) => tab.id === tabId) ?? -1;
+		const nextSibling = sourceTabs?.[sourceIndex + 1];
+		const previousSibling = sourceTabs?.[sourceIndex - 1];
+		const targetName = groups.find((group) => group.id === toGroupId)?.name;
 		const result = await send('MOVE_TAB', {
 			fromGroupId,
 			tabId,
@@ -833,6 +862,30 @@ export function SessionManager({
 		});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not move this link.', true);
+		} else if (!copy && fromGroupId !== toGroupId && sourceIndex !== -1) {
+			showStatus(
+				`Moved the link to “${targetName ?? 'another session'}”.`,
+				false,
+				{
+					action: {
+						label: 'Undo',
+						async onClick() {
+							const undone = await send('MOVE_TAB', {
+								fromGroupId: toGroupId,
+								tabId,
+								toGroupId: fromGroupId,
+								targetTabId: nextSibling?.id ?? previousSibling?.id ?? null,
+								position: nextSibling ? 'before' : 'after',
+							});
+							if (!undone?.ok) {
+								showStatus(undone?.error || 'Could not undo that move.', true);
+							}
+
+							await reload();
+						},
+					},
+				},
+			);
 		}
 
 		await reload();
@@ -1058,6 +1111,12 @@ export function SessionManager({
 
 				setFolderId(ALL);
 				await reload();
+				offerTrashUndo(
+					`Folder “${folder.name}” deleted.`,
+					result.trashId,
+					showStatus,
+					reload,
+				);
 			},
 		});
 	}
@@ -1199,6 +1258,19 @@ export function SessionManager({
 									<DropdownMenuItem onSelect={() => openBackup('sessions')}>
 										<Download className="h-4 w-4" />
 										Back up sessions…
+									</DropdownMenuItem>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										onSelect={() => emitRecoveryEvent({type: 'snapshots'})}
+									>
+										<History className="h-4 w-4" />
+										Recent snapshots…
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										onSelect={() => emitRecoveryEvent({type: 'trash'})}
+									>
+										<Trash2 className="h-4 w-4" />
+										Trash…
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>

@@ -21,6 +21,7 @@ import {
 	Settings as SettingsIcon,
 	SunMoon,
 	HardDriveDownload,
+	History,
 	MoreHorizontal,
 	Pencil,
 	Plus,
@@ -79,6 +80,14 @@ import {
 	type FinderAction,
 } from './finder';
 import {BackupDialog, ImportDialog, useShareDialog} from './data-transfer';
+import {
+	RecoveryBanner,
+	SnapshotsDialog,
+	TrashDialog,
+	emitRecoveryEvent,
+	offerTrashUndo,
+	useRecoveryEvents,
+} from './recovery';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
 import {IconNameField} from './icon-picker';
 import {openLink} from './link-target';
@@ -268,6 +277,11 @@ function NewTab() {
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
 	const [finderOpen, setFinderOpen] = useState(false);
+	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+	const [trashOpen, setTrashOpen] = useState(false);
+	useRecoveryEvents((type) =>
+		type === 'snapshots' ? setSnapshotsOpen(true) : setTrashOpen(true),
+	);
 	const autoOpenedFinderRef = useRef(false);
 	const {setTheme} = useTheme();
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
@@ -403,6 +417,36 @@ function NewTab() {
 		}
 
 		await reload();
+		// With "Close tabs after saving" the window just lost its tabs: Undo reopens them from the new session.
+		if (
+			settings.closeOnSave === false ||
+			!result.groupId ||
+			result.count === 0
+		) {
+			return;
+		}
+
+		const {groupId} = result;
+		showStatus(`Saved ${plural(result.count, 'tab')} and closed them.`, false, {
+			action: {
+				label: 'Undo',
+				async onClick() {
+					const reopened = await send('RESTORE_GROUP', {
+						groupId,
+						restoreTarget: 'current-window',
+						restoreMode: 'keep',
+						activate: false,
+					});
+					showStatus(
+						reopened?.ok
+							? `Reopened ${plural(reopened.count, 'tab')}.`
+							: reopened?.error || 'Could not reopen the tabs.',
+						!reopened?.ok,
+						{toast: true},
+					);
+				},
+			},
+		});
 	}
 
 	function openBookmarkEditor(
@@ -537,6 +581,12 @@ function NewTab() {
 
 		setColumnDeletionOpen(false);
 		await reload();
+		offerTrashUndo(
+			`Column “${column.name}” deleted.`,
+			result.trashId,
+			showStatus,
+			reload,
+		);
 	}
 
 	function askConfirmation(details: ConfirmationRequest) {
@@ -747,7 +797,8 @@ function NewTab() {
 	function deleteBookmark(bookmark: Bookmark, closeEditor = false) {
 		askConfirmation({
 			title: 'Delete bookmark?',
-			description: 'This removes the bookmark. It can’t be undone.',
+			description:
+				'This removes the bookmark. You can undo it right after, or restore it from the trash.',
 			detail: bookmark.title || bookmark.url,
 			confirmLabel: 'Delete bookmark',
 			async run() {
@@ -764,6 +815,7 @@ function NewTab() {
 				}
 
 				await reload();
+				offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
 			},
 		});
 	}
@@ -1101,6 +1153,20 @@ function NewTab() {
 		}
 
 		list.push(
+			{
+				id: 'recent-snapshots',
+				title: 'Recent snapshots…',
+				keywords: ['crash', 'recover', 'restore session', 'history', 'windows'],
+				icon: History,
+				run: () => emitRecoveryEvent({type: 'snapshots'}),
+			},
+			{
+				id: 'open-trash',
+				title: 'Trash…',
+				keywords: ['deleted', 'undo', 'restore', 'bin', 'recover'],
+				icon: Trash2,
+				run: () => emitRecoveryEvent({type: 'trash'}),
+			},
 			{
 				id: 'toggle-theme',
 				title: 'Toggle light/dark theme',
@@ -1453,6 +1519,10 @@ function NewTab() {
 				onOpenChange={setFinderOpen}
 			/>
 
+			<RecoveryBanner
+				showStatus={showStatus}
+				onReview={() => setSnapshotsOpen(true)}
+			/>
 			{sessionsOnTop ? sessionsSection : bookmarksSection}
 			{bothVisible && <hr className="my-8 border-border" aria-hidden="true" />}
 			{sessionsOnTop ? bookmarksSection : sessionsSection}
@@ -1484,6 +1554,18 @@ function NewTab() {
 				onConfirm={confirmDeleteColumn}
 			/>
 			{shareDialog}
+			<SnapshotsDialog
+				open={snapshotsOpen}
+				showStatus={showStatus}
+				onOpenChange={setSnapshotsOpen}
+				onSessionsChanged={reload}
+			/>
+			<TrashDialog
+				open={trashOpen}
+				showStatus={showStatus}
+				onOpenChange={setTrashOpen}
+				onChanged={reload}
+			/>
 			<BackupDialog
 				state={state}
 				data={backupData}
