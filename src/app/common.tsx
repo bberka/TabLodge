@@ -33,10 +33,65 @@ type OptionalFields<K extends TabLodgeMessageType> =
 /**
 Sends a typed message to the TabLodge service worker and resolves with its response.
 */
-export const send = <K extends TabLodgeMessageType>(
+export const send = async <K extends TabLodgeMessageType>(
 	type: K,
 	...[fields]: OptionalFields<K>
-): Promise<ActionResult<K>> => chrome.runtime.sendMessage({type, ...fields});
+): Promise<ActionResult<K>> => {
+	try {
+		return await chrome.runtime.sendMessage({type, ...fields});
+	} catch {
+		// The worker is gone (the extension was reloaded or updated while this page stayed open).
+		return {
+			ok: false,
+			error: `${PROJECT.name} was updated. Reload this page.`,
+		};
+	}
+};
+
+/**
+Why a restored link could not be opened: "<title>: <reason>", or '' without a failure.
+*/
+export function restoreFailureText(failure?: {
+	title?: string;
+	url?: string;
+	error?: string;
+}) {
+	return failure ? `${failure.title || failure.url}: ${failure.error}` : '';
+}
+
+/**
+One-line result of a session restore, with partial failures and their first reason spelled out.
+*/
+export function restoreSummary(result: {
+	count: number;
+	skipped?: number;
+	failed?: number;
+	failures?: Array<{title?: string; url?: string; error?: string}>;
+	splitsSeparated?: number;
+}) {
+	const parts = [
+		`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'}`,
+	];
+	if (result.skipped) {
+		parts.push(
+			`skipped ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'}`,
+		);
+	}
+
+	if (result.failed) {
+		parts.push(`${result.failed} failed`);
+		const reason = restoreFailureText(result.failures?.[0]);
+		if (reason) {
+			parts.push(reason);
+		}
+	}
+
+	if (result.splitsSeparated) {
+		parts.push(splitNote(result.splitsSeparated));
+	}
+
+	return `${parts.join(' · ')}.`;
+}
 
 /**
 Soft restore note for saved split views the browser would not recreate (the tabs still opened).

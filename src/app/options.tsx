@@ -211,6 +211,7 @@ const settingsGroups: Array<{
 				label: 'Focus search when opening a new tab',
 				help: 'Opens the search palette whenever a new tab opens. Chromium may keep focus in the address bar until you click the page.',
 				type: 'switch',
+				requires: 'newTabEnabled',
 			},
 			{
 				name: 'keepLodgePinned',
@@ -233,6 +234,7 @@ const settingsGroups: Array<{
 					['dashboard', `Open the ${PROJECT.name} page`],
 					['last-session', 'Restore the newest session'],
 				],
+				requires: 'openDashboardOnStartup',
 			},
 			{
 				name: 'actionMode',
@@ -944,9 +946,12 @@ function Options() {
 		setExcluded(result.settings?.excludedOrigins || [...excluded, ...entries]);
 		setSiteDialog(false);
 		showStatus(
-			bulkMode
-				? `Excluded ${plural(result.added, 'website')}.`
-				: 'Website exclusion added.',
+			result.notAdded > 0
+				? `Excluded ${plural(result.added, 'website')}. ${plural(result.notAdded, 'website')} did not fit: the list is full.`
+				: bulkMode
+					? `Excluded ${plural(result.added, 'website')}.`
+					: 'Website exclusion added.',
+			result.notAdded > 0,
 		);
 	}
 
