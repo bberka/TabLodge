@@ -1636,31 +1636,26 @@ function NewTab() {
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							<div className="flex items-end gap-3">
-								<div className="min-w-0 flex-1 space-y-1.5">
-									<Label htmlFor="column-name">Column name</Label>
-									<Input
-										required
-										autoFocus
-										id="column-name"
-										maxLength={60}
-										value={columnEdit?.name || ''}
-										onChange={(e) =>
-											setColumnEdit(
-												(old) => old && {...old, name: e.target.value},
-											)
-										}
-									/>
-								</div>
-								<IconPickerField
-									id="column-icon"
-									value={columnEdit?.icon}
-									defaultIcon={DEFAULT_COLUMN_ICON}
-									onChange={(icon) =>
-										setColumnEdit((old) => old && {...old, icon})
-									}
-								/>
-							</div>
+							<IconNameField
+								id="column-name"
+								label="Name"
+								nameLabel="Column name"
+								icon={columnEdit?.icon}
+								defaultIcon={DEFAULT_COLUMN_ICON}
+								inputProps={{
+									required: true,
+									autoFocus: true,
+									maxLength: 60,
+									value: columnEdit?.name || '',
+									onChange: (e) =>
+										setColumnEdit(
+											(old) => old && {...old, name: e.target.value},
+										),
+								}}
+								onIconChange={(icon) =>
+									setColumnEdit((old) => old && {...old, icon})
+								}
+							/>
 						</DialogBody>
 						<DialogFooter>
 							<Button

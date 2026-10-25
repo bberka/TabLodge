@@ -109,7 +109,8 @@ import type {
 } from './types';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
-import {IconPickerField} from './icon-picker';
+import {IconNameField} from './icon-picker';
+import {FINDER_EVENT, type FinderEventDetail} from './finder';
 import {openLink, resolveLinkTarget} from './link-target';
 
 /**
@@ -1707,29 +1708,25 @@ export function SessionManager({
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							<div className="flex items-end gap-3">
-								<div className="min-w-0 flex-1 space-y-1.5">
-									<Label htmlFor="folder-name">Folder name</Label>
-									<Input
-										required
-										autoFocus
-										id="folder-name"
-										name="name"
-										maxLength={60}
-										defaultValue={folderDialog?.folder?.name || ''}
-									/>
-								</div>
-								<IconPickerField
-									id="folder-icon"
-									value={folderDialog?.icon}
-									defaultIcon={DEFAULT_FOLDER_ICON}
-									onChange={(icon) =>
-										setDialog((old) =>
-											typeof old === 'object' && old ? {...old, icon} : old,
-										)
-									}
-								/>
-							</div>
+							<IconNameField
+								id="folder-name"
+								label="Name"
+								nameLabel="Folder name"
+								icon={folderDialog?.icon}
+								defaultIcon={DEFAULT_FOLDER_ICON}
+								inputProps={{
+									required: true,
+									autoFocus: true,
+									name: 'name',
+									maxLength: 60,
+									defaultValue: folderDialog?.folder?.name || '',
+								}}
+								onIconChange={(icon) =>
+									setDialog((old) =>
+										typeof old === 'object' && old ? {...old, icon} : old,
+									)
+								}
+							/>
 						</DialogBody>
 						<DialogFooter>
 							<Button
