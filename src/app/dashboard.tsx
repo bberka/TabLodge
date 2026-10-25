@@ -23,7 +23,6 @@ import {
 	Merge,
 	History,
 	LayoutGrid,
-	LayoutList,
 	MoreHorizontal,
 	MoreVertical,
 	PanelTop,
@@ -163,7 +162,7 @@ Highlight id for the New folder button while a session is dragged over it.
 const NEW_FOLDER_DROP = 'new-folder';
 const WIDE_PAGE = '(min-width: 768px)';
 /**
-Tailwind's md breakpoint, tracked so the grid layout knows whether it shows two columns.
+Tailwind's md breakpoint, tracked so collapsed cards know whether there is room for their preview icons.
 */
 function useWidePage() {
 	const [wide, setWide] = useState(
@@ -291,10 +290,8 @@ export function SessionManager({
 	const groups = state?.groups || NO_SESSIONS;
 	const folders = state?.folders || NO_FOLDERS;
 	const settings: Partial<Settings> = state?.settings || NO_SETTINGS;
-	const grid = settings.sessionLayout === 'grid';
-	// The grid collapses to one column on narrow pages; drop positions follow what is on screen.
+	// Collapsed cards show a row of preview icons only on wide pages.
 	const wide = useWidePage();
-	const sideBySide = grid && wide;
 	const folderDialog = typeof dialog === 'object' ? dialog : null;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
 	const expandAll = settings.expandSessionsByDefault === true;
@@ -946,12 +943,7 @@ export function SessionManager({
 			dragStore.set({dragging: null, mark: null});
 		},
 		over(group: Session, event: DragEvent<HTMLElement>) {
-			const mark = resolveDropMark(
-				group,
-				event,
-				dragItemRef.current,
-				sideBySide,
-			);
+			const mark = resolveDropMark(group, event, dragItemRef.current);
 			if (!mark) {
 				return;
 			}
@@ -973,7 +965,7 @@ export function SessionManager({
 		},
 		drop(group: Session, event: DragEvent<HTMLElement>) {
 			const item = dragItemRef.current;
-			const mark = resolveDropMark(group, event, item, sideBySide);
+			const mark = resolveDropMark(group, event, item);
 			if (!item || !mark) {
 				return;
 			}
@@ -1051,21 +1043,6 @@ export function SessionManager({
 		});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save the sort preference.', true);
-		}
-	}
-
-	async function changeLayout(layout: 'list' | 'grid') {
-		if ((settings.sessionLayout ?? 'list') === layout) {
-			return;
-		}
-
-		const result = await send('UPDATE_SETTINGS', {
-			settings: {sessionLayout: layout},
-		});
-		if (result?.ok) {
-			await reload();
-		} else {
-			showStatus(result?.error || 'Could not save the layout.', true);
 		}
 	}
 
@@ -1335,38 +1312,6 @@ export function SessionManager({
 												{label}
 											</DropdownMenuRadioItem>
 										))}
-									</DropdownMenuRadioGroup>
-								</DropdownMenuContent>
-							</DropdownMenu>
-							<DropdownMenu>
-								<IconTooltip label="Session layout">
-									<DropdownMenuTrigger asChild>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-8 w-8"
-											aria-label="Session layout"
-										>
-											{grid ? <LayoutGrid /> : <LayoutList />}
-										</Button>
-									</DropdownMenuTrigger>
-								</IconTooltip>
-								<DropdownMenuContent align="end">
-									<DropdownMenuLabel>Layout</DropdownMenuLabel>
-									<DropdownMenuRadioGroup
-										value={grid ? 'grid' : 'list'}
-										onValueChange={(value) =>
-											void changeLayout(value as 'list' | 'grid')
-										}
-									>
-										<DropdownMenuRadioItem value="list">
-											<LayoutList className="mr-2 h-4 w-4" />
-											List
-										</DropdownMenuRadioItem>
-										<DropdownMenuRadioItem value="grid">
-											<LayoutGrid className="mr-2 h-4 w-4" />
-											Grid
-										</DropdownMenuRadioItem>
 									</DropdownMenuRadioGroup>
 								</DropdownMenuContent>
 							</DropdownMenu>
@@ -1667,21 +1612,13 @@ export function SessionManager({
 								: 'This folder is empty. Save a session or move one here from its details.'}
 						</EmptyState>
 					) : (
-						<div
-							className={
-								grid
-									? 'grid grid-cols-1 items-stretch gap-2 md:grid-cols-2'
-									: 'space-y-2'
-							}
-						>
+						<div className="space-y-2">
 							{renderedGroups.map((group) => (
 								<GroupCard
 									key={group.id}
 									group={group}
 									folderName={folderNames.get(group.folderId)}
 									settings={settings}
-									grid={grid}
-									sideBySide={sideBySide}
 									wide={wide}
 									isExpanded={isOpen(group.id)}
 									selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
@@ -2134,7 +2071,6 @@ function resolveDropMark(
 	group: Session,
 	event: DragEvent<HTMLElement>,
 	item: DragItem | null,
-	sideBySide: boolean,
 ): DropMark | null {
 	if (!item) {
 		return null;
@@ -2146,10 +2082,7 @@ function resolveDropMark(
 		}
 
 		const rect = event.currentTarget.getBoundingClientRect();
-		// Cards sit side by side in the grid layout, so their order runs left to right.
-		const before = sideBySide
-			? event.clientX < rect.left + rect.width / 2
-			: event.clientY < rect.top + rect.height / 2;
+		const before = event.clientY < rect.top + rect.height / 2;
 		return {
 			kind: 'session',
 			groupId: group.id,
@@ -2187,14 +2120,6 @@ type GroupCardProps = {
 	folderName?: string;
 	settings: Partial<Settings>;
 	/**
-	Two-column grid layout: the card fills its cell and drops are marked left or right.
-	*/
-	grid: boolean;
-	/**
-	The grid currently shows two columns, so session drops are marked left or right.
-	*/
-	sideBySide: boolean;
-	/**
 	The page is wide enough for the row of preview icons on a collapsed card.
 	*/
 	wide: boolean;
@@ -2213,8 +2138,6 @@ const GroupCard = memo(
 		group,
 		folderName,
 		settings,
-		grid,
-		sideBySide,
 		wide,
 		isExpanded,
 		selectedTabs,
@@ -2349,20 +2272,16 @@ const GroupCard = memo(
 			},
 		];
 		return (
-			<div className={grid ? 'relative flex min-w-0' : 'relative'}>
+			<div className="relative">
 				{mark?.kind === 'session' && (
 					<DropIndicator
-						orientation={sideBySide ? 'vertical' : 'horizontal'}
-						className={
-							sideBySide
-								? `inset-y-0 ${mark.position === 'before' ? '-left-[5px]' : '-right-[5px]'}`
-								: `inset-x-0 ${mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]'}`
-						}
+						orientation="horizontal"
+						className={`inset-x-0 ${mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]'}`}
 					/>
 				)}
 				<article
 					id={`session-${group.id}`}
-					className={`tn-card-lazy group/session overflow-hidden rounded-xl border ${grid ? 'w-full min-w-0' : ''} bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
+					className={`tn-card-lazy group/session overflow-hidden rounded-xl border bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
 					aria-label={`Session ${name}`}
 					onDragOver={(event) => handlers.dragOver(group, event)}
 					onDragLeave={handlers.dragLeave}
@@ -2453,7 +2372,7 @@ const GroupCard = memo(
 									)}
 								</span>
 							</button>
-							{!isExpanded && !grid && wide && (
+							{!isExpanded && wide && (
 								<span
 									className="hidden shrink-0 items-center -space-x-1.5 md:flex"
 									aria-hidden="true"
@@ -2474,9 +2393,7 @@ const GroupCard = memo(
 								</span>
 							)}
 							<div className="flex shrink-0 items-center gap-0.5">
-								<span
-									className={`items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 ${grid ? 'hidden' : 'flex'}`}
-								>
+								<span className="items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 flex">
 									<IconTooltip label="Delete session">
 										<Button
 											variant="ghost"
