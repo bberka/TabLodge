@@ -1969,7 +1969,7 @@ async function saveTabs(
 }
 
 const NAME_PROMPT_WIDTH = 440;
-const NAME_PROMPT_HEIGHT = 230;
+const NAME_PROMPT_HEIGHT = 280;
 
 /**
 Opens the small "Name this session" window for sessions that were just saved with the fallback name.
