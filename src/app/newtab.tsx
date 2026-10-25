@@ -65,9 +65,11 @@ import {
 	AppHeader,
 	EmptyState,
 	StatusLine,
+	saveWindowLabel,
 	send,
 	useStatus,
 	useTabLodgeState,
+	useTabSelection,
 } from './common';
 import {SessionManager} from './dashboard';
 import {
@@ -259,6 +261,7 @@ function NewTab() {
 	const newTabOn = settings.newTabEnabled !== false;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
 	const bookmarksEnabled = settings.bookmarksEnabled !== false;
+	const tabSelection = useTabSelection(settings.includePinnedTabs === true);
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const urlMode = settings.urlDisplayMode ?? 'full';
@@ -417,7 +420,7 @@ function NewTab() {
 
 	async function saveWindow() {
 		setBusy('save-window');
-		const result = await send('SAVE_TABS', {scope: 'window'});
+		const result = await send('SAVE_TABS', {scope: 'selected-or-window'});
 		setBusy('');
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save this window.', true);
@@ -1051,7 +1054,7 @@ function NewTab() {
 		if (sessionsVisible) {
 			list.push({
 				id: 'save-window',
-				title: 'Save this window',
+				title: saveWindowLabel(tabSelection),
 				keywords: ['session', 'tabs', 'store'],
 				icon: PanelsTopLeft,
 				run: () => h().saveWindow(),
@@ -1155,7 +1158,7 @@ function NewTab() {
 			},
 		);
 		return list;
-	}, [sessionsVisible, bookmarksEnabled]);
+	}, [sessionsVisible, bookmarksEnabled, tabSelection]);
 
 	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder .
 	useEffect(() => {
@@ -1466,12 +1469,14 @@ function NewTab() {
 					<Button
 						size="sm"
 						disabled={busy !== ''}
-						aria-label="Save this window"
+						aria-label={saveWindowLabel(tabSelection)}
 						onClick={saveWindow}
 					>
 						<PanelsTopLeft />
 						<span className="hidden sm:inline">
-							{busy === 'save-window' ? 'Saving' : 'Save this window'}
+							{busy === 'save-window'
+								? 'Saving'
+								: saveWindowLabel(tabSelection)}
 						</span>
 					</Button>
 				)}

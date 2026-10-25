@@ -31,6 +31,74 @@ type OptionalFields<K extends TabLodgeMessageType> =
 		: [fields: TabLodgeMessages[K]];
 
 /**
+Ctrl/Shift-click selection in this window's tab strip, matching how the service worker's "selected-or-window"
+save reads it: a selection is more than one tab-strip slot (both halves of a split view are one slot). `count` is
+the selected web tabs that would be saved (pinned ones only when `includePinned`). Updates live.
+*/
+export function useTabSelection(includePinned: boolean) {
+	const [selection, setSelection] = useState({selected: false, count: 0});
+	useEffect(() => {
+		if (!chrome.tabs?.query) {
+			return;
+		}
+
+		let alive = true;
+		const slot = (tab: chrome.tabs.Tab) => {
+			const split = (tab as {splitViewId?: number}).splitViewId ?? -1;
+			return split >= 0 ? `split:${split}` : `tab:${tab.id}`;
+		};
+
+		const read = async () => {
+			try {
+				const tabs = await chrome.tabs.query({
+					currentWindow: true,
+					highlighted: true,
+				});
+				const selected = new Set(tabs.map((tab) => slot(tab))).size > 1;
+				const count = new Set(
+					tabs
+						.filter(
+							(tab) =>
+								/^https?:\/\//i.test(tab.url || '') &&
+								(includePinned || !tab.pinned),
+						)
+						.map((tab) => slot(tab)),
+				).size;
+				if (alive) {
+					setSelection({selected, count});
+				}
+			} catch {
+				// Without a readable selection the button keeps saving the whole window.
+			}
+		};
+
+		void read();
+		const onChange = () => void read();
+		chrome.tabs.onHighlighted.addListener(onChange);
+		chrome.tabs.onRemoved.addListener(onChange);
+		chrome.tabs.onAttached?.addListener(onChange);
+		chrome.tabs.onDetached?.addListener(onChange);
+		return () => {
+			alive = false;
+			chrome.tabs.onHighlighted.removeListener(onChange);
+			chrome.tabs.onRemoved.removeListener(onChange);
+			chrome.tabs.onAttached?.removeListener(onChange);
+			chrome.tabs.onDetached?.removeListener(onChange);
+		};
+	}, [includePinned]);
+	return selection;
+}
+
+/**
+"Save this window", or "Save 3 selected tabs" while tabs are selected in the tab strip.
+*/
+export function saveWindowLabel(selection: {selected: boolean; count: number}) {
+	return selection.selected
+		? `Save ${selection.count} selected ${selection.count === 1 ? 'tab' : 'tabs'}`
+		: 'Save this window';
+}
+
+/**
 Sends a typed message to the TabLodge service worker and resolves with its response.
 */
 export const send = <K extends TabLodgeMessageType>(

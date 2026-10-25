@@ -48,10 +48,12 @@ import {ThemeProvider} from '../shared/theme';
 import {
 	StatusLine,
 	TabLodgeMark,
+	saveWindowLabel,
 	send,
 	splitNote,
 	useStatus,
 	useTabLodgeState,
+	useTabSelection,
 } from './common';
 import type {SaveScope, Session} from './types';
 import {PROJECT} from './project';
@@ -89,6 +91,9 @@ function Popup() {
 	const bookmarksEnabled = state?.settings?.bookmarksEnabled !== false;
 	const includePinnedTabs =
 		state?.settings?.includePinnedTabs === true || allowPinnedOnce;
+	const tabSelection = useTabSelection(
+		state?.settings?.includePinnedTabs === true,
+	);
 	const recentSessions = useMemo(
 		() =>
 			groups
@@ -429,9 +434,15 @@ function Popup() {
 									<PanelsTopLeft className="h-4 w-4" />
 								)}
 								<span className="flex flex-col items-start gap-0.5 leading-tight">
-									<strong className="font-semibold">Save current window</strong>
+									<strong className="font-semibold">
+										{tabSelection.selected
+											? saveWindowLabel(tabSelection)
+											: 'Save current window'}
+									</strong>
 									<small className="text-xs font-normal opacity-80">
-										Selected tabs, or the whole window
+										{tabSelection.selected
+											? 'Only the tabs selected in the tab strip'
+											: 'All tabs in this window'}
 									</small>
 								</span>
 							</Button>
