@@ -31,7 +31,7 @@ type TabLodgeMessages = import('../src/app/types').TabLodgeMessages;
 type TitlePolicy = import('../src/app/types').TitlePolicy;
 
 /**
-Untrusted object (stored state, import file, legacy data): every field is checked before use.
+Untrusted object (stored state or import file): every field is checked before use.
 */
 type Raw = Record<string, unknown>;
 /**
@@ -130,7 +130,6 @@ const APP_NAME =
 // Persistent identifiers (storage keys, export formats, menu ids) use the "tablodge" prefix and are
 // independent of the display name: changing one would orphan saved data.
 const STORAGE_KEY = 'tablodge.state';
-const LEGACY_KEY = 'savedTabGroups';
 const SCHEMA_VERSION = 7;
 const DEFAULT_FOLDER_ID = 'unfiled';
 const DEFAULT_FOLDER = Object.freeze<Folder>({
@@ -641,16 +640,13 @@ function normalizeGroup(
 	};
 }
 
-function normalizeSettings(
-	input: RawSettings | null = {},
-	{allowPinned = true} = {},
-): Settings {
+function normalizeSettings(input: RawSettings | null = {}): Settings {
 	// A missing, null or non-object stored value means "no saved preferences": every field falls back to its default.
 	const raw: RawSettings = isRecord(input) ? input : {};
 	const settings: Settings = {
 		...DEFAULT_SETTINGS,
 		closeOnSave: raw.closeOnSave !== false,
-		includePinnedTabs: allowPinned && raw.includePinnedTabs === true,
+		includePinnedTabs: raw.includePinnedTabs === true,
 		openDashboardAfterSave: raw.openDashboardAfterSave === true,
 		openDashboardOnStartup: Boolean(raw.openDashboardOnStartup),
 		startupBehavior:
@@ -686,17 +682,10 @@ function normalizeSettings(
 			raw.restoreTarget,
 		)
 			? raw.restoreTarget
-			: raw.restoreTarget === 'new-window'
-				? 'always-new-window'
-				: 'new-window-unless-only-tab',
+			: 'new-window-unless-only-tab',
 		restoreMode: isOneOf(['keep', 'remove', 'archive'], raw.restoreMode)
 			? raw.restoreMode
-			: raw.removeAfterRestore === true
-				? 'remove'
-				: 'keep',
-		removeAfterRestore: isOneOf(['keep', 'remove', 'archive'], raw.restoreMode)
-			? raw.restoreMode === 'remove'
-			: raw.removeAfterRestore === true,
+			: 'keep',
 		singleTabBehavior: raw.singleTabBehavior === 'switch' ? 'switch' : 'stay',
 		unloadRestoredTabs: Boolean(raw.unloadRestoredTabs),
 		restoreSplitTabs:
@@ -775,7 +764,7 @@ function normalizeExcludedOrigins(raw: unknown): string[] {
 			seen.add(url.origin);
 		} catch {
 			/*
-			Ignore malformed legacy entries.
+			Ignore malformed entries.
 			*/
 		}
 	}
@@ -783,32 +772,17 @@ function normalizeExcludedOrigins(raw: unknown): string[] {
 	return origins;
 }
 
-function normalizeStore(
-	raw: Raw | null | undefined,
-	legacyGroups: unknown = [],
-): Store {
+function normalizeStore(raw: Raw | null | undefined): Store {
 	// NormalizeSettings treats a missing, null or non-object `settings` value as defaults.
 	const settings = normalizeSettings(
 		raw?.settings as RawSettings | null | undefined,
-		{allowPinned: Number(raw?.schemaVersion) >= 5},
 	);
-	const sourceGroups = Array.isArray(raw?.groups)
-		? raw.groups
-		: Array.isArray(legacyGroups)
-			? legacyGroups
-			: [];
+	const sourceGroups = Array.isArray(raw?.groups) ? raw.groups : [];
 	const seenIds = new Set<string>();
-	// Pinned tabs that were deliberately saved (v5+ data) stay stored even if the save preference is later switched off.
-	const keepStoredPinned = Number(raw?.schemaVersion) >= 5;
+	// Pinned tabs that were deliberately saved stay stored even if the save preference is later switched off.
 	const groups = sourceGroups
 		.slice(0, 1000)
-		.map((entry: unknown) =>
-			normalizeGroup(
-				entry,
-				Date.now(),
-				keepStoredPinned || settings.includePinnedTabs,
-			),
-		)
+		.map((entry: unknown) => normalizeGroup(entry, Date.now(), true))
 		.filter((group): group is Session => {
 			if (!group) {
 				return false;
@@ -863,7 +837,7 @@ async function getStore(): Promise<Store> {
 	// Stored values are untrusted; only property reads happen before normalization.
 	const saved = await chrome.storage.local.get<
 		Record<string, Raw | null | undefined>
-	>([STORAGE_KEY, LEGACY_KEY]);
+	>([STORAGE_KEY]);
 	const exists = saved[STORAGE_KEY] && typeof saved[STORAGE_KEY] === 'object';
 	const storedVersion = Number(saved[STORAGE_KEY]?.schemaVersion) || 0;
 	if (exists && storedVersion > SCHEMA_VERSION) {
@@ -872,10 +846,7 @@ async function getStore(): Promise<Store> {
 		);
 	}
 
-	const store = normalizeStore(
-		exists ? saved[STORAGE_KEY] : null,
-		saved[LEGACY_KEY],
-	);
+	const store = normalizeStore(exists ? saved[STORAGE_KEY] : null);
 	if (!exists || saved[STORAGE_KEY]?.schemaVersion !== SCHEMA_VERSION) {
 		await chrome.storage.local.set({[STORAGE_KEY]: store});
 	}
