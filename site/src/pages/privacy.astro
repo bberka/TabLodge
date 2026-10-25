@@ -16,6 +16,8 @@ const permissions = [
 	['clipboardWrite', 'Copying bookmark URLs and session links when you ask.'],
 	['sidePanel', 'The optional bookmark list in the browser\'s Side Panel.'],
 	['search', 'Running a web search with your default engine, only when you choose "Search the web".'],
+	['alarms', 'Scheduling crash-recovery snapshots, automatic backups and trash bin cleanup.'],
+	['downloads (optional)', 'Saving backup copies to your Downloads folder, only if you turn that on; turning it off gives the permission back.'],
 ];
 ---
 
@@ -42,7 +44,7 @@ const permissions = [
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Privacy</span></nav>
 		<h1>Privacy</h1>
-		<p class="note">Last updated: 2026-10-25</p>
+		<p class="note">Last updated: 2026-10-26</p>
 		<p class="lead">
 			TabLodge is built to keep your data on your device. In short: <strong>no data leaves your device, and nothing is collected.</strong>
 		</p>
@@ -61,12 +63,13 @@ const permissions = [
 		<ul>
 			<li><strong>Extension storage</strong> (<code>chrome.storage.local</code>, key <code>tablodge.state</code>): your saved sessions (tab titles, URLs, notes, pinned, tab-group and split-view info), folders, bookmark columns and bookmarks, settings, and excluded websites.</li>
 			<li><strong>Extension storage</strong> (<code>uiTheme</code>) and the extension's <code>localStorage</code> (<code>tablodge.uiTheme</code>): your Light, Dark or System appearance choice, and a copy used to paint each page in the right theme before it loads.</li>
+			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). Snapshots skip private windows and excluded websites.</li>
 		</ul>
 		<p>
 			TabLodge reads tab details (URL, title, pinned state, tab group, window) only when you save a session, check for duplicates or restore. It reads your browser bookmarks only when you explicitly import them. Site icons come from the browser's own local favicon cache.
 		</p>
 		<p>
-			Data stays until you delete it: delete individual items, use <strong>Settings &rsaquo; Data</strong> to erase sessions, bookmarks or both, or remove the extension (the browser then deletes its storage). Exported JSON and HTML files are plain, unencrypted text that you control; keep them private if their URLs, titles or notes are sensitive.
+			Data stays until you delete it: delete individual items, use <strong>Settings &rsaquo; Data</strong> to erase sessions, bookmarks or both, or remove the extension (the browser then deletes its storage). Exported JSON, HTML and full-backup ZIP files are not encrypted and stay under your control; keep them private if their URLs, titles or notes are sensitive.
 		</p>
 		<p>
 			When you restore a session or open a bookmark, your browser loads those web pages as usual, and those sites see a normal visit. TabLodge itself sends nothing to them.
