@@ -467,7 +467,6 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	assert.deepEqual(titles(harness.childrenOf('tablodge-link-bookmark')), [
 		'Bookmarks',
 		'Reading',
-		'Unfiled',
 		'---',
 		'New column',
 	]);
@@ -479,7 +478,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		[
 			'tablodge-link-bookmark:bookmark-default',
 			'tablodge-link-bookmark:column-reading',
-			'tablodge-link-bookmark:bookmark-unfiled',
+			'tablodge-link-bookmark-separator',
 		],
 	);
 
@@ -504,7 +503,6 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-bookmark')), [
 		'Bookmarks',
 		'Reading',
-		'Unfiled',
 		'---',
 		'New column',
 	]);
@@ -664,7 +662,6 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Bookmarks',
 		'Reading',
 		'Recipes',
-		'Unfiled',
 		'---',
 		'New column',
 	]);
@@ -683,7 +680,6 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Bookmarks',
 		'Read later',
 		'Recipes',
-		'Unfiled',
 		'---',
 		'New column',
 	]);
@@ -699,7 +695,6 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Recipes',
 		'Bookmarks',
 		'Read later',
-		'Unfiled',
 		'---',
 		'New column',
 	]);
@@ -712,7 +707,6 @@ test('menus follow column additions, renames, reorders and deletions without dup
 	assert.deepEqual(columnTitles(), [
 		'Recipes',
 		'Bookmarks',
-		'Unfiled',
 		'---',
 		'New column',
 	]);
@@ -738,7 +732,6 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Bookmarks',
 		'One',
 		'Two',
-		'Unfiled',
 		'---',
 		'New column',
 	]);
@@ -772,7 +765,7 @@ test('bookmarking a link into a column uses the link text, falls back to the hos
 		linkText: '  A good story ',
 	});
 	await harness.click({
-		menuItemId: 'tablodge-link-bookmark:bookmark-unfiled',
+		menuItemId: 'tablodge-link-bookmark:bookmark-default',
 		linkUrl: 'https://www.docs.example/guide/intro',
 	});
 	await harness.click({
@@ -795,7 +788,7 @@ test('bookmarking a link into a column uses the link text, falls back to the hos
 			{
 				title: 'docs.example',
 				url: 'https://www.docs.example/guide/intro',
-				columnId: 'bookmark-unfiled',
+				columnId: 'bookmark-default',
 			},
 		],
 	);
