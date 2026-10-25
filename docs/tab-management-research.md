@@ -313,7 +313,7 @@ Legend: ✅ yes · ◐ partial or limited · ❌ no · ? not verified · 💲 pa
 
 **Already strong**
 - Save the current window, selected tabs, the full window with native groups, the active group, the active tab, or all windows. Or send a tab to the first unlocked session. Available from the popup, the toolbar action, context menus, and two shortcuts plus "open dashboard".
-- Restore one tab or a whole session. Destination policies, per-session override, keep/remove/archive modes, modifier-click overrides, locked sessions, per-tab failure reporting, and removal only of tabs that opened. Optional background unloading.
+- Restore one tab or a whole session. Destination policies, keep/remove/archive modes, modifier-click overrides, locked sessions, per-tab failure reporting, and removal only of tabs that opened. Optional background unloading.
 - Folders, search and sort (including custom order), notes, rename and edit, reorder, move, archive, lock, and multi-select export and share (local HTML).
 - Pinned-tab opt-in with a safety re-check before closing. Native tab-group metadata. Split-view pairing model (`SplitInfo`) and restore via `chrome.tabs.createSplit` with a fallback to separate tabs.
 - Duplicate policies at save, restore and import time. Excluded sites. Copy formats (Markdown, rich text, title/URL variants).

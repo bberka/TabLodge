@@ -95,7 +95,6 @@ import type {
 	Folder,
 	InsertPosition,
 	RestoreMode,
-	RestoreTarget,
 	SavedTab as SavedTabRecord,
 	Session,
 	SessionFields,
@@ -871,11 +870,6 @@ export function SessionManager({
 			description: String(form.get('description') || ''),
 			notes: String(form.get('notes') || ''),
 			folderId: String(form.get('folderId') || 'unfiled'),
-			restoreTarget:
-				form.get('restoreTarget') === 'default'
-					? null
-					: ((String(form.get('restoreTarget') || '') ||
-							null) as RestoreTarget | null),
 		};
 		const result = await send('UPDATE_GROUP', {
 			groupId: editingGroup.id,
@@ -1453,7 +1447,7 @@ export function SessionManager({
 						<DialogHeader>
 							<DialogTitle>Session details</DialogTitle>
 							<DialogDescription>
-								Update this session’s name, notes, folder, and restore location.
+								Update this session’s name, notes, and folder.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
@@ -1499,50 +1493,23 @@ export function SessionManager({
 									defaultValue={editingGroup?.notes || ''}
 								/>
 							</div>
-							<div className="grid gap-4 sm:grid-cols-2">
-								<div className="min-w-0 space-y-1.5">
-									<Label htmlFor="group-folder">Folder</Label>
-									<Select
-										name="folderId"
-										defaultValue={editingGroup?.folderId || 'unfiled'}
-									>
-										<SelectTrigger id="group-folder">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{folders.map((folder) => (
-												<SelectItem key={folder.id} value={folder.id}>
-													{folder.name}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-								<div className="min-w-0 space-y-1.5">
-									<Label htmlFor="group-restore-target">Restore location</Label>
-									<Select
-										name="restoreTarget"
-										defaultValue={editingGroup?.restoreTarget || 'default'}
-									>
-										<SelectTrigger id="group-restore-target">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="default">
-												Use Settings default
+							<div className="min-w-0 space-y-1.5">
+								<Label htmlFor="group-folder">Folder</Label>
+								<Select
+									name="folderId"
+									defaultValue={editingGroup?.folderId || 'unfiled'}
+								>
+									<SelectTrigger id="group-folder">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{folders.map((folder) => (
+											<SelectItem key={folder.id} value={folder.id}>
+												{folder.name}
 											</SelectItem>
-											<SelectItem value="current-window">
-												Current window
-											</SelectItem>
-											<SelectItem value="new-window-unless-only-tab">
-												New window unless only tab
-											</SelectItem>
-											<SelectItem value="always-new-window">
-												Always a new window
-											</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 						</DialogBody>
 						<DialogFooter className="justify-between">

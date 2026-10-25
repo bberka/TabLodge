@@ -4043,3 +4043,45 @@ test('folder icons survive a session import and are validated on load', async ()
 		'rocket',
 	);
 });
+
+test('a legacy per-session restoreTarget is stripped and sessions follow the Settings restore target', async () => {
+	const state = stateWithSession({restoreTarget: 'always-new-window'});
+	(state.groups[0] as Record<string, unknown>).restoreTarget = 'current-window';
+	const harness = createWorkerHarness(state);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal('restoreTarget' in loaded.groups[0], false);
+
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.createdWindows.length, 1);
+});
+
+test('UPDATE_GROUP and imports ignore a restoreTarget field on sessions', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const updated = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {name: 'Renamed', restoreTarget: 'always-new-window'} as never,
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal('restoreTarget' in updated.group, false);
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: {
+			groups: [
+				{
+					name: 'Imported',
+					restoreTarget: 'always-new-window',
+					tabs: [{url: 'https://imported.example/', title: 'Imported'}],
+				},
+			],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	for (const group of harness.state.groups) {
+		assert.equal('restoreTarget' in group, false);
+	}
+});
