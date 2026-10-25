@@ -194,7 +194,6 @@ export type SavedTab = {
 	id: string;
 	title: string;
 	url: string;
-	faviconUrl: string;
 	notes: string;
 	archived: boolean;
 	pinned: boolean;

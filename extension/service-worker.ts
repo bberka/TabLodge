@@ -392,10 +392,6 @@ function normalizeUrl(value: unknown): string | null {
 	}
 }
 
-function normalizeFavicon(value: unknown) {
-	return typeof value === 'string' ? value.slice(0, 4096) : '';
-}
-
 function normalizeNativeGroup(
 	value: unknown,
 	fallbackKey: unknown = '',
@@ -432,7 +428,6 @@ function normalizeTab(
 		id: cleanText(raw.id, makeId(), 100),
 		title: cleanText(raw.title ?? raw.name, url, 500),
 		url,
-		faviconUrl: normalizeFavicon(raw.faviconUrl ?? raw.favIconUrl),
 		notes: normalizeNotes(raw.notes),
 		archived: raw.archived === true,
 		pinned: Boolean(raw.pinned),
@@ -1122,12 +1117,49 @@ async function getStore(): Promise<Store> {
 		);
 	}
 
-	const store = normalizeStore(exists ? saved[STORAGE_KEY] : null);
-	if (!exists || saved[STORAGE_KEY]?.schemaVersion !== SCHEMA_VERSION) {
-		await chrome.storage.local.set({[STORAGE_KEY]: store});
+	if (exists && saved[STORAGE_KEY]?.schemaVersion === SCHEMA_VERSION) {
+		// Already current: a later mutation has nothing to migrate.
+		migrationChecked = true;
 	}
 
-	return store;
+	// Read paths never write: the schema migration is persisted once, inside `mutate` (see migrateStoreOnce).
+	return normalizeStore(exists ? saved[STORAGE_KEY] : null);
+}
+
+let migrationChecked = false;
+/**
+Writes the normalized store back once per worker run when it is missing or saved by an older schema.
+Runs inside the mutation queue, so it can never race a mutation or a concurrent read-only caller.
+*/
+async function migrateStoreOnce() {
+	if (migrationChecked) {
+		return;
+	}
+
+	try {
+		const saved = await chrome.storage.local.get<
+			Record<string, Raw | null | undefined>
+		>([STORAGE_KEY]);
+		const raw = saved[STORAGE_KEY];
+		const exists = raw && typeof raw === 'object';
+		if (exists && (Number(raw.schemaVersion) || 0) > SCHEMA_VERSION) {
+			// Refused (and reported) by getStore; never overwritten.
+			return;
+		}
+
+		if (!exists || raw.schemaVersion !== SCHEMA_VERSION) {
+			await chrome.storage.local.set({
+				[STORAGE_KEY]: normalizeStore(exists ? raw : null),
+			});
+			invalidateSettings();
+		}
+
+		migrationChecked = true;
+	} catch {
+		/*
+		Best effort: the operation reports its own storage error, and the next mutation retries.
+		*/
+	}
 }
 
 async function writeStore(store: Store): Promise<Store> {
@@ -1146,11 +1178,17 @@ async function writeStore(store: Store): Promise<Store> {
 		updatedAt: Date.now(),
 	};
 	await chrome.storage.local.set({[STORAGE_KEY]: next});
+	invalidateSettings();
 	return next;
 }
 
 function mutate<T>(operation: () => Promise<T>): Promise<T> {
-	const result = mutationQueue.then(operation, operation);
+	const run = async () => {
+		await migrateStoreOnce();
+		return operation();
+	};
+
+	const result = mutationQueue.then(run, run);
 	mutationQueue = result.catch(() => undefined);
 	return result;
 }
@@ -1272,7 +1310,6 @@ async function captureTabs(
 				id: makeId(),
 				title: cleanText(tab.title, normalizeUrl(tab.url), 500),
 				url: normalizeUrl(tab.url),
-				faviconUrl: normalizeFavicon(tab.favIconUrl),
 				notes: '',
 				pinned: Boolean(tab.pinned),
 				nativeGroup:
@@ -3096,7 +3133,7 @@ async function importBrowserBookmarks(
 		return {ok: false, error: 'This browser does not provide bookmark access.'};
 	}
 
-	if (!(await getStore()).settings.bookmarksEnabled) {
+	if (!(await readSettings()).bookmarksEnabled) {
 		return {ok: false, error: 'Bookmarks are disabled in Settings.'};
 	}
 
@@ -4145,7 +4182,6 @@ async function importGroups(
 								tab.title !== existing.tab.title
 							) {
 								existing.tab.title = tab.title;
-								existing.tab.faviconUrl = tab.faviconUrl;
 								existing.group.updatedAt = Date.now();
 								updatedTitles += 1;
 							}
@@ -4383,7 +4419,7 @@ async function handOffNewTab(
 	brave: boolean,
 	claim: boolean,
 ): Promise<boolean> {
-	const {settings} = await getStore();
+	const settings = await readSettings();
 	if (settings.newTabEnabled) {
 		return false;
 	}
@@ -4423,7 +4459,7 @@ chrome.tabs.onRemoved?.addListener((tabId) => {
 // Storage keys (all separate from `tablodge.state`, so the big state is never rewritten for them):
 //   tablodge.snapshots       { version, history: Snapshot[] }  rotated at the interval, newest first
 //   tablodge.snapshots.live  Snapshot                          the latest capture, rewritten on (debounced) tab events
-//   tablodge.snapshots.meta  { sessionOpen, liveAt, closing, recovery }  the small crash-detection flags
+//   tablodge.snapshots.meta  { sessionOpen, liveAt, liveSig, closing, recovery }  the small crash-detection flags
 //   tablodge.backups         { auto, safety, downloadError, lastAutoCheckAt } full JSON exports (auto/manual ring, safety ring)
 //   tablodge.trash           { items }                         deleted sessions, links, bookmarks, columns, folders
 const SNAPSHOTS_KEY = 'tablodge.snapshots';
@@ -4449,6 +4485,8 @@ const BACKUP_MAX_CHARS = 40_000_000;
 // Chrome refuses URLs longer than 2 MB, which also limits data: URLs handed to downloads.download.
 const DOWNLOAD_MAX_URL_CHARS = 2_000_000;
 const TRASH_MAX_ITEMS = 500;
+// The whole trash is one storage value rewritten on every delete, so it also has a size cap (serialized characters of the item data).
+const TRASH_MAX_CHARS = 8_000_000;
 const BULK_DELETE_THRESHOLD = 10;
 const LARGE_IMPORT_THRESHOLD = 50;
 const DAY_MS = 86_400_000;
@@ -4528,15 +4566,47 @@ async function readKey<T>(key: string): Promise<T | undefined> {
 }
 
 /**
+In-memory copy of the normalized settings. Safe to lose (a worker restart just re-reads) and dropped on every
+change of `tablodge.state`, whoever wrote it. Callers must treat the result as read-only.
+*/
+let settingsCache: Settings | undefined;
+let settingsGeneration = 0;
+function invalidateSettings() {
+	settingsCache = undefined;
+	settingsGeneration += 1;
+}
+
+chrome.storage?.onChanged?.addListener?.((changes, areaName) => {
+	if (areaName === 'local' && changes[STORAGE_KEY] !== undefined) {
+		invalidateSettings();
+	}
+});
+
+/**
 Settings without touching the big state (no normalization of sessions, no writes).
 */
 async function readSettings(): Promise<Settings> {
+	if (settingsCache) {
+		return settingsCache;
+	}
+
+	const generation = settingsGeneration;
 	const saved = await chrome.storage.local.get<Record<string, Raw | undefined>>(
 		[STORAGE_KEY],
 	);
-	return normalizeSettings(
+	if (saved[STORAGE_KEY]?.schemaVersion === SCHEMA_VERSION) {
+		migrationChecked = true;
+	}
+
+	const settings = normalizeSettings(
 		saved[STORAGE_KEY]?.settings as RawSettings | undefined,
 	);
+	// A change that landed while this read was in flight makes its result possibly stale: use it once, do not keep it.
+	if (generation === settingsGeneration) {
+		settingsCache = settings;
+	}
+
+	return settings;
 }
 
 // ---- Crash snapshots
@@ -4547,6 +4617,10 @@ type SnapshotMeta = {
 	*/
 	sessionOpen: boolean;
 	liveAt: number;
+	/**
+	Content hash of the stored live snapshot, so a capture can tell whether it changed without reading that (large) record. Empty when unknown.
+	*/
+	liveSig: string;
 	/**
 	The latest window close and how many normal windows were left, to recognize a shutdown in progress.
 	*/
@@ -4576,6 +4650,7 @@ async function readSnapshotMeta(): Promise<SnapshotMeta> {
 	return {
 		sessionOpen: raw?.sessionOpen === true,
 		liveAt: Number(raw?.liveAt) || 0,
+		liveSig: typeof raw?.liveSig === 'string' ? raw.liveSig : '',
 		closing: closing
 			? {at: Number(closing.at) || 0, remaining: Number(closing.remaining) || 0}
 			: null,
@@ -4776,12 +4851,14 @@ function takeSnapshot(
 		}
 
 		const snapshot = newSnapshot(windows, reason);
-		const live = await readLiveSnapshot();
-		if (live?.sig !== snapshot.sig) {
+		const meta = await readSnapshotMeta();
+		// Metas written before liveSig existed fall back to reading the live record once.
+		const liveSig = meta.liveSig || (await readLiveSnapshot())?.sig;
+		if (liveSig !== snapshot.sig) {
 			await chrome.storage.local.set({[SNAPSHOT_LIVE_KEY]: snapshot});
 		}
 
-		const meta = await readSnapshotMeta();
+		meta.liveSig = snapshot.sig;
 		meta.sessionOpen = true;
 		meta.liveAt = Date.now();
 		meta.closing = null;
@@ -4805,6 +4882,11 @@ let snapshotFirstEventAt = 0;
 Debounced capture for tab and window events: waits SNAPSHOT_DEBOUNCE_MS after the last event, but never longer than SNAPSHOT_MAX_WAIT_MS after the first.
 */
 function scheduleSnapshot() {
+	// Snapshots off (as far as the cached settings know): skip the timer; turning them on schedules one itself.
+	if (settingsCache && !settingsCache.snapshotsEnabled) {
+		return;
+	}
+
 	const now = Date.now();
 	if (snapshotTimer === undefined) {
 		snapshotFirstEventAt = now;
@@ -5013,7 +5095,6 @@ function snapshotRecords(win: SnapshotWindow, stamp: number): SavedTab[] {
 			id: makeId(),
 			title: tab.title,
 			url: tab.url,
-			faviconUrl: '',
 			notes: '',
 			archived: false,
 			pinned: Boolean(tab.pinned),
@@ -5236,6 +5317,7 @@ function clearSnapshots(): Promise<ActionResult<'CLEAR_SNAPSHOTS'>> {
 			await writeSnapshotHistory([]);
 			await chrome.storage.local.remove?.(SNAPSHOT_LIVE_KEY);
 			const meta = await readSnapshotMeta();
+			meta.liveSig = '';
 			meta.recovery = null;
 			await writeSnapshotMeta(meta);
 			return {ok: true, count: history.length};
@@ -5810,10 +5892,12 @@ async function applyFullBackup(
 		isRecord(input.trash) && Array.isArray(input.trash.items)
 			? input.trash.items
 			: [];
-	const items = rawItems
-		.slice(0, TRASH_MAX_ITEMS)
-		.map((entry: unknown) => normalizeImportedTrash(entry))
-		.filter((entry): entry is TrashEntry => entry !== null);
+	const items = capTrashSize(
+		rawItems
+			.slice(0, TRASH_MAX_ITEMS)
+			.map((entry: unknown) => normalizeImportedTrash(entry))
+			.filter((entry): entry is TrashEntry => entry !== null),
+	);
 	const theme = isRecord(input.preferences)
 		? asTheme(input.preferences[UI_THEME_KEY])
 		: undefined;
@@ -5871,6 +5955,10 @@ type TrashEntry = {
 	origin: string;
 	count: number;
 	data: Raw;
+	/**
+	Serialized length of `data`, cached so the size cap never re-serializes stored items.
+	*/
+	size?: number;
 };
 
 const isTrashEntry = (value: unknown): value is TrashEntry =>
@@ -5888,11 +5976,36 @@ async function writeTrash(items: TrashEntry[]) {
 	await chrome.storage.local.set({[TRASH_KEY]: {version: 1, items}});
 }
 
+const trashSize = (entry: TrashEntry) => {
+	entry.size ??= JSON.stringify(entry.data).length;
+	return entry.size;
+};
+
+/**
+Newest first: keeps items while their total size fits TRASH_MAX_CHARS (the newest item always stays), dropping the oldest.
+*/
+function capTrashSize(items: TrashEntry[]): TrashEntry[] {
+	let total = 0;
+	let kept = 0;
+	for (const item of items) {
+		total += trashSize(item);
+		if (kept > 0 && total > TRASH_MAX_CHARS) {
+			break;
+		}
+
+		kept += 1;
+	}
+
+	return kept === items.length ? items : items.slice(0, kept);
+}
+
 function pruneTrash(items: TrashEntry[], retentionDays: number): TrashEntry[] {
 	const cutoff = Date.now() - retentionDays * DAY_MS;
-	return items
-		.filter((item) => Number(item.deletedAt) > cutoff)
-		.slice(0, TRASH_MAX_ITEMS);
+	return capTrashSize(
+		items
+			.filter((item) => Number(item.deletedAt) > cutoff)
+			.slice(0, TRASH_MAX_ITEMS),
+	);
 }
 
 /**
@@ -5904,6 +6017,7 @@ function trashAdd(
 ): Promise<string> {
 	return trashMutate(async () => {
 		const entry: TrashEntry = {...item, id: makeId(), deletedAt: Date.now()};
+		trashSize(entry);
 		await writeTrash(
 			pruneTrash([entry, ...(await readTrash())], settings.trashRetentionDays),
 		);
@@ -5915,8 +6029,10 @@ function purgeTrash(): Promise<void> {
 	return trashMutate(async () => {
 		const settings = await readSettings();
 		const items = await readTrash();
+		const unsized = items.some((item) => item.size === undefined);
 		const kept = pruneTrash(items, settings.trashRetentionDays);
-		if (kept.length !== items.length) {
+		// Entries stored before sizes were tracked get theirs written once.
+		if (kept.length !== items.length || unsized) {
 			await writeTrash(kept);
 		}
 	});
@@ -6432,6 +6548,8 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 				await chrome.storage.local.remove(drop);
 			}
 
+			invalidateSettings();
+
 			await undoMutate(async () => {
 				await writeUndo((await readUndo()).filter((entry) => entry.id !== id));
 			});
@@ -6902,9 +7020,9 @@ async function handleMessage(
 		}
 
 		case 'OPEN_DASHBOARD': {
-			const store = await getStore();
+			const settings = await readSettings();
 			const windowId = await currentWindowId(sender.tab);
-			await openDashboard(windowId, '', store.settings.dashboardBehavior);
+			await openDashboard(windowId, '', settings.dashboardBehavior);
 			return {ok: true};
 		}
 
@@ -7080,7 +7198,6 @@ async function saveCurrentTabToFirstGroup(
 						? copies[0].title
 						: title,
 				url: tabUrl,
-				faviconUrl: normalizeFavicon(tab.favIconUrl),
 				notes: copies[0]?.notes || '',
 				archived: false,
 				pinned: Boolean(tab.pinned),
@@ -7142,8 +7259,8 @@ async function saveCurrentTabToFirstGroup(
 }
 
 async function handleToolbarAction(tab?: chrome.tabs.Tab) {
-	const store = await getStore();
-	if (store.settings.actionMode === 'current-tab-to-group') {
+	const settings = await readSettings();
+	if (settings.actionMode === 'current-tab-to-group') {
 		const result = await saveCurrentTabToFirstGroup(tab);
 		if (!result?.ok) {
 			console.warn(
@@ -7162,7 +7279,7 @@ async function handleToolbarAction(tab?: chrome.tabs.Tab) {
 		'all-windows': 'all-windows',
 		'current-tab': 'current-tab',
 	};
-	const scope = scopeByMode[store.settings.actionMode];
+	const scope = scopeByMode[settings.actionMode];
 	if (!scope) {
 		return;
 	}
@@ -7177,9 +7294,9 @@ async function handleToolbarAction(tab?: chrome.tabs.Tab) {
 }
 
 async function openDashboardForTab(tab?: chrome.tabs.Tab) {
-	const store = await getStore();
+	const settings = await readSettings();
 	const windowId = await currentWindowId(tab);
-	await openDashboard(windowId, '', store.settings.dashboardBehavior);
+	await openDashboard(windowId, '', settings.dashboardBehavior);
 }
 
 // ---- Right-click menus ----
@@ -7605,6 +7722,8 @@ function rebuildContextMenus(
 				store.bookmarkColumns,
 				await excludeMenuState(store.settings),
 			);
+			menuGeneration += 1;
+			syncedMenuState = '';
 			await removeAllMenus();
 			for (const item of plan) {
 				chrome.contextMenus.create(
@@ -7612,6 +7731,9 @@ function rebuildContextMenus(
 					menuCallback(`create the menu item "${item.title || item.id}"`),
 				);
 			}
+
+			menuGeneration += 1;
+			syncedMenuState = '';
 		} catch (error) {
 			console.warn(
 				errorMessage(error) ||
@@ -7639,6 +7761,12 @@ function scheduleContextMenuRebuild() {
 }
 
 /**
+What the two dynamic toolbar items were last set to; cleared whenever the menus are rebuilt (new items start from defaults).
+*/
+let syncedMenuState = '';
+let menuGeneration = 0;
+
+/**
 Keeps the toolbar menu's "Exclude this site" checkbox in step with the active tab.
 */
 async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
@@ -7647,8 +7775,7 @@ async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 	}
 
 	try {
-		const store = await getStore();
-		const {settings} = store;
+		const settings = await readSettings();
 		if (
 			!settings.contextMenusEnabled ||
 			!settings.contextMenuActionEnabled ||
@@ -7657,10 +7784,20 @@ async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 			return;
 		}
 
-		await updateMenu(MENU.actionExclude, await excludeMenuState(settings, tab));
-		await updateMenu(MENU.actionSaveWindow, {
-			title: await saveWindowMenuTitle(settings),
-		});
+		const generation = menuGeneration;
+		const exclude = await excludeMenuState(settings, tab);
+		const title = await saveWindowMenuTitle(settings);
+		// Most activations leave both items as they are: skip the two updateMenu calls then.
+		const state = `${exclude.checked}|${exclude.enabled}|${title}`;
+		if (state === syncedMenuState && generation === menuGeneration) {
+			return;
+		}
+
+		await updateMenu(MENU.actionExclude, exclude);
+		await updateMenu(MENU.actionSaveWindow, {title});
+		if (generation === menuGeneration) {
+			syncedMenuState = state;
+		}
 	} catch {
 		/*
 		The checkbox is cosmetic; a click still reads the stored exclusions.
@@ -7738,12 +7875,12 @@ function watchContextMenuShown() {
 				return;
 			}
 
-			void getStore()
-				.then(async (store) => {
+			void readSettings()
+				.then(async (settings) => {
 					if (
-						!store.settings.sessionsEnabled ||
-						!store.settings.contextMenusEnabled ||
-						!store.settings.contextMenuPageEnabled
+						!settings.sessionsEnabled ||
+						!settings.contextMenusEnabled ||
+						!settings.contextMenuPageEnabled
 					) {
 						return;
 					}
@@ -7912,8 +8049,8 @@ async function openPrefilledBookmarkDialog(
 		};
 	}
 
-	const store = await getStore();
-	if (!store.settings.bookmarksEnabled) {
+	const settings = await readSettings();
+	if (!settings.bookmarksEnabled) {
 		return {ok: false, error: 'Bookmarks are disabled in Settings.'};
 	}
 
@@ -7926,7 +8063,7 @@ async function openPrefilledBookmarkDialog(
 	await openDashboard(
 		await currentWindowId(tab),
 		`?${query}`,
-		store.settings.dashboardBehavior,
+		settings.dashboardBehavior,
 	);
 	return {ok: true};
 }
@@ -8002,7 +8139,6 @@ async function saveLinkForLater(
 				500,
 			),
 			url,
-			faviconUrl: '',
 			notes: copies[0]?.notes || '',
 			archived: false,
 			pinned: false,
@@ -8032,11 +8168,11 @@ async function searchDashboard(
 	text: unknown,
 	tab?: chrome.tabs.Tab,
 ): Promise<MenuOutcome> {
-	const store = await getStore();
+	const settings = await readSettings();
 	await openDashboard(
 		await currentWindowId(tab),
 		dashboardSearchQuery(text),
-		store.settings.dashboardBehavior,
+		settings.dashboardBehavior,
 	);
 	return {ok: true};
 }
@@ -8060,8 +8196,8 @@ async function toggleExcludedSite(
 	}
 
 	// An excluded host (directly or through a parent domain) is un-excluded by removing every entry that covers it.
-	const store = await getStore();
-	const covering = store.settings.excludedOrigins.filter(
+	const settings = await readSettings();
+	const covering = settings.excludedOrigins.filter(
 		(entry) => origin === entry || origin.endsWith(`.${entry}`),
 	);
 	let result:
@@ -8232,6 +8368,8 @@ chrome.contextMenus?.onClicked?.addListener((info, tab) =>
 );
 
 async function initializeExtension(openDashboardAtStartup = false) {
+	// Persists a pending schema migration once, through the mutation queue.
+	await mutate(async () => undefined);
 	if (openDashboardAtStartup) {
 		// The browser just started: judge how the previous run ended before anything is captured.
 		await runStartupRecovery();
