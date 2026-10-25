@@ -1144,31 +1144,38 @@ export function SessionManager({
 									</DropdownMenuRadioGroup>
 								</DropdownMenuContent>
 							</DropdownMenu>
-							<div
-								role="group"
-								aria-label="Session layout"
-								className="mx-0.5 flex items-center rounded-md border border-border p-0.5"
-							>
-								{(
-									[
-										['list', 'List layout', LayoutList],
-										['grid', 'Grid layout', LayoutGrid],
-									] as const
-								).map(([value, label, LayoutIcon]) => (
-									<IconTooltip key={value} label={label}>
+							<DropdownMenu>
+								<IconTooltip label="Session layout">
+									<DropdownMenuTrigger asChild>
 										<Button
 											variant="ghost"
 											size="icon"
-											className={`h-7 w-7 min-h-7 ${(grid ? 'grid' : 'list') === value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-											aria-label={label}
-											aria-pressed={(grid ? 'grid' : 'list') === value}
-											onClick={() => void changeLayout(value)}
+											className="h-8 w-8"
+											aria-label="Session layout"
 										>
-											<LayoutIcon />
+											{grid ? <LayoutGrid /> : <LayoutList />}
 										</Button>
-									</IconTooltip>
-								))}
-							</div>
+									</DropdownMenuTrigger>
+								</IconTooltip>
+								<DropdownMenuContent align="end">
+									<DropdownMenuLabel>Layout</DropdownMenuLabel>
+									<DropdownMenuRadioGroup
+										value={grid ? 'grid' : 'list'}
+										onValueChange={(value) =>
+											void changeLayout(value as 'list' | 'grid')
+										}
+									>
+										<DropdownMenuRadioItem value="list">
+											<LayoutList className="mr-2 h-4 w-4" />
+											List
+										</DropdownMenuRadioItem>
+										<DropdownMenuRadioItem value="grid">
+											<LayoutGrid className="mr-2 h-4 w-4" />
+											Grid
+										</DropdownMenuRadioItem>
+									</DropdownMenuRadioGroup>
+								</DropdownMenuContent>
+							</DropdownMenu>
 							<DropdownMenu>
 								<IconTooltip label="Import and back up sessions">
 									<DropdownMenuTrigger asChild>
