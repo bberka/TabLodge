@@ -1,10 +1,15 @@
-# <img src="extension/icons/tablodge.svg" alt="" width="36" height="36" align="center" /> TabLodge
+<h1 align="center">
+  <img src="extension/icons/tablodge.svg" alt="" width="72" height="72"><br>
+  TabLodge
+</h1>
 
-**A cozy, local-only home for your tabs: save sessions, restore them, and keep a bookmark board on your new tab.**
+<p align="center"><strong>A cozy, local-only home for your tabs: save sessions, restore them, and keep a bookmark board on your new tab.</strong></p>
 
-[![Test](https://github.com/bberka/TabLodge/actions/workflows/test.yml/badge.svg)](https://github.com/bberka/TabLodge/actions/workflows/test.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Manifest V3](https://img.shields.io/badge/Chromium%20browsers-Manifest%20V3-4285F4)
+<p align="center">
+  <a href="https://github.com/bberka/TabLodge/actions/workflows/test.yml"><img src="https://github.com/bberka/TabLodge/actions/workflows/test.yml/badge.svg" alt="Test"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/Chromium%20browsers-Manifest%20V3-4285F4" alt="Manifest V3">
+</p>
 
 TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, Edge, Vivaldi, Opera, and others). It turns open windows into named sessions you can restore later, and replaces the new-tab page with a local bookmark board. There are no accounts, servers, or tracking: everything stays in your browser's extension storage.
 
