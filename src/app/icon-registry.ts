@@ -570,7 +570,7 @@ function scoreWord(icon: IconEntry, haystack: string, word: string) {
 		return 20;
 	}
 
-	return word.length > 2 && isSubsequence(word, icon.id.replaceAll('-', ''))
+	return word.length > 3 && isSubsequence(word, icon.id.replaceAll('-', ''))
 		? 5
 		: 0;
 }

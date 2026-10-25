@@ -160,6 +160,13 @@ export function IconPickerDialog({
 									return (
 										<button
 											key={icon.id}
+											ref={
+												active
+													? (node) => {
+															node?.scrollIntoView({block: 'nearest'});
+														}
+													: undefined
+											}
 											type="button"
 											role="option"
 											aria-selected={active}
@@ -242,7 +249,7 @@ export function IconPickerField({
 					id={id}
 					type="button"
 					variant="outline"
-					className="h-10 w-10 p-0"
+					className="h-9 w-9 min-h-9 p-0"
 					aria-label={`${label}: ${getIcon(value, defaultIcon).label}. Change icon`}
 					onClick={() => {
 						setOpen(true);
