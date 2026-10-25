@@ -24,6 +24,7 @@ import {
 	ExternalLink,
 	FolderInput,
 	FolderPlus,
+	History,
 	LayoutGrid,
 	LayoutList,
 	LockKeyhole,
@@ -32,6 +33,7 @@ import {
 	PanelTop,
 	Pencil,
 	RotateCcw,
+	Save,
 	StickyNote,
 	Search,
 	Share2,
@@ -1949,6 +1951,20 @@ function GroupCard({
 		drag.dragging?.kind === 'tab' && drag.dragging.groupId === group.id
 			? drag.dragging.tabId
 			: null;
+	const windowActions: MenuAction[] = [
+		{
+			id: 'restore-here',
+			label: 'In this window',
+			icon: PanelTop,
+			onSelect: () => onRestoreTarget('current-window'),
+		},
+		{
+			id: 'restore-new-window',
+			label: 'In a new window',
+			icon: AppWindow,
+			onSelect: () => onRestoreTarget('always-new-window'),
+		},
+	];
 	const actions: MenuAction[] = [
 		{
 			id: 'restore',
@@ -1957,35 +1973,33 @@ function GroupCard({
 			onSelect: () => onRestore(),
 		},
 		{
-			id: 'restore-here',
-			label: 'Restore in this window',
-			icon: PanelTop,
-			onSelect: () => onRestoreTarget('current-window'),
-		},
-		{
-			id: 'restore-new-window',
-			label: 'Restore in a new window',
-			icon: AppWindow,
-			onSelect: () => onRestoreTarget('always-new-window'),
-		},
-		{
-			id: 'restore-keep',
-			label: 'Restore & keep',
-			icon: RotateCcw,
-			onSelect: () => onRestoreMode('keep'),
-		},
-		{
-			id: 'restore-remove',
-			label: 'Restore & remove',
-			icon: Trash2,
-			disabled: group.locked,
-			onSelect: onForceRestore,
-		},
-		{
-			id: 'restore-archive',
-			label: 'Restore & archive',
-			icon: Archive,
-			onSelect: () => onRestoreMode('archive'),
+			type: 'submenu',
+			id: 'restore-options',
+			label: 'Restore options',
+			icon: History,
+			items: [
+				...windowActions,
+				{type: 'separator'},
+				{
+					id: 'restore-keep',
+					label: 'Keep session after restoring',
+					icon: Save,
+					onSelect: () => onRestoreMode('keep'),
+				},
+				{
+					id: 'restore-remove',
+					label: 'Remove session after restoring',
+					icon: Trash2,
+					disabled: group.locked,
+					onSelect: onForceRestore,
+				},
+				{
+					id: 'restore-archive',
+					label: 'Archive after restoring',
+					icon: Archive,
+					onSelect: () => onRestoreMode('archive'),
+				},
+			],
 		},
 		{
 			id: 'open-all',
@@ -2015,14 +2029,16 @@ function GroupCard({
 			id: 'up',
 			label: 'Move up',
 			icon: ArrowUp,
-			disabled: !reorderEnabled || index === 0,
+			hidden: !reorderEnabled,
+			disabled: index === 0,
 			onSelect: () => onReorder('up'),
 		},
 		{
 			id: 'down',
 			label: 'Move down',
 			icon: ArrowDown,
-			disabled: !reorderEnabled || index === count - 1,
+			hidden: !reorderEnabled,
+			disabled: index === count - 1,
 			onSelect: () => onReorder('down'),
 		},
 		{type: 'separator'},
@@ -2034,11 +2050,7 @@ function GroupCard({
 			onSelect: onDelete,
 		},
 	];
-	const restoreActions = actions.filter(
-		(action) =>
-			action.type !== 'separator' &&
-			['restore-here', 'restore-new-window'].includes(action.id),
-	);
+	const restoreActions = windowActions;
 	return (
 		<div className={grid ? 'relative flex min-w-0' : 'relative'}>
 			{mark?.kind === 'session' && (
