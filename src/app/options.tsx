@@ -151,7 +151,7 @@ const settingsGroups: Array<{
 			{
 				name: 'autoFocusSearchOnNewTab',
 				label: 'Focus search when opening a new tab',
-				help: `Shows a search box at the top of the ${PROJECT.name} page and puts the cursor in it. Chromium may keep focus in the address bar on new tabs unless ${PROJECT.name} is opened as a normal tab.`,
+				help: 'Opens the search palette whenever a new tab opens. Chromium may keep focus in the address bar until you click the page.',
 				type: 'switch',
 			},
 			{

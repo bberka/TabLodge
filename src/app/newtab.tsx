@@ -76,7 +76,6 @@ import {SessionManager} from './dashboard';
 import {
 	FinderPalette,
 	FinderTrigger,
-	InlineFinder,
 	emitFinderEvent,
 	type FinderAction,
 } from './finder';
@@ -269,7 +268,7 @@ function NewTab() {
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
 	const [finderOpen, setFinderOpen] = useState(false);
-	const inlineFinderRef = useRef<HTMLInputElement | null>(null);
+	const autoOpenedFinderRef = useRef(false);
 	const {setTheme} = useTheme();
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
 	const editedBookmark = bookmarkEdit?.id
@@ -288,7 +287,8 @@ function NewTab() {
 			? (settings.bookmarkQuickAction ?? 'open-new')
 			: null;
 	const sessionsVisible = enabled && sessionsEnabled;
-	const inlineFinder = enabled && settings.autoFocusSearchOnNewTab === true;
+	const autoOpenFinder =
+		enabled && settings.autoFocusSearchOnNewTab === true && !initialQuery;
 	const bothVisible = sessionsVisible && bookmarksEnabled;
 	const sessionsOnTop = bothVisible && settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
@@ -1118,7 +1118,7 @@ function NewTab() {
 		return list;
 	}, [sessionsVisible, bookmarksEnabled]);
 
-	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder (or focuses the inline one).
+	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder .
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
@@ -1144,18 +1144,40 @@ function NewTab() {
 			}
 
 			event.preventDefault();
-			if (inlineFinder && inlineFinderRef.current) {
-				inlineFinderRef.current.focus();
-				inlineFinderRef.current.select();
-				return;
-			}
-
 			setFinderOpen((open) => !open);
 		};
 
 		document.addEventListener('keydown', onKeyDown);
 		return () => document.removeEventListener('keydown', onKeyDown);
-	}, [inlineFinder]);
+	}, []);
+
+	// "Focus search when opening a new tab": opens the palette once per page load (not for ?q= links, which prefill
+	// the page search instead). A tab loaded in the background gets its input focused once it becomes visible.
+	useEffect(() => {
+		if (!autoOpenFinder || autoOpenedFinderRef.current) {
+			return;
+		}
+
+		autoOpenedFinderRef.current = true;
+		setFinderOpen(true);
+		if (document.visibilityState === 'visible') {
+			return;
+		}
+
+		const onVisible = () => {
+			if (document.visibilityState !== 'visible') {
+				return;
+			}
+
+			document.removeEventListener('visibilitychange', onVisible);
+			document
+				.querySelector<HTMLInputElement>('[data-finder] [data-autofocus]')
+				?.focus({preventScroll: true});
+		};
+
+		document.addEventListener('visibilitychange', onVisible);
+		return () => document.removeEventListener('visibilitychange', onVisible);
+	}, [autoOpenFinder]);
 
 	// While loading, the page stays blank (just the themed background) so new tabs open without a flash of text.
 	if (!state) {
@@ -1400,7 +1422,7 @@ function NewTab() {
 			className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8 sm:py-9"
 		>
 			<AppHeader active="dashboard">
-				{!inlineFinder && <FinderTrigger onClick={() => setFinderOpen(true)} />}
+				<FinderTrigger onClick={() => setFinderOpen(true)} />
 				{sessionsVisible && (
 					<Button
 						size="sm"
@@ -1416,13 +1438,6 @@ function NewTab() {
 				)}
 			</AppHeader>
 
-			{inlineFinder && (
-				<InlineFinder
-					state={state}
-					actions={finderActions}
-					inputRef={inlineFinderRef}
-				/>
-			)}
 			<FinderPalette
 				open={finderOpen}
 				state={state}

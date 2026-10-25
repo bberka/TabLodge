@@ -1,5 +1,5 @@
-// The global finder: a command palette (Ctrl/Cmd+K) and an optional always-visible inline search that share one
-// search box, one ranking (global-search.ts) and one way of opening results.
+// The global finder: the command palette (Ctrl/Cmd+K) with one search box, one ranking (global-search.ts) and one
+// way of opening results.
 import {
 	Fragment,
 	useEffect,
@@ -63,7 +63,6 @@ export function emitFinderEvent(detail: FinderEventDetail) {
 }
 
 const isMac = /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '');
-export const SHORTCUT_LABEL = isMac ? '⌘K' : 'Ctrl K';
 const SHORTCUT_NAME = isMac ? '⌘K' : 'Ctrl+K';
 
 const KIND_ICONS: Partial<Record<FinderKind, IconComponent>> = {
@@ -168,16 +167,10 @@ type FinderProps = {
 	Called after a result ran (the palette closes itself).
 	*/
 	onDone?: () => void;
-	variant: 'palette' | 'inline';
 	active: boolean;
 };
 
-function useFinder({
-	state,
-	actions,
-	onDone,
-	active,
-}: Omit<FinderProps, 'variant'>) {
+function useFinder({state, actions, onDone, active}: FinderProps) {
 	const [query, setQuery] = useState('');
 	const [index, setIndex] = useState(0);
 	const tabs = useOpenTabs(active);
@@ -494,108 +487,6 @@ function PaletteBody(props: {
 					<Kbd>Esc</Kbd> Close
 				</span>
 			</div>
-		</div>
-	);
-}
-
-/**
-The always-visible finder at the top of the page ("Focus search when opening a new tab"). Its input takes focus
-on load and whenever the page becomes visible. Chromium may keep focus in the address bar on a new tab.
-*/
-export function InlineFinder({
-	state,
-	actions,
-	inputRef,
-}: {
-	state: TabLodgeState;
-	actions: readonly FinderAction[];
-	inputRef: {current: HTMLInputElement | null};
-}) {
-	const [focused, setFocused] = useState(false);
-	const finder = useFinder({state, actions, active: true, onDone: undefined});
-	const listId = 'finder-inline';
-	useScrollActiveIntoView(listId, finder.selected);
-
-	useEffect(() => {
-		const focus = () => {
-			if (document.visibilityState === 'visible') {
-				inputRef.current?.focus({preventScroll: true});
-			}
-		};
-
-		focus();
-		// Chromium may move focus to the address bar just after load, so ask again a few times.
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const retry = (attempt: number) => {
-			timer = setTimeout(() => {
-				focus();
-				if (attempt < 2) {
-					retry(attempt + 1);
-				}
-			}, [60, 300, 900][attempt]);
-		};
-
-		retry(0);
-		document.addEventListener('visibilitychange', focus);
-		globalThis.addEventListener('focus', focus);
-		return () => {
-			clearTimeout(timer);
-			document.removeEventListener('visibilitychange', focus);
-			globalThis.removeEventListener('focus', focus);
-		};
-	}, [inputRef]);
-
-	const showResults = focused && finder.query.trim() !== '';
-	return (
-		<div className="relative mx-auto mb-8 w-full max-w-2xl">
-			<div className="relative">
-				<Search
-					className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-					aria-hidden="true"
-				/>
-				<input
-					ref={inputRef}
-					autoFocus
-					role="combobox"
-					aria-expanded={showResults}
-					aria-controls={listId}
-					aria-activedescendant={
-						showResults && finder.selected >= 0
-							? `${listId}-${finder.selected}`
-							: undefined
-					}
-					aria-label="Search TabLodge or the web"
-					autoComplete="off"
-					spellCheck={false}
-					placeholder="Search bookmarks, sessions, open tabs, or the web"
-					value={finder.query}
-					className="tn-input h-11 w-full rounded-lg border border-input bg-card pl-10 pr-20 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-					onChange={(event) => finder.setQuery(event.target.value)}
-					onFocus={() => setFocused(true)}
-					onBlur={() => setFocused(false)}
-					onKeyDown={(event) => {
-						if (event.key === 'Escape') {
-							finder.setQuery('');
-							event.currentTarget.blur();
-							return;
-						}
-
-						finder.onKeyDown(event);
-					}}
-				/>
-				<span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-					<Kbd>{SHORTCUT_LABEL}</Kbd>
-				</span>
-			</div>
-			{showResults && (
-				<div className="absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lg">
-					<ResultList
-						finder={finder}
-						listId={listId}
-						viewportClassName="max-h-[min(26rem,60vh)]"
-					/>
-				</div>
-			)}
 		</div>
 	);
 }
