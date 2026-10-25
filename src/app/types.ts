@@ -166,6 +166,10 @@ export type Session = {
 export type Folder = {
 	id: string;
 	name: string;
+	/**
+	Icon id from the icon registry; missing means the default folder icon.
+	*/
+	icon?: string;
 	createdAt: number;
 	isDefault: boolean;
 };
@@ -277,8 +281,11 @@ export type TabLodgeMessages = {
 	the slots those sessions held in the stored order (others stay put). Switches the sort to "custom".
 	*/
 	SET_GROUP_ORDER: {order: string[]};
-	CREATE_FOLDER: {name: string};
-	UPDATE_FOLDER: {folderId: string; name: string};
+	CREATE_FOLDER: {name: string; icon?: string};
+	/**
+	`icon` omitted keeps the current icon; an empty string resets it to the default.
+	*/
+	UPDATE_FOLDER: {folderId: string; name: string; icon?: string};
 	DELETE_FOLDER: {folderId: string};
 	MOVE_GROUP: {groupId: string; folderId: string};
 	DELETE_TAB: {groupId: string; tabId: string};

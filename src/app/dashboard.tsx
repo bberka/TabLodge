@@ -22,6 +22,7 @@ import {
 	ExternalLink,
 	FolderInput,
 	FolderPlus,
+	LayoutGrid,
 	LockKeyhole,
 	MoreHorizontal,
 	MoreVertical,
@@ -103,6 +104,8 @@ import type {
 	TabLodgeMessages,
 } from './types';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
+import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
+import {IconPickerField} from './icon-picker';
 import {openLink, resolveLinkTarget} from './link-target';
 
 /**
@@ -137,6 +140,10 @@ type Confirmation = {
 type FolderDialog = {
 	mode: 'create' | 'rename';
 	folder?: Folder;
+	/**
+	The icon chosen so far in the open dialog.
+	*/
+	icon?: string;
 };
 type DialogState = 'bookmark' | 'details' | FolderDialog | null;
 type BookmarkDraft = Partial<SavedTabRecord> & {columnId?: string};
@@ -893,8 +900,12 @@ export function SessionManager({
 
 		const result =
 			folderDialog?.mode === 'rename'
-				? await send('UPDATE_FOLDER', {folderId, name})
-				: await send('CREATE_FOLDER', {name});
+				? await send('UPDATE_FOLDER', {
+						folderId,
+						name,
+						icon: folderDialog.icon ?? '',
+					})
+				: await send('CREATE_FOLDER', {name, icon: folderDialog?.icon});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save this folder.', true);
 			return;
@@ -1046,28 +1057,40 @@ export function SessionManager({
 						className="mb-4 flex flex-wrap items-center gap-1"
 						aria-label="Session folders"
 					>
-						{[{id: ALL, name: 'All'}, ...folders].map((folder) => (
-							<button
-								key={folder.id}
-								type="button"
-								aria-pressed={folderId === folder.id}
-								className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${folderId === folder.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-								onClick={() => {
-									setFolderId(folder.id);
-									setAnchor(null);
-								}}
-							>
-								{folder.name}
-								<span className="tabular-nums opacity-70">
-									{folder.id === ALL
-										? groups.filter((group) => !group.archived).length
-										: groups.filter(
-												(group) =>
-													!group.archived && group.folderId === folder.id,
-											).length}
-								</span>
-							</button>
-						))}
+						{[{id: ALL, name: 'All', icon: undefined}, ...folders].map(
+							(folder) => {
+								const FolderIcon =
+									folder.id === ALL
+										? LayoutGrid
+										: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component;
+								return (
+									<button
+										key={folder.id}
+										type="button"
+										aria-pressed={folderId === folder.id}
+										className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${folderId === folder.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+										onClick={() => {
+											setFolderId(folder.id);
+											setAnchor(null);
+										}}
+									>
+										<FolderIcon
+											className="size-3.5 shrink-0"
+											aria-hidden="true"
+										/>
+										{folder.name}
+										<span className="tabular-nums opacity-70">
+											{folder.id === ALL
+												? groups.filter((group) => !group.archived).length
+												: groups.filter(
+														(group) =>
+															!group.archived && group.folderId === folder.id,
+													).length}
+										</span>
+									</button>
+								);
+							},
+						)}
 						<button
 							type="button"
 							aria-pressed={folderId === 'archived'}
@@ -1097,14 +1120,18 @@ export function SessionManager({
 						</IconTooltip>
 						{selectedFolder && !selectedFolder.isDefault && (
 							<>
-								<IconTooltip label={`Rename ${selectedFolder.name}`}>
+								<IconTooltip label={`Edit ${selectedFolder.name}`}>
 									<Button
 										variant="ghost"
 										size="icon"
 										className="h-8 w-8"
-										aria-label={`Rename ${selectedFolder.name}`}
+										aria-label={`Edit ${selectedFolder.name}`}
 										onClick={() =>
-											setDialog({mode: 'rename', folder: selectedFolder})
+											setDialog({
+												mode: 'rename',
+												folder: selectedFolder,
+												icon: selectedFolder.icon,
+											})
 										}
 									>
 										<Pencil />
@@ -1533,24 +1560,34 @@ export function SessionManager({
 					<form onSubmit={saveFolder}>
 						<DialogHeader>
 							<DialogTitle>
-								{folderDialog?.mode === 'rename'
-									? 'Rename folder'
-									: 'Create folder'}
+								{folderDialog?.mode === 'rename' ? 'Edit folder' : 'New folder'}
 							</DialogTitle>
 							<DialogDescription>
-								Keep related sessions organized together.
+								Choose a name and icon to keep related sessions together.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							<div className="space-y-1.5">
-								<Label htmlFor="folder-name">Folder name</Label>
-								<Input
-									required
-									autoFocus
-									id="folder-name"
-									name="name"
-									maxLength={60}
-									defaultValue={folderDialog?.folder?.name || ''}
+							<div className="flex items-end gap-3">
+								<div className="min-w-0 flex-1 space-y-1.5">
+									<Label htmlFor="folder-name">Folder name</Label>
+									<Input
+										required
+										autoFocus
+										id="folder-name"
+										name="name"
+										maxLength={60}
+										defaultValue={folderDialog?.folder?.name || ''}
+									/>
+								</div>
+								<IconPickerField
+									id="folder-icon"
+									value={folderDialog?.icon}
+									defaultIcon={DEFAULT_FOLDER_ICON}
+									onChange={(icon) =>
+										setDialog((old) =>
+											typeof old === 'object' && old ? {...old, icon} : old,
+										)
+									}
 								/>
 							</div>
 						</DialogBody>
@@ -1564,7 +1601,7 @@ export function SessionManager({
 							</Button>
 							<Button type="submit">
 								{folderDialog?.mode === 'rename'
-									? 'Save folder'
+									? 'Save changes'
 									: 'Create folder'}
 							</Button>
 						</DialogFooter>

@@ -3973,3 +3973,73 @@ test('stored column icons are validated on load and kept by imports', async () =
 		undefined,
 	);
 });
+
+test('session folders store a registry icon, keep it on rename and reset it', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const created = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'Research',
+		icon: 'flask',
+	});
+	assert.equal(created.ok, true, created.error);
+	assert.equal(created.folder.icon, 'flask');
+	const plain = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'Plain',
+		icon: 'unknown-icon',
+	});
+	assert.equal(plain.ok, true, plain.error);
+	assert.equal('icon' in plain.folder, false);
+
+	const renamed = await harness.sendMessage({
+		type: 'UPDATE_FOLDER',
+		folderId: created.folder.id,
+		name: 'Science',
+	});
+	assert.equal(renamed.folder.icon, 'flask');
+	const swapped = await harness.sendMessage({
+		type: 'UPDATE_FOLDER',
+		folderId: created.folder.id,
+		name: 'Science',
+		icon: 'brain',
+	});
+	assert.equal(swapped.folder.icon, 'brain');
+	const reset = await harness.sendMessage({
+		type: 'UPDATE_FOLDER',
+		folderId: created.folder.id,
+		name: 'Science',
+		icon: '',
+	});
+	assert.equal(reset.ok, true, reset.error);
+	assert.equal('icon' in reset.folder, false);
+});
+
+test('folder icons survive a session import and are validated on load', async () => {
+	const state = stateWithSession();
+	state.folders.push({id: 'f-bad', name: 'Bad', icon: 'nope'});
+	const harness = createWorkerHarness(state);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(
+		loaded.folders.find((folder) => folder.id === 'f-bad')?.icon,
+		undefined,
+	);
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: {
+			folders: [{id: 'in-1', name: 'Imported folder', icon: 'rocket'}],
+			groups: [
+				{
+					name: 'Imported',
+					folderId: 'in-1',
+					tabs: [{url: 'https://imported.example/', title: 'Imported'}],
+				},
+			],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	assert.equal(
+		harness.state.folders.find((folder) => folder.name === 'Imported folder')
+			?.icon,
+		'rocket',
+	);
+});
