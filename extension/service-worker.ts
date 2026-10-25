@@ -875,34 +875,78 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 	return settings;
 }
 
-function normalizeExcludedOrigins(raw: unknown): string[] {
-	const origins: string[] = [];
-	const seen = new Set<string>();
-	for (const value of Array.isArray(raw) ? raw.slice(0, 500) : []) {
-		if (typeof value !== 'string') {
-			continue;
+/**
+A whole number within [min, max]; fractions are truncated, anything that is not a number gives the fallback.
+*/
+function clampInteger(
+	value: unknown,
+	min: number,
+	max: number,
+	fallback: number,
+): number {
+	const number_ = typeof value === 'string' ? Number(value) : value;
+	return typeof number_ !== 'number' || !Number.isFinite(number_)
+		? fallback
+		: Math.min(max, Math.max(min, Math.trunc(number_)));
+}
+
+/**
+An excluded-site entry as a bare lower-case host name, or null when it is not a usable web host. Accepts
+"google.com", "*.google.com", "https://google.com:8080/path" and old stored origins; a leading "www." is dropped.
+Entries cover the host and all its subdomains. (Duplicated in src/app/excluded-sites.ts for the pages.)
+*/
+function normalizeExcludedHost(value: unknown): string | null {
+	if (typeof value !== 'string') {
+		return null;
+	}
+
+	const text = value.trim().replace(/^([a-z][\d+\-.a-z]*:\/\/)?\*\./i, '$1');
+	if (!text || text.length > 2048) {
+		return null;
+	}
+
+	try {
+		const url = new URL(
+			/^[a-z][\d+\-.a-z]*:\/\//i.test(text) ? text : `https://${text}`,
+		);
+		if (!['http:', 'https:'].includes(url.protocol)) {
+			return null;
 		}
 
-		try {
-			const url = new URL(value);
-			if (
-				!['http:', 'https:'].includes(url.protocol) ||
-				url.origin === 'null' ||
-				seen.has(url.origin)
-			) {
-				continue;
-			}
+		let host = url.hostname.toLowerCase().replace(/\.$/, '');
+		if (host.startsWith('www.') && host.includes('.', 4)) {
+			host = host.slice(4);
+		}
 
-			origins.push(url.origin);
-			seen.add(url.origin);
-		} catch {
-			/*
-			Ignore malformed entries.
-			*/
+		return !host.includes('.') && host !== 'localhost' && !host.startsWith('[')
+			? null
+			: host;
+	} catch {
+		return null;
+	}
+}
+
+/**
+True when `host` is an entry or one of its subdomains ("mail.google.com" for "google.com", not "notgoogle.com").
+*/
+function hostIsExcluded(host: string, entries: readonly string[]): boolean {
+	return entries.some((entry) => host === entry || host.endsWith(`.${entry}`));
+}
+
+/**
+Normalizes the stored list: hosts only, duplicates removed. A child such as "mail.google.com" next to "google.com"
+is kept, since it is harmless and shows what the user added.
+*/
+function normalizeExcludedOrigins(raw: unknown): string[] {
+	const hosts: string[] = [];
+	for (const value of Array.isArray(raw) ? raw.slice(0, 500) : []) {
+		const host = normalizeExcludedHost(value);
+		if (host && !hosts.includes(host)) {
+			hosts.push(host);
 		}
 	}
 
-	return origins;
+	return hosts;
 }
 
 function normalizeStore(raw: Raw | null | undefined): Store {
@@ -1081,7 +1125,10 @@ function isCapturable(
 	}
 
 	try {
-		return !settings.excludedOrigins.includes(new URL(url).origin);
+		return !hostIsExcluded(
+			new URL(url).hostname.toLowerCase(),
+			settings.excludedOrigins,
+		);
 	} catch {
 		return false;
 	}
@@ -2938,30 +2985,48 @@ async function importBrowserBookmarks(
 	});
 }
 
-async function addExcludedOrigin(
-	origin: string,
-): Promise<ActionResult<'ADD_EXCLUDED_ORIGIN'>> {
+async function addExcludedOrigins(
+	origins: string[],
+): Promise<ActionResult<'ADD_EXCLUDED_ORIGINS'>> {
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
 			return {ok: false, error: 'Sessions are disabled in Settings.'};
 		}
 
-		const normalized = normalizeExcludedOrigins([origin])[0];
-		if (!normalized) {
-			return {ok: false, error: 'Enter a valid http or https website origin.'};
+		const hosts = normalizeExcludedOrigins(origins);
+		if (hosts.length === 0) {
+			return {ok: false, error: 'Enter a valid website, such as example.com.'};
 		}
 
-		if (!store.settings.excludedOrigins.includes(normalized)) {
+		const added = hosts.filter(
+			(host) => !store.settings.excludedOrigins.includes(host),
+		);
+		if (added.length > 0) {
 			store.settings.excludedOrigins = normalizeExcludedOrigins([
 				...store.settings.excludedOrigins,
-				normalized,
+				...added,
 			]);
 			await writeStore(store);
 		}
 
-		return {ok: true, origin: normalized, settings: store.settings};
+		return {ok: true, added: added.length, settings: store.settings};
 	});
+}
+
+async function addExcludedOrigin(
+	origin: string,
+): Promise<ActionResult<'ADD_EXCLUDED_ORIGIN'>> {
+	const result = await addExcludedOrigins([origin]);
+	if (!result.ok) {
+		return result;
+	}
+
+	return {
+		ok: true,
+		origin: normalizeExcludedHost(origin) ?? origin,
+		settings: result.settings,
+	};
 }
 
 async function removeExcludedOrigin(
@@ -4026,6 +4091,12 @@ async function handleMessage(
 			);
 		}
 
+		case 'ADD_EXCLUDED_ORIGINS': {
+			return addExcludedOrigins(
+				Array.isArray(message.origins) ? message.origins.slice(0, 500) : [],
+			);
+		}
+
 		case 'ADD_EXCLUDED_ORIGIN': {
 			return addExcludedOrigin(message.origin);
 		}
@@ -4672,7 +4743,7 @@ function updateMenu(
 }
 
 /**
-The web origin of the active tab (or `tab`), or null for non-web pages.
+The exact host name of the active tab (or `tab`), or null for non-web pages.
 */
 async function menuTabOrigin(tab?: chrome.tabs.Tab): Promise<string | null> {
 	try {
@@ -4680,7 +4751,7 @@ async function menuTabOrigin(tab?: chrome.tabs.Tab): Promise<string | null> {
 			tab ??
 			(await chrome.tabs.query({active: true, lastFocusedWindow: true}))[0];
 		const url = normalizeUrl(target?.url);
-		return url ? new URL(url).origin : null;
+		return url ? new URL(url).hostname.toLowerCase() : null;
 	} catch {
 		return null;
 	}
@@ -4689,7 +4760,9 @@ async function menuTabOrigin(tab?: chrome.tabs.Tab): Promise<string | null> {
 async function excludeMenuState(settings: Settings, tab?: chrome.tabs.Tab) {
 	const origin = await menuTabOrigin(tab);
 	return {
-		checked: Boolean(origin && settings.excludedOrigins.includes(origin)),
+		checked: Boolean(
+			origin && hostIsExcluded(origin, settings.excludedOrigins),
+		),
 		enabled: Boolean(origin),
 	};
 }
@@ -5157,18 +5230,33 @@ async function toggleExcludedSite(
 		return {ok: false, error: 'Open a regular web page to exclude its site.'};
 	}
 
+	// An excluded host (directly or through a parent domain) is un-excluded by removing every entry that covers it.
 	const store = await getStore();
-	const result = store.settings.excludedOrigins.includes(origin)
-		? await removeExcludedOrigin(origin)
-		: await addExcludedOrigin(origin);
+	const covering = store.settings.excludedOrigins.filter(
+		(entry) => origin === entry || origin.endsWith(`.${entry}`),
+	);
+	let result:
+		| Awaited<ReturnType<typeof addExcludedOrigin>>
+		| Awaited<ReturnType<typeof removeExcludedOrigin>> =
+		await (covering.length > 0
+			? removeExcludedOrigin(covering[0])
+			: addExcludedOrigin(origin));
+	for (const entry of covering.slice(1)) {
+		if (result.ok) {
+			result = await removeExcludedOrigin(entry);
+		}
+	}
+
 	if (!result.ok) {
 		return result;
 	}
 
-	const excluded = result.settings.excludedOrigins.includes(origin);
+	const excluded = hostIsExcluded(origin, result.settings.excludedOrigins);
 	await updateMenu(MENU.actionExclude, {checked: excluded, enabled: true});
 	if (excluded) {
-		console.info(`${APP_NAME} will skip ${origin} in future session saves.`);
+		console.info(
+			`${APP_NAME} will skip ${origin} and its subdomains in future session saves.`,
+		);
 	}
 
 	return {ok: true, origin, excluded};

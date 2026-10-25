@@ -973,7 +973,7 @@ test('ADD_EXCLUDED_ORIGIN validates and adds a website from Settings', async () 
 	assert.equal(added.ok, true, added.error);
 	assert.equal(
 		JSON.stringify(added.settings.excludedOrigins),
-		JSON.stringify(['https://example.test']),
+		JSON.stringify(['example.test']),
 	);
 });
 
@@ -2268,9 +2268,7 @@ test('ERASE_DATA sessions removes sessions and folders but keeps bookmarks and s
 		harness.state.bookmarkColumns.map((column) => column.id),
 		['column-news'],
 	);
-	assert.deepEqual(harness.state.settings.excludedOrigins, [
-		'https://private.example',
-	]);
+	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
 	assert.equal(harness.state.settings.copyFormat, 'url');
 });
 
@@ -2293,9 +2291,7 @@ test('ERASE_DATA bookmarks removes bookmarks and columns and recreates the defau
 		harness.state.folders.map((folder) => folder.id),
 		['unfiled', 'folder-work'],
 	);
-	assert.deepEqual(harness.state.settings.excludedOrigins, [
-		'https://private.example',
-	]);
+	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
 });
 
 test('ERASE_DATA all restores fresh-install data while keeping settings and excluded sites', async () => {
@@ -2308,9 +2304,7 @@ test('ERASE_DATA all restores fresh-install data while keeping settings and excl
 	assert.deepEqual(harness.state.folders, freshFolders);
 	assert.deepEqual(harness.state.bookmarks, []);
 	assert.deepEqual(harness.state.bookmarkColumns, freshColumns);
-	assert.deepEqual(harness.state.settings.excludedOrigins, [
-		'https://private.example',
-	]);
+	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
 	assert.equal(harness.state.settings.copyFormat, 'url');
 
 	const invalid = await harness.sendMessage({
@@ -4161,4 +4155,93 @@ test('sessionLayout defaults to list, accepts grid, ignores junk and resets to l
 	assert.equal(junk.state.settings.sessionLayout, 'grid');
 	const reset = await junk.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.sessionLayout, 'list');
+});
+
+test('excluded sites are hostnames covering subdomains; old origin entries migrate', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({
+			closeOnSave: false,
+			excludedOrigins: [
+				'https://google.com',
+				'https://Mail.Google.com:8443',
+				'https://google.com',
+				'garbage',
+			],
+		}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://gemini.google.com/app',
+				title: 'Gemini',
+			},
+			{
+				id: 2,
+				windowId: 10,
+				index: 1,
+				active: false,
+				url: 'https://notgoogle.com/',
+				title: 'Not',
+			},
+			{
+				id: 3,
+				windowId: 10,
+				index: 2,
+				active: false,
+				url: 'https://google.com/',
+				title: 'Root',
+			},
+			{
+				id: 4,
+				windowId: 10,
+				index: 3,
+				active: false,
+				url: 'https://other.example/',
+				title: 'Other',
+			},
+		],
+	);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.deepEqual(
+		[...state.settings.excludedOrigins],
+		['google.com', 'mail.google.com'],
+	);
+	const saved = await harness.sendMessage({type: 'SAVE_TABS', scope: 'window'});
+	assert.equal(saved.ok, true, saved.error);
+	const group = harness.state.groups.find(
+		(entry) => entry.id === saved.groupId,
+	)!;
+	assert.deepEqual(
+		group.tabs.map((tab) => tab.url),
+		['https://notgoogle.com/', 'https://other.example/'],
+	);
+});
+
+test('ADD_EXCLUDED_ORIGINS adds many websites at once and ignores repeats', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({excludedOrigins: ['known.test']}),
+	);
+	const result = await harness.sendMessage({
+		type: 'ADD_EXCLUDED_ORIGINS',
+		origins: [
+			'known.test',
+			'https://a.example/x',
+			'*.b.example',
+			'a.example',
+			'nonsense',
+		],
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.added, 2);
+	assert.deepEqual(
+		[...result.settings.excludedOrigins],
+		['known.test', 'a.example', 'b.example'],
+	);
+	const none = await harness.sendMessage({
+		type: 'ADD_EXCLUDED_ORIGINS',
+		origins: ['nonsense'],
+	});
+	assert.equal(none.ok, false);
 });

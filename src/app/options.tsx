@@ -46,6 +46,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 	Switch,
+	Textarea,
 	TooltipProvider,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
@@ -66,6 +67,11 @@ import type {ActionResult, EraseScope, Settings} from './types';
 import {BackupDialog, ImportDialog} from './data-transfer';
 import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
+import {
+	excludedHostError,
+	normalizeExcludedHost,
+	parseExcludedLines,
+} from './excluded-sites';
 import {
 	highlightSegments,
 	matchesAnyTerm,
@@ -535,7 +541,7 @@ const DATA = {
 const EXCLUDED = {
 	title: 'Excluded websites',
 	description:
-		'Excludes the exact scheme, host, and port from future session saves. Existing sessions and bookmarks are unchanged.',
+		'Excludes a website and all its subdomains from future session saves. Existing sessions and bookmarks are unchanged.',
 	words: ['exclude', 'ignore', 'site', 'origin', 'host', 'domain', 'Add site'],
 };
 const DEFAULTS = {
@@ -553,42 +559,6 @@ type DataRowDef = {
 	action: ReactNode;
 };
 
-// Mirrors the service worker's rule (new URL(value).origin, http/https only) so the dialog only
-// submits values the backend accepts. Bare hosts such as "example.com" are treated as https.
-function parseExcludedOrigin(value: string) {
-	const text = value.trim();
-	if (!text) {
-		return {origin: '', error: ''};
-	}
-
-	try {
-		const url = new URL(
-			/^[a-z][\d+\-.a-z]*:\/\//i.test(text) ? text : `https://${text}`,
-		);
-		if (!['http:', 'https:'].includes(url.protocol)) {
-			return {origin: '', error: 'Use an http:// or https:// address.'};
-		}
-
-		if (
-			!url.hostname.includes('.') &&
-			url.hostname !== 'localhost' &&
-			!url.hostname.startsWith('[')
-		) {
-			return {
-				origin: '',
-				error: 'Enter a full host name, such as example.com.',
-			};
-		}
-
-		return {origin: url.origin, error: ''};
-	} catch {
-		return {
-			origin: '',
-			error: 'Enter a valid website, such as https://example.com.',
-		};
-	}
-}
-
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const [status, showStatus] = useStatus();
@@ -596,16 +566,21 @@ function Options() {
 	const [settings, setSettings] = useState<Partial<Settings>>({});
 	const [excluded, setExcluded] = useState<string[]>([]);
 	const [excludedDraft, setExcludedDraft] = useState('');
+	const [bulkMode, setBulkMode] = useState(false);
+	const [showInvalid, setShowInvalid] = useState(false);
 	const [siteDialog, setSiteDialog] = useState(false);
 	const [siteError, setSiteError] = useState('');
 	const [siteBusy, setSiteBusy] = useState(false);
 	const siteInputRef = useRef<HTMLInputElement>(null);
+	const siteTextRef = useRef<HTMLTextAreaElement>(null);
 	const [busy, setBusy] = useState('');
 	const [confirmDefaults, setConfirmDefaults] = useState(false);
 	const [resetBusy, setResetBusy] = useState(false);
-	const [erase, setErase] = useState<{scope: EraseScope; busy: boolean} | null>(
-		null,
-	);
+	const [erase, setErase] = useState<{
+		sessions: boolean;
+		bookmarks: boolean;
+		busy: boolean;
+	} | null>(null);
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const eraseFocusRef = useRef<HTMLElement | null>(null);
@@ -699,14 +674,16 @@ function Options() {
 		}
 	}
 
-	const parsedSite = parseExcludedOrigin(excludedDraft);
-	const siteDuplicate =
-		Boolean(parsedSite.origin) && excluded.includes(parsedSite.origin);
+	const siteHost = normalizeExcludedHost(excludedDraft) ?? '';
+	const siteDuplicate = Boolean(siteHost) && excluded.includes(siteHost);
 	const siteFieldError =
 		siteError ||
-		parsedSite.error ||
+		excludedHostError(excludedDraft) ||
 		(siteDuplicate ? 'This website is already excluded.' : '');
-	const siteValid = Boolean(parsedSite.origin) && !siteFieldError;
+	const bulk = parseExcludedLines(excludedDraft, excluded);
+	const siteValid = bulkMode
+		? bulk.valid.length > 0
+		: Boolean(siteHost) && !siteFieldError;
 
 	// Dialog state is reset on open, not on close, so the closing animation never shows an emptied form.
 	function openSiteDialog() {
@@ -723,12 +700,13 @@ function Options() {
 		}
 
 		setSiteBusy(true);
+		const entries = bulkMode ? bulk.valid : [siteHost];
 		let result:
-			| ActionResult<'ADD_EXCLUDED_ORIGIN'>
+			| ActionResult<'ADD_EXCLUDED_ORIGINS'>
 			| {ok: false; error: string | undefined}
 			| undefined;
 		try {
-			result = await send('ADD_EXCLUDED_ORIGIN', {origin: parsedSite.origin});
+			result = await send('ADD_EXCLUDED_ORIGINS', {origins: entries});
 		} catch (reason) {
 			result = {ok: false, error: messageOf(reason)};
 		}
@@ -739,14 +717,13 @@ function Options() {
 			return;
 		}
 
-		setExcluded(
-			result.settings?.excludedOrigins || [
-				...excluded,
-				result.origin || parsedSite.origin,
-			],
-		);
+		setExcluded(result.settings?.excludedOrigins || [...excluded, ...entries]);
 		setSiteDialog(false);
-		showStatus('Website exclusion added.');
+		showStatus(
+			bulkMode
+				? `Excluded ${plural(result.added, 'website')}.`
+				: 'Website exclusion added.',
+		);
 	}
 
 	async function removeExcludedOrigin(origin: string) {
@@ -819,48 +796,29 @@ function Options() {
 		...(bookmarkCount ? [plural(bookmarkCount, 'bookmark')] : []),
 		...(bookmarkColumns ? [plural(bookmarkColumns, 'bookmark column')] : []),
 	];
-	const eraseScopes: Record<
-		EraseScope,
-		{
-			label: string;
-			title: string;
-			parts: string[];
-			kept: string;
-			icon: IconComponent;
-		}
-	> = {
-		sessions: {
-			label: 'Erase all sessions',
-			title: 'Erase all sessions?',
-			parts: sessionParts,
-			kept: 'Bookmarks, settings, and excluded sites are kept.',
-			icon: PanelsTopLeft,
-		},
-		bookmarks: {
-			label: 'Erase all bookmarks',
-			title: 'Erase all bookmarks?',
-			parts: bookmarkParts,
-			kept: 'An empty Bookmarks column is recreated. Sessions, settings, and excluded sites are kept.',
-			icon: Bookmark,
-		},
-		all: {
-			label: 'Erase everything',
-			title: 'Erase all sessions and bookmarks?',
-			parts: [...sessionParts, ...bookmarkParts],
-			kept: 'Settings and excluded sites are kept.',
-			icon: TriangleAlert,
-		},
+	const eraseScope: EraseScope | null = erase
+		? erase.sessions && erase.bookmarks
+			? 'all'
+			: erase.sessions
+				? 'sessions'
+				: erase.bookmarks
+					? 'bookmarks'
+					: null
+		: null;
+	const eraseLabel = {
+		sessions: 'Erase sessions',
+		bookmarks: 'Erase bookmarks',
+		all: 'Erase everything',
 	};
-	const eraseInfo = erase ? eraseScopes[erase.scope] : null;
 
-	function askErase(scope: EraseScope, trigger: HTMLElement) {
+	function askErase(trigger: HTMLElement) {
 		eraseFocusRef.current = trigger;
-		setErase({scope, busy: false});
+		setErase({sessions: false, bookmarks: false, busy: false});
 	}
 
-	// "Erase everything" also asks for ERASE_WORD; the confirmation dialog enables its button only once it is typed.
+	// Erasing everything also asks for ERASE_WORD; the confirmation dialog enables its button only once it is typed.
 	async function confirmErase() {
-		if (!erase || erase.busy) {
+		if (!erase || !eraseScope || erase.busy) {
 			return;
 		}
 
@@ -1074,21 +1032,16 @@ function Options() {
 		visibleData.length +
 		Number(showExcluded) +
 		Number(showDefaults);
-	const renderDataRows = (group: DataRowDef['group']) =>
-		visibleData
-			.filter((row) => row.group === group)
-			.map((row) => (
-				<DataRow
-					key={row.key}
-					icon={row.icon}
-					label={hl(row.label)}
-					help={hl(row.help)}
-				>
-					{row.action}
-				</DataRow>
-			));
-	const transferRows = renderDataRows('transfer');
-	const eraseRows = renderDataRows('erase');
+	const dataRowElements = visibleData.map((row) => (
+		<DataRow
+			key={row.key}
+			icon={row.icon}
+			label={hl(row.label)}
+			help={hl(row.help)}
+		>
+			{row.action}
+		</DataRow>
+	));
 
 	return (
 		<PageShell data-brand="tablodge" className="max-w-4xl">
@@ -1434,9 +1387,14 @@ function Options() {
 													key={origin}
 													className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
 												>
-													<code className="min-w-0 truncate text-xs">
-														{origin}
-													</code>
+													<span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+														<code className="min-w-0 truncate text-xs">
+															{origin}
+														</code>
+														<span className="text-xs text-muted-foreground">
+															Includes subdomains
+														</span>
+													</span>
 													<Button
 														variant="ghost"
 														size="sm"
@@ -1556,46 +1514,118 @@ function Options() {
 				<DialogContent
 					onOpenAutoFocus={(event) => {
 						event.preventDefault();
-						siteInputRef.current?.focus();
+						(siteTextRef.current ?? siteInputRef.current)?.focus();
 					}}
 				>
 					<form noValidate onSubmit={addExcludedOrigin}>
 						<DialogHeader>
 							<DialogTitle>Exclude a website</DialogTitle>
 							<DialogDescription>
-								Future session saves skip tabs from this scheme, host, and port.
+								Excludes this domain and all its subdomains, e.g. google.com
+								also covers mail.google.com.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							<div className="space-y-1.5">
-								<Label htmlFor="excluded-origin">Website origin</Label>
-								<Input
-									ref={siteInputRef}
-									id="excluded-origin"
-									value={excludedDraft}
-									placeholder="https://example.com"
-									autoComplete="url"
-									inputMode="url"
-									spellCheck={false}
-									aria-invalid={Boolean(siteFieldError)}
-									aria-describedby="excluded-origin-message"
-									className="aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive"
-									onChange={(event) => {
-										setExcludedDraft(event.target.value);
+							<div className="flex items-center justify-between gap-3">
+								<Label htmlFor="excluded-bulk">Bulk add</Label>
+								<Switch
+									id="excluded-bulk"
+									checked={bulkMode}
+									onCheckedChange={(checked) => {
+										setBulkMode(checked);
 										setSiteError('');
 									}}
 								/>
-								<p
-									id="excluded-origin-message"
-									className={`min-h-5 text-xs leading-5 ${siteFieldError ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
-									aria-live="polite"
-								>
-									{siteFieldError ||
-										(parsedSite.origin
-											? `Will exclude ${parsedSite.origin}`
-											: 'Paths are ignored. Without a scheme, https:// is assumed.')}
-								</p>
 							</div>
+							{bulkMode ? (
+								<div className="space-y-1.5">
+									<Label htmlFor="excluded-origin">Websites</Label>
+									<Textarea
+										ref={siteTextRef}
+										id="excluded-origin"
+										rows={8}
+										value={excludedDraft}
+										placeholder={
+											'One website per line, e.g.\nexample.com\nhttps://news.site.org'
+										}
+										spellCheck={false}
+										className="font-mono text-xs"
+										aria-describedby="excluded-origin-message"
+										onChange={(event) => {
+											setExcludedDraft(event.target.value);
+											setSiteError('');
+										}}
+									/>
+									<p
+										id="excluded-origin-message"
+										className={`min-h-5 text-xs leading-5 ${siteError ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+										aria-live="polite"
+									>
+										{siteError ||
+											[
+												plural(bulk.valid.length, 'website') +
+													' will be excluded',
+												bulk.duplicates.length > 0
+													? `${bulk.duplicates.length} already excluded`
+													: '',
+												bulk.invalid.length > 0
+													? `${plural(bulk.invalid.length, 'invalid line')} ignored`
+													: '',
+											]
+												.filter(Boolean)
+												.join(' · ')}
+									</p>
+									{bulk.invalid.length > 0 && (
+										<div className="text-xs text-muted-foreground">
+											<button
+												type="button"
+												className="underline underline-offset-2"
+												aria-expanded={showInvalid}
+												onClick={() => setShowInvalid((shown) => !shown)}
+											>
+												{showInvalid ? 'Hide' : 'Show'} ignored lines
+											</button>
+											{showInvalid && (
+												<ul className="mt-1 max-h-20 overflow-auto font-mono [overflow-wrap:anywhere]">
+													{bulk.invalid.map((line, index) => (
+														<li key={`${index}-${line}`}>{line}</li>
+													))}
+												</ul>
+											)}
+										</div>
+									)}
+								</div>
+							) : (
+								<div className="space-y-1.5">
+									<Label htmlFor="excluded-origin">Website</Label>
+									<Input
+										ref={siteInputRef}
+										id="excluded-origin"
+										value={excludedDraft}
+										placeholder="example.com"
+										autoComplete="url"
+										inputMode="url"
+										spellCheck={false}
+										aria-invalid={Boolean(siteFieldError)}
+										aria-describedby="excluded-origin-message"
+										className="aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive"
+										onChange={(event) => {
+											setExcludedDraft(event.target.value);
+											setSiteError('');
+										}}
+									/>
+									<p
+										id="excluded-origin-message"
+										className={`min-h-5 text-xs leading-5 ${siteFieldError ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+										aria-live="polite"
+									>
+										{siteFieldError ||
+											(siteHost
+												? `Will exclude ${siteHost} and its subdomains`
+												: 'Paths, ports and www. are ignored.')}
+									</p>
+								</div>
+							)}
 						</DialogBody>
 						<DialogFooter>
 							<Button
@@ -1607,7 +1637,11 @@ function Options() {
 							</Button>
 							<Button type="submit" disabled={!siteValid || siteBusy}>
 								<Plus className="h-4 w-4" />
-								{siteBusy ? 'Adding' : 'Add site'}
+								{siteBusy
+									? 'Adding'
+									: bulkMode
+										? `Add ${plural(bulk.valid.length, 'website')}`
+										: 'Add site'}
 							</Button>
 						</DialogFooter>
 					</form>
