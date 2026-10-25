@@ -15,7 +15,7 @@ TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, 
 - **Organize sessions.** Folders, notes and descriptions, search and sorting, multi-select, archive, and lock (a locked session keeps its tabs no matter how you restore it).
 - **Flexible restores.** Restore into the current or a new window; keep, remove, or archive the saved tabs afterward; skip duplicates; optionally unload background tabs. Ctrl/Cmd-, Alt-, and Shift-click give one-off overrides.
 - **Import and export.** Session and bookmark JSON backups, a shareable HTML page of selected sessions, and a one-time import of your browser bookmarks.
-- **Everywhere you need it.** A toolbar popup with a quick chooser, an optional Side Panel bookmark list, keyboard shortcuts, and page and toolbar context menus.
+- **Everywhere you need it.** A toolbar popup with a quick chooser, a side panel (bookmarks, sessions and open tabs), keyboard shortcuts, and page and toolbar context menus.
 - **Local-only and private.** No host permissions, no content scripts, no network requests, no analytics. See [PRIVACY.md](PRIVACY.md).
 - **Light, dark, and system themes** with no flash on load.
 
@@ -70,6 +70,7 @@ Then click the reload button (↻) on TabLodge's card.
 ### After installing
 
 - Open a new tab to see the dashboard, or click the toolbar icon for the quick popup.
+- Open the side panel with the "Open side panel" shortcut or the toolbar icon's right-click menu, or make the toolbar icon open it (Settings > Side Panel > Toolbar icon opens). In Brave, right-click the sidebar and add TabLodge, or pick it from the sidebar's extensions panel.
 - Change keyboard shortcuts at `chrome://extensions/shortcuts` (or your browser's equivalent).
 
 ## Development

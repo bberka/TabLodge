@@ -320,6 +320,11 @@ function createHarness(
 			async setBadgeBackgroundColor() {},
 			onClicked: on('actionClicked'),
 		},
+		sidePanel: {
+			async open() {},
+			async setOptions() {},
+			async setPanelBehavior() {},
+		},
 		commands: {onCommand: on('onCommand')},
 		contextMenus: {
 			ACTION_MENU_TOP_LEVEL_LIMIT: 6,
@@ -515,9 +520,9 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	const action = harness.topLevel('action');
 	assert.deepEqual(titles(action), [
 		'Open dashboard',
+		'Open side panel',
 		'Save this window',
 		'Exclude this site from saves',
-		'---',
 		'Help',
 		'Settings',
 	]);
@@ -575,7 +580,7 @@ test('disabled systems drop their items', async () => {
 	]);
 	assert.deepEqual(titles(noSessions.topLevel('action')), [
 		'Open dashboard',
-		'---',
+		'Open side panel',
 		'Help',
 		'Settings',
 	]);

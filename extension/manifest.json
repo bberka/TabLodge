@@ -53,6 +53,9 @@
 			},
 			"description": "Save selected tabs in the current window"
 		},
+		"toggle-side-panel": {
+			"description": "Open the TabLodge side panel"
+		},
 		"open-dashboard": {
 			"description": "Open the TabLodge dashboard"
 		}

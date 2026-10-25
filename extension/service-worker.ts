@@ -39,6 +39,7 @@ Settings as stored or patched; unknown values are normalized.
 */
 type RawSettings = {[K in keyof Settings]?: unknown} & {
 	duplicateHandling?: unknown;
+	sidePanelEnabled?: unknown;
 };
 type Result<T extends object = {}> = ({ok: true} & T) | ActionFailure;
 /**
@@ -156,7 +157,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	actionMode: 'popup',
 	sessionsEnabled: true,
 	bookmarksEnabled: true,
-	sidePanelEnabled: false,
+	toolbarOpens: 'popup',
 	excludedOrigins: [],
 	saveDuplicateHandling: 'allow',
 	saveDuplicateTitle: 'existing',
@@ -667,7 +668,12 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			: 'popup',
 		sessionsEnabled: raw.sessionsEnabled !== false,
 		bookmarksEnabled: raw.bookmarksEnabled !== false,
-		sidePanelEnabled: Boolean(raw.sidePanelEnabled),
+		// `sidePanelEnabled` is the pre-toolbarOpens boolean; honour it for data saved by older builds.
+		toolbarOpens:
+			raw.toolbarOpens === 'sidepanel' ||
+			(raw.toolbarOpens === undefined && raw.sidePanelEnabled === true)
+				? 'sidepanel'
+				: 'popup',
 		excludedOrigins: normalizeExcludedOrigins(raw.excludedOrigins),
 		saveDuplicateHandling:
 			raw.saveDuplicateHandling === 'reject' ? 'reject' : 'allow',
@@ -3620,7 +3626,7 @@ async function updateSettings(
 		if (
 			previousSettings.actionMode !== store.settings.actionMode ||
 			previousSettings.sessionsEnabled !== store.settings.sessionsEnabled ||
-			previousSettings.sidePanelEnabled !== store.settings.sidePanelEnabled
+			previousSettings.toolbarOpens !== store.settings.toolbarOpens
 		) {
 			await syncToolbarAction(store.settings);
 		}
@@ -3956,16 +3962,45 @@ chrome.commands.onCommand.addListener((command, tab) => {
 	if (command === 'open-dashboard') {
 		void openDashboardForTab(tab);
 	}
+
+	if (command === 'toggle-side-panel') {
+		openSidePanel(tab);
+	}
 });
+
+/**
+Opens the side panel for the tab's window. Must run synchronously inside a user gesture
+(command, menu click), so it is not awaited behind other work.
+*/
+function openSidePanel(tab?: chrome.tabs.Tab) {
+	if (!chrome.sidePanel?.open) {
+		return;
+	}
+
+	const windowId = tab?.windowId;
+	const request =
+		windowId === undefined
+			? chrome.windows
+					.getLastFocused()
+					.then(async (focused) =>
+						chrome.sidePanel.open({windowId: focused.id!}),
+					)
+			: chrome.sidePanel.open({windowId});
+	void Promise.resolve(request).catch(() => {
+		/*
+		The panel can only open from a user gesture; ignore refusals.
+		*/
+	});
+}
 
 async function syncToolbarAction(settings: Settings) {
 	const sidePanelEnabled = Boolean(
-		settings.sidePanelEnabled && chrome.sidePanel,
+		settings.toolbarOpens === 'sidepanel' && chrome.sidePanel,
 	);
 	if (chrome.sidePanel) {
 		try {
 			await chrome.sidePanel.setOptions({
-				enabled: sidePanelEnabled,
+				enabled: true,
 				path: 'sidepanel.html',
 			});
 			await chrome.sidePanel.setPanelBehavior({
@@ -4183,6 +4218,7 @@ const MENU = {
 	actionOpen: 'tablodge-action-open',
 	actionSaveWindow: 'tablodge-action-save-window',
 	actionExclude: 'tablodge-action-exclude',
+	actionSidePanel: 'tablodge-action-side-panel',
 	actionHelp: 'tablodge-action-help',
 	actionSettings: 'tablodge-action-settings',
 } as const;
@@ -4400,6 +4436,14 @@ function contextMenuPlan(
 	if (settings.contextMenuActionEnabled) {
 		const action = {contexts: ['action']} satisfies Partial<MenuItemProperties>;
 		items.push({id: MENU.actionOpen, title: 'Open dashboard', ...action});
+		if (chrome.sidePanel) {
+			items.push({
+				id: MENU.actionSidePanel,
+				title: 'Open side panel',
+				...action,
+			});
+		}
+
 		if (settings.sessionsEnabled) {
 			items.push(
 				{
@@ -4419,7 +4463,6 @@ function contextMenuPlan(
 		}
 
 		items.push(
-			{id: 'tablodge-action-separator', type: 'separator', ...action},
 			{id: MENU.actionHelp, title: 'Help', ...action},
 			{id: MENU.actionSettings, title: 'Settings', ...action},
 		);
@@ -5110,6 +5153,11 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 			() => openDashboardForTab(tab),
 			false,
 		);
+		return;
+	}
+
+	if (id === MENU.actionSidePanel) {
+		openSidePanel(tab);
 		return;
 	}
 

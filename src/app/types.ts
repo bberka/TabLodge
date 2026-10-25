@@ -44,7 +44,10 @@ export type Settings = {
 	actionMode: ActionMode;
 	sessionsEnabled: boolean;
 	bookmarksEnabled: boolean;
-	sidePanelEnabled: boolean;
+	/**
+	What the toolbar icon opens: the quick popup or the browser side panel.
+	*/
+	toolbarOpens: 'popup' | 'sidepanel';
 	excludedOrigins: string[];
 	saveDuplicateHandling: 'allow' | 'reject';
 	saveDuplicateTitle: TitlePolicy;
