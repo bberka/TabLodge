@@ -2049,6 +2049,40 @@ async function reorderGroup(
 	});
 }
 
+async function setGroupOrder(
+	order: string[],
+): Promise<ActionResult<'SET_GROUP_ORDER'>> {
+	return mutate(async () => {
+		const store = await getStore();
+		if (!store.settings.sessionsEnabled) {
+			return {ok: false, error: 'Sessions are disabled in Settings.'};
+		}
+
+		const byId = new Map(store.groups.map((group) => [group.id, group]));
+		const ids = [
+			...new Set(
+				(Array.isArray(order) ? order : []).filter(
+					(id): id is string => typeof id === 'string' && byId.has(id),
+				),
+			),
+		];
+		// The listed sessions are re-dealt into the stored positions they already occupied.
+		const slots = store.groups
+			.map((group, index) => (ids.includes(group.id) ? index : -1))
+			.filter((index) => index !== -1);
+		for (const [position, slot] of slots.entries()) {
+			store.groups[slot] = byId.get(ids[position])!;
+		}
+
+		store.settings = normalizeSettings({
+			...store.settings,
+			sessionSort: 'custom',
+		});
+		await writeStore(store);
+		return {ok: true};
+	});
+}
+
 function normalizeFolderName(value: unknown) {
 	return typeof value === 'string'
 		? value
@@ -2223,6 +2257,73 @@ async function deleteTab(
 		store.groups = store.groups.filter(
 			(entry) => entry.id !== groupId || entry.tabs.length > 0,
 		);
+		await writeStore(store);
+		return {ok: true};
+	});
+}
+
+async function moveTab(
+	fromGroupId: string,
+	tabId: string,
+	toGroupId: string,
+	targetTabId: string | null = null,
+	position: InsertPosition = 'after',
+	copy = false,
+): Promise<ActionResult<'MOVE_TAB'>> {
+	return mutate(async () => {
+		const store = await getStore();
+		if (!store.settings.sessionsEnabled) {
+			return {ok: false, error: 'Sessions are disabled in Settings.'};
+		}
+
+		const source = findGroup(store, fromGroupId);
+		const target = findGroup(store, toGroupId);
+		const tab = source?.tabs.find((entry) => entry.id === tabId);
+		if (!source || !tab) {
+			return {ok: false, error: 'That saved tab no longer exists.'};
+		}
+
+		if (!target) {
+			return {ok: false, error: 'That saved session no longer exists.'};
+		}
+
+		if (targetTabId === tabId && source === target) {
+			return {ok: true};
+		}
+
+		// A moved link leaves its split view: the partner becomes a plain tab as well (a copy leaves the pair alone).
+		if (!copy && tab.split) {
+			const splitId = tab.split.id;
+			for (const entry of source.tabs) {
+				if (entry.split?.id === splitId) {
+					delete entry.split;
+				}
+			}
+		}
+
+		const moving: SavedTab = copy
+			? {...structuredClone(tab), id: makeId(), savedAt: Date.now()}
+			: tab;
+		delete moving.split;
+		if (!copy) {
+			source.tabs = source.tabs.filter((entry) => entry.id !== tabId);
+		}
+
+		const index = targetTabId
+			? target.tabs.findIndex((entry) => entry.id === targetTabId)
+			: -1;
+		const insertAt =
+			index === -1
+				? target.tabs.length
+				: index + (position === 'after' ? 1 : 0);
+		target.tabs.splice(insertAt, 0, moving);
+		const now = Date.now();
+		target.updatedAt = now;
+		if (!copy) {
+			source.updatedAt = now;
+		}
+
+		store.groups = store.groups.filter((entry) => entry.tabs.length > 0);
 		await writeStore(store);
 		return {ok: true};
 	});
@@ -3528,6 +3629,10 @@ async function handleMessage(
 			);
 		}
 
+		case 'SET_GROUP_ORDER': {
+			return setGroupOrder(message.order);
+		}
+
 		case 'CREATE_FOLDER': {
 			return createFolder(message.name);
 		}
@@ -3546,6 +3651,17 @@ async function handleMessage(
 
 		case 'DELETE_TAB': {
 			return deleteTab(message.groupId, message.tabId);
+		}
+
+		case 'MOVE_TAB': {
+			return moveTab(
+				message.fromGroupId,
+				message.tabId,
+				message.toGroupId,
+				message.targetTabId || null,
+				message.position,
+				message.copy === true,
+			);
 		}
 
 		case 'UPDATE_TAB': {

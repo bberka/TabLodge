@@ -1,15 +1,26 @@
-import {useEffect, useMemo, useRef, useState, type SyntheticEvent} from 'react';
+import {
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type DragEvent,
+	type MouseEvent,
+	type SyntheticEvent,
+} from 'react';
 import {
 	Archive,
 	ArrowDown,
 	ArrowDownUp,
 	ArrowUp,
+	ArrowUpRight,
 	BookmarkPlus,
 	ChevronRight,
 	Columns2,
 	Copy,
 	Download,
 	Edit3,
+	ExternalLink,
+	FolderInput,
 	FolderPlus,
 	LockKeyhole,
 	MoreHorizontal,
@@ -42,7 +53,6 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 	ExpandingSearch,
 	Input,
@@ -57,6 +67,11 @@ import {
 } from '../shared/ui';
 import '../../styles/extension-app.css';
 import {
+	ActionContextMenu,
+	ActionDropdownMenu,
+	type MenuAction,
+} from '../components/ui/action-menu';
+import {
 	EmptyState,
 	LoadingLine,
 	StatusLine,
@@ -66,7 +81,7 @@ import {
 	useStatus,
 	useTabLodgeState,
 } from './common';
-import {BackupDialog, ImportDialog, downloadFile} from './data-transfer';
+import {BackupDialog, ImportDialog, useShareDialog} from './data-transfer';
 import type {ExportData} from './export-formats';
 import {
 	activateSessionTitle,
@@ -77,6 +92,7 @@ import {
 import type {
 	BookmarkColumn,
 	Folder,
+	InsertPosition,
 	RestoreMode,
 	RestoreTarget,
 	SavedTab as SavedTabRecord,
@@ -86,7 +102,8 @@ import type {
 	Settings,
 	TabLodgeMessages,
 } from './types';
-import {PROJECT} from './project';
+import {setLinkDragImage, setSessionDragImage} from './drag-preview';
+import {openLink, resolveLinkTarget} from './link-target';
 
 /**
 Modifier keys that choose how a restore behaves (a mouse or keyboard event satisfies this).
@@ -109,6 +126,10 @@ type ReorderDirection = TabLodgeMessages['REORDER_GROUP']['direction'];
 type Confirmation = {
 	title: string;
 	description: string;
+	/**
+	Muted, truncated line naming the item (kept out of the title).
+	*/
+	detail?: string;
 	confirmLabel: string;
 	run: () => Promise<void>;
 	busy?: boolean;
@@ -138,11 +159,6 @@ const setMember = (set: Set<string>, key: string, member: boolean) => {
 	}
 };
 
-const safeFilename = (value?: string) =>
-	String(value || 'session')
-		.toLowerCase()
-		.replaceAll(/[^0-9a-z]+/g, '-')
-		.replaceAll(/^-|-$/g, '') || 'session';
 const tabKey = (groupId: string, tabId: string) =>
 	JSON.stringify([groupId, tabId]);
 const dateText = (value: unknown) => {
@@ -224,12 +240,16 @@ export function SessionManager({
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const confirmFocusRef = useRef<HTMLElement | null>(null);
+	const {openShare, shareDialog} = useShareDialog(showStatus);
+	const dragItemRef = useRef<DragItem | null>(null);
+	const [dragging, setDragging] = useState<DragItem | null>(null);
+	const [dropMark, setDropMark] = useState<DropMark | null>(null);
 	const groups = state?.groups || NO_SESSIONS;
 	const folders = state?.folders || NO_FOLDERS;
 	const settings: Partial<Settings> = state?.settings || {};
 	const folderDialog = typeof dialog === 'object' ? dialog : null;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
-	const expandAll = settings.expandSessionsByDefault === true;
+	const expandAll = settings.expandSessionsByDefault !== false;
 	const isOpen = (id: string) =>
 		expandAll ? !collapsed.has(id) : expanded.has(id);
 	const bookmarksEnabled = settings.bookmarksEnabled !== false;
@@ -330,6 +350,30 @@ export function SessionManager({
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `state` on purpose
 	}, [state]);
 
+	useEffect(() => {
+		if (selected.size === 0) {
+			return;
+		}
+
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (
+				event.key !== 'Escape' ||
+				event.defaultPrevented ||
+				document.querySelector(
+					'[role="dialog"], [role="alertdialog"], [role="menu"]',
+				)
+			) {
+				return;
+			}
+
+			setSelected(new Set());
+			setAnchor(null);
+		};
+
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [selected.size]);
+
 	function setGroupOpen(id: string, value: boolean) {
 		const toggled = (old: Set<string>, include: boolean) => {
 			const next = new Set(old);
@@ -399,42 +443,6 @@ export function SessionManager({
 		setBackupData({kind, groups: exportGroups, folders});
 	}
 
-	function shareHtml(exportGroups: Session[]) {
-		const esc = (v: unknown) =>
-			String(v ?? '').replaceAll(
-				/["&'<>]/g,
-				(c) =>
-					(
-						({
-							'&': '&amp;',
-							'<': '&lt;',
-							'>': '&gt;',
-							'"': '&quot;',
-							"'": '&#39;',
-						}) as Record<string, string>
-					)[c],
-			);
-		const title =
-			exportGroups.length === 1
-				? exportGroups[0].name
-				: `Shared ${PROJECT.name} sessions`;
-		// Only complete pairs are marked: a share of selected tabs may hold just one half of a split view.
-		const splitTabs = new Set(
-			exportGroups.flatMap((group) =>
-				tabRuns(group.tabs)
-					.filter((run) => run.length === 2)
-					.flat(),
-			),
-		);
-		const parts = exportGroups
-			.map(
-				(group) =>
-					`<article><header><div><h2>${esc(group.name)}</h2><p>Saved ${esc(dateText(group.createdAt))}</p></div><span>${group.tabs.length} ${group.tabs.length === 1 ? 'tab' : 'tabs'}</span></header>${group.description ? `<p>${esc(group.description)}</p>` : ''}${group.notes ? `<p class="notes">${esc(group.notes)}</p>` : ''}<ol>${group.tabs.map((tab) => `<li><a href="${esc(tab.url)}" target="_blank" rel="noopener noreferrer">${esc(tab.title || tab.url)}</a><small>${esc(tab.url)}${tab.pinned ? ' · Pinned' : ''}${tab.nativeGroup?.title ? ` · ${esc(tab.nativeGroup.title)}` : ''}${splitTabs.has(tab) ? ` · Split view, ${tab.split?.position === 0 ? 'left' : 'right'}` : ''}</small></li>`).join('')}</ol></article>`,
-			)
-			.join('');
-		return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${esc(title)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f5f6fa;color:#222737;font:14px/1.55 system-ui,sans-serif}main{width:min(780px,calc(100% - 32px));margin:40px auto}h1{font-size:30px;letter-spacing:-1px}article{margin:14px 0;border:1px solid #e0e3ed;border-radius:15px;background:#fff;overflow:hidden}header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid #e0e3ed}h2{margin:0;font-size:18px}header p,header span,small{color:#686f84;font-size:12px}p,ol{margin:16px 20px}p,h1,h2{overflow-wrap:anywhere}header>div{min-width:0}ol{padding-left:22px}li{padding:10px 0;border-top:1px solid #eee}a{display:block;color:#5c54c3;font-weight:650;overflow-wrap:anywhere}small{display:block;margin-top:4px;overflow-wrap:anywhere}.notes{white-space:pre-wrap}</style><main><h1>${esc(title)}</h1><p>Shared from ${PROJECT.name} · ${exportGroups.reduce((sum, g) => sum + g.tabs.length, 0)} saved tabs</p>${parts}</main></html>`;
-	}
-
 	function selectedGroups() {
 		return groups.flatMap((group) => {
 			const tabs = group.tabs.filter((tab) =>
@@ -471,7 +479,7 @@ export function SessionManager({
 		});
 		setBusy('');
 		if (!result?.ok) {
-			showStatus(result?.error || `Could not restore “${group.name}”.`, true);
+			showStatus(result?.error || 'Could not restore this session.', true);
 			return;
 		}
 
@@ -605,8 +613,9 @@ export function SessionManager({
 
 	function deleteGroup(group: Session) {
 		askConfirmation({
-			title: `Delete “${group.name}”?`,
-			description: `This permanently removes the saved session and its ${group.tabs.length} saved ${group.tabs.length === 1 ? 'tab' : 'tabs'}. It does not close browser tabs.`,
+			title: 'Delete session?',
+			description: `This removes the session and its ${group.tabs.length} saved ${group.tabs.length === 1 ? 'link' : 'links'}. Open tabs stay open.`,
+			detail: group.name,
 			confirmLabel: 'Delete session',
 			async run() {
 				const result = await send('DELETE_GROUP', {groupId: group.id});
@@ -620,12 +629,11 @@ export function SessionManager({
 	}
 
 	function deleteSavedTab(group: Session, tab: SavedTabRecord) {
-		const title = tab.title || tab.url;
 		askConfirmation({
-			title: `Remove “${title}”?`,
-			description:
-				'This removes the saved link from this session. It does not close the browser tab.',
-			confirmLabel: 'Remove saved tab',
+			title: 'Remove link?',
+			description: 'It is removed from this session. Open tabs stay open.',
+			detail: tab.title || tab.url,
+			confirmLabel: 'Remove link',
 			async run() {
 				const result = await send('DELETE_TAB', {
 					groupId: group.id,
@@ -652,6 +660,156 @@ export function SessionManager({
 			showStatus(result?.error || 'Could not reorder this session.', true);
 		}
 	}
+
+	async function openAllInNewTabs(tabs: SavedTabRecord[]) {
+		if (tabs.length === 0) {
+			return;
+		}
+
+		const run = async () => {
+			for (const tab of tabs) {
+				await chrome.tabs.create({url: tab.url, active: false});
+			}
+		};
+
+		if (tabs.length > 10) {
+			askConfirmation({
+				title: `Open ${tabs.length} tabs?`,
+				description: 'They open in the background, in saved order.',
+				confirmLabel: `Open ${tabs.length} tabs`,
+				async run() {
+					await run();
+				},
+			});
+			return;
+		}
+
+		await run();
+	}
+
+	async function openTab(tab: SavedTabRecord, requested?: 'current' | 'new') {
+		try {
+			await openLink(tab.url, 'session', settings as Settings, requested);
+		} catch {
+			showStatus('Could not open this link.', true);
+		}
+	}
+
+	async function copyTabLink(tab: SavedTabRecord) {
+		try {
+			await writeClipboard({text: tab.url, html: null});
+		} catch {
+			showStatus('Could not copy the link. Check clipboard permissions.', true);
+		}
+	}
+
+	async function moveTab(
+		fromGroupId: string,
+		tabId: string,
+		toGroupId: string,
+		targetTabId: string | null = null,
+		position?: InsertPosition,
+		copy = false,
+	) {
+		const result = await send('MOVE_TAB', {
+			fromGroupId,
+			tabId,
+			toGroupId,
+			targetTabId,
+			position,
+			copy,
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not move this link.', true);
+		}
+
+		await reload();
+	}
+
+	async function placeGroup(
+		draggedId: string,
+		targetId: string,
+		position: InsertPosition,
+	) {
+		const ids = visibleGroups
+			.map((group) => group.id)
+			.filter((id) => id !== draggedId);
+		const at = ids.indexOf(targetId);
+		if (at === -1) {
+			return;
+		}
+
+		ids.splice(position === 'after' ? at + 1 : at, 0, draggedId);
+		setSort('custom');
+		const result = await send('SET_GROUP_ORDER', {order: ids});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not reorder sessions.', true);
+		}
+
+		await reload();
+	}
+
+	const drag: DragApi = {
+		mark: dropMark,
+		dragging,
+		begin(item) {
+			dragItemRef.current = item;
+			// Styling the source row right away can cancel the browser's drag, so it waits a frame.
+			requestAnimationFrame(() => {
+				if (dragItemRef.current === item) {
+					setDragging(item);
+				}
+			});
+		},
+		end() {
+			dragItemRef.current = null;
+			setDragging(null);
+			setDropMark(null);
+		},
+		over(group, event) {
+			const mark = resolveDropMark(group, event, dragItemRef.current);
+			if (!mark) {
+				return;
+			}
+
+			event.preventDefault();
+			event.dataTransfer.dropEffect =
+				mark.kind !== 'session' && (event.ctrlKey || event.metaKey)
+					? 'copy'
+					: 'move';
+			setDropMark((old) =>
+				JSON.stringify(old) === JSON.stringify(mark) ? old : mark,
+			);
+		},
+		leave(event) {
+			if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+				setDropMark(null);
+			}
+		},
+		drop(group, event) {
+			const item = dragItemRef.current;
+			const mark = resolveDropMark(group, event, item);
+			if (!item || !mark) {
+				return;
+			}
+
+			event.preventDefault();
+			const copy = event.ctrlKey || event.metaKey;
+			drag.end();
+			if (item.kind === 'session' && mark.kind === 'session') {
+				void placeGroup(item.id, mark.groupId, mark.position);
+			} else if (item.kind === 'tab' && mark.kind !== 'session') {
+				void moveTab(
+					item.groupId,
+					item.tabId,
+					group.id,
+					mark.kind === 'tab' ? mark.tabId : null,
+					mark.kind === 'tab' ? mark.position : undefined,
+					copy,
+				);
+			}
+		},
+	};
 
 	async function changeSort(value: string) {
 		setSort(value);
@@ -757,9 +915,9 @@ export function SessionManager({
 		}
 
 		askConfirmation({
-			title: `Delete “${folder.name}”?`,
-			description:
-				'Sessions in this folder will move to Unfiled. Their saved tabs are preserved.',
+			title: 'Delete folder?',
+			description: 'Its sessions move to Unfiled. No links are lost.',
+			detail: folder.name,
 			confirmLabel: 'Delete folder',
 			async run() {
 				const result = await send('DELETE_FOLDER', {folderId});
@@ -972,20 +1130,34 @@ export function SessionManager({
 								{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
 							</span>
 							<div className="flex flex-wrap gap-2">
-								<Button size="sm" onClick={() => openBackup('selected')}>
+								<Button
+									size="sm"
+									onClick={() =>
+										void openAllInNewTabs(
+											selectedGroups().flatMap((group) => group.tabs),
+										)
+									}
+								>
+									<ExternalLink className="h-4 w-4" />
+									Open selected
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => openBackup('selected')}
+								>
 									<Download className="h-4 w-4" />
 									Export selected…
 								</Button>
 								<Button
 									variant="outline"
 									size="sm"
-									onClick={() => {
-										downloadFile(
-											shareHtml(selectedGroups()),
-											'text/html;charset=utf-8',
-											`${safeFilename(`${PROJECT.name}-shared-tabs`)}.html`,
-										);
-									}}
+									onClick={() =>
+										openShare({
+											title: 'Shared tabs',
+											groups: selectedGroups(),
+										})
+									}
 								>
 									<Share2 className="h-4 w-4" />
 									Share selected
@@ -1045,13 +1217,19 @@ export function SessionManager({
 									index={index}
 									count={visibleGroups.length}
 									bookmarksEnabled={bookmarksEnabled}
-									downloadShare={() => {
-										downloadFile(
-											shareHtml([group]),
-											'text/html;charset=utf-8',
-											`${safeFilename(group.name)}.html`,
-										);
-									}}
+									otherGroups={groups
+										.filter((other) => other.id !== group.id)
+										.map((other) => ({id: other.id, name: other.name}))}
+									drag={drag}
+									onShare={() =>
+										openShare({title: group.name, groups: [group]})
+									}
+									onOpenAll={() => void openAllInNewTabs(group.tabs)}
+									onOpenTab={(tab, requested) => void openTab(tab, requested)}
+									onCopyTab={(tab) => void copyTabLink(tab)}
+									onMoveTab={(tab, toGroupId) =>
+										void moveTab(group.id, tab.id, toGroupId)
+									}
 									onExpanded={(next) => setGroupOpen(group.id, next)}
 									onRestore={(event) => restoreGroup(group, false, event)}
 									onRestoreMode={(mode) =>
@@ -1090,10 +1268,21 @@ export function SessionManager({
 				restoreFocusTo={confirmFocusRef.current}
 				onOpenChange={(open) => !open && setConfirmation(null)}
 				onConfirm={runConfirmation}
-			/>
+			>
+				{confirmation?.detail && (
+					<p
+						className="truncate text-xs text-muted-foreground"
+						title={confirmation.detail}
+					>
+						{confirmation.detail}
+					</p>
+				)}
+			</ConfirmationDialog>
+			{shareDialog}
 			<BackupDialog
 				data={backupData}
 				open={Boolean(backupData)}
+				state={state}
 				showStatus={showStatus}
 				onOpenChange={(open) => !open && setBackupData(null)}
 			/>
@@ -1112,7 +1301,7 @@ export function SessionManager({
 				<DialogContent>
 					<form key={editingTab?.tab.id} onSubmit={saveTabDetails}>
 						<DialogHeader>
-							<DialogTitle>Edit saved tab</DialogTitle>
+							<DialogTitle>Edit link</DialogTitle>
 							<DialogDescription className="break-all">
 								{editingTab?.tab.url}
 							</DialogDescription>
@@ -1151,7 +1340,7 @@ export function SessionManager({
 							>
 								Cancel
 							</Button>
-							<Button type="submit">Save tab</Button>
+							<Button type="submit">Save</Button>
 						</DialogFooter>
 					</form>
 				</DialogContent>
@@ -1163,7 +1352,7 @@ export function SessionManager({
 				<DialogContent size="sm">
 					<form onSubmit={saveBookmark}>
 						<DialogHeader>
-							<DialogTitle>Bookmark saved tab</DialogTitle>
+							<DialogTitle>Bookmark link</DialogTitle>
 							<DialogDescription className="break-all">
 								{bookmarkTab?.title || bookmarkTab?.url}
 							</DialogDescription>
@@ -1394,13 +1583,94 @@ function restoreFailureText(failure?: {
 	return failure ? `${failure.title || failure.url}: ${failure.error}` : '';
 }
 
-function urlDisplay(url: string, mode = 'full') {
-	return mode === 'none' ? null : url;
+function urlDisplay(url: string, mode: Settings['urlDisplayMode'] = 'full') {
+	return mode === 'none' ? null : mode === 'domain' ? hostFor(url) : url;
 }
+
+/**
+Where a drag would land, drawn as a highlight (into a session) or a line (between sessions or links).
+*/
+type DropMark =
+	| {kind: 'session'; groupId: string; position: InsertPosition}
+	| {kind: 'into'; groupId: string}
+	| {
+			kind: 'tab';
+			groupId: string;
+			tabId: string;
+			position: InsertPosition;
+	  };
+type DragItem =
+	{kind: 'session'; id: string} | {kind: 'tab'; groupId: string; tabId: string};
+/**
+Drag handlers and state the session manager shares with every card.
+*/
+type DragApi = {
+	mark: DropMark | null;
+	dragging: DragItem | null;
+	begin: (item: DragItem) => void;
+	end: () => void;
+	over: (group: Session, event: DragEvent<HTMLElement>) => void;
+	leave: (event: DragEvent<HTMLElement>) => void;
+	drop: (group: Session, event: DragEvent<HTMLElement>) => void;
+};
+
+/**
+Where the current drag would land over `group`, or null when dropping there does nothing.
+*/
+function resolveDropMark(
+	group: Session,
+	event: DragEvent<HTMLElement>,
+	item: DragItem | null,
+): DropMark | null {
+	if (!item) {
+		return null;
+	}
+
+	if (item.kind === 'session') {
+		if (item.id === group.id) {
+			return null;
+		}
+
+		const rect = event.currentTarget.getBoundingClientRect();
+		return {
+			kind: 'session',
+			groupId: group.id,
+			position: event.clientY < rect.top + rect.height / 2 ? 'before' : 'after',
+		};
+	}
+
+	const row = (event.target as Element).closest<HTMLElement>('[data-tab-id]');
+	if (!row?.dataset.tabId) {
+		return item.groupId === group.id && !(event.ctrlKey || event.metaKey)
+			? null
+			: {kind: 'into', groupId: group.id};
+	}
+
+	const rect = row.getBoundingClientRect();
+	const position: InsertPosition =
+		event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+	const run = tabRuns(group.tabs).find((entry) =>
+		entry.some((tab) => tab.id === row.dataset.tabId),
+	);
+	// A split pair moves as a unit: dropping beside one half lands outside the pair.
+	if (item.groupId === group.id && run?.some((tab) => tab.id === item.tabId)) {
+		return null;
+	}
+
+	const tabId =
+		run?.length === 2
+			? (position === 'before' ? run[0] : run[1]).id
+			: row.dataset.tabId;
+	return {kind: 'tab', groupId: group.id, tabId, position};
+}
+
+const LINE_BEFORE = 'shadow-[inset_0_2px_0_0_rgb(var(--primary))]';
+const LINE_AFTER = 'shadow-[inset_0_-2px_0_0_rgb(var(--primary))]';
 
 type GroupCardProps = {
 	group: Session;
 	folders: Folder[];
+	otherGroups: Array<{id: string; name: string}>;
 	settings: Partial<Settings>;
 	isExpanded: boolean;
 	onExpanded: (next: boolean) => void;
@@ -1410,6 +1680,11 @@ type GroupCardProps = {
 	onRestoreTab: (tab: SavedTabRecord, event?: RestoreModifiers) => void;
 	onUpdateGroup: (fields: SessionFields) => void;
 	onCopy: () => void;
+	onShare: () => void;
+	onOpenAll: () => void;
+	onOpenTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
+	onCopyTab: (tab: SavedTabRecord) => void;
+	onMoveTab: (tab: SavedTabRecord, toGroupId: string) => void;
 	onDelete: () => void;
 	onDeleteTab: (group: Session, tab: SavedTabRecord) => void;
 	onEditTab: (tab: SavedTabRecord) => void;
@@ -1423,18 +1698,18 @@ type GroupCardProps = {
 	selected: Set<string>;
 	selectionActive: boolean;
 	onSelect: (key: string, checked: boolean, event: SelectionModifiers) => void;
-	displayMode?: string;
+	displayMode?: Settings['urlDisplayMode'];
 	reorderEnabled: boolean;
 	index: number;
 	count: number;
 	bookmarksEnabled: boolean;
 	onBookmark: (tab: SavedTabRecord) => void;
-	downloadShare: () => void;
+	drag: DragApi;
 };
-
 function GroupCard({
 	group,
 	folders,
+	otherGroups,
 	settings,
 	isExpanded,
 	onExpanded,
@@ -1444,6 +1719,11 @@ function GroupCard({
 	onRestoreTab,
 	onUpdateGroup,
 	onCopy,
+	onShare,
+	onOpenAll,
+	onOpenTab,
+	onCopyTab,
+	onMoveTab,
 	onDelete,
 	onDeleteTab,
 	onEditTab,
@@ -1460,291 +1740,362 @@ function GroupCard({
 	count,
 	bookmarksEnabled,
 	onBookmark,
-	downloadShare,
+	drag,
 }: GroupCardProps) {
 	const folderName = folders.find(
 		(folder) => folder.id === group.folderId,
 	)?.name;
 	const previewTabs = group.tabs.slice(0, 6);
+	const mark = drag.mark?.groupId === group.id ? drag.mark : null;
+	const draggingSelf =
+		drag.dragging?.kind === 'session' && drag.dragging.id === group.id;
+	const draggingTabId =
+		drag.dragging?.kind === 'tab' && drag.dragging.groupId === group.id
+			? drag.dragging.tabId
+			: null;
+	const actions: MenuAction[] = [
+		{
+			id: 'restore',
+			label: 'Restore',
+			icon: RotateCcw,
+			onSelect: () => onRestore(),
+		},
+		{
+			id: 'restore-keep',
+			label: 'Restore & keep',
+			icon: RotateCcw,
+			onSelect: () => onRestoreMode('keep'),
+		},
+		{
+			id: 'restore-remove',
+			label: 'Restore & remove',
+			icon: Trash2,
+			disabled: group.locked,
+			onSelect: onForceRestore,
+		},
+		{
+			id: 'restore-archive',
+			label: 'Restore & archive',
+			icon: Archive,
+			onSelect: () => onRestoreMode('archive'),
+		},
+		{
+			id: 'open-all',
+			label: 'Open all in new tabs',
+			icon: ExternalLink,
+			onSelect: onOpenAll,
+		},
+		{type: 'separator'},
+		{id: 'copy', label: 'Copy links', icon: Copy, onSelect: onCopy},
+		{id: 'share', label: 'Share', icon: Share2, onSelect: onShare},
+		{type: 'separator'},
+		{id: 'edit', label: 'Edit details', icon: Edit3, onSelect: onEdit},
+		{
+			id: 'lock',
+			label: group.locked ? 'Unlock' : 'Lock',
+			icon: group.locked ? UnlockKeyhole : LockKeyhole,
+			onSelect: () => onUpdateGroup({locked: !group.locked}),
+		},
+		{
+			id: 'archive',
+			label: group.archived ? 'Unarchive' : 'Archive',
+			icon: Archive,
+			onSelect: () => onUpdateGroup({archived: !group.archived}),
+		},
+		{type: 'separator'},
+		{
+			id: 'up',
+			label: 'Move up',
+			icon: ArrowUp,
+			disabled: !reorderEnabled || index === 0,
+			onSelect: () => onReorder('up'),
+		},
+		{
+			id: 'down',
+			label: 'Move down',
+			icon: ArrowDown,
+			disabled: !reorderEnabled || index === count - 1,
+			onSelect: () => onReorder('down'),
+		},
+		{type: 'separator'},
+		{
+			id: 'delete',
+			label: 'Delete',
+			icon: Trash2,
+			destructive: true,
+			onSelect: onDelete,
+		},
+	];
 	return (
-		<article
-			id={`session-${group.id}`}
-			className={`group/session overflow-hidden rounded-xl border bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${group.archived ? 'opacity-75 grayscale' : ''}`}
-			style={group.archived ? ARCHIVED_STYLE : undefined}
-			aria-label={`Session ${group.name}`}
-		>
-			<div className="flex items-center gap-2 px-2 py-2 sm:px-3">
-				<IconTooltip
-					label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${group.name}`}
-				>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-8 w-8 shrink-0"
-						aria-expanded={isExpanded}
-						aria-label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${group.name}`}
-						onClick={() => onExpanded(!isExpanded)}
-					>
-						<ChevronRight
-							className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-						/>
-					</Button>
-				</IconTooltip>
-				<button
-					draggable
-					type="button"
-					className="min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing"
-					aria-label={`${settings.groupTitleAction === 'restore' ? 'Restore' : 'Edit details for'} session ${group.name}`}
-					onDragStart={(event) =>
-						applyLinkDrag(event.dataTransfer, group.tabs, group.name, group.id)
-					}
-					onClick={(event) =>
-						activateSessionTitle(
-							settings.groupTitleAction,
-							{edit: onEditName, restore: onRestore},
-							event,
-						)
-					}
-				>
-					<span className="flex min-w-0 items-center gap-2">
-						<h2
-							className="min-w-0 truncate text-sm font-semibold"
-							title={group.name}
+		<div className="relative">
+			{mark?.kind === 'session' && (
+				<span
+					aria-hidden="true"
+					className={`pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-primary ${mark.position === 'before' ? '-top-1.5' : '-bottom-1.5'}`}
+				/>
+			)}
+			<article
+				id={`session-${group.id}`}
+				className={`group/session overflow-hidden rounded-xl border bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${group.archived ? 'opacity-75 grayscale' : ''} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
+				style={group.archived ? ARCHIVED_STYLE : undefined}
+				aria-label={`Session ${group.name}`}
+				onDragOver={(event) => drag.over(group, event)}
+				onDragLeave={drag.leave}
+				onDrop={(event) => drag.drop(group, event)}
+			>
+				<ActionContextMenu actions={actions}>
+					<div className="flex items-center gap-2 px-2 py-2 sm:px-3">
+						<IconTooltip
+							label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${group.name}`}
 						>
-							{group.name}
-						</h2>
-						{group.locked && (
-							<LockKeyhole
-								className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-								aria-label="Locked"
-							/>
-						)}
-						{group.archived && <Badge variant="accent">Archived</Badge>}
-					</span>
-					<span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-						<span>
-							{group.tabs.length} {group.tabs.length === 1 ? 'tab' : 'tabs'}
-						</span>
-						<span aria-hidden="true">·</span>
-						<span>{dateText(group.createdAt)}</span>
-						{folderName && (
-							<>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8 shrink-0"
+								aria-expanded={isExpanded}
+								aria-label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${group.name}`}
+								onClick={() => onExpanded(!isExpanded)}
+							>
+								<ChevronRight
+									className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+								/>
+							</Button>
+						</IconTooltip>
+						<button
+							draggable
+							type="button"
+							className="min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing"
+							aria-label={`${settings.groupTitleAction === 'restore' ? 'Restore' : 'Edit details for'} session ${group.name}`}
+							onDragStart={(event) => {
+								applyLinkDrag(
+									event.dataTransfer,
+									group.tabs,
+									group.name,
+									group.id,
+								);
+								event.dataTransfer.effectAllowed = 'copyMove';
+								setSessionDragImage(event.dataTransfer, group);
+								drag.begin({kind: 'session', id: group.id});
+							}}
+							onDragEnd={drag.end}
+							onClick={(event) =>
+								activateSessionTitle(
+									settings.groupTitleAction,
+									{edit: onEditName, restore: onRestore},
+									event,
+								)
+							}
+						>
+							<span className="flex min-w-0 items-center gap-2">
+								<h2
+									className="min-w-0 truncate text-sm font-semibold"
+									title={group.name}
+								>
+									{group.name}
+								</h2>
+								{group.locked && (
+									<LockKeyhole
+										className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+										aria-label="Locked"
+									/>
+								)}
+								{group.archived && <Badge variant="accent">Archived</Badge>}
+							</span>
+							<span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+								<span>
+									{group.tabs.length} {group.tabs.length === 1 ? 'tab' : 'tabs'}
+								</span>
 								<span aria-hidden="true">·</span>
-								<span>{folderName}</span>
-							</>
-						)}
-					</span>
-				</button>
-				{!isExpanded && (
-					<span
-						className="hidden shrink-0 items-center -space-x-1.5 md:flex"
-						aria-hidden="true"
-					>
-						{previewTabs.map((tab) => (
-							<Favicon
-								key={tab.id}
-								url={tab.url}
-								label={tab.title}
-								className="h-6 w-6 rounded-full ring-2 ring-card"
-							/>
-						))}
-						{group.tabs.length > previewTabs.length && (
-							<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
-								+{group.tabs.length - previewTabs.length}
+								<span>{dateText(group.createdAt)}</span>
+								{folderName && (
+									<>
+										<span aria-hidden="true">·</span>
+										<span>{folderName}</span>
+									</>
+								)}
+							</span>
+						</button>
+						{!isExpanded && (
+							<span
+								className="hidden shrink-0 items-center -space-x-1.5 md:flex"
+								aria-hidden="true"
+							>
+								{previewTabs.map((tab) => (
+									<Favicon
+										key={tab.id}
+										url={tab.url}
+										label={tab.title}
+										className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
+									/>
+								))}
+								{group.tabs.length > previewTabs.length && (
+									<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
+										+{group.tabs.length - previewTabs.length}
+									</span>
+								)}
 							</span>
 						)}
-					</span>
-				)}
-				<div className="flex shrink-0 items-center gap-0.5">
-					<span className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100">
-						<IconTooltip
-							label={group.locked ? 'Unlock session' : 'Lock session'}
-						>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8 text-muted-foreground"
-								aria-label={
-									group.locked ? `Unlock ${group.name}` : `Lock ${group.name}`
-								}
-								onClick={() => onUpdateGroup({locked: !group.locked})}
-							>
-								{group.locked ? <UnlockKeyhole /> : <LockKeyhole />}
-							</Button>
-						</IconTooltip>
-						<IconTooltip
-							label={group.archived ? 'Unarchive session' : 'Archive session'}
-						>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8 text-muted-foreground"
-								aria-label={
-									group.archived
-										? `Unarchive ${group.name}`
-										: `Archive ${group.name}`
-								}
-								onClick={() => onUpdateGroup({archived: !group.archived})}
-							>
-								<Archive />
-							</Button>
-						</IconTooltip>
-						<IconTooltip label="Delete session">
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8 text-muted-foreground hover:text-destructive"
-								aria-label={`Delete session ${group.name}`}
-								onClick={onDelete}
-							>
-								<Trash2 />
-							</Button>
-						</IconTooltip>
-					</span>
-					<Button
-						size="sm"
-						variant={isExpanded ? 'default' : 'secondary'}
-						onClick={onRestore}
-					>
-						<RotateCcw />
-						<span className="hidden sm:inline">Restore</span>
-					</Button>
-					<DropdownMenu>
-						<IconTooltip label="More actions">
-							<DropdownMenuTrigger asChild>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-8 w-8"
-									aria-label={`More actions for ${group.name}`}
+						<div className="flex shrink-0 items-center gap-0.5">
+							<span className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100">
+								<IconTooltip
+									label={group.locked ? 'Unlock session' : 'Lock session'}
 								>
-									<MoreVertical />
-								</Button>
-							</DropdownMenuTrigger>
-						</IconTooltip>
-						<DropdownMenuContent align="end">
-							<DropdownMenuItem onSelect={() => onRestoreMode('keep')}>
-								<RotateCcw className="h-4 w-4" />
-								Restore &amp; keep
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								disabled={group.locked}
-								onSelect={onForceRestore}
-							>
-								<Trash2 className="h-4 w-4" />
-								Restore &amp; remove
-							</DropdownMenuItem>
-							<DropdownMenuItem onSelect={() => onRestoreMode('archive')}>
-								<Archive className="h-4 w-4" />
-								Restore &amp; archive
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={onCopy}>
-								<Copy className="h-4 w-4" />
-								Copy session links
-							</DropdownMenuItem>
-							<DropdownMenuItem onSelect={downloadShare}>
-								<Share2 className="h-4 w-4" />
-								Share HTML
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem onSelect={onEdit}>
-								<Edit3 className="h-4 w-4" />
-								Edit details
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								disabled={!reorderEnabled || index === 0}
-								onSelect={() => onReorder('up')}
-							>
-								<ArrowUp className="h-4 w-4" />
-								Move up
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								disabled={!reorderEnabled || index === count - 1}
-								onSelect={() => onReorder('down')}
-							>
-								<ArrowDown className="h-4 w-4" />
-								Move down
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								className="text-destructive focus:text-destructive"
-								onSelect={onDelete}
-							>
-								<Trash2 className="h-4 w-4" />
-								Delete session
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				</div>
-			</div>
-			{isExpanded && (
-				<div className="border-t border-border">
-					{(group.description || group.notes) && (
-						<div className="min-w-0 border-b border-border bg-muted/30 px-4 py-2.5 sm:pl-14">
-							{group.description && (
-								<p className="min-w-0 whitespace-pre-wrap text-sm font-medium [overflow-wrap:anywhere]">
-									{group.description}
-								</p>
-							)}
-							{group.notes && (
-								<p className="mt-0.5 min-w-0 max-w-2xl whitespace-pre-wrap text-xs text-muted-foreground [overflow-wrap:anywhere]">
-									{group.notes}
-								</p>
-							)}
-						</div>
-					)}
-					<ol className="m-0 list-none p-1 sm:p-1.5">
-						{tabRuns(group.tabs).map((run) => {
-							const row = (tab: SavedTabRecord, splitBadge = false) => (
-								<SavedTab
-									key={tab.id}
-									tab={tab}
-									group={group}
-									splitBadge={splitBadge}
-									selected={selected.has(tabKey(group.id, tab.id))}
-									selectionActive={selectionActive}
-									showBookmark={bookmarksEnabled}
-									displayMode={displayMode}
-									onSelect={(checked, event) =>
-										onSelect(tabKey(group.id, tab.id), checked, event)
-									}
-									onRestore={(event) => onRestoreTab(tab, event)}
-									onBookmark={() => onBookmark(tab)}
-									onDelete={() => onDeleteTab(group, tab)}
-									onEditTab={() => onEditTab(tab)}
-									onToggleArchived={() => onToggleTabArchived(tab)}
-								/>
-							);
-							if (run.length === 1) {
-								return row(run[0]);
-							}
-
-							// A split view: both rows share a tinted background, joined by a bracket in the left gutter.
-							return (
-								<li
-									key={`split-${run[0].id}`}
-									className="relative my-0.5 rounded-lg bg-muted/40 ring-1 ring-inset ring-border/70"
-								>
-									<span
-										aria-hidden="true"
-										className="pointer-events-none absolute bottom-3.5 left-[3px] top-3.5 w-[3px] rounded-full bg-primary/35"
-									/>
-									<ol
-										className="m-0 list-none p-0"
-										aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostFor(tab.url)).join(' and ')}`}
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-8 w-8 text-muted-foreground"
+										aria-label={
+											group.locked
+												? `Unlock ${group.name}`
+												: `Lock ${group.name}`
+										}
+										onClick={() => onUpdateGroup({locked: !group.locked})}
 									>
-										{row(run[0], true)}
-										{row(run[1])}
-									</ol>
-								</li>
-							);
-						})}
-					</ol>
-				</div>
-			)}
-		</article>
+										{group.locked ? <UnlockKeyhole /> : <LockKeyhole />}
+									</Button>
+								</IconTooltip>
+								<IconTooltip
+									label={
+										group.archived ? 'Unarchive session' : 'Archive session'
+									}
+								>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-8 w-8 text-muted-foreground"
+										aria-label={
+											group.archived
+												? `Unarchive ${group.name}`
+												: `Archive ${group.name}`
+										}
+										onClick={() => onUpdateGroup({archived: !group.archived})}
+									>
+										<Archive />
+									</Button>
+								</IconTooltip>
+								<IconTooltip label="Delete session">
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-8 w-8 text-muted-foreground hover:text-destructive"
+										aria-label={`Delete session ${group.name}`}
+										onClick={onDelete}
+									>
+										<Trash2 />
+									</Button>
+								</IconTooltip>
+							</span>
+							<Button
+								size="sm"
+								variant={isExpanded ? 'default' : 'secondary'}
+								onClick={onRestore}
+							>
+								<RotateCcw />
+								<span className="hidden sm:inline">Restore</span>
+							</Button>
+							<ActionDropdownMenu
+								actions={actions}
+								trigger={
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-8 w-8"
+										title="More actions"
+										aria-label={`More actions for ${group.name}`}
+									>
+										<MoreVertical />
+									</Button>
+								}
+							/>
+						</div>
+					</div>
+				</ActionContextMenu>
+				{isExpanded && (
+					<div className="border-t border-border">
+						{(group.description || group.notes) && (
+							<div className="min-w-0 border-b border-border bg-muted/30 px-4 py-2.5 sm:pl-14">
+								{group.description && (
+									<p className="min-w-0 whitespace-pre-wrap break-words text-sm font-medium [overflow-wrap:anywhere]">
+										{group.description}
+									</p>
+								)}
+								{group.notes && (
+									<p className="mt-0.5 min-w-0 whitespace-pre-wrap break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+										{group.notes}
+									</p>
+								)}
+							</div>
+						)}
+						<ol className="m-0 list-none p-1 sm:p-1.5">
+							{tabRuns(group.tabs).map((run) => {
+								const row = (tab: SavedTabRecord, splitBadge = false) => (
+									<SavedTab
+										key={tab.id}
+										tab={tab}
+										group={group}
+										otherGroups={otherGroups}
+										settings={settings}
+										splitBadge={splitBadge}
+										selected={selected.has(tabKey(group.id, tab.id))}
+										selectionActive={selectionActive}
+										showBookmark={bookmarksEnabled}
+										displayMode={displayMode}
+										dragging={draggingTabId === tab.id}
+										dropLine={
+											mark?.kind === 'tab' && mark.tabId === tab.id
+												? mark.position
+												: null
+										}
+										onSelect={(checked, event) =>
+											onSelect(tabKey(group.id, tab.id), checked, event)
+										}
+										onDragBegin={() =>
+											drag.begin({
+												kind: 'tab',
+												groupId: group.id,
+												tabId: tab.id,
+											})
+										}
+										onDragEnd={drag.end}
+										onRestore={(event) => onRestoreTab(tab, event)}
+										onOpen={(requested) => onOpenTab(tab, requested)}
+										onCopyLink={() => onCopyTab(tab)}
+										onMoveTo={(toGroupId) => onMoveTab(tab, toGroupId)}
+										onBookmark={() => onBookmark(tab)}
+										onDelete={() => onDeleteTab(group, tab)}
+										onEditTab={() => onEditTab(tab)}
+										onToggleArchived={() => onToggleTabArchived(tab)}
+									/>
+								);
+								if (run.length === 1) {
+									return row(run[0]);
+								}
+
+								// A split view: both rows share a tinted background, joined by a bracket in the left gutter.
+								return (
+									<li
+										key={`split-${run[0].id}`}
+										className="relative my-0.5 rounded-lg bg-muted/40 ring-1 ring-inset ring-border/70"
+									>
+										<span
+											aria-hidden="true"
+											className="pointer-events-none absolute bottom-3.5 left-[3px] top-3.5 w-[3px] rounded-full bg-primary/35"
+										/>
+										<ol
+											className="m-0 list-none p-0"
+											aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostFor(tab.url)).join(' and ')}`}
+										>
+											{row(run[0], true)}
+											{row(run[1])}
+										</ol>
+									</li>
+								);
+							})}
+						</ol>
+					</div>
+				)}
+			</article>
+		</div>
 	);
 }
 
@@ -1757,47 +2108,70 @@ function Favicon({
 	label?: string;
 	className?: string;
 }) {
-	return (
+	const [failedUrl, setFailedUrl] = useState('');
+	// The icon sits on a transparent background; the letter tile only appears when the icon cannot load.
+	return failedUrl === url ? (
 		<span
-			className={`relative grid shrink-0 place-items-center overflow-hidden bg-muted text-[10px] font-semibold text-muted-foreground ${className}`}
+			className={`grid shrink-0 place-items-center overflow-hidden bg-muted text-[10px] font-semibold text-muted-foreground ${className}`}
 		>
 			{(String(label || hostFor(url)).trim()[0] || '↗').toUpperCase()}
-			<img
-				className="absolute inset-0 h-full w-full bg-card object-contain p-0.5"
-				src={faviconUrl(url)}
-				alt=""
-				onError={(event) => event.currentTarget.remove()}
-			/>
 		</span>
+	) : (
+		<img
+			className={`shrink-0 object-contain ${className}`}
+			src={faviconUrl(url)}
+			alt=""
+			onError={() => setFailedUrl(url)}
+		/>
 	);
 }
 
 type SavedTabProps = {
 	tab: SavedTabRecord;
 	group: Session;
+	otherGroups: Array<{id: string; name: string}>;
+	settings: Partial<Settings>;
 	selected: boolean;
 	selectionActive: boolean;
+	dragging: boolean;
+	dropLine: InsertPosition | null;
 	onSelect: (checked: boolean, event: SelectionModifiers) => void;
+	onDragBegin: () => void;
+	onDragEnd: () => void;
 	onRestore: (event: RestoreModifiers) => void;
+	onOpen: (requested?: 'current' | 'new') => void;
+	onCopyLink: () => void;
+	onMoveTo: (toGroupId: string) => void;
 	onBookmark: () => void;
 	onDelete: () => void;
 	onEditTab: () => void;
 	onToggleArchived: () => void;
 	showBookmark: boolean;
-	displayMode?: string;
+	displayMode?: Settings['urlDisplayMode'];
 	/**
 	Shown on the first tab of a split view pair.
 	*/
 	splitBadge?: boolean;
 };
 
+const MAX_MOVE_TARGETS = 30;
+
 function SavedTab({
 	tab,
 	group,
+	otherGroups,
+	settings,
 	selected,
 	selectionActive,
+	dragging,
+	dropLine,
 	onSelect,
+	onDragBegin,
+	onDragEnd,
 	onRestore,
+	onOpen,
+	onCopyLink,
+	onMoveTo,
 	onBookmark,
 	onDelete,
 	onEditTab,
@@ -1809,147 +2183,243 @@ function SavedTab({
 	const modifierRef = useRef<SelectionModifiers>({});
 	const label = tab.title?.trim() || hostFor(tab.url);
 	const displayUrl = urlDisplay(tab.url, displayMode);
+	const compact = displayUrl === null;
 	const action = 'h-7 w-7 text-muted-foreground hover:text-foreground';
+	const actions: MenuAction[] = [
+		{
+			id: 'open-here',
+			label: 'Open in this tab',
+			icon: ArrowUpRight,
+			onSelect: () => onOpen('current'),
+		},
+		{
+			id: 'open-new',
+			label: 'Open in new tab',
+			icon: ExternalLink,
+			onSelect: () => onOpen('new'),
+		},
+		{
+			id: 'restore',
+			label: 'Restore',
+			icon: RotateCcw,
+			onSelect: () => onRestore({}),
+		},
+		{type: 'separator'},
+		{
+			id: 'edit',
+			label: 'Edit title & notes',
+			icon: StickyNote,
+			onSelect: onEditTab,
+		},
+		{id: 'copy', label: 'Copy link', icon: Copy, onSelect: onCopyLink},
+		{
+			id: 'bookmark',
+			label: 'Bookmark',
+			icon: BookmarkPlus,
+			hidden: !showBookmark,
+			onSelect: onBookmark,
+		},
+		{
+			id: 'unarchive',
+			label: 'Unarchive',
+			icon: Archive,
+			hidden: !tab.archived,
+			onSelect: onToggleArchived,
+		},
+		{
+			id: 'move',
+			label: 'Move to session',
+			icon: FolderInput,
+			type: 'submenu',
+			items: otherGroups.slice(0, MAX_MOVE_TARGETS).map((target) => ({
+				id: `move-${target.id}`,
+				label:
+					target.name.length > 40
+						? `${target.name.slice(0, 39)}…`
+						: target.name,
+				onSelect: () => onMoveTo(target.id),
+			})),
+		},
+		{type: 'separator'},
+		{
+			id: 'remove',
+			label: 'Remove',
+			icon: X,
+			destructive: true,
+			onSelect: onDelete,
+		},
+	];
+	function handleRowClick(event: MouseEvent<HTMLLIElement>) {
+		if (
+			(event.target as Element).closest(
+				'button, input, [role="checkbox"], [role="menu"], [role="menuitem"]',
+			)
+		) {
+			return;
+		}
+
+		const modifier = event.ctrlKey || event.metaKey;
+		if (modifier || event.shiftKey) {
+			event.preventDefault();
+			onSelect(modifier ? !selected : true, {
+				shiftKey: event.shiftKey,
+				ctrlKey: event.ctrlKey,
+				metaKey: event.metaKey,
+			});
+			return;
+		}
+
+		if (selectionActive && !(event.target as Element).closest('a')) {
+			onSelect(!selected, {});
+		}
+	}
+
 	return (
-		<li
-			draggable
-			style={tab.archived ? ARCHIVED_STYLE : undefined}
-			className={`group/tab flex min-w-0 items-start gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${tab.archived ? 'opacity-60 grayscale' : ''}`}
-			onDragStart={(event) => applyLinkDrag(event.dataTransfer, [tab])}
-		>
-			<span
-				className={`mt-1.5 flex w-4 shrink-0 justify-center transition-opacity ${selected || selectionActive ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100'}`}
+		<ActionContextMenu actions={actions}>
+			<li
+				draggable
+				data-tab-id={tab.id}
+				style={tab.archived ? ARCHIVED_STYLE : undefined}
+				className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${tab.archived ? 'opacity-60 grayscale' : ''} ${dragging ? 'opacity-40' : ''} ${dropLine === 'before' ? LINE_BEFORE : ''} ${dropLine === 'after' ? LINE_AFTER : ''}`}
+				onClick={handleRowClick}
+				onDragStart={(event) => {
+					event.stopPropagation();
+					applyLinkDrag(event.dataTransfer, [tab]);
+					event.dataTransfer.effectAllowed = 'copyMove';
+					setLinkDragImage(event.dataTransfer, tab);
+					onDragBegin();
+				}}
+				onDragEnd={onDragEnd}
 			>
-				<Checkbox
-					checked={selected}
-					aria-label={`Select ${label} from ${group.name} for export`}
-					onPointerDown={(event) => {
-						modifierRef.current = {
-							shiftKey: event.shiftKey,
-							ctrlKey: event.ctrlKey,
-							metaKey: event.metaKey,
-						};
-					}}
-					onKeyDown={(event) => {
-						modifierRef.current = {
-							shiftKey: event.shiftKey,
-							ctrlKey: event.ctrlKey,
-							metaKey: event.metaKey,
-						};
-					}}
-					onCheckedChange={(checked) =>
-						onSelect(Boolean(checked), modifierRef.current)
-					}
-				/>
-			</span>
-			<Favicon
-				url={tab.url}
-				label={label}
-				className="mt-0.5 h-6 w-6 rounded-md"
-			/>
-			<div className="min-w-0 flex-1">
-				<span className="flex min-w-0 items-center gap-1.5">
-					<a
-						className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
-						href={tab.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						title={label}
-					>
-						{label}
-					</a>
-					{splitBadge && (
-						<Badge
-							className="shrink-0 gap-1 px-1.5"
-							title="Saved from a split view; restores side by side"
-						>
-							<Columns2 className="h-3 w-3" aria-hidden="true" />
-							Split
-						</Badge>
-					)}
-					{tab.pinned && <Badge>Pinned</Badge>}
-					{tab.nativeGroup?.title && (
-						<Badge
-							className="min-w-0 max-w-[12rem]"
-							title={tab.nativeGroup.title}
-						>
-							<span className="truncate">{tab.nativeGroup.title}</span>
-						</Badge>
-					)}
-					{tab.archived && <Badge variant="outline">Archived</Badge>}
+				<span
+					className={`${compact ? '' : 'mt-1.5'} flex w-4 shrink-0 justify-center transition-opacity ${selected || selectionActive ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100'}`}
+				>
+					<Checkbox
+						checked={selected}
+						aria-label={`Select ${label} from ${group.name}`}
+						onPointerDown={(event) => {
+							modifierRef.current = {
+								shiftKey: event.shiftKey,
+								ctrlKey: event.ctrlKey,
+								metaKey: event.metaKey,
+							};
+						}}
+						onKeyDown={(event) => {
+							modifierRef.current = {
+								shiftKey: event.shiftKey,
+								ctrlKey: event.ctrlKey,
+								metaKey: event.metaKey,
+							};
+						}}
+						onCheckedChange={(checked) =>
+							onSelect(Boolean(checked), modifierRef.current)
+						}
+					/>
 				</span>
-				{displayUrl !== null && (
-					<p className="mt-0.5 break-all text-[11px] leading-4 text-muted-foreground">
-						{displayUrl}
-					</p>
-				)}
-				{tab.notes && (
-					<p className="mt-1 whitespace-pre-wrap text-xs italic text-muted-foreground [overflow-wrap:anywhere]">
-						{tab.notes}
-					</p>
-				)}
-			</div>
-			<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100">
-				<IconTooltip label="Restore tab">
-					<Button
-						variant="ghost"
-						size="icon"
-						className={action}
-						aria-label={`Restore ${label}`}
-						onClick={(event) => onRestore(event)}
-					>
-						<RotateCcw />
-					</Button>
-				</IconTooltip>
-				<IconTooltip label="Edit title and notes">
-					<Button
-						variant="ghost"
-						size="icon"
-						className={action}
-						aria-label={`Edit title and notes for ${label}`}
-						onClick={onEditTab}
-					>
-						<StickyNote />
-					</Button>
-				</IconTooltip>
-				{tab.archived && (
-					<IconTooltip label="Unarchive tab">
+				<Favicon
+					url={tab.url}
+					label={label}
+					className={`${compact ? 'h-5 w-5' : 'mt-0.5 h-6 w-6'} rounded-sm`}
+				/>
+				<div className="min-w-0 flex-1">
+					<span className="flex min-w-0 items-center gap-1.5">
+						<a
+							className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
+							href={tab.url}
+							target="_blank"
+							rel="noopener noreferrer"
+							title={label}
+							onClick={(event) => {
+								if (event.ctrlKey || event.metaKey || event.shiftKey) {
+									return;
+								}
+
+								event.preventDefault();
+								if (
+									resolveLinkTarget('session', settings as Settings) === 'none'
+								) {
+									onSelect(!selected, {});
+									return;
+								}
+
+								onOpen();
+							}}
+						>
+							{label}
+						</a>
+						{splitBadge && (
+							<Badge
+								className="shrink-0 gap-1 px-1.5"
+								title="Saved from a split view; restores side by side"
+							>
+								<Columns2 className="h-3 w-3" aria-hidden="true" />
+								Split
+							</Badge>
+						)}
+						{tab.pinned && <Badge>Pinned</Badge>}
+						{tab.nativeGroup?.title && (
+							<Badge
+								className="min-w-0 max-w-[12rem]"
+								title={tab.nativeGroup.title}
+							>
+								<span className="truncate">{tab.nativeGroup.title}</span>
+							</Badge>
+						)}
+						{tab.archived && <Badge variant="outline">Archived</Badge>}
+					</span>
+					{displayUrl !== null && (
+						<p
+							className="mt-0.5 break-all text-[11px] leading-4 text-muted-foreground"
+							title={tab.url}
+						>
+							{displayUrl}
+						</p>
+					)}
+					{tab.notes && (
+						<p className="mt-1 whitespace-pre-wrap break-words text-xs italic text-muted-foreground [overflow-wrap:anywhere]">
+							{tab.notes}
+						</p>
+					)}
+				</div>
+				<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100">
+					<IconTooltip label="Restore tab">
 						<Button
 							variant="ghost"
 							size="icon"
 							className={action}
-							aria-label={`Unarchive ${label}`}
-							onClick={onToggleArchived}
+							aria-label={`Restore ${label}`}
+							onClick={(event) => onRestore(event)}
 						>
-							<Archive />
+							<RotateCcw />
 						</Button>
 					</IconTooltip>
-				)}
-				{showBookmark && (
-					<IconTooltip label="Bookmark tab">
+					<IconTooltip label="Remove from session">
 						<Button
 							variant="ghost"
 							size="icon"
-							className={action}
-							aria-label={`Bookmark ${label}`}
-							onClick={onBookmark}
+							className="h-7 w-7 text-muted-foreground hover:text-destructive"
+							aria-label={`Remove ${label} from saved session`}
+							onClick={onDelete}
 						>
-							<BookmarkPlus />
+							<X />
 						</Button>
 					</IconTooltip>
-				)}
-				<IconTooltip label="Remove from session">
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-7 w-7 text-muted-foreground hover:text-destructive"
-						aria-label={`Remove ${label} from saved session`}
-						onClick={onDelete}
-					>
-						<X />
-					</Button>
-				</IconTooltip>
-			</div>
-		</li>
+					<ActionDropdownMenu
+						actions={actions}
+						trigger={
+							<Button
+								variant="ghost"
+								size="icon"
+								className={action}
+								title="More actions"
+								aria-label={`More actions for ${label}`}
+							>
+								<MoreVertical />
+							</Button>
+						}
+					/>
+				</div>
+			</li>
+		</ActionContextMenu>
 	);
 }

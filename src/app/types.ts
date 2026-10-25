@@ -269,11 +269,29 @@ export type TabLodgeMessages = {
 	DELETE_GROUP: {groupId: string};
 	UPDATE_GROUP: {groupId: string; fields: SessionFields};
 	REORDER_GROUP: {groupId: string; direction: 'up' | 'down'; folderId?: string};
+	/**
+	Sets the custom session order: `order` lists the visible session ids in their new order and they take
+	the slots those sessions held in the stored order (others stay put). Switches the sort to "custom".
+	*/
+	SET_GROUP_ORDER: {order: string[]};
 	CREATE_FOLDER: {name: string};
 	UPDATE_FOLDER: {folderId: string; name: string};
 	DELETE_FOLDER: {folderId: string};
 	MOVE_GROUP: {groupId: string; folderId: string};
 	DELETE_TAB: {groupId: string; tabId: string};
+	/**
+	Moves (or, with `copy`, duplicates) a saved link into another session, or reorders it inside the same
+	session. It lands next to `targetTabId` (`position` defaults to after) or at the end. Split info of the
+	moved link and its partner is dropped.
+	*/
+	MOVE_TAB: {
+		fromGroupId: string;
+		tabId: string;
+		toGroupId: string;
+		targetTabId?: string | null;
+		position?: InsertPosition;
+		copy?: boolean;
+	};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
 	ADD_BOOKMARKS: {
@@ -387,11 +405,13 @@ export type TabLodgeResponses = {
 	DELETE_GROUP: {};
 	UPDATE_GROUP: {group: Session};
 	REORDER_GROUP: {};
+	SET_GROUP_ORDER: {};
 	CREATE_FOLDER: {folder: Folder};
 	UPDATE_FOLDER: {folder: Folder};
 	DELETE_FOLDER: {};
 	MOVE_GROUP: {};
 	DELETE_TAB: {};
+	MOVE_TAB: {};
 	UPDATE_TAB: {shared: number};
 	ADD_BOOKMARK: {bookmark: Bookmark};
 	ADD_BOOKMARKS: {count: number; bookmarks: Bookmark[]};
