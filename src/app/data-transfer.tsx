@@ -54,6 +54,7 @@ import {
 	SelectValue,
 	useRetainedValue,
 } from '../shared/ui';
+import {offerUndo} from './recovery';
 import {send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
 import {
@@ -795,6 +796,7 @@ export function ImportDialog({
 		};
 		try {
 			let message: string;
+			let undoId: string | undefined;
 			if (source.type === 'browser') {
 				const result = await send('IMPORT_BROWSER_BOOKMARKS', {
 					duplicateMode: options.duplicateMode,
@@ -807,6 +809,7 @@ export function ImportDialog({
 					);
 				}
 
+				undoId = result.undoId;
 				message = importSummary('bookmarks', {
 					added: result.bookmarksAdded,
 					groups: result.columnsAdded,
@@ -822,6 +825,7 @@ export function ImportDialog({
 					throw new Error(result?.error || 'Could not import this file.');
 				}
 
+				undoId = result.undoId;
 				message = importSummary('sessions', {
 					added: result.count,
 					groups: result.groups,
@@ -837,6 +841,7 @@ export function ImportDialog({
 					throw new Error(result?.error || 'Could not import this file.');
 				}
 
+				undoId = result.undoId;
 				message = importSummary('bookmarks', {
 					added: result.bookmarks,
 					groups: result.columns,
@@ -847,7 +852,7 @@ export function ImportDialog({
 
 			onOpenChange(false);
 			await onImported?.();
-			showStatus(message, false, {toast: true});
+			offerUndo(message, undoId, showStatus, async () => onImported?.());
 		} catch (reason) {
 			showStatus(
 				String(messageOf(reason) || 'Could not import this file.'),

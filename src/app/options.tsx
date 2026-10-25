@@ -30,8 +30,7 @@ import {
 } from 'lucide-react';
 import {
 	Button,
-	Checkbox,
-	ConfirmationDialog,
+	ActionDropdownMenu,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -66,7 +65,12 @@ import {
 } from './common';
 import type {ActionResult, EraseScope, Settings} from './types';
 import {BackupDialog, ImportDialog} from './data-transfer';
-import {RecoveryTools, SnapshotsDialog, TrashDialog} from './recovery';
+import {
+	RecoveryTools,
+	SnapshotsDialog,
+	TrashDialog,
+	offerUndo,
+} from './recovery';
 import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
 import {
@@ -153,8 +157,6 @@ const RECOVERY_TOOLS_TEXT = [
 	'deleted items',
 	'crash',
 ];
-// Typed into the "Erase everything" dialog before its confirm button enables.
-const ERASE_WORD = 'ERASE';
 
 const footerLinks = [
 	{label: 'Source code', href: PROJECT.repoUrl, external: true},
@@ -752,13 +754,8 @@ function Options() {
 	const siteInputRef = useRef<HTMLInputElement>(null);
 	const siteTextRef = useRef<HTMLTextAreaElement>(null);
 	const [busy, setBusy] = useState('');
-	const [confirmDefaults, setConfirmDefaults] = useState(false);
 	const [resetBusy, setResetBusy] = useState(false);
-	const [erase, setErase] = useState<{
-		sessions: boolean;
-		bookmarks: boolean;
-		busy: boolean;
-	} | null>(null);
+	const [eraseBusy, setEraseBusy] = useState(false);
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
@@ -771,7 +768,6 @@ function Options() {
 			.then((granted) => setDownloadsGranted(Boolean(granted)))
 			.catch(() => undefined);
 	}, []);
-	const eraseFocusRef = useRef<HTMLElement | null>(null);
 	const dataRef = useRef<HTMLDivElement>(null);
 	// The search box: `?q=` keeps the query across reloads; "/" and Ctrl/Cmd+K focus it, Escape clears it.
 	const searchRef = useRef<HTMLInputElement>(null);
@@ -965,6 +961,7 @@ function Options() {
 			return;
 		}
 
+		const previousTheme = theme;
 		setResetBusy(true);
 		setBusy('defaults');
 		const result = await send('RESET_SETTINGS');
@@ -982,22 +979,27 @@ function Options() {
 		setExcluded(result.settings.excludedOrigins || []);
 		try {
 			await setTheme('system');
-			showStatus(
-				'Default settings restored. Saved sessions and bookmarks were left unchanged.',
-				false,
-				{toast: true},
-			);
 		} catch {
 			showStatus(
 				'Settings were reset, but the appearance choice could not be changed.',
 				true,
 			);
+			return;
 		}
 
-		setConfirmDefaults(false);
+		// The appearance is stored apart from the other settings, so Undo puts it back too.
+		offerUndo(
+			'Default settings restored.',
+			result.undoId,
+			showStatus,
+			async () => {
+				await setTheme(previousTheme).catch(() => undefined);
+				await reload();
+			},
+		);
 	}
 
-	// Live counts for the Data section and the erase confirmations.
+	// Live counts for the Data section and its Erase menu.
 	const sessions = state?.groups || [];
 	const tabs = sessions.reduce(
 		(sum, group) => sum + (group.tabs?.length || 0),
@@ -1020,45 +1022,25 @@ function Options() {
 		...(bookmarkCount ? [plural(bookmarkCount, 'bookmark')] : []),
 		...(bookmarkColumns ? [plural(bookmarkColumns, 'bookmark column')] : []),
 	];
-	const eraseScope: EraseScope | null = erase
-		? erase.sessions && erase.bookmarks
-			? 'all'
-			: erase.sessions
-				? 'sessions'
-				: erase.bookmarks
-					? 'bookmarks'
-					: null
-		: null;
-	const eraseLabel = {
-		sessions: 'Erase sessions',
-		bookmarks: 'Erase bookmarks',
-		all: 'Erase everything',
-	};
-
-	function askErase(trigger: HTMLElement) {
-		eraseFocusRef.current = trigger;
-		setErase({sessions: false, bookmarks: false, busy: false});
-	}
-
-	// Erasing everything also asks for ERASE_WORD; the confirmation dialog enables its button only once it is typed.
-	async function confirmErase() {
-		if (!erase || !eraseScope || erase.busy) {
+	// Erases right away (a safety backup is taken first); Undo puts the data back.
+	async function eraseData(scope: EraseScope) {
+		if (eraseBusy) {
 			return;
 		}
 
-		setErase({...erase, busy: true});
+		setEraseBusy(true);
 		let result:
 			| ActionResult<'ERASE_DATA'>
 			| {ok: false; error: string | undefined}
 			| undefined;
 		try {
-			result = await send('ERASE_DATA', {scope: eraseScope});
+			result = await send('ERASE_DATA', {scope});
 		} catch (reason) {
 			result = {ok: false, error: messageOf(reason)};
 		}
 
+		setEraseBusy(false);
 		if (!result?.ok) {
-			setErase((current) => current && {...current, busy: false});
 			showStatus(
 				result?.error || 'Could not erase that data. Nothing was changed.',
 				true,
@@ -1066,21 +1048,17 @@ function Options() {
 			return;
 		}
 
-		// The erase button is disabled once nothing is left, so focus returns to the Data section.
-		eraseFocusRef.current = dataRef.current;
-		setErase(null);
 		await reload();
 		const erased = [
-			...(eraseScope === 'bookmarks'
-				? []
-				: [plural(result.sessions, 'session')]),
-			...(eraseScope === 'sessions'
-				? []
-				: [plural(result.bookmarks, 'bookmark')]),
+			...(scope === 'bookmarks' ? [] : [plural(result.sessions, 'session')]),
+			...(scope === 'sessions' ? [] : [plural(result.bookmarks, 'bookmark')]),
 		];
-		showStatus(`Erased ${listing(erased)}. Settings were kept.`, false, {
-			toast: true,
-		});
+		offerUndo(
+			`Erased ${listing(erased)}. Settings were kept.`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
 	}
 
 	// Nothing renders until the saved state arrives, so the page opens on its themed background without a flash.
@@ -1235,15 +1213,43 @@ function Options() {
 			help: 'Delete saved sessions, bookmarks, or both. Settings are kept.',
 			words: ['delete', 'remove', 'clear', 'wipe', 'reset data', 'everything'],
 			action: (
-				<Button
-					variant="outline"
-					className="w-full border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-32"
-					disabled={sessionParts.length === 0 && bookmarkParts.length === 0}
-					onClick={(event) => askErase(event.currentTarget)}
-				>
-					<Eraser className="h-4 w-4" />
-					Erase
-				</Button>
+				<ActionDropdownMenu
+					trigger={
+						<Button
+							variant="outline"
+							className="w-full border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-32"
+							disabled={
+								eraseBusy ||
+								(sessionParts.length === 0 && bookmarkParts.length === 0)
+							}
+						>
+							<Eraser className="h-4 w-4" />
+							Erase
+						</Button>
+					}
+					actions={[
+						{
+							id: 'erase-sessions',
+							label: 'Erase sessions',
+							destructive: true,
+							disabled: sessionParts.length === 0,
+							onSelect: () => void eraseData('sessions'),
+						},
+						{
+							id: 'erase-bookmarks',
+							label: 'Erase bookmarks',
+							destructive: true,
+							disabled: bookmarkParts.length === 0,
+							onSelect: () => void eraseData('bookmarks'),
+						},
+						{
+							id: 'erase-all',
+							label: 'Erase everything',
+							destructive: true,
+							onSelect: () => void eraseData('all'),
+						},
+					]}
+				/>
 			),
 		},
 	];
@@ -1737,7 +1743,7 @@ function Options() {
 							<Button
 								variant="outline"
 								disabled={busy === 'defaults'}
-								onClick={() => setConfirmDefaults(true)}
+								onClick={() => void restoreDefaults()}
 							>
 								<RotateCcw className="h-4 w-4" />
 								{busy === 'defaults' ? 'Restoring' : 'Restore defaults'}
@@ -1746,62 +1752,6 @@ function Options() {
 					)}
 				</div>
 			)}
-			<ConfirmationDialog
-				open={confirmDefaults}
-				title="Restore default preferences?"
-				description={`${PROJECT.name} preferences will return to their default values. Saved sessions and bookmarks will not be changed.`}
-				confirmLabel="Restore defaults"
-				busy={resetBusy}
-				onOpenChange={setConfirmDefaults}
-				onConfirm={restoreDefaults}
-			/>
-			<ConfirmationDialog
-				open={Boolean(erase)}
-				title="Erase data?"
-				description="Choose what to erase. This can’t be undone. Settings and excluded sites are kept."
-				requireText={eraseScope === 'all' ? ERASE_WORD : undefined}
-				confirmLabel={eraseScope ? eraseLabel[eraseScope] : 'Erase'}
-				confirmDisabled={!eraseScope}
-				busy={Boolean(erase?.busy)}
-				restoreFocusTo={eraseFocusRef.current}
-				onOpenChange={(open) => !open && !erase?.busy && setErase(null)}
-				onConfirm={confirmErase}
-			>
-				<div className="grid gap-2">
-					{(
-						[
-							['sessions', 'Sessions', sessionParts],
-							['bookmarks', 'Bookmarks', bookmarkParts],
-						] as const
-					).map(([key, label, parts]) => (
-						<div
-							key={key}
-							className={`flex items-start rounded-lg border border-border ${parts.length === 0 ? 'opacity-60' : 'has-[[data-state=checked]]:border-destructive/60 has-[[data-state=checked]]:bg-destructive/5'}`}
-						>
-							<Checkbox
-								id={`erase-${key}`}
-								className="ml-3.5 mt-3.5"
-								disabled={parts.length === 0 || Boolean(erase?.busy)}
-								checked={Boolean(erase?.[key])}
-								onCheckedChange={(checked) =>
-									setErase((current) =>
-										current ? {...current, [key]: checked === true} : current,
-									)
-								}
-							/>
-							<Label
-								htmlFor={`erase-${key}`}
-								className={`block min-w-0 flex-1 py-3 pl-3 pr-3.5 ${parts.length === 0 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-							>
-								<span className="block text-sm font-medium">{label}</span>
-								<span className="block text-xs font-normal leading-5 text-muted-foreground">
-									{parts.length > 0 ? listing(parts) : 'Nothing saved.'}
-								</span>
-							</Label>
-						</div>
-					))}
-				</div>
-			</ConfirmationDialog>
 			<BackupDialog
 				state={state}
 				data={backupData}
