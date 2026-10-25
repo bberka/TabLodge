@@ -1,5 +1,13 @@
-// The backup (export) and import dialogs, shared by the dashboard and Settings › Data.
-// File formats live in the pure modules export-formats.ts and import-formats.ts.
+// The backup (export), import and share dialogs, shared by the dashboard and Settings › Data.
+// File formats live in the pure modules export-formats.ts, import-formats.ts and share-formats.ts.
+//
+// Share dialog API (used by the session manager and the bookmark board):
+//   <ShareDialog open onOpenChange title="Shared sessions" groups={sessions} showStatus={showStatus} />
+//     `groups` is any {name, tabs: {title, url}[]}[] (a Session[] fits as is). Optionally pass
+//     `sources` ([{id, label, description?, groups}]) to let the user choose what to share.
+//   const {openShare, shareDialog} = useShareDialog(showStatus);  // render {shareDialog} once
+//     openShare({title, groups} | {title, sources}) opens it. The dialog offers: HTML page
+//     (download), Markdown / plain links / rich text (copy to clipboard).
 import {
 	useEffect,
 	useMemo,
@@ -18,6 +26,7 @@ import {
 	FileText,
 	FileUp,
 	Globe,
+	Copy,
 	Info,
 	Link2,
 	PanelsTopLeft,
@@ -46,10 +55,21 @@ import {
 	useRetainedValue,
 } from '../shared/ui';
 import {send, type ShowStatus} from './common';
+import {writeClipboard} from './interaction-actions';
+import {
+	shareCounts,
+	shareHtmlPage,
+	shareLinks,
+	shareMarkdown,
+	shareRich,
+	type ShareGroup,
+	type ShareMethod,
+} from './share-formats';
 import {
 	buildExport,
 	exportCounts,
 	exportFilename,
+	dateStamp,
 	type ExportData,
 	type ExportFormat,
 	type ExportKind,
@@ -72,6 +92,7 @@ import type {
 	TitlePolicy,
 } from './types';
 import {PROJECT} from './project';
+import {fileNamePrefix} from './backup-format';
 
 const plural = (count: number, noun: string, many = `${noun}s`) =>
 	`${count.toLocaleString()} ${count === 1 ? noun : many}`;
@@ -91,6 +112,16 @@ export function downloadFile(content: string, mime: string, filename: string) {
 	anchor.click();
 	anchor.remove();
 	setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function KindLabel({kind}: {kind: 'sessions' | 'bookmarks'}) {
+	const Icon = kind === 'bookmarks' ? Bookmark : PanelsTopLeft;
+	return (
+		<span className="inline-flex items-center justify-center gap-1.5">
+			<Icon className="h-3.5 w-3.5" aria-hidden="true" />
+			{kind === 'bookmarks' ? 'Bookmarks' : 'Sessions'}
+		</span>
+	);
 }
 
 // ---------------------------------------------------------------- Backup / export
@@ -160,6 +191,10 @@ type BackupDialogProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	showStatus: ShowStatus;
+	/**
+	When given (and both systems are on), a Bookmarks/Sessions switch lets the user change what is backed up.
+	*/
+	state?: TabLodgeState | null;
 };
 
 /**
@@ -170,14 +205,40 @@ export function BackupDialog({
 	open,
 	onOpenChange,
 	showStatus,
+	state,
 }: BackupDialogProps) {
-	const shown = useRetainedValue(data, open && data != null);
+	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
+	const [switched, setSwitched] = useState<'sessions' | 'bookmarks' | null>(
+		null,
+	);
 	useEffect(() => {
-		if (open) {
-			setFormat('json');
+		if (!open) {
+			return;
 		}
+
+		setFormat('json');
+		setSwitched(null);
 	}, [open]);
+	const canSwitch = Boolean(
+		state &&
+		requested &&
+		requested.kind !== 'selected' &&
+		state.settings.sessionsEnabled &&
+		state.settings.bookmarksEnabled,
+	);
+	let shown = requested;
+	if (state && canSwitch && switched && switched !== requested?.kind) {
+		shown =
+			switched === 'bookmarks'
+				? {
+						kind: 'bookmarks',
+						columns: state.bookmarkColumns,
+						bookmarks: state.bookmarks,
+					}
+				: {kind: 'sessions', groups: state.groups, folders: state.folders};
+	}
+
 	const kind = shown?.kind ?? 'sessions';
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
 	const filename = exportFilename(PROJECT.name, kind, format);
@@ -214,6 +275,18 @@ export function BackupDialog({
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
+					{canSwitch && (
+						<SegmentedControl
+							fullWidth
+							label="What to back up"
+							value={kind as 'sessions' | 'bookmarks'}
+							options={[
+								{value: 'bookmarks', label: <KindLabel kind="bookmarks" />},
+								{value: 'sessions', label: <KindLabel kind="sessions" />},
+							]}
+							onValueChange={setSwitched}
+						/>
+					)}
 					<RadioCardGroup
 						label="File format"
 						value={format}
@@ -271,6 +344,235 @@ export function BackupDialog({
 			</DialogContent>
 		</Dialog>
 	);
+}
+
+// ---------------------------------------------------------------- Share
+
+export type ShareSource = {
+	id: string;
+	label: string;
+	description?: string;
+	groups: ShareGroup[];
+};
+export type SharePayload = {
+	title: string;
+	groups?: readonly ShareGroup[];
+	sources?: ShareSource[];
+};
+
+const SHARE_METHODS: ReadonlyArray<{
+	id: ShareMethod;
+	title: string;
+	icon: typeof FileJson;
+	description: string;
+	action: 'Download' | 'Copy';
+}> = [
+	{
+		id: 'html',
+		title: 'HTML page',
+		icon: Globe,
+		description: 'A standalone page you can send or open anywhere.',
+		action: 'Download',
+	},
+	{
+		id: 'markdown',
+		title: 'Markdown',
+		icon: FileText,
+		description: 'A titled list of links, ready for notes or chat.',
+		action: 'Copy',
+	},
+	{
+		id: 'links',
+		title: 'Plain links',
+		icon: Link2,
+		description: 'One web address per line.',
+		action: 'Copy',
+	},
+	{
+		id: 'rich',
+		title: 'Rich text',
+		icon: Copy,
+		description: 'Clickable links that paste into documents and email.',
+		action: 'Copy',
+	},
+];
+
+type ShareDialogProps = {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	title?: string;
+	groups?: readonly ShareGroup[];
+	sources?: ShareSource[];
+	showStatus: ShowStatus;
+};
+
+/**
+Unified share dialog: choose what to share (when several sources are offered) and how.
+*/
+export function ShareDialog({
+	open,
+	onOpenChange,
+	title = `Shared ${PROJECT.name} links`,
+	groups,
+	sources,
+	showStatus,
+}: ShareDialogProps) {
+	const all: ShareSource[] = useMemo(
+		() =>
+			sources && sources.length > 0
+				? sources
+				: [{id: 'all', label: title, groups: [...(groups ?? [])]}],
+		[sources, groups, title],
+	);
+	const [sourceId, setSourceId] = useState(all[0].id);
+	const [method, setMethod] = useState<ShareMethod>('html');
+	useEffect(() => {
+		if (!open) {
+			return;
+		}
+
+		setSourceId(all[0].id);
+		setMethod('html');
+		// Reset each time the dialog opens only.
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
+	}, [open]);
+	const source = all.find((entry) => entry.id === sourceId) ?? all[0];
+	const counts = shareCounts(source.groups);
+	const chosen = SHARE_METHODS.find((entry) => entry.id === method)!;
+
+	async function run() {
+		try {
+			if (method === 'html') {
+				const pageTitle =
+					source.groups.length === 1 ? source.groups[0].name : title;
+				downloadFile(
+					shareHtmlPage(pageTitle, source.groups, PROJECT.name),
+					'text/html;charset=utf-8',
+					`${fileNamePrefix(PROJECT.name)}-shared-${dateStamp(new Date())}.html`,
+				);
+				showStatus('Saved the shared page.', false, {toast: true});
+			} else {
+				await writeClipboard(
+					method === 'markdown'
+						? {text: shareMarkdown(source.groups), html: null}
+						: method === 'links'
+							? {text: shareLinks(source.groups), html: null}
+							: shareRich(source.groups),
+				);
+				showStatus(`Copied ${plural(counts.links, 'link')}.`, false, {
+					toast: true,
+				});
+			}
+
+			onOpenChange(false);
+		} catch (reason) {
+			showStatus(
+				String(
+					messageOf(reason) ||
+						'Could not share. Check clipboard permissions and try again.',
+				),
+				true,
+			);
+		}
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent size="lg">
+				<DialogHeader>
+					<DialogTitle>Share</DialogTitle>
+					<DialogDescription>
+						Choose what to share and how. Nothing leaves your browser.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogBody>
+					{all.length > 1 && (
+						<RadioCardGroup
+							label="What to share"
+							value={source.id}
+							onValueChange={setSourceId}
+						>
+							{all.map((entry) => (
+								<RadioCard
+									key={entry.id}
+									value={entry.id}
+									title={entry.label}
+									description={
+										entry.description ??
+										plural(shareCounts(entry.groups).links, 'link')
+									}
+								/>
+							))}
+						</RadioCardGroup>
+					)}
+					<RadioCardGroup
+						label="How to share"
+						value={method}
+						className="sm:grid-cols-2"
+						onValueChange={(value) => setMethod(value as ShareMethod)}
+					>
+						{SHARE_METHODS.map((entry) => (
+							<RadioCard
+								key={entry.id}
+								value={entry.id}
+								icon={entry.icon}
+								title={entry.title}
+								description={entry.description}
+							/>
+						))}
+					</RadioCardGroup>
+					<p
+						className="rounded-md bg-muted/70 px-3 py-2 text-xs text-muted-foreground"
+						aria-live="polite"
+					>
+						{plural(counts.links, 'link')} in {plural(counts.groups, 'group')}
+					</p>
+				</DialogBody>
+				<DialogFooter>
+					<Button
+						type="button"
+						variant="outline"
+						onClick={() => onOpenChange(false)}
+					>
+						Cancel
+					</Button>
+					<Button
+						type="button"
+						disabled={counts.links === 0}
+						onClick={() => void run()}
+					>
+						{chosen.action === 'Download' ? <Download /> : <Copy />}
+						{chosen.action}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+/**
+Hook form: `openShare(payload)` opens the dialog; render `shareDialog` once.
+*/
+export function useShareDialog(showStatus: ShowStatus) {
+	const [payload, setPayload] = useState<SharePayload | null>(null);
+	const [open, setOpen] = useState(false);
+	const shown = useRetainedValue(payload, open && payload != null);
+	return {
+		openShare(next: SharePayload) {
+			setPayload(next);
+			setOpen(true);
+		},
+		shareDialog: (
+			<ShareDialog
+				open={open}
+				title={shown?.title}
+				groups={shown?.groups}
+				sources={shown?.sources}
+				showStatus={showStatus}
+				onOpenChange={setOpen}
+			/>
+		),
+	};
 }
 
 // ---------------------------------------------------------------- Import
@@ -571,27 +873,12 @@ export function ImportDialog({
 	const kindSwitch =
 		sessionsEnabled && bookmarksEnabled && source?.type !== 'browser' ? (
 			<SegmentedControl
+				fullWidth
 				label="What to import"
 				value={kind}
 				options={[
-					{
-						value: 'bookmarks',
-						label: (
-							<span className="inline-flex items-center gap-1.5">
-								<Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
-								Bookmarks
-							</span>
-						),
-					},
-					{
-						value: 'sessions',
-						label: (
-							<span className="inline-flex items-center gap-1.5">
-								<PanelsTopLeft className="h-3.5 w-3.5" aria-hidden="true" />
-								Sessions
-							</span>
-						),
-					},
+					{value: 'bookmarks', label: <KindLabel kind="bookmarks" />},
+					{value: 'sessions', label: <KindLabel kind="sessions" />},
 				]}
 				onValueChange={(value) => setKind(value)}
 			/>
@@ -661,7 +948,7 @@ export function ImportDialog({
 									onClick={() => fileRef.current?.click()}
 								>
 									<Upload />
-									{reading ? 'Reading…' : 'Choose file…'}
+									{reading ? 'Reading' : 'Choose file'}
 								</Button>
 								<input
 									ref={fileRef}
@@ -1002,7 +1289,7 @@ export function ImportDialog({
 									data-autofocus=""
 									onClick={() => void runImport()}
 								>
-									{busy ? 'Importing…' : importLabel}
+									{busy ? 'Importing' : importLabel}
 								</Button>
 							</DialogFooter>
 						</>
