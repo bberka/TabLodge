@@ -11,9 +11,10 @@ test('displayUrl drops https://, www. and a lone trailing slash', () => {
 	assert.equal(displayUrl('https://a.com/#top'), 'a.com#top');
 });
 
-test('displayUrl keeps http:// and shows the exact address when simplifying is off', () => {
+test('displayUrl drops http:// too, and shows the exact address when simplifying is off', () => {
 	const insecure = ['http', '//www.a.com/'].join(':');
-	assert.equal(displayUrl(insecure), insecure);
+	assert.equal(displayUrl(insecure), 'a.com');
+	assert.equal(displayUrl(['http', '//192.168.1.1/'].join(':')), '192.168.1.1');
 	assert.equal(
 		displayUrl('https://www.icloud.com/mail', false),
 		'https://www.icloud.com/mail',
