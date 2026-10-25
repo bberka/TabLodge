@@ -201,7 +201,6 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	restoreSplitTabs: 'split',
 	saveSplitTabs: 'both',
 	sessionSort: 'newest',
-	sessionLayout: 'list',
 	expandSessionsByDefault: false,
 	stretchBookmarkColumns: true,
 	pasteLinkToBookmark: true,
@@ -971,7 +970,6 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.sessionSort
 			: 'newest',
-		sessionLayout: raw.sessionLayout === 'grid' ? 'grid' : 'list',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
 		pasteLinkToBookmark: raw.pasteLinkToBookmark !== false,

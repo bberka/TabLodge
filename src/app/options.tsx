@@ -544,16 +544,6 @@ const settingsGroups: Array<{
 				],
 			},
 			{
-				name: 'sessionLayout',
-				label: 'Session layout',
-				help: 'Show sessions in a single list, or as a two-column grid on wide pages.',
-				type: 'select',
-				options: [
-					['list', 'List'],
-					['grid', 'Grid'],
-				],
-			},
-			{
 				name: 'expandSessionsByDefault',
 				label: 'Keep sessions expanded by default',
 				help: `Show every session’s saved tabs when the ${PROJECT.name} page opens, including sessions saved later. You can still collapse or expand each one.`,

@@ -4747,31 +4747,6 @@ test('RESTORE_GROUP honors a restoreTarget override over the Settings default', 
 	assert.equal(inThisWindow.openedTabs[0].windowId, 10);
 });
 
-test('sessionLayout defaults to list, accepts grid, ignores junk and resets to list', async () => {
-	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
-	assert.equal(
-		(await defaults.sendMessage({type: 'GET_STATE'})).settings.sessionLayout,
-		'list',
-	);
-
-	const junk = createWorkerHarness(
-		stateWithSession({sessionLayout: 'masonry'}),
-	);
-	assert.equal(
-		(await junk.sendMessage({type: 'GET_STATE'})).settings.sessionLayout,
-		'list',
-	);
-
-	const updated = await junk.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {sessionLayout: 'grid'},
-	});
-	assert.equal(updated.ok, true, updated.error);
-	assert.equal(junk.state.settings.sessionLayout, 'grid');
-	const reset = await junk.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.sessionLayout, 'list');
-});
-
 test('excluded sites are hostnames covering subdomains; old origin entries migrate', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({
