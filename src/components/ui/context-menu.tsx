@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
+import {ChevronRight} from 'lucide-react';
 import {ScrollArea} from './scroll-area';
 import {cn} from '@/lib/utils';
 
@@ -61,7 +62,7 @@ const ContextMenuItem = React.forwardRef<
 	<ContextMenuPrimitive.Item
 		ref={ref}
 		className={cn(
-			'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+			'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0',
 			inset && 'pl-8',
 			className,
 		)}
@@ -69,6 +70,44 @@ const ContextMenuItem = React.forwardRef<
 	/>
 ));
 ContextMenuItem.displayName = ContextMenuPrimitive.Item.displayName;
+
+const ContextMenuSub = ContextMenuPrimitive.Sub;
+
+const ContextMenuSubTrigger = React.forwardRef<
+	React.ComponentRef<typeof ContextMenuPrimitive.SubTrigger>,
+	React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubTrigger>
+>(({className, children, ...props}, ref) => (
+	<ContextMenuPrimitive.SubTrigger
+		ref={ref}
+		className={cn(
+			'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent [&>svg]:size-4 [&>svg]:shrink-0',
+			className,
+		)}
+		{...props}
+	>
+		{children}
+		<ChevronRight className="ml-auto" />
+	</ContextMenuPrimitive.SubTrigger>
+));
+ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
+
+const ContextMenuSubContent = React.forwardRef<
+	React.ComponentRef<typeof ContextMenuPrimitive.SubContent>,
+	React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
+>(({className, ...props}, ref) => (
+	<ContextMenuPrimitive.Portal>
+		<ContextMenuPrimitive.SubContent
+			ref={ref}
+			collisionPadding={8}
+			className={cn(
+				'tn-menu-content z-[100] min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground',
+				className,
+			)}
+			{...props}
+		/>
+	</ContextMenuPrimitive.Portal>
+));
+ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName;
 
 const ContextMenuSeparator = React.forwardRef<
 	React.ComponentRef<typeof ContextMenuPrimitive.Separator>,
@@ -88,4 +127,7 @@ export {
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuSeparator,
+	ContextMenuSub,
+	ContextMenuSubTrigger,
+	ContextMenuSubContent,
 };

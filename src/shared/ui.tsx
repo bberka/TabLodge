@@ -82,6 +82,11 @@ export {
 	CardDescription,
 	CardContent,
 } from '../components/ui/card';
+export {
+	ActionDropdownMenu,
+	ActionContextMenu,
+	type MenuAction,
+} from '../components/ui/action-menu';
 export {Badge} from '../components/ui/badge';
 export {TooltipProvider} from '../components/ui/tooltip';
 export {Label} from '../components/ui/label';

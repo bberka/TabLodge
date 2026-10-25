@@ -156,6 +156,10 @@ type SegmentedControlProps<T extends string> = {
 	'aria-labelledby'?: string;
 	name?: string;
 	className?: string;
+	/**
+	Stretch to the container width with equal-width segments.
+	*/
+	fullWidth?: boolean;
 };
 
 function SegmentedControl<T extends string>({
@@ -165,6 +169,7 @@ function SegmentedControl<T extends string>({
 	label,
 	name,
 	className,
+	fullWidth,
 	...props
 }: SegmentedControlProps<T>) {
 	const generated = React.useId();
@@ -174,7 +179,8 @@ function SegmentedControl<T extends string>({
 			aria-label={label}
 			aria-labelledby={props['aria-labelledby']}
 			className={cn(
-				'inline-flex max-w-full flex-wrap rounded-md border border-border bg-muted/60 p-0.5',
+				fullWidth ? 'flex w-full' : 'inline-flex max-w-full flex-wrap',
+				'rounded-md border border-border bg-muted/60 p-0.5',
 				className,
 			)}
 		>
@@ -184,6 +190,7 @@ function SegmentedControl<T extends string>({
 					<label
 						key={option.value}
 						className={cn(
+							fullWidth && 'flex-1 text-center',
 							'relative cursor-pointer rounded-[5px] px-3 py-1 text-xs font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
 							checked
 								? 'bg-card text-foreground shadow-sm'
