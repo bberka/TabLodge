@@ -1789,7 +1789,21 @@ test('ADD_BOOKMARKS adds every dropped link to one column in order at the drop p
 	assert.equal(none.ok, false);
 });
 
-test('session title activation respects the configured edit or restore action', async () => {
+test('groupTitleAction defaults to toggle and keeps stored edit or restore', async () => {
+	const read = async (value?: unknown) =>
+		(
+			await createWorkerHarness({
+				...stateWithSession(),
+				settings: value === undefined ? {} : {groupTitleAction: value as never},
+			}).sendMessage({type: 'GET_STATE'})
+		).settings.groupTitleAction;
+	assert.equal(await read(), 'toggle');
+	assert.equal(await read('bogus'), 'toggle');
+	assert.equal(await read('edit'), 'edit');
+	assert.equal(await read('restore'), 'restore');
+});
+
+test('session title activation respects the configured toggle, edit or restore action', async () => {
 	const {activateSessionTitle} = await import('../src/app/interaction-actions');
 	const calls: string[] = [];
 	const handlers = {
@@ -1799,11 +1813,15 @@ test('session title activation respects the configured edit or restore action', 
 		restore() {
 			calls.push('restore');
 		},
+		toggle() {
+			calls.push('toggle');
+		},
 	};
 	activateSessionTitle('restore', handlers);
 	activateSessionTitle('edit', handlers);
 	activateSessionTitle('unexpected', handlers);
-	assert.deepEqual(calls, ['restore', 'edit', 'edit']);
+	activateSessionTitle('toggle', handlers);
+	assert.deepEqual(calls, ['restore', 'edit', 'toggle', 'toggle']);
 });
 
 test('save duplicates can be allowed or silently rejected, with existing or latest title', async () => {

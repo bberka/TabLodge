@@ -465,10 +465,11 @@ const settingsGroups: Array<{
 			{
 				name: 'groupTitleAction',
 				label: 'Clicking a session title',
-				help: 'Choose whether clicking a session title opens its details or restores it.',
+				help: 'Choose whether clicking a session title expands or collapses it, opens its details, or restores it.',
 				type: 'select',
 				options: [
-					['edit', 'Edit session details'],
+					['toggle', 'Expand or collapse the session'],
+					['edit', 'Open session details'],
 					['restore', 'Restore the session'],
 				],
 			},
