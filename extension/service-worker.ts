@@ -3044,49 +3044,44 @@ async function updateFolder(
 	});
 }
 
+/**
+Deletes a session folder; its sessions move to Unfiled. A folder holds no data of its own, so it does not go to the
+trash bin: the short-lived Undo puts the folder and its sessions back.
+*/
 async function deleteFolder(
 	folderId: string,
 ): Promise<ActionResult<'DELETE_FOLDER'>> {
-	return mutate(async () => {
-		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
-		}
-
-		const folder = store.folders.find((entry) => entry.id === folderId);
-		if (!folder) {
-			return {ok: false, error: 'That folder no longer exists.'};
-		}
-
-		if (folder.isDefault) {
-			return {ok: false, error: 'The Unfiled folder cannot be deleted.'};
-		}
-
-		const groupIds: string[] = [];
-		for (const group of store.groups) {
-			if (group.folderId !== folderId) {
-				continue;
+	return mutate(() =>
+		withUndo('Delete folder', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			if (!store.settings.sessionsEnabled) {
+				return {ok: false, error: 'Sessions are disabled in Settings.'};
 			}
 
-			group.folderId = DEFAULT_FOLDER_ID;
-			groupIds.push(group.id);
-		}
+			const folder = store.folders.find((entry) => entry.id === folderId);
+			if (!folder) {
+				return {ok: false, error: 'That folder no longer exists.'};
+			}
 
-		const trashId = await trashAdd(store.settings, {
-			kind: 'folder',
-			label: folder.name,
-			origin: '',
-			count: groupIds.length,
-			data: {
-				folder,
-				index: store.folders.findIndex((entry) => entry.id === folderId),
-				groupIds,
-			},
-		});
-		store.folders = store.folders.filter((entry) => entry.id !== folderId);
-		await writeStore(store);
-		return {ok: true, trashId};
-	});
+			if (folder.isDefault) {
+				return {ok: false, error: 'The Unfiled folder cannot be deleted.'};
+			}
+
+			const groupIds: string[] = [];
+			for (const group of store.groups) {
+				if (group.folderId !== folderId) {
+					continue;
+				}
+
+				group.folderId = DEFAULT_FOLDER_ID;
+				groupIds.push(group.id);
+			}
+
+			store.folders = store.folders.filter((entry) => entry.id !== folderId);
+			await writeStore(store);
+			return {ok: true, moved: groupIds.length};
+		}),
+	);
 }
 
 async function moveGroup(
