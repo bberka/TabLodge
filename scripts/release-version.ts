@@ -64,16 +64,34 @@ export function nextVersion(minor: number, tags: readonly string[]): string {
 	);
 }
 
-function setVersion(version: string) {
+/**
+Replaces the top-level `"version"` value in a JSON file's text, leaving the rest of the file byte-for-byte unchanged so it still matches the repo's formatting (re-serializing would fail `pnpm check`).
+*/
+export function stampVersion(text: string, version: string): string {
 	if (!VERSION_PATTERN.test(version)) {
 		throw new Error(`Not a ZeroVer version (0.x.y): "${version}".`);
 	}
 
+	const pattern = /^([\t ]?"version"\s*:\s*")[^"]*(")/m;
+	if (!pattern.test(text)) {
+		throw new Error('No top-level "version" field found.');
+	}
+
+	const stamped = text.replace(
+		pattern,
+		(_match, before: string, after: string) => before + version + after,
+	);
+	if ((JSON.parse(stamped) as {version?: unknown}).version !== version) {
+		throw new Error('Stamped the wrong "version" field.');
+	}
+
+	return stamped;
+}
+
+function setVersion(version: string) {
 	for (const file of ['package.json', 'extension/manifest.json']) {
 		const path = resolve(projectRoot, file);
-		const json = JSON.parse(readFileSync(path, 'utf8')) as {version: string};
-		json.version = version;
-		writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
+		writeFileSync(path, stampVersion(readFileSync(path, 'utf8'), version));
 	}
 }
 
