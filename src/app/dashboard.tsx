@@ -246,6 +246,7 @@ export function SessionManager({
 	const {state, error, reload} = useTabLodgeState();
 	const [status, showStatus] = useStatus();
 	const [folderId, setFolderId] = useState(ALL);
+	const [folderDropId, setFolderDropId] = useState<string | null>(null);
 	const [query, setQuery] = useState(initialQuery);
 	const [sort, setSort] = useState<string>('newest');
 	const [expanded, setExpanded] = useState(() => new Set<string>());
@@ -923,6 +924,17 @@ export function SessionManager({
 		await reload();
 	}
 
+	// A dragged session may land on any folder chip except All and the folder it already sits in.
+	function folderDropTarget(targetId: string) {
+		const item = dragItemRef.current;
+		if (item?.kind !== 'session' || targetId === ALL) {
+			return false;
+		}
+
+		const dragged = groups.find((group) => group.id === item.id);
+		return Boolean(dragged) && dragged?.folderId !== targetId;
+	}
+
 	const drag = {
 		begin(item: DragItem) {
 			dragItemRef.current = item;
@@ -935,6 +947,7 @@ export function SessionManager({
 		},
 		end() {
 			dragItemRef.current = null;
+			setFolderDropId(null);
 			dragStore.set({dragging: null, mark: null});
 		},
 		over(group: Session, event: DragEvent<HTMLElement>) {
@@ -1209,6 +1222,7 @@ export function SessionManager({
 		}
 
 		setFolderId(ALL);
+
 		await reload();
 		offerTrashUndo(
 			`Folder “${folder.name}” deleted.`,
@@ -1383,12 +1397,54 @@ export function SessionManager({
 									folder.id === ALL
 										? LayoutGrid
 										: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component;
-								return (
+								const chip = (
 									<button
 										key={folder.id}
 										type="button"
 										aria-pressed={folderId === folder.id}
-										className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${folderId === folder.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+										data-drop-active={folderDropId === folder.id || undefined}
+										className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${folderDropId === folder.id ? 'bg-primary/15 text-foreground ring-2 ring-primary' : folderId === folder.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+										onDragOver={(event) => {
+											if (dragItemRef.current?.kind !== 'session') {
+												return;
+											}
+
+											event.preventDefault();
+											if (folderDropTarget(folder.id)) {
+												event.dataTransfer.dropEffect = 'move';
+												setFolderDropId(folder.id);
+											} else {
+												event.dataTransfer.dropEffect = 'none';
+												setFolderDropId(null);
+											}
+										}}
+										onDragLeave={(event) => {
+											if (
+												!event.currentTarget.contains(
+													event.relatedTarget as Node | null,
+												)
+											) {
+												setFolderDropId((current) =>
+													current === folder.id ? null : current,
+												);
+											}
+										}}
+										onDrop={(event) => {
+											if (!folderDropTarget(folder.id)) {
+												return;
+											}
+
+											event.preventDefault();
+											const item = dragItemRef.current;
+											const dragged = groups.find(
+												(group) =>
+													item?.kind === 'session' && group.id === item.id,
+											);
+											drag.end();
+											if (dragged) {
+												void moveGroupToFolder(dragged, folder.id, folder.name);
+											}
+										}}
 										onClick={() => {
 											setFolderId(folder.id);
 											setAnchor(null);
@@ -1406,6 +1462,7 @@ export function SessionManager({
 										</span>
 									</button>
 								);
+								return chip;
 							},
 						)}
 						<span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
