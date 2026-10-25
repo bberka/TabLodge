@@ -156,6 +156,10 @@ type DialogState = 'bookmark' | 'details' | FolderDialog | null;
 type BookmarkDraft = Partial<SavedTabRecord> & {columnId?: string};
 
 const ALL = 'all';
+/**
+Highlight id for the New folder button while a session is dragged over it.
+*/
+const NEW_FOLDER_DROP = 'new-folder';
 const WIDE_PAGE = '(min-width: 768px)';
 /**
 Tailwind's md breakpoint, tracked so the grid layout knows whether it shows two columns.
@@ -1511,9 +1515,40 @@ export function SessionManager({
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-8 w-8"
+								className={`h-8 w-8 ${folderDropId === NEW_FOLDER_DROP ? 'bg-primary/15 ring-2 ring-primary' : ''}`}
 								aria-label="New folder"
 								onClick={() => setDialog({mode: 'create'})}
+								// Dropping a session here creates a folder and moves the session into it.
+								onDragOver={(event) => {
+									if (dragItemRef.current?.kind !== 'session') {
+										return;
+									}
+
+									event.preventDefault();
+									event.dataTransfer.dropEffect = 'move';
+									setFolderDropId(NEW_FOLDER_DROP);
+								}}
+								onDragLeave={(event) => {
+									if (
+										!event.currentTarget.contains(
+											event.relatedTarget as Node | null,
+										)
+									) {
+										setFolderDropId((current) =>
+											current === NEW_FOLDER_DROP ? null : current,
+										);
+									}
+								}}
+								onDrop={(event) => {
+									const item = dragItemRef.current;
+									if (item?.kind !== 'session') {
+										return;
+									}
+
+									event.preventDefault();
+									drag.end();
+									setDialog({mode: 'create', moveGroupId: item.id});
+								}}
 							>
 								<FolderPlus />
 							</Button>
