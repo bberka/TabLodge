@@ -1117,7 +1117,11 @@ export function SessionManager({
 		setDialog('details');
 	}
 
-	async function moveGroupToFolder(group: Session, targetId: string) {
+	async function moveGroupToFolder(
+		group: Session,
+		targetId: string,
+		targetName?: string,
+	) {
 		if (group.folderId === targetId) {
 			return;
 		}
@@ -1132,8 +1136,9 @@ export function SessionManager({
 			return;
 		}
 
-		const target = folders.find((folder) => folder.id === targetId);
-		showStatus(`Moved to ${target?.name ?? 'the folder'}.`, false, {
+		const name =
+			targetName ?? folders.find((folder) => folder.id === targetId)?.name;
+		showStatus(`Moved to ${name ?? 'the folder'}.`, false, {
 			action: {
 				label: 'Undo',
 				async onClick() {
@@ -1184,10 +1189,7 @@ export function SessionManager({
 		setDialog(null);
 		if (moving) {
 			// The folder exists now; the move reports its own result with Undo.
-			await moveGroupToFolder(
-				{...moving, folderId: moving.folderId},
-				result.folder.id,
-			);
+			await moveGroupToFolder(moving, result.folder.id, result.folder.name);
 			return;
 		}
 
