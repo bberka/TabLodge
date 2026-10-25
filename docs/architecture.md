@@ -24,7 +24,7 @@ Reference notes for contributors: how the extension is built and loaded, how dat
 
 These names are stored in user data or exported files. Changing them later requires a migration:
 
-- storage keys: `tablodge.state` in `chrome.storage.local` (sessions, bookmarks, and settings) and `tablodge.uiTheme` in the pages' `localStorage` (theme mirror for `theme-boot.ts`);
+- storage keys: `tablodge.state` in `chrome.storage.local` (sessions, bookmarks, and settings) and `tablodge.uiTheme` in the pages' `localStorage` (theme mirror for `theme-boot.ts`); the recovery keys `tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta`, `tablodge.backups`, and `tablodge.trash` (see [Recovery](#recovery-snapshots-backups-and-trash));
 - export formats: `"format": "tablodge-sessions"` for session JSON and `"format": "tablodge"` for bookmark JSON (written on export; import recognizes backups by structure, not by this id);
 - drag-and-drop MIME types: `application/x-tablodge-session`, `application/x-tablodge-column`, `application/x-tablodge-bookmark`;
 - context-menu ids `tablodge-page-*` and `tablodge-action-*`.
@@ -36,6 +36,37 @@ The build output folder also matters for development: an unpacked extension's ID
 `src/app/types.ts` holds the data model and the typed message protocol between the pages and the service worker. Pages send messages with `send()` (`src/app/common.tsx`); the service worker owns all reads and writes of `chrome.storage.local`.
 
 Local state is versioned under `tablodge.state` (schema v7); older session data is normalized on load, and data saved by a newer schema is refused rather than overwritten. Session, bookmark, and preference data stays in `chrome.storage.local`; there are no accounts, servers, or cloud sync. Incognito tabs are available only if the browser permits the extension in incognito mode.
+
+## Recovery: snapshots, backups, and trash
+
+Everything here is local, optional, and kept out of `tablodge.state` so the big state is never rewritten for it. All of it lives in the service worker (`extension/service-worker.ts`, section "Recovery") with the UI in `src/app/recovery.tsx`.
+
+| Key                      | Shape                                                                  | Written                                              |
+| ------------------------ | ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| `tablodge.snapshots`     | `{version, history: Snapshot[]}`, newest first                         | at the interval alarm, at startup, on clean exit     |
+| `tablodge.snapshots.live`| the latest `Snapshot`                                                  | ~5 s after tab/window events (debounced, max wait 30 s), only when it changed |
+| `tablodge.snapshots.meta`| `{sessionOpen, liveAt, closing, recovery}`, the crash-detection flags  | on captures and window closes                        |
+| `tablodge.backups`       | `{auto: Backup[], safety: Backup[], downloadError}`; each backup holds the JSON text | backup alarm, Back up now, before risky actions |
+| `tablodge.trash`         | `{items: TrashEntry[]}` with `deletedAt` and origin info               | on every delete                                      |
+
+**Snapshots.** A snapshot lists every normal, non-incognito window: tabs (`url`, `title`, `pinned`, `active`, tab-group index, split pair) and the window's focus and state. Only `http(s)` pages that are not on an excluded site are included, so TabLodge's own pages and browser pages never appear. The live snapshot is replaced only when its content hash changed; the interval alarm (`snapshotIntervalMinutes`: 5, 15, or 30) also adds it to the history unless it equals the newest entry. The history keeps `snapshotKeep` entries (10, 25, or 50) and at most about 24 million serialized characters, dropping the oldest first. An empty capture (no windows) never replaces a stored snapshot. A 5,000-tab capture serializes to well under 1.2 MB.
+
+**Crash detection (a heuristic).** Manifest V3 has no reliable shutdown event, so a clean exit is inferred, not observed:
+
+1. While snapshots are on, the first capture sets `meta.sessionOpen = true`.
+2. `windows.onRemoved` closing the last normal window sets `sessionOpen = false` (the clean-exit signal) and files the last live snapshot into the history as `exit`. Closing any other window records `{at, remaining}` as `meta.closing`.
+3. On `runtime.onStartup` the previous run counts as **crashed** when `sessionOpen` is still true and it does not look like a shutdown in progress (a window close that left one or no windows and was not followed by any capture). The previous live snapshot moves into the history (reason `crash`), and if it has at least 2 tabs it becomes `meta.recovery`.
+4. The dashboard banner reads `GET_SNAPSHOTS`, which also hides the recovery when at least 80% of the snapshot's URLs are already open (the browser restored the session itself, such as with "Continue where you left off").
+
+Limits: the browser may kill the worker before it handles the last `windows.onRemoved`, so a normal quit can occasionally look like a crash (the banner is then one click to dismiss, and the snapshot is still in the history); a crash within about five seconds of the last tab change loses that change; a profile that restores its own tabs on startup mostly hides the banner via the 80% rule; and a worker restart (extension reload or update) is not a browser start, so it never shows the banner.
+
+**Restoring.** `RESTORE_SNAPSHOT` creates one new window per snapshot window and reuses `restoreRecords` (tab groups, pinned tabs, split view pairs, background unloading), always allowing duplicate URLs, activating the snapshot's active tab, maximizing windows that were maximized, and focusing the window that had focus. `SAVE_SNAPSHOT_AS_SESSION` stores a window as a normal session (several when it has more than 1,000 tabs); `DELETE_SNAPSHOT` and `CLEAR_SNAPSHOTS` remove history.
+
+**Backups.** `tablodge-backup` JSON (`format`, `version`, `exportedAt`, `folders`, `groups`, `bookmarkColumns`, `bookmarks`, `settings`) is the same structure Import already reads. `autoBackup` (`off`, `daily`, `weekly`) drives an alarm; a run is skipped when sessions and bookmarks are identical to the newest backup, and `autoBackupKeep` (7 or 30) rotates the ring. A missed backup is caught up at browser start. Restoring replaces sessions, folders, bookmarks, and columns but keeps the current settings, after a safety backup. **Safety backups** (a separate ring of 5) are taken before `ERASE_DATA` (which stops if the backup cannot be written), imports of more than 50 items, importing browser bookmarks with more than 50 links, restoring a backup, and deleting a bookmark column with 10 or more bookmarks. With `autoBackupToDownloads` the backup is also written with `chrome.downloads.download` to `Downloads/TabLodge/tablodge-backup-YYYY-MM-DD.json` through a base64 `data:` URL (a service worker has no Blob URLs). The `downloads` permission is optional: Settings requests it from the toggle's click and releases it when switched off. Chrome refuses URLs over 2 MB, so a larger backup records an error in the backup list instead; the in-page Download button has no such limit.
+
+**Trash.** Deleting a session, saved link (also the links removed by restore-and-remove), bookmark, bookmark column, or session folder first writes a `TrashEntry` (`kind`, `label`, `origin`, `deletedAt`, and the data with its position and neighbors), then updates the state, so a crash in between duplicates instead of losing data. Restoring puts an item back where it was when its session, column, or folder still exists, and otherwise in Unfiled (sessions, folders) or the first column (bookmarks); links of a vanished session recreate that session. Items older than `trashRetentionDays` (7, 30, or 90) are purged by a daily alarm and when something is added; the trash is capped at 500 items. Erase-all is not trashed; it has its safety backup instead.
+
+**Undo toasts.** `showStatus(message, false, {action: {label, onClick}})` shows a toast with a button for 6 seconds. Delete responses carry `trashId`, so Undo is `RESTORE_TRASH`. Restore-and-remove also returns `trashId` (Undo puts the saved links back; the opened tabs stay). Moving a link between sessions undoes with a reverse `MOVE_TAB` next to its old neighbor. After Save with close-after-save, Undo runs `RESTORE_GROUP` into the current window.
 
 ## Shared UI
 
