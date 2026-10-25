@@ -5,6 +5,8 @@
 
 <p align="center"><strong>A cozy, local-only home for your tabs: save sessions, restore them, and keep a bookmark board on your new tab.</strong></p>
 
+<p align="center"><a href="https://tablodge.bbay.dev">Website: https://tablodge.bbay.dev</a></p>
+
 <p align="center">
   <a href="https://github.com/bberka/TabLodge/actions/workflows/test.yml"><img src="https://github.com/bberka/TabLodge/actions/workflows/test.yml/badge.svg" alt="Test"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
@@ -113,6 +115,7 @@ styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites (service worker in a VM with a mocked chrome.* API)
 scripts/                build.ts, verify-build.ts, shared Vite config helpers
 docs/                   architecture notes, naming research, and tab-manager research
+site/                   Astro landing page for https://tablodge.bbay.dev (see site/README.md)
 vite.pages.config.ts    page build; vite.config.ts holds lint, format, and test settings
 ```
 
@@ -155,6 +158,10 @@ TabLodge has no servers, accounts, analytics, or telemetry, and makes no network
 - **Session editing** (replace or append the current window, merge and split, tags, an "already saved" badge) and **tab hygiene that never loses data** (optional auto-discard and auto-archive of idle tabs, with undo).
 
 The research file has the full priority list, MV3 implementation sketches, and the evidence behind each item.
+
+## Website
+
+The landing page at <https://tablodge.bbay.dev> lives in [`site/`](site) (Astro, deployed to GitHub Pages by `.github/workflows/pages.yml`). `pnpm site:dev` and `pnpm site:build` run it; setup steps for Pages and DNS are in [site/README.md](site/README.md).
 
 ## Contributing
 
