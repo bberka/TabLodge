@@ -155,6 +155,29 @@ const messageOf = (reason: unknown) =>
 	(reason as {message?: string} | null | undefined)?.message;
 
 const ALL = 'all';
+const WIDE_PAGE = '(min-width: 768px)';
+/**
+Tailwind's md breakpoint, tracked so the grid layout knows whether it shows two columns.
+*/
+function useWidePage() {
+	const [wide, setWide] = useState(
+		() => globalThis.matchMedia(WIDE_PAGE).matches,
+	);
+	useEffect(() => {
+		const query = globalThis.matchMedia(WIDE_PAGE);
+		const update = () => {
+			setWide(query.matches);
+		};
+
+		update();
+		query.addEventListener('change', update);
+		return () => {
+			query.removeEventListener('change', update);
+		};
+	}, []);
+	return wide;
+}
+
 /**
 Stable fallbacks so memoized values and effects do not see a new array on every render.
 */
@@ -257,6 +280,10 @@ export function SessionManager({
 	const groups = state?.groups || NO_SESSIONS;
 	const folders = state?.folders || NO_FOLDERS;
 	const settings: Partial<Settings> = state?.settings || {};
+	const grid = settings.sessionLayout === 'grid';
+	// The grid collapses to one column on narrow pages; drop positions follow what is on screen.
+	const wide = useWidePage();
+	const sideBySide = grid && wide;
 	const folderDialog = typeof dialog === 'object' ? dialog : null;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
 	const expandAll = settings.expandSessionsByDefault !== false;
@@ -787,7 +814,12 @@ export function SessionManager({
 			setDropMark(null);
 		},
 		over(group, event) {
-			const mark = resolveDropMark(group, event, dragItemRef.current);
+			const mark = resolveDropMark(
+				group,
+				event,
+				dragItemRef.current,
+				sideBySide,
+			);
 			if (!mark) {
 				return;
 			}
@@ -808,7 +840,7 @@ export function SessionManager({
 		},
 		drop(group, event) {
 			const item = dragItemRef.current;
-			const mark = resolveDropMark(group, event, item);
+			const mark = resolveDropMark(group, event, item, sideBySide);
 			if (!item || !mark) {
 				return;
 			}
@@ -1233,13 +1265,22 @@ export function SessionManager({
 									: 'This folder is empty. Save a session or move one here from its details.'}
 						</EmptyState>
 					) : (
-						<div className="space-y-2" aria-live="polite">
+						<div
+							className={
+								grid
+									? 'grid grid-cols-1 items-stretch gap-2 md:grid-cols-2'
+									: 'space-y-2'
+							}
+							aria-live="polite"
+						>
 							{visibleGroups.map((group, index) => (
 								<GroupCard
 									key={group.id}
 									group={group}
 									folders={folders}
 									settings={settings}
+									grid={grid}
+									sideBySide={sideBySide}
 									isExpanded={isOpen(group.id)}
 									selected={selected}
 									selectionActive={selected.size > 0}
@@ -1656,6 +1697,7 @@ function resolveDropMark(
 	group: Session,
 	event: DragEvent<HTMLElement>,
 	item: DragItem | null,
+	sideBySide: boolean,
 ): DropMark | null {
 	if (!item) {
 		return null;
@@ -1667,10 +1709,14 @@ function resolveDropMark(
 		}
 
 		const rect = event.currentTarget.getBoundingClientRect();
+		// Cards sit side by side in the grid layout, so their order runs left to right.
+		const before = sideBySide
+			? event.clientX < rect.left + rect.width / 2
+			: event.clientY < rect.top + rect.height / 2;
 		return {
 			kind: 'session',
 			groupId: group.id,
-			position: event.clientY < rect.top + rect.height / 2 ? 'before' : 'after',
+			position: before ? 'before' : 'after',
 		};
 	}
 
@@ -1707,6 +1753,14 @@ type GroupCardProps = {
 	folders: Folder[];
 	otherGroups: Array<{id: string; name: string}>;
 	settings: Partial<Settings>;
+	/**
+	Two-column grid layout: the card fills its cell and drops are marked left or right.
+	*/
+	grid: boolean;
+	/**
+	The grid currently shows two columns, so session drops are marked left or right.
+	*/
+	sideBySide: boolean;
 	isExpanded: boolean;
 	onExpanded: (next: boolean) => void;
 	onRestore: (event?: RestoreModifiers) => void;
@@ -1747,6 +1801,8 @@ function GroupCard({
 	folders,
 	otherGroups,
 	settings,
+	grid,
+	sideBySide,
 	isExpanded,
 	onExpanded,
 	onRestore,
@@ -1881,16 +1937,20 @@ function GroupCard({
 			['restore-here', 'restore-new-window'].includes(action.id),
 	);
 	return (
-		<div className="relative">
+		<div className={grid ? 'relative flex min-w-0' : 'relative'}>
 			{mark?.kind === 'session' && (
 				<span
 					aria-hidden="true"
-					className={`pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-primary ${mark.position === 'before' ? '-top-1.5' : '-bottom-1.5'}`}
+					className={`pointer-events-none absolute z-10 rounded-full bg-primary ${
+						sideBySide
+							? `inset-y-0 w-0.5 ${mark.position === 'before' ? '-left-1.5' : '-right-1.5'}`
+							: `inset-x-0 h-0.5 ${mark.position === 'before' ? '-top-1.5' : '-bottom-1.5'}`
+					}`}
 				/>
 			)}
 			<article
 				id={`session-${group.id}`}
-				className={`group/session overflow-hidden rounded-xl border bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${group.archived ? 'opacity-75 grayscale' : ''} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
+				className={`group/session overflow-hidden rounded-xl border ${grid ? 'w-full min-w-0' : ''} bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${group.archived ? 'opacity-75 grayscale' : ''} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
 				style={group.archived ? ARCHIVED_STYLE : undefined}
 				aria-label={`Session ${group.name}`}
 				onDragOver={(event) => drag.over(group, event)}
@@ -1969,7 +2029,7 @@ function GroupCard({
 								)}
 							</span>
 						</button>
-						{!isExpanded && (
+						{!isExpanded && !grid && (
 							<span
 								className="hidden shrink-0 items-center -space-x-1.5 md:flex"
 								aria-hidden="true"
@@ -1990,7 +2050,9 @@ function GroupCard({
 							</span>
 						)}
 						<div className="flex shrink-0 items-center gap-0.5">
-							<span className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100">
+							<span
+								className={`items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 ${grid ? 'hidden' : 'flex'}`}
+							>
 								<IconTooltip
 									label={group.locked ? 'Unlock session' : 'Lock session'}
 								>
