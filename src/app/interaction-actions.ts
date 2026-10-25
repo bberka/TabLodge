@@ -135,14 +135,14 @@ export function parseSessionDragData(raw: unknown): SessionDragData | null {
 }
 
 export function sessionDropPrompt(
-	session: {name?: string; links?: readonly unknown[]} | null | undefined,
+	session: {links?: readonly unknown[]} | null | undefined,
 	columnName: string,
 ) {
 	const count = session?.links?.length || 0;
 	const noun = count === 1 ? 'link' : 'links';
 	return {
-		title: `Add ${count} ${noun} from “${session?.name || 'Saved session'}” to “${columnName}”?`,
-		description: `${count === 1 ? 'The link is' : 'Each link is'} saved as a separate bookmark in this column. The session itself is not changed.`,
+		title: `Add ${count} ${noun} to “${columnName}” column?`,
+		description: '',
 		confirmLabel: `Add ${count} ${noun}`,
 	};
 }
