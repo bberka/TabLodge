@@ -1,0 +1,104 @@
+---
+import Base from '../layouts/Base.astro';
+import {SITE} from '../site';
+
+const title = 'Privacy Policy: a Local-Only Tab Manager | TabLodge';
+const description =
+	'TabLodge keeps your tab sessions and bookmarks on your device. No accounts, no servers, no analytics, no network requests. Read what it stores and why each permission is needed.';
+
+const permissions = [
+	['tabs', 'Reading tab URLs, titles and placement to save sessions; opening tabs to restore them.'],
+	['tabGroups', 'Saving and recreating native tab groups.'],
+	['bookmarks', 'Importing your browser bookmarks, only when you ask.'],
+	['favicon', 'Showing site icons from the browser\'s local cache.'],
+	['storage, unlimitedStorage', 'Keeping your data in local extension storage without the default size cap.'],
+	['contextMenus', 'Optional right-click save and bookmark actions.'],
+	['clipboardWrite', 'Copying bookmark URLs and session links when you ask.'],
+	['sidePanel', 'The optional bookmark list in the browser\'s Side Panel.'],
+	['search', 'Running a web search with your default engine, only when you choose "Search the web".'],
+];
+---
+
+<Base
+	title={title}
+	description={description}
+	path="/privacy/"
+	breadcrumbs={[
+		{name: 'Home', path: '/'},
+		{name: 'Privacy', path: '/privacy/'},
+	]}
+	jsonLd={[
+		{
+			'@type': 'WebPage',
+			'@id': 'https://tablodge.bbay.dev/privacy/#webpage',
+			url: 'https://tablodge.bbay.dev/privacy/',
+			name: title,
+			description,
+			dateModified: '2026-10-25',
+			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
+		},
+	]}
+>
+	<article class="narrow prose page">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Privacy</span></nav>
+		<h1>Privacy</h1>
+		<p class="note">Last updated: 2026-10-25</p>
+		<p class="lead">
+			TabLodge is built to keep your data on your device. In short: <strong>no data leaves your device, and nothing is collected.</strong>
+		</p>
+
+		<h2>What TabLodge does not do</h2>
+		<ul>
+			<li>No accounts, servers or cloud sync. TabLodge has no backend.</li>
+			<li>No analytics, telemetry, crash reporting or advertising.</li>
+			<li>No network requests of its own. All code, styles, fonts and icons are bundled in the extension; nothing is loaded from a CDN.</li>
+			<li>No website access. TabLodge requests no host permissions, injects no content scripts and never reads page contents.</li>
+			<li>No sale or sharing of data with anyone.</li>
+		</ul>
+
+		<h2>What TabLodge stores, and where</h2>
+		<p>Everything is stored locally in your browser profile:</p>
+		<ul>
+			<li><strong>Extension storage</strong> (<code>chrome.storage.local</code>, key <code>tablodge.state</code>): your saved sessions (tab titles, URLs, notes, pinned, tab-group and split-view info), folders, bookmark columns and bookmarks, settings, and excluded websites.</li>
+			<li><strong>Extension storage</strong> (<code>uiTheme</code>) and the extension's <code>localStorage</code> (<code>tablodge.uiTheme</code>): your Light, Dark or System appearance choice, and a copy used to paint each page in the right theme before it loads.</li>
+		</ul>
+		<p>
+			TabLodge reads tab details (URL, title, pinned state, tab group, window) only when you save a session, check for duplicates or restore. It reads your browser bookmarks only when you explicitly import them. Site icons come from the browser's own local favicon cache.
+		</p>
+		<p>
+			Data stays until you delete it: delete individual items, use <strong>Settings &rsaquo; Data</strong> to erase sessions, bookmarks or both, or remove the extension (the browser then deletes its storage). Exported JSON and HTML files are plain, unencrypted text that you control; keep them private if their URLs, titles or notes are sensitive.
+		</p>
+		<p>
+			When you restore a session or open a bookmark, your browser loads those web pages as usual, and those sites see a normal visit. TabLodge itself sends nothing to them.
+		</p>
+
+		<h2>Permissions</h2>
+		<div class="table-wrap">
+			<table>
+				<thead><tr><th scope="col">Permission</th><th scope="col">Used for</th></tr></thead>
+				<tbody>
+					{permissions.map(([name, use]) => <tr><th scope="row"><code>{name}</code></th><td>{use}</td></tr>)}
+				</tbody>
+			</table>
+		</div>
+
+		<h2>This website</h2>
+		<p>
+			This site (tablodge.bbay.dev) is a static page with no analytics, cookies or third-party scripts. It is hosted on GitHub Pages, which, like any web host, may keep ordinary server logs; see <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub's privacy statement</a>. Downloads are served by GitHub Releases.
+		</p>
+
+		<h2>Contact</h2>
+		<p>Questions or concerns: <a href={SITE.issues} rel="noopener">open an issue on GitHub</a>.</p>
+	</article>
+</Base>
+
+<style>
+	.page {
+		padding-block: 3rem 5rem;
+	}
+	.crumbs {
+		font-size: 0.9rem;
+		color: var(--muted);
+		margin-bottom: 1rem;
+	}
+</style>

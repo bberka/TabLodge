@@ -1,0 +1,31 @@
+---
+import {DEFAULT_WIDTHS, screenshotSet, type ScreenName} from '../lib/screens';
+
+interface Props {
+	name: ScreenName;
+	alt: string;
+	sizes: string;
+	widths?: number[];
+	eager?: boolean;
+}
+const {name, alt, sizes, widths = DEFAULT_WIDTHS, eager = false} = Astro.props;
+const [dark, light] = await Promise.all([
+	screenshotSet(name, 'dark', widths),
+	screenshotSet(name, 'light', widths),
+]);
+---
+
+<picture class="shot">
+	<source media="(prefers-color-scheme: dark)" srcset={dark.srcset} sizes={sizes} type="image/webp" />
+	<img
+		src={light.src}
+		srcset={light.srcset}
+		sizes={sizes}
+		width={light.width}
+		height={light.height}
+		alt={alt}
+		loading={eager ? 'eager' : 'lazy'}
+		decoding={eager ? 'sync' : 'async'}
+		fetchpriority={eager ? 'high' : 'auto'}
+	/>
+</picture>
