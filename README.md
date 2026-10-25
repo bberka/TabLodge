@@ -21,7 +21,7 @@ TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, 
 - **Bookmark board on the new tab.** Columns of bookmarks with icons, search, drag-and-drop reordering, and drop-a-link-to-save. Paste one link or a whole list on the page to add bookmarks, or drag session links straight into a column.
 - **Organize sessions.** Folders with icons, descriptions, search and sorting, multi-select, dragging sessions onto folders, and merging one session into another without duplicates.
 - **Flexible restores.** Restore into the current or a new window; keep or remove the saved tabs afterward; skip duplicates; optionally unload background tabs. Ctrl/Cmd- and Shift-click give one-off overrides.
-- **Import and export.** Session and bookmark JSON backups, a full-backup ZIP (everything, including settings) you can import back, a shareable HTML page of selected sessions, and a one-time import of your browser bookmarks.
+- **Import and export.** Session and bookmark JSON backups, a full-backup ZIP (everything, including settings) you can import back, a shareable HTML page of selected sessions, and a one-time import of your browser bookmarks. Optionally, TabLodge can offer to add (or automatically add) a page you bookmark with the browser's own star button.
 - **Crash recovery, backups and undo.** Rolling snapshots of your open windows offer to restore your last session after an unclean exit; optional automatic backups (with an optional copy in Downloads) and safety backups before risky actions; a trash bin with retention for deleted sessions, links, bookmarks and columns; and an Undo toast instead of a confirmation on the dashboard (Settings still asks before erasing data or restoring a backup). All local. See [docs/architecture.md](docs/architecture.md#recovery-snapshots-backups-and-trash).
 - **Everywhere you need it.** A toolbar popup with a quick chooser, a side panel (bookmarks, sessions and open tabs), keyboard shortcuts (save selected tabs or the window, bookmark this page, open the side panel or dashboard), and page and toolbar context menus.
 - **Local-only and private.** No host permissions, no content scripts, no network requests, no analytics. See [PRIVACY.md](PRIVACY.md).
@@ -132,19 +132,19 @@ vite.pages.config.ts    page build; vite.config.ts holds lint, format, and test 
 
 TabLodge requests no website (host) permissions and injects nothing into web pages. Each permission in `extension/manifest.json` has one job:
 
-| Permission         | Why TabLodge needs it                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `tabs`             | Read tab URLs, titles, pinned state, selection, and window placement to save sessions, and open tabs to restore them. |
-| `tabGroups`        | Read native tab-group titles, colors, and collapsed state when saving, and recreate the groups on restore.            |
-| `bookmarks`        | Read the browser's bookmark tree, only when you explicitly import your browser bookmarks.                             |
-| `favicon`          | Show site icons from the browser's local favicon cache instead of a third-party favicon service.                      |
-| `storage`          | Keep sessions, bookmarks, and settings in local extension storage (`chrome.storage.local`).                           |
-| `unlimitedStorage` | Lift the default local-storage quota so large session and bookmark libraries fit; disk space is still finite.         |
-| `contextMenus`     | Add optional "Save…" and "Bookmark this page" actions to the page and toolbar right-click menus.                      |
-| `clipboardWrite`   | Copy bookmark URLs and session links in the format you choose.                                                        |
-| `sidePanel`        | Show the optional searchable bookmark list in the browser's Side Panel.                                               |
-| `search`           | Run a normal web search with your default search engine when you pick "Search the web" in TabLodge's finder.          |
-| `alarms`           | Schedule crash-recovery snapshots, automatic backups, and the daily trash bin cleanup while the browser runs.         |
+| Permission         | Why TabLodge needs it                                                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tabs`             | Read tab URLs, titles, pinned state, selection, and window placement to save sessions, and open tabs to restore them.                                                |
+| `tabGroups`        | Read native tab-group titles, colors, and collapsed state when saving, and recreate the groups on restore.                                                           |
+| `bookmarks`        | Read the browser's bookmark tree when you import your browser bookmarks, and notice a page you bookmark in the browser if you turn on that setting (off by default). |
+| `favicon`          | Show site icons from the browser's local favicon cache instead of a third-party favicon service.                                                                     |
+| `storage`          | Keep sessions, bookmarks, and settings in local extension storage (`chrome.storage.local`).                                                                          |
+| `unlimitedStorage` | Lift the default local-storage quota so large session and bookmark libraries fit; disk space is still finite.                                                        |
+| `contextMenus`     | Add optional "Save…" and "Bookmark this page" actions to the page and toolbar right-click menus.                                                                     |
+| `clipboardWrite`   | Copy bookmark URLs and session links in the format you choose.                                                                                                       |
+| `sidePanel`        | Show the optional searchable bookmark list in the browser's Side Panel.                                                                                              |
+| `search`           | Run a normal web search with your default search engine when you pick "Search the web" in TabLodge's finder.                                                         |
+| `alarms`           | Schedule crash-recovery snapshots, automatic backups, and the daily trash bin cleanup while the browser runs.                                                        |
 
 One **optional** permission, `downloads`, is requested only if you turn on _Settings › Recovery & backups › Also save a copy to Downloads_. It lets TabLodge write backup JSON files to `Downloads/TabLodge/`; turning the option off gives the permission back.
 

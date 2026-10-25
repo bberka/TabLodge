@@ -28,6 +28,7 @@ const NEW_COLUMN = '__new-column__';
 function AddBookmarkPrompt() {
 	const params = new URLSearchParams(location.search);
 	const url = params.get('url') || '';
+	const fromBrowser = params.get('source') === 'browser';
 	const {state, error: stateError} = useTabLodgeState();
 	const [title, setTitle] = useState(params.get('title') || url);
 	const [columnId, setColumnId] = useState('');
@@ -103,7 +104,9 @@ function AddBookmarkPrompt() {
 				<div>
 					<h1 className="text-base font-semibold">Bookmark this page</h1>
 					<p className="mt-1 text-sm text-muted-foreground">
-						Save it to a local column.
+						{fromBrowser
+							? 'You bookmarked this page in the browser. Add it to TabLodge too?'
+							: 'Save it to a local column.'}
 					</p>
 				</div>
 				<div className="space-y-1.5">

@@ -9,7 +9,7 @@ const description =
 const permissions = [
 	['tabs', 'Reading tab URLs, titles and placement to save sessions; opening tabs to restore them.'],
 	['tabGroups', 'Saving and recreating native tab groups.'],
-	['bookmarks', 'Importing your browser bookmarks, only when you ask.'],
+	['bookmarks', 'Importing your browser bookmarks when you ask, and noticing a page you bookmark in the browser if you turn on that setting (off by default).'],
 	['favicon', 'Showing site icons from the browser\'s local cache.'],
 	['storage, unlimitedStorage', 'Keeping your data in local extension storage without the default size cap.'],
 	['contextMenus', 'Optional right-click save and bookmark actions.'],
@@ -66,7 +66,7 @@ const permissions = [
 			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). Snapshots skip private windows and excluded websites.</li>
 		</ul>
 		<p>
-			TabLodge reads tab details (URL, title, pinned state, tab group, window) only when you save a session, check for duplicates or restore. It reads your browser bookmarks only when you explicitly import them. Site icons come from the browser's own local favicon cache.
+			TabLodge reads tab details (URL, title, pinned state, tab group, window) only when you save a session, check for duplicates or restore. It reads your browser bookmarks when you explicitly import them and, only if you turn on the browser-bookmark setting, sees each bookmark you create in the browser to offer to add that page to TabLodge. Site icons come from the browser's own local favicon cache.
 		</p>
 		<p>
 			Data stays until you delete it: delete individual items, use <strong>Settings &rsaquo; Data</strong> to erase sessions, bookmarks or both, or remove the extension (the browser then deletes its storage). Exported JSON, HTML and full-backup ZIP files are not encrypted and stay under your control; keep them private if their URLs, titles or notes are sensitive.

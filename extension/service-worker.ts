@@ -213,6 +213,8 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionsOnTop: false,
 	keepLodgePinned: false,
 	closeLodgeAfterOpening: false,
+	browserBookmarkAction: 'off',
+	browserBookmarkColumn: '',
 	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
@@ -1046,6 +1048,13 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		sessionsOnTop: raw.sessionsOnTop === true,
 		keepLodgePinned: raw.keepLodgePinned === true,
 		closeLodgeAfterOpening: raw.closeLodgeAfterOpening === true,
+		browserBookmarkAction: isOneOf(
+			['off', 'ask', 'add'],
+			raw.browserBookmarkAction,
+		)
+			? raw.browserBookmarkAction
+			: 'off',
+		browserBookmarkColumn: cleanText(raw.browserBookmarkColumn, '', 120),
 		copyFormat: isOneOf(
 			['rich', 'title-url', 'url-title', 'url', 'markdown'],
 			raw.copyFormat,
@@ -2064,6 +2073,7 @@ bookmarks, fail without opening anything.
 */
 async function openBookmarkPrompt(
 	commandTab?: chrome.tabs.Tab,
+	prefill?: {title?: string; fromBrowser?: boolean},
 ): Promise<MenuOutcome> {
 	const settings = await readSettings();
 	if (!settings.bookmarksEnabled) {
@@ -2093,10 +2103,14 @@ async function openBookmarkPrompt(
 		};
 	}
 
-	const title = cleanText(tab?.title, linkHost(url), 500);
+	const title = cleanText(
+		prefill?.title || tab?.title,
+		cleanText(tab?.title, linkHost(url), 500),
+		500,
+	);
 	const options: chrome.windows.CreateData = {
 		type: 'popup',
-		url: `${chrome.runtime.getURL('add-bookmark.html')}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
+		url: `${chrome.runtime.getURL('add-bookmark.html')}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${prefill?.fromBrowser ? '&source=browser' : ''}`,
 		width: BOOKMARK_PROMPT_WIDTH,
 		height: BOOKMARK_PROMPT_HEIGHT,
 		focused: true,
@@ -9101,6 +9115,107 @@ async function initializeExtension(openDashboardAtStartup = false) {
 		await openDashboardForTab();
 	}
 }
+
+/*
+Offer to add pages bookmarked with the browser's own bookmark feature (star button, Ctrl/Cmd+D). Extensions cannot
+hook the star, so this watches bookmarks.onCreated and acts only when exactly one bookmark appears within a short
+window and it is for the page the user is on, which filters out sync, imports, pastes and other devices.
+*/
+const BROWSER_BOOKMARK_QUIET_MS = 1500;
+const BROWSER_IMPORT_KEY = 'browserBookmarkImporting';
+let browserBookmarkImporting = false;
+let browserBookmarkBurst: chrome.bookmarks.BookmarkTreeNode[] = [];
+let browserBookmarkTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function handleBrowserBookmark(node: chrome.bookmarks.BookmarkTreeNode) {
+	const url = normalizeUrl(node.url);
+	if (!url) {
+		return;
+	}
+
+	const stored = await chrome.storage.session?.get(BROWSER_IMPORT_KEY);
+	if (stored?.[BROWSER_IMPORT_KEY] === true) {
+		return;
+	}
+
+	const store = await getStore();
+	const {settings} = store;
+	if (
+		settings.browserBookmarkAction === 'off' ||
+		!settings.bookmarksEnabled ||
+		store.bookmarks.some((bookmark) => bookmark.url === url)
+	) {
+		return;
+	}
+
+	let active: chrome.tabs.Tab | undefined;
+	try {
+		const focused = await chrome.windows.getLastFocused({
+			windowTypes: ['normal'],
+		});
+		if (isInteger(focused.id)) {
+			active = (
+				await chrome.tabs.query({active: true, windowId: focused.id})
+			).find((tab) => tab.active);
+		}
+	} catch {
+		return;
+	}
+
+	if (!active || normalizeUrl(active.url) !== url) {
+		return;
+	}
+
+	if (settings.browserBookmarkAction === 'ask') {
+		await openBookmarkPrompt(active, {title: node.title, fromBrowser: true});
+		return;
+	}
+
+	const columnId = store.bookmarkColumns.some(
+		(column) => column.id === settings.browserBookmarkColumn,
+	)
+		? settings.browserBookmarkColumn
+		: store.bookmarkColumns[0]?.id;
+	const result = await addBookmark({title: node.title, url, columnId});
+	flashBadge(active, result.ok);
+}
+
+function flushBrowserBookmarks() {
+	browserBookmarkTimer = undefined;
+	const burst = browserBookmarkBurst;
+	browserBookmarkBurst = [];
+	if (burst.length !== 1) {
+		return;
+	}
+
+	void handleBrowserBookmark(burst[0]).catch((error: unknown) => {
+		console.warn(errorMessage(error));
+	});
+}
+
+chrome.bookmarks?.onImportBegan?.addListener(() => {
+	browserBookmarkImporting = true;
+	void chrome.storage.session?.set({[BROWSER_IMPORT_KEY]: true});
+});
+
+chrome.bookmarks?.onImportEnded?.addListener(() => {
+	browserBookmarkImporting = false;
+	void chrome.storage.session?.remove(BROWSER_IMPORT_KEY);
+});
+
+chrome.bookmarks?.onCreated?.addListener((_id, node) => {
+	if (browserBookmarkImporting) {
+		return;
+	}
+
+	// Folders count towards a burst (a pasted folder arrives as folder plus children) but are never offered.
+	browserBookmarkBurst.push(node);
+	clearTimeout(browserBookmarkTimer);
+	browserBookmarkTimer = setTimeout(
+		flushBrowserBookmarks,
+		BROWSER_BOOKMARK_QUIET_MS,
+	);
+});
 
 chrome.runtime.onInstalled.addListener(() => {
 	void initializeExtension();
