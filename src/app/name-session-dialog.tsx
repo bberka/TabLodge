@@ -32,6 +32,7 @@ export function NameSessionForm({
 	busy = false,
 	submitLabel = 'Save',
 	selectOnFocus = false,
+	plain = false,
 	onSubmit,
 	onCancel,
 	children,
@@ -41,6 +42,10 @@ export function NameSessionForm({
 	busy?: boolean;
 	submitLabel?: string;
 	selectOnFocus?: boolean;
+	/**
+	Render as a page of its own (the prompt window) instead of inside a dialog.
+	*/
+	plain?: boolean;
 	/**
 	The raw typed text; the caller applies the empty-means-default rule.
 	*/
@@ -69,6 +74,48 @@ export function NameSessionForm({
 		}
 	}
 
+	const input = (
+		<div className="space-y-1.5">
+			<Label htmlFor="name-session-input">Session name</Label>
+			<Input
+				ref={inputRef}
+				autoFocus
+				id="name-session-input"
+				name="name"
+				autoComplete="off"
+				maxLength={SESSION_NAME_MAX}
+				placeholder={placeholder}
+				value={name}
+				onChange={(event) => setName(event.target.value)}
+			/>
+		</div>
+	);
+	const buttons = (
+		<>
+			<Button type="button" variant="outline" onClick={onCancel}>
+				Cancel
+			</Button>
+			<Button type="submit" disabled={busy}>
+				{submitLabel}
+			</Button>
+		</>
+	);
+	if (plain) {
+		return (
+			<form className="flex flex-col gap-4 p-5" onSubmit={submit}>
+				<div>
+					<h1 className="text-base font-semibold">Name this session</h1>
+					<p className="mt-1 text-sm text-muted-foreground">
+						Leave it empty to use the default name.
+					</p>
+				</div>
+				{input}
+				{children}
+				<div className="flex justify-end gap-2">{buttons}</div>
+			</form>
+		);
+	}
+
 	return (
 		<form onSubmit={submit}>
 			<DialogHeader>
@@ -78,30 +125,10 @@ export function NameSessionForm({
 				</DialogDescription>
 			</DialogHeader>
 			<DialogBody>
-				<div className="space-y-1.5">
-					<Label htmlFor="name-session-input">Session name</Label>
-					<Input
-						ref={inputRef}
-						autoFocus
-						id="name-session-input"
-						name="name"
-						autoComplete="off"
-						maxLength={SESSION_NAME_MAX}
-						placeholder={placeholder}
-						value={name}
-						onChange={(event) => setName(event.target.value)}
-					/>
-				</div>
+				{input}
 				{children}
 			</DialogBody>
-			<DialogFooter>
-				<Button type="button" variant="outline" onClick={onCancel}>
-					Cancel
-				</Button>
-				<Button type="submit" disabled={busy}>
-					{submitLabel}
-				</Button>
-			</DialogFooter>
+			<DialogFooter>{buttons}</DialogFooter>
 		</form>
 	);
 }

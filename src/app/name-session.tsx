@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Dialog, DialogContent, TooltipProvider} from '../shared/ui';
+import {TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {send} from './common';
@@ -20,6 +20,18 @@ function NameSessionPrompt() {
 	const [initialName, setInitialName] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
+
+	// Escape keeps the default name, like closing the window.
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				window.close();
+			}
+		};
+
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
+	}, []);
 
 	useEffect(() => {
 		let current = true;
@@ -71,23 +83,20 @@ function NameSessionPrompt() {
 
 	return (
 		<main data-brand="tablodge" className="min-h-screen bg-background">
-			<Dialog open onOpenChange={() => window.close()}>
-				<DialogContent size="sm">
-					<NameSessionForm
-						selectOnFocus
-						initialName={initialName}
-						busy={busy}
-						onCancel={() => window.close()}
-						onSubmit={(typed) => void save(typed)}
-					>
-						{error && (
-							<p role="alert" className="text-xs text-destructive">
-								{error}
-							</p>
-						)}
-					</NameSessionForm>
-				</DialogContent>
-			</Dialog>
+			<NameSessionForm
+				plain
+				selectOnFocus
+				initialName={initialName}
+				busy={busy}
+				onCancel={() => window.close()}
+				onSubmit={(typed) => void save(typed)}
+			>
+				{error && (
+					<p role="alert" className="text-xs text-destructive">
+						{error}
+					</p>
+				)}
+			</NameSessionForm>
 		</main>
 	);
 }
