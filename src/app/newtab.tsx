@@ -1755,6 +1755,11 @@ function NewTab() {
 														)
 													}
 												/>
+												<Favicon
+													url={link.url}
+													label={link.title || link.url}
+													className="mt-0.5 h-5 w-5 shrink-0"
+												/>
 												<span className="min-w-0 flex-1">
 													<span className="block truncate font-medium">
 														{link.title}
@@ -2369,49 +2374,53 @@ const BookmarkColumn = memo(
 							/>
 						</header>
 					</ActionContextMenu>
-					<div className="flex min-h-24 flex-1 flex-col p-2">
-						{shown.length > 0 ? (
-							<div className="space-y-1">
-								{shown.map((bookmark) => {
-									const targeted =
-										bookmarkDrop?.targetBookmarkId === bookmark.id;
-									return (
-										<BookmarkCard
-											key={bookmark.id}
-											bookmark={bookmark}
-											dropBefore={
-												targeted && bookmarkDrop.position === 'before'
-											}
-											dropAfter={targeted && bookmarkDrop.position === 'after'}
-											dropActive={targeted}
-											urlMode={urlMode}
-											quickAction={quickAction}
-											onAction={actions.bookmark}
+					<ActionContextMenu actions={columnActions}>
+						<div className="flex min-h-24 flex-1 flex-col p-2">
+							{shown.length > 0 ? (
+								<div className="space-y-1">
+									{shown.map((bookmark) => {
+										const targeted =
+											bookmarkDrop?.targetBookmarkId === bookmark.id;
+										return (
+											<BookmarkCard
+												key={bookmark.id}
+												bookmark={bookmark}
+												dropBefore={
+													targeted && bookmarkDrop.position === 'before'
+												}
+												dropAfter={
+													targeted && bookmarkDrop.position === 'after'
+												}
+												dropActive={targeted}
+												urlMode={urlMode}
+												quickAction={quickAction}
+												onAction={actions.bookmark}
+											/>
+										);
+									})}
+									{bookmarks.length > shown.length && (
+										<LoadMore
+											remaining={bookmarks.length - shown.length}
+											step={COLUMN_PAGE}
+											noun="bookmarks"
+											onMore={() => setLimit((old) => old + COLUMN_PAGE)}
 										/>
-									);
-								})}
-								{bookmarks.length > shown.length && (
-									<LoadMore
-										remaining={bookmarks.length - shown.length}
-										step={COLUMN_PAGE}
-										noun="bookmarks"
-										onMore={() => setLimit((old) => old + COLUMN_PAGE)}
-									/>
-								)}
-							</div>
-						) : (
-							<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
-								{siblings.length > 0
-									? 'No matching links.'
-									: 'Drop a bookmark here, or add one from this column’s menu.'}
-							</p>
-						)}
-						{showEndInsertion && (
-							<div className="relative h-0">
-								<InsertionLine className="inset-x-1 top-0.5" />
-							</div>
-						)}
-					</div>
+									)}
+								</div>
+							) : (
+								<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
+									{siblings.length > 0
+										? 'No matching links.'
+										: 'Drop a bookmark here, or add one from this column’s menu.'}
+								</p>
+							)}
+							{showEndInsertion && (
+								<div className="relative h-0">
+									<InsertionLine className="inset-x-1 top-0.5" />
+								</div>
+							)}
+						</div>
+					</ActionContextMenu>
 				</section>
 			</div>
 		);
@@ -2501,6 +2510,8 @@ const BookmarkCard = memo(
 					data-bookmark-domain={domainName(bookmark.url)}
 					data-column-id={bookmark.columnId}
 					className="bookmark-drop-row relative"
+					// The column body has its own right-click menu; a card keeps its own.
+					onContextMenu={(event) => event.stopPropagation()}
 				>
 					{dropBefore && <InsertionLine className="inset-x-1 -top-[3px]" />}
 					<article
