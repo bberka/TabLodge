@@ -573,19 +573,6 @@ const settingsGroups: Array<{
 					['restore', 'Restore the session'],
 				],
 			},
-			{
-				name: 'copyFormat',
-				label: 'Copy session links as',
-				help: 'Choose a local text format when copying saved session links.',
-				type: 'select',
-				options: [
-					['markdown', 'Markdown'],
-					['rich', 'Rich text (falls back to title and URL)'],
-					['title-url', 'Title, then URL'],
-					['url-title', 'URL, then title'],
-					['url', 'URL only'],
-				],
-			},
 		],
 	},
 	{
