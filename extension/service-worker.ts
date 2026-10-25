@@ -27,7 +27,6 @@ type Store = import('../src/app/types').Store;
 type TabFields = import('../src/app/types').TabFields;
 type TabGroupColor = import('../src/app/types').TabGroupColor;
 type TabLodgeMessage = import('../src/app/types').TabLodgeMessage;
-type TabLodgeMessages = import('../src/app/types').TabLodgeMessages;
 type TitlePolicy = import('../src/app/types').TitlePolicy;
 
 /**
@@ -148,8 +147,10 @@ const APP_NAME =
 // Persistent identifiers (storage keys, export formats, menu ids) use the "tablodge" prefix and are
 // independent of the display name: changing one would orphan saved data.
 const STORAGE_KEY = 'tablodge.state';
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 const DEFAULT_FOLDER_ID = 'unfiled';
+const ARCHIVED_FOLDER_ID = 'archived-sessions';
+const ARCHIVED_FOLDER_NAME = 'Archived';
 // Loading keeps at most this many sessions and links per session, so every write path has to stay inside the same limits.
 const MAX_SESSIONS = 1000;
 const MAX_TABS_PER_SESSION = 1000;
@@ -429,7 +430,6 @@ function normalizeTab(
 		title: cleanText(raw.title ?? raw.name, url, 500),
 		url,
 		notes: normalizeNotes(raw.notes),
-		archived: raw.archived === true,
 		pinned: Boolean(raw.pinned),
 		nativeGroup: normalizeNativeGroup(
 			raw.nativeGroup ?? raw.group,
@@ -806,13 +806,6 @@ function normalizeGroup(
 		name: cleanText(raw.name ?? raw.title, 'Saved session', 120),
 		folderId: cleanText(raw.folderId, DEFAULT_FOLDER_ID, 100),
 		description: mergeSessionText(raw.description, raw.notes),
-		archived: Boolean(raw.archived),
-		archivedAt: raw.archived
-			? Number.isFinite(Number(raw.archivedAt)) && Number(raw.archivedAt) > 0
-				? Number(raw.archivedAt)
-				: createdAt
-			: null,
-		locked: Boolean(raw.locked),
 		createdAt,
 		updatedAt: Number.isFinite(updated) && updated > 0 ? updated : createdAt,
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
@@ -874,7 +867,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.restoreTarget
 			: 'new-window-unless-only-tab',
-		restoreMode: isOneOf(['keep', 'remove', 'archive'], raw.restoreMode)
+		restoreMode: isOneOf(['keep', 'remove'], raw.restoreMode)
 			? raw.restoreMode
 			: 'keep',
 		singleTabBehavior: raw.singleTabBehavior === 'switch' ? 'switch' : 'stay',
@@ -1064,6 +1057,28 @@ function normalizeExcludedOrigins(raw: unknown): string[] {
 	return [...hosts].slice(0, MAX_EXCLUDED_ORIGINS);
 }
 
+/**
+Finds the "Archived" folder by name or adds it. Old builds had an Archived view; sessions that were archived
+without a folder land here now, since archiving no longer exists.
+*/
+function findOrAddArchivedFolder(folders: Folder[]): Folder {
+	let folder = folders.find((entry) => entry.name === ARCHIVED_FOLDER_NAME);
+	if (!folder) {
+		folder = {
+			id: folders.some((entry) => entry.id === ARCHIVED_FOLDER_ID)
+				? makeId()
+				: ARCHIVED_FOLDER_ID,
+			name: ARCHIVED_FOLDER_NAME,
+			icon: 'archive',
+			createdAt: Date.now(),
+			isDefault: false,
+		};
+		folders.push(folder);
+	}
+
+	return folder;
+}
+
 function normalizeStore(raw: Raw | null | undefined): Store {
 	// NormalizeSettings treats a missing, null or non-object `settings` value as defaults.
 	const settings = normalizeSettings(
@@ -1072,9 +1087,18 @@ function normalizeStore(raw: Raw | null | undefined): Store {
 	const sourceGroups = Array.isArray(raw?.groups) ? raw.groups : [];
 	const seenIds = new Set<string>();
 	// Pinned tabs that were deliberately saved stay stored even if the save preference is later switched off.
+	// Sessions archived by older builds (the Archived view is gone): they become normal sessions.
+	const wasArchived = new WeakSet<Session>();
 	const groups = sourceGroups
 		.slice(0, MAX_SESSIONS)
-		.map((entry: unknown) => normalizeGroup(entry, Date.now(), true))
+		.map((entry: unknown) => {
+			const group = normalizeGroup(entry, Date.now(), true);
+			if (group && isRecord(entry) && entry.archived === true) {
+				wasArchived.add(group);
+			}
+
+			return group;
+		})
 		.filter((group): group is Session => {
 			if (!group) {
 				return false;
@@ -1092,6 +1116,18 @@ function normalizeStore(raw: Raw | null | undefined): Store {
 	for (const group of groups) {
 		if (!knownFolderIds.has(group.folderId)) {
 			group.folderId = DEFAULT_FOLDER_ID;
+		}
+	}
+
+	// Archived sessions without a folder move into an "Archived" folder, created once and reused by name.
+	const stranded = groups.filter(
+		(group) => wasArchived.has(group) && group.folderId === DEFAULT_FOLDER_ID,
+	);
+	if (stranded.length > 0) {
+		const archivedFolder = findOrAddArchivedFolder(folders);
+
+		for (const group of stranded) {
+			group.folderId = archivedFolder.id;
 		}
 	}
 
@@ -1342,7 +1378,7 @@ async function captureTabs(
 						: null,
 				savedAt: timestamp,
 				originalIndex: isInteger(tab.index) ? tab.index : index,
-				// IsCapturable guarantees a web URL; `archived` is filled in by the next normalization.
+				// IsCapturable guarantees a web URL;
 			} as SavedTab,
 		}));
 	if (captureEntries.length === 0) {
@@ -1458,9 +1494,6 @@ async function captureTabs(
 						? folderId
 						: DEFAULT_FOLDER_ID,
 					description: '',
-					archived: false,
-					archivedAt: null,
-					locked: false,
 					createdAt: timestamp,
 					updatedAt: timestamp,
 					sourceWindowName: cleanText(window.title, '', 180),
@@ -2329,12 +2362,12 @@ async function restoreTab(
 			};
 		}
 
-		const mode = isOneOf(['keep', 'remove', 'archive'], options.restoreMode)
+		const mode = isOneOf(['keep', 'remove'], options.restoreMode)
 			? options.restoreMode
 			: store.settings.restoreMode;
 		let removed = false;
 		let trashId: string | undefined;
-		if (mode === 'remove' && !group.locked) {
+		if (mode === 'remove') {
 			const groupIndex = store.groups.indexOf(group);
 			const tabIndex = group.tabs.findIndex((entry) => entry.id === tabId);
 			group.tabs = group.tabs.filter((entry) => entry.id !== tabId);
@@ -2348,11 +2381,6 @@ async function restoreTab(
 				trashTabsEntry(group, [{tab, index: tabIndex}], removed, groupIndex),
 			);
 			await writeStore(store);
-		} else if (mode === 'archive') {
-			// Archiving one restored tab dims that tab; the rest of the session stays active.
-			tab.archived = true;
-			group.updatedAt = Date.now();
-			await writeStore(store);
 		}
 
 		return {
@@ -2362,7 +2390,6 @@ async function restoreTab(
 			failed: result.failures.length,
 			failures: result.failures,
 			removed,
-			archived: mode === 'archive',
 			splits: 0,
 			splitsSeparated: 0,
 			...(trashId && {trashId}),
@@ -2406,10 +2433,10 @@ async function restoreGroup(
 
 		const mode = forceRemove
 			? 'remove'
-			: isOneOf(['keep', 'remove', 'archive'], options.restoreMode)
+			: isOneOf(['keep', 'remove'], options.restoreMode)
 				? options.restoreMode
 				: store.settings.restoreMode;
-		const remove = mode === 'remove' && !group.locked;
+		const remove = mode === 'remove';
 		let removed = false;
 		let trashId: string | undefined;
 		if (remove) {
@@ -2432,11 +2459,6 @@ async function restoreGroup(
 			}
 
 			await writeStore(store);
-		} else if (mode === 'archive') {
-			group.archived = true;
-			group.archivedAt ||= Date.now();
-			group.updatedAt = Date.now();
-			await writeStore(store);
 		}
 
 		return {
@@ -2446,7 +2468,6 @@ async function restoreGroup(
 			failed: result.failures.length,
 			failures: result.failures,
 			removed,
-			archived: mode === 'archive',
 			splits: result.splits,
 			splitsSeparated: result.splitsSeparated,
 			...(trashId && {trashId}),
@@ -2505,17 +2526,6 @@ async function updateGroup(
 			group.description = normalizeSessionText(fields.description);
 		}
 
-		if (typeof fields.archived === 'boolean') {
-			group.archived = fields.archived;
-			group.archivedAt = fields.archived
-				? group.archivedAt || Date.now()
-				: null;
-		}
-
-		if (typeof fields.locked === 'boolean') {
-			group.locked = fields.locked;
-		}
-
 		if (typeof fields.folderId === 'string') {
 			if (store.folders.every((folder) => folder.id !== fields.folderId)) {
 				return {ok: false, error: 'Choose an existing folder.'};
@@ -2527,51 +2537,6 @@ async function updateGroup(
 		group.updatedAt = Date.now();
 		await writeStore(store);
 		return {ok: true, group};
-	});
-}
-
-async function reorderGroup(
-	groupId: string,
-	direction: TabLodgeMessages['REORDER_GROUP']['direction'],
-	folderId = 'all',
-): Promise<ActionResult<'REORDER_GROUP'>> {
-	return mutate(async () => {
-		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
-		}
-
-		const index = store.groups.findIndex((group) => group.id === groupId);
-		if (index === -1) {
-			return {ok: false, error: 'That saved session no longer exists.'};
-		}
-
-		// Same list the dashboard shows: archived sessions only in the Archived view, never mixed into a folder or "All".
-		const scope = store.groups.filter((group) =>
-			folderId === 'archived'
-				? group.archived
-				: !group.archived &&
-					(folderId === 'all' || group.folderId === folderId),
-		);
-		const scopeIndex = scope.findIndex((group) => group.id === groupId);
-		const nextScopeIndex = direction === 'up' ? scopeIndex - 1 : scopeIndex + 1;
-		if (
-			scopeIndex === -1 ||
-			nextScopeIndex < 0 ||
-			nextScopeIndex >= scope.length
-		) {
-			return {ok: true};
-		}
-
-		const nextIndex = store.groups.findIndex(
-			(group) => group.id === scope[nextScopeIndex].id,
-		);
-		[store.groups[index], store.groups[nextIndex]] = [
-			store.groups[nextIndex],
-			store.groups[index],
-		];
-		await writeStore(store);
-		return {ok: true};
 	});
 }
 
@@ -2957,8 +2922,31 @@ async function updateTab(
 			return {ok: false, error: 'That saved tab no longer exists.'};
 		}
 
-		if (typeof fields.archived === 'boolean') {
-			tab.archived = fields.archived;
+		// A new address belongs to this one saved link only; titles and notes are shared across copies of the same page.
+		// Excluded sites only filter what is captured from open tabs, so, like imports and bookmarks, a typed address is not checked against them.
+		if (typeof fields.url === 'string' && fields.url !== tab.url) {
+			const url = normalizeUrl(fields.url.trim());
+			if (!url) {
+				return {
+					ok: false,
+					error: 'Enter a web address that starts with http:// or https://.',
+				};
+			}
+
+			if (url !== tab.url) {
+				if (typeof fields.title === 'string') {
+					tab.title = cleanText(fields.title, url, 500);
+				}
+
+				if (typeof fields.notes === 'string') {
+					tab.notes = normalizeNotes(fields.notes);
+				}
+
+				tab.url = url;
+				group.updatedAt = Date.now();
+				await writeStore(store);
+				return {ok: true, shared: 0};
+			}
 		}
 
 		const shareTitle = typeof fields.title === 'string';
@@ -4184,6 +4172,14 @@ async function importGroups(
 					continue;
 				}
 
+				// Exports from older builds may carry archived sessions: same rule as the stored-data migration.
+				if (
+					candidate.archived === true &&
+					group.folderId === DEFAULT_FOLDER_ID
+				) {
+					group.folderId = findOrAddArchivedFolder(store.folders).id;
+				}
+
 				if (!allowDuplicates) {
 					const kept: SavedTab[] = [];
 					for (const tab of group.tabs) {
@@ -5110,7 +5106,6 @@ function snapshotRecords(win: SnapshotWindow, stamp: number): SavedTab[] {
 			title: tab.title,
 			url: tab.url,
 			notes: '',
-			archived: false,
 			pinned: Boolean(tab.pinned),
 			nativeGroup: group
 				? {
@@ -6358,7 +6353,7 @@ function restoreTrash(id: string): Promise<ActionResult<'RESTORE_TRASH'>> {
 	return mutate(async () => {
 		const entry = (await readTrash()).find((item) => item.id === id);
 		if (!entry) {
-			return {ok: false, error: 'That item is no longer in the trash.'};
+			return {ok: false, error: 'That item is no longer in the trash bin.'};
 		}
 
 		const store = await getStore();
@@ -6377,11 +6372,11 @@ function restoreTrash(id: string): Promise<ActionResult<'RESTORE_TRASH'>> {
 
 function deleteTrash(id: string): Promise<ActionResult<'DELETE_TRASH'>> {
 	return trashMutate(() =>
-		withUndo('Delete from trash', [TRASH_KEY], async () => {
+		withUndo('Delete from trash bin', [TRASH_KEY], async () => {
 			const items = await readTrash();
 			const next = items.filter((item) => item.id !== id);
 			if (next.length === items.length) {
-				return {ok: false, error: 'That item is no longer in the trash.'};
+				return {ok: false, error: 'That item is no longer in the trash bin.'};
 			}
 
 			await writeTrash(next);
@@ -6392,7 +6387,7 @@ function deleteTrash(id: string): Promise<ActionResult<'DELETE_TRASH'>> {
 
 function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
 	return trashMutate(() =>
-		withUndo('Empty trash', [TRASH_KEY], async () => {
+		withUndo('Empty trash bin', [TRASH_KEY], async () => {
 			const items = await readTrash();
 			await writeTrash([]);
 			return {ok: true, count: items.length};
@@ -6786,14 +6781,6 @@ async function handleMessage(
 			return updateGroup(message.groupId, message.fields || {});
 		}
 
-		case 'REORDER_GROUP': {
-			return reorderGroup(
-				message.groupId,
-				message.direction,
-				message.folderId || 'all',
-			);
-		}
-
 		case 'SET_GROUP_ORDER': {
 			return setGroupOrder(message.order);
 		}
@@ -7167,14 +7154,11 @@ async function saveCurrentTabToFirstGroup(
 			return {ok: false, error: 'There is no eligible web tab to save.'};
 		}
 
-		const group = store.groups.find(
-			(entry) => !entry.archived && !entry.locked,
-		);
+		const group = store.groups[0];
 		if (!group) {
 			return {
 				ok: false,
-				error:
-					'Create or unlock a session before sending this tab to a session.',
+				error: 'Create a session before sending this tab to a session.',
 			};
 		}
 
@@ -7213,7 +7197,6 @@ async function saveCurrentTabToFirstGroup(
 						: title,
 				url: tabUrl,
 				notes: copies[0]?.notes || '',
-				archived: false,
 				pinned: Boolean(tab.pinned),
 				nativeGroup:
 					tab.groupId >= 0
@@ -8102,7 +8085,7 @@ async function saveLinkForLater(
 
 		const name = SAVED_LINKS_SESSION.toLocaleLowerCase();
 		let group = store.groups.find(
-			(entry) => !entry.archived && entry.name.toLocaleLowerCase() === name,
+			(entry) => entry.name.toLocaleLowerCase() === name,
 		);
 		const copies = store.groups
 			.flatMap((entry) => entry.tabs)
@@ -8130,9 +8113,6 @@ async function saveLinkForLater(
 				name: SAVED_LINKS_SESSION,
 				folderId: DEFAULT_FOLDER_ID,
 				description: '',
-				archived: false,
-				archivedAt: null,
-				locked: false,
 				createdAt: now,
 				updatedAt: now,
 				sourceWindowName: '',
@@ -8153,7 +8133,6 @@ async function saveLinkForLater(
 			),
 			url,
 			notes: copies[0]?.notes || '',
-			archived: false,
 			pinned: false,
 			nativeGroup: null,
 			savedAt: now,

@@ -963,18 +963,16 @@ test('Save link for later creates the Saved links session, appends to it, and sk
 	assert.deepEqual(harness.warnings, []);
 });
 
-test('Save link for later respects rejected duplicates and skips archived Saved links sessions', async () => {
+test('Save link for later respects rejected duplicates and appends to an existing Saved links session', async () => {
 	const harness = createHarness(
 		baseState(
 			{saveDuplicateHandling: 'reject'},
 			{
 				groups: [
 					{
-						id: 'archived',
+						id: 'saved-links',
 						name: 'Saved links',
 						folderId: 'unfiled',
-						archived: true,
-						archivedAt: 5,
 						createdAt: 1,
 						updatedAt: 1,
 						tabs: [{id: 't1', title: 'Old', url: 'https://old.example/'}],
@@ -1000,12 +998,12 @@ test('Save link for later respects rejected duplicates and skips archived Saved 
 	});
 	assert.equal(
 		harness.state.groups.length,
-		2,
-		'the archived session is left alone and a new one is created',
+		1,
+		'the existing Saved links session is reused',
 	);
 	assert.deepEqual(
 		harness.state.groups[0].tabs.map((tab) => tab.url),
-		['https://new.example/'],
+		['https://old.example/', 'https://new.example/'],
 	);
 });
 

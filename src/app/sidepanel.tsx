@@ -10,7 +10,6 @@ import {
 } from 'react';
 import {createRoot} from 'react-dom/client';
 import {
-	Archive,
 	Bookmark,
 	ChevronRight,
 	ExternalLink,
@@ -296,7 +295,6 @@ function SidePanel() {
 	const visibleSessions = useMemo(
 		() =>
 			sessions
-				.filter((session) => !session.archived)
 				.map((session) => ({
 					session,
 					tabs: matches(session.name)
@@ -650,7 +648,7 @@ function SidePanel() {
 		{
 			id: 'sessions',
 			label: 'Sessions',
-			count: sessions.filter((session) => !session.archived).length,
+			count: sessions.length,
 			icon: Layers,
 		},
 		{id: 'tabs', label: 'Tabs', count: windowTabs.length, icon: PanelTop},
@@ -693,7 +691,7 @@ function SidePanel() {
 								},
 								{
 									id: 'trash',
-									label: 'Trash',
+									label: 'Trash bin',
 									icon: Trash2,
 									onSelect: () => setTrashOpen(true),
 								},
@@ -800,7 +798,7 @@ function SidePanel() {
 						(sessionsEnabled ? (
 							visibleSessions.length === 0 ? (
 								<EmptyState
-									icon={Archive}
+									icon={Layers}
 									title={search ? 'No sessions match' : 'No sessions yet'}
 								>
 									{search

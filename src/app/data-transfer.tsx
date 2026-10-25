@@ -197,7 +197,7 @@ const ZIP_CHOICE = {
 	title: 'Full backup (ZIP)',
 	icon: Archive,
 	description:
-		'Everything in one file: sessions, bookmarks, all settings and excluded sites, theme, crash snapshots, and trash. Restore it with Import.',
+		'Everything in one file: sessions, bookmarks, all settings and excluded sites, theme, crash snapshots, and trash bin. Restore it with Import.',
 };
 
 const BACKUP_TITLES: Record<ExportKind, (count: number) => string> = {
@@ -999,7 +999,7 @@ export function ImportDialog({
 				? 'Import sessions'
 				: 'Import bookmarks';
 	const description = full
-		? 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash. You can undo it right after.'
+		? 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
 		: step === 'preview'
 			? 'Nothing is saved until you choose Import.'
 			: kind === 'sessions'
@@ -1179,7 +1179,7 @@ export function ImportDialog({
 								<Stat label="Columns" value={full.counts.columns} />
 								<Stat label="Folders" value={full.counts.folders} />
 								<Stat label="Snapshots" value={full.counts.snapshots} />
-								<Stat label="Trash items" value={full.counts.trash} />
+								<Stat label="Trash bin items" value={full.counts.trash} />
 							</dl>
 							<ul className="space-y-1 text-xs leading-5 text-muted-foreground">
 								<Note>

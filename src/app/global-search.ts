@@ -272,7 +272,7 @@ function cachedSessionItems(groups: readonly Session[]): FinderItem[] {
 				id: `session:${group.id}`,
 				kind: 'session',
 				title: group.name,
-				detail: `${count} ${count === 1 ? 'tab' : 'tabs'}${group.archived ? ' · Archived' : ''}`,
+				detail: `${count} ${count === 1 ? 'tab' : 'tabs'}`,
 				texts: [group.name, clip(group.description)],
 				ref: group.id,
 			}),

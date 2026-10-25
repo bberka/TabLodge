@@ -1,5 +1,5 @@
 import type {ReactElement, ReactNode} from 'react';
-import type {LucideIcon} from 'lucide-react';
+import {Check, type LucideIcon} from 'lucide-react';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -35,6 +35,10 @@ export type MenuAction =
 			shortcut?: string;
 			destructive?: boolean;
 			disabled?: boolean;
+			/**
+			Marks the current choice in a list of options.
+			*/
+			checked?: boolean;
 			hidden?: boolean;
 			onSelect: () => void;
 	  }
@@ -152,6 +156,9 @@ function renderActions(actions: MenuAction[], kit: Kit): ReactNode {
 				{Icon && <Icon />}
 				<span>{action.label}</span>
 				{action.shortcut && <Shortcut>{action.shortcut}</Shortcut>}
+				{action.checked && (
+					<Check className="ml-auto h-4 w-4" aria-label="Current" />
+				)}
 			</kit.Item>
 		);
 	});

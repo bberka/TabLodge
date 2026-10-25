@@ -12,10 +12,7 @@ import {
 } from 'react';
 import {
 	AppWindow,
-	Archive,
-	ArrowDown,
 	ArrowDownUp,
-	ArrowUp,
 	BookmarkPlus,
 	ChevronDown,
 	ChevronRight,
@@ -27,7 +24,6 @@ import {
 	History,
 	LayoutGrid,
 	LayoutList,
-	LockKeyhole,
 	MoreHorizontal,
 	MoreVertical,
 	PanelTop,
@@ -37,7 +33,6 @@ import {
 	Search,
 	Share2,
 	Trash2,
-	UnlockKeyhole,
 	Upload,
 	X,
 } from 'lucide-react';
@@ -111,10 +106,10 @@ import type {
 	SessionFields,
 	SessionSort,
 	Settings,
-	TabLodgeMessages,
 } from './types';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
+import {webUrl} from './import-formats';
 import {ColumnLabel, FolderLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
@@ -131,7 +126,6 @@ import {openLink, resolveLinkTarget} from './link-target';
 Modifier keys that choose how a restore behaves (a mouse or keyboard event satisfies this).
 */
 type RestoreModifiers = {
-	altKey?: boolean;
 	ctrlKey?: boolean;
 	metaKey?: boolean;
 	shiftKey?: boolean;
@@ -144,10 +138,13 @@ type SelectionModifiers = {
 	ctrlKey?: boolean;
 	metaKey?: boolean;
 };
-type ReorderDirection = TabLodgeMessages['REORDER_GROUP']['direction'];
 type FolderDialog = {
 	mode: 'create' | 'rename';
 	folder?: Folder;
+	/**
+	Create mode only: the session to move into the new folder.
+	*/
+	moveGroupId?: string;
 	/**
 	The icon chosen so far in the open dialog.
 	*/
@@ -212,11 +209,6 @@ const dateText = (value: unknown) => {
 		: 'Date unavailable';
 };
 
-// Gray, diagonal-striped treatment for archived sessions and tabs.
-const ARCHIVED_STYLE = {
-	backgroundImage:
-		'repeating-linear-gradient(135deg, transparent 0 8px, rgb(var(--muted) / 0.7) 8px 16px)',
-};
 const hostFor = (url: string) => {
 	try {
 		return new URL(url).host;
@@ -267,6 +259,7 @@ export function SessionManager({
 	const [focusGroupName, setFocusGroupName] = useState(false);
 	const groupNameRef = useRef<HTMLInputElement>(null);
 	const [bookmarkTab, setBookmarkTab] = useState<BookmarkDraft | null>(null);
+	const [tabUrlError, setTabUrlError] = useState('');
 	const [editingTab, setEditingTab] = useState<{
 		group: Session;
 		tab: SavedTabRecord;
@@ -303,13 +296,9 @@ export function SessionManager({
 
 	const visibleGroups = useMemo(() => {
 		const needle = query.trim().toLocaleLowerCase();
-		const archiveView = folderId === 'archived';
 		const filtered = groups.filter(
 			(group) =>
-				(archiveView
-					? Boolean(group.archived)
-					: !group.archived &&
-						(folderId === ALL || group.folderId === folderId)) &&
+				(folderId === ALL || group.folderId === folderId) &&
 				(!needle ||
 					[
 						group.name,
@@ -368,19 +357,11 @@ export function SessionManager({
 	);
 	const folderCounts = useMemo(() => {
 		const counts = new Map<string, number>();
-		let archived = 0;
-		let all = 0;
 		for (const group of groups) {
-			if (group.archived) {
-				archived += 1;
-				continue;
-			}
-
-			all += 1;
 			counts.set(group.folderId, (counts.get(group.folderId) ?? 0) + 1);
 		}
 
-		return {all, archived, byFolder: counts};
+		return {all: groups.length, byFolder: counts};
 	}, [groups]);
 	const selectedByGroup = useMemo(() => {
 		const byGroup = new Map<string, Set<string>>();
@@ -407,11 +388,7 @@ export function SessionManager({
 			setSort(state.settings.sessionSort);
 		}
 
-		if (
-			folderId !== ALL &&
-			folderId !== 'archived' &&
-			folders.every((folder) => folder.id !== folderId)
-		) {
+		if (folderId !== ALL && folders.every((folder) => folder.id !== folderId)) {
 			setFolderId(ALL);
 		}
 
@@ -453,7 +430,7 @@ export function SessionManager({
 					return;
 				}
 
-				setFolderId(group.archived ? 'archived' : ALL);
+				setFolderId(ALL);
 				setQuery('');
 				setGroupOpen(group.id, true);
 				revealRef.current = {id: group.id, focus: true};
@@ -642,12 +619,7 @@ export function SessionManager({
 		requestedTarget?: RestoreTarget,
 	) {
 		const restoreMode =
-			requestedMode ||
-			(event?.altKey
-				? 'archive'
-				: event?.ctrlKey || event?.metaKey
-					? 'keep'
-					: undefined);
+			requestedMode || (event?.ctrlKey || event?.metaKey ? 'keep' : undefined);
 		const restoreTarget =
 			requestedTarget ?? (event?.shiftKey ? 'always-new-window' : undefined);
 		setBusy(`restore:${group.id}`);
@@ -695,11 +667,7 @@ export function SessionManager({
 		const result = await send('RESTORE_TAB', {
 			groupId: group.id,
 			tabId: tab.id,
-			restoreMode: event?.altKey
-				? 'archive'
-				: event?.ctrlKey || event?.metaKey
-					? 'keep'
-					: undefined,
+			restoreMode: event?.ctrlKey || event?.metaKey ? 'keep' : undefined,
 			restoreTarget: event?.shiftKey ? 'always-new-window' : undefined,
 			activate: event?.ctrlKey || event?.metaKey ? false : undefined,
 		});
@@ -730,12 +698,22 @@ export function SessionManager({
 		}
 
 		const form = new FormData(event.currentTarget);
+		const {group, tab} = editingTab;
+		const url = webUrl(String(form.get('url') || ''));
+		if (!url) {
+			setTabUrlError(
+				'Enter a web address that starts with http:// or https://.',
+			);
+			return;
+		}
+
 		const result = await send('UPDATE_TAB', {
-			groupId: editingTab.group.id,
-			tabId: editingTab.tab.id,
+			groupId: group.id,
+			tabId: tab.id,
 			fields: {
 				title: String(form.get('title') || ''),
 				notes: String(form.get('notes') || ''),
+				...(url !== tab.url && {url}),
 			},
 		});
 		if (!result?.ok) {
@@ -744,20 +722,28 @@ export function SessionManager({
 		}
 
 		setEditingTab(null);
-		await reload();
-	}
+		if (url !== tab.url) {
+			// Undo puts the link's address, title and notes back; only this one saved link is touched.
+			showStatus('Link updated.', false, {
+				action: {
+					label: 'Undo',
+					async onClick() {
+						const undone = await send('UPDATE_TAB', {
+							groupId: group.id,
+							tabId: tab.id,
+							fields: {url: tab.url, title: tab.title, notes: tab.notes},
+						});
+						if (!undone?.ok) {
+							showStatus(undone?.error || 'Could not undo that edit.', true);
+						}
 
-	async function toggleTabArchived(group: Session, tab: SavedTabRecord) {
-		const result = await send('UPDATE_TAB', {
-			groupId: group.id,
-			tabId: tab.id,
-			fields: {archived: !tab.archived},
-		});
-		if (result?.ok) {
-			await reload();
-		} else {
-			showStatus(result?.error || 'Could not update this tab.', true);
+						await reload();
+					},
+				},
+			});
 		}
+
+		await reload();
 	}
 
 	async function updateGroup(group: Session, fields: SessionFields) {
@@ -817,19 +803,6 @@ export function SessionManager({
 
 		await reload();
 		offerTrashUndo('Link removed.', result.trashId, showStatus, reload);
-	}
-
-	async function reorderGroup(group: Session, direction: ReorderDirection) {
-		const result = await send('REORDER_GROUP', {
-			groupId: group.id,
-			direction,
-			folderId,
-		});
-		if (result?.ok) {
-			await reload();
-		} else {
-			showStatus(result?.error || 'Could not reorder this session.', true);
-		}
 	}
 
 	async function openAllInNewTabs(tabs: SavedTabRecord[]) {
@@ -1035,10 +1008,11 @@ export function SessionManager({
 		deleteGroup: (group) => deleteGroup(group),
 		deleteTab: deleteSavedTab,
 		editTab: (group, tab) => setEditingTab({group, tab}),
-		toggleTabArchived,
 		editGroup: (group) => openGroupDetails(group),
 		editName: (group) => openGroupDetails(group, true),
-		reorder: reorderGroup,
+		moveToFolder: moveGroupToFolder,
+		newFolderFor: (group) => setDialog({mode: 'create', moveGroupId: group.id}),
+		folderTargets: () => folders,
 		bookmark: openBookmarkPicker,
 		select: changeSelection,
 		moveTargets(excludeId) {
@@ -1143,6 +1117,41 @@ export function SessionManager({
 		setDialog('details');
 	}
 
+	async function moveGroupToFolder(group: Session, targetId: string) {
+		if (group.folderId === targetId) {
+			return;
+		}
+
+		const previous = group.folderId;
+		const result = await send('UPDATE_GROUP', {
+			groupId: group.id,
+			fields: {folderId: targetId},
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not move this session.', true);
+			return;
+		}
+
+		const target = folders.find((folder) => folder.id === targetId);
+		showStatus(`Moved to ${target?.name ?? 'the folder'}.`, false, {
+			action: {
+				label: 'Undo',
+				async onClick() {
+					const undone = await send('UPDATE_GROUP', {
+						groupId: group.id,
+						fields: {folderId: previous},
+					});
+					if (!undone?.ok) {
+						showStatus(undone?.error || 'Could not undo that move.', true);
+					}
+
+					await reload();
+				},
+			},
+		});
+		await reload();
+	}
+
 	async function saveFolder(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 		const name = String(
@@ -1165,11 +1174,23 @@ export function SessionManager({
 			return;
 		}
 
-		if (folderDialog?.mode !== 'rename') {
+		const moving = folderDialog?.moveGroupId
+			? groups.find((entry) => entry.id === folderDialog.moveGroupId)
+			: undefined;
+		if (folderDialog?.mode !== 'rename' && !moving) {
 			setFolderId(result.folder.id);
 		}
 
 		setDialog(null);
+		if (moving) {
+			// The folder exists now; the move reports its own result with Undo.
+			await moveGroupToFolder(
+				{...moving, folderId: moving.folderId},
+				result.folder.id,
+			);
+			return;
+		}
+
 		await reload();
 	}
 
@@ -1209,8 +1230,6 @@ export function SessionManager({
 	}
 
 	const selectedCount = selectedTabCount();
-	const reorderEnabled =
-		sort === 'custom' && !query.trim() && folderId !== 'archived';
 	const selectedFolder = folders.find((folder) => folder.id === folderId);
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
 	return (
@@ -1237,7 +1256,7 @@ export function SessionManager({
 								tabIndex={-1}
 								className="text-lg font-semibold tracking-tight"
 							>
-								{folderId === 'archived' ? 'Archived sessions' : 'Sessions'}
+								Sessions
 							</h2>
 							<Badge variant="accent">{visibleGroups.length}</Badge>
 						</div>
@@ -1345,7 +1364,7 @@ export function SessionManager({
 										onSelect={() => emitRecoveryEvent({type: 'trash'})}
 									>
 										<Trash2 className="h-4 w-4" />
-										Trash
+										Trash bin
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
@@ -1387,21 +1406,6 @@ export function SessionManager({
 								);
 							},
 						)}
-						<button
-							type="button"
-							aria-pressed={folderId === 'archived'}
-							className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${folderId === 'archived' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-							onClick={() => {
-								setFolderId('archived');
-								setAnchor(null);
-							}}
-						>
-							<Archive className="h-3.5 w-3.5" />
-							Archived
-							<span className="tabular-nums opacity-90">
-								{folderCounts.archived}
-							</span>
-						</button>
 						<span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
 						<IconTooltip label="New folder">
 							<Button
@@ -1505,20 +1509,16 @@ export function SessionManager({
 						</EmptyState>
 					) : visibleGroups.length === 0 ? (
 						<EmptyState
-							icon={folderId === 'archived' ? Archive : Search}
+							icon={Search}
 							title={
 								query.trim()
 									? 'No matching sessions'
-									: folderId === 'archived'
-										? 'Archive is empty'
-										: `Nothing in ${selectedFolder?.name || 'this folder'}`
+									: `Nothing in ${selectedFolder?.name || 'this folder'}`
 							}
 						>
 							{query.trim()
 								? 'Try another search term.'
-								: folderId === 'archived'
-									? 'Archived sessions will appear here.'
-									: 'This folder is empty. Save a session or move one here from its details.'}
+								: 'This folder is empty. Save a session or move one here from its details.'}
 						</EmptyState>
 					) : (
 						<div
@@ -1528,7 +1528,7 @@ export function SessionManager({
 									: 'space-y-2'
 							}
 						>
-							{renderedGroups.map((group, index) => (
+							{renderedGroups.map((group) => (
 								<GroupCard
 									key={group.id}
 									group={group}
@@ -1540,9 +1540,6 @@ export function SessionManager({
 									isExpanded={isOpen(group.id)}
 									selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
 									selectionActive={selected.size > 0}
-									reorderEnabled={reorderEnabled}
-									isFirst={index === 0}
-									isLast={index === visibleGroups.length - 1}
 									bookmarksEnabled={bookmarksEnabled}
 									actions={cardActions}
 									dragStore={dragStore}
@@ -1581,14 +1578,21 @@ export function SessionManager({
 			/>
 			<Dialog
 				open={Boolean(editingTab)}
-				onOpenChange={(open) => !open && setEditingTab(null)}
+				onOpenChange={(open) => {
+					if (open) {
+						return;
+					}
+
+					setEditingTab(null);
+					setTabUrlError('');
+				}}
 			>
 				<DialogContent>
 					<form key={editingTab?.tab.id} onSubmit={saveTabDetails}>
 						<DialogHeader>
 							<DialogTitle>Edit link</DialogTitle>
 							<DialogDescription>
-								Change the title and notes of this saved link.
+								Change the title, address, and notes of this saved link.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
@@ -1609,6 +1613,30 @@ export function SessionManager({
 								/>
 							</div>
 							<div className="space-y-1.5">
+								<Label htmlFor="tab-url">Address</Label>
+								<Input
+									required
+									id="tab-url"
+									name="url"
+									type="text"
+									inputMode="url"
+									maxLength={16_384}
+									aria-invalid={Boolean(tabUrlError)}
+									aria-describedby={tabUrlError ? 'tab-url-error' : undefined}
+									defaultValue={editingTab?.tab.url || ''}
+									onChange={() => setTabUrlError('')}
+								/>
+								{tabUrlError && (
+									<p
+										id="tab-url-error"
+										role="alert"
+										className="text-xs text-destructive"
+									>
+										{tabUrlError}
+									</p>
+								)}
+							</div>
+							<div className="space-y-1.5">
 								<Label htmlFor="tab-notes">Notes</Label>
 								<Textarea
 									id="tab-notes"
@@ -1620,7 +1648,8 @@ export function SessionManager({
 								/>
 							</div>
 							<p className="text-xs text-muted-foreground">
-								Title and notes are shared with every saved copy of this page.
+								Title and notes are shared with every saved copy of this page. A
+								new address changes only this saved link.
 							</p>
 						</DialogBody>
 						<DialogFooter>
@@ -1757,8 +1786,6 @@ export function SessionManager({
 								<Button
 									type="button"
 									variant="destructive"
-									disabled={editingGroup.locked}
-									title={editingGroup.locked ? 'Unlock to delete' : undefined}
 									onClick={() => deleteGroup(editingGroup, true)}
 								>
 									<Trash2 />
@@ -1827,7 +1854,9 @@ export function SessionManager({
 							<Button type="submit">
 								{folderDialog?.mode === 'rename'
 									? 'Save changes'
-									: 'Create folder'}
+									: folderDialog?.moveGroupId
+										? 'Create and move'
+										: 'Create folder'}
 							</Button>
 						</DialogFooter>
 					</form>
@@ -1915,10 +1944,17 @@ type CardActions = {
 	deleteGroup: (group: Session) => void;
 	deleteTab: (group: Session, tab: SavedTabRecord) => void;
 	editTab: (group: Session, tab: SavedTabRecord) => void;
-	toggleTabArchived: (group: Session, tab: SavedTabRecord) => void;
 	editGroup: (group: Session) => void;
 	editName: (group: Session) => void;
-	reorder: (group: Session, direction: ReorderDirection) => void;
+	moveToFolder: (group: Session, folderId: string) => void;
+	/**
+	Opens the new-folder dialog; saving it creates the folder and moves the session in.
+	*/
+	newFolderFor: (group: Session) => void;
+	/**
+	Folders a session can move to (read when a menu opens, never while rendering).
+	*/
+	folderTargets: () => Folder[];
 	bookmark: (tab: SavedTabRecord) => void;
 	select: (key: string, checked: boolean, event: SelectionModifiers) => void;
 	/**
@@ -2009,9 +2045,6 @@ type GroupCardProps = {
 	*/
 	selectedTabs: Set<string>;
 	selectionActive: boolean;
-	reorderEnabled: boolean;
-	isFirst: boolean;
-	isLast: boolean;
 	bookmarksEnabled: boolean;
 	actions: CardActions;
 	dragStore: DragStore;
@@ -2027,9 +2060,6 @@ const GroupCard = memo(
 		isExpanded,
 		selectedTabs,
 		selectionActive,
-		reorderEnabled,
-		isFirst,
-		isLast,
 		bookmarksEnabled,
 		actions: handlers,
 		dragStore,
@@ -2052,9 +2082,8 @@ const GroupCard = memo(
 			handlers.restore(group, event);
 		const onExpanded = (next: boolean) => handlers.expand(group.id, next);
 		const onDelete = () => handlers.deleteGroup(group);
-		const onUpdateGroup = (fields: SessionFields) =>
-			handlers.updateGroup(group, fields);
-		const windowActions: MenuAction[] = [
+		// One list for the Restore dropdown and the Restore options submenu, so they cannot drift apart.
+		const restoreOptions: MenuAction[] = [
 			{
 				id: 'restore-here',
 				label: 'In this window',
@@ -2066,6 +2095,19 @@ const GroupCard = memo(
 				label: 'In a new window',
 				icon: AppWindow,
 				onSelect: () => handlers.restoreTarget(group, 'always-new-window'),
+			},
+			{type: 'separator'},
+			{
+				id: 'restore-keep',
+				label: 'Keep session after restoring',
+				icon: Save,
+				onSelect: () => handlers.restoreMode(group, 'keep'),
+			},
+			{
+				id: 'restore-remove',
+				label: 'Remove session after restoring',
+				icon: Trash2,
+				onSelect: () => handlers.forceRestore(group),
 			},
 		];
 		// Built only when the menu opens.
@@ -2081,29 +2123,7 @@ const GroupCard = memo(
 				id: 'restore-options',
 				label: 'Restore options',
 				icon: History,
-				items: [
-					...windowActions,
-					{type: 'separator'},
-					{
-						id: 'restore-keep',
-						label: 'Keep session after restoring',
-						icon: Save,
-						onSelect: () => handlers.restoreMode(group, 'keep'),
-					},
-					{
-						id: 'restore-remove',
-						label: 'Remove session after restoring',
-						icon: Trash2,
-						disabled: group.locked,
-						onSelect: () => handlers.forceRestore(group),
-					},
-					{
-						id: 'restore-archive',
-						label: 'Archive after restoring',
-						icon: Archive,
-						onSelect: () => handlers.restoreMode(group, 'archive'),
-					},
-				],
+				items: restoreOptions,
 			},
 			{
 				id: 'open-all',
@@ -2132,33 +2152,30 @@ const GroupCard = memo(
 				onSelect: () => handlers.editGroup(group),
 			},
 			{
-				id: 'lock',
-				label: group.locked ? 'Unlock' : 'Lock',
-				icon: group.locked ? UnlockKeyhole : LockKeyhole,
-				onSelect: () => onUpdateGroup({locked: !group.locked}),
-			},
-			{
-				id: 'archive',
-				label: group.archived ? 'Unarchive' : 'Archive',
-				icon: Archive,
-				onSelect: () => onUpdateGroup({archived: !group.archived}),
-			},
-			{type: 'separator'},
-			{
-				id: 'up',
-				label: 'Move up',
-				icon: ArrowUp,
-				hidden: !reorderEnabled,
-				disabled: isFirst,
-				onSelect: () => handlers.reorder(group, 'up'),
-			},
-			{
-				id: 'down',
-				label: 'Move down',
-				icon: ArrowDown,
-				hidden: !reorderEnabled,
-				disabled: isLast,
-				onSelect: () => handlers.reorder(group, 'down'),
+				type: 'submenu',
+				id: 'move-folder',
+				label: 'Move to folder',
+				icon: ACTION_ICONS.move,
+				items: [
+					...handlers.folderTargets().map((folder): MenuAction => ({
+						id: `folder-${folder.id}`,
+						label:
+							folder.name.length > 40
+								? `${folder.name.slice(0, 39)}…`
+								: folder.name,
+						icon: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component,
+						checked: folder.id === group.folderId,
+						disabled: folder.id === group.folderId,
+						onSelect: () => handlers.moveToFolder(group, folder.id),
+					})),
+					{type: 'separator'},
+					{
+						id: 'folder-new',
+						label: 'Create folder',
+						icon: FolderPlus,
+						onSelect: () => handlers.newFolderFor(group),
+					},
+				],
 			},
 			{type: 'separator'},
 			{
@@ -2183,8 +2200,7 @@ const GroupCard = memo(
 				)}
 				<article
 					id={`session-${group.id}`}
-					className={`tn-card-lazy group/session overflow-hidden rounded-xl border ${grid ? 'w-full min-w-0' : ''} bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${group.archived ? 'opacity-75 grayscale' : ''} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
-					style={group.archived ? ARCHIVED_STYLE : undefined}
+					className={`tn-card-lazy group/session overflow-hidden rounded-xl border ${grid ? 'w-full min-w-0' : ''} bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
 					aria-label={`Session ${name}`}
 					onDragOver={(event) => handlers.dragOver(group, event)}
 					onDragLeave={handlers.dragLeave}
@@ -2259,13 +2275,6 @@ const GroupCard = memo(
 									>
 										{name}
 									</h3>
-									{group.locked && (
-										<LockKeyhole
-											className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-											aria-label="Locked"
-										/>
-									)}
-									{group.archived && <Badge variant="accent">Archived</Badge>}
 								</span>
 								<span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
 									<span>
@@ -2306,42 +2315,6 @@ const GroupCard = memo(
 								<span
 									className={`items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 ${grid ? 'hidden' : 'flex'}`}
 								>
-									<IconTooltip
-										label={group.locked ? 'Unlock session' : 'Lock session'}
-									>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-8 w-8 text-muted-foreground"
-											aria-label={
-												group.locked
-													? `Unlock ${group.name}`
-													: `Lock ${group.name}`
-											}
-											onClick={() => onUpdateGroup({locked: !group.locked})}
-										>
-											{group.locked ? <UnlockKeyhole /> : <LockKeyhole />}
-										</Button>
-									</IconTooltip>
-									<IconTooltip
-										label={
-											group.archived ? 'Unarchive session' : 'Archive session'
-										}
-									>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-8 w-8 text-muted-foreground"
-											aria-label={
-												group.archived
-													? `Unarchive ${group.name}`
-													: `Archive ${group.name}`
-											}
-											onClick={() => onUpdateGroup({archived: !group.archived})}
-										>
-											<Archive />
-										</Button>
-									</IconTooltip>
 									<IconTooltip label="Delete session">
 										<Button
 											variant="ghost"
@@ -2365,7 +2338,7 @@ const GroupCard = memo(
 										<span className="hidden sm:inline">Restore</span>
 									</Button>
 									<ActionDropdownMenu
-										actions={windowActions}
+										actions={restoreOptions}
 										trigger={
 											<Button
 												size="sm"
@@ -2535,7 +2508,7 @@ const SavedTab = memo(
 			{type: 'separator'},
 			{
 				id: 'edit',
-				label: 'Edit title & notes',
+				label: 'Edit',
 				icon: ACTION_ICONS.edit,
 				onSelect: () => handlers.editTab(group, tab),
 			},
@@ -2551,13 +2524,6 @@ const SavedTab = memo(
 				icon: BookmarkPlus,
 				hidden: !showBookmark,
 				onSelect: () => handlers.bookmark(tab),
-			},
-			{
-				id: 'unarchive',
-				label: 'Unarchive',
-				icon: Archive,
-				hidden: !tab.archived,
-				onSelect: () => handlers.toggleTabArchived(group, tab),
 			},
 			{
 				id: 'move',
@@ -2612,8 +2578,7 @@ const SavedTab = memo(
 				<li
 					draggable
 					data-tab-id={tab.id}
-					style={tab.archived ? ARCHIVED_STYLE : undefined}
-					className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 relative rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${tab.archived ? 'opacity-60 grayscale' : ''} ${dragging ? 'opacity-40' : ''} `}
+					className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 relative rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${dragging ? 'opacity-40' : ''} `}
 					onClick={handleRowClick}
 					onDragStart={(event) => {
 						event.stopPropagation();
@@ -2708,7 +2673,6 @@ const SavedTab = memo(
 									<span className="truncate">{tab.nativeGroup.title}</span>
 								</Badge>
 							)}
-							{tab.archived && <Badge variant="outline">Archived</Badge>}
 						</span>
 						{displayUrl !== null && (
 							<p

@@ -149,8 +149,8 @@ const RECOVERY_TOOLS_TEXT = [
 	'Back up now',
 	'Recent snapshots',
 	'Clear snapshots',
-	'Empty trash',
-	'Trash',
+	'Empty trash bin',
+	'Trash bin',
 	'Backups',
 	'Restore a backup',
 	'Download a backup',
@@ -250,10 +250,7 @@ const settingsGroups: Array<{
 					['current-window', 'Save selected tabs, or this window'],
 					['full-window', 'Save the full window, including tab groups'],
 					['current-group', 'Save the active tab group'],
-					[
-						'current-tab-to-group',
-						'Send current tab to first unlocked session',
-					],
+					['current-tab-to-group', 'Send current tab to first session'],
 					['current-tab', 'Save only the active tab'],
 					['all-windows', 'Save tabs from all windows'],
 				],
@@ -428,12 +425,11 @@ const settingsGroups: Array<{
 			{
 				name: 'restoreMode',
 				label: 'After restoring a session',
-				help: 'Choose whether saved tabs stay, are removed, or the session is archived. Locked sessions always keep their tabs.',
+				help: 'Choose whether saved tabs stay in the session or are removed once they are restored.',
 				type: 'select',
 				options: [
 					['keep', 'Keep saved tabs'],
 					['remove', 'Remove restored tabs'],
-					['archive', 'Archive the session'],
 				],
 			},
 			{
@@ -664,7 +660,7 @@ const settingsGroups: Array<{
 			{
 				name: 'trashRetentionDays',
 				label: 'Keep deleted items for',
-				help: 'Deleted sessions, saved links, bookmarks, columns and folders wait in the trash this long, then are removed for good.',
+				help: 'Deleted sessions, saved links, bookmarks, columns and folders wait in the trash bin this long, then are removed for good.',
 				type: 'number-select',
 				options: [
 					['7', '7 days'],

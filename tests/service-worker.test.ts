@@ -970,34 +970,6 @@ test('RESTORE_GROUP opens a new window when the current window has other tabs', 
 	);
 });
 
-test('locked sessions always keep saved tabs when restore mode requests removal', async () => {
-	const state = stateWithSession({restoreMode: 'remove'});
-	state.groups[0].locked = true;
-	const harness = createWorkerHarness(state);
-	const response = await harness.sendMessage({
-		type: 'RESTORE_GROUP',
-		groupId: 'session-1',
-		forceRemove: true,
-	});
-	assert.equal(response.ok, true, response.error);
-	assert.equal(response.removed, false);
-	assert.equal(harness.state.groups[0].tabs.length, 1);
-});
-
-test('restoring with archive policy marks the session without removing saved tabs', async () => {
-	const harness = createWorkerHarness(
-		stateWithSession({restoreMode: 'archive'}),
-	);
-	const response = await harness.sendMessage({
-		type: 'RESTORE_GROUP',
-		groupId: 'session-1',
-	});
-	assert.equal(response.ok, true, response.error);
-	assert.equal(response.archived, true);
-	assert.equal(harness.state.groups[0].archived, true);
-	assert.equal(harness.state.groups[0].tabs.length, 1);
-});
-
 test('single-tab restore can remain in the background or switch based on its setting', async () => {
 	const background = createWorkerHarness(
 		stateWithSession({singleTabBehavior: 'stay'}),
@@ -1106,32 +1078,19 @@ test('RESTORE_TAB opens a valid saved URL and reports success', async () => {
 	assert.equal(harness.openedTabs[0].url, 'https://saved.example/article');
 });
 
-test('single-tab toolbar mode appends into the first non-archived unlocked session', async () => {
+test('single-tab toolbar mode appends into the first session', async () => {
 	const state = stateWithSession({closeOnSave: false});
-	state.groups[0].locked = true;
-	state.groups[1] = {
-		...structuredClone(state.groups[0]),
-		id: 'archived-session',
-		locked: false,
-		archived: true,
-	};
-	state.groups[2] = {
-		...structuredClone(state.groups[0]),
-		id: 'eligible-session',
-		locked: false,
-		archived: false,
-	};
+	state.groups[1] = {...structuredClone(state.groups[0]), id: 'second-session'};
 	const harness = createWorkerHarness(state);
 	const response = await harness.sendMessage({
 		type: 'SAVE_CURRENT_TAB_TO_GROUP',
 	});
 	assert.equal(response.ok, true, response.error);
-	assert.equal(response.groupId, 'eligible-session');
-	assert.equal(harness.state.groups[0].tabs.length, 1);
-	assert.equal(harness.state.groups[2].tabs.length, 2);
-	assert.equal(harness.state.groups[2].tabs[1].url, 'https://current.example/');
+	assert.equal(response.groupId, 'session-1');
+	assert.equal(harness.state.groups[0].tabs.length, 2);
+	assert.equal(harness.state.groups[1].tabs.length, 1);
+	assert.equal(harness.state.groups[0].tabs[1].url, 'https://current.example/');
 });
-
 test('popup selection saves only explicitly selected tabs and uses the supplied session title', async () => {
 	const harness = createWorkerHarness(stateWithSession({closeOnSave: false}), [
 		{
@@ -2461,35 +2420,6 @@ test('allowed duplicates inherit notes and title, and UPDATE_TAB shares edits ac
 		latest.state.groups.map((group) => group.tabs[0].title),
 		['Fresh title', 'Fresh title'],
 	);
-});
-
-test('restoring a single tab in archive mode dims only that tab, and UPDATE_TAB can unarchive it', async () => {
-	const state = stateWithSession({restoreMode: 'archive'});
-	state.groups[0].tabs.push({
-		id: 'saved-tab-2',
-		title: 'Other',
-		url: 'https://other-saved.example/',
-		pinned: false,
-	});
-	const harness = createWorkerHarness(state);
-	const response = await harness.sendMessage({
-		type: 'RESTORE_TAB',
-		groupId: 'session-1',
-		tabId: 'saved-tab-1',
-	});
-	assert.equal(response.ok, true, response.error);
-	assert.equal(harness.state.groups[0].archived, false);
-	assert.deepEqual(
-		harness.state.groups[0].tabs.map((tab) => tab.archived),
-		[true, false],
-	);
-	await harness.sendMessage({
-		type: 'UPDATE_TAB',
-		groupId: 'session-1',
-		tabId: 'saved-tab-1',
-		fields: {archived: false},
-	});
-	assert.equal(harness.state.groups[0].tabs[0].archived, false);
 });
 
 test('link drag data carries uri-list, plain text, and html for tabs and sessions', async () => {
@@ -6506,39 +6436,6 @@ test('MOVE_TAB trashes a session emptied by the move, and Undo brings it back wi
 	assert.equal(plain.trashId, undefined);
 });
 
-test('REORDER_GROUP only swaps with sessions that are shown, never archived ones', async () => {
-	const state = reorderState();
-	state.groups = [
-		{...state.groups[0], id: 'A'},
-		{...state.groups[1], id: 'X', archived: true, archivedAt: 1},
-		{...state.groups[2], id: 'C'},
-	];
-	const harness = createWorkerHarness(state);
-	const down = await harness.sendMessage({
-		type: 'REORDER_GROUP',
-		groupId: 'A',
-		direction: 'down',
-		folderId: 'all',
-	});
-	assert.equal(down.ok, true, down.error);
-	assert.deepEqual(
-		harness.state.groups.map((group) => group.id),
-		['C', 'X', 'A'],
-		'A swapped with C, the next visible session',
-	);
-	// Inside the Archived view only archived sessions count.
-	await harness.sendMessage({
-		type: 'REORDER_GROUP',
-		groupId: 'X',
-		direction: 'up',
-		folderId: 'archived',
-	});
-	assert.deepEqual(
-		harness.state.groups.map((group) => group.id),
-		['C', 'X', 'A'],
-	);
-});
-
 test('a capture of more than 1000 tabs becomes numbered sessions and loses nothing', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({closeOnSave: false}),
@@ -7011,4 +6908,288 @@ test('UPDATE_GROUP stores one description and ignores a notes field', async () =
 	assert.equal(updated.ok, true, updated.error);
 	assert.equal(updated.group.description, 'Line one\nLine two');
 	assert.equal('notes' in updated.group, false);
+});
+
+// ---- Archive and lock were removed: older data is migrated on read.
+type LegacyState = StoredState & {groups: Array<Record<string, unknown>>};
+function legacyState(): LegacyState {
+	const state = stateWithSession({restoreMode: 'archive'}) as LegacyState;
+	state.schemaVersion = 7;
+	state.folders.push({id: 'work', name: 'Work', createdAt: 1});
+	const tab = (id: string, extra: Record<string, unknown> = {}) => ({
+		id,
+		title: id,
+		url: `https://${id}.example/`,
+		pinned: false,
+		originalIndex: 0,
+		...extra,
+	});
+	state.groups = [
+		{
+			id: 'kept',
+			name: 'In a folder',
+			folderId: 'work',
+			archived: true,
+			archivedAt: 5,
+			createdAt: 1,
+			updatedAt: 1,
+			tabs: [tab('a')],
+		},
+		{
+			id: 'loose',
+			name: 'No folder',
+			folderId: 'unfiled',
+			archived: true,
+			archivedAt: 6,
+			createdAt: 2,
+			updatedAt: 2,
+			tabs: [tab('b', {archived: true})],
+		},
+		{
+			id: 'loose-2',
+			name: 'Also no folder',
+			folderId: 'missing-folder',
+			archived: true,
+			createdAt: 3,
+			updatedAt: 3,
+			tabs: [tab('c')],
+		},
+		{
+			id: 'plain',
+			name: 'Locked',
+			folderId: 'unfiled',
+			locked: true,
+			createdAt: 4,
+			updatedAt: 4,
+			tabs: [tab('d', {archived: true})],
+		},
+	];
+	return state;
+}
+
+test('stored archived sessions and links become normal data, with an Archived folder for the unfiled ones', async () => {
+	const harness = createWorkerHarness(legacyState());
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(response.ok, true, response.error);
+	const {groups, folders, settings} = response;
+	const byId = new Map(groups.map((group) => [group.id, group]));
+	const archivedFolders = folders.filter(
+		(folder) => folder.name === 'Archived',
+	);
+	assert.equal(archivedFolders.length, 1, 'created once');
+	assert.equal(archivedFolders[0].icon, 'archive');
+	assert.equal(byId.get('kept')?.folderId, 'work', 'a folder is kept');
+	assert.equal(byId.get('loose')?.folderId, archivedFolders[0].id);
+	assert.equal(byId.get('loose-2')?.folderId, archivedFolders[0].id);
+	assert.equal(byId.get('plain')?.folderId, 'unfiled');
+	assert.equal(settings.restoreMode, 'keep', 'never remove');
+	for (const group of groups) {
+		assert.equal('archived' in group, false);
+		assert.equal('archivedAt' in group, false);
+		assert.equal('locked' in group, false);
+		for (const tab of group.tabs) {
+			assert.equal('archived' in tab, false);
+		}
+	}
+});
+
+test('the archive migration is persisted once and is idempotent', async () => {
+	const harness = createWorkerHarness(legacyState());
+	await harness.sendMessage({type: 'GET_STATE'});
+	// Any mutation runs the persisted migration.
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'plain',
+		fields: {name: 'Renamed'},
+	});
+	const first = structuredClone(harness.state);
+	assert.equal(
+		harness.state.folders.filter((folder) => folder.name === 'Archived').length,
+		1,
+	);
+	assert.doesNotMatch(JSON.stringify(first), /"archived(At)?":/);
+	assert.doesNotMatch(JSON.stringify(first), /"locked":/);
+	await harness.sendMessage({type: 'GET_STATE'});
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'plain',
+		fields: {name: 'Renamed'},
+	});
+	assert.deepEqual(
+		harness.state.folders.map((folder) => folder.id),
+		first.folders.map((folder) => folder.id),
+	);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.folderId),
+		first.groups.map((group) => group.folderId),
+	);
+});
+
+test('an existing folder named Archived is reused', async () => {
+	const state = legacyState();
+	state.folders.push({
+		id: 'mine',
+		name: 'Archived',
+		createdAt: 2,
+		icon: 'star',
+	});
+	const harness = createWorkerHarness(state);
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	const folders = response.folders.filter(
+		(folder) => folder.name === 'Archived',
+	);
+	assert.equal(folders.length, 1);
+	assert.equal(folders[0].id, 'mine');
+	assert.equal(
+		response.groups.find((group) => group.id === 'loose')?.folderId,
+		'mine',
+	);
+});
+
+test('without archived sessions no Archived folder is created', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(
+		response.folders.some((folder) => folder.name === 'Archived'),
+		false,
+	);
+});
+
+test('importing an older export with archived sessions applies the same migration', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const response = await harness.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: {
+			groups: [
+				{
+					name: 'Old export',
+					folderId: 'unfiled',
+					archived: true,
+					locked: true,
+					tabs: [{title: 'X', url: 'https://x.example/', archived: true}],
+				},
+			],
+		},
+		importOptions: {duplicateMode: 'allow'},
+	});
+	assert.equal(response.ok, true, response.error);
+	const folder = harness.state.folders.find(
+		(entry) => entry.name === 'Archived',
+	);
+	assert.ok(folder);
+	const imported = harness.state.groups.find(
+		(group) => group.name === 'Old export',
+	);
+	assert.equal(imported?.folderId, folder.id);
+	assert.doesNotMatch(JSON.stringify(imported), /"archived(At)?":/);
+	assert.doesNotMatch(JSON.stringify(imported), /"locked":/);
+});
+
+test('restoreMode archive is not accepted any more and falls back to keep', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const response = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {restoreMode: 'archive' as never},
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.settings.restoreMode, 'keep');
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+		restoreMode: 'archive' as never,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.equal(harness.state.groups[0].tabs.length, 1);
+});
+
+test('restore-and-remove removes tabs of any session (there is no lock)', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({restoreMode: 'remove'}),
+	);
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.removed, true);
+});
+
+test('UPDATE_TAB changes the address of only that saved link, not other copies of the old URL', async () => {
+	const state = stateWithSession();
+	state.groups.push({
+		...structuredClone(state.groups[0]),
+		id: 'session-2',
+		tabs: [{...structuredClone(state.groups[0].tabs[0]), id: 'copy-tab'}],
+	});
+	const harness = createWorkerHarness(state);
+	const response = await harness.sendMessage({
+		type: 'UPDATE_TAB',
+		groupId: 'session-1',
+		tabId: 'saved-tab-1',
+		fields: {url: ' https://changed.example/page ', title: 'New title'},
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.shared, 0);
+	assert.equal(
+		harness.state.groups[0].tabs[0].url,
+		'https://changed.example/page',
+	);
+	assert.equal(harness.state.groups[0].tabs[0].title, 'New title');
+	assert.equal(
+		harness.state.groups[1].tabs[0].url,
+		'https://saved.example/article',
+	);
+	assert.equal(harness.state.groups[1].tabs[0].title, 'Saved page');
+	const undone = await harness.sendMessage({
+		type: 'UPDATE_TAB',
+		groupId: 'session-1',
+		tabId: 'saved-tab-1',
+		fields: {url: 'https://saved.example/article', title: 'Saved page'},
+	});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(
+		harness.state.groups[0].tabs[0].url,
+		'https://saved.example/article',
+	);
+});
+
+test('UPDATE_TAB rejects addresses that are not http or https', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	for (const url of [
+		'javascript:alert(1)',
+		'chrome://settings',
+		'not a url',
+		'',
+	]) {
+		const response = await harness.sendMessage({
+			type: 'UPDATE_TAB',
+			groupId: 'session-1',
+			tabId: 'saved-tab-1',
+			fields: {url},
+		});
+		assert.equal(response.ok, false, url);
+	}
+
+	assert.equal(
+		harness.state.groups[0].tabs[0].url,
+		'https://saved.example/article',
+	);
+});
+
+test('UPDATE_TAB title and notes still apply to every saved copy of the same URL', async () => {
+	const state = stateWithSession();
+	state.groups.push({
+		...structuredClone(state.groups[0]),
+		id: 'session-2',
+		tabs: [{...structuredClone(state.groups[0].tabs[0]), id: 'copy-tab'}],
+	});
+	const harness = createWorkerHarness(state);
+	const response = await harness.sendMessage({
+		type: 'UPDATE_TAB',
+		groupId: 'session-1',
+		tabId: 'saved-tab-1',
+		fields: {title: 'Shared'},
+	});
+	assert.equal(response.shared, 1);
+	assert.equal(harness.state.groups[1].tabs[0].title, 'Shared');
 });

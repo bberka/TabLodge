@@ -1205,7 +1205,7 @@ function NewTab() {
 			},
 			{
 				id: 'open-trash',
-				title: 'Trash',
+				title: 'Trash bin',
 				keywords: ['deleted', 'undo', 'restore', 'bin', 'recover'],
 				icon: Trash2,
 				run: () => emitRecoveryEvent({type: 'trash'}),

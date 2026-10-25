@@ -12,7 +12,7 @@ export type ActionMode =
 	| 'current-tab-to-group';
 export type RestoreTarget =
 	'current-window' | 'new-window-unless-only-tab' | 'always-new-window';
-export type RestoreMode = 'keep' | 'remove' | 'archive';
+export type RestoreMode = 'keep' | 'remove';
 export type SessionLayout = 'list' | 'grid';
 export type SessionSort = 'newest' | 'oldest' | 'name' | 'tabs' | 'custom';
 export type CopyFormat =
@@ -195,7 +195,6 @@ export type SavedTab = {
 	title: string;
 	url: string;
 	notes: string;
-	archived: boolean;
 	pinned: boolean;
 	nativeGroup: NativeGroup | null;
 	savedAt: number;
@@ -214,9 +213,6 @@ export type Session = {
 	name: string;
 	folderId: string;
 	description: string;
-	archived: boolean;
-	archivedAt: number | null;
-	locked: boolean;
 	createdAt: number;
 	updatedAt: number;
 	sourceWindowName: string;
@@ -391,9 +387,9 @@ export type RestoreOptions = {
 };
 
 export type SessionFields = Partial<
-	Pick<Session, 'name' | 'description' | 'archived' | 'locked' | 'folderId'>
+	Pick<Session, 'name' | 'description' | 'folderId'>
 >;
-export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'archived'>>;
+export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'url'>>;
 export type BookmarkFields = Partial<
 	Pick<Bookmark, 'title' | 'url' | 'columnId'>
 >;
@@ -435,7 +431,6 @@ export type TabLodgeMessages = {
 	RESTORE_GROUP: {groupId: string; forceRemove?: boolean} & RestoreOptions;
 	DELETE_GROUP: {groupId: string};
 	UPDATE_GROUP: {groupId: string; fields: SessionFields};
-	REORDER_GROUP: {groupId: string; direction: 'up' | 'down'; folderId?: string};
 	/**
 	Sets the custom session order: `order` lists the visible session ids in their new order and they take
 	the slots those sessions held in the stored order (others stay put). Switches the sort to "custom".
@@ -600,7 +595,6 @@ export type RestoreResult = {
 	failed: number;
 	failures: RestoreFailure[];
 	removed: boolean;
-	archived: boolean;
 	splits: number;
 	splitsSeparated: number;
 	/**
@@ -646,7 +640,6 @@ export type TabLodgeResponses = {
 	*/
 	DELETE_GROUP: {trashId?: string};
 	UPDATE_GROUP: {group: Session};
-	REORDER_GROUP: {};
 	SET_GROUP_ORDER: {};
 	CREATE_FOLDER: {folder: Folder};
 	UPDATE_FOLDER: {folder: Folder};
