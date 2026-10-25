@@ -466,6 +466,11 @@ export type TabLodgeMessages = {
 		targetTabId?: string | null;
 		position?: InsertPosition;
 		copy?: boolean;
+		/**
+		Undo of a move that emptied its source: the trash entry holding that session. `toGroupId` is the
+		deleted source session; the link comes back with it.
+		*/
+		restoreTrashId?: string;
 	};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
@@ -625,7 +630,12 @@ export type TabLodgeResponses = {
 	DELETE_FOLDER: {trashId?: string};
 	MOVE_GROUP: {};
 	DELETE_TAB: {trashId?: string};
-	MOVE_TAB: {};
+	MOVE_TAB: {
+		/**
+		Set when the move emptied the source session: it is in the trash under this id.
+		*/
+		trashId?: string;
+	};
 	UPDATE_TAB: {shared: number};
 	ADD_BOOKMARK: {bookmark: Bookmark};
 	ADD_BOOKMARKS: {count: number; bookmarks: Bookmark[]};
@@ -649,7 +659,14 @@ export type TabLodgeResponses = {
 	IMPORT_BOOKMARKS_FILE: ImportResult;
 	IMPORT_BROWSER_BOOKMARKS: BrowserBookmarkImportResult;
 	ADD_EXCLUDED_ORIGIN: {origin: string; settings: Settings};
-	ADD_EXCLUDED_ORIGINS: {added: number; settings: Settings};
+	ADD_EXCLUDED_ORIGINS: {
+		added: number;
+		/**
+		Valid new sites left out because the list is full.
+		*/
+		notAdded: number;
+		settings: Settings;
+	};
 	REMOVE_EXCLUDED_ORIGIN: {settings: Settings};
 	UPDATE_SETTINGS: {settings: Settings};
 	RESET_SETTINGS: {settings: Settings};
