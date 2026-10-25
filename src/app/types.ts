@@ -129,7 +129,7 @@ export type Settings = {
 	copyFormat: CopyFormat;
 	dashboardBehavior: 'switch' | 'move';
 	/**
-	Shown addresses drop https:// and www. (default on); display only.
+	Shown addresses drop https://, http:// and www. (default on); display only.
 	*/
 	simplifyUrls: boolean;
 	/**
