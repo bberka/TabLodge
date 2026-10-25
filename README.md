@@ -17,21 +17,27 @@ TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, 
 
 ## Features
 
-- **Sessions that remember how you worked.** Save a window, selected tabs, a tab group, everything left or right of a tab, or all windows. Restores bring back native tab groups (title, color, collapsed state), pinned tabs (opt-in), and split-view pairs side by side on Chromium 155+. New sessions are named by date and first tab, or by your own template, in Settings.
-- **Bookmark board on the new tab.** Columns of bookmarks with search, drag-and-drop reordering, and drop-a-link-to-save. Session links can be dragged straight into a column.
-- **Organize sessions.** Folders, descriptions, search and sorting, multi-select, and quick moves between folders.
+- **Sessions that remember how you worked.** Save a window, selected tabs, a tab group, everything left or right of a tab, or all windows. Restores bring back native tab groups (title, color, collapsed state), pinned tabs (opt-in), and split-view pairs side by side on Chromium 155+. New sessions are named by date and first tab, by your own template, or by a name you type each time, and page titles are saved without notification counts like “(1)”.
+- **Bookmark board on the new tab.** Columns of bookmarks with icons, search, drag-and-drop reordering, and drop-a-link-to-save. Paste one link or a whole list on the page to add bookmarks, or drag session links straight into a column.
+- **Organize sessions.** Folders with icons, descriptions, search and sorting, multi-select, dragging sessions onto folders, and merging one session into another without duplicates.
 - **Flexible restores.** Restore into the current or a new window; keep or remove the saved tabs afterward; skip duplicates; optionally unload background tabs. Ctrl/Cmd- and Shift-click give one-off overrides.
 - **Import and export.** Session and bookmark JSON backups, a full-backup ZIP (everything, including settings) you can import back, a shareable HTML page of selected sessions, and a one-time import of your browser bookmarks.
-- **Crash recovery, backups and undo.** Rolling snapshots of your open windows offer to restore your last session after an unclean exit; optional automatic backups (with an optional copy in Downloads) and safety backups before risky actions; a trash bin with retention, and an Undo toast instead of a confirmation for deletes, erasing data, restoring backups, and imports. All local. See [docs/architecture.md](docs/architecture.md#recovery-snapshots-backups-and-trash).
+- **Crash recovery, backups and undo.** Rolling snapshots of your open windows offer to restore your last session after an unclean exit; optional automatic backups (with an optional copy in Downloads) and safety backups before risky actions; a trash bin with retention for deleted sessions, links, bookmarks and columns; and an Undo toast instead of a confirmation on the dashboard (Settings still asks before erasing data or restoring a backup). All local. See [docs/architecture.md](docs/architecture.md#recovery-snapshots-backups-and-trash).
 - **Everywhere you need it.** A toolbar popup with a quick chooser, a side panel (bookmarks, sessions and open tabs), keyboard shortcuts, and page and toolbar context menus.
 - **Local-only and private.** No host permissions, no content scripts, no network requests, no analytics. See [PRIVACY.md](PRIVACY.md).
 - **Light, dark, and system themes** with no flash on load.
 
 ## Screenshots
 
-<!-- TODO: add screenshots, for example docs/screenshots/newtab.png, popup.png, sidepanel.png, settings.png. -->
+<p align="center">
+  <img src="site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with saved sessions above a board of bookmark columns" width="800">
+</p>
+<p align="center">
+  <img src="site/src/assets/palette-dark.webp" alt="The search palette finding sessions, saved tabs and bookmarks" width="420">
+  <img src="site/src/assets/sidepanel-light.webp" alt="The TabLodge side panel listing bookmark columns" width="210">
+</p>
 
-_Screenshots coming soon._
+More on the website: <https://tablodge.bbay.dev>.
 
 ## Install
 
@@ -150,16 +156,13 @@ TabLodge has no servers, accounts, analytics, or telemetry, and makes no network
 
 ## Roadmap
 
-[docs/tab-management-research.md](docs/tab-management-research.md) compares TabLodge with OneTab, Session Buddy, Tab Session Manager, Toby, Workona, BroTab, and the browsers' built-in features. The biggest fear in this category is losing saved tabs, so the top recommendations focus on safety first:
+[docs/tab-management-research.md](docs/tab-management-research.md) compares TabLodge with OneTab, Session Buddy, Tab Session Manager, Toby, Workona, BroTab, and the browsers' built-in features. Already built from that list: automatic and safety backups, a full-backup ZIP, a trash bin with Undo, crash-recovery snapshots, the search palette, and import from the common tab managers. Still open:
 
-- **Automatic local backups** with rotating snapshots, a backup before every migration or bulk action, and a "Restore from backup" screen.
-- **Trash bin and undo** for every destructive action (sessions, tabs, bookmarks, columns), with an Undo toast and 30-day retention. (Done: actions on the dashboard run immediately and offer Undo; the Settings page asks first for erase, restore defaults, clearing snapshots, emptying the trash bin, and restoring or deleting a backup.)
-- **Auto-saved window history** so crashes and accidentally closed windows can be recovered without relying on the browser.
 - **A live open-tabs manager:** list every window and tab, then filter, activate, close, move, group, pin, mute, discard, or deduplicate.
-- **Keyboard-first search and a command palette** (Ctrl/Cmd+K) across open tabs, sessions, bookmarks, and recently closed tabs.
-- **Portable import and export:** OneTab text, Session Buddy, Tab Session Manager, Toby, and bookmark HTML in; Markdown, CSV, URL lists, and bookmark HTML out.
-- **Scale and robustness:** per-session storage instead of one large value, resumable migrations, virtualized lists, and testing with 10,000+ saved tabs.
-- **Session editing** (replace or append the current window, merge and split, tags, an "already saved" badge) and **tab hygiene that never loses data** (optional auto-discard and auto-archive of idle tabs, with undo).
+- **Recently closed tabs** in the search palette.
+- **Scale and robustness:** per-session storage instead of one large value, resumable migrations, and testing with 10,000+ saved tabs.
+- **Session editing:** replace or append the current window, split a session, tags, and an "already saved" badge.
+- **Tab hygiene that never loses data:** optional auto-discard of idle tabs, with undo.
 
 The research file has the full priority list, MV3 implementation sketches, and the evidence behind each item.
 
