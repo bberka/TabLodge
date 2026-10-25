@@ -25,6 +25,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 	ScrollArea,
+	SegmentedControl,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
 import {send, type ShowStatus} from './common';
@@ -36,6 +37,7 @@ import {
 	whenText,
 	bytesText,
 	offerUndo,
+	type TrashFilter,
 } from './recovery-core';
 import type {
 	ActionSuccess,
@@ -341,6 +343,12 @@ export function SnapshotsDialog({
 	);
 }
 
+/**
+Which side of TabLodge a deleted item belongs to, for the Sessions / Bookmarks filter.
+*/
+const trashSide = (item: TrashSummary): Exclude<TrashFilter, 'all'> =>
+	item.kind === 'bookmark' || item.kind === 'column' ? 'bookmarks' : 'sessions';
+
 const KIND_LABELS: Record<TrashKind, string> = {
 	session: 'Session',
 	tabs: 'Saved links',
@@ -358,11 +366,16 @@ export function TrashDialog({
 	showStatus,
 	onChanged,
 	confirmDestructive = false,
+	initialFilter = 'all',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	showStatus: ShowStatus;
 	onChanged?: () => unknown;
+	/**
+	Show only session or bookmark items at first (the user can switch).
+	*/
+	initialFilter?: TrashFilter;
 	/**
 	Ask before emptying the trash bin (the Settings page does; other pages use Undo alone).
 	*/
@@ -372,6 +385,12 @@ export function TrashDialog({
 	const [items, setItems] = useState<TrashSummary[] | null>(null);
 	const [error, setError] = useState('');
 	const [busy, setBusy] = useState(false);
+	const [filter, setFilter] = useState<TrashFilter>(initialFilter);
+	useEffect(() => {
+		if (open) {
+			setFilter(initialFilter);
+		}
+	}, [open, initialFilter]);
 	const load = useCallback(async () => {
 		try {
 			const result = await send('GET_TRASH');
@@ -446,6 +465,11 @@ export function TrashDialog({
 			}
 		});
 
+	const shown =
+		items &&
+		(filter === 'all'
+			? items
+			: items.filter((item) => trashSide(item) === filter));
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent size="lg">
@@ -462,12 +486,33 @@ export function TrashDialog({
 							{error}
 						</p>
 					)}
-					{items && items.length === 0 && (
+					{items && items.length > 0 && (
+						<SegmentedControl
+							fullWidth
+							label="Show"
+							value={filter}
+							options={[
+								{value: 'all', label: `All ${items.length}`},
+								{
+									value: 'sessions',
+									label: `Sessions ${items.filter((item) => trashSide(item) === 'sessions').length}`,
+								},
+								{
+									value: 'bookmarks',
+									label: `Bookmarks ${items.filter((item) => trashSide(item) === 'bookmarks').length}`,
+								},
+							]}
+							onValueChange={setFilter}
+						/>
+					)}
+					{shown && shown.length === 0 && (
 						<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-							The trash bin is empty.
+							{items?.length
+								? `No deleted ${filter === 'bookmarks' ? 'bookmarks or columns' : 'sessions, links or folders'}.`
+								: 'The trash bin is empty.'}
 						</p>
 					)}
-					{items && items.length > 0 && (
+					{shown && shown.length > 0 && (
 						// Only the list scrolls, so the title and the buttons stay in view however long it gets.
 						<ScrollArea
 							type="auto"
@@ -475,7 +520,7 @@ export function TrashDialog({
 							viewportClassName="max-h-[min(32rem,calc(100dvh-19rem))] px-2"
 						>
 							<ul className="space-y-2 py-0.5" aria-label="Deleted items">
-								{items.map((item) => (
+								{shown.map((item) => (
 									<li
 										key={item.id}
 										className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5"
@@ -534,7 +579,9 @@ export function TrashDialog({
 						}
 					>
 						<Trash2 className="h-4 w-4" />
-						Empty trash bin
+						{filter === 'all' || !items?.length
+							? 'Empty trash bin'
+							: `Empty all ${items.length}`}
 					</Button>
 					<Button onClick={() => onOpenChange(false)}>Done</Button>
 				</DialogFooter>
@@ -934,4 +981,5 @@ export {
 	useRecoveryEvents,
 	whenText,
 	type RecoveryEventDetail,
+	type TrashFilter,
 } from './recovery-core';

@@ -36,7 +36,14 @@ export function bytesText(bytes: number): string {
 Window event that asks the page to open the snapshots or trash dialog (sent by menus and palette commands).
 */
 export const RECOVERY_EVENT = 'tablodge:recovery';
-export type RecoveryEventDetail = {type: 'snapshots' | 'trash'};
+export type TrashFilter = 'all' | 'sessions' | 'bookmarks';
+export type RecoveryEventDetail = {
+	type: 'snapshots' | 'trash';
+	/**
+	The trash bin opens showing only this side (from the Sessions or Bookmarks menu).
+	*/
+	filter?: TrashFilter;
+};
 export function emitRecoveryEvent(detail: RecoveryEventDetail) {
 	globalThis.dispatchEvent(new CustomEvent(RECOVERY_EVENT, {detail}));
 }
@@ -45,11 +52,17 @@ export function emitRecoveryEvent(detail: RecoveryEventDetail) {
 Opens the dialog a menu or palette command asked for.
 */
 export function useRecoveryEvents(
-	onOpen: (type: RecoveryEventDetail['type']) => void,
+	onOpen: (
+		type: RecoveryEventDetail['type'],
+		detail: RecoveryEventDetail,
+	) => void,
 ) {
 	useEffect(() => {
-		const handler = (event: Event) =>
-			onOpen((event as CustomEvent<RecoveryEventDetail>).detail.type);
+		const handler = (event: Event) => {
+			const {detail} = event as CustomEvent<RecoveryEventDetail>;
+			onOpen(detail.type, detail);
+		};
+
 		globalThis.addEventListener(RECOVERY_EVENT, handler);
 		return () => globalThis.removeEventListener(RECOVERY_EVENT, handler);
 	}, [onOpen]);

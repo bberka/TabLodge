@@ -98,6 +98,7 @@ import {
 	offerTrashUndo,
 	offerUndo,
 	useRecoveryEvents,
+	type TrashFilter,
 } from './recovery-core';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
 import {ColumnLabel, IconLabel} from './icon-label';
@@ -281,9 +282,15 @@ function NewTab() {
 	const [finderOpen, setFinderOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
-	useRecoveryEvents((type) =>
-		type === 'snapshots' ? setSnapshotsOpen(true) : setTrashOpen(true),
-	);
+	const [trashFilter, setTrashFilter] = useState<TrashFilter>('all');
+	useRecoveryEvents((type, detail) => {
+		if (type === 'snapshots') {
+			setSnapshotsOpen(true);
+		} else {
+			setTrashFilter(detail.filter ?? 'all');
+			setTrashOpen(true);
+		}
+	});
 	const autoOpenedFinderRef = useRef(false);
 	const {setTheme} = useTheme();
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
@@ -1490,6 +1497,14 @@ function NewTab() {
 								disabled: bookmarks.length === 0,
 								onSelect: () => shareBookmarks(),
 							},
+							{type: 'separator'},
+							{
+								id: 'trash',
+								label: 'Trash bin',
+								icon: Trash2,
+								onSelect: () =>
+									emitRecoveryEvent({type: 'trash', filter: 'bookmarks'}),
+							},
 						]}
 					/>
 				</div>
@@ -1655,6 +1670,7 @@ function NewTab() {
 			/>
 			<TrashDialog
 				open={trashOpen}
+				initialFilter={trashFilter}
 				showStatus={showStatus}
 				onOpenChange={setTrashOpen}
 				onChanged={reload}
