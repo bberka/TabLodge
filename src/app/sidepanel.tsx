@@ -598,9 +598,9 @@ function SidePanel() {
 			className="flex h-screen min-w-0 flex-col overflow-hidden text-foreground"
 		>
 			<div className="shrink-0 px-3 pt-3">
-				<header className="mb-3 flex items-center justify-between gap-2">
-					<Brand compact />
-					<Button asChild variant="ghost" size="sm">
+				<header className="mb-3 flex min-w-0 items-center justify-between gap-2">
+					<Brand />
+					<Button asChild variant="ghost" size="sm" className="shrink-0">
 						<a href="options.html" target="_blank" rel="noopener noreferrer">
 							<Settings2 className="h-4 w-4" />
 							Settings

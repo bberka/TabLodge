@@ -305,13 +305,13 @@ export function Brand({
 	return (
 		<a
 			href={link}
-			className="inline-flex items-center gap-2.5 rounded-lg text-sm font-extrabold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			className="inline-flex min-w-0 items-center gap-2.5 rounded-lg text-sm font-extrabold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			aria-label={label}
 		>
-			<span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary">
+			<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
 				<TabLodgeMark className="h-[22px] w-[22px]" />
 			</span>
-			{!compact && <span>{PROJECT.name}</span>}
+			{!compact && <span className="truncate">{PROJECT.name}</span>}
 		</a>
 	);
 }
