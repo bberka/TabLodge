@@ -1,5 +1,7 @@
 import {memo, useState} from 'react';
 import {displayUrl} from './url-display';
+import {InsecureMarkFor} from './insecure-mark';
+import type {Settings} from './types';
 
 export const faviconUrl = (url: string) =>
 	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
@@ -71,14 +73,16 @@ export const Favicon = memo(
 /**
 The link a dialog is about, drawn like a list row: icon, title, and the full address (wrapped, never cut).
 */
+const NO_SETTINGS: Partial<Settings> = {};
+
 export function LinkSummary({
 	title,
 	url,
-	simplify = true,
+	settings = NO_SETTINGS,
 }: {
 	title?: string;
 	url: string;
-	simplify?: boolean;
+	settings?: Partial<Settings>;
 }) {
 	return (
 		<span className="flex min-w-0 items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2 text-left">
@@ -96,7 +100,8 @@ export function LinkSummary({
 					className="block text-[11px] leading-4 text-muted-foreground [overflow-wrap:anywhere]"
 					title={url}
 				>
-					{displayUrl(url, simplify)}
+					<InsecureMarkFor url={url} settings={settings} />
+					{displayUrl(url, settings.simplifyUrls !== false)}
 				</small>
 			</span>
 		</span>

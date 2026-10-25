@@ -215,6 +215,8 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
 	simplifyUrls: true,
+	markInsecureLinks: true,
+	markLocalLinks: false,
 	groupTitleAction: 'toggle',
 	contextMenusEnabled: true,
 	contextMenuLinksEnabled: true,
@@ -1006,6 +1008,8 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 					: 'markdown',
 		dashboardBehavior: raw.dashboardBehavior === 'move' ? 'move' : 'switch',
 		simplifyUrls: raw.simplifyUrls !== false,
+		markInsecureLinks: raw.markInsecureLinks !== false,
+		markLocalLinks: raw.markLocalLinks === true,
 		urlDisplayMode: isOneOf(
 			['domain', 'full', 'url-only', 'none'],
 			raw.urlDisplayMode,

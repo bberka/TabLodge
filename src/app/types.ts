@@ -132,6 +132,14 @@ export type Settings = {
 	Shown addresses drop https:// and www. (default on); display only.
 	*/
 	simplifyUrls: boolean;
+	/**
+	An amber open lock next to http addresses (default on); display only.
+	*/
+	markInsecureLinks: boolean;
+	/**
+	Also mark localhost and home-network http addresses (default off).
+	*/
+	markLocalLinks: boolean;
 	urlDisplayMode: 'domain' | 'full' | 'url-only' | 'none';
 	groupTitleAction: 'toggle' | 'edit' | 'restore';
 	// ---- Right-click menus (context-menu agent) ----

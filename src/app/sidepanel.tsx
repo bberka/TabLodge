@@ -53,6 +53,7 @@ import {
 } from './common';
 import {Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
+import {InsecureMarkFor} from './insecure-mark';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
@@ -441,6 +442,7 @@ function SidePanel() {
 								{title || hostname(url)}
 							</strong>
 							<small className="block truncate text-[11px] text-muted-foreground">
+								<InsecureMarkFor url={url} settings={settings ?? {}} />
 								{hostname(url)}
 							</small>
 						</span>
@@ -598,6 +600,7 @@ function SidePanel() {
 							{title}
 						</strong>
 						<small className="block truncate text-[11px] text-muted-foreground">
+							<InsecureMarkFor url={url} settings={settings ?? {}} />
 							{hostname(url)}
 						</small>
 					</span>
