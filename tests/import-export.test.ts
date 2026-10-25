@@ -78,7 +78,6 @@ const session = (
 	name,
 	folderId: 'unfiled',
 	description: '',
-	notes: '',
 	archived: false,
 	archivedAt: null,
 	locked: false,
@@ -111,7 +110,7 @@ const groups: Session[] = [
 				'https://a.example/sum?x=1,2',
 			),
 		],
-		{folderId: 'f-work', notes: 'Session notes'},
+		{folderId: 'f-work', description: 'Session notes'},
 	),
 	session('g2', 'Second [session]', [
 		tab('t4', 'Pipes | in | title', 'https://b.example/path_(with)_parens'),
@@ -898,4 +897,32 @@ test('every export format re-imports with the same links', () => {
 			format,
 		);
 	}
+});
+
+test('an old session export with both description and notes imports as one description', () => {
+	const old = JSON.stringify({
+		format: 'tablodge-sessions',
+		version: 3,
+		groups: [
+			{
+				name: 'Old',
+				description: 'Short',
+				notes: 'Longer note',
+				tabs: [{url: 'https://a.example/', title: 'A', notes: 'tab note'}],
+			},
+			{
+				name: 'Same',
+				description: 'Equal',
+				notes: 'Equal',
+				tabs: [{url: 'https://b.example/', title: 'B'}],
+			},
+		],
+	});
+	const parsed = parseImportFile(old, 'old.json');
+	assert.equal(parsed.sessions[0].description, 'Short\n\nLonger note');
+	assert.equal(parsed.sessions[0].notes, undefined);
+	assert.equal(parsed.sessions[0].links[0].notes, 'tab note');
+	assert.equal(parsed.sessions[1].description, 'Equal');
+	// The backup goes to the service worker as is; it does the same merge there.
+	assert.equal(sessionImportPayload(parsed), parsed.native?.data);
 });

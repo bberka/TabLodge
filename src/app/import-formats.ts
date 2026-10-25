@@ -61,6 +61,9 @@ export type ImportGroup = {
 	name: string;
 	folder?: string;
 	description?: string;
+	/**
+	Older exports kept a second text field; it is merged into `description`.
+	*/
 	notes?: string;
 	createdAt?: number;
 	links: ImportLink[];
@@ -246,12 +249,16 @@ function group(
 		created.folder = cleanTitle(extra.folder, 60);
 	}
 
-	if (extra.description) {
-		created.description = cleanTitle(extra.description);
+	// Sessions have one description field; an old description plus notes become one text.
+	const description = [extra.description, extra.notes]
+		.map((value) => cleanNotes(value))
+		.filter(Boolean);
+	if (description.length === 2 && description[0] === description[1]) {
+		description.pop();
 	}
 
-	if (extra.notes) {
-		created.notes = cleanNotes(extra.notes);
+	if (description.length > 0) {
+		created.description = description.join('\n\n');
 	}
 
 	if (extra.createdAt) {
@@ -1483,7 +1490,6 @@ export function sessionImportPayload(
 			name: entry.name || fallbackName,
 			...(folderId && {folderId}),
 			...(entry.description && {description: entry.description}),
-			...(entry.notes && {notes: entry.notes}),
 			...(entry.createdAt && {createdAt: entry.createdAt}),
 			tabs: entry.links.map((link) => ({
 				url: link.url,

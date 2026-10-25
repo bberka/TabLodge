@@ -576,6 +576,28 @@ function normalizeNotes(value: unknown) {
 		: '';
 }
 
+// Sessions used to have a short description plus separate notes; one field now holds both.
+// Room for the old 500-character description, a blank line, and the old 10,000-character notes.
+const SESSION_TEXT_MAX = 10_502;
+
+function normalizeSessionText(value: unknown) {
+	return typeof value === 'string'
+		? value.replaceAll('\u0000', '').slice(0, SESSION_TEXT_MAX)
+		: '';
+}
+
+function mergeSessionText(description: unknown, notes: unknown) {
+	const first = typeof description === 'string' ? description.trim() : '';
+	const second = typeof notes === 'string' ? notes.trim() : '';
+	if (first && second && first !== second) {
+		return normalizeSessionText(
+			`${first.slice(0, 500)}\n\n${second.slice(0, 10_000)}`,
+		);
+	}
+
+	return normalizeSessionText(first || second);
+}
+
 function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 	if (!isRecord(raw)) {
 		return null;
@@ -783,8 +805,7 @@ function normalizeGroup(
 		id: cleanText(raw.id, makeId(), 100),
 		name: cleanText(raw.name ?? raw.title, 'Saved session', 120),
 		folderId: cleanText(raw.folderId, DEFAULT_FOLDER_ID, 100),
-		description: cleanText(raw.description, '', 500),
-		notes: normalizeNotes(raw.notes),
+		description: mergeSessionText(raw.description, raw.notes),
 		archived: Boolean(raw.archived),
 		archivedAt: raw.archived
 			? Number.isFinite(Number(raw.archivedAt)) && Number(raw.archivedAt) > 0
@@ -1437,7 +1458,6 @@ async function captureTabs(
 						? folderId
 						: DEFAULT_FOLDER_ID,
 					description: '',
-					notes: '',
 					archived: false,
 					archivedAt: null,
 					locked: false,
@@ -2482,13 +2502,7 @@ async function updateGroup(
 		}
 
 		if (typeof fields.description === 'string') {
-			group.description = fields.description
-				.replaceAll('\u0000', '')
-				.slice(0, 500);
-		}
-
-		if (typeof fields.notes === 'string') {
-			group.notes = normalizeNotes(fields.notes);
+			group.description = normalizeSessionText(fields.description);
 		}
 
 		if (typeof fields.archived === 'boolean') {
@@ -8116,7 +8130,6 @@ async function saveLinkForLater(
 				name: SAVED_LINKS_SESSION,
 				folderId: DEFAULT_FOLDER_ID,
 				description: '',
-				notes: '',
 				archived: false,
 				archivedAt: null,
 				locked: false,
