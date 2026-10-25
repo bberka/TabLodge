@@ -78,6 +78,7 @@ import {useStableCallbacks} from '../shared/use-stable';
 import {
 	EmptyState,
 	LoadingLine,
+	armLodgeClose,
 	StatusLine,
 	TabLodgeMark,
 	send,
@@ -820,8 +821,14 @@ export function SessionManager({
 			}
 		} catch {
 			showStatus('Some tabs could not be opened.', true);
+			if (opened.length > 0) {
+				armLodgeClose();
+			}
+
 			return;
 		}
+
+		armLodgeClose();
 
 		// A handful of tabs is routine; a bigger batch gets an Undo that closes them again.
 		if (tabs.length > 10) {
@@ -2765,8 +2772,14 @@ const SavedTab = memo(
 										? `${tab.title.trim()} (${tab.url})`
 										: undefined
 								}
+								onAuxClick={(event) => {
+									if (event.button === 1) {
+										armLodgeClose();
+									}
+								}}
 								onClick={(event) => {
 									if (event.ctrlKey || event.metaKey || event.shiftKey) {
+										armLodgeClose();
 										return;
 									}
 

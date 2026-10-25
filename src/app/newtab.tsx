@@ -68,6 +68,7 @@ import {useStableCallbacks} from '../shared/use-stable';
 import {ACTION_ICONS} from './action-icons';
 import {
 	AppHeader,
+	armLodgeClose,
 	EmptyState,
 	StatusLine,
 	saveWindowLabel,
@@ -1146,8 +1147,14 @@ function NewTab() {
 			}
 		} catch {
 			showStatus('Some bookmarks could not be opened.', true);
+			if (opened.length > 0) {
+				armLodgeClose();
+			}
+
 			return;
 		}
+
+		armLodgeClose();
 
 		// A handful of tabs is routine; a bigger batch gets an Undo that closes them again.
 		if (urls.length > 10) {
@@ -2752,6 +2759,11 @@ const BookmarkCard = memo(
 									: undefined
 							}
 							className="flex min-w-0 flex-1 items-center gap-2.5"
+							onAuxClick={(event) => {
+								if (event.button === 1) {
+									armLodgeClose();
+								}
+							}}
 							onClick={(event) => {
 								if (
 									event.button !== 0 ||
@@ -2760,6 +2772,10 @@ const BookmarkCard = memo(
 									event.shiftKey ||
 									event.altKey
 								) {
+									if (event.button === 0 || event.button === 1) {
+										armLodgeClose();
+									}
+
 									return;
 								}
 
