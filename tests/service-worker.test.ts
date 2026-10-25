@@ -3764,6 +3764,8 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(s.autoFocusSearchOnNewTab, false);
 	assert.equal(s.urlDisplayMode, 'full');
 	assert.equal(s.simplifyUrls, true);
+	assert.equal(s.markInsecureLinks, true);
+	assert.equal(s.markLocalLinks, false);
 
 	const junk = createWorkerHarness(
 		stateWithSession({
@@ -3776,6 +3778,8 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 			autoFocusSearchOnNewTab: true,
 			urlDisplayMode: 'domain',
 			simplifyUrls: false,
+			markInsecureLinks: false,
+			markLocalLinks: 'yes',
 		}),
 	);
 	const j = (await junk.sendMessage({type: 'GET_STATE'})).settings;
@@ -3788,11 +3792,15 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(j.autoFocusSearchOnNewTab, true);
 	assert.equal(j.urlDisplayMode, 'domain');
 	assert.equal(j.simplifyUrls, false);
+	assert.equal(j.markInsecureLinks, false);
+	assert.equal(j.markLocalLinks, false, 'only a real true enables it');
 	const reset = await junk.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.keepLodgePinned, false);
 	assert.equal(reset.settings.autoFocusSearchOnNewTab, false);
 	assert.equal(reset.settings.urlDisplayMode, 'full');
 	assert.equal(reset.settings.simplifyUrls, true);
+	assert.equal(reset.settings.markInsecureLinks, true);
+	assert.equal(reset.settings.markLocalLinks, false);
 });
 
 test('url-only display mode and the bookmark menu click action are accepted', async () => {

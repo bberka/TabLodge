@@ -101,6 +101,7 @@ import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {displayUrl} from './url-display';
+import {InsecureMarkFor} from './insecure-mark';
 import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
 import {
@@ -287,7 +288,18 @@ function NewTab() {
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const urlMode = settings.urlDisplayMode ?? 'full';
-	const simplifyUrls = settings.simplifyUrls !== false;
+	const urlSettings = useMemo<UrlSettings>(
+		() => ({
+			simplifyUrls: settings.simplifyUrls !== false,
+			markInsecureLinks: settings.markInsecureLinks !== false,
+			markLocalLinks: settings.markLocalLinks === true,
+		}),
+		[
+			settings.simplifyUrls,
+			settings.markInsecureLinks,
+			settings.markLocalLinks,
+		],
+	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
 	const quickAction: BookmarkQuickAction | null =
 		settings.showBookmarkQuickActions === true
@@ -1437,7 +1449,7 @@ function NewTab() {
 							}
 							urlMode={urlMode}
 							clickOpensMenu={clickOpensMenu}
-							simplifyUrls={simplifyUrls}
+							urlSettings={urlSettings}
 							quickAction={quickAction}
 							actions={boardActions}
 						/>
@@ -1497,7 +1509,7 @@ function NewTab() {
 													dropActive={Boolean(drop)}
 													urlMode={urlMode}
 													clickOpensMenu={clickOpensMenu}
-													simplifyUrls={simplifyUrls}
+													urlSettings={urlSettings}
 													quickAction={quickAction}
 													onAction={boardActions.bookmark}
 												/>
@@ -1612,7 +1624,7 @@ function NewTab() {
 						<DialogBody>
 							{editedBookmark && (
 								<LinkSummary
-									simplify={settings.simplifyUrls !== false}
+									settings={settings}
 									title={editedBookmark.title}
 									url={editedBookmark.url}
 								/>
@@ -1773,6 +1785,10 @@ function NewTab() {
 														{link.title}
 													</span>
 													<span className="block truncate text-xs text-muted-foreground">
+														<InsecureMarkFor
+															url={link.url}
+															settings={settings}
+														/>
 														{displayUrl(
 															link.url,
 															settings.simplifyUrls !== false,
@@ -1891,7 +1907,7 @@ function NewTab() {
 						<DialogBody>
 							{moveBookmark && (
 								<LinkSummary
-									simplify={settings.simplifyUrls !== false}
+									settings={settings}
 									title={moveBookmark.title}
 									url={moveBookmark.url}
 								/>
@@ -2249,7 +2265,7 @@ type BookmarkColumnProps = {
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickAction: BookmarkQuickAction | null;
 	clickOpensMenu: boolean;
-	simplifyUrls: boolean;
+	urlSettings: UrlSettings;
 	dropIndicator: DropIndicator | null;
 	actions: BoardActions;
 };
@@ -2267,7 +2283,7 @@ const BookmarkColumn = memo(
 		urlMode,
 		quickAction,
 		clickOpensMenu,
-		simplifyUrls,
+		urlSettings,
 		dropIndicator,
 		actions,
 	}: BookmarkColumnProps) => {
@@ -2410,7 +2426,7 @@ const BookmarkColumn = memo(
 												dropActive={targeted}
 												urlMode={urlMode}
 												clickOpensMenu={clickOpensMenu}
-												simplifyUrls={simplifyUrls}
+												urlSettings={urlSettings}
 												quickAction={quickAction}
 												onAction={actions.bookmark}
 											/>
@@ -2454,10 +2470,20 @@ type BookmarkCardProps = {
 	Clicking the card opens its action menu instead of the link.
 	*/
 	clickOpensMenu?: boolean;
-	simplifyUrls?: boolean;
+	urlSettings?: UrlSettings;
 	dropBefore?: boolean;
 	dropAfter?: boolean;
 	dropActive?: boolean;
+};
+
+type UrlSettings = Pick<
+	Settings,
+	'simplifyUrls' | 'markInsecureLinks' | 'markLocalLinks'
+>;
+const DEFAULT_URL_SETTINGS: UrlSettings = {
+	simplifyUrls: true,
+	markInsecureLinks: true,
+	markLocalLinks: false,
 };
 
 const BookmarkCard = memo(
@@ -2467,7 +2493,7 @@ const BookmarkCard = memo(
 		urlMode,
 		quickAction,
 		clickOpensMenu = false,
-		simplifyUrls = true,
+		urlSettings = DEFAULT_URL_SETTINGS,
 		dropBefore = false,
 		dropAfter = false,
 		dropActive = false,
@@ -2530,7 +2556,7 @@ const BookmarkCard = memo(
 		const showUrl = urlMode !== 'none';
 		const urlOnly = urlMode === 'url-only';
 		const cardName = urlOnly
-			? displayUrl(bookmark.url, simplifyUrls)
+			? displayUrl(bookmark.url, urlSettings.simplifyUrls)
 			: bookmark.title || domainName(bookmark.url);
 		return (
 			<ActionContextMenu actions={actions}>
@@ -2585,13 +2611,23 @@ const BookmarkCard = memo(
 							/>
 							<span className="min-w-0 flex-1">
 								<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
+									{(urlOnly || !showUrl) && (
+										<InsecureMarkFor
+											url={bookmark.url}
+											settings={urlSettings}
+										/>
+									)}
 									{cardName}
 								</strong>
 								{showUrl && !urlOnly && (
 									<small className="block truncate text-[11px] leading-4 text-muted-foreground">
+										<InsecureMarkFor
+											url={bookmark.url}
+											settings={urlSettings}
+										/>
 										{urlMode === 'domain'
 											? domainName(bookmark.url)
-											: displayUrl(bookmark.url, simplifyUrls)}
+											: displayUrl(bookmark.url, urlSettings.simplifyUrls)}
 									</small>
 								)}
 							</span>

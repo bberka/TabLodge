@@ -640,7 +640,7 @@ function Popup() {
 								<LinkSummary
 									title={bookmarkTab.title}
 									url={bookmarkTab.url}
-									simplify={state?.settings?.simplifyUrls !== false}
+									settings={state?.settings}
 								/>
 							)}
 							<div className="space-y-1.5">

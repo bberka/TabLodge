@@ -115,6 +115,7 @@ import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {displayUrl as simplifiedUrl} from './url-display';
+import {InsecureMarkFor} from './insecure-mark';
 import {FINDER_EVENT, type FinderEventDetail} from './finder';
 import {
 	emitRecoveryEvent,
@@ -1697,7 +1698,7 @@ export function SessionManager({
 						<DialogBody>
 							{editingTab && (
 								<LinkSummary
-									simplify={settings.simplifyUrls !== false}
+									settings={settings}
 									title={editingTab.tab.title}
 									url={editingTab.tab.url}
 								/>
@@ -1782,7 +1783,7 @@ export function SessionManager({
 								<LinkSummary
 									title={bookmarkTab.title}
 									url={bookmarkTab.url}
-									simplify={settings.simplifyUrls !== false}
+									settings={settings}
 								/>
 							)}
 							<div className="space-y-1.5">
@@ -2774,6 +2775,9 @@ const SavedTab = memo(
 									onOpen();
 								}}
 							>
+								{(urlOnly || compact) && (
+									<InsecureMarkFor url={tab.url} settings={settings} />
+								)}
 								{rowText}
 							</a>
 							{splitBadge && (
@@ -2800,6 +2804,7 @@ const SavedTab = memo(
 								className="mt-0.5 break-all text-[11px] leading-4 text-muted-foreground"
 								title={tab.url}
 							>
+								<InsecureMarkFor url={tab.url} settings={settings} />
 								{displayUrl}
 							</p>
 						)}

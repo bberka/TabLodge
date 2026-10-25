@@ -297,6 +297,19 @@ const settingsGroups: Array<{
 				help: 'Hide https:// and www. in shown addresses.',
 				type: 'switch',
 			},
+			{
+				name: 'markInsecureLinks',
+				label: 'Mark insecure (http) links',
+				help: 'Shows an amber lock next to http addresses.',
+				type: 'switch',
+			},
+			{
+				name: 'markLocalLinks',
+				label: 'Also mark local addresses',
+				help: 'Mark localhost and home-network addresses too.',
+				type: 'switch',
+				requires: 'markInsecureLinks',
+			},
 		],
 	},
 	{
