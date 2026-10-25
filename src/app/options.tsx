@@ -78,6 +78,7 @@ import {
 	matchesQuery,
 	rankByQuery,
 	scoreQuery,
+	sortByQuery,
 	searchTerms,
 } from './fuzzy';
 import {PROJECT} from './project';
@@ -914,9 +915,11 @@ function Options() {
 		items: readonly T[],
 		textOf: (item: T) => string[],
 	): T[] =>
-		!searching || titleHit(title)
-			? [...items]
-			: rankByQuery(query, items, textOf);
+		searching
+			? titleHit(title)
+				? sortByQuery(query, items, textOf)
+				: rankByQuery(query, items, textOf)
+			: [...items];
 	const systemOn = (system: System) =>
 		settings[system === 'sessions' ? 'sessionsEnabled' : 'bookmarksEnabled'] !==
 		false;
@@ -933,9 +936,9 @@ function Options() {
 	const collapsedGroups = searching
 		? []
 		: settingsGroups.filter((group) => group.system && !systemOn(group.system));
-	const groupScore = (fields: SettingField[]) =>
+	const groupScore = (title: string, fields: SettingField[]) =>
 		Math.max(
-			0,
+			scoreQuery(query, [title]),
 			...fields.map((field) => scoreQuery(query, fieldSearchText(field))),
 		);
 	const visibleGroups = settingsGroups
@@ -951,8 +954,9 @@ function Options() {
 		.filter((entry) => entry.fields.length)
 		.map((entry, index) => ({...entry, index}))
 		.toSorted((a, b) =>
-			searching && !titleHit(a.group.title) && !titleHit(b.group.title)
-				? groupScore(b.fields) - groupScore(a.fields) || a.index - b.index
+			searching
+				? groupScore(b.group.title, b.fields) -
+						groupScore(a.group.title, a.fields) || a.index - b.index
 				: a.index - b.index,
 		);
 

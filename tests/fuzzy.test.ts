@@ -33,10 +33,15 @@ test('a blank query matches everything and every word must match', () => {
 
 test('words match only at the start of a word', () => {
 	assert.equal(matchesQuery('book', ['Bookmarks']), true);
-	assert.equal(matchesQuery('mark', ['Bookmarks']), false);
+	assert.equal(
+		matchesQuery('mark', ['Bookmarks']),
+		true,
+		'inside a word counts, ranked lower',
+	);
+	assert.equal(matchesQuery('ok', ['Bookmarks']), false);
 	assert.equal(matchesQuery('up', ['Load a backup']), false);
 	assert.equal(matchesQuery('click', ['Right-click menus']), true);
-	assert.equal(matchesAnyTerm('mark', 'Bookmarks'), false);
+	assert.equal(matchesAnyTerm('ok', 'Bookmarks'), false);
 });
 
 test('words may match across different texts, and missing texts are ignored', () => {
@@ -147,7 +152,8 @@ test('results rank exact words above prefixes above fuzzy matches', () => {
 			['Open restored tabs', 'Close tabs', 'Bookmarks'],
 			(item) => [item],
 		),
-		['Open restored tabs', 'Close tabs'],
+		['Close tabs', 'Open restored tabs'],
+		'equal matches: shorter label first',
 	);
 	assert.deepEqual(
 		rankByQuery('book', ['Bookmark', 'Book'], (item) => [item]),
@@ -170,5 +176,112 @@ test('fuzzy matches highlight only the matched characters', () => {
 		{text: 'ookmark ', match: false},
 		{text: 'd', match: true},
 		{text: 'ock', match: false},
+	]);
+});
+
+const rank = (query: string, items: string[]) =>
+	rankByQuery(query, items, (item) => [item]);
+
+test('match types rank in a strict order', () => {
+	const ordered = [
+		'Side', // Whole text
+		'Show side', // Whole word
+		'Sidebar', // Word prefix
+		'Inside', // Inside a word
+		'Show it directly everywhere', // Initials
+		'Sunrise dock', // Letters in order in one word
+		'Hide', // Typo
+	];
+	assert.deepEqual(rank('side', ordered.toReversed()), [
+		'Side',
+		'Show side',
+		'Sidebar',
+		'Inside',
+		'Show it directly everywhere',
+		'Hide',
+	]);
+	const scores = [
+		scoreQuery('side', ['Side']),
+		scoreQuery('side', ['Show side']),
+		scoreQuery('side', ['Sidebar']),
+		scoreQuery('side', ['Inside']),
+		scoreQuery('sde', ['Show dock extra']),
+		scoreQuery('sdbr', ['Sidebar']),
+		scoreQuery('side', ['Hide']),
+	];
+	assert.ok(scores.every((score) => score > 0));
+	for (let i = 1; i < scores.length; i++) {
+		assert.ok(scores[i - 1] > scores[i], `rank ${i}`);
+	}
+});
+
+test('a typo never outranks a real match, even in a weaker field', () => {
+	assert.ok(
+		scoreQuery('side', ['Hide', 'x', 'x', 'x', 'x', 'Inside']) >
+			scoreQuery('side', ['Hide']),
+	);
+	assert.deepEqual(rank('side', ['Hide addresses', 'Panel on the side']), [
+		'Panel on the side',
+		'Hide addresses',
+	]);
+	assert.equal(matchesQuery('sid', ['Hide']), false, 'short: no typos');
+	assert.equal(matchesQuery('hid', ['Side']), false);
+	assert.equal(matchesQuery('bokmarkz', ['Bookmarks']), true);
+	assert.equal(
+		matchesQuery('bokmakz', ['Bookmarks']),
+		false,
+		'two edits need 7+',
+	);
+});
+
+test('a label hit beats a help hit beats an option or keyword hit', () => {
+	const label = scoreQuery('dock', ['Dock', 'x', 'x']);
+	const help = scoreQuery('dock', ['x', 'Dock', 'x']);
+	const other = scoreQuery('dock', ['x', 'x', 'Dock']);
+	assert.ok(label > help);
+	assert.ok(help > other);
+	assert.ok(other > 0);
+	assert.ok(
+		scoreQuery('dock', ['x', 'x', 'Dock']) >
+			scoreQuery('dock', ['Docking', 'x']) - 100,
+	);
+});
+
+test('wide letter gaps rank below tight ones', () => {
+	assert.ok(scoreQuery('bkm', ['Bookmark']) < scoreQuery('boo', ['Bookmark']));
+	assert.ok(scoreQuery('bmk', ['Bmark']) > scoreQuery('bmk', ['Bookmark']));
+});
+
+test('multi-word queries sum word scores and reward order', () => {
+	assert.equal(scoreQuery('right zebra', ['Right-click menus']), 0);
+	assert.ok(
+		scoreQuery('right click', ['Right-click menus']) >
+			scoreQuery('click right', ['Right-click menus']),
+	);
+	assert.ok(
+		scoreQuery('right click', ['Right click']) >
+			scoreQuery('right click', ['Right and then click']),
+	);
+});
+
+test('ties go to the shorter label, then the original order', () => {
+	assert.deepEqual(rank('tab', ['Tab list', 'Tab', 'Tab one', 'Tab two']), [
+		'Tab',
+		'Tab one',
+		'Tab two',
+		'Tab list',
+	]);
+	assert.deepEqual(rank('tab', ['Tab aa', 'Tab bb', 'Tab cc']), [
+		'Tab aa',
+		'Tab bb',
+		'Tab cc',
+	]);
+});
+
+test('highlighting marks only the best kind of match', () => {
+	assert.deepEqual(highlightSegments('Inside sidebar', 'side'), [
+		{text: 'Inside ', match: false},
+		{text: 'side', match: true},
+		{text: 'bar', match: false},
 	]);
 });

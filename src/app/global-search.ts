@@ -307,7 +307,7 @@ export function searchFinder(
 
 	const scored = new Map<
 		FinderKind,
-		Array<{item: FinderItem; score: number}>
+		Array<{item: FinderItem; score: number; position: number}>
 	>();
 	for (const [position, item] of index.entries()) {
 		const score = scoreQuery(trimmed, item.texts);
@@ -315,12 +315,8 @@ export function searchFinder(
 			continue;
 		}
 
-		const title = item.title.toLocaleLowerCase();
-		const needle = trimmed.toLocaleLowerCase();
-		// Whole-title and title-prefix matches beat the same words buried in a longer title or in the address.
-		const bonus = title === needle ? 20 : title.startsWith(needle) ? 10 : 0;
 		const list = scored.get(item.kind) ?? [];
-		list.push({item, score: score + bonus - position / 1_000_000});
+		list.push({item, score, position});
 		scored.set(item.kind, list);
 	}
 
@@ -330,7 +326,12 @@ export function searchFinder(
 			return [];
 		}
 
-		hits.sort((a, b) => b.score - a.score);
+		hits.sort(
+			(a, b) =>
+				b.score - a.score ||
+				a.item.title.length - b.item.title.length ||
+				a.position - b.position,
+		);
 		return [
 			{
 				kind,
