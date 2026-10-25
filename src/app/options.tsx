@@ -71,6 +71,8 @@ import {
 	highlightSegments,
 	matchesAnyTerm,
 	matchesQuery,
+	rankByQuery,
+	scoreQuery,
 	searchTerms,
 } from './settings-search';
 import {PROJECT} from './project';
@@ -79,11 +81,14 @@ import {PROJECT} from './project';
 type SettingKey<V> = {
 	[K in keyof Settings]-?: Settings[K] extends V ? K : never;
 }[keyof Settings];
+type System = 'sessions' | 'bookmarks';
 // `requires`: a switch that must be on for this row to apply; the row is inset and disabled while it is off.
+// `systems`: the row is hidden (and not searchable) while any listed system is turned off.
 type SettingField = {
 	label: string;
 	help: string;
 	requires?: SettingKey<boolean>;
+	systems?: System[];
 } & (
 	| {name: SettingKey<boolean>; type: 'switch'}
 	| {name: SettingKey<string>; type: 'select'; options: Array<[string, string]>}
@@ -115,6 +120,7 @@ const settingsGroups: Array<{
 	title: string;
 	icon: IconComponent;
 	description?: string;
+	system?: System;
 	fields: SettingField[];
 }> = [
 	{
@@ -205,6 +211,7 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'When saving',
+		system: 'sessions',
 		icon: Settings2,
 		fields: [
 			{
@@ -316,6 +323,7 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'When restoring',
+		system: 'sessions',
 		icon: RotateCcw,
 		fields: [
 			{
@@ -383,6 +391,7 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'Session display',
+		system: 'sessions',
 		icon: Settings2,
 		fields: [
 			{
@@ -409,10 +418,7 @@ const settingsGroups: Array<{
 				label: 'When clicking a saved session link',
 				help: 'Choose what happens when you click a link inside a saved session.',
 				type: 'select',
-				options: [
-					['full', 'Full address'],
-					['none', 'Hide addresses'],
-				],
+				options: LINK_ACTIONS,
 			},
 			{
 				name: 'groupTitleAction',
@@ -441,6 +447,7 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'Bookmark board',
+		system: 'bookmarks',
 		icon: Bookmark,
 		fields: [
 			{
@@ -900,7 +907,12 @@ function Options() {
 	): T[] =>
 		!searching || titleHit(title)
 			? [...items]
-			: items.filter((item) => matchesQuery(query, textOf(item)));
+			: rankByQuery(query, items, textOf);
+	const systemOn = (system: System) =>
+		settings[system === 'sessions' ? 'sessionsEnabled' : 'bookmarksEnabled'] !==
+		false;
+	const fieldShown = (field: SettingField) =>
+		(field.systems ?? []).every((system) => systemOn(system));
 	const hl = (text: string) => <Highlight text={text} query={query} />;
 
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
@@ -908,12 +920,32 @@ function Options() {
 		row.label,
 		row.help,
 	]);
+	// A group whose system is off collapses to one line (and is skipped by search); single rows can hide too.
+	const collapsedGroups = searching
+		? []
+		: settingsGroups.filter((group) => group.system && !systemOn(group.system));
+	const groupScore = (fields: SettingField[]) =>
+		Math.max(
+			0,
+			...fields.map((field) => scoreQuery(query, fieldSearchText(field))),
+		);
 	const visibleGroups = settingsGroups
+		.filter((group) => !group.system || systemOn(group.system))
 		.map((group) => ({
 			group,
-			fields: pick(group.title, group.fields, fieldSearchText),
+			fields: pick(
+				group.title,
+				group.fields.filter((field) => fieldShown(field)),
+				fieldSearchText,
+			),
 		}))
-		.filter((entry) => entry.fields.length);
+		.filter((entry) => entry.fields.length)
+		.map((entry, index) => ({...entry, index}))
+		.toSorted((a, b) =>
+			searching && !titleHit(a.group.title) && !titleHit(b.group.title)
+				? groupScore(b.fields) - groupScore(a.fields) || a.index - b.index
+				: a.index - b.index,
+		);
 
 	const dataRows: DataRowDef[] = [
 		{
@@ -1028,12 +1060,14 @@ function Options() {
 		row.help,
 		...row.words,
 	]);
-	const showExcluded = matchesQuery(query, [
-		EXCLUDED.title,
-		EXCLUDED.description,
-		...EXCLUDED.words,
-		...excluded,
-	]);
+	const showExcluded =
+		(!searching || settings.sessionsEnabled !== false) &&
+		matchesQuery(query, [
+			EXCLUDED.title,
+			EXCLUDED.description,
+			...EXCLUDED.words,
+			...excluded,
+		]);
 	const showDefaults = matchesQuery(query, [
 		DEFAULTS.title,
 		DEFAULTS.help,
@@ -1043,6 +1077,7 @@ function Options() {
 		Number(showAppearance) +
 		systemRows.length +
 		visibleGroups.reduce((sum, entry) => sum + entry.fields.length, 0) +
+		collapsedGroups.length +
 		visibleData.length +
 		Number(showExcluded) +
 		Number(showDefaults);
@@ -1303,27 +1338,53 @@ function Options() {
 																.filter((label) => matchesAnyTerm(query, label))
 														: undefined
 												}
+												inset={Boolean(field.requires)}
+												highlight={query}
 											>
-												<SelectTrigger
-													className="w-full sm:w-64"
-													aria-label={field.label}
-												>
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{field.options.map(([value, label]) => (
-														<SelectItem key={value} value={value}>
-															{label}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-										)}
-									</SettingRow>
-								))}
-							</div>
-						</SectionCard>
-					))}
+												{field.type === 'switch' ? (
+													<Switch
+														checked={
+															field.name === 'stretchBookmarkColumns'
+																? settings.stretchBookmarkColumns !== false
+																: Boolean(settings[field.name])
+														}
+														aria-label={field.label}
+														disabled={
+															field.requires !== undefined &&
+															settings[field.requires] === false
+														}
+														onCheckedChange={(value) =>
+															updateSetting(field.name, value)
+														}
+													/>
+												) : (
+													<Select
+														value={settings[field.name] || field.options[0][0]}
+														onValueChange={(value) =>
+															updateSetting(field.name, value)
+														}
+													>
+														<SelectTrigger
+															className="w-full sm:w-64"
+															aria-label={field.label}
+														>
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent>
+															{field.options.map(([value, label]) => (
+																<SelectItem key={value} value={value}>
+																	{label}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+												)}
+											</SettingRow>
+										))}
+									</div>
+								</SectionCard>
+							),
+						)}
 
 					{visibleData.length > 0 && (
 						<SectionCard
@@ -1368,9 +1429,18 @@ function Options() {
 							}
 						>
 							{settings.sessionsEnabled === false ? (
-								<p className="text-sm text-muted-foreground">
-									Sessions are disabled. Existing exclusions are retained.
-								</p>
+								<div className="flex flex-wrap items-center justify-between gap-3">
+									<p className="text-sm text-muted-foreground">
+										Sessions are turned off.
+									</p>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => updateSetting('sessionsEnabled', true)}
+									>
+										Turn on
+									</Button>
+								</div>
 							) : (
 								<>
 									{excluded.length > 0 ? (
@@ -1446,6 +1516,7 @@ function Options() {
 				onConfirm={confirmErase}
 			/>
 			<BackupDialog
+				state={state}
 				data={backupData}
 				open={Boolean(backupData)}
 				showStatus={showStatus}
