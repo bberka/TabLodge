@@ -16,7 +16,6 @@ import {
 	BookmarkPlus,
 	Download,
 	ExternalLink,
-	GripVertical,
 	MoreHorizontal,
 	Pencil,
 	Plus,
@@ -70,6 +69,8 @@ import {
 } from './common';
 import {SessionManager} from './dashboard';
 import {BackupDialog, ImportDialog, useShareDialog} from './data-transfer';
+import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
+import {IconPickerField} from './icon-picker';
 import {openLink} from './link-target';
 import type {ExportData} from './export-formats';
 import {
@@ -124,6 +125,7 @@ type BookmarkDraft = {
 type ColumnDraft = {
 	id: string | null;
 	name: string;
+	icon?: string;
 };
 type MoveDraft = Bookmark & {targetColumnId: string};
 /**
@@ -365,7 +367,11 @@ function NewTab() {
 	}
 
 	function openColumnEditor(column: BookmarkColumnData | null = null) {
-		setColumnEdit({id: column?.id || null, name: column?.name || ''});
+		setColumnEdit({
+			id: column?.id || null,
+			name: column?.name || '',
+			icon: column?.icon,
+		});
 		setDialog('column');
 	}
 
@@ -427,8 +433,12 @@ function NewTab() {
 			? await send('UPDATE_BOOKMARK_COLUMN', {
 					columnId: columnEdit.id,
 					name: columnEdit.name,
+					icon: columnEdit.icon ?? '',
 				})
-			: await send('CREATE_BOOKMARK_COLUMN', {name: columnEdit.name});
+			: await send('CREATE_BOOKMARK_COLUMN', {
+					name: columnEdit.name,
+					icon: columnEdit.icon,
+				});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save that column.', true);
 			return;
@@ -1386,25 +1396,35 @@ function NewTab() {
 					<form onSubmit={saveColumn}>
 						<DialogHeader>
 							<DialogTitle>
-								{columnEdit?.id ? 'Rename column' : 'Add bookmark column'}
+								{columnEdit?.id ? 'Edit column' : 'Add column'}
 							</DialogTitle>
 							<DialogDescription>
-								Choose a name for this bookmark column.
+								Choose a name and icon for this bookmark column.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							<div className="space-y-1.5">
-								<Label htmlFor="column-name">Column name</Label>
-								<Input
-									required
-									autoFocus
-									id="column-name"
-									maxLength={60}
-									value={columnEdit?.name || ''}
-									onChange={(e) =>
-										setColumnEdit(
-											(old) => old && {...old, name: e.target.value},
-										)
+							<div className="flex items-end gap-3">
+								<div className="min-w-0 flex-1 space-y-1.5">
+									<Label htmlFor="column-name">Column name</Label>
+									<Input
+										required
+										autoFocus
+										id="column-name"
+										maxLength={60}
+										value={columnEdit?.name || ''}
+										onChange={(e) =>
+											setColumnEdit(
+												(old) => old && {...old, name: e.target.value},
+											)
+										}
+									/>
+								</div>
+								<IconPickerField
+									id="column-icon"
+									value={columnEdit?.icon}
+									defaultIcon={DEFAULT_COLUMN_ICON}
+									onChange={(icon) =>
+										setColumnEdit((old) => old && {...old, icon})
 									}
 								/>
 							</div>
@@ -1418,7 +1438,7 @@ function NewTab() {
 								Cancel
 							</Button>
 							<Button type="submit">
-								{columnEdit?.id ? 'Save name' : 'Add column'}
+								{columnEdit?.id ? 'Save changes' : 'Add column'}
 							</Button>
 						</DialogFooter>
 					</form>
@@ -1770,7 +1790,7 @@ type BookmarkColumnProps = {
 	onEdit: () => void;
 	onDelete: () => void;
 	onMove: (offset: number) => void;
-	onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+	onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
 	dropIndicator: DropIndicator | null;
 	onDropOver: (indicator: DropIndicator | null) => void;
 	onDrop: (event: DragEvent<HTMLElement>) => Promise<void>;
@@ -1831,7 +1851,7 @@ function BookmarkColumn({
 			onSelect: onShare,
 		},
 		{type: 'separator'},
-		{id: 'rename', label: 'Rename column', icon: Pencil, onSelect: onEdit},
+		{id: 'edit', label: 'Edit column', icon: Pencil, onSelect: onEdit},
 		{
 			id: 'move-left',
 			label: 'Move column left',
@@ -1855,6 +1875,7 @@ function BookmarkColumn({
 			onSelect: onDelete,
 		},
 	];
+	const ColumnIcon = getIcon(column.icon, DEFAULT_COLUMN_ICON).component;
 	const bookmarkDrop =
 		dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
 	const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
@@ -1885,19 +1906,19 @@ function BookmarkColumn({
 				/>
 			)}
 			<ActionContextMenu actions={columnActions}>
-				<header className="flex shrink-0 items-center gap-1.5 border-b border-border px-2 py-2">
-					<IconTooltip label={`Drag to reorder ${column.name} column`}>
-						<button
-							draggable
-							type="button"
-							data-drag-column={column.id}
-							aria-label={`Drag to reorder ${column.name} column`}
-							className="grid h-8 w-7 touch-none cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted active:cursor-grabbing"
-							onPointerDown={onPointerDown}
-						>
-							<GripVertical className="h-4 w-4" />
-						</button>
-					</IconTooltip>
+				<header
+					draggable
+					data-drag-column={column.id}
+					title="Drag to reorder"
+					className="flex shrink-0 cursor-grab touch-none items-center gap-2 border-b border-border px-3 py-2 active:cursor-grabbing"
+					onPointerDown={(event) => {
+						// Buttons in the header (its menu) keep their own taps and clicks.
+						if (!(event.target as Element).closest('button')) {
+							onPointerDown(event);
+						}
+					}}
+				>
+					<ColumnIcon className="size-4 shrink-0 text-muted-foreground" />
 					<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
 						{column.name}
 					</h3>
