@@ -51,12 +51,16 @@ import type {
 	TrashSummary,
 } from './types';
 
-const REASON_LABELS: Record<SnapshotReason, string> = {
-	interval: 'Regular snapshot',
-	startup: 'At startup',
-	crash: 'Before an unclean exit',
-	exit: 'When the browser was closed',
-	manual: 'Saved by you',
+// Short badge text, with the full explanation shown on hover.
+const REASON_LABELS: Record<
+	SnapshotReason,
+	[label: string, explanation: string]
+> = {
+	interval: ['Regular', 'Taken regularly while you browse'],
+	startup: ['Startup', 'Taken when the browser started'],
+	crash: ['Crash', 'Your windows just before the browser closed unexpectedly'],
+	exit: ['Exit', 'Your windows when the browser was closed normally'],
+	manual: ['Manual', 'Saved by you'],
 };
 
 function SnapshotRow({
@@ -80,8 +84,11 @@ function SnapshotRow({
 				<div className="min-w-0">
 					<p className="flex flex-wrap items-center gap-2 text-sm font-medium">
 						{whenText(snapshot.at)}
-						<Badge variant={snapshot.reason === 'crash' ? 'accent' : 'default'}>
-							{REASON_LABELS[snapshot.reason]}
+						<Badge
+							variant={snapshot.reason === 'crash' ? 'accent' : 'default'}
+							title={REASON_LABELS[snapshot.reason][1]}
+						>
+							{REASON_LABELS[snapshot.reason][0]}
 						</Badge>
 					</p>
 					<p className="text-xs text-muted-foreground">
