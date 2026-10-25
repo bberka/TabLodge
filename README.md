@@ -22,6 +22,7 @@ TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, 
 - **Organize sessions.** Folders, notes and descriptions, search and sorting, multi-select, archive, and lock (a locked session keeps its tabs no matter how you restore it).
 - **Flexible restores.** Restore into the current or a new window; keep, remove, or archive the saved tabs afterward; skip duplicates; optionally unload background tabs. Ctrl/Cmd-, Alt-, and Shift-click give one-off overrides.
 - **Import and export.** Session and bookmark JSON backups, a shareable HTML page of selected sessions, and a one-time import of your browser bookmarks.
+- **Crash recovery, backups and undo.** Rolling snapshots of your open windows offer to restore your last session after an unclean exit; optional automatic backups (with an optional copy in Downloads) and safety backups before risky actions; a trash with retention and Undo for deletes. All local. See [docs/architecture.md](docs/architecture.md#recovery-snapshots-backups-and-trash).
 - **Everywhere you need it.** A toolbar popup with a quick chooser, a side panel (bookmarks, sessions and open tabs), keyboard shortcuts, and page and toolbar context menus.
 - **Local-only and private.** No host permissions, no content scripts, no network requests, no analytics. See [PRIVACY.md](PRIVACY.md).
 - **Light, dark, and system themes** with no flash on load.
@@ -137,6 +138,9 @@ TabLodge requests no website (host) permissions and injects nothing into web pag
 | `clipboardWrite`   | Copy bookmark URLs and session links in the format you choose.                                                        |
 | `sidePanel`        | Show the optional searchable bookmark list in the browser's Side Panel.                                               |
 | `search`           | Run a normal web search with your default search engine when you pick "Search the web" in TabLodge's finder.          |
+| `alarms`           | Schedule crash-recovery snapshots, automatic backups, and the daily trash cleanup while the browser runs.             |
+
+One **optional** permission, `downloads`, is requested only if you turn on _Settings › Recovery & backups › Also save a copy to Downloads_. It lets TabLodge write backup JSON files to `Downloads/TabLodge/`; turning the option off gives the permission back.
 
 The manifest also overrides the new-tab page with TabLodge's local page (you can switch its session area off in Settings) and declares the keyboard shortcuts.
 
