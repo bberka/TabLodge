@@ -177,6 +177,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	bookmarkClickAction: 'current',
 	sessionLinkClickAction: 'new',
 	showBookmarkQuickActions: false,
+	bookmarkQuickAction: 'open-new',
 	sessionsOnTop: false,
 	keepLodgePinned: false,
 	copyFormat: 'markdown',
@@ -852,6 +853,12 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.sessionLinkClickAction
 			: 'new',
 		showBookmarkQuickActions: raw.showBookmarkQuickActions === true,
+		bookmarkQuickAction: isOneOf(
+			['open-current', 'open-new', 'copy', 'edit', 'delete'],
+			raw.bookmarkQuickAction,
+		)
+			? raw.bookmarkQuickAction
+			: 'open-new',
 		sessionsOnTop: raw.sessionsOnTop === true,
 		keepLodgePinned: raw.keepLodgePinned === true,
 		copyFormat: isOneOf(

@@ -33,6 +33,9 @@ export type SaveSplitTabs = 'both' | 'focused';
 /**
 What clicking a link does: nothing, open in the current tab, or open in a new tab.
 */
+export type BookmarkQuickAction =
+	'open-current' | 'open-new' | 'copy' | 'edit' | 'delete';
+
 export type LinkClickAction = 'none' | 'current' | 'new';
 
 export type Settings = {
@@ -92,9 +95,13 @@ export type Settings = {
 	*/
 	sessionLinkClickAction: LinkClickAction;
 	/**
-	Show a small quick-actions button next to the bookmark menu button.
+	Show one configurable quick-action button next to the bookmark menu button.
 	*/
 	showBookmarkQuickActions: boolean;
+	/**
+	What the quick-action button on a bookmark does (default: open in a new tab).
+	*/
+	bookmarkQuickAction: BookmarkQuickAction;
 	/**
 	Show the sessions section above the bookmark board (only when both are enabled).
 	*/

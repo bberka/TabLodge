@@ -104,6 +104,7 @@ import type {
 	InsertPosition,
 	LinkEntry,
 	Settings,
+	BookmarkQuickAction,
 } from './types';
 import {PROJECT} from './project';
 
@@ -187,6 +188,27 @@ Stable fallbacks so memoized values and effects do not see a new array on every 
 const NO_COLUMNS: BookmarkColumnData[] = [];
 const NO_BOOKMARKS: Bookmark[] = [];
 const UNFILED_COLUMN = {id: 'bookmark-unfiled', name: 'Unfiled'};
+/**
+What the single quick-action button on a bookmark row does, per the "Quick action" setting.
+*/
+const QUICK_ACTIONS: Record<
+	BookmarkQuickAction,
+	{label: string; icon: typeof ExternalLink; action: BookmarkAction}
+> = {
+	'open-current': {
+		label: 'Open in this tab',
+		icon: ExternalLink,
+		action: 'open',
+	},
+	'open-new': {
+		label: 'Open in new tab',
+		icon: SquareArrowOutUpRight,
+		action: 'open-new',
+	},
+	copy: {label: 'Copy link', icon: Copy, action: 'copy'},
+	edit: {label: 'Edit', icon: Pencil, action: 'edit'},
+	delete: {label: 'Delete', icon: Trash2, action: 'delete'},
+};
 /**
 Column-picker value for "New column…" in the bookmark dialog.
 */
@@ -771,6 +793,7 @@ function NewTab() {
 		if (action === 'copy') {
 			try {
 				await navigator.clipboard.writeText(bookmark.url);
+				showStatus('Link copied.', false, {toast: true});
 			} catch {
 				showStatus(
 					'The URL could not be copied. Check clipboard permissions and try again.',
@@ -1257,7 +1280,7 @@ function NewTab() {
 									: null
 							}
 							urlMode={urlMode}
-							quickActions={quickActions}
+							quickAction={quickAction}
 							onAction={bookmarkAction}
 							onShare={() => shareBookmarks(column)}
 							onAdd={() => openBookmarkEditor(null, column.id)}
@@ -1341,7 +1364,7 @@ function NewTab() {
 													dropAfter={drop?.position === 'after'}
 													dropActive={Boolean(drop)}
 													urlMode={urlMode}
-													quickActions={quickActions}
+													quickAction={quickAction}
 													onAction={bookmarkAction}
 												/>
 											);
@@ -1993,7 +2016,7 @@ type BookmarkColumnProps = {
 	allBookmarks: Bookmark[];
 	onAction: OnBookmarkAction;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
-	quickActions: boolean;
+	quickAction: BookmarkQuickAction | null;
 	onShare: () => void;
 	onAdd: () => void;
 	onOpenAll: () => void;
@@ -2016,7 +2039,7 @@ function BookmarkColumn({
 	allBookmarks,
 	onAction,
 	urlMode,
-	quickActions,
+	quickAction,
 	onShare,
 	onAdd,
 	onOpenAll,
@@ -2195,7 +2218,7 @@ type BookmarkCardProps = {
 	count: number;
 	onAction: OnBookmarkAction;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
-	quickActions: boolean;
+	quickAction: BookmarkQuickAction | null;
 	dropBefore?: boolean;
 	dropAfter?: boolean;
 	dropActive?: boolean;
@@ -2237,7 +2260,7 @@ function BookmarkCard({
 	count,
 	onAction,
 	urlMode,
-	quickActions,
+	quickAction,
 	dropBefore = false,
 	dropAfter = false,
 	dropActive = false,
@@ -2307,14 +2330,9 @@ function BookmarkCard({
 		{type: 'separator'},
 		remove,
 	];
-	const quick: MenuAction[] = [
-		open,
-		openNew,
-		copy,
-		edit,
-		{type: 'separator'},
-		remove,
-	];
+	const QuickIcon = quickAction
+		? QUICK_ACTIONS[quickAction].icon
+		: ExternalLink;
 	const showUrl = urlMode !== 'none';
 	return (
 		<ActionContextMenu actions={actions}>
@@ -2367,21 +2385,18 @@ function BookmarkCard({
 							)}
 						</span>
 					</a>
-					{quickActions && (
-						<ActionDropdownMenu
-							actions={quick}
-							trigger={
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
-									aria-label={`Quick actions for ${bookmark.title}`}
-									title="Quick actions"
-								>
-									<Zap className="h-4 w-4" />
-								</Button>
-							}
-						/>
+					{quickAction && (
+						<IconTooltip label={QUICK_ACTIONS[quickAction].label}>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
+								aria-label={`${QUICK_ACTIONS[quickAction].label}: ${bookmark.title || domainName(bookmark.url)}`}
+								onClick={act(QUICK_ACTIONS[quickAction].action)}
+							>
+								<QuickIcon className="h-4 w-4" />
+							</Button>
+						</IconTooltip>
 					)}
 					<ActionDropdownMenu
 						actions={actions}
