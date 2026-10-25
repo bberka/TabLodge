@@ -86,7 +86,7 @@ function Help() {
 			title: 'Local data and backups',
 			text: `${PROJECT.name} stores sessions, bookmarks, and preferences in this browser’s extension storage. It does not use accounts, servers, or cloud sync. Exported JSON and HTML files are plain text; keep them private if their URLs, titles, or notes are sensitive.`,
 			detail:
-				'Session import and export are in the Sessions ⋯ menu; bookmark import and export are in the Bookmarks toolbar ⋯ menu. Settings › Data can also export bookmarks, and can erase all sessions, all bookmarks, or everything right away, with an Undo button for a short while; settings and excluded sites are kept. The Backup dialog also offers a full backup (ZIP) with everything, including settings, excluded sites, the theme, snapshots, and trash. Importing that ZIP replaces all of it, with an Undo button for a short while.',
+				'Session import and export are in the Sessions ⋯ menu; bookmark import and export are in the Bookmarks toolbar ⋯ menu. Settings › Data can also export bookmarks, and can erase sessions, bookmarks, or both after you choose what to erase and confirm, with an Undo button for a short while; settings and excluded sites are kept. The Backup dialog also offers a full backup (ZIP) with everything, including settings, excluded sites, the theme, snapshots, and trash. Importing that ZIP replaces all of it, with an Undo button for a short while.',
 		},
 		{
 			icon: LifeBuoy,

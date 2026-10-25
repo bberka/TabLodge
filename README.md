@@ -153,7 +153,7 @@ TabLodge has no servers, accounts, analytics, or telemetry, and makes no network
 [docs/tab-management-research.md](docs/tab-management-research.md) compares TabLodge with OneTab, Session Buddy, Tab Session Manager, Toby, Workona, BroTab, and the browsers' built-in features. The biggest fear in this category is losing saved tabs, so the top recommendations focus on safety first:
 
 - **Automatic local backups** with rotating snapshots, a backup before every migration or bulk action, and a "Restore from backup" screen.
-- **Trash and undo** for every destructive action (sessions, tabs, bookmarks, columns), with an Undo toast and 30-day retention. (Done: actions run immediately and offer Undo rather than asking first.)
+- **Trash and undo** for every destructive action (sessions, tabs, bookmarks, columns), with an Undo toast and 30-day retention. (Done: actions on the dashboard run immediately and offer Undo; the Settings page asks first for erase, restore defaults, clearing snapshots, emptying the trash, and restoring or deleting a backup.)
 - **Auto-saved window history** so crashes and accidentally closed windows can be recovered without relying on the browser.
 - **A live open-tabs manager:** list every window and tab, then filter, activate, close, move, group, pin, mute, discard, or deduplicate.
 - **Keyboard-first search and a command palette** (Ctrl/Cmd+K) across open tabs, sessions, bookmarks, and recently closed tabs.

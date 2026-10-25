@@ -16,6 +16,7 @@ import {
 import {
 	Badge,
 	Button,
+	ConfirmationDialog,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -179,14 +180,20 @@ export function SnapshotsDialog({
 	onOpenChange,
 	showStatus,
 	onSessionsChanged,
+	confirmDestructive = false,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	showStatus: ShowStatus;
 	onSessionsChanged?: () => unknown;
+	/**
+	Ask before clearing everything (the Settings page does; other pages use Undo alone).
+	*/
+	confirmDestructive?: boolean;
 }) {
 	const {data, error, reload} = useSnapshots(open);
 	const [busy, setBusy] = useState(false);
+	const [confirmOpen, setConfirmOpen] = useState(false);
 
 	async function run(action: () => Promise<void>) {
 		setBusy(true);
@@ -302,7 +309,9 @@ export function SnapshotsDialog({
 					<Button
 						variant="outline"
 						disabled={busy || snapshots.length === 0}
-						onClick={() => void clearAll()}
+						onClick={() =>
+							confirmDestructive ? setConfirmOpen(true) : void clearAll()
+						}
 					>
 						<Trash2 className="h-4 w-4" />
 						Clear all
@@ -310,6 +319,17 @@ export function SnapshotsDialog({
 					<Button onClick={() => onOpenChange(false)}>Done</Button>
 				</DialogFooter>
 			</DialogContent>
+			<ConfirmationDialog
+				open={confirmOpen}
+				title="Clear all snapshots?"
+				description="Every recent snapshot is removed. You can undo this right after."
+				confirmLabel="Clear snapshots"
+				onOpenChange={setConfirmOpen}
+				onConfirm={() => {
+					setConfirmOpen(false);
+					void clearAll();
+				}}
+			/>
 		</Dialog>
 	);
 }
@@ -330,12 +350,18 @@ export function TrashDialog({
 	onOpenChange,
 	showStatus,
 	onChanged,
+	confirmDestructive = false,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	showStatus: ShowStatus;
 	onChanged?: () => unknown;
+	/**
+	Ask before emptying the trash (the Settings page does; other pages use Undo alone).
+	*/
+	confirmDestructive?: boolean;
 }) {
+	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [items, setItems] = useState<TrashSummary[] | null>(null);
 	const [error, setError] = useState('');
 	const [busy, setBusy] = useState(false);
@@ -485,7 +511,9 @@ export function TrashDialog({
 						variant="outline"
 						className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
 						disabled={busy || !items || items.length === 0}
-						onClick={() => void empty()}
+						onClick={() =>
+							confirmDestructive ? setConfirmOpen(true) : void empty()
+						}
 					>
 						<Trash2 className="h-4 w-4" />
 						Empty trash
@@ -493,6 +521,17 @@ export function TrashDialog({
 					<Button onClick={() => onOpenChange(false)}>Done</Button>
 				</DialogFooter>
 			</DialogContent>
+			<ConfirmationDialog
+				open={confirmOpen}
+				title="Empty the trash?"
+				description="Everything in the trash is deleted for good. You can undo this right after."
+				confirmLabel="Empty trash"
+				onOpenChange={setConfirmOpen}
+				onConfirm={() => {
+					setConfirmOpen(false);
+					void empty();
+				}}
+			/>
 		</Dialog>
 	);
 }
@@ -585,6 +624,11 @@ export function RecoveryTools({
 		null,
 	);
 	const [busy, setBusy] = useState('');
+	const [pending, setPending] = useState<
+		| {kind: 'snapshots' | 'trash'}
+		| {kind: 'restore' | 'delete'; backup: BackupSummary}
+		| null
+	>(null);
 	const refresh = useCallback(async () => {
 		const [usageResult, backupResult] = await Promise.all([
 			send('GET_STORAGE_USAGE'),
@@ -746,7 +790,7 @@ export function RecoveryTools({
 						size="sm"
 						variant="outline"
 						disabled={busy !== ''}
-						onClick={() => void clearSnapshots()}
+						onClick={() => setPending({kind: 'snapshots'})}
 					>
 						Clear snapshots
 					</Button>
@@ -754,7 +798,7 @@ export function RecoveryTools({
 						size="sm"
 						variant="outline"
 						disabled={busy !== ''}
-						onClick={() => void emptyTrash()}
+						onClick={() => setPending({kind: 'trash'})}
 					>
 						Empty trash
 					</Button>
@@ -788,14 +832,74 @@ export function RecoveryTools({
 								key={backup.id}
 								backup={backup}
 								busy={busy !== ''}
-								onRestore={() => void restoreBackup(backup)}
+								onRestore={() => setPending({kind: 'restore', backup})}
 								onDownload={() => void download(backup)}
-								onDelete={() => void removeBackup(backup)}
+								onDelete={() => setPending({kind: 'delete', backup})}
 							/>
 						))}
 					</ul>
 				)}
 			</div>
+			<ConfirmationDialog
+				open={pending !== null}
+				title={
+					pending?.kind === 'snapshots'
+						? 'Clear all snapshots?'
+						: pending?.kind === 'trash'
+							? 'Empty the trash?'
+							: pending?.kind === 'restore'
+								? 'Restore this backup?'
+								: 'Delete this backup?'
+				}
+				description={
+					pending?.kind === 'snapshots'
+						? 'Every recent snapshot is removed. You can undo this right after.'
+						: pending?.kind === 'trash'
+							? 'Everything in the trash is deleted for good. You can undo this right after.'
+							: pending?.kind === 'restore'
+								? 'Your sessions and bookmarks are replaced by this backup. A safety backup of what you have now is kept, and you can undo this right after.'
+								: 'This backup is removed. You can undo this right after.'
+				}
+				confirmLabel={
+					pending?.kind === 'snapshots'
+						? 'Clear snapshots'
+						: pending?.kind === 'trash'
+							? 'Empty trash'
+							: pending?.kind === 'restore'
+								? 'Restore'
+								: 'Delete'
+				}
+				onOpenChange={(open) => !open && setPending(null)}
+				onConfirm={() => {
+					const current = pending;
+					setPending(null);
+					switch (current?.kind) {
+						case 'snapshots': {
+							void clearSnapshots();
+
+							break;
+						}
+
+						case 'trash': {
+							void emptyTrash();
+
+							break;
+						}
+
+						case 'restore': {
+							void restoreBackup(current.backup);
+
+							break;
+						}
+
+						default: {
+							if (current) {
+								void removeBackup(current.backup);
+							}
+						}
+					}
+				}}
+			/>
 		</div>
 	);
 }
