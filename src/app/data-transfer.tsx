@@ -191,20 +191,33 @@ const FORMAT_CHOICES: ReadonlyArray<{
 	},
 ];
 
-type BackupFormat = ExportFormat | 'zip';
-
-const ZIP_CHOICE = {
-	title: 'Full backup (ZIP)',
-	icon: Archive,
-	description:
-		'Everything in one file: sessions, bookmarks, all settings and excluded sites, theme, crash snapshots, and trash bin. Restore it with Import.',
-};
+/**
+What a full backup ZIP holds, listed on the "Everything" choice instead of a format list (it has only one format).
+*/
+const FULL_BACKUP_CONTENTS = [
+	'Sessions and folders',
+	'Bookmarks and columns',
+	'All settings and excluded sites',
+	'Theme',
+	'Crash snapshots and the trash bin',
+];
 
 const BACKUP_TITLES: Record<ExportKind, (count: number) => string> = {
 	sessions: () => 'Back up sessions',
 	bookmarks: () => 'Back up bookmarks',
 	selected: (count) => `Export ${plural(count, 'selected tab')}`,
 };
+
+type BackupScope = 'everything' | 'sessions' | 'bookmarks';
+
+function EverythingLabel() {
+	return (
+		<span className="inline-flex items-center justify-center gap-1.5">
+			<Archive className="h-3.5 w-3.5" aria-hidden="true" />
+			Everything
+		</span>
+	);
+}
 
 type BackupDialogProps = {
 	/**
@@ -231,11 +244,9 @@ export function BackupDialog({
 	state,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
-	const [format, setFormat] = useState<BackupFormat>('json');
+	const [format, setFormat] = useState<ExportFormat>('json');
 	const [saving, setSaving] = useState(false);
-	const [switched, setSwitched] = useState<'sessions' | 'bookmarks' | null>(
-		null,
-	);
+	const [switched, setSwitched] = useState<BackupScope | null>(null);
 	useEffect(() => {
 		if (!open) {
 			return;
@@ -253,7 +264,13 @@ export function BackupDialog({
 		state.settings.bookmarksEnabled,
 	);
 	let shown = requested;
-	if (state && canSwitch && switched && switched !== requested?.kind) {
+	if (
+		state &&
+		canSwitch &&
+		switched &&
+		switched !== 'everything' &&
+		switched !== requested?.kind
+	) {
 		shown =
 			switched === 'bookmarks'
 				? {
@@ -266,10 +283,33 @@ export function BackupDialog({
 
 	const kind = shown?.kind ?? 'sessions';
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
-	const full = format === 'zip' && kind !== 'selected';
+	// "Everything" is the full backup ZIP; Bookmarks or Sessions pick a file format. Selected tabs never offer it.
+	const full = switched === 'everything' && kind !== 'selected';
+	const scopeOptions =
+		kind === 'selected'
+			? []
+			: [
+					{value: 'everything' as const, label: <EverythingLabel />},
+					...(canSwitch || kind === 'bookmarks'
+						? [
+								{
+									value: 'bookmarks' as const,
+									label: <KindLabel kind="bookmarks" />,
+								},
+							]
+						: []),
+					...(canSwitch || kind === 'sessions'
+						? [
+								{
+									value: 'sessions' as const,
+									label: <KindLabel kind="sessions" />,
+								},
+							]
+						: []),
+				];
 	const filename = full
 		? fullBackupFilename(PROJECT.name)
-		: exportFilename(PROJECT.name, kind, format === 'zip' ? 'json' : format);
+		: exportFilename(PROJECT.name, kind, format);
 	const summary = full
 		? 'All data and settings'
 		: kind === 'bookmarks'
@@ -314,7 +354,7 @@ export function BackupDialog({
 		}
 
 		try {
-			const file = buildExport(shown, format === 'zip' ? 'json' : format, {
+			const file = buildExport(shown, format, {
 				appName: PROJECT.name,
 			});
 			downloadFile(file.content, file.mime, file.filename);
@@ -332,60 +372,73 @@ export function BackupDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent size="lg">
 				<DialogHeader>
-					<DialogTitle>{BACKUP_TITLES[kind](counts.items)}</DialogTitle>
+					<DialogTitle>
+						{full ? 'Back up everything' : BACKUP_TITLES[kind](counts.items)}
+					</DialogTitle>
 					<DialogDescription>
-						Choose a file format. The file is saved to your downloads; it is
-						plain text, not encrypted.
+						{full
+							? 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted.'
+							: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
-					{canSwitch && (
+					{scopeOptions.length > 1 && (
 						<SegmentedControl
 							fullWidth
 							label="What to back up"
-							value={kind as 'sessions' | 'bookmarks'}
-							options={[
-								{value: 'bookmarks', label: <KindLabel kind="bookmarks" />},
-								{value: 'sessions', label: <KindLabel kind="sessions" />},
-							]}
+							value={full ? 'everything' : (kind as 'sessions' | 'bookmarks')}
+							options={scopeOptions}
 							onValueChange={setSwitched}
 						/>
 					)}
-					<RadioCardGroup
-						label="File format"
-						value={format}
-						className="sm:grid-cols-2"
-						onValueChange={(value) => setFormat(value as BackupFormat)}
-					>
-						{FORMAT_CHOICES.map((choice) => (
-							<RadioCard
-								key={choice.id}
-								value={choice.id}
-								icon={choice.icon}
-								title={choice.title}
-								badge={
-									choice.id === 'json' ? (
-										<Badge variant="accent" className="px-1.5 py-0 text-[10px]">
-											Recommended
-										</Badge>
-									) : undefined
-								}
-								description={
-									kind === 'bookmarks' ? choice.bookmarks : choice.sessions
-								}
-								className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
-							/>
-						))}
-						{kind !== 'selected' && (
-							<RadioCard
-								value="zip"
-								icon={ZIP_CHOICE.icon}
-								title={ZIP_CHOICE.title}
-								description={ZIP_CHOICE.description}
-								className="sm:col-span-2"
-							/>
-						)}
-					</RadioCardGroup>
+					{full ? (
+						<div className="rounded-lg border border-border p-4">
+							<p className="flex items-center gap-2 text-sm font-medium">
+								<Archive
+									className="h-4 w-4 text-muted-foreground"
+									aria-hidden="true"
+								/>
+								Full backup (ZIP)
+							</p>
+							<ul className="mt-2 grid gap-1 pl-6 text-sm text-muted-foreground sm:grid-cols-2">
+								{FULL_BACKUP_CONTENTS.map((item) => (
+									<li key={item} className="list-disc">
+										{item}
+									</li>
+								))}
+							</ul>
+						</div>
+					) : (
+						<RadioCardGroup
+							label="File format"
+							value={format}
+							className="sm:grid-cols-2"
+							onValueChange={(value) => setFormat(value as ExportFormat)}
+						>
+							{FORMAT_CHOICES.map((choice) => (
+								<RadioCard
+									key={choice.id}
+									value={choice.id}
+									icon={choice.icon}
+									title={choice.title}
+									badge={
+										choice.id === 'json' ? (
+											<Badge
+												variant="accent"
+												className="px-1.5 py-0 text-[10px]"
+											>
+												Recommended
+											</Badge>
+										) : undefined
+									}
+									description={
+										kind === 'bookmarks' ? choice.bookmarks : choice.sessions
+									}
+									className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
+								/>
+							))}
+						</RadioCardGroup>
+					)}
 					<p
 						className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-muted/70 px-3 py-2 text-xs text-muted-foreground"
 						aria-live="polite"
@@ -1006,7 +1059,11 @@ export function ImportDialog({
 				? `Restore a backup or bring in tabs saved by another tab manager. Each group of tabs becomes a ${PROJECT.name} session.`
 				: 'Restore a backup, or bring in bookmarks from a browser or another tool. Folders become columns.';
 	const kindSwitch =
-		sessionsEnabled && bookmarksEnabled && source?.type !== 'browser' ? (
+		// A full backup restores everything, so choosing Bookmarks or Sessions would only mislead.
+		!full &&
+		sessionsEnabled &&
+		bookmarksEnabled &&
+		source?.type !== 'browser' ? (
 			<SegmentedControl
 				fullWidth
 				label="What to import"
