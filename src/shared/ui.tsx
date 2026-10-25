@@ -239,7 +239,7 @@ export function ConfirmationDialog({
 							disabled={blocked}
 							data-autofocus={(!destructive && !requireText) || undefined}
 						>
-							{busy ? 'Working…' : confirmLabel}
+							{busy ? 'Working' : confirmLabel}
 						</Button>
 					</AlertDialogFooter>
 				</form>

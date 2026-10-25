@@ -969,7 +969,7 @@ function Options() {
 					}
 				>
 					<Download className="h-4 w-4" />
-					Back up bookmarks…
+					Back up bookmarks
 				</Button>
 			),
 		},
@@ -994,7 +994,7 @@ function Options() {
 					}
 				>
 					<Download className="h-4 w-4" />
-					Back up sessions…
+					Back up sessions
 				</Button>
 			),
 		},
@@ -1021,7 +1021,7 @@ function Options() {
 					onClick={() => setImportOpen(true)}
 				>
 					<Upload className="h-4 w-4" />
-					Restore / Import…
+					Restore / Import
 				</Button>
 			),
 		},
@@ -1489,7 +1489,7 @@ function Options() {
 								onClick={() => setConfirmDefaults(true)}
 							>
 								<RotateCcw className="h-4 w-4" />
-								{busy === 'defaults' ? 'Restoring…' : 'Restore defaults'}
+								{busy === 'defaults' ? 'Restoring' : 'Restore defaults'}
 							</Button>
 						</div>
 					)}
@@ -1587,7 +1587,7 @@ function Options() {
 							</Button>
 							<Button type="submit" disabled={!siteValid || siteBusy}>
 								<Plus className="h-4 w-4" />
-								{siteBusy ? 'Adding…' : 'Add site'}
+								{siteBusy ? 'Adding' : 'Add site'}
 							</Button>
 						</DialogFooter>
 					</form>

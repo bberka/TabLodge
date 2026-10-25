@@ -332,8 +332,7 @@ export function AppHeader({
 	active,
 	children,
 }: {
-	title: ReactNode;
-	back?: boolean;
+	active: AppPage;
 	children?: ReactNode;
 }) {
 	return (
@@ -341,15 +340,42 @@ export function AppHeader({
 			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
 				<Brand />
 				<span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-				<h1 className="truncate text-sm font-normal text-muted-foreground">
-					{title}
-				</h1>
+				<nav
+					aria-label={`${PROJECT.name} pages`}
+					className="flex items-center gap-1"
+				>
+					{APP_PAGES.map((page) => {
+						const current = page.id === active;
+						return (
+							<a
+								key={page.id}
+								href={page.href}
+								aria-current={current ? 'page' : undefined}
+								className={`relative inline-flex h-9 items-center rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${current ? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:-bottom-[17px] after:h-0.5 after:rounded-full after:bg-primary' : 'text-muted-foreground hover:text-foreground'}`}
+							>
+								{page.label}
+							</a>
+						);
+					})}
+				</nav>
 			</div>
 			{Boolean(children) && (
 				<div className="flex items-center gap-2">{children}</div>
 			)}
 		</header>
 	);
+}
+
+/**
+Opens the browser's extension-shortcuts page. Plain links to chrome:// pages are blocked, so this uses tabs.create.
+*/
+export async function openShortcutsPage(): Promise<boolean> {
+	try {
+		await chrome.tabs.create({url: 'chrome://extensions/shortcuts'});
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 // Shown in place of a page when its saved state definitively failed to load.

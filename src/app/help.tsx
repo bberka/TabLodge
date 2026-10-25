@@ -1,3 +1,4 @@
+import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {
 	ArrowUpRight,
@@ -29,7 +30,10 @@ import {ThemeProvider} from '../shared/theme';
 import {AppHeader, openShortcutsPage} from './common';
 import {PROJECT} from './project';
 
+const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
+
 function Help() {
+	const [shortcutsFailed, setShortcutsFailed] = useState(false);
 	const sections = [
 		{
 			icon: MousePointer2,
@@ -86,7 +90,7 @@ function Help() {
 			icon: Keyboard,
 			title: 'Keyboard shortcuts',
 			text: `Review or change ${PROJECT.name} shortcuts in the browser’s extension-shortcuts page. Browser support for tab groups, pinned tabs, startup behavior, and unloading depends on Chromium APIs and browser policy.`,
-			href: 'chrome://extensions/shortcuts',
+			href: SHORTCUTS_URL,
 			action: 'Configure shortcuts',
 		},
 	];
@@ -118,35 +122,39 @@ function Help() {
 						<CardContent>
 							<p className="text-sm leading-6 text-muted-foreground">{text}</p>
 							{detail && <p className="mt-2 text-sm font-medium">{detail}</p>}
-							{href && (
-								<Button
-									asChild
-									className="mt-4"
-									variant={
-										title === 'Keyboard shortcuts' ? 'outline' : 'default'
-									}
-								>
-									<a
-										href={href}
-										target={
-											title === 'Keyboard shortcuts' ? '_blank' : undefined
-										}
-										rel={
-											title === 'Keyboard shortcuts'
-												? 'noopener noreferrer'
-												: undefined
-										}
+							{href === SHORTCUTS_URL && (
+								<>
+									<Button
+										className="mt-4"
+										variant="outline"
+										onClick={async () => {
+											setShortcutsFailed(!(await openShortcutsPage()));
+										}}
 									>
+										{action}
+										<ArrowUpRight className="h-4 w-4" />
+									</Button>
+									{shortcutsFailed && (
+										<p
+											role="alert"
+											className="mt-2 text-xs text-muted-foreground"
+										>
+											Your browser did not open it. Paste{' '}
+											<code>{SHORTCUTS_URL}</code> into the address bar.
+										</p>
+									)}
+								</>
+							)}
+							{href && href !== SHORTCUTS_URL && (
+								<Button asChild className="mt-4">
+									<a href={href}>
 										{href === 'options.html' ? (
 											<>
 												<Settings2 className="h-4 w-4" />
 												{action}
 											</>
 										) : (
-											<>
-												{action}
-												<ArrowUpRight className="h-4 w-4" />
-											</>
+											action
 										)}
 									</a>
 								</Button>
