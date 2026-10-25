@@ -23,7 +23,7 @@ TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, 
 - **Flexible restores.** Restore into the current or a new window; keep or remove the saved tabs afterward; skip duplicates; optionally unload background tabs. Ctrl/Cmd- and Shift-click give one-off overrides.
 - **Import and export.** Session and bookmark JSON backups, a full-backup ZIP (everything, including settings) you can import back, a shareable HTML page of selected sessions, and a one-time import of your browser bookmarks.
 - **Crash recovery, backups and undo.** Rolling snapshots of your open windows offer to restore your last session after an unclean exit; optional automatic backups (with an optional copy in Downloads) and safety backups before risky actions; a trash bin with retention for deleted sessions, links, bookmarks and columns; and an Undo toast instead of a confirmation on the dashboard (Settings still asks before erasing data or restoring a backup). All local. See [docs/architecture.md](docs/architecture.md#recovery-snapshots-backups-and-trash).
-- **Everywhere you need it.** A toolbar popup with a quick chooser, a side panel (bookmarks, sessions and open tabs), keyboard shortcuts, and page and toolbar context menus.
+- **Everywhere you need it.** A toolbar popup with a quick chooser, a side panel (bookmarks, sessions and open tabs), keyboard shortcuts (save selected tabs or the window, bookmark this page, open the side panel or dashboard), and page and toolbar context menus.
 - **Local-only and private.** No host permissions, no content scripts, no network requests, no analytics. See [PRIVACY.md](PRIVACY.md).
 - **Light, dark, and system themes** with no flash on load.
 

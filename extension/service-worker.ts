@@ -178,6 +178,7 @@ const DEFAULT_BOOKMARK_COLUMN = Object.freeze<BookmarkColumn>({
 const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	closeOnSave: true,
 	includePinnedTabs: false,
+	ignoreTabGroups: false,
 	openDashboardAfterSave: false,
 	openDashboardOnStartup: false,
 	startupBehavior: 'dashboard',
@@ -951,6 +952,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		...DEFAULT_SETTINGS,
 		closeOnSave: raw.closeOnSave !== false,
 		includePinnedTabs: raw.includePinnedTabs === true,
+		ignoreTabGroups: raw.ignoreTabGroups === true,
 		openDashboardAfterSave: raw.openDashboardAfterSave === true,
 		openDashboardOnStartup: Boolean(raw.openDashboardOnStartup),
 		startupBehavior:
@@ -1525,7 +1527,7 @@ async function captureTabs(
 				notes: '',
 				pinned: Boolean(tab.pinned),
 				nativeGroup:
-					tab.groupId >= 0
+					tab.groupId >= 0 && !settings.ignoreTabGroups
 						? normalizeNativeGroup(
 								nativeGroups.get(tab.groupId),
 								String(tab.groupId),
@@ -2048,6 +2050,70 @@ async function openNamePrompt(
 		The sessions are saved with the fallback name; the prompt is a convenience.
 		*/
 	}
+}
+
+const BOOKMARK_PROMPT_WIDTH = 440;
+const BOOKMARK_PROMPT_HEIGHT = 470;
+
+/**
+The "Bookmark this page" shortcut: reads the active tab of the last-focused normal window (the prompt window takes
+focus afterwards) and opens the small add-bookmark window for it. Pages that cannot be bookmarked, and disabled
+bookmarks, fail without opening anything.
+*/
+async function openBookmarkPrompt(
+	commandTab?: chrome.tabs.Tab,
+): Promise<MenuOutcome> {
+	const settings = await readSettings();
+	if (!settings.bookmarksEnabled) {
+		return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+	}
+
+	let tab = commandTab?.url ? commandTab : undefined;
+	let anchor: chrome.windows.Window | undefined;
+	try {
+		anchor = await chrome.windows.getLastFocused({windowTypes: ['normal']});
+		if (!tab && isInteger(anchor.id)) {
+			tab = (await chrome.tabs.query({active: true, windowId: anchor.id})).find(
+				(candidate) => candidate.active,
+			);
+		}
+	} catch {
+		/*
+		Without the window the browser places the prompt itself.
+		*/
+	}
+
+	const url = normalizeUrl(tab?.url);
+	if (!url) {
+		return {
+			ok: false,
+			error: 'Only regular http and https pages can be bookmarked.',
+		};
+	}
+
+	const title = cleanText(tab?.title, linkHost(url), 500);
+	const options: chrome.windows.CreateData = {
+		type: 'popup',
+		url: `${chrome.runtime.getURL('add-bookmark.html')}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
+		width: BOOKMARK_PROMPT_WIDTH,
+		height: BOOKMARK_PROMPT_HEIGHT,
+		focused: true,
+	};
+	if (
+		anchor &&
+		isInteger(anchor.left) &&
+		isInteger(anchor.top) &&
+		isInteger(anchor.width)
+	) {
+		options.left = Math.max(
+			0,
+			anchor.left + Math.round((anchor.width - BOOKMARK_PROMPT_WIDTH) / 2),
+		);
+		options.top = Math.max(0, anchor.top + 80);
+	}
+
+	await chrome.windows.create(options);
+	return {ok: true};
 }
 
 /**
@@ -5207,7 +5273,12 @@ async function captureSnapshotWindows(
 				entry.active = true;
 			}
 
-			if (!tab.pinned && isInteger(tab.groupId) && tab.groupId >= 0) {
+			if (
+				!settings.ignoreTabGroups &&
+				!tab.pinned &&
+				isInteger(tab.groupId) &&
+				tab.groupId >= 0
+			) {
 				let index = groupIndex.get(tab.groupId);
 				const info = groupInfo.get(tab.groupId);
 				if (index === undefined && info) {
@@ -7530,11 +7601,15 @@ chrome.action.onClicked.addListener((tab) => {
 
 chrome.commands.onCommand.addListener((command, tab) => {
 	if (command === 'save-window') {
-		void saveTabs('window', tab, DEFAULT_FOLDER_ID, {promptName: true});
+		void saveTabs('selected-or-window', tab, DEFAULT_FOLDER_ID, {
+			promptName: true,
+		});
 	}
 
-	if (command === 'save-selected-tabs') {
-		void saveTabs('selected', tab, DEFAULT_FOLDER_ID, {promptName: true});
+	if (command === 'bookmark-page') {
+		runMenuAction(tab, `${APP_NAME} could not bookmark this page.`, () =>
+			openBookmarkPrompt(tab),
+		);
 	}
 
 	if (command === 'open-dashboard') {
@@ -7677,7 +7752,7 @@ async function saveCurrentTabToFirstGroup(
 				notes: copies[0]?.notes || '',
 				pinned: Boolean(tab.pinned),
 				nativeGroup:
-					tab.groupId >= 0
+					tab.groupId >= 0 && !store.settings.ignoreTabGroups
 						? normalizeNativeGroup(
 								nativeGroups.get(tab.groupId),
 								String(tab.groupId),

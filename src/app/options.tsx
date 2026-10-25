@@ -258,7 +258,7 @@ const settingsGroups: Array<{
 				options: [
 					['popup', 'Open the quick action popup'],
 					['current-window', 'Save selected tabs, or this window'],
-					['full-window', 'Save the full window, including tab groups'],
+					['full-window', 'Save the whole window'],
 					['current-group', 'Save the active tab group'],
 					['current-tab-to-group', 'Send current tab to first session'],
 					['current-tab', 'Save only the active tab'],
@@ -330,6 +330,12 @@ const settingsGroups: Array<{
 				name: 'includePinnedTabs',
 				label: 'Include pinned tabs',
 				help: 'Pinned tabs are ignored by default. When enabled, they are stored before any close operation and regain their pinned state on restore.',
+				type: 'switch',
+			},
+			{
+				name: 'ignoreTabGroups',
+				label: 'Ignore tab groups',
+				help: 'Saved tabs do not remember their browser tab groups, so they restore ungrouped. Sessions you already saved are not changed.',
 				type: 'switch',
 			},
 			{

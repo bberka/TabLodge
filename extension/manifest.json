@@ -48,13 +48,13 @@
 			"suggested_key": {
 				"default": "Alt+Shift+S"
 			},
-			"description": "Save tabs in the current window"
+			"description": "Save selected tabs, or the whole window"
 		},
-		"save-selected-tabs": {
+		"bookmark-page": {
 			"suggested_key": {
-				"default": "Alt+Shift+A"
+				"default": "Alt+Shift+D"
 			},
-			"description": "Save selected tabs in the current window"
+			"description": "Bookmark this page"
 		},
 		"toggle-side-panel": {
 			"description": "Open the TabLodge side panel"

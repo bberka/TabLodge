@@ -52,6 +52,7 @@ export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
 export type Settings = {
 	closeOnSave: boolean;
 	includePinnedTabs: boolean;
+	ignoreTabGroups: boolean;
 	openDashboardAfterSave: boolean;
 	openDashboardOnStartup: boolean;
 	startupBehavior: 'dashboard' | 'last-session';
