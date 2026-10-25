@@ -294,7 +294,7 @@ const settingsGroups: Array<{
 			{
 				name: 'simplifyUrls',
 				label: 'Simplify addresses',
-				help: 'Hide https:// and www. in shown addresses.',
+				help: 'Hide https://, http:// and www. in shown addresses.',
 				type: 'switch',
 			},
 			{
