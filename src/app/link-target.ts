@@ -1,4 +1,4 @@
-import type {LinkClickAction, Settings} from './types';
+import type {BookmarkClickAction, Settings} from './types';
 
 export type {LinkClickAction} from './types';
 
@@ -6,6 +6,7 @@ type LinkKind = 'bookmark' | 'session';
 
 /**
 Decides what a link click does. `requested` is an explicit menu choice and wins over the setting.
+A bookmark can resolve to 'menu' (open its action menu); that never navigates, so pages that cannot show the menu must handle or replace it.
 `pinnedLodge` is true when this page is the pinned TabLodge tab: there, "current" becomes "new".
 */
 export function resolveLinkTarget(
@@ -15,8 +16,8 @@ export function resolveLinkTarget(
 		'bookmarkClickAction' | 'sessionLinkClickAction' | 'keepLodgePinned'
 	>,
 	opts: {requested?: 'current' | 'new'; pinnedLodge?: boolean} = {},
-): LinkClickAction {
-	const action: LinkClickAction =
+): BookmarkClickAction {
+	const action: BookmarkClickAction =
 		opts.requested ??
 		(kind === 'bookmark'
 			? settings.bookmarkClickAction
@@ -49,10 +50,19 @@ export async function openLink(
 	requested?: 'current' | 'new',
 ): Promise<void> {
 	const pinned = settings.keepLodgePinned ? await isPinnedLodgeTab() : false;
-	const action = resolveLinkTarget(kind, settings, {
+	// Places that cannot show a bookmark menu (the search palette) open the link like the default setting.
+	const resolved = resolveLinkTarget(kind, settings, {
 		requested,
 		pinnedLodge: pinned,
 	});
+	const action =
+		resolved === 'menu'
+			? resolveLinkTarget(
+					kind,
+					{...settings, bookmarkClickAction: 'current'},
+					{pinnedLodge: pinned},
+				)
+			: resolved;
 	if (action === 'none') {
 		return;
 	}

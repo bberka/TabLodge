@@ -1,4 +1,5 @@
 import {memo, useState} from 'react';
+import {displayUrl} from './url-display';
 
 export const faviconUrl = (url: string) =>
 	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
@@ -70,7 +71,15 @@ export const Favicon = memo(
 /**
 The link a dialog is about, drawn like a list row: icon, title, and the full address (wrapped, never cut).
 */
-export function LinkSummary({title, url}: {title?: string; url: string}) {
+export function LinkSummary({
+	title,
+	url,
+	simplify = true,
+}: {
+	title?: string;
+	url: string;
+	simplify?: boolean;
+}) {
 	return (
 		<span className="flex min-w-0 items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2 text-left">
 			<Favicon url={url} label={title} className="h-6 w-6 rounded" />
@@ -87,7 +96,7 @@ export function LinkSummary({title, url}: {title?: string; url: string}) {
 					className="block text-[11px] leading-4 text-muted-foreground [overflow-wrap:anywhere]"
 					title={url}
 				>
-					{url}
+					{displayUrl(url, simplify)}
 				</small>
 			</span>
 		</span>

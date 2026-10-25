@@ -282,13 +282,20 @@ const settingsGroups: Array<{
 			{
 				name: 'urlDisplayMode',
 				label: 'Show URLs as',
-				help: 'How web addresses appear under bookmarks and saved session links.',
+				help: 'How web addresses appear under bookmarks and saved session links. Full URL only hides the title and shows the address instead.',
 				type: 'select',
 				options: [
 					['domain', 'Domain only'],
 					['full', 'Full URL'],
+					['url-only', 'Full URL only'],
 					['none', 'Hide'],
 				],
+			},
+			{
+				name: 'simplifyUrls',
+				label: 'Simplify addresses',
+				help: 'Hide https:// and www. in shown addresses.',
+				type: 'switch',
 			},
 		],
 	},
@@ -578,7 +585,7 @@ const settingsGroups: Array<{
 				label: 'When clicking a bookmark',
 				help: 'Choose what happens when you click a bookmark. The bookmark menu can always open it either way.',
 				type: 'select',
-				options: LINK_ACTIONS,
+				options: [...LINK_ACTIONS, ['menu', 'Open action menu']],
 			},
 			{
 				name: 'showBookmarkQuickActions',

@@ -114,6 +114,7 @@ import {ColumnLabel, FolderLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
+import {displayUrl as simplifiedUrl} from './url-display';
 import {FINDER_EVENT, type FinderEventDetail} from './finder';
 import {
 	emitRecoveryEvent,
@@ -1696,6 +1697,7 @@ export function SessionManager({
 						<DialogBody>
 							{editingTab && (
 								<LinkSummary
+									simplify={settings.simplifyUrls !== false}
 									title={editingTab.tab.title}
 									url={editingTab.tab.url}
 								/>
@@ -1777,7 +1779,11 @@ export function SessionManager({
 						</DialogHeader>
 						<DialogBody>
 							{bookmarkTab?.url && (
-								<LinkSummary title={bookmarkTab.title} url={bookmarkTab.url} />
+								<LinkSummary
+									title={bookmarkTab.title}
+									url={bookmarkTab.url}
+									simplify={settings.simplifyUrls !== false}
+								/>
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column-select">Bookmark column</Label>
@@ -1964,8 +1970,17 @@ export function SessionManager({
 	);
 }
 
-function urlDisplay(url: string, mode: Settings['urlDisplayMode'] = 'full') {
-	return mode === 'none' ? null : mode === 'domain' ? hostFor(url) : url;
+function urlDisplay(
+	url: string,
+	mode: Settings['urlDisplayMode'] = 'full',
+	simplify = true,
+) {
+	// 'url-only' shows the address as the row's main line, so it has no second line.
+	return mode === 'none' || mode === 'url-only'
+		? null
+		: mode === 'domain'
+			? hostFor(url)
+			: simplifiedUrl(url, simplify);
 }
 
 /**
@@ -2580,7 +2595,10 @@ const SavedTab = memo(
 		const onDelete = () => handlers.deleteTab(group, tab);
 		const modifierRef = useRef<SelectionModifiers>({});
 		const label = tab.title?.trim() || hostFor(tab.url);
-		const displayUrl = urlDisplay(tab.url, displayMode);
+		const urlOnly = displayMode === 'url-only';
+		const simplify = settings.simplifyUrls !== false;
+		const rowText = urlOnly ? simplifiedUrl(tab.url, simplify) : label;
+		const displayUrl = urlDisplay(tab.url, displayMode, simplify);
 		const compact = displayUrl === null;
 		const action = 'h-7 w-7 text-muted-foreground hover:text-foreground';
 		// Built only when the menu opens.
@@ -2733,7 +2751,12 @@ const SavedTab = memo(
 								href={tab.url}
 								target="_blank"
 								rel="noopener noreferrer"
-								title={label}
+								title={urlOnly ? tab.url : label}
+								aria-label={
+									urlOnly && tab.title?.trim()
+										? `${tab.title.trim()} (${tab.url})`
+										: undefined
+								}
 								onClick={(event) => {
 									if (event.ctrlKey || event.metaKey || event.shiftKey) {
 										return;
@@ -2751,7 +2774,7 @@ const SavedTab = memo(
 									onOpen();
 								}}
 							>
-								{label}
+								{rowText}
 							</a>
 							{splitBadge && (
 								<Badge

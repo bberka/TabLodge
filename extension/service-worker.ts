@@ -214,6 +214,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
+	simplifyUrls: true,
 	groupTitleAction: 'toggle',
 	contextMenusEnabled: true,
 	contextMenuLinksEnabled: true,
@@ -973,7 +974,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
 		pasteLinkToBookmark: raw.pasteLinkToBookmark !== false,
 		bookmarkClickAction: isOneOf(
-			['none', 'current', 'new'],
+			['none', 'current', 'new', 'menu'],
 			raw.bookmarkClickAction,
 		)
 			? raw.bookmarkClickAction
@@ -1004,7 +1005,11 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 					? 'title-url'
 					: 'markdown',
 		dashboardBehavior: raw.dashboardBehavior === 'move' ? 'move' : 'switch',
-		urlDisplayMode: isOneOf(['domain', 'full', 'none'], raw.urlDisplayMode)
+		simplifyUrls: raw.simplifyUrls !== false,
+		urlDisplayMode: isOneOf(
+			['domain', 'full', 'url-only', 'none'],
+			raw.urlDisplayMode,
+		)
 			? raw.urlDisplayMode
 			: 'full',
 		groupTitleAction: isOneOf(
