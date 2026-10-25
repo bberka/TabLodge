@@ -273,7 +273,7 @@ function cachedSessionItems(groups: readonly Session[]): FinderItem[] {
 				kind: 'session',
 				title: group.name,
 				detail: `${count} ${count === 1 ? 'tab' : 'tabs'}${group.archived ? ' · Archived' : ''}`,
-				texts: [group.name, clip(group.description), clip(group.notes)],
+				texts: [group.name, clip(group.description)],
 				ref: group.id,
 			}),
 		);
@@ -289,7 +289,7 @@ function cachedSessionItems(groups: readonly Session[]): FinderItem[] {
 						clip(tab.title),
 						matchableUrl(tab.url),
 						group.name,
-						clip(group.notes),
+						clip(group.description),
 					],
 					ref: group.id,
 				}),

@@ -6957,3 +6957,58 @@ test('favicon URLs are no longer stored and are stripped from older data', async
 	assert.equal(raw.includes('faviconUrl'), false);
 	assert.equal(raw.includes('favicon.ico'), false);
 });
+
+test('session description and old notes merge into one description on load, import, and backup', async () => {
+	const long = 'n'.repeat(10_000);
+	const cases: Array<[Record<string, unknown>, string]> = [
+		[{description: 'Trip', notes: 'Pack light'}, 'Trip\n\nPack light'],
+		[{description: 'Trip'}, 'Trip'],
+		[{notes: 'Pack light'}, 'Pack light'],
+		[{description: 'Same', notes: 'Same'}, 'Same'],
+		[{description: '  ', notes: 'Pack light'}, 'Pack light'],
+		[
+			{description: 'd'.repeat(600), notes: long},
+			`${'d'.repeat(500)}\n\n${long}`,
+		],
+		[{notes: 'x'.repeat(20_000)}, 'x'.repeat(10_502)],
+	];
+	for (const [fields, expected] of cases) {
+		const state = stateWithSession();
+		Object.assign(state.groups[0], fields);
+		const harness = createWorkerHarness(state);
+		const response = await harness.sendMessage({type: 'GET_STATE'});
+		assert.equal(response.groups[0].description, expected);
+		assert.equal('notes' in response.groups[0], false);
+
+		const imported = await harness.sendMessage({
+			type: 'IMPORT_SESSIONS',
+			data: {
+				groups: [
+					{
+						name: 'Old export',
+						...fields,
+						tabs: [{url: 'https://old.example/', title: 'Old'}],
+					},
+				],
+			},
+		});
+		assert.equal(imported.ok, true, imported.error);
+		const added = harness.state.groups.find(
+			(group) => group.name === 'Old export',
+		);
+		assert.equal(added!.description, expected);
+		assert.equal('notes' in added!, false);
+	}
+});
+
+test('UPDATE_GROUP stores one description and ignores a notes field', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const updated = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {description: 'Line one\nLine two', notes: 'ignored'} as never,
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(updated.group.description, 'Line one\nLine two');
+	assert.equal('notes' in updated.group, false);
+});

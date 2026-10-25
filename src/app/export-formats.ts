@@ -298,12 +298,8 @@ function toMarkdown(data: ExportData, appName: string): string {
 		for (const group of data.groups ?? []) {
 			lines.push(`## ${escapeMarkdown(group.name)}`, '');
 			if (group.description) {
-				lines.push(escapeMarkdown(group.description), '');
-			}
-
-			if (group.notes) {
 				lines.push(
-					...group.notes
+					...group.description
 						.split(/\r?\n/)
 						.map((line) => `> ${escapeMarkdown(line)}`.trimEnd()),
 					'',

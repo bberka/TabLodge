@@ -316,7 +316,6 @@ export function SessionManager({
 					[
 						group.name,
 						group.description,
-						group.notes,
 						group.sourceWindowName,
 						...group.tabs.flatMap((tab) => [
 							tab.title,
@@ -1124,7 +1123,6 @@ export function SessionManager({
 		const fields: SessionFields = {
 			name: String(form.get('name') || ''),
 			description: String(form.get('description') || ''),
-			notes: String(form.get('notes') || ''),
 			folderId: String(form.get('folderId') || 'unfiled'),
 		};
 		const result = await send('UPDATE_GROUP', {
@@ -1707,7 +1705,7 @@ export function SessionManager({
 						<DialogHeader>
 							<DialogTitle>Session details</DialogTitle>
 							<DialogDescription>
-								Update this session’s name, notes, and folder.
+								Update this session’s name, description, and folder.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
@@ -1727,30 +1725,10 @@ export function SessionManager({
 								<Textarea
 									id="group-description"
 									name="description"
-									maxLength={500}
-									rows={2}
-									placeholder="Add a project or task"
-									defaultValue={editingGroup?.description || ''}
-									className="min-h-0 resize-y"
-									onKeyDown={(event) => {
-										if (event.key !== 'Enter' || event.shiftKey) {
-											return;
-										}
-
-										event.preventDefault();
-										event.currentTarget.form?.requestSubmit();
-									}}
-								/>
-							</div>
-							<div className="space-y-1.5">
-								<Label htmlFor="group-notes">Notes</Label>
-								<Textarea
-									id="group-notes"
-									name="notes"
-									maxLength={10_000}
+									maxLength={10_502}
 									rows={4}
-									placeholder="Add a note (optional)"
-									defaultValue={editingGroup?.notes || ''}
+									placeholder="Add a project, task, or note (optional)"
+									defaultValue={editingGroup?.description || ''}
 								/>
 							</div>
 							<div className="min-w-0 space-y-1.5">
@@ -2418,18 +2396,11 @@ const GroupCard = memo(
 					</ActionContextMenu>
 					{isExpanded && (
 						<div className="border-t border-border">
-							{(group.description || group.notes) && (
+							{group.description && (
 								<div className="min-w-0 border-b border-border bg-muted/30 px-4 py-2.5 sm:pl-14">
-									{group.description && (
-										<p className="min-w-0 whitespace-pre-wrap break-words text-sm font-medium [overflow-wrap:anywhere]">
-											{group.description}
-										</p>
-									)}
-									{group.notes && (
-										<p className="mt-0.5 min-w-0 whitespace-pre-wrap break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
-											{group.notes}
-										</p>
-									)}
+									<p className="min-w-0 whitespace-pre-wrap break-words text-sm [overflow-wrap:anywhere]">
+										{group.description}
+									</p>
 								</div>
 							)}
 							<ol className="m-0 list-none p-1 sm:p-1.5">

@@ -214,7 +214,6 @@ export type Session = {
 	name: string;
 	folderId: string;
 	description: string;
-	notes: string;
 	archived: boolean;
 	archivedAt: number | null;
 	locked: boolean;
@@ -392,10 +391,7 @@ export type RestoreOptions = {
 };
 
 export type SessionFields = Partial<
-	Pick<
-		Session,
-		'name' | 'description' | 'notes' | 'archived' | 'locked' | 'folderId'
-	>
+	Pick<Session, 'name' | 'description' | 'archived' | 'locked' | 'folderId'>
 >;
 export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'archived'>>;
 export type BookmarkFields = Partial<
