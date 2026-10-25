@@ -4085,3 +4085,48 @@ test('UPDATE_GROUP and imports ignore a restoreTarget field on sessions', async 
 		assert.equal('restoreTarget' in group, false);
 	}
 });
+
+test('RESTORE_GROUP honors a restoreTarget override over the Settings default', async () => {
+	const twoTabs: MockTab[] = [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'https://current.example/',
+			title: 'Current',
+		},
+		{
+			id: 2,
+			windowId: 10,
+			index: 1,
+			active: false,
+			url: 'https://other.example/',
+			title: 'Other',
+		},
+	];
+	const inNewWindow = createWorkerHarness(
+		stateWithSession({restoreTarget: 'current-window'}),
+		twoTabs,
+	);
+	const opened = await inNewWindow.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+		restoreTarget: 'always-new-window',
+	});
+	assert.equal(opened.ok, true, opened.error);
+	assert.equal(inNewWindow.createdWindows.length, 1);
+
+	const inThisWindow = createWorkerHarness(
+		stateWithSession({restoreTarget: 'always-new-window'}),
+		twoTabs,
+	);
+	const here = await inThisWindow.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+		restoreTarget: 'current-window',
+	});
+	assert.equal(here.ok, true, here.error);
+	assert.equal(inThisWindow.createdWindows.length, 0);
+	assert.equal(inThisWindow.openedTabs[0].windowId, 10);
+});
