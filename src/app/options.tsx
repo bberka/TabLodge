@@ -707,7 +707,7 @@ const settingsGroups: Array<{
 			{
 				name: 'trashRetentionDays',
 				label: 'Keep items in the trash bin for',
-				help: 'Deleted sessions, saved links, bookmarks, columns and folders wait in the trash bin this long, then are removed for good automatically.',
+				help: 'Deleted sessions, saved links, bookmarks and columns wait in the trash bin this long, then are removed for good automatically.',
 				type: 'number-select',
 				options: [
 					['7', '7 days'],

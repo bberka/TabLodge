@@ -693,7 +693,7 @@ export type TabLodgeResponses = {
 	SET_GROUP_ORDER: {};
 	CREATE_FOLDER: {folder: Folder};
 	UPDATE_FOLDER: {folder: Folder};
-	DELETE_FOLDER: {trashId?: string};
+	DELETE_FOLDER: {moved: number} & Undoable;
 	MOVE_GROUP: {};
 	DELETE_TAB: {trashId?: string};
 	MOVE_TAB: {

@@ -6048,7 +6048,16 @@ test('a restored session whose folder is gone lands in Unfiled', async () => {
 		type: 'DELETE_FOLDER',
 		folderId: 'work',
 	});
-	assert.ok(folder.trashId);
+	assert.equal(folder.ok, true, folder.error);
+	assert.ok(
+		folder.undoId,
+		'a folder delete is undone directly, not from the trash bin',
+	);
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.equal(
+		trash.items.some((item) => item.kind === 'folder'),
+		false,
+	);
 	const restored = await harness.sendMessage({
 		type: 'RESTORE_TRASH',
 		id: deleted.trashId!,
@@ -6056,16 +6065,6 @@ test('a restored session whose folder is gone lands in Unfiled', async () => {
 	assert.equal(restored.ok, true, restored.error);
 	assert.equal(restored.placed, 'Unfiled');
 	assert.equal(harness.state.groups[0].folderId, 'unfiled');
-	// Restoring the folder afterwards recreates it.
-	const back = await harness.sendMessage({
-		type: 'RESTORE_TRASH',
-		id: folder.trashId,
-	});
-	assert.equal(back.ok, true, back.error);
-	assert.equal(
-		harness.state.folders.some((item) => item.id === 'work'),
-		true,
-	);
 });
 
 test('deleted saved links come back at their position, or recreate a vanished session', async () => {
@@ -7828,4 +7827,30 @@ test('MERGE_GROUPS moves the links into the target, skips duplicates, removes th
 		targetGroupId: 'session-1',
 	});
 	assert.equal(self.ok, false);
+});
+
+test('Undo after deleting a folder brings the folder back with its sessions in it', async () => {
+	const state = stateWithSession();
+	state.folders.push({
+		id: 'work',
+		name: 'Work',
+		createdAt: 1,
+		isDefault: false,
+	});
+	state.groups[0].folderId = 'work';
+	const harness = createWorkerHarness(state);
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_FOLDER',
+		folderId: 'work',
+	});
+	assert.equal(deleted.ok, true, deleted.error);
+	assert.equal(deleted.moved, 1);
+	assert.equal(harness.state.groups[0].folderId, 'unfiled');
+	const undone = await harness.sendMessage({type: 'UNDO', id: deleted.undoId!});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(
+		harness.state.folders.some((folder) => folder.id === 'work'),
+		true,
+	);
+	assert.equal(harness.state.groups[0].folderId, 'work');
 });

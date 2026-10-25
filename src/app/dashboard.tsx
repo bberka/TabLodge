@@ -1247,9 +1247,9 @@ export function SessionManager({
 		}
 
 		await reload();
-		offerTrashUndo(
+		offerUndo(
 			`Deleted folder “${folder.name}”.${moved > 0 ? ` ${moved} ${moved === 1 ? 'session' : 'sessions'} moved to Unfiled.` : ''}`,
-			result.trashId,
+			result.undoId,
 			showStatus,
 			reload,
 		);

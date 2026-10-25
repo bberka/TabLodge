@@ -358,7 +358,7 @@ const KIND_LABELS: Record<TrashKind, string> = {
 };
 
 /**
-The trash bin: deleted sessions, saved links, bookmarks, columns and folders; restore, delete permanently, or empty it.
+The trash bin: deleted sessions, saved links, bookmarks and columns; restore, delete permanently, or empty it.
 */
 export function TrashDialog({
 	open,
@@ -476,8 +476,8 @@ export function TrashDialog({
 				<DialogHeader>
 					<DialogTitle>Trash bin</DialogTitle>
 					<DialogDescription>
-						Deleted sessions, saved links, bookmarks, columns and folders wait
-						here until the retention period set in Settings ends.
+						Deleted sessions, saved links, bookmarks and columns wait here until
+						the retention period set in Settings ends.
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
