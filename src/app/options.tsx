@@ -113,7 +113,7 @@ type SettingField = {
 	parent?: keyof Settings;
 	systems?: System[];
 	/**
-	The row only shows while this is true for the current settings (searching shows it regardless).
+	The row only exists while this is true for the current settings; otherwise it is hidden and left out of search.
 	*/
 	when?: (settings: Settings) => boolean;
 } & (
@@ -1142,18 +1142,20 @@ function Options() {
 	const systemOn = (system: System) =>
 		settings[system === 'sessions' ? 'sessionsEnabled' : 'bookmarksEnabled'] !==
 		false;
-	// Rows that depend on another setting are hidden while it is off; search still shows them (disabled) next to
-	// their parent so they can be found.
-	// A row is disabled while the switch it `requires` is off or its `enabled` check fails.
+	// A row whose `when` check fails does not apply at all (for example the custom new-tab address while TabLodge
+	// owns new tabs): it is hidden and left out of search. A row whose parent switch is off (`requires`, `enabled`)
+	// is hidden too, but search still shows it next to its parent, disabled, so it can be found.
+	const rowAvailable = (field: SettingField) =>
+		!field.when || field.when(settings as Settings);
 	const rowDisabled = (field: SettingField) =>
+		!rowAvailable(field) ||
 		(field.requires !== undefined && settings[field.requires] === false) ||
 		(field.enabled !== undefined && !field.enabled(settings as Settings));
 
 	const fieldShown = (field: SettingField) =>
 		(field.systems ?? []).every((system) => systemOn(system)) &&
-		(searching ||
-			((!field.when || field.when(settings as Settings)) &&
-				!rowDisabled(field)));
+		rowAvailable(field) &&
+		(searching || !rowDisabled(field));
 	const hl = (text: string) => <Highlight text={text} query={query} />;
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
 	const systemRows = pick(SYSTEMS.title, SYSTEM_ROWS, (row) => [
@@ -1657,6 +1659,7 @@ function Options() {
 												) : field.type === 'url' ? (
 													<UrlSetting
 														label={field.label}
+														disabled={rowDisabled(field)}
 														placeholder={field.placeholder}
 														value={settings[field.name] ?? ''}
 														onCommit={(value) =>
@@ -1672,6 +1675,7 @@ function Options() {
 												) : field.type === 'text' ? (
 													<TextSetting
 														label={field.label}
+														disabled={rowDisabled(field)}
 														placeholder={field.placeholder}
 														value={settings[field.name] ?? ''}
 														onDraft={setTemplateDraft}
@@ -2214,12 +2218,14 @@ function UrlSetting({
 	value,
 	onCommit,
 	onInvalid,
+	disabled = false,
 }: {
 	label: string;
 	placeholder: string;
 	value: string;
 	onCommit: (value: string) => void;
 	onInvalid: () => void;
+	disabled?: boolean;
 }) {
 	const [draft, setDraft] = useState(value);
 	useEffect(() => setDraft(value), [value]);
@@ -2239,6 +2245,7 @@ function UrlSetting({
 
 	return (
 		<Input
+			disabled={disabled}
 			type="url"
 			inputMode="url"
 			value={draft}
@@ -2263,6 +2270,7 @@ function TextSetting({
 	value,
 	onCommit,
 	onDraft,
+	disabled = false,
 }: {
 	label: string;
 	placeholder: string;
@@ -2272,6 +2280,7 @@ function TextSetting({
 	Called with the text while typing, before it is saved.
 	*/
 	onDraft?: (value: string) => void;
+	disabled?: boolean;
 }) {
 	const [draft, setDraft] = useState(value);
 	useEffect(() => setDraft(value), [value]);
@@ -2283,6 +2292,7 @@ function TextSetting({
 
 	return (
 		<Input
+			disabled={disabled}
 			value={draft}
 			placeholder={placeholder}
 			aria-label={label}
