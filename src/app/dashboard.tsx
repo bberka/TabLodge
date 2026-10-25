@@ -289,7 +289,7 @@ export function SessionManager({
 	const sideBySide = grid && wide;
 	const folderDialog = typeof dialog === 'object' ? dialog : null;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
-	const expandAll = settings.expandSessionsByDefault !== false;
+	const expandAll = settings.expandSessionsByDefault === true;
 	const isOpen = (id: string) =>
 		expandAll ? !collapsed.has(id) : expanded.has(id);
 	const bookmarksEnabled = settings.bookmarksEnabled !== false;

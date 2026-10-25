@@ -79,7 +79,7 @@ export type Settings = {
 	*/
 	sessionLayout: SessionLayout;
 	/**
-	Session cards start expanded on the TabLodge page; each can still be collapsed during the visit.
+	Session cards start expanded on the TabLodge page (default off: collapsed); each can still be toggled during the visit.
 	*/
 	expandSessionsByDefault: boolean;
 	/**

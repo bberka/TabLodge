@@ -717,9 +717,9 @@ function SidePanel() {
 										count={tabs.length}
 										open={
 											Boolean(search) ||
-											(settings?.expandSessionsByDefault === false
-												? opened.has(session.id)
-												: !closed.has(session.id))
+											(settings?.expandSessionsByDefault === true
+												? !closed.has(session.id)
+												: opened.has(session.id))
 										}
 										extra={
 											<IconTooltip label={`Restore ${session.name}`}>
@@ -735,9 +735,9 @@ function SidePanel() {
 											</IconTooltip>
 										}
 										onToggle={() =>
-											settings?.expandSessionsByDefault === false
-												? toggle(opened, session.id, setOpened)
-												: toggle(closed, session.id, setClosed)
+											settings?.expandSessionsByDefault === true
+												? toggle(closed, session.id, setClosed)
+												: toggle(opened, session.id, setOpened)
 										}
 									>
 										{tabs.map((tab) => (

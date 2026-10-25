@@ -3240,32 +3240,32 @@ test('split settings default to side-by-side restore and saving both tabs, and n
 	assert.equal(reset.settings.saveSplitTabs, 'both');
 });
 
-test('expandSessionsByDefault is on by default, only an explicit false turns it off, and resets to on', async () => {
+test('expandSessionsByDefault is off by default, only an explicit true turns it on, and resets to off', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
 		(await defaults.sendMessage({type: 'GET_STATE'})).settings
 			.expandSessionsByDefault,
-		true,
+		false,
 	);
 
 	const truthy = createWorkerHarness(
-		stateWithSession({expandSessionsByDefault: false}),
+		stateWithSession({expandSessionsByDefault: true}),
 	);
 	assert.equal(
 		(await truthy.sendMessage({type: 'GET_STATE'})).settings
 			.expandSessionsByDefault,
-		false,
-		'an explicit false is kept',
+		true,
+		'an explicit true is kept',
 	);
 
 	const updated = await truthy.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {expandSessionsByDefault: true},
+		settings: {expandSessionsByDefault: false},
 	});
 	assert.equal(updated.ok, true, updated.error);
-	assert.equal(truthy.state.settings.expandSessionsByDefault, true);
+	assert.equal(truthy.state.settings.expandSessionsByDefault, false);
 	const reset = await truthy.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.expandSessionsByDefault, true);
+	assert.equal(reset.settings.expandSessionsByDefault, false);
 });
 
 test('link, quick-action, ordering and pin settings normalize with defaults', async () => {
