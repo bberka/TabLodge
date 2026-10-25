@@ -1209,23 +1209,29 @@ export function SessionManager({
 		await reload();
 	}
 
-	async function deleteFolder() {
-		const folder = folders.find((item) => item.id === folderId);
-		if (!folder || folder.isDefault) {
+	async function deleteFolder(folder: {
+		id: string;
+		name: string;
+		isDefault?: boolean;
+	}) {
+		if (folder.isDefault) {
 			return;
 		}
 
-		const result = await send('DELETE_FOLDER', {folderId});
+		const moved = folderCounts.byFolder.get(folder.id) ?? 0;
+		const result = await send('DELETE_FOLDER', {folderId: folder.id});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not delete this folder.', true);
 			return;
 		}
 
-		setFolderId(ALL);
+		if (folderId === folder.id) {
+			setFolderId(ALL);
+		}
 
 		await reload();
 		offerTrashUndo(
-			`Folder “${folder.name}” deleted.`,
+			`Deleted folder “${folder.name}”.${moved > 0 ? ` ${moved} ${moved === 1 ? 'session' : 'sessions'} moved to Unfiled.` : ''}`,
 			result.trashId,
 			showStatus,
 			reload,
@@ -1462,7 +1468,40 @@ export function SessionManager({
 										</span>
 									</button>
 								);
-								return chip;
+								if (!('createdAt' in folder) || folder.isDefault) {
+									return chip;
+								}
+
+								return (
+									<ActionContextMenu
+										key={folder.id}
+										actions={() => [
+											{
+												id: 'edit-folder',
+												label: 'Edit folder',
+												icon: ACTION_ICONS.edit,
+												onSelect() {
+													setDialog({
+														mode: 'rename',
+														folder,
+														icon: folder.icon,
+													});
+												},
+											},
+											{
+												id: 'delete-folder',
+												label: 'Delete folder',
+												icon: ACTION_ICONS.remove,
+												destructive: true,
+												onSelect() {
+													void deleteFolder(folder);
+												},
+											},
+										]}
+									>
+										{chip}
+									</ActionContextMenu>
+								);
 							},
 						)}
 						<span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
@@ -1502,7 +1541,7 @@ export function SessionManager({
 										size="icon"
 										className="h-8 w-8 text-muted-foreground hover:text-destructive"
 										aria-label={`Delete ${selectedFolder.name}`}
-										onClick={deleteFolder}
+										onClick={() => void deleteFolder(selectedFolder)}
 									>
 										<Trash2 />
 									</Button>
