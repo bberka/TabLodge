@@ -3433,3 +3433,161 @@ test('dashboard query parameters: search prefill, new-column request, and URL cl
 		'/newtab.html',
 	);
 });
+
+// ---- Session link moves, session ordering, and the pinned TabLodge tab ----
+function reorderState(settings: Record<string, unknown> = {}): StoredState {
+	const state = stateWithSession(settings);
+	const tab = (
+		id: string,
+		extra: Partial<SavedTab> = {},
+	): Partial<SavedTab> => ({
+		id,
+		title: id,
+		url: `https://${id}.example/`,
+		pinned: false,
+		originalIndex: 0,
+		...extra,
+	});
+	state.groups = [
+		{
+			...state.groups[0],
+			id: 'A',
+			name: 'A',
+			tabs: [
+				tab('a1', {split: {id: 'pair', position: 0}}),
+				tab('a2', {split: {id: 'pair', position: 1}}),
+				tab('a3'),
+			],
+		},
+		{...state.groups[0], id: 'B', name: 'B', tabs: [tab('b1'), tab('b2')]},
+		{...state.groups[0], id: 'C', name: 'C', tabs: [tab('c1')]},
+	];
+	return state;
+}
+
+const tabIdsOf = (state: StoredState, groupId: string) =>
+	state.groups.find((group) => group.id === groupId)?.tabs.map((t) => t.id);
+
+test('MOVE_TAB moves a link to another session, drops split info for both halves, and removes an emptied source', async () => {
+	const harness = createWorkerHarness(reorderState());
+	const moved = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'A',
+		tabId: 'a1',
+		toGroupId: 'B',
+		targetTabId: 'b1',
+		position: 'after',
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a2', 'a3']);
+	assert.deepEqual(tabIdsOf(harness.state, 'B'), ['b1', 'a1', 'b2']);
+	const all = harness.state.groups.flatMap((group) => group.tabs);
+	assert.equal(
+		all.every((t) => !t.split),
+		true,
+		'neither half of the old pair keeps split info',
+	);
+
+	const emptied = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'C',
+		tabId: 'c1',
+		toGroupId: 'A',
+		targetTabId: 'a2',
+		position: 'before',
+	});
+	assert.equal(emptied.ok, true, emptied.error);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['c1', 'a2', 'a3']);
+	assert.equal(
+		harness.state.groups.some((group) => group.id === 'C'),
+		false,
+	);
+});
+
+test('MOVE_TAB with copy keeps the source and its split pair, and appends without a target', async () => {
+	const harness = createWorkerHarness(reorderState());
+	const copied = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'A',
+		tabId: 'a1',
+		toGroupId: 'B',
+		copy: true,
+	});
+	assert.equal(copied.ok, true, copied.error);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a1', 'a2', 'a3']);
+	assert.equal(harness.state.groups[0].tabs[0].split?.id, 'pair');
+	const b = harness.state.groups.find((group) => group.id === 'B')!;
+	assert.equal(b.tabs.length, 3);
+	const copy = b.tabs.at(-1)!;
+	assert.notEqual(copy.id, 'a1');
+	assert.equal(copy.url, 'https://a1.example/');
+	assert.equal(copy.split, undefined);
+});
+
+test('MOVE_TAB reorders inside one session and rejects unknown links or sessions', async () => {
+	const harness = createWorkerHarness(reorderState());
+	const reordered = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'A',
+		tabId: 'a3',
+		toGroupId: 'A',
+		targetTabId: 'a1',
+		position: 'before',
+	});
+	assert.equal(reordered.ok, true, reordered.error);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a3', 'a1', 'a2']);
+	const missingTab = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'A',
+		tabId: 'nope',
+		toGroupId: 'B',
+	});
+	assert.equal(missingTab.ok, false);
+	const missingGroup = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'A',
+		tabId: 'a3',
+		toGroupId: 'nope',
+	});
+	assert.equal(missingGroup.ok, false);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a3', 'a1', 'a2']);
+});
+
+test('SET_GROUP_ORDER persists a custom session order and switches the sort to custom', async () => {
+	const harness = createWorkerHarness(reorderState({sessionSort: 'newest'}));
+	const result = await harness.sendMessage({
+		type: 'SET_GROUP_ORDER',
+		order: ['C', 'A', 'B'],
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['C', 'A', 'B'],
+	);
+	assert.equal(harness.state.settings.sessionSort, 'custom');
+
+	// A filtered view lists only some sessions: they trade places among their own slots.
+	const subset = await harness.sendMessage({
+		type: 'SET_GROUP_ORDER',
+		order: ['B', 'C', 'ghost'],
+	});
+	assert.equal(subset.ok, true, subset.error);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['B', 'A', 'C'],
+	);
+});
+
+const settleLodge = async () =>
+	new Promise((resolve) => {
+		setTimeout(resolve, 500);
+	});
+const lodgeUrl = 'chrome-extension://tablodge/newtab.html';
+const pinnedLodges = (
+	harness: ReturnType<typeof createWorkerHarness>,
+	windowId: number,
+) =>
+	harness.tabs.filter(
+		(tab) => tab.windowId === windowId && tab.url === lodgeUrl && tab.pinned,
+	);
+
