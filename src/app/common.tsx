@@ -5,7 +5,7 @@ import {
 	type ComponentType,
 	type ReactNode,
 } from 'react';
-import {ArrowLeft, Bookmark, CircleAlert, CircleCheck, X} from 'lucide-react';
+import {Bookmark, CircleAlert, CircleCheck, X} from 'lucide-react';
 import {
 	Card,
 	CardContent,
@@ -316,32 +316,20 @@ export function Brand({
 	);
 }
 
-// Back link to the dashboard for secondary pages (Settings, Help); reads like the Brand mark with an arrow.
-export function BackToDashboard({href = 'newtab.html'}: {href?: string}) {
-	return (
-		<a
-			href={href}
-			aria-label={`Back to the ${PROJECT.name} dashboard`}
-			title={`Back to the ${PROJECT.name} dashboard`}
-			className="group -ml-1.5 inline-flex shrink-0 items-center gap-2 rounded-lg py-0.5 pl-1 pr-2.5 text-sm font-extrabold tracking-tight transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-		>
-			<ArrowLeft
-				className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-x-0.5 group-hover:text-foreground"
-				aria-hidden="true"
-			/>
-			<span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary">
-				<TabLodgeMark className="h-[22px] w-[22px]" />
-			</span>
-			{PROJECT.name}
-		</a>
-	);
-}
+export type AppPage = 'dashboard' | 'settings' | 'help';
+const APP_PAGES: ReadonlyArray<{id: AppPage; label: string; href: string}> = [
+	{id: 'dashboard', label: 'Dashboard', href: 'newtab.html'},
+	{id: 'settings', label: 'Settings', href: 'options.html'},
+	{id: 'help', label: 'Help', href: 'help.html'},
+];
 
-// Page header for secondary TabLodge pages, matching the dashboard's "TabLodge │ Dashboard": "TabLodge │ Page", with "←" back to the dashboard on secondary
-// pages (`back`), a thin vertical separator, and the page name in a lighter weight. Actions go on the right.
-export function PageHeader({
-	title,
-	back = false,
+/**
+Shared header for the Dashboard, Settings and Help pages: "[logo] TabLodge | Dashboard Settings Help".
+The active page is shown in the foreground color with a primary underline (aria-current="page").
+Page actions go on the right. Navigation stays in the same tab.
+*/
+export function AppHeader({
+	active,
 	children,
 }: {
 	title: ReactNode;
@@ -349,9 +337,9 @@ export function PageHeader({
 	children?: ReactNode;
 }) {
 	return (
-		<header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
-			<div className="flex min-w-0 items-center gap-3">
-				{back ? <BackToDashboard /> : <Brand />}
+		<header className="mb-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border pb-4">
+			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+				<Brand />
 				<span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 				<h1 className="truncate text-sm font-normal text-muted-foreground">
 					{title}

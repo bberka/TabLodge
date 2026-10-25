@@ -39,7 +39,6 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	IconTooltip,
 	Input,
 	Label,
 	Select,
@@ -55,7 +54,7 @@ import {ThemeProvider, useTheme} from '../shared/theme';
 import {
 	EmptyState,
 	LoadError,
-	PageHeader,
+	AppHeader,
 	PageShell,
 	SectionCard,
 	StatusLine,
@@ -1637,17 +1636,7 @@ function DataRow({
 }
 
 function PageTop() {
-	return (
-		<PageHeader back title="Settings">
-			<IconTooltip label="Help">
-				<Button asChild variant="ghost" size="icon" className="h-8 w-8">
-					<a href="help.html" aria-label="Help">
-						<Info />
-					</a>
-				</Button>
-			</IconTooltip>
-		</PageHeader>
-	);
+	return <AppHeader active="settings" />;
 }
 
 createRoot(document.querySelector('#root')!).render(
