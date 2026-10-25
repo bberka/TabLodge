@@ -208,6 +208,13 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	contextMenuPageEnabled: true,
 	contextMenuSelectionEnabled: true,
 	contextMenuActionEnabled: true,
+	snapshotsEnabled: true,
+	snapshotIntervalMinutes: 15,
+	snapshotKeep: 25,
+	autoBackup: 'off',
+	autoBackupKeep: 7,
+	autoBackupToDownloads: false,
+	trashRetentionDays: 30,
 });
 // Mirrors src/app/icon-ids.ts (the worker cannot import); a test keeps both lists identical.
 const ICON_IDS = new Set<unknown>([
@@ -909,12 +916,39 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		contextMenuPageEnabled: raw.contextMenuPageEnabled !== false,
 		contextMenuSelectionEnabled: raw.contextMenuSelectionEnabled !== false,
 		contextMenuActionEnabled: raw.contextMenuActionEnabled !== false,
+		snapshotsEnabled: raw.snapshotsEnabled !== false,
+		snapshotIntervalMinutes: oneOfNumbers(
+			[5, 15, 30],
+			raw.snapshotIntervalMinutes,
+			15,
+		),
+		snapshotKeep: oneOfNumbers([10, 25, 50], raw.snapshotKeep, 25),
+		autoBackup: isOneOf(['off', 'daily', 'weekly'], raw.autoBackup)
+			? raw.autoBackup
+			: 'off',
+		autoBackupKeep: oneOfNumbers([7, 30], raw.autoBackupKeep, 7),
+		autoBackupToDownloads: raw.autoBackupToDownloads === true,
+		trashRetentionDays: oneOfNumbers([7, 30, 90], raw.trashRetentionDays, 30),
 	};
 	if (!settings.sessionsEnabled && !settings.bookmarksEnabled) {
 		settings.sessionsEnabled = true;
 	}
 
 	return settings;
+}
+
+/**
+A number from a fixed list (numeric strings count); anything else gives the fallback.
+*/
+function oneOfNumbers(
+	allowed: readonly number[],
+	value: unknown,
+	fallback: number,
+): number {
+	const number_ = typeof value === 'string' ? Number(value) : value;
+	return typeof number_ === 'number' && allowed.includes(number_)
+		? number_
+		: fallback;
 }
 
 /**
@@ -1825,6 +1859,23 @@ function findGroup(store: Store, groupId: string) {
 	return store.groups.find((group) => group.id === groupId) || null;
 }
 
+/**
+A new window for a restore; its starting new-tab page is the bootstrap tab, removed once the restored tabs are open.
+*/
+async function createRestoreWindow(): Promise<{
+	id: number | undefined;
+	bootstrapTabId: number | null;
+}> {
+	// Windows.create only resolves without a window for incognito requests, which TabLodge never makes.
+	const created = (await chrome.windows.create({
+		url: 'chrome://newtab/',
+		focused: true,
+		type: 'normal',
+	}))!;
+	const tabs = await chrome.tabs.query({windowId: created.id});
+	return {id: created.id, bootstrapTabId: tabs[0]?.id ?? null};
+}
+
 async function chooseRestoreWindow(
 	settings: Settings,
 	senderTab: chrome.tabs.Tab | undefined,
@@ -1841,19 +1892,10 @@ async function chooseRestoreWindow(
 		needsNewWindow = true;
 	}
 
-	if (needsNewWindow) {
-		// Windows.create only resolves without a window for incognito requests, which TabLodge never makes.
-		const created = (await chrome.windows.create({
-			url: 'chrome://newtab/',
-			focused: true,
-			type: 'normal',
-		}))!;
-		const tabs = await chrome.tabs.query({windowId: created.id});
-		return {id: created.id, bootstrapTabId: tabs[0]?.id ?? null};
-	}
-
-	// Reached only when id is an integer; otherwise needsNewWindow was set above.
-	return {id: id!, bootstrapTabId: null};
+	// Without a new window, id is an integer: otherwise needsNewWindow was set above.
+	return needsNewWindow
+		? createRestoreWindow()
+		: {id: id!, bootstrapTabId: null};
 }
 
 /**
@@ -1902,7 +1944,18 @@ async function restoreRecords(
 	records: SavedTab[],
 	settings: Settings,
 	senderTab: chrome.tabs.Tab | undefined,
-	options: {restoreTarget?: RestoreTarget; activate?: boolean} = {},
+	options: {
+		restoreTarget?: RestoreTarget;
+		activate?: boolean;
+		/**
+		Restore into this (new) window instead of choosing one.
+		*/
+		target?: {id: number | undefined; bootstrapTabId: number | null};
+		/**
+		The saved tab to make active (default: the first one that opened).
+		*/
+		activeSavedId?: string;
+	} = {},
 ): Promise<RestoreRecordsResult> {
 	// Restoring a single tab of a pair passes one record, so pairSplits leaves it a plain tab.
 	const valid = pairSplits(
@@ -1920,11 +1973,13 @@ async function restoreRecords(
 		};
 	}
 
-	const target = await chooseRestoreWindow(
-		settings,
-		senderTab,
-		options.restoreTarget || settings.restoreTarget,
-	);
+	const target =
+		options.target ??
+		(await chooseRestoreWindow(
+			settings,
+			senderTab,
+			options.restoreTarget || settings.restoreTarget,
+		));
 	const targetTabs = await chrome.tabs.query({windowId: target.id});
 	const existing = new Set(
 		targetTabs
@@ -2052,9 +2107,12 @@ async function restoreRecords(
 		}
 	}
 
-	if (options.activate !== false && opened[0]?.tabId) {
+	const activeEntry =
+		opened.find((entry) => entry.saved.id === options.activeSavedId) ??
+		opened[0];
+	if (options.activate !== false && activeEntry?.tabId) {
 		try {
-			await chrome.tabs.update(opened[0].tabId, {active: true});
+			await chrome.tabs.update(activeEntry.tabId, {active: true});
 		} catch {
 			/*
 			The tab may have been closed.
@@ -2162,13 +2220,20 @@ async function restoreTab(
 			? options.restoreMode
 			: store.settings.restoreMode;
 		let removed = false;
+		let trashId: string | undefined;
 		if (mode === 'remove' && !group.locked) {
+			const groupIndex = store.groups.indexOf(group);
+			const tabIndex = group.tabs.findIndex((entry) => entry.id === tabId);
 			group.tabs = group.tabs.filter((entry) => entry.id !== tabId);
 			if (group.tabs.length === 0) {
 				store.groups = store.groups.filter((entry) => entry.id !== groupId);
 				removed = true;
 			}
 
+			trashId = await trashAdd(
+				store.settings,
+				trashTabsEntry(group, [{tab, index: tabIndex}], removed, groupIndex),
+			);
 			await writeStore(store);
 		} else if (mode === 'archive') {
 			// Archiving one restored tab dims that tab; the rest of the session stays active.
@@ -2187,6 +2252,7 @@ async function restoreTab(
 			archived: mode === 'archive',
 			splits: 0,
 			splitsSeparated: 0,
+			...(trashId && {trashId}),
 		};
 	});
 }
@@ -2232,12 +2298,24 @@ async function restoreGroup(
 				: store.settings.restoreMode;
 		const remove = mode === 'remove' && !group.locked;
 		let removed = false;
+		let trashId: string | undefined;
 		if (remove) {
 			const restoredIds = new Set(result.opened.map(({saved}) => saved.id));
+			const groupIndex = store.groups.indexOf(group);
+			const gone = group.tabs
+				.map((tab, index) => ({tab, index}))
+				.filter(({tab}) => restoredIds.has(tab.id));
 			group.tabs = group.tabs.filter((tab) => !restoredIds.has(tab.id));
 			if (group.tabs.length === 0) {
 				store.groups = store.groups.filter((entry) => entry.id !== groupId);
 				removed = true;
+			}
+
+			if (gone.length > 0) {
+				trashId = await trashAdd(
+					store.settings,
+					trashTabsEntry(group, gone, removed, groupIndex),
+				);
 			}
 
 			await writeStore(store);
@@ -2258,6 +2336,7 @@ async function restoreGroup(
 			archived: mode === 'archive',
 			splits: result.splits,
 			splitsSeparated: result.splitsSeparated,
+			...(trashId && {trashId}),
 		};
 	});
 }
@@ -2271,14 +2350,21 @@ async function deleteGroup(
 			return {ok: false, error: 'Sessions are disabled in Settings.'};
 		}
 
-		const before = store.groups.length;
-		store.groups = store.groups.filter((group) => group.id !== groupId);
-		if (before === store.groups.length) {
+		const index = store.groups.findIndex((group) => group.id === groupId);
+		if (index === -1) {
 			return {ok: false, error: 'That saved session no longer exists.'};
 		}
 
+		const [removed] = store.groups.splice(index, 1);
+		const trashId = await trashAdd(store.settings, {
+			kind: 'session',
+			label: removed.name,
+			origin: store.folders.find((f) => f.id === removed.folderId)?.name ?? '',
+			count: removed.tabs.length,
+			data: trashSessionData(removed, index),
+		});
 		await writeStore(store);
-		return {ok: true};
+		return {ok: true, trashId};
 	});
 }
 
@@ -2534,15 +2620,30 @@ async function deleteFolder(
 			return {ok: false, error: 'The Unfiled folder cannot be deleted.'};
 		}
 
+		const groupIds: string[] = [];
 		for (const group of store.groups) {
-			if (group.folderId === folderId) {
-				group.folderId = DEFAULT_FOLDER_ID;
+			if (group.folderId !== folderId) {
+				continue;
 			}
+
+			group.folderId = DEFAULT_FOLDER_ID;
+			groupIds.push(group.id);
 		}
 
+		const trashId = await trashAdd(store.settings, {
+			kind: 'folder',
+			label: folder.name,
+			origin: '',
+			count: groupIds.length,
+			data: {
+				folder,
+				index: store.folders.findIndex((entry) => entry.id === folderId),
+				groupIds,
+			},
+		});
 		store.folders = store.folders.filter((entry) => entry.id !== folderId);
 		await writeStore(store);
-		return {ok: true};
+		return {ok: true, trashId};
 	});
 }
 
@@ -2587,13 +2688,24 @@ async function deleteTab(
 			return {ok: false, error: 'That saved session no longer exists.'};
 		}
 
-		const oldLength = group.tabs.length;
-		group.tabs = group.tabs.filter((tab) => tab.id !== tabId);
-		if (group.tabs.length === oldLength) {
+		const tabIndex = group.tabs.findIndex((tab) => tab.id === tabId);
+		if (tabIndex === -1) {
 			return {ok: false, error: 'That saved tab no longer exists.'};
 		}
 
-		if (group.tabs.length > 0) {
+		const groupIndex = store.groups.indexOf(group);
+		const [removedTab] = group.tabs.splice(tabIndex, 1);
+		const groupRemoved = group.tabs.length === 0;
+		const trashId = await trashAdd(
+			store.settings,
+			trashTabsEntry(
+				group,
+				[{tab: removedTab, index: tabIndex}],
+				groupRemoved,
+				groupIndex,
+			),
+		);
+		if (!groupRemoved) {
 			group.updatedAt = Date.now();
 		}
 
@@ -2601,7 +2713,7 @@ async function deleteTab(
 			(entry) => entry.id !== groupId || entry.tabs.length > 0,
 		);
 		await writeStore(store);
-		return {ok: true};
+		return {ok: true, trashId};
 	});
 }
 
@@ -2897,6 +3009,16 @@ async function importBrowserBookmarks(
 			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
 		}
 
+		const treeLinks = (nodes: chrome.bookmarks.BookmarkTreeNode[]): number =>
+			nodes.reduce(
+				(sum, node) =>
+					sum + (node.url ? 1 : 0) + treeLinks(node.children ?? []),
+				0,
+			);
+		if (treeLinks(Array.isArray(tree) ? tree : []) > LARGE_IMPORT_THRESHOLD) {
+			await safetyBackup(store, 'Before importing browser bookmarks');
+		}
+
 		const columnsByName = new Map(
 			store.bookmarkColumns.map((column) => [
 				column.name.toLocaleLowerCase(),
@@ -3148,16 +3270,33 @@ async function deleteBookmark(
 			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
 		}
 
-		const originalLength = store.bookmarks.length;
-		store.bookmarks = store.bookmarks.filter(
-			(bookmark) => bookmark.id !== bookmarkId,
+		const index = store.bookmarks.findIndex(
+			(bookmark) => bookmark.id === bookmarkId,
 		);
-		if (store.bookmarks.length === originalLength) {
+		if (index === -1) {
 			return {ok: false, error: 'That bookmark no longer exists.'};
 		}
 
+		const [removed] = store.bookmarks.splice(index, 1);
+		const sameColumn = (bookmark: Bookmark | undefined) =>
+			bookmark?.columnId === removed.columnId ? bookmark.id : null;
+		const trashId = await trashAdd(store.settings, {
+			kind: 'bookmark',
+			label: removed.title || removed.url,
+			origin:
+				store.bookmarkColumns.find((column) => column.id === removed.columnId)
+					?.name ?? 'Unfiled',
+			count: 1,
+			data: {
+				bookmark: removed,
+				columnId: removed.columnId,
+				index,
+				prevId: sameColumn(store.bookmarks[index - 1]),
+				nextId: sameColumn(store.bookmarks[index]),
+			},
+		});
 		await writeStore(store);
-		return {ok: true};
+		return {ok: true, trashId};
 	});
 }
 
@@ -3261,13 +3400,46 @@ async function deleteBookmarkColumn(
 		const affected = store.bookmarks.filter(
 			(bookmark) => bookmark.columnId === columnId,
 		);
+		const columnEntry = store.bookmarkColumns.find(
+			(entry) => entry.id === columnId,
+		)!;
+		const columnIndex = store.bookmarkColumns.indexOf(columnEntry);
 		if (discardBookmarks) {
+			if (
+				affected.length >= BULK_DELETE_THRESHOLD &&
+				!(await safetyBackup(store, 'Before deleting a bookmark column'))
+			) {
+				return {
+					ok: false,
+					error: 'Could not take a safety backup first. Nothing was changed.',
+				};
+			}
+
+			const trashId = await trashAdd(store.settings, {
+				kind: 'column',
+				label: columnEntry.name,
+				origin: '',
+				count: affected.length,
+				data: {
+					column: columnEntry,
+					index: columnIndex,
+					bookmarks: affected,
+					movedIds: [],
+					movedTo: null,
+				},
+			});
 			store.bookmarks = store.bookmarks.filter(
 				(bookmark) => bookmark.columnId !== columnId,
 			);
 			store.bookmarkColumns = remaining;
 			await writeStore(store);
-			return {ok: true, moved: 0, unfiled: 0, deleted: affected.length};
+			return {
+				ok: true,
+				moved: 0,
+				unfiled: 0,
+				deleted: affected.length,
+				trashId,
+			};
 		}
 
 		if (
@@ -3282,9 +3454,23 @@ async function deleteBookmarkColumn(
 		}
 
 		// With remaining columns, the check above guarantees targetColumnId is one of them.
+		const movedTo =
+			remaining.length > 0 ? targetColumnId! : BOOKMARK_UNFILED_ID;
+		const trashId = await trashAdd(store.settings, {
+			kind: 'column',
+			label: columnEntry.name,
+			origin: '',
+			count: 0,
+			data: {
+				column: columnEntry,
+				index: columnIndex,
+				bookmarks: [],
+				movedIds: affected.map((bookmark) => bookmark.id),
+				movedTo,
+			},
+		});
 		for (const bookmark of affected) {
-			bookmark.columnId =
-				remaining.length > 0 ? targetColumnId! : BOOKMARK_UNFILED_ID;
+			bookmark.columnId = movedTo;
 		}
 
 		store.bookmarkColumns = remaining;
@@ -3294,6 +3480,7 @@ async function deleteBookmarkColumn(
 			moved: affected.length,
 			unfiled: remaining.length > 0 ? 0 : affected.length,
 			deleted: 0,
+			trashId,
 		};
 	});
 }
@@ -3725,6 +3912,22 @@ async function importGroups(
 			};
 		}
 
+		const incomingItems =
+			candidates.reduce<number>(
+				(sum, candidate) =>
+					sum +
+					(isRecord(candidate) && Array.isArray(candidate.tabs)
+						? candidate.tabs.length
+						: 0),
+				0,
+			) +
+			(hasBookmarkData && Array.isArray(input?.bookmarks)
+				? input.bookmarks.length
+				: 0);
+		if (incomingItems > LARGE_IMPORT_THRESHOLD) {
+			await safetyBackup(store, 'Before a large import');
+		}
+
 		const folderMap =
 			candidates.length > 0
 				? mergeImportedFolders(store, input, candidates)
@@ -3869,6 +4072,21 @@ async function updateSettings(
 			await syncToolbarAction(store.settings);
 		}
 
+		if (
+			previousSettings.snapshotsEnabled !== store.settings.snapshotsEnabled ||
+			previousSettings.snapshotIntervalMinutes !==
+				store.settings.snapshotIntervalMinutes ||
+			previousSettings.autoBackup !== store.settings.autoBackup
+		) {
+			await syncRecoveryAlarms(store.settings);
+			if (
+				store.settings.snapshotsEnabled &&
+				!previousSettings.snapshotsEnabled
+			) {
+				scheduleSnapshot();
+			}
+		}
+
 		if (store.settings.keepLodgePinned && !previousSettings.keepLodgePinned) {
 			lodgePaused.clear();
 			lodgeUndoneAt.clear();
@@ -3891,6 +4109,7 @@ async function resetSettings(): Promise<ActionResult<'RESET_SETTINGS'>> {
 		const store = await getStore();
 		store.settings = normalizeSettings({...DEFAULT_SETTINGS});
 		await writeStore(store);
+		await syncRecoveryAlarms(store.settings);
 		await syncToolbarAction(store.settings);
 		await rebuildContextMenus(store);
 		return {ok: true, settings: store.settings};
@@ -3911,6 +4130,16 @@ async function eraseData(
 		const eraseBookmarks = scope !== 'sessions';
 		const sessions = eraseSessions ? store.groups.length : 0;
 		const bookmarks = eraseBookmarks ? store.bookmarks.length : 0;
+		if (
+			sessions + bookmarks > 0 &&
+			!(await safetyBackup(store, 'Before erasing data'))
+		) {
+			return {
+				ok: false,
+				error: 'Could not take a safety backup first. Nothing was erased.',
+			};
+		}
+
 		// Erasing data keeps settings and excluded sites; only the chosen data returns to its fresh-install state.
 		if (eraseSessions) {
 			store.groups = fresh.groups;
@@ -4016,6 +4245,1673 @@ chrome.tabs.onRemoved?.addListener((tabId) => {
 		return gone === undefined ? undefined : writeClaims(rest);
 	});
 });
+
+// ---- Recovery: crash snapshots, automatic and safety backups, trash. Everything stays in chrome.storage.local.
+// Storage keys (all separate from `tablodge.state`, so the big state is never rewritten for them):
+//   tablodge.snapshots       { version, history: Snapshot[] }  rotated at the interval, newest first
+//   tablodge.snapshots.live  Snapshot                          the latest capture, rewritten on (debounced) tab events
+//   tablodge.snapshots.meta  { sessionOpen, liveAt, closing, recovery }  the small crash-detection flags
+//   tablodge.backups         { auto, safety, downloadError }   full JSON exports (auto/manual ring, safety ring)
+//   tablodge.trash           { items }                         deleted sessions, links, bookmarks, columns, folders
+const SNAPSHOTS_KEY = 'tablodge.snapshots';
+const SNAPSHOT_LIVE_KEY = 'tablodge.snapshots.live';
+const SNAPSHOT_META_KEY = 'tablodge.snapshots.meta';
+const BACKUPS_KEY = 'tablodge.backups';
+const TRASH_KEY = 'tablodge.trash';
+const SNAPSHOT_DEBOUNCE_MS = 5000;
+const SNAPSHOT_MAX_WAIT_MS = 30_000;
+// Serialized characters across the whole history; the oldest snapshots go first.
+const SNAPSHOT_MAX_CHARS = 24_000_000;
+const MIN_RECOVERY_TABS = 2;
+// If the browser already reopened this share of the snapshot's tabs, there is nothing left to recover.
+const ALREADY_OPEN_RATIO = 0.8;
+const ALARM_SNAPSHOT = 'tablodge-snapshot';
+const ALARM_BACKUP = 'tablodge-backup';
+const ALARM_TRASH = 'tablodge-trash';
+// Mirrors BACKUP_FORMAT_ID and BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
+const BACKUP_FORMAT_ID = 'tablodge-backup';
+const BACKUP_VERSION = 1;
+const SAFETY_BACKUP_KEEP = 5;
+const BACKUP_MAX_CHARS = 40_000_000;
+// Chrome refuses URLs longer than 2 MB, which also limits data: URLs handed to downloads.download.
+const DOWNLOAD_MAX_URL_CHARS = 2_000_000;
+const TRASH_MAX_ITEMS = 500;
+const BULK_DELETE_THRESHOLD = 10;
+const LARGE_IMPORT_THRESHOLD = 50;
+const DAY_MS = 86_400_000;
+
+type SnapshotTab = import('../src/app/types').SnapshotTab;
+type SnapshotGroup = import('../src/app/types').SnapshotGroup;
+type SnapshotWindow = import('../src/app/types').SnapshotWindow;
+type SnapshotReason = import('../src/app/types').SnapshotReason;
+type Snapshot = import('../src/app/types').Snapshot;
+type SnapshotSummary = import('../src/app/types').SnapshotSummary;
+type RecoveryInfo = import('../src/app/types').RecoveryInfo;
+type BackupKind = import('../src/app/types').BackupKind;
+type BackupSummary = import('../src/app/types').BackupSummary;
+type TrashKind = import('../src/app/types').TrashKind;
+type TrashSummary = import('../src/app/types').TrashSummary;
+type StorageUsage = import('../src/app/types').StorageUsage;
+
+/**
+A small FIFO runner: each operation starts after the previous one settled, so read-modify-write cycles on one storage key never interleave.
+*/
+function serialQueue() {
+	let tail: Promise<unknown> = Promise.resolve();
+	return <T>(operation: () => Promise<T>): Promise<T> => {
+		const result = tail.then(operation, operation);
+		tail = result.catch(() => undefined);
+		return result;
+	};
+}
+
+const snapshotMutate = serialQueue();
+const backupMutate = serialQueue();
+const trashMutate = serialQueue();
+
+/**
+A short non-cryptographic hash (cyrb53) used to spot a snapshot or backup identical to the previous one.
+*/
+/* eslint-disable no-bitwise -- a hash is bit arithmetic */
+function hashText(text: string): string {
+	let h1 = 0xde_ad_be_ef ^ text.length;
+	let h2 = 0x41_c6_ce_57 ^ text.length;
+	for (let index = 0; index < text.length; index += 1) {
+		const code = text.codePointAt(index)!;
+		h1 = Math.imul(h1 ^ code, 2_654_435_761);
+		h2 = Math.imul(h2 ^ code, 1_597_334_677);
+	}
+
+	h1 =
+		Math.imul(h1 ^ (h1 >>> 16), 2_246_822_507) ^
+		Math.imul(h2 ^ (h2 >>> 13), 3_266_489_909);
+	h2 =
+		Math.imul(h2 ^ (h2 >>> 16), 2_246_822_507) ^
+		Math.imul(h1 ^ (h1 >>> 13), 3_266_489_909);
+	return (
+		(4_294_967_296 * (2_097_151 & h2) + (h1 >>> 0)).toString(36) +
+		text.length.toString(36)
+	);
+}
+
+/* eslint-enable no-bitwise */
+
+const pad2 = (value: number) => String(value).padStart(2, '0');
+const localDate = (time: number) => {
+	const date = new Date(time);
+	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
+
+const localDateTime = (time: number) => {
+	const date = new Date(time);
+	return `${localDate(time)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+};
+
+async function readKey<T>(key: string): Promise<T | undefined> {
+	const saved = await chrome.storage.local.get<Record<string, T | undefined>>([
+		key,
+	]);
+	return saved[key];
+}
+
+/**
+Settings without touching the big state (no normalization of sessions, no writes).
+*/
+async function readSettings(): Promise<Settings> {
+	const saved = await chrome.storage.local.get<Record<string, Raw | undefined>>(
+		[STORAGE_KEY],
+	);
+	return normalizeSettings(
+		saved[STORAGE_KEY]?.settings as RawSettings | undefined,
+	);
+}
+
+// ---- Crash snapshots
+
+type SnapshotMeta = {
+	/**
+	True from the first capture of a run until the last window closes; still true at startup means no clean exit.
+	*/
+	sessionOpen: boolean;
+	liveAt: number;
+	/**
+	The latest window close and how many normal windows were left, to recognize a shutdown in progress.
+	*/
+	closing: {at: number; remaining: number} | null;
+	recovery: {snapshotId: string; detectedAt: number} | null;
+};
+
+const isSnapshot = (value: unknown): value is Snapshot =>
+	isRecord(value) &&
+	typeof value.id === 'string' &&
+	Array.isArray(value.windows) &&
+	Number.isFinite(Number(value.at));
+
+async function readSnapshotHistory(): Promise<Snapshot[]> {
+	const raw = await readKey<Raw>(SNAPSHOTS_KEY);
+	return Array.isArray(raw?.history) ? raw.history.filter(isSnapshot) : [];
+}
+
+async function writeSnapshotHistory(history: Snapshot[]) {
+	await chrome.storage.local.set({[SNAPSHOTS_KEY]: {version: 1, history}});
+}
+
+async function readSnapshotMeta(): Promise<SnapshotMeta> {
+	const raw = await readKey<Raw>(SNAPSHOT_META_KEY);
+	const closing = isRecord(raw?.closing) ? raw.closing : null;
+	const recovery = isRecord(raw?.recovery) ? raw.recovery : null;
+	return {
+		sessionOpen: raw?.sessionOpen === true,
+		liveAt: Number(raw?.liveAt) || 0,
+		closing: closing
+			? {at: Number(closing.at) || 0, remaining: Number(closing.remaining) || 0}
+			: null,
+		recovery:
+			recovery && typeof recovery.snapshotId === 'string'
+				? {
+						snapshotId: recovery.snapshotId,
+						detectedAt: Number(recovery.detectedAt) || 0,
+					}
+				: null,
+	};
+}
+
+async function writeSnapshotMeta(meta: SnapshotMeta) {
+	await chrome.storage.local.set({[SNAPSHOT_META_KEY]: meta});
+}
+
+async function readLiveSnapshot(): Promise<Snapshot | null> {
+	const raw = await readKey<unknown>(SNAPSHOT_LIVE_KEY);
+	return isSnapshot(raw) ? raw : null;
+}
+
+/**
+The open normal windows as a snapshot: web tabs only (TabLodge's own pages and browser pages are left out),
+honoring excluded sites, with pinned state, tab groups, split view pairs, the active tab and the focused window.
+*/
+async function captureSnapshotWindows(
+	settings: Settings,
+): Promise<SnapshotWindow[]> {
+	let windows: chrome.windows.Window[];
+	try {
+		windows = await chrome.windows.getAll({
+			populate: true,
+			windowTypes: ['normal'],
+		});
+	} catch {
+		return [];
+	}
+
+	const groupInfo = new Map<number, SnapshotGroup>();
+	try {
+		for (const group of await chrome.tabGroups.query({})) {
+			groupInfo.set(group.id, {
+				title: cleanText(group.title, '', 100),
+				color: isGroupColor(group.color) ? group.color : 'grey',
+				collapsed: Boolean(group.collapsed),
+			});
+		}
+	} catch {
+		/*
+		Tab groups are optional.
+		*/
+	}
+
+	const result: SnapshotWindow[] = [];
+	for (const win of windows) {
+		if (win.incognito || !Array.isArray(win.tabs)) {
+			continue;
+		}
+
+		const groups: SnapshotGroup[] = [];
+		const groupIndex = new Map<number, number>();
+		const splitSlots = new Map<number, number[]>();
+		const tabs: SnapshotTab[] = [];
+		for (const tab of win.tabs.toSorted((a, b) => a.index - b.index)) {
+			const url = normalizeUrl(tab.url || tab.pendingUrl);
+			if (!url || !isCapturable({url} as chrome.tabs.Tab, settings)) {
+				continue;
+			}
+
+			const entry: SnapshotTab = {url, title: cleanText(tab.title, url, 200)};
+			if (tab.pinned) {
+				entry.pinned = true;
+			}
+
+			if (tab.active) {
+				entry.active = true;
+			}
+
+			if (!tab.pinned && isInteger(tab.groupId) && tab.groupId >= 0) {
+				let index = groupIndex.get(tab.groupId);
+				const info = groupInfo.get(tab.groupId);
+				if (index === undefined && info) {
+					groups.push(info);
+					index = groups.length - 1;
+					groupIndex.set(tab.groupId, index);
+				}
+
+				if (index !== undefined) {
+					entry.group = index;
+				}
+			}
+
+			const splitView = splitViewOf(tab);
+			if (splitView !== null) {
+				splitSlots.set(splitView, [
+					...(splitSlots.get(splitView) ?? []),
+					tabs.length,
+				]);
+			}
+
+			tabs.push(entry);
+		}
+
+		// A split pair is kept only when both halves made it into the snapshot, side by side.
+		for (const [splitView, slots] of splitSlots) {
+			if (!(slots.length === 2 && slots[1] === slots[0] + 1)) {
+				continue;
+			}
+
+			tabs[slots[0]].split = {id: String(splitView), position: 0};
+			tabs[slots[1]].split = {id: String(splitView), position: 1};
+		}
+
+		if (tabs.length > 0) {
+			result.push({
+				focused: Boolean(win.focused),
+				state: typeof win.state === 'string' ? win.state : 'normal',
+				groups,
+				tabs,
+			});
+		}
+	}
+
+	return result;
+}
+
+const countTabs = (windows: readonly SnapshotWindow[]) =>
+	windows.reduce((sum, win) => sum + win.tabs.length, 0);
+
+function summarizeSnapshot(snapshot: Snapshot): SnapshotSummary {
+	return {
+		id: snapshot.id,
+		at: Number(snapshot.at),
+		reason: snapshot.reason,
+		tabs: countTabs(snapshot.windows),
+		windows: snapshot.windows.map((win) => ({
+			tabs: win.tabs.length,
+			pinned: win.tabs.filter((tab) => tab.pinned).length,
+			groups: win.groups.length,
+			focused: Boolean(win.focused),
+			titles: win.tabs.slice(0, 3).map((tab) => tab.title),
+		})),
+	};
+}
+
+function newSnapshot(
+	windows: SnapshotWindow[],
+	reason: SnapshotReason,
+): Snapshot {
+	const text = JSON.stringify(windows);
+	return {
+		id: makeId(),
+		at: Date.now(),
+		reason,
+		sig: hashText(text),
+		size: text.length,
+		windows,
+	};
+}
+
+/**
+Newest first, at most `keep` entries, and no more than SNAPSHOT_MAX_CHARS in total (the newest always stays).
+*/
+function trimHistory(history: Snapshot[], keep: number): Snapshot[] {
+	const result: Snapshot[] = [];
+	let total = 0;
+	for (const snapshot of history.slice(0, keep)) {
+		total += Number(snapshot.size) || 0;
+		if (result.length > 0 && total > SNAPSHOT_MAX_CHARS) {
+			break;
+		}
+
+		result.push(snapshot);
+	}
+
+	return result;
+}
+
+/**
+Captures the open windows. The result replaces the live snapshot when it changed; with `rotate` it also joins
+the history (unless identical to the newest entry there). Never overwrites a snapshot with an empty one.
+*/
+function takeSnapshot(
+	reason: SnapshotReason,
+	rotate: boolean,
+	force = false,
+): Promise<Snapshot | null> {
+	return snapshotMutate(async () => {
+		const settings = await readSettings();
+		if (!settings.snapshotsEnabled && !force) {
+			return null;
+		}
+
+		const windows = await captureSnapshotWindows(settings);
+		if (windows.length === 0) {
+			return null;
+		}
+
+		const snapshot = newSnapshot(windows, reason);
+		const live = await readLiveSnapshot();
+		if (live?.sig !== snapshot.sig) {
+			await chrome.storage.local.set({[SNAPSHOT_LIVE_KEY]: snapshot});
+		}
+
+		const meta = await readSnapshotMeta();
+		meta.sessionOpen = true;
+		meta.liveAt = Date.now();
+		meta.closing = null;
+		await writeSnapshotMeta(meta);
+		if (rotate) {
+			const history = await readSnapshotHistory();
+			if (history[0]?.sig !== snapshot.sig) {
+				await writeSnapshotHistory(
+					trimHistory([snapshot, ...history], settings.snapshotKeep),
+				);
+			}
+		}
+
+		return snapshot;
+	});
+}
+
+let snapshotTimer: ReturnType<typeof setTimeout> | undefined;
+let snapshotFirstEventAt = 0;
+/**
+Debounced capture for tab and window events: waits SNAPSHOT_DEBOUNCE_MS after the last event, but never longer than SNAPSHOT_MAX_WAIT_MS after the first.
+*/
+function scheduleSnapshot() {
+	const now = Date.now();
+	if (snapshotTimer === undefined) {
+		snapshotFirstEventAt = now;
+	} else {
+		clearTimeout(snapshotTimer);
+	}
+
+	const delay = Math.max(
+		0,
+		Math.min(
+			SNAPSHOT_DEBOUNCE_MS,
+			snapshotFirstEventAt + SNAPSHOT_MAX_WAIT_MS - now,
+		),
+	);
+	snapshotTimer = setTimeout(() => {
+		snapshotTimer = undefined;
+		void takeSnapshot('interval', false).catch(() => undefined);
+	}, delay);
+}
+
+/**
+Adds the live snapshot to the history (unless it is already there) under the given reason.
+*/
+async function rotateLiveIntoHistory(
+	reason: SnapshotReason,
+	keep: number,
+): Promise<Snapshot | null> {
+	const live = await readLiveSnapshot();
+	if (!live) {
+		return null;
+	}
+
+	const history = await readSnapshotHistory();
+	if (history[0]?.sig === live.sig) {
+		if (reason === 'crash' && history[0].reason !== 'crash') {
+			history[0] = {...history[0], reason};
+			await writeSnapshotHistory(history);
+		}
+
+		return history[0];
+	}
+
+	const entry: Snapshot = {...live, id: makeId(), reason};
+	await writeSnapshotHistory(trimHistory([entry, ...history], keep));
+	return entry;
+}
+
+/**
+Crash detection, run once per browser start. MV3 has no shutdown event, so a clean exit is inferred:
+the previous run counts as ended cleanly when the last normal window was closed (windows.onRemoved saw it), or
+when windows were being closed down to one and nothing was captured after that. Anything else, a run that was
+still "open", is treated as a crash or a forced quit. The previous run's final snapshot moves into the history
+and, with at least MIN_RECOVERY_TABS tabs, becomes the pending recovery offered on the dashboard.
+*/
+function evaluateStartup(): Promise<void> {
+	return snapshotMutate(async () => {
+		const settings = await readSettings();
+		if (!settings.snapshotsEnabled) {
+			return;
+		}
+
+		const meta = await readSnapshotMeta();
+		const live = await readLiveSnapshot();
+		const shuttingDown = Boolean(
+			meta.closing &&
+			meta.closing.at >= meta.liveAt &&
+			meta.closing.remaining <= 1,
+		);
+		const crashed = meta.sessionOpen && !shuttingDown;
+		if (live) {
+			const entry = await rotateLiveIntoHistory(
+				crashed ? 'crash' : 'exit',
+				settings.snapshotKeep,
+			);
+			meta.recovery =
+				crashed && entry && countTabs(entry.windows) >= MIN_RECOVERY_TABS
+					? {snapshotId: entry.id, detectedAt: Date.now()}
+					: null;
+		} else {
+			meta.recovery = null;
+		}
+
+		meta.sessionOpen = true;
+		meta.closing = null;
+		await writeSnapshotMeta(meta);
+	});
+}
+
+/**
+The last normal window closed: that is the clean-exit signal. The live snapshot (the state before closing) joins the history.
+*/
+function handleWindowRemoved() {
+	return snapshotMutate(async () => {
+		const settings = await readSettings();
+		if (!settings.snapshotsEnabled) {
+			return;
+		}
+
+		let remaining: number;
+		try {
+			remaining = (
+				await chrome.windows.getAll({windowTypes: ['normal']})
+			).filter((win) => !win.incognito).length;
+		} catch {
+			return;
+		}
+
+		const meta = await readSnapshotMeta();
+		if (remaining > 0) {
+			meta.closing = {at: Date.now(), remaining};
+			await writeSnapshotMeta(meta);
+			scheduleSnapshot();
+			return;
+		}
+
+		meta.sessionOpen = false;
+		meta.closing = null;
+		await writeSnapshotMeta(meta);
+		await rotateLiveIntoHistory('exit', settings.snapshotKeep);
+	});
+}
+
+async function openUrlSet(): Promise<Set<string>> {
+	const urls = new Set<string>();
+	try {
+		for (const tab of await chrome.tabs.query({})) {
+			const url = normalizeUrl(tab.url);
+			if (url) {
+				urls.add(url);
+			}
+		}
+	} catch {
+		/*
+		Treated as nothing open.
+		*/
+	}
+
+	return urls;
+}
+
+async function getSnapshots(): Promise<ActionResult<'GET_SNAPSHOTS'>> {
+	return snapshotMutate(async () => {
+		const settings = await readSettings();
+		const history = await readSnapshotHistory();
+		const live = await readLiveSnapshot();
+		const meta = await readSnapshotMeta();
+		let recovery: RecoveryInfo | null = null;
+		const pending = meta.recovery
+			? history.find((entry) => entry.id === meta.recovery!.snapshotId)
+			: undefined;
+		if (meta.recovery && !pending) {
+			meta.recovery = null;
+			await writeSnapshotMeta(meta);
+		}
+
+		if (meta.recovery && pending) {
+			const open = await openUrlSet();
+			const urls = pending.windows.flatMap((win) =>
+				win.tabs.map((tab) => tab.url),
+			);
+			const already = urls.filter((url) => open.has(url)).length;
+			if (urls.length > 0 && already / urls.length >= ALREADY_OPEN_RATIO) {
+				// The browser reopened the session itself.
+				meta.recovery = null;
+				await writeSnapshotMeta(meta);
+			} else {
+				recovery = {
+					snapshotId: pending.id,
+					at: Number(pending.at),
+					windows: pending.windows.length,
+					tabs: countTabs(pending.windows),
+				};
+			}
+		}
+
+		return {
+			ok: true,
+			enabled: settings.snapshotsEnabled,
+			snapshots: history.map((entry) => summarizeSnapshot(entry)),
+			live: live ? summarizeSnapshot(live) : null,
+			recovery,
+		};
+	});
+}
+
+/**
+A snapshot window as saved-tab records, so the regular restore code (groups, pinned, split view) can reopen it.
+*/
+function snapshotRecords(win: SnapshotWindow, stamp: number): SavedTab[] {
+	return win.tabs.map((tab, index) => {
+		const group =
+			tab.group === undefined || tab.pinned ? undefined : win.groups[tab.group];
+		return {
+			id: makeId(),
+			title: tab.title,
+			url: tab.url,
+			faviconUrl: '',
+			notes: '',
+			archived: false,
+			pinned: Boolean(tab.pinned),
+			nativeGroup: group
+				? {
+						key: `snapshot-${tab.group}`,
+						title: group.title,
+						color: group.color,
+						collapsed: group.collapsed,
+					}
+				: null,
+			savedAt: stamp,
+			originalIndex: index,
+			...(tab.split && {split: {...tab.split}}),
+		};
+	});
+}
+
+function pickSnapshotWindows(
+	snapshot: Snapshot,
+	windowIndex: number | undefined,
+): SnapshotWindow[] | null {
+	if (windowIndex === undefined) {
+		return snapshot.windows;
+	}
+
+	const win = isInteger(windowIndex)
+		? snapshot.windows[windowIndex]
+		: undefined;
+	return win ? [win] : null;
+}
+
+async function findSnapshot(id: string): Promise<Snapshot | null> {
+	return id === 'live'
+		? readLiveSnapshot()
+		: ((await readSnapshotHistory()).find((entry) => entry.id === id) ?? null);
+}
+
+async function restoreSnapshot(
+	id: string,
+	windowIndex?: number,
+): Promise<ActionResult<'RESTORE_SNAPSHOT'>> {
+	const store = await getStore();
+	const snapshot = await findSnapshot(id);
+	if (!snapshot) {
+		return {ok: false, error: 'That snapshot no longer exists.'};
+	}
+
+	const windows = pickSnapshotWindows(snapshot, windowIndex);
+	if (!windows) {
+		return {ok: false, error: 'That window is not in the snapshot.'};
+	}
+
+	// Snapshot windows may repeat a URL, so duplicates open; restores always go to new windows.
+	const settings: Settings = {
+		...store.settings,
+		restoreDuplicateHandling: 'open',
+	};
+	let count = 0;
+	let failed = 0;
+	let restoredWindows = 0;
+	let focusId: number | null = null;
+	for (const win of windows) {
+		const records = snapshotRecords(win, Date.now());
+		const activeIndex = win.tabs.findIndex((tab) => tab.active);
+		const target = await createRestoreWindow();
+		const result = await restoreRecords(records, settings, undefined, {
+			target,
+			activeSavedId: records[Math.max(0, activeIndex)]?.id,
+		});
+		count += result.opened.length;
+		failed += result.failures.length;
+		if (result.opened.length === 0) {
+			// Nothing opened: drop the empty window that was created for it.
+			if (isInteger(target.id)) {
+				await chrome.windows.remove?.(target.id).catch(() => undefined);
+			}
+
+			continue;
+		}
+
+		restoredWindows += 1;
+		if (win.state === 'maximized' && isInteger(target.id)) {
+			await chrome.windows
+				.update(target.id, {state: 'maximized'})
+				.catch(() => undefined);
+		}
+
+		if (win.focused || focusId === null) {
+			focusId = target.id ?? focusId;
+		}
+	}
+
+	if (restoredWindows === 0) {
+		return {ok: false, error: 'No tabs in that snapshot could be opened.'};
+	}
+
+	if (focusId !== null) {
+		await chrome.windows
+			.update(focusId, {focused: true})
+			.catch(() => undefined);
+	}
+
+	if (windowIndex === undefined) {
+		await snapshotMutate(async () => {
+			const meta = await readSnapshotMeta();
+			if (meta.recovery?.snapshotId !== id) {
+				return;
+			}
+
+			meta.recovery = null;
+			await writeSnapshotMeta(meta);
+		});
+	}
+
+	return {ok: true, windows: restoredWindows, count, failed};
+}
+
+async function saveSnapshotAsSession(
+	id: string,
+	windowIndex?: number,
+): Promise<ActionResult<'SAVE_SNAPSHOT_AS_SESSION'>> {
+	return mutate(async () => {
+		const store = await getStore();
+		if (!store.settings.sessionsEnabled) {
+			return {ok: false, error: 'Sessions are disabled in Settings.'};
+		}
+
+		const snapshot = await findSnapshot(id);
+		if (!snapshot) {
+			return {ok: false, error: 'That snapshot no longer exists.'};
+		}
+
+		const windows = pickSnapshotWindows(snapshot, windowIndex);
+		if (!windows) {
+			return {ok: false, error: 'That window is not in the snapshot.'};
+		}
+
+		const stamp = Date.now();
+		const created: Session[] = [];
+		for (const [offset, win] of windows.entries()) {
+			const number_ = (windowIndex ?? offset) + 1;
+			const records = snapshotRecords(win, stamp);
+			// A stored session holds at most 1000 tabs, so a huge window becomes several sessions.
+			for (let start = 0; start < records.length; start += 1000) {
+				const part = Math.floor(start / 1000) + 1;
+				const parts = Math.ceil(records.length / 1000);
+				const group = normalizeGroup(
+					{
+						id: makeId(),
+						name: `Snapshot ${localDateTime(Number(snapshot.at))} · window ${number_}${parts > 1 ? ` (${part}/${parts})` : ''}`,
+						folderId: DEFAULT_FOLDER_ID,
+						createdAt: stamp,
+						updatedAt: stamp,
+						tabs: records.slice(start, start + 1000),
+					},
+					stamp,
+					true,
+				);
+				if (group) {
+					created.push(group);
+				}
+			}
+		}
+
+		if (created.length === 0) {
+			return {ok: false, error: 'That snapshot has no tabs to save.'};
+		}
+
+		store.groups = [...created, ...store.groups];
+		await writeStore(store);
+		return {
+			ok: true,
+			groups: created.length,
+			count: created.reduce((sum, group) => sum + group.tabs.length, 0),
+		};
+	});
+}
+
+function deleteSnapshot(id: string): Promise<ActionResult<'DELETE_SNAPSHOT'>> {
+	return snapshotMutate(async () => {
+		const history = await readSnapshotHistory();
+		const next = history.filter((entry) => entry.id !== id);
+		if (next.length === history.length) {
+			return {ok: false, error: 'That snapshot no longer exists.'};
+		}
+
+		await writeSnapshotHistory(next);
+		const meta = await readSnapshotMeta();
+		if (meta.recovery?.snapshotId === id) {
+			meta.recovery = null;
+			await writeSnapshotMeta(meta);
+		}
+
+		return {ok: true};
+	});
+}
+
+function clearSnapshots(): Promise<ActionResult<'CLEAR_SNAPSHOTS'>> {
+	return snapshotMutate(async () => {
+		const history = await readSnapshotHistory();
+		await writeSnapshotHistory([]);
+		await chrome.storage.local.remove?.(SNAPSHOT_LIVE_KEY);
+		const meta = await readSnapshotMeta();
+		meta.recovery = null;
+		await writeSnapshotMeta(meta);
+		return {ok: true, count: history.length};
+	});
+}
+
+function dismissRecovery(): Promise<ActionResult<'DISMISS_RECOVERY'>> {
+	return snapshotMutate(async () => {
+		const meta = await readSnapshotMeta();
+		if (meta.recovery) {
+			meta.recovery = null;
+			await writeSnapshotMeta(meta);
+		}
+
+		return {ok: true};
+	});
+}
+
+// ---- Backups
+
+type BackupRecord = BackupSummary & {sig: string; json: string};
+type BackupStore = {
+	auto: BackupRecord[];
+	safety: BackupRecord[];
+	downloadError: string;
+};
+
+const isBackupRecord = (value: unknown): value is BackupRecord =>
+	isRecord(value) &&
+	typeof value.id === 'string' &&
+	typeof value.json === 'string';
+
+async function readBackups(): Promise<BackupStore> {
+	const raw = await readKey<Raw>(BACKUPS_KEY);
+	return {
+		auto: Array.isArray(raw?.auto) ? raw.auto.filter(isBackupRecord) : [],
+		safety: Array.isArray(raw?.safety) ? raw.safety.filter(isBackupRecord) : [],
+		downloadError:
+			typeof raw?.downloadError === 'string' ? raw.downloadError : '',
+	};
+}
+
+async function writeBackups(backups: BackupStore) {
+	await chrome.storage.local.set({[BACKUPS_KEY]: {version: 1, ...backups}});
+}
+
+const summarizeBackup = (record: BackupRecord): BackupSummary => ({
+	id: record.id,
+	at: Number(record.at),
+	kind: record.kind,
+	reason: record.reason,
+	sessions: record.sessions,
+	tabs: record.tabs,
+	bookmarks: record.bookmarks,
+	bytes: record.bytes,
+});
+
+/**
+The regular JSON export (same shape as the Back up dialog, so Import reads it), with sessions, bookmarks and settings in one file.
+*/
+function backupJson(store: Store, at: number): string {
+	return JSON.stringify({
+		format: BACKUP_FORMAT_ID,
+		version: BACKUP_VERSION,
+		exportedAt: new Date(at).toISOString(),
+		folders: store.folders,
+		groups: store.groups,
+		bookmarkColumns: store.bookmarkColumns,
+		bookmarks: store.bookmarks,
+		settings: store.settings,
+	});
+}
+
+const dataSignature = (store: Store) =>
+	hashText(
+		JSON.stringify([
+			store.groups,
+			store.folders,
+			store.bookmarkColumns,
+			store.bookmarks,
+		]),
+	);
+
+const storeIsEmpty = (store: Store) =>
+	store.groups.length === 0 && store.bookmarks.length === 0;
+
+function trimBackups(records: BackupRecord[], keep: number): BackupRecord[] {
+	const result: BackupRecord[] = [];
+	let total = 0;
+	for (const record of records.slice(0, keep)) {
+		total += record.bytes;
+		if (result.length > 0 && total > BACKUP_MAX_CHARS) {
+			break;
+		}
+
+		result.push(record);
+	}
+
+	return result;
+}
+
+function makeBackupRecord(
+	store: Store,
+	kind: BackupKind,
+	reason: string,
+): BackupRecord {
+	const at = Date.now();
+	const json = backupJson(store, at);
+	return {
+		id: makeId(),
+		at,
+		kind,
+		reason,
+		sessions: store.groups.length,
+		tabs: store.groups.reduce((sum, group) => sum + group.tabs.length, 0),
+		bookmarks: store.bookmarks.length,
+		bytes: json.length,
+		sig: dataSignature(store),
+		json,
+	};
+}
+
+function utf8Base64(text: string): string {
+	const bytes = new TextEncoder().encode(text);
+	let binary = '';
+	for (let index = 0; index < bytes.length; index += 0x80_00) {
+		binary += String.fromCodePoint(...bytes.subarray(index, index + 0x80_00));
+	}
+
+	// eslint-disable-next-line no-restricted-globals -- Uint8Array.prototype.toBase64 is not available in Chromium yet
+	return btoa(binary);
+}
+
+/**
+Writes a backup to Downloads/TabLodge (a data: URL, since a service worker has no Blob URLs). Returns an error text, or '' on success.
+*/
+async function downloadBackupCopy(record: BackupRecord): Promise<string> {
+	try {
+		const granted = await chrome.permissions?.contains?.({
+			permissions: ['downloads'],
+		});
+		if (!granted || !chrome.downloads?.download) {
+			return 'The Downloads permission was not granted.';
+		}
+
+		const url = `data:application/json;base64,${utf8Base64(record.json)}`;
+		if (url.length > DOWNLOAD_MAX_URL_CHARS) {
+			return 'This backup is too large for a Downloads copy. Use Download in the backup list instead.';
+		}
+
+		await chrome.downloads.download({
+			url,
+			filename: `${APP_NAME}/${backupFileName(record.at)}`,
+			conflictAction: 'uniquify',
+			saveAs: false,
+		});
+		return '';
+	} catch (error) {
+		return cleanText(errorMessage(error), 'The download failed.', 200);
+	}
+}
+
+const backupFileName = (at: number) =>
+	`${APP_NAME.toLowerCase().replaceAll(/[^0-9a-z]+/g, '-')}-backup-${localDate(at)}.json`;
+
+/**
+Stores an automatic or manual backup of `store` and, when enabled, a Downloads copy. Automatic runs skip data identical to the newest backup.
+*/
+function addBackup(
+	store: Store,
+	kind: 'auto' | 'manual',
+	force: boolean,
+): Promise<BackupRecord | null> {
+	return backupMutate(async () => {
+		const backups = await readBackups();
+		if (
+			!force &&
+			(storeIsEmpty(store) || backups.auto[0]?.sig === dataSignature(store))
+		) {
+			return null;
+		}
+
+		const record = makeBackupRecord(store, kind, '');
+		backups.auto = trimBackups(
+			[record, ...backups.auto],
+			store.settings.autoBackupKeep,
+		);
+		if (store.settings.autoBackupToDownloads) {
+			backups.downloadError = await downloadBackupCopy(record);
+		}
+
+		await writeBackups(backups);
+		return record;
+	});
+}
+
+/**
+A backup taken just before something destructive (erase, large import, bulk delete); a small separate ring of SAFETY_BACKUP_KEEP.
+Returns false when it could not be written, so the caller can stop before losing data.
+*/
+async function safetyBackup(store: Store, reason: string): Promise<boolean> {
+	if (storeIsEmpty(store)) {
+		return true;
+	}
+
+	try {
+		await backupMutate(async () => {
+			const backups = await readBackups();
+			backups.safety = trimBackups(
+				[makeBackupRecord(store, 'safety', reason), ...backups.safety],
+				SAFETY_BACKUP_KEEP,
+			);
+			await writeBackups(backups);
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function getBackups(): Promise<ActionResult<'GET_BACKUPS'>> {
+	const backups = await readBackups();
+	return {
+		ok: true,
+		auto: backups.auto.map((record) => summarizeBackup(record)),
+		safety: backups.safety.map((record) => summarizeBackup(record)),
+		downloadError: backups.downloadError,
+	};
+}
+
+function backupNow(): Promise<ActionResult<'BACKUP_NOW'>> {
+	return mutate(async () => {
+		const store = await getStore();
+		const record = await addBackup(store, 'manual', true);
+		return {ok: true, backup: summarizeBackup(record!)};
+	});
+}
+
+/**
+The alarm (or a startup catch-up): back up unless nothing changed since the last backup.
+*/
+function runScheduledBackup(): Promise<void> {
+	return mutate(async () => {
+		const store = await getStore();
+		if (store.settings.autoBackup !== 'off') {
+			await addBackup(store, 'auto', false);
+		}
+	});
+}
+
+const BACKUP_PERIOD_MINUTES: Record<'daily' | 'weekly', number> = {
+	daily: 1440,
+	weekly: 10_080,
+};
+
+async function backupDue(settings: Settings): Promise<boolean> {
+	if (settings.autoBackup === 'off') {
+		return false;
+	}
+
+	const backups = await readBackups();
+	const newest = backups.auto.find((record) => record.kind === 'auto');
+	return (
+		!newest ||
+		Date.now() - Number(newest.at) >=
+			BACKUP_PERIOD_MINUTES[settings.autoBackup] * 60_000
+	);
+}
+
+async function findBackup(id: string): Promise<BackupRecord | null> {
+	const backups = await readBackups();
+	return (
+		[...backups.auto, ...backups.safety].find((record) => record.id === id) ??
+		null
+	);
+}
+
+function restoreBackup(id: string): Promise<ActionResult<'RESTORE_BACKUP'>> {
+	return mutate(async () => {
+		const record = await findBackup(id);
+		if (!record) {
+			return {ok: false, error: 'That backup no longer exists.'};
+		}
+
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(record.json);
+		} catch {
+			return {ok: false, error: 'That backup could not be read.'};
+		}
+
+		const store = await getStore();
+		// Settings stay as they are; the backup brings back sessions, folders, bookmarks and columns.
+		const restored = normalizeStore({
+			...(isRecord(parsed) && parsed),
+			settings: store.settings,
+		});
+		if (!(await safetyBackup(store, 'Before restoring a backup'))) {
+			return {
+				ok: false,
+				error: 'Could not take a safety backup first. Nothing was changed.',
+			};
+		}
+
+		await writeStore(restored);
+		return {
+			ok: true,
+			sessions: restored.groups.length,
+			bookmarks: restored.bookmarks.length,
+		};
+	});
+}
+
+function deleteBackup(id: string): Promise<ActionResult<'DELETE_BACKUP'>> {
+	return backupMutate(async () => {
+		const backups = await readBackups();
+		const auto = backups.auto.filter((record) => record.id !== id);
+		const safety = backups.safety.filter((record) => record.id !== id);
+		if (
+			auto.length === backups.auto.length &&
+			safety.length === backups.safety.length
+		) {
+			return {ok: false, error: 'That backup no longer exists.'};
+		}
+
+		await writeBackups({...backups, auto, safety});
+		return {ok: true};
+	});
+}
+
+async function getBackupData(
+	id: string,
+): Promise<ActionResult<'GET_BACKUP_DATA'>> {
+	const record = await findBackup(id);
+	return record
+		? {ok: true, filename: backupFileName(Number(record.at)), json: record.json}
+		: {ok: false, error: 'That backup no longer exists.'};
+}
+
+// ---- Trash
+
+type TrashEntry = {
+	id: string;
+	kind: TrashKind;
+	deletedAt: number;
+	label: string;
+	origin: string;
+	count: number;
+	data: Raw;
+};
+
+const isTrashEntry = (value: unknown): value is TrashEntry =>
+	isRecord(value) &&
+	typeof value.id === 'string' &&
+	typeof value.kind === 'string' &&
+	isRecord(value.data);
+
+async function readTrash(): Promise<TrashEntry[]> {
+	const raw = await readKey<Raw>(TRASH_KEY);
+	return Array.isArray(raw?.items) ? raw.items.filter(isTrashEntry) : [];
+}
+
+async function writeTrash(items: TrashEntry[]) {
+	await chrome.storage.local.set({[TRASH_KEY]: {version: 1, items}});
+}
+
+function pruneTrash(items: TrashEntry[], retentionDays: number): TrashEntry[] {
+	const cutoff = Date.now() - retentionDays * DAY_MS;
+	return items
+		.filter((item) => Number(item.deletedAt) > cutoff)
+		.slice(0, TRASH_MAX_ITEMS);
+}
+
+/**
+Moves a deleted item into the trash and returns its id. Called before the main state is written, so a crash in between duplicates rather than loses data.
+*/
+function trashAdd(
+	settings: Settings,
+	item: Omit<TrashEntry, 'id' | 'deletedAt'>,
+): Promise<string> {
+	return trashMutate(async () => {
+		const entry: TrashEntry = {...item, id: makeId(), deletedAt: Date.now()};
+		await writeTrash(
+			pruneTrash([entry, ...(await readTrash())], settings.trashRetentionDays),
+		);
+		return entry.id;
+	});
+}
+
+function purgeTrash(): Promise<void> {
+	return trashMutate(async () => {
+		const settings = await readSettings();
+		const items = await readTrash();
+		const kept = pruneTrash(items, settings.trashRetentionDays);
+		if (kept.length !== items.length) {
+			await writeTrash(kept);
+		}
+	});
+}
+
+const trashSessionData = (session: Session, index: number): Raw => ({
+	session,
+	index,
+});
+
+/**
+A tab removal (delete, or restore-and-remove) with where each link sat; a session that disappeared with its last link is kept as `groupMeta`.
+*/
+function trashTabsEntry(
+	group: Session,
+	removed: Array<{tab: SavedTab; index: number}>,
+	groupRemoved: boolean,
+	index: number,
+): Omit<TrashEntry, 'id' | 'deletedAt'> {
+	const first = removed[0]?.tab;
+	return {
+		kind: 'tabs',
+		label:
+			removed.length === 1
+				? first.title || first.url
+				: `${removed.length} saved links`,
+		origin: group.name,
+		count: removed.length,
+		data: {
+			groupId: group.id,
+			groupName: group.name,
+			groupIndex: index,
+			groupMeta: groupRemoved ? {...group, tabs: []} : null,
+			items: removed,
+		},
+	};
+}
+
+function describeTrash(entry: TrashEntry): TrashSummary {
+	return {
+		id: entry.id,
+		kind: entry.kind,
+		deletedAt: Number(entry.deletedAt),
+		label: entry.label,
+		origin: entry.origin,
+		count: entry.count,
+	};
+}
+
+async function getTrash(): Promise<ActionResult<'GET_TRASH'>> {
+	const settings = await readSettings();
+	const items = pruneTrash(await readTrash(), settings.trashRetentionDays);
+	return {ok: true, items: items.map((entry) => describeTrash(entry))};
+}
+
+const clampIndex = (value: unknown, length: number) =>
+	Math.max(0, Math.min(length, isInteger(value) ? value : length));
+
+function uniqueName(name: string, taken: (candidate: string) => boolean) {
+	if (!taken(name)) {
+		return name;
+	}
+
+	for (let n = 1; ; n += 1) {
+		const candidate = `${name} (restored${n > 1 ? ` ${n}` : ''})`;
+		if (!taken(candidate)) {
+			return candidate;
+		}
+	}
+}
+
+/**
+Puts a trash item back into `store` (not yet written). Returns where it landed.
+*/
+function applyTrashRestore(
+	store: Store,
+	entry: TrashEntry,
+): ActionFailure | {ok: true; placed: string} {
+	const {data} = entry;
+	const sessionsOff = !store.settings.sessionsEnabled;
+	const bookmarksOff = !store.settings.bookmarksEnabled;
+	if (entry.kind === 'bookmark' || entry.kind === 'column') {
+		if (bookmarksOff) {
+			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+		}
+	} else if (sessionsOff) {
+		return {ok: false, error: 'Sessions are disabled in Settings.'};
+	}
+
+	if (entry.kind === 'session') {
+		const session = normalizeGroup(data.session, Date.now(), true);
+		if (!session) {
+			return {ok: false, error: 'That session could not be restored.'};
+		}
+
+		if (store.groups.some((group) => group.id === session.id)) {
+			session.id = makeId();
+		}
+
+		const folder = store.folders.find((item) => item.id === session.folderId);
+		if (!folder) {
+			session.folderId = DEFAULT_FOLDER_ID;
+		}
+
+		store.groups.splice(
+			clampIndex(data.index, store.groups.length),
+			0,
+			session,
+		);
+		return {
+			ok: true,
+			placed: folder?.name ?? DEFAULT_FOLDER.name,
+		};
+	}
+
+	if (entry.kind === 'tabs') {
+		const items = (Array.isArray(data.items) ? data.items : [])
+			.filter(isRecord)
+			.map((item) => ({
+				tab: normalizeTab(item.tab, Date.now(), 0),
+				index: Number(item.index),
+			}))
+			.filter(
+				(item): item is {tab: SavedTab; index: number} => item.tab !== null,
+			)
+			.toSorted((a, b) => a.index - b.index);
+		if (items.length === 0) {
+			return {ok: false, error: 'Those links could not be restored.'};
+		}
+
+		const group = store.groups.find((item) => item.id === data.groupId);
+		if (!group) {
+			const meta = isRecord(data.groupMeta) ? data.groupMeta : {};
+			const created = normalizeGroup(
+				{
+					...meta,
+					id: meta.id ?? makeId(),
+					name: meta.name ?? data.groupName ?? 'Restored links',
+					tabs: items.map((item) => item.tab),
+				},
+				Date.now(),
+				true,
+			);
+			if (!created) {
+				return {ok: false, error: 'Those links could not be restored.'};
+			}
+
+			if (store.groups.some((item) => item.id === created.id)) {
+				created.id = makeId();
+			}
+
+			if (store.folders.every((item) => item.id !== created.folderId)) {
+				created.folderId = DEFAULT_FOLDER_ID;
+			}
+
+			store.groups.splice(
+				clampIndex(data.groupIndex, store.groups.length),
+				0,
+				created,
+			);
+			return {ok: true, placed: created.name};
+		}
+
+		const known = new Set(group.tabs.map((tab) => tab.id));
+		for (const {tab, index} of items) {
+			if (known.has(tab.id)) {
+				tab.id = makeId();
+			}
+
+			known.add(tab.id);
+			group.tabs.splice(clampIndex(index, group.tabs.length), 0, tab);
+		}
+
+		group.updatedAt = Date.now();
+		return {ok: true, placed: group.name};
+	}
+
+	if (entry.kind === 'bookmark') {
+		const bookmark = normalizeBookmark(
+			data.bookmark,
+			new Set([
+				...store.bookmarkColumns.map((column) => column.id),
+				BOOKMARK_UNFILED_ID,
+			]),
+		);
+		if (!bookmark) {
+			return {ok: false, error: 'That bookmark could not be restored.'};
+		}
+
+		const column = store.bookmarkColumns.find(
+			(item) => item.id === data.columnId,
+		);
+		bookmark.columnId =
+			column?.id ?? store.bookmarkColumns[0]?.id ?? BOOKMARK_UNFILED_ID;
+		if (store.bookmarks.some((item) => item.id === bookmark.id)) {
+			bookmark.id = makeId();
+		}
+
+		const previous = store.bookmarks.findIndex(
+			(item) => item.id === data.prevId,
+		);
+		const next = store.bookmarks.findIndex((item) => item.id === data.nextId);
+		if (column && previous !== -1) {
+			store.bookmarks.splice(previous + 1, 0, bookmark);
+		} else if (column && next !== -1) {
+			store.bookmarks.splice(next, 0, bookmark);
+		} else {
+			store.bookmarks.push(bookmark);
+		}
+
+		return {
+			ok: true,
+			placed:
+				column?.name ??
+				store.bookmarkColumns.find((item) => item.id === bookmark.columnId)
+					?.name ??
+				'Unfiled',
+		};
+	}
+
+	if (entry.kind === 'column') {
+		const column = normalizeBookmarkColumn(data.column);
+		if (!column) {
+			return {ok: false, error: 'That column could not be restored.'};
+		}
+
+		if (store.bookmarkColumns.some((item) => item.id === column.id)) {
+			column.id = makeId();
+		}
+
+		column.name = uniqueName(column.name, (candidate) =>
+			bookmarkColumnNameExists(store, candidate),
+		);
+		column.isDefault = column.id === DEFAULT_BOOKMARK_COLUMN_ID;
+		store.bookmarkColumns.splice(
+			clampIndex(data.index, store.bookmarkColumns.length),
+			0,
+			column,
+		);
+		const columnIds = new Set([
+			...store.bookmarkColumns.map((item) => item.id),
+			BOOKMARK_UNFILED_ID,
+		]);
+		const knownBookmarks = new Set(store.bookmarks.map((item) => item.id));
+		// Links deleted together with the column come back into it.
+		for (const raw of Array.isArray(data.bookmarks) ? data.bookmarks : []) {
+			const bookmark = normalizeBookmark(raw, columnIds);
+			if (!bookmark || knownBookmarks.has(bookmark.id)) {
+				continue;
+			}
+
+			bookmark.columnId = column.id;
+			store.bookmarks.push(bookmark);
+		}
+
+		// Links that were moved elsewhere when the column was deleted go back if they are still where they were put.
+		const moved = new Set(
+			Array.isArray(data.movedIds) ? (data.movedIds as unknown[]) : [],
+		);
+		for (const bookmark of store.bookmarks) {
+			if (moved.has(bookmark.id) && bookmark.columnId === data.movedTo) {
+				bookmark.columnId = column.id;
+			}
+		}
+
+		return {ok: true, placed: column.name};
+	}
+
+	const folder = normalizeFolder(data.folder);
+	if (!folder) {
+		return {ok: false, error: 'That folder could not be restored.'};
+	}
+
+	if (store.folders.some((item) => item.id === folder.id)) {
+		folder.id = makeId();
+	}
+
+	folder.name = uniqueName(folder.name, (candidate) =>
+		folderNameExists(store, candidate),
+	);
+	folder.isDefault = false;
+	store.folders.splice(clampIndex(data.index, store.folders.length), 0, folder);
+	// Sessions that were moved to Unfiled when the folder was deleted return to it.
+	const wasIn = new Set(
+		Array.isArray(data.groupIds) ? (data.groupIds as unknown[]) : [],
+	);
+	for (const group of store.groups) {
+		if (wasIn.has(group.id) && group.folderId === DEFAULT_FOLDER_ID) {
+			group.folderId = folder.id;
+		}
+	}
+
+	return {ok: true, placed: folder.name};
+}
+
+function restoreTrash(id: string): Promise<ActionResult<'RESTORE_TRASH'>> {
+	return mutate(async () => {
+		const entry = (await readTrash()).find((item) => item.id === id);
+		if (!entry) {
+			return {ok: false, error: 'That item is no longer in the trash.'};
+		}
+
+		const store = await getStore();
+		const outcome = applyTrashRestore(store, entry);
+		if (!outcome.ok) {
+			return outcome;
+		}
+
+		await writeStore(store);
+		await trashMutate(async () => {
+			await writeTrash((await readTrash()).filter((item) => item.id !== id));
+		});
+		return {ok: true, placed: outcome.placed};
+	});
+}
+
+function deleteTrash(id: string): Promise<ActionResult<'DELETE_TRASH'>> {
+	return trashMutate(async () => {
+		const items = await readTrash();
+		const next = items.filter((item) => item.id !== id);
+		if (next.length === items.length) {
+			return {ok: false, error: 'That item is no longer in the trash.'};
+		}
+
+		await writeTrash(next);
+		return {ok: true};
+	});
+}
+
+function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
+	return trashMutate(async () => {
+		const items = await readTrash();
+		await writeTrash([]);
+		return {ok: true, count: items.length};
+	});
+}
+
+async function getStorageUsage(): Promise<ActionResult<'GET_STORAGE_USAGE'>> {
+	const bytes = async (keys: string[]) => {
+		try {
+			return (await chrome.storage.local.getBytesInUse?.(keys)) ?? 0;
+		} catch {
+			return 0;
+		}
+	};
+
+	const usage: StorageUsage = {
+		snapshots: await bytes([
+			SNAPSHOTS_KEY,
+			SNAPSHOT_LIVE_KEY,
+			SNAPSHOT_META_KEY,
+		]),
+		backups: await bytes([BACKUPS_KEY]),
+		trash: await bytes([TRASH_KEY]),
+		state: await bytes([STORAGE_KEY]),
+	};
+	return {ok: true, usage};
+}
+
+// ---- Alarms and browser events
+
+async function ensureAlarm(
+	name: string,
+	periodInMinutes: number | null,
+	delayInMinutes?: number,
+) {
+	if (!chrome.alarms) {
+		return;
+	}
+
+	try {
+		const existing = await chrome.alarms.get(name);
+		if (periodInMinutes === null) {
+			if (existing) {
+				await chrome.alarms.clear(name);
+			}
+
+			return;
+		}
+
+		if (existing?.periodInMinutes === periodInMinutes) {
+			return;
+		}
+
+		await chrome.alarms.create(name, {
+			periodInMinutes,
+			delayInMinutes: delayInMinutes ?? periodInMinutes,
+		});
+	} catch {
+		/*
+		Alarms are an optimization; events still capture snapshots.
+		*/
+	}
+}
+
+/**
+Creates, changes or clears the repeating alarms that match the settings (alarms may not survive a browser restart, so this runs on every start too).
+*/
+async function syncRecoveryAlarms(settings: Settings) {
+	await ensureAlarm(
+		ALARM_SNAPSHOT,
+		settings.snapshotsEnabled ? settings.snapshotIntervalMinutes : null,
+	);
+	await ensureAlarm(
+		ALARM_BACKUP,
+		settings.autoBackup === 'off'
+			? null
+			: BACKUP_PERIOD_MINUTES[settings.autoBackup],
+		1,
+	);
+	await ensureAlarm(ALARM_TRASH, 1440, 5);
+}
+
+/**
+Everything the recovery features do when the browser starts: judge the previous run, catch up a missed backup, purge old trash.
+*/
+async function runStartupRecovery() {
+	try {
+		await evaluateStartup();
+		const settings = await readSettings();
+		await syncRecoveryAlarms(settings);
+		await purgeTrash();
+		if (await backupDue(settings)) {
+			await runScheduledBackup();
+		}
+
+		if (settings.snapshotsEnabled) {
+			scheduleSnapshot();
+		}
+	} catch {
+		/*
+		Recovery is best effort and must never block startup.
+		*/
+	}
+}
+
+chrome.alarms?.onAlarm?.addListener?.((alarm) => {
+	const work =
+		alarm.name === ALARM_SNAPSHOT
+			? takeSnapshot('interval', true)
+			: alarm.name === ALARM_BACKUP
+				? runScheduledBackup()
+				: alarm.name === ALARM_TRASH
+					? purgeTrash()
+					: undefined;
+	void work?.catch(() => undefined);
+});
+
+// Tab and window changes schedule a debounced capture. Title-only updates are ignored (they are frequent and unimportant).
+const scheduleSnapshotSoon = () => scheduleSnapshot();
+chrome.tabs?.onCreated?.addListener?.(scheduleSnapshotSoon);
+chrome.tabs?.onMoved?.addListener?.(scheduleSnapshotSoon);
+chrome.tabs?.onActivated?.addListener?.(scheduleSnapshotSoon);
+chrome.tabs?.onAttached?.addListener?.(scheduleSnapshotSoon);
+chrome.tabs?.onDetached?.addListener?.(scheduleSnapshotSoon);
+chrome.tabs?.onRemoved?.addListener?.((_tabId, info) => {
+	// A closing window is handled by windows.onRemoved.
+	if (!info?.isWindowClosing) {
+		scheduleSnapshot();
+	}
+});
+chrome.tabs?.onUpdated?.addListener?.((_tabId, change) => {
+	if (
+		change.url !== undefined ||
+		change.pinned !== undefined ||
+		change.groupId !== undefined ||
+		change.status === 'complete'
+	) {
+		scheduleSnapshot();
+	}
+});
+chrome.tabGroups?.onCreated?.addListener?.(scheduleSnapshotSoon);
+chrome.tabGroups?.onUpdated?.addListener?.(scheduleSnapshotSoon);
+chrome.tabGroups?.onRemoved?.addListener?.(scheduleSnapshotSoon);
+chrome.windows?.onCreated?.addListener?.(scheduleSnapshotSoon);
+chrome.windows?.onFocusChanged?.addListener?.(scheduleSnapshotSoon);
+chrome.windows?.onRemoved?.addListener?.(() => {
+	void handleWindowRemoved().catch(() => undefined);
+});
+
+// Alarms can be lost when the browser restarts and the worker may wake without onStartup, so re-check on every start.
+void readSettings()
+	.then((settings) => syncRecoveryAlarms(settings))
+	.catch(() => undefined);
 
 async function handleMessage(
 	message: TabLodgeMessage | undefined,
@@ -4229,6 +6125,70 @@ async function handleMessage(
 
 		case 'ERASE_DATA': {
 			return eraseData(message.scope);
+		}
+
+		case 'GET_SNAPSHOTS': {
+			return getSnapshots();
+		}
+
+		case 'RESTORE_SNAPSHOT': {
+			return restoreSnapshot(message.id, message.windowIndex);
+		}
+
+		case 'SAVE_SNAPSHOT_AS_SESSION': {
+			return saveSnapshotAsSession(message.id, message.windowIndex);
+		}
+
+		case 'DELETE_SNAPSHOT': {
+			return deleteSnapshot(message.id);
+		}
+
+		case 'CLEAR_SNAPSHOTS': {
+			return clearSnapshots();
+		}
+
+		case 'DISMISS_RECOVERY': {
+			return dismissRecovery();
+		}
+
+		case 'GET_BACKUPS': {
+			return getBackups();
+		}
+
+		case 'BACKUP_NOW': {
+			return backupNow();
+		}
+
+		case 'RESTORE_BACKUP': {
+			return restoreBackup(message.id);
+		}
+
+		case 'DELETE_BACKUP': {
+			return deleteBackup(message.id);
+		}
+
+		case 'GET_BACKUP_DATA': {
+			return getBackupData(message.id);
+		}
+
+		case 'GET_TRASH': {
+			return getTrash();
+		}
+
+		case 'RESTORE_TRASH': {
+			return restoreTrash(message.id);
+		}
+
+		case 'DELETE_TRASH': {
+			return deleteTrash(message.id);
+		}
+
+		case 'EMPTY_TRASH': {
+			return emptyTrash();
+		}
+
+		case 'GET_STORAGE_USAGE': {
+			return getStorageUsage();
 		}
 
 		case 'HANDOFF_NEW_TAB': {
@@ -5523,7 +7483,13 @@ chrome.contextMenus?.onClicked?.addListener((info, tab) =>
 );
 
 async function initializeExtension(openDashboardAtStartup = false) {
+	if (openDashboardAtStartup) {
+		// The browser just started: judge how the previous run ended before anything is captured.
+		await runStartupRecovery();
+	}
+
 	const store = await getStore();
+	await syncRecoveryAlarms(store.settings);
 	await syncToolbarAction(store.settings);
 	await rebuildContextMenus(store);
 	if (store.settings.keepLodgePinned) {
