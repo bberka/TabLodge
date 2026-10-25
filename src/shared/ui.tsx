@@ -106,7 +106,7 @@ type ConfirmationDialogProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	title: React.ReactNode;
-	description: React.ReactNode;
+	description?: React.ReactNode;
 	/**
 	Extra body content between the description and the buttons (choices, a list, a note).
 	*/
@@ -184,6 +184,8 @@ export function ConfirmationDialog({
 				size={size}
 				container={container}
 				portalContainer={portalContainer}
+				// A title-only confirmation has nothing to describe it; this tells Radix that is intended.
+				{...(description ? {} : {'aria-describedby': undefined})}
 			>
 				<form
 					noValidate
@@ -196,7 +198,9 @@ export function ConfirmationDialog({
 				>
 					<AlertDialogHeader>
 						<AlertDialogTitle>{title}</AlertDialogTitle>
-						<AlertDialogDescription>{description}</AlertDialogDescription>
+						{Boolean(description) && (
+							<AlertDialogDescription>{description}</AlertDialogDescription>
+						)}
 					</AlertDialogHeader>
 					{Boolean(children || requireText) && (
 						<div className="grid min-w-0 gap-4 text-sm [overflow-wrap:anywhere]">

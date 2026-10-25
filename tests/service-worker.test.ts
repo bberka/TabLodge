@@ -1990,14 +1990,11 @@ test('session drags carry every link for TabLodge columns while keeping plain li
 		{title: '', url: 'https://b.example/'},
 	]);
 	const prompt = sessionDropPrompt(session, 'Work');
-	assert.equal(prompt.title, 'Add 2 links from “Reading” to “Work”?');
+	assert.equal(prompt.title, 'Add 2 links to “Work” column?');
 	assert.equal(prompt.confirmLabel, 'Add 2 links');
 	assert.equal(
-		sessionDropPrompt(
-			{name: 'One', links: [{url: 'https://a.example/'}]},
-			'Work',
-		).title,
-		'Add 1 link from “One” to “Work”?',
+		sessionDropPrompt({links: [{url: 'https://a.example/'}]}, 'Work').title,
+		'Add 1 link to “Work” column?',
 	);
 
 	const single: Record<string, string> = {};
