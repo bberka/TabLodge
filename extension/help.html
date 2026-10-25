@@ -1,0 +1,26 @@
+<!doctype html>
+<html data-theme="system" lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta content="width=device-width, initial-scale=1" name="viewport" />
+		<meta content="dark light" name="color-scheme" />
+		<title>%APP_NAME% · Help</title>
+		<script src="./theme-boot.js"></script>
+		<style>
+			html {
+				background: #09090b;
+			}
+			@media (prefers-color-scheme: light) {
+				html:not([data-theme='dark']) {
+					background: #fafafa;
+				}
+			}
+			html[data-theme='light'] {
+				background: #fafafa;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="root"></div>
+	</body>
+</html>

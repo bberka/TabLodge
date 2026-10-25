@@ -1,0 +1,60 @@
+{
+	"manifest_version": 3,
+	"name": "TabLodge – Tab Session Manager & Bookmarks",
+	"short_name": "TabLodge",
+	"version": "0.1.0",
+	"description": "Save and restore tab sessions with tab groups, and keep a bookmark board on your new tab. Local-only: no account, no tracking.",
+	"minimum_chrome_version": "116",
+	"icons": {
+		"16": "icons/tablodge-16.png",
+		"32": "icons/tablodge-32.png",
+		"48": "icons/tablodge-48.png",
+		"128": "icons/tablodge-128.png"
+	},
+	"permissions": [
+		"tabs",
+		"tabGroups",
+		"bookmarks",
+		"favicon",
+		"storage",
+		"contextMenus",
+		"unlimitedStorage",
+		"clipboardWrite",
+		"sidePanel"
+	],
+	"background": {
+		"service_worker": "service-worker.js"
+	},
+	"action": {
+		"default_title": "TabLodge",
+		"default_icon": {
+			"16": "icons/tablodge-16.png",
+			"32": "icons/tablodge-32.png"
+		},
+		"default_popup": "popup.html"
+	},
+	"options_page": "options.html",
+	"side_panel": {
+		"default_path": "sidepanel.html"
+	},
+	"chrome_url_overrides": {
+		"newtab": "newtab.html"
+	},
+	"commands": {
+		"save-window": {
+			"suggested_key": {
+				"default": "Alt+Shift+S"
+			},
+			"description": "Save tabs in the current window"
+		},
+		"save-selected-tabs": {
+			"suggested_key": {
+				"default": "Alt+Shift+A"
+			},
+			"description": "Save selected tabs in the current window"
+		},
+		"open-dashboard": {
+			"description": "Open the TabLodge dashboard"
+		}
+	}
+}

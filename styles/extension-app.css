@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	/*
+   * Theme contract: pages set data-brand="tablodge" on their root container.
+   * Portal content (menus, tooltips) inherits the tokens from :root. Only
+   * primary/ring colors vary by brand; surfaces, type, and spacing stay shared.
+   */
+	:root {
+		color-scheme: light;
+		--brand-primary-light: 98 84 215;
+		--brand-primary-dark: 165 155 255;
+		--brand-primary-foreground-light: 255 255 255;
+		--brand-primary-foreground-dark: 24 24 27;
+		--brand-primary: var(--brand-primary-light);
+		--brand-primary-foreground: var(--brand-primary-foreground-light);
+
+		--background: 250 250 250;
+		--foreground: 24 24 27;
+		--card: 255 255 255;
+		--card-foreground: 24 24 27;
+		--popover: 255 255 255;
+		--popover-foreground: 24 24 27;
+		--primary: var(--brand-primary);
+		--primary-foreground: var(--brand-primary-foreground);
+		--secondary: 244 244 245;
+		--secondary-foreground: 39 39 42;
+		--muted: 244 244 245;
+		--muted-foreground: 113 113 122;
+		--accent: 244 244 245;
+		--accent-foreground: 39 39 42;
+		--destructive: 220 38 38;
+		--destructive-foreground: 255 255 255;
+		--border: 228 228 231;
+		--input: 212 212 216;
+		--ring: var(--brand-primary);
+		--radius: 0.5rem;
+	}
+
+	/* Brands only change the light/dark primary values; the active scheme picks one below. */
+	:root[data-brand='tablodge'],
+	[data-brand='tablodge'] {
+		--brand-primary-light: 98 84 215;
+		--brand-primary-dark: 165 155 255;
+		--brand-primary-foreground-light: 255 255 255;
+		--brand-primary-foreground-dark: 24 24 27;
+	}
+
+	:root[data-brand='tablodge'],
+	[data-brand='tablodge'] {
+		--primary: var(--brand-primary);
+		--primary-foreground: var(--brand-primary-foreground);
+		--ring: var(--brand-primary);
+	}
+
+	:root[data-theme='dark'] {
+		color-scheme: dark;
+		--background: 9 9 11;
+		--foreground: 250 250 250;
+		--card: 17 17 20;
+		--card-foreground: 250 250 250;
+		--popover: 17 17 20;
+		--popover-foreground: 250 250 250;
+		--secondary: 39 39 42;
+		--secondary-foreground: 250 250 250;
+		--muted: 39 39 42;
+		--muted-foreground: 161 161 170;
+		--accent: 39 39 42;
+		--accent-foreground: 250 250 250;
+		--destructive: 248 113 113;
+		--destructive-foreground: 24 24 27;
+		--border: 39 39 42;
+		--input: 63 63 70;
+		--brand-primary: var(--brand-primary-dark);
+		--brand-primary-foreground: var(--brand-primary-foreground-dark);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root[data-theme='system'] {
+			color-scheme: dark;
+			--background: 9 9 11;
+			--foreground: 250 250 250;
+			--card: 17 17 20;
+			--card-foreground: 250 250 250;
+			--popover: 17 17 20;
+			--popover-foreground: 250 250 250;
+			--secondary: 39 39 42;
+			--secondary-foreground: 250 250 250;
+			--muted: 39 39 42;
+			--muted-foreground: 161 161 170;
+			--accent: 39 39 42;
+			--accent-foreground: 250 250 250;
+			--destructive: 248 113 113;
+			--destructive-foreground: 24 24 27;
+			--border: 39 39 42;
+			--input: 63 63 70;
+			--brand-primary: var(--brand-primary-dark);
+			--brand-primary-foreground: var(--brand-primary-foreground-dark);
+		}
+	}
+
+	* {
+		box-sizing: border-box;
+	}
+	html {
+		min-width: 320px;
+		min-height: 100%;
+		background: rgb(var(--background));
+	}
+	body {
+		min-height: 100vh;
+		margin: 0;
+		color: rgb(var(--foreground));
+		background: rgb(var(--background));
+		font-family:
+			system-ui,
+			-apple-system,
+			BlinkMacSystemFont,
+			'Segoe UI',
+			sans-serif;
+		font-size: 14px;
+		-webkit-font-smoothing: antialiased;
+	}
+	button,
+	input,
+	select,
+	textarea {
+		font: inherit;
+	}
+	button {
+		cursor: pointer;
+	}
+	button:disabled {
+		cursor: not-allowed;
+	}
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
+	::selection {
+		background: rgb(var(--primary) / 0.2);
+	}
+}
+
+@layer components {
+	.tn-button {
+		min-height: 36px;
+	}
+	.tn-input {
+		color: rgb(var(--foreground));
+	}
+	.tn-input::placeholder {
+		color: rgb(var(--muted-foreground));
+	}
+	.tn-switch[data-state='checked'] > span {
+		transform: translateX(16px);
+	}
+	.tn-switch[data-state='unchecked'] > span {
+		transform: translateX(0);
+	}
+	.tn-checkbox[data-state='checked'] {
+		color: rgb(var(--primary-foreground));
+	}
+	.tn-select-content,
+	.tn-menu-content {
+		animation: pop-in 100ms ease-out;
+	}
+	.tn-dialog-overlay[data-state='open'] {
+		animation: fade-in 120ms ease-out;
+	}
+	.tn-dialog-overlay[data-state='closed'] {
+		animation: fade-out 120ms ease-in;
+	}
+	.tn-dialog-content[data-state='open'] {
+		animation: dialog-in 150ms ease-out;
+	}
+	.tn-dialog-content[data-state='closed'] {
+		animation: dialog-out 100ms ease-in;
+	}
+	.tn-card {
+		box-shadow: none;
+	}
+	.is-dragging {
+		opacity: 0.55;
+	}
+}
+
+@keyframes pop-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+@keyframes fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+@keyframes dialog-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+@keyframes dialog-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}
