@@ -46,6 +46,7 @@ type MockTab = {
 	index: number;
 	active: boolean;
 	url?: string;
+	pendingUrl?: string;
 	title?: string;
 	pinned?: boolean;
 	highlighted?: boolean;
@@ -107,6 +108,10 @@ type HarnessOptions = {
 	Provide chrome.downloads and grant the optional "downloads" permission.
 	*/
 	downloads?: boolean;
+	/**
+	New tabs start with only a pendingUrl, as before their first navigation commits.
+	*/
+	pendingNavigation?: boolean;
 	/**
 	Chrome.alarms is missing in this browser build.
 	*/
@@ -294,17 +299,34 @@ function createWorkerHarness(
 		}
 	};
 
+	const eventCallbacks = new Map<
+		string,
+		Set<(...args: unknown[]) => unknown>
+	>();
 	const event = (name: string) => ({
 		// Several worker modules can listen to one event: all of them run, the last result is returned.
 		addListener(callback: EventListener) {
-			const previous = listeners[name] as
-				((...args: unknown[]) => unknown) | undefined;
-			listeners[name] = previous
-				? (...args: unknown[]) => {
-						previous(...args);
-						return (callback as (...args: unknown[]) => unknown)(...args);
+			let callbacks = eventCallbacks.get(name);
+			if (!callbacks) {
+				const set = new Set<(...args: unknown[]) => unknown>();
+				eventCallbacks.set(name, set);
+				callbacks = set;
+				listeners[name] = (...args: unknown[]) => {
+					let result: unknown;
+					for (const run of set) {
+						result = run(...args);
 					}
-				: callback;
+
+					return result;
+				};
+			}
+
+			callbacks.add(callback as (...args: unknown[]) => unknown);
+		},
+		removeListener(callback: EventListener) {
+			eventCallbacks
+				.get(name)
+				?.delete(callback as (...args: unknown[]) => unknown);
 		},
 	});
 	const chrome = {
@@ -539,6 +561,11 @@ function createWorkerHarness(
 
 				if ((options.misplacedCreateUrls || []).includes(created.url ?? '')) {
 					position = 0;
+				}
+
+				if (options.pendingNavigation && created.url) {
+					created.pendingUrl = created.url;
+					created.url = '';
 				}
 
 				tabs.push(created);
@@ -7482,4 +7509,42 @@ test('deleting a column moves its bookmarks after the target column’s own, in 
 		),
 		['bm-2@col-news', 'bm-3@col-news', 'bm-0@col-news', 'bm-1@col-news'],
 	);
+});
+
+test('restored tabs are unloaded only after their address commits, so they never reopen blank', async () => {
+	const state = stateWithSession({
+		unloadRestoredTabs: true,
+		unloadRestoredTabsThreshold: 1,
+	});
+	state.groups[0].tabs.push({
+		id: 'saved-tab-2',
+		title: 'Background',
+		url: 'https://background.example/',
+		pinned: false,
+	});
+	const harness = createWorkerHarness(state, undefined, {
+		pendingNavigation: true,
+	});
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.deepEqual(
+		harness.discardedTabs,
+		[],
+		'nothing is discarded mid-navigation',
+	);
+	const background = harness.tabs.find(
+		(tab) => tab.pendingUrl === 'https://background.example/',
+	)!;
+	background.url = background.pendingUrl!;
+	delete background.pendingUrl;
+	await harness.fire(
+		'tabUpdated',
+		background.id,
+		{url: background.url},
+		{...background},
+	);
+	assert.deepEqual(harness.discardedTabs, [background.id]);
 });

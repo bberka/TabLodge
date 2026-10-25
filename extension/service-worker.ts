@@ -2242,6 +2242,83 @@ async function splitRestoredPair(
 	}
 }
 
+const UNLOAD_WAIT_MS = 60_000;
+
+/**
+Discards background tabs once each has committed its address. A tab discarded while its first navigation is still
+pending loses the address and reopens blank, so tabs that are not there yet are discarded when `tabs.onUpdated`
+reports their URL (for up to a minute). Already committed tabs are discarded before this resolves.
+*/
+async function unloadWhenCommitted(
+	tabIds: number[],
+	knownTabs: chrome.tabs.Tab[] = [],
+): Promise<void> {
+	const pending = new Set(tabIds);
+	const committed = (tab: chrome.tabs.Tab | undefined) =>
+		Boolean(tab?.url && /^https?:/i.test(tab.url));
+	const discard = async (tabId: number) => {
+		pending.delete(tabId);
+		try {
+			await chrome.tabs.discard(tabId);
+		} catch {
+			/*
+			Chromium may refuse, for example for a tab that just became active.
+			*/
+		}
+	};
+
+	const byId = new Map(knownTabs.map((tab) => [tab.id, tab]));
+	for (const tabId of tabIds) {
+		const tab = byId.get(tabId);
+		if (tab?.active || tab?.discarded) {
+			pending.delete(tabId);
+		} else if (committed(tab)) {
+			await discard(tabId);
+		}
+	}
+
+	if (pending.size === 0 || !chrome.tabs.onUpdated?.addListener) {
+		return;
+	}
+
+	const onUpdated = (
+		tabId: number,
+		changeInfo: chrome.tabs.OnUpdatedInfo,
+		tab: chrome.tabs.Tab,
+	) => {
+		if (!pending.has(tabId) || !(changeInfo.url || changeInfo.status)) {
+			return;
+		}
+
+		if (tab.active) {
+			pending.delete(tabId);
+		} else if (committed(tab)) {
+			void discard(tabId);
+		}
+
+		if (pending.size === 0) {
+			stop();
+		}
+	};
+
+	const onRemoved = (tabId: number) => {
+		pending.delete(tabId);
+		if (pending.size === 0) {
+			stop();
+		}
+	};
+
+	const timer = setTimeout(() => stop(), UNLOAD_WAIT_MS);
+	function stop() {
+		clearTimeout(timer);
+		chrome.tabs.onUpdated.removeListener(onUpdated);
+		chrome.tabs.onRemoved?.removeListener?.(onRemoved);
+	}
+
+	chrome.tabs.onUpdated.addListener(onUpdated);
+	chrome.tabs.onRemoved?.addListener?.(onRemoved);
+}
+
 async function restoreRecords(
 	records: SavedTab[],
 	settings: Settings,
@@ -2443,25 +2520,18 @@ async function restoreRecords(
 	) {
 		const currentTabs = await chrome.tabs.query({windowId: target.id});
 		const activeId = currentTabs.find((tab) => tab.active)?.id;
-		for (const entry of opened) {
-			// Split tabs stay loaded: either half can be on screen next to the active tab, and discarding one
-			// would leave a blank pane in the split view.
-			if (
-				entry.saved.pinned ||
-				entry.tabId === activeId ||
-				(entry.tabId !== undefined && splitTabIds.has(entry.tabId))
-			) {
-				continue;
-			}
-
-			try {
-				await chrome.tabs.discard(entry.tabId);
-			} catch {
-				/*
-				Chromium may refuse to discard a recently activated tab.
-				*/
-			}
-		}
+		// Split tabs stay loaded: either half can be on screen next to the active tab, and discarding one
+		// would leave a blank pane in the split view.
+		const unload = opened
+			.filter(
+				(entry) =>
+					entry.tabId !== undefined &&
+					!entry.saved.pinned &&
+					entry.tabId !== activeId &&
+					!splitTabIds.has(entry.tabId),
+			)
+			.map((entry) => entry.tabId!);
+		await unloadWhenCommitted(unload, currentTabs);
 	}
 
 	return {
