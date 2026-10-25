@@ -186,6 +186,126 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	contextMenuSelectionEnabled: true,
 	contextMenuActionEnabled: true,
 });
+// Mirrors src/app/icon-ids.ts (the worker cannot import); a test keeps both lists identical.
+const ICON_IDS = new Set<unknown>([
+	'bookmark',
+	'folder',
+	'star',
+	'heart',
+	'pin',
+	'flag',
+	'tag',
+	'bell',
+	'clock',
+	'calendar',
+	'lightbulb',
+	'zap',
+	'sparkles',
+	'archive',
+	'inbox',
+	'link',
+	'globe',
+	'search',
+	'rocket',
+	'target',
+	'briefcase',
+	'building',
+	'mail',
+	'clipboard',
+	'check-square',
+	'presentation',
+	'chart',
+	'trending-up',
+	'users',
+	'phone',
+	'file-text',
+	'kanban',
+	'code',
+	'terminal',
+	'git-branch',
+	'git-merge',
+	'database',
+	'server',
+	'cloud',
+	'cpu',
+	'bug',
+	'package',
+	'wrench',
+	'settings',
+	'shield',
+	'lock',
+	'key',
+	'music',
+	'video',
+	'film',
+	'image',
+	'camera',
+	'headphones',
+	'mic',
+	'tv',
+	'palette',
+	'book-open',
+	'book',
+	'newspaper',
+	'library',
+	'rss',
+	'bookmark-check',
+	'shopping-cart',
+	'shopping-bag',
+	'gift',
+	'store',
+	'credit-card',
+	'receipt',
+	'plane',
+	'map',
+	'map-pin',
+	'compass',
+	'car',
+	'tent',
+	'luggage',
+	'wallet',
+	'banknote',
+	'piggy-bank',
+	'landmark',
+	'coins',
+	'calculator',
+	'message-circle',
+	'message-square',
+	'share',
+	'thumbs-up',
+	'user',
+	'megaphone',
+	'home',
+	'sofa',
+	'bed',
+	'wifi',
+	'activity',
+	'dumbbell',
+	'stethoscope',
+	'pill',
+	'brain',
+	'graduation-cap',
+	'school',
+	'pencil',
+	'notebook',
+	'languages',
+	'flask',
+	'gamepad',
+	'dices',
+	'trophy',
+	'utensils',
+	'coffee',
+	'pizza',
+	'cooking-pot',
+	'leaf',
+	'trees',
+	'sun',
+	'moon',
+	'flower',
+	'mountain',
+	'cat',
+	'dog',
+]);
 const GROUP_COLORS = new Set<unknown>([
 	'grey',
 	'blue',
@@ -351,6 +471,13 @@ function pairSplits(tabs: SavedTab[]): SavedTab[] {
 	return tabs;
 }
 
+/**
+The `icon` property for a stored column or folder: only a registry id is kept, anything else is dropped.
+*/
+function iconField(value: unknown): {icon?: string} {
+	return typeof value === 'string' && ICON_IDS.has(value) ? {icon: value} : {};
+}
+
 function normalizeFolder(raw: unknown): Folder | null {
 	if (!isRecord(raw)) {
 		return null;
@@ -425,6 +552,7 @@ function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 	return {
 		id,
 		name: cleanText(raw.name, 'New column', 60),
+		...iconField(raw.icon),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
 			: Date.now(),
@@ -2938,6 +3066,7 @@ async function deleteBookmark(
 
 async function createBookmarkColumn(
 	name: string,
+	icon?: unknown,
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -2960,6 +3089,7 @@ async function createBookmarkColumn(
 		const column = {
 			id: makeId(),
 			name: columnName,
+			...iconField(icon),
 			createdAt: Date.now(),
 			isDefault: false,
 		};
@@ -2972,6 +3102,7 @@ async function createBookmarkColumn(
 async function updateBookmarkColumn(
 	columnId: string,
 	name: string,
+	icon?: unknown,
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -2997,6 +3128,16 @@ async function updateBookmarkColumn(
 		}
 
 		column.name = columnName;
+		// `icon` omitted keeps the current icon; "" or an unknown id resets it to the default.
+		if (icon !== undefined) {
+			const {icon: nextIcon} = iconField(icon);
+			if (nextIcon) {
+				column.icon = nextIcon;
+			} else {
+				delete column.icon;
+			}
+		}
+
 		await writeStore(store);
 		return {ok: true, column};
 	});
@@ -3832,11 +3973,11 @@ async function handleMessage(
 		}
 
 		case 'CREATE_BOOKMARK_COLUMN': {
-			return createBookmarkColumn(message.name);
+			return createBookmarkColumn(message.name, message.icon);
 		}
 
 		case 'UPDATE_BOOKMARK_COLUMN': {
-			return updateBookmarkColumn(message.columnId, message.name);
+			return updateBookmarkColumn(message.columnId, message.name, message.icon);
 		}
 
 		case 'DELETE_BOOKMARK_COLUMN': {

@@ -173,6 +173,10 @@ export type Folder = {
 export type BookmarkColumn = {
 	id: string;
 	name: string;
+	/**
+	Icon id from the icon registry; missing means the default column icon.
+	*/
+	icon?: string;
 	createdAt: number;
 	isDefault: boolean;
 };
@@ -301,8 +305,11 @@ export type TabLodgeMessages = {
 	};
 	UPDATE_BOOKMARK: {bookmarkId: string; fields: BookmarkFields};
 	DELETE_BOOKMARK: {bookmarkId: string};
-	CREATE_BOOKMARK_COLUMN: {name: string};
-	UPDATE_BOOKMARK_COLUMN: {columnId: string; name: string};
+	CREATE_BOOKMARK_COLUMN: {name: string; icon?: string};
+	/**
+	`icon` omitted keeps the current icon; an empty string resets it to the default.
+	*/
+	UPDATE_BOOKMARK_COLUMN: {columnId: string; name: string; icon?: string};
 	/**
 	Moves the column's bookmarks to `targetColumnId` (or the first remaining column), or deletes them when `discardBookmarks` is true.
 	*/

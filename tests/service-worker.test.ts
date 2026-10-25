@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import vm from 'node:vm';
 import {transformWithOxc} from 'vite-plus';
 import {test} from 'vite-plus/test';
+import {ICON_IDS} from '../src/app/icon-ids';
 import type {
 	ActionSuccess,
 	Bookmark,
@@ -3887,4 +3888,88 @@ test('restoring into the current window leaves the pinned TabLodge tab in place'
 	assert.equal(response.ok, true, response.error);
 	assert.equal(harness.removedTabIds.length, 0);
 	assert.equal(pinnedLodges(harness, 10).length, 1);
+});
+
+test('the worker inlines exactly the icon ids of the icon registry', () => {
+	const inlined = /const ICON_IDS = new Set<unknown>\(\[([^\]]*)\]\)/.exec(
+		readFileSync(workerPath, 'utf8'),
+	);
+	assert.ok(inlined, 'the worker declares ICON_IDS');
+	const workerIds = [...inlined[1].matchAll(/'([-a-z]+)'/g)].map(
+		(match) => match[1],
+	);
+	assert.deepEqual(workerIds, [...ICON_IDS]);
+});
+
+test('bookmark columns store a registry icon and drop unknown ones', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const created = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Reading',
+		icon: 'book-open',
+	});
+	assert.equal(created.ok, true, created.error);
+	assert.equal(created.column.icon, 'book-open');
+	const plain = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Plain',
+		icon: 'not-a-real-icon',
+	});
+	assert.equal(plain.ok, true, plain.error);
+	assert.equal('icon' in plain.column, false);
+
+	// Renaming without an icon keeps it; an empty string resets it; a valid id replaces it.
+	const renamed = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+	});
+	assert.equal(renamed.column.icon, 'book-open');
+	const swapped = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+		icon: 'star',
+	});
+	assert.equal(swapped.column.icon, 'star');
+	const reset = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+		icon: '',
+	});
+	assert.equal(reset.ok, true, reset.error);
+	assert.equal('icon' in reset.column, false);
+});
+
+test('stored column icons are validated on load and kept by imports', async () => {
+	const state = stateWithSession();
+	state.bookmarkColumns = [
+		{id: 'bookmark-default', name: 'Bookmarks', icon: 'bogus'},
+		{id: 'column-a', name: 'Alpha', icon: 'rocket'},
+	];
+	const harness = createWorkerHarness(state);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(loaded.bookmarkColumns[0].icon, undefined);
+	assert.equal(loaded.bookmarkColumns[1].icon, 'rocket');
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: {
+			bookmarkColumns: [
+				{id: 'x', name: 'Imported', icon: 'globe'},
+				{id: 'y', name: 'Other', icon: 'nope'},
+			],
+			bookmarks: [{url: 'https://a.example/', columnId: 'x'}],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	const columns = harness.state.bookmarkColumns;
+	assert.equal(
+		columns.find((column) => column.name === 'Imported')?.icon,
+		'globe',
+	);
+	assert.equal(
+		columns.find((column) => column.name === 'Other')?.icon,
+		undefined,
+	);
 });
