@@ -1296,10 +1296,12 @@ function Options() {
 							off: true,
 						})),
 					]
-						.toSorted(
-							(a, b) =>
-								settingsGroups.indexOf(a.group) -
-								settingsGroups.indexOf(b.group),
+						// While searching the sections stay in score order (none are collapsed then).
+						.toSorted((a, b) =>
+							searching
+								? 0
+								: settingsGroups.indexOf(a.group) -
+									settingsGroups.indexOf(b.group),
 						)
 						.map(({group, fields, off}) =>
 							off ? (
