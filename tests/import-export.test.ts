@@ -60,7 +60,6 @@ const tab = (
 	id,
 	title,
 	url,
-	faviconUrl: '',
 	notes: '',
 	archived: false,
 	pinned: false,

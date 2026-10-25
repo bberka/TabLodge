@@ -277,6 +277,18 @@ function createWorkerHarness(
 	};
 
 	const sessionStore: Record<string, unknown> = {};
+	// Every storage.local.get / set / remove, so tests can assert what a code path reads and writes.
+	const storageGets: string[][] = [];
+	const storageSets: string[][] = [];
+	const changeListeners: Array<
+		(changes: Record<string, unknown>, area: string) => void
+	> = [];
+	const notifyChanged = (changes: Record<string, unknown>) => {
+		for (const listener of changeListeners) {
+			listener(changes, 'local');
+		}
+	};
+
 	const event = (name: string) => ({
 		// Several worker modules can listen to one event: all of them run, the last result is returned.
 		addListener(callback: EventListener) {
@@ -305,6 +317,7 @@ function createWorkerHarness(
 		storage: {
 			local: {
 				async get(keys: string[]) {
+					storageGets.push([...keys]);
 					const out: Record<string, unknown> = {};
 					for (const key of keys) {
 						if (key === storageKey && state) {
@@ -321,18 +334,30 @@ function createWorkerHarness(
 						throw storageFailure;
 					}
 
+					storageSets.push(Object.keys(values));
+					const changes: Record<string, unknown> = {};
 					for (const [key, value] of Object.entries(values)) {
 						if (key === storageKey) {
+							const oldValue = structuredClone(state);
 							Object.assign(state, structuredClone(value));
+							changes[key] = {oldValue, newValue: structuredClone(state)};
 						} else {
+							const oldValue = structuredClone(extraStorage[key]);
 							extraStorage[key] = structuredClone(value);
+							changes[key] = {oldValue, newValue: structuredClone(value)};
 						}
 					}
+
+					notifyChanged(changes);
 				},
 				async remove(keys: string | string[]) {
+					const changes: Record<string, unknown> = {};
 					for (const key of [keys].flat()) {
+						changes[key] = {oldValue: structuredClone(extraStorage[key])};
 						Reflect.deleteProperty(extraStorage, key);
 					}
+
+					notifyChanged(changes);
 				},
 				async getBytesInUse(keys: string[]) {
 					let total = 0;
@@ -342,6 +367,13 @@ function createWorkerHarness(
 					}
 
 					return total;
+				},
+			},
+			onChanged: {
+				addListener(
+					callback: (changes: Record<string, unknown>, area: string) => void,
+				) {
+					changeListeners.push(callback);
 				},
 			},
 			session: {
@@ -782,6 +814,18 @@ function createWorkerHarness(
 			storageFailure = error;
 		},
 		state,
+		storageGets,
+		storageSets,
+		/**
+		Another extension context (a page) writing the state: the worker only learns of it through storage.onChanged.
+		*/
+		externalSetState(next: Partial<StoredState>) {
+			const oldValue = structuredClone(state);
+			Object.assign(state, structuredClone(next));
+			notifyChanged({
+				[storageKey]: {oldValue, newValue: structuredClone(state)},
+			});
+		},
 		async sendMessage<M extends TabLodgeMessage>(
 			message: M,
 			sender: {tab?: Partial<MockTab>} = {tab: {id: 1, windowId: 10}},
@@ -4832,6 +4876,7 @@ type StoredSnapshot = {
 type StoredMeta = {
 	sessionOpen: boolean;
 	liveAt: number;
+	liveSig?: string;
 	closing: {at: number; remaining: number} | null;
 	recovery: {snapshotId: string} | null;
 };
@@ -6749,4 +6794,166 @@ test('a run that starts with no window is not marked open, so exiting without on
 	await harness.fire('onStartup');
 	const response = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
 	assert.equal(response.recovery, null);
+});
+
+// ---- Worker CPU and memory use ----
+
+const stateReads = (harness: {storageGets: string[][]}) =>
+	harness.storageGets.filter((keys) => keys.includes(storageKey)).length;
+
+test('the settings cache follows changes written by another context', async () => {
+	const harness = createWorkerHarness(stateWithSession({newTabEnabled: true}), [
+		{id: 7, windowId: 10, index: 0, active: true, url: ''},
+	]);
+	const tab = harness.tabs[0];
+	// Warms the cache with newTabEnabled on: nothing to hand off.
+	await harness.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'});
+	assert.equal(tab.url, '');
+	harness.externalSetState({
+		settings: {...harness.state.settings, newTabEnabled: false},
+	});
+	await harness.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'});
+	assert.equal(tab.url, 'chrome://new-tab-page/');
+});
+
+test('tab activation and focus changes do not read the stored state once settings are cached', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	await harness.fire('tabActivated', {tabId: 1, windowId: 10});
+	assert.ok(stateReads(harness) >= 1, 'the first event loads the settings');
+	harness.storageGets.length = 0;
+	for (let index = 0; index < 20; index += 1) {
+		await harness.fire('tabActivated', {tabId: 1, windowId: 10});
+		await harness.fire(
+			'tabUpdated',
+			1,
+			{url: 'https://x.example/'},
+			{active: true, url: 'https://x.example/'},
+		);
+		await harness.fire('windowFocusChanged', 10);
+	}
+
+	assert.equal(stateReads(harness), 0);
+});
+
+test('snapshot captures compare against the signature in the meta record, not the live snapshot', async () => {
+	const harness = recoveryHarness();
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	const live = liveOf(harness)!;
+	assert.equal(metaOf(harness)?.liveSig, live.sig);
+	harness.storageGets.length = 0;
+	harness.storageSets.length = 0;
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.equal(
+		harness.storageGets.some((keys) => keys.includes(LIVE_KEY)),
+		false,
+		'the live snapshot is not read for the comparison',
+	);
+	assert.equal(
+		harness.storageSets.some((keys) => keys.includes(LIVE_KEY)),
+		false,
+		'an unchanged capture does not rewrite it',
+	);
+	harness.tabs.push(webTab(40, 10, 2));
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.notEqual(liveOf(harness)!.sig, live.sig);
+	assert.equal(metaOf(harness)?.liveSig, liveOf(harness)!.sig);
+	// An older meta without the signature falls back to reading the live record, and clearing forgets it.
+	const meta = harness.extraStorage[META_KEY] as Record<string, unknown>;
+	delete meta.liveSig;
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.equal(metaOf(harness)?.liveSig, liveOf(harness)!.sig);
+	await harness.sendMessage({type: 'CLEAR_SNAPSHOTS'});
+	assert.equal(liveOf(harness), undefined);
+	await harness.fire('alarm', {name: 'tablodge-snapshot'});
+	assert.ok(
+		liveOf(harness),
+		'a capture after clearing writes the live snapshot again',
+	);
+});
+
+test('the trash is capped by total size, dropping the oldest items first', async () => {
+	const big = (id: string, age: number) => ({
+		id,
+		kind: 'bookmark',
+		deletedAt: Date.now() - age * 1000,
+		label: id,
+		origin: '',
+		count: 1,
+		data: {
+			bookmark: {id, url: 'https://x.example/', title: 'x'.repeat(3_000_000)},
+		},
+	});
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		storage: {
+			[TRASH_KEY]: {version: 1, items: [big('a', 3), big('b', 2), big('c', 1)]},
+		},
+	});
+	const response = await harness.sendMessage({
+		type: 'DELETE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	const ids = trashOf(harness).map((item) => item.label);
+	assert.equal(ids.length, 3, ids.join(','));
+	assert.deepEqual(ids.slice(1), ['a', 'b']);
+	assert.equal(
+		(trashOf(harness) as Array<{size?: number}>).every(
+			(item) => typeof item.size === 'number',
+		),
+		true,
+		'sizes are cached on the stored entries',
+	);
+});
+
+test('the schema migration is written once, inside a mutation, and reads never write', async () => {
+	const state = stateWithSession();
+	state.schemaVersion = 3;
+	const harness = createWorkerHarness(state);
+	const stateWrites = () =>
+		harness.storageSets.filter((keys) => keys.includes(storageKey)).length;
+	await harness.sendMessage({type: 'GET_STATE'});
+	await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(stateWrites(), 0, 'reads do not migrate');
+	assert.notEqual(harness.state.schemaVersion, 7);
+	const first = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://one.example/'},
+	});
+	assert.equal(first.ok, true, first.error);
+	assert.equal(stateWrites(), 2, 'one migration write plus the mutation');
+	const second = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://two.example/'},
+	});
+	assert.equal(second.ok, true, second.error);
+	assert.equal(stateWrites(), 3, 'no further migration');
+});
+
+test('favicon URLs are no longer stored and are stripped from older data', async () => {
+	const state = stateWithSession();
+	state.groups[0].tabs[0] = {
+		...state.groups[0].tabs[0],
+		faviconUrl: 'data:image/png;base64,AAAA',
+	} as never;
+	const harness = createWorkerHarness(state, [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'https://current.example/',
+			title: 'Current',
+			favIconUrl: 'https://current.example/favicon.ico',
+		} as MockTab,
+	]);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal('faviconUrl' in loaded.groups[0].tabs[0], false);
+	const saved = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'current-tab',
+	});
+	assert.equal(saved.ok, true, saved.error);
+	const raw = JSON.stringify(harness.state);
+	assert.equal(raw.includes('faviconUrl'), false);
+	assert.equal(raw.includes('favicon.ico'), false);
 });
