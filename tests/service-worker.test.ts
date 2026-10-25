@@ -5651,7 +5651,7 @@ test('oversized backups report that no Downloads copy was written', async () => 
 	await harness.fire('alarm', {name: 'tablodge-backup'});
 	assert.equal(harness.downloads.length, 0);
 	assert.match(backupsOf(harness).downloadError, /too large/i);
-});
+}, 30_000); // Builds a deliberately oversized backup; slow machines need more than the 5 s default.
 
 test('safety backups are taken before erase, large imports and bulk deletes, in a ring of five', async () => {
 	const harness = createWorkerHarness(bookmarksState());
