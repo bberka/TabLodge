@@ -7419,23 +7419,24 @@ function contextMenuPlan(
 			});
 		}
 
-		items.push(
-			{
-				id: `${prefix}${BOOKMARK_UNFILED_ID}`,
-				title: 'Unfiled',
-				parentId,
-				contexts,
-				...extra,
-			},
-			{
+		// Unfiled is not offered: it only holds bookmarks left over from a deleted column.
+		if (columns.length > 0) {
+			items.push({
 				id: `${parentId}-separator`,
 				type: 'separator',
 				parentId,
 				contexts,
 				...extra,
-			},
-			{id: newId, title: 'New column', parentId, contexts, ...extra},
-		);
+			});
+		}
+
+		items.push({
+			id: newId,
+			title: 'New column',
+			parentId,
+			contexts,
+			...extra,
+		});
 	};
 
 	if (
