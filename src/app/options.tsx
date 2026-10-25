@@ -106,6 +106,10 @@ type SettingField = {
 	Like `requires`, for a dependency that is not a switch (such as "backups are not off"): the row is inset and disabled while false.
 	*/
 	enabled?: (settings: Settings) => boolean;
+	/**
+	The row an `enabled` check depends on, so search can show the two together (`requires` names it already).
+	*/
+	parent?: keyof Settings;
 	systems?: System[];
 	/**
 	The row only shows while this is true for the current settings (searching shows it regardless).
@@ -670,6 +674,7 @@ const settingsGroups: Array<{
 			{
 				name: 'autoBackupKeep',
 				enabled: (current) => current.autoBackup !== 'off',
+				parent: 'autoBackup',
 				label: 'Backups to keep',
 				help: 'The oldest are dropped first. Backups are skipped when nothing changed.',
 				type: 'number-select',
@@ -681,6 +686,7 @@ const settingsGroups: Array<{
 			{
 				name: 'autoBackupToDownloads',
 				enabled: (current) => current.autoBackup !== 'off',
+				parent: 'autoBackup',
 				label: 'Also save a copy to Downloads',
 				help: `Writes each backup as a dated JSON file to Downloads/${PROJECT.name}. Asks the browser for the optional “Downloads” permission when you turn it on. Very large backups are too big for this; use Download in the list below.`,
 				type: 'switch',
@@ -1151,16 +1157,50 @@ function Options() {
 		!searching ||
 		titleHit(RECOVERY_TITLE) ||
 		matchesQuery(query, RECOVERY_TOOLS_TEXT);
+	// While searching, a matching row brings its parent switch and the rows that depend on it (and a matching
+	// dependent row brings its parent and siblings), so a setting is never shown without what controls it.
+	const withFamilies = (all: SettingField[], matched: SettingField[]) => {
+		if (!searching || matched.length === 0) {
+			return matched;
+		}
+
+		const parentOf = (field: SettingField) => field.requires ?? field.parent;
+		const roots = new Set(
+			matched.map((field) => parentOf(field) ?? field.name),
+		);
+		const family = all.filter(
+			(field) => roots.has(field.name) || roots.has(parentOf(field)!),
+		);
+		const seen = new Set<SettingField>();
+		const result: SettingField[] = [];
+		// Keep the ranking of the best match in each family, with the family in page order.
+		for (const field of matched) {
+			const root = parentOf(field) ?? field.name;
+			for (const member of family) {
+				if (
+					seen.has(member) ||
+					!(member.name === root || parentOf(member) === root)
+				) {
+					continue;
+				}
+
+				seen.add(member);
+				result.push(member);
+			}
+		}
+
+		return result;
+	};
+
 	const visibleGroups = settingsGroups
 		.filter((group) => !group.system || systemOn(group.system))
-		.map((group) => ({
-			group,
-			fields: pick(
-				group.title,
-				group.fields.filter((field) => fieldShown(field)),
-				fieldSearchText,
-			),
-		}))
+		.map((group) => {
+			const shown = group.fields.filter((field) => fieldShown(field));
+			return {
+				group,
+				fields: withFamilies(shown, pick(group.title, shown, fieldSearchText)),
+			};
+		})
 		.filter(
 			(entry) =>
 				entry.fields.length ||
