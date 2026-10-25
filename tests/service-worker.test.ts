@@ -3763,6 +3763,7 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(s.keepLodgePinned, false);
 	assert.equal(s.autoFocusSearchOnNewTab, false);
 	assert.equal(s.urlDisplayMode, 'full');
+	assert.equal(s.simplifyUrls, true);
 
 	const junk = createWorkerHarness(
 		stateWithSession({
@@ -3774,6 +3775,7 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 			keepLodgePinned: true,
 			autoFocusSearchOnNewTab: true,
 			urlDisplayMode: 'domain',
+			simplifyUrls: false,
 		}),
 	);
 	const j = (await junk.sendMessage({type: 'GET_STATE'})).settings;
@@ -3785,10 +3787,33 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(j.keepLodgePinned, true);
 	assert.equal(j.autoFocusSearchOnNewTab, true);
 	assert.equal(j.urlDisplayMode, 'domain');
+	assert.equal(j.simplifyUrls, false);
 	const reset = await junk.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.keepLodgePinned, false);
 	assert.equal(reset.settings.autoFocusSearchOnNewTab, false);
 	assert.equal(reset.settings.urlDisplayMode, 'full');
+	assert.equal(reset.settings.simplifyUrls, true);
+});
+
+test('url-only display mode and the bookmark menu click action are accepted', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const result = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {urlDisplayMode: 'url-only', bookmarkClickAction: 'menu'},
+	});
+	assert.equal(result.settings.urlDisplayMode, 'url-only');
+	assert.equal(result.settings.bookmarkClickAction, 'menu');
+	const bad = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			sessionLinkClickAction: 'menu',
+		} as unknown as Partial<Settings>,
+	});
+	assert.equal(
+		bad.settings.sessionLinkClickAction,
+		'new',
+		'sessions have no menu click action',
+	);
 });
 
 test('pasteLinkToBookmark is on by default and only an explicit false turns it off', async () => {

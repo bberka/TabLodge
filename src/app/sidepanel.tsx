@@ -150,9 +150,13 @@ function ActionRow({
 }: {
 	label: string;
 	actions: MenuAction[];
-	children: ReactNode;
+	/**
+	A function receives `openMenu`, which opens the row's ⋯ menu.
+	*/
+	children: ReactNode | ((openMenu: () => void) => ReactNode);
 	selected?: boolean;
 }) {
+	const [menuOpen, setMenuOpen] = useState(false);
 	return (
 		<ActionContextMenu actions={actions}>
 			<div
@@ -161,8 +165,11 @@ function ActionRow({
 					selected && 'bg-muted',
 				)}
 			>
-				{children}
+				{typeof children === 'function'
+					? children(() => setMenuOpen(true))
+					: children}
 				<ActionDropdownMenu
+					open={menuOpen}
 					actions={actions}
 					trigger={
 						<Button
@@ -174,6 +181,7 @@ function ActionRow({
 							<MoreVertical className="h-4 w-4" />
 						</Button>
 					}
+					onOpenChange={setMenuOpen}
 				/>
 			</div>
 		</ActionContextMenu>
@@ -341,6 +349,7 @@ function SidePanel() {
 		event: MouseEvent,
 		url: string,
 		kind: 'bookmark' | 'session',
+		openMenu?: () => void,
 	) {
 		// Modified clicks keep the browser's own behavior (new tab, new window).
 		if (
@@ -354,6 +363,11 @@ function SidePanel() {
 		}
 
 		event.preventDefault();
+		if (openMenu && resolveLinkTarget(kind, settings) === 'menu') {
+			openMenu();
+			return;
+		}
+
 		void attempt(
 			() => openSavedLink(url, kind, settings),
 			'Could not open the link.',
@@ -408,28 +422,30 @@ function SidePanel() {
 				label={title || hostname(url)}
 				actions={linkActions(url, kind, extra)}
 			>
-				<a
-					href={url}
-					target="_blank"
-					rel="noopener noreferrer"
-					title={`${title}\n${url}`}
-					className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					onClick={(event) => linkClick(event, url, kind)}
-				>
-					<Favicon
-						url={url}
-						label={hostname(url)}
-						className="h-6 w-6 rounded"
-					/>
-					<span className="min-w-0">
-						<strong className="block truncate text-xs font-medium">
-							{title || hostname(url)}
-						</strong>
-						<small className="block truncate text-[11px] text-muted-foreground">
-							{hostname(url)}
-						</small>
-					</span>
-				</a>
+				{(openMenu) => (
+					<a
+						href={url}
+						target="_blank"
+						rel="noopener noreferrer"
+						title={`${title}\n${url}`}
+						className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						onClick={(event) => linkClick(event, url, kind, openMenu)}
+					>
+						<Favicon
+							url={url}
+							label={hostname(url)}
+							className="h-6 w-6 rounded"
+						/>
+						<span className="min-w-0">
+							<strong className="block truncate text-xs font-medium">
+								{title || hostname(url)}
+							</strong>
+							<small className="block truncate text-[11px] text-muted-foreground">
+								{hostname(url)}
+							</small>
+						</span>
+					</a>
+				)}
 			</ActionRow>
 		);
 	}

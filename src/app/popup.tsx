@@ -637,7 +637,11 @@ function Popup() {
 						</DialogHeader>
 						<DialogBody>
 							{bookmarkTab && (
-								<LinkSummary title={bookmarkTab.title} url={bookmarkTab.url} />
+								<LinkSummary
+									title={bookmarkTab.title}
+									url={bookmarkTab.url}
+									simplify={state?.settings?.simplifyUrls !== false}
+								/>
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column">Bookmark column</Label>

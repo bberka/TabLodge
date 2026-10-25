@@ -181,13 +181,20 @@ export function ActionDropdownMenu({
 	actions,
 	trigger,
 	align = 'end',
+	open,
+	onOpenChange,
 }: {
 	actions: ActionsSource;
 	trigger: ReactElement;
 	align?: 'start' | 'end';
+	/**
+	Set both to control the menu from outside (such as opening it when its row is clicked).
+	*/
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
 }) {
 	return (
-		<DropdownMenu>
+		<DropdownMenu open={open} onOpenChange={onOpenChange}>
 			<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align}>
 				<MenuItems actions={actions} kit={dropdownKit} />

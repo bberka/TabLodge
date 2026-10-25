@@ -100,6 +100,7 @@ import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
 import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
+import {displayUrl} from './url-display';
 import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
 import {
@@ -286,6 +287,8 @@ function NewTab() {
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const urlMode = settings.urlDisplayMode ?? 'full';
+	const simplifyUrls = settings.simplifyUrls !== false;
+	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
 	const quickAction: BookmarkQuickAction | null =
 		settings.showBookmarkQuickActions === true
 			? (settings.bookmarkQuickAction ?? 'open-new')
@@ -1433,6 +1436,8 @@ function NewTab() {
 									: null
 							}
 							urlMode={urlMode}
+							clickOpensMenu={clickOpensMenu}
+							simplifyUrls={simplifyUrls}
 							quickAction={quickAction}
 							actions={boardActions}
 						/>
@@ -1491,6 +1496,8 @@ function NewTab() {
 													dropAfter={drop?.position === 'after'}
 													dropActive={Boolean(drop)}
 													urlMode={urlMode}
+													clickOpensMenu={clickOpensMenu}
+													simplifyUrls={simplifyUrls}
 													quickAction={quickAction}
 													onAction={boardActions.bookmark}
 												/>
@@ -1605,6 +1612,7 @@ function NewTab() {
 						<DialogBody>
 							{editedBookmark && (
 								<LinkSummary
+									simplify={settings.simplifyUrls !== false}
 									title={editedBookmark.title}
 									url={editedBookmark.url}
 								/>
@@ -1765,7 +1773,10 @@ function NewTab() {
 														{link.title}
 													</span>
 													<span className="block truncate text-xs text-muted-foreground">
-														{link.url}
+														{displayUrl(
+															link.url,
+															settings.simplifyUrls !== false,
+														)}
 													</span>
 												</span>
 											</label>
@@ -1880,6 +1891,7 @@ function NewTab() {
 						<DialogBody>
 							{moveBookmark && (
 								<LinkSummary
+									simplify={settings.simplifyUrls !== false}
 									title={moveBookmark.title}
 									url={moveBookmark.url}
 								/>
@@ -2236,6 +2248,8 @@ type BookmarkColumnProps = {
 	siblings: Bookmark[];
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickAction: BookmarkQuickAction | null;
+	clickOpensMenu: boolean;
+	simplifyUrls: boolean;
 	dropIndicator: DropIndicator | null;
 	actions: BoardActions;
 };
@@ -2252,6 +2266,8 @@ const BookmarkColumn = memo(
 		siblings,
 		urlMode,
 		quickAction,
+		clickOpensMenu,
+		simplifyUrls,
 		dropIndicator,
 		actions,
 	}: BookmarkColumnProps) => {
@@ -2393,6 +2409,8 @@ const BookmarkColumn = memo(
 												}
 												dropActive={targeted}
 												urlMode={urlMode}
+												clickOpensMenu={clickOpensMenu}
+												simplifyUrls={simplifyUrls}
 												quickAction={quickAction}
 												onAction={actions.bookmark}
 											/>
@@ -2432,6 +2450,11 @@ type BookmarkCardProps = {
 	onAction: OnBookmarkAction;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickAction: BookmarkQuickAction | null;
+	/**
+	Clicking the card opens its action menu instead of the link.
+	*/
+	clickOpensMenu?: boolean;
+	simplifyUrls?: boolean;
 	dropBefore?: boolean;
 	dropAfter?: boolean;
 	dropActive?: boolean;
@@ -2443,10 +2466,13 @@ const BookmarkCard = memo(
 		onAction,
 		urlMode,
 		quickAction,
+		clickOpensMenu = false,
+		simplifyUrls = true,
 		dropBefore = false,
 		dropAfter = false,
 		dropActive = false,
 	}: BookmarkCardProps) => {
+		const [menuOpen, setMenuOpen] = useState(false);
 		const act = (action: BookmarkAction) => () => {
 			void onAction(action, bookmark);
 		};
@@ -2502,6 +2528,10 @@ const BookmarkCard = memo(
 			? QUICK_ACTIONS[quickAction].icon
 			: ACTION_ICONS.openHere;
 		const showUrl = urlMode !== 'none';
+		const urlOnly = urlMode === 'url-only';
+		const cardName = urlOnly
+			? displayUrl(bookmark.url, simplifyUrls)
+			: bookmark.title || domainName(bookmark.url);
 		return (
 			<ActionContextMenu actions={actions}>
 				<div
@@ -2521,7 +2551,12 @@ const BookmarkCard = memo(
 						<a
 							href={bookmark.url}
 							rel="noopener noreferrer"
-							title={bookmark.title}
+							title={urlOnly ? bookmark.url : bookmark.title}
+							aria-label={
+								urlOnly && bookmark.title
+									? `${bookmark.title} (${bookmark.url})`
+									: undefined
+							}
 							className="flex min-w-0 flex-1 items-center gap-2.5"
 							onClick={(event) => {
 								if (
@@ -2535,6 +2570,11 @@ const BookmarkCard = memo(
 								}
 
 								event.preventDefault();
+								if (clickOpensMenu) {
+									setMenuOpen(true);
+									return;
+								}
+
 								void onAction('click', bookmark);
 							}}
 						>
@@ -2545,13 +2585,13 @@ const BookmarkCard = memo(
 							/>
 							<span className="min-w-0 flex-1">
 								<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
-									{bookmark.title || domainName(bookmark.url)}
+									{cardName}
 								</strong>
-								{showUrl && (
+								{showUrl && !urlOnly && (
 									<small className="block truncate text-[11px] leading-4 text-muted-foreground">
 										{urlMode === 'domain'
 											? domainName(bookmark.url)
-											: bookmark.url}
+											: displayUrl(bookmark.url, simplifyUrls)}
 									</small>
 								)}
 							</span>
@@ -2571,6 +2611,7 @@ const BookmarkCard = memo(
 						)}
 						<ActionDropdownMenu
 							actions={actions}
+							open={menuOpen}
 							trigger={
 								<Button
 									variant="ghost"
@@ -2582,6 +2623,7 @@ const BookmarkCard = memo(
 									<MoreHorizontal className="h-4 w-4" />
 								</Button>
 							}
+							onOpenChange={setMenuOpen}
 						/>
 					</article>
 					{dropAfter && <InsertionLine className="inset-x-1 -bottom-[3px]" />}

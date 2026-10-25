@@ -38,6 +38,10 @@ export type BookmarkQuickAction =
 	'open-current' | 'open-new' | 'copy' | 'edit' | 'delete';
 
 export type LinkClickAction = 'none' | 'current' | 'new';
+/**
+What clicking a bookmark does: a link action, or open the bookmark's action menu instead.
+*/
+export type BookmarkClickAction = LinkClickAction | 'menu';
 
 export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
 
@@ -101,7 +105,7 @@ export type Settings = {
 	/**
 	What clicking a bookmark does (default: open in this tab).
 	*/
-	bookmarkClickAction: LinkClickAction;
+	bookmarkClickAction: BookmarkClickAction;
 	/**
 	What clicking a saved session link does (default: open in a new tab).
 	*/
@@ -124,7 +128,11 @@ export type Settings = {
 	keepLodgePinned: boolean;
 	copyFormat: CopyFormat;
 	dashboardBehavior: 'switch' | 'move';
-	urlDisplayMode: 'domain' | 'full' | 'none';
+	/**
+	Shown addresses drop https:// and www. (default on); display only.
+	*/
+	simplifyUrls: boolean;
+	urlDisplayMode: 'domain' | 'full' | 'url-only' | 'none';
 	groupTitleAction: 'toggle' | 'edit' | 'restore';
 	// ---- Right-click menus (context-menu agent) ----
 	/**
