@@ -28,6 +28,7 @@ export type RestoreSplitTabs = 'split' | 'separate';
 /**
 For selection saves while the active tab is in a split view: keep both halves, or only the focused one.
 */
+export type SessionNameStyle = 'title' | 'datetime' | 'date-title' | 'custom';
 export type SaveSplitTabs = 'both' | 'focused';
 
 /**
@@ -170,6 +171,14 @@ export type Settings = {
 	Days deleted items stay in the trash: 7, 30 (default) or 90.
 	*/
 	trashRetentionDays: number;
+	/**
+	How a new session is named: the first tab's title, the date and time, the date and first tab (default), or `sessionNameTemplate`.
+	*/
+	sessionNameStyle: SessionNameStyle;
+	/**
+	Template for the `custom` style, with {date} {time} {weekday} {title} {domain} {count} {window} (default "{date} · {title}").
+	*/
+	sessionNameTemplate: string;
 	// ---- end recovery & backups ----
 };
 
@@ -426,6 +435,7 @@ export type TabLodgeMessages = {
 		groupName?: string;
 		includePinned?: boolean;
 	};
+	PREVIEW_SESSION_NAME: {style?: SessionNameStyle; template?: string};
 	SAVE_CURRENT_TAB_TO_GROUP: {};
 	RESTORE_TAB: {groupId: string; tabId: string} & RestoreOptions;
 	RESTORE_GROUP: {groupId: string; forceRemove?: boolean} & RestoreOptions;
@@ -632,6 +642,7 @@ Success payload of each message (merged with `{ ok: true }`). Fields marked opti
 export type TabLodgeResponses = {
 	GET_STATE: Store;
 	SAVE_TABS: SaveResult;
+	PREVIEW_SESSION_NAME: {name: string};
 	SAVE_CURRENT_TAB_TO_GROUP: {count: number; skipped: number; groupId: string};
 	RESTORE_TAB: RestoreResult;
 	RESTORE_GROUP: RestoreResult;
