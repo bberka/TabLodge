@@ -653,13 +653,13 @@ function SidePanel() {
 							actions={[
 								{
 									id: 'snapshots',
-									label: 'Recent snapshots…',
+									label: 'Recent snapshots',
 									icon: History,
 									onSelect: () => setSnapshotsOpen(true),
 								},
 								{
 									id: 'trash',
-									label: 'Trash…',
+									label: 'Trash',
 									icon: Trash2,
 									onSelect: () => setTrashOpen(true),
 								},

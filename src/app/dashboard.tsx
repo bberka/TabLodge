@@ -1253,24 +1253,24 @@ export function SessionManager({
 								<DropdownMenuContent align="end">
 									<DropdownMenuItem onSelect={() => setImportOpen(true)}>
 										<Upload className="h-4 w-4" />
-										Import sessions…
+										Import sessions
 									</DropdownMenuItem>
 									<DropdownMenuItem onSelect={() => openBackup('sessions')}>
 										<Download className="h-4 w-4" />
-										Back up sessions…
+										Back up sessions
 									</DropdownMenuItem>
 									<DropdownMenuSeparator />
 									<DropdownMenuItem
 										onSelect={() => emitRecoveryEvent({type: 'snapshots'})}
 									>
 										<History className="h-4 w-4" />
-										Recent snapshots…
+										Recent snapshots
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										onSelect={() => emitRecoveryEvent({type: 'trash'})}
 									>
 										<Trash2 className="h-4 w-4" />
-										Trash…
+										Trash
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
@@ -1398,7 +1398,7 @@ export function SessionManager({
 									onClick={() => openBackup('selected')}
 								>
 									<Download className="h-4 w-4" />
-									Export selected…
+									Export selected
 								</Button>
 								<Button
 									variant="outline"
