@@ -264,7 +264,7 @@ export function SnapshotsDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent size="lg">
-				<DialogHeader>
+				<DialogHeader className={SCROLL_HEADER}>
 					<DialogTitle>Recent snapshots</DialogTitle>
 					<DialogDescription>
 						Automatic copies of your open windows, kept on this computer so a
@@ -293,7 +293,7 @@ export function SnapshotsDialog({
 						<ScrollArea
 							type="auto"
 							className="-mx-2"
-							viewportClassName="max-h-[min(32rem,calc(100dvh-19rem))] px-2"
+							viewportClassName="max-h-[min(32rem,calc(100dvh-23rem))] px-2"
 						>
 							<ul className="space-y-2 py-0.5" aria-label="Snapshots">
 								{snapshots.map((snapshot) => (
@@ -314,7 +314,7 @@ export function SnapshotsDialog({
 						</ScrollArea>
 					)}
 				</DialogBody>
-				<DialogFooter>
+				<DialogFooter className={SCROLL_FOOTER}>
 					<Button
 						variant="outline"
 						disabled={busy || snapshots.length === 0}
@@ -342,6 +342,10 @@ export function SnapshotsDialog({
 		</Dialog>
 	);
 }
+
+// Dialogs whose list scrolls between a fixed title and fixed buttons: edge-to-edge lines mark where the list starts and ends.
+const SCROLL_HEADER = '-mx-6 mb-4 border-b border-border pb-4 pl-6 pr-14';
+const SCROLL_FOOTER = '-mx-6 mt-4 border-t border-border px-6 pt-4';
 
 /**
 Which side of TabLodge a deleted item belongs to, for the Sessions / Bookmarks filter.
@@ -473,7 +477,7 @@ export function TrashDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent size="lg">
-				<DialogHeader>
+				<DialogHeader className={SCROLL_HEADER}>
 					<DialogTitle>Trash bin</DialogTitle>
 					<DialogDescription>
 						Deleted sessions, saved links, bookmarks and columns wait here until
@@ -517,7 +521,7 @@ export function TrashDialog({
 						<ScrollArea
 							type="auto"
 							className="-mx-2"
-							viewportClassName="max-h-[min(32rem,calc(100dvh-19rem))] px-2"
+							viewportClassName="max-h-[min(32rem,calc(100dvh-23rem))] px-2"
 						>
 							<ul className="space-y-2 py-0.5" aria-label="Deleted items">
 								{shown.map((item) => (
@@ -569,7 +573,7 @@ export function TrashDialog({
 						</ScrollArea>
 					)}
 				</DialogBody>
-				<DialogFooter>
+				<DialogFooter className={SCROLL_FOOTER}>
 					<Button
 						variant="outline"
 						className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
