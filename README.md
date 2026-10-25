@@ -133,6 +133,7 @@ TabLodge requests no website (host) permissions and injects nothing into web pag
 | `contextMenus`     | Add optional "Save…" and "Bookmark this page" actions to the page and toolbar right-click menus.                      |
 | `clipboardWrite`   | Copy bookmark URLs and session links in the format you choose.                                                        |
 | `sidePanel`        | Show the optional searchable bookmark list in the browser's Side Panel.                                               |
+| `search`           | Run a normal web search with your default search engine when you pick "Search the web" in TabLodge's finder.          |
 
 The manifest also overrides the new-tab page with TabLodge's local page (you can switch its session area off in Settings) and declares the keyboard shortcuts.
 

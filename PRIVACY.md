@@ -40,6 +40,7 @@ When you restore a session or open a bookmark, your browser loads those web page
 | `contextMenus`                | Optional right-click save and bookmark actions.                                         |
 | `clipboardWrite`              | Copying bookmark URLs and session links when you ask.                                   |
 | `sidePanel`                   | The optional bookmark list in the browser's Side Panel.                                 |
+| `search`                      | Running a web search with your default engine, only when you choose "Search the web".   |
 
 ## Contact
 

@@ -387,6 +387,66 @@ export function SessionManager({
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `state` on purpose
 	}, [state]);
 
+	// Requests from the global finder: reveal a session or folder, or open one of the session dialogs.
+	const finderRequestRef = useRef<(detail: FinderEventDetail) => void>(
+		() => {},
+	);
+	finderRequestRef.current = (detail) => {
+		switch (detail.type) {
+			case 'reveal-session': {
+				const group = groups.find((entry) => entry.id === detail.id);
+				if (!group) {
+					return;
+				}
+
+				setFolderId(group.archived ? 'archived' : ALL);
+				setQuery('');
+				setGroupOpen(group.id, true);
+				setTimeout(
+					() =>
+						document
+							.querySelector(`#session-${CSS.escape(group.id)}`)
+							?.scrollIntoView({block: 'center', behavior: 'smooth'}),
+					60,
+				);
+
+				break;
+			}
+
+			case 'select-folder': {
+				setFolderId(detail.id);
+				setQuery('');
+
+				break;
+			}
+
+			case 'new-folder': {
+				setDialog({mode: 'create'});
+
+				break;
+			}
+
+			case 'backup-sessions': {
+				openBackup('sessions');
+
+				break;
+			}
+
+			default: {
+				setImportOpen(true);
+			}
+		}
+	};
+
+	useEffect(() => {
+		const onRequest = (event: Event) =>
+			finderRequestRef.current(
+				(event as CustomEvent<FinderEventDetail>).detail,
+			);
+		globalThis.addEventListener(FINDER_EVENT, onRequest);
+		return () => globalThis.removeEventListener(FINDER_EVENT, onRequest);
+	}, []);
+
 	useEffect(() => {
 		if (selected.size === 0) {
 			return;
