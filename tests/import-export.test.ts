@@ -778,7 +778,7 @@ test('link limits and session size: groups over 1000 tabs are split, extra links
 	assert.equal(parseImportFile(tooMany, 'x.txt').invalid, 10);
 });
 
-test('preview counts duplicates against saved and repeated links, skips pinned tabs, and samples items', () => {
+test('preview counts duplicates against saved and repeated links, keeps pinned tabs of a TabLodge export, and samples items', () => {
 	const data = {
 		groups: [
 			{
@@ -804,11 +804,17 @@ test('preview counts duplicates against saved and repeated links, skips pinned t
 			duplicates: preview.duplicates,
 			pinned: preview.pinnedSkipped,
 		},
-		{groups: 1, links: 3, duplicates: 2, pinned: 1},
+		{groups: 1, links: 4, duplicates: 2, pinned: 0},
 	);
 	assert.equal(preview.sample.length, 2);
+	// Other formats still follow the setting.
+	const foreign = {...parsed, native: undefined};
 	assert.equal(
-		previewImport(parsed, 'sessions', {existingUrls: [], includePinned: true})
+		previewImport(foreign, 'sessions', {existingUrls: []}).pinnedSkipped,
+		1,
+	);
+	assert.equal(
+		previewImport(foreign, 'sessions', {existingUrls: [], includePinned: true})
 			.links,
 		4,
 	);

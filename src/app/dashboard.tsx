@@ -89,6 +89,7 @@ import {
 	splitNote,
 	useStatus,
 	useTabLodgeState,
+	restoreFailureText,
 } from './common';
 import {BackupDialog, ImportDialog, useShareDialog} from './data-transfer';
 import type {ExportData} from './export-formats';
@@ -876,6 +877,8 @@ export function SessionManager({
 								toGroupId: fromGroupId,
 								targetTabId: nextSibling?.id ?? previousSibling?.id ?? null,
 								position: nextSibling ? 'before' : 'after',
+								// The move emptied the source session: it comes back from the trash with the link.
+								restoreTrashId: result.trashId,
 							});
 							if (!undone?.ok) {
 								showStatus(undone?.error || 'Could not undo that move.', true);
@@ -1829,14 +1832,6 @@ export function SessionManager({
 			</Dialog>
 		</div>
 	);
-}
-
-function restoreFailureText(failure?: {
-	title?: string;
-	url?: string;
-	error?: string;
-}) {
-	return failure ? `${failure.title || failure.url}: ${failure.error}` : '';
 }
 
 function urlDisplay(url: string, mode: Settings['urlDisplayMode'] = 'full') {
