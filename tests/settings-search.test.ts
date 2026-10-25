@@ -4,6 +4,8 @@ import {
 	highlightSegments,
 	matchesAnyTerm,
 	matchesQuery,
+	rankByQuery,
+	scoreQuery,
 	searchTerms,
 } from '../src/app/settings-search';
 import {withSearchParam} from '../src/app/page-params';
@@ -113,4 +115,60 @@ test('withSearchParam sets or removes one parameter and keeps the rest', () => {
 		'/options.html?x=1#data',
 	);
 	assert.equal(withSearchParam(at('?q=old'), 'q', null), '/options.html#data');
+});
+
+test('typos, missing letters and abbreviations still match', () => {
+	assert.equal(matchesQuery('bokmarks', ['Show bookmarks']), true);
+	assert.equal(matchesQuery('sesions', ['Keep sessions expanded']), true);
+	assert.equal(matchesQuery('bkmrk', ['Bookmark board']), true);
+	assert.equal(matchesQuery('sbd', ['Show bookmark dock']), true);
+	assert.equal(matchesQuery('zebra', ['Show bookmarks']), false);
+	assert.equal(
+		matchesQuery('bz', ['Bookmarks']),
+		false,
+		'short words stay strict',
+	);
+});
+
+test('results rank exact words above prefixes above fuzzy matches', () => {
+	const exact = scoreQuery('tab', ['Pinned tab']);
+	const prefix = scoreQuery('tab', ['Pinned tabs']);
+	const fuzzy = scoreQuery('tbs', ['Pinned tabs']);
+	assert.ok(exact > prefix, 'exact word beats word prefix');
+	assert.ok(prefix > fuzzy, 'prefix beats fuzzy subsequence');
+	assert.ok(fuzzy > 0);
+	assert.ok(
+		scoreQuery('tab', ['Tab', 'x']) > scoreQuery('tab', ['x', 'Tab']),
+		'a label hit beats a help hit',
+	);
+	assert.deepEqual(
+		rankByQuery(
+			'tabs',
+			['Open restored tabs', 'Close tabs', 'Bookmarks'],
+			(item) => [item],
+		),
+		['Open restored tabs', 'Close tabs'],
+	);
+	assert.deepEqual(
+		rankByQuery('book', ['Bookmark', 'Book'], (item) => [item]),
+		['Book', 'Bookmark'],
+	);
+});
+
+test('fuzzy matches highlight only the matched characters', () => {
+	assert.deepEqual(highlightSegments('Bookmark', 'bkmrk'), [
+		{text: 'B', match: true},
+		{text: 'oo', match: false},
+		{text: 'km', match: true},
+		{text: 'a', match: false},
+		{text: 'rk', match: true},
+	]);
+	assert.deepEqual(highlightSegments('Show bookmark dock', 'sbd'), [
+		{text: 'S', match: true},
+		{text: 'how ', match: false},
+		{text: 'b', match: true},
+		{text: 'ookmark ', match: false},
+		{text: 'd', match: true},
+		{text: 'ock', match: false},
+	]);
 });
