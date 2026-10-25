@@ -18,12 +18,10 @@ import {
 	Download,
 	Bookmark,
 	Database,
-	PanelsTopLeft,
 	PanelRightOpen,
 	Plus,
 	LockKeyhole,
 	Eraser,
-	TriangleAlert,
 	MousePointerClick,
 	Upload,
 	Search,
@@ -31,6 +29,7 @@ import {
 } from 'lucide-react';
 import {
 	Button,
+	Checkbox,
 	ConfirmationDialog,
 	Dialog,
 	DialogBody,
@@ -547,7 +546,6 @@ const DEFAULTS = {
 
 type DataRowDef = {
 	key: string;
-	group: 'transfer' | 'erase';
 	icon: IconComponent;
 	label: string;
 	help: string;
@@ -872,7 +870,7 @@ function Options() {
 			| {ok: false; error: string | undefined}
 			| undefined;
 		try {
-			result = await send('ERASE_DATA', {scope: erase.scope});
+			result = await send('ERASE_DATA', {scope: eraseScope});
 		} catch (reason) {
 			result = {ok: false, error: messageOf(reason)};
 		}
@@ -891,10 +889,10 @@ function Options() {
 		setErase(null);
 		await reload();
 		const erased = [
-			...(erase.scope === 'bookmarks'
+			...(eraseScope === 'bookmarks'
 				? []
 				: [plural(result.sessions, 'session')]),
-			...(erase.scope === 'sessions'
+			...(eraseScope === 'sessions'
 				? []
 				: [plural(result.bookmarks, 'bookmark')]),
 		];
@@ -965,111 +963,90 @@ function Options() {
 
 	const dataRows: DataRowDef[] = [
 		{
-			key: 'backup-bookmarks',
-			group: 'transfer',
+			key: 'backup',
 			icon: Download,
-			label: 'Back up bookmarks',
-			help: 'Save your bookmarks and columns to a file.',
-			words: ['export', 'download', 'save', 'file'],
-			action: (
-				<Button
-					variant="outline"
-					className="w-full sm:w-44"
-					disabled={!bookmarkCount}
-					onClick={() =>
-						setBackupData({
-							kind: 'bookmarks',
-							columns: state.bookmarkColumns,
-							bookmarks: state.bookmarks,
-						})
-					}
-				>
-					<Download className="h-4 w-4" />
-					Back up bookmarks
-				</Button>
-			),
-		},
-		{
-			key: 'backup-sessions',
-			group: 'transfer',
-			icon: Download,
-			label: 'Back up sessions',
-			help: 'Save your sessions, tabs, and folders to a file.',
-			words: ['export', 'download', 'save', 'file'],
-			action: (
-				<Button
-					variant="outline"
-					className="w-full sm:w-44"
-					disabled={sessions.length === 0}
-					onClick={() =>
-						setBackupData({
-							kind: 'sessions',
-							groups: state.groups,
-							folders: state.folders,
-						})
-					}
-				>
-					<Download className="h-4 w-4" />
-					Back up sessions
-				</Button>
-			),
-		},
-		{
-			key: 'restore',
-			group: 'transfer',
-			icon: Upload,
-			label: 'Restore or import',
-			help: 'Load a backup, a browser bookmark file, or another tab manager’s export.',
+			label: 'Back up',
+			help: 'Save bookmarks or sessions to a file.',
 			words: [
-				'Import',
-				'Restore / Import',
+				'backup',
+				'export',
+				'download',
+				'save',
+				'file',
+				'bookmarks',
+				'sessions',
+			],
+			action: (
+				<Button
+					variant="outline"
+					className="w-full sm:w-32"
+					disabled={!bookmarkCount && sessions.length === 0}
+					onClick={() =>
+						setBackupData(
+							settings.bookmarksEnabled !== false && bookmarkCount > 0
+								? {
+										kind: 'bookmarks',
+										columns: state.bookmarkColumns,
+										bookmarks: state.bookmarks,
+									}
+								: {
+										kind: 'sessions',
+										groups: state.groups,
+										folders: state.folders,
+									},
+						)
+					}
+				>
+					<Download className="h-4 w-4" />
+					Back up
+				</Button>
+			),
+		},
+		{
+			key: 'import',
+			icon: Upload,
+			label: 'Import',
+			help: 'Bring in bookmarks or sessions from a file or your browser.',
+			words: [
+				'restore',
+				'load',
 				'OneTab',
 				'Session Buddy',
 				'Toby',
 				'CSV',
 				'HTML',
 				'JSON',
+				'browser bookmarks',
 			],
 			action: (
 				<Button
 					variant="outline"
-					className="w-full sm:w-44"
+					className="w-full sm:w-32"
 					onClick={() => setImportOpen(true)}
 				>
 					<Upload className="h-4 w-4" />
-					Restore / Import
+					Import
 				</Button>
 			),
 		},
-		...(['sessions', 'bookmarks', 'all'] as const).map((scope): DataRowDef => {
-			const {label, parts, icon} = eraseScopes[scope];
-			return {
-				key: `erase-${scope}`,
-				group: 'erase',
-				icon,
-				label,
-				help:
-					parts.length === 0
-						? scope === 'all'
-							? 'Nothing is saved yet.'
-							: `No saved ${scope} to erase.`
-						: scope === 'all'
-							? 'Deletes all sessions and bookmarks. Settings are kept.'
-							: `Deletes ${listing(parts)}.`,
-				words: ['delete', 'remove', 'clear', 'wipe', 'reset'],
-				action: (
-					<Button
-						variant="destructive"
-						className="w-full sm:w-44"
-						disabled={parts.length === 0}
-						onClick={(event) => askErase(scope, event.currentTarget)}
-					>
-						<Eraser className="h-4 w-4" />
-						{label}
-					</Button>
-				),
-			};
-		}),
+		{
+			key: 'erase',
+			icon: Eraser,
+			label: 'Erase',
+			help: 'Delete saved sessions, bookmarks, or both. Settings are kept.',
+			words: ['delete', 'remove', 'clear', 'wipe', 'reset data', 'everything'],
+			action: (
+				<Button
+					variant="outline"
+					className="w-full border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-32"
+					disabled={sessionParts.length === 0 && bookmarkParts.length === 0}
+					onClick={(event) => askErase(event.currentTarget)}
+				>
+					<Eraser className="h-4 w-4" />
+					Erase
+				</Button>
+			),
+		},
 	];
 	const visibleData = pick(DATA.title, dataRows, (row) => [
 		row.label,
@@ -1414,18 +1391,9 @@ function Options() {
 								className="focus-visible:outline-none"
 								aria-label="Session and bookmark data"
 							>
-								{transferRows.length > 0 && (
-									<div className="divide-y divide-border/70">
-										{transferRows}
-									</div>
-								)}
-								{eraseRows.length > 0 && (
-									<div
-										className={`divide-y divide-border/70 ${transferRows.length > 0 ? 'mt-4 border-t border-border pt-4' : ''}`}
-									>
-										{eraseRows}
-									</div>
-								)}
+								<div className="divide-y divide-border/70">
+									{dataRowElements}
+								</div>
 							</div>
 						</SectionCard>
 					)}
@@ -1522,15 +1490,51 @@ function Options() {
 			/>
 			<ConfirmationDialog
 				open={Boolean(erase)}
-				title={eraseInfo?.title}
-				description={`This permanently deletes ${listing(eraseInfo?.parts || [])}. ${eraseInfo?.kept || ''} This can’t be undone.`}
-				requireText={erase?.scope === 'all' ? ERASE_WORD : undefined}
-				confirmLabel={eraseInfo?.label}
+				title="Erase data?"
+				description="Choose what to erase. This can’t be undone. Settings and excluded sites are kept."
+				requireText={eraseScope === 'all' ? ERASE_WORD : undefined}
+				confirmLabel={eraseScope ? eraseLabel[eraseScope] : 'Erase'}
+				confirmDisabled={!eraseScope}
 				busy={Boolean(erase?.busy)}
 				restoreFocusTo={eraseFocusRef.current}
 				onOpenChange={(open) => !open && !erase?.busy && setErase(null)}
 				onConfirm={confirmErase}
-			/>
+			>
+				<div className="grid gap-2">
+					{(
+						[
+							['sessions', 'Sessions', sessionParts],
+							['bookmarks', 'Bookmarks', bookmarkParts],
+						] as const
+					).map(([key, label, parts]) => (
+						<div
+							key={key}
+							className={`flex items-start rounded-lg border border-border ${parts.length === 0 ? 'opacity-60' : 'has-[[data-state=checked]]:border-destructive/60 has-[[data-state=checked]]:bg-destructive/5'}`}
+						>
+							<Checkbox
+								id={`erase-${key}`}
+								className="ml-3.5 mt-3.5"
+								disabled={parts.length === 0 || Boolean(erase?.busy)}
+								checked={Boolean(erase?.[key])}
+								onCheckedChange={(checked) =>
+									setErase((current) =>
+										current ? {...current, [key]: checked === true} : current,
+									)
+								}
+							/>
+							<Label
+								htmlFor={`erase-${key}`}
+								className={`block min-w-0 flex-1 py-3 pl-3 pr-3.5 ${parts.length === 0 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+							>
+								<span className="block text-sm font-medium">{label}</span>
+								<span className="block text-xs font-normal leading-5 text-muted-foreground">
+									{parts.length > 0 ? listing(parts) : 'Nothing saved.'}
+								</span>
+							</Label>
+						</div>
+					))}
+				</div>
+			</ConfirmationDialog>
 			<BackupDialog
 				state={state}
 				data={backupData}
