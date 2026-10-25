@@ -992,7 +992,6 @@ test('RESTORE_GROUP reports individual tab-create failures when some tabs open',
 
 test('unified new-tab destination is enabled by default while pinned tabs remain opt-out', async () => {
 	const state = stateWithSession();
-	state.schemaVersion = 6;
 	delete state.settings.newTabEnabled;
 	delete state.settings.includePinnedTabs;
 	const harness = createWorkerHarness(state);
@@ -1212,10 +1211,10 @@ test('selected-tab saving never stores or removes pinned tabs', async () => {
 	assert.equal(harness.removedTabIds.includes(2), false);
 });
 
-test('saving with a legacy includePinnedTabs preference never stores or removes pinned tabs', async () => {
+test('saving with includePinnedTabs off never stores or removes pinned tabs', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({
-			includePinnedTabs: true,
+			includePinnedTabs: false,
 			closeOnSave: true,
 			openDashboardAfterSave: false,
 		}),
@@ -1280,7 +1279,6 @@ test('explicit pinned-tab opt-in stores and retains pinned state, and close requ
 		openDashboardAfterSave: false,
 		duplicateHandling: 'open',
 	});
-	state.schemaVersion = 6;
 	const harness = createWorkerHarness(state, [
 		{
 			id: 11,
@@ -1321,7 +1319,6 @@ test('failed storage never closes an opted-in pinned tab', async () => {
 		closeOnSave: true,
 		openDashboardAfterSave: false,
 	});
-	state.schemaVersion = 6;
 	const harness = createWorkerHarness(state, [
 		{
 			id: 12,
@@ -1343,30 +1340,7 @@ test('failed storage never closes an opted-in pinned tab', async () => {
 	assert.deepEqual(harness.removedTabIds, []);
 });
 
-test('pinned opt-in is false for pre-v5 and missing legacy settings', async () => {
-	const state = stateWithSession({includePinnedTabs: true});
-	state.schemaVersion = 4;
-	const harness = createWorkerHarness(state, [
-		{
-			id: 13,
-			windowId: 10,
-			index: 0,
-			active: true,
-			url: 'https://legacy-pinned.example/',
-			title: 'Pinned',
-			pinned: true,
-		},
-	]);
-	const response = await harness.sendMessage({
-		type: 'SAVE_TABS',
-		scope: 'window',
-	});
-	assert.equal(response.ok, false);
-	assert.equal(harness.state.settings.includePinnedTabs, false);
-	assert.deepEqual(harness.removedTabIds, []);
-});
-
-test('Side Panel setting enables the local bookmark page on the toolbar action', async () => {
+test('toolbarOpens switches the toolbar icon between popup and side panel', async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	const result = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
@@ -1393,7 +1367,6 @@ test('Side Panel setting enables the local bookmark page on the toolbar action',
 
 test('column delete preserves bookmarks, including when the built-in or last column is removed', async () => {
 	const state = stateWithSession();
-	state.schemaVersion = 6;
 	state.bookmarkColumns.push({id: 'column-work', name: 'Work', createdAt: 2});
 	state.bookmarks = [
 		{
@@ -1447,7 +1420,6 @@ test('column delete preserves bookmarks, including when the built-in or last col
 
 test('bookmark columns reorder deterministically from first to last and last to first', async () => {
 	const state = stateWithSession();
-	state.schemaVersion = 6;
 	state.bookmarkColumns.push(
 		{id: 'column-two', name: 'Two'},
 		{id: 'column-three', name: 'Three'},
@@ -1479,7 +1451,6 @@ test('bookmark columns reorder deterministically from first to last and last to 
 
 test('bookmark reordering moves a link across columns at the requested insertion point', async () => {
 	const state = stateWithSession();
-	state.schemaVersion = 6;
 	state.bookmarkColumns.push({id: 'column-two', name: 'Two'});
 	state.bookmarks = [
 		{
@@ -1710,7 +1681,6 @@ test('session drags carry every link for TabLodge columns while keeping plain li
 
 test('ADD_BOOKMARKS adds every dropped link to one column in order at the drop position', async () => {
 	const state = stateWithSession();
-	state.schemaVersion = 6;
 	state.bookmarkColumns.push({id: 'column-two', name: 'Two'});
 	state.bookmarks = [
 		{
@@ -2137,7 +2107,6 @@ test('link drag data carries uri-list, plain text, and html for tabs and session
 
 test("DELETE_BOOKMARK_COLUMN with discardBookmarks deletes the column's bookmarks instead of moving them", async () => {
 	const state = stateWithSession();
-	state.schemaVersion = 6;
 	state.bookmarkColumns.push({id: 'column-work', name: 'Work', createdAt: 2});
 	state.bookmarks = [
 		{
@@ -2194,7 +2163,6 @@ function stateWithEverything(): StoredState {
 		excludedOrigins: ['https://private.example'],
 		copyFormat: 'url',
 	});
-	state.schemaVersion = 6;
 	state.groups.push({
 		id: 'session-2',
 		name: 'Work',

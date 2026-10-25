@@ -51,10 +51,6 @@ export type Settings = {
 	restoreDuplicateHandling: 'skip' | 'open';
 	restoreTarget: RestoreTarget;
 	restoreMode: RestoreMode;
-	/**
-	Legacy mirror of `restoreMode === "remove"`, kept for older readers of the stored state.
-	*/
-	removeAfterRestore?: boolean;
 	singleTabBehavior: 'stay' | 'switch';
 	unloadRestoredTabs: boolean;
 	restoreSplitTabs: RestoreSplitTabs;
