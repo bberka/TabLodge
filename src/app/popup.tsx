@@ -50,7 +50,7 @@ import {
 	TabLodgeMark,
 	saveWindowLabel,
 	send,
-	splitNote,
+	restoreSummary,
 	useStatus,
 	useTabLodgeState,
 	useTabSelection,
@@ -175,6 +175,8 @@ function Popup() {
 		if (result?.ok) {
 			showStatus(
 				`Saved ${result.count} ${result.count === 1 ? 'tab' : 'tabs'} in ${result.groups} ${result.groups === 1 ? 'session' : 'sessions'}${result.skipped ? ` · ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'} not saved again` : ''}.`,
+				false,
+				{toast: true},
 			);
 			setChooseOpen(false);
 			await reload();
@@ -235,7 +237,7 @@ function Popup() {
 
 		setBookmarkOpen(false);
 		setBookmarkTab(null);
-		showStatus('Bookmark saved.');
+		showStatus('Bookmark saved.', false, {toast: true});
 		await reload();
 	}
 
@@ -256,10 +258,9 @@ function Popup() {
 		});
 		setBusy('');
 		if (result?.ok) {
-			showStatus(
-				`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'}${result.skipped ? ` · skipped ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'}` : ''}${result.splitsSeparated ? ` · ${splitNote(result.splitsSeparated)}` : ''}.`,
-				Boolean(result.failed),
-			);
+			showStatus(restoreSummary(result), Boolean(result.failed), {
+				toast: true,
+			});
 			await reload();
 		} else {
 			showStatus(result?.error || `Could not restore “${group.name}”.`, true);

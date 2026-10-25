@@ -64,3 +64,18 @@ export async function openLink(
 
 	globalThis.location.assign(url);
 }
+
+/**
+Opens one of the extension's own pages (Settings, Help). It replaces this tab, except when this is the pinned TabLodge tab, which must stay put: there it opens in a new tab.
+*/
+export async function openOwnPage(
+	path: string,
+	settings: Partial<Pick<Settings, 'keepLodgePinned'>>,
+): Promise<void> {
+	if (settings.keepLodgePinned && (await isPinnedLodgeTab())) {
+		await chrome.tabs.create({url: chrome.runtime.getURL(path)});
+		return;
+	}
+
+	globalThis.location.assign(path);
+}

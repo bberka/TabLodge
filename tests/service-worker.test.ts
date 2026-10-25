@@ -3593,6 +3593,7 @@ test('import keeps valid split pairs and drops invalid, orphaned, or mismatched 
 			['bad-position', null],
 			['bad-id', null],
 			['pinned-a', null],
+			['pinned-b', null],
 			['same-a', null],
 			['same-b', null],
 			['reused-a', null],
@@ -6187,4 +6188,355 @@ test('the manifest asks for alarms up front and Downloads only as an optional pe
 	assert.equal(manifest.permissions?.includes('alarms'), true);
 	assert.equal(manifest.permissions?.includes('downloads'), false);
 	assert.deepEqual(manifest.optional_permissions, ['downloads']);
+});
+
+// ---- Limits, moves, scopes and recovery details ----
+
+const manyTabs = (count: number, windowId = 10): MockTab[] =>
+	Array.from({length: count}, (_, index) =>
+		webTab(index + 1, windowId, index, {active: index === 0}),
+	);
+const filler = (id: string, tabCount = 1): Partial<Session> => ({
+	id,
+	name: id,
+	folderId: 'unfiled',
+	createdAt: 1,
+	updatedAt: 1,
+	tabs: Array.from({length: tabCount}, (_, index) => ({
+		id: `${id}-t${index}`,
+		title: `${id} ${index}`,
+		url: `https://${id}-${index}.example/`,
+		pinned: false,
+		originalIndex: index,
+	})) as SavedTab[],
+});
+
+test('MOVE_TAB trashes a session emptied by the move, and Undo brings it back with its link', async () => {
+	const harness = createWorkerHarness(reorderState());
+	const moved = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'C',
+		tabId: 'c1',
+		toGroupId: 'A',
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(typeof moved.trashId, 'string');
+	assert.equal(
+		harness.state.groups.some((group) => group.id === 'C'),
+		false,
+	);
+	assert.equal(trashOf(harness).length, 1);
+	assert.equal(trashOf(harness)[0].id, moved.trashId);
+
+	const undone = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'A',
+		tabId: 'c1',
+		toGroupId: 'C',
+		restoreTrashId: moved.trashId,
+	});
+	assert.equal(undone.ok, true, undone.error);
+	assert.deepEqual(tabIdsOf(harness.state, 'C'), ['c1']);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a1', 'a2', 'a3']);
+	assert.equal(harness.state.groups.find((g) => g.id === 'C')?.name, 'C');
+	assert.equal(trashOf(harness).length, 0);
+
+	// A move that leaves the source non-empty adds no trash entry.
+	const plain = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'A',
+		tabId: 'a3',
+		toGroupId: 'B',
+	});
+	assert.equal(plain.trashId, undefined);
+});
+
+test('REORDER_GROUP only swaps with sessions that are shown, never archived ones', async () => {
+	const state = reorderState();
+	state.groups = [
+		{...state.groups[0], id: 'A'},
+		{...state.groups[1], id: 'X', archived: true, archivedAt: 1},
+		{...state.groups[2], id: 'C'},
+	];
+	const harness = createWorkerHarness(state);
+	const down = await harness.sendMessage({
+		type: 'REORDER_GROUP',
+		groupId: 'A',
+		direction: 'down',
+		folderId: 'all',
+	});
+	assert.equal(down.ok, true, down.error);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['C', 'X', 'A'],
+		'A swapped with C, the next visible session',
+	);
+	// Inside the Archived view only archived sessions count.
+	await harness.sendMessage({
+		type: 'REORDER_GROUP',
+		groupId: 'X',
+		direction: 'up',
+		folderId: 'archived',
+	});
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['C', 'X', 'A'],
+	);
+});
+
+test('a capture of more than 1000 tabs becomes numbered sessions and loses nothing', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({closeOnSave: false}),
+		manyTabs(2500),
+	);
+	const response = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.count, 2500);
+	assert.equal(response.groups, 3);
+	const saved = harness.state.groups.slice(0, 3);
+	assert.deepEqual(
+		saved.map((group) => group.tabs.length),
+		[1000, 1000, 500],
+	);
+	assert.match(String(saved[0].name), /\(1\/3\)$/);
+	assert.match(String(saved[2].name), /\(3\/3\)$/);
+	assert.equal(response.groupId, saved[0].id);
+});
+
+test('saving is refused with a clear error when it would exceed 1000 sessions, and no tab is closed', async () => {
+	const state = stateWithSession();
+	state.groups = Array.from(
+		{length: 1000},
+		(_, index) => filler(`s${index}`) as Session,
+	);
+	const harness = createWorkerHarness(state);
+	const response = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+	});
+	assert.equal(response.ok, false);
+	assert.match(String(response.error), /1000 sessions/);
+	assert.equal(harness.removedTabIds.length, 0);
+	assert.equal(harness.state.groups.length, 1000);
+});
+
+test('adding into a full session is refused for a move and for saving the current tab', async () => {
+	const state = reorderState();
+	state.groups[0] = {...state.groups[0], ...filler('A', 1000)};
+	const harness = createWorkerHarness(state);
+	const moved = await harness.sendMessage({
+		type: 'MOVE_TAB',
+		fromGroupId: 'B',
+		tabId: 'b1',
+		toGroupId: 'A',
+	});
+	assert.equal(moved.ok, false);
+	assert.match(String(moved.error), /1000 links/);
+	assert.deepEqual(tabIdsOf(harness.state, 'B'), ['b1', 'b2']);
+
+	const saved = await harness.sendMessage({type: 'SAVE_CURRENT_TAB_TO_GROUP'});
+	assert.equal(saved.ok, false);
+	assert.match(String(saved.error), /1000 links/);
+	assert.equal(harness.state.groups[0].tabs.length, 1000);
+});
+
+test('importing a session of more than 1000 links splits it into numbered sessions', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const result = await harness.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: {
+			groups: [
+				{
+					name: 'Huge',
+					tabs: Array.from({length: 1500}, (_, index) => ({
+						url: `https://huge${index}.example/`,
+					})),
+				},
+			],
+		},
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.groups, 2);
+	assert.equal(result.count, 1500);
+	const parts = harness.state.groups.filter((group) =>
+		String(group.name).startsWith('Huge'),
+	);
+	assert.deepEqual(
+		parts.map((group) => [group.name, group.tabs.length]),
+		[
+			['Huge (1/2)', 1000],
+			['Huge (2/2)', 500],
+		],
+	);
+
+	const full = stateWithSession();
+	full.groups = Array.from(
+		{length: 1000},
+		(_, index) => filler(`s${index}`) as Session,
+	);
+	const refused = createWorkerHarness(full);
+	const second = await refused.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: {
+			groups: [{name: 'One more', tabs: [{url: 'https://more.example/'}]}],
+		},
+	});
+	assert.equal(second.ok, false);
+	assert.match(String(second.error), /1000 sessions/);
+	assert.equal(refused.state.groups.length, 1000);
+});
+
+test('excluded sites ignore a trailing dot in the host, also when capturing', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({excludedOrigins: ['bank.example'], closeOnSave: false}),
+		[
+			webTab(1, 10, 0, {active: true, url: 'https://bank.example./account'}),
+			webTab(2, 10, 1, {url: 'https://www.bank.example/'}),
+			webTab(3, 10, 2, {url: 'https://fine.example/'}),
+		],
+	);
+	const response = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.count, 1);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.url),
+		['https://fine.example/'],
+	);
+});
+
+test('the excluded-sites list dedupes before it caps, and reports sites that do not fit', async () => {
+	const existing = Array.from({length: 499}, (_, index) => `site${index}.test`);
+	const harness = createWorkerHarness(
+		stateWithSession({excludedOrigins: existing}),
+	);
+	const partial = await harness.sendMessage({
+		type: 'ADD_EXCLUDED_ORIGINS',
+		origins: ['site0.test', 'new-a.test', 'new-b.test'],
+	});
+	assert.equal(partial.ok, true, partial.error);
+	assert.equal(partial.added, 1);
+	assert.equal(partial.notAdded, 1);
+	assert.equal(partial.settings.excludedOrigins.length, 500);
+
+	const full = await harness.sendMessage({
+		type: 'ADD_EXCLUDED_ORIGINS',
+		origins: ['new-c.test'],
+	});
+	assert.equal(full.ok, false);
+	assert.match(String(full.error), /full/i);
+
+	// Repeats in a long raw list no longer eat into the 500.
+	const repeated = createWorkerHarness(
+		stateWithSession({
+			excludedOrigins: [
+				...Array.from({length: 600}, () => 'same.test'),
+				'later.test',
+			],
+		}),
+	);
+	const state = await repeated.sendMessage({type: 'GET_STATE'});
+	assert.deepEqual(
+		[...state.settings.excludedOrigins],
+		['same.test', 'later.test'],
+	);
+});
+
+test('importing a TabLodge export keeps its pinned tabs even with pinned tabs off in Settings', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({includePinnedTabs: false}),
+	);
+	const result = await harness.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: {
+			groups: [
+				{
+					name: 'Native',
+					tabs: [
+						{url: 'https://pinned.example/', pinned: true},
+						{url: 'https://plain.example/'},
+					],
+				},
+			],
+		},
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 2);
+	const imported = harness.state.groups.find((g) => g.name === 'Native')!;
+	assert.deepEqual(
+		imported.tabs.map((tab) => [tab.url, Boolean(tab.pinned)]),
+		[
+			['https://pinned.example/', true],
+			['https://plain.example/', false],
+		],
+	);
+
+	// A plain list of tabs is a foreign shape: the setting still applies.
+	const plain = await harness.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: [
+			{url: 'https://p2.example/', pinned: true},
+			{url: 'https://n2.example/'},
+		],
+	});
+	assert.equal(plain.ok, true, plain.error);
+	assert.equal(plain.count, 1);
+});
+
+test('manual backups never push scheduled ones out, and keep a cap of their own', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {});
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily', autoBackupKeep: 7},
+	});
+	await harness.fire('alarm', {name: 'tablodge-backup'});
+	for (let index = 0; index < 12; index += 1) {
+		await harness.sendMessage({type: 'BACKUP_NOW'});
+	}
+
+	const kinds = backupsOf(harness).auto.map((record) => record.kind);
+	assert.equal(kinds.filter((kind) => kind === 'auto').length, 1);
+	assert.equal(kinds.filter((kind) => kind === 'manual').length, 10);
+});
+
+test('a skipped unchanged backup run still counts, so the catch-up is not due on every start', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {});
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoBackup: 'daily'},
+	});
+	await harness.fire('onStartup');
+	assert.equal(backupsOf(harness).auto.length, 1);
+	// Age the record out of the list, as a small keep count would over time.
+	const stored = harness.extraStorage[BACKUPS_KEY] as {
+		auto: unknown[];
+		lastAutoCheckAt: number;
+	};
+	assert.ok(stored.lastAutoCheckAt > 0);
+	stored.auto = [];
+	await harness.fire('onStartup');
+	assert.equal(
+		backupsOf(harness).auto.length,
+		0,
+		'the recent check keeps the catch-up from running again',
+	);
+});
+
+test('a run that starts with no window is not marked open, so exiting without one is not a crash', async () => {
+	const harness = recoveryHarness();
+	await harness.fire('tabCreated', {});
+	await harness.runTimers();
+	await harness.closeWindow(20);
+	await harness.closeWindow(10);
+	assert.equal(metaOf(harness)?.sessionOpen, false);
+	await harness.fire('onStartup');
+	assert.equal(metaOf(harness)?.sessionOpen, false, 'no window, not open');
+	await harness.fire('onStartup');
+	const response = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
+	assert.equal(response.recovery, null);
 });
