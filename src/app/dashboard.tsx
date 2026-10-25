@@ -16,16 +16,13 @@ import {
 	ArrowDown,
 	ArrowDownUp,
 	ArrowUp,
-	ArrowUpRight,
 	BookmarkPlus,
 	ChevronDown,
 	ChevronRight,
 	Columns2,
 	Copy,
 	Download,
-	Edit3,
 	ExternalLink,
-	FolderInput,
 	FolderPlus,
 	History,
 	LayoutGrid,
@@ -37,7 +34,6 @@ import {
 	Pencil,
 	RotateCcw,
 	Save,
-	StickyNote,
 	Search,
 	Share2,
 	Trash2,
@@ -119,8 +115,10 @@ import type {
 } from './types';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
+import {ColumnLabel, FolderLabel} from './icon-label';
+import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
-import {Favicon} from './favicon';
+import {Favicon, LinkSummary} from './favicon';
 import {FINDER_EVENT, type FinderEventDetail} from './finder';
 import {
 	emitRecoveryEvent,
@@ -1589,11 +1587,17 @@ export function SessionManager({
 					<form key={editingTab?.tab.id} onSubmit={saveTabDetails}>
 						<DialogHeader>
 							<DialogTitle>Edit link</DialogTitle>
-							<DialogDescription className="break-all">
-								{editingTab?.tab.url}
+							<DialogDescription>
+								Change the title and notes of this saved link.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
+							{editingTab && (
+								<LinkSummary
+									title={editingTab.tab.title}
+									url={editingTab.tab.url}
+								/>
+							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="tab-title">Title</Label>
 								<Input
@@ -1640,19 +1644,18 @@ export function SessionManager({
 					<form onSubmit={saveBookmark}>
 						<DialogHeader>
 							<DialogTitle>Bookmark link</DialogTitle>
-							<DialogDescription className="break-all">
-								{bookmarkTab?.title || bookmarkTab?.url}
+							<DialogDescription>
+								Save this link to a bookmark column.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
+							{bookmarkTab?.url && (
+								<LinkSummary title={bookmarkTab.title} url={bookmarkTab.url} />
+							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column-select">Bookmark column</Label>
 								<Select
-									value={
-										bookmarkTab?.columnId ||
-										columns[0]?.id ||
-										'bookmark-unfiled'
-									}
+									value={bookmarkTab?.columnId || columns[0]?.id}
 									onValueChange={(value) =>
 										setBookmarkTab((old) => ({...old, columnId: value}))
 									}
@@ -1663,10 +1666,9 @@ export function SessionManager({
 									<SelectContent>
 										{columns.map((column) => (
 											<SelectItem key={column.id} value={column.id}>
-												{column.name}
+												<ColumnLabel column={column} />
 											</SelectItem>
 										))}
-										<SelectItem value="bookmark-unfiled">Unfiled</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
@@ -1743,7 +1745,7 @@ export function SessionManager({
 									<SelectContent>
 										{folders.map((folder) => (
 											<SelectItem key={folder.id} value={folder.id}>
-												{folder.name}
+												<FolderLabel folder={folder} />
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -2106,7 +2108,7 @@ const GroupCard = memo(
 			{
 				id: 'open-all',
 				label: 'Open all in new tabs',
-				icon: ExternalLink,
+				icon: ACTION_ICONS.openNew,
 				onSelect: () => handlers.openAll(group.tabs),
 			},
 			{type: 'separator'},
@@ -2126,7 +2128,7 @@ const GroupCard = memo(
 			{
 				id: 'edit',
 				label: 'Edit details',
-				icon: Edit3,
+				icon: ACTION_ICONS.edit,
 				onSelect: () => handlers.editGroup(group),
 			},
 			{
@@ -2515,13 +2517,13 @@ const SavedTab = memo(
 			{
 				id: 'open-here',
 				label: 'Open in this tab',
-				icon: ArrowUpRight,
+				icon: ACTION_ICONS.openHere,
 				onSelect: () => onOpen('current'),
 			},
 			{
 				id: 'open-new',
 				label: 'Open in new tab',
-				icon: ExternalLink,
+				icon: ACTION_ICONS.openNew,
 				onSelect: () => onOpen('new'),
 			},
 			{
@@ -2534,13 +2536,13 @@ const SavedTab = memo(
 			{
 				id: 'edit',
 				label: 'Edit title & notes',
-				icon: StickyNote,
+				icon: ACTION_ICONS.edit,
 				onSelect: () => handlers.editTab(group, tab),
 			},
 			{
 				id: 'copy',
 				label: 'Copy link',
-				icon: Copy,
+				icon: ACTION_ICONS.copy,
 				onSelect: () => handlers.copyTab(tab),
 			},
 			{
@@ -2560,7 +2562,7 @@ const SavedTab = memo(
 			{
 				id: 'move',
 				label: 'Move to session',
-				icon: FolderInput,
+				icon: ACTION_ICONS.move,
 				type: 'submenu',
 				items: handlers.moveTargets(group.id).map((target) => ({
 					id: `move-${target.id}`,
@@ -2575,7 +2577,7 @@ const SavedTab = memo(
 			{
 				id: 'remove',
 				label: 'Remove',
-				icon: X,
+				icon: ACTION_ICONS.remove,
 				destructive: true,
 				onSelect: onDelete,
 			},

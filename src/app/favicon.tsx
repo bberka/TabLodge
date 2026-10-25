@@ -66,3 +66,30 @@ export const Favicon = memo(
 		);
 	},
 );
+
+/**
+The link a dialog is about, drawn like a list row: icon, title, and the full address (wrapped, never cut).
+*/
+export function LinkSummary({title, url}: {title?: string; url: string}) {
+	return (
+		<span className="flex min-w-0 items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2 text-left">
+			<Favicon url={url} label={title} className="h-6 w-6 rounded" />
+			<span className="min-w-0 flex-1">
+				{title && title !== url && (
+					<strong
+						className="block truncate text-[13px] font-semibold text-foreground"
+						title={title}
+					>
+						{title}
+					</strong>
+				)}
+				<small
+					className="block text-[11px] leading-4 text-muted-foreground [overflow-wrap:anywhere]"
+					title={url}
+				>
+					{url}
+				</small>
+			</span>
+		</span>
+	);
+}

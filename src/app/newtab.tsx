@@ -11,13 +11,12 @@ import {
 } from 'react';
 import {createRoot} from 'react-dom/client';
 import {
-	ArrowDown,
-	ArrowLeft,
-	ArrowRight,
-	ArrowUp,
+	type LucideIcon,
+	ArchiveRestore,
 	BookmarkPlus,
+	Save,
+	SquarePlus,
 	Download,
-	ExternalLink,
 	FolderPlus,
 	HelpCircle,
 	Settings as SettingsIcon,
@@ -31,9 +30,6 @@ import {
 	Share2,
 	Trash2,
 	PanelsTopLeft,
-	Copy,
-	FolderInput,
-	SquareArrowOutUpRight,
 	Upload,
 } from 'lucide-react';
 import {
@@ -67,6 +63,7 @@ import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
+import {ACTION_ICONS} from './action-icons';
 import {
 	AppHeader,
 	EmptyState,
@@ -100,8 +97,9 @@ import {
 	useRecoveryEvents,
 } from './recovery-core';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
+import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
-import {Favicon} from './favicon';
+import {Favicon, LinkSummary} from './favicon';
 import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
 import {
@@ -129,15 +127,7 @@ import type {
 type DialogKind = 'bookmark' | 'column' | 'move' | 'paste-links';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 type BookmarkAction =
-	| 'click'
-	| 'open'
-	| 'open-new'
-	| 'edit'
-	| 'move'
-	| 'copy'
-	| 'delete'
-	| 'earlier'
-	| 'later';
+	'click' | 'open' | 'open-new' | 'edit' | 'move' | 'copy' | 'delete';
 type OnBookmarkAction = (
 	action: BookmarkAction,
 	bookmark: Bookmark,
@@ -151,6 +141,7 @@ type BookmarkDraft = {
 	url: string;
 	columnId: string;
 	newColumnName?: string;
+	newColumnIcon?: string;
 };
 type ColumnDraft = {
 	id: string | null;
@@ -189,21 +180,21 @@ What the single quick-action button on a bookmark row does, per the "Quick actio
 */
 const QUICK_ACTIONS: Record<
 	BookmarkQuickAction,
-	{label: string; icon: typeof ExternalLink; action: BookmarkAction}
+	{label: string; icon: LucideIcon; action: BookmarkAction}
 > = {
 	'open-current': {
 		label: 'Open in this tab',
-		icon: ExternalLink,
+		icon: ACTION_ICONS.openHere,
 		action: 'open',
 	},
 	'open-new': {
 		label: 'Open in new tab',
-		icon: SquareArrowOutUpRight,
+		icon: ACTION_ICONS.openNew,
 		action: 'open-new',
 	},
-	copy: {label: 'Copy link', icon: Copy, action: 'copy'},
-	edit: {label: 'Edit', icon: Pencil, action: 'edit'},
-	delete: {label: 'Delete', icon: Trash2, action: 'delete'},
+	copy: {label: 'Copy link', icon: ACTION_ICONS.copy, action: 'copy'},
+	edit: {label: 'Edit', icon: ACTION_ICONS.edit, action: 'edit'},
+	delete: {label: 'Delete', icon: ACTION_ICONS.remove, action: 'delete'},
 };
 /**
 Column-picker value for "New column…" in the bookmark dialog.
@@ -423,7 +414,7 @@ function NewTab() {
 			? NEW_COLUMN
 			: columns.find((column) => column.id === requested)?.id ||
 				columns[0]?.id ||
-				'bookmark-unfiled';
+				NEW_COLUMN;
 		setBookmarkEdit({
 			title: params.get('bookmarkTitle') || domainName(url),
 			url,
@@ -498,7 +489,7 @@ function NewTab() {
 					id: null,
 					title,
 					url: link.url,
-					columnId: columns[0]?.id || 'bookmark-unfiled',
+					columnId: columns[0]?.id || NEW_COLUMN,
 				});
 				setDialog('bookmark');
 			});
@@ -587,13 +578,17 @@ function NewTab() {
 
 	function openBookmarkEditor(
 		bookmark: Bookmark | null = null,
-		preferredColumn = columns[0]?.id || 'bookmark-unfiled',
+		preferredColumn = columns[0]?.id || NEW_COLUMN,
 	) {
+		// A bookmark left in the board's Unfiled area has no column to show, so it starts on the preferred one.
+		const own = columns.some((column) => column.id === bookmark?.columnId)
+			? bookmark?.columnId
+			: undefined;
 		setBookmarkEdit({
 			id: bookmark?.id || null,
 			title: bookmark?.title || '',
 			url: bookmark?.url || '',
-			columnId: bookmark?.columnId || preferredColumn,
+			columnId: own || preferredColumn,
 		});
 		setDialog('bookmark');
 	}
@@ -623,7 +618,10 @@ function NewTab() {
 					return;
 				}
 
-				const created = await send('CREATE_BOOKMARK_COLUMN', {name});
+				const created = await send('CREATE_BOOKMARK_COLUMN', {
+					name,
+					icon: bookmarkEdit.newColumnIcon,
+				});
 				if (!created?.ok) {
 					showStatus(created?.error || 'Could not create that column.', true);
 					return;
@@ -705,25 +703,6 @@ function NewTab() {
 			showStatus,
 			reload,
 		);
-	}
-
-	async function moveColumnBy(column: BookmarkColumnData, offset: number) {
-		const index = columns.findIndex((entry) => entry.id === column.id);
-		const target = columns[index + offset];
-		if (!target) {
-			return;
-		}
-
-		const result = await send('REORDER_BOOKMARK_COLUMN', {
-			columnId: column.id,
-			targetColumnId: target.id,
-			position: offset < 0 ? 'before' : 'after',
-		});
-		if (result?.ok) {
-			await reload();
-		} else {
-			showStatus(result?.error || 'Could not reorder columns.', true);
-		}
 	}
 
 	function beginColumnPointerDrag(
@@ -836,32 +815,6 @@ function NewTab() {
 		// ShowStatus is recreated every render; the handlers only need the latest reload.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `reload` on purpose
 	}, [reload]);
-	async function reorderBookmark(
-		bookmark: Bookmark,
-		action: 'earlier' | 'later',
-	) {
-		const siblings = bookmarks.filter(
-			(entry) => entry.columnId === bookmark.columnId,
-		);
-		const index = siblings.findIndex((entry) => entry.id === bookmark.id);
-		const target = siblings[index + (action === 'earlier' ? -1 : 1)];
-		if (!target) {
-			return;
-		}
-
-		const result = await send('REORDER_BOOKMARK', {
-			bookmarkId: bookmark.id,
-			targetColumnId: bookmark.columnId,
-			targetBookmarkId: target.id,
-			position: action === 'earlier' ? 'before' : 'after',
-		});
-		if (result?.ok) {
-			await reload();
-		} else {
-			showStatus(result?.error || 'Could not reorder that bookmark.', true);
-		}
-	}
-
 	async function moveBookmarkToColumn(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!moveBookmark) {
@@ -948,11 +901,6 @@ function NewTab() {
 
 		if (action === 'delete') {
 			await deleteBookmark(bookmark);
-			return;
-		}
-
-		if (action === 'earlier' || action === 'later') {
-			await reorderBookmark(bookmark, action);
 		}
 	}
 
@@ -1183,7 +1131,7 @@ function NewTab() {
 				id: 'save-window',
 				title: saveWindowLabel(tabSelection),
 				keywords: ['session', 'tabs', 'store'],
-				icon: PanelsTopLeft,
+				icon: Save,
 				run: () => h().saveWindow(),
 			});
 		}
@@ -1201,7 +1149,7 @@ function NewTab() {
 					id: 'new-column',
 					title: 'New column',
 					keywords: ['bookmark', 'add'],
-					icon: Plus,
+					icon: SquarePlus,
 					run: () => h().newColumn(),
 				},
 				{
@@ -1241,7 +1189,7 @@ function NewTab() {
 					id: 'import-sessions',
 					title: 'Import sessions',
 					keywords: ['restore', 'load', 'upload'],
-					icon: Upload,
+					icon: ArchiveRestore,
 					run: () => emitFinderEvent({type: 'import-sessions'}),
 				},
 			);
@@ -1356,7 +1304,6 @@ function NewTab() {
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
 		remove: deleteColumn,
-		move: moveColumnBy,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
 		drop: (event, column) => dropOnColumn(event, column),
@@ -1474,12 +1421,10 @@ function NewTab() {
 				<div
 					className={`grid gap-4 sm:grid-cols-2 xl:grid-cols-3 ${stretchColumns ? 'items-stretch' : 'items-start'}`}
 				>
-					{columns.map((column, columnIndex) => (
+					{columns.map((column) => (
 						<BookmarkColumn
 							key={column.id}
 							column={column}
-							index={columnIndex}
-							columnCount={columns.length}
 							bookmarks={columnBookmarks.shown.get(column.id) ?? NO_BOOKMARKS}
 							siblings={columnBookmarks.all.get(column.id) ?? NO_BOOKMARKS}
 							dropIndicator={
@@ -1541,8 +1486,6 @@ function NewTab() {
 											return (
 												<BookmarkCard
 													key={bookmark.id}
-													isFirst
-													isLast
 													bookmark={bookmark}
 													dropBefore={drop?.position === 'before'}
 													dropAfter={drop?.position === 'after'}
@@ -1660,6 +1603,12 @@ function NewTab() {
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
+							{editedBookmark && (
+								<LinkSummary
+									title={editedBookmark.title}
+									url={editedBookmark.url}
+								/>
+							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-title">Title</Label>
 								<Input
@@ -1692,11 +1641,7 @@ function NewTab() {
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column">Column</Label>
 								<Select
-									value={
-										bookmarkEdit?.columnId ||
-										columns[0]?.id ||
-										'bookmark-unfiled'
-									}
+									value={bookmarkEdit?.columnId || columns[0]?.id || NEW_COLUMN}
 									onValueChange={(value) =>
 										setBookmarkEdit((old) => old && {...old, columnId: value})
 									}
@@ -1707,31 +1652,39 @@ function NewTab() {
 									<SelectContent>
 										{columns.map((column) => (
 											<SelectItem key={column.id} value={column.id}>
-												{column.name}
+												<ColumnLabel column={column} />
 											</SelectItem>
 										))}
-										<SelectItem value="bookmark-unfiled">Unfiled</SelectItem>
-										<SelectItem value={NEW_COLUMN}>New column</SelectItem>
+										<SelectItem value={NEW_COLUMN}>
+											<IconLabel icon={Plus}>New column</IconLabel>
+										</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
 							{bookmarkEdit?.columnId === NEW_COLUMN && (
-								<div className="space-y-1.5">
-									<Label htmlFor="bookmark-new-column">New column name</Label>
-									<Input
-										required
-										id="bookmark-new-column"
-										maxLength={60}
-										placeholder="Reading list"
-										data-autofocus=""
-										value={bookmarkEdit.newColumnName || ''}
-										onChange={(e) =>
+								<IconNameField
+									id="bookmark-new-column"
+									label="New column name"
+									nameLabel="New column name"
+									icon={bookmarkEdit.newColumnIcon}
+									defaultIcon={DEFAULT_COLUMN_ICON}
+									inputProps={{
+										required: true,
+										maxLength: 60,
+										placeholder: 'Reading list',
+										...({'data-autofocus': ''} as object),
+										value: bookmarkEdit.newColumnName || '',
+										onChange: (e) =>
 											setBookmarkEdit(
 												(old) => old && {...old, newColumnName: e.target.value},
-											)
-										}
-									/>
-								</div>
+											),
+									}}
+									onIconChange={(icon) =>
+										setBookmarkEdit(
+											(old) => old && {...old, newColumnIcon: icon},
+										)
+									}
+								/>
 							)}
 						</DialogBody>
 						<DialogFooter className="justify-between">
@@ -1780,8 +1733,11 @@ function NewTab() {
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							<ScrollArea className="max-h-72 rounded-md border">
-								<ul className="divide-y" aria-label="Pasted links">
+							<ScrollArea className="max-h-72 rounded-md border border-border">
+								<ul
+									className="divide-y divide-border"
+									aria-label="Pasted links"
+								>
 									{pastedLinks.map((link, index) => (
 										<li key={link.url}>
 											<label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm">
@@ -1821,10 +1777,9 @@ function NewTab() {
 									<SelectContent>
 										{columns.map((column) => (
 											<SelectItem key={column.id} value={column.id}>
-												{column.name}
+												<ColumnLabel column={column} />
 											</SelectItem>
 										))}
-										<SelectItem value="bookmark-unfiled">Unfiled</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
@@ -1918,7 +1873,12 @@ function NewTab() {
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							<ItemName>{moveBookmark?.title}</ItemName>
+							{moveBookmark && (
+								<LinkSummary
+									title={moveBookmark.title}
+									url={moveBookmark.url}
+								/>
+							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="move-bookmark-column">Column</Label>
 								<Select
@@ -1935,10 +1895,9 @@ function NewTab() {
 									<SelectContent>
 										{columns.map((column) => (
 											<SelectItem key={column.id} value={column.id}>
-												{column.name}
+												<ColumnLabel column={column} />
 											</SelectItem>
 										))}
-										<SelectItem value="bookmark-unfiled">Unfiled</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
@@ -2247,7 +2206,6 @@ type BoardActions = {
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
 	remove: (column: BookmarkColumnData, discard: boolean) => void;
-	move: (column: BookmarkColumnData, offset: number) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
 		columnId: string,
@@ -2263,8 +2221,6 @@ type BoardActions = {
 
 type BookmarkColumnProps = {
 	column: BookmarkColumnData;
-	index: number;
-	columnCount: number;
 	/**
 	The bookmarks to show (after the search).
 	*/
@@ -2287,8 +2243,6 @@ const COLUMN_PAGE = 60;
 const BookmarkColumn = memo(
 	({
 		column,
-		index,
-		columnCount,
 		bookmarks,
 		siblings,
 		urlMode,
@@ -2299,13 +2253,11 @@ const BookmarkColumn = memo(
 		const [limit, setLimit] = useState(COLUMN_PAGE);
 		const shown =
 			bookmarks.length > limit ? bookmarks.slice(0, limit) : bookmarks;
-		const positions = new Map(siblings.map((entry, at) => [entry.id, at]));
 		const onShare = () => actions.share(column);
 		const onAdd = () => actions.add(column);
 		const onOpenAll = () => actions.openAll(column);
 		const onEdit = () => actions.edit(column);
 		const onDelete = (discard: boolean) => actions.remove(column, discard);
-		const onMove = (offset: number) => actions.move(column, offset);
 		const onDropOver = actions.dropOver;
 		function leaveColumn(event: DragEvent<HTMLElement>) {
 			if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -2318,7 +2270,7 @@ const BookmarkColumn = memo(
 			{
 				id: 'open-all',
 				label: 'Open all in new tabs',
-				icon: SquareArrowOutUpRight,
+				icon: ACTION_ICONS.openNew,
 				disabled: siblings.length === 0,
 				onSelect: onOpenAll,
 			},
@@ -2337,20 +2289,6 @@ const BookmarkColumn = memo(
 			},
 			{type: 'separator'},
 			{id: 'edit', label: 'Edit column', icon: Pencil, onSelect: onEdit},
-			{
-				id: 'move-left',
-				label: 'Move column left',
-				icon: ArrowLeft,
-				disabled: index <= 0,
-				onSelect: () => onMove(-1),
-			},
-			{
-				id: 'move-right',
-				label: 'Move column right',
-				icon: ArrowRight,
-				disabled: index >= columnCount - 1,
-				onSelect: () => onMove(1),
-			},
 			{type: 'separator'},
 			{
 				id: 'delete',
@@ -2435,15 +2373,12 @@ const BookmarkColumn = memo(
 						{shown.length > 0 ? (
 							<div className="space-y-1">
 								{shown.map((bookmark) => {
-									const at = positions.get(bookmark.id) ?? 0;
 									const targeted =
 										bookmarkDrop?.targetBookmarkId === bookmark.id;
 									return (
 										<BookmarkCard
 											key={bookmark.id}
 											bookmark={bookmark}
-											isFirst={at <= 0}
-											isLast={at >= siblings.length - 1}
 											dropBefore={
 												targeted && bookmarkDrop.position === 'before'
 											}
@@ -2485,8 +2420,6 @@ const BookmarkColumn = memo(
 
 type BookmarkCardProps = {
 	bookmark: Bookmark;
-	isFirst: boolean;
-	isLast: boolean;
 	onAction: OnBookmarkAction;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickAction: BookmarkQuickAction | null;
@@ -2495,19 +2428,9 @@ type BookmarkCardProps = {
 	dropActive?: boolean;
 };
 
-function ItemName({children}: {children?: string}) {
-	return (
-		<p className="truncate text-xs text-muted-foreground" title={children}>
-			{children}
-		</p>
-	);
-}
-
 const BookmarkCard = memo(
 	({
 		bookmark,
-		isFirst,
-		isLast,
 		onAction,
 		urlMode,
 		quickAction,
@@ -2522,31 +2445,31 @@ const BookmarkCard = memo(
 		const open: MenuAction = {
 			id: 'open',
 			label: 'Open in this tab',
-			icon: ExternalLink,
+			icon: ACTION_ICONS.openHere,
 			onSelect: act('open'),
 		};
 		const openNew: MenuAction = {
 			id: 'open-new',
 			label: 'Open in new tab',
-			icon: SquareArrowOutUpRight,
+			icon: ACTION_ICONS.openNew,
 			onSelect: act('open-new'),
 		};
 		const edit: MenuAction = {
 			id: 'edit',
 			label: 'Edit',
-			icon: Pencil,
+			icon: ACTION_ICONS.edit,
 			onSelect: act('edit'),
 		};
 		const copy: MenuAction = {
 			id: 'copy',
 			label: 'Copy link',
-			icon: Copy,
+			icon: ACTION_ICONS.copy,
 			onSelect: act('copy'),
 		};
 		const remove: MenuAction = {
 			id: 'delete',
 			label: 'Delete',
-			icon: Trash2,
+			icon: ACTION_ICONS.remove,
 			destructive: true,
 			onSelect: act('delete'),
 		};
@@ -2560,29 +2483,15 @@ const BookmarkCard = memo(
 			{
 				id: 'move',
 				label: 'Move to',
-				icon: FolderInput,
+				icon: ACTION_ICONS.move,
 				onSelect: act('move'),
-			},
-			{
-				id: 'earlier',
-				label: 'Move up',
-				icon: ArrowUp,
-				disabled: isFirst,
-				onSelect: act('earlier'),
-			},
-			{
-				id: 'later',
-				label: 'Move down',
-				icon: ArrowDown,
-				disabled: isLast,
-				onSelect: act('later'),
 			},
 			{type: 'separator'},
 			remove,
 		];
 		const QuickIcon = quickAction
 			? QUICK_ACTIONS[quickAction].icon
-			: ExternalLink;
+			: ACTION_ICONS.openHere;
 		const showUrl = urlMode !== 'none';
 		return (
 			<ActionContextMenu actions={actions}>

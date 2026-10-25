@@ -58,6 +58,7 @@ import {
 import {offerUndo} from './recovery';
 import {send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
+import {ColumnLabel} from './icon-label';
 import {
 	shareCounts,
 	shareHtmlPage,
@@ -108,7 +109,6 @@ const plural = (count: number, noun: string, many = `${noun}s`) =>
 	`${count.toLocaleString()} ${count === 1 ? noun : many}`;
 const messageOf = (reason: unknown) =>
 	(reason as {message?: unknown} | null | undefined)?.message;
-const UNFILED_COLUMN_ID = 'bookmark-unfiled';
 
 /**
 Starts a download of a generated file.
@@ -744,7 +744,7 @@ export function ImportDialog({
 		setDuplicateMode('skip');
 		setTitlePolicy('existing');
 		setTarget('folders');
-		setColumnId(columns[0]?.id ?? UNFILED_COLUMN_ID);
+		setColumnId(columns[0]?.id ?? '');
 		// Resets the form each time the dialog opens; later changes to the state or props must not wipe it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
@@ -919,7 +919,8 @@ export function ImportDialog({
 			duplicateMode,
 			titlePolicy: duplicateMode === 'skip' ? titlePolicy : 'existing',
 			...(kind === 'bookmarks' &&
-				target === 'column' && {targetColumnId: columnId || UNFILED_COLUMN_ID}),
+				target === 'column' &&
+				columnId && {targetColumnId: columnId}),
 		};
 		try {
 			let message: string;
@@ -1425,15 +1426,19 @@ export function ImportDialog({
 													value={target}
 													options={[
 														{value: 'folders', label: 'Columns from folders'},
-														{value: 'column', label: 'One column'},
+														...(columns.length > 0
+															? [
+																	{
+																		value: 'column' as const,
+																		label: 'One column',
+																	},
+																]
+															: []),
 													]}
 													onValueChange={setTarget}
 												/>
 												{target === 'column' && (
-													<Select
-														value={columnId || UNFILED_COLUMN_ID}
-														onValueChange={setColumnId}
-													>
+													<Select value={columnId} onValueChange={setColumnId}>
 														<SelectTrigger
 															className="h-8 w-48 text-xs"
 															aria-label="Column for every imported bookmark"
@@ -1443,12 +1448,9 @@ export function ImportDialog({
 														<SelectContent>
 															{columns.map((column) => (
 																<SelectItem key={column.id} value={column.id}>
-																	{column.name}
+																	<ColumnLabel column={column} />
 																</SelectItem>
 															))}
-															<SelectItem value={UNFILED_COLUMN_ID}>
-																Unfiled
-															</SelectItem>
 														</SelectContent>
 													</Select>
 												)}

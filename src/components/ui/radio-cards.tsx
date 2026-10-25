@@ -180,7 +180,7 @@ function SegmentedControl<T extends string>({
 			aria-labelledby={props['aria-labelledby']}
 			className={cn(
 				fullWidth ? 'flex w-full' : 'inline-flex max-w-full flex-wrap',
-				'rounded-md border border-border bg-muted/60 p-0.5',
+				'min-h-9 items-stretch rounded-md border border-border bg-muted/60 p-0.5',
 				className,
 			)}
 		>
@@ -190,8 +190,8 @@ function SegmentedControl<T extends string>({
 					<label
 						key={option.value}
 						className={cn(
-							fullWidth && 'flex-1 text-center',
-							'relative cursor-pointer rounded-[5px] px-3 py-1 text-xs font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+							fullWidth && 'flex-1',
+							'relative flex cursor-pointer items-center justify-center rounded-[5px] px-3 text-center text-xs font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
 							checked
 								? 'bg-card text-foreground shadow-sm'
 								: 'text-muted-foreground hover:text-foreground',
