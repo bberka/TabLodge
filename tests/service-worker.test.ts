@@ -7467,3 +7467,19 @@ test('PREVIEW_SESSION_NAME formats the next save from the window tabs', async ()
 	});
 	assert.equal(datetime.name, 'Sat, Oct 25 · 10:42 PM');
 });
+
+test('deleting a column moves its bookmarks after the target column’s own, in order', async () => {
+	const harness = createWorkerHarness(bookmarksState(4));
+	const result = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'bookmark-default',
+		targetColumnId: 'col-news',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(
+		harness.state.bookmarks.map(
+			(bookmark) => `${bookmark.id}@${bookmark.columnId}`,
+		),
+		['bm-2@col-news', 'bm-3@col-news', 'bm-0@col-news', 'bm-1@col-news'],
+	);
+});

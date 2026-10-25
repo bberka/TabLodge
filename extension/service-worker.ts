@@ -3793,10 +3793,16 @@ async function deleteBookmarkColumn(
 				movedTo,
 			},
 		});
+		// Moved bookmarks keep their order and go after the target column's own bookmarks.
 		for (const bookmark of affected) {
 			bookmark.columnId = movedTo;
 		}
 
+		const movedIds = new Set(affected.map((bookmark) => bookmark.id));
+		store.bookmarks = [
+			...store.bookmarks.filter((bookmark) => !movedIds.has(bookmark.id)),
+			...affected,
+		];
 		store.bookmarkColumns = remaining;
 		await writeStore(store);
 		return {
