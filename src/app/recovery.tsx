@@ -992,11 +992,11 @@ export function RecoveryTools({
 					</Button>
 					<Button size="sm" variant="outline" onClick={onOpenSnapshots}>
 						<History className="h-4 w-4" />
-						Recent snapshots…
+						Recent snapshots
 					</Button>
 					<Button size="sm" variant="outline" onClick={onOpenTrash}>
 						<Trash2 className="h-4 w-4" />
-						Trash…
+						Trash
 					</Button>
 					<Button
 						size="sm"

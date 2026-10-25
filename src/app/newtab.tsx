@@ -1111,14 +1111,14 @@ function NewTab() {
 				},
 				{
 					id: 'backup-bookmarks',
-					title: 'Back up bookmarks…',
+					title: 'Back up bookmarks',
 					keywords: ['export', 'download', 'save'],
 					icon: Download,
 					run: () => h().backupBookmarks(),
 				},
 				{
 					id: 'import-bookmarks',
-					title: 'Import bookmarks…',
+					title: 'Import bookmarks',
 					keywords: ['restore', 'load', 'upload'],
 					icon: Upload,
 					run: () => h().importData(),
@@ -1137,14 +1137,14 @@ function NewTab() {
 				},
 				{
 					id: 'backup-sessions',
-					title: 'Back up sessions…',
+					title: 'Back up sessions',
 					keywords: ['export', 'download', 'save'],
 					icon: HardDriveDownload,
 					run: () => emitFinderEvent({type: 'backup-sessions'}),
 				},
 				{
 					id: 'import-sessions',
-					title: 'Import sessions…',
+					title: 'Import sessions',
 					keywords: ['restore', 'load', 'upload'],
 					icon: Upload,
 					run: () => emitFinderEvent({type: 'import-sessions'}),
@@ -1155,14 +1155,14 @@ function NewTab() {
 		list.push(
 			{
 				id: 'recent-snapshots',
-				title: 'Recent snapshots…',
+				title: 'Recent snapshots',
 				keywords: ['crash', 'recover', 'restore session', 'history', 'windows'],
 				icon: History,
 				run: () => emitRecoveryEvent({type: 'snapshots'}),
 			},
 			{
 				id: 'open-trash',
-				title: 'Trash…',
+				title: 'Trash',
 				keywords: ['deleted', 'undo', 'restore', 'bin', 'recover'],
 				icon: Trash2,
 				run: () => emitRecoveryEvent({type: 'trash'}),
