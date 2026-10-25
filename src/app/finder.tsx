@@ -10,11 +10,13 @@ import {
 } from 'react';
 import {
 	AppWindow,
+	Bookmark,
 	Columns3,
 	CornerDownLeft,
 	Folder,
 	Globe,
 	Layers,
+	Link2,
 	Search,
 	Zap,
 } from 'lucide-react';
@@ -71,6 +73,8 @@ const SHORTCUT_NAME = isMac ? '⌘K' : 'Ctrl+K';
 const KIND_ICONS: Partial<Record<FinderKind, IconComponent>> = {
 	url: Globe,
 	tab: AppWindow,
+	bookmark: Bookmark,
+	'saved-tab': Link2,
 	session: Layers,
 	column: Columns3,
 	folder: Folder,
@@ -78,7 +82,13 @@ const KIND_ICONS: Partial<Record<FinderKind, IconComponent>> = {
 	web: Search,
 };
 
-function ResultIcon({item}: {item: FinderItem}) {
+function ResultIcon({
+	item,
+	commandIcon,
+}: {
+	item: FinderItem;
+	commandIcon?: IconComponent;
+}) {
 	const [failed, setFailed] = useState(false);
 	if (item.url && !failed && item.kind !== 'url') {
 		return (
@@ -93,7 +103,8 @@ function ResultIcon({item}: {item: FinderItem}) {
 		);
 	}
 
-	const Icon = KIND_ICONS[item.kind] ?? Globe;
+	const Icon =
+		(item.kind === 'command' && commandIcon) || KIND_ICONS[item.kind] || Globe;
 	return (
 		<Icon
 			className="h-4 w-4 shrink-0 text-muted-foreground"
@@ -302,7 +313,12 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 		}
 	}
 
+	const commandIcons = useMemo(
+		() => new Map(actions.map((action) => [action.id, action.icon])),
+		[actions],
+	);
 	return {
+		commandIcons,
 		query,
 		resultQuery,
 		setQuery,
@@ -340,7 +356,14 @@ function ResultList({
 	listId: string;
 	viewportClassName: string;
 }) {
-	const {resultQuery: query, sections, selected, setIndex, run} = finder;
+	const {
+		resultQuery: query,
+		sections,
+		selected,
+		setIndex,
+		run,
+		commandIcons,
+	} = finder;
 	let position = -1;
 	return (
 		<ScrollArea viewportClassName={viewportClassName}>
@@ -373,7 +396,14 @@ function ResultList({
 										void run(item, event.ctrlKey || event.metaKey)
 									}
 								>
-									<ResultIcon item={item} />
+									<ResultIcon
+										item={item}
+										commandIcon={
+											item.kind === 'command'
+												? commandIcons.get(item.ref!)
+												: undefined
+										}
+									/>
 									<span className="min-w-0 flex-1">
 										<span className="block truncate text-[13px] font-medium">
 											{item.kind === 'web' || item.kind === 'url' ? (

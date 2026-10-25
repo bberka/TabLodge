@@ -13,7 +13,6 @@ import {
 	Archive,
 	Bookmark,
 	ChevronRight,
-	Copy,
 	ExternalLink,
 	History,
 	Layers,
@@ -58,6 +57,7 @@ import {resolveLinkTarget} from './link-target';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
+import {ACTION_ICONS} from './action-icons';
 import {cn} from '@/lib/utils';
 
 type PanelTab = 'bookmarks' | 'sessions' | 'tabs';
@@ -380,19 +380,19 @@ function SidePanel() {
 			{
 				id: 'current',
 				label: 'Open in this tab',
-				icon: ExternalLink,
+				icon: ACTION_ICONS.openHere,
 				onSelect: open('current'),
 			},
 			{
 				id: 'new',
 				label: 'Open in new tab',
-				icon: PanelTop,
+				icon: ACTION_ICONS.openNew,
 				onSelect: open('new'),
 			},
 			{
 				id: 'copy',
 				label: 'Copy link',
-				icon: Copy,
+				icon: ACTION_ICONS.copy,
 				onSelect: () => void copy(url),
 			},
 			...extra,
@@ -531,7 +531,7 @@ function SidePanel() {
 			{
 				id: 'copy',
 				label: 'Copy link',
-				icon: Copy,
+				icon: ACTION_ICONS.copy,
 				hidden: !url,
 				onSelect: () => void copy(url),
 			},
@@ -715,7 +715,7 @@ function SidePanel() {
 				<div
 					role="tablist"
 					aria-label={`${PROJECT.name} sections`}
-					className="mb-2 grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+					className="mb-2 grid h-9 grid-cols-3 items-stretch gap-1 rounded-lg bg-muted p-1"
 					onKeyDown={onTabListKeys}
 				>
 					{tabsDef.map(({id, label, count}) => (
@@ -728,7 +728,7 @@ function SidePanel() {
 							aria-controls="sp-panel"
 							tabIndex={panel === id ? 0 : -1}
 							className={cn(
-								'flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+								'flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 								panel === id && 'bg-background text-foreground shadow-sm',
 							)}
 							onClick={() => setChosenPanel(id)}

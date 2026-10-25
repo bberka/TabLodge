@@ -1,4 +1,6 @@
 import {
+	lazy,
+	Suspense,
 	useEffect,
 	useMemo,
 	useState,
@@ -56,7 +58,13 @@ import {
 	useTabSelection,
 } from './common';
 import type {SaveScope, Session} from './types';
+import {LinkSummary} from './favicon';
 import {PROJECT} from './project';
+
+// The icon registry is large; the popup only loads it once the column picker renders.
+const ColumnLabel = lazy(async () => ({
+	default: (await import('./icon-label')).ColumnLabel,
+}));
 
 /**
 Stable fallback so memoized values do not see a new array on every render.
@@ -636,6 +644,9 @@ function Popup() {
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
+							{bookmarkTab && (
+								<LinkSummary title={bookmarkTab.title} url={bookmarkTab.url} />
+							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column">Bookmark column</Label>
 								<Select value={columnId} onValueChange={setColumnId}>
@@ -645,7 +656,9 @@ function Popup() {
 									<SelectContent>
 										{columns.map((column) => (
 											<SelectItem key={column.id} value={column.id}>
-												{column.name}
+												<Suspense fallback={column.name}>
+													<ColumnLabel column={column} />
+												</Suspense>
 											</SelectItem>
 										))}
 									</SelectContent>
