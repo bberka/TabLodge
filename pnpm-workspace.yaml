@@ -1,0 +1,14 @@
+allowBuilds:
+  esbuild: true
+  # Prebuilt binaries come from optional dependencies; its postinstall check isn't needed.
+  unrs-resolver: false
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
