@@ -25,6 +25,7 @@ import {
 	FolderInput,
 	FolderPlus,
 	LayoutGrid,
+	LayoutList,
 	LockKeyhole,
 	MoreHorizontal,
 	MoreVertical,
@@ -933,6 +934,21 @@ export function SessionManager({
 		}
 	}
 
+	async function changeLayout(layout: 'list' | 'grid') {
+		if ((settings.sessionLayout ?? 'list') === layout) {
+			return;
+		}
+
+		const result = await send('UPDATE_SETTINGS', {
+			settings: {sessionLayout: layout},
+		});
+		if (result?.ok) {
+			await reload();
+		} else {
+			showStatus(result?.error || 'Could not save the layout.', true);
+		}
+	}
+
 	async function saveBookmark(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!bookmarkTab) {
@@ -1126,6 +1142,31 @@ export function SessionManager({
 									</DropdownMenuRadioGroup>
 								</DropdownMenuContent>
 							</DropdownMenu>
+							<div
+								role="group"
+								aria-label="Session layout"
+								className="mx-0.5 flex items-center rounded-md border border-border p-0.5"
+							>
+								{(
+									[
+										['list', 'List layout', LayoutList],
+										['grid', 'Grid layout', LayoutGrid],
+									] as const
+								).map(([value, label, LayoutIcon]) => (
+									<IconTooltip key={value} label={label}>
+										<Button
+											variant="ghost"
+											size="icon"
+											className={`h-7 w-7 min-h-7 ${(grid ? 'grid' : 'list') === value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+											aria-label={label}
+											aria-pressed={(grid ? 'grid' : 'list') === value}
+											onClick={() => void changeLayout(value)}
+										>
+											<LayoutIcon />
+										</Button>
+									</IconTooltip>
+								))}
+							</div>
 							<DropdownMenu>
 								<IconTooltip label="Import and back up sessions">
 									<DropdownMenuTrigger asChild>
