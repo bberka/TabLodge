@@ -17,7 +17,6 @@ import {
 import {
 	Badge,
 	Button,
-	ConfirmationDialog,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -132,6 +131,88 @@ export function offerTrashUndo(
 	);
 }
 
+/**
+A success toast with an Undo button that runs `UNDO` for an `undoId` from the service worker, then lets the page reload its data.
+*/
+export function offerUndo(
+	message: string,
+	undoId: string | undefined,
+	showStatus: ShowStatus,
+	reload: () => unknown,
+) {
+	showStatus(
+		message,
+		false,
+		undoId
+			? {
+					action: {
+						label: 'Undo',
+						async onClick() {
+							const result = await send('UNDO', {id: undoId});
+							if (result?.ok) {
+								showStatus(`Undone: ${result.label}.`, false, {toast: true});
+								await reload();
+							} else {
+								showStatus(result?.error || 'Could not undo that.', true);
+							}
+						},
+					},
+				}
+			: {toast: true},
+	);
+}
+
+/**
+A success toast with an Undo button that closes the tabs just opened (the ones that still exist).
+*/
+export function offerCloseTabsUndo(
+	message: string,
+	tabIds: number[],
+	showStatus: ShowStatus,
+	isError = false,
+) {
+	showStatus(
+		message,
+		isError,
+		tabIds.length > 0
+			? {
+					action: {
+						label: 'Undo',
+						async onClick() {
+							try {
+								await chrome.tabs.remove(tabIds);
+							} catch {
+								// Some of them were already closed; close the rest one by one.
+								await Promise.all(
+									tabIds.map(async (id) =>
+										chrome.tabs.remove(id).catch(() => undefined),
+									),
+								);
+							}
+
+							showStatus('Closed the opened tabs.', false, {toast: true});
+						},
+					},
+				}
+			: {toast: true},
+	);
+}
+
+/**
+Reports a snapshot restore with an Undo that closes the tabs it opened.
+*/
+function reportSnapshotRestore(
+	result: ActionSuccess<'RESTORE_SNAPSHOT'>,
+	showStatus: ShowStatus,
+) {
+	offerCloseTabsUndo(
+		`Restored ${plural(result.windows, 'window')} · ${plural(result.count, 'tab')}${result.failed ? ` · ${result.failed} failed` : ''}.`,
+		result.tabIds,
+		showStatus,
+		Boolean(result.failed),
+	);
+}
+
 const REASON_LABELS: Record<SnapshotReason, string> = {
 	interval: 'Regular snapshot',
 	startup: 'At startup',
@@ -207,11 +288,7 @@ export function RecoveryBanner({
 				id: recovery.snapshotId,
 			});
 			if (result?.ok) {
-				showStatus(
-					`Restored ${plural(result.windows, 'window')} · ${plural(result.count, 'tab')}${result.failed ? ` · ${result.failed} failed` : ''}.`,
-					Boolean(result.failed),
-					{toast: true},
-				);
+				reportSnapshotRestore(result, showStatus);
 			} else {
 				showStatus(result?.error || 'Could not restore that session.', true);
 			}
@@ -400,11 +477,6 @@ export function SnapshotsDialog({
 }) {
 	const {data, error, reload} = useSnapshots(open);
 	const [busy, setBusy] = useState(false);
-	const [confirmClear, setConfirmClear] = useState(false);
-	const [confirmRestore, setConfirmRestore] = useState<{
-		id: string;
-		windowIndex?: number;
-	} | null>(null);
 
 	async function run(action: () => Promise<void>) {
 		setBusy(true);
@@ -422,11 +494,7 @@ export function SnapshotsDialog({
 		run(async () => {
 			const result = await send('RESTORE_SNAPSHOT', {id, windowIndex});
 			if (result?.ok) {
-				showStatus(
-					`Restored ${plural(result.windows, 'window')} · ${plural(result.count, 'tab')}${result.failed ? ` · ${result.failed} failed` : ''}.`,
-					Boolean(result.failed),
-					{toast: true},
-				);
+				reportSnapshotRestore(result, showStatus);
 			} else {
 				showStatus(result?.error || 'Could not restore that snapshot.', true);
 			}
@@ -450,115 +518,89 @@ export function SnapshotsDialog({
 	const remove = (id: string) =>
 		run(async () => {
 			const result = await send('DELETE_SNAPSHOT', {id});
-			if (!result?.ok) {
+			if (result?.ok) {
+				offerUndo('Snapshot deleted.', result.undoId, showStatus, reload);
+			} else {
 				showStatus(result?.error || 'Could not delete that snapshot.', true);
 			}
 		});
 
-	async function clearAll() {
-		await run(async () => {
+	const clearAll = () =>
+		run(async () => {
 			const result = await send('CLEAR_SNAPSHOTS');
 			if (result?.ok) {
-				showStatus(`Cleared ${plural(result.count, 'snapshot')}.`, false, {
-					toast: true,
-				});
+				offerUndo(
+					`Cleared ${plural(result.count, 'snapshot')}.`,
+					result.undoId,
+					showStatus,
+					reload,
+				);
 			} else {
 				showStatus(result?.error || 'Could not clear the snapshots.', true);
 			}
 		});
-		setConfirmClear(false);
-	}
 
 	const snapshots = data?.snapshots ?? [];
 	return (
-		<>
-			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent size="lg">
-					<DialogHeader>
-						<DialogTitle>Recent snapshots</DialogTitle>
-						<DialogDescription>
-							Automatic copies of your open windows, kept on this computer so a
-							crash does not cost you your tabs. Restoring opens new windows.
-						</DialogDescription>
-					</DialogHeader>
-					<DialogBody>
-						{error && (
-							<p role="alert" className="text-sm font-medium text-destructive">
-								{error}
-							</p>
-						)}
-						{data && !data.enabled && (
-							<p className="rounded-md bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-								Snapshots are turned off in Settings › Recovery &amp; backups.
-								Existing ones are kept until you clear them.
-							</p>
-						)}
-						{data && snapshots.length === 0 && (
-							<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-								No snapshots yet. They appear a few minutes after you open some
-								web pages.
-							</p>
-						)}
-						{snapshots.length > 0 && (
-							<ul className="space-y-2" aria-label="Snapshots">
-								{snapshots.map((snapshot) => (
-									<SnapshotRow
-										key={snapshot.id}
-										snapshot={snapshot}
-										busy={busy}
-										onRestore={(windowIndex) =>
-											snapshot.tabs > 100
-												? setConfirmRestore({id: snapshot.id, windowIndex})
-												: void restore(snapshot.id, windowIndex)
-										}
-										onSave={(windowIndex) =>
-											void saveAsSession(snapshot.id, windowIndex)
-										}
-										onDelete={() => void remove(snapshot.id)}
-									/>
-								))}
-							</ul>
-						)}
-					</DialogBody>
-					<DialogFooter>
-						<Button
-							variant="outline"
-							disabled={busy || snapshots.length === 0}
-							onClick={() => setConfirmClear(true)}
-						>
-							<Trash2 className="h-4 w-4" />
-							Clear all
-						</Button>
-						<Button onClick={() => onOpenChange(false)}>Done</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-			<ConfirmationDialog
-				open={confirmClear}
-				title="Clear all snapshots?"
-				description="The saved copies of your windows are deleted. Your open tabs, sessions and bookmarks are not affected."
-				confirmLabel="Clear snapshots"
-				busy={busy}
-				onOpenChange={setConfirmClear}
-				onConfirm={() => void clearAll()}
-			/>
-			<ConfirmationDialog
-				open={Boolean(confirmRestore)}
-				title="Open a lot of tabs?"
-				description="This snapshot has more than 100 tabs. They all open in new windows."
-				confirmLabel="Restore"
-				confirmVariant="default"
-				busy={busy}
-				onOpenChange={(next) => !next && setConfirmRestore(null)}
-				onConfirm={() => {
-					const request = confirmRestore;
-					setConfirmRestore(null);
-					if (request) {
-						void restore(request.id, request.windowIndex);
-					}
-				}}
-			/>
-		</>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent size="lg">
+				<DialogHeader>
+					<DialogTitle>Recent snapshots</DialogTitle>
+					<DialogDescription>
+						Automatic copies of your open windows, kept on this computer so a
+						crash does not cost you your tabs. Restoring opens new windows.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogBody>
+					{error && (
+						<p role="alert" className="text-sm font-medium text-destructive">
+							{error}
+						</p>
+					)}
+					{data && !data.enabled && (
+						<p className="rounded-md bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
+							Snapshots are turned off in Settings › Recovery &amp; backups.
+							Existing ones are kept until you clear them.
+						</p>
+					)}
+					{data && snapshots.length === 0 && (
+						<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+							No snapshots yet. They appear a few minutes after you open some
+							web pages.
+						</p>
+					)}
+					{snapshots.length > 0 && (
+						<ul className="space-y-2" aria-label="Snapshots">
+							{snapshots.map((snapshot) => (
+								<SnapshotRow
+									key={snapshot.id}
+									snapshot={snapshot}
+									busy={busy}
+									onRestore={(windowIndex) =>
+										void restore(snapshot.id, windowIndex)
+									}
+									onSave={(windowIndex) =>
+										void saveAsSession(snapshot.id, windowIndex)
+									}
+									onDelete={() => void remove(snapshot.id)}
+								/>
+							))}
+						</ul>
+					)}
+				</DialogBody>
+				<DialogFooter>
+					<Button
+						variant="outline"
+						disabled={busy || snapshots.length === 0}
+						onClick={() => void clearAll()}
+					>
+						<Trash2 className="h-4 w-4" />
+						Clear all
+					</Button>
+					<Button onClick={() => onOpenChange(false)}>Done</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -587,7 +629,6 @@ export function TrashDialog({
 	const [items, setItems] = useState<TrashSummary[] | null>(null);
 	const [error, setError] = useState('');
 	const [busy, setBusy] = useState(false);
-	const [confirmEmpty, setConfirmEmpty] = useState(false);
 	const load = useCallback(async () => {
 		try {
 			const result = await send('GET_TRASH');
@@ -635,123 +676,114 @@ export function TrashDialog({
 	const remove = (item: TrashSummary) =>
 		run(async () => {
 			const result = await send('DELETE_TRASH', {id: item.id});
-			if (!result?.ok) {
+			if (result?.ok) {
+				offerUndo(
+					`Deleted “${item.label}” permanently.`,
+					result.undoId,
+					showStatus,
+					load,
+				);
+			} else {
 				showStatus(result?.error || 'Could not delete that item.', true);
 			}
 		});
 
-	async function empty() {
-		await run(async () => {
+	const empty = () =>
+		run(async () => {
 			const result = await send('EMPTY_TRASH');
 			if (result?.ok) {
-				showStatus(
+				offerUndo(
 					`Emptied the trash (${plural(result.count, 'item')}).`,
-					false,
-					{
-						toast: true,
-					},
+					result.undoId,
+					showStatus,
+					load,
 				);
 			} else {
 				showStatus(result?.error || 'Could not empty the trash.', true);
 			}
 		});
-		setConfirmEmpty(false);
-	}
 
 	return (
-		<>
-			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent size="lg">
-					<DialogHeader>
-						<DialogTitle>Trash</DialogTitle>
-						<DialogDescription>
-							Deleted sessions, saved links, bookmarks, columns and folders wait
-							here until the retention period set in Settings ends.
-						</DialogDescription>
-					</DialogHeader>
-					<DialogBody>
-						{error && (
-							<p role="alert" className="text-sm font-medium text-destructive">
-								{error}
-							</p>
-						)}
-						{items && items.length === 0 && (
-							<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-								The trash is empty.
-							</p>
-						)}
-						{items && items.length > 0 && (
-							<ul className="space-y-2" aria-label="Deleted items">
-								{items.map((item) => (
-									<li
-										key={item.id}
-										className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5"
-									>
-										<div className="min-w-0">
-											<p className="flex min-w-0 items-center gap-2 text-sm font-medium">
-												<span className="truncate">{item.label}</span>
-												<Badge variant="default" className="shrink-0">
-													{KIND_LABELS[item.kind]}
-												</Badge>
-											</p>
-											<p className="truncate text-xs text-muted-foreground">
-												{item.count > 1
-													? `${plural(item.count, 'link')} · `
-													: ''}
-												{item.origin ? `from ${item.origin} · ` : ''}
-												deleted {whenText(item.deletedAt)}
-											</p>
-										</div>
-										<div className="flex gap-1">
-											<Button
-												size="sm"
-												variant="outline"
-												disabled={busy}
-												onClick={() => void restore(item)}
-											>
-												<Undo2 className="h-4 w-4" />
-												Restore
-											</Button>
-											<Button
-												size="icon"
-												variant="ghost"
-												className="h-8 w-8 text-muted-foreground hover:text-destructive"
-												aria-label={`Delete “${item.label}” permanently`}
-												disabled={busy}
-												onClick={() => void remove(item)}
-											>
-												<Trash2 className="h-4 w-4" />
-											</Button>
-										</div>
-									</li>
-								))}
-							</ul>
-						)}
-					</DialogBody>
-					<DialogFooter>
-						<Button
-							variant="outline"
-							className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
-							disabled={busy || !items || items.length === 0}
-							onClick={() => setConfirmEmpty(true)}
-						>
-							<Trash2 className="h-4 w-4" />
-							Empty trash
-						</Button>
-						<Button onClick={() => onOpenChange(false)}>Done</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-			<ConfirmationDialog
-				open={confirmEmpty}
-				title="Empty the trash?"
-				description={`${plural(items?.length ?? 0, 'item')} will be deleted permanently. This can’t be undone.`}
-				confirmLabel="Empty trash"
-				busy={busy}
-				onOpenChange={setConfirmEmpty}
-				onConfirm={() => void empty()}
-			/>
-		</>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent size="lg">
+				<DialogHeader>
+					<DialogTitle>Trash</DialogTitle>
+					<DialogDescription>
+						Deleted sessions, saved links, bookmarks, columns and folders wait
+						here until the retention period set in Settings ends.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogBody>
+					{error && (
+						<p role="alert" className="text-sm font-medium text-destructive">
+							{error}
+						</p>
+					)}
+					{items && items.length === 0 && (
+						<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+							The trash is empty.
+						</p>
+					)}
+					{items && items.length > 0 && (
+						<ul className="space-y-2" aria-label="Deleted items">
+							{items.map((item) => (
+								<li
+									key={item.id}
+									className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5"
+								>
+									<div className="min-w-0">
+										<p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+											<span className="truncate">{item.label}</span>
+											<Badge variant="default" className="shrink-0">
+												{KIND_LABELS[item.kind]}
+											</Badge>
+										</p>
+										<p className="truncate text-xs text-muted-foreground">
+											{item.count > 1 ? `${plural(item.count, 'link')} · ` : ''}
+											{item.origin ? `from ${item.origin} · ` : ''}
+											deleted {whenText(item.deletedAt)}
+										</p>
+									</div>
+									<div className="flex gap-1">
+										<Button
+											size="sm"
+											variant="outline"
+											disabled={busy}
+											onClick={() => void restore(item)}
+										>
+											<Undo2 className="h-4 w-4" />
+											Restore
+										</Button>
+										<Button
+											size="icon"
+											variant="ghost"
+											className="h-8 w-8 text-muted-foreground hover:text-destructive"
+											aria-label={`Delete “${item.label}” permanently`}
+											disabled={busy}
+											onClick={() => void remove(item)}
+										>
+											<Trash2 className="h-4 w-4" />
+										</Button>
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
+				</DialogBody>
+				<DialogFooter>
+					<Button
+						variant="outline"
+						className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+						disabled={busy || !items || items.length === 0}
+						onClick={() => void empty()}
+					>
+						<Trash2 className="h-4 w-4" />
+						Empty trash
+					</Button>
+					<Button onClick={() => onOpenChange(false)}>Done</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -843,12 +875,6 @@ export function RecoveryTools({
 		null,
 	);
 	const [busy, setBusy] = useState('');
-	const [confirm, setConfirm] = useState<
-		| {kind: 'restore'; backup: BackupSummary}
-		| {kind: 'snapshots'}
-		| {kind: 'trash'}
-		| null
-	>(null);
 	const refresh = useCallback(async () => {
 		const [usageResult, backupResult] = await Promise.all([
 			send('GET_STORAGE_USAGE'),
@@ -910,10 +936,14 @@ export function RecoveryTools({
 		run(`restore:${backup.id}`, async () => {
 			const result = await send('RESTORE_BACKUP', {id: backup.id});
 			if (result?.ok) {
-				showStatus(
-					`Restored ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}. A safety backup of the previous data was kept.`,
-					false,
-					{toast: true},
+				offerUndo(
+					`Restored ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}.`,
+					result.undoId,
+					showStatus,
+					async () => {
+						await refresh();
+						await onDataChanged();
+					},
 				);
 				await onDataChanged();
 			} else {
@@ -924,7 +954,9 @@ export function RecoveryTools({
 	const removeBackup = (backup: BackupSummary) =>
 		run(`delete:${backup.id}`, async () => {
 			const result = await send('DELETE_BACKUP', {id: backup.id});
-			if (!result?.ok) {
+			if (result?.ok) {
+				offerUndo('Backup deleted.', result.undoId, showStatus, refresh);
+			} else {
 				showStatus(result?.error || 'Could not delete that backup.', true);
 			}
 		});
@@ -933,9 +965,12 @@ export function RecoveryTools({
 		run('snapshots', async () => {
 			const result = await send('CLEAR_SNAPSHOTS');
 			if (result?.ok) {
-				showStatus(`Cleared ${plural(result.count, 'snapshot')}.`, false, {
-					toast: true,
-				});
+				offerUndo(
+					`Cleared ${plural(result.count, 'snapshot')}.`,
+					result.undoId,
+					showStatus,
+					refresh,
+				);
 			} else {
 				showStatus(result?.error || 'Could not clear the snapshots.', true);
 			}
@@ -945,12 +980,11 @@ export function RecoveryTools({
 		run('trash', async () => {
 			const result = await send('EMPTY_TRASH');
 			if (result?.ok) {
-				showStatus(
+				offerUndo(
 					`Emptied the trash (${plural(result.count, 'item')}).`,
-					false,
-					{
-						toast: true,
-					},
+					result.undoId,
+					showStatus,
+					refresh,
 				);
 			} else {
 				showStatus(result?.error || 'Could not empty the trash.', true);
@@ -1002,7 +1036,7 @@ export function RecoveryTools({
 						size="sm"
 						variant="outline"
 						disabled={busy !== ''}
-						onClick={() => setConfirm({kind: 'snapshots'})}
+						onClick={() => void clearSnapshots()}
 					>
 						Clear snapshots
 					</Button>
@@ -1010,7 +1044,7 @@ export function RecoveryTools({
 						size="sm"
 						variant="outline"
 						disabled={busy !== ''}
-						onClick={() => setConfirm({kind: 'trash'})}
+						onClick={() => void emptyTrash()}
 					>
 						Empty trash
 					</Button>
@@ -1044,7 +1078,7 @@ export function RecoveryTools({
 								key={backup.id}
 								backup={backup}
 								busy={busy !== ''}
-								onRestore={() => setConfirm({kind: 'restore', backup})}
+								onRestore={() => void restoreBackup(backup)}
 								onDownload={() => void download(backup)}
 								onDelete={() => void removeBackup(backup)}
 							/>
@@ -1052,52 +1086,6 @@ export function RecoveryTools({
 					</ul>
 				)}
 			</div>
-			<ConfirmationDialog
-				open={confirm?.kind === 'restore'}
-				title="Restore this backup?"
-				description="Your saved sessions and bookmarks are replaced with the ones in this backup. Settings stay as they are, and a safety backup of the current data is kept first."
-				confirmLabel="Restore backup"
-				confirmVariant="default"
-				busy={busy.startsWith('restore:')}
-				onOpenChange={(next) => !next && setConfirm(null)}
-				onConfirm={() => {
-					const pending = confirm;
-					setConfirm(null);
-					if (pending?.kind === 'restore') {
-						void restoreBackup(pending.backup);
-					}
-				}}
-			>
-				{confirm?.kind === 'restore' && (
-					<p className="rounded-md bg-muted px-3 py-2 text-xs">
-						{whenText(confirm.backup.at)} ·{' '}
-						{plural(confirm.backup.sessions, 'session')} ·{' '}
-						{plural(confirm.backup.bookmarks, 'bookmark')}
-					</p>
-				)}
-			</ConfirmationDialog>
-			<ConfirmationDialog
-				open={confirm?.kind === 'snapshots'}
-				title="Clear all snapshots?"
-				description="The saved copies of your windows are deleted. Your open tabs, sessions and bookmarks are not affected."
-				confirmLabel="Clear snapshots"
-				onOpenChange={(next) => !next && setConfirm(null)}
-				onConfirm={() => {
-					setConfirm(null);
-					void clearSnapshots();
-				}}
-			/>
-			<ConfirmationDialog
-				open={confirm?.kind === 'trash'}
-				title="Empty the trash?"
-				description="Everything in the trash is deleted permanently. This can’t be undone."
-				confirmLabel="Empty trash"
-				onOpenChange={(next) => !next && setConfirm(null)}
-				onConfirm={() => {
-					setConfirm(null);
-					void emptyTrash();
-				}}
-			/>
 		</div>
 	);
 }

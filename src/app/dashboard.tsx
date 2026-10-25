@@ -46,7 +46,6 @@ import {
 	Badge,
 	Button,
 	Checkbox,
-	ConfirmationDialog,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -115,7 +114,11 @@ import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {IconNameField} from './icon-picker';
 import {FINDER_EVENT, type FinderEventDetail} from './finder';
-import {emitRecoveryEvent, offerTrashUndo} from './recovery';
+import {
+	emitRecoveryEvent,
+	offerCloseTabsUndo,
+	offerTrashUndo,
+} from './recovery';
 import {openLink, resolveLinkTarget} from './link-target';
 
 /**
@@ -136,17 +139,6 @@ type SelectionModifiers = {
 	metaKey?: boolean;
 };
 type ReorderDirection = TabLodgeMessages['REORDER_GROUP']['direction'];
-type Confirmation = {
-	title: string;
-	description: string;
-	/**
-	Muted, truncated line naming the item (kept out of the title).
-	*/
-	detail?: string;
-	confirmLabel: string;
-	run: () => Promise<void>;
-	busy?: boolean;
-};
 type FolderDialog = {
 	mode: 'create' | 'rename';
 	folder?: Folder;
@@ -157,9 +149,6 @@ type FolderDialog = {
 };
 type DialogState = 'bookmark' | 'details' | FolderDialog | null;
 type BookmarkDraft = Partial<SavedTabRecord> & {columnId?: string};
-
-const messageOf = (reason: unknown) =>
-	(reason as {message?: string} | null | undefined)?.message;
 
 const ALL = 'all';
 const WIDE_PAGE = '(min-width: 768px)';
@@ -276,10 +265,8 @@ export function SessionManager({
 	// Written while a restore runs; the value itself is never read, the update just re-renders the page.
 	// eslint-disable-next-line @eslint-react/use-state -- write-only on purpose
 	const [, setBusy] = useState('');
-	const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
-	const confirmFocusRef = useRef<HTMLElement | null>(null);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const dragItemRef = useRef<DragItem | null>(null);
 	const [dragging, setDragging] = useState<DragItem | null>(null);
@@ -707,80 +694,42 @@ export function SessionManager({
 		}
 	}
 
-	function askConfirmation(details: Confirmation) {
-		confirmFocusRef.current = document.activeElement as HTMLElement | null;
-		setConfirmation(details);
-	}
-
-	async function runConfirmation() {
-		if (!confirmation || confirmation.busy) {
+	/**
+	Deletes right away; `closeEditor` also closes the details dialog it was asked from. Undo puts the session back from the trash.
+	*/
+	async function deleteGroup(group: Session, closeEditor = false) {
+		const result = await send('DELETE_GROUP', {groupId: group.id});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not delete this session.', true);
 			return;
 		}
 
-		const active = confirmation;
-		setConfirmation({...active, busy: true});
-		try {
-			await active.run();
-			setConfirmation(null);
-		} catch (reason) {
-			showStatus(
-				messageOf(reason) || 'That action could not be completed.',
-				true,
-			);
-			setConfirmation({...active, busy: false});
+		if (closeEditor) {
+			setDialog(null);
+			setEditingGroup(null);
 		}
+
+		await reload();
+		offerTrashUndo(
+			`Session “${group.name}” deleted.`,
+			result.trashId,
+			showStatus,
+			reload,
+		);
 	}
 
-	/**
-	Asks for confirmation, then deletes; `closeEditor` also closes the details dialog it was asked from.
-	*/
-	function deleteGroup(group: Session, closeEditor = false) {
-		askConfirmation({
-			title: 'Delete session?',
-			description: `This removes the session and its ${group.tabs.length} saved ${group.tabs.length === 1 ? 'link' : 'links'}. Open tabs stay open. You can undo it right after, or restore it from the trash.`,
-			detail: group.name,
-			confirmLabel: 'Delete session',
-			async run() {
-				const result = await send('DELETE_GROUP', {groupId: group.id});
-				if (!result?.ok) {
-					throw new Error(result?.error || 'Could not delete this session.');
-				}
-
-				if (closeEditor) {
-					setDialog(null);
-					setEditingGroup(null);
-				}
-
-				await reload();
-				offerTrashUndo(
-					`Session “${group.name}” deleted.`,
-					result.trashId,
-					showStatus,
-					reload,
-				);
-			},
+	async function deleteSavedTab(group: Session, tab: SavedTabRecord) {
+		const result = await send('DELETE_TAB', {
+			groupId: group.id,
+			tabId: tab.id,
 		});
-	}
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not remove this saved tab.', true);
+			return;
+		}
 
-	function deleteSavedTab(group: Session, tab: SavedTabRecord) {
-		askConfirmation({
-			title: 'Remove link?',
-			description: 'It is removed from this session. Open tabs stay open.',
-			detail: tab.title || tab.url,
-			confirmLabel: 'Remove link',
-			async run() {
-				const result = await send('DELETE_TAB', {
-					groupId: group.id,
-					tabId: tab.id,
-				});
-				if (!result?.ok) {
-					throw new Error(result?.error || 'Could not remove this saved tab.');
-				}
-
-				await reload();
-				offerTrashUndo('Link removed.', result.trashId, showStatus, reload);
-			},
-		});
+		await reload();
+		offerTrashUndo('Link removed.', result.trashId, showStatus, reload);
 	}
 
 	async function reorderGroup(group: Session, direction: ReorderDirection) {
@@ -801,25 +750,23 @@ export function SessionManager({
 			return;
 		}
 
-		const run = async () => {
+		const opened: number[] = [];
+		try {
 			for (const tab of tabs) {
-				await chrome.tabs.create({url: tab.url, active: false});
+				const created = await chrome.tabs.create({url: tab.url, active: false});
+				if (created.id !== undefined) {
+					opened.push(created.id);
+				}
 			}
-		};
-
-		if (tabs.length > 10) {
-			askConfirmation({
-				title: `Open ${tabs.length} tabs?`,
-				description: 'They open in the background, in saved order.',
-				confirmLabel: `Open ${tabs.length} tabs`,
-				async run() {
-					await run();
-				},
-			});
+		} catch {
+			showStatus('Some tabs could not be opened.', true);
 			return;
 		}
 
-		await run();
+		// A handful of tabs is routine; a bigger batch gets an Undo that closes them again.
+		if (tabs.length > 10) {
+			offerCloseTabsUndo(`Opened ${tabs.length} tabs.`, opened, showStatus);
+		}
 	}
 
 	async function openTab(tab: SavedTabRecord, requested?: 'current' | 'new') {
@@ -1092,33 +1039,26 @@ export function SessionManager({
 		await reload();
 	}
 
-	function deleteFolder() {
+	async function deleteFolder() {
 		const folder = folders.find((item) => item.id === folderId);
 		if (!folder || folder.isDefault) {
 			return;
 		}
 
-		askConfirmation({
-			title: 'Delete folder?',
-			description: 'Its sessions move to Unfiled. No links are lost.',
-			detail: folder.name,
-			confirmLabel: 'Delete folder',
-			async run() {
-				const result = await send('DELETE_FOLDER', {folderId});
-				if (!result?.ok) {
-					throw new Error(result?.error || 'Could not delete this folder.');
-				}
+		const result = await send('DELETE_FOLDER', {folderId});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not delete this folder.', true);
+			return;
+		}
 
-				setFolderId(ALL);
-				await reload();
-				offerTrashUndo(
-					`Folder “${folder.name}” deleted.`,
-					result.trashId,
-					showStatus,
-					reload,
-				);
-			},
-		});
+		setFolderId(ALL);
+		await reload();
+		offerTrashUndo(
+			`Folder “${folder.name}” deleted.`,
+			result.trashId,
+			showStatus,
+			reload,
+		);
 	}
 
 	async function openBookmarkPicker(tab: SavedTabRecord) {
@@ -1522,25 +1462,6 @@ export function SessionManager({
 
 			<StatusLine status={status} />
 
-			<ConfirmationDialog
-				open={Boolean(confirmation)}
-				title={confirmation?.title}
-				description={confirmation?.description}
-				confirmLabel={confirmation?.confirmLabel}
-				busy={Boolean(confirmation?.busy)}
-				restoreFocusTo={confirmFocusRef.current}
-				onOpenChange={(open) => !open && setConfirmation(null)}
-				onConfirm={runConfirmation}
-			>
-				{confirmation?.detail && (
-					<p
-						className="truncate text-xs text-muted-foreground"
-						title={confirmation.detail}
-					>
-						{confirmation.detail}
-					</p>
-				)}
-			</ConfirmationDialog>
 			{shareDialog}
 			<BackupDialog
 				data={backupData}

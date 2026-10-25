@@ -134,19 +134,6 @@ export function parseSessionDragData(raw: unknown): SessionDragData | null {
 	};
 }
 
-export function sessionDropPrompt(
-	session: {links?: readonly unknown[]} | null | undefined,
-	columnName: string,
-) {
-	const count = session?.links?.length || 0;
-	const noun = count === 1 ? 'link' : 'links';
-	return {
-		title: `Add ${count} ${noun} to “${columnName}” column?`,
-		description: '',
-		confirmLabel: `Add ${count} ${noun}`,
-	};
-}
-
 export function activateSessionTitle<E, R>(
 	action: string | undefined,
 	handlers: {
