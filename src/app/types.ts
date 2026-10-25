@@ -552,6 +552,21 @@ export type TabLodgeMessages = {
 	The backup as JSON text in the regular export format, for downloading.
 	*/
 	GET_BACKUP_DATA: {id: string};
+	/**
+	The stored values a full-backup ZIP is made of (state, page preferences, snapshot history, trash).
+	*/
+	GET_FULL_BACKUP: {};
+	/**
+	Replaces everything with the contents of a full-backup ZIP, read on the page. The worker validates and normalizes it; a safety backup comes first.
+	*/
+	RESTORE_FULL_BACKUP: {
+		format: string;
+		version: number;
+		state: unknown;
+		preferences?: unknown;
+		snapshots?: unknown;
+		trash?: unknown;
+	};
 	GET_TRASH: {};
 	RESTORE_TRASH: {id: string};
 	DELETE_TRASH: {id: string};
@@ -720,6 +735,18 @@ export type TabLodgeResponses = {
 	RESTORE_BACKUP: {sessions: number; bookmarks: number} & Undoable;
 	DELETE_BACKUP: Undoable;
 	GET_BACKUP_DATA: {filename: string; json: string};
+	GET_FULL_BACKUP: {
+		state: unknown;
+		preferences: unknown;
+		snapshots: unknown;
+		trash: unknown;
+	};
+	RESTORE_FULL_BACKUP: {
+		sessions: number;
+		bookmarks: number;
+		snapshots: number;
+		trash: number;
+	} & Undoable;
 	GET_TRASH: {items: TrashSummary[]};
 	/**
 	`placed`: where it went, such as the session name or "Unfiled".
