@@ -46,6 +46,11 @@ export type Settings = {
 	startupBehavior: 'dashboard' | 'last-session';
 	newTabEnabled: boolean;
 	/**
+	What new tabs show while "Use TabLodge for new tabs" is off: the browser's own page, a blank page, or a custom http(s) page.
+	*/
+	newTabFallback: 'browser' | 'blank' | 'custom';
+	newTabFallbackUrl: string;
+	/**
 	The new-tab page opens with an always-visible search box that has focus (default off).
 	*/
 	autoFocusSearchOnNewTab: boolean;
@@ -375,7 +380,7 @@ export type TabLodgeMessages = {
 	Erases stored data (not settings or excluded sites): sessions + folders, bookmarks + columns, or both.
 	*/
 	ERASE_DATA: {scope: EraseScope};
-	OPEN_DEFAULT_NEW_TAB: {};
+	HANDOFF_NEW_TAB: {brave?: boolean};
 	OPEN_DASHBOARD: {};
 };
 
@@ -474,7 +479,7 @@ export type TabLodgeResponses = {
 	Counts of sessions and bookmarks removed.
 	*/
 	ERASE_DATA: {sessions: number; bookmarks: number};
-	OPEN_DEFAULT_NEW_TAB: {};
+	HANDOFF_NEW_TAB: {handedOff: boolean};
 	OPEN_DASHBOARD: {};
 };
 

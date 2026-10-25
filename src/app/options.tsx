@@ -95,6 +95,10 @@ type SettingField = {
 	help: string;
 	requires?: SettingKey<boolean>;
 	systems?: System[];
+	/**
+	The row only shows while this is true for the current settings (searching shows it regardless).
+	*/
+	when?: (settings: Settings) => boolean;
 } & (
 	| {name: SettingKey<boolean>; type: 'switch'}
 	| {
@@ -108,6 +112,7 @@ type SettingField = {
 			suffix: string;
 	  }
 	| {name: SettingKey<string>; type: 'select'; options: Array<[string, string]>}
+	| {name: SettingKey<string>; type: 'url'; placeholder: string}
 );
 const messageOf = (reason: unknown) =>
 	(reason as {message?: string} | null | undefined)?.message;
@@ -148,6 +153,27 @@ const settingsGroups: Array<{
 				label: `Use ${PROJECT.name} for new tabs`,
 				help: `Show saved bookmarks and sessions on ${PROJECT.name}’s local new-tab page.`,
 				type: 'switch',
+			},
+			{
+				name: 'newTabFallback',
+				label: 'When off, new tabs show',
+				help: 'Browsers cannot remove an extension’s new-tab page while it is installed, so new tabs hand off to this page right away. The address bar may keep focus on the browser’s own page but not on a blank or custom one; click it or press Ctrl+L.',
+				type: 'select',
+				options: [
+					['browser', 'Browser’s new tab page'],
+					['blank', 'Blank page'],
+					['custom', 'Custom page'],
+				],
+				when: (current) => !current.newTabEnabled,
+			},
+			{
+				name: 'newTabFallbackUrl',
+				label: 'Custom new tab page',
+				help: 'A web address starting with http:// or https://. Without a valid one, new tabs show the browser’s page.',
+				type: 'url',
+				placeholder: 'https://example.com',
+				when: (current) =>
+					!current.newTabEnabled && current.newTabFallback === 'custom',
 			},
 			{
 				name: 'autoFocusSearchOnNewTab',
@@ -925,7 +951,8 @@ function Options() {
 		settings[system === 'sessions' ? 'sessionsEnabled' : 'bookmarksEnabled'] !==
 		false;
 	const fieldShown = (field: SettingField) =>
-		(field.systems ?? []).every((system) => systemOn(system));
+		(field.systems ?? []).every((system) => systemOn(system)) &&
+		(searching || !field.when || field.when(settings as Settings));
 	const hl = (text: string) => <Highlight text={text} query={query} />;
 
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
@@ -1343,6 +1370,21 @@ function Options() {
 														}
 														onCheckedChange={(value) =>
 															updateSetting(field.name, value)
+														}
+													/>
+												) : field.type === 'url' ? (
+													<UrlSetting
+														label={field.label}
+														placeholder={field.placeholder}
+														value={settings[field.name] ?? ''}
+														onCommit={(value) =>
+															updateSetting(field.name, value)
+														}
+														onInvalid={() =>
+															showStatus(
+																'Enter a web address that starts with http:// or https://.',
+																true,
+															)
 														}
 													/>
 												) : field.type === 'number' ? (
@@ -1818,6 +1860,54 @@ function SettingRow({
 }
 
 // A small whole-number input that saves on blur or Enter; the text may be empty or out of range while typing.
+function UrlSetting({
+	label,
+	placeholder,
+	value,
+	onCommit,
+	onInvalid,
+}: {
+	label: string;
+	placeholder: string;
+	value: string;
+	onCommit: (value: string) => void;
+	onInvalid: () => void;
+}) {
+	const [draft, setDraft] = useState(value);
+	useEffect(() => setDraft(value), [value]);
+	function commit() {
+		const text = draft.trim();
+		if (text === value) {
+			return;
+		}
+
+		if (text && !/^https?:\/\/[^\s/]+/i.test(text)) {
+			onInvalid();
+			return;
+		}
+
+		onCommit(text);
+	}
+
+	return (
+		<Input
+			type="url"
+			inputMode="url"
+			value={draft}
+			placeholder={placeholder}
+			aria-label={label}
+			className="h-9 w-full sm:w-64"
+			onChange={(event) => setDraft(event.target.value)}
+			onBlur={commit}
+			onKeyDown={(event) => {
+				if (event.key === 'Enter') {
+					event.currentTarget.blur();
+				}
+			}}
+		/>
+	);
+}
+
 function NumberSetting({
 	label,
 	value,
