@@ -85,7 +85,7 @@ Then click the reload button (↻) on TabLodge's card.
 
 - Open a new tab to see the dashboard, or click the toolbar icon for the quick popup.
 - Open the side panel with the "Open side panel" shortcut or the toolbar icon's right-click menu, or make the toolbar icon open it (Settings > Side Panel > Toolbar icon opens). In Brave, right-click the sidebar and add TabLodge, or pick it from the sidebar's extensions panel.
-- Change keyboard shortcuts at `chrome://extensions/shortcuts` (or your browser's equivalent).
+- See your keyboard shortcuts in **Settings › Keyboard shortcuts**, and change them with **Configure shortcuts** (it opens `chrome://extensions/shortcuts` or your browser's equivalent).
 
 ## Development
 

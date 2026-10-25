@@ -12,6 +12,7 @@ import {
 	Moon,
 	RotateCcw,
 	Sun,
+	Keyboard,
 	Laptop,
 	Trash2,
 	Settings2,
@@ -59,6 +60,7 @@ import {
 	PageShell,
 	SectionCard,
 	StatusLine,
+	openShortcutsPage,
 	send,
 	useStatus,
 	useTabLodgeState,
@@ -735,6 +737,19 @@ const fieldSearchText = (field: SettingField) => [
 ];
 
 // The sections that are not generated from `settingsGroups`, with the extra words people may search for.
+const SHORTCUTS = {
+	title: 'Keyboard shortcuts',
+	help: `Review or change ${PROJECT.name} shortcuts on the browser’s extension-shortcuts page.`,
+	text: [
+		'Keyboard shortcuts',
+		'keys',
+		'hotkey',
+		'keybinding',
+		'Configure shortcuts',
+		'save window',
+		'side panel',
+	],
+};
 const APPEARANCE = {
 	title: 'Appearance',
 	help: 'System follows your device and updates automatically.',
@@ -1164,6 +1179,7 @@ function Options() {
 		(searching || !rowDisabled(field));
 	const hl = (text: string) => <Highlight text={text} query={query} />;
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
+	const showShortcuts = matchesQuery(query, SHORTCUTS.text);
 	const systemRows = pick(SYSTEMS.title, SYSTEM_ROWS, (row) => [
 		row.label,
 		row.help,
@@ -1353,6 +1369,7 @@ function Options() {
 	]);
 	const matchCount =
 		Number(showAppearance) +
+		Number(showShortcuts) +
 		systemRows.length +
 		visibleGroups.reduce((sum, entry) => sum + entry.fields.length, 0) +
 		(searching &&
@@ -1502,6 +1519,12 @@ function Options() {
 								))}
 							</div>
 						</section>
+					)}
+					{showShortcuts && (
+						<ShortcutsCard
+							title={hl(SHORTCUTS.title)}
+							help={hl(SHORTCUTS.help)}
+						/>
 					)}
 
 					{systemRows.length > 0 && (
@@ -2157,6 +2180,87 @@ function Highlight({text, query}: {text: string; query: string}) {
 				),
 			)}
 		</>
+	);
+}
+
+const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
+
+/**
+The current shortcut for each command (read with chrome.commands), and a button to the browser's page that changes them.
+*/
+function ShortcutsCard({title, help}: {title: ReactNode; help: ReactNode}) {
+	const [commands, setCommands] = useState<chrome.commands.Command[]>([]);
+	const [failed, setFailed] = useState(false);
+	useEffect(() => {
+		let alive = true;
+		const read = () => {
+			void chrome.commands
+				?.getAll?.()
+				.then((all) => {
+					if (alive) {
+						setCommands(all.filter((command) => command.description));
+					}
+				})
+				.catch(() => {});
+		};
+
+		read();
+		// Shortcuts are changed on another page; pick up the change when the user comes back.
+		globalThis.addEventListener('focus', read);
+		return () => {
+			alive = false;
+			globalThis.removeEventListener('focus', read);
+		};
+	}, []);
+
+	return (
+		<section className="rounded-lg border border-border bg-card p-5">
+			<div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+				<div>
+					<h2 className="font-semibold">{title}</h2>
+					<p className="mt-1 text-sm text-muted-foreground">{help}</p>
+				</div>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="shrink-0"
+					onClick={async () => setFailed(!(await openShortcutsPage()))}
+				>
+					<Keyboard className="h-4 w-4" />
+					Configure shortcuts
+				</Button>
+			</div>
+			{failed && (
+				<p role="alert" className="mt-2 text-xs text-muted-foreground">
+					Your browser did not open it. Paste <code>{SHORTCUTS_URL}</code> into
+					the address bar.
+				</p>
+			)}
+			{commands.length > 0 && (
+				<dl className="mt-4 grid gap-x-6 gap-y-2 border-t border-border pt-4 text-sm sm:grid-cols-2">
+					{commands.map((command) => (
+						<div
+							key={command.name}
+							className="flex min-w-0 items-center justify-between gap-3"
+						>
+							<dt className="min-w-0 truncate text-muted-foreground">
+								{command.description}
+							</dt>
+							<dd className="shrink-0">
+								{command.shortcut ? (
+									<kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
+										{command.shortcut}
+									</kbd>
+								) : (
+									<span className="text-xs text-muted-foreground">Not set</span>
+								)}
+							</dd>
+						</div>
+					))}
+				</dl>
+			)}
+		</section>
 	);
 }
 
