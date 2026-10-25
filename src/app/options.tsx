@@ -30,7 +30,8 @@ import {
 } from 'lucide-react';
 import {
 	Button,
-	ActionDropdownMenu,
+	Checkbox,
+	ConfirmationDialog,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -759,6 +760,10 @@ function Options() {
 	const [busy, setBusy] = useState('');
 	const [resetBusy, setResetBusy] = useState(false);
 	const [eraseBusy, setEraseBusy] = useState(false);
+	const [eraseOpen, setEraseOpen] = useState(false);
+	const [eraseSessions, setEraseSessions] = useState(false);
+	const [eraseBookmarks, setEraseBookmarks] = useState(false);
+	const [confirmDefaults, setConfirmDefaults] = useState(false);
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
@@ -1028,7 +1033,7 @@ function Options() {
 		...(bookmarkCount ? [plural(bookmarkCount, 'bookmark')] : []),
 		...(bookmarkColumns ? [plural(bookmarkColumns, 'bookmark column')] : []),
 	];
-	// Erases right away (a safety backup is taken first); Undo puts the data back.
+	// A safety backup is taken first; Undo puts the data back.
 	async function eraseData(scope: EraseScope) {
 		if (eraseBusy) {
 			return;
@@ -1219,43 +1224,22 @@ function Options() {
 			help: 'Delete saved sessions, bookmarks, or both. Settings are kept.',
 			words: ['delete', 'remove', 'clear', 'wipe', 'reset data', 'everything'],
 			action: (
-				<ActionDropdownMenu
-					trigger={
-						<Button
-							variant="outline"
-							className="w-full border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-32"
-							disabled={
-								eraseBusy ||
-								(sessionParts.length === 0 && bookmarkParts.length === 0)
-							}
-						>
-							<Eraser className="h-4 w-4" />
-							Erase
-						</Button>
+				<Button
+					variant="outline"
+					className="w-full border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-32"
+					disabled={
+						eraseBusy ||
+						(sessionParts.length === 0 && bookmarkParts.length === 0)
 					}
-					actions={[
-						{
-							id: 'erase-sessions',
-							label: 'Erase sessions',
-							destructive: true,
-							disabled: sessionParts.length === 0,
-							onSelect: () => void eraseData('sessions'),
-						},
-						{
-							id: 'erase-bookmarks',
-							label: 'Erase bookmarks',
-							destructive: true,
-							disabled: bookmarkParts.length === 0,
-							onSelect: () => void eraseData('bookmarks'),
-						},
-						{
-							id: 'erase-all',
-							label: 'Erase everything',
-							destructive: true,
-							onSelect: () => void eraseData('all'),
-						},
-					]}
-				/>
+					onClick={() => {
+						setEraseSessions(false);
+						setEraseBookmarks(false);
+						setEraseOpen(true);
+					}}
+				>
+					<Eraser className="h-4 w-4" />
+					Erase
+				</Button>
 			),
 		},
 	];
@@ -1749,7 +1733,7 @@ function Options() {
 							<Button
 								variant="outline"
 								disabled={busy === 'defaults'}
-								onClick={() => void restoreDefaults()}
+								onClick={() => setConfirmDefaults(true)}
 							>
 								<RotateCcw className="h-4 w-4" />
 								{busy === 'defaults' ? 'Restoring' : 'Restore defaults'}
@@ -1758,6 +1742,70 @@ function Options() {
 					)}
 				</div>
 			)}
+			<ConfirmationDialog
+				open={confirmDefaults}
+				title="Restore default preferences?"
+				description="Your preferences go back to their defaults. Sessions and bookmarks are kept, and you can undo this right after."
+				confirmLabel="Restore defaults"
+				busy={resetBusy}
+				onOpenChange={setConfirmDefaults}
+				onConfirm={() => {
+					setConfirmDefaults(false);
+					void restoreDefaults();
+				}}
+			/>
+			<ConfirmationDialog
+				open={eraseOpen}
+				title="Erase data"
+				description="Choose what to erase. A safety backup is kept, and you can undo this right after. Settings are kept."
+				confirmLabel="Erase"
+				confirmDisabled={!eraseSessions && !eraseBookmarks}
+				busy={eraseBusy}
+				onOpenChange={setEraseOpen}
+				onConfirm={() => {
+					setEraseOpen(false);
+					void eraseData(
+						eraseSessions && eraseBookmarks
+							? 'all'
+							: eraseSessions
+								? 'sessions'
+								: 'bookmarks',
+					);
+				}}
+			>
+				<div className="grid gap-3 text-sm">
+					<Label className="flex items-start gap-2.5 font-normal">
+						<Checkbox
+							className="mt-0.5"
+							checked={eraseSessions}
+							disabled={sessionParts.length === 0}
+							onCheckedChange={(checked) => setEraseSessions(checked === true)}
+						/>
+						<span>
+							Sessions and folders
+							<span className="block text-xs text-muted-foreground">
+								{sessionParts.length > 0 ? listing(sessionParts) : 'None saved'}
+							</span>
+						</span>
+					</Label>
+					<Label className="flex items-start gap-2.5 font-normal">
+						<Checkbox
+							className="mt-0.5"
+							checked={eraseBookmarks}
+							disabled={bookmarkParts.length === 0}
+							onCheckedChange={(checked) => setEraseBookmarks(checked === true)}
+						/>
+						<span>
+							Bookmarks and columns
+							<span className="block text-xs text-muted-foreground">
+								{bookmarkParts.length > 0
+									? listing(bookmarkParts)
+									: 'None saved'}
+							</span>
+						</span>
+					</Label>
+				</div>
+			</ConfirmationDialog>
 			<BackupDialog
 				state={state}
 				data={backupData}
@@ -1766,12 +1814,14 @@ function Options() {
 				onOpenChange={(open) => !open && setBackupData(null)}
 			/>
 			<SnapshotsDialog
+				confirmDestructive
 				open={snapshotsOpen}
 				showStatus={showStatus}
 				onOpenChange={setSnapshotsOpen}
 				onSessionsChanged={reload}
 			/>
 			<TrashDialog
+				confirmDestructive
 				open={trashOpen}
 				showStatus={showStatus}
 				onOpenChange={setTrashOpen}

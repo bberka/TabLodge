@@ -3,6 +3,15 @@ import {Search} from 'lucide-react';
 import {Button} from '../components/ui/button';
 import {Input} from '../components/ui/input';
 import {
+	AlertDialog,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '../components/ui/alert-dialog';
+import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
@@ -188,5 +197,57 @@ export function ExpandingSearch({
 				}}
 			/>
 		</label>
+	);
+}
+
+/**
+A confirmation for destructive actions on the Settings page. Dashboard, new-tab and side-panel actions run at once with an Undo toast instead.
+*/
+export function ConfirmationDialog({
+	open,
+	onOpenChange,
+	title,
+	description,
+	children,
+	confirmLabel = 'Delete',
+	confirmDisabled = false,
+	busy = false,
+	onConfirm,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	title: React.ReactNode;
+	description?: React.ReactNode;
+	/**
+	Extra body content, such as choices.
+	*/
+	children?: React.ReactNode;
+	confirmLabel?: React.ReactNode;
+	confirmDisabled?: boolean;
+	busy?: boolean;
+	onConfirm: () => void;
+}) {
+	return (
+		<AlertDialog open={open} onOpenChange={onOpenChange}>
+			<AlertDialogContent size="sm">
+				<AlertDialogHeader>
+					<AlertDialogTitle>{title}</AlertDialogTitle>
+					{Boolean(description) && (
+						<AlertDialogDescription>{description}</AlertDialogDescription>
+					)}
+				</AlertDialogHeader>
+				{children}
+				<AlertDialogFooter>
+					<AlertDialogCancel>Cancel</AlertDialogCancel>
+					<Button
+						variant="destructive"
+						disabled={busy || confirmDisabled}
+						onClick={onConfirm}
+					>
+						{confirmLabel}
+					</Button>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	);
 }
