@@ -262,10 +262,14 @@ const settingsGroups: Array<{
 		icon: PanelRightOpen,
 		fields: [
 			{
-				name: 'sidePanelEnabled',
-				label: `Open ${PROJECT.name} in the browser Side Panel`,
-				help: `Use ${PROJECT.name}’s local bookmark search from the browser toolbar Side Panel.`,
-				type: 'switch',
+				name: 'toolbarOpens',
+				label: 'Toolbar icon opens',
+				help: `Choose whether the toolbar icon opens the quick popup or the ${PROJECT.name} side panel. The side panel is always available from the browser’s sidebar or side panel menu, and via the “Open side panel” shortcut.`,
+				type: 'select',
+				options: [
+					['popup', 'Popup'],
+					['sidepanel', 'Side panel'],
+				],
 			},
 		],
 	},
@@ -642,7 +646,7 @@ function Options() {
 
 	// Values come from the switch and select controls below, so they match the setting's type.
 	async function updateSetting(name: keyof Settings, value: boolean | string) {
-		if (name === 'sidePanelEnabled' && value && !chrome.sidePanel) {
+		if (name === 'toolbarOpens' && value === 'sidepanel' && !chrome.sidePanel) {
 			showStatus(
 				'The browser Side Panel API is unavailable in this version.',
 				true,
@@ -1230,54 +1234,74 @@ function Options() {
 						</SectionCard>
 					)}
 
-					{visibleGroups.map(({group, fields}) => (
-						<SectionCard
-							key={group.title}
-							title={hl(group.title)}
-							description={group.description}
-							icon={group.icon}
-						>
-							<div className="divide-y divide-border/70">
-								{fields.map((field) => (
-									<SettingRow
-										key={field.name}
-										label={hl(field.label)}
-										help={hl(field.help)}
-										hint={
-											searching &&
-											field.type === 'select' &&
-											!matchesQuery(query, [field.label, field.help])
-												? field.options
-														.map(([, label]) => label)
-														.filter((label) => matchesAnyTerm(query, label))
-												: undefined
-										}
-										inset={Boolean(field.requires)}
-										highlight={query}
-									>
-										{field.type === 'switch' ? (
-											<Switch
-												checked={
-													field.name === 'stretchBookmarkColumns'
-														? settings.stretchBookmarkColumns !== false
-														: Boolean(settings[field.name])
-												}
-												aria-label={field.label}
-												disabled={
-													(field.name === 'sidePanelEnabled' &&
-														!chrome.sidePanel) ||
-													(field.requires !== undefined &&
-														settings[field.requires] === false)
-												}
-												onCheckedChange={(value) =>
-													updateSetting(field.name, value)
-												}
-											/>
-										) : (
-											<Select
-												value={settings[field.name] || field.options[0][0]}
-												onValueChange={(value) =>
-													updateSetting(field.name, value)
+					{[
+						...visibleGroups.map(({group, fields}) => ({
+							group,
+							fields,
+							off: false,
+						})),
+						...collapsedGroups.map((group) => ({
+							group,
+							fields: [] as SettingField[],
+							off: true,
+						})),
+					]
+						.toSorted(
+							(a, b) =>
+								settingsGroups.indexOf(a.group) -
+								settingsGroups.indexOf(b.group),
+						)
+						.map(({group, fields, off}) =>
+							off ? (
+								<SectionCard
+									key={group.title}
+									title={group.title}
+									description={group.description}
+									icon={group.icon}
+								>
+									<div className="flex flex-wrap items-center justify-between gap-3">
+										<p className="text-sm text-muted-foreground">
+											{group.system === 'sessions'
+												? 'Sessions are turned off.'
+												: 'Bookmarks are turned off.'}
+										</p>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() =>
+												updateSetting(
+													group.system === 'sessions'
+														? 'sessionsEnabled'
+														: 'bookmarksEnabled',
+													true,
+												)
+											}
+										>
+											Turn on
+										</Button>
+									</div>
+								</SectionCard>
+							) : (
+								<SectionCard
+									key={group.title}
+									title={hl(group.title)}
+									description={group.description}
+									icon={group.icon}
+								>
+									<div className="divide-y divide-border/70">
+										{fields.map((field) => (
+											<SettingRow
+												key={field.name}
+												label={hl(field.label)}
+												help={hl(field.help)}
+												hint={
+													searching &&
+													field.type === 'select' &&
+													!matchesQuery(query, [field.label, field.help])
+														? field.options
+																.map(([, label]) => label)
+																.filter((label) => matchesAnyTerm(query, label))
+														: undefined
 												}
 											>
 												<SelectTrigger

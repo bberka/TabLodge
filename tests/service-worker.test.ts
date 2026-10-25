@@ -135,6 +135,8 @@ function createWorkerHarness(
 	const openedTabs: MockTab[] = [];
 	const removedTabIds: number[] = [];
 	const sidePanelCalls: SidePanelCall[] = [];
+	const sidePanelOpened: Array<{windowId: number}> = [];
+	const popupCalls: string[] = [];
 	const createdWindows: Array<Omit<MockWindow, 'tabs'> & {tabs: undefined}> =
 		[];
 	const discardedTabs: number[] = [];
@@ -507,8 +509,16 @@ function createWorkerHarness(
 				return structuredClone(options.bookmarkTree || []);
 			},
 		},
-		action: {async setPopup() {}, onClicked: event('actionClicked')},
+		action: {
+			async setPopup(value: {popup: string}) {
+				popupCalls.push(value.popup);
+			},
+			onClicked: event('actionClicked'),
+		},
 		sidePanel: {
+			async open(value: {windowId: number}) {
+				sidePanelOpened.push(value);
+			},
 			async setOptions(value: SidePanelCall['value']) {
 				sidePanelCalls.push({
 					method: 'setOptions',
@@ -545,6 +555,7 @@ function createWorkerHarness(
 		URL,
 		console,
 		crypto: webcrypto,
+		structuredClone,
 		globalThis: null,
 		setTimeout,
 		clearTimeout,
@@ -556,6 +567,8 @@ function createWorkerHarness(
 		openedTabs,
 		removedTabIds,
 		sidePanelCalls,
+		sidePanelOpened,
+		popupCalls,
 		createdWindows,
 		discardedTabs,
 		menuItems,
@@ -1344,9 +1357,10 @@ test('toolbarOpens switches the toolbar icon between popup and side panel', asyn
 	const harness = createWorkerHarness(stateWithSession());
 	const result = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {sidePanelEnabled: true},
+		settings: {toolbarOpens: 'sidepanel'},
 	});
 	assert.equal(result.ok, true);
+	assert.equal(harness.state.settings.toolbarOpens, 'sidepanel');
 	assert.equal(
 		harness.sidePanelCalls.some(
 			(call) =>
@@ -1356,13 +1370,48 @@ test('toolbarOpens switches the toolbar icon between popup and side panel', asyn
 		),
 		true,
 	);
+	const last = (method: string) =>
+		harness.sidePanelCalls.findLast((call) => call.method === method);
+	assert.equal(last('setPanelBehavior')?.value.openPanelOnActionClick, true);
+	assert.equal(harness.popupCalls.at(-1), '');
+
+	await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {toolbarOpens: 'popup'},
+	});
+	assert.equal(last('setPanelBehavior')?.value.openPanelOnActionClick, false);
+	assert.equal(harness.popupCalls.at(-1), 'popup.html');
+});
+
+test('toolbarOpens normalizes bad values and migrates the old boolean', async () => {
+	const bad = createWorkerHarness({
+		...stateWithSession(),
+		settings: {toolbarOpens: 'dock'},
+	} as never);
 	assert.equal(
-		harness.sidePanelCalls.some(
-			(call) =>
-				call.method === 'setPanelBehavior' && call.value.openPanelOnActionClick,
-		),
-		true,
+		(await bad.sendMessage({type: 'GET_STATE'})).settings.toolbarOpens,
+		'popup',
 	);
+	const legacy = createWorkerHarness({
+		...stateWithSession(),
+		settings: {sidePanelEnabled: true},
+	});
+	assert.equal(
+		(await legacy.sendMessage({type: 'GET_STATE'})).settings.toolbarOpens,
+		'sidepanel',
+	);
+});
+
+test('the toggle-side-panel command opens the side panel for the window', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+		'toggle-side-panel',
+		{id: 1, windowId: 7},
+	);
+	await new Promise((resolve) => {
+		setTimeout(resolve, 0);
+	});
+	assert.deepEqual(structuredClone(harness.sidePanelOpened), [{windowId: 7}]);
 });
 
 test('column delete preserves bookmarks, including when the built-in or last column is removed', async () => {
