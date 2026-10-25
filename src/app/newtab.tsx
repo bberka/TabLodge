@@ -39,8 +39,6 @@ import {
 	ActionDropdownMenu,
 	Badge,
 	Button,
-	Checkbox,
-	ConfirmationDialog,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -60,7 +58,6 @@ import {
 	ExpandingSearch,
 	type MenuAction,
 } from '../shared/ui';
-import type {ButtonProps} from '../components/ui/button';
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
@@ -85,7 +82,9 @@ import {
 	SnapshotsDialog,
 	TrashDialog,
 	emitRecoveryEvent,
+	offerCloseTabsUndo,
 	offerTrashUndo,
+	offerUndo,
 	useRecoveryEvents,
 } from './recovery';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
@@ -103,7 +102,6 @@ import {
 	SESSION_DRAG_TYPE,
 	dragPayloadKind,
 	parseSessionDragData,
-	sessionDropPrompt,
 	shouldBlockDocumentDrop,
 } from './interaction-actions';
 import type {
@@ -147,28 +145,6 @@ type ColumnDraft = {
 	icon?: string;
 };
 type MoveDraft = Bookmark & {targetColumnId: string};
-/**
-`discard`: delete the column's bookmarks instead of moving them ("Don't keep the bookmarks").
-*/
-type ColumnDeletion = {
-	column: BookmarkColumnData;
-	remaining: BookmarkColumnData[];
-	count: number;
-	targetColumnId: string;
-	discard: boolean;
-};
-type ConfirmationRequest = {
-	title: string;
-	description: string;
-	/**
-	Small muted line naming the item (truncated).
-	*/
-	detail?: string;
-	confirmLabel?: string;
-	confirmVariant?: ButtonProps['variant'];
-	run: () => Promise<void> | void;
-	busy?: boolean;
-};
 type PointerColumnDrag = {
 	pointerId: number;
 	columnId: string;
@@ -245,7 +221,6 @@ function domainName(url: string) {
 
 const plural = (count: number, noun: string) =>
 	`${count} ${count === 1 ? noun : `${noun}s`}`;
-const bookmarkCount = (count: number) => plural(count, 'bookmark');
 
 type BraveNavigator = Navigator & {brave?: {isBrave: () => Promise<boolean>}};
 
@@ -257,18 +232,9 @@ function NewTab() {
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
-	const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(
-		null,
-	);
-	// The deletion details stay set while the dialog closes, so its title never renders from cleared state.
-	const [columnDeletion, setColumnDeletion] = useState<ColumnDeletion | null>(
-		null,
-	);
-	const [columnDeletionOpen, setColumnDeletionOpen] = useState(false);
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
-	const confirmFocusRef = useRef<HTMLElement | null>(null);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
 		useState<DropIndicator | null>(null);
@@ -587,41 +553,23 @@ function NewTab() {
 		await reload();
 	}
 
-	function deleteColumn(column: BookmarkColumnData) {
-		const remaining = columns.filter((entry) => entry.id !== column.id);
+	/**
+	Deletes right away. Its bookmarks move to Unfiled, or are deleted with it when `discard` is set; Undo restores the column and puts them back.
+	*/
+	async function deleteColumn(column: BookmarkColumnData, discard: boolean) {
 		const count = bookmarks.filter(
 			(bookmark) => bookmark.columnId === column.id,
 		).length;
-		confirmFocusRef.current = document.activeElement as HTMLElement | null;
-		setColumnDeletion({
-			column,
-			remaining,
-			count,
-			targetColumnId: remaining[0]?.id || '',
-			discard: false,
-		});
-		setColumnDeletionOpen(true);
-	}
-
-	async function confirmDeleteColumn() {
-		if (!columnDeletion || !columnDeletionOpen) {
-			return;
-		}
-
-		const {column, count, targetColumnId, remaining, discard} = columnDeletion;
-		const discardBookmarks = discard && count > 0;
 		const result = await send('DELETE_BOOKMARK_COLUMN', {
 			columnId: column.id,
-			targetColumnId:
-				remaining.length > 0 && !discardBookmarks ? targetColumnId : null,
-			discardBookmarks,
+			targetColumnId: UNFILED_COLUMN.id,
+			discardBookmarks: discard && count > 0,
 		});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not delete that column.', true);
 			return;
 		}
 
-		setColumnDeletionOpen(false);
 		await reload();
 		offerTrashUndo(
 			`Column “${column.name}” deleted.`,
@@ -629,33 +577,6 @@ function NewTab() {
 			showStatus,
 			reload,
 		);
-	}
-
-	function askConfirmation(details: ConfirmationRequest) {
-		confirmFocusRef.current = document.activeElement as HTMLElement | null;
-		setConfirmation(details);
-	}
-
-	async function runConfirmation() {
-		if (!confirmation || confirmation.busy) {
-			return;
-		}
-
-		const current = confirmation;
-		setConfirmation({...current, busy: true});
-		try {
-			await current.run();
-			setConfirmation(null);
-		} catch (reason) {
-			showStatus(
-				String(
-					(reason as {message?: unknown} | null | undefined)?.message ||
-						'That action could not be completed.',
-				),
-				true,
-			);
-			setConfirmation({...current, busy: false});
-		}
 	}
 
 	async function moveColumnBy(column: BookmarkColumnData, offset: number) {
@@ -834,32 +755,22 @@ function NewTab() {
 	}
 
 	/**
-	Asks for confirmation, then deletes; `closeEditor` also closes the edit dialog it was asked from.
+	Deletes right away; `closeEditor` also closes the edit dialog it was asked from. Undo restores it from the trash.
 	*/
-	function deleteBookmark(bookmark: Bookmark, closeEditor = false) {
-		askConfirmation({
-			title: 'Delete bookmark?',
-			description:
-				'This removes the bookmark. You can undo it right after, or restore it from the trash.',
-			detail: bookmark.title || bookmark.url,
-			confirmLabel: 'Delete bookmark',
-			async run() {
-				const result = await send('DELETE_BOOKMARK', {
-					bookmarkId: bookmark.id,
-				});
-				if (!result?.ok) {
-					throw new Error(result?.error || 'Could not delete that bookmark.');
-				}
+	async function deleteBookmark(bookmark: Bookmark, closeEditor = false) {
+		const result = await send('DELETE_BOOKMARK', {bookmarkId: bookmark.id});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not delete that bookmark.', true);
+			return;
+		}
 
-				if (closeEditor) {
-					setDialog(null);
-					setBookmarkEdit(null);
-				}
+		if (closeEditor) {
+			setDialog(null);
+			setBookmarkEdit(null);
+		}
 
-				await reload();
-				offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
-			},
-		});
+		await reload();
+		offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
 	}
 
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
@@ -908,7 +819,7 @@ function NewTab() {
 		}
 
 		if (action === 'delete') {
-			deleteBookmark(bookmark);
+			await deleteBookmark(bookmark);
 			return;
 		}
 
@@ -922,18 +833,21 @@ function NewTab() {
 		columnId: string,
 		targetBookmarkId: string | null,
 		position: InsertPosition,
+		undoable = false,
 	) {
 		const result = await send('ADD_BOOKMARKS', {
 			bookmarks: links,
 			columnId,
 			targetBookmarkId,
 			position,
+			undoable,
 		});
 		if (!result?.ok) {
 			throw new Error(result?.error || 'Could not save the dropped links.');
 		}
 
 		await reload();
+		return result;
 	}
 
 	// Drag data must be read synchronously, before the first await.
@@ -1011,12 +925,24 @@ function NewTab() {
 				return;
 			}
 
-			askConfirmation({
-				...sessionDropPrompt(session, column.name),
-				confirmVariant: 'default',
-				run: () =>
-					addDroppedLinks(session.links, column.id, targetBookmarkId, position),
-			});
+			try {
+				const result = await addDroppedLinks(
+					session.links,
+					column.id,
+					targetBookmarkId,
+					position,
+					true,
+				);
+				offerUndo(
+					`Added ${plural(result.count, 'link')} to “${column.name}”.`,
+					result.undoId,
+					showStatus,
+					reload,
+				);
+			} catch (reason) {
+				showStatus((reason as Error).message, true);
+			}
+
 			return;
 		}
 
@@ -1046,26 +972,23 @@ function NewTab() {
 			return;
 		}
 
-		const open = async () => {
+		const opened: number[] = [];
+		try {
 			for (const url of urls) {
-				await chrome.tabs.create({url, active: false});
+				const created = await chrome.tabs.create({url, active: false});
+				if (created.id !== undefined) {
+					opened.push(created.id);
+				}
 			}
-		};
-
-		if (urls.length <= 10) {
-			return void open().catch(() =>
-				showStatus('Some bookmarks could not be opened.', true),
-			);
+		} catch {
+			showStatus('Some bookmarks could not be opened.', true);
+			return;
 		}
 
-		askConfirmation({
-			title: `Open ${urls.length} tabs?`,
-			description: 'Every bookmark in this column opens in a background tab.',
-			detail: column.name,
-			confirmLabel: `Open ${urls.length} tabs`,
-			confirmVariant: 'default',
-			run: open,
-		});
+		// A handful of tabs is routine; a bigger batch gets an Undo that closes them again.
+		if (urls.length > 10) {
+			offerCloseTabsUndo(`Opened ${urls.length} tabs.`, opened, showStatus);
+		}
 	}
 
 	function openBookmarkBackup() {
@@ -1425,7 +1348,7 @@ function NewTab() {
 							onAdd={() => openBookmarkEditor(null, column.id)}
 							onOpenAll={() => openAllInColumn(column)}
 							onEdit={() => openColumnEditor(column)}
-							onDelete={() => deleteColumn(column)}
+							onDelete={(discard) => deleteColumn(column, discard)}
 							onMove={(offset) => moveColumnBy(column, offset)}
 							onPointerDown={(event) =>
 								beginColumnPointerDrag(event, column.id)
@@ -1570,31 +1493,6 @@ function NewTab() {
 			{sessionsOnTop ? bookmarksSection : sessionsSection}
 			<StatusLine status={error ? {message: error, error: true} : status} />
 
-			<ConfirmationDialog
-				open={Boolean(confirmation)}
-				title={confirmation?.title}
-				description={confirmation?.description}
-				confirmLabel={confirmation?.confirmLabel}
-				confirmVariant={confirmation?.confirmVariant}
-				busy={Boolean(confirmation?.busy)}
-				restoreFocusTo={confirmFocusRef.current}
-				onOpenChange={(open) => !open && setConfirmation(null)}
-				onConfirm={runConfirmation}
-			>
-				{confirmation?.detail && <ItemName>{confirmation.detail}</ItemName>}
-			</ConfirmationDialog>
-			<ColumnDeletionDialog
-				deletion={columnDeletion}
-				open={columnDeletionOpen}
-				restoreFocusTo={confirmFocusRef.current}
-				onOpenChange={setColumnDeletionOpen}
-				onChange={(patch) =>
-					setColumnDeletion((current) =>
-						current ? {...current, ...patch} : current,
-					)
-				}
-				onConfirm={confirmDeleteColumn}
-			/>
 			{shareDialog}
 			<SnapshotsDialog
 				open={snapshotsOpen}
@@ -1849,93 +1747,6 @@ function NewTab() {
 	);
 }
 
-type ColumnDeletionDialogProps = {
-	deletion: ColumnDeletion | null;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	onChange: (patch: Partial<ColumnDeletion>) => void;
-	onConfirm: () => void;
-	restoreFocusTo: HTMLElement | null;
-};
-
-// A destructive confirmation with choices: where the column's bookmarks go, or delete them too.
-function ColumnDeletionDialog({
-	deletion,
-	open,
-	onOpenChange,
-	onChange,
-	onConfirm,
-	restoreFocusTo,
-}: ColumnDeletionDialogProps) {
-	const name = deletion?.column.name.trim() || '';
-	const count = deletion?.count || 0;
-	const remaining = deletion?.remaining || [];
-	const discard = Boolean(deletion?.discard && count);
-	const moving = count > 0 && !discard && remaining.length > 0;
-	const description = count
-		? discard
-			? `The ${bookmarkCount(count)} in this column will be deleted permanently.`
-			: remaining.length > 0
-				? `Move ${count === 1 ? 'its bookmark' : `its ${bookmarkCount(count)}`} to another column before deleting this one.`
-				: `${count === 1 ? 'Its bookmark' : `Its ${bookmarkCount(count)}`} will remain visible in Unfiled.`
-		: 'This column contains no bookmarks.';
-	return (
-		<ConfirmationDialog
-			open={open}
-			title="Delete column?"
-			description={description}
-			confirmLabel={
-				discard ? `Delete column and ${bookmarkCount(count)}` : 'Delete column'
-			}
-			confirmDisabled={moving && !deletion?.targetColumnId}
-			restoreFocusTo={restoreFocusTo}
-			onOpenChange={onOpenChange}
-			onConfirm={onConfirm}
-		>
-			{name && <ItemName>{name}</ItemName>}
-			{count > 0 && (
-				<>
-					{moving && (
-						<div className="space-y-1.5">
-							<Label htmlFor="column-delete-target">Move bookmarks to</Label>
-							<Select
-								value={deletion?.targetColumnId || ''}
-								onValueChange={(value) => onChange({targetColumnId: value})}
-							>
-								<SelectTrigger id="column-delete-target" data-autofocus="">
-									<SelectValue placeholder="Choose a column" />
-								</SelectTrigger>
-								<SelectContent>
-									{remaining.map((entry) => (
-										<SelectItem key={entry.id} value={entry.id}>
-											{entry.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-					)}
-					<div className="flex items-center gap-2.5">
-						<Checkbox
-							id="column-delete-discard"
-							checked={discard}
-							onCheckedChange={(checked) =>
-								onChange({discard: checked === true})
-							}
-						/>
-						<Label
-							htmlFor="column-delete-discard"
-							className="cursor-pointer font-normal"
-						>
-							Don’t keep the bookmarks
-						</Label>
-					</div>
-				</>
-			)}
-		</ConfirmationDialog>
-	);
-}
-
 function parseDraggedBookmark(
 	dataTransfer: DataTransfer | null,
 ): LinkEntry | null {
@@ -2155,7 +1966,7 @@ type BookmarkColumnProps = {
 	onAdd: () => void;
 	onOpenAll: () => void;
 	onEdit: () => void;
-	onDelete: () => void;
+	onDelete: (discard: boolean) => void;
 	onMove: (offset: number) => void;
 	onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
 	dropIndicator: DropIndicator | null;
@@ -2239,7 +2050,15 @@ function BookmarkColumn({
 			label: 'Delete column',
 			icon: Trash2,
 			destructive: true,
-			onSelect: onDelete,
+			onSelect: () => onDelete(false),
+		},
+		{
+			id: 'delete-with-bookmarks',
+			label: 'Delete column and bookmarks',
+			icon: Trash2,
+			destructive: true,
+			disabled: siblings.length === 0,
+			onSelect: () => onDelete(true),
 		},
 	];
 	const ColumnIcon = getIcon(column.icon, DEFAULT_COLUMN_ICON).component;
