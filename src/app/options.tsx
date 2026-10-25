@@ -133,6 +133,7 @@ type SettingField = {
 			options: Array<[string, string]>;
 	  }
 	| {name: SettingKey<string>; type: 'url'; placeholder: string}
+	| {name: SettingKey<string>; type: 'text'; placeholder: string}
 );
 const messageOf = (reason: unknown) =>
 	(reason as {message?: string} | null | undefined)?.message;
@@ -337,6 +338,26 @@ const settingsGroups: Array<{
 					['both', 'Save both tabs'],
 					['focused', 'Save only the focused tab'],
 				],
+			},
+			{
+				name: 'sessionNameStyle',
+				label: 'Session name',
+				help: 'How a new session is named. A saved tab group keeps its own title, and a title typed in the popup always wins.',
+				type: 'select',
+				options: [
+					['title', 'First tab title'],
+					['datetime', 'Date and time'],
+					['date-title', 'Date and first tab'],
+					['custom', 'Custom'],
+				],
+			},
+			{
+				name: 'sessionNameTemplate',
+				label: 'Session name template',
+				help: 'Placeholders: {date}, {time}, {weekday}, {title}, {domain}, {count} (tabs saved), {window} (window number when saving all windows).',
+				type: 'text',
+				placeholder: '{date} · {title}',
+				when: (current) => current.sessionNameStyle === 'custom',
 			},
 			{
 				name: 'openDashboardAfterSave',
@@ -775,6 +796,7 @@ function Options() {
 	const dataRef = useRef<HTMLDivElement>(null);
 	// The search box: `?q=` keeps the query across reloads; "/" and Ctrl/Cmd+K focus it, Escape clears it.
 	const searchRef = useRef<HTMLInputElement>(null);
+	const [templateDraft, setTemplateDraft] = useState<string | null>(null);
 	const [query, setQuery] = useState(() => initialSearchQuery(location.search));
 	function updateQuery(value: string) {
 		setQuery(value);
@@ -1514,7 +1536,23 @@ function Options() {
 											<SettingRow
 												key={field.name}
 												label={hl(field.label)}
-												help={hl(field.help)}
+												help={
+													field.name === 'sessionNameStyle' ? (
+														<>
+															{hl(field.help)}
+															<SessionNamePreview
+																style={
+																	settings.sessionNameStyle ?? 'date-title'
+																}
+																template={
+																	templateDraft ?? settings.sessionNameTemplate
+																}
+															/>
+														</>
+													) : (
+														hl(field.help)
+													)
+												}
 												hint={
 													searching &&
 													(field.type === 'select' ||
@@ -1558,6 +1596,17 @@ function Options() {
 																true,
 															)
 														}
+													/>
+												) : field.type === 'text' ? (
+													<TextSetting
+														label={field.label}
+														placeholder={field.placeholder}
+														value={settings[field.name] ?? ''}
+														onDraft={setTemplateDraft}
+														onCommit={(value) => {
+															setTemplateDraft(null);
+															return updateSetting(field.name, value);
+														}}
 													/>
 												) : field.type === 'number' ? (
 													<NumberSetting
@@ -2130,6 +2179,82 @@ function UrlSetting({
 			}}
 		/>
 	);
+}
+
+// A short text input that saves on blur or Enter.
+function TextSetting({
+	label,
+	placeholder,
+	value,
+	onCommit,
+	onDraft,
+}: {
+	label: string;
+	placeholder: string;
+	value: string;
+	onCommit: (value: string) => void;
+	/**
+	Called with the text while typing, before it is saved.
+	*/
+	onDraft?: (value: string) => void;
+}) {
+	const [draft, setDraft] = useState(value);
+	useEffect(() => setDraft(value), [value]);
+	function commit() {
+		if (draft.trim() !== value) {
+			onCommit(draft.trim());
+		}
+	}
+
+	return (
+		<Input
+			value={draft}
+			placeholder={placeholder}
+			aria-label={label}
+			maxLength={200}
+			className="h-9 w-full sm:w-64"
+			onChange={(event) => {
+				setDraft(event.target.value);
+				onDraft?.(event.target.value);
+			}}
+			onBlur={commit}
+			onKeyDown={(event) => {
+				if (event.key === 'Enter') {
+					event.currentTarget.blur();
+				}
+			}}
+		/>
+	);
+}
+
+// "Next save: ..." line under the Session name setting; the service worker formats it with the current window's tabs.
+function SessionNamePreview({
+	style,
+	template,
+}: {
+	style: Settings['sessionNameStyle'];
+	template: string | undefined;
+}) {
+	const [name, setName] = useState('');
+	useEffect(() => {
+		let current = true;
+		const timer = setTimeout(async () => {
+			const result = await send('PREVIEW_SESSION_NAME', {style, template});
+			if (current && result?.ok) {
+				setName(result.name);
+			}
+		}, 250);
+		return () => {
+			current = false;
+			clearTimeout(timer);
+		};
+	}, [style, template]);
+
+	return name ? (
+		<span className="mt-1 block text-foreground">
+			Next save: <span className="font-medium">{name}</span>
+		</span>
+	) : null;
 }
 
 function NumberSetting({

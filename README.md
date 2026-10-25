@@ -17,7 +17,7 @@ TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, 
 
 ## Features
 
-- **Sessions that remember how you worked.** Save a window, selected tabs, a tab group, everything left or right of a tab, or all windows. Restores bring back native tab groups (title, color, collapsed state), pinned tabs (opt-in), and split-view pairs side by side on Chromium 155+.
+- **Sessions that remember how you worked.** Save a window, selected tabs, a tab group, everything left or right of a tab, or all windows. Restores bring back native tab groups (title, color, collapsed state), pinned tabs (opt-in), and split-view pairs side by side on Chromium 155+. New sessions are named by date and first tab, or by your own template, in Settings.
 - **Bookmark board on the new tab.** Columns of bookmarks with search, drag-and-drop reordering, and drop-a-link-to-save. Session links can be dragged straight into a column.
 - **Organize sessions.** Folders, descriptions, search and sorting, multi-select, and quick moves between folders.
 - **Flexible restores.** Restore into the current or a new window; keep or remove the saved tabs afterward; skip duplicates; optionally unload background tabs. Ctrl/Cmd- and Shift-click give one-off overrides.
