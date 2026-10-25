@@ -47,6 +47,7 @@ import {
 	EmptyState,
 	LoadError,
 	StatusLine,
+	restoreSummary,
 	send,
 	useStatus,
 	useTabLodgeState,
@@ -245,7 +246,7 @@ function SidePanel() {
 	const {state, error, reload} = useTabLodgeState();
 	const [status, showStatus] = useStatus();
 	const [query, setQuery] = useState('');
-	const [panel, setPanel] = useState<PanelTab>('bookmarks');
+	const [chosenPanel, setChosenPanel] = useState<PanelTab | null>(null);
 	const [closed, setClosed] = useState<Set<string>>(() => new Set());
 	const [opened, setOpened] = useState<Set<string>>(() => new Set());
 	const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -263,6 +264,9 @@ function SidePanel() {
 	const columns = state?.bookmarkColumns;
 	const bookmarksEnabled = settings?.bookmarksEnabled !== false;
 	const sessionsEnabled = settings?.sessionsEnabled !== false;
+	// Until a tab is picked, open the first system that is turned on.
+	const panel: PanelTab =
+		chosenPanel ?? (bookmarksEnabled ? 'bookmarks' : 'sessions');
 
 	const bookmarkGroups = useMemo(() => {
 		const known = new Set(columns?.map((column) => column.id));
@@ -318,7 +322,7 @@ function SidePanel() {
 	async function copy(url: string) {
 		await attempt(async () => {
 			await navigator.clipboard.writeText(url);
-			showStatus('Link copied.');
+			showStatus('Link copied.', false, {toast: true});
 		}, 'Could not copy the link.');
 	}
 
@@ -422,7 +426,13 @@ function SidePanel() {
 				throw new Error(result?.error || 'Could not restore this session.');
 			}
 
-			showStatus(`Restored “${session.name}”.`);
+			showStatus(
+				result.failed || result.splitsSeparated
+					? restoreSummary(result)
+					: `Restored “${session.name}”.`,
+				Boolean(result.failed),
+				{toast: true},
+			);
 		}, 'Could not restore this session.');
 	}
 
@@ -460,7 +470,7 @@ function SidePanel() {
 					},
 				});
 			} else {
-				showStatus(done);
+				showStatus(done, false, {toast: true});
 			}
 
 			setSelected(new Set());
@@ -498,6 +508,7 @@ function SidePanel() {
 				id: 'save',
 				label: 'Save this tab',
 				icon: Save,
+				hidden: !sessionsEnabled,
 				onSelect: () => void saveTabs({tabIds: [id]}, 'Tab saved.'),
 			},
 			{
@@ -588,7 +599,7 @@ function SidePanel() {
 		event.preventDefault();
 		const next =
 			order[(order.indexOf(panel) + step + order.length) % order.length];
-		setPanel(next);
+		setChosenPanel(next);
 		requestAnimationFrame(() =>
 			document.querySelector<HTMLElement>(`#sp-tab-${next}`)?.focus(),
 		);
@@ -697,7 +708,7 @@ function SidePanel() {
 								'flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 								panel === id && 'bg-background text-foreground shadow-sm',
 							)}
-							onClick={() => setPanel(id)}
+							onClick={() => setChosenPanel(id)}
 						>
 							<span className="truncate">{label}</span>
 							<span className="text-[10px] font-normal text-muted-foreground">
