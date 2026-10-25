@@ -235,6 +235,9 @@ function NewTab() {
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
+	const editedBookmark = bookmarkEdit?.id
+		? state?.bookmarks.find((entry) => entry.id === bookmarkEdit.id)
+		: undefined;
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
 	const settings: Partial<Settings> = state?.settings || {};
 	const enabled = Boolean(settings.newTabEnabled);
@@ -689,6 +692,33 @@ function NewTab() {
 		await reload();
 	}
 
+	/**
+	Asks for confirmation, then deletes; `closeEditor` also closes the edit dialog it was asked from.
+	*/
+	function deleteBookmark(bookmark: Bookmark, closeEditor = false) {
+		askConfirmation({
+			title: 'Delete bookmark?',
+			description: 'This removes the bookmark. It can’t be undone.',
+			detail: bookmark.title || bookmark.url,
+			confirmLabel: 'Delete bookmark',
+			async run() {
+				const result = await send('DELETE_BOOKMARK', {
+					bookmarkId: bookmark.id,
+				});
+				if (!result?.ok) {
+					throw new Error(result?.error || 'Could not delete that bookmark.');
+				}
+
+				if (closeEditor) {
+					setDialog(null);
+					setBookmarkEdit(null);
+				}
+
+				await reload();
+			},
+		});
+	}
+
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
 		if (['click', 'open', 'open-new'].includes(action)) {
 			try {
@@ -734,22 +764,7 @@ function NewTab() {
 		}
 
 		if (action === 'delete') {
-			askConfirmation({
-				title: 'Delete bookmark?',
-				description: 'This removes the bookmark. It can’t be undone.',
-				detail: bookmark.title || bookmark.url,
-				confirmLabel: 'Delete bookmark',
-				async run() {
-					const result = await send('DELETE_BOOKMARK', {
-						bookmarkId: bookmark.id,
-					});
-					if (!result?.ok) {
-						throw new Error(result?.error || 'Could not delete that bookmark.');
-					}
-
-					await reload();
-				},
-			});
+			deleteBookmark(bookmark);
 			return;
 		}
 
@@ -1369,21 +1384,33 @@ function NewTab() {
 								</div>
 							)}
 						</DialogBody>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setDialog(null)}
-							>
-								Cancel
-							</Button>
-							<Button type="submit" disabled={busy === 'bookmark-save'}>
-								{bookmarkEdit?.columnId === NEW_COLUMN
-									? 'Create column and save'
-									: bookmarkEdit?.id
-										? 'Save changes'
-										: 'Save bookmark'}
-							</Button>
+						<DialogFooter className="justify-between">
+							{editedBookmark && (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={() => deleteBookmark(editedBookmark, true)}
+								>
+									<Trash2 />
+									Delete
+								</Button>
+							)}
+							<div className="ml-auto flex flex-wrap justify-end gap-2">
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setDialog(null)}
+								>
+									Cancel
+								</Button>
+								<Button type="submit" disabled={busy === 'bookmark-save'}>
+									{bookmarkEdit?.columnId === NEW_COLUMN
+										? 'Create column and save'
+										: bookmarkEdit?.id
+											? 'Save changes'
+											: 'Save bookmark'}
+								</Button>
+							</div>
 						</DialogFooter>
 					</form>
 				</DialogContent>

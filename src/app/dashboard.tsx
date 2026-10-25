@@ -618,7 +618,10 @@ export function SessionManager({
 		}
 	}
 
-	function deleteGroup(group: Session) {
+	/**
+	Asks for confirmation, then deletes; `closeEditor` also closes the details dialog it was asked from.
+	*/
+	function deleteGroup(group: Session, closeEditor = false) {
 		askConfirmation({
 			title: 'Delete session?',
 			description: `This removes the session and its ${group.tabs.length} saved ${group.tabs.length === 1 ? 'link' : 'links'}. Open tabs stay open.`,
@@ -628,6 +631,11 @@ export function SessionManager({
 				const result = await send('DELETE_GROUP', {groupId: group.id});
 				if (!result?.ok) {
 					throw new Error(result?.error || 'Could not delete this session.');
+				}
+
+				if (closeEditor) {
+					setDialog(null);
+					setEditingGroup(null);
 				}
 
 				await reload();
@@ -1537,15 +1545,29 @@ export function SessionManager({
 								</div>
 							</div>
 						</DialogBody>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setDialog(null)}
-							>
-								Cancel
-							</Button>
-							<Button type="submit">Save changes</Button>
+						<DialogFooter className="justify-between">
+							{editingGroup && (
+								<Button
+									type="button"
+									variant="destructive"
+									disabled={editingGroup.locked}
+									title={editingGroup.locked ? 'Unlock to delete' : undefined}
+									onClick={() => deleteGroup(editingGroup, true)}
+								>
+									<Trash2 />
+									Delete
+								</Button>
+							)}
+							<div className="ml-auto flex flex-wrap justify-end gap-2">
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setDialog(null)}
+								>
+									Cancel
+								</Button>
+								<Button type="submit">Save changes</Button>
+							</div>
 						</DialogFooter>
 					</form>
 				</DialogContent>
