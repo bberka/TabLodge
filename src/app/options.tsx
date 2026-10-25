@@ -96,14 +96,15 @@ type SettingKey<V> = {
 	[K in keyof Settings]-?: Settings[K] extends V ? K : never;
 }[keyof Settings];
 type System = 'sessions' | 'bookmarks';
-// `requires`: a switch that must be on for this row to apply; the row is inset and disabled while it is off.
+// `requires`: a switch that must be on for this row to apply; the row is hidden while it is off (search shows it
+// next to its parent, disabled).
 // `systems`: the row is hidden (and not searchable) while any listed system is turned off.
 type SettingField = {
 	label: string;
 	help: string;
 	requires?: SettingKey<boolean>;
 	/**
-	Like `requires`, for a dependency that is not a switch (such as "backups are not off"): the row is inset and disabled while false.
+	Like `requires`, for a dependency that is not a switch (such as "backups are not off"): the row is hidden while false.
 	*/
 	enabled?: (settings: Settings) => boolean;
 	/**
@@ -205,6 +206,7 @@ const settingsGroups: Array<{
 					['custom', 'Custom page'],
 				],
 				when: (current) => !current.newTabEnabled,
+				parent: 'newTabEnabled',
 			},
 			{
 				name: 'newTabFallbackUrl',
@@ -214,6 +216,7 @@ const settingsGroups: Array<{
 				placeholder: 'https://example.com',
 				when: (current) =>
 					!current.newTabEnabled && current.newTabFallback === 'custom',
+				parent: 'newTabEnabled',
 			},
 			{
 				name: 'autoFocusSearchOnNewTab',
@@ -1139,15 +1142,19 @@ function Options() {
 	const systemOn = (system: System) =>
 		settings[system === 'sessions' ? 'sessionsEnabled' : 'bookmarksEnabled'] !==
 		false;
-	const fieldShown = (field: SettingField) =>
-		(field.systems ?? []).every((system) => systemOn(system)) &&
-		(searching || !field.when || field.when(settings as Settings));
-	const hl = (text: string) => <Highlight text={text} query={query} />;
+	// Rows that depend on another setting are hidden while it is off; search still shows them (disabled) next to
+	// their parent so they can be found.
 	// A row is disabled while the switch it `requires` is off or its `enabled` check fails.
 	const rowDisabled = (field: SettingField) =>
 		(field.requires !== undefined && settings[field.requires] === false) ||
 		(field.enabled !== undefined && !field.enabled(settings as Settings));
 
+	const fieldShown = (field: SettingField) =>
+		(field.systems ?? []).every((system) => systemOn(system)) &&
+		(searching ||
+			((!field.when || field.when(settings as Settings)) &&
+				!rowDisabled(field)));
+	const hl = (text: string) => <Highlight text={text} query={query} />;
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
 	const systemRows = pick(SYSTEMS.title, SYSTEM_ROWS, (row) => [
 		row.label,
@@ -1623,7 +1630,12 @@ function Options() {
 																.filter((label) => matchesAnyTerm(query, label))
 														: undefined
 												}
-												inset={Boolean(field.requires || field.enabled)}
+												inset={Boolean(
+													field.requires ||
+													field.enabled ||
+													field.parent ||
+													field.when,
+												)}
 												highlight={query}
 											>
 												{field.type === 'switch' ? (
@@ -2159,7 +2171,8 @@ function SettingRow({
 }) {
 	return (
 		<div
-			className={`flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between ${inset ? 'pl-5' : ''}`}
+			// A setting that depends on the one above sits on a line hanging from it.
+			className={`flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between ${inset ? 'ml-2 border-l-2 border-primary/50 pl-4' : ''}`}
 		>
 			<div className="min-w-0">
 				<p className="text-sm font-medium">{label}</p>
