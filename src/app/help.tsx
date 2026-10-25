@@ -86,12 +86,12 @@ function Help() {
 			title: 'Local data and backups',
 			text: `${PROJECT.name} stores sessions, bookmarks, and preferences in this browser’s extension storage. It does not use accounts, servers, or cloud sync. Exported JSON and HTML files are plain text; keep them private if their URLs, titles, or notes are sensitive.`,
 			detail:
-				'Session import and export are in the Sessions ⋯ menu; bookmark import and export are in the Bookmarks toolbar ⋯ menu. Settings › Data can also export bookmarks, and can permanently erase all sessions, all bookmarks, or everything; settings and excluded sites are kept.',
+				'Session import and export are in the Sessions ⋯ menu; bookmark import and export are in the Bookmarks toolbar ⋯ menu. Settings › Data can also export bookmarks, and can erase all sessions, all bookmarks, or everything right away, with an Undo button for a short while; settings and excluded sites are kept.',
 		},
 		{
 			icon: LifeBuoy,
 			title: 'Recovery & backups',
-			text: `${PROJECT.name} keeps rolling snapshots of your open windows and restores them if the browser closes unexpectedly: the dashboard then asks whether to restore your last session. Recent snapshots (Sessions ⋯ menu, the side panel menu, or the search palette) lists them with restore for everything or a single window, and Save as session. Deleted sessions, saved links, bookmarks, columns and folders go to the Trash for a while, and most deletes show an Undo button for a few seconds.`,
+			text: `${PROJECT.name} keeps rolling snapshots of your open windows and restores them if the browser closes unexpectedly: the dashboard then asks whether to restore your last session. Recent snapshots (Sessions ⋯ menu, the side panel menu, or the search palette) lists them with restore for everything or a single window, and Save as session. Deleted sessions, saved links, bookmarks, columns and folders go to the Trash for a while, and deletes, erasing data, emptying the Trash, clearing snapshots, restoring a backup, imports and opening many tabs run right away with an Undo button for a few seconds. There are no confirmation dialogs for these.`,
 			detail:
 				'Automatic backups (off by default) keep dated copies of your sessions, bookmarks and settings; safety backups are taken before erasing data, large imports and deleting many bookmarks. Everything stays in this browser’s extension storage, and an optional copy can go to Downloads. Crash detection is a best guess because browsers give extensions no shutdown signal. Choose intervals, retention and see storage use in Settings › Recovery & backups.',
 			href: 'options.html?q=Recovery',
