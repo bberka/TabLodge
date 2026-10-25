@@ -7548,3 +7548,68 @@ test('restored tabs are unloaded only after their address commits, so they never
 	);
 	assert.deepEqual(harness.discardedTabs, [background.id]);
 });
+
+test('MERGE_GROUPS moves the links into the target, skips duplicates, removes the source, and undoes', async () => {
+	const state = stateWithSession();
+	state.groups[0].description = 'Target notes';
+	state.groups.push({
+		id: 'session-2',
+		name: 'Reading',
+		folderId: 'unfiled',
+		description: 'Source notes',
+		createdAt: 1,
+		updatedAt: 1,
+		tabs: [
+			{
+				id: 'dup',
+				title: 'Same page',
+				url: 'https://saved.example/article',
+				notes: 'From the source',
+				pinned: false,
+			},
+			{
+				id: 'new',
+				title: 'New page',
+				url: 'https://new.example/',
+				pinned: false,
+			},
+		],
+	});
+	const harness = createWorkerHarness(state);
+	const result = await harness.sendMessage({
+		type: 'MERGE_GROUPS',
+		sourceGroupId: 'session-2',
+		targetGroupId: 'session-1',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.added, 1);
+	assert.equal(result.skipped, 1);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['session-1'],
+	);
+	const target = harness.state.groups[0];
+	assert.deepEqual(
+		target.tabs.map((tab) => tab.url),
+		['https://saved.example/article', 'https://new.example/'],
+	);
+	assert.equal(target.tabs[0].notes, 'From the source');
+	assert.equal(target.description, 'Target notes\n\nSource notes');
+
+	const undone = await harness.sendMessage({
+		type: 'UNDO',
+		id: result.undoId!,
+	});
+	assert.equal(undone.ok, true, undone.error);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['session-1', 'session-2'],
+	);
+
+	const self = await harness.sendMessage({
+		type: 'MERGE_GROUPS',
+		sourceGroupId: 'session-1',
+		targetGroupId: 'session-1',
+	});
+	assert.equal(self.ok, false);
+});

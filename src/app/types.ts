@@ -478,6 +478,10 @@ export type TabLodgeMessages = {
 	session. It lands next to `targetTabId` (`position` defaults to after) or at the end. Split info of the
 	moved link and its partner is dropped.
 	*/
+	/**
+	Moves every link of `sourceGroupId` into `targetGroupId` (links already there are skipped) and removes the source.
+	*/
+	MERGE_GROUPS: {sourceGroupId: string; targetGroupId: string};
 	MOVE_TAB: {
 		fromGroupId: string;
 		tabId: string;
@@ -683,6 +687,7 @@ export type TabLodgeResponses = {
 		trashId?: string;
 	};
 	UPDATE_TAB: {shared: number};
+	MERGE_GROUPS: {added: number; skipped: number} & Undoable;
 	ADD_BOOKMARK: {bookmark: Bookmark};
 	ADD_BOOKMARKS: {count: number; bookmarks: Bookmark[]} & Undoable;
 	UPDATE_BOOKMARK: {bookmark: Bookmark};

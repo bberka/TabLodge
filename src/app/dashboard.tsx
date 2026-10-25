@@ -20,6 +20,7 @@ import {
 	Download,
 	ExternalLink,
 	FolderPlus,
+	Merge,
 	History,
 	LayoutGrid,
 	LayoutList,
@@ -119,6 +120,8 @@ import {
 	emitRecoveryEvent,
 	offerCloseTabsUndo,
 	offerTrashUndo,
+	offerUndo,
+	plural,
 } from './recovery-core';
 import {openLink, resolveLinkTarget} from './link-target';
 
@@ -1014,6 +1017,7 @@ export function SessionManager({
 		editGroup: (group) => openGroupDetails(group),
 		editName: (group) => openGroupDetails(group, true),
 		moveToFolder: moveGroupToFolder,
+		merge: mergeGroup,
 		newFolderFor: (group) => setDialog({mode: 'create', moveGroupId: group.id}),
 		folderTargets: () => folders,
 		bookmark: openBookmarkPicker,
@@ -1118,6 +1122,29 @@ export function SessionManager({
 		setEditingGroup(group);
 		setFocusGroupName(focusName);
 		setDialog('details');
+	}
+
+	async function mergeGroup(group: Session, targetId: string) {
+		const target = groups.find((item) => item.id === targetId);
+		const result = await send('MERGE_GROUPS', {
+			sourceGroupId: group.id,
+			targetGroupId: targetId,
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not merge these sessions.', true);
+			return;
+		}
+
+		await reload();
+		const duplicates = result.skipped
+			? ` ${plural(result.skipped, 'duplicate')} skipped.`
+			: '';
+		offerUndo(
+			`Merged “${group.name}” into “${target?.name ?? 'the session'}”: ${plural(result.added, 'link')} added.${duplicates}`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
 	}
 
 	async function moveGroupToFolder(
@@ -2078,6 +2105,7 @@ type CardActions = {
 	editGroup: (group: Session) => void;
 	editName: (group: Session) => void;
 	moveToFolder: (group: Session, folderId: string) => void;
+	merge: (group: Session, targetId: string) => void;
 	/**
 	Opens the new-folder dialog; saving it creates the folder and moves the session in.
 	*/
@@ -2295,6 +2323,21 @@ const GroupCard = memo(
 						onSelect: () => handlers.newFolderFor(group),
 					},
 				],
+			},
+			{
+				type: 'submenu',
+				id: 'merge',
+				label: 'Merge into',
+				icon: Merge,
+				hidden: handlers.moveTargets(group.id).length === 0,
+				items: handlers.moveTargets(group.id).map((target) => ({
+					id: `merge-${target.id}`,
+					label:
+						target.name.length > 40
+							? `${target.name.slice(0, 39)}…`
+							: target.name,
+					onSelect: () => handlers.merge(group, target.id),
+				})),
 			},
 			{type: 'separator'},
 			{

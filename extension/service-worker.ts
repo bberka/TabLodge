@@ -3018,6 +3018,67 @@ async function deleteTab(
 	});
 }
 
+/**
+Merges one session into another: the target keeps its name, folder and order, the source's links are added at its
+end except addresses it already holds (their notes fill empty notes on the kept copy), the source's description is
+added below the target's, and the source session is removed. Undo restores both.
+*/
+async function mergeGroups(
+	sourceGroupId: string,
+	targetGroupId: string,
+): Promise<ActionResult<'MERGE_GROUPS'>> {
+	return mutate(() =>
+		withUndo('Merge sessions', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			if (!store.settings.sessionsEnabled) {
+				return {ok: false, error: 'Sessions are disabled in Settings.'};
+			}
+
+			const source = findGroup(store, sourceGroupId);
+			const target = findGroup(store, targetGroupId);
+			if (!source || !target || source === target) {
+				return {ok: false, error: 'That saved session no longer exists.'};
+			}
+
+			const kept = new Map(target.tabs.map((tab) => [tab.url, tab]));
+			const added: SavedTab[] = [];
+			let skipped = 0;
+			for (const tab of source.tabs) {
+				const existing = kept.get(tab.url);
+				if (existing) {
+					skipped += 1;
+					if (!existing.notes && tab.notes) {
+						existing.notes = tab.notes;
+					}
+
+					continue;
+				}
+
+				kept.set(tab.url, tab);
+				added.push(tab);
+			}
+
+			if (target.tabs.length + added.length > MAX_TABS_PER_SESSION) {
+				return {ok: false, error: sessionFullError()};
+			}
+
+			target.tabs.push(...added);
+			const description = source.description.trim();
+			if (description && !target.description.includes(description)) {
+				target.description = [target.description.trim(), description]
+					.filter(Boolean)
+					.join('\n\n')
+					.slice(0, SESSION_TEXT_MAX);
+			}
+
+			target.updatedAt = Date.now();
+			store.groups = store.groups.filter((group) => group !== source);
+			await writeStore(store);
+			return {ok: true, added: added.length, skipped};
+		}),
+	);
+}
+
 async function moveTab(
 	fromGroupId: string,
 	tabId: string,
@@ -7039,6 +7100,13 @@ async function handleMessage(
 
 		case 'DELETE_TAB': {
 			return deleteTab(message.groupId, message.tabId);
+		}
+
+		case 'MERGE_GROUPS': {
+			return mergeGroups(
+				String(message.sourceGroupId),
+				String(message.targetGroupId),
+			);
 		}
 
 		case 'MOVE_TAB': {
