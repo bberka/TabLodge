@@ -63,7 +63,7 @@ Releases use [ZeroVer](https://0ver.org): every version is `0.<minor>.<patch>`.
 
 - The root `VERSION` file holds `<minor>` (a single number such as `1`).
 - `<patch>` is computed when a release runs: it continues from the latest `v0.<minor>.*` tag, or starts at `0` when that minor has no release yet. With `VERSION` = `1` and latest release `0.1.1`, the next release is `0.1.2`; change `VERSION` to `2` and it becomes `0.2.0`. `VERSION` can't go below the latest released minor.
-- To release, run **Actions → Release → Run workflow** on `master`. The workflow computes the version, stamps it into `package.json` and `extension/manifest.json`, runs `pnpm check` and `pnpm build`, zips the unpacked extension, and publishes a `v0.x.y` GitHub release with the zip and its SHA-256 checksum.
+- To release, run **Actions → Release → Run workflow** on the default branch (`master`). The workflow computes the version, stamps it into `package.json` and `extension/manifest.json`, runs `pnpm check` and `pnpm build`, zips the unpacked extension, and publishes a `v0.x.y` GitHub release with the zip and its SHA-256 checksum.
 - `pnpm version:next` prints the version the next release would get (based on your local tags).
 
 ## Pull request checklist
