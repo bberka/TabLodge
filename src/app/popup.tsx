@@ -652,7 +652,7 @@ function Popup() {
 								type="submit"
 								disabled={!bookmarkTab || busy === 'bookmark-save'}
 							>
-								{busy === 'bookmark-save' ? 'Saving…' : 'Save bookmark'}
+								{busy === 'bookmark-save' ? 'Saving' : 'Save bookmark'}
 							</Button>
 						</DialogFooter>
 					</form>

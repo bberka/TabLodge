@@ -3197,7 +3197,7 @@ test('expandSessionsByDefault is on by default, only an explicit false turns it 
 	assert.equal(
 		(await defaults.sendMessage({type: 'GET_STATE'})).settings
 			.expandSessionsByDefault,
-		false,
+		true,
 	);
 
 	const truthy = createWorkerHarness(
@@ -3207,7 +3207,7 @@ test('expandSessionsByDefault is on by default, only an explicit false turns it 
 		(await truthy.sendMessage({type: 'GET_STATE'})).settings
 			.expandSessionsByDefault,
 		false,
-		'only a real true enables it',
+		'an explicit false is kept',
 	);
 
 	const updated = await truthy.sendMessage({

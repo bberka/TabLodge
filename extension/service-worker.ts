@@ -4335,7 +4335,7 @@ function contextMenuPlan(
 				contexts,
 				...extra,
 			},
-			{id: newId, title: 'New column…', parentId, contexts, ...extra},
+			{id: newId, title: 'New column', parentId, contexts, ...extra},
 		);
 	};
 
@@ -4351,7 +4351,7 @@ function contextMenuPlan(
 		if (settings.bookmarksEnabled) {
 			items.push({
 				id: MENU.linkBookmark,
-				title: 'Bookmark link to…',
+				title: 'Bookmark link to',
 				parentId: MENU.linkRoot,
 				...link,
 			});
@@ -4386,7 +4386,7 @@ function contextMenuPlan(
 		if (settings.bookmarksEnabled) {
 			items.push({
 				id: MENU.pageBookmark,
-				title: 'Bookmark this page to…',
+				title: 'Bookmark this page to',
 				parentId: MENU.pageRoot,
 				...page,
 			});
@@ -4880,7 +4880,7 @@ async function bookmarkToColumn(
 }
 
 /**
-"New column…": opens the dashboard's add-bookmark dialog prefilled with the link or page.
+"New column": opens the dashboard's add-bookmark dialog prefilled with the link or page.
 */
 async function openPrefilledBookmarkDialog(
 	rawUrl: unknown,

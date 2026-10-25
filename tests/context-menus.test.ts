@@ -461,7 +461,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'https://*/*',
 	]);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-link-root')), [
-		'Bookmark link to…',
+		'Bookmark link to',
 		'Save link for later',
 	]);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-link-bookmark')), [
@@ -469,7 +469,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'Reading',
 		'Unfiled',
 		'---',
-		'New column…',
+		'New column',
 	]);
 	assert.deepEqual(
 		harness
@@ -490,7 +490,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	);
 	assert.deepEqual(pageRoots[0].contexts, ['page', 'frame']);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-root')), [
-		'Bookmark this page to…',
+		'Bookmark this page to',
 		'---',
 		'Save this tab',
 		'Save this window',
@@ -506,7 +506,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'Reading',
 		'Unfiled',
 		'---',
-		'New column…',
+		'New column',
 	]);
 
 	assert.deepEqual(
@@ -573,10 +573,10 @@ test('disabled systems drop their items', async () => {
 	const noSessions = createHarness(baseState({sessionsEnabled: false}));
 	await noSessions.install();
 	assert.deepEqual(titles(noSessions.childrenOf('tablodge-link-root')), [
-		'Bookmark link to…',
+		'Bookmark link to',
 	]);
 	assert.deepEqual(titles(noSessions.childrenOf('tablodge-page-root')), [
-		'Bookmark this page to…',
+		'Bookmark this page to',
 	]);
 	assert.deepEqual(titles(noSessions.topLevel('action')), [
 		'Open dashboard',
@@ -666,7 +666,7 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Recipes',
 		'Unfiled',
 		'---',
-		'New column…',
+		'New column',
 	]);
 	assert.ok(
 		harness.item(`tablodge-page-bookmark:${recipesId}`),
@@ -685,7 +685,7 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Recipes',
 		'Unfiled',
 		'---',
-		'New column…',
+		'New column',
 	]);
 
 	await harness.send({
@@ -701,7 +701,7 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Read later',
 		'Unfiled',
 		'---',
-		'New column…',
+		'New column',
 	]);
 
 	await harness.send({
@@ -714,7 +714,7 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Bookmarks',
 		'Unfiled',
 		'---',
-		'New column…',
+		'New column',
 	]);
 
 	// A burst of changes, settings updates and lifecycle events at once still never creates an id twice.
@@ -740,7 +740,7 @@ test('menus follow column additions, renames, reorders and deletions without dup
 		'Two',
 		'Unfiled',
 		'---',
-		'New column…',
+		'New column',
 	]);
 	assert.ok(harness.item('tablodge-selection-search'));
 	assert.deepEqual(harness.menuErrors, [], 'no duplicate or orphaned ids');
@@ -844,7 +844,7 @@ test('bookmarking this page uses the tab title and the chosen column', async () 
 	);
 });
 
-test('New column… opens the dashboard with a prefilled add-bookmark dialog', async () => {
+test('New column opens the dashboard with a prefilled add-bookmark dialog', async () => {
 	const harness = createHarness(baseState());
 	await harness.install();
 	await harness.click({
