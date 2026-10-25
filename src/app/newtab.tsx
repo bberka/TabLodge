@@ -91,7 +91,7 @@ import {
 } from './recovery';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
 import {IconNameField} from './icon-picker';
-import {openLink} from './link-target';
+import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
 import {
 	initialSearchQuery,
@@ -302,8 +302,13 @@ function NewTab() {
 				brave = Boolean(await (navigator as BraveNavigator).brave?.isBrave());
 			} catch {}
 
-			const result = await send('HANDOFF_NEW_TAB', {brave});
-			if (!result?.ok || !result.handedOff) {
+			try {
+				const result = await send('HANDOFF_NEW_TAB', {brave});
+				if (!result?.ok || !result.handedOff) {
+					setHandoff('stay');
+				}
+			} catch {
+				// If the hand-off fails, show the page instead of leaving it blank.
 				setHandoff('stay');
 			}
 		})();
@@ -1047,6 +1052,8 @@ function NewTab() {
 			const dark = document.documentElement.style.colorScheme === 'dark';
 			void setTheme(dark ? 'light' : 'dark');
 		},
+		openSettings: () => void openOwnPage('options.html', settings),
+		openHelp: () => void openOwnPage('help.html', settings),
 	};
 	const finderActions = useMemo<FinderAction[]>(() => {
 		const h = () => commandHandlersRef.current;
@@ -1147,14 +1154,14 @@ function NewTab() {
 				title: 'Open Settings',
 				keywords: ['options', 'preferences'],
 				icon: SettingsIcon,
-				run: () => globalThis.location.assign('options.html'),
+				run: () => h().openSettings(),
 			},
 			{
 				id: 'open-help',
 				title: 'Open Help',
 				keywords: ['shortcuts', 'about', 'guide'],
 				icon: HelpCircle,
-				run: () => globalThis.location.assign('help.html'),
+				run: () => h().openHelp(),
 			},
 		);
 		return list;

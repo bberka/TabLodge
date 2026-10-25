@@ -1122,6 +1122,47 @@ test('the toolbar exclude toggle adds and removes the active site and tracks the
 	assert.equal(harness.item('tablodge-action-exclude')?.checked, true);
 });
 
+test('the toolbar exclude item matches hosts with a trailing dot and is off for single-label hosts', async () => {
+	const harness = createHarness(
+		baseState({excludedOrigins: ['https://other.example']}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://other.example./x',
+				title: 'Dotted',
+			},
+			{
+				id: 2,
+				windowId: 10,
+				index: 1,
+				active: false,
+				url: 'http://wiki/page',
+				title: 'Wiki',
+			},
+		],
+	);
+	await harness.install();
+	harness.fire('tabActivated', {tabId: 1, windowId: 10});
+	await wait(50);
+	assert.equal(harness.item('tablodge-action-exclude')?.checked, true);
+	for (const entry of harness.tabs) {
+		entry.active = entry.id === 2;
+	}
+
+	harness.fire('tabActivated', {tabId: 2, windowId: 10});
+	await wait(50);
+	assert.deepEqual(
+		[
+			harness.item('tablodge-action-exclude')?.checked,
+			harness.item('tablodge-action-exclude')?.enabled,
+		],
+		[false, false],
+	);
+});
+
 test('toolbar items open the dashboard, Help and Settings, and save the window', async () => {
 	const harness = createHarness(baseState({closeOnSave: false}), [
 		{

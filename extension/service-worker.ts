@@ -55,8 +55,8 @@ type PopulatedWindow = chrome.windows.Window & {
 CaptureTabs reports duplicates it skipped on the session it creates (or on an empty placeholder).
 */
 type CaptureResult =
-	| (Session & {skipped?: number})
-	| {id: null; tabs: SavedTab[]; skipped: number};
+	| (Session & {skipped?: number; more?: Session[]})
+	| {id: null; tabs: SavedTab[]; skipped: number; error?: string};
 type RestoreRecordsResult = {
 	opened: Array<{saved: SavedTab; tabId: number | undefined}>;
 	skipped: number;
@@ -150,6 +150,16 @@ const APP_NAME =
 const STORAGE_KEY = 'tablodge.state';
 const SCHEMA_VERSION = 7;
 const DEFAULT_FOLDER_ID = 'unfiled';
+// Loading keeps at most this many sessions and links per session, so every write path has to stay inside the same limits.
+const MAX_SESSIONS = 1000;
+const MAX_TABS_PER_SESSION = 1000;
+const MAX_EXCLUDED_ORIGINS = 500;
+const sessionLimitError = () =>
+	`TabLodge keeps up to ${MAX_SESSIONS} sessions. Delete or merge some sessions first.`;
+const sessionFullError = () =>
+	`A session holds up to ${MAX_TABS_PER_SESSION} links. Use another session.`;
+const chunkCount = (length: number) =>
+	Math.max(1, Math.ceil(length / MAX_TABS_PER_SESSION));
 const DEFAULT_FOLDER = Object.freeze<Folder>({
 	id: DEFAULT_FOLDER_ID,
 	name: 'Unfiled',
@@ -753,7 +763,7 @@ function normalizeGroup(
 		Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallbackTimestamp;
 	const seenTabIds = new Set<string>();
 	const tabs = tabsRaw
-		.slice(0, 1000)
+		.slice(0, MAX_TABS_PER_SESSION)
 		.map((tab: unknown, index: number) => {
 			const normalized = normalizeTab(tab, createdAt, index);
 			if (!normalized || (normalized.pinned && !includePinnedTabs)) {
@@ -969,6 +979,17 @@ function clampInteger(
 }
 
 /**
+The lower-case host of a URL without a trailing dot, so "bank.com." and "bank.com" match; null when it does not parse. The one place hosts are read for comparisons.
+*/
+function urlHost(url: string): string | null {
+	try {
+		return new URL(url).hostname.toLowerCase().replace(/\.$/, '');
+	} catch {
+		return null;
+	}
+}
+
+/**
 An excluded-site entry as a bare lower-case host name, or null when it is not a usable web host. Accepts
 "google.com", "*.google.com", "https://google.com:8080/path" and old stored origins; a leading "www." is dropped.
 Entries cover the host and all its subdomains. (Duplicated in src/app/excluded-sites.ts for the pages.)
@@ -991,7 +1012,7 @@ function normalizeExcludedHost(value: unknown): string | null {
 			return null;
 		}
 
-		let host = url.hostname.toLowerCase().replace(/\.$/, '');
+		let host = urlHost(url.href) ?? '';
 		if (host.startsWith('www.') && host.includes('.', 4)) {
 			host = host.slice(4);
 		}
@@ -1016,15 +1037,15 @@ Normalizes the stored list: hosts only, duplicates removed. A child such as "mai
 is kept, since it is harmless and shows what the user added.
 */
 function normalizeExcludedOrigins(raw: unknown): string[] {
-	const hosts: string[] = [];
-	for (const value of Array.isArray(raw) ? raw.slice(0, 500) : []) {
+	const hosts = new Set<string>();
+	for (const value of Array.isArray(raw) ? raw : []) {
 		const host = normalizeExcludedHost(value);
-		if (host && !hosts.includes(host)) {
-			hosts.push(host);
+		if (host) {
+			hosts.add(host);
 		}
 	}
 
-	return hosts;
+	return [...hosts].slice(0, MAX_EXCLUDED_ORIGINS);
 }
 
 function normalizeStore(raw: Raw | null | undefined): Store {
@@ -1036,7 +1057,7 @@ function normalizeStore(raw: Raw | null | undefined): Store {
 	const seenIds = new Set<string>();
 	// Pinned tabs that were deliberately saved stay stored even if the save preference is later switched off.
 	const groups = sourceGroups
-		.slice(0, 1000)
+		.slice(0, MAX_SESSIONS)
 		.map((entry: unknown) => normalizeGroup(entry, Date.now(), true))
 		.filter((group): group is Session => {
 			if (!group) {
@@ -1202,14 +1223,8 @@ function isCapturable(
 		return true;
 	}
 
-	try {
-		return !hostIsExcluded(
-			new URL(url).hostname.toLowerCase(),
-			settings.excludedOrigins,
-		);
-	} catch {
-		return false;
-	}
+	const host = urlHost(url);
+	return host !== null && !hostIsExcluded(host, settings.excludedOrigins);
 }
 
 async function getWindowGroups(
@@ -1363,6 +1378,11 @@ async function captureTabs(
 
 	const captured = pairSplits(newEntries.map(({saved}) => saved));
 
+	const parts = chunkCount(captured.length);
+	if (captured.length > 0 && store.groups.length + parts > MAX_SESSIONS) {
+		return {id: null, tabs: [], skipped, error: sessionLimitError()};
+	}
+
 	const group: CaptureResult =
 		captured.length > 0
 			? {
@@ -1393,7 +1413,28 @@ async function captureTabs(
 			: {id: null, tabs: [], skipped};
 	// A non-empty capture always produced the Session branch above.
 	if (captured.length > 0) {
-		store.groups.unshift(group as Session);
+		const first = group as Session;
+		if (parts > 1) {
+			// A session holds at most 1000 links, so a huge capture becomes several numbered sessions.
+			const baseName = first.name.slice(0, 100);
+			const sessions = Array.from({length: parts}, (_, part) => ({
+				...structuredClone({...first, tabs: []}),
+				id: part === 0 ? first.id : makeId(),
+				name: `${baseName} (${part + 1}/${parts})`,
+				tabs: pairSplits(
+					captured.slice(
+						part * MAX_TABS_PER_SESSION,
+						(part + 1) * MAX_TABS_PER_SESSION,
+					),
+				),
+			}));
+			first.name = sessions[0].name;
+			first.tabs = sessions[0].tabs;
+			(group as CaptureResult & {more?: Session[]}).more = sessions.slice(1);
+			store.groups.unshift(...sessions);
+		} else {
+			store.groups.unshift(first);
+		}
 	}
 
 	group.skipped = skipped;
@@ -1515,6 +1556,7 @@ async function saveTabs(
 
 		const savedGroups: Session[] = [];
 		let skippedDuplicates = 0;
+		let limitError = '';
 		for (const win of windows) {
 			const activeTab = win.tabs.find((tab) => tab.active);
 			let inScope = win.tabs;
@@ -1610,13 +1652,25 @@ async function saveTabs(
 				options.groupName,
 			);
 			// A capture with tabs is always a stored Session.
+			if (group && 'error' in group && group.error) {
+				limitError = group.error;
+				break;
+			}
+
 			if (group?.tabs.length) {
-				savedGroups.push(group as Session);
+				savedGroups.push(
+					group as Session,
+					...((group as Session & {more?: Session[]}).more ?? []),
+				);
 			}
 
 			if (group) {
 				skippedDuplicates += group.skipped || 0;
 			}
+		}
+
+		if (savedGroups.length === 0 && limitError) {
+			return {ok: false, error: limitError};
 		}
 
 		if (savedGroups.length === 0 && skippedDuplicates) {
@@ -2441,10 +2495,13 @@ async function reorderGroup(
 			return {ok: false, error: 'That saved session no longer exists.'};
 		}
 
-		const scope =
-			folderId === 'all'
-				? store.groups
-				: store.groups.filter((group) => group.folderId === folderId);
+		// Same list the dashboard shows: archived sessions only in the Archived view, never mixed into a folder or "All".
+		const scope = store.groups.filter((group) =>
+			folderId === 'archived'
+				? group.archived
+				: !group.archived &&
+					(folderId === 'all' || group.folderId === folderId),
+		);
 		const scopeIndex = scope.findIndex((group) => group.id === groupId);
 		const nextScopeIndex = direction === 'up' ? scopeIndex - 1 : scopeIndex + 1;
 		if (
@@ -2726,6 +2783,7 @@ async function moveTab(
 	targetTabId: string | null = null,
 	position: InsertPosition = 'after',
 	copy = false,
+	restoreTrashId: string | null = null,
 ): Promise<ActionResult<'MOVE_TAB'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -2740,12 +2798,41 @@ async function moveTab(
 			return {ok: false, error: 'That saved tab no longer exists.'};
 		}
 
+		// Undoing a move that emptied its source: the source session is in the trash, so bring it back (it holds the link) and take the link out of where it went.
+		if (!target && restoreTrashId && !copy) {
+			const entry = (await readTrash()).find(
+				(item) => item.id === restoreTrashId,
+			);
+			if (entry?.kind !== 'tabs' || entry.data.groupId !== toGroupId) {
+				return {ok: false, error: 'That saved session no longer exists.'};
+			}
+
+			source.tabs = source.tabs.filter((item) => item.id !== tabId);
+			const outcome = applyTrashRestore(store, entry);
+			if (!outcome.ok) {
+				return outcome;
+			}
+
+			store.groups = store.groups.filter((item) => item.tabs.length > 0);
+			await writeStore(store);
+			await trashMutate(async () => {
+				await writeTrash(
+					(await readTrash()).filter((item) => item.id !== restoreTrashId),
+				);
+			});
+			return {ok: true};
+		}
+
 		if (!target) {
 			return {ok: false, error: 'That saved session no longer exists.'};
 		}
 
 		if (targetTabId === tabId && source === target) {
 			return {ok: true};
+		}
+
+		if (source !== target && target.tabs.length >= MAX_TABS_PER_SESSION) {
+			return {ok: false, error: sessionFullError()};
 		}
 
 		// A moved link leaves its split view: the partner becomes a plain tab as well (a copy leaves the pair alone).
@@ -2758,6 +2845,7 @@ async function moveTab(
 			}
 		}
 
+		const sourceIndex = source.tabs.indexOf(tab);
 		const moving: SavedTab = copy
 			? {...structuredClone(tab), id: makeId(), savedAt: Date.now()}
 			: tab;
@@ -2780,9 +2868,23 @@ async function moveTab(
 			source.updatedAt = now;
 		}
 
+		// An emptied source goes to the trash (with its name, notes and folder) instead of vanishing.
+		let trashId: string | undefined;
+		if (!copy && source !== target && source.tabs.length === 0) {
+			trashId = await trashAdd(
+				store.settings,
+				trashTabsEntry(
+					source,
+					[{tab, index: sourceIndex}],
+					true,
+					store.groups.indexOf(source),
+				),
+			);
+		}
+
 		store.groups = store.groups.filter((entry) => entry.tabs.length > 0);
 		await writeStore(store);
-		return {ok: true};
+		return trashId ? {ok: true, trashId} : {ok: true};
 	});
 }
 
@@ -3173,9 +3275,21 @@ async function addExcludedOrigins(
 			return {ok: false, error: 'Enter a valid website, such as example.com.'};
 		}
 
-		const added = hosts.filter(
+		const fresh = hosts.filter(
 			(host) => !store.settings.excludedOrigins.includes(host),
 		);
+		const room = Math.max(
+			0,
+			MAX_EXCLUDED_ORIGINS - store.settings.excludedOrigins.length,
+		);
+		if (fresh.length > 0 && room === 0) {
+			return {
+				ok: false,
+				error: `The list is full (${MAX_EXCLUDED_ORIGINS} sites). Remove some sites first.`,
+			};
+		}
+
+		const added = fresh.slice(0, room);
 		if (added.length > 0) {
 			store.settings.excludedOrigins = normalizeExcludedOrigins([
 				...store.settings.excludedOrigins,
@@ -3184,7 +3298,12 @@ async function addExcludedOrigins(
 			await writeStore(store);
 		}
 
-		return {ok: true, added: added.length, settings: store.settings};
+		return {
+			ok: true,
+			added: added.length,
+			notAdded: fresh.length - added.length,
+			settings: store.settings,
+		};
 	});
 }
 
@@ -3961,7 +4080,36 @@ async function importGroups(
 			const allowDuplicates = options.duplicateMode === 'allow';
 			let skipped = 0;
 			let updatedTitles = 0;
-			for (const candidate of candidates) {
+			// A TabLodge export ({groups}) keeps its pinned tabs, as backup restore does; the setting only filters other shapes of tab lists.
+			const keepPinned =
+				store.settings.includePinnedTabs ||
+				(isRecord(input) && Array.isArray(input.groups));
+			// A session holds at most 1000 links, so a bigger imported one becomes several numbered sessions.
+			const parts = candidates.flatMap((candidate) => {
+				if (
+					!isRecord(candidate) ||
+					!Array.isArray(candidate.tabs) ||
+					candidate.tabs.length <= MAX_TABS_PER_SESSION
+				) {
+					return [candidate];
+				}
+
+				const count = chunkCount(candidate.tabs.length);
+				const base = cleanText(
+					candidate.name ?? candidate.title,
+					'Saved session',
+					100,
+				);
+				return Array.from({length: count}, (_, part) => ({
+					...candidate,
+					name: `${base} (${part + 1}/${count})`,
+					tabs: (candidate.tabs as unknown[]).slice(
+						part * MAX_TABS_PER_SESSION,
+						(part + 1) * MAX_TABS_PER_SESSION,
+					),
+				}));
+			});
+			for (const candidate of parts) {
 				if (!isRecord(candidate)) {
 					continue;
 				}
@@ -3979,7 +4127,7 @@ async function importGroups(
 						createdAt: candidate.createdAt ?? candidate.timestamp ?? Date.now(),
 					},
 					Date.now(),
-					store.settings.includePinnedTabs,
+					keepPinned,
 				);
 				if (!group) {
 					continue;
@@ -4051,6 +4199,10 @@ async function importGroups(
 
 			if (imported.length > 0) {
 				store.groups = [...imported, ...store.groups];
+			}
+
+			if (store.groups.length > MAX_SESSIONS) {
+				return {ok: false, error: sessionLimitError()};
 			}
 
 			await writeStore(store);
@@ -4272,7 +4424,7 @@ chrome.tabs.onRemoved?.addListener((tabId) => {
 //   tablodge.snapshots       { version, history: Snapshot[] }  rotated at the interval, newest first
 //   tablodge.snapshots.live  Snapshot                          the latest capture, rewritten on (debounced) tab events
 //   tablodge.snapshots.meta  { sessionOpen, liveAt, closing, recovery }  the small crash-detection flags
-//   tablodge.backups         { auto, safety, downloadError }   full JSON exports (auto/manual ring, safety ring)
+//   tablodge.backups         { auto, safety, downloadError, lastAutoCheckAt } full JSON exports (auto/manual ring, safety ring)
 //   tablodge.trash           { items }                         deleted sessions, links, bookmarks, columns, folders
 const SNAPSHOTS_KEY = 'tablodge.snapshots';
 const SNAPSHOT_LIVE_KEY = 'tablodge.snapshots.live';
@@ -4735,7 +4887,19 @@ function evaluateStartup(): Promise<void> {
 			meta.recovery = null;
 		}
 
-		meta.sessionOpen = true;
+		// A run that starts without a window (background mode) is not "open" yet: the first snapshot taken once a window appears marks it.
+		let hasWindow = true;
+		try {
+			hasWindow = (await chrome.windows.getAll({windowTypes: ['normal']})).some(
+				(win) => !win.incognito,
+			);
+		} catch {
+			/*
+			Without window info, assume one exists (the old behavior).
+			*/
+		}
+
+		meta.sessionOpen = hasWindow;
 		meta.closing = null;
 		await writeSnapshotMeta(meta);
 	});
@@ -5001,9 +5165,13 @@ async function saveSnapshotAsSession(
 			const number_ = (windowIndex ?? offset) + 1;
 			const records = snapshotRecords(win, stamp);
 			// A stored session holds at most 1000 tabs, so a huge window becomes several sessions.
-			for (let start = 0; start < records.length; start += 1000) {
-				const part = Math.floor(start / 1000) + 1;
-				const parts = Math.ceil(records.length / 1000);
+			for (
+				let start = 0;
+				start < records.length;
+				start += MAX_TABS_PER_SESSION
+			) {
+				const part = Math.floor(start / MAX_TABS_PER_SESSION) + 1;
+				const parts = chunkCount(records.length);
 				const group = normalizeGroup(
 					{
 						id: makeId(),
@@ -5011,7 +5179,7 @@ async function saveSnapshotAsSession(
 						folderId: DEFAULT_FOLDER_ID,
 						createdAt: stamp,
 						updatedAt: stamp,
-						tabs: records.slice(start, start + 1000),
+						tabs: records.slice(start, start + MAX_TABS_PER_SESSION),
 					},
 					stamp,
 					true,
@@ -5024,6 +5192,10 @@ async function saveSnapshotAsSession(
 
 		if (created.length === 0) {
 			return {ok: false, error: 'That snapshot has no tabs to save.'};
+		}
+
+		if (store.groups.length + created.length > MAX_SESSIONS) {
+			return {ok: false, error: sessionLimitError()};
 		}
 
 		store.groups = [...created, ...store.groups];
@@ -5090,7 +5262,13 @@ type BackupStore = {
 	auto: BackupRecord[];
 	safety: BackupRecord[];
 	downloadError: string;
+	/**
+	When the last scheduled backup ran, including runs that skipped unchanged data, so a quiet profile is not "due" on every start.
+	*/
+	lastAutoCheckAt: number;
 };
+// Manual ("Back up now") backups have their own cap, so they never push scheduled ones out of the list.
+const MANUAL_BACKUP_KEEP = 10;
 
 const isBackupRecord = (value: unknown): value is BackupRecord =>
 	isRecord(value) &&
@@ -5104,6 +5282,7 @@ async function readBackups(): Promise<BackupStore> {
 		safety: Array.isArray(raw?.safety) ? raw.safety.filter(isBackupRecord) : [],
 		downloadError:
 			typeof raw?.downloadError === 'string' ? raw.downloadError : '',
+		lastAutoCheckAt: isInteger(raw?.lastAutoCheckAt) ? raw.lastAutoCheckAt : 0,
 	};
 }
 
@@ -5240,23 +5419,40 @@ function addBackup(
 ): Promise<BackupRecord | null> {
 	return backupMutate(async () => {
 		const backups = await readBackups();
+		if (kind === 'auto') {
+			backups.lastAutoCheckAt = Date.now();
+		}
+
 		if (
 			!force &&
 			(storeIsEmpty(store) || backups.auto[0]?.sig === dataSignature(store))
 		) {
+			if (kind === 'auto') {
+				await writeBackups(backups);
+			}
+
 			return null;
 		}
 
 		const record = makeBackupRecord(store, kind, '');
-		backups.auto = trimBackups(
-			[record, ...backups.auto],
+		const scheduled = trimBackups(
+			[record, ...backups.auto].filter((item) => item.kind === 'auto'),
 			store.settings.autoBackupKeep,
 		);
+		const manual = trimBackups(
+			[record, ...backups.auto].filter((item) => item.kind !== 'auto'),
+			MANUAL_BACKUP_KEEP,
+		);
+		backups.auto = [...scheduled, ...manual].toSorted(
+			(a, b) => Number(b.at) - Number(a.at),
+		);
+		// The record is stored first, so a failed or slow Downloads copy cannot lose it.
+		await writeBackups(backups);
 		if (store.settings.autoBackupToDownloads) {
 			backups.downloadError = await downloadBackupCopy(record);
+			await writeBackups(backups);
 		}
 
-		await writeBackups(backups);
 		return record;
 	});
 }
@@ -5327,10 +5523,10 @@ async function backupDue(settings: Settings): Promise<boolean> {
 
 	const backups = await readBackups();
 	const newest = backups.auto.find((record) => record.kind === 'auto');
+	const last = Math.max(Number(newest?.at ?? 0), backups.lastAutoCheckAt);
 	return (
-		!newest ||
-		Date.now() - Number(newest.at) >=
-			BACKUP_PERIOD_MINUTES[settings.autoBackup] * 60_000
+		last === 0 ||
+		Date.now() - last >= BACKUP_PERIOD_MINUTES[settings.autoBackup] * 60_000
 	);
 }
 
@@ -5559,6 +5755,10 @@ function applyTrashRestore(
 			return {ok: false, error: 'That session could not be restored.'};
 		}
 
+		if (store.groups.length >= MAX_SESSIONS) {
+			return {ok: false, error: sessionLimitError()};
+		}
+
 		if (store.groups.some((group) => group.id === session.id)) {
 			session.id = makeId();
 		}
@@ -5595,6 +5795,14 @@ function applyTrashRestore(
 		}
 
 		const group = store.groups.find((item) => item.id === data.groupId);
+		if (group && group.tabs.length + items.length > MAX_TABS_PER_SESSION) {
+			return {ok: false, error: sessionFullError()};
+		}
+
+		if (!group && store.groups.length >= MAX_SESSIONS) {
+			return {ok: false, error: sessionLimitError()};
+		}
+
 		if (!group) {
 			const meta = isRecord(data.groupMeta) ? data.groupMeta : {};
 			const created = normalizeGroup(
@@ -6229,6 +6437,7 @@ async function handleMessage(
 				message.targetTabId || null,
 				message.position,
 				message.copy === true,
+				message.restoreTrashId || null,
 			);
 		}
 
@@ -6570,6 +6779,10 @@ async function saveCurrentTabToFirstGroup(
 				error:
 					'Create or unlock a session before sending this tab to a session.',
 			};
+		}
+
+		if (group.tabs.length >= MAX_TABS_PER_SESSION) {
+			return {ok: false, error: sessionFullError()};
 		}
 
 		const nativeGroups = await getWindowGroups(window.id);
@@ -7057,7 +7270,7 @@ async function menuTabOrigin(tab?: chrome.tabs.Tab): Promise<string | null> {
 			tab ??
 			(await chrome.tabs.query({active: true, lastFocusedWindow: true}))[0];
 		const url = normalizeUrl(target?.url);
-		return url ? new URL(url).hostname.toLowerCase() : null;
+		return url ? urlHost(url) : null;
 	} catch {
 		return null;
 	}
@@ -7092,7 +7305,8 @@ async function excludeMenuState(settings: Settings, tab?: chrome.tabs.Tab) {
 		checked: Boolean(
 			origin && hostIsExcluded(origin, settings.excludedOrigins),
 		),
-		enabled: Boolean(origin),
+		// A single-label host such as http://wiki/ cannot be an excluded-site entry, so the item stays off for it.
+		enabled: Boolean(origin && normalizeExcludedHost(origin)),
 	};
 }
 
@@ -7485,6 +7699,14 @@ async function saveLinkForLater(
 			return {ok: true, added: false, groupId: group?.id ?? null};
 		}
 
+		if (group && group.tabs.length >= MAX_TABS_PER_SESSION) {
+			return {ok: false, error: sessionFullError()};
+		}
+
+		if (!group && store.groups.length >= MAX_SESSIONS) {
+			return {ok: false, error: sessionLimitError()};
+		}
+
 		const now = Date.now();
 		if (!group) {
 			group = {
@@ -7563,6 +7785,13 @@ async function toggleExcludedSite(
 	const origin = await menuTabOrigin(tab);
 	if (!origin) {
 		return {ok: false, error: 'Open a regular web page to exclude its site.'};
+	}
+
+	if (!normalizeExcludedHost(origin)) {
+		return {
+			ok: false,
+			error: 'This site cannot be added to the excluded list.',
+		};
 	}
 
 	// An excluded host (directly or through a parent domain) is un-excluded by removing every entry that covers it.

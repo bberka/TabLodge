@@ -1388,7 +1388,7 @@ export type ImportPreview = {
 	*/
 	invalid: number;
 	/**
-	Pinned tabs the importer leaves out because Settings excludes pinned tabs.
+	Pinned tabs the importer leaves out because Settings excludes pinned tabs (never for a TabLodge export).
 	*/
 	pinnedSkipped: number;
 	sample: Array<{title: string; url: string; group: string}>;
@@ -1420,10 +1420,12 @@ export function previewImport(
 	let duplicates = 0;
 	let links = 0;
 	let pinnedSkipped = 0;
+	// A TabLodge export keeps its pinned tabs; the setting only filters other formats.
+	const keepPinned = includePinned || Boolean(parsed.native?.sessions);
 	const sample: ImportPreview['sample'] = [];
 	for (const entry of groups) {
 		for (const link of entry.links) {
-			if (kind === 'sessions' && link.pinned && !includePinned) {
+			if (kind === 'sessions' && link.pinned && !keepPinned) {
 				pinnedSkipped += 1;
 				continue;
 			}
