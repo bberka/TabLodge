@@ -27,9 +27,9 @@ Everything is stored locally in your browser profile:
 
 TabLodge reads tab details (URL, title, pinned state, tab group, window) only when you save a session, check for duplicates, or restore. It reads your browser bookmarks only when you explicitly import them. Site icons come from the browser's own local favicon cache.
 
-Snapshots, backups, and the trash are ordinary local data like everything else: they never leave your device, are capped in number and size, and can be cleared at any time from **Settings › Recovery & backups**. If you turn on **Also save a copy to Downloads**, backups are additionally written as JSON files to `Downloads/TabLodge/` on your computer; those files are yours to keep or delete, and are not uploaded anywhere by TabLodge.
+Snapshots, backups, and the trash bin are ordinary local data like everything else: they never leave your device, are capped in number and size, and can be cleared at any time from **Settings › Recovery & backups**. If you turn on **Also save a copy to Downloads**, backups are additionally written as JSON files to `Downloads/TabLodge/` on your computer; those files are yours to keep or delete, and are not uploaded anywhere by TabLodge.
 
-Data stays until you delete it: delete individual items, use **Settings › Data** to erase sessions, bookmarks, or both, or remove the extension (the browser then deletes its storage). Exported JSON, HTML, and full-backup ZIP files (which hold your sessions, bookmarks, settings, excluded sites, theme, snapshot history, and trash) are plain, unencrypted data that you control; keep them private if their URLs, titles, or notes are sensitive.
+Data stays until you delete it: delete individual items, use **Settings › Data** to erase sessions, bookmarks, or both, or remove the extension (the browser then deletes its storage). Exported JSON, HTML, and full-backup ZIP files (which hold your sessions, bookmarks, settings, excluded sites, theme, snapshot history, and trash bin) are plain, unencrypted data that you control; keep them private if their URLs, titles, or notes are sensitive.
 
 When you restore a session or open a bookmark, your browser loads those web pages as usual, and those sites see a normal visit. TabLodge itself sends nothing to them.
 
@@ -46,7 +46,7 @@ When you restore a session or open a bookmark, your browser loads those web page
 | `clipboardWrite`              | Copying bookmark URLs and session links when you ask.                                                                                                                         |
 | `sidePanel`                   | The optional bookmark list in the browser's Side Panel.                                                                                                                       |
 | `search`                      | Running a web search with your default engine, only when you choose "Search the web".                                                                                         |
-| `alarms`                      | Scheduling local snapshots, automatic backups, and trash cleanup.                                                                                                             |
+| `alarms`                      | Scheduling local snapshots, automatic backups, and trash bin cleanup.                                                                                                         |
 | `downloads` (optional)        | Only if you enable "Also save a copy to Downloads": writing backup files to `Downloads/TabLodge/`. The browser asks first, and turning the option off removes the permission. |
 
 ## Contact

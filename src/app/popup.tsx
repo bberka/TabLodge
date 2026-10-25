@@ -103,11 +103,7 @@ function Popup() {
 		state?.settings?.includePinnedTabs === true,
 	);
 	const recentSessions = useMemo(
-		() =>
-			groups
-				.filter((group) => !group.archived)
-				.toSorted((a, b) => b.createdAt - a.createdAt)
-				.slice(0, 5),
+		() => groups.toSorted((a, b) => b.createdAt - a.createdAt).slice(0, 5),
 		[groups],
 	);
 	const columns = state?.bookmarkColumns || [];
@@ -249,7 +245,7 @@ function Popup() {
 		await reload();
 	}
 
-	// Ctrl/Cmd keeps the saved tabs, Alt archives them, Shift opens a new window, as on the TabLodge page.
+	// Ctrl/Cmd keeps the saved tabs, Shift opens a new window, as on the TabLodge page.
 	async function restoreSession(
 		group: Session,
 		event: MouseEvent<HTMLButtonElement>,
@@ -257,11 +253,7 @@ function Popup() {
 		setBusy(`restore:${group.id}`);
 		const result = await send('RESTORE_GROUP', {
 			groupId: group.id,
-			restoreMode: event.altKey
-				? 'archive'
-				: event.ctrlKey || event.metaKey
-					? 'keep'
-					: undefined,
+			restoreMode: event.ctrlKey || event.metaKey ? 'keep' : undefined,
 			restoreTarget: event.shiftKey ? 'always-new-window' : undefined,
 		});
 		setBusy('');
@@ -605,7 +597,7 @@ function Popup() {
 											{group.tabs.length === 1 ? 'tab' : 'tabs'}
 										</span>
 									</span>
-									<IconTooltip label="Restore. Ctrl or Cmd keeps, Alt archives, Shift opens a new window.">
+									<IconTooltip label="Restore. Ctrl or Cmd keeps, Shift opens a new window.">
 										<Button
 											size="icon"
 											variant="ghost"

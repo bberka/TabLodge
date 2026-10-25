@@ -1,5 +1,5 @@
 // Recovery UI shared by the dashboard, side panel and Settings: the "restore your last session" banner, the
-// recent-snapshots dialog, the trash dialog, and the backup list. Every action is a message to the service
+// recent-snapshots dialog, the trash bin dialog, and the backup list. Every action is a message to the service
 // worker, which keeps all of this data in local extension storage.
 import {useCallback, useEffect, useState} from 'react';
 import {
@@ -343,7 +343,7 @@ const KIND_LABELS: Record<TrashKind, string> = {
 };
 
 /**
-The trash: deleted sessions, saved links, bookmarks, columns and folders; restore, delete permanently, or empty it.
+The trash bin: deleted sessions, saved links, bookmarks, columns and folders; restore, delete permanently, or empty it.
 */
 export function TrashDialog({
 	open,
@@ -357,7 +357,7 @@ export function TrashDialog({
 	showStatus: ShowStatus;
 	onChanged?: () => unknown;
 	/**
-	Ask before emptying the trash (the Settings page does; other pages use Undo alone).
+	Ask before emptying the trash bin (the Settings page does; other pages use Undo alone).
 	*/
 	confirmDestructive?: boolean;
 }) {
@@ -372,10 +372,10 @@ export function TrashDialog({
 				setItems(result.items);
 				setError('');
 			} else {
-				setError(result?.error || 'Could not read the trash.');
+				setError(result?.error || 'Could not read the trash bin.');
 			}
 		} catch (reason) {
-			setError(messageOf(reason) || 'Could not read the trash.');
+			setError(messageOf(reason) || 'Could not read the trash bin.');
 		}
 	}, []);
 	useEffect(() => {
@@ -429,13 +429,13 @@ export function TrashDialog({
 			const result = await send('EMPTY_TRASH');
 			if (result?.ok) {
 				offerUndo(
-					`Emptied the trash (${plural(result.count, 'item')}).`,
+					`Emptied the trash bin (${plural(result.count, 'item')}).`,
 					result.undoId,
 					showStatus,
 					load,
 				);
 			} else {
-				showStatus(result?.error || 'Could not empty the trash.', true);
+				showStatus(result?.error || 'Could not empty the trash bin.', true);
 			}
 		});
 
@@ -443,7 +443,7 @@ export function TrashDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent size="lg">
 				<DialogHeader>
-					<DialogTitle>Trash</DialogTitle>
+					<DialogTitle>Trash bin</DialogTitle>
 					<DialogDescription>
 						Deleted sessions, saved links, bookmarks, columns and folders wait
 						here until the retention period set in Settings ends.
@@ -457,7 +457,7 @@ export function TrashDialog({
 					)}
 					{items && items.length === 0 && (
 						<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-							The trash is empty.
+							The trash bin is empty.
 						</p>
 					)}
 					{items && items.length > 0 && (
@@ -516,16 +516,16 @@ export function TrashDialog({
 						}
 					>
 						<Trash2 className="h-4 w-4" />
-						Empty trash
+						Empty trash bin
 					</Button>
 					<Button onClick={() => onOpenChange(false)}>Done</Button>
 				</DialogFooter>
 			</DialogContent>
 			<ConfirmationDialog
 				open={confirmOpen}
-				title="Empty the trash?"
-				description="Everything in the trash is deleted for good. You can undo this right after."
-				confirmLabel="Empty trash"
+				title="Empty the trash bin?"
+				description="Everything in the trash bin is deleted for good. You can undo this right after."
+				confirmLabel="Empty trash bin"
 				onOpenChange={setConfirmOpen}
 				onConfirm={() => {
 					setConfirmOpen(false);
@@ -735,13 +735,13 @@ export function RecoveryTools({
 			const result = await send('EMPTY_TRASH');
 			if (result?.ok) {
 				offerUndo(
-					`Emptied the trash (${plural(result.count, 'item')}).`,
+					`Emptied the trash bin (${plural(result.count, 'item')}).`,
 					result.undoId,
 					showStatus,
 					refresh,
 				);
 			} else {
-				showStatus(result?.error || 'Could not empty the trash.', true);
+				showStatus(result?.error || 'Could not empty the trash bin.', true);
 			}
 		});
 
@@ -757,7 +757,7 @@ export function RecoveryTools({
 						[
 							['Snapshots', usage?.snapshots],
 							['Backups', usage?.backups],
-							['Trash', usage?.trash],
+							['Trash bin', usage?.trash],
 						] as const
 					).map(([label, value]) => (
 						<div key={label}>
@@ -784,7 +784,7 @@ export function RecoveryTools({
 					</Button>
 					<Button size="sm" variant="outline" onClick={onOpenTrash}>
 						<Trash2 className="h-4 w-4" />
-						Trash
+						Trash bin
 					</Button>
 					<Button
 						size="sm"
@@ -800,7 +800,7 @@ export function RecoveryTools({
 						disabled={busy !== ''}
 						onClick={() => setPending({kind: 'trash'})}
 					>
-						Empty trash
+						Empty trash bin
 					</Button>
 				</div>
 			</div>
@@ -846,7 +846,7 @@ export function RecoveryTools({
 					pending?.kind === 'snapshots'
 						? 'Clear all snapshots?'
 						: pending?.kind === 'trash'
-							? 'Empty the trash?'
+							? 'Empty the trash bin?'
 							: pending?.kind === 'restore'
 								? 'Restore this backup?'
 								: 'Delete this backup?'
@@ -855,7 +855,7 @@ export function RecoveryTools({
 					pending?.kind === 'snapshots'
 						? 'Every recent snapshot is removed. You can undo this right after.'
 						: pending?.kind === 'trash'
-							? 'Everything in the trash is deleted for good. You can undo this right after.'
+							? 'Everything in the trash bin is deleted for good. You can undo this right after.'
 							: pending?.kind === 'restore'
 								? 'Your sessions and bookmarks are replaced by this backup. A safety backup of what you have now is kept, and you can undo this right after.'
 								: 'This backup is removed. You can undo this right after.'
@@ -864,7 +864,7 @@ export function RecoveryTools({
 					pending?.kind === 'snapshots'
 						? 'Clear snapshots'
 						: pending?.kind === 'trash'
-							? 'Empty trash'
+							? 'Empty trash bin'
 							: pending?.kind === 'restore'
 								? 'Restore'
 								: 'Delete'

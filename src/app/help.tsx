@@ -11,7 +11,6 @@ import {
 	Keyboard,
 	Layers2,
 	LifeBuoy,
-	LockKeyhole,
 	MousePointer2,
 	MousePointerClick,
 	RotateCcw,
@@ -40,7 +39,7 @@ function Help() {
 		{
 			icon: MousePointer2,
 			title: 'Quick actions',
-			text: 'The toolbar button opens a compact popup by default. Choose tabs and a session title without leaving it, or use Open Dashboard to open the full page in a separate tab. Settings can instead assign the toolbar button to save the current selection/window, the full window with tab groups, the active group, the active tab, all windows, or the active tab into the first unlocked session. A separate save preference can open the saved session afterward.',
+			text: 'The toolbar button opens a compact popup by default. Choose tabs and a session title without leaving it, or use Open Dashboard to open the full page in a separate tab. Settings can instead assign the toolbar button to save the current selection/window, the full window with tab groups, the active group, the active tab, all windows, or the active tab into the first session. A separate save preference can open the saved session afterward.',
 		},
 		{
 			icon: Layers2,
@@ -52,13 +51,8 @@ function Help() {
 		{
 			icon: RotateCcw,
 			title: 'Restoring sessions',
-			text: 'Choose whether restored tabs stay in the session, are removed after a successful restore, or the session is archived. Locked sessions always keep their tabs. Set a default destination in Settings and override it for individual sessions. Tabs saved from a split view reopen side by side in Chromium-based browsers version 155 or newer, or as neighboring tabs if you choose that in Settings or the browser cannot split them.',
-			detail: `Restore modifiers: Ctrl/Cmd-click keeps the saved session, Alt-click archives it, and Shift-click opens a new window. For a single tab, Settings controls whether ${PROJECT.name} switches to it or stays on the current page.`,
-		},
-		{
-			icon: LockKeyhole,
-			title: 'Archive and lock',
-			text: 'Use the visible archive and lock controls on a session. Archived sessions are kept in the Archived view until unarchived or deleted. A locked session can still be restored, but restore actions will not remove its saved tabs.',
+			text: 'Choose whether restored tabs stay in the session, are removed after a successful restore. Set a default destination in Settings and override it for individual sessions. Tabs saved from a split view reopen side by side in Chromium-based browsers version 155 or newer, or as neighboring tabs if you choose that in Settings or the browser cannot split them.',
+			detail: `Restore modifiers: Ctrl/Cmd-click keeps the saved session and Shift-click opens a new window. For a single tab, Settings controls whether ${PROJECT.name} switches to it or stays on the current page.`,
 		},
 		{
 			icon: BookOpen,
@@ -86,12 +80,12 @@ function Help() {
 			title: 'Local data and backups',
 			text: `${PROJECT.name} stores sessions, bookmarks, and preferences in this browser’s extension storage. It does not use accounts, servers, or cloud sync. Exported JSON and HTML files are plain text; keep them private if their URLs, titles, or notes are sensitive.`,
 			detail:
-				'Session import and export are in the Sessions ⋯ menu; bookmark import and export are in the Bookmarks toolbar ⋯ menu. Settings › Data can also export bookmarks, and can erase sessions, bookmarks, or both after you choose what to erase and confirm, with an Undo button for a short while; settings and excluded sites are kept. The Backup dialog also offers a full backup (ZIP) with everything, including settings, excluded sites, the theme, snapshots, and trash. Importing that ZIP replaces all of it, with an Undo button for a short while.',
+				'Session import and export are in the Sessions ⋯ menu; bookmark import and export are in the Bookmarks toolbar ⋯ menu. Settings › Data can also export bookmarks, and can erase sessions, bookmarks, or both after you choose what to erase and confirm, with an Undo button for a short while; settings and excluded sites are kept. The Backup dialog also offers a full backup (ZIP) with everything, including settings, excluded sites, the theme, snapshots, and trash bin. Importing that ZIP replaces all of it, with an Undo button for a short while.',
 		},
 		{
 			icon: LifeBuoy,
 			title: 'Recovery & backups',
-			text: `${PROJECT.name} keeps rolling snapshots of your open windows and restores them if the browser closes unexpectedly: the dashboard then asks whether to restore your last session. Recent snapshots (Sessions ⋯ menu, the side panel menu, or the search palette) lists them with restore for everything or a single window, and Save as session. Deleted sessions, saved links, bookmarks, columns and folders go to the Trash for a while, and deletes, erasing data, emptying the Trash, clearing snapshots, restoring a backup, imports and opening many tabs run right away with an Undo button for a few seconds. There are no confirmation dialogs for these.`,
+			text: `${PROJECT.name} keeps rolling snapshots of your open windows and restores them if the browser closes unexpectedly: the dashboard then asks whether to restore your last session. Recent snapshots (Sessions ⋯ menu, the side panel menu, or the search palette) lists them with restore for everything or a single window, and Save as session. Deleted sessions, saved links, bookmarks, columns and folders go to the Trash bin for a while, and deletes, erasing data, emptying the Trash bin, clearing snapshots, restoring a backup, imports and opening many tabs run right away with an Undo button for a few seconds. There are no confirmation dialogs for these.`,
 			detail:
 				'Automatic backups (off by default) keep dated copies of your sessions, bookmarks and settings; safety backups are taken before erasing data, large imports and deleting many bookmarks. Everything stays in this browser’s extension storage, and an optional copy can go to Downloads. Crash detection is a best guess because browsers give extensions no shutdown signal. Choose intervals, retention and see storage use in Settings › Recovery & backups.',
 			href: 'options.html?q=Recovery',
