@@ -29,6 +29,11 @@ For selection saves while the active tab is in a split view: keep both halves, o
 */
 export type SaveSplitTabs = 'both' | 'focused';
 
+/**
+What clicking a link does: nothing, open in the current tab, or open in a new tab.
+*/
+export type LinkClickAction = 'none' | 'current' | 'new';
+
 export type Settings = {
 	closeOnSave: boolean;
 	includePinnedTabs: boolean;
@@ -63,9 +68,29 @@ export type Settings = {
 	Dashboard bookmark board: columns in the same row grow to the tallest one's height (default on).
 	*/
 	stretchBookmarkColumns: boolean;
+	/**
+	What clicking a bookmark does (default: open in this tab).
+	*/
+	bookmarkClickAction: LinkClickAction;
+	/**
+	What clicking a saved session link does (default: open in a new tab).
+	*/
+	sessionLinkClickAction: LinkClickAction;
+	/**
+	Show a small quick-actions button next to the bookmark menu button.
+	*/
+	showBookmarkQuickActions: boolean;
+	/**
+	Show the sessions section above the bookmark board (only when both are enabled).
+	*/
+	sessionsOnTop: boolean;
+	/**
+	Keep one pinned TabLodge tab per window open; links from it open in new tabs.
+	*/
+	keepLodgePinned: boolean;
 	copyFormat: CopyFormat;
 	dashboardBehavior: 'switch' | 'move';
-	urlDisplayMode: 'full' | 'none';
+	urlDisplayMode: 'domain' | 'full' | 'none';
 	groupTitleAction: 'edit' | 'restore';
 	// ---- Right-click menus (context-menu agent) ----
 	/**

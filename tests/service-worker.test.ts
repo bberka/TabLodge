@@ -3149,7 +3149,7 @@ test('split settings default to side-by-side restore and saving both tabs, and n
 	assert.equal(reset.settings.saveSplitTabs, 'both');
 });
 
-test('expandSessionsByDefault is off by default, accepts only true, and resets to off', async () => {
+test('expandSessionsByDefault is on by default, only an explicit false turns it off, and resets to on', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
 		(await defaults.sendMessage({type: 'GET_STATE'})).settings
@@ -3158,7 +3158,7 @@ test('expandSessionsByDefault is off by default, accepts only true, and resets t
 	);
 
 	const truthy = createWorkerHarness(
-		stateWithSession({expandSessionsByDefault: 'yes'}),
+		stateWithSession({expandSessionsByDefault: false}),
 	);
 	assert.equal(
 		(await truthy.sendMessage({type: 'GET_STATE'})).settings
@@ -3174,7 +3174,39 @@ test('expandSessionsByDefault is off by default, accepts only true, and resets t
 	assert.equal(updated.ok, true, updated.error);
 	assert.equal(truthy.state.settings.expandSessionsByDefault, true);
 	const reset = await truthy.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.expandSessionsByDefault, false);
+	assert.equal(reset.settings.expandSessionsByDefault, true);
+});
+
+test('link, quick-action, ordering and pin settings normalize with defaults', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	const s = (await defaults.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(s.bookmarkClickAction, 'current');
+	assert.equal(s.sessionLinkClickAction, 'new');
+	assert.equal(s.showBookmarkQuickActions, false);
+	assert.equal(s.sessionsOnTop, false);
+	assert.equal(s.keepLodgePinned, false);
+	assert.equal(s.urlDisplayMode, 'full');
+
+	const junk = createWorkerHarness(
+		stateWithSession({
+			bookmarkClickAction: 'bogus',
+			sessionLinkClickAction: 'none',
+			showBookmarkQuickActions: 'yes',
+			sessionsOnTop: 1,
+			keepLodgePinned: true,
+			urlDisplayMode: 'domain',
+		}),
+	);
+	const j = (await junk.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(j.bookmarkClickAction, 'current');
+	assert.equal(j.sessionLinkClickAction, 'none');
+	assert.equal(j.showBookmarkQuickActions, false);
+	assert.equal(j.sessionsOnTop, false);
+	assert.equal(j.keepLodgePinned, true);
+	assert.equal(j.urlDisplayMode, 'domain');
+	const reset = await junk.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.keepLodgePinned, false);
+	assert.equal(reset.settings.urlDisplayMode, 'full');
 });
 
 test('stretchBookmarkColumns is on by default, only an explicit false turns it off, and resets to on', async () => {
