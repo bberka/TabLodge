@@ -47,6 +47,8 @@ import {
 	DialogTitle,
 	Input,
 	Label,
+	RadioCard,
+	RadioCardGroup,
 	Select,
 	SelectContent,
 	SelectItem,
@@ -126,7 +128,8 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 
-type DialogKind = 'bookmark' | 'column' | 'move' | 'paste-links';
+type DialogKind =
+	'bookmark' | 'column' | 'move' | 'paste-links' | 'delete-column';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 type BookmarkAction =
 	'click' | 'open' | 'open-new' | 'edit' | 'move' | 'copy' | 'delete';
@@ -264,6 +267,13 @@ function NewTab() {
 		Array<LinkEntry & {include: boolean}>
 	>([]);
 	const [pastedColumn, setPastedColumn] = useState('bookmark-unfiled');
+	// Deleting a column with bookmarks: move them to another column, or delete them too.
+	const [columnDelete, setColumnDelete] = useState<{
+		column: BookmarkColumnData;
+		count: number;
+		mode: 'move' | 'delete';
+		targetColumnId: string;
+	} | null>(null);
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
@@ -695,16 +705,44 @@ function NewTab() {
 	}
 
 	/**
-	Deletes right away. Its bookmarks move to Unfiled, or are deleted with it when `discard` is set; Undo restores the column and puts them back.
+	An empty column is deleted right away. One with bookmarks asks where they go: another column, or deleted with it
+	(the only choice when it is the last column). Either way Undo restores the column and puts them back.
 	*/
-	async function deleteColumn(column: BookmarkColumnData, discard: boolean) {
+	function requestDeleteColumn(column: BookmarkColumnData) {
+		const count = bookmarks.filter(
+			(bookmark) => bookmark.columnId === column.id,
+		).length;
+		if (count === 0) {
+			void deleteColumn(column, null);
+			return;
+		}
+
+		const other = columns.find((item) => item.id !== column.id);
+		const index = columns.findIndex((item) => item.id === column.id);
+		const neighbour = columns[index + 1] ?? columns[index - 1] ?? other;
+		setColumnDelete({
+			column,
+			count,
+			mode: neighbour ? 'move' : 'delete',
+			targetColumnId: neighbour?.id ?? '',
+		});
+		setDialog('delete-column');
+	}
+
+	/**
+	`targetColumnId` receives the bookmarks; null deletes them with the column.
+	*/
+	async function deleteColumn(
+		column: BookmarkColumnData,
+		targetColumnId: string | null,
+	) {
 		const count = bookmarks.filter(
 			(bookmark) => bookmark.columnId === column.id,
 		).length;
 		const result = await send('DELETE_BOOKMARK_COLUMN', {
 			columnId: column.id,
-			targetColumnId: UNFILED_COLUMN.id,
-			discardBookmarks: discard && count > 0,
+			targetColumnId: targetColumnId ?? UNFILED_COLUMN.id,
+			discardBookmarks: targetColumnId === null && count > 0,
 		});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not delete that column.', true);
@@ -712,11 +750,29 @@ function NewTab() {
 		}
 
 		await reload();
+		const target = columns.find((item) => item.id === targetColumnId);
 		offerTrashUndo(
-			`Column “${column.name}” deleted.`,
+			count === 0
+				? `Column “${column.name}” deleted.`
+				: target
+					? `Column “${column.name}” deleted. ${plural(count, 'bookmark')} moved to “${target.name}”.`
+					: `Column “${column.name}” and ${plural(count, 'bookmark')} deleted.`,
 			result.trashId,
 			showStatus,
 			reload,
+		);
+	}
+
+	async function confirmDeleteColumn(event: SyntheticEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (!columnDelete) {
+			return;
+		}
+
+		setDialog(null);
+		await deleteColumn(
+			columnDelete.column,
+			columnDelete.mode === 'move' ? columnDelete.targetColumnId : null,
 		);
 	}
 
@@ -1318,7 +1374,7 @@ function NewTab() {
 		add: (column) => openBookmarkEditor(null, column.id),
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
-		remove: deleteColumn,
+		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
 		drop: (event, column) => dropOnColumn(event, column),
@@ -1893,6 +1949,99 @@ function NewTab() {
 				</DialogContent>
 			</Dialog>
 			<Dialog
+				open={dialog === 'delete-column'}
+				onOpenChange={(open) => !open && setDialog(null)}
+			>
+				<DialogContent size="sm">
+					<form onSubmit={confirmDeleteColumn}>
+						<DialogHeader>
+							<DialogTitle>
+								Delete column “{columnDelete?.column.name}”?
+							</DialogTitle>
+							<DialogDescription>
+								It has {plural(columnDelete?.count ?? 0, 'bookmark')}. You can
+								undo this right after.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogBody>
+							{columns.some((item) => item.id !== columnDelete?.column.id) ? (
+								<RadioCardGroup
+									label="Its bookmarks"
+									value={columnDelete?.mode ?? 'move'}
+									onValueChange={(value) =>
+										setColumnDelete(
+											(old) =>
+												old && {...old, mode: value as 'move' | 'delete'},
+										)
+									}
+								>
+									<RadioCard
+										value="move"
+										icon={ACTION_ICONS.move}
+										title="Move them to another column"
+										description="They go to the end of the column you pick."
+									/>
+									<RadioCard
+										value="delete"
+										icon={Trash2}
+										title="Delete them too"
+										description="They go to the trash bin with the column."
+									/>
+								</RadioCardGroup>
+							) : null}
+							{columnDelete?.mode === 'move' &&
+							columns.some((item) => item.id !== columnDelete.column.id) ? (
+								<div className="space-y-1.5">
+									<Label htmlFor="delete-column-target">
+										Move bookmarks to
+									</Label>
+									<Select
+										value={columnDelete.targetColumnId}
+										onValueChange={(value) =>
+											setColumnDelete(
+												(old) => old && {...old, targetColumnId: value},
+											)
+										}
+									>
+										<SelectTrigger id="delete-column-target">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{columns
+												.filter((item) => item.id !== columnDelete.column.id)
+												.map((item) => (
+													<SelectItem key={item.id} value={item.id}>
+														<ColumnLabel column={item} />
+													</SelectItem>
+												))}
+										</SelectContent>
+									</Select>
+								</div>
+							) : null}
+							{columns.every((item) => item.id === columnDelete?.column.id) ? (
+								<p className="text-sm text-muted-foreground">
+									This is your last column, so its bookmarks are deleted with it
+									and go to the trash bin.
+								</p>
+							) : null}
+						</DialogBody>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setDialog(null)}
+							>
+								Cancel
+							</Button>
+							<Button type="submit" variant="destructive">
+								<Trash2 />
+								Delete column
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+			<Dialog
 				open={dialog === 'move'}
 				onOpenChange={(open) => !open && setDialog(null)}
 			>
@@ -2238,7 +2387,7 @@ type BoardActions = {
 	add: (column: BookmarkColumnData) => void;
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
-	remove: (column: BookmarkColumnData, discard: boolean) => void;
+	remove: (column: BookmarkColumnData) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
 		columnId: string,
@@ -2294,7 +2443,7 @@ const BookmarkColumn = memo(
 		const onAdd = () => actions.add(column);
 		const onOpenAll = () => actions.openAll(column);
 		const onEdit = () => actions.edit(column);
-		const onDelete = (discard: boolean) => actions.remove(column, discard);
+		const onDelete = () => actions.remove(column);
 		const onDropOver = actions.dropOver;
 		function leaveColumn(event: DragEvent<HTMLElement>) {
 			if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -2332,15 +2481,7 @@ const BookmarkColumn = memo(
 				label: 'Delete column',
 				icon: Trash2,
 				destructive: true,
-				onSelect: () => onDelete(false),
-			},
-			{
-				id: 'delete-with-bookmarks',
-				label: 'Delete column and bookmarks',
-				icon: Trash2,
-				destructive: true,
-				disabled: siblings.length === 0,
-				onSelect: () => onDelete(true),
+				onSelect: onDelete,
 			},
 		];
 		const ColumnIcon = getIcon(column.icon, DEFAULT_COLUMN_ICON).component;
