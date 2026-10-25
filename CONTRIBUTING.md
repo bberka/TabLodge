@@ -74,6 +74,7 @@ Releases use [ZeroVer](https://0ver.org): every version is `0.<minor>.<patch>`.
 - [ ] UI follows the existing style (tokens, shadcn components, lucide icons) and works in light and dark themes and with the keyboard.
 - [ ] No new network requests, CDN assets, or permissions (or they are justified and documented in README and PRIVACY).
 - [ ] Stored-data changes stay backward compatible (bump the schema version and normalize older data in the service worker).
+- [ ] `README.md`, the landing page in `site/` (copy and screenshots), Help, and `PRIVACY.md` are updated if the change made anything in them outdated.
 - [ ] User-visible changes are described in the PR for the release notes.
 
 By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).
