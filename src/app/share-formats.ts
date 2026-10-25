@@ -1,0 +1,82 @@
+// Pure builders for the Share dialog: an HTML page, Markdown, plain links and rich text.
+export type ShareLink = {
+	title?: string;
+	url: string;
+	pinned?: boolean;
+	nativeGroup?: {title?: string} | null;
+};
+export type ShareGroup = {
+	name: string;
+	description?: string;
+	notes?: string;
+	createdAt?: number;
+	tabs: readonly ShareLink[];
+};
+export type ShareMethod = 'html' | 'markdown' | 'links' | 'rich';
+
+const ESCAPES: Record<string, string> = {
+	'&': '&amp;',
+	'<': '&lt;',
+	'>': '&gt;',
+	'"': '&quot;',
+	"'": '&#39;',
+};
+const esc = (value: unknown) =>
+	String(value ?? '').replaceAll(/["&'<>]/g, (char) => ESCAPES[char]);
+const label = (link: ShareLink) => String(link.title || link.url);
+
+export function shareCounts(groups: readonly ShareGroup[]) {
+	return {
+		groups: groups.length,
+		links: groups.reduce((sum, group) => sum + group.tabs.length, 0),
+	};
+}
+
+export function shareMarkdown(groups: readonly ShareGroup[]): string {
+	return groups
+		.map(
+			(group) =>
+				`# ${group.name}\n\n${group.tabs.map((tab) => `- [${label(tab).replaceAll(/[[\\\]]/g, String.raw`\$&`)}](${tab.url})`).join('\n')}`,
+		)
+		.join('\n\n');
+}
+
+export function shareLinks(groups: readonly ShareGroup[]): string {
+	return groups.flatMap((group) => group.tabs.map((tab) => tab.url)).join('\n');
+}
+
+export function shareRich(groups: readonly ShareGroup[]): {
+	text: string;
+	html: string;
+} {
+	return {
+		text: groups
+			.map(
+				(group) =>
+					`${group.name}\n${group.tabs.map((tab) => `${label(tab)}\n${tab.url}`).join('\n\n')}`,
+			)
+			.join('\n'.repeat(3)),
+		html: groups
+			.map(
+				(group) =>
+					`<h3>${esc(group.name)}</h3><ul>${group.tabs.map((tab) => `<li><a href="${esc(tab.url)}">${esc(label(tab))}</a></li>`).join('')}</ul>`,
+			)
+			.join(''),
+	};
+}
+
+export function shareHtmlPage(
+	title: string,
+	groups: readonly ShareGroup[],
+	appName: string,
+	formatDate: (value: number) => string = (value) =>
+		new Date(value).toLocaleDateString(),
+): string {
+	const parts = groups
+		.map(
+			(group) =>
+				`<article><header><div><h2>${esc(group.name)}</h2>${group.createdAt ? `<p>Saved ${esc(formatDate(group.createdAt))}</p>` : ''}</div><span>${group.tabs.length} ${group.tabs.length === 1 ? 'link' : 'links'}</span></header>${group.description ? `<p>${esc(group.description)}</p>` : ''}${group.notes ? `<p class="notes">${esc(group.notes)}</p>` : ''}<ol>${group.tabs.map((tab) => `<li><a href="${esc(tab.url)}" target="_blank" rel="noopener noreferrer">${esc(label(tab))}</a><small>${esc(tab.url)}${tab.pinned ? ' · Pinned' : ''}${tab.nativeGroup?.title ? ` · ${esc(tab.nativeGroup.title)}` : ''}</small></li>`).join('')}</ol></article>`,
+		)
+		.join('');
+	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${esc(title)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f5f6fa;color:#222737;font:14px/1.55 system-ui,sans-serif}main{width:min(780px,calc(100% - 32px));margin:40px auto}h1{font-size:30px;letter-spacing:-1px}article{margin:14px 0;border:1px solid #e0e3ed;border-radius:15px;background:#fff;overflow:hidden}header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid #e0e3ed}h2{margin:0;font-size:18px}header p,header span,small{color:#686f84;font-size:12px}p,ol{margin:16px 20px}p,h1,h2{overflow-wrap:anywhere}header>div{min-width:0}ol{padding-left:22px}li{padding:10px 0;border-top:1px solid #eee}a{display:block;color:#5c54c3;font-weight:650;overflow-wrap:anywhere}small{display:block;margin-top:4px;overflow-wrap:anywhere}.notes{white-space:pre-wrap}</style><main><h1>${esc(title)}</h1><p>Shared from ${esc(appName)} · ${shareCounts(groups).links} links</p>${parts}</main></html>`;
+}
