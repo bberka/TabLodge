@@ -7,6 +7,7 @@ import {
 	useState,
 	type ReactNode,
 } from 'react';
+import {installFocusRescue} from './focus-rescue';
 
 export type Theme = 'system' | 'light' | 'dark';
 
@@ -88,6 +89,8 @@ export function ThemeProvider({children}: {children?: ReactNode}) {
 	}, []);
 
 	useEffect(() => applyDocumentTheme(theme, systemDark), [theme, systemDark]);
+	// Every page mounts this provider, so it also keeps focus from falling to <body> when an item is removed.
+	useEffect(() => installFocusRescue(), []);
 
 	const changeTheme = useCallback(
 		async (nextValue: string) => {

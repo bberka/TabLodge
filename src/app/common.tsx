@@ -1,5 +1,7 @@
 import {
+	useCallback,
 	useEffect,
+	useRef,
 	useState,
 	type ComponentPropsWithoutRef,
 	type ComponentType,
@@ -175,6 +177,55 @@ export type IconComponent = ComponentType<{
 	'aria-hidden'?: boolean | 'true' | 'false';
 }>;
 
+const STORAGE_RELOAD_DELAY_MS = 60;
+
+// Each reload returns brand-new objects. Reusing the previous object for every item that did not change
+// lets memoized cards and rows skip rendering after an unrelated edit.
+const jsonCache = new WeakMap<object, string>();
+const jsonOf = (value: object) => {
+	let json = jsonCache.get(value);
+	if (json === undefined) {
+		json = JSON.stringify(value);
+		jsonCache.set(value, json);
+	}
+
+	return json;
+};
+
+function shareUnchanged<T extends {id: string}>(
+	previous: readonly T[] | undefined,
+	next: T[],
+): T[] {
+	if (!previous || previous.length === 0) {
+		return next;
+	}
+
+	const old = new Map(previous.map((item) => [item.id, item]));
+	let same = previous.length === next.length;
+	const merged = next.map((item, index) => {
+		const before = old.get(item.id);
+		const keep = before && jsonOf(before) === JSON.stringify(item);
+		if (keep) {
+			jsonCache.set(item, jsonOf(before));
+			if (previous[index] !== before) {
+				same = false;
+			}
+
+			return before;
+		}
+
+		same = false;
+		return item;
+	});
+	return same ? (previous as T[]) : merged;
+}
+
+function shareValue<T extends object>(previous: T | undefined, next: T): T {
+	return previous && jsonOf(previous) === JSON.stringify(next)
+		? previous
+		: next;
+}
+
 const RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
 const wait = (ms: number) =>
 	new Promise<void>((resolve) => {
@@ -194,7 +245,13 @@ export function useTabLodgeState() {
 	const [state, setState] = useState<TabLodgeState | null>(null);
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(true);
-	const load = async (): Promise<TabLodgeState | null> => {
+	// Each load gets a number; only the newest one may write state, so a slow older response
+	// can never overwrite a newer one.
+	const latestRequestRef = useRef(0);
+	const mountedRef = useRef(true);
+	const load = useCallback(async (): Promise<TabLodgeState | null> => {
+		latestRequestRef.current += 1;
+		const request = latestRequestRef.current;
 		try {
 			let result: ActionResult<'GET_STATE'> | ActionFailure | undefined;
 			for (let attempt = 0; ; attempt += 1) {
@@ -223,27 +280,43 @@ export function useTabLodgeState() {
 				);
 			}
 
-			setState({
+			if (request !== latestRequestRef.current || !mountedRef.current) {
+				return result;
+			}
+
+			const groups = Array.isArray(result.groups) ? result.groups : [];
+			const folders = Array.isArray(result.folders)
+				? result.folders
+				: [{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true}];
+			const bookmarkColumns = Array.isArray(result.bookmarkColumns)
+				? result.bookmarkColumns
+				: [
+						{
+							id: 'bookmark-default',
+							name: 'Bookmarks',
+							createdAt: 0,
+							isDefault: true,
+						},
+					];
+			const bookmarks = Array.isArray(result.bookmarks) ? result.bookmarks : [];
+			setState((old) => ({
 				...result,
-				groups: Array.isArray(result.groups) ? result.groups : [],
-				folders: Array.isArray(result.folders)
-					? result.folders
-					: [{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true}],
-				bookmarkColumns: Array.isArray(result.bookmarkColumns)
-					? result.bookmarkColumns
-					: [
-							{
-								id: 'bookmark-default',
-								name: 'Bookmarks',
-								createdAt: 0,
-								isDefault: true,
-							},
-						],
-				bookmarks: Array.isArray(result.bookmarks) ? result.bookmarks : [],
-			});
+				groups: shareUnchanged(old?.groups, groups),
+				folders: shareUnchanged(old?.folders, folders),
+				bookmarkColumns: shareUnchanged(old?.bookmarkColumns, bookmarkColumns),
+				bookmarks: shareUnchanged(old?.bookmarks, bookmarks),
+				settings:
+					result.settings && old?.settings
+						? shareValue(old.settings, result.settings)
+						: result.settings,
+			}));
 			setError('');
 			return result;
 		} catch (reason) {
+			if (request !== latestRequestRef.current || !mountedRef.current) {
+				return null;
+			}
+
 			setError(
 				isTransportError(reason)
 					? `${PROJECT.name}’s background service is not responding. Reload the page or the extension and try again.`
@@ -254,24 +327,36 @@ export function useTabLodgeState() {
 			);
 			return null;
 		} finally {
-			setLoading(false);
+			if (request === latestRequestRef.current && mountedRef.current) {
+				setLoading(false);
+			}
 		}
-	};
+	}, []);
 
 	useEffect(() => {
+		mountedRef.current = true;
 		void load();
+		// A burst of storage writes (an import, a bulk move, our own reload after an action) is read once.
+		let timer: ReturnType<typeof setTimeout> | undefined;
 		const onChanged = (
 			changes: Record<string, chrome.storage.StorageChange>,
 			area: chrome.storage.AreaName,
 		) => {
-			if (area === 'local' && Object.hasOwn(changes, STORAGE_KEY)) {
-				void load();
+			if (!(area === 'local' && Object.hasOwn(changes, STORAGE_KEY))) {
+				return;
 			}
+
+			clearTimeout(timer);
+			timer = setTimeout(() => void load(), STORAGE_RELOAD_DELAY_MS);
 		};
 
 		chrome.storage.onChanged.addListener(onChanged);
-		return () => chrome.storage.onChanged.removeListener(onChanged);
-	}, []);
+		return () => {
+			mountedRef.current = false;
+			clearTimeout(timer);
+			chrome.storage.onChanged.removeListener(onChanged);
+		};
+	}, [load]);
 	return {state, error, loading, reload: load};
 }
 
@@ -354,11 +439,14 @@ const TOAST_TIMEOUT_MS = {success: 4000, error: 10_000, action: 6000};
 // load) stay until dismissed.
 export function StatusLine({status}: {status: Status | null | undefined}) {
 	const [dismissed, setDismissed] = useState<string | null>(null);
+	// The timeout stops while the pointer or keyboard focus is on the toast, so Undo can always be reached.
+	const [paused, setPaused] = useState(false);
 	const visible =
 		status?.message && (status.error || status.toast) ? status : null;
 	const key = visible ? `${visible.id ?? 'fixed'}:${visible.message}` : null;
+	const shown = Boolean(visible) && dismissed !== key;
 	useEffect(() => {
-		if (!visible?.id) {
+		if (!visible?.id || paused) {
 			return undefined;
 		}
 
@@ -371,18 +459,60 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 					: TOAST_TIMEOUT_MS.success,
 		);
 		return () => clearTimeout(timer);
-	}, [key, visible?.id, visible?.error, visible?.action]);
+	}, [key, visible?.id, visible?.error, visible?.action, paused]);
+	useEffect(() => {
+		if (!shown) {
+			setPaused(false);
+		}
+	}, [shown]);
+	const undoAction = shown ? visible?.action : undefined;
+	useEffect(() => {
+		if (!undoAction) {
+			return undefined;
+		}
+
+		// Ctrl/Cmd+Z runs the toast's action (Undo) from anywhere except text fields, which keep their own undo.
+		const onKeyDown = (event: KeyboardEvent) => {
+			const target = event.target as HTMLElement | null;
+			if (
+				event.key.toLowerCase() !== 'z' ||
+				!(event.ctrlKey || event.metaKey) ||
+				event.shiftKey ||
+				event.altKey ||
+				event.defaultPrevented ||
+				target?.closest('input, textarea, select, [contenteditable="true"]') ||
+				document.querySelector('[role="dialog"], [role="alertdialog"]')
+			) {
+				return;
+			}
+
+			event.preventDefault();
+			setDismissed(key);
+			void undoAction.onClick();
+		};
+
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [undoAction, key]);
 	const Icon = visible?.error ? CircleAlert : CircleCheck;
 	return (
 		<>
 			<p className="sr-only" role="status" aria-live="polite">
 				{status && !status.error ? status.message || '' : ''}
 			</p>
-			{visible && dismissed !== key && (
+			{visible && shown && (
 				<div
 					key={key}
 					role={visible.error ? 'alert' : undefined}
-					className={`fixed bottom-5 left-1/2 z-[100] flex w-max max-w-[min(92vw,28rem)] -translate-x-1/2 animate-[pop-in_160ms_ease-out] items-start gap-2.5 rounded-lg border bg-popover py-2.5 pl-3 pr-2 text-sm text-popover-foreground shadow-lg ${visible.error ? 'border-destructive/40' : 'border-border'}`}
+					className={`fixed bottom-5 left-1/2 z-[100] flex w-max max-w-[min(92vw,28rem)] -translate-x-1/2 animate-[pop-in_160ms_ease-out] motion-reduce:animate-none items-start gap-2.5 rounded-lg border bg-popover py-2.5 pl-3 pr-2 text-sm text-popover-foreground shadow-lg ${visible.error ? 'border-destructive/40' : 'border-border'}`}
+					onMouseEnter={() => setPaused(true)}
+					onMouseLeave={() => setPaused(false)}
+					onFocus={() => setPaused(true)}
+					onBlur={(event) => {
+						if (!event.currentTarget.contains(event.relatedTarget)) {
+							setPaused(false);
+						}
+					}}
 				>
 					<Icon
 						className={`mt-0.5 h-4 w-4 shrink-0 ${visible.error ? 'text-destructive' : 'text-primary'}`}
@@ -394,6 +524,7 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 					{visible.action && (
 						<button
 							type="button"
+							aria-keyshortcuts="Control+Z Meta+Z"
 							className="shrink-0 rounded px-1.5 text-sm font-semibold leading-5 text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							onClick={() => {
 								setDismissed(key);
@@ -489,6 +620,9 @@ export function AppHeader({
 }) {
 	return (
 		<header className="mb-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border pb-4">
+			<h1 className="sr-only">
+				{PROJECT.name} {APP_PAGES.find((page) => page.id === active)?.label}
+			</h1>
 			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
 				<Brand />
 				<span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />

@@ -28,7 +28,7 @@
 		--secondary: 244 244 245;
 		--secondary-foreground: 39 39 42;
 		--muted: 244 244 245;
-		--muted-foreground: 113 113 122;
+		--muted-foreground: 100 100 110;
 		--accent: 244 244 245;
 		--accent-foreground: 39 39 42;
 		--destructive: 220 38 38;
@@ -182,6 +182,11 @@
 	.tn-card {
 		box-shadow: none;
 	}
+	/* Cards far outside the viewport skip layout and paint; the size is remembered once rendered. */
+	.tn-card-lazy {
+		content-visibility: auto;
+		contain-intrinsic-size: auto 64px;
+	}
 	.is-dragging {
 		opacity: 0.55;
 	}
@@ -233,6 +238,7 @@
 	*::after {
 		scroll-behavior: auto !important;
 		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}
 }
