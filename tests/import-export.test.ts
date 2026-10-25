@@ -83,7 +83,6 @@ const session = (
 	archived: false,
 	archivedAt: null,
 	locked: false,
-	restoreTarget: null,
 	createdAt: 1_760_000_000_000,
 	updatedAt: 1_760_000_000_000,
 	sourceWindowName: '',

@@ -155,7 +155,6 @@ export type Session = {
 	archived: boolean;
 	archivedAt: number | null;
 	locked: boolean;
-	restoreTarget: RestoreTarget | null;
 	createdAt: number;
 	updatedAt: number;
 	sourceWindowName: string;
@@ -232,7 +231,7 @@ export type SessionFields = Partial<
 		Session,
 		'name' | 'description' | 'notes' | 'archived' | 'locked' | 'folderId'
 	>
-> & {restoreTarget?: RestoreTarget | 'default' | null};
+>;
 export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'archived'>>;
 export type BookmarkFields = Partial<
 	Pick<Bookmark, 'title' | 'url' | 'columnId'>

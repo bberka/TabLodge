@@ -756,12 +756,6 @@ function normalizeGroup(
 				: createdAt
 			: null,
 		locked: Boolean(raw.locked),
-		restoreTarget: isOneOf(
-			['current-window', 'new-window-unless-only-tab', 'always-new-window'],
-			raw.restoreTarget,
-		)
-			? raw.restoreTarget
-			: null,
 		createdAt,
 		updatedAt: Number.isFinite(updated) && updated > 0 ? updated : createdAt,
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
@@ -1261,7 +1255,6 @@ async function captureTabs(
 					archived: false,
 					archivedAt: null,
 					locked: false,
-					restoreTarget: null,
 					createdAt: timestamp,
 					updatedAt: timestamp,
 					sourceWindowName: cleanText(window.title, '', 180),
@@ -2056,10 +2049,7 @@ async function restoreTab(
 		}
 
 		const result = await restoreRecords([tab], store.settings, senderTab, {
-			restoreTarget:
-				options.restoreTarget ||
-				group.restoreTarget ||
-				store.settings.restoreTarget,
+			restoreTarget: options.restoreTarget || store.settings.restoreTarget,
 			activate:
 				typeof options.activate === 'boolean'
 					? options.activate
@@ -2124,10 +2114,7 @@ async function restoreGroup(
 			return {ok: false, error: 'That saved session no longer exists.'};
 		}
 
-		const restoreTarget =
-			options.restoreTarget ||
-			group.restoreTarget ||
-			store.settings.restoreTarget;
+		const restoreTarget = options.restoreTarget || store.settings.restoreTarget;
 		const result = await restoreRecords(group.tabs, store.settings, senderTab, {
 			restoreTarget,
 			activate: options.activate !== false,
@@ -2240,22 +2227,6 @@ async function updateGroup(
 
 		if (typeof fields.locked === 'boolean') {
 			group.locked = fields.locked;
-		}
-
-		if (fields.restoreTarget === null || fields.restoreTarget === 'default') {
-			group.restoreTarget = null;
-		} else if (typeof fields.restoreTarget === 'string') {
-			if (
-				![
-					'current-window',
-					'new-window-unless-only-tab',
-					'always-new-window',
-				].includes(fields.restoreTarget)
-			) {
-				return {ok: false, error: 'Choose a valid restore location.'};
-			}
-
-			group.restoreTarget = fields.restoreTarget;
 		}
 
 		if (typeof fields.folderId === 'string') {
@@ -5113,7 +5084,6 @@ async function saveLinkForLater(
 				archived: false,
 				archivedAt: null,
 				locked: false,
-				restoreTarget: null,
 				createdAt: now,
 				updatedAt: now,
 				sourceWindowName: '',
