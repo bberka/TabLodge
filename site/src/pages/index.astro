@@ -15,7 +15,7 @@ const heroSizes = '(min-width: 1160px) 1120px, calc(100vw - 2.5rem)';
 const features = [
 	{
 		title: 'Save tabs as sessions',
-		text: 'Save a window, selected tabs, one tab group, everything left or right of a tab, or all windows at once. Each session gets a name, notes and a folder.',
+		text: 'Save a window, selected tabs, one tab group, everything left or right of a tab, or all windows at once. Each session gets a folder, a description and a name: by date, first tab, your own template, or one you type each time.',
 	},
 	{
 		title: 'Restores that remember how you worked',
@@ -23,7 +23,7 @@ const features = [
 	},
 	{
 		title: 'A bookmark board on your new tab',
-		text: 'Columns with icons, drag-and-drop ordering, and drop-a-link-to-save. Drag a saved session link straight into a column.',
+		text: 'Columns with icons, drag-and-drop ordering and drop-a-link-to-save. Paste one link or a whole list to add bookmarks, or drag a saved session link straight into a column.',
 	},
 	{
 		title: 'Search everything',
@@ -31,7 +31,7 @@ const features = [
 	},
 	{
 		title: 'Organize your sessions',
-		text: 'Folders, notes, search, sorting and multi-select. Move sessions between folders and undo any delete from the trash bin.',
+		text: 'Folders, descriptions, search, sorting and multi-select. Drag sessions onto folders, merge two sessions without duplicates, and undo any delete from the trash bin.',
 	},
 	{
 		title: 'Flexible restores',
@@ -43,7 +43,7 @@ const features = [
 	},
 	{
 		title: 'Import and back up',
-		text: 'Bring your data from other tools, and export to JSON, HTML, CSV or Markdown any time. Your backups are plain files you control.',
+		text: 'Bring your data from other tools and export to JSON, HTML, CSV or Markdown, or save everything, settings included, as one ZIP. Automatic backups, crash recovery and Undo keep your tabs safe.',
 	},
 ];
 
@@ -75,7 +75,7 @@ const faq = [
 	},
 	{
 		q: 'Does it sync between my computers?',
-		a: 'No, by design: syncing would need a server. You can export a JSON backup on one machine and import it on another.',
+		a: 'No, by design: syncing would need a server. You can save a full backup (one ZIP with everything, settings included) on one machine and import it on another.',
 	},
 	{
 		q: 'Can I import my tabs from OneTab, Session Buddy, Tab Session Manager or Toby?',
@@ -162,7 +162,7 @@ const jsonLd = [
 			<div class="actions">
 				<a class="btn primary" href={SITE.releases} rel="noopener">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11.2l3.9-3.9 1.4 1.4L12 17.1 6.7 11.7l1.4-1.4 3.9 3.9V3zM5 19h14v2H5z" /></svg>
-					Download for Chrome, Brave, Edge
+					Download for Chromium browsers
 				</a>
 				<a class="btn ghost" href={SITE.repo} rel="noopener">View on GitHub</a>
 			</div>
@@ -279,7 +279,7 @@ const jsonLd = [
 				<h3>Updating</h3>
 				<p>Download the new zip, replace the files in the same folder, then press the reload button on TabLodge's card. Reuse the same folder: the browser ties your saved data to it.</p>
 				<h3>Make a backup first</h3>
-				<p>In Settings, choose Data and export JSON. It is a plain file you can re-import anywhere.</p>
+				<p>In Settings &rsaquo; Data, choose Back up &rsaquo; Everything. It saves one ZIP with your sessions, bookmarks and settings that Import can restore.</p>
 			</div>
 		</div>
 	</section>
@@ -342,7 +342,7 @@ const jsonLd = [
 			<h2>Give your tabs a lodge</h2>
 			<p class="lead">Free, open source, and yours. Download it, load it, and keep your tabs private.</p>
 			<div class="actions center">
-				<a class="btn primary" href={SITE.releases} rel="noopener">Download for Chrome, Brave, Edge</a>
+				<a class="btn primary" href={SITE.releases} rel="noopener">Download for Chromium browsers</a>
 				<a class="btn ghost" href={SITE.repo} rel="noopener">View on GitHub</a>
 			</div>
 		</div>
