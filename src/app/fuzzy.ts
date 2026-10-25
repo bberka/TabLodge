@@ -15,7 +15,7 @@
 /**
 Lower-cases and unifies punctuation without changing the text's length, so match offsets still fit the original.
 */
-function fold(value: string): string {
+export function fold(value: string): string {
 	return value
 		.toLocaleLowerCase()
 		.replaceAll(/[‘’]/g, "'")
@@ -161,6 +161,7 @@ function fuzzyHits(
 	haystack: string,
 	term: string,
 	allowInitials: boolean,
+	allowTypos: boolean,
 ): Hit[] {
 	if (term.length < 3 || /[^\p{Letter}\p{Number}]/u.test(term)) {
 		return [];
@@ -171,7 +172,7 @@ function fuzzyHits(
 	const maxEdits = term.length >= 7 ? 2 : 1;
 	for (const word of words) {
 		// A typo or missing letter, compared with the word's start (so "sesion" finds "sessions").
-		if (term.length >= 4) {
+		if (allowTypos && term.length >= 4) {
 			for (const size of [term.length, term.length - 1, term.length + 1]) {
 				const part = word.text.slice(0, size);
 				const distance = editDistance(term, part, maxEdits);
@@ -227,12 +228,38 @@ function fuzzyHits(
 /**
 Every way `term` matches the text; typos are dropped when the text has any other kind of match.
 */
-function hitsIn(haystack: string, term: string, allowInitials: boolean): Hit[] {
-	const hits = [
-		...literalHits(haystack, term),
-		...fuzzyHits(haystack, term, allowInitials),
-	];
+function hitsIn(
+	haystack: string,
+	term: string,
+	allowInitials: boolean,
+	allowTypos = true,
+): Hit[] {
+	const literal = literalHits(haystack, term);
+	// Every literal match outranks every fuzzy one (and typos are dropped whenever another kind of match
+	// exists), so fuzzy matching only runs when the text has no literal match.
+	if (literal.length > 0) {
+		return literal;
+	}
+
+	// Initials and in-word letter matches need the term's letters in order somewhere in the text.
+	if (!allowTypos && !hasLettersInOrder(haystack, term)) {
+		return [];
+	}
+
+	const hits = fuzzyHits(haystack, term, allowInitials, allowTypos);
 	return hits.some((hit) => !hit.typo) ? hits.filter((hit) => !hit.typo) : hits;
+}
+
+function hasLettersInOrder(haystack: string, term: string): boolean {
+	let from = 0;
+	for (const char of term) {
+		from = haystack.indexOf(char, from) + 1;
+		if (from === 0) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 /**
@@ -242,19 +269,35 @@ function bestHit(
 	haystack: string,
 	term: string,
 	allowInitials: boolean,
+	allowTypos = true,
 ): Hit | undefined {
-	const hits = hitsIn(haystack, term, allowInitials);
+	const hits = hitsIn(haystack, term, allowInitials, allowTypos);
 	if (hits.length === 0) {
 		return undefined;
 	}
 
-	const score = Math.max(...hits.map((hit) => hit.score));
-	const top = hits.filter((hit) => hit.score === score);
-	return {
-		score,
-		ranges: top.flatMap((hit) => hit.ranges),
-		typo: top[0].typo,
-	};
+	let {score} = hits[0];
+	for (const hit of hits) {
+		if (hit.score > score) {
+			score = hit.score;
+		}
+	}
+
+	const ranges: Range[] = [];
+	let typo = false;
+	for (const hit of hits) {
+		if (hit.score !== score) {
+			continue;
+		}
+
+		if (ranges.length === 0) {
+			typo = hit.typo;
+		}
+
+		ranges.push(...hit.ranges);
+	}
+
+	return {score, ranges, typo};
 }
 
 type TermMatch = {score: number; field: number; start: number; end: number};
@@ -265,6 +308,7 @@ The best place for a term among all texts: a typo only counts when no text has a
 function bestMatch(
 	folded: readonly string[],
 	term: string,
+	allowTypos: boolean,
 ): TermMatch | undefined {
 	let best: (TermMatch & {typo: boolean}) | undefined;
 	for (const [field, haystack] of folded.entries()) {
@@ -272,7 +316,7 @@ function bestMatch(
 			continue;
 		}
 
-		const hit = bestHit(haystack, term, field === 0);
+		const hit = bestHit(haystack, term, field === 0, allowTypos);
 		if (!hit) {
 			continue;
 		}
@@ -306,16 +350,30 @@ export function scoreQuery(
 	query: string,
 	texts: ReadonlyArray<string | null | undefined>,
 ): number {
-	const terms = searchTerms(query);
+	return scoreFolded(
+		searchTerms(query),
+		texts.map((text) => fold(text ?? '')),
+	);
+}
+
+/**
+Like scoreQuery for a query already split into `searchTerms` and texts already `fold`ed, so a long list can be
+scored without folding every text again on every keystroke. `typos: false` skips the (slower) typo matching;
+scores of texts that match without typos are the same either way.
+*/
+export function scoreFolded(
+	terms: readonly string[],
+	folded: readonly string[],
+	typos = true,
+): number {
 	if (terms.length === 0) {
 		return 1;
 	}
 
-	const folded = texts.map((text) => fold(text ?? ''));
 	const matches: TermMatch[] = [];
 	let total = 0;
 	for (const term of terms) {
-		const match = bestMatch(folded, term);
+		const match = bestMatch(folded, term, typos);
 		if (!match) {
 			return 0;
 		}

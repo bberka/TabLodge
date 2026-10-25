@@ -2,6 +2,7 @@
 // way of opening results.
 import {
 	Fragment,
+	useDeferredValue,
 	useEffect,
 	useMemo,
 	useState,
@@ -25,6 +26,7 @@ import {
 	DialogTitle,
 	ScrollArea,
 } from '../shared/ui';
+import {scrollBehavior} from '../shared/motion';
 import type {IconComponent} from './common';
 import {
 	buildFinderIndex,
@@ -35,6 +37,7 @@ import {
 	type FinderKind,
 	type OpenTabInfo,
 } from './global-search';
+import {faviconUrl} from './favicon';
 import {highlightSegments} from './fuzzy';
 import {isPinnedLodgeTab, openLink} from './link-target';
 import type {TabLodgeState} from './types';
@@ -75,9 +78,6 @@ const KIND_ICONS: Partial<Record<FinderKind, IconComponent>> = {
 	web: Search,
 };
 
-const faviconUrl = (url: string) =>
-	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
-
 function ResultIcon({item}: {item: FinderItem}) {
 	const [failed, setFailed] = useState(false);
 	if (item.url && !failed && item.kind !== 'url') {
@@ -85,6 +85,8 @@ function ResultIcon({item}: {item: FinderItem}) {
 			<img
 				src={faviconUrl(item.url)}
 				alt=""
+				loading="lazy"
+				decoding="async"
 				className="h-5 w-5 shrink-0 object-contain"
 				onError={() => setFailed(true)}
 			/>
@@ -187,11 +189,22 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 				bookmarksEnabled: settings.bookmarksEnabled,
 				sessionsEnabled: settings.sessionsEnabled,
 			}),
-		[state, tabs, actions, settings.bookmarksEnabled, settings.sessionsEnabled],
+		[
+			state.groups,
+			state.folders,
+			state.bookmarks,
+			state.bookmarkColumns,
+			tabs,
+			actions,
+			settings.bookmarksEnabled,
+			settings.sessionsEnabled,
+		],
 	);
+	// The input stays responsive while a big library is searched: results follow the query when React has time.
+	const resultQuery = useDeferredValue(query);
 	const sections = useMemo(
-		() => searchFinder(query, catalog),
-		[query, catalog],
+		() => searchFinder(resultQuery, catalog),
+		[resultQuery, catalog],
 	);
 	const flat = useMemo(() => flattenSections(sections), [sections]);
 	useEffect(() => setIndex(0), [query]);
@@ -289,7 +302,17 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 		}
 	}
 
-	return {query, setQuery, sections, flat, selected, setIndex, run, onKeyDown};
+	return {
+		query,
+		resultQuery,
+		setQuery,
+		sections,
+		flat,
+		selected,
+		setIndex,
+		run,
+		onKeyDown,
+	};
 }
 
 /**
@@ -303,7 +326,7 @@ function revealColumn(id: string) {
 		return;
 	}
 
-	column.scrollIntoView({block: 'center', behavior: 'smooth'});
+	column.scrollIntoView({block: 'center', behavior: scrollBehavior()});
 	column.classList.add('ring-2', 'ring-primary');
 	setTimeout(() => column.classList.remove('ring-2', 'ring-primary'), 1600);
 }
@@ -317,7 +340,7 @@ function ResultList({
 	listId: string;
 	viewportClassName: string;
 }) {
-	const {query, sections, selected, setIndex, run} = finder;
+	const {resultQuery: query, sections, selected, setIndex, run} = finder;
 	let position = -1;
 	return (
 		<ScrollArea viewportClassName={viewportClassName}>
