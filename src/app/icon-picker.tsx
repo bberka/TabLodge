@@ -221,48 +221,65 @@ export function IconPickerDialog({
 	);
 }
 
-type IconPickerFieldProps = {
-	id?: string;
-	value?: string;
+type IconNameFieldProps = {
+	id: string;
+	/**
+	Visible label above the row, for example "Name".
+	*/
+	label: string;
+	/**
+	Accessible name of the text input, for example "Column name".
+	*/
+	nameLabel: string;
+	icon?: string;
 	defaultIcon: IconId;
-	onChange: (id: string | undefined) => void;
-	label?: string;
+	onIconChange: (id: string | undefined) => void;
+	inputProps: Omit<React.ComponentPropsWithoutRef<typeof Input>, 'id'>;
 };
 
 /**
-A labelled icon button for forms: shows the current (or default) icon and opens the picker.
+One form row: the icon button (opens the picker) on the left, the name input filling the rest, both 36px tall.
 */
-export function IconPickerField({
+export function IconNameField({
 	id,
-	value,
+	label,
+	nameLabel,
+	icon,
 	defaultIcon,
-	onChange,
-	label = 'Icon',
-}: IconPickerFieldProps) {
+	onIconChange,
+	inputProps,
+}: IconNameFieldProps) {
 	const [open, setOpen] = useState(false);
-	const Icon = getIcon(value, defaultIcon).component;
+	const current = getIcon(icon, defaultIcon);
+	const Icon = current.component;
 	return (
 		<div className="space-y-1.5">
 			<Label htmlFor={id}>{label}</Label>
-			<div>
+			<div className="flex items-center gap-2">
 				<Button
-					id={id}
 					type="button"
 					variant="outline"
-					className="h-9 w-9 min-h-9 p-0"
-					aria-label={`${label}: ${getIcon(value, defaultIcon).label}. Change icon`}
+					className="h-9 w-9 min-h-9 shrink-0 p-0"
+					aria-label={`Choose icon (current: ${current.label})`}
+					title="Choose icon"
 					onClick={() => {
 						setOpen(true);
 					}}
 				>
 					<Icon className="!size-5" />
 				</Button>
+				<Input
+					{...inputProps}
+					id={id}
+					aria-label={nameLabel}
+					className="min-w-0 flex-1"
+				/>
 			</div>
 			<IconPickerDialog
 				open={open}
-				value={value}
+				value={icon}
 				onOpenChange={setOpen}
-				onSelect={onChange}
+				onSelect={onIconChange}
 			/>
 		</div>
 	);
