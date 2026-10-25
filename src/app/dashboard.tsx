@@ -8,12 +8,14 @@ import {
 	type SyntheticEvent,
 } from 'react';
 import {
+	AppWindow,
 	Archive,
 	ArrowDown,
 	ArrowDownUp,
 	ArrowUp,
 	ArrowUpRight,
 	BookmarkPlus,
+	ChevronDown,
 	ChevronRight,
 	Columns2,
 	Copy,
@@ -26,6 +28,7 @@ import {
 	LockKeyhole,
 	MoreHorizontal,
 	MoreVertical,
+	PanelTop,
 	Pencil,
 	RotateCcw,
 	StickyNote,
@@ -95,6 +98,7 @@ import type {
 	Folder,
 	InsertPosition,
 	RestoreMode,
+	RestoreTarget,
 	SavedTab as SavedTabRecord,
 	Session,
 	SessionFields,
@@ -467,6 +471,7 @@ export function SessionManager({
 		forceRemove = false,
 		event?: RestoreModifiers,
 		requestedMode?: RestoreMode,
+		requestedTarget?: RestoreTarget,
 	) {
 		const restoreMode =
 			requestedMode ||
@@ -475,7 +480,8 @@ export function SessionManager({
 				: event?.ctrlKey || event?.metaKey
 					? 'keep'
 					: undefined);
-		const restoreTarget = event?.shiftKey ? 'always-new-window' : undefined;
+		const restoreTarget =
+			requestedTarget ?? (event?.shiftKey ? 'always-new-window' : undefined);
 		setBusy(`restore:${group.id}`);
 		const result = await send('RESTORE_GROUP', {
 			groupId: group.id,
@@ -1261,6 +1267,9 @@ export function SessionManager({
 									}
 									onExpanded={(next) => setGroupOpen(group.id, next)}
 									onRestore={(event) => restoreGroup(group, false, event)}
+									onRestoreTarget={(target) =>
+										restoreGroup(group, false, undefined, undefined, target)
+									}
 									onRestoreMode={(mode) =>
 										restoreGroup(group, false, undefined, mode)
 									}
@@ -1701,6 +1710,7 @@ type GroupCardProps = {
 	isExpanded: boolean;
 	onExpanded: (next: boolean) => void;
 	onRestore: (event?: RestoreModifiers) => void;
+	onRestoreTarget: (target: RestoreTarget) => void;
 	onRestoreMode: (mode: RestoreMode) => void;
 	onForceRestore: () => void;
 	onRestoreTab: (tab: SavedTabRecord, event?: RestoreModifiers) => void;
@@ -1740,6 +1750,7 @@ function GroupCard({
 	isExpanded,
 	onExpanded,
 	onRestore,
+	onRestoreTarget,
 	onRestoreMode,
 	onForceRestore,
 	onRestoreTab,
@@ -1785,6 +1796,18 @@ function GroupCard({
 			label: 'Restore',
 			icon: RotateCcw,
 			onSelect: () => onRestore(),
+		},
+		{
+			id: 'restore-here',
+			label: 'Restore in this window',
+			icon: PanelTop,
+			onSelect: () => onRestoreTarget('current-window'),
+		},
+		{
+			id: 'restore-new-window',
+			label: 'Restore in a new window',
+			icon: AppWindow,
+			onSelect: () => onRestoreTarget('always-new-window'),
 		},
 		{
 			id: 'restore-keep',
@@ -1852,6 +1875,11 @@ function GroupCard({
 			onSelect: onDelete,
 		},
 	];
+	const restoreActions = actions.filter(
+		(action) =>
+			action.type !== 'separator' &&
+			['restore-here', 'restore-new-window'].includes(action.id),
+	);
 	return (
 		<div className="relative">
 			{mark?.kind === 'session' && (
@@ -2011,14 +2039,31 @@ function GroupCard({
 									</Button>
 								</IconTooltip>
 							</span>
-							<Button
-								size="sm"
-								variant={isExpanded ? 'default' : 'secondary'}
-								onClick={onRestore}
-							>
-								<RotateCcw />
-								<span className="hidden sm:inline">Restore</span>
-							</Button>
+							<span className="flex items-center">
+								<Button
+									size="sm"
+									variant={isExpanded ? 'default' : 'secondary'}
+									className="rounded-r-none"
+									onClick={onRestore}
+								>
+									<RotateCcw />
+									<span className="hidden sm:inline">Restore</span>
+								</Button>
+								<ActionDropdownMenu
+									actions={restoreActions}
+									trigger={
+										<Button
+											size="sm"
+											variant={isExpanded ? 'default' : 'secondary'}
+											className="w-7 rounded-l-none border-l border-background/40 px-0"
+											title="Restore options"
+											aria-label={`Restore options for ${group.name}`}
+										>
+											<ChevronDown />
+										</Button>
+									}
+								/>
+							</span>
 							<ActionDropdownMenu
 								actions={actions}
 								trigger={
