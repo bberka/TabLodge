@@ -500,9 +500,23 @@ const settingsGroups: Array<{
 			},
 			{
 				name: 'showBookmarkQuickActions',
-				label: 'Show quick actions on bookmarks',
-				help: 'Add a small actions button next to each bookmark’s menu button for opening, copying, editing, or deleting.',
+				label: 'Show a quick action on bookmarks',
+				help: 'Add one button next to each bookmark’s menu button that does the action you pick below.',
 				type: 'switch',
+			},
+			{
+				name: 'bookmarkQuickAction',
+				label: 'Quick action',
+				help: 'What the button on each bookmark does. Delete still asks first.',
+				requires: 'showBookmarkQuickActions',
+				type: 'select',
+				options: [
+					['open-current', 'Open in this tab'],
+					['open-new', 'Open in new tab'],
+					['copy', 'Copy link'],
+					['edit', 'Edit'],
+					['delete', 'Delete'],
+				],
 			},
 			{
 				name: 'stretchBookmarkColumns',
