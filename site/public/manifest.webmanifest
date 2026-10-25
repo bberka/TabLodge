@@ -1,0 +1,15 @@
+{
+	"name": "TabLodge",
+	"short_name": "TabLodge",
+	"description": "A free, open-source, local-only tab session manager and bookmark board for Chromium browsers.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "browser",
+	"background_color": "#fbfaff",
+	"theme_color": "#6254d7",
+	"icons": [
+		{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+		{"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+		{"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
+	]
+}

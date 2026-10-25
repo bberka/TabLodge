@@ -1,0 +1,140 @@
+---
+import Base from '../layouts/Base.astro';
+import {SITE} from '../site';
+
+const title = 'OneTab, Session Buddy and Toby Alternative: TabLodge Compared';
+const description =
+	'Looking for a OneTab, Session Buddy or Toby alternative? Compare TabLodge, a free, open-source, local-only tab session manager for Chrome, Brave and Edge, and import your tabs in a minute.';
+
+const rows: [string, string, string, string, string][] = [
+	['Price', 'Free, MIT license', 'Free', 'Free, asks for donations', 'Free tier capped at 60 saved tabs per workspace; paid plans for more'],
+	['Account required', 'No', 'No', 'No', 'Yes'],
+	['Where your data lives', 'Locally in your browser; no servers', 'Locally; the optional "share as web page" uploads the list', 'Locally in the browser (IndexedDB)', 'Toby\'s cloud, synced across devices'],
+	['Cross-device sync', 'No, by design (export and import a backup)', 'Check OneTab for its current status', 'No', 'Yes'],
+	['Open source', 'Yes', 'No', 'No', 'No'],
+	['Bookmark board on the new tab', 'Yes', 'No', 'No', 'Yes'],
+	['Folders for saved sessions', 'Yes', 'Yes', 'Yes (collections)', 'Yes (spaces and collections)'],
+	['Automatic history or crash snapshots', 'Not yet', 'No', 'Yes', 'No'],
+	['Native tab groups and split view on restore', 'Yes (split view on Chromium 155+)', 'Not listed', 'Not listed', 'Not listed'],
+	['Export formats', 'JSON, HTML, CSV, Markdown, URL lists', 'Text URL list', 'JSON, CSV, Markdown, HTML', 'Export supported'],
+	['Import from other tools', 'OneTab, Session Buddy, Tab Session Manager, Toby, bookmarks, HTML, CSV', 'URL lists', 'Its own backups', 'Not verified'],
+];
+
+const breadcrumbs = [
+	{name: 'Home', path: '/'},
+	{name: 'Alternatives', path: '/alternatives/'},
+];
+---
+
+<Base
+	title={title}
+	description={description}
+	path="/alternatives/"
+	breadcrumbs={breadcrumbs}
+	jsonLd={[
+		{
+			'@type': 'WebPage',
+			'@id': 'https://tablodge.bbay.dev/alternatives/#webpage',
+			url: 'https://tablodge.bbay.dev/alternatives/',
+			name: title,
+			description,
+			about: {'@id': 'https://tablodge.bbay.dev/#software'},
+			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
+		},
+	]}
+>
+	<article class="narrow prose page">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Alternatives</span></nav>
+		<h1>A OneTab, Session Buddy and Toby alternative</h1>
+		<p class="lead">
+			OneTab, Session Buddy and Toby are well-known ways to save tabs. TabLodge takes a different route: free,
+			open source, local-only, with a bookmark board on your new tab. Here is an honest look at how they differ,
+			so you can pick the one that fits.
+		</p>
+		<p>
+			<a class="btn primary" href={SITE.releases} rel="noopener">Download TabLodge</a>
+		</p>
+
+		<h2>At a glance</h2>
+		<div class="table-wrap">
+			<table>
+				<caption class="note">Feature comparison, based on each product's public listings in October 2026. Details change; check each project for the latest.</caption>
+				<thead>
+					<tr>
+						<th scope="col">&nbsp;</th>
+						<th scope="col">TabLodge</th>
+						<th scope="col">OneTab</th>
+						<th scope="col">Session Buddy</th>
+						<th scope="col">Toby</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map((r) => <tr><th scope="row">{r[0]}</th><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td></tr>)}
+				</tbody>
+			</table>
+		</div>
+
+		<h2>OneTab alternative</h2>
+		<p>
+			OneTab turns your open tabs into a simple list, which is great if you want something minimal. If you like that idea but want more control, TabLodge also saves a window or just the tabs you select as a named session. On top of that it adds folders, notes, archive and lock, restores tab groups and pinned tabs, and gives you a bookmark board and a global search. Everything stays in your browser, and the code is open.
+		</p>
+		<p>
+			To move over, export your tabs from OneTab's import/export page and import the text in TabLodge under Settings, Data.
+		</p>
+
+		<h2>Session Buddy alternative</h2>
+		<p>
+			Session Buddy is a mature session saver with automatic history that can help after a crash. TabLodge does not have automatic snapshots yet, so if crash recovery is your top need, Session Buddy is a strong fit. If you want an open-source tool with a bookmark board, a side panel, a command palette and Markdown, CSV, HTML and JSON export, TabLodge may suit you better. It imports Session Buddy's JSON exports directly.
+		</p>
+
+		<h2>Toby alternative</h2>
+		<p>
+			Toby organizes tabs into cloud-synced spaces and collections, with sharing and team features, and requires an account. TabLodge is the opposite trade-off: no account and no cloud, so your data never leaves the device, but also no sync or team sharing. If you want a Toby-style board without the account and without a saved-tab cap, import your Toby JSON export and try it side by side.
+		</p>
+
+		<h2>When another tool is the better choice</h2>
+		<ul>
+			<li>You need to sync sessions between computers or share them with a team: Toby or a browser-native sync is a better fit.</li>
+			<li>You rely on automatic crash-history snapshots: Session Buddy has them, TabLodge does not yet.</li>
+			<li>You want the simplest possible one-click tab list: OneTab does exactly that.</li>
+			<li>You need an extension from an official store with automatic updates: TabLodge is not in the stores yet.</li>
+		</ul>
+
+		<h2>Switching to TabLodge</h2>
+		<ol>
+			<li><a href={SITE.releases} rel="noopener">Download and load TabLodge</a> (about a minute, see the <a href="/#install">install steps</a>).</li>
+			<li>Export your data from the other tool: OneTab as text, Session Buddy, Tab Session Manager or Toby as JSON. Keep the old extension installed until you are happy with the result.</li>
+			<li>In TabLodge open Settings, then Data, choose the file and review what will be imported. Duplicates can be skipped.</li>
+		</ol>
+		<p>TabLodge also imports your browser bookmarks, HTML bookmark files, CSV and plain URL lists.</p>
+
+		<p class="note">
+			TabLodge is an independent project and is not affiliated with, endorsed by or sponsored by OneTab, Session Buddy, Toby or their makers. Product names are used only to describe compatibility and comparisons, and belong to their respective owners. Spotted something out of date? <a href={SITE.issues} rel="noopener">Tell us on GitHub</a>.
+		</p>
+	</article>
+</Base>
+
+<style>
+	.page {
+		padding-block: 3rem 5rem;
+	}
+	.narrow.page {
+		width: min(900px, 100% - 2.5rem);
+	}
+	.crumbs {
+		font-size: 0.9rem;
+		color: var(--muted);
+		margin-bottom: 1rem;
+	}
+	caption {
+		text-align: left;
+		padding: 0.7rem 0.9rem;
+		caption-side: bottom;
+	}
+	table {
+		min-width: 760px;
+	}
+	.page h1 {
+		font-size: clamp(2rem, 4.5vw, 3rem);
+	}
+</style>
