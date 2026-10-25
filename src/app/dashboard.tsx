@@ -76,6 +76,7 @@ import {
 	ActionDropdownMenu,
 	type MenuAction,
 } from '../components/ui/action-menu';
+import {DropIndicator} from '../components/ui/drop-indicator';
 import {
 	EmptyState,
 	LoadingLine,
@@ -1843,9 +1844,6 @@ function resolveDropMark(
 	return {kind: 'tab', groupId: group.id, tabId, position};
 }
 
-const LINE_BEFORE = 'shadow-[inset_0_2px_0_0_rgb(var(--primary))]';
-const LINE_AFTER = 'shadow-[inset_0_-2px_0_0_rgb(var(--primary))]';
-
 type GroupCardProps = {
 	group: Session;
 	folders: Folder[];
@@ -2037,13 +2035,13 @@ function GroupCard({
 	return (
 		<div className={grid ? 'relative flex min-w-0' : 'relative'}>
 			{mark?.kind === 'session' && (
-				<span
-					aria-hidden="true"
-					className={`pointer-events-none absolute z-10 rounded-full bg-primary ${
+				<DropIndicator
+					orientation={sideBySide ? 'vertical' : 'horizontal'}
+					className={
 						sideBySide
-							? `inset-y-0 w-0.5 ${mark.position === 'before' ? '-left-1.5' : '-right-1.5'}`
-							: `inset-x-0 h-0.5 ${mark.position === 'before' ? '-top-1.5' : '-bottom-1.5'}`
-					}`}
+							? `inset-y-0 ${mark.position === 'before' ? '-left-[5px]' : '-right-[5px]'}`
+							: `inset-x-0 ${mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]'}`
+					}
 				/>
 			)}
 			<article
@@ -2511,7 +2509,7 @@ function SavedTab({
 				draggable
 				data-tab-id={tab.id}
 				style={tab.archived ? ARCHIVED_STYLE : undefined}
-				className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${tab.archived ? 'opacity-60 grayscale' : ''} ${dragging ? 'opacity-40' : ''} ${dropLine === 'before' ? LINE_BEFORE : ''} ${dropLine === 'after' ? LINE_AFTER : ''}`}
+				className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 relative rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${tab.archived ? 'opacity-60 grayscale' : ''} ${dragging ? 'opacity-40' : ''} `}
 				onClick={handleRowClick}
 				onDragStart={(event) => {
 					event.stopPropagation();
@@ -2522,6 +2520,11 @@ function SavedTab({
 				}}
 				onDragEnd={onDragEnd}
 			>
+				{dropLine && (
+					<DropIndicator
+						className={`inset-x-0 ${dropLine === 'before' ? '-top-px' : '-bottom-px'}`}
+					/>
+				)}
 				<span
 					className={`${compact ? '' : 'mt-1.5'} flex w-4 shrink-0 justify-center transition-opacity ${selected || selectionActive ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100'}`}
 				>
