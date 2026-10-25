@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Filled lucide "layers-2" mark; mirrored by the brand mark in src/app/common.tsx. -->
+  <path d="M12 42 64 14l52 28-52 28ZM12 86l14.9-8L64 98l37.1-20 14.9 8-52 28Z" fill="#6254D7" stroke="#6254D7" stroke-width="8" stroke-linejoin="round"/>
+</svg>

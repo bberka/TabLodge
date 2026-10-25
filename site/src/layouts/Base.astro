@@ -1,0 +1,207 @@
+---
+import '../styles/global.css';
+import {SITE, abs} from '../site';
+
+interface Crumb {
+	name: string;
+	path: string;
+}
+interface Props {
+	title: string;
+	description: string;
+	path: string;
+	ogType?: string;
+	breadcrumbs?: Crumb[];
+	jsonLd?: Record<string, unknown>[];
+	noindex?: boolean;
+}
+const {title, description, path, ogType = 'website', breadcrumbs, jsonLd = [], noindex = false} = Astro.props;
+const canonical = abs(path);
+
+const graph: Record<string, unknown>[] = [
+	{
+		'@type': 'WebSite',
+		'@id': `${SITE.url}/#website`,
+		url: `${SITE.url}/`,
+		name: SITE.name,
+		description: SITE.defaultDescription,
+		inLanguage: 'en',
+		publisher: {'@id': `${SITE.url}/#organization`},
+	},
+	{
+		'@type': 'Organization',
+		'@id': `${SITE.url}/#organization`,
+		name: SITE.name,
+		url: `${SITE.url}/`,
+		logo: abs('/icon-512.png'),
+		sameAs: [SITE.repo],
+	},
+	...jsonLd,
+];
+if (breadcrumbs) {
+	graph.push({
+		'@type': 'BreadcrumbList',
+		itemListElement: breadcrumbs.map((c, i) => ({
+			'@type': 'ListItem',
+			position: i + 1,
+			name: c.name,
+			item: abs(c.path),
+		})),
+	});
+}
+const structured = JSON.stringify({'@context': 'https://schema.org', '@graph': graph});
+const nav = [
+	{href: '/#features', label: 'Features'},
+	{href: '/#install', label: 'Install'},
+	{href: '/alternatives/', label: 'Alternatives'},
+	{href: '/#faq', label: 'FAQ'},
+];
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+		<meta name="robots" content={noindex ? 'noindex' : 'index, follow, max-image-preview:large'} />
+		<meta name="theme-color" content="#fbfaff" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#0d0b1a" media="(prefers-color-scheme: dark)" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<link rel="sitemap" href="/sitemap-index.xml" />
+		<meta property="og:site_name" content={SITE.name} />
+		<meta property="og:type" content={ogType} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={abs(SITE.ogImage)} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="TabLodge dashboard showing saved tab sessions and a bookmark board" />
+		<meta property="og:locale" content="en_US" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={abs(SITE.ogImage)} />
+		<meta name="twitter:image:alt" content="TabLodge dashboard showing saved tab sessions and a bookmark board" />
+		<slot name="head" />
+		<script type="application/ld+json" set:html={structured} />
+	</head>
+	<body>
+		<a class="skip" href="#main">Skip to content</a>
+		<header class="site-header">
+			<div class="wrap bar">
+				<a class="brand" href="/" aria-label="TabLodge home">
+					<img src="/favicon.svg" alt="" width="30" height="30" />
+					<span>TabLodge</span>
+				</a>
+				<nav aria-label="Main">
+					<ul>
+						{nav.map((n) => <li><a href={n.href}>{n.label}</a></li>)}
+						<li><a href={SITE.repo} rel="noopener">GitHub</a></li>
+					</ul>
+				</nav>
+			</div>
+		</header>
+		<main id="main">
+			<slot />
+		</main>
+		<footer class="site-footer">
+			<div class="wrap foot">
+				<div>
+					<a class="brand" href="/">
+						<img src="/favicon.svg" alt="" width="26" height="26" />
+						<span>TabLodge</span>
+					</a>
+					<p class="note">A cozy, local-only home for your tabs.<br />Free and open source.</p>
+				</div>
+				<nav aria-label="Footer">
+					<ul>
+						<li><a href={SITE.repo} rel="noopener">GitHub</a></li>
+						<li><a href={SITE.releases} rel="noopener">Download</a></li>
+						<li><a href={SITE.issues} rel="noopener">Report an issue</a></li>
+						<li><a href="/alternatives/">Alternatives</a></li>
+						<li><a href="/privacy/">Privacy</a></li>
+						<li><a href={SITE.license} rel="noopener">MIT License</a></li>
+					</ul>
+				</nav>
+			</div>
+			<p class="wrap note legal">
+				&copy; 2026 Berkay. TabLodge is not affiliated with Google, Brave, Microsoft or any other product named on this site.
+			</p>
+		</footer>
+	</body>
+</html>
+
+<style is:global>
+	.site-header {
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		background: color-mix(in srgb, var(--bg) 88%, transparent);
+		backdrop-filter: blur(10px);
+		border-bottom: 1px solid var(--line);
+	}
+	.bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		min-height: 64px;
+		flex-wrap: wrap;
+	}
+	.brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-weight: 750;
+		font-size: 1.15rem;
+		color: var(--text);
+		text-decoration: none;
+	}
+	.site-header ul,
+	.site-footer ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1.2rem;
+	}
+	.site-header a:not(.brand),
+	.site-footer a:not(.brand) {
+		color: var(--muted);
+		text-decoration: none;
+		font-weight: 550;
+		font-size: 0.97rem;
+	}
+	.site-header a:not(.brand):hover,
+	.site-footer a:not(.brand):hover {
+		color: var(--text);
+		text-decoration: underline;
+	}
+	.site-footer {
+		border-top: 1px solid var(--line);
+		padding: 2.5rem 0 2rem;
+		background: var(--bg-alt);
+	}
+	.foot {
+		display: flex;
+		justify-content: space-between;
+		gap: 2rem;
+		flex-wrap: wrap;
+	}
+	.legal {
+		margin-top: 1.6rem;
+		margin-bottom: 0;
+	}
+	@media (max-width: 560px) {
+		.bar {
+			padding-block: 0.5rem;
+		}
+	}
+</style>

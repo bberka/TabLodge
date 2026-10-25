@@ -1,3 +1,6 @@
+packages:
+  - .
+  - site
 allowBuilds:
   esbuild: true
   # Prebuilt binaries come from optional dependencies; its postinstall check isn't needed.
