@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output and caches
+dist/
+*.tsbuildinfo
+node_modules/.tmp/
+coverage/
+
+# Packaged extensions (store uploads)
+*.zip
+*.crx
+*.pem
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Scratch artifacts
+/tmp/
+
+# Editors and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Release packaging output (CI)
+/release/

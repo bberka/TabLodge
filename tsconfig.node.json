@@ -1,0 +1,18 @@
+{
+	// Build tooling run by Node (type stripping) or loaded by Vite+.
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"erasableSyntaxOnly": true,
+		"lib": ["ES2024"],
+		"types": ["node"]
+	},
+	"include": [
+		"vite.config.ts",
+		"vite.*.config.ts",
+		"xo.config.ts",
+		"scripts/**/*.ts"
+	]
+}
