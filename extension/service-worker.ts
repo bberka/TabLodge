@@ -167,6 +167,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	restoreMode: 'keep',
 	singleTabBehavior: 'stay',
 	unloadRestoredTabs: false,
+	unloadRestoredTabsThreshold: 5,
 	restoreSplitTabs: 'split',
 	saveSplitTabs: 'both',
 	sessionSort: 'newest',
@@ -820,6 +821,12 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			: 'keep',
 		singleTabBehavior: raw.singleTabBehavior === 'switch' ? 'switch' : 'stay',
 		unloadRestoredTabs: Boolean(raw.unloadRestoredTabs),
+		unloadRestoredTabsThreshold: clampInteger(
+			raw.unloadRestoredTabsThreshold,
+			1,
+			500,
+			5,
+		),
 		restoreSplitTabs:
 			raw.restoreSplitTabs === 'separate' ? 'separate' : 'split',
 		saveSplitTabs: raw.saveSplitTabs === 'focused' ? 'focused' : 'both',
@@ -2036,6 +2043,7 @@ async function restoreRecords(
 
 	if (
 		settings.unloadRestoredTabs &&
+		opened.length > settings.unloadRestoredTabsThreshold &&
 		typeof chrome.tabs.discard === 'function'
 	) {
 		const currentTabs = await chrome.tabs.query({windowId: target.id});

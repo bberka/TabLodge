@@ -96,6 +96,16 @@ type SettingField = {
 	systems?: System[];
 } & (
 	| {name: SettingKey<boolean>; type: 'switch'}
+	| {
+			name: SettingKey<number>;
+			type: 'number';
+			min: number;
+			max: number;
+			/**
+			Text after the input, such as "tabs".
+			*/
+			suffix: string;
+	  }
 	| {name: SettingKey<string>; type: 'select'; options: Array<[string, string]>}
 );
 const messageOf = (reason: unknown) =>
@@ -398,6 +408,16 @@ const settingsGroups: Array<{
 				help: 'Ask Chromium to discard background tabs after restore when the browser supports it. Active, pinned, and split view tabs are left alone.',
 				type: 'switch',
 			},
+			{
+				name: 'unloadRestoredTabsThreshold',
+				label: 'Only when restoring more than',
+				help: 'Smaller restores keep every tab loaded.',
+				requires: 'unloadRestoredTabs',
+				type: 'number',
+				min: 1,
+				max: 500,
+				suffix: 'tabs',
+			},
 		],
 	},
 	{
@@ -641,7 +661,10 @@ function Options() {
 	}, [state]);
 
 	// Values come from the switch and select controls below, so they match the setting's type.
-	async function updateSetting(name: keyof Settings, value: boolean | string) {
+	async function updateSetting(
+		name: keyof Settings,
+		value: boolean | string | number,
+	) {
 		if (name === 'toolbarOpens' && value === 'sidepanel' && !chrome.sidePanel) {
 			showStatus(
 				'The browser Side Panel API is unavailable in this version.',
@@ -1303,6 +1326,21 @@ function Options() {
 															updateSetting(field.name, value)
 														}
 													/>
+												) : field.type === 'number' ? (
+													<NumberSetting
+														label={field.label}
+														value={settings[field.name] ?? field.min}
+														min={field.min}
+														max={field.max}
+														suffix={field.suffix}
+														disabled={
+															field.requires !== undefined &&
+															settings[field.requires] === false
+														}
+														onCommit={(value) =>
+															updateSetting(field.name, value)
+														}
+													/>
 												) : (
 													<Select
 														value={settings[field.name] || field.options[0][0]}
@@ -1756,6 +1794,64 @@ function SettingRow({
 				)}
 			</div>
 			<div className="shrink-0">{children}</div>
+		</div>
+	);
+}
+
+// A small whole-number input that saves on blur or Enter; the text may be empty or out of range while typing.
+function NumberSetting({
+	label,
+	value,
+	min,
+	max,
+	suffix,
+	disabled,
+	onCommit,
+}: {
+	label: string;
+	value: number;
+	min: number;
+	max: number;
+	suffix: string;
+	disabled: boolean;
+	onCommit: (value: number) => void;
+}) {
+	const [draft, setDraft] = useState(String(value));
+	useEffect(() => setDraft(String(value)), [value]);
+	function commit() {
+		const parsed = Math.trunc(Number(draft));
+		const next = Number.isFinite(parsed)
+			? Math.min(max, Math.max(min, parsed))
+			: value;
+		setDraft(String(next));
+		if (next !== value) {
+			onCommit(next);
+		}
+	}
+
+	return (
+		<div className="flex items-center gap-2 text-sm">
+			<Input
+				type="number"
+				inputMode="numeric"
+				min={min}
+				max={max}
+				value={draft}
+				disabled={disabled}
+				aria-label={label}
+				className="h-9 w-20"
+				onChange={(event) => setDraft(event.target.value)}
+				onBlur={commit}
+				onKeyDown={(event) => {
+					if (event.key !== 'Enter') {
+						return;
+					}
+
+					event.preventDefault();
+					commit();
+				}}
+			/>
+			<span className="text-muted-foreground">{suffix}</span>
 		</div>
 	);
 }
