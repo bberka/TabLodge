@@ -893,7 +893,11 @@ export function ImportDialog({
 				}
 			}}
 		>
-			<DialogContent size="lg">
+			<DialogContent
+				size="lg"
+				// The review step uses most of the viewport so the sample list gets the space left over.
+				className={step === 'preview' ? 'h-[min(90vh,52rem)]' : undefined}
+			>
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>{description}</DialogDescription>
@@ -1020,7 +1024,7 @@ export function ImportDialog({
 					preview &&
 					source && (
 						<>
-							<DialogBody>
+							<DialogBody className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
 								{kindSwitch && <div>{kindSwitch}</div>}
 								<div className="flex min-w-0 items-start gap-3 rounded-lg border border-border px-3.5 py-3">
 									<span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -1116,7 +1120,7 @@ export function ImportDialog({
 										))}
 									</ul>
 								)}
-								<div className="min-w-0">
+								<div className="flex min-h-[20rem] min-w-0 flex-1 shrink flex-col">
 									<p className="mb-1.5 text-xs font-medium text-muted-foreground">
 										Preview
 										{preview.links > preview.sample.length
@@ -1125,7 +1129,7 @@ export function ImportDialog({
 									</p>
 									<ScrollArea
 										type="auto"
-										className="h-40 rounded-md border border-border"
+										className="min-h-0 flex-1 rounded-md border border-border"
 									>
 										<ol className="divide-y divide-border/70">
 											{preview.sample.map((item, index) => (
