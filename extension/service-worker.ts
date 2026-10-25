@@ -6759,7 +6759,7 @@ const PAGE_SAVE_ITEMS: ReadonlyArray<
 ];
 const MENU_SAVE_SCOPES: Record<string, SaveScope> = {
 	...Object.fromEntries(PAGE_SAVE_ITEMS.map(([id, , scope]) => [id, scope])),
-	[MENU.actionSaveWindow]: 'window',
+	[MENU.actionSaveWindow]: 'selected-or-window',
 };
 /**
 "Save link for later" collects links in this session (matched by name, case-insensitively).
@@ -7023,7 +7023,7 @@ function removeAllMenus(): Promise<void> {
 
 function updateMenu(
 	id: string,
-	properties: {checked?: boolean; enabled?: boolean},
+	properties: {checked?: boolean; enabled?: boolean; title?: string},
 ): Promise<void> {
 	return new Promise((resolve) => {
 		// A missing item (menus off, or mid-rebuild) is expected here, so its error is consumed silently.
@@ -7061,6 +7061,29 @@ async function menuTabOrigin(tab?: chrome.tabs.Tab): Promise<string | null> {
 	} catch {
 		return null;
 	}
+}
+
+/**
+"Save this window", or "Save 3 selected tabs" while tabs are Ctrl/Shift-selected in the focused window (the
+toolbar item saves with "selected-or-window", so the title says what a click will save).
+*/
+async function saveWindowMenuTitle(settings: Settings) {
+	const highlighted = await chrome.tabs.query({
+		lastFocusedWindow: true,
+		highlighted: true,
+	});
+	if (selectionSlots(highlighted) <= 1) {
+		return 'Save this window';
+	}
+
+	const count = selectionSlots(
+		highlighted.filter(
+			(tab) =>
+				isCapturable(tab, settings) &&
+				(settings.includePinnedTabs || !tab.pinned),
+		),
+	);
+	return `Save ${count} selected ${count === 1 ? 'tab' : 'tabs'}`;
 }
 
 async function excludeMenuState(settings: Settings, tab?: chrome.tabs.Tab) {
@@ -7156,6 +7179,9 @@ async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 		}
 
 		await updateMenu(MENU.actionExclude, await excludeMenuState(settings, tab));
+		await updateMenu(MENU.actionSaveWindow, {
+			title: await saveWindowMenuTitle(settings),
+		});
 	} catch {
 		/*
 		The checkbox is cosmetic; a click still reads the stored exclusions.
@@ -7195,6 +7221,9 @@ chrome.storage?.onChanged?.addListener?.((changes, areaName) => {
 	}
 });
 chrome.tabs?.onActivated?.addListener?.(() => {
+	void syncExcludeMenuItem();
+});
+chrome.tabs?.onHighlighted?.addListener?.(() => {
 	void syncExcludeMenuItem();
 });
 chrome.tabs?.onUpdated?.addListener?.((_tabId, changeInfo, tab) => {
