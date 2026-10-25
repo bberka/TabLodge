@@ -39,6 +39,7 @@ import {
 	ActionDropdownMenu,
 	Badge,
 	Button,
+	Checkbox,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -53,6 +54,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
+	ScrollArea,
 	TooltipProvider,
 	IconTooltip,
 	ExpandingSearch,
@@ -115,7 +117,7 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 
-type DialogKind = 'bookmark' | 'column' | 'move';
+type DialogKind = 'bookmark' | 'column' | 'move' | 'paste-links';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 type BookmarkAction =
 	| 'click'
@@ -241,6 +243,11 @@ function NewTab() {
 	const [columnDropIndicator, setColumnDropIndicator] =
 		useState<DropIndicator | null>(null);
 	const [bookmarkEdit, setBookmarkEdit] = useState<BookmarkDraft | null>(null);
+	// Several links pasted at once: each row can be left out before they are added to one column.
+	const [pastedLinks, setPastedLinks] = useState<
+		Array<LinkEntry & {include: boolean}>
+	>([]);
+	const [pastedColumn, setPastedColumn] = useState('bookmark-unfiled');
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
@@ -402,6 +409,17 @@ function NewTab() {
 				return;
 			}
 
+			const several = parsePastedLinks(event.clipboardData);
+			if (several.length > 1) {
+				event.preventDefault();
+				void pastedLinkTitles(several).then((links) => {
+					setPastedLinks(links.map((link) => ({...link, include: true})));
+					setPastedColumn(columns[0]?.id || 'bookmark-unfiled');
+					setDialog('paste-links');
+				});
+				return;
+			}
+
 			const link = parseDraggedBookmark(event.clipboardData);
 			if (!link) {
 				return;
@@ -422,6 +440,41 @@ function NewTab() {
 		document.addEventListener('paste', onPaste);
 		return () => document.removeEventListener('paste', onPaste);
 	}, [pasteToBookmark, columns]);
+
+	async function addPastedLinks(event: SyntheticEvent<HTMLFormElement>) {
+		event.preventDefault();
+		const links = pastedLinks
+			.filter((link) => link.include)
+			.map(({url, title}) => ({url, title}));
+		if (links.length === 0) {
+			return;
+		}
+
+		setBusy('paste-links');
+		try {
+			const result = await addDroppedLinks(
+				links,
+				pastedColumn,
+				null,
+				'after',
+				true,
+			);
+			setDialog(null);
+			const name =
+				columns.find((column) => column.id === pastedColumn)?.name ||
+				UNFILED_COLUMN.name;
+			offerUndo(
+				`Added ${plural(result.count, 'bookmark')} to “${name}”.`,
+				result.undoId,
+				showStatus,
+				reload,
+			);
+		} catch (reason) {
+			showStatus((reason as Error).message, true);
+		} finally {
+			setBusy('');
+		}
+	}
 
 	async function saveWindow() {
 		setBusy('save-window');
@@ -1654,6 +1707,95 @@ function NewTab() {
 				</DialogContent>
 			</Dialog>
 			<Dialog
+				open={dialog === 'paste-links'}
+				onOpenChange={(open) => !open && setDialog(null)}
+			>
+				<DialogContent size="md">
+					<form onSubmit={addPastedLinks}>
+						<DialogHeader>
+							<DialogTitle>
+								Add {plural(pastedLinks.length, 'bookmark')}
+							</DialogTitle>
+							<DialogDescription>
+								Untick any link you don't want to add.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogBody>
+							<ScrollArea className="max-h-72 rounded-md border">
+								<ul className="divide-y" aria-label="Pasted links">
+									{pastedLinks.map((link, index) => (
+										<li key={link.url}>
+											<label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm">
+												<Checkbox
+													className="mt-0.5"
+													checked={link.include}
+													aria-label={`Add ${link.title}`}
+													onCheckedChange={(checked) =>
+														setPastedLinks((old) =>
+															old.map((entry, at) =>
+																at === index
+																	? {...entry, include: checked === true}
+																	: entry,
+															),
+														)
+													}
+												/>
+												<span className="min-w-0 flex-1">
+													<span className="block truncate font-medium">
+														{link.title}
+													</span>
+													<span className="block truncate text-xs text-muted-foreground">
+														{link.url}
+													</span>
+												</span>
+											</label>
+										</li>
+									))}
+								</ul>
+							</ScrollArea>
+							<div className="space-y-1.5">
+								<Label htmlFor="pasted-links-column">Column</Label>
+								<Select value={pastedColumn} onValueChange={setPastedColumn}>
+									<SelectTrigger id="pasted-links-column">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{columns.map((column) => (
+											<SelectItem key={column.id} value={column.id}>
+												{column.name}
+											</SelectItem>
+										))}
+										<SelectItem value="bookmark-unfiled">Unfiled</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						</DialogBody>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setDialog(null)}
+							>
+								Cancel
+							</Button>
+							<Button
+								type="submit"
+								disabled={
+									busy === 'paste-links' ||
+									pastedLinks.filter((link) => link.include).length === 0
+								}
+							>
+								Add{' '}
+								{plural(
+									pastedLinks.filter((link) => link.include).length,
+									'bookmark',
+								)}
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+			<Dialog
 				open={dialog === 'column'}
 				onOpenChange={(open) => !open && setDialog(null)}
 			>
@@ -1806,6 +1948,77 @@ function parseDraggedBookmark(
 			.trim()
 			.slice(0, 500),
 	};
+}
+
+const MAX_PASTED_LINKS = 500;
+
+/**
+Every web link in pasted content: one per line in plain text or a URI list, or each link in copied HTML. Lines
+that are not a web address are ignored, and repeated addresses are kept once.
+*/
+function parsePastedLinks(dataTransfer: DataTransfer | null): LinkEntry[] {
+	if (!dataTransfer) {
+		return [];
+	}
+
+	const links = new Map<string, LinkEntry>();
+	const add = (raw: string, title = '') => {
+		const url = safeWebUrl(raw.trim());
+		if (url && !links.has(url) && links.size < MAX_PASTED_LINKS) {
+			links.set(url, {
+				url,
+				title: title
+					.replaceAll(/[\u0000-\u001F\u007F]/g, ' ')
+					.trim()
+					.slice(0, 500),
+			});
+		}
+	};
+
+	const html = dataTransfer.getData('text/html');
+	if (html) {
+		for (const anchor of new DOMParser()
+			.parseFromString(html, 'text/html')
+			.querySelectorAll('a[href]')) {
+			add(anchor.getAttribute('href') || '', anchor.textContent || '');
+		}
+	}
+
+	if (links.size < 2) {
+		links.clear();
+		const text = [
+			dataTransfer.getData('text/uri-list'),
+			dataTransfer.getData('text/plain'),
+		].join('\n');
+		for (const line of text.split(/\r?\n/)) {
+			if (!line.trimStart().startsWith('#')) {
+				add(line);
+			}
+		}
+	}
+
+	return [...links.values()];
+}
+
+/**
+Fills missing titles from open tabs showing the same page, then the domain.
+*/
+async function pastedLinkTitles(links: LinkEntry[]): Promise<LinkEntry[]> {
+	let tabs: chrome.tabs.Tab[] = [];
+	try {
+		tabs = await chrome.tabs.query({});
+	} catch {}
+
+	return links.map((link) => ({
+		url: link.url,
+		title:
+			link.title ||
+			tabs
+				.find((tab) => tab.url === link.url)
+				?.title?.trim()
+				.slice(0, 500) ||
+			domainName(link.url),
+	}));
 }
 
 async function pastedLinkTitle(link: LinkEntry): Promise<string> {
