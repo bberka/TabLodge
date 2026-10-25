@@ -22,6 +22,7 @@ import {
 	Plus,
 	LockKeyhole,
 	Eraser,
+	LifeBuoy,
 	MousePointerClick,
 	Upload,
 	Search,
@@ -65,6 +66,7 @@ import {
 } from './common';
 import type {ActionResult, EraseScope, Settings} from './types';
 import {BackupDialog, ImportDialog} from './data-transfer';
+import {RecoveryTools, SnapshotsDialog, TrashDialog} from './recovery';
 import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
 import {
@@ -94,6 +96,10 @@ type SettingField = {
 	label: string;
 	help: string;
 	requires?: SettingKey<boolean>;
+	/**
+	Like `requires`, for a dependency that is not a switch (such as "backups are not off"): the row is inset and disabled while false.
+	*/
+	enabled?: (settings: Settings) => boolean;
 	systems?: System[];
 	/**
 	The row only shows while this is true for the current settings (searching shows it regardless).
@@ -112,6 +118,14 @@ type SettingField = {
 			suffix: string;
 	  }
 	| {name: SettingKey<string>; type: 'select'; options: Array<[string, string]>}
+	| {
+			name: SettingKey<number>;
+			type: 'number-select';
+			/**
+			Value (as text) and label of each allowed number.
+			*/
+			options: Array<[string, string]>;
+	  }
 	| {name: SettingKey<string>; type: 'url'; placeholder: string}
 );
 const messageOf = (reason: unknown) =>
@@ -122,6 +136,23 @@ const listing = (parts: string[]) =>
 	parts.length < 2
 		? parts.join('')
 		: `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+const RECOVERY_TITLE = 'Recovery & backups';
+// Words people may search for that live in the tools below the Recovery & backups settings.
+const RECOVERY_TOOLS_TEXT = [
+	'Storage used',
+	'Back up now',
+	'Recent snapshots',
+	'Clear snapshots',
+	'Empty trash',
+	'Trash',
+	'Backups',
+	'Restore a backup',
+	'Download a backup',
+	'Safety backups',
+	'undo',
+	'deleted items',
+	'crash',
+];
 // Typed into the "Erase everything" dialog before its confirm button enables.
 const ERASE_WORD = 'ERASE';
 
@@ -554,13 +585,92 @@ const settingsGroups: Array<{
 			},
 		],
 	},
+	{
+		title: RECOVERY_TITLE,
+		icon: LifeBuoy,
+		description: `Everything here stays on this computer. ${PROJECT.name} never uploads snapshots, backups or deleted items.`,
+		fields: [
+			{
+				name: 'snapshotsEnabled',
+				label: 'Keep crash-recovery snapshots',
+				help: 'Saves a copy of your open windows (web pages only) every few minutes and after changes. If the browser closes unexpectedly, the dashboard offers to restore them.',
+				type: 'switch',
+			},
+			{
+				name: 'snapshotIntervalMinutes',
+				requires: 'snapshotsEnabled',
+				label: 'Add to the history every',
+				help: 'How often a snapshot joins the list under Recent snapshots. The latest state is also saved a few seconds after each tab change.',
+				type: 'number-select',
+				options: [
+					['5', '5 minutes'],
+					['15', '15 minutes'],
+					['30', '30 minutes'],
+				],
+			},
+			{
+				name: 'snapshotKeep',
+				requires: 'snapshotsEnabled',
+				label: 'Snapshots to keep',
+				help: 'The oldest are dropped first.',
+				type: 'number-select',
+				options: [
+					['10', '10 snapshots'],
+					['25', '25 snapshots'],
+					['50', '50 snapshots'],
+				],
+			},
+			{
+				name: 'autoBackup',
+				label: 'Automatic backups',
+				help: 'Keeps dated copies of your sessions, bookmarks and settings inside the extension’s storage. They can be restored or downloaded below.',
+				type: 'select',
+				options: [
+					['off', 'Off'],
+					['daily', 'Daily'],
+					['weekly', 'Weekly'],
+				],
+			},
+			{
+				name: 'autoBackupKeep',
+				enabled: (current) => current.autoBackup !== 'off',
+				label: 'Backups to keep',
+				help: 'The oldest are dropped first. Backups are skipped when nothing changed.',
+				type: 'number-select',
+				options: [
+					['7', 'Last 7'],
+					['30', 'Last 30'],
+				],
+			},
+			{
+				name: 'autoBackupToDownloads',
+				enabled: (current) => current.autoBackup !== 'off',
+				label: 'Also save a copy to Downloads',
+				help: `Writes each backup as a dated JSON file to Downloads/${PROJECT.name}. Asks the browser for the optional “Downloads” permission when you turn it on. Very large backups are too big for this; use Download in the list below.`,
+				type: 'switch',
+			},
+			{
+				name: 'trashRetentionDays',
+				label: 'Keep deleted items for',
+				help: 'Deleted sessions, saved links, bookmarks, columns and folders wait in the trash this long, then are removed for good.',
+				type: 'number-select',
+				options: [
+					['7', '7 days'],
+					['30', '30 days'],
+					['90', '90 days'],
+				],
+			},
+		],
+	},
 ];
 
 // Text of a settings row that the search box looks through: its label, help, and (for selects) option labels.
 const fieldSearchText = (field: SettingField) => [
 	field.label,
 	field.help,
-	...(field.type === 'select' ? field.options.map(([, label]) => label) : []),
+	...(field.type === 'select' || field.type === 'number-select'
+		? field.options.map(([, label]) => label)
+		: []),
 ];
 
 // The sections that are not generated from `settingsGroups`, with the extra words people may search for.
@@ -645,6 +755,16 @@ function Options() {
 	} | null>(null);
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+	const [trashOpen, setTrashOpen] = useState(false);
+	const [downloadsGranted, setDownloadsGranted] = useState(false);
+	useEffect(() => {
+		void Promise.resolve(
+			chrome.permissions?.contains({permissions: ['downloads']}),
+		)
+			.then((granted) => setDownloadsGranted(Boolean(granted)))
+			.catch(() => undefined);
+	}, []);
 	const eraseFocusRef = useRef<HTMLElement | null>(null);
 	const dataRef = useRef<HTMLDivElement>(null);
 	// The search box: `?q=` keeps the query across reloads; "/" and Ctrl/Cmd+K focus it, Escape clears it.
@@ -724,6 +844,39 @@ function Options() {
 			if (settings[otherName] === false) {
 				showStatus('Keep Sessions or Bookmarks enabled.', true);
 				return;
+			}
+		}
+
+		// Copies to Downloads need the optional permission; the browser asks for it here, straight from the click.
+		if (name === 'autoBackupToDownloads') {
+			if (value === true) {
+				let granted = false;
+				try {
+					granted = await chrome.permissions.request({
+						permissions: ['downloads'],
+					});
+				} catch {
+					granted = false;
+				}
+
+				setDownloadsGranted(granted);
+				if (!granted) {
+					showStatus(
+						'The browser did not grant Downloads access, so backups are not copied to your Downloads folder.',
+						true,
+					);
+					return;
+				}
+			} else {
+				try {
+					await chrome.permissions.remove({permissions: ['downloads']});
+				} catch {
+					/*
+					The permission may already be gone.
+					*/
+				}
+
+				setDownloadsGranted(false);
 			}
 		}
 
@@ -954,6 +1107,10 @@ function Options() {
 		(field.systems ?? []).every((system) => systemOn(system)) &&
 		(searching || !field.when || field.when(settings as Settings));
 	const hl = (text: string) => <Highlight text={text} query={query} />;
+	// A row is disabled while the switch it `requires` is off or its `enabled` check fails.
+	const rowDisabled = (field: SettingField) =>
+		(field.requires !== undefined && settings[field.requires] === false) ||
+		(field.enabled !== undefined && !field.enabled(settings as Settings));
 
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
 	const systemRows = pick(SYSTEMS.title, SYSTEM_ROWS, (row) => [
@@ -969,6 +1126,11 @@ function Options() {
 			scoreQuery(query, [title]),
 			...fields.map((field) => scoreQuery(query, fieldSearchText(field))),
 		);
+	// The tools below the Recovery & backups rows (storage, backup list, quick buttons) are searchable as a unit.
+	const recoveryTools =
+		!searching ||
+		titleHit(RECOVERY_TITLE) ||
+		matchesQuery(query, RECOVERY_TOOLS_TEXT);
 	const visibleGroups = settingsGroups
 		.filter((group) => !group.system || systemOn(group.system))
 		.map((group) => ({
@@ -979,7 +1141,11 @@ function Options() {
 				fieldSearchText,
 			),
 		}))
-		.filter((entry) => entry.fields.length)
+		.filter(
+			(entry) =>
+				entry.fields.length ||
+				(entry.group.title === RECOVERY_TITLE && recoveryTools),
+		)
 		.map((entry, index) => ({...entry, index}))
 		.toSorted((a, b) =>
 			searching
@@ -1097,6 +1263,11 @@ function Options() {
 		Number(showAppearance) +
 		systemRows.length +
 		visibleGroups.reduce((sum, entry) => sum + entry.fields.length, 0) +
+		(searching &&
+		recoveryTools &&
+		visibleGroups.some((entry) => entry.fields.length === 0)
+			? 1
+			: 0) +
 		collapsedGroups.length +
 		visibleData.length +
 		Number(showExcluded) +
@@ -1348,14 +1519,15 @@ function Options() {
 												help={hl(field.help)}
 												hint={
 													searching &&
-													field.type === 'select' &&
+													(field.type === 'select' ||
+														field.type === 'number-select') &&
 													!matchesQuery(query, [field.label, field.help])
 														? field.options
 																.map(([, label]) => label)
 																.filter((label) => matchesAnyTerm(query, label))
 														: undefined
 												}
-												inset={Boolean(field.requires)}
+												inset={Boolean(field.requires || field.enabled)}
 												highlight={query}
 											>
 												{field.type === 'switch' ? (
@@ -1363,13 +1535,13 @@ function Options() {
 														checked={
 															field.name === 'stretchBookmarkColumns'
 																? settings.stretchBookmarkColumns !== false
-																: Boolean(settings[field.name])
+																: field.name === 'autoBackupToDownloads'
+																	? Boolean(settings.autoBackupToDownloads) &&
+																		downloadsGranted
+																	: Boolean(settings[field.name])
 														}
 														aria-label={field.label}
-														disabled={
-															field.requires !== undefined &&
-															settings[field.requires] === false
-														}
+														disabled={rowDisabled(field)}
 														onCheckedChange={(value) =>
 															updateSetting(field.name, value)
 														}
@@ -1396,17 +1568,39 @@ function Options() {
 														min={field.min}
 														max={field.max}
 														suffix={field.suffix}
-														disabled={
-															field.requires !== undefined &&
-															settings[field.requires] === false
-														}
+														disabled={rowDisabled(field)}
 														onCommit={(value) =>
 															updateSetting(field.name, value)
 														}
 													/>
+												) : field.type === 'number-select' ? (
+													<Select
+														value={String(
+															settings[field.name] ?? field.options[0][0],
+														)}
+														disabled={rowDisabled(field)}
+														onValueChange={(value) =>
+															updateSetting(field.name, Number(value))
+														}
+													>
+														<SelectTrigger
+															className="w-full sm:w-64"
+															aria-label={field.label}
+														>
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent>
+															{field.options.map(([value, label]) => (
+																<SelectItem key={value} value={value}>
+																	{label}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
 												) : (
 													<Select
 														value={settings[field.name] || field.options[0][0]}
+														disabled={rowDisabled(field)}
 														onValueChange={(value) =>
 															updateSetting(field.name, value)
 														}
@@ -1429,6 +1623,14 @@ function Options() {
 											</SettingRow>
 										))}
 									</div>
+									{group.title === RECOVERY_TITLE && recoveryTools && (
+										<RecoveryTools
+											showStatus={showStatus}
+											onDataChanged={reload}
+											onOpenSnapshots={() => setSnapshotsOpen(true)}
+											onOpenTrash={() => setTrashOpen(true)}
+										/>
+									)}
 								</SectionCard>
 							),
 						)}
@@ -1600,6 +1802,18 @@ function Options() {
 				open={Boolean(backupData)}
 				showStatus={showStatus}
 				onOpenChange={(open) => !open && setBackupData(null)}
+			/>
+			<SnapshotsDialog
+				open={snapshotsOpen}
+				showStatus={showStatus}
+				onOpenChange={setSnapshotsOpen}
+				onSessionsChanged={reload}
+			/>
+			<TrashDialog
+				open={trashOpen}
+				showStatus={showStatus}
+				onOpenChange={setTrashOpen}
+				onChanged={reload}
 			/>
 			<ImportDialog
 				open={importOpen}
