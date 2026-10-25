@@ -20,6 +20,7 @@ import {
 	ChevronUp,
 	RotateCcw,
 	Info,
+	PanelRightOpen,
 	Pin,
 	AppWindow,
 } from 'lucide-react';
@@ -72,6 +73,9 @@ Stable fallback so memoized values do not see a new array on every render.
 */
 const NO_SESSIONS: Session[] = [];
 
+// Older Chromium builds and some forks lack the side panel API.
+const hasSidePanel = typeof chrome.sidePanel?.open === 'function';
+
 // Web tabs from chrome.tabs.query, which always carries an id for tabs in normal windows.
 type WebTab = chrome.tabs.Tab & {id: number; url: string};
 
@@ -90,6 +94,8 @@ function Popup() {
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
 	const [groupName, setGroupName] = useState('');
 	const [allowPinnedOnce, setAllowPinnedOnce] = useState(false);
+	// Read ahead of the click: sidePanel.open must run inside the user gesture, without awaiting anything first.
+	const [windowId, setWindowId] = useState<number | undefined>();
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(
 		state?.settings,
 	);
@@ -118,6 +124,17 @@ function Popup() {
 			),
 		[currentTabs, includePinnedTabs],
 	);
+
+	useEffect(() => {
+		if (!hasSidePanel) {
+			return;
+		}
+
+		void chrome.windows
+			.getCurrent()
+			.then((current) => setWindowId(current.id))
+			.catch(() => undefined);
+	}, []);
 
 	useEffect(() => {
 		if (!chooseOpen) {
@@ -305,6 +322,23 @@ function Popup() {
 		await openPage(url);
 	}
 
+	function openSidePanel() {
+		if (windowId === undefined) {
+			return;
+		}
+
+		chrome.sidePanel.open({windowId}).then(
+			() => window.close(),
+			(reason: unknown) =>
+				showStatus(
+					reason instanceof Error && reason.message
+						? reason.message
+						: 'Could not open the side panel.',
+					true,
+				),
+		);
+	}
+
 	async function openPage(url: string) {
 		await chrome.tabs.create({url, active: true});
 		window.close();
@@ -372,6 +406,19 @@ function Popup() {
 						>
 							Offline
 						</span>
+					)}
+					{hasSidePanel && (
+						<IconTooltip label="Open side panel">
+							<Button
+								variant="ghost"
+								size="icon"
+								aria-label="Open side panel"
+								disabled={windowId === undefined}
+								onClick={openSidePanel}
+							>
+								<PanelRightOpen className="h-4 w-4" />
+							</Button>
+						</IconTooltip>
 					)}
 					<IconTooltip label="Help">
 						<Button
@@ -463,16 +510,18 @@ function Popup() {
 									</small>
 								</span>
 							</Button>
-							<Button
-								size="sm"
-								variant="outline"
-								className="w-full justify-start gap-3 px-3"
-								disabled={busy !== ''}
-								onClick={() => save('window')}
-							>
-								<Layers2 className="h-4 w-4" />
-								Save full window with groups
-							</Button>
+							{tabSelection.selected && (
+								<Button
+									size="sm"
+									variant="outline"
+									className="w-full justify-start gap-3 px-3"
+									disabled={busy !== ''}
+									onClick={() => save('window')}
+								>
+									<Layers2 className="h-4 w-4" />
+									Save whole window
+								</Button>
+							)}
 							<Button
 								size="sm"
 								variant="outline"

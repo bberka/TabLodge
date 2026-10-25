@@ -22,6 +22,7 @@ const appEntries: Record<string, string> = {
 	'help.html': '../src/app/help.tsx',
 	'sidepanel.html': '../src/app/sidepanel.tsx',
 	'name-session.html': '../src/app/name-session.tsx',
+	'add-bookmark.html': '../src/app/add-bookmark.tsx',
 };
 
 const sourceEntryPlugin: Plugin = {

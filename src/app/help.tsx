@@ -39,25 +39,25 @@ function Help() {
 		{
 			icon: MousePointer2,
 			title: 'Quick actions',
-			text: 'The toolbar button opens a compact popup by default. Choose tabs and a session title without leaving it, or use Open Dashboard to open the full page in a separate tab. Settings can instead assign the toolbar button to save the current selection/window, the full window with tab groups, the active group, the active tab, all windows, or the active tab into the first session. A separate save preference can open the saved session afterward.',
+			text: 'The toolbar button opens a compact popup by default. Choose tabs and a session title without leaving it, or use Open Dashboard to open the full page in a separate tab. Settings can instead assign the toolbar button to save the current selection/window, the whole window, the active group, the active tab, all windows, or the active tab into the first session. A separate save preference can open the saved session afterward.',
 		},
 		{
 			icon: Layers2,
 			title: 'Saving sessions',
-			text: `Save from the popup, the right-click menus, or a keyboard shortcut. Sessions retain tab titles, notes, URLs, pinned state when opted in, and Chromium tab-group metadata. New sessions are named by date and first tab by default; change that in Settings › When saving, where “Ask each time” shows a “Name this session” dialog before saving from the popup, the dashboard or the side panel (leave it empty for the default name). Shortcuts, right-click menus and a toolbar button that saves directly save first and then open a small window to rename the session. Pinned tabs are excluded by default; when enabled, ${PROJECT.name} stores them before any close operation.`,
+			text: 'Save from the popup, the side panel, the right-click menus, or a keyboard shortcut. A session keeps each tab’s title, address and notes, and its tab group (unless you turn on Ignore tab groups in Settings); pinned tabs are left out unless you turn them on in Settings. The save shortcut saves the selected tabs, or the whole window when nothing is selected.',
 			detail:
-				'The quick chooser starts with the selected tabs (or eligible tabs in the window) checked. Review the list and title before saving.',
+				'New sessions are named by date and first tab. In Settings › When saving you can pick another style or “Ask each time”: saving from the popup, the dashboard or the side panel then asks for a name first (leave it empty for the default), and shortcuts or right-click saves open a small window to rename the session right after. In the popup, Choose tabs and title starts with your selected tabs checked so you can review them before saving.',
 		},
 		{
 			icon: RotateCcw,
 			title: 'Restoring sessions',
-			text: 'Choose whether restored tabs stay in the session, are removed after a successful restore. Set a default destination in Settings and override it for individual sessions. Tabs saved from a split view reopen side by side in Chromium-based browsers version 155 or newer, or as neighboring tabs if you choose that in Settings or the browser cannot split them.',
+			text: 'Choose whether restored tabs stay in the session or are removed after a successful restore. Set a default destination in Settings and override it for individual sessions. Tabs saved from a split view reopen side by side in Chromium-based browsers version 155 or newer, or as neighboring tabs if you choose that in Settings or the browser cannot split them.',
 			detail: `Restore modifiers: Ctrl/Cmd-click keeps the saved session and Shift-click opens a new window. For a single tab, Settings controls whether ${PROJECT.name} switches to it or stays on the current page.`,
 		},
 		{
 			icon: BookOpen,
 			title: 'Bookmarks',
-			text: 'Save the current page from the popup or the right-click menus, or add a bookmark directly. Drag bookmarks between columns to reorder or move them; insertion feedback shows where the bookmark will land. Drag a browser link or a session link onto a column to save it at that position, or paste a link anywhere on the page to open Add bookmark with it filled in.',
+			text: 'Save the current page from the popup or the right-click menus, add a bookmark directly, or press the Bookmark this page shortcut. Drag bookmarks between columns to reorder or move them; insertion feedback shows where the bookmark will land. Drag a browser link or a session link onto a column to save it at that position, or paste a link anywhere on the page to open Add bookmark with it filled in.',
 			detail: `Import a bookmark JSON file or your browser bookmarks, or export bookmarks, from the ⋯ menu on the Bookmarks toolbar of the ${PROJECT.name} page. When duplicates are found, choose skip or allow for that import; title updates are also scoped to that dialog.`,
 			href: 'newtab.html#bookmark-library',
 			action: 'Open bookmarks',
@@ -127,7 +127,11 @@ function Help() {
 						</CardHeader>
 						<CardContent>
 							<p className="text-sm leading-6 text-muted-foreground">{text}</p>
-							{detail && <p className="mt-2 text-sm font-medium">{detail}</p>}
+							{detail && (
+								<p className="mt-2 text-sm leading-6 text-muted-foreground">
+									{detail}
+								</p>
+							)}
 							{href === SHORTCUTS_URL && (
 								<>
 									<Button
@@ -190,7 +194,6 @@ function Help() {
 									<a href={href} target="_blank" rel="noopener noreferrer">
 										<Icon className="h-4 w-4" />
 										{label}
-										<ArrowUpRight className="h-4 w-4" />
 									</a>
 								</Button>
 							))}

@@ -7618,12 +7618,128 @@ test('shortcut and menu saves with "ask" save first, then open the name prompt w
 		}),
 	]);
 	(selected.listeners.onCommand as (c: string, t: unknown) => void)(
-		'save-selected-tabs',
+		'save-window',
 		{id: 1, windowId: 10},
 	);
 	await settle();
 	assert.equal(selected.state.groups[0].tabs.length, 2);
 	assert.equal(selected.windowCreateCalls.length, 1);
+});
+
+test('the save shortcut saves the selected tabs, or the whole window without a selection', async () => {
+	const three = (highlight: number[]) =>
+		nameHarness({}, [
+			webTab(1, 10, 0, {
+				active: true,
+				highlighted: highlight.includes(1),
+				url: 'https://a.example/',
+				title: 'A',
+			}),
+			webTab(2, 10, 1, {
+				highlighted: highlight.includes(2),
+				url: 'https://b.example/',
+				title: 'B',
+			}),
+			webTab(3, 10, 2, {
+				highlighted: highlight.includes(3),
+				url: 'https://c.example/',
+				title: 'C',
+			}),
+		]);
+	const press = async (harness: ReturnType<typeof three>, command: string) => {
+		(harness.listeners.onCommand as (c: string, t: unknown) => void)(command, {
+			id: 1,
+			windowId: 10,
+		});
+		await settle();
+	};
+
+	const two = three([1, 2]);
+	await press(two, 'save-window');
+	assert.equal(two.state.groups[0].tabs.length, 2);
+
+	const one = three([1]);
+	await press(one, 'save-window');
+	assert.equal(one.state.groups[0].tabs.length, 3);
+
+	const removed = three([1, 2]);
+	const before = removed.state.groups.length;
+	await press(removed, 'save-selected-tabs');
+	assert.equal(removed.state.groups.length, before);
+});
+
+test('saves record native tab groups, unless "Ignore tab groups" is on', async () => {
+	const group = {id: 5, title: 'Work', color: 'blue', collapsed: false};
+	const tabs = () => [
+		webTab(1, 10, 0, {
+			active: true,
+			groupId: 5,
+			url: 'https://a.example/',
+			title: 'A',
+		}),
+		webTab(2, 10, 1, {url: 'https://b.example/', title: 'B'}),
+	];
+	for (const ignore of [false, true]) {
+		const harness = createWorkerHarness(
+			stateWithSession({closeOnSave: false, ignoreTabGroups: ignore}),
+			tabs(),
+			{now: NAME_NOW, tabGroups: [group]},
+		);
+		const result = await harness.sendMessage({
+			type: 'SAVE_TABS',
+			scope: 'window',
+		});
+		assert.equal(result.ok, true, result.error);
+		const saved = harness.state.groups[0].tabs;
+		assert.equal(saved[0].nativeGroup?.title, ignore ? undefined : 'Work');
+		assert.equal(saved[1].nativeGroup, null);
+	}
+
+	const defaults = createWorkerHarness(stateWithSession({}), tabs());
+	const response = await defaults.sendMessage({type: 'GET_STATE'});
+	assert.equal(response.settings.ignoreTabGroups, false);
+});
+
+test('the bookmark shortcut opens the add-bookmark window for a web page only', async () => {
+	const web = nameHarness({}, [
+		webTab(1, 10, 0, {
+			active: true,
+			url: 'https://a.example/page?x=1&y=2',
+			title: 'A & B',
+		}),
+	]);
+	(web.listeners.onCommand as (c: string, t: unknown) => void)(
+		'bookmark-page',
+		{id: 1, windowId: 10},
+	);
+	await settle();
+	assert.equal(web.windowCreateCalls.length, 1);
+	const call = web.windowCreateCalls[0] as {type: string; url: string};
+	assert.equal(call.type, 'popup');
+	const url = new URL(call.url);
+	assert.equal(url.pathname, '/add-bookmark.html');
+	assert.equal(url.searchParams.get('url'), 'https://a.example/page?x=1&y=2');
+	assert.equal(url.searchParams.get('title'), 'A & B');
+
+	const internal = nameHarness({}, [
+		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
+	]);
+	(internal.listeners.onCommand as (c: string, t: unknown) => void)(
+		'bookmark-page',
+		{id: 1, windowId: 10},
+	);
+	await settle();
+	assert.equal(internal.windowCreateCalls.length, 0);
+
+	const off = nameHarness({bookmarksEnabled: false}, [
+		webTab(1, 10, 0, {active: true, url: 'https://a.example/', title: 'A'}),
+	]);
+	(off.listeners.onCommand as (c: string, t: unknown) => void)(
+		'bookmark-page',
+		{id: 1, windowId: 10},
+	);
+	await settle();
+	assert.equal(off.windowCreateCalls.length, 0);
 });
 
 test('an all-windows toolbar save asks once for every session it created', async () => {
