@@ -1740,6 +1740,29 @@ test('column delete preserves bookmarks, including when the built-in or last col
 	);
 	assert.equal(harness.state.bookmarks[0].columnId, 'bookmark-default');
 
+	const toUnfiled = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'bookmark-default',
+		targetColumnId: 'bookmark-unfiled',
+	});
+	assert.equal(toUnfiled.ok, true, toUnfiled.error);
+	assert.equal(toUnfiled.unfiled, 1);
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.id === 'default-link')!
+			.columnId,
+		'bookmark-unfiled',
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'RESTORE_TRASH', id: toUnfiled.trashId!}))
+			.ok,
+		true,
+	);
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.id === 'default-link')!
+			.columnId,
+		'bookmark-default',
+	);
+
 	const moved = await harness.sendMessage({
 		type: 'DELETE_BOOKMARK_COLUMN',
 		columnId: 'bookmark-default',
@@ -5234,6 +5257,7 @@ test('RESTORE_SNAPSHOT reopens every window with pinned tabs, groups and the act
 	assert.equal(response.ok, true, response.error);
 	assert.equal(response.windows, 2);
 	assert.equal(response.count, 4);
+	assert.equal(response.tabIds.length, 4, 'the opened tab ids are returned');
 	assert.equal(harness.createdWindows.length, 2);
 	const firstWindow = harness.createdWindows[0].id;
 	const opened = harness.openedTabs.filter(

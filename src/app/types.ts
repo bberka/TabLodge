@@ -487,7 +487,7 @@ export type TabLodgeMessages = {
 	*/
 	UPDATE_BOOKMARK_COLUMN: {columnId: string; name: string; icon?: string};
 	/**
-	Moves the column's bookmarks to `targetColumnId` (or the first remaining column), or deletes them when `discardBookmarks` is true.
+	Moves the column's bookmarks to `targetColumnId` (a remaining column or the Unfiled id), or deletes them when `discardBookmarks` is true.
 	*/
 	DELETE_BOOKMARK_COLUMN: {
 		columnId: string;
@@ -701,7 +701,7 @@ export type TabLodgeResponses = {
 	};
 	BACKUP_NOW: {backup: BackupSummary};
 	RESTORE_BACKUP: {sessions: number; bookmarks: number} & Undoable;
-	DELETE_BACKUP: {};
+	DELETE_BACKUP: Undoable;
 	GET_BACKUP_DATA: {filename: string; json: string};
 	GET_TRASH: {items: TrashSummary[]};
 	/**

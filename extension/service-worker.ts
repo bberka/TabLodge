@@ -3454,7 +3454,8 @@ async function deleteBookmarkColumn(
 		if (
 			affected.length > 0 &&
 			remaining.length > 0 &&
-			remaining.every((entry) => entry.id !== targetColumnId)
+			remaining.every((entry) => entry.id !== targetColumnId) &&
+			targetColumnId !== BOOKMARK_UNFILED_ID
 		) {
 			return {
 				ok: false,
@@ -3462,7 +3463,7 @@ async function deleteBookmarkColumn(
 			};
 		}
 
-		// With remaining columns, the check above guarantees targetColumnId is one of them.
+		// With remaining columns, the check above guarantees targetColumnId is one of them or Unfiled.
 		const movedTo =
 			remaining.length > 0 ? targetColumnId! : BOOKMARK_UNFILED_ID;
 		const trashId = await trashAdd(store.settings, {
@@ -3487,7 +3488,7 @@ async function deleteBookmarkColumn(
 		return {
 			ok: true,
 			moved: affected.length,
-			unfiled: remaining.length > 0 ? 0 : affected.length,
+			unfiled: movedTo === BOOKMARK_UNFILED_ID ? affected.length : 0,
 			deleted: 0,
 			trashId,
 		};
@@ -5380,20 +5381,22 @@ function restoreBackup(id: string): Promise<ActionResult<'RESTORE_BACKUP'>> {
 }
 
 function deleteBackup(id: string): Promise<ActionResult<'DELETE_BACKUP'>> {
-	return backupMutate(async () => {
-		const backups = await readBackups();
-		const auto = backups.auto.filter((record) => record.id !== id);
-		const safety = backups.safety.filter((record) => record.id !== id);
-		if (
-			auto.length === backups.auto.length &&
-			safety.length === backups.safety.length
-		) {
-			return {ok: false, error: 'That backup no longer exists.'};
-		}
+	return backupMutate(() =>
+		withUndo('Delete backup', [BACKUPS_KEY], async () => {
+			const backups = await readBackups();
+			const auto = backups.auto.filter((record) => record.id !== id);
+			const safety = backups.safety.filter((record) => record.id !== id);
+			if (
+				auto.length === backups.auto.length &&
+				safety.length === backups.safety.length
+			) {
+				return {ok: false, error: 'That backup no longer exists.'};
+			}
 
-		await writeBackups({...backups, auto, safety});
-		return {ok: true};
-	});
+			await writeBackups({...backups, auto, safety});
+			return {ok: true};
+		}),
+	);
 }
 
 async function getBackupData(
@@ -5912,6 +5915,11 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 		if (keys.includes(TRASH_KEY)) {
 			const inner = step;
 			step = () => trashMutate(inner);
+		}
+
+		if (keys.includes(BACKUPS_KEY)) {
+			const inner = step;
+			step = () => backupMutate(inner);
 		}
 
 		if (keys.includes(SNAPSHOTS_KEY)) {
