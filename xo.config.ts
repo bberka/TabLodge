@@ -5,7 +5,16 @@ import xoReact from 'eslint-config-xo-react';
 import type {XoConfigItem} from 'xo';
 
 const xoConfig: XoConfigItem[] = [
-	{ignores: ['dist/**', 'release/**', 'docs/**', 'site/**']},
+	{
+		ignores: [
+			'dist/**',
+			'release/**',
+			'docs/**',
+			'site/**',
+			'.agents/**',
+			'skills-lock.json',
+		],
+	},
 	{prettier: true},
 	...(xoReact({prettier: true}) as XoConfigItem[]),
 	{files: ['**/*.tsx'], settings: {react: {version: 'detect'}}},

@@ -30,3 +30,7 @@ Thumbs.db
 
 # Release packaging output (CI)
 /release/
+
+# Local AI agent skills (installed per machine)
+/.agents/
+/skills-lock.json
