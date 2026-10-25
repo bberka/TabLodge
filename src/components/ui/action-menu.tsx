@@ -157,12 +157,25 @@ function renderActions(actions: MenuAction[], kit: Kit): ReactNode {
 	});
 }
 
+/**
+Pass a function to build the actions only when the menu opens (long lists render many closed menus).
+*/
+type ActionsSource = MenuAction[] | (() => MenuAction[]);
+
+// Mounted by the menu content only while the menu is open, so closed menus cost nothing per render.
+function MenuItems({actions, kit}: {actions: ActionsSource; kit: Kit}) {
+	return renderActions(
+		typeof actions === 'function' ? actions() : actions,
+		kit,
+	);
+}
+
 export function ActionDropdownMenu({
 	actions,
 	trigger,
 	align = 'end',
 }: {
-	actions: MenuAction[];
+	actions: ActionsSource;
 	trigger: ReactElement;
 	align?: 'start' | 'end';
 }) {
@@ -170,7 +183,7 @@ export function ActionDropdownMenu({
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align}>
-				{renderActions(actions, dropdownKit)}
+				<MenuItems actions={actions} kit={dropdownKit} />
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
@@ -180,14 +193,14 @@ export function ActionContextMenu({
 	actions,
 	children,
 }: {
-	actions: MenuAction[];
+	actions: ActionsSource;
 	children: ReactElement;
 }) {
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
 			<ContextMenuContent>
-				{renderActions(actions, contextKit)}
+				<MenuItems actions={actions} kit={contextKit} />
 			</ContextMenuContent>
 		</ContextMenu>
 	);

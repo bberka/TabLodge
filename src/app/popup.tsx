@@ -440,7 +440,7 @@ function Popup() {
 											? saveWindowLabel(tabSelection)
 											: 'Save current window'}
 									</strong>
-									<small className="text-xs font-normal opacity-80">
+									<small className="text-xs font-normal opacity-90">
 										{tabSelection.selected
 											? 'Only the tabs selected in the tab strip'
 											: 'All tabs in this window'}
@@ -603,7 +603,7 @@ function Popup() {
 											variant="ghost"
 											className="h-7 w-7"
 											disabled={busy !== ''}
-											aria-label={`Restore ${group.name}`}
+											aria-label={`Restore ${group.name || 'untitled session'}`}
 											onClick={(event) => restoreSession(group, event)}
 										>
 											<RotateCcw className="h-3.5 w-3.5" />

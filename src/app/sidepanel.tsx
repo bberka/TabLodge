@@ -42,6 +42,7 @@ import {
 } from '../components/ui/action-menu';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
+import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {
 	Brand,
 	EmptyState,
@@ -52,8 +53,9 @@ import {
 	useStatus,
 	useTabLodgeState,
 } from './common';
+import {Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
-import {SnapshotsDialog, TrashDialog} from './recovery';
+import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
 import {cn} from '@/lib/utils';
@@ -138,27 +140,6 @@ function useWindowTabs() {
 	return tabs;
 }
 
-function Favicon({url, fallback}: {url: string; fallback?: string}) {
-	return (
-		<span className="relative grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded bg-muted text-[10px] font-semibold text-muted-foreground">
-			{hostname(url).slice(0, 1).toUpperCase()}
-			<img
-				src={faviconUrl(url)}
-				alt=""
-				className="absolute inset-0 h-full w-full bg-background object-contain p-0.5"
-				onError={(event) => {
-					if (fallback && event.currentTarget.src !== fallback) {
-						event.currentTarget.src = fallback;
-						return;
-					}
-
-					event.currentTarget.remove();
-				}}
-			/>
-		</span>
-	);
-}
-
 /**
 A row with a primary button and a "more" menu; the same actions open on right-click.
 */
@@ -200,6 +181,12 @@ function ActionRow({
 	);
 }
 
+/**
+Rows drawn per section and sections drawn per panel at first (a library can hold thousands); the rest load on demand.
+*/
+const ROW_PAGE = 30;
+const SECTION_PAGE = 12;
+
 function Collapsible({
 	title,
 	count,
@@ -212,9 +199,13 @@ function Collapsible({
 	count: number;
 	open: boolean;
 	onToggle: () => void;
-	children: ReactNode;
+	/**
+	Draws the first `limit` rows.
+	*/
+	children: (limit: number) => ReactNode;
 	extra?: ReactNode;
 }) {
+	const [limit, setLimit] = useState(ROW_PAGE);
 	return (
 		<section aria-label={title}>
 			<div className="flex items-center gap-1">
@@ -237,7 +228,19 @@ function Collapsible({
 				</button>
 				{extra}
 			</div>
-			{open && <div>{children}</div>}
+			{open && (
+				<div>
+					{children(limit)}
+					{count > limit && (
+						<LoadMore
+							remaining={count - limit}
+							step={ROW_PAGE}
+							noun="items"
+							onMore={() => setLimit((old) => old + ROW_PAGE)}
+						/>
+					)}
+				</div>
+			)}
 		</section>
 	);
 }
@@ -253,6 +256,10 @@ function SidePanel() {
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
 	const windowTabs = useWindowTabs();
+	const [sectionLimit, moreSections] = usePagedLimit(
+		`${chosenPanel}|${query.trim()}`,
+		SECTION_PAGE,
+	);
 	const settings = state?.settings;
 	const search = query.trim().toLocaleLowerCase();
 	const matches = (...values: Array<string | undefined>) =>
@@ -301,6 +308,12 @@ function SidePanel() {
 		[sessions, search],
 	);
 
+	const sectionCount =
+		panel === 'bookmarks'
+			? bookmarkGroups.length
+			: panel === 'sessions'
+				? visibleSessions.length
+				: 0;
 	const visibleTabs = windowTabs.filter(
 		(tab) => tab.id !== undefined && matches(tab.title, tab.url),
 	);
@@ -405,7 +418,11 @@ function SidePanel() {
 					className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					onClick={(event) => linkClick(event, url, kind)}
 				>
-					<Favicon url={url} />
+					<Favicon
+						url={url}
+						label={hostname(url)}
+						className="h-6 w-6 rounded"
+					/>
 					<span className="min-w-0">
 						<strong className="block truncate text-xs font-medium">
 							{title || hostname(url)}
@@ -551,7 +568,12 @@ function SidePanel() {
 					className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					onClick={() => void activate(tab)}
 				>
-					<Favicon url={url} fallback={tab.favIconUrl} />
+					<Favicon
+						url={url}
+						label={hostname(url)}
+						fallbackSrc={tab.favIconUrl}
+						className="h-6 w-6 rounded"
+					/>
 					<span className="min-w-0">
 						<strong
 							className={cn(
@@ -642,6 +664,7 @@ function SidePanel() {
 		>
 			<div className="shrink-0 px-3 pt-3">
 				<header className="mb-3 flex min-w-0 items-center justify-between gap-2">
+					<h1 className="sr-only">{PROJECT.name} side panel</h1>
 					<Brand />
 					<div className="flex shrink-0 items-center gap-1">
 						<Button asChild variant="ghost" size="sm">
@@ -746,7 +769,7 @@ function SidePanel() {
 									)}
 								</EmptyState>
 							) : (
-								bookmarkGroups.map((column) => (
+								bookmarkGroups.slice(0, sectionLimit).map((column) => (
 									<Collapsible
 										key={column.id}
 										title={column.name}
@@ -754,11 +777,15 @@ function SidePanel() {
 										open={Boolean(search) || !closed.has(column.id)}
 										onToggle={() => toggle(closed, column.id, setClosed)}
 									>
-										{column.items.map((bookmark) => (
-											<div key={bookmark.id}>
-												{linkRow(bookmark.url, bookmark.title, 'bookmark')}
-											</div>
-										))}
+										{(limit) =>
+											column.items
+												.slice(0, limit)
+												.map((bookmark) => (
+													<div key={bookmark.id}>
+														{linkRow(bookmark.url, bookmark.title, 'bookmark')}
+													</div>
+												))
+										}
 									</Collapsible>
 								))
 							)
@@ -781,43 +808,49 @@ function SidePanel() {
 										: 'Save the tabs in this window from the Tabs section.'}
 								</EmptyState>
 							) : (
-								visibleSessions.map(({session, tabs}) => (
-									<Collapsible
-										key={session.id}
-										title={session.name}
-										count={tabs.length}
-										open={
-											Boolean(search) ||
-											(settings?.expandSessionsByDefault === true
-												? !closed.has(session.id)
-												: opened.has(session.id))
-										}
-										extra={
-											<IconTooltip label={`Restore ${session.name}`}>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-7 w-7 shrink-0"
-													aria-label={`Restore ${session.name}`}
-													onClick={() => void restoreSession(session)}
-												>
-													<RotateCcw className="h-4 w-4" />
-												</Button>
-											</IconTooltip>
-										}
-										onToggle={() =>
-											settings?.expandSessionsByDefault === true
-												? toggle(closed, session.id, setClosed)
-												: toggle(opened, session.id, setOpened)
-										}
-									>
-										{tabs.map((tab) => (
-											<div key={tab.id}>
-												{linkRow(tab.url, tab.title, 'session')}
-											</div>
-										))}
-									</Collapsible>
-								))
+								visibleSessions
+									.slice(0, sectionLimit)
+									.map(({session, tabs}) => (
+										<Collapsible
+											key={session.id}
+											title={session.name}
+											count={tabs.length}
+											open={
+												Boolean(search) ||
+												(settings?.expandSessionsByDefault === true
+													? !closed.has(session.id)
+													: opened.has(session.id))
+											}
+											extra={
+												<IconTooltip label={`Restore ${session.name}`}>
+													<Button
+														variant="ghost"
+														size="icon"
+														className="h-7 w-7 shrink-0"
+														aria-label={`Restore ${session.name || 'untitled session'}`}
+														onClick={() => void restoreSession(session)}
+													>
+														<RotateCcw className="h-4 w-4" />
+													</Button>
+												</IconTooltip>
+											}
+											onToggle={() =>
+												settings?.expandSessionsByDefault === true
+													? toggle(closed, session.id, setClosed)
+													: toggle(opened, session.id, setOpened)
+											}
+										>
+											{(limit) =>
+												tabs
+													.slice(0, limit)
+													.map((tab) => (
+														<div key={tab.id}>
+															{linkRow(tab.url, tab.title, 'session')}
+														</div>
+													))
+											}
+										</Collapsible>
+									))
 							)
 						) : (
 							<Note>
@@ -837,6 +870,14 @@ function SidePanel() {
 						) : (
 							<div>{visibleTabs.map((tab) => tabRow(tab))}</div>
 						))}
+					{sectionCount > sectionLimit && (
+						<LoadMore
+							remaining={sectionCount - sectionLimit}
+							step={SECTION_PAGE}
+							noun={panel === 'bookmarks' ? 'columns' : 'sessions'}
+							onMore={moreSections}
+						/>
+					)}
 				</div>
 			</ScrollArea>
 			{panel === 'tabs' && sessionsEnabled && (
@@ -907,12 +948,6 @@ function hostname(value: string) {
 	} catch {
 		return value || 'Untitled';
 	}
-}
-
-function faviconUrl(value: string) {
-	return chrome.runtime.getURL(
-		`_favicon/?pageUrl=${encodeURIComponent(value)}&size=32`,
-	);
 }
 
 createRoot(document.querySelector('#root')!).render(

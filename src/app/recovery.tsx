@@ -8,7 +8,6 @@ import {
 	ChevronRight,
 	Download,
 	History,
-	LifeBuoy,
 	RotateCcw,
 	Save,
 	Trash2,
@@ -25,8 +24,17 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '../shared/ui';
+import {downloadFile} from '../shared/download';
 import {send, type ShowStatus} from './common';
-import {downloadFile} from './data-transfer';
+import {
+	messageOf,
+	plural,
+	reportSnapshotRestore,
+	useSnapshots,
+	whenText,
+	bytesText,
+	offerUndo,
+} from './recovery-core';
 import type {
 	ActionSuccess,
 	BackupSummary,
@@ -36,183 +44,6 @@ import type {
 	TrashSummary,
 } from './types';
 
-const plural = (count: number, one: string, many = `${one}s`) =>
-	`${count} ${count === 1 ? one : many}`;
-const messageOf = (reason: unknown) =>
-	(reason as {message?: string} | null | undefined)?.message;
-
-/**
-A date and time in the user's locale, such as "Oct 25, 2026, 2:32 PM".
-*/
-export function whenText(time: number): string {
-	return new Date(time).toLocaleString(undefined, {
-		dateStyle: 'medium',
-		timeStyle: 'short',
-	});
-}
-
-/**
-A byte count such as "1.4 MB".
-*/
-export function bytesText(bytes: number): string {
-	if (bytes < 1024) {
-		return `${bytes} B`;
-	}
-
-	return bytes < 1024 * 1024
-		? `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`
-		: `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/**
-Window event that asks the page to open the snapshots or trash dialog (sent by menus and palette commands).
-*/
-export const RECOVERY_EVENT = 'tablodge:recovery';
-export type RecoveryEventDetail = {type: 'snapshots' | 'trash'};
-export function emitRecoveryEvent(detail: RecoveryEventDetail) {
-	globalThis.dispatchEvent(new CustomEvent(RECOVERY_EVENT, {detail}));
-}
-
-/**
-Opens the dialog a menu or palette command asked for.
-*/
-export function useRecoveryEvents(
-	onOpen: (type: RecoveryEventDetail['type']) => void,
-) {
-	useEffect(() => {
-		const handler = (event: Event) =>
-			onOpen((event as CustomEvent<RecoveryEventDetail>).detail.type);
-		globalThis.addEventListener(RECOVERY_EVENT, handler);
-		return () => globalThis.removeEventListener(RECOVERY_EVENT, handler);
-	}, [onOpen]);
-}
-
-/**
-Undo for a delete: puts the item back from the trash, then lets the page reload its data.
-*/
-export async function undoFromTrash(
-	trashId: string | undefined,
-	showStatus: ShowStatus,
-	reload: () => unknown,
-) {
-	if (!trashId) {
-		return;
-	}
-
-	const result = await send('RESTORE_TRASH', {id: trashId});
-	if (result?.ok) {
-		showStatus(`Restored to ${result.placed}.`, false, {toast: true});
-		await reload();
-	} else {
-		showStatus(result?.error || 'Could not undo that.', true);
-	}
-}
-
-/**
-A success toast with an Undo button that restores `trashId` from the trash.
-*/
-export function offerTrashUndo(
-	message: string,
-	trashId: string | undefined,
-	showStatus: ShowStatus,
-	reload: () => unknown,
-) {
-	showStatus(
-		message,
-		false,
-		trashId
-			? {
-					action: {
-						label: 'Undo',
-						onClick: () => undoFromTrash(trashId, showStatus, reload),
-					},
-				}
-			: {toast: true},
-	);
-}
-
-/**
-A success toast with an Undo button that runs `UNDO` for an `undoId` from the service worker, then lets the page reload its data.
-*/
-export function offerUndo(
-	message: string,
-	undoId: string | undefined,
-	showStatus: ShowStatus,
-	reload: () => unknown,
-) {
-	showStatus(
-		message,
-		false,
-		undoId
-			? {
-					action: {
-						label: 'Undo',
-						async onClick() {
-							const result = await send('UNDO', {id: undoId});
-							if (result?.ok) {
-								showStatus(`Undone: ${result.label}.`, false, {toast: true});
-								await reload();
-							} else {
-								showStatus(result?.error || 'Could not undo that.', true);
-							}
-						},
-					},
-				}
-			: {toast: true},
-	);
-}
-
-/**
-A success toast with an Undo button that closes the tabs just opened (the ones that still exist).
-*/
-export function offerCloseTabsUndo(
-	message: string,
-	tabIds: number[],
-	showStatus: ShowStatus,
-	isError = false,
-) {
-	showStatus(
-		message,
-		isError,
-		tabIds.length > 0
-			? {
-					action: {
-						label: 'Undo',
-						async onClick() {
-							try {
-								await chrome.tabs.remove(tabIds);
-							} catch {
-								// Some of them were already closed; close the rest one by one.
-								await Promise.all(
-									tabIds.map(async (id) =>
-										chrome.tabs.remove(id).catch(() => undefined),
-									),
-								);
-							}
-
-							showStatus('Closed the opened tabs.', false, {toast: true});
-						},
-					},
-				}
-			: {toast: true},
-	);
-}
-
-/**
-Reports a snapshot restore with an Undo that closes the tabs it opened.
-*/
-function reportSnapshotRestore(
-	result: ActionSuccess<'RESTORE_SNAPSHOT'>,
-	showStatus: ShowStatus,
-) {
-	offerCloseTabsUndo(
-		`Restored ${plural(result.windows, 'window')} · ${plural(result.count, 'tab')}${result.failed ? ` · ${result.failed} failed` : ''}.`,
-		result.tabIds,
-		showStatus,
-		Boolean(result.failed),
-	);
-}
-
 const REASON_LABELS: Record<SnapshotReason, string> = {
 	interval: 'Regular snapshot',
 	startup: 'At startup',
@@ -220,127 +51,6 @@ const REASON_LABELS: Record<SnapshotReason, string> = {
 	exit: 'When the browser was closed',
 	manual: 'Saved by you',
 };
-
-type SnapshotsData = ActionSuccess<'GET_SNAPSHOTS'>;
-
-function useSnapshots(active: boolean) {
-	const [data, setData] = useState<SnapshotsData | null>(null);
-	const [error, setError] = useState('');
-	const load = useCallback(async () => {
-		try {
-			const result = await send('GET_SNAPSHOTS');
-			if (result?.ok) {
-				setData(result);
-				setError('');
-			} else {
-				setError(result?.error || 'Could not read the snapshots.');
-			}
-		} catch (reason) {
-			setError(messageOf(reason) || 'Could not read the snapshots.');
-		}
-	}, []);
-	useEffect(() => {
-		if (active) {
-			void load();
-		}
-	}, [active, load]);
-	return {data, error, reload: load};
-}
-
-/**
-"Restore your last browsing session? N windows · M tabs" shown on the dashboard after an unclean exit.
-*/
-export function RecoveryBanner({
-	showStatus,
-	onReview,
-}: {
-	showStatus: ShowStatus;
-	onReview: () => void;
-}) {
-	const {data, reload} = useSnapshots(true);
-	const [busy, setBusy] = useState(false);
-	useEffect(() => {
-		const onChanged = (
-			changes: Record<string, chrome.storage.StorageChange>,
-			area: chrome.storage.AreaName,
-		) => {
-			if (area === 'local' && 'tablodge.snapshots.meta' in changes) {
-				void reload();
-			}
-		};
-
-		chrome.storage.onChanged.addListener(onChanged);
-		return () => chrome.storage.onChanged.removeListener(onChanged);
-	}, [reload]);
-	const recovery = data?.recovery;
-	if (!recovery) {
-		return null;
-	}
-
-	async function restore() {
-		if (busy || !recovery) {
-			return;
-		}
-
-		setBusy(true);
-		try {
-			const result = await send('RESTORE_SNAPSHOT', {
-				id: recovery.snapshotId,
-			});
-			if (result?.ok) {
-				reportSnapshotRestore(result, showStatus);
-			} else {
-				showStatus(result?.error || 'Could not restore that session.', true);
-			}
-		} catch (reason) {
-			showStatus(messageOf(reason) || 'Could not restore that session.', true);
-		}
-
-		setBusy(false);
-		await reload();
-	}
-
-	async function dismiss() {
-		await send('DISMISS_RECOVERY');
-		await reload();
-	}
-
-	return (
-		<section
-			aria-label="Session recovery"
-			className="mb-6 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/[.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-		>
-			<div className="flex min-w-0 items-start gap-3">
-				<span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-					<LifeBuoy className="h-4 w-4" aria-hidden="true" />
-				</span>
-				<div className="min-w-0">
-					<p className="text-sm font-semibold">
-						Restore your last browsing session?
-					</p>
-					<p className="text-xs leading-5 text-muted-foreground">
-						{plural(recovery.windows, 'window')} ·{' '}
-						{plural(recovery.tabs, 'tab')} · {whenText(recovery.at)}. The
-						browser seems to have closed unexpectedly.
-					</p>
-				</div>
-			</div>
-			<div className="flex shrink-0 flex-wrap gap-2">
-				<Button size="sm" disabled={busy} onClick={() => void restore()}>
-					<RotateCcw className="h-4 w-4" />
-					{busy ? 'Restoring' : 'Restore'}
-				</Button>
-				<Button size="sm" variant="outline" onClick={onReview}>
-					<History className="h-4 w-4" />
-					Review
-				</Button>
-				<Button size="sm" variant="ghost" onClick={() => void dismiss()}>
-					Dismiss
-				</Button>
-			</div>
-		</section>
-	);
-}
 
 function SnapshotRow({
 	snapshot,
@@ -1089,3 +799,17 @@ export function RecoveryTools({
 		</div>
 	);
 }
+
+// The helpers moved to recovery-core.ts; other modules still import them from here.
+export {
+	RECOVERY_EVENT,
+	bytesText,
+	emitRecoveryEvent,
+	offerCloseTabsUndo,
+	offerTrashUndo,
+	offerUndo,
+	undoFromTrash,
+	useRecoveryEvents,
+	whenText,
+	type RecoveryEventDetail,
+} from './recovery-core';
