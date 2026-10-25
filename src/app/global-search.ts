@@ -1,6 +1,6 @@
 // Pure logic for the global finder (command palette): builds a flat index of everything searchable, ranks it
 // with the shared fuzzy scorer, groups the hits by type, and recognizes typed web addresses.
-import {scoreQuery, searchTerms} from './fuzzy';
+import {fold, scoreFolded, searchTerms} from './fuzzy';
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
 
 export type FinderKind =
@@ -33,6 +33,10 @@ export type FinderItem = {
 	Texts the query is matched against; the first counts most.
 	*/
 	texts: ReadonlyArray<string | undefined>;
+	/**
+	`texts`, folded for matching (filled in by the index builder, once, instead of on every keystroke).
+	*/
+	folded?: readonly string[];
 	/**
 	What the item refers to: a session, column, folder, command or browser-tab id.
 	*/
@@ -104,6 +108,11 @@ const EMPTY_LIMIT: Partial<Record<FinderKind, number>> = {
 	command: 8,
 };
 
+/**
+Most items per group that the (slow) typo pass looks at, so a huge library cannot stall a keystroke.
+*/
+const TYPO_SCAN_LIMIT = 1500;
+
 const MAX_TEXT = 400;
 const clip = (value: string | undefined) => (value ?? '').slice(0, MAX_TEXT);
 
@@ -145,76 +154,132 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 	);
 	columnName.set(UNFILED, 'Unfiled');
 	for (const command of sources.commands) {
-		items.push({
-			id: `command:${command.id}`,
-			kind: 'command',
-			title: command.title,
-			texts: [command.title, ...(command.keywords ?? [])],
-			ref: command.id,
-		});
+		items.push(
+			prepared({
+				id: `command:${command.id}`,
+				kind: 'command',
+				title: command.title,
+				texts: [command.title, ...(command.keywords ?? [])],
+				ref: command.id,
+			}),
+		);
 	}
 
 	for (const tab of sources.tabs) {
-		items.push({
-			id: `tab:${tab.id}`,
-			kind: 'tab',
-			title: tab.title || hostOf(tab.url),
-			detail: hostOf(tab.url),
-			url: tab.url,
-			texts: [clip(tab.title), matchableUrl(tab.url)],
-			ref: String(tab.id),
-			windowId: tab.windowId,
-		});
+		items.push(
+			prepared({
+				id: `tab:${tab.id}`,
+				kind: 'tab',
+				title: tab.title || hostOf(tab.url),
+				detail: hostOf(tab.url),
+				url: tab.url,
+				texts: [clip(tab.title), matchableUrl(tab.url)],
+				ref: String(tab.id),
+				windowId: tab.windowId,
+			}),
+		);
 	}
 
 	if (sources.bookmarksEnabled !== false) {
-		for (const bookmark of sources.bookmarks) {
-			const column = columnName.get(bookmark.columnId) ?? '';
-			items.push({
-				id: `bookmark:${bookmark.id}`,
-				kind: 'bookmark',
-				title: bookmark.title || hostOf(bookmark.url),
-				detail: column ? `${hostOf(bookmark.url)} · ${column}` : undefined,
-				url: bookmark.url,
-				texts: [clip(bookmark.title), matchableUrl(bookmark.url), column],
-				ref: bookmark.id,
-			});
-		}
-
+		items.push(
+			...cachedBookmarkItems(sources.bookmarks, sources.columns, columnName),
+		);
 		for (const column of sources.columns) {
-			items.push({
-				id: `column:${column.id}`,
-				kind: 'column',
-				title: column.name,
-				texts: [column.name],
-				ref: column.id,
-			});
+			items.push(
+				prepared({
+					id: `column:${column.id}`,
+					kind: 'column',
+					title: column.name,
+					texts: [column.name],
+					ref: column.id,
+				}),
+			);
 		}
 	}
 
 	if (sources.sessionsEnabled !== false) {
 		for (const folder of sources.folders) {
-			items.push({
-				id: `folder:${folder.id}`,
-				kind: 'folder',
-				title: folder.name,
-				texts: [folder.name],
-				ref: folder.id,
-			});
+			items.push(
+				prepared({
+					id: `folder:${folder.id}`,
+					kind: 'folder',
+					title: folder.name,
+					texts: [folder.name],
+					ref: folder.id,
+				}),
+			);
 		}
 
-		for (const group of sources.groups) {
-			const count = group.tabs.length;
-			items.push({
+		items.push(...cachedSessionItems(sources.groups));
+	}
+
+	return items;
+}
+
+const prepared = (item: FinderItem): FinderItem => {
+	item.folded = item.texts.map((text) => fold(text ?? ''));
+	return item;
+};
+
+// The bookmark and session items are by far the biggest part of the index and rarely change, so the last
+// build is kept and reused (state reloads keep the arrays of unchanged data) instead of rebuilt on every open.
+let bookmarkCache:
+	| {
+			bookmarks: readonly Bookmark[];
+			columns: readonly BookmarkColumn[];
+			items: FinderItem[];
+	  }
+	| undefined;
+function cachedBookmarkItems(
+	bookmarks: readonly Bookmark[],
+	columns: readonly BookmarkColumn[],
+	columnName: Map<string, string>,
+): FinderItem[] {
+	if (
+		bookmarkCache?.bookmarks === bookmarks &&
+		bookmarkCache.columns === columns
+	) {
+		return bookmarkCache.items;
+	}
+
+	const items = bookmarks.map((bookmark) => {
+		const column = columnName.get(bookmark.columnId) ?? '';
+		return prepared({
+			id: `bookmark:${bookmark.id}`,
+			kind: 'bookmark',
+			title: bookmark.title || hostOf(bookmark.url),
+			detail: column ? `${hostOf(bookmark.url)} · ${column}` : undefined,
+			url: bookmark.url,
+			texts: [clip(bookmark.title), matchableUrl(bookmark.url), column],
+			ref: bookmark.id,
+		});
+	});
+	bookmarkCache = {bookmarks, columns, items};
+	return items;
+}
+
+let sessionCache: {groups: readonly Session[]; items: FinderItem[]} | undefined;
+function cachedSessionItems(groups: readonly Session[]): FinderItem[] {
+	if (sessionCache?.groups === groups) {
+		return sessionCache.items;
+	}
+
+	const items: FinderItem[] = [];
+	for (const group of groups) {
+		const count = group.tabs.length;
+		items.push(
+			prepared({
 				id: `session:${group.id}`,
 				kind: 'session',
 				title: group.name,
 				detail: `${count} ${count === 1 ? 'tab' : 'tabs'}${group.archived ? ' · Archived' : ''}`,
 				texts: [group.name, clip(group.description), clip(group.notes)],
 				ref: group.id,
-			});
-			for (const tab of group.tabs) {
-				items.push({
+			}),
+		);
+		for (const tab of group.tabs) {
+			items.push(
+				prepared({
 					id: `saved-tab:${group.id}:${tab.id}`,
 					kind: 'saved-tab',
 					title: tab.title || hostOf(tab.url),
@@ -227,11 +292,12 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 						clip(group.notes),
 					],
 					ref: group.id,
-				});
-			}
+				}),
+			);
 		}
 	}
 
+	sessionCache = {groups, items};
 	return items;
 }
 
@@ -309,9 +375,16 @@ export function searchFinder(
 		FinderKind,
 		Array<{item: FinderItem; score: number; position: number}>
 	>();
+	const foldedOf = (item: FinderItem) =>
+		item.folded ?? item.texts.map((text) => fold(text ?? ''));
+	// Pass 1 skips typo matching, the slowest part, over the whole index. A typo match always ranks below every
+	// other kind of match, so pass 2 only looks for them (and only among the items pass 1 rejected, up to a cap
+	// on very large indexes) in groups whose list is not already full.
+	const misses: Array<{item: FinderItem; position: number}> = [];
 	for (const [position, item] of index.entries()) {
-		const score = scoreQuery(trimmed, item.texts);
+		const score = scoreFolded(terms, foldedOf(item), false);
 		if (score <= 0) {
+			misses.push({item, position});
 			continue;
 		}
 
@@ -320,23 +393,65 @@ export function searchFinder(
 		scored.set(item.kind, list);
 	}
 
+	const scannedWithTypos = new Map<FinderKind, number>();
+	for (const {item, position} of misses) {
+		const limit = SECTION_LIMIT[item.kind] ?? 6;
+		const list = scored.get(item.kind);
+		if ((list?.length ?? 0) >= limit) {
+			continue;
+		}
+
+		const scanned = scannedWithTypos.get(item.kind) ?? 0;
+		if (scanned >= TYPO_SCAN_LIMIT) {
+			continue;
+		}
+
+		scannedWithTypos.set(item.kind, scanned + 1);
+		const score = scoreFolded(terms, foldedOf(item), true);
+		if (score <= 0) {
+			continue;
+		}
+
+		const entry = list ?? [];
+		entry.push({item, score, position});
+		scored.set(item.kind, entry);
+	}
+
+	type Hit = {item: FinderItem; score: number; position: number};
+	const better = (a: Hit, b: Hit) =>
+		b.score - a.score ||
+		a.item.title.length - b.item.title.length ||
+		a.position - b.position;
 	const ranked = KIND_ORDER.flatMap((kind) => {
 		const hits = scored.get(kind);
 		if (!hits) {
 			return [];
 		}
 
-		hits.sort(
-			(a, b) =>
-				b.score - a.score ||
-				a.item.title.length - b.item.title.length ||
-				a.position - b.position,
-		);
+		// Only the best few are shown, so keep a short sorted list instead of sorting every hit.
+		const limit = SECTION_LIMIT[kind] ?? 6;
+		const top: Hit[] = [];
+		for (const hit of hits) {
+			if (top.length === limit && better(hit, top[limit - 1]) >= 0) {
+				continue;
+			}
+
+			let at = top.length;
+			while (at > 0 && better(hit, top[at - 1]) < 0) {
+				at -= 1;
+			}
+
+			top.splice(at, 0, hit);
+			if (top.length > limit) {
+				top.pop();
+			}
+		}
+
 		return [
 			{
 				kind,
-				best: hits[0].score,
-				items: hits.slice(0, SECTION_LIMIT[kind] ?? 6).map((hit) => hit.item),
+				best: top[0].score,
+				items: top.map((hit) => hit.item),
 			},
 		];
 	});
