@@ -17,3 +17,7 @@ Before finishing a change, check these places and update anything the change mad
 - `src/app/help.tsx`, `docs/architecture.md`, `PRIVACY.md`, and `CONTRIBUTING.md`: behavior and development details affected by the change.
 
 Check feature names, settings, defaults, permissions, and removed behavior. If none of these documents need an update, say so in the summary.
+
+## Agent validation and scope gate
+
+Before reporting a code change complete, and before committing, pushing, or opening a pull request, follow [Agent validation and PR gate](docs/agent-validation.md). Runtime changes require automated checks, browser proof of the affected workflow, and a focused diff review. If browser validation is blocked, stop before commit or push and report the blocker.

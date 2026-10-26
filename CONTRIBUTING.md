@@ -6,7 +6,7 @@ Bug reports, ideas, and pull requests are welcome. If you're planning a larger c
 
 Follow the [source installation steps](README.md#build-from-source) and load `dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
 
-Run `pnpm dev` while you work. It rebuilds when files change, but you still need to reload the extension and reopen its pages to see the result. The [README command list](README.md#development) covers the other scripts.
+Run `pnpm dev` while you work. It rebuilds when files change and opens Chrome or Chromium with the extension loaded in a dedicated profile for this worktree. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. This profile keeps test data separate from your regular browser profile. The [README command list](README.md#development) covers the other scripts.
 
 For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](docs/architecture.md).
 
@@ -34,9 +34,9 @@ Keep each topic in one main place and link to it from elsewhere. Remove obsolete
 
 The worker tests run `extension/service-worker.ts` in a Node VM with mocked browser APIs. Add regression tests for bug fixes and cover behavior changes in the relevant suite. Extend the mock when you use another browser API. Pure helpers should have direct unit tests.
 
-Mocks can't catch everything. Load the unpacked build in a Chromium browser and try the affected workflow. For UI changes, check the keyboard and both themes.
+Mocks can't catch everything. For runtime changes, follow [Agent validation and PR gate](docs/agent-validation.md) to load the build in the dev browser, exercise the affected workflow, and record evidence. For UI changes, check keyboard use and both themes.
 
-Before opening a pull request, run:
+Before opening a pull request, follow [Agent validation and PR gate](docs/agent-validation.md) and run:
 
 ```sh
 pnpm check

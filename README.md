@@ -88,20 +88,24 @@ Before uninstalling, export anything you want to keep. Removing the extension al
 
 ## Development
 
-TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind CSS 3. [Vite+](https://viteplus.dev) builds the extension and runs Vitest. [XO](https://github.com/xojs/xo) handles linting and formatting. All runtime dependencies are bundled with the extension.
+TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind CSS 3. [Vite+](https://viteplus.dev) builds the extension and runs Vitest. Playwright launches Chrome or Chromium for manual browser testing. [XO](https://github.com/xojs/xo) handles linting and formatting. All runtime dependencies are bundled with the extension.
 
-| Command                          | What it does                                                     |
-| -------------------------------- | ---------------------------------------------------------------- |
-| `pnpm build`                     | Build into `dist/tablodge/` and verify the package               |
-| `pnpm dev` or `pnpm watch`       | Rebuild when sources change; reload the extension to see changes |
-| `pnpm test`                      | Run the tests once                                               |
-| `pnpm test:watch`                | Run tests as files change                                        |
-| `pnpm typecheck`                 | Check all TypeScript projects                                    |
-| `pnpm lint`                      | Check code with XO                                               |
-| `pnpm lint:fix` or `pnpm format` | Fix lint issues and format with XO                               |
-| `pnpm check`                     | Run lint, type checks, and tests                                 |
-| `pnpm verify`                    | Verify an existing build                                         |
-| `pnpm clean`                     | Remove build output and TypeScript build caches                  |
+| Command                          | What it does                                                        |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `pnpm build`                     | Build into `dist/tablodge/` and verify the package                  |
+| `pnpm browser:install`           | Install Playwright Chromium for development                         |
+| `pnpm dev`                       | Watch sources and open Chrome or Chromium with the extension loaded |
+| `pnpm watch`                     | Watch sources without opening a browser                             |
+| `pnpm test`                      | Run the tests once                                                  |
+| `pnpm test:watch`                | Run tests as files change                                           |
+| `pnpm typecheck`                 | Check all TypeScript projects                                       |
+| `pnpm lint`                      | Check code with XO                                                  |
+| `pnpm lint:fix` or `pnpm format` | Fix lint issues and format with XO                                  |
+| `pnpm check`                     | Run lint, type checks, and tests                                    |
+| `pnpm verify`                    | Verify an existing build                                            |
+| `pnpm clean`                     | Remove build output and TypeScript build caches                     |
+
+`pnpm dev` uses Playwright to open Chrome, or Playwright Chromium when Chrome is unavailable, with a separate profile in `.dev/chrome-profile`. Test data stays separate from your regular profile and other worktrees. If neither browser is available, run `pnpm browser:install` once. After a rebuild, reload TabLodge from `chrome://extensions` in that profile, then reopen its pages. Set `CHROME_BIN` to your browser executable if needed. If no browser is available, the build watcher still runs.
 
 See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](docs/architecture.md) explains storage, messages, and feature behavior.
 
@@ -115,7 +119,7 @@ src/shared/             Shared UI helpers and theme handling
 src/lib/                Small utilities
 styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites and mocked browser APIs
-scripts/                Build, package verification, and release tooling
+scripts/                Build, Chrome development launch, package verification, and release tooling
 docs/                   Architecture, tab manager, and mobile app research
 site/                   Astro website for tablodge.bbay.dev
 vite.pages.config.ts    Extension page build configuration

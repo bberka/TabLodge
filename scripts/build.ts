@@ -2,6 +2,7 @@
 //
 //   node scripts/build.ts            build once
 //   node scripts/build.ts --watch    build, then rebuild on source changes
+//   pnpm dev                         watch sources and open Chrome with the extension loaded
 //
 // The package is several Vite+ builds writing into one folder: the HTML pages
 // (vite.pages.config.ts, which also writes manifest.json and copies icons) plus self-contained
@@ -10,6 +11,7 @@ import {rm} from 'node:fs/promises';
 import {relative, resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 import {build, type InlineConfig} from 'vite-plus';
+import {openDevBrowser} from './dev-browser.ts';
 import {
 	OUT_DIR,
 	SOURCE_DIR,
@@ -48,39 +50,51 @@ const steps: BuildStep[] = [
 ];
 
 const {values} = parseArgs({
-	options: {watch: {type: 'boolean', default: false}},
+	options: {
+		watch: {type: 'boolean', default: false},
+		'open-browser': {type: 'boolean', default: false},
+	},
 });
-const {watch} = values;
+const {watch, 'open-browser': openBrowser} = values;
 const outLabel = relative(projectRoot, OUT_DIR);
+const initialBuilds: Array<Promise<void>> = [];
 
 await rm(OUT_DIR, {recursive: true, force: true});
 
 for (const step of steps) {
 	const {config} = step;
+	const initialBuild = watch ? Promise.withResolvers<void>() : undefined;
 	const result = await build({
 		...config,
 		mode: 'production',
 		build: {...config.build, ...(watch && {watch: {}})},
 	});
-	if (watch && 'on' in result) {
-		result.on('event', (event) => {
-			if (event.code === 'BUNDLE_END') {
-				console.log(
-					`[${new Date().toLocaleTimeString()}] rebuilt ${step.label} in ${event.duration}ms`,
-				);
-			}
-
-			if (event.code === 'ERROR') {
-				console.error(
-					`[${new Date().toLocaleTimeString()}] ${step.label} failed: ${event.error.message}`,
-				);
-			}
-
-			if ('result' in event && event.result) {
-				void event.result.close();
-			}
-		});
+	if (!(watch && 'on' in result)) {
+		continue;
 	}
+
+	if (initialBuild) {
+		initialBuilds.push(initialBuild.promise);
+	}
+
+	result.on('event', (event) => {
+		if (event.code === 'BUNDLE_END') {
+			initialBuild?.resolve();
+			console.log(
+				`[${new Date().toLocaleTimeString()}] rebuilt ${step.label} in ${event.duration}ms`,
+			);
+		}
+
+		if (event.code === 'ERROR') {
+			console.error(
+				`[${new Date().toLocaleTimeString()}] ${step.label} failed: ${event.error.message}`,
+			);
+		}
+
+		if ('result' in event && event.result) {
+			void event.result.close();
+		}
+	});
 }
 
 console.log(
@@ -88,3 +102,8 @@ console.log(
 		? `Watching sources; rebuilt files land in ${outLabel}/. Reload the extension in the browser after a rebuild. Press Ctrl+C to stop.`
 		: `Built the loadable MV3 extension in ${outLabel}/.`,
 );
+
+if (openBrowser) {
+	await Promise.all(initialBuilds);
+	await openDevBrowser();
+}
