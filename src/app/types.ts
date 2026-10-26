@@ -48,6 +48,7 @@ What clicking a bookmark does: a link action, or open the bookmark's action menu
 export type BookmarkClickAction = LinkClickAction | 'menu';
 
 export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
+export type DashboardWidth = 'default' | 'wider' | 'full' | 'narrower';
 
 export type BrowserBookmarkAction = 'off' | 'ask' | 'add';
 
@@ -129,6 +130,10 @@ export type Settings = {
 	Show the sessions section above the bookmark board (only when both are enabled).
 	*/
 	sessionsOnTop: boolean;
+	/**
+	Dashboard width and bookmark-grid layout (default: default).
+	*/
+	dashboardWidth: DashboardWidth;
 	/**
 	Keep one pinned TabLodge tab per window open; links from it open in new tabs.
 	*/
