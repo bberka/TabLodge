@@ -20,7 +20,8 @@
 	"packageManager": "pnpm@12.15.0",
 	"scripts": {
 		"build": "node scripts/build.ts && node scripts/verify-build.ts",
-		"dev": "node scripts/build.ts --watch",
+		"dev": "node scripts/build.ts --watch --open-browser",
+		"browser:install": "playwright install chromium",
 		"watch": "node scripts/build.ts --watch",
 		"verify": "node scripts/verify-build.ts",
 		"site:dev": "pnpm --filter tablodge-site dev",
@@ -72,6 +73,7 @@
 		"@types/react-dom": "^19.3.0",
 		"@vitejs/plugin-react": "^6.1.2",
 		"eslint-config-xo-react": "^0.32.0",
+		"playwright": "^1.64.1",
 		"tailwindcss": "3.4.17",
 		"typescript": "^6.0.3",
 		"vite": "catalog:",
