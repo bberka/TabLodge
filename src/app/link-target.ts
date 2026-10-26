@@ -1,4 +1,3 @@
-import {armLodgeClose} from './common';
 import type {BookmarkClickAction, Settings} from './types';
 
 export type {LinkClickAction} from './types';
@@ -70,7 +69,6 @@ export async function openLink(
 
 	if (action === 'new') {
 		await chrome.tabs.create({url});
-		armLodgeClose();
 		return;
 	}
 

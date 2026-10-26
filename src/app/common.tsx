@@ -119,13 +119,6 @@ export const send = async <K extends TabLodgeMessageType>(
 };
 
 /**
-Tells the worker this TabLodge tab just opened something in other tabs, so it can close the tab once you switch away (when "Close TabLodge after opening links" is on; the worker checks the setting).
-*/
-export function armLodgeClose(): void {
-	void send('ARM_LODGE_CLOSE');
-}
-
-/**
 Why a restored link could not be opened: "<title>: <reason>", or '' without a failure.
 */
 export function restoreFailureText(failure?: {
