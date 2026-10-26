@@ -284,6 +284,18 @@ const settingsGroups: Array<{
 		icon: LayoutDashboard,
 		fields: [
 			{
+				name: 'dashboardWidth',
+				label: 'Dashboard width',
+				help: 'Choose the dashboard width and how many bookmark columns fit across it. Wider uses the full width on a 1080p screen and fits 4 columns. Full width fits as many columns as the screen can hold. Narrower keeps the board to 2 columns.',
+				type: 'select',
+				options: [
+					['narrower', 'Narrower'],
+					['default', 'Default'],
+					['wider', 'Wider'],
+					['full', 'Full width'],
+				],
+			},
+			{
 				name: 'sessionsOnTop',
 				systems: ['sessions', 'bookmarks'],
 				label: 'Show sessions at the top',

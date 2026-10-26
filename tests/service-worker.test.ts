@@ -3886,6 +3886,43 @@ test('pasteLinkToBookmark is on by default and only an explicit false turns it o
 	assert.equal(reset.settings.pasteLinkToBookmark, true);
 });
 
+test('dashboardWidth defaults to the existing layout, validates choices, and resets', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings.dashboardWidth,
+		'default',
+	);
+
+	for (const width of ['wider', 'full', 'narrower'] as const) {
+		const configured = createWorkerHarness(
+			stateWithSession({dashboardWidth: width}),
+		);
+		assert.equal(
+			(await configured.sendMessage({type: 'GET_STATE'})).settings
+				.dashboardWidth,
+			width,
+		);
+	}
+
+	const invalid = createWorkerHarness(
+		stateWithSession({dashboardWidth: 'giant'}),
+	);
+	assert.equal(
+		(await invalid.sendMessage({type: 'GET_STATE'})).settings.dashboardWidth,
+		'default',
+	);
+
+	const updated = await invalid.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {dashboardWidth: 'full'},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(invalid.state.settings.dashboardWidth, 'full');
+
+	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.dashboardWidth, 'default');
+});
+
 test('stretchBookmarkColumns is on by default, only an explicit false turns it off, and resets to on', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
