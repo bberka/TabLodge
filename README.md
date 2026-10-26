@@ -3,9 +3,9 @@
   TabLodge
 </h1>
 
-<p align="center"><strong>A cozy, local-only home for your tabs: save sessions, restore them, and keep a bookmark board on your new tab.</strong></p>
+<p align="center"><strong>Save your tabs for later. Keep your bookmarks on every new tab.</strong></p>
 
-<p align="center"><a href="https://tablodge.bbay.dev">Website: https://tablodge.bbay.dev</a></p>
+<p align="center"><a href="https://tablodge.bbay.dev">tablodge.bbay.dev</a></p>
 
 <p align="center">
   <a href="https://github.com/bberka/TabLodge/actions/workflows/test.yml"><img src="https://github.com/bberka/TabLodge/actions/workflows/test.yml/badge.svg" alt="Test"></a>
@@ -13,19 +13,19 @@
   <img src="https://img.shields.io/badge/Chromium%20browsers-Manifest%20V3-4285F4" alt="Manifest V3">
 </p>
 
-TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, Edge, Vivaldi, Opera, and others). It turns open windows into named sessions you can restore later, and replaces the new-tab page with a local bookmark board. There are no accounts, servers, or tracking: everything stays in your browser's extension storage.
+TabLodge is a browser extension for Chrome, Brave, Edge, Vivaldi, Opera, and other Chromium browsers. Save a window as a named session, close it, and bring it back when you need it. Your new tab page also becomes a board of bookmark columns.
 
-## Features
+There are no accounts, servers, or analytics. TabLodge keeps your data in your browser profile and doesn't sync it between devices.
 
-- **Sessions that remember how you worked.** Save a window, selected tabs, a tab group, everything left or right of a tab, or all windows. Restores bring back native tab groups (title, color, collapsed state), pinned tabs (opt-in), and split-view pairs side by side on Chromium 155+. New sessions are named by date and first tab, by your own template, or by a name you type each time, and page titles are saved without notification counts like “(1)”.
-- **Bookmark board on the new tab.** Columns of bookmarks with icons, search, drag-and-drop reordering, and drop-a-link-to-save. Paste one link or a whole list on the page to add bookmarks, or drag session links straight into a column.
-- **Organize sessions.** Folders with icons, descriptions, search and sorting, multi-select, dragging sessions onto folders, and merging one session into another without duplicates.
-- **Flexible restores.** Restore into the current or a new window; keep or remove the saved tabs afterward; skip duplicates; optionally unload background tabs. Ctrl/Cmd- and Shift-click give one-off overrides.
-- **Import and export.** Session and bookmark JSON backups, a full-backup ZIP (everything, including settings) you can import back, a shareable HTML page of selected sessions, and a one-time import of your browser bookmarks. Optionally, TabLodge can offer to add (or automatically add) a page you bookmark with the browser's own star button.
-- **Crash recovery, backups and undo.** Rolling snapshots of your open windows offer to restore your last session after an unclean exit; optional automatic backups (with an optional copy in Downloads) and safety backups before risky actions; a trash bin with retention for deleted sessions, links, bookmarks and columns; and an Undo toast instead of a confirmation on the dashboard (Settings still asks before erasing data or restoring a backup). All local. See [docs/architecture.md](docs/architecture.md#recovery-snapshots-backups-and-trash).
-- **Everywhere you need it.** A toolbar popup with a quick chooser, a side panel (bookmarks, sessions and open tabs), keyboard shortcuts (save selected tabs or the window, bookmark this page, open the side panel or dashboard), and page and toolbar context menus.
-- **Local-only and private.** No host permissions, no content scripts, no network requests, no analytics. See [PRIVACY.md](PRIVACY.md).
-- **Light, dark, and system themes** with no flash on load.
+## What you can do
+
+- **Save and restore sessions.** Save selected tabs, a tab group, tabs to the left or right, a whole window, or all windows. Restores preserve tab groups and, if you choose to save them, pinned tabs. Split view pairs restore side by side on Chromium 155 or newer.
+- **Keep sessions organized.** Use folders, icons, descriptions, search, sorting, and custom ordering. Move sessions between folders or merge them without duplicate links. Name sessions yourself, use a template, or have TabLodge ask each time.
+- **Choose how restores work.** Open a session in the current window or a new one. Keep or remove saved links afterward, skip URLs that are already open, and optionally unload restored background tabs. Ctrl/Cmd and Shift clicks let you override the usual behavior for one restore.
+- **Build a bookmark board.** Search your bookmarks, reorder columns and links by dragging, or paste a list of links to add them. You can also drag links from saved sessions into a column.
+- **Bring your data with you.** Import from OneTab, Session Buddy, Tab Session Manager, Toby, or browser bookmarks. Export JSON backups, HTML, CSV, Markdown, or URL lists. A full backup ZIP includes settings and recovery data as well.
+- **Recover from mistakes.** Snapshots of open windows help after a browser crash. Deleted sessions, links, bookmarks, and columns go to the trash bin, and many actions offer Undo. Automatic backups are optional, with an extra copy in Downloads if you want one.
+- **Use the view that suits you.** Open the toolbar popup, the dashboard, or the side panel for bookmarks, sessions, and open tabs. Keyboard shortcuts and context menus give you quick save and bookmark actions. Light, dark, and system themes are available.
 
 ## Screenshots
 
@@ -33,30 +33,30 @@ TabLodge is a Manifest V3 extension for Chromium-based browsers (Chrome, Brave, 
   <img src="site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with saved sessions above a board of bookmark columns" width="800">
 </p>
 <p align="center">
-  <img src="site/src/assets/palette-dark.webp" alt="The search palette finding sessions, saved tabs and bookmarks" width="420">
-  <img src="site/src/assets/sidepanel-light.webp" alt="The TabLodge side panel listing bookmark columns" width="210">
+  <img src="site/src/assets/palette-dark.webp" alt="Search results for sessions, saved tabs, and bookmarks" width="420">
+  <img src="site/src/assets/sidepanel-light.webp" alt="Bookmark columns in the TabLodge side panel" width="210">
 </p>
-
-More on the website: <https://tablodge.bbay.dev>.
 
 ## Install
 
-TabLodge isn't in the extension stores yet. Install it in any Chromium-based browser (Chrome 116+, Brave, Edge, Vivaldi, Opera, …) in one of two ways.
+TabLodge isn't in the extension stores yet. You can load it manually in Chrome 116 or newer, or a compatible Chromium browser.
 
-### Option 1: Download a release (no tools needed)
+### Download a release
 
-1. Download the latest **`tablodge-0.x.y.zip`** from [Releases](https://github.com/bberka/TabLodge/releases/latest).
-2. Unzip it into a folder you'll keep, for example `~/Extensions/tablodge`. The browser loads the extension from this folder, so don't delete it.
-3. Open your browser's extensions page: `chrome://extensions`, `brave://extensions`, `edge://extensions`, …
-4. Turn on **Developer mode** (top-right toggle).
-5. Click **Load unpacked** and select the unzipped folder (the one that contains `manifest.json`).
-6. Pin TabLodge from the extensions menu (puzzle icon) for quick access.
+You don't need any development tools for this option.
 
-**Updating:** download the new zip, replace the folder's contents with it, then click the reload button (↻) on TabLodge's card. Always reuse the same folder: the browser ties your saved sessions and bookmarks to the folder the extension is loaded from.
+1. Download `tablodge-0.x.y.zip` from the [latest release](https://github.com/bberka/TabLodge/releases/latest).
+2. Unzip it into a folder you'll keep, such as `~/Extensions/tablodge`. The browser loads the extension from this folder, so don't delete it.
+3. Open `chrome://extensions`, `brave://extensions`, or your browser's equivalent.
+4. Turn on **Developer mode**.
+5. Click **Load unpacked** and select the folder containing `manifest.json`.
+6. Pin TabLodge from the extensions menu if you want its toolbar button nearby.
 
-### Option 2: Build from source
+To update, download the new release, replace the contents of the same folder, and click the reload button on TabLodge's extension card. Keep using the same folder so the browser keeps the same extension ID and storage. Export a backup before moving the installation.
 
-Requirements: [Git](https://git-scm.com), [Node.js](https://nodejs.org) 22.18+ or 24.11+, and [pnpm](https://pnpm.io) (`corepack enable` installs the version pinned in `package.json`).
+### Build from source
+
+You'll need Git, Node.js 22.18+ or 24.11+, and pnpm. `corepack enable` makes the pnpm version pinned in `package.json` available.
 
 ```sh
 git clone https://github.com/bberka/TabLodge.git
@@ -66,12 +66,9 @@ pnpm install
 pnpm build
 ```
 
-Then load the build:
+Open your browser's extensions page, turn on **Developer mode**, and use **Load unpacked** to select `dist/tablodge/`. Don't select the repository root or `extension/`; those contain source files, not the built extension.
 
-1. Open your browser's extensions page and turn on **Developer mode** (same as Option 1).
-2. Click **Load unpacked** and select the **`dist/tablodge/`** folder inside the clone. Don't select the repository root or `extension/`, which hold sources.
-
-**Updating:**
+To update a source installation:
 
 ```sh
 git pull
@@ -79,100 +76,89 @@ pnpm install
 pnpm build
 ```
 
-Then click the reload button (↻) on TabLodge's card.
+Then reload TabLodge from the extensions page.
 
 ### After installing
 
-- Open a new tab to see the dashboard, or click the toolbar icon for the quick popup.
-- Open the side panel with the "Open side panel" shortcut or the toolbar icon's right-click menu, or make the toolbar icon open it (Settings > Side Panel > Toolbar icon opens). In Brave, right-click the sidebar and add TabLodge, or pick it from the sidebar's extensions panel.
-- See your keyboard shortcuts in **Settings › Keyboard shortcuts**, and change them with **Configure shortcuts** (it opens `chrome://extensions/shortcuts` or your browser's equivalent).
+Open a new tab for the dashboard or click the toolbar icon for the popup. To use the side panel, choose it from the toolbar icon's context menu or set **Settings › Side Panel › Toolbar icon opens**. In Brave, you can also add TabLodge from the browser sidebar.
+
+Find the available keyboard shortcuts in **Settings › Keyboard shortcuts**. **Configure shortcuts** opens your browser's shortcut settings.
+
+Before uninstalling, export anything you want to keep. Removing the extension also removes its browser storage.
 
 ## Development
 
-TabLodge is written in TypeScript (strict) with React 19, Radix primitives in local shadcn-style components, Lucide icons, and Tailwind CSS 3, built with [Vite+](https://viteplus.dev) (`vite-plus`: Vite 8/Rolldown and Vitest) and managed with [pnpm](https://pnpm.io). Code is linted and formatted with [XO](https://github.com/xojs/xo) (ESLint + Prettier). Every dependency is bundled; no page loads code, styles, fonts, or icons from a CDN.
+TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind CSS 3. [Vite+](https://viteplus.dev) builds the extension and runs Vitest. [XO](https://github.com/xojs/xo) handles linting and formatting. All runtime dependencies are bundled with the extension.
 
-| Command                               | What it does                                                                                                 |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `pnpm build`                          | Build the extension into `dist/tablodge/`, then run `scripts/verify-build.ts`                                |
-| `pnpm dev` (alias `pnpm watch`)       | Build, then rebuild whenever sources, the manifest, or icons change; reload the extension to pick up changes |
-| `pnpm test`                           | Run the Vitest suites once (`pnpm test:watch` keeps watching)                                                |
-| `pnpm typecheck`                      | `tsc -b` over all TypeScript projects (pages, service worker, tests, build tooling)                          |
-| `pnpm lint`                           | Lint with XO (type-aware TypeScript and React rules)                                                         |
-| `pnpm lint:fix` (alias `pnpm format`) | Fix lint issues and format the code with XO's Prettier style                                                 |
-| `pnpm check`                          | XO, `tsc -b`, and the tests: run this before a pull request                                                  |
-| `pnpm verify`                         | Re-run the package verification on an existing `dist/tablodge/`                                              |
-| `pnpm clean`                          | Remove `dist/` and the TypeScript build-info cache                                                           |
+| Command                          | What it does                                                     |
+| -------------------------------- | ---------------------------------------------------------------- |
+| `pnpm build`                     | Build into `dist/tablodge/` and verify the package               |
+| `pnpm dev` or `pnpm watch`       | Rebuild when sources change; reload the extension to see changes |
+| `pnpm test`                      | Run the tests once                                               |
+| `pnpm test:watch`                | Run tests as files change                                        |
+| `pnpm typecheck`                 | Check all TypeScript projects                                    |
+| `pnpm lint`                      | Check code with XO                                               |
+| `pnpm lint:fix` or `pnpm format` | Fix lint issues and format with XO                               |
+| `pnpm check`                     | Run lint, type checks, and tests                                 |
+| `pnpm verify`                    | Verify an existing build                                         |
+| `pnpm clean`                     | Remove build output and TypeScript build caches                  |
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and code style, and [docs/architecture.md](docs/architecture.md) for the build pipeline, data model, and detailed feature behavior.
+See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](docs/architecture.md) explains storage, messages, and feature behavior.
 
-## Project structure
+### Project structure
 
 ```text
-extension/              manifest.json, icons/, HTML shells, and scripts the manifest loads directly
-  service-worker.ts     background logic: saving, restoring, storage, menus, shortcuts
-  theme-boot.ts         applies the saved theme before first paint
-src/
-  app/                  extension pages: newtab, popup, options (Settings), help, sidepanel
-    types.ts            data model and the page <-> service worker message protocol
-    project.ts          project metadata (name, version, repository links)
-  components/ui/        local shadcn-style primitives (Radix + Tailwind)
-  shared/               UI helpers and the theme provider
-  lib/                  small utilities
+extension/              Manifest, icons, HTML shells, service worker, and theme boot script
+src/app/                Extension pages, shared page code, data types, and messages
+src/components/ui/      Local UI primitives built with Radix and Tailwind
+src/shared/             Shared UI helpers and theme handling
+src/lib/                Small utilities
 styles/                 Tailwind entry and theme tokens
-tests/                  Vitest suites (service worker in a VM with a mocked chrome.* API)
-scripts/                build.ts, verify-build.ts, shared Vite config helpers
-docs/                   architecture notes, naming, tab-manager, and mobile-app research
-site/                   Astro landing page for https://tablodge.bbay.dev (see site/README.md)
-vite.pages.config.ts    page build; vite.config.ts holds lint, format, and test settings
+tests/                  Vitest suites and mocked browser APIs
+scripts/                Build, package verification, and release tooling
+docs/                   Architecture, tab manager, and mobile app research
+site/                   Astro website for tablodge.bbay.dev
+vite.pages.config.ts    Extension page build configuration
+xo.config.ts            Lint and formatting rules
 ```
 
-`tsconfig.json` references `tsconfig.app.json` (DOM pages), `tsconfig.worker.json` (service worker, no DOM), `tsconfig.test.json`, and `tsconfig.node.json` (build tooling).
+## Permissions and privacy
 
-## Permissions
+TabLodge has no website host permissions, injects no content scripts, and makes no network requests of its own. Opening a saved page loads that website normally. Choosing **Search the web** sends a search through your browser's default engine.
 
-TabLodge requests no website (host) permissions and injects nothing into web pages. Each permission in `extension/manifest.json` has one job:
+| Permission         | Why it's needed                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `tabs`             | Read tab details to save sessions, find duplicates, and work with open tabs               |
+| `tabGroups`        | Save and recreate native tab groups                                                       |
+| `bookmarks`        | Import browser bookmarks and, if enabled, offer to add newly bookmarked pages             |
+| `favicon`          | Show icons from the browser's local favicon cache                                         |
+| `storage`          | Store sessions, bookmarks, settings, and recovery data locally                            |
+| `unlimitedStorage` | Allow libraries larger than the default storage quota; available disk space still matters |
+| `contextMenus`     | Add save and bookmark actions to browser context menus                                    |
+| `clipboardWrite`   | Copy bookmark URLs and session links when you ask                                         |
+| `sidePanel`        | Show bookmarks, sessions, and open tabs in the browser side panel                         |
+| `search`           | Use the default search engine when you choose **Search the web**                          |
+| `alarms`           | Schedule snapshots, backups, and trash cleanup                                            |
 
-| Permission         | Why TabLodge needs it                                                                                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tabs`             | Read tab URLs, titles, pinned state, selection, and window placement to save sessions, and open tabs to restore them.                                                |
-| `tabGroups`        | Read native tab-group titles, colors, and collapsed state when saving, and recreate the groups on restore.                                                           |
-| `bookmarks`        | Read the browser's bookmark tree when you import your browser bookmarks, and notice a page you bookmark in the browser if you turn on that setting (off by default). |
-| `favicon`          | Show site icons from the browser's local favicon cache instead of a third-party favicon service.                                                                     |
-| `storage`          | Keep sessions, bookmarks, and settings in local extension storage (`chrome.storage.local`).                                                                          |
-| `unlimitedStorage` | Lift the default local-storage quota so large session and bookmark libraries fit; disk space is still finite.                                                        |
-| `contextMenus`     | Add optional "Save…" and "Bookmark this page" actions to the page and toolbar right-click menus.                                                                     |
-| `clipboardWrite`   | Copy bookmark URLs and session links in the format you choose.                                                                                                       |
-| `sidePanel`        | Show the optional searchable bookmark list in the browser's Side Panel.                                                                                              |
-| `search`           | Run a normal web search with your default search engine when you pick "Search the web" in TabLodge's finder.                                                         |
-| `alarms`           | Schedule crash-recovery snapshots, automatic backups, and the daily trash bin cleanup while the browser runs.                                                        |
+The optional `downloads` permission is requested only when you enable **Settings › Recovery & backups › Also save a copy to Downloads**. It writes backup JSON files to `Downloads/TabLodge/`. Turning the setting off removes the permission.
 
-One **optional** permission, `downloads`, is requested only if you turn on _Settings › Recovery & backups › Also save a copy to Downloads_. It lets TabLodge write backup JSON files to `Downloads/TabLodge/`; turning the option off gives the permission back.
+The manifest also replaces the new tab page and declares keyboard shortcuts. You can change what new tabs show in Settings without disabling the rest of TabLodge.
 
-The manifest also overrides the new-tab page with TabLodge's local page (you can switch its session area off in Settings) and declares the keyboard shortcuts.
+See [Privacy](PRIVACY.md) for what is stored, how recovery data is retained, and how to remove it.
 
-## Privacy
+## Future work
 
-TabLodge has no servers, accounts, analytics, or telemetry, and makes no network requests. Your sessions, bookmarks, and settings never leave your device unless you export a file yourself. Details: [PRIVACY.md](PRIVACY.md).
+Ideas still worth exploring include more actions for open tabs across windows, recently closed tabs in search, storage that scales better for large libraries, more session editing tools, and optional unloading of idle tabs. These are ideas, not promised release dates.
 
-## Roadmap
-
-[docs/tab-management-research.md](docs/tab-management-research.md) compares TabLodge with OneTab, Session Buddy, Tab Session Manager, Toby, Workona, BroTab, and the browsers' built-in features. Already built from that list: automatic and safety backups, a full-backup ZIP, a trash bin with Undo, crash-recovery snapshots, the search palette, and import from the common tab managers. Still open:
-
-- **A live open-tabs manager:** list every window and tab, then filter, activate, close, move, group, pin, mute, discard, or deduplicate.
-- **Recently closed tabs** in the search palette.
-- **Scale and robustness:** per-session storage instead of one large value, resumable migrations, and testing with 10,000+ saved tabs.
-- **Session editing:** replace or append the current window, split a session, tags, and an "already saved" badge.
-- **Tab hygiene that never loses data:** optional auto-discard of idle tabs, with undo.
-
-The research file has the full priority list, MV3 implementation sketches, and the evidence behind each item. [Mobile app opportunity research](docs/mobile-app-opportunity.md) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
+The [tab manager comparison notes](docs/tab-management-research.md) explain the reasoning and link to the original sources. [Mobile app opportunity research](docs/mobile-app-opportunity.md) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
 
 ## Website
 
-The landing page at <https://tablodge.bbay.dev> lives in [`site/`](site) (Astro, deployed to GitHub Pages by `.github/workflows/pages.yml`). `pnpm site:dev` and `pnpm site:build` run it; setup steps for Pages and DNS are in [site/README.md](site/README.md).
+The website lives in [`site/`](site). Run `pnpm site:dev` to work on it or `pnpm site:build` to build it. [Website setup](site/README.md) covers deployment and screenshots.
 
 ## Contributing
 
-Bug reports, ideas, and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first; for larger changes, open an issue so we can agree on the approach.
+Bug reports, ideas, and pull requests are welcome. Read [Contributing](CONTRIBUTING.md) before opening a pull request. For larger changes, open an issue first so we can discuss the approach.
 
 ## License
 

@@ -16,9 +16,11 @@ labels: bug
 **Environment**
 
 - TabLodge version (Help › About):
-- Browser and version (e.g. Chrome 155, Brave 1.97):
-- OS:
+- Browser and version:
+- Operating system:
 
-**Screenshots or console errors** (optional; the service worker console is under the extension's "Inspect views" link)
+**Screenshots or console errors** (optional)
+
+To find worker errors, open your browser's extensions page and use TabLodge's **Inspect views** link.
 
 Please remove any private URLs or titles before posting.

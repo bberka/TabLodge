@@ -8,6 +8,8 @@ labels: enhancement
 
 What are you trying to do, and what gets in the way?
 
-**Proposed solution**
+**Your idea**
 
-**Alternatives considered** (optional)
+How would you like it to work?
+
+**Other options you've tried** (optional)
