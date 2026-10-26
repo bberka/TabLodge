@@ -1,146 +1,187 @@
-# Architecture and behavior notes
+# Architecture
 
-Reference notes for contributors: how the extension is built and loaded, how data is stored, and the detailed behavior of each feature. The [README](../README.md) has the overview, install steps, and permissions; [PRIVACY.md](../PRIVACY.md) covers data handling.
+This guide explains how TabLodge is built, where data lives, and which behavior needs care when changing the code. For installation and commands, see the [README](../README.md). For data handling, see [Privacy](../PRIVACY.md).
 
-## Build pipeline
+## Build and startup
 
-`scripts/build.ts` produces the loadable package in `dist/tablodge/` (`OUT_DIR` in `scripts/vite-shared.ts`) from several Vite+ builds that write into the same folder:
+`scripts/build.ts` runs several Vite+ builds into `dist/tablodge/`:
 
-- **Pages** (`vite.pages.config.ts`): `extension/*.html` are source shells that hold only an empty `#root` element and a `theme-boot.js` classic script in `<head>`. The build injects the React entry for each page (`src/app/<page>.tsx`), replaces `%APP_NAME%` in the titles, bundles all UI assets locally, writes `manifest.json` (adding `homepage_url` from `package.json`), and copies `icons/`.
-- **Service worker** (`extension/service-worker.ts`): a classic (non-module) script bundled as one IIFE; the manifest declares no `"type": "module"`.
-- **Theme boot** (`extension/theme-boot.ts`): a tiny classic script loaded synchronously in every page's `<head>`. It applies the saved Light/Dark/System choice before the first paint so each page opens on its themed background with no loading text or flash; the React UI renders into `#root` once the saved state arrives. `src/shared/theme.tsx` mirrors the theme stored in `chrome.storage.local` (`uiTheme`) into this extension's `localStorage` (`tablodge.uiTheme`) for it.
+* **Pages:** `vite.pages.config.ts` builds the HTML shells in `extension/` with their React entries in `src/app/`. It replaces `%APP_NAME%` in page titles, bundles assets locally, writes the manifest, and copies icons.
+* **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The manifest does not declare it as a module.
+* **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme before the first paint. React renders into `#root` after the saved state arrives.
 
-`scripts/verify-build.ts` then checks the package: every manifest-referenced file exists, built HTML loads only local bundles (no CDN, no inline scripts, no source paths), classic scripts parse as classic scripts and contain no `process.env`, every page loads `theme-boot.js` before its module script, and the manifest `version`/`homepage_url` match `package.json`.
+`scripts/verify-build.ts` checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest.
 
-`extension/` is source, not an installable package: never load it or the repository root. A build recreates `dist/tablodge/`, so do not run two builds at once.
+Load only `dist/tablodge/` in the browser. `extension/` and the repository root are source directories. Each build recreates the output directory, so don't run two builds at once.
 
-## Project metadata and naming
+## Names, versions, and persistent identifiers
 
-- **Display name:** `short_name` in `extension/manifest.json` (`TabLodge`). Pages read it at runtime through `PROJECT.name` (`src/app/project.ts`), HTML titles get it at build time (`%APP_NAME%`), and the service worker reads it as `APP_NAME`. The manifest `name` is the full store title, `TabLodge – Tab Session Manager & Bookmarks` (42 characters: under the 45-character limit of Firefox AMO and Edge Add-ons, and Chrome's 75). The Chrome Web Store and `chrome://extensions` show `name`; the browser falls back to `short_name` where space is tight. `action.default_title` (the toolbar tooltip) and the command descriptions sit next to them in the same file.
-- **Version:** `version` in `extension/manifest.json`; `package.json` `version` must match (the build verification enforces it).
-- **Repository URL:** `package.json` `homepage` and `repository.url`. `PROJECT.repoUrl`, `issuesUrl`, `changelogUrl`, and `licenseUrl` derive from `repository.url`; the manifest `homepage_url` is written from `homepage`. Both point to https://github.com/bberka/TabLodge.
+The manifest's `short_name` supplies `PROJECT.name` in pages and `APP_NAME` in the worker. The full store title and toolbar tooltip also live in `extension/manifest.json`.
 
-### Persistent identifiers
+The manifest version must match `package.json`; build verification checks this. Repository links come from `package.json` through `src/app/project.ts`. The build adds the manifest's `homepage_url` from the package's `homepage`.
 
-These names are stored in user data or exported files. Changing them later requires a migration:
+These identifiers are part of stored data or external formats. Changing them requires a migration:
 
-- storage keys: `tablodge.state` in `chrome.storage.local` (sessions, bookmarks, and settings) and `tablodge.uiTheme` in the pages' `localStorage` (theme mirror for `theme-boot.ts`); the recovery keys `tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta`, `tablodge.backups`, and `tablodge.trash` (see [Recovery](#recovery-snapshots-backups-and-trash));
-- export formats: `"format": "tablodge-sessions"` for session JSON and `"format": "tablodge"` for bookmark JSON (written on export; import recognizes backups by structure, not by this id);
-- drag-and-drop MIME types: `application/x-tablodge-session`, `application/x-tablodge-column`, `application/x-tablodge-bookmark`;
-- context-menu ids `tablodge-page-*` and `tablodge-action-*`.
+* The main storage key, `tablodge.state`, and recovery keys listed below.
+* The theme key `uiTheme` in extension storage and its `tablodge.uiTheme` mirror in page `localStorage`.
+* Export format identifiers such as `tablodge-sessions`, `tablodge`, `tablodge-backup`, and `tablodge-full-backup`.
+* Drag MIME types `application/x-tablodge-session`, `application/x-tablodge-column`, and `application/x-tablodge-bookmark`.
+* Context menu IDs beginning with `tablodge-page-` or `tablodge-action-`.
 
-The build output folder also matters for development: an unpacked extension's ID comes from the folder it is loaded from, and its storage belongs to that ID, so loading a build from a different folder starts with empty storage.
+The installation path matters too. An unpacked extension gets its ID from the folder it is loaded from. A different path can mean a different ID and separate storage.
 
-## Data model and storage
+## Data and messages
 
-`src/app/types.ts` holds the data model and the typed message protocol between the pages and the service worker. Pages send messages with `send()` (`src/app/common.tsx`); the service worker owns all reads and writes of `chrome.storage.local`.
+`src/app/types.ts` defines the data model and typed messages. Pages call `send()` from `src/app/common.tsx`; the worker handles storage and browser operations. Mutations are serialized so concurrent messages don't overwrite one another.
 
-Local state is versioned under `tablodge.state` (schema v7); older session data is normalized on load, and data saved by a newer schema is refused rather than overwritten. Session, bookmark, and preference data stays in `chrome.storage.local`; there are no accounts, servers, or cloud sync. Incognito tabs are available only if the browser permits the extension in incognito mode.
+Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state`. The current schema is version 8. Older data is normalized on load. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library.
 
-## Recovery: snapshots, backups, and trash bin
+Sessions and bookmarks can be disabled separately without deleting data. Both the UI and worker reject mutations for a disabled system. At least one must stay enabled.
 
-Everything here is local, optional, and kept out of `tablodge.state` so the big state is never rewritten for it. All of it lives in the service worker (`extension/service-worker.ts`, section "Recovery") with the UI in `src/app/recovery.tsx`.
+## Recovery
 
-| Key                      | Shape                                                                  | Written                                              |
-| ------------------------ | ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| `tablodge.snapshots`     | `{version, history: Snapshot[]}`, newest first                         | at the interval alarm, at startup, on clean exit     |
-| `tablodge.snapshots.live`| the latest `Snapshot`                                                  | ~5 s after tab/window events (debounced, max wait 30 s), only when it changed |
-| `tablodge.snapshots.meta`| `{sessionOpen, liveAt, liveSig, closing, recovery}`, the crash-detection flags and the live snapshot's signature (so a capture never re-reads the live snapshot) | on captures and window closes                        |
-| `tablodge.backups`       | `{auto: Backup[], safety: Backup[], downloadError}`; each backup holds the JSON text | backup alarm, Back up now, before risky actions |
-| `tablodge.trash`         | `{items: TrashEntry[]}` with `deletedAt` and origin info               | on every delete                                      |
-| `tablodge.undo`          | `{version, records: UndoRecord[]}`, newest first, at most 3            | before erase, empty trash bin, clear/delete snapshot, delete backup, restore backup, reset settings, imports |
+Worker recovery code lives in `extension/service-worker.ts`; the UI lives in `src/app/recovery.tsx`.
 
-**Snapshots.** A snapshot lists every normal, non-incognito window: tabs (`url`, `title`, `pinned`, `active`, tab-group index, split pair) and the window's focus and state. Only `http(s)` pages that are not on an excluded site are included, so TabLodge's own pages and browser pages never appear. The live snapshot is replaced only when its content hash changed; the interval alarm (`snapshotIntervalMinutes`: 5, 15, or 30) also adds it to the history unless it equals the newest entry. The history keeps `snapshotKeep` entries (10, 25, or 50) and at most about 24 million serialized characters, dropping the oldest first. An empty capture (no windows) never replaces a stored snapshot. A 5,000-tab capture serializes to well under 1.2 MB.
+| Key | Contents |
+| --- | --- |
+| `tablodge.snapshots` | Snapshot history, newest first |
+| `tablodge.snapshots.live` | Latest capture of open windows |
+| `tablodge.snapshots.meta` | Browser session flags, latest capture signature, and pending recovery |
+| `tablodge.backups` | Automatic and safety backup lists, plus download errors |
+| `tablodge.trash` | Deleted items with their original positions and deletion times |
+| `tablodge.undo` | Up to three recent undo records |
 
-**Crash detection (a heuristic).** Manifest V3 has no reliable shutdown event, so a clean exit is inferred, not observed:
+### Snapshots
 
-1. While snapshots are on, the first capture sets `meta.sessionOpen = true`.
-2. `windows.onRemoved` closing the last normal window sets `sessionOpen = false` (the clean-exit signal) and files the last live snapshot into the history as `exit`. Closing any other window records `{at, remaining}` as `meta.closing`.
-3. On `runtime.onStartup` the previous run counts as **crashed** when `sessionOpen` is still true and it does not look like a shutdown in progress (a window close that left one or no windows and was not followed by any capture). The previous live snapshot moves into the history (reason `crash`), and if it has at least 2 tabs it becomes `meta.recovery`.
-4. The dashboard banner reads `GET_SNAPSHOTS`, which also hides the recovery when at least 80% of the snapshot's URLs are already open (the browser restored the session itself, such as with "Continue where you left off").
+Snapshots are enabled by default. Captures include normal windows, ordinary HTTP and HTTPS tabs, active and pinned state, tab groups, split view pairs, and window focus and state. Incognito windows and excluded sites are omitted.
 
-Limits: the browser may kill the worker before it handles the last `windows.onRemoved`, so a normal quit can occasionally look like a crash (the banner is then one click to dismiss, and the snapshot is still in the history); a crash within about five seconds of the last tab change loses that change; a profile that restores its own tabs on startup mostly hides the banner via the 80% rule; and a worker restart (extension reload or update) is not a browser start, so it never shows the banner.
+Tab and window events trigger a capture after about five seconds, with a maximum wait of 30 seconds. The live capture is written only when its content changes. An interval alarm also adds history entries at the chosen interval of 5, 15, or 30 minutes, unless the latest entry is identical. Empty captures never replace saved snapshots.
 
-**Restoring.** `RESTORE_SNAPSHOT` creates one new window per snapshot window and reuses `restoreRecords` (tab groups, pinned tabs, split view pairs, background unloading), always allowing duplicate URLs, activating the snapshot's active tab, maximizing windows that were maximized, and focusing the window that had focus. `SAVE_SNAPSHOT_AS_SESSION` stores a window as a normal session (several when it has more than 1,000 tabs); `DELETE_SNAPSHOT` and `CLEAR_SNAPSHOTS` remove history.
+History keeps 10, 25, or 50 entries, subject to a cap of about 24 million serialized characters. Oldest entries are removed first.
 
-**Backups.** `tablodge-backup` JSON (`format`, `version`, `exportedAt`, `folders`, `groups`, `bookmarkColumns`, `bookmarks`, `settings`) is the same structure Import already reads. `autoBackup` (`off`, `daily`, `weekly`) drives an alarm; a run is skipped when sessions and bookmarks are identical to the newest backup, and `autoBackupKeep` (7 or 30) rotates the ring. A missed backup is caught up at browser start. Restoring replaces sessions, folders, bookmarks, and columns but keeps the current settings, after a safety backup. **Safety backups** (a separate ring of 5) are taken before `ERASE_DATA` (which stops if the backup cannot be written), imports of more than 50 items, importing browser bookmarks with more than 50 links, restoring a backup, and deleting a bookmark column with 10 or more bookmarks. With `autoBackupToDownloads` the backup is also written with `chrome.downloads.download` to `Downloads/TabLodge/tablodge-backup-YYYY-MM-DD.json` through a base64 `data:` URL (a service worker has no Blob URLs). The `downloads` permission is optional: Settings requests it from the toggle's click and releases it when switched off. Chrome refuses URLs over 2 MB, so a larger backup records an error in the backup list instead; the in-page Download button has no such limit.
+### Crash detection
 
-**Trash bin.** Deleting a session, saved link (also the links removed by restore-and-remove), bookmark, or bookmark column first writes a `TrashEntry` (`kind`, `label`, `origin`, `deletedAt`, and the data with its position and neighbors), then updates the state, so a crash in between duplicates instead of losing data. Restoring puts an item back where it was when its session, column, or folder still exists, and otherwise in Unfiled (sessions, folders) or the first column (bookmarks); links of a vanished session recreate that session. Items older than `trashRetentionDays` (7, 30, or 90) are purged by a daily alarm and when something is added; the trash bin is capped at 500 items and about 8 million characters in total (oldest dropped first; the newest item always stays). A deleted session folder is not trashed: it holds no data, its sessions move to Unfiled, and the generic undo below puts it back. Trash entries for folders from older versions can still be restored. Erase-all is not trashed; it has its safety backup and the generic undo below instead.
+Manifest V3 has no reliable browser shutdown event. TabLodge therefore treats crash detection as a best guess:
 
-**The rule: undoable actions never ask first.** An action that offers Undo runs immediately and shows an Undo toast; no confirmation dialog sits in front of it. Anything important is therefore made undoable instead of confirmed. The exception is the Settings page: erasing data, restoring default preferences, clearing snapshots, emptying the trash bin, and restoring a backup ask first (deleting a single backup does not) (a small `ConfirmationDialog` in `src/shared/ui.tsx`; Erase lets you tick what to erase), and still offer Undo afterwards.
+1. The first capture marks the browser session as open.
+2. Closing the last normal window marks a clean exit and adds the last live capture to history. Closing another window records when it closed and how many windows remained.
+3. On browser startup, a session still marked open is treated as crashed unless the flags suggest shutdown was already in progress. Its live capture moves to history. A capture with at least two tabs becomes a recovery offer.
+4. `GET_SNAPSHOTS` hides the offer when at least 80% of its URLs are already open, since the browser probably restored them itself.
 
-**Undo toasts.** `showStatus(message, false, {action: {label, onClick}})` shows a toast with a button for 6 seconds (an action always renders as a visible toast, on every page). Delete responses carry `trashId`, so Undo is `RESTORE_TRASH`. Restore-and-remove also returns `trashId` (Undo puts the saved links back; the opened tabs stay). Moving a link between sessions undoes with a reverse `MOVE_TAB` next to its old neighbor. After Save with close-after-save, Undo runs `RESTORE_GROUP` into the current window.
+A normal quit can look like a crash if the worker stops before handling the last window event. Changes within roughly five seconds of a crash may be missing. Reloading or updating the extension is not a browser startup and does not produce a crash banner.
 
-**Generic undo.** What the trash bin cannot hold (erase data, empty trash bin, delete permanently from the trash bin, clear or delete snapshots, delete a backup, restore a backup, restore default settings, imports, and `ADD_BOOKMARKS` with `undoable`) uses `withUndo` in the worker. Before the action it copies the affected storage keys; afterwards it stores a hash of each key's new value in `tablodge.undo` and returns an `undoId`. `UNDO` (through the `mutate` queue, plus the snapshot, backup, and trash queues for their keys) puts the old values back only when the record is under 2 minutes old and every key still hashes to what the action left, so any later change to the same data refuses with "Can't undo: your data changed since." Only the latest 3 records are kept; a one-shot alarm (and worker startup) drops expired ones, since each holds a copy of user data. Undo of a state change re-syncs alarms, the toolbar action, and context menus. Clearing or deleting snapshots only restores the history list (not the live snapshot or the crash banner), and Undo is refused if a new snapshot was taken in between. Safety backups stay as an extra net.
+`RESTORE_SNAPSHOT` creates a window for each saved window, reuses normal restore logic, allows duplicate URLs, and restores active tabs, maximized state, and focus. `SAVE_SNAPSHOT_AS_SESSION` converts a window to a saved session, splitting it into several sessions above 1,000 tabs.
 
-**Opening many tabs.** Opening more than 10 saved links or bookmarks at once, or restoring a snapshot, does not ask first; the toast offers Undo, which closes the tabs that were opened (`RESTORE_SNAPSHOT` returns their ids) and that still exist.
+### Backups
 
-## Shared UI
+Automatic backups are off by default. When enabled, they run daily or weekly and keep 7 or 30 entries. A missed run is caught up at browser startup. A run is skipped if sessions and bookmarks match the newest backup.
 
-The pages share a restrained neutral token system (`styles/extension-app.css`) and local shadcn-style primitives. `components.json` is the shadcn CLI configuration; generated source lives in `src/components/ui/`, while `src/shared/ui.tsx` re-exports them with a few composed helpers (icon tooltip, expanding search). To add a primitive, run `pnpm dlx shadcn@latest add <component>` and review the generated source before committing it. Keep dependencies bundled locally; never add a CDN import. The `@/` alias maps to `src/` in every build and in `tsconfig.base.json`; it is resolved at build time and must not remain in runtime bundles.
+JSON backups use the `tablodge-backup` format and contain folders, sessions (`groups`), bookmark columns, bookmarks, and settings. Restoring one replaces the saved library but keeps the current settings. It takes a safety backup first.
 
-## Testing approach
+A separate list keeps five safety backups. They are taken before erasing data, restoring a backup, imports above 50 items, browser bookmark imports above 50 links, and deletion of a column containing at least 10 bookmarks. Erasing data stops if its safety backup cannot be written.
 
-`tests/service-worker.test.ts` runs the type-stripped `extension/service-worker.ts` source in a fresh Node VM context per harness, against a mocked `chrome.*` API (tabs, windows, tab groups, split view, storage, context menus, bookmarks). It also unit-tests the drag-and-drop and clipboard helpers in `src/app/interaction-actions.ts`. The mocked tests and the build do not replace a browser smoke test: load `dist/tablodge/` in a Chromium-based browser for manual testing.
+The optional Downloads copy uses `chrome.downloads.download` with a base64 data URL and a filename under `Downloads/TabLodge/`. The worker cannot create Blob URLs. The current download path rejects URLs above 2 MB and records an error; downloading from a page avoids that limit. The Settings toggle requests or releases the optional `downloads` permission.
 
-## The main page
+### Trash
 
-The local **new-tab page** is the main TabLodge destination. It includes bookmark columns and search, followed by the full session manager: folder filtering/management, session search and sorting, multi-select export/share, saved-tab details, restore, rename, edit, move to folder, and delete actions. Settings stays on its own page. The toolbar popup remains a quick chooser; only its explicit **Open TabLodge** action opens the full page in a separate tab.
+Deleting a session, saved link, bookmark, or column writes a `TrashEntry` before updating the library. If execution stops between those writes, the result is a duplicate rather than lost data. Links removed after a restore also go to the trash.
 
-The browser’s Side Panel is optional. Enable **Open TabLodge in the browser Side Panel** in Settings to make the toolbar button open a searchable bookmark list there. The Side Panel can open, copy, edit, and delete bookmarks; it uses the same local data as the main page.
+Restore uses the original position and neighboring items where possible. If the parent no longer exists, sessions return to Unfiled and bookmarks to the first column. Restoring a link can recreate its missing session.
 
-## Sessions and pinned tabs
+Retention is 7, 30, or 90 days. Cleanup runs daily and when adding an entry. Limits are 500 entries and about 8 million serialized characters; oldest entries are removed first, but the newest entry stays.
 
-- The toolbar action defaults to the compact popup. Settings can instead make it save selected tabs (or the current window), the whole window, the active group, the active tab, all normal windows, or send the active tab to the first session. Page context menus and browser shortcuts provide additional save paths (`save-window` saves with `selected-or-window`, so a multi-tab selection saves only the selected tabs; `bookmark-page` has the worker read the active web tab and open `add-bookmark.html?url=…&title=…` in a small popup window, where `src/app/add-bookmark.tsx` picks the column and saves through `ADD_BOOKMARK`); shortcuts can be changed at `chrome://extensions/shortcuts` or `brave://extensions/shortcuts`.
-- **Clean page titles.** With `cleanTitles` (default on), `pageTitle` strips a leading run of notification counters and unread markers (`(1)`, `(12+)`, `[3]`, `●`, `•`, `*`) from tab titles when they are saved as session links, bookmarks (from tabs or pages), and snapshots; a title that is only a counter is kept, and counters elsewhere in a title stay. Existing data and titles you type are not changed.
-- **Session names.** `sessionNameStyle` picks how `captureTabs` names a new session: `title` (first saved tab's title), `datetime` (`Sat, Oct 25 · 10:42 PM`), `date-title` (default, `Sat, Oct 25 · Google Flights`), or `custom` (`sessionNameTemplate`, default `{date} · {title}`, trimmed and capped at 200 characters). One worker function, `formatSessionName`, builds the name from the time of the save and `navigator.language` through `Intl.DateTimeFormat`; names are capped at 120 characters and a `(1/3)` chunk suffix is appended after them. Placeholders: `{date}` (weekday, month, day; never a year), `{time}` (short time), `{weekday}`, `{title}` (first tab's title, or its domain when empty), `{domain}` (host without `www.`), `{count}` (tabs saved), `{window}` (1-based window number when saving all windows, else empty); unknown `{...}` tokens stay as typed. A name typed in the popup and the title of a titled native tab group (current-group saves) win over the setting; "Saved links", snapshot-to-session, and imports keep their own names, and existing sessions are never renamed. Settings shows a live "Next save" line through the `PREVIEW_SESSION_NAME` message, which runs the same function on the sender's window tabs. **Ask each time.** `sessionNameStyle: 'ask'` (with `sessionNameFallback`, one of the four styles, default `date-title`) makes saves ask for a name. The worker never asks itself: `ask` resolves to the fallback style through `builtNameStyle` wherever it has to name a session, and `PREVIEW_SESSION_NAME` returns `asks: true` with the fallback name (optionally for a `scope` or `tabIds`, so a dialog can show the exact default as its placeholder). Saves started from a page (popup quick buttons, the dashboard's Save this window and palette command, the side panel) call `useSessionNameAsk` (`src/app/name-session-dialog.tsx`), which shows one shared "Name this session" dialog before `SAVE_TABS`; Enter saves, an empty answer sends no `groupName` (the worker uses the fallback), Cancel aborts so nothing is saved or closed. The popup's "Choose tabs and title" has its own title field and does not ask twice. A typed name for an all-windows save becomes `Name (1/N)` per window. Saves without a page (shortcuts, right-click menu items, the toolbar button in a direct-save mode) pass `promptName` to `saveTabs`: it saves first with the fallback name, then `openNamePrompt` opens `name-session.html?groupId=…` (repeated for every session the save created) in a small `popup` window; Save renames them through `UPDATE_GROUP` (several get `Name (i/n)`), while Cancel, Escape or closing keeps the fallback name. Titled native tab groups keep their title and are never followed by a prompt; saved links, snapshot-to-session, imports and merges never ask. The helpers in `src/app/session-name.ts` are pure.
-- **Ignore tab groups.** `ignoreTabGroups` (default off, Settings › When saving) makes `captureTabs`, the send-to-session path and crash snapshots store no native tab group (`nativeGroup: null`, no snapshot groups), so those tabs restore ungrouped; the current-group scope still saves the group's tabs, just without the metadata. Sessions that are already saved are not changed.
-- **Pinned tabs are ignored by default.** The explicit **Include pinned tabs** Settings option is required to save them. A pinned tab may be closed only after the session has been written successfully and **Close tabs after saving** is enabled; the service worker checks the tab’s URL and pinned state again before removal. Restore preserves `pinned: true`.
-- Turning the option off leaves pinned tabs out of subsequent captures and close operations.
-- Restore one tab or a complete session. The default destination is a new window unless the current window contains only the current tab; Settings also offers current-window and always-new-window policies, and a session card offers “Restore in this window” and “Restore in a new window” next to its Restore button. Ctrl/Cmd-click keeps the saved session and Shift-click opens a new window. Choose whether restores keep or remove saved tabs. Single-tab activation, restore duplicate handling, and optional background-tab unloading are configurable. Restore failures are reported, and removal applies only to tabs that opened successfully.
-- Sessions support folders, search/sorting, descriptions, details, reordering, single-tab and full-session restore, selected-tab export/share, and delete actions. Session import/export is in the Sessions ⋯ menu, not in Settings.
-- **Close tabs after saving** is controlled in Settings, not in the popup. TabLodge stores the session first and rechecks each close candidate before removal.
+Deleting a session folder moves its sessions to Unfiled rather than trashing them. Generic Undo restores the folder. Erasing all data also uses a safety backup and generic Undo, not trash.
 
-## Split view tabs
+### Undo and confirmations
 
-Chromium-based browsers can show two tabs side by side in one tab-strip slot (Split View). TabLodge saves and restores these pairs; the extension API it uses (`chrome.tabs.createSplit`, `Tab.splitViewId`) needs Chromium 155 or newer and no extra permission.
+On the dashboard, actions that can be undone run immediately and show an Undo toast. Settings still asks before erasing data, resetting preferences, clearing snapshots, emptying trash, or restoring a backup. These actions also offer Undo afterward. Deleting one backup does not ask first.
 
-- **Saving.** Every save path (window, selected tabs, all windows, tab group, left/right of a tab, context menus, shortcuts) records which saved tabs form a pair, with a pair key that stays stable inside the session (not the browser's temporary split id) and the left/right order. A pair is recorded only when both tabs end up in the session: if only one half is selected, or its partner is an excluded site, an ignored pinned tab, or a rejected duplicate, the remaining tab is saved as a normal tab. Both highlighted halves of the active split view count as one tab, not as a multi-tab selection.
-- **When the active tab is in a split view** (Settings, When saving): **Save both tabs** (default) or **Save only the focused tab**. The focused-only choice applies to selection saves (the save shortcut with a selection and the Save selected tabs menu items, and the toolbar's selected-tabs mode when it saves a selection). Only the active split view is reduced; other split views are saved in full. Whole-window saves always keep both tabs, and tabs picked in the popup's chooser are saved exactly as picked.
-- **Restoring.** With **Tabs saved from a split view: Keep them side by side** (default), a pair whose two tabs both open is recreated as a split view: the tabs open next to each other with their saved pinned state, native tab groups are created first (so both halves share a group, as the browser requires), then the pair is split, and group titles, colors, and collapsed state are applied last. **Open as separate tabs** opens them as neighboring normal tabs. Restoring one tab of a pair, or a pair whose partner was skipped as already open or failed, opens a normal tab. On browsers without the API TabLodge silently opens normal tabs; if the browser refuses a split, the tabs still open and the page shows a short note ("1 split view opened as separate tabs"). This never counts as a failed tab. **Unload background restored tabs** leaves split tabs loaded, because either half can be visible.
-- The session list shows a pair as two joined rows on a shared background with a **Split** badge. Shared HTML marks them "Split view, left/right".
+`showStatus(message, false, {action: {label, onClick}})` displays an action toast for six seconds. Delete responses include `trashId`; Undo sends `RESTORE_TRASH`. Undoing removal after a restore brings saved links back but leaves the opened tabs alone. Undoing a move sends a reverse `MOVE_TAB`. Undo after saving and closing tabs restores the saved session into the current window.
 
-TabLodge saves only ordinary `http:` and `https:` URLs. Browser-internal pages and unsupported URLs are skipped. Native tab-group metadata is restored on a best-effort basis.
+For actions the trash cannot represent, the worker's `withUndo` copies affected storage keys before the action and stores hashes of their resulting values afterward. The response includes `undoId`. `UNDO` succeeds only within two minutes and only if all affected keys still match those hashes. Later edits to the same data cause Undo to be refused.
+
+Undo runs through the mutation queue and relevant recovery queues. It resynchronizes alarms, toolbar behavior, and menus after restoring state. At most three records are kept, with expired copies removed by an alarm and on worker startup. Undoing snapshot deletion restores history, not the live capture or crash banner, and is refused if another snapshot was captured in the meantime.
+
+Opening more than 10 saved links or bookmarks, or restoring a snapshot, also offers Undo. That action closes the newly opened tabs that still exist.
+
+## Pages and shared UI
+
+The new tab dashboard contains sessions and bookmark columns. Settings and Help have their own pages. The popup is a compact chooser; its **Open TabLodge** action opens the dashboard. The side panel has bookmarks, sessions, and open tabs, with search and actions suited to its narrow layout.
+
+The toolbar icon normally opens the popup. **Settings › Side Panel › Toolbar icon opens** can make it open the side panel instead. A shortcut and context menu can open the panel without changing that preference.
+
+UI primitives live in `src/components/ui/`, with composed helpers in `src/shared/ui.tsx`. Theme tokens live in `styles/extension-app.css`. `src/shared/theme.tsx` mirrors the saved theme for the boot script and follows system theme changes. The `@/` alias resolves to `src/` during builds and must not remain in output bundles.
+
+## Saving and restoring sessions
+
+Save scopes include selected tabs, the current window, all windows, a native tab group, the active tab, and tabs to either side. Toolbar actions, context menus, and shortcuts share worker logic. The `save-window` shortcut uses `selected-or-window`, so a selection takes precedence over the window.
+
+Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during capture. Native group metadata is restored where browser APIs allow it.
+
+Pinned tabs are excluded by default. When included, they can be closed only after the session is written and **Close tabs after saving** is enabled. The worker checks each tab's URL and pinned state again before closing it.
+
+The default restore destination is a new window unless the current window contains only the current tab. Settings also offers current window and always new window policies. Ctrl/Cmd clicks keep saved links; Shift clicks force a new window. A failed restore never removes its saved link. Duplicate handling, activation, and unloading of restored background tabs are separate preferences.
+
+### Titles and names
+
+`cleanTitles`, enabled by default, removes leading notification counters and unread markers from captured page titles. It leaves manually entered titles and existing data alone. A title made only of counters is kept.
+
+`formatSessionName` builds names from the save time and browser locale. Styles are first tab title, date and time, date and title (the default), a custom template, or a prompt each time. Names are capped at 120 characters, before any chunk suffix. Templates are capped at 200 characters and accept `{date}`, `{time}`, `{weekday}`, `{title}`, `{domain}`, `{count}`, and `{window}`. Unknown placeholders stay as typed.
+
+An explicit name or the title of a native group takes precedence. Imports, saved links, merges, and snapshot conversions keep their own naming rules. Existing sessions are never renamed by a preference change.
+
+Pages use `useSessionNameAsk` to prompt before saving. Cancel aborts the save. An empty answer uses the fallback style. Saves started without a page must save first, then open `name-session.html` to offer a rename; cancelling keeps the fallback name. `PREVIEW_SESSION_NAME` uses the same formatter for Settings and dialogs. Pure naming helpers live in `src/app/session-name.ts`.
+
+`ignoreTabGroups` omits native group metadata from new captures and snapshots without changing existing sessions. Saving the current group still saves its tabs, just without the metadata.
+
+### Split view
+
+Split view support needs the Chromium 155 APIs. Captures record a stable pair key and left or right position only when both tabs survive selection, exclusions, pinned filtering, and duplicate handling.
+
+The save preference can keep both halves of the active split view or only the focused tab during selection saves. Whole window saves always keep both; the popup chooser saves exactly what was selected.
+
+On restore, both tabs open next to each other with matching pinned state. Native groups are created before the pair is split, with group appearance applied afterward. If one half is missing or the API is unavailable, tabs open normally. A rejected split is reported as a pair opened separately, not as failed tabs. Split pairs stay loaded even when background unloading is enabled because either half can be visible.
 
 ## Bookmarks
 
-- Bookmark the active page from the popup or page/toolbar context menu; the popup uses the current tab’s title and URL. Manually added/imported links prefer supplied metadata, then a matching open-tab title, then a readable URL label. TabLodge does not scrape websites or request host permissions.
-- Add a bookmark manually, drag a browser link onto the new-tab page when the browser exposes link data, or import a TabLodge bookmark JSON file or the browser’s bookmark tree from the ⋯ menu on the Bookmarks toolbar of the main page.
-- **Browser bookmark offers** (`browserBookmarkAction`: `off`, `ask`, `add`; `browserBookmarkColumn`). Extensions cannot hook the browser’s star button, so the worker listens to `chrome.bookmarks.onCreated`. Events are debounced for 1.5 s and acted on only when exactly one arrived (a burst is sync, a paste or an import). Anything between `onImportBegan` and `onImportEnded` is ignored (flag kept in memory and `chrome.storage.session`). Folders and non-http(s) URLs are ignored, and so is a URL that is not the active tab of the last-focused normal window or is already a TabLodge bookmark. `ask` opens the Bookmark this page window (`add-bookmark.html?…&source=browser`) with the browser’s title; `add` writes to the chosen column (the first column if it is gone) and flashes the ✓ badge. Removing the browser bookmark never touches the TabLodge one. Browser bookmark folders become ordered columns; duplicate URLs are handled by the import-specific choice when duplicates are detected.
-- Create, rename, and reorder bookmark columns. Any column—including the built-in or last one—can be deleted. An empty column is deleted at once. **Delete column** on a column with bookmarks opens a dialog: move them to another column (the neighbouring one by default) or delete them too; for the last column they are deleted with it. Either way the result has an Undo toast and the column goes to the trash bin.
-- Bookmark drag/drop shows an insertion marker, supports reordering within a column, and moves bookmarks across columns. Column drag/drop supports pointer/touch and mouse input; reordering is by drag and drop only (menus have no Move up/down/left/right). Bookmark menus can open a link, open it in a new tab, edit, copy its URL, move it to another column, or delete it. Equivalent link actions share one icon (`src/app/action-icons.ts`).
-- Favicons use the browser’s local favicon service with a text fallback, derived from each URL when shown; saved tabs do not store favicon data. TabLodge does not use third-party favicon hosting.
+Bookmarks can come from the active page, manual entry, pasted links, dragging, a file, or an explicit browser bookmark import. Supplied titles take priority, then a matching open tab title, then a readable URL label. TabLodge does not fetch page contents. Favicons come from the browser's local cache with a text fallback.
 
-Sessions and bookmarks can each be disabled in Settings without deleting their local data. Disabled systems reject mutations until re-enabled. At least one system must remain enabled; the service worker enforces this as well as the interface. Bookmark data is stored in `chrome.storage.local` and does not sync through TabLodge.
+The optional browser bookmark setting uses `chrome.bookmarks.onCreated`, not a hook on the star button. It waits 1.5 seconds and acts only on a single new web bookmark matching the active tab of the last focused normal window. Bursts, imports, folders, and URLs already saved in TabLodge are ignored. An import flag also lives in `chrome.storage.session` so it survives worker restarts.
 
-## Settings and appearance
+The setting can ask or add automatically to a chosen column, falling back to the first column. Removing the browser bookmark does not remove the TabLodge copy. Explicit browser imports turn folders into ordered columns and offer duplicate choices.
 
-- Choose **System**, **Light**, or **Dark**. System follows device-theme changes live.
-- **Use TabLodge for new tabs**: Chromium declares new-tab overrides statically, so switching this off cannot uninstall the override. Instead the service worker watches `tabs.onCreated` for tabs the browser opens as new tabs (pending URL `chrome://newtab/`) and immediately redirects that tab with `tabs.update` to the chosen **When off, new tabs show** target: the browser’s own page (`chrome://new-tab-page/`, `brave://newtab/` best effort in Brave), `about:blank`, or a custom http(s) page. `newtab.html` renders nothing while it asks the worker (`HANDOFF_NEW_TAB`) whether it is a claimed new tab, as a fallback if it loaded first. A per-tab redirect counter prevents loops: a tab sent back to TabLodge is retried once, then sent to `about:blank`. `chrome://newtab/` itself is not usable as a target because the override captures it. The dashboard stays usable when opened on purpose. The address bar usually has focus on the browser’s page but may not on blank or custom pages.
-- Choose whether TabLodge opens on browser startup, whether to keep a pinned TabLodge tab, and whether to show the local page or restore the newest session. Settings also cover toolbar action, opening the saved session after saving, optional Side Panel and context menus, pinned-tab opt-in, safe close-after-save, restore destination/default keep-or-remove behavior, save-time duplicate handling (allow or silently reject, keeping the existing title or taking the latest), restore-time duplicate URLs, single-tab activation, split view saving and restoring, URL display, whether sessions start expanded on the TabLodge page (**Keep sessions expanded by default**, off by default; each session can still be collapsed or expanded), what clicking a session title does (expand or collapse by default, open details, or restore), session sort and title-click behavior, session naming (including asking each time) and clean page titles, background unloading, and site exclusions. Preference reset leaves saved data unchanged.
+Columns and bookmarks are reordered by dragging. Any column, including the last, can be deleted. For a populated column, the dialog offers to move its bookmarks or delete them too; the last column has no move destination. The result offers Undo and stores the column in trash.
 
-## JSON data
+## New tab behavior
 
-The Sessions ⋯ menu provides session JSON import/export; the Bookmarks toolbar ⋯ menu provides bookmark-file import/export and explicit browser-bookmark import, and Settings › Data can also export bookmarks. Session JSON contains sessions and folders; bookmark JSON contains bookmark columns and bookmarks. A saved tab that belongs to a split view carries `"split": { "id": "<pair key>", "position": 0 | 1 }` (0 is the left tab). On import, split info is kept only for complete pairs (two neighboring tabs with the same key, one at each position, and the same pinned and tab-group state); malformed, orphaned, or mismatched split info is dropped and the tabs import as normal tabs. A session has one `description` field (up to 10,502 characters). Older data and exports that kept a separate session `notes` field are merged on load and import: when both are set and differ, the result is `description`, a blank line, then `notes`. Exports without split info, including older ones, import unchanged. Import duplicate choices appear in the relevant import dialog only when duplicates are found. Choose whether to skip or keep duplicate URLs; when skipping, choose whether to preserve an existing title or use the imported title. Updating a session tab’s title preserves its existing notes. Restore duplicate handling is a separate Settings preference. Imported web links are validated and unsupported URLs are ignored. Export files are plain text, not encrypted. Treat them as private when titles, URLs, or notes are sensitive.
+Chromium declares the new tab override statically. Turning off **Use TabLodge for new tabs** cannot remove that declaration. Instead, the worker redirects newly created tabs to the browser's own page, a blank page, or a custom HTTP or HTTPS URL.
 
-**Full backup (ZIP).** The Backup dialog's "Full backup (ZIP)" writes `tablodge-full-YYYY-MM-DD.zip` (deflate, built on the page with the bundled `fflate`; the pure layout code is `src/app/full-backup.ts`). It holds `manifest.json` (`format: "tablodge-full-backup"`, `version`, `appVersion`, `createdAt`, `counts`), `data.json` (the normalized `tablodge.state`: sessions, folders, bookmarks, columns, and all settings including excluded sites), `preferences.json` (the page theme, `uiTheme` in `chrome.storage.local`, which `theme.tsx` mirrors into `localStorage`), `snapshots.json` (`tablodge.snapshots` history) and `trash.json` (`tablodge.trash`). The automatic backup history and undo records are not included. The worker supplies the values with `GET_FULL_BACKUP`. Import detects the ZIP by its `PK\x03\x04` header plus a manifest with that format id, shows the counts, and sends the parsed files in `RESTORE_FULL_BACKUP`. The worker rejects a newer `version` or `schemaVersion`, rebuilds everything through `normalizeStore` and per-entry snapshot and trash normalization (web URLs only, size caps), takes a safety backup, and replaces state, snapshot history, trash, and theme inside one `withUndo` covering those keys, then re-syncs alarms, the toolbar action, and context menus. A ZIP over the 45 MB import limit or unpacking to more than 60 MB is refused.
+`newtab.html` also asks `HANDOFF_NEW_TAB` whether a redirect is needed before rendering. A counter prevents redirect loops: after one retry, the tab goes to `about:blank`. Opening the dashboard deliberately still works. Address bar focus depends on the destination and browser.
 
-## Permissions in practice
+## Imports and exports
 
-TabLodge requests no website host permissions, injects no scripts into web pages, and sends no browsing data to a service. Session, bookmark, and preference data stays in `chrome.storage.local`; there are no TabLodge accounts, servers, or cloud sync.
+Session and bookmark menus provide their own import and export actions; Settings also provides data tools. Parsing and conversion live in `src/app/import-formats.ts`. Imports accept native backups and formats from other tab managers. Unsupported URLs are ignored. Duplicate choices appear only when needed and are separate from restore preferences.
 
-See the README for why each permission is requested.
+Session JSON includes sessions and folders. Bookmark JSON includes columns and bookmarks. A split pair uses `split: {id, position}`, where position is 0 for left and 1 for right. Import keeps only complete adjacent pairs with matching pinned and group state. Invalid pair metadata is dropped without losing the links.
 
-## Behavior summary
+A session has one description, capped at 10,502 characters. Older separate `notes` fields are merged into the description with a blank line when both differ. Editing a saved tab title preserves its notes.
 
-Pinned tabs are opt-in. Restores can keep or remove saved tabs. Import duplicate choices are made in the applicable import dialog, while restore duplicate handling remains a separate preference. Bookmark import and export are in the Bookmarks toolbar ⋯ menu (Settings › Data can also export bookmarks); session import/export is in the Sessions ⋯ menu. The built-in Help page documents toolbar actions, restore modifiers, and browser API limitations.
+### Full backup ZIP
+
+`src/app/full-backup.ts` builds `tablodge-full-YYYY-MM-DD.zip` on the page using bundled `fflate`. The worker supplies data through `GET_FULL_BACKUP`.
+
+| File | Contents |
+| --- | --- |
+| `manifest.json` | Format `tablodge-full-backup`, versions, creation time, and counts |
+| `data.json` | Normalized state, including settings and excluded sites |
+| `preferences.json` | Theme choice |
+| `snapshots.json` | Snapshot history |
+| `trash.json` | Trash entries |
+
+Automatic backup history and Undo records are not included. Import recognizes the ZIP header and format identifier, shows counts, and sends `RESTORE_FULL_BACKUP`. The worker rejects newer versions, normalizes entries, takes a safety backup, and replaces the affected data inside one undoable action. It then resynchronizes alarms, toolbar behavior, and menus.
+
+Files above 45 MB, or expanding beyond 60 MB, are refused. All export formats are unencrypted; see [Privacy](../PRIVACY.md) before sharing backups.
+
+## Testing
+
+The worker harness runs the source in a fresh Node VM with mocked `chrome.*` APIs. Pure helpers also have direct unit tests. These tests cover storage and browser logic, not full browser behavior. Use the unpacked build for a manual smoke test, especially for worker restarts, native groups, split view, and side panel gestures.
