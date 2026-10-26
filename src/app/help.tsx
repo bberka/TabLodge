@@ -1,105 +1,572 @@
-import {useState} from 'react';
+import {useState, type ReactNode} from 'react';
 import {createRoot} from 'react-dom/client';
 import {
 	ArrowUpRight,
 	BookOpen,
+	Bookmark,
 	Bug,
+	Check,
+	CircleHelp,
 	Database,
-	Github,
+	ExternalLink,
 	Globe,
-	Info,
+	Github,
 	Keyboard,
 	Layers2,
 	LifeBuoy,
+	Link2,
+	MoreHorizontal,
 	MousePointer2,
 	MousePointerClick,
 	RotateCcw,
 	Scale,
+	Search,
 	Settings2,
 	Tag,
+	X,
 } from 'lucide-react';
-import {
-	Button,
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-	TooltipProvider,
-} from '../shared/ui';
+import {Badge, Button, Input, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import {AppHeader, openShortcutsPage} from './common';
+import {AppHeader, openShortcutsPage, type IconComponent} from './common';
 import {PROJECT} from './project';
 
 const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
+const normalizeSearchText = (value: string) =>
+	value
+		.toLocaleLowerCase()
+		.replaceAll(/[^0-9a-z]+/g, ' ')
+		.trim();
+
+type GuideEntry = {
+	title: string;
+	body: ReactNode;
+	searchText: string;
+	gesture?: {
+		label: string;
+		icon: IconComponent;
+	};
+};
+
+type GuideAction = {
+	label: string;
+	href: string;
+	icon?: IconComponent;
+};
+
+type GuideSection = {
+	id: string;
+	title: string;
+	icon: IconComponent;
+	intro: string;
+	keywords: string[];
+	entries: GuideEntry[];
+	action?: GuideAction;
+};
+
+function GestureBadge({
+	label,
+	icon: Icon,
+}: {
+	label: string;
+	icon: IconComponent;
+}) {
+	return (
+		<Badge variant="accent" className="gap-1.5 whitespace-nowrap">
+			<Icon className="h-3.5 w-3.5" aria-hidden="true" />
+			{label}
+		</Badge>
+	);
+}
+
+function MenuLocation({label}: {label: string}) {
+	return (
+		<Badge
+			variant="outline"
+			className="mx-0.5 inline-flex align-middle gap-1 whitespace-nowrap"
+		>
+			{label}
+			<MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+			<span>menu</span>
+		</Badge>
+	);
+}
+
+function Key({children}: {children: ReactNode}) {
+	return (
+		<kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-medium text-foreground">
+			{children}
+		</kbd>
+	);
+}
 
 function Help() {
 	const [shortcutsFailed, setShortcutsFailed] = useState(false);
-	const sections = [
+	const [query, setQuery] = useState('');
+	const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+	const hasTerms = (value: string) => {
+		const normalized = normalizeSearchText(value);
+		return terms.every((term) => normalized.includes(term));
+	};
+
+	const sections: GuideSection[] = [
 		{
-			icon: MousePointer2,
+			id: 'quick-actions',
 			title: 'Quick actions',
-			text: 'The toolbar button opens a compact popup by default. Choose tabs and a session title without leaving it, or use Open Dashboard to open the full page in a separate tab. Settings can instead assign the toolbar button to save the current selection/window, the whole window, the active group, the active tab, all windows, or the active tab into the first session. A separate save preference can open the saved session afterward.',
+			icon: MousePointer2,
+			intro:
+				'Save a few tabs from the toolbar, or open the full dashboard to manage everything.',
+			keywords: [
+				'toolbar icon',
+				'popup',
+				'side panel',
+				'save window',
+				'action button',
+			],
+			entries: [
+				{
+					title: 'Toolbar button',
+					body: `By default, the ${PROJECT.name} button opens a compact popup. Choose tabs and a session title there, or select Open Dashboard to open the full page.`,
+					searchText:
+						'default compact popup choose tabs session title open dashboard full page toolbar button',
+				},
+				{
+					title: 'Change what the button does',
+					body: 'In Settings, assign it to save selected tabs, the whole window, a tab group, the active tab, all windows, or to add the active tab to your first session. You can also choose whether to open the saved session afterward.',
+					searchText:
+						'settings toolbar button action selected tabs window group active tab all windows first session open after saving',
+				},
+				{
+					title: 'Use the side panel',
+					body: 'Choose the side panel instead of the popup in Settings, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing.',
+					searchText:
+						'side panel sidebar session list beside page toolbar icon settings keyboard shortcut',
+				},
+			],
+			action: {label: 'Open Settings', href: 'options.html', icon: Settings2},
 		},
 		{
-			icon: Layers2,
+			id: 'saving-sessions',
 			title: 'Saving sessions',
-			text: 'Save from the popup, the side panel, the right-click menus, or a keyboard shortcut. A session keeps each tab’s title, address and notes, and its tab group (unless you turn on Ignore tab groups in Settings); pinned tabs are left out unless you turn them on in Settings. The save shortcut saves the selected tabs, or the whole window when nothing is selected.',
-			detail:
-				'New sessions are named by date and first tab. In Settings › When saving you can pick another style or “Ask each time”: saving from the popup, the dashboard or the side panel then asks for a name first (leave it empty for the default), and shortcuts or right-click saves open a small window to rename the session right after. In the popup, Choose tabs and title starts with your selected tabs checked so you can review them before saving.',
+			icon: Layers2,
+			intro:
+				'Save a set of tabs to come back to later. Nothing closes unless you turn on close after saving.',
+			keywords: [
+				'save tabs',
+				'selected tabs',
+				'pinned tabs',
+				'tab groups',
+				'session names',
+			],
+			entries: [
+				{
+					title: 'Save the tabs you want',
+					body: 'Save from the popup, side panel, a keyboard shortcut, or a right-click menu. The save shortcut uses your selected tabs, or the whole window when no tabs are selected. Choose tabs and title in the popup starts with your selected tabs checked.',
+					searchText:
+						'popup side panel keyboard shortcut right-click menu selected tabs whole window choose tabs and title',
+				},
+				{
+					title: 'What a session keeps',
+					body: 'Each saved tab keeps its title, address, and notes. Tab groups are kept unless Ignore tab groups is on. Pinned tabs are skipped by default; turn on Include pinned tabs to save and restore them.',
+					searchText:
+						'title address url notes tab groups ignore groups pinned tabs include pinned tabs default',
+				},
+				{
+					title: 'Name a session',
+					body: 'Choose a naming style in Settings. Ask each time prompts in the popup, dashboard, or side panel before saving. A direct-save toolbar action, shortcut, or right-click save opens a small rename window after saving. Leave the name empty to use the fallback name.',
+					searchText:
+						'name naming style ask each time date first tab custom fallback rename window shortcut right-click',
+				},
+				{
+					title: 'Close tabs after saving',
+					body: `This is optional. ${PROJECT.name} saves and checks the session before closing tabs. Pinned tabs close only when Include pinned tabs is on.`,
+					searchText:
+						'close tabs after saving delete remove verify pinned tabs include',
+				},
+			],
+			action: {
+				label: 'Save or naming settings',
+				href: 'options.html?q=When+saving',
+				icon: Settings2,
+			},
 		},
 		{
-			icon: RotateCcw,
+			id: 'restoring-sessions',
 			title: 'Restoring sessions',
-			text: 'Choose whether restored tabs stay in the session or are removed after a successful restore. Set a default destination in Settings and override it for individual sessions. Tabs saved from a split view reopen side by side in Chromium-based browsers version 155 or newer, or as neighboring tabs if you choose that in Settings or the browser cannot split them.',
-			detail: `Restore modifiers: Ctrl/Cmd-click keeps the saved session and Shift-click opens a new window. For a single tab, Settings controls whether ${PROJECT.name} switches to it or stays on the current page.`,
+			icon: RotateCcw,
+			intro:
+				'Restore a whole session or open one saved tab. You can keep the original session and choose where tabs open.',
+			keywords: [
+				'restore tabs',
+				'duplicate tabs',
+				'new window',
+				'split view',
+				'keyboard modifiers',
+			],
+			entries: [
+				{
+					title: 'Keep or remove restored tabs',
+					body: 'Settings controls whether restored tabs stay in their session or are removed after a successful restore. You can also choose the destination window and what to do when a URL is already open.',
+					searchText:
+						'settings restore keep remove saved tabs successful restore destination current window new window duplicate urls already open skip',
+				},
+				{
+					title: 'Use a click modifier',
+					body: (
+						<>
+							<Key>Ctrl</Key> or <Key>⌘</Key> click to keep the saved session.{' '}
+							<Key>Shift</Key> click to open it in a new window.
+						</>
+					),
+					searchText:
+						'ctrl control command cmd meta click keep original session shift click new window',
+				},
+				{
+					title: 'Restore one tab or a split view',
+					body: 'For one tab, Settings chooses whether it becomes active or opens in the background. Tabs saved side by side reopen as a split view in Chromium 155 or newer. Settings can instead open them as separate tabs, and the browser may do the same if it cannot recreate the split.',
+					searchText:
+						'single tab active background split view side by side chromium 155 separate neighboring tabs',
+				},
+			],
+			action: {
+				label: 'Restore settings',
+				href: 'options.html?q=When+restoring',
+				icon: Settings2,
+			},
 		},
 		{
-			icon: BookOpen,
+			id: 'bookmarks',
 			title: 'Bookmarks',
-			text: 'Save the current page from the popup or the right-click menus, add a bookmark directly, or press the Bookmark this page shortcut. Drag bookmarks between columns to reorder or move them; insertion feedback shows where the bookmark will land. Drag a browser link or a session link onto a column to save it at that position, or paste a link anywhere on the page to open Add bookmark with it filled in. In Settings you can also have TabLodge offer to add, or automatically add, a page you bookmark with the browser’s own star button.',
-			detail: `Import a bookmark JSON file or your browser bookmarks, or export bookmarks, from the ⋯ menu on the Bookmarks toolbar of the ${PROJECT.name} page. When duplicates are found, choose skip or allow for that import; title updates are also scoped to that dialog.`,
-			href: 'newtab.html#bookmark-library',
-			action: 'Open bookmarks',
+			icon: BookOpen,
+			intro:
+				'Keep useful pages on your bookmark board, arranged in columns you choose.',
+			keywords: [
+				'bookmark board',
+				'columns',
+				'drag and drop',
+				'browser star',
+				'import bookmarks',
+				'export bookmarks',
+			],
+			entries: [
+				{
+					title: 'Add a page or link',
+					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically.',
+					searchText:
+						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
+				},
+				{
+					title: 'Move and add links',
+					body: 'Drag bookmarks between columns to move or reorder them. Drag a browser link or a link from a saved session onto a column. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark.',
+					searchText:
+						'drag reorder move browser link saved session paste one several links dashboard text field add bookmark column',
+				},
+				{
+					title: 'Import or export bookmarks',
+					body: (
+						<>
+							On the dashboard, use the{' '}
+							<MenuLocation label="Bookmarks toolbar" /> to import a JSON file
+							or your browser bookmarks, or export bookmarks. Import lets you
+							skip or allow duplicates.
+						</>
+					),
+					searchText:
+						'dashboard bookmarks toolbar menu import export JSON browser bookmarks duplicates skip allow',
+				},
+			],
+			action: {
+				label: 'Open bookmarks',
+				href: 'newtab.html#bookmark-library',
+				icon: Bookmark,
+			},
 		},
 		{
+			id: 'right-click',
+			title: 'Right-click actions',
 			icon: MousePointerClick,
-			title: 'Right-click menus',
-			text: `Right-click a link to bookmark it to a column, or save it for later in the “Saved links” session without opening it. Right-click a page to bookmark it, or to save this tab, this window, its tab group, or the tabs to its left or right. Select text and right-click to search your saved tabs and bookmarks for it. Right-click the ${PROJECT.name} toolbar icon to open the dashboard, save this window, exclude the current site from saves, or open Help and Settings.`,
-			detail: `Each menu groups its actions under one ${PROJECT.name} item, and the toolbar icon briefly shows ✓ when an action is done. Browsers don’t let extensions add items to the tab strip’s right-click menu. Choose which menus appear in Settings › Right-click menus.`,
+			intro: `The action depends on what you right-click. Each browser menu groups ${PROJECT.name} actions under one item.`,
+			keywords: [
+				'context menu',
+				'right click',
+				'right-click',
+				'link menu',
+				'page menu',
+				'selection menu',
+				'toolbar menu',
+			],
+			entries: [
+				{
+					title: 'On a link',
+					gesture: {label: 'Right-click a link', icon: Link2},
+					body: 'Bookmark the link to a column, or save it to the Saved links session without opening it.',
+					searchText:
+						'right-click link bookmark column saved links session without opening',
+				},
+				{
+					title: 'On a page',
+					gesture: {label: 'Right-click the page', icon: MousePointerClick},
+					body: 'Bookmark the current page, or save this tab, its tab group, the whole window, or the tabs to its left or right.',
+					searchText:
+						'right-click page bookmark current tab tab group whole window left right save',
+				},
+				{
+					title: 'On selected text',
+					gesture: {
+						label: 'Select text, then right-click',
+						icon: MousePointer2,
+					},
+					body: 'Search your saved tabs and bookmarks for the selected words.',
+					searchText:
+						'select text selection right-click search saved tabs bookmarks words',
+				},
+				{
+					title: `On the ${PROJECT.name} toolbar icon`,
+					gesture: {
+						label: `Right-click the ${PROJECT.name} icon`,
+						icon: MousePointerClick,
+					},
+					body: 'Open the dashboard, save this window, exclude the current site from saves, or open Help and Settings. The icon briefly shows a checkmark when an action finishes.',
+					searchText:
+						'right-click toolbar icon dashboard save window exclude website site help settings checkmark done',
+				},
+				{
+					title: 'In the browser tab strip',
+					body: 'Browsers do not let extensions add actions to the tab strip’s own right-click menu.',
+					searchText:
+						'tab strip browser tab context menu cannot add extension actions unavailable',
+				},
+			],
+			action: {
+				label: 'Choose right-click menus',
+				href: 'options.html?q=Right-click+menus',
+				icon: Settings2,
+			},
 		},
 		{
-			icon: Settings2,
-			title: 'Settings',
-			text: `Set startup behavior, whether to keep a pinned ${PROJECT.name} tab, whether to open ${PROJECT.name} after saving, dashboard width, restore destination and duplicate policy, default session sorting, URL display, title-click behavior, local copy format, which right-click menus appear, site exclusions, and optional background-tab unloading. ${PROJECT.name} follows the system color theme by default.`,
-			href: 'options.html',
-			action: 'Open settings',
+			id: 'search-and-shortcuts',
+			title: 'Search and shortcuts',
+			icon: Search,
+			intro: 'Find saved items and actions without browsing the whole page.',
+			keywords: [
+				'global search',
+				'command palette',
+				'finder',
+				'hotkeys',
+				'keys',
+				'Ctrl K',
+				'slash',
+			],
+			entries: [
+				{
+					title: 'Search the dashboard',
+					body: 'Use the search field to find sessions and saved tabs by name or page details.',
+					searchText:
+						'search field dashboard sessions saved tabs name page details title url',
+				},
+				{
+					title: 'Open the search palette',
+					body: (
+						<>
+							On the dashboard, press <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
+							<Key>K</Key>, or press <Key>/</Key> when you are not typing in a
+							field. Search bookmarks, sessions, open tabs, commands, or the
+							web.
+						</>
+					),
+					searchText:
+						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette',
+				},
+				{
+					title: 'Navigate results',
+					body: (
+						<>
+							<Key>↑</Key> and <Key>↓</Key> move through results. Press{' '}
+							<Key>Enter</Key> to open one, or <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
+							<Key>Enter</Key> to open it in a new tab. Press <Key>Esc</Key> to
+							close the palette.
+						</>
+					),
+					searchText:
+						'up down arrows navigate results enter open ctrl command cmd meta new tab escape esc close palette',
+				},
+				{
+					title: 'Change keyboard shortcuts',
+					body: (
+						<>
+							The suggested shortcuts are <Key>Alt</Key> + <Key>Shift</Key> +{' '}
+							<Key>S</Key> to save tabs and <Key>Alt</Key> + <Key>Shift</Key> +{' '}
+							<Key>D</Key> to bookmark this page. Your browser can change these
+							and assign keys to other actions.
+						</>
+					),
+					searchText:
+						'alt shift s save tabs alt shift d bookmark page browser configure customize shortcut side panel dashboard',
+				},
+			],
+			action: {
+				label: 'Configure shortcuts',
+				href: SHORTCUTS_URL,
+				icon: Keyboard,
+			},
 		},
 		{
+			id: 'data-and-recovery',
+			title: 'Data and recovery',
 			icon: Database,
-			title: 'Local data and backups',
-			text: `${PROJECT.name} stores sessions, bookmarks, and preferences in this browser’s extension storage. It does not use accounts, servers, or cloud sync. Exported JSON and HTML files are plain text; keep them private if their URLs, titles, or notes are sensitive.`,
-			detail:
-				'Session import and export are in the Sessions ⋯ menu; bookmark import and export are in the Bookmarks toolbar ⋯ menu. Settings › Data can also export bookmarks, and can erase sessions, bookmarks, or both after you choose what to erase and confirm, with an Undo button for a short while; settings and excluded sites are kept. The Backup dialog also offers a full backup (ZIP) with everything, including settings, excluded sites, the theme, snapshots, and trash bin. Importing that ZIP replaces all of it, with an Undo button for a short while.',
+			intro:
+				'Sessions, bookmarks, and backups stay in this browser unless you export or download a copy.',
+			keywords: [
+				'privacy',
+				'local storage',
+				'backup',
+				'crash recovery',
+				'snapshots',
+				'trash',
+				'undo',
+				'export data',
+			],
+			entries: [
+				{
+					title: 'Where data is stored',
+					body: `${PROJECT.name} uses this browser’s extension storage. There are no accounts, servers, or cloud sync. Exported files can contain page addresses, titles, and notes, so keep them private.`,
+					searchText:
+						'local browser extension storage accounts servers cloud sync privacy exported files addresses urls titles notes private',
+				},
+				{
+					title: 'Export or import data',
+					body: (
+						<>
+							Session import and export are in the{' '}
+							<MenuLocation label="Sessions" />. Bookmark import and export are
+							in the <MenuLocation label="Bookmarks toolbar" />. Settings can
+							export bookmarks or create a full ZIP backup with settings,
+							excluded sites, theme, snapshots, and the trash bin. Open{' '}
+							<a
+								href="options.html?q=Data"
+								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								Data settings
+							</a>{' '}
+							to back up, import, or erase data. Importing a full ZIP replaces
+							the current data and offers Undo for a short time.
+						</>
+					),
+					searchText:
+						'sessions menu bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
+				},
+				{
+					title: 'Recover after a browser crash',
+					body: (
+						<>
+							Recent snapshots keep copies of open windows and can restore
+							everything, one window, or save a copy as a session. Open them
+							from the <MenuLocation label="Sessions" />, the side panel menu,
+							or the dashboard search palette. Crash detection is a best guess
+							because browsers do not tell extensions when they shut down.
+						</>
+					),
+					searchText:
+						'crash browser closed unexpectedly recovery recent snapshots restore all one window save as session sessions menu side panel search palette',
+				},
+				{
+					title: 'Undo and the trash bin',
+					body: (
+						<>
+							Deleted sessions, saved links, bookmarks, and columns stay in the
+							trash until their retention period ends. Settings controls how
+							long. Open it from the <MenuLocation label="Sessions" />, the{' '}
+							<MenuLocation label="Bookmarks toolbar" />, the side panel menu,
+							or the search palette. Dashboard deletes, imports, and actions
+							that open many tabs also offer Undo for a few seconds.
+						</>
+					),
+					searchText:
+						'undo deleted sessions saved links bookmarks columns trash bin retention sessions menu bookmarks toolbar side panel search palette imports many tabs',
+				},
+				{
+					title: 'Automatic backups',
+					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Choose backup frequency, retention, and an optional Downloads copy in Settings.',
+					searchText:
+						'automatic backups off default dated copies sessions bookmarks settings safety backup before erase import delete frequency retention downloads permission',
+				},
+			],
+			action: {
+				label: 'Open recovery settings',
+				href: 'options.html?q=Recovery',
+				icon: LifeBuoy,
+			},
 		},
 		{
-			icon: LifeBuoy,
-			title: 'Recovery & backups',
-			text: `${PROJECT.name} keeps rolling snapshots of your open windows and restores them if the browser closes unexpectedly: the dashboard then asks whether to restore your last session. Recent snapshots (Sessions ⋯ menu, the side panel menu, or the search palette) lists them with restore for everything or a single window, and Save as session. Deleted sessions, saved links, bookmarks and columns go to the Trash bin for a while (a deleted folder only moves its sessions to Unfiled, with Undo) (open it from the Sessions or Bookmarks ⋯ menu, the side panel menu, or the search palette; it can show everything or one side), and on the dashboard, deletes, imports and opening many tabs run right away with an Undo button for a few seconds. In Settings, erasing data, emptying the Trash bin, clearing snapshots, restoring a backup and restoring default preferences ask first, and can still be undone right after.`,
-			detail:
-				'Automatic backups (off by default) keep dated copies of your sessions, bookmarks and settings; safety backups are taken before erasing data, large imports and deleting many bookmarks. Everything stays in this browser’s extension storage, and an optional copy can go to Downloads. Crash detection is a best guess because browsers give extensions no shutdown signal. Choose intervals, retention and see storage use in Settings › Recovery & backups.',
-			href: 'options.html?q=Recovery',
-			action: 'Open recovery settings',
+			id: 'settings',
+			title: 'Settings',
+			icon: Settings2,
+			intro: `Tune how ${PROJECT.name} opens, saves, restores, and displays your library.`,
+			keywords: [
+				'preferences',
+				'startup',
+				'theme',
+				'excluded websites',
+				'site exclusions',
+				'data settings',
+				'dashboard width',
+				'column layout',
+				'full width',
+			],
+			entries: [
+				{
+					title: 'Find a setting',
+					body: 'Use the search box at the top of Settings. Search by setting name or by what you want to change.',
+					searchText:
+						'search settings box find preference name behavior setting label',
+				},
+				{
+					title: 'Common choices',
+					body: `Set dashboard width, startup behavior, session sorting, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default.`,
+					searchText:
+						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting urls bookmark click site exclusions right-click menus open after save theme system light dark',
+				},
+				{
+					title: 'Control saved data',
+					body: 'You can turn Sessions or Bookmarks off without deleting their saved data. Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data.',
+					searchText:
+						'disable turn off sessions bookmarks data retained delete erase export restore defaults recovery settings',
+				},
+			],
+			action: {label: 'Open Settings', href: 'options.html', icon: Settings2},
 		},
 		{
-			icon: Keyboard,
-			title: 'Keyboard shortcuts',
-			text: `Review or change ${PROJECT.name} shortcuts in the browser’s extension-shortcuts page. Browser support for tab groups, pinned tabs, startup behavior, and unloading depends on Chromium APIs and browser policy.`,
-			href: SHORTCUTS_URL,
-			action: 'Configure shortcuts',
+			id: 'about',
+			title: 'About and feedback',
+			icon: CircleHelp,
+			intro: `${PROJECT.name} is free and open source under the ${PROJECT.license} License. Version ${PROJECT.version}.`,
+			keywords: [
+				'about',
+				'version',
+				'website',
+				'source code',
+				'github',
+				'report a bug',
+				'issue',
+				'license',
+				'changelog',
+				'release',
+			],
+			entries: [
+				{
+					title: 'Project links',
+					body: 'Visit the project website, read the source, report a problem, check release notes, or view the license.',
+					searchText:
+						'website source code github report problem issue bug release notes changelog license',
+				},
+			],
 		},
 	];
-	const projectLinks = [
+	const projectLinks: Array<{
+		icon: IconComponent;
+		label: string;
+		href: string;
+	}> = [
 		{icon: Globe, label: 'Website', href: PROJECT.websiteUrl},
 		{icon: Github, label: 'Source code', href: PROJECT.repoUrl},
 		{icon: Bug, label: 'Report an issue', href: PROJECT.issuesUrl},
@@ -110,96 +577,280 @@ function Help() {
 			href: PROJECT.licenseUrl,
 		},
 	];
+	const visibleSections = sections.flatMap((section) => {
+		if (terms.length === 0) {
+			return [{...section, visibleEntries: section.entries}];
+		}
+
+		const sectionText = [
+			section.title,
+			section.intro,
+			...section.keywords,
+		].join(' ');
+		const sectionMatches = hasTerms(sectionText);
+		const matchingEntries = section.entries.filter((entry) =>
+			hasTerms(`${entry.title} ${entry.searchText}`),
+		);
+		if (!sectionMatches && matchingEntries.length === 0) {
+			return [];
+		}
+
+		return [
+			{
+				...section,
+				visibleEntries: sectionMatches ? section.entries : matchingEntries,
+			},
+		];
+	});
+	const matchingEntriesCount = visibleSections.reduce(
+		(count, section) => count + section.visibleEntries.length,
+		0,
+	);
+
 	return (
 		<main
 			data-brand="tablodge"
-			className="mx-auto max-w-3xl px-5 py-6 sm:px-8 sm:py-9"
+			className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-9"
 		>
 			<AppHeader active="help" />
-			<div className="space-y-3">
-				{sections.map(({icon: Icon, title, text, detail, href, action}) => (
-					<Card key={title}>
-						<CardHeader className="flex-row items-center gap-3 space-y-0 pb-2">
-							<span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary">
-								<Icon className="h-4 w-4" />
-							</span>
-							<CardTitle>{title}</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<p className="text-sm leading-6 text-muted-foreground">{text}</p>
-							{detail && (
-								<p className="mt-2 text-sm leading-6 text-muted-foreground">
-									{detail}
-								</p>
-							)}
-							{href === SHORTCUTS_URL && (
-								<>
-									<Button
-										className="mt-4"
-										variant="outline"
-										onClick={async () => {
-											setShortcutsFailed(!(await openShortcutsPage()));
-										}}
+			<section className="mb-8 grid gap-6 border-b border-border pb-8 sm:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] sm:items-end">
+				<div className="max-w-xl">
+					<p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
+						<CircleHelp className="h-4 w-4" aria-hidden="true" />
+						Help for your everyday tab work
+					</p>
+					<h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+						Find the answer and get back to your tabs.
+					</h2>
+					<p className="mt-3 max-w-lg leading-6 text-muted-foreground">
+						Search for an action, setting, or menu. Open links here to jump
+						straight to the relevant part of {PROJECT.name}.
+					</p>
+				</div>
+				<div>
+					<div className="relative block">
+						<label htmlFor="help-search" className="sr-only">
+							Search help
+						</label>
+						<Search
+							className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+							aria-hidden="true"
+						/>
+						<Input
+							id="help-search"
+							type="text"
+							value={query}
+							placeholder="Try “right-click”, “backup”, or “shortcut”"
+							className="h-11 pl-9 pr-10"
+							onChange={(event) => setQuery(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === 'Escape') {
+									setQuery('');
+								}
+							}}
+						/>
+						{query && (
+							<Button
+								variant="ghost"
+								size="icon"
+								className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+								aria-label="Clear help search"
+								onClick={() => setQuery('')}
+							>
+								<X className="h-4 w-4" aria-hidden="true" />
+							</Button>
+						)}
+					</div>
+					<p
+						className="mt-2 text-xs text-muted-foreground"
+						role="status"
+						aria-live="polite"
+					>
+						{terms.length > 0
+							? `${matchingEntriesCount} matching ${matchingEntriesCount === 1 ? 'answer' : 'answers'} in ${visibleSections.length} ${visibleSections.length === 1 ? 'topic' : 'topics'}`
+							: `${sections.length} topics, with links to the right page`}
+					</p>
+				</div>
+			</section>
+
+			<div className="grid gap-8 lg:grid-cols-[190px_minmax(0,1fr)]">
+				<aside className="self-start lg:sticky lg:top-5">
+					<h2 className="mb-3 text-sm font-semibold">Browse topics</h2>
+					<nav
+						aria-label="Help topics"
+						className="flex flex-wrap gap-1.5 lg:flex-col lg:items-stretch"
+					>
+						{visibleSections.map(({id, title, icon: Icon}) => (
+							<a
+								key={id}
+								href={`#${id}`}
+								className="inline-flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+								{title}
+							</a>
+						))}
+					</nav>
+				</aside>
+
+				<div className="min-w-0">
+					{visibleSections.length > 0 ? (
+						<div>
+							{visibleSections.map((section) => {
+								const Icon = section.icon;
+								return (
+									<article
+										key={section.id}
+										id={section.id}
+										className="scroll-mt-6 border-b border-border py-7 first:pt-0"
+										aria-labelledby={`${section.id}-title`}
 									>
-										{action}
-										<ArrowUpRight className="h-4 w-4" />
-									</Button>
-									{shortcutsFailed && (
-										<p
-											role="alert"
-											className="mt-2 text-xs text-muted-foreground"
-										>
-											Your browser did not open it. Paste{' '}
-											<code>{SHORTCUTS_URL}</code> into the address bar.
-										</p>
-									)}
-								</>
-							)}
-							{href && href !== SHORTCUTS_URL && (
-								<Button asChild className="mt-4">
-									<a href={href}>
-										{href === 'options.html' ? (
-											<>
-												<Settings2 className="h-4 w-4" />
-												{action}
-											</>
-										) : (
-											action
+										<header className="flex items-start gap-3">
+											<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+												<Icon className="h-5 w-5" aria-hidden="true" />
+											</span>
+											<div className="min-w-0">
+												<h2
+													id={`${section.id}-title`}
+													className="text-xl font-semibold tracking-tight"
+												>
+													{section.title}
+												</h2>
+												<p className="mt-1 max-w-2xl leading-6 text-muted-foreground">
+													{section.intro}
+												</p>
+											</div>
+										</header>
+										<div className="mt-4 divide-y divide-border border-t border-border sm:ml-[3.25rem]">
+											{section.visibleEntries.map((entry) => (
+												<div
+													key={entry.title}
+													className="grid gap-2 py-4 sm:grid-cols-[minmax(145px,0.34fr)_minmax(0,1fr)] sm:gap-5"
+												>
+													<div className="flex flex-wrap items-center gap-2">
+														<h3 className="text-sm font-semibold">
+															{entry.title}
+														</h3>
+														{entry.gesture && (
+															<GestureBadge {...entry.gesture} />
+														)}
+													</div>
+													<p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+														{entry.body}
+													</p>
+												</div>
+											))}
+										</div>
+										{section.action && (
+											<div className="mt-4 flex flex-wrap items-center gap-3 sm:ml-[3.25rem]">
+												{section.action.href === SHORTCUTS_URL ? (
+													<Button
+														variant="outline"
+														size="sm"
+														onClick={async () => {
+															setShortcutsFailed(!(await openShortcutsPage()));
+														}}
+													>
+														<Keyboard className="h-4 w-4" aria-hidden="true" />
+														{section.action.label}
+														<ArrowUpRight
+															className="h-4 w-4"
+															aria-hidden="true"
+														/>
+													</Button>
+												) : (
+													<a
+														href={section.action.href}
+														className="inline-flex min-h-9 items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+													>
+														{section.action.icon && (
+															<section.action.icon
+																className="h-4 w-4"
+																aria-hidden="true"
+															/>
+														)}
+														{section.action.label}
+														<ArrowUpRight
+															className="h-4 w-4"
+															aria-hidden="true"
+														/>
+													</a>
+												)}
+												{shortcutsFailed &&
+													section.id === 'search-and-shortcuts' && (
+														<p
+															role="alert"
+															className="text-xs text-muted-foreground"
+														>
+															Your browser did not open the shortcuts page.
+															Paste <code>{SHORTCUTS_URL}</code> into the
+															address bar.
+														</p>
+													)}
+											</div>
 										)}
-									</a>
-								</Button>
-							)}
-						</CardContent>
-					</Card>
-				))}
-				<Card id="about">
-					<CardHeader className="flex-row items-center gap-3 space-y-0 pb-2">
-						<span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary">
-							<Info className="h-4 w-4" />
-						</span>
-						<CardTitle>About {PROJECT.name}</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<p className="text-sm leading-6 text-muted-foreground">
-							{PROJECT.name} is free and open-source software under the{' '}
-							{PROJECT.license} License. Report bugs and suggest features on
-							GitHub.
-						</p>
-						<p className="mt-2 text-sm font-medium">
-							Version {PROJECT.version}
-						</p>
-						<div className="mt-4 flex flex-wrap gap-2">
-							{projectLinks.map(({icon: Icon, label, href}) => (
-								<Button key={label} asChild variant="outline" size="sm">
-									<a href={href} target="_blank" rel="noopener noreferrer">
-										<Icon className="h-4 w-4" />
-										{label}
-									</a>
-								</Button>
-							))}
+										{section.id === 'about' && (
+											<div className="mt-4 flex flex-wrap gap-2 sm:ml-[3.25rem]">
+												{projectLinks.map(({icon: LinkIcon, label, href}) => (
+													<Button
+														key={label}
+														asChild
+														variant="outline"
+														size="sm"
+													>
+														<a
+															href={href}
+															target="_blank"
+															rel="noopener noreferrer"
+														>
+															<LinkIcon
+																className="h-4 w-4"
+																aria-hidden="true"
+															/>
+															{label}
+															<ExternalLink
+																className="h-3.5 w-3.5"
+																aria-hidden="true"
+															/>
+														</a>
+													</Button>
+												))}
+											</div>
+										)}
+										{terms.length === 0 && section.id === 'right-click' && (
+											<p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground sm:ml-[3.25rem]">
+												<Check
+													className="h-4 w-4 shrink-0"
+													aria-hidden="true"
+												/>
+												Each menu location can be enabled separately.
+											</p>
+										)}
+									</article>
+								);
+							})}
 						</div>
-					</CardContent>
-				</Card>
+					) : (
+						<div className="rounded-lg border border-dashed border-border px-5 py-10 text-center">
+							<Search
+								className="mx-auto h-5 w-5 text-muted-foreground"
+								aria-hidden="true"
+							/>
+							<h2 className="mt-3 font-semibold">No help topics found</h2>
+							<p className="mt-1 text-sm text-muted-foreground">
+								Try another word, or clear the search to browse all topics.
+							</p>
+							<Button
+								className="mt-4"
+								variant="outline"
+								size="sm"
+								onClick={() => setQuery('')}
+							>
+								Clear search
+							</Button>
+						</div>
+					)}
+				</div>
 			</div>
 		</main>
 	);
