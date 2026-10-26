@@ -121,7 +121,7 @@ src/
 styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites (service worker in a VM with a mocked chrome.* API)
 scripts/                build.ts, verify-build.ts, shared Vite config helpers
-docs/                   architecture notes, naming research, and tab-manager research
+docs/                   architecture notes, naming, tab-manager, and mobile-app research
 site/                   Astro landing page for https://tablodge.bbay.dev (see site/README.md)
 vite.pages.config.ts    page build; vite.config.ts holds lint, format, and test settings
 ```
@@ -164,7 +164,7 @@ TabLodge has no servers, accounts, analytics, or telemetry, and makes no network
 - **Session editing:** replace or append the current window, split a session, tags, and an "already saved" badge.
 - **Tab hygiene that never loses data:** optional auto-discard of idle tabs, with undo.
 
-The research file has the full priority list, MV3 implementation sketches, and the evidence behind each item.
+The research file has the full priority list, MV3 implementation sketches, and the evidence behind each item. [Mobile app opportunity research](docs/mobile-app-opportunity.md) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
 
 ## Website
 
