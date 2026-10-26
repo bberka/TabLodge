@@ -306,6 +306,23 @@ function NewTab() {
 	const tabSelection = useTabSelection(settings.includePinnedTabs === true);
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
+	const dashboardWidth = settings.dashboardWidth ?? 'default';
+	const dashboardMaxWidthClass =
+		dashboardWidth === 'narrower'
+			? 'max-w-5xl'
+			: dashboardWidth === 'wider'
+				? 'max-w-[1920px]'
+				: dashboardWidth === 'full'
+					? 'max-w-none'
+					: 'max-w-[1440px]';
+	const bookmarkGridColumnsClass =
+		dashboardWidth === 'full'
+			? 'dashboard-columns-auto'
+			: dashboardWidth === 'narrower'
+				? 'grid-cols-1 sm:grid-cols-2'
+				: dashboardWidth === 'wider'
+					? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
+					: 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3';
 	const urlMode = settings.urlDisplayMode ?? 'full';
 	const urlSettings = useMemo<UrlSettings>(
 		() => ({
@@ -1515,7 +1532,7 @@ function NewTab() {
 				</EmptyState>
 			) : (
 				<div
-					className={`grid gap-4 sm:grid-cols-2 xl:grid-cols-3 ${stretchColumns ? 'items-stretch' : 'items-start'}`}
+					className={`grid gap-4 ${bookmarkGridColumnsClass} ${stretchColumns ? 'items-stretch' : 'items-start'}`}
 				>
 					{columns.map((column) => (
 						<BookmarkColumn
@@ -1623,7 +1640,7 @@ function NewTab() {
 	return (
 		<main
 			data-brand="tablodge"
-			className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8 sm:py-9"
+			className={`mx-auto ${dashboardMaxWidthClass} px-5 py-6 sm:px-8 sm:py-9`}
 		>
 			<AppHeader active="dashboard">
 				<FinderTrigger onClick={() => setFinderOpen(true)} />
