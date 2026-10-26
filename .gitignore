@@ -3,6 +3,7 @@ node_modules/
 
 # Build output and caches
 dist/
+.dev/
 *.tsbuildinfo
 node_modules/.tmp/
 coverage/
