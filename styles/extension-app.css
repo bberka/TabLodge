@@ -145,6 +145,9 @@
 }
 
 @layer components {
+	.dashboard-columns-auto {
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+	}
 	.tn-button {
 		min-height: 36px;
 	}

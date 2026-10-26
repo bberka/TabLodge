@@ -110,6 +110,8 @@ The new tab dashboard contains sessions and bookmark columns. Settings and Help 
 
 The toolbar icon normally opens the popup. **Settings › Side Panel › Toolbar icon opens** can make it open the side panel instead. A shortcut and context menu can open the panel without changing that preference.
 
+**Settings › Dashboard › Dashboard width** controls the dashboard container and bookmark grid together. The default keeps the existing 1,440 pixel maximum and three column desktop grid. Wider uses up to 1,920 pixels and four columns on a 1,920 pixel viewport. Full width removes the maximum and fits as many columns as the available space allows, with a 288 pixel minimum column width. Narrower uses a 1,024 pixel maximum and two columns. Small screens still use one column where two would not fit. The worker normalizes invalid values back to the default.
+
 UI primitives live in `src/components/ui/`, with composed helpers in `src/shared/ui.tsx`. Theme tokens live in `styles/extension-app.css`. `src/shared/theme.tsx` mirrors the saved theme for the boot script and follows system theme changes. The `@/` alias resolves to `src/` during builds and must not remain in output bundles.
 
 ## Saving and restoring sessions

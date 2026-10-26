@@ -71,7 +71,7 @@ function Help() {
 		{
 			icon: Settings2,
 			title: 'Settings',
-			text: `Set startup behavior, whether to keep a pinned ${PROJECT.name} tab, whether to open ${PROJECT.name} after saving, restore destination and duplicate policy, default session sorting, URL display, title-click behavior, local copy format, which right-click menus appear, site exclusions, and optional background-tab unloading. ${PROJECT.name} follows the system color theme by default.`,
+			text: `Set startup behavior, whether to keep a pinned ${PROJECT.name} tab, whether to open ${PROJECT.name} after saving, dashboard width, restore destination and duplicate policy, default session sorting, URL display, title-click behavior, local copy format, which right-click menus appear, site exclusions, and optional background-tab unloading. ${PROJECT.name} follows the system color theme by default.`,
 			href: 'options.html',
 			action: 'Open settings',
 		},

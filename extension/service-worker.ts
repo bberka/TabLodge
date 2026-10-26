@@ -217,6 +217,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
+	dashboardWidth: 'default',
 	simplifyUrls: true,
 	markInsecureLinks: true,
 	markLocalLinks: false,
@@ -1045,6 +1046,12 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.bookmarkQuickAction
 			: 'open-new',
 		sessionsOnTop: raw.sessionsOnTop === true,
+		dashboardWidth: isOneOf(
+			['default', 'wider', 'full', 'narrower'],
+			raw.dashboardWidth,
+		)
+			? raw.dashboardWidth
+			: 'default',
 		keepLodgePinned: raw.keepLodgePinned === true,
 		browserBookmarkAction: isOneOf(
 			['off', 'ask', 'add'],
