@@ -14,7 +14,7 @@ const rows: [string, string, string, string, string][] = [
 	['Open source', 'Yes', 'No', 'No', 'No'],
 	['Bookmark board on the new tab', 'Yes', 'No', 'No', 'Yes'],
 	['Folders for saved sessions', 'Yes', 'Yes', 'Yes (collections)', 'Yes (spaces and collections)'],
-	['Automatic history or crash snapshots', 'Not yet', 'No', 'Yes', 'No'],
+	['Automatic history or crash snapshots', 'Yes, stored locally', 'No', 'Yes', 'No'],
 	['Native tab groups and split view on restore', 'Yes (split view on Chromium 155+)', 'Not listed', 'Not listed', 'Not listed'],
 	['Export formats', 'JSON, HTML, CSV, Markdown, URL lists', 'Text URL list', 'JSON, CSV, Markdown, HTML', 'Export supported'],
 	['Import from other tools', 'OneTab, Session Buddy, Tab Session Manager, Toby, bookmarks, HTML, CSV', 'URL lists', 'Its own backups', 'Not verified'],
@@ -84,7 +84,7 @@ const breadcrumbs = [
 
 		<h2>Session Buddy alternative</h2>
 		<p>
-			Session Buddy is a mature session saver with automatic history that can help after a crash. TabLodge does not have automatic snapshots yet, so if crash recovery is your top need, Session Buddy is a strong fit. If you want an open-source tool with a bookmark board, a side panel, a command palette and Markdown, CSV, HTML and JSON export, TabLodge may suit you better. It imports Session Buddy's JSON exports directly.
+			Session Buddy has saved collections, automatic history and several export formats. TabLodge also keeps local snapshots for crash recovery, along with optional automatic backups, a trash bin and Undo. It adds a bookmark board, a side panel and a command palette, and imports Session Buddy's JSON exports directly.
 		</p>
 
 		<h2>Toby alternative</h2>
@@ -95,7 +95,7 @@ const breadcrumbs = [
 		<h2>When another tool is the better choice</h2>
 		<ul>
 			<li>You need to sync sessions between computers or share them with a team: Toby or a browser-native sync is a better fit.</li>
-			<li>You rely on automatic crash-history snapshots: Session Buddy has them, TabLodge does not yet.</li>
+			<li>You prefer Session Buddy's collections and automatic history workflow: try it alongside TabLodge before switching.</li>
 			<li>You want the simplest possible one-click tab list: OneTab does exactly that.</li>
 			<li>You need an extension from an official store with automatic updates: TabLodge is not in the stores yet.</li>
 		</ul>
