@@ -116,7 +116,7 @@ src/lib/                Small utilities
 styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites and mocked browser APIs
 scripts/                Build, package verification, and release tooling
-docs/                   Architecture and tab manager comparisons
+docs/                   Architecture, tab manager, and mobile app research
 site/                   Astro website for tablodge.bbay.dev
 vite.pages.config.ts    Extension page build configuration
 xo.config.ts            Lint and formatting rules
@@ -150,7 +150,7 @@ See [Privacy](PRIVACY.md) for what is stored, how recovery data is retained, and
 
 Ideas still worth exploring include more actions for open tabs across windows, recently closed tabs in search, storage that scales better for large libraries, more session editing tools, and optional unloading of idle tabs. These are ideas, not promised release dates.
 
-The [tab manager comparison notes](docs/tab-management-research.md) explain the reasoning and link to the original sources.
+The [tab manager comparison notes](docs/tab-management-research.md) explain the reasoning and link to the original sources. [Mobile app opportunity research](docs/mobile-app-opportunity.md) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
 
 ## Website
 
