@@ -14,7 +14,7 @@ const permissions = [
 	['storage, unlimitedStorage', 'Keeping your data in local extension storage without the default size cap.'],
 	['contextMenus', 'Optional right-click save and bookmark actions.'],
 	['clipboardWrite', 'Copying bookmark URLs and session links when you ask.'],
-	['sidePanel', 'The optional bookmark list in the browser\'s Side Panel.'],
+	['sidePanel', 'Showing bookmarks, sessions and open tabs in the browser side panel.'],
 	['search', 'Running a web search with your default engine, only when you choose "Search the web".'],
 	['alarms', 'Scheduling crash-recovery snapshots, automatic backups and trash bin cleanup.'],
 	['downloads (optional)', 'Saving backup copies to your Downloads folder, only if you turn that on; turning it off gives the permission back.'],
@@ -46,7 +46,7 @@ const permissions = [
 		<h1>Privacy</h1>
 		<p class="note">Last updated: 2026-10-26</p>
 		<p class="lead">
-			TabLodge is built to keep your data on your device. In short: <strong>no data leaves your device, and nothing is collected.</strong>
+			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect or upload your data.</strong>
 		</p>
 
 		<h2>What TabLodge does not do</h2>
@@ -66,13 +66,16 @@ const permissions = [
 			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). Snapshots skip private windows and excluded websites.</li>
 		</ul>
 		<p>
-			TabLodge reads tab details (URL, title, pinned state, tab group, window) only when you save a session, check for duplicates or restore. It reads your browser bookmarks when you explicitly import them and, only if you turn on the browser-bookmark setting, sees each bookmark you create in the browser to offer to add that page to TabLodge. Site icons come from the browser's own local favicon cache.
+			TabLodge reads tab details to save and restore sessions, find duplicates, show and search open tabs, and capture recovery snapshots. Snapshots are enabled by default and can be turned off in Settings, under Recovery &amp; backups. It reads your browser's bookmark tree only when you ask to import it. If you enable the browser bookmark setting, it also watches for newly created bookmarks to offer to add that page or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.
 		</p>
 		<p>
-			Data stays until you delete it: delete individual items, use <strong>Settings &rsaquo; Data</strong> to erase sessions, bookmarks or both, or remove the extension (the browser then deletes its storage). Exported JSON, HTML and full-backup ZIP files are not encrypted and stay under your control; keep them private if their URLs, titles or notes are sensitive.
+			Saved sessions and bookmarks stay until you delete them. Trash is kept for 7, 30 or 90 days, depending on your setting. Snapshots, backups and Undo copies also have retention or size limits. You can clear recovery data in <strong>Settings &rsaquo; Recovery &amp; backups</strong>. Erasing sessions or bookmarks in <strong>Settings &rsaquo; Data</strong> creates a safety backup, so check the backup history too if you want to remove retained copies. Removing the extension deletes its browser storage.
 		</p>
 		<p>
-			When you restore a session or open a bookmark, your browser loads those web pages as usual, and those sites see a normal visit. TabLodge itself sends nothing to them.
+			If you enable backup copies in Downloads, TabLodge writes JSON files to <code>Downloads/TabLodge/</code>. Turning the setting off or uninstalling does not delete those files. Exports, including JSON, HTML, CSV, Markdown, URL lists and full backup ZIP files, are not encrypted. Keep them private if their titles, URLs or notes are sensitive. A folder synced by another app may upload them.
+		</p>
+		<p>
+			Opening a saved link loads that website normally. Choosing <strong>Search the web</strong> sends your query to the browser's default search engine. These are actions you request, not background reporting by TabLodge.
 		</p>
 
 		<h2>Permissions</h2>

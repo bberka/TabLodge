@@ -1,80 +1,58 @@
 # Contributing to TabLodge
 
-Thanks for helping. Bug reports, feature ideas, and pull requests are all welcome. For larger changes, please open an issue first so we can agree on the approach.
+Bug reports, ideas, and pull requests are welcome. If you're planning a larger change, open an issue first so we can discuss the approach before you spend time on it.
 
-## Setup
+## Get set up
 
-1. Install Node.js 22.18+ or 24.11+ and enable pnpm with `corepack enable` (the version is pinned in `package.json` `packageManager`).
-2. Install dependencies and build:
+Follow the [source installation steps](README.md#build-from-source) and load `dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
 
-   ```sh
-   pnpm install
-   pnpm build
-   ```
+Run `pnpm dev` while you work. It rebuilds when files change, but you still need to reload the extension and reopen its pages to see the result. The [README command list](README.md#development) covers the other scripts.
 
-3. Load `dist/tablodge/` as an unpacked extension (`chrome://extensions` or `brave://extensions` → Developer mode → **Load unpacked**).
-4. Run `pnpm dev` while you work. It rebuilds into `dist/tablodge/` on every change; reload the extension (and reopen its pages) to see the changes.
+For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](docs/architecture.md).
 
-Tip: unpacked extensions get their ID, and therefore their storage, from the folder path. Loading the build from a different folder starts with empty storage, so export your data first.
+## Code conventions
 
-## Scripts
+- Use strict TypeScript without `any` escapes. Validate stored data, imports, and messages before using them. The service worker treats incoming data as untrusted.
+- Use XO for both linting and formatting. Run `pnpm lint:fix`, or `pnpm exec xo --fix <files>` for just the files you changed. Don't run another formatter. Review automatic fixes because some can change behavior.
+- Keep rule exceptions in `xo.config.ts`, with a short reason and a narrow file scope. If one line needs an inline exception, explain it with `// eslint-disable-next-line <rule> -- <reason>`.
+- Use Tailwind theme tokens such as `bg-background` and `text-muted-foreground` rather than raw colors. Check both light and dark themes.
+- Build controls from the local Radix components in `src/components/ui/`, exposed through `src/shared/ui.tsx`. To add a primitive, run `pnpm dlx shadcn@latest add <component>` and review the generated code.
+- Use icons from `lucide-react`. Controls must work with a keyboard, have visible focus, and have labels. Pair icon buttons with `aria-label` and `IconTooltip`. Announce feedback with an appropriate status or alert role.
+- Bundle dependencies locally. Don't add CDN imports, remote fonts, or network calls. A new permission needs a clear reason and documentation in the [permissions table](README.md#permissions-and-privacy) and [privacy policy](PRIVACY.md).
+- Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker. Both use the manifest's `short_name`. Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
+- External links should use `target="_blank" rel="noopener noreferrer"`.
 
-| Command                         | What it does                                       |
-| ------------------------------- | -------------------------------------------------- |
-| `pnpm build`                    | Build into `dist/tablodge/` and verify the package |
-| `pnpm dev` / `pnpm watch`       | Rebuild on changes                                 |
-| `pnpm test` / `pnpm test:watch` | Run the Vitest suites                              |
-| `pnpm typecheck`                | `tsc -b` over all projects                         |
-| `pnpm lint`                     | XO (ESLint, type-aware TypeScript and React rules) |
-| `pnpm lint:fix` / `pnpm format` | Auto-fix and format with XO                        |
-| `pnpm check`                    | Lint, typecheck, and tests: must pass before a PR  |
-| `pnpm verify`                   | Re-verify an existing build                        |
-| `pnpm clean`                    | Remove `dist/` and build caches                    |
+## Writing documentation
 
-## Where things live
+Use plain language, short paragraphs, and direct instructions. Describe what a person can do and what to expect, rather than listing implementation terms without context.
 
-- `extension/`: manifest, icons, HTML shells, `service-worker.ts` (all storage and browser-API work), and `theme-boot.ts`.
-- `src/app/`: one entry per page (`newtab`, `popup`, `options`, `help`, `sidepanel`) plus shared page code in `common.tsx` and `dashboard.tsx`. `types.ts` defines the data model and the typed messages pages send to the service worker.
-- `src/components/ui/`: shadcn-style primitives. `src/shared/`: composed UI helpers and the theme provider.
-- `tests/`: Vitest suites. `docs/architecture.md`: build pipeline, storage, naming, and detailed behavior.
+Do not use em dashes or en dashes in prose. Rewrite sentences instead of using a dash as punctuation. Avoid hyphenated wording when a natural alternative exists. Keep hyphens only where needed for Markdown syntax, exact names, paths, URLs, commands, code, or a technical term that would be unclear without one.
 
-## Code style
+Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. When behavior changes, check the README, architecture notes, privacy policy, website, and Help. Update screenshots when the UI they show changes; [website setup](site/README.md#screenshots) explains how they're captured.
 
-- **TypeScript strict**, no `any` escapes. Validate anything untrusted (stored data, imports, messages) before use; the service worker treats every input as untrusted.
-- **XO style.** Formatting and lint rules come from [XO](https://github.com/xojs/xo) with its defaults (tabs, single quotes, semicolons, Prettier formatting, type-aware TypeScript rules) plus the React rules from `eslint-config-xo-react`. It also lints the HTML shells, CSS, JSON, and Markdown. Run `pnpm lint:fix` before committing; `pnpm check` fails on any XO error. Review what the auto-fixer changed (`pnpm check` re-runs the tests), because a few rule fixes can change behavior.
-- **Rule exceptions** live in `xo.config.ts`, each with a one-line reason and scoped with `files` where possible. Avoid inline disable comments; when a single line really needs one, write `// eslint-disable-next-line <rule> -- <reason>`.
-- **Tailwind for styling**, using the theme tokens (`bg-background`, `text-muted-foreground`, `border-border`, `text-primary`, …) so light and dark themes work. Avoid raw colors and new global CSS.
-- **shadcn-style components.** Build UI from `src/components/ui/` (Radix primitives) via `src/shared/ui.tsx`. To add one, run `pnpm dlx shadcn@latest add <component>` and review the generated file.
-- **Icons from `lucide-react`** only.
-- **Everything bundled.** Never add CDN imports, remote fonts, or network calls; TabLodge is local-only by design (see [PRIVACY.md](PRIVACY.md)). New permissions need a strong reason and an entry in the README and PRIVACY tables.
-- **Accessibility.** Keyboard-operable controls, visible focus rings, labels for icon-only buttons (`aria-label` plus `IconTooltip`), and `role="status"`/`alert` for feedback.
-- **User-facing name.** Use `PROJECT.name` (pages) or `APP_NAME` (service worker) instead of writing "TabLodge" in UI strings; both read the manifest `short_name`. Storage keys, export format ids, drag MIME types, and context-menu ids are persistent: changing them needs a migration.
-- External links open in a new tab with `target="_blank" rel="noopener noreferrer"`.
+## Test your change
 
-## Testing
+The worker tests run `extension/service-worker.ts` in a Node VM with mocked browser APIs. Add regression tests for bug fixes and cover behavior changes in the relevant suite. Extend the mock when you use another browser API. Pure helpers should have direct unit tests.
 
-- Service-worker behavior is tested in `tests/service-worker.test.ts`, which runs the worker source in a Node VM against a mocked `chrome.*` API. Add a test for every bug fix and behavior change there; extend the mock when you use a new API.
-- Pure helpers (for example `src/app/interaction-actions.ts`) get direct unit tests.
-- Mocks don't catch everything: also try your change in a Chromium-based browser with the unpacked build, in both light and dark themes.
+Mocks can't catch everything. Load the unpacked build in a Chromium browser and try the affected workflow. For UI changes, check the keyboard and both themes.
+
+Before opening a pull request, run:
+
+```sh
+pnpm check
+pnpm build
+```
+
+In the pull request, explain what changed, why it changed, and how you tested it. Mention any checks you couldn't run. Call out new permissions and storage changes, including how older data is handled. Describe changes people will notice so they can be included in release notes.
 
 ## Releases
 
-Releases use [ZeroVer](https://0ver.org): every version is `0.<minor>.<patch>`.
+TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
 
-- The root `VERSION` file holds `<minor>` (a single number such as `1`).
-- `<patch>` is computed when a release runs: it continues from the latest `v0.<minor>.*` tag, or starts at `0` when that minor has no release yet. With `VERSION` = `1` and latest release `0.1.1`, the next release is `0.1.2`; change `VERSION` to `2` and it becomes `0.2.0`. `VERSION` can't go below the latest released minor.
-- To release, run **Actions → Release → Run workflow** on the default branch (`master`). The workflow computes the version, stamps it into `package.json` and `extension/manifest.json`, runs `pnpm check` and `pnpm build`, zips the unpacked extension, and publishes a `v0.x.y` GitHub release with the zip and its SHA-256 checksum.
-- `pnpm version:next` prints the version the next release would get (based on your local tags).
+The root `VERSION` file holds the minor number. The release workflow computes the patch from the latest matching tag. For example, with `VERSION` set to `1` and a latest release of `0.1.1`, the next release is `0.1.2`. Set `VERSION` to `2` and the next release is `0.2.0`. The minor number cannot go below the latest released minor.
 
-## Pull request checklist
+Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, and publishes the ZIP and its SHA256 checksum under a `v0.x.y` tag.
 
-- [ ] `pnpm check` passes (0 errors) and `pnpm build` succeeds with verification.
-- [ ] Tests cover the change (or the PR explains why not).
-- [ ] Manually tested in a Chromium-based browser with the unpacked `dist/tablodge/` build.
-- [ ] UI follows the existing style (tokens, shadcn components, lucide icons) and works in light and dark themes and with the keyboard.
-- [ ] No new network requests, CDN assets, or permissions (or they are justified and documented in README and PRIVACY).
-- [ ] Stored-data changes stay backward compatible (bump the schema version and normalize older data in the service worker).
-- [ ] `README.md`, the landing page in `site/` (copy and screenshots), Help, and `PRIVACY.md` are updated if the change made anything in them outdated.
-- [ ] User-visible changes are described in the PR for the release notes.
+`pnpm version:next` shows the next version based on your local tags.
 
-By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).
+By contributing, you agree to license your contributions under the [MIT License](LICENSE).

@@ -1,43 +1,54 @@
 # TabLodge website
 
-The landing page for [TabLodge](https://github.com/bberka/TabLodge), published at <https://tablodge.bbay.dev>. It is a static [Astro](https://astro.build) site: no client-side JavaScript, plain scoped CSS, and a system font stack.
+The website at <https://tablodge.bbay.dev> is a static [Astro](https://astro.build) site. It uses scoped CSS and system fonts, with no JavaScript shipped to the browser.
 
-## Develop
+## Local development
 
-From the repository root:
+Run these commands from the repository root:
 
 ```sh
 pnpm install
-pnpm site:dev      # http://localhost:4321
-pnpm site:build    # static output in site/dist
-pnpm site:preview  # serve the build
+pnpm site:dev
 ```
 
-## Layout
+The development server runs at `http://localhost:4321`. `pnpm site:build` writes the static site to `site/dist/`. Use `pnpm site:preview` to serve that build locally.
 
-| Path                            | What it is                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `src/pages/index.astro`         | Landing page (hero, features, privacy, install, import, FAQ) and its SoftwareApplication/FAQ JSON-LD |
-| `src/pages/alternatives.astro`  | OneTab / Session Buddy / Toby comparison                                                          |
-| `src/pages/privacy.astro`       | Privacy policy, adapted from the root `PRIVACY.md`                                                |
-| `src/layouts/Base.astro`        | `<head>` SEO: title, description, canonical, Open Graph, Twitter card, WebSite/Organization/Breadcrumb JSON-LD |
-| `src/assets/*.webp`             | UI screenshots (dark and light), optimized by `astro:assets` at build time                        |
-| `public/`                       | Favicon, `og.png` (1200x630), touch icons, web manifest, `robots.txt`, `CNAME`                    |
-| `src/site.ts`                   | Site constants; the version comes from the root `package.json`                                    |
+## Where to edit
 
-Keep the privacy page in sync with `PRIVACY.md` and the comparison table with `docs/tab-management-research.md`.
+Paths below are relative to `site/`.
+
+| Path | Contents |
+| --- | --- |
+| `src/pages/index.astro` | Main page, features, installation, imports, FAQ, and structured data |
+| `src/pages/alternatives.astro` | Comparison with OneTab, Session Buddy, and Toby |
+| `src/pages/privacy.astro` | Website and extension privacy policy |
+| `src/layouts/Base.astro` | Shared layout, metadata, and structured data |
+| `src/assets/` | Extension screenshots in light and dark themes |
+| `public/` | Icons, social image, web manifest, `robots.txt`, and custom domain file |
+| `src/site.ts` | Shared site values; the version comes from the root `package.json` |
+
+Follow the [documentation style](../CONTRIBUTING.md#writing-documentation) for website copy. Keep extension privacy details consistent with [PRIVACY.md](../PRIVACY.md). Check TabLodge comparisons against the current app, and competitor claims against their own documentation. The [comparison notes](../docs/tab-management-research.md) are background, not a live feature checklist.
 
 ## Screenshots
 
-The screenshots show the built extension rendered with mock data (no personal data), captured at 2x with Playwright in dark and light themes. Re-capture them after big UI changes: run `pnpm build`, serve the built pages with a mocked `chrome.*` API, take the shots, and save them as WebP in `src/assets/` as `dashboard|palette|settings|sidepanel-(dark|light).webp`.
+Use mock data, never a personal browser profile. Existing screenshots were captured with Playwright at twice the display resolution in both themes.
 
-## Deploy (GitHub Pages)
+After changing UI shown in a screenshot:
 
-`.github/workflows/pages.yml` builds and deploys the site on every push to `master` that touches `site/**`, and can be run manually (Actions > Website > Run workflow).
+1. Run `pnpm build`.
+2. Serve the built extension pages with a mocked `chrome.*` API.
+3. Capture the affected dashboard, search palette, Settings, or side panel in light and dark themes.
+4. Save WebP files in `site/src/assets/`, keeping the existing names: for example, `dashboard-light.webp` and `dashboard-dark.webp`.
 
-One-time setup:
+This is a manual capture process; there is no dedicated screenshot command. Astro optimizes the images during the site build.
 
-1. **GitHub:** repository **Settings > Pages > Build and deployment > Source: GitHub Actions**.
-2. **DNS** (at the provider for `bbay.dev`): add a `CNAME` record, name `tablodge`, value `bberka.github.io`. Do not add an `A` record for it.
-3. Run the workflow once (push a change under `site/` or use **Run workflow**). `public/CNAME` makes Pages serve the site at `tablodge.bbay.dev`.
-4. In **Settings > Pages**, confirm the custom domain `tablodge.bbay.dev` and wait for the DNS check to pass, then tick **Enforce HTTPS** once the certificate has been issued (this can take up to an hour).
+## Deploy to GitHub Pages
+
+`.github/workflows/pages.yml` builds and deploys changes to `site/**` on `master`. You can also run **Actions › Website › Run workflow**.
+
+For the initial setup:
+
+1. In the repository, open **Settings › Pages › Build and deployment** and choose **GitHub Actions** as the source.
+2. At the DNS provider for `bbay.dev`, add a `CNAME` record named `tablodge` pointing to `bberka.github.io`. Don't add an `A` record for that name.
+3. Run the website workflow. `site/public/CNAME` sets the custom domain to `tablodge.bbay.dev`.
+4. In **Settings › Pages**, confirm the domain and wait for the DNS check. Enable **Enforce HTTPS** when the certificate is ready; issuance can take up to an hour.
