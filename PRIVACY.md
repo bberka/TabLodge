@@ -1,54 +1,51 @@
 # Privacy
 
-_Last updated: 2026-10-25_
+TabLodge keeps your sessions, bookmarks, and settings in your browser profile. It has no accounts or backend, and does not collect or upload your data.
 
-TabLodge is built to keep your data on your device. In short: **no data leaves your device, and nothing is collected.**
+## What it doesn't do
 
-## What TabLodge does not do
-
-- No accounts, servers, or cloud sync. TabLodge has no backend.
 - No analytics, telemetry, crash reporting, or advertising.
-- No network requests of its own. All code, styles, fonts, and icons are bundled in the extension; nothing is loaded from a CDN.
-- No website access. TabLodge requests no host permissions, injects no content scripts, and never reads page contents.
-- No sale or sharing of data with anyone.
+- No cloud sync or sale of data.
+- No network requests of its own. Code, styles, fonts, and icons are bundled with the extension.
+- No website host permissions or content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages.
 
-## What TabLodge stores, and where
+Opening a saved link loads that website normally. Choosing **Search the web** sends your query to the browser's default search engine. These are actions you request, not background reporting by TabLodge.
 
-Everything is stored locally in your browser profile:
+## What is stored
 
-| Storage                                                                                             | Contents                                                                                                                                                                                                                                                                                                                       |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `chrome.storage.local` (`tablodge.state`)                                                           | Your saved sessions (tab titles, URLs, notes, pinned/tab-group/split-view info), folders, bookmark columns and bookmarks, settings, and excluded websites.                                                                                                                                                                     |
-| `chrome.storage.local` (`uiTheme`)                                                                  | Your Light/Dark/System appearance choice.                                                                                                                                                                                                                                                                                      |
-| The extension's `localStorage` (`tablodge.uiTheme`)                                                 | A copy of the appearance choice, used to paint each page in the right theme before it loads.                                                                                                                                                                                                                                   |
-| `chrome.storage.local` (`tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta`) | Crash-recovery snapshots: the titles and URLs of your open web tabs per window (pinned state, tab groups, split view, active tab), plus a few flags used to tell whether the last browser run ended cleanly. Excluded sites, incognito windows, and non-web pages are left out. Turn off in **Settings › Recovery & backups**. |
-| `chrome.storage.local` (`tablodge.backups`)                                                         | Automatic, manual, and safety backups: full copies of your sessions, bookmarks, and settings in the regular JSON export format.                                                                                                                                                                                                |
-| `chrome.storage.local` (`tablodge.trash`)                                                           | Deleted sessions, saved links, bookmarks, and columns, kept for the retention period you choose (7, 30, or 90 days).                                                                                                                                                                                                           |
+Data stays in local extension storage within your browser profile.
 
-TabLodge reads tab details (URL, title, pinned state, tab group, window) only when you save a session, check for duplicates, or restore. It reads your browser bookmarks when you explicitly import them, and, only if you turn on **When you bookmark a page in the browser** in Settings, it sees each bookmark you create in the browser (URL and title) to offer to add that one page to TabLodge. It does not read your existing bookmarks for this, and nothing leaves your device. Site icons come from the browser's own local favicon cache.
+| Storage key                                                                | Contents                                                                                                                                   |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tablodge.state`                                                           | Saved sessions, titles, URLs, notes, pinned state, tab groups, split view pairs, folders, bookmarks, columns, settings, and excluded sites |
+| `uiTheme`                                                                  | Your system, light, or dark theme choice                                                                                                   |
+| `tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta` | Snapshots of open windows and flags used to detect a possible browser crash                                                                |
+| `tablodge.backups`                                                         | Automatic, manual, and safety backups of sessions, bookmarks, and settings                                                                 |
+| `tablodge.trash`                                                           | Deleted sessions, saved links, bookmarks, and columns                                                                                      |
+| `tablodge.undo`                                                            | Temporary copies used to undo recent actions, kept for up to two minutes                                                                   |
 
-Snapshots, backups, and the trash bin are ordinary local data like everything else: they never leave your device, are capped in number and size, and can be cleared at any time from **Settings › Recovery & backups**. If you turn on **Also save a copy to Downloads**, backups are additionally written as JSON files to `Downloads/TabLodge/` on your computer; those files are yours to keep or delete, and are not uploaded anywhere by TabLodge.
+These keys use `chrome.storage.local`. A copy of the theme choice also lives in the extension's `localStorage` under `tablodge.uiTheme` so pages can apply it before rendering. A temporary flag in `chrome.storage.session` helps ignore bulk browser bookmark imports.
 
-Data stays until you delete it: delete individual items, use **Settings › Data** to erase sessions, bookmarks, or both, or remove the extension (the browser then deletes its storage). Exported JSON, HTML, and full-backup ZIP files (which hold your sessions, bookmarks, settings, excluded sites, theme, snapshot history, and trash bin) are plain, unencrypted data that you control; keep them private if their URLs, titles, or notes are sensitive.
+Snapshots contain tab titles, URLs, pinned state, tab groups, split view pairs, the active tab, and window layout information. They skip incognito windows, excluded sites, and pages other than ordinary HTTP or HTTPS websites. Snapshots are enabled by default; you can turn them off in **Settings › Recovery & backups**.
 
-When you restore a session or open a bookmark, your browser loads those web pages as usual, and those sites see a normal visit. TabLodge itself sends nothing to them.
+TabLodge reads tab metadata to save and restore sessions, detect duplicates, show and search open tabs, and capture recovery snapshots. It reads your browser's bookmark tree only when you ask to import it. If you enable **When you bookmark a page in the browser**, it also watches for newly created bookmarks to offer to add that page, or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.
+
+## Retention and deletion
+
+Your saved sessions and bookmarks stay until you delete them. Deleted items go to the trash bin for 7, 30, or 90 days, depending on your setting. Snapshots, backups, trash, and Undo records have retention or size limits. You can clear recovery data from **Settings › Recovery & backups**.
+
+Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data creates a safety backup and offers Undo, so check the backup history too if you want to remove retained copies. Removing the extension deletes its browser storage.
+
+If you enable **Also save a copy to Downloads**, TabLodge writes backup JSON files to `Downloads/TabLodge/`. It doesn't upload them. Turning the option off or uninstalling the extension doesn't delete files already written there; you must remove those yourself.
+
+Exports are not encrypted. JSON, HTML, CSV, Markdown, URL lists, and full backup ZIP files may contain sensitive titles, URLs, or notes. The full backup also includes settings, excluded sites, theme, snapshot history, and trash. Keep these files private and remember that a folder you sync through another app may upload them.
 
 ## Permissions
 
-| Permission                    | Used for                                                                                                                                                                      |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tabs`                        | Reading tab URLs, titles, and placement to save sessions; opening tabs to restore them.                                                                                       |
-| `tabGroups`                   | Saving and recreating native tab groups.                                                                                                                                      |
-| `bookmarks`                   | Importing your browser bookmarks when you ask, and noticing a page you bookmark in the browser when you enable that setting (off by default).                                 |
-| `favicon`                     | Showing site icons from the browser's local cache.                                                                                                                            |
-| `storage`, `unlimitedStorage` | Keeping your data in local extension storage without the default size cap.                                                                                                    |
-| `contextMenus`                | Optional right-click save and bookmark actions.                                                                                                                               |
-| `clipboardWrite`              | Copying bookmark URLs and session links when you ask.                                                                                                                         |
-| `sidePanel`                   | The optional bookmark list in the browser's Side Panel.                                                                                                                       |
-| `search`                      | Running a web search with your default engine, only when you choose "Search the web".                                                                                         |
-| `alarms`                      | Scheduling local snapshots, automatic backups, and trash bin cleanup.                                                                                                         |
-| `downloads` (optional)        | Only if you enable "Also save a copy to Downloads": writing backup files to `Downloads/TabLodge/`. The browser asks first, and turning the option off removes the permission. |
+The [README permissions table](README.md#permissions-and-privacy) explains each required permission. TabLodge requests no website access.
+
+The only optional permission is `downloads`. The browser asks for it when you turn on backup copies in Downloads. Turning that setting off removes the permission.
 
 ## Contact
 
-Questions or concerns: open an issue on the project's GitHub repository (linked from TabLodge's Help page).
+For questions or concerns, [open an issue on GitHub](https://github.com/bberka/TabLodge/issues). Please leave private URLs, titles, and exported data out of public reports.
