@@ -79,7 +79,7 @@ async function listFiles(path: string): Promise<string[]> {
 
 /**
  Copies static package files (icons) next to the bundle after each write and adds
- them to the watch list, so `pnpm dev` picks up icon edits too.
+ them to the watch list, so `vp run dev` picks up icon edits too.
  */
 export function copyStatic(
 	sourceDir: string,
@@ -111,7 +111,7 @@ export function copyStatic(
 
 /**
  Writes manifest.json into the package with `homepage_url` taken from package.json "homepage",
- so the repository URL has one source of truth. Watched, so `pnpm dev` picks up edits too.
+ so the repository URL has one source of truth. Watched, so `vp run dev` picks up edits too.
  */
 export function writeManifest(sourceDir: string, outDir: string): Plugin {
 	const source = resolve(sourceDir, 'manifest.json');

@@ -1,59 +1,27 @@
 ---
 import Base from '../layouts/Base.astro';
+import ButtonIcon from '../components/ButtonIcon.astro';
 import Screenshot from '../components/Screenshot.astro';
 import {SITE, abs} from '../site';
 import {screenshotSet} from '../lib/screens';
 
-const title = 'TabLodge: Local Tab Session Manager for Chrome, Brave and Edge';
+const title = 'TabLodge: Save Tabs for Later';
 const description =
-	'Save tabs as sessions and restore them later. TabLodge is a free, open-source tab manager and new-tab bookmark board for Chrome, Brave and Edge. No account, no tracking.';
+	'Save tab sessions and bookmarks in your Chromium browser. Free, open source, and private.';
 
 const heroDark = await screenshotSet('dashboard', 'dark');
 const heroLight = await screenshotSet('dashboard', 'light');
 const heroSizes = '(min-width: 1160px) 1120px, calc(100vw - 2.5rem)';
 
 const features = [
-	{
-		title: 'Save tabs as sessions',
-		text: 'Save a window, selected tabs, one tab group, everything left or right of a tab, or all windows at once. Each session gets a folder, a description and a name: by date, first tab, your own template, or one you type each time. Titles are saved without notification counts like “(1)”.',
-	},
-	{
-		title: 'Restores that remember how you worked',
-		text: 'Native tab groups come back with their title, color and collapsed state. Pinned tabs are opt-in, and split-view pairs return side by side on Chromium 155+.',
-	},
-	{
-		title: 'A bookmark board on your new tab',
-		text: 'Columns have icons and can be reordered by dragging. Drop a link onto a column to save it, or paste one link or a list to add bookmarks. Drag saved session links into columns, or let TabLodge offer to add a page you star in the browser. Choose a default, wider, full width or narrower dashboard layout in Settings.',
-	},
-	{
-		title: 'Search everything',
-		text: 'One fuzzy search across sessions, saved tabs, bookmarks and your open tabs. Press Ctrl+K or / on any TabLodge page.',
-	},
-	{
-		title: 'Organize your sessions',
-		text: 'Folders, descriptions, search, sorting and multi-select. Drag sessions onto folders, merge two sessions without duplicates, and undo any delete from the trash bin.',
-	},
-	{
-		title: 'Flexible restores',
-		text: 'Restore into the current or a new window. Keep or remove the saved tabs afterward, skip duplicates, and optionally unload background tabs to save memory.',
-	},
-	{
-		title: 'Side panel and right-click menus',
-		text: 'Browse bookmarks, sessions and open tabs from the browser side panel. Save from page, link and toolbar context menus, or with keyboard shortcuts.',
-	},
-	{
-		title: 'Import and back up',
-		text: 'Bring your data from other tools and export to JSON, HTML, CSV or Markdown, or save everything, settings included, as one ZIP. Automatic backups, crash recovery and Undo keep your tabs safe.',
-	},
-];
-
-const imports = [
-	{name: 'OneTab', detail: 'text export'},
-	{name: 'Session Buddy', detail: 'JSON export'},
-	{name: 'Tab Session Manager', detail: 'JSON export'},
-	{name: 'Toby', detail: 'JSON export'},
-	{name: 'Browser bookmarks', detail: 'directly, or an exported HTML file'},
-	{name: 'HTML, CSV and URL lists', detail: 'any page or file with links'},
+	{title: 'Save tabs as sessions', text: 'Save one tab, selected tabs, or a whole window for later.'},
+	{title: 'Restore with tab groups', text: 'Bring back group names, colors, and collapsed state.'},
+	{title: 'A bookmark board on your new tab', text: 'Keep links in columns. Add bookmarks by dragging or pasting.'},
+	{title: 'Search everything', text: 'Find sessions, saved tabs, bookmarks, and open tabs together.'},
+	{title: 'Organize your sessions', text: 'Sort sessions into folders, merge without duplicates, or undo deletions.'},
+	{title: 'Flexible restores', text: 'Restore in this or a new window, skip duplicates, and choose what stays open.'},
+	{title: 'Side panel and quick actions', text: 'Browse your library from the side panel, popup, menus, or shortcuts.'},
+	{title: 'Import and back up', text: 'Import from other tab tools or export selected data or a full backup.'},
 ];
 
 const faq = [
@@ -63,7 +31,7 @@ const faq = [
 	},
 	{
 		q: 'Is TabLodge on the Chrome Web Store?',
-		a: 'Not yet. For now you download a zip from GitHub Releases and load it with Developer mode, or build it from source. It takes about a minute, and the steps are below.',
+		a: 'Yes. Install TabLodge from the Chrome Web Store in Chrome, Brave, Edge, Vivaldi, Opera, or another compatible Chromium browser.',
 	},
 	{
 		q: 'Which browsers does TabLodge support?',
@@ -87,7 +55,7 @@ const faq = [
 	},
 	{
 		q: 'How do I update TabLodge?',
-		a: 'Download the new zip, replace the contents of the same folder you loaded the extension from, then click the reload button on TabLodge in your extensions page. Always reuse the same folder, because the browser ties your saved data to it.',
+		a: 'Chrome Web Store installations update automatically in supported Chromium browsers.',
 	},
 ];
 
@@ -106,7 +74,7 @@ const jsonLd = [
 		browserRequirements: 'Requires a Chromium-based browser, version 116 or newer',
 		softwareVersion: SITE.version,
 		downloadUrl: SITE.releases,
-		installUrl: SITE.releases,
+		installUrl: SITE.chromeWebStore,
 		license: SITE.license,
 		isAccessibleForFree: true,
 		offers: {'@type': 'Offer', price: '0', priceCurrency: 'USD'},
@@ -152,22 +120,15 @@ const jsonLd = [
 
 	<section class="hero">
 		<div class="wrap">
-			<p class="eyebrow">Free &middot; Open source &middot; Local-only</p>
-			<h1>Your tabs, saved and restored. Never leaving your browser.</h1>
-			<p class="lead">
-				TabLodge is a tab session manager and new-tab bookmark board for Chrome, Brave, Edge and other Chromium
-				browsers. Save windows as sessions, restore them whenever you like, and keep your favorite links on a
-				calm board. No account, no servers, no tracking.
-			</p>
+			<p class="eyebrow">Free &amp; open source</p>
+			<h1>Sessions and bookmarks in one quiet place.</h1>
+			<p class="lead">Save tabs for later. Restore them with tab groups intact.</p>
 			<div class="actions">
-				<a class="btn primary" href={SITE.releases} rel="noopener">
-					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v9.17l3.59-3.58L18 10l-6 6-6-6 1.41-1.41L11 12.17zM5 18h14v2H5z" /></svg>
-					Download for Chromium browsers
-				</a>
-				<a class="btn ghost" href={SITE.repo} rel="noopener">View on GitHub</a>
+				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 			<p class="note">
-				Version {SITE.version} &middot; Chrome 116+ &middot; MIT license &middot; Not in the extension stores yet, <a href="#install">install in a minute</a>.
+				TabLodge v{SITE.version} &middot; Chrome 116+ &middot; MIT license
 			</p>
 			<div class="hero-shot">
 				<Screenshot
@@ -200,13 +161,9 @@ const jsonLd = [
 	<section>
 		<div class="wrap split">
 			<div>
-				<p class="eyebrow">Find anything fast</p>
-				<h2>One search for sessions, tabs and bookmarks</h2>
-				<p class="lead">
-					Press <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>/</kbd> for the command palette. Type a few letters and
-					TabLodge ranks matches from your saved sessions, saved tabs, bookmarks and open tabs together, or
-					falls through to a normal web search with your default engine.
-				</p>
+				<p class="eyebrow">Search</p>
+				<h2>Find it all.</h2>
+				<p class="lead">Search sessions, bookmarks, and open tabs in one place.</p>
 			</div>
 			<Screenshot
 				name="palette"
@@ -230,92 +187,28 @@ const jsonLd = [
 			<div>
 				<p class="eyebrow">Side panel</p>
 				<h2>Always one click away</h2>
-				<p class="lead">
-					Keep TabLodge open next to the page you are reading. The side panel has your bookmarks, saved
-					sessions and the tabs open in this window, with search across all three. Make the toolbar icon open
-					the panel or the quick popup, whichever you prefer.
-				</p>
+				<p class="lead">Browse sessions, bookmarks, and open tabs beside your page.</p>
 			</div>
 		</div>
 	</section>
 
 	<section id="privacy">
-		<div class="wrap">
-			<p class="eyebrow">Privacy</p>
-			<h2>Your tabs never leave your browser</h2>
-			<p class="lead">
-				Tab lists show where you work, what you read and what you plan. TabLodge treats them as yours alone.
-			</p>
-			<ul class="grid three">
-				<li class="card"><h3>No servers</h3><p>There is no backend and no account. Sessions, bookmarks and settings live in your browser's extension storage.</p></li>
-				<li class="card"><h3>No network requests</h3><p>No analytics, telemetry, ads or CDN. All code and icons are bundled, and site icons come from the browser's local favicon cache.</p></li>
-				<li class="card"><h3>No website access</h3><p>No host permissions and no content scripts. TabLodge never reads page contents. It uses tab titles and URLs for sessions, open tab search and recovery snapshots.</p></li>
-			</ul>
-			<p>
-				The code is open under the MIT license, so you can <a href={SITE.repo} rel="noopener">audit every permission</a>.
-				Read the full <a href="/privacy/">privacy policy</a>.
-			</p>
+		<div class="wrap split">
+			<div>
+				<p class="eyebrow">Privacy</p>
+				<h2>Your tabs stay yours</h2>
+				<p class="lead">Your library stays in your browser. No account, tracking, or website access.</p>
+			</div>
+			<p><a class="btn ghost" href="/privacy/">Read the privacy policy</a></p>
 		</div>
 	</section>
 
 	<section id="install" class="alt">
 		<div class="wrap split">
 			<div>
-				<p class="eyebrow">Install</p>
-				<h2>Install in about a minute</h2>
-				<p>TabLodge is not in the Chrome Web Store or Edge Add-ons yet, so you load it yourself. It works the same way in Chrome, Brave, Edge, Vivaldi and Opera.</p>
-				<ol class="steps">
-					<li><a href={SITE.releases} rel="noopener">Download the latest <code>tablodge-x.y.z.zip</code></a> from GitHub Releases.</li>
-					<li>Unzip it into a folder you will keep, such as <code>~/Extensions/tablodge</code>. The browser loads the extension from there.</li>
-					<li>Open <code>chrome://extensions</code> (or <code>brave://extensions</code>, <code>edge://extensions</code>) and turn on <strong>Developer mode</strong>.</li>
-					<li>Click <strong>Load unpacked</strong> and choose the folder that contains <code>manifest.json</code>.</li>
-					<li>TabLodge opens the dashboard in a new tab after installation. Pin it from the extensions menu if you want its toolbar button.</li>
-				</ol>
-				<p class="note">
-					Prefer to build it yourself? Clone the repo, run <code>pnpm install</code> and <code>pnpm build</code>, and load <code>dist/tablodge</code>. See the <a href={SITE.repo + '#install'} rel="noopener">README</a>.
-				</p>
-			</div>
-			<div class="side-card card">
-				<h3>Updating</h3>
-				<p>Download the new zip, replace the files in the same folder, then press the reload button on TabLodge's card. Reuse the same folder: the browser ties your saved data to it.</p>
-				<h3>Make a backup first</h3>
-				<p>In Settings &rsaquo; Data, choose Back up &rsaquo; Everything. It saves one ZIP with your sessions, bookmarks and settings that Import can restore.</p>
-			</div>
-		</div>
-	</section>
-
-	<section id="import">
-		<div class="wrap">
-			<p class="eyebrow">Switching</p>
-			<h2>Bring your tabs from other tools</h2>
-			<p class="lead">
-				Moving over from another tab manager? Import its export file and TabLodge turns it into sessions and bookmarks, with a review step and duplicate handling.
-				Looking for a comparison? See <a href="/alternatives/">TabLodge as an alternative to OneTab, Session Buddy and Toby</a>.
-			</p>
-			<ul class="grid three imports">
-				{
-					imports.map((i) => (
-						<li class="card">
-							<h3>{i.name}</h3>
-							<p>{i.detail}</p>
-						</li>
-					))
-				}
-			</ul>
-			<div class="split settings-row">
-				<div>
-					<h3>Back up in the format you want</h3>
-					<p>
-						Export sessions and bookmarks as JSON backups, a shareable HTML page, CSV, Markdown or plain URL
-						lists. Light, dark and system themes are in Settings too.
-					</p>
-				</div>
-				<Screenshot
-					name="settings"
-					alt="TabLodge settings page with appearance options and system toggles"
-					sizes="(min-width: 900px) 540px, calc(100vw - 2.5rem)"
-					widths={[640, 1080, 1600]}
-				/>
+				<h2>Get TabLodge</h2>
+				<p>Available in Chrome, Brave, Edge, Vivaldi, Opera, and other Chromium browsers. Updates are automatic. TabLodge opens the dashboard in a new tab after installation.</p>
+				<p><a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a></p>
 			</div>
 		</div>
 	</section>
@@ -323,7 +216,7 @@ const jsonLd = [
 	<section id="faq" class="alt">
 		<div class="narrow">
 			<p class="eyebrow">FAQ</p>
-			<h2>Questions, answered</h2>
+			<h2>Quick answers</h2>
 			<div class="faq">
 				{
 					faq.map((f) => (
@@ -340,10 +233,9 @@ const jsonLd = [
 	<section class="cta">
 		<div class="wrap center">
 			<h2>Give your tabs a lodge</h2>
-			<p class="lead">Free, open source, and yours. Download it, load it, and keep your tabs private.</p>
 			<div class="actions center">
-				<a class="btn primary" href={SITE.releases} rel="noopener">Download for Chromium browsers</a>
-				<a class="btn ghost" href={SITE.repo} rel="noopener">View on GitHub</a>
+				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 		</div>
 	</section>
@@ -368,18 +260,6 @@ const jsonLd = [
 		gap: 1.1rem;
 		grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
 	}
-	.grid + p {
-		margin-top: 1.6rem;
-	}
-	.grid.three {
-		grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-	}
-	.settings-row {
-		margin-top: 1rem;
-	}
-	.imports {
-		margin-bottom: 2.5rem;
-	}
 	.card {
 		background: var(--card);
 		border: 1px solid var(--line);
@@ -403,23 +283,11 @@ const jsonLd = [
 			grid-template-columns: 320px 1fr;
 			gap: 4rem;
 		}
-		.settings-row {
-			grid-template-columns: 1fr 540px;
-			gap: 3rem;
-		}
 	}
 	.sidepanel-shot {
 		max-width: 320px;
 		width: 60vw;
 		justify-self: center;
-	}
-	.steps {
-		padding-left: 1.3rem;
-		margin: 1.2rem 0;
-	}
-	.steps li {
-		margin-bottom: 0.7rem;
-		padding-left: 0.3rem;
 	}
 	.side-card {
 		padding-bottom: 0.9rem;
@@ -444,9 +312,6 @@ const jsonLd = [
 	}
 	.center {
 		text-align: center;
-	}
-	.center .lead {
-		margin-inline: auto;
 	}
 	.actions.center {
 		justify-content: center;

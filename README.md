@@ -6,6 +6,7 @@
 <p align="center"><strong>Save your tabs for later. Keep your bookmarks on every new tab.</strong></p>
 
 <p align="center"><a href="https://tablodge.bbay.dev">tablodge.bbay.dev</a></p>
+<p align="center"><a href="https://chromewebstore.google.com/detail/tablodge-%E2%80%93-tab-session-ma/ekidoclgpdfhpdlidlkcjccgihbndoib"><img src="https://img.shields.io/badge/Chrome_Web_Store-Install_TabLodge-4285F4?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="Install TabLodge from the Chrome Web Store"></a></p>
 
 <p align="center">
   <a href="https://github.com/bberka/TabLodge/actions/workflows/test.yml"><img src="https://github.com/bberka/TabLodge/actions/workflows/test.yml/badge.svg" alt="Test"></a>
@@ -37,34 +38,49 @@ There are no accounts, servers, or analytics. TabLodge keeps your data in your b
   <img src="site/src/assets/sidepanel-light.webp" alt="Bookmark columns in the TabLodge side panel" width="210">
 </p>
 
-## Install
+## Install on Chromium-based browsers
 
-TabLodge isn't in the extension stores yet. You can load it manually in Chrome 116 or newer, or a compatible Chromium browser.
+[Install TabLodge from the Chrome Web Store](https://chromewebstore.google.com/detail/tablodge-%E2%80%93-tab-session-ma/ekidoclgpdfhpdlidlkcjccgihbndoib) in Chrome, Brave, Edge, Vivaldi, Opera, or another supported Chromium browser. The same listing works across these browsers, so you do not need a separate listing or a manual install. Choose the install option shown by your browser. The store handles updates automatically.
 
-### Download a release
+#### Test a development build
 
-You don't need any development tools for this option.
-
-1. Download `tablodge-0.x.y.zip` from the [latest release](https://github.com/bberka/TabLodge/releases/latest).
-2. Unzip it into a folder you'll keep, such as `~/Extensions/tablodge`. The browser loads the extension from this folder, so don't delete it.
-3. Open `chrome://extensions`, `brave://extensions`, or your browser's equivalent.
-4. Turn on **Developer mode**.
-5. Click **Load unpacked** and select the folder containing `manifest.json`.
-6. Pin TabLodge from the extensions menu if you want its toolbar button nearby.
-
-To update, download the new release, replace the contents of the same folder, and click the reload button on TabLodge's extension card. Keep using the same folder so the browser keeps the same extension ID and storage. Export a backup before moving the installation.
-
-### Build from source
-
-You'll need Git, Node.js 22.18+ or 24.11+, and pnpm. `corepack enable` makes the pnpm version pinned in `package.json` available.
+With the Vite+ CLI installed as described in [Development](#development), clone the repository and run TabLodge in its isolated test browser profile:
 
 ```sh
 git clone https://github.com/bberka/TabLodge.git
 cd TabLodge
 corepack enable
 pnpm install
-pnpm build
+vp run dev
 ```
+
+#### Full local installation
+
+To install a release manually instead of using the Chrome Web Store:
+
+1. Download `tablodge-0.x.y.zip` from the [latest release](https://github.com/bberka/TabLodge/releases/latest).
+2. Unzip it into a folder you'll keep, such as `~/Extensions/tablodge`. The browser loads the extension from this folder, so don't delete it.
+3. Open `chrome://extensions`, `brave://extensions`, `edge://extensions`, or your browser's equivalent.
+4. Turn on **Developer mode**.
+5. Click **Load unpacked** and select the folder containing `manifest.json`.
+6. Pin TabLodge from the extensions menu if you want its toolbar button nearby.
+
+To update a manual installation, download the new release, replace the contents of the same folder, and click the reload button on TabLodge's extension card. Keep using the same folder so the browser keeps the same extension ID and storage.
+
+### Build from source
+
+To build and package TabLodge, you'll need Git, Node.js 22.18+ or 24.11+, pnpm, and the Vite+ CLI. See [Development](#development) to install Vite+. `corepack enable` makes the pnpm version pinned in `package.json` available. You do not need a separate ZIP utility. A Chromium browser is needed only to load or test the build.
+
+```sh
+git clone https://github.com/bberka/TabLodge.git
+cd TabLodge
+corepack enable
+pnpm install
+vp run build
+vp run pack
+```
+
+The build creates and verifies the unpacked extension in `dist/tablodge/`. The pack task creates `release/tablodge-<version>.zip` and its `.sha256` checksum. The ZIP contains the extension files at its root, ready to upload or distribute.
 
 Open your browser's extensions page, turn on **Developer mode**, and use **Load unpacked** to select `dist/tablodge/`. Don't select the repository root or `extension/`; those contain source files, not the built extension.
 
@@ -73,7 +89,7 @@ To update a source installation:
 ```sh
 git pull
 pnpm install
-pnpm build
+vp run build
 ```
 
 Then reload TabLodge from the extensions page.
@@ -84,28 +100,33 @@ TabLodge opens the dashboard in a new tab after installation. Open another new t
 
 Find the available keyboard shortcuts in **Settings › Keyboard shortcuts**. **Configure shortcuts** opens your browser's shortcut settings.
 
-Before uninstalling, export anything you want to keep. Removing the extension also removes its browser storage.
+### Move from a manual installation to the Chrome Web Store
+
+The manual and Chrome Web Store installations may have separate storage. Before removing the manual copy, open it and create a full backup in **Settings › Data › Back up › Everything**. Install TabLodge from the Chrome Web Store, import that ZIP from **Settings › Data**, and check that your sessions and bookmarks are there. Remove the manual copy only after confirming the import. Uninstalling an extension removes its browser storage.
+
+Before uninstalling any copy, export anything you want to keep. Removing the extension also removes its browser storage.
 
 ## Development
 
-TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind CSS 3. [Vite+](https://viteplus.dev) builds the extension and runs Vitest. Playwright launches Chrome or Chromium for manual browser testing. [XO](https://github.com/xojs/xo) handles linting and formatting. All runtime dependencies are bundled with the extension.
+TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind CSS 3. Vite+ builds the extension and runs Vitest. Playwright launches Chrome or Chromium for manual browser testing. [XO](https://github.com/xojs/xo) handles linting and formatting. All runtime dependencies are bundled with the extension. Install the [Vite+ CLI](https://viteplus.dev/) once and open a new terminal, then run `vp run <task>` directly from the repository root. Use `pnpm install` to install project dependencies.
 
-| Command                          | What it does                                                        |
-| -------------------------------- | ------------------------------------------------------------------- |
-| `pnpm build`                     | Build into `dist/tablodge/` and verify the package                  |
-| `pnpm browser:install`           | Install Playwright Chromium for development                         |
-| `pnpm dev`                       | Watch sources and open Chrome or Chromium with the extension loaded |
-| `pnpm watch`                     | Watch sources without opening a browser                             |
-| `pnpm test`                      | Run the tests once                                                  |
-| `pnpm test:watch`                | Run tests as files change                                           |
-| `pnpm typecheck`                 | Check all TypeScript projects                                       |
-| `pnpm lint`                      | Check code with XO                                                  |
-| `pnpm lint:fix` or `pnpm format` | Fix lint issues and format with XO                                  |
-| `pnpm check`                     | Run lint, type checks, and tests                                    |
-| `pnpm verify`                    | Verify an existing build                                            |
-| `pnpm clean`                     | Remove build output and TypeScript build caches                     |
+| Command                              | What it does                                                        |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `vp run build`                       | Build into `dist/tablodge/` and verify the package                  |
+| `vp run pack`                        | Create a versioned ZIP and SHA256 checksum under `release/`         |
+| `vp run browser:install`             | Install Playwright Chromium for development                         |
+| `vp run dev`                         | Watch sources and open Chrome or Chromium with the extension loaded |
+| `vp run watch`                       | Watch sources without opening a browser                             |
+| `vp run test`                        | Run the tests once                                                  |
+| `vp run test:watch`                  | Run tests as files change                                           |
+| `vp run typecheck`                   | Check all TypeScript projects                                       |
+| `vp run lint`                        | Check code with XO                                                  |
+| `vp run lint:fix` or `vp run format` | Fix lint issues and format with XO                                  |
+| `vp run check`                       | Run lint, type checks, and tests                                    |
+| `vp run verify`                      | Verify an existing build                                            |
+| `vp run clean`                       | Remove build output and TypeScript build caches                     |
 
-`pnpm dev` uses Playwright to open Chrome, or Playwright Chromium when Chrome is unavailable, with a separate profile in `.dev/chrome-profile`. Test data stays separate from your regular profile and other worktrees. If neither browser is available, run `pnpm browser:install` once. After a rebuild, reload TabLodge from `chrome://extensions` in that profile, then reopen its pages. Set `CHROME_BIN` to your browser executable if needed. If no browser is available, the build watcher still runs.
+`vp run dev` uses Playwright to open Chrome, or Playwright Chromium when Chrome is unavailable, with a separate profile in `.dev/chrome-profile`. Test data stays separate from your regular profile and other worktrees. If neither browser is available, run `vp run browser:install` once. After a rebuild, reload TabLodge from `chrome://extensions` in that profile, then reopen its pages. Set `CHROME_BIN` to your browser executable if needed. If no browser is available, the build watcher still runs.
 
 See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](docs/architecture.md) explains storage, messages, and feature behavior.
 
@@ -158,7 +179,7 @@ The [tab manager comparison notes](docs/tab-management-research.md) explain the 
 
 ## Website
 
-The website lives in [`site/`](site). Run `pnpm site:dev` to work on it or `pnpm site:build` to build it. [Website setup](site/README.md) covers deployment and screenshots.
+The website lives in [`site/`](site). Run `vp run site:dev` to work on it or `vp run site:build` to build it. [Website setup](site/README.md) covers deployment and screenshots.
 
 ## Contributing
 

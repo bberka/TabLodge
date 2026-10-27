@@ -1,6 +1,6 @@
 name: Test
 
-# Runs on every push to the main branch and on pull requests: lint (XO), typecheck, tests, build.
+# Runs on every push to the main branch and on pull requests: lint (XO), typecheck, tests, build, and package.
 on:
   push:
     branches: [master, main]
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   test:
-    name: Lint, typecheck, test, build
+    name: Lint, typecheck, test, build, package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,5 +26,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
-      - run: pnpm build
+      - run: pnpm exec vp run check
+      - run: pnpm exec vp run build
+      - run: pnpm exec vp run pack

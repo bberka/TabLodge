@@ -1,5 +1,5 @@
 {
-	// Solution file: `pnpm typecheck` runs `tsc -b`, which checks each project below.
+	// Solution file: `vp run typecheck` runs `tsc -b`, which checks each project below.
 	"files": [],
 	"references": [
 		{"path": "./tsconfig.app.json"},

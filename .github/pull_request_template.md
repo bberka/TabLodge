@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] `pnpm check` and `pnpm build` pass, or I have explained which checks I couldn't run
+- [ ] `vp run check` and `vp run build` pass, or I have explained which checks I couldn't run
 - [ ] Tests cover the change, or I have explained why they aren't needed
 - [ ] For runtime changes, I tested the affected workflow in the dev browser and recorded the steps and result below
 - [ ] UI changes work with the keyboard and in both themes

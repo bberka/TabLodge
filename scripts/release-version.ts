@@ -65,7 +65,7 @@ export function nextVersion(minor: number, tags: readonly string[]): string {
 }
 
 /**
-Replaces the top-level `"version"` value in a JSON file's text, leaving the rest of the file byte-for-byte unchanged so it still matches the repo's formatting (re-serializing would fail `pnpm check`).
+Replaces the top-level `"version"` value in a JSON file's text, leaving the rest of the file byte-for-byte unchanged so it still matches the repo's formatting (re-serializing would fail `vp run check`).
 */
 export function stampVersion(text: string, version: string): string {
 	if (!VERSION_PATTERN.test(version)) {
