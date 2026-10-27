@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import ButtonIcon from '../components/ButtonIcon.astro';
 import {SITE} from '../site';
 
 const title = 'OneTab, Session Buddy and Toby Alternative: TabLodge Compared';
@@ -52,7 +53,7 @@ const breadcrumbs = [
 			so you can pick the one that fits.
 		</p>
 		<p>
-			<a class="btn primary" href={SITE.releases} rel="noopener">Download TabLodge</a>
+			<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from the Chrome Web Store</a>
 		</p>
 
 		<h2>At a glance</h2>
@@ -97,12 +98,11 @@ const breadcrumbs = [
 			<li>You need to sync sessions between computers or share them with a team: Toby or a browser-native sync is a better fit.</li>
 			<li>You prefer Session Buddy's collections and automatic history workflow: try it alongside TabLodge before switching.</li>
 			<li>You want the simplest possible one-click tab list: OneTab does exactly that.</li>
-			<li>You need an extension from an official store with automatic updates: TabLodge is not in the stores yet.</li>
 		</ul>
 
 		<h2>Switching to TabLodge</h2>
 		<ol>
-			<li><a href={SITE.releases} rel="noopener">Download and load TabLodge</a> (about a minute, see the <a href="/#install">install steps</a>).</li>
+			<li><a href={SITE.chromeWebStore} rel="noopener">Install TabLodge from the Chrome Web Store</a> in any compatible Chromium browser.</li>
 			<li>Export your data from the other tool: OneTab as text, Session Buddy, Tab Session Manager or Toby as JSON. Keep the old extension installed until you are happy with the result.</li>
 			<li>In TabLodge open Settings, then Data, choose the file and review what will be imported. Duplicates can be skipped.</li>
 		</ol>

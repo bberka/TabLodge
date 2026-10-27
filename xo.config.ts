@@ -1,5 +1,5 @@
 // Lint and format configuration: XO (ESLint) with its default style, Prettier formatting, and React rules.
-// `pnpm lint` checks, `pnpm lint:fix` (alias `pnpm format`) fixes and formats.
+// `vp run lint` checks, `vp run lint:fix` (alias `vp run format`) fixes and formats.
 // Every rule turned off or relaxed below says why; prefer fixing the code over adding to this list.
 import xoReact from 'eslint-config-xo-react';
 import type {XoConfigItem} from 'xo';
