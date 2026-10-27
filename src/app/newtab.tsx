@@ -1644,7 +1644,7 @@ function NewTab() {
 		>
 			<AppHeader active="dashboard">
 				<FinderTrigger onClick={() => setFinderOpen(true)} />
-				{sessionsVisible && (
+				{sessionsVisible && settings.showSaveWindowButton !== false && (
 					<Button
 						size="sm"
 						disabled={busy !== ''}
@@ -1658,6 +1658,22 @@ function NewTab() {
 								: saveWindowLabel(tabSelection)}
 						</span>
 					</Button>
+				)}
+				{settings.showTrashBinButton !== false && (
+					<IconTooltip label="Trash bin">
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-8 w-8"
+							aria-label="Trash bin"
+							onClick={() => {
+								setTrashFilter('all');
+								setTrashOpen(true);
+							}}
+						>
+							<Trash2 />
+						</Button>
+					</IconTooltip>
 				)}
 			</AppHeader>
 

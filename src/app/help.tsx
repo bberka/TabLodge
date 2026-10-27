@@ -460,14 +460,15 @@ function Help() {
 					body: (
 						<>
 							Recent snapshots keep copies of open windows and can restore
-							everything, one window, or save a copy as a session. Open them
-							from the <MenuLocation label="Sessions" />, the side panel menu,
-							or the dashboard search palette. Crash detection is a best guess
-							because browsers do not tell extensions when they shut down.
+							everything, one window, or save a copy as a session. On the
+							dashboard, open them with the button beside session search and
+							sort, from the side panel menu, or the dashboard search palette.
+							Crash detection is a best guess because browsers do not tell
+							extensions when they shut down.
 						</>
 					),
 					searchText:
-						'crash browser closed unexpectedly recovery recent snapshots restore all one window save as session sessions menu side panel search palette',
+						'crash browser closed unexpectedly recovery recent snapshots restore all one window save as session session toolbar side panel search palette',
 				},
 				{
 					title: 'Undo and the trash bin',
@@ -475,14 +476,16 @@ function Help() {
 						<>
 							Deleted sessions, saved links, bookmarks, and columns stay in the
 							trash until their retention period ends. Settings controls how
-							long. Open it from the <MenuLocation label="Sessions" />, the{' '}
+							long. On the dashboard, use the Trash bin icon in the header or
+							the Sessions menu. Dashboard settings can hide either header
+							shortcut. You can also open the bin from the{' '}
 							<MenuLocation label="Bookmarks toolbar" />, the side panel menu,
 							or the search palette. Dashboard deletes, imports, and actions
 							that open many tabs also offer Undo for a few seconds.
 						</>
 					),
 					searchText:
-						'undo deleted sessions saved links bookmarks columns trash bin retention sessions menu bookmarks toolbar side panel search palette imports many tabs',
+						'undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs',
 				},
 				{
 					title: 'Automatic backups',
