@@ -59,64 +59,16 @@ jobs:
 
       - name: Upload and submit package to Chrome Web Store
         env:
-          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
-          CWS_EXTENSION_ID: ekidoclgpdfhpdlidlkcjccgihbndoib
-          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          EXTENSION_ID: ekidoclgpdfhpdlidlkcjccgihbndoib
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          for name in CWS_PUBLISHER_ID CWS_EXTENSION_ID CWS_CLIENT_ID CWS_CLIENT_SECRET CWS_REFRESH_TOKEN; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::Configure $name for Chrome Web Store publishing. See CONTRIBUTING.md."
-              exit 1
-            fi
-          done
-
-          token_response="$(curl --fail-with-body --silent --show-error \
-            --request POST \
-            --data-urlencode "client_id=$CWS_CLIENT_ID" \
-            --data-urlencode "client_secret=$CWS_CLIENT_SECRET" \
-            --data-urlencode "refresh_token=$CWS_REFRESH_TOKEN" \
-            --data-urlencode "grant_type=refresh_token" \
-            https://oauth2.googleapis.com/token)"
-          access_token="$(jq -er '.access_token' <<< "$token_response")"
-          echo "::add-mask::$access_token"
-
-          item_url="https://chromewebstore.googleapis.com/v2/publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID"
           zip="release/tablodge-$VERSION.zip"
-          upload_response="$(curl --fail-with-body --silent --show-error \
-            --header "Authorization: Bearer $access_token" \
-            --request POST \
-            --upload-file "$zip" \
-            "$item_url:upload")"
-          upload_state="$(jq -r '.uploadState // empty' <<< "$upload_response")"
-
-          if [ "$upload_state" = UPLOAD_IN_PROGRESS ]; then
-            for attempt in $(seq 1 18); do
-              sleep 5
-              upload_response="$(curl --fail-with-body --silent --show-error \
-                --header "Authorization: Bearer $access_token" \
-                "$item_url:fetchStatus")"
-              upload_state="$(jq -r '.uploadState // empty' <<< "$upload_response")"
-              if [ "$upload_state" != UPLOAD_IN_PROGRESS ]; then
-                break
-              fi
-            done
-          fi
-
-          if [ "$upload_state" != SUCCESS ]; then
-            echo "::error::Chrome Web Store upload ended with state '${upload_state:-unknown}'."
-            jq -c . <<< "$upload_response" || true
-            exit 1
-          fi
-
-          publish_response="$(curl --fail-with-body --silent --show-error \
-            --header "Authorization: Bearer $access_token" \
-            --request POST \
-            "$item_url:publish")"
-          if [ -n "$publish_response" ]; then
-            jq -c . <<< "$publish_response"
-          fi
-          echo "::notice::Submitted TabLodge v$VERSION to the Chrome Web Store. Google review may be required before the update is live."
+          npm exec --yes --package=chrome-webstore-upload-cli@4.0.2 -- \
+            chrome-webstore-upload \
+            --source "$zip" \
+            --max-await-in-progress 300
