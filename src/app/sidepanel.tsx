@@ -58,6 +58,7 @@ import {InsecureMarkFor} from './insecure-mark';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
+import {siteName, webUrl} from './web-url';
 import {ACTION_ICONS} from './action-icons';
 import {cn} from '@/lib/utils';
 
@@ -77,7 +78,7 @@ async function openSavedLink(
 	settings: Settings,
 	requested?: 'current' | 'new',
 ) {
-	const safe = safeWebUrl(url);
+	const safe = webUrl(url);
 	if (!safe) {
 		throw new Error('This item does not contain a valid web address.');
 	}
@@ -272,9 +273,14 @@ function SidePanel() {
 	const settings = state?.settings;
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const search = query.trim().toLocaleLowerCase();
-	const matches = (...values: Array<string | undefined>) =>
-		!search ||
-		values.some((value) => (value || '').toLocaleLowerCase().includes(search));
+	const matches = useCallback(
+		(...values: Array<string | undefined>) =>
+			!search ||
+			values.some((value) =>
+				(value || '').toLocaleLowerCase().includes(search),
+			),
+		[search],
+	);
 
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
 	const sessions = state?.groups || NO_SESSIONS;
@@ -300,8 +306,7 @@ function SidePanel() {
 			}),
 		);
 		return all.filter((column) => column.items.length > 0);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [bookmarks, columns, search]);
+	}, [bookmarks, columns, matches]);
 
 	const visibleSessions = useMemo(
 		() =>
@@ -313,8 +318,7 @@ function SidePanel() {
 						: session.tabs.filter((tab) => matches(tab.title, tab.url)),
 				}))
 				.filter(({session, tabs}) => matches(session.name) || tabs.length > 0),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[sessions, search],
+		[sessions, matches],
 	);
 
 	const sectionCount =
@@ -962,22 +966,7 @@ function Note({children}: {children: ReactNode}) {
 	);
 }
 
-function safeWebUrl(value: string) {
-	try {
-		const url = new URL(value);
-		return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-	} catch {
-		return null;
-	}
-}
-
-function hostname(value: string) {
-	try {
-		return new URL(value).hostname.replace(/^www\./i, '') || value;
-	} catch {
-		return value || 'Untitled';
-	}
-}
+const hostname = (value: string) => siteName(value) || value || 'Untitled';
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>

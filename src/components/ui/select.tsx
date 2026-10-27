@@ -31,31 +31,15 @@ SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
 // The Select viewport doubles as the ScrollArea viewport (the composition Radix documents), so
 // long lists get the thin themed scrollbar and stay within the space left in the window.
-// `container`/`portalContainer` choose the portal host (for example a ShadowRoot); defaults to document.body.
-type SelectContentProps = React.ComponentPropsWithoutRef<
-	typeof SelectPrimitive.Content
-> & {
-	container?: Element | DocumentFragment | null;
-	portalContainer?: Element | DocumentFragment | null;
-};
-
 const SelectContent = React.forwardRef<
 	React.ComponentRef<typeof SelectPrimitive.Content>,
-	SelectContentProps
+	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
 >(
 	(
-		{
-			className,
-			children,
-			position = 'popper',
-			collisionPadding = 8,
-			container,
-			portalContainer,
-			...props
-		},
+		{className, children, position = 'popper', collisionPadding = 8, ...props},
 		ref,
 	) => (
-		<SelectPrimitive.Portal container={portalContainer ?? container}>
+		<SelectPrimitive.Portal>
 			<SelectPrimitive.Content
 				ref={ref}
 				className={cn(

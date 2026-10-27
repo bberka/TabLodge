@@ -8,7 +8,7 @@ const REASON =
 /**
 A small amber open lock before an http address, with an explanation on hover or keyboard focus.
 */
-export function InsecureMark({className = ''}: {className?: string}) {
+function InsecureMark({className = ''}: {className?: string}) {
 	return (
 		<IconTooltip
 			label={

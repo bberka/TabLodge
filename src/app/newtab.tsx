@@ -73,6 +73,7 @@ import {
 	saveWindowLabel,
 	send,
 	useStatus,
+	plural,
 	useTabLodgeState,
 	useTabSelection,
 } from './common';
@@ -105,6 +106,7 @@ import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {displayUrl} from './url-display';
+import {siteName, webUrl} from './web-url';
 import {InsecureMarkFor} from './insecure-mark';
 import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
@@ -207,30 +209,6 @@ const QUICK_ACTIONS: Record<
 Column-picker value for "New column…" in the bookmark dialog.
 */
 const NEW_COLUMN = '__new-column__';
-const safeWebUrl = (value: unknown) => {
-	if (typeof value !== 'string' || value.length > 16_384) {
-		return null;
-	}
-
-	try {
-		const url = new URL(value);
-		return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-	} catch {
-		return null;
-	}
-};
-
-function domainName(url: string) {
-	try {
-		return new URL(url).hostname.replace(/^www\./i, '');
-	} catch {
-		return url;
-	}
-}
-
-const plural = (count: number, noun: string) =>
-	`${count} ${count === 1 ? noun : `${noun}s`}`;
-
 type BraveNavigator = Navigator & {brave?: {isBrave: () => Promise<boolean>}};
 
 function NewTab() {
@@ -268,7 +246,7 @@ function NewTab() {
 	const [pastedLinks, setPastedLinks] = useState<
 		Array<LinkEntry & {include: boolean}>
 	>([]);
-	const [pastedColumn, setPastedColumn] = useState('bookmark-unfiled');
+	const [pastedColumn, setPastedColumn] = useState(UNFILED_COLUMN.id);
 	// Deleting a column with bookmarks: move them to another column, or delete them too.
 	const [columnDelete, setColumnDelete] = useState<{
 		column: BookmarkColumnData;
@@ -341,10 +319,9 @@ function NewTab() {
 		settings.showBookmarkQuickActions === true
 			? (settings.bookmarkQuickAction ?? 'open-new')
 			: null;
-	const sessionsVisible = sessionsEnabled;
 	const autoOpenFinder =
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
-	const bothVisible = sessionsVisible && bookmarksEnabled;
+	const bothVisible = sessionsEnabled && bookmarksEnabled;
 	const sessionsOnTop = bothVisible && settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
 		const needle = bookmarkSearch.trim().toLocaleLowerCase();
@@ -352,14 +329,12 @@ function NewTab() {
 			return bookmarks;
 		}
 
-		return bookmarks.filter(
-			(bookmark) =>
-				!needle ||
-				[bookmark.title, bookmark.url, domainName(bookmark.url)].some((value) =>
-					String(value || '')
-						.toLocaleLowerCase()
-						.includes(needle),
-				),
+		return bookmarks.filter((bookmark) =>
+			[bookmark.title, bookmark.url, siteName(bookmark.url)].some((value) =>
+				String(value || '')
+					.toLocaleLowerCase()
+					.includes(needle),
+			),
 		);
 	}, [bookmarks, bookmarkSearch]);
 	// Bookmarks per column, computed once instead of filtering the whole list for every column. A column whose
@@ -444,7 +419,7 @@ function NewTab() {
 		}
 
 		const params = new URLSearchParams(location.search);
-		const url = safeWebUrl(params.get('bookmarkUrl'));
+		const url = webUrl(params.get('bookmarkUrl'));
 		if (!url) {
 			return;
 		}
@@ -467,7 +442,7 @@ function NewTab() {
 				columns[0]?.id ||
 				NEW_COLUMN;
 		setBookmarkEdit({
-			title: params.get('bookmarkTitle') || domainName(url),
+			title: params.get('bookmarkTitle') || siteName(url),
 			url,
 			columnId,
 			newColumnName: '',
@@ -523,7 +498,7 @@ function NewTab() {
 				event.preventDefault();
 				void pastedLinkTitles(several).then((links) => {
 					setPastedLinks(links.map((link) => ({...link, include: true})));
-					setPastedColumn(columns[0]?.id || 'bookmark-unfiled');
+					setPastedColumn(columns[0]?.id || UNFILED_COLUMN.id);
 					setDialog('paste-links');
 				});
 				return;
@@ -1231,7 +1206,7 @@ function NewTab() {
 	const finderActions = useMemo<FinderAction[]>(() => {
 		const h = () => commandHandlersRef.current;
 		const list: FinderAction[] = [];
-		if (sessionsVisible) {
+		if (sessionsEnabled) {
 			list.push({
 				id: 'save-window',
 				title: saveWindowLabel(tabSelection),
@@ -1274,7 +1249,7 @@ function NewTab() {
 			);
 		}
 
-		if (sessionsVisible) {
+		if (sessionsEnabled) {
 			list.push(
 				{
 					id: 'new-folder',
@@ -1338,7 +1313,7 @@ function NewTab() {
 			},
 		);
 		return list;
-	}, [sessionsVisible, bookmarksEnabled, tabSelection]);
+	}, [sessionsEnabled, bookmarksEnabled, tabSelection]);
 
 	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder .
 	useEffect(() => {
@@ -1553,7 +1528,7 @@ function NewTab() {
 						/>
 					))}
 					{(bookmarks.some(
-						(bookmark) => bookmark.columnId === 'bookmark-unfiled',
+						(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
 					) ||
 						columns.length === 0) && (
 						<section
@@ -1585,12 +1560,12 @@ function NewTab() {
 						>
 							<h3 className="mb-3 text-sm font-semibold">Unfiled</h3>
 							{filteredBookmarks.some(
-								(bookmark) => bookmark.columnId === 'bookmark-unfiled',
+								(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
 							) ? (
 								<div className="space-y-1">
 									{filteredBookmarks
 										.filter(
-											(bookmark) => bookmark.columnId === 'bookmark-unfiled',
+											(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
 										)
 										.map((bookmark) => {
 											const drop =
@@ -1631,7 +1606,7 @@ function NewTab() {
 			)}
 		</section>
 	) : null;
-	const sessionsSection = sessionsVisible ? (
+	const sessionsSection = sessionsEnabled ? (
 		<section id="sessions" className="scroll-mt-6">
 			<SessionManager embedded initialQuery={initialQuery} />
 		</section>
@@ -1644,7 +1619,7 @@ function NewTab() {
 		>
 			<AppHeader active="dashboard">
 				<FinderTrigger onClick={() => setFinderOpen(true)} />
-				{sessionsVisible && settings.showSaveWindowButton !== false && (
+				{sessionsEnabled && settings.showSaveWindowButton !== false && (
 					<Button
 						size="sm"
 						disabled={busy !== ''}
@@ -2196,14 +2171,14 @@ function parseDraggedBookmark(
 	}
 
 	raw ||= dataTransfer.getData('text/plain').trim();
-	const url = safeWebUrl(raw.trim());
+	const url = webUrl(raw);
 	if (!url) {
 		return null;
 	}
 
 	return {
 		url,
-		title: (title || domainName(url))
+		title: (title || siteName(url))
 			.replaceAll(/[\u0000-\u001F\u007F]/g, ' ')
 			.trim()
 			.slice(0, 500),
@@ -2223,7 +2198,7 @@ function parsePastedLinks(dataTransfer: DataTransfer | null): LinkEntry[] {
 
 	const links = new Map<string, LinkEntry>();
 	const add = (raw: string, title = '') => {
-		const url = safeWebUrl(raw.trim());
+		const url = webUrl(raw);
 		if (url && !links.has(url) && links.size < MAX_PASTED_LINKS) {
 			links.set(url, {
 				url,
@@ -2277,13 +2252,13 @@ async function pastedLinkTitles(links: LinkEntry[]): Promise<LinkEntry[]> {
 				.find((tab) => tab.url === link.url)
 				?.title?.trim()
 				.slice(0, 500) ||
-			domainName(link.url),
+			siteName(link.url),
 	}));
 }
 
 async function pastedLinkTitle(link: LinkEntry): Promise<string> {
-	const fallback = link.title || domainName(link.url);
-	if (fallback !== domainName(link.url)) {
+	const fallback = link.title || siteName(link.url);
+	if (fallback !== siteName(link.url)) {
 		return fallback;
 	}
 
@@ -2758,13 +2733,13 @@ const BookmarkCard = memo(
 		const urlOnly = urlMode === 'url-only';
 		const cardName = urlOnly
 			? displayUrl(bookmark.url, urlSettings.simplifyUrls)
-			: bookmark.title || domainName(bookmark.url);
+			: bookmark.title || siteName(bookmark.url);
 		return (
 			<ActionContextMenu actions={actions}>
 				<div
 					data-bookmark-id={bookmark.id}
-					data-bookmark-title={bookmark.title || domainName(bookmark.url)}
-					data-bookmark-domain={domainName(bookmark.url)}
+					data-bookmark-title={bookmark.title || siteName(bookmark.url)}
+					data-bookmark-domain={siteName(bookmark.url)}
 					data-column-id={bookmark.columnId}
 					className="bookmark-drop-row relative"
 					// The column body has its own right-click menu; a card keeps its own.
@@ -2807,7 +2782,7 @@ const BookmarkCard = memo(
 						>
 							<Favicon
 								url={bookmark.url}
-								label={domainName(bookmark.url)}
+								label={siteName(bookmark.url)}
 								className={`${showUrl ? 'h-6 w-6' : 'h-5 w-5'} rounded`}
 							/>
 							<span className="min-w-0 flex-1">
@@ -2827,7 +2802,7 @@ const BookmarkCard = memo(
 											settings={urlSettings}
 										/>
 										{urlMode === 'domain'
-											? domainName(bookmark.url)
+											? siteName(bookmark.url)
 											: displayUrl(bookmark.url, urlSettings.simplifyUrls)}
 									</small>
 								)}
@@ -2839,7 +2814,7 @@ const BookmarkCard = memo(
 									variant="ghost"
 									size="icon"
 									className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
-									aria-label={`${QUICK_ACTIONS[quickAction].label}: ${bookmark.title || domainName(bookmark.url)}`}
+									aria-label={`${QUICK_ACTIONS[quickAction].label}: ${bookmark.title || siteName(bookmark.url)}`}
 									onClick={act(QUICK_ACTIONS[quickAction].action)}
 								>
 									<QuickIcon className="h-4 w-4" />
@@ -2854,7 +2829,7 @@ const BookmarkCard = memo(
 									variant="ghost"
 									size="icon"
 									className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
-									aria-label={`Actions for ${bookmark.title || domainName(bookmark.url)}`}
+									aria-label={`Actions for ${bookmark.title || siteName(bookmark.url)}`}
 									title="Actions"
 								>
 									<MoreHorizontal className="h-4 w-4" />

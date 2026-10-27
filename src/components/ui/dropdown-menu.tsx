@@ -14,30 +14,15 @@ const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
-// `container`/`portalContainer` choose the portal host (for example a ShadowRoot); defaults to document.body.
-type PortalTarget = {
-	container?: Element | DocumentFragment | null;
-	portalContainer?: Element | DocumentFragment | null;
-};
-
 const DropdownMenuContent = React.forwardRef<
 	React.ComponentRef<typeof DropdownMenuPrimitive.Content>,
-	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> &
-		PortalTarget
+	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
 >(
 	(
-		{
-			className,
-			children,
-			sideOffset = 6,
-			collisionPadding = 8,
-			container,
-			portalContainer,
-			...props
-		},
+		{className, children, sideOffset = 6, collisionPadding = 8, ...props},
 		ref,
 	) => (
-		<DropdownMenuPrimitive.Portal container={portalContainer ?? container}>
+		<DropdownMenuPrimitive.Portal>
 			<DropdownMenuPrimitive.Content
 				ref={ref}
 				sideOffset={sideOffset}

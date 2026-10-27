@@ -1,5 +1,3 @@
-'use client';
-
 import * as React from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import {buttonVariants} from './button';
@@ -27,8 +25,6 @@ function AlertDialog({
 	);
 }
 
-const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
-
 const AlertDialogOverlay = React.forwardRef<
 	React.ComponentRef<typeof AlertDialogPrimitive.Overlay>,
 	React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
@@ -44,8 +40,6 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 type AlertDialogContentProps = React.ComponentPropsWithoutRef<
 	typeof AlertDialogPrimitive.Content
 > & {
-	container?: Element | DocumentFragment | null;
-	portalContainer?: Element | DocumentFragment | null;
 	/**
 	Width preset; defaults to "sm".
 	*/
@@ -57,57 +51,44 @@ type AlertDialogContentProps = React.ComponentPropsWithoutRef<
 const AlertDialogContent = React.forwardRef<
 	React.ComponentRef<typeof AlertDialogPrimitive.Content>,
 	AlertDialogContentProps
->(
-	(
-		{
-			className,
-			children,
-			container,
-			portalContainer,
-			onOpenAutoFocus,
-			size = 'sm',
-			...props
+>(({className, children, onOpenAutoFocus, size = 'sm', ...props}, ref) => {
+	const open = React.useContext(DialogOpenContext);
+	const shownChildren = useRetainedValue(children, open !== false);
+	const contentRef = React.useRef<HTMLDivElement | null>(null);
+	const setRefs = React.useCallback(
+		(node: HTMLDivElement | null) => {
+			contentRef.current = node;
+			if (typeof ref === 'function') {
+				ref(node);
+			} else if (ref) {
+				ref.current = node;
+			}
 		},
-		ref,
-	) => {
-		const open = React.useContext(DialogOpenContext);
-		const shownChildren = useRetainedValue(children, open !== false);
-		const contentRef = React.useRef<HTMLDivElement | null>(null);
-		const setRefs = React.useCallback(
-			(node: HTMLDivElement | null) => {
-				contentRef.current = node;
-				if (typeof ref === 'function') {
-					ref(node);
-				} else if (ref) {
-					ref.current = node;
-				}
-			},
-			[ref],
-		);
-		return (
-			<AlertDialogPrimitive.Portal container={portalContainer ?? container}>
-				<AlertDialogOverlay />
-				<AlertDialogPrimitive.Content
-					ref={setRefs}
-					tabIndex={-1}
-					className={cn(dialogPanelClass(size), className)}
-					onOpenAutoFocus={(event) => {
-						onOpenAutoFocus?.(event);
-						if (event.defaultPrevented || !contentRef.current) {
-							return;
-						}
+		[ref],
+	);
+	return (
+		<AlertDialogPrimitive.Portal>
+			<AlertDialogOverlay />
+			<AlertDialogPrimitive.Content
+				ref={setRefs}
+				tabIndex={-1}
+				className={cn(dialogPanelClass(size), className)}
+				onOpenAutoFocus={(event) => {
+					onOpenAutoFocus?.(event);
+					if (event.defaultPrevented || !contentRef.current) {
+						return;
+					}
 
-						event.preventDefault();
-						initialFocusTarget(contentRef.current).focus();
-					}}
-					{...props}
-				>
-					{shownChildren}
-				</AlertDialogPrimitive.Content>
-			</AlertDialogPrimitive.Portal>
-		);
-	},
-);
+					event.preventDefault();
+					initialFocusTarget(contentRef.current).focus();
+				}}
+				{...props}
+			>
+				{shownChildren}
+			</AlertDialogPrimitive.Content>
+		</AlertDialogPrimitive.Portal>
+	);
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({
@@ -166,18 +147,6 @@ const AlertDialogDescription = React.forwardRef<
 AlertDialogDescription.displayName =
 	AlertDialogPrimitive.Description.displayName;
 
-const AlertDialogAction = React.forwardRef<
-	React.ComponentRef<typeof AlertDialogPrimitive.Action>,
-	React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({className, ...props}, ref) => (
-	<AlertDialogPrimitive.Action
-		ref={ref}
-		className={cn(buttonVariants(), className)}
-		{...props}
-	/>
-));
-AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName;
-
 const AlertDialogCancel = React.forwardRef<
 	React.ComponentRef<typeof AlertDialogPrimitive.Cancel>,
 	React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
@@ -192,12 +161,10 @@ AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName;
 
 export {
 	AlertDialog,
-	AlertDialogTrigger,
 	AlertDialogContent,
 	AlertDialogHeader,
 	AlertDialogFooter,
 	AlertDialogTitle,
 	AlertDialogDescription,
-	AlertDialogAction,
 	AlertDialogCancel,
 };

@@ -1,20 +1,12 @@
 // Compact drag previews for the session manager: a small card instead of the full-width row.
 // The card is built offscreen, handed to setDragImage, and removed right after the browser snapshots it.
+import {faviconUrl} from './favicon';
+import {hostOf} from './web-url';
+
 type PreviewLink = {url: string; title?: string};
 type ImageTarget = {
 	setDragImage?: (image: Element, x: number, y: number) => void;
 };
-
-const host = (url: string) => {
-	try {
-		return new URL(url).host;
-	} catch {
-		return url;
-	}
-};
-
-const faviconSrc = (url: string) =>
-	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
 
 function box(styles: Record<string, string>) {
 	const element = document.createElement('div');
@@ -51,7 +43,7 @@ function icon(url: string, size: number, round = false) {
 		display: 'inline-block',
 	});
 	const image = document.createElement('img');
-	image.src = faviconSrc(url);
+	image.src = faviconUrl(url);
 	image.alt = '';
 	Object.assign(image.style, {
 		width: '100%',
@@ -128,8 +120,8 @@ export function setLinkDragImage(
 	const body = document.createElement('div');
 	body.style.minWidth = '0';
 	body.append(
-		text(link.title?.trim() || host(link.url), {fontWeight: '600'}),
-		text(host(link.url), {
+		text(link.title?.trim() || hostOf(link.url), {fontWeight: '600'}),
+		text(hostOf(link.url), {
 			fontSize: '11px',
 			color: 'rgb(var(--muted-foreground))',
 		}),

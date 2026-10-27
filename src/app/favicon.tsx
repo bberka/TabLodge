@@ -1,18 +1,11 @@
 import {memo, useState} from 'react';
 import {displayUrl} from './url-display';
+import {hostOf} from './web-url';
 import {InsecureMarkFor} from './insecure-mark';
 import type {Settings} from './types';
 
 export const faviconUrl = (url: string) =>
 	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
-
-const hostOf = (url: string) => {
-	try {
-		return new URL(url).host;
-	} catch {
-		return url;
-	}
-};
 
 type FaviconProps = {
 	url: string;
@@ -70,11 +63,11 @@ export const Favicon = memo(
 	},
 );
 
+const NO_SETTINGS: Partial<Settings> = {};
+
 /**
 The link a dialog is about, drawn like a list row: icon, title, and the full address (wrapped, never cut).
 */
-const NO_SETTINGS: Partial<Settings> = {};
-
 export function LinkSummary({
 	title,
 	url,

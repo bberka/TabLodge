@@ -55,7 +55,7 @@ export type MenuAction =
 /**
 Drops hidden entries, empty submenus and leading, trailing and repeated separators.
 */
-export function cleanActions(actions: MenuAction[]): MenuAction[] {
+function cleanActions(actions: MenuAction[]): MenuAction[] {
 	const out: MenuAction[] = [];
 	for (const action of actions) {
 		if (action.type === 'separator') {
