@@ -1338,6 +1338,17 @@ export function SessionManager({
 									</DropdownMenuRadioGroup>
 								</DropdownMenuContent>
 							</DropdownMenu>
+							<IconTooltip label="Recent snapshots">
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									aria-label="Recent snapshots"
+									onClick={() => emitRecoveryEvent({type: 'snapshots'})}
+								>
+									<History />
+								</Button>
+							</IconTooltip>
 							<DropdownMenu>
 								<IconTooltip label="Import and back up sessions">
 									<DropdownMenuTrigger asChild>
@@ -1361,12 +1372,6 @@ export function SessionManager({
 										Back up sessions
 									</DropdownMenuItem>
 									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										onSelect={() => emitRecoveryEvent({type: 'snapshots'})}
-									>
-										<History className="h-4 w-4" />
-										Recent snapshots
-									</DropdownMenuItem>
 									<DropdownMenuItem
 										onSelect={() =>
 											emitRecoveryEvent({type: 'trash', filter: 'sessions'})

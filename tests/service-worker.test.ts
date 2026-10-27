@@ -3901,6 +3901,77 @@ test('pasteLinkToBookmark is on by default and only an explicit false turns it o
 	assert.equal(reset.settings.pasteLinkToBookmark, true);
 });
 
+test('showSaveWindowButton defaults on, can be hidden, and resets to on', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings
+			.showSaveWindowButton,
+		true,
+	);
+
+	const junk = createWorkerHarness(
+		stateWithSession({showSaveWindowButton: 'no'}),
+	);
+	assert.equal(
+		(await junk.sendMessage({type: 'GET_STATE'})).settings.showSaveWindowButton,
+		true,
+		'only an explicit false hides the button',
+	);
+
+	const hidden = createWorkerHarness(
+		stateWithSession({showSaveWindowButton: false}),
+	);
+	assert.equal(
+		(await hidden.sendMessage({type: 'GET_STATE'})).settings
+			.showSaveWindowButton,
+		false,
+	);
+
+	const updated = await defaults.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {showSaveWindowButton: false},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(defaults.state.settings.showSaveWindowButton, false);
+	const reset = await defaults.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.showSaveWindowButton, true);
+});
+
+test('showTrashBinButton defaults on, can be hidden, and resets to on', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings
+			.showTrashBinButton,
+		true,
+	);
+
+	const junk = createWorkerHarness(
+		stateWithSession({showTrashBinButton: 'no'}),
+	);
+	assert.equal(
+		(await junk.sendMessage({type: 'GET_STATE'})).settings.showTrashBinButton,
+		true,
+		'only an explicit false hides the button',
+	);
+
+	const hidden = createWorkerHarness(
+		stateWithSession({showTrashBinButton: false}),
+	);
+	assert.equal(
+		(await hidden.sendMessage({type: 'GET_STATE'})).settings.showTrashBinButton,
+		false,
+	);
+
+	const updated = await defaults.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {showTrashBinButton: false},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(defaults.state.settings.showTrashBinButton, false);
+	const reset = await defaults.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.showTrashBinButton, true);
+});
+
 test('dashboardWidth defaults to the existing layout, validates choices, and resets', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(

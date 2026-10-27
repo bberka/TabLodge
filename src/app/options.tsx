@@ -303,6 +303,18 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'showSaveWindowButton',
+				label: 'Show Save this window button in the header',
+				help: 'Hide this shortcut to keep the header compact. You can still save tabs from the popup, keyboard shortcut, or right-click menu.',
+				type: 'switch',
+			},
+			{
+				name: 'showTrashBinButton',
+				label: 'Show Trash bin button in the header',
+				help: 'Hide this shortcut to keep the header compact. The Trash bin remains in the Sessions menu, Bookmarks menu, side panel, and search palette.',
+				type: 'switch',
+			},
+			{
 				name: 'urlDisplayMode',
 				label: 'Show URLs as',
 				help: 'How web addresses appear under bookmarks and saved session links. Full URL only hides the title and shows the address instead.',
