@@ -2873,12 +2873,27 @@ test('null stored settings are treated as defaults', async () => {
 	assert.equal(result.groups.length, 1);
 });
 
+test('install opens a dashboard tab, but extension updates do not', async () => {
+	const installed = createWorkerHarness(stateWithSession());
+	await installed.fire('onInstalled', {reason: 'install'});
+	assert.equal(installed.openedTabs.length, 1);
+	assert.equal(
+		installed.openedTabs[0].url,
+		'chrome-extension://tablodge/newtab.html',
+	);
+	assert.equal(installed.openedTabs[0].active, true);
+
+	const updated = createWorkerHarness(stateWithSession());
+	await updated.fire('onInstalled', {reason: 'update'});
+	assert.equal(updated.openedTabs.length, 0);
+});
+
 test('without contextMenus.onShown the tab-group item stays enabled and a click outside a group fails gracefully', async () => {
 	const harness = createWorkerHarness(stateWithSession(), undefined, {
 		withoutContextMenuShown: true,
 	});
 	assert.equal(harness.listeners.contextMenuShown, undefined);
-	await harness.listeners.onInstalled();
+	await harness.listeners.onInstalled({reason: 'update'});
 	await new Promise((resolve) => {
 		setTimeout(resolve, 0);
 	});

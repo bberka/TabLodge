@@ -9081,8 +9081,14 @@ chrome.bookmarks?.onCreated?.addListener((_id, node) => {
 	);
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
 	void initializeExtension();
+	if (details.reason === 'install') {
+		void chrome.tabs.create({
+			url: chrome.runtime.getURL('newtab.html'),
+			active: true,
+		});
+	}
 });
 
 chrome.runtime.onStartup.addListener(() => {
