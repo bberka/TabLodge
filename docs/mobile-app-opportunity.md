@@ -1,6 +1,6 @@
 # Mobile app / link-saving opportunity for TabLodge
 
-_Research memo, 2026-10-26. No code was written or changed. Sections marked **Source facts** are claims taken from the cited pages. Sections marked **Assessment** and **Recommendation** are judgment. The final section lists what the sources did not settle._
+_Research memo, 2026-10-26. No code was written or changed. Sections marked **Source facts** are claims taken from the cited pages. Sections marked **Assessment** and **Recommendation** are judgment. The final section lists what the sources did not settle. Since this memo was written, TabLodge has launched in the Chrome Web Store. Store distribution is no longer a prerequisite to testing user interest, though the project still has no analytics._
 
 ## 1. Bottom line
 
@@ -9,7 +9,7 @@ _Research memo, 2026-10-26. No code was written or changed. Sections marked **So
 - TabLodge's distinctive value is desktop tab and window fidelity: native tab groups, split view, crash snapshots and restore. Those have no counterpart on a phone.
 - The part of TabLodge that does translate to a phone is a list of links. That is where Raindrop, Instapaper, Readwise Reader and Karakeep already compete, with generous free tiers.
 - Any cross-device sync breaks TabLodge's current promise of no accounts, servers or network requests. Under the current architecture that promise is the product, so sync should be a deliberate, separate decision.
-- TabLodge isn't in any extension store yet (README). There is no distribution to convert into a mobile audience, and the project has no analytics to measure demand with.
+- When this memo was written, TabLodge was not in any extension store. It is now available in the Chrome Web Store, but the project still has no analytics to measure demand with.
 
 ## 2. What TabLodge is today (repo facts)
 
@@ -111,7 +111,7 @@ Pages were fetched 2026-10-26. A page that doesn't say something doesn't prove i
 
 ## 6. Recommendation (judgment)
 
-1. **Keep TabLodge extension-first and desktop-first.** Put effort into getting it into the Chrome Web Store and Edge Add-ons, and into the roadmap in README.
+1. **Keep TabLodge extension-first and desktop-first.** The Chrome Web Store launch is complete. Use user feedback to judge whether distribution on other stores, such as Edge Add-ons, is worth pursuing before adding mobile work to the roadmap.
 2. **Run a small, time-boxed demand check for a phone handoff** before any mobile code. That is section 7.
 3. **Defer sync.** If it ever happens, make it opt-in, user-held and end-to-end encrypted (research item C5/C9), with the file as the source of truth. Update `PRIVACY.md`, the README, the site and the in-app Help in the same change, per `AGENTS.md`.
 4. **Don't build for Safari on iOS or Firefox for Android now.** Per section 3 they lack APIs TabLodge's core depends on, and Safari needs a full app and the Apple developer program. Revisit if desktop Firefox support (research item C10) lands first.
@@ -121,9 +121,9 @@ Pages were fetched 2026-10-26. A page that doesn't say something doesn't prove i
 Each stage ends in a go or no-go. Stop at the first no-go.
 
 **Stage 0: publish and listen (no mobile code).**
-- Publish to the extension stores and keep a "phone / mobile" label on GitHub issues.
+- The Chrome Web Store launch is complete. Listen for user feedback and keep a "phone / mobile" label on GitHub issues.
 - Add a short, optional, user-initiated feedback prompt in Help or on the site, such as "Would you use this on your phone?" with a free-text field. Don't add analytics. TabLodge's no-telemetry stance is part of its value.
-- Decide the timebox up front, for example 8 to 12 weeks after the first store listing.
+- Decide the timebox up front, for example 8 to 12 weeks after the Chrome Web Store launch.
 
 **Stage 1: phone handoff with what exists.**
 - Test whether the shareable HTML page of selected sessions and the existing exports are enough to carry a list to a phone. Make sure that page reads well on a small screen.

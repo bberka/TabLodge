@@ -1,6 +1,6 @@
 {
 	"name": "tablodge",
-	"version": "0.1.0",
+	"version": "0.1.3",
 	"private": true,
 	"description": "TabLodge: a cozy, local-only home for your tabs. Save and restore tab sessions and keep a bookmark board on your new tab (Chrome/Brave, Manifest V3).",
 	"license": "MIT",
@@ -20,6 +20,7 @@
 	"packageManager": "pnpm@12.15.0",
 	"scripts": {
 		"build": "node scripts/build.ts && node scripts/verify-build.ts",
+		"pack": "node scripts/package.ts",
 		"dev": "node scripts/build.ts --watch --open-browser",
 		"browser:install": "playwright install chromium",
 		"watch": "node scripts/build.ts --watch",

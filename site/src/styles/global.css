@@ -165,7 +165,15 @@ section {
 .btn svg {
 	width: 1.1em;
 	height: 1.1em;
+	flex: none;
 	fill: currentColor;
+}
+.btn svg.icon-outline {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
 }
 .actions {
 	display: flex;

@@ -10,7 +10,7 @@ This guide explains how TabLodge is built, where data lives, and which behavior 
 * **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The manifest does not declare it as a module.
 * **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme before the first paint. React renders into `#root` after the saved state arrives.
 
-`scripts/verify-build.ts` checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest.
+`scripts/verify-build.ts` checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest. After building, `scripts/package.ts` writes a versioned ZIP and SHA256 checksum under `release/`. The release workflow uses the same task.
 
 Load only `dist/tablodge/` in the browser. `extension/` and the repository root are source directories. Each build recreates the output directory, so don't run two builds at once.
 
