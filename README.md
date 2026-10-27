@@ -104,7 +104,7 @@ Find the available keyboard shortcuts in **Settings › Keyboard shortcuts**. **
 
 The manual and Chrome Web Store installations may have separate storage. Before removing the manual copy, open it and create a full backup in **Settings › Data › Back up › Everything**. Install TabLodge from the Chrome Web Store, import that ZIP from **Settings › Data**, and check that your sessions and bookmarks are there. Remove the manual copy only after confirming the import. Uninstalling an extension removes its browser storage.
 
-Before uninstalling any copy, export anything you want to keep. Removing the extension also removes its browser storage.
+Before uninstalling any copy, export anything you want to keep.
 
 ## Development
 

@@ -177,7 +177,7 @@ These thresholds are suggestions. They are judgment calls, not benchmarks from t
 - Whether Chrome for Android will gain extensions. Only press coverage exists.
 - The exact Pocket and Omnivore shutdown dates. The Pocket support page didn't load directly, and Omnivore's dates come from press coverage.
 - Raindrop and Toby paid prices, and any figure on how many TabLodge users want mobile. No usable first-party data was found, and the repo has no analytics.
-- Whether a PWA can serve as an adequate share target on Android and iOS. Not researched.
+- Whether a PWA is an adequate share target on Android and iOS. Not researched.
 
 ## Sources
 
