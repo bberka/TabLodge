@@ -2,7 +2,7 @@
 //
 //   node scripts/build.ts            build once
 //   node scripts/build.ts --watch    build, then rebuild on source changes
-//   pnpm dev                         watch sources and open Chrome with the extension loaded
+//   pnpm exec vp run dev             watch sources and open Chrome with the extension loaded
 //
 // The package is several Vite+ builds writing into one folder: the HTML pages
 // (vite.pages.config.ts, which also writes manifest.json and copies icons) plus self-contained

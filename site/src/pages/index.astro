@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import ButtonIcon from '../components/ButtonIcon.astro';
 import Screenshot from '../components/Screenshot.astro';
 import {SITE, abs} from '../site';
 import {screenshotSet} from '../lib/screens';
@@ -63,7 +64,7 @@ const faq = [
 	},
 	{
 		q: 'Is TabLodge on the Chrome Web Store?',
-		a: 'Not yet. For now you download a zip from GitHub Releases and load it with Developer mode, or build it from source. It takes about a minute, and the steps are below.',
+		a: 'Yes. Install TabLodge from the Chrome Web Store in Chrome, Brave, Edge, Vivaldi, Opera, or another compatible Chromium browser.',
 	},
 	{
 		q: 'Which browsers does TabLodge support?',
@@ -87,7 +88,7 @@ const faq = [
 	},
 	{
 		q: 'How do I update TabLodge?',
-		a: 'Download the new zip, replace the contents of the same folder you loaded the extension from, then click the reload button on TabLodge in your extensions page. Always reuse the same folder, because the browser ties your saved data to it.',
+		a: 'Chrome Web Store installations update automatically in supported Chromium browsers.',
 	},
 ];
 
@@ -106,7 +107,7 @@ const jsonLd = [
 		browserRequirements: 'Requires a Chromium-based browser, version 116 or newer',
 		softwareVersion: SITE.version,
 		downloadUrl: SITE.releases,
-		installUrl: SITE.releases,
+		installUrl: SITE.chromeWebStore,
 		license: SITE.license,
 		isAccessibleForFree: true,
 		offers: {'@type': 'Offer', price: '0', priceCurrency: 'USD'},
@@ -160,14 +161,11 @@ const jsonLd = [
 				calm board. No account, no servers, no tracking.
 			</p>
 			<div class="actions">
-				<a class="btn primary" href={SITE.releases} rel="noopener">
-					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v9.17l3.59-3.58L18 10l-6 6-6-6 1.41-1.41L11 12.17zM5 18h14v2H5z" /></svg>
-					Download for Chromium browsers
-				</a>
-				<a class="btn ghost" href={SITE.repo} rel="noopener">View on GitHub</a>
+				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 			<p class="note">
-				Version {SITE.version} &middot; Chrome 116+ &middot; MIT license &middot; Not in the extension stores yet, <a href="#install">install in a minute</a>.
+				TabLodge v{SITE.version} &middot; Chrome 116+ &middot; MIT license
 			</p>
 			<div class="hero-shot">
 				<Screenshot
@@ -262,24 +260,13 @@ const jsonLd = [
 		<div class="wrap split">
 			<div>
 				<p class="eyebrow">Install</p>
-				<h2>Install in about a minute</h2>
-				<p>TabLodge is not in the Chrome Web Store or Edge Add-ons yet, so you load it yourself. It works the same way in Chrome, Brave, Edge, Vivaldi and Opera.</p>
-				<ol class="steps">
-					<li><a href={SITE.releases} rel="noopener">Download the latest <code>tablodge-x.y.z.zip</code></a> from GitHub Releases.</li>
-					<li>Unzip it into a folder you will keep, such as <code>~/Extensions/tablodge</code>. The browser loads the extension from there.</li>
-					<li>Open <code>chrome://extensions</code> (or <code>brave://extensions</code>, <code>edge://extensions</code>) and turn on <strong>Developer mode</strong>.</li>
-					<li>Click <strong>Load unpacked</strong> and choose the folder that contains <code>manifest.json</code>.</li>
-					<li>Pin TabLodge from the puzzle-piece menu, then open a new tab.</li>
-				</ol>
-				<p class="note">
-					Prefer to build it yourself? Clone the repo, run <code>pnpm install</code> and <code>pnpm build</code>, and load <code>dist/tablodge</code>. See the <a href={SITE.repo + '#install'} rel="noopener">README</a>.
-				</p>
+				<h2>Install in your Chromium browser</h2>
+				<p>TabLodge is available from the Chrome Web Store in Chrome, Brave, Edge, Vivaldi, Opera, and other compatible Chromium browsers. Open the listing, choose the install option shown for your browser, and confirm. The store handles updates automatically.</p>
+				<p><a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from the Chrome Web Store</a></p>
 			</div>
 			<div class="side-card card">
-				<h3>Updating</h3>
-				<p>Download the new zip, replace the files in the same folder, then press the reload button on TabLodge's card. Reuse the same folder: the browser ties your saved data to it.</p>
-				<h3>Make a backup first</h3>
-				<p>In Settings &rsaquo; Data, choose Back up &rsaquo; Everything. It saves one ZIP with your sessions, bookmarks and settings that Import can restore.</p>
+				<h3>Moving an existing library</h3>
+				<p>If you already use a manually loaded copy, its data may be separate. In that copy, open Settings &rsaquo; Data and choose Back up &rsaquo; Everything. Install the store version, import the ZIP, and verify your sessions and bookmarks before removing the old copy. Uninstalling removes that copy's browser storage.</p>
 			</div>
 		</div>
 	</section>
@@ -340,10 +327,10 @@ const jsonLd = [
 	<section class="cta">
 		<div class="wrap center">
 			<h2>Give your tabs a lodge</h2>
-			<p class="lead">Free, open source, and yours. Download it, load it, and keep your tabs private.</p>
+			<p class="lead">Free, open source, and yours. Install it from the Chrome Web Store in your Chromium browser.</p>
 			<div class="actions center">
-				<a class="btn primary" href={SITE.releases} rel="noopener">Download for Chromium browsers</a>
-				<a class="btn ghost" href={SITE.repo} rel="noopener">View on GitHub</a>
+				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from the Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 		</div>
 	</section>

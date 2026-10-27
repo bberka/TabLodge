@@ -46,20 +46,18 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: node scripts/release-version.ts set "$VERSION"
 
-      - run: pnpm check
-      - run: pnpm build
+      - run: pnpm exec vp run check
+      - run: pnpm exec vp run build
 
       - name: Package unpacked extension
         id: package
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          out_dir="$(dirname "$(ls dist/*/manifest.json | head -n 1)")"
+          pnpm exec vp run pack
           name="$(node -p "require('./package.json').name")"
           zip_path="release/$name-$VERSION.zip"
-          mkdir -p release
-          (cd "$out_dir" && zip -r -X -9 "$GITHUB_WORKSPACE/$zip_path" .)
-          (cd release && sha256sum "$(basename "$zip_path")" > "$(basename "$zip_path").sha256")
+          test -f "$zip_path"
           echo "zip=$zip_path" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
@@ -84,3 +82,13 @@ jobs:
             --title "$app_name v$VERSION" \
             --notes-file release/notes.md \
             --generate-notes
+
+      - name: Trigger website deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/dispatches" \
+            --method POST \
+            -f event_type=tablodge-release-published \
+            -F "client_payload[version]=$VERSION"
