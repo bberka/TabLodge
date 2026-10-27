@@ -80,7 +80,7 @@ Then reload TabLodge from the extensions page.
 
 ### After installing
 
-Open a new tab for the dashboard or click the toolbar icon for the popup. To use the side panel, choose it from the toolbar icon's context menu or set **Settings › Side Panel › Toolbar icon opens**. In Brave, you can also add TabLodge from the browser sidebar.
+TabLodge opens the dashboard in a new tab after installation. Open another new tab for the dashboard or click the toolbar icon for the popup. To use the side panel, choose it from the toolbar icon's context menu or set **Settings › Side Panel › Toolbar icon opens**. In Brave, you can also add TabLodge from the browser sidebar.
 
 Find the available keyboard shortcuts in **Settings › Keyboard shortcuts**. **Configure shortcuts** opens your browser's shortcut settings.
 
