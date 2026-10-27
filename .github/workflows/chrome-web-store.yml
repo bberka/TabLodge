@@ -1,0 +1,122 @@
+name: Chrome Web Store
+
+# The release workflow sends this dispatch after publishing the GitHub release.
+# Manual runs can retry the upload for an existing v0.x.y release.
+on:
+  repository_dispatch:
+    types: [tablodge-release-published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: GitHub release version to submit, for example 0.1.4
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chrome-web-store-${{ github.event.client_payload.version || github.event.inputs.version || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Submit release to Chrome Web Store
+    if: github.repository == 'bberka/TabLodge'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release version
+        id: release
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          MANUAL_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${DISPATCH_VERSION:-$MANUAL_VERSION}"
+          version="${version#v}"
+          if [[ ! "$version" =~ ^0\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Expected a release version like 0.1.4."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify GitHub release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh release download "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "tablodge-$VERSION.zip*" \
+            --dir release
+          zip="release/tablodge-$VERSION.zip"
+          checksum="release/tablodge-$VERSION.zip.sha256"
+          test -s "$zip"
+          test -s "$checksum"
+          (cd release && sha256sum --check "tablodge-$VERSION.zip.sha256")
+
+      - name: Upload and submit package to Chrome Web Store
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ekidoclgpdfhpdlidlkcjccgihbndoib
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          for name in CWS_PUBLISHER_ID CWS_EXTENSION_ID CWS_CLIENT_ID CWS_CLIENT_SECRET CWS_REFRESH_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Configure $name for Chrome Web Store publishing. See CONTRIBUTING.md."
+              exit 1
+            fi
+          done
+
+          token_response="$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --data-urlencode "client_id=$CWS_CLIENT_ID" \
+            --data-urlencode "client_secret=$CWS_CLIENT_SECRET" \
+            --data-urlencode "refresh_token=$CWS_REFRESH_TOKEN" \
+            --data-urlencode "grant_type=refresh_token" \
+            https://oauth2.googleapis.com/token)"
+          access_token="$(jq -er '.access_token' <<< "$token_response")"
+          echo "::add-mask::$access_token"
+
+          item_url="https://chromewebstore.googleapis.com/v2/publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID"
+          zip="release/tablodge-$VERSION.zip"
+          upload_response="$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $access_token" \
+            --request POST \
+            --upload-file "$zip" \
+            "$item_url:upload")"
+          upload_state="$(jq -r '.uploadState // empty' <<< "$upload_response")"
+
+          if [ "$upload_state" = UPLOAD_IN_PROGRESS ]; then
+            for attempt in $(seq 1 18); do
+              sleep 5
+              upload_response="$(curl --fail-with-body --silent --show-error \
+                --header "Authorization: Bearer $access_token" \
+                "$item_url:fetchStatus")"
+              upload_state="$(jq -r '.uploadState // empty' <<< "$upload_response")"
+              if [ "$upload_state" != UPLOAD_IN_PROGRESS ]; then
+                break
+              fi
+            done
+          fi
+
+          if [ "$upload_state" != SUCCESS ]; then
+            echo "::error::Chrome Web Store upload ended with state '${upload_state:-unknown}'."
+            jq -c . <<< "$upload_response" || true
+            exit 1
+          fi
+
+          publish_response="$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $access_token" \
+            --request POST \
+            "$item_url:publish")"
+          if [ -n "$publish_response" ]; then
+            jq -c . <<< "$publish_response"
+          fi
+          echo "::notice::Submitted TabLodge v$VERSION to the Chrome Web Store. Google review may be required before the update is live."
