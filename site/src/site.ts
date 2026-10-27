@@ -14,8 +14,7 @@ export const SITE = {
 	version,
 	author: 'Berkay',
 	ogImage: '/og.png',
-	defaultDescription:
-		'TabLodge is a free, open-source tab session manager and new-tab bookmark board for Chrome, Brave and Edge. Save and restore tabs. No account, no tracking, everything stays in your browser.',
+	defaultDescription: 'Save tabs for later and keep bookmarks close. Your library stays in your browser.',
 } as const;
 
 export const abs = (path: string) => new URL(path, SITE.url).href;
