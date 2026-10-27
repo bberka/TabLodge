@@ -51,7 +51,19 @@ TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
 
 The root `VERSION` file holds the minor number. The release workflow computes the patch from the latest matching tag. For example, with `VERSION` set to `1` and a latest release of `0.1.1`, the next release is `0.1.2`. Set `VERSION` to `2` and the next release is `0.2.0`. The minor number cannot go below the latest released minor.
 
-Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, publishes the ZIP and its SHA256 checksum under a `v0.x.y` tag, and triggers a website deployment with the new version. To build and package the extension locally, follow the [README build steps](README.md#build-from-source).
+Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, publishes the ZIP and its SHA256 checksum under a `v0.x.y` tag, and triggers the website deployment. It also dispatches the Chrome Web Store workflow, which verifies the release ZIP, uploads it to the existing listing, and submits it for publication. Google review may delay when the update becomes available. To build and package the extension locally, follow the [README build steps](README.md#build-from-source).
+
+### Chrome Web Store publishing
+
+Before the first release, enable the Chrome Web Store API in a Google Cloud project and create OAuth credentials authorized with the `https://www.googleapis.com/auth/chromewebstore` scope. Generate a refresh token for the Google account that owns the existing listing. If the OAuth consent screen remains in Testing, Google may expire the refresh token after seven days, so configure a production consent screen for ongoing automation.
+
+In GitHub repository **Settings › Secrets and variables › Actions**, add the `CWS_PUBLISHER_ID` repository variable using the publisher ID from the Chrome Web Store Developer Dashboard. Add these repository secrets:
+
+- `CWS_CLIENT_ID`
+- `CWS_CLIENT_SECRET`
+- `CWS_REFRESH_TOKEN`
+
+The workflow already uses TabLodge's existing extension ID. It runs after each GitHub release. If a submission needs to be retried, run **Actions › Chrome Web Store › Run workflow** and enter the published version, such as `0.1.4`.
 
 `vp run version:next` shows the next version based on your local tags.
 
