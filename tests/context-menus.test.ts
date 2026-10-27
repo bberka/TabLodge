@@ -410,7 +410,7 @@ function createHarness(
 					item.parentId === undefined && item.contexts?.includes(contextName),
 			),
 		async install() {
-			fire('onInstalled', {reason: 'install'});
+			fire('onInstalled', {reason: 'update'});
 			await wait(REBUILD_WAIT);
 		},
 		async click(
