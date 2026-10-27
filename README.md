@@ -44,14 +44,14 @@ There are no accounts, servers, or analytics. TabLodge keeps your data in your b
 
 #### Test a development build
 
-Developers can clone the repository and run TabLodge in its isolated test browser profile:
+With the Vite+ CLI installed as described in [Development](#development), clone the repository and run TabLodge in its isolated test browser profile:
 
 ```sh
 git clone https://github.com/bberka/TabLodge.git
 cd TabLodge
 corepack enable
 pnpm install
-pnpm exec vp run dev
+vp run dev
 ```
 
 #### Full local installation
@@ -69,15 +69,15 @@ To update a manual installation, download the new release, replace the contents 
 
 ### Build from source
 
-To build and package TabLodge, you'll need Git, Node.js 22.18+ or 24.11+, and pnpm. `corepack enable` makes the pnpm version pinned in `package.json` available. You do not need a separate ZIP utility. A Chromium browser is needed only to load or test the build.
+To build and package TabLodge, you'll need Git, Node.js 22.18+ or 24.11+, pnpm, and the Vite+ CLI. See [Development](#development) to install Vite+. `corepack enable` makes the pnpm version pinned in `package.json` available. You do not need a separate ZIP utility. A Chromium browser is needed only to load or test the build.
 
 ```sh
 git clone https://github.com/bberka/TabLodge.git
 cd TabLodge
 corepack enable
 pnpm install
-pnpm exec vp run build
-pnpm exec vp run pack
+vp run build
+vp run pack
 ```
 
 The build creates and verifies the unpacked extension in `dist/tablodge/`. The pack task creates `release/tablodge-<version>.zip` and its `.sha256` checksum. The ZIP contains the extension files at its root, ready to upload or distribute.
@@ -89,7 +89,7 @@ To update a source installation:
 ```sh
 git pull
 pnpm install
-pnpm exec vp run build
+vp run build
 ```
 
 Then reload TabLodge from the extensions page.
@@ -108,25 +108,25 @@ Before uninstalling any copy, export anything you want to keep. Removing the ext
 
 ## Development
 
-TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind CSS 3. [Vite+](https://viteplus.dev) builds the extension and runs Vitest. Playwright launches Chrome or Chromium for manual browser testing. [XO](https://github.com/xojs/xo) handles linting and formatting. All runtime dependencies are bundled with the extension. Run project tasks through Vite+ with `pnpm exec vp run <task>`.
+TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind CSS 3. Vite+ builds the extension and runs Vitest. Playwright launches Chrome or Chromium for manual browser testing. [XO](https://github.com/xojs/xo) handles linting and formatting. All runtime dependencies are bundled with the extension. Install the [Vite+ CLI](https://viteplus.dev/) once and open a new terminal, then run `vp run <task>` directly from the repository root. Use `pnpm install` to install project dependencies.
 
-| Command                                                  | What it does                                                        |
-| -------------------------------------------------------- | ------------------------------------------------------------------- |
-| `pnpm exec vp run build`                                 | Build into `dist/tablodge/` and verify the package                  |
-| `pnpm exec vp run pack`                                  | Create a versioned ZIP and SHA256 checksum under `release/`         |
-| `pnpm exec vp run browser:install`                       | Install Playwright Chromium for development                         |
-| `pnpm exec vp run dev`                                   | Watch sources and open Chrome or Chromium with the extension loaded |
-| `pnpm exec vp run watch`                                 | Watch sources without opening a browser                             |
-| `pnpm exec vp run test`                                  | Run the tests once                                                  |
-| `pnpm exec vp run test:watch`                            | Run tests as files change                                           |
-| `pnpm exec vp run typecheck`                             | Check all TypeScript projects                                       |
-| `pnpm exec vp run lint`                                  | Check code with XO                                                  |
-| `pnpm exec vp run lint:fix` or `pnpm exec vp run format` | Fix lint issues and format with XO                                  |
-| `pnpm exec vp run check`                                 | Run lint, type checks, and tests                                    |
-| `pnpm exec vp run verify`                                | Verify an existing build                                            |
-| `pnpm exec vp run clean`                                 | Remove build output and TypeScript build caches                     |
+| Command                              | What it does                                                        |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `vp run build`                       | Build into `dist/tablodge/` and verify the package                  |
+| `vp run pack`                        | Create a versioned ZIP and SHA256 checksum under `release/`         |
+| `vp run browser:install`             | Install Playwright Chromium for development                         |
+| `vp run dev`                         | Watch sources and open Chrome or Chromium with the extension loaded |
+| `vp run watch`                       | Watch sources without opening a browser                             |
+| `vp run test`                        | Run the tests once                                                  |
+| `vp run test:watch`                  | Run tests as files change                                           |
+| `vp run typecheck`                   | Check all TypeScript projects                                       |
+| `vp run lint`                        | Check code with XO                                                  |
+| `vp run lint:fix` or `vp run format` | Fix lint issues and format with XO                                  |
+| `vp run check`                       | Run lint, type checks, and tests                                    |
+| `vp run verify`                      | Verify an existing build                                            |
+| `vp run clean`                       | Remove build output and TypeScript build caches                     |
 
-`pnpm exec vp run dev` uses Playwright to open Chrome, or Playwright Chromium when Chrome is unavailable, with a separate profile in `.dev/chrome-profile`. Test data stays separate from your regular profile and other worktrees. If neither browser is available, run `pnpm exec vp run browser:install` once. After a rebuild, reload TabLodge from `chrome://extensions` in that profile, then reopen its pages. Set `CHROME_BIN` to your browser executable if needed. If no browser is available, the build watcher still runs.
+`vp run dev` uses Playwright to open Chrome, or Playwright Chromium when Chrome is unavailable, with a separate profile in `.dev/chrome-profile`. Test data stays separate from your regular profile and other worktrees. If neither browser is available, run `vp run browser:install` once. After a rebuild, reload TabLodge from `chrome://extensions` in that profile, then reopen its pages. Set `CHROME_BIN` to your browser executable if needed. If no browser is available, the build watcher still runs.
 
 See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](docs/architecture.md) explains storage, messages, and feature behavior.
 
@@ -179,7 +179,7 @@ The [tab manager comparison notes](docs/tab-management-research.md) explain the 
 
 ## Website
 
-The website lives in [`site/`](site). Run `pnpm exec vp run site:dev` to work on it or `pnpm exec vp run site:build` to build it. [Website setup](site/README.md) covers deployment and screenshots.
+The website lives in [`site/`](site). Run `vp run site:dev` to work on it or `vp run site:build` to build it. [Website setup](site/README.md) covers deployment and screenshots.
 
 ## Contributing
 

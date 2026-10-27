@@ -6,14 +6,14 @@ Bug reports, ideas, and pull requests are welcome. If you're planning a larger c
 
 Follow the [source installation steps](README.md#build-from-source) and load `dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
 
-Run `pnpm exec vp run dev` while you work. It rebuilds when files change and opens Chrome or Chromium with the extension loaded in a dedicated profile for this worktree. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. This profile keeps test data separate from your regular browser profile. Use `pnpm exec vp run <task>` for the other scripts in the [README command list](README.md#development).
+Install the Vite+ CLI once as described in [README Development](README.md#development), then run `vp run dev` while you work. It rebuilds when files change and opens Chrome or Chromium with the extension loaded in a dedicated profile for this worktree. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. This profile keeps test data separate from your regular browser profile. Use `vp run <task>` for the other scripts in the [README command list](README.md#development).
 
 For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](docs/architecture.md).
 
 ## Code conventions
 
 - Use strict TypeScript without `any` escapes. Validate stored data, imports, and messages before using them. The service worker treats incoming data as untrusted.
-- Use XO for both linting and formatting. Run `pnpm exec vp run lint:fix`, or `pnpm exec xo --fix <files>` for just the files you changed. Don't run another formatter. Review automatic fixes because some can change behavior.
+- Use XO for both linting and formatting. Run `vp run lint:fix`, or `pnpm exec xo --fix <files>` for just the files you changed. Don't run another formatter. Review automatic fixes because some can change behavior.
 - Keep rule exceptions in `xo.config.ts`, with a short reason and a narrow file scope. If one line needs an inline exception, explain it with `// eslint-disable-next-line <rule> -- <reason>`.
 - Use Tailwind theme tokens such as `bg-background` and `text-muted-foreground` rather than raw colors. Check both light and dark themes.
 - Build controls from the local Radix components in `src/components/ui/`, exposed through `src/shared/ui.tsx`. To add a primitive, run `pnpm dlx shadcn@latest add <component>` and review the generated code.
@@ -39,8 +39,8 @@ Mocks can't catch everything. For runtime changes, follow [Agent validation and 
 Before opening a pull request, follow [Agent validation and PR gate](docs/agent-validation.md) and run:
 
 ```sh
-pnpm exec vp run check
-pnpm exec vp run build
+vp run check
+vp run build
 ```
 
 In the pull request, explain what changed, why it changed, and how you tested it. Mention any checks you couldn't run. Call out new permissions and storage changes, including how older data is handled. Describe changes people will notice so they can be included in release notes.
@@ -53,6 +53,6 @@ The root `VERSION` file holds the minor number. The release workflow computes th
 
 Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, publishes the ZIP and its SHA256 checksum under a `v0.x.y` tag, and triggers a website deployment with the new version. To build and package the extension locally, follow the [README build steps](README.md#build-from-source).
 
-`pnpm exec vp run version:next` shows the next version based on your local tags.
+`vp run version:next` shows the next version based on your local tags.
 
 By contributing, you agree to license your contributions under the [MIT License](LICENSE).

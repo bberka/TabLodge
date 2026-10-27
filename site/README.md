@@ -4,14 +4,14 @@ The website at <https://tablodge.bbay.dev> is a static [Astro](https://astro.bui
 
 ## Local development
 
-Run these commands from the repository root:
+Install the Vite+ CLI once as described in [README Development](../README.md#development), then run these commands from the repository root:
 
 ```sh
 pnpm install
-pnpm exec vp run site:dev
+vp run site:dev
 ```
 
-The development server runs at `http://localhost:4321`. `pnpm exec vp run site:build` writes the static site to `site/dist/`. Use `pnpm exec vp run site:preview` to serve that build locally.
+The development server runs at `http://localhost:4321`. `vp run site:build` writes the static site to `site/dist/`. Use `vp run site:preview` to serve that build locally.
 
 ## Where to edit
 
@@ -35,7 +35,7 @@ Use mock data, never a personal browser profile. Existing screenshots were captu
 
 After changing UI shown in a screenshot:
 
-1. Run `pnpm exec vp run build`.
+1. Run `vp run build`.
 2. Serve the built extension pages with a mocked `chrome.*` API.
 3. Capture the affected dashboard, search palette, Settings, or side panel in light and dark themes.
 4. Save WebP files in `site/src/assets/`, keeping the existing names: for example, `dashboard-light.webp` and `dashboard-dark.webp`.

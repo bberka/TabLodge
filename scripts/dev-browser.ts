@@ -57,7 +57,7 @@ export async function openDevBrowser(): Promise<void> {
 	} catch (error) {
 		await context?.close().catch(() => {});
 		console.warn(
-			'Could not launch a browser. Run `pnpm exec vp run browser:install` or set CHROME_BIN to your browser executable, then run `pnpm exec vp run dev` again. The build watcher is still running.',
+			'Could not launch a browser. Run `vp run browser:install` or set CHROME_BIN to your browser executable, then run `vp run dev` again. The build watcher is still running.',
 		);
 		console.warn(error instanceof Error ? error.message : String(error));
 	}

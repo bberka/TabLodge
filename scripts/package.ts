@@ -1,5 +1,5 @@
 // Package the verified, unpacked extension as a versioned ZIP and SHA256 checksum.
-// Run `pnpm exec vp run build` first, then `pnpm exec vp run pack`.
+// Run `vp run build` first, then `vp run pack`.
 import {createHash} from 'node:crypto';
 import {readdir, readFile, mkdir, writeFile} from 'node:fs/promises';
 import {basename, dirname, relative, resolve, sep} from 'node:path';
@@ -60,9 +60,7 @@ async function main() {
 			resolve(packageDir, 'manifest.json'),
 		);
 	} catch {
-		throw new Error(
-			'No built extension found. Run `pnpm exec vp run build` first.',
-		);
+		throw new Error('No built extension found. Run `vp run build` first.');
 	}
 
 	if (manifest.version !== metadata.version) {

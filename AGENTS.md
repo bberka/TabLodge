@@ -2,7 +2,7 @@
 
 Commit messages must list only the human author. Never add `Co-Authored-By` trailers or AI attribution.
 
-Use only XO for formatting: `pnpm exec vp run lint:fix`, or `pnpm exec xo --fix <files>` for changed files. Never run `vp fmt`, plain `prettier`, or another formatter; their styles differ and can rewrite unrelated files.
+Install the Vite+ CLI once as described in [README Development](README.md#development), then use `vp run lint:fix` for formatting. For selected files, use `pnpm exec xo --fix <files>`. Never run `vp fmt`, plain `prettier`, or another formatter; their styles differ and can rewrite unrelated files.
 
 ## Documentation style
 
