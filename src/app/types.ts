@@ -131,6 +131,14 @@ export type Settings = {
 	*/
 	sessionsOnTop: boolean;
 	/**
+	Show the Save this window shortcut in the dashboard header (default on).
+	*/
+	showSaveWindowButton: boolean;
+	/**
+	Show the Trash bin shortcut in the dashboard header (default on).
+	*/
+	showTrashBinButton: boolean;
+	/**
 	Dashboard width and bookmark-grid layout (default: default).
 	*/
 	dashboardWidth: DashboardWidth;

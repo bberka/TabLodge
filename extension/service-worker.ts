@@ -211,6 +211,8 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	showBookmarkQuickActions: false,
 	bookmarkQuickAction: 'open-new',
 	sessionsOnTop: false,
+	showSaveWindowButton: true,
+	showTrashBinButton: true,
 	keepLodgePinned: false,
 	browserBookmarkAction: 'off',
 	browserBookmarkColumn: '',
@@ -1046,6 +1048,8 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.bookmarkQuickAction
 			: 'open-new',
 		sessionsOnTop: raw.sessionsOnTop === true,
+		showSaveWindowButton: raw.showSaveWindowButton !== false,
+		showTrashBinButton: raw.showTrashBinButton !== false,
 		dashboardWidth: isOneOf(
 			['default', 'wider', 'full', 'narrower'],
 			raw.dashboardWidth,
