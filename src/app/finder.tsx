@@ -186,6 +186,12 @@ type FinderProps = {
 function useFinder({state, actions, onDone, active}: FinderProps) {
 	const [query, setQuery] = useState('');
 	const [index, setIndex] = useState(0);
+	// A new query starts again from the first result.
+	const changeQuery = (value: string) => {
+		setQuery(value);
+		setIndex(0);
+	};
+
 	const tabs = useOpenTabs(active);
 	const {settings} = state;
 	const catalog = useMemo(
@@ -218,7 +224,6 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 		[resultQuery, catalog],
 	);
 	const flat = useMemo(() => flattenSections(sections), [sections]);
-	useEffect(() => setIndex(0), [query]);
 	const selected = flat.length > 0 ? Math.min(index, flat.length - 1) : -1;
 
 	async function run(item: FinderItem, newTab: boolean) {
@@ -321,7 +326,7 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 		commandIcons,
 		query,
 		resultQuery,
-		setQuery,
+		changeQuery,
 		sections,
 		flat,
 		selected,
@@ -515,7 +520,7 @@ function PaletteBody(props: {
 					placeholder="Search bookmarks, sessions, open tabs, commands, or the web"
 					value={finder.query}
 					className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-					onChange={(event) => finder.setQuery(event.target.value)}
+					onChange={(event) => finder.changeQuery(event.target.value)}
 					onKeyDown={finder.onKeyDown}
 				/>
 			</div>

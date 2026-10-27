@@ -2,6 +2,7 @@
 // with the shared fuzzy scorer, groups the hits by type, and recognizes typed web addresses.
 import {fold, scoreFolded, searchTerms} from './fuzzy';
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
+import {siteName} from './web-url';
 
 export type FinderKind =
 	| 'url'
@@ -63,7 +64,7 @@ export type FinderCommand = {
 	keywords?: string[];
 };
 
-export const SECTION_LABELS: Record<FinderKind, string> = {
+const SECTION_LABELS: Record<FinderKind, string> = {
 	url: 'Go to address',
 	tab: 'Switch to tab',
 	bookmark: 'Bookmarks',
@@ -116,14 +117,6 @@ const TYPO_SCAN_LIMIT = 1500;
 const MAX_TEXT = 400;
 const clip = (value: string | undefined) => (value ?? '').slice(0, MAX_TEXT);
 
-export function hostOf(url: string): string {
-	try {
-		return new URL(url).hostname.replace(/^www\./i, '');
-	} catch {
-		return url;
-	}
-}
-
 /**
 The URL as text to match: the host and path without the scheme, so "https" never matches everything.
 */
@@ -170,8 +163,8 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 			prepared({
 				id: `tab:${tab.id}`,
 				kind: 'tab',
-				title: tab.title || hostOf(tab.url),
-				detail: hostOf(tab.url),
+				title: tab.title || siteName(tab.url),
+				detail: siteName(tab.url),
 				url: tab.url,
 				texts: [clip(tab.title), matchableUrl(tab.url)],
 				ref: String(tab.id),
@@ -247,8 +240,8 @@ function cachedBookmarkItems(
 		return prepared({
 			id: `bookmark:${bookmark.id}`,
 			kind: 'bookmark',
-			title: bookmark.title || hostOf(bookmark.url),
-			detail: column ? `${hostOf(bookmark.url)} · ${column}` : undefined,
+			title: bookmark.title || siteName(bookmark.url),
+			detail: column ? `${siteName(bookmark.url)} · ${column}` : undefined,
 			url: bookmark.url,
 			texts: [clip(bookmark.title), matchableUrl(bookmark.url), column],
 			ref: bookmark.id,
@@ -282,8 +275,8 @@ function cachedSessionItems(groups: readonly Session[]): FinderItem[] {
 				prepared({
 					id: `saved-tab:${group.id}:${tab.id}`,
 					kind: 'saved-tab',
-					title: tab.title || hostOf(tab.url),
-					detail: `${hostOf(tab.url)} · ${group.name}`,
+					title: tab.title || siteName(tab.url),
+					detail: `${siteName(tab.url)} · ${group.name}`,
 					url: tab.url,
 					texts: [
 						clip(tab.title),

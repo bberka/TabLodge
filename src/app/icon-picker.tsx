@@ -38,7 +38,7 @@ type IconPickerDialogProps = {
 Searchable icon grid. Arrow keys move through the grid (ArrowDown from the search box enters it),
 Enter picks the focused icon, or the first match while typing.
 */
-export function IconPickerDialog({
+function IconPickerDialog({
 	open,
 	onOpenChange,
 	value,

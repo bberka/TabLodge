@@ -1,14 +1,8 @@
 import {useEffect, useState} from 'react';
 import {History, LifeBuoy, RotateCcw} from 'lucide-react';
 import {Button} from '../shared/ui';
-import {send, type ShowStatus} from './common';
-import {
-	messageOf,
-	plural,
-	reportSnapshotRestore,
-	useSnapshots,
-	whenText,
-} from './recovery-core';
+import {messageOf, plural, send, type ShowStatus} from './common';
+import {reportSnapshotRestore, useSnapshots, whenText} from './recovery-core';
 
 /**
 "Restore your last browsing session? N windows · M tabs" shown on the dashboard after an unclean exit.

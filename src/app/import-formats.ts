@@ -10,6 +10,7 @@ import {
 	BOOKMARKS_FORMAT_ID,
 	SESSIONS_FORMAT_ID,
 } from './backup-format';
+import {webUrl} from './web-url';
 
 // Safety: only http/https URLs survive, titles are stripped of control characters and capped, the
 // input size is limited, and HTML is tokenized as text (never parsed into a live document).
@@ -21,7 +22,7 @@ export const MAX_IMPORT_BYTES = 45 * 1024 * 1024;
 /**
 Links read from one file; anything beyond is reported as skipped.
 */
-export const MAX_IMPORT_LINKS = 50_000;
+const MAX_IMPORT_LINKS = 50_000;
 /**
 Matches the service worker's per-session cap; larger groups are split into numbered parts.
 */
@@ -111,29 +112,6 @@ const text = (value: unknown) =>
 		: typeof value === 'number'
 			? String(value)
 			: '';
-
-/**
-An http(s) URL in canonical form, or null. Mirrors the service worker's normalizeUrl.
-*/
-export function webUrl(value: unknown): string | null {
-	if (typeof value !== 'string') {
-		return null;
-	}
-
-	const raw = value.trim();
-	if (!raw || raw.length > 16_384) {
-		return null;
-	}
-
-	try {
-		const url = new URL(raw);
-		return url.protocol === 'http:' || url.protocol === 'https:'
-			? url.href
-			: null;
-	} catch {
-		return null;
-	}
-}
 
 /**
 Plain one-line text: control and zero-width characters removed, whitespace collapsed, length capped.

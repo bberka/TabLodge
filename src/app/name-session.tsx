@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import {send} from './common';
+import {send, useCloseOnEscape} from './common';
 import {NameSessionForm} from './name-session-dialog';
 import {
 	baseSessionName,
@@ -22,16 +22,7 @@ function NameSessionPrompt() {
 	const [error, setError] = useState('');
 
 	// Escape keeps the default name, like closing the window.
-	useEffect(() => {
-		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				window.close();
-			}
-		};
-
-		document.addEventListener('keydown', onKey);
-		return () => document.removeEventListener('keydown', onKey);
-	}, []);
+	useCloseOnEscape();
 
 	useEffect(() => {
 		let current = true;

@@ -198,6 +198,7 @@ export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
 		snapshots: parseEntry(files, FILES.snapshots),
 		trash: parseEntry(files, FILES.trash),
 	};
+	const counts = countFullBackup(parts);
 	return {
 		...parts,
 		manifest: {
@@ -209,8 +210,8 @@ export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
 					: '',
 			createdAt:
 				typeof manifest.createdAt === 'string' ? manifest.createdAt : '',
-			counts: countFullBackup(parts),
+			counts,
 		},
-		counts: countFullBackup(parts),
+		counts,
 	};
 }

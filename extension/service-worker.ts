@@ -73,9 +73,6 @@ type BookmarkMergeResult = {
 };
 type ImportInput = Raw | null | undefined;
 /**
-`contextMenus.onShown`/`refresh` exist only in some Chromium-based browsers and are feature-detected.
-*/
-/**
 The callback forms of `removeAll` and `update` return nothing in Chrome's types, but some browsers return a promise as well.
 */
 type CallbackMenuApi = {
@@ -86,6 +83,9 @@ type CallbackMenuApi = {
 		callback: () => void,
 	): unknown;
 };
+/**
+`contextMenus.onShown`/`refresh` exist only in some Chromium-based browsers and are feature-detected.
+*/
 type ContextMenusWithOnShown = typeof chrome.contextMenus & {
 	onShown?: chrome.events.Event<
 		(
@@ -110,6 +110,14 @@ const recordId = (value: unknown) =>
 	isRecord(value) && typeof value.id === 'string' ? value.id : '';
 const isInteger = (value: unknown): value is number =>
 	Number.isSafeInteger(value);
+/**
+The number when it is finite and above zero (a usable timestamp), otherwise `fallback`.
+*/
+const positiveOr = (value: unknown, fallback: number) => {
+	const number = Number(value);
+	return Number.isFinite(number) && number > 0 ? number : fallback;
+};
+
 /**
 A web address as typed, when it is a valid http(s) URL; otherwise an empty string.
 */
@@ -155,6 +163,14 @@ const ARCHIVED_FOLDER_NAME = 'Archived';
 const MAX_SESSIONS = 1000;
 const MAX_TABS_PER_SESSION = 1000;
 const MAX_EXCLUDED_ORIGINS = 500;
+const sessionsDisabled = (): ActionFailure => ({
+	ok: false,
+	error: 'Sessions are disabled in Settings.',
+});
+const bookmarksDisabled = (): ActionFailure => ({
+	ok: false,
+	error: 'Bookmarks are disabled in Settings.',
+});
 const sessionLimitError = () =>
 	`TabLodge keeps up to ${MAX_SESSIONS} sessions. Delete or merge some sessions first.`;
 const sessionFullError = () =>
@@ -556,7 +572,6 @@ function normalizeTab(
 		return null;
 	}
 
-	const timestamp = Number(raw.timestamp ?? raw.savedAt);
 	const originalIndex = Number(raw.originalIndex ?? raw.index);
 	return {
 		id: cleanText(raw.id, makeId(), 100),
@@ -568,8 +583,7 @@ function normalizeTab(
 			raw.nativeGroup ?? raw.group,
 			raw.groupKey,
 		),
-		savedAt:
-			Number.isFinite(timestamp) && timestamp > 0 ? timestamp : groupTimestamp,
+		savedAt: positiveOr(raw.timestamp ?? raw.savedAt, groupTimestamp),
 		originalIndex:
 			Number.isFinite(originalIndex) && originalIndex >= 0
 				? originalIndex
@@ -868,8 +882,7 @@ function normalizeBookmark(
 		return null;
 	}
 
-	const createdAt = Number(raw.createdAt ?? raw.savedAt);
-	const updatedAt = Number(raw.updatedAt);
+	const createdAt = positiveOr(raw.createdAt ?? raw.savedAt, fallbackTimestamp);
 	const requestedColumnId = cleanText(
 		raw.columnId,
 		DEFAULT_BOOKMARK_COLUMN_ID,
@@ -888,16 +901,8 @@ function normalizeBookmark(
 				: columnIds.has(requestedColumnId)
 					? requestedColumnId
 					: fallbackColumnId,
-		createdAt:
-			Number.isFinite(createdAt) && createdAt > 0
-				? createdAt
-				: fallbackTimestamp,
-		updatedAt:
-			Number.isFinite(updatedAt) && updatedAt > 0
-				? updatedAt
-				: Number.isFinite(createdAt) && createdAt > 0
-					? createdAt
-					: fallbackTimestamp,
+		createdAt,
+		updatedAt: positiveOr(raw.updatedAt, createdAt),
 	};
 }
 
@@ -911,9 +916,10 @@ function normalizeGroup(
 	}
 
 	const tabsRaw = Array.isArray(raw.tabs) ? raw.tabs : [];
-	const timestamp = Number(raw.createdAt ?? raw.timestamp);
-	const createdAt =
-		Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallbackTimestamp;
+	const createdAt = positiveOr(
+		raw.createdAt ?? raw.timestamp,
+		fallbackTimestamp,
+	);
 	const seenTabIds = new Set<string>();
 	const tabs = tabsRaw
 		.slice(0, MAX_TABS_PER_SESSION)
@@ -936,14 +942,13 @@ function normalizeGroup(
 	}
 
 	pairSplits(tabs);
-	const updated = Number(raw.updatedAt);
 	return {
 		id: cleanText(raw.id, makeId(), 100),
 		name: cleanText(raw.name ?? raw.title, 'Saved session', 120),
 		folderId: cleanText(raw.folderId, DEFAULT_FOLDER_ID, 100),
 		description: mergeSessionText(raw.description, raw.notes),
 		createdAt,
-		updatedAt: Number.isFinite(updated) && updated > 0 ? updated : createdAt,
+		updatedAt: positiveOr(raw.updatedAt, createdAt),
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
 		sourceWindowId: isInteger(raw.sourceWindowId) ? raw.sourceWindowId : null,
 		tabs,
@@ -1806,7 +1811,7 @@ async function saveTabs(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const windowId = await currentWindowId(senderTab);
@@ -2086,7 +2091,7 @@ async function openBookmarkPrompt(
 ): Promise<MenuOutcome> {
 	const settings = await readSettings();
 	if (!settings.bookmarksEnabled) {
-		return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+		return bookmarksDisabled();
 	}
 
 	let tab = commandTab?.url ? commandTab : undefined;
@@ -2822,7 +2827,7 @@ async function restoreTab(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const group = findGroup(store, groupId);
@@ -2891,7 +2896,7 @@ async function restoreGroup(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const group = findGroup(store, groupId);
@@ -2966,7 +2971,7 @@ async function deleteGroup(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const index = store.groups.findIndex((group) => group.id === groupId);
@@ -2994,7 +2999,7 @@ async function updateGroup(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const group = findGroup(store, groupId);
@@ -3031,7 +3036,7 @@ async function setGroupOrder(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const byId = new Map(store.groups.map((group) => [group.id, group]));
@@ -3088,7 +3093,7 @@ async function createFolder(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const folderName = normalizeFolderName(name);
@@ -3125,7 +3130,7 @@ async function updateFolder(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const folder = store.folders.find((entry) => entry.id === folderId);
@@ -3173,7 +3178,7 @@ async function deleteFolder(
 		withUndo('Delete folder', [STORAGE_KEY], async () => {
 			const store = await getStore();
 			if (!store.settings.sessionsEnabled) {
-				return {ok: false, error: 'Sessions are disabled in Settings.'};
+				return sessionsDisabled();
 			}
 
 			const folder = store.folders.find((entry) => entry.id === folderId);
@@ -3202,32 +3207,6 @@ async function deleteFolder(
 	);
 }
 
-async function moveGroup(
-	groupId: string,
-	folderId: string,
-): Promise<ActionResult<'MOVE_GROUP'>> {
-	return mutate(async () => {
-		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
-		}
-
-		const group = findGroup(store, groupId);
-		if (!group) {
-			return {ok: false, error: 'That saved session no longer exists.'};
-		}
-
-		if (store.folders.every((folder) => folder.id !== folderId)) {
-			return {ok: false, error: 'Choose an existing folder.'};
-		}
-
-		group.folderId = folderId;
-		group.updatedAt = Date.now();
-		await writeStore(store);
-		return {ok: true};
-	});
-}
-
 async function deleteTab(
 	groupId: string,
 	tabId: string,
@@ -3235,7 +3214,7 @@ async function deleteTab(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const group = findGroup(store, groupId);
@@ -3285,7 +3264,7 @@ async function mergeGroups(
 		withUndo('Merge sessions', [STORAGE_KEY], async () => {
 			const store = await getStore();
 			if (!store.settings.sessionsEnabled) {
-				return {ok: false, error: 'Sessions are disabled in Settings.'};
+				return sessionsDisabled();
 			}
 
 			const source = findGroup(store, sourceGroupId);
@@ -3345,7 +3324,7 @@ async function moveTab(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const source = findGroup(store, fromGroupId);
@@ -3454,7 +3433,7 @@ async function updateTab(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const group = findGroup(store, groupId);
@@ -3558,7 +3537,7 @@ async function addBookmark(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const url = normalizeUrl(fields.url);
@@ -3609,7 +3588,7 @@ async function addBookmarks(
 	const run = async (): Promise<ActionResult<'ADD_BOOKMARKS'>> => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const targetColumnId =
@@ -3685,7 +3664,7 @@ async function importBrowserBookmarks(
 	}
 
 	if (!(await readSettings()).bookmarksEnabled) {
-		return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+		return bookmarksDisabled();
 	}
 
 	let tree: chrome.bookmarks.BookmarkTreeNode[];
@@ -3704,7 +3683,7 @@ async function importBrowserBookmarks(
 		withUndo('Import', [STORAGE_KEY], async () => {
 			const store = await getStore();
 			if (!store.settings.bookmarksEnabled) {
-				return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+				return bookmarksDisabled();
 			}
 
 			const treeLinks = (nodes: chrome.bookmarks.BookmarkTreeNode[]): number =>
@@ -3855,7 +3834,7 @@ async function addExcludedOrigins(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const hosts = normalizeExcludedOrigins(origins);
@@ -3916,7 +3895,7 @@ async function removeExcludedOrigin(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const normalized = normalizeExcludedOrigins([origin])[0];
@@ -3939,7 +3918,7 @@ async function updateBookmark(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const bookmark = findBookmark(store, bookmarkId);
@@ -3983,7 +3962,7 @@ async function deleteBookmark(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const index = store.bookmarks.findIndex(
@@ -4023,7 +4002,7 @@ async function createBookmarkColumn(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const columnName = bookmarkColumnName(name);
@@ -4059,7 +4038,7 @@ async function updateBookmarkColumn(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const column = store.bookmarkColumns.find((entry) => entry.id === columnId);
@@ -4103,7 +4082,7 @@ async function deleteBookmarkColumn(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		if (store.bookmarkColumns.every((entry) => entry.id !== columnId)) {
@@ -4216,7 +4195,7 @@ async function reorderBookmarkColumn(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const sourceIndex = store.bookmarkColumns.findIndex(
@@ -4260,7 +4239,7 @@ async function reorderBookmark(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.bookmarksEnabled) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 
 		const bookmark = findBookmark(store, bookmarkId);
@@ -4625,11 +4604,11 @@ async function importGroups(
 				store.settings.bookmarksEnabled && incomingBookmarkData;
 			if (candidates.length === 0 && !hasBookmarkData) {
 				if (incomingCandidates.length > 0 && !store.settings.sessionsEnabled) {
-					return {ok: false, error: 'Sessions are disabled in Settings.'};
+					return sessionsDisabled();
 				}
 
 				if (incomingBookmarkData && !store.settings.bookmarksEnabled) {
-					return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+					return bookmarksDisabled();
 				}
 
 				return {
@@ -5799,7 +5778,7 @@ async function saveSnapshotAsSession(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const snapshot = await findSnapshot(id);
@@ -6688,10 +6667,10 @@ function applyTrashRestore(
 	const bookmarksOff = !store.settings.bookmarksEnabled;
 	if (entry.kind === 'bookmark' || entry.kind === 'column') {
 		if (bookmarksOff) {
-			return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+			return bookmarksDisabled();
 		}
 	} else if (sessionsOff) {
-		return {ok: false, error: 'Sessions are disabled in Settings.'};
+		return sessionsDisabled();
 	}
 
 	if (entry.kind === 'session') {
@@ -7371,10 +7350,6 @@ async function handleMessage(
 			return deleteFolder(message.folderId);
 		}
 
-		case 'MOVE_GROUP': {
-			return moveGroup(message.groupId, message.folderId);
-		}
-
 		case 'DELETE_TAB': {
 			return deleteTab(message.groupId, message.tabId);
 		}
@@ -7601,13 +7576,6 @@ async function handleMessage(
 			};
 		}
 
-		case 'OPEN_DASHBOARD': {
-			const settings = await readSettings();
-			const windowId = await currentWindowId(sender.tab);
-			await openDashboard(windowId, '', settings.dashboardBehavior);
-			return {ok: true};
-		}
-
 		default: {
 			return {ok: false, error: `Unknown ${APP_NAME} action.`};
 		}
@@ -7717,7 +7685,7 @@ async function saveCurrentTabToFirstGroup(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const windowId = await currentWindowId(senderTab);
@@ -8597,7 +8565,7 @@ async function bookmarkToColumn(
 
 	const store = await getStore();
 	if (!store.settings.bookmarksEnabled) {
-		return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+		return bookmarksDisabled();
 	}
 
 	if (
@@ -8636,7 +8604,7 @@ async function openPrefilledBookmarkDialog(
 
 	const settings = await readSettings();
 	if (!settings.bookmarksEnabled) {
-		return {ok: false, error: 'Bookmarks are disabled in Settings.'};
+		return bookmarksDisabled();
 	}
 
 	// BookmarkColumn=new asks the dialog to start a new column; pages that do not support it ignore the parameter.
@@ -8668,7 +8636,7 @@ async function saveLinkForLater(
 	return mutate(async () => {
 		const store = await getStore();
 		if (!store.settings.sessionsEnabled) {
-			return {ok: false, error: 'Sessions are disabled in Settings.'};
+			return sessionsDisabled();
 		}
 
 		const name = SAVED_LINKS_SESSION.toLocaleLowerCase();

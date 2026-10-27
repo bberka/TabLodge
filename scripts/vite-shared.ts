@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {cp, mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import type {InlineConfig, Plugin, PluginOption} from 'vite-plus';
+import type {InlineConfig, Plugin} from 'vite-plus';
 
 export const projectRoot = resolve(
 	dirname(fileURLToPath(import.meta.url)),
@@ -156,16 +156,10 @@ type ScriptBuildOptions = {
 	Output file name, as referenced by the manifest or HTML.
 	*/
 	fileName: string;
-	/**
-	`iife` for classic scripts (content scripts, non-module workers), `es` for module service workers.
-	*/
-	format: 'iife' | 'es';
-	minify?: boolean;
-	plugins?: PluginOption[];
 };
 
 /**
- A self-contained script bundle (service worker, content script, boot script). Dependencies are
+ A self-contained classic script bundle (service worker, boot script). Dependencies are
  inlined into a single file and `process.env.NODE_ENV` is replaced, since library mode does not
  do that and extension scripts have no `process` global.
  */
@@ -173,9 +167,6 @@ export function scriptConfig({
 	entry,
 	outDir,
 	fileName,
-	format,
-	minify = false,
-	plugins = [],
 }: ScriptBuildOptions): InlineConfig {
 	return {
 		configFile: false,
@@ -183,16 +174,15 @@ export function scriptConfig({
 		base: './',
 		publicDir: false,
 		logLevel: 'warn',
-		plugins,
 		resolve: {alias},
 		define: {'process.env.NODE_ENV': JSON.stringify('production')},
 		build: {
 			...sharedBuild,
 			outDir,
-			minify,
+			minify: false,
 			lib: {
 				entry,
-				formats: [format],
+				formats: ['iife'],
 				name: 'ExtensionScript',
 				fileName: () => fileName,
 			},

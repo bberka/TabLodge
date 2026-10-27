@@ -25,9 +25,9 @@ import {
 	previewImport,
 	sessionImportPayload,
 	toTimestamp,
-	webUrl,
 	type ParsedImport,
 } from '../src/app/import-formats';
+import {webUrl} from '../src/app/web-url';
 import type {
 	Bookmark,
 	BookmarkColumn,

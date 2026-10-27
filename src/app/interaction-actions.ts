@@ -1,3 +1,6 @@
+import {escapeHtml} from './escape-html';
+import {webUrl} from './web-url';
+
 export const SESSION_DRAG_TYPE = 'application/x-tablodge-session';
 export const COLUMN_DRAG_TYPE = 'application/x-tablodge-column';
 export const BOOKMARK_DRAG_TYPE = 'application/x-tablodge-bookmark';
@@ -80,19 +83,6 @@ export function shouldBlockDocumentDrop(
 	);
 }
 
-const webUrl = (value: unknown) => {
-	if (typeof value !== 'string' || value.length > 16_384) {
-		return null;
-	}
-
-	try {
-		const url = new URL(value);
-		return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-	} catch {
-		return null;
-	}
-};
-
 // Reads the session payload placed by applyLinkDrag. Returns null for anything malformed.
 export function parseSessionDragData(raw: unknown): SessionDragData | null {
 	let data: unknown;
@@ -150,62 +140,14 @@ export function activateSessionTitle<E, R>(
 	return action === 'edit' ? handlers.edit(event) : handlers.toggle(event);
 }
 
-const HTML_ESCAPES: Record<string, string> = {
-	'&': '&amp;',
-	'<': '&lt;',
-	'>': '&gt;',
-	'"': '&quot;',
-	"'": '&#39;',
-};
-const escapeHtml = (value: unknown) =>
-	String(value ?? '').replaceAll(/["&'<>]/g, (char) => HTML_ESCAPES[char]);
-
-// Builds clipboard text for a session in one of the configured formats. `html`
-// is only set for rich text so callers can write text/html alongside text/plain.
+/**
+What writeClipboard puts on the clipboard. `html` is set only for rich text, so callers can write text/html
+alongside text/plain.
+*/
 export type ClipboardContent = {
 	text: string;
 	html: string | null;
 };
-
-export function formatSessionLinks(
-	group: {name?: string; tabs?: readonly LinkLike[]} | null | undefined,
-	format = 'markdown',
-): ClipboardContent {
-	const tabs: readonly LinkLike[] = Array.isArray(group?.tabs)
-		? group.tabs
-		: [];
-	if (format === 'url') {
-		return {text: tabs.map((tab) => tab.url).join('\n'), html: null};
-	}
-
-	const label = (tab: LinkLike) => String(tab.title || tab.url);
-	if (format === 'url-title') {
-		return {
-			text: tabs.map((tab) => `${tab.url}\n${label(tab)}`).join('\n\n'),
-			html: null,
-		};
-	}
-
-	if (format === 'title-url') {
-		return {
-			text: tabs.map((tab) => `${label(tab)}\n${tab.url}`).join('\n\n'),
-			html: null,
-		};
-	}
-
-	const name = String(group?.name || 'Saved session');
-	if (format === 'rich') {
-		return {
-			text: tabs.map((tab) => `${label(tab)}\n${tab.url}`).join('\n\n'),
-			html: `<h3>${escapeHtml(name)}</h3><ul>${tabs.map((tab) => `<li><a href="${escapeHtml(tab.url)}">${escapeHtml(label(tab))}</a></li>`).join('')}</ul>`,
-		};
-	}
-
-	return {
-		text: `# ${name}\n\n${tabs.map((tab) => `- [${label(tab).replaceAll(/[[\\\]]/g, String.raw`\$&`)}](${tab.url})`).join('\n')}`,
-		html: null,
-	};
-}
 
 /**
 The clipboard methods writeClipboard uses (navigator.clipboard satisfies this).
