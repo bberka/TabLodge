@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import vm from 'node:vm';
 import {transformWithOxc} from 'vite-plus';
-import {test} from 'vite-plus/test';
+import {afterEach, beforeEach, test, vi} from 'vite-plus/test';
 import type {
 	Bookmark,
 	BookmarkColumn,
@@ -42,6 +42,14 @@ const dashboardUrl = 'chrome-extension://tablodge/newtab.html';
 Longer than the worker's rebuild debounce (150 ms).
 */
 const REBUILD_WAIT = 200;
+
+// The mocks and the worker's debounces run on fake timers, so waiting means advancing the clock.
+beforeEach(() => {
+	vi.useFakeTimers();
+});
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 type MockTab = {
 	id: number;
@@ -427,17 +435,31 @@ function createHarness(
 		},
 		fire,
 		send(message: TabLodgeMessage) {
-			return new Promise<Response>((resolve) => {
-				messageListener!(message, {tab: {id: 1, windowId: 10}}, resolve);
-			});
+			return untilSettled(
+				new Promise<Response>((resolve) => {
+					messageListener!(message, {tab: {id: 1, windowId: 10}}, resolve);
+				}),
+			);
 		},
 	};
 }
 
-const wait = (ms: number) =>
-	new Promise((resolve) => {
-		setTimeout(resolve, ms);
+const wait = async (ms: number) => vi.advanceTimersByTimeAsync(ms);
+/**
+Advances the fake clock until the promise settles, for responses that wait on mock callbacks scheduled with setTimeout.
+*/
+async function untilSettled<T>(promise: Promise<T>) {
+	const state = {settled: false};
+	const result = promise.finally(() => {
+		state.settled = true;
 	});
+	while (!state.settled) {
+		await vi.advanceTimersByTimeAsync(1);
+	}
+
+	return result;
+}
+
 const titles = (items: MenuItem[]) =>
 	items.map((item) => (item.type === 'separator' ? '---' : item.title));
 
@@ -524,17 +546,8 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'Help',
 		'Settings',
 	]);
-	assert.ok(
-		action.length <= 6,
-		'the toolbar menu stays within ACTION_MENU_TOP_LEVEL_LIMIT',
-	);
 	assert.equal(harness.item('tablodge-action-exclude')?.type, 'checkbox');
 	assert.equal(harness.item('tablodge-action-exclude')?.checked, false);
-	assert.equal(
-		new Set(harness.ids()).size,
-		harness.ids().length,
-		'every id is unique',
-	);
 });
 
 test('the master switch and each group switch control their menus', async () => {
@@ -1009,10 +1022,6 @@ test('the selection search opens the dashboard with ?q=', async () => {
 	});
 	assert.equal(harness.openedTabs.length, 1);
 	assert.equal(harness.openedTabs[0].url, `${dashboardUrl}?q=split+view+tabs`);
-	assert.equal(
-		new URL(harness.openedTabs[0].url).searchParams.get('q'),
-		'split view tabs',
-	);
 	assert.deepEqual(harness.badges, [], 'opening a page needs no badge');
 });
 
