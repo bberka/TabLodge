@@ -620,6 +620,7 @@ const settingsGroups: Array<{
 				options: [
 					['newest', 'Newest first'],
 					['oldest', 'Oldest first'],
+					['opened', 'Last opened'],
 					['name', 'Name A–Z'],
 					['tabs', 'Most tabs'],
 					['custom', 'Custom order'],

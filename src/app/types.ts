@@ -13,7 +13,8 @@ export type ActionMode =
 export type RestoreTarget =
 	'current-window' | 'new-window-unless-only-tab' | 'always-new-window';
 export type RestoreMode = 'keep' | 'remove';
-export type SessionSort = 'newest' | 'oldest' | 'name' | 'tabs' | 'custom';
+export type SessionSort =
+	'newest' | 'oldest' | 'opened' | 'name' | 'tabs' | 'custom';
 export type CopyFormat =
 	'rich' | 'title-url' | 'url-title' | 'url' | 'markdown';
 export type TabGroupColor = `${chrome.tabGroups.Color}`;
@@ -277,6 +278,10 @@ export type Session = {
 	description: string;
 	createdAt: number;
 	updatedAt: number;
+	/**
+	When the session was last restored; missing means it never was.
+	*/
+	lastOpenedAt?: number;
 	sourceWindowName: string;
 	sourceWindowId: number | null;
 	tabs: SavedTab[];

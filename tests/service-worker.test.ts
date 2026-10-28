@@ -992,6 +992,23 @@ test('RESTORE_GROUP opens a valid saved URL and reports successful session resto
 	);
 });
 
+test('RESTORE_GROUP stamps lastOpenedAt and keeps it through a reload', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	assert.equal(harness.state.groups[0].lastOpenedAt, undefined);
+	const before = Date.now();
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+
+	assert.equal(response.ok, true, response.error);
+	const stored = harness.state.groups.find((group) => group.id === 'session-1');
+	const openedAt = stored?.lastOpenedAt ?? 0;
+	assert.ok(openedAt >= before);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.groups[0].lastOpenedAt, openedAt);
+});
+
 test('default preferences use newest-first, keep-on-restore, quick-popup action, opt-out pinned tabs, and the TabLodge new tab', async () => {
 	const harness = createWorkerHarness({...stateWithSession(), settings: {}});
 	const response = await harness.sendMessage({type: 'GET_STATE'});

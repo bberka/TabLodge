@@ -1027,6 +1027,7 @@ function normalizeGroup(
 	}
 
 	pairSplits(tabs);
+	const lastOpenedAt = positiveOr(raw.lastOpenedAt, 0);
 	return {
 		id: cleanText(raw.id, makeId(), 100),
 		name: cleanText(raw.name ?? raw.title, 'Saved session', 120),
@@ -1034,6 +1035,7 @@ function normalizeGroup(
 		description: mergeSessionText(raw.description, raw.notes),
 		createdAt,
 		updatedAt: positiveOr(raw.updatedAt, createdAt),
+		...(lastOpenedAt > 0 && {lastOpenedAt}),
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
 		sourceWindowId: isInteger(raw.sourceWindowId) ? raw.sourceWindowId : null,
 		tabs,
@@ -1111,7 +1113,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			raw.restoreSplitTabs === 'separate' ? 'separate' : 'split',
 		saveSplitTabs: raw.saveSplitTabs === 'focused' ? 'focused' : 'both',
 		sessionSort: isOneOf(
-			['newest', 'oldest', 'name', 'tabs', 'custom'],
+			['newest', 'oldest', 'opened', 'name', 'tabs', 'custom'],
 			raw.sessionSort,
 		)
 			? raw.sessionSort
@@ -3093,6 +3095,7 @@ async function restoreGroup(
 		const remove = mode === 'remove';
 		let removed = false;
 		let trashId: string | undefined;
+		group.lastOpenedAt = Date.now();
 		if (remove) {
 			const restoredIds = new Set(result.opened.map(({saved}) => saved.id));
 			const groupIndex = store.groups.indexOf(group);
@@ -3111,9 +3114,9 @@ async function restoreGroup(
 					trashTabsEntry(group, gone, removed, groupIndex),
 				);
 			}
-
-			await writeStore(store);
 		}
+
+		await writeStore(store);
 
 		return {
 			ok: true,
