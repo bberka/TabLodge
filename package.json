@@ -22,6 +22,7 @@
 		"build": "node scripts/build.ts && node scripts/verify-build.ts",
 		"pack": "node scripts/package.ts",
 		"dev": "node scripts/build.ts --watch --open-browser",
+		"dev:seed": "node scripts/build.ts --watch --open-browser --seed-data",
 		"browser:install": "playwright install chromium",
 		"watch": "node scripts/build.ts --watch",
 		"verify": "node scripts/verify-build.ts",
