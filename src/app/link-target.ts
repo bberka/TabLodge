@@ -1,4 +1,5 @@
 import type {BookmarkClickAction, Settings} from './types';
+import {stripTrackingParameters} from './tracking-parameters';
 
 export type {LinkClickAction} from './types';
 
@@ -49,6 +50,9 @@ export async function openLink(
 	settings: Settings,
 	requested?: 'current' | 'new',
 ): Promise<void> {
+	const destination = settings.removeTrackingParameters
+		? stripTrackingParameters(url)
+		: url;
 	const pinned = settings.keepLodgePinned ? await isPinnedLodgeTab() : false;
 	// Places that cannot show a bookmark menu (the search palette) open the link like the default setting.
 	const resolved = resolveLinkTarget(kind, settings, {
@@ -68,11 +72,11 @@ export async function openLink(
 	}
 
 	if (action === 'new') {
-		await chrome.tabs.create({url});
+		await chrome.tabs.create({url: destination});
 		return;
 	}
 
-	globalThis.location.assign(url);
+	globalThis.location.assign(destination);
 }
 
 /**

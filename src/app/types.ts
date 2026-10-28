@@ -160,6 +160,10 @@ export type Settings = {
 	copyFormat: CopyFormat;
 	dashboardBehavior: 'switch' | 'move';
 	/**
+	Remove common tracking parameters when opening saved links or restoring sessions and snapshots; saved URLs are unchanged (default off).
+	*/
+	removeTrackingParameters: boolean;
+	/**
 	Shown addresses drop https://, http:// and www. (default on); display only.
 	*/
 	simplifyUrls: boolean;
