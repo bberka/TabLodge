@@ -8,7 +8,7 @@ Follow the [source installation steps](README.md#build-from-source) and load `di
 
 Install the Vite+ CLI once as described in [README Development](README.md#development), then run `vp run dev` while you work. It rebuilds when files change and opens Chrome or Chromium with the extension loaded in a dedicated profile for this worktree. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. This profile keeps test data separate from your regular browser profile. Use `vp run <task>` for the other scripts in the [README command list](README.md#development).
 
-For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](docs/architecture.md).
+For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](architecture.md).
 
 ## Code conventions
 
@@ -28,15 +28,15 @@ Use plain language, short paragraphs, and direct instructions. Describe what a p
 
 Do not use em dashes or en dashes in prose. Rewrite sentences instead of using a dash as punctuation. Avoid hyphenated wording when a natural alternative exists. Keep hyphens only where needed for Markdown syntax, exact names, paths, URLs, commands, code, or a technical term that would be unclear without one.
 
-Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. When behavior changes, check the README, architecture notes, privacy policy, website, and Help. Update screenshots when the UI they show changes; [website setup](site/README.md#screenshots) explains how they're captured.
+Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. When behavior changes, check the README, architecture notes, privacy policy, website, and Help. Update screenshots when the UI they show changes; [website setup](website.md#screenshots) explains how they're captured.
 
 ## Test your change
 
 The worker tests run `extension/service-worker.ts` in a Node VM with mocked browser APIs. Add regression tests for bug fixes and cover behavior changes in the relevant suite. Extend the mock when you use another browser API. Pure helpers should have direct unit tests.
 
-Mocks can't catch everything. For runtime changes, follow [Agent validation and PR gate](docs/agent-validation.md) to load the build in the dev browser, exercise the affected workflow, and record evidence. For UI changes, check keyboard use and both themes.
+Mocks can't catch everything. For runtime changes, follow [Agent validation and PR gate](agent-validation.md) to load the build in the dev browser, exercise the affected workflow, and record evidence. For UI changes, check keyboard use and both themes.
 
-Before opening a pull request, follow [Agent validation and PR gate](docs/agent-validation.md) and run:
+Before opening a pull request, follow [Agent validation and PR gate](agent-validation.md) and run:
 
 ```sh
 vp run check
@@ -67,4 +67,4 @@ The workflow already uses TabLodge's existing extension ID. It runs after each G
 
 `vp run version:next` shows the next version based on your local tags.
 
-By contributing, you agree to license your contributions under the [MIT License](LICENSE).
+By contributing, you agree to license your contributions under the [MIT License](../LICENSE).

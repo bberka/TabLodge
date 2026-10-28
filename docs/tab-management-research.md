@@ -2,7 +2,7 @@
 
 These notes keep the useful findings from research done on October 25, 2026. They are background for product decisions, not a current market survey. Prices, store listings, browser features, and competitor behavior may have changed. Check the linked primary sources before publishing a comparison.
 
-For TabLodge's current features, see the [README](../README.md#what-you-can-do). Future ideas are listed under [Future work](../README.md#future-work). The original research described an earlier version called TabNest; its implementation checklist is no longer useful because many of those features have shipped.
+For TabLodge's current features, see the [README](README.md#what-you-can-do). Future ideas are listed under [Future work](README.md#future-work). The original research described an earlier version called TabNest; its implementation checklist is no longer useful because many of those features have shipped.
 
 ## What people need from a tab manager
 
