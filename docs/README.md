@@ -164,7 +164,7 @@ src/lib/                Small utilities
 styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites and mocked browser APIs
 scripts/                Build, Chrome development launch, package verification, and release tooling
-docs/                   All documentation except AGENTS.md: this README, contributing, privacy, architecture, agent workflow, and research
+docs/                   All documentation except AGENTS.md: this README, contributing, privacy, architecture, and agent workflow
 site/                   Astro website for tablodge.bbay.dev
 tsconfig/               TypeScript projects for the pages, service worker, tests, and build tooling
 tsconfig.json           Solution file that `tsc -b` follows into tsconfig/
@@ -202,7 +202,7 @@ See [Privacy](PRIVACY.md) for what is stored, how recovery data is retained, and
 
 Ideas still worth exploring include more actions for open tabs across windows, recently closed tabs in search, storage that scales better for large libraries, more session editing tools, and optional unloading of idle tabs. These are ideas, not promised release dates.
 
-The [tab manager comparison notes](tab-management-research.md) explain the reasoning and link to the original sources. [Mobile app opportunity research](mobile-app-opportunity.md) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
+Research notes live in the issue tracker. The [tab manager comparison notes](https://github.com/bberka/TabLodge/issues/21#issuecomment-6470138750) explain the reasoning and link to the original sources. The [mobile app research](https://github.com/bberka/TabLodge/issues/1#issuecomment-6470139241) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
 
 ## Website
 
