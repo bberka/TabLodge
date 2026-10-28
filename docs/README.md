@@ -151,7 +151,7 @@ vp run browser:install
 
 If Chrome is installed outside the usual path, set `CHROME_BIN` to its executable. If no browser is available, the build watcher still runs.
 
-See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](architecture.md) explains storage, messages, and feature behavior.
+See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](architecture.md) explains storage, messages, and feature behavior. AI agents also follow [AGENTS.md](../AGENTS.md) and the [validation gate](agent-validation.md).
 
 ### Project structure
 
@@ -164,10 +164,14 @@ src/lib/                Small utilities
 styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites and mocked browser APIs
 scripts/                Build, Chrome development launch, package verification, and release tooling
-docs/                   Architecture, tab manager, and mobile app research
+docs/                   All documentation except AGENTS.md: this README, contributing, privacy, architecture, agent workflow, and research
 site/                   Astro website for tablodge.bbay.dev
+tsconfig/               TypeScript projects for the pages, service worker, tests, and build tooling
+tsconfig.json           Solution file that `tsc -b` follows into tsconfig/
 vite.pages.config.ts    Extension page build configuration
 xo.config.ts            Lint and formatting rules
+AGENTS.md               Rules and documentation map for AI agents
+skills-lock.json        Pinned agent skills, restored with `npx skills experimental_install`
 ```
 
 ## Permissions and privacy

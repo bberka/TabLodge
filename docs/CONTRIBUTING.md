@@ -45,6 +45,15 @@ vp run build
 
 In the pull request, explain what changed, why it changed, and how you tested it. Mention any checks you couldn't run. Call out new permissions and storage changes, including how older data is handled. Describe changes people will notice so they can be included in release notes.
 
+## Working with AI agents
+
+Agents follow [AGENTS.md](../AGENTS.md). In short:
+
+- Work on a branch and open a pull request. Nobody, human or agent, pushes to `master` directly.
+- The pull request names the model that did the work, and commits carry only the human author.
+- Every fix or feature includes proof in the pull request, such as a screenshot, recording, or test output, with a before and after for a fix.
+- Before pushing, run the `unslop-*` skills on the changed files only. Pinned skills install with `npx skills experimental_install` from `skills-lock.json`.
+
 ## Releases
 
 TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
