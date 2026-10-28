@@ -4,6 +4,17 @@ import {hostOf} from './web-url';
 import {InsecureMarkFor} from './insecure-mark';
 import type {Settings} from './types';
 
+const devFaviconFor = (url: string) => {
+	try {
+		const appWindow = globalThis as typeof globalThis & {
+			__TABLODGE_DEV_FAVICONS__?: Record<string, string>;
+		};
+		return appWindow.__TABLODGE_DEV_FAVICONS__?.[new URL(url).origin];
+	} catch {
+		return undefined;
+	}
+};
+
 export const faviconUrl = (url: string) =>
 	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
 
@@ -29,6 +40,7 @@ decodes off the main thread, and falls back to a letter tile when no icon can be
 */
 export const Favicon = memo(
 	({url, label, className = '', fallbackSrc}: FaviconProps) => {
+		const devFallbackSrc = devFaviconFor(url);
 		const [failed, setFailed] = useState('');
 		const [triedFallback, setTriedFallback] = useState(false);
 		if (failed === url) {
@@ -45,7 +57,10 @@ export const Favicon = memo(
 		return (
 			<img
 				className={`shrink-0 object-contain ${className}`}
-				src={triedFallback && fallbackSrc ? fallbackSrc : faviconUrl(url)}
+				src={
+					devFallbackSrc ||
+					(triedFallback && fallbackSrc ? fallbackSrc : faviconUrl(url))
+				}
 				alt=""
 				data-favicon=""
 				loading="lazy"
