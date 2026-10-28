@@ -120,7 +120,7 @@ import {
 } from 'lucide-react';
 import {ICON_IDS, type IconId} from './icon-ids';
 
-export type IconCategory =
+type IconCategory =
 	| 'general'
 	| 'work'
 	| 'dev'
@@ -147,25 +147,6 @@ export type IconEntry = {
 
 export const DEFAULT_COLUMN_ICON: IconId = 'bookmark';
 export const DEFAULT_FOLDER_ICON: IconId = 'folder';
-
-export const ICON_CATEGORIES: ReadonlyArray<{id: IconCategory; label: string}> =
-	[
-		{id: 'general', label: 'General'},
-		{id: 'work', label: 'Work'},
-		{id: 'dev', label: 'Dev'},
-		{id: 'media', label: 'Media'},
-		{id: 'reading', label: 'Reading'},
-		{id: 'shopping', label: 'Shopping'},
-		{id: 'travel', label: 'Travel'},
-		{id: 'finance', label: 'Finance'},
-		{id: 'social', label: 'Social'},
-		{id: 'home', label: 'Home'},
-		{id: 'health', label: 'Health'},
-		{id: 'education', label: 'Education'},
-		{id: 'games', label: 'Games'},
-		{id: 'food', label: 'Food'},
-		{id: 'nature', label: 'Nature'},
-	];
 
 // Keyed by id, so adding an id to ICON_IDS without an entry here fails to compile.
 const DEFINITIONS: Record<

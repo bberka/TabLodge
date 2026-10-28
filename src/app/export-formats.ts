@@ -7,6 +7,7 @@ import {
 	SESSIONS_FORMAT_ID,
 	fileNamePrefix,
 } from './backup-format';
+import {escapeHtml} from './escape-html';
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
 
 export type ExportFormat = 'json' | 'html' | 'csv' | 'markdown' | 'txt';
@@ -29,7 +30,7 @@ export type ExportFile = {
 	filename: string;
 };
 
-export const EXPORT_FORMATS: ReadonlyArray<{
+const EXPORT_FORMATS: ReadonlyArray<{
 	id: ExportFormat;
 	extension: string;
 	mime: string;
@@ -112,14 +113,6 @@ function bookmarkSections(
 	return sections;
 }
 
-const escapeHtml = (value: unknown) =>
-	String(value ?? '').replaceAll(
-		/["&'<>]/g,
-		(char) =>
-			({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[
-				char
-			] ?? char,
-	);
 const seconds = (ms: number | undefined) =>
 	ms && Number.isFinite(ms) && ms > 0 ? String(Math.floor(ms / 1000)) : '';
 const addDate = (ms: number | undefined) => {

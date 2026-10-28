@@ -24,23 +24,23 @@ export type InsertPosition = 'before' | 'after';
 Whether a restore recreates a saved split view ("split") or opens its two tabs side by side as normal tabs.
 */
 export type RestoreSplitTabs = 'split' | 'separate';
-/**
-For selection saves while the active tab is in a split view: keep both halves, or only the focused one.
-*/
 export type SessionNameStyle =
 	'title' | 'datetime' | 'date-title' | 'custom' | 'ask';
 /**
 The styles that build a name by themselves: what `ask` falls back to when the name is left empty or no page can ask.
 */
 export type SessionNameFallback = Exclude<SessionNameStyle, 'ask'>;
+/**
+For selection saves while the active tab is in a split view: keep both halves, or only the focused one.
+*/
 export type SaveSplitTabs = 'both' | 'focused';
+
+export type BookmarkQuickAction =
+	'open-current' | 'open-new' | 'copy' | 'edit' | 'delete';
 
 /**
 What clicking a link does: nothing, open in the current tab, or open in a new tab.
 */
-export type BookmarkQuickAction =
-	'open-current' | 'open-new' | 'copy' | 'edit' | 'delete';
-
 export type LinkClickAction = 'none' | 'current' | 'new';
 /**
 What clicking a bookmark does: a link action, or open the bookmark's action menu instead.
@@ -173,7 +173,7 @@ export type Settings = {
 	markLocalLinks: boolean;
 	urlDisplayMode: 'domain' | 'full' | 'url-only' | 'none';
 	groupTitleAction: 'toggle' | 'edit' | 'restore';
-	// ---- Right-click menus (context-menu agent) ----
+	// ---- Right-click menus ----
 	/**
 	Master switch: when off, no right-click menu items are created at all.
 	*/
@@ -188,7 +188,6 @@ export type Settings = {
 	The toolbar icon's own right-click menu (Chrome's "action" context).
 	*/
 	contextMenuActionEnabled: boolean;
-	// ---- end right-click menus ----
 	// ---- Recovery & backups (all local; nothing leaves the browser) ----
 	/**
 	Keep rolling snapshots of the open windows so a crash can be undone (default on).
@@ -230,7 +229,6 @@ export type Settings = {
 	The style used when `sessionNameStyle` is `ask` and the name is left empty (default "date-title").
 	*/
 	sessionNameFallback: SessionNameFallback;
-	// ---- end recovery & backups ----
 };
 
 export type NativeGroup = {
@@ -512,17 +510,12 @@ export type TabLodgeMessages = {
 	*/
 	UPDATE_FOLDER: {folderId: string; name: string; icon?: string};
 	DELETE_FOLDER: {folderId: string};
-	MOVE_GROUP: {groupId: string; folderId: string};
 	DELETE_TAB: {groupId: string; tabId: string};
 	/**
 	Moves (or, with `copy`, duplicates) a saved link into another session, or reorders it inside the same
 	session. It lands next to `targetTabId` (`position` defaults to after) or at the end. Split info of the
 	moved link and its partner is dropped.
 	*/
-	/**
-	Moves every link of `sourceGroupId` into `targetGroupId` (links already there are skipped) and removes the source.
-	*/
-	MERGE_GROUPS: {sourceGroupId: string; targetGroupId: string};
 	MOVE_TAB: {
 		fromGroupId: string;
 		tabId: string;
@@ -536,6 +529,10 @@ export type TabLodgeMessages = {
 		*/
 		restoreTrashId?: string;
 	};
+	/**
+	Moves every link of `sourceGroupId` into `targetGroupId` (links already there are skipped) and removes the source.
+	*/
+	MERGE_GROUPS: {sourceGroupId: string; targetGroupId: string};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
 	ADD_BOOKMARKS: {
@@ -592,7 +589,6 @@ export type TabLodgeMessages = {
 	*/
 	ERASE_DATA: {scope: EraseScope};
 	HANDOFF_NEW_TAB: {brave?: boolean};
-	OPEN_DASHBOARD: {};
 	GET_SNAPSHOTS: {};
 	/**
 	Reopens a snapshot (every window, or just `windowIndex`) in new windows.
@@ -722,7 +718,6 @@ export type TabLodgeResponses = {
 	CREATE_FOLDER: {folder: Folder};
 	UPDATE_FOLDER: {folder: Folder};
 	DELETE_FOLDER: {moved: number} & Undoable;
-	MOVE_GROUP: {};
 	DELETE_TAB: {trashId?: string};
 	MOVE_TAB: {
 		/**
@@ -770,7 +765,6 @@ export type TabLodgeResponses = {
 	*/
 	ERASE_DATA: {sessions: number; bookmarks: number} & Undoable;
 	HANDOFF_NEW_TAB: {handedOff: boolean};
-	OPEN_DASHBOARD: {};
 	GET_SNAPSHOTS: {
 		enabled: boolean;
 		snapshots: SnapshotSummary[];

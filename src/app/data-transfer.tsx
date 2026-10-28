@@ -5,8 +5,7 @@
 //   <ShareDialog open onOpenChange title="Shared sessions" groups={sessions} showStatus={showStatus} />
 //     `groups` is any {name, tabs: {title, url}[]}[] (a Session[] fits as is). Optionally pass
 //     `sources` ([{id, label, description?, groups}]) to let the user choose what to share.
-//   const {openShare, shareDialog} = useShareDialog(showStatus);  // render {shareDialog} once
-//     openShare({title, groups} | {title, sources}) opens it. The dialog offers: HTML page
+//   Pages open it through useShareDialog in lazy-dialogs.tsx. The dialog offers: HTML page
 //     (download), Markdown / plain links / rich text (copy to clipboard).
 import {
 	useEffect,
@@ -55,8 +54,9 @@ import {
 	SelectValue,
 	useRetainedValue,
 } from '../shared/ui';
-import {offerUndo} from './recovery';
-import {send, type ShowStatus} from './common';
+import {downloadFile} from '../shared/download';
+import {offerUndo} from './recovery-core';
+import {messageOf, send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
 import {ColumnLabel} from './icon-label';
 import {
@@ -107,26 +107,6 @@ import {
 
 const plural = (count: number, noun: string, many = `${noun}s`) =>
 	`${count.toLocaleString()} ${count === 1 ? noun : many}`;
-const messageOf = (reason: unknown) =>
-	(reason as {message?: unknown} | null | undefined)?.message;
-
-/**
-Starts a download of a generated file.
-*/
-export function downloadFile(
-	content: BlobPart,
-	mime: string,
-	filename: string,
-) {
-	const url = URL.createObjectURL(new Blob([content], {type: mime}));
-	const anchor = document.createElement('a');
-	anchor.href = url;
-	anchor.download = filename;
-	document.body.append(anchor);
-	anchor.click();
-	anchor.remove();
-	setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 function KindLabel({kind}: {kind: 'sessions' | 'bookmarks'}) {
 	const Icon = kind === 'bookmarks' ? Bookmark : PanelsTopLeft;
@@ -479,7 +459,7 @@ export function BackupDialog({
 
 // ---------------------------------------------------------------- Share
 
-export type ShareSource = {
+type ShareSource = {
 	id: string;
 	label: string;
 	description?: string;
@@ -679,31 +659,6 @@ export function ShareDialog({
 			</DialogContent>
 		</Dialog>
 	);
-}
-
-/**
-Hook form: `openShare(payload)` opens the dialog; render `shareDialog` once.
-*/
-export function useShareDialog(showStatus: ShowStatus) {
-	const [payload, setPayload] = useState<SharePayload | null>(null);
-	const [open, setOpen] = useState(false);
-	const shown = useRetainedValue(payload, open && payload != null);
-	return {
-		openShare(next: SharePayload) {
-			setPayload(next);
-			setOpen(true);
-		},
-		shareDialog: (
-			<ShareDialog
-				open={open}
-				title={shown?.title}
-				groups={shown?.groups}
-				sources={shown?.sources}
-				showStatus={showStatus}
-				onOpenChange={setOpen}
-			/>
-		),
-	};
 }
 
 // ---------------------------------------------------------------- Import

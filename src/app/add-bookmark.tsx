@@ -1,4 +1,4 @@
-import {useEffect, useState, type SyntheticEvent} from 'react';
+import {useState, type SyntheticEvent} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Plus} from 'lucide-react';
 import {
@@ -14,7 +14,7 @@ import {
 } from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import {send, useTabLodgeState} from './common';
+import {send, useCloseOnEscape, useTabLodgeState} from './common';
 import {LinkSummary} from './favicon';
 import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
@@ -37,16 +37,7 @@ function AddBookmarkPrompt() {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
 
-	useEffect(() => {
-		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				window.close();
-			}
-		};
-
-		document.addEventListener('keydown', onKey);
-		return () => document.removeEventListener('keydown', onKey);
-	}, []);
+	useCloseOnEscape();
 
 	if (!state) {
 		return stateError ? (

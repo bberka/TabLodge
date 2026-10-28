@@ -52,7 +52,8 @@ export function LoadMore({
 
 /**
 How many items of a long list to draw: starts at one `page`, grows by a page per `more()`, and starts over
-when `signature` (the filter, search or sort) changes.
+when `signature` (the filter, search or sort) changes. `showUpTo(limit)` sets the limit directly, to reveal
+an item further down the list.
 */
 export function usePagedLimit(signature: string, page: number) {
 	const [state, setState] = useState({signature, limit: page});
@@ -65,5 +66,9 @@ export function usePagedLimit(signature: string, page: number) {
 			})),
 		[signature, page],
 	);
-	return [limit, more] as const;
+	const showUpTo = useCallback(
+		(next: number) => setState({signature, limit: next}),
+		[signature],
+	);
+	return [limit, more, showUpTo] as const;
 }

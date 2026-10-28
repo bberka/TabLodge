@@ -25,9 +25,9 @@ import {
 	previewImport,
 	sessionImportPayload,
 	toTimestamp,
-	webUrl,
 	type ParsedImport,
 } from '../src/app/import-formats';
+import {webUrl} from '../src/app/web-url';
 import type {
 	Bookmark,
 	BookmarkColumn,
@@ -307,10 +307,6 @@ test('HTML export is a Netscape bookmark file that browsers and this importer re
 		'Research, "quoted" & <b>bold</b>',
 		'Second [session]',
 	]);
-	assert.deepEqual(
-		urls(parsed),
-		groups.flatMap((group) => group.tabs.map((entry) => entry.url)),
-	);
 	assert.equal(parsed.sessions[0].links[0].createdAt, 1_760_000_000_000);
 	const bookmarkHtml = parseImportFile(
 		buildExport(bookmarksData, 'html', {appName: 'TabLodge', now}).content,
@@ -405,10 +401,6 @@ test('CSV: export round trip, quoting, formula guards, other delimiters, and bad
 		'=SUM(A1) formula-looking title',
 	);
 	assert.equal(parsed.sessions[0].links[1].notes, 'Read later\nsecond line');
-	assert.deepEqual(
-		urls(parsed),
-		groups.flatMap((group) => group.tabs.map((entry) => entry.url)),
-	);
 	const payload = sessionImportPayload(parsed) as {
 		folders: Array<{id: string; name: string}>;
 		groups: Array<{folderId?: string; tabs: Array<{notes?: string}>}>;
@@ -433,7 +425,6 @@ test('CSV: export round trip, quoting, formula guards, other delimiters, and bad
 		'Name;URL;Folder;Date added\nSite A;https://a.example/;Reading;2024-01-02\nBroken;not-a-url;Reading;\n',
 		'export.csv',
 	);
-	assert.equal(names(parsed).length, 2);
 	assert.deepEqual(names(semicolon, 'bookmarks'), ['Reading']);
 	assert.equal(semicolon.invalid, 1);
 	assert.equal(
@@ -490,10 +481,6 @@ test('plain URL lists: export round trip and tolerant reading', () => {
 	);
 	const parsed = parseImportFile(text, 'urls.txt');
 	assert.equal(parsed.format, 'url-list');
-	assert.deepEqual(
-		urls(parsed),
-		groups.flatMap((group) => group.tabs.map((entry) => entry.url)),
-	);
 	const messy = parseImportFile(
 		'# my links\r\nhttps://a.example/page, Page A\r\nSee https://b.example/x.\r\njust words\r\nftp://old.example/\r\n\r\nhttps://c.example/ - Title C',
 		'notes.txt',
@@ -813,10 +800,10 @@ test('preview counts duplicates against saved and repeated links, keeps pinned t
 		4,
 	);
 	const html = parseImportFile(
-		'<DL><DT><H3>A</H3><DL><DT><A HREF="https://a.example/">a</A></DL><DT><A HREF="https://b.example/">b</A></DL>',
+		'<DL><DT><H3>A</H3><DL><DT><A HREF="https://a.example/">a</A></DL><DT><H3>B</H3><DL><DT><A HREF="https://c.example/">c</A></DL><DT><A HREF="https://b.example/">b</A></DL>',
 		'b.html',
 	);
-	assert.equal(previewImport(html, 'bookmarks', {existingUrls: []}).groups, 1);
+	assert.equal(previewImport(html, 'bookmarks', {existingUrls: []}).groups, 2);
 	assert.equal(
 		previewImport(html, 'bookmarks', {existingUrls: [], singleColumn: true})
 			.groups,

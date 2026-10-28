@@ -22,7 +22,7 @@ const PRIVATE_IPV4 =
 /**
 True for hosts on this device or a home/office network: `localhost`, `*.localhost`, `*.local`, 127.0.0.0/8, 0.0.0.0, `[::1]`, 10.0.0.0/8, 192.168.0.0/16, and 172.16.0.0/12.
 */
-export function isLocalHost(hostname: string): boolean {
+function isLocalHost(hostname: string): boolean {
 	const host = hostname.toLowerCase().replace(/\.$/, '');
 	return (
 		host === 'localhost' ||

@@ -106,10 +106,7 @@ test('open tabs, columns, folders and commands are found', () => {
 	assert.deepEqual(ids('inbox').slice(0, 1), ['tab:7']);
 	assert.ok(ids('reading').includes('column:c1'));
 	assert.ok(ids('travel').includes('folder:f1'));
-	assert.ok(
-		ids('prefs').length > 0 ||
-			ids('preferences').includes('command:open-settings'),
-	);
+	assert.ok(ids('preferences').includes('command:open-settings'));
 	assert.equal(ids('new col')[0], 'command:new-column');
 });
 

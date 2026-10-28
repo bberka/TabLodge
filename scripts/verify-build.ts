@@ -36,7 +36,6 @@ const {values} = parseArgs({
 const root = resolve(projectRoot, values.dir);
 const name = relative(projectRoot, root);
 const errors: string[] = [];
-const warnings: string[] = [];
 
 const messageOf = (error: unknown) =>
 	error instanceof Error ? error.message : String(error);
@@ -300,9 +299,6 @@ async function verifyExtension() {
 }
 
 await verifyExtension();
-for (const warning of warnings) {
-	console.warn(`WARNING: ${warning}`);
-}
 
 if (errors.length > 0) {
 	for (const error of errors) {

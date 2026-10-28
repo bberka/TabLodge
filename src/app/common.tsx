@@ -26,6 +26,34 @@ import {PROJECT} from './project';
 
 const STORAGE_KEY = 'tablodge.state';
 
+/**
+"1 tab", "2 tabs": a count with its noun, `many` when the plural is not just an added "s".
+*/
+export const plural = (count: number, one: string, many = `${one}s`) =>
+	`${count} ${count === 1 ? one : many}`;
+
+/**
+The message of a rejection reason. Rejections are usually Errors, but any object with a message counts.
+*/
+export const messageOf = (reason: unknown) =>
+	(reason as {message?: string} | null | undefined)?.message;
+
+/**
+Closes this window when Escape is pressed, for the small prompt windows the service worker opens.
+*/
+export function useCloseOnEscape() {
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				window.close();
+			}
+		};
+
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
+	}, []);
+}
+
 // Message types whose payload has no required fields can be sent without a second argument.
 type OptionalFields<K extends TabLodgeMessageType> =
 	{} extends TabLodgeMessages[K]
@@ -231,12 +259,9 @@ const wait = (ms: number) =>
 	new Promise<void>((resolve) => {
 		setTimeout(resolve, ms);
 	});
-// Rejections are usually Errors, but any object with a message counts.
-const errorMessage = (reason: unknown): unknown =>
-	(reason as {message?: unknown} | null | undefined)?.message;
 const isTransportError = (reason: unknown) =>
 	/receiving end does not exist|could not establish connection|message port closed|extension context invalidated/i.test(
-		String(errorMessage(reason) || reason || ''),
+		String(messageOf(reason) || reason || ''),
 	);
 
 // The service worker may still be waking up when a page opens. Transport failures are retried
@@ -321,8 +346,7 @@ export function useTabLodgeState() {
 				isTransportError(reason)
 					? `${PROJECT.name}’s background service is not responding. Reload the page or the extension and try again.`
 					: String(
-							errorMessage(reason) ||
-								`${PROJECT.name} could not load saved data.`,
+							messageOf(reason) || `${PROJECT.name} could not load saved data.`,
 						),
 			);
 			return null;
