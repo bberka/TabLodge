@@ -236,6 +236,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
 	dashboardWidth: 'default',
+	removeTrackingParameters: false,
 	simplifyUrls: true,
 	markInsecureLinks: true,
 	markLocalLinks: false,
@@ -539,6 +540,82 @@ function normalizeUrl(value: unknown): string | null {
 		return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
 	} catch {
 		return null;
+	}
+}
+
+// Mirrors src/app/tracking-parameters.ts; the classic worker cannot import the page helper.
+const TRACKING_PARAMETER_NAMES = new Set([
+	'_ga',
+	'_gl',
+	'_hsenc',
+	'_hsmi',
+	'__hsfp',
+	'__hssc',
+	'__hstc',
+	'dclid',
+	'epik',
+	'fb_action_ids',
+	'fb_action_types',
+	'fb_ref',
+	'fb_source',
+	'fbclid',
+	'gad_source',
+	'gclsrc',
+	'gclid',
+	'gbraid',
+	'hsctatracking',
+	'igshid',
+	'li_fat_id',
+	'mc_cid',
+	'mc_eid',
+	'mkt_tok',
+	'msclkid',
+	'rb_clickid',
+	's_cid',
+	'srsltid',
+	'ttclid',
+	'twclid',
+	'vero_conv',
+	'vero_id',
+	'wbraid',
+	'yclid',
+]);
+
+function isTrackingParameter(name: string) {
+	const normalized = name.toLowerCase();
+	return (
+		normalized.startsWith('utm_') || TRACKING_PARAMETER_NAMES.has(normalized)
+	);
+}
+
+function stripTrackingParameters(rawUrl: string) {
+	try {
+		const url = new URL(rawUrl);
+		if (!['http:', 'https:'].includes(url.protocol)) {
+			return rawUrl;
+		}
+
+		const query = url.search.slice(1).split('&');
+		const kept = query.filter((part) => {
+			const separator = part.indexOf('=');
+			const key = separator === -1 ? part : part.slice(0, separator);
+			let name = key;
+			try {
+				name = decodeURIComponent(key.replaceAll('+', ' '));
+			} catch {
+				// Keep malformed keys unless their raw form is a known tracker.
+			}
+
+			return !isTrackingParameter(name);
+		});
+		if (kept.length === query.length) {
+			return rawUrl;
+		}
+
+		url.search = kept.length > 0 ? `?${kept.join('&')}` : '';
+		return url.href;
+	} catch {
+		return rawUrl;
 	}
 }
 
@@ -1080,6 +1157,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 					? 'title-url'
 					: 'markdown',
 		dashboardBehavior: raw.dashboardBehavior === 'move' ? 'move' : 'switch',
+		removeTrackingParameters: raw.removeTrackingParameters === true,
 		simplifyUrls: raw.simplifyUrls !== false,
 		markInsecureLinks: raw.markInsecureLinks !== false,
 		markLocalLinks: raw.markLocalLinks === true,
@@ -2631,7 +2709,12 @@ async function restoreRecords(
 					(!tab.pinned || settings.includePinnedTabs) &&
 					isCapturable(tab, settings),
 			)
-			.map((tab) => normalizeUrl(tab.url)),
+			.map((tab) => {
+				const url = normalizeUrl(tab.url);
+				return settings.removeTrackingParameters && url
+					? stripTrackingParameters(url)
+					: url;
+			}),
 	);
 	const shouldSkip = settings.restoreDuplicateHandling === 'skip';
 	const opened: RestoreRecordsResult['opened'] = [];
@@ -2645,7 +2728,10 @@ async function restoreRecords(
 
 	// Tabs open in saved order, so the two halves of a pair are created next to each other.
 	for (const saved of valid) {
-		if (shouldSkip && existing.has(saved.url)) {
+		const url = settings.removeTrackingParameters
+			? stripTrackingParameters(saved.url)
+			: saved.url;
+		if (shouldSkip && existing.has(url)) {
 			skipped += 1;
 			continue;
 		}
@@ -2653,14 +2739,14 @@ async function restoreRecords(
 		try {
 			const created = await chrome.tabs.create({
 				windowId: target.id,
-				url: saved.url,
+				url,
 				active: false,
 				pinned: saved.pinned,
 			});
 			opened.push({saved, tabId: created.id});
 			// Tabs.create always resolves with a tab that has an id.
 			openedIds.set(saved, created.id!);
-			existing.add(saved.url);
+			existing.add(url);
 			if (saved.nativeGroup && !saved.pinned) {
 				const key =
 					saved.nativeGroup.key || saved.nativeGroup.title || 'default';
