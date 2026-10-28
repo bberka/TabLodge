@@ -51,6 +51,10 @@ Worker recovery code lives in `extension/service-worker.ts`; the UI lives in `sr
 | `tablodge.trash` | Deleted items with their original positions and deletion times |
 | `tablodge.undo` | Up to three recent undo records |
 
+### Auto-archive
+
+The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into the folder named Archived, creating it if missing. The move runs in the mutation queue, does not change `updatedAt`, and deletes nothing. Moving a session back out through the editor updates `updatedAt`, so it is not archived again until it has been idle for the full period.
+
 ### Snapshots
 
 Snapshots are enabled by default. Captures include normal windows, ordinary HTTP and HTTPS tabs, active and pinned state, tab groups, split view pairs, and window focus and state. Incognito windows and excluded sites are omitted.
