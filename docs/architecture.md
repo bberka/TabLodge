@@ -122,7 +122,7 @@ Save scopes include selected tabs, the current window, all windows, a native tab
 
 Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during capture. Native group metadata is restored where browser APIs allow it.
 
-Pinned tabs are excluded by default. When included, they can be closed only after the session is written and **Close tabs after saving** is enabled. The worker checks each tab's URL and pinned state again before closing it.
+Pinned tabs are excluded by default. When included, they can be closed only after the session is written and **Close tabs after saving** is enabled. The worker checks each tab's URL and pinned state again before closing it. When that closes every tab in a window, the worker opens a new tab so the window stays, unless **When a save empties a window** is set to close it and another normal window of the same incognito state is open. It then focuses that window and closes the emptied one. The last window is never closed.
 
 The default restore destination is a new window unless the current window contains only the current tab. Settings also offers current window and always new window policies. Ctrl/Cmd clicks keep saved links; Shift clicks force a new window. A failed restore never removes its saved link. Duplicate handling, activation, and unloading of restored background tabs are separate preferences. When **Remove tracking parameters** is enabled, restore duplicate checks compare the cleaned destination while the saved URL remains unchanged.
 
