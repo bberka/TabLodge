@@ -369,6 +369,18 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'emptyWindowAfterSave',
+				label: 'When a save empties a window',
+				help: 'A window whose tabs all close keeps a new tab by default. Choose to close it instead when another browser window is open, and switch to that window. The last window always stays open.',
+				type: 'select',
+				parent: 'closeOnSave',
+				when: (current) => current.closeOnSave,
+				options: [
+					['new-tab', 'Keep it open with a new tab'],
+					['close-extra', 'Close it if another window is open'],
+				],
+			},
+			{
 				name: 'saveDuplicateHandling',
 				label: 'When a saved URL is saved again',
 				help: 'Applies to saving tabs. Rejected duplicates are not stored twice, but their tabs still close if close-after-save is on.',
