@@ -552,8 +552,17 @@ function SharePreviewPanel({
 					</h3>
 					<Badge variant="outline">{formatLabel}</Badge>
 				</div>
-				<p className="text-xs text-muted-foreground" aria-live="polite">
+				<p
+					className="text-right text-xs text-muted-foreground"
+					aria-live="polite"
+				>
 					{plural(counts.links, 'link')} in {plural(counts.groups, 'group')}
+					{notShown.length > 0 && (
+						<>
+							<span aria-hidden="true"> · </span>
+							Not shown in preview: {notShown.join(' and ')}
+						</>
+					)}
 				</p>
 			</div>
 			{counts.links === 0 ? (
@@ -561,7 +570,7 @@ function SharePreviewPanel({
 					No links to preview.
 				</p>
 			) : preview.format === 'html' ? (
-				<div className="mt-3 max-h-48 overflow-y-auto rounded-md border border-border bg-background p-3">
+				<div className="mt-3 max-h-[min(24rem,50dvh)] overflow-y-auto rounded-md border border-border bg-background p-3">
 					<div className="mx-auto max-w-xl">
 						<h4 className="text-base font-semibold leading-tight [overflow-wrap:anywhere]">
 							{pageTitle}
@@ -627,11 +636,11 @@ function SharePreviewPanel({
 					</div>
 				</div>
 			) : preview.format === 'markdown' || preview.format === 'links' ? (
-				<pre className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
+				<pre className="mt-3 max-h-[min(24rem,50dvh)] overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
 					{preview.text}
 				</pre>
 			) : (
-				<div className="mt-3 max-h-48 space-y-3 overflow-y-auto rounded-md border border-border bg-background p-3">
+				<div className="mt-3 max-h-[min(24rem,50dvh)] space-y-3 overflow-y-auto rounded-md border border-border bg-background p-3">
 					{preview.groups.map((group, groupIndex) => (
 						<div key={`${group.name}-${groupIndex}`}>
 							<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
@@ -652,11 +661,6 @@ function SharePreviewPanel({
 						</div>
 					))}
 				</div>
-			)}
-			{notShown.length > 0 && (
-				<p className="mt-2 text-[11px] text-muted-foreground">
-					Not shown in preview: {notShown.join(' and ')}.
-				</p>
 			)}
 		</section>
 	);
@@ -734,14 +738,17 @@ export function ShareDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="lg">
-				<DialogHeader>
+			<DialogContent
+				size="lg"
+				className="max-h-[calc(100dvh-1rem)] overflow-hidden"
+			>
+				<DialogHeader className="shrink-0">
 					<DialogTitle>Share</DialogTitle>
 					<DialogDescription>
 						Choose what to share and how. Nothing leaves your browser.
 					</DialogDescription>
 				</DialogHeader>
-				<DialogBody>
+				<DialogBody className="min-h-0 flex-1 overflow-y-auto pr-1">
 					{all.length > 1 && (
 						<RadioCardGroup
 							label="What to share"
@@ -784,7 +791,7 @@ export function ShareDialog({
 						formatLabel={chosen.title}
 					/>
 				</DialogBody>
-				<DialogFooter>
+				<DialogFooter className="shrink-0">
 					<Button
 						type="button"
 						variant="outline"
