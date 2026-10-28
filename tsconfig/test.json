@@ -1,11 +1,11 @@
 {
 	// Vitest suites (run in Node, exercising extension code with mocked chrome APIs).
-	"extends": "./tsconfig.base.json",
+	"extends": "./base.json",
 	"compilerOptions": {
-		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+		"tsBuildInfoFile": "../node_modules/.tmp/tsconfig.test.tsbuildinfo",
 		"lib": ["ES2023", "DOM", "DOM.Iterable"],
 		"jsx": "react-jsx",
 		"types": ["node", "chrome"]
 	},
-	"include": ["tests/**/*.ts"]
+	"include": ["../tests/**/*.ts"]
 }
