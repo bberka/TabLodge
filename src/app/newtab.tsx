@@ -76,6 +76,8 @@ import {
 	plural,
 	useTabLodgeState,
 	useTabSelection,
+	forceAddAction,
+	duplicatesNote,
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {SessionManager} from './dashboard';
@@ -583,6 +585,15 @@ function NewTab() {
 		}
 
 		await reload();
+		if (result.rejectedTabIds.length > 0) {
+			showStatus(
+				`${result.count > 0 ? `Saved ${plural(result.count, 'tab')}.` : 'Nothing saved.'}${duplicatesNote(result.skipped)}`,
+				false,
+				{action: forceAddAction(result.rejectedTabIds, showStatus, reload)},
+			);
+			return;
+		}
+
 		// With "Close tabs after saving" the window just lost its tabs: Undo reopens them from the new session.
 		if (
 			settings.closeOnSave === false ||

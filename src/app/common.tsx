@@ -439,6 +439,42 @@ export type ShowStatus = (
 	options?: StatusOptions,
 ) => void;
 
+/**
+The toast button after a save rejected duplicates: saves those still open tabs anyway.
+*/
+export function forceAddAction(
+	tabIds: number[],
+	showStatus: ShowStatus,
+	afterAdd: () => unknown,
+): StatusAction {
+	return {
+		label: 'Force add',
+		async onClick() {
+			const result = await send('SAVE_TABS', {
+				scope: 'all-windows',
+				tabIds,
+				includePinned: true,
+				allowDuplicates: true,
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not add those tabs.', true);
+				return;
+			}
+
+			showStatus(`Added ${plural(result.count, 'tab')}.`, false, {
+				toast: true,
+			});
+			await afterAdd();
+		},
+	};
+}
+
+/**
+The note for a save that left duplicates out, such as " 2 duplicates not saved." (empty when none).
+*/
+export const duplicatesNote = (skipped: number) =>
+	skipped ? ` ${plural(skipped, 'duplicate')} not saved.` : '';
+
 export function useStatus(): [Status | null, ShowStatus] {
 	const [status, setStatus] = useState<Status | null>(null);
 	const showStatus: ShowStatus = (message, error = false, options = {}) =>

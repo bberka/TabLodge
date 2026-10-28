@@ -57,6 +57,9 @@ import {
 	useStatus,
 	useTabLodgeState,
 	useTabSelection,
+	forceAddAction,
+	duplicatesNote,
+	plural,
 } from './common';
 import type {SaveScope, Session} from './types';
 import {LinkSummary} from './favicon';
@@ -213,9 +216,13 @@ function Popup() {
 		setBusy('');
 		if (result?.ok) {
 			showStatus(
-				`Saved ${result.count} ${result.count === 1 ? 'tab' : 'tabs'} in ${result.groups} ${result.groups === 1 ? 'session' : 'sessions'}${result.skipped ? ` · ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'} not saved again` : ''}.`,
+				`Saved ${plural(result.count, 'tab')} in ${plural(result.groups, 'session')}.${duplicatesNote(result.skipped)}`,
 				false,
-				{toast: true},
+				result.rejectedTabIds.length > 0
+					? {
+							action: forceAddAction(result.rejectedTabIds, showStatus, reload),
+						}
+					: {toast: true},
 			);
 			setChooseOpen(false);
 			await reload();

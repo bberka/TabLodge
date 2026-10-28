@@ -484,6 +484,10 @@ export type TabLodgeMessages = {
 		tabIds?: number[];
 		groupName?: string;
 		includePinned?: boolean;
+		/**
+		Store tabs whose address is already saved even when the duplicate setting rejects them.
+		*/
+		allowDuplicates?: boolean;
 	};
 	PREVIEW_SESSION_NAME: {
 		style?: SessionNameStyle;
@@ -653,6 +657,10 @@ export type SaveResult = {
 	count: number;
 	groups: number;
 	skipped: number;
+	/**
+	Open tabs rejected as duplicates; they stay open so a save can offer to add them anyway.
+	*/
+	rejectedTabIds: number[];
 	groupId: string | null;
 };
 /**
