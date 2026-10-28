@@ -15,7 +15,67 @@ export type ShareGroup = {
 };
 export type ShareMethod = 'html' | 'markdown' | 'links' | 'rich';
 
+const SHARE_PREVIEW_GROUP_LIMIT = 3;
+const SHARE_PREVIEW_LINK_LIMIT = 3;
+
 const label = (link: ShareLink) => String(link.title || link.url);
+
+export type SharePreviewGroup = Omit<ShareGroup, 'tabs'> & {
+	tabs: readonly ShareLink[];
+	moreLinks: number;
+};
+type SharePreviewBase = {
+	groups: SharePreviewGroup[];
+	moreGroups: number;
+	omittedLinks: number;
+};
+export type SharePreview = SharePreviewBase &
+	({format: 'html'} | {format: 'markdown' | 'links' | 'rich'; text: string});
+
+export function sharePreview(
+	groups: readonly ShareGroup[],
+	method: ShareMethod,
+): SharePreview {
+	const shownGroups = groups.slice(0, SHARE_PREVIEW_GROUP_LIMIT);
+	const previewGroups = shownGroups.map((group) => ({
+		...group,
+		tabs: group.tabs.slice(0, SHARE_PREVIEW_LINK_LIMIT),
+		moreLinks: Math.max(0, group.tabs.length - SHARE_PREVIEW_LINK_LIMIT),
+	}));
+	const sampleGroups: ShareGroup[] = previewGroups.map(
+		({name, description, createdAt, tabs}) => ({
+			name,
+			...(description !== undefined && {description}),
+			...(createdAt !== undefined && {createdAt}),
+			tabs,
+		}),
+	);
+	const base: SharePreviewBase = {
+		groups: previewGroups,
+		moreGroups: Math.max(0, groups.length - shownGroups.length),
+		omittedLinks:
+			groups.reduce((count, group) => count + group.tabs.length, 0) -
+			previewGroups.reduce((count, group) => count + group.tabs.length, 0),
+	};
+
+	switch (method) {
+		case 'html': {
+			return {...base, format: method};
+		}
+
+		case 'markdown': {
+			return {...base, format: method, text: shareMarkdown(sampleGroups)};
+		}
+
+		case 'links': {
+			return {...base, format: method, text: shareLinks(sampleGroups)};
+		}
+
+		case 'rich': {
+			return {...base, format: method, text: shareRich(sampleGroups).text};
+		}
+	}
+}
 
 export function shareCounts(groups: readonly ShareGroup[]) {
 	return {
