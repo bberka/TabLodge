@@ -124,6 +124,75 @@ export function parseSessionDragData(raw: unknown): SessionDragData | null {
 	};
 }
 
+/**
+The one link a dragged or pasted `DataTransfer` carries, or null when it holds no web address. The title is empty
+when the source gave none.
+*/
+export function parseDraggedLink(
+	dataTransfer: DataTransfer | null,
+): {url: string; title: string} | null {
+	if (!dataTransfer) {
+		return null;
+	}
+
+	let raw = '';
+	let title = '';
+	const mozUrl =
+		dataTransfer.getData('text/x-moz-url') ||
+		dataTransfer.getData('application/x-moz-url');
+	if (mozUrl) {
+		const [url, ...titleParts] = mozUrl.split(/\r?\n/);
+		raw = url;
+		title = titleParts.join(' ').trim();
+	}
+
+	raw ||=
+		dataTransfer
+			.getData('text/uri-list')
+			.split(/\r?\n/)
+			.find((line) => line.trim() && !line.trimStart().startsWith('#')) || '';
+	if (!raw) {
+		const html = dataTransfer.getData('text/html');
+		if (html) {
+			const anchor = new DOMParser()
+				.parseFromString(html, 'text/html')
+				.querySelector('a[href]');
+			raw = anchor?.getAttribute('href') || '';
+			title ||= anchor?.textContent?.trim() || '';
+		}
+	}
+
+	raw ||= dataTransfer.getData('text/plain').trim();
+	const url = webUrl(raw);
+	if (!url) {
+		return null;
+	}
+
+	return {
+		url,
+		title: title
+			.replaceAll(/[\u0000-\u001F\u007F]/g, ' ')
+			.trim()
+			.slice(0, 500),
+	};
+}
+
+/**
+Every link a drop carries: all links of a dragged session, otherwise the single dragged link.
+*/
+export function parseDroppedLinks(
+	dataTransfer: DataTransfer,
+): Array<{url: string; title: string}> {
+	if (dragPayloadKind(dataTransfer.types) === 'session') {
+		return (
+			parseSessionDragData(dataTransfer.getData(SESSION_DRAG_TYPE))?.links ?? []
+		);
+	}
+
+	const link = parseDraggedLink(dataTransfer);
+	return link ? [link] : [];
+}
+
 export function activateSessionTitle<E, R>(
 	action: string | undefined,
 	handlers: {

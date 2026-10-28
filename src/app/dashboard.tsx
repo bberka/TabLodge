@@ -91,6 +91,9 @@ import type {ExportData} from './export-formats';
 import {
 	activateSessionTitle,
 	applyLinkDrag,
+	dragPayloadKind,
+	parseDroppedLinks,
+	shouldBlockDocumentDrop,
 	writeClipboard,
 } from './interaction-actions';
 import type {
@@ -363,6 +366,28 @@ export function SessionManager({
 
 		return byGroup;
 	}, [selected]);
+
+	// Links are only saved by drops on a session. Elsewhere a link drag shows the "no drop" cursor and
+	// a stray drop is swallowed so the page does not navigate to the link.
+	useEffect(() => {
+		const guard = (event: globalThis.DragEvent) => {
+			if (!shouldBlockDocumentDrop(event)) {
+				return;
+			}
+
+			event.preventDefault();
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect = 'none';
+			}
+		};
+
+		document.addEventListener('dragover', guard);
+		document.addEventListener('drop', guard);
+		return () => {
+			document.removeEventListener('dragover', guard);
+			document.removeEventListener('drop', guard);
+		};
+	}, []);
 
 	useEffect(() => {
 		if (!state) {
@@ -879,6 +904,40 @@ export function SessionManager({
 		await reload();
 	}
 
+	async function addDroppedLinks(
+		group: Session,
+		links: Array<{url: string; title: string}>,
+		targetTabId: string | null,
+		position?: InsertPosition,
+	) {
+		if (links.length === 0) {
+			showStatus('Only regular http and https links can be saved.', true);
+			return;
+		}
+
+		const result = await send('ADD_LINKS_TO_SESSION', {
+			groupId: group.id,
+			links,
+			targetTabId,
+			position,
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not add the dropped links.', true);
+			return;
+		}
+
+		await reload();
+		const duplicates = result.skipped
+			? ` ${plural(result.skipped, 'duplicate')} skipped.`
+			: '';
+		offerUndo(
+			`Added ${plural(result.added, 'link')} to “${group.name}”.${duplicates}`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
+	}
+
 	async function placeGroup(
 		draggedId: string,
 		targetId: string,
@@ -929,14 +988,16 @@ export function SessionManager({
 			dragStore.set({dragging: null, mark: null});
 		},
 		over(group: Session, event: DragEvent<HTMLElement>) {
-			const mark = resolveDropMark(group, event, dragItemRef.current);
+			const item = dragItemRef.current;
+			const mark = resolveDropMark(group, event, item);
 			if (!mark) {
 				return;
 			}
 
 			event.preventDefault();
+			// Links from outside this list (a page, a bookmark, another window) are always copied in.
 			event.dataTransfer.dropEffect =
-				mark.kind !== 'session' && (event.ctrlKey || event.metaKey)
+				!item || (mark.kind !== 'session' && (event.ctrlKey || event.metaKey))
 					? 'copy'
 					: 'move';
 			const old = dragStore.mark;
@@ -952,11 +1013,24 @@ export function SessionManager({
 		drop(group: Session, event: DragEvent<HTMLElement>) {
 			const item = dragItemRef.current;
 			const mark = resolveDropMark(group, event, item);
-			if (!item || !mark) {
+			if (!mark) {
 				return;
 			}
 
 			event.preventDefault();
+			if (!item) {
+				// Drag data is only readable now, before the first await.
+				const links = parseDroppedLinks(event.dataTransfer);
+				drag.end();
+				void addDroppedLinks(
+					group,
+					links,
+					mark.kind === 'tab' ? mark.tabId : null,
+					mark.kind === 'tab' ? mark.position : undefined,
+				);
+				return;
+			}
+
 			const copy = event.ctrlKey || event.metaKey;
 			drag.end();
 			if (item.kind === 'session' && mark.kind === 'session') {
@@ -2100,11 +2174,17 @@ function resolveDropMark(
 	event: DragEvent<HTMLElement>,
 	item: DragItem | null,
 ): DropMark | null {
-	if (!item) {
+	// No drag of ours in progress: only a link from a page, a bookmark, or another window can land.
+	if (
+		!item &&
+		!['link', 'bookmark', 'session'].includes(
+			dragPayloadKind(event.dataTransfer.types) ?? '',
+		)
+	) {
 		return null;
 	}
 
-	if (item.kind === 'session') {
+	if (item?.kind === 'session') {
 		if (item.id === group.id) {
 			return null;
 		}
@@ -2120,7 +2200,9 @@ function resolveDropMark(
 
 	const row = (event.target as Element).closest<HTMLElement>('[data-tab-id]');
 	if (!row?.dataset.tabId) {
-		return item.groupId === group.id && !(event.ctrlKey || event.metaKey)
+		return item?.kind === 'tab' &&
+			item.groupId === group.id &&
+			!(event.ctrlKey || event.metaKey)
 			? null
 			: {kind: 'into', groupId: group.id};
 	}
@@ -2132,7 +2214,11 @@ function resolveDropMark(
 		entry.some((tab) => tab.id === row.dataset.tabId),
 	);
 	// A split pair moves as a unit: dropping beside one half lands outside the pair.
-	if (item.groupId === group.id && run?.some((tab) => tab.id === item.tabId)) {
+	if (
+		item?.kind === 'tab' &&
+		item.groupId === group.id &&
+		run?.some((tab) => tab.id === item.tabId)
+	) {
 		return null;
 	}
 

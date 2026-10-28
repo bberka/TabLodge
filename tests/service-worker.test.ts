@@ -2760,6 +2760,36 @@ test('UNDO restores a backup restore and reset settings, and resyncs settings', 
 	assert.equal(harness.state.settings.copyFormat, 'url');
 });
 
+test('ADD_BOOKMARKS skips links already in the column and reports them', async () => {
+	const state = stateWithSession();
+	state.bookmarks = [];
+	const harness = createWorkerHarness(state);
+	const columnId = 'bookmark-unfiled';
+	const first = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		columnId,
+		bookmarks: [{url: 'https://example.com/a', title: 'A'}],
+	});
+	assert.equal(first.ok, true, first.error);
+	const mixed = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		columnId,
+		bookmarks: [
+			{url: 'https://example.com/a', title: 'A'},
+			{url: 'https://example.com/b', title: 'B'},
+		],
+	});
+	assert.equal(mixed.ok, true, mixed.error);
+	assert.equal(mixed.count, 1);
+	assert.equal(mixed.skipped, 1);
+	const again = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		columnId,
+		bookmarks: [{url: 'https://example.com/a', title: 'A'}],
+	});
+	assert.equal(again.ok, false);
+});
+
 test('ADD_BOOKMARKS offers undo only when asked, and undo removes just those bookmarks', async () => {
 	const harness = createWorkerHarness(bookmarksState());
 	const plain = await harness.sendMessage({
@@ -4192,6 +4222,38 @@ test('MOVE_TAB moves a link to another session, drops split info for both halves
 		harness.state.groups.some((group) => group.id === 'C'),
 		false,
 	);
+});
+
+test('ADD_LINKS_TO_SESSION inserts web links at the target, skips known addresses, and rejects others', async () => {
+	const harness = createWorkerHarness(reorderState());
+	const known = 'https://example.com/known';
+	harness.state.groups.find((group) => group.id === 'B')!.tabs[0].url = known;
+	const added = await harness.sendMessage({
+		type: 'ADD_LINKS_TO_SESSION',
+		groupId: 'B',
+		targetTabId: 'b1',
+		position: 'after',
+		links: [
+			{url: 'https://example.com/new', title: 'New page'},
+			{url: known, title: 'Known'},
+			{url: 'javascript:alert(1)', title: 'Bad'},
+		],
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal(added.added, 1);
+	assert.equal(added.skipped, 1);
+	const {tabs} = harness.state.groups.find((group) => group.id === 'B')!;
+	assert.deepEqual(
+		tabs.map((t) => t.url === 'https://example.com/new'),
+		[false, true, false],
+	);
+
+	const none = await harness.sendMessage({
+		type: 'ADD_LINKS_TO_SESSION',
+		groupId: 'B',
+		links: [{url: 'chrome://settings', title: 'x'}],
+	});
+	assert.equal(none.ok, false);
 });
 
 test('MOVE_TAB with copy keeps the source and its split pair, and appends without a target', async () => {

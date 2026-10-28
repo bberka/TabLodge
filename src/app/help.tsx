@@ -257,7 +257,7 @@ function Help() {
 				},
 				{
 					title: 'Move and add links',
-					body: 'Drag bookmarks between columns to move or reorder them. Drag a browser link or a link from a saved session onto a column. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark.',
+					body: 'Drag bookmarks between columns to move or reorder them. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark.',
 					searchText:
 						'drag reorder move browser link saved session paste one several links dashboard text field add bookmark column',
 				},

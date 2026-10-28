@@ -534,6 +534,15 @@ export type TabLodgeMessages = {
 	Moves every link of `sourceGroupId` into `targetGroupId` (links already there are skipped) and removes the source.
 	*/
 	MERGE_GROUPS: {sourceGroupId: string; targetGroupId: string};
+	/**
+	Adds links (dropped from a page, bookmarks or another session) to a session; addresses it already holds are skipped.
+	*/
+	ADD_LINKS_TO_SESSION: {
+		groupId: string;
+		links: LinkEntry[];
+		targetTabId?: string | null;
+		position?: InsertPosition;
+	};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
 	ADD_BOOKMARKS: {
@@ -726,10 +735,15 @@ export type TabLodgeResponses = {
 		*/
 		trashId?: string;
 	};
+	ADD_LINKS_TO_SESSION: {added: number; skipped: number} & Undoable;
 	UPDATE_TAB: {shared: number};
 	MERGE_GROUPS: {added: number; skipped: number} & Undoable;
 	ADD_BOOKMARK: {bookmark: Bookmark};
-	ADD_BOOKMARKS: {count: number; bookmarks: Bookmark[]} & Undoable;
+	ADD_BOOKMARKS: {
+		count: number;
+		skipped: number;
+		bookmarks: Bookmark[];
+	} & Undoable;
 	UPDATE_BOOKMARK: {bookmark: Bookmark};
 	DELETE_BOOKMARK: {trashId?: string};
 	CREATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
