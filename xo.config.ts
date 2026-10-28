@@ -26,10 +26,10 @@ const xoConfig: XoConfigItem[] = [
 			parserOptions: {
 				projectService: false,
 				project: [
-					'./tsconfig.app.json',
-					'./tsconfig.worker.json',
-					'./tsconfig.test.json',
-					'./tsconfig.node.json',
+					'./tsconfig/app.json',
+					'./tsconfig/worker.json',
+					'./tsconfig/test.json',
+					'./tsconfig/node.json',
 				],
 				tsconfigRootDir: import.meta.dirname,
 			},
@@ -170,7 +170,7 @@ const xoConfig: XoConfigItem[] = [
 	},
 	{
 		// The tsconfig files carry explanatory comments, so they are JSONC.
-		files: ['tsconfig*.json'],
+		files: ['tsconfig.json', 'tsconfig/*.json'],
 		language: 'json/jsonc',
 	},
 	{
