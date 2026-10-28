@@ -560,7 +560,7 @@ function SharePreviewPanel({
 					{notShown.length > 0 && (
 						<>
 							<span aria-hidden="true"> · </span>
-							Not shown in preview: {notShown.join(' and ')}
+							{notShown.join(' and ')} hidden
 						</>
 					)}
 				</p>
