@@ -3476,6 +3476,92 @@ async function mergeGroups(
 	);
 }
 
+/**
+Adds dropped links to a session, before or after `targetTabId` (or at its end). Addresses the session already holds
+are skipped. Undo removes the added links again.
+*/
+async function addLinksToSession(
+	groupId: string,
+	entries: LinkEntry[] = [],
+	targetTabId: string | null = null,
+	position: InsertPosition = 'after',
+): Promise<ActionResult<'ADD_LINKS_TO_SESSION'>> {
+	return mutate(() =>
+		withUndo('Add links to session', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			if (!store.settings.sessionsEnabled) {
+				return sessionsDisabled();
+			}
+
+			const group = findGroup(store, groupId);
+			if (!group) {
+				return {ok: false, error: 'That saved session no longer exists.'};
+			}
+
+			const known = new Set(group.tabs.map((tab) => tab.url));
+			const now = Date.now();
+			const added: SavedTab[] = [];
+			let skipped = 0;
+			for (const entry of (Array.isArray(entries) ? entries : []).slice(
+				0,
+				500,
+			)) {
+				const url = normalizeUrl(entry?.url);
+				if (!url) {
+					continue;
+				}
+
+				if (known.has(url)) {
+					skipped += 1;
+					continue;
+				}
+
+				known.add(url);
+				added.push({
+					id: makeId(),
+					title: await bestBookmarkTitle(
+						entry?.title,
+						url,
+						store.settings.cleanTitles,
+					),
+					url,
+					notes: '',
+					pinned: false,
+					nativeGroup: null,
+					savedAt: now,
+					originalIndex: group.tabs.length + added.length,
+				});
+			}
+
+			if (added.length === 0) {
+				const error =
+					skipped > 0
+						? 'Those links are already in this session.'
+						: 'Only regular http and https pages can be saved.';
+				return {ok: false, error};
+			}
+
+			if (group.tabs.length + added.length > MAX_TABS_PER_SESSION) {
+				return {ok: false, error: sessionFullError()};
+			}
+
+			const index = targetTabId
+				? group.tabs.findIndex((tab) => tab.id === targetTabId)
+				: -1;
+			group.tabs.splice(
+				index === -1
+					? group.tabs.length
+					: index + (position === 'before' ? 0 : 1),
+				0,
+				...added,
+			);
+			group.updatedAt = now;
+			await writeStore(store);
+			return {ok: true, added: added.length, skipped};
+		}),
+	);
+}
+
 async function moveTab(
 	fromGroupId: string,
 	tabId: string,
@@ -3766,11 +3852,24 @@ async function addBookmarks(
 					BOOKMARK_UNFILED_ID;
 		const now = Date.now();
 		const added: Bookmark[] = [];
+		const known = new Set(
+			store.bookmarks
+				.filter((bookmark) => bookmark.columnId === targetColumnId)
+				.map((bookmark) => bookmark.url),
+		);
+		let skipped = 0;
 		for (const entry of (Array.isArray(entries) ? entries : []).slice(0, 500)) {
 			const url = normalizeUrl(entry?.url);
 			if (!url) {
 				continue;
 			}
+
+			if (known.has(url)) {
+				skipped += 1;
+				continue;
+			}
+
+			known.add(url);
 
 			added.push({
 				id: makeId(),
@@ -3787,10 +3886,11 @@ async function addBookmarks(
 		}
 
 		if (added.length === 0) {
-			return {
-				ok: false,
-				error: 'Only regular http and https pages can be bookmarked.',
-			};
+			const error =
+				skipped > 0
+					? 'Already bookmarked in this column.'
+					: 'Only regular http and https pages can be bookmarked.';
+			return {ok: false, error};
 		}
 
 		const target = targetBookmarkId
@@ -3810,7 +3910,7 @@ async function addBookmarks(
 		}
 
 		await writeStore(store);
-		return {ok: true, count: added.length, bookmarks: added};
+		return {ok: true, count: added.length, skipped, bookmarks: added};
 	};
 
 	return mutate(() =>
@@ -7515,6 +7615,15 @@ async function handleMessage(
 			return mergeGroups(
 				String(message.sourceGroupId),
 				String(message.targetGroupId),
+			);
+		}
+
+		case 'ADD_LINKS_TO_SESSION': {
+			return addLinksToSession(
+				String(message.groupId),
+				message.links,
+				message.targetTabId || null,
+				message.position,
 			);
 		}
 

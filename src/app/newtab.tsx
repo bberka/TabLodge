@@ -123,6 +123,7 @@ import {
 	COLUMN_DRAG_TYPE,
 	SESSION_DRAG_TYPE,
 	dragPayloadKind,
+	parseDraggedLink,
 	parseSessionDragData,
 	shouldBlockDocumentDrop,
 } from './interaction-actions';
@@ -555,7 +556,7 @@ function NewTab() {
 				columns.find((column) => column.id === pastedColumn)?.name ||
 				UNFILED_COLUMN.name;
 			offerUndo(
-				`Added ${plural(result.count, 'bookmark')} to “${name}”.`,
+				`Added ${plural(result.count, 'bookmark')} to “${name}”.${skippedNote(result.skipped)}`,
 				result.undoId,
 				showStatus,
 				reload,
@@ -1106,7 +1107,7 @@ function NewTab() {
 					true,
 				);
 				offerUndo(
-					`Added ${plural(result.count, 'link')} to “${column.name}”.`,
+					`Added ${plural(result.count, 'link')} to “${column.name}”.${skippedNote(result.skipped)}`,
 					result.undoId,
 					showStatus,
 					reload,
@@ -2148,53 +2149,14 @@ function NewTab() {
 	);
 }
 
+const skippedNote = (skipped: number) =>
+	skipped ? ` ${plural(skipped, 'duplicate')} skipped.` : '';
+
 function parseDraggedBookmark(
 	dataTransfer: DataTransfer | null,
 ): LinkEntry | null {
-	if (!dataTransfer) {
-		return null;
-	}
-
-	let raw = '';
-	let title = '';
-	const mozUrl =
-		dataTransfer.getData('text/x-moz-url') ||
-		dataTransfer.getData('application/x-moz-url');
-	if (mozUrl) {
-		const [url, ...titleParts] = mozUrl.split(/\r?\n/);
-		raw = url;
-		title = titleParts.join(' ').trim();
-	}
-
-	raw ||=
-		dataTransfer
-			.getData('text/uri-list')
-			.split(/\r?\n/)
-			.find((line) => line.trim() && !line.trimStart().startsWith('#')) || '';
-	if (!raw) {
-		const html = dataTransfer.getData('text/html');
-		if (html) {
-			const anchor = new DOMParser()
-				.parseFromString(html, 'text/html')
-				.querySelector('a[href]');
-			raw = anchor?.getAttribute('href') || '';
-			title ||= anchor?.textContent?.trim() || '';
-		}
-	}
-
-	raw ||= dataTransfer.getData('text/plain').trim();
-	const url = webUrl(raw);
-	if (!url) {
-		return null;
-	}
-
-	return {
-		url,
-		title: (title || siteName(url))
-			.replaceAll(/[\u0000-\u001F\u007F]/g, ' ')
-			.trim()
-			.slice(0, 500),
-	};
+	const link = parseDraggedLink(dataTransfer);
+	return link && {url: link.url, title: link.title || siteName(link.url)};
 }
 
 const MAX_PASTED_LINKS = 500;
@@ -2347,7 +2309,17 @@ function handleInternalDragStart(event: DragEvent<HTMLElement>) {
 		card.classList.add('is-dragging');
 		setBookmarkDragImage(event, card);
 		event.dataTransfer.setData(BOOKMARK_DRAG_TYPE, card.dataset.bookmarkId!);
-		event.dataTransfer.effectAllowed = 'move';
+		const link = card.dataset.bookmarkUrl;
+		if (link) {
+			event.dataTransfer.setData('text/uri-list', link);
+			event.dataTransfer.setData('text/plain', link);
+			event.dataTransfer.setData(
+				'text/x-moz-url',
+				`${link}\n${card.dataset.bookmarkTitle || ''}`,
+			);
+		}
+
+		event.dataTransfer.effectAllowed = 'copyMove';
 	}
 }
 
@@ -2766,6 +2738,7 @@ const BookmarkCard = memo(
 					data-bookmark-id={bookmark.id}
 					data-bookmark-title={bookmark.title || siteName(bookmark.url)}
 					data-bookmark-domain={siteName(bookmark.url)}
+					data-bookmark-url={bookmark.url}
 					data-column-id={bookmark.columnId}
 					className="bookmark-drop-row relative"
 					// The column body has its own right-click menu; a card keeps its own.
