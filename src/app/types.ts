@@ -54,6 +54,7 @@ export type BrowserBookmarkAction = 'off' | 'ask' | 'add';
 
 export type Settings = {
 	closeOnSave: boolean;
+	emptyWindowAfterSave: 'new-tab' | 'close-extra';
 	includePinnedTabs: boolean;
 	ignoreTabGroups: boolean;
 	openDashboardAfterSave: boolean;

@@ -1594,6 +1594,75 @@ test('saving with includePinnedTabs off never stores or removes pinned tabs', as
 	assert.equal(harness.removedTabIds.includes(2), false);
 });
 
+test('emptyWindowAfterSave close-extra closes an emptied window when another window is open', async () => {
+	const tab = {
+		id: 1,
+		windowId: 10,
+		index: 0,
+		active: true,
+		url: 'https://only.example/',
+		title: 'Only',
+	};
+	const other = {
+		id: 2,
+		windowId: 21,
+		index: 0,
+		active: true,
+		url: 'https://other.example/',
+		title: 'Other',
+	};
+	const run = async (
+		emptyWindowAfterSave: 'new-tab' | 'close-extra',
+		extraWindows: number[],
+	) => {
+		const harness = createWorkerHarness(
+			stateWithSession({
+				closeOnSave: true,
+				openDashboardAfterSave: false,
+				emptyWindowAfterSave,
+			}),
+			extraWindows.length > 0 ? [tab, other] : [tab],
+			{extraWindows},
+		);
+		const response = await harness.sendMessage({
+			type: 'SAVE_TABS',
+			scope: 'window',
+		});
+		assert.equal(response.ok, true, response.error);
+		return harness;
+	};
+
+	const closing = await run('close-extra', [21]);
+	assert.equal(
+		closing.windows.some((win) => win.id === 10),
+		false,
+		'the emptied window closes',
+	);
+	assert.equal(
+		closing.windowUpdates.some(
+			(update) =>
+				update.id === 21 && (update.properties as {focused?: boolean}).focused,
+		),
+		true,
+		'the other window is focused',
+	);
+	assert.equal(closing.tabsForWindow(21).length, 1, 'no new tab is opened');
+
+	const lastWindow = await run('close-extra', []);
+	assert.equal(
+		lastWindow.windows.some((win) => win.id === 10),
+		true,
+	);
+	assert.equal(lastWindow.tabsForWindow(10).length, 1, 'keeps a new tab');
+
+	const keeping = await run('new-tab', [21]);
+	assert.equal(
+		keeping.windows.some((win) => win.id === 10),
+		true,
+	);
+	assert.equal(keeping.tabsForWindow(10).length, 1);
+});
+
 test('explicit pinned-tab opt-in stores and retains pinned state, and close requires successful storage', async () => {
 	const state = stateWithSession({
 		includePinnedTabs: true,

@@ -193,6 +193,7 @@ const DEFAULT_BOOKMARK_COLUMN = Object.freeze<BookmarkColumn>({
 });
 const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	closeOnSave: true,
+	emptyWindowAfterSave: 'new-tab',
 	includePinnedTabs: false,
 	ignoreTabGroups: false,
 	openDashboardAfterSave: false,
@@ -961,6 +962,8 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 	const settings: Settings = {
 		...DEFAULT_SETTINGS,
 		closeOnSave: raw.closeOnSave !== false,
+		emptyWindowAfterSave:
+			raw.emptyWindowAfterSave === 'close-extra' ? 'close-extra' : 'new-tab',
 		includePinnedTabs: raw.includePinnedTabs === true,
 		ignoreTabGroups: raw.ignoreTabGroups === true,
 		openDashboardAfterSave: raw.openDashboardAfterSave === true,
@@ -1763,6 +1766,15 @@ async function captureTabs(
 			})
 			.map((tab) => tab.id);
 		const remainingIds = remaining.filter((tab) => !closeIds.includes(tab.id));
+		if (
+			closeIds.length > 0 &&
+			remainingIds.length === 0 &&
+			isInteger(window.id) &&
+			(await closeEmptiedWindow(window.id, settings))
+		) {
+			return group;
+		}
+
 		if (closeIds.length > 0 && remainingIds.length === 0) {
 			const isFocusedWindow = window.id === (await currentWindowId());
 			const useDashboard =
@@ -1791,6 +1803,47 @@ async function captureTabs(
 	}
 
 	return group;
+}
+
+/**
+Handles a window whose tabs were all closed by a save. With `close-extra` and another normal window of the same kind open, that window is focused and this one closes; otherwise it gets a fresh tab so the window stays. Returns whether the window was closed.
+*/
+async function closeEmptiedWindow(
+	windowId: number,
+	settings: Settings,
+): Promise<boolean> {
+	if (settings.emptyWindowAfterSave !== 'close-extra') {
+		return false;
+	}
+
+	try {
+		const current = await chrome.windows.get(windowId, {populate: false});
+		const others = (
+			await chrome.windows.getAll({populate: false, windowTypes: ['normal']})
+		).filter(
+			(other) =>
+				other.id !== windowId &&
+				other.type === 'normal' &&
+				Boolean(other.incognito) === Boolean(current.incognito),
+		);
+		if (others.length === 0) {
+			return false;
+		}
+
+		const lastFocused = await chrome.windows
+			.getLastFocused({populate: false})
+			.catch(() => undefined);
+		const target =
+			others.find((other) => other.id === lastFocused?.id) ?? others[0];
+		await chrome.windows.update(target.id!, {focused: true});
+		await chrome.windows.remove(windowId);
+		return true;
+	} catch {
+		/*
+		The window can close on its own meanwhile; fall back to keeping it open.
+		*/
+		return false;
+	}
 }
 
 async function saveTabs(
@@ -7776,6 +7829,19 @@ async function saveCurrentTabToFirstGroup(
 				normalizeUrl(candidate.url) === normalizeUrl(tab.url) &&
 				(!candidate.pinned || store.settings.includePinnedTabs)
 			) {
+				if (
+					remaining.length === 1 &&
+					isInteger(windowId) &&
+					(await closeEmptiedWindow(windowId, store.settings))
+				) {
+					return {
+						ok: true,
+						count: duplicate ? 0 : 1,
+						skipped: duplicate ? 1 : 0,
+						groupId: group.id,
+					};
+				}
+
 				if (remaining.length === 1) {
 					const isFocusedWindow = window.id === (await currentWindowId());
 					const useDashboard =

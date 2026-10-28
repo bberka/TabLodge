@@ -179,9 +179,9 @@ function Help() {
 				},
 				{
 					title: 'Close tabs after saving',
-					body: `This is optional. ${PROJECT.name} saves and checks the session before closing tabs. Pinned tabs close only when Include pinned tabs is on.`,
+					body: `This is optional. ${PROJECT.name} saves and checks the session before closing tabs. Pinned tabs close only when Include pinned tabs is on. If a save closes every tab in a window, that window keeps a new tab by default. In Settings you can have it close instead when another browser window is open, and the browser switches to that window. The last window always stays open.`,
 					searchText:
-						'close tabs after saving delete remove verify pinned tabs include',
+						'close tabs after saving delete remove verify pinned tabs include empty window close extra second window',
 				},
 			],
 			action: {
