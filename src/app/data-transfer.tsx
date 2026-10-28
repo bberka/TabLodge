@@ -64,6 +64,7 @@ import {
 	shareHtmlPage,
 	shareLinks,
 	shareMarkdown,
+	sharePreview,
 	shareRich,
 	type ShareGroup,
 	type ShareMethod,
@@ -517,6 +518,150 @@ type ShareDialogProps = {
 	showStatus: ShowStatus;
 };
 
+type SharePreviewPanelProps = {
+	preview: ReturnType<typeof sharePreview>;
+	pageTitle: string;
+	counts: ReturnType<typeof shareCounts>;
+	formatLabel: string;
+};
+
+function SharePreviewPanel({
+	preview,
+	pageTitle,
+	counts,
+	formatLabel,
+}: SharePreviewPanelProps) {
+	const notShown = [
+		...(preview.omittedLinks > 0
+			? [plural(preview.omittedLinks, 'more link')]
+			: []),
+		...(preview.moreGroups > 0
+			? [plural(preview.moreGroups, 'more group')]
+			: []),
+	];
+
+	return (
+		<section
+			aria-labelledby="share-preview-heading"
+			className="rounded-lg border border-border bg-muted/30 p-3"
+		>
+			<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+				<div className="flex items-center gap-2">
+					<h3 id="share-preview-heading" className="text-sm font-medium">
+						Preview
+					</h3>
+					<Badge variant="outline">{formatLabel}</Badge>
+				</div>
+				<p className="text-xs text-muted-foreground" aria-live="polite">
+					{plural(counts.links, 'link')} in {plural(counts.groups, 'group')}
+				</p>
+			</div>
+			{counts.links === 0 ? (
+				<p className="mt-2 text-xs text-muted-foreground">
+					No links to preview.
+				</p>
+			) : preview.format === 'html' ? (
+				<div className="mt-3 max-h-48 overflow-y-auto rounded-md border border-border bg-background p-3">
+					<div className="mx-auto max-w-xl">
+						<h4 className="text-base font-semibold leading-tight [overflow-wrap:anywhere]">
+							{pageTitle}
+						</h4>
+						<p className="mt-1 text-[11px] text-muted-foreground">
+							Shared from {PROJECT.name} · {plural(counts.links, 'link')}
+						</p>
+						<div className="mt-3 space-y-2">
+							{preview.groups.map((group, groupIndex) => (
+								<article
+									key={`${group.name}-${groupIndex}`}
+									className="overflow-hidden rounded-md border border-border bg-card"
+								>
+									<div className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2">
+										<div className="min-w-0">
+											<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
+												{group.name}
+											</h5>
+											{group.createdAt !== undefined && group.createdAt > 0 && (
+												<p className="mt-0.5 text-[10px] text-muted-foreground">
+													Saved {new Date(group.createdAt).toLocaleDateString()}
+												</p>
+											)}
+										</div>
+										<span className="shrink-0 text-[11px] text-muted-foreground">
+											{plural(group.tabs.length + group.moreLinks, 'link')}
+										</span>
+									</div>
+									{group.description && (
+										<p className="whitespace-pre-wrap px-3 py-2 text-xs [overflow-wrap:anywhere]">
+											{group.description}
+										</p>
+									)}
+									{group.tabs.length > 0 && (
+										<ol className="mx-3 my-2 list-decimal pl-5">
+											{group.tabs.map((tab, tabIndex) => (
+												<li
+													key={`${tab.url}-${tabIndex}`}
+													className="border-t border-border py-1.5 pl-1"
+												>
+													<span className="block text-xs font-semibold text-primary [overflow-wrap:anywhere]">
+														{tab.title || tab.url}
+													</span>
+													<span className="mt-0.5 block text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
+														{tab.url}
+														{tab.pinned ? ' · Pinned' : ''}
+														{tab.nativeGroup?.title
+															? ` · ${tab.nativeGroup.title}`
+															: ''}
+													</span>
+												</li>
+											))}
+										</ol>
+									)}
+								</article>
+							))}
+							{preview.moreGroups > 0 && (
+								<p className="text-[11px] text-muted-foreground">
+									and {plural(preview.moreGroups, 'more group')}
+								</p>
+							)}
+						</div>
+					</div>
+				</div>
+			) : preview.format === 'markdown' || preview.format === 'links' ? (
+				<pre className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
+					{preview.text}
+				</pre>
+			) : (
+				<div className="mt-3 max-h-48 space-y-3 overflow-y-auto rounded-md border border-border bg-background p-3">
+					{preview.groups.map((group, groupIndex) => (
+						<div key={`${group.name}-${groupIndex}`}>
+							<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
+								{group.name}
+							</h5>
+							<ul className="mt-2 list-disc space-y-1 pl-5">
+								{group.tabs.map((tab, tabIndex) => (
+									<li key={`${tab.url}-${tabIndex}`}>
+										<span
+											className="text-xs font-medium text-primary underline underline-offset-2 [overflow-wrap:anywhere]"
+											title={tab.url}
+										>
+											{tab.title || tab.url}
+										</span>
+									</li>
+								))}
+							</ul>
+						</div>
+					))}
+				</div>
+			)}
+			{notShown.length > 0 && (
+				<p className="mt-2 text-[11px] text-muted-foreground">
+					Not shown in preview: {notShown.join(' and ')}.
+				</p>
+			)}
+		</section>
+	);
+}
+
 /**
 Unified share dialog: choose what to share (when several sources are offered) and how.
 */
@@ -549,13 +694,13 @@ export function ShareDialog({
 	}, [open]);
 	const source = all.find((entry) => entry.id === sourceId) ?? all[0];
 	const counts = shareCounts(source.groups);
+	const preview = sharePreview(source.groups, method);
 	const chosen = SHARE_METHODS.find((entry) => entry.id === method)!;
+	const pageTitle = source.groups.length === 1 ? source.groups[0].name : title;
 
 	async function run() {
 		try {
 			if (method === 'html') {
-				const pageTitle =
-					source.groups.length === 1 ? source.groups[0].name : title;
 				downloadFile(
 					shareHtmlPage(pageTitle, source.groups, PROJECT.name),
 					'text/html;charset=utf-8',
@@ -632,12 +777,12 @@ export function ShareDialog({
 							/>
 						))}
 					</RadioCardGroup>
-					<p
-						className="rounded-md bg-muted/70 px-3 py-2 text-xs text-muted-foreground"
-						aria-live="polite"
-					>
-						{plural(counts.links, 'link')} in {plural(counts.groups, 'group')}
-					</p>
+					<SharePreviewPanel
+						preview={preview}
+						pageTitle={pageTitle}
+						counts={counts}
+						formatLabel={chosen.title}
+					/>
 				</DialogBody>
 				<DialogFooter>
 					<Button
