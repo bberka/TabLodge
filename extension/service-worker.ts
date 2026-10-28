@@ -1769,13 +1769,8 @@ async function captureTabs(
 		if (
 			closeIds.length > 0 &&
 			remainingIds.length === 0 &&
-			isInteger(window.id) &&
-			(await closeEmptiedWindow(window.id, settings))
+			!(await closeEmptiedWindow(window.id, settings))
 		) {
-			return group;
-		}
-
-		if (closeIds.length > 0 && remainingIds.length === 0) {
 			const isFocusedWindow = window.id === (await currentWindowId());
 			const useDashboard =
 				captured.length > 0 &&
@@ -1806,13 +1801,13 @@ async function captureTabs(
 }
 
 /**
-Handles a window whose tabs were all closed by a save. With `close-extra` and another normal window of the same kind open, that window is focused and this one closes; otherwise it gets a fresh tab so the window stays. Returns whether the window was closed.
+Closes a window that a save is about to empty, when the setting asks for it and another normal window of the same incognito state is open; that window is focused first. Returns whether the window was closed, so the caller knows to keep it with a new tab otherwise.
 */
 async function closeEmptiedWindow(
-	windowId: number,
+	windowId: number | null | undefined,
 	settings: Settings,
 ): Promise<boolean> {
-	if (settings.emptyWindowAfterSave !== 'close-extra') {
+	if (settings.emptyWindowAfterSave !== 'close-extra' || !isInteger(windowId)) {
 		return false;
 	}
 
@@ -1823,7 +1818,6 @@ async function closeEmptiedWindow(
 		).filter(
 			(other) =>
 				other.id !== windowId &&
-				other.type === 'normal' &&
 				Boolean(other.incognito) === Boolean(current.incognito),
 		);
 		if (others.length === 0) {
@@ -7831,18 +7825,8 @@ async function saveCurrentTabToFirstGroup(
 			) {
 				if (
 					remaining.length === 1 &&
-					isInteger(windowId) &&
-					(await closeEmptiedWindow(windowId, store.settings))
+					!(await closeEmptiedWindow(windowId, store.settings))
 				) {
-					return {
-						ok: true,
-						count: duplicate ? 0 : 1,
-						skipped: duplicate ? 1 : 0,
-						groupId: group.id,
-					};
-				}
-
-				if (remaining.length === 1) {
 					const isFocusedWindow = window.id === (await currentWindowId());
 					const useDashboard =
 						store.settings.openDashboardAfterSave && isFocusedWindow;
