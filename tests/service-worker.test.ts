@@ -1001,6 +1001,35 @@ test('default preferences use newest-first, keep-on-restore, quick-popup action,
 	assert.equal(response.settings.sessionSort, 'newest');
 	assert.equal(response.settings.restoreMode, 'keep');
 	assert.equal(response.settings.restoreTarget, 'new-window-unless-only-tab');
+	assert.equal(response.settings.removeTrackingParameters, false);
+});
+
+test('RESTORE_GROUP strips trackers only when enabled and keeps the saved URL unchanged', async () => {
+	const originalUrl =
+		'https://saved.example/article?utm_source=mail&gclid=abc&ref=story#details';
+	const enabled = createWorkerHarness(
+		stateWithSession({removeTrackingParameters: true}),
+	);
+	enabled.state.groups[0].tabs[0].url = originalUrl;
+	const stripped = await enabled.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(stripped.ok, true, stripped.error);
+	assert.equal(
+		enabled.openedTabs[0].url,
+		'https://saved.example/article?ref=story#details',
+	);
+	assert.equal(enabled.state.groups[0].tabs[0].url, originalUrl);
+
+	const disabled = createWorkerHarness(stateWithSession());
+	disabled.state.groups[0].tabs[0].url = originalUrl;
+	const untouched = await disabled.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(untouched.ok, true, untouched.error);
+	assert.equal(disabled.openedTabs[0].url, originalUrl);
 });
 
 test('RESTORE_GROUP opens a new window when the current window has other tabs', async () => {
@@ -3703,6 +3732,7 @@ test('split settings default to side-by-side restore and saving both tabs, and n
 for (const [key, fallback] of [
 	['expandSessionsByDefault', false],
 	['pasteLinkToBookmark', true],
+	['removeTrackingParameters', false],
 	['showSaveWindowButton', true],
 	['showTrashBinButton', true],
 	['stretchBookmarkColumns', true],

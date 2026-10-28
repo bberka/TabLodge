@@ -331,6 +331,12 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'removeTrackingParameters',
+				label: 'Remove tracking parameters',
+				help: 'Remove common tracking parameters such as utm_source, fbclid and gclid when opening saved links or restoring sessions and snapshots. Saved URLs and copied links stay unchanged. This is off by default.',
+				type: 'switch',
+			},
+			{
 				name: 'markInsecureLinks',
 				label: 'Mark insecure (http) links',
 				help: 'Shows an amber lock next to http addresses.',

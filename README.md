@@ -22,7 +22,7 @@ There are no accounts, servers, or analytics. TabLodge keeps your data in your b
 
 - **Save and restore sessions.** Save selected tabs, a tab group, tabs to the left or right, a whole window, or all windows. Restores preserve tab groups and, if you choose to save them, pinned tabs. Split view pairs restore side by side on Chromium 155 or newer.
 - **Keep sessions organized.** Use folders, icons, descriptions, search, sorting, and custom ordering. Move sessions between folders or merge them without duplicate links. Name sessions yourself, use a template, or have TabLodge ask each time.
-- **Choose how restores work.** Open a session in the current window or a new one. Keep or remove saved links afterward, skip URLs that are already open, and optionally unload restored background tabs. Ctrl/Cmd and Shift clicks let you override the usual behavior for one restore.
+- **Choose how restores work.** Open a session in the current window or a new one. Keep or remove saved links afterward, skip URLs that are already open, and optionally unload restored background tabs. Ctrl/Cmd and Shift clicks let you override the usual behavior for one restore. A setting, off by default, can remove common tracking parameters when opening saved links without changing the stored URLs.
 - **Build a bookmark board.** Search your bookmarks, reorder columns and links by dragging, or paste a list of links to add them. You can also drag links from saved sessions into a column. Choose the default, wider, full width, or narrower dashboard layout in Settings.
 - **Bring your data with you.** Import from OneTab, Session Buddy, Tab Session Manager, Toby, or browser bookmarks. Export JSON backups, HTML, CSV, Markdown, or URL lists. A full backup ZIP includes settings and recovery data as well.
 - **Recover from mistakes.** Snapshots of open windows help after a browser crash. Deleted sessions, links, bookmarks, and columns go to the trash bin, and many actions offer Undo. Automatic backups are optional, with an extra copy in Downloads if you want one.
@@ -149,7 +149,7 @@ xo.config.ts            Lint and formatting rules
 
 ## Permissions and privacy
 
-TabLodge has no website host permissions, injects no content scripts, and makes no network requests of its own. Opening a saved page loads that website normally. Choosing **Search the web** sends a search through your browser's default engine.
+TabLodge has no website host permissions, injects no content scripts, and makes no network requests of its own. By default, opening a saved page uses its saved URL. The optional tracking setting removes common tracking parameters from the destination but leaves your saved data unchanged. Choosing **Search the web** sends a search through your browser's default engine.
 
 | Permission         | Why it's needed                                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------- |
