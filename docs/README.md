@@ -171,7 +171,7 @@ tsconfig.json           Solution file that `tsc -b` follows into tsconfig/
 vite.pages.config.ts    Extension page build configuration
 xo.config.ts            Lint and formatting rules
 AGENTS.md               Rules and documentation map for AI agents
-skills-lock.json        Pinned agent skills, restored with `npx skills experimental_install`
+skills-lock.json        Pinned agent skills, restored with `vp run skills:install`
 ```
 
 ## Permissions and privacy

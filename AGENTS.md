@@ -13,7 +13,14 @@
 
 Install the Vite+ CLI once as described in [README Development](docs/README.md#development). Use `vp run lint:fix` for formatting. For selected files, use `pnpm exec xo --fix <files>`. Never run `vp fmt`, plain `prettier`, or another formatter; their styles differ and can rewrite unrelated files.
 
-Agent skills are pinned in `skills-lock.json` and installed per machine into `.agents/skills/`, which git ignores. Restore them once per clone with `npx skills experimental_install`. Load a skill only when its description matches the task. The ones this repo relies on:
+Agent skills are pinned in `skills-lock.json` and installed per machine into `.agents/skills/`, which git ignores. A fresh clone or a new worktree starts without them.
+
+**Check at the start of every session.** Run `ls .agents/skills`. If it is missing or empty, and the skills are not installed globally in `~/.agents/skills`, run `vp run skills:install` (it calls `npx skills experimental_install`).
+
+- A session that was already running may not list the newly installed skills. Read `.agents/skills/<name>/SKILL.md` directly and follow it.
+- If the restore fails, for example because there is no network, tell the user in your first message which skills are missing. The unslop pass, `pr` body, and `tdd` workflow depend on them. Do not skip those gates silently, and do not push until the skills are available or the user says to go on without them.
+
+Load a skill only when its description matches the task. The ones this repo relies on:
 
 | Skill                                                                           | Use it when                                     |
 | ------------------------------------------------------------------------------- | ----------------------------------------------- |
