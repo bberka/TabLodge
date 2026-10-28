@@ -32,7 +32,9 @@ Thumbs.db
 # Release packaging output (CI)
 /release/
 
-# Local AI agent skills (installed per machine)
+# Agent skills are restored per machine from skills-lock.json (see AGENTS.md)
 /.agents/
-/skills-lock.json
 /.claude/worktrees/
+
+# Local unslop run output
+/.unslop/

@@ -24,6 +24,7 @@
 		"dev": "node scripts/build.ts --watch --open-browser",
 		"dev:seed": "node scripts/build.ts --watch --open-browser --seed-data",
 		"browser:install": "playwright install chromium",
+		"skills:install": "npx skills experimental_install",
 		"watch": "node scripts/build.ts --watch",
 		"verify": "node scripts/verify-build.ts",
 		"site:dev": "pnpm --filter tablodge-site dev",

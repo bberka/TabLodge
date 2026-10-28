@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="extension/icons/tablodge.svg" alt="" width="72" height="72"><br>
+  <img src="../extension/icons/tablodge.svg" alt="" width="72" height="72"><br>
   TabLodge
 </h1>
 
@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/bberka/TabLodge/actions/workflows/test.yml"><img src="https://github.com/bberka/TabLodge/actions/workflows/test.yml/badge.svg" alt="Test"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Chromium%20browsers-Manifest%20V3-4285F4" alt="Manifest V3">
 </p>
 
@@ -31,11 +31,11 @@ There are no accounts, servers, or analytics. TabLodge keeps your data in your b
 ## Screenshots
 
 <p align="center">
-  <img src="site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with saved sessions above a board of bookmark columns" width="800">
+  <img src="../site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with saved sessions above a board of bookmark columns" width="800">
 </p>
 <p align="center">
-  <img src="site/src/assets/palette-dark.webp" alt="Search results for sessions, saved tabs, and bookmarks" width="420">
-  <img src="site/src/assets/sidepanel-light.webp" alt="Bookmark columns in the TabLodge side panel" width="210">
+  <img src="../site/src/assets/palette-dark.webp" alt="Search results for sessions, saved tabs, and bookmarks" width="420">
+  <img src="../site/src/assets/sidepanel-light.webp" alt="Bookmark columns in the TabLodge side panel" width="210">
 </p>
 
 ## Install on Chromium-based browsers
@@ -151,7 +151,7 @@ vp run browser:install
 
 If Chrome is installed outside the usual path, set `CHROME_BIN` to its executable. If no browser is available, the build watcher still runs.
 
-See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](docs/architecture.md) explains storage, messages, and feature behavior.
+See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](architecture.md) explains storage, messages, and feature behavior. AI agents also follow [AGENTS.md](../AGENTS.md) and the [validation gate](agent-validation.md).
 
 ### Project structure
 
@@ -164,10 +164,14 @@ src/lib/                Small utilities
 styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites and mocked browser APIs
 scripts/                Build, Chrome development launch, package verification, and release tooling
-docs/                   Architecture, tab manager, and mobile app research
+docs/                   All documentation except AGENTS.md: this README, contributing, privacy, architecture, and agent workflow
 site/                   Astro website for tablodge.bbay.dev
+tsconfig/               TypeScript projects for the pages, service worker, tests, and build tooling
+tsconfig.json           Solution file that `tsc -b` follows into tsconfig/
 vite.pages.config.ts    Extension page build configuration
 xo.config.ts            Lint and formatting rules
+AGENTS.md               Rules and documentation map for AI agents
+skills-lock.json        Pinned agent skills, restored with `vp run skills:install`
 ```
 
 ## Permissions and privacy
@@ -198,11 +202,11 @@ See [Privacy](PRIVACY.md) for what is stored, how recovery data is retained, and
 
 Ideas still worth exploring include more actions for open tabs across windows, recently closed tabs in search, storage that scales better for large libraries, more session editing tools, and optional unloading of idle tabs. These are ideas, not promised release dates.
 
-The [tab manager comparison notes](docs/tab-management-research.md) explain the reasoning and link to the original sources. [Mobile app opportunity research](docs/mobile-app-opportunity.md) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
+Research notes live in the issue tracker. The [tab manager comparison notes](https://github.com/bberka/TabLodge/issues/21#issuecomment-6470138750) explain the reasoning and link to the original sources. The [mobile app research](https://github.com/bberka/TabLodge/issues/1#issuecomment-6470139241) recommends staying extension-first and validating demand for phone link capture before considering a native companion or cross-device sync.
 
 ## Website
 
-The website lives in [`site/`](site). Run `vp run site:dev` to work on it or `vp run site:build` to build it. [Website setup](site/README.md) covers deployment and screenshots.
+The website lives in [`site/`](../site). Run `vp run site:dev` to work on it or `vp run site:build` to build it. [Website setup](website.md) covers deployment and screenshots.
 
 ## Contributing
 
@@ -210,4 +214,4 @@ Bug reports, ideas, and pull requests are welcome. Read [Contributing](CONTRIBUT
 
 ## License
 
-[MIT](LICENSE) © 2026 Berkay
+[MIT](../LICENSE) © 2026 Berkay
