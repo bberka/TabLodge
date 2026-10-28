@@ -23,6 +23,7 @@ import type {
 	TabLodgeState,
 } from './types';
 import {PROJECT} from './project';
+import {cn} from '@/lib/utils';
 
 const STORAGE_KEY = 'tablodge.state';
 
@@ -387,7 +388,7 @@ export function useTabLodgeState() {
 export function LoadingLine({className = ''}: {className?: string}) {
 	return (
 		<p
-			className={`py-6 text-sm text-muted-foreground ${className}`}
+			className={cn('py-6 text-sm text-muted-foreground', className)}
 			role="status"
 			aria-live="polite"
 		>
@@ -528,7 +529,10 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 				<div
 					key={key}
 					role={visible.error ? 'alert' : undefined}
-					className={`fixed bottom-5 left-1/2 z-[100] flex w-max max-w-[min(92vw,28rem)] -translate-x-1/2 animate-[pop-in_160ms_ease-out] motion-reduce:animate-none items-start gap-2.5 rounded-lg border bg-popover py-2.5 pl-3 pr-2 text-sm text-popover-foreground shadow-lg ${visible.error ? 'border-destructive/40' : 'border-border'}`}
+					className={cn(
+						'fixed bottom-5 left-1/2 z-[100] flex w-max max-w-[min(92vw,28rem)] -translate-x-1/2 animate-[pop-in_160ms_ease-out] motion-reduce:animate-none items-start gap-2.5 rounded-lg border bg-popover py-2.5 pl-3 pr-2 text-sm text-popover-foreground shadow-lg',
+						visible.error ? 'border-destructive/40' : 'border-border',
+					)}
 					onMouseEnter={() => setPaused(true)}
 					onMouseLeave={() => setPaused(false)}
 					onFocus={() => setPaused(true)}
@@ -539,7 +543,10 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 					}}
 				>
 					<Icon
-						className={`mt-0.5 h-4 w-4 shrink-0 ${visible.error ? 'text-destructive' : 'text-primary'}`}
+						className={cn(
+							'mt-0.5 h-4 w-4 shrink-0',
+							visible.error ? 'text-destructive' : 'text-primary',
+						)}
 						aria-hidden="true"
 					/>
 					<span className="min-w-0 flex-1 break-words leading-5">
@@ -661,7 +668,12 @@ export function AppHeader({
 								key={page.id}
 								href={page.href}
 								aria-current={current ? 'page' : undefined}
-								className={`relative inline-flex h-9 items-center rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${current ? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:-bottom-[17px] after:h-0.5 after:rounded-full after:bg-primary' : 'text-muted-foreground hover:text-foreground'}`}
+								className={cn(
+									'relative inline-flex h-9 items-center rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+									current
+										? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:-bottom-[17px] after:h-0.5 after:rounded-full after:bg-primary'
+										: 'text-muted-foreground hover:text-foreground',
+								)}
 							>
 								{page.label}
 							</a>
@@ -699,7 +711,10 @@ export function LoadError({
 	return (
 		<div
 			role="alert"
-			className={`flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-card p-4 text-sm ${className}`}
+			className={cn(
+				'flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-card p-4 text-sm',
+				className,
+			)}
 		>
 			<CircleAlert
 				className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
@@ -727,7 +742,10 @@ export function PageShell({
 	return (
 		<main
 			data-brand="tablodge"
-			className={`mx-auto w-full max-w-6xl px-5 py-6 sm:px-8 sm:py-9 ${className}`}
+			className={cn(
+				'mx-auto w-full max-w-6xl px-5 py-6 sm:px-8 sm:py-9',
+				className,
+			)}
 			{...props}
 		>
 			{children}
@@ -780,7 +798,7 @@ export function SectionCard({
 	id?: string;
 }) {
 	return (
-		<Card id={id} className={`overflow-hidden ${className}`}>
+		<Card id={id} className={cn('overflow-hidden', className)}>
 			<CardHeader className="flex-row items-center gap-3 space-y-0 border-b border-border bg-muted/60 px-4 py-3">
 				{Icon && (
 					<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-card text-primary">

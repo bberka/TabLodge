@@ -1,24 +1,15 @@
 import {useState, type SyntheticEvent} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Plus} from 'lucide-react';
-import {
-	Button,
-	Input,
-	Label,
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-	TooltipProvider,
-} from '../shared/ui';
+import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {send, useCloseOnEscape, useTabLodgeState} from './common';
 import {LinkSummary} from './favicon';
-import {ColumnLabel, IconLabel} from './icon-label';
+import {IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {DEFAULT_COLUMN_ICON} from './icon-registry';
+import {ColumnSelect} from './column-select';
 
 const NEW_COLUMN = '__new-column__';
 
@@ -116,21 +107,16 @@ function AddBookmarkPrompt() {
 				<LinkSummary url={url} settings={state.settings} />
 				<div className="space-y-1.5">
 					<Label htmlFor="add-bookmark-column">Column</Label>
-					<Select value={selected} onValueChange={setColumnId}>
-						<SelectTrigger id="add-bookmark-column">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{columns.map((column) => (
-								<SelectItem key={column.id} value={column.id}>
-									<ColumnLabel column={column} />
-								</SelectItem>
-							))}
-							<SelectItem value={NEW_COLUMN}>
-								<IconLabel icon={Plus}>New column</IconLabel>
-							</SelectItem>
-						</SelectContent>
-					</Select>
+					<ColumnSelect
+						columns={columns}
+						value={selected}
+						id="add-bookmark-column"
+						onValueChange={setColumnId}
+					>
+						<SelectItem value={NEW_COLUMN}>
+							<IconLabel icon={Plus}>New column</IconLabel>
+						</SelectItem>
+					</ColumnSelect>
 					{existing && existingColumn && (
 						<p className="text-xs text-muted-foreground">
 							Already in “{existingColumn.name}”.

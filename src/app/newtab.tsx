@@ -132,6 +132,8 @@ import type {
 	Settings,
 	BookmarkQuickAction,
 } from './types';
+import {ColumnSelect} from './column-select';
+import {cn} from '@/lib/utils';
 
 type DialogKind =
 	'bookmark' | 'column' | 'move' | 'paste-links' | 'delete-column';
@@ -1517,7 +1519,11 @@ function NewTab() {
 				</EmptyState>
 			) : (
 				<div
-					className={`grid gap-4 ${bookmarkGridColumnsClass} ${stretchColumns ? 'items-stretch' : 'items-start'}`}
+					className={cn(
+						'grid gap-4',
+						bookmarkGridColumnsClass,
+						stretchColumns ? 'items-stretch' : 'items-start',
+					)}
 				>
 					{columns.map((column) => (
 						<BookmarkColumn
@@ -1544,7 +1550,11 @@ function NewTab() {
 						<section
 							data-column-id={UNFILED_COLUMN.id}
 							aria-label="Unfiled bookmarks"
-							className={`flex min-w-0 flex-col rounded-lg border border-border bg-card p-3 ${columnDropIndicator?.columnId === UNFILED_COLUMN.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+							className={cn(
+								'flex min-w-0 flex-col rounded-lg border border-border bg-card p-3',
+								columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
+									'ring-2 ring-primary ring-offset-2 ring-offset-background',
+							)}
 							onDragOver={(event) =>
 								previewBookmarkDrop(event, UNFILED_COLUMN.id, markDrop, false)
 							}
@@ -1625,7 +1635,11 @@ function NewTab() {
 	return (
 		<main
 			data-brand="tablodge"
-			className={`mx-auto ${dashboardMaxWidthClass} px-5 py-6 sm:px-8 sm:py-9`}
+			className={cn(
+				'mx-auto',
+				dashboardMaxWidthClass,
+				'px-5 py-6 sm:px-8 sm:py-9',
+			)}
 		>
 			<AppHeader active="dashboard">
 				<FinderTrigger onClick={() => setFinderOpen(true)} />
@@ -1761,26 +1775,18 @@ function NewTab() {
 							</div>
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column">Column</Label>
-								<Select
+								<ColumnSelect
+									columns={columns}
 									value={bookmarkEdit?.columnId || columns[0]?.id || NEW_COLUMN}
+									id="bookmark-column"
 									onValueChange={(value) =>
 										setBookmarkEdit((old) => old && {...old, columnId: value})
 									}
 								>
-									<SelectTrigger id="bookmark-column">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{columns.map((column) => (
-											<SelectItem key={column.id} value={column.id}>
-												<ColumnLabel column={column} />
-											</SelectItem>
-										))}
-										<SelectItem value={NEW_COLUMN}>
-											<IconLabel icon={Plus}>New column</IconLabel>
-										</SelectItem>
-									</SelectContent>
-								</Select>
+									<SelectItem value={NEW_COLUMN}>
+										<IconLabel icon={Plus}>New column</IconLabel>
+									</SelectItem>
+								</ColumnSelect>
 							</div>
 							{bookmarkEdit?.columnId === NEW_COLUMN && (
 								<IconNameField
@@ -1903,18 +1909,12 @@ function NewTab() {
 							</ScrollArea>
 							<div className="space-y-1.5">
 								<Label htmlFor="pasted-links-column">Column</Label>
-								<Select value={pastedColumn} onValueChange={setPastedColumn}>
-									<SelectTrigger id="pasted-links-column">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{columns.map((column) => (
-											<SelectItem key={column.id} value={column.id}>
-												<ColumnLabel column={column} />
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<ColumnSelect
+									columns={columns}
+									value={pastedColumn}
+									id="pasted-links-column"
+									onValueChange={setPastedColumn}
+								/>
 							</div>
 						</DialogBody>
 						<DialogFooter>
@@ -2108,25 +2108,16 @@ function NewTab() {
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="move-bookmark-column">Column</Label>
-								<Select
+								<ColumnSelect
+									columns={columns}
 									value={moveBookmark?.targetColumnId || columns[0]?.id}
+									id="move-bookmark-column"
 									onValueChange={(value) =>
 										setMoveBookmark(
 											(old) => old && {...old, targetColumnId: value},
 										)
 									}
-								>
-									<SelectTrigger id="move-bookmark-column">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{columns.map((column) => (
-											<SelectItem key={column.id} value={column.id}>
-												<ColumnLabel column={column} />
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								/>
 							</div>
 						</DialogBody>
 						<DialogFooter>
@@ -2538,12 +2529,22 @@ const BookmarkColumn = memo(
 				{dropIndicator?.kind === 'column' && (
 					<InsertionLine
 						orientation="vertical"
-						className={`inset-y-0 ${dropIndicator.position === 'before' ? '-left-[9px]' : '-right-[9px]'}`}
+						className={cn(
+							'inset-y-0',
+							dropIndicator.position === 'before'
+								? '-left-[9px]'
+								: '-right-[9px]',
+						)}
 					/>
 				)}
 				<section
 					data-column-id={column.id}
-					className={`bookmark-column relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card ${dropIndicator && dropIndicator.kind !== 'column' ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+					className={cn(
+						'bookmark-column relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card',
+						dropIndicator &&
+							dropIndicator.kind !== 'column' &&
+							'ring-2 ring-primary ring-offset-2 ring-offset-background',
+					)}
 					aria-label={`${column.name} bookmark column`}
 					onDragOver={(event) =>
 						previewBookmarkDrop(event, column.id, onDropOver, true)
@@ -2762,7 +2763,12 @@ const BookmarkCard = memo(
 					{dropBefore && <InsertionLine className="inset-x-1 -top-[3px]" />}
 					<article
 						draggable
-						className={`group flex min-w-0 items-center gap-1 rounded-md px-2 ${showUrl ? 'py-1.5' : 'py-1'} transition-colors hover:bg-muted/75 ${dropActive ? 'bg-primary/10' : ''}`}
+						className={cn(
+							'group flex min-w-0 items-center gap-1 rounded-md px-2',
+							showUrl ? 'py-1.5' : 'py-1',
+							'transition-colors hover:bg-muted/75',
+							dropActive && 'bg-primary/10',
+						)}
 					>
 						<a
 							href={
@@ -2801,7 +2807,7 @@ const BookmarkCard = memo(
 							<Favicon
 								url={bookmark.url}
 								label={siteName(bookmark.url)}
-								className={`${showUrl ? 'h-6 w-6' : 'h-5 w-5'} rounded`}
+								className={cn(showUrl ? 'h-6 w-6' : 'h-5 w-5', 'rounded')}
 							/>
 							<span className="min-w-0 flex-1">
 								<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">

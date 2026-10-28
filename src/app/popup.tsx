@@ -63,6 +63,7 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {webUrl} from './web-url';
+import {cn} from '@/lib/utils';
 
 // The icon registry is large; the popup only loads it once the column picker renders.
 const ColumnLabel = lazy(async () => ({
@@ -446,7 +447,14 @@ function Popup() {
 			<ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
 				{stats.length > 0 && (
 					<dl
-						className={`mb-4 grid divide-x divide-border rounded-lg border border-border bg-card py-2.5 ${stats.length === 3 ? 'grid-cols-3' : stats.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+						className={cn(
+							'mb-4 grid divide-x divide-border rounded-lg border border-border bg-card py-2.5',
+							stats.length === 3
+								? 'grid-cols-3'
+								: stats.length === 2
+									? 'grid-cols-2'
+									: 'grid-cols-1',
+						)}
 						aria-label={`Saved in ${PROJECT.name}`}
 					>
 						{stats.map(({icon: Icon, count, label}) => (

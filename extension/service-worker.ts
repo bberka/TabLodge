@@ -2393,7 +2393,6 @@ async function openDashboard(
 	return created.id;
 }
 
-// ---- Keep TabLodge pinned ----
 // With "Keep TabLodge pinned" on, every normal window gets exactly one pinned TabLodge tab. Checks are
 // debounced; if the user closes or unpins it twice within LODGE_FIGHT_WINDOW_MS the window is left alone until it
 // is focused again, so the worker never fights the user.
@@ -5042,7 +5041,7 @@ async function eraseData(
 	);
 }
 
-// ---- New tab hand-off: with "Use TabLodge for new tabs" off the override page cannot be uninstalled, so tabs the
+// New tab hand-off: with "Use TabLodge for new tabs" off the override page cannot be uninstalled, so tabs the
 // browser opens as new tabs are sent straight on to the browser's own page (or a blank / custom page).
 const NEW_TAB_URL = /^(?:chrome|brave|edge):\/\/(?:newtab|new-tab-page)\/?$/;
 const CLAIMS_KEY = 'newTabClaims';
@@ -5132,7 +5131,7 @@ chrome.tabs.onRemoved?.addListener((tabId) => {
 	});
 });
 
-// ---- Recovery: crash snapshots, automatic and safety backups, trash. Everything stays in chrome.storage.local.
+// Recovery: crash snapshots, automatic and safety backups, trash. Everything stays in chrome.storage.local.
 // Storage keys (all separate from `tablodge.state`, so the big state is never rewritten for them):
 //   tablodge.snapshots       { version, history: Snapshot[] }  rotated at the interval, newest first
 //   tablodge.snapshots.live  Snapshot                          the latest capture, rewritten on (debounced) tab events
@@ -5285,8 +5284,6 @@ async function readSettings(): Promise<Settings> {
 
 	return settings;
 }
-
-// ---- Crash snapshots
 
 type SnapshotMeta = {
 	/**
@@ -6021,8 +6018,6 @@ function dismissRecovery(): Promise<ActionResult<'DISMISS_RECOVERY'>> {
 	});
 }
 
-// ---- Backups
-
 type BackupRecord = BackupSummary & {sig: string; json: string};
 type BackupStore = {
 	auto: BackupRecord[];
@@ -6370,7 +6365,7 @@ async function getBackupData(
 		: {ok: false, error: 'That backup no longer exists.'};
 }
 
-// ---- Full backup (ZIP): the page builds and reads the archive; the worker supplies and replaces the stored values.
+// Full backup (ZIP): the page builds and reads the archive; the worker supplies and replaces the stored values.
 // Mirrors FULL_BACKUP_FORMAT_ID and FULL_BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
 const FULL_BACKUP_FORMAT_ID = 'tablodge-full-backup';
 const FULL_BACKUP_VERSION = 1;
@@ -6628,8 +6623,6 @@ function restoreFullBackup(
 		return result;
 	});
 }
-
-// ---- Trash
 
 type TrashEntry = {
 	id: string;
@@ -7070,7 +7063,7 @@ function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
 	);
 }
 
-// ---- Undo: for actions the trash cannot hold (erase, empty trash, clear snapshots, restore a backup, imports),
+// Undo: for actions the trash cannot hold (erase, empty trash, clear snapshots, restore a backup, imports),
 // the affected storage keys are copied before the action and put back by UNDO, but only briefly and only while
 // nothing else has changed those keys since.
 const UNDO_KEY = 'tablodge.undo';
@@ -7271,8 +7264,6 @@ async function getStorageUsage(): Promise<ActionResult<'GET_STORAGE_USAGE'>> {
 	};
 	return {ok: true, usage};
 }
-
-// ---- Alarms and browser events
 
 async function ensureAlarm(
 	name: string,
@@ -7987,7 +7978,6 @@ async function openDashboardForTab(tab?: chrome.tabs.Tab) {
 	await openDashboard(windowId, '', settings.dashboardBehavior);
 }
 
-// ---- Right-click menus ----
 // One parent item per context, named after the extension, keeps the browser menu short. The toolbar
 // icon's menu is already the extension's own, so its items are top level (Chrome shows at most
 // ACTION_MENU_TOP_LEVEL_LIMIT = 6). Tab-strip menus are not available to extensions.

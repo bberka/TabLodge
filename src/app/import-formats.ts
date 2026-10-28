@@ -297,8 +297,6 @@ function result(
 	};
 }
 
-// ---------------------------------------------------------------- JSON formats
-
 function parseNative(data: unknown, collector: Collector): ParsedImport | null {
 	// Recognized by structure, not by the `format` id, so backups written under any id import.
 	const record = isObject(data) ? data : null;
@@ -682,8 +680,6 @@ function parseJson(data: unknown): ParsedImport {
 	);
 }
 
-// ---------------------------------------------------------------- HTML (Netscape bookmark file)
-
 const NAMED_ENTITIES: Record<string, string> = {
 	amp: '&',
 	lt: '<',
@@ -906,8 +902,6 @@ function parseHtml(source: string): ParsedImport {
 		collector,
 	);
 }
-
-// ---------------------------------------------------------------- Text formats
 
 /**
 RFC 4180 rows: quoted fields may contain the delimiter, quotes ("") and line breaks.
@@ -1189,8 +1183,6 @@ function parseUrlList(lines: string[]): ParsedImport {
 	);
 }
 
-// ---------------------------------------------------------------- Entry point
-
 /**
  Detects the format of an import file and parses it. Throws ImportFormatError with a readable
  message when the file is empty, too large, or not a supported format.
@@ -1352,8 +1344,6 @@ export function parseBookmarkTree(roots: BookmarkTreeNode[]): ParsedImport {
 		collector,
 	);
 }
-
-// ---------------------------------------------------------------- Preview and payloads
 
 export type ImportPreview = {
 	/**

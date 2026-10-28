@@ -78,7 +78,6 @@ import {
 	SnapshotsDialog,
 	TrashDialog,
 } from './lazy-dialogs';
-import {ColumnLabel} from './icon-label';
 import {offerUndo} from './recovery-core';
 import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
@@ -88,7 +87,6 @@ import {
 	parseExcludedLines,
 } from './excluded-sites';
 import {
-	highlightSegments,
 	matchesAnyTerm,
 	matchesQuery,
 	rankByQuery,
@@ -96,7 +94,10 @@ import {
 	sortByQuery,
 	searchTerms,
 } from './fuzzy';
+import {Highlight} from './highlight';
 import {PROJECT} from './project';
+import {ColumnSelect} from './column-select';
+import {cn} from '@/lib/utils';
 
 // Settings keys whose value has the given type, so switch rows only bind boolean settings and select rows string ones.
 type SettingKey<V> = {
@@ -1313,7 +1314,7 @@ function Options() {
 		) : null;
 	}
 
-	// ---- Search: every section lists its rows' searchable text; a matching section title keeps all its rows.
+	// Search: every section lists its rows' searchable text; a matching section title keeps all its rows.
 	const titleHit = (title: string) => searching && matchesQuery(query, [title]);
 	const pick = <T,>(
 		title: string,
@@ -1665,7 +1666,12 @@ function Options() {
 							key={id}
 							href={`#${id}`}
 							aria-current={activeSection === id ? 'location' : undefined}
-							className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${activeSection === id ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+							className={cn(
+								'inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+								activeSection === id
+									? 'bg-primary/10 font-medium text-primary'
+									: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+							)}
 							onClick={(event) => {
 								if (!searching) {
 									return;
@@ -1722,7 +1728,10 @@ function Options() {
 					{showAppearance && (
 						<section
 							id={sectionId(APPEARANCE.title)}
-							className={`${SECTION_SCROLL_CLASS} flex flex-col justify-between gap-5 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-center`}
+							className={cn(
+								SECTION_SCROLL_CLASS,
+								'flex flex-col justify-between gap-5 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-center',
+							)}
 						>
 							<div>
 								<h2 className="font-semibold">{hl(APPEARANCE.title)}</h2>
@@ -1981,7 +1990,8 @@ function Options() {
 														}
 													/>
 												) : field.type === 'column' ? (
-													<Select
+													<ColumnSelect
+														columns={state?.bookmarkColumns ?? []}
 														value={
 															state?.bookmarkColumns.some(
 																(column) => column.id === settings[field.name],
@@ -1990,24 +2000,12 @@ function Options() {
 																: (state?.bookmarkColumns[0]?.id ?? '')
 														}
 														disabled={rowDisabled(field)}
+														className="w-full sm:w-64"
+														aria-label={field.label}
 														onValueChange={(value) =>
 															updateSetting(field.name, value)
 														}
-													>
-														<SelectTrigger
-															className="w-full sm:w-64"
-															aria-label={field.label}
-														>
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent>
-															{(state?.bookmarkColumns ?? []).map((column) => (
-																<SelectItem key={column.id} value={column.id}>
-																	<ColumnLabel column={column} />
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
+													/>
 												) : field.type === 'number-select' ? (
 													<Select
 														value={String(
@@ -2162,7 +2160,10 @@ function Options() {
 					{showDefaults && (
 						<div
 							id={sectionId(DEFAULTS.title)}
-							className={`${SECTION_SCROLL_CLASS} flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-5 py-4`}
+							className={cn(
+								SECTION_SCROLL_CLASS,
+								'flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-5 py-4',
+							)}
 						>
 							<div>
 								<p className="text-sm font-semibold">{hl(DEFAULTS.title)}</p>
@@ -2327,7 +2328,12 @@ function Options() {
 									/>
 									<p
 										id="excluded-origin-message"
-										className={`min-h-5 text-xs leading-5 ${siteError ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+										className={cn(
+											'min-h-5 text-xs leading-5',
+											siteError
+												? 'font-medium text-destructive'
+												: 'text-muted-foreground',
+										)}
 										aria-live="polite"
 									>
 										{siteError ||
@@ -2385,7 +2391,12 @@ function Options() {
 									/>
 									<p
 										id="excluded-origin-message"
-										className={`min-h-5 text-xs leading-5 ${siteFieldError ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+										className={cn(
+											'min-h-5 text-xs leading-5',
+											siteFieldError
+												? 'font-medium text-destructive'
+												: 'text-muted-foreground',
+										)}
 										aria-live="polite"
 									>
 										{siteFieldError ||
@@ -2449,30 +2460,6 @@ function Options() {
 	);
 }
 
-// A subtle <mark> around the parts of `text` that match the search query; the text itself never changes, so nothing shifts.
-function Highlight({text, query}: {text: string; query: string}) {
-	if (!query.trim()) {
-		return <>{text}</>;
-	}
-
-	return (
-		<>
-			{highlightSegments(text, query).map((segment, index) =>
-				segment.match ? (
-					<mark
-						key={index}
-						className="rounded-sm bg-primary/15 px-0 text-inherit"
-					>
-						{segment.text}
-					</mark>
-				) : (
-					<Fragment key={index}>{segment.text}</Fragment>
-				),
-			)}
-		</>
-	);
-}
-
 const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
 
 /**
@@ -2514,7 +2501,10 @@ function ShortcutsCard({
 	return (
 		<section
 			id={id}
-			className={`${SECTION_SCROLL_CLASS} rounded-lg border border-border bg-card p-5`}
+			className={cn(
+				SECTION_SCROLL_CLASS,
+				'rounded-lg border border-border bg-card p-5',
+			)}
 		>
 			<div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
 				<div>
@@ -2587,7 +2577,10 @@ function SettingRow({
 	return (
 		<div
 			// A setting that depends on the one above sits on a line hanging from it.
-			className={`flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between ${inset ? 'ml-2 border-l-2 border-primary/50 pl-4' : ''}`}
+			className={cn(
+				'flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between',
+				inset && 'ml-2 border-l-2 border-primary/50 pl-4',
+			)}
 		>
 			<div className="min-w-0">
 				<p className="text-sm font-medium">{label}</p>
@@ -2622,7 +2615,7 @@ function SettingRow({
 	);
 }
 
-// A small whole-number input that saves on blur or Enter; the text may be empty or out of range while typing.
+// A web address input that saves on blur or Enter; an address that is not http or https is reported instead of saved.
 function UrlSetting({
 	label,
 	placeholder,
@@ -2764,6 +2757,7 @@ function SessionNamePreview({
 	) : null;
 }
 
+// A small whole-number input that saves on blur or Enter; the text may be empty or out of range while typing.
 function NumberSetting({
 	label,
 	value,
