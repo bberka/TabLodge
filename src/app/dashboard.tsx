@@ -109,7 +109,7 @@ import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {hostOf, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
-import {ColumnLabel, FolderLabel, IconLabel} from './icon-label';
+import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
@@ -123,6 +123,8 @@ import {
 	offerUndo,
 } from './recovery-core';
 import {openLink, resolveLinkTarget} from './link-target';
+import {ColumnSelect} from './column-select';
+import {cn} from '@/lib/utils';
 
 /**
 Modifier keys that choose how a restore behaves or extend a tab selection (a mouse or keyboard event satisfies this).
@@ -1378,7 +1380,14 @@ export function SessionManager({
 										type="button"
 										aria-pressed={folderId === folder.id}
 										data-drop-active={folderDropId === folder.id || undefined}
-										className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${folderDropId === folder.id ? 'bg-primary/15 text-foreground ring-2 ring-primary' : folderId === folder.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+										className={cn(
+											'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+											folderDropId === folder.id
+												? 'bg-primary/15 text-foreground ring-2 ring-primary'
+												: folderId === folder.id
+													? 'bg-primary text-primary-foreground'
+													: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+										)}
 										onDragOver={(event) => {
 											if (dragItemRef.current?.kind !== 'session') {
 												return;
@@ -1478,7 +1487,11 @@ export function SessionManager({
 							<Button
 								variant="ghost"
 								size="icon"
-								className={`h-8 w-8 ${folderDropId === NEW_FOLDER_DROP ? 'bg-primary/15 ring-2 ring-primary' : ''}`}
+								className={cn(
+									'h-8 w-8',
+									folderDropId === NEW_FOLDER_DROP &&
+										'bg-primary/15 ring-2 ring-primary',
+								)}
 								aria-label="New folder"
 								onClick={() => setDialog({mode: 'create'})}
 								// Dropping a session here creates a folder and moves the session into it.
@@ -1778,23 +1791,14 @@ export function SessionManager({
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column-select">Bookmark column</Label>
-								<Select
+								<ColumnSelect
+									columns={columns}
 									value={bookmarkTab?.columnId || columns[0]?.id}
+									id="bookmark-column-select"
 									onValueChange={(value) =>
 										setBookmarkTab((old) => ({...old, columnId: value}))
 									}
-								>
-									<SelectTrigger id="bookmark-column-select">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{columns.map((column) => (
-											<SelectItem key={column.id} value={column.id}>
-												<ColumnLabel column={column} />
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								/>
 							</div>
 						</DialogBody>
 						<DialogFooter>
@@ -2323,12 +2327,22 @@ const GroupCard = memo(
 				{mark?.kind === 'session' && (
 					<DropIndicator
 						orientation="horizontal"
-						className={`inset-x-0 ${mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]'}`}
+						className={cn(
+							'inset-x-0',
+							mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]',
+						)}
 					/>
 				)}
 				<article
 					id={`session-${group.id}`}
-					className={`tn-card-lazy group/session cursor-pointer overflow-hidden rounded-xl border bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
+					className={cn(
+						'tn-card-lazy group/session cursor-pointer overflow-hidden rounded-xl border bg-card transition-shadow',
+						isExpanded
+							? 'border-primary/30 shadow-sm'
+							: 'border-border hover:border-primary/25',
+						mark?.kind === 'into' && 'border-primary ring-2 ring-primary/40',
+						draggingSelf && 'opacity-50',
+					)}
 					aria-label={`Session ${name}`}
 					onDragOver={(event) => handlers.dragOver(group, event)}
 					onDragLeave={handlers.dragLeave}
@@ -2348,7 +2362,10 @@ const GroupCard = memo(
 									onClick={() => onExpanded(!isExpanded)}
 								>
 									<ChevronRight
-										className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+										className={cn(
+											'transition-transform',
+											isExpanded && 'rotate-90',
+										)}
 									/>
 								</Button>
 							</IconTooltip>
@@ -2722,7 +2739,15 @@ const SavedTab = memo(
 				<li
 					draggable
 					data-tab-id={tab.id}
-					className={`group/tab flex min-w-0 ${compact ? 'items-center' : 'items-start'} gap-2.5 relative rounded-lg px-2 ${compact ? 'py-1.5' : 'py-2'} transition-colors hover:bg-muted/60 ${selected ? 'bg-primary/[.07]' : ''} ${dragging ? 'opacity-40' : ''} `}
+					className={cn(
+						'group/tab flex min-w-0',
+						compact ? 'items-center' : 'items-start',
+						'gap-2.5 relative rounded-lg px-2',
+						compact ? 'py-1.5' : 'py-2',
+						'transition-colors hover:bg-muted/60',
+						selected && 'bg-primary/[.07]',
+						dragging && 'opacity-40',
+					)}
 					onClick={handleRowClick}
 					onDragStart={(event) => {
 						event.stopPropagation();
@@ -2739,11 +2764,20 @@ const SavedTab = memo(
 				>
 					{dropLine && (
 						<DropIndicator
-							className={`inset-x-0 ${dropLine === 'before' ? '-top-px' : '-bottom-px'}`}
+							className={cn(
+								'inset-x-0',
+								dropLine === 'before' ? '-top-px' : '-bottom-px',
+							)}
 						/>
 					)}
 					<span
-						className={`${compact ? '' : 'mt-1.5'} flex w-4 shrink-0 justify-center transition-opacity ${selected || selectionActive ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100'}`}
+						className={cn(
+							compact ? '' : 'mt-1.5',
+							'flex w-4 shrink-0 justify-center transition-opacity',
+							selected || selectionActive
+								? 'opacity-100'
+								: 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100',
+						)}
 					>
 						<Checkbox
 							checked={selected}
@@ -2770,7 +2804,7 @@ const SavedTab = memo(
 					<Favicon
 						url={tab.url}
 						label={label}
-						className={`${compact ? 'h-5 w-5' : 'mt-0.5 h-6 w-6'} rounded-sm`}
+						className={cn(compact ? 'h-5 w-5' : 'mt-0.5 h-6 w-6', 'rounded-sm')}
 					/>
 					<div className="min-w-0 flex-1">
 						<span className="flex min-w-0 items-center gap-1.5">

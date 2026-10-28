@@ -47,18 +47,12 @@ import {
 	RadioCardGroup,
 	ScrollArea,
 	SegmentedControl,
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
 	useRetainedValue,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
 import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
-import {ColumnLabel} from './icon-label';
 import {
 	shareCounts,
 	shareHtmlPage,
@@ -105,6 +99,8 @@ import {
 	readFullBackup,
 	type FullBackupContents,
 } from './full-backup';
+import {ColumnSelect} from './column-select';
+import {cn} from '@/lib/utils';
 
 const plural = (count: number, noun: string, many = `${noun}s`) =>
 	`${count.toLocaleString()} ${count === 1 ? noun : many}`;
@@ -1245,7 +1241,12 @@ export function ImportDialog({
 							{kindSwitch && <div>{kindSwitch}</div>}
 							<section
 								aria-labelledby="import-file-heading"
-								className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-5 py-6 text-center transition-colors ${dragging ? 'border-primary bg-primary/[.06]' : 'border-border bg-muted/30'}`}
+								className={cn(
+									'flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-5 py-6 text-center transition-colors',
+									dragging
+										? 'border-primary bg-primary/[.06]'
+										: 'border-border bg-muted/30',
+								)}
 								onDragOver={(event) => {
 									if (!event.dataTransfer.types.includes('Files')) {
 										return;
@@ -1644,21 +1645,13 @@ export function ImportDialog({
 													onValueChange={setTarget}
 												/>
 												{target === 'column' && (
-													<Select value={columnId} onValueChange={setColumnId}>
-														<SelectTrigger
-															className="h-8 w-48 text-xs"
-															aria-label="Column for every imported bookmark"
-														>
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent>
-															{columns.map((column) => (
-																<SelectItem key={column.id} value={column.id}>
-																	<ColumnLabel column={column} />
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
+													<ColumnSelect
+														columns={columns}
+														value={columnId}
+														className="h-8 w-48 text-xs"
+														aria-label="Column for every imported bookmark"
+														onValueChange={setColumnId}
+													/>
 												)}
 											</div>
 										</OptionRow>
@@ -1741,7 +1734,12 @@ function Stat({
 				{label}
 			</dt>
 			<dd
-				className={`mt-0.5 text-lg font-semibold tabular-nums leading-6 ${tone === 'accent' ? 'text-primary' : tone === 'warn' ? 'text-destructive' : ''}`}
+				className={cn(
+					'mt-0.5 text-lg font-semibold tabular-nums leading-6',
+					tone === 'accent'
+						? 'text-primary'
+						: tone === 'warn' && 'text-destructive',
+				)}
 			>
 				{value.toLocaleString()}
 			</dd>

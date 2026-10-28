@@ -1,7 +1,6 @@
 // The global finder: the command palette (Ctrl/Cmd+K) with one search box, one ranking (global-search.ts) and one
 // way of opening results.
 import {
-	Fragment,
 	useDeferredValue,
 	useEffect,
 	useMemo,
@@ -40,9 +39,10 @@ import {
 	type OpenTabInfo,
 } from './global-search';
 import {faviconUrl} from './favicon';
-import {highlightSegments} from './fuzzy';
+import {Highlight} from './highlight';
 import {isPinnedLodgeTab, openLink} from './link-target';
 import type {TabLodgeState} from './types';
+import {cn} from '@/lib/utils';
 
 /**
 A command the finder lists; `run` is called when it is chosen.
@@ -110,25 +110,6 @@ function ResultIcon({
 			className="h-4 w-4 shrink-0 text-muted-foreground"
 			aria-hidden="true"
 		/>
-	);
-}
-
-function Highlight({text, query}: {text: string; query: string}) {
-	return (
-		<>
-			{highlightSegments(text, query).map((segment, index) =>
-				segment.match ? (
-					<mark
-						key={index}
-						className="rounded-sm bg-primary/20 px-0 text-inherit"
-					>
-						{segment.text}
-					</mark>
-				) : (
-					<Fragment key={index}>{segment.text}</Fragment>
-				),
-			)}
-		</>
 	);
 }
 
@@ -394,7 +375,10 @@ function ResultList({
 									role="option"
 									aria-selected={active}
 									data-active={active || undefined}
-									className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 ${active ? 'bg-accent text-accent-foreground' : ''}`}
+									className={cn(
+										'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5',
+										active && 'bg-accent text-accent-foreground',
+									)}
 									onMouseMove={() => !active && setIndex(at)}
 									onMouseDown={(event) => event.preventDefault()}
 									onClick={(event) =>
