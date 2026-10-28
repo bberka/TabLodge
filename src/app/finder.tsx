@@ -485,7 +485,7 @@ function PaletteBody(props: {
 	useScrollActiveIntoView(listId, finder.selected);
 	return (
 		<div className="flex min-h-0 flex-col">
-			<div className="flex items-center gap-2.5 border-b border-border px-4">
+			<div className="flex items-center gap-2.5 border-b border-border px-4 focus-within:shadow-[inset_0_-2px_0_0_rgb(var(--ring))]">
 				<Search
 					className="h-4 w-4 shrink-0 text-muted-foreground"
 					aria-hidden="true"
