@@ -613,247 +613,219 @@ function Help() {
 	return (
 		<main
 			data-brand="tablodge"
-			className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-9"
+			className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-9 lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8"
 		>
-			<AppHeader active="help" />
-			<section className="mb-8 grid gap-6 border-b border-border pb-8 sm:grid-cols-[minmax(0,1fr)_minmax(300px,400px)] sm:items-end">
-				<div className="max-w-xl">
-					<p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
-						<CircleHelp className="h-4 w-4" aria-hidden="true" />
-						Help for your everyday tab work
-					</p>
-					<h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-						Find the answer and get back to your tabs.
-					</h2>
-					<p className="mt-3 max-w-lg leading-6 text-muted-foreground">
-						Search for an action, setting, or menu. Open links here to jump
-						straight to the relevant part of {PROJECT.name}.
-					</p>
-				</div>
-				<div>
-					<div className="relative block">
-						<label htmlFor="help-search" className="sr-only">
-							Search help
-						</label>
-						<Search
-							className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-							aria-hidden="true"
-						/>
-						<Input
-							id="help-search"
-							type="text"
-							value={query}
-							placeholder="Try “right-click”, “backup”, or “shortcut”"
-							className="h-11 pl-9 pr-10"
-							onChange={(event) => setQuery(event.target.value)}
-							onKeyDown={(event) => {
-								if (event.key === 'Escape') {
-									setQuery('');
-								}
-							}}
-						/>
-						{query && (
-							<Button
-								variant="ghost"
-								size="icon"
-								className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
-								aria-label="Clear help search"
-								onClick={() => setQuery('')}
-							>
-								<X className="h-4 w-4" aria-hidden="true" />
-							</Button>
-						)}
-					</div>
-					<p
-						className="mt-2 text-xs text-muted-foreground"
-						role="status"
-						aria-live="polite"
+			<div className="lg:col-span-2">
+				<AppHeader active="help" />
+			</div>
+			<h2 className="mb-3 hidden text-sm font-semibold lg:col-start-1 lg:row-start-2 lg:-mt-3 lg:block">
+				Browse topics
+			</h2>
+			<div
+				role="search"
+				className="relative -mt-3 mb-6 lg:col-start-2 lg:row-start-2"
+			>
+				<label htmlFor="help-search" className="sr-only">
+					Search help
+				</label>
+				<Search
+					className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+					aria-hidden="true"
+				/>
+				<Input
+					id="help-search"
+					type="text"
+					value={query}
+					placeholder="Search help"
+					autoComplete="off"
+					spellCheck={false}
+					className="h-10 pl-9 pr-10"
+					onChange={(event) => setQuery(event.target.value)}
+					onKeyDown={(event) => {
+						if (event.key === 'Escape') {
+							setQuery('');
+						}
+					}}
+				/>
+				{query && (
+					<Button
+						variant="ghost"
+						size="icon"
+						className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+						aria-label="Clear help search"
+						onClick={() => setQuery('')}
 					>
-						{terms.length > 0
-							? `${matchingEntriesCount} matching ${matchingEntriesCount === 1 ? 'answer' : 'answers'} in ${visibleSections.length} ${visibleSections.length === 1 ? 'topic' : 'topics'}`
-							: `${sections.length} topics, with links to the right page`}
-					</p>
-				</div>
-			</section>
+						<X className="h-4 w-4" aria-hidden="true" />
+					</Button>
+				)}
+			</div>
+			<p className="sr-only" role="status" aria-live="polite">
+				{terms.length > 0
+					? `${matchingEntriesCount} matching ${matchingEntriesCount === 1 ? 'answer' : 'answers'} in ${visibleSections.length} ${visibleSections.length === 1 ? 'topic' : 'topics'}`
+					: ''}
+			</p>
 
-			<div className="grid gap-8 lg:grid-cols-[190px_minmax(0,1fr)]">
-				<aside className="self-start lg:sticky lg:top-5">
-					<h2 className="mb-3 text-sm font-semibold">Browse topics</h2>
-					<nav
-						aria-label="Help topics"
-						className="flex flex-wrap gap-1.5 lg:flex-col lg:items-stretch"
-					>
-						{visibleSections.map(({id, title, icon: Icon}) => (
-							<a
-								key={id}
-								href={`#${id}`}
-								className="inline-flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							>
-								<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-								{title}
-							</a>
-						))}
-					</nav>
-				</aside>
+			<aside className="mb-4 self-start lg:sticky lg:top-5 lg:-mt-8 lg:mb-0 lg:col-start-1 lg:row-start-3">
+				<nav
+					aria-label="Help topics"
+					className="flex flex-wrap gap-1.5 lg:flex-col lg:items-stretch"
+				>
+					{visibleSections.map(({id, title, icon: Icon}) => (
+						<a
+							key={id}
+							href={`#${id}`}
+							className="inline-flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						>
+							<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+							{title}
+						</a>
+					))}
+				</nav>
+			</aside>
 
-				<div className="min-w-0">
-					{visibleSections.length > 0 ? (
-						<div>
-							{visibleSections.map((section) => {
-								const Icon = section.icon;
-								return (
-									<article
-										key={section.id}
-										id={section.id}
-										className="scroll-mt-6 border-b border-border py-7 first:pt-0"
-										aria-labelledby={`${section.id}-title`}
-									>
-										<header className="flex items-start gap-3">
-											<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-												<Icon className="h-5 w-5" aria-hidden="true" />
-											</span>
-											<div className="min-w-0">
-												<h2
-													id={`${section.id}-title`}
-													className="text-xl font-semibold tracking-tight"
-												>
-													{section.title}
-												</h2>
-												<p className="mt-1 max-w-2xl leading-6 text-muted-foreground">
-													{section.intro}
+			<div className="min-w-0 lg:col-start-2 lg:row-start-3">
+				{visibleSections.length > 0 ? (
+					<div>
+						{visibleSections.map((section) => {
+							const Icon = section.icon;
+							return (
+								<article
+									key={section.id}
+									id={section.id}
+									className="scroll-mt-6 border-b border-border py-7 first:pt-0"
+									aria-labelledby={`${section.id}-title`}
+								>
+									<header className="flex items-start gap-3">
+										<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+											<Icon className="h-5 w-5" aria-hidden="true" />
+										</span>
+										<div className="min-w-0">
+											<h2
+												id={`${section.id}-title`}
+												className="text-xl font-semibold tracking-tight"
+											>
+												{section.title}
+											</h2>
+											<p className="mt-1 max-w-2xl leading-6 text-muted-foreground">
+												{section.intro}
+											</p>
+										</div>
+									</header>
+									<div className="mt-4 divide-y divide-border border-t border-border sm:ml-[3.25rem]">
+										{section.visibleEntries.map((entry) => (
+											<div
+												key={entry.title}
+												className="grid gap-2 py-4 sm:grid-cols-[minmax(145px,0.34fr)_minmax(0,1fr)] sm:gap-5"
+											>
+												<div className="flex flex-wrap items-center gap-2">
+													<h3 className="text-sm font-semibold">
+														{entry.title}
+													</h3>
+													{entry.gesture && <GestureBadge {...entry.gesture} />}
+												</div>
+												<p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+													{entry.body}
 												</p>
 											</div>
-										</header>
-										<div className="mt-4 divide-y divide-border border-t border-border sm:ml-[3.25rem]">
-											{section.visibleEntries.map((entry) => (
-												<div
-													key={entry.title}
-													className="grid gap-2 py-4 sm:grid-cols-[minmax(145px,0.34fr)_minmax(0,1fr)] sm:gap-5"
+										))}
+									</div>
+									{section.action && (
+										<div className="mt-4 flex flex-wrap items-center gap-3 sm:ml-[3.25rem]">
+											{section.action.href === SHORTCUTS_URL ? (
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={async () => {
+														setShortcutsFailed(!(await openShortcutsPage()));
+													}}
 												>
-													<div className="flex flex-wrap items-center gap-2">
-														<h3 className="text-sm font-semibold">
-															{entry.title}
-														</h3>
-														{entry.gesture && (
-															<GestureBadge {...entry.gesture} />
-														)}
-													</div>
-													<p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-														{entry.body}
-													</p>
-												</div>
-											))}
-										</div>
-										{section.action && (
-											<div className="mt-4 flex flex-wrap items-center gap-3 sm:ml-[3.25rem]">
-												{section.action.href === SHORTCUTS_URL ? (
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={async () => {
-															setShortcutsFailed(!(await openShortcutsPage()));
-														}}
-													>
-														<Keyboard className="h-4 w-4" aria-hidden="true" />
-														{section.action.label}
-														<ArrowUpRight
+													<Keyboard className="h-4 w-4" aria-hidden="true" />
+													{section.action.label}
+													<ArrowUpRight
+														className="h-4 w-4"
+														aria-hidden="true"
+													/>
+												</Button>
+											) : (
+												<a
+													href={section.action.href}
+													className="inline-flex min-h-9 items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+												>
+													{section.action.icon && (
+														<section.action.icon
 															className="h-4 w-4"
 															aria-hidden="true"
 														/>
-													</Button>
-												) : (
-													<a
-														href={section.action.href}
-														className="inline-flex min-h-9 items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+													)}
+													{section.action.label}
+													<ArrowUpRight
+														className="h-4 w-4"
+														aria-hidden="true"
+													/>
+												</a>
+											)}
+											{shortcutsFailed &&
+												section.id === 'search-and-shortcuts' && (
+													<p
+														role="alert"
+														className="text-xs text-muted-foreground"
 													>
-														{section.action.icon && (
-															<section.action.icon
-																className="h-4 w-4"
-																aria-hidden="true"
-															/>
-														)}
-														{section.action.label}
-														<ArrowUpRight
-															className="h-4 w-4"
+														Your browser did not open the shortcuts page. Paste{' '}
+														<code>{SHORTCUTS_URL}</code> into the address bar.
+													</p>
+												)}
+										</div>
+									)}
+									{section.id === 'about' && (
+										<div className="mt-4 flex flex-wrap gap-2 sm:ml-[3.25rem]">
+											{projectLinks.map(({icon: LinkIcon, label, href}) => (
+												<Button key={label} asChild variant="outline" size="sm">
+													<a
+														href={href}
+														target="_blank"
+														rel="noopener noreferrer"
+													>
+														<LinkIcon className="h-4 w-4" aria-hidden="true" />
+														{label}
+														<ExternalLink
+															className="h-3.5 w-3.5"
 															aria-hidden="true"
 														/>
 													</a>
-												)}
-												{shortcutsFailed &&
-													section.id === 'search-and-shortcuts' && (
-														<p
-															role="alert"
-															className="text-xs text-muted-foreground"
-														>
-															Your browser did not open the shortcuts page.
-															Paste <code>{SHORTCUTS_URL}</code> into the
-															address bar.
-														</p>
-													)}
-											</div>
-										)}
-										{section.id === 'about' && (
-											<div className="mt-4 flex flex-wrap gap-2 sm:ml-[3.25rem]">
-												{projectLinks.map(({icon: LinkIcon, label, href}) => (
-													<Button
-														key={label}
-														asChild
-														variant="outline"
-														size="sm"
-													>
-														<a
-															href={href}
-															target="_blank"
-															rel="noopener noreferrer"
-														>
-															<LinkIcon
-																className="h-4 w-4"
-																aria-hidden="true"
-															/>
-															{label}
-															<ExternalLink
-																className="h-3.5 w-3.5"
-																aria-hidden="true"
-															/>
-														</a>
-													</Button>
-												))}
-											</div>
-										)}
-										{terms.length === 0 && section.id === 'right-click' && (
-											<p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground sm:ml-[3.25rem]">
-												<Check
-													className="h-4 w-4 shrink-0"
-													aria-hidden="true"
-												/>
-												Each menu location can be enabled separately.
-											</p>
-										)}
-									</article>
-								);
-							})}
-						</div>
-					) : (
-						<div className="rounded-lg border border-dashed border-border px-5 py-10 text-center">
-							<Search
-								className="mx-auto h-5 w-5 text-muted-foreground"
-								aria-hidden="true"
-							/>
-							<h2 className="mt-3 font-semibold">No help topics found</h2>
-							<p className="mt-1 text-sm text-muted-foreground">
-								Try another word, or clear the search to browse all topics.
-							</p>
-							<Button
-								className="mt-4"
-								variant="outline"
-								size="sm"
-								onClick={() => setQuery('')}
-							>
-								Clear search
-							</Button>
-						</div>
-					)}
-				</div>
+												</Button>
+											))}
+										</div>
+									)}
+									{terms.length === 0 && section.id === 'right-click' && (
+										<p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground sm:ml-[3.25rem]">
+											<Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+											Each menu location can be enabled separately.
+										</p>
+									)}
+								</article>
+							);
+						})}
+					</div>
+				) : (
+					<div className="rounded-lg border border-dashed border-border px-5 py-10 text-center">
+						<Search
+							className="mx-auto h-5 w-5 text-muted-foreground"
+							aria-hidden="true"
+						/>
+						<h2 className="mt-3 font-semibold">No help topics found</h2>
+						<p className="mt-1 text-sm text-muted-foreground">
+							Try another word, or clear the search to browse all topics.
+						</p>
+						<Button
+							className="mt-4"
+							variant="outline"
+							size="sm"
+							onClick={() => setQuery('')}
+						>
+							Clear search
+						</Button>
+					</div>
+				)}
 			</div>
 		</main>
 	);
