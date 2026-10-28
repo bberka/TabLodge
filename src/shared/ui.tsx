@@ -33,7 +33,6 @@ export {
 export {
 	Dialog,
 	DialogBody,
-	DialogCloseButton,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
@@ -41,16 +40,6 @@ export {
 	DialogTitle,
 	useRetainedValue,
 } from '../components/ui/dialog';
-export {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '../components/ui/alert-dialog';
 export {
 	RadioCard,
 	RadioCardGroup,
@@ -66,13 +55,6 @@ export {
 	DropdownMenuSeparator,
 	DropdownMenuRadioGroup,
 } from '../components/ui/dropdown-menu';
-export {
-	ContextMenu,
-	ContextMenuTrigger,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-} from '../components/ui/context-menu';
 export {
 	Card,
 	CardHeader,
@@ -90,44 +72,21 @@ export {TooltipProvider} from '../components/ui/tooltip';
 export {Label} from '../components/ui/label';
 export {ScrollArea} from '../components/ui/scroll-area';
 
-/**
-Where Radix portals render (for example a shadow-root container); defaults to document.body.
-*/
-type PortalTargetProps = {
-	container?: Element | DocumentFragment | null;
-	portalContainer?: Element | DocumentFragment | null;
+type IconTooltipProps = React.ComponentPropsWithoutRef<typeof Tooltip> & {
+	label: React.ReactNode;
+	side?: React.ComponentPropsWithoutRef<typeof TooltipContent>['side'];
 };
-
-function portalTarget(
-	container?: Element | DocumentFragment | null,
-	portalContainer?: Element | DocumentFragment | null,
-) {
-	return portalContainer ?? container;
-}
-
-type IconTooltipProps = React.ComponentPropsWithoutRef<typeof Tooltip> &
-	PortalTargetProps & {
-		label: React.ReactNode;
-		side?: React.ComponentPropsWithoutRef<typeof TooltipContent>['side'];
-	};
 
 export function IconTooltip({
 	label,
 	children,
 	side = 'top',
-	container,
-	portalContainer,
 	...props
 }: IconTooltipProps) {
 	return (
 		<Tooltip {...props}>
 			<TooltipTrigger asChild>{children}</TooltipTrigger>
-			<TooltipContent
-				side={side}
-				container={portalTarget(container, portalContainer)}
-			>
-				{label}
-			</TooltipContent>
+			<TooltipContent side={side}>{label}</TooltipContent>
 		</Tooltip>
 	);
 }

@@ -42,12 +42,14 @@ const sources = {
 };
 
 test('the finder index reuses bookmark items while the bookmarks are unchanged', () => {
-	const first = buildFinderIndex(sources);
-	const second = buildFinderIndex(sources);
-	assert.equal(
-		second.find((item) => item.id === 'bookmark:b1'),
-		first.find((item) => item.id === 'bookmark:b1'),
+	const first = buildFinderIndex(sources).find(
+		(item) => item.id === 'bookmark:b1',
 	);
+	const second = buildFinderIndex(sources).find(
+		(item) => item.id === 'bookmark:b1',
+	);
+	assert.ok(first, 'the bookmark is indexed');
+	assert.equal(second, first);
 });
 
 test('the finder still finds typos when nothing matches exactly', () => {

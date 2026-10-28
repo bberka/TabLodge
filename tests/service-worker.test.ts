@@ -992,11 +992,12 @@ test('RESTORE_GROUP opens a valid saved URL and reports successful session resto
 	);
 });
 
-test('default session preferences use newest-first, keep-on-restore, quick-popup action, and opt-out pinned tabs', async () => {
+test('default preferences use newest-first, keep-on-restore, quick-popup action, opt-out pinned tabs, and the TabLodge new tab', async () => {
 	const harness = createWorkerHarness({...stateWithSession(), settings: {}});
 	const response = await harness.sendMessage({type: 'GET_STATE'});
 	assert.equal(response.settings.actionMode, 'popup');
 	assert.equal(response.settings.includePinnedTabs, false);
+	assert.equal(response.settings.newTabEnabled, true);
 	assert.equal(response.settings.sessionSort, 'newest');
 	assert.equal(response.settings.restoreMode, 'keep');
 	assert.equal(response.settings.restoreTarget, 'new-window-unless-only-tab');
@@ -1159,49 +1160,6 @@ test('single-tab toolbar mode appends into the first session', async () => {
 	assert.equal(harness.state.groups[1].tabs.length, 1);
 	assert.equal(harness.state.groups[0].tabs[1].url, 'https://current.example/');
 });
-test('popup selection saves only explicitly selected tabs and uses the supplied session title', async () => {
-	const harness = createWorkerHarness(stateWithSession({closeOnSave: false}), [
-		{
-			id: 1,
-			windowId: 10,
-			index: 0,
-			active: true,
-			highlighted: true,
-			url: 'https://current.example/',
-			title: 'Current',
-		},
-		{
-			id: 2,
-			windowId: 10,
-			index: 1,
-			active: false,
-			highlighted: true,
-			url: 'https://selected.example/',
-			title: 'Selected',
-		},
-		{
-			id: 3,
-			windowId: 10,
-			index: 2,
-			active: false,
-			highlighted: false,
-			url: 'https://not-selected.example/',
-			title: 'Not selected',
-		},
-	]);
-	const response = await harness.sendMessage({
-		type: 'SAVE_TABS',
-		scope: 'selected',
-		tabIds: [2],
-		groupName: 'Quick chooser title',
-	});
-	assert.equal(response.ok, true, response.error);
-	const saved = harness.state.groups[0];
-	assert.equal(saved.name, 'Quick chooser title');
-	assert.equal(saved.tabs.length, 1);
-	assert.equal(saved.tabs[0].url, 'https://selected.example/');
-});
-
 test('import duplicate decisions are scoped to each import request and latest title keeps existing notes', async () => {
 	const state = stateWithSession();
 	state.groups[0].tabs[0].notes = 'Keep this note';
@@ -1290,17 +1248,6 @@ test('RESTORE_GROUP reports individual tab-create failures when some tabs open',
 	);
 });
 
-test('unified new-tab destination is enabled by default while pinned tabs remain opt-out', async () => {
-	const state = stateWithSession();
-	delete state.settings.newTabEnabled;
-	delete state.settings.includePinnedTabs;
-	const harness = createWorkerHarness(state);
-	const response = await harness.sendMessage({type: 'GET_STATE'});
-	assert.equal(response.settings.newTabEnabled, true);
-	assert.equal(response.settings.includePinnedTabs, false);
-	assert.equal(response.bookmarkColumns.length, 1);
-});
-
 test('new tab hand-off only happens for browser-opened new tabs while TabLodge new tab is off', async () => {
 	const off = createWorkerHarness(stateWithSession({newTabEnabled: false}), [
 		{id: 7, windowId: 10, index: 0, active: true, url: ''},
@@ -1311,10 +1258,7 @@ test('new tab hand-off only happens for browser-opened new tabs while TabLodge n
 		(await off.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab})).handedOff,
 		false,
 	);
-	await off.listeners.tabCreated({id: 7, pendingUrl: 'chrome://newtab/'});
-	await new Promise<void>((resolve) => {
-		setTimeout(resolve, 20);
-	});
+	await off.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'});
 	assert.equal(tab.url, 'chrome://new-tab-page/');
 	// The browser sent the tab back: try once more, then fall back to a blank page, then stop.
 	assert.equal(
@@ -1374,10 +1318,7 @@ test('new tab fallback settings normalize and choose the target', async () => {
 			stateWithSession({newTabEnabled: false, ...settings}),
 			[{id: 7, windowId: 10, index: 0, active: true, url: ''}],
 		);
-		await harness.listeners.tabCreated({id: 7, pendingUrl: 'chrome://newtab/'});
-		await new Promise<void>((resolve) => {
-			setTimeout(resolve, 20);
-		});
+		await harness.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'});
 		assert.equal(harness.tabs[0].url, url);
 	}
 });
@@ -2264,35 +2205,12 @@ test('save duplicates can be allowed or silently rejected, with existing or late
 	);
 });
 
-test('session clipboard formats cover URL/title orderings, URL-only, Markdown, and rich text', async () => {
-	const {formatSessionLinks, writeClipboard} =
-		await import('../src/app/interaction-actions');
-	const group = {
-		name: 'Reading <list>',
-		tabs: [
-			{title: 'A [one]', url: 'https://a.example/?x=1&y=2'},
-			{title: '', url: 'https://b.example/'},
-		],
+test('writeClipboard writes HTML beside plain text when the browser allows it, else plain text only', async () => {
+	const {writeClipboard} = await import('../src/app/interaction-actions');
+	const rich = {
+		text: 'Reading <list>\nhttps://a.example/?x=1&y=2',
+		html: '<h3>Reading &lt;list&gt;</h3>',
 	};
-	assert.equal(
-		formatSessionLinks(group, 'url').text,
-		'https://a.example/?x=1&y=2\nhttps://b.example/',
-	);
-	assert.equal(
-		formatSessionLinks(group, 'title-url').text,
-		'A [one]\nhttps://a.example/?x=1&y=2\n\nhttps://b.example/\nhttps://b.example/',
-	);
-	assert.equal(
-		formatSessionLinks(group, 'url-title').text.split('\n\n', 1)[0],
-		'https://a.example/?x=1&y=2\nA [one]',
-	);
-	assert.match(
-		formatSessionLinks(group, 'markdown').text,
-		/- \[A \\\[one\\\]\]\(https:\/\/a\.example/,
-	);
-	const rich = formatSessionLinks(group, 'rich');
-	assert.match(rich.html!, /<h3>Reading &lt;list&gt;<\/h3>/);
-	assert.match(rich.html!, /href="https:\/\/a\.example\/\?x=1&amp;y=2"/);
 
 	const writes: FakeItem[][] = [];
 	class FakeItem {
@@ -2331,7 +2249,7 @@ test('session clipboard formats cover URL/title orderings, URL-only, Markdown, a
 		),
 		'plain',
 	);
-	assert.equal(texts.length, 1);
+	assert.deepEqual(texts, [rich.text]);
 });
 
 test('popup pinned override saves pinned tabs once without changing the preference, and they survive reload', async () => {
@@ -2385,7 +2303,7 @@ test('popup pinned override saves pinned tabs once without changing the preferen
 	);
 });
 
-test('explicit quick-popup tab picks are saved even when those tabs are not highlighted', async () => {
+test('explicit quick-popup tab picks are saved whether or not they are highlighted, and other highlighted tabs are left out', async () => {
 	const harness = createWorkerHarness(stateWithSession({closeOnSave: false}), [
 		{
 			id: 1,
@@ -2410,7 +2328,7 @@ test('explicit quick-popup tab picks are saved even when those tabs are not high
 			windowId: 10,
 			index: 2,
 			active: false,
-			highlighted: false,
+			highlighted: true,
 			url: 'https://c.example/',
 			title: 'C',
 		},
@@ -2799,7 +2717,7 @@ test('undo records expire, are purged by the alarm, and only the latest few are 
 		await harness.sendMessage({type: 'EMPTY_TRASH'});
 	}
 
-	assert.equal(undoRecordsOf(harness).length <= 3, true);
+	assert.equal(undoRecordsOf(harness).length, 3);
 });
 
 test('ERASE_DATA bookmarks removes bookmarks and columns and recreates the default column', async () => {
@@ -2922,9 +2840,7 @@ test('without contextMenus.onShown the tab-group item stays enabled and a click 
 			{menuItemId: 'tablodge-page-save-group'},
 			{id: 1, windowId: 10, groupId: -1},
 		);
-		await new Promise((resolve) => {
-			setTimeout(resolve, 10);
-		});
+		await settle();
 	} finally {
 		console.warn = originalWarn;
 	}
@@ -3783,33 +3699,40 @@ test('split settings default to side-by-side restore and saving both tabs, and n
 	assert.equal(reset.settings.saveSplitTabs, 'both');
 });
 
-test('expandSessionsByDefault is off by default, only an explicit true turns it on, and resets to off', async () => {
-	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
-	assert.equal(
-		(await defaults.sendMessage({type: 'GET_STATE'})).settings
-			.expandSessionsByDefault,
-		false,
-	);
+// Boolean settings fall back to their default unless the stored value is exactly the opposite boolean.
+for (const [key, fallback] of [
+	['expandSessionsByDefault', false],
+	['pasteLinkToBookmark', true],
+	['showSaveWindowButton', true],
+	['showTrashBinButton', true],
+	['stretchBookmarkColumns', true],
+] as const) {
+	test(`${key} is ${fallback ? 'on' : 'off'} by default, only an explicit ${String(!fallback)} changes it, and it resets`, async () => {
+		const readStored = async (stored: unknown) =>
+			(
+				await createWorkerHarness(
+					stateWithSession({[key]: stored}),
+				).sendMessage({type: 'GET_STATE'})
+			).settings[key];
+		const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+		assert.equal(
+			(await defaults.sendMessage({type: 'GET_STATE'})).settings[key],
+			fallback,
+		);
+		// Wrong-typed values that point away from the default, so loose truthiness checks fail.
+		assert.equal(await readStored(fallback ? 0 : 'yes'), fallback);
+		assert.equal(await readStored(!fallback), !fallback, 'explicit is kept');
 
-	const truthy = createWorkerHarness(
-		stateWithSession({expandSessionsByDefault: true}),
-	);
-	assert.equal(
-		(await truthy.sendMessage({type: 'GET_STATE'})).settings
-			.expandSessionsByDefault,
-		true,
-		'an explicit true is kept',
-	);
-
-	const updated = await truthy.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {expandSessionsByDefault: false},
+		const updated = await defaults.sendMessage({
+			type: 'UPDATE_SETTINGS',
+			settings: {[key]: !fallback},
+		});
+		assert.equal(updated.ok, true, updated.error);
+		assert.equal(defaults.state.settings[key], !fallback);
+		const reset = await defaults.sendMessage({type: 'RESET_SETTINGS'});
+		assert.equal(reset.settings[key], fallback);
 	});
-	assert.equal(updated.ok, true, updated.error);
-	assert.equal(truthy.state.settings.expandSessionsByDefault, false);
-	const reset = await truthy.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.expandSessionsByDefault, false);
-});
+}
 
 test('link, quick-action, ordering and pin settings normalize with defaults', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
@@ -3883,95 +3806,6 @@ test('url-only display mode and the bookmark menu click action are accepted', as
 	);
 });
 
-test('pasteLinkToBookmark is on by default and only an explicit false turns it off', async () => {
-	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
-	assert.equal(
-		(await defaults.sendMessage({type: 'GET_STATE'})).settings
-			.pasteLinkToBookmark,
-		true,
-	);
-	const off = createWorkerHarness(
-		stateWithSession({pasteLinkToBookmark: false}),
-	);
-	assert.equal(
-		(await off.sendMessage({type: 'GET_STATE'})).settings.pasteLinkToBookmark,
-		false,
-	);
-	const reset = await off.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.pasteLinkToBookmark, true);
-});
-
-test('showSaveWindowButton defaults on, can be hidden, and resets to on', async () => {
-	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
-	assert.equal(
-		(await defaults.sendMessage({type: 'GET_STATE'})).settings
-			.showSaveWindowButton,
-		true,
-	);
-
-	const junk = createWorkerHarness(
-		stateWithSession({showSaveWindowButton: 'no'}),
-	);
-	assert.equal(
-		(await junk.sendMessage({type: 'GET_STATE'})).settings.showSaveWindowButton,
-		true,
-		'only an explicit false hides the button',
-	);
-
-	const hidden = createWorkerHarness(
-		stateWithSession({showSaveWindowButton: false}),
-	);
-	assert.equal(
-		(await hidden.sendMessage({type: 'GET_STATE'})).settings
-			.showSaveWindowButton,
-		false,
-	);
-
-	const updated = await defaults.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {showSaveWindowButton: false},
-	});
-	assert.equal(updated.ok, true, updated.error);
-	assert.equal(defaults.state.settings.showSaveWindowButton, false);
-	const reset = await defaults.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.showSaveWindowButton, true);
-});
-
-test('showTrashBinButton defaults on, can be hidden, and resets to on', async () => {
-	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
-	assert.equal(
-		(await defaults.sendMessage({type: 'GET_STATE'})).settings
-			.showTrashBinButton,
-		true,
-	);
-
-	const junk = createWorkerHarness(
-		stateWithSession({showTrashBinButton: 'no'}),
-	);
-	assert.equal(
-		(await junk.sendMessage({type: 'GET_STATE'})).settings.showTrashBinButton,
-		true,
-		'only an explicit false hides the button',
-	);
-
-	const hidden = createWorkerHarness(
-		stateWithSession({showTrashBinButton: false}),
-	);
-	assert.equal(
-		(await hidden.sendMessage({type: 'GET_STATE'})).settings.showTrashBinButton,
-		false,
-	);
-
-	const updated = await defaults.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {showTrashBinButton: false},
-	});
-	assert.equal(updated.ok, true, updated.error);
-	assert.equal(defaults.state.settings.showTrashBinButton, false);
-	const reset = await defaults.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.showTrashBinButton, true);
-});
-
 test('dashboardWidth defaults to the existing layout, validates choices, and resets', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
@@ -4007,43 +3841,6 @@ test('dashboardWidth defaults to the existing layout, validates choices, and res
 
 	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.dashboardWidth, 'default');
-});
-
-test('stretchBookmarkColumns is on by default, only an explicit false turns it off, and resets to on', async () => {
-	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
-	assert.equal(
-		(await defaults.sendMessage({type: 'GET_STATE'})).settings
-			.stretchBookmarkColumns,
-		true,
-	);
-
-	const junk = createWorkerHarness(
-		stateWithSession({stretchBookmarkColumns: 'no'}),
-	);
-	assert.equal(
-		(await junk.sendMessage({type: 'GET_STATE'})).settings
-			.stretchBookmarkColumns,
-		true,
-		'only a real false disables it',
-	);
-
-	const off = createWorkerHarness(
-		stateWithSession({stretchBookmarkColumns: false}),
-	);
-	assert.equal(
-		(await off.sendMessage({type: 'GET_STATE'})).settings
-			.stretchBookmarkColumns,
-		false,
-	);
-
-	const updated = await junk.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {stretchBookmarkColumns: false},
-	});
-	assert.equal(updated.ok, true, updated.error);
-	assert.equal(junk.state.settings.stretchBookmarkColumns, false);
-	const reset = await junk.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.stretchBookmarkColumns, true);
 });
 
 test("bookmark imports with a target column ignore the file's columns and fill only that column", async () => {
@@ -4378,10 +4175,6 @@ test('SET_GROUP_ORDER persists a custom session order and switches the sort to c
 	);
 });
 
-const settleLodge = async () =>
-	new Promise((resolve) => {
-		setTimeout(resolve, 500);
-	});
 const lodgeUrl = 'chrome-extension://tablodge/newtab.html';
 const pinnedLodges = (
 	harness: ReturnType<typeof createWorkerHarness>,
@@ -4407,16 +4200,16 @@ test('keepLodgePinned creates one pinned TabLodge tab per window, re-pins, and n
 				title: 'Current',
 			},
 		],
-		{tabEvents: true},
+		{tabEvents: true, manualTimers: true},
 	);
-	await harness.listeners.onStartup();
-	await settleLodge();
+	await harness.fire('onStartup');
+	await harness.runTimers();
 	assert.equal(pinnedLodges(harness, 10).length, 1);
 	assert.equal(pinnedLodges(harness, 10)[0].active, false);
 
 	// A second check finds it and adds nothing.
 	harness.listeners.windowFocusChanged(10);
-	await settleLodge();
+	await harness.runTimers();
 	assert.equal(pinnedLodges(harness, 10).length, 1);
 
 	// A restore into a new window gets its own pinned tab; the restored session never contains one.
@@ -4426,7 +4219,7 @@ test('keepLodgePinned creates one pinned TabLodge tab per window, re-pins, and n
 	});
 	assert.equal(restored.ok, true, restored.error);
 	harness.listeners.windowCreated({id: 20, type: 'normal'});
-	await settleLodge();
+	await harness.runTimers();
 	assert.equal(pinnedLodges(harness, 20).length, 1);
 	assert.equal(pinnedLodges(harness, 10).length, 1);
 	assert.equal(
@@ -4458,10 +4251,10 @@ test('keepLodgePinned re-pins an unpinned TabLodge tab and removes extra pinned 
 				pinned: false,
 			},
 		],
-		{tabEvents: true},
+		{tabEvents: true, manualTimers: true},
 	);
-	await harness.listeners.onStartup();
-	await settleLodge();
+	await harness.fire('onStartup');
+	await harness.runTimers();
 	assert.equal(harness.tabs.find((tab) => tab.id === 2)!.pinned, true);
 	assert.equal(
 		harness.openedTabs.length,
@@ -4478,7 +4271,7 @@ test('keepLodgePinned re-pins an unpinned TabLodge tab and removes extra pinned 
 		pinned: true,
 	});
 	harness.listeners.tabAttached(3, {newWindowId: 10});
-	await settleLodge();
+	await harness.runTimers();
 	assert.equal(pinnedLodges(harness, 10).length, 1);
 });
 
@@ -4495,10 +4288,10 @@ test('keepLodgePinned recreates a closed tab once, then waits for window focus w
 				title: 'Current',
 			},
 		],
-		{tabEvents: true},
+		{tabEvents: true, manualTimers: true},
 	);
-	await harness.listeners.onStartup();
-	await settleLodge();
+	await harness.fire('onStartup');
+	await harness.runTimers();
 	const close = async () => {
 		const lodge = pinnedLodges(harness, 10)[0];
 		const index = harness.tabs.indexOf(lodge);
@@ -4507,7 +4300,7 @@ test('keepLodgePinned recreates a closed tab once, then waits for window focus w
 			windowId: 10,
 			isWindowClosing: false,
 		});
-		await settleLodge();
+		await harness.runTimers();
 	};
 
 	await close();
@@ -4523,7 +4316,7 @@ test('keepLodgePinned recreates a closed tab once, then waits for window focus w
 		'a quick second close is respected',
 	);
 	harness.listeners.windowFocusChanged(10);
-	await settleLodge();
+	await harness.runTimers();
 	assert.equal(
 		pinnedLodges(harness, 10).length,
 		1,
@@ -4544,11 +4337,11 @@ test('keepLodgePinned off leaves windows alone, and enabling it adds the pinned 
 				title: 'Current',
 			},
 		],
-		{tabEvents: true},
+		{tabEvents: true, manualTimers: true},
 	);
-	await harness.listeners.onStartup();
+	await harness.fire('onStartup');
 	harness.listeners.windowCreated({id: 10, type: 'normal'});
-	await settleLodge();
+	await harness.runTimers();
 	assert.equal(harness.openedTabs.length, 0);
 
 	const enabled = await harness.sendMessage({
@@ -4556,7 +4349,7 @@ test('keepLodgePinned off leaves windows alone, and enabling it adds the pinned 
 		settings: {keepLodgePinned: true},
 	});
 	assert.equal(enabled.ok, true, enabled.error);
-	await settleLodge();
+	await harness.runTimers();
 	assert.equal(pinnedLodges(harness, 10).length, 1);
 });
 
@@ -7374,24 +7167,6 @@ test('UPDATE_TAB rejects addresses that are not http or https', async () => {
 	);
 });
 
-test('UPDATE_TAB title and notes still apply to every saved copy of the same URL', async () => {
-	const state = stateWithSession();
-	state.groups.push({
-		...structuredClone(state.groups[0]),
-		id: 'session-2',
-		tabs: [{...structuredClone(state.groups[0].tabs[0]), id: 'copy-tab'}],
-	});
-	const harness = createWorkerHarness(state);
-	const response = await harness.sendMessage({
-		type: 'UPDATE_TAB',
-		groupId: 'session-1',
-		tabId: 'saved-tab-1',
-		fields: {title: 'Shared'},
-	});
-	assert.equal(response.shared, 1);
-	assert.equal(harness.state.groups[1].tabs[0].title, 'Shared');
-});
-
 // ---- Session name setting ----
 
 // Saturday, Oct 25 2025, 10:42 PM in the machine's time zone (the worker formats in local time).
@@ -7474,7 +7249,7 @@ test('session names: custom templates fill placeholders and keep unknown tokens'
 	);
 });
 
-test('session names: {title} falls back to the domain and names are capped', async () => {
+test('session names: {title} falls back to the page address and names are capped', async () => {
 	const harness = nameHarness(
 		{sessionNameStyle: 'custom', sessionNameTemplate: '{title}'},
 		[
@@ -7544,9 +7319,6 @@ test('session names: Saved links keeps its name', async () => {
 		{menuItemId: 'tablodge-link-save', linkUrl: 'https://later.example/'},
 		{id: 1, windowId: 10, groupId: -1},
 	);
-	await new Promise((resolve) => {
-		setTimeout(resolve, 20);
-	});
 	assert.equal(harness.state.groups[0].name, 'Saved links');
 });
 

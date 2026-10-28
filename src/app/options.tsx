@@ -60,7 +60,9 @@ import {
 	PageShell,
 	SectionCard,
 	StatusLine,
+	messageOf,
 	openShortcutsPage,
+	plural,
 	send,
 	useStatus,
 	useTabLodgeState,
@@ -144,10 +146,6 @@ type SettingField = {
 	| {name: SettingKey<string>; type: 'url'; placeholder: string}
 	| {name: SettingKey<string>; type: 'text'; placeholder: string}
 );
-const messageOf = (reason: unknown) =>
-	(reason as {message?: string} | null | undefined)?.message;
-const plural = (count: number, one: string, many = `${one}s`) =>
-	`${count} ${count === 1 ? one : many}`;
 const listing = (parts: string[]) =>
 	parts.length < 2
 		? parts.join('')
@@ -984,7 +982,7 @@ function Options() {
 						permissions: ['downloads'],
 					});
 				} catch {
-					granted = false;
+					// A request the browser rejects counts as not granted.
 				}
 
 				setDownloadsGranted(granted);

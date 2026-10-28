@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {strToU8, zipSync} from 'fflate';
+import {strToU8, unzipSync, zipSync} from 'fflate';
 import {test} from 'vite-plus/test';
 import {
 	FullBackupError,
@@ -59,7 +59,7 @@ test('a full backup round-trips through the ZIP', () => {
 
 test('the ZIP holds exactly the five files and the file name is dated', () => {
 	const {bytes} = buildFullBackup(parts, {appVersion: '1'});
-	const names = Object.keys(readZipNames(bytes)).toSorted();
+	const names = Object.keys(unzipSync(bytes)).toSorted();
 	assert.deepEqual(names, [
 		'data.json',
 		'manifest.json',
@@ -72,25 +72,6 @@ test('the ZIP holds exactly the five files and the file name is dated', () => {
 		'tablodge-full-2026-03-04.zip',
 	);
 });
-
-function readZipNames(bytes: Uint8Array) {
-	const result: Record<string, true> = {};
-	// The local headers carry the names; scan for them through the real reader instead of re-parsing.
-	for (const name of [
-		'data.json',
-		'manifest.json',
-		'preferences.json',
-		'snapshots.json',
-		'trash.json',
-		'other.json',
-	]) {
-		if (new TextDecoder('latin1').decode(bytes).includes(name)) {
-			result[name] = true;
-		}
-	}
-
-	return result;
-}
 
 test('files that are not a TabLodge full backup are not claimed', () => {
 	assert.equal(readFullBackup(strToU8('{"groups":[]}')), null);

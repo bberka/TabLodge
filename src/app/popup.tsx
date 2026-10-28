@@ -62,6 +62,7 @@ import type {SaveScope, Session} from './types';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
+import {webUrl} from './web-url';
 
 // The icon registry is large; the popup only loads it once the column picker renders.
 const ColumnLabel = lazy(async () => ({
@@ -120,7 +121,7 @@ function Popup() {
 	const eligibleTabs = useMemo(
 		() =>
 			currentTabs.filter(
-				(tab) => safeWebUrl(tab.url) && (includePinnedTabs || !tab.pinned),
+				(tab) => webUrl(tab.url) && (includePinnedTabs || !tab.pinned),
 			),
 		[currentTabs, includePinnedTabs],
 	);
@@ -150,7 +151,7 @@ function Popup() {
 				}
 
 				const valid = tabs.filter((tab): tab is WebTab =>
-					Boolean(safeWebUrl(tab.url)),
+					Boolean(webUrl(tab.url)),
 				);
 				setCurrentTabs(valid);
 				const highlighted = valid.filter(
@@ -237,7 +238,7 @@ function Popup() {
 				active: true,
 				lastFocusedWindow: true,
 			});
-			const url = safeWebUrl(tab?.url);
+			const url = webUrl(tab?.url);
 			if (!url) {
 				showStatus('Open a regular web page to bookmark it.', true);
 				return;
@@ -749,19 +750,6 @@ function Popup() {
 	);
 }
 
-function safeWebUrl(value: string | undefined) {
-	try {
-		const url = new URL(value ?? '');
-		return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-	} catch {
-		return null;
-	}
-}
-
-chrome.storage.local
-	.get('tablodge.state')
-	.then(() => {})
-	.catch(() => {});
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<TooltipProvider>

@@ -31,7 +31,7 @@ test('a blank query matches everything and every word must match', () => {
 	);
 });
 
-test('words match only at the start of a word', () => {
+test('a word matches at the start of a word, or inside one from three letters', () => {
 	assert.equal(matchesQuery('book', ['Bookmarks']), true);
 	assert.equal(
 		matchesQuery('mark', ['Bookmarks']),
@@ -132,32 +132,6 @@ test('typos, missing letters and abbreviations still match', () => {
 		matchesQuery('bz', ['Bookmarks']),
 		false,
 		'short words stay strict',
-	);
-});
-
-test('results rank exact words above prefixes above fuzzy matches', () => {
-	const exact = scoreQuery('tab', ['Pinned tab']);
-	const prefix = scoreQuery('tab', ['Pinned tabs']);
-	const fuzzy = scoreQuery('tbs', ['Pinned tabs']);
-	assert.ok(exact > prefix, 'exact word beats word prefix');
-	assert.ok(prefix > fuzzy, 'prefix beats fuzzy subsequence');
-	assert.ok(fuzzy > 0);
-	assert.ok(
-		scoreQuery('tab', ['Tab', 'x']) > scoreQuery('tab', ['x', 'Tab']),
-		'a label hit beats a help hit',
-	);
-	assert.deepEqual(
-		rankByQuery(
-			'tabs',
-			['Open restored tabs', 'Close tabs', 'Bookmarks'],
-			(item) => [item],
-		),
-		['Close tabs', 'Open restored tabs'],
-		'equal matches: shorter label first',
-	);
-	assert.deepEqual(
-		rankByQuery('book', ['Bookmark', 'Book'], (item) => [item]),
-		['Book', 'Bookmark'],
 	);
 });
 

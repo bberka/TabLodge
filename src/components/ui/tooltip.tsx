@@ -8,19 +8,11 @@ const Tooltip = TooltipPrimitive.Root;
 
 const TooltipTrigger = TooltipPrimitive.Trigger;
 
-// `container`/`portalContainer` choose the portal host (for example a ShadowRoot); defaults to document.body.
-type TooltipContentProps = React.ComponentPropsWithoutRef<
-	typeof TooltipPrimitive.Content
-> & {
-	container?: Element | DocumentFragment | null;
-	portalContainer?: Element | DocumentFragment | null;
-};
-
 const TooltipContent = React.forwardRef<
 	React.ComponentRef<typeof TooltipPrimitive.Content>,
-	TooltipContentProps
->(({className, sideOffset = 5, container, portalContainer, ...props}, ref) => (
-	<TooltipPrimitive.Portal container={portalContainer ?? container}>
+	React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
+>(({className, sideOffset = 5, ...props}, ref) => (
+	<TooltipPrimitive.Portal>
 		<TooltipPrimitive.Content
 			ref={ref}
 			sideOffset={sideOffset}

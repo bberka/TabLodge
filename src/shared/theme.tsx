@@ -23,10 +23,9 @@ const isTheme = (value: unknown): value is Theme => THEMES.has(value);
 const THEME_KEY = 'uiTheme';
 
 function applyDocumentTheme(theme: Theme, systemDark: boolean) {
-	const normalized = isTheme(theme) ? theme : 'system';
-	document.documentElement.dataset.theme = normalized;
+	document.documentElement.dataset.theme = theme;
 	document.documentElement.style.colorScheme =
-		normalized === 'system' ? (systemDark ? 'dark' : 'light') : normalized;
+		theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
 }
 
 // Mirrors the stored theme into localStorage so pages with a pre-paint boot script

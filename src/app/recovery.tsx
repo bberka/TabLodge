@@ -31,10 +31,8 @@ import {
 	SegmentedControl,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
-import {send, type ShowStatus} from './common';
+import {messageOf, plural, send, type ShowStatus} from './common';
 import {
-	messageOf,
-	plural,
 	reportSnapshotRestore,
 	useSnapshots,
 	whenText,
@@ -1020,18 +1018,3 @@ export function RecoveryTools({
 		</div>
 	);
 }
-
-// The helpers moved to recovery-core.ts; other modules still import them from here.
-export {
-	RECOVERY_EVENT,
-	bytesText,
-	emitRecoveryEvent,
-	offerCloseTabsUndo,
-	offerTrashUndo,
-	offerUndo,
-	undoFromTrash,
-	useRecoveryEvents,
-	whenText,
-	type RecoveryEventDetail,
-	type TrashFilter,
-} from './recovery-core';

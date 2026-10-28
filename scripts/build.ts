@@ -34,7 +34,6 @@ const steps: BuildStep[] = [
 			entry: resolve(SOURCE_DIR, 'service-worker.ts'),
 			outDir: OUT_DIR,
 			fileName: 'service-worker.js',
-			format: 'iife',
 		}),
 	},
 	// Loaded synchronously by every page's <head> before first paint, so it must be a classic script.
@@ -44,7 +43,6 @@ const steps: BuildStep[] = [
 			entry: resolve(SOURCE_DIR, 'theme-boot.ts'),
 			outDir: OUT_DIR,
 			fileName: 'theme-boot.js',
-			format: 'iife',
 		}),
 	},
 ];

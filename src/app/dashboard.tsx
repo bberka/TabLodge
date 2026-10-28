@@ -2,7 +2,6 @@ import {
 	memo,
 	useEffect,
 	useMemo,
-	useCallback,
 	useRef,
 	useState,
 	useSyncExternalStore,
@@ -73,7 +72,7 @@ import {
 } from '../components/ui/action-menu';
 import {DropIndicator} from '../components/ui/drop-indicator';
 import {scrollBehavior} from '../shared/motion';
-import {LoadMore} from '../shared/load-more';
+import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import {
 	EmptyState,
@@ -85,6 +84,7 @@ import {
 	useStatus,
 	useTabLodgeState,
 	restoreFailureText,
+	plural,
 } from './common';
 import {BackupDialog, ImportDialog, useShareDialog} from './lazy-dialogs';
 import type {ExportData} from './export-formats';
@@ -107,7 +107,7 @@ import type {
 } from './types';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
-import {webUrl} from './import-formats';
+import {hostOf, webUrl} from './web-url';
 import {ColumnLabel, FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
@@ -120,25 +120,16 @@ import {
 	offerCloseTabsUndo,
 	offerTrashUndo,
 	offerUndo,
-	plural,
 } from './recovery-core';
 import {openLink, resolveLinkTarget} from './link-target';
 
 /**
-Modifier keys that choose how a restore behaves (a mouse or keyboard event satisfies this).
+Modifier keys that choose how a restore behaves or extend a tab selection (a mouse or keyboard event satisfies this).
 */
-type RestoreModifiers = {
+type ClickModifiers = {
 	ctrlKey?: boolean;
 	metaKey?: boolean;
 	shiftKey?: boolean;
-};
-/**
-Modifier keys captured for range/toggle tab selection.
-*/
-type SelectionModifiers = {
-	shiftKey?: boolean;
-	ctrlKey?: boolean;
-	metaKey?: boolean;
 };
 type FolderDialog = {
 	mode: 'create' | 'rename';
@@ -219,14 +210,6 @@ const dateText = (value: unknown) => {
 		: 'Date unavailable';
 };
 
-const hostFor = (url: string) => {
-	try {
-		return new URL(url).host;
-	} catch {
-		return url;
-	}
-};
-
 /**
 Saved tabs in display order, with the two halves of each split view joined into one entry.
 */
@@ -287,10 +270,6 @@ export function SessionManager({
 	const dragItemRef = useRef<DragItem | null>(null);
 	// Drag state lives outside React state: only the cards a drag touches re-render, not the whole list.
 	const [dragStore] = useState(() => new DragStore());
-	const [limitState, setLimitState] = useState({
-		signature: '',
-		limit: SESSION_PAGE,
-	});
 	// Bumped to ask the list to scroll to `revealRef` once it is rendered.
 	const [revealTick, setRevealTick] = useState(0);
 	const revealRef = useRef<{id: string; focus: boolean} | null>(null);
@@ -346,18 +325,9 @@ export function SessionManager({
 		return filtered;
 	}, [groups, folderId, query, sort]);
 	// A new filter, search or sort starts again from the first batch.
-	const signature = `${folderId}|${query}|${sort}`;
-	const visibleLimit =
-		limitState.signature === signature ? limitState.limit : SESSION_PAGE;
-	const showMore = useCallback(
-		() =>
-			setLimitState((old) => ({
-				signature,
-				limit:
-					(old.signature === signature ? old.limit : SESSION_PAGE) +
-					SESSION_PAGE,
-			})),
-		[signature],
+	const [visibleLimit, showMore, showUpTo] = usePagedLimit(
+		`${folderId}|${query}|${sort}`,
+		SESSION_PAGE,
 	);
 	const renderedGroups = useMemo(
 		() => visibleGroups.slice(0, visibleLimit),
@@ -500,7 +470,7 @@ export function SessionManager({
 		}
 
 		if (index >= visibleLimit) {
-			setLimitState({signature, limit: index + SESSION_PAGE});
+			showUpTo(index + SESSION_PAGE);
 			return;
 		}
 
@@ -515,7 +485,7 @@ export function SessionManager({
 			}
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [revealTick, visibleGroups, visibleLimit, signature]);
+	}, [revealTick, visibleGroups, visibleLimit, showUpTo]);
 
 	useEffect(() => {
 		if (selected.size === 0) {
@@ -566,7 +536,7 @@ export function SessionManager({
 	function changeSelection(
 		key: string,
 		checked: boolean,
-		event: SelectionModifiers,
+		event: ClickModifiers,
 	) {
 		setSelected((old) => {
 			const next = new Set(old);
@@ -626,7 +596,7 @@ export function SessionManager({
 	async function restoreGroup(
 		group: Session,
 		forceRemove = false,
-		event?: RestoreModifiers,
+		event?: ClickModifiers,
 		requestedMode?: RestoreMode,
 		requestedTarget?: RestoreTarget,
 	) {
@@ -674,7 +644,7 @@ export function SessionManager({
 	async function restoreTab(
 		group: Session,
 		tab: SavedTabRecord,
-		event?: RestoreModifiers,
+		event?: ClickModifiers,
 	) {
 		const result = await send('RESTORE_TAB', {
 			groupId: group.id,
@@ -1255,7 +1225,7 @@ export function SessionManager({
 		);
 	}
 
-	async function openBookmarkPicker(tab: SavedTabRecord) {
+	function openBookmarkPicker(tab: SavedTabRecord) {
 		setBookmarkTab(tab);
 		setDialog('bookmark');
 	}
@@ -2010,7 +1980,7 @@ function urlDisplay(
 	return mode === 'none' || mode === 'url-only'
 		? null
 		: mode === 'domain'
-			? hostFor(url)
+			? hostOf(url)
 			: simplifiedUrl(url, simplify);
 }
 
@@ -2069,14 +2039,14 @@ and rows are not re-rendered by it.
 */
 type CardActions = {
 	expand: (groupId: string, next: boolean) => void;
-	restore: (group: Session, event?: RestoreModifiers) => void;
+	restore: (group: Session, event?: ClickModifiers) => void;
 	restoreTarget: (group: Session, target: RestoreTarget) => void;
 	restoreMode: (group: Session, mode: RestoreMode) => void;
 	forceRestore: (group: Session) => void;
 	restoreTab: (
 		group: Session,
 		tab: SavedTabRecord,
-		event?: RestoreModifiers,
+		event?: ClickModifiers,
 	) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
@@ -2099,7 +2069,7 @@ type CardActions = {
 	*/
 	folderTargets: () => Folder[];
 	bookmark: (tab: SavedTabRecord) => void;
-	select: (key: string, checked: boolean, event: SelectionModifiers) => void;
+	select: (key: string, checked: boolean, event: ClickModifiers) => void;
 	/**
 	Sessions a link can be moved to (read when a menu opens, never while rendering).
 	*/
@@ -2207,7 +2177,7 @@ const GroupCard = memo(
 			(store) =>
 				store.dragging?.kind === 'session' && store.dragging.id === group.id,
 		);
-		const onRestore = (event?: RestoreModifiers) =>
+		const onRestore = (event?: ClickModifiers) =>
 			handlers.restore(group, event);
 		const onExpanded = (next: boolean) => handlers.expand(group.id, next);
 		const onDelete = () => handlers.deleteGroup(group);
@@ -2537,7 +2507,7 @@ const GroupCard = memo(
 											/>
 											<ol
 												className="m-0 list-none p-0"
-												aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostFor(tab.url)).join(' and ')}`}
+												aria-label={`Split view: ${run.map((tab) => tab.title?.trim() || hostOf(tab.url)).join(' and ')}`}
 											>
 												{row(run[0], true)}
 												{row(run[1])}
@@ -2599,15 +2569,15 @@ const SavedTab = memo(
 				? store.mark.position
 				: null,
 		);
-		const onSelect = (checked: boolean, event: SelectionModifiers) =>
+		const onSelect = (checked: boolean, event: ClickModifiers) =>
 			handlers.select(tabKey(group.id, tab.id), checked, event);
-		const onRestore = (event: RestoreModifiers) =>
+		const onRestore = (event: ClickModifiers) =>
 			handlers.restoreTab(group, tab, event);
 		const onOpen = (requested?: 'current' | 'new') =>
 			handlers.openTab(tab, requested);
 		const onDelete = () => handlers.deleteTab(group, tab);
-		const modifierRef = useRef<SelectionModifiers>({});
-		const label = tab.title?.trim() || hostFor(tab.url);
+		const modifierRef = useRef<ClickModifiers>({});
+		const label = tab.title?.trim() || hostOf(tab.url);
 		const urlOnly = displayMode === 'url-only';
 		const simplify = settings.simplifyUrls !== false;
 		const rowText = urlOnly ? simplifiedUrl(tab.url, simplify) : label;

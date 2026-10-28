@@ -1,5 +1,3 @@
-'use client';
-
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {X} from 'lucide-react';
@@ -70,14 +68,6 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
-/**
-Where Radix portals render (for example a shadow-root container); defaults to document.body.
-*/
-type PortalTargetProps = {
-	container?: Element | DocumentFragment | null;
-	portalContainer?: Element | DocumentFragment | null;
-};
-
 const FORM_FIELDS =
 	'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [role="combobox"]:not([disabled])';
 const ACTIONS = 'button:not([disabled]):not([data-dialog-close])';
@@ -124,15 +114,13 @@ function trackTabKey(doc: Document) {
 
 const KEYBOARD_FOCUS_WINDOW_MS = 500;
 
-type DialogCloseButtonProps = Omit<ButtonProps, 'children'> & PortalTargetProps;
-
 // The close (X) button's tooltip opens on hover and on Tab focus only. Other focus is default-prevented,
 // which makes Radix's trigger skip opening the tooltip. Escape while the tooltip is showing closes the
 // dialog too, so one Escape is always enough. Dialogs never focus this button initially (see DialogContent).
 const DialogCloseButton = React.forwardRef<
 	HTMLButtonElement,
-	DialogCloseButtonProps
->(({className, container, portalContainer, onFocus, ...props}, ref) => {
+	Omit<ButtonProps, 'children'>
+>(({className, onFocus, ...props}, ref) => {
 	const buttonRef = React.useRef<HTMLButtonElement | null>(null);
 	const setRefs = React.useCallback(
 		(node: HTMLButtonElement | null) => {
@@ -182,7 +170,6 @@ const DialogCloseButton = React.forwardRef<
 			</TooltipTrigger>
 			<TooltipContent
 				side="top"
-				container={portalContainer ?? container}
 				onEscapeKeyDown={() => buttonRef.current?.click()}
 			>
 				Close dialog
@@ -191,20 +178,18 @@ const DialogCloseButton = React.forwardRef<
 	);
 });
 
-// `container`/`portalContainer` choose the portal host (for example a ShadowRoot); defaults to document.body.
 type DialogContentProps = React.ComponentPropsWithoutRef<
 	typeof DialogPrimitive.Content
-> &
-	PortalTargetProps & {
-		/**
-		Width preset; defaults to "md".
-		*/
-		size?: DialogSize;
-		/**
-		Hides the close (X) button in the top-right corner.
-		*/
-		hideClose?: boolean;
-	};
+> & {
+	/**
+	Width preset; defaults to "md".
+	*/
+	size?: DialogSize;
+	/**
+	Hides the close (X) button in the top-right corner.
+	*/
+	hideClose?: boolean;
+};
 
 const DialogContent = React.forwardRef<
 	React.ComponentRef<typeof DialogPrimitive.Content>,
@@ -214,8 +199,6 @@ const DialogContent = React.forwardRef<
 		{
 			className,
 			children,
-			container,
-			portalContainer,
 			onOpenAutoFocus,
 			size = 'md',
 			hideClose = false,
@@ -239,7 +222,7 @@ const DialogContent = React.forwardRef<
 			[ref],
 		);
 		return (
-			<DialogPrimitive.Portal container={portalContainer ?? container}>
+			<DialogPrimitive.Portal>
 				<DialogOverlay />
 				<DialogPrimitive.Content
 					ref={setRefs}
@@ -260,11 +243,7 @@ const DialogContent = React.forwardRef<
 				>
 					{shownChildren}
 					{!hideClose && (
-						<DialogCloseButton
-							container={container}
-							portalContainer={portalContainer}
-							className="absolute right-3 top-3"
-						/>
+						<DialogCloseButton className="absolute right-3 top-3" />
 					)}
 				</DialogPrimitive.Content>
 			</DialogPrimitive.Portal>
@@ -354,8 +333,6 @@ DialogDescription.displayName = DialogPrimitive.Description.displayName;
 export {
 	Dialog,
 	DialogBody,
-	DialogClose,
-	DialogCloseButton,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
