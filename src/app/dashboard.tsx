@@ -2783,7 +2783,7 @@ const SavedTab = memo(
 						</span>
 						{displayUrl !== null && (
 							<p
-								className="mt-0.5 break-all text-[11px] leading-4 text-muted-foreground"
+								className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground"
 								title={tab.url}
 							>
 								<InsecureMarkFor url={tab.url} settings={settings} />
