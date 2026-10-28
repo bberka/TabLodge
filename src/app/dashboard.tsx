@@ -320,6 +320,10 @@ export function SessionManager({
 			filtered.sort((a, b) => a.createdAt - b.createdAt);
 		}
 
+		if (sort === 'opened') {
+			filtered.sort((a, b) => (b.lastOpenedAt ?? 0) - (a.lastOpenedAt ?? 0));
+		}
+
 		if (sort === 'name') {
 			filtered.sort((a, b) => a.name.localeCompare(b.name));
 		}
@@ -1380,6 +1384,7 @@ export function SessionManager({
 										{[
 											['newest', 'Newest first'],
 											['oldest', 'Oldest first'],
+											['opened', 'Last opened'],
 											['name', 'Name A–Z'],
 											['tabs', 'Most tabs'],
 											['custom', 'Custom order'],
