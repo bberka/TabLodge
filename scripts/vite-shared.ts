@@ -34,7 +34,7 @@ const readJson = <T>(file: string) =>
 	JSON.parse(readFileSync(file, 'utf8')) as T;
 export const readPackageJson = () =>
 	readJson<PackageJson>(fromRoot('package.json'));
-export const readSourceManifest = () =>
+const readSourceManifest = () =>
 	readJson<SourceManifest>(resolve(SOURCE_DIR, 'manifest.json'));
 /**
 The display name: the manifest's short_name. HTML shells use `%APP_NAME%`; pages read it at runtime.
@@ -47,7 +47,7 @@ export const appName = () => {
 /**
 Matches `minimum_chrome_version` in the manifest.
 */
-export const BUILD_TARGET = 'chrome116';
+const BUILD_TARGET = 'chrome116';
 
 export const alias = {'@': fromRoot('src')};
 

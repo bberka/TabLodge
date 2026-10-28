@@ -178,7 +178,6 @@ export type Settings = {
 	markLocalLinks: boolean;
 	urlDisplayMode: 'domain' | 'full' | 'url-only' | 'none';
 	groupTitleAction: 'toggle' | 'edit' | 'restore';
-	// ---- Right-click menus ----
 	/**
 	Master switch: when off, no right-click menu items are created at all.
 	*/
@@ -193,7 +192,7 @@ export type Settings = {
 	The toolbar icon's own right-click menu (Chrome's "action" context).
 	*/
 	contextMenuActionEnabled: boolean;
-	// ---- Recovery & backups (all local; nothing leaves the browser) ----
+	// Recovery & backups (all local; nothing leaves the browser)
 	/**
 	Keep rolling snapshots of the open windows so a crash can be undone (default on).
 	*/
@@ -326,7 +325,6 @@ export type Store = {
 
 export type TabLodgeState = Store & {ok: true};
 
-// ---- Crash snapshots ----
 export type SnapshotTab = {
 	url: string;
 	title: string;
@@ -389,7 +387,6 @@ export type RecoveryInfo = {
 	tabs: number;
 };
 
-// ---- Backups ----
 export type BackupKind = 'auto' | 'manual' | 'safety';
 export type BackupSummary = {
 	id: string;
@@ -405,7 +402,6 @@ export type BackupSummary = {
 	bytes: number;
 };
 
-// ---- Trash ----
 export type TrashKind = 'session' | 'tabs' | 'bookmark' | 'column' | 'folder';
 export type TrashSummary = {
 	id: string;

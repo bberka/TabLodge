@@ -1313,7 +1313,7 @@ function Options() {
 		) : null;
 	}
 
-	// ---- Search: every section lists its rows' searchable text; a matching section title keeps all its rows.
+	// Search: every section lists its rows' searchable text; a matching section title keeps all its rows.
 	const titleHit = (title: string) => searching && matchesQuery(query, [title]);
 	const pick = <T,>(
 		title: string,

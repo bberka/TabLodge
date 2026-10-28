@@ -119,8 +119,6 @@ function KindLabel({kind}: {kind: 'sessions' | 'bookmarks'}) {
 	);
 }
 
-// ---------------------------------------------------------------- Backup / export
-
 const FORMAT_CHOICES: ReadonlyArray<{
 	id: ExportFormat;
 	title: string;
@@ -457,8 +455,6 @@ export function BackupDialog({
 		</Dialog>
 	);
 }
-
-// ---------------------------------------------------------------- Share
 
 type ShareSource = {
 	id: string;
@@ -812,8 +808,6 @@ export function ShareDialog({
 		</Dialog>
 	);
 }
-
-// ---------------------------------------------------------------- Import
 
 type ImportSource = {type: 'file'; name: string} | {type: 'browser'};
 type BookmarkTarget = 'folders' | 'column';
