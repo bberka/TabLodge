@@ -108,7 +108,7 @@ Opening more than 10 saved links or bookmarks, or restoring a snapshot, also off
 
 The new tab dashboard contains sessions and bookmark columns. Settings and Help have their own pages. The popup is a compact chooser; its **Open TabLodge** action opens the dashboard. The side panel has bookmarks, sessions, and open tabs, with search and actions suited to its narrow layout.
 
-The toolbar icon normally opens the popup. **Settings › Side Panel › Toolbar icon opens** can make it open the side panel instead. A shortcut and context menu can open the panel without changing that preference.
+The toolbar icon normally opens the popup. **Settings › Side panel › Toolbar icon opens** can make it open the side panel instead. A shortcut and context menu can open the panel without changing that preference.
 
 **Settings › Dashboard › Dashboard width** controls the dashboard container and bookmark grid together. The default keeps the existing 1,440 pixel maximum and three column desktop grid. Wider uses up to 1,920 pixels and four columns on a 1,920 pixel viewport. Full width removes the maximum and fits as many columns as the available space allows, with a 288 pixel minimum column width. Narrower uses a 1,024 pixel maximum and two columns. Small screens still use one column where two would not fit. The worker normalizes invalid values back to the default.
 

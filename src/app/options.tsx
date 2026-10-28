@@ -25,6 +25,8 @@ import {
 	Eraser,
 	LifeBuoy,
 	MousePointerClick,
+	Globe,
+	Layers2,
 	Upload,
 	Search,
 	X,
@@ -354,7 +356,7 @@ const settingsGroups: Array<{
 	{
 		title: 'When saving',
 		system: 'sessions',
-		icon: Settings2,
+		icon: Layers2,
 		fields: [
 			{
 				name: 'includePinnedTabs',
@@ -471,7 +473,7 @@ const settingsGroups: Array<{
 		],
 	},
 	{
-		title: 'Side Panel',
+		title: 'Side panel',
 		icon: PanelRightOpen,
 		fields: [
 			{
@@ -605,9 +607,9 @@ const settingsGroups: Array<{
 		],
 	},
 	{
-		title: 'Session display',
+		title: 'Session board',
 		system: 'sessions',
-		icon: Settings2,
+		icon: Layers2,
 		fields: [
 			{
 				name: 'sessionSort',
@@ -866,6 +868,36 @@ const DEFAULTS = {
 	help: 'Saved sessions and bookmarks are not changed.',
 	words: ['Restore defaults', 'reset', 'factory'],
 };
+const sectionId = (title: string) =>
+	`settings-${title.toLowerCase().replaceAll(/[^0-9a-z]+/g, '-')}`;
+const SECTION_SCROLL_CLASS = 'scroll-mt-6';
+const ACTIVE_SECTION_OFFSET = 120;
+const settingsNavigationLabels: Record<string, string> = {
+	[SHORTCUTS.title]: 'Shortcuts',
+	'When saving': 'Saving',
+	'Side panel': 'Side panel',
+	'Right-click menus': 'Context menus',
+	'When restoring': 'Restoring',
+	'Session board': 'Session board',
+	'Bookmark board': 'Bookmark board',
+	[RECOVERY_TITLE]: 'Recovery',
+	[EXCLUDED.title]: 'Excluded sites',
+	[DEFAULTS.title]: 'Defaults',
+};
+const settingsNavigation = [
+	{title: APPEARANCE.title, icon: Sun},
+	{title: SHORTCUTS.title, icon: Keyboard},
+	{title: SYSTEMS.title, icon: Settings2},
+	...settingsGroups.map(({title, icon}) => ({title, icon})),
+	{title: DATA.title, icon: Database},
+	{title: EXCLUDED.title, icon: Globe},
+	{title: DEFAULTS.title, icon: RotateCcw},
+].map(({title, icon}) => ({
+	title,
+	label: settingsNavigationLabels[title] ?? title,
+	icon,
+	id: sectionId(title),
+}));
 
 type DataRowDef = {
 	key: string;
@@ -914,6 +946,71 @@ function Options() {
 	const searchRef = useRef<HTMLInputElement>(null);
 	const [templateDraft, setTemplateDraft] = useState<string | null>(null);
 	const [query, setQuery] = useState(() => initialSearchQuery(location.search));
+	const [activeSection, setActiveSection] = useState(settingsNavigation[0].id);
+	const searching = searchTerms(query).length > 0;
+	useEffect(() => {
+		if (!state) {
+			return;
+		}
+
+		let frame = 0;
+		const updateActiveSection = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(() => {
+				const atBottom =
+					window.scrollY + window.innerHeight >=
+					document.documentElement.scrollHeight - 2;
+				let first = settingsNavigation[0].id;
+				let firstTop = Infinity;
+				let active = first;
+				let activeTop = -Infinity;
+				let last = first;
+				let lastTop = -Infinity;
+
+				for (const section of settingsNavigation) {
+					const element = document.querySelector(`#${section.id}`);
+					if (!element) {
+						continue;
+					}
+
+					const {top} = element.getBoundingClientRect();
+					if (top < firstTop) {
+						first = section.id;
+						firstTop = top;
+					}
+
+					if (top > lastTop) {
+						last = section.id;
+						lastTop = top;
+					}
+
+					if (!(top <= ACTIVE_SECTION_OFFSET && top > activeTop)) {
+						continue;
+					}
+
+					active = section.id;
+					activeTop = top;
+				}
+
+				if (atBottom) {
+					active = last;
+				} else if (activeTop === -Infinity) {
+					active = first;
+				}
+
+				setActiveSection((current) => (current === active ? current : active));
+			});
+		};
+
+		updateActiveSection();
+		window.addEventListener('scroll', updateActiveSection, {passive: true});
+		window.addEventListener('resize', updateActiveSection);
+		return () => {
+			cancelAnimationFrame(frame);
+			window.removeEventListener('scroll', updateActiveSection);
+			window.removeEventListener('resize', updateActiveSection);
+		};
+	}, [query, state]);
 	function updateQuery(value: string) {
 		setQuery(value);
 		history.replaceState(
@@ -1217,7 +1314,6 @@ function Options() {
 	}
 
 	// ---- Search: every section lists its rows' searchable text; a matching section title keeps all its rows.
-	const searching = searchTerms(query).length > 0;
 	const titleHit = (title: string) => searching && matchesQuery(query, [title]);
 	const pick = <T,>(
 		title: string,
@@ -1450,6 +1546,42 @@ function Options() {
 		visibleData.length +
 		Number(showExcluded) +
 		Number(showDefaults);
+	const visibleGroupTitles = new Set(
+		visibleGroups.map(({group}) => group.title),
+	);
+	const visibleSettingsNavigation = searching
+		? settingsNavigation.filter(({title}) => {
+				switch (title) {
+					case APPEARANCE.title: {
+						return showAppearance;
+					}
+
+					case SHORTCUTS.title: {
+						return showShortcuts;
+					}
+
+					case SYSTEMS.title: {
+						return systemRows.length > 0;
+					}
+
+					case DATA.title: {
+						return visibleData.length > 0;
+					}
+
+					case EXCLUDED.title: {
+						return showExcluded;
+					}
+
+					case DEFAULTS.title: {
+						return showDefaults;
+					}
+
+					default: {
+						return visibleGroupTitles.has(title);
+					}
+				}
+			})
+		: settingsNavigation;
 	const dataRowElements = visibleData.map((row) => (
 		<DataRow
 			key={row.key}
@@ -1462,9 +1594,17 @@ function Options() {
 	));
 
 	return (
-		<PageShell data-brand="tablodge" className="max-w-4xl">
-			<PageTop />
-			<div role="search" className="relative -mt-3 mb-6">
+		<PageShell
+			data-brand="tablodge"
+			className="max-w-6xl lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8"
+		>
+			<div className="lg:col-span-2">
+				<PageTop />
+			</div>
+			<h2 className="mb-3 hidden text-sm font-semibold lg:col-start-1 lg:row-start-2 lg:-mt-3 lg:block">
+				Browse settings
+			</h2>
+			<div role="search" className="relative -mt-3 mb-6 lg:col-start-2">
 				<Search
 					className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
 					aria-hidden="true"
@@ -1515,6 +1655,40 @@ function Options() {
 					</span>
 				)}
 			</div>
+			<aside className="-mx-1 mb-4 self-start lg:sticky lg:top-5 lg:-mt-8 lg:row-start-3 lg:col-start-1 lg:mx-0 lg:mb-0 lg:w-[190px] lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto">
+				<nav
+					aria-label="Settings categories"
+					className="flex flex-wrap gap-1.5 lg:flex-col lg:items-stretch"
+				>
+					{visibleSettingsNavigation.map(({icon: Icon, label, id}) => (
+						<a
+							key={id}
+							href={`#${id}`}
+							aria-current={activeSection === id ? 'location' : undefined}
+							className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${activeSection === id ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+							onClick={(event) => {
+								if (!searching) {
+									return;
+								}
+
+								event.preventDefault();
+								updateQuery('');
+								requestAnimationFrame(() => {
+									document.querySelector(`#${id}`)?.scrollIntoView();
+									history.replaceState(
+										null,
+										'',
+										`${location.pathname}${location.search}#${id}`,
+									);
+								});
+							}}
+						>
+							<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+							{label}
+						</a>
+					))}
+				</nav>
+			</aside>
 			<p className="sr-only" role="status" aria-live="polite">
 				{searching
 					? matchCount
@@ -1524,27 +1698,32 @@ function Options() {
 			</p>
 
 			{searching && !matchCount ? (
-				<EmptyState
-					icon={Search}
-					title={`No settings match “${query.trim()}”`}
-					action={
-						<Button
-							variant="outline"
-							onClick={() => {
-								updateQuery('');
-								searchRef.current?.focus();
-							}}
-						>
-							Clear search
-						</Button>
-					}
-				>
-					Try a different word, such as “tabs”, “restore”, or “back up”.
-				</EmptyState>
+				<div className="lg:col-start-2 lg:row-start-3">
+					<EmptyState
+						icon={Search}
+						title={`No settings match “${query.trim()}”`}
+						action={
+							<Button
+								variant="outline"
+								onClick={() => {
+									updateQuery('');
+									searchRef.current?.focus();
+								}}
+							>
+								Clear search
+							</Button>
+						}
+					>
+						Try a different word, such as “tabs”, “restore”, or “back up”.
+					</EmptyState>
+				</div>
 			) : (
-				<div className="grid gap-5">
+				<div className="grid gap-5 lg:col-start-2 lg:row-start-3">
 					{showAppearance && (
-						<section className="flex flex-col justify-between gap-5 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-center">
+						<section
+							id={sectionId(APPEARANCE.title)}
+							className={`${SECTION_SCROLL_CLASS} flex flex-col justify-between gap-5 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-center`}
+						>
 							<div>
 								<h2 className="font-semibold">{hl(APPEARANCE.title)}</h2>
 								<p className="mt-1 text-sm text-muted-foreground">
@@ -1591,6 +1770,7 @@ function Options() {
 					)}
 					{showShortcuts && (
 						<ShortcutsCard
+							id={sectionId(SHORTCUTS.title)}
 							title={hl(SHORTCUTS.title)}
 							help={hl(SHORTCUTS.help)}
 						/>
@@ -1598,9 +1778,11 @@ function Options() {
 
 					{systemRows.length > 0 && (
 						<SectionCard
+							id={sectionId(SYSTEMS.title)}
 							title={hl(SYSTEMS.title)}
 							description={SYSTEMS.description}
 							icon={Settings2}
+							className={SECTION_SCROLL_CLASS}
 						>
 							<div className="space-y-1">
 								{systemRows.map(({name, label, help, otherLabel}) => {
@@ -1662,9 +1844,11 @@ function Options() {
 							off ? (
 								<SectionCard
 									key={group.title}
+									id={sectionId(group.title)}
 									title={group.title}
 									description={group.description}
 									icon={group.icon}
+									className={SECTION_SCROLL_CLASS}
 								>
 									<div className="flex flex-wrap items-center justify-between gap-3">
 										<p className="text-sm text-muted-foreground">
@@ -1691,9 +1875,11 @@ function Options() {
 							) : (
 								<SectionCard
 									key={group.title}
+									id={sectionId(group.title)}
 									title={hl(group.title)}
 									description={group.description}
 									icon={group.icon}
+									className={SECTION_SCROLL_CLASS}
 								>
 									<div className="divide-y divide-border/70">
 										{fields.map((field) => (
@@ -1886,9 +2072,11 @@ function Options() {
 
 					{visibleData.length > 0 && (
 						<SectionCard
+							id={sectionId(DATA.title)}
 							title={hl(DATA.title)}
 							description={DATA.description}
 							icon={Database}
+							className={SECTION_SCROLL_CLASS}
 						>
 							<div
 								ref={dataRef}
@@ -1905,9 +2093,11 @@ function Options() {
 
 					{showExcluded && (
 						<SectionCard
+							id={sectionId(EXCLUDED.title)}
 							title={hl(EXCLUDED.title)}
 							description={EXCLUDED.description}
-							icon={Settings2}
+							icon={Globe}
+							className={SECTION_SCROLL_CLASS}
 							action={
 								settings.sessionsEnabled !== false && (
 									<Button variant="outline" size="sm" onClick={openSiteDialog}>
@@ -1970,7 +2160,10 @@ function Options() {
 					)}
 
 					{showDefaults && (
-						<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-5 py-4">
+						<div
+							id={sectionId(DEFAULTS.title)}
+							className={`${SECTION_SCROLL_CLASS} flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-5 py-4`}
+						>
 							<div>
 								<p className="text-sm font-semibold">{hl(DEFAULTS.title)}</p>
 								<p className="mt-1 text-xs text-muted-foreground">
@@ -2224,7 +2417,7 @@ function Options() {
 				</DialogContent>
 			</Dialog>
 			<StatusLine status={status} />
-			<footer className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted-foreground">
+			<footer className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted-foreground lg:col-start-2">
 				<p>
 					{PROJECT.name} reads tab details only to save sessions and check for
 					duplicates. It never reads page contents. Sessions are stored in this
@@ -2285,7 +2478,15 @@ const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
 /**
 The current shortcut for each command (read with chrome.commands), and a button to the browser's page that changes them.
 */
-function ShortcutsCard({title, help}: {title: ReactNode; help: ReactNode}) {
+function ShortcutsCard({
+	id,
+	title,
+	help,
+}: {
+	id: string;
+	title: ReactNode;
+	help: ReactNode;
+}) {
 	const [commands, setCommands] = useState<chrome.commands.Command[]>([]);
 	const [failed, setFailed] = useState(false);
 	useEffect(() => {
@@ -2311,7 +2512,10 @@ function ShortcutsCard({title, help}: {title: ReactNode; help: ReactNode}) {
 	}, []);
 
 	return (
-		<section className="rounded-lg border border-border bg-card p-5">
+		<section
+			id={id}
+			className={`${SECTION_SCROLL_CLASS} rounded-lg border border-border bg-card p-5`}
+		>
 			<div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
 				<div>
 					<h2 className="font-semibold">{title}</h2>

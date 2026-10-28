@@ -763,6 +763,7 @@ export function EmptyState({
 // Header is a flex row (space-y reset so the text block is not pushed down) with the icon
 // centered against the title/description block, on a tinted strip separated from the body.
 export function SectionCard({
+	id,
 	title,
 	description,
 	icon: Icon,
@@ -776,9 +777,10 @@ export function SectionCard({
 	action?: ReactNode;
 	children?: ReactNode;
 	className?: string;
+	id?: string;
 }) {
 	return (
-		<Card className={`overflow-hidden ${className}`}>
+		<Card id={id} className={`overflow-hidden ${className}`}>
 			<CardHeader className="flex-row items-center gap-3 space-y-0 border-b border-border bg-muted/60 px-4 py-3">
 				{Icon && (
 					<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-card text-primary">
