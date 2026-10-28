@@ -51,9 +51,10 @@ const {values} = parseArgs({
 	options: {
 		watch: {type: 'boolean', default: false},
 		'open-browser': {type: 'boolean', default: false},
+		'seed-data': {type: 'boolean', default: false},
 	},
 });
-const {watch, 'open-browser': openBrowser} = values;
+const {watch, 'open-browser': openBrowser, 'seed-data': seedData} = values;
 const outLabel = relative(projectRoot, OUT_DIR);
 const initialBuilds: Array<Promise<void>> = [];
 
@@ -103,5 +104,5 @@ console.log(
 
 if (openBrowser) {
 	await Promise.all(initialBuilds);
-	await openDevBrowser();
+	await openDevBrowser({seedData});
 }

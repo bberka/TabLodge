@@ -116,6 +116,7 @@ TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind
 | `vp run pack`                        | Create a versioned ZIP and SHA256 checksum under `release/`         |
 | `vp run browser:install`             | Install Playwright Chromium for development                         |
 | `vp run dev`                         | Watch sources and open Chrome or Chromium with the extension loaded |
+| `vp run dev:seed`                    | Open the dev browser with repeatable sample sessions and bookmarks  |
 | `vp run watch`                       | Watch sources without opening a browser                             |
 | `vp run test`                        | Run the tests once                                                  |
 | `vp run test:watch`                  | Run tests as files change                                           |
@@ -126,7 +127,29 @@ TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind
 | `vp run verify`                      | Verify an existing build                                            |
 | `vp run clean`                       | Remove build output and TypeScript build caches                     |
 
-`vp run dev` uses Playwright to open Chrome, or Playwright Chromium when Chrome is unavailable, with a separate profile in `.dev/chrome-profile`. Test data stays separate from your regular profile and other worktrees. If neither browser is available, run `vp run browser:install` once. After a rebuild, reload TabLodge from `chrome://extensions` in that profile, then reopen its pages. Set `CHROME_BIN` to your browser executable if needed. If no browser is available, the build watcher still runs.
+To run TabLodge in a browser, use:
+
+```sh
+vp run dev
+```
+
+This builds the extension, watches for source changes, and opens Chrome. If Chrome is unavailable, Playwright uses its own Chromium browser. The window can be resized with your window manager. The browser profile lives in `.dev/chrome-profile` and is separate from your regular profile and other worktrees. After a rebuild, open `chrome://extensions`, reload TabLodge, then reopen its page. Use the page's DevTools console to check page errors. Use the service worker's Inspect link on `chrome://extensions` to check worker errors.
+
+To open it with sample sessions and bookmarks for UI checks or screenshots, run:
+
+```sh
+vp run dev:seed
+```
+
+This replaces TabLodge data in the worktree's dev profile. If `~/.cache/tablodge/dev-favicons.json` is missing sample site icons, the command fetches them and adds them to the cache shared by worktrees. Later runs use that cache. Delete the file to fetch the icons again. Only this dev command fetches the icons. The extension itself makes no network requests for them and gains no permissions.
+
+If Chrome is not installed, install Playwright Chromium once:
+
+```sh
+vp run browser:install
+```
+
+If Chrome is installed outside the usual path, set `CHROME_BIN` to its executable. If no browser is available, the build watcher still runs.
 
 See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](docs/architecture.md) explains storage, messages, and feature behavior.
 

@@ -31,16 +31,15 @@ Follow the [documentation style](../CONTRIBUTING.md#writing-documentation) for w
 
 ## Screenshots
 
-Use mock data, never a personal browser profile. Existing screenshots were captured with Playwright at twice the display resolution in both themes.
+Use synthetic data, never a personal browser profile. Run `vp run dev:seed` to load the repeatable sample sessions and bookmarks in the isolated `.dev/chrome-profile`. Existing screenshots were captured with Playwright at twice the display resolution in both themes.
 
 After changing UI shown in a screenshot:
 
-1. Run `vp run build`.
-2. Serve the built extension pages with a mocked `chrome.*` API.
-3. Capture the affected dashboard, search palette, Settings, or side panel in light and dark themes.
-4. Save WebP files in `site/src/assets/`, keeping the existing names: for example, `dashboard-light.webp` and `dashboard-dark.webp`.
+1. Run `vp run dev:seed` to build the extension and load the sample data.
+2. Capture the affected dashboard, search palette, Settings, or side panel in light and dark themes from the opened dev browser.
+3. Save WebP files in `site/src/assets/`, keeping the existing names: for example, `dashboard-light.webp` and `dashboard-dark.webp`.
 
-This is a manual capture process; there is no dedicated screenshot command. Astro optimizes the images during the site build.
+The fixture is synthetic and deterministic. Seeding replaces TabLodge data in the isolated dev profile and loads local icons from `~/.cache/tablodge/dev-favicons.json`, a machine wide cache shared by worktrees. The first run fetches missing icons from sample sites. Delete the cache file to fetch them again. This network activity only happens when you explicitly run `vp run dev:seed`; the extension itself does not fetch favicons or gain extra permissions. This is a manual capture process; there is no dedicated screenshot command. Astro optimizes the images during the site build.
 
 ## Deploy to GitHub Pages
 
