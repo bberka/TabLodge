@@ -2289,7 +2289,30 @@ const GroupCard = memo(
 			},
 		];
 		return (
-			<div className="relative">
+			<div
+				className="relative cursor-pointer"
+				onClick={(event) => {
+					const {target} = event;
+					if (
+						target instanceof Element &&
+						target.closest(
+							'button, a, input, textarea, select, [role="button"]',
+						)
+					) {
+						return;
+					}
+
+					activateSessionTitle(
+						settings.groupTitleAction,
+						{
+							edit: () => handlers.editName(group),
+							restore: onRestore,
+							toggle: () => onExpanded(!isExpanded),
+						},
+						event,
+					);
+				}}
+			>
 				{mark?.kind === 'session' && (
 					<DropIndicator
 						orientation="horizontal"
@@ -2298,7 +2321,7 @@ const GroupCard = memo(
 				)}
 				<article
 					id={`session-${group.id}`}
-					className={`tn-card-lazy group/session overflow-hidden rounded-xl border bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
+					className={`tn-card-lazy group/session cursor-pointer overflow-hidden rounded-xl border bg-card transition-shadow ${isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-primary/25'} ${mark?.kind === 'into' ? 'border-primary ring-2 ring-primary/40' : ''} ${draggingSelf ? 'opacity-50' : ''}`}
 					aria-label={`Session ${name}`}
 					onDragOver={(event) => handlers.dragOver(group, event)}
 					onDragLeave={handlers.dragLeave}
@@ -2390,17 +2413,32 @@ const GroupCard = memo(
 								</span>
 							</button>
 							{!isExpanded && wide && (
-								<span
-									className="hidden shrink-0 items-center -space-x-1.5 md:flex"
-									aria-hidden="true"
-								>
+								<span className="hidden shrink-0 items-center -space-x-1.5 md:flex">
 									{previewTabs.map((tab) => (
-										<Favicon
+										<button
 											key={tab.id}
-											url={tab.url}
-											label={tab.title}
-											className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
-										/>
+											type="button"
+											className="rounded-full focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+											title={`${settings.groupTitleAction === 'restore' ? 'Restore' : settings.groupTitleAction === 'edit' ? 'Edit details for' : isExpanded ? 'Collapse' : 'Expand'} ${name}`}
+											aria-label={`${settings.groupTitleAction === 'restore' ? 'Restore' : settings.groupTitleAction === 'edit' ? 'Edit details for' : isExpanded ? 'Collapse' : 'Expand'} ${name}`}
+											onClick={(event) =>
+												activateSessionTitle(
+													settings.groupTitleAction,
+													{
+														edit: () => handlers.editName(group),
+														restore: onRestore,
+														toggle: () => onExpanded(!isExpanded),
+													},
+													event,
+												)
+											}
+										>
+											<Favicon
+												url={tab.url}
+												label={tab.title}
+												className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
+											/>
+										</button>
 									))}
 									{group.tabs.length > previewTabs.length && (
 										<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
