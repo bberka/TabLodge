@@ -392,11 +392,11 @@ const settingsGroups: Array<{
 			{
 				name: 'saveDuplicateHandling',
 				label: 'When a saved URL is saved again',
-				help: 'Applies to saving tabs. Rejected duplicates are not stored twice, but their tabs still close if close-after-save is on.',
+				help: 'Applies to saving tabs. Rejected duplicates are not stored twice and their tabs stay open. The save shows a toast with a Force add button to store them anyway.',
 				type: 'select',
 				options: [
 					['allow', 'Allow duplicates'],
-					['reject', 'Reject duplicates silently'],
+					['reject', 'Reject duplicates'],
 				],
 			},
 			{

@@ -51,11 +51,18 @@ type PopulatedWindow = chrome.windows.Window & {
 	title?: string;
 };
 /**
-CaptureTabs reports duplicates it skipped on the session it creates (or on an empty placeholder).
+CaptureTabs reports duplicates it skipped on the session it creates (or on an empty placeholder), with the ids of
+the open tabs they came from so a save can offer to add them anyway.
 */
 type CaptureResult =
-	| (Session & {skipped?: number; more?: Session[]})
-	| {id: null; tabs: SavedTab[]; skipped: number; error?: string};
+	| (Session & {skipped?: number; rejectedTabIds?: number[]; more?: Session[]})
+	| {
+			id: null;
+			tabs: SavedTab[];
+			skipped: number;
+			rejectedTabIds?: number[];
+			error?: string;
+	  };
 type RestoreRecordsResult = {
 	opened: Array<{saved: SavedTab; tabId: number | undefined}>;
 	skipped: number;
@@ -1648,9 +1655,10 @@ async function captureTabs(
 		return null;
 	}
 
-	// Rejected duplicates are not stored again, but their tabs still count as saved for close-after-save.
+	// Rejected duplicates are not stored again and their tabs stay open, so the save can offer to add them anyway.
 	// Allowed duplicates share notes (and, by policy, the title) with the copies already saved.
 	let skipped = 0;
+	const rejectedTabIds: number[] = [];
 	let titlesUpdated = false;
 	let newEntries = captureEntries;
 	const known = new Map<string, SavedTab>();
@@ -1686,6 +1694,10 @@ async function captureTabs(
 
 		if (settings.saveDuplicateHandling === 'reject') {
 			skipped += 1;
+			if (isInteger(entry.sourceTabId)) {
+				rejectedTabIds.push(entry.sourceTabId);
+			}
+
 			if (settings.saveDuplicateTitle === 'latest') {
 				applyLatestTitle(entry.saved.url, entry.saved.title);
 			}
@@ -1737,7 +1749,13 @@ async function captureTabs(
 
 	const parts = chunkCount(captured.length);
 	if (captured.length > 0 && store.groups.length + parts > MAX_SESSIONS) {
-		return {id: null, tabs: [], skipped, error: sessionLimitError()};
+		return {
+			id: null,
+			tabs: [],
+			skipped,
+			rejectedTabIds,
+			error: sessionLimitError(),
+		};
 	}
 
 	const group: CaptureResult =
@@ -1773,7 +1791,7 @@ async function captureTabs(
 					sourceWindowId: window.id,
 					tabs: captured,
 				}
-			: {id: null, tabs: [], skipped};
+			: {id: null, tabs: [], skipped, rejectedTabIds};
 	// A non-empty capture always produced the Session branch above.
 	if (captured.length > 0) {
 		const first = group as Session;
@@ -1801,12 +1819,13 @@ async function captureTabs(
 	}
 
 	group.skipped = skipped;
+	group.rejectedTabIds = rejectedTabIds;
 	if (captured.length > 0 || titlesUpdated) {
 		await writeStore(store);
 	}
 
 	const closeCandidates = new Map(
-		captureEntries
+		newEntries
 			.filter(
 				({sourceTabId, saved}) =>
 					isInteger(sourceTabId) &&
@@ -1927,6 +1946,10 @@ async function saveTabs(
 		groupName?: string;
 		includePinned?: boolean;
 		/**
+		Stores tabs even when their address is already saved, whatever the duplicate setting says (the "Force add" button).
+		*/
+		allowDuplicates?: boolean;
+		/**
 		The save has no page that could ask for a name (shortcut, right-click menu, toolbar button): with the
 		`ask` style, save with the fallback name first, then open the small name prompt window.
 		*/
@@ -1948,10 +1971,13 @@ async function saveTabs(
 			populate: false,
 		});
 		// The quick popup may allow pinned tabs for one save without changing the stored preference.
-		const captureSettings =
-			options.includePinned === true
-				? {...store.settings, includePinnedTabs: true}
-				: store.settings;
+		const captureSettings = {
+			...store.settings,
+			...(options.includePinned === true && {includePinnedTabs: true}),
+			...(options.allowDuplicates === true && {
+				saveDuplicateHandling: 'allow' as const,
+			}),
+		};
 		let windows: PopulatedWindow[];
 		if (scope === 'all-windows') {
 			windows = (await chrome.windows.getAll({
@@ -1968,6 +1994,7 @@ async function saveTabs(
 
 		const savedGroups: Session[] = [];
 		let skippedDuplicates = 0;
+		const rejectedTabIds: number[] = [];
 		let limitError = '';
 		for (const [windowIndex, win] of windows.entries()) {
 			const activeTab = win.tabs.find((tab) => tab.active);
@@ -2080,9 +2107,12 @@ async function saveTabs(
 				);
 			}
 
-			if (group) {
-				skippedDuplicates += group.skipped || 0;
+			if (!group) {
+				continue;
 			}
+
+			skippedDuplicates += group.skipped || 0;
+			rejectedTabIds.push(...(group.rejectedTabIds ?? []));
 		}
 
 		if (savedGroups.length === 0 && limitError) {
@@ -2095,6 +2125,7 @@ async function saveTabs(
 				count: 0,
 				groups: 0,
 				skipped: skippedDuplicates,
+				rejectedTabIds,
 				groupId: null,
 			};
 		}
@@ -2142,6 +2173,7 @@ async function saveTabs(
 			count: savedGroups.reduce((sum, group) => sum + group.tabs.length, 0),
 			groups: savedGroups.length,
 			skipped: skippedDuplicates,
+			rejectedTabIds,
 			groupId: savedGroups[0].id,
 		};
 	});
@@ -7410,6 +7442,7 @@ async function handleMessage(
 					tabIds: message.tabIds,
 					groupName: message.groupName,
 					includePinned: message.includePinned === true,
+					allowDuplicates: message.allowDuplicates === true,
 				},
 			);
 		}

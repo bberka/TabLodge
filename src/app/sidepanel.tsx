@@ -50,6 +50,9 @@ import {
 	send,
 	useStatus,
 	useTabLodgeState,
+	forceAddAction,
+	duplicatesNote,
+	plural,
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {Favicon} from './favicon';
@@ -502,7 +505,17 @@ function SidePanel() {
 			}
 
 			const {groupId} = result;
-			if (settings?.closeOnSave !== false && groupId && result.count > 0) {
+			if (result.rejectedTabIds.length > 0) {
+				showStatus(
+					`${result.count > 0 ? `Saved ${plural(result.count, 'tab')}.` : 'Nothing saved.'}${duplicatesNote(result.skipped)}`,
+					false,
+					{action: forceAddAction(result.rejectedTabIds, showStatus, reload)},
+				);
+			} else if (
+				settings?.closeOnSave !== false &&
+				groupId &&
+				result.count > 0
+			) {
 				// Saved tabs were closed: Undo reopens them in this window from the new session.
 				showStatus(done, false, {
 					action: {

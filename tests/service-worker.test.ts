@@ -2229,7 +2229,7 @@ test('session title activation respects the configured toggle, edit or restore a
 	assert.deepEqual(calls, ['restore', 'edit', 'toggle', 'toggle']);
 });
 
-test('save duplicates can be allowed or silently rejected, with existing or latest title', async () => {
+test('save duplicates can be allowed or rejected and forced in, with existing or latest title', async () => {
 	const tabs = [
 		{
 			id: 1,
@@ -2291,10 +2291,24 @@ test('save duplicates can be allowed or silently rejected, with existing or late
 	assert.equal(latestResult.skipped, 1);
 	assert.equal(latest.state.groups[1].tabs[0].title, 'Fresh title');
 	assert.equal(latest.state.groups[0].tabs.length, 1);
+	assert.deepEqual([...latestResult.rejectedTabIds], [1]);
 	assert.deepEqual(
-		latest.removedTabIds.toSorted((a, b) => a - b),
-		[1, 2],
+		[...latest.removedTabIds],
+		[2],
+		'the rejected duplicate stays open, the new tab closes',
 	);
+
+	const forced = await latest.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'all-windows',
+		tabIds: [...latestResult.rejectedTabIds],
+		allowDuplicates: true,
+	});
+	assert.equal(forced.ok, true, forced.error);
+	assert.equal(forced.count, 1);
+	assert.equal(forced.skipped, 0);
+	assert.equal(forced.rejectedTabIds.length, 0);
+	assert.equal(latest.state.groups.length, 3);
 });
 
 test('writeClipboard writes HTML beside plain text when the browser allows it, else plain text only', async () => {
