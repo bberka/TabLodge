@@ -11,6 +11,7 @@ import {
 import {createRoot} from 'react-dom/client';
 import {
 	Bookmark,
+	Check,
 	ChevronRight,
 	ExternalLink,
 	History,
@@ -58,6 +59,7 @@ import {useSessionNameAsk} from './name-session-dialog';
 import {Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
 import {InsecureMarkFor} from './insecure-mark';
+import {savedUrlSet} from './saved-urls';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
@@ -291,6 +293,10 @@ function SidePanel() {
 
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
 	const sessions = state?.groups || NO_SESSIONS;
+	const savedUrls = useMemo(
+		() => savedUrlSet(bookmarks, sessions),
+		[bookmarks, sessions],
+	);
 	const columns = state?.bookmarkColumns;
 	const bookmarksEnabled = settings?.bookmarksEnabled !== false;
 	const sessionsEnabled = settings?.sessionsEnabled !== false;
@@ -635,6 +641,17 @@ function SidePanel() {
 							{title}
 						</strong>
 						<small className="block truncate text-[11px] text-muted-foreground">
+							{savedUrls.has(url) && (
+								<IconTooltip label="Already saved in a session or bookmark">
+									<span
+										role="img"
+										aria-label="Already saved"
+										className="mr-1 inline-block align-[-1px] text-emerald-600 dark:text-emerald-400"
+									>
+										<Check className="h-3 w-3" aria-hidden="true" />
+									</span>
+								</IconTooltip>
+							)}
 							<InsecureMarkFor url={url} settings={settings ?? {}} />
 							{hostname(url)}
 						</small>

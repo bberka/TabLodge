@@ -26,7 +26,7 @@ There are no accounts, servers, or analytics. TabLodge keeps your data in your b
 - **Build a bookmark board.** Search your bookmarks, reorder columns and links by dragging, or paste a list of links to add them. You can also drag links from saved sessions into a column, and drag a link from a web page, a bookmark, or another window onto a saved session to add it there. Choose the default, wider, full width, or narrower dashboard layout in Settings.
 - **Bring your data with you.** Import from OneTab, Session Buddy, Tab Session Manager, Toby, or browser bookmarks. Export JSON backups, HTML, CSV, Markdown, or URL lists. A full backup ZIP includes settings and recovery data as well.
 - **Recover from mistakes.** Snapshots of open windows help after a browser crash. Deleted sessions, links, bookmarks, and columns go to the trash bin, and many actions offer Undo. Automatic backups are optional, with an extra copy in Downloads if you want one.
-- **Use the view that suits you.** Open the toolbar popup, the dashboard, or the side panel for bookmarks, sessions, and open tabs. Keyboard shortcuts and context menus give you quick save and bookmark actions. Light, dark, and system themes are available.
+- **Use the view that suits you.** Open the toolbar popup, the dashboard, or the side panel for bookmarks, sessions, and open tabs. The side panel marks open tabs whose address is already saved in a session or bookmark. Keyboard shortcuts and context menus give you quick save and bookmark actions. Light, dark, and system themes are available.
 
 ## Screenshots
 
