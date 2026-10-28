@@ -525,9 +525,9 @@ function Help() {
 				},
 				{
 					title: 'Common choices',
-					body: `Set dashboard width, startup behavior, session sorting, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default.`,
+					body: `Set dashboard width, startup behavior, session sorting, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. You can also remove common tracking parameters when opening saved links or restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default.`,
 					searchText:
-						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting urls bookmark click site exclusions right-click menus open after save theme system light dark',
+						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark',
 				},
 				{
 					title: 'Control saved data',

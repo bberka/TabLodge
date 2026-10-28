@@ -9,7 +9,7 @@ TabLodge keeps your sessions, bookmarks, and settings in your browser profile. I
 - No network requests of its own. Code, styles, fonts, and icons are bundled with the extension.
 - No website host permissions or content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages.
 
-Opening a saved link loads that website normally. Choosing **Search the web** sends your query to the browser's default search engine. These are actions you request, not background reporting by TabLodge.
+Opening a saved link loads that website normally. An optional setting removes common tracking parameters from the destination URL when opening saved links or restoring sessions and snapshots. It is off by default and does not change the URLs stored in your library. Choosing **Search the web** sends your query to the browser's default search engine. These are actions you request, not background reporting by TabLodge.
 
 ## What is stored
 

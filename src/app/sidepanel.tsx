@@ -59,6 +59,7 @@ import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
 import {siteName, webUrl} from './web-url';
+import {stripTrackingParameters} from './tracking-parameters';
 import {ACTION_ICONS} from './action-icons';
 import {cn} from '@/lib/utils';
 
@@ -83,6 +84,9 @@ async function openSavedLink(
 		throw new Error('This item does not contain a valid web address.');
 	}
 
+	const destination = settings.removeTrackingParameters
+		? stripTrackingParameters(safe)
+		: safe;
 	const action = resolveLinkTarget(kind, settings, {requested});
 	if (action === 'none') {
 		return;
@@ -94,12 +98,12 @@ async function openSavedLink(
 			currentWindow: true,
 		});
 		if (active?.id !== undefined) {
-			await chrome.tabs.update(active.id, {url: safe});
+			await chrome.tabs.update(active.id, {url: destination});
 			return;
 		}
 	}
 
-	await chrome.tabs.create({url: safe});
+	await chrome.tabs.create({url: destination});
 }
 
 function useWindowTabs() {
@@ -431,7 +435,11 @@ function SidePanel() {
 			>
 				{(openMenu) => (
 					<a
-						href={url}
+						href={
+							settings?.removeTrackingParameters
+								? stripTrackingParameters(url)
+								: url
+						}
 						target="_blank"
 						rel="noopener noreferrer"
 						title={`${title}\n${url}`}

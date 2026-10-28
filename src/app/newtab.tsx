@@ -107,6 +107,7 @@ import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {displayUrl} from './url-display';
 import {siteName, webUrl} from './web-url';
+import {stripTrackingParameters} from './tracking-parameters';
 import {InsecureMarkFor} from './insecure-mark';
 import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
@@ -307,11 +308,13 @@ function NewTab() {
 			simplifyUrls: settings.simplifyUrls !== false,
 			markInsecureLinks: settings.markInsecureLinks !== false,
 			markLocalLinks: settings.markLocalLinks === true,
+			removeTrackingParameters: settings.removeTrackingParameters === true,
 		}),
 		[
 			settings.simplifyUrls,
 			settings.markInsecureLinks,
 			settings.markLocalLinks,
+			settings.removeTrackingParameters,
 		],
 	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
@@ -1131,7 +1134,14 @@ function NewTab() {
 		const opened: number[] = [];
 		try {
 			for (const url of urls) {
-				const created = await chrome.tabs.create({url, active: false});
+				const destination =
+					settings.removeTrackingParameters === true
+						? stripTrackingParameters(url)
+						: url;
+				const created = await chrome.tabs.create({
+					url: destination,
+					active: false,
+				});
 				if (created.id !== undefined) {
 					opened.push(created.id);
 				}
@@ -2654,12 +2664,16 @@ type BookmarkCardProps = {
 
 type UrlSettings = Pick<
 	Settings,
-	'simplifyUrls' | 'markInsecureLinks' | 'markLocalLinks'
+	| 'simplifyUrls'
+	| 'markInsecureLinks'
+	| 'markLocalLinks'
+	| 'removeTrackingParameters'
 >;
 const DEFAULT_URL_SETTINGS: UrlSettings = {
 	simplifyUrls: true,
 	markInsecureLinks: true,
 	markLocalLinks: false,
+	removeTrackingParameters: false,
 };
 
 const BookmarkCard = memo(
@@ -2751,7 +2765,11 @@ const BookmarkCard = memo(
 						className={`group flex min-w-0 items-center gap-1 rounded-md px-2 ${showUrl ? 'py-1.5' : 'py-1'} transition-colors hover:bg-muted/75 ${dropActive ? 'bg-primary/10' : ''}`}
 					>
 						<a
-							href={bookmark.url}
+							href={
+								urlSettings.removeTrackingParameters
+									? stripTrackingParameters(bookmark.url)
+									: bookmark.url
+							}
 							rel="noopener noreferrer"
 							title={urlOnly ? bookmark.url : bookmark.title}
 							aria-label={

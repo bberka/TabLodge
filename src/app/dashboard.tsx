@@ -108,6 +108,7 @@ import type {
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {hostOf, webUrl} from './web-url';
+import {stripTrackingParameters} from './tracking-parameters';
 import {ColumnLabel, FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {IconNameField} from './icon-picker';
@@ -783,7 +784,13 @@ export function SessionManager({
 		const opened: number[] = [];
 		try {
 			for (const tab of tabs) {
-				const created = await chrome.tabs.create({url: tab.url, active: false});
+				const destination = settings.removeTrackingParameters
+					? stripTrackingParameters(tab.url)
+					: tab.url;
+				const created = await chrome.tabs.create({
+					url: destination,
+					active: false,
+				});
 				if (created.id !== undefined) {
 					opened.push(created.id);
 				}
@@ -2731,7 +2738,11 @@ const SavedTab = memo(
 						<span className="flex min-w-0 items-center gap-1.5">
 							<a
 								className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
-								href={tab.url}
+								href={
+									settings.removeTrackingParameters
+										? stripTrackingParameters(tab.url)
+										: tab.url
+								}
 								target="_blank"
 								rel="noopener noreferrer"
 								title={urlOnly ? tab.url : label}

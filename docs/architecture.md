@@ -112,6 +112,8 @@ The toolbar icon normally opens the popup. **Settings › Side Panel › Toolbar
 
 **Settings › Dashboard › Dashboard width** controls the dashboard container and bookmark grid together. The default keeps the existing 1,440 pixel maximum and three column desktop grid. Wider uses up to 1,920 pixels and four columns on a 1,920 pixel viewport. Full width removes the maximum and fits as many columns as the available space allows, with a 288 pixel minimum column width. Narrower uses a 1,024 pixel maximum and two columns. Small screens still use one column where two would not fit. The worker normalizes invalid values back to the default.
 
+**Settings › Dashboard › Remove tracking parameters** is off by default. When enabled, opening saved links, restoring sessions, and restoring snapshots removes common query parameters such as `utm_source`, `fbclid`, and `gclid`. Saved URLs, copied links, and exports keep their original values. The page helper and classic service worker maintain matching parameter lists.
+
 UI primitives live in `src/components/ui/`, with composed helpers in `src/shared/ui.tsx`. Theme tokens live in `styles/extension-app.css`. `src/shared/theme.tsx` mirrors the saved theme for the boot script and follows system theme changes. The `@/` alias resolves to `src/` during builds and must not remain in output bundles.
 
 ## Saving and restoring sessions
@@ -122,7 +124,7 @@ Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during 
 
 Pinned tabs are excluded by default. When included, they can be closed only after the session is written and **Close tabs after saving** is enabled. The worker checks each tab's URL and pinned state again before closing it.
 
-The default restore destination is a new window unless the current window contains only the current tab. Settings also offers current window and always new window policies. Ctrl/Cmd clicks keep saved links; Shift clicks force a new window. A failed restore never removes its saved link. Duplicate handling, activation, and unloading of restored background tabs are separate preferences.
+The default restore destination is a new window unless the current window contains only the current tab. Settings also offers current window and always new window policies. Ctrl/Cmd clicks keep saved links; Shift clicks force a new window. A failed restore never removes its saved link. Duplicate handling, activation, and unloading of restored background tabs are separate preferences. When **Remove tracking parameters** is enabled, restore duplicate checks compare the cleaned destination while the saved URL remains unchanged.
 
 ### Titles and names
 
