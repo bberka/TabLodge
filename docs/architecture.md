@@ -1,6 +1,6 @@
 # Architecture
 
-This guide explains how TabLodge is built, where data lives, and which behavior needs care when changing the code. For installation and commands, see the [README](../README.md). For data handling, see [Privacy](../PRIVACY.md).
+This guide explains how TabLodge is built, where data lives, and which behavior needs care when changing the code. For installation and commands, see the [README](README.md). For data handling, see [Privacy](PRIVACY.md).
 
 ## Build and startup
 
@@ -184,7 +184,7 @@ A session has one description, capped at 10,502 characters. Older separate `note
 
 Automatic backup history and Undo records are not included. Import recognizes the ZIP header and format identifier, shows counts, and sends `RESTORE_FULL_BACKUP`. The worker rejects newer versions, normalizes entries, takes a safety backup, and replaces the affected data inside one undoable action. It then resynchronizes alarms, toolbar behavior, and menus.
 
-Files above 45 MB, or expanding beyond 60 MB, are refused. All export formats are unencrypted; see [Privacy](../PRIVACY.md) before sharing backups.
+Files above 45 MB, or expanding beyond 60 MB, are refused. All export formats are unencrypted; see [Privacy](PRIVACY.md) before sharing backups.
 
 ## Testing
 

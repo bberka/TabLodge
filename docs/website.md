@@ -4,7 +4,7 @@ The website at <https://tablodge.bbay.dev> is a static [Astro](https://astro.bui
 
 ## Local development
 
-Install the Vite+ CLI once as described in [README Development](../README.md#development), then run these commands from the repository root:
+Install the Vite+ CLI once as described in [README Development](README.md#development), then run these commands from the repository root:
 
 ```sh
 pnpm install
@@ -27,7 +27,7 @@ Paths below are relative to `site/`.
 | `public/` | Icons, social image, web manifest, `robots.txt`, and custom domain file |
 | `src/site.ts` | Shared site values; deployment uses the latest release version and local builds fall back to `package.json` |
 
-Follow the [documentation style](../CONTRIBUTING.md#writing-documentation) for website copy. Keep extension privacy details consistent with [PRIVACY.md](../PRIVACY.md). Check TabLodge comparisons against the current app, and competitor claims against their own documentation. The [comparison notes](../docs/tab-management-research.md) are background, not a live feature checklist.
+Follow the [documentation style](CONTRIBUTING.md#writing-documentation) for website copy. Keep extension privacy details consistent with [PRIVACY.md](PRIVACY.md). Check TabLodge comparisons against the current app, and competitor claims against their own documentation. The [comparison notes](tab-management-research.md) are background, not a live feature checklist.
 
 ## Screenshots
 

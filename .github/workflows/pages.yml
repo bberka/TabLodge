@@ -2,7 +2,7 @@ name: Website
 
 # Builds the Astro site in site/ and deploys it to GitHub Pages (https://tablodge.bbay.dev).
 # The site version comes from the latest GitHub release. Release workflow dispatches a build after publishing.
-# One-time setup: repository Settings > Pages > Source: GitHub Actions (see site/README.md).
+# One-time setup: repository Settings > Pages > Source: GitHub Actions (see docs/website.md).
 on:
   push:
     branches: [master]
