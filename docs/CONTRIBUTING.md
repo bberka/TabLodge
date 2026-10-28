@@ -52,7 +52,7 @@ Agents follow [AGENTS.md](../AGENTS.md). In short:
 - Work on a branch and open a pull request. Nobody, human or agent, pushes to `master` directly.
 - The pull request names the model that did the work, and commits carry only the human author.
 - Every fix or feature includes proof in the pull request, such as a screenshot, recording, or test output, with a before and after for a fix.
-- Before pushing, run the `unslop-*` skills on the changed files only. Pinned skills install with `npx skills experimental_install` from `skills-lock.json`.
+- Before pushing, run the `unslop-*` skills on the changed files only. Install the pinned skills in `skills-lock.json` with `vp run skills:install`.
 
 ## Releases
 
