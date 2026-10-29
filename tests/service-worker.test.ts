@@ -6037,7 +6037,7 @@ const fullBackupInput = (overrides: Record<string, unknown> = {}) => ({
 		],
 		settings: {copyFormat: 'url', excludedOrigins: ['skip.example']},
 	},
-	preferences: {uiTheme: 'dark'},
+	preferences: {uiTheme: 'dark', uiAccent: '#12ab9f'},
 	snapshots: {
 		version: 1,
 		history: [
@@ -6075,7 +6075,7 @@ const fullBackupInput = (overrides: Record<string, unknown> = {}) => ({
 
 test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the theme, after a safety backup', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
-		storage: {uiTheme: 'light'},
+		storage: {uiTheme: 'light', uiAccent: 'rose'},
 	});
 	const result = await harness.sendMessage(fullBackupInput());
 	assert.equal(result.ok, true, result.error);
@@ -6092,6 +6092,7 @@ test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the the
 	assert.equal(harness.state.settings.copyFormat, 'url');
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['skip.example']);
 	assert.equal(harness.extraStorage.uiTheme, 'dark');
+	assert.equal(harness.extraStorage.uiAccent, '#12ab9f');
 	const {history} = harness.extraStorage[HISTORY_KEY] as {
 		history: Array<{id: string}>;
 	};
@@ -6111,7 +6112,7 @@ test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the the
 
 test('RESTORE_FULL_BACKUP undo brings back the previous data', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
-		storage: {uiTheme: 'light'},
+		storage: {uiTheme: 'light', uiAccent: 'rose'},
 	});
 	const result = await harness.sendMessage(fullBackupInput());
 	assert.equal(result.ok, true, result.error);
@@ -6120,6 +6121,7 @@ test('RESTORE_FULL_BACKUP undo brings back the previous data', async () => {
 	assert.equal(harness.state.bookmarks.length, 3);
 	assert.equal(harness.state.groups.length, 1);
 	assert.equal(harness.extraStorage.uiTheme, 'light');
+	assert.equal(harness.extraStorage.uiAccent, 'rose');
 	assert.equal(Object.hasOwn(harness.extraStorage, HISTORY_KEY), false);
 	assert.equal(trashOf(harness).length, 0);
 });
@@ -6138,7 +6140,7 @@ test('RESTORE_FULL_BACKUP normalizes junk and drops what it cannot trust', async
 				],
 				settings: {snapshotKeep: 9999, excludedOrigins: [42]},
 			},
-			preferences: {uiTheme: '<script>'},
+			preferences: {uiTheme: '<script>', uiAccent: '<script>'},
 			snapshots: {
 				history: [
 					null,
@@ -6169,6 +6171,7 @@ test('RESTORE_FULL_BACKUP normalizes junk and drops what it cannot trust', async
 	assert.equal(harness.state.settings.snapshotKeep, 25);
 	assert.deepEqual(harness.state.settings.excludedOrigins, []);
 	assert.equal(harness.extraStorage.uiTheme, 'system');
+	assert.equal(harness.extraStorage.uiAccent, 'default');
 	const {history} = harness.extraStorage[HISTORY_KEY] as {
 		history: Array<{
 			id: string;
@@ -6209,7 +6212,7 @@ test('RESTORE_FULL_BACKUP rejects a newer format, another format and missing dat
 
 test('GET_FULL_BACKUP returns the state, theme, snapshot history and trash', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
-		storage: {uiTheme: 'dark'},
+		storage: {uiTheme: 'dark', uiAccent: 'green'},
 	});
 	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: 'bm-0'});
 	const result = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
@@ -6219,6 +6222,7 @@ test('GET_FULL_BACKUP returns the state, theme, snapshot history and trash', asy
 	assert.equal(typeof state.settings, 'object');
 	assert.deepEqual(structuredClone(result.preferences), {
 		uiTheme: 'dark',
+		uiAccent: 'green',
 	});
 	assert.deepEqual(structuredClone(result.snapshots), {
 		version: 1,

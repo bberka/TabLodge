@@ -531,9 +531,9 @@ function Help() {
 				},
 				{
 					title: 'Common choices',
-					body: `Set dashboard width, startup behavior, session sorting, archiving sessions you have not opened in a while, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. You can also remove common tracking parameters when opening saved links or restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default.`,
+					body: `Set dashboard width, startup behavior, session sorting, archiving sessions you have not opened in a while, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. You can also remove common tracking parameters when opening saved links or restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
 					searchText:
-						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting archive old sessions not opened days urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark',
+						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting archive old sessions not opened days urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
 				},
 				{
 					title: 'Control saved data',
@@ -617,10 +617,7 @@ function Help() {
 	);
 
 	return (
-		<main
-			data-brand="tablodge"
-			className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-9 lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8"
-		>
+		<main className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-9 lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8">
 			<div className="lg:col-span-2">
 				<AppHeader active="help" />
 			</div>

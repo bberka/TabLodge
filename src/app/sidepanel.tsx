@@ -719,7 +719,7 @@ function SidePanel() {
 
 	if (!state) {
 		return error ? (
-			<main data-brand="tablodge" className="min-h-screen p-3">
+			<main className="min-h-screen p-3">
 				<LoadError message={error} />
 			</main>
 		) : null;
@@ -748,10 +748,7 @@ function SidePanel() {
 	const searchLabel = panel === 'tabs' ? 'Search open tabs' : `Search ${panel}`;
 
 	return (
-		<main
-			data-brand="tablodge"
-			className="flex h-screen min-w-0 flex-col overflow-hidden text-foreground"
-		>
+		<main className="flex h-screen min-w-0 flex-col overflow-hidden text-foreground">
 			<div className="shrink-0 px-3 pt-3">
 				<header className="mb-3 flex min-w-0 items-center justify-between gap-2">
 					<h1 className="sr-only">{PROJECT.name} side panel</h1>

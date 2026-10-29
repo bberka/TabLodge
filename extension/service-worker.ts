@@ -6655,8 +6655,25 @@ async function getBackupData(
 // Mirrors FULL_BACKUP_FORMAT_ID and FULL_BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
 const FULL_BACKUP_FORMAT_ID = 'tablodge-full-backup';
 const FULL_BACKUP_VERSION = 1;
-// The page theme, kept in storage by the pages (src/shared/theme.tsx); the only preference outside the state.
+// The page theme and accent color, kept in storage by the pages (src/shared/theme.tsx); the only preferences outside the state.
 const UI_THEME_KEY = 'uiTheme';
+const UI_ACCENT_KEY = 'uiAccent';
+// Mirrors ACCENTS and the custom hex rule in src/shared/accents.ts.
+const ACCENT_IDS = new Set([
+	'default',
+	'system',
+	'red',
+	'orange',
+	'amber',
+	'green',
+	'teal',
+	'cyan',
+	'blue',
+	'violet',
+	'pink',
+	'rose',
+	'slate',
+]);
 const SNAPSHOT_REASONS = new Set([
 	'interval',
 	'startup',
@@ -6677,12 +6694,21 @@ const MAX_SNAPSHOT_TABS = 10_000;
 const asTheme = (value: unknown) =>
 	value === 'light' || value === 'dark' ? value : 'system';
 
+const asAccent = (value: unknown) =>
+	typeof value === 'string' &&
+	(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value))
+		? value
+		: 'default';
+
 async function getFullBackup(): Promise<ActionResult<'GET_FULL_BACKUP'>> {
 	const store = await getStore();
 	return {
 		ok: true,
 		state: store,
-		preferences: {[UI_THEME_KEY]: asTheme(await readKey(UI_THEME_KEY))},
+		preferences: {
+			[UI_THEME_KEY]: asTheme(await readKey(UI_THEME_KEY)),
+			[UI_ACCENT_KEY]: asAccent(await readKey(UI_ACCENT_KEY)),
+		},
 		snapshots: {version: 1, history: await readSnapshotHistory()},
 		trash: {version: 1, items: await readTrash()},
 	};
@@ -6863,15 +6889,15 @@ async function applyFullBackup(
 			.map((entry: unknown) => normalizeImportedTrash(entry))
 			.filter((entry): entry is TrashEntry => entry !== null),
 	);
-	const theme = isRecord(input.preferences)
-		? asTheme(input.preferences[UI_THEME_KEY])
-		: undefined;
 
 	await writeStore(restored);
 	await writeSnapshotHistory(history);
 	await writeTrash(items);
-	if (theme) {
-		await chrome.storage.local.set({[UI_THEME_KEY]: theme});
+	if (isRecord(input.preferences)) {
+		await chrome.storage.local.set({
+			[UI_THEME_KEY]: asTheme(input.preferences[UI_THEME_KEY]),
+			[UI_ACCENT_KEY]: asAccent(input.preferences[UI_ACCENT_KEY]),
+		});
 	}
 
 	return {
@@ -6892,7 +6918,7 @@ function restoreFullBackup(
 			trashMutate(() =>
 				withUndo<'RESTORE_FULL_BACKUP'>(
 					'Import full backup',
-					[STORAGE_KEY, SNAPSHOTS_KEY, TRASH_KEY, UI_THEME_KEY],
+					[STORAGE_KEY, SNAPSHOTS_KEY, TRASH_KEY, UI_THEME_KEY, UI_ACCENT_KEY],
 					() => applyFullBackup(input),
 				),
 			),

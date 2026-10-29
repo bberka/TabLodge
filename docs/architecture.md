@@ -8,7 +8,7 @@ This guide explains how TabLodge is built, where data lives, and which behavior 
 
 * **Pages:** `vite.pages.config.ts` builds the HTML shells in `extension/` with their React entries in `src/app/`. It replaces `%APP_NAME%` in page titles, bundles assets locally, writes the manifest, and copies icons.
 * **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The manifest does not declare it as a module.
-* **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme before the first paint. React renders into `#root` after the saved state arrives.
+* **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme and accent color before the first paint. React renders into `#root` after the saved state arrives.
 
 `scripts/verify-build.ts` checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest. After building, `scripts/package.ts` writes a versioned ZIP and SHA256 checksum under `release/`. The release workflow uses the same task.
 
@@ -23,7 +23,7 @@ The manifest version must match `package.json`; build verification checks this. 
 These identifiers are part of stored data or external formats. Changing them requires a migration:
 
 * The main storage key, `tablodge.state`, and recovery keys listed below.
-* The theme key `uiTheme` in extension storage and its `tablodge.uiTheme` mirror in page `localStorage`.
+* The theme key `uiTheme` and accent key `uiAccent` in extension storage, and their `tablodge.uiTheme` and `tablodge.uiAccent` mirrors in page `localStorage`.
 * Export format identifiers such as `tablodge-sessions`, `tablodge`, `tablodge-backup`, and `tablodge-full-backup`.
 * Drag MIME types `application/x-tablodge-session`, `application/x-tablodge-column`, and `application/x-tablodge-bookmark`.
 * Context menu IDs beginning with `tablodge-page-` or `tablodge-action-`.
@@ -118,7 +118,7 @@ The toolbar icon normally opens the popup. **Settings › Side panel › Toolbar
 
 **Settings › Dashboard › Remove tracking parameters** is off by default. When enabled, opening saved links, restoring sessions, and restoring snapshots removes common query parameters such as `utm_source`, `fbclid`, and `gclid`. Saved URLs, copied links, and exports keep their original values. The page helper and classic service worker maintain matching parameter lists.
 
-UI primitives live in `src/components/ui/`, with composed helpers in `src/shared/ui.tsx`. Theme tokens live in `styles/extension-app.css`. `src/shared/theme.tsx` mirrors the saved theme for the boot script and follows system theme changes. The `@/` alias resolves to `src/` during builds and must not remain in output bundles.
+UI primitives live in `src/components/ui/`, with composed helpers in `src/shared/ui.tsx`. Theme tokens and the accent colors live in `styles/extension-app.css`. `src/shared/accents.ts` lists the preset accents and applies every accent except the default as inline variables. The system accent is read from the CSS `AccentColor` keyword (Chromium's placeholder `rgb(0, 117, 255)` counts as no accent, and the extension cannot read the Chrome theme color) and rechecked on focus, on visibility and color scheme changes, and every two seconds while the page is visible, because the browser sends no event for it. `src/shared/theme.tsx` mirrors the saved theme and accent for the boot script and follows system theme changes. The `@/` alias resolves to `src/` during builds and must not remain in output bundles.
 
 ## Saving and restoring sessions
 
@@ -186,7 +186,7 @@ A session has one description, capped at 10,502 characters. Older separate `note
 | --- | --- |
 | `manifest.json` | Format `tablodge-full-backup`, versions, creation time, and counts |
 | `data.json` | Normalized state, including settings and excluded sites |
-| `preferences.json` | Theme choice |
+| `preferences.json` | Theme and accent color choice |
 | `snapshots.json` | Snapshot history |
 | `trash.json` | Trash entries |
 

@@ -859,7 +859,6 @@ export function PageShell({
 }: ComponentPropsWithoutRef<'main'>) {
 	return (
 		<main
-			data-brand="tablodge"
 			className={cn(
 				'mx-auto w-full max-w-6xl px-5 py-6 sm:px-8 sm:py-9',
 				className,

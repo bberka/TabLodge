@@ -18,13 +18,13 @@ Data stays in local extension storage within your browser profile.
 | Storage key                                                                | Contents                                                                                                                                   |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `tablodge.state`                                                           | Saved sessions, titles, URLs, notes, pinned state, tab groups, split view pairs, folders, bookmarks, columns, settings, and excluded sites |
-| `uiTheme`                                                                  | Your system, light, or dark theme choice                                                                                                   |
+| `uiTheme`, `uiAccent`                                                      | Your system, light, or dark theme choice and your accent color (a preset name, `browser`, or a hex color)                                                                             |
 | `tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta` | Snapshots of open windows and flags used to detect a possible browser crash                                                                |
 | `tablodge.backups`                                                         | Automatic, manual, and safety backups of sessions, bookmarks, and settings                                                                 |
 | `tablodge.trash`                                                           | Deleted sessions, saved links, bookmarks, and columns                                                                                      |
 | `tablodge.undo`                                                            | Temporary copies used to undo recent actions, kept for up to two minutes                                                                   |
 
-These keys use `chrome.storage.local`. A copy of the theme choice also lives in the extension's `localStorage` under `tablodge.uiTheme` so pages can apply it before rendering. A temporary flag in `chrome.storage.session` helps ignore bulk browser bookmark imports.
+These keys use `chrome.storage.local`. A copy of the theme and accent choices also lives in the extension's `localStorage` under `tablodge.uiTheme` and `tablodge.uiAccent` so pages can apply it before rendering. A temporary flag in `chrome.storage.session` helps ignore bulk browser bookmark imports.
 
 Snapshots contain tab titles, URLs, pinned state, tab groups, split view pairs, the active tab, and window layout information. They skip incognito windows, excluded sites, and pages other than ordinary HTTP or HTTPS websites. Snapshots are enabled by default; you can turn them off in **Settings › Recovery & backups**.
 
@@ -38,7 +38,7 @@ Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data cr
 
 If you enable **Also save a copy to Downloads**, TabLodge writes backup JSON files to `Downloads/TabLodge/`. It doesn't upload them. Turning the option off or uninstalling the extension doesn't delete files already written there; you must remove those yourself.
 
-Exports are not encrypted. JSON, HTML, CSV, Markdown, URL lists, and full backup ZIP files may contain sensitive titles, URLs, or notes. The full backup also includes settings, excluded sites, theme, snapshot history, and trash. Keep these files private and remember that a folder you sync through another app may upload them.
+Exports are not encrypted. JSON, HTML, CSV, Markdown, URL lists, and full backup ZIP files may contain sensitive titles, URLs, or notes. The full backup also includes settings, excluded sites, theme and accent, snapshot history, and trash. Keep these files private and remember that a folder you sync through another app may upload them.
 
 ## Permissions
 
