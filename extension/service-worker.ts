@@ -261,6 +261,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	autoBackupKeep: 7,
 	autoBackupToDownloads: false,
 	trashRetentionDays: 30,
+	autoArchiveDays: 0,
 	sessionNameStyle: 'date-title',
 	sessionNameTemplate: '{date} · {title}',
 	sessionNameFallback: 'date-title',
@@ -1203,6 +1204,11 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		autoBackupKeep: oneOfNumbers([7, 30], raw.autoBackupKeep, 7),
 		autoBackupToDownloads: raw.autoBackupToDownloads === true,
 		trashRetentionDays: oneOfNumbers([7, 30, 90], raw.trashRetentionDays, 30),
+		autoArchiveDays: oneOfNumbers(
+			[0, 30, 90, 180, 365],
+			raw.autoArchiveDays,
+			0,
+		),
 		sessionNameStyle: isOneOf(SESSION_NAME_STYLES, raw.sessionNameStyle)
 			? raw.sessionNameStyle
 			: 'date-title',
@@ -1326,7 +1332,7 @@ function normalizeExcludedOrigins(raw: unknown): string[] {
 
 /**
 Finds the "Archived" folder by name or adds it. Old builds had an Archived view; sessions that were archived
-without a folder land here now, since archiving no longer exists.
+without a folder land here now. The auto-archive setting uses the same folder.
 */
 function findOrAddArchivedFolder(folders: Folder[]): Folder {
 	let folder = folders.find((entry) => entry.name === ARCHIVED_FOLDER_NAME);
@@ -3306,6 +3312,40 @@ async function updateGroup(
 	});
 }
 
+/**
+Moves sessions that were not opened (or saved or edited) in the last `autoArchiveDays` days into the "Archived" folder. Nothing is deleted.
+*/
+function archiveStaleSessions(): Promise<void> {
+	return mutate(async () => {
+		const store = await getStore();
+		const {autoArchiveDays} = store.settings;
+		if (!store.settings.sessionsEnabled || autoArchiveDays === 0) {
+			return;
+		}
+
+		const cutoff = Date.now() - autoArchiveDays * 86_400_000;
+		const archivedId = store.folders.find(
+			(folder) => folder.name === ARCHIVED_FOLDER_NAME,
+		)?.id;
+		const stale = store.groups.filter(
+			(group) =>
+				group.folderId !== archivedId &&
+				Math.max(group.lastOpenedAt ?? 0, group.updatedAt, group.createdAt) <
+					cutoff,
+		);
+		if (stale.length === 0 || (!archivedId && store.folders.length >= 200)) {
+			return;
+		}
+
+		const archived = findOrAddArchivedFolder(store.folders);
+		for (const group of stale) {
+			group.folderId = archived.id;
+		}
+
+		await writeStore(store);
+	});
+}
+
 async function setGroupOrder(
 	order: string[],
 ): Promise<ActionResult<'SET_GROUP_ORDER'>> {
@@ -5201,7 +5241,8 @@ async function updateSettings(
 			previousSettings.snapshotsEnabled !== store.settings.snapshotsEnabled ||
 			previousSettings.snapshotIntervalMinutes !==
 				store.settings.snapshotIntervalMinutes ||
-			previousSettings.autoBackup !== store.settings.autoBackup
+			previousSettings.autoBackup !== store.settings.autoBackup ||
+			previousSettings.autoArchiveDays !== store.settings.autoArchiveDays
 		) {
 			await syncRecoveryAlarms(store.settings);
 			if (
@@ -5397,6 +5438,7 @@ const ALREADY_OPEN_RATIO = 0.8;
 const ALARM_SNAPSHOT = 'tablodge-snapshot';
 const ALARM_BACKUP = 'tablodge-backup';
 const ALARM_TRASH = 'tablodge-trash';
+const ALARM_ARCHIVE = 'tablodge-archive';
 // Mirrors BACKUP_FORMAT_ID and BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
 const BACKUP_FORMAT_ID = 'tablodge-backup';
 const BACKUP_VERSION = 1;
@@ -7559,6 +7601,11 @@ async function syncRecoveryAlarms(settings: Settings) {
 		1,
 	);
 	await ensureAlarm(ALARM_TRASH, 1440, 5);
+	await ensureAlarm(
+		ALARM_ARCHIVE,
+		settings.autoArchiveDays === 0 ? null : 1440,
+		5,
+	);
 }
 
 /**
@@ -7571,6 +7618,7 @@ async function runStartupRecovery() {
 		await syncRecoveryAlarms(settings);
 		await purgeTrash();
 		await purgeUndo();
+		await archiveStaleSessions();
 		if (await backupDue(settings)) {
 			await runScheduledBackup();
 		}
@@ -7595,7 +7643,9 @@ chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 					? purgeTrash()
 					: alarm.name === ALARM_UNDO
 						? purgeUndo()
-						: undefined;
+						: alarm.name === ALARM_ARCHIVE
+							? archiveStaleSessions()
+							: undefined;
 	void work?.catch(() => undefined);
 });
 

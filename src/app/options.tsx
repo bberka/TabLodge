@@ -627,6 +627,19 @@ const settingsGroups: Array<{
 				],
 			},
 			{
+				name: 'autoArchiveDays',
+				label: 'Archive sessions not opened for',
+				help: 'Moves a session to the Archived folder (created if missing) when you have not restored or edited it for this long. Nothing is deleted, and you can move sessions back at any time. Checked daily and at browser start.',
+				type: 'number-select',
+				options: [
+					['0', 'Never'],
+					['30', '30 days'],
+					['90', '90 days'],
+					['180', '180 days'],
+					['365', '1 year'],
+				],
+			},
+			{
 				name: 'expandSessionsByDefault',
 				label: 'Keep sessions expanded by default',
 				help: `Show every session’s saved tabs when the ${PROJECT.name} page opens, including sessions saved later. You can still collapse or expand each one.`,

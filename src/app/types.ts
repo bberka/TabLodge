@@ -223,6 +223,10 @@ export type Settings = {
 	*/
 	trashRetentionDays: number;
 	/**
+	Days without opening, saving to or editing a session before it moves to the Archived folder: 0 (off, default), 30, 90, 180 or 365.
+	*/
+	autoArchiveDays: number;
+	/**
 	How a new session is named: the first tab's title, the date and time, the date and first tab (default), `sessionNameTemplate`, or `ask` (a dialog asks each time; `sessionNameFallback` names it when left empty).
 	*/
 	sessionNameStyle: SessionNameStyle;
