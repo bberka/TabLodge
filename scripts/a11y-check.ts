@@ -316,6 +316,26 @@ async function main() {
 			);
 			await page.close();
 		});
+
+		await check('a bookmark is added to a session from its menu', async () => {
+			const page = await openPage(context, extensionId, 'newtab');
+			const trigger = page
+				.locator('[data-bookmark-id] [data-move-focus]')
+				.first();
+			await trigger.focus();
+			await page.keyboard.press('Enter');
+			await page.getByRole('menuitem', {name: 'Add to session'}).focus();
+			await page.keyboard.press('ArrowRight');
+			await page.keyboard.press('Enter');
+			await until(
+				async () =>
+					(await page.getByRole('status').allTextContents()).some((text) =>
+						text.startsWith('Added'),
+					),
+				'the added announcement',
+			);
+			await page.close();
+		});
 	} finally {
 		await context.close();
 		await rm(profile, {recursive: true, force: true});

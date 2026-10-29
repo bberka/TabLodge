@@ -17,6 +17,7 @@ import {
 	ArrowLeft,
 	ArrowRight,
 	ArrowUp,
+	ListPlus,
 	BookmarkPlus,
 	Save,
 	SquarePlus,
@@ -1036,6 +1037,33 @@ function NewTab() {
 		);
 	}
 
+	// Keyboard alternative to dropping a bookmark on a saved session.
+	async function addBookmarkToSession(
+		bookmark: Bookmark,
+		target: {id: string; name: string},
+	) {
+		const result = await send('ADD_LINKS_TO_SESSION', {
+			groupId: target.id,
+			links: [{url: bookmark.url, title: bookmark.title}],
+		});
+		if (!result?.ok) {
+			showStatus(
+				result?.error || 'Could not add the link to that session.',
+				true,
+			);
+			return;
+		}
+
+		await reload();
+		const note = result.skipped ? ' It was already there.' : '';
+		offerUndo(
+			`Added “${bookmark.title || siteName(bookmark.url)}” to “${target.name}”.${note}`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
+	}
+
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
 		if (['click', 'open', 'open-new'].includes(action)) {
 			try {
@@ -1505,6 +1533,12 @@ function NewTab() {
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
 		moveColumn: moveColumnStep,
+		addToSession: addBookmarkToSession,
+		sessionTargets: () =>
+			(state?.groups ?? []).slice(0, MAX_SESSION_TARGETS).map((group) => ({
+				id: group.id,
+				name: group.name.trim() || 'Untitled session',
+			})),
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
@@ -1722,6 +1756,7 @@ function NewTab() {
 													clickOpensMenu={clickOpensMenu}
 													urlSettings={urlSettings}
 													quickAction={quickAction}
+													sessions={boardActions}
 													onAction={boardActions.bookmark}
 												/>
 											);
@@ -2515,6 +2550,14 @@ type BoardActions = {
 	Keyboard alternative to dragging: moves a column one place earlier or later.
 	*/
 	moveColumn: (column: BookmarkColumnData, direction: MoveDirection) => void;
+	addToSession: (
+		bookmark: Bookmark,
+		target: {id: string; name: string},
+	) => void;
+	/**
+	Sessions a bookmark can be added to (read when a menu opens, never while rendering).
+	*/
+	sessionTargets: () => Array<{id: string; name: string}>;
 	remove: (column: BookmarkColumnData) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
@@ -2548,6 +2591,8 @@ type BookmarkColumnProps = {
 	canMoveLater: boolean;
 	actions: BoardActions;
 };
+
+const MAX_SESSION_TARGETS = 30;
 
 /**
 Bookmarks drawn per column at first; the rest follow on demand (a column can hold thousands).
@@ -2730,6 +2775,7 @@ const BookmarkColumn = memo(
 												clickOpensMenu={clickOpensMenu}
 												urlSettings={urlSettings}
 												quickAction={quickAction}
+												sessions={actions}
 												onAction={actions.bookmark}
 											/>
 										);
@@ -2766,6 +2812,7 @@ const BookmarkColumn = memo(
 type BookmarkCardProps = {
 	bookmark: Bookmark;
 	onAction: OnBookmarkAction;
+	sessions: Pick<BoardActions, 'addToSession' | 'sessionTargets'>;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickAction: BookmarkQuickAction | null;
 	/**
@@ -2798,6 +2845,7 @@ const BookmarkCard = memo(
 	({
 		bookmark,
 		onAction,
+		sessions,
 		urlMode,
 		quickAction,
 		clickOpensMenu = false,
@@ -2856,6 +2904,21 @@ const BookmarkCard = memo(
 				label: 'Move to',
 				icon: ACTION_ICONS.move,
 				onSelect: act('move'),
+			},
+			{
+				type: 'submenu',
+				id: 'add-to-session',
+				label: 'Add to session',
+				icon: ListPlus,
+				hidden: sessions.sessionTargets().length === 0,
+				items: sessions.sessionTargets().map((target) => ({
+					id: `session-${target.id}`,
+					label:
+						target.name.length > 40
+							? `${target.name.slice(0, 39)}…`
+							: target.name,
+					onSelect: () => sessions.addToSession(bookmark, target),
+				})),
 			},
 			{
 				id: 'move-up',
