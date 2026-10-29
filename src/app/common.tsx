@@ -23,6 +23,8 @@ import type {
 	TabLodgeState,
 } from './types';
 import {PROJECT} from './project';
+import {hostIsExcluded} from './excluded-sites';
+import {webUrl} from './web-url';
 import {cn} from '@/lib/utils';
 
 const STORAGE_KEY = 'tablodge.state';
@@ -121,6 +123,66 @@ export function useTabSelection(includePinned: boolean) {
 }
 
 /**
+Whether this window has a web tab a workspace switch would save and close: not pinned (unless `includePinned`),
+not on an excluded site, and not a browser or TabLodge page. Updates live; unknown until the tabs are read.
+*/
+export function useHasSavableTabs(
+	includePinned: boolean,
+	excludedOrigins: readonly string[],
+) {
+	const [found, setFound] = useState(false);
+	// A fresh array on every render must not restart the listeners.
+	const excludedKey = excludedOrigins.join('\n');
+	useEffect(() => {
+		if (!chrome.tabs?.query) {
+			return;
+		}
+
+		let alive = true;
+		const excluded = excludedKey ? excludedKey.split('\n') : [];
+		const read = async () => {
+			try {
+				const tabs = await chrome.tabs.query({currentWindow: true});
+				const savable = tabs.some((tab) => {
+					const url = webUrl(tab.url);
+					return (
+						url !== null &&
+						(includePinned || !tab.pinned) &&
+						!hostIsExcluded(new URL(url).hostname, excluded)
+					);
+				});
+				if (alive) {
+					setFound(savable);
+				}
+			} catch {
+				// Without a readable tab strip the switch stays off.
+			}
+		};
+
+		void read();
+		const onChange = () => void read();
+		const events = [
+			chrome.tabs.onCreated,
+			chrome.tabs.onUpdated,
+			chrome.tabs.onRemoved,
+			chrome.tabs.onAttached,
+			chrome.tabs.onDetached,
+		];
+		for (const event of events) {
+			event?.addListener(onChange);
+		}
+
+		return () => {
+			alive = false;
+			for (const event of events) {
+				event?.removeListener(onChange);
+			}
+		};
+	}, [includePinned, excludedKey]);
+	return found;
+}
+
+/**
 "Save this window", or "Save 3 selected tabs" while tabs are selected in the tab strip.
 */
 export function saveWindowLabel(selection: {selected: boolean; count: number}) {
@@ -190,6 +252,26 @@ export function restoreSummary(result: {
 	}
 
 	return `${parts.join(' · ')}.`;
+}
+
+/**
+One-line result of a workspace switch, for the toast after "Switch to this session".
+*/
+export function switchSummary(
+	result: {saved: number; count: number; failed?: number},
+	name: string,
+) {
+	const parts = [
+		result.saved > 0
+			? `Saved ${plural(result.saved, 'tab')}`
+			: 'Nothing to save',
+		`opened ${plural(result.count, 'tab')} from “${name}”`,
+	];
+	if (result.failed) {
+		parts.push(`${result.failed} failed`);
+	}
+
+	return `${parts.join(', ')}.`;
 }
 
 /**

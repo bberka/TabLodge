@@ -51,6 +51,10 @@ Worker recovery code lives in `extension/service-worker.ts`; the UI lives in `sr
 | `tablodge.trash` | Deleted items with their original positions and deletion times |
 | `tablodge.undo` | Up to three recent undo records |
 
+### Auto-archive
+
+The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into the folder named Archived, creating it if missing. The move runs in the mutation queue, does not change `updatedAt`, and deletes nothing. Moving a session back out through the editor updates `updatedAt`, so it is not archived again until it has been idle for the full period.
+
 ### Snapshots
 
 Snapshots are enabled by default. Captures include normal windows, ordinary HTTP and HTTPS tabs, active and pinned state, tab groups, split view pairs, and window focus and state. Incognito windows and excluded sites are omitted.
@@ -125,6 +129,10 @@ Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during 
 Pinned tabs are excluded by default. When included, they can be closed only after the session is written and **Close tabs after saving** is enabled. The worker checks each tab's URL and pinned state again before closing it. When that closes every tab in a window, the worker opens a new tab so the window stays, unless **When a save empties a window** is set to close it and another normal window of the same incognito state is open. It then focuses that window and closes the emptied one. The last window is never closed.
 
 The default restore destination is a new window unless the current window contains only the current tab. Settings also offers current window and always new window policies. Ctrl/Cmd clicks keep saved links; Shift clicks force a new window. A failed restore never removes its saved link. Duplicate handling, activation, and unloading of restored background tabs are separate preferences. When **Remove tracking parameters** is enabled, restore duplicate checks compare the cleaned destination while the saved URL remains unchanged.
+
+### Switching workspaces
+
+`SWITCH_WORKSPACE` saves the window's web tabs, opens another session in the same window, and then closes the saved tabs. The save uses the normal naming and duplicate rules but leaves the tabs open and skips **Open dashboard after saving**. The restore ignores the restore target and duplicate preferences, so a URL that is already open still opens, and it follows the keep or remove preference as usual. The old tabs are closed only after the other session opened at least one tab, and only if their URL still matches what was saved. If the restore fails, the window keeps its tabs and the new session stays saved. Pinned tabs (unless saved), excluded sites, and pages that are not web pages are left alone, so the dashboard stays open. The dashboard menu item and the popup and side panel buttons are disabled while the window has no such tab (`useHasSavableTabs`, which follows tab events).
 
 ### Titles and names
 

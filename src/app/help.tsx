@@ -211,6 +211,12 @@ function Help() {
 						'settings restore keep remove saved tabs successful restore destination current window new window duplicate urls already open skip',
 				},
 				{
+					title: 'Switch workspaces',
+					body: 'Choose Switch to this session in the menu of a session on the dashboard, or the switch button next to a session in the popup or side panel, to save the tabs in this window as a new session and open that session in their place. Pinned tabs and pages that cannot be saved stay open. The item is off while this window has no tab it could save.',
+					searchText:
+						'switch workspace context swap replace current window save open another session pinned tabs',
+				},
+				{
 					title: 'Use a click modifier',
 					body: (
 						<>
@@ -525,9 +531,9 @@ function Help() {
 				},
 				{
 					title: 'Common choices',
-					body: `Set dashboard width, startup behavior, session sorting, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. You can also remove common tracking parameters when opening saved links or restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
+					body: `Set dashboard width, startup behavior, session sorting, archiving sessions you have not opened in a while, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. You can also remove common tracking parameters when opening saved links or restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
 					searchText:
-						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
+						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting archive old sessions not opened days urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
 				},
 				{
 					title: 'Control saved data',

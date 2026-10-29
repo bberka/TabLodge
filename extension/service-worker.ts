@@ -261,6 +261,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	autoBackupKeep: 7,
 	autoBackupToDownloads: false,
 	trashRetentionDays: 30,
+	autoArchiveDays: 0,
 	sessionNameStyle: 'date-title',
 	sessionNameTemplate: '{date} · {title}',
 	sessionNameFallback: 'date-title',
@@ -1203,6 +1204,11 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		autoBackupKeep: oneOfNumbers([7, 30], raw.autoBackupKeep, 7),
 		autoBackupToDownloads: raw.autoBackupToDownloads === true,
 		trashRetentionDays: oneOfNumbers([7, 30, 90], raw.trashRetentionDays, 30),
+		autoArchiveDays: oneOfNumbers(
+			[0, 30, 90, 180, 365],
+			raw.autoArchiveDays,
+			0,
+		),
 		sessionNameStyle: isOneOf(SESSION_NAME_STYLES, raw.sessionNameStyle)
 			? raw.sessionNameStyle
 			: 'date-title',
@@ -1326,7 +1332,7 @@ function normalizeExcludedOrigins(raw: unknown): string[] {
 
 /**
 Finds the "Archived" folder by name or adds it. Old builds had an Archived view; sessions that were archived
-without a folder land here now, since archiving no longer exists.
+without a folder land here now. The auto-archive setting uses the same folder.
 */
 function findOrAddArchivedFolder(folders: Folder[]): Folder {
 	let folder = folders.find((entry) => entry.name === ARCHIVED_FOLDER_NAME);
@@ -1956,6 +1962,11 @@ async function saveTabs(
 		`ask` style, save with the fallback name first, then open the small name prompt window.
 		*/
 		promptName?: boolean;
+		/**
+		A workspace switch saves the window but closes the tabs itself once the other session is open, so this
+		save leaves them open and does not open the dashboard.
+		*/
+		keepTabsOpen?: boolean;
 	} = {},
 ): Promise<ActionResult<'SAVE_TABS'>> {
 	return mutate(async () => {
@@ -1978,6 +1989,10 @@ async function saveTabs(
 			...(options.includePinned === true && {includePinnedTabs: true}),
 			...(options.allowDuplicates === true && {
 				saveDuplicateHandling: 'allow' as const,
+			}),
+			...(options.keepTabsOpen === true && {
+				closeOnSave: false,
+				openDashboardAfterSave: false,
 			}),
 		};
 		let windows: PopulatedWindow[];
@@ -3057,7 +3072,12 @@ async function restoreGroup(
 	groupId: string,
 	senderTab: chrome.tabs.Tab | undefined,
 	forceRemove = false,
-	options: RestoreOptions = {},
+	options: RestoreOptions & {
+		/**
+		Open every tab even when the window already shows its address, and restore into this window.
+		*/
+		intoWindowId?: number;
+	} = {},
 ): Promise<ActionResult<'RESTORE_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -3071,10 +3091,21 @@ async function restoreGroup(
 		}
 
 		const restoreTarget = options.restoreTarget || store.settings.restoreTarget;
-		const result = await restoreRecords(group.tabs, store.settings, senderTab, {
-			restoreTarget,
-			activate: options.activate !== false,
-		});
+		const intoWindow = isInteger(options.intoWindowId);
+		const result = await restoreRecords(
+			group.tabs,
+			intoWindow
+				? {...store.settings, restoreDuplicateHandling: 'open'}
+				: store.settings,
+			senderTab,
+			{
+				restoreTarget,
+				activate: options.activate !== false,
+				...(intoWindow && {
+					target: {id: options.intoWindowId, bootstrapTabId: null},
+				}),
+			},
+		);
 		if (result.opened.length === 0) {
 			return {
 				ok: false,
@@ -3130,6 +3161,90 @@ async function restoreGroup(
 			...(trashId && {trashId}),
 		};
 	});
+}
+
+/**
+Workspace switch: saves the window's web tabs as a new session, opens another session in the same window, and then
+closes the tabs that were saved. The old tabs stay open until the other session is open, so a failed restore never
+leaves the window empty. Pinned tabs, excluded sites, and pages that are not web pages stay where they are.
+*/
+async function switchWorkspace(
+	groupId: string,
+	senderTab: chrome.tabs.Tab | undefined,
+): Promise<ActionResult<'SWITCH_WORKSPACE'>> {
+	const store = await getStore();
+	if (!store.settings.sessionsEnabled) {
+		return sessionsDisabled();
+	}
+
+	if (!findGroup(store, groupId)) {
+		return {ok: false, error: 'That saved session no longer exists.'};
+	}
+
+	const windowId = await currentWindowId(senderTab);
+	if (!isInteger(windowId)) {
+		return {ok: false, error: 'Open a browser window before switching.'};
+	}
+
+	const outgoing = new Map(
+		(await chrome.tabs.query({windowId}))
+			.filter(
+				(tab) =>
+					isInteger(tab.id) &&
+					isCapturable(tab, store.settings) &&
+					(!tab.pinned || store.settings.includePinnedTabs),
+			)
+			.map((tab) => [tab.id!, normalizeUrl(tab.url)] as const),
+	);
+	let saved = 0;
+	let savedGroupId: string | null = null;
+	if (outgoing.size > 0) {
+		const save = await saveTabs('window', senderTab, DEFAULT_FOLDER_ID, {
+			tabIds: [...outgoing.keys()],
+			keepTabsOpen: true,
+		});
+		if (!save.ok) {
+			return save;
+		}
+
+		saved = save.count;
+		savedGroupId = save.groupId;
+	}
+
+	const restore = await restoreGroup(groupId, senderTab, false, {
+		restoreTarget: 'current-window',
+		intoWindowId: windowId,
+	});
+	if (!restore.ok) {
+		return {
+			ok: false,
+			error: saved
+				? `Saved the current tabs, but ${restore.error.charAt(0).toLowerCase()}${restore.error.slice(1)} They stay open.`
+				: restore.error,
+		};
+	}
+
+	let closed = 0;
+	if (outgoing.size > 0) {
+		const closeIds = (await chrome.tabs.query({windowId}))
+			.filter(
+				(tab) =>
+					isInteger(tab.id) &&
+					outgoing.get(tab.id) === normalizeUrl(tab.url) &&
+					(!tab.pinned || store.settings.includePinnedTabs),
+			)
+			.map((tab) => tab.id!);
+		try {
+			await chrome.tabs.remove(closeIds);
+			closed = closeIds.length;
+		} catch {
+			/*
+			A tab can close while the switch is being completed.
+			*/
+		}
+	}
+
+	return {...restore, saved, savedGroupId, closed};
 }
 
 async function deleteGroup(
@@ -3194,6 +3309,40 @@ async function updateGroup(
 		group.updatedAt = Date.now();
 		await writeStore(store);
 		return {ok: true, group};
+	});
+}
+
+/**
+Moves sessions that were not opened (or saved or edited) in the last `autoArchiveDays` days into the "Archived" folder. Nothing is deleted.
+*/
+function archiveStaleSessions(): Promise<void> {
+	return mutate(async () => {
+		const store = await getStore();
+		const {autoArchiveDays} = store.settings;
+		if (!store.settings.sessionsEnabled || autoArchiveDays === 0) {
+			return;
+		}
+
+		const cutoff = Date.now() - autoArchiveDays * 86_400_000;
+		const archivedId = store.folders.find(
+			(folder) => folder.name === ARCHIVED_FOLDER_NAME,
+		)?.id;
+		const stale = store.groups.filter(
+			(group) =>
+				group.folderId !== archivedId &&
+				Math.max(group.lastOpenedAt ?? 0, group.updatedAt, group.createdAt) <
+					cutoff,
+		);
+		if (stale.length === 0 || (!archivedId && store.folders.length >= 200)) {
+			return;
+		}
+
+		const archived = findOrAddArchivedFolder(store.folders);
+		for (const group of stale) {
+			group.folderId = archived.id;
+		}
+
+		await writeStore(store);
 	});
 }
 
@@ -5092,7 +5241,8 @@ async function updateSettings(
 			previousSettings.snapshotsEnabled !== store.settings.snapshotsEnabled ||
 			previousSettings.snapshotIntervalMinutes !==
 				store.settings.snapshotIntervalMinutes ||
-			previousSettings.autoBackup !== store.settings.autoBackup
+			previousSettings.autoBackup !== store.settings.autoBackup ||
+			previousSettings.autoArchiveDays !== store.settings.autoArchiveDays
 		) {
 			await syncRecoveryAlarms(store.settings);
 			if (
@@ -5288,6 +5438,7 @@ const ALREADY_OPEN_RATIO = 0.8;
 const ALARM_SNAPSHOT = 'tablodge-snapshot';
 const ALARM_BACKUP = 'tablodge-backup';
 const ALARM_TRASH = 'tablodge-trash';
+const ALARM_ARCHIVE = 'tablodge-archive';
 // Mirrors BACKUP_FORMAT_ID and BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
 const BACKUP_FORMAT_ID = 'tablodge-backup';
 const BACKUP_VERSION = 1;
@@ -7476,6 +7627,11 @@ async function syncRecoveryAlarms(settings: Settings) {
 		1,
 	);
 	await ensureAlarm(ALARM_TRASH, 1440, 5);
+	await ensureAlarm(
+		ALARM_ARCHIVE,
+		settings.autoArchiveDays === 0 ? null : 1440,
+		5,
+	);
 }
 
 /**
@@ -7488,6 +7644,7 @@ async function runStartupRecovery() {
 		await syncRecoveryAlarms(settings);
 		await purgeTrash();
 		await purgeUndo();
+		await archiveStaleSessions();
 		if (await backupDue(settings)) {
 			await runScheduledBackup();
 		}
@@ -7512,7 +7669,9 @@ chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 					? purgeTrash()
 					: alarm.name === ALARM_UNDO
 						? purgeUndo()
-						: undefined;
+						: alarm.name === ALARM_ARCHIVE
+							? archiveStaleSessions()
+							: undefined;
 	void work?.catch(() => undefined);
 });
 
@@ -7610,6 +7769,10 @@ async function handleMessage(
 				},
 			);
 			return result;
+		}
+
+		case 'SWITCH_WORKSPACE': {
+			return switchWorkspace(message.groupId, sender.tab);
 		}
 
 		case 'DELETE_GROUP': {
