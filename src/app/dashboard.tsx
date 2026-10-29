@@ -1330,7 +1330,6 @@ export function SessionManager({
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
 	return (
 		<div
-			data-brand="tablodge"
 			className={
 				embedded
 					? 'w-full space-y-6'

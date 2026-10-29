@@ -81,7 +81,7 @@ function AddBookmarkPrompt() {
 	}
 
 	return (
-		<main data-brand="tablodge" className="min-h-screen bg-background">
+		<main className="min-h-screen bg-background">
 			<form className="flex flex-col gap-4 p-5" onSubmit={(e) => void save(e)}>
 				<div>
 					<h1 className="text-base font-semibold">Bookmark this page</h1>

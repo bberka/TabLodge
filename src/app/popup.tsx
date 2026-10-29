@@ -362,12 +362,7 @@ function Popup() {
 	// popup has a fixed size: a stable header and footer with the body scrolling in between.
 	// Until the saved state arrives only the fixed-size frame renders, so the popup neither flashes text nor resizes.
 	if (!state && !error) {
-		return (
-			<main
-				data-brand="tablodge"
-				className="h-[560px] w-[380px] bg-background"
-			/>
-		);
+		return <main className="h-[560px] w-[380px] bg-background" />;
 	}
 
 	const stats = [
@@ -396,10 +391,7 @@ function Popup() {
 			: []),
 	];
 	return (
-		<main
-			data-brand="tablodge"
-			className="flex h-[560px] w-[380px] flex-col overflow-hidden bg-background text-foreground"
-		>
+		<main className="flex h-[560px] w-[380px] flex-col overflow-hidden bg-background text-foreground">
 			<header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
 				<h1 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
 					<span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
