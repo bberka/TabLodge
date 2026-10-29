@@ -55,6 +55,7 @@ import {
 } from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
+import {radioTargetIndex} from '../shared/radio-keys';
 import {
 	EmptyState,
 	LoadError,
@@ -1744,14 +1745,30 @@ function Options() {
 								className="flex flex-wrap gap-2"
 								role="radiogroup"
 								aria-label="Appearance"
+								onKeyDown={(event) => {
+									const buttons = [
+										...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+											'[role="radio"]',
+										),
+									];
+									const next = radioTargetIndex(
+										event.key,
+										buttons.indexOf(
+											document.activeElement as HTMLButtonElement,
+										),
+										buttons.length,
+									);
+									if (next === null) {
+										return;
+									}
+
+									// Arrow keys select as they move, as native radio buttons do.
+									event.preventDefault();
+									buttons[next].focus();
+									buttons[next].click();
+								}}
 							>
-								{(
-									[
-										['system', Laptop, 'System'],
-										['light', Sun, 'Light'],
-										['dark', Moon, 'Dark'],
-									] as const
-								).map(([value, Icon, label]) => (
+								{APPEARANCE_CHOICES.map(([value, Icon, label]) => (
 									<Button
 										key={value}
 										type="button"
@@ -1759,6 +1776,7 @@ function Options() {
 										size="sm"
 										role="radio"
 										aria-checked={theme === value}
+										tabIndex={theme === value ? 0 : -1}
 										onClick={async () => {
 											try {
 												await setTheme(value);
@@ -2845,6 +2863,12 @@ function DataRow({
 		</div>
 	);
 }
+
+const APPEARANCE_CHOICES = [
+	['system', Laptop, 'System'],
+	['light', Sun, 'Light'],
+	['dark', Moon, 'Dark'],
+] as const;
 
 function PageTop() {
 	return <AppHeader active="settings" />;

@@ -22,6 +22,20 @@ For code locations and how the pieces fit together, see the [project structure](
 - Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker. Both use the manifest's `short_name`. Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
 - External links should use `target="_blank" rel="noopener noreferrer"`.
 
+## Accessibility
+
+TabLodge is used by keyboard and with screen readers, so every UI change meets [WCAG 2.2 AA](https://www.w3.org/TR/WCAG22/) for what it touches. Check these before you write the UI, not after:
+
+- **Everything works from the keyboard.** Anything done by dragging, hovering, or right-clicking has a keyboard alternative. Reordering sessions, bookmark columns, and bookmarks is available as **Move up**, **Move down**, **Move left**, and **Move right** in their menus. Keep drag as well; do not replace it.
+- **Use the native element or the Radix primitive.** A `button` for actions, an `a` for navigation, Radix for dialogs, menus, selects, and tooltips. If you build a custom control, follow its [WAI-ARIA pattern](https://www.w3.org/WAI/ARIA/apg/patterns/): roles, states, and keys. A radio group, for example, has one tab stop and uses arrow keys (see `src/shared/radio-keys.ts`).
+- **Name and state.** Icon only buttons have an `aria-label` that includes what they act on. Toggles expose `aria-expanded`, `aria-pressed`, `aria-checked`, or `aria-current`. Decorative icons and duplicate images are `aria-hidden`.
+- **Focus.** Focus is visible, follows reading order, and never ends up on the page body. After an action that removes or moves the focused element, put focus somewhere sensible: `src/shared/focus-rescue.ts` covers removal, and `focusAfterMove` in `src/app/reorder.ts` covers moving. Dialogs and menus return focus to what opened them.
+- **Announce results.** Success, errors, empty search results, and changes with no visible focus move go through `showStatus` so a screen reader hears them. Do not rely on color, position, or animation alone.
+- **Targets and contrast.** Interactive targets are at least 24 by 24 CSS pixels, or have enough spacing. Text and controls meet contrast in both themes. Respect reduced motion.
+- **Pages with the shared header** get the skip link from `AppHeader`. A new page with its own navigation adds one.
+
+Run `vp run build` and then `vp run a11y`. It runs axe-core on every extension page in both themes and exercises the keyboard workflows above. Add a check to `scripts/a11y-check.ts` when you add a workflow that needs the keyboard. Automated checks cannot judge reading order, announcements, or whether a workflow makes sense, so also use the feature with the keyboard alone and with a screen reader (for example NVDA or Orca in Chrome) and write down the browser, the assistive technology, what you tested, and what is left in the pull request.
+
 ## Writing documentation
 
 Use plain language, short paragraphs, and direct instructions. Describe what a person can do and what to expect, rather than listing implementation terms without context.
@@ -34,7 +48,7 @@ Keep each topic in one main place and link to it from elsewhere. Remove obsolete
 
 The worker tests run `extension/service-worker.ts` in a Node VM with mocked browser APIs. Add regression tests for bug fixes and cover behavior changes in the relevant suite. Extend the mock when you use another browser API. Pure helpers should have direct unit tests.
 
-Mocks can't catch everything. For runtime changes, follow [Agent validation and PR gate](agent-validation.md) to load the build in the dev browser, exercise the affected workflow, and record evidence. For UI changes, check keyboard use and both themes.
+Mocks can't catch everything. For runtime changes, follow [Agent validation and PR gate](agent-validation.md) to load the build in the dev browser, exercise the affected workflow, and record evidence. For UI changes, check keyboard use and both themes, and run `vp run a11y` (see [Accessibility](#accessibility)).
 
 Before opening a pull request, follow [Agent validation and PR gate](agent-validation.md) and run:
 

@@ -38,6 +38,7 @@
 		"lint:fix": "xo --fix",
 		"format": "xo --fix",
 		"check": "xo && tsc -b && vp test run",
+		"a11y": "node scripts/a11y-check.ts",
 		"clean": "node --eval \"for (const dir of ['dist', 'node_modules/.tmp']) require('node:fs').rmSync(dir, { recursive: true, force: true })\""
 	},
 	"keywords": [
@@ -75,6 +76,7 @@
 		"@types/react": "^19.3.0",
 		"@types/react-dom": "^19.3.0",
 		"@vitejs/plugin-react": "^6.1.2",
+		"axe-core": "^4.14.0",
 		"eslint-config-xo-react": "^0.32.0",
 		"playwright": "^1.64.1",
 		"tailwindcss": "3.4.17",
