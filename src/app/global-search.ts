@@ -131,14 +131,12 @@ export type FinderSources = {
 	columns: readonly BookmarkColumn[];
 	tabs: readonly OpenTabInfo[];
 	commands: readonly FinderCommand[];
-	bookmarksEnabled?: boolean;
-	sessionsEnabled?: boolean;
 };
 
 const UNFILED = 'bookmark-unfiled';
 
 /**
-Everything the finder can find, in a flat list. Disabled systems (sessions, bookmarks) contribute nothing.
+Everything the finder can find, in a flat list.
 */
 export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 	const items: FinderItem[] = [];
@@ -173,38 +171,34 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 		);
 	}
 
-	if (sources.bookmarksEnabled !== false) {
+	items.push(
+		...cachedBookmarkItems(sources.bookmarks, sources.columns, columnName),
+	);
+	for (const column of sources.columns) {
 		items.push(
-			...cachedBookmarkItems(sources.bookmarks, sources.columns, columnName),
+			prepared({
+				id: `column:${column.id}`,
+				kind: 'column',
+				title: column.name,
+				texts: [column.name],
+				ref: column.id,
+			}),
 		);
-		for (const column of sources.columns) {
-			items.push(
-				prepared({
-					id: `column:${column.id}`,
-					kind: 'column',
-					title: column.name,
-					texts: [column.name],
-					ref: column.id,
-				}),
-			);
-		}
 	}
 
-	if (sources.sessionsEnabled !== false) {
-		for (const folder of sources.folders) {
-			items.push(
-				prepared({
-					id: `folder:${folder.id}`,
-					kind: 'folder',
-					title: folder.name,
-					texts: [folder.name],
-					ref: folder.id,
-				}),
-			);
-		}
-
-		items.push(...cachedSessionItems(sources.groups));
+	for (const folder of sources.folders) {
+		items.push(
+			prepared({
+				id: `folder:${folder.id}`,
+				kind: 'folder',
+				title: folder.name,
+				texts: [folder.name],
+				ref: folder.id,
+			}),
+		);
 	}
+
+	items.push(...cachedSessionItems(sources.groups));
 
 	return items;
 }

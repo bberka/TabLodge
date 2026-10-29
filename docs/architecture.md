@@ -36,8 +36,6 @@ The installation path matters too. An unpacked extension gets its ID from the fo
 
 Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state`. The current schema is version 8. Older data is normalized on load. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library.
 
-Sessions and bookmarks can be disabled separately without deleting data. Both the UI and worker reject mutations for a disabled system. At least one must stay enabled.
-
 ## Recovery
 
 Worker recovery code lives in `extension/service-worker.ts`; the UI lives in `src/app/recovery.tsx`.

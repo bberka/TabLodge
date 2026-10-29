@@ -306,11 +306,7 @@ function SidePanel() {
 		[bookmarks, sessions],
 	);
 	const columns = state?.bookmarkColumns;
-	const bookmarksEnabled = settings?.bookmarksEnabled !== false;
-	const sessionsEnabled = settings?.sessionsEnabled !== false;
-	// Until a tab is picked, open the first system that is turned on.
-	const panel: PanelTab =
-		chosenPanel ?? (bookmarksEnabled ? 'bookmarks' : 'sessions');
+	const panel: PanelTab = chosenPanel ?? 'bookmarks';
 
 	const bookmarkGroups = useMemo(() => {
 		const known = new Set(columns?.map((column) => column.id));
@@ -603,7 +599,6 @@ function SidePanel() {
 				id: 'save',
 				label: 'Save this tab',
 				icon: Save,
-				hidden: !sessionsEnabled,
 				onSelect: () => void saveTabs({tabIds: [id]}, 'Tab saved.'),
 			},
 			{
@@ -837,136 +832,120 @@ function SidePanel() {
 					className="space-y-2 pt-1"
 				>
 					{panel === 'bookmarks' &&
-						(bookmarksEnabled ? (
-							bookmarkGroups.length === 0 ? (
-								<EmptyState
-									icon={Bookmark}
-									title={search ? 'No bookmarks match' : 'No bookmarks yet'}
-								>
-									{search ? (
-										'Try another title or address.'
-									) : (
-										<a
-											className="font-semibold text-primary hover:underline"
-											href="newtab.html#bookmark-library"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Add bookmarks in {PROJECT.name}
-										</a>
-									)}
-								</EmptyState>
-							) : (
-								bookmarkGroups.slice(0, sectionLimit).map((column) => (
-									<Collapsible
-										key={column.id}
-										title={column.name}
-										count={column.items.length}
-										open={Boolean(search) || !closed.has(column.id)}
-										onToggle={() => toggle(closed, column.id, setClosed)}
+						(bookmarkGroups.length === 0 ? (
+							<EmptyState
+								icon={Bookmark}
+								title={search ? 'No bookmarks match' : 'No bookmarks yet'}
+							>
+								{search ? (
+									'Try another title or address.'
+								) : (
+									<a
+										className="font-semibold text-primary hover:underline"
+										href="newtab.html#bookmark-library"
+										target="_blank"
+										rel="noopener noreferrer"
 									>
-										{(limit) =>
-											column.items
-												.slice(0, limit)
-												.map((bookmark) => (
-													<div key={bookmark.id}>
-														{linkRow(bookmark.url, bookmark.title, 'bookmark')}
-													</div>
-												))
-										}
-									</Collapsible>
-								))
-							)
+										Add bookmarks in {PROJECT.name}
+									</a>
+								)}
+							</EmptyState>
 						) : (
-							<Note>
-								Bookmarks are disabled in Settings. Your saved links remain
-								stored.
-							</Note>
+							bookmarkGroups.slice(0, sectionLimit).map((column) => (
+								<Collapsible
+									key={column.id}
+									title={column.name}
+									count={column.items.length}
+									open={Boolean(search) || !closed.has(column.id)}
+									onToggle={() => toggle(closed, column.id, setClosed)}
+								>
+									{(limit) =>
+										column.items
+											.slice(0, limit)
+											.map((bookmark) => (
+												<div key={bookmark.id}>
+													{linkRow(bookmark.url, bookmark.title, 'bookmark')}
+												</div>
+											))
+									}
+								</Collapsible>
+							))
 						))}
 
 					{panel === 'sessions' &&
-						(sessionsEnabled ? (
-							visibleSessions.length === 0 ? (
-								<EmptyState
-									icon={Layers}
-									title={search ? 'No sessions match' : 'No sessions yet'}
-								>
-									{search
-										? 'Try another session name, title or address.'
-										: 'Save the tabs in this window from the Tabs section.'}
-								</EmptyState>
-							) : (
-								visibleSessions
-									.slice(0, sectionLimit)
-									.map(({session, tabs}) => (
-										<Collapsible
-											key={session.id}
-											title={session.name}
-											count={tabs.length}
-											open={
-												Boolean(search) ||
-												(settings?.expandSessionsByDefault === true
-													? !closed.has(session.id)
-													: opened.has(session.id))
-											}
-											extra={
-												<>
-													<IconTooltip
-														label={
-															canSwitch
-																? `Switch to ${session.name}`
-																: 'Switch is off: this window has no tabs to save.'
-														}
-													>
-														<span>
-															<Button
-																variant="ghost"
-																size="icon"
-																className="h-7 w-7 shrink-0"
-																disabled={!canSwitch}
-																aria-label={`Switch to ${session.name || 'untitled session'}`}
-																onClick={() => void switchToSession(session)}
-															>
-																<ArrowLeftRight className="h-4 w-4" />
-															</Button>
-														</span>
-													</IconTooltip>
-													<IconTooltip label={`Restore ${session.name}`}>
-														<Button
-															variant="ghost"
-															size="icon"
-															className="h-7 w-7 shrink-0"
-															aria-label={`Restore ${session.name || 'untitled session'}`}
-															onClick={() => void restoreSession(session)}
-														>
-															<RotateCcw className="h-4 w-4" />
-														</Button>
-													</IconTooltip>
-												</>
-											}
-											onToggle={() =>
-												settings?.expandSessionsByDefault === true
-													? toggle(closed, session.id, setClosed)
-													: toggle(opened, session.id, setOpened)
-											}
-										>
-											{(limit) =>
-												tabs
-													.slice(0, limit)
-													.map((tab) => (
-														<div key={tab.id}>
-															{linkRow(tab.url, tab.title, 'session')}
-														</div>
-													))
-											}
-										</Collapsible>
-									))
-							)
+						(visibleSessions.length === 0 ? (
+							<EmptyState
+								icon={Layers}
+								title={search ? 'No sessions match' : 'No sessions yet'}
+							>
+								{search
+									? 'Try another session name, title or address.'
+									: 'Save the tabs in this window from the Tabs section.'}
+							</EmptyState>
 						) : (
-							<Note>
-								Sessions are disabled in Settings. Your saved sessions remain
-								stored.
-							</Note>
+							visibleSessions.slice(0, sectionLimit).map(({session, tabs}) => (
+								<Collapsible
+									key={session.id}
+									title={session.name}
+									count={tabs.length}
+									open={
+										Boolean(search) ||
+										(settings?.expandSessionsByDefault === true
+											? !closed.has(session.id)
+											: opened.has(session.id))
+									}
+									extra={
+										<>
+											<IconTooltip
+												label={
+													canSwitch
+														? `Switch to ${session.name}`
+														: 'Switch is off: this window has no tabs to save.'
+												}
+											>
+												<span>
+													<Button
+														variant="ghost"
+														size="icon"
+														className="h-7 w-7 shrink-0"
+														disabled={!canSwitch}
+														aria-label={`Switch to ${session.name || 'untitled session'}`}
+														onClick={() => void switchToSession(session)}
+													>
+														<ArrowLeftRight className="h-4 w-4" />
+													</Button>
+												</span>
+											</IconTooltip>
+											<IconTooltip label={`Restore ${session.name}`}>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-7 w-7 shrink-0"
+													aria-label={`Restore ${session.name || 'untitled session'}`}
+													onClick={() => void restoreSession(session)}
+												>
+													<RotateCcw className="h-4 w-4" />
+												</Button>
+											</IconTooltip>
+										</>
+									}
+									onToggle={() =>
+										settings?.expandSessionsByDefault === true
+											? toggle(closed, session.id, setClosed)
+											: toggle(opened, session.id, setOpened)
+									}
+								>
+									{(limit) =>
+										tabs
+											.slice(0, limit)
+											.map((tab) => (
+												<div key={tab.id}>
+													{linkRow(tab.url, tab.title, 'session')}
+												</div>
+											))
+									}
+								</Collapsible>
+							))
 						))}
 
 					{panel === 'tabs' &&
@@ -990,7 +969,7 @@ function SidePanel() {
 					)}
 				</div>
 			</ScrollArea>
-			{panel === 'tabs' && sessionsEnabled && (
+			{panel === 'tabs' && (
 				<div className="flex shrink-0 gap-2 border-t border-border px-3 py-2">
 					<Button
 						variant="outline"
@@ -1033,14 +1012,6 @@ function SidePanel() {
 				onChanged={reload}
 			/>
 		</main>
-	);
-}
-
-function Note({children}: {children: ReactNode}) {
-	return (
-		<div className="rounded-lg border border-border bg-muted p-3 text-xs text-muted-foreground">
-			{children}
-		</div>
 	);
 }
 

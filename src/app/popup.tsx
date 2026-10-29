@@ -114,8 +114,6 @@ function Popup() {
 		() => groups.reduce((sum, group) => sum + (group.tabs?.length || 0), 0),
 		[groups],
 	);
-	const sessionsEnabled = state?.settings?.sessionsEnabled !== false;
-	const bookmarksEnabled = state?.settings?.bookmarksEnabled !== false;
 	const includePinnedTabs =
 		state?.settings?.includePinnedTabs === true || allowPinnedOnce;
 	const tabSelection = useTabSelection(
@@ -388,29 +386,21 @@ function Popup() {
 	}
 
 	const stats = [
-		...(sessionsEnabled
-			? [
-					{
-						icon: PanelsTopLeft,
-						count: groups.length,
-						label: groups.length === 1 ? 'session' : 'sessions',
-					},
-					{
-						icon: AppWindow,
-						count: tabCount,
-						label: tabCount === 1 ? 'tab' : 'tabs',
-					},
-				]
-			: []),
-		...(bookmarksEnabled
-			? [
-					{
-						icon: Bookmark,
-						count: state?.bookmarks?.length || 0,
-						label: state?.bookmarks?.length === 1 ? 'bookmark' : 'bookmarks',
-					},
-				]
-			: []),
+		{
+			icon: PanelsTopLeft,
+			count: groups.length,
+			label: groups.length === 1 ? 'session' : 'sessions',
+		},
+		{
+			icon: AppWindow,
+			count: tabCount,
+			label: tabCount === 1 ? 'tab' : 'tabs',
+		},
+		{
+			icon: Bookmark,
+			count: state?.bookmarks?.length || 0,
+			label: state?.bookmarks?.length === 1 ? 'bookmark' : 'bookmarks',
+		},
 	];
 	return (
 		<main className="flex h-[560px] w-[380px] flex-col overflow-hidden bg-background text-foreground">
@@ -498,181 +488,175 @@ function Popup() {
 					</dl>
 				)}
 				<div className="space-y-2">
-					{bookmarksEnabled && (
+					<Button
+						size="sm"
+						className="w-full justify-start gap-3 px-3"
+						variant="outline"
+						disabled={busy !== ''}
+						onClick={startBookmark}
+					>
+						{busy === 'bookmark-current' ? (
+							<LoaderCircle className="h-4 w-4 animate-spin" />
+						) : (
+							<BookmarkPlus className="h-4 w-4" />
+						)}{' '}
+						Bookmark this page
+					</Button>
+					<Button
+						className="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left"
+						variant="default"
+						disabled={busy !== ''}
+						onClick={() => save('selected-or-window')}
+					>
+						{busy === 'selected-or-window' ? (
+							<LoaderCircle className="h-4 w-4 animate-spin" />
+						) : (
+							<PanelsTopLeft className="h-4 w-4" />
+						)}
+						<span className="flex flex-col items-start gap-0.5 leading-tight">
+							<strong className="font-semibold">
+								{tabSelection.selected
+									? saveWindowLabel(tabSelection)
+									: 'Save current window'}
+							</strong>
+							<small className="text-xs font-normal opacity-90">
+								{tabSelection.selected
+									? 'Only the tabs selected in the tab strip'
+									: 'All tabs in this window'}
+							</small>
+						</span>
+					</Button>
+					{tabSelection.selected && (
 						<Button
 							size="sm"
-							className="w-full justify-start gap-3 px-3"
 							variant="outline"
+							className="w-full justify-start gap-3 px-3"
 							disabled={busy !== ''}
-							onClick={startBookmark}
+							onClick={() => save('window')}
 						>
-							{busy === 'bookmark-current' ? (
-								<LoaderCircle className="h-4 w-4 animate-spin" />
-							) : (
-								<BookmarkPlus className="h-4 w-4" />
-							)}{' '}
-							Bookmark this page
+							<Layers2 className="h-4 w-4" />
+							Save whole window
 						</Button>
 					)}
-					{sessionsEnabled && (
-						<>
-							<Button
-								className="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left"
-								variant="default"
-								disabled={busy !== ''}
-								onClick={() => save('selected-or-window')}
+					<Button
+						size="sm"
+						variant="outline"
+						className="w-full justify-start gap-3 px-3"
+						disabled={busy !== ''}
+						onClick={() => save('all-windows')}
+					>
+						<PanelsTopLeft className="h-4 w-4" />
+						Save tabs in all windows
+					</Button>
+					{!state?.settings?.includePinnedTabs && (
+						<div className="flex h-8 items-center justify-between gap-3 rounded-md border border-dashed border-border px-3">
+							<Label
+								htmlFor="popup-include-pinned"
+								className="flex min-w-0 cursor-pointer items-center gap-3 text-xs font-medium text-muted-foreground"
 							>
-								{busy === 'selected-or-window' ? (
+								<Pin className="h-4 w-4 shrink-0" aria-hidden="true" />
+								Include pinned tabs in this save
+							</Label>
+							<Switch
+								id="popup-include-pinned"
+								checked={allowPinnedOnce}
+								onCheckedChange={setAllowPinnedOnce}
+							/>
+						</div>
+					)}
+					<Button
+						size="sm"
+						variant="ghost"
+						className="w-full justify-between px-3"
+						aria-expanded={chooseOpen}
+						onClick={() => setChooseOpen((value) => !value)}
+					>
+						<span className="flex items-center gap-3">
+							<Layers2 className="h-4 w-4" />
+							Choose tabs and title
+						</span>
+						{chooseOpen ? (
+							<ChevronUp className="h-4 w-4" />
+						) : (
+							<ChevronDown className="h-4 w-4" />
+						)}
+					</Button>
+					{chooseOpen && (
+						<section
+							className="rounded-md border border-border bg-card p-3"
+							aria-label="Choose tabs to save"
+						>
+							<div className="mb-3 space-y-1.5">
+								<Label htmlFor="quick-session-title">Session title</Label>
+								<Input
+									id="quick-session-title"
+									value={groupName}
+									maxLength={120}
+									placeholder="Saved session"
+									onChange={(event) => setGroupName(event.target.value)}
+								/>
+							</div>
+							<p className="mb-2 text-xs text-muted-foreground">
+								Select the tabs to include
+								{includePinnedTabs
+									? '.'
+									: '. Pinned tabs are ignored; enable them in Settings to include them.'}
+							</p>
+							<ScrollArea
+								className="flex max-h-44 flex-col"
+								viewportClassName="min-h-0"
+							>
+								<ul className="space-y-1 pr-2">
+									{eligibleTabs.map((tab) => (
+										<li key={tab.id}>
+											<label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent">
+												<Checkbox
+													checked={selectedIds.includes(tab.id)}
+													aria-label={`Include ${tab.title || tab.url}`}
+													onCheckedChange={(checked) =>
+														toggleTab(tab.id, checked === true)
+													}
+												/>
+												<span className="min-w-0 flex-1">
+													<span className="block truncate font-medium text-foreground">
+														{tab.title || tab.url}
+													</span>
+													<span className="block truncate text-muted-foreground">
+														{new URL(tab.url).hostname}
+														{tab.pinned ? ' · pinned' : ''}
+														{(tab.splitViewId ?? -1) >= 0
+															? ' · split view'
+															: ''}
+													</span>
+												</span>
+											</label>
+										</li>
+									))}
+									{eligibleTabs.length === 0 && (
+										<li className="px-2 py-4 text-center text-xs text-muted-foreground">
+											No web tabs are available in this window.
+										</li>
+									)}
+								</ul>
+							</ScrollArea>
+							<Button
+								size="sm"
+								className="mt-3 w-full"
+								disabled={busy !== '' || selectedIds.length === 0}
+								onClick={() =>
+									save('selected', {tabIds: selectedIds, groupName})
+								}
+							>
+								{busy === 'selected' ? (
 									<LoaderCircle className="h-4 w-4 animate-spin" />
-								) : (
-									<PanelsTopLeft className="h-4 w-4" />
-								)}
-								<span className="flex flex-col items-start gap-0.5 leading-tight">
-									<strong className="font-semibold">
-										{tabSelection.selected
-											? saveWindowLabel(tabSelection)
-											: 'Save current window'}
-									</strong>
-									<small className="text-xs font-normal opacity-90">
-										{tabSelection.selected
-											? 'Only the tabs selected in the tab strip'
-											: 'All tabs in this window'}
-									</small>
-								</span>
+								) : null}
+								Save {selectedIds.length} selected{' '}
+								{selectedIds.length === 1 ? 'tab' : 'tabs'}
 							</Button>
-							{tabSelection.selected && (
-								<Button
-									size="sm"
-									variant="outline"
-									className="w-full justify-start gap-3 px-3"
-									disabled={busy !== ''}
-									onClick={() => save('window')}
-								>
-									<Layers2 className="h-4 w-4" />
-									Save whole window
-								</Button>
-							)}
-							<Button
-								size="sm"
-								variant="outline"
-								className="w-full justify-start gap-3 px-3"
-								disabled={busy !== ''}
-								onClick={() => save('all-windows')}
-							>
-								<PanelsTopLeft className="h-4 w-4" />
-								Save tabs in all windows
-							</Button>
-							{!state?.settings?.includePinnedTabs && (
-								<div className="flex h-8 items-center justify-between gap-3 rounded-md border border-dashed border-border px-3">
-									<Label
-										htmlFor="popup-include-pinned"
-										className="flex min-w-0 cursor-pointer items-center gap-3 text-xs font-medium text-muted-foreground"
-									>
-										<Pin className="h-4 w-4 shrink-0" aria-hidden="true" />
-										Include pinned tabs in this save
-									</Label>
-									<Switch
-										id="popup-include-pinned"
-										checked={allowPinnedOnce}
-										onCheckedChange={setAllowPinnedOnce}
-									/>
-								</div>
-							)}
-							<Button
-								size="sm"
-								variant="ghost"
-								className="w-full justify-between px-3"
-								aria-expanded={chooseOpen}
-								onClick={() => setChooseOpen((value) => !value)}
-							>
-								<span className="flex items-center gap-3">
-									<Layers2 className="h-4 w-4" />
-									Choose tabs and title
-								</span>
-								{chooseOpen ? (
-									<ChevronUp className="h-4 w-4" />
-								) : (
-									<ChevronDown className="h-4 w-4" />
-								)}
-							</Button>
-							{chooseOpen && (
-								<section
-									className="rounded-md border border-border bg-card p-3"
-									aria-label="Choose tabs to save"
-								>
-									<div className="mb-3 space-y-1.5">
-										<Label htmlFor="quick-session-title">Session title</Label>
-										<Input
-											id="quick-session-title"
-											value={groupName}
-											maxLength={120}
-											placeholder="Saved session"
-											onChange={(event) => setGroupName(event.target.value)}
-										/>
-									</div>
-									<p className="mb-2 text-xs text-muted-foreground">
-										Select the tabs to include
-										{includePinnedTabs
-											? '.'
-											: '. Pinned tabs are ignored; enable them in Settings to include them.'}
-									</p>
-									<ScrollArea
-										className="flex max-h-44 flex-col"
-										viewportClassName="min-h-0"
-									>
-										<ul className="space-y-1 pr-2">
-											{eligibleTabs.map((tab) => (
-												<li key={tab.id}>
-													<label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent">
-														<Checkbox
-															checked={selectedIds.includes(tab.id)}
-															aria-label={`Include ${tab.title || tab.url}`}
-															onCheckedChange={(checked) =>
-																toggleTab(tab.id, checked === true)
-															}
-														/>
-														<span className="min-w-0 flex-1">
-															<span className="block truncate font-medium text-foreground">
-																{tab.title || tab.url}
-															</span>
-															<span className="block truncate text-muted-foreground">
-																{new URL(tab.url).hostname}
-																{tab.pinned ? ' · pinned' : ''}
-																{(tab.splitViewId ?? -1) >= 0
-																	? ' · split view'
-																	: ''}
-															</span>
-														</span>
-													</label>
-												</li>
-											))}
-											{eligibleTabs.length === 0 && (
-												<li className="px-2 py-4 text-center text-xs text-muted-foreground">
-													No web tabs are available in this window.
-												</li>
-											)}
-										</ul>
-									</ScrollArea>
-									<Button
-										size="sm"
-										className="mt-3 w-full"
-										disabled={busy !== '' || selectedIds.length === 0}
-										onClick={() =>
-											save('selected', {tabIds: selectedIds, groupName})
-										}
-									>
-										{busy === 'selected' ? (
-											<LoaderCircle className="h-4 w-4 animate-spin" />
-										) : null}
-										Save {selectedIds.length} selected{' '}
-										{selectedIds.length === 1 ? 'tab' : 'tabs'}
-									</Button>
-								</section>
-							)}
-						</>
+						</section>
 					)}
 				</div>
-				{sessionsEnabled && recentSessions.length > 0 && (
+				{recentSessions.length > 0 && (
 					<section className="mt-4" aria-label="Recent sessions">
 						<h2 className="mb-1.5 px-1 text-xs font-medium text-muted-foreground">
 							Recent sessions

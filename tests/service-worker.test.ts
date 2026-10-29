@@ -1369,87 +1369,18 @@ test('new tab fallback settings normalize and choose the target', async () => {
 	}
 });
 
-test('settings updates never disable Sessions and Bookmarks together', async () => {
+test('resetting settings restores the defaults', async () => {
 	const harness = createWorkerHarness(stateWithSession());
-	const first = await harness.sendMessage({
+	const changed = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {sessionsEnabled: false},
+		settings: {newTabEnabled: false, includePinnedTabs: true},
 	});
-	assert.equal(first.ok, true);
-	const rejected = await harness.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {bookmarksEnabled: false},
-	});
-	assert.equal(rejected.ok, false);
-	assert.match(rejected.error!, /keep sessions or bookmarks enabled/i);
+	assert.equal(changed.ok, true);
 	const response = await harness.sendMessage({type: 'GET_STATE'});
-	assert.equal(response.settings.sessionsEnabled, false);
-	assert.equal(response.settings.bookmarksEnabled, true);
+	assert.equal(response.settings.newTabEnabled, false);
 	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.sessionsEnabled, true);
-	assert.equal(reset.settings.bookmarksEnabled, true);
 	assert.equal(reset.settings.newTabEnabled, true);
 	assert.equal(reset.settings.includePinnedTabs, false);
-});
-
-test('disabled systems keep their data and reject mutations', async () => {
-	const harness = createWorkerHarness(stateWithSession());
-	harness.state.bookmarks = [
-		{
-			id: 'bookmark-1',
-			title: 'Saved link',
-			url: 'https://link.example/',
-			columnId: 'bookmark-default',
-		},
-	];
-	assert.equal(
-		(
-			await harness.sendMessage({
-				type: 'UPDATE_SETTINGS',
-				settings: {sessionsEnabled: false},
-			})
-		).ok,
-		true,
-	);
-	assert.equal(
-		(await harness.sendMessage({type: 'DELETE_GROUP', groupId: 'session-1'}))
-			.ok,
-		false,
-	);
-	assert.equal(
-		(
-			await harness.sendMessage({
-				type: 'IMPORT_GROUPS',
-				data: [{title: 'New', url: 'https://new.example/'}],
-			})
-		).ok,
-		false,
-	);
-	assert.equal(harness.state.groups.length, 1);
-
-	assert.equal(
-		(
-			await harness.sendMessage({
-				type: 'UPDATE_SETTINGS',
-				settings: {sessionsEnabled: true, bookmarksEnabled: false},
-			})
-		).ok,
-		true,
-	);
-	assert.equal(
-		(
-			await harness.sendMessage({
-				type: 'DELETE_BOOKMARK',
-				bookmarkId: 'bookmark-1',
-			})
-		).ok,
-		false,
-	);
-	assert.equal(
-		(await harness.sendMessage({type: 'IMPORT_BROWSER_BOOKMARKS'})).ok,
-		false,
-	);
-	assert.equal(harness.state.bookmarks.length, 1);
 });
 
 test('browser bookmark import maps folders to ordered columns and skips duplicate URLs', async () => {
@@ -3003,23 +2934,6 @@ test('ERASE_DATA all restores fresh-install data while keeping settings and excl
 	assert.equal(invalid.ok, false);
 });
 
-test('importing sessions with Bookmarks disabled reports a numeric updatedTitles', async () => {
-	const harness = createWorkerHarness(
-		stateWithSession({bookmarksEnabled: false}),
-	);
-	const result = await harness.sendMessage({
-		type: 'IMPORT_GROUPS',
-		data: {
-			groups: [
-				{name: 'Imported', tabs: [{title: 'New', url: 'https://new.example/'}]},
-			],
-		},
-	});
-	assert.equal(result.ok, true, result.error);
-	assert.equal(result.updatedTitles, 0);
-	assert.equal(result.count, 1);
-});
-
 test('null stored settings are treated as defaults', async () => {
 	const harness = createWorkerHarness({
 		...stateWithSession(),
@@ -3027,7 +2941,6 @@ test('null stored settings are treated as defaults', async () => {
 	} as unknown as StoredState);
 	const result = await harness.sendMessage({type: 'GET_STATE'});
 	assert.equal(result.ok, true, result.error);
-	assert.equal(result.settings.sessionsEnabled, true);
 	assert.equal(result.settings.restoreTarget, 'new-window-unless-only-tab');
 	assert.equal(result.groups.length, 1);
 });
@@ -7951,16 +7864,6 @@ test('the bookmark shortcut opens the add-bookmark window for a web page only', 
 	);
 	await settle();
 	assert.equal(internal.windowCreateCalls.length, 0);
-
-	const off = nameHarness({bookmarksEnabled: false}, [
-		webTab(1, 10, 0, {active: true, url: 'https://a.example/', title: 'A'}),
-	]);
-	(off.listeners.onCommand as (c: string, t: unknown) => void)(
-		'bookmark-page',
-		{id: 1, windowId: 10},
-	);
-	await settle();
-	assert.equal(off.windowCreateCalls.length, 0);
 });
 
 test('an all-windows toolbar save asks once for every session it created', async () => {
@@ -8396,12 +8299,4 @@ test('browser bookmark: existing TabLodge bookmarks and a disabled board are ign
 	existing.listeners.bookmarkCreated('b1', starNode());
 	await existing.runTimers();
 	assert.equal(existing.windowCreateCalls.length, 0);
-
-	const disabled = browserBookmarkHarness({
-		browserBookmarkAction: 'ask',
-		bookmarksEnabled: false,
-	});
-	disabled.listeners.bookmarkCreated('b1', starNode());
-	await disabled.runTimers();
-	assert.equal(disabled.windowCreateCalls.length, 0);
 });

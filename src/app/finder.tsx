@@ -184,8 +184,6 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 				columns: state.bookmarkColumns,
 				tabs,
 				commands: actions,
-				bookmarksEnabled: settings.bookmarksEnabled,
-				sessionsEnabled: settings.sessionsEnabled,
 			}),
 		[
 			state.groups,
@@ -194,8 +192,6 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 			state.bookmarkColumns,
 			tabs,
 			actions,
-			settings.bookmarksEnabled,
-			settings.sessionsEnabled,
 		],
 	);
 	// The input stays responsive while a big library is searched: results follow the query when React has time.

@@ -170,14 +170,6 @@ const ARCHIVED_FOLDER_NAME = 'Archived';
 const MAX_SESSIONS = 1000;
 const MAX_TABS_PER_SESSION = 1000;
 const MAX_EXCLUDED_ORIGINS = 500;
-const sessionsDisabled = (): ActionFailure => ({
-	ok: false,
-	error: 'Sessions are disabled in Settings.',
-});
-const bookmarksDisabled = (): ActionFailure => ({
-	ok: false,
-	error: 'Bookmarks are disabled in Settings.',
-});
 const sessionLimitError = () =>
 	`TabLodge keeps up to ${MAX_SESSIONS} sessions. Delete or merge some sessions first.`;
 const sessionFullError = () =>
@@ -211,8 +203,6 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	newTabFallbackUrl: '',
 	autoFocusSearchOnNewTab: false,
 	actionMode: 'popup',
-	sessionsEnabled: true,
-	bookmarksEnabled: true,
 	toolbarOpens: 'popup',
 	excludedOrigins: [],
 	saveDuplicateHandling: 'allow',
@@ -1076,8 +1066,6 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.actionMode
 			: 'popup',
-		sessionsEnabled: raw.sessionsEnabled !== false,
-		bookmarksEnabled: raw.bookmarksEnabled !== false,
 		// `sidePanelEnabled` is the pre-toolbarOpens boolean; honour it for data saved by older builds.
 		toolbarOpens:
 			raw.toolbarOpens === 'sidepanel' ||
@@ -1224,10 +1212,6 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			SESSION_NAME_TEMPLATE_MAX,
 		),
 	};
-	if (!settings.sessionsEnabled && !settings.bookmarksEnabled) {
-		settings.sessionsEnabled = true;
-	}
-
 	return settings;
 }
 
@@ -1971,10 +1955,6 @@ async function saveTabs(
 ): Promise<ActionResult<'SAVE_TABS'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const windowId = await currentWindowId(senderTab);
 		if (!isInteger(windowId)) {
 			return {ok: false, error: 'Open a browser window before saving tabs.'};
@@ -2256,18 +2236,13 @@ const BOOKMARK_PROMPT_HEIGHT = 470;
 
 /**
 The "Bookmark this page" shortcut: reads the active tab of the last-focused normal window (the prompt window takes
-focus afterwards) and opens the small add-bookmark window for it. Pages that cannot be bookmarked, and disabled
-bookmarks, fail without opening anything.
+focus afterwards) and opens the small add-bookmark window for it. Pages that cannot be bookmarked fail
+without opening anything.
 */
 async function openBookmarkPrompt(
 	commandTab?: chrome.tabs.Tab,
 	prefill?: {title?: string; fromBrowser?: boolean},
 ): Promise<MenuOutcome> {
-	const settings = await readSettings();
-	if (!settings.bookmarksEnabled) {
-		return bookmarksDisabled();
-	}
-
 	let tab = commandTab?.url ? commandTab : undefined;
 	let anchor: chrome.windows.Window | undefined;
 	try {
@@ -3007,10 +2982,6 @@ async function restoreTab(
 ): Promise<ActionResult<'RESTORE_TAB'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const group = findGroup(store, groupId);
 		const tab = group?.tabs.find((entry) => entry.id === tabId);
 		if (!group || !tab) {
@@ -3081,10 +3052,6 @@ async function restoreGroup(
 ): Promise<ActionResult<'RESTORE_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const group = findGroup(store, groupId);
 		if (!group) {
 			return {ok: false, error: 'That saved session no longer exists.'};
@@ -3173,10 +3140,6 @@ async function switchWorkspace(
 	senderTab: chrome.tabs.Tab | undefined,
 ): Promise<ActionResult<'SWITCH_WORKSPACE'>> {
 	const store = await getStore();
-	if (!store.settings.sessionsEnabled) {
-		return sessionsDisabled();
-	}
-
 	if (!findGroup(store, groupId)) {
 		return {ok: false, error: 'That saved session no longer exists.'};
 	}
@@ -3252,10 +3215,6 @@ async function deleteGroup(
 ): Promise<ActionResult<'DELETE_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const index = store.groups.findIndex((group) => group.id === groupId);
 		if (index === -1) {
 			return {ok: false, error: 'That saved session no longer exists.'};
@@ -3280,10 +3239,6 @@ async function updateGroup(
 ): Promise<ActionResult<'UPDATE_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const group = findGroup(store, groupId);
 		if (!group) {
 			return {ok: false, error: 'That saved session no longer exists.'};
@@ -3319,7 +3274,7 @@ function archiveStaleSessions(): Promise<void> {
 	return mutate(async () => {
 		const store = await getStore();
 		const {autoArchiveDays} = store.settings;
-		if (!store.settings.sessionsEnabled || autoArchiveDays === 0) {
+		if (autoArchiveDays === 0) {
 			return;
 		}
 
@@ -3351,10 +3306,6 @@ async function setGroupOrder(
 ): Promise<ActionResult<'SET_GROUP_ORDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const byId = new Map(store.groups.map((group) => [group.id, group]));
 		const ids = [
 			...new Set(
@@ -3408,10 +3359,6 @@ async function createFolder(
 ): Promise<ActionResult<'CREATE_FOLDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const folderName = normalizeFolderName(name);
 		if (!folderName || folderName.toLocaleLowerCase() === 'all sessions') {
 			return {ok: false, error: 'Choose a different folder name.'};
@@ -3445,10 +3392,6 @@ async function updateFolder(
 ): Promise<ActionResult<'UPDATE_FOLDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const folder = store.folders.find((entry) => entry.id === folderId);
 		if (!folder) {
 			return {ok: false, error: 'That folder no longer exists.'};
@@ -3493,10 +3436,6 @@ async function deleteFolder(
 	return mutate(() =>
 		withUndo('Delete folder', [STORAGE_KEY], async () => {
 			const store = await getStore();
-			if (!store.settings.sessionsEnabled) {
-				return sessionsDisabled();
-			}
-
 			const folder = store.folders.find((entry) => entry.id === folderId);
 			if (!folder) {
 				return {ok: false, error: 'That folder no longer exists.'};
@@ -3529,10 +3468,6 @@ async function deleteTab(
 ): Promise<ActionResult<'DELETE_TAB'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const group = findGroup(store, groupId);
 		if (!group) {
 			return {ok: false, error: 'That saved session no longer exists.'};
@@ -3579,10 +3514,6 @@ async function mergeGroups(
 	return mutate(() =>
 		withUndo('Merge sessions', [STORAGE_KEY], async () => {
 			const store = await getStore();
-			if (!store.settings.sessionsEnabled) {
-				return sessionsDisabled();
-			}
-
 			const source = findGroup(store, sourceGroupId);
 			const target = findGroup(store, targetGroupId);
 			if (!source || !target || source === target) {
@@ -3641,10 +3572,6 @@ async function addLinksToSession(
 	return mutate(() =>
 		withUndo('Add links to session', [STORAGE_KEY], async () => {
 			const store = await getStore();
-			if (!store.settings.sessionsEnabled) {
-				return sessionsDisabled();
-			}
-
 			const group = findGroup(store, groupId);
 			if (!group) {
 				return {ok: false, error: 'That saved session no longer exists.'};
@@ -3725,10 +3652,6 @@ async function moveTab(
 ): Promise<ActionResult<'MOVE_TAB'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const source = findGroup(store, fromGroupId);
 		const target = findGroup(store, toGroupId);
 		const tab = source?.tabs.find((entry) => entry.id === tabId);
@@ -3834,10 +3757,6 @@ async function updateTab(
 ): Promise<ActionResult<'UPDATE_TAB'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const group = findGroup(store, groupId);
 		const tab = group?.tabs.find((entry) => entry.id === tabId);
 		if (!group || !tab) {
@@ -3938,10 +3857,6 @@ async function addBookmark(
 ): Promise<ActionResult<'ADD_BOOKMARK'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const url = normalizeUrl(fields.url);
 		if (!url) {
 			return {
@@ -3989,10 +3904,6 @@ async function addBookmarks(
 ): Promise<ActionResult<'ADD_BOOKMARKS'>> {
 	const run = async (): Promise<ActionResult<'ADD_BOOKMARKS'>> => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const targetColumnId =
 			store.bookmarkColumns.some((column) => column.id === columnId) ||
 			columnId === BOOKMARK_UNFILED_ID
@@ -4079,10 +3990,6 @@ async function importBrowserBookmarks(
 		return {ok: false, error: 'This browser does not provide bookmark access.'};
 	}
 
-	if (!(await readSettings()).bookmarksEnabled) {
-		return bookmarksDisabled();
-	}
-
 	let tree: chrome.bookmarks.BookmarkTreeNode[];
 	try {
 		tree = await chrome.bookmarks.getTree();
@@ -4098,10 +4005,6 @@ async function importBrowserBookmarks(
 	return mutate(() =>
 		withUndo('Import', [STORAGE_KEY], async () => {
 			const store = await getStore();
-			if (!store.settings.bookmarksEnabled) {
-				return bookmarksDisabled();
-			}
-
 			const treeLinks = (nodes: chrome.bookmarks.BookmarkTreeNode[]): number =>
 				nodes.reduce(
 					(sum, node) =>
@@ -4249,10 +4152,6 @@ async function addExcludedOrigins(
 ): Promise<ActionResult<'ADD_EXCLUDED_ORIGINS'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const hosts = normalizeExcludedOrigins(origins);
 		if (hosts.length === 0) {
 			return {ok: false, error: 'Enter a valid website, such as example.com.'};
@@ -4310,10 +4209,6 @@ async function removeExcludedOrigin(
 ): Promise<ActionResult<'REMOVE_EXCLUDED_ORIGIN'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const normalized = normalizeExcludedOrigins([origin])[0];
 		if (!normalized || !store.settings.excludedOrigins.includes(normalized)) {
 			return {ok: false, error: 'That website is not excluded.'};
@@ -4333,10 +4228,6 @@ async function updateBookmark(
 ): Promise<ActionResult<'UPDATE_BOOKMARK'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const bookmark = findBookmark(store, bookmarkId);
 		if (!bookmark) {
 			return {ok: false, error: 'That bookmark no longer exists.'};
@@ -4377,10 +4268,6 @@ async function deleteBookmark(
 ): Promise<ActionResult<'DELETE_BOOKMARK'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const index = store.bookmarks.findIndex(
 			(bookmark) => bookmark.id === bookmarkId,
 		);
@@ -4417,10 +4304,6 @@ async function createBookmarkColumn(
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const columnName = bookmarkColumnName(name);
 		if (!columnName || columnName.toLocaleLowerCase() === 'all bookmarks') {
 			return {ok: false, error: 'Choose a different column name.'};
@@ -4453,10 +4336,6 @@ async function updateBookmarkColumn(
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const column = store.bookmarkColumns.find((entry) => entry.id === columnId);
 		if (!column) {
 			return {ok: false, error: 'That bookmark column no longer exists.'};
@@ -4497,10 +4376,6 @@ async function deleteBookmarkColumn(
 ): Promise<ActionResult<'DELETE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		if (store.bookmarkColumns.every((entry) => entry.id !== columnId)) {
 			return {ok: false, error: 'That bookmark column no longer exists.'};
 		}
@@ -4610,10 +4485,6 @@ async function reorderBookmarkColumn(
 ): Promise<ActionResult<'REORDER_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const sourceIndex = store.bookmarkColumns.findIndex(
 			(column) => column.id === columnId,
 		);
@@ -4654,10 +4525,6 @@ async function reorderBookmark(
 ): Promise<ActionResult<'REORDER_BOOKMARK'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.bookmarksEnabled) {
-			return bookmarksDisabled();
-		}
-
 		const bookmark = findBookmark(store, bookmarkId);
 		if (!bookmark) {
 			return {ok: false, error: 'That bookmark no longer exists.'};
@@ -5007,26 +4874,13 @@ async function importGroups(
 	return mutate(() =>
 		withUndo('Import', [STORAGE_KEY], async () => {
 			const store = await getStore();
-			const incomingCandidates =
+			const candidates =
 				importMode === 'bookmarks' ? [] : importCandidates(input).slice(0, 500);
-			const candidates = store.settings.sessionsEnabled
-				? incomingCandidates
-				: [];
-			const incomingBookmarkData =
+			const hasBookmarkData =
 				importMode !== 'sessions' &&
 				(Array.isArray(input?.bookmarks) ||
 					Array.isArray(input?.bookmarkColumns));
-			const hasBookmarkData =
-				store.settings.bookmarksEnabled && incomingBookmarkData;
 			if (candidates.length === 0 && !hasBookmarkData) {
-				if (incomingCandidates.length > 0 && !store.settings.sessionsEnabled) {
-					return sessionsDisabled();
-				}
-
-				if (incomingBookmarkData && !store.settings.bookmarksEnabled) {
-					return bookmarksDisabled();
-				}
-
 				return {
 					ok: false,
 					error: `Choose a ${APP_NAME} export or a JSON array of tabs.`,
@@ -5163,15 +5017,15 @@ async function importGroups(
 			}
 
 			const bookmarkResult =
-				store.settings.bookmarksEnabled && importMode !== 'sessions'
-					? await mergeImportedBookmarks(store, input, options)
-					: ({
+				importMode === 'sessions'
+					? ({
 							columnsAdded: 0,
 							columnsReordered: false,
 							bookmarksAdded: 0,
 							bookmarksSkipped: 0,
 							bookmarksUpdated: 0,
-						} satisfies BookmarkMergeResult);
+						} satisfies BookmarkMergeResult)
+					: await mergeImportedBookmarks(store, input, options);
 			const groupCount = imported.reduce(
 				(sum, group) => sum + group.tabs.length,
 				0,
@@ -5223,15 +5077,10 @@ async function updateSettings(
 		const store = await getStore();
 		const previousSettings = store.settings;
 		const requested = {...store.settings, ...patch};
-		if (!requested.sessionsEnabled && !requested.bookmarksEnabled) {
-			return {ok: false, error: 'Keep Sessions or Bookmarks enabled.'};
-		}
-
 		store.settings = normalizeSettings(requested);
 		await writeStore(store);
 		if (
 			previousSettings.actionMode !== store.settings.actionMode ||
-			previousSettings.sessionsEnabled !== store.settings.sessionsEnabled ||
 			previousSettings.toolbarOpens !== store.settings.toolbarOpens
 		) {
 			await syncToolbarAction(store.settings);
@@ -6193,10 +6042,6 @@ async function saveSnapshotAsSession(
 ): Promise<ActionResult<'SAVE_SNAPSHOT_AS_SESSION'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const snapshot = await findSnapshot(id);
 		if (!snapshot) {
 			return {ok: false, error: 'That snapshot no longer exists.'};
@@ -7101,16 +6946,6 @@ function applyTrashRestore(
 	entry: TrashEntry,
 ): ActionFailure | {ok: true; placed: string} {
 	const {data} = entry;
-	const sessionsOff = !store.settings.sessionsEnabled;
-	const bookmarksOff = !store.settings.bookmarksEnabled;
-	if (entry.kind === 'bookmark' || entry.kind === 'column') {
-		if (bookmarksOff) {
-			return bookmarksDisabled();
-		}
-	} else if (sessionsOff) {
-		return sessionsDisabled();
-	}
-
 	if (entry.kind === 'session') {
 		const session = normalizeGroup(data.session, Date.now(), true);
 		if (!session) {
@@ -8131,7 +7966,7 @@ async function syncToolbarAction(settings: Settings) {
 	await chrome.action.setPopup({
 		popup: sidePanelEnabled
 			? ''
-			: !settings.sessionsEnabled || settings.actionMode === 'popup'
+			: settings.actionMode === 'popup'
 				? 'popup.html'
 				: '',
 	});
@@ -8142,10 +7977,6 @@ async function saveCurrentTabToFirstGroup(
 ): Promise<ActionResult<'SAVE_CURRENT_TAB_TO_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const windowId = await currentWindowId(senderTab);
 		if (!isInteger(windowId)) {
 			return {ok: false, error: 'Open a browser window before saving a tab.'};
@@ -8394,8 +8225,6 @@ function contextMenuSignature(settings: Settings, columns: BookmarkColumn[]) {
 		settings.contextMenuPageEnabled,
 		settings.contextMenuSelectionEnabled,
 		settings.contextMenuActionEnabled,
-		settings.sessionsEnabled,
-		settings.bookmarksEnabled,
 		columns.map((column) => [column.id, column.name]),
 	]);
 }
@@ -8454,81 +8283,69 @@ function contextMenuPlan(
 		});
 	};
 
-	if (
-		settings.contextMenuLinksEnabled &&
-		(settings.bookmarksEnabled || settings.sessionsEnabled)
-	) {
+	if (settings.contextMenuLinksEnabled) {
 		const link = {
 			contexts: ['link'],
 			targetUrlPatterns: WEB_URL_PATTERNS,
 		} satisfies Partial<MenuItemProperties>;
-		items.push({id: MENU.linkRoot, title: APP_NAME, ...link});
-		if (settings.bookmarksEnabled) {
-			items.push({
+		items.push(
+			{id: MENU.linkRoot, title: APP_NAME, ...link},
+			{
 				id: MENU.linkBookmark,
 				title: 'Bookmark link to',
 				parentId: MENU.linkRoot,
 				...link,
-			});
-			columnSubmenu(
-				MENU.linkBookmark,
-				LINK_COLUMN_PREFIX,
-				MENU.linkBookmarkNew,
-				link.contexts,
-				{targetUrlPatterns: WEB_URL_PATTERNS},
-			);
-		}
+			},
+		);
+		columnSubmenu(
+			MENU.linkBookmark,
+			LINK_COLUMN_PREFIX,
+			MENU.linkBookmarkNew,
+			link.contexts,
+			{targetUrlPatterns: WEB_URL_PATTERNS},
+		);
 
-		if (settings.sessionsEnabled) {
-			items.push({
-				id: MENU.linkSave,
-				title: 'Save link for later',
-				parentId: MENU.linkRoot,
-				...link,
-			});
-		}
+		items.push({
+			id: MENU.linkSave,
+			title: 'Save link for later',
+			parentId: MENU.linkRoot,
+			...link,
+		});
 	}
 
-	if (
-		settings.contextMenuPageEnabled &&
-		(settings.bookmarksEnabled || settings.sessionsEnabled)
-	) {
+	if (settings.contextMenuPageEnabled) {
 		const page = {
 			contexts: ['page', 'frame'],
 			documentUrlPatterns: WEB_URL_PATTERNS,
 		} satisfies Partial<MenuItemProperties>;
-		items.push({id: MENU.pageRoot, title: APP_NAME, ...page});
-		if (settings.bookmarksEnabled) {
-			items.push({
+		items.push(
+			{id: MENU.pageRoot, title: APP_NAME, ...page},
+			{
 				id: MENU.pageBookmark,
 				title: 'Bookmark this page to',
 				parentId: MENU.pageRoot,
 				...page,
-			});
-			columnSubmenu(
-				MENU.pageBookmark,
-				PAGE_COLUMN_PREFIX,
-				MENU.pageBookmarkNew,
-				page.contexts,
-				{documentUrlPatterns: WEB_URL_PATTERNS},
-			);
-		}
+			},
+		);
+		columnSubmenu(
+			MENU.pageBookmark,
+			PAGE_COLUMN_PREFIX,
+			MENU.pageBookmarkNew,
+			page.contexts,
+			{documentUrlPatterns: WEB_URL_PATTERNS},
+		);
 
-		if (settings.sessionsEnabled) {
-			if (settings.bookmarksEnabled) {
-				items.push({
-					id: 'tablodge-page-separator',
-					type: 'separator',
-					parentId: MENU.pageRoot,
-					...page,
-				});
-			}
+		items.push({
+			id: 'tablodge-page-separator',
+			type: 'separator',
+			parentId: MENU.pageRoot,
+			...page,
+		});
 
-			// The tab-group item stays enabled: Chrome has no contextMenus.onShown to toggle it per tab, and a
-			// click outside a tab group just logs "The active tab is not in a tab group." Browsers with onShown refine it.
-			for (const [id, title] of PAGE_SAVE_ITEMS) {
-				items.push({id, title, parentId: MENU.pageRoot, ...page});
-			}
+		// The tab-group item stays enabled: Chrome has no contextMenus.onShown to toggle it per tab, and a
+		// click outside a tab group just logs "The active tab is not in a tab group." Browsers with onShown refine it.
+		for (const [id, title] of PAGE_SAVE_ITEMS) {
+			items.push({id, title, parentId: MENU.pageRoot, ...page});
 		}
 	}
 
@@ -8559,25 +8376,20 @@ function contextMenuPlan(
 			});
 		}
 
-		if (settings.sessionsEnabled) {
-			items.push(
-				{
-					id: MENU.actionSaveWindow,
-					title: 'Save this window',
-					...action,
-				},
-				{
-					id: MENU.actionExclude,
-					title: 'Exclude this site from saves',
-					type: 'checkbox',
-					checked: excludeState.checked,
-					enabled: excludeState.enabled,
-					...action,
-				},
-			);
-		}
-
 		items.push(
+			{
+				id: MENU.actionSaveWindow,
+				title: 'Save this window',
+				...action,
+			},
+			{
+				id: MENU.actionExclude,
+				title: 'Exclude this site from saves',
+				type: 'checkbox',
+				checked: excludeState.checked,
+				enabled: excludeState.enabled,
+				...action,
+			},
 			{id: MENU.actionHelp, title: 'Help', ...action},
 			{id: MENU.actionSettings, title: 'Settings', ...action},
 		);
@@ -8789,11 +8601,7 @@ async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 
 	try {
 		const settings = await readSettings();
-		if (
-			!settings.contextMenusEnabled ||
-			!settings.contextMenuActionEnabled ||
-			!settings.sessionsEnabled
-		) {
+		if (!settings.contextMenusEnabled || !settings.contextMenuActionEnabled) {
 			return;
 		}
 
@@ -8891,7 +8699,6 @@ function watchContextMenuShown() {
 			void readSettings()
 				.then(async (settings) => {
 					if (
-						!settings.sessionsEnabled ||
 						!settings.contextMenusEnabled ||
 						!settings.contextMenuPageEnabled
 					) {
@@ -9024,10 +8831,6 @@ async function bookmarkToColumn(
 	}
 
 	const store = await getStore();
-	if (!store.settings.bookmarksEnabled) {
-		return bookmarksDisabled();
-	}
-
 	if (
 		columnId !== BOOKMARK_UNFILED_ID &&
 		store.bookmarkColumns.every((column) => column.id !== columnId)
@@ -9063,10 +8866,6 @@ async function openPrefilledBookmarkDialog(
 	}
 
 	const settings = await readSettings();
-	if (!settings.bookmarksEnabled) {
-		return bookmarksDisabled();
-	}
-
 	// BookmarkColumn=new asks the dialog to start a new column; pages that do not support it ignore the parameter.
 	const query = new URLSearchParams({
 		bookmarkUrl: url,
@@ -9095,10 +8894,6 @@ async function saveLinkForLater(
 
 	return mutate(async () => {
 		const store = await getStore();
-		if (!store.settings.sessionsEnabled) {
-			return sessionsDisabled();
-		}
-
 		const name = SAVED_LINKS_SESSION.toLocaleLowerCase();
 		let group = store.groups.find(
 			(entry) => entry.name.toLocaleLowerCase() === name,
@@ -9438,7 +9233,6 @@ async function handleBrowserBookmark(node: chrome.bookmarks.BookmarkTreeNode) {
 	const {settings} = store;
 	if (
 		settings.browserBookmarkAction === 'off' ||
-		!settings.bookmarksEnabled ||
 		store.bookmarks.some((bookmark) => bookmark.url === url)
 	) {
 		return;

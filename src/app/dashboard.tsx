@@ -293,11 +293,9 @@ export function SessionManager({
 		settings.excludedOrigins ?? NO_ORIGINS,
 	);
 	const folderDialog = typeof dialog === 'object' ? dialog : null;
-	const sessionsEnabled = settings.sessionsEnabled !== false;
 	const expandAll = settings.expandSessionsByDefault === true;
 	const isOpen = (id: string) =>
 		expandAll ? !collapsed.has(id) : expanded.has(id);
-	const bookmarksEnabled = settings.bookmarksEnabled !== false;
 
 	const visibleGroups = useMemo(() => {
 		const needle = query.trim().toLocaleLowerCase();
@@ -1361,409 +1359,400 @@ export function SessionManager({
 					: 'mx-auto w-full max-w-6xl px-5 py-6 sm:px-8 sm:py-9'
 			}
 		>
-			{!sessionsEnabled && (
-				<div className="mb-6 rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
-					Sessions are disabled. Saved data is retained; enable Sessions in
-					Settings to manage it.
-				</div>
-			)}
-			{sessionsEnabled && (
-				<section aria-labelledby="sessions-title">
-					<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-						<div className="flex items-center gap-2">
-							<h2
-								id="sessions-title"
-								tabIndex={-1}
-								className="text-lg font-semibold tracking-tight"
-							>
-								Sessions
-							</h2>
-							<Badge variant="accent">{visibleGroups.length}</Badge>
-						</div>
-						<div className="flex items-center gap-1">
-							<ExpandingSearch
-								label="Search sessions and tabs"
-								value={query}
-								onChange={setQuery}
-							/>
-							<DropdownMenu>
-								<IconTooltip label="Sort sessions">
-									<DropdownMenuTrigger asChild>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-8 w-8"
-											aria-label="Sort sessions"
-										>
-											<ArrowDownUp />
-										</Button>
-									</DropdownMenuTrigger>
-								</IconTooltip>
-								<DropdownMenuContent align="end">
-									<DropdownMenuLabel>Sort sessions</DropdownMenuLabel>
-									<DropdownMenuRadioGroup
-										value={sort}
-										onValueChange={(value) => void changeSort(value)}
-									>
-										{[
-											['newest', 'Newest first'],
-											['oldest', 'Oldest first'],
-											['opened', 'Last opened'],
-											['name', 'Name A–Z'],
-											['tabs', 'Most tabs'],
-											['custom', 'Custom order'],
-										].map(([value, label]) => (
-											<DropdownMenuRadioItem key={value} value={value}>
-												{label}
-											</DropdownMenuRadioItem>
-										))}
-									</DropdownMenuRadioGroup>
-								</DropdownMenuContent>
-							</DropdownMenu>
-							<IconTooltip label="Recent snapshots">
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-8 w-8"
-									aria-label="Recent snapshots"
-									onClick={() => emitRecoveryEvent({type: 'snapshots'})}
-								>
-									<History />
-								</Button>
-							</IconTooltip>
-							<DropdownMenu>
-								<IconTooltip label="Import and back up sessions">
-									<DropdownMenuTrigger asChild>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-8 w-8"
-											aria-label="Import and back up sessions"
-										>
-											<MoreHorizontal />
-										</Button>
-									</DropdownMenuTrigger>
-								</IconTooltip>
-								<DropdownMenuContent align="end">
-									<DropdownMenuItem onSelect={() => setImportOpen(true)}>
-										<Upload className="h-4 w-4" />
-										Import sessions
-									</DropdownMenuItem>
-									<DropdownMenuItem onSelect={() => openBackup('sessions')}>
-										<Download className="h-4 w-4" />
-										Back up sessions
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										onSelect={() =>
-											emitRecoveryEvent({type: 'trash', filter: 'sessions'})
-										}
-									>
-										<Trash2 className="h-4 w-4" />
-										Trash bin
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
-						</div>
+			<section aria-labelledby="sessions-title">
+				<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+					<div className="flex items-center gap-2">
+						<h2
+							id="sessions-title"
+							tabIndex={-1}
+							className="text-lg font-semibold tracking-tight"
+						>
+							Sessions
+						</h2>
+						<Badge variant="accent">{visibleGroups.length}</Badge>
 					</div>
-
-					<nav
-						className="mb-4 flex flex-wrap items-center gap-1"
-						aria-label="Session folders"
-					>
-						{[{id: ALL, name: 'All', icon: undefined}, ...folders].map(
-							(folder) => {
-								const FolderIcon =
-									folder.id === ALL
-										? LayoutGrid
-										: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component;
-								const chip = (
-									<button
-										key={folder.id}
-										type="button"
-										aria-pressed={folderId === folder.id}
-										data-drop-active={folderDropId === folder.id || undefined}
-										className={cn(
-											'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
-											folderDropId === folder.id
-												? 'bg-primary/15 text-foreground ring-2 ring-primary'
-												: folderId === folder.id
-													? 'bg-primary text-primary-foreground'
-													: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-										)}
-										onDragOver={(event) => {
-											if (dragItemRef.current?.kind !== 'session') {
-												return;
-											}
-
-											event.preventDefault();
-											if (folderDropTarget(folder.id)) {
-												event.dataTransfer.dropEffect = 'move';
-												setFolderDropId(folder.id);
-											} else {
-												event.dataTransfer.dropEffect = 'none';
-												setFolderDropId(null);
-											}
-										}}
-										onDragLeave={(event) => {
-											if (
-												!event.currentTarget.contains(
-													event.relatedTarget as Node | null,
-												)
-											) {
-												setFolderDropId((current) =>
-													current === folder.id ? null : current,
-												);
-											}
-										}}
-										onDrop={(event) => {
-											if (!folderDropTarget(folder.id)) {
-												return;
-											}
-
-											event.preventDefault();
-											const item = dragItemRef.current;
-											const dragged = groups.find(
-												(group) =>
-													item?.kind === 'session' && group.id === item.id,
-											);
-											drag.end();
-											if (dragged) {
-												void moveGroupToFolder(dragged, folder.id, folder.name);
-											}
-										}}
-										onClick={() => {
-											setFolderId(folder.id);
-											setAnchor(null);
-										}}
-									>
-										<FolderIcon
-											className="size-3.5 shrink-0"
-											aria-hidden="true"
-										/>
-										{folder.name}
-										<span className="tabular-nums opacity-90">
-											{folder.id === ALL
-												? folderCounts.all
-												: (folderCounts.byFolder.get(folder.id) ?? 0)}
-										</span>
-									</button>
-								);
-								if (!('createdAt' in folder) || folder.isDefault) {
-									return chip;
-								}
-
-								return (
-									<ActionContextMenu
-										key={folder.id}
-										actions={() => [
-											{
-												id: 'edit-folder',
-												label: 'Edit folder',
-												icon: ACTION_ICONS.edit,
-												onSelect() {
-													setDialog({
-														mode: 'rename',
-														folder,
-														icon: folder.icon,
-													});
-												},
-											},
-											{
-												id: 'delete-folder',
-												label: 'Delete folder',
-												icon: ACTION_ICONS.remove,
-												destructive: true,
-												onSelect() {
-													void deleteFolder(folder);
-												},
-											},
-										]}
-									>
-										{chip}
-									</ActionContextMenu>
-								);
-							},
-						)}
-						<span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
-						<IconTooltip label="New folder">
-							<Button
-								variant="ghost"
-								size="icon"
-								className={cn(
-									'h-8 w-8',
-									folderDropId === NEW_FOLDER_DROP &&
-										'bg-primary/15 ring-2 ring-primary',
-								)}
-								aria-label="New folder"
-								onClick={() => setDialog({mode: 'create'})}
-								// Dropping a session here creates a folder and moves the session into it.
-								onDragOver={(event) => {
-									if (dragItemRef.current?.kind !== 'session') {
-										return;
-									}
-
-									event.preventDefault();
-									event.dataTransfer.dropEffect = 'move';
-									setFolderDropId(NEW_FOLDER_DROP);
-								}}
-								onDragLeave={(event) => {
-									if (
-										!event.currentTarget.contains(
-											event.relatedTarget as Node | null,
-										)
-									) {
-										setFolderDropId((current) =>
-											current === NEW_FOLDER_DROP ? null : current,
-										);
-									}
-								}}
-								onDrop={(event) => {
-									const item = dragItemRef.current;
-									if (item?.kind !== 'session') {
-										return;
-									}
-
-									event.preventDefault();
-									drag.end();
-									setDialog({mode: 'create', moveGroupId: item.id});
-								}}
-							>
-								<FolderPlus />
-							</Button>
-						</IconTooltip>
-						{selectedFolder && !selectedFolder.isDefault && (
-							<>
-								<IconTooltip label={`Edit ${selectedFolder.name}`}>
+					<div className="flex items-center gap-1">
+						<ExpandingSearch
+							label="Search sessions and tabs"
+							value={query}
+							onChange={setQuery}
+						/>
+						<DropdownMenu>
+							<IconTooltip label="Sort sessions">
+								<DropdownMenuTrigger asChild>
 									<Button
 										variant="ghost"
 										size="icon"
 										className="h-8 w-8"
-										aria-label={`Edit ${selectedFolder.name}`}
-										onClick={() =>
-											setDialog({
-												mode: 'rename',
-												folder: selectedFolder,
-												icon: selectedFolder.icon,
-											})
-										}
+										aria-label="Sort sessions"
 									>
-										<Pencil />
+										<ArrowDownUp />
 									</Button>
-								</IconTooltip>
-								<IconTooltip label={`Delete ${selectedFolder.name}`}>
+								</DropdownMenuTrigger>
+							</IconTooltip>
+							<DropdownMenuContent align="end">
+								<DropdownMenuLabel>Sort sessions</DropdownMenuLabel>
+								<DropdownMenuRadioGroup
+									value={sort}
+									onValueChange={(value) => void changeSort(value)}
+								>
+									{[
+										['newest', 'Newest first'],
+										['oldest', 'Oldest first'],
+										['opened', 'Last opened'],
+										['name', 'Name A–Z'],
+										['tabs', 'Most tabs'],
+										['custom', 'Custom order'],
+									].map(([value, label]) => (
+										<DropdownMenuRadioItem key={value} value={value}>
+											{label}
+										</DropdownMenuRadioItem>
+									))}
+								</DropdownMenuRadioGroup>
+							</DropdownMenuContent>
+						</DropdownMenu>
+						<IconTooltip label="Recent snapshots">
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8"
+								aria-label="Recent snapshots"
+								onClick={() => emitRecoveryEvent({type: 'snapshots'})}
+							>
+								<History />
+							</Button>
+						</IconTooltip>
+						<DropdownMenu>
+							<IconTooltip label="Import and back up sessions">
+								<DropdownMenuTrigger asChild>
 									<Button
 										variant="ghost"
 										size="icon"
-										className="h-8 w-8 text-muted-foreground hover:text-destructive"
-										aria-label={`Delete ${selectedFolder.name}`}
-										onClick={() => void deleteFolder(selectedFolder)}
+										className="h-8 w-8"
+										aria-label="Import and back up sessions"
 									>
-										<Trash2 />
+										<MoreHorizontal />
 									</Button>
-								</IconTooltip>
-							</>
-						)}
-					</nav>
-					{selectedCount > 0 && (
-						<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3">
-							<span className="text-sm font-semibold" aria-live="polite">
-								{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
-							</span>
-							<div className="flex flex-wrap gap-2">
-								<Button
-									size="sm"
-									onClick={() =>
-										void openAllInNewTabs(
-											selectedGroups().flatMap((group) => group.tabs),
-										)
-									}
-								>
-									<ExternalLink className="h-4 w-4" />
-									Open selected
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => openBackup('selected')}
-								>
+								</DropdownMenuTrigger>
+							</IconTooltip>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onSelect={() => setImportOpen(true)}>
+									<Upload className="h-4 w-4" />
+									Import sessions
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={() => openBackup('sessions')}>
 									<Download className="h-4 w-4" />
-									Export selected
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() =>
-										openShare({
-											title: 'Shared tabs',
-											groups: selectedGroups(),
-										})
+									Back up sessions
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									onSelect={() =>
+										emitRecoveryEvent({type: 'trash', filter: 'sessions'})
 									}
 								>
-									<Share2 className="h-4 w-4" />
-									Share selected
-								</Button>
-								<Button
-									variant="ghost"
-									size="sm"
+									<Trash2 className="h-4 w-4" />
+									Trash bin
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
+				</div>
+
+				<nav
+					className="mb-4 flex flex-wrap items-center gap-1"
+					aria-label="Session folders"
+				>
+					{[{id: ALL, name: 'All', icon: undefined}, ...folders].map(
+						(folder) => {
+							const FolderIcon =
+								folder.id === ALL
+									? LayoutGrid
+									: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component;
+							const chip = (
+								<button
+									key={folder.id}
+									type="button"
+									aria-pressed={folderId === folder.id}
+									data-drop-active={folderDropId === folder.id || undefined}
+									className={cn(
+										'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+										folderDropId === folder.id
+											? 'bg-primary/15 text-foreground ring-2 ring-primary'
+											: folderId === folder.id
+												? 'bg-primary text-primary-foreground'
+												: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+									)}
+									onDragOver={(event) => {
+										if (dragItemRef.current?.kind !== 'session') {
+											return;
+										}
+
+										event.preventDefault();
+										if (folderDropTarget(folder.id)) {
+											event.dataTransfer.dropEffect = 'move';
+											setFolderDropId(folder.id);
+										} else {
+											event.dataTransfer.dropEffect = 'none';
+											setFolderDropId(null);
+										}
+									}}
+									onDragLeave={(event) => {
+										if (
+											!event.currentTarget.contains(
+												event.relatedTarget as Node | null,
+											)
+										) {
+											setFolderDropId((current) =>
+												current === folder.id ? null : current,
+											);
+										}
+									}}
+									onDrop={(event) => {
+										if (!folderDropTarget(folder.id)) {
+											return;
+										}
+
+										event.preventDefault();
+										const item = dragItemRef.current;
+										const dragged = groups.find(
+											(group) =>
+												item?.kind === 'session' && group.id === item.id,
+										);
+										drag.end();
+										if (dragged) {
+											void moveGroupToFolder(dragged, folder.id, folder.name);
+										}
+									}}
 									onClick={() => {
-										setSelected(new Set());
+										setFolderId(folder.id);
 										setAnchor(null);
 									}}
 								>
-									Clear
-								</Button>
-							</div>
-						</div>
-					)}
-
-					{groups.length === 0 ? (
-						<EmptyState icon={TabLodgeMark} title="No saved sessions">
-							Save tabs from the popup, a shortcut, or the right-click menu.
-						</EmptyState>
-					) : visibleGroups.length === 0 ? (
-						<EmptyState
-							icon={Search}
-							title={
-								query.trim()
-									? 'No matching sessions'
-									: `Nothing in ${selectedFolder?.name || 'this folder'}`
+									<FolderIcon
+										className="size-3.5 shrink-0"
+										aria-hidden="true"
+									/>
+									{folder.name}
+									<span className="tabular-nums opacity-90">
+										{folder.id === ALL
+											? folderCounts.all
+											: (folderCounts.byFolder.get(folder.id) ?? 0)}
+									</span>
+								</button>
+							);
+							if (!('createdAt' in folder) || folder.isDefault) {
+								return chip;
 							}
+
+							return (
+								<ActionContextMenu
+									key={folder.id}
+									actions={() => [
+										{
+											id: 'edit-folder',
+											label: 'Edit folder',
+											icon: ACTION_ICONS.edit,
+											onSelect() {
+												setDialog({
+													mode: 'rename',
+													folder,
+													icon: folder.icon,
+												});
+											},
+										},
+										{
+											id: 'delete-folder',
+											label: 'Delete folder',
+											icon: ACTION_ICONS.remove,
+											destructive: true,
+											onSelect() {
+												void deleteFolder(folder);
+											},
+										},
+									]}
+								>
+									{chip}
+								</ActionContextMenu>
+							);
+						},
+					)}
+					<span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+					<IconTooltip label="New folder">
+						<Button
+							variant="ghost"
+							size="icon"
+							className={cn(
+								'h-8 w-8',
+								folderDropId === NEW_FOLDER_DROP &&
+									'bg-primary/15 ring-2 ring-primary',
+							)}
+							aria-label="New folder"
+							onClick={() => setDialog({mode: 'create'})}
+							// Dropping a session here creates a folder and moves the session into it.
+							onDragOver={(event) => {
+								if (dragItemRef.current?.kind !== 'session') {
+									return;
+								}
+
+								event.preventDefault();
+								event.dataTransfer.dropEffect = 'move';
+								setFolderDropId(NEW_FOLDER_DROP);
+							}}
+							onDragLeave={(event) => {
+								if (
+									!event.currentTarget.contains(
+										event.relatedTarget as Node | null,
+									)
+								) {
+									setFolderDropId((current) =>
+										current === NEW_FOLDER_DROP ? null : current,
+									);
+								}
+							}}
+							onDrop={(event) => {
+								const item = dragItemRef.current;
+								if (item?.kind !== 'session') {
+									return;
+								}
+
+								event.preventDefault();
+								drag.end();
+								setDialog({mode: 'create', moveGroupId: item.id});
+							}}
 						>
-							{query.trim()
-								? 'Try another search term.'
-								: 'This folder is empty. Save a session or move one here from its details.'}
-						</EmptyState>
-					) : (
-						<div className="space-y-2">
-							{renderedGroups.map((group) => (
-								<GroupCard
-									key={group.id}
-									group={group}
-									folderName={folderNames.get(group.folderId)}
-									settings={settings}
-									wide={wide}
-									isExpanded={isOpen(group.id)}
-									selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
-									selectionActive={selected.size > 0}
-									bookmarksEnabled={bookmarksEnabled}
-									canSwitch={canSwitch}
-									actions={cardActions}
-									dragStore={dragStore}
-								/>
-							))}
+							<FolderPlus />
+						</Button>
+					</IconTooltip>
+					{selectedFolder && !selectedFolder.isDefault && (
+						<>
+							<IconTooltip label={`Edit ${selectedFolder.name}`}>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									aria-label={`Edit ${selectedFolder.name}`}
+									onClick={() =>
+										setDialog({
+											mode: 'rename',
+											folder: selectedFolder,
+											icon: selectedFolder.icon,
+										})
+									}
+								>
+									<Pencil />
+								</Button>
+							</IconTooltip>
+							<IconTooltip label={`Delete ${selectedFolder.name}`}>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 text-muted-foreground hover:text-destructive"
+									aria-label={`Delete ${selectedFolder.name}`}
+									onClick={() => void deleteFolder(selectedFolder)}
+								>
+									<Trash2 />
+								</Button>
+							</IconTooltip>
+						</>
+					)}
+				</nav>
+				{selectedCount > 0 && (
+					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3">
+						<span className="text-sm font-semibold" aria-live="polite">
+							{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
+						</span>
+						<div className="flex flex-wrap gap-2">
+							<Button
+								size="sm"
+								onClick={() =>
+									void openAllInNewTabs(
+										selectedGroups().flatMap((group) => group.tabs),
+									)
+								}
+							>
+								<ExternalLink className="h-4 w-4" />
+								Open selected
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => openBackup('selected')}
+							>
+								<Download className="h-4 w-4" />
+								Export selected
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() =>
+									openShare({
+										title: 'Shared tabs',
+										groups: selectedGroups(),
+									})
+								}
+							>
+								<Share2 className="h-4 w-4" />
+								Share selected
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setSelected(new Set());
+									setAnchor(null);
+								}}
+							>
+								Clear
+							</Button>
 						</div>
-					)}
-					{visibleGroups.length > renderedGroups.length && (
-						<LoadMore
-							remaining={visibleGroups.length - renderedGroups.length}
-							step={SESSION_PAGE}
-							noun="sessions"
-							onMore={showMore}
-						/>
-					)}
-				</section>
-			)}
+					</div>
+				)}
+
+				{groups.length === 0 ? (
+					<EmptyState icon={TabLodgeMark} title="No saved sessions">
+						Save tabs from the popup, a shortcut, or the right-click menu.
+					</EmptyState>
+				) : visibleGroups.length === 0 ? (
+					<EmptyState
+						icon={Search}
+						title={
+							query.trim()
+								? 'No matching sessions'
+								: `Nothing in ${selectedFolder?.name || 'this folder'}`
+						}
+					>
+						{query.trim()
+							? 'Try another search term.'
+							: 'This folder is empty. Save a session or move one here from its details.'}
+					</EmptyState>
+				) : (
+					<div className="space-y-2">
+						{renderedGroups.map((group) => (
+							<GroupCard
+								key={group.id}
+								group={group}
+								folderName={folderNames.get(group.folderId)}
+								settings={settings}
+								wide={wide}
+								isExpanded={isOpen(group.id)}
+								selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
+								selectionActive={selected.size > 0}
+								canSwitch={canSwitch}
+								actions={cardActions}
+								dragStore={dragStore}
+							/>
+						))}
+					</div>
+				)}
+				{visibleGroups.length > renderedGroups.length && (
+					<LoadMore
+						remaining={visibleGroups.length - renderedGroups.length}
+						step={SESSION_PAGE}
+						noun="sessions"
+						onMore={showMore}
+					/>
+				)}
+			</section>
 
 			<StatusLine status={status} />
 
@@ -1913,9 +1902,7 @@ export function SessionManager({
 							>
 								Cancel
 							</Button>
-							<Button type="submit" disabled={!bookmarksEnabled}>
-								Save bookmark
-							</Button>
+							<Button type="submit">Save bookmark</Button>
 						</DialogFooter>
 					</form>
 				</DialogContent>
@@ -2274,7 +2261,6 @@ type GroupCardProps = {
 	*/
 	selectedTabs: Set<string>;
 	selectionActive: boolean;
-	bookmarksEnabled: boolean;
 	/**
 	This window has tabs a workspace switch could save; without any, switching is off.
 	*/
@@ -2291,7 +2277,6 @@ const GroupCard = memo(
 		isExpanded,
 		selectedTabs,
 		selectionActive,
-		bookmarksEnabled,
 		canSwitch,
 		actions: handlers,
 		dragStore,
@@ -2676,7 +2661,6 @@ const GroupCard = memo(
 											splitBadge={splitBadge}
 											selected={selectedTabs.has(tab.id)}
 											selectionActive={selectionActive}
-											showBookmark={bookmarksEnabled}
 											displayMode={displayMode}
 											actions={handlers}
 											dragStore={dragStore}
@@ -2723,7 +2707,6 @@ type SavedTabProps = {
 	selectionActive: boolean;
 	actions: CardActions;
 	dragStore: DragStore;
-	showBookmark: boolean;
 	displayMode?: Settings['urlDisplayMode'];
 	/**
 	Shown on the first tab of a split view pair.
@@ -2742,7 +2725,6 @@ const SavedTab = memo(
 		selectionActive,
 		actions: handlers,
 		dragStore,
-		showBookmark,
 		displayMode,
 		splitBadge = false,
 	}: SavedTabProps) => {
@@ -2812,7 +2794,6 @@ const SavedTab = memo(
 				id: 'bookmark',
 				label: 'Bookmark',
 				icon: BookmarkPlus,
-				hidden: !showBookmark,
 				onSelect: () => handlers.bookmark(tab),
 			},
 			{
