@@ -1956,6 +1956,11 @@ async function saveTabs(
 		`ask` style, save with the fallback name first, then open the small name prompt window.
 		*/
 		promptName?: boolean;
+		/**
+		A workspace switch saves the window but closes the tabs itself once the other session is open, so this
+		save leaves them open and does not open the dashboard.
+		*/
+		keepTabsOpen?: boolean;
 	} = {},
 ): Promise<ActionResult<'SAVE_TABS'>> {
 	return mutate(async () => {
@@ -1978,6 +1983,10 @@ async function saveTabs(
 			...(options.includePinned === true && {includePinnedTabs: true}),
 			...(options.allowDuplicates === true && {
 				saveDuplicateHandling: 'allow' as const,
+			}),
+			...(options.keepTabsOpen === true && {
+				closeOnSave: false,
+				openDashboardAfterSave: false,
 			}),
 		};
 		let windows: PopulatedWindow[];
@@ -3057,7 +3066,12 @@ async function restoreGroup(
 	groupId: string,
 	senderTab: chrome.tabs.Tab | undefined,
 	forceRemove = false,
-	options: RestoreOptions = {},
+	options: RestoreOptions & {
+		/**
+		Open every tab even when the window already shows its address, and restore into this window.
+		*/
+		intoWindowId?: number;
+	} = {},
 ): Promise<ActionResult<'RESTORE_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -3071,10 +3085,21 @@ async function restoreGroup(
 		}
 
 		const restoreTarget = options.restoreTarget || store.settings.restoreTarget;
-		const result = await restoreRecords(group.tabs, store.settings, senderTab, {
-			restoreTarget,
-			activate: options.activate !== false,
-		});
+		const intoWindow = isInteger(options.intoWindowId);
+		const result = await restoreRecords(
+			group.tabs,
+			intoWindow
+				? {...store.settings, restoreDuplicateHandling: 'open'}
+				: store.settings,
+			senderTab,
+			{
+				restoreTarget,
+				activate: options.activate !== false,
+				...(intoWindow && {
+					target: {id: options.intoWindowId, bootstrapTabId: null},
+				}),
+			},
+		);
 		if (result.opened.length === 0) {
 			return {
 				ok: false,
@@ -3130,6 +3155,90 @@ async function restoreGroup(
 			...(trashId && {trashId}),
 		};
 	});
+}
+
+/**
+Workspace switch: saves the window's web tabs as a new session, opens another session in the same window, and then
+closes the tabs that were saved. The old tabs stay open until the other session is open, so a failed restore never
+leaves the window empty. Pinned tabs, excluded sites, and pages that are not web pages stay where they are.
+*/
+async function switchWorkspace(
+	groupId: string,
+	senderTab: chrome.tabs.Tab | undefined,
+): Promise<ActionResult<'SWITCH_WORKSPACE'>> {
+	const store = await getStore();
+	if (!store.settings.sessionsEnabled) {
+		return sessionsDisabled();
+	}
+
+	if (!findGroup(store, groupId)) {
+		return {ok: false, error: 'That saved session no longer exists.'};
+	}
+
+	const windowId = await currentWindowId(senderTab);
+	if (!isInteger(windowId)) {
+		return {ok: false, error: 'Open a browser window before switching.'};
+	}
+
+	const outgoing = new Map(
+		(await chrome.tabs.query({windowId}))
+			.filter(
+				(tab) =>
+					isInteger(tab.id) &&
+					isCapturable(tab, store.settings) &&
+					(!tab.pinned || store.settings.includePinnedTabs),
+			)
+			.map((tab) => [tab.id!, normalizeUrl(tab.url)] as const),
+	);
+	let saved = 0;
+	let savedGroupId: string | null = null;
+	if (outgoing.size > 0) {
+		const save = await saveTabs('window', senderTab, DEFAULT_FOLDER_ID, {
+			tabIds: [...outgoing.keys()],
+			keepTabsOpen: true,
+		});
+		if (!save.ok) {
+			return save;
+		}
+
+		saved = save.count;
+		savedGroupId = save.groupId;
+	}
+
+	const restore = await restoreGroup(groupId, senderTab, false, {
+		restoreTarget: 'current-window',
+		intoWindowId: windowId,
+	});
+	if (!restore.ok) {
+		return {
+			ok: false,
+			error: saved
+				? `Saved the current tabs, but ${restore.error.charAt(0).toLowerCase()}${restore.error.slice(1)} They stay open.`
+				: restore.error,
+		};
+	}
+
+	let closed = 0;
+	if (outgoing.size > 0) {
+		const closeIds = (await chrome.tabs.query({windowId}))
+			.filter(
+				(tab) =>
+					isInteger(tab.id) &&
+					outgoing.get(tab.id) === normalizeUrl(tab.url) &&
+					(!tab.pinned || store.settings.includePinnedTabs),
+			)
+			.map((tab) => tab.id!);
+		try {
+			await chrome.tabs.remove(closeIds);
+			closed = closeIds.length;
+		} catch {
+			/*
+			A tab can close while the switch is being completed.
+			*/
+		}
+	}
+
+	return {...restore, saved, savedGroupId, closed};
 }
 
 async function deleteGroup(
@@ -7584,6 +7693,10 @@ async function handleMessage(
 				},
 			);
 			return result;
+		}
+
+		case 'SWITCH_WORKSPACE': {
+			return switchWorkspace(message.groupId, sender.tab);
 		}
 
 		case 'DELETE_GROUP': {

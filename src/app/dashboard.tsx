@@ -12,6 +12,7 @@ import {
 import {
 	AppWindow,
 	ArrowDownUp,
+	ArrowLeftRight,
 	BookmarkPlus,
 	ChevronDown,
 	ChevronRight,
@@ -81,6 +82,8 @@ import {
 	TabLodgeMark,
 	send,
 	splitNote,
+	useHasSavableTabs,
+	switchSummary,
 	useStatus,
 	useTabLodgeState,
 	restoreFailureText,
@@ -191,6 +194,7 @@ const NO_SESSIONS: Session[] = [];
 const NO_FOLDERS: Folder[] = [];
 const NO_COLUMNS: BookmarkColumn[] = [];
 const NO_SETTINGS: Partial<Settings> = {};
+const NO_ORIGINS: readonly string[] = [];
 const NO_SELECTION = new Set<string>();
 /**
 Sessions rendered at first; more are added as the list is scrolled (thousands of cards at once are slow).
@@ -284,6 +288,10 @@ export function SessionManager({
 	const settings: Partial<Settings> = state?.settings || NO_SETTINGS;
 	// Collapsed cards show a row of preview icons only on wide pages.
 	const wide = useWidePage();
+	const canSwitch = useHasSavableTabs(
+		settings.includePinnedTabs === true,
+		settings.excludedOrigins ?? NO_ORIGINS,
+	);
 	const folderDialog = typeof dialog === 'object' ? dialog : null;
 	const sessionsEnabled = settings.sessionsEnabled !== false;
 	const expandAll = settings.expandSessionsByDefault === true;
@@ -670,6 +678,22 @@ export function SessionManager({
 			);
 		}
 
+		await reload();
+	}
+
+	async function switchToGroup(group: Session) {
+		setBusy(`restore:${group.id}`);
+		const result = await send('SWITCH_WORKSPACE', {groupId: group.id});
+		setBusy('');
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not switch to this session.', true);
+			await reload();
+			return;
+		}
+
+		showStatus(switchSummary(result, group.name), Boolean(result.failed), {
+			toast: true,
+		});
 		await reload();
 	}
 
@@ -1061,6 +1085,7 @@ export function SessionManager({
 			restoreGroup(group, false, undefined, undefined, target),
 		restoreMode: (group, mode) => restoreGroup(group, false, undefined, mode),
 		forceRestore: (group) => restoreGroup(group, true),
+		switchTo: switchToGroup,
 		restoreTab,
 		updateGroup,
 		share: (group) => openShare({title: group.name, groups: [group]}),
@@ -1723,6 +1748,7 @@ export function SessionManager({
 									selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
 									selectionActive={selected.size > 0}
 									bookmarksEnabled={bookmarksEnabled}
+									canSwitch={canSwitch}
 									actions={cardActions}
 									dragStore={dragStore}
 								/>
@@ -2133,6 +2159,7 @@ type CardActions = {
 	restoreTarget: (group: Session, target: RestoreTarget) => void;
 	restoreMode: (group: Session, mode: RestoreMode) => void;
 	forceRestore: (group: Session) => void;
+	switchTo: (group: Session) => void;
 	restoreTab: (
 		group: Session,
 		tab: SavedTabRecord,
@@ -2249,6 +2276,10 @@ type GroupCardProps = {
 	selectedTabs: Set<string>;
 	selectionActive: boolean;
 	bookmarksEnabled: boolean;
+	/**
+	This window has tabs a workspace switch could save; without any, switching is off.
+	*/
+	canSwitch: boolean;
 	actions: CardActions;
 	dragStore: DragStore;
 };
@@ -2262,6 +2293,7 @@ const GroupCard = memo(
 		selectedTabs,
 		selectionActive,
 		bookmarksEnabled,
+		canSwitch,
 		actions: handlers,
 		dragStore,
 	}: GroupCardProps) => {
@@ -2318,6 +2350,13 @@ const GroupCard = memo(
 				label: 'Restore',
 				icon: RotateCcw,
 				onSelect: () => onRestore(),
+			},
+			{
+				id: 'switch-to',
+				label: 'Switch to this session',
+				icon: ArrowLeftRight,
+				disabled: !canSwitch,
+				onSelect: () => handlers.switchTo(group),
 			},
 			{
 				type: 'submenu',

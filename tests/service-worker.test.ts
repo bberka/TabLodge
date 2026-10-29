@@ -1528,6 +1528,94 @@ test('browser bookmark import maps folders to ordered columns and skips duplicat
 	assert.equal(imported[2].columnId, harness.state.bookmarkColumns[1].id);
 });
 
+const windowTabs: MockTab[] = [
+	{
+		id: 1,
+		windowId: 10,
+		index: 0,
+		active: true,
+		url: 'https://one.example/',
+		title: 'One',
+	},
+	{
+		id: 2,
+		windowId: 10,
+		index: 1,
+		active: false,
+		pinned: true,
+		url: 'https://pinned.example/',
+		title: 'Pinned',
+	},
+	{
+		id: 3,
+		windowId: 10,
+		index: 2,
+		active: false,
+		url: 'https://saved.example/article',
+		title: 'Also saved',
+	},
+];
+
+test('SWITCH_WORKSPACE saves the window, opens the chosen session there, and closes the saved tabs', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({openDashboardAfterSave: false}),
+		windowTabs,
+	);
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'session-1',
+	});
+
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.saved, 2);
+	assert.equal(response.count, 1);
+	assert.equal(response.closed, 2);
+	const saved = harness.state.groups.find(
+		(group) => group.id === response.savedGroupId,
+	)!;
+	assert.deepEqual(
+		saved.tabs.map((tab) => tab.url),
+		['https://one.example/', 'https://saved.example/article'],
+	);
+	assert.equal(harness.createdWindows.length, 0);
+	assert.deepEqual(
+		harness.openedTabs.map((tab) => [tab.windowId, tab.url]),
+		[[10, 'https://saved.example/article']],
+		'the chosen session opens in the same window even though one of its URLs is already open',
+	);
+	assert.deepEqual(
+		harness.removedTabIds.toSorted((a, b) => a - b),
+		[1, 3],
+	);
+});
+
+test('SWITCH_WORKSPACE keeps the window open when the chosen session cannot be restored', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({openDashboardAfterSave: false}),
+		windowTabs,
+	);
+	harness.state.groups[0].tabs[0].url = 'chrome://settings/';
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'session-1',
+	});
+
+	assert.equal(response.ok, false);
+	assert.deepEqual(harness.removedTabIds, []);
+});
+
+test('SWITCH_WORKSPACE reports a session that no longer exists without touching the window', async () => {
+	const harness = createWorkerHarness(stateWithSession(), windowTabs);
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'missing',
+	});
+
+	assert.equal(response.ok, false);
+	assert.equal(harness.state.groups.length, 1);
+	assert.deepEqual(harness.removedTabIds, []);
+});
+
 test('selected-tab saving never stores or removes pinned tabs', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({closeOnSave: true, openDashboardAfterSave: false}),

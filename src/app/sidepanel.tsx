@@ -19,6 +19,7 @@ import {
 	MoreHorizontal,
 	MoreVertical,
 	PanelTop,
+	ArrowLeftRight,
 	RotateCcw,
 	Save,
 	Search,
@@ -54,6 +55,8 @@ import {
 	forceAddAction,
 	duplicatesNote,
 	plural,
+	switchSummary,
+	useHasSavableTabs,
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {Favicon} from './favicon';
@@ -72,6 +75,7 @@ type PanelTab = 'bookmarks' | 'sessions' | 'tabs';
 
 const NO_BOOKMARKS: SavedBookmark[] = [];
 const NO_SESSIONS: Session[] = [];
+const NO_ORIGINS: readonly string[] = [];
 const UNFILED = 'bookmark-unfiled';
 
 /**
@@ -280,6 +284,10 @@ function SidePanel() {
 		SECTION_PAGE,
 	);
 	const settings = state?.settings;
+	const canSwitch = useHasSavableTabs(
+		settings?.includePinnedTabs === true,
+		settings?.excludedOrigins ?? NO_ORIGINS,
+	);
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const search = query.trim().toLocaleLowerCase();
 	const matches = useCallback(
@@ -490,6 +498,19 @@ function SidePanel() {
 				{toast: true},
 			);
 		}, 'Could not restore this session.');
+	}
+
+	async function switchToSession(session: Session) {
+		await attempt(async () => {
+			const result = await send('SWITCH_WORKSPACE', {groupId: session.id});
+			if (!result?.ok) {
+				throw new Error(result?.error || 'Could not switch to this session.');
+			}
+
+			showStatus(switchSummary(result, session.name), Boolean(result.failed), {
+				toast: true,
+			});
+		}, 'Could not switch to this session.');
 	}
 
 	async function saveTabs(
@@ -892,17 +913,39 @@ function SidePanel() {
 													: opened.has(session.id))
 											}
 											extra={
-												<IconTooltip label={`Restore ${session.name}`}>
-													<Button
-														variant="ghost"
-														size="icon"
-														className="h-7 w-7 shrink-0"
-														aria-label={`Restore ${session.name || 'untitled session'}`}
-														onClick={() => void restoreSession(session)}
+												<>
+													<IconTooltip
+														label={
+															canSwitch
+																? `Switch to ${session.name}`
+																: 'Switch is off: this window has no tabs to save.'
+														}
 													>
-														<RotateCcw className="h-4 w-4" />
-													</Button>
-												</IconTooltip>
+														<span>
+															<Button
+																variant="ghost"
+																size="icon"
+																className="h-7 w-7 shrink-0"
+																disabled={!canSwitch}
+																aria-label={`Switch to ${session.name || 'untitled session'}`}
+																onClick={() => void switchToSession(session)}
+															>
+																<ArrowLeftRight className="h-4 w-4" />
+															</Button>
+														</span>
+													</IconTooltip>
+													<IconTooltip label={`Restore ${session.name}`}>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="h-7 w-7 shrink-0"
+															aria-label={`Restore ${session.name || 'untitled session'}`}
+															onClick={() => void restoreSession(session)}
+														>
+															<RotateCcw className="h-4 w-4" />
+														</Button>
+													</IconTooltip>
+												</>
 											}
 											onToggle={() =>
 												settings?.expandSessionsByDefault === true

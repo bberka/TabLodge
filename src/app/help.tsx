@@ -211,6 +211,12 @@ function Help() {
 						'settings restore keep remove saved tabs successful restore destination current window new window duplicate urls already open skip',
 				},
 				{
+					title: 'Switch workspaces',
+					body: 'Choose Switch to this session in the menu of a session on the dashboard, or the switch button next to a session in the popup or side panel, to save the tabs in this window as a new session and open that session in their place. Pinned tabs and pages that cannot be saved stay open. The item is off while this window has no tab it could save.',
+					searchText:
+						'switch workspace context swap replace current window save open another session pinned tabs',
+				},
+				{
 					title: 'Use a click modifier',
 					body: (
 						<>
