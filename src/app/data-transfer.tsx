@@ -203,7 +203,7 @@ type BackupDialogProps = {
 	onOpenChange: (open: boolean) => void;
 	showStatus: ShowStatus;
 	/**
-	When given (and both systems are on), a Bookmarks/Sessions switch lets the user change what is backed up.
+	When given, a Bookmarks/Sessions switch lets the user change what is backed up.
 	*/
 	state?: TabLodgeState | null;
 	/**
@@ -237,11 +237,7 @@ export function BackupDialog({
 		setSwitched(initialScope ?? null);
 	}, [open, initialScope]);
 	const canSwitch = Boolean(
-		state &&
-		requested &&
-		requested.kind !== 'selected' &&
-		state.settings.sessionsEnabled &&
-		state.settings.bookmarksEnabled,
+		state && requested && requested.kind !== 'selected',
 	);
 	let shown = requested;
 	if (
@@ -812,7 +808,7 @@ type ImportDialogProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	/**
-	The kind selected when the dialog opens; the user can switch when both systems are enabled.
+	The kind selected when the dialog opens; the user can switch to the other kind.
 	*/
 	initialKind: ImportKind;
 	/**
@@ -863,8 +859,6 @@ export function ImportDialog({
 	showStatus,
 	onImported,
 }: ImportDialogProps) {
-	const sessionsEnabled = state?.settings.sessionsEnabled !== false;
-	const bookmarksEnabled = state?.settings.bookmarksEnabled !== false;
 	const [kind, setKind] = useState<ImportKind>(initialKind);
 	// "Everything" only takes a full backup ZIP, which replaces all data and settings.
 	const [everything, setEverything] = useState(initialScope === 'everything');
@@ -889,13 +883,7 @@ export function ImportDialog({
 			return;
 		}
 
-		setKind(
-			initialKind === 'sessions' && !sessionsEnabled
-				? 'bookmarks'
-				: initialKind === 'bookmarks' && !bookmarksEnabled
-					? 'sessions'
-					: initialKind,
-		);
+		setKind(initialKind);
 		setEverything(initialScope === 'everything');
 		setSource(null);
 		setParsed(null);
@@ -1188,22 +1176,8 @@ export function ImportDialog({
 				value={everything ? 'everything' : kind}
 				options={[
 					{value: 'everything', label: <EverythingLabel />},
-					...(bookmarksEnabled
-						? [
-								{
-									value: 'bookmarks' as const,
-									label: <KindLabel kind="bookmarks" />,
-								},
-							]
-						: []),
-					...(sessionsEnabled
-						? [
-								{
-									value: 'sessions' as const,
-									label: <KindLabel kind="sessions" />,
-								},
-							]
-						: []),
+					{value: 'bookmarks', label: <KindLabel kind="bookmarks" />},
+					{value: 'sessions', label: <KindLabel kind="sessions" />},
 				]}
 				onValueChange={(value) => {
 					setError('');

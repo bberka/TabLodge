@@ -125,18 +125,6 @@ test('the group holding the best match comes first, and a better title ranks fir
 	assert.equal(hit?.id, 'bookmark:x2');
 });
 
-test('disabled systems contribute nothing', () => {
-	const off = buildFinderIndex({
-		...sources,
-		bookmarksEnabled: false,
-		sessionsEnabled: false,
-	});
-	assert.deepEqual(
-		new Set(off.map((item) => item.kind)),
-		new Set(['command', 'tab']),
-	);
-});
-
 test('a blank query lists commands and open tabs only', () => {
 	assert.deepEqual(kinds(''), ['tab', 'command']);
 });

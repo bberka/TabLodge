@@ -580,38 +580,6 @@ test('the master switch and each group switch control their menus', async () => 
 	}
 });
 
-test('disabled systems drop their items', async () => {
-	const noSessions = createHarness(baseState({sessionsEnabled: false}));
-	await noSessions.install();
-	assert.deepEqual(titles(noSessions.childrenOf('tablodge-link-root')), [
-		'Bookmark link to',
-	]);
-	assert.deepEqual(titles(noSessions.childrenOf('tablodge-page-root')), [
-		'Bookmark this page to',
-	]);
-	assert.deepEqual(titles(noSessions.topLevel('action')), [
-		'Open dashboard',
-		'Open side panel',
-		'Help',
-		'Settings',
-	]);
-
-	const noBookmarks = createHarness(baseState({bookmarksEnabled: false}));
-	await noBookmarks.install();
-	assert.deepEqual(titles(noBookmarks.childrenOf('tablodge-link-root')), [
-		'Save link for later',
-	]);
-	assert.equal(
-		noBookmarks.childrenOf('tablodge-page-root')[0].title,
-		'Save this tab',
-		'no leading separator without the bookmark submenu',
-	);
-	assert.equal(
-		noBookmarks.ids().some((id) => id.includes('bookmark')),
-		false,
-	);
-});
-
 test('settings default to on, normalize, and rebuild the menus immediately', async () => {
 	const harness = createHarness(
 		baseState({
@@ -1203,21 +1171,19 @@ test('toolbar items open the dashboard, Help and Settings, and save the window',
 });
 
 test('menu actions never throw when an action fails', async () => {
-	const harness = createHarness(baseState({sessionsEnabled: false}));
+	const harness = createHarness(baseState());
 	await harness.install();
 	await harness.click({
 		menuItemId: 'tablodge-link-save',
-		linkUrl: 'https://one.example/',
+		linkUrl: 'javascript:alert(1)',
 	});
 	await harness.click({
 		menuItemId: 'tablodge-link-bookmark:bookmark-default',
 		linkUrl: 'javascript:alert(1)',
 	});
-	await harness.click({menuItemId: 'tablodge-page-save-tab'}, undefined);
 	assert.deepEqual(harness.warnings, [
-		'Sessions are disabled in Settings.',
 		'Only http and https links can be saved.',
-		'Sessions are disabled in Settings.',
+		'Only http and https links can be saved.',
 	]);
 	assert.equal(harness.state.groups.length, 0);
 });
