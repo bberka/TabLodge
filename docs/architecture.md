@@ -130,6 +130,10 @@ Pinned tabs are excluded by default. When included, they can be closed only afte
 
 The default restore destination is a new window unless the current window contains only the current tab. Settings also offers current window and always new window policies. Ctrl/Cmd clicks keep saved links; Shift clicks force a new window. A failed restore never removes its saved link. Duplicate handling, activation, and unloading of restored background tabs are separate preferences. When **Remove tracking parameters** is enabled, restore duplicate checks compare the cleaned destination while the saved URL remains unchanged.
 
+### Switching workspaces
+
+`SWITCH_WORKSPACE` saves the window's web tabs, opens another session in the same window, and then closes the saved tabs. The save uses the normal naming and duplicate rules but leaves the tabs open and skips **Open dashboard after saving**. The restore ignores the restore target and duplicate preferences, so a URL that is already open still opens, and it follows the keep or remove preference as usual. The old tabs are closed only after the other session opened at least one tab, and only if their URL still matches what was saved. If the restore fails, the window keeps its tabs and the new session stays saved. Pinned tabs (unless saved), excluded sites, and pages that are not web pages are left alone, so the dashboard stays open. The dashboard menu item and the popup and side panel buttons are disabled while the window has no such tab (`useHasSavableTabs`, which follows tab events).
+
 ### Titles and names
 
 `cleanTitles`, enabled by default, removes leading notification counters and unread markers from captured page titles. It leaves manually entered titles and existing data alone. A title made only of counters is kept.

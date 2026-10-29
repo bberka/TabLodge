@@ -511,6 +511,10 @@ export type TabLodgeMessages = {
 	SAVE_CURRENT_TAB_TO_GROUP: {};
 	RESTORE_TAB: {groupId: string; tabId: string} & RestoreOptions;
 	RESTORE_GROUP: {groupId: string; forceRemove?: boolean} & RestoreOptions;
+	/**
+	Saves the window's web tabs as a new session, opens `groupId` in the same window, and closes the saved tabs.
+	*/
+	SWITCH_WORKSPACE: {groupId: string};
 	DELETE_GROUP: {groupId: string};
 	UPDATE_GROUP: {groupId: string; fields: SessionFields};
 	/**
@@ -736,6 +740,14 @@ export type TabLodgeResponses = {
 	SAVE_CURRENT_TAB_TO_GROUP: {count: number; skipped: number; groupId: string};
 	RESTORE_TAB: RestoreResult;
 	RESTORE_GROUP: RestoreResult;
+	/**
+	`saved`/`savedGroupId`: the tabs of the old window and the session they went into; `closed`: old tabs closed.
+	*/
+	SWITCH_WORKSPACE: RestoreResult & {
+		saved: number;
+		savedGroupId: string | null;
+		closed: number;
+	};
 	/**
 	`trashId`: the deleted session in the trash, for Undo.
 	*/

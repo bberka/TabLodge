@@ -18,6 +18,7 @@ import {
 	LoaderCircle,
 	ChevronDown,
 	ChevronUp,
+	ArrowLeftRight,
 	RotateCcw,
 	Info,
 	PanelRightOpen,
@@ -54,6 +55,8 @@ import {
 	saveWindowLabel,
 	send,
 	restoreSummary,
+	switchSummary,
+	useHasSavableTabs,
 	useStatus,
 	useTabLodgeState,
 	useTabSelection,
@@ -77,6 +80,7 @@ const ColumnLabel = lazy(async () => ({
 Stable fallback so memoized values do not see a new array on every render.
 */
 const NO_SESSIONS: Session[] = [];
+const NO_ORIGINS: readonly string[] = [];
 
 // Older Chromium builds and some forks lack the side panel API.
 const hasSidePanel = typeof chrome.sidePanel?.open === 'function';
@@ -116,6 +120,10 @@ function Popup() {
 		state?.settings?.includePinnedTabs === true || allowPinnedOnce;
 	const tabSelection = useTabSelection(
 		state?.settings?.includePinnedTabs === true,
+	);
+	const canSwitch = useHasSavableTabs(
+		state?.settings?.includePinnedTabs === true,
+		state?.settings?.excludedOrigins ?? NO_ORIGINS,
 	);
 	const recentSessions = useMemo(
 		() => groups.toSorted((a, b) => b.createdAt - a.createdAt).slice(0, 5),
@@ -306,6 +314,20 @@ function Popup() {
 			await reload();
 		} else {
 			showStatus(result?.error || `Could not restore “${group.name}”.`, true);
+		}
+	}
+
+	async function switchToSession(group: Session) {
+		setBusy(`restore:${group.id}`);
+		const result = await send('SWITCH_WORKSPACE', {groupId: group.id});
+		setBusy('');
+		if (result?.ok) {
+			showStatus(switchSummary(result, group.name), Boolean(result.failed), {
+				toast: true,
+			});
+			await reload();
+		} else {
+			showStatus(result?.error || `Could not switch to “${group.name}”.`, true);
 		}
 	}
 
@@ -678,6 +700,26 @@ function Popup() {
 											{group.tabs.length === 1 ? 'tab' : 'tabs'}
 										</span>
 									</span>
+									<IconTooltip
+										label={
+											canSwitch
+												? 'Switch. Save this window and open this session in it.'
+												: 'Switch is off: this window has no tabs to save.'
+										}
+									>
+										<span>
+											<Button
+												size="icon"
+												variant="ghost"
+												className="h-7 w-7"
+												disabled={busy !== '' || !canSwitch}
+												aria-label={`Switch to ${group.name || 'untitled session'}`}
+												onClick={() => void switchToSession(group)}
+											>
+												<ArrowLeftRight className="h-3.5 w-3.5" />
+											</Button>
+										</span>
+									</IconTooltip>
 									<IconTooltip label="Restore. Ctrl or Cmd keeps, Shift opens a new window.">
 										<Button
 											size="icon"
