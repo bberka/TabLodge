@@ -1553,6 +1553,13 @@ function NewTab() {
 					<ExpandingSearch
 						label="Search bookmarks"
 						value={bookmarkSearch}
+						status={
+							bookmarkSearch.trim()
+								? filteredBookmarks.length === 0
+									? 'No bookmarks match'
+									: `${plural(filteredBookmarks.length, 'bookmark')} found`
+								: ''
+						}
 						onChange={setBookmarkSearch}
 					/>
 					<IconTooltip label="Add bookmark">

@@ -273,6 +273,49 @@ async function main() {
 				await page.close();
 			},
 		);
+		await check('dialogs hand focus back to what opened them', async () => {
+			const page = await openPage(context, extensionId, 'newtab');
+			const add = page.getByRole('button', {name: 'Add bookmark'}).first();
+			await add.focus();
+			await page.keyboard.press('Enter');
+			await page.getByRole('dialog').waitFor();
+			await page.keyboard.press('Escape');
+			await until(
+				async () => (await focusedLabel(page)) === 'Add bookmark',
+				'focus to return to the Add bookmark button',
+			);
+			// A dialog opened from a menu item returns to the menu's button.
+			const trigger = page
+				.locator('[data-bookmark-id] [data-move-focus]')
+				.first();
+			const label = await trigger.getAttribute('aria-label');
+			await trigger.focus();
+			await page.keyboard.press('Enter');
+			await page.getByRole('menuitem', {name: 'Edit', exact: true}).click();
+			await page.getByRole('dialog').waitFor();
+			await page.keyboard.press('Escape');
+			await until(async () => (await focusedLabel(page)) === label, 'focus');
+			await page.close();
+		});
+
+		await check('searches announce how many results they found', async () => {
+			const page = await openPage(context, extensionId, 'newtab');
+			await page.getByRole('button', {name: 'Search bookmarks'}).click();
+			await page.keyboard.type('zzzqq');
+			await until(
+				async () =>
+					(await page.getByRole('status').allTextContents()).includes(
+						'No bookmarks match',
+					),
+				'the no results announcement',
+			);
+			await page.keyboard.press('Escape');
+			await until(
+				async () => (await focusedLabel(page)) === 'Search bookmarks',
+				'focus to return to the search button',
+			);
+			await page.close();
+		});
 	} finally {
 		await context.close();
 		await rm(profile, {recursive: true, force: true});

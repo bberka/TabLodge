@@ -1424,6 +1424,13 @@ export function SessionManager({
 							<ExpandingSearch
 								label="Search sessions and tabs"
 								value={query}
+								status={
+									query.trim()
+										? visibleGroups.length === 0
+											? 'No matching sessions'
+											: `${plural(visibleGroups.length, 'session')} found`
+										: ''
+								}
 								onChange={setQuery}
 							/>
 							<DropdownMenu>

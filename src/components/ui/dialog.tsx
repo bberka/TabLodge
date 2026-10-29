@@ -3,6 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {X} from 'lucide-react';
 import {Button, type ButtonProps} from './button';
 import {Tooltip, TooltipContent, TooltipTrigger} from './tooltip';
+import {focusReturnTarget} from '@/shared/focus-rescue';
 import {cn} from '@/lib/utils';
 
 // Returns `value` while `active`, and the last active value otherwise. Dialogs use it so their
@@ -35,6 +36,23 @@ function Dialog({
 }
 
 const DialogClose = DialogPrimitive.Close;
+
+// Hands focus back to the control that opened the dialog. A caller's own onCloseAutoFocus that calls
+// preventDefault keeps full control.
+function returnFocus(event: Event, onCloseAutoFocus?: (event: Event) => void) {
+	onCloseAutoFocus?.(event);
+	if (event.defaultPrevented) {
+		return;
+	}
+
+	const target = focusReturnTarget();
+	if (!target) {
+		return;
+	}
+
+	event.preventDefault();
+	target.focus();
+}
 
 /**
 Width presets shared by every dialog and alert dialog: confirmations (sm), forms (md), and richer flows (lg).
@@ -200,6 +218,7 @@ const DialogContent = React.forwardRef<
 			className,
 			children,
 			onOpenAutoFocus,
+			onCloseAutoFocus,
 			size = 'md',
 			hideClose = false,
 			...props
@@ -239,6 +258,7 @@ const DialogContent = React.forwardRef<
 						// The container is focusable (tabIndex -1) and has no visible focus ring.
 						initialFocusTarget(contentRef.current).focus();
 					}}
+					onCloseAutoFocus={(event) => returnFocus(event, onCloseAutoFocus)}
 					{...props}
 				>
 					{shownChildren}
@@ -342,6 +362,7 @@ export {
 	dialogOverlayClass,
 	dialogPanelClass,
 	initialFocusTarget,
+	returnFocus,
 	useRetainedValue,
 	type DialogSize,
 };

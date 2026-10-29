@@ -351,79 +351,89 @@ function ResultList({
 		commandIcons,
 	} = finder;
 	let position = -1;
+	const count = sections.reduce(
+		(total, section) => total + section.items.length,
+		0,
+	);
 	return (
-		<ScrollArea viewportClassName={viewportClassName}>
-			<div
-				id={listId}
-				role="listbox"
-				aria-label="Results"
-				className="px-2 pb-2"
-			>
-				{sections.map((section) => (
-					<div key={section.kind} role="group" aria-label={section.label}>
-						<div className="px-2 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-							{section.label}
-						</div>
-						{section.items.map((item) => {
-							position++;
-							const at = position;
-							const active = at === selected;
-							return (
-								<div
-									key={item.id}
-									id={`${listId}-${at}`}
-									role="option"
-									aria-selected={active}
-									data-active={active || undefined}
-									className={cn(
-										'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5',
-										active && 'bg-accent text-accent-foreground',
-									)}
-									onMouseMove={() => !active && setIndex(at)}
-									onMouseDown={(event) => event.preventDefault()}
-									onClick={(event) =>
-										void run(item, event.ctrlKey || event.metaKey)
-									}
-								>
-									<ResultIcon
-										item={item}
-										commandIcon={
-											item.kind === 'command'
-												? commandIcons.get(item.ref!)
-												: undefined
+		<>
+			{/* Moving through results announces each option; this says how many a new search found. */}
+			<p role="status" className="sr-only">
+				{query.trim() ? `${count} ${count === 1 ? 'result' : 'results'}` : ''}
+			</p>
+			<ScrollArea viewportClassName={viewportClassName}>
+				<div
+					id={listId}
+					role="listbox"
+					aria-label="Results"
+					className="px-2 pb-2"
+				>
+					{sections.map((section) => (
+						<div key={section.kind} role="group" aria-label={section.label}>
+							<div className="px-2 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+								{section.label}
+							</div>
+							{section.items.map((item) => {
+								position++;
+								const at = position;
+								const active = at === selected;
+								return (
+									<div
+										key={item.id}
+										id={`${listId}-${at}`}
+										role="option"
+										aria-selected={active}
+										data-active={active || undefined}
+										className={cn(
+											'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5',
+											active && 'bg-accent text-accent-foreground',
+										)}
+										onMouseMove={() => !active && setIndex(at)}
+										onMouseDown={(event) => event.preventDefault()}
+										onClick={(event) =>
+											void run(item, event.ctrlKey || event.metaKey)
 										}
-									/>
-									<span className="min-w-0 flex-1">
-										<span className="block truncate text-[13px] font-medium">
-											{item.kind === 'web' || item.kind === 'url' ? (
-												item.title
-											) : (
-												<Highlight text={item.title} query={query} />
-											)}
-										</span>
-										{item.detail && (
-											<span className="block truncate text-[11px] text-muted-foreground">
+									>
+										<ResultIcon
+											item={item}
+											commandIcon={
+												item.kind === 'command'
+													? commandIcons.get(item.ref!)
+													: undefined
+											}
+										/>
+										<span className="min-w-0 flex-1">
+											<span className="block truncate text-[13px] font-medium">
 												{item.kind === 'web' || item.kind === 'url' ? (
-													item.detail
+													item.title
 												) : (
-													<Highlight text={item.detail} query={query} />
+													<Highlight text={item.title} query={query} />
 												)}
 											</span>
+											{item.detail && (
+												<span className="block truncate text-[11px] text-muted-foreground">
+													{item.kind === 'web' || item.kind === 'url' ? (
+														item.detail
+													) : (
+														<Highlight text={item.detail} query={query} />
+													)}
+												</span>
+											)}
+										</span>
+										{active && (
+											<CornerDownLeft
+												className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+												aria-hidden="true"
+											/>
 										)}
-									</span>
-									{active && (
-										<CornerDownLeft
-											className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-											aria-hidden="true"
-										/>
-									)}
-								</div>
-							);
-						})}
-					</div>
-				))}
-			</div>
-		</ScrollArea>
+									</div>
+								);
+							})}
+						</div>
+					))}
+				</div>
+			</ScrollArea>
+		</>
 	);
 }
 
