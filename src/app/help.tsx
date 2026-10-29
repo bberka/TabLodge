@@ -537,9 +537,9 @@ function Help() {
 				},
 				{
 					title: 'Control saved data',
-					body: 'You can turn Sessions or Bookmarks off without deleting their saved data. Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data.',
+					body: 'Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data.',
 					searchText:
-						'disable turn off sessions bookmarks data retained delete erase export restore defaults recovery settings',
+						'sessions bookmarks data delete erase export restore defaults recovery settings',
 				},
 			],
 			action: {label: 'Open Settings', href: 'options.html', icon: Settings2},

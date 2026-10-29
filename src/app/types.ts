@@ -72,8 +72,6 @@ export type Settings = {
 	*/
 	autoFocusSearchOnNewTab: boolean;
 	actionMode: ActionMode;
-	sessionsEnabled: boolean;
-	bookmarksEnabled: boolean;
 	/**
 	What the toolbar icon opens: the quick popup or the browser side panel.
 	*/

@@ -299,8 +299,6 @@ function NewTab() {
 	const settings: Partial<Settings> = state?.settings || {};
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
-	const sessionsEnabled = settings.sessionsEnabled !== false;
-	const bookmarksEnabled = settings.bookmarksEnabled !== false;
 	const tabSelection = useTabSelection(settings.includePinnedTabs === true);
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
@@ -343,8 +341,7 @@ function NewTab() {
 			: null;
 	const autoOpenFinder =
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
-	const bothVisible = sessionsEnabled && bookmarksEnabled;
-	const sessionsOnTop = bothVisible && settings.sessionsOnTop === true;
+	const sessionsOnTop = settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
 		const needle = bookmarkSearch.trim().toLocaleLowerCase();
 		if (!needle) {
@@ -436,7 +433,7 @@ function NewTab() {
 	}, []);
 
 	useEffect(() => {
-		if (!state || externalPromptHandled || !bookmarksEnabled) {
+		if (!state || externalPromptHandled) {
 			return;
 		}
 
@@ -470,7 +467,7 @@ function NewTab() {
 			newColumnName: '',
 		});
 		setDialog('bookmark');
-	}, [state, externalPromptHandled, bookmarksEnabled, columns]);
+	}, [state, externalPromptHandled, columns]);
 
 	// Bookmarks are only added by drops on a column or Unfiled. Elsewhere, link drags show the
 	// "no drop" cursor and a stray drop is swallowed so the page does not navigate to the link.
@@ -496,8 +493,7 @@ function NewTab() {
 
 	// Pasting a link outside a text field opens Add bookmark prefilled with it. The title comes from the copied
 	// link's text, then from an open tab showing that page, then the domain (no page is ever fetched).
-	const pasteToBookmark =
-		bookmarksEnabled && settings.pasteLinkToBookmark !== false;
+	const pasteToBookmark = settings.pasteLinkToBookmark !== false;
 	useEffect(() => {
 		if (!pasteToBookmark) {
 			return;
@@ -1350,77 +1346,63 @@ function NewTab() {
 	};
 	const finderActions = useMemo<FinderAction[]>(() => {
 		const h = () => commandHandlersRef.current;
-		const list: FinderAction[] = [];
-		if (sessionsEnabled) {
-			list.push({
+		return [
+			{
 				id: 'save-window',
 				title: saveWindowLabel(tabSelection),
 				keywords: ['session', 'tabs', 'store'],
 				icon: Save,
 				run: () => h().saveWindow(),
-			});
-		}
-
-		if (bookmarksEnabled) {
-			list.push(
-				{
-					id: 'new-bookmark',
-					title: 'New bookmark',
-					keywords: ['add', 'link'],
-					icon: BookmarkPlus,
-					run: () => h().newBookmark(),
-				},
-				{
-					id: 'new-column',
-					title: 'New column',
-					keywords: ['bookmark', 'add'],
-					icon: SquarePlus,
-					run: () => h().newColumn(),
-				},
-				{
-					id: 'backup-bookmarks',
-					title: 'Back up bookmarks',
-					keywords: ['export', 'download', 'save'],
-					icon: Download,
-					run: () => h().backupBookmarks(),
-				},
-				{
-					id: 'import-bookmarks',
-					title: 'Import bookmarks',
-					keywords: ['restore', 'load', 'upload'],
-					icon: Upload,
-					run: () => h().importData(),
-				},
-			);
-		}
-
-		if (sessionsEnabled) {
-			list.push(
-				{
-					id: 'new-folder',
-					title: 'New session folder',
-					keywords: ['add', 'sessions'],
-					icon: FolderPlus,
-					run: () => emitFinderEvent({type: 'new-folder'}),
-				},
-				{
-					id: 'backup-sessions',
-					title: 'Back up sessions',
-					keywords: ['export', 'download', 'save'],
-					icon: HardDriveDownload,
-					run: () => emitFinderEvent({type: 'backup-sessions'}),
-				},
-				{
-					id: 'import-sessions',
-					title: 'Import sessions',
-					keywords: ['restore', 'load', 'upload'],
-					icon: ArchiveRestore,
-					run: () => emitFinderEvent({type: 'import-sessions'}),
-				},
-			);
-		}
-
-		list.push(
+			},
+			{
+				id: 'new-bookmark',
+				title: 'New bookmark',
+				keywords: ['add', 'link'],
+				icon: BookmarkPlus,
+				run: () => h().newBookmark(),
+			},
+			{
+				id: 'new-column',
+				title: 'New column',
+				keywords: ['bookmark', 'add'],
+				icon: SquarePlus,
+				run: () => h().newColumn(),
+			},
+			{
+				id: 'backup-bookmarks',
+				title: 'Back up bookmarks',
+				keywords: ['export', 'download', 'save'],
+				icon: Download,
+				run: () => h().backupBookmarks(),
+			},
+			{
+				id: 'import-bookmarks',
+				title: 'Import bookmarks',
+				keywords: ['restore', 'load', 'upload'],
+				icon: Upload,
+				run: () => h().importData(),
+			},
+			{
+				id: 'new-folder',
+				title: 'New session folder',
+				keywords: ['add', 'sessions'],
+				icon: FolderPlus,
+				run: () => emitFinderEvent({type: 'new-folder'}),
+			},
+			{
+				id: 'backup-sessions',
+				title: 'Back up sessions',
+				keywords: ['export', 'download', 'save'],
+				icon: HardDriveDownload,
+				run: () => emitFinderEvent({type: 'backup-sessions'}),
+			},
+			{
+				id: 'import-sessions',
+				title: 'Import sessions',
+				keywords: ['restore', 'load', 'upload'],
+				icon: ArchiveRestore,
+				run: () => emitFinderEvent({type: 'import-sessions'}),
+			},
 			{
 				id: 'recent-snapshots',
 				title: 'Recent snapshots',
@@ -1456,9 +1438,8 @@ function NewTab() {
 				icon: HelpCircle,
 				run: () => h().openHelp(),
 			},
-		);
-		return list;
-	}, [sessionsEnabled, bookmarksEnabled, tabSelection]);
+		];
+	}, [tabSelection]);
 
 	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder .
 	useEffect(() => {
@@ -1566,7 +1547,7 @@ function NewTab() {
 		);
 	}
 
-	const bookmarksSection = bookmarksEnabled ? (
+	const bookmarksSection = (
 		<section
 			id="bookmark-library"
 			className="scroll-mt-6"
@@ -1778,12 +1759,12 @@ function NewTab() {
 				</div>
 			)}
 		</section>
-	) : null;
-	const sessionsSection = sessionsEnabled ? (
+	);
+	const sessionsSection = (
 		<section id="sessions" className="scroll-mt-6">
 			<SessionManager embedded initialQuery={initialQuery} />
 		</section>
-	) : null;
+	);
 
 	return (
 		<main
@@ -1795,7 +1776,7 @@ function NewTab() {
 		>
 			<AppHeader active="dashboard">
 				<FinderTrigger onClick={() => setFinderOpen(true)} />
-				{sessionsEnabled && settings.showSaveWindowButton !== false && (
+				{settings.showSaveWindowButton !== false && (
 					<Button
 						size="sm"
 						disabled={busy !== ''}
@@ -1840,7 +1821,7 @@ function NewTab() {
 				onReview={() => setSnapshotsOpen(true)}
 			/>
 			{sessionsOnTop ? sessionsSection : bookmarksSection}
-			{bothVisible && <hr className="my-8 border-border" aria-hidden="true" />}
+			<hr className="my-8 border-border" aria-hidden="true" />
 			{sessionsOnTop ? bookmarksSection : sessionsSection}
 			<StatusLine status={error ? {message: error, error: true} : status} />
 

@@ -8,7 +8,7 @@ const baseStore = {
 	folders: [],
 	bookmarkColumns: [],
 	bookmarks: [],
-	settings: {sessionsEnabled: false},
+	settings: {includePinnedTabs: true},
 	updatedAt: 0,
 } as DevStore;
 

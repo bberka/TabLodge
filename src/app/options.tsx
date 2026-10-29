@@ -15,13 +15,11 @@ import {
 	Keyboard,
 	Laptop,
 	Trash2,
-	Settings2,
 	Download,
 	Bookmark,
 	Database,
 	PanelRightOpen,
 	Plus,
-	LockKeyhole,
 	Eraser,
 	LifeBuoy,
 	MousePointerClick,
@@ -106,10 +104,8 @@ import {cn} from '@/lib/utils';
 type SettingKey<V> = {
 	[K in keyof Settings]-?: Settings[K] extends V ? K : never;
 }[keyof Settings];
-type System = 'sessions' | 'bookmarks';
 // `requires`: a switch that must be on for this row to apply; the row is hidden while it is off (search shows it
 // next to its parent, disabled).
-// `systems`: the row is hidden (and not searchable) while any listed system is turned off.
 type SettingField = {
 	label: string;
 	help: string;
@@ -122,7 +118,6 @@ type SettingField = {
 	The row an `enabled` check depends on, so search can show the two together (`requires` names it already).
 	*/
 	parent?: keyof Settings;
-	systems?: System[];
 	/**
 	The row only exists while this is true for the current settings; otherwise it is hidden and left out of search.
 	*/
@@ -185,12 +180,10 @@ const LINK_ACTIONS: Array<[string, string]> = [
 	['current', 'Open in this tab'],
 	['new', 'Open in new tab'],
 ];
-// `system`: the whole section collapses to a "turned off" line while that system is off.
 const settingsGroups: Array<{
 	title: string;
 	icon: IconComponent;
 	description?: string;
-	system?: System;
 	fields: SettingField[];
 }> = [
 	{
@@ -301,7 +294,6 @@ const settingsGroups: Array<{
 			},
 			{
 				name: 'sessionsOnTop',
-				systems: ['sessions', 'bookmarks'],
 				label: 'Show sessions at the top',
 				help: 'Put the sessions section above the bookmark board.',
 				type: 'switch',
@@ -359,7 +351,6 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'When saving',
-		system: 'sessions',
 		icon: Layers2,
 		fields: [
 			{
@@ -535,7 +526,6 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'When restoring',
-		system: 'sessions',
 		icon: RotateCcw,
 		fields: [
 			{
@@ -612,7 +602,6 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'Session board',
-		system: 'sessions',
 		icon: Layers2,
 		fields: [
 			{
@@ -670,7 +659,6 @@ const settingsGroups: Array<{
 	},
 	{
 		title: 'Bookmark board',
-		system: 'bookmarks',
 		icon: Bookmark,
 		fields: [
 			{
@@ -711,7 +699,6 @@ const settingsGroups: Array<{
 				label: 'When you bookmark a page in the browser',
 				help: `Use the browser’s own bookmark button (star, Ctrl/Cmd+D) as usual and ${PROJECT.name} can offer to keep the page on the bookmark board too. Only a single bookmark for the page you are on counts; syncing, imports and pastes are ignored. Removing the browser bookmark never removes the ${PROJECT.name} one.`,
 				type: 'select',
-				systems: ['bookmarks'],
 				options: [
 					['off', 'Do nothing'],
 					['ask', `Ask to add it to ${PROJECT.name}`],
@@ -723,7 +710,6 @@ const settingsGroups: Array<{
 				label: 'Column for browser bookmarks',
 				help: 'Where automatically added bookmarks go. The first column is used if this one no longer exists.',
 				type: 'column',
-				systems: ['bookmarks'],
 				when: (current) => current.browserBookmarkAction === 'add',
 				parent: 'browserBookmarkAction',
 			},
@@ -855,25 +841,6 @@ const APPEARANCE = {
 		...ACCENTS.map(({label}) => label),
 	],
 };
-const SYSTEMS = {
-	title: 'Systems',
-	description: 'Switch a system off without deleting its saved data.',
-	note: 'At least one system must remain enabled. Disabled systems keep their data and reject changes until re-enabled.',
-};
-const SYSTEM_ROWS = [
-	{
-		name: 'sessionsEnabled',
-		label: 'Sessions',
-		help: 'Save, organize, and restore tab sessions.',
-		otherLabel: 'Bookmarks',
-	},
-	{
-		name: 'bookmarksEnabled',
-		label: 'Bookmarks',
-		help: 'Keep a local library of browser bookmarks.',
-		otherLabel: 'Sessions',
-	},
-] as const;
 const DATA = {
 	title: 'Data',
 	description: 'Sessions and bookmarks are stored only in this browser.',
@@ -908,7 +875,6 @@ const settingsNavigationLabels: Record<string, string> = {
 const settingsNavigation = [
 	{title: APPEARANCE.title, icon: Sun},
 	{title: SHORTCUTS.title, icon: Keyboard},
-	{title: SYSTEMS.title, icon: Settings2},
 	...settingsGroups.map(({title, icon}) => ({title, icon})),
 	{title: DATA.title, icon: Database},
 	{title: EXCLUDED.title, icon: Globe},
@@ -1095,18 +1061,6 @@ function Options() {
 				true,
 			);
 			return;
-		}
-
-		if (
-			['sessionsEnabled', 'bookmarksEnabled'].includes(name) &&
-			value === false
-		) {
-			const otherName =
-				name === 'sessionsEnabled' ? 'bookmarksEnabled' : 'sessionsEnabled';
-			if (settings[otherName] === false) {
-				showStatus('Keep Sessions or Bookmarks enabled.', true);
-				return;
-			}
 		}
 
 		// Copies to Downloads need the optional permission; the browser asks for it here, straight from the click.
@@ -1349,9 +1303,6 @@ function Options() {
 				? sortByQuery(query, items, textOf)
 				: rankByQuery(query, items, textOf)
 			: [...items];
-	const systemOn = (system: System) =>
-		settings[system === 'sessions' ? 'sessionsEnabled' : 'bookmarksEnabled'] !==
-		false;
 	// A row whose `when` check fails does not apply at all (for example the custom new-tab address while TabLodge
 	// owns new tabs): it is hidden and left out of search. A row whose parent switch is off (`requires`, `enabled`)
 	// is hidden too, but search still shows it next to its parent, disabled, so it can be found.
@@ -1363,20 +1314,10 @@ function Options() {
 		(field.enabled !== undefined && !field.enabled(settings as Settings));
 
 	const fieldShown = (field: SettingField) =>
-		(field.systems ?? []).every((system) => systemOn(system)) &&
-		rowAvailable(field) &&
-		(searching || !rowDisabled(field));
+		rowAvailable(field) && (searching || !rowDisabled(field));
 	const hl = (text: string) => <Highlight text={text} query={query} />;
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
 	const showShortcuts = matchesQuery(query, SHORTCUTS.text);
-	const systemRows = pick(SYSTEMS.title, SYSTEM_ROWS, (row) => [
-		row.label,
-		row.help,
-	]);
-	// A group whose system is off collapses to one line (and is skipped by search); single rows can hide too.
-	const collapsedGroups = searching
-		? []
-		: settingsGroups.filter((group) => group.system && !systemOn(group.system));
 	const groupScore = (title: string, fields: SettingField[]) =>
 		Math.max(
 			scoreQuery(query, [title]),
@@ -1423,7 +1364,6 @@ function Options() {
 	};
 
 	const visibleGroups = settingsGroups
-		.filter((group) => !group.system || systemOn(group.system))
 		.map((group) => {
 			const shown = group.fields.filter((field) => fieldShown(field));
 			return {
@@ -1466,7 +1406,7 @@ function Options() {
 					// Opens on Everything, which also holds settings, so it is never empty.
 					onClick={() =>
 						setBackupData(
-							settings.bookmarksEnabled !== false && bookmarkCount > 0
+							bookmarkCount > 0
 								? {
 										kind: 'bookmarks',
 										columns: state.bookmarkColumns,
@@ -1543,14 +1483,12 @@ function Options() {
 		row.help,
 		...row.words,
 	]);
-	const showExcluded =
-		(!searching || settings.sessionsEnabled !== false) &&
-		matchesQuery(query, [
-			EXCLUDED.title,
-			EXCLUDED.description,
-			...EXCLUDED.words,
-			...excluded,
-		]);
+	const showExcluded = matchesQuery(query, [
+		EXCLUDED.title,
+		EXCLUDED.description,
+		...EXCLUDED.words,
+		...excluded,
+	]);
 	const showDefaults = matchesQuery(query, [
 		DEFAULTS.title,
 		DEFAULTS.help,
@@ -1559,14 +1497,12 @@ function Options() {
 	const matchCount =
 		Number(showAppearance) +
 		Number(showShortcuts) +
-		systemRows.length +
 		visibleGroups.reduce((sum, entry) => sum + entry.fields.length, 0) +
 		(searching &&
 		recoveryTools &&
 		visibleGroups.some((entry) => entry.fields.length === 0)
 			? 1
 			: 0) +
-		collapsedGroups.length +
 		visibleData.length +
 		Number(showExcluded) +
 		Number(showDefaults);
@@ -1582,10 +1518,6 @@ function Options() {
 
 					case SHORTCUTS.title: {
 						return showShortcuts;
-					}
-
-					case SYSTEMS.title: {
-						return systemRows.length > 0;
 					}
 
 					case DATA.title: {
@@ -1838,288 +1770,185 @@ function Options() {
 						/>
 					)}
 
-					{systemRows.length > 0 && (
+					{visibleGroups.map(({group, fields}) => (
 						<SectionCard
-							id={sectionId(SYSTEMS.title)}
-							title={hl(SYSTEMS.title)}
-							description={SYSTEMS.description}
-							icon={Settings2}
+							key={group.title}
+							id={sectionId(group.title)}
+							title={hl(group.title)}
+							description={group.description}
+							icon={group.icon}
 							className={SECTION_SCROLL_CLASS}
 						>
-							<div className="space-y-1">
-								{systemRows.map(({name, label, help, otherLabel}) => {
-									const locked =
-										settings[
-											`${otherLabel.toLowerCase()}Enabled` as
-												'sessionsEnabled' | 'bookmarksEnabled'
-										] === false;
-									return (
-										<SettingRow
-											key={name}
-											label={hl(label)}
-											help={hl(help)}
-											noteId={`${name}-note`}
-											note={
-												locked &&
-												`Stays on while ${otherLabel} is off. Turn ${otherLabel} on to change this.`
-											}
-										>
+							<div className="divide-y divide-border/70">
+								{fields.map((field) => (
+									<SettingRow
+										key={field.name}
+										label={hl(field.label)}
+										help={
+											field.name === 'sessionNameStyle' ? (
+												<>
+													{hl(field.help)}
+													<SessionNamePreview
+														style={settings.sessionNameStyle ?? 'date-title'}
+														fallback={
+															settings.sessionNameFallback ?? 'date-title'
+														}
+														template={
+															templateDraft ?? settings.sessionNameTemplate
+														}
+													/>
+												</>
+											) : (
+												hl(field.help)
+											)
+										}
+										hint={
+											searching &&
+											(field.type === 'select' ||
+												field.type === 'number-select') &&
+											!matchesQuery(query, [field.label, field.help])
+												? field.options
+														.map(([, label]) => label)
+														.filter((label) => matchesAnyTerm(query, label))
+												: undefined
+										}
+										inset={Boolean(
+											field.requires ||
+											field.enabled ||
+											field.parent ||
+											field.when,
+										)}
+										highlight={query}
+									>
+										{field.type === 'switch' ? (
 											<Switch
-												checked={settings[name] !== false}
-												readOnly={locked}
-												aria-label={label}
-												aria-describedby={locked ? `${name}-note` : undefined}
-												onCheckedChange={(value) => updateSetting(name, value)}
+												checked={
+													field.name === 'stretchBookmarkColumns'
+														? settings.stretchBookmarkColumns !== false
+														: field.name === 'autoBackupToDownloads'
+															? Boolean(settings.autoBackupToDownloads) &&
+																downloadsGranted
+															: Boolean(settings[field.name])
+												}
+												aria-label={field.label}
+												disabled={rowDisabled(field)}
+												onCheckedChange={(value) =>
+													updateSetting(field.name, value)
+												}
 											/>
-										</SettingRow>
-									);
-								})}
-							</div>
-							{(!searching || titleHit(SYSTEMS.title)) && (
-								<p className="mt-4 rounded-md bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-									{SYSTEMS.note}
-								</p>
-							)}
-						</SectionCard>
-					)}
-
-					{[
-						...visibleGroups.map(({group, fields}) => ({
-							group,
-							fields,
-							off: false,
-						})),
-						...collapsedGroups.map((group) => ({
-							group,
-							fields: [] as SettingField[],
-							off: true,
-						})),
-					]
-						// While searching the sections stay in score order (none are collapsed then).
-						.toSorted((a, b) =>
-							searching
-								? 0
-								: settingsGroups.indexOf(a.group) -
-									settingsGroups.indexOf(b.group),
-						)
-						.map(({group, fields, off}) =>
-							off ? (
-								<SectionCard
-									key={group.title}
-									id={sectionId(group.title)}
-									title={group.title}
-									description={group.description}
-									icon={group.icon}
-									className={SECTION_SCROLL_CLASS}
-								>
-									<div className="flex flex-wrap items-center justify-between gap-3">
-										<p className="text-sm text-muted-foreground">
-											{group.system === 'sessions'
-												? 'Sessions are turned off.'
-												: 'Bookmarks are turned off.'}
-										</p>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() =>
-												updateSetting(
-													group.system === 'sessions'
-														? 'sessionsEnabled'
-														: 'bookmarksEnabled',
-													true,
-												)
-											}
-										>
-											Turn on
-										</Button>
-									</div>
-								</SectionCard>
-							) : (
-								<SectionCard
-									key={group.title}
-									id={sectionId(group.title)}
-									title={hl(group.title)}
-									description={group.description}
-									icon={group.icon}
-									className={SECTION_SCROLL_CLASS}
-								>
-									<div className="divide-y divide-border/70">
-										{fields.map((field) => (
-											<SettingRow
-												key={field.name}
-												label={hl(field.label)}
-												help={
-													field.name === 'sessionNameStyle' ? (
-														<>
-															{hl(field.help)}
-															<SessionNamePreview
-																style={
-																	settings.sessionNameStyle ?? 'date-title'
-																}
-																fallback={
-																	settings.sessionNameFallback ?? 'date-title'
-																}
-																template={
-																	templateDraft ?? settings.sessionNameTemplate
-																}
-															/>
-														</>
-													) : (
-														hl(field.help)
+										) : field.type === 'url' ? (
+											<UrlSetting
+												label={field.label}
+												disabled={rowDisabled(field)}
+												placeholder={field.placeholder}
+												value={settings[field.name] ?? ''}
+												onCommit={(value) => updateSetting(field.name, value)}
+												onInvalid={() =>
+													showStatus(
+														'Enter a web address that starts with http:// or https://.',
+														true,
 													)
 												}
-												hint={
-													searching &&
-													(field.type === 'select' ||
-														field.type === 'number-select') &&
-													!matchesQuery(query, [field.label, field.help])
-														? field.options
-																.map(([, label]) => label)
-																.filter((label) => matchesAnyTerm(query, label))
-														: undefined
+											/>
+										) : field.type === 'text' ? (
+											<TextSetting
+												label={field.label}
+												disabled={rowDisabled(field)}
+												placeholder={field.placeholder}
+												value={settings[field.name] ?? ''}
+												onDraft={setTemplateDraft}
+												onCommit={(value) => {
+													setTemplateDraft(null);
+													return updateSetting(field.name, value);
+												}}
+											/>
+										) : field.type === 'number' ? (
+											<NumberSetting
+												label={field.label}
+												value={settings[field.name] ?? field.min}
+												min={field.min}
+												max={field.max}
+												suffix={field.suffix}
+												disabled={rowDisabled(field)}
+												onCommit={(value) => updateSetting(field.name, value)}
+											/>
+										) : field.type === 'column' ? (
+											<ColumnSelect
+												columns={state?.bookmarkColumns ?? []}
+												value={
+													state?.bookmarkColumns.some(
+														(column) => column.id === settings[field.name],
+													)
+														? settings[field.name]
+														: (state?.bookmarkColumns[0]?.id ?? '')
 												}
-												inset={Boolean(
-													field.requires ||
-													field.enabled ||
-													field.parent ||
-													field.when,
+												disabled={rowDisabled(field)}
+												className="w-full sm:w-64"
+												aria-label={field.label}
+												onValueChange={(value) =>
+													updateSetting(field.name, value)
+												}
+											/>
+										) : field.type === 'number-select' ? (
+											<Select
+												value={String(
+													settings[field.name] ?? field.options[0][0],
 												)}
-												highlight={query}
+												disabled={rowDisabled(field)}
+												onValueChange={(value) =>
+													updateSetting(field.name, Number(value))
+												}
 											>
-												{field.type === 'switch' ? (
-													<Switch
-														checked={
-															field.name === 'stretchBookmarkColumns'
-																? settings.stretchBookmarkColumns !== false
-																: field.name === 'autoBackupToDownloads'
-																	? Boolean(settings.autoBackupToDownloads) &&
-																		downloadsGranted
-																	: Boolean(settings[field.name])
-														}
-														aria-label={field.label}
-														disabled={rowDisabled(field)}
-														onCheckedChange={(value) =>
-															updateSetting(field.name, value)
-														}
-													/>
-												) : field.type === 'url' ? (
-													<UrlSetting
-														label={field.label}
-														disabled={rowDisabled(field)}
-														placeholder={field.placeholder}
-														value={settings[field.name] ?? ''}
-														onCommit={(value) =>
-															updateSetting(field.name, value)
-														}
-														onInvalid={() =>
-															showStatus(
-																'Enter a web address that starts with http:// or https://.',
-																true,
-															)
-														}
-													/>
-												) : field.type === 'text' ? (
-													<TextSetting
-														label={field.label}
-														disabled={rowDisabled(field)}
-														placeholder={field.placeholder}
-														value={settings[field.name] ?? ''}
-														onDraft={setTemplateDraft}
-														onCommit={(value) => {
-															setTemplateDraft(null);
-															return updateSetting(field.name, value);
-														}}
-													/>
-												) : field.type === 'number' ? (
-													<NumberSetting
-														label={field.label}
-														value={settings[field.name] ?? field.min}
-														min={field.min}
-														max={field.max}
-														suffix={field.suffix}
-														disabled={rowDisabled(field)}
-														onCommit={(value) =>
-															updateSetting(field.name, value)
-														}
-													/>
-												) : field.type === 'column' ? (
-													<ColumnSelect
-														columns={state?.bookmarkColumns ?? []}
-														value={
-															state?.bookmarkColumns.some(
-																(column) => column.id === settings[field.name],
-															)
-																? settings[field.name]
-																: (state?.bookmarkColumns[0]?.id ?? '')
-														}
-														disabled={rowDisabled(field)}
-														className="w-full sm:w-64"
-														aria-label={field.label}
-														onValueChange={(value) =>
-															updateSetting(field.name, value)
-														}
-													/>
-												) : field.type === 'number-select' ? (
-													<Select
-														value={String(
-															settings[field.name] ?? field.options[0][0],
-														)}
-														disabled={rowDisabled(field)}
-														onValueChange={(value) =>
-															updateSetting(field.name, Number(value))
-														}
-													>
-														<SelectTrigger
-															className="w-full sm:w-64"
-															aria-label={field.label}
-														>
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent>
-															{field.options.map(([value, label]) => (
-																<SelectItem key={value} value={value}>
-																	{label}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-												) : (
-													<Select
-														value={settings[field.name] || field.options[0][0]}
-														disabled={rowDisabled(field)}
-														onValueChange={(value) =>
-															updateSetting(field.name, value)
-														}
-													>
-														<SelectTrigger
-															className="w-full sm:w-64"
-															aria-label={field.label}
-														>
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent>
-															{field.options.map(([value, label]) => (
-																<SelectItem key={value} value={value}>
-																	{label}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-												)}
-											</SettingRow>
-										))}
-									</div>
-									{group.title === RECOVERY_TITLE && recoveryTools && (
-										<RecoveryTools
-											showStatus={showStatus}
-											onDataChanged={reload}
-											onOpenSnapshots={() => setSnapshotsOpen(true)}
-											onOpenTrash={() => setTrashOpen(true)}
-										/>
-									)}
-								</SectionCard>
-							),
-						)}
+												<SelectTrigger
+													className="w-full sm:w-64"
+													aria-label={field.label}
+												>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{field.options.map(([value, label]) => (
+														<SelectItem key={value} value={value}>
+															{label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										) : (
+											<Select
+												value={settings[field.name] || field.options[0][0]}
+												disabled={rowDisabled(field)}
+												onValueChange={(value) =>
+													updateSetting(field.name, value)
+												}
+											>
+												<SelectTrigger
+													className="w-full sm:w-64"
+													aria-label={field.label}
+												>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{field.options.map(([value, label]) => (
+														<SelectItem key={value} value={value}>
+															{label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										)}
+									</SettingRow>
+								))}
+							</div>
+							{group.title === RECOVERY_TITLE && recoveryTools && (
+								<RecoveryTools
+									showStatus={showStatus}
+									onDataChanged={reload}
+									onOpenSnapshots={() => setSnapshotsOpen(true)}
+									onOpenTrash={() => setTrashOpen(true)}
+								/>
+							)}
+						</SectionCard>
+					))}
 
 					{visibleData.length > 0 && (
 						<SectionCard
@@ -2150,62 +1979,43 @@ function Options() {
 							icon={Globe}
 							className={SECTION_SCROLL_CLASS}
 							action={
-								settings.sessionsEnabled !== false && (
-									<Button variant="outline" size="sm" onClick={openSiteDialog}>
-										<Plus className="h-4 w-4" />
-										Add site
-									</Button>
-								)
+								<Button variant="outline" size="sm" onClick={openSiteDialog}>
+									<Plus className="h-4 w-4" />
+									Add site
+								</Button>
 							}
 						>
-							{settings.sessionsEnabled === false ? (
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<p className="text-sm text-muted-foreground">
-										Sessions are turned off.
-									</p>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => updateSetting('sessionsEnabled', true)}
-									>
-										Turn on
-									</Button>
+							{excluded.length > 0 ? (
+								<div className="space-y-2">
+									{excluded.map((origin) => (
+										<div
+											key={origin}
+											className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+										>
+											<span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+												<code className="min-w-0 truncate text-xs">
+													{origin}
+												</code>
+												<span className="text-xs text-muted-foreground">
+													Includes subdomains
+												</span>
+											</span>
+											<Button
+												variant="ghost"
+												size="sm"
+												aria-label={`Remove ${origin} from exclusions`}
+												onClick={() => removeExcludedOrigin(origin)}
+											>
+												<Trash2 className="h-4 w-4" />
+												Remove
+											</Button>
+										</div>
+									))}
 								</div>
 							) : (
-								<>
-									{excluded.length > 0 ? (
-										<div className="space-y-2">
-											{excluded.map((origin) => (
-												<div
-													key={origin}
-													className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
-												>
-													<span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-														<code className="min-w-0 truncate text-xs">
-															{origin}
-														</code>
-														<span className="text-xs text-muted-foreground">
-															Includes subdomains
-														</span>
-													</span>
-													<Button
-														variant="ghost"
-														size="sm"
-														aria-label={`Remove ${origin} from exclusions`}
-														onClick={() => removeExcludedOrigin(origin)}
-													>
-														<Trash2 className="h-4 w-4" />
-														Remove
-													</Button>
-												</div>
-											))}
-										</div>
-									) : (
-										<p className="rounded-md bg-muted px-3 py-3 text-sm text-muted-foreground">
-											No websites are excluded.
-										</p>
-									)}
-								</>
+								<p className="rounded-md bg-muted px-3 py-3 text-sm text-muted-foreground">
+									No websites are excluded.
+								</p>
 							)}
 						</SectionCard>
 					)}
@@ -2325,9 +2135,7 @@ function Options() {
 			<ImportDialog
 				initialScope="everything"
 				open={importOpen}
-				initialKind={
-					settings.bookmarksEnabled === false ? 'sessions' : 'bookmarks'
-				}
+				initialKind="bookmarks"
 				state={state}
 				showStatus={showStatus}
 				onOpenChange={setImportOpen}
@@ -2611,8 +2419,6 @@ function ShortcutsCard({
 function SettingRow({
 	label,
 	help,
-	note,
-	noteId,
 	hint,
 	highlight = '',
 	inset,
@@ -2620,8 +2426,6 @@ function SettingRow({
 }: {
 	label: ReactNode;
 	help?: ReactNode;
-	note?: ReactNode;
-	noteId?: string;
 	/** Select options that matched the search while the label and help did not. */ hint?: string[];
 	highlight?: string;
 	inset?: boolean;
@@ -2651,15 +2455,6 @@ function SettingRow({
 								<Highlight text={option} query={highlight} />
 							</Fragment>
 						))}
-					</p>
-				)}
-				{Boolean(note) && (
-					<p
-						id={noteId}
-						className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-primary"
-					>
-						<LockKeyhole className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-						{note}
 					</p>
 				)}
 			</div>
