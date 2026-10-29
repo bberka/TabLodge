@@ -11,8 +11,10 @@ import {
 } from 'react';
 import {
 	AppWindow,
+	ArrowDown,
 	ArrowDownUp,
 	ArrowLeftRight,
+	ArrowUp,
 	BookmarkPlus,
 	ChevronDown,
 	ChevronRight,
@@ -117,6 +119,7 @@ import {hostOf, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
 import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
+import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {displayUrl as simplifiedUrl} from './url-display';
@@ -974,7 +977,7 @@ export function SessionManager({
 			.filter((id) => id !== draggedId);
 		const at = ids.indexOf(targetId);
 		if (at === -1) {
-			return;
+			return false;
 		}
 
 		ids.splice(position === 'after' ? at + 1 : at, 0, draggedId);
@@ -985,6 +988,41 @@ export function SessionManager({
 		}
 
 		await reload();
+		return Boolean(result?.ok);
+	}
+
+	// Keyboard alternative to dragging a session: one step up or down in the list as shown.
+	async function moveGroup(group: Session, direction: MoveDirection) {
+		const ids = visibleGroups.map((entry) => entry.id);
+		const target = neighborId(ids, group.id, direction);
+		if (!target) {
+			return;
+		}
+
+		const placed = await placeGroup(
+			group.id,
+			target,
+			direction === 'earlier' ? 'before' : 'after',
+		);
+		if (!placed) {
+			return;
+		}
+
+		const position = ids.indexOf(target) + 1;
+		showStatus(
+			`Moved “${group.name.trim() || 'Untitled session'}” to position ${position} of ${ids.length}.`,
+		);
+		focusAfterMove(`#session-${CSS.escape(group.id)} [data-move-focus]`);
+	}
+
+	function canMoveGroup(groupId: string, direction: MoveDirection) {
+		return Boolean(
+			neighborId(
+				visibleGroups.map((entry) => entry.id),
+				groupId,
+				direction,
+			),
+		);
 	}
 
 	// A dragged session may land on any folder chip except All and the folder it already sits in.
@@ -1096,6 +1134,8 @@ export function SessionManager({
 		editGroup: (group) => openGroupDetails(group),
 		editName: (group) => openGroupDetails(group, true),
 		moveToFolder: moveGroupToFolder,
+		moveGroup,
+		canMoveGroup,
 		merge: mergeGroup,
 		newFolderFor: (group) => setDialog({mode: 'create', moveGroupId: group.id}),
 		folderTargets: () => folders,
@@ -1375,6 +1415,13 @@ export function SessionManager({
 						<ExpandingSearch
 							label="Search sessions and tabs"
 							value={query}
+							status={
+								query.trim()
+									? visibleGroups.length === 0
+										? 'No matching sessions'
+										: `${plural(visibleGroups.length, 'session')} found`
+									: ''
+							}
 							onChange={setQuery}
 						/>
 						<DropdownMenu>
@@ -2162,6 +2209,11 @@ type CardActions = {
 	editGroup: (group: Session) => void;
 	editName: (group: Session) => void;
 	moveToFolder: (group: Session, folderId: string) => void;
+	/**
+	Keyboard alternative to dragging: moves a session one place up or down.
+	*/
+	moveGroup: (group: Session, direction: MoveDirection) => void;
+	canMoveGroup: (groupId: string, direction: MoveDirection) => boolean;
 	merge: (group: Session, targetId: string) => void;
 	/**
 	Opens the new-folder dialog; saving it creates the folder and moves the session in.
@@ -2364,6 +2416,20 @@ const GroupCard = memo(
 				onSelect: () => handlers.editGroup(group),
 			},
 			{
+				id: 'move-up',
+				label: 'Move up',
+				icon: ArrowUp,
+				disabled: !handlers.canMoveGroup(group.id, 'earlier'),
+				onSelect: () => handlers.moveGroup(group, 'earlier'),
+			},
+			{
+				id: 'move-down',
+				label: 'Move down',
+				icon: ArrowDown,
+				disabled: !handlers.canMoveGroup(group.id, 'later'),
+				onSelect: () => handlers.moveGroup(group, 'later'),
+			},
+			{
 				type: 'submenu',
 				id: 'move-folder',
 				label: 'Move to folder',
@@ -2553,30 +2619,14 @@ const GroupCard = memo(
 							{!isExpanded && wide && (
 								<span className="hidden shrink-0 items-center -space-x-1.5 md:flex">
 									{previewTabs.map((tab) => (
-										<button
-											key={tab.id}
-											type="button"
-											className="rounded-full focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-											title={`${settings.groupTitleAction === 'restore' ? 'Restore' : settings.groupTitleAction === 'edit' ? 'Edit details for' : isExpanded ? 'Collapse' : 'Expand'} ${name}`}
-											aria-label={`${settings.groupTitleAction === 'restore' ? 'Restore' : settings.groupTitleAction === 'edit' ? 'Edit details for' : isExpanded ? 'Collapse' : 'Expand'} ${name}`}
-											onClick={(event) =>
-												activateSessionTitle(
-													settings.groupTitleAction,
-													{
-														edit: () => handlers.editName(group),
-														restore: onRestore,
-														toggle: () => onExpanded(!isExpanded),
-													},
-													event,
-												)
-											}
-										>
+										// Decorative: the title button is the keyboard and screen reader control, and a click here reaches the card's own handler.
+										<span key={tab.id} aria-hidden="true">
 											<Favicon
 												url={tab.url}
 												label={tab.title}
 												className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
 											/>
-										</button>
+										</span>
 									))}
 									{group.tabs.length > previewTabs.length && (
 										<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
@@ -2628,6 +2678,7 @@ const GroupCard = memo(
 									actions={actions}
 									trigger={
 										<Button
+											data-move-focus
 											variant="ghost"
 											size="icon"
 											className="h-8 w-8"

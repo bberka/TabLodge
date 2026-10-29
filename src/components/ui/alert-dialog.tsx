@@ -6,6 +6,7 @@ import {
 	dialogOverlayClass,
 	dialogPanelClass,
 	initialFocusTarget,
+	returnFocus,
 	useRetainedValue,
 	type DialogSize,
 } from './dialog';
@@ -51,44 +52,57 @@ type AlertDialogContentProps = React.ComponentPropsWithoutRef<
 const AlertDialogContent = React.forwardRef<
 	React.ComponentRef<typeof AlertDialogPrimitive.Content>,
 	AlertDialogContentProps
->(({className, children, onOpenAutoFocus, size = 'sm', ...props}, ref) => {
-	const open = React.useContext(DialogOpenContext);
-	const shownChildren = useRetainedValue(children, open !== false);
-	const contentRef = React.useRef<HTMLDivElement | null>(null);
-	const setRefs = React.useCallback(
-		(node: HTMLDivElement | null) => {
-			contentRef.current = node;
-			if (typeof ref === 'function') {
-				ref(node);
-			} else if (ref) {
-				ref.current = node;
-			}
+>(
+	(
+		{
+			className,
+			children,
+			onOpenAutoFocus,
+			onCloseAutoFocus,
+			size = 'sm',
+			...props
 		},
-		[ref],
-	);
-	return (
-		<AlertDialogPrimitive.Portal>
-			<AlertDialogOverlay />
-			<AlertDialogPrimitive.Content
-				ref={setRefs}
-				tabIndex={-1}
-				className={cn(dialogPanelClass(size), className)}
-				onOpenAutoFocus={(event) => {
-					onOpenAutoFocus?.(event);
-					if (event.defaultPrevented || !contentRef.current) {
-						return;
-					}
+		ref,
+	) => {
+		const open = React.useContext(DialogOpenContext);
+		const shownChildren = useRetainedValue(children, open !== false);
+		const contentRef = React.useRef<HTMLDivElement | null>(null);
+		const setRefs = React.useCallback(
+			(node: HTMLDivElement | null) => {
+				contentRef.current = node;
+				if (typeof ref === 'function') {
+					ref(node);
+				} else if (ref) {
+					ref.current = node;
+				}
+			},
+			[ref],
+		);
+		return (
+			<AlertDialogPrimitive.Portal>
+				<AlertDialogOverlay />
+				<AlertDialogPrimitive.Content
+					ref={setRefs}
+					tabIndex={-1}
+					className={cn(dialogPanelClass(size), className)}
+					onOpenAutoFocus={(event) => {
+						onOpenAutoFocus?.(event);
+						if (event.defaultPrevented || !contentRef.current) {
+							return;
+						}
 
-					event.preventDefault();
-					initialFocusTarget(contentRef.current).focus();
-				}}
-				{...props}
-			>
-				{shownChildren}
-			</AlertDialogPrimitive.Content>
-		</AlertDialogPrimitive.Portal>
-	);
-});
+						event.preventDefault();
+						initialFocusTarget(contentRef.current).focus();
+					}}
+					onCloseAutoFocus={(event) => returnFocus(event, onCloseAutoFocus)}
+					{...props}
+				>
+					{shownChildren}
+				</AlertDialogPrimitive.Content>
+			</AlertDialogPrimitive.Portal>
+		);
+	},
+);
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({

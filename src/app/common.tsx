@@ -748,6 +748,9 @@ export function Brand({
 	);
 }
 
+// Where the skip link lands: an empty, focusable marker right after the header, so the next Tab reaches the page's content.
+const MAIN_CONTENT_ID = 'main-content';
+
 export type AppPage = 'dashboard' | 'settings' | 'help';
 const APP_PAGES: ReadonlyArray<{id: AppPage; label: string; href: string}> = [
 	{id: 'dashboard', label: 'Dashboard', href: 'newtab.html'},
@@ -768,41 +771,59 @@ export function AppHeader({
 	children?: ReactNode;
 }) {
 	return (
-		<header className="mb-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border pb-4">
-			<h1 className="sr-only">
-				{PROJECT.name} {APP_PAGES.find((page) => page.id === active)?.label}
-			</h1>
-			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-				<Brand />
-				<span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-				<nav
-					aria-label={`${PROJECT.name} pages`}
-					className="flex items-center gap-1"
-				>
-					{APP_PAGES.map((page) => {
-						const current = page.id === active;
-						return (
-							<a
-								key={page.id}
-								href={page.href}
-								aria-current={current ? 'page' : undefined}
-								className={cn(
-									'relative inline-flex h-9 items-center rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-									current
-										? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:-bottom-[17px] after:h-0.5 after:rounded-full after:bg-primary'
-										: 'text-muted-foreground hover:text-foreground',
-								)}
-							>
-								{page.label}
-							</a>
-						);
-					})}
-				</nav>
-			</div>
-			{Boolean(children) && (
-				<div className="flex items-center gap-2">{children}</div>
-			)}
-		</header>
+		<>
+			<a
+				href={`#${MAIN_CONTENT_ID}`}
+				className="sr-only rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+				onClick={(event) => {
+					// A plain hash jump would also fire the pages' own hash handlers (Settings and Help topics).
+					event.preventDefault();
+					const target = document.querySelector<HTMLElement>(
+						`#${MAIN_CONTENT_ID}`,
+					);
+					target?.focus();
+					target?.scrollIntoView({block: 'start'});
+				}}
+			>
+				Skip to main content
+			</a>
+			<header className="mb-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border pb-4">
+				<h1 className="sr-only">
+					{PROJECT.name} {APP_PAGES.find((page) => page.id === active)?.label}
+				</h1>
+				<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+					<Brand />
+					<span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+					<nav
+						aria-label={`${PROJECT.name} pages`}
+						className="flex items-center gap-1"
+					>
+						{APP_PAGES.map((page) => {
+							const current = page.id === active;
+							return (
+								<a
+									key={page.id}
+									href={page.href}
+									aria-current={current ? 'page' : undefined}
+									className={cn(
+										'relative inline-flex h-9 items-center rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+										current
+											? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:-bottom-[17px] after:h-0.5 after:rounded-full after:bg-primary'
+											: 'text-muted-foreground hover:text-foreground',
+									)}
+								>
+									{page.label}
+								</a>
+							);
+						})}
+					</nav>
+				</div>
+				{Boolean(children) && (
+					<div className="flex items-center gap-2">{children}</div>
+				)}
+			</header>
+			<div id={MAIN_CONTENT_ID} tabIndex={-1} className="outline-none" />
+		</>
 	);
 }
 

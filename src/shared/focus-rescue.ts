@@ -123,6 +123,20 @@ function rescue(anchor: Anchor) {
 	document.querySelector<HTMLElement>('main h1, h1')?.focus();
 }
 
+// The last element focused outside menus and dialogs (the control that opened the current dialog).
+let lastOutside: Element | undefined;
+
+/**
+Where focus should go when a dialog closes. Dialogs here are controlled by page state, so Radix has no
+trigger to hand focus back to, and a dialog opened from a menu item has lost that menu by then.
+Null when that element is gone; the rescue above then picks a neighbor.
+*/
+export function focusReturnTarget(): HTMLElement | null {
+	return lastOutside instanceof HTMLElement && lastOutside.isConnected
+		? lastOutside
+		: null;
+}
+
 export function installFocusRescue() {
 	let anchor: Anchor | undefined;
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -166,6 +180,7 @@ export function installFocusRescue() {
 		}
 
 		anchor = describe(target);
+		lastOutside = target;
 	};
 
 	const onFocusOut = (event: FocusEvent) => {

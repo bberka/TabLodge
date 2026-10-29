@@ -103,6 +103,10 @@ type ExpandingSearchProps = {
 	label: string;
 	placeholder?: string;
 	className?: string;
+	/**
+	What a screen reader hears after the query changes, such as "3 bookmarks found". Empty says nothing.
+	*/
+	status?: string;
 };
 
 export function ExpandingSearch({
@@ -111,56 +115,77 @@ export function ExpandingSearch({
 	label,
 	placeholder = label,
 	className,
+	status = '',
 }: ExpandingSearchProps) {
 	const [open, setOpen] = React.useState(Boolean(value));
 	const inputRef = React.useRef<HTMLInputElement>(null);
+	const buttonRef = React.useRef<HTMLButtonElement>(null);
+	// Escape closes the field from inside it, so focus goes back to the icon button that opens it.
+	const refocusButtonRef = React.useRef(false);
 	React.useEffect(() => {
 		if (open) {
 			inputRef.current?.focus();
+		} else if (refocusButtonRef.current) {
+			refocusButtonRef.current = false;
+			buttonRef.current?.focus();
 		}
 	}, [open]);
+	// The region stays mounted in both states so a screen reader treats later text as an update.
+	const announcement = (
+		<span role="status" className="sr-only">
+			{status}
+		</span>
+	);
 	if (!open && !value) {
 		return (
-			<IconTooltip label={label}>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="h-8 w-8"
-					aria-label={label}
-					onClick={() => setOpen(true)}
-				>
-					<Search />
-				</Button>
-			</IconTooltip>
+			<>
+				{announcement}
+				<IconTooltip label={label}>
+					<Button
+						ref={buttonRef}
+						variant="ghost"
+						size="icon"
+						className="h-8 w-8"
+						aria-label={label}
+						onClick={() => setOpen(true)}
+					>
+						<Search />
+					</Button>
+				</IconTooltip>
+			</>
 		);
 	}
 
 	return (
-		<label className={cn('relative block', className)}>
-			<span className="sr-only">{label}</span>
-			<Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-			<Input
-				ref={inputRef}
-				type="search"
-				value={value}
-				placeholder={placeholder}
-				className="h-8 w-[min(60vw,240px)] pl-8 text-xs"
-				onChange={(event) => onChange(event.target.value)}
-				onBlur={() => {
-					if (!value) {
-						setOpen(false);
-					}
-				}}
-				onKeyDown={(event) => {
-					if (event.key !== 'Escape') {
-						return;
-					}
+		<>
+			{announcement}
+			<label className={cn('relative block', className)}>
+				<span className="sr-only">{label}</span>
+				<Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					ref={inputRef}
+					type="search"
+					value={value}
+					placeholder={placeholder}
+					className="h-8 w-[min(60vw,240px)] pl-8 text-xs"
+					onChange={(event) => onChange(event.target.value)}
+					onBlur={() => {
+						if (!value) {
+							setOpen(false);
+						}
+					}}
+					onKeyDown={(event) => {
+						if (event.key !== 'Escape') {
+							return;
+						}
 
-					onChange('');
-					setOpen(false);
-				}}
-			/>
-		</label>
+						refocusButtonRef.current = true;
+						onChange('');
+						setOpen(false);
+					}}
+				/>
+			</label>
+		</>
 	);
 }
 

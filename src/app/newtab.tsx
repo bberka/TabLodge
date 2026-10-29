@@ -13,6 +13,11 @@ import {createRoot} from 'react-dom/client';
 import {
 	type LucideIcon,
 	ArchiveRestore,
+	ArrowDown,
+	ArrowLeft,
+	ArrowRight,
+	ArrowUp,
+	ListPlus,
 	BookmarkPlus,
 	Save,
 	SquarePlus,
@@ -66,6 +71,7 @@ import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import {ACTION_ICONS} from './action-icons';
+import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {
 	AppHeader,
 	EmptyState,
@@ -142,7 +148,15 @@ type DialogKind =
 	'bookmark' | 'column' | 'move' | 'paste-links' | 'delete-column';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 type BookmarkAction =
-	'click' | 'open' | 'open-new' | 'edit' | 'move' | 'copy' | 'delete';
+	| 'click'
+	| 'open'
+	| 'open-new'
+	| 'edit'
+	| 'move'
+	| 'move-up'
+	| 'move-down'
+	| 'copy'
+	| 'delete';
 type OnBookmarkAction = (
 	action: BookmarkAction,
 	bookmark: Bookmark,
@@ -947,6 +961,105 @@ function NewTab() {
 		offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
 	}
 
+	// Keyboard alternative to dragging: one step earlier or later within the bookmark's column.
+	async function moveBookmarkStep(
+		bookmark: Bookmark,
+		direction: MoveDirection,
+	) {
+		const siblings = bookmarks.filter(
+			(entry) => entry.columnId === bookmark.columnId,
+		);
+		const target = neighborId(
+			siblings.map((entry) => entry.id),
+			bookmark.id,
+			direction,
+		);
+		if (!target) {
+			return;
+		}
+
+		const result = await send('REORDER_BOOKMARK', {
+			bookmarkId: bookmark.id,
+			targetColumnId: bookmark.columnId,
+			targetBookmarkId: target,
+			position: direction === 'earlier' ? 'before' : 'after',
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not reorder bookmarks.', true);
+			return;
+		}
+
+		await reload();
+		const position = siblings.findIndex((entry) => entry.id === target) + 1;
+		showStatus(
+			`Moved “${bookmark.title || siteName(bookmark.url)}” to position ${position} of ${siblings.length}.`,
+		);
+		focusAfterMove(
+			`[data-bookmark-id="${CSS.escape(bookmark.id)}"] [data-move-focus]`,
+		);
+	}
+
+	// Keyboard alternative to dragging a column header: one step left or right.
+	async function moveColumnStep(
+		column: BookmarkColumnData,
+		direction: MoveDirection,
+	) {
+		const target = neighborId(
+			columns.map((entry) => entry.id),
+			column.id,
+			direction,
+		);
+		if (!target) {
+			return;
+		}
+
+		const result = await send('REORDER_BOOKMARK_COLUMN', {
+			columnId: column.id,
+			targetColumnId: target,
+			position: direction === 'earlier' ? 'before' : 'after',
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not reorder columns.', true);
+			return;
+		}
+
+		await reload();
+		const position = columns.findIndex((entry) => entry.id === target) + 1;
+		showStatus(
+			`Moved column “${column.name}” to position ${position} of ${columns.length}.`,
+		);
+		focusAfterMove(
+			`section[data-column-id="${CSS.escape(column.id)}"] header [data-move-focus]`,
+		);
+	}
+
+	// Keyboard alternative to dropping a bookmark on a saved session.
+	async function addBookmarkToSession(
+		bookmark: Bookmark,
+		target: {id: string; name: string},
+	) {
+		const result = await send('ADD_LINKS_TO_SESSION', {
+			groupId: target.id,
+			links: [{url: bookmark.url, title: bookmark.title}],
+		});
+		if (!result?.ok) {
+			showStatus(
+				result?.error || 'Could not add the link to that session.',
+				true,
+			);
+			return;
+		}
+
+		await reload();
+		const note = result.skipped ? ' It was already there.' : '';
+		offerUndo(
+			`Added “${bookmark.title || siteName(bookmark.url)}” to “${target.name}”.${note}`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
+	}
+
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
 		if (['click', 'open', 'open-new'].includes(action)) {
 			try {
@@ -975,6 +1088,14 @@ function NewTab() {
 		if (action === 'move') {
 			setMoveBookmark({...bookmark, targetColumnId: bookmark.columnId});
 			setDialog('move');
+			return;
+		}
+
+		if (action === 'move-up' || action === 'move-down') {
+			await moveBookmarkStep(
+				bookmark,
+				action === 'move-up' ? 'earlier' : 'later',
+			);
 			return;
 		}
 
@@ -1381,6 +1502,10 @@ function NewTab() {
 		return () => document.removeEventListener('visibilitychange', onVisible);
 	}, [autoOpenFinder]);
 
+	const unfiledAll = columnBookmarks.all.get(UNFILED_COLUMN.id);
+	const unfiledFirst = unfiledAll?.[0]?.id;
+	const unfiledLast = unfiledAll?.at(-1)?.id;
+
 	// One stable set of callbacks for every column and bookmark, so memoized ones skip re-rendering.
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
@@ -1388,6 +1513,13 @@ function NewTab() {
 		add: (column) => openBookmarkEditor(null, column.id),
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
+		moveColumn: moveColumnStep,
+		addToSession: addBookmarkToSession,
+		sessionTargets: () =>
+			(state?.groups ?? []).slice(0, MAX_SESSION_TARGETS).map((group) => ({
+				id: group.id,
+				name: group.name.trim() || 'Untitled session',
+			})),
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
@@ -1436,6 +1568,13 @@ function NewTab() {
 					<ExpandingSearch
 						label="Search bookmarks"
 						value={bookmarkSearch}
+						status={
+							bookmarkSearch.trim()
+								? filteredBookmarks.length === 0
+									? 'No bookmarks match'
+									: `${plural(filteredBookmarks.length, 'bookmark')} found`
+								: ''
+						}
 						onChange={setBookmarkSearch}
 					/>
 					<IconTooltip label="Add bookmark">
@@ -1515,10 +1654,12 @@ function NewTab() {
 						stretchColumns ? 'items-stretch' : 'items-start',
 					)}
 				>
-					{columns.map((column) => (
+					{columns.map((column, index) => (
 						<BookmarkColumn
 							key={column.id}
 							column={column}
+							canMoveEarlier={index > 0}
+							canMoveLater={index < columns.length - 1}
 							bookmarks={columnBookmarks.shown.get(column.id) ?? NO_BOOKMARKS}
 							siblings={columnBookmarks.all.get(column.id) ?? NO_BOOKMARKS}
 							dropIndicator={
@@ -1590,10 +1731,13 @@ function NewTab() {
 													dropBefore={drop?.position === 'before'}
 													dropAfter={drop?.position === 'after'}
 													dropActive={Boolean(drop)}
+													canMoveEarlier={bookmark.id !== unfiledFirst}
+													canMoveLater={bookmark.id !== unfiledLast}
 													urlMode={urlMode}
 													clickOpensMenu={clickOpensMenu}
 													urlSettings={urlSettings}
 													quickAction={quickAction}
+													sessions={boardActions}
 													onAction={boardActions.bookmark}
 												/>
 											);
@@ -2383,6 +2527,18 @@ type BoardActions = {
 	add: (column: BookmarkColumnData) => void;
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
+	/**
+	Keyboard alternative to dragging: moves a column one place earlier or later.
+	*/
+	moveColumn: (column: BookmarkColumnData, direction: MoveDirection) => void;
+	addToSession: (
+		bookmark: Bookmark,
+		target: {id: string; name: string},
+	) => void;
+	/**
+	Sessions a bookmark can be added to (read when a menu opens, never while rendering).
+	*/
+	sessionTargets: () => Array<{id: string; name: string}>;
 	remove: (column: BookmarkColumnData) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
@@ -2412,8 +2568,12 @@ type BookmarkColumnProps = {
 	clickOpensMenu: boolean;
 	urlSettings: UrlSettings;
 	dropIndicator: DropIndicator | null;
+	canMoveEarlier: boolean;
+	canMoveLater: boolean;
 	actions: BoardActions;
 };
+
+const MAX_SESSION_TARGETS = 30;
 
 /**
 Bookmarks drawn per column at first; the rest follow on demand (a column can hold thousands).
@@ -2430,11 +2590,15 @@ const BookmarkColumn = memo(
 		clickOpensMenu,
 		urlSettings,
 		dropIndicator,
+		canMoveEarlier,
+		canMoveLater,
 		actions,
 	}: BookmarkColumnProps) => {
 		const [limit, setLimit] = useState(COLUMN_PAGE);
 		const shown =
 			bookmarks.length > limit ? bookmarks.slice(0, limit) : bookmarks;
+		const lastSibling = siblings.at(-1)?.id;
+		const firstSibling = siblings[0]?.id;
 		const onShare = () => actions.share(column);
 		const onAdd = () => actions.add(column);
 		const onOpenAll = () => actions.openAll(column);
@@ -2471,6 +2635,20 @@ const BookmarkColumn = memo(
 			},
 			{type: 'separator'},
 			{id: 'edit', label: 'Edit column', icon: Pencil, onSelect: onEdit},
+			{
+				id: 'move-left',
+				label: 'Move left',
+				icon: ArrowLeft,
+				disabled: !canMoveEarlier,
+				onSelect: () => actions.moveColumn(column, 'earlier'),
+			},
+			{
+				id: 'move-right',
+				label: 'Move right',
+				icon: ArrowRight,
+				disabled: !canMoveLater,
+				onSelect: () => actions.moveColumn(column, 'later'),
+			},
 			{type: 'separator'},
 			{
 				id: 'delete',
@@ -2542,6 +2720,7 @@ const BookmarkColumn = memo(
 							<ActionDropdownMenu
 								trigger={
 									<Button
+										data-move-focus
 										variant="ghost"
 										size="icon"
 										aria-label={`Options for ${column.name} column`}
@@ -2571,10 +2750,13 @@ const BookmarkColumn = memo(
 													targeted && bookmarkDrop.position === 'after'
 												}
 												dropActive={targeted}
+												canMoveEarlier={bookmark.id !== firstSibling}
+												canMoveLater={bookmark.id !== lastSibling}
 												urlMode={urlMode}
 												clickOpensMenu={clickOpensMenu}
 												urlSettings={urlSettings}
 												quickAction={quickAction}
+												sessions={actions}
 												onAction={actions.bookmark}
 											/>
 										);
@@ -2611,6 +2793,7 @@ const BookmarkColumn = memo(
 type BookmarkCardProps = {
 	bookmark: Bookmark;
 	onAction: OnBookmarkAction;
+	sessions: Pick<BoardActions, 'addToSession' | 'sessionTargets'>;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickAction: BookmarkQuickAction | null;
 	/**
@@ -2621,6 +2804,8 @@ type BookmarkCardProps = {
 	dropBefore?: boolean;
 	dropAfter?: boolean;
 	dropActive?: boolean;
+	canMoveEarlier?: boolean;
+	canMoveLater?: boolean;
 };
 
 type UrlSettings = Pick<
@@ -2641,6 +2826,7 @@ const BookmarkCard = memo(
 	({
 		bookmark,
 		onAction,
+		sessions,
 		urlMode,
 		quickAction,
 		clickOpensMenu = false,
@@ -2648,6 +2834,8 @@ const BookmarkCard = memo(
 		dropBefore = false,
 		dropAfter = false,
 		dropActive = false,
+		canMoveEarlier = false,
+		canMoveLater = false,
 	}: BookmarkCardProps) => {
 		const [menuOpen, setMenuOpen] = useState(false);
 		const act = (action: BookmarkAction) => () => {
@@ -2697,6 +2885,35 @@ const BookmarkCard = memo(
 				label: 'Move to',
 				icon: ACTION_ICONS.move,
 				onSelect: act('move'),
+			},
+			{
+				type: 'submenu',
+				id: 'add-to-session',
+				label: 'Add to session',
+				icon: ListPlus,
+				hidden: sessions.sessionTargets().length === 0,
+				items: sessions.sessionTargets().map((target) => ({
+					id: `session-${target.id}`,
+					label:
+						target.name.length > 40
+							? `${target.name.slice(0, 39)}…`
+							: target.name,
+					onSelect: () => sessions.addToSession(bookmark, target),
+				})),
+			},
+			{
+				id: 'move-up',
+				label: 'Move up',
+				icon: ArrowUp,
+				disabled: !canMoveEarlier,
+				onSelect: act('move-up'),
+			},
+			{
+				id: 'move-down',
+				label: 'Move down',
+				icon: ArrowDown,
+				disabled: !canMoveLater,
+				onSelect: act('move-down'),
 			},
 			{type: 'separator'},
 			remove,
@@ -2811,6 +3028,7 @@ const BookmarkCard = memo(
 							open={menuOpen}
 							trigger={
 								<Button
+									data-move-focus
 									variant="ghost"
 									size="icon"
 									className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"

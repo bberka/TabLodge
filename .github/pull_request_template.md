@@ -12,7 +12,8 @@
 - [ ] Tests cover the change, or I have explained why they aren't needed
 - [ ] For runtime changes, I tested the affected workflow in the dev browser and recorded the steps and result below
 - [ ] A fix or feature has proof below (screenshot, recording, or output, with a before and after for a fix)
-- [ ] UI changes work with the keyboard and in both themes
+- [ ] UI changes work with the keyboard alone and in both themes, anything done by dragging or hovering has a keyboard alternative, and `vp run a11y` passes
+- [ ] For UI changes, I listed the browser, assistive technology, workflows tested, and limitations below
 - [ ] I ran the `unslop-*` skills on the changed files only and fixed what they found
 - [ ] I reviewed the full diff, every changed file supports this request, and unrelated changes are removed
 - [ ] Any new permissions are justified and documented; no remote code or background network calls were added
