@@ -1528,6 +1528,94 @@ test('browser bookmark import maps folders to ordered columns and skips duplicat
 	assert.equal(imported[2].columnId, harness.state.bookmarkColumns[1].id);
 });
 
+const windowTabs: MockTab[] = [
+	{
+		id: 1,
+		windowId: 10,
+		index: 0,
+		active: true,
+		url: 'https://one.example/',
+		title: 'One',
+	},
+	{
+		id: 2,
+		windowId: 10,
+		index: 1,
+		active: false,
+		pinned: true,
+		url: 'https://pinned.example/',
+		title: 'Pinned',
+	},
+	{
+		id: 3,
+		windowId: 10,
+		index: 2,
+		active: false,
+		url: 'https://saved.example/article',
+		title: 'Also saved',
+	},
+];
+
+test('SWITCH_WORKSPACE saves the window, opens the chosen session there, and closes the saved tabs', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({openDashboardAfterSave: false}),
+		windowTabs,
+	);
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'session-1',
+	});
+
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.saved, 2);
+	assert.equal(response.count, 1);
+	assert.equal(response.closed, 2);
+	const saved = harness.state.groups.find(
+		(group) => group.id === response.savedGroupId,
+	)!;
+	assert.deepEqual(
+		saved.tabs.map((tab) => tab.url),
+		['https://one.example/', 'https://saved.example/article'],
+	);
+	assert.equal(harness.createdWindows.length, 0);
+	assert.deepEqual(
+		harness.openedTabs.map((tab) => [tab.windowId, tab.url]),
+		[[10, 'https://saved.example/article']],
+		'the chosen session opens in the same window even though one of its URLs is already open',
+	);
+	assert.deepEqual(
+		harness.removedTabIds.toSorted((a, b) => a - b),
+		[1, 3],
+	);
+});
+
+test('SWITCH_WORKSPACE keeps the window open when the chosen session cannot be restored', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({openDashboardAfterSave: false}),
+		windowTabs,
+	);
+	harness.state.groups[0].tabs[0].url = 'chrome://settings/';
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'session-1',
+	});
+
+	assert.equal(response.ok, false);
+	assert.deepEqual(harness.removedTabIds, []);
+});
+
+test('SWITCH_WORKSPACE reports a session that no longer exists without touching the window', async () => {
+	const harness = createWorkerHarness(stateWithSession(), windowTabs);
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'missing',
+	});
+
+	assert.equal(response.ok, false);
+	assert.equal(harness.state.groups.length, 1);
+	assert.deepEqual(harness.removedTabIds, []);
+});
+
 test('selected-tab saving never stores or removes pinned tabs', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({closeOnSave: true, openDashboardAfterSave: false}),
@@ -5045,6 +5133,75 @@ test('recovery settings default on and invalid values fall back', async () => {
 	assert.equal(valid.settings.trashRetentionDays, 90);
 });
 
+test('auto-archive moves stale sessions to the Archived folder and leaves recent ones', async () => {
+	const state = stateWithSession({autoArchiveDays: 30});
+	const old = state.groups[0];
+	const day = 86_400_000;
+	const recent = (id: string, extra: Record<string, number>) => ({
+		...old,
+		id,
+		createdAt: 1_700_000_000_000,
+		updatedAt: 1_700_000_000_000,
+		...extra,
+	});
+	state.groups.push(
+		recent('opened-recently', {lastOpenedAt: Date.now() - 5 * day}),
+		recent('edited-recently', {updatedAt: Date.now() - 5 * day}),
+		recent('opened-long-ago', {lastOpenedAt: Date.now() - 60 * day}),
+	);
+	const harness = createWorkerHarness(state);
+	await harness.fire('alarm', {name: 'tablodge-archive'});
+	const folderOf = (id: string) =>
+		harness.state.groups.find((group) => group.id === id)?.folderId;
+	const archived = harness.state.folders.find(
+		(folder) => folder.name === 'Archived',
+	);
+	assert.ok(archived);
+	assert.equal(folderOf('session-1'), archived.id);
+	assert.equal(folderOf('opened-long-ago'), archived.id);
+	assert.equal(folderOf('opened-recently'), 'unfiled');
+	assert.equal(folderOf('edited-recently'), 'unfiled');
+	assert.equal(harness.state.groups.length, 4, 'nothing is deleted');
+
+	// A session moved back out is not archived again until it goes stale again.
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {folderId: 'unfiled'},
+	});
+	await harness.fire('alarm', {name: 'tablodge-archive'});
+	assert.equal(folderOf('session-1'), 'unfiled');
+	assert.equal(
+		harness.state.folders.filter((folder) => folder.name === 'Archived').length,
+		1,
+	);
+});
+
+test('auto-archive is off by default, runs at browser start, and its alarm follows the setting', async () => {
+	const off = createWorkerHarness(stateWithSession());
+	await off.fire('alarm', {name: 'tablodge-archive'});
+	assert.equal(off.state.groups[0].folderId, 'unfiled');
+	assert.equal(off.state.folders.length, 1);
+	assert.equal(off.alarms.has('tablodge-archive'), false);
+
+	const harness = createWorkerHarness(stateWithSession());
+	const response = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoArchiveDays: 90},
+	});
+	assert.equal(response.settings.autoArchiveDays, 90);
+	assert.equal(harness.alarms.has('tablodge-archive'), true);
+	await harness.fire('onStartup');
+	assert.equal(harness.state.groups[0].folderId, 'archived-sessions');
+
+	const invalid = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoArchiveDays: 7},
+	});
+	assert.equal(invalid.settings.autoArchiveDays, 0);
+	assert.equal(harness.alarms.has('tablodge-archive'), false);
+});
+
 test('snapshots capture windows with pinned tabs, groups, split pairs, active tab and focus, and skip non-web pages', async () => {
 	const harness = recoveryHarness(
 		{excludedOrigins: ['private.example']},
@@ -5880,7 +6037,7 @@ const fullBackupInput = (overrides: Record<string, unknown> = {}) => ({
 		],
 		settings: {copyFormat: 'url', excludedOrigins: ['skip.example']},
 	},
-	preferences: {uiTheme: 'dark'},
+	preferences: {uiTheme: 'dark', uiAccent: '#12ab9f'},
 	snapshots: {
 		version: 1,
 		history: [
@@ -5918,7 +6075,7 @@ const fullBackupInput = (overrides: Record<string, unknown> = {}) => ({
 
 test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the theme, after a safety backup', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
-		storage: {uiTheme: 'light'},
+		storage: {uiTheme: 'light', uiAccent: 'rose'},
 	});
 	const result = await harness.sendMessage(fullBackupInput());
 	assert.equal(result.ok, true, result.error);
@@ -5935,6 +6092,7 @@ test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the the
 	assert.equal(harness.state.settings.copyFormat, 'url');
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['skip.example']);
 	assert.equal(harness.extraStorage.uiTheme, 'dark');
+	assert.equal(harness.extraStorage.uiAccent, '#12ab9f');
 	const {history} = harness.extraStorage[HISTORY_KEY] as {
 		history: Array<{id: string}>;
 	};
@@ -5954,7 +6112,7 @@ test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the the
 
 test('RESTORE_FULL_BACKUP undo brings back the previous data', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
-		storage: {uiTheme: 'light'},
+		storage: {uiTheme: 'light', uiAccent: 'rose'},
 	});
 	const result = await harness.sendMessage(fullBackupInput());
 	assert.equal(result.ok, true, result.error);
@@ -5963,6 +6121,7 @@ test('RESTORE_FULL_BACKUP undo brings back the previous data', async () => {
 	assert.equal(harness.state.bookmarks.length, 3);
 	assert.equal(harness.state.groups.length, 1);
 	assert.equal(harness.extraStorage.uiTheme, 'light');
+	assert.equal(harness.extraStorage.uiAccent, 'rose');
 	assert.equal(Object.hasOwn(harness.extraStorage, HISTORY_KEY), false);
 	assert.equal(trashOf(harness).length, 0);
 });
@@ -5981,7 +6140,7 @@ test('RESTORE_FULL_BACKUP normalizes junk and drops what it cannot trust', async
 				],
 				settings: {snapshotKeep: 9999, excludedOrigins: [42]},
 			},
-			preferences: {uiTheme: '<script>'},
+			preferences: {uiTheme: '<script>', uiAccent: '<script>'},
 			snapshots: {
 				history: [
 					null,
@@ -6012,6 +6171,7 @@ test('RESTORE_FULL_BACKUP normalizes junk and drops what it cannot trust', async
 	assert.equal(harness.state.settings.snapshotKeep, 25);
 	assert.deepEqual(harness.state.settings.excludedOrigins, []);
 	assert.equal(harness.extraStorage.uiTheme, 'system');
+	assert.equal(harness.extraStorage.uiAccent, 'default');
 	const {history} = harness.extraStorage[HISTORY_KEY] as {
 		history: Array<{
 			id: string;
@@ -6052,7 +6212,7 @@ test('RESTORE_FULL_BACKUP rejects a newer format, another format and missing dat
 
 test('GET_FULL_BACKUP returns the state, theme, snapshot history and trash', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
-		storage: {uiTheme: 'dark'},
+		storage: {uiTheme: 'dark', uiAccent: 'green'},
 	});
 	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: 'bm-0'});
 	const result = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
@@ -6062,6 +6222,7 @@ test('GET_FULL_BACKUP returns the state, theme, snapshot history and trash', asy
 	assert.equal(typeof state.settings, 'object');
 	assert.deepEqual(structuredClone(result.preferences), {
 		uiTheme: 'dark',
+		uiAccent: 'green',
 	});
 	assert.deepEqual(structuredClone(result.snapshots), {
 		version: 1,

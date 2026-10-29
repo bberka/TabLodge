@@ -16,7 +16,7 @@ const permissions = [
 	['clipboardWrite', 'Copying bookmark URLs and session links when you ask.'],
 	['sidePanel', 'Showing bookmarks, sessions and open tabs in the browser side panel.'],
 	['search', 'Running a web search with your default engine, only when you choose "Search the web".'],
-	['alarms', 'Scheduling crash-recovery snapshots, automatic backups and trash bin cleanup.'],
+	['alarms', 'Scheduling crash-recovery snapshots, automatic backups, trash bin cleanup and archiving old sessions.'],
 	['downloads (optional)', 'Saving backup copies to your Downloads folder, only if you turn that on; turning it off gives the permission back.'],
 ];
 ---
@@ -62,7 +62,7 @@ const permissions = [
 		<p>Everything is stored locally in your browser profile:</p>
 		<ul>
 			<li><strong>Extension storage</strong> (<code>chrome.storage.local</code>, key <code>tablodge.state</code>): your saved sessions (tab titles, URLs, notes, pinned, tab-group and split-view info), folders, bookmark columns and bookmarks, settings, and excluded websites.</li>
-			<li><strong>Extension storage</strong> (<code>uiTheme</code>) and the extension's <code>localStorage</code> (<code>tablodge.uiTheme</code>): your Light, Dark or System appearance choice, and a copy used to paint each page in the right theme before it loads.</li>
+			<li><strong>Extension storage</strong> (<code>uiTheme</code>, <code>uiAccent</code>) and the extension's <code>localStorage</code> (<code>tablodge.uiTheme</code>, <code>tablodge.uiAccent</code>): your Light, Dark or System appearance choice and accent color, and a copy used to paint each page in the right theme before it loads.</li>
 			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). Snapshots skip private windows and excluded websites.</li>
 		</ul>
 		<p>

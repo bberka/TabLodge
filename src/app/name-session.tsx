@@ -73,7 +73,7 @@ function NameSessionPrompt() {
 	}
 
 	return (
-		<main data-brand="tablodge" className="min-h-screen bg-background">
+		<main className="min-h-screen bg-background">
 			<NameSessionForm
 				plain
 				selectOnFocus

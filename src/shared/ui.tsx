@@ -41,6 +41,11 @@ export {
 	useRetainedValue,
 } from '../components/ui/dialog';
 export {
+	Popover,
+	PopoverTrigger,
+	PopoverContent,
+} from '../components/ui/popover';
+export {
 	RadioCard,
 	RadioCardGroup,
 	SegmentedControl,

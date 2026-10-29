@@ -8,7 +8,7 @@ This guide explains how TabLodge is built, where data lives, and which behavior 
 
 * **Pages:** `vite.pages.config.ts` builds the HTML shells in `extension/` with their React entries in `src/app/`. It replaces `%APP_NAME%` in page titles, bundles assets locally, writes the manifest, and copies icons.
 * **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The manifest does not declare it as a module.
-* **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme before the first paint. React renders into `#root` after the saved state arrives.
+* **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme and accent color before the first paint. React renders into `#root` after the saved state arrives.
 
 `scripts/verify-build.ts` checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest. After building, `scripts/package.ts` writes a versioned ZIP and SHA256 checksum under `release/`. The release workflow uses the same task.
 
@@ -23,7 +23,7 @@ The manifest version must match `package.json`; build verification checks this. 
 These identifiers are part of stored data or external formats. Changing them requires a migration:
 
 * The main storage key, `tablodge.state`, and recovery keys listed below.
-* The theme key `uiTheme` in extension storage and its `tablodge.uiTheme` mirror in page `localStorage`.
+* The theme key `uiTheme` and accent key `uiAccent` in extension storage, and their `tablodge.uiTheme` and `tablodge.uiAccent` mirrors in page `localStorage`.
 * Export format identifiers such as `tablodge-sessions`, `tablodge`, `tablodge-backup`, and `tablodge-full-backup`.
 * Drag MIME types `application/x-tablodge-session`, `application/x-tablodge-column`, and `application/x-tablodge-bookmark`.
 * Context menu IDs beginning with `tablodge-page-` or `tablodge-action-`.
@@ -50,6 +50,10 @@ Worker recovery code lives in `extension/service-worker.ts`; the UI lives in `sr
 | `tablodge.backups` | Automatic and safety backup lists, plus download errors |
 | `tablodge.trash` | Deleted items with their original positions and deletion times |
 | `tablodge.undo` | Up to three recent undo records |
+
+### Auto-archive
+
+The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into the folder named Archived, creating it if missing. The move runs in the mutation queue, does not change `updatedAt`, and deletes nothing. Moving a session back out through the editor updates `updatedAt`, so it is not archived again until it has been idle for the full period.
 
 ### Snapshots
 
@@ -114,7 +118,7 @@ The toolbar icon normally opens the popup. **Settings › Side panel › Toolbar
 
 **Settings › Dashboard › Remove tracking parameters** is off by default. When enabled, opening saved links, restoring sessions, and restoring snapshots removes common query parameters such as `utm_source`, `fbclid`, and `gclid`. Saved URLs, copied links, and exports keep their original values. The page helper and classic service worker maintain matching parameter lists.
 
-UI primitives live in `src/components/ui/`, with composed helpers in `src/shared/ui.tsx`. Theme tokens live in `styles/extension-app.css`. `src/shared/theme.tsx` mirrors the saved theme for the boot script and follows system theme changes. The `@/` alias resolves to `src/` during builds and must not remain in output bundles.
+UI primitives live in `src/components/ui/`, with composed helpers in `src/shared/ui.tsx`. Theme tokens and the accent colors live in `styles/extension-app.css`. `src/shared/accents.ts` lists the preset accents and applies every accent except the default as inline variables. The system accent is read from the CSS `AccentColor` keyword (Chromium's placeholder `rgb(0, 117, 255)` counts as no accent, and the extension cannot read the Chrome theme color) and rechecked on focus, on visibility and color scheme changes, and every two seconds while the page is visible, because the browser sends no event for it. `src/shared/theme.tsx` mirrors the saved theme and accent for the boot script and follows system theme changes. The `@/` alias resolves to `src/` during builds and must not remain in output bundles.
 
 ## Saving and restoring sessions
 
@@ -125,6 +129,10 @@ Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during 
 Pinned tabs are excluded by default. When included, they can be closed only after the session is written and **Close tabs after saving** is enabled. The worker checks each tab's URL and pinned state again before closing it. When that closes every tab in a window, the worker opens a new tab so the window stays, unless **When a save empties a window** is set to close it and another normal window of the same incognito state is open. It then focuses that window and closes the emptied one. The last window is never closed.
 
 The default restore destination is a new window unless the current window contains only the current tab. Settings also offers current window and always new window policies. Ctrl/Cmd clicks keep saved links; Shift clicks force a new window. A failed restore never removes its saved link. Duplicate handling, activation, and unloading of restored background tabs are separate preferences. When **Remove tracking parameters** is enabled, restore duplicate checks compare the cleaned destination while the saved URL remains unchanged.
+
+### Switching workspaces
+
+`SWITCH_WORKSPACE` saves the window's web tabs, opens another session in the same window, and then closes the saved tabs. The save uses the normal naming and duplicate rules but leaves the tabs open and skips **Open dashboard after saving**. The restore ignores the restore target and duplicate preferences, so a URL that is already open still opens, and it follows the keep or remove preference as usual. The old tabs are closed only after the other session opened at least one tab, and only if their URL still matches what was saved. If the restore fails, the window keeps its tabs and the new session stays saved. Pinned tabs (unless saved), excluded sites, and pages that are not web pages are left alone, so the dashboard stays open. The dashboard menu item and the popup and side panel buttons are disabled while the window has no such tab (`useHasSavableTabs`, which follows tab events).
 
 ### Titles and names
 
@@ -178,7 +186,7 @@ A session has one description, capped at 10,502 characters. Older separate `note
 | --- | --- |
 | `manifest.json` | Format `tablodge-full-backup`, versions, creation time, and counts |
 | `data.json` | Normalized state, including settings and excluded sites |
-| `preferences.json` | Theme choice |
+| `preferences.json` | Theme and accent color choice |
 | `snapshots.json` | Snapshot history |
 | `trash.json` | Trash entries |
 

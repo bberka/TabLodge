@@ -21,12 +21,12 @@ There are no accounts, servers, or analytics. TabLodge keeps your data in your b
 ## What you can do
 
 - **Save and restore sessions.** Save selected tabs, a tab group, tabs to the left or right, a whole window, or all windows. Restores preserve tab groups and, if you choose to save them, pinned tabs. Split view pairs restore side by side on Chromium 155 or newer.
-- **Keep sessions organized.** Use folders, icons, descriptions, search, sorting, and custom ordering. Move sessions between folders or merge them without duplicate links. Name sessions yourself, use a template, or have TabLodge ask each time.
-- **Choose how restores work.** Open a session in the current window or a new one. Keep or remove saved links afterward, skip URLs that are already open, and optionally unload restored background tabs. Ctrl/Cmd and Shift clicks let you override the usual behavior for one restore. A setting, off by default, can remove common tracking parameters when opening saved links without changing the stored URLs.
+- **Keep sessions organized.** Use folders, icons, descriptions, search, sorting, and custom ordering. Move sessions between folders or merge them without duplicate links. Name sessions yourself, use a template, or have TabLodge ask each time. An optional setting moves sessions you haven't opened or edited for 30 days to a year into an Archived folder, without deleting anything.
+- **Choose how restores work.** Open a session in the current window or a new one. Keep or remove saved links afterward, skip URLs that are already open, and optionally unload restored background tabs. Ctrl/Cmd and Shift clicks let you override the usual behavior for one restore. **Switch to this session** (a menu item on the dashboard, a button in the popup and side panel) saves the window's tabs as a new session and opens the chosen one in their place. A setting, off by default, can remove common tracking parameters when opening saved links without changing the stored URLs.
 - **Build a bookmark board.** Search your bookmarks, reorder columns and links by dragging or with Move up and Move down in their menus, or paste a list of links to add them. You can also drag links from saved sessions into a column, and drag a link from a web page, a bookmark, or another window onto a saved session to add it there. Choose the default, wider, full width, or narrower dashboard layout in Settings.
 - **Bring your data with you.** Import from OneTab, Session Buddy, Tab Session Manager, Toby, or browser bookmarks. Export JSON backups, HTML, CSV, Markdown, or URL lists. A full backup ZIP includes settings and recovery data as well.
 - **Recover from mistakes.** Snapshots of open windows help after a browser crash. Deleted sessions, links, bookmarks, and columns go to the trash bin, and many actions offer Undo. Automatic backups are optional, with an extra copy in Downloads if you want one.
-- **Use the view that suits you.** Open the toolbar popup, the dashboard, or the side panel for bookmarks, sessions, and open tabs. Keyboard shortcuts and context menus give you quick save and bookmark actions. Light, dark, and system themes are available.
+- **Use the view that suits you.** Open the toolbar popup, the dashboard, or the side panel for bookmarks, sessions, and open tabs. The side panel marks open tabs whose address is already saved in a session or bookmark. Keyboard shortcuts and context menus give you quick save and bookmark actions. Light, dark, and system themes are available, with TabLodge's own accent color by default. Open the color picker in Settings to choose a preset, any custom color, or System, which follows your operating system's accent color and updates by itself when it changes. Where the platform has no accent color to give, such as Linux without a GTK accent, System uses the default. Reset returns to the default.
 
 ## Screenshots
 
@@ -191,7 +191,7 @@ TabLodge has no website host permissions, injects no content scripts, and makes 
 | `clipboardWrite`   | Copy bookmark URLs and session links when you ask                                         |
 | `sidePanel`        | Show bookmarks, sessions, and open tabs in the browser side panel                         |
 | `search`           | Use the default search engine when you choose **Search the web**                          |
-| `alarms`           | Schedule snapshots, backups, and trash cleanup                                            |
+| `alarms`           | Schedule snapshots, backups, trash cleanup, and archiving                                 |
 
 The optional `downloads` permission is requested only when you enable **Settings › Recovery & backups › Also save a copy to Downloads**. It writes backup JSON files to `Downloads/TabLodge/`. Turning the setting off removes the permission.
 

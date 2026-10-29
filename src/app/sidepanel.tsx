@@ -11,6 +11,7 @@ import {
 import {createRoot} from 'react-dom/client';
 import {
 	Bookmark,
+	Check,
 	ChevronRight,
 	ExternalLink,
 	History,
@@ -18,6 +19,7 @@ import {
 	MoreHorizontal,
 	MoreVertical,
 	PanelTop,
+	ArrowLeftRight,
 	RotateCcw,
 	Save,
 	Search,
@@ -53,11 +55,14 @@ import {
 	forceAddAction,
 	duplicatesNote,
 	plural,
+	switchSummary,
+	useHasSavableTabs,
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
 import {InsecureMarkFor} from './insecure-mark';
+import {savedUrlSet} from './saved-urls';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
@@ -70,6 +75,7 @@ type PanelTab = 'bookmarks' | 'sessions' | 'tabs';
 
 const NO_BOOKMARKS: SavedBookmark[] = [];
 const NO_SESSIONS: Session[] = [];
+const NO_ORIGINS: readonly string[] = [];
 const UNFILED = 'bookmark-unfiled';
 
 /**
@@ -278,6 +284,10 @@ function SidePanel() {
 		SECTION_PAGE,
 	);
 	const settings = state?.settings;
+	const canSwitch = useHasSavableTabs(
+		settings?.includePinnedTabs === true,
+		settings?.excludedOrigins ?? NO_ORIGINS,
+	);
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const search = query.trim().toLocaleLowerCase();
 	const matches = useCallback(
@@ -291,6 +301,10 @@ function SidePanel() {
 
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
 	const sessions = state?.groups || NO_SESSIONS;
+	const savedUrls = useMemo(
+		() => savedUrlSet(bookmarks, sessions),
+		[bookmarks, sessions],
+	);
 	const columns = state?.bookmarkColumns;
 	const bookmarksEnabled = settings?.bookmarksEnabled !== false;
 	const sessionsEnabled = settings?.sessionsEnabled !== false;
@@ -486,6 +500,19 @@ function SidePanel() {
 		}, 'Could not restore this session.');
 	}
 
+	async function switchToSession(session: Session) {
+		await attempt(async () => {
+			const result = await send('SWITCH_WORKSPACE', {groupId: session.id});
+			if (!result?.ok) {
+				throw new Error(result?.error || 'Could not switch to this session.');
+			}
+
+			showStatus(switchSummary(result, session.name), Boolean(result.failed), {
+				toast: true,
+			});
+		}, 'Could not switch to this session.');
+	}
+
 	async function saveTabs(
 		request: {scope?: 'window'; tabIds?: number[]},
 		done: string,
@@ -635,6 +662,17 @@ function SidePanel() {
 							{title}
 						</strong>
 						<small className="block truncate text-[11px] text-muted-foreground">
+							{savedUrls.has(url) && (
+								<IconTooltip label="Already saved in a session or bookmark">
+									<span
+										role="img"
+										aria-label="Already saved"
+										className="mr-1 inline-block align-[-1px] text-emerald-600 dark:text-emerald-400"
+									>
+										<Check className="h-3 w-3" aria-hidden="true" />
+									</span>
+								</IconTooltip>
+							)}
 							<InsecureMarkFor url={url} settings={settings ?? {}} />
 							{hostname(url)}
 						</small>
@@ -681,7 +719,7 @@ function SidePanel() {
 
 	if (!state) {
 		return error ? (
-			<main data-brand="tablodge" className="min-h-screen p-3">
+			<main className="min-h-screen p-3">
 				<LoadError message={error} />
 			</main>
 		) : null;
@@ -710,10 +748,7 @@ function SidePanel() {
 	const searchLabel = panel === 'tabs' ? 'Search open tabs' : `Search ${panel}`;
 
 	return (
-		<main
-			data-brand="tablodge"
-			className="flex h-screen min-w-0 flex-col overflow-hidden text-foreground"
-		>
+		<main className="flex h-screen min-w-0 flex-col overflow-hidden text-foreground">
 			<div className="shrink-0 px-3 pt-3">
 				<header className="mb-3 flex min-w-0 items-center justify-between gap-2">
 					<h1 className="sr-only">{PROJECT.name} side panel</h1>
@@ -875,17 +910,39 @@ function SidePanel() {
 													: opened.has(session.id))
 											}
 											extra={
-												<IconTooltip label={`Restore ${session.name}`}>
-													<Button
-														variant="ghost"
-														size="icon"
-														className="h-7 w-7 shrink-0"
-														aria-label={`Restore ${session.name || 'untitled session'}`}
-														onClick={() => void restoreSession(session)}
+												<>
+													<IconTooltip
+														label={
+															canSwitch
+																? `Switch to ${session.name}`
+																: 'Switch is off: this window has no tabs to save.'
+														}
 													>
-														<RotateCcw className="h-4 w-4" />
-													</Button>
-												</IconTooltip>
+														<span>
+															<Button
+																variant="ghost"
+																size="icon"
+																className="h-7 w-7 shrink-0"
+																disabled={!canSwitch}
+																aria-label={`Switch to ${session.name || 'untitled session'}`}
+																onClick={() => void switchToSession(session)}
+															>
+																<ArrowLeftRight className="h-4 w-4" />
+															</Button>
+														</span>
+													</IconTooltip>
+													<IconTooltip label={`Restore ${session.name}`}>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="h-7 w-7 shrink-0"
+															aria-label={`Restore ${session.name || 'untitled session'}`}
+															onClick={() => void restoreSession(session)}
+														>
+															<RotateCcw className="h-4 w-4" />
+														</Button>
+													</IconTooltip>
+												</>
 											}
 											onToggle={() =>
 												settings?.expandSessionsByDefault === true

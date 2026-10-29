@@ -4,9 +4,11 @@
 
 @layer base {
 	/*
-   * Theme contract: pages set data-brand="tablodge" on their root container.
-   * Portal content (menus, tooltips) inherits the tokens from :root. Only
-   * primary/ring colors vary by brand; surfaces, type, and spacing stay shared.
+   * Theme contract: the page sets data-theme on <html> and the accent variables inline
+   * (theme-boot.ts before first paint, theme.tsx afterwards; src/shared/accents.ts picks the
+   * values). The indigo below is the fallback. Portal content (menus, tooltips) inherits the
+   * tokens from :root. Only primary/ring colors vary by accent; surfaces, type, and spacing
+   * stay shared.
    */
 	:root {
 		color-scheme: light;
@@ -37,22 +39,6 @@
 		--input: 212 212 216;
 		--ring: var(--brand-primary);
 		--radius: 0.5rem;
-	}
-
-	/* Brands only change the light/dark primary values; the active scheme picks one below. */
-	:root[data-brand='tablodge'],
-	[data-brand='tablodge'] {
-		--brand-primary-light: 98 84 215;
-		--brand-primary-dark: 165 155 255;
-		--brand-primary-foreground-light: 255 255 255;
-		--brand-primary-foreground-dark: 24 24 27;
-	}
-
-	:root[data-brand='tablodge'],
-	[data-brand='tablodge'] {
-		--primary: var(--brand-primary);
-		--primary-foreground: var(--brand-primary-foreground);
-		--ring: var(--brand-primary);
 	}
 
 	:root[data-theme='dark'] {

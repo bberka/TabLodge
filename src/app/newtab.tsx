@@ -1519,10 +1519,7 @@ function NewTab() {
 	// While loading, and while a new tab hands off to the browser's own page, nothing renders (just the themed background).
 	if (!state || holding) {
 		return (
-			<main
-				data-brand="tablodge"
-				className="mx-auto min-h-screen max-w-6xl px-5 py-8"
-			>
+			<main className="mx-auto min-h-screen max-w-6xl px-5 py-8">
 				{error && (
 					<p role="alert" className="text-sm font-medium text-destructive">
 						{error}{' '}
@@ -1748,7 +1745,6 @@ function NewTab() {
 
 	return (
 		<main
-			data-brand="tablodge"
 			className={cn(
 				'mx-auto',
 				dashboardMaxWidthClass,

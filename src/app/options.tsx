@@ -54,8 +54,10 @@ import {
 	TooltipProvider,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
+import {ACCENTS, DEFAULT_ACCENT} from '../shared/accents';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {radioTargetIndex} from '../shared/radio-keys';
+import {AccentPalette} from './accent-palette';
 import {
 	EmptyState,
 	LoadError,
@@ -628,6 +630,19 @@ const settingsGroups: Array<{
 				],
 			},
 			{
+				name: 'autoArchiveDays',
+				label: 'Archive sessions not opened for',
+				help: 'Moves a session to the Archived folder (created if missing) when you have not restored or edited it for this long. Nothing is deleted, and you can move sessions back at any time. Checked daily and at browser start.',
+				type: 'number-select',
+				options: [
+					['0', 'Never'],
+					['30', '30 days'],
+					['90', '90 days'],
+					['180', '180 days'],
+					['365', '1 year'],
+				],
+			},
+			{
 				name: 'expandSessionsByDefault',
 				label: 'Keep sessions expanded by default',
 				help: `Show every session’s saved tabs when the ${PROJECT.name} page opens, including sessions saved later. You can still collapse or expand each one.`,
@@ -826,7 +841,7 @@ const SHORTCUTS = {
 };
 const APPEARANCE = {
 	title: 'Appearance',
-	help: 'System follows your device and updates automatically.',
+	help: 'System follows your device and updates automatically. The accent color tints buttons, focus rings, and selections. The default is TabLodge’s own color; System follows your operating system’s accent color where it has one.',
 	text: [
 		'Appearance',
 		'System follows your device and updates automatically.',
@@ -835,6 +850,9 @@ const APPEARANCE = {
 		'Dark',
 		'theme',
 		'color mode',
+		'Accent color',
+		'Custom',
+		...ACCENTS.map(({label}) => label),
 	],
 };
 const SYSTEMS = {
@@ -914,7 +932,7 @@ type DataRowDef = {
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const [status, showStatus] = useStatus();
-	const {theme, setTheme} = useTheme();
+	const {theme, setTheme, accent, systemColor, setAccent} = useTheme();
 	const [settings, setSettings] = useState<Partial<Settings>>({});
 	const [excluded, setExcluded] = useState<string[]>([]);
 	const [excludedDraft, setExcludedDraft] = useState('');
@@ -1207,6 +1225,7 @@ function Options() {
 		}
 
 		const previousTheme = theme;
+		const previousAccent = accent;
 		setResetBusy(true);
 		setBusy('defaults');
 		const result = await send('RESET_SETTINGS');
@@ -1224,6 +1243,7 @@ function Options() {
 		setExcluded(result.settings.excludedOrigins || []);
 		try {
 			await setTheme('system');
+			await setAccent(DEFAULT_ACCENT);
 		} catch {
 			showStatus(
 				'Settings were reset, but the appearance choice could not be changed.',
@@ -1239,6 +1259,7 @@ function Options() {
 			showStatus,
 			async () => {
 				await setTheme(previousTheme).catch(() => undefined);
+				await setAccent(previousAccent).catch(() => undefined);
 				await reload();
 			},
 		);
@@ -1309,7 +1330,7 @@ function Options() {
 	// Nothing renders until the saved state arrives, so the page opens on its themed background without a flash.
 	if (!state) {
 		return error ? (
-			<PageShell data-brand="tablodge" className="max-w-4xl">
+			<PageShell className="max-w-4xl">
 				<PageTop />
 				<LoadError message={error} />
 			</PageShell>
@@ -1597,10 +1618,7 @@ function Options() {
 	));
 
 	return (
-		<PageShell
-			data-brand="tablodge"
-			className="max-w-6xl lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8"
-		>
+		<PageShell className="max-w-6xl lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8">
 			<div className="lg:col-span-2">
 				<PageTop />
 			</div>
@@ -1732,7 +1750,7 @@ function Options() {
 							id={sectionId(APPEARANCE.title)}
 							className={cn(
 								SECTION_SCROLL_CLASS,
-								'flex flex-col justify-between gap-5 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-center',
+								'flex flex-col gap-4 rounded-lg border border-border bg-card p-5',
 							)}
 						>
 							<div>
@@ -1741,58 +1759,74 @@ function Options() {
 									{hl(APPEARANCE.help)}
 								</p>
 							</div>
-							<div
-								className="flex flex-wrap gap-2"
-								role="radiogroup"
-								aria-label="Appearance"
-								onKeyDown={(event) => {
-									const buttons = [
-										...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-											'[role="radio"]',
-										),
-									];
-									const next = radioTargetIndex(
-										event.key,
-										buttons.indexOf(
-											document.activeElement as HTMLButtonElement,
-										),
-										buttons.length,
-									);
-									if (next === null) {
-										return;
-									}
+							<div className="flex flex-wrap items-center gap-3">
+								<div
+									className="flex flex-wrap gap-2"
+									role="radiogroup"
+									aria-label="Appearance"
+									onKeyDown={(event) => {
+										const buttons = [
+											...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+												'[role="radio"]',
+											),
+										];
+										const next = radioTargetIndex(
+											event.key,
+											buttons.indexOf(
+												document.activeElement as HTMLButtonElement,
+											),
+											buttons.length,
+										);
+										if (next === null) {
+											return;
+										}
 
-									// Arrow keys select as they move, as native radio buttons do.
-									event.preventDefault();
-									buttons[next].focus();
-									buttons[next].click();
-								}}
-							>
-								{APPEARANCE_CHOICES.map(([value, Icon, label]) => (
-									<Button
-										key={value}
-										type="button"
-										variant={theme === value ? 'default' : 'outline'}
-										size="sm"
-										role="radio"
-										aria-checked={theme === value}
-										tabIndex={theme === value ? 0 : -1}
-										onClick={async () => {
-											try {
-												await setTheme(value);
-												showStatus('Appearance saved.');
-											} catch {
-												showStatus(
-													'Could not save the appearance choice.',
-													true,
-												);
+										// Arrow keys select as they move, as native radio buttons do.
+										event.preventDefault();
+										buttons[next].focus();
+										buttons[next].click();
+									}}
+								>
+									{APPEARANCE_CHOICES.map(([value, Icon, label]) => (
+										<Button
+											key={value}
+											type="button"
+											variant={theme === value ? 'default' : 'outline'}
+											size="sm"
+											role="radio"
+											aria-checked={theme === value}
+											tabIndex={theme === value ? 0 : -1}
+											onClick={async () => {
+												try {
+													await setTheme(value);
+													showStatus('Appearance saved.');
+												} catch {
+													showStatus(
+														'Could not save the appearance choice.',
+														true,
+													);
+												}
+											}}
+										>
+											<Icon className="h-4 w-4" />
+											{label}
+										</Button>
+									))}
+								</div>
+								<AccentPalette
+									accent={accent}
+									systemColor={systemColor}
+									onChange={async (next) => {
+										try {
+											await setAccent(next);
+											if (!next.startsWith('#')) {
+												showStatus('Accent color saved.');
 											}
-										}}
-									>
-										<Icon className="h-4 w-4" />
-										{label}
-									</Button>
-								))}
+										} catch {
+											showStatus('Could not save the accent color.', true);
+										}
+									}}
+								/>
 							</div>
 						</section>
 					)}
