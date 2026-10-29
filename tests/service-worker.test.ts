@@ -5045,6 +5045,75 @@ test('recovery settings default on and invalid values fall back', async () => {
 	assert.equal(valid.settings.trashRetentionDays, 90);
 });
 
+test('auto-archive moves stale sessions to the Archived folder and leaves recent ones', async () => {
+	const state = stateWithSession({autoArchiveDays: 30});
+	const old = state.groups[0];
+	const day = 86_400_000;
+	const recent = (id: string, extra: Record<string, number>) => ({
+		...old,
+		id,
+		createdAt: 1_700_000_000_000,
+		updatedAt: 1_700_000_000_000,
+		...extra,
+	});
+	state.groups.push(
+		recent('opened-recently', {lastOpenedAt: Date.now() - 5 * day}),
+		recent('edited-recently', {updatedAt: Date.now() - 5 * day}),
+		recent('opened-long-ago', {lastOpenedAt: Date.now() - 60 * day}),
+	);
+	const harness = createWorkerHarness(state);
+	await harness.fire('alarm', {name: 'tablodge-archive'});
+	const folderOf = (id: string) =>
+		harness.state.groups.find((group) => group.id === id)?.folderId;
+	const archived = harness.state.folders.find(
+		(folder) => folder.name === 'Archived',
+	);
+	assert.ok(archived);
+	assert.equal(folderOf('session-1'), archived.id);
+	assert.equal(folderOf('opened-long-ago'), archived.id);
+	assert.equal(folderOf('opened-recently'), 'unfiled');
+	assert.equal(folderOf('edited-recently'), 'unfiled');
+	assert.equal(harness.state.groups.length, 4, 'nothing is deleted');
+
+	// A session moved back out is not archived again until it goes stale again.
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {folderId: 'unfiled'},
+	});
+	await harness.fire('alarm', {name: 'tablodge-archive'});
+	assert.equal(folderOf('session-1'), 'unfiled');
+	assert.equal(
+		harness.state.folders.filter((folder) => folder.name === 'Archived').length,
+		1,
+	);
+});
+
+test('auto-archive is off by default, runs at browser start, and its alarm follows the setting', async () => {
+	const off = createWorkerHarness(stateWithSession());
+	await off.fire('alarm', {name: 'tablodge-archive'});
+	assert.equal(off.state.groups[0].folderId, 'unfiled');
+	assert.equal(off.state.folders.length, 1);
+	assert.equal(off.alarms.has('tablodge-archive'), false);
+
+	const harness = createWorkerHarness(stateWithSession());
+	const response = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoArchiveDays: 90},
+	});
+	assert.equal(response.settings.autoArchiveDays, 90);
+	assert.equal(harness.alarms.has('tablodge-archive'), true);
+	await harness.fire('onStartup');
+	assert.equal(harness.state.groups[0].folderId, 'archived-sessions');
+
+	const invalid = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoArchiveDays: 7},
+	});
+	assert.equal(invalid.settings.autoArchiveDays, 0);
+	assert.equal(harness.alarms.has('tablodge-archive'), false);
+});
+
 test('snapshots capture windows with pinned tabs, groups, split pairs, active tab and focus, and skip non-web pages', async () => {
 	const harness = recoveryHarness(
 		{excludedOrigins: ['private.example']},

@@ -32,7 +32,7 @@ TabLodge reads tab metadata to save and restore sessions, detect duplicates, sho
 
 ## Retention and deletion
 
-Your saved sessions and bookmarks stay until you delete them. Deleted items go to the trash bin for 7, 30, or 90 days, depending on your setting. Snapshots, backups, trash, and Undo records have retention or size limits. You can clear recovery data from **Settings › Recovery & backups**.
+Your saved sessions and bookmarks stay until you delete them. The optional auto-archive setting only moves old sessions into an Archived folder; it never deletes them. Deleted items go to the trash bin for 7, 30, or 90 days, depending on your setting. Snapshots, backups, trash, and Undo records have retention or size limits. You can clear recovery data from **Settings › Recovery & backups**.
 
 Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data creates a safety backup and offers Undo, so check the backup history too if you want to remove retained copies. Removing the extension deletes its browser storage.
 
