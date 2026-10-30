@@ -872,7 +872,12 @@ export function SessionManager({
 
 	async function copyTabLink(tab: SavedTabRecord) {
 		try {
-			await writeClipboard({text: tab.url, html: null});
+			await writeClipboard({
+				text: settings.removeTrackingParameters
+					? stripTrackingParameters(tab.url)
+					: tab.url,
+				html: null,
+			});
 		} catch {
 			showStatus('Could not copy the link. Check clipboard permissions.', true);
 		}
