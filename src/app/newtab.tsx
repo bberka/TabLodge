@@ -1101,7 +1101,11 @@ function NewTab() {
 
 		if (action === 'copy') {
 			try {
-				await navigator.clipboard.writeText(bookmark.url);
+				await navigator.clipboard.writeText(
+					settings.removeTrackingParameters === true
+						? stripTrackingParameters(bookmark.url)
+						: bookmark.url,
+				);
 				showStatus('Link copied.', false, {toast: true});
 			} catch {
 				showStatus(

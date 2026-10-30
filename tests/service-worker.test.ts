@@ -1021,6 +1021,23 @@ test('default preferences use newest-first, keep-on-restore, quick-popup action,
 	assert.equal(response.settings.removeTrackingParameters, false);
 });
 
+test('RESTORE_GROUP strips X share parameters from status links when enabled', async () => {
+	const enabled = createWorkerHarness(
+		stateWithSession({removeTrackingParameters: true}),
+	);
+	enabled.state.groups[0].tabs[0].url =
+		'https://x.com/user/status/123?s=20&t=abc&lang=en';
+	const result = await enabled.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(
+		enabled.openedTabs[0].url,
+		'https://x.com/user/status/123?lang=en',
+	);
+});
+
 test('RESTORE_GROUP strips trackers only when enabled and keeps the saved URL unchanged', async () => {
 	const originalUrl =
 		'https://saved.example/article?utm_source=mail&gclid=abc&ref=story#details';

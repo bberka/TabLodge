@@ -364,7 +364,9 @@ function SidePanel() {
 
 	async function copy(url: string) {
 		await attempt(async () => {
-			await navigator.clipboard.writeText(url);
+			await navigator.clipboard.writeText(
+				settings?.removeTrackingParameters ? stripTrackingParameters(url) : url,
+			);
 			showStatus('Link copied.', false, {toast: true});
 		}, 'Could not copy the link.');
 	}

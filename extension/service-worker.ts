@@ -563,6 +563,7 @@ const TRACKING_PARAMETER_NAMES = new Set([
 	'gclid',
 	'gbraid',
 	'hsctatracking',
+	'igsh',
 	'igshid',
 	'li_fat_id',
 	'mc_cid',
@@ -580,10 +581,42 @@ const TRACKING_PARAMETER_NAMES = new Set([
 	'yclid',
 ]);
 
-function isTrackingParameter(name: string) {
+/**
+Parameters that are only trackers on certain sites. `s` and `t` are generic names, so they are removed on X status links and nowhere else.
+*/
+const SITE_TRACKING_RULES: ReadonlyArray<{
+	hosts: readonly string[];
+	path?: RegExp;
+	names: ReadonlySet<string>;
+}> = [
+	{
+		hosts: ['x.com', 'twitter.com'],
+		path: /\/status(?:es)?\/\d/,
+		names: new Set(['s', 't']),
+	},
+	{
+		hosts: ['x.com', 'twitter.com'],
+		names: new Set(['ref_src', 'ref_url', 'cxt']),
+	},
+	{
+		hosts: ['youtube.com', 'youtu.be', 'open.spotify.com'],
+		names: new Set(['si']),
+	},
+];
+
+function isTrackingParameter(name: string, url: URL) {
 	const normalized = name.toLowerCase();
 	return (
-		normalized.startsWith('utm_') || TRACKING_PARAMETER_NAMES.has(normalized)
+		normalized.startsWith('utm_') ||
+		TRACKING_PARAMETER_NAMES.has(normalized) ||
+		SITE_TRACKING_RULES.some(
+			(rule) =>
+				rule.names.has(normalized) &&
+				rule.hosts.some(
+					(host) => url.hostname === host || url.hostname.endsWith(`.${host}`),
+				) &&
+				(!rule.path || rule.path.test(url.pathname)),
+		)
 	);
 }
 
@@ -605,7 +638,7 @@ function stripTrackingParameters(rawUrl: string) {
 				// Keep malformed keys unless their raw form is a known tracker.
 			}
 
-			return !isTrackingParameter(name);
+			return !isTrackingParameter(name, url);
 		});
 		if (kept.length === query.length) {
 			return rawUrl;

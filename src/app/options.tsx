@@ -331,7 +331,7 @@ const settingsGroups: Array<{
 			{
 				name: 'removeTrackingParameters',
 				label: 'Remove tracking parameters',
-				help: 'Remove common tracking parameters such as utm_source, fbclid and gclid when opening saved links or restoring sessions and snapshots. Saved URLs and copied links stay unchanged. This is off by default.',
+				help: 'Remove common tracking parameters such as utm_source, fbclid and gclid, and the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. The URLs stored in your library stay unchanged. This is off by default.',
 				type: 'switch',
 			},
 			{
