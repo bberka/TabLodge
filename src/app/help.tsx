@@ -257,7 +257,7 @@ function Help() {
 			entries: [
 				{
 					title: 'Add a page or link',
-					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically.',
+					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, choose New column in the column selector to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically.',
 					searchText:
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},

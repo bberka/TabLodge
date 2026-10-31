@@ -38,11 +38,6 @@ import {
 	Input,
 	Label,
 	ScrollArea,
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
 	Switch,
 	TooltipProvider,
 	IconTooltip,
@@ -69,11 +64,12 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {webUrl} from './web-url';
+import type {BookmarkColumnDraft} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
-// The icon registry is large; the popup only loads it once the column picker renders.
-const ColumnLabel = lazy(async () => ({
-	default: (await import('./icon-label')).ColumnLabel,
+// Keep the icon registry out of the popup's initial load.
+const BookmarkColumnPicker = lazy(async () => ({
+	default: (await import('./bookmark-column-picker')).BookmarkColumnPicker,
 }));
 
 /**
@@ -98,6 +94,7 @@ function Popup() {
 		url: string;
 	} | null>(null);
 	const [columnId, setColumnId] = useState('');
+	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
 	const [chooseOpen, setChooseOpen] = useState(false);
 	const [currentTabs, setCurrentTabs] = useState<WebTab[]>([]);
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -258,8 +255,11 @@ function Popup() {
 				return;
 			}
 
+			const {NEW_BOOKMARK_COLUMN: newColumnValue} =
+				await import('./bookmark-column-picker');
 			setBookmarkTab({title: tab.title || url, url});
-			setColumnId(columns[0]?.id || 'bookmark-default');
+			setColumnId(columns[0]?.id || newColumnValue);
+			setNewColumn({name: ''});
 			setBookmarkOpen(true);
 		} catch {
 			showStatus(
@@ -273,24 +273,37 @@ function Popup() {
 
 	async function saveBookmark(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (!bookmarkTab) {
+		if (!bookmarkTab || busy === 'bookmark-save') {
 			return;
 		}
 
 		setBusy('bookmark-save');
-		const result = await send('ADD_BOOKMARK', {
-			bookmark: {...bookmarkTab, columnId},
-		});
-		setBusy('');
-		if (!result?.ok) {
-			showStatus(result?.error || 'Could not bookmark this page.', true);
-			return;
-		}
+		try {
+			const {resolveBookmarkColumn} = await import('./bookmark-column-picker');
+			const target = await resolveBookmarkColumn(columnId, newColumn);
+			setColumnId(target);
+			const result = await send('ADD_BOOKMARK', {
+				bookmark: {...bookmarkTab, columnId: target},
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not bookmark this page.', true);
+				return;
+			}
 
-		setBookmarkOpen(false);
-		setBookmarkTab(null);
-		showStatus('Bookmark saved.', false, {toast: true});
-		await reload();
+			setBookmarkOpen(false);
+			setBookmarkTab(null);
+			showStatus('Bookmark saved.', false, {toast: true});
+			await reload();
+		} catch (reason) {
+			showStatus(
+				reason instanceof Error
+					? reason.message
+					: 'Could not bookmark this page.',
+				true,
+			);
+		} finally {
+			setBusy('');
+		}
 	}
 
 	// Ctrl/Cmd keeps the saved tabs, Shift opens a new window, as on the TabLodge page.
@@ -745,20 +758,16 @@ function Popup() {
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column">Bookmark column</Label>
-								<Select value={columnId} onValueChange={setColumnId}>
-									<SelectTrigger id="bookmark-column">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{columns.map((column) => (
-											<SelectItem key={column.id} value={column.id}>
-												<Suspense fallback={column.name}>
-													<ColumnLabel column={column} />
-												</Suspense>
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<Suspense fallback={<p role="status">Loading columns</p>}>
+									<BookmarkColumnPicker
+										id="bookmark-column"
+										columns={columns}
+										value={columnId}
+										draft={newColumn}
+										onDraftChange={setNewColumn}
+										onValueChange={setColumnId}
+									/>
+								</Suspense>
 							</div>
 						</DialogBody>
 						<DialogFooter>

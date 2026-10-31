@@ -99,7 +99,13 @@ import {
 	readFullBackup,
 	type FullBackupContents,
 } from './full-backup';
-import {ColumnSelect} from './column-select';
+import {
+	BookmarkColumnSelect,
+	BookmarkColumnNameField,
+	NEW_BOOKMARK_COLUMN,
+	resolveBookmarkColumn,
+	type BookmarkColumnDraft,
+} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
 const plural = (count: number, noun: string, many = `${noun}s`) =>
@@ -872,7 +878,8 @@ export function ImportDialog({
 	const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('skip');
 	const [titlePolicy, setTitlePolicy] = useState<TitlePolicy>('existing');
 	const [target, setTarget] = useState<BookmarkTarget>('folders');
-	const [columnId, setColumnId] = useState('');
+	const [columnId, setColumnId] = useState(NEW_BOOKMARK_COLUMN);
+	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
 	const fileRef = useRef<HTMLInputElement>(null);
 	const importButtonRef = useRef<HTMLButtonElement>(null);
 	const columns = state?.bookmarkColumns ?? [];
@@ -895,7 +902,8 @@ export function ImportDialog({
 		setDuplicateMode('skip');
 		setTitlePolicy('existing');
 		setTarget('folders');
-		setColumnId(columns[0]?.id ?? '');
+		setColumnId(columns[0]?.id ?? NEW_BOOKMARK_COLUMN);
+		setNewColumn({name: ''});
 		// Resets the form each time the dialog opens; later changes to the state or props must not wipe it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
@@ -1073,14 +1081,20 @@ export function ImportDialog({
 		}
 
 		setBusy(true);
-		const options: ImportOptions = {
-			duplicateMode,
-			titlePolicy: duplicateMode === 'skip' ? titlePolicy : 'existing',
-			...(kind === 'bookmarks' &&
-				target === 'column' &&
-				columnId && {targetColumnId: columnId}),
-		};
 		try {
+			const targetColumnId =
+				kind === 'bookmarks' && target === 'column'
+					? await resolveBookmarkColumn(columnId, newColumn)
+					: undefined;
+			if (targetColumnId) {
+				setColumnId(targetColumnId);
+			}
+
+			const options: ImportOptions = {
+				duplicateMode,
+				titlePolicy: duplicateMode === 'skip' ? titlePolicy : 'existing',
+				...(targetColumnId && {targetColumnId}),
+			};
 			let message: string;
 			let undoId: string | undefined;
 			if (source.type === 'browser') {
@@ -1202,7 +1216,9 @@ export function ImportDialog({
 				size="lg"
 				// The review step uses most of the viewport so the sample list gets the space left over.
 				className={
-					step === 'preview' && !full ? 'h-[min(90vh,52rem)]' : undefined
+					step === 'preview' && !full
+						? 'h-[calc(100dvh-2rem)] overflow-hidden'
+						: undefined
 				}
 			>
 				<DialogHeader>
@@ -1409,7 +1425,7 @@ export function ImportDialog({
 					preview &&
 					source && (
 						<>
-							<DialogBody className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+							<DialogBody className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*:not([data-import-preview])]:shrink-0">
 								{kindSwitch && <div>{kindSwitch}</div>}
 								<div className="flex min-w-0 items-start gap-3 rounded-lg border border-border px-3.5 py-3">
 									<span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -1505,7 +1521,10 @@ export function ImportDialog({
 										))}
 									</ul>
 								)}
-								<div className="flex min-h-[20rem] min-w-0 flex-1 shrink flex-col">
+								<div
+									data-import-preview=""
+									className="flex min-h-32 min-w-0 flex-1 flex-col"
+								>
 									<p className="mb-1.5 text-xs font-medium text-muted-foreground">
 										Preview
 										{preview.links > preview.sample.length
@@ -1607,19 +1626,16 @@ export function ImportDialog({
 													value={target}
 													options={[
 														{value: 'folders', label: 'Columns from folders'},
-														...(columns.length > 0
-															? [
-																	{
-																		value: 'column' as const,
-																		label: 'One column',
-																	},
-																]
-															: []),
+														{
+															value: 'column',
+															label: 'One column',
+														},
 													]}
 													onValueChange={setTarget}
 												/>
 												{target === 'column' && (
-													<ColumnSelect
+													<BookmarkColumnSelect
+														id="import-bookmark-column"
 														columns={columns}
 														value={columnId}
 														className="h-8 w-48 text-xs"
@@ -1630,6 +1646,15 @@ export function ImportDialog({
 											</div>
 										</OptionRow>
 									)}
+									{kind === 'bookmarks' &&
+										target === 'column' &&
+										columnId === NEW_BOOKMARK_COLUMN && (
+											<BookmarkColumnNameField
+												id="import-bookmark-column-new-name"
+												draft={newColumn}
+												onDraftChange={setNewColumn}
+											/>
+										)}
 								</div>
 								{nothingNew && (
 									<p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
@@ -1667,7 +1692,15 @@ export function ImportDialog({
 								<Button
 									ref={importButtonRef}
 									type="button"
-									disabled={busy || !preview.links || nothingNew}
+									disabled={
+										busy ||
+										!preview.links ||
+										nothingNew ||
+										(kind === 'bookmarks' &&
+											target === 'column' &&
+											columnId === NEW_BOOKMARK_COLUMN &&
+											!newColumn.name.trim())
+									}
 									data-autofocus=""
 									onClick={() => void runImport()}
 								>

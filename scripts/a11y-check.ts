@@ -6,6 +6,7 @@
 //      Appearance radio group, and moving sessions, columns and bookmarks without dragging.
 // Automated checks do not replace manual keyboard and screen reader testing; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -31,6 +32,7 @@ type AxeResults = {
 };
 type AxeOptions = {runOnly: {type: 'tag'; values: string[]}};
 type AxeGlobal = {axe: {run(options: AxeOptions): Promise<AxeResults>}};
+type ScrollElement = {scrollHeight: number; clientHeight: number};
 
 const failures: string[] = [];
 
@@ -123,6 +125,7 @@ async function main() {
 		],
 	});
 	try {
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 		const worker =
 			context.serviceWorkers()[0] ??
 			(await context.waitForEvent('serviceworker', {timeout: 15_000}));
@@ -270,6 +273,444 @@ async function main() {
 					);
 					await dashboard.close();
 					await page.close();
+				},
+			);
+		}
+
+		for (const theme of THEMES) {
+			await check(`bookmark import scrolling (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'newtab');
+				await setTheme(page, theme);
+				await page.setViewportSize({width: 1440, height: 900});
+				await page
+					.getByRole('button', {name: 'Import, back up and share bookmarks'})
+					.click();
+				await page
+					.getByRole('menuitem', {name: 'Import bookmarks', exact: true})
+					.click();
+				await page.locator('input[type="file"]').setInputFiles({
+					name: 'bookmarks.txt',
+					mimeType: 'text/plain',
+					buffer: Buffer.from(
+						Array.from(
+							{length: 60},
+							(_, index) => `https://example.com/import-${index}`,
+						).join('\n'),
+					),
+				});
+				const dialog = page.getByRole('dialog');
+				await dialog
+					.getByRole('heading', {name: 'Review bookmark import'})
+					.waitFor();
+				await page.screenshot({path: `.dev/evidence/import-${theme}.png`});
+				const body = dialog.locator('div').filter({has: page.locator('ol')});
+				const scrolling = await body.evaluateAll(
+					(nodes: ScrollElement[]) =>
+						nodes.filter((node) => {
+							const {getComputedStyle} = globalThis as typeof globalThis & {
+								getComputedStyle: (node: ScrollElement) => {overflowY: string};
+							};
+							const style = getComputedStyle(node);
+							return (
+								['auto', 'scroll'].includes(style.overflowY) &&
+								node.scrollHeight > node.clientHeight + 1
+							);
+						}).length,
+				);
+				assert.equal(
+					scrolling,
+					1,
+					'only the bookmark list should scroll at desktop height',
+				);
+				for (const height of [600, 420]) {
+					await page.setViewportSize({width: 800, height});
+					assert.ok(
+						await dialog.evaluate(
+							(node: ScrollElement) =>
+								node.scrollHeight <= node.clientHeight + 1,
+						),
+						'the dialog panel must not add another scrollbar',
+					);
+					const action = dialog.getByRole('button', {
+						name: 'Import 60 bookmarks',
+					});
+					await action.focus();
+					const bounds = await action.boundingBox();
+					assert.ok(bounds, 'Import is rendered');
+					assert.ok(bounds.y >= 0, 'Import stays below the top edge');
+					assert.ok(
+						bounds.y + bounds.height <= height,
+						'Import stays above the bottom edge',
+					);
+				}
+
+				await page.setViewportSize({width: 375, height: 667});
+				assert.ok(
+					await dialog.evaluate(
+						(
+							node: ScrollElement & {scrollWidth: number; clientWidth: number},
+						) => node.scrollWidth <= node.clientWidth + 1,
+					),
+					'the review fits a narrow screen',
+				);
+				await page.screenshot({
+					path: `.dev/evidence/import-narrow-${theme}.png`,
+				});
+				await page.close();
+			});
+			await check(`import into a new bookmark column (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'newtab');
+				await setTheme(page, theme);
+				const name = `Imported ${theme}`;
+				for (const save of [false, true]) {
+					await page
+						.getByRole('button', {name: 'Import, back up and share bookmarks'})
+						.click();
+					await page
+						.getByRole('menuitem', {name: 'Import bookmarks', exact: true})
+						.click();
+					await page.locator('input[type="file"]').setInputFiles({
+						name: 'links.txt',
+						mimeType: 'text/plain',
+						buffer: Buffer.from(`https://example.com/new-column-${theme}`),
+					});
+					const dialog = page.getByRole('dialog');
+					await dialog
+						.getByRole('radio', {name: 'One column', exact: true})
+						.focus();
+					await page.keyboard.press('Space');
+					await dialog.getByRole('combobox').press('Space');
+					await page
+						.getByRole('option', {name: 'New column', exact: true})
+						.waitFor({timeout: 2000});
+					await page
+						.getByRole('option', {name: 'New column', exact: true})
+						.press('Enter');
+					assert.equal(
+						await dialog
+							.getByRole('button', {name: 'Import 1 bookmark', exact: true})
+							.isEnabled(),
+						false,
+						'a new column needs a name',
+					);
+					await dialog
+						.getByRole('textbox', {name: 'New column name'})
+						.fill(name);
+					const nameBounds = await dialog
+						.getByRole('textbox', {name: 'New column name'})
+						.boundingBox();
+					const dialogBounds = await dialog.boundingBox();
+					assert.ok(nameBounds);
+					assert.ok(dialogBounds);
+					assert.ok(
+						nameBounds.width > dialogBounds.width * 0.65,
+						'the new column name gets its own full width row',
+					);
+					if (save) {
+						await page.screenshot({
+							path: `.dev/evidence/import-new-column-${theme}.png`,
+						});
+					}
+
+					await dialog
+						.getByRole('button', {
+							name: save ? 'Import 1 bookmark' : 'Cancel',
+							exact: true,
+						})
+						.click();
+					await dialog.waitFor({state: 'hidden'});
+					if (!save) {
+						assert.equal(
+							await page.getByRole('heading', {name, exact: true}).count(),
+							0,
+							'Cancel must not create the column',
+						);
+					}
+				}
+
+				await page.getByRole('heading', {name, exact: true}).waitFor();
+				const column = page
+					.locator('section[data-column-id]')
+					.filter({has: page.getByRole('heading', {name, exact: true})});
+				assert.equal(await column.locator('[data-bookmark-id]').count(), 1);
+				await page.close();
+			});
+			await check(`paste bookmarks into a new column (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'newtab');
+				await setTheme(page, theme);
+				await page.bringToFront();
+				await page.evaluate(async (text) => {
+					const {navigator} = globalThis as typeof globalThis & {
+						navigator: {clipboard: {writeText(text: string): Promise<void>}};
+					};
+					await navigator.clipboard.writeText(text);
+				}, `https://example.com/paste-${theme}-1\nhttps://example.com/paste-${theme}-2`);
+				await page.keyboard.press('Control+V');
+				const dialog = page.getByRole('dialog');
+				await dialog.getByRole('combobox').press('Space');
+				await page
+					.getByRole('option', {name: 'New column', exact: true})
+					.press('Enter', {timeout: 2000});
+				const name = `Pasted ${theme}`;
+				await dialog.getByRole('textbox', {name: 'New column name'}).fill(name);
+				await dialog
+					.getByRole('button', {name: 'Add 2 bookmarks', exact: true})
+					.press('Enter');
+				await dialog.waitFor({state: 'hidden'});
+				const column = page
+					.locator('section[data-column-id]')
+					.filter({has: page.getByRole('heading', {name, exact: true})});
+				await column.waitFor();
+				assert.equal(await column.locator('[data-bookmark-id]').count(), 2);
+				await page.close();
+			});
+			await check(
+				`bookmark a saved tab into a new column (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					await page
+						.getByRole('button', {name: /^Expand session:/})
+						.first()
+						.press('Enter');
+					await page
+						.locator('[data-tab-id]')
+						.first()
+						.getByRole('button', {name: /^More actions for /})
+						.press('Enter');
+					await page
+						.getByRole('menuitem', {name: 'Bookmark', exact: true})
+						.press('Enter');
+					const dialog = page.getByRole('dialog');
+					await dialog.getByRole('combobox').press('Space');
+					await page
+						.getByRole('option', {name: 'New column', exact: true})
+						.press('Enter', {timeout: 2000});
+					const name = `Saved tab ${theme}`;
+					await dialog
+						.getByRole('textbox', {name: 'New column name'})
+						.fill(name);
+					await dialog
+						.getByRole('button', {name: 'Save bookmark', exact: true})
+						.press('Enter');
+					await dialog.waitFor({state: 'hidden'});
+					const column = page
+						.locator('section[data-column-id]')
+						.filter({has: page.getByRole('heading', {name, exact: true})});
+					await column.waitFor();
+					assert.equal(await column.locator('[data-bookmark-id]').count(), 1);
+					await page.close();
+				},
+			);
+		}
+
+		for (const theme of THEMES) {
+			await check(
+				`toolbar popup bookmarks into a new column (${theme})`,
+				async () => {
+					const url = `https://example.com/popup-bookmark-${theme}`;
+					const webPage = await context.newPage();
+					await webPage.route(url, async (route) =>
+						route.fulfill({
+							contentType: 'text/html',
+							body: '<title>Popup bookmark test</title>',
+						}),
+					);
+					await webPage.goto(url);
+					const popup = await openPage(context, extensionId, 'popup');
+					await popup.setViewportSize({width: 380, height: 560});
+					await setTheme(popup, theme);
+					const name = `Popup ${theme}`;
+					for (const save of [false, true]) {
+						await webPage.bringToFront();
+						await popup
+							.getByRole('button', {name: 'Bookmark this page', exact: true})
+							.press('Enter');
+						const dialog = popup.getByRole('dialog');
+						await dialog
+							.getByText('Popup bookmark test', {exact: true})
+							.waitFor();
+						await dialog.getByRole('combobox').press('Space');
+						await popup
+							.getByRole('option', {name: 'New column', exact: true})
+							.press('Enter', {timeout: 2000});
+						await dialog
+							.getByRole('textbox', {name: 'New column name'})
+							.fill(name);
+						await popup.screenshot({
+							path: `.dev/evidence/popup-new-column-${theme}.png`,
+						});
+						await dialog
+							.getByRole('button', {
+								name: save ? 'Save bookmark' : 'Cancel',
+								exact: true,
+							})
+							.press('Enter');
+						await dialog.waitFor({state: 'hidden'});
+						const board = await openPage(context, extensionId, 'newtab');
+						const column = board
+							.locator('section[data-column-id]')
+							.filter({has: board.getByRole('heading', {name, exact: true})});
+						if (save) {
+							await column.waitFor();
+							assert.equal(
+								await column
+									.locator(`[data-bookmark-id] a[href="${url}"]`)
+									.count(),
+								1,
+							);
+						} else {
+							assert.equal(await column.count(), 0, 'Cancel creates no column');
+						}
+
+						await board.close();
+					}
+
+					await popup.close();
+					await webPage.close();
+				},
+			);
+			for (const entry of ['dashboard', 'prompt']) {
+				await check(
+					`${entry} adds a bookmark into a new column (${theme})`,
+					async () => {
+						const url = `https://example.com/${entry}-bookmark-${theme}`;
+						const page = await openPage(
+							context,
+							extensionId,
+							entry === 'dashboard' ? 'newtab' : 'add-bookmark',
+						);
+						if (entry === 'prompt') {
+							await page.goto(
+								`chrome-extension://${extensionId}/add-bookmark.html?url=${encodeURIComponent(url)}&title=Prompt%20bookmark&source=browser`,
+							);
+						}
+
+						await setTheme(page, theme);
+						if (entry === 'dashboard') {
+							await page
+								.getByRole('button', {name: 'Add bookmark', exact: true})
+								.first()
+								.focus();
+							await page.keyboard.press('Enter');
+							await page.getByRole('dialog').waitFor({timeout: 5000});
+							await page
+								.getByRole('textbox', {name: 'Title', exact: true})
+								.fill('Dashboard bookmark', {timeout: 5000});
+							await page
+								.getByRole('textbox', {name: 'Web address', exact: true})
+								.fill(url);
+						}
+
+						await page.getByRole('combobox').press('Space');
+						await page
+							.getByRole('option', {name: 'New column', exact: true})
+							.press('Enter');
+						const name = `${entry} ${theme}`;
+						await page
+							.getByRole('textbox', {name: 'New column name'})
+							.fill(name);
+						await page.screenshot({
+							path: `.dev/evidence/${entry}-new-column-${theme}.png`,
+						});
+						await page
+							.getByRole('button', {
+								name: entry === 'dashboard' ? 'Create column and save' : 'Save',
+								exact: true,
+							})
+							.press('Enter');
+						const board = await openPage(context, extensionId, 'newtab');
+						const column = board
+							.locator('section[data-column-id]')
+							.filter({has: board.getByRole('heading', {name, exact: true})});
+						await column.waitFor();
+						assert.equal(
+							await column
+								.locator(`[data-bookmark-id] a[href="${url}"]`)
+								.count(),
+							1,
+						);
+						await board.close();
+						if (!page.isClosed()) {
+							await page.close();
+						}
+					},
+				);
+			}
+
+			await check(
+				`browser bookmarks import into a new column (${theme})`,
+				async () => {
+					const url = `https://example.com/browser-import-${theme}`;
+					const browserBookmarkId = await worker.evaluate(
+						async (bookmarkUrl) => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: {
+									bookmarks: {
+										create(details: {
+											title: string;
+											url: string;
+										}): Promise<{id: string}>;
+									};
+								};
+							};
+							const bookmark = await chrome.bookmarks.create({
+								title: 'Browser import test',
+								url: bookmarkUrl,
+							});
+							return bookmark.id;
+						},
+						url,
+					);
+					try {
+						const page = await openPage(context, extensionId, 'newtab');
+						await setTheme(page, theme);
+						await page
+							.getByRole('button', {
+								name: 'Import, back up and share bookmarks',
+							})
+							.press('Enter');
+						await page
+							.getByRole('menuitem', {name: 'Import bookmarks', exact: true})
+							.press('Enter');
+						await page
+							.getByRole('button', {name: 'Read bookmarks', exact: true})
+							.press('Enter');
+						const dialog = page.getByRole('dialog');
+						await dialog
+							.getByRole('radio', {name: 'One column', exact: true})
+							.press('Space');
+						await dialog.getByRole('combobox').press('Space');
+						await page
+							.getByRole('option', {name: 'New column', exact: true})
+							.press('Enter');
+						const name = `Browser import ${theme}`;
+						await dialog
+							.getByRole('textbox', {name: 'New column name'})
+							.fill(name);
+						await dialog
+							.getByRole('button', {name: 'Import 1 bookmark', exact: true})
+							.press('Enter');
+						await dialog.waitFor({state: 'hidden'});
+						const column = page
+							.locator('section[data-column-id]')
+							.filter({has: page.getByRole('heading', {name, exact: true})});
+						await column.waitFor();
+						assert.equal(
+							await column
+								.locator(`[data-bookmark-id] a[href="${url}"]`)
+								.count(),
+							1,
+						);
+						await page.close();
+					} finally {
+						await worker.evaluate(async (id) => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: {bookmarks: {remove(id: string): Promise<void>}};
+							};
+							await chrome.bookmarks.remove(id);
+						}, browserBookmarkId);
+					}
 				},
 			);
 		}
