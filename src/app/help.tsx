@@ -268,6 +268,12 @@ function Help() {
 						'drag reorder move keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column',
 				},
 				{
+					title: 'Select several bookmarks',
+					body: 'Use Select bookmarks beside bookmark search to turn selection mode on or off. You can also hold Alt (Option on Mac) and hover a bookmark to reveal its selection checkbox, or choose Select bookmark from its menu. In selection mode, click bookmarks or use Tab and Space to select them. Hold Shift and click, or press Shift+Space, to select every visible bookmark between the last selection and the current one. Clicking with Ctrl (Command on Mac) still opens a link in a new tab. Drag selected bookmarks within the board, or use Move and Delete above it. Clear bookmark selection clears the selection; Escape exits selection mode. Deleted bookmarks offer Undo and go to the trash bin.',
+					searchText:
+						'select multiple bulk bookmarks alt option shift range ctrl command checkbox drag move delete undo keyboard space escape',
+				},
+				{
 					title: 'Import or export bookmarks',
 					body: (
 						<>

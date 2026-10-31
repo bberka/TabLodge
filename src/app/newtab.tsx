@@ -20,6 +20,8 @@ import {
 	ListPlus,
 	BookmarkPlus,
 	Save,
+	Square,
+	SquareCheck,
 	SquarePlus,
 	Download,
 	FolderPlus,
@@ -156,6 +158,8 @@ type BookmarkAction =
 	| 'move-up'
 	| 'move-down'
 	| 'copy'
+	| 'select'
+	| 'select-range'
 	| 'delete';
 type OnBookmarkAction = (
 	action: BookmarkAction,
@@ -177,7 +181,8 @@ type ColumnDraft = {
 	name: string;
 	icon?: string;
 };
-type MoveDraft = Bookmark & {targetColumnId: string};
+type MoveDraft = {bookmarkIds: string[]; targetColumnId: string};
+type BookmarkSelectionMode = 'off' | 'hover' | 'on';
 type PointerColumnDrag = {
 	pointerId: number;
 	columnId: string;
@@ -276,6 +281,15 @@ function NewTab() {
 	} | null>(null);
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
+	const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(
+		() => new Set(),
+	);
+	const [selectionModifier, setSelectionModifier] = useState(false);
+	const [bookmarkSelectionEnabled, setBookmarkSelectionEnabled] =
+		useState(false);
+	const bookmarkSelectionAnchorRef = useRef<string | null>(null);
+	const draggedBookmarksRef = useRef<string[]>([]);
+	const bookmarkBatchRunningRef = useRef(false);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
 	const [finderOpen, setFinderOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
@@ -296,6 +310,88 @@ function NewTab() {
 		? state?.bookmarks.find((entry) => entry.id === bookmarkEdit.id)
 		: undefined;
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
+	const selectedBookmarkIds = bookmarks
+		.filter((bookmark) => selectedBookmarks.has(bookmark.id))
+		.map((bookmark) => bookmark.id);
+	const bookmarkSelectionMode: BookmarkSelectionMode = bookmarkSelectionEnabled
+		? 'on'
+		: selectionModifier
+			? 'hover'
+			: 'off';
+	const movingBookmark =
+		moveBookmark?.bookmarkIds.length === 1
+			? bookmarks.find(
+					(bookmark) => bookmark.id === moveBookmark.bookmarkIds[0],
+				)
+			: undefined;
+
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			setSelectionModifier(event.altKey);
+			if (
+				!(event.type === 'keydown' && event.key === 'Escape') ||
+				event.defaultPrevented ||
+				document.querySelector('[role="dialog"], [role="menu"]')
+			) {
+				return;
+			}
+
+			setSelectedBookmarks(new Set());
+			setBookmarkSelectionEnabled(false);
+			bookmarkSelectionAnchorRef.current = null;
+		};
+
+		const reset = () => setSelectionModifier(false);
+		globalThis.addEventListener('keydown', onKey);
+		globalThis.addEventListener('keyup', onKey);
+		window.addEventListener('blur', reset);
+		return () => {
+			globalThis.removeEventListener('keydown', onKey);
+			globalThis.removeEventListener('keyup', onKey);
+			window.removeEventListener('blur', reset);
+		};
+	}, []);
+
+	function toggleBookmark(bookmark: Bookmark, range = false) {
+		const order = [
+			...document.querySelectorAll<HTMLElement>(
+				'#bookmark-library [data-bookmark-id]',
+			),
+		].map((card) => card.dataset.bookmarkId || '');
+		const first = order.indexOf(bookmarkSelectionAnchorRef.current || '');
+		const last = order.indexOf(bookmark.id);
+		const rangeIds =
+			range && first !== -1 && last !== -1
+				? order.slice(Math.min(first, last), Math.max(first, last) + 1)
+				: [bookmark.id];
+		setBookmarkSelectionEnabled(true);
+		setSelectedBookmarks((old) => {
+			const next = new Set(old);
+			if (range) {
+				for (const id of rangeIds) {
+					next.add(id);
+				}
+			} else if (next.has(bookmark.id)) {
+				next.delete(bookmark.id);
+			} else {
+				next.add(bookmark.id);
+			}
+
+			return next;
+		});
+		bookmarkSelectionAnchorRef.current = bookmark.id;
+	}
+
+	useEffect(() => {
+		setSelectedBookmarks((old) => {
+			const next = new Set(
+				[...old].filter((id) =>
+					bookmarks.some((bookmark) => bookmark.id === id),
+				),
+			);
+			return next.size === old.size ? old : next;
+		});
+	}, [bookmarks]);
 	const settings: Partial<Settings> = state?.settings || {};
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
@@ -922,24 +1018,66 @@ function NewTab() {
 		// ShowStatus is recreated every render; the handlers only need the latest reload.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `reload` on purpose
 	}, [reload]);
-	async function moveBookmarkToColumn(event: SyntheticEvent<HTMLFormElement>) {
-		event.preventDefault();
-		if (!moveBookmark) {
-			return;
+	async function moveBookmarks(
+		bookmarkIds: string[],
+		targetColumnId: string,
+		targetBookmarkId: string | null = null,
+		position: InsertPosition = 'after',
+	) {
+		if (
+			bookmarkBatchRunningRef.current ||
+			bookmarkIds.includes(targetBookmarkId || '')
+		) {
+			return false;
 		}
 
-		const result = await send('REORDER_BOOKMARK', {
-			bookmarkId: moveBookmark.id,
-			targetColumnId: moveBookmark.targetColumnId,
-		});
-		if (!result?.ok) {
-			showStatus(result?.error || 'Could not move that bookmark.', true);
+		bookmarkBatchRunningRef.current = true;
+		setBusy('bookmark-batch');
+		try {
+			const ordered =
+				targetBookmarkId && position === 'after'
+					? bookmarkIds.toReversed()
+					: bookmarkIds;
+			for (const bookmarkId of ordered) {
+				const result = await send('REORDER_BOOKMARK', {
+					bookmarkId,
+					targetColumnId,
+					targetBookmarkId,
+					position,
+				});
+				if (!result?.ok) {
+					showStatus(
+						result?.error ||
+							'Could not move all bookmarks. Some may have moved.',
+						true,
+					);
+					return false;
+				}
+			}
+
+			showStatus(`Moved ${plural(bookmarkIds.length, 'bookmark')}.`);
+			return true;
+		} finally {
+			await reload();
+			bookmarkBatchRunningRef.current = false;
+			setBusy('');
+		}
+	}
+
+	async function moveBookmarkToColumn(event: SyntheticEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (
+			!moveBookmark ||
+			!(await moveBookmarks(
+				moveBookmark.bookmarkIds,
+				moveBookmark.targetColumnId,
+			))
+		) {
 			return;
 		}
 
 		setDialog(null);
 		setMoveBookmark(null);
-		await reload();
 	}
 
 	/**
@@ -959,6 +1097,71 @@ function NewTab() {
 
 		await reload();
 		offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
+	}
+
+	async function deleteSelectedBookmarks() {
+		if (bookmarkBatchRunningRef.current) {
+			return;
+		}
+
+		bookmarkBatchRunningRef.current = true;
+		setBusy('bookmark-batch');
+		const trashIds: string[] = [];
+		let deleted = 0;
+		try {
+			for (const bookmarkId of selectedBookmarkIds) {
+				const result = await send('DELETE_BOOKMARK', {bookmarkId});
+				if (!result?.ok) {
+					showStatus(
+						result?.error ||
+							'Could not delete all bookmarks. Deleted bookmarks are in the trash bin.',
+						true,
+					);
+					return;
+				}
+
+				deleted += 1;
+				if (result.trashId) {
+					trashIds.push(result.trashId);
+				}
+			}
+
+			showStatus(
+				`${plural(deleted, 'bookmark')} deleted.`,
+				false,
+				trashIds.length > 0
+					? {
+							action: {
+								label: 'Undo',
+								async onClick() {
+									for (const id of trashIds.toReversed()) {
+										const result = await send('RESTORE_TRASH', {id});
+										if (!result?.ok) {
+											await reload();
+											showStatus(
+												result?.error || 'Could not restore all bookmarks.',
+												true,
+											);
+											return;
+										}
+									}
+
+									await reload();
+									showStatus(
+										`${plural(trashIds.length, 'bookmark')} restored.`,
+										false,
+										{toast: true},
+									);
+								},
+							},
+						}
+					: {toast: true},
+			);
+		} finally {
+			await reload();
+			bookmarkBatchRunningRef.current = false;
+			setBusy('');
+		}
 	}
 
 	// Keyboard alternative to dragging: one step earlier or later within the bookmark's column.
@@ -1061,6 +1264,11 @@ function NewTab() {
 	}
 
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
+		if (action === 'select' || action === 'select-range') {
+			toggleBookmark(bookmark, action === 'select-range');
+			return;
+		}
+
 		if (['click', 'open', 'open-new'].includes(action)) {
 			try {
 				await openLink(
@@ -1086,7 +1294,10 @@ function NewTab() {
 		}
 
 		if (action === 'move') {
-			setMoveBookmark({...bookmark, targetColumnId: bookmark.columnId});
+			setMoveBookmark({
+				bookmarkIds: [bookmark.id],
+				targetColumnId: bookmark.columnId,
+			});
 			setDialog('move');
 			return;
 		}
@@ -1194,17 +1405,10 @@ function NewTab() {
 				return;
 			}
 
-			const result = await send('REORDER_BOOKMARK', {
-				bookmarkId,
-				targetColumnId: column.id,
-				targetBookmarkId,
-				position,
-			});
-			if (result?.ok) {
-				await reload();
-			} else {
-				showStatus(result?.error || 'Could not move that bookmark.', true);
-			}
+			const ids = draggedBookmarksRef.current.includes(bookmarkId)
+				? draggedBookmarksRef.current
+				: [bookmarkId];
+			await moveBookmarks(ids, column.id, targetBookmarkId, position);
 
 			return;
 		}
@@ -1528,8 +1732,20 @@ function NewTab() {
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
 		drop: (event, column) => dropOnColumn(event, column),
-		dragStart: handleInternalDragStart,
+		dragStart(event) {
+			const card = (event.target as Element).closest<HTMLElement>(
+				'[data-bookmark-id]',
+			);
+			const id = card?.dataset.bookmarkId;
+			draggedBookmarksRef.current = id
+				? selectedBookmarks.has(id)
+					? selectedBookmarkIds
+					: [id]
+				: [];
+			handleInternalDragStart(event, draggedBookmarksRef.current.length);
+		},
 		dragEnd() {
+			draggedBookmarksRef.current = [];
 			handleInternalDragEnd();
 			markDrop(null);
 		},
@@ -1581,6 +1797,32 @@ function NewTab() {
 						}
 						onChange={setBookmarkSearch}
 					/>
+					<IconTooltip
+						label={
+							bookmarkSelectionEnabled
+								? 'Exit bookmark selection'
+								: 'Select bookmarks'
+						}
+					>
+						<Button
+							variant={bookmarkSelectionEnabled ? 'secondary' : 'ghost'}
+							size="icon"
+							className="h-8 w-8"
+							aria-label="Select bookmarks"
+							aria-pressed={bookmarkSelectionEnabled}
+							onClick={() => {
+								setBookmarkSelectionEnabled(!bookmarkSelectionEnabled);
+								if (!bookmarkSelectionEnabled) {
+									return;
+								}
+
+								setSelectedBookmarks(new Set());
+								bookmarkSelectionAnchorRef.current = null;
+							}}
+						>
+							<SquareCheck />
+						</Button>
+					</IconTooltip>
 					<IconTooltip label="Add bookmark">
 						<Button
 							variant="ghost"
@@ -1646,6 +1888,52 @@ function NewTab() {
 					/>
 				</div>
 			</div>
+			{selectedBookmarkIds.length > 0 && (
+				<div
+					className="mb-3 flex flex-wrap items-center gap-2"
+					role="group"
+					aria-label="Selected bookmarks"
+				>
+					<span role="status" className="text-sm">
+						{plural(selectedBookmarkIds.length, 'bookmark')} selected
+					</span>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={busy === 'bookmark-batch'}
+						aria-label="Move selected bookmarks"
+						onClick={() => {
+							setMoveBookmark({
+								bookmarkIds: selectedBookmarkIds,
+								targetColumnId: columns[0]?.id || UNFILED_COLUMN.id,
+							});
+							setDialog('move');
+						}}
+					>
+						Move
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={busy === 'bookmark-batch'}
+						aria-label="Delete selected bookmarks"
+						onClick={() => void deleteSelectedBookmarks()}
+					>
+						Delete
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={busy === 'bookmark-batch'}
+						onClick={() => {
+							setSelectedBookmarks(new Set());
+							bookmarkSelectionAnchorRef.current = null;
+						}}
+					>
+						Clear bookmark selection
+					</Button>
+				</div>
+			)}
 			{bookmarkSearch.trim() && filteredBookmarks.length === 0 ? (
 				<EmptyState icon={Search} title="No bookmarks match">
 					Search titles, web addresses, and domains.
@@ -1662,6 +1950,8 @@ function NewTab() {
 						<BookmarkColumn
 							key={column.id}
 							column={column}
+							selected={selectedBookmarks}
+							selectionMode={bookmarkSelectionMode}
 							canMoveEarlier={index > 0}
 							canMoveLater={index < columns.length - 1}
 							bookmarks={columnBookmarks.shown.get(column.id) ?? NO_BOOKMARKS}
@@ -1710,7 +2000,7 @@ function NewTab() {
 								event.preventDefault();
 								void dropOnColumn(event, UNFILED_COLUMN);
 							}}
-							onDragStart={handleInternalDragStart}
+							onDragStart={boardActions.dragStart}
 							onDragEnd={boardActions.dragEnd}
 						>
 							<h3 className="mb-3 text-sm font-semibold">Unfiled</h3>
@@ -1732,6 +2022,8 @@ function NewTab() {
 												<BookmarkCard
 													key={bookmark.id}
 													bookmark={bookmark}
+													selected={selectedBookmarks.has(bookmark.id)}
+													selectionMode={bookmarkSelectionMode}
 													dropBefore={drop?.position === 'before'}
 													dropAfter={drop?.position === 'after'}
 													dropActive={Boolean(drop)}
@@ -2230,18 +2522,28 @@ function NewTab() {
 				<DialogContent size="sm">
 					<form onSubmit={moveBookmarkToColumn}>
 						<DialogHeader>
-							<DialogTitle>Move bookmark to</DialogTitle>
+							<DialogTitle>
+								{moveBookmark?.bookmarkIds.length === 1
+									? 'Move bookmark to'
+									: 'Move bookmarks to'}
+							</DialogTitle>
 							<DialogDescription>
-								It goes to the end of the column you choose.
+								Bookmarks go to the end of the column you choose, in their
+								current order.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
-							{moveBookmark && (
+							{movingBookmark ? (
 								<LinkSummary
 									settings={settings}
-									title={moveBookmark.title}
-									url={moveBookmark.url}
+									title={movingBookmark.title}
+									url={movingBookmark.url}
 								/>
+							) : (
+								<p className="text-sm">
+									{plural(moveBookmark?.bookmarkIds.length || 0, 'bookmark')}{' '}
+									selected
+								</p>
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="move-bookmark-column">Column</Label>
@@ -2254,7 +2556,9 @@ function NewTab() {
 											(old) => old && {...old, targetColumnId: value},
 										)
 									}
-								/>
+								>
+									<SelectItem value={UNFILED_COLUMN.id}>Unfiled</SelectItem>
+								</ColumnSelect>
 							</div>
 						</DialogBody>
 						<DialogFooter>
@@ -2265,7 +2569,11 @@ function NewTab() {
 							>
 								Cancel
 							</Button>
-							<Button type="submit">Move bookmark</Button>
+							<Button type="submit" disabled={busy === 'bookmark-batch'}>
+								{moveBookmark?.bookmarkIds.length === 1
+									? 'Move bookmark'
+									: 'Move bookmarks'}
+							</Button>
 						</DialogFooter>
 					</form>
 				</DialogContent>
@@ -2420,7 +2728,7 @@ function previewBookmarkDrop(
 	});
 }
 
-function handleInternalDragStart(event: DragEvent<HTMLElement>) {
+function handleInternalDragStart(event: DragEvent<HTMLElement>, count = 1) {
 	const handle = (event.target as Element).closest<HTMLElement>(
 		'[data-drag-column]',
 	);
@@ -2432,7 +2740,7 @@ function handleInternalDragStart(event: DragEvent<HTMLElement>) {
 		event.dataTransfer.effectAllowed = 'move';
 	} else if (card) {
 		card.classList.add('is-dragging');
-		setBookmarkDragImage(event, card);
+		setBookmarkDragImage(event, card, count);
 		event.dataTransfer.setData(BOOKMARK_DRAG_TYPE, card.dataset.bookmarkId!);
 		const link = card.dataset.bookmarkUrl;
 		if (link) {
@@ -2452,6 +2760,7 @@ function handleInternalDragStart(event: DragEvent<HTMLElement>) {
 function setBookmarkDragImage(
 	event: DragEvent<HTMLElement>,
 	card: HTMLElement,
+	count: number,
 ) {
 	const title = card.dataset.bookmarkTitle || '';
 	const domain = card.dataset.bookmarkDomain || '';
@@ -2493,7 +2802,7 @@ function setBookmarkDragImage(
 	const text = document.createElement('div');
 	text.style.minWidth = '0';
 	const strong = document.createElement('div');
-	strong.textContent = title;
+	strong.textContent = count > 1 ? `${count} bookmarks` : title;
 	Object.assign(strong.style, {
 		fontWeight: '600',
 		overflow: 'hidden',
@@ -2559,6 +2868,8 @@ type BoardActions = {
 
 type BookmarkColumnProps = {
 	column: BookmarkColumnData;
+	selected: Set<string>;
+	selectionMode: BookmarkSelectionMode;
 	/**
 	The bookmarks to show (after the search).
 	*/
@@ -2587,6 +2898,8 @@ const COLUMN_PAGE = 60;
 const BookmarkColumn = memo(
 	({
 		column,
+		selected,
+		selectionMode,
 		bookmarks,
 		siblings,
 		urlMode,
@@ -2747,6 +3060,8 @@ const BookmarkColumn = memo(
 											<BookmarkCard
 												key={bookmark.id}
 												bookmark={bookmark}
+												selected={selected.has(bookmark.id)}
+												selectionMode={selectionMode}
 												dropBefore={
 													targeted && bookmarkDrop.position === 'before'
 												}
@@ -2796,6 +3111,8 @@ const BookmarkColumn = memo(
 
 type BookmarkCardProps = {
 	bookmark: Bookmark;
+	selected: boolean;
+	selectionMode: BookmarkSelectionMode;
 	onAction: OnBookmarkAction;
 	sessions: Pick<BoardActions, 'addToSession' | 'sessionTargets'>;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
@@ -2829,6 +3146,8 @@ const DEFAULT_URL_SETTINGS: UrlSettings = {
 const BookmarkCard = memo(
 	({
 		bookmark,
+		selected,
+		selectionMode,
 		onAction,
 		sessions,
 		urlMode,
@@ -2879,6 +3198,12 @@ const BookmarkCard = memo(
 		};
 		// One list feeds both the ⋯ menu and the right-click menu so they always match.
 		const actions = (): MenuAction[] => [
+			{
+				id: 'select',
+				label: selected ? 'Deselect bookmark' : 'Select bookmark',
+				icon: selected ? Square : SquareCheck,
+				onSelect: act('select'),
+			},
 			open,
 			openNew,
 			{type: 'separator'},
@@ -2946,12 +3271,30 @@ const BookmarkCard = memo(
 					<article
 						draggable
 						className={cn(
-							'group flex min-w-0 items-center gap-1 rounded-md px-2',
+							'group relative flex min-w-0 items-center gap-1 rounded-md px-2',
 							showUrl ? 'py-1.5' : 'py-1',
 							'transition-colors hover:bg-muted/75',
-							dropActive && 'bg-primary/10',
+							(dropActive || selected) && 'bg-primary/10',
 						)}
 					>
+						{selectionMode !== 'off' && (
+							<Checkbox
+								checked={selected}
+								aria-label={`Select bookmark: ${bookmark.title || siteName(bookmark.url)}`}
+								className={cn(
+									'absolute left-2 top-1/2 z-10 size-6 -translate-y-1/2',
+									selectionMode === 'hover' &&
+										!selected &&
+										'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+								)}
+								onClick={(event) =>
+									void onAction(
+										event.shiftKey ? 'select-range' : 'select',
+										bookmark,
+									)
+								}
+							/>
+						)}
 						<a
 							href={
 								urlSettings.removeTrackingParameters
@@ -2967,13 +3310,20 @@ const BookmarkCard = memo(
 							}
 							className="flex min-w-0 flex-1 items-center gap-2.5"
 							onClick={(event) => {
-								if (
-									event.button !== 0 ||
-									event.ctrlKey ||
-									event.metaKey ||
-									event.shiftKey ||
-									event.altKey
-								) {
+								if (event.ctrlKey || event.metaKey) {
+									return;
+								}
+
+								if (event.altKey || selectionMode !== 'off') {
+									event.preventDefault();
+									void onAction(
+										event.shiftKey ? 'select-range' : 'select',
+										bookmark,
+									);
+									return;
+								}
+
+								if (event.button !== 0 || event.shiftKey) {
 									return;
 								}
 
@@ -2989,7 +3339,14 @@ const BookmarkCard = memo(
 							<Favicon
 								url={bookmark.url}
 								label={siteName(bookmark.url)}
-								className={cn(showUrl ? 'h-6 w-6' : 'h-5 w-5', 'rounded')}
+								className={cn(
+									showUrl ? 'h-6 w-6' : 'h-5 w-5',
+									'rounded',
+									selectionMode !== 'off' &&
+										(selectionMode === 'on' || selected
+											? 'invisible'
+											: 'group-hover:invisible group-focus-within:invisible'),
+								)}
 							/>
 							<span className="min-w-0 flex-1">
 								<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
