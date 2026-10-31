@@ -748,14 +748,18 @@ export function Brand({
 	compact = false,
 	link = 'newtab.html',
 	label = PROJECT.name,
+	newTab = false,
 }: {
 	compact?: boolean;
 	link?: string;
 	label?: string;
+	newTab?: boolean;
 }) {
 	return (
 		<a
 			href={link}
+			target={newTab ? '_blank' : undefined}
+			rel={newTab ? 'noopener noreferrer' : undefined}
 			className="inline-flex min-w-0 items-center gap-2.5 rounded-lg text-sm font-extrabold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			aria-label={label}
 		>
@@ -806,16 +810,19 @@ export function AppHeader({
 			>
 				Skip to main content
 			</a>
-			<header className="mb-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border pb-4">
+			<header className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 border-b border-border pb-2 sm:mb-8 sm:flex sm:flex-wrap sm:justify-between sm:gap-x-4 sm:pb-4">
 				<h1 className="sr-only">
 					{PROJECT.name} {APP_PAGES.find((page) => page.id === active)?.label}
 				</h1>
-				<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+				<div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
 					<Brand />
-					<span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+					<span
+						className="hidden h-5 w-px shrink-0 bg-border sm:block"
+						aria-hidden="true"
+					/>
 					<nav
 						aria-label={`${PROJECT.name} pages`}
-						className="flex items-center gap-1"
+						className="col-span-2 row-start-2 flex flex-wrap items-center gap-1"
 					>
 						{APP_PAGES.map((page) => {
 							const current = page.id === active;
@@ -827,7 +834,7 @@ export function AppHeader({
 									className={cn(
 										'relative inline-flex h-9 items-center rounded-md px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 										current
-											? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:-bottom-[17px] after:h-0.5 after:rounded-full after:bg-primary'
+											? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary'
 											: 'text-muted-foreground hover:text-foreground',
 									)}
 								>
@@ -838,7 +845,9 @@ export function AppHeader({
 					</nav>
 				</div>
 				{Boolean(children) && (
-					<div className="flex items-center gap-2">{children}</div>
+					<div className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center justify-end gap-2">
+						{children}
+					</div>
 				)}
 			</header>
 			<div id={MAIN_CONTENT_ID} tabIndex={-1} className="outline-none" />

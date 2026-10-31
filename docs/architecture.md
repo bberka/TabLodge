@@ -166,6 +166,10 @@ The setting can ask or add automatically to a chosen column, falling back to the
 
 Columns and bookmarks are reordered by dragging. Any column, including the last, can be deleted. For a populated column, the dialog offers to move its bookmarks or delete them too; the last column has no move destination. The result offers Undo and stores the column in trash.
 
+Bookmark selection stays in the dashboard page, not in storage. A toolbar toggle enables selection mode; Alt reveals selection controls temporarily. Shift selects a range in rendered board order, across columns, without including hidden search results or bookmarks not yet loaded. Ctrl and Command clicks retain native link behavior.
+
+Moving or deleting a selection sends the existing bookmark mutation messages in sequence and stops on the first failure. A partial failure leaves completed changes in place and reloads the board. Group moves preserve board order, and deletion offers one Undo that restores the individual trash entries in reverse deletion order. The bookmark drag payload still identifies the dragged bookmark; the source board keeps the selected IDs for drops within that board.
+
 ## New tab behavior
 
 Chromium declares the new tab override statically. Turning off **Use TabLodge for new tabs** cannot remove that declaration. Instead, the worker redirects newly created tabs to the browser's own page, a blank page, or a custom HTTP or HTTPS URL.

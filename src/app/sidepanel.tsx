@@ -16,7 +16,7 @@ import {
 	ExternalLink,
 	History,
 	Layers,
-	MoreHorizontal,
+	LayoutDashboard,
 	MoreVertical,
 	PanelTop,
 	ArrowLeftRight,
@@ -747,42 +747,56 @@ function SidePanel() {
 	return (
 		<main className="flex h-screen min-w-0 flex-col overflow-hidden text-foreground">
 			<div className="shrink-0 px-3 pt-3">
-				<header className="mb-3 flex min-w-0 items-center justify-between gap-2">
+				<header className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
 					<h1 className="sr-only">{PROJECT.name} side panel</h1>
-					<Brand />
+					<Brand newTab />
 					<div className="flex shrink-0 items-center gap-1">
-						<Button asChild variant="ghost" size="sm">
-							<a href="options.html" target="_blank" rel="noopener noreferrer">
-								<Settings2 className="h-4 w-4" />
-								Settings
-							</a>
-						</Button>
-						<ActionDropdownMenu
-							trigger={
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-8 w-8"
-									aria-label="Recovery"
+						<IconTooltip label="Open dashboard">
+							<Button asChild variant="ghost" size="icon" className="h-8 w-8">
+								<a
+									href="newtab.html"
+									target="_blank"
+									rel="noopener noreferrer"
+									aria-label="Open dashboard"
 								>
-									<MoreHorizontal className="h-4 w-4" />
-								</Button>
-							}
-							actions={[
-								{
-									id: 'snapshots',
-									label: 'Recent snapshots',
-									icon: History,
-									onSelect: () => setSnapshotsOpen(true),
-								},
-								{
-									id: 'trash',
-									label: 'Trash bin',
-									icon: Trash2,
-									onSelect: () => setTrashOpen(true),
-								},
-							]}
-						/>
+									<LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+								</a>
+							</Button>
+						</IconTooltip>
+						<IconTooltip label="Recent snapshots">
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8"
+								aria-label="Recent snapshots"
+								onClick={() => setSnapshotsOpen(true)}
+							>
+								<History className="h-4 w-4" aria-hidden="true" />
+							</Button>
+						</IconTooltip>
+						<IconTooltip label="Trash bin">
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8"
+								aria-label="Trash bin"
+								onClick={() => setTrashOpen(true)}
+							>
+								<Trash2 className="h-4 w-4" aria-hidden="true" />
+							</Button>
+						</IconTooltip>
+						<IconTooltip label="Open settings">
+							<Button asChild variant="ghost" size="icon" className="h-8 w-8">
+								<a
+									href="options.html"
+									target="_blank"
+									rel="noopener noreferrer"
+									aria-label="Open settings"
+								>
+									<Settings2 className="h-4 w-4" aria-hidden="true" />
+								</a>
+							</Button>
+						</IconTooltip>
 					</div>
 				</header>
 				<div className="relative mb-3">

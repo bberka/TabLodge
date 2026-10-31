@@ -6,7 +6,7 @@
 //      Appearance radio group, and moving sessions, columns and bookmarks without dragging.
 // Automated checks do not replace manual keyboard and screen reader testing; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
-import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
@@ -87,6 +87,10 @@ async function openPage(
 	name: string,
 ) {
 	const page = await context.newPage();
+	page.on('pageerror', (error) => {
+		failures.push(`${name}: ${error.message}`);
+		console.log(`FAIL ${name} page error: ${error.message}`);
+	});
 	await page.setViewportSize({width: 1280, height: 900});
 	await page.goto(`chrome-extension://${extensionId}/${name}.html`);
 	await page.waitForLoadState('networkidle');
@@ -132,6 +136,144 @@ async function main() {
 		await seed(seedPage);
 		await seedPage.close();
 
+		for (const theme of THEMES) {
+			await check(
+				`dashboard header and buttons fit narrow windows (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					for (const width of [320, 480]) {
+						await page.setViewportSize({width, height: 900});
+						await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+						await page.screenshot({
+							path: fromRoot(`.dev/evidence/dashboard-${width}-${theme}.png`),
+						});
+						for (const control of await page
+							.locator('main > header a, main button')
+							.all()) {
+							const rect = await control.boundingBox();
+							if (!rect) {
+								continue;
+							}
+
+							assert.ok(
+								rect.x >= 0,
+								`control starts inside ${width}px viewport`,
+							);
+							assert.ok(
+								rect.x + rect.width <= width,
+								`control ends inside ${width}px viewport`,
+							);
+						}
+
+						const header = page.locator('main > header');
+						const brand = await header
+							.getByRole('link', {name: 'TabLodge', exact: true})
+							.boundingBox();
+						const nav = await header.getByRole('navigation').boundingBox();
+						assert.ok(brand);
+						assert.ok(nav);
+						assert.ok(
+							nav.y >= brand.y + brand.height,
+							'narrow navigation has its own row',
+						);
+					}
+
+					await page.close();
+				},
+			);
+
+			await check(
+				`side panel header icons work by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'sidepanel');
+					await page.setViewportSize({width: 320, height: 900});
+					await setTheme(page, theme);
+					for (const label of ['Recent snapshots', 'Trash bin']) {
+						const button = page.getByRole('button', {name: label, exact: true});
+						assert.equal(
+							await button.count(),
+							1,
+							`${label} has a direct button`,
+						);
+						await button.focus();
+						await page.keyboard.press('Enter');
+						await page.getByRole('dialog').waitFor();
+						await page.keyboard.press('Escape');
+						await until(
+							async () => (await focusedLabel(page)) === label,
+							'focus returns to the header icon',
+						);
+					}
+
+					for (const [label, destination] of [
+						['Open dashboard', 'newtab'],
+						['Open settings', 'options'],
+					]) {
+						const link = page.getByRole('link', {name: label, exact: true});
+						await link.focus();
+						const opened = context.waitForEvent('page');
+						await page.keyboard.press('Enter');
+						const tab = await opened;
+						await tab.waitForLoadState();
+						assert.equal(
+							tab.url(),
+							`chrome-extension://${extensionId}/${destination}.html`,
+						);
+						assert.equal(
+							page.url(),
+							`chrome-extension://${extensionId}/sidepanel.html`,
+						);
+						await tab.close();
+					}
+
+					for (const control of await page
+						.locator('header a, header button')
+						.all()) {
+						const rect = await control.boundingBox();
+						assert.ok(rect);
+						assert.ok(rect.x >= 0);
+						assert.ok(rect.x + rect.width <= 320);
+						assert.ok(rect.width >= 24);
+						assert.ok(rect.height >= 24);
+					}
+
+					await page.close();
+				},
+			);
+
+			await check(
+				`side panel title opens a dashboard tab (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'sidepanel');
+					await page.setViewportSize({width: 320, height: 900});
+					await setTheme(page, theme);
+					const brand = page.getByRole('link', {name: 'TabLodge', exact: true});
+					await brand.waitFor();
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					await page.screenshot({
+						path: fromRoot(`.dev/evidence/sidebar-${theme}.png`),
+					});
+					await brand.focus();
+					assert.equal(await brand.getAttribute('target'), '_blank');
+					const opened = context.waitForEvent('page');
+					await page.keyboard.press('Enter');
+					const dashboard = await opened;
+					await dashboard.waitForLoadState();
+					assert.equal(
+						dashboard.url(),
+						`chrome-extension://${extensionId}/newtab.html`,
+					);
+					assert.equal(
+						page.url(),
+						`chrome-extension://${extensionId}/sidepanel.html`,
+					);
+					await dashboard.close();
+					await page.close();
+				},
+			);
+		}
+
 		for (const name of PAGES) {
 			for (const theme of THEMES) {
 				await check(`axe ${name} (${theme})`, async () => {
@@ -154,6 +296,346 @@ async function main() {
 					assert.deepEqual(lines, []);
 				});
 			}
+		}
+
+		for (const theme of THEMES) {
+			await check(`bookmark selection mode and ranges (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'newtab');
+				await seed(page);
+				await page.reload();
+				await setTheme(page, theme);
+				const mode = page.getByRole('button', {
+					name: 'Select bookmarks',
+					exact: true,
+				});
+				await mode.waitFor({timeout: 2000});
+				await mode.focus();
+				await page.keyboard.press('Enter');
+				assert.equal(await mode.getAttribute('aria-pressed'), 'true');
+				const cards = page.locator('[data-bookmark-id]');
+				await cards.first().getByRole('checkbox').focus();
+				await page.keyboard.press('Space');
+				await cards.nth(3).getByRole('checkbox').focus();
+				await page.keyboard.press('Shift+Space');
+				await cards
+					.nth(6)
+					.locator('a')
+					.click({modifiers: ['Shift']});
+				const checked = await attributes(
+					page,
+					'[data-bookmark-id] [role="checkbox"]',
+					'aria-checked',
+				);
+				assert.deepEqual(
+					checked.slice(0, 7),
+					Array.from({length: 7}, () => 'true'),
+				);
+				assert.ok(checked.slice(7).every((value) => value === 'false'));
+				const [opened] = await Promise.all([
+					context.waitForEvent('page', {timeout: 2000}),
+					cards
+						.first()
+						.locator('a')
+						.click({modifiers: ['Control']}),
+				]);
+				await opened.close();
+				assert.equal(
+					await cards
+						.first()
+						.getByRole('checkbox')
+						.getAttribute('aria-checked'),
+					'true',
+				);
+				await page
+					.getByRole('button', {name: 'Clear bookmark selection', exact: true})
+					.click();
+				await cards.nth(6).getByRole('checkbox').click();
+				await cards
+					.nth(2)
+					.getByRole('checkbox')
+					.click({modifiers: ['Shift']});
+				assert.deepEqual(
+					await attributes(
+						page,
+						'[data-bookmark-id] [role="checkbox"]',
+						'aria-checked',
+					),
+					Array.from({length: 16}, (_, index) =>
+						index >= 2 && index <= 6 ? 'true' : 'false',
+					),
+				);
+				await page.keyboard.press('Escape');
+				await until(
+					async () => (await mode.getAttribute('aria-pressed')) === 'false',
+					'selection mode to exit',
+				);
+				assert.equal(await cards.first().getByRole('checkbox').count(), 0);
+				const [normalTab] = await Promise.all([
+					context.waitForEvent('page', {timeout: 2000}),
+					cards
+						.first()
+						.locator('a')
+						.click({modifiers: ['Control']}),
+				]);
+				await normalTab.close();
+				assert.equal(await mode.getAttribute('aria-pressed'), 'false');
+				await mode.click();
+				await cards.first().getByRole('checkbox').click();
+				await mode.click();
+				assert.equal(await cards.first().getByRole('checkbox').count(), 0);
+				await page.close();
+			});
+
+			await check(
+				`move and delete selected bookmarks by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await seed(page);
+					await page.reload();
+					await setTheme(page, theme);
+					const cards = page.locator('[data-bookmark-id]');
+					const ids = (
+						await attributes(page, '[data-bookmark-id]', 'data-bookmark-id')
+					).slice(0, 2);
+					await cards.first().locator('[data-move-focus]').focus();
+					await page.keyboard.press('Enter');
+					assert.equal(
+						await page
+							.getByRole('menuitem', {name: 'Select bookmark', exact: true})
+							.locator('svg')
+							.count(),
+						1,
+					);
+					await page
+						.getByRole('menuitem', {name: 'Select bookmark', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					await cards.first().locator('[data-move-focus]').focus();
+					await page.keyboard.press('Enter');
+					assert.equal(
+						await page
+							.getByRole('menuitem', {name: 'Deselect bookmark', exact: true})
+							.locator('svg')
+							.count(),
+						1,
+					);
+					await page.keyboard.press('Escape');
+					await cards.nth(1).getByRole('checkbox').focus();
+					await page.keyboard.press('Space');
+					const move = page.getByRole('button', {
+						name: 'Move selected bookmarks',
+					});
+					await move.focus();
+					await page.keyboard.press('Enter');
+					await page
+						.getByRole('combobox', {name: 'Column', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					await page.keyboard.press('r');
+					await until(
+						async () =>
+							(await page.locator('[role="option"]:focus').textContent()) ===
+							'Reading',
+						'the last column option to receive focus',
+					);
+					await page.keyboard.press('Enter');
+					await page
+						.getByRole('button', {name: 'Move bookmarks', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					await page.getByRole('dialog').waitFor({state: 'hidden'});
+					const destination = page.locator('section[data-column-id]').last();
+					const columnId = await destination.getAttribute('data-column-id');
+					assert.deepEqual(
+						(
+							await attributes(
+								page,
+								`section[data-column-id="${columnId}"] [data-bookmark-id]`,
+								'data-bookmark-id',
+							)
+						).slice(-2),
+						ids,
+					);
+					await until(
+						async () =>
+							(await focusedLabel(page)) === 'Move selected bookmarks',
+						'focus after moving',
+					);
+					const remove = page.getByRole('button', {
+						name: 'Delete selected bookmarks',
+					});
+					await remove.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(
+								await attributes(page, '[data-bookmark-id]', 'data-bookmark-id')
+							).every((id) => !ids.includes(id)),
+						'both bookmarks to be deleted',
+					);
+					await page.getByRole('button', {name: 'Undo', exact: true}).focus();
+					await page.keyboard.press('Enter');
+					await until(async () => {
+						const restored = await attributes(
+							page,
+							'[data-bookmark-id]',
+							'data-bookmark-id',
+						);
+						return ids.every((id) => restored.includes(id));
+					}, 'both bookmarks to be restored');
+					assert.deepEqual(
+						(
+							await attributes(
+								page,
+								`section[data-column-id="${columnId}"] [data-bookmark-id]`,
+								'data-bookmark-id',
+							)
+						).slice(-2),
+						ids,
+					);
+					assert.equal(await page.locator('body:focus').count(), 0);
+					await page.close();
+				},
+			);
+
+			await check(`drag selected bookmarks (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'newtab');
+				await page.setViewportSize({width: 1440, height: 900});
+				await seed(page);
+				await page.reload();
+				await setTheme(page, theme);
+				const cards = page.locator('[data-bookmark-id]');
+				const ids = (
+					await attributes(page, '[data-bookmark-id]', 'data-bookmark-id')
+				).slice(0, 2);
+				await cards.first().hover();
+				await page.keyboard.down('Alt');
+				await cards.first().getByRole('checkbox').click();
+				await page.keyboard.up('Alt');
+				await cards.nth(1).getByRole('checkbox').click();
+				await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+				await page.locator('#bookmark-library').screenshot({
+					path: fromRoot(`.dev/evidence/bookmark-selection-${theme}.png`),
+				});
+				await page.evaluate(axeSource);
+				const selectedAxe = await page.evaluate(
+					async (values) =>
+						(globalThis as typeof globalThis & AxeGlobal).axe.run({
+							runOnly: {type: 'tag', values},
+						}),
+					AXE_TAGS,
+				);
+				assert.deepEqual(selectedAxe.violations, []);
+				await page.setViewportSize({width: 375, height: 900});
+				assert.ok(
+					await page
+						.locator('html')
+						.evaluate(
+							(node: {scrollWidth: number; clientWidth: number}) =>
+								node.scrollWidth <= node.clientWidth,
+						),
+				);
+				await page.locator('#bookmark-library').screenshot({
+					path: fromRoot(
+						`.dev/evidence/bookmark-selection-mobile-${theme}.png`,
+					),
+				});
+				await page.setViewportSize({width: 1440, height: 900});
+				const destination = page.locator('section[data-column-id]').last();
+				const columnId = await destination.getAttribute('data-column-id');
+				await cards
+					.first()
+					.locator('article')
+					.dragTo(destination.locator('header'));
+				await until(async () => {
+					const moved = await attributes(
+						page,
+						`section[data-column-id="${columnId}"] [data-bookmark-id]`,
+						'data-bookmark-id',
+					);
+					return moved.slice(-2).join(',') === ids.join(',');
+				}, 'both bookmarks to move together in order');
+				const movedCard = page.locator(
+					`[data-bookmark-id="${ids[0]}"] article`,
+				);
+				const target = destination.locator('[data-bookmark-id]').first();
+				const targetId = await target.getAttribute('data-bookmark-id');
+				await movedCard.dragTo(target, {targetPosition: {x: 60, y: 2}});
+				await until(
+					async () =>
+						(
+							await attributes(
+								page,
+								`section[data-column-id="${columnId}"] [data-bookmark-id]`,
+								'data-bookmark-id',
+							)
+						)
+							.slice(0, 3)
+							.join(',') === [...ids, targetId].join(','),
+					'the selection to move before a bookmark',
+				);
+				const sameTarget = page.locator(`[data-bookmark-id="${targetId}"]`);
+				const box = await sameTarget.boundingBox();
+				assert.ok(box);
+				await movedCard.dragTo(sameTarget, {
+					targetPosition: {x: 60, y: box.height - 2},
+				});
+				await until(
+					async () =>
+						(
+							await attributes(
+								page,
+								`section[data-column-id="${columnId}"] [data-bookmark-id]`,
+								'data-bookmark-id',
+							)
+						)
+							.slice(0, 3)
+							.join(',') === [targetId, ...ids].join(','),
+					'the selection to move after a bookmark',
+				);
+				await page.locator('#bookmark-library').screenshot({
+					path: fromRoot(`.dev/evidence/bookmark-group-moved-${theme}.png`),
+				});
+				await page.close();
+			});
+
+			await check(`bookmark selection (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'newtab');
+				await seed(page);
+				await page.reload();
+				await setTheme(page, theme);
+				const cards = page.locator('[data-bookmark-id]');
+				await cards.first().hover();
+				await page.keyboard.down('Alt');
+				const first = cards.first().getByRole('checkbox');
+				await first.waitFor({state: 'visible', timeout: 2000});
+				await page.keyboard.up('Alt');
+				await until(
+					async () => (await first.count()) === 0,
+					'the favicon to return when Alt is released',
+				);
+				await page.keyboard.down('Alt');
+				await first.click();
+				await page.keyboard.up('Alt');
+				const second = cards.nth(1).getByRole('checkbox');
+				await second.focus();
+				await page.keyboard.press('Space');
+				assert.equal(await first.getAttribute('aria-checked'), 'true');
+				assert.equal(await second.getAttribute('aria-checked'), 'true');
+				assert.ok(
+					await page
+						.getByRole('button', {name: 'Move selected bookmarks'})
+						.isVisible(),
+				);
+				await page.keyboard.press('Escape');
+				assert.equal(
+					await page
+						.getByRole('button', {name: 'Move selected bookmarks'})
+						.count(),
+					0,
+				);
+				await page.close();
+			});
 		}
 
 		await check('skip link moves focus to the content', async () => {

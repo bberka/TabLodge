@@ -138,7 +138,7 @@ function Help() {
 				},
 				{
 					title: 'Use the side panel',
-					body: 'Choose the side panel instead of the popup in Settings, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing.',
+					body: 'Choose the side panel instead of the popup in Settings, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
 					searchText:
 						'side panel sidebar session list beside page toolbar icon settings keyboard shortcut',
 				},
@@ -266,6 +266,12 @@ function Help() {
 					body: 'Drag bookmarks between columns to move or reorder them. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark.',
 					searchText:
 						'drag reorder move keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column',
+				},
+				{
+					title: 'Select several bookmarks',
+					body: 'Use Select bookmarks beside bookmark search to turn selection mode on or off. You can also hold Alt (Option on Mac) and hover a bookmark to reveal its selection checkbox, or choose Select bookmark from its menu. In selection mode, click bookmarks or use Tab and Space to select them. Hold Shift and click, or press Shift+Space, to select every visible bookmark between the last selection and the current one. Clicking with Ctrl (Command on Mac) still opens a link in a new tab. Drag selected bookmarks within the board, or use Move and Delete above it. Clear bookmark selection clears the selection; Escape exits selection mode. Deleted bookmarks offer Undo and go to the trash bin.',
+					searchText:
+						'select multiple bulk bookmarks alt option shift range ctrl command checkbox drag move delete undo keyboard space escape',
 				},
 				{
 					title: 'Import or export bookmarks',
@@ -474,9 +480,9 @@ function Help() {
 							Recent snapshots keep copies of open windows and can restore
 							everything, one window, or save a copy as a session. On the
 							dashboard, open them with the button beside session search and
-							sort, from the side panel menu, or the dashboard search palette.
-							Crash detection is a best guess because browsers do not tell
-							extensions when they shut down.
+							sort, from the Recent snapshots icon in the side panel header, or
+							the dashboard search palette. Crash detection is a best guess
+							because browsers do not tell extensions when they shut down.
 						</>
 					),
 					searchText:
@@ -491,9 +497,10 @@ function Help() {
 							long. On the dashboard, use the Trash bin icon in the header or
 							the Sessions menu. Dashboard settings can hide either header
 							shortcut. You can also open the bin from the{' '}
-							<MenuLocation label="Bookmarks toolbar" />, the side panel menu,
-							or the search palette. Dashboard deletes, imports, and actions
-							that open many tabs also offer Undo for a few seconds.
+							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
+							the side panel header, or the search palette. Dashboard deletes,
+							imports, and actions that open many tabs also offer Undo for a few
+							seconds.
 						</>
 					),
 					searchText:
