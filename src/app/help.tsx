@@ -138,7 +138,7 @@ function Help() {
 				},
 				{
 					title: 'Use the side panel',
-					body: 'Choose the side panel instead of the popup in Settings, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing.',
+					body: 'Choose the side panel instead of the popup in Settings, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
 					searchText:
 						'side panel sidebar session list beside page toolbar icon settings keyboard shortcut',
 				},
@@ -468,9 +468,9 @@ function Help() {
 							Recent snapshots keep copies of open windows and can restore
 							everything, one window, or save a copy as a session. On the
 							dashboard, open them with the button beside session search and
-							sort, from the side panel menu, or the dashboard search palette.
-							Crash detection is a best guess because browsers do not tell
-							extensions when they shut down.
+							sort, from the Recent snapshots icon in the side panel header, or
+							the dashboard search palette. Crash detection is a best guess
+							because browsers do not tell extensions when they shut down.
 						</>
 					),
 					searchText:
@@ -485,9 +485,10 @@ function Help() {
 							long. On the dashboard, use the Trash bin icon in the header or
 							the Sessions menu. Dashboard settings can hide either header
 							shortcut. You can also open the bin from the{' '}
-							<MenuLocation label="Bookmarks toolbar" />, the side panel menu,
-							or the search palette. Dashboard deletes, imports, and actions
-							that open many tabs also offer Undo for a few seconds.
+							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
+							the side panel header, or the search palette. Dashboard deletes,
+							imports, and actions that open many tabs also offer Undo for a few
+							seconds.
 						</>
 					),
 					searchText:
