@@ -175,7 +175,9 @@ async function main() {
 			'appearance is one tab stop with arrow key selection',
 			async () => {
 				const page = await openPage(context, extensionId, 'options');
-				const radios = page.getByRole('radio');
+				const radios = page
+					.getByRole('radiogroup', {name: 'Appearance', exact: true})
+					.getByRole('radio');
 				assert.equal(await radios.count(), 3);
 				assert.deepEqual(await attributes(page, '[role="radio"]', 'tabindex'), [
 					'0',

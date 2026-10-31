@@ -32,6 +32,20 @@ TabLodge reads tab metadata to save and restore sessions, detect duplicates, sho
 
 ## Retention and deletion
 
+### Private windows
+
+Private access requires the browser's **Allow in Incognito** permission. The first private dashboard visit requires a storage choice, also available in **Settings › Private windows**. **Share normal storage** is selected by default: anything saved privately in that mode is part of the normal library and remains after private windows close.
+
+**Separate, saved storage** keeps a private library in `chrome.storage.local`. **Separate, temporary storage** keeps a different library in `chrome.storage.session`, which clears on browser restart, not when the last private window closes or the extension worker stops. Each separate library includes its sessions, bookmarks, preferences, trash, backups, and Undo records under keys prefixed with `tablodge.private.`. The mode and setup completion are stored in `chrome.storage.local` under `tablodge.private.config`. Appearance is shared.
+
+Separate libraries start empty. Switching modes does not copy, merge, or delete any library. To erase one, select that mode, open Settings from its private dashboard, and clear its data and recovery copies. Removing the extension deletes all its browser storage. Saved private storage is not encrypted or hidden from someone who can access your browser profile. Automatic snapshots, automatic backups, and browser bookmark monitoring do not run in private windows. Explicit exports and manual backup downloads can still write private data to disk and are not removed on browser restart.
+
+Temporary private data also clears if the extension is disabled, reloaded, or updated. This is different from a background worker restart, which keeps browser session storage.
+
+Two temporary coordination keys, `tablodge.lock.normal` and `tablodge.lock.private`, hold only write order numbers and flags in browser session storage. They prevent concurrent saves from overwriting one another and contain no browsing data.
+
+### Saved data
+
 Your saved sessions and bookmarks stay until you delete them. The optional auto-archive setting only moves old sessions into an Archived folder; it never deletes them. Deleted items go to the trash bin for 7, 30, or 90 days, depending on your setting. Snapshots, backups, trash, and Undo records have retention or size limits. You can clear recovery data from **Settings › Recovery & backups**.
 
 Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data creates a safety backup and offers Undo, so check the backup history too if you want to remove retained copies. Removing the extension deletes its browser storage.

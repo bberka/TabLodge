@@ -36,7 +36,7 @@ const permissions = [
 			url: 'https://tablodge.bbay.dev/privacy/',
 			name: title,
 			description,
-			dateModified: '2026-10-25',
+			dateModified: '2026-10-31',
 			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
 		},
 	]}
@@ -44,7 +44,7 @@ const permissions = [
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Privacy</span></nav>
 		<h1>Privacy</h1>
-		<p class="note">Last updated: 2026-10-26</p>
+		<p class="note">Last updated: 2026-10-31</p>
 		<p class="lead">
 			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect or upload your data.</strong>
 		</p>
@@ -77,6 +77,10 @@ const permissions = [
 		<p>
 			Opening a saved link loads that website normally. An optional setting, off by default, removes common tracking parameters from the destination when opening saved links or restoring sessions and snapshots. It leaves the URLs in your library unchanged. Choosing <strong>Search the web</strong> sends your query to the browser's default search engine. These are actions you request, not background reporting by TabLodge.
 		</p>
+
+		<h2>Private windows</h2>
+		<p>After you enable Allow in Incognito in your browser's extension settings, the first private dashboard visit requires a storage choice. Share normal storage is selected by default and keeps private saves in the normal library. Separate, saved storage keeps a different library in local extension storage. Separate, temporary storage uses browser session storage, which clears on browser restart, not when private windows close. Both separate libraries start empty. Switching modes does not copy, merge or delete data. Appearance remains shared.</p>
+		<p>The choice is also available in Settings under Private windows. The mode is kept in <code>tablodge.private.config</code>; separate library and recovery keys have the prefix <code>tablodge.private.</code>. Saved private data is not encrypted or hidden from someone with access to your browser profile. Temporary data also clears if the extension is disabled, reloaded or updated. Automatic snapshots, automatic backups and browser bookmark monitoring do not run in private windows. Explicit exports and manual backup downloads can still leave files on disk after temporary data clears. To erase a saved private library and its recovery copies, select that mode and open Settings from its private dashboard.</p>
 
 		<h2>Permissions</h2>
 		<div class="table-wrap">

@@ -1,5 +1,6 @@
 {
 	"manifest_version": 3,
+	"incognito": "split",
 	"name": "Tab Lodge: Tab Session Manager & Bookmarks",
 	"short_name": "TabLodge",
 	"version": "0.1.3",

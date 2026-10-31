@@ -28,6 +28,7 @@ type TabFields = import('../src/app/types').TabFields;
 type TabGroupColor = import('../src/app/types').TabGroupColor;
 type TabLodgeMessage = import('../src/app/types').TabLodgeMessage;
 type TitlePolicy = import('../src/app/types').TitlePolicy;
+type PrivateConfig = import('../src/app/types').PrivateConfig;
 
 /**
 Untrusted object (stored state or import file): every field is checked before use.
@@ -162,6 +163,257 @@ const APP_NAME =
 // Persistent identifiers (storage keys, export formats, menu ids) use the "tablodge" prefix and are
 // independent of the display name: changing one would orphan saved data.
 const STORAGE_KEY = 'tablodge.state';
+const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
+const PRIVATE_PREFIX = 'tablodge.private.';
+const privateContext = Boolean(chrome.extension?.inIncognitoContext);
+let privateConfig: PrivateConfig = {mode: 'shared', configured: false};
+
+function normalizePrivateConfig(value: unknown): PrivateConfig {
+	const raw = isRecord(value) ? value : {};
+	const mode =
+		raw.mode === 'saved' || raw.mode === 'temporary' ? raw.mode : 'shared';
+	return {
+		mode,
+		configured: raw.configured === true && raw.mode === mode,
+	};
+}
+
+const privateConfigReady = chrome.storage.local
+	.get([PRIVATE_CONFIG_KEY])
+	.then((saved) => {
+		privateConfig = normalizePrivateConfig(saved[PRIVATE_CONFIG_KEY]);
+	});
+
+// Web Locks are partitioned between normal and private contexts, but extension storage is shared.
+// The two workers use Lamport's bakery lock, with one slot each and normal winning ticket ties.
+const ownLockKey = `tablodge.lock.${privateContext ? 'private' : 'normal'}`;
+const otherLockKey = `tablodge.lock.${privateContext ? 'normal' : 'private'}`;
+const lockResetReady = chrome.storage.session.remove(ownLockKey);
+let sharedLockUsers = 0;
+let sharedLockReady: Promise<void> = Promise.resolve();
+let sharedLockTail: Promise<void> = Promise.resolve();
+
+async function otherLibraryLock() {
+	const saved = await chrome.storage.session.get([otherLockKey]);
+	const value: unknown = saved[otherLockKey];
+	if (value === undefined) {
+		return {choosing: false, ticket: 0};
+	}
+
+	if (
+		!isRecord(value) ||
+		typeof value.choosing !== 'boolean' ||
+		typeof value.ticket !== 'number' ||
+		!Number.isSafeInteger(value.ticket) ||
+		value.ticket < 0
+	) {
+		throw new Error(
+			'Storage coordination data is invalid. Reload the extension.',
+		);
+	}
+
+	return {choosing: value.choosing, ticket: value.ticket};
+}
+
+async function acquireSharedLibraryLock() {
+	await lockResetReady;
+	await chrome.storage.session.set({[ownLockKey]: {choosing: true, ticket: 0}});
+	const other = await otherLibraryLock();
+	const ticket = other.ticket + 1;
+	await chrome.storage.session.set({[ownLockKey]: {choosing: false, ticket}});
+	const deadline = Date.now() + 15_000;
+	for (;;) {
+		let notify = () => {};
+		// eslint-disable-next-line unicorn/prefer-promise-with-resolvers -- Promise.withResolvers needs Chrome 124; we support Chrome 116.
+		const changed = new Promise<void>((resolve) => {
+			notify = resolve;
+		});
+		const listener = (
+			changes: Record<string, chrome.storage.StorageChange>,
+			area: chrome.storage.AreaName,
+		) => {
+			if (area === 'session' && Object.hasOwn(changes, otherLockKey)) {
+				notify();
+			}
+		};
+
+		chrome.storage.onChanged.addListener(listener);
+		const timer = setTimeout(notify, Math.max(0, deadline - Date.now()));
+		try {
+			const current = await otherLibraryLock();
+			const waiting =
+				current.choosing ||
+				(current.ticket > 0 &&
+					(current.ticket < ticket ||
+						(current.ticket === ticket && privateContext)));
+			if (!waiting) {
+				return;
+			}
+
+			if (Date.now() >= deadline) {
+				throw new Error(
+					'Storage is busy. Try again when the save finishes. If a private window closed during a save, reopen one first.',
+				);
+			}
+
+			await changed;
+		} finally {
+			clearTimeout(timer);
+			chrome.storage.onChanged.removeListener(listener);
+		}
+	}
+}
+
+async function withSharedLibraryLock<T>(
+	operation: () => Promise<T>,
+): Promise<T> {
+	await privateConfigReady;
+	if (privateContext && privateConfig.mode !== 'shared') {
+		return operation();
+	}
+
+	// Nested recovery queues, and concurrent queues within this worker, share one acquisition.
+	if (sharedLockUsers++ === 0) {
+		sharedLockReady = sharedLockTail.then(acquireSharedLibraryLock);
+	}
+
+	const ready = sharedLockReady;
+
+	try {
+		await ready;
+		return await operation();
+	} finally {
+		if (--sharedLockUsers === 0) {
+			const release = async () => chrome.storage.session.remove(ownLockKey);
+			const released = ready.then(release, release);
+			sharedLockTail = released.catch(() => undefined);
+			await released;
+		}
+	}
+}
+
+function libraryStorage() {
+	const separate = privateContext && privateConfig.mode !== 'shared';
+	return {
+		area:
+			separate && privateConfig.mode === 'temporary'
+				? chrome.storage.session
+				: chrome.storage.local,
+		prefix: separate ? PRIVATE_PREFIX : '',
+	};
+}
+
+function storageParts(keys: string[]) {
+	const scope = libraryStorage();
+	if (!scope.prefix) {
+		return [{...scope, keys}];
+	}
+
+	const appearance: string[] = keys.filter(
+		(key) => key === 'uiTheme' || key === 'uiAccent',
+	);
+	const data = keys.filter((key) => !appearance.includes(key));
+	return [
+		{...scope, keys: data},
+		{area: chrome.storage.local, prefix: '', keys: appearance},
+	].filter((part) => part.keys.length > 0);
+}
+
+// Each split worker owns its mutation queue. Mode changes join that queue so a write cannot change libraries midway.
+const library = {
+	async get<T = Record<string, unknown>>(keys: string[]): Promise<T> {
+		await privateConfigReady;
+		const entries = await Promise.all(
+			storageParts(keys).map(async ({area, prefix, keys: part}) => {
+				const saved = await area.get(part.map((key) => prefix + key));
+				return Object.entries(saved).map(([key, value]) => [
+					key.slice(prefix.length),
+					value,
+				]);
+			}),
+		);
+		return Object.fromEntries(entries.flat()) as T;
+	},
+	async set(values: Record<string, unknown>) {
+		await privateConfigReady;
+		for (const {area, prefix, keys} of storageParts(Object.keys(values))) {
+			await area.set(
+				Object.fromEntries(keys.map((key) => [prefix + key, values[key]])),
+			);
+		}
+	},
+	async remove(keys: string | string[]) {
+		await privateConfigReady;
+		for (const {area, prefix, keys: part} of storageParts([keys].flat())) {
+			await area.remove(part.map((key) => prefix + key));
+		}
+	},
+	async getBytesInUse(keys: string[]) {
+		await privateConfigReady;
+		const sizes = await Promise.all(
+			storageParts(keys).map(async ({area, prefix, keys: part}) =>
+				area.getBytesInUse(part.map((key) => prefix + key)),
+			),
+		);
+		return sizes.reduce((total, size) => total + size, 0);
+	},
+};
+
+function onLibraryChanged(
+	listener: (
+		changes: Record<string, chrome.storage.StorageChange>,
+		area: chrome.storage.AreaName,
+	) => void,
+) {
+	chrome.storage?.onChanged?.addListener?.((changes, area) => {
+		const scope = libraryStorage();
+		const expectedArea =
+			privateContext && privateConfig.mode === 'temporary'
+				? 'session'
+				: 'local';
+		if (area !== expectedArea) {
+			return;
+		}
+
+		const translated = Object.fromEntries(
+			Object.entries(changes)
+				.filter(([key]) =>
+					scope.prefix
+						? key.startsWith(scope.prefix) && key !== PRIVATE_CONFIG_KEY
+						: !key.startsWith(PRIVATE_PREFIX),
+				)
+				.map(([key, value]) => [key.slice(scope.prefix.length), value]),
+		);
+		listener(translated, 'local');
+	});
+}
+
+function replacePrivateConfig(next: PrivateConfig) {
+	return snapshotMutate(() =>
+		backupMutate(() =>
+			trashMutate(() =>
+				undoMutate(async () => {
+					privateConfig = next;
+					migrationChecked = false;
+					invalidateSettings();
+				}),
+			),
+		),
+	);
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (area !== 'local' || !Object.hasOwn(changes, PRIVATE_CONFIG_KEY)) {
+		return;
+	}
+
+	const next = normalizePrivateConfig(changes[PRIVATE_CONFIG_KEY].newValue);
+	const update = mutationQueue.then(async () => {
+		await privateConfigReady;
+		await replacePrivateConfig(next);
+	});
+	mutationQueue = update.catch(() => undefined);
+});
 const SCHEMA_VERSION = 8;
 const DEFAULT_FOLDER_ID = 'unfiled';
 const ARCHIVED_FOLDER_ID = 'archived-sessions';
@@ -1453,9 +1705,9 @@ function normalizeStore(raw: Raw | null | undefined): Store {
 
 async function getStore(): Promise<Store> {
 	// Stored values are untrusted; only property reads happen before normalization.
-	const saved = await chrome.storage.local.get<
-		Record<string, Raw | null | undefined>
-	>([STORAGE_KEY]);
+	const saved = await library.get<Record<string, Raw | null | undefined>>([
+		STORAGE_KEY,
+	]);
 	const exists = saved[STORAGE_KEY] && typeof saved[STORAGE_KEY] === 'object';
 	const storedVersion = Number(saved[STORAGE_KEY]?.schemaVersion) || 0;
 	if (exists && storedVersion > SCHEMA_VERSION) {
@@ -1484,9 +1736,9 @@ async function migrateStoreOnce() {
 	}
 
 	try {
-		const saved = await chrome.storage.local.get<
-			Record<string, Raw | null | undefined>
-		>([STORAGE_KEY]);
+		const saved = await library.get<Record<string, Raw | null | undefined>>([
+			STORAGE_KEY,
+		]);
 		const raw = saved[STORAGE_KEY];
 		const exists = raw && typeof raw === 'object';
 		if (exists && (Number(raw.schemaVersion) || 0) > SCHEMA_VERSION) {
@@ -1495,7 +1747,7 @@ async function migrateStoreOnce() {
 		}
 
 		if (!exists || raw.schemaVersion !== SCHEMA_VERSION) {
-			await chrome.storage.local.set({
+			await library.set({
 				[STORAGE_KEY]: normalizeStore(exists ? raw : null),
 			});
 			invalidateSettings();
@@ -1524,18 +1776,26 @@ async function writeStore(store: Store): Promise<Store> {
 		settings: normalizeSettings(store.settings),
 		updatedAt: Date.now(),
 	};
-	await chrome.storage.local.set({[STORAGE_KEY]: next});
+	await library.set({[STORAGE_KEY]: next});
 	invalidateSettings();
 	return next;
 }
 
 function mutate<T>(operation: () => Promise<T>): Promise<T> {
 	const run = async () => {
+		await privateConfigReady;
+		if (privateContext && !privateConfig.configured) {
+			throw new Error(
+				'Open the private dashboard to configure private storage first.',
+			);
+		}
+
 		await migrateStoreOnce();
 		return operation();
 	};
 
-	const result = mutationQueue.then(run, run);
+	const locked = () => withSharedLibraryLock(run);
+	const result = mutationQueue.then(locked, locked);
 	mutationQueue = result.catch(() => undefined);
 	return result;
 }
@@ -1560,7 +1820,11 @@ async function currentWindowId(
 
 	try {
 		const focused = await chrome.windows.getLastFocused({populate: false});
-		if (focused.type === 'normal' && isInteger(focused.id)) {
+		if (
+			focused.type === 'normal' &&
+			isInteger(focused.id) &&
+			Boolean(focused.incognito) === privateContext
+		) {
 			return focused.id;
 		}
 	} catch {
@@ -1573,7 +1837,9 @@ async function currentWindowId(
 		populate: false,
 		windowTypes: ['normal'],
 	});
-	return windows[0]?.id ?? null;
+	return (
+		windows.find((win) => Boolean(win.incognito) === privateContext)?.id ?? null
+	);
 }
 
 /**
@@ -2010,10 +2276,14 @@ async function saveTabs(
 		};
 		let windows: PopulatedWindow[];
 		if (scope === 'all-windows') {
-			windows = (await chrome.windows.getAll({
-				populate: true,
-				windowTypes: ['normal'],
-			})) as PopulatedWindow[];
+			windows = (
+				await chrome.windows.getAll({
+					populate: true,
+					windowTypes: ['normal'],
+				})
+			).filter(
+				(win) => Boolean(win.incognito) === privateContext,
+			) as PopulatedWindow[];
 		} else {
 			windows = [
 				(await chrome.windows.get(windowId, {
@@ -2256,7 +2526,7 @@ async function openNamePrompt(
 			options.top = Math.max(0, anchor.top + 80);
 		}
 
-		await chrome.windows.create(options);
+		await chrome.windows.create({...options, incognito: privateContext});
 	} catch {
 		/*
 		The sessions are saved with the fallback name; the prompt is a convenience.
@@ -2324,7 +2594,7 @@ async function openBookmarkPrompt(
 		options.top = Math.max(0, anchor.top + 80);
 	}
 
-	await chrome.windows.create(options);
+	await chrome.windows.create({...options, incognito: privateContext});
 	return {ok: true};
 }
 
@@ -2414,7 +2684,14 @@ async function openDashboard(
 ) {
 	const path = `${DASHBOARD_URL}${query}`;
 	const existingTabs = await chrome.tabs.query({});
-	const dashboards = existingTabs.filter((tab) => isLodgeTab(tab));
+	const targetWindow = isInteger(windowId)
+		? await chrome.windows.get(windowId)
+		: await chrome.windows.getLastFocused();
+	const dashboards = existingTabs.filter(
+		(tab) =>
+			isLodgeTab(tab) &&
+			Boolean(tab.incognito) === Boolean(targetWindow.incognito),
+	);
 	// A pinned TabLodge tab is the window's fixed home: prefer the one in this window and never move it.
 	const pinnedHere = dashboards.find(
 		(tab) => tab.pinned && tab.windowId === windowId,
@@ -2613,12 +2890,16 @@ async function createRestoreWindow(): Promise<{
 	id: number | undefined;
 	bootstrapTabId: number | null;
 }> {
-	// Windows.create only resolves without a window for incognito requests, which TabLodge never makes.
-	const created = (await chrome.windows.create({
+	const created = await chrome.windows.create({
 		url: 'chrome://newtab/',
 		focused: true,
 		type: 'normal',
-	}))!;
+		incognito: privateContext,
+	});
+	if (!created?.id) {
+		throw new Error('The browser did not return the restored window.');
+	}
+
 	const tabs = await chrome.tabs.query({windowId: created.id});
 	return {id: created.id, bootstrapTabId: tabs[0]?.id ?? null};
 }
@@ -5354,7 +5635,8 @@ A small FIFO runner: each operation starts after the previous one settled, so re
 function serialQueue() {
 	let tail: Promise<unknown> = Promise.resolve();
 	return <T>(operation: () => Promise<T>): Promise<T> => {
-		const result = tail.then(operation, operation);
+		const run = () => withSharedLibraryLock(operation);
+		const result = tail.then(run, run);
 		tail = result.catch(() => undefined);
 		return result;
 	};
@@ -5403,9 +5685,7 @@ const localDateTime = (time: number) => {
 };
 
 async function readKey<T>(key: string): Promise<T | undefined> {
-	const saved = await chrome.storage.local.get<Record<string, T | undefined>>([
-		key,
-	]);
+	const saved = await library.get<Record<string, T | undefined>>([key]);
 	return saved[key];
 }
 
@@ -5420,7 +5700,7 @@ function invalidateSettings() {
 	settingsGeneration += 1;
 }
 
-chrome.storage?.onChanged?.addListener?.((changes, areaName) => {
+onLibraryChanged((changes, areaName) => {
 	if (areaName === 'local' && changes[STORAGE_KEY] !== undefined) {
 		invalidateSettings();
 	}
@@ -5435,9 +5715,9 @@ async function readSettings(): Promise<Settings> {
 	}
 
 	const generation = settingsGeneration;
-	const saved = await chrome.storage.local.get<Record<string, Raw | undefined>>(
-		[STORAGE_KEY],
-	);
+	const saved = await library.get<Record<string, Raw | undefined>>([
+		STORAGE_KEY,
+	]);
 	if (saved[STORAGE_KEY]?.schemaVersion === SCHEMA_VERSION) {
 		migrationChecked = true;
 	}
@@ -5482,7 +5762,7 @@ async function readSnapshotHistory(): Promise<Snapshot[]> {
 }
 
 async function writeSnapshotHistory(history: Snapshot[]) {
-	await chrome.storage.local.set({[SNAPSHOTS_KEY]: {version: 1, history}});
+	await library.set({[SNAPSHOTS_KEY]: {version: 1, history}});
 }
 
 async function readSnapshotMeta(): Promise<SnapshotMeta> {
@@ -5507,7 +5787,7 @@ async function readSnapshotMeta(): Promise<SnapshotMeta> {
 }
 
 async function writeSnapshotMeta(meta: SnapshotMeta) {
-	await chrome.storage.local.set({[SNAPSHOT_META_KEY]: meta});
+	await library.set({[SNAPSHOT_META_KEY]: meta});
 }
 
 async function readLiveSnapshot(): Promise<Snapshot | null> {
@@ -5689,6 +5969,10 @@ function takeSnapshot(
 	rotate: boolean,
 	force = false,
 ): Promise<Snapshot | null> {
+	if (privateContext) {
+		return Promise.resolve(null);
+	}
+
 	return snapshotMutate(async () => {
 		const settings = await readSettings();
 		if (!settings.snapshotsEnabled && !force) {
@@ -5705,7 +5989,7 @@ function takeSnapshot(
 		// Metas written before liveSig existed fall back to reading the live record once.
 		const liveSig = meta.liveSig || (await readLiveSnapshot())?.sig;
 		if (liveSig !== snapshot.sig) {
-			await chrome.storage.local.set({[SNAPSHOT_LIVE_KEY]: snapshot});
+			await library.set({[SNAPSHOT_LIVE_KEY]: snapshot});
 		}
 
 		meta.liveSig = snapshot.sig;
@@ -6160,7 +6444,7 @@ function clearSnapshots(): Promise<ActionResult<'CLEAR_SNAPSHOTS'>> {
 		withUndo('Clear snapshots', [SNAPSHOTS_KEY], async () => {
 			const history = await readSnapshotHistory();
 			await writeSnapshotHistory([]);
-			await chrome.storage.local.remove?.(SNAPSHOT_LIVE_KEY);
+			await library.remove(SNAPSHOT_LIVE_KEY);
 			const meta = await readSnapshotMeta();
 			meta.liveSig = '';
 			meta.recovery = null;
@@ -6212,7 +6496,7 @@ async function readBackups(): Promise<BackupStore> {
 }
 
 async function writeBackups(backups: BackupStore) {
-	await chrome.storage.local.set({[BACKUPS_KEY]: {version: 1, ...backups}});
+	await library.set({[BACKUPS_KEY]: {version: 1, ...backups}});
 }
 
 const summarizeBackup = (record: BackupRecord): BackupSummary => ({
@@ -6772,7 +7056,7 @@ async function applyFullBackup(
 	await writeSnapshotHistory(history);
 	await writeTrash(items);
 	if (isRecord(input.preferences)) {
-		await chrome.storage.local.set({
+		await library.set({
 			[UI_THEME_KEY]: asTheme(input.preferences[UI_THEME_KEY]),
 			[UI_ACCENT_KEY]: asAccent(input.preferences[UI_ACCENT_KEY]),
 		});
@@ -6840,7 +7124,7 @@ async function readTrash(): Promise<TrashEntry[]> {
 }
 
 async function writeTrash(items: TrashEntry[]) {
-	await chrome.storage.local.set({[TRASH_KEY]: {version: 1, items}});
+	await library.set({[TRASH_KEY]: {version: 1, items}});
 }
 
 const trashSize = (entry: TrashEntry) => {
@@ -7286,8 +7570,8 @@ async function readUndo(): Promise<UndoRecord[]> {
 
 async function writeUndo(records: UndoRecord[]) {
 	await (records.length === 0
-		? chrome.storage.local.remove(UNDO_KEY)
-		: chrome.storage.local.set({[UNDO_KEY]: {version: 1, records}}));
+		? library.remove(UNDO_KEY)
+		: library.set({[UNDO_KEY]: {version: 1, records}}));
 }
 
 /**
@@ -7298,14 +7582,14 @@ async function withUndo<K extends TabLodgeMessageType>(
 	keys: string[],
 	run: () => Promise<ActionResult<K>>,
 ): Promise<ActionResult<K>> {
-	const before = await chrome.storage.local.get<Raw>(keys);
+	const before = await library.get<Raw>(keys);
 	const result = await run();
 	if (!result.ok) {
 		return result;
 	}
 
 	try {
-		const now = await chrome.storage.local.get<Raw>(keys);
+		const now = await library.get<Raw>(keys);
 		const after = Object.fromEntries(
 			keys.map((key) => [key, undoHash(now[key])]),
 		);
@@ -7378,7 +7662,7 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 		}
 
 		return run(record.keys, async () => {
-			const current = await chrome.storage.local.get<Raw>(record.keys);
+			const current = await library.get<Raw>(record.keys);
 			if (
 				record.keys.some((key) => undoHash(current[key]) !== record.after[key])
 			) {
@@ -7400,9 +7684,9 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 				}
 			}
 
-			await chrome.storage.local.set(restore);
+			await library.set(restore);
 			if (drop.length > 0) {
-				await chrome.storage.local.remove(drop);
+				await library.remove(drop);
 			}
 
 			invalidateSettings();
@@ -7426,7 +7710,7 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 async function getStorageUsage(): Promise<ActionResult<'GET_STORAGE_USAGE'>> {
 	const bytes = async (keys: string[]) => {
 		try {
-			return (await chrome.storage.local.getBytesInUse?.(keys)) ?? 0;
+			return await library.getBytesInUse(keys);
 		} catch {
 			return 0;
 		}
@@ -7483,6 +7767,10 @@ async function ensureAlarm(
 Creates, changes or clears the repeating alarms that match the settings (alarms may not survive a browser restart, so this runs on every start too).
 */
 async function syncRecoveryAlarms(settings: Settings) {
+	if (privateContext) {
+		return;
+	}
+
 	await ensureAlarm(
 		ALARM_SNAPSHOT,
 		settings.snapshotsEnabled ? settings.snapshotIntervalMinutes : null,
@@ -7528,6 +7816,10 @@ async function runStartupRecovery() {
 }
 
 chrome.alarms?.onAlarm?.addListener?.((alarm) => {
+	if (privateContext) {
+		return;
+	}
+
 	const work =
 		alarm.name === ALARM_SNAPSHOT
 			? takeSnapshot('interval', true)
@@ -7572,7 +7864,9 @@ chrome.tabGroups?.onRemoved?.addListener?.(scheduleSnapshotSoon);
 chrome.windows?.onCreated?.addListener?.(scheduleSnapshotSoon);
 chrome.windows?.onFocusChanged?.addListener?.(scheduleSnapshotSoon);
 chrome.windows?.onRemoved?.addListener?.(() => {
-	void handleWindowRemoved().catch(() => undefined);
+	if (!privateContext) {
+		void handleWindowRemoved().catch(() => undefined);
+	}
 });
 
 // Alarms can be lost when the browser restarts and the worker may wake without onStartup, so re-check on every start.
@@ -7584,7 +7878,37 @@ async function handleMessage(
 	message: TabLodgeMessage | undefined,
 	sender: chrome.runtime.MessageSender,
 ): Promise<ActionResult> {
+	await privateConfigReady;
+	await mutationQueue;
+	if (
+		privateContext &&
+		!privateConfig.configured &&
+		!['GET_PRIVATE_CONFIG', 'SET_PRIVATE_CONFIG', 'HANDOFF_NEW_TAB'].includes(
+			message?.type || '',
+		)
+	) {
+		return {
+			ok: false,
+			error: 'Open the private dashboard to configure private storage first.',
+		};
+	}
+
 	switch (message?.type) {
+		case 'GET_PRIVATE_CONFIG': {
+			return {ok: true, ...privateConfig};
+		}
+
+		case 'SET_PRIVATE_CONFIG': {
+			if (!['shared', 'saved', 'temporary'].includes(message.mode)) {
+				return {ok: false, error: 'Choose a valid private storage mode.'};
+			}
+
+			const config: PrivateConfig = {mode: message.mode, configured: true};
+			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
+			await mutationQueue;
+			return {ok: true, ...config};
+		}
+
 		case 'GET_STATE': {
 			return {ok: true, ...(await getStore())};
 		}
@@ -8661,7 +8985,7 @@ async function syncExcludeMenuItem(tab?: chrome.tabs.Tab) {
 
 // Column renames, reorders, additions and deletions (from any page, import or erase) and settings
 // changes all land in the stored state, so the menus follow it here.
-chrome.storage?.onChanged?.addListener?.((changes, areaName) => {
+onLibraryChanged((changes, areaName) => {
 	const change = areaName === 'local' ? changes[STORAGE_KEY] : undefined;
 	if (!change || !isRecord(change.newValue)) {
 		return;
@@ -9208,6 +9532,10 @@ chrome.contextMenus?.onClicked?.addListener((info, tab) =>
 );
 
 async function initializeExtension(openDashboardAtStartup = false) {
+	if (privateContext) {
+		return;
+	}
+
 	// Persists a pending schema migration once, through the mutation queue.
 	await mutate(async () => undefined);
 	if (openDashboardAtStartup) {
@@ -9252,6 +9580,10 @@ let browserBookmarkBurst: chrome.bookmarks.BookmarkTreeNode[] = [];
 let browserBookmarkTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function handleBrowserBookmark(node: chrome.bookmarks.BookmarkTreeNode) {
+	if (privateContext) {
+		return;
+	}
+
 	const url = normalizeUrl(node.url);
 	if (!url) {
 		return;

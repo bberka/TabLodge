@@ -10,6 +10,8 @@ export type ActionMode =
 	| 'all-windows'
 	| 'current-tab'
 	| 'current-tab-to-group';
+export type PrivateStorageMode = 'shared' | 'saved' | 'temporary';
+export type PrivateConfig = {mode: PrivateStorageMode; configured: boolean};
 export type RestoreTarget =
 	'current-window' | 'new-window-unless-only-tab' | 'always-new-window';
 export type RestoreMode = 'keep' | 'remove';
@@ -484,6 +486,8 @@ export type SaveScope =
 Every message the TabLodge pages send to the service worker, keyed by `type`.
 */
 export type TabLodgeMessages = {
+	GET_PRIVATE_CONFIG: {};
+	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
 	GET_STATE: {};
 	SAVE_TABS: {
 		scope?: SaveScope;
@@ -729,6 +733,8 @@ type Undoable = {undoId?: string};
 Success payload of each message (merged with `{ ok: true }`). Fields marked optional are only sometimes reported.
 */
 export type TabLodgeResponses = {
+	GET_PRIVATE_CONFIG: PrivateConfig;
+	SET_PRIVATE_CONFIG: PrivateConfig;
 	GET_STATE: Store;
 	SAVE_TABS: SaveResult;
 	/**
