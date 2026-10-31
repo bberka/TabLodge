@@ -6,7 +6,7 @@
 //      Appearance radio group, and moving sessions, columns and bookmarks without dragging.
 // Automated checks do not replace manual keyboard and screen reader testing; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
-import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
@@ -131,6 +131,144 @@ async function main() {
 		const seedPage = await openPage(context, extensionId, 'newtab');
 		await seed(seedPage);
 		await seedPage.close();
+
+		for (const theme of THEMES) {
+			await check(
+				`dashboard header and buttons fit narrow windows (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					for (const width of [320, 480]) {
+						await page.setViewportSize({width, height: 900});
+						await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+						await page.screenshot({
+							path: fromRoot(`.dev/evidence/dashboard-${width}-${theme}.png`),
+						});
+						for (const control of await page
+							.locator('main > header a, main button')
+							.all()) {
+							const rect = await control.boundingBox();
+							if (!rect) {
+								continue;
+							}
+
+							assert.ok(
+								rect.x >= 0,
+								`control starts inside ${width}px viewport`,
+							);
+							assert.ok(
+								rect.x + rect.width <= width,
+								`control ends inside ${width}px viewport`,
+							);
+						}
+
+						const header = page.locator('main > header');
+						const brand = await header
+							.getByRole('link', {name: 'TabLodge', exact: true})
+							.boundingBox();
+						const nav = await header.getByRole('navigation').boundingBox();
+						assert.ok(brand);
+						assert.ok(nav);
+						assert.ok(
+							nav.y >= brand.y + brand.height,
+							'narrow navigation has its own row',
+						);
+					}
+
+					await page.close();
+				},
+			);
+
+			await check(
+				`side panel header icons work by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'sidepanel');
+					await page.setViewportSize({width: 320, height: 900});
+					await setTheme(page, theme);
+					for (const label of ['Recent snapshots', 'Trash bin']) {
+						const button = page.getByRole('button', {name: label, exact: true});
+						assert.equal(
+							await button.count(),
+							1,
+							`${label} has a direct button`,
+						);
+						await button.focus();
+						await page.keyboard.press('Enter');
+						await page.getByRole('dialog').waitFor();
+						await page.keyboard.press('Escape');
+						await until(
+							async () => (await focusedLabel(page)) === label,
+							'focus returns to the header icon',
+						);
+					}
+
+					for (const [label, destination] of [
+						['Open dashboard', 'newtab'],
+						['Open settings', 'options'],
+					]) {
+						const link = page.getByRole('link', {name: label, exact: true});
+						await link.focus();
+						const opened = context.waitForEvent('page');
+						await page.keyboard.press('Enter');
+						const tab = await opened;
+						await tab.waitForLoadState();
+						assert.equal(
+							tab.url(),
+							`chrome-extension://${extensionId}/${destination}.html`,
+						);
+						assert.equal(
+							page.url(),
+							`chrome-extension://${extensionId}/sidepanel.html`,
+						);
+						await tab.close();
+					}
+
+					for (const control of await page
+						.locator('header a, header button')
+						.all()) {
+						const rect = await control.boundingBox();
+						assert.ok(rect);
+						assert.ok(rect.x >= 0);
+						assert.ok(rect.x + rect.width <= 320);
+						assert.ok(rect.width >= 24);
+						assert.ok(rect.height >= 24);
+					}
+
+					await page.close();
+				},
+			);
+
+			await check(
+				`side panel title opens a dashboard tab (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'sidepanel');
+					await page.setViewportSize({width: 320, height: 900});
+					await setTheme(page, theme);
+					const brand = page.getByRole('link', {name: 'TabLodge', exact: true});
+					await brand.waitFor();
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					await page.screenshot({
+						path: fromRoot(`.dev/evidence/sidebar-${theme}.png`),
+					});
+					await brand.focus();
+					assert.equal(await brand.getAttribute('target'), '_blank');
+					const opened = context.waitForEvent('page');
+					await page.keyboard.press('Enter');
+					const dashboard = await opened;
+					await dashboard.waitForLoadState();
+					assert.equal(
+						dashboard.url(),
+						`chrome-extension://${extensionId}/newtab.html`,
+					);
+					assert.equal(
+						page.url(),
+						`chrome-extension://${extensionId}/sidepanel.html`,
+					);
+					await dashboard.close();
+					await page.close();
+				},
+			);
+		}
 
 		for (const name of PAGES) {
 			for (const theme of THEMES) {
