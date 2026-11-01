@@ -216,10 +216,14 @@ type BackupDialogProps = {
 	Opens on this choice instead of the requested kind; Settings opens on Everything.
 	*/
 	initialScope?: BackupScope;
+	/**
+	A single session export cannot switch to other data scopes.
+	*/
+	singleSession?: boolean;
 };
 
 /**
-"Back up sessions" / "Back up bookmarks" / "Export N selected tabs": pick a format, then download.
+"Back up sessions" / "Back up bookmarks" / "Export session" / "Export N selected tabs": pick a format, then download.
 */
 export function BackupDialog({
 	data,
@@ -228,6 +232,7 @@ export function BackupDialog({
 	showStatus,
 	state,
 	initialScope,
+	singleSession = false,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
@@ -243,7 +248,7 @@ export function BackupDialog({
 		setSwitched(initialScope ?? null);
 	}, [open, initialScope]);
 	const canSwitch = Boolean(
-		state && requested && requested.kind !== 'selected',
+		!singleSession && state && requested && requested.kind !== 'selected',
 	);
 	let shown = requested;
 	if (
@@ -266,9 +271,10 @@ export function BackupDialog({
 	const kind = shown?.kind ?? 'sessions';
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
 	// "Everything" is the full backup ZIP; Bookmarks or Sessions pick a file format. Selected tabs never offer it.
-	const full = switched === 'everything' && kind !== 'selected';
+	const full =
+		!singleSession && switched === 'everything' && kind !== 'selected';
 	const scopeOptions =
-		kind === 'selected'
+		singleSession || kind === 'selected'
 			? []
 			: [
 					{value: 'everything' as const, label: <EverythingLabel />},
@@ -291,7 +297,13 @@ export function BackupDialog({
 				];
 	const filename = full
 		? fullBackupFilename(PROJECT.name)
-		: exportFilename(PROJECT.name, kind, format);
+		: exportFilename(
+				PROJECT.name,
+				kind,
+				format,
+				new Date(),
+				singleSession ? shown?.groups?.[0]?.name : undefined,
+			);
 	const summary = full
 		? 'All data and settings'
 		: kind === 'bookmarks'
@@ -338,6 +350,7 @@ export function BackupDialog({
 		try {
 			const file = buildExport(shown, format, {
 				appName: PROJECT.name,
+				name: singleSession ? shown.groups?.[0]?.name : undefined,
 			});
 			downloadFile(file.content, file.mime, file.filename);
 			onOpenChange(false);
@@ -355,12 +368,18 @@ export function BackupDialog({
 			<DialogContent size="lg">
 				<DialogHeader>
 					<DialogTitle>
-						{full ? 'Back up everything' : BACKUP_TITLES[kind](counts.items)}
+						{full
+							? 'Back up everything'
+							: singleSession
+								? 'Export session'
+								: BACKUP_TITLES[kind](counts.items)}
 					</DialogTitle>
 					<DialogDescription>
 						{full
 							? 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted.'
-							: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
+							: singleSession
+								? 'Choose a format for this session. The file is saved to your downloads; it is not encrypted.'
+								: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
@@ -414,7 +433,11 @@ export function BackupDialog({
 										) : undefined
 									}
 									description={
-										kind === 'bookmarks' ? choice.bookmarks : choice.sessions
+										kind === 'bookmarks'
+											? choice.bookmarks
+											: singleSession && choice.id === 'json'
+												? 'A backup of this session you can restore here. Keeps notes, split views, tab groups, and order.'
+												: choice.sessions
 									}
 									className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
 								/>
@@ -573,54 +596,73 @@ function SharePreviewPanel({
 							Shared from {PROJECT.name} · {plural(counts.links, 'link')}
 						</p>
 						<div className="mt-3 space-y-2">
-							{preview.groups.map((group, groupIndex) => (
-								<article
-									key={`${group.name}-${groupIndex}`}
-									className="overflow-hidden rounded-md border border-border bg-card"
-								>
-									<div className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2">
-										<div className="min-w-0">
-											<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
-												{group.name}
-											</h5>
-											{group.createdAt !== undefined && group.createdAt > 0 && (
-												<p className="mt-0.5 text-[10px] text-muted-foreground">
-													Saved {new Date(group.createdAt).toLocaleDateString()}
-												</p>
-											)}
-										</div>
-										<span className="shrink-0 text-[11px] text-muted-foreground">
-											{plural(group.tabs.length + group.moreLinks, 'link')}
-										</span>
-									</div>
-									{group.description && (
-										<p className="whitespace-pre-wrap px-3 py-2 text-xs [overflow-wrap:anywhere]">
-											{group.description}
-										</p>
-									)}
-									{group.tabs.length > 0 && (
-										<ol className="mx-3 my-2 list-decimal pl-5">
-											{group.tabs.map((tab, tabIndex) => (
-												<li
-													key={`${tab.url}-${tabIndex}`}
-													className="border-t border-border py-1.5 pl-1"
-												>
-													<span className="block text-xs font-semibold text-primary [overflow-wrap:anywhere]">
-														{tab.title || tab.url}
+							{preview.groups.map((group, groupIndex) => {
+								const repeatedTitle =
+									preview.groups.length === 1 &&
+									preview.moreGroups === 0 &&
+									group.name === pageTitle;
+								const createdAt =
+									group.createdAt !== undefined && group.createdAt > 0
+										? group.createdAt
+										: null;
+								return (
+									<article
+										key={`${group.name}-${groupIndex}`}
+										className="overflow-hidden rounded-md border border-border bg-card"
+									>
+										{(!repeatedTitle || createdAt !== null) && (
+											<div className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2">
+												<div className="min-w-0">
+													{!repeatedTitle && (
+														<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
+															{group.name}
+														</h5>
+													)}
+													{createdAt !== null && (
+														<p className="mt-0.5 text-[10px] text-muted-foreground">
+															Saved {new Date(createdAt).toLocaleDateString()}
+														</p>
+													)}
+												</div>
+												{!repeatedTitle && (
+													<span className="shrink-0 text-[11px] text-muted-foreground">
+														{plural(
+															group.tabs.length + group.moreLinks,
+															'link',
+														)}
 													</span>
-													<span className="mt-0.5 block text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
-														{tab.url}
-														{tab.pinned ? ' · Pinned' : ''}
-														{tab.nativeGroup?.title
-															? ` · ${tab.nativeGroup.title}`
-															: ''}
-													</span>
-												</li>
-											))}
-										</ol>
-									)}
-								</article>
-							))}
+												)}
+											</div>
+										)}
+										{group.description && (
+											<p className="whitespace-pre-wrap px-3 py-2 text-xs [overflow-wrap:anywhere]">
+												{group.description}
+											</p>
+										)}
+										{group.tabs.length > 0 && (
+											<ol className="mx-3 my-2 list-decimal pl-5">
+												{group.tabs.map((tab, tabIndex) => (
+													<li
+														key={`${tab.url}-${tabIndex}`}
+														className="border-t border-border py-1.5 pl-1"
+													>
+														<span className="block text-xs font-semibold text-primary [overflow-wrap:anywhere]">
+															{tab.title || tab.url}
+														</span>
+														<span className="mt-0.5 block text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
+															{tab.url}
+															{tab.pinned ? ' · Pinned' : ''}
+															{tab.nativeGroup?.title
+																? ` · ${tab.nativeGroup.title}`
+																: ''}
+														</span>
+													</li>
+												))}
+											</ol>
+										)}
+									</article>
+								);
+							})}
 							{preview.moreGroups > 0 && (
 								<p className="text-[11px] text-muted-foreground">
 									and {plural(preview.moreGroups, 'more group')}

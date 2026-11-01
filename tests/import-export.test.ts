@@ -195,6 +195,10 @@ test('file names are lower-case, dated, and use the display name as prefix', () 
 		exportFilename('TabLodge', 'selected', 'txt', now),
 		'tablodge-selected-tabs-2026-10-25.txt',
 	);
+	assert.equal(
+		exportFilename('TabLodge', 'sessions', 'json', now, 'Second [session]'),
+		'tablodge-sessions-second-session-2026-10-25.json',
+	);
 	assert.deepEqual(exportCounts(sessionsData), {groups: 2, items: 4});
 	assert.deepEqual(exportCounts(bookmarksData), {groups: 2, items: 3});
 });
@@ -877,6 +881,36 @@ test('every export format re-imports with the same links', () => {
 				'bookmarks',
 			).toSorted(),
 			bookmarks.map((entry) => entry.url).toSorted(),
+			format,
+		);
+	}
+});
+
+test('single-session exports contain only that session and use its name in the filename', () => {
+	const data: ExportData = {
+		kind: 'sessions',
+		groups: [groups[1]],
+		folders,
+	};
+	for (const format of [
+		'json',
+		'html',
+		'csv',
+		'markdown',
+		'txt',
+	] satisfies ExportFormat[]) {
+		const file = buildExport(data, format, {
+			appName: 'TabLodge',
+			now,
+			name: groups[1].name,
+		});
+		assert.match(
+			file.filename,
+			/^tablodge-sessions-second-session-2026-10-25\./,
+		);
+		assert.deepEqual(
+			urls(parseImportFile(file.content, file.filename)),
+			groups[1].tabs.map((entry) => entry.url),
 			format,
 		);
 	}

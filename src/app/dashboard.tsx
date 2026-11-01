@@ -292,6 +292,7 @@ export function SessionManager({
 	// eslint-disable-next-line @eslint-react/use-state -- write-only on purpose
 	const [, setBusy] = useState('');
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
+	const [singleSessionExport, setSingleSessionExport] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const dragItemRef = useRef<DragItem | null>(null);
@@ -627,6 +628,7 @@ export function SessionManager({
 	}
 
 	function openBackup(kind: 'sessions' | 'selected') {
+		setSingleSessionExport(false);
 		const exportGroups = kind === 'selected' ? selectedGroups() : groups;
 		if (exportGroups.length === 0) {
 			showStatus(
@@ -639,6 +641,11 @@ export function SessionManager({
 		}
 
 		setBackupData({kind, groups: exportGroups, folders});
+	}
+
+	function openSessionExport(group: Session) {
+		setSingleSessionExport(true);
+		setBackupData({kind: 'sessions', groups: [group], folders});
 	}
 
 	function selectedGroups() {
@@ -1151,6 +1158,7 @@ export function SessionManager({
 		updateGroup,
 		archive: archiveGroup,
 		share: (group) => openShare({title: group.name, groups: [group]}),
+		exportSession: openSessionExport,
 		openTab,
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
@@ -1885,8 +1893,16 @@ export function SessionManager({
 				data={backupData}
 				open={Boolean(backupData)}
 				state={state}
+				singleSession={singleSessionExport}
 				showStatus={showStatus}
-				onOpenChange={(open) => !open && setBackupData(null)}
+				onOpenChange={(open) => {
+					if (open) {
+						return;
+					}
+
+					setBackupData(null);
+					setSingleSessionExport(false);
+				}}
 			/>
 			<ImportDialog
 				open={importOpen}
@@ -2285,6 +2301,7 @@ type CardActions = {
 	) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
+	exportSession: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
@@ -2474,18 +2491,18 @@ const GroupCard = memo(
 				onSelect: () => onRestore(),
 			},
 			{
-				id: 'switch-to',
-				label: 'Switch to this session',
-				icon: ArrowLeftRight,
-				disabled: !canSwitch,
-				onSelect: () => handlers.switchTo(group),
-			},
-			{
 				type: 'submenu',
 				id: 'restore-options',
 				label: 'Restore options',
 				icon: History,
 				items: restoreOptions,
+			},
+			{
+				id: 'switch-to',
+				label: 'Switch to this session',
+				icon: ArrowLeftRight,
+				disabled: !canSwitch,
+				onSelect: () => handlers.switchTo(group),
 			},
 			{type: 'separator'},
 			{
@@ -2493,6 +2510,12 @@ const GroupCard = memo(
 				label: 'Share',
 				icon: Share2,
 				onSelect: () => handlers.share(group),
+			},
+			{
+				id: 'export-session',
+				label: 'Export session',
+				icon: Download,
+				onSelect: () => handlers.exportSession(group),
 			},
 			{type: 'separator'},
 			{

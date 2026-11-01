@@ -16,11 +16,11 @@ Install the Vite+ CLI once as described in [README Development](README.md#develo
 
 A fix or feature is not done until the pull request shows it working. Pick the strongest form the environment allows:
 
-- **Screenshot** for anything visual. Take it from the dev browser (`vp run dev`, or `vp run dev:seed` for realistic sample data) after the change. For a fix, also capture the broken state before the change. Check both themes for UI changes.
+- **Screenshots** for UI changes. Exercise the affected workflow and capture its resulting state at all three browser viewport sizes, measured in CSS pixels: tablet portrait at 768 × 1024, wide desktop at 1440 × 900, and very wide desktop at 1920 × 1080. Use the dev browser (`vp run dev`, or `vp run dev:seed` for realistic sample data). For a fix, also capture the broken state before the change at each size where the issue reproduces. Check both themes for UI changes.
 - **Recording or step list** for behavior that a still image cannot show, such as drag and drop, shortcuts, or restore flows. Give the exact steps and the observed result.
 - **Console or test output** for worker, storage, or import and export changes: the failing test before the fix and the passing test after, or the service worker console showing the expected result.
 
-Save screenshots and recordings under `.dev/evidence/`, which git ignores, and attach them to the pull request. Do not commit evidence files. If the agent cannot attach files, name the file path in the pull request and ask the maintainer to attach it. Documentation only and tooling only changes need a sentence explaining why browser proof does not apply.
+Save screenshots and recordings under `.dev/evidence/`, which git ignores. Name screenshots so their viewport is clear. Attach or upload the screenshots to the pull request, preferably in its description, so reviewers can inspect them there. Do not commit evidence files. If the environment cannot upload attachments, include each exact file path in the pull request and ask the maintainer to attach them. Documentation only and tooling only changes need a sentence explaining why browser proof does not apply.
 
 ## Unslop the diff
 
