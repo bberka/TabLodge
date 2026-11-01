@@ -69,16 +69,60 @@ async function until(condition: () => Promise<boolean>, what: string) {
 	assert.fail(`Timed out waiting for ${what}.`);
 }
 
-async function seed(page: Page) {
+async function readDevStore(page: Page) {
 	const base = await page.evaluate(async () => {
 		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
 		return chrome.runtime.sendMessage({type: 'GET_STATE'});
 	});
 	const {ok: _ok, ...store} = base as {ok: boolean} & DevStore;
-	await page.evaluate(async (fixture) => {
+	return store;
+}
+
+async function writeDevStore(page: Page, store: DevStore) {
+	await page.evaluate(async (data) => {
 		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
-		await chrome.storage.local.set({'tablodge.state': fixture});
-	}, createDevFixture(store));
+		await chrome.storage.local.set({'tablodge.state': data});
+	}, store);
+}
+
+async function seed(page: Page) {
+	const fixture = createDevFixture(await readDevStore(page));
+	fixture.settings = {
+		...fixture.settings,
+		limitBookmarksPerColumn: false,
+		bookmarkColumnPageSize: 10,
+	};
+	await writeDevStore(page, fixture);
+}
+
+async function seedLongBookmarkColumn(page: Page, count: number) {
+	const fixture = createDevFixture(await readDevStore(page));
+	fixture.bookmarkColumns = [
+		{id: 'bookmark-limit', name: 'Limit test', createdAt: 0, isDefault: true},
+	];
+	fixture.bookmarks = Array.from({length: count}, (_, index) => ({
+		id: `bookmark-limit-${index + 1}`,
+		title: `Limit test bookmark ${index + 1}`,
+		url: `https://example.com/limit-${index + 1}`,
+		columnId: 'bookmark-limit',
+		createdAt: index,
+		updatedAt: index,
+	})).concat(
+		Array.from({length: count}, (_, index) => ({
+			id: `unfiled-limit-${index + 1}`,
+			title: `Unfiled limit test bookmark ${index + 1}`,
+			url: `https://example.com/unfiled-limit-${index + 1}`,
+			columnId: 'bookmark-unfiled',
+			createdAt: index,
+			updatedAt: index,
+		})),
+	);
+	fixture.settings = {
+		...fixture.settings,
+		limitBookmarksPerColumn: false,
+		bookmarkColumnPageSize: 10,
+	};
+	await writeDevStore(page, fixture);
 }
 
 // The pages follow the system theme by default, so emulating the color scheme switches them.
@@ -294,8 +338,121 @@ async function main() {
 		}
 
 		for (const theme of THEMES) {
+			await check(
+				`bookmark columns reveal configured batches by keyboard (${theme})`,
+				async () => {
+					const limitSeedPage = await openPage(context, extensionId, 'newtab');
+					await seedLongBookmarkColumn(limitSeedPage, 65);
+					await limitSeedPage.close();
+
+					const defaultBoard = await openPage(context, extensionId, 'newtab');
+					await setTheme(defaultBoard, theme);
+					const defaultColumn = defaultBoard
+						.locator('section[data-column-id]')
+						.filter({
+							has: defaultBoard.getByRole('heading', {name: 'Limit test'}),
+						});
+					await defaultColumn.waitFor();
+					assert.equal(
+						await defaultColumn.locator('[data-bookmark-id]').count(),
+						60,
+						'off keeps the existing 60-bookmark batches',
+					);
+					assert.equal(
+						await defaultBoard
+							.locator(
+								'section[data-column-id="bookmark-unfiled"] [data-bookmark-id]',
+							)
+							.count(),
+						65,
+						'off keeps the existing unfiled display behavior',
+					);
+					await defaultBoard.close();
+
+					const settingsPage = await openPage(context, extensionId, 'options');
+					await setTheme(settingsPage, theme);
+					const toggle = settingsPage.getByRole('switch', {
+						name: 'Limit bookmarks shown at a time',
+					});
+					await toggle.waitFor({timeout: 2000});
+					assert.equal(await toggle.getAttribute('aria-checked'), 'false');
+					await toggle.focus();
+					await settingsPage.keyboard.press('Space');
+					assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+					const batchSize = settingsPage.getByRole('spinbutton', {
+						name: 'Show at a time',
+					});
+					await batchSize.fill('10');
+					await batchSize.press('Enter');
+					await settingsPage.close();
+
+					const board = await openPage(context, extensionId, 'newtab');
+					await setTheme(board, theme);
+					const column = board
+						.locator('section[data-column-id]')
+						.filter({has: board.getByRole('heading', {name: 'Limit test'})});
+					const cards = column.locator('[data-bookmark-id]');
+					const unfiled = board.locator(
+						'section[data-column-id="bookmark-unfiled"]',
+					);
+					const unfiledCards = unfiled.locator('[data-bookmark-id]');
+					await until(
+						async () => (await cards.count()) === 10,
+						'the first ten bookmarks',
+					);
+					await until(
+						async () => (await unfiledCards.count()) === 10,
+						'the first ten unfiled bookmarks',
+					);
+					const showMore = column.getByRole('button', {
+						name: 'Show 10 more',
+						exact: true,
+					});
+					const showMoreUnfiled = unfiled.getByRole('button', {
+						name: 'Show 10 more',
+						exact: true,
+					});
+					await showMore.waitFor();
+					const showMoreBounds = await showMore.boundingBox();
+					const listBounds = await showMore.locator('..').boundingBox();
+					assert.ok(showMoreBounds);
+					assert.ok(listBounds);
+					assert.ok(
+						Math.abs(showMoreBounds.width - listBounds.width) < 1,
+						'Show more fills the bookmark column width',
+					);
+					await board.screenshot({
+						path: `.dev/evidence/bookmark-limit-${theme}.png`,
+					});
+					await showMore.focus();
+					await board.keyboard.press('Enter');
+					await until(
+						async () => (await cards.count()) === 20,
+						'the next ten bookmarks',
+					);
+					await showMoreUnfiled.focus();
+					await board.keyboard.press('Enter');
+					await until(
+						async () => (await unfiledCards.count()) === 20,
+						'the next ten unfiled bookmarks',
+					);
+					assert.equal(
+						await board.locator(':focus').count(),
+						1,
+						'focus stays on the Show more button after it updates',
+					);
+					await board.close();
+
+					const resetPage = await openPage(context, extensionId, 'newtab');
+					await seed(resetPage);
+					await resetPage.close();
+				},
+			);
+
 			await check(`bookmark import scrolling (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
+				await seed(page);
+				await page.reload();
 				await setTheme(page, theme);
 				await page.setViewportSize({width: 1440, height: 900});
 				await page
@@ -376,6 +533,8 @@ async function main() {
 			});
 			await check(`import into a new bookmark column (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
+				await seed(page);
+				await page.reload();
 				await setTheme(page, theme);
 				const name = `Imported ${theme}`;
 				for (const save of [false, true]) {
@@ -453,6 +612,8 @@ async function main() {
 			});
 			await check(`paste bookmarks into a new column (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
+				await seed(page);
+				await page.reload();
 				await setTheme(page, theme);
 				await page.bringToFront();
 				await page.evaluate(async (text) => {
@@ -484,6 +645,8 @@ async function main() {
 				`bookmark a saved tab into a new column (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'newtab');
+					await seed(page);
+					await page.reload();
 					await setTheme(page, theme);
 					await page
 						.getByRole('button', {name: /^Expand session:/})
@@ -794,6 +957,8 @@ async function main() {
 					);
 					try {
 						const page = await openPage(context, extensionId, 'newtab');
+						await seed(page);
+						await page.reload();
 						await setTheme(page, theme);
 						await page
 							.getByRole('button', {

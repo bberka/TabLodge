@@ -3878,6 +3878,7 @@ for (const [key, fallback] of [
 	['showSaveWindowButton', true],
 	['showTrashBinButton', true],
 	['stretchBookmarkColumns', true],
+	['limitBookmarksPerColumn', false],
 ] as const) {
 	test(`${key} is ${fallback ? 'on' : 'off'} by default, only an explicit ${String(!fallback)} changes it, and it resets`, async () => {
 		const readStored = async (stored: unknown) =>
@@ -3905,6 +3906,52 @@ for (const [key, fallback] of [
 		assert.equal(reset.settings[key], fallback);
 	});
 }
+
+test('bookmark column batch size defaults to ten, is clamped, and resets', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings
+			.bookmarkColumnPageSize,
+		10,
+	);
+
+	const configured = await defaults.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {bookmarkColumnPageSize: 42},
+	});
+	assert.equal(configured.ok, true, configured.error);
+	assert.equal(defaults.state.settings.bookmarkColumnPageSize, 42);
+
+	const invalid = createWorkerHarness(
+		stateWithSession({bookmarkColumnPageSize: 'many'}),
+	);
+	assert.equal(
+		(await invalid.sendMessage({type: 'GET_STATE'})).settings
+			.bookmarkColumnPageSize,
+		10,
+	);
+	const tooSmall = createWorkerHarness(
+		stateWithSession({bookmarkColumnPageSize: 0}),
+	);
+	assert.equal(
+		(await tooSmall.sendMessage({type: 'GET_STATE'})).settings
+			.bookmarkColumnPageSize,
+		1,
+	);
+	const tooLarge = createWorkerHarness(
+		stateWithSession({bookmarkColumnPageSize: 501}),
+	);
+	assert.equal(
+		(await tooLarge.sendMessage({type: 'GET_STATE'})).settings
+			.bookmarkColumnPageSize,
+		500,
+	);
+	assert.equal(
+		(await defaults.sendMessage({type: 'RESET_SETTINGS'})).settings
+			.bookmarkColumnPageSize,
+		10,
+	);
+});
 
 test('link, quick-action, ordering and pin settings normalize with defaults', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});

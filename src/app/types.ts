@@ -103,6 +103,14 @@ export type Settings = {
 	*/
 	stretchBookmarkColumns: boolean;
 	/**
+	Reveal bookmarks in each column in smaller batches (default off).
+	*/
+	limitBookmarksPerColumn: boolean;
+	/**
+	Number of bookmarks shown per batch when per-column limiting is on (default 10).
+	*/
+	bookmarkColumnPageSize: number;
+	/**
 	Pasting a link (Ctrl/Cmd+V outside a text field) on the TabLodge page opens the add-bookmark dialog prefilled with it (default on).
 	*/
 	pasteLinkToBookmark: boolean;

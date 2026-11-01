@@ -695,6 +695,22 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'limitBookmarksPerColumn',
+				label: 'Limit bookmarks shown at a time',
+				help: 'When on, each column starts with the number below and Show more adds another batch of that size. Off keeps the current display behavior.',
+				type: 'switch',
+			},
+			{
+				name: 'bookmarkColumnPageSize',
+				label: 'Show at a time',
+				help: 'How many bookmarks each column reveals in a batch.',
+				requires: 'limitBookmarksPerColumn',
+				type: 'number',
+				min: 1,
+				max: 500,
+				suffix: 'bookmarks',
+			},
+			{
 				name: 'browserBookmarkAction',
 				label: 'When you bookmark a page in the browser',
 				help: `Use the browser’s own bookmark button (star, Ctrl/Cmd+D) as usual and ${PROJECT.name} can offer to keep the page on the bookmark board too. Only a single bookmark for the page you are on counts; syncing, imports and pastes are ignored. Removing the browser bookmark never removes the ${PROJECT.name} one.`,
