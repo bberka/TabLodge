@@ -132,7 +132,12 @@ import {
 	offerUndo,
 } from './recovery-core';
 import {openLink, resolveLinkTarget} from './link-target';
-import {ColumnSelect} from './column-select';
+import {
+	BookmarkColumnPicker,
+	NEW_BOOKMARK_COLUMN,
+	resolveBookmarkColumn,
+	type BookmarkColumnDraft,
+} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
 /**
@@ -269,6 +274,9 @@ export function SessionManager({
 	const [newFolderIcon, setNewFolderIcon] = useState<string | undefined>();
 	const groupNameRef = useRef<HTMLInputElement>(null);
 	const [bookmarkTab, setBookmarkTab] = useState<BookmarkDraft | null>(null);
+	const [newBookmarkColumn, setNewBookmarkColumn] =
+		useState<BookmarkColumnDraft>({name: ''});
+	const [savingBookmark, setSavingBookmark] = useState(false);
 	const [tabUrlError, setTabUrlError] = useState('');
 	const [editingTab, setEditingTab] = useState<{
 		group: Session;
@@ -1180,25 +1188,37 @@ export function SessionManager({
 
 	async function saveBookmark(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (!bookmarkTab) {
+		if (!bookmarkTab || savingBookmark) {
 			return;
 		}
 
-		const result = await send('ADD_BOOKMARK', {
-			bookmark: {
-				title: bookmarkTab.title,
-				url: bookmarkTab.url,
-				columnId: bookmarkTab.columnId,
-			},
-		});
-		if (!result?.ok) {
-			showStatus(result?.error || 'Could not bookmark this saved tab.', true);
-			return;
-		}
+		setSavingBookmark(true);
+		try {
+			const columnId = await resolveBookmarkColumn(
+				bookmarkTab.columnId || columns[0]?.id || NEW_BOOKMARK_COLUMN,
+				newBookmarkColumn,
+			);
+			setBookmarkTab((old) => old && {...old, columnId});
+			const result = await send('ADD_BOOKMARK', {
+				bookmark: {
+					title: bookmarkTab.title,
+					url: bookmarkTab.url,
+					columnId,
+				},
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not bookmark this saved tab.', true);
+				return;
+			}
 
-		setDialog(null);
-		setBookmarkTab(null);
-		await reload();
+			setDialog(null);
+			setBookmarkTab(null);
+			await reload();
+		} catch (reason) {
+			showStatus((reason as Error).message, true);
+		} finally {
+			setSavingBookmark(false);
+		}
 	}
 
 	async function saveGroupDetails(event: SyntheticEvent<HTMLFormElement>) {
@@ -1382,6 +1402,7 @@ export function SessionManager({
 
 	function openBookmarkPicker(tab: SavedTabRecord) {
 		setBookmarkTab(tab);
+		setNewBookmarkColumn({name: ''});
 		setDialog('bookmark');
 	}
 
@@ -1936,10 +1957,16 @@ export function SessionManager({
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column-select">Bookmark column</Label>
-								<ColumnSelect
+								<BookmarkColumnPicker
 									columns={columns}
-									value={bookmarkTab?.columnId || columns[0]?.id}
+									value={
+										bookmarkTab?.columnId ||
+										columns[0]?.id ||
+										NEW_BOOKMARK_COLUMN
+									}
 									id="bookmark-column-select"
+									draft={newBookmarkColumn}
+									onDraftChange={setNewBookmarkColumn}
 									onValueChange={(value) =>
 										setBookmarkTab((old) => ({...old, columnId: value}))
 									}
@@ -1954,7 +1981,9 @@ export function SessionManager({
 							>
 								Cancel
 							</Button>
-							<Button type="submit">Save bookmark</Button>
+							<Button type="submit" disabled={savingBookmark}>
+								Save bookmark
+							</Button>
 						</DialogFooter>
 					</form>
 				</DialogContent>

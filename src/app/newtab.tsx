@@ -144,6 +144,11 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 import {ColumnSelect} from './column-select';
+import {
+	BookmarkColumnPicker,
+	resolveBookmarkColumn,
+	type BookmarkColumnDraft,
+} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
 type DialogKind =
@@ -272,6 +277,9 @@ function NewTab() {
 		Array<LinkEntry & {include: boolean}>
 	>([]);
 	const [pastedColumn, setPastedColumn] = useState(UNFILED_COLUMN.id);
+	const [pastedNewColumn, setPastedNewColumn] = useState<BookmarkColumnDraft>({
+		name: '',
+	});
 	// Deleting a column with bookmarks: move them to another column, or delete them too.
 	const [columnDelete, setColumnDelete] = useState<{
 		column: BookmarkColumnData;
@@ -613,6 +621,7 @@ function NewTab() {
 				void pastedLinkTitles(several).then((links) => {
 					setPastedLinks(links.map((link) => ({...link, include: true})));
 					setPastedColumn(columns[0]?.id || UNFILED_COLUMN.id);
+					setPastedNewColumn({name: ''});
 					setDialog('paste-links');
 				});
 				return;
@@ -650,16 +659,22 @@ function NewTab() {
 
 		setBusy('paste-links');
 		try {
+			const columnId = await resolveBookmarkColumn(
+				pastedColumn,
+				pastedNewColumn,
+			);
+			setPastedColumn(columnId);
 			const result = await addDroppedLinks(
 				links,
-				pastedColumn,
+				columnId,
 				null,
 				'after',
 				true,
 			);
 			setDialog(null);
 			const name =
-				columns.find((column) => column.id === pastedColumn)?.name ||
+				columns.find((column) => column.id === columnId)?.name ||
+				pastedNewColumn.name ||
 				UNFILED_COLUMN.name;
 			offerUndo(
 				`Added ${plural(result.count, 'bookmark')} to “${name}”.${skippedNote(result.skipped)}`,
@@ -2174,10 +2189,10 @@ function NewTab() {
 								/>
 							)}
 							<div className="space-y-1.5">
-								<Label htmlFor="bookmark-title">Title</Label>
+								<Label htmlFor="bookmark-edit-title">Title</Label>
 								<Input
 									required
-									id="bookmark-title"
+									id="bookmark-edit-title"
 									maxLength={500}
 									value={bookmarkEdit?.title || ''}
 									onChange={(e) =>
@@ -2338,10 +2353,12 @@ function NewTab() {
 							</ScrollArea>
 							<div className="space-y-1.5">
 								<Label htmlFor="pasted-links-column">Column</Label>
-								<ColumnSelect
+								<BookmarkColumnPicker
 									columns={columns}
 									value={pastedColumn}
 									id="pasted-links-column"
+									draft={pastedNewColumn}
+									onDraftChange={setPastedNewColumn}
 									onValueChange={setPastedColumn}
 								/>
 							</div>
