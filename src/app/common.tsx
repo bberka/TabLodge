@@ -23,6 +23,11 @@ import type {
 	TabLodgeState,
 } from './types';
 import {PROJECT} from './project';
+import {
+	PRIVATE_CONFIG_KEY,
+	PRIVATE_STORAGE_PREFIX,
+	reloadPrivatePage,
+} from './private-config';
 import {hostIsExcluded} from './excluded-sites';
 import {webUrl} from './web-url';
 import {cn} from '@/lib/utils';
@@ -449,7 +454,21 @@ export function useTabLodgeState() {
 			changes: Record<string, chrome.storage.StorageChange>,
 			area: chrome.storage.AreaName,
 		) => {
-			if (!(area === 'local' && Object.hasOwn(changes, STORAGE_KEY))) {
+			if (
+				chrome.extension.inIncognitoContext &&
+				area === 'local' &&
+				Object.hasOwn(changes, PRIVATE_CONFIG_KEY)
+			) {
+				reloadPrivatePage();
+				return;
+			}
+
+			if (!(
+				['local', 'session'].includes(area) &&
+				(Object.hasOwn(changes, STORAGE_KEY) ||
+					(chrome.extension.inIncognitoContext &&
+						Object.hasOwn(changes, `${PRIVATE_STORAGE_PREFIX}${STORAGE_KEY}`)))
+			)) {
 				return;
 			}
 

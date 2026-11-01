@@ -137,6 +137,13 @@ function createHarness(
 		addListener(callback: Listener) {
 			(listeners[name] ||= []).push(callback);
 		},
+		removeListener(callback: Listener) {
+			const callbacks = listeners[name];
+			const index = callbacks?.indexOf(callback) ?? -1;
+			if (index >= 0) {
+				callbacks.splice(index, 1);
+			}
+		},
 	});
 	const fire = (name: string, ...args: unknown[]) => {
 		for (const callback of listeners[name] || []) {
@@ -152,6 +159,7 @@ function createHarness(
 		  ) => unknown)
 		| undefined;
 	const state = structuredClone(initialState);
+	const sessionStorage: Record<string, unknown> = {};
 	const tabs = structuredClone(initialTabs);
 	const openedTabs: MockTab[] = [];
 	const updatedTabs: Array<{id: number; url?: string}> = [];
@@ -190,6 +198,24 @@ function createHarness(
 			onStartup: on('onStartup'),
 		},
 		storage: {
+			session: {
+				async get(keys: string | string[]) {
+					return Object.fromEntries(
+						[keys]
+							.flat()
+							.filter((key) => Object.hasOwn(sessionStorage, key))
+							.map((key) => [key, structuredClone(sessionStorage[key])]),
+					);
+				},
+				async set(values: Record<string, unknown>) {
+					Object.assign(sessionStorage, structuredClone(values));
+				},
+				async remove(keys: string | string[]) {
+					for (const key of [keys].flat()) {
+						Reflect.deleteProperty(sessionStorage, key);
+					}
+				},
+			},
 			local: {
 				async get(keys: string[]) {
 					return keys.includes(storageKey)

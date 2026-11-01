@@ -40,6 +40,7 @@
 		"format": "xo --fix",
 		"check": "xo && tsc -b && vp test run",
 		"a11y": "node scripts/a11y-check.ts",
+		"test:private": "node scripts/private-storage-check.ts",
 		"clean": "node --eval \"for (const dir of ['dist', 'node_modules/.tmp']) require('node:fs').rmSync(dir, { recursive: true, force: true })\""
 	},
 	"keywords": [

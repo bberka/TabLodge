@@ -102,6 +102,14 @@ The side panel header has icons for the dashboard, recent snapshots, trash bin, 
 
 Find the available keyboard shortcuts in **Settings › Keyboard shortcuts**. **Configure shortcuts** opens your browser's shortcut settings.
 
+### Private windows
+
+Enable **Allow in Incognito** (or your browser's equivalent) in the extension's browser settings. Open the dashboard from the toolbar popup or the **Open dashboard** shortcut. Chromium does not replace the private new tab page with an extension dashboard.
+
+On your first private dashboard visit, choose **Share normal storage** (the default), **Separate, saved storage**, or **Separate, temporary storage**. You must finish setup before using the private library. You can also configure this in **Settings › Private windows**.
+
+Shared mode uses your normal sessions, bookmarks, and preferences. The separate modes start empty. Saved private data stays after browser restarts. Temporary data survives closing private windows and extension worker restarts, but clears on browser restart. Switching modes does not copy, merge, or delete existing libraries. Switch back to reopen one. Appearance is shared across modes. Automatic snapshots and backups do not run in private windows. Exports and manual backup downloads are ordinary files and are not cleared with temporary storage. See [Privacy](PRIVACY.md#private-windows) for storage and deletion details.
+
 ### Move from a manual installation to the Chrome Web Store
 
 The manual and Chrome Web Store installations may have separate storage. Before removing the manual copy, open it and create a full backup in **Settings › Data › Back up › Everything**. Install TabLodge from the Chrome Web Store, import that ZIP from **Settings › Data**, and check that your sessions and bookmarks are there. Remove the manual copy only after confirming the import. Uninstalling an extension removes its browser storage.
@@ -128,6 +136,7 @@ TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind
 | `vp run lint`                        | Check code with XO                                                  |
 | `vp run lint:fix` or `vp run format` | Fix lint issues and format with XO                                  |
 | `vp run check`                       | Run lint, type checks, and tests                                    |
+| `vp run test:private`                | Check private setup and storage lifecycle in Chromium after building |
 | `vp run verify`                      | Verify an existing build                                            |
 | `vp run clean`                       | Remove build output and TypeScript build caches                     |
 

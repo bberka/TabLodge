@@ -100,6 +100,11 @@ import {
 import {Highlight} from './highlight';
 import {PROJECT} from './project';
 import {ColumnSelect} from './column-select';
+import {
+	PrivateStorageSettings,
+	PRIVATE_STORAGE_TITLE,
+	PRIVATE_STORAGE_WORDS,
+} from './private-storage';
 import {cn} from '@/lib/utils';
 
 // Settings keys whose value has the given type, so switch rows only bind boolean settings and select rows string ones.
@@ -893,6 +898,7 @@ const settingsNavigationLabels: Record<string, string> = {
 const settingsNavigation = [
 	{title: APPEARANCE.title, icon: Sun},
 	{title: SHORTCUTS.title, icon: Keyboard},
+	{title: PRIVATE_STORAGE_TITLE, icon: Database},
 	...settingsGroups.map(({title, icon}) => ({title, icon})),
 	{title: DATA.title, icon: Database},
 	{title: EXCLUDED.title, icon: Globe},
@@ -1542,7 +1548,12 @@ function Options() {
 		DEFAULTS.help,
 		...DEFAULTS.words,
 	]);
+	const showPrivate = matchesQuery(query, [
+		PRIVATE_STORAGE_TITLE,
+		...PRIVATE_STORAGE_WORDS,
+	]);
 	const matchCount =
+		Number(showPrivate) +
 		Number(showAppearance) +
 		Number(showShortcuts) +
 		visibleGroups.reduce((sum, entry) => sum + entry.fields.length, 0) +
@@ -1560,6 +1571,10 @@ function Options() {
 	const visibleSettingsNavigation = searching
 		? settingsNavigation.filter(({title}) => {
 				switch (title) {
+					case PRIVATE_STORAGE_TITLE: {
+						return showPrivate;
+					}
+
 					case APPEARANCE.title: {
 						return showAppearance;
 					}
@@ -1818,6 +1833,17 @@ function Options() {
 						/>
 					)}
 
+					{showPrivate && (
+						<SectionCard
+							id={sectionId(PRIVATE_STORAGE_TITLE)}
+							title={PRIVATE_STORAGE_TITLE}
+							description="Choose whether private windows share your normal library or use their own. This choice applies to all private windows."
+							icon={Database}
+							className={SECTION_SCROLL_CLASS}
+						>
+							<PrivateStorageSettings showStatus={showStatus} />
+						</SectionCard>
+					)}
 					{visibleGroups.map(({group, fields}) => (
 						<SectionCard
 							key={group.title}

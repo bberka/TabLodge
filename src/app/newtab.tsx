@@ -146,6 +146,7 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 import {ColumnSelect} from './column-select';
+import {PrivateSetupGate} from './private-storage';
 import {
 	BookmarkColumnPicker,
 	resolveBookmarkColumn,
@@ -3508,7 +3509,9 @@ const BookmarkCard = memo(
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<TooltipProvider>
-			<NewTab />
+			<PrivateSetupGate>
+				<NewTab />
+			</PrivateSetupGate>
 		</TooltipProvider>
 	</ThemeProvider>,
 );

@@ -49,6 +49,7 @@ type MockTab = {
 	pendingUrl?: string;
 	title?: string;
 	pinned?: boolean;
+	incognito?: boolean;
 	highlighted?: boolean;
 	groupId?: number;
 	splitViewId?: number;
@@ -73,6 +74,7 @@ type SidePanelCall = {
  `misplacedCreateUrls` opens those tabs at the start of the window, as if the browser placed them elsewhere.
  */
 type HarnessOptions = {
+	incognitoContext?: boolean;
 	failedCreateUrls?: string[];
 	bookmarkTree?: unknown[];
 	withoutContextMenuShown?: boolean;
@@ -191,6 +193,7 @@ function createWorkerHarness(
 	const discardedTabs: number[] = [];
 	const menuItems: MenuItem[] = [];
 	let storageFailure: Error | null = null;
+	let storageFailureKey: string | undefined;
 	const extraStorage: Record<string, unknown> = structuredClone(
 		options.storage ?? {},
 	);
@@ -210,7 +213,14 @@ function createWorkerHarness(
 	let lastFocusedWindowId = 10;
 	const tabs = structuredClone(initialTabs);
 	const windows: MockWindow[] = [
-		{id: 10, type: 'normal', focused: true, title: 'Test window', tabs},
+		{
+			id: 10,
+			type: 'normal',
+			focused: true,
+			title: 'Test window',
+			tabs,
+			incognito: (options.incognitoWindows ?? []).includes(10),
+		},
 		...(options.extraWindows ?? []).map((id) => ({
 			id,
 			type: 'normal',
@@ -337,6 +347,7 @@ function createWorkerHarness(
 		},
 	});
 	const chrome = {
+		extension: {inIncognitoContext: options.incognitoContext === true},
 		runtime: {
 			getURL: (file: string) => `chrome-extension://tablodge/${file}`,
 			getManifest: () => ({...manifest}),
@@ -364,7 +375,10 @@ function createWorkerHarness(
 					return out;
 				},
 				async set(values: Record<string, unknown>) {
-					if (storageFailure) {
+					if (
+						storageFailure &&
+						(!storageFailureKey || Object.hasOwn(values, storageFailureKey))
+					) {
 						throw storageFailure;
 					}
 
@@ -409,18 +423,31 @@ function createWorkerHarness(
 				) {
 					changeListeners.push(callback);
 				},
+				removeListener(
+					callback: (changes: Record<string, unknown>, area: string) => void,
+				) {
+					const index = changeListeners.indexOf(callback);
+					if (index !== -1) {
+						changeListeners.splice(index, 1);
+					}
+				},
 			},
 			session: {
-				async get(key: string) {
-					return Object.hasOwn(sessionStore, key)
-						? {[key]: sessionStore[key]}
-						: {};
+				async get(keys: string | string[]) {
+					return Object.fromEntries(
+						[keys]
+							.flat()
+							.filter((key) => Object.hasOwn(sessionStore, key))
+							.map((key) => [key, structuredClone(sessionStore[key])]),
+					);
 				},
 				async set(values: Record<string, unknown>) {
 					Object.assign(sessionStore, structuredClone(values));
 				},
-				async remove(key: string) {
-					Reflect.deleteProperty(sessionStore, key);
+				async remove(keys: string | string[]) {
+					for (const key of [keys].flat()) {
+						Reflect.deleteProperty(sessionStore, key);
+					}
 				},
 			},
 		},
@@ -435,6 +462,7 @@ function createWorkerHarness(
 					id: win.id,
 					type: win.type,
 					title: win.title,
+					incognito: Boolean(win.incognito),
 					...(query.populate && {
 						tabs: tabsForWindow(win.id).map((tab) => ({...tab})),
 					}),
@@ -832,6 +860,7 @@ function createWorkerHarness(
 		tabs,
 		windows,
 		extraStorage,
+		sessionStore,
 		alarms,
 		alarmCalls,
 		downloads,
@@ -878,8 +907,9 @@ function createWorkerHarness(
 		},
 		apiLog,
 		tabsForWindow,
-		setStorageFailure(error: Error) {
+		setStorageFailure(error: Error, key?: string) {
 			storageFailure = error;
+			storageFailureKey = key;
 		},
 		state,
 		storageGets,
@@ -973,6 +1003,168 @@ function stateWithSession(settings: Record<string, unknown> = {}): StoredState {
 		updatedAt: timestamp,
 	};
 }
+
+test('private dashboards require setup before exposing the shared library', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+	});
+	const config = await harness.sendMessage({type: 'GET_PRIVATE_CONFIG'});
+	assert.equal(config.ok, true);
+	assert.equal(config.mode, 'shared');
+	assert.equal(config.configured, false);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.ok, false);
+});
+
+test('private storage modes keep the normal, saved, and browser session libraries separate', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+	});
+	for (const mode of ['saved', 'temporary'] as const) {
+		const configured = await harness.sendMessage({
+			type: 'SET_PRIVATE_CONFIG',
+			mode,
+		});
+		assert.equal(configured.ok, true, configured.error);
+		const empty = await harness.sendMessage({type: 'GET_STATE'});
+		assert.equal(empty.groups?.length, 0);
+		assert.equal(empty.bookmarks?.length, 0);
+		const added = await harness.sendMessage({
+			type: 'ADD_BOOKMARK',
+			bookmark: {title: mode, url: `https://${mode}.example/`},
+		});
+		assert.equal(added.ok, true, added.error);
+		assert.equal(harness.state.bookmarks?.length, 0);
+	}
+
+	for (const mode of ['saved', 'temporary', 'shared'] as const) {
+		await harness.sendMessage({type: 'SET_PRIVATE_CONFIG', mode});
+		const library = await harness.sendMessage({type: 'GET_STATE'});
+		assert.equal(library.ok, true, library.error);
+		assert.equal(library.groups?.length, mode === 'shared' ? 1 : 0);
+		assert.deepEqual(
+			library.bookmarks?.map((bookmark) => bookmark.title),
+			mode === 'shared' ? [] : [mode],
+		);
+	}
+});
+
+test('temporary private data survives a worker restart but not a browser restart', async () => {
+	const options = {
+		incognitoContext: true,
+		storage: {'tablodge.private.config': {mode: 'temporary', configured: true}},
+	};
+	const first = createWorkerHarness(stateWithSession(), undefined, options);
+	await first.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Private', url: 'https://private.example/'},
+	});
+	const restartedWorker = createWorkerHarness(stateWithSession(), undefined, {
+		...options,
+		sessionStorage: first.sessionStore,
+	});
+	const kept = await restartedWorker.sendMessage({type: 'GET_STATE'});
+	assert.equal(kept.bookmarks?.[0]?.title, 'Private');
+	const restartedBrowser = createWorkerHarness(
+		stateWithSession(),
+		undefined,
+		options,
+	);
+	const cleared = await restartedBrowser.sendMessage({type: 'GET_STATE'});
+	assert.equal(cleared.bookmarks?.length, 0);
+	assert.equal(restartedBrowser.state.groups.length, 1);
+});
+
+test('normal windows ignore the private storage mode', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		storage: {'tablodge.private.config': {mode: 'temporary', configured: true}},
+	});
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(response.groups?.[0]?.name, 'Research');
+	const invalid = await harness.sendMessage({
+		type: 'SET_PRIVATE_CONFIG',
+		mode: 'invalid' as never,
+	});
+	assert.equal(invalid.ok, false);
+});
+
+test('opening a private dashboard never reuses a normal window dashboard', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession(),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				incognito: true,
+				url: 'https://private.example/',
+			},
+			{
+				id: 2,
+				windowId: 20,
+				index: 0,
+				active: true,
+				url: 'chrome-extension://tablodge/newtab.html',
+			},
+		],
+		{
+			incognitoContext: true,
+			incognitoWindows: [10],
+			extraWindows: [20],
+			storage: {'tablodge.private.config': {mode: 'shared', configured: true}},
+		},
+	);
+	await harness.fire('onCommand', 'open-dashboard', harness.tabs[0]);
+	assert.equal(harness.openedTabs.length, 1);
+	assert.equal(harness.openedTabs[0].windowId, 10);
+	assert.equal(
+		harness.openedTabs[0].url,
+		'chrome-extension://tablodge/newtab.html',
+	);
+	assert.equal(
+		harness.windowUpdates.some((update) => update.id === 20),
+		false,
+	);
+});
+
+test('separate private backups and deleted bookmarks never enter normal recovery storage', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			uiTheme: 'dark',
+			uiAccent: 'blue',
+		},
+	});
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Private', url: 'https://private.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(backup.ok, true, backup.error);
+	if (backup.ok) {
+		assert.deepEqual(structuredClone(backup.preferences), {
+			uiTheme: 'dark',
+			uiAccent: 'blue',
+		});
+	}
+
+	if (added.ok) {
+		await harness.sendMessage({
+			type: 'DELETE_BOOKMARK',
+			bookmarkId: added.bookmark.id,
+		});
+	}
+
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.ok(trash.ok);
+	assert.equal(trash.items.length, 1);
+	assert.equal(harness.extraStorage['tablodge.trash'], undefined);
+	assert.equal(harness.extraStorage['tablodge.backups'], undefined);
+	assert.equal(harness.state.groups[0]?.name, 'Research');
+});
 
 test('RESTORE_GROUP opens a valid saved URL and reports successful session restoration', async () => {
 	const harness = createWorkerHarness(stateWithSession());
@@ -6097,7 +6289,7 @@ test('safety backups are taken before erase, large imports and bulk deletes, in 
 test('erasing stops when the safety backup cannot be written', async () => {
 	const harness = createWorkerHarness(bookmarksState());
 	await harness.sendMessage({type: 'GET_STATE'});
-	harness.setStorageFailure(new Error('quota'));
+	harness.setStorageFailure(new Error('quota'), 'tablodge.backups');
 	const response = await harness.sendMessage({
 		type: 'ERASE_DATA',
 		scope: 'all',
