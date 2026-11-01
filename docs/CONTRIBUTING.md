@@ -34,7 +34,7 @@ TabLodge is used by keyboard and with screen readers, so every UI change meets [
 - **Targets and contrast.** Interactive targets are at least 24 by 24 CSS pixels, or have enough spacing. Text and controls meet contrast in both themes. Respect reduced motion.
 - **Pages with the shared header** get the skip link from `AppHeader`. A new page with its own navigation adds one.
 
-Run `vp run build` and then `vp run a11y`. It runs axe-core on every extension page in both themes and exercises the keyboard workflows above. Add a check to `scripts/a11y-check.ts` when you add a workflow that needs the keyboard. Automated checks cannot judge reading order, announcements, or whether a workflow makes sense, so also use the feature with the keyboard alone and with a screen reader (for example NVDA or Orca in Chrome) and write down the browser, the assistive technology, what you tested, and what is left in the pull request.
+Run `vp run build` and then `vp run a11y`. It runs axe-core on every extension page in both themes and exercises the keyboard workflows above. Add a check to `scripts/a11y-check.ts` when you add a workflow that needs the keyboard. Automated checks cannot judge reading order, announcements, or whether a workflow makes sense, so use available browser accessibility or screen reader tools to inspect the affected workflow. Manual screen reader testing is not required. In the pull request, report the tools used or that none were available, what you tested, and any gaps.
 
 ## Writing documentation
 
