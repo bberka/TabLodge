@@ -456,10 +456,11 @@ function Help() {
 					body: (
 						<>
 							Session import and export are in the{' '}
-							<MenuLocation label="Sessions" />. Bookmark import and export are
-							in the <MenuLocation label="Bookmarks toolbar" />. Settings can
-							export bookmarks or create a full ZIP backup with settings,
-							excluded sites, theme, snapshots, and the trash bin. Open{' '}
+							<MenuLocation label="Sessions" />. A session menu can export just
+							that session in any format. Bookmark import and export are in the{' '}
+							<MenuLocation label="Bookmarks toolbar" />. Settings can export
+							bookmarks or create a full ZIP backup with settings, excluded
+							sites, theme, snapshots, and the trash bin. Open{' '}
 							<a
 								href="options.html?q=Data"
 								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -471,7 +472,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sessions menu bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
+						'sessions menu individual session export bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
 				},
 				{
 					title: 'Recover after a browser crash',

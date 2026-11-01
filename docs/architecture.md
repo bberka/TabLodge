@@ -174,7 +174,7 @@ Chromium declares the new tab override statically. Turning off **Use TabLodge fo
 
 ## Imports and exports
 
-Session and bookmark menus provide their own import and export actions; Settings also provides data tools. Parsing and conversion live in `src/app/import-formats.ts`. Imports accept native backups and formats from other tab managers. Unsupported URLs are ignored. Duplicate choices appear only when needed and are separate from restore preferences.
+Session and bookmark menus provide their own import and export actions. A session menu can export only that session in any supported format; Settings also provides data tools. Parsing and conversion live in `src/app/import-formats.ts`. Imports accept native backups and formats from other tab managers. Unsupported URLs are ignored. Duplicate choices appear only when needed and are separate from restore preferences.
 
 Session JSON includes sessions and folders. Bookmark JSON includes columns and bookmarks. A split pair uses `split: {id, position}`, where position is 0 for left and 1 for right. Import keeps only complete adjacent pairs with matching pinned and group state. Invalid pair metadata is dropped without losing the links.
 
