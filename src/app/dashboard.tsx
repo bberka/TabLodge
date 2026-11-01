@@ -88,7 +88,6 @@ import {
 	useHasSavableTabs,
 	switchSummary,
 	useStatus,
-	useTabLodgeState,
 	restoreFailureText,
 	plural,
 } from './common';
@@ -113,6 +112,7 @@ import type {
 	SessionFields,
 	SessionSort,
 	Settings,
+	TabLodgeState,
 } from './types';
 import {
 	ARCHIVED_FOLDER_NAME,
@@ -259,8 +259,16 @@ function tabRuns(tabs: SavedTabRecord[]): SavedTabRecord[][] {
 export function SessionManager({
 	embedded = false,
 	initialQuery = '',
-}: {embedded?: boolean; initialQuery?: string} = {}) {
-	const {state, error, reload} = useTabLodgeState();
+	state,
+	error,
+	reload,
+}: {
+	embedded?: boolean;
+	initialQuery?: string;
+	state: TabLodgeState | null;
+	error: string;
+	reload: () => Promise<TabLodgeState | null>;
+}) {
 	const [status, showStatus] = useStatus();
 	const [folderId, setFolderId] = useState(ALL);
 	const [folderDropId, setFolderDropId] = useState<string | null>(null);

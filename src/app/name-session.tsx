@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import {send, useCloseOnEscape} from './common';
+import {LoadingLine, send, useCloseOnEscape} from './common';
 import {NameSessionForm} from './name-session-dialog';
 import {
 	baseSessionName,
@@ -69,7 +69,11 @@ function NameSessionPrompt() {
 	}
 
 	if (initialName === null) {
-		return null;
+		return (
+			<main className="min-h-screen bg-background p-5" aria-busy="true">
+				<LoadingLine />
+			</main>
+		);
 	}
 
 	return (

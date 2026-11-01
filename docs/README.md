@@ -123,6 +123,7 @@ TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind
 | `vp run test`                        | Run the tests once                                                  |
 | `vp run test:watch`                  | Run tests as files change                                           |
 | `vp run a11y`                        | Run axe and keyboard checks on the built extension                  |
+| `vp run browser:startup`             | Check all seven pages with delayed state loading                    |
 | `vp run typecheck`                   | Check all TypeScript projects                                       |
 | `vp run lint`                        | Check code with XO                                                  |
 | `vp run lint:fix` or `vp run format` | Fix lint issues and format with XO                                  |
