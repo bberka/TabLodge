@@ -1042,11 +1042,15 @@ export function ImportDialog({
 				: (state?.bookmarks ?? []).map((bookmark) => bookmark.url),
 		[kind, state],
 	);
+	const hasBookmarkFolders = Boolean(
+		parsed?.bookmarks.some((group) => group.name && group.links.length > 0),
+	);
+	const bookmarkTarget = hasBookmarkFolders ? target : 'column';
 	const preview = parsed
 		? previewImport(parsed, kind, {
 				existingUrls,
 				includePinned: state?.settings.includePinnedTabs === true,
-				singleColumn: target === 'column',
+				singleColumn: bookmarkTarget === 'column',
 			})
 		: null;
 	const step = (parsed || full) && source ? 'preview' : 'source';
@@ -1208,7 +1212,7 @@ export function ImportDialog({
 		setBusy(true);
 		try {
 			const targetColumnId =
-				kind === 'bookmarks' && target === 'column'
+				kind === 'bookmarks' && bookmarkTarget === 'column'
 					? await resolveBookmarkColumn(columnId, newColumn)
 					: undefined;
 			if (targetColumnId) {
@@ -1588,7 +1592,7 @@ export function ImportDialog({
 										label={
 											kind === 'sessions'
 												? 'Sessions'
-												: target === 'column'
+												: bookmarkTarget === 'column'
 													? 'Column'
 													: 'Columns'
 										}
@@ -1676,7 +1680,8 @@ export function ImportDialog({
 														className="truncate text-[11px] text-muted-foreground"
 														title={item.url}
 													>
-														{kind === 'bookmarks' && target === 'column' ? (
+														{kind === 'bookmarks' &&
+														bookmarkTarget === 'column' ? (
 															item.url
 														) : (
 															<>
@@ -1696,6 +1701,7 @@ export function ImportDialog({
 								</div>
 								<div className="grid gap-3 rounded-lg bg-muted/40 p-3">
 									<OptionRow
+										inlineControl
 										id="import-duplicates"
 										label="Links already saved"
 										help={
@@ -1737,28 +1743,31 @@ export function ImportDialog({
 									)}
 									{kind === 'bookmarks' && (
 										<OptionRow
+											inlineControl
 											id="import-target"
 											label="Put bookmarks in"
 											help={
-												target === 'folders'
+												bookmarkTarget === 'folders'
 													? 'Each folder becomes a column (merged by name); links without a folder go to the first column.'
 													: undefined
 											}
 										>
-											<div className="flex flex-wrap items-center justify-end gap-2">
-												<SegmentedControl
-													aria-labelledby="import-target"
-													value={target}
-													options={[
-														{value: 'folders', label: 'Columns from folders'},
-														{
-															value: 'column',
-															label: 'One column',
-														},
-													]}
-													onValueChange={setTarget}
-												/>
-												{target === 'column' && (
+											<div className="flex min-w-0 flex-wrap items-center gap-2">
+												{hasBookmarkFolders && (
+													<SegmentedControl
+														aria-labelledby="import-target"
+														value={target}
+														options={[
+															{
+																value: 'folders',
+																label: 'Columns from folders',
+															},
+															{value: 'column', label: 'One column'},
+														]}
+														onValueChange={setTarget}
+													/>
+												)}
+												{bookmarkTarget === 'column' && (
 													<BookmarkColumnSelect
 														id="import-bookmark-column"
 														columns={columns}
@@ -1772,7 +1781,7 @@ export function ImportDialog({
 										</OptionRow>
 									)}
 									{kind === 'bookmarks' &&
-										target === 'column' &&
+										bookmarkTarget === 'column' &&
 										columnId === NEW_BOOKMARK_COLUMN && (
 											<BookmarkColumnNameField
 												id="import-bookmark-column-new-name"
@@ -1822,7 +1831,7 @@ export function ImportDialog({
 										!preview.links ||
 										nothingNew ||
 										(kind === 'bookmarks' &&
-											target === 'column' &&
+											bookmarkTarget === 'column' &&
 											columnId === NEW_BOOKMARK_COLUMN &&
 											!newColumn.name.trim())
 									}
@@ -1892,26 +1901,53 @@ function OptionRow({
 	id,
 	label,
 	help,
+	inlineControl = false,
 	children,
 }: {
 	id: string;
 	label: string;
 	help?: string;
+	inlineControl?: boolean;
 	children: ReactNode;
 }) {
 	return (
-		<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-			<div className="min-w-0">
-				<Label id={id} className="text-sm font-medium">
+		<div
+			className={
+				inlineControl
+					? 'flex flex-col gap-1'
+					: 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'
+			}
+		>
+			<div
+				className={
+					inlineControl
+						? 'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1'
+						: 'min-w-0'
+				}
+			>
+				<Label
+					id={id}
+					className={cn('text-sm font-medium', inlineControl && 'shrink-0')}
+				>
 					{label}
 				</Label>
+				{inlineControl && (
+					<div className="flex min-w-0 flex-wrap items-center gap-2">
+						{children}
+					</div>
+				)}
 				{help && (
-					<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+					<p
+						className={cn(
+							'mt-0.5 text-xs leading-5 text-muted-foreground',
+							inlineControl && 'basis-full',
+						)}
+					>
 						{help}
 					</p>
 				)}
 			</div>
-			<div className="shrink-0">{children}</div>
+			{!inlineControl && <div className="shrink-0">{children}</div>}
 		</div>
 	);
 }
