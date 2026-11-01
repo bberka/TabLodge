@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
-import {join} from 'node:path';
-import {chromium, type Page} from 'playwright';
+import {Buffer} from 'node:buffer';
+import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {chromium, type Locator, type Page} from 'playwright';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 type ChromeGlobal = {
@@ -71,6 +71,64 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+const evidenceViewports = [
+	{width: 768, height: 1024},
+	{width: 1440, height: 900},
+	{width: 1920, height: 1080},
+] as const;
+
+async function captureEvidence(
+	page: Page,
+	target: Locator,
+	name: string,
+	captureElement = false,
+) {
+	for (const {width, height} of evidenceViewports) {
+		await page.setViewportSize({width, height});
+		await target.scrollIntoViewIfNeeded();
+		const path = fromRoot(`.dev/evidence/${name}-${width}x${height}.png`);
+		if (captureElement) {
+			await target.screenshot({animations: 'disabled', path});
+		} else {
+			await page.screenshot({animations: 'disabled', path});
+		}
+	}
+
+	const device = await page.context().newCDPSession(page);
+	try {
+		await device.send('Emulation.setDeviceMetricsOverride', {
+			width: 440,
+			height: 956,
+			deviceScaleFactor: 3,
+			mobile: true,
+			screenOrientation: {angle: 0, type: 'portraitPrimary'},
+		});
+		await target.scrollIntoViewIfNeeded();
+		assert.ok(
+			await page
+				.locator('html')
+				.evaluate(
+					(node: {scrollWidth: number; clientWidth: number}) =>
+						node.scrollWidth <= node.clientWidth,
+				),
+			'screen overflows at 440px',
+		);
+		const {data} = await device.send('Page.captureScreenshot', {
+			format: 'png',
+			captureBeyondViewport: false,
+		});
+		await writeFile(
+			fromRoot(`.dev/evidence/${name}-440x956-dsf3.png`),
+			Buffer.from(data, 'base64'),
+		);
+	} finally {
+		await device.send('Emulation.clearDeviceMetricsOverride');
+		await device.detach();
+	}
+
+	await page.setViewportSize(evidenceViewports[1]);
+}
+
 async function bookmarkTitles(page: Page): Promise<string[]> {
 	const state = await send(page, {type: 'GET_STATE'});
 	assert.ok(Array.isArray(state.bookmarks));
@@ -135,18 +193,14 @@ try {
 		0,
 		'Settings should apply private storage changes without a Save button.',
 	);
-	await normal.setViewportSize({width: 1000, height: 900});
 	for (const theme of ['Light', 'Dark']) {
 		await normal.getByRole('radio', {name: theme, exact: true}).click();
-		await normal
-			.getByText(
-				'Private storage settings are disabled until Allow in Incognito is enabled in your browser’s extension settings.',
-				{exact: true},
-			)
-			.scrollIntoViewIfNeeded();
-		await normal.locator('#settings-private-windows').screenshot({
-			path: join(evidence, `settings-${theme.toLowerCase()}.png`),
-		});
+		await captureEvidence(
+			normal,
+			normal.locator('#settings-private-windows'),
+			`settings-${theme.toLowerCase()}`,
+			true,
+		);
 	}
 
 	const extensions = await context.newPage();
@@ -302,12 +356,7 @@ try {
 		);
 		await privatePage.keyboard.press('Escape');
 		assert.equal(await dialog.isVisible(), true);
-		for (const width of [1440, 375]) {
-			await privatePage.setViewportSize({width, height: 900});
-			await privatePage.screenshot({
-				path: join(evidence, `private-setup-${theme}-${width}.png`),
-			});
-		}
+		await captureEvidence(privatePage, dialog, `private-setup-${theme}`);
 	}
 
 	await privatePage.setViewportSize({width: 1440, height: 900});
