@@ -257,6 +257,42 @@ const attributes = (page: Page, selector: string, name: string) =>
 const focusedLabel = (page: Page) =>
 	page.locator(':focus').getAttribute('aria-label');
 
+type DevtoolsSession = Awaited<ReturnType<BrowserContext['newCDPSession']>>;
+
+async function withMobileEmulation(
+	page: Page,
+	viewport: {width: number; height: number},
+	capture: (device: DevtoolsSession) => Promise<void>,
+	withTouch = false,
+) {
+	const device = await page.context().newCDPSession(page);
+	try {
+		await device.send('Emulation.setDeviceMetricsOverride', {
+			...viewport,
+			deviceScaleFactor: 3,
+			mobile: true,
+			screenWidth: viewport.width,
+			screenHeight: viewport.height,
+			screenOrientation: {angle: 0, type: 'portraitPrimary'},
+		});
+		if (withTouch) {
+			await device.send('Emulation.setTouchEmulationEnabled', {
+				enabled: true,
+				maxTouchPoints: 1,
+			});
+		}
+
+		await capture(device);
+	} finally {
+		if (withTouch) {
+			await device.send('Emulation.setTouchEmulationEnabled', {enabled: false});
+		}
+
+		await device.send('Emulation.clearDeviceMetricsOverride');
+		await device.detach();
+	}
+}
+
 async function captureEvidence(page: Page, name: string) {
 	if (process.env.TABLODGE_CAPTURE_EVIDENCE !== '1') {
 		return;
@@ -269,47 +305,33 @@ async function captureEvidence(page: Page, name: string) {
 	for (const [width, height] of EVIDENCE_VIEWPORTS) {
 		await page.setViewportSize({width, height});
 		const sizedName = `${name.slice(0, -4)}-${width}x${height}.png`;
-		const mobileEmulation =
-			width === 440 ? await page.context().newCDPSession(page) : undefined;
-		try {
-			if (mobileEmulation) {
-				await mobileEmulation.send('Emulation.setDeviceMetricsOverride', {
-					width,
-					height,
-					deviceScaleFactor: 3,
-					mobile: true,
-					screenWidth: width,
-					screenHeight: height,
-				});
-				await mobileEmulation.send('Emulation.setTouchEmulationEnabled', {
-					enabled: true,
-					maxTouchPoints: 1,
-				});
-				const deviceScaleFactor = await page.locator('body').evaluate(
-					(node: {
-						ownerDocument: {
-							defaultView: {devicePixelRatio: number} | null;
-						};
-					}) => {
-						const view = node.ownerDocument.defaultView;
-						return view?.devicePixelRatio ?? 1;
-					},
-				);
-				assert.equal(deviceScaleFactor, 3, 'phone evidence uses DPR 3');
-			}
-
-			await page.screenshot({
+		const capture = async () =>
+			page.screenshot({
 				path: join(directory, sizedName),
 				scale: 'device',
 			});
-		} finally {
-			if (mobileEmulation) {
-				await mobileEmulation.send('Emulation.setTouchEmulationEnabled', {
-					enabled: false,
-				});
-				await mobileEmulation.send('Emulation.clearDeviceMetricsOverride');
-				await mobileEmulation.detach();
-			}
+		if (width === 440) {
+			await withMobileEmulation(
+				page,
+				{width, height},
+				async () => {
+					const deviceScaleFactor = await page.locator('body').evaluate(
+						(node: {
+							ownerDocument: {
+								defaultView: {devicePixelRatio: number} | null;
+							};
+						}) => {
+							const view = node.ownerDocument.defaultView;
+							return view?.devicePixelRatio ?? 1;
+						},
+					);
+					assert.equal(deviceScaleFactor, 3, 'phone evidence uses DPR 3');
+					await capture();
+				},
+				true,
+			);
+		} else {
+			await capture();
 		}
 	}
 
@@ -369,36 +391,32 @@ async function captureResetEvidence(
 	}
 
 	await page.setViewportSize({width: 440, height: 956});
-	const device = await page.context().newCDPSession(page);
 	try {
-		await device.send('Emulation.setDeviceMetricsOverride', {
-			width: 440,
-			height: 956,
-			deviceScaleFactor: 3,
-			mobile: true,
-			screenOrientation: {angle: 0, type: 'portraitPrimary'},
-		});
-		await target.scrollIntoViewIfNeeded();
-		assert.ok(
-			await page
-				.locator('html')
-				.evaluate(
-					(node: {scrollWidth: number; clientWidth: number}) =>
-						node.scrollWidth <= node.clientWidth,
-				),
-			'settings overflow at 440px',
-		);
-		const {data} = await device.send('Page.captureScreenshot', {
-			format: 'png',
-			captureBeyondViewport: false,
-		});
-		await writeFile(
-			join(directory, `reset-setting-${theme}-440x956-dsf3.png`),
-			Buffer.from(data, 'base64'),
+		await withMobileEmulation(
+			page,
+			{width: 440, height: 956},
+			async (device) => {
+				await target.scrollIntoViewIfNeeded();
+				assert.ok(
+					await page
+						.locator('html')
+						.evaluate(
+							(node: {scrollWidth: number; clientWidth: number}) =>
+								node.scrollWidth <= node.clientWidth,
+						),
+					'settings overflow at 440px',
+				);
+				const {data} = await device.send('Page.captureScreenshot', {
+					format: 'png',
+					captureBeyondViewport: false,
+				});
+				await writeFile(
+					join(directory, `reset-setting-${theme}-440x956-dsf3.png`),
+					Buffer.from(data, 'base64'),
+				);
+			},
 		);
 	} finally {
-		await device.send('Emulation.clearDeviceMetricsOverride');
-		await device.detach();
 		await page.setViewportSize(viewport);
 	}
 }
