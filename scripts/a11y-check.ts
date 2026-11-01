@@ -8,7 +8,7 @@
 // Axe and keyboard checks do not judge reading order or screen reader announcements; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
-import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
@@ -304,6 +304,66 @@ async function assertInline(
 		controlBounds.x - (labelBounds.x + labelBounds.width) <= 24,
 		`${description} should sit beside its label`,
 	);
+}
+
+async function captureResetEvidence(
+	page: Page,
+	target: Locator,
+	theme: string,
+) {
+	if (process.env.TABLODGE_CAPTURE_RESET_EVIDENCE !== '1') {
+		return;
+	}
+
+	const directory = fromRoot('.dev/evidence');
+	const viewport = page.viewportSize();
+	assert.ok(viewport);
+	await mkdir(directory, {recursive: true});
+	for (const [width, height] of EVIDENCE_VIEWPORTS) {
+		if (width === 440) {
+			continue;
+		}
+
+		await page.setViewportSize({width, height});
+		await target.scrollIntoViewIfNeeded();
+		await page.screenshot({
+			path: join(directory, `reset-setting-${theme}-${width}x${height}.png`),
+		});
+	}
+
+	await page.setViewportSize({width: 440, height: 956});
+	const device = await page.context().newCDPSession(page);
+	try {
+		await device.send('Emulation.setDeviceMetricsOverride', {
+			width: 440,
+			height: 956,
+			deviceScaleFactor: 3,
+			mobile: true,
+			screenOrientation: {angle: 0, type: 'portraitPrimary'},
+		});
+		await target.scrollIntoViewIfNeeded();
+		assert.ok(
+			await page
+				.locator('html')
+				.evaluate(
+					(node: {scrollWidth: number; clientWidth: number}) =>
+						node.scrollWidth <= node.clientWidth,
+				),
+			'settings overflow at 440px',
+		);
+		const {data} = await device.send('Page.captureScreenshot', {
+			format: 'png',
+			captureBeyondViewport: false,
+		});
+		await writeFile(
+			join(directory, `reset-setting-${theme}-440x956-dsf3.png`),
+			Buffer.from(data, 'base64'),
+		);
+	} finally {
+		await device.send('Emulation.clearDeviceMetricsOverride');
+		await device.detach();
+		await page.setViewportSize(viewport);
+	}
 }
 
 async function main() {
@@ -1627,6 +1687,109 @@ async function main() {
 				await page.close();
 			},
 		);
+		for (const theme of THEMES) {
+			await check(
+				`changed setting resets to its default by keyboard (${theme})`,
+				async () => {
+					const setupPage = await openPage(context, extensionId, 'options');
+					const updated = await setupPage.evaluate(async () => {
+						const {chrome} = globalThis as typeof globalThis & {
+							chrome: ExtensionApi;
+						};
+						return chrome.runtime.sendMessage({
+							type: 'UPDATE_SETTINGS',
+							settings: {
+								closeOnSave: false,
+								restoreTarget: 'current-window',
+							},
+						});
+					});
+					assert.equal((updated as {ok: boolean}).ok, true);
+					await setupPage.close();
+
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					const reset = page.getByRole('button', {
+						name: 'Reset Close tabs after saving to default',
+					});
+					const resetSelect = page.getByRole('button', {
+						name: 'Reset Open restored tabs in to default',
+					});
+					await reset.waitFor();
+					await resetSelect.waitFor();
+					assert.equal(
+						await page
+							.getByRole('button', {
+								name: 'Reset Include pinned tabs to default',
+							})
+							.count(),
+						0,
+					);
+					await captureResetEvidence(page, reset, theme);
+					await page.setViewportSize({width: 375, height: 900});
+					await reset.scrollIntoViewIfNeeded();
+					assert.ok(
+						await page
+							.locator('html')
+							.evaluate(
+								(node: {scrollWidth: number; clientWidth: number}) =>
+									node.scrollWidth <= node.clientWidth,
+							),
+						'settings overflow at 375px',
+					);
+					await page.screenshot({
+						path: fromRoot(`.dev/evidence/reset-setting-${theme}-375x900.png`),
+					});
+					await reset.focus();
+					await page.keyboard.press('Enter');
+					await page
+						.getByRole('switch', {
+							name: 'Close tabs after saving',
+							checked: true,
+						})
+						.waitFor();
+					await until(
+						async () => (await reset.count()) === 0,
+						'reset button to disappear',
+					);
+					assert.equal(
+						await page.locator(':focus').getAttribute('role'),
+						'switch',
+					);
+					await resetSelect.scrollIntoViewIfNeeded();
+					await resetSelect.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () => (await resetSelect.count()) === 0,
+						'select reset button to disappear',
+					);
+					assert.equal(
+						await page.locator(':focus').getAttribute('role'),
+						'combobox',
+					);
+					const state = await page.evaluate(async () => {
+						const {chrome} = globalThis as typeof globalThis & {
+							chrome: ExtensionApi;
+						};
+						return chrome.runtime.sendMessage({type: 'GET_STATE'});
+					});
+					const currentSettings = (
+						state as {
+							settings: {
+								closeOnSave: boolean;
+								restoreTarget: string;
+							};
+						}
+					).settings;
+					assert.equal(currentSettings.closeOnSave, true);
+					assert.equal(
+						currentSettings.restoreTarget,
+						'new-window-unless-only-tab',
+					);
+					await page.close();
+				},
+			);
+		}
 
 		await check(
 			'a bookmark moves down from its menu and keeps focus',

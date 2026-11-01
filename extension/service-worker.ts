@@ -7701,6 +7701,10 @@ async function handleMessage(
 			return {ok: true, ...(await getStore())};
 		}
 
+		case 'GET_SETTINGS_DEFAULTS': {
+			return {ok: true, settings: {...DEFAULT_SETTINGS}};
+		}
+
 		case 'SAVE_TABS': {
 			return saveTabs(
 				message.scope || 'window',

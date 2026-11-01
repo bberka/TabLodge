@@ -493,6 +493,7 @@ Every message the TabLodge pages send to the service worker, keyed by `type`.
 */
 export type TabLodgeMessages = {
 	GET_STATE: {};
+	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
 		scope?: SaveScope;
 		folderId?: string;
@@ -739,6 +740,7 @@ Success payload of each message (merged with `{ ok: true }`). Fields marked opti
 */
 export type TabLodgeResponses = {
 	GET_STATE: Store;
+	GET_SETTINGS_DEFAULTS: {settings: Settings};
 	SAVE_TABS: SaveResult;
 	/**
 	`asks` is true when the style is `ask`; `name` is then the name used when the answer is left empty.
