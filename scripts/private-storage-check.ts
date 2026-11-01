@@ -40,12 +40,14 @@ async function configure(
 		name: new RegExp(`^${titles[mode]}`),
 	});
 	await choice.focus();
-	await normal.keyboard.press('Space');
-	await normal.getByRole('button', {name: 'Save private settings'}).focus();
 	await Promise.all([
 		privatePage.waitForEvent('load'),
-		normal.keyboard.press('Enter'),
+		normal.keyboard.press('Space'),
 	]);
+	await normal
+		.getByRole('status')
+		.getByText(`Private window storage set to ${titles[mode]}.`, {exact: true})
+		.waitFor();
 	await privatePage.getByRole('main').waitFor();
 }
 
@@ -110,10 +112,39 @@ try {
 	});
 	assert.equal(normalBookmark.ok, true);
 	await normal.goto(`chrome-extension://${id}/options.html`);
-	await normal.setViewportSize({width: 1000, height: 633});
+	const privateSettingsRadios = normal
+		.getByRole('radiogroup', {name: 'Private window storage'})
+		.getByRole('radio');
+	await privateSettingsRadios.first().waitFor();
+	await normal
+		.getByText(
+			'Private storage settings are disabled until Allow in Incognito is enabled in your browser’s extension settings.',
+			{exact: true},
+		)
+		.waitFor();
+	for (const radio of await privateSettingsRadios.all()) {
+		assert.equal(
+			await radio.isDisabled(),
+			true,
+			'Private settings must be disabled without incognito access.',
+		);
+	}
+
+	assert.equal(
+		await normal.getByRole('button', {name: /Save private settings/}).count(),
+		0,
+		'Settings should apply private storage changes without a Save button.',
+	);
+	await normal.setViewportSize({width: 1000, height: 900});
 	for (const theme of ['Light', 'Dark']) {
 		await normal.getByRole('radio', {name: theme, exact: true}).click();
-		await normal.screenshot({
+		await normal
+			.getByText(
+				'Private storage settings are disabled until Allow in Incognito is enabled in your browser’s extension settings.',
+				{exact: true},
+			)
+			.scrollIntoViewIfNeeded();
+		await normal.locator('#settings-private-windows').screenshot({
 			path: join(evidence, `settings-${theme.toLowerCase()}.png`),
 		});
 	}
@@ -135,6 +166,23 @@ try {
 	await reloadedWorker;
 	await extensions.close();
 	normal = await context.newPage();
+	await normal.goto(`chrome-extension://${id}/options.html`);
+	const enabledPrivateSettingsRadios = normal
+		.getByRole('radiogroup', {name: 'Private window storage'})
+		.getByRole('radio');
+	for (const radio of await enabledPrivateSettingsRadios.all()) {
+		assert.equal(
+			await radio.isDisabled(),
+			false,
+			'Private settings must be enabled with incognito access.',
+		);
+	}
+
+	assert.equal(
+		await normal.getByRole('button', {name: /Save private settings/}).count(),
+		0,
+		'Settings should apply private storage changes without a Save button.',
+	);
 	await normal.goto(`chrome-extension://${id}/newtab.html`);
 	const popupPromise = context.waitForEvent('page');
 	void popupPromise.catch(() => undefined);
@@ -169,6 +217,13 @@ try {
 	});
 	await dialog.waitFor();
 	assert.equal(
+		(
+			await privatePage.getByRole('main', {includeHidden: true}).textContent()
+		)?.trim(),
+		'',
+		'Setup should appear over an empty background, without a second heading behind the dialog.',
+	);
+	assert.equal(
 		await privatePage
 			.getByRole('radio', {name: /Share normal storage/})
 			.isChecked(),
@@ -182,17 +237,33 @@ try {
 		fromRoot('node_modules/axe-core/axe.min.js'),
 		'utf8',
 	);
+	await normal.goto(`chrome-extension://${id}/options.html`);
 	for (const theme of ['light', 'dark']) {
-		await privatePage.evaluate((value) => {
-			const {document} = globalThis as typeof globalThis & {
-				document: {
-					documentElement: {
-						classList: {toggle(name: string, force: boolean): void};
+		await normal
+			.getByRole('radio', {
+				name: theme === 'light' ? 'Light' : 'Dark',
+				exact: true,
+			})
+			.click();
+		await privatePage.locator(`html[data-theme="${theme}"]`).waitFor();
+		await privatePage.evaluate(async () => {
+			const {document, requestAnimationFrame} =
+				globalThis as typeof globalThis & {
+					document: {
+						getAnimations(): Array<{finished: Promise<unknown>}>;
 					};
+					requestAnimationFrame(callback: () => void): number;
 				};
-			};
-			document.documentElement.classList.toggle('dark', value === 'dark');
-		}, theme);
+			const nextFrame = () =>
+				new Promise<void>((resolve) => {
+					requestAnimationFrame(() => resolve());
+				});
+			await nextFrame();
+			await nextFrame();
+			await Promise.allSettled(
+				document.getAnimations().map((animation) => animation.finished),
+			);
+		});
 		await privatePage.evaluate(axeSource);
 		const violations = await privatePage.evaluate(async () => {
 			const {axe} = globalThis as typeof globalThis & {
@@ -250,15 +321,27 @@ try {
 		true,
 	);
 	await privatePage.keyboard.press('Tab');
+	assert.equal(
+		await privatePage.getByRole('button', {name: 'Continue'}).isVisible(),
+		true,
+	);
 	await privatePage.keyboard.press('Enter');
 	await privatePage.getByRole('dialog').waitFor({state: 'hidden'});
 	await privatePage.getByRole('main').waitFor();
 	await privatePage
 		.getByRole('link', {name: 'Change private storage'})
 		.waitFor();
+	assert.match(
+		(await privatePage.getByLabel('Private storage').textContent()) ?? '',
+		/Separate, saved storage/,
+	);
 	assert.equal(
 		await privatePage.locator(':focus').textContent(),
 		'Change private storage',
+	);
+	assert.equal(
+		await privatePage.getByRole('button', {name: /Don.t show again/}).count(),
+		0,
 	);
 	assert.deepEqual(await bookmarkTitles(privatePage), []);
 	assert.equal(

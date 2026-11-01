@@ -11,7 +11,7 @@ import {
 	RadioCard,
 	RadioCardGroup,
 } from '../shared/ui';
-import {messageOf, send} from './common';
+import {messageOf, send, type ShowStatus} from './common';
 import type {PrivateConfig, PrivateStorageMode} from './types';
 import {PROJECT} from './project';
 import {
@@ -60,45 +60,63 @@ const choices: Array<{
 function PrivateStorageForm({
 	config,
 	onSaved,
+	disabled = false,
+	showContinue = false,
 }: {
 	config: PrivateConfig;
 	onSaved: (config: PrivateConfig) => void;
+	disabled?: boolean;
+	showContinue?: boolean;
 }) {
 	const [mode, setMode] = useState(config.mode);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
-	useEffect(() => setMode(config.mode), [config.mode]);
+	const saveMode = async (nextMode: PrivateStorageMode) => {
+		if (busy || disabled) {
+			return;
+		}
+
+		setBusy(true);
+		setError('');
+		try {
+			const result = await send('SET_PRIVATE_CONFIG', {mode: nextMode});
+			if (!result.ok) {
+				throw new Error(result.error);
+			}
+
+			onSaved(result);
+		} catch (reason) {
+			if (!showContinue) {
+				setMode(config.mode);
+			}
+
+			setError(messageOf(reason) || 'Could not save private storage settings.');
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	return (
 		<form
 			className="space-y-4"
-			onSubmit={async (event) => {
+			onSubmit={(event) => {
 				event.preventDefault();
-				setBusy(true);
-				setError('');
-				try {
-					const result = await send('SET_PRIVATE_CONFIG', {mode});
-					if (!result.ok) {
-						throw new Error(result.error);
-					}
-
-					onSaved(result);
-				} catch (reason) {
-					setError(
-						messageOf(reason) || 'Could not save private storage settings.',
-					);
-				} finally {
-					setBusy(false);
-				}
+				void saveMode(mode);
 			}}
 		>
 			<RadioCardGroup
 				label="Private window storage"
 				value={mode}
-				disabled={busy}
+				disabled={busy || disabled}
 				onValueChange={(value) => {
 					const choice = choices.find((choice) => choice.value === value);
-					if (choice) {
-						setMode(choice.value);
+					if (!choice || choice.value === mode) {
+						return;
+					}
+
+					setMode(choice.value);
+					if (!showContinue) {
+						void saveMode(choice.value);
 					}
 				}}
 			>
@@ -117,23 +135,43 @@ function PrivateStorageForm({
 					{error}
 				</p>
 			)}
-			<DialogFooter>
-				<Button type="submit" disabled={busy}>
-					{busy
-						? 'Saving…'
-						: config.configured
-							? 'Save private settings'
-							: 'Save and open dashboard'}
-				</Button>
-			</DialogFooter>
+			{showContinue && (
+				<DialogFooter>
+					<Button type="submit" disabled={busy || disabled}>
+						{busy ? 'Saving…' : 'Continue'}
+					</Button>
+				</DialogFooter>
+			)}
 		</form>
 	);
 }
 
-export function PrivateStorageSettings() {
+export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [config, setConfig] = useState<PrivateConfig>();
+	const [incognitoAllowed, setIncognitoAllowed] = useState<boolean>();
 	const [error, setError] = useState('');
-	const [saved, setSaved] = useState(false);
+	useEffect(() => {
+		const checkAccess = () => {
+			void chrome.extension
+				.isAllowedIncognitoAccess()
+				.then(setIncognitoAllowed)
+				.catch(() => setIncognitoAllowed(false));
+		};
+
+		const checkOnVisible = () => {
+			if (document.visibilityState === 'visible') {
+				checkAccess();
+			}
+		};
+
+		checkAccess();
+		window.addEventListener('focus', checkAccess);
+		document.addEventListener('visibilitychange', checkOnVisible);
+		return () => {
+			window.removeEventListener('focus', checkAccess);
+			document.removeEventListener('visibilitychange', checkOnVisible);
+		};
+	}, []);
 	useEffect(() => {
 		const load = () =>
 			send('GET_PRIVATE_CONFIG')
@@ -165,25 +203,35 @@ export function PrivateStorageSettings() {
 	return (
 		<>
 			<p className="mb-4 text-sm text-muted-foreground">
-				To open the dashboard privately, enable Allow in Incognito in your
-				browser’s extension settings, then use the toolbar popup or the Open
-				dashboard shortcut. The browser does not replace its private new tab
-				page.
+				Open the private dashboard from the toolbar popup or the Open dashboard
+				shortcut. The browser does not replace its private new tab page.
 			</p>
 			{error && <p role="alert">{error}</p>}
+			{incognitoAllowed === undefined && (
+				<p role="status" className="mb-4 text-sm text-muted-foreground">
+					Checking private window access…
+				</p>
+			)}
+			{incognitoAllowed === false && (
+				<p role="status" className="mb-4 text-sm text-muted-foreground">
+					Private storage settings are disabled until Allow in Incognito is
+					enabled in your browser’s extension settings.
+				</p>
+			)}
 			{config && (
 				<PrivateStorageForm
+					key={`${config.mode}:${config.configured}`}
 					config={config}
+					disabled={incognitoAllowed !== true}
+					showContinue={false}
 					onSaved={(next) => {
 						setConfig(next);
-						setSaved(true);
+						const title =
+							choices.find((choice) => choice.value === next.mode)?.title ??
+							'updated';
+						showStatus(`Private window storage set to ${title}.`);
 					}}
 				/>
-			)}
-			{saved && (
-				<p role="status" className="mt-3 text-sm">
-					Private storage settings saved.
-				</p>
 			)}
 		</>
 	);
@@ -264,7 +312,6 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 
 	return (
 		<main className="p-6">
-			<h1 className="text-xl font-semibold">Private {PROJECT.name} setup</h1>
 			{error && (
 				<>
 					<p role="alert">{error}</p>
@@ -288,7 +335,11 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 					</DialogHeader>
 					<DialogBody>
 						{config && (
-							<PrivateStorageForm config={config} onSaved={reloadPrivatePage} />
+							<PrivateStorageForm
+								showContinue
+								config={config}
+								onSaved={reloadPrivatePage}
+							/>
 						)}
 					</DialogBody>
 				</DialogContent>

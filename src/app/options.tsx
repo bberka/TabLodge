@@ -1789,11 +1789,11 @@ function Options() {
 						<SectionCard
 							id={sectionId(PRIVATE_STORAGE_TITLE)}
 							title={PRIVATE_STORAGE_TITLE}
-							description="Choose whether private windows share your normal library or use their own."
+							description="Choose whether private windows share your normal library or use their own. This choice applies to all private windows."
 							icon={Database}
 							className={SECTION_SCROLL_CLASS}
 						>
-							<PrivateStorageSettings />
+							<PrivateStorageSettings showStatus={showStatus} />
 						</SectionCard>
 					)}
 					{visibleGroups.map(({group, fields}) => (
