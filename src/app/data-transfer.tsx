@@ -64,11 +64,14 @@ import {
 	type ShareMethod,
 } from './share-formats';
 import {
+	bookmarkColumnExportChoices,
 	buildExport,
+	dateStamp,
 	exportCounts,
 	exportFilename,
-	dateStamp,
+	sessionExportChoices,
 	type ExportData,
+	type ExportChoice,
 	type ExportFormat,
 	type ExportKind,
 } from './export-formats';
@@ -99,7 +102,13 @@ import {
 	readFullBackup,
 	type FullBackupContents,
 } from './full-backup';
-import {ColumnSelect} from './column-select';
+import {
+	BookmarkColumnSelect,
+	BookmarkColumnNameField,
+	NEW_BOOKMARK_COLUMN,
+	resolveBookmarkColumn,
+	type BookmarkColumnDraft,
+} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
 const plural = (count: number, noun: string, many = `${noun}s`) =>
@@ -210,10 +219,18 @@ type BackupDialogProps = {
 	Opens on this choice instead of the requested kind; Settings opens on Everything.
 	*/
 	initialScope?: BackupScope;
+	/**
+	A single session export cannot switch to other data scopes.
+	*/
+	singleSession?: boolean;
+	/**
+	An individual column export can switch between that column and all bookmarks.
+	*/
+	singleColumn?: boolean;
 };
 
 /**
-"Back up sessions" / "Back up bookmarks" / "Export N selected tabs": pick a format, then download.
+"Back up sessions" / "Back up bookmarks" / "Export session" / "Export N selected tabs": pick a format, then download.
 */
 export function BackupDialog({
 	data,
@@ -222,11 +239,16 @@ export function BackupDialog({
 	showStatus,
 	state,
 	initialScope,
+	singleSession = false,
+	singleColumn = false,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
 	const [saving, setSaving] = useState(false);
 	const [switched, setSwitched] = useState<BackupScope | null>(null);
+	const [individualChoice, setIndividualChoice] = useState<ExportChoice['id']>(
+		singleColumn ? 'column' : 'current',
+	);
 	useEffect(() => {
 		if (!open) {
 			return;
@@ -235,11 +257,34 @@ export function BackupDialog({
 		setFormat('json');
 		setSaving(false);
 		setSwitched(initialScope ?? null);
-	}, [open, initialScope]);
-	const canSwitch = Boolean(
-		state && requested && requested.kind !== 'selected',
+		setIndividualChoice(singleColumn ? 'column' : 'current');
+	}, [open, initialScope, singleColumn]);
+	const individualChoices = singleSession
+		? requested?.groups?.[0]
+			? sessionExportChoices(
+					requested.groups[0],
+					state?.groups ?? requested.groups,
+					state?.folders ?? requested.folders ?? [],
+				)
+			: []
+		: singleColumn && requested?.columns?.[0]
+			? bookmarkColumnExportChoices(
+					requested.columns[0],
+					state?.bookmarkColumns ?? requested.columns,
+					state?.bookmarks ?? requested.bookmarks ?? [],
+				)
+			: [];
+	const selectedIndividualChoice = individualChoices.find(
+		(choice) => choice.id === individualChoice,
 	);
-	let shown = requested;
+	const canSwitch = Boolean(
+		!singleSession &&
+		!singleColumn &&
+		state &&
+		requested &&
+		requested.kind !== 'selected',
+	);
+	let shown = selectedIndividualChoice?.data ?? requested;
 	if (
 		state &&
 		canSwitch &&
@@ -260,9 +305,13 @@ export function BackupDialog({
 	const kind = shown?.kind ?? 'sessions';
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
 	// "Everything" is the full backup ZIP; Bookmarks or Sessions pick a file format. Selected tabs never offer it.
-	const full = switched === 'everything' && kind !== 'selected';
+	const full =
+		!singleSession &&
+		!singleColumn &&
+		switched === 'everything' &&
+		kind !== 'selected';
 	const scopeOptions =
-		kind === 'selected'
+		singleSession || singleColumn || kind === 'selected'
 			? []
 			: [
 					{value: 'everything' as const, label: <EverythingLabel />},
@@ -283,9 +332,17 @@ export function BackupDialog({
 							]
 						: []),
 				];
+	const exportName =
+		selectedIndividualChoice?.id === 'all'
+			? undefined
+			: singleSession
+				? shown?.groups?.[0]?.name
+				: singleColumn
+					? shown?.columns?.[0]?.name
+					: undefined;
 	const filename = full
 		? fullBackupFilename(PROJECT.name)
-		: exportFilename(PROJECT.name, kind, format);
+		: exportFilename(PROJECT.name, kind, format, new Date(), exportName);
 	const summary = full
 		? 'All data and settings'
 		: kind === 'bookmarks'
@@ -332,6 +389,7 @@ export function BackupDialog({
 		try {
 			const file = buildExport(shown, format, {
 				appName: PROJECT.name,
+				name: exportName,
 			});
 			downloadFile(file.content, file.mime, file.filename);
 			onOpenChange(false);
@@ -346,18 +404,66 @@ export function BackupDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="lg">
+			<DialogContent
+				size="lg"
+				className="h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden sm:h-auto"
+			>
 				<DialogHeader>
 					<DialogTitle>
-						{full ? 'Back up everything' : BACKUP_TITLES[kind](counts.items)}
+						{full
+							? 'Back up everything'
+							: singleSession
+								? selectedIndividualChoice?.id === 'all'
+									? 'Back up sessions'
+									: 'Export session'
+								: singleColumn
+									? selectedIndividualChoice?.id === 'all'
+										? 'Back up bookmarks'
+										: 'Export column'
+									: BACKUP_TITLES[kind](counts.items)}
 					</DialogTitle>
 					<DialogDescription>
 						{full
 							? 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted.'
-							: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
+							: singleSession
+								? selectedIndividualChoice?.id === 'all'
+									? 'Choose a format for these sessions. The file is saved to your downloads; it is not encrypted.'
+									: 'Choose a format for this session. The file is saved to your downloads; it is not encrypted.'
+								: singleColumn
+									? selectedIndividualChoice?.id === 'all'
+										? 'Choose a format for all bookmarks. The file is saved to your downloads; it is not encrypted.'
+										: 'Choose a format for this column. The file is saved to your downloads; it is not encrypted.'
+									: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
+					{individualChoices.length > 0 && (
+						<RadioCardGroup
+							label="What to export"
+							value={selectedIndividualChoice?.id ?? individualChoices[0].id}
+							onValueChange={(value) =>
+								setIndividualChoice(value as ExportChoice['id'])
+							}
+						>
+							{individualChoices.map((choice) => {
+								const choiceCounts = exportCounts(choice.data);
+								const description =
+									choice.id === 'current'
+										? `${requested?.groups?.[0]?.name ?? 'Untitled session'} · ${plural(choiceCounts.items, 'tab')}`
+										: choice.id === 'column' || choice.data.kind === 'bookmarks'
+											? plural(choiceCounts.items, 'bookmark')
+											: `${plural(choiceCounts.groups, 'session')} · ${plural(choiceCounts.items, 'tab')}`;
+								return (
+									<RadioCard
+										key={choice.id}
+										value={choice.id}
+										title={choice.label}
+										description={description}
+									/>
+								);
+							})}
+						</RadioCardGroup>
+					)}
 					{scopeOptions.length > 1 && (
 						<SegmentedControl
 							fullWidth
@@ -408,7 +514,13 @@ export function BackupDialog({
 										) : undefined
 									}
 									description={
-										kind === 'bookmarks' ? choice.bookmarks : choice.sessions
+										kind === 'bookmarks'
+											? choice.bookmarks
+											: singleSession &&
+												  selectedIndividualChoice?.id !== 'all' &&
+												  choice.id === 'json'
+												? 'A backup of this session you can restore here. Keeps notes, split views, tab groups, and order.'
+												: choice.sessions
 									}
 									className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
 								/>
@@ -426,7 +538,7 @@ export function BackupDialog({
 						</span>
 					</p>
 				</DialogBody>
-				<DialogFooter>
+				<DialogFooter className="mt-3 shrink-0 sm:mt-6">
 					<Button
 						type="button"
 						variant="outline"
@@ -567,54 +679,73 @@ function SharePreviewPanel({
 							Shared from {PROJECT.name} · {plural(counts.links, 'link')}
 						</p>
 						<div className="mt-3 space-y-2">
-							{preview.groups.map((group, groupIndex) => (
-								<article
-									key={`${group.name}-${groupIndex}`}
-									className="overflow-hidden rounded-md border border-border bg-card"
-								>
-									<div className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2">
-										<div className="min-w-0">
-											<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
-												{group.name}
-											</h5>
-											{group.createdAt !== undefined && group.createdAt > 0 && (
-												<p className="mt-0.5 text-[10px] text-muted-foreground">
-													Saved {new Date(group.createdAt).toLocaleDateString()}
-												</p>
-											)}
-										</div>
-										<span className="shrink-0 text-[11px] text-muted-foreground">
-											{plural(group.tabs.length + group.moreLinks, 'link')}
-										</span>
-									</div>
-									{group.description && (
-										<p className="whitespace-pre-wrap px-3 py-2 text-xs [overflow-wrap:anywhere]">
-											{group.description}
-										</p>
-									)}
-									{group.tabs.length > 0 && (
-										<ol className="mx-3 my-2 list-decimal pl-5">
-											{group.tabs.map((tab, tabIndex) => (
-												<li
-													key={`${tab.url}-${tabIndex}`}
-													className="border-t border-border py-1.5 pl-1"
-												>
-													<span className="block text-xs font-semibold text-primary [overflow-wrap:anywhere]">
-														{tab.title || tab.url}
+							{preview.groups.map((group, groupIndex) => {
+								const repeatedTitle =
+									preview.groups.length === 1 &&
+									preview.moreGroups === 0 &&
+									group.name === pageTitle;
+								const createdAt =
+									group.createdAt !== undefined && group.createdAt > 0
+										? group.createdAt
+										: null;
+								return (
+									<article
+										key={`${group.name}-${groupIndex}`}
+										className="overflow-hidden rounded-md border border-border bg-card"
+									>
+										{(!repeatedTitle || createdAt !== null) && (
+											<div className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2">
+												<div className="min-w-0">
+													{!repeatedTitle && (
+														<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
+															{group.name}
+														</h5>
+													)}
+													{createdAt !== null && (
+														<p className="mt-0.5 text-[10px] text-muted-foreground">
+															Saved {new Date(createdAt).toLocaleDateString()}
+														</p>
+													)}
+												</div>
+												{!repeatedTitle && (
+													<span className="shrink-0 text-[11px] text-muted-foreground">
+														{plural(
+															group.tabs.length + group.moreLinks,
+															'link',
+														)}
 													</span>
-													<span className="mt-0.5 block text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
-														{tab.url}
-														{tab.pinned ? ' · Pinned' : ''}
-														{tab.nativeGroup?.title
-															? ` · ${tab.nativeGroup.title}`
-															: ''}
-													</span>
-												</li>
-											))}
-										</ol>
-									)}
-								</article>
-							))}
+												)}
+											</div>
+										)}
+										{group.description && (
+											<p className="whitespace-pre-wrap px-3 py-2 text-xs [overflow-wrap:anywhere]">
+												{group.description}
+											</p>
+										)}
+										{group.tabs.length > 0 && (
+											<ol className="mx-3 my-2 list-decimal pl-5">
+												{group.tabs.map((tab, tabIndex) => (
+													<li
+														key={`${tab.url}-${tabIndex}`}
+														className="border-t border-border py-1.5 pl-1"
+													>
+														<span className="block text-xs font-semibold text-primary [overflow-wrap:anywhere]">
+															{tab.title || tab.url}
+														</span>
+														<span className="mt-0.5 block text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
+															{tab.url}
+															{tab.pinned ? ' · Pinned' : ''}
+															{tab.nativeGroup?.title
+																? ` · ${tab.nativeGroup.title}`
+																: ''}
+														</span>
+													</li>
+												))}
+											</ol>
+										)}
+									</article>
+								);
+							})}
 							{preview.moreGroups > 0 && (
 								<p className="text-[11px] text-muted-foreground">
 									and {plural(preview.moreGroups, 'more group')}
@@ -872,7 +1003,8 @@ export function ImportDialog({
 	const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('skip');
 	const [titlePolicy, setTitlePolicy] = useState<TitlePolicy>('existing');
 	const [target, setTarget] = useState<BookmarkTarget>('folders');
-	const [columnId, setColumnId] = useState('');
+	const [columnId, setColumnId] = useState(NEW_BOOKMARK_COLUMN);
+	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
 	const fileRef = useRef<HTMLInputElement>(null);
 	const importButtonRef = useRef<HTMLButtonElement>(null);
 	const columns = state?.bookmarkColumns ?? [];
@@ -895,7 +1027,8 @@ export function ImportDialog({
 		setDuplicateMode('skip');
 		setTitlePolicy('existing');
 		setTarget('folders');
-		setColumnId(columns[0]?.id ?? '');
+		setColumnId(columns[0]?.id ?? NEW_BOOKMARK_COLUMN);
+		setNewColumn({name: ''});
 		// Resets the form each time the dialog opens; later changes to the state or props must not wipe it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
@@ -1073,14 +1206,20 @@ export function ImportDialog({
 		}
 
 		setBusy(true);
-		const options: ImportOptions = {
-			duplicateMode,
-			titlePolicy: duplicateMode === 'skip' ? titlePolicy : 'existing',
-			...(kind === 'bookmarks' &&
-				target === 'column' &&
-				columnId && {targetColumnId: columnId}),
-		};
 		try {
+			const targetColumnId =
+				kind === 'bookmarks' && target === 'column'
+					? await resolveBookmarkColumn(columnId, newColumn)
+					: undefined;
+			if (targetColumnId) {
+				setColumnId(targetColumnId);
+			}
+
+			const options: ImportOptions = {
+				duplicateMode,
+				titlePolicy: duplicateMode === 'skip' ? titlePolicy : 'existing',
+				...(targetColumnId && {targetColumnId}),
+			};
 			let message: string;
 			let undoId: string | undefined;
 			if (source.type === 'browser') {
@@ -1202,7 +1341,9 @@ export function ImportDialog({
 				size="lg"
 				// The review step uses most of the viewport so the sample list gets the space left over.
 				className={
-					step === 'preview' && !full ? 'h-[min(90vh,52rem)]' : undefined
+					step === 'preview' && !full
+						? 'h-[calc(100dvh-2rem)] overflow-hidden'
+						: undefined
 				}
 			>
 				<DialogHeader>
@@ -1409,7 +1550,7 @@ export function ImportDialog({
 					preview &&
 					source && (
 						<>
-							<DialogBody className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+							<DialogBody className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*:not([data-import-preview])]:shrink-0">
 								{kindSwitch && <div>{kindSwitch}</div>}
 								<div className="flex min-w-0 items-start gap-3 rounded-lg border border-border px-3.5 py-3">
 									<span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -1505,7 +1646,10 @@ export function ImportDialog({
 										))}
 									</ul>
 								)}
-								<div className="flex min-h-[20rem] min-w-0 flex-1 shrink flex-col">
+								<div
+									data-import-preview=""
+									className="flex min-h-32 min-w-0 flex-1 flex-col"
+								>
 									<p className="mb-1.5 text-xs font-medium text-muted-foreground">
 										Preview
 										{preview.links > preview.sample.length
@@ -1607,19 +1751,16 @@ export function ImportDialog({
 													value={target}
 													options={[
 														{value: 'folders', label: 'Columns from folders'},
-														...(columns.length > 0
-															? [
-																	{
-																		value: 'column' as const,
-																		label: 'One column',
-																	},
-																]
-															: []),
+														{
+															value: 'column',
+															label: 'One column',
+														},
 													]}
 													onValueChange={setTarget}
 												/>
 												{target === 'column' && (
-													<ColumnSelect
+													<BookmarkColumnSelect
+														id="import-bookmark-column"
 														columns={columns}
 														value={columnId}
 														className="h-8 w-48 text-xs"
@@ -1630,6 +1771,15 @@ export function ImportDialog({
 											</div>
 										</OptionRow>
 									)}
+									{kind === 'bookmarks' &&
+										target === 'column' &&
+										columnId === NEW_BOOKMARK_COLUMN && (
+											<BookmarkColumnNameField
+												id="import-bookmark-column-new-name"
+												draft={newColumn}
+												onDraftChange={setNewColumn}
+											/>
+										)}
 								</div>
 								{nothingNew && (
 									<p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
@@ -1667,7 +1817,15 @@ export function ImportDialog({
 								<Button
 									ref={importButtonRef}
 									type="button"
-									disabled={busy || !preview.links || nothingNew}
+									disabled={
+										busy ||
+										!preview.links ||
+										nothingNew ||
+										(kind === 'bookmarks' &&
+											target === 'column' &&
+											columnId === NEW_BOOKMARK_COLUMN &&
+											!newColumn.name.trim())
+									}
 									data-autofocus=""
 									onClick={() => void runImport()}
 								>

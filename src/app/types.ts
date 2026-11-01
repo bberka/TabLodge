@@ -105,6 +105,14 @@ export type Settings = {
 	*/
 	stretchBookmarkColumns: boolean;
 	/**
+	Reveal bookmarks in each column in smaller batches (default off).
+	*/
+	limitBookmarksPerColumn: boolean;
+	/**
+	Number of bookmarks shown per batch when per-column limiting is on (default 10).
+	*/
+	bookmarkColumnPageSize: number;
+	/**
 	Pasting a link (Ctrl/Cmd+V outside a text field) on the TabLodge page opens the add-bookmark dialog prefilled with it (default on).
 	*/
 	pasteLinkToBookmark: boolean;
@@ -489,6 +497,7 @@ export type TabLodgeMessages = {
 	GET_PRIVATE_CONFIG: {};
 	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
 	GET_STATE: {};
+	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
 		scope?: SaveScope;
 		folderId?: string;
@@ -518,6 +527,7 @@ export type TabLodgeMessages = {
 	*/
 	SWITCH_WORKSPACE: {groupId: string};
 	DELETE_GROUP: {groupId: string};
+	ARCHIVE_GROUP: {groupId: string};
 	UPDATE_GROUP: {groupId: string; fields: SessionFields};
 	/**
 	Sets the custom session order: `order` lists the visible session ids in their new order and they take
@@ -736,6 +746,7 @@ export type TabLodgeResponses = {
 	GET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_CONFIG: PrivateConfig;
 	GET_STATE: Store;
+	GET_SETTINGS_DEFAULTS: {settings: Settings};
 	SAVE_TABS: SaveResult;
 	/**
 	`asks` is true when the style is `ask`; `name` is then the name used when the answer is left empty.
@@ -756,6 +767,7 @@ export type TabLodgeResponses = {
 	`trashId`: the deleted session in the trash, for Undo.
 	*/
 	DELETE_GROUP: {trashId?: string};
+	ARCHIVE_GROUP: {group: Session};
 	UPDATE_GROUP: {group: Session};
 	SET_GROUP_ORDER: {};
 	CREATE_FOLDER: {folder: Folder};

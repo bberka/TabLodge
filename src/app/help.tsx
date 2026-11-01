@@ -257,7 +257,7 @@ function Help() {
 			entries: [
 				{
 					title: 'Add a page or link',
-					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically.',
+					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, choose New column in the column selector to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically.',
 					searchText:
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},
@@ -266,6 +266,12 @@ function Help() {
 					body: 'Drag bookmarks between columns to move or reorder them. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark.',
 					searchText:
 						'drag reorder move keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column',
+				},
+				{
+					title: 'Show bookmarks in batches',
+					body: 'If a column has many bookmarks, open Settings › Bookmark board and turn on Limit bookmarks shown at a time. Set how many appear in each batch. Show more reveals the next batch. This setting is off by default.',
+					searchText:
+						'limit bookmarks links render show more batch many column settings performance',
 				},
 				{
 					title: 'Select several bookmarks',
@@ -280,7 +286,10 @@ function Help() {
 							On the dashboard, use the{' '}
 							<MenuLocation label="Bookmarks toolbar" /> to import a JSON file
 							or your browser bookmarks, or export bookmarks. Import lets you
-							skip or allow duplicates.
+							skip or allow duplicates. Browser bookmark folders become columns;
+							folders with the same name merge, and links without a folder go in
+							the first column. Use a column’s menu to export that column or all
+							bookmarks.
 						</>
 					),
 					searchText:
@@ -456,10 +465,11 @@ function Help() {
 					body: (
 						<>
 							Session import and export are in the{' '}
-							<MenuLocation label="Sessions" />. Bookmark import and export are
-							in the <MenuLocation label="Bookmarks toolbar" />. Settings can
-							export bookmarks or create a full ZIP backup with settings,
-							excluded sites, theme, snapshots, and the trash bin. Open{' '}
+							<MenuLocation label="Sessions" />. A session menu can export just
+							that session in any format. Bookmark import and export are in the{' '}
+							<MenuLocation label="Bookmarks toolbar" />. Settings can export
+							bookmarks or create a full ZIP backup with settings, excluded
+							sites, theme, snapshots, and the trash bin. Open{' '}
 							<a
 								href="options.html?q=Data"
 								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -471,7 +481,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sessions menu bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
+						'sessions menu individual session export bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
 				},
 				{
 					title: 'Recover after a browser crash',
@@ -544,9 +554,9 @@ function Help() {
 				},
 				{
 					title: 'Common choices',
-					body: `Set dashboard width, startup behavior, session sorting, archiving sessions you have not opened in a while, URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. You can also remove common tracking parameters, including the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
+					body: `Set dashboard width, startup behavior, session sorting, and automatic archiving for sessions you have not opened in a while. The Archived folder is available by default. Archived sessions leave active lists but remain available in that folder. To archive one session immediately, use Archive session in its dashboard menu. In Archived, use Move to folder in the session menu to bring a session back. You can also set URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Remove common tracking parameters, including the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
 					searchText:
-						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting archive old sessions not opened days urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
+						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting archive old sessions not opened days archive session now menu Archived folder move to folder restore move back urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
 				},
 				{
 					title: 'Control saved data',

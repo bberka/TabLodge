@@ -9,17 +9,25 @@ export function LoadMore({
 	remaining,
 	step,
 	noun,
+	autoLoad = true,
+	compact = false,
 	onMore,
 }: {
 	remaining: number;
 	step: number;
 	noun: string;
+	autoLoad?: boolean;
+	compact?: boolean;
 	onMore: () => void;
 }) {
 	const ref = useRef<HTMLButtonElement>(null);
 	const onMoreRef = useRef(onMore);
 	onMoreRef.current = onMore;
 	useEffect(() => {
+		if (!autoLoad) {
+			return undefined;
+		}
+
 		const element = ref.current;
 		if (!element || typeof IntersectionObserver === 'undefined') {
 			return undefined;
@@ -36,16 +44,24 @@ export function LoadMore({
 		observer.observe(element);
 		return () => observer.disconnect();
 		// Re-observing after each batch re-checks whether the end is still near the viewport.
-	}, [remaining]);
+	}, [autoLoad, remaining]);
+	const amount = Math.min(step, remaining);
+	const label = compact
+		? `Show ${amount} more`
+		: `Show ${amount} more ${noun} (${remaining} not shown yet)`;
 	return (
 		<Button
 			ref={ref}
 			variant="ghost"
 			size="sm"
-			className="mx-auto mt-2 flex text-muted-foreground"
+			className={
+				compact
+					? 'mt-2 flex w-full text-muted-foreground'
+					: 'mx-auto mt-2 flex text-muted-foreground'
+			}
 			onClick={onMore}
 		>
-			Show {Math.min(step, remaining)} more {noun} ({remaining} not shown yet)
+			{label}
 		</Button>
 	);
 }

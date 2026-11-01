@@ -10,6 +10,7 @@ import {
 	type SyntheticEvent,
 } from 'react';
 import {
+	Archive,
 	AppWindow,
 	ArrowDown,
 	ArrowDownUp,
@@ -113,6 +114,11 @@ import type {
 	SessionSort,
 	Settings,
 } from './types';
+import {
+	ARCHIVED_FOLDER_NAME,
+	archivedFolderId,
+	isArchivedFolder,
+} from './session-folders';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {hostOf, webUrl} from './web-url';
@@ -132,7 +138,12 @@ import {
 	offerUndo,
 } from './recovery-core';
 import {openLink, resolveLinkTarget} from './link-target';
-import {ColumnSelect} from './column-select';
+import {
+	BookmarkColumnPicker,
+	NEW_BOOKMARK_COLUMN,
+	resolveBookmarkColumn,
+	type BookmarkColumnDraft,
+} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
 /**
@@ -269,6 +280,9 @@ export function SessionManager({
 	const [newFolderIcon, setNewFolderIcon] = useState<string | undefined>();
 	const groupNameRef = useRef<HTMLInputElement>(null);
 	const [bookmarkTab, setBookmarkTab] = useState<BookmarkDraft | null>(null);
+	const [newBookmarkColumn, setNewBookmarkColumn] =
+		useState<BookmarkColumnDraft>({name: ''});
+	const [savingBookmark, setSavingBookmark] = useState(false);
 	const [tabUrlError, setTabUrlError] = useState('');
 	const [editingTab, setEditingTab] = useState<{
 		group: Session;
@@ -278,6 +292,7 @@ export function SessionManager({
 	// eslint-disable-next-line @eslint-react/use-state -- write-only on purpose
 	const [, setBusy] = useState('');
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
+	const [singleSessionExport, setSingleSessionExport] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const dragItemRef = useRef<DragItem | null>(null);
@@ -288,6 +303,7 @@ export function SessionManager({
 	const revealRef = useRef<{id: string; focus: boolean} | null>(null);
 	const groups = state?.groups || NO_SESSIONS;
 	const folders = state?.folders || NO_FOLDERS;
+	const archivedId = archivedFolderId(folders);
 	const settings: Partial<Settings> = state?.settings || NO_SETTINGS;
 	// Collapsed cards show a row of preview icons only on wide pages.
 	const wide = useWidePage();
@@ -304,7 +320,9 @@ export function SessionManager({
 		const needle = query.trim().toLocaleLowerCase();
 		const filtered = groups.filter(
 			(group) =>
-				(folderId === ALL || group.folderId === folderId) &&
+				(folderId === ALL
+					? group.folderId !== archivedId
+					: group.folderId === folderId) &&
 				(!needle ||
 					[
 						group.name,
@@ -342,7 +360,7 @@ export function SessionManager({
 		}
 
 		return filtered;
-	}, [groups, folderId, query, sort]);
+	}, [groups, archivedId, folderId, query, sort]);
 	// A new filter, search or sort starts again from the first batch.
 	const [visibleLimit, showMore, showUpTo] = usePagedLimit(
 		`${folderId}|${query}|${sort}`,
@@ -362,8 +380,11 @@ export function SessionManager({
 			counts.set(group.folderId, (counts.get(group.folderId) ?? 0) + 1);
 		}
 
-		return {all: groups.length, byFolder: counts};
-	}, [groups]);
+		return {
+			all: groups.filter((group) => group.folderId !== archivedId).length,
+			byFolder: counts,
+		};
+	}, [groups, archivedId]);
 	const selectedByGroup = useMemo(() => {
 		const byGroup = new Map<string, Set<string>>();
 		for (const key of selected) {
@@ -607,6 +628,7 @@ export function SessionManager({
 	}
 
 	function openBackup(kind: 'sessions' | 'selected') {
+		setSingleSessionExport(false);
 		const exportGroups = kind === 'selected' ? selectedGroups() : groups;
 		if (exportGroups.length === 0) {
 			showStatus(
@@ -619,6 +641,11 @@ export function SessionManager({
 		}
 
 		setBackupData({kind, groups: exportGroups, folders});
+	}
+
+	function openSessionExport(group: Session) {
+		setSingleSessionExport(true);
+		setBackupData({kind: 'sessions', groups: [group], folders});
 	}
 
 	function selectedGroups() {
@@ -1129,7 +1156,9 @@ export function SessionManager({
 		switchTo: switchToGroup,
 		restoreTab,
 		updateGroup,
+		archive: archiveGroup,
 		share: (group) => openShare({title: group.name, groups: [group]}),
+		exportSession: openSessionExport,
 		openTab,
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
@@ -1180,25 +1209,37 @@ export function SessionManager({
 
 	async function saveBookmark(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (!bookmarkTab) {
+		if (!bookmarkTab || savingBookmark) {
 			return;
 		}
 
-		const result = await send('ADD_BOOKMARK', {
-			bookmark: {
-				title: bookmarkTab.title,
-				url: bookmarkTab.url,
-				columnId: bookmarkTab.columnId,
-			},
-		});
-		if (!result?.ok) {
-			showStatus(result?.error || 'Could not bookmark this saved tab.', true);
-			return;
-		}
+		setSavingBookmark(true);
+		try {
+			const columnId = await resolveBookmarkColumn(
+				bookmarkTab.columnId || columns[0]?.id || NEW_BOOKMARK_COLUMN,
+				newBookmarkColumn,
+			);
+			setBookmarkTab((old) => old && {...old, columnId});
+			const result = await send('ADD_BOOKMARK', {
+				bookmark: {
+					title: bookmarkTab.title,
+					url: bookmarkTab.url,
+					columnId,
+				},
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not bookmark this saved tab.', true);
+				return;
+			}
 
-		setDialog(null);
-		setBookmarkTab(null);
-		await reload();
+			setDialog(null);
+			setBookmarkTab(null);
+			await reload();
+		} catch (reason) {
+			showStatus((reason as Error).message, true);
+		} finally {
+			setSavingBookmark(false);
+		}
 	}
 
 	async function saveGroupDetails(event: SyntheticEvent<HTMLFormElement>) {
@@ -1272,6 +1313,29 @@ export function SessionManager({
 		);
 	}
 
+	function offerFolderMoveUndo(
+		message: string,
+		groupId: string,
+		previousFolderId: string,
+	) {
+		showStatus(message, false, {
+			action: {
+				label: 'Undo',
+				async onClick() {
+					const undone = await send('UPDATE_GROUP', {
+						groupId,
+						fields: {folderId: previousFolderId},
+					});
+					if (!undone?.ok) {
+						showStatus(undone?.error || 'Could not undo that move.', true);
+					}
+
+					await reload();
+				},
+			},
+		});
+	}
+
 	async function moveGroupToFolder(
 		group: Session,
 		targetId: string,
@@ -1293,23 +1357,31 @@ export function SessionManager({
 
 		const name =
 			targetName ?? folders.find((folder) => folder.id === targetId)?.name;
-		showStatus(`Moved to ${name ?? 'the folder'}.`, false, {
-			action: {
-				label: 'Undo',
-				async onClick() {
-					const undone = await send('UPDATE_GROUP', {
-						groupId: group.id,
-						fields: {folderId: previous},
-					});
-					if (!undone?.ok) {
-						showStatus(undone?.error || 'Could not undo that move.', true);
-					}
-
-					await reload();
-				},
-			},
-		});
+		offerFolderMoveUndo(
+			`Moved to ${name ?? 'the folder'}.`,
+			group.id,
+			previous,
+		);
 		await reload();
+	}
+
+	async function archiveGroup(group: Session) {
+		const previousFolderId = group.folderId;
+		const result = await send('ARCHIVE_GROUP', {groupId: group.id});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not archive this session.', true);
+			return;
+		}
+
+		offerFolderMoveUndo(
+			`Moved “${group.name}” to ${ARCHIVED_FOLDER_NAME}.`,
+			group.id,
+			previousFolderId,
+		);
+		await reload();
+		focusAfterMove(
+			`[data-session-folder-chip="${CSS.escape(result.group.folderId)}"]`,
+		);
 	}
 
 	async function saveFolder(event: SyntheticEvent<HTMLFormElement>) {
@@ -1356,7 +1428,7 @@ export function SessionManager({
 		name: string;
 		isDefault?: boolean;
 	}) {
-		if (folder.isDefault) {
+		if (folder.isDefault || isArchivedFolder(folder)) {
 			return;
 		}
 
@@ -1382,6 +1454,7 @@ export function SessionManager({
 
 	function openBookmarkPicker(tab: SavedTabRecord) {
 		setBookmarkTab(tab);
+		setNewBookmarkColumn({name: ''});
 		setDialog('bookmark');
 	}
 
@@ -1526,6 +1599,7 @@ export function SessionManager({
 									type="button"
 									aria-pressed={folderId === folder.id}
 									data-drop-active={folderDropId === folder.id || undefined}
+									data-session-folder-chip={folder.id}
 									className={cn(
 										'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
 										folderDropId === folder.id
@@ -1592,7 +1666,11 @@ export function SessionManager({
 									</span>
 								</button>
 							);
-							if (!('createdAt' in folder) || folder.isDefault) {
+							if (
+								!('createdAt' in folder) ||
+								folder.isDefault ||
+								isArchivedFolder(folder)
+							) {
 								return chip;
 							}
 
@@ -1675,38 +1753,40 @@ export function SessionManager({
 							<FolderPlus />
 						</Button>
 					</IconTooltip>
-					{selectedFolder && !selectedFolder.isDefault && (
-						<>
-							<IconTooltip label={`Edit ${selectedFolder.name}`}>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-8 w-8"
-									aria-label={`Edit ${selectedFolder.name}`}
-									onClick={() =>
-										setDialog({
-											mode: 'rename',
-											folder: selectedFolder,
-											icon: selectedFolder.icon,
-										})
-									}
-								>
-									<Pencil />
-								</Button>
-							</IconTooltip>
-							<IconTooltip label={`Delete ${selectedFolder.name}`}>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-8 w-8 text-muted-foreground hover:text-destructive"
-									aria-label={`Delete ${selectedFolder.name}`}
-									onClick={() => void deleteFolder(selectedFolder)}
-								>
-									<Trash2 />
-								</Button>
-							</IconTooltip>
-						</>
-					)}
+					{selectedFolder &&
+						!selectedFolder.isDefault &&
+						!isArchivedFolder(selectedFolder) && (
+							<>
+								<IconTooltip label={`Edit ${selectedFolder.name}`}>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-8 w-8"
+										aria-label={`Edit ${selectedFolder.name}`}
+										onClick={() =>
+											setDialog({
+												mode: 'rename',
+												folder: selectedFolder,
+												icon: selectedFolder.icon,
+											})
+										}
+									>
+										<Pencil />
+									</Button>
+								</IconTooltip>
+								<IconTooltip label={`Delete ${selectedFolder.name}`}>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-8 w-8 text-muted-foreground hover:text-destructive"
+										aria-label={`Delete ${selectedFolder.name}`}
+										onClick={() => void deleteFolder(selectedFolder)}
+									>
+										<Trash2 />
+									</Button>
+								</IconTooltip>
+							</>
+						)}
 				</nav>
 				{selectedCount > 0 && (
 					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3">
@@ -1813,8 +1893,16 @@ export function SessionManager({
 				data={backupData}
 				open={Boolean(backupData)}
 				state={state}
+				singleSession={singleSessionExport}
 				showStatus={showStatus}
-				onOpenChange={(open) => !open && setBackupData(null)}
+				onOpenChange={(open) => {
+					if (open) {
+						return;
+					}
+
+					setBackupData(null);
+					setSingleSessionExport(false);
+				}}
 			/>
 			<ImportDialog
 				open={importOpen}
@@ -1936,10 +2024,16 @@ export function SessionManager({
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column-select">Bookmark column</Label>
-								<ColumnSelect
+								<BookmarkColumnPicker
 									columns={columns}
-									value={bookmarkTab?.columnId || columns[0]?.id}
+									value={
+										bookmarkTab?.columnId ||
+										columns[0]?.id ||
+										NEW_BOOKMARK_COLUMN
+									}
 									id="bookmark-column-select"
+									draft={newBookmarkColumn}
+									onDraftChange={setNewBookmarkColumn}
 									onValueChange={(value) =>
 										setBookmarkTab((old) => ({...old, columnId: value}))
 									}
@@ -1954,7 +2048,9 @@ export function SessionManager({
 							>
 								Cancel
 							</Button>
-							<Button type="submit">Save bookmark</Button>
+							<Button type="submit" disabled={savingBookmark}>
+								Save bookmark
+							</Button>
 						</DialogFooter>
 					</form>
 				</DialogContent>
@@ -2205,6 +2301,7 @@ type CardActions = {
 	) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
+	exportSession: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
@@ -2214,6 +2311,7 @@ type CardActions = {
 	editGroup: (group: Session) => void;
 	editName: (group: Session) => void;
 	moveToFolder: (group: Session, folderId: string) => void;
+	archive: (group: Session) => void;
 	/**
 	Keyboard alternative to dragging: moves a session one place up or down.
 	*/
@@ -2393,18 +2491,18 @@ const GroupCard = memo(
 				onSelect: () => onRestore(),
 			},
 			{
-				id: 'switch-to',
-				label: 'Switch to this session',
-				icon: ArrowLeftRight,
-				disabled: !canSwitch,
-				onSelect: () => handlers.switchTo(group),
-			},
-			{
 				type: 'submenu',
 				id: 'restore-options',
 				label: 'Restore options',
 				icon: History,
 				items: restoreOptions,
+			},
+			{
+				id: 'switch-to',
+				label: 'Switch to this session',
+				icon: ArrowLeftRight,
+				disabled: !canSwitch,
+				onSelect: () => handlers.switchTo(group),
 			},
 			{type: 'separator'},
 			{
@@ -2412,6 +2510,12 @@ const GroupCard = memo(
 				label: 'Share',
 				icon: Share2,
 				onSelect: () => handlers.share(group),
+			},
+			{
+				id: 'export-session',
+				label: 'Export session',
+				icon: Download,
+				onSelect: () => handlers.exportSession(group),
 			},
 			{type: 'separator'},
 			{
@@ -2474,6 +2578,15 @@ const GroupCard = memo(
 							: target.name,
 					onSelect: () => handlers.merge(group, target.id),
 				})),
+			},
+			{type: 'separator'},
+			{
+				id: 'archive',
+				label: 'Archive session',
+				icon: Archive,
+				accent: true,
+				hidden: folderName === ARCHIVED_FOLDER_NAME,
+				onSelect: () => handlers.archive(group),
 			},
 			{type: 'separator'},
 			{

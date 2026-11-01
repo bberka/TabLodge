@@ -33,6 +33,7 @@ export type MenuAction =
 			label: string;
 			icon?: LucideIcon;
 			shortcut?: string;
+			accent?: boolean;
 			destructive?: boolean;
 			disabled?: boolean;
 			/**
@@ -92,6 +93,7 @@ function cleanActions(actions: MenuAction[]): MenuAction[] {
 
 const destructiveClass =
 	'text-destructive focus:bg-destructive/10 focus:text-destructive';
+const accentClass = 'text-primary focus:bg-primary/10 focus:text-primary';
 
 function Shortcut({children}: {children: ReactNode}) {
 	return (
@@ -148,7 +150,10 @@ function renderActions(actions: MenuAction[], kit: Kit): ReactNode {
 			<kit.Item
 				key={action.id}
 				disabled={action.disabled}
-				className={cn(action.destructive && destructiveClass)}
+				className={cn(
+					action.accent && accentClass,
+					action.destructive && destructiveClass,
+				)}
 				onSelect={() => {
 					action.onSelect();
 				}}

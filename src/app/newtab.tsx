@@ -70,7 +70,7 @@ import {
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
-import {LoadMore} from '../shared/load-more';
+import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import {ACTION_ICONS} from './action-icons';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
@@ -112,6 +112,7 @@ import {
 	type TrashFilter,
 } from './recovery-core';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
+import {archivedFolderId} from './session-folders';
 import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
@@ -145,6 +146,11 @@ import type {
 } from './types';
 import {ColumnSelect} from './column-select';
 import {PrivateSetupGate} from './private-storage';
+import {
+	BookmarkColumnPicker,
+	resolveBookmarkColumn,
+	type BookmarkColumnDraft,
+} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
 type DialogKind =
@@ -245,7 +251,10 @@ function NewTab() {
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
-	const [backupData, setBackupData] = useState<ExportData | null>(null);
+	const [backupRequest, setBackupRequest] = useState<{
+		data: ExportData;
+		singleColumn: boolean;
+	} | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
@@ -273,6 +282,9 @@ function NewTab() {
 		Array<LinkEntry & {include: boolean}>
 	>([]);
 	const [pastedColumn, setPastedColumn] = useState(UNFILED_COLUMN.id);
+	const [pastedNewColumn, setPastedNewColumn] = useState<BookmarkColumnDraft>({
+		name: '',
+	});
 	// Deleting a column with bookmarks: move them to another column, or delete them too.
 	const [columnDelete, setColumnDelete] = useState<{
 		column: BookmarkColumnData;
@@ -397,6 +409,9 @@ function NewTab() {
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
 	const tabSelection = useTabSelection(settings.includePinnedTabs === true);
+	const bookmarkPageSize = settings.limitBookmarksPerColumn
+		? (settings.bookmarkColumnPageSize ?? 10)
+		: COLUMN_PAGE;
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const dashboardWidth = settings.dashboardWidth ?? 'default';
@@ -614,6 +629,7 @@ function NewTab() {
 				void pastedLinkTitles(several).then((links) => {
 					setPastedLinks(links.map((link) => ({...link, include: true})));
 					setPastedColumn(columns[0]?.id || UNFILED_COLUMN.id);
+					setPastedNewColumn({name: ''});
 					setDialog('paste-links');
 				});
 				return;
@@ -651,16 +667,22 @@ function NewTab() {
 
 		setBusy('paste-links');
 		try {
+			const columnId = await resolveBookmarkColumn(
+				pastedColumn,
+				pastedNewColumn,
+			);
+			setPastedColumn(columnId);
 			const result = await addDroppedLinks(
 				links,
-				pastedColumn,
+				columnId,
 				null,
 				'after',
 				true,
 			);
 			setDialog(null);
 			const name =
-				columns.find((column) => column.id === pastedColumn)?.name ||
+				columns.find((column) => column.id === columnId)?.name ||
+				pastedNewColumn.name ||
 				UNFILED_COLUMN.name;
 			offerUndo(
 				`Added ${plural(result.count, 'bookmark')} to “${name}”.${skippedNote(result.skipped)}`,
@@ -1503,7 +1525,23 @@ function NewTab() {
 			return;
 		}
 
-		setBackupData({kind: 'bookmarks', columns, bookmarks});
+		setBackupRequest({
+			data: {kind: 'bookmarks', columns, bookmarks},
+			singleColumn: false,
+		});
+	}
+
+	function openColumnExport(column: BookmarkColumnData) {
+		setBackupRequest({
+			data: {
+				kind: 'bookmarks',
+				columns: [column],
+				bookmarks: bookmarks.filter(
+					(bookmark) => bookmark.columnId === column.id,
+				),
+			},
+			singleColumn: true,
+		});
 	}
 
 	function shareBookmarks(column?: BookmarkColumnData) {
@@ -1712,6 +1750,15 @@ function NewTab() {
 	}, [autoOpenFinder]);
 
 	const unfiledAll = columnBookmarks.all.get(UNFILED_COLUMN.id);
+	const unfiledFiltered =
+		columnBookmarks.shown.get(UNFILED_COLUMN.id) ?? NO_BOOKMARKS;
+	const [unfiledLimit, loadMoreUnfiled] = usePagedLimit(
+		`unfiled:${bookmarkSearch}:${bookmarkPageSize}`,
+		bookmarkPageSize,
+	);
+	const unfiledShown = settings.limitBookmarksPerColumn
+		? unfiledFiltered.slice(0, unfiledLimit)
+		: unfiledFiltered;
 	const unfiledFirst = unfiledAll?.[0]?.id;
 	const unfiledLast = unfiledAll?.at(-1)?.id;
 
@@ -1719,16 +1766,22 @@ function NewTab() {
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
 		share: (column) => shareBookmarks(column),
+		exportColumn: openColumnExport,
 		add: (column) => openBookmarkEditor(null, column.id),
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
-		sessionTargets: () =>
-			(state?.groups ?? []).slice(0, MAX_SESSION_TARGETS).map((group) => ({
-				id: group.id,
-				name: group.name.trim() || 'Untitled session',
-			})),
+		sessionTargets() {
+			const archivedId = archivedFolderId(state?.folders ?? []);
+			return (state?.groups ?? [])
+				.filter((group) => group.folderId !== archivedId)
+				.slice(0, MAX_SESSION_TARGETS)
+				.map((group) => ({
+					id: group.id,
+					name: group.name.trim() || 'Untitled session',
+				}));
+		},
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
@@ -1957,6 +2010,8 @@ function NewTab() {
 							canMoveLater={index < columns.length - 1}
 							bookmarks={columnBookmarks.shown.get(column.id) ?? NO_BOOKMARKS}
 							siblings={columnBookmarks.all.get(column.id) ?? NO_BOOKMARKS}
+							pageSize={bookmarkPageSize}
+							autoLoadMore={!settings.limitBookmarksPerColumn}
 							dropIndicator={
 								columnDropIndicator?.columnId === column.id
 									? columnDropIndicator
@@ -2005,40 +2060,44 @@ function NewTab() {
 							onDragEnd={boardActions.dragEnd}
 						>
 							<h3 className="mb-3 text-sm font-semibold">Unfiled</h3>
-							{filteredBookmarks.some(
-								(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
-							) ? (
+							{unfiledFiltered.length > 0 ? (
 								<div className="space-y-1">
-									{filteredBookmarks
-										.filter(
-											(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
-										)
-										.map((bookmark) => {
-											const drop =
-												columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
-												columnDropIndicator.targetBookmarkId === bookmark.id
-													? columnDropIndicator
-													: null;
-											return (
-												<BookmarkCard
-													key={bookmark.id}
-													bookmark={bookmark}
-													selected={selectedBookmarks.has(bookmark.id)}
-													selectionMode={bookmarkSelectionMode}
-													dropBefore={drop?.position === 'before'}
-													dropAfter={drop?.position === 'after'}
-													dropActive={Boolean(drop)}
-													canMoveEarlier={bookmark.id !== unfiledFirst}
-													canMoveLater={bookmark.id !== unfiledLast}
-													urlMode={urlMode}
-													clickOpensMenu={clickOpensMenu}
-													urlSettings={urlSettings}
-													quickAction={quickAction}
-													sessions={boardActions}
-													onAction={boardActions.bookmark}
-												/>
-											);
-										})}
+									{unfiledShown.map((bookmark) => {
+										const drop =
+											columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
+											columnDropIndicator.targetBookmarkId === bookmark.id
+												? columnDropIndicator
+												: null;
+										return (
+											<BookmarkCard
+												key={bookmark.id}
+												bookmark={bookmark}
+												selected={selectedBookmarks.has(bookmark.id)}
+												selectionMode={bookmarkSelectionMode}
+												dropBefore={drop?.position === 'before'}
+												dropAfter={drop?.position === 'after'}
+												dropActive={Boolean(drop)}
+												canMoveEarlier={bookmark.id !== unfiledFirst}
+												canMoveLater={bookmark.id !== unfiledLast}
+												urlMode={urlMode}
+												clickOpensMenu={clickOpensMenu}
+												urlSettings={urlSettings}
+												quickAction={quickAction}
+												sessions={boardActions}
+												onAction={boardActions.bookmark}
+											/>
+										);
+									})}
+									{unfiledFiltered.length > unfiledShown.length && (
+										<LoadMore
+											compact
+											remaining={unfiledFiltered.length - unfiledShown.length}
+											step={bookmarkPageSize}
+											noun="bookmarks"
+											autoLoad={false}
+											onMore={loadMoreUnfiled}
+										/>
+									)}
 								</div>
 							) : (
 								<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
@@ -2139,10 +2198,11 @@ function NewTab() {
 			/>
 			<BackupDialog
 				state={state}
-				data={backupData}
-				open={Boolean(backupData)}
+				data={backupRequest?.data ?? null}
+				open={Boolean(backupRequest)}
+				singleColumn={backupRequest?.singleColumn ?? false}
 				showStatus={showStatus}
-				onOpenChange={(open) => !open && setBackupData(null)}
+				onOpenChange={(open) => !open && setBackupRequest(null)}
 			/>
 			<ImportDialog
 				open={importOpen}
@@ -2175,10 +2235,10 @@ function NewTab() {
 								/>
 							)}
 							<div className="space-y-1.5">
-								<Label htmlFor="bookmark-title">Title</Label>
+								<Label htmlFor="bookmark-edit-title">Title</Label>
 								<Input
 									required
-									id="bookmark-title"
+									id="bookmark-edit-title"
 									maxLength={500}
 									value={bookmarkEdit?.title || ''}
 									onChange={(e) =>
@@ -2339,10 +2399,12 @@ function NewTab() {
 							</ScrollArea>
 							<div className="space-y-1.5">
 								<Label htmlFor="pasted-links-column">Column</Label>
-								<ColumnSelect
+								<BookmarkColumnPicker
 									columns={columns}
 									value={pastedColumn}
 									id="pasted-links-column"
+									draft={pastedNewColumn}
+									onDraftChange={setPastedNewColumn}
 									onValueChange={setPastedColumn}
 								/>
 							</div>
@@ -2838,6 +2900,7 @@ Handlers the board shares with every column and bookmark. The object never chang
 type BoardActions = {
 	bookmark: OnBookmarkAction;
 	share: (column: BookmarkColumnData) => void;
+	exportColumn: (column: BookmarkColumnData) => void;
 	add: (column: BookmarkColumnData) => void;
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
@@ -2886,13 +2949,15 @@ type BookmarkColumnProps = {
 	dropIndicator: DropIndicator | null;
 	canMoveEarlier: boolean;
 	canMoveLater: boolean;
+	pageSize: number;
+	autoLoadMore: boolean;
 	actions: BoardActions;
 };
 
 const MAX_SESSION_TARGETS = 30;
 
 /**
-Bookmarks drawn per column at first; the rest follow on demand (a column can hold thousands).
+Default number of bookmarks first drawn in each column; Settings can use smaller manual batches.
 */
 const COLUMN_PAGE = 60;
 
@@ -2910,14 +2975,20 @@ const BookmarkColumn = memo(
 		dropIndicator,
 		canMoveEarlier,
 		canMoveLater,
+		pageSize,
+		autoLoadMore,
 		actions,
 	}: BookmarkColumnProps) => {
-		const [limit, setLimit] = useState(COLUMN_PAGE);
+		const [limit, loadMore] = usePagedLimit(
+			`${column.id}:${pageSize}`,
+			pageSize,
+		);
 		const shown =
 			bookmarks.length > limit ? bookmarks.slice(0, limit) : bookmarks;
 		const lastSibling = siblings.at(-1)?.id;
 		const firstSibling = siblings[0]?.id;
 		const onShare = () => actions.share(column);
+		const onExport = () => actions.exportColumn(column);
 		const onAdd = () => actions.add(column);
 		const onOpenAll = () => actions.openAll(column);
 		const onEdit = () => actions.edit(column);
@@ -2950,6 +3021,13 @@ const BookmarkColumn = memo(
 				icon: Share2,
 				disabled: siblings.length === 0,
 				onSelect: onShare,
+			},
+			{
+				id: 'export',
+				label: 'Export column',
+				icon: Download,
+				disabled: siblings.length === 0,
+				onSelect: onExport,
 			},
 			{type: 'separator'},
 			{id: 'edit', label: 'Edit column', icon: Pencil, onSelect: onEdit},
@@ -3083,10 +3161,12 @@ const BookmarkColumn = memo(
 									})}
 									{bookmarks.length > shown.length && (
 										<LoadMore
+											compact
 											remaining={bookmarks.length - shown.length}
-											step={COLUMN_PAGE}
+											step={pageSize}
 											noun="bookmarks"
-											onMore={() => setLimit((old) => old + COLUMN_PAGE)}
+											autoLoad={autoLoadMore}
+											onMore={loadMore}
 										/>
 									)}
 								</div>

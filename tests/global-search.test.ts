@@ -110,6 +110,53 @@ test('open tabs, columns, folders and commands are found', () => {
 	assert.equal(ids('new col')[0], 'command:new-column');
 });
 
+test('Archived sessions stay out of global search while the Archived folder remains findable', () => {
+	const archiveFolder: Folder = {
+		id: 'archive-folder',
+		name: 'Archived',
+		createdAt: 0,
+		isDefault: false,
+	};
+	const archived: Session = {
+		...session,
+		id: 'archived-session',
+		name: 'Old roadmap',
+		folderId: archiveFolder.id,
+		tabs: [
+			{
+				...session.tabs[0],
+				id: 'archived-tab',
+				title: 'Old decision notes',
+				url: 'https://archive.example/notes',
+			},
+		],
+	};
+	const archivedIndex = buildFinderIndex({
+		...sources,
+		groups: [session, archived],
+		folders: [folder, archiveFolder],
+	});
+	const sessionResults = flattenSections(
+		searchFinder('old roadmap', archivedIndex),
+	);
+	const tabResults = flattenSections(
+		searchFinder('old decision notes', archivedIndex),
+	);
+	const folderResults = flattenSections(
+		searchFinder('archived', archivedIndex),
+	);
+
+	assert.ok(
+		sessionResults.every((item) => item.id !== 'session:archived-session'),
+	);
+	assert.ok(
+		tabResults.every(
+			(item) => item.id !== 'saved-tab:archived-session:archived-tab',
+		),
+	);
+	assert.ok(folderResults.some((item) => item.id === 'folder:archive-folder'));
+});
+
 test('the group holding the best match comes first, and a better title ranks first within a group', () => {
 	assert.equal(kinds('open settings')[0], 'command');
 	const near = buildFinderIndex({

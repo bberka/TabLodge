@@ -34,7 +34,7 @@ The installation path matters too. An unpacked extension gets its ID from the fo
 
 `src/app/types.ts` defines the data model and typed messages. Pages call `send()` from `src/app/common.tsx`; the worker handles storage and browser operations. Mutations are serialized so concurrent messages don't overwrite one another.
 
-Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state`. The current schema is version 8. Older data is normalized on load. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library.
+Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state`. The current schema is version 9. Older data is normalized on load. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library. Normalization creates the Archived folder when missing. Sessions in that folder stay stored but are left out of active session lists and global search.
 
 The manifest uses split incognito mode so extension pages can open inside private windows. `tablodge.private.config` in local storage holds the global private mode and setup completion, independently of library imports and preference resets. Private messages and mutations are blocked until setup is complete. Normal windows always use the normal library. Private workers route library and recovery keys through `library`: shared mode keeps the original keys, saved mode prefixes them with `tablodge.private.` in local storage, and temporary mode uses the same prefix in session storage. Session storage survives worker and private window restarts but is cleared by a browser restart. Existing data needs no migration and mode changes do not copy or delete libraries. Mode changes join the worker's mutation queue and invalidate its settings and migration caches. Private pages reload when the mode changes. Appearance remains shared. Private workers do not run automatic recovery, backups, or browser bookmark monitoring. Dashboard lookup and new restore windows respect the private context.
 
@@ -55,7 +55,9 @@ Worker recovery code lives in `extension/service-worker.ts`; the UI lives in `sr
 
 ### Auto-archive
 
-The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into the folder named Archived, creating it if missing. The move runs in the mutation queue, does not change `updatedAt`, and deletes nothing. Moving a session back out through the editor updates `updatedAt`, so it is not archived again until it has been idle for the full period.
+The dashboard's **Archive session** action moves one session to the folder named Archived immediately, regardless of its age or the automatic archive setting. It changes `updatedAt` and deletes nothing. Move the session to another folder to take it out of Archived. The folder is available by default and cannot be renamed or deleted.
+
+The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into Archived. The automatic move runs in the mutation queue and does not change `updatedAt`. Moving a session back out updates `updatedAt`, so it is not archived automatically again until it has been idle for the full period.
 
 ### Snapshots
 
@@ -162,7 +164,7 @@ Bookmarks can come from the active page, manual entry, pasted links, dragging, a
 
 The optional browser bookmark setting uses `chrome.bookmarks.onCreated`, not a hook on the star button. It waits 1.5 seconds and acts only on a single new web bookmark matching the active tab of the last focused normal window. Bursts, imports, folders, and URLs already saved in TabLodge are ignored. An import flag also lives in `chrome.storage.session` so it survives worker restarts.
 
-The setting can ask or add automatically to a chosen column, falling back to the first column. Removing the browser bookmark does not remove the TabLodge copy. Explicit browser imports turn folders into ordered columns and offer duplicate choices.
+The setting can ask or add automatically to a chosen column, falling back to the first column. Removing the browser bookmark does not remove the TabLodge copy. Explicit bookmark imports turn each containing folder into a column, merge folders with the same name, and place links without a folder in the first column. Imports offer duplicate choices.
 
 Columns and bookmarks are reordered by dragging. Any column, including the last, can be deleted. For a populated column, the dialog offers to move its bookmarks or delete them too; the last column has no move destination. The result offers Undo and stores the column in trash.
 
@@ -178,7 +180,7 @@ Chromium declares the new tab override statically. Turning off **Use TabLodge fo
 
 ## Imports and exports
 
-Session and bookmark menus provide their own import and export actions; Settings also provides data tools. Parsing and conversion live in `src/app/import-formats.ts`. Imports accept native backups and formats from other tab managers. Unsupported URLs are ignored. Duplicate choices appear only when needed and are separate from restore preferences.
+Session and bookmark menus provide their own import and export actions. A session menu can export only that session in any supported format; Settings also provides data tools. Parsing and conversion live in `src/app/import-formats.ts`. Imports accept native backups and formats from other tab managers. Unsupported URLs are ignored. Duplicate choices appear only when needed and are separate from restore preferences.
 
 Session JSON includes sessions and folders. Bookmark JSON includes columns and bookmarks. A split pair uses `split: {id, position}`, where position is 0 for left and 1 for right. Import keeps only complete adjacent pairs with matching pinned and group state. Invalid pair metadata is dropped without losing the links.
 
