@@ -70,7 +70,7 @@ import {
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
-import {LoadMore} from '../shared/load-more';
+import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import {ACTION_ICONS} from './action-icons';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
@@ -404,6 +404,9 @@ function NewTab() {
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
 	const tabSelection = useTabSelection(settings.includePinnedTabs === true);
+	const bookmarkPageSize = settings.limitBookmarksPerColumn
+		? (settings.bookmarkColumnPageSize ?? 10)
+		: COLUMN_PAGE;
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const dashboardWidth = settings.dashboardWidth ?? 'default';
@@ -1726,6 +1729,15 @@ function NewTab() {
 	}, [autoOpenFinder]);
 
 	const unfiledAll = columnBookmarks.all.get(UNFILED_COLUMN.id);
+	const unfiledFiltered =
+		columnBookmarks.shown.get(UNFILED_COLUMN.id) ?? NO_BOOKMARKS;
+	const [unfiledLimit, loadMoreUnfiled] = usePagedLimit(
+		`unfiled:${bookmarkSearch}:${bookmarkPageSize}`,
+		bookmarkPageSize,
+	);
+	const unfiledShown = settings.limitBookmarksPerColumn
+		? unfiledFiltered.slice(0, unfiledLimit)
+		: unfiledFiltered;
 	const unfiledFirst = unfiledAll?.[0]?.id;
 	const unfiledLast = unfiledAll?.at(-1)?.id;
 
@@ -1971,6 +1983,8 @@ function NewTab() {
 							canMoveLater={index < columns.length - 1}
 							bookmarks={columnBookmarks.shown.get(column.id) ?? NO_BOOKMARKS}
 							siblings={columnBookmarks.all.get(column.id) ?? NO_BOOKMARKS}
+							pageSize={bookmarkPageSize}
+							autoLoadMore={!settings.limitBookmarksPerColumn}
 							dropIndicator={
 								columnDropIndicator?.columnId === column.id
 									? columnDropIndicator
@@ -2019,40 +2033,44 @@ function NewTab() {
 							onDragEnd={boardActions.dragEnd}
 						>
 							<h3 className="mb-3 text-sm font-semibold">Unfiled</h3>
-							{filteredBookmarks.some(
-								(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
-							) ? (
+							{unfiledFiltered.length > 0 ? (
 								<div className="space-y-1">
-									{filteredBookmarks
-										.filter(
-											(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
-										)
-										.map((bookmark) => {
-											const drop =
-												columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
-												columnDropIndicator.targetBookmarkId === bookmark.id
-													? columnDropIndicator
-													: null;
-											return (
-												<BookmarkCard
-													key={bookmark.id}
-													bookmark={bookmark}
-													selected={selectedBookmarks.has(bookmark.id)}
-													selectionMode={bookmarkSelectionMode}
-													dropBefore={drop?.position === 'before'}
-													dropAfter={drop?.position === 'after'}
-													dropActive={Boolean(drop)}
-													canMoveEarlier={bookmark.id !== unfiledFirst}
-													canMoveLater={bookmark.id !== unfiledLast}
-													urlMode={urlMode}
-													clickOpensMenu={clickOpensMenu}
-													urlSettings={urlSettings}
-													quickAction={quickAction}
-													sessions={boardActions}
-													onAction={boardActions.bookmark}
-												/>
-											);
-										})}
+									{unfiledShown.map((bookmark) => {
+										const drop =
+											columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
+											columnDropIndicator.targetBookmarkId === bookmark.id
+												? columnDropIndicator
+												: null;
+										return (
+											<BookmarkCard
+												key={bookmark.id}
+												bookmark={bookmark}
+												selected={selectedBookmarks.has(bookmark.id)}
+												selectionMode={bookmarkSelectionMode}
+												dropBefore={drop?.position === 'before'}
+												dropAfter={drop?.position === 'after'}
+												dropActive={Boolean(drop)}
+												canMoveEarlier={bookmark.id !== unfiledFirst}
+												canMoveLater={bookmark.id !== unfiledLast}
+												urlMode={urlMode}
+												clickOpensMenu={clickOpensMenu}
+												urlSettings={urlSettings}
+												quickAction={quickAction}
+												sessions={boardActions}
+												onAction={boardActions.bookmark}
+											/>
+										);
+									})}
+									{unfiledFiltered.length > unfiledShown.length && (
+										<LoadMore
+											compact
+											remaining={unfiledFiltered.length - unfiledShown.length}
+											step={bookmarkPageSize}
+											noun="bookmarks"
+											autoLoad={false}
+											onMore={loadMoreUnfiled}
+										/>
+									)}
 								</div>
 							) : (
 								<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
@@ -2902,13 +2920,15 @@ type BookmarkColumnProps = {
 	dropIndicator: DropIndicator | null;
 	canMoveEarlier: boolean;
 	canMoveLater: boolean;
+	pageSize: number;
+	autoLoadMore: boolean;
 	actions: BoardActions;
 };
 
 const MAX_SESSION_TARGETS = 30;
 
 /**
-Bookmarks drawn per column at first; the rest follow on demand (a column can hold thousands).
+Default number of bookmarks first drawn in each column; Settings can use smaller manual batches.
 */
 const COLUMN_PAGE = 60;
 
@@ -2926,9 +2946,14 @@ const BookmarkColumn = memo(
 		dropIndicator,
 		canMoveEarlier,
 		canMoveLater,
+		pageSize,
+		autoLoadMore,
 		actions,
 	}: BookmarkColumnProps) => {
-		const [limit, setLimit] = useState(COLUMN_PAGE);
+		const [limit, loadMore] = usePagedLimit(
+			`${column.id}:${pageSize}`,
+			pageSize,
+		);
 		const shown =
 			bookmarks.length > limit ? bookmarks.slice(0, limit) : bookmarks;
 		const lastSibling = siblings.at(-1)?.id;
@@ -3099,10 +3124,12 @@ const BookmarkColumn = memo(
 									})}
 									{bookmarks.length > shown.length && (
 										<LoadMore
+											compact
 											remaining={bookmarks.length - shown.length}
-											step={COLUMN_PAGE}
+											step={pageSize}
 											noun="bookmarks"
-											onMore={() => setLimit((old) => old + COLUMN_PAGE)}
+											autoLoad={autoLoadMore}
+											onMore={loadMore}
 										/>
 									)}
 								</div>

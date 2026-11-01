@@ -218,6 +218,8 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionSort: 'newest',
 	expandSessionsByDefault: false,
 	stretchBookmarkColumns: true,
+	limitBookmarksPerColumn: false,
+	bookmarkColumnPageSize: 10,
 	pasteLinkToBookmark: true,
 	cleanTitles: true,
 	bookmarkClickAction: 'current',
@@ -1142,6 +1144,13 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			: 'newest',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
+		limitBookmarksPerColumn: raw.limitBookmarksPerColumn === true,
+		bookmarkColumnPageSize: clampInteger(
+			raw.bookmarkColumnPageSize,
+			1,
+			500,
+			10,
+		),
 		pasteLinkToBookmark: raw.pasteLinkToBookmark !== false,
 		cleanTitles: raw.cleanTitles !== false,
 		bookmarkClickAction: isOneOf(
