@@ -34,7 +34,7 @@ The installation path matters too. An unpacked extension gets its ID from the fo
 
 `src/app/types.ts` defines the data model and typed messages. Pages call `send()` from `src/app/common.tsx`; the worker handles storage and browser operations. Mutations are serialized so concurrent messages don't overwrite one another.
 
-Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state`. The current schema is version 8. Older data is normalized on load. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library.
+Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state`. The current schema is version 9. Older data is normalized on load. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library. Normalization creates the Archived folder when missing. Sessions in that folder stay stored but are left out of active session lists and global search.
 
 ## Recovery
 
@@ -51,7 +51,9 @@ Worker recovery code lives in `extension/service-worker.ts`; the UI lives in `sr
 
 ### Auto-archive
 
-The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into the folder named Archived, creating it if missing. The move runs in the mutation queue, does not change `updatedAt`, and deletes nothing. Moving a session back out through the editor updates `updatedAt`, so it is not archived again until it has been idle for the full period.
+The dashboard's **Archive session** action moves one session to the folder named Archived immediately, regardless of its age or the automatic archive setting. It changes `updatedAt` and deletes nothing. Move the session to another folder to take it out of Archived. The folder is available by default and cannot be renamed or deleted.
+
+The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into Archived. The automatic move runs in the mutation queue and does not change `updatedAt`. Moving a session back out updates `updatedAt`, so it is not archived automatically again until it has been idle for the full period.
 
 ### Snapshots
 

@@ -3,15 +3,21 @@
 // Loads dist/tablodge in a headless Chromium with the development data fixture, then:
 //   1. runs axe-core (WCAG 2.2 A and AA rules) on each extension page in both themes, and
 //   2. exercises the keyboard workflows that automated rules cannot judge: the skip link, the
-//      Appearance radio group, and moving sessions, columns and bookmarks without dragging.
-// Automated checks do not replace manual keyboard and screen reader testing; see docs/CONTRIBUTING.md.
+//      Appearance radio group, moving sessions, columns and bookmarks without dragging, and
+//      archiving a session from its menu. Page and service worker console errors fail the run.
+// Axe checks do not judge reading order or screen reader announcements; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
 import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
-import {chromium, type BrowserContext, type Page} from 'playwright';
+import {
+	chromium,
+	type BrowserContext,
+	type Page,
+	type Worker,
+} from 'playwright';
 import {createDevFixture, type DevStore} from './dev-fixture.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
@@ -27,14 +33,23 @@ type AxeResults = {
 	violations: Array<{
 		id: string;
 		help: string;
-		nodes: Array<{target: unknown[]}>;
+		nodes: Array<{target: unknown[]; failureSummary?: string}>;
 	}>;
 };
-type AxeOptions = {runOnly: {type: 'tag'; values: string[]}};
+type AxeOptions = {runOnly: {type: 'rule' | 'tag'; values: string[]}};
 type AxeGlobal = {axe: {run(options: AxeOptions): Promise<AxeResults>}};
 type ScrollElement = {scrollHeight: number; clientHeight: number};
 
 const failures: string[] = [];
+const consoleErrors: string[] = [];
+
+function watchConsole(target: Page | Worker, source: string) {
+	target.on('console', (message) => {
+		if (message.type() === 'error') {
+			consoleErrors.push(`${source}: ${message.text()}`);
+		}
+	});
+}
 
 async function check(name: string, run: () => Promise<void>) {
 	try {
@@ -76,6 +91,14 @@ async function seed(page: Page) {
 	}, createDevFixture(store));
 }
 
+async function groupFolderId(page: Page, groupId: string) {
+	const state = (await page.evaluate(async () => {
+		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
+		return chrome.runtime.sendMessage({type: 'GET_STATE'});
+	})) as {groups: Array<{id: string; folderId: string}>};
+	return state.groups.find((group) => group.id === groupId)?.folderId;
+}
+
 // The pages follow the system theme by default, so emulating the color scheme switches them.
 async function setTheme(page: Page, theme: (typeof THEMES)[number]) {
 	await page.emulateMedia({colorScheme: theme});
@@ -89,6 +112,7 @@ async function openPage(
 	name: string,
 ) {
 	const page = await context.newPage();
+	watchConsole(page, `${name} page`);
 	page.on('pageerror', (error) => {
 		failures.push(`${name}: ${error.message}`);
 		console.log(`FAIL ${name} page error: ${error.message}`);
@@ -97,6 +121,26 @@ async function openPage(
 	await page.goto(`chrome-extension://${extensionId}/${name}.html`);
 	await page.waitForLoadState('networkidle');
 	return page;
+}
+
+async function axeViolationLines(
+	page: Page,
+	source: string,
+	runOnly: AxeOptions['runOnly'] = {type: 'tag', values: AXE_TAGS},
+) {
+	// Evaluated through the protocol because the extension CSP blocks inline scripts.
+	await page.evaluate(source);
+	const results = await page.evaluate(
+		async (options: AxeOptions['runOnly']) =>
+			(globalThis as typeof globalThis & AxeGlobal).axe.run({
+				runOnly: options,
+			}),
+		runOnly,
+	);
+	return results.violations.map(
+		(violation) =>
+			`${violation.id}: ${violation.help} (${violation.nodes.length}) targets: ${violation.nodes.map((node) => `${node.target.join(' ')} ${node.failureSummary ?? ''}`).join(', ')}`,
+	);
 }
 
 const attributes = (page: Page, selector: string, name: string) =>
@@ -114,6 +158,27 @@ const attributes = (page: Page, selector: string, name: string) =>
 const focusedLabel = (page: Page) =>
 	page.locator(':focus').getAttribute('aria-label');
 
+async function captureEvidence(page: Page, name: string) {
+	if (process.env.TABLODGE_CAPTURE_EVIDENCE !== '1') {
+		return;
+	}
+
+	const directory = fromRoot('.dev/evidence');
+	const viewport = page.viewportSize();
+	assert.ok(viewport);
+	await mkdir(directory, {recursive: true});
+	for (const width of [1440, 375]) {
+		await page.setViewportSize({width, height: viewport.height});
+		const sizedName = `${name.slice(0, -4)}-${width}.png`;
+		await page.screenshot({
+			path: join(directory, sizedName),
+			fullPage: true,
+		});
+	}
+
+	await page.setViewportSize(viewport);
+}
+
 async function main() {
 	const profile = await mkdtemp(join(tmpdir(), 'tablodge-a11y-'));
 	const context = await chromium.launchPersistentContext(profile, {
@@ -129,6 +194,7 @@ async function main() {
 		const worker =
 			context.serviceWorkers()[0] ??
 			(await context.waitForEvent('serviceworker', {timeout: 15_000}));
+		watchConsole(worker, 'service worker');
 		const extensionId = new URL(worker.url()).hostname;
 		const axeSource = await readFile(
 			fromRoot('node_modules/axe-core/axe.min.js'),
@@ -720,20 +786,8 @@ async function main() {
 				await check(`axe ${name} (${theme})`, async () => {
 					const page = await openPage(context, extensionId, name);
 					await setTheme(page, theme);
-					// Evaluated through the protocol: the pages' CSP blocks an injected inline script.
-					await page.evaluate(axeSource);
-					const results = await page.evaluate(
-						async (values) =>
-							(globalThis as typeof globalThis & AxeGlobal).axe.run({
-								runOnly: {type: 'tag', values},
-							}),
-						AXE_TAGS,
-					);
+					const lines = await axeViolationLines(page, axeSource);
 					await page.close();
-					const lines = results.violations.map(
-						(violation) =>
-							`${violation.id}: ${violation.help} (${violation.nodes.length}) e.g. ${violation.nodes[0].target.join(' ')}`,
-					);
 					assert.deepEqual(lines, []);
 				});
 			}
@@ -1196,6 +1250,199 @@ async function main() {
 				await page.close();
 			},
 		);
+		for (const [index, theme] of THEMES.entries()) {
+			await check(
+				`a session archives from its menu by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					const sessionId = `dev-session-${index + 1}`;
+					const previousFolderId =
+						index === 0 ? 'folder-learning' : 'folder-work';
+					const card = page.locator(`#session-${sessionId}`);
+					await card.waitFor();
+					const trigger = card.locator('[data-move-focus]');
+					await trigger.focus();
+					await page.keyboard.press('Enter');
+					const menuItems = page.getByRole('menuitem');
+					const labels = await menuItems.allTextContents();
+					const archiveIndex = labels.findIndex((label) =>
+						label.includes('Archive session'),
+					);
+					const trashIndex = labels.findIndex(
+						(label) => label.trim() === 'Delete',
+					);
+					assert.notStrictEqual(archiveIndex, -1);
+					assert.notStrictEqual(trashIndex, -1);
+					assert.ok(archiveIndex < trashIndex);
+					const archiveClasses = await menuItems
+						.nth(archiveIndex)
+						.getAttribute('class');
+					assert.ok(archiveClasses?.split(/\s+/).includes('text-primary'));
+					await page.evaluate(async () => {
+						const {document} = globalThis as typeof globalThis & {
+							document: {
+								querySelector(selector: string): {
+									getAnimations(options: {subtree: boolean}): Array<{
+										finished: Promise<unknown>;
+									}>;
+								} | null;
+							};
+						};
+						const menu = document.querySelector('[role="menu"]');
+						if (!menu) {
+							throw new Error('The session action menu did not open.');
+						}
+
+						await Promise.all(
+							menu
+								.getAnimations({subtree: true})
+								.map((animation) => animation.finished),
+						);
+					});
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource, {
+							type: 'rule',
+							values: ['color-contrast'],
+						}),
+						[],
+					);
+					await captureEvidence(page, `archive-menu-${theme}.png`);
+					await page.getByRole('menuitem', {name: 'Archive session'}).focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await page.getByRole('status').allTextContents()).some((text) =>
+								text.includes('to Archived.'),
+							),
+						'the archive announcement',
+					);
+					await until(
+						async () => (await card.count()) === 0,
+						'session leaves All',
+					);
+					await until(
+						async () =>
+							(await page
+								.locator(':focus')
+								.getAttribute('data-session-folder-chip')) ===
+							'archived-sessions',
+						'focus to move to the Archived folder',
+					);
+
+					const state = (await page.evaluate(async () => {
+						const {chrome} = globalThis as typeof globalThis & {
+							chrome: ExtensionApi;
+						};
+						return chrome.runtime.sendMessage({type: 'GET_STATE'});
+					})) as {
+						groups: Array<{id: string; folderId: string}>;
+						folders: Array<{id: string; name: string}>;
+					};
+					const archivedId = state.folders.find(
+						(folder) => folder.name === 'Archived',
+					)?.id;
+					assert.ok(archivedId, 'the Archived folder should exist');
+					assert.equal(
+						state.groups.find((group) => group.id === sessionId)?.folderId,
+						archivedId,
+					);
+					const undo = page.getByRole('button', {name: 'Undo'});
+					await undo.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await groupFolderId(page, sessionId)) === previousFolderId,
+						'Undo to restore the previous folder',
+					);
+					await card.waitFor();
+
+					await trigger.focus();
+					await page.keyboard.press('Enter');
+					await page.getByRole('menuitem', {name: 'Archive session'}).focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () => (await groupFolderId(page, sessionId)) === archivedId,
+						'session to archive again',
+					);
+
+					const archivedFolderButton = page.getByRole('button', {
+						name: /Archived/,
+					});
+					await archivedFolderButton.focus();
+					await page.keyboard.press('Enter');
+					await card.waitFor();
+					const archivedTrigger = card.locator('[data-move-focus]');
+					await archivedTrigger.focus();
+					await page.keyboard.press('Enter');
+					assert.equal(
+						await page.getByRole('menuitem', {name: 'Archive session'}).count(),
+						0,
+						'already archived sessions should not offer Archive session',
+					);
+					await page.getByRole('menuitem', {name: 'Move to folder'}).focus();
+					await page.keyboard.press('ArrowRight');
+					const workFolder = page.getByRole('menuitem', {
+						name: 'Work',
+						exact: true,
+					});
+					await workFolder.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await groupFolderId(page, sessionId)) === 'folder-work',
+						'session to move out of Archived',
+					);
+					await until(
+						async () => (await card.count()) === 0,
+						'session to leave Archived',
+					);
+					const workFolderButton = page.getByRole('button', {name: /Work/});
+					await workFolderButton.focus();
+					await page.keyboard.press('Enter');
+					await card.waitFor();
+					await page.close();
+				},
+			);
+		}
+
+		await check(
+			'Archived sessions are hidden from popup and side panel',
+			async () => {
+				for (const theme of THEMES) {
+					const popup = await openPage(context, extensionId, 'popup');
+					await setTheme(popup, theme);
+					await popup.getByRole('region', {name: 'Recent sessions'}).waitFor();
+					assert.equal(
+						await popup.getByText('Archived example', {exact: true}).count(),
+						0,
+					);
+					assert.equal(
+						await popup.getByText('Lisbon trip', {exact: true}).count(),
+						1,
+					);
+					await popup.close();
+
+					const sidepanel = await openPage(context, extensionId, 'sidepanel');
+					await setTheme(sidepanel, theme);
+					const sessionsTab = sidepanel.getByRole('tab', {name: /Sessions/});
+					await sessionsTab.focus();
+					await sidepanel.keyboard.press('Enter');
+					assert.equal(
+						await sidepanel
+							.getByText('Archived example', {exact: true})
+							.count(),
+						0,
+					);
+					assert.equal(
+						await sidepanel.getByText('Lisbon trip', {exact: true}).count(),
+						1,
+					);
+					await sidepanel.close();
+				}
+			},
+		);
+
 		await check('dialogs hand focus back to what opened them', async () => {
 			const page = await openPage(context, extensionId, 'newtab');
 			const add = page.getByRole('button', {name: 'Add bookmark'}).first();
@@ -1249,6 +1496,11 @@ async function main() {
 			await page.keyboard.press('Enter');
 			await page.getByRole('menuitem', {name: 'Add to session'}).focus();
 			await page.keyboard.press('ArrowRight');
+			assert.equal(
+				await page.getByRole('menuitem', {name: 'Archived example'}).count(),
+				0,
+				'archived sessions should not be targets for adding bookmarks',
+			);
 			await page.keyboard.press('Enter');
 			await until(
 				async () =>
@@ -1259,6 +1511,13 @@ async function main() {
 			);
 			await page.close();
 		});
+
+		if (consoleErrors.length > 0) {
+			failures.push('browser console errors');
+			for (const error of consoleErrors) {
+				console.log(`FAIL ${error}`);
+			}
+		}
 	} finally {
 		await context.close();
 		await rm(profile, {recursive: true, force: true});

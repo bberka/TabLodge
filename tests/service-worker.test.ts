@@ -2063,6 +2063,42 @@ test('session and bookmark import paths mutate only their own data types', async
 	);
 });
 
+test('imported duplicate Archived folders keep their sessions archived', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const response = await harness.sendMessage({
+		type: 'IMPORT_SESSIONS',
+		data: {
+			folders: [
+				{id: 'archive-first', name: 'Archived'},
+				{id: 'archive-duplicate', name: 'archived'},
+			],
+			groups: [
+				{
+					name: 'Imported archived session',
+					folderId: 'archive-duplicate',
+					tabs: [
+						{
+							title: 'Archived note',
+							url: 'https://archived-import.example/',
+						},
+					],
+				},
+			],
+		},
+	});
+	const archivedId = harness.state.folders.find(
+		(folder) => folder.name === 'Archived',
+	)?.id;
+
+	assert.equal(response.ok, true, response.error);
+	assert.equal(
+		harness.state.groups.find(
+			(group) => group.name === 'Imported archived session',
+		)?.folderId,
+		archivedId,
+	);
+});
+
 test('bookmark title falls back to matching open-tab metadata instead of a bare URL', async () => {
 	const harness = createWorkerHarness(stateWithSession(), [
 		{
@@ -2687,8 +2723,16 @@ function stateWithEverything(): StoredState {
 }
 
 const freshFolders = [
-	{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true},
+	{id: 'unfiled', name: 'Unfiled', icon: undefined, isDefault: true},
+	{
+		id: 'archived-sessions',
+		name: 'Archived',
+		icon: 'archive',
+		isDefault: false,
+	},
 ];
+const summarizeFolders = (folders: StoredState['folders']) =>
+	folders.map(({id, name, icon, isDefault}) => ({id, name, icon, isDefault}));
 const freshColumns = [
 	{id: 'bookmark-default', name: 'Bookmarks', createdAt: 0, isDefault: true},
 ];
@@ -2703,7 +2747,7 @@ test('ERASE_DATA sessions removes sessions and folders but keeps bookmarks and s
 	assert.equal(result.sessions, 2);
 	assert.equal(result.bookmarks, 0);
 	assert.deepEqual(harness.state.groups, []);
-	assert.deepEqual(harness.state.folders, freshFolders);
+	assert.deepEqual(summarizeFolders(harness.state.folders), freshFolders);
 	assert.equal(harness.state.bookmarks.length, 3);
 	assert.deepEqual(
 		harness.state.bookmarkColumns.map((column) => column.id),
@@ -2926,7 +2970,7 @@ test('ERASE_DATA bookmarks removes bookmarks and columns and recreates the defau
 	);
 	assert.deepEqual(
 		harness.state.folders.map((folder) => folder.id),
-		['unfiled', 'folder-work'],
+		['unfiled', 'folder-work', 'archived-sessions'],
 	);
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
 });
@@ -2938,7 +2982,7 @@ test('ERASE_DATA all restores fresh-install data while keeping settings and excl
 	assert.equal(result.sessions, 2);
 	assert.equal(result.bookmarks, 3);
 	assert.deepEqual(harness.state.groups, []);
-	assert.deepEqual(harness.state.folders, freshFolders);
+	assert.deepEqual(summarizeFolders(harness.state.folders), freshFolders);
 	assert.deepEqual(harness.state.bookmarks, []);
 	assert.deepEqual(harness.state.bookmarkColumns, freshColumns);
 	assert.deepEqual(harness.state.settings.excludedOrigins, ['private.example']);
@@ -5107,11 +5151,65 @@ test('auto-archive moves stale sessions to the Archived folder and leaves recent
 	);
 });
 
+test('ARCHIVE_GROUP moves one session to Archived even when auto-archive is off', async () => {
+	const state = stateWithSession({autoArchiveDays: 0});
+	state.groups[0].createdAt = 1_700_000_000_000;
+	state.groups[0].updatedAt = 1_700_000_000_000;
+	state.groups.push({
+		...state.groups[0],
+		id: 'session-2',
+		name: 'Keep here',
+	});
+	const harness = createWorkerHarness(state);
+	const result = await harness.sendMessage({
+		type: 'ARCHIVE_GROUP',
+		groupId: 'session-1',
+	});
+	const archived = harness.state.folders.find(
+		(folder) => folder.name === 'Archived',
+	);
+
+	assert.equal(result.ok, true);
+	assert.equal(archived?.icon, 'archive');
+	assert.equal(
+		harness.state.groups.find((group) => group.id === 'session-1')?.folderId,
+		archived?.id,
+	);
+	assert.equal(
+		harness.state.groups.find((group) => group.id === 'session-2')?.folderId,
+		'unfiled',
+	);
+	assert.equal(harness.state.groups.length, 2, 'nothing is deleted');
+});
+
+test('ARCHIVE_GROUP uses an existing Archived folder', async () => {
+	const state = stateWithSession({autoArchiveDays: 0});
+	state.folders.push({
+		id: 'archived-existing',
+		name: 'Archived',
+		icon: 'archive',
+		createdAt: 1,
+		isDefault: false,
+	});
+	const harness = createWorkerHarness(state);
+	const result = await harness.sendMessage({
+		type: 'ARCHIVE_GROUP',
+		groupId: 'session-1',
+	});
+
+	assert.equal(result.ok, true);
+	assert.equal(result.group.folderId, 'archived-existing');
+	assert.equal(
+		harness.state.folders.filter((folder) => folder.name === 'Archived').length,
+		1,
+	);
+});
+
 test('auto-archive is off by default, runs at browser start, and its alarm follows the setting', async () => {
 	const off = createWorkerHarness(stateWithSession());
 	await off.fire('alarm', {name: 'tablodge-archive'});
 	assert.equal(off.state.groups[0].folderId, 'unfiled');
-	assert.equal(off.state.folders.length, 1);
+	assert.equal(off.state.folders.length, 2);
 	assert.equal(off.alarms.has('tablodge-archive'), false);
 
 	const harness = createWorkerHarness(stateWithSession());
@@ -5316,6 +5414,61 @@ const cleanStorage = (storage: Record<string, unknown>) =>
 	Object.fromEntries(
 		Object.entries(storage).filter(([, value]) => value !== undefined),
 	);
+
+test('startup restores the latest active session, not a newer archived session', async () => {
+	const state = stateWithSession({
+		openDashboardOnStartup: true,
+		startupBehavior: 'last-session',
+	});
+	state.folders.push({
+		id: 'archived-sessions',
+		name: 'Archived',
+		createdAt: 2,
+	});
+	const active = state.groups[0];
+	assert.ok(active);
+	const activeCreatedAt = active.createdAt ?? 0;
+	state.groups.push({
+		...structuredClone(active),
+		id: 'archived-latest',
+		name: 'Archived latest',
+		folderId: 'archived-sessions',
+		createdAt: activeCreatedAt + 1,
+		tabs: [
+			{
+				...active.tabs[0],
+				id: 'archived-tab',
+				url: 'https://archived.example/',
+			},
+		],
+	});
+	const harness = createWorkerHarness(state);
+	await harness.fire('onStartup');
+
+	const [opened] = harness.openedTabs;
+	assert.ok(opened);
+	assert.equal(opened.url, 'https://saved.example/article');
+});
+
+test('startup opens the dashboard when every session is archived', async () => {
+	const state = stateWithSession({
+		openDashboardOnStartup: true,
+		startupBehavior: 'last-session',
+	});
+	state.folders.push({
+		id: 'archived-sessions',
+		name: 'Archived',
+		createdAt: 2,
+	});
+	state.groups[0].folderId = 'archived-sessions';
+	const harness = createWorkerHarness(state);
+	await harness.fire('onStartup');
+
+	const [opened] = harness.openedTabs;
+	assert.ok(opened);
+	assert.ok(opened.url);
+	assert.match(opened.url, /newtab\.html/);
+});
 
 test('crash detection: a run that never closed cleanly leaves a pending recovery', async () => {
 	const harness = recoveryHarness({}, undefined, {
@@ -7281,12 +7434,123 @@ test('an existing folder named Archived is reused', async () => {
 	);
 });
 
-test('without archived sessions no Archived folder is created', async () => {
+test('Archived exists by default even when no sessions have been archived', async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	const response = await harness.sendMessage({type: 'GET_STATE'});
+	const archived = response.folders.find(
+		(folder) => folder.name === 'Archived',
+	);
+	assert.ok(archived);
+	assert.equal(archived.icon, 'archive');
+});
+
+test('the Archived folder does not use one of the 200 regular folder slots', async () => {
+	const state = stateWithSession();
+	state.folders.push(
+		...Array.from({length: 198}, (_, index) => ({
+			id: `folder-${index}`,
+			name: `Folder ${index}`,
+			createdAt: index,
+		})),
+	);
+	const harness = createWorkerHarness(state);
+	const existing = await harness.sendMessage({type: 'GET_STATE'});
+	const archived = existing.folders.find(
+		(folder) => folder.name === 'Archived',
+	);
+	assert.ok(archived);
 	assert.equal(
-		response.folders.some((folder) => folder.name === 'Archived'),
-		false,
+		existing.folders.filter((folder) => folder.id !== archived.id).length,
+		199,
+	);
+
+	const lastAllowed = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'The 200th folder',
+	});
+	assert.equal(lastAllowed.ok, true);
+	assert.equal(
+		harness.state.folders.filter((folder) => folder.id !== archived.id).length,
+		200,
+	);
+
+	const overLimit = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'One too many',
+	});
+	assert.equal(overLimit.ok, false);
+	assert.ok(harness.state.folders.some((folder) => folder.id === archived.id));
+});
+
+test('the Archived folder cannot be renamed or deleted', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const initial = await harness.sendMessage({type: 'GET_STATE'});
+	const archived = initial.folders.find((folder) => folder.name === 'Archived');
+	assert.ok(archived);
+	const moved = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {folderId: archived.id},
+	});
+	assert.equal(moved.ok, true, moved.error);
+
+	const renamed = await harness.sendMessage({
+		type: 'UPDATE_FOLDER',
+		folderId: archived.id,
+		name: 'Old sessions',
+	});
+	assert.equal(renamed.ok, false);
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_FOLDER',
+		folderId: archived.id,
+	});
+	assert.equal(deleted.ok, false);
+
+	const after = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(
+		after.folders.find((folder) => folder.id === archived.id)?.name,
+		'Archived',
+	);
+	assert.equal(
+		after.groups.find((group) => group.id === 'session-1')?.folderId,
+		archived.id,
+	);
+});
+
+test('a lower-case archived folder is reused and normalized', async () => {
+	const state = stateWithSession();
+	state.folders.push({
+		id: 'existing-archive',
+		name: 'archived',
+		createdAt: 2,
+	});
+	const harness = createWorkerHarness(state);
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	const archived = response.folders.filter(
+		(folder) => folder.name.toLocaleLowerCase() === 'archived',
+	);
+	assert.equal(archived.length, 1);
+	assert.equal(archived[0].id, 'existing-archive');
+	assert.equal(archived[0].name, 'Archived');
+});
+
+test('sessions stay archived when duplicate Archived folders are normalized', async () => {
+	const state = stateWithSession();
+	state.folders.push(
+		{id: 'archive-first', name: 'Archived', createdAt: 1},
+		{id: 'archive-duplicate', name: 'archived', createdAt: 2},
+	);
+	state.groups[0].folderId = 'archive-duplicate';
+	const harness = createWorkerHarness(state);
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	const archived = response.folders.filter(
+		(folder) => folder.name === 'Archived',
+	);
+
+	assert.equal(archived.length, 1);
+	assert.equal(
+		response.groups.find((group) => group.id === 'session-1')?.folderId,
+		archived[0].id,
 	);
 });
 

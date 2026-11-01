@@ -80,7 +80,7 @@ async function seedDevStore(page: Page): Promise<void> {
 	});
 	if (
 		!seeded.ok ||
-		seeded.groups.length !== 5 ||
+		seeded.groups.length !== 6 ||
 		seeded.bookmarks.length !== 16
 	) {
 		throw new Error('The development data fixture did not load as expected.');

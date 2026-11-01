@@ -162,10 +162,13 @@ const APP_NAME =
 // Persistent identifiers (storage keys, export formats, menu ids) use the "tablodge" prefix and are
 // independent of the display name: changing one would orphan saved data.
 const STORAGE_KEY = 'tablodge.state';
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 const DEFAULT_FOLDER_ID = 'unfiled';
 const ARCHIVED_FOLDER_ID = 'archived-sessions';
 const ARCHIVED_FOLDER_NAME = 'Archived';
+const MAX_FOLDERS = 200;
+const isArchivedFolderName = (name: string) =>
+	name.toLocaleLowerCase() === ARCHIVED_FOLDER_NAME.toLocaleLowerCase();
 // Loading keeps at most this many sessions and links per session, so every write path has to stay inside the same limits.
 const MAX_SESSIONS = 1000;
 const MAX_TABS_PER_SESSION = 1000;
@@ -780,9 +783,10 @@ function normalizeFolder(raw: unknown): Folder | null {
 		return null;
 	}
 
+	const name = cleanText(raw.name, 'New folder', 60);
 	return {
 		id,
-		name: cleanText(raw.name, 'New folder', 60),
+		name: isArchivedFolderName(name) ? ARCHIVED_FOLDER_NAME : name,
 		...iconField(raw.icon),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
@@ -791,10 +795,48 @@ function normalizeFolder(raw: unknown): Folder | null {
 	};
 }
 
+function isArchivedFolderEntry(entry: unknown): entry is Raw {
+	return isRecord(entry) && isArchivedFolderName(cleanText(entry.name, '', 60));
+}
+
+function archivedFolderIds(rawFolders: unknown): Set<string> {
+	const entries = arrayOf(rawFolders);
+	const regularIds = new Set(
+		entries
+			.filter(
+				(folder): folder is Raw =>
+					isRecord(folder) && !isArchivedFolderEntry(folder),
+			)
+			.map((folder) => cleanText(folder.id, '', 100))
+			.filter(Boolean),
+	);
+	return new Set(
+		entries
+			.filter(isArchivedFolderEntry)
+			.map((folder) => cleanText(folder.id, '', 100))
+			.filter(
+				(id) =>
+					id && id !== 'all' && id !== DEFAULT_FOLDER_ID && !regularIds.has(id),
+			),
+	);
+}
+
+function folderEntriesWithArchive(rawFolders: unknown): unknown[] {
+	const entries = arrayOf(rawFolders);
+	const archivedIndex = entries.findIndex((entry) =>
+		isArchivedFolderEntry(entry),
+	);
+	const regular = entries.filter(
+		(entry, index) => index !== archivedIndex && !isArchivedFolderEntry(entry),
+	);
+	const limited = regular.slice(0, MAX_FOLDERS);
+	return archivedIndex === -1 ? limited : [...limited, entries[archivedIndex]];
+}
+
 function normalizeFolders(rawFolders: unknown): Folder[] {
 	const seenIds = new Set(['all']);
 	const folders: Folder[] = [];
-	for (const raw of Array.isArray(rawFolders) ? rawFolders.slice(0, 200) : []) {
+	for (const raw of folderEntriesWithArchive(rawFolders)) {
 		const folder = normalizeFolder(raw);
 		if (!folder) {
 			continue;
@@ -822,6 +864,8 @@ function normalizeFolders(rawFolders: unknown): Folder[] {
 	} else {
 		folders.unshift({...DEFAULT_FOLDER});
 	}
+
+	findOrAddArchivedFolder(folders);
 
 	return folders;
 }
@@ -1352,8 +1396,10 @@ Finds the "Archived" folder by name or adds it. Old builds had an Archived view;
 without a folder land here now. The auto-archive setting uses the same folder.
 */
 function findOrAddArchivedFolder(folders: Folder[]): Folder {
-	let folder = folders.find((entry) => entry.name === ARCHIVED_FOLDER_NAME);
-	if (!folder) {
+	let folder = folders.find((entry) => isArchivedFolderName(entry.name));
+	if (folder) {
+		folder.name = ARCHIVED_FOLDER_NAME;
+	} else {
 		folder = {
 			id: folders.some((entry) => entry.id === ARCHIVED_FOLDER_ID)
 				? makeId()
@@ -1401,9 +1447,17 @@ function normalizeStore(raw: Raw | null | undefined): Store {
 			seenIds.add(group.id);
 			return true;
 		});
+	const archivedIds = archivedFolderIds(raw?.folders);
 	const folders = normalizeFolders(raw?.folders);
+	const archivedFolderId = folders.find((folder) =>
+		isArchivedFolderName(folder.name),
+	)?.id;
 	const knownFolderIds = new Set(folders.map((folder) => folder.id));
 	for (const group of groups) {
+		if (archivedIds.has(group.folderId) && archivedFolderId) {
+			group.folderId = archivedFolderId;
+		}
+
 		if (!knownFolderIds.has(group.folderId)) {
 			group.folderId = DEFAULT_FOLDER_ID;
 		}
@@ -3300,6 +3354,31 @@ async function updateGroup(
 	});
 }
 
+async function archiveGroup(
+	groupId: string,
+): Promise<ActionResult<'ARCHIVE_GROUP'>> {
+	return mutate(async () => {
+		const store = await getStore();
+		const group = findGroup(store, groupId);
+		if (!group) {
+			return {ok: false, error: 'That saved session no longer exists.'};
+		}
+
+		const existingFolder = store.folders.find(
+			(folder) => folder.name === ARCHIVED_FOLDER_NAME,
+		);
+		if (existingFolder?.id === group.folderId) {
+			return {ok: true, group};
+		}
+
+		const archived = existingFolder ?? findOrAddArchivedFolder(store.folders);
+		group.folderId = archived.id;
+		group.updatedAt = Date.now();
+		await writeStore(store);
+		return {ok: true, group};
+	});
+}
+
 /**
 Moves sessions that were not opened (or saved or edited) in the last `autoArchiveDays` days into the "Archived" folder. Nothing is deleted.
 */
@@ -3321,7 +3400,7 @@ function archiveStaleSessions(): Promise<void> {
 				Math.max(group.lastOpenedAt ?? 0, group.updatedAt, group.createdAt) <
 					cutoff,
 		);
-		if (stale.length === 0 || (!archivedId && store.folders.length >= 200)) {
+		if (stale.length === 0) {
 			return;
 		}
 
@@ -3397,7 +3476,10 @@ async function createFolder(
 			return {ok: false, error: 'Choose a different folder name.'};
 		}
 
-		if (store.folders.length >= 200) {
+		if (
+			store.folders.filter((folder) => !isArchivedFolderName(folder.name))
+				.length >= MAX_FOLDERS
+		) {
 			return {ok: false, error: `${APP_NAME} can store up to 200 folders.`};
 		}
 
@@ -3432,6 +3514,10 @@ async function updateFolder(
 
 		if (folder.isDefault) {
 			return {ok: false, error: 'The Unfiled folder cannot be renamed.'};
+		}
+
+		if (isArchivedFolderName(folder.name)) {
+			return {ok: false, error: 'The Archived folder cannot be renamed.'};
 		}
 
 		const folderName = normalizeFolderName(name);
@@ -3476,6 +3562,10 @@ async function deleteFolder(
 
 			if (folder.isDefault) {
 				return {ok: false, error: 'The Unfiled folder cannot be deleted.'};
+			}
+
+			if (isArchivedFolderName(folder.name)) {
+				return {ok: false, error: 'The Archived folder cannot be deleted.'};
 			}
 
 			const groupIds: string[] = [];
@@ -4652,7 +4742,7 @@ function mergeImportedFolders(
 	input: ImportInput,
 	candidates: unknown[],
 ) {
-	const incoming = arrayOf(input?.folders).slice(0, 200);
+	const incoming = folderEntriesWithArchive(input?.folders);
 	const sourceById = new Map<string, Raw>(
 		incoming
 			.filter(
@@ -4686,7 +4776,11 @@ function mergeImportedFolders(
 		}
 
 		let target = folderByName.get(folder.name.toLocaleLowerCase());
-		if (!target && store.folders.length < 200) {
+		if (
+			!target &&
+			store.folders.filter((entry) => !isArchivedFolderName(entry.name))
+				.length < MAX_FOLDERS
+		) {
 			target = {
 				...folder,
 				id: makeId(),
@@ -4699,6 +4793,15 @@ function mergeImportedFolders(
 
 		if (recordId(source)) {
 			idMap.set(recordId(source), target?.id || DEFAULT_FOLDER_ID);
+		}
+	}
+
+	const archivedFolder = folderByName.get(
+		ARCHIVED_FOLDER_NAME.toLocaleLowerCase(),
+	);
+	if (archivedFolder) {
+		for (const id of archivedFolderIds(input?.folders)) {
+			idMap.set(id, archivedFolder.id);
 		}
 	}
 
@@ -7647,6 +7750,10 @@ async function handleMessage(
 			return deleteGroup(message.groupId);
 		}
 
+		case 'ARCHIVE_GROUP': {
+			return archiveGroup(message.groupId);
+		}
+
 		case 'UPDATE_GROUP': {
 			return updateGroup(message.groupId, message.fields || {});
 		}
@@ -9227,17 +9334,20 @@ async function initializeExtension(openDashboardAtStartup = false) {
 		return;
 	}
 
-	if (
-		store.settings.startupBehavior === 'last-session' &&
-		store.groups.length > 0
-	) {
-		const latest = store.groups.toSorted(
-			(a, b) => b.createdAt - a.createdAt,
-		)[0];
-		await restoreGroup(latest.id, undefined, false, {restoreMode: 'keep'});
-	} else {
-		await openDashboardForTab();
+	if (store.settings.startupBehavior === 'last-session') {
+		const archivedFolder = store.folders.find((folder) =>
+			isArchivedFolderName(folder.name),
+		);
+		const latest = store.groups
+			.filter((group) => group.folderId !== archivedFolder?.id)
+			.toSorted((a, b) => b.createdAt - a.createdAt)[0];
+		if (latest) {
+			await restoreGroup(latest.id, undefined, false, {restoreMode: 'keep'});
+			return;
+		}
 	}
+
+	await openDashboardForTab();
 }
 
 /*

@@ -2,6 +2,7 @@
 // with the shared fuzzy scorer, groups the hits by type, and recognizes typed web addresses.
 import {fold, scoreFolded, searchTerms} from './fuzzy';
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
+import {archivedFolderId} from './session-folders';
 import {siteName} from './web-url';
 
 export type FinderKind =
@@ -198,7 +199,9 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 		);
 	}
 
-	items.push(...cachedSessionItems(sources.groups));
+	items.push(
+		...cachedSessionItems(sources.groups, archivedFolderId(sources.folders)),
+	);
 
 	return items;
 }
@@ -245,14 +248,30 @@ function cachedBookmarkItems(
 	return items;
 }
 
-let sessionCache: {groups: readonly Session[]; items: FinderItem[]} | undefined;
-function cachedSessionItems(groups: readonly Session[]): FinderItem[] {
-	if (sessionCache?.groups === groups) {
+let sessionCache:
+	| {
+			groups: readonly Session[];
+			archivedId: string | undefined;
+			items: FinderItem[];
+	  }
+	| undefined;
+function cachedSessionItems(
+	groups: readonly Session[],
+	archivedId: string | undefined,
+): FinderItem[] {
+	if (
+		sessionCache?.groups === groups &&
+		sessionCache.archivedId === archivedId
+	) {
 		return sessionCache.items;
 	}
 
 	const items: FinderItem[] = [];
 	for (const group of groups) {
+		if (group.folderId === archivedId) {
+			continue;
+		}
+
 		const count = group.tabs.length;
 		items.push(
 			prepared({
@@ -284,7 +303,7 @@ function cachedSessionItems(groups: readonly Session[]): FinderItem[] {
 		}
 	}
 
-	sessionCache = {groups, items};
+	sessionCache = {groups, archivedId, items};
 	return items;
 }
 

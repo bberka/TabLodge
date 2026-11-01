@@ -60,6 +60,7 @@ import {
 	plural,
 } from './common';
 import type {SaveScope, Session} from './types';
+import {archivedFolderId} from './session-folders';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
@@ -106,7 +107,12 @@ function Popup() {
 		state?.settings,
 	);
 
-	const groups = state?.groups || NO_SESSIONS;
+	const allGroups = state?.groups || NO_SESSIONS;
+	const archivedId = archivedFolderId(state?.folders || []);
+	const groups = useMemo(
+		() => allGroups.filter((group) => group.folderId !== archivedId),
+		[allGroups, archivedId],
+	);
 	const tabCount = useMemo(
 		() => groups.reduce((sum, group) => sum + (group.tabs?.length || 0), 0),
 		[groups],

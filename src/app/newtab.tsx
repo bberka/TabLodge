@@ -112,6 +112,7 @@ import {
 	type TrashFilter,
 } from './recovery-core';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
+import {archivedFolderId} from './session-folders';
 import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
@@ -1738,11 +1739,16 @@ function NewTab() {
 		edit: openColumnEditor,
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
-		sessionTargets: () =>
-			(state?.groups ?? []).slice(0, MAX_SESSION_TARGETS).map((group) => ({
-				id: group.id,
-				name: group.name.trim() || 'Untitled session',
-			})),
+		sessionTargets() {
+			const archivedId = archivedFolderId(state?.folders ?? []);
+			return (state?.groups ?? [])
+				.filter((group) => group.folderId !== archivedId)
+				.slice(0, MAX_SESSION_TARGETS)
+				.map((group) => ({
+					id: group.id,
+					name: group.name.trim() || 'Untitled session',
+				}));
+		},
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
