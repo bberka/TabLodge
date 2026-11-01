@@ -77,6 +77,7 @@ import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {
 	AppHeader,
 	EmptyState,
+	LoadingLine,
 	StatusLine,
 	saveWindowLabel,
 	send,
@@ -1804,10 +1805,18 @@ function NewTab() {
 		},
 	});
 
-	// While loading, and while a new tab hands off to the browser's own page, nothing renders (just the themed background).
-	if (!state || holding) {
+	// Keep the extension handoff blank, but show a stable shell while the initial state read is in flight.
+	if (holding) {
+		return <main className="min-h-screen" />;
+	}
+
+	if (!state) {
 		return (
-			<main className="mx-auto min-h-screen max-w-6xl px-5 py-8">
+			<main
+				className="mx-auto min-h-screen max-w-6xl px-5 py-6 sm:px-8 sm:py-9"
+				aria-busy={!error}
+			>
+				<AppHeader active="dashboard" />
 				{error && (
 					<p role="alert" className="text-sm font-medium text-destructive">
 						{error}{' '}
@@ -1816,6 +1825,7 @@ function NewTab() {
 						</a>
 					</p>
 				)}
+				{!error && <LoadingLine />}
 			</main>
 		);
 	}
@@ -2117,7 +2127,13 @@ function NewTab() {
 	);
 	const sessionsSection = (
 		<section id="sessions" className="scroll-mt-6">
-			<SessionManager embedded initialQuery={initialQuery} />
+			<SessionManager
+				embedded
+				initialQuery={initialQuery}
+				state={state}
+				error={error}
+				reload={reload}
+			/>
 		</section>
 	);
 

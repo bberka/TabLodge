@@ -4,7 +4,7 @@ import {Plus} from 'lucide-react';
 import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import {send, useCloseOnEscape, useTabLodgeState} from './common';
+import {LoadingLine, send, useCloseOnEscape, useTabLodgeState} from './common';
 import {LinkSummary} from './favicon';
 import {IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
@@ -35,7 +35,11 @@ function AddBookmarkPrompt() {
 			<p role="alert" className="p-5 text-sm text-destructive">
 				{stateError}
 			</p>
-		) : null;
+		) : (
+			<main className="min-h-screen p-5" aria-busy="true">
+				<LoadingLine />
+			</main>
+		);
 	}
 
 	const columns = state.bookmarkColumns;

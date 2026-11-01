@@ -61,6 +61,7 @@ import {
 	EmptyState,
 	LoadError,
 	AppHeader,
+	LoadingLine,
 	PageShell,
 	SectionCard,
 	StatusLine,
@@ -1308,14 +1309,19 @@ function Options() {
 		);
 	}
 
-	// Nothing renders until the saved state arrives, so the page opens on its themed background without a flash.
+	// Keep the settings navigation visible while the saved state arrives.
 	if (!state) {
 		return error ? (
 			<PageShell className="max-w-4xl">
 				<PageTop />
 				<LoadError message={error} />
 			</PageShell>
-		) : null;
+		) : (
+			<PageShell className="max-w-4xl" aria-busy="true">
+				<PageTop />
+				<LoadingLine />
+			</PageShell>
+		);
 	}
 
 	// Search: every section lists its rows' searchable text; a matching section title keeps all its rows.

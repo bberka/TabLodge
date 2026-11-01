@@ -46,6 +46,7 @@ import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {
 	Brand,
 	EmptyState,
+	LoadingLine,
 	LoadError,
 	StatusLine,
 	restoreSummary,
@@ -725,7 +726,11 @@ function SidePanel() {
 			<main className="min-h-screen p-3">
 				<LoadError message={error} />
 			</main>
-		) : null;
+		) : (
+			<main className="min-h-screen p-3" aria-busy="true">
+				<LoadingLine />
+			</main>
+		);
 	}
 
 	const tabsDef: Array<{

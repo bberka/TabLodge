@@ -45,6 +45,7 @@ import {
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {
+	LoadingLine,
 	StatusLine,
 	TabLodgeMark,
 	saveWindowLabel,
@@ -399,9 +400,13 @@ function Popup() {
 
 	// Chrome sizes the popup to its content (max 800x600) and 100vh is circular there, so the
 	// popup has a fixed size: a stable header and footer with the body scrolling in between.
-	// Until the saved state arrives only the fixed-size frame renders, so the popup neither flashes text nor resizes.
+	// Keep the popup's fixed frame while the saved state arrives.
 	if (!state && !error) {
-		return <main className="h-[560px] w-[380px] bg-background" />;
+		return (
+			<main className="flex h-[560px] w-[380px] items-center justify-center bg-background text-foreground">
+				<LoadingLine className="py-0" />
+			</main>
+		);
 	}
 
 	const stats = [
