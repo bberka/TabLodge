@@ -50,6 +50,7 @@ import {
 	Switch,
 	Textarea,
 	TooltipProvider,
+	IconTooltip,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ACCENTS, DEFAULT_ACCENT} from '../shared/accents';
@@ -916,6 +917,7 @@ function Options() {
 	const [status, showStatus] = useStatus();
 	const {theme, setTheme, accent, systemColor, setAccent} = useTheme();
 	const [settings, setSettings] = useState<Partial<Settings>>({});
+	const [defaultSettings, setDefaultSettings] = useState<Settings>();
 	const [excluded, setExcluded] = useState<string[]>([]);
 	const [excludedDraft, setExcludedDraft] = useState('');
 	const [bulkMode, setBulkMode] = useState(false);
@@ -1058,6 +1060,14 @@ function Options() {
 	}, []);
 
 	useEffect(() => {
+		void send('GET_SETTINGS_DEFAULTS').then((result) => {
+			if (result.ok) {
+				setDefaultSettings(result.settings);
+			}
+		});
+	}, []);
+
+	useEffect(() => {
 		if (!state?.settings) {
 			return;
 		}
@@ -1070,6 +1080,7 @@ function Options() {
 	async function updateSetting(
 		name: keyof Settings,
 		value: boolean | string | number,
+		savedMessage = 'Setting saved.',
 	) {
 		if (name === 'toolbarOpens' && value === 'sidepanel' && !chrome.sidePanel) {
 			showStatus(
@@ -1117,7 +1128,7 @@ function Options() {
 			settings: {[name]: value},
 		});
 		if (result?.ok) {
-			showStatus('Setting saved.');
+			showStatus(savedMessage);
 		} else {
 			await reload();
 			showStatus(result?.error || 'Could not save that setting.', true);
@@ -1331,6 +1342,21 @@ function Options() {
 
 	const fieldShown = (field: SettingField) =>
 		rowAvailable(field) && (searching || !rowDisabled(field));
+	const changedFromDefault = (field: SettingField) =>
+		defaultSettings !== undefined &&
+		!Object.is(settings[field.name], defaultSettings[field.name]);
+	const focusSettingControl = (field: SettingField) => {
+		const dependency = field.requires ?? field.parent;
+		const name = rowDisabled(field) && dependency ? dependency : field.name;
+		const row = [
+			...document.querySelectorAll<HTMLElement>('[data-setting-row]'),
+		].find((element) => element.dataset.settingRow === name);
+		const control = row?.querySelector<HTMLElement>(
+			'[role="switch"]:not([disabled]), [role="combobox"]:not([disabled]), input:not([disabled])',
+		);
+		(control ?? searchRef.current)?.focus();
+	};
+
 	const hl = (text: string) => <Highlight text={text} query={query} />;
 	const showAppearance = matchesQuery(query, APPEARANCE.text);
 	const showShortcuts = matchesQuery(query, SHORTCUTS.text);
@@ -1799,6 +1825,8 @@ function Options() {
 								{fields.map((field) => (
 									<SettingRow
 										key={field.name}
+										settingName={field.name}
+										hasReset={changedFromDefault(field)}
 										label={hl(field.label)}
 										help={
 											field.name === 'sessionNameStyle' ? (
@@ -1836,6 +1864,27 @@ function Options() {
 										)}
 										highlight={query}
 									>
+										{changedFromDefault(field) && defaultSettings && (
+											<IconTooltip label={`Reset ${field.label} to default`}>
+												<Button
+													type="button"
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8 shrink-0"
+													aria-label={`Reset ${field.label} to default`}
+													onClick={() => {
+														focusSettingControl(field);
+														void updateSetting(
+															field.name,
+															defaultSettings[field.name],
+															`Restored ${field.label} to its default.`,
+														);
+													}}
+												>
+													<RotateCcw className="h-4 w-4" aria-hidden="true" />
+												</Button>
+											</IconTooltip>
+										)}
 										{field.type === 'switch' ? (
 											<Switch
 												checked={
@@ -2438,6 +2487,8 @@ function SettingRow({
 	hint,
 	highlight = '',
 	inset,
+	settingName,
+	hasReset = false,
 	children,
 }: {
 	label: ReactNode;
@@ -2445,10 +2496,13 @@ function SettingRow({
 	/** Select options that matched the search while the label and help did not. */ hint?: string[];
 	highlight?: string;
 	inset?: boolean;
+	settingName: string;
+	hasReset?: boolean;
 	children?: ReactNode;
 }) {
 	return (
 		<div
+			data-setting-row={settingName}
 			// A setting that depends on the one above sits on a line hanging from it.
 			className={cn(
 				'flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between',
@@ -2474,7 +2528,14 @@ function SettingRow({
 					</p>
 				)}
 			</div>
-			<div className="shrink-0">{children}</div>
+			<div
+				className={cn(
+					'shrink-0',
+					hasReset && 'flex flex-wrap items-center justify-end gap-2',
+				)}
+			>
+				{children}
+			</div>
 		</div>
 	);
 }
