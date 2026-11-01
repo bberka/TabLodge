@@ -10,6 +10,8 @@ import {
 	csvCell,
 	exportCounts,
 	exportFilename,
+	bookmarkColumnExportChoices,
+	sessionExportChoices,
 	type ExportData,
 	type ExportFormat,
 } from '../src/app/export-formats';
@@ -316,7 +318,7 @@ test('HTML export is a Netscape bookmark file that browsers and this importer re
 		buildExport(bookmarksData, 'html', {appName: 'TabLodge', now}).content,
 		'b.html',
 	);
-	assert.deepEqual(names(bookmarkHtml, 'bookmarks'), ['Bookmarks', 'Dev', '']);
+	assert.deepEqual(names(bookmarkHtml, 'bookmarks'), ['Bookmarks', 'Dev']);
 });
 
 test('browser bookmark HTML: nested folders, entities, descriptions, and unsafe content', () => {
@@ -348,28 +350,32 @@ test('browser bookmark HTML: nested folders, entities, descriptions, and unsafe 
 	assert.equal(parsed.confidence, 'verified');
 	assert.deepEqual(names(parsed, 'bookmarks'), [
 		'Bookmarks bar',
-		'Bookmarks bar / Dev <tools>',
-		'',
+		'Dev <tools>',
 	]);
 	assert.deepEqual(urls(parsed, 'bookmarks'), [
 		'https://news.example/?a=1&b=2',
-		'https://dev.example/',
 		'https://top.example/',
+		'https://dev.example/',
 	]);
 	assert.equal(parsed.bookmarks[0].links[0].title, 'News & views');
 	assert.equal(parsed.bookmarks[0].links[0].notes, 'Morning reading');
 	assert.equal(parsed.invalid, 2);
 	assert.equal(parsed.bookmarks[0].createdAt, 1_700_000_000_000);
-	// Converted payload: folders become columns, loose links have no column.
+	// Converted payload: folders become columns, and loose links join the first column.
 	const payload = bookmarkImportPayload(parsed) as {
 		bookmarkColumns: Array<{id: string; name: string}>;
 		bookmarks: Array<{url: string; columnId?: string}>;
 	};
 	assert.deepEqual(
 		payload.bookmarkColumns.map((column) => column.name),
-		['Bookmarks bar', 'Bookmarks bar / Dev <tools>'],
+		['Bookmarks bar', 'Dev <tools>'],
 	);
-	assert.equal(payload.bookmarks.at(-1)?.columnId, undefined);
+	assert.equal(
+		payload.bookmarks.find(
+			(bookmark) => bookmark.url === 'https://top.example/',
+		)?.columnId,
+		'import-column-1',
+	);
 
 	const page = parseImportFile(
 		'<html><body><ul><li><a href="https://one.example/" onclick="evil()">One</a><li><a href=https://two.example/>Two</a></ul><img src=x onerror=alert(1)></body></html>',
@@ -846,12 +852,167 @@ test("browser bookmark trees read like the service worker's browser import", () 
 			],
 		},
 	]);
-	assert.deepEqual(names(parsed, 'bookmarks'), [
-		'Bookmarks bar',
-		'Bookmarks bar / Sub',
-	]);
+	assert.deepEqual(names(parsed, 'bookmarks'), ['Bookmarks bar', 'Sub']);
 	assert.equal(parsed.invalid, 1);
 	assert.equal(parsed.bookmarks[0].links[0].createdAt, 1_700_000_000_000);
+});
+
+test('bookmark folders merge by name and folderless links land in the first column', () => {
+	const parsed = parseBookmarkTree([
+		{
+			id: '0',
+			children: [
+				{id: '10', title: 'Loose', url: 'https://loose.example/'},
+				{
+					id: '1',
+					title: 'Socials',
+					children: [
+						{id: '2', title: 'First', url: 'https://first.example/'},
+						{
+							id: '3',
+							title: 'Nested',
+							children: [
+								{id: '4', title: 'Second', url: 'https://second.example/'},
+							],
+						},
+					],
+				},
+				{
+					id: '5',
+					title: 'Socials',
+					children: [{id: '6', title: 'Third', url: 'https://third.example/'}],
+				},
+			],
+		},
+	]);
+
+	assert.deepEqual(
+		parsed.bookmarks.map((entry) => [
+			entry.name,
+			entry.links.map((link) => link.url),
+		]),
+		[
+			[
+				'Socials',
+				[
+					'https://first.example/',
+					'https://third.example/',
+					'https://loose.example/',
+				],
+			],
+			['Nested', ['https://second.example/']],
+		],
+	);
+
+	const payload = bookmarkImportPayload(parsed) as {
+		bookmarkColumns: Array<{id: string; name: string}>;
+		bookmarks: Array<{url: string; columnId?: string}>;
+	};
+	assert.deepEqual(payload.bookmarkColumns, [
+		{id: 'import-column-1', name: 'Socials'},
+		{id: 'import-column-2', name: 'Nested'},
+	]);
+	assert.equal(
+		payload.bookmarks.find(
+			(bookmark) => bookmark.url === 'https://loose.example/',
+		)?.columnId,
+		'import-column-1',
+	);
+});
+
+test('bookmark HTML folders merge by name and unfiled links use the first column', () => {
+	const data: ExportData = {
+		kind: 'bookmarks',
+		columns: [
+			{id: 'social-one', name: 'Socials', createdAt: 0, isDefault: false},
+			{id: 'work', name: 'Work', createdAt: 0, isDefault: false},
+			{id: 'social-two', name: 'Socials', createdAt: 0, isDefault: false},
+		],
+		bookmarks: [
+			{...bookmarks[0], id: 'one', columnId: 'social-one'},
+			{...bookmarks[1], id: 'two', columnId: 'work'},
+			{...bookmarks[2], id: 'three', columnId: 'social-two'},
+			{...bookmarks[0], id: 'loose', columnId: 'bookmark-unfiled'},
+		],
+	};
+	const parsed = parseImportFile(
+		buildExport(data, 'html', {appName: 'TabLodge'}).content,
+		'bookmarks.html',
+	);
+
+	assert.deepEqual(names(parsed, 'bookmarks'), ['Socials', 'Work']);
+	assert.deepEqual(urls(parsed, 'bookmarks'), [
+		bookmarks[0].url,
+		bookmarks[2].url,
+		bookmarks[0].url,
+		bookmarks[1].url,
+	]);
+	const payload = bookmarkImportPayload(parsed) as {
+		bookmarkColumns: Array<{id: string; name: string}>;
+		bookmarks: Array<{url: string; columnId: string}>;
+	};
+	assert.deepEqual(payload.bookmarkColumns, [
+		{id: 'import-column-1', name: 'Socials'},
+		{id: 'import-column-2', name: 'Work'},
+	]);
+	assert.ok(
+		payload.bookmarks
+			.filter((entry) => entry.url === bookmarks[0].url)
+			.every((entry) => entry.columnId === 'import-column-1'),
+	);
+});
+
+test('individual export choices include current and all data', () => {
+	const sessionChoices = sessionExportChoices(groups[1], groups, folders);
+	assert.deepEqual(
+		sessionChoices.map(({id, label}) => ({id, label})),
+		[
+			{id: 'current', label: 'Current session'},
+			{id: 'all', label: 'All sessions'},
+		],
+	);
+	const currentSessionExport = JSON.parse(
+		buildExport(sessionChoices[0].data, 'json', {appName: 'TabLodge'}).content,
+	) as {groups: Array<{name: string}>};
+	assert.deepEqual(
+		currentSessionExport.groups.map((entry) => entry.name),
+		[groups[1].name],
+	);
+	const allSessionsExport = JSON.parse(
+		buildExport(sessionChoices[1].data, 'json', {appName: 'TabLodge'}).content,
+	) as {groups: Array<{name: string}>};
+	assert.deepEqual(
+		allSessionsExport.groups.map((entry) => entry.name),
+		groups.map((entry) => entry.name),
+	);
+
+	const columnChoices = bookmarkColumnExportChoices(
+		bookmarksData.columns![0],
+		bookmarksData.columns!,
+		bookmarksData.bookmarks!,
+	);
+	assert.deepEqual(
+		columnChoices.map(({id, label}) => ({id, label})),
+		[
+			{id: 'column', label: bookmarksData.columns![0].name},
+			{id: 'all', label: 'All bookmarks'},
+		],
+	);
+	const columnExport = JSON.parse(
+		buildExport(columnChoices[0].data, 'json', {appName: 'TabLodge'}).content,
+	) as {bookmarks: Array<{url: string}>};
+	assert.deepEqual(
+		columnExport.bookmarks.map((entry) => entry.url),
+		bookmarksData
+			.bookmarks!.filter(
+				(entry) => entry.columnId === bookmarksData.columns![0].id,
+			)
+			.map((entry) => entry.url),
+	);
+	assert.equal(
+		columnChoices[1].data.bookmarks?.length,
+		bookmarksData.bookmarks?.length,
+	);
 });
 
 test('every export format re-imports with the same links', () => {

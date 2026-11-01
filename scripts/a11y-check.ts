@@ -185,6 +185,43 @@ async function openPage(
 	return page;
 }
 
+async function captureMobileExportEvidence(extensionId: string) {
+	const profile = await mkdtemp(join(tmpdir(), 'tablodge-mobile-evidence-'));
+	const context = await chromium.launchPersistentContext(profile, {
+		channel: 'chromium',
+		headless: true,
+		viewport: {width: 440, height: 956},
+		deviceScaleFactor: 3,
+		isMobile: true,
+		args: [
+			`--disable-extensions-except=${OUT_DIR}`,
+			`--load-extension=${OUT_DIR}`,
+		],
+	});
+	try {
+		const page = await context.newPage();
+		await page.goto(`chrome-extension://${extensionId}/newtab.html`);
+		await page.waitForLoadState('networkidle');
+		await seed(page);
+		await page.reload();
+		await setTheme(page, 'light');
+		const trigger = page
+			.locator('#session-dev-session-1 [data-move-focus]')
+			.first();
+		await openMenuItemByKeyboard(page, trigger, 'Export session');
+		await page.getByRole('menu').waitFor({state: 'hidden'});
+		await page.getByRole('radiogroup', {name: 'What to export'}).waitFor();
+		await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+		await page.screenshot({
+			path: fromRoot('.dev/evidence/session-export-440x956-dsf3.png'),
+			animations: 'disabled',
+		});
+	} finally {
+		await context.close();
+		await rm(profile, {recursive: true, force: true});
+	}
+}
+
 async function axeViolationLines(
 	page: Page,
 	source: string,
@@ -824,18 +861,41 @@ async function main() {
 						buffer: Buffer.from(`https://example.com/new-column-${theme}`),
 					});
 					const dialog = page.getByRole('dialog');
-					await dialog
-						.getByRole('combobox', {
-							name: 'Column for every imported bookmark',
-						})
-						.waitFor();
-					await dialog.getByRole('combobox').press('Space');
-					await page
-						.getByRole('option', {name: 'New column', exact: true})
-						.waitFor({timeout: 2000});
-					await page
-						.getByRole('option', {name: 'New column', exact: true})
-						.press('Enter');
+					const importAction = dialog.getByRole('button', {
+						name: 'Import 1 bookmark',
+						exact: true,
+					});
+					await importAction.waitFor();
+					await until(
+						async () =>
+							(await page.locator(':focus').textContent())?.trim() ===
+							'Import 1 bookmark',
+						'focus to move to the Import action',
+					);
+					assert.equal(
+						await dialog
+							.getByRole('radio', {name: 'Columns from folders'})
+							.count(),
+						0,
+					);
+					assert.equal(
+						await dialog
+							.getByRole('radio', {name: 'One column', exact: true})
+							.count(),
+						0,
+					);
+					const columnSelect = dialog.getByRole('combobox', {
+						name: 'Column for every imported bookmark',
+					});
+					await columnSelect.waitFor();
+					await columnSelect.focus();
+					await page.keyboard.press('Space');
+					const newColumnOption = page.getByRole('option', {
+						name: 'New column',
+						exact: true,
+					});
+					await newColumnOption.waitFor();
+					await newColumnOption.press('Enter');
 					assert.equal(
 						await dialog
 							.getByRole('button', {name: 'Import 1 bookmark', exact: true})
@@ -1005,19 +1065,73 @@ async function main() {
 							.count(),
 						0,
 					);
+					const exportScope = exportDialog.getByRole('radiogroup', {
+						name: 'What to export',
+					});
+					assert.equal(await exportScope.count(), 1);
+					const allSessions = exportScope.getByRole('radio', {
+						name: 'All sessions',
+					});
+					await exportScope
+						.getByRole('radio', {name: 'Current session'})
+						.focus();
+					await page.keyboard.press('ArrowRight');
+					assert.equal(await allSessions.isChecked(), true);
+					assert.equal(
+						await exportDialog
+							.getByRole('heading', {name: 'Back up sessions'})
+							.count(),
+						1,
+					);
+					const allSessionsDownloadPromise = page.waitForEvent('download');
+					await exportDialog
+						.getByRole('button', {name: 'Download', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					const allSessionsDownload = await allSessionsDownloadPromise;
+					const allSessionsPath = await allSessionsDownload.path();
+					assert.ok(allSessionsPath);
+					const allSessionsJson = JSON.parse(
+						await readFile(allSessionsPath, 'utf8'),
+					) as {groups: Array<{name: string}>};
+					assert.ok(
+						allSessionsJson.groups.some((group) => group.name === name),
+					);
+					assert.ok(allSessionsJson.groups.length > 1);
+					await exportDialog.waitFor({state: 'hidden'});
 
-					const htmlFormat = exportDialog.getByRole('radio', {
+					await openMenuItemByKeyboard(page, trigger, 'Export session');
+					const currentExportDialog = page.getByRole('dialog');
+					await currentExportDialog.waitFor();
+
+					const htmlFormat = currentExportDialog.getByRole('radio', {
 						name: /Browser bookmarks \(HTML\)/,
 					});
 					await htmlFormat.focus();
 					await page.keyboard.press('Space');
 					assert.equal(await htmlFormat.isChecked(), true);
 					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
-					await exportDialog.screenshot({
+					await currentExportDialog.screenshot({
 						path: fromRoot(`.dev/evidence/session-export-${theme}.png`),
 					});
+					if (
+						process.env.TABLODGE_CAPTURE_EVIDENCE === '1' &&
+						theme === 'light'
+					) {
+						for (const [width, height] of EVIDENCE_VIEWPORTS) {
+							await page.setViewportSize({width, height});
+							await page.screenshot({
+								path: fromRoot(
+									`.dev/evidence/session-export-${width}x${height}.png`,
+								),
+							});
+						}
+
+						await page.setViewportSize({width: 1280, height: 900});
+					}
+
 					const exportDownloadPromise = page.waitForEvent('download');
-					await exportDialog
+					await currentExportDialog
 						.getByRole('button', {name: 'Download', exact: true})
 						.focus();
 					await page.keyboard.press('Enter');
@@ -1067,6 +1181,71 @@ async function main() {
 					assert.match(html, /<h1>Daily<\/h1>/);
 					assert.doesNotMatch(html, /<h2>Daily<\/h2>/);
 					assert.match(html, /Gmail/);
+					await page.close();
+				},
+			);
+			await check(
+				`bookmark column export offers this column or all bookmarks (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await seed(page);
+					await page.reload();
+					await setTheme(page, theme);
+					const column = page.locator('section[data-column-id]').first();
+					const trigger = column.locator('header [data-move-focus]');
+					await openMenuItemByKeyboard(page, trigger, 'Export column');
+					const dialog = page.getByRole('dialog');
+					await dialog.waitFor();
+					const choices = dialog.getByRole('radiogroup', {
+						name: 'What to export',
+					});
+					assert.equal(await choices.count(), 1);
+					const current = choices.getByRole('radio', {name: 'Daily'});
+					const allBookmarks = choices.getByRole('radio', {
+						name: 'All bookmarks',
+					});
+					await current.focus();
+					await page.keyboard.press('ArrowRight');
+					assert.equal(await allBookmarks.isChecked(), true);
+					assert.equal(
+						await dialog
+							.getByRole('heading', {name: 'Back up bookmarks'})
+							.count(),
+						1,
+					);
+					await page.keyboard.press('ArrowLeft');
+					assert.equal(await current.isChecked(), true);
+					assert.equal(
+						await dialog.getByRole('heading', {name: 'Export column'}).count(),
+						1,
+					);
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					await dialog.screenshot({
+						path: fromRoot(`.dev/evidence/bookmark-export-${theme}.png`),
+					});
+
+					const downloadPromise = page.waitForEvent('download');
+					await dialog
+						.getByRole('button', {name: 'Download', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					const download = await downloadPromise;
+					const path = await download.path();
+					assert.ok(path);
+					const exported = JSON.parse(await readFile(path, 'utf8')) as {
+						bookmarkColumns: Array<{name: string}>;
+						bookmarks: Array<{columnId: string}>;
+					};
+					assert.deepEqual(
+						exported.bookmarkColumns.map((entry) => entry.name),
+						['Daily'],
+					);
+					assert.ok(exported.bookmarks.length > 0);
+					assert.ok(
+						exported.bookmarks.every(
+							(bookmark) => bookmark.columnId === 'bookmark-daily',
+						),
+					);
 					await page.close();
 				},
 			);
@@ -1650,6 +1829,8 @@ async function main() {
 
 		await check('skip link moves focus to the content', async () => {
 			const page = await openPage(context, extensionId, 'options');
+			await page.bringToFront();
+			await page.locator('body').focus();
 			await page.keyboard.press('Tab');
 			assert.equal(
 				await page.locator(':focus').textContent(),
@@ -2163,6 +2344,12 @@ async function main() {
 			);
 			await page.close();
 		});
+
+		if (process.env.TABLODGE_CAPTURE_EVIDENCE === '1') {
+			await check('mobile export dialog evidence at DSF 3', async () => {
+				await captureMobileExportEvidence(extensionId);
+			});
+		}
 
 		if (consoleErrors.length > 0) {
 			failures.push('browser console errors');

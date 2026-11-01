@@ -64,11 +64,14 @@ import {
 	type ShareMethod,
 } from './share-formats';
 import {
+	bookmarkColumnExportChoices,
 	buildExport,
+	dateStamp,
 	exportCounts,
 	exportFilename,
-	dateStamp,
+	sessionExportChoices,
 	type ExportData,
+	type ExportChoice,
 	type ExportFormat,
 	type ExportKind,
 } from './export-formats';
@@ -220,6 +223,10 @@ type BackupDialogProps = {
 	A single session export cannot switch to other data scopes.
 	*/
 	singleSession?: boolean;
+	/**
+	An individual column export can switch between that column and all bookmarks.
+	*/
+	singleColumn?: boolean;
 };
 
 /**
@@ -233,11 +240,15 @@ export function BackupDialog({
 	state,
 	initialScope,
 	singleSession = false,
+	singleColumn = false,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
 	const [saving, setSaving] = useState(false);
 	const [switched, setSwitched] = useState<BackupScope | null>(null);
+	const [individualChoice, setIndividualChoice] = useState<ExportChoice['id']>(
+		singleColumn ? 'column' : 'current',
+	);
 	useEffect(() => {
 		if (!open) {
 			return;
@@ -246,11 +257,34 @@ export function BackupDialog({
 		setFormat('json');
 		setSaving(false);
 		setSwitched(initialScope ?? null);
-	}, [open, initialScope]);
-	const canSwitch = Boolean(
-		!singleSession && state && requested && requested.kind !== 'selected',
+		setIndividualChoice(singleColumn ? 'column' : 'current');
+	}, [open, initialScope, singleColumn]);
+	const individualChoices = singleSession
+		? requested?.groups?.[0]
+			? sessionExportChoices(
+					requested.groups[0],
+					state?.groups ?? requested.groups,
+					state?.folders ?? requested.folders ?? [],
+				)
+			: []
+		: singleColumn && requested?.columns?.[0]
+			? bookmarkColumnExportChoices(
+					requested.columns[0],
+					state?.bookmarkColumns ?? requested.columns,
+					state?.bookmarks ?? requested.bookmarks ?? [],
+				)
+			: [];
+	const selectedIndividualChoice = individualChoices.find(
+		(choice) => choice.id === individualChoice,
 	);
-	let shown = requested;
+	const canSwitch = Boolean(
+		!singleSession &&
+		!singleColumn &&
+		state &&
+		requested &&
+		requested.kind !== 'selected',
+	);
+	let shown = selectedIndividualChoice?.data ?? requested;
 	if (
 		state &&
 		canSwitch &&
@@ -272,9 +306,12 @@ export function BackupDialog({
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
 	// "Everything" is the full backup ZIP; Bookmarks or Sessions pick a file format. Selected tabs never offer it.
 	const full =
-		!singleSession && switched === 'everything' && kind !== 'selected';
+		!singleSession &&
+		!singleColumn &&
+		switched === 'everything' &&
+		kind !== 'selected';
 	const scopeOptions =
-		singleSession || kind === 'selected'
+		singleSession || singleColumn || kind === 'selected'
 			? []
 			: [
 					{value: 'everything' as const, label: <EverythingLabel />},
@@ -295,15 +332,17 @@ export function BackupDialog({
 							]
 						: []),
 				];
+	const exportName =
+		selectedIndividualChoice?.id === 'all'
+			? undefined
+			: singleSession
+				? shown?.groups?.[0]?.name
+				: singleColumn
+					? shown?.columns?.[0]?.name
+					: undefined;
 	const filename = full
 		? fullBackupFilename(PROJECT.name)
-		: exportFilename(
-				PROJECT.name,
-				kind,
-				format,
-				new Date(),
-				singleSession ? shown?.groups?.[0]?.name : undefined,
-			);
+		: exportFilename(PROJECT.name, kind, format, new Date(), exportName);
 	const summary = full
 		? 'All data and settings'
 		: kind === 'bookmarks'
@@ -350,7 +389,7 @@ export function BackupDialog({
 		try {
 			const file = buildExport(shown, format, {
 				appName: PROJECT.name,
-				name: singleSession ? shown.groups?.[0]?.name : undefined,
+				name: exportName,
 			});
 			downloadFile(file.content, file.mime, file.filename);
 			onOpenChange(false);
@@ -365,24 +404,66 @@ export function BackupDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="lg">
+			<DialogContent
+				size="lg"
+				className="h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden sm:h-auto"
+			>
 				<DialogHeader>
 					<DialogTitle>
 						{full
 							? 'Back up everything'
 							: singleSession
-								? 'Export session'
-								: BACKUP_TITLES[kind](counts.items)}
+								? selectedIndividualChoice?.id === 'all'
+									? 'Back up sessions'
+									: 'Export session'
+								: singleColumn
+									? selectedIndividualChoice?.id === 'all'
+										? 'Back up bookmarks'
+										: 'Export column'
+									: BACKUP_TITLES[kind](counts.items)}
 					</DialogTitle>
 					<DialogDescription>
 						{full
 							? 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted.'
 							: singleSession
-								? 'Choose a format for this session. The file is saved to your downloads; it is not encrypted.'
-								: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
+								? selectedIndividualChoice?.id === 'all'
+									? 'Choose a format for these sessions. The file is saved to your downloads; it is not encrypted.'
+									: 'Choose a format for this session. The file is saved to your downloads; it is not encrypted.'
+								: singleColumn
+									? selectedIndividualChoice?.id === 'all'
+										? 'Choose a format for all bookmarks. The file is saved to your downloads; it is not encrypted.'
+										: 'Choose a format for this column. The file is saved to your downloads; it is not encrypted.'
+									: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
+					{individualChoices.length > 0 && (
+						<RadioCardGroup
+							label="What to export"
+							value={selectedIndividualChoice?.id ?? individualChoices[0].id}
+							onValueChange={(value) =>
+								setIndividualChoice(value as ExportChoice['id'])
+							}
+						>
+							{individualChoices.map((choice) => {
+								const choiceCounts = exportCounts(choice.data);
+								const description =
+									choice.id === 'current'
+										? `${requested?.groups?.[0]?.name ?? 'Untitled session'} · ${plural(choiceCounts.items, 'tab')}`
+										: choice.id === 'column' || choice.data.kind === 'bookmarks'
+											? plural(choiceCounts.items, 'bookmark')
+											: `${plural(choiceCounts.groups, 'session')} · ${plural(choiceCounts.items, 'tab')}`;
+								return (
+									<RadioCard
+										key={choice.id}
+										value={choice.id}
+										title={choice.label}
+										description={description}
+									/>
+								);
+							})}
+						</RadioCardGroup>
+					)}
 					{scopeOptions.length > 1 && (
 						<SegmentedControl
 							fullWidth
@@ -435,7 +516,9 @@ export function BackupDialog({
 									description={
 										kind === 'bookmarks'
 											? choice.bookmarks
-											: singleSession && choice.id === 'json'
+											: singleSession &&
+												  selectedIndividualChoice?.id !== 'all' &&
+												  choice.id === 'json'
 												? 'A backup of this session you can restore here. Keeps notes, split views, tab groups, and order.'
 												: choice.sessions
 									}
@@ -455,7 +538,7 @@ export function BackupDialog({
 						</span>
 					</p>
 				</DialogBody>
-				<DialogFooter>
+				<DialogFooter className="mt-3 shrink-0 sm:mt-6">
 					<Button
 						type="button"
 						variant="outline"
