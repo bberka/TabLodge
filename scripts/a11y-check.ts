@@ -78,6 +78,13 @@ async function readDevStore(page: Page) {
 	return store;
 }
 
+async function writeDevStore(page: Page, store: DevStore) {
+	await page.evaluate(async (data) => {
+		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
+		await chrome.storage.local.set({'tablodge.state': data});
+	}, store);
+}
+
 async function seed(page: Page) {
 	const fixture = createDevFixture(await readDevStore(page));
 	fixture.settings = {
@@ -85,10 +92,7 @@ async function seed(page: Page) {
 		limitBookmarksPerColumn: false,
 		bookmarkColumnPageSize: 10,
 	};
-	await page.evaluate(async (data) => {
-		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
-		await chrome.storage.local.set({'tablodge.state': data});
-	}, fixture);
+	await writeDevStore(page, fixture);
 }
 
 async function seedLongBookmarkColumn(page: Page, count: number) {
@@ -118,10 +122,7 @@ async function seedLongBookmarkColumn(page: Page, count: number) {
 		limitBookmarksPerColumn: false,
 		bookmarkColumnPageSize: 10,
 	};
-	await page.evaluate(async (data) => {
-		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
-		await chrome.storage.local.set({'tablodge.state': data});
-	}, fixture);
+	await writeDevStore(page, fixture);
 }
 
 // The pages follow the system theme by default, so emulating the color scheme switches them.
