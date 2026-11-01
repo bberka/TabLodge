@@ -216,10 +216,14 @@ type BackupDialogProps = {
 	Opens on this choice instead of the requested kind; Settings opens on Everything.
 	*/
 	initialScope?: BackupScope;
+	/**
+	A single session export cannot switch to other data scopes.
+	*/
+	singleSession?: boolean;
 };
 
 /**
-"Back up sessions" / "Back up bookmarks" / "Export N selected tabs": pick a format, then download.
+"Back up sessions" / "Back up bookmarks" / "Export session" / "Export N selected tabs": pick a format, then download.
 */
 export function BackupDialog({
 	data,
@@ -228,6 +232,7 @@ export function BackupDialog({
 	showStatus,
 	state,
 	initialScope,
+	singleSession = false,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
@@ -243,7 +248,7 @@ export function BackupDialog({
 		setSwitched(initialScope ?? null);
 	}, [open, initialScope]);
 	const canSwitch = Boolean(
-		state && requested && requested.kind !== 'selected',
+		!singleSession && state && requested && requested.kind !== 'selected',
 	);
 	let shown = requested;
 	if (
@@ -266,9 +271,10 @@ export function BackupDialog({
 	const kind = shown?.kind ?? 'sessions';
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
 	// "Everything" is the full backup ZIP; Bookmarks or Sessions pick a file format. Selected tabs never offer it.
-	const full = switched === 'everything' && kind !== 'selected';
+	const full =
+		!singleSession && switched === 'everything' && kind !== 'selected';
 	const scopeOptions =
-		kind === 'selected'
+		singleSession || kind === 'selected'
 			? []
 			: [
 					{value: 'everything' as const, label: <EverythingLabel />},
@@ -291,7 +297,13 @@ export function BackupDialog({
 				];
 	const filename = full
 		? fullBackupFilename(PROJECT.name)
-		: exportFilename(PROJECT.name, kind, format);
+		: exportFilename(
+				PROJECT.name,
+				kind,
+				format,
+				new Date(),
+				singleSession ? shown?.groups?.[0]?.name : undefined,
+			);
 	const summary = full
 		? 'All data and settings'
 		: kind === 'bookmarks'
@@ -338,6 +350,7 @@ export function BackupDialog({
 		try {
 			const file = buildExport(shown, format, {
 				appName: PROJECT.name,
+				name: singleSession ? shown.groups?.[0]?.name : undefined,
 			});
 			downloadFile(file.content, file.mime, file.filename);
 			onOpenChange(false);
@@ -355,12 +368,18 @@ export function BackupDialog({
 			<DialogContent size="lg">
 				<DialogHeader>
 					<DialogTitle>
-						{full ? 'Back up everything' : BACKUP_TITLES[kind](counts.items)}
+						{full
+							? 'Back up everything'
+							: singleSession
+								? 'Export session'
+								: BACKUP_TITLES[kind](counts.items)}
 					</DialogTitle>
 					<DialogDescription>
 						{full
 							? 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted.'
-							: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
+							: singleSession
+								? 'Choose a format for this session. The file is saved to your downloads; it is not encrypted.'
+								: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
@@ -414,7 +433,11 @@ export function BackupDialog({
 										) : undefined
 									}
 									description={
-										kind === 'bookmarks' ? choice.bookmarks : choice.sessions
+										kind === 'bookmarks'
+											? choice.bookmarks
+											: singleSession && choice.id === 'json'
+												? 'A backup of this session you can restore here. Keeps notes, split views, tab groups, and order.'
+												: choice.sessions
 									}
 									className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
 								/>
