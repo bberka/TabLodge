@@ -522,6 +522,7 @@ export type TabLodgeMessages = {
 	*/
 	SWITCH_WORKSPACE: {groupId: string};
 	DELETE_GROUP: {groupId: string};
+	ARCHIVE_GROUP: {groupId: string};
 	UPDATE_GROUP: {groupId: string; fields: SessionFields};
 	/**
 	Sets the custom session order: `order` lists the visible session ids in their new order and they take
@@ -758,6 +759,7 @@ export type TabLodgeResponses = {
 	`trashId`: the deleted session in the trash, for Undo.
 	*/
 	DELETE_GROUP: {trashId?: string};
+	ARCHIVE_GROUP: {group: Session};
 	UPDATE_GROUP: {group: Session};
 	SET_GROUP_ORDER: {};
 	CREATE_FOLDER: {folder: Folder};

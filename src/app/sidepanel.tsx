@@ -66,6 +66,7 @@ import {savedUrlSet} from './saved-urls';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
+import {archivedFolderId} from './session-folders';
 import {siteName, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
 import {ACTION_ICONS} from './action-icons';
@@ -300,10 +301,15 @@ function SidePanel() {
 	);
 
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
-	const sessions = state?.groups || NO_SESSIONS;
+	const allSessions = state?.groups || NO_SESSIONS;
+	const archivedId = archivedFolderId(state?.folders || []);
+	const sessions = useMemo(
+		() => allSessions.filter((session) => session.folderId !== archivedId),
+		[allSessions, archivedId],
+	);
 	const savedUrls = useMemo(
-		() => savedUrlSet(bookmarks, sessions),
-		[bookmarks, sessions],
+		() => savedUrlSet(bookmarks, allSessions),
+		[bookmarks, allSessions],
 	);
 	const columns = state?.bookmarkColumns;
 	const panel: PanelTab = chosenPanel ?? 'bookmarks';

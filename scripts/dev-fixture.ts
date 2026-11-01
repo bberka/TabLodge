@@ -116,6 +116,13 @@ const bookmarkEntries = [
 const folders: DevFolder[] = [
 	{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true},
 	{
+		id: 'archived-sessions',
+		name: 'Archived',
+		icon: 'archive',
+		createdAt,
+		isDefault: false,
+	},
+	{
 		id: 'folder-work',
 		name: 'Work',
 		icon: 'briefcase',
@@ -178,6 +185,29 @@ const sessions: DevSession[] = sessionNames.map((name, sessionIndex) => ({
 	})),
 }));
 
+const archivedExample: DevSession = {
+	id: 'dev-archived-session',
+	name: 'Archived example',
+	folderId: 'archived-sessions',
+	description: 'An example of a session kept in the archive.',
+	createdAt: createdAt - 6 * 86_400_000,
+	updatedAt: createdAt - 6 * 86_400_000,
+	sourceWindowName: '',
+	sourceWindowId: null,
+	tabs: [
+		{
+			id: 'dev-archived-tab-1',
+			title: 'Old project notes',
+			url: 'https://archive.example/old-project',
+			notes: '',
+			pinned: false,
+			nativeGroup: null,
+			savedAt: createdAt - 6 * 86_400_000,
+			originalIndex: 0,
+		},
+	],
+};
+
 const bookmarkColumns: DevBookmarkColumn[] = [
 	{
 		id: 'bookmark-daily',
@@ -206,6 +236,7 @@ export const devFixtureUrls = [
 	...new Set([
 		...sessionTabs.flatMap((tabs) => tabs.map(([, url]) => url)),
 		...bookmarkEntries.map(([, , url]) => url),
+		archivedExample.tabs[0].url,
 	]),
 ];
 
@@ -229,7 +260,7 @@ Build repeatable, synthetic data for local UI work from the worker's default sto
 export function createDevFixture(base: DevStore): DevStore {
 	return {
 		...base,
-		groups: sessions,
+		groups: [...sessions, archivedExample],
 		folders,
 		bookmarkColumns,
 		bookmarks,
