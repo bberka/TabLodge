@@ -51,18 +51,20 @@ export const dateStamp = (date: Date) =>
 	`${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
 /**
-For example `tablodge-sessions-2026-10-25.json`: lower-case display name, what was exported, and the date.
+For example `tablodge-sessions-2026-10-25.json`: lower-case display name, what was exported, and the date. A session name is included for individual session exports.
 */
 export function exportFilename(
 	appName: string,
 	kind: ExportKind,
 	format: ExportFormat,
 	date = new Date(),
+	name?: string,
 ) {
 	const extension =
 		EXPORT_FORMATS.find((entry) => entry.id === format)?.extension ?? 'txt';
 	const what = kind === 'selected' ? 'selected-tabs' : kind;
-	return `${fileNamePrefix(appName)}-${what}-${dateStamp(date)}.${extension}`;
+	const namePart = name?.trim() ? `-${fileNamePrefix(name)}` : '';
+	return `${fileNamePrefix(appName)}-${what}${namePart}-${dateStamp(date)}.${extension}`;
 }
 
 /**
@@ -330,7 +332,11 @@ Builds the file for an export: its text, MIME type, and dated file name.
 export function buildExport(
 	data: ExportData,
 	format: ExportFormat,
-	{appName, now = new Date()}: {appName: string; now?: Date},
+	{
+		appName,
+		now = new Date(),
+		name,
+	}: {appName: string; now?: Date; name?: string},
 ): ExportFile {
 	const mime =
 		EXPORT_FORMATS.find((entry) => entry.id === format)?.mime ??
@@ -348,6 +354,6 @@ export function buildExport(
 	return {
 		content,
 		mime,
-		filename: exportFilename(appName, data.kind, format, now),
+		filename: exportFilename(appName, data.kind, format, now, name),
 	};
 }

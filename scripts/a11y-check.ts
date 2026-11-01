@@ -11,7 +11,12 @@ import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
-import {chromium, type BrowserContext, type Page} from 'playwright';
+import {
+	chromium,
+	type BrowserContext,
+	type Locator,
+	type Page,
+} from 'playwright';
 import {createDevFixture, type DevStore} from './dev-fixture.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
@@ -81,6 +86,17 @@ async function setTheme(page: Page, theme: (typeof THEMES)[number]) {
 	await page.emulateMedia({colorScheme: theme});
 	// Colors transition between themes; measure contrast after they settle.
 	await page.waitForTimeout(600);
+}
+
+async function openMenuItemByKeyboard(
+	page: Page,
+	trigger: Locator,
+	name: string,
+) {
+	await trigger.focus();
+	await page.keyboard.press('Enter');
+	await page.getByRole('menuitem', {name, exact: true}).focus();
+	await page.keyboard.press('Enter');
 }
 
 async function openPage(
@@ -499,6 +515,120 @@ async function main() {
 						.filter({has: page.getByRole('heading', {name, exact: true})});
 					await column.waitFor();
 					assert.equal(await column.locator('[data-bookmark-id]').count(), 1);
+					await page.close();
+				},
+			);
+			await check(
+				`share and export one session from its menu by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await seed(page);
+					await page.reload();
+					await setTheme(page, theme);
+					const card = page.locator('#session-dev-session-1');
+					const name = 'Home lab rebuild';
+					const trigger = card.locator('[data-move-focus]');
+
+					await openMenuItemByKeyboard(page, trigger, 'Share');
+					const shareDialog = page.getByRole('dialog');
+					await shareDialog.waitFor();
+					assert.equal(await shareDialog.locator('h4').textContent(), name);
+					assert.equal(await shareDialog.locator('h5').count(), 0);
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					await shareDialog.screenshot({
+						path: fromRoot(`.dev/evidence/session-share-${theme}.png`),
+					});
+
+					const shareDownloadPromise = page.waitForEvent('download');
+					await shareDialog
+						.getByRole('button', {name: 'Download', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					const shareDownload = await shareDownloadPromise;
+					const sharePath = await shareDownload.path();
+					assert.ok(sharePath);
+					const shareHtml = await readFile(sharePath, 'utf8');
+					assert.match(shareHtml, /<h1>Home lab rebuild<\/h1>/);
+					assert.doesNotMatch(shareHtml, /<h2>Home lab rebuild<\/h2>/);
+					await shareDialog.waitFor({state: 'hidden'});
+
+					await openMenuItemByKeyboard(page, trigger, 'Export session');
+					const exportDialog = page.getByRole('dialog');
+					await exportDialog.waitFor();
+					assert.equal(
+						await exportDialog
+							.getByRole('heading', {name: 'Export session'})
+							.count(),
+						1,
+					);
+					assert.equal(
+						await exportDialog
+							.getByRole('radiogroup', {name: 'What to back up'})
+							.count(),
+						0,
+					);
+
+					const htmlFormat = exportDialog.getByRole('radio', {
+						name: /Browser bookmarks \(HTML\)/,
+					});
+					await htmlFormat.focus();
+					await page.keyboard.press('Space');
+					assert.equal(await htmlFormat.isChecked(), true);
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					await exportDialog.screenshot({
+						path: fromRoot(`.dev/evidence/session-export-${theme}.png`),
+					});
+					const exportDownloadPromise = page.waitForEvent('download');
+					await exportDialog
+						.getByRole('button', {name: 'Download', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					const exportDownload = await exportDownloadPromise;
+					assert.match(
+						exportDownload.suggestedFilename(),
+						/^tablodge-sessions-home-lab-rebuild-\d{4}-\d{2}-\d{2}\.html$/,
+					);
+					const exportPath = await exportDownload.path();
+					assert.ok(exportPath);
+					const exportHtml = await readFile(exportPath, 'utf8');
+					assert.match(exportHtml, /^<!DOCTYPE NETSCAPE-Bookmark-file-1>/);
+					assert.match(exportHtml, /Home lab rebuild/);
+					assert.doesNotMatch(exportHtml, /Quarterly planning/);
+					await page.close();
+				},
+			);
+			await check(
+				`bookmark column share does not repeat its title (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await seed(page);
+					await page.reload();
+					await setTheme(page, theme);
+					const column = page.locator('section[data-column-id]').first();
+					const trigger = column.locator('header [data-move-focus]');
+
+					await openMenuItemByKeyboard(page, trigger, 'Share');
+					const dialog = page.getByRole('dialog');
+					await dialog.waitFor();
+					assert.equal(await dialog.locator('h4').textContent(), 'Daily');
+					assert.equal(await dialog.locator('h5').count(), 0);
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					await dialog.screenshot({
+						path: fromRoot(`.dev/evidence/bookmark-share-${theme}.png`),
+					});
+
+					const downloadPromise = page.waitForEvent('download');
+					await dialog
+						.getByRole('button', {name: 'Download', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+					const download = await downloadPromise;
+					const path = await download.path();
+					assert.ok(path);
+					const html = await readFile(path, 'utf8');
+					assert.match(html, /<h1>Daily<\/h1>/);
+					assert.doesNotMatch(html, /<h2>Daily<\/h2>/);
+					assert.match(html, /Gmail/);
 					await page.close();
 				},
 			);

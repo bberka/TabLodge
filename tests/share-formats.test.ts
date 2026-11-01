@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {sharePreview, type ShareGroup} from '../src/app/share-formats';
+import {
+	shareHtmlPage,
+	sharePreview,
+	type ShareGroup,
+} from '../src/app/share-formats';
 
 const groups: ShareGroup[] = Array.from({length: 4}, (_group, groupIndex) => ({
 	name: `Group ${groupIndex + 1}`,
@@ -94,4 +98,22 @@ test('share preview matches each selected output format', () => {
 	);
 	assert.notEqual(markdown.text, links.text);
 	assert.notEqual(links.text, rich.text);
+});
+
+test('single-group share HTML does not repeat the page title as a group heading', () => {
+	const html = shareHtmlPage(
+		'Research',
+		[
+			{
+				name: 'Research',
+				tabs: [{title: 'Research', url: 'https://example.com/'}],
+			},
+		],
+		'TabLodge',
+	);
+
+	assert.match(html, /<h1>Research<\/h1>/);
+	assert.doesNotMatch(html, /<h2>Research<\/h2>/);
+	assert.doesNotMatch(html, /<article><header>/);
+	assert.match(html, /<a href="https:\/\/example\.com\/"[^>]*>Research<\/a>/);
 });
