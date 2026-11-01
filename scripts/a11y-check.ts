@@ -26,6 +26,7 @@ const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const PAGES = ['newtab', 'options', 'help', 'popup', 'sidepanel'] as const;
 const THEMES = ['light', 'dark'] as const;
 const EVIDENCE_VIEWPORTS = [
+	[440, 956],
 	[768, 1024],
 	[1440, 900],
 	[1920, 1080],
@@ -231,12 +232,78 @@ async function captureEvidence(page: Page, name: string) {
 	for (const [width, height] of EVIDENCE_VIEWPORTS) {
 		await page.setViewportSize({width, height});
 		const sizedName = `${name.slice(0, -4)}-${width}x${height}.png`;
-		await page.screenshot({
-			path: join(directory, sizedName),
-		});
+		const mobileEmulation =
+			width === 440 ? await page.context().newCDPSession(page) : undefined;
+		try {
+			if (mobileEmulation) {
+				await mobileEmulation.send('Emulation.setDeviceMetricsOverride', {
+					width,
+					height,
+					deviceScaleFactor: 3,
+					mobile: true,
+					screenWidth: width,
+					screenHeight: height,
+				});
+				await mobileEmulation.send('Emulation.setTouchEmulationEnabled', {
+					enabled: true,
+					maxTouchPoints: 1,
+				});
+				const deviceScaleFactor = await page.locator('body').evaluate(
+					(node: {
+						ownerDocument: {
+							defaultView: {devicePixelRatio: number} | null;
+						};
+					}) => {
+						const view = node.ownerDocument.defaultView;
+						return view?.devicePixelRatio ?? 1;
+					},
+				);
+				assert.equal(deviceScaleFactor, 3, 'phone evidence uses DPR 3');
+			}
+
+			await page.screenshot({
+				path: join(directory, sizedName),
+				scale: 'device',
+			});
+		} finally {
+			if (mobileEmulation) {
+				await mobileEmulation.send('Emulation.setTouchEmulationEnabled', {
+					enabled: false,
+				});
+				await mobileEmulation.send('Emulation.clearDeviceMetricsOverride');
+				await mobileEmulation.detach();
+			}
+		}
 	}
 
 	await page.setViewportSize(viewport);
+}
+
+async function assertInline(
+	label: Locator,
+	control: Locator,
+	description: string,
+) {
+	const labelBounds = await label.boundingBox();
+	const controlBounds = await control.boundingBox();
+	assert.ok(labelBounds);
+	assert.ok(controlBounds);
+	assert.ok(
+		Math.abs(
+			labelBounds.y +
+				labelBounds.height / 2 -
+				(controlBounds.y + controlBounds.height / 2),
+		) <= 2,
+		`${description} should share a line`,
+	);
+	assert.ok(
+		controlBounds.x >= labelBounds.x + labelBounds.width,
+		`${description} should follow its label`,
+	);
+	assert.ok(
+		controlBounds.x - (labelBounds.x + labelBounds.width) <= 24,
+		`${description} should sit beside its label`,
+	);
 }
 
 async function main() {
@@ -541,6 +608,48 @@ async function main() {
 				await dialog
 					.getByRole('heading', {name: 'Review bookmark import'})
 					.waitFor();
+				assert.equal(
+					await dialog
+						.getByRole('radio', {name: 'Columns from folders'})
+						.count(),
+					0,
+					'flat bookmark imports should not offer columns from folders',
+				);
+				assert.equal(
+					await dialog.getByRole('radio', {name: 'One column'}).count(),
+					0,
+					'flat bookmark imports should not offer a column mode button',
+				);
+				const targetColumn = dialog.getByRole('combobox', {
+					name: 'Column for every imported bookmark',
+				});
+				const targetLabel = dialog.getByText('Put bookmarks in', {exact: true});
+				const savedLinksControl = dialog.getByRole('radiogroup', {
+					name: 'Links already saved',
+				});
+				const savedLinksLabel = dialog.getByText('Links already saved', {
+					exact: true,
+				});
+				for (const viewport of [
+					{width: 440, height: 956},
+					{width: 768, height: 1024},
+					{width: 1440, height: 900},
+					{width: 1920, height: 1080},
+				]) {
+					await page.setViewportSize(viewport);
+					await assertInline(
+						targetLabel,
+						targetColumn,
+						'bookmark column picker',
+					);
+					await assertInline(
+						savedLinksLabel,
+						savedLinksControl,
+						'saved links selector',
+					);
+				}
+
+				await captureEvidence(page, `bookmark-import-flat-${theme}.png`);
 				await page.screenshot({path: `.dev/evidence/import-${theme}.png`});
 				const body = dialog.locator('div').filter({has: page.locator('ol')});
 				const scrolling = await body.evaluateAll(
@@ -595,6 +704,45 @@ async function main() {
 				await page.screenshot({
 					path: `.dev/evidence/import-narrow-${theme}.png`,
 				});
+				await dialog.getByRole('button', {name: 'Back'}).click();
+				await page.locator('input[type="file"]').setInputFiles({
+					name: 'bookmarks.html',
+					mimeType: 'text/html',
+					buffer: Buffer.from(
+						'<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>Research</H3><DL><p><DT><A HREF="https://example.com/folder">Folder bookmark</A></DL><p></DL><p>',
+					),
+				});
+				await dialog
+					.getByRole('heading', {name: 'Review bookmark import'})
+					.waitFor();
+				const folderOption = dialog.getByRole('radio', {
+					name: 'Columns from folders',
+				});
+				assert.equal(
+					await folderOption.count(),
+					1,
+					'foldered bookmark imports should offer columns from folders',
+				);
+				await captureEvidence(page, `bookmark-import-folders-${theme}.png`);
+				await folderOption.focus();
+				await page.keyboard.press('Space');
+				assert.equal(await folderOption.isChecked(), true);
+				const oneColumnOption = dialog.getByRole('radio', {
+					name: 'One column',
+				});
+				await oneColumnOption.focus();
+				await page.keyboard.press('Space');
+				assert.equal(await oneColumnOption.isChecked(), true);
+				assert.equal(
+					await dialog
+						.getByRole('combobox', {
+							name: 'Column for every imported bookmark',
+						})
+						.count(),
+					1,
+					'one-column mode should show the column picker',
+				);
+				await captureEvidence(page, `bookmark-import-one-column-${theme}.png`);
 				await page.close();
 			});
 			await check(`import into a new bookmark column (${theme})`, async () => {
@@ -617,9 +765,10 @@ async function main() {
 					});
 					const dialog = page.getByRole('dialog');
 					await dialog
-						.getByRole('radio', {name: 'One column', exact: true})
-						.focus();
-					await page.keyboard.press('Space');
+						.getByRole('combobox', {
+							name: 'Column for every imported bookmark',
+						})
+						.waitFor();
 					await dialog.getByRole('combobox').press('Space');
 					await page
 						.getByRole('option', {name: 'New column', exact: true})
@@ -1039,9 +1188,20 @@ async function main() {
 							.press('Enter');
 						const dialog = page.getByRole('dialog');
 						await dialog
-							.getByRole('radio', {name: 'One column', exact: true})
-							.press('Space');
-						await dialog.getByRole('combobox').press('Space');
+							.getByRole('heading', {name: 'Review bookmark import'})
+							.waitFor();
+						const oneColumnMode = dialog.getByRole('radio', {
+							name: 'One column',
+							exact: true,
+						});
+						await oneColumnMode.focus();
+						await page.keyboard.press('Space');
+						assert.equal(await oneColumnMode.isChecked(), true);
+						const columnPicker = dialog.getByRole('combobox', {
+							name: 'Column for every imported bookmark',
+						});
+						await columnPicker.waitFor();
+						await columnPicker.press('Space');
 						await page
 							.getByRole('option', {name: 'New column', exact: true})
 							.press('Enter');
