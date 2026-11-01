@@ -1196,6 +1196,40 @@ async function main() {
 				await page.close();
 			},
 		);
+		for (const theme of THEMES) {
+			await check(`session action menu order (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'newtab');
+				await setTheme(page, theme);
+				const trigger = page.getByRole('button', {
+					name: 'More actions for Home lab rebuild',
+				});
+				await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+				for (const width of [1440, 375]) {
+					await page.setViewportSize({width, height: 900});
+					await trigger.scrollIntoViewIfNeeded();
+					await trigger.focus();
+					await page.keyboard.press('Enter');
+					const menu = page.getByRole('menu');
+					await menu
+						.getByRole('menuitem', {name: 'Switch to this session'})
+						.waitFor();
+					assert.deepEqual(
+						(await menu.getByRole('menuitem').allTextContents()).slice(0, 3),
+						['Restore', 'Restore options', 'Switch to this session'],
+					);
+					await page.screenshot({
+						animations: 'disabled',
+						path: fromRoot(
+							`.dev/evidence/session-action-menu-${width}-${theme}.png`,
+						),
+					});
+					await page.keyboard.press('Escape');
+				}
+
+				await page.close();
+			});
+		}
+
 		await check('dialogs hand focus back to what opened them', async () => {
 			const page = await openPage(context, extensionId, 'newtab');
 			const add = page.getByRole('button', {name: 'Add bookmark'}).first();

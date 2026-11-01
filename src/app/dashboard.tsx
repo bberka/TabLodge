@@ -2422,18 +2422,18 @@ const GroupCard = memo(
 				onSelect: () => onRestore(),
 			},
 			{
-				id: 'switch-to',
-				label: 'Switch to this session',
-				icon: ArrowLeftRight,
-				disabled: !canSwitch,
-				onSelect: () => handlers.switchTo(group),
-			},
-			{
 				type: 'submenu',
 				id: 'restore-options',
 				label: 'Restore options',
 				icon: History,
 				items: restoreOptions,
+			},
+			{
+				id: 'switch-to',
+				label: 'Switch to this session',
+				icon: ArrowLeftRight,
+				disabled: !canSwitch,
+				onSelect: () => handlers.switchTo(group),
 			},
 			{type: 'separator'},
 			{
