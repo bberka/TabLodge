@@ -286,7 +286,10 @@ function Help() {
 							On the dashboard, use the{' '}
 							<MenuLocation label="Bookmarks toolbar" /> to import a JSON file
 							or your browser bookmarks, or export bookmarks. Import lets you
-							skip or allow duplicates.
+							skip or allow duplicates. Browser bookmark folders become columns;
+							folders with the same name merge, and links without a folder go in
+							the first column. Use a column’s menu to export that column or all
+							bookmarks.
 						</>
 					),
 					searchText:

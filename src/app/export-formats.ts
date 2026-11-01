@@ -30,6 +30,62 @@ export type ExportFile = {
 	filename: string;
 };
 
+export type ExportChoice = {
+	id: 'current' | 'column' | 'all';
+	label: string;
+	data: ExportData;
+};
+
+/**
+Options shown when exporting one session.
+*/
+export function sessionExportChoices(
+	current: Session,
+	allSessions: Session[],
+	folders: Folder[],
+): ExportChoice[] {
+	return [
+		{
+			id: 'current',
+			label: 'Current session',
+			data: {kind: 'sessions', groups: [current], folders},
+		},
+		{
+			id: 'all',
+			label: 'All sessions',
+			data: {kind: 'sessions', groups: allSessions, folders},
+		},
+	];
+}
+
+/**
+Options shown when exporting one bookmark column.
+*/
+export function bookmarkColumnExportChoices(
+	current: BookmarkColumn,
+	allColumns: BookmarkColumn[],
+	allBookmarks: Bookmark[],
+): ExportChoice[] {
+	return [
+		{
+			id: 'column',
+			label: current.name,
+			data: {
+				kind: 'bookmarks',
+				columns: [current],
+				bookmarks: allBookmarks.filter(
+					(bookmark) => bookmark.columnId === current.id,
+				),
+			},
+		},
+		{
+			id: 'all',
+			label: 'All bookmarks',
+			data: {kind: 'bookmarks', columns: allColumns, bookmarks: allBookmarks},
+		},
+	];
+}
+
 const EXPORT_FORMATS: ReadonlyArray<{
 	id: ExportFormat;
 	extension: string;

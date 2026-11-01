@@ -250,7 +250,10 @@ function NewTab() {
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
-	const [backupData, setBackupData] = useState<ExportData | null>(null);
+	const [backupRequest, setBackupRequest] = useState<{
+		data: ExportData;
+		singleColumn: boolean;
+	} | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
@@ -1521,7 +1524,23 @@ function NewTab() {
 			return;
 		}
 
-		setBackupData({kind: 'bookmarks', columns, bookmarks});
+		setBackupRequest({
+			data: {kind: 'bookmarks', columns, bookmarks},
+			singleColumn: false,
+		});
+	}
+
+	function openColumnExport(column: BookmarkColumnData) {
+		setBackupRequest({
+			data: {
+				kind: 'bookmarks',
+				columns: [column],
+				bookmarks: bookmarks.filter(
+					(bookmark) => bookmark.columnId === column.id,
+				),
+			},
+			singleColumn: true,
+		});
 	}
 
 	function shareBookmarks(column?: BookmarkColumnData) {
@@ -1746,6 +1765,7 @@ function NewTab() {
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
 		share: (column) => shareBookmarks(column),
+		exportColumn: openColumnExport,
 		add: (column) => openBookmarkEditor(null, column.id),
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
@@ -2177,10 +2197,11 @@ function NewTab() {
 			/>
 			<BackupDialog
 				state={state}
-				data={backupData}
-				open={Boolean(backupData)}
+				data={backupRequest?.data ?? null}
+				open={Boolean(backupRequest)}
+				singleColumn={backupRequest?.singleColumn ?? false}
 				showStatus={showStatus}
-				onOpenChange={(open) => !open && setBackupData(null)}
+				onOpenChange={(open) => !open && setBackupRequest(null)}
 			/>
 			<ImportDialog
 				open={importOpen}
@@ -2878,6 +2899,7 @@ Handlers the board shares with every column and bookmark. The object never chang
 type BoardActions = {
 	bookmark: OnBookmarkAction;
 	share: (column: BookmarkColumnData) => void;
+	exportColumn: (column: BookmarkColumnData) => void;
 	add: (column: BookmarkColumnData) => void;
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
@@ -2965,6 +2987,7 @@ const BookmarkColumn = memo(
 		const lastSibling = siblings.at(-1)?.id;
 		const firstSibling = siblings[0]?.id;
 		const onShare = () => actions.share(column);
+		const onExport = () => actions.exportColumn(column);
 		const onAdd = () => actions.add(column);
 		const onOpenAll = () => actions.openAll(column);
 		const onEdit = () => actions.edit(column);
@@ -2997,6 +3020,13 @@ const BookmarkColumn = memo(
 				icon: Share2,
 				disabled: siblings.length === 0,
 				onSelect: onShare,
+			},
+			{
+				id: 'export',
+				label: 'Export column',
+				icon: Download,
+				disabled: siblings.length === 0,
+				onSelect: onExport,
 			},
 			{type: 'separator'},
 			{id: 'edit', label: 'Edit column', icon: Pencil, onSelect: onEdit},

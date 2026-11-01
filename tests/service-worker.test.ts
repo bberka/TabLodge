@@ -4261,7 +4261,7 @@ test("files from other tools import through the parsers' payloads", async () => 
 		harness.state.bookmarks.find(
 			(bookmark) => bookmark.url === 'https://loose.example/',
 		)?.columnId,
-		'bookmark-default',
+		dev?.id,
 	);
 });
 

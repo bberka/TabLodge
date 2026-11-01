@@ -247,6 +247,41 @@ function group(
 }
 
 /**
+Folder hierarchy is flattened to bookmark columns. Equal folder names share a
+column, and links outside a folder join the first named column.
+*/
+function mergeBookmarkFolders(entries: ImportGroup[]): ImportGroup[] {
+	const folders = new Map<string, ImportGroup>();
+	const looseLinks: ImportLink[] = [];
+	for (const entry of entries) {
+		const {name} = entry;
+		if (!name) {
+			looseLinks.push(...entry.links);
+			continue;
+		}
+
+		const existing = folders.get(name);
+		if (existing) {
+			existing.links.push(...entry.links);
+			existing.createdAt ??= entry.createdAt;
+		} else {
+			folders.set(name, {...entry, name});
+		}
+	}
+
+	const merged = [...folders.values()];
+	if (looseLinks.length > 0) {
+		if (merged.length > 0) {
+			merged[0].links.push(...looseLinks);
+		} else {
+			merged.push(group('Bookmarks', looseLinks));
+		}
+	}
+
+	return merged;
+}
+
+/**
 Splits groups over the service worker's per-session limit into numbered parts and drops empty ones.
 */
 function sessionSized(groups: ImportGroup[]): ImportGroup[] {
@@ -748,7 +783,7 @@ function parseHtml(source: string): ParsedImport {
 	} | null = null;
 	let lastLink: ImportLink | null = null;
 	const groupFor = (names: string[]) => {
-		const key = names.filter(Boolean).join(' / ');
+		const key = names.findLast(Boolean) ?? '';
 		let entry = groups.get(key);
 		if (!entry) {
 			entry = group(key, []);
@@ -777,7 +812,7 @@ function parseHtml(source: string): ParsedImport {
 			if (link) {
 				const entry = groupFor(path);
 				if (
-					path.length > 0 &&
+					path.some(Boolean) &&
 					!entry.createdAt &&
 					pendingCreated.get(path.join(' / '))
 				) {
@@ -877,19 +912,8 @@ function parseHtml(source: string): ParsedImport {
 	}
 
 	finish();
-	// Netscape files wrap everything in one unnamed top-level <DL>; its path segment is "" and is dropped.
-	const merged = new Map<string, ImportGroup>();
-	for (const entry of groups.values()) {
-		const name = entry.name.split(' / ').filter(Boolean).join(' / ');
-		const target = merged.get(name);
-		if (target) {
-			target.links.push(...entry.links);
-		} else {
-			merged.set(name, {...entry, name});
-		}
-	}
-
-	const list = [...merged.values()];
+	// Unnamed <DL> wrappers do not become columns; root links stay loose for the first column.
+	const list = mergeBookmarkFolders([...groups.values()]);
 	if (list.every((entry) => entry.links.length === 0) && !collector.invalid) {
 		throw new ImportFormatError('This HTML file has no links.');
 	}
@@ -1312,7 +1336,7 @@ export function parseBookmarkTree(roots: BookmarkTreeNode[]): ParsedImport {
 				return;
 			}
 
-			const key = path.join(' / ');
+			const key = path.at(-1) ?? '';
 			let entry = groups.get(key);
 			if (!entry) {
 				entry = group(key, []);
@@ -1340,7 +1364,7 @@ export function parseBookmarkTree(roots: BookmarkTreeNode[]): ParsedImport {
 		'netscape-html',
 		'This browser’s bookmarks',
 		'verified',
-		[...groups.values()],
+		mergeBookmarkFolders([...groups.values()]),
 		collector,
 	);
 }
@@ -1484,6 +1508,7 @@ export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 	}
 
 	const bookmarkColumns: Array<{id: string; name: string}> = [];
+	const columnIds = new Map<string, string>();
 	const bookmarks: Array<{
 		url: string;
 		title: string;
@@ -1491,11 +1516,26 @@ export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 		createdAt?: number;
 	}> = [];
 	for (const entry of parsed.bookmarks) {
-		let columnId: string | undefined;
-		if (entry.name) {
-			columnId = `import-column-${bookmarkColumns.length + 1}`;
-			bookmarkColumns.push({id: columnId, name: entry.name.slice(0, 60)});
+		if (!entry.name || columnIds.has(entry.name)) {
+			continue;
 		}
+
+		const columnId = `import-column-${bookmarkColumns.length + 1}`;
+		columnIds.set(entry.name, columnId);
+		bookmarkColumns.push({id: columnId, name: entry.name.slice(0, 60)});
+	}
+
+	if (
+		bookmarkColumns.length === 0 &&
+		parsed.bookmarks.some((entry) => entry.links.length > 0)
+	) {
+		columnIds.set('', 'import-column-1');
+		bookmarkColumns.push({id: 'import-column-1', name: 'Bookmarks'});
+	}
+
+	const firstColumnId = bookmarkColumns[0]?.id;
+	for (const entry of parsed.bookmarks) {
+		const columnId = entry.name ? columnIds.get(entry.name) : firstColumnId;
 
 		for (const link of entry.links) {
 			bookmarks.push({

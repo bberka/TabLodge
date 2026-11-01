@@ -160,7 +160,7 @@ Bookmarks can come from the active page, manual entry, pasted links, dragging, a
 
 The optional browser bookmark setting uses `chrome.bookmarks.onCreated`, not a hook on the star button. It waits 1.5 seconds and acts only on a single new web bookmark matching the active tab of the last focused normal window. Bursts, imports, folders, and URLs already saved in TabLodge are ignored. An import flag also lives in `chrome.storage.session` so it survives worker restarts.
 
-The setting can ask or add automatically to a chosen column, falling back to the first column. Removing the browser bookmark does not remove the TabLodge copy. Explicit browser imports turn folders into ordered columns and offer duplicate choices.
+The setting can ask or add automatically to a chosen column, falling back to the first column. Removing the browser bookmark does not remove the TabLodge copy. Explicit bookmark imports turn each containing folder into a column, merge folders with the same name, and place links without a folder in the first column. Imports offer duplicate choices.
 
 Columns and bookmarks are reordered by dragging. Any column, including the last, can be deleted. For a populated column, the dialog offers to move its bookmarks or delete them too; the last column has no move destination. The result offers Undo and stores the column in trash.
 
