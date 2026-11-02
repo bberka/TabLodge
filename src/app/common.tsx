@@ -15,13 +15,8 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../shared/ui';
-import type {
-	ActionFailure,
-	ActionResult,
-	TabLodgeMessages,
-	TabLodgeMessageType,
-	TabLodgeState,
-} from './types';
+import type {ActionFailure, ActionResult, TabLodgeState} from './types';
+import {send} from './message-client';
 import {PROJECT} from './project';
 import {
 	PRIVATE_CONFIG_KEY,
@@ -61,12 +56,6 @@ export function useCloseOnEscape() {
 		return () => document.removeEventListener('keydown', onKey);
 	}, []);
 }
-
-// Message types whose payload has no required fields can be sent without a second argument.
-type OptionalFields<K extends TabLodgeMessageType> =
-	{} extends TabLodgeMessages[K]
-		? [fields?: TabLodgeMessages[K]]
-		: [fields: TabLodgeMessages[K]];
 
 /**
 Ctrl/Shift-click selection in this window's tab strip, matching how the service worker's "selected-or-window"
@@ -195,24 +184,6 @@ export function saveWindowLabel(selection: {selected: boolean; count: number}) {
 		? `Save ${selection.count} selected ${selection.count === 1 ? 'tab' : 'tabs'}`
 		: 'Save this window';
 }
-
-/**
-Sends a typed message to the TabLodge service worker and resolves with its response.
-*/
-export const send = async <K extends TabLodgeMessageType>(
-	type: K,
-	...[fields]: OptionalFields<K>
-): Promise<ActionResult<K>> => {
-	try {
-		return await chrome.runtime.sendMessage({type, ...fields});
-	} catch {
-		// The worker is gone (the extension was reloaded or updated while this page stayed open).
-		return {
-			ok: false,
-			error: `${PROJECT.name} was updated. Reload this page.`,
-		};
-	}
-};
 
 /**
 Why a restored link could not be opened: "<title>: <reason>", or '' without a failure.
@@ -354,10 +325,13 @@ const isTransportError = (reason: unknown) =>
 
 // The service worker may still be waking up when a page opens. Transport failures are retried
 // quietly so only a definitive failure replaces the loading state with an error.
-export function useTabLodgeState() {
+export function useTabLodgeState(
+	initialRequest?: Promise<ActionResult<'GET_STATE'> | undefined>,
+) {
 	const [state, setState] = useState<TabLodgeState | null>(null);
 	const [error, setError] = useState('');
 	const [loading, setLoading] = useState(true);
+	const initialRequestRef = useRef(initialRequest);
 	// Each load gets a number; only the newest one may write state, so a slow older response
 	// can never overwrite a newer one.
 	const latestRequestRef = useRef(0);
@@ -369,7 +343,9 @@ export function useTabLodgeState() {
 			let result: ActionResult<'GET_STATE'> | ActionFailure | undefined;
 			for (let attempt = 0; ; attempt += 1) {
 				try {
-					result = await send('GET_STATE');
+					const firstRequest = initialRequestRef.current;
+					initialRequestRef.current = undefined;
+					result = firstRequest ? await firstRequest : await send('GET_STATE');
 				} catch (reason) {
 					if (!isTransportError(reason) || attempt >= RETRY_DELAYS_MS.length) {
 						throw reason;
@@ -388,8 +364,7 @@ export function useTabLodgeState() {
 
 			if (!result?.ok) {
 				throw new Error(
-					(result as ActionFailure | undefined)?.error ||
-						`${PROJECT.name} could not load saved data.`,
+					result?.error || `${PROJECT.name} could not load saved data.`,
 				);
 			}
 
@@ -489,7 +464,7 @@ export function useTabLodgeState() {
 export function LoadingLine({className = ''}: {className?: string}) {
 	return (
 		<p
-			className={cn('py-6 text-sm text-muted-foreground', className)}
+			className={cn('sr-only py-6 text-sm text-muted-foreground', className)}
 			role="status"
 			aria-live="polite"
 		>
@@ -985,3 +960,5 @@ export function SectionCard({
 		</Card>
 	);
 }
+
+export {send} from './message-client';

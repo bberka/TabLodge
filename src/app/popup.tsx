@@ -769,7 +769,13 @@ function Popup() {
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column">Bookmark column</Label>
-								<Suspense fallback={<p role="status">Loading columns</p>}>
+								<Suspense
+									fallback={
+										<p className="sr-only" role="status">
+											Loading columns
+										</p>
+									}
+								>
 									<BookmarkColumnPicker
 										id="bookmark-column"
 										columns={columns}
