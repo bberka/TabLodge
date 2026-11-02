@@ -208,7 +208,7 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 			</p>
 			{error && <p role="alert">{error}</p>}
 			{incognitoAllowed === undefined && (
-				<p role="status" className="mb-4 text-sm text-muted-foreground">
+				<p role="status" className="sr-only mb-4 text-sm text-muted-foreground">
 					Checking private window access…
 				</p>
 			)}
@@ -318,7 +318,11 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 					<Button onClick={() => location.reload()}>Retry</Button>
 				</>
 			)}
-			{!config && !error && <p role="status">Loading private settings…</p>}
+			{!config && !error && (
+				<p className="sr-only" role="status">
+					Loading private settings…
+				</p>
+			)}
 			<Dialog open={Boolean(config)}>
 				<DialogContent
 					hideClose

@@ -135,12 +135,34 @@ try {
 						'html[data-startup-get-state-calls="1"][data-startup-pending="1"]',
 					)
 					.waitFor();
-				const status = await page.locator('[role="status"]').textContent();
+				const loadingStatus = page
+					.locator('[role="status"]')
+					.filter({hasText: /^Loading TabLodge…$/});
 				assert.match(
-					status?.trim() ?? '',
+					(await loadingStatus.textContent())?.trim() ?? '',
 					/^Loading TabLodge…$/,
-					`${pageName}.html should show a loading status while saved data is pending.`,
+					`${pageName}.html should keep its accessible loading announcement while saved data is pending.`,
 				);
+				assert.ok(
+					(await loadingStatus.getAttribute('class'))
+						?.split(/\s+/)
+						.includes('sr-only'),
+					`${pageName}.html should not display the loading announcement visually.`,
+				);
+				if (pageName === 'options') {
+					assert.ok(
+						await page
+							.getByRole('searchbox', {name: 'Search settings'})
+							.isVisible(),
+						'Settings should render its search field while saved data is pending.',
+					);
+					assert.ok(
+						await page
+							.getByRole('navigation', {name: 'Settings categories'})
+							.isVisible(),
+						'Settings should render its navigation while saved data is pending.',
+					);
+				}
 			}
 		}
 

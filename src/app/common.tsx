@@ -464,7 +464,7 @@ export function useTabLodgeState(
 export function LoadingLine({className = ''}: {className?: string}) {
 	return (
 		<p
-			className={cn('py-6 text-sm text-muted-foreground', className)}
+			className={cn('sr-only py-6 text-sm text-muted-foreground', className)}
 			role="status"
 			aria-live="polite"
 		>

@@ -921,6 +921,7 @@ type DataRowDef = {
 
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
+	const loadedSettingsRef = useRef(false);
 	const [status, showStatus] = useStatus();
 	const {theme, setTheme, accent, systemColor, setAccent} = useTheme();
 	const [settings, setSettings] = useState<Partial<Settings>>({});
@@ -1068,9 +1069,17 @@ function Options() {
 
 	useEffect(() => {
 		void send('GET_SETTINGS_DEFAULTS').then((result) => {
-			if (result.ok) {
-				setDefaultSettings(result.settings);
+			if (!result.ok) {
+				return;
 			}
+
+			setDefaultSettings(result.settings);
+			if (loadedSettingsRef.current) {
+				return;
+			}
+
+			setSettings(result.settings);
+			setExcluded(result.settings.excludedOrigins || []);
 		});
 	}, []);
 
@@ -1079,6 +1088,7 @@ function Options() {
 			return;
 		}
 
+		loadedSettingsRef.current = true;
 		setSettings(state.settings);
 		setExcluded(state.settings.excludedOrigins || []);
 	}, [state]);
@@ -1089,6 +1099,10 @@ function Options() {
 		value: boolean | string | number,
 		savedMessage = 'Setting saved.',
 	) {
+		if (!state) {
+			return;
+		}
+
 		if (name === 'toolbarOpens' && value === 'sidepanel' && !chrome.sidePanel) {
 			showStatus(
 				'The browser Side Panel API is unavailable in this version.',
@@ -1163,7 +1177,7 @@ function Options() {
 
 	async function addExcludedOrigin(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (!siteValid || siteBusy) {
+		if (!state || !siteValid || siteBusy) {
 			return;
 		}
 
@@ -1198,6 +1212,10 @@ function Options() {
 	}
 
 	async function removeExcludedOrigin(origin: string) {
+		if (!state) {
+			return;
+		}
+
 		const result = await send('REMOVE_EXCLUDED_ORIGIN', {origin});
 		if (result?.ok) {
 			setExcluded(result.settings.excludedOrigins || []);
@@ -1208,7 +1226,7 @@ function Options() {
 	}
 
 	async function restoreDefaults() {
-		if (resetBusy) {
+		if (!state || resetBusy) {
 			return;
 		}
 
@@ -1315,17 +1333,11 @@ function Options() {
 		);
 	}
 
-	// Keep the settings navigation visible while the saved state arrives.
-	if (!state) {
-		return error ? (
+	if (!state && error) {
+		return (
 			<PageShell className="max-w-4xl">
 				<PageTop />
 				<LoadError message={error} />
-			</PageShell>
-		) : (
-			<PageShell className="max-w-4xl" aria-busy="true">
-				<PageTop />
-				<LoadingLine />
 			</PageShell>
 		);
 	}
@@ -1348,13 +1360,15 @@ function Options() {
 	const rowAvailable = (field: SettingField) =>
 		!field.when || field.when(settings as Settings);
 	const rowDisabled = (field: SettingField) =>
+		!state ||
 		!rowAvailable(field) ||
 		(field.requires !== undefined && settings[field.requires] === false) ||
 		(field.enabled !== undefined && !field.enabled(settings as Settings));
 
 	const fieldShown = (field: SettingField) =>
-		rowAvailable(field) && (searching || !rowDisabled(field));
+		!state || (rowAvailable(field) && (searching || !rowDisabled(field)));
 	const changedFromDefault = (field: SettingField) =>
+		Boolean(state) &&
 		defaultSettings !== undefined &&
 		!Object.is(settings[field.name], defaultSettings[field.name]);
 	const focusSettingControl = (field: SettingField) => {
@@ -1457,19 +1471,20 @@ function Options() {
 				<Button
 					variant="outline"
 					className="w-full sm:w-32"
+					disabled={!state}
 					// Opens on Everything, which also holds settings, so it is never empty.
 					onClick={() =>
 						setBackupData(
 							bookmarkCount > 0
 								? {
 										kind: 'bookmarks',
-										columns: state.bookmarkColumns,
-										bookmarks: state.bookmarks,
+										columns: state?.bookmarkColumns ?? [],
+										bookmarks: state?.bookmarks ?? [],
 									}
 								: {
 										kind: 'sessions',
-										groups: state.groups,
-										folders: state.folders,
+										groups: state?.groups ?? [],
+										folders: state?.folders ?? [],
 									},
 						)
 					}
@@ -1613,7 +1628,11 @@ function Options() {
 	));
 
 	return (
-		<PageShell className="max-w-6xl lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8">
+		<PageShell
+			className="max-w-6xl lg:grid lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-x-8"
+			aria-busy={!state}
+		>
+			{!state && <LoadingLine />}
 			<div className="lg:col-span-2">
 				<PageTop />
 			</div>
@@ -2076,7 +2095,12 @@ function Options() {
 							icon={Globe}
 							className={SECTION_SCROLL_CLASS}
 							action={
-								<Button variant="outline" size="sm" onClick={openSiteDialog}>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={!state}
+									onClick={openSiteDialog}
+								>
 									<Plus className="h-4 w-4" />
 									Add site
 								</Button>
@@ -2100,6 +2124,7 @@ function Options() {
 											<Button
 												variant="ghost"
 												size="sm"
+												disabled={!state}
 												aria-label={`Remove ${origin} from exclusions`}
 												onClick={() => removeExcludedOrigin(origin)}
 											>
@@ -2133,7 +2158,7 @@ function Options() {
 							</div>
 							<Button
 								variant="outline"
-								disabled={busy === 'defaults'}
+								disabled={!state || busy === 'defaults'}
 								onClick={() => setConfirmDefaults(true)}
 							>
 								<RotateCcw className="h-4 w-4" />

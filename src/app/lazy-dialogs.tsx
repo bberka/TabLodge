@@ -68,7 +68,11 @@ export function RecoveryTools(
 ) {
 	return (
 		<Suspense
-			fallback={<p className="text-sm text-muted-foreground">Loading…</p>}
+			fallback={
+				<p className="sr-only text-sm text-muted-foreground" role="status">
+					Loading…
+				</p>
+			}
 		>
 			<RecoveryToolsLoaded {...props} />
 		</Suspense>
