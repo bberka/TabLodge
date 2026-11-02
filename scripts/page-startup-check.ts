@@ -23,7 +23,21 @@ try {
 		(await context.waitForEvent('serviceworker', {timeout: 15_000}));
 	const extensionId = new URL(worker.url()).hostname;
 	await context.addInitScript(`(() => {
-		const probe = {getStateCalls: 0, pending: 0};
+		const probe = {getStateCalls: 0, pending: 0, delayedFirstResponse: false};
+		document.addEventListener(
+			'DOMContentLoaded',
+			() => {
+				document.documentElement.dataset.startupDomContentLoadedMs = String(performance.now());
+			},
+			{once: true},
+		);
+		const readyObserver = new MutationObserver(() => {
+			if (document.querySelector('#sessions-title')) {
+				document.documentElement.dataset.startupDashboardReadyMs = String(performance.now());
+				readyObserver.disconnect();
+			}
+		});
+		readyObserver.observe(document, {childList: true, subtree: true});
 		const runtime = globalThis.chrome?.runtime;
 		if (!runtime || typeof runtime.sendMessage !== 'function') return;
 		const sendMessage = runtime.sendMessage.bind(runtime);
@@ -34,9 +48,11 @@ try {
 				probe.pending++;
 				document.documentElement.dataset.startupGetStateCalls = String(probe.getStateCalls);
 				document.documentElement.dataset.startupPending = String(probe.pending);
+				document.documentElement.dataset.startupStateRequestReadyState = document.readyState;
 			}
 			const response = await sendMessage(message, ...args);
-			if (isStateRequest && probe.getStateCalls === 1) {
+			if (isStateRequest && !probe.delayedFirstResponse) {
+				probe.delayedFirstResponse = true;
 				await new Promise((resolve) => setTimeout(resolve, 250));
 			}
 			if (isStateRequest) {
@@ -53,15 +69,29 @@ try {
 	await dashboard
 		.locator('html[data-startup-get-state-calls="1"][data-startup-pending="1"]')
 		.waitFor();
-	const loadingStatus = await dashboard
-		.locator('[role="status"]')
-		.textContent();
-	assert.match(
-		loadingStatus?.trim() ?? '',
-		/^Loading TabLodge…$/,
-		'The new-tab page should announce that saved data is loading instead of showing a blank page.',
+	assert.equal(
+		await dashboard
+			.locator('html')
+			.getAttribute('data-startup-state-request-ready-state'),
+		'loading',
+		'The new-tab page should start reading saved data before DOMContentLoaded.',
+	);
+	assert.equal(
+		(await dashboard.locator('#root').innerText()).trim(),
+		'',
+		'The new-tab page should stay blank until saved data is ready.',
 	);
 	await dashboard.locator('#sessions-title').waitFor({timeout: 10_000});
+	const domContentLoadedMs = Number(
+		await dashboard
+			.locator('html')
+			.getAttribute('data-startup-dom-content-loaded-ms'),
+	);
+	const dashboardReadyMs = Number(
+		await dashboard
+			.locator('html')
+			.getAttribute('data-startup-dashboard-ready-ms'),
+	);
 	assert.equal(
 		await dashboard
 			.locator('html')
@@ -89,6 +119,11 @@ try {
 		const page = pageName === 'newtab' ? dashboard : await context.newPage();
 		page.setDefaultTimeout(10_000);
 		const errors: string[] = [];
+		page.on('console', (message) => {
+			if (message.type() === 'error') {
+				errors.push(message.text());
+			}
+		});
 		page.on('pageerror', (error) => {
 			errors.push(error.message);
 		});
@@ -127,6 +162,9 @@ try {
 		}
 	}
 
+	console.log(
+		`New tab dashboard ready ${Math.round(dashboardReadyMs - domContentLoadedMs)} ms after DOMContentLoaded (250 ms delayed state response).`,
+	);
 	console.log('Startup check passed for all seven extension pages.');
 } finally {
 	await context?.close();

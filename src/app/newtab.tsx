@@ -77,7 +77,6 @@ import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {
 	AppHeader,
 	EmptyState,
-	LoadingLine,
 	StatusLine,
 	saveWindowLabel,
 	send,
@@ -152,7 +151,10 @@ import {
 	resolveBookmarkColumn,
 	type BookmarkColumnDraft,
 } from './bookmark-column-picker';
+import {takeStateRequest} from './state-preload';
 import {cn} from '@/lib/utils';
+
+const initialStateRequest = takeStateRequest();
 
 type DialogKind =
 	'bookmark' | 'column' | 'move' | 'paste-links' | 'delete-column';
@@ -245,7 +247,7 @@ const NEW_COLUMN = '__new-column__';
 type BraveNavigator = Navigator & {brave?: {isBrave: () => Promise<boolean>}};
 
 function NewTab() {
-	const {state, error, reload} = useTabLodgeState();
+	const {state, error, reload} = useTabLodgeState(initialStateRequest);
 	const [status, showStatus] = useStatus();
 	const [busy, setBusy] = useState('');
 	// `?q=` (from the "Search … in TabLodge" selection menu) prefills both searches once, then leaves the URL.
@@ -1812,21 +1814,19 @@ function NewTab() {
 	}
 
 	if (!state) {
+		if (!error) {
+			return null;
+		}
+
 		return (
-			<main
-				className="mx-auto min-h-screen max-w-6xl px-5 py-6 sm:px-8 sm:py-9"
-				aria-busy={!error}
-			>
+			<main className="mx-auto min-h-screen max-w-6xl px-5 py-6 sm:px-8 sm:py-9">
 				<AppHeader active="dashboard" />
-				{error && (
-					<p role="alert" className="text-sm font-medium text-destructive">
-						{error}{' '}
-						<a href="newtab.html" className="underline">
-							Reload
-						</a>
-					</p>
-				)}
-				{!error && <LoadingLine />}
+				<p role="alert" className="text-sm font-medium text-destructive">
+					{error}{' '}
+					<a href="newtab.html" className="underline">
+						Reload
+					</a>
+				</p>
 			</main>
 		);
 	}

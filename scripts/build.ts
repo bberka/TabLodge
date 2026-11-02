@@ -45,6 +45,15 @@ const steps: BuildStep[] = [
 			fileName: 'theme-boot.js',
 		}),
 	},
+	// Starts the new-tab state read while the React page bundle is loading.
+	{
+		label: 'newtab-preload.js',
+		config: scriptConfig({
+			entry: resolve(SOURCE_DIR, 'newtab-preload.ts'),
+			outDir: OUT_DIR,
+			fileName: 'newtab-preload.js',
+		}),
+	},
 ];
 
 const {values} = parseArgs({
