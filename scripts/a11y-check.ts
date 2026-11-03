@@ -1683,17 +1683,13 @@ async function main() {
 						`bookmark-multi-select-${theme}.png`,
 						bookmarks,
 					);
-					await page
-						.getByRole('button', {name: 'Open selected bookmarks'})
+					await bookmarks
+						.getByRole('button', {name: 'Open', exact: true})
 						.waitFor();
-					await page
-						.getByRole('button', {name: 'Move selected bookmarks'})
+					await bookmarks
+						.getByRole('button', {name: 'Move bookmarks', exact: true})
 						.waitFor();
-					for (const name of [
-						'Export selected',
-						'Share selected',
-						'Delete selected',
-					]) {
+					for (const name of ['Export', 'Share', 'Delete']) {
 						await bookmarks.getByRole('button', {name, exact: true}).waitFor();
 					}
 
@@ -1708,8 +1704,9 @@ async function main() {
 					);
 					await verifySelectedLinksOpen(
 						context,
-						page.getByRole('button', {
-							name: 'Open selected bookmarks',
+						bookmarks.getByRole('button', {
+							name: 'Open',
+							exact: true,
 						}),
 						[
 							'https://example.com/bulk-open-bookmark-1',
@@ -1761,13 +1758,16 @@ async function main() {
 						name: 'Selected session tabs',
 					});
 					await sessionSelection.scrollIntoViewIfNeeded();
-					await page
-						.getByRole('button', {name: 'Open selected', exact: true})
+					await sessionSelection
+						.getByRole('button', {name: 'Open', exact: true})
 						.waitFor();
-					await page
-						.getByRole('button', {name: 'Bookmark selected', exact: true})
+					await sessionSelection
+						.getByRole('button', {
+							name: 'Bookmark',
+							exact: true,
+						})
 						.waitFor();
-					for (const name of ['Export selected', 'Share selected']) {
+					for (const name of ['Export', 'Share']) {
 						await sessionSelection
 							.getByRole('button', {name, exact: true})
 							.waitFor();
@@ -1779,8 +1779,8 @@ async function main() {
 					);
 					await verifySelectedLinksOpen(
 						context,
-						page.getByRole('button', {
-							name: 'Open selected',
+						sessionSelection.getByRole('button', {
+							name: 'Open',
 							exact: true,
 						}),
 						[
@@ -1799,8 +1799,11 @@ async function main() {
 						page.getByRole('group', {name: 'Selected session tabs'}),
 					);
 
-					await page
-						.getByRole('button', {name: 'Bookmark selected', exact: true})
+					await sessionSelection
+						.getByRole('button', {
+							name: 'Bookmark',
+							exact: true,
+						})
 						.press('Enter');
 					const dialog = page.getByRole('dialog');
 					await dialog
@@ -1950,7 +1953,7 @@ async function main() {
 					await selectBookmarks(page, ['Gmail', 'Calendar']);
 
 					await page
-						.getByRole('button', {name: 'Move selected bookmarks'})
+						.getByRole('button', {name: 'Move bookmarks', exact: true})
 						.press('Enter');
 					const dialog = page.getByRole('dialog');
 					const columnPicker = dialog.getByRole('combobox', {
@@ -2739,7 +2742,8 @@ async function main() {
 					await cards.nth(1).getByRole('checkbox').focus();
 					await page.keyboard.press('Space');
 					await page
-						.getByRole('button', {name: 'Move selected bookmarks'})
+						.getByRole('group', {name: 'Selected bookmarks'})
+						.getByRole('button', {name: 'Move bookmarks', exact: true})
 						.focus();
 					await page.keyboard.press('Enter');
 					await page
@@ -2772,13 +2776,12 @@ async function main() {
 						ids,
 					);
 					await until(
-						async () =>
-							(await focusedLabel(page)) === 'Move selected bookmarks',
+						async () => (await focusedLabel(page)) === 'Move bookmarks',
 						'focus after moving',
 					);
 					await page
 						.getByRole('button', {
-							name: 'Delete selected',
+							name: 'Delete',
 							exact: true,
 						})
 						.focus();
@@ -2943,7 +2946,7 @@ async function main() {
 				assert.equal(await selection.isVisible(), true);
 				assert.equal(
 					await selection
-						.getByRole('button', {name: 'Export selected'})
+						.getByRole('button', {name: 'Export', exact: true})
 						.isVisible(),
 					true,
 				);

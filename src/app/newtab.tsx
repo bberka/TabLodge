@@ -2106,21 +2106,20 @@ function NewTab() {
 						<Button
 							size="sm"
 							disabled={busy === 'bookmark-batch'}
-							aria-label="Open selected bookmarks"
 							onClick={() => void openSelectedBookmarks()}
 						>
 							<ExternalLink className="h-4 w-4" />
-							Open selected
+							Open
 						</Button>
 						<Button
 							variant="outline"
 							size="sm"
 							disabled={busy === 'bookmark-batch'}
-							aria-label="Move selected bookmarks"
+							aria-label="Move bookmarks"
 							onClick={openSelectedBookmarkMove}
 						>
 							<MoveBookmarkIcon className="h-4 w-4" />
-							Move selected
+							Move
 						</Button>
 						<Button
 							variant="outline"
@@ -2129,7 +2128,7 @@ function NewTab() {
 							onClick={openSelectedBookmarkExport}
 						>
 							<Download className="h-4 w-4" />
-							Export selected
+							Export
 						</Button>
 						<Button
 							variant="outline"
@@ -2138,7 +2137,7 @@ function NewTab() {
 							onClick={shareSelectedBookmarks}
 						>
 							<Share2 className="h-4 w-4" />
-							Share selected
+							Share
 						</Button>
 						{sessionTargetsForBookmarks.length > 0 && (
 							<Select
@@ -2176,7 +2175,7 @@ function NewTab() {
 							onClick={() => void deleteSelectedBookmarks()}
 						>
 							<Trash2 className="h-4 w-4" />
-							Delete selected
+							Delete
 						</Button>
 					</div>
 					<span role="status" className="text-sm font-semibold">

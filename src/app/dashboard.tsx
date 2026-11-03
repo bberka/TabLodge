@@ -1912,16 +1912,15 @@ export function SessionManager({
 								}
 							>
 								<ExternalLink className="h-4 w-4" />
-								Open selected
+								Open
 							</Button>
 							<Button
 								variant="outline"
 								size="sm"
-								aria-label="Bookmark selected"
 								onClick={openSelectedBookmarkPicker}
 							>
 								<BookmarkPlus className="h-4 w-4" />
-								Bookmark selected
+								Bookmark
 							</Button>
 							<Button
 								variant="outline"
@@ -1929,7 +1928,7 @@ export function SessionManager({
 								onClick={() => openBackup('selected')}
 							>
 								<Download className="h-4 w-4" />
-								Export selected
+								Export
 							</Button>
 							<Button
 								variant="outline"
@@ -1942,7 +1941,7 @@ export function SessionManager({
 								}
 							>
 								<Share2 className="h-4 w-4" />
-								Share selected
+								Share
 							</Button>
 						</div>
 						<span className="text-sm font-semibold" aria-live="polite">
