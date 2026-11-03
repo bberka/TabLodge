@@ -93,7 +93,8 @@ function cleanActions(actions: MenuAction[]): MenuAction[] {
 
 const destructiveClass =
 	'text-destructive focus:bg-destructive/10 focus:text-destructive';
-const accentClass = 'text-primary focus:bg-primary/10 focus:text-primary';
+const accentClass =
+	'text-amber-700 focus:bg-amber-500/10 focus:text-amber-800 dark:text-amber-300 dark:focus:bg-amber-400/10 dark:focus:text-amber-200';
 
 function Shortcut({children}: {children: ReactNode}) {
 	return (

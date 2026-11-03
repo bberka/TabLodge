@@ -645,6 +645,18 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'showSessionArchiveQuickAction',
+				label: 'Show Archive button on session cards',
+				help: 'Put an Archive button on active session cards. Expanded cards keep enabled quick actions visible without hovering.',
+				type: 'switch',
+			},
+			{
+				name: 'showSessionDeleteQuickAction',
+				label: 'Show Delete button on session cards',
+				help: 'Put a Delete button on session cards. It stays hidden unless you turn this on. Expanded cards keep enabled quick actions visible without hovering.',
+				type: 'switch',
+			},
+			{
 				name: 'sessionLinkClickAction',
 				label: 'When clicking a saved session link',
 				help: 'Choose what happens when you click a link inside a saved session.',

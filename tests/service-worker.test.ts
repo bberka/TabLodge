@@ -4113,6 +4113,8 @@ for (const [key, fallback] of [
 	['removeTrackingParameters', false],
 	['showSaveWindowButton', true],
 	['showTrashBinButton', true],
+	['showSessionArchiveQuickAction', true],
+	['showSessionDeleteQuickAction', false],
 	['stretchBookmarkColumns', true],
 	['limitBookmarksPerColumn', false],
 ] as const) {

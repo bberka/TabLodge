@@ -118,6 +118,7 @@ import {
 	ARCHIVED_FOLDER_NAME,
 	archivedFolderId,
 	isArchivedFolder,
+	visibleSessionFolders,
 } from './session-folders';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
@@ -312,6 +313,10 @@ export function SessionManager({
 	const groups = state?.groups || NO_SESSIONS;
 	const folders = state?.folders || NO_FOLDERS;
 	const archivedId = archivedFolderId(folders);
+	const visibleFolders = useMemo(
+		() => visibleSessionFolders(folders, groups),
+		[folders, groups],
+	);
 	const settings: Partial<Settings> = state?.settings || NO_SETTINGS;
 	// Collapsed cards show a row of preview icons only on wide pages.
 	const wide = useWidePage();
@@ -440,7 +445,10 @@ export function SessionManager({
 			setSort(state.settings.sessionSort);
 		}
 
-		if (folderId !== ALL && folders.every((folder) => folder.id !== folderId)) {
+		if (
+			folderId !== ALL &&
+			visibleFolders.every((folder) => folder.id !== folderId)
+		) {
 			setFolderId(ALL);
 		}
 
@@ -1601,7 +1609,7 @@ export function SessionManager({
 					className="mb-4 flex flex-wrap items-center gap-1"
 					aria-label="Session folders"
 				>
-					{[{id: ALL, name: 'All', icon: undefined}, ...folders].map(
+					{[{id: ALL, name: 'All', icon: undefined}, ...visibleFolders].map(
 						(folder) => {
 							const FolderIcon =
 								folder.id === ALL
@@ -2468,6 +2476,13 @@ const GroupCard = memo(
 			handlers.restore(group, event);
 		const onExpanded = (next: boolean) => handlers.expand(group.id, next);
 		const onDelete = () => handlers.deleteGroup(group);
+		const onArchive = () => handlers.archive(group);
+		const inArchivedFolder =
+			folderName !== undefined && isArchivedFolder({name: folderName});
+		const showArchiveQuickAction =
+			settings.showSessionArchiveQuickAction !== false && !inArchivedFolder;
+		const showDeleteQuickAction =
+			settings.showSessionDeleteQuickAction === true;
 		// One list for the Restore dropdown and the Restore options submenu, so they cannot drift apart.
 		const restoreOptions: MenuAction[] = [
 			{
@@ -2599,7 +2614,7 @@ const GroupCard = memo(
 				label: 'Archive session',
 				icon: Archive,
 				accent: true,
-				hidden: folderName === ARCHIVED_FOLDER_NAME,
+				hidden: inArchivedFolder,
 				onSelect: () => handlers.archive(group),
 			},
 			{type: 'separator'},
@@ -2768,19 +2783,43 @@ const GroupCard = memo(
 								</span>
 							)}
 							<div className="flex shrink-0 items-center gap-0.5">
-								<span className="items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 flex">
-									<IconTooltip label="Delete session">
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-8 w-8 text-muted-foreground hover:text-destructive"
-											aria-label={`Delete session ${name}`}
-											onClick={onDelete}
-										>
-											<Trash2 />
-										</Button>
-									</IconTooltip>
-								</span>
+								{(showArchiveQuickAction || showDeleteQuickAction) && (
+									<span
+										data-session-quick-actions
+										className={cn(
+											'flex items-center gap-0.5',
+											!isExpanded &&
+												'opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100',
+										)}
+									>
+										{showArchiveQuickAction && (
+											<IconTooltip label="Archive session">
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8 text-muted-foreground hover:bg-amber-500/10 hover:text-amber-800 focus-visible:bg-amber-500/10 focus-visible:text-amber-800 dark:hover:bg-amber-400/10 dark:hover:text-amber-200 dark:focus-visible:bg-amber-400/10 dark:focus-visible:text-amber-200"
+													aria-label={`Archive session ${name}`}
+													onClick={onArchive}
+												>
+													<Archive />
+												</Button>
+											</IconTooltip>
+										)}
+										{showDeleteQuickAction && (
+											<IconTooltip label="Delete session">
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive"
+													aria-label={`Delete session ${name}`}
+													onClick={onDelete}
+												>
+													<Trash2 />
+												</Button>
+											</IconTooltip>
+										)}
+									</span>
+								)}
 								<span className="flex items-center">
 									<Button
 										size="sm"

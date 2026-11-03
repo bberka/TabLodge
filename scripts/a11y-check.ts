@@ -293,7 +293,12 @@ async function withMobileEmulation(
 	}
 }
 
-async function captureEvidence(page: Page, name: string) {
+async function captureEvidence(
+	page: Page,
+	name: string,
+	target?: Locator,
+	hoverTarget?: Locator,
+) {
 	if (process.env.TABLODGE_CAPTURE_EVIDENCE !== '1') {
 		return;
 	}
@@ -304,6 +309,26 @@ async function captureEvidence(page: Page, name: string) {
 	await mkdir(directory, {recursive: true});
 	for (const [width, height] of EVIDENCE_VIEWPORTS) {
 		await page.setViewportSize({width, height});
+		if (target) {
+			await target.scrollIntoViewIfNeeded();
+		}
+
+		if (hoverTarget) {
+			await hoverTarget.hover();
+			await hoverTarget.evaluate(
+				async (node: {
+					getAnimations(options: {subtree: boolean}): Array<{
+						finished: Promise<unknown>;
+					}>;
+				}) =>
+					Promise.all(
+						node
+							.getAnimations({subtree: true})
+							.map((animation) => animation.finished),
+					),
+			);
+		}
+
 		const sizedName = `${name.slice(0, -4)}-${width}x${height}.png`;
 		const capture = async () =>
 			page.screenshot({
@@ -315,6 +340,26 @@ async function captureEvidence(page: Page, name: string) {
 				page,
 				{width, height},
 				async () => {
+					if (target) {
+						await target.scrollIntoViewIfNeeded();
+					}
+
+					if (hoverTarget) {
+						await hoverTarget.hover();
+						await hoverTarget.evaluate(
+							async (node: {
+								getAnimations(options: {subtree: boolean}): Array<{
+									finished: Promise<unknown>;
+								}>;
+							}) =>
+								Promise.all(
+									node
+										.getAnimations({subtree: true})
+										.map((animation) => animation.finished),
+								),
+						);
+					}
+
 					const deviceScaleFactor = await page.locator('body').evaluate(
 						(node: {
 							ownerDocument: {
@@ -446,6 +491,278 @@ async function main() {
 		const seedPage = await openPage(context, extensionId, 'newtab');
 		await seed(seedPage);
 		await seedPage.close();
+
+		for (const theme of THEMES) {
+			await check(
+				`session card quick actions follow settings and expand without hover (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					const fixture = createDevFixture(await readDevStore(page));
+					fixture.groups = fixture.groups.filter(
+						(group) => group.folderId !== 'archived-sessions',
+					);
+					fixture.settings = {
+						...fixture.settings,
+						expandSessionsByDefault: false,
+						showSessionArchiveQuickAction: true,
+						showSessionDeleteQuickAction: false,
+					};
+					await writeDevStore(page, fixture);
+					await page.reload();
+					await setTheme(page, theme);
+
+					const archivedChip = page.locator(
+						'[data-session-folder-chip="archived-sessions"]',
+					);
+					assert.equal(
+						await archivedChip.count(),
+						0,
+						'empty Archived folder is hidden',
+					);
+					const card = page.locator('#session-dev-session-1');
+					const archiveButton = card.getByRole('button', {
+						name: 'Archive session Home lab rebuild',
+					});
+					assert.equal(await archiveButton.count(), 1);
+					assert.equal(
+						await card.getByRole('button', {name: /Delete session/}).count(),
+						0,
+						'Delete is hidden by default',
+					);
+					const initialExpand = card.getByRole('button', {
+						name: 'Show tabs in Home lab rebuild',
+					});
+					await initialExpand.focus();
+					await page.keyboard.press('Enter');
+					await page.mouse.move(0, 0);
+					const actionBar = card.locator('[data-session-quick-actions]');
+					assert.ok(
+						!(await actionBar.getAttribute('class'))?.includes('opacity-0'),
+						'expanded card shows enabled quick actions without hover',
+					);
+
+					const options = await openPage(context, extensionId, 'options');
+					await setTheme(options, theme);
+					const archiveToggle = options.getByRole('switch', {
+						name: 'Show Archive button on session cards',
+					});
+					const showDeleteSwitch = options.getByRole('switch', {
+						name: 'Show Delete button on session cards',
+					});
+					await archiveToggle.waitFor();
+					assert.equal(
+						await archiveToggle.getAttribute('aria-checked'),
+						'true',
+					);
+					assert.equal(
+						await showDeleteSwitch.getAttribute('aria-checked'),
+						'false',
+					);
+
+					await archiveToggle.focus();
+					await options.keyboard.press('Space');
+					await showDeleteSwitch.focus();
+					await options.keyboard.press('Space');
+					await until(
+						async () =>
+							(await archiveToggle.getAttribute('aria-checked')) === 'false' &&
+							(await showDeleteSwitch.getAttribute('aria-checked')) === 'true',
+						'quick action settings to update',
+					);
+					await until(async () => {
+						const {settings} = await readDevStore(options);
+						return (
+							settings.showSessionArchiveQuickAction === false &&
+							settings.showSessionDeleteQuickAction === true
+						);
+					}, 'quick action settings to save');
+					await page.reload();
+					await setTheme(page, theme);
+					assert.equal(await archiveButton.count(), 0);
+					assert.equal(
+						await card
+							.getByRole('button', {
+								name: 'Delete session Home lab rebuild',
+							})
+							.count(),
+						1,
+						'Delete appears and Archive disappears when configured',
+					);
+
+					await archiveToggle.focus();
+					await options.keyboard.press('Space');
+					await until(
+						async () =>
+							(await archiveToggle.getAttribute('aria-checked')) === 'true',
+						'Archive setting to turn on again',
+					);
+					await until(async () => {
+						const {settings} = await readDevStore(options);
+						return (
+							settings.showSessionArchiveQuickAction === true &&
+							settings.showSessionDeleteQuickAction === true
+						);
+					}, 'Archive setting to save');
+					await options.close();
+					await page.reload();
+					await setTheme(page, theme);
+
+					const expand = card.getByRole('button', {
+						name: 'Show tabs in Home lab rebuild',
+					});
+					await expand.focus();
+					await page.keyboard.press('Enter');
+					await page.mouse.move(0, 0);
+					assert.ok(
+						!(await actionBar.getAttribute('class'))?.includes('opacity-0'),
+					);
+					assert.equal(await archiveButton.count(), 1);
+					assert.equal(
+						await card
+							.getByRole('button', {name: 'Delete session Home lab rebuild'})
+							.count(),
+						1,
+						'Delete appears after enabling it in Settings',
+					);
+					await archiveButton.hover();
+					const archiveHoverColor = async () =>
+						archiveButton.evaluate(
+							(button: {
+								ownerDocument: {
+									defaultView: {
+										getComputedStyle(element: unknown): {color: string};
+									} | null;
+								};
+							}) =>
+								button.ownerDocument.defaultView?.getComputedStyle(button)
+									.color,
+						);
+					const expectedHoverColor =
+						theme === 'light' ? 'rgb(146, 64, 14)' : 'rgb(253, 230, 138)';
+					await until(
+						async () => (await archiveHoverColor()) === expectedHoverColor,
+						'Archive button hover color transition',
+					);
+					assert.equal(await archiveHoverColor(), expectedHoverColor);
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource, {
+							type: 'rule',
+							values: ['color-contrast'],
+						}),
+						[],
+					);
+					if (theme === 'light') {
+						await captureEvidence(
+							page,
+							'session-quick-actions-light.png',
+							card,
+							archiveButton,
+						);
+					}
+
+					const sessionDeleteButton = card.getByRole('button', {
+						name: 'Delete session Home lab rebuild',
+					});
+					await sessionDeleteButton.hover();
+					const deleteHoverBackground = async () =>
+						sessionDeleteButton.evaluate(
+							(button: {
+								ownerDocument: {
+									defaultView: {
+										getComputedStyle(element: unknown): {
+											backgroundColor: string;
+										};
+									} | null;
+								};
+							}) =>
+								button.ownerDocument.defaultView?.getComputedStyle(button)
+									.backgroundColor,
+						);
+					const expectedDeleteHoverBackground =
+						theme === 'light'
+							? 'rgba(220, 38, 38, 0.1)'
+							: 'rgba(248, 113, 113, 0.1)';
+					await until(
+						async () =>
+							(await deleteHoverBackground()) === expectedDeleteHoverBackground,
+						'Delete button hover background transition',
+					);
+					assert.equal(
+						await deleteHoverBackground(),
+						expectedDeleteHoverBackground,
+					);
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource, {
+							type: 'rule',
+							values: ['color-contrast'],
+						}),
+						[],
+					);
+					if (theme === 'light') {
+						await captureEvidence(
+							page,
+							'session-delete-quick-action-light.png',
+							card,
+							sessionDeleteButton,
+						);
+					}
+
+					const sessionToRemove = page.locator('#session-dev-session-2');
+					const sessionDeleteAction = sessionToRemove.getByRole('button', {
+						name: 'Delete session Quarterly planning',
+					});
+					await sessionDeleteAction.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () => (await sessionToRemove.count()) === 0,
+						'Delete quick action to remove the session',
+					);
+
+					await archiveButton.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await groupFolderId(page, 'dev-session-1')) ===
+							'archived-sessions',
+						'Archive quick action to move the session',
+					);
+					await archivedChip.waitFor();
+					await archivedChip.focus();
+					await page.keyboard.press('Enter');
+					await card.waitFor();
+					const menuTrigger = card.locator('[data-move-focus]');
+					await menuTrigger.focus();
+					await page.keyboard.press('Enter');
+					await page.getByRole('menuitem', {name: 'Move to folder'}).focus();
+					await page.keyboard.press('ArrowRight');
+					const workFolder = page.getByRole('menuitem', {
+						name: 'Work',
+						exact: true,
+					});
+					await workFolder.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await groupFolderId(page, 'dev-session-1')) === 'folder-work',
+						'session to leave Archived',
+					);
+					await until(
+						async () => (await archivedChip.count()) === 0,
+						'empty Archived folder to hide',
+					);
+
+					const reset = createDevFixture(await readDevStore(page));
+					reset.settings = {
+						...reset.settings,
+						showSessionArchiveQuickAction: true,
+						showSessionDeleteQuickAction: false,
+					};
+					await writeDevStore(page, reset);
+					await page.reload();
+					await page.close();
+				},
+			);
+		}
 
 		for (const theme of THEMES) {
 			await check(
@@ -2097,7 +2414,7 @@ async function main() {
 					const archiveClasses = await menuItems
 						.nth(archiveIndex)
 						.getAttribute('class');
-					assert.ok(archiveClasses?.split(/\s+/).includes('text-primary'));
+					assert.ok(archiveClasses?.split(/\s+/).includes('text-amber-700'));
 					await page.evaluate(async () => {
 						const {document} = globalThis as typeof globalThis & {
 							document: {
