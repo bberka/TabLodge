@@ -42,7 +42,7 @@ Use plain language, short paragraphs, and direct instructions. Describe what a p
 
 Do not use em dashes or en dashes in prose. Rewrite sentences instead of using a dash as punctuation. Avoid hyphenated wording when a natural alternative exists. Keep hyphens only where needed for Markdown syntax, exact names, paths, URLs, commands, code, or a technical term that would be unclear without one.
 
-Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. When behavior changes, check the README, architecture notes, privacy policy, website, and Help. Update screenshots when the UI they show changes; [website setup](website.md#screenshots) explains how they're captured.
+Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. For every change, check whether Help (`src/app/help.tsx`) needs an update. Update it when the change affects user-visible behavior, settings, or workflows; otherwise leave it unchanged. Also check the README, architecture notes, privacy policy, and website when behavior changes. Update screenshots when the UI they show changes; [website setup](website.md#screenshots) explains how they're captured.
 
 ## Test your change
 
