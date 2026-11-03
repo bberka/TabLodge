@@ -101,6 +101,14 @@ export type Settings = {
 	*/
 	expandSessionsByDefault: boolean;
 	/**
+	Show the Archive action on session cards (default on).
+	*/
+	showSessionArchiveQuickAction: boolean;
+	/**
+	Show the Delete action on session cards (default off).
+	*/
+	showSessionDeleteQuickAction: boolean;
+	/**
 	Dashboard bookmark board: columns in the same row grow to the tallest one's height (default on).
 	*/
 	stretchBookmarkColumns: boolean;
