@@ -2225,6 +2225,74 @@ async function main() {
 			);
 		}
 
+		for (const theme of THEMES) {
+			await check(
+				`moving a session out of its folder keeps focus off the next session (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					const fixture = createDevFixture(await readDevStore(page));
+					const moved = fixture.groups.find(
+						(group) => group.id === 'dev-session-1',
+					);
+					assert.ok(moved, 'the fixture needs a session to move');
+					moved.folderId = 'folder-work';
+					await writeDevStore(page, fixture);
+					await page.reload();
+
+					await page
+						.locator('[data-session-folder-chip="folder-work"]')
+						.click();
+					const movedCard = page.locator('#session-dev-session-1');
+					const nextCard = page.locator('#session-dev-session-2');
+					await movedCard.waitFor();
+					await nextCard.waitFor();
+					const trigger = movedCard.locator('[data-move-focus]');
+					await trigger.focus();
+					await page.keyboard.press('Enter');
+					await page.getByRole('menuitem', {name: 'Move to folder'}).focus();
+					await page.keyboard.press('ArrowRight');
+					await page
+						.getByRole('menuitem', {name: 'Trips', exact: true})
+						.focus();
+					await page.keyboard.press('Enter');
+
+					await until(
+						async () =>
+							(await groupFolderId(page, 'dev-session-1')) === 'folder-trips',
+						'session to move to Trips',
+					);
+					await until(
+						async () => (await movedCard.count()) === 0,
+						'session to leave Work',
+					);
+					await until(
+						async () =>
+							(await page
+								.locator(':focus')
+								.getAttribute('data-session-folder-chip')) === 'folder-trips',
+						'focus to move to the destination folder',
+					);
+					await page.waitForTimeout(800);
+					assert.equal(
+						await nextCard.locator(':focus-within').count(),
+						0,
+						'the next session must not receive focus',
+					);
+					assert.equal(
+						await page
+							.getByRole('tooltip', {
+								name: 'Show tabs in Quarterly planning',
+							})
+							.count(),
+						0,
+						'the next session tooltip must not appear after the move',
+					);
+					await page.close();
+				},
+			);
+		}
+
 		await check(
 			'Archived sessions are hidden from popup and side panel',
 			async () => {

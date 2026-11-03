@@ -1353,6 +1353,9 @@ export function SessionManager({
 			return;
 		}
 
+		const leavesCurrentView =
+			folderId === group.folderId ||
+			(folderId === ALL && targetId === archivedId);
 		const previous = group.folderId;
 		const result = await send('UPDATE_GROUP', {
 			groupId: group.id,
@@ -1371,6 +1374,9 @@ export function SessionManager({
 			previous,
 		);
 		await reload();
+		if (leavesCurrentView) {
+			focusAfterMove(`[data-session-folder-chip="${CSS.escape(targetId)}"]`);
+		}
 	}
 
 	async function archiveGroup(group: Session) {
