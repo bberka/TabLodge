@@ -2824,6 +2824,32 @@ test('link drag data carries uri-list, plain text, and html for tabs and session
 	assert.equal(buildLinkDragData([]), null);
 });
 
+test('a multi-bookmark drag exposes every selected link to session drop targets', async () => {
+	const {
+		BOOKMARK_DRAG_TYPE,
+		SESSION_DRAG_TYPE,
+		buildLinkDragData,
+		parseDroppedLinks,
+	} = await import('../src/app/interaction-actions');
+	const links = [
+		{title: 'First', url: 'https://first.example/'},
+		{title: 'Second', url: 'https://second.example/'},
+	];
+	const sessionPayload = buildLinkDragData(links, '2 selected bookmarks')!;
+	const data = {
+		types: [BOOKMARK_DRAG_TYPE, SESSION_DRAG_TYPE, 'text/uri-list'],
+		getData(type: string) {
+			if (type === SESSION_DRAG_TYPE) {
+				return sessionPayload[SESSION_DRAG_TYPE];
+			}
+
+			return type === 'text/uri-list' ? links[0].url : '';
+		},
+	};
+
+	assert.deepEqual(parseDroppedLinks(data), links);
+});
+
 test("DELETE_BOOKMARK_COLUMN with discardBookmarks deletes the column's bookmarks instead of moving them", async () => {
 	const state = stateWithSession();
 	state.bookmarkColumns.push({id: 'column-work', name: 'Work', createdAt: 2});
@@ -4113,8 +4139,6 @@ for (const [key, fallback] of [
 	['removeTrackingParameters', false],
 	['showSaveWindowButton', true],
 	['showTrashBinButton', true],
-	['showSessionArchiveQuickAction', true],
-	['showSessionDeleteQuickAction', false],
 	['stretchBookmarkColumns', true],
 	['limitBookmarksPerColumn', false],
 ] as const) {
@@ -4283,6 +4307,49 @@ test('quick actions migrate old preferences and accept up to three selected acti
 		settings: {bookmarkQuickActions: []},
 	});
 	assert.deepEqual(Array.from(cleared.settings.bookmarkQuickActions), []);
+});
+
+test('session quick actions default to Archive and migrate the old switches', async () => {
+	const actionsFrom = async (settings: Record<string, unknown>) =>
+		Array.from(
+			(
+				await createWorkerHarness(stateWithSession(settings)).sendMessage({
+					type: 'GET_STATE',
+				})
+			).settings.sessionQuickActions,
+		);
+
+	assert.deepEqual(await actionsFrom({}), ['archive']);
+	assert.deepEqual(
+		await actionsFrom({
+			showSessionArchiveQuickAction: false,
+			showSessionDeleteQuickAction: true,
+		}),
+		['delete'],
+	);
+	assert.deepEqual(await actionsFrom({showSessionDeleteQuickAction: true}), [
+		'archive',
+		'delete',
+	]);
+
+	const harness = createWorkerHarness(stateWithSession());
+	const selected = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			sessionQuickActions: ['delete', 'unknown', 'delete'],
+		} as unknown as Partial<Settings>,
+	});
+	assert.deepEqual(Array.from(selected.settings.sessionQuickActions), [
+		'delete',
+	]);
+
+	const cleared = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {sessionQuickActions: []},
+	});
+	assert.deepEqual(Array.from(cleared.settings.sessionQuickActions), []);
+	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
+	assert.deepEqual(Array.from(reset.settings.sessionQuickActions), ['archive']);
 });
 
 test('url-only display mode and the bookmark menu click action are accepted', async () => {

@@ -42,6 +42,8 @@ type RawSettings = {[K in keyof Settings]?: unknown} & {
 	sidePanelEnabled?: unknown;
 	showBookmarkQuickActions?: unknown;
 	bookmarkQuickAction?: unknown;
+	showSessionArchiveQuickAction?: unknown;
+	showSessionDeleteQuickAction?: unknown;
 };
 type Result<T extends object = {}> = ({ok: true} & T) | ActionFailure;
 /**
@@ -474,8 +476,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	saveSplitTabs: 'both',
 	sessionSort: 'newest',
 	expandSessionsByDefault: false,
-	showSessionArchiveQuickAction: true,
-	showSessionDeleteQuickAction: false,
+	sessionQuickActions: ['archive'],
 	stretchBookmarkColumns: true,
 	limitBookmarksPerColumn: false,
 	bookmarkColumnPageSize: 10,
@@ -1403,6 +1404,35 @@ function normalizeBookmarkQuickActions(
 	return selected.slice(0, 3);
 }
 
+type SessionQuickAction = Settings['sessionQuickActions'][number];
+const SESSION_QUICK_ACTIONS = [
+	'archive',
+	'delete',
+] as const satisfies readonly SessionQuickAction[];
+
+function normalizeSessionQuickActions(raw: RawSettings): SessionQuickAction[] {
+	let candidates: unknown[];
+	if (Array.isArray(raw.sessionQuickActions)) {
+		candidates = raw.sessionQuickActions;
+	} else if (raw.sessionQuickActions === undefined) {
+		candidates = [
+			...(raw.showSessionArchiveQuickAction === false ? [] : ['archive']),
+			...(raw.showSessionDeleteQuickAction === true ? ['delete'] : []),
+		];
+	} else {
+		candidates = ['archive'];
+	}
+
+	const selected: SessionQuickAction[] = [];
+	for (const action of candidates) {
+		if (isOneOf(SESSION_QUICK_ACTIONS, action) && !selected.includes(action)) {
+			selected.push(action);
+		}
+	}
+
+	return selected;
+}
+
 function normalizeSettings(input: RawSettings | null = {}): Settings {
 	// A missing, null or non-object stored value means "no saved preferences": every field falls back to its default.
 	const raw: RawSettings = isRecord(input) ? input : {};
@@ -1478,8 +1508,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.sessionSort
 			: 'newest',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
-		showSessionArchiveQuickAction: raw.showSessionArchiveQuickAction !== false,
-		showSessionDeleteQuickAction: raw.showSessionDeleteQuickAction === true,
+		sessionQuickActions: normalizeSessionQuickActions(raw),
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
 		limitBookmarksPerColumn: raw.limitBookmarksPerColumn === true,
 		bookmarkColumnPageSize: clampInteger(

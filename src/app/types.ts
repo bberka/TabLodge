@@ -40,6 +40,7 @@ export type SaveSplitTabs = 'both' | 'focused';
 
 export type BookmarkQuickAction =
 	'open-current' | 'open-new' | 'copy' | 'edit' | 'delete';
+export type SessionQuickAction = 'archive' | 'delete';
 
 /**
 What clicking a link does: nothing, open in the current tab, or open in a new tab.
@@ -101,13 +102,9 @@ export type Settings = {
 	*/
 	expandSessionsByDefault: boolean;
 	/**
-	Show the Archive action on session cards (default on).
+	Actions shown on session cards (Archive by default; Delete is off by default).
 	*/
-	showSessionArchiveQuickAction: boolean;
-	/**
-	Show the Delete action on session cards (default off).
-	*/
-	showSessionDeleteQuickAction: boolean;
+	sessionQuickActions: SessionQuickAction[];
 	/**
 	Dashboard bookmark board: columns in the same row grow to the tallest one's height (default on).
 	*/
