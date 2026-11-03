@@ -655,6 +655,24 @@ export function SessionManager({
 		setAnchor(key);
 	}
 
+	function changeGroupSelection(groupId: string, checked: boolean) {
+		const group = groups.find((entry) => entry.id === groupId);
+		if (!group) {
+			return;
+		}
+
+		const keys = group.tabs.map((tab) => tabKey(group.id, tab.id));
+		setSelected((old) => {
+			const next = new Set(old);
+			for (const key of keys) {
+				setMember(next, key, checked);
+			}
+
+			return next;
+		});
+		setAnchor(keys.at(-1) ?? null);
+	}
+
 	function openBackup(kind: 'sessions' | 'selected') {
 		setSingleSessionExport(false);
 		const exportGroups = kind === 'selected' ? selectedGroups() : groups;
@@ -1203,6 +1221,7 @@ export function SessionManager({
 		folderTargets: () => folders,
 		bookmark: openBookmarkPicker,
 		select: changeSelection,
+		selectGroup: changeGroupSelection,
 		moveTargets(excludeId) {
 			const targets: Array<{id: string; name: string}> = [];
 			for (const group of groups) {
@@ -1879,14 +1898,11 @@ export function SessionManager({
 				</nav>
 				{selectedCount > 0 && (
 					<div
-						className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
+						className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
 						role="group"
 						aria-label="Selected session tabs"
 					>
 						<div className="flex flex-wrap items-center gap-2">
-							<span className="text-sm font-semibold" aria-live="polite">
-								{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
-							</span>
 							<Button
 								size="sm"
 								onClick={() =>
@@ -1907,52 +1923,44 @@ export function SessionManager({
 								<BookmarkPlus className="h-4 w-4" />
 								Bookmark selected
 							</Button>
-						</div>
-						<div className="ml-auto flex flex-wrap items-center gap-2">
 							<Button
-								variant="ghost"
+								variant="outline"
 								size="sm"
-								aria-label="Clear session selection"
-								onClick={() => {
-									setSelected(new Set());
-									setAnchor(null);
-								}}
+								onClick={() => openBackup('selected')}
 							>
-								<X className="h-4 w-4" />
-								Clear
+								<Download className="h-4 w-4" />
+								Export selected
 							</Button>
-							<ActionDropdownMenu
-								actions={[
-									{
-										id: 'export-selected',
-										label: 'Export selected',
-										icon: Download,
-										onSelect: () => openBackup('selected'),
-									},
-									{
-										id: 'share-selected',
-										label: 'Share selected',
-										icon: Share2,
-										onSelect: () =>
-											openShare({
-												title: 'Shared tabs',
-												groups: selectedGroups(),
-											}),
-									},
-								]}
-								trigger={
-									<Button
-										variant="outline"
-										size="icon"
-										className="h-8 w-8"
-										title="Session selection actions"
-										aria-label="Session selection actions"
-									>
-										<MoreHorizontal />
-									</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() =>
+									openShare({
+										title: 'Shared tabs',
+										groups: selectedGroups(),
+									})
 								}
-							/>
+							>
+								<Share2 className="h-4 w-4" />
+								Share selected
+							</Button>
 						</div>
+						<span className="text-sm font-semibold" aria-live="polite">
+							{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
+						</span>
+						<Button
+							variant="ghost"
+							size="sm"
+							className="ml-auto shrink-0"
+							aria-label="Clear session selection"
+							onClick={() => {
+								setSelected(new Set());
+								setAnchor(null);
+							}}
+						>
+							<X className="h-4 w-4" />
+							Clear
+						</Button>
 					</div>
 				)}
 
@@ -2492,6 +2500,7 @@ type CardActions = {
 	folderTargets: () => Folder[];
 	bookmark: (tab: SavedTabRecord) => void;
 	select: (key: string, checked: boolean, event: ClickModifiers) => void;
+	selectGroup: (groupId: string, checked: boolean) => void;
 	/**
 	Sessions a link can be moved to (read when a menu opens, never while rendering).
 	*/
@@ -2623,10 +2632,10 @@ const GroupCard = memo(
 		const onArchive = () => handlers.archive(group);
 		const inArchivedFolder =
 			folderName !== undefined && isArchivedFolder({name: folderName});
+		const sessionQuickActions = settings.sessionQuickActions ?? ['archive'];
 		const showArchiveQuickAction =
-			settings.showSessionArchiveQuickAction !== false && !inArchivedFolder;
-		const showDeleteQuickAction =
-			settings.showSessionDeleteQuickAction === true;
+			sessionQuickActions.includes('archive') && !inArchivedFolder;
+		const showDeleteQuickAction = sessionQuickActions.includes('delete');
 		// One list for the Restore dropdown and the Restore options submenu, so they cannot drift apart.
 		const restoreOptions: MenuAction[] = [
 			{
@@ -2821,6 +2830,26 @@ const GroupCard = memo(
 				>
 					<ActionContextMenu actions={actions}>
 						<div className="flex items-center gap-2 px-2 py-2 sm:px-3">
+							<span
+								data-session-select
+								className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/session:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+							>
+								<Checkbox
+									checked={
+										selectedTabs.size === 0
+											? false
+											: selectedTabs.size === group.tabs.length
+												? true
+												: 'indeterminate'
+									}
+									className="size-6"
+									aria-label={`Select all links in ${name}`}
+									disabled={group.tabs.length === 0}
+									onCheckedChange={(checked) =>
+										handlers.selectGroup(group.id, checked === true)
+									}
+								/>
+							</span>
 							<IconTooltip
 								label={`${isExpanded ? 'Hide' : 'Show'} tabs in ${name}`}
 							>

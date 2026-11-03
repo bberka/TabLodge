@@ -642,8 +642,7 @@ async function main() {
 					fixture.settings = {
 						...fixture.settings,
 						expandSessionsByDefault: false,
-						showSessionArchiveQuickAction: true,
-						showSessionDeleteQuickAction: false,
+						sessionQuickActions: ['archive'],
 					};
 					await writeDevStore(page, fixture);
 					await page.reload();
@@ -681,37 +680,54 @@ async function main() {
 
 					const options = await openPage(context, extensionId, 'options');
 					await setTheme(options, theme);
-					const archiveToggle = options.getByRole('switch', {
-						name: 'Show Archive button on session cards',
+					const quickActionsTrigger = options.getByRole('button', {
+						name: 'Quick actions on session cards: Archive',
+						exact: true,
 					});
-					const showDeleteSwitch = options.getByRole('switch', {
-						name: 'Show Delete button on session cards',
+					await quickActionsTrigger.waitFor();
+					await captureEvidence(
+						options,
+						`session-quick-actions-settings-${theme}.png`,
+						options.locator('[data-setting-row="sessionQuickActions"]'),
+					);
+					await quickActionsTrigger.focus();
+					await options.keyboard.press('Enter');
+					const quickActionsMenu = options.getByRole('menu');
+					const archiveOption = quickActionsMenu.getByRole('menuitemcheckbox', {
+						name: 'Archive',
+						exact: true,
 					});
-					await archiveToggle.waitFor();
+					const deletionChoice = quickActionsMenu.getByRole(
+						'menuitemcheckbox',
+						{
+							name: 'Delete',
+							exact: true,
+						},
+					);
 					assert.equal(
-						await archiveToggle.getAttribute('aria-checked'),
+						await archiveOption.getAttribute('aria-checked'),
 						'true',
 					);
 					assert.equal(
-						await showDeleteSwitch.getAttribute('aria-checked'),
+						await deletionChoice.getAttribute('aria-checked'),
 						'false',
 					);
 
-					await archiveToggle.focus();
+					await deletionChoice.focus();
 					await options.keyboard.press('Space');
-					await showDeleteSwitch.focus();
+					await archiveOption.focus();
 					await options.keyboard.press('Space');
 					await until(
 						async () =>
-							(await archiveToggle.getAttribute('aria-checked')) === 'false' &&
-							(await showDeleteSwitch.getAttribute('aria-checked')) === 'true',
+							(await archiveOption.getAttribute('aria-checked')) === 'false' &&
+							(await deletionChoice.getAttribute('aria-checked')) === 'true',
 						'quick action settings to update',
 					);
 					await until(async () => {
 						const {settings} = await readDevStore(options);
 						return (
-							settings.showSessionArchiveQuickAction === false &&
-							settings.showSessionDeleteQuickAction === true
+							JSON.stringify(settings.sessionQuickActions) ===
+							JSON.stringify(['delete'])
 						);
 					}, 'quick action settings to save');
 					await page.reload();
@@ -727,18 +743,21 @@ async function main() {
 						'Delete appears and Archive disappears when configured',
 					);
 
-					await archiveToggle.focus();
+					await options.keyboard.press('Escape');
+					await options
+						.getByRole('button', {
+							name: 'Quick actions on session cards: Delete',
+							exact: true,
+						})
+						.focus();
+					await options.keyboard.press('Enter');
+					await archiveOption.focus();
 					await options.keyboard.press('Space');
-					await until(
-						async () =>
-							(await archiveToggle.getAttribute('aria-checked')) === 'true',
-						'Archive setting to turn on again',
-					);
 					await until(async () => {
 						const {settings} = await readDevStore(options);
 						return (
-							settings.showSessionArchiveQuickAction === true &&
-							settings.showSessionDeleteQuickAction === true
+							JSON.stringify(settings.sessionQuickActions) ===
+							JSON.stringify(['delete', 'archive'])
 						);
 					}, 'Archive setting to save');
 					await options.close();
@@ -789,14 +808,12 @@ async function main() {
 						}),
 						[],
 					);
-					if (theme === 'light') {
-						await captureEvidence(
-							page,
-							'session-quick-actions-light.png',
-							card,
-							archiveButton,
-						);
-					}
+					await captureEvidence(
+						page,
+						`session-quick-actions-${theme}.png`,
+						card,
+						archiveButton,
+					);
 
 					const sessionDeleteButton = card.getByRole('button', {
 						name: 'Delete session Home lab rebuild',
@@ -836,14 +853,12 @@ async function main() {
 						}),
 						[],
 					);
-					if (theme === 'light') {
-						await captureEvidence(
-							page,
-							'session-delete-quick-action-light.png',
-							card,
-							sessionDeleteButton,
-						);
-					}
+					await captureEvidence(
+						page,
+						`session-delete-quick-action-${theme}.png`,
+						card,
+						sessionDeleteButton,
+					);
 
 					const sessionToRemove = page.locator('#session-dev-session-2');
 					const sessionDeleteAction = sessionToRemove.getByRole('button', {
@@ -892,8 +907,7 @@ async function main() {
 					const reset = createDevFixture(await readDevStore(page));
 					reset.settings = {
 						...reset.settings,
-						showSessionArchiveQuickAction: true,
-						showSessionDeleteQuickAction: false,
+						sessionQuickActions: ['archive'],
 					};
 					await writeDevStore(page, reset);
 					await page.reload();
@@ -1675,6 +1689,23 @@ async function main() {
 					await page
 						.getByRole('button', {name: 'Move selected bookmarks'})
 						.waitFor();
+					for (const name of [
+						'Export selected',
+						'Share selected',
+						'Delete selected',
+					]) {
+						await bookmarks.getByRole('button', {name, exact: true}).waitFor();
+					}
+
+					const sessionTargetSelect = bookmarks.getByRole('combobox', {
+						name: 'Add selected bookmarks to session',
+						exact: true,
+					});
+					await sessionTargetSelect.waitFor();
+					assert.equal(
+						await bookmarks.getByText('2 bookmarks selected').count(),
+						1,
+					);
 					await verifySelectedLinksOpen(
 						context,
 						page.getByRole('button', {
@@ -1685,34 +1716,24 @@ async function main() {
 							'https://example.com/bulk-open-bookmark-2',
 						],
 					);
-					await page
-						.getByRole('button', {
-							name: 'Bookmark selection actions',
-						})
-						.press('Enter');
-					const bookmarkActions = page.getByRole('menu');
-					for (const name of [
-						'Export selected bookmarks',
-						'Share selected bookmarks',
-						'Add to session',
-						'Delete selected bookmarks',
-					]) {
-						await bookmarkActions.getByRole('menuitem', {name}).waitFor();
-					}
-
 					await captureEvidence(
 						page,
 						`bookmark-selection-actions-${theme}.png`,
-						bookmarkActions,
+						bookmarks,
 					);
 
-					await bookmarkActions
-						.getByRole('menuitem', {name: 'Add to session', exact: true})
-						.focus();
-					await page.keyboard.press('ArrowRight');
-					await page
-						.getByRole('menuitem', {name: 'Home lab rebuild', exact: true})
-						.press('Enter');
+					await sessionTargetSelect.focus();
+					await page.keyboard.press('Enter');
+					const homeLabTarget = page.getByRole('option', {
+						name: 'Home lab rebuild',
+						exact: true,
+					});
+					await homeLabTarget.waitFor();
+					assert.equal(
+						await homeLabTarget.getAttribute('data-highlighted'),
+						'',
+					);
+					await page.keyboard.press('Enter');
 					await until(async () => {
 						const store = await readDevStore(page);
 						const session = store.groups.find(
@@ -1736,18 +1757,26 @@ async function main() {
 							.press('Space');
 					}
 
-					await page
-						.getByRole('button', {
-							name: 'Session selection actions',
-							exact: true,
-						})
-						.scrollIntoViewIfNeeded();
+					const sessionSelection = page.getByRole('group', {
+						name: 'Selected session tabs',
+					});
+					await sessionSelection.scrollIntoViewIfNeeded();
 					await page
 						.getByRole('button', {name: 'Open selected', exact: true})
 						.waitFor();
 					await page
 						.getByRole('button', {name: 'Bookmark selected', exact: true})
 						.waitFor();
+					for (const name of ['Export selected', 'Share selected']) {
+						await sessionSelection
+							.getByRole('button', {name, exact: true})
+							.waitFor();
+					}
+
+					assert.equal(
+						await sessionSelection.getByText('2 tabs selected').count(),
+						1,
+					);
 					await verifySelectedLinksOpen(
 						context,
 						page.getByRole('button', {
@@ -1764,24 +1793,12 @@ async function main() {
 						`session-multi-select-${theme}.png`,
 						page.getByRole('group', {name: 'Selected session tabs'}),
 					);
-					await page
-						.getByRole('button', {
-							name: 'Session selection actions',
-							exact: true,
-						})
-						.press('Enter');
-					const sessionActions = page.getByRole('menu');
-					for (const name of ['Export selected', 'Share selected']) {
-						await sessionActions.getByRole('menuitem', {name}).waitFor();
-					}
-
 					await captureEvidence(
 						page,
 						`session-selection-actions-${theme}.png`,
-						sessionActions,
+						page.getByRole('group', {name: 'Selected session tabs'}),
 					);
 
-					await page.keyboard.press('Escape');
 					await page
 						.getByRole('button', {name: 'Bookmark selected', exact: true})
 						.press('Enter');
@@ -1801,6 +1818,124 @@ async function main() {
 							)
 							.map((bookmark) => bookmark.columnId),
 						['bookmark-daily', 'bookmark-daily'],
+					);
+					await page.close();
+				},
+			);
+			await check(
+				`session header checkbox selects every link by keyboard and hover (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await seed(page);
+					await page.reload();
+					await setTheme(page, theme);
+					const session = page.locator('#session-dev-session-1');
+					const selectAll = session.getByRole('checkbox', {
+						name: 'Select all links in Home lab rebuild',
+					});
+					await selectAll.waitFor();
+					const selectControl = session.locator('[data-session-select]');
+					const controlOpacity = () =>
+						selectControl.evaluate(
+							(element: {
+								ownerDocument: {
+									defaultView: {
+										getComputedStyle(element: unknown): {opacity: string};
+									} | null;
+								};
+							}) =>
+								element.ownerDocument.defaultView?.getComputedStyle(element)
+									.opacity ?? '',
+						);
+					await page.mouse.move(0, 0);
+					assert.equal(
+						await controlOpacity(),
+						'0',
+						'the card checkbox starts hidden until hover or focus',
+					);
+					await session.hover();
+					await until(
+						async () => (await controlOpacity()) === '1',
+						'card checkbox to appear on hover',
+					);
+					await captureEvidence(
+						page,
+						`session-card-select-checkbox-${theme}.png`,
+						session,
+						selectAll,
+					);
+					await withMobileEmulation(
+						page,
+						{width: 440, height: 956},
+						async () => {
+							assert.equal(
+								await page.evaluate(() => {
+									const {matchMedia} = globalThis as typeof globalThis & {
+										matchMedia: (query: string) => {matches: boolean};
+									};
+									return matchMedia('(hover: none)').matches;
+								}),
+								true,
+								'touch devices do not have hover',
+							);
+							await page.mouse.move(0, 0);
+							await until(
+								async () => (await controlOpacity()) === '1',
+								'the session checkbox to appear on touch devices',
+							);
+						},
+						true,
+					);
+
+					const expand = session.getByRole('button', {
+						name: 'Show tabs in Home lab rebuild',
+					});
+					await expand.focus();
+					await page.keyboard.press('Enter');
+					const firstTab = session.getByRole('checkbox', {
+						name: 'Select TabLodge architecture from Home lab rebuild',
+					});
+					await firstTab.focus();
+					await page.keyboard.press('Space');
+					await until(
+						async () =>
+							(await selectAll.getAttribute('aria-checked')) === 'mixed',
+						'partially selected state on the session checkbox',
+					);
+					await selectAll.focus();
+					await page.keyboard.press('Space');
+					await until(
+						async () =>
+							(await selectAll.getAttribute('aria-checked')) === 'true',
+						'all session links to become selected',
+					);
+					assert.deepEqual(
+						await attributes(
+							page,
+							'#session-dev-session-1 [data-tab-id] [role="checkbox"]',
+							'aria-checked',
+						),
+						['true', 'true', 'true', 'true'],
+					);
+					assert.equal(
+						await page
+							.getByRole('group', {name: 'Selected session tabs'})
+							.getByText('4 tabs selected')
+							.count(),
+						1,
+					);
+					await captureEvidence(
+						page,
+						`session-select-all-${theme}.png`,
+						page.getByRole('group', {name: 'Selected session tabs'}),
+					);
+
+					await selectAll.focus();
+					await page.keyboard.press('Space');
+					await until(
+						async () =>
+							(await selectAll.getAttribute('aria-checked')) === 'false',
+						'session links to be cleared',
 					);
 					await page.close();
 				},
@@ -2603,9 +2738,6 @@ async function main() {
 					await page.keyboard.press('Escape');
 					await cards.nth(1).getByRole('checkbox').focus();
 					await page.keyboard.press('Space');
-					const selectionActions = page.getByRole('button', {
-						name: 'Bookmark selection actions',
-					});
 					await page
 						.getByRole('button', {name: 'Move selected bookmarks'})
 						.focus();
@@ -2644,11 +2776,10 @@ async function main() {
 							(await focusedLabel(page)) === 'Move selected bookmarks',
 						'focus after moving',
 					);
-					await selectionActions.focus();
-					await page.keyboard.press('Enter');
 					await page
-						.getByRole('menuitem', {
-							name: 'Delete selected bookmarks',
+						.getByRole('button', {
+							name: 'Delete selected',
+							exact: true,
 						})
 						.focus();
 					await page.keyboard.press('Enter');
@@ -2808,18 +2939,16 @@ async function main() {
 				await page.keyboard.press('Space');
 				assert.equal(await first.getAttribute('aria-checked'), 'true');
 				assert.equal(await second.getAttribute('aria-checked'), 'true');
-				assert.ok(
-					await page
-						.getByRole('button', {name: 'Bookmark selection actions'})
+				const selection = page.getByRole('group', {name: 'Selected bookmarks'});
+				assert.equal(await selection.isVisible(), true);
+				assert.equal(
+					await selection
+						.getByRole('button', {name: 'Export selected'})
 						.isVisible(),
+					true,
 				);
 				await page.keyboard.press('Escape');
-				assert.equal(
-					await page
-						.getByRole('button', {name: 'Bookmark selection actions'})
-						.count(),
-					0,
-				);
+				assert.equal(await selection.count(), 0);
 				await page.close();
 			});
 		}

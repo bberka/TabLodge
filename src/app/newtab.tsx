@@ -2098,14 +2098,11 @@ function NewTab() {
 			</div>
 			{selectedBookmarkIds.length > 0 && (
 				<div
-					className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
+					className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
 					role="group"
 					aria-label="Selected bookmarks"
 				>
 					<div className="flex flex-wrap items-center gap-2">
-						<span role="status" className="text-sm">
-							{plural(selectedBookmarkIds.length, 'bookmark')} selected
-						</span>
 						<Button
 							size="sm"
 							disabled={busy === 'bookmark-batch'}
@@ -2123,75 +2120,82 @@ function NewTab() {
 							onClick={openSelectedBookmarkMove}
 						>
 							<MoveBookmarkIcon className="h-4 w-4" />
-							Move
+							Move selected
 						</Button>
-					</div>
-					<div className="ml-auto flex flex-wrap items-center gap-2">
 						<Button
-							variant="ghost"
+							variant="outline"
 							size="sm"
 							disabled={busy === 'bookmark-batch'}
-							aria-label="Clear bookmark selection"
-							onClick={() => {
-								setSelectedBookmarks(new Set());
-								bookmarkSelectionAnchorRef.current = null;
-							}}
+							onClick={openSelectedBookmarkExport}
 						>
-							<X className="h-4 w-4" />
-							Clear
+							<Download className="h-4 w-4" />
+							Export selected
 						</Button>
-						<ActionDropdownMenu
-							actions={[
-								{
-									id: 'export-selected',
-									label: 'Export selected bookmarks',
-									icon: Download,
-									disabled: busy === 'bookmark-batch',
-									onSelect: openSelectedBookmarkExport,
-								},
-								{
-									id: 'share-selected',
-									label: 'Share selected bookmarks',
-									icon: Share2,
-									disabled: busy === 'bookmark-batch',
-									onSelect: shareSelectedBookmarks,
-								},
-								{
-									type: 'submenu',
-									id: 'add-to-session',
-									label: 'Add to session',
-									icon: ListPlus,
-									hidden: sessionTargetsForBookmarks.length === 0,
-									items: sessionTargetsForBookmarks.map((target) => ({
-										id: `session-${target.id}`,
-										label: target.name,
-										icon: ListPlus,
-										onSelect: () => void addSelectedBookmarksToSession(target),
-									})),
-								},
-								{type: 'separator'},
-								{
-									id: 'delete-selected',
-									label: 'Delete selected bookmarks',
-									icon: Trash2,
-									destructive: true,
-									disabled: busy === 'bookmark-batch',
-									onSelect: () => void deleteSelectedBookmarks(),
-								},
-							]}
-							trigger={
-								<Button
-									variant="outline"
-									size="icon"
-									className="h-8 w-8"
-									title="Bookmark selection actions"
-									aria-label="Bookmark selection actions"
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={busy === 'bookmark-batch'}
+							onClick={shareSelectedBookmarks}
+						>
+							<Share2 className="h-4 w-4" />
+							Share selected
+						</Button>
+						{sessionTargetsForBookmarks.length > 0 && (
+							<Select
+								value=""
+								disabled={busy === 'bookmark-batch'}
+								onValueChange={(targetId) => {
+									const target = sessionTargetsForBookmarks.find(
+										(entry) => entry.id === targetId,
+									);
+									if (target) {
+										void addSelectedBookmarksToSession(target);
+									}
+								}}
+							>
+								<SelectTrigger
+									aria-label="Add selected bookmarks to session"
+									className="h-9 w-auto min-w-36 text-sm"
 								>
-									<MoreHorizontal />
-								</Button>
-							}
-						/>
+									<SelectValue placeholder="Add to session" />
+								</SelectTrigger>
+								<SelectContent>
+									{sessionTargetsForBookmarks.map((target) => (
+										<SelectItem key={target.id} value={target.id}>
+											{target.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						)}
+						<Button
+							variant="outline"
+							size="sm"
+							className="text-destructive hover:text-destructive"
+							disabled={busy === 'bookmark-batch'}
+							onClick={() => void deleteSelectedBookmarks()}
+						>
+							<Trash2 className="h-4 w-4" />
+							Delete selected
+						</Button>
 					</div>
+					<span role="status" className="text-sm font-semibold">
+						{plural(selectedBookmarkIds.length, 'bookmark')} selected
+					</span>
+					<Button
+						variant="ghost"
+						size="sm"
+						className="ml-auto shrink-0"
+						disabled={busy === 'bookmark-batch'}
+						aria-label="Clear bookmark selection"
+						onClick={() => {
+							setSelectedBookmarks(new Set());
+							bookmarkSelectionAnchorRef.current = null;
+						}}
+					>
+						<X className="h-4 w-4" />
+						Clear
+					</Button>
 				</div>
 			)}
 			{bookmarkSearch.trim() && filteredBookmarks.length === 0 ? (

@@ -83,6 +83,7 @@ import type {
 	ActionResult,
 	BookmarkQuickAction,
 	EraseScope,
+	SessionQuickAction,
 	Settings,
 } from './types';
 import {
@@ -165,6 +166,12 @@ type SettingField = {
 			name: SettingKey<BookmarkQuickAction[]>;
 			type: 'checkbox-dropdown';
 			options: Array<[BookmarkQuickAction, string]>;
+			maxActions: 3;
+	  }
+	| {
+			name: SettingKey<SessionQuickAction[]>;
+			type: 'checkbox-dropdown';
+			options: Array<[SessionQuickAction, string]>;
 	  }
 	| {name: SettingKey<string>; type: 'column'}
 	| {name: SettingKey<string>; type: 'url'; placeholder: string}
@@ -661,16 +668,14 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
-				name: 'showSessionArchiveQuickAction',
-				label: 'Show Archive button on session cards',
-				help: 'Put an Archive button on active session cards. Expanded cards keep enabled quick actions visible without hovering.',
-				type: 'switch',
-			},
-			{
-				name: 'showSessionDeleteQuickAction',
-				label: 'Show Delete button on session cards',
-				help: 'Put a Delete button on session cards. It stays hidden unless you turn this on. Expanded cards keep enabled quick actions visible without hovering.',
-				type: 'switch',
+				name: 'sessionQuickActions',
+				label: 'Quick actions on session cards',
+				help: 'Choose which buttons appear on session cards. Archive is on by default and Delete is off. Enabled actions stay visible while a card is expanded.',
+				type: 'checkbox-dropdown',
+				options: [
+					['archive', 'Archive'],
+					['delete', 'Delete'],
+				],
 			},
 			{
 				name: 'sessionLinkClickAction',
@@ -708,6 +713,7 @@ const settingsGroups: Array<{
 				label: 'Quick actions on bookmarks',
 				help: 'Choose up to three buttons to show beside each bookmark’s menu. Clear all to hide them. Delete still asks first.',
 				type: 'checkbox-dropdown',
+				maxActions: 3,
 				options: [
 					['open-current', 'Open in this tab'],
 					['open-new', 'Open in new tab'],
@@ -2033,10 +2039,13 @@ function Options() {
 												}
 											/>
 										) : field.type === 'checkbox-dropdown' ? (
-											<BookmarkQuickActionsSetting
+											<QuickActionsSetting
 												label={field.label}
-												actions={settings.bookmarkQuickActions ?? ['open-new']}
+												actions={settings[field.name] ?? []}
 												options={field.options}
+												maxActions={
+													'maxActions' in field ? field.maxActions : undefined
+												}
 												disabled={rowDisabled(field)}
 												onChange={(actions) =>
 													updateSetting(field.name, actions)
@@ -2575,18 +2584,22 @@ function ShortcutsCard({
 	);
 }
 
-function BookmarkQuickActionsSetting({
+function QuickActionsSetting<
+	Action extends BookmarkQuickAction | SessionQuickAction,
+>({
 	label,
 	actions,
 	options,
+	maxActions,
 	disabled,
 	onChange,
 }: {
 	label: string;
-	actions: BookmarkQuickAction[];
-	options: Array<[BookmarkQuickAction, string]>;
+	actions: Action[];
+	options: Array<[Action, string]>;
+	maxActions?: number;
 	disabled: boolean;
-	onChange: (actions: BookmarkQuickAction[]) => void;
+	onChange: (actions: Action[]) => void;
 }) {
 	const summary =
 		actions.length === 0
@@ -2612,19 +2625,27 @@ function BookmarkQuickActionsSetting({
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-56">
-				<DropdownMenuLabel>Choose up to 3</DropdownMenuLabel>
+				<DropdownMenuLabel>
+					{maxActions ? `Choose up to ${maxActions}` : 'Choose actions'}
+				</DropdownMenuLabel>
 				{options.map(([action, actionLabel]) => {
 					const checked = actions.includes(action);
 					return (
 						<DropdownMenuCheckboxItem
 							key={action}
 							checked={checked}
-							disabled={!checked && actions.length >= 3}
+							disabled={
+								!checked &&
+								maxActions !== undefined &&
+								actions.length >= maxActions
+							}
 							onCheckedChange={(nextChecked) => {
 								const next = nextChecked
 									? [...actions, action]
 									: actions.filter((selected) => selected !== action);
-								onChange(next.slice(0, 3));
+								onChange(
+									maxActions === undefined ? next : next.slice(0, maxActions),
+								);
 							}}
 						>
 							{actionLabel}
