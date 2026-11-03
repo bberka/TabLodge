@@ -167,7 +167,8 @@ type FolderDialog = {
 	*/
 	icon?: string;
 };
-type DialogState = 'bookmark' | 'details' | FolderDialog | null;
+type DialogState =
+	'bookmark' | 'bookmark-selected' | 'details' | FolderDialog | null;
 type BookmarkDraft = Partial<SavedTabRecord> & {columnId?: string};
 
 const ALL = 'all';
@@ -289,6 +290,10 @@ export function SessionManager({
 	const [newFolderIcon, setNewFolderIcon] = useState<string | undefined>();
 	const groupNameRef = useRef<HTMLInputElement>(null);
 	const [bookmarkTab, setBookmarkTab] = useState<BookmarkDraft | null>(null);
+	const [bookmarkSelectedTabs, setBookmarkSelectedTabs] = useState<
+		SavedTabRecord[]
+	>([]);
+	const [bookmarkSelectedColumn, setBookmarkSelectedColumn] = useState('');
 	const [newBookmarkColumn, setNewBookmarkColumn] =
 		useState<BookmarkColumnDraft>({name: ''});
 	const [savingBookmark, setSavingBookmark] = useState(false);
@@ -413,6 +418,13 @@ export function SessionManager({
 
 		return byGroup;
 	}, [selected]);
+	const selectedTabsForDrag = useMemo(
+		() =>
+			groups.flatMap((group) =>
+				group.tabs.filter((tab) => selected.has(tabKey(group.id, tab.id))),
+			),
+		[groups, selected],
+	);
 
 	// Links are only saved by drops on a session. Elsewhere a link drag shows the "no drop" cursor and
 	// a stray drop is swallowed so the page does not navigate to the link.
@@ -1258,6 +1270,54 @@ export function SessionManager({
 		}
 	}
 
+	async function saveSelectedBookmarks(event: SyntheticEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (bookmarkSelectedTabs.length === 0 || savingBookmark) {
+			return;
+		}
+
+		setSavingBookmark(true);
+		try {
+			const columnId = await resolveBookmarkColumn(
+				bookmarkSelectedColumn || columns[0]?.id || NEW_BOOKMARK_COLUMN,
+				newBookmarkColumn,
+			);
+			const result = await send('ADD_BOOKMARKS', {
+				bookmarks: bookmarkSelectedTabs.map(({title, url}) => ({title, url})),
+				columnId,
+				undoable: true,
+			});
+			if (!result?.ok) {
+				showStatus(
+					result?.error || 'Could not bookmark the selected tabs.',
+					true,
+				);
+				return;
+			}
+
+			setDialog(null);
+			setBookmarkSelectedTabs([]);
+			await reload();
+			const columnName =
+				columns.find((column) => column.id === columnId)?.name ||
+				newBookmarkColumn.name.trim() ||
+				'Unfiled';
+			const skipped = result.skipped
+				? ` ${plural(result.skipped, 'duplicate')} skipped.`
+				: '';
+			offerUndo(
+				`Added ${plural(result.count, 'bookmark')} to “${columnName}”.${skipped}`,
+				result.undoId,
+				showStatus,
+				reload,
+			);
+		} catch (reason) {
+			showStatus((reason as Error).message, true);
+		} finally {
+			setSavingBookmark(false);
+		}
+	}
+
 	async function saveGroupDetails(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!editingGroup) {
@@ -1478,6 +1538,13 @@ export function SessionManager({
 		setBookmarkTab(tab);
 		setNewBookmarkColumn({name: ''});
 		setDialog('bookmark');
+	}
+
+	function openSelectedBookmarkPicker() {
+		setBookmarkSelectedTabs(selectedGroups().flatMap((group) => group.tabs));
+		setBookmarkSelectedColumn(columns[0]?.id || NEW_BOOKMARK_COLUMN);
+		setNewBookmarkColumn({name: ''});
+		setDialog('bookmark-selected');
 	}
 
 	if (!state) {
@@ -1811,11 +1878,15 @@ export function SessionManager({
 						)}
 				</nav>
 				{selectedCount > 0 && (
-					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3">
-						<span className="text-sm font-semibold" aria-live="polite">
-							{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
-						</span>
-						<div className="flex flex-wrap gap-2">
+					<div
+						className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
+						role="group"
+						aria-label="Selected session tabs"
+					>
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="text-sm font-semibold" aria-live="polite">
+								{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
+							</span>
 							<Button
 								size="sm"
 								onClick={() =>
@@ -1830,34 +1901,57 @@ export function SessionManager({
 							<Button
 								variant="outline"
 								size="sm"
-								onClick={() => openBackup('selected')}
+								aria-label="Bookmark selected"
+								onClick={openSelectedBookmarkPicker}
 							>
-								<Download className="h-4 w-4" />
-								Export selected
+								<BookmarkPlus className="h-4 w-4" />
+								Bookmark selected
 							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() =>
-									openShare({
-										title: 'Shared tabs',
-										groups: selectedGroups(),
-									})
-								}
-							>
-								<Share2 className="h-4 w-4" />
-								Share selected
-							</Button>
+						</div>
+						<div className="ml-auto flex flex-wrap items-center gap-2">
 							<Button
 								variant="ghost"
 								size="sm"
+								aria-label="Clear session selection"
 								onClick={() => {
 									setSelected(new Set());
 									setAnchor(null);
 								}}
 							>
+								<X className="h-4 w-4" />
 								Clear
 							</Button>
+							<ActionDropdownMenu
+								actions={[
+									{
+										id: 'export-selected',
+										label: 'Export selected',
+										icon: Download,
+										onSelect: () => openBackup('selected'),
+									},
+									{
+										id: 'share-selected',
+										label: 'Share selected',
+										icon: Share2,
+										onSelect: () =>
+											openShare({
+												title: 'Shared tabs',
+												groups: selectedGroups(),
+											}),
+									},
+								]}
+								trigger={
+									<Button
+										variant="outline"
+										size="icon"
+										className="h-8 w-8"
+										title="Session selection actions"
+										aria-label="Session selection actions"
+									>
+										<MoreHorizontal />
+									</Button>
+								}
+							/>
 						</div>
 					</div>
 				)}
@@ -1890,6 +1984,7 @@ export function SessionManager({
 								wide={wide}
 								isExpanded={isOpen(group.id)}
 								selectedTabs={selectedByGroup.get(group.id) ?? NO_SELECTION}
+								selectedTabsForDrag={selectedTabsForDrag}
 								selectionActive={selected.size > 0}
 								canSwitch={canSwitch}
 								actions={cardActions}
@@ -2072,6 +2167,53 @@ export function SessionManager({
 							</Button>
 							<Button type="submit" disabled={savingBookmark}>
 								Save bookmark
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+			<Dialog
+				open={dialog === 'bookmark-selected'}
+				onOpenChange={(open) => !open && setDialog(null)}
+			>
+				<DialogContent size="sm">
+					<form onSubmit={saveSelectedBookmarks}>
+						<DialogHeader>
+							<DialogTitle>Bookmark selected tabs</DialogTitle>
+							<DialogDescription>
+								Save {plural(bookmarkSelectedTabs.length, 'selected tab')} to a
+								bookmark column.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogBody>
+							<div className="space-y-1.5">
+								<Label htmlFor="selected-bookmark-column-select">
+									Bookmark column
+								</Label>
+								<BookmarkColumnPicker
+									columns={columns}
+									value={
+										bookmarkSelectedColumn ||
+										columns[0]?.id ||
+										NEW_BOOKMARK_COLUMN
+									}
+									id="selected-bookmark-column-select"
+									draft={newBookmarkColumn}
+									onDraftChange={setNewBookmarkColumn}
+									onValueChange={setBookmarkSelectedColumn}
+								/>
+							</div>
+						</DialogBody>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setDialog(null)}
+							>
+								Cancel
+							</Button>
+							<Button type="submit" disabled={savingBookmark}>
+								Bookmark {bookmarkSelectedTabs.length} tabs
 							</Button>
 						</DialogFooter>
 					</form>
@@ -2437,6 +2579,7 @@ type GroupCardProps = {
 	Ids of this session's selected links.
 	*/
 	selectedTabs: Set<string>;
+	selectedTabsForDrag: SavedTabRecord[];
 	selectionActive: boolean;
 	/**
 	This window has tabs a workspace switch could save; without any, switching is off.
@@ -2453,6 +2596,7 @@ const GroupCard = memo(
 		wide,
 		isExpanded,
 		selectedTabs,
+		selectedTabsForDrag,
 		selectionActive,
 		canSwitch,
 		actions: handlers,
@@ -2883,6 +3027,7 @@ const GroupCard = memo(
 											splitBadge={splitBadge}
 											selected={selectedTabs.has(tab.id)}
 											selectionActive={selectionActive}
+											selectedTabsForDrag={selectedTabsForDrag}
 											displayMode={displayMode}
 											actions={handlers}
 											dragStore={dragStore}
@@ -2927,6 +3072,7 @@ type SavedTabProps = {
 	settings: Partial<Settings>;
 	selected: boolean;
 	selectionActive: boolean;
+	selectedTabsForDrag: SavedTabRecord[];
 	actions: CardActions;
 	dragStore: DragStore;
 	displayMode?: Settings['urlDisplayMode'];
@@ -2945,6 +3091,7 @@ const SavedTab = memo(
 		settings,
 		selected,
 		selectionActive,
+		selectedTabsForDrag,
 		actions: handlers,
 		dragStore,
 		displayMode,
@@ -3083,7 +3230,12 @@ const SavedTab = memo(
 					onClick={handleRowClick}
 					onDragStart={(event) => {
 						event.stopPropagation();
-						applyLinkDrag(event.dataTransfer, [tab]);
+						const links = selected ? selectedTabsForDrag : [tab];
+						applyLinkDrag(
+							event.dataTransfer,
+							links,
+							links.length > 1 ? `${links.length} selected tabs` : '',
+						);
 						event.dataTransfer.effectAllowed = 'copyMove';
 						setLinkDragImage(event.dataTransfer, tab);
 						handlers.dragBegin({
@@ -3105,7 +3257,7 @@ const SavedTab = memo(
 					<span
 						className={cn(
 							compact ? '' : 'mt-1.5',
-							'flex w-4 shrink-0 justify-center transition-opacity',
+							'flex w-6 shrink-0 justify-center transition-opacity',
 							selected || selectionActive
 								? 'opacity-100'
 								: 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100',
@@ -3113,6 +3265,7 @@ const SavedTab = memo(
 					>
 						<Checkbox
 							checked={selected}
+							className="size-6"
 							aria-label={`Select ${label} from ${group.name.trim() || 'Untitled session'}`}
 							onPointerDown={(event) => {
 								modifierRef.current = {
@@ -3161,6 +3314,11 @@ const SavedTab = memo(
 									}
 
 									event.preventDefault();
+									if (event.altKey) {
+										onSelect(!selected, {});
+										return;
+									}
+
 									if (
 										resolveLinkTarget('session', settings as Settings) ===
 										'none'

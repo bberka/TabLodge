@@ -17,6 +17,7 @@ import {
 	ArrowLeft,
 	ArrowRight,
 	ArrowUp,
+	ExternalLink,
 	ListPlus,
 	BookmarkPlus,
 	Save,
@@ -36,6 +37,7 @@ import {
 	Search,
 	Share2,
 	Trash2,
+	X,
 	PanelsTopLeft,
 	Upload,
 } from 'lucide-react';
@@ -132,6 +134,7 @@ import {
 	COLUMN_DRAG_TYPE,
 	SESSION_DRAG_TYPE,
 	dragPayloadKind,
+	applyLinkDrag,
 	parseDraggedLink,
 	parseSessionDragData,
 	shouldBlockDocumentDrop,
@@ -148,6 +151,7 @@ import {ColumnSelect} from './column-select';
 import {PrivateSetupGate} from './private-storage';
 import {
 	BookmarkColumnPicker,
+	NEW_BOOKMARK_COLUMN,
 	resolveBookmarkColumn,
 	type BookmarkColumnDraft,
 } from './bookmark-column-picker';
@@ -223,7 +227,13 @@ Stable fallbacks so memoized values and effects do not see a new array on every 
 */
 const NO_COLUMNS: BookmarkColumnData[] = [];
 const NO_BOOKMARKS: Bookmark[] = [];
-const UNFILED_COLUMN = {id: 'bookmark-unfiled', name: 'Unfiled'};
+const UNFILED_COLUMN: BookmarkColumnData = {
+	id: 'bookmark-unfiled',
+	name: 'Unfiled',
+	createdAt: 0,
+	isDefault: true,
+};
+const MoveBookmarkIcon = ACTION_ICONS.move;
 /**
 What each quick-action button on a bookmark row does.
 */
@@ -305,6 +315,8 @@ function NewTab() {
 	} | null>(null);
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
+	const [moveBookmarkColumnDraft, setMoveBookmarkColumnDraft] =
+		useState<BookmarkColumnDraft>({name: ''});
 	const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(
 		() => new Set(),
 	);
@@ -1097,18 +1109,34 @@ function NewTab() {
 
 	async function moveBookmarkToColumn(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (
-			!moveBookmark ||
-			!(await moveBookmarks(
-				moveBookmark.bookmarkIds,
-				moveBookmark.targetColumnId,
-			))
-		) {
+		if (!moveBookmark) {
 			return;
 		}
 
-		setDialog(null);
-		setMoveBookmark(null);
+		try {
+			const targetColumnId = await resolveBookmarkColumn(
+				moveBookmark.targetColumnId,
+				moveBookmarkColumnDraft,
+			);
+			if (!(await moveBookmarks(moveBookmark.bookmarkIds, targetColumnId))) {
+				return;
+			}
+
+			setDialog(null);
+			setMoveBookmark(null);
+			setMoveBookmarkColumnDraft({name: ''});
+		} catch (reason) {
+			showStatus((reason as Error).message, true);
+		}
+	}
+
+	function openSelectedBookmarkMove() {
+		setMoveBookmarkColumnDraft({name: ''});
+		setMoveBookmark({
+			bookmarkIds: selectedBookmarkIds,
+			targetColumnId: columns[0]?.id || NEW_BOOKMARK_COLUMN,
+		});
+		setDialog('move');
 	}
 
 	/**
@@ -1306,6 +1334,48 @@ function NewTab() {
 		);
 	}
 
+	function sessionTargets() {
+		const archivedId = archivedFolderId(state?.folders ?? []);
+		return (state?.groups ?? [])
+			.filter((group) => group.folderId !== archivedId)
+			.slice(0, MAX_SESSION_TARGETS)
+			.map((group) => ({
+				id: group.id,
+				name: group.name.trim() || 'Untitled session',
+			}));
+	}
+
+	async function addSelectedBookmarksToSession(target: {
+		id: string;
+		name: string;
+	}) {
+		const selected = bookmarks
+			.filter((bookmark) => selectedBookmarks.has(bookmark.id))
+			.map(({title, url}) => ({title, url}));
+		const result = await send('ADD_LINKS_TO_SESSION', {
+			groupId: target.id,
+			links: selected,
+		});
+		if (!result?.ok) {
+			showStatus(
+				result?.error || 'Could not add bookmarks to that session.',
+				true,
+			);
+			return;
+		}
+
+		await reload();
+		const skipped = result.skipped
+			? ` ${plural(result.skipped, 'duplicate')} skipped.`
+			: '';
+		offerUndo(
+			`Added ${plural(result.added, 'link')} to “${target.name}”.${skipped}`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
+	}
+
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
 		if (action === 'select' || action === 'select-range') {
 			toggleBookmark(bookmark, action === 'select-range');
@@ -1337,9 +1407,13 @@ function NewTab() {
 		}
 
 		if (action === 'move') {
+			setMoveBookmarkColumnDraft({name: ''});
 			setMoveBookmark({
 				bookmarkIds: [bookmark.id],
-				targetColumnId: bookmark.columnId,
+				targetColumnId:
+					bookmark.columnId === UNFILED_COLUMN.id
+						? columns[0]?.id || NEW_BOOKMARK_COLUMN
+						: bookmark.columnId,
 			});
 			setDialog('move');
 			return;
@@ -1508,21 +1582,25 @@ function NewTab() {
 	}
 
 	async function openAllInColumn(column: BookmarkColumnData) {
-		const urls = bookmarks
-			.filter((bookmark) => bookmark.columnId === column.id)
-			.map((bookmark) => bookmark.url);
-		if (urls.length === 0) {
+		const bookmarksInColumn = bookmarks.filter(
+			(bookmark) => bookmark.columnId === column.id,
+		);
+		if (bookmarksInColumn.length === 0) {
 			showStatus('This column has no bookmarks to open.', true);
 			return;
 		}
 
+		await openBookmarks(bookmarksInColumn);
+	}
+
+	async function openBookmarks(bookmarkEntries: Bookmark[]) {
 		const opened: number[] = [];
 		try {
-			for (const url of urls) {
+			for (const bookmark of bookmarkEntries) {
 				const destination =
 					settings.removeTrackingParameters === true
-						? stripTrackingParameters(url)
-						: url;
+						? stripTrackingParameters(bookmark.url)
+						: bookmark.url;
 				const created = await chrome.tabs.create({
 					url: destination,
 					active: false,
@@ -1537,9 +1615,56 @@ function NewTab() {
 		}
 
 		// A handful of tabs is routine; a bigger batch gets an Undo that closes them again.
-		if (urls.length > 10) {
-			offerCloseTabsUndo(`Opened ${urls.length} tabs.`, opened, showStatus);
+		if (bookmarkEntries.length > 10) {
+			offerCloseTabsUndo(
+				`Opened ${bookmarkEntries.length} tabs.`,
+				opened,
+				showStatus,
+			);
 		}
+	}
+
+	async function openSelectedBookmarks() {
+		await openBookmarks(
+			bookmarks.filter((bookmark) => selectedBookmarks.has(bookmark.id)),
+		);
+	}
+
+	function openSelectedBookmarkExport() {
+		const selected = bookmarks.filter((bookmark) =>
+			selectedBookmarks.has(bookmark.id),
+		);
+		const columnIds = new Set(selected.map((bookmark) => bookmark.columnId));
+		setBackupRequest({
+			data: {
+				kind: 'bookmarks',
+				columns: [
+					...columns.filter((column) => columnIds.has(column.id)),
+					...(columnIds.has(UNFILED_COLUMN.id) ? [UNFILED_COLUMN] : []),
+				],
+				bookmarks: selected,
+			},
+			singleColumn: false,
+		});
+	}
+
+	function shareSelectedBookmarks() {
+		const selected = bookmarks.filter((bookmark) =>
+			selectedBookmarks.has(bookmark.id),
+		);
+		const groups = [
+			...columns.map((column) => ({
+				name: column.name,
+				tabs: selected.filter((bookmark) => bookmark.columnId === column.id),
+			})),
+			{
+				name: UNFILED_COLUMN.name,
+				tabs: selected.filter(
+					(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
+				),
+			},
+		].filter((group) => group.tabs.length > 0);
+		openShare({title: 'Selected bookmarks', groups});
 	}
 
 	function openBookmarkBackup() {
@@ -1784,6 +1909,7 @@ function NewTab() {
 		: unfiledFiltered;
 	const unfiledFirst = unfiledAll?.[0]?.id;
 	const unfiledLast = unfiledAll?.at(-1)?.id;
+	const sessionTargetsForBookmarks = sessionTargets();
 
 	// One stable set of callbacks for every column and bookmark, so memoized ones skip re-rendering.
 	const boardActions = useStableCallbacks<BoardActions>({
@@ -1795,16 +1921,7 @@ function NewTab() {
 		edit: openColumnEditor,
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
-		sessionTargets() {
-			const archivedId = archivedFolderId(state?.folders ?? []);
-			return (state?.groups ?? [])
-				.filter((group) => group.folderId !== archivedId)
-				.slice(0, MAX_SESSION_TARGETS)
-				.map((group) => ({
-					id: group.id,
-					name: group.name.trim() || 'Untitled session',
-				}));
-		},
+		sessionTargets,
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
@@ -1819,7 +1936,14 @@ function NewTab() {
 					? selectedBookmarkIds
 					: [id]
 				: [];
-			handleInternalDragStart(event, draggedBookmarksRef.current.length);
+			const draggedLinks = bookmarks
+				.filter((bookmark) => draggedBookmarksRef.current.includes(bookmark.id))
+				.map(({title, url}) => ({title, url}));
+			handleInternalDragStart(
+				event,
+				draggedBookmarksRef.current.length,
+				draggedLinks,
+			);
 		},
 		dragEnd() {
 			draggedBookmarksRef.current = [];
@@ -1974,48 +2098,100 @@ function NewTab() {
 			</div>
 			{selectedBookmarkIds.length > 0 && (
 				<div
-					className="mb-3 flex flex-wrap items-center gap-2"
+					className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
 					role="group"
 					aria-label="Selected bookmarks"
 				>
-					<span role="status" className="text-sm">
-						{plural(selectedBookmarkIds.length, 'bookmark')} selected
-					</span>
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={busy === 'bookmark-batch'}
-						aria-label="Move selected bookmarks"
-						onClick={() => {
-							setMoveBookmark({
-								bookmarkIds: selectedBookmarkIds,
-								targetColumnId: columns[0]?.id || UNFILED_COLUMN.id,
-							});
-							setDialog('move');
-						}}
-					>
-						Move
-					</Button>
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={busy === 'bookmark-batch'}
-						aria-label="Delete selected bookmarks"
-						onClick={() => void deleteSelectedBookmarks()}
-					>
-						Delete
-					</Button>
-					<Button
-						variant="ghost"
-						size="sm"
-						disabled={busy === 'bookmark-batch'}
-						onClick={() => {
-							setSelectedBookmarks(new Set());
-							bookmarkSelectionAnchorRef.current = null;
-						}}
-					>
-						Clear bookmark selection
-					</Button>
+					<div className="flex flex-wrap items-center gap-2">
+						<span role="status" className="text-sm">
+							{plural(selectedBookmarkIds.length, 'bookmark')} selected
+						</span>
+						<Button
+							size="sm"
+							disabled={busy === 'bookmark-batch'}
+							aria-label="Open selected bookmarks"
+							onClick={() => void openSelectedBookmarks()}
+						>
+							<ExternalLink className="h-4 w-4" />
+							Open selected
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={busy === 'bookmark-batch'}
+							aria-label="Move selected bookmarks"
+							onClick={openSelectedBookmarkMove}
+						>
+							<MoveBookmarkIcon className="h-4 w-4" />
+							Move
+						</Button>
+					</div>
+					<div className="ml-auto flex flex-wrap items-center gap-2">
+						<Button
+							variant="ghost"
+							size="sm"
+							disabled={busy === 'bookmark-batch'}
+							aria-label="Clear bookmark selection"
+							onClick={() => {
+								setSelectedBookmarks(new Set());
+								bookmarkSelectionAnchorRef.current = null;
+							}}
+						>
+							<X className="h-4 w-4" />
+							Clear
+						</Button>
+						<ActionDropdownMenu
+							actions={[
+								{
+									id: 'export-selected',
+									label: 'Export selected bookmarks',
+									icon: Download,
+									disabled: busy === 'bookmark-batch',
+									onSelect: openSelectedBookmarkExport,
+								},
+								{
+									id: 'share-selected',
+									label: 'Share selected bookmarks',
+									icon: Share2,
+									disabled: busy === 'bookmark-batch',
+									onSelect: shareSelectedBookmarks,
+								},
+								{
+									type: 'submenu',
+									id: 'add-to-session',
+									label: 'Add to session',
+									icon: ListPlus,
+									hidden: sessionTargetsForBookmarks.length === 0,
+									items: sessionTargetsForBookmarks.map((target) => ({
+										id: `session-${target.id}`,
+										label: target.name,
+										icon: ListPlus,
+										onSelect: () => void addSelectedBookmarksToSession(target),
+									})),
+								},
+								{type: 'separator'},
+								{
+									id: 'delete-selected',
+									label: 'Delete selected bookmarks',
+									icon: Trash2,
+									destructive: true,
+									disabled: busy === 'bookmark-batch',
+									onSelect: () => void deleteSelectedBookmarks(),
+								},
+							]}
+							trigger={
+								<Button
+									variant="outline"
+									size="icon"
+									className="h-8 w-8"
+									title="Bookmark selection actions"
+									aria-label="Bookmark selection actions"
+								>
+									<MoreHorizontal />
+								</Button>
+							}
+						/>
+					</div>
 				</div>
 			)}
 			{bookmarkSearch.trim() && filteredBookmarks.length === 0 ? (
@@ -2690,18 +2866,23 @@ function NewTab() {
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="move-bookmark-column">Column</Label>
-								<ColumnSelect
+								<BookmarkColumnPicker
 									columns={columns}
-									value={moveBookmark?.targetColumnId || columns[0]?.id}
+									value={
+										moveBookmark?.targetColumnId ||
+										columns[0]?.id ||
+										NEW_BOOKMARK_COLUMN
+									}
 									id="move-bookmark-column"
+									newColumnLabel="Add column"
+									draft={moveBookmarkColumnDraft}
 									onValueChange={(value) =>
 										setMoveBookmark(
 											(old) => old && {...old, targetColumnId: value},
 										)
 									}
-								>
-									<SelectItem value={UNFILED_COLUMN.id}>Unfiled</SelectItem>
-								</ColumnSelect>
+									onDraftChange={setMoveBookmarkColumnDraft}
+								/>
 							</div>
 						</DialogBody>
 						<DialogFooter>
@@ -2871,7 +3052,11 @@ function previewBookmarkDrop(
 	});
 }
 
-function handleInternalDragStart(event: DragEvent<HTMLElement>, count = 1) {
+function handleInternalDragStart(
+	event: DragEvent<HTMLElement>,
+	count = 1,
+	links: LinkEntry[] = [],
+) {
 	const handle = (event.target as Element).closest<HTMLElement>(
 		'[data-drag-column]',
 	);
@@ -2885,14 +3070,18 @@ function handleInternalDragStart(event: DragEvent<HTMLElement>, count = 1) {
 		card.classList.add('is-dragging');
 		setBookmarkDragImage(event, card, count);
 		event.dataTransfer.setData(BOOKMARK_DRAG_TYPE, card.dataset.bookmarkId!);
-		const link = card.dataset.bookmarkUrl;
-		if (link) {
-			event.dataTransfer.setData('text/uri-list', link);
-			event.dataTransfer.setData('text/plain', link);
-			event.dataTransfer.setData(
-				'text/x-moz-url',
-				`${link}\n${card.dataset.bookmarkTitle || ''}`,
-			);
+		if (count > 1) {
+			applyLinkDrag(event.dataTransfer, links, `${count} selected bookmarks`);
+		} else {
+			const link = card.dataset.bookmarkUrl;
+			if (link) {
+				event.dataTransfer.setData('text/uri-list', link);
+				event.dataTransfer.setData('text/plain', link);
+				event.dataTransfer.setData(
+					'text/x-moz-url',
+					`${link}\n${card.dataset.bookmarkTitle || ''}`,
+				);
+			}
 		}
 
 		event.dataTransfer.effectAllowed = 'copyMove';

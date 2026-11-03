@@ -41,12 +41,13 @@ export async function resolveBookmarkColumn(
 export function BookmarkColumnPicker({
 	draft,
 	onDraftChange,
+	newColumnLabel,
 	...props
 }: Omit<ComponentProps<typeof ColumnSelect>, 'children'> &
-	NewColumnFieldProps) {
+	NewColumnFieldProps & {newColumnLabel?: string}) {
 	return (
 		<div className="space-y-3">
-			<BookmarkColumnSelect {...props} />
+			<BookmarkColumnSelect {...props} newColumnLabel={newColumnLabel} />
 			{props.value === NEW_BOOKMARK_COLUMN && (
 				<BookmarkColumnNameField
 					id={`${props.id}-new-name`}
@@ -58,13 +59,16 @@ export function BookmarkColumnPicker({
 	);
 }
 
-export function BookmarkColumnSelect(
-	props: Omit<ComponentProps<typeof ColumnSelect>, 'children'>,
-) {
+export function BookmarkColumnSelect({
+	newColumnLabel = 'New column',
+	...props
+}: Omit<ComponentProps<typeof ColumnSelect>, 'children'> & {
+	newColumnLabel?: string;
+}) {
 	return (
 		<ColumnSelect {...props}>
 			<SelectItem value={NEW_BOOKMARK_COLUMN}>
-				<IconLabel icon={Plus}>New column</IconLabel>
+				<IconLabel icon={Plus}>{newColumnLabel}</IconLabel>
 			</SelectItem>
 		</ColumnSelect>
 	);

@@ -129,7 +129,7 @@ The one link a dragged or pasted `DataTransfer` carries, or null when it holds n
 when the source gave none.
 */
 export function parseDraggedLink(
-	dataTransfer: DataTransfer | null,
+	dataTransfer: Pick<DataTransfer, 'getData'> | null,
 ): {url: string; title: string} | null {
 	if (!dataTransfer) {
 		return null;
@@ -178,12 +178,12 @@ export function parseDraggedLink(
 }
 
 /**
-Every link a drop carries: all links of a dragged session, otherwise the single dragged link.
+Every link a drop carries: links from a named group drag, otherwise the single dragged link.
 */
 export function parseDroppedLinks(
-	dataTransfer: DataTransfer,
+	dataTransfer: Pick<DataTransfer, 'types' | 'getData'>,
 ): Array<{url: string; title: string}> {
-	if (dragPayloadKind(dataTransfer.types) === 'session') {
+	if (Array.from(dataTransfer.types).includes(SESSION_DRAG_TYPE)) {
 		return (
 			parseSessionDragData(dataTransfer.getData(SESSION_DRAG_TYPE))?.links ?? []
 		);
@@ -247,9 +247,9 @@ export async function writeClipboard(
 	return html ? 'plain' : 'text';
 }
 
-// Data placed on a drag so saved tabs or whole sessions can be dropped into documents,
-// editors, and chat boxes. A single tab drops as a link; a session (any drag with a name) drops as
-// a titled list and also carries SESSION_DRAG_TYPE so TabLodge's own columns can add every link.
+// Data placed on a drag so saved tabs or grouped links can be dropped into documents, editors, and
+// chat boxes. A single tab drops as a link; a named group drops as a titled list and also carries
+// SESSION_DRAG_TYPE so TabLodge's own columns can add every link.
 export function buildLinkDragData(
 	tabs: readonly LinkLike[] | null | undefined,
 	name = '',

@@ -172,6 +172,12 @@ function Help() {
 						'title address url notes tab groups ignore groups pinned tabs include pinned tabs default',
 				},
 				{
+					title: 'Select tabs and bookmark them together',
+					body: 'Use the checkboxes, Ctrl or Command clicks, Shift clicks, or Alt-click a saved link to select tabs. Alt-click selects without opening the link or collapsing its session. The selection bar has Open selected and Bookmark selected buttons. Use Session selection actions for export or share. Drag a selected tab to a bookmark column to add the whole selection there.',
+					searchText:
+						'select multiple saved tabs checkbox ctrl command shift alt click open export share bookmark selected drag bookmark column',
+				},
+				{
 					title: 'Name a session',
 					body: 'Choose a naming style in Settings. Ask each time prompts in the popup, dashboard, or side panel before saving. A direct-save toolbar action, shortcut, or right-click save opens a small rename window after saving. Leave the name empty to use the fallback name.',
 					searchText:
@@ -281,7 +287,7 @@ function Help() {
 				},
 				{
 					title: 'Select several bookmarks',
-					body: 'Use Select bookmarks beside bookmark search to turn selection mode on or off. You can also hold Alt (Option on Mac) and hover a bookmark to reveal its selection checkbox, or choose Select bookmark from its menu. In selection mode, click bookmarks or use Tab and Space to select them. Hold Shift and click, or press Shift+Space, to select every visible bookmark between the last selection and the current one. Clicking with Ctrl (Command on Mac) still opens a link in a new tab. Drag selected bookmarks within the board, or use Move and Delete above it. Clear bookmark selection clears the selection; Escape exits selection mode. Deleted bookmarks offer Undo and go to the trash bin.',
+					body: 'Use Select bookmarks beside bookmark search to turn selection mode on or off. You can also hold Alt (Option on Mac) and hover a bookmark to reveal its selection checkbox, or choose Select bookmark from its menu. In selection mode, click bookmarks or use Tab and Space to select them. Hold Shift and click, or press Shift+Space, to select every visible bookmark between the last selection and the current one. Clicking with Ctrl (Command on Mac) still opens a link in a new tab. The selection bar has Open selected and Move buttons. The Bookmark selection actions menu has export, share, add to session, and delete. Drag selected bookmarks within the board or drop them onto a session to add them there. Clear bookmark selection clears the selection; Escape exits selection mode. Deleted bookmarks offer Undo and go to the trash bin.',
 					searchText:
 						'select multiple bulk bookmarks alt option shift range ctrl command checkbox drag move delete undo keyboard space escape',
 				},

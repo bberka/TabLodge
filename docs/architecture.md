@@ -170,7 +170,7 @@ Columns and bookmarks are reordered by dragging. Any column, including the last,
 
 Bookmark selection stays in the dashboard page, not in storage. A toolbar toggle enables selection mode; Alt reveals selection controls temporarily. Shift selects a range in rendered board order, across columns, without including hidden search results or bookmarks not yet loaded. Ctrl and Command clicks retain native link behavior.
 
-Moving or deleting a selection sends the existing bookmark mutation messages in sequence and stops on the first failure. A partial failure leaves completed changes in place and reloads the board. Group moves preserve board order, and deletion offers one Undo that restores the individual trash entries in reverse deletion order. The bookmark drag payload still identifies the dragged bookmark; the source board keeps the selected IDs for drops within that board.
+Moving or deleting a bookmark selection sends the existing mutation messages in sequence and stops on the first failure. A partial failure leaves completed changes in place and reloads the board. Group moves preserve board order, and deletion offers one Undo that restores the individual trash entries in reverse deletion order. Multi-bookmark drags keep the dragged bookmark ID for board reordering and include the selected links for drops into sessions. Selected saved tabs carry the same link list when dropped onto bookmark columns. Selection state stays in the page and is not stored.
 
 ## New tab behavior
 

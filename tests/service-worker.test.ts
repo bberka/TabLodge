@@ -2824,6 +2824,32 @@ test('link drag data carries uri-list, plain text, and html for tabs and session
 	assert.equal(buildLinkDragData([]), null);
 });
 
+test('a multi-bookmark drag exposes every selected link to session drop targets', async () => {
+	const {
+		BOOKMARK_DRAG_TYPE,
+		SESSION_DRAG_TYPE,
+		buildLinkDragData,
+		parseDroppedLinks,
+	} = await import('../src/app/interaction-actions');
+	const links = [
+		{title: 'First', url: 'https://first.example/'},
+		{title: 'Second', url: 'https://second.example/'},
+	];
+	const sessionPayload = buildLinkDragData(links, '2 selected bookmarks')!;
+	const data = {
+		types: [BOOKMARK_DRAG_TYPE, SESSION_DRAG_TYPE, 'text/uri-list'],
+		getData(type: string) {
+			if (type === SESSION_DRAG_TYPE) {
+				return sessionPayload[SESSION_DRAG_TYPE];
+			}
+
+			return type === 'text/uri-list' ? links[0].url : '';
+		},
+	};
+
+	assert.deepEqual(parseDroppedLinks(data), links);
+});
+
 test("DELETE_BOOKMARK_COLUMN with discardBookmarks deletes the column's bookmarks instead of moving them", async () => {
 	const state = stateWithSession();
 	state.bookmarkColumns.push({id: 'column-work', name: 'Work', createdAt: 2});
