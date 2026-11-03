@@ -28,6 +28,7 @@ import {
 	Upload,
 	Search,
 	X,
+	ChevronDown,
 } from 'lucide-react';
 import {
 	Button,
@@ -47,6 +48,11 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
+	DropdownMenu,
+	DropdownMenuTrigger,
+	DropdownMenuContent,
+	DropdownMenuCheckboxItem,
+	DropdownMenuLabel,
 	Switch,
 	Textarea,
 	TooltipProvider,
@@ -73,7 +79,12 @@ import {
 	useTabLodgeState,
 	type IconComponent,
 } from './common';
-import type {ActionResult, EraseScope, Settings} from './types';
+import type {
+	ActionResult,
+	BookmarkQuickAction,
+	EraseScope,
+	Settings,
+} from './types';
 import {
 	BackupDialog,
 	ImportDialog,
@@ -149,6 +160,11 @@ type SettingField = {
 			Value (as text) and label of each allowed number.
 			*/
 			options: Array<[string, string]>;
+	  }
+	| {
+			name: SettingKey<BookmarkQuickAction[]>;
+			type: 'checkbox-dropdown';
+			options: Array<[BookmarkQuickAction, string]>;
 	  }
 	| {name: SettingKey<string>; type: 'column'}
 	| {name: SettingKey<string>; type: 'url'; placeholder: string}
@@ -676,17 +692,10 @@ const settingsGroups: Array<{
 				options: [...LINK_ACTIONS, ['menu', 'Open action menu']],
 			},
 			{
-				name: 'showBookmarkQuickActions',
-				label: 'Show a quick action on bookmarks',
-				help: 'Add one button next to each bookmark’s menu button that does the action you pick below.',
-				type: 'switch',
-			},
-			{
-				name: 'bookmarkQuickAction',
-				label: 'Quick action',
-				help: 'What the button on each bookmark does. Delete still asks first.',
-				requires: 'showBookmarkQuickActions',
-				type: 'select',
+				name: 'bookmarkQuickActions',
+				label: 'Quick actions on bookmarks',
+				help: 'Choose up to three buttons to show beside each bookmark’s menu. Clear all to hide them. Delete still asks first.',
+				type: 'checkbox-dropdown',
 				options: [
 					['open-current', 'Open in this tab'],
 					['open-new', 'Open in new tab'],
@@ -829,9 +838,7 @@ const settingsGroups: Array<{
 const fieldSearchText = (field: SettingField) => [
 	field.label,
 	field.help,
-	...(field.type === 'select' || field.type === 'number-select'
-		? field.options.map(([, label]) => label)
-		: []),
+	...('options' in field ? field.options.map(([, label]) => label) : []),
 ];
 
 // The sections that are not generated from `settingsGroups`, with the extra words people may search for.
@@ -1096,7 +1103,7 @@ function Options() {
 	// Values come from the switch and select controls below, so they match the setting's type.
 	async function updateSetting(
 		name: keyof Settings,
-		value: boolean | string | number,
+		value: boolean | string | number | string[],
 		savedMessage = 'Setting saved.',
 	) {
 		if (!state) {
@@ -1367,10 +1374,19 @@ function Options() {
 
 	const fieldShown = (field: SettingField) =>
 		!state || (rowAvailable(field) && (searching || !rowDisabled(field)));
-	const changedFromDefault = (field: SettingField) =>
-		Boolean(state) &&
-		defaultSettings !== undefined &&
-		!Object.is(settings[field.name], defaultSettings[field.name]);
+	const changedFromDefault = (field: SettingField) => {
+		if (!state || !defaultSettings) {
+			return false;
+		}
+
+		const value = settings[field.name];
+		const defaultValue = defaultSettings[field.name];
+		return Array.isArray(value) && Array.isArray(defaultValue)
+			? value.length !== defaultValue.length ||
+					value.some((entry, index) => entry !== defaultValue[index])
+			: !Object.is(value, defaultValue);
+	};
+
 	const focusSettingControl = (field: SettingField) => {
 		const dependency = field.requires ?? field.parent;
 		const name = rowDisabled(field) && dependency ? dependency : field.name;
@@ -1378,7 +1394,7 @@ function Options() {
 			...document.querySelectorAll<HTMLElement>('[data-setting-row]'),
 		].find((element) => element.dataset.settingRow === name);
 		const control = row?.querySelector<HTMLElement>(
-			'[role="switch"]:not([disabled]), [role="combobox"]:not([disabled]), input:not([disabled])',
+			'[data-setting-control]:not([disabled]), [role="switch"]:not([disabled]), [role="combobox"]:not([disabled]), input:not([disabled])',
 		);
 		(control ?? searchRef.current)?.focus();
 	};
@@ -1899,8 +1915,7 @@ function Options() {
 										}
 										hint={
 											searching &&
-											(field.type === 'select' ||
-												field.type === 'number-select') &&
+											'options' in field &&
 											!matchesQuery(query, [field.label, field.help])
 												? field.options
 														.map(([, label]) => label)
@@ -2003,6 +2018,16 @@ function Options() {
 												aria-label={field.label}
 												onValueChange={(value) =>
 													updateSetting(field.name, value)
+												}
+											/>
+										) : field.type === 'checkbox-dropdown' ? (
+											<BookmarkQuickActionsSetting
+												label={field.label}
+												actions={settings.bookmarkQuickActions ?? ['open-new']}
+												options={field.options}
+												disabled={rowDisabled(field)}
+												onChange={(actions) =>
+													updateSetting(field.name, actions)
 												}
 											/>
 										) : field.type === 'number-select' ? (
@@ -2535,6 +2560,67 @@ function ShortcutsCard({
 				</dl>
 			)}
 		</section>
+	);
+}
+
+function BookmarkQuickActionsSetting({
+	label,
+	actions,
+	options,
+	disabled,
+	onChange,
+}: {
+	label: string;
+	actions: BookmarkQuickAction[];
+	options: Array<[BookmarkQuickAction, string]>;
+	disabled: boolean;
+	onChange: (actions: BookmarkQuickAction[]) => void;
+}) {
+	const summary =
+		actions.length === 0
+			? 'None'
+			: actions.length === 1
+				? (options.find(([action]) => action === actions[0])?.[1] ??
+					'1 selected')
+				: `${actions.length} selected`;
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					data-setting-control
+					type="button"
+					variant="outline"
+					size="sm"
+					className="w-full justify-between sm:w-64"
+					aria-label={`${label}: ${summary}`}
+					disabled={disabled}
+				>
+					<span className="truncate">{summary}</span>
+					<ChevronDown aria-hidden="true" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="min-w-56">
+				<DropdownMenuLabel>Choose up to 3</DropdownMenuLabel>
+				{options.map(([action, actionLabel]) => {
+					const checked = actions.includes(action);
+					return (
+						<DropdownMenuCheckboxItem
+							key={action}
+							checked={checked}
+							disabled={!checked && actions.length >= 3}
+							onCheckedChange={(nextChecked) => {
+								const next = nextChecked
+									? [...actions, action]
+									: actions.filter((selected) => selected !== action);
+								onChange(next.slice(0, 3));
+							}}
+						>
+							{actionLabel}
+						</DropdownMenuCheckboxItem>
+					);
+				})}
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 

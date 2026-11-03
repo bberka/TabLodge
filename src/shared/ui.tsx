@@ -56,6 +56,7 @@ export {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuRadioItem,
+	DropdownMenuCheckboxItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuRadioGroup,

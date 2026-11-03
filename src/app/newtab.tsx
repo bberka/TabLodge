@@ -157,7 +157,12 @@ import {cn} from '@/lib/utils';
 const initialStateRequest = takeStateRequest();
 
 type DialogKind =
-	'bookmark' | 'column' | 'move' | 'paste-links' | 'delete-column';
+	| 'bookmark'
+	| 'column'
+	| 'move'
+	| 'paste-links'
+	| 'delete-column'
+	| 'delete-bookmark';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 type BookmarkAction =
 	| 'click'
@@ -220,7 +225,7 @@ const NO_COLUMNS: BookmarkColumnData[] = [];
 const NO_BOOKMARKS: Bookmark[] = [];
 const UNFILED_COLUMN = {id: 'bookmark-unfiled', name: 'Unfiled'};
 /**
-What the single quick-action button on a bookmark row does, per the "Quick action" setting.
+What each quick-action button on a bookmark row does.
 */
 const QUICK_ACTIONS: Record<
 	BookmarkQuickAction,
@@ -280,6 +285,9 @@ function NewTab() {
 		[],
 	);
 	const [bookmarkEdit, setBookmarkEdit] = useState<BookmarkDraft | null>(null);
+	const [bookmarkToDelete, setBookmarkToDelete] = useState<Bookmark | null>(
+		null,
+	);
 	// Several links pasted at once: each row can be left out before they are added to one column.
 	const [pastedLinks, setPastedLinks] = useState<
 		Array<LinkEntry & {include: boolean}>
@@ -450,10 +458,7 @@ function NewTab() {
 		],
 	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
-	const quickAction: BookmarkQuickAction | null =
-		settings.showBookmarkQuickActions === true
-			? (settings.bookmarkQuickAction ?? 'open-new')
-			: null;
+	const quickActions = settings.bookmarkQuickActions ?? ['open-new'];
 	const autoOpenFinder =
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
 	const sessionsOnTop = settings.sessionsOnTop === true;
@@ -1125,6 +1130,18 @@ function NewTab() {
 		offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
 	}
 
+	async function confirmDeleteBookmark(event: SyntheticEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (!bookmarkToDelete) {
+			return;
+		}
+
+		const bookmark = bookmarkToDelete;
+		setDialog(null);
+		setBookmarkToDelete(null);
+		await deleteBookmark(bookmark);
+	}
+
 	async function deleteSelectedBookmarks() {
 		if (bookmarkBatchRunningRef.current) {
 			return;
@@ -1354,9 +1371,12 @@ function NewTab() {
 			return;
 		}
 
-		if (action === 'delete') {
-			await deleteBookmark(bookmark);
+		if (action !== 'delete') {
+			return;
 		}
+
+		setBookmarkToDelete(bookmark);
+		setDialog('delete-bookmark');
 	}
 
 	async function addDroppedLinks(
@@ -2030,7 +2050,7 @@ function NewTab() {
 							urlMode={urlMode}
 							clickOpensMenu={clickOpensMenu}
 							urlSettings={urlSettings}
-							quickAction={quickAction}
+							quickActions={quickActions}
 							actions={boardActions}
 						/>
 					))}
@@ -2092,7 +2112,7 @@ function NewTab() {
 												urlMode={urlMode}
 												clickOpensMenu={clickOpensMenu}
 												urlSettings={urlSettings}
-												quickAction={quickAction}
+												quickActions={quickActions}
 												sessions={boardActions}
 												onAction={boardActions.bookmark}
 											/>
@@ -2595,6 +2615,50 @@ function NewTab() {
 				</DialogContent>
 			</Dialog>
 			<Dialog
+				open={dialog === 'delete-bookmark'}
+				onOpenChange={(open) => {
+					if (open) {
+						return;
+					}
+
+					setDialog(null);
+					setBookmarkToDelete(null);
+				}}
+			>
+				<DialogContent size="sm">
+					<form onSubmit={confirmDeleteBookmark}>
+						<DialogHeader>
+							<DialogTitle>
+								Delete “
+								{bookmarkToDelete?.title ||
+									siteName(bookmarkToDelete?.url || '')}
+								”?
+							</DialogTitle>
+							<DialogDescription>
+								This bookmark will move to the trash bin. You can undo this
+								right after.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									setDialog(null);
+									setBookmarkToDelete(null);
+								}}
+							>
+								Cancel
+							</Button>
+							<Button type="submit" variant="destructive">
+								<Trash2 />
+								Delete bookmark
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+			<Dialog
 				open={dialog === 'move'}
 				onOpenChange={(open) => !open && setDialog(null)}
 			>
@@ -2959,7 +3023,7 @@ type BookmarkColumnProps = {
 	*/
 	siblings: Bookmark[];
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
-	quickAction: BookmarkQuickAction | null;
+	quickActions: BookmarkQuickAction[];
 	clickOpensMenu: boolean;
 	urlSettings: UrlSettings;
 	dropIndicator: DropIndicator | null;
@@ -2985,7 +3049,7 @@ const BookmarkColumn = memo(
 		bookmarks,
 		siblings,
 		urlMode,
-		quickAction,
+		quickActions,
 		clickOpensMenu,
 		urlSettings,
 		dropIndicator,
@@ -3169,7 +3233,7 @@ const BookmarkColumn = memo(
 												urlMode={urlMode}
 												clickOpensMenu={clickOpensMenu}
 												urlSettings={urlSettings}
-												quickAction={quickAction}
+												quickActions={quickActions}
 												sessions={actions}
 												onAction={actions.bookmark}
 											/>
@@ -3213,7 +3277,7 @@ type BookmarkCardProps = {
 	onAction: OnBookmarkAction;
 	sessions: Pick<BoardActions, 'addToSession' | 'sessionTargets'>;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
-	quickAction: BookmarkQuickAction | null;
+	quickActions: BookmarkQuickAction[];
 	/**
 	Clicking the card opens its action menu instead of the link.
 	*/
@@ -3248,7 +3312,7 @@ const BookmarkCard = memo(
 		onAction,
 		sessions,
 		urlMode,
-		quickAction,
+		quickActions,
 		clickOpensMenu = false,
 		urlSettings = DEFAULT_URL_SETTINGS,
 		dropBefore = false,
@@ -3344,9 +3408,6 @@ const BookmarkCard = memo(
 			{type: 'separator'},
 			remove,
 		];
-		const QuickIcon = quickAction
-			? QUICK_ACTIONS[quickAction].icon
-			: ACTION_ICONS.openHere;
 		const showUrl = urlMode !== 'none';
 		const urlOnly = urlMode === 'url-only';
 		const cardName = urlOnly
@@ -3468,19 +3529,26 @@ const BookmarkCard = memo(
 								)}
 							</span>
 						</a>
-						{quickAction && (
-							<IconTooltip label={QUICK_ACTIONS[quickAction].label}>
-								<Button
-									variant="ghost"
-									size="icon"
-									className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
-									aria-label={`${QUICK_ACTIONS[quickAction].label}: ${bookmark.title || siteName(bookmark.url)}`}
-									onClick={act(QUICK_ACTIONS[quickAction].action)}
-								>
-									<QuickIcon className="h-4 w-4" />
-								</Button>
-							</IconTooltip>
-						)}
+						{quickActions.map((quickAction) => {
+							const {
+								icon: QuickIcon,
+								label,
+								action,
+							} = QUICK_ACTIONS[quickAction];
+							return (
+								<IconTooltip key={quickAction} label={label}>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
+										aria-label={`${label}: ${bookmark.title || siteName(bookmark.url)}`}
+										onClick={act(action)}
+									>
+										<QuickIcon className="h-4 w-4" />
+									</Button>
+								</IconTooltip>
+							);
+						})}
 						<ActionDropdownMenu
 							actions={actions}
 							open={menuOpen}

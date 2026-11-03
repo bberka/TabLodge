@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import {ChevronRight, Circle} from 'lucide-react';
+import {Check, ChevronRight, Circle} from 'lucide-react';
 import {ScrollArea} from './scroll-area';
 import {cn} from '@/lib/utils';
 
@@ -123,6 +123,35 @@ const DropdownMenuRadioItem = React.forwardRef<
 ));
 DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;
 
+const DropdownMenuCheckboxItem = React.forwardRef<
+	React.ComponentRef<typeof DropdownMenuPrimitive.CheckboxItem>,
+	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
+>(({className, children, onSelect, ...props}, ref) => (
+	<DropdownMenuPrimitive.CheckboxItem
+		ref={ref}
+		className={cn(
+			'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+			className,
+		)}
+		onSelect={(event) => {
+			onSelect?.(event);
+			if (!event.defaultPrevented) {
+				event.preventDefault();
+			}
+		}}
+		{...props}
+	>
+		<span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+			<DropdownMenuPrimitive.ItemIndicator>
+				<Check className="h-3.5 w-3.5" />
+			</DropdownMenuPrimitive.ItemIndicator>
+		</span>
+		{children}
+	</DropdownMenuPrimitive.CheckboxItem>
+));
+DropdownMenuCheckboxItem.displayName =
+	DropdownMenuPrimitive.CheckboxItem.displayName;
+
 const DropdownMenuLabel = React.forwardRef<
 	React.ComponentRef<typeof DropdownMenuPrimitive.Label>,
 	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
@@ -159,6 +188,7 @@ export {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuRadioItem,
+	DropdownMenuCheckboxItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuRadioGroup,

@@ -4194,8 +4194,7 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	const s = (await defaults.sendMessage({type: 'GET_STATE'})).settings;
 	assert.equal(s.bookmarkClickAction, 'current');
 	assert.equal(s.sessionLinkClickAction, 'new');
-	assert.equal(s.showBookmarkQuickActions, false);
-	assert.equal(s.bookmarkQuickAction, 'open-new');
+	assert.deepEqual(Array.from(s.bookmarkQuickActions), ['open-new']);
 	assert.equal(s.sessionsOnTop, false);
 	assert.equal(s.keepLodgePinned, false);
 	assert.equal(s.autoFocusSearchOnNewTab, false);
@@ -4208,8 +4207,14 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 		stateWithSession({
 			bookmarkClickAction: 'bogus',
 			sessionLinkClickAction: 'none',
-			showBookmarkQuickActions: 'yes',
-			bookmarkQuickAction: 'explode',
+			bookmarkQuickActions: [
+				'copy',
+				'bad',
+				'copy',
+				'edit',
+				'delete',
+				'open-new',
+			],
 			sessionsOnTop: 1,
 			keepLodgePinned: true,
 			autoFocusSearchOnNewTab: true,
@@ -4222,8 +4227,11 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	const j = (await junk.sendMessage({type: 'GET_STATE'})).settings;
 	assert.equal(j.bookmarkClickAction, 'current');
 	assert.equal(j.sessionLinkClickAction, 'none');
-	assert.equal(j.showBookmarkQuickActions, false);
-	assert.equal(j.bookmarkQuickAction, 'open-new');
+	assert.deepEqual(Array.from(j.bookmarkQuickActions), [
+		'copy',
+		'edit',
+		'delete',
+	]);
 	assert.equal(j.sessionsOnTop, false);
 	assert.equal(j.keepLodgePinned, true);
 	assert.equal(j.autoFocusSearchOnNewTab, true);
@@ -4238,6 +4246,41 @@ test('link, quick-action, ordering and pin settings normalize with defaults', as
 	assert.equal(reset.settings.simplifyUrls, true);
 	assert.equal(reset.settings.markInsecureLinks, true);
 	assert.equal(reset.settings.markLocalLinks, false);
+});
+
+test('quick actions migrate old preferences and accept up to three selected actions', async () => {
+	const legacy = createWorkerHarness(
+		stateWithSession({
+			showBookmarkQuickActions: true,
+			bookmarkQuickAction: 'copy',
+		}),
+	);
+	assert.deepEqual(
+		Array.from(
+			(await legacy.sendMessage({type: 'GET_STATE'})).settings
+				.bookmarkQuickActions,
+		),
+		['copy'],
+	);
+
+	const harness = createWorkerHarness(stateWithSession());
+	const selected = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			bookmarkQuickActions: ['open-current', 'open-new', 'copy', 'delete'],
+		},
+	});
+	assert.deepEqual(Array.from(selected.settings.bookmarkQuickActions), [
+		'open-current',
+		'open-new',
+		'copy',
+	]);
+
+	const cleared = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {bookmarkQuickActions: []},
+	});
+	assert.deepEqual(Array.from(cleared.settings.bookmarkQuickActions), []);
 });
 
 test('url-only display mode and the bookmark menu click action are accepted', async () => {

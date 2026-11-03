@@ -3,8 +3,9 @@
 // Loads dist/tablodge in a headless Chromium with the development data fixture, then:
 //   1. runs axe-core (WCAG 2.2 A and AA rules) on each extension page in both themes, and
 //   2. exercises the keyboard workflows that automated rules cannot judge: the skip link, the
-//      Appearance radio group, moving sessions, columns and bookmarks without dragging, and
-//      archiving a session from its menu. Page and service worker console errors fail the run.
+//      Appearance radio group, bookmark quick actions, moving sessions, columns and bookmarks
+//      without dragging, and archiving a session from its menu. Page and service worker console
+//      errors fail the run.
 // Axe and keyboard checks do not judge reading order or screen reader announcements; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
@@ -110,6 +111,19 @@ async function seed(page: Page) {
 		bookmarkColumnPageSize: 10,
 	};
 	await writeDevStore(page, fixture);
+}
+
+async function seedQuickActions(page: Page, actions: string[]) {
+	const fixture = createDevFixture(await readDevStore(page));
+	fixture.settings = {...fixture.settings, bookmarkQuickActions: actions};
+	await writeDevStore(page, fixture);
+	await until(
+		async () =>
+			JSON.stringify(
+				(await readDevStore(page)).settings.bookmarkQuickActions,
+			) === JSON.stringify(actions),
+		'quick actions to reach the worker state',
+	);
 }
 
 async function seedLongBookmarkColumn(page: Page, count: number) {
@@ -586,6 +600,167 @@ async function main() {
 		}
 
 		for (const theme of THEMES) {
+			await check(
+				`bookmark quick actions work by pointer and keyboard (${theme})`,
+				async () => {
+					const quickActionSeedPage = await openPage(
+						context,
+						extensionId,
+						'newtab',
+					);
+					await seedQuickActions(quickActionSeedPage, ['open-new']);
+					await quickActionSeedPage.close();
+
+					const settingsPage = await openPage(context, extensionId, 'options');
+					await setTheme(settingsPage, theme);
+					const trigger = settingsPage.getByRole('button', {
+						name: 'Quick actions on bookmarks: Open in new tab',
+						exact: true,
+					});
+					await trigger.waitFor();
+					await trigger.focus();
+					await settingsPage.keyboard.press('Enter');
+					const menu = settingsPage.getByRole('menu');
+					await menu.waitFor();
+					const openNew = menu.getByRole('menuitemcheckbox', {
+						name: 'Open in new tab',
+						exact: true,
+					});
+					assert.equal(await openNew.getAttribute('aria-checked'), 'true');
+
+					for (const action of ['Copy link', 'Delete']) {
+						const item = menu.getByRole('menuitemcheckbox', {
+							name: action,
+							exact: true,
+						});
+						await until(
+							async () => (await item.count()) === 1,
+							`${action} quick action option to appear`,
+						);
+						await item.click();
+						await until(
+							async () => (await item.getAttribute('aria-checked')) === 'true',
+							`${action} quick action to be selected`,
+						);
+					}
+
+					const deletionOption = menu.getByRole('menuitemcheckbox', {
+						name: 'Delete',
+						exact: true,
+					});
+					await deletionOption.focus();
+					await settingsPage.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await deletionOption.getAttribute('aria-checked')) === 'false',
+						'Delete quick action to clear by keyboard',
+					);
+					await settingsPage.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await deletionOption.getAttribute('aria-checked')) === 'true',
+						'Delete quick action to select by keyboard',
+					);
+
+					const fourth = menu.getByRole('menuitemcheckbox', {
+						name: 'Edit',
+						exact: true,
+					});
+					assert.equal(
+						await fourth.getAttribute('aria-disabled'),
+						'true',
+						'a fourth action is disabled while three are selected',
+					);
+					await until(
+						async () =>
+							JSON.stringify(
+								(await readDevStore(settingsPage)).settings
+									.bookmarkQuickActions,
+							) === JSON.stringify(['open-new', 'copy', 'delete']),
+						'quick actions to save from Settings',
+					);
+					await settingsPage.keyboard.press('Escape');
+					assert.equal(
+						await settingsPage
+							.getByRole('button', {
+								name: 'Quick actions on bookmarks: 3 selected',
+								exact: true,
+							})
+							.count(),
+						1,
+					);
+					await settingsPage.close();
+
+					const board = await openPage(context, extensionId, 'newtab');
+					await board.setViewportSize({width: 480, height: 900});
+					await setTheme(board, theme);
+					for (const label of ['Open in new tab', 'Copy link', 'Delete']) {
+						const action = board.getByRole('button', {
+							name: `${label}: Gmail`,
+							exact: true,
+						});
+						assert.equal(
+							await action.count(),
+							1,
+							`${label} appears beside Gmail`,
+						);
+						assert.equal(
+							await action.isVisible(),
+							true,
+							`${label} is visible at 480px`,
+						);
+						const bounds = await action.boundingBox();
+						assert.ok(bounds);
+						assert.ok(bounds.x >= 0);
+						assert.ok(bounds.x + bounds.width <= 480);
+					}
+
+					const copy = board.getByRole('button', {
+						name: 'Copy link: Gmail',
+						exact: true,
+					});
+					await copy.focus();
+					await board.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await board.evaluate(() =>
+								(
+									navigator as Navigator & {
+										clipboard: {readText: () => Promise<string>};
+									}
+								).clipboard.readText(),
+							)) === 'https://mail.google.com/',
+						'copy quick action to write the bookmark URL',
+					);
+
+					const remove = board.getByRole('button', {
+						name: 'Delete: Gmail',
+						exact: true,
+					});
+					await remove.focus();
+					await board.keyboard.press('Enter');
+					const confirmation = board.getByRole('dialog');
+					await confirmation.waitFor();
+					await confirmation
+						.getByRole('heading', {name: 'Delete “Gmail”?', exact: true})
+						.waitFor();
+					assert.equal(
+						await board.locator('[data-bookmark-title="Gmail"]').count(),
+						1,
+						'bookmark remains until the confirmation is accepted',
+					);
+					const cancel = confirmation.getByRole('button', {
+						name: 'Cancel',
+						exact: true,
+					});
+					await cancel.focus();
+					await board.keyboard.press('Enter');
+					await confirmation.waitFor({state: 'hidden'});
+					await seedQuickActions(board, ['open-new']);
+					await board.close();
+				},
+			);
+
 			await check(
 				`bookmark columns reveal configured batches by keyboard (${theme})`,
 				async () => {

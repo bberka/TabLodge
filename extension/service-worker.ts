@@ -40,6 +40,8 @@ Settings as stored or patched; unknown values are normalized.
 type RawSettings = {[K in keyof Settings]?: unknown} & {
 	duplicateHandling?: unknown;
 	sidePanelEnabled?: unknown;
+	showBookmarkQuickActions?: unknown;
+	bookmarkQuickAction?: unknown;
 };
 type Result<T extends object = {}> = ({ok: true} & T) | ActionFailure;
 /**
@@ -479,8 +481,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	cleanTitles: true,
 	bookmarkClickAction: 'current',
 	sessionLinkClickAction: 'new',
-	showBookmarkQuickActions: false,
-	bookmarkQuickAction: 'open-new',
+	bookmarkQuickActions: ['open-new'],
 	sessionsOnTop: false,
 	showSaveWindowButton: true,
 	showTrashBinButton: true,
@@ -1364,6 +1365,42 @@ function normalizeGroup(
 	};
 }
 
+type BookmarkQuickAction = Settings['bookmarkQuickActions'][number];
+const BOOKMARK_QUICK_ACTIONS = [
+	'open-current',
+	'open-new',
+	'copy',
+	'edit',
+	'delete',
+] as const satisfies readonly BookmarkQuickAction[];
+
+function normalizeBookmarkQuickActions(
+	raw: RawSettings,
+): BookmarkQuickAction[] {
+	let candidates: unknown[];
+	if (Array.isArray(raw.bookmarkQuickActions)) {
+		candidates = raw.bookmarkQuickActions;
+	} else if (raw.bookmarkQuickActions !== undefined) {
+		candidates = ['open-new'];
+	} else if (
+		raw.showBookmarkQuickActions === true &&
+		isOneOf(BOOKMARK_QUICK_ACTIONS, raw.bookmarkQuickAction)
+	) {
+		candidates = [raw.bookmarkQuickAction];
+	} else {
+		candidates = ['open-new'];
+	}
+
+	const selected: BookmarkQuickAction[] = [];
+	for (const action of candidates) {
+		if (isOneOf(BOOKMARK_QUICK_ACTIONS, action) && !selected.includes(action)) {
+			selected.push(action);
+		}
+	}
+
+	return selected.slice(0, 3);
+}
+
 function normalizeSettings(input: RawSettings | null = {}): Settings {
 	// A missing, null or non-object stored value means "no saved preferences": every field falls back to its default.
 	const raw: RawSettings = isRecord(input) ? input : {};
@@ -1461,13 +1498,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.sessionLinkClickAction
 			: 'new',
-		showBookmarkQuickActions: raw.showBookmarkQuickActions === true,
-		bookmarkQuickAction: isOneOf(
-			['open-current', 'open-new', 'copy', 'edit', 'delete'],
-			raw.bookmarkQuickAction,
-		)
-			? raw.bookmarkQuickAction
-			: 'open-new',
+		bookmarkQuickActions: normalizeBookmarkQuickActions(raw),
 		sessionsOnTop: raw.sessionsOnTop === true,
 		showSaveWindowButton: raw.showSaveWindowButton !== false,
 		showTrashBinButton: raw.showTrashBinButton !== false,

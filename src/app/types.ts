@@ -129,13 +129,9 @@ export type Settings = {
 	*/
 	sessionLinkClickAction: LinkClickAction;
 	/**
-	Show one configurable quick-action button next to the bookmark menu button.
+	Quick-action buttons shown next to the bookmark menu button, up to three.
 	*/
-	showBookmarkQuickActions: boolean;
-	/**
-	What the quick-action button on a bookmark does (default: open in a new tab).
-	*/
-	bookmarkQuickAction: BookmarkQuickAction;
+	bookmarkQuickActions: BookmarkQuickAction[];
 	/**
 	Show the sessions section above the bookmark board (only when both are enabled).
 	*/

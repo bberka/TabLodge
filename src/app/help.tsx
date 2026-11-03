@@ -262,6 +262,12 @@ function Help() {
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},
 				{
+					title: 'Bookmark quick actions',
+					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu, or clear the list to hide them. Delete still asks for confirmation.',
+					searchText:
+						'quick action buttons open new tab bookmark menu copy edit delete checkbox settings',
+				},
+				{
 					title: 'Move and add links',
 					body: 'Drag bookmarks between columns to move or reorder them. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark.',
 					searchText:
