@@ -91,6 +91,53 @@ async function until(condition: () => Promise<boolean>, what: string) {
 	assert.fail(`Timed out waiting for ${what}.`);
 }
 
+async function selectQuickActions(
+	page: Page,
+	menu: Locator,
+	labels: string[],
+	kind: 'session' | 'bookmark',
+) {
+	for (const label of labels) {
+		const option = menu.getByRole('menuitemcheckbox', {
+			name: label,
+			exact: true,
+		});
+		await option.focus();
+		await page.keyboard.press('Space');
+		await until(
+			async () => (await option.getAttribute('aria-checked')) === 'true',
+			`${label} ${kind} action to be selected`,
+		);
+	}
+}
+
+async function assertBookmarkQuickActions(
+	page: Page,
+	labels: string[],
+	bookmarkTitle: string,
+	viewportWidth: number,
+) {
+	for (const label of labels) {
+		const action = page.getByRole('button', {
+			name: `${label}: ${bookmarkTitle}`,
+			exact: true,
+		});
+		assert.equal(
+			await action.count(),
+			1,
+			`${label} appears beside ${bookmarkTitle}`,
+		);
+		assert.equal(await action.isVisible(), true, `${label} is visible`);
+		const bounds = await action.boundingBox();
+		assert.ok(bounds);
+		assert.ok(bounds.x >= 0, `${label} is within the left edge`);
+		assert.ok(
+			bounds.x + bounds.width <= viewportWidth,
+			`${label} is within the right edge at ${viewportWidth}px`,
+		);
+	}
+}
+
 async function verifySelectedLinksOpen(
 	context: BrowserContext,
 	action: Locator,
@@ -521,6 +568,39 @@ async function captureEvidence(
 	await page.setViewportSize(viewport);
 }
 
+async function captureNarrowEvidence(
+	page: Page,
+	name: string,
+	target: Locator,
+) {
+	if (process.env.TABLODGE_CAPTURE_EVIDENCE !== '1') {
+		return;
+	}
+
+	const viewport = page.viewportSize();
+	assert.ok(viewport);
+	await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+	try {
+		await page.setViewportSize({width: 375, height: 812});
+		await target.scrollIntoViewIfNeeded();
+		assert.ok(
+			await page
+				.locator('html')
+				.evaluate(
+					(node: {scrollWidth: number; clientWidth: number}) =>
+						node.scrollWidth <= node.clientWidth,
+				),
+			'page overflows at 375px',
+		);
+		await page.screenshot({
+			path: fromRoot(`.dev/evidence/${name}`),
+			scale: 'css',
+		});
+	} finally {
+		await page.setViewportSize(viewport);
+	}
+}
+
 async function assertInline(
 	label: Locator,
 	control: Locator,
@@ -918,6 +998,275 @@ async function main() {
 
 		for (const theme of THEMES) {
 			await check(
+				`session favicon previews toggle by keyboard (${theme})`,
+				async () => {
+					let page: Page | undefined;
+					let options: Page | undefined;
+					try {
+						page = await openPage(context, extensionId, 'newtab');
+						const fixture = createDevFixture(await readDevStore(page));
+						fixture.settings = {
+							...fixture.settings,
+							expandSessionsByDefault: false,
+							showSessionFaviconPreviews: true,
+						};
+						await writeDevStore(page, fixture);
+						await page.reload();
+						await setTheme(page, theme);
+
+						const card = page.locator('#session-dev-session-1');
+						const favicons = card.locator('img[data-favicon]');
+						assert.ok(
+							(await favicons.count()) > 0,
+							'collapsed session card shows its favicon previews by default',
+						);
+
+						const settingsPage = await openPage(
+							context,
+							extensionId,
+							'options',
+						);
+						options = settingsPage;
+						await setTheme(settingsPage, theme);
+						const toggle = settingsPage.getByRole('switch', {
+							name: 'Show favicon previews on session cards',
+							exact: true,
+						});
+						await toggle.focus();
+						assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+						const settingRow = settingsPage.locator(
+							'[data-setting-row="showSessionFaviconPreviews"]',
+						);
+						await captureEvidence(
+							settingsPage,
+							`session-favicon-setting-${theme}.png`,
+							settingRow,
+						);
+						await captureNarrowEvidence(
+							settingsPage,
+							`session-favicon-setting-${theme}-375x812.png`,
+							settingRow,
+						);
+						await settingsPage.keyboard.press('Space');
+						assert.equal(
+							await toggle.evaluate(
+								(element: {ownerDocument: {activeElement: unknown}}) =>
+									element === element.ownerDocument.activeElement,
+							),
+							true,
+							'toggle keeps keyboard focus after changing state',
+						);
+						await until(async () => {
+							const {settings} = await readDevStore(settingsPage);
+							return settings.showSessionFaviconPreviews === false;
+						}, 'favicon preview setting to turn off');
+
+						await page.reload();
+						await setTheme(page, theme);
+						assert.equal(
+							await favicons.count(),
+							0,
+							'collapsed session card hides the full preview strip',
+						);
+						await captureEvidence(
+							page,
+							`session-favicon-previews-hidden-${theme}.png`,
+							card,
+						);
+						await captureNarrowEvidence(
+							page,
+							`session-favicon-previews-hidden-${theme}-375x812.png`,
+							card,
+						);
+
+						await toggle.focus();
+						await settingsPage.keyboard.press('Space');
+						assert.equal(
+							await toggle.evaluate(
+								(element: {ownerDocument: {activeElement: unknown}}) =>
+									element === element.ownerDocument.activeElement,
+							),
+							true,
+							'toggle keeps keyboard focus when previews return',
+						);
+						await until(async () => {
+							const {settings} = await readDevStore(settingsPage);
+							return settings.showSessionFaviconPreviews === true;
+						}, 'favicon preview setting to turn on');
+						await page.reload();
+						await setTheme(page, theme);
+						assert.ok(
+							(await favicons.count()) > 0,
+							'collapsed session card restores its favicon previews',
+						);
+						assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+						await settingsPage.close();
+						options = undefined;
+						await page.close();
+						page = undefined;
+					} finally {
+						await Promise.all([options?.close(), page?.close()]);
+					}
+				},
+			);
+		}
+
+		for (const theme of THEMES) {
+			await check(
+				`session quick actions include menu actions and allow five (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					const fixture = createDevFixture(await readDevStore(page));
+					fixture.settings = {
+						...fixture.settings,
+						expandSessionsByDefault: false,
+						sessionQuickActions: ['archive'],
+					};
+					await writeDevStore(page, fixture);
+					await page.reload();
+					await setTheme(page, theme);
+
+					const options = await openPage(context, extensionId, 'options');
+					await setTheme(options, theme);
+					const trigger = options.getByRole('button', {
+						name: 'Quick actions on session cards: Archive',
+						exact: true,
+					});
+					await trigger.focus();
+					await options.keyboard.press('Enter');
+					const menu = options.getByRole('menu');
+					await selectQuickActions(
+						options,
+						menu,
+						['Share', 'Export session', 'Edit details', 'Move down'],
+						'session',
+					);
+
+					for (const label of ['Move up', 'Switch to this session']) {
+						const option = menu.getByRole('menuitemcheckbox', {
+							name: label,
+							exact: true,
+						});
+						assert.equal(
+							await option.getAttribute('aria-disabled'),
+							'true',
+							`${label} is disabled after five actions are selected`,
+						);
+					}
+
+					await until(async () => {
+						const {settings} = await readDevStore(options);
+						return (
+							JSON.stringify(settings.sessionQuickActions) ===
+							JSON.stringify([
+								'archive',
+								'share',
+								'export',
+								'edit',
+								'move-down',
+							])
+						);
+					}, 'five session quick actions to save');
+					await options.close();
+					await page.reload();
+					await setTheme(page, theme);
+					await page.setViewportSize({width: 440, height: 956});
+					const collapsedTitle = page.locator('#session-dev-session-2 h3');
+					await captureEvidence(
+						page,
+						`session-quick-actions-collapsed-${theme}.png`,
+						page.locator('#session-dev-session-2'),
+					);
+					const collapsedTitleBounds = await collapsedTitle.boundingBox();
+					assert.ok(collapsedTitleBounds);
+					assert.ok(
+						collapsedTitleBounds.width >= 128,
+						`five quick actions leave a readable title width on collapsed cards (${collapsedTitleBounds.width}px)`,
+					);
+
+					const card = page.locator('#session-dev-session-1');
+					for (const label of [
+						'Archive session',
+						'Share session',
+						'Export session',
+						'Edit details',
+						'Move down',
+					]) {
+						assert.equal(
+							await card
+								.getByRole('button', {
+									name: `${label} Home lab rebuild`,
+									exact: true,
+								})
+								.count(),
+							1,
+							`${label} appears on the session card`,
+						);
+					}
+
+					const expand = card.getByRole('button', {
+						name: 'Show tabs in Home lab rebuild',
+						exact: true,
+					});
+					await expand.focus();
+					await page.keyboard.press('Enter');
+					await page.mouse.move(0, 0);
+					const actionBar = card.locator('[data-session-quick-actions]');
+					await until(
+						async () =>
+							!(await actionBar.getAttribute('class'))?.includes('opacity-0'),
+						'enabled quick actions to remain visible on the expanded card',
+					);
+
+					await captureEvidence(
+						page,
+						`session-quick-actions-five-${theme}.png`,
+						card,
+					);
+					const sessionOrder = () =>
+						attributes(page, 'article[id^="session-"]', 'id');
+					const beforeMove = await sessionOrder();
+					const firstSessionId = beforeMove[0];
+					assert.ok(firstSessionId);
+					const firstCard = page.locator(`#${firstSessionId}`);
+					const focusTarget = await firstCard
+						.locator('[data-move-focus]')
+						.getAttribute('aria-label');
+					const moveDown = firstCard.getByRole('button', {
+						name: /^Move down /,
+					});
+					await moveDown.focus();
+					await page.keyboard.press('Enter');
+					await until(async () => {
+						const order = await sessionOrder();
+						return order[0] !== firstSessionId && order[1] === firstSessionId;
+					}, 'Move down to reorder the first session');
+					await until(
+						async () => (await focusedLabel(page)) === focusTarget,
+						'focus to return to the moved session menu',
+					);
+
+					const edit = card.getByRole('button', {
+						name: 'Edit details Home lab rebuild',
+						exact: true,
+					});
+					await edit.focus();
+					await page.keyboard.press('Enter');
+					const details = page.getByRole('dialog', {name: 'Session details'});
+					await details.waitFor();
+					await details.getByRole('button', {name: 'Cancel'}).click();
+					await details.waitFor({state: 'hidden'});
+					const reset = createDevFixture(await readDevStore(page));
+					reset.settings = {
+						...reset.settings,
+						sessionQuickActions: ['archive'],
+					};
+					await writeDevStore(page, reset);
+					await page.close();
+				},
+			);
+
+			await check(
 				`dashboard header and buttons fit narrow windows (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'newtab');
@@ -1149,26 +1498,12 @@ async function main() {
 					const board = await openPage(context, extensionId, 'newtab');
 					await board.setViewportSize({width: 480, height: 900});
 					await setTheme(board, theme);
-					for (const label of ['Open in new tab', 'Copy link', 'Delete']) {
-						const action = board.getByRole('button', {
-							name: `${label}: Gmail`,
-							exact: true,
-						});
-						assert.equal(
-							await action.count(),
-							1,
-							`${label} appears beside Gmail`,
-						);
-						assert.equal(
-							await action.isVisible(),
-							true,
-							`${label} is visible at 480px`,
-						);
-						const bounds = await action.boundingBox();
-						assert.ok(bounds);
-						assert.ok(bounds.x >= 0);
-						assert.ok(bounds.x + bounds.width <= 480);
-					}
+					await assertBookmarkQuickActions(
+						board,
+						['Open in new tab', 'Copy link', 'Delete'],
+						'Gmail',
+						480,
+					);
 
 					const copy = board.getByRole('button', {
 						name: 'Copy link: Gmail',
@@ -1212,6 +1547,115 @@ async function main() {
 					await board.keyboard.press('Enter');
 					await confirmation.waitFor({state: 'hidden'});
 					await seedQuickActions(board, ['open-new']);
+					await board.close();
+				},
+			);
+
+			await check(
+				`bookmark menu actions are available as quick actions (${theme})`,
+				async () => {
+					const quickActionSeed = await openPage(
+						context,
+						extensionId,
+						'newtab',
+					);
+					await seedQuickActions(quickActionSeed, ['open-new']);
+					await quickActionSeed.close();
+
+					const options = await openPage(context, extensionId, 'options');
+					await setTheme(options, theme);
+					const trigger = options.getByRole('button', {
+						name: 'Quick actions on bookmarks: Open in new tab',
+						exact: true,
+					});
+					await trigger.focus();
+					await options.keyboard.press('Enter');
+					const menu = options.getByRole('menu');
+					await selectQuickActions(
+						options,
+						menu,
+						['Move to', 'Move down'],
+						'bookmark',
+					);
+
+					const fourthAction = menu.getByRole('menuitemcheckbox', {
+						name: 'Move up',
+						exact: true,
+					});
+					assert.equal(
+						await fourthAction.getAttribute('aria-disabled'),
+						'true',
+						'a fourth bookmark action is disabled when three are selected',
+					);
+					await until(async () => {
+						const {settings} = await readDevStore(options);
+						return (
+							JSON.stringify(settings.bookmarkQuickActions) ===
+							JSON.stringify(['open-new', 'move', 'move-down'])
+						);
+					}, 'Move to and Move down to save in Settings');
+					await options.close();
+
+					const board = await openPage(context, extensionId, 'newtab');
+					await board.setViewportSize({width: 480, height: 900});
+					await setTheme(board, theme);
+					const gmail = board.locator('[data-bookmark-title="Gmail"]');
+					const calendar = board.locator('[data-bookmark-title="Calendar"]');
+					await assertBookmarkQuickActions(
+						board,
+						['Open in new tab', 'Move to', 'Move down'],
+						'Gmail',
+						480,
+					);
+
+					await captureEvidence(
+						board,
+						`bookmark-quick-actions-move-${theme}.png`,
+						gmail,
+					);
+
+					const moveDown = board.getByRole('button', {
+						name: 'Move down: Gmail',
+						exact: true,
+					});
+					await moveDown.focus();
+					await board.keyboard.press('Enter');
+					await until(async () => {
+						const [gmailBounds, calendarBounds] = await Promise.all([
+							gmail.boundingBox(),
+							calendar.boundingBox(),
+						]);
+						return Boolean(
+							gmailBounds && calendarBounds && gmailBounds.y > calendarBounds.y,
+						);
+					}, 'Move down to reorder Gmail below Calendar');
+					await until(
+						async () => (await focusedLabel(board)) === 'Actions for Gmail',
+						'focus to return to the bookmark menu after moving',
+					);
+
+					const moveTo = board.getByRole('button', {
+						name: 'Move to: Gmail',
+						exact: true,
+					});
+					assert.equal(await moveTo.isEnabled(), true);
+					await moveTo.focus();
+					assert.equal(await focusedLabel(board), 'Move to: Gmail');
+					await board.keyboard.press('Enter');
+					const moveDialog = board.getByRole('dialog');
+					await moveDialog.waitFor();
+					await moveDialog
+						.getByRole('heading', {name: 'Move bookmark to', exact: true})
+						.waitFor();
+					await moveDialog.getByRole('button', {name: 'Cancel'}).click();
+					await moveDialog.waitFor({state: 'hidden'});
+
+					const reset = createDevFixture(await readDevStore(board));
+					reset.settings = {
+						...reset.settings,
+						bookmarkQuickActions: ['open-new'],
+					};
+					await writeDevStore(board, reset);
 					await board.close();
 				},
 			);
@@ -2977,6 +3421,21 @@ async function main() {
 			'appearance is one tab stop with arrow key selection',
 			async () => {
 				const page = await openPage(context, extensionId, 'options');
+				await page
+					.getByRole('button', {name: 'Accent color: Default', exact: true})
+					.click();
+				assert.equal(
+					await page
+						.getByRole('option', {name: 'Default', exact: true})
+						.count(),
+					1,
+				);
+				assert.equal(
+					await page
+						.getByRole('option', {name: 'TabLodge default', exact: true})
+						.count(),
+					0,
+				);
 				const radios = page
 					.getByRole('radiogroup', {name: 'Appearance', exact: true})
 					.getByRole('radio');

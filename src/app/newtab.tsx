@@ -254,6 +254,9 @@ const QUICK_ACTIONS: Record<
 	copy: {label: 'Copy link', icon: ACTION_ICONS.copy, action: 'copy'},
 	edit: {label: 'Edit', icon: ACTION_ICONS.edit, action: 'edit'},
 	delete: {label: 'Delete', icon: ACTION_ICONS.remove, action: 'delete'},
+	move: {label: 'Move to', icon: ACTION_ICONS.move, action: 'move'},
+	'move-up': {label: 'Move up', icon: ArrowUp, action: 'move-up'},
+	'move-down': {label: 'Move down', icon: ArrowDown, action: 'move-down'},
 };
 /**
 Column-picker value for "New column…" in the bookmark dialog.
@@ -3727,6 +3730,9 @@ const BookmarkCard = memo(
 								label,
 								action,
 							} = QUICK_ACTIONS[quickAction];
+							const disabled =
+								(quickAction === 'move-up' && !canMoveEarlier) ||
+								(quickAction === 'move-down' && !canMoveLater);
 							return (
 								<IconTooltip key={quickAction} label={label}>
 									<Button
@@ -3734,6 +3740,7 @@ const BookmarkCard = memo(
 										size="icon"
 										className="h-7 w-7 shrink-0 opacity-70 group-hover:opacity-100"
 										aria-label={`${label}: ${bookmark.title || siteName(bookmark.url)}`}
+										disabled={disabled}
 										onClick={act(action)}
 									>
 										<QuickIcon className="h-4 w-4" />

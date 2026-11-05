@@ -476,6 +476,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	saveSplitTabs: 'both',
 	sessionSort: 'newest',
 	expandSessionsByDefault: false,
+	showSessionFaviconPreviews: true,
 	sessionQuickActions: ['archive'],
 	stretchBookmarkColumns: true,
 	limitBookmarksPerColumn: false,
@@ -1375,6 +1376,9 @@ const BOOKMARK_QUICK_ACTIONS = [
 	'copy',
 	'edit',
 	'delete',
+	'move',
+	'move-up',
+	'move-down',
 ] as const satisfies readonly BookmarkQuickAction[];
 
 function normalizeBookmarkQuickActions(
@@ -1408,6 +1412,12 @@ type SessionQuickAction = Settings['sessionQuickActions'][number];
 const SESSION_QUICK_ACTIONS = [
 	'archive',
 	'delete',
+	'share',
+	'export',
+	'edit',
+	'move-up',
+	'move-down',
+	'switch-to',
 ] as const satisfies readonly SessionQuickAction[];
 
 function normalizeSessionQuickActions(raw: RawSettings): SessionQuickAction[] {
@@ -1430,7 +1440,7 @@ function normalizeSessionQuickActions(raw: RawSettings): SessionQuickAction[] {
 		}
 	}
 
-	return selected;
+	return selected.slice(0, 5);
 }
 
 function normalizeSettings(input: RawSettings | null = {}): Settings {
@@ -1508,6 +1518,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.sessionSort
 			: 'newest',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
+		showSessionFaviconPreviews: raw.showSessionFaviconPreviews !== false,
 		sessionQuickActions: normalizeSessionQuickActions(raw),
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
 		limitBookmarksPerColumn: raw.limitBookmarksPerColumn === true,

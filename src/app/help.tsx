@@ -211,6 +211,12 @@ function Help() {
 			],
 			entries: [
 				{
+					title: 'Session card previews',
+					body: 'On wide layouts, collapsed session cards show favicon previews for saved tabs. In Settings › Session board, turn off Show favicon previews on session cards to hide the icons and overflow count.',
+					searchText:
+						'session card collapsed favicon icons preview strip hide overflow count settings session board',
+				},
+				{
 					title: 'Keep or remove restored tabs',
 					body: 'Settings controls whether restored tabs stay in their session or are removed after a successful restore. You can also choose the destination window and what to do when a URL is already open.',
 					searchText:
@@ -566,9 +572,9 @@ function Help() {
 				},
 				{
 					title: 'Common choices',
-					body: `Set dashboard width, startup behavior, session sorting, and automatic archiving for sessions you have not opened in a while. The Archived folder appears when it contains sessions. Archive an active session with its card button or menu. Archived sessions leave active lists but remain available in that folder. In Archived, use Move to folder in the session menu to bring a session back. Quick actions on session cards let you choose Archive or Delete. Archive is selected by default, and Delete is hidden until you select it. Expanded cards keep enabled quick actions visible without hovering. You can also set URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Remove common tracking parameters, including the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
+					body: `Set dashboard width, startup behavior, session sorting, and automatic archiving for sessions you have not opened in a while. The Archived folder appears when it contains sessions. Archive an active session with its card button or menu. Archived sessions leave active lists but remain available in that folder. In Archived, use Move to folder in the session menu to bring a session back. Choose up to five direct menu actions as session card quick actions: Archive, Delete, Share, Export session, Edit details, Move up, Move down, and Switch to this session. Archive is selected by default and Delete is off. Expanded cards keep enabled quick actions visible without hovering. Choose up to three direct menu actions as bookmark quick actions, including opening, copying, editing, deleting, and moving a bookmark or changing its order. Open in new tab is selected by default, and Delete still asks first. You can also set URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Remove common tracking parameters, including the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
 					searchText:
-						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting archive old sessions not opened days archive button delete button session card quick actions hover expanded menu Archived folder move to folder restore move back urls bookmark click tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
+						'dashboard width narrow narrower default wider full width columns layout startup behavior session sorting archive old sessions not opened days archive delete share export edit details move up move down switch session session card quick actions hover expanded menu Archived folder move to folder restore move back bookmark quick actions open in this tab open in new tab copy edit delete move to URL tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
 				},
 				{
 					title: 'Control saved data',

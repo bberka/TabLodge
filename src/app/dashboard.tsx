@@ -37,6 +37,7 @@ import {
 	Trash2,
 	Upload,
 	X,
+	type LucideIcon,
 } from 'lucide-react';
 import {
 	Badge,
@@ -110,6 +111,7 @@ import type {
 	SavedTab as SavedTabRecord,
 	Session,
 	SessionFields,
+	SessionQuickAction,
 	SessionSort,
 	Settings,
 	TabLodgeState,
@@ -2596,6 +2598,13 @@ type GroupCardProps = {
 	actions: CardActions;
 	dragStore: DragStore;
 };
+type SessionQuickActionButton = {
+	id: SessionQuickAction;
+	label: string;
+	icon: LucideIcon;
+	disabled?: boolean;
+	onClick: () => void;
+};
 const GroupCard = memo(
 	({
 		group,
@@ -2632,9 +2641,108 @@ const GroupCard = memo(
 		const inArchivedFolder =
 			folderName !== undefined && isArchivedFolder({name: folderName});
 		const sessionQuickActions = settings.sessionQuickActions ?? ['archive'];
-		const showArchiveQuickAction =
-			sessionQuickActions.includes('archive') && !inArchivedFolder;
-		const showDeleteQuickAction = sessionQuickActions.includes('delete');
+		const quickActions = sessionQuickActions.flatMap(
+			(action): SessionQuickActionButton[] => {
+				switch (action) {
+					case 'archive': {
+						return inArchivedFolder
+							? []
+							: [
+									{
+										id: action,
+										label: 'Archive session',
+										icon: Archive,
+										onClick: onArchive,
+									},
+								];
+					}
+
+					case 'delete': {
+						return [
+							{
+								id: action,
+								label: 'Delete session',
+								icon: Trash2,
+								onClick: onDelete,
+							},
+						];
+					}
+
+					case 'share': {
+						return [
+							{
+								id: action,
+								label: 'Share session',
+								icon: Share2,
+								onClick: () => handlers.share(group),
+							},
+						];
+					}
+
+					case 'export': {
+						return [
+							{
+								id: action,
+								label: 'Export session',
+								icon: Download,
+								onClick: () => handlers.exportSession(group),
+							},
+						];
+					}
+
+					case 'edit': {
+						return [
+							{
+								id: action,
+								label: 'Edit details',
+								icon: ACTION_ICONS.edit,
+								onClick: () => handlers.editGroup(group),
+							},
+						];
+					}
+
+					case 'move-up': {
+						return [
+							{
+								id: action,
+								label: 'Move up',
+								icon: ArrowUp,
+								disabled: !handlers.canMoveGroup(group.id, 'earlier'),
+								onClick: () => handlers.moveGroup(group, 'earlier'),
+							},
+						];
+					}
+
+					case 'move-down': {
+						return [
+							{
+								id: action,
+								label: 'Move down',
+								icon: ArrowDown,
+								disabled: !handlers.canMoveGroup(group.id, 'later'),
+								onClick: () => handlers.moveGroup(group, 'later'),
+							},
+						];
+					}
+
+					case 'switch-to': {
+						return [
+							{
+								id: action,
+								label: 'Switch to this session',
+								icon: ArrowLeftRight,
+								disabled: !canSwitch,
+								onClick: () => handlers.switchTo(group),
+							},
+						];
+					}
+
+					default: {
+						return [];
+					}
+				}
+			},
+		);
 		// One list for the Restore dropdown and the Restore options submenu, so they cannot drift apart.
 		const restoreOptions: MenuAction[] = [
 			{
@@ -2828,7 +2936,7 @@ const GroupCard = memo(
 					onDrop={(event) => handlers.dragDrop(group, event)}
 				>
 					<ActionContextMenu actions={actions}>
-						<div className="flex items-center gap-2 px-2 py-2 sm:px-3">
+						<div className="flex items-center gap-2 px-2 py-2 max-sm:flex-wrap sm:px-3">
 							<span
 								data-session-select
 								className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/session:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
@@ -2871,7 +2979,10 @@ const GroupCard = memo(
 							<button
 								draggable
 								type="button"
-								className="min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing"
+								className={cn(
+									'min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing',
+									'max-sm:min-w-32',
+								)}
 								aria-expanded={
 									settings.groupTitleAction === 'restore' ||
 									settings.groupTitleAction === 'edit'
@@ -2935,27 +3046,29 @@ const GroupCard = memo(
 									)}
 								</span>
 							</button>
-							{!isExpanded && wide && (
-								<span className="hidden shrink-0 items-center -space-x-1.5 md:flex">
-									{previewTabs.map((tab) => (
-										// Decorative: the title button is the keyboard and screen reader control, and a click here reaches the card's own handler.
-										<span key={tab.id} aria-hidden="true">
-											<Favicon
-												url={tab.url}
-												label={tab.title}
-												className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
-											/>
-										</span>
-									))}
-									{group.tabs.length > previewTabs.length && (
-										<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
-											+{group.tabs.length - previewTabs.length}
-										</span>
-									)}
-								</span>
-							)}
-							<div className="flex shrink-0 items-center gap-0.5">
-								{(showArchiveQuickAction || showDeleteQuickAction) && (
+							{!isExpanded &&
+								wide &&
+								settings.showSessionFaviconPreviews !== false && (
+									<span className="hidden shrink-0 items-center -space-x-1.5 md:flex">
+										{previewTabs.map((tab) => (
+											// Decorative: the title button is the keyboard and screen reader control, and a click here reaches the card's own handler.
+											<span key={tab.id} aria-hidden="true">
+												<Favicon
+													url={tab.url}
+													label={tab.title}
+													className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
+												/>
+											</span>
+										))}
+										{group.tabs.length > previewTabs.length && (
+											<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
+												+{group.tabs.length - previewTabs.length}
+											</span>
+										)}
+									</span>
+								)}
+							<div className="ml-auto flex shrink-0 items-center gap-0.5">
+								{quickActions.length > 0 && (
 									<span
 										data-session-quick-actions
 										className={cn(
@@ -2964,31 +3077,28 @@ const GroupCard = memo(
 												'opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100',
 										)}
 									>
-										{showArchiveQuickAction && (
-											<IconTooltip label="Archive session">
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-8 w-8 text-muted-foreground hover:bg-amber-500/10 hover:text-amber-800 focus-visible:bg-amber-500/10 focus-visible:text-amber-800 dark:hover:bg-amber-400/10 dark:hover:text-amber-200 dark:focus-visible:bg-amber-400/10 dark:focus-visible:text-amber-200"
-													aria-label={`Archive session ${name}`}
-													onClick={onArchive}
-												>
-													<Archive />
-												</Button>
-											</IconTooltip>
-										)}
-										{showDeleteQuickAction && (
-											<IconTooltip label="Delete session">
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive"
-													aria-label={`Delete session ${name}`}
-													onClick={onDelete}
-												>
-													<Trash2 />
-												</Button>
-											</IconTooltip>
+										{quickActions.map(
+											({id, label, icon: QuickIcon, disabled, onClick}) => (
+												<IconTooltip key={id} label={label}>
+													<Button
+														variant="ghost"
+														size="icon"
+														className={cn(
+															'h-8 w-8 text-muted-foreground',
+															id === 'archive'
+																? 'hover:bg-amber-500/10 hover:text-amber-800 focus-visible:bg-amber-500/10 focus-visible:text-amber-800 dark:hover:bg-amber-400/10 dark:hover:text-amber-200 dark:focus-visible:bg-amber-400/10 dark:focus-visible:text-amber-200'
+																: id === 'delete'
+																	? 'hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
+																	: '',
+														)}
+														aria-label={`${label} ${name}`}
+														disabled={disabled}
+														onClick={onClick}
+													>
+														<QuickIcon />
+													</Button>
+												</IconTooltip>
+											),
 										)}
 									</span>
 								)}

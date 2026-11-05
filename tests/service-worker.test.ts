@@ -4302,13 +4302,13 @@ test('quick actions migrate old preferences and accept up to three selected acti
 	const selected = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
 		settings: {
-			bookmarkQuickActions: ['open-current', 'open-new', 'copy', 'delete'],
+			bookmarkQuickActions: ['move-up', 'move-down', 'move', 'copy'],
 		},
 	});
 	assert.deepEqual(Array.from(selected.settings.bookmarkQuickActions), [
-		'open-current',
-		'open-new',
-		'copy',
+		'move-up',
+		'move-down',
+		'move',
 	]);
 
 	const cleared = await harness.sendMessage({
@@ -4345,11 +4345,25 @@ test('session quick actions default to Archive and migrate the old switches', as
 	const selected = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
 		settings: {
-			sessionQuickActions: ['delete', 'unknown', 'delete'],
+			sessionQuickActions: [
+				'share',
+				'export',
+				'edit',
+				'move-up',
+				'move-down',
+				'switch-to',
+				'delete',
+				'unknown',
+				'share',
+			],
 		} as unknown as Partial<Settings>,
 	});
 	assert.deepEqual(Array.from(selected.settings.sessionQuickActions), [
-		'delete',
+		'share',
+		'export',
+		'edit',
+		'move-up',
+		'move-down',
 	]);
 
 	const cleared = await harness.sendMessage({
@@ -4359,6 +4373,25 @@ test('session quick actions default to Archive and migrate the old switches', as
 	assert.deepEqual(Array.from(cleared.settings.sessionQuickActions), []);
 	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
 	assert.deepEqual(Array.from(reset.settings.sessionQuickActions), ['archive']);
+});
+
+test('session favicon previews default to visible, can be hidden, and reset visible', async () => {
+	const harness = createWorkerHarness({...stateWithSession(), settings: {}});
+
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_STATE'})).settings
+			.showSessionFaviconPreviews,
+		true,
+	);
+
+	const hidden = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {showSessionFaviconPreviews: false},
+	});
+	assert.equal(hidden.settings.showSessionFaviconPreviews, false);
+
+	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.showSessionFaviconPreviews, true);
 });
 
 test('url-only display mode and the bookmark menu click action are accepted', async () => {
