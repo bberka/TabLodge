@@ -96,7 +96,7 @@ Then reload TabLodge from the extensions page.
 
 ### After installing
 
-TabLodge opens the dashboard in a new tab after installation. Open another new tab for the dashboard or click the toolbar icon for the popup. To use the side panel, choose it from the toolbar icon's context menu or set **Settings › Side panel › Toolbar icon opens**. In Brave, you can also add TabLodge from the browser sidebar.
+TabLodge opens the dashboard in a new tab after installation. Open another new tab for the dashboard or click the toolbar icon for the popup. To use the side panel from the toolbar icon, choose **Open the side panel** in **Settings › Opening TabLodge › Toolbar button action**. The side panel is also available from the browser sidebar or side panel menu, and through its keyboard shortcut. In Brave, you can also add TabLodge from the browser sidebar.
 
 The side panel header has icons for the dashboard, recent snapshots, trash bin, and Settings. Click the TabLodge title or dashboard icon to open the dashboard in a new tab without leaving the side panel.
 

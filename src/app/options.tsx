@@ -18,7 +18,6 @@ import {
 	Download,
 	Bookmark,
 	Database,
-	PanelRightOpen,
 	Plus,
 	Eraser,
 	LifeBuoy,
@@ -282,10 +281,11 @@ const settingsGroups: Array<{
 			{
 				name: 'actionMode',
 				label: 'Toolbar button action',
-				help: 'The default is a compact popup. Only Open Dashboard opens the full page in a separate tab.',
+				help: 'The default is a compact popup. Only Open Dashboard opens the full page in a separate tab. The side panel is also available from the browser’s sidebar or menu, and via the “Open side panel” shortcut.',
 				type: 'select',
 				options: [
 					['popup', 'Open the quick action popup'],
+					['sidepanel', 'Open the side panel'],
 					['current-window', 'Save selected tabs, or this window'],
 					['full-window', 'Save the whole window'],
 					['current-group', 'Save the active tab group'],
@@ -494,22 +494,6 @@ const settingsGroups: Array<{
 				label: `Open ${PROJECT.name} after saving`,
 				help: 'Open the saved session in a separate browser tab after a save action.',
 				type: 'switch',
-			},
-		],
-	},
-	{
-		title: 'Side panel',
-		icon: PanelRightOpen,
-		fields: [
-			{
-				name: 'toolbarOpens',
-				label: 'Toolbar icon opens',
-				help: `Choose whether the toolbar icon opens the quick popup or the ${PROJECT.name} side panel. The side panel is always available from the browser’s sidebar or side panel menu, and via the “Open side panel” shortcut.`,
-				type: 'select',
-				options: [
-					['popup', 'Popup'],
-					['sidepanel', 'Side panel'],
-				],
 			},
 		],
 	},
@@ -1128,7 +1112,7 @@ function Options() {
 			return;
 		}
 
-		if (name === 'toolbarOpens' && value === 'sidepanel' && !chrome.sidePanel) {
+		if (name === 'actionMode' && value === 'sidepanel' && !chrome.sidePanel) {
 			showStatus(
 				'The browser Side Panel API is unavailable in this version.',
 				true,

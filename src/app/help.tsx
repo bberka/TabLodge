@@ -138,7 +138,7 @@ function Help() {
 				},
 				{
 					title: 'Use the side panel',
-					body: 'Choose the side panel instead of the popup in Settings, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
+					body: 'Choose Open the side panel in Settings under Toolbar button action, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
 					searchText:
 						'side panel sidebar session list beside page toolbar icon settings keyboard shortcut',
 				},

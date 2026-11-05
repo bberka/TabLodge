@@ -12,15 +12,10 @@ const rows: Row[] = [
 	['Hide addresses', 'Show only page titles in lists.'],
 	[
 		'Toolbar button action',
-		'The default is a compact popup.',
-		'Popup',
+		'The default is a compact popup. The side panel is always available from the browser sidebar or menu, and the Open side panel shortcut.',
+		'Open the quick action popup',
+		'Open the side panel',
 		'Open Dashboard',
-	],
-	[
-		'Toolbar icon opens',
-		'Choose whether the toolbar icon opens the quick popup or the TabLodge side panel.',
-		'Popup',
-		'Side panel',
 	],
 	['Keep sessions expanded by default', 'Show every session’s saved tabs.'],
 	[
@@ -37,7 +32,11 @@ const labels = (query: string) =>
 
 test('"side" lists real side matches before any typo match', () => {
 	const result = labels('side');
-	assert.equal(result[0], 'Toolbar icon opens', 'help text "side panel" word');
+	assert.equal(
+		result[0],
+		'Toolbar button action',
+		'help text "side panel" word',
+	);
 	const firstHide = result.findIndex((label) => label.startsWith('Hide'));
 	const lastReal = result.findLastIndex((label) => !label.startsWith('Hide'));
 	assert.ok(firstHide > lastReal, result.join(' | '));
