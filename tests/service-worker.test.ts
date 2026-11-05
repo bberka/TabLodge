@@ -2005,14 +2005,14 @@ test('failed storage never closes an opted-in pinned tab', async () => {
 	assert.deepEqual(harness.removedTabIds, []);
 });
 
-test('toolbarOpens switches the toolbar icon between popup and side panel', async () => {
+test('the toolbar action switches the toolbar icon between popup and side panel', async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	const result = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {toolbarOpens: 'sidepanel'},
+		settings: {actionMode: 'sidepanel'},
 	});
 	assert.equal(result.ok, true);
-	assert.equal(harness.state.settings.toolbarOpens, 'sidepanel');
+	assert.equal(harness.state.settings.actionMode, 'sidepanel');
 	assert.equal(
 		harness.sidePanelCalls.some(
 			(call) =>
@@ -2029,19 +2029,19 @@ test('toolbarOpens switches the toolbar icon between popup and side panel', asyn
 
 	await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {toolbarOpens: 'popup'},
+		settings: {actionMode: 'popup'},
 	});
 	assert.equal(last('setPanelBehavior')?.value.openPanelOnActionClick, false);
 	assert.equal(harness.popupCalls.at(-1), 'popup.html');
 });
 
-test('toolbarOpens normalizes bad values and migrates the old boolean', async () => {
+test('the toolbar action migrates its legacy side panel settings', async () => {
 	const bad = createWorkerHarness({
 		...stateWithSession(),
 		settings: {toolbarOpens: 'dock'},
-	} as never);
+	});
 	assert.equal(
-		(await bad.sendMessage({type: 'GET_STATE'})).settings.toolbarOpens,
+		(await bad.sendMessage({type: 'GET_STATE'})).settings.actionMode,
 		'popup',
 	);
 	const legacy = createWorkerHarness({
@@ -2049,7 +2049,16 @@ test('toolbarOpens normalizes bad values and migrates the old boolean', async ()
 		settings: {sidePanelEnabled: true},
 	});
 	assert.equal(
-		(await legacy.sendMessage({type: 'GET_STATE'})).settings.toolbarOpens,
+		(await legacy.sendMessage({type: 'GET_STATE'})).settings.actionMode,
+		'sidepanel',
+	);
+	const oldToolbarChoice = createWorkerHarness({
+		...stateWithSession(),
+		settings: {actionMode: 'popup', toolbarOpens: 'sidepanel'},
+	} as never);
+	assert.equal(
+		(await oldToolbarChoice.sendMessage({type: 'GET_STATE'})).settings
+			.actionMode,
 		'sidepanel',
 	);
 });

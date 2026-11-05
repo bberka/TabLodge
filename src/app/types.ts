@@ -4,6 +4,7 @@
 
 export type ActionMode =
 	| 'popup'
+	| 'sidepanel'
 	| 'current-group'
 	| 'current-window'
 	| 'full-window'
@@ -75,10 +76,6 @@ export type Settings = {
 	*/
 	autoFocusSearchOnNewTab: boolean;
 	actionMode: ActionMode;
-	/**
-	What the toolbar icon opens: the quick popup or the browser side panel.
-	*/
-	toolbarOpens: 'popup' | 'sidepanel';
 	/**
 	Excluded sites as bare host names; an entry covers the host and all its subdomains (older versions stored origins).
 	*/

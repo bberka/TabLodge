@@ -40,6 +40,7 @@ Settings as stored or patched; unknown values are normalized.
 type RawSettings = {[K in keyof Settings]?: unknown} & {
 	duplicateHandling?: unknown;
 	sidePanelEnabled?: unknown;
+	toolbarOpens?: unknown;
 	showBookmarkQuickActions?: unknown;
 	bookmarkQuickAction?: unknown;
 	showSessionArchiveQuickAction?: unknown;
@@ -462,7 +463,6 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	newTabFallbackUrl: '',
 	autoFocusSearchOnNewTab: false,
 	actionMode: 'popup',
-	toolbarOpens: 'popup',
 	excludedOrigins: [],
 	saveDuplicateHandling: 'allow',
 	saveDuplicateTitle: 'existing',
@@ -1436,6 +1436,24 @@ function normalizeSessionQuickActions(raw: RawSettings): SessionQuickAction[] {
 function normalizeSettings(input: RawSettings | null = {}): Settings {
 	// A missing, null or non-object stored value means "no saved preferences": every field falls back to its default.
 	const raw: RawSettings = isRecord(input) ? input : {};
+	const savedActionMode = isOneOf(
+		[
+			'sidepanel',
+			'current-group',
+			'current-window',
+			'full-window',
+			'all-windows',
+			'current-tab',
+			'current-tab-to-group',
+		],
+		raw.actionMode,
+	)
+		? raw.actionMode
+		: 'popup';
+	const actionMode =
+		raw.toolbarOpens === 'sidepanel' || raw.sidePanelEnabled === true
+			? 'sidepanel'
+			: savedActionMode;
 	const settings: Settings = {
 		...DEFAULT_SETTINGS,
 		closeOnSave: raw.closeOnSave !== false,
@@ -1453,25 +1471,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			: 'browser',
 		newTabFallbackUrl: httpUrlOrEmpty(raw.newTabFallbackUrl),
 		autoFocusSearchOnNewTab: raw.autoFocusSearchOnNewTab === true,
-		actionMode: isOneOf(
-			[
-				'current-group',
-				'current-window',
-				'full-window',
-				'all-windows',
-				'current-tab',
-				'current-tab-to-group',
-			],
-			raw.actionMode,
-		)
-			? raw.actionMode
-			: 'popup',
-		// `sidePanelEnabled` is the pre-toolbarOpens boolean; honour it for data saved by older builds.
-		toolbarOpens:
-			raw.toolbarOpens === 'sidepanel' ||
-			(raw.toolbarOpens === undefined && raw.sidePanelEnabled === true)
-				? 'sidepanel'
-				: 'popup',
+		actionMode,
 		excludedOrigins: normalizeExcludedOrigins(raw.excludedOrigins),
 		saveDuplicateHandling:
 			raw.saveDuplicateHandling === 'reject' ? 'reject' : 'allow',
@@ -5569,10 +5569,7 @@ async function updateSettings(
 		const requested = {...store.settings, ...patch};
 		store.settings = normalizeSettings(requested);
 		await writeStore(store);
-		if (
-			previousSettings.actionMode !== store.settings.actionMode ||
-			previousSettings.toolbarOpens !== store.settings.toolbarOpens
-		) {
+		if (previousSettings.actionMode !== store.settings.actionMode) {
 			await syncToolbarAction(store.settings);
 		}
 
@@ -8482,7 +8479,7 @@ function openSidePanel(tab?: chrome.tabs.Tab) {
 
 async function syncToolbarAction(settings: Settings) {
 	const sidePanelEnabled = Boolean(
-		settings.toolbarOpens === 'sidepanel' && chrome.sidePanel,
+		settings.actionMode === 'sidepanel' && chrome.sidePanel,
 	);
 	if (chrome.sidePanel) {
 		try {
