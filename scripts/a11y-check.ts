@@ -568,6 +568,39 @@ async function captureEvidence(
 	await page.setViewportSize(viewport);
 }
 
+async function captureNarrowEvidence(
+	page: Page,
+	name: string,
+	target: Locator,
+) {
+	if (process.env.TABLODGE_CAPTURE_EVIDENCE !== '1') {
+		return;
+	}
+
+	const viewport = page.viewportSize();
+	assert.ok(viewport);
+	await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+	try {
+		await page.setViewportSize({width: 375, height: 812});
+		await target.scrollIntoViewIfNeeded();
+		assert.ok(
+			await page
+				.locator('html')
+				.evaluate(
+					(node: {scrollWidth: number; clientWidth: number}) =>
+						node.scrollWidth <= node.clientWidth,
+				),
+			'page overflows at 375px',
+		);
+		await page.screenshot({
+			path: fromRoot(`.dev/evidence/${name}`),
+			scale: 'css',
+		});
+	} finally {
+		await page.setViewportSize(viewport);
+	}
+}
+
 async function assertInline(
 	label: Locator,
 	control: Locator,
@@ -959,6 +992,121 @@ async function main() {
 					await writeDevStore(page, reset);
 					await page.reload();
 					await page.close();
+				},
+			);
+		}
+
+		for (const theme of THEMES) {
+			await check(
+				`session favicon previews toggle by keyboard (${theme})`,
+				async () => {
+					let page: Page | undefined;
+					let options: Page | undefined;
+					try {
+						page = await openPage(context, extensionId, 'newtab');
+						const fixture = createDevFixture(await readDevStore(page));
+						fixture.settings = {
+							...fixture.settings,
+							expandSessionsByDefault: false,
+							showSessionFaviconPreviews: true,
+						};
+						await writeDevStore(page, fixture);
+						await page.reload();
+						await setTheme(page, theme);
+
+						const card = page.locator('#session-dev-session-1');
+						const favicons = card.locator('img[data-favicon]');
+						assert.ok(
+							(await favicons.count()) > 0,
+							'collapsed session card shows its favicon previews by default',
+						);
+
+						const settingsPage = await openPage(
+							context,
+							extensionId,
+							'options',
+						);
+						options = settingsPage;
+						await setTheme(settingsPage, theme);
+						const toggle = settingsPage.getByRole('switch', {
+							name: 'Show favicon previews on session cards',
+							exact: true,
+						});
+						await toggle.focus();
+						assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+						const settingRow = settingsPage.locator(
+							'[data-setting-row="showSessionFaviconPreviews"]',
+						);
+						await captureEvidence(
+							settingsPage,
+							`session-favicon-setting-${theme}.png`,
+							settingRow,
+						);
+						await captureNarrowEvidence(
+							settingsPage,
+							`session-favicon-setting-${theme}-375x812.png`,
+							settingRow,
+						);
+						await settingsPage.keyboard.press('Space');
+						assert.equal(
+							await toggle.evaluate(
+								(element: {ownerDocument: {activeElement: unknown}}) =>
+									element === element.ownerDocument.activeElement,
+							),
+							true,
+							'toggle keeps keyboard focus after changing state',
+						);
+						await until(async () => {
+							const {settings} = await readDevStore(settingsPage);
+							return settings.showSessionFaviconPreviews === false;
+						}, 'favicon preview setting to turn off');
+
+						await page.reload();
+						await setTheme(page, theme);
+						assert.equal(
+							await favicons.count(),
+							0,
+							'collapsed session card hides the full preview strip',
+						);
+						await captureEvidence(
+							page,
+							`session-favicon-previews-hidden-${theme}.png`,
+							card,
+						);
+						await captureNarrowEvidence(
+							page,
+							`session-favicon-previews-hidden-${theme}-375x812.png`,
+							card,
+						);
+
+						await toggle.focus();
+						await settingsPage.keyboard.press('Space');
+						assert.equal(
+							await toggle.evaluate(
+								(element: {ownerDocument: {activeElement: unknown}}) =>
+									element === element.ownerDocument.activeElement,
+							),
+							true,
+							'toggle keeps keyboard focus when previews return',
+						);
+						await until(async () => {
+							const {settings} = await readDevStore(settingsPage);
+							return settings.showSessionFaviconPreviews === true;
+						}, 'favicon preview setting to turn on');
+						await page.reload();
+						await setTheme(page, theme);
+						assert.ok(
+							(await favicons.count()) > 0,
+							'collapsed session card restores its favicon previews',
+						);
+						assert.equal(await toggle.getAttribute('aria-checked'), 'true');
+						await settingsPage.close();
+						options = undefined;
+						await page.close();
+						page = undefined;
+					} finally {
+						await Promise.all([options?.close(), page?.close()]);
+					}
 				},
 			);
 		}

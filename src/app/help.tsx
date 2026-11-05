@@ -211,6 +211,12 @@ function Help() {
 			],
 			entries: [
 				{
+					title: 'Session card previews',
+					body: 'On wide layouts, collapsed session cards show favicon previews for saved tabs. In Settings › Session board, turn off Show favicon previews on session cards to hide the icons and overflow count.',
+					searchText:
+						'session card collapsed favicon icons preview strip hide overflow count settings session board',
+				},
+				{
 					title: 'Keep or remove restored tabs',
 					body: 'Settings controls whether restored tabs stay in their session or are removed after a successful restore. You can also choose the destination window and what to do when a URL is already open.',
 					searchText:

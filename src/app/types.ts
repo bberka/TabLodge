@@ -114,6 +114,10 @@ export type Settings = {
 	*/
 	expandSessionsByDefault: boolean;
 	/**
+	Show the tab favicon strip on collapsed session cards (default on).
+	*/
+	showSessionFaviconPreviews: boolean;
+	/**
 	Actions shown on session cards (Archive by default; Delete is off by default; up to five).
 	*/
 	sessionQuickActions: SessionQuickAction[];

@@ -476,6 +476,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	saveSplitTabs: 'both',
 	sessionSort: 'newest',
 	expandSessionsByDefault: false,
+	showSessionFaviconPreviews: true,
 	sessionQuickActions: ['archive'],
 	stretchBookmarkColumns: true,
 	limitBookmarksPerColumn: false,
@@ -1517,6 +1518,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.sessionSort
 			: 'newest',
 		expandSessionsByDefault: raw.expandSessionsByDefault === true,
+		showSessionFaviconPreviews: raw.showSessionFaviconPreviews !== false,
 		sessionQuickActions: normalizeSessionQuickActions(raw),
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
 		limitBookmarksPerColumn: raw.limitBookmarksPerColumn === true,

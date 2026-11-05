@@ -3046,25 +3046,27 @@ const GroupCard = memo(
 									)}
 								</span>
 							</button>
-							{!isExpanded && wide && (
-								<span className="hidden shrink-0 items-center -space-x-1.5 md:flex">
-									{previewTabs.map((tab) => (
-										// Decorative: the title button is the keyboard and screen reader control, and a click here reaches the card's own handler.
-										<span key={tab.id} aria-hidden="true">
-											<Favicon
-												url={tab.url}
-												label={tab.title}
-												className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
-											/>
-										</span>
-									))}
-									{group.tabs.length > previewTabs.length && (
-										<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
-											+{group.tabs.length - previewTabs.length}
-										</span>
-									)}
-								</span>
-							)}
+							{!isExpanded &&
+								wide &&
+								settings.showSessionFaviconPreviews !== false && (
+									<span className="hidden shrink-0 items-center -space-x-1.5 md:flex">
+										{previewTabs.map((tab) => (
+											// Decorative: the title button is the keyboard and screen reader control, and a click here reaches the card's own handler.
+											<span key={tab.id} aria-hidden="true">
+												<Favicon
+													url={tab.url}
+													label={tab.title}
+													className="h-6 w-6 rounded-full bg-card ring-2 ring-card"
+												/>
+											</span>
+										))}
+										{group.tabs.length > previewTabs.length && (
+											<span className="grid h-6 min-w-6 place-items-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-2 ring-card">
+												+{group.tabs.length - previewTabs.length}
+											</span>
+										)}
+									</span>
+								)}
 							<div className="ml-auto flex shrink-0 items-center gap-0.5">
 								{quickActions.length > 0 && (
 									<span

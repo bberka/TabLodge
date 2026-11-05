@@ -653,6 +653,12 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'showSessionFaviconPreviews',
+				label: 'Show favicon previews on session cards',
+				help: 'Show the tab icons and overflow count on collapsed session cards. Turn this off to hide the preview strip.',
+				type: 'switch',
+			},
+			{
 				name: 'sessionQuickActions',
 				label: 'Quick actions on session cards',
 				help: 'Choose up to five buttons from the session menu. Archive is on by default and Delete is off. Enabled actions stay visible while a card is expanded.',
