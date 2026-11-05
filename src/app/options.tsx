@@ -165,12 +165,13 @@ type SettingField = {
 			name: SettingKey<BookmarkQuickAction[]>;
 			type: 'checkbox-dropdown';
 			options: Array<[BookmarkQuickAction, string]>;
-			maxActions: 3;
+			maxActions: number;
 	  }
 	| {
 			name: SettingKey<SessionQuickAction[]>;
 			type: 'checkbox-dropdown';
 			options: Array<[SessionQuickAction, string]>;
+			maxActions: number;
 	  }
 	| {name: SettingKey<string>; type: 'column'}
 	| {name: SettingKey<string>; type: 'url'; placeholder: string}
@@ -654,11 +655,18 @@ const settingsGroups: Array<{
 			{
 				name: 'sessionQuickActions',
 				label: 'Quick actions on session cards',
-				help: 'Choose which buttons appear on session cards. Archive is on by default and Delete is off. Enabled actions stay visible while a card is expanded.',
+				help: 'Choose up to five buttons from the session menu. Archive is on by default and Delete is off. Enabled actions stay visible while a card is expanded.',
 				type: 'checkbox-dropdown',
+				maxActions: 5,
 				options: [
 					['archive', 'Archive'],
 					['delete', 'Delete'],
+					['share', 'Share'],
+					['export', 'Export session'],
+					['edit', 'Edit details'],
+					['move-up', 'Move up'],
+					['move-down', 'Move down'],
+					['switch-to', 'Switch to this session'],
 				],
 			},
 			{
@@ -695,7 +703,7 @@ const settingsGroups: Array<{
 			{
 				name: 'bookmarkQuickActions',
 				label: 'Quick actions on bookmarks',
-				help: 'Choose up to three buttons to show beside each bookmark’s menu. Clear all to hide them. Delete still asks first.',
+				help: 'Choose up to three buttons from the bookmark menu. Clear all to hide them. Delete still asks first.',
 				type: 'checkbox-dropdown',
 				maxActions: 3,
 				options: [
@@ -704,6 +712,9 @@ const settingsGroups: Array<{
 					['copy', 'Copy link'],
 					['edit', 'Edit'],
 					['delete', 'Delete'],
+					['move', 'Move to'],
+					['move-up', 'Move up'],
+					['move-down', 'Move down'],
 				],
 			},
 			{

@@ -48,7 +48,7 @@ type Choice = {
 
 const DEFAULT_CHOICE: Choice = {
 	id: DEFAULT_ACCENT,
-	label: 'TabLodge default',
+	label: 'Default',
 	detail: 'The default theme color',
 	background: DEFAULT_ACCENT_HEX,
 };

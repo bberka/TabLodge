@@ -4302,13 +4302,13 @@ test('quick actions migrate old preferences and accept up to three selected acti
 	const selected = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
 		settings: {
-			bookmarkQuickActions: ['open-current', 'open-new', 'copy', 'delete'],
+			bookmarkQuickActions: ['move-up', 'move-down', 'move', 'copy'],
 		},
 	});
 	assert.deepEqual(Array.from(selected.settings.bookmarkQuickActions), [
-		'open-current',
-		'open-new',
-		'copy',
+		'move-up',
+		'move-down',
+		'move',
 	]);
 
 	const cleared = await harness.sendMessage({
@@ -4345,11 +4345,25 @@ test('session quick actions default to Archive and migrate the old switches', as
 	const selected = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
 		settings: {
-			sessionQuickActions: ['delete', 'unknown', 'delete'],
+			sessionQuickActions: [
+				'share',
+				'export',
+				'edit',
+				'move-up',
+				'move-down',
+				'switch-to',
+				'delete',
+				'unknown',
+				'share',
+			],
 		} as unknown as Partial<Settings>,
 	});
 	assert.deepEqual(Array.from(selected.settings.sessionQuickActions), [
-		'delete',
+		'share',
+		'export',
+		'edit',
+		'move-up',
+		'move-down',
 	]);
 
 	const cleared = await harness.sendMessage({

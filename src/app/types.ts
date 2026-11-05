@@ -40,8 +40,23 @@ For selection saves while the active tab is in a split view: keep both halves, o
 export type SaveSplitTabs = 'both' | 'focused';
 
 export type BookmarkQuickAction =
-	'open-current' | 'open-new' | 'copy' | 'edit' | 'delete';
-export type SessionQuickAction = 'archive' | 'delete';
+	| 'open-current'
+	| 'open-new'
+	| 'copy'
+	| 'edit'
+	| 'delete'
+	| 'move'
+	| 'move-up'
+	| 'move-down';
+export type SessionQuickAction =
+	| 'archive'
+	| 'delete'
+	| 'share'
+	| 'export'
+	| 'edit'
+	| 'move-up'
+	| 'move-down'
+	| 'switch-to';
 
 /**
 What clicking a link does: nothing, open in the current tab, or open in a new tab.
@@ -99,7 +114,7 @@ export type Settings = {
 	*/
 	expandSessionsByDefault: boolean;
 	/**
-	Actions shown on session cards (Archive by default; Delete is off by default).
+	Actions shown on session cards (Archive by default; Delete is off by default; up to five).
 	*/
 	sessionQuickActions: SessionQuickAction[];
 	/**
