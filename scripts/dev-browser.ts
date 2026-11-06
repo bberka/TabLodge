@@ -1,4 +1,4 @@
-// Launches installed Chrome when available, with Playwright Chromium as a portable fallback.
+import {readFile} from 'node:fs/promises';
 import process from 'node:process';
 import {chromium, type BrowserContext, type Page} from 'playwright';
 import {
@@ -10,17 +10,32 @@ import {loadDevFavicons} from './dev-favicon-cache.ts';
 import {stopWatchersWhenBrowserCloses} from './dev-browser-lifecycle.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
-const userDataDir = fromRoot('.dev/chrome-profile');
-const launchOptions = {
-	headless: false,
-	viewport: null,
-	args: [
-		`--disable-extensions-except=${OUT_DIR}`,
-		`--load-extension=${OUT_DIR}`,
-	],
-};
+function profileDirectory(headless: boolean): string {
+	return fromRoot(
+		headless ? '.dev/chromium-headless-profile' : '.dev/chrome-profile',
+	);
+}
 
-async function launchBrowser(): Promise<BrowserContext> {
+async function launchBrowser(headless: boolean): Promise<BrowserContext> {
+	const userDataDir = profileDirectory(headless);
+	const launchOptions = {
+		headless,
+		viewport: headless ? {width: 1440, height: 900} : null,
+		args: [
+			`--disable-extensions-except=${OUT_DIR}`,
+			`--load-extension=${OUT_DIR}`,
+			...(headless
+				? ['--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0']
+				: []),
+		],
+	};
+	if (headless) {
+		return chromium.launchPersistentContext(userDataDir, {
+			...launchOptions,
+			channel: 'chromium',
+		});
+	}
+
 	if (process.env.CHROME_BIN) {
 		return chromium.launchPersistentContext(userDataDir, {
 			...launchOptions,
@@ -94,13 +109,14 @@ async function seedDevStore(page: Page): Promise<void> {
 }
 
 export async function openDevBrowser(
-	options: {seedData?: boolean} = {},
+	options: {seedData?: boolean; headless?: boolean} = {},
 	watchers: Array<{close(): Promise<void>}> = [],
 ): Promise<void> {
 	let context: BrowserContext | undefined;
 
 	try {
-		context = await launchBrowser();
+		const headless = options.headless ?? false;
+		context = await launchBrowser(headless);
 		const browserClosed = stopWatchersWhenBrowserCloses(context, watchers);
 		const serviceWorker =
 			context
@@ -123,13 +139,22 @@ export async function openDevBrowser(
 		}
 
 		console.log(
-			'Opened the browser with TabLodge loaded in the isolated .dev/chrome-profile. Reload the extension after each rebuild.',
+			`Loaded TabLodge in ${profileDirectory(headless)}. Reload the extension after each rebuild.`,
 		);
+		if (headless) {
+			const [port] = (
+				await readFile(`${profileDirectory(true)}/DevToolsActivePort`, 'utf8')
+			).split('\n', 1);
+			console.log(`Dev browser CDP: http://127.0.0.1:${port}`);
+		}
+
 		await browserClosed;
 	} catch (error) {
 		await context?.close().catch(() => {});
 		console.warn(
-			'Could not launch a browser. Run `vp run browser:install` or set CHROME_BIN to your browser executable, then run `vp run dev` again. The build watcher is still running.',
+			options.headless
+				? 'Could not launch headless Chromium. Run `vp run browser:install`, then retry `vp run dev:headless`. The build watcher is still running.'
+				: 'Could not launch a browser. Run `vp run browser:install` or set CHROME_BIN to your browser executable, then run `vp run dev` again. The build watcher is still running.',
 		);
 		console.warn(error instanceof Error ? error.message : String(error));
 	}

@@ -10,6 +10,8 @@ Install the Vite+ CLI once as described in [README Development](README.md#develo
 
 For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](architecture.md).
 
+Agents validate with the headless dev browser to avoid interrupting the desktop. See [Browser access](agent-validation.md#browser-access) for automation and shutdown instructions. Manual development can keep using the visible browser above.
+
 ## Code conventions
 
 - Use strict TypeScript without `any` escapes. Validate stored data, imports, and messages before using them. The service worker treats incoming data as untrusted.

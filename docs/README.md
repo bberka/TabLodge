@@ -127,11 +127,14 @@ TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind
 | `vp run browser:install`             | Install Playwright Chromium for development                         |
 | `vp run dev`                         | Watch sources and open Chrome or Chromium with the extension loaded |
 | `vp run dev:seed`                    | Open the dev browser with repeatable sample sessions and bookmarks  |
+| `vp run dev:headless`                | Watch sources with the extension in Chromium, without a desktop window |
+| `vp run dev:headless:seed`           | Run the headless dev browser with repeatable sample data             |
+| `vp run browser:dev`                 | Check headless dev launch, automation, screenshots, and shutdown     |
 | `vp run watch`                       | Watch sources without opening a browser                             |
 | `vp run test`                        | Run the tests once                                                  |
 | `vp run test:watch`                  | Run tests as files change                                           |
 | `vp run a11y`                        | Run axe and keyboard checks on the built extension                  |
-| `vp run browser:startup`             | Check all seven pages with delayed state loading                    |
+| `vp run browser:startup`             | Check all seven pages headlessly with delayed state loading         |
 | `vp run typecheck`                   | Check all TypeScript projects                                       |
 | `vp run lint`                        | Check code with XO                                                  |
 | `vp run lint:fix` or `vp run format` | Fix lint issues and format with XO                                  |
@@ -148,13 +151,15 @@ vp run dev
 
 This builds the extension, watches for source changes, and opens Chrome. If Chrome is unavailable, Playwright uses its own Chromium browser. Closing the browser also stops the watcher. The window can be resized with your window manager. The browser profile lives in `.dev/chrome-profile` and is separate from your regular profile and other worktrees. After a rebuild, open `chrome://extensions`, reload TabLodge, then reopen its page. Use the page's DevTools console to check page errors. Use the service worker's Inspect link on `chrome://extensions` to check worker errors.
 
+Agents use `vp run dev:headless` to validate without opening a desktop window. For sample data, use `vp run dev:headless:seed`. These commands use Playwright Chromium and a separate profile. See [Browser access](agent-validation.md#browser-access) for the local automation endpoint and shutdown instructions.
+
 To open it with sample sessions and bookmarks for UI checks or screenshots, run:
 
 ```sh
 vp run dev:seed
 ```
 
-This replaces TabLodge data in the worktree's dev profile. If `~/.cache/tablodge/dev-favicons.json` is missing sample site icons, the command fetches them and adds them to the cache shared by worktrees. Later runs use that cache. Delete the file to fetch the icons again. Only this dev command fetches the icons. The extension itself makes no network requests for them and gains no permissions.
+Both sample data commands replace TabLodge data in their dev profile. If `~/.cache/tablodge/dev-favicons.json` is missing sample site icons, the command fetches them and adds them to the cache shared by worktrees. Later runs use that cache. Delete the file to fetch the icons again. Only these sample data commands fetch the icons. The extension itself makes no network requests for them and gains no permissions.
 
 If Chrome is not installed, install Playwright Chromium once:
 
@@ -162,7 +167,7 @@ If Chrome is not installed, install Playwright Chromium once:
 vp run browser:install
 ```
 
-If Chrome is installed outside the usual path, set `CHROME_BIN` to its executable. If no browser is available, the build watcher still runs.
+If Chrome is installed outside the usual path, set `CHROME_BIN` to its executable for the visible dev browser. Headless mode always uses Playwright Chromium. If no browser is available, the build watcher still runs.
 
 See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases. [Architecture](architecture.md) explains storage, messages, and feature behavior. AI agents also follow [AGENTS.md](../AGENTS.md) and the [validation gate](agent-validation.md).
 
