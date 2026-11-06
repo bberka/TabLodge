@@ -1,4 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
+import {ArrowRight} from 'lucide-react';
 import {
 	Button,
 	Dialog,
@@ -138,6 +139,7 @@ function PrivateStorageForm({
 			{showContinue && (
 				<DialogFooter>
 					<Button type="submit" disabled={busy || disabled}>
+						<ArrowRight aria-hidden="true" />
 						{busy ? 'Saving…' : 'Continue'}
 					</Button>
 				</DialogFooter>

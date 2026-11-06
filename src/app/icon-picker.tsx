@@ -4,6 +4,7 @@ import {
 	useState,
 	type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
+import {RotateCcw, X} from 'lucide-react';
 import {
 	Button,
 	Dialog,
@@ -204,6 +205,7 @@ function IconPickerDialog({
 							choose(undefined);
 						}}
 					>
+						<RotateCcw aria-hidden="true" />
 						Reset to default
 					</Button>
 					<Button
@@ -213,6 +215,7 @@ function IconPickerDialog({
 							onOpenChange(false);
 						}}
 					>
+						<X aria-hidden="true" />
 						Cancel
 					</Button>
 				</DialogFooter>

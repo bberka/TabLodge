@@ -275,7 +275,7 @@ function Help() {
 				},
 				{
 					title: 'Bookmark quick actions',
-					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu, or clear the list to hide them. Delete still asks for confirmation.',
+					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete still asks for confirmation.',
 					searchText:
 						'quick action buttons open new tab bookmark menu copy edit delete checkbox settings',
 				},
