@@ -216,7 +216,7 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 				</p>
 			)}
 			{incognitoAllowed === false && (
-				<p role="status" className="mb-4 text-sm text-muted-foreground">
+				<p role="status" className="text-sm text-muted-foreground">
 					Enable Allow in Incognito in your browser’s extension settings to
 					configure private storage.
 				</p>

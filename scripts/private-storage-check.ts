@@ -179,6 +179,17 @@ try {
 			{exact: true},
 		)
 		.waitFor();
+	const disabledMessage = normal.getByText(
+		'Enable Allow in Incognito in your browser’s extension settings to configure private storage.',
+		{exact: true},
+	);
+	assert.equal(
+		(await disabledMessage.getAttribute('class'))
+			?.split(/\s+/)
+			.includes('mb-4'),
+		false,
+		'Disabled private settings should not add margin below the message.',
+	);
 	assert.equal(
 		await privateSettingsRadios.count(),
 		0,
