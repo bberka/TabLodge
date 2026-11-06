@@ -43,7 +43,7 @@ Fix every finding that is in your diff. Leave code you did not change alone, eve
 
 ## Browser access
 
-`vp run dev` opens the extension from `dist/tablodge/` in a profile for this worktree at `.dev/chrome-profile`. Playwright uses installed Google Chrome when available and falls back to its Chromium browser. The profile is separate from regular browser data and from other worktrees. Source changes rebuild automatically, but Chrome does not reload the extension automatically.
+`vp run dev` opens the extension from `dist/tablodge/` in a profile for this worktree at `.dev/chrome-profile`. Playwright uses installed Google Chrome when available and falls back to its Chromium browser. The profile is separate from regular browser data and from other worktrees. Source changes rebuild automatically, but Chrome does not reload the extension automatically. Closing the browser stops the build watcher.
 
 Use the opened browser to exercise the affected workflow, not just to confirm that a page renders. A screenshot can support evidence for a visual change, but it does not replace exercising the behavior. If the agent environment can interact with the browser, use that browser control. If it cannot, add or run an automated browser test for the affected behavior. If neither browser interaction nor an appropriate automated test can run, report validation as blocked and ask for access. Do not claim the behavior works based only on unit tests, a successful build, or static inspection.
 

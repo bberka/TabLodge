@@ -7,6 +7,7 @@ import {
 	type DevStore,
 } from './dev-fixture.ts';
 import {loadDevFavicons} from './dev-favicon-cache.ts';
+import {stopWatchersWhenBrowserCloses} from './dev-browser-lifecycle.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 const userDataDir = fromRoot('.dev/chrome-profile');
@@ -94,11 +95,13 @@ async function seedDevStore(page: Page): Promise<void> {
 
 export async function openDevBrowser(
 	options: {seedData?: boolean} = {},
+	watchers: Array<{close(): Promise<void>}> = [],
 ): Promise<void> {
 	let context: BrowserContext | undefined;
 
 	try {
 		context = await launchBrowser();
+		const browserClosed = stopWatchersWhenBrowserCloses(context, watchers);
 		const serviceWorker =
 			context
 				.serviceWorkers()
@@ -122,6 +125,7 @@ export async function openDevBrowser(
 		console.log(
 			'Opened the browser with TabLodge loaded in the isolated .dev/chrome-profile. Reload the extension after each rebuild.',
 		);
+		await browserClosed;
 	} catch (error) {
 		await context?.close().catch(() => {});
 		console.warn(
