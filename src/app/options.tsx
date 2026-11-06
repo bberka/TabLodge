@@ -28,6 +28,9 @@ import {
 	Search,
 	X,
 	ChevronDown,
+	ArrowDown,
+	ArrowUp,
+	Check,
 } from 'lucide-react';
 import {
 	Button,
@@ -47,15 +50,13 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-	DropdownMenu,
-	DropdownMenuTrigger,
-	DropdownMenuContent,
-	DropdownMenuCheckboxItem,
-	DropdownMenuLabel,
 	Switch,
 	Textarea,
 	TooltipProvider,
 	IconTooltip,
+	Popover,
+	PopoverTrigger,
+	PopoverContent,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ACCENTS, DEFAULT_ACCENT} from '../shared/accents';
@@ -667,7 +668,7 @@ const settingsGroups: Array<{
 			{
 				name: 'sessionQuickActions',
 				label: 'Quick actions on session cards',
-				help: 'Choose up to five buttons from the session menu. Archive is on by default and Delete is off. Enabled actions stay visible while a card is expanded.',
+				help: 'Choose up to five buttons from the session menu and reorder them in the picker. Archive is on by default and Delete is off. Enabled actions stay visible while a card is expanded.',
 				type: 'checkbox-dropdown',
 				maxActions: 5,
 				options: [
@@ -715,7 +716,7 @@ const settingsGroups: Array<{
 			{
 				name: 'bookmarkQuickActions',
 				label: 'Quick actions on bookmarks',
-				help: 'Choose up to three buttons from the bookmark menu. Clear all to hide them. Delete still asks first.',
+				help: 'Choose up to three buttons from the bookmark menu and reorder them in the picker. Remove all to hide them. Delete still asks first.',
 				type: 'checkbox-dropdown',
 				maxActions: 3,
 				options: [
@@ -1747,22 +1748,6 @@ function Options() {
 									? 'bg-primary/10 font-medium text-primary'
 									: 'text-muted-foreground hover:bg-muted hover:text-foreground',
 							)}
-							onClick={(event) => {
-								if (!searching) {
-									return;
-								}
-
-								event.preventDefault();
-								updateQuery('');
-								requestAnimationFrame(() => {
-									document.querySelector(`#${id}`)?.scrollIntoView();
-									history.replaceState(
-										null,
-										'',
-										`${location.pathname}${location.search}#${id}`,
-									);
-								});
-							}}
 						>
 							<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
 							{label}
@@ -2449,6 +2434,7 @@ function Options() {
 								variant="outline"
 								onClick={() => setSiteDialog(false)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit" disabled={!siteValid || siteBusy}>
@@ -2608,6 +2594,10 @@ function QuickActionsSetting<
 	disabled: boolean;
 	onChange: (actions: Action[]) => void;
 }) {
+	const [query, setQuery] = useState('');
+	const hasMatches = options.some(([, actionLabel]) =>
+		actionLabel.toLowerCase().includes(query.toLowerCase()),
+	);
 	const summary =
 		actions.length === 0
 			? 'None'
@@ -2616,8 +2606,8 @@ function QuickActionsSetting<
 					'1 selected')
 				: `${actions.length} selected`;
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
+		<Popover>
+			<PopoverTrigger asChild>
 				<Button
 					data-setting-control
 					type="button"
@@ -2630,37 +2620,153 @@ function QuickActionsSetting<
 					<span className="truncate">{summary}</span>
 					<ChevronDown aria-hidden="true" />
 				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="min-w-56">
-				<DropdownMenuLabel>
-					{maxActions ? `Choose up to ${maxActions}` : 'Choose actions'}
-				</DropdownMenuLabel>
-				{options.map(([action, actionLabel]) => {
-					const checked = actions.includes(action);
-					return (
-						<DropdownMenuCheckboxItem
-							key={action}
-							checked={checked}
-							disabled={
-								!checked &&
-								maxActions !== undefined &&
-								actions.length >= maxActions
-							}
-							onCheckedChange={(nextChecked) => {
-								const next = nextChecked
-									? [...actions, action]
-									: actions.filter((selected) => selected !== action);
-								onChange(
-									maxActions === undefined ? next : next.slice(0, maxActions),
-								);
-							}}
+			</PopoverTrigger>
+			<PopoverContent align="end" className="w-80 p-0" aria-label={label}>
+				<div className="border-b border-border p-3">
+					<Input
+						autoFocus
+						value={query}
+						placeholder="Find an action"
+						aria-label={`Find ${label.toLowerCase()}`}
+						onChange={(event) => setQuery(event.target.value)}
+					/>
+					<p className="mt-2 text-xs text-muted-foreground">
+						{maxActions
+							? `${actions.length} of ${maxActions} selected`
+							: `${actions.length} selected`}
+					</p>
+					{actions.length > 0 && (
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="mt-2 h-9 w-full justify-center"
+							onClick={() => onChange([])}
 						>
-							{actionLabel}
-						</DropdownMenuCheckboxItem>
-					);
-				})}
-			</DropdownMenuContent>
-		</DropdownMenu>
+							Clear all
+						</Button>
+					)}
+				</div>
+				<div className="max-h-80 overflow-y-auto p-2">
+					{actions.length > 0 && (
+						<section aria-label="Selected actions">
+							<p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+								Selected
+							</p>
+							{actions.map((action, index) => {
+								const actionLabel =
+									options.find(([item]) => item === action)?.[1] ?? action;
+								if (!actionLabel.toLowerCase().includes(query.toLowerCase())) {
+									return null;
+								}
+
+								return (
+									<div
+										key={action}
+										className="flex min-h-9 items-center gap-1 rounded-sm px-2 text-sm hover:bg-accent"
+									>
+										<Check
+											aria-hidden="true"
+											className="mr-1 h-4 w-4 text-primary"
+										/>
+										<span className="min-w-0 flex-1 truncate">
+											{actionLabel}
+										</span>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className="h-7 w-7"
+											aria-label={`Move ${actionLabel} up`}
+											disabled={index === 0}
+											onClick={() => {
+												const reordered = [...actions];
+												[reordered[index - 1], reordered[index]] = [
+													reordered[index],
+													reordered[index - 1],
+												];
+												onChange(reordered);
+											}}
+										>
+											<ArrowUp aria-hidden="true" className="h-4 w-4" />
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className="h-7 w-7"
+											aria-label={`Move ${actionLabel} down`}
+											disabled={index === actions.length - 1}
+											onClick={() => {
+												const reordered = [...actions];
+												[reordered[index], reordered[index + 1]] = [
+													reordered[index + 1],
+													reordered[index],
+												];
+												onChange(reordered);
+											}}
+										>
+											<ArrowDown aria-hidden="true" className="h-4 w-4" />
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											className="h-7 px-2"
+											aria-label={`Remove ${actionLabel}`}
+											onClick={() =>
+												onChange(actions.filter((item) => item !== action))
+											}
+										>
+											<X aria-hidden="true" className="h-4 w-4" />
+										</Button>
+									</div>
+								);
+							})}
+						</section>
+					)}
+					{!hasMatches && (
+						<p className="px-2 py-3 text-sm text-muted-foreground">
+							No matching actions
+						</p>
+					)}
+					<section
+						aria-label="Available actions"
+						className={
+							actions.length > 0 ? 'mt-2 border-t border-border pt-2' : ''
+						}
+					>
+						<p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+							Available actions
+						</p>
+						{options
+							.filter(
+								([action, actionLabel]) =>
+									!actions.includes(action) &&
+									actionLabel.toLowerCase().includes(query.toLowerCase()),
+							)
+							.map(([action, actionLabel]) => {
+								const atLimit =
+									maxActions !== undefined && actions.length >= maxActions;
+								return (
+									<Button
+										key={action}
+										type="button"
+										variant="ghost"
+										disabled={atLimit}
+										className="h-9 w-full justify-start px-2 font-normal"
+										aria-label={`Add ${actionLabel}`}
+										onClick={() => onChange([...actions, action])}
+									>
+										<Plus aria-hidden="true" className="mr-2 h-4 w-4" />
+										{actionLabel}
+									</Button>
+								);
+							})}
+					</section>
+				</div>
+			</PopoverContent>
+		</Popover>
 	);
 }
 

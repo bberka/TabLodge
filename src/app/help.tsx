@@ -281,7 +281,7 @@ function Help() {
 				},
 				{
 					title: 'Bookmark quick actions',
-					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu, or clear the list to hide them. Delete still asks for confirmation.',
+					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete still asks for confirmation.',
 					searchText:
 						'quick action buttons open new tab bookmark menu copy edit delete checkbox settings',
 				},
@@ -489,8 +489,9 @@ function Help() {
 					body: (
 						<>
 							Session import and export are in the{' '}
-							<MenuLocation label="Sessions" />. A session menu can export just
-							that session in any format. Bookmark import and export are in the{' '}
+							<MenuLocation label="Sessions" />. It can also share all sessions,
+							including archived sessions. A session menu can export just that
+							session in any format. Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. Settings can export
 							bookmarks or create a full ZIP backup with settings, excluded
 							sites, theme, snapshots, and the trash bin. Open{' '}
@@ -505,7 +506,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sessions menu individual session export bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
+						'sessions menu share all sessions archived individual session export bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
 				},
 				{
 					title: 'Recover after a browser crash',

@@ -66,6 +66,7 @@ const {values} = parseArgs({
 const {watch, 'open-browser': openBrowser, 'seed-data': seedData} = values;
 const outLabel = relative(projectRoot, OUT_DIR);
 const initialBuilds: Array<Promise<void>> = [];
+const watchers: Array<{close(): Promise<void>}> = [];
 
 await rm(OUT_DIR, {recursive: true, force: true});
 
@@ -80,6 +81,8 @@ for (const step of steps) {
 	if (!(watch && 'on' in result)) {
 		continue;
 	}
+
+	watchers.push(result);
 
 	if (initialBuild) {
 		initialBuilds.push(initialBuild.promise);
@@ -113,5 +116,5 @@ console.log(
 
 if (openBrowser) {
 	await Promise.all(initialBuilds);
-	await openDevBrowser({seedData});
+	await openDevBrowser({seedData}, watchers);
 }

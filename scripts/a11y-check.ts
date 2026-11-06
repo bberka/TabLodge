@@ -98,14 +98,14 @@ async function selectQuickActions(
 	kind: 'session' | 'bookmark',
 ) {
 	for (const label of labels) {
-		const option = menu.getByRole('menuitemcheckbox', {
-			name: label,
+		const option = menu.getByRole('button', {
+			name: `Add ${label}`,
 			exact: true,
 		});
 		await option.focus();
-		await page.keyboard.press('Space');
+		await page.keyboard.press('Enter');
 		await until(
-			async () => (await option.getAttribute('aria-checked')) === 'true',
+			async () => (await option.count()) === 0,
 			`${label} ${kind} action to be selected`,
 		);
 	}
@@ -709,6 +709,43 @@ async function main() {
 		const seedPage = await openPage(context, extensionId, 'newtab');
 		await seed(seedPage);
 		await seedPage.close();
+		await check(
+			'settings search stays active when navigating categories',
+			async () => {
+				for (const theme of THEMES) {
+					const page = await openPage(context, extensionId, 'options');
+					try {
+						await setTheme(page, theme);
+						const search = page.getByRole('searchbox', {
+							name: 'Search settings',
+						});
+						await search.fill('saving');
+						const savingCategory = page.getByRole('link', {
+							name: 'Saving',
+							exact: true,
+						});
+						await savingCategory.waitFor();
+						await savingCategory.focus();
+						await page.keyboard.press('Enter');
+						assert.equal(await search.inputValue(), 'saving');
+						assert.match(page.url(), /[&?]q=saving/);
+						assert.match(page.url(), /#settings-when-saving$/);
+						assert.equal(
+							await page
+								.locator('[data-setting-row="saveDuplicateHandling"]')
+								.count(),
+							1,
+						);
+						await captureEvidence(
+							page,
+							`settings-search-navigation-${theme}.png`,
+						);
+					} finally {
+						await page.close();
+					}
+				}
+			},
+		);
 
 		for (const theme of THEMES) {
 			await check(
@@ -772,37 +809,18 @@ async function main() {
 					);
 					await quickActionsTrigger.focus();
 					await options.keyboard.press('Enter');
-					const quickActionsMenu = options.getByRole('menu');
-					const archiveOption = quickActionsMenu.getByRole('menuitemcheckbox', {
-						name: 'Archive',
-						exact: true,
+					const quickActionsMenu = options.getByRole('dialog', {
+						name: 'Quick actions on session cards',
 					});
-					const deletionChoice = quickActionsMenu.getByRole(
-						'menuitemcheckbox',
-						{
-							name: 'Delete',
-							exact: true,
-						},
-					);
-					assert.equal(
-						await archiveOption.getAttribute('aria-checked'),
-						'true',
-					);
-					assert.equal(
-						await deletionChoice.getAttribute('aria-checked'),
-						'false',
-					);
-
-					await deletionChoice.focus();
-					await options.keyboard.press('Space');
-					await archiveOption.focus();
-					await options.keyboard.press('Space');
-					await until(
-						async () =>
-							(await archiveOption.getAttribute('aria-checked')) === 'false' &&
-							(await deletionChoice.getAttribute('aria-checked')) === 'true',
-						'quick action settings to update',
-					);
+					await quickActionsMenu
+						.getByRole('button', {name: 'Add Delete'})
+						.focus();
+					await options.keyboard.press('Enter');
+					const archiveRemoval = quickActionsMenu.getByRole('button', {
+						name: 'Remove Archive',
+					});
+					await archiveRemoval.focus();
+					await options.keyboard.press('Enter');
 					await until(async () => {
 						const {settings} = await readDevStore(options);
 						return (
@@ -831,8 +849,13 @@ async function main() {
 						})
 						.focus();
 					await options.keyboard.press('Enter');
-					await archiveOption.focus();
-					await options.keyboard.press('Space');
+					const sessionActions = options.getByRole('dialog', {
+						name: 'Quick actions on session cards',
+					});
+					await sessionActions
+						.getByRole('button', {name: 'Add Archive'})
+						.focus();
+					await options.keyboard.press('Enter');
 					await until(async () => {
 						const {settings} = await readDevStore(options);
 						return (
@@ -1134,7 +1157,9 @@ async function main() {
 					});
 					await trigger.focus();
 					await options.keyboard.press('Enter');
-					const menu = options.getByRole('menu');
+					const menu = options.getByRole('dialog', {
+						name: 'Quick actions on session cards',
+					});
 					await selectQuickActions(
 						options,
 						menu,
@@ -1143,13 +1168,13 @@ async function main() {
 					);
 
 					for (const label of ['Move up', 'Switch to this session']) {
-						const option = menu.getByRole('menuitemcheckbox', {
-							name: label,
+						const option = menu.getByRole('button', {
+							name: `Add ${label}`,
 							exact: true,
 						});
 						assert.equal(
-							await option.getAttribute('aria-disabled'),
-							'true',
+							await option.isDisabled(),
+							true,
 							`${label} is disabled after five actions are selected`,
 						);
 					}
@@ -1424,55 +1449,65 @@ async function main() {
 					await trigger.waitFor();
 					await trigger.focus();
 					await settingsPage.keyboard.press('Enter');
-					const menu = settingsPage.getByRole('menu');
-					await menu.waitFor();
-					const openNew = menu.getByRole('menuitemcheckbox', {
-						name: 'Open in new tab',
-						exact: true,
+					const menu = settingsPage.getByRole('dialog', {
+						name: 'Quick actions on bookmarks',
 					});
-					assert.equal(await openNew.getAttribute('aria-checked'), 'true');
+					await menu.waitFor();
+					await captureEvidence(
+						settingsPage,
+						`bookmark-quick-actions-settings-${theme}.png`,
+						menu,
+					);
+					assert.equal(
+						await menu
+							.getByRole('button', {name: 'Remove Open in new tab'})
+							.count(),
+						1,
+					);
 
 					for (const action of ['Copy link', 'Delete']) {
-						const item = menu.getByRole('menuitemcheckbox', {
-							name: action,
+						const item = menu.getByRole('button', {
+							name: `Add ${action}`,
 							exact: true,
 						});
 						await until(
 							async () => (await item.count()) === 1,
 							`${action} quick action option to appear`,
 						);
-						await item.click();
+						await item.focus();
+						await settingsPage.keyboard.press('Enter');
 						await until(
-							async () => (await item.getAttribute('aria-checked')) === 'true',
+							async () => (await item.count()) === 0,
 							`${action} quick action to be selected`,
 						);
 					}
 
-					const deletionOption = menu.getByRole('menuitemcheckbox', {
-						name: 'Delete',
-						exact: true,
+					const deletionOption = menu.getByRole('button', {
+						name: 'Remove Delete',
 					});
 					await deletionOption.focus();
 					await settingsPage.keyboard.press('Enter');
 					await until(
-						async () =>
-							(await deletionOption.getAttribute('aria-checked')) === 'false',
+						async () => (await deletionOption.count()) === 0,
 						'Delete quick action to clear by keyboard',
 					);
+					const actionButton = menu.getByRole('button', {
+						name: 'Add Delete',
+					});
+					await actionButton.focus();
 					await settingsPage.keyboard.press('Enter');
 					await until(
-						async () =>
-							(await deletionOption.getAttribute('aria-checked')) === 'true',
+						async () => (await actionButton.count()) === 0,
 						'Delete quick action to select by keyboard',
 					);
 
-					const fourth = menu.getByRole('menuitemcheckbox', {
-						name: 'Edit',
+					const fourth = menu.getByRole('button', {
+						name: 'Add Edit',
 						exact: true,
 					});
 					assert.equal(
-						await fourth.getAttribute('aria-disabled'),
-						'true',
+						await fourth.isDisabled(),
+						true,
 						'a fourth action is disabled while three are selected',
 					);
 					await until(
@@ -1570,7 +1605,9 @@ async function main() {
 					});
 					await trigger.focus();
 					await options.keyboard.press('Enter');
-					const menu = options.getByRole('menu');
+					const menu = options.getByRole('dialog', {
+						name: 'Quick actions on bookmarks',
+					});
 					await selectQuickActions(
 						options,
 						menu,
@@ -1578,22 +1615,27 @@ async function main() {
 						'bookmark',
 					);
 
-					const fourthAction = menu.getByRole('menuitemcheckbox', {
-						name: 'Move up',
+					const fourthAction = menu.getByRole('button', {
+						name: 'Add Move up',
 						exact: true,
 					});
 					assert.equal(
-						await fourthAction.getAttribute('aria-disabled'),
-						'true',
+						await fourthAction.isDisabled(),
+						true,
 						'a fourth bookmark action is disabled when three are selected',
 					);
+					const moveDownAction = menu.getByRole('button', {
+						name: 'Move Move down up',
+					});
+					await moveDownAction.focus();
+					await options.keyboard.press('Enter');
 					await until(async () => {
 						const {settings} = await readDevStore(options);
 						return (
 							JSON.stringify(settings.bookmarkQuickActions) ===
-							JSON.stringify(['open-new', 'move', 'move-down'])
+							JSON.stringify(['open-new', 'move-down', 'move'])
 						);
-					}, 'Move to and Move down to save in Settings');
+					}, 'reordered quick actions to save in Settings');
 					await options.close();
 
 					const board = await openPage(context, extensionId, 'newtab');
@@ -1603,7 +1645,7 @@ async function main() {
 					const calendar = board.locator('[data-bookmark-title="Calendar"]');
 					await assertBookmarkQuickActions(
 						board,
-						['Open in new tab', 'Move to', 'Move down'],
+						['Open in new tab', 'Move down', 'Move to'],
 						'Gmail',
 						480,
 					);
@@ -3007,9 +3049,11 @@ async function main() {
 							name: 'One column',
 							exact: true,
 						});
-						await oneColumnMode.focus();
-						await page.keyboard.press('Space');
-						assert.equal(await oneColumnMode.isChecked(), true);
+						await oneColumnMode.press('Space');
+						await until(
+							() => oneColumnMode.isChecked(),
+							'one column import mode to be selected',
+						);
 						const columnPicker = dialog.getByRole('combobox', {
 							name: 'Column for every imported bookmark',
 						});
@@ -3932,6 +3976,65 @@ async function main() {
 
 				await page.close();
 			});
+
+			await check(
+				`share all sessions from the Sessions menu (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					const currentSessions = await readDevStore(page);
+					const linkCount = currentSessions.groups.reduce(
+						(count, group) => count + group.tabs.length,
+						0,
+					);
+					const linksLabel = linkCount === 1 ? 'link' : 'links';
+					const groupsLabel =
+						currentSessions.groups.length === 1 ? 'group' : 'groups';
+					const trigger = page.getByRole('button', {
+						name: 'Import and back up sessions',
+					});
+					await openMenuItemByKeyboard(page, trigger, 'Share all sessions');
+					const dialog = page.getByRole('dialog');
+					await dialog.waitFor();
+					await dialog
+						.getByText(
+							`${linkCount} ${linksLabel} in ${currentSessions.groups.length} ${groupsLabel}`,
+						)
+						.waitFor();
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					for (const [width, height] of EVIDENCE_VIEWPORTS) {
+						await page.setViewportSize({width, height});
+						if (width === 440) {
+							await withMobileEmulation(
+								page,
+								{width, height},
+								async (device) => {
+									const {data} = await device.send('Page.captureScreenshot', {
+										format: 'png',
+										captureBeyondViewport: false,
+									});
+									await writeFile(
+										fromRoot(
+											`.dev/evidence/share-all-sessions-${width}x${height}-dsf3-${theme}.png`,
+										),
+										Buffer.from(data, 'base64'),
+									);
+								},
+							);
+						} else {
+							await page.screenshot({
+								animations: 'disabled',
+								path: fromRoot(
+									`.dev/evidence/share-all-sessions-${width}x${height}-${theme}.png`,
+								),
+							});
+						}
+					}
+
+					await page.keyboard.press('Escape');
+					await page.close();
+				},
+			);
 		}
 
 		await check('dialogs hand focus back to what opened them', async () => {

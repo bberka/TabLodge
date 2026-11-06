@@ -173,20 +173,28 @@ try {
 	const privateSettingsRadios = normal
 		.getByRole('radiogroup', {name: 'Private window storage'})
 		.getByRole('radio');
-	await privateSettingsRadios.first().waitFor();
 	await normal
 		.getByText(
-			'Private storage settings are disabled until Allow in Incognito is enabled in your browser’s extension settings.',
+			'Enable Allow in Incognito in your browser’s extension settings to configure private storage.',
 			{exact: true},
 		)
 		.waitFor();
-	for (const radio of await privateSettingsRadios.all()) {
-		assert.equal(
-			await radio.isDisabled(),
-			true,
-			'Private settings must be disabled without incognito access.',
-		);
-	}
+	const disabledMessage = normal.getByText(
+		'Enable Allow in Incognito in your browser’s extension settings to configure private storage.',
+		{exact: true},
+	);
+	assert.equal(
+		(await disabledMessage.getAttribute('class'))
+			?.split(/\s+/)
+			.includes('mb-4'),
+		false,
+		'Disabled private settings should not add margin below the message.',
+	);
+	assert.equal(
+		await privateSettingsRadios.count(),
+		0,
+		'Private storage choices should be hidden without incognito access.',
+	);
 
 	assert.equal(
 		await normal.getByRole('button', {name: /Save private settings/}).count(),

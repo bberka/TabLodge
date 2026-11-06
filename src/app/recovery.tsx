@@ -5,6 +5,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {
 	AppWindow,
 	Bookmark,
+	Check,
 	ChevronDown,
 	ChevronRight,
 	Download,
@@ -333,7 +334,10 @@ export function SnapshotsDialog({
 						<Trash2 className="h-4 w-4" />
 						Clear all
 					</Button>
-					<Button onClick={() => onOpenChange(false)}>Done</Button>
+					<Button onClick={() => onOpenChange(false)}>
+						<Check aria-hidden="true" />
+						Done
+					</Button>
 				</DialogFooter>
 			</DialogContent>
 			<ConfirmationDialog
@@ -640,7 +644,10 @@ export function TrashDialog({
 							? 'Empty trash bin'
 							: `Empty all ${items.length}`}
 					</Button>
-					<Button onClick={() => onOpenChange(false)}>Done</Button>
+					<Button onClick={() => onOpenChange(false)}>
+						<Check aria-hidden="true" />
+						Done
+					</Button>
 				</DialogFooter>
 			</DialogContent>
 			<ConfirmationDialog

@@ -1,6 +1,6 @@
 import {useState, type SyntheticEvent} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Plus} from 'lucide-react';
+import {Plus, Save, X} from 'lucide-react';
 import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
@@ -156,9 +156,11 @@ function AddBookmarkPrompt() {
 						variant="outline"
 						onClick={() => window.close()}
 					>
+						<X aria-hidden="true" />
 						Cancel
 					</Button>
 					<Button type="submit" disabled={busy}>
+						<Save aria-hidden="true" />
 						Save
 					</Button>
 				</div>
