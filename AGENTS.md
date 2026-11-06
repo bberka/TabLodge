@@ -12,6 +12,8 @@
 
 ## Setup
 
+Use the headless dev browser for agent validation so it does not interrupt the user's desktop. See [Browser access](docs/agent-validation.md#browser-access) for commands and automation access. Open a visible browser only when the user asks for one.
+
 Install the Vite+ CLI once as described in [README Development](docs/README.md#development). Use `vp run lint:fix` for formatting. For selected files, use `pnpm exec xo --fix <files>`. Never run `vp fmt`, plain `prettier`, or another formatter; their styles differ and can rewrite unrelated files.
 
 Agent skills are pinned in `skills-lock.json` and installed per machine into `.agents/skills/`, which git ignores. A fresh clone or a new worktree starts without them.
