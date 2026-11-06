@@ -60,6 +60,10 @@ type MockWindow = {
 	type: string;
 	focused: boolean;
 	title: string;
+	left?: number;
+	top?: number;
+	width?: number;
+	height?: number;
 	tabs: MockTab[];
 	state?: string;
 	incognito?: boolean;
@@ -122,6 +126,10 @@ type HarnessOptions = {
 	Chrome.alarms is missing in this browser build.
 	*/
 	noAlarms?: boolean;
+	/**
+	Make window creation reject explicit bounds as Chromium does for off-screen geometry.
+	*/
+	rejectWindowBounds?: boolean;
 	/**
 	Freeze the worker's clock at this time and set navigator.language (default 'en-US').
 	*/
@@ -218,6 +226,10 @@ function createWorkerHarness(
 			type: 'normal',
 			focused: true,
 			title: 'Test window',
+			left: 120,
+			top: 80,
+			width: 1280,
+			height: 900,
 			tabs,
 			incognito: (options.incognitoWindows ?? []).includes(10),
 		},
@@ -463,6 +475,10 @@ function createWorkerHarness(
 					type: win.type,
 					title: win.title,
 					incognito: Boolean(win.incognito),
+					left: win.left,
+					top: win.top,
+					width: win.width,
+					height: win.height,
 					...(query.populate && {
 						tabs: tabsForWindow(win.id).map((tab) => ({...tab})),
 					}),
@@ -512,11 +528,20 @@ function createWorkerHarness(
 					type?: string;
 					focused?: boolean;
 					url?: string | string[];
+					left?: number;
+					top?: number;
 					width?: number;
 					height?: number;
 				} = {},
 			) {
 				windowCreateCalls.push({...properties});
+				if (
+					options.rejectWindowBounds &&
+					(properties.left !== undefined || properties.top !== undefined)
+				) {
+					throw new Error('Invalid value for bounds');
+				}
+
 				const id = nextWindowId++;
 				const win: MockWindow = {
 					id,
@@ -1292,6 +1317,70 @@ test('RESTORE_GROUP opens a new window when the current window has other tabs', 
 		true,
 		'the temporary bootstrap tab is removed after a successful restore',
 	);
+});
+
+test('RESTORE_GROUP restores saved bounds only when the preference is enabled', async () => {
+	const state = stateWithSession({
+		restoreTarget: 'always-new-window',
+		restoreWindowBounds: true,
+	});
+	state.groups[0].windowBounds = {left: 80, top: 60, width: 1200, height: 800};
+	const harness = createWorkerHarness(state);
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.windowCreateCalls[0].left, 80);
+	assert.equal(harness.windowCreateCalls[0].top, 60);
+	assert.equal(harness.windowCreateCalls[0].width, 1200);
+	assert.equal(harness.windowCreateCalls[0].height, 800);
+});
+
+test('saving a window stores its bounds on the session', async () => {
+	const harness = createWorkerHarness(stateWithSession({closeOnSave: false}), [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'https://saved.example/',
+			title: 'Saved page',
+		},
+	]);
+	const saved = await harness.sendMessage({type: 'SAVE_TABS', scope: 'window'});
+	assert.deepEqual(
+		harness.state.groups.find((group) => group.id === saved.groupId)
+			?.windowBounds,
+		{
+			left: 120,
+			top: 80,
+			width: 1280,
+			height: 900,
+		},
+	);
+});
+
+test('RESTORE_GROUP retries without saved bounds when the browser rejects them', async () => {
+	const state = stateWithSession({
+		restoreTarget: 'always-new-window',
+		restoreWindowBounds: true,
+	});
+	state.groups[0].windowBounds = {
+		left: -5000,
+		top: 70,
+		width: 1000,
+		height: 700,
+	};
+	const harness = createWorkerHarness(state, [], {rejectWindowBounds: true});
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.windowCreateCalls.length, 2);
+	assert.equal(harness.windowCreateCalls[0].left, -5000);
+	assert.equal(harness.windowCreateCalls[1].left, undefined);
 });
 
 test('single-tab restore can remain in the background or switch based on its setting', async () => {

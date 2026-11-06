@@ -17,7 +17,7 @@ Data stays in local extension storage within your browser profile.
 
 | Storage key                                                                | Contents                                                                                                                                   |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tablodge.state`                                                           | Saved sessions, titles, URLs, notes, pinned state, tab groups, split view pairs, folders, bookmarks, columns, settings, and excluded sites |
+| `tablodge.state`                                                           | Saved sessions, titles, URLs, notes, pinned state, tab groups, split view pairs, saved window size and position, folders, bookmarks, columns, settings, and excluded sites |
 | `uiTheme`, `uiAccent`                                                      | Your system, light, or dark theme choice and your accent color (a preset name, `browser`, or a hex color)                                                                             |
 | `tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta` | Snapshots of open windows and flags used to detect a possible browser crash                                                                |
 | `tablodge.backups`                                                         | Automatic, manual, and safety backups of sessions, bookmarks, and settings                                                                 |

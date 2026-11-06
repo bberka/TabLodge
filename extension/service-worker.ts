@@ -468,6 +468,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	saveDuplicateTitle: 'existing',
 	restoreDuplicateHandling: 'skip',
 	restoreTarget: 'new-window-unless-only-tab',
+	restoreWindowBounds: false,
 	restoreMode: 'keep',
 	singleTabBehavior: 'stay',
 	unloadRestoredTabs: false,
@@ -1365,6 +1366,22 @@ function normalizeGroup(
 		...(lastOpenedAt > 0 && {lastOpenedAt}),
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
 		sourceWindowId: isInteger(raw.sourceWindowId) ? raw.sourceWindowId : null,
+		...(isRecord(raw.windowBounds) &&
+			[
+				raw.windowBounds.left,
+				raw.windowBounds.top,
+				raw.windowBounds.width,
+				raw.windowBounds.height,
+			].every((value) => Number.isFinite(value)) &&
+			Number(raw.windowBounds.width) > 0 &&
+			Number(raw.windowBounds.height) > 0 && {
+				windowBounds: {
+					left: Number(raw.windowBounds.left),
+					top: Number(raw.windowBounds.top),
+					width: Number(raw.windowBounds.width),
+					height: Number(raw.windowBounds.height),
+				},
+			}),
 		tabs,
 	};
 }
@@ -1497,6 +1514,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.restoreTarget
 			: 'new-window-unless-only-tab',
+		restoreWindowBounds: raw.restoreWindowBounds === true,
 		restoreMode: isOneOf(['keep', 'remove'], raw.restoreMode)
 			? raw.restoreMode
 			: 'keep',
@@ -2218,6 +2236,17 @@ async function captureTabs(
 					updatedAt: timestamp,
 					sourceWindowName: cleanText(window.title, '', 180),
 					sourceWindowId: window.id,
+					...(Number.isFinite(window.left) &&
+						Number.isFinite(window.top) &&
+						Number.isFinite(window.width) &&
+						Number.isFinite(window.height) && {
+							windowBounds: {
+								left: window.left!,
+								top: window.top!,
+								width: window.width!,
+								height: window.height!,
+							},
+						}),
 					tabs: captured,
 				}
 			: {id: null, tabs: [], skipped, rejectedTabIds};
@@ -3024,16 +3053,39 @@ function findGroup(store: Store, groupId: string) {
 /**
 A new window for a restore; its starting new-tab page is the bootstrap tab, removed once the restored tabs are open.
 */
-async function createRestoreWindow(): Promise<{
+async function createRestoreWindow(bounds?: Session['windowBounds']): Promise<{
 	id: number | undefined;
 	bootstrapTabId: number | null;
 }> {
-	const created = await chrome.windows.create({
+	const properties: chrome.windows.CreateData = {
 		url: 'chrome://newtab/',
 		focused: true,
 		type: 'normal',
 		incognito: privateContext,
-	});
+		...(bounds && {
+			left: bounds.left,
+			top: bounds.top,
+			width: bounds.width,
+			height: bounds.height,
+		}),
+	};
+	let created: chrome.windows.Window | undefined;
+	try {
+		created = await chrome.windows.create(properties);
+	} catch (error) {
+		if (!bounds) {
+			throw error;
+		}
+
+		// Chromium rejects bounds that are mostly outside the visible desktop on some displays.
+		created = await chrome.windows.create({
+			url: 'chrome://newtab/',
+			focused: true,
+			type: 'normal',
+			incognito: privateContext,
+		});
+	}
+
 	if (!created?.id) {
 		throw new Error('The browser did not return the restored window.');
 	}
@@ -3046,6 +3098,7 @@ async function chooseRestoreWindow(
 	settings: Settings,
 	senderTab: chrome.tabs.Tab | undefined,
 	restoreTarget: RestoreTarget = settings.restoreTarget,
+	bounds?: Session['windowBounds'],
 ): Promise<{id: number | undefined; bootstrapTabId: number | null}> {
 	const id = await currentWindowId(senderTab);
 	let needsNewWindow = restoreTarget === 'always-new-window';
@@ -3060,7 +3113,7 @@ async function chooseRestoreWindow(
 
 	// Without a new window, id is an integer: otherwise needsNewWindow was set above.
 	return needsNewWindow
-		? createRestoreWindow()
+		? createRestoreWindow(bounds)
 		: {id: id!, bootstrapTabId: null};
 }
 
@@ -3198,6 +3251,7 @@ async function restoreRecords(
 		The saved tab to make active (default: the first one that opened).
 		*/
 		activeSavedId?: string;
+		windowBounds?: Session['windowBounds'];
 	} = {},
 ): Promise<RestoreRecordsResult> {
 	// Restoring a single tab of a pair passes one record, so pairSplits leaves it a plain tab.
@@ -3222,6 +3276,7 @@ async function restoreRecords(
 			settings,
 			senderTab,
 			options.restoreTarget || settings.restoreTarget,
+			settings.restoreWindowBounds ? options.windowBounds : undefined,
 		));
 	const targetTabs = await chrome.tabs.query({windowId: target.id});
 	const existing = new Set(
@@ -3523,6 +3578,7 @@ async function restoreGroup(
 				...(intoWindow && {
 					target: {id: options.intoWindowId, bootstrapTabId: null},
 				}),
+				...(!intoWindow && {windowBounds: group.windowBounds}),
 			},
 		);
 		if (result.opened.length === 0) {
