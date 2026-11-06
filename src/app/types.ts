@@ -99,6 +99,7 @@ export type Settings = {
 	saveDuplicateTitle: TitlePolicy;
 	restoreDuplicateHandling: 'skip' | 'open';
 	restoreTarget: RestoreTarget;
+	restoreWindowBounds: boolean;
 	restoreMode: RestoreMode;
 	singleTabBehavior: 'stay' | 'switch';
 	unloadRestoredTabs: boolean;
@@ -313,7 +314,18 @@ export type Session = {
 	lastOpenedAt?: number;
 	sourceWindowName: string;
 	sourceWindowId: number | null;
+	/**
+	Window geometry captured when this session was saved from a whole window.
+	*/
+	windowBounds?: WindowBounds;
 	tabs: SavedTab[];
+};
+
+export type WindowBounds = {
+	left: number;
+	top: number;
+	width: number;
+	height: number;
 };
 
 export type Folder = {

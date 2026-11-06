@@ -559,6 +559,12 @@ const settingsGroups: Array<{
 				],
 			},
 			{
+				name: 'restoreWindowBounds',
+				label: 'Restore saved window size and position',
+				help: 'When restoring a session in a new window, use the size and screen position recorded when you saved the whole window. This is off by default. Your browser or window manager may override the saved bounds, especially with tiling window managers.',
+				type: 'switch',
+			},
+			{
 				name: 'restoreMode',
 				label: 'After restoring a session',
 				help: 'Choose whether saved tabs stay in the session or are removed once they are restored.',
