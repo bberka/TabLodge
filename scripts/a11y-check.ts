@@ -3932,6 +3932,65 @@ async function main() {
 
 				await page.close();
 			});
+
+			await check(
+				`share all sessions from the Sessions menu (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					const currentSessions = await readDevStore(page);
+					const linkCount = currentSessions.groups.reduce(
+						(count, group) => count + group.tabs.length,
+						0,
+					);
+					const linksLabel = linkCount === 1 ? 'link' : 'links';
+					const groupsLabel =
+						currentSessions.groups.length === 1 ? 'group' : 'groups';
+					const trigger = page.getByRole('button', {
+						name: 'Import and back up sessions',
+					});
+					await openMenuItemByKeyboard(page, trigger, 'Share all sessions');
+					const dialog = page.getByRole('dialog');
+					await dialog.waitFor();
+					await dialog
+						.getByText(
+							`${linkCount} ${linksLabel} in ${currentSessions.groups.length} ${groupsLabel}`,
+						)
+						.waitFor();
+					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+					for (const [width, height] of EVIDENCE_VIEWPORTS) {
+						await page.setViewportSize({width, height});
+						if (width === 440) {
+							await withMobileEmulation(
+								page,
+								{width, height},
+								async (device) => {
+									const {data} = await device.send('Page.captureScreenshot', {
+										format: 'png',
+										captureBeyondViewport: false,
+									});
+									await writeFile(
+										fromRoot(
+											`.dev/evidence/share-all-sessions-${width}x${height}-dsf3-${theme}.png`,
+										),
+										Buffer.from(data, 'base64'),
+									);
+								},
+							);
+						} else {
+							await page.screenshot({
+								animations: 'disabled',
+								path: fromRoot(
+									`.dev/evidence/share-all-sessions-${width}x${height}-${theme}.png`,
+								),
+							});
+						}
+					}
+
+					await page.keyboard.press('Escape');
+					await page.close();
+				},
+			);
 		}
 
 		await check('dialogs hand focus back to what opened them', async () => {
