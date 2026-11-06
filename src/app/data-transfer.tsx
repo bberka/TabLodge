@@ -31,6 +31,7 @@ import {
 	Link2,
 	PanelsTopLeft,
 	Upload,
+	X,
 } from 'lucide-react';
 import {
 	Badge,
@@ -544,6 +545,7 @@ export function BackupDialog({
 						variant="outline"
 						onClick={() => onOpenChange(false)}
 					>
+						<X aria-hidden="true" />
 						Cancel
 					</Button>
 					<Button
@@ -916,6 +918,7 @@ export function ShareDialog({
 						variant="outline"
 						onClick={() => onOpenChange(false)}
 					>
+						<X aria-hidden="true" />
 						Cancel
 					</Button>
 					<Button
@@ -1478,6 +1481,7 @@ export function ImportDialog({
 								variant="outline"
 								onClick={() => onOpenChange(false)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 						</DialogFooter>
@@ -1536,6 +1540,7 @@ export function ImportDialog({
 								disabled={busy}
 								onClick={() => onOpenChange(false)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button
@@ -1545,6 +1550,7 @@ export function ImportDialog({
 								data-autofocus=""
 								onClick={() => void runFullImport()}
 							>
+								<FileUp aria-hidden="true" />
 								{busy ? 'Importing' : 'Replace everything'}
 							</Button>
 						</DialogFooter>
@@ -1821,6 +1827,7 @@ export function ImportDialog({
 									disabled={busy}
 									onClick={() => onOpenChange(false)}
 								>
+									<X aria-hidden="true" />
 									Cancel
 								</Button>
 								<Button
@@ -1838,6 +1845,7 @@ export function ImportDialog({
 									data-autofocus=""
 									onClick={() => void runImport()}
 								>
+									<FileUp aria-hidden="true" />
 									{busy ? 'Importing' : importLabel}
 								</Button>
 							</DialogFooter>

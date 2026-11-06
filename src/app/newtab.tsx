@@ -2539,9 +2539,11 @@ function NewTab() {
 									variant="outline"
 									onClick={() => setDialog(null)}
 								>
+									<X aria-hidden="true" />
 									Cancel
 								</Button>
 								<Button type="submit" disabled={busy === 'bookmark-save'}>
+									<Save aria-hidden="true" />
 									{bookmarkEdit?.columnId === NEW_COLUMN
 										? 'Create column and save'
 										: bookmarkEdit?.id
@@ -2633,6 +2635,7 @@ function NewTab() {
 								variant="outline"
 								onClick={() => setDialog(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button
@@ -2642,6 +2645,7 @@ function NewTab() {
 									pastedLinks.filter((link) => link.include).length === 0
 								}
 							>
+								<ListPlus aria-hidden="true" />
 								Add{' '}
 								{plural(
 									pastedLinks.filter((link) => link.include).length,
@@ -2694,9 +2698,15 @@ function NewTab() {
 								variant="outline"
 								onClick={() => setDialog(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit">
+								{columnEdit?.id ? (
+									<Save aria-hidden="true" />
+								) : (
+									<FolderPlus aria-hidden="true" />
+								)}
 								{columnEdit?.id ? 'Save changes' : 'Add column'}
 							</Button>
 						</DialogFooter>
@@ -2786,6 +2796,7 @@ function NewTab() {
 								variant="outline"
 								onClick={() => setDialog(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit" variant="destructive">
@@ -2830,6 +2841,7 @@ function NewTab() {
 									setBookmarkToDelete(null);
 								}}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit" variant="destructive">
@@ -2897,9 +2909,11 @@ function NewTab() {
 								variant="outline"
 								onClick={() => setDialog(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit" disabled={busy === 'bookmark-batch'}>
+								<ArrowRight aria-hidden="true" />
 								{moveBookmark?.bookmarkIds.length === 1
 									? 'Move bookmark'
 									: 'Move bookmarks'}

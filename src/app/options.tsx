@@ -2444,6 +2444,7 @@ function Options() {
 								variant="outline"
 								onClick={() => setSiteDialog(false)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit" disabled={!siteValid || siteBusy}>

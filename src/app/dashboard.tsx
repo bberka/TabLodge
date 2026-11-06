@@ -2121,9 +2121,13 @@ export function SessionManager({
 								variant="outline"
 								onClick={() => setEditingTab(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
-							<Button type="submit">Save</Button>
+							<Button type="submit">
+								<Save aria-hidden="true" />
+								Save
+							</Button>
 						</DialogFooter>
 					</form>
 				</DialogContent>
@@ -2172,9 +2176,11 @@ export function SessionManager({
 								variant="outline"
 								onClick={() => setDialog(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit" disabled={savingBookmark}>
+								<BookmarkPlus aria-hidden="true" />
 								Save bookmark
 							</Button>
 						</DialogFooter>
@@ -2219,9 +2225,11 @@ export function SessionManager({
 								variant="outline"
 								onClick={() => setDialog(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit" disabled={savingBookmark}>
+								<BookmarkPlus aria-hidden="true" />
 								Bookmark {bookmarkSelectedTabs.length} tabs
 							</Button>
 						</DialogFooter>
@@ -2326,9 +2334,13 @@ export function SessionManager({
 									variant="outline"
 									onClick={() => setDialog(null)}
 								>
+									<X aria-hidden="true" />
 									Cancel
 								</Button>
-								<Button type="submit">Save changes</Button>
+								<Button type="submit">
+									<Save aria-hidden="true" />
+									Save changes
+								</Button>
 							</div>
 						</DialogFooter>
 					</form>
@@ -2377,9 +2389,15 @@ export function SessionManager({
 								variant="outline"
 								onClick={() => setDialog(null)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button type="submit">
+								{folderDialog?.mode === 'rename' ? (
+									<Save aria-hidden="true" />
+								) : (
+									<FolderPlus aria-hidden="true" />
+								)}
 								{folderDialog?.mode === 'rename'
 									? 'Save changes'
 									: folderDialog?.moveGroupId

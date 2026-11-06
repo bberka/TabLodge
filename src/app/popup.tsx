@@ -24,6 +24,7 @@ import {
 	PanelRightOpen,
 	Pin,
 	AppWindow,
+	X,
 } from 'lucide-react';
 import {
 	Button,
@@ -793,12 +794,14 @@ function Popup() {
 								variant="outline"
 								onClick={() => setBookmarkOpen(false)}
 							>
+								<X aria-hidden="true" />
 								Cancel
 							</Button>
 							<Button
 								type="submit"
 								disabled={!bookmarkTab || busy === 'bookmark-save'}
 							>
+								<BookmarkPlus aria-hidden="true" />
 								{busy === 'bookmark-save' ? 'Saving' : 'Save bookmark'}
 							</Button>
 						</DialogFooter>
