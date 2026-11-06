@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {Search} from 'lucide-react';
+import {RotateCcw, Search, Trash2, X} from 'lucide-react';
 import {Button} from '../components/ui/button';
 import {Input} from '../components/ui/input';
 import {
@@ -228,12 +228,21 @@ export function ConfirmationDialog({
 				</AlertDialogHeader>
 				{children}
 				<AlertDialogFooter>
-					<AlertDialogCancel>Cancel</AlertDialogCancel>
+					<AlertDialogCancel>
+						<X aria-hidden="true" />
+						Cancel
+					</AlertDialogCancel>
 					<Button
 						variant="destructive"
 						disabled={busy || confirmDisabled}
 						onClick={onConfirm}
 					>
+						{typeof confirmLabel === 'string' &&
+							(/delete|clear|empty|erase/i.test(confirmLabel) ? (
+								<Trash2 aria-hidden="true" />
+							) : /restore/i.test(confirmLabel) ? (
+								<RotateCcw aria-hidden="true" />
+							) : null)}
 						{confirmLabel}
 					</Button>
 				</AlertDialogFooter>

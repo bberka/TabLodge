@@ -6,6 +6,7 @@ import {
 	type ReactNode,
 	type SyntheticEvent,
 } from 'react';
+import {Save, X} from 'lucide-react';
 import {
 	Button,
 	Dialog,
@@ -93,9 +94,11 @@ export function NameSessionForm({
 	const buttons = (
 		<>
 			<Button type="button" variant="outline" onClick={onCancel}>
+				<X aria-hidden="true" />
 				Cancel
 			</Button>
 			<Button type="submit" disabled={busy}>
+				{submitLabel === 'Save' && <Save aria-hidden="true" />}
 				{submitLabel}
 			</Button>
 		</>
