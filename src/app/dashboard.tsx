@@ -1679,6 +1679,12 @@ export function SessionManager({
 									<Download className="h-4 w-4" />
 									Back up sessions
 								</DropdownMenuItem>
+								<DropdownMenuItem
+									onSelect={() => openShare({title: 'Shared sessions', groups})}
+								>
+									<Share2 className="h-4 w-4" />
+									Share all sessions
+								</DropdownMenuItem>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem
 									onSelect={() =>
