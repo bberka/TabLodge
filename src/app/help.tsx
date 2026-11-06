@@ -223,6 +223,12 @@ function Help() {
 						'settings restore keep remove saved tabs successful restore destination current window new window duplicate urls already open skip',
 				},
 				{
+					title: 'Restore saved window size and position',
+					body: 'When enabled, sessions opened in a new window use the size and position recorded when you saved the whole window. Your browser or window manager may override those bounds, especially with tiling window managers.',
+					searchText:
+						'restore saved window size position bounds new window tiling window manager monitors',
+				},
+				{
 					title: 'Switch workspaces',
 					body: 'Choose Switch to this session in the menu of a session on the dashboard, or the switch button next to a session in the popup or side panel, to save the tabs in this window as a new session and open that session in their place. Pinned tabs and pages that cannot be saved stay open. The item is off while this window has no tab it could save.',
 					searchText:
