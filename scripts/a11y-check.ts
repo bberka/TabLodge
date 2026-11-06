@@ -709,6 +709,43 @@ async function main() {
 		const seedPage = await openPage(context, extensionId, 'newtab');
 		await seed(seedPage);
 		await seedPage.close();
+		await check(
+			'settings search stays active when navigating categories',
+			async () => {
+				for (const theme of THEMES) {
+					const page = await openPage(context, extensionId, 'options');
+					try {
+						await setTheme(page, theme);
+						const search = page.getByRole('searchbox', {
+							name: 'Search settings',
+						});
+						await search.fill('saving');
+						const savingCategory = page.getByRole('link', {
+							name: 'Saving',
+							exact: true,
+						});
+						await savingCategory.waitFor();
+						await savingCategory.focus();
+						await page.keyboard.press('Enter');
+						assert.equal(await search.inputValue(), 'saving');
+						assert.match(page.url(), /[&?]q=saving/);
+						assert.match(page.url(), /#settings-when-saving$/);
+						assert.equal(
+							await page
+								.locator('[data-setting-row="saveDuplicateHandling"]')
+								.count(),
+							1,
+						);
+						await captureEvidence(
+							page,
+							`settings-search-navigation-${theme}.png`,
+						);
+					} finally {
+						await page.close();
+					}
+				}
+			},
+		);
 
 		for (const theme of THEMES) {
 			await check(

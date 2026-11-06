@@ -1741,22 +1741,6 @@ function Options() {
 									? 'bg-primary/10 font-medium text-primary'
 									: 'text-muted-foreground hover:bg-muted hover:text-foreground',
 							)}
-							onClick={(event) => {
-								if (!searching) {
-									return;
-								}
-
-								event.preventDefault();
-								updateQuery('');
-								requestAnimationFrame(() => {
-									document.querySelector(`#${id}`)?.scrollIntoView();
-									history.replaceState(
-										null,
-										'',
-										`${location.pathname}${location.search}#${id}`,
-									);
-								});
-							}}
 						>
 							<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
 							{label}
