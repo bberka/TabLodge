@@ -3007,9 +3007,11 @@ async function main() {
 							name: 'One column',
 							exact: true,
 						});
-						await oneColumnMode.focus();
-						await page.keyboard.press('Space');
-						assert.equal(await oneColumnMode.isChecked(), true);
+						await oneColumnMode.press('Space');
+						await until(
+							() => oneColumnMode.isChecked(),
+							'one column import mode to be selected',
+						);
 						const columnPicker = dialog.getByRole('combobox', {
 							name: 'Column for every imported bookmark',
 						});

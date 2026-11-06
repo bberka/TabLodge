@@ -202,10 +202,13 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 	}, []);
 	return (
 		<>
-			<p className="mb-4 text-sm text-muted-foreground">
-				Open the private dashboard from the toolbar popup or the Open dashboard
-				shortcut. The browser does not replace its private new tab page.
-			</p>
+			{incognitoAllowed !== false && (
+				<p className="mb-4 text-sm text-muted-foreground">
+					Open the private dashboard from the toolbar popup or the Open
+					dashboard shortcut. The browser does not replace its private new tab
+					page.
+				</p>
+			)}
 			{error && <p role="alert">{error}</p>}
 			{incognitoAllowed === undefined && (
 				<p role="status" className="sr-only mb-4 text-sm text-muted-foreground">
@@ -214,15 +217,14 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 			)}
 			{incognitoAllowed === false && (
 				<p role="status" className="mb-4 text-sm text-muted-foreground">
-					Private storage settings are disabled until Allow in Incognito is
-					enabled in your browser’s extension settings.
+					Enable Allow in Incognito in your browser’s extension settings to
+					configure private storage.
 				</p>
 			)}
-			{config && (
+			{config && incognitoAllowed === true && (
 				<PrivateStorageForm
 					key={`${config.mode}:${config.configured}`}
 					config={config}
-					disabled={incognitoAllowed !== true}
 					showContinue={false}
 					onSaved={(next) => {
 						setConfig(next);
