@@ -4236,7 +4236,7 @@ for (const [key, fallback] of [
 	['pasteLinkToBookmark', true],
 	['removeTrackingParameters', false],
 	['showSaveWindowButton', true],
-	['showTrashBinButton', true],
+	['showTrashBinButton', false],
 	['stretchBookmarkColumns', true],
 	['limitBookmarksPerColumn', false],
 ] as const) {

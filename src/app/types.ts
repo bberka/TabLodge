@@ -163,7 +163,7 @@ export type Settings = {
 	*/
 	showSaveWindowButton: boolean;
 	/**
-	Show the Trash bin shortcut in the dashboard header (default on).
+	Show the Trash bin shortcut in the dashboard header (default off).
 	*/
 	showTrashBinButton: boolean;
 	/**
