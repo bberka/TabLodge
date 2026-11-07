@@ -5733,6 +5733,7 @@ async function eraseData(
 // browser opens as new tabs are sent straight on to the browser's own page (or a blank / custom page).
 const NEW_TAB_URL = /^(?:chrome|brave|edge):\/\/(?:newtab|new-tab-page)\/?$/;
 const CLAIMS_KEY = 'newTabClaims';
+const claimsMutate = serialQueue();
 
 async function readClaims(): Promise<Record<string, number>> {
 	try {
@@ -5789,17 +5790,24 @@ async function handOffNewTab(
 	}
 
 	// `claims` counts the redirects already made for a tab; a tab the browser sends back gets a blank page.
-	const claims = await readClaims();
-	const done = claims[tabId];
-	if ((done === undefined && !claim) || (done ?? 0) >= 3) {
+	const done = await claimsMutate(async () => {
+		const claims = await readClaims();
+		const previous = claims[tabId];
+		if ((previous === undefined && !claim) || (previous ?? 0) >= 3) {
+			return null;
+		}
+
+		claims[tabId] = (previous ?? 0) + 1;
+		await writeClaims(claims);
+		return previous ?? 0;
+	});
+	if (done === null) {
 		return false;
 	}
 
-	claims[tabId] = (done ?? 0) + 1;
-	await writeClaims(claims);
 	try {
 		await chrome.tabs.update(tabId, {
-			url: newTabTarget(settings, done ?? 0, brave || looksLikeBrave()),
+			url: newTabTarget(settings, done, brave || looksLikeBrave()),
 		});
 		return true;
 	} catch {
@@ -5813,9 +5821,12 @@ chrome.tabs.onCreated?.addListener((tab) => {
 	}
 });
 chrome.tabs.onRemoved?.addListener((tabId) => {
-	void readClaims().then((claims) => {
+	void claimsMutate(async () => {
+		const claims = await readClaims();
 		const {[String(tabId)]: gone, ...rest} = claims;
-		return gone === undefined ? undefined : writeClaims(rest);
+		if (gone !== undefined) {
+			await writeClaims(rest);
+		}
 	});
 });
 
