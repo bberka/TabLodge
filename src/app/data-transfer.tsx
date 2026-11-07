@@ -1010,10 +1010,12 @@ export function ImportDialog({
 	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
 	const fileRef = useRef<HTMLInputElement>(null);
 	const importButtonRef = useRef<HTMLButtonElement>(null);
+	const readGenerationRef = useRef(0);
 	const columns = state?.bookmarkColumns ?? [];
 
 	// Reset on open (never on close) so the closing animation keeps the last content.
 	useEffect(() => {
+		readGenerationRef.current += 1;
 		if (!open) {
 			return;
 		}
@@ -1090,18 +1092,29 @@ export function ImportDialog({
 			return;
 		}
 
+		const generation = ++readGenerationRef.current;
 		setError('');
 		if (file.size > MAX_IMPORT_BYTES) {
+			setReading(false);
 			setError(`“${file.name}” is larger than 45 MB.`);
 			return;
 		}
 
 		setReading(true);
 		try {
-			if (looksLikeZip(new Uint8Array(await file.slice(0, 4).arrayBuffer()))) {
+			const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
+			if (looksLikeZip(header)) {
 				const contents = readFullBackup(
 					new Uint8Array(await file.arrayBuffer()),
 				);
+				if (generation !== readGenerationRef.current) {
+					return;
+				}
+
 				if (!contents) {
 					setError(
 						`“${file.name}” is a ZIP file, but not a ${PROJECT.name} full backup.`,
@@ -1121,23 +1134,36 @@ export function ImportDialog({
 				return;
 			}
 
-			const result = parseImportFile(await file.text(), file.name);
+			const text = await file.text();
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
+			const result = parseImportFile(text, file.name);
 			setParsed(result);
 			setSource({type: 'file', name: file.name});
 		} catch (reason) {
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
 			setError(
 				reason instanceof ImportFormatError || reason instanceof FullBackupError
 					? reason.message
 					: `Could not read “${file.name}”.`,
 			);
 		} finally {
-			setReading(false);
+			if (generation === readGenerationRef.current) {
+				setReading(false);
+			}
 		}
 	}
 
 	async function readBrowserBookmarks() {
+		const generation = ++readGenerationRef.current;
 		setError('');
 		if (!chrome.bookmarks?.getTree) {
+			setReading(false);
 			setError(
 				'This browser does not give extensions access to its bookmarks.',
 			);
@@ -1147,6 +1173,10 @@ export function ImportDialog({
 		setReading(true);
 		try {
 			const result = parseBookmarkTree(await chrome.bookmarks.getTree());
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
 			if (result.bookmarks.length === 0) {
 				setError('This browser has no bookmarks with web links.');
 				return;
@@ -1156,11 +1186,17 @@ export function ImportDialog({
 			setSource({type: 'browser'});
 			setKind('bookmarks');
 		} catch (reason) {
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
 			setError(
 				String(messageOf(reason) || 'Could not read this browser’s bookmarks.'),
 			);
 		} finally {
-			setReading(false);
+			if (generation === readGenerationRef.current) {
+				setReading(false);
+			}
 		}
 	}
 
