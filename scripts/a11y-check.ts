@@ -1160,6 +1160,29 @@ async function main() {
 					const menu = options.getByRole('dialog', {
 						name: 'Quick actions on session cards',
 					});
+					await menu.getByRole('button', {name: 'Clear all'}).focus();
+					await options.keyboard.press('Enter');
+					await menu.getByRole('button', {name: 'Add Archive'}).waitFor();
+					await captureEvidence(
+						options,
+						`clear-quick-actions-${theme}.png`,
+						menu,
+					);
+					assert.equal(
+						await options.locator('body').evaluate(
+							(node: {
+								ownerDocument: {
+									activeElement: {
+										getAttribute(name: string): string | null;
+									} | null;
+								};
+							}) =>
+								node.ownerDocument.activeElement?.getAttribute('aria-label'),
+						),
+						'Find quick actions on session cards',
+						'clearing quick actions returns focus to the search field',
+					);
+					await menu.getByRole('button', {name: 'Add Archive'}).click();
 					await selectQuickActions(
 						options,
 						menu,

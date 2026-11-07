@@ -2064,6 +2064,7 @@ async function captureTabs(
 	useNativeGroupTitle = false,
 	requestedName = '',
 	windowNumber = 0,
+	saveWindowBounds = false,
 ): Promise<CaptureResult | null> {
 	const timestamp = Date.now();
 	const nativeGroups = await getWindowGroups(window.id);
@@ -2236,7 +2237,8 @@ async function captureTabs(
 					updatedAt: timestamp,
 					sourceWindowName: cleanText(window.title, '', 180),
 					sourceWindowId: window.id,
-					...(Number.isFinite(window.left) &&
+					...(saveWindowBounds &&
+						Number.isFinite(window.left) &&
 						Number.isFinite(window.top) &&
 						Number.isFinite(window.width) &&
 						Number.isFinite(window.height) && {
@@ -2560,6 +2562,10 @@ async function saveTabs(
 					? `${cleanText(options.groupName, '', 100)} (${windowIndex + 1}/${windows.length})`
 					: options.groupName,
 				scope === 'all-windows' ? windowIndex + 1 : 0,
+				!Array.isArray(options.tabIds) &&
+					(scope === 'window' ||
+						scope === 'all-windows' ||
+						(scope === 'selected-or-window' && inScope === win.tabs)),
 			);
 			// A capture with tabs is always a stored Session.
 			if (group && 'error' in group && group.error) {
