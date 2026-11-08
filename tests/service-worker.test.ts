@@ -1649,6 +1649,24 @@ test('new tab hand-off only happens for browser-opened new tabs while TabLodge n
 	assert.equal(on.tabs[0].url, '');
 });
 
+test('concurrent new tabs retain separate hand-off claims', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({newTabEnabled: false}),
+		[
+			{id: 7, windowId: 10, index: 0, active: true, url: ''},
+			{id: 8, windowId: 10, index: 1, active: false, url: ''},
+		],
+	);
+	await Promise.all([
+		harness.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'}),
+		harness.fire('tabCreated', {id: 8, pendingUrl: 'chrome://newtab/'}),
+	]);
+	for (const tab of harness.tabs) {
+		const result = await harness.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab});
+		assert.equal(result.handedOff, true, `tab ${tab.id} retains its claim`);
+	}
+});
+
 test('new tab fallback settings normalize and choose the target', async () => {
 	const read = async (settings: Record<string, unknown>) =>
 		(
