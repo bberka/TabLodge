@@ -1361,6 +1361,28 @@ test('saving a window stores its bounds on the session', async () => {
 	);
 });
 
+test('saving a single tab does not store window bounds', async () => {
+	const harness = createWorkerHarness(stateWithSession({closeOnSave: false}), [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'https://saved.example/',
+			title: 'Saved page',
+		},
+	]);
+	const saved = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'current-tab',
+	});
+	assert.equal(
+		harness.state.groups.find((group) => group.id === saved.groupId)
+			?.windowBounds,
+		undefined,
+	);
+});
+
 test('RESTORE_GROUP retries without saved bounds when the browser rejects them', async () => {
 	const state = stateWithSession({
 		restoreTarget: 'always-new-window',
@@ -1625,6 +1647,24 @@ test('new tab hand-off only happens for browser-opened new tabs while TabLodge n
 	]);
 	await on.listeners.tabCreated({id: 8, pendingUrl: 'chrome://newtab/'});
 	assert.equal(on.tabs[0].url, '');
+});
+
+test('concurrent new tabs retain separate hand-off claims', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({newTabEnabled: false}),
+		[
+			{id: 7, windowId: 10, index: 0, active: true, url: ''},
+			{id: 8, windowId: 10, index: 1, active: false, url: ''},
+		],
+	);
+	await Promise.all([
+		harness.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'}),
+		harness.fire('tabCreated', {id: 8, pendingUrl: 'chrome://newtab/'}),
+	]);
+	for (const tab of harness.tabs) {
+		const result = await harness.sendMessage({type: 'HANDOFF_NEW_TAB'}, {tab});
+		assert.equal(result.handedOff, true, `tab ${tab.id} retains its claim`);
+	}
 });
 
 test('new tab fallback settings normalize and choose the target', async () => {

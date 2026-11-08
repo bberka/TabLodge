@@ -1160,6 +1160,29 @@ async function main() {
 					const menu = options.getByRole('dialog', {
 						name: 'Quick actions on session cards',
 					});
+					await menu.getByRole('button', {name: 'Clear all'}).focus();
+					await options.keyboard.press('Enter');
+					await menu.getByRole('button', {name: 'Add Archive'}).waitFor();
+					await captureEvidence(
+						options,
+						`clear-quick-actions-${theme}.png`,
+						menu,
+					);
+					assert.equal(
+						await options.locator('body').evaluate(
+							(node: {
+								ownerDocument: {
+									activeElement: {
+										getAttribute(name: string): string | null;
+									} | null;
+								};
+							}) =>
+								node.ownerDocument.activeElement?.getAttribute('aria-label'),
+						),
+						'Find quick actions on session cards',
+						'clearing quick actions returns focus to the search field',
+					);
+					await menu.getByRole('button', {name: 'Add Archive'}).click();
 					await selectQuickActions(
 						options,
 						menu,
@@ -1891,6 +1914,73 @@ async function main() {
 						bookmarkColumnPageSize: 16,
 					};
 					await writeDevStore(page, reset);
+					await page.close();
+				},
+			);
+
+			await check(
+				`changing import scope cancels a pending read (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					await page.getByRole('button', {name: 'Import', exact: true}).click();
+					const dialog = page.getByRole('dialog');
+					await dialog
+						.getByRole('radio', {name: 'Sessions'})
+						.check({force: true});
+					await page.evaluate(() => {
+						const file = new File(['https://example.com'], 'pending.txt');
+						Object.defineProperty(file, 'slice', {
+							value: () => ({
+								arrayBuffer: () =>
+									new Promise<ArrayBuffer>((resolve) => {
+										Object.assign(globalThis, {
+											finishImportRead: () => resolve(new ArrayBuffer(4)),
+										});
+									}),
+							}),
+						});
+						const browser = globalThis as typeof globalThis & {
+							DataTransfer: new () => {
+								items: {add(file: File): void};
+								files: unknown;
+							};
+							document: {
+								querySelector(selector: string): {
+									files: unknown;
+									dispatchEvent(event: Event): boolean;
+								};
+							};
+						};
+						const transfer = new browser.DataTransfer();
+						transfer.items.add(file);
+						const input = browser.document.querySelector(
+							':scope [role="dialog"] input[type="file"]',
+						);
+						input.files = transfer.files;
+						input.dispatchEvent(new Event('change', {bubbles: true}));
+					});
+					const everything = dialog.getByRole('radio', {name: 'Everything'});
+					await everything.focus();
+					await page.keyboard.press('Space');
+					await page.evaluate(async () => {
+						(
+							globalThis as typeof globalThis & {finishImportRead(): void}
+						).finishImportRead();
+						const {requestAnimationFrame} = globalThis as typeof globalThis & {
+							requestAnimationFrame(callback: () => void): number;
+						};
+						await new Promise<void>((resolve) => {
+							requestAnimationFrame(() => {
+								requestAnimationFrame(resolve);
+							});
+						});
+					});
+					assert.equal(await dialog.getByText('pending.txt').count(), 0);
+					assert.equal(
+						await dialog.getByRole('button', {name: 'Choose file'}).isEnabled(),
+						true,
+					);
 					await page.close();
 				},
 			);

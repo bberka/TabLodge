@@ -2605,6 +2605,7 @@ function QuickActionsSetting<
 	onChange: (actions: Action[]) => void;
 }) {
 	const [query, setQuery] = useState('');
+	const searchRef = useRef<HTMLInputElement>(null);
 	const hasMatches = options.some(([, actionLabel]) =>
 		actionLabel.toLowerCase().includes(query.toLowerCase()),
 	);
@@ -2634,6 +2635,7 @@ function QuickActionsSetting<
 			<PopoverContent align="end" className="w-80 p-0" aria-label={label}>
 				<div className="border-b border-border p-3">
 					<Input
+						ref={searchRef}
 						autoFocus
 						value={query}
 						placeholder="Find an action"
@@ -2651,7 +2653,10 @@ function QuickActionsSetting<
 							variant="outline"
 							size="sm"
 							className="mt-2 h-9 w-full justify-center"
-							onClick={() => onChange([])}
+							onClick={() => {
+								searchRef.current?.focus();
+								onChange([]);
+							}}
 						>
 							Clear all
 						</Button>
