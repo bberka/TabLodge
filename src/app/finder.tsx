@@ -317,16 +317,35 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 Scrolls the bookmark column into view and rings it briefly.
 */
 function revealColumn(id: string) {
-	const column = document.querySelector<HTMLElement>(
-		`section[data-column-id="${CSS.escape(id)}"]`,
-	);
-	if (!column) {
+	const selector = `section[data-column-id="${CSS.escape(id)}"]`;
+	const reveal = () => {
+		const column = document.querySelector<HTMLElement>(selector);
+		if (!column) {
+			return false;
+		}
+
+		column.scrollIntoView({block: 'center', behavior: scrollBehavior()});
+		column.classList.add('ring-2', 'ring-primary');
+		setTimeout(() => column.classList.remove('ring-2', 'ring-primary'), 1600);
+		return true;
+	};
+
+	if (reveal()) {
 		return;
 	}
 
-	column.scrollIntoView({block: 'center', behavior: scrollBehavior()});
-	column.classList.add('ring-2', 'ring-primary');
-	setTimeout(() => column.classList.remove('ring-2', 'ring-primary'), 1600);
+	// The Focus view renders one column at a time, so open it from the rail first.
+	const railItem = document.querySelector<HTMLElement>(
+		`[data-focus-column="${CSS.escape(id)}"]`,
+	);
+	if (!railItem) {
+		return;
+	}
+
+	railItem.click();
+	requestAnimationFrame(() => {
+		requestAnimationFrame(reveal);
+	});
 }
 
 function ResultList({

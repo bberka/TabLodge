@@ -1726,7 +1726,7 @@ async function main() {
 			);
 
 			await check(
-				`bookmark columns reveal configured batches by keyboard (${theme})`,
+				`bookmark columns cap long lists and scroll by keyboard (${theme})`,
 				async () => {
 					const limitSeedPage = await openPage(context, extensionId, 'newtab');
 					await seedLongBookmarkColumn(limitSeedPage, 65);
@@ -1784,55 +1784,137 @@ async function main() {
 					);
 					const unfiledCards = unfiled.locator('[data-bookmark-id]');
 					await until(
-						async () => (await cards.count()) === 10,
-						'the first ten bookmarks',
+						async () => (await cards.count()) === 65,
+						'all bookmarks in the capped column',
 					);
 					await until(
-						async () => (await unfiledCards.count()) === 10,
-						'the first ten unfiled bookmarks',
+						async () => (await unfiledCards.count()) === 65,
+						'all unfiled bookmarks in the capped column',
 					);
-					const showMore = column.getByRole('button', {
-						name: 'Show 10 more',
-						exact: true,
-					});
-					const showMoreUnfiled = unfiled.getByRole('button', {
-						name: 'Show 10 more',
-						exact: true,
-					});
-					await showMore.waitFor();
-					const showMoreBounds = await showMore.boundingBox();
-					const listBounds = await showMore.locator('..').boundingBox();
-					assert.ok(showMoreBounds);
-					assert.ok(listBounds);
-					assert.ok(
-						Math.abs(showMoreBounds.width - listBounds.width) < 1,
-						'Show more fills the bookmark column width',
+					assert.equal(
+						await column.getByRole('button', {name: /^Show \d+ more$/}).count(),
+						0,
+						'a capped column draws every bookmark instead of asking to load more',
+					);
+					const columnBody = column.locator('[role="region"]');
+					await columnBody.focus();
+					await board.keyboard.press('PageDown');
+					await until(
+						async () =>
+							(await columnBody.evaluate(
+								(element) => (element as {scrollTop: number}).scrollTop,
+							)) > 0,
+						'the capped column to scroll by keyboard',
 					);
 					await board.screenshot({
 						path: `.dev/evidence/bookmark-limit-${theme}.png`,
 					});
-					await showMore.focus();
-					await board.keyboard.press('Enter');
-					await until(
-						async () => (await cards.count()) === 20,
-						'the next ten bookmarks',
-					);
-					await showMoreUnfiled.focus();
-					await board.keyboard.press('Enter');
-					await until(
-						async () => (await unfiledCards.count()) === 20,
-						'the next ten unfiled bookmarks',
-					);
-					assert.equal(
-						await board.locator(':focus').count(),
-						1,
-						'focus stays on the Show more button after it updates',
-					);
 					await board.close();
 
 					const resetPage = await openPage(context, extensionId, 'newtab');
 					await seed(resetPage);
 					await resetPage.close();
+				},
+			);
+
+			await check(
+				`bookmark Focus view switches columns by keyboard (${theme})`,
+				async () => {
+					const setupPage = await openPage(context, extensionId, 'newtab');
+					await seed(setupPage);
+					const fixture = createDevFixture(await readDevStore(setupPage));
+					fixture.settings = {
+						...fixture.settings,
+						bookmarkBoardView: 'board',
+						limitBookmarksPerColumn: true,
+						bookmarkColumnPageSize: 16,
+					};
+					await writeDevStore(setupPage, fixture);
+					await setupPage.close();
+
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					await page.setViewportSize({width: 1440, height: 900});
+
+					const focusButton = page.getByRole('button', {
+						name: 'Switch to Focus view',
+						exact: true,
+					});
+					await focusButton.focus();
+					await page.keyboard.press('Enter');
+
+					const rail = page.getByRole('navigation', {
+						name: 'Bookmark columns',
+					});
+					await rail.waitFor({timeout: 5000});
+					assert.equal(
+						await page
+							.getByRole('button', {
+								name: 'Switch to Board view',
+								exact: true,
+							})
+							.count(),
+						1,
+						'the view button switches to the Board action',
+					);
+
+					const daily = rail.getByRole('button', {name: /^Daily/});
+					const dev = rail.getByRole('button', {name: /^Dev/});
+					assert.equal(await daily.getAttribute('aria-current'), 'true');
+
+					await dev.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await page
+								.locator('#focus-column-panel header h3')
+								.textContent()) === 'Dev',
+						'the Dev column to open',
+					);
+					assert.equal(await dev.getAttribute('aria-current'), 'true');
+					assert.equal(await daily.getAttribute('aria-current'), null);
+
+					const region = page.getByRole('region', {name: 'Dev bookmarks'});
+					await region.waitFor();
+					assert.equal(await region.getAttribute('tabindex'), '0');
+					assert.ok(
+						(
+							await page
+								.locator('nav[aria-label="Bookmark columns"] + [role="status"]')
+								.textContent()
+						)?.includes('Showing Dev'),
+					);
+
+					await dev.click({button: 'right'});
+					const railMenu = page.getByRole('menu');
+					await railMenu.waitFor();
+					assert.equal(
+						await railMenu
+							.getByRole('menuitem', {name: 'Edit column', exact: true})
+							.count(),
+						1,
+						'the rail column opens the same column menu on right click',
+					);
+					await page.keyboard.press('Escape');
+					await railMenu.waitFor({state: 'hidden'});
+
+					const violations = await axeViolationLines(page, axeSource);
+					assert.deepEqual(violations, [], 'Focus view should pass axe');
+
+					await until(
+						async () =>
+							(await readDevStore(page)).settings.bookmarkBoardView === 'focus',
+						'the Focus view setting to save',
+					);
+					const reset = createDevFixture(await readDevStore(page));
+					reset.settings = {
+						...reset.settings,
+						bookmarkBoardView: 'board',
+						limitBookmarksPerColumn: true,
+						bookmarkColumnPageSize: 16,
+					};
+					await writeDevStore(page, reset);
+					await page.close();
 				},
 			);
 

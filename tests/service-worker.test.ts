@@ -4278,7 +4278,7 @@ for (const [key, fallback] of [
 	['showSaveWindowButton', true],
 	['showTrashBinButton', false],
 	['stretchBookmarkColumns', true],
-	['limitBookmarksPerColumn', false],
+	['limitBookmarksPerColumn', true],
 ] as const) {
 	test(`${key} is ${fallback ? 'on' : 'off'} by default, only an explicit ${String(!fallback)} changes it, and it resets`, async () => {
 		const readStored = async (stored: unknown) =>
@@ -4307,12 +4307,12 @@ for (const [key, fallback] of [
 	});
 }
 
-test('bookmark column batch size defaults to ten, is clamped, and resets', async () => {
+test('bookmark column batch size defaults to sixteen, is clamped, and resets', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
 		(await defaults.sendMessage({type: 'GET_STATE'})).settings
 			.bookmarkColumnPageSize,
-		10,
+		16,
 	);
 
 	const configured = await defaults.sendMessage({
@@ -4328,7 +4328,7 @@ test('bookmark column batch size defaults to ten, is clamped, and resets', async
 	assert.equal(
 		(await invalid.sendMessage({type: 'GET_STATE'})).settings
 			.bookmarkColumnPageSize,
-		10,
+		16,
 	);
 	const tooSmall = createWorkerHarness(
 		stateWithSession({bookmarkColumnPageSize: 0}),
@@ -4349,7 +4349,7 @@ test('bookmark column batch size defaults to ten, is clamped, and resets', async
 	assert.equal(
 		(await defaults.sendMessage({type: 'RESET_SETTINGS'})).settings
 			.bookmarkColumnPageSize,
-		10,
+		16,
 	);
 });
 
@@ -4579,6 +4579,42 @@ test('dashboardWidth defaults to the existing layout, validates choices, and res
 
 	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.dashboardWidth, 'default');
+});
+
+test('bookmarkBoardView defaults to board, validates choices, and resets', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings
+			.bookmarkBoardView,
+		'board',
+	);
+
+	const configured = createWorkerHarness(
+		stateWithSession({bookmarkBoardView: 'focus'}),
+	);
+	assert.equal(
+		(await configured.sendMessage({type: 'GET_STATE'})).settings
+			.bookmarkBoardView,
+		'focus',
+	);
+
+	const invalid = createWorkerHarness(
+		stateWithSession({bookmarkBoardView: 'deck'}),
+	);
+	assert.equal(
+		(await invalid.sendMessage({type: 'GET_STATE'})).settings.bookmarkBoardView,
+		'board',
+	);
+
+	const updated = await invalid.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {bookmarkBoardView: 'focus'},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(invalid.state.settings.bookmarkBoardView, 'focus');
+
+	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.bookmarkBoardView, 'board');
 });
 
 test("bookmark imports with a target column ignore the file's columns and fill only that column", async () => {

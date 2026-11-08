@@ -480,8 +480,8 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	showSessionFaviconPreviews: true,
 	sessionQuickActions: ['archive'],
 	stretchBookmarkColumns: true,
-	limitBookmarksPerColumn: false,
-	bookmarkColumnPageSize: 10,
+	limitBookmarksPerColumn: true,
+	bookmarkColumnPageSize: 16,
 	pasteLinkToBookmark: true,
 	cleanTitles: true,
 	bookmarkClickAction: 'current',
@@ -497,6 +497,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
 	dashboardWidth: 'default',
+	bookmarkBoardView: 'board',
 	removeTrackingParameters: false,
 	simplifyUrls: true,
 	markInsecureLinks: true,
@@ -1539,12 +1540,12 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		showSessionFaviconPreviews: raw.showSessionFaviconPreviews !== false,
 		sessionQuickActions: normalizeSessionQuickActions(raw),
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
-		limitBookmarksPerColumn: raw.limitBookmarksPerColumn === true,
+		limitBookmarksPerColumn: raw.limitBookmarksPerColumn !== false,
 		bookmarkColumnPageSize: clampInteger(
 			raw.bookmarkColumnPageSize,
 			1,
 			500,
-			10,
+			16,
 		),
 		pasteLinkToBookmark: raw.pasteLinkToBookmark !== false,
 		cleanTitles: raw.cleanTitles !== false,
@@ -1570,6 +1571,9 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		)
 			? raw.dashboardWidth
 			: 'default',
+		bookmarkBoardView: isOneOf(['board', 'focus'], raw.bookmarkBoardView)
+			? raw.bookmarkBoardView
+			: 'board',
 		keepLodgePinned: raw.keepLodgePinned === true,
 		browserBookmarkAction: isOneOf(
 			['off', 'ask', 'add'],

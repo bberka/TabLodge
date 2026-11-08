@@ -69,6 +69,7 @@ export type BookmarkClickAction = LinkClickAction | 'menu';
 
 export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
 export type DashboardWidth = 'default' | 'wider' | 'full' | 'narrower';
+export type BookmarkBoardView = 'board' | 'focus';
 
 export type BrowserBookmarkAction = 'off' | 'ask' | 'add';
 
@@ -127,11 +128,11 @@ export type Settings = {
 	*/
 	stretchBookmarkColumns: boolean;
 	/**
-	Reveal bookmarks in each column in smaller batches (default off).
+	Cap each column at the number of bookmarks below and scroll inside it (default on).
 	*/
 	limitBookmarksPerColumn: boolean;
 	/**
-	Number of bookmarks shown per batch when per-column limiting is on (default 10).
+	Bookmarks visible in a capped column before it scrolls (default 16).
 	*/
 	bookmarkColumnPageSize: number;
 	/**
@@ -170,6 +171,10 @@ export type Settings = {
 	Dashboard width and bookmark-grid layout (default: default).
 	*/
 	dashboardWidth: DashboardWidth;
+	/**
+	Bookmark board layout: the grid of columns or the Focus column list (default: board).
+	*/
+	bookmarkBoardView: BookmarkBoardView;
 	/**
 	Keep one pinned TabLodge tab per window open; links from it open in new tabs.
 	*/

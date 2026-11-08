@@ -41,6 +41,7 @@ const ScrollArea = React.forwardRef<
 				ref={viewportRef}
 				className={cn(
 					'h-full w-full rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+					'[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
 					!horizontal && '[&>div]:!block',
 					viewportClassName,
 				)}
@@ -63,10 +64,9 @@ const ScrollBar = React.forwardRef<
 		ref={ref}
 		orientation={orientation}
 		className={cn(
-			'z-10 flex touch-none select-none p-px transition-colors',
-			orientation === 'vertical' && 'h-full w-2 border-l border-l-transparent',
-			orientation === 'horizontal' &&
-				'h-2 flex-col border-t border-t-transparent',
+			'z-10 flex touch-none select-none p-0.5 transition-colors',
+			orientation === 'vertical' && 'h-full w-2.5',
+			orientation === 'horizontal' && 'h-2.5 flex-col',
 			className,
 		)}
 		{...props}

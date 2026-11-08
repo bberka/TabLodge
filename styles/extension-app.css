@@ -128,6 +128,57 @@
 	::selection {
 		background: rgb(var(--primary) / 0.2);
 	}
+	/*
+	 * One thin rounded scrollbar for every surface. The track stays transparent
+	 * and the arrow buttons are removed; the thumb uses the same muted tone in
+	 * both themes. Radix scroll areas draw their own thumb over a hidden native
+	 * one, so they use the matching component styles instead.
+	 */
+	/*
+	 * Firefox uses the standard properties; Chromium ignores its WebKit
+	 * pseudo-elements once these are set, so keep them Firefox-only to keep the
+	 * arrow-free custom thumb there.
+	 */
+	@supports (-moz-appearance: none) {
+		* {
+			scrollbar-width: thin;
+			scrollbar-color: rgb(var(--muted-foreground) / 0.35) transparent;
+		}
+	}
+	*::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+	*::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	*::-webkit-scrollbar-thumb {
+		border: 2px solid transparent;
+		border-radius: 9999px;
+		background-color: rgb(var(--muted-foreground) / 0.35);
+		background-clip: padding-box;
+	}
+	*::-webkit-scrollbar-thumb:hover {
+		background-color: rgb(var(--muted-foreground) / 0.6);
+	}
+	*::-webkit-scrollbar-thumb:active {
+		background-color: rgb(var(--muted-foreground) / 0.75);
+	}
+	*::-webkit-scrollbar-button {
+		display: none;
+		width: 0;
+		height: 0;
+		background: transparent;
+	}
+	*::-webkit-scrollbar-corner {
+		background: transparent;
+	}
+	[data-radix-scroll-area-viewport] {
+		scrollbar-width: none;
+	}
+	[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+		display: none;
+	}
 }
 
 @layer components {
