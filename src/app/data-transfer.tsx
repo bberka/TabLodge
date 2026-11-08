@@ -1362,6 +1362,11 @@ export function ImportDialog({
 					{value: 'sessions', label: <KindLabel kind="sessions" />},
 				]}
 				onValueChange={(value) => {
+					if (reading) {
+						readGenerationRef.current += 1;
+						setReading(false);
+					}
+
 					setError('');
 					setEverything(value === 'everything');
 					if (value !== 'everything') {
