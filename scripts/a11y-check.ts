@@ -1587,23 +1587,29 @@ async function main() {
 					});
 					await remove.focus();
 					await board.keyboard.press('Enter');
-					const confirmation = board.getByRole('dialog');
-					await confirmation.waitFor();
-					await confirmation
-						.getByRole('heading', {name: 'Delete “Gmail”?', exact: true})
-						.waitFor();
 					assert.equal(
-						await board.locator('[data-bookmark-title="Gmail"]').count(),
-						1,
-						'bookmark remains until the confirmation is accepted',
+						await board.getByRole('dialog').count(),
+						0,
+						'Delete runs without a confirmation dialog',
 					);
-					const cancel = confirmation.getByRole('button', {
-						name: 'Cancel',
+					const undo = board.getByRole('button', {
+						name: 'Undo',
 						exact: true,
 					});
-					await cancel.focus();
+					await undo.waitFor();
+					assert.equal(
+						await board.locator('[data-bookmark-title="Gmail"]').count(),
+						0,
+						'bookmark is removed right away',
+					);
+					await undo.focus();
 					await board.keyboard.press('Enter');
-					await confirmation.waitFor({state: 'hidden'});
+					await until(
+						async () =>
+							(await board.locator('[data-bookmark-title="Gmail"]').count()) ===
+							1,
+						'Undo to restore the bookmark from the trash',
+					);
 					await seedQuickActions(board, ['open-new']);
 					await board.close();
 				},

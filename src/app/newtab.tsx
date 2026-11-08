@@ -165,12 +165,7 @@ import {cn} from '@/lib/utils';
 const initialStateRequest = takeStateRequest();
 
 type DialogKind =
-	| 'bookmark'
-	| 'column'
-	| 'move'
-	| 'paste-links'
-	| 'delete-column'
-	| 'delete-bookmark';
+	'bookmark' | 'column' | 'move' | 'paste-links' | 'delete-column';
 type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 type BookmarkAction =
 	| 'click'
@@ -310,9 +305,6 @@ function NewTab() {
 		[],
 	);
 	const [bookmarkEdit, setBookmarkEdit] = useState<BookmarkDraft | null>(null);
-	const [bookmarkToDelete, setBookmarkToDelete] = useState<Bookmark | null>(
-		null,
-	);
 	// Several links pasted at once: each row can be left out before they are added to one column.
 	const [pastedLinks, setPastedLinks] = useState<
 		Array<LinkEntry & {include: boolean}>
@@ -1199,18 +1191,6 @@ function NewTab() {
 		offerTrashUndo('Bookmark deleted.', result.trashId, showStatus, reload);
 	}
 
-	async function confirmDeleteBookmark(event: SyntheticEvent<HTMLFormElement>) {
-		event.preventDefault();
-		if (!bookmarkToDelete) {
-			return;
-		}
-
-		const bookmark = bookmarkToDelete;
-		setDialog(null);
-		setBookmarkToDelete(null);
-		await deleteBookmark(bookmark);
-	}
-
 	async function deleteSelectedBookmarks() {
 		if (bookmarkBatchRunningRef.current) {
 			return;
@@ -1490,8 +1470,7 @@ function NewTab() {
 			return;
 		}
 
-		setBookmarkToDelete(bookmark);
-		setDialog('delete-bookmark');
+		await deleteBookmark(bookmark);
 	}
 
 	async function addDroppedLinks(
@@ -2983,51 +2962,6 @@ function NewTab() {
 							<Button type="submit" variant="destructive">
 								<Trash2 />
 								Delete column
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-			<Dialog
-				open={dialog === 'delete-bookmark'}
-				onOpenChange={(open) => {
-					if (open) {
-						return;
-					}
-
-					setDialog(null);
-					setBookmarkToDelete(null);
-				}}
-			>
-				<DialogContent size="sm">
-					<form onSubmit={confirmDeleteBookmark}>
-						<DialogHeader>
-							<DialogTitle>
-								Delete “
-								{bookmarkToDelete?.title ||
-									siteName(bookmarkToDelete?.url || '')}
-								”?
-							</DialogTitle>
-							<DialogDescription>
-								This bookmark will move to the trash bin. You can undo this
-								right after.
-							</DialogDescription>
-						</DialogHeader>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => {
-									setDialog(null);
-									setBookmarkToDelete(null);
-								}}
-							>
-								<X aria-hidden="true" />
-								Cancel
-							</Button>
-							<Button type="submit" variant="destructive">
-								<Trash2 />
-								Delete bookmark
 							</Button>
 						</DialogFooter>
 					</form>
