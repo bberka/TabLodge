@@ -707,6 +707,16 @@ const settingsGroups: Array<{
 		icon: Bookmark,
 		fields: [
 			{
+				name: 'bookmarkBoardView',
+				label: 'Bookmark view',
+				help: 'Board shows every column in a grid. Focus shows a column list next to one open column. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of stretching the page.',
+				type: 'select',
+				options: [
+					['board', 'Board'],
+					['focus', 'Focus'],
+				],
+			},
+			{
 				name: 'bookmarkClickAction',
 				label: 'When clicking a bookmark',
 				help: 'Choose what happens when you click a bookmark. The bookmark menu can always open it either way.',
@@ -739,13 +749,13 @@ const settingsGroups: Array<{
 			{
 				name: 'limitBookmarksPerColumn',
 				label: 'Limit bookmarks shown at a time',
-				help: 'When on, each column starts with the number below and Show more adds another batch of that size. Off keeps the current display behavior.',
+				help: 'On by default. Each column in Board and Focus keeps the number below visible and scrolls through the rest. All bookmarks stay loaded. Off keeps the current display behavior.',
 				type: 'switch',
 			},
 			{
 				name: 'bookmarkColumnPageSize',
 				label: 'Show at a time',
-				help: 'How many bookmarks each column reveals in a batch.',
+				help: 'How many bookmarks fit in a column before it starts scrolling. Defaults to 16.',
 				requires: 'limitBookmarksPerColumn',
 				type: 'number',
 				min: 1,

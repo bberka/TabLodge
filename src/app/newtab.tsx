@@ -31,7 +31,10 @@ import {
 	SunMoon,
 	HardDriveDownload,
 	History,
+	Inbox,
+	LayoutGrid,
 	MoreHorizontal,
+	PanelLeft,
 	Pencil,
 	Plus,
 	Search,
@@ -141,6 +144,7 @@ import {
 } from './interaction-actions';
 import type {
 	Bookmark,
+	BookmarkBoardView,
 	BookmarkColumn as BookmarkColumnData,
 	InsertPosition,
 	LinkEntry,
@@ -221,6 +225,14 @@ type DropIndicator = {
 	position: InsertPosition;
 };
 type ColumnRef = Pick<BookmarkColumnData, 'id' | 'name'>;
+type FocusColumnItem = {
+	id: string;
+	name: string;
+	icon?: string;
+	count: number;
+	column: BookmarkColumnData;
+	unfiled?: boolean;
+};
 
 /**
 Stable fallbacks so memoized values and effects do not see a new array on every render.
@@ -436,10 +448,36 @@ function NewTab() {
 	const newTabOn = settings.newTabEnabled !== false;
 	const tabSelection = useTabSelection(settings.includePinnedTabs === true);
 	const bookmarkPageSize = settings.limitBookmarksPerColumn
-		? (settings.bookmarkColumnPageSize ?? 10)
+		? (settings.bookmarkColumnPageSize ?? 16)
 		: COLUMN_PAGE;
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
+	const bookmarkView = settings.bookmarkBoardView ?? 'board';
+	const [focusColumnId, setFocusColumnId] = useState('');
+	const [railDropId, setRailDropId] = useState<string | null>(null);
+	// The Board view caps a column when the limit setting is on, so scrolling
+	// inside the column loads the next batch instead of growing the page.
+	const cappedColumnBodyHeight = settings.limitBookmarksPerColumn
+		? `${Math.min(Math.max(bookmarkPageSize, 1), 16) * 2.5 + 1}rem`
+		: undefined;
+	const changeBookmarkView = useCallback(
+		async (next: BookmarkBoardView) => {
+			if (next === bookmarkView) {
+				return;
+			}
+
+			const result = await send('UPDATE_SETTINGS', {
+				settings: {bookmarkBoardView: next},
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not save the bookmark view.', true);
+				return;
+			}
+
+			await reload();
+		},
+		[bookmarkView, reload, showStatus],
+	);
 	const dashboardWidth = settings.dashboardWidth ?? 'default';
 	const dashboardMaxWidthClass =
 		dashboardWidth === 'narrower'
@@ -1900,18 +1938,10 @@ function NewTab() {
 		return () => document.removeEventListener('visibilitychange', onVisible);
 	}, [autoOpenFinder]);
 
-	const unfiledAll = columnBookmarks.all.get(UNFILED_COLUMN.id);
+	const unfiledAll = columnBookmarks.all.get(UNFILED_COLUMN.id) ?? NO_BOOKMARKS;
 	const unfiledFiltered =
 		columnBookmarks.shown.get(UNFILED_COLUMN.id) ?? NO_BOOKMARKS;
-	const [unfiledLimit, loadMoreUnfiled] = usePagedLimit(
-		`unfiled:${bookmarkSearch}:${bookmarkPageSize}`,
-		bookmarkPageSize,
-	);
-	const unfiledShown = settings.limitBookmarksPerColumn
-		? unfiledFiltered.slice(0, unfiledLimit)
-		: unfiledFiltered;
-	const unfiledFirst = unfiledAll?.[0]?.id;
-	const unfiledLast = unfiledAll?.at(-1)?.id;
+	const includeUnfiled = unfiledAll.length > 0 || columns.length === 0;
 	const sessionTargetsForBookmarks = sessionTargets();
 
 	// One stable set of callbacks for every column and bookmark, so memoized ones skip re-rendering.
@@ -1978,6 +2008,33 @@ function NewTab() {
 		);
 	}
 
+	const focusItems: FocusColumnItem[] = [
+		...columns.map((column) => ({
+			id: column.id,
+			name: column.name,
+			icon: column.icon,
+			count: columnBookmarks.all.get(column.id)?.length ?? 0,
+			column,
+			unfiled: false,
+		})),
+		...(includeUnfiled
+			? [
+					{
+						id: UNFILED_COLUMN.id,
+						name: UNFILED_COLUMN.name,
+						count: unfiledAll.length,
+						column: UNFILED_COLUMN,
+						unfiled: true,
+					},
+				]
+			: []),
+	];
+	const activeFocus =
+		focusItems.find((item) => item.id === focusColumnId) ?? focusItems[0];
+	const activeFocusIndex = activeFocus
+		? columns.findIndex((column) => column.id === activeFocus.id)
+		: -1;
+
 	const bookmarksSection = (
 		<section
 			id="bookmark-library"
@@ -2008,6 +2065,31 @@ function NewTab() {
 						}
 						onChange={setBookmarkSearch}
 					/>
+					<IconTooltip
+						label={
+							bookmarkView === 'board'
+								? 'Switch to Focus view'
+								: 'Switch to Board view'
+						}
+					>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-8 w-8"
+							aria-label={
+								bookmarkView === 'board'
+									? 'Switch to Focus view'
+									: 'Switch to Board view'
+							}
+							onClick={() =>
+								void changeBookmarkView(
+									bookmarkView === 'board' ? 'focus' : 'board',
+								)
+							}
+						>
+							{bookmarkView === 'board' ? <PanelLeft /> : <LayoutGrid />}
+						</Button>
+					</IconTooltip>
 					<IconTooltip
 						label={
 							bookmarkSelectionEnabled
@@ -2204,6 +2286,150 @@ function NewTab() {
 				<EmptyState icon={Search} title="No bookmarks match">
 					Search titles, web addresses, and domains.
 				</EmptyState>
+			) : bookmarkView === 'focus' ? (
+				<div className="flex flex-col gap-4 md:flex-row">
+					<nav aria-label="Bookmark columns" className="md:w-56 md:shrink-0">
+						<ul className="flex gap-1 overflow-x-auto pb-1 md:block md:space-y-1 md:overflow-visible md:pb-0">
+							{focusItems.map((item) => {
+								const active = item.id === activeFocus?.id;
+								const ItemIcon = item.unfiled
+									? Inbox
+									: getIcon(item.icon, DEFAULT_COLUMN_ICON).component;
+								const itemIndex = columns.findIndex(
+									(column) => column.id === item.id,
+								);
+								const itemSiblings =
+									columnBookmarks.all.get(item.id) ?? NO_BOOKMARKS;
+								const railButton = (
+									<button
+										type="button"
+										data-focus-column={item.id}
+										aria-current={active ? 'true' : undefined}
+										aria-controls="focus-column-panel"
+										className={cn(
+											'flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm md:whitespace-normal',
+											active
+												? 'bg-primary/10 font-semibold text-primary'
+												: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+											railDropId === item.id &&
+												'ring-2 ring-primary ring-offset-2 ring-offset-background',
+										)}
+										onDragOver={(event) => {
+											if (!acceptsDrop(event, false)) {
+												return;
+											}
+
+											event.preventDefault();
+											setRailDropId(item.id);
+										}}
+										onDragLeave={(event) => {
+											if (
+												!event.currentTarget.contains(
+													event.relatedTarget as Node | null,
+												)
+											) {
+												setRailDropId(null);
+											}
+										}}
+										onDrop={(event) => {
+											setRailDropId(null);
+											if (!acceptsDrop(event, false)) {
+												return;
+											}
+
+											event.preventDefault();
+											void boardActions.drop(event, item.column);
+										}}
+										onClick={() => setFocusColumnId(item.id)}
+									>
+										<ItemIcon className="size-4 shrink-0" />
+										<span className="min-w-0 flex-1 truncate">{item.name}</span>
+										<Badge
+											variant={active ? 'accent' : 'secondary'}
+											className="ml-1"
+										>
+											{item.count}
+										</Badge>
+									</button>
+								);
+								return (
+									<li key={item.id} className="shrink-0 md:block">
+										{item.unfiled ? (
+											railButton
+										) : (
+											<ActionContextMenu
+												actions={() =>
+													columnMenuActions(
+														item.column,
+														itemSiblings,
+														itemIndex > 0,
+														itemIndex < columns.length - 1,
+														boardActions,
+													)
+												}
+											>
+												{railButton}
+											</ActionContextMenu>
+										)}
+									</li>
+								);
+							})}
+						</ul>
+					</nav>
+					<p className="sr-only" role="status" aria-live="polite">
+						{activeFocus
+							? `Showing ${activeFocus.name}, ${plural(activeFocus.count, 'bookmark')}.`
+							: ''}
+					</p>
+					{activeFocus && (
+						<div
+							id="focus-column-panel"
+							className="flex min-w-0 flex-1 flex-col"
+						>
+							<BookmarkColumn
+								autoLoadMore
+								scrollBody={settings.limitBookmarksPerColumn === true}
+								renderAll={settings.limitBookmarksPerColumn === true}
+								bodyMaxHeight={cappedColumnBodyHeight}
+								column={activeFocus.column}
+								selected={selectedBookmarks}
+								selectionMode={bookmarkSelectionMode}
+								canMoveEarlier={!activeFocus.unfiled && activeFocusIndex > 0}
+								canMoveLater={
+									!activeFocus.unfiled && activeFocusIndex < columns.length - 1
+								}
+								bookmarks={
+									columnBookmarks.shown.get(activeFocus.id) ?? NO_BOOKMARKS
+								}
+								siblings={
+									columnBookmarks.all.get(activeFocus.id) ?? NO_BOOKMARKS
+								}
+								pageSize={bookmarkPageSize}
+								dropIndicator={
+									columnDropIndicator?.columnId === activeFocus.id
+										? columnDropIndicator
+										: null
+								}
+								urlMode={urlMode}
+								clickOpensMenu={clickOpensMenu}
+								urlSettings={urlSettings}
+								quickActions={quickActions}
+								actions={boardActions}
+								simpleHeader={activeFocus.unfiled}
+								allowColumnDrag={false}
+								allowColumnDrop={!activeFocus.unfiled}
+								ariaLabel={
+									activeFocus.unfiled ? 'Unfiled bookmarks' : undefined
+								}
+								emptyMessage={
+									activeFocus.unfiled
+										? 'No columns yet. New bookmarks will be kept here until you add a column.'
+										: undefined
+								}
+							/>
+						</div>
+					)}
+				</div>
 			) : (
 				<div
 					className={cn(
@@ -2215,6 +2441,7 @@ function NewTab() {
 					{columns.map((column, index) => (
 						<BookmarkColumn
 							key={column.id}
+							autoLoadMore
 							column={column}
 							selected={selectedBookmarks}
 							selectionMode={bookmarkSelectionMode}
@@ -2223,7 +2450,9 @@ function NewTab() {
 							bookmarks={columnBookmarks.shown.get(column.id) ?? NO_BOOKMARKS}
 							siblings={columnBookmarks.all.get(column.id) ?? NO_BOOKMARKS}
 							pageSize={bookmarkPageSize}
-							autoLoadMore={!settings.limitBookmarksPerColumn}
+							renderAll={settings.limitBookmarksPerColumn === true}
+							scrollBody={settings.limitBookmarksPerColumn === true}
+							bodyMaxHeight={cappedColumnBodyHeight}
 							dropIndicator={
 								columnDropIndicator?.columnId === column.id
 									? columnDropIndicator
@@ -2236,88 +2465,40 @@ function NewTab() {
 							actions={boardActions}
 						/>
 					))}
-					{(bookmarks.some(
-						(bookmark) => bookmark.columnId === UNFILED_COLUMN.id,
-					) ||
-						columns.length === 0) && (
-						<section
-							data-column-id={UNFILED_COLUMN.id}
-							aria-label="Unfiled bookmarks"
-							className={cn(
-								'flex min-w-0 flex-col rounded-lg border border-border bg-card p-3',
-								columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
-									'ring-2 ring-primary ring-offset-2 ring-offset-background',
-							)}
-							onDragOver={(event) =>
-								previewBookmarkDrop(event, UNFILED_COLUMN.id, markDrop, false)
+					{includeUnfiled && (
+						<BookmarkColumn
+							autoLoadMore
+							simpleHeader
+							column={UNFILED_COLUMN}
+							selected={selectedBookmarks}
+							selectionMode={bookmarkSelectionMode}
+							canMoveEarlier={false}
+							canMoveLater={false}
+							bookmarks={unfiledFiltered}
+							siblings={unfiledAll}
+							pageSize={
+								settings.limitBookmarksPerColumn
+									? bookmarkPageSize
+									: Math.max(unfiledFiltered.length, 1)
 							}
-							onDragLeave={(event) => {
-								if (
-									!event.currentTarget.contains(
-										event.relatedTarget as Node | null,
-									)
-								) {
-									markDrop(null);
-								}
-							}}
-							onDrop={(event) => {
-								if (!acceptsDrop(event, false)) {
-									return;
-								}
-
-								event.preventDefault();
-								void dropOnColumn(event, UNFILED_COLUMN);
-							}}
-							onDragStart={boardActions.dragStart}
-							onDragEnd={boardActions.dragEnd}
-						>
-							<h3 className="mb-3 text-sm font-semibold">Unfiled</h3>
-							{unfiledFiltered.length > 0 ? (
-								<div className="space-y-1">
-									{unfiledShown.map((bookmark) => {
-										const drop =
-											columnDropIndicator?.columnId === UNFILED_COLUMN.id &&
-											columnDropIndicator.targetBookmarkId === bookmark.id
-												? columnDropIndicator
-												: null;
-										return (
-											<BookmarkCard
-												key={bookmark.id}
-												bookmark={bookmark}
-												selected={selectedBookmarks.has(bookmark.id)}
-												selectionMode={bookmarkSelectionMode}
-												dropBefore={drop?.position === 'before'}
-												dropAfter={drop?.position === 'after'}
-												dropActive={Boolean(drop)}
-												canMoveEarlier={bookmark.id !== unfiledFirst}
-												canMoveLater={bookmark.id !== unfiledLast}
-												urlMode={urlMode}
-												clickOpensMenu={clickOpensMenu}
-												urlSettings={urlSettings}
-												quickActions={quickActions}
-												sessions={boardActions}
-												onAction={boardActions.bookmark}
-											/>
-										);
-									})}
-									{unfiledFiltered.length > unfiledShown.length && (
-										<LoadMore
-											compact
-											remaining={unfiledFiltered.length - unfiledShown.length}
-											step={bookmarkPageSize}
-											noun="bookmarks"
-											autoLoad={false}
-											onMore={loadMoreUnfiled}
-										/>
-									)}
-								</div>
-							) : (
-								<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
-									No columns yet. New bookmarks will be kept here until you add
-									a column.
-								</p>
-							)}
-						</section>
+							renderAll={settings.limitBookmarksPerColumn === true}
+							scrollBody={settings.limitBookmarksPerColumn === true}
+							bodyMaxHeight={cappedColumnBodyHeight}
+							dropIndicator={
+								columnDropIndicator?.columnId === UNFILED_COLUMN.id
+									? columnDropIndicator
+									: null
+							}
+							urlMode={urlMode}
+							clickOpensMenu={clickOpensMenu}
+							urlSettings={urlSettings}
+							quickActions={quickActions}
+							actions={boardActions}
+							allowColumnDrag={false}
+							allowColumnDrop={false}
+							ariaLabel="Unfiled bookmarks"
+							emptyMessage="No columns yet. New bookmarks will be kept here until you add a column."
+						/>
 					)}
 				</div>
 			)}
@@ -3219,6 +3400,73 @@ type BoardActions = {
 	dragEnd: () => void;
 };
 
+function columnMenuActions(
+	column: BookmarkColumnData,
+	siblings: Bookmark[],
+	canMoveEarlier: boolean,
+	canMoveLater: boolean,
+	actions: BoardActions,
+): MenuAction[] {
+	return [
+		{
+			id: 'open-all',
+			label: 'Open all in new tabs',
+			icon: ACTION_ICONS.openNew,
+			disabled: siblings.length === 0,
+			onSelect: () => actions.openAll(column),
+		},
+		{
+			id: 'add',
+			label: 'Add bookmark here',
+			icon: BookmarkPlus,
+			onSelect: () => actions.add(column),
+		},
+		{
+			id: 'share',
+			label: 'Share',
+			icon: Share2,
+			disabled: siblings.length === 0,
+			onSelect: () => actions.share(column),
+		},
+		{
+			id: 'export',
+			label: 'Export column',
+			icon: Download,
+			disabled: siblings.length === 0,
+			onSelect: () => actions.exportColumn(column),
+		},
+		{type: 'separator'},
+		{
+			id: 'edit',
+			label: 'Edit column',
+			icon: Pencil,
+			onSelect: () => actions.edit(column),
+		},
+		{
+			id: 'move-left',
+			label: 'Move left',
+			icon: ArrowLeft,
+			disabled: !canMoveEarlier,
+			onSelect: () => actions.moveColumn(column, 'earlier'),
+		},
+		{
+			id: 'move-right',
+			label: 'Move right',
+			icon: ArrowRight,
+			disabled: !canMoveLater,
+			onSelect: () => actions.moveColumn(column, 'later'),
+		},
+		{type: 'separator'},
+		{
+			id: 'delete',
+			label: 'Delete column',
+			icon: Trash2,
+			destructive: true,
+			onSelect: () => actions.remove(column),
+		},
+	];
+}
+
 type BookmarkColumnProps = {
 	column: BookmarkColumnData;
 	selected: Set<string>;
@@ -3241,6 +3489,26 @@ type BookmarkColumnProps = {
 	pageSize: number;
 	autoLoadMore: boolean;
 	actions: BoardActions;
+	/**
+	Scroll the bookmark list inside the column instead of letting it grow.
+	*/
+	scrollBody?: boolean;
+	/**
+	Maximum height of a scrolling body, used when the Board view caps columns.
+	*/
+	bodyMaxHeight?: string;
+	/**
+	Draw every bookmark, used by capped panes that scroll instead of loading batches.
+	*/
+	renderAll?: boolean;
+	/**
+	Header without the column icon, menu, or drag handle, used by Unfiled.
+	*/
+	simpleHeader?: boolean;
+	allowColumnDrag?: boolean;
+	allowColumnDrop?: boolean;
+	ariaLabel?: string;
+	emptyMessage?: string;
 };
 
 const MAX_SESSION_TARGETS = 30;
@@ -3267,21 +3535,26 @@ const BookmarkColumn = memo(
 		pageSize,
 		autoLoadMore,
 		actions,
+		scrollBody = false,
+		bodyMaxHeight,
+		renderAll = false,
+		simpleHeader = false,
+		allowColumnDrag = true,
+		allowColumnDrop = true,
+		ariaLabel,
+		emptyMessage,
 	}: BookmarkColumnProps) => {
 		const [limit, loadMore] = usePagedLimit(
 			`${column.id}:${pageSize}`,
 			pageSize,
 		);
-		const shown =
-			bookmarks.length > limit ? bookmarks.slice(0, limit) : bookmarks;
+		const shown = renderAll
+			? bookmarks
+			: bookmarks.length > limit
+				? bookmarks.slice(0, limit)
+				: bookmarks;
 		const lastSibling = siblings.at(-1)?.id;
 		const firstSibling = siblings[0]?.id;
-		const onShare = () => actions.share(column);
-		const onExport = () => actions.exportColumn(column);
-		const onAdd = () => actions.add(column);
-		const onOpenAll = () => actions.openAll(column);
-		const onEdit = () => actions.edit(column);
-		const onDelete = () => actions.remove(column);
 		const onDropOver = actions.dropOver;
 		function leaveColumn(event: DragEvent<HTMLElement>) {
 			if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -3290,63 +3563,131 @@ const BookmarkColumn = memo(
 		}
 
 		// Built only when a menu opens.
-		const columnActions = (): MenuAction[] => [
-			{
-				id: 'open-all',
-				label: 'Open all in new tabs',
-				icon: ACTION_ICONS.openNew,
-				disabled: siblings.length === 0,
-				onSelect: onOpenAll,
-			},
-			{
-				id: 'add',
-				label: 'Add bookmark here',
-				icon: BookmarkPlus,
-				onSelect: onAdd,
-			},
-			{
-				id: 'share',
-				label: 'Share',
-				icon: Share2,
-				disabled: siblings.length === 0,
-				onSelect: onShare,
-			},
-			{
-				id: 'export',
-				label: 'Export column',
-				icon: Download,
-				disabled: siblings.length === 0,
-				onSelect: onExport,
-			},
-			{type: 'separator'},
-			{id: 'edit', label: 'Edit column', icon: Pencil, onSelect: onEdit},
-			{
-				id: 'move-left',
-				label: 'Move left',
-				icon: ArrowLeft,
-				disabled: !canMoveEarlier,
-				onSelect: () => actions.moveColumn(column, 'earlier'),
-			},
-			{
-				id: 'move-right',
-				label: 'Move right',
-				icon: ArrowRight,
-				disabled: !canMoveLater,
-				onSelect: () => actions.moveColumn(column, 'later'),
-			},
-			{type: 'separator'},
-			{
-				id: 'delete',
-				label: 'Delete column',
-				icon: Trash2,
-				destructive: true,
-				onSelect: onDelete,
-			},
-		];
+		const columnActions = () =>
+			columnMenuActions(
+				column,
+				siblings,
+				canMoveEarlier,
+				canMoveLater,
+				actions,
+			);
 		const ColumnIcon = getIcon(column.icon, DEFAULT_COLUMN_ICON).component;
 		const bookmarkDrop =
 			dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
 		const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
+		const header = simpleHeader ? (
+			<header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+				<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
+					{column.name}
+				</h3>
+				<Badge>{siblings.length}</Badge>
+			</header>
+		) : (
+			<header
+				draggable={allowColumnDrag}
+				data-drag-column={allowColumnDrag ? column.id : undefined}
+				title={allowColumnDrag ? 'Drag to reorder' : undefined}
+				className={cn(
+					'flex shrink-0 items-center gap-2 border-b border-border px-3 py-2',
+					allowColumnDrag && 'cursor-grab touch-none active:cursor-grabbing',
+				)}
+				onPointerDown={
+					allowColumnDrag
+						? (event) => {
+								// Buttons in the header (its menu) keep their own taps and clicks.
+								if (!(event.target as Element).closest('button')) {
+									actions.pointerDown(event, column.id);
+								}
+							}
+						: undefined
+				}
+			>
+				<ColumnIcon className="size-4 shrink-0 text-muted-foreground" />
+				<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
+					{column.name}
+				</h3>
+				<Badge>{siblings.length}</Badge>
+				<ActionDropdownMenu
+					trigger={
+						<Button
+							data-move-focus
+							variant="ghost"
+							size="icon"
+							aria-label={`Options for ${column.name} column`}
+						>
+							<MoreHorizontal className="h-4 w-4" />
+						</Button>
+					}
+					actions={columnActions}
+				/>
+			</header>
+		);
+		const body = (
+			<div
+				role={scrollBody ? 'region' : undefined}
+				// Focusable so keyboard users can scroll this region on its own.
+				// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
+				tabIndex={scrollBody ? 0 : undefined}
+				aria-label={
+					scrollBody ? (ariaLabel ?? `${column.name} bookmarks`) : undefined
+				}
+				style={scrollBody ? {maxHeight: bodyMaxHeight} : undefined}
+				className={cn(
+					'flex flex-1 flex-col p-2',
+					scrollBody ? 'min-h-0 overflow-y-auto' : 'min-h-24',
+				)}
+			>
+				{shown.length > 0 ? (
+					<div className="space-y-1">
+						{shown.map((bookmark) => {
+							const targeted = bookmarkDrop?.targetBookmarkId === bookmark.id;
+							return (
+								<BookmarkCard
+									key={bookmark.id}
+									bookmark={bookmark}
+									selected={selected.has(bookmark.id)}
+									selectionMode={selectionMode}
+									dropBefore={targeted && bookmarkDrop.position === 'before'}
+									dropAfter={targeted && bookmarkDrop.position === 'after'}
+									dropActive={targeted}
+									canMoveEarlier={bookmark.id !== firstSibling}
+									canMoveLater={bookmark.id !== lastSibling}
+									urlMode={urlMode}
+									clickOpensMenu={clickOpensMenu}
+									urlSettings={urlSettings}
+									quickActions={quickActions}
+									sessions={actions}
+									onAction={actions.bookmark}
+								/>
+							);
+						})}
+						{!renderAll && bookmarks.length > shown.length && (
+							<LoadMore
+								compact
+								remaining={bookmarks.length - shown.length}
+								step={pageSize}
+								noun="bookmarks"
+								autoLoad={autoLoadMore}
+								onMore={loadMore}
+							/>
+						)}
+					</div>
+				) : (
+					<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
+						{emptyMessage && siblings.length === 0
+							? emptyMessage
+							: siblings.length > 0
+								? 'No matching links.'
+								: 'Drop a bookmark here, or add one from this column’s menu.'}
+					</p>
+				)}
+				{showEndInsertion && (
+					<div className="relative h-0">
+						<InsertionLine className="inset-x-1 top-0.5" />
+					</div>
+				)}
+			</div>
+		);
 		return (
 			<div className="relative flex min-w-0 flex-col">
 				{dropIndicator?.kind === 'column' && (
@@ -3368,13 +3709,13 @@ const BookmarkColumn = memo(
 							dropIndicator.kind !== 'column' &&
 							'ring-2 ring-primary ring-offset-2 ring-offset-background',
 					)}
-					aria-label={`${column.name} bookmark column`}
+					aria-label={ariaLabel ?? `${column.name} bookmark column`}
 					onDragOver={(event) =>
-						previewBookmarkDrop(event, column.id, onDropOver, true)
+						previewBookmarkDrop(event, column.id, onDropOver, allowColumnDrop)
 					}
 					onDragLeave={leaveColumn}
 					onDrop={(event) => {
-						if (!acceptsDrop(event, true)) {
+						if (!acceptsDrop(event, allowColumnDrop)) {
 							return;
 						}
 
@@ -3384,95 +3725,20 @@ const BookmarkColumn = memo(
 					onDragStart={actions.dragStart}
 					onDragEnd={actions.dragEnd}
 				>
-					<ActionContextMenu actions={columnActions}>
-						<header
-							draggable
-							data-drag-column={column.id}
-							title="Drag to reorder"
-							className="flex shrink-0 cursor-grab touch-none items-center gap-2 border-b border-border px-3 py-2 active:cursor-grabbing"
-							onPointerDown={(event) => {
-								// Buttons in the header (its menu) keep their own taps and clicks.
-								if (!(event.target as Element).closest('button')) {
-									actions.pointerDown(event, column.id);
-								}
-							}}
-						>
-							<ColumnIcon className="size-4 shrink-0 text-muted-foreground" />
-							<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
-								{column.name}
-							</h3>
-							<Badge>{siblings.length}</Badge>
-							<ActionDropdownMenu
-								trigger={
-									<Button
-										data-move-focus
-										variant="ghost"
-										size="icon"
-										aria-label={`Options for ${column.name} column`}
-									>
-										<MoreHorizontal className="h-4 w-4" />
-									</Button>
-								}
-								actions={columnActions}
-							/>
-						</header>
-					</ActionContextMenu>
-					<ActionContextMenu actions={columnActions}>
-						<div className="flex min-h-24 flex-1 flex-col p-2">
-							{shown.length > 0 ? (
-								<div className="space-y-1">
-									{shown.map((bookmark) => {
-										const targeted =
-											bookmarkDrop?.targetBookmarkId === bookmark.id;
-										return (
-											<BookmarkCard
-												key={bookmark.id}
-												bookmark={bookmark}
-												selected={selected.has(bookmark.id)}
-												selectionMode={selectionMode}
-												dropBefore={
-													targeted && bookmarkDrop.position === 'before'
-												}
-												dropAfter={
-													targeted && bookmarkDrop.position === 'after'
-												}
-												dropActive={targeted}
-												canMoveEarlier={bookmark.id !== firstSibling}
-												canMoveLater={bookmark.id !== lastSibling}
-												urlMode={urlMode}
-												clickOpensMenu={clickOpensMenu}
-												urlSettings={urlSettings}
-												quickActions={quickActions}
-												sessions={actions}
-												onAction={actions.bookmark}
-											/>
-										);
-									})}
-									{bookmarks.length > shown.length && (
-										<LoadMore
-											compact
-											remaining={bookmarks.length - shown.length}
-											step={pageSize}
-											noun="bookmarks"
-											autoLoad={autoLoadMore}
-											onMore={loadMore}
-										/>
-									)}
-								</div>
-							) : (
-								<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
-									{siblings.length > 0
-										? 'No matching links.'
-										: 'Drop a bookmark here, or add one from this column’s menu.'}
-								</p>
-							)}
-							{showEndInsertion && (
-								<div className="relative h-0">
-									<InsertionLine className="inset-x-1 top-0.5" />
-								</div>
-							)}
-						</div>
-					</ActionContextMenu>
+					{simpleHeader ? (
+						header
+					) : (
+						<ActionContextMenu actions={columnActions}>
+							{header}
+						</ActionContextMenu>
+					)}
+					{simpleHeader ? (
+						body
+					) : (
+						<ActionContextMenu actions={columnActions}>
+							{body}
+						</ActionContextMenu>
+					)}
 				</section>
 			</div>
 		);
