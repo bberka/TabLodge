@@ -58,6 +58,7 @@ const SelectContent = React.forwardRef<
 						<ScrollAreaPrimitive.Viewport
 							className={cn(
 								'min-h-0 w-full p-1 [&>div]:!block',
+								'[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
 								position === 'popper' &&
 									'min-w-[var(--radix-select-trigger-width)]',
 							)}
