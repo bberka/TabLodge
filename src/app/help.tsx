@@ -28,6 +28,7 @@ import {
 import {Badge, Button, Input, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {AppHeader, openShortcutsPage, type IconComponent} from './common';
 import {PROJECT} from './project';
 
@@ -892,8 +893,10 @@ function Help() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<Help />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<Help />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

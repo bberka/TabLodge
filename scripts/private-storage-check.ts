@@ -160,6 +160,36 @@ async function captureEvidence(
 	await page.setViewportSize(evidenceViewports[1]);
 }
 
+async function assertPrivateMarkAppearance(page: Page) {
+	const marks = page.locator(
+		'[data-private-window-appearance] > div[aria-hidden="true"] svg',
+	);
+	assert.equal(await marks.count(), 48);
+	const gridClass = await page
+		.locator('[data-private-window-appearance] > div[aria-hidden="true"]')
+		.getAttribute('class');
+	assert.ok(gridClass?.split(/\s+/).includes('text-muted-foreground/15'));
+	const expectedSizes = [
+		{width: 440, height: 956, size: 48},
+		{width: 768, height: 1024, size: 56},
+		{width: 1440, height: 900, size: 64},
+		{width: 1920, height: 1080, size: 64},
+	] as const;
+
+	for (const {width, height, size} of expectedSizes) {
+		await page.setViewportSize({width, height});
+		const actualSize = await marks
+			.first()
+			.evaluate(
+				(mark: {getBoundingClientRect(): {width: number}}) =>
+					mark.getBoundingClientRect().width,
+			);
+		assert.equal(actualSize, size, `private mark size at ${width}px`);
+	}
+
+	await page.setViewportSize(evidenceViewports[1]);
+}
+
 async function bookmarkTitles(page: Page): Promise<string[]> {
 	const state = await send(page, {type: 'GET_STATE'});
 	assert.ok(Array.isArray(state.bookmarks));
@@ -468,12 +498,38 @@ try {
 	);
 	for (const theme of ['light', 'dark'] as const) {
 		await setPrivatePageTheme(normal, privatePage, theme);
+		await assertPrivateMarkAppearance(privatePage);
 		await captureEvidence(
 			privatePage,
 			privatePage.locator('body'),
 			`private-dashboard-${theme}`,
 		);
 	}
+
+	for (const page of [
+		'options.html',
+		'help.html',
+		'popup.html',
+		'sidepanel.html',
+		'add-bookmark.html',
+		'name-session.html',
+	]) {
+		await privatePage.goto(`chrome-extension://${id}/${page}`);
+		await privatePage.locator('[data-private-window-appearance]').waitFor();
+		assert.equal(
+			await privatePage.evaluate(
+				() =>
+					(globalThis as typeof globalThis & ChromeGlobal).chrome.extension
+						.inIncognitoContext,
+			),
+			true,
+			`${page} should know it is in a private window`,
+		);
+		await assertPrivateMarkAppearance(privatePage);
+	}
+
+	await privatePage.goto(`chrome-extension://${id}/newtab.html`);
+	await privatePage.getByRole('main').waitFor();
 
 	assert.equal(
 		await privatePage.getByRole('button', {name: /Don.t show again/}).count(),

@@ -45,6 +45,7 @@ import {
 } from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {
 	LoadingLine,
 	StatusLine,
@@ -404,7 +405,7 @@ function Popup() {
 	// Keep the popup's fixed frame while the saved state arrives.
 	if (!state && !error) {
 		return (
-			<main className="flex h-[560px] w-[380px] items-center justify-center bg-background text-foreground">
+			<main className="flex h-[560px] w-[380px] items-center justify-center text-foreground">
 				<LoadingLine className="py-0" />
 			</main>
 		);
@@ -428,7 +429,7 @@ function Popup() {
 		},
 	];
 	return (
-		<main className="flex h-[560px] w-[380px] flex-col overflow-hidden bg-background text-foreground">
+		<main className="flex h-[560px] w-[380px] flex-col overflow-hidden text-foreground">
 			<header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
 				<h1 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
 					<span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
@@ -814,8 +815,10 @@ function Popup() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<Popup />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<Popup />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

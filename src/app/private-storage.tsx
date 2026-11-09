@@ -21,6 +21,7 @@ import {
 	PRIVATE_RELOAD_FOCUS_KEY,
 	reloadPrivatePage,
 } from './private-config';
+import {PrivateWindowMark} from './private-window-appearance';
 
 export const PRIVATE_STORAGE_TITLE = 'Private windows';
 export const PRIVATE_STORAGE_WORDS = [
@@ -72,33 +73,6 @@ const modeStatus: Record<PrivateStorageMode, string> = {
 	saved: 'Private windows will use a separate saved library.',
 	temporary: 'Private windows will use a separate temporary library.',
 };
-
-function PrivateWindowMark({className}: {className: string}) {
-	return (
-		<svg
-			aria-hidden="true"
-			className={className}
-			viewBox="0 0 64 64"
-			fill="none"
-		>
-			<path
-				d="M12 24c.7-6.2 4.5-10.7 10.6-12.8l3-4.7h12.8l3 4.7C47.5 13.3 51.3 17.8 52 24H12Z"
-				fill="currentColor"
-			/>
-			<path
-				d="M5.5 27h53c.8 0 1.3.8.9 1.5-2.2 4.3-9.2 6.4-27.4 6.4S6.8 32.8 4.6 28.5c-.4-.7.1-1.5.9-1.5Z"
-				fill="currentColor"
-			/>
-			<path
-				d="M8 40h5m38 0h5M28.5 40h7M13 39.5h15l-1.4 7a6.4 6.4 0 0 1-12.5 0l-1.1-7Zm23 0h15l-1.1 7a6.4 6.4 0 0 1-12.5 0l-1.4-7Z"
-				stroke="currentColor"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				strokeWidth="3"
-			/>
-		</svg>
-	);
-}
 
 function PrivateStorageForm({
 	config,
@@ -400,23 +374,10 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 
 	if (config?.configured) {
 		return (
-			<div className="relative isolate min-h-screen">
-				<div
-					aria-hidden="true"
-					className="pointer-events-none fixed inset-0 z-0 overflow-hidden text-muted-foreground/10"
-				>
-					<PrivateWindowMark className="absolute left-1/2 top-1/4 h-16 w-16 -rotate-12 sm:h-20 sm:w-20" />
-					<PrivateWindowMark className="absolute right-1/6 top-1/3 h-20 w-20 rotate-12" />
-					<PrivateWindowMark className="absolute left-1/3 top-1/2 h-14 w-14 rotate-6" />
-					<PrivateWindowMark className="absolute right-1/4 top-2/3 h-20 w-20 -rotate-6" />
-					<PrivateWindowMark className="absolute left-1/6 bottom-1/6 h-12 w-12 rotate-12" />
-					<PrivateWindowMark className="absolute right-2/5 top-1/2 h-16 w-16 -rotate-12" />
-					<PrivateWindowMark className="absolute left-3/5 top-1/4 h-14 w-14 rotate-6" />
-					<PrivateWindowMark className="absolute right-1/5 top-5/6 h-16 w-16 rotate-12" />
-				</div>
+			<>
 				<aside
 					aria-label="Private window"
-					className="relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-muted px-5 py-3 text-sm sm:px-8"
+					className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-muted px-5 py-3 text-sm sm:px-8"
 				>
 					<div className="flex min-w-0 items-center gap-3">
 						<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -437,8 +398,8 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 						Private window settings
 					</a>
 				</aside>
-				<div className="relative z-10">{children}</div>
-			</div>
+				{children}
+			</>
 		);
 	}
 

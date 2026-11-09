@@ -117,6 +117,7 @@ import {
 	PRIVATE_STORAGE_TITLE,
 	PRIVATE_STORAGE_WORDS,
 } from './private-storage';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {cn} from '@/lib/utils';
 
 // Settings keys whose value has the given type, so switch rows only bind boolean settings and select rows string ones.
@@ -3099,8 +3100,10 @@ function PageTop() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<Options />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<Options />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

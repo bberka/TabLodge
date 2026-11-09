@@ -43,6 +43,7 @@ import {
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {
 	Brand,
 	EmptyState,
@@ -1046,8 +1047,10 @@ const hostname = (value: string) => siteName(value) || value || 'Untitled';
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<SidePanel />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<SidePanel />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

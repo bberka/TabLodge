@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {LoadingLine, send, useCloseOnEscape} from './common';
 import {NameSessionForm} from './name-session-dialog';
 import {
@@ -70,14 +71,14 @@ function NameSessionPrompt() {
 
 	if (initialName === null) {
 		return (
-			<main className="min-h-screen bg-background p-5" aria-busy="true">
+			<main className="min-h-screen p-5" aria-busy="true">
 				<LoadingLine />
 			</main>
 		);
 	}
 
 	return (
-		<main className="min-h-screen bg-background">
+		<main className="min-h-screen">
 			<NameSessionForm
 				plain
 				selectOnFocus
@@ -98,8 +99,10 @@ function NameSessionPrompt() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<NameSessionPrompt />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<NameSessionPrompt />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

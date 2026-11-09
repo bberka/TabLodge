@@ -4,6 +4,7 @@ import {Plus, Save, X} from 'lucide-react';
 import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {LoadingLine, send, useCloseOnEscape, useTabLodgeState} from './common';
 import {LinkSummary} from './favicon';
 import {IconLabel} from './icon-label';
@@ -85,7 +86,7 @@ function AddBookmarkPrompt() {
 	}
 
 	return (
-		<main className="min-h-screen bg-background">
+		<main className="min-h-screen">
 			<form className="flex flex-col gap-4 p-5" onSubmit={(e) => void save(e)}>
 				<div>
 					<h1 className="text-base font-semibold">Bookmark this page</h1>
@@ -171,8 +172,10 @@ function AddBookmarkPrompt() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<AddBookmarkPrompt />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<AddBookmarkPrompt />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );
