@@ -463,6 +463,20 @@ function Help() {
 						'up down arrows navigate results enter open ctrl command cmd meta new tab escape esc close palette',
 				},
 				{
+					title: 'Search from the address bar',
+					body: (
+						<>
+							Type <Key>tl</Key>, then press <Key>Space</Key> or <Key>Tab</Key>,
+							and keep typing. Suggestions list open tabs, bookmarks, saved
+							tabs, and sessions. <Key>Enter</Key> opens one, or <Key>Alt</Key>{' '}
+							+ <Key>Enter</Key> opens it in a new tab. Pressing{' '}
+							<Key>Enter</Key> on your own text searches the dashboard.
+						</>
+					),
+					searchText:
+						'address bar omnibox url bar keyword tl type space tab suggestions open tabs bookmarks saved tabs sessions enter alt new tab',
+				},
+				{
 					title: 'Change keyboard shortcuts',
 					body: (
 						<>

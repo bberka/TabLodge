@@ -4,7 +4,6 @@ import {webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import vm from 'node:vm';
-import {transformWithOxc} from 'vite-plus';
 import {test} from 'vite-plus/test';
 import {ICON_IDS} from '../src/app/icon-ids';
 import type {
@@ -18,6 +17,7 @@ import type {
 	TabLodgeMessage,
 	TabLodgeMessageType,
 } from '../src/app/types';
+import {buildWorkerSource} from './worker-source';
 
 // The service worker is a classic script with no exports, so each harness runs the
 // type-stripped source in a fresh VM context against a mocked chrome.* API.
@@ -27,11 +27,7 @@ const workerPath = join(
 	'extension',
 	'service-worker.ts',
 );
-const {code: workerSource} = await transformWithOxc(
-	readFileSync(workerPath, 'utf8'),
-	workerPath,
-	{lang: 'ts'},
-);
+const workerSource = await buildWorkerSource();
 const storageKey = 'tablodge.state';
 const manifest = JSON.parse(
 	readFileSync(
@@ -217,6 +213,7 @@ function createWorkerHarness(
 	const alarmCalls: string[] = [];
 	const downloads: Array<{url: string; filename: string}> = [];
 	const windowUpdates: Array<{id: number; properties: unknown}> = [];
+	const defaultSuggestions: string[] = [];
 	const timers = new Map<number, {callback: () => void; delay: number}>();
 	let nextTimerId = 1;
 	let nextTabId = 200;
@@ -589,11 +586,22 @@ function createWorkerHarness(
 			},
 		},
 		tabs: {
-			async query(query: {windowId?: number} = {}) {
+			async query(
+				query: {
+					windowId?: number;
+					active?: boolean;
+					lastFocusedWindow?: boolean;
+				} = {},
+			) {
 				return tabs
 					.filter(
 						(tab) =>
-							query.windowId === undefined || tab.windowId === query.windowId,
+							(query.windowId === undefined ||
+								tab.windowId === query.windowId) &&
+							(query.active === undefined ||
+								Boolean(tab.active) === query.active) &&
+							(!query.lastFocusedWindow ||
+								tab.windowId === lastFocusedWindowId),
 					)
 					.map((tab) => ({...tab}));
 			},
@@ -807,6 +815,13 @@ function createWorkerHarness(
 					},
 				}),
 		commands: {onCommand: event('onCommand')},
+		omnibox: {
+			async setDefaultSuggestion(suggestion: {description: string}) {
+				defaultSuggestions.push(suggestion.description);
+			},
+			onInputChanged: event('omniboxInputChanged'),
+			onInputEntered: event('omniboxInputEntered'),
+		},
 		...(!options.noAlarms && {
 			alarms: {
 				async create(
@@ -884,6 +899,7 @@ function createWorkerHarness(
 		Date: FrozenDate,
 		navigator: {language: options.locale ?? 'en-US'},
 		URL,
+		URLSearchParams,
 		console,
 		crypto: webcrypto,
 		structuredClone,
@@ -921,6 +937,7 @@ function createWorkerHarness(
 		alarmCalls,
 		downloads,
 		windowUpdates,
+		defaultSuggestions,
 		timers,
 		/**
 		Runs every pending manual timer (and any they schedule), then lets the queued async work settle.
@@ -9656,4 +9673,161 @@ test('SPLIT_GROUP keeps a whole split pair together, uses the given name, and re
 		tabIds: ['a1'],
 	});
 	assert.equal(missing.ok, false);
+});
+
+type OmniboxSuggestion = {content: string; description: string};
+
+function omniboxHarness(settings: Record<string, unknown> = {}) {
+	const state = stateWithSession(settings);
+	state.bookmarks = [
+		{
+			id: 'bookmark-1',
+			title: 'Hacker News',
+			url: 'https://news.ycombinator.com/?utm_source=x',
+			columnId: 'bookmark-default',
+			createdAt: 1,
+			updatedAt: 1,
+		},
+	];
+	const harness = createWorkerHarness(state, [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'https://current.example/',
+			title: 'Current',
+		},
+		{
+			id: 2,
+			windowId: 11,
+			index: 0,
+			active: true,
+			url: 'https://news.example/',
+			title: 'Hacker daily',
+		},
+		{
+			id: 3,
+			windowId: 10,
+			index: 1,
+			active: false,
+			url: 'chrome-extension://tablodge/newtab.html',
+			title: 'TabLodge',
+		},
+	]);
+	return {
+		harness,
+		async suggest(text: string) {
+			let suggestions: OmniboxSuggestion[] = [];
+			(
+				harness.listeners.omniboxInputChanged as (
+					text: string,
+					suggest: (list: OmniboxSuggestion[]) => void,
+				) => void
+			)(text, (list) => {
+				suggestions = list;
+			});
+			await settle();
+			return [...suggestions];
+		},
+		async enter(text: string, disposition = 'currentTab') {
+			(
+				harness.listeners.omniboxInputEntered as (
+					text: string,
+					disposition: string,
+				) => void
+			)(text, disposition);
+			await settle();
+		},
+	};
+}
+
+test('omnibox: suggests open tabs, saved tabs, bookmarks and sessions, never the dashboard tab', async () => {
+	const {harness, suggest} = omniboxHarness();
+	assert.match(harness.defaultSuggestions[0], /%s/);
+	assert.deepEqual(
+		(await suggest('hacker')).map((entry) => entry.content),
+		['tab:2', 'bookmark:bookmark-1'],
+	);
+	assert.deepEqual(
+		(await suggest('research')).map((entry) => entry.content),
+		['session:session-1', 'saved-tab:session-1:saved-tab-1'],
+	);
+	assert.deepEqual(
+		(await suggest('saved page')).map((entry) => entry.content),
+		['saved-tab:session-1:saved-tab-1'],
+	);
+	assert.deepEqual(await suggest('tablodge'), []);
+	assert.deepEqual(await suggest('zzzzqqq'), []);
+});
+
+test('omnibox: entering an open tab switches to it and focuses its window', async () => {
+	const {harness, enter} = omniboxHarness();
+	await enter('tab:2');
+	assert.equal(harness.tabs.find((tab) => tab.id === 2)?.active, true);
+	assert.ok(harness.windowUpdates.some((update) => update.id === 11));
+	assert.equal(harness.openedTabs.length, 0);
+});
+
+test('omnibox: entering a bookmark follows the address bar disposition', async () => {
+	const current = omniboxHarness();
+	await current.enter('bookmark:bookmark-1', 'currentTab');
+	assert.equal(
+		current.harness.tabs.find((tab) => tab.id === 1)?.url,
+		'https://news.ycombinator.com/?utm_source=x',
+	);
+	assert.equal(current.harness.openedTabs.length, 0);
+
+	const foreground = omniboxHarness({removeTrackingParameters: true});
+	await foreground.enter('bookmark:bookmark-1', 'newForegroundTab');
+	assert.deepEqual(
+		foreground.harness.openedTabs.map((tab) => [tab.url, tab.active]),
+		[['https://news.ycombinator.com/', true]],
+	);
+
+	const background = omniboxHarness();
+	await background.enter('saved-tab:session-1:saved-tab-1', 'newBackgroundTab');
+	assert.deepEqual(
+		background.harness.openedTabs.map((tab) => [tab.url, tab.active]),
+		[['https://saved.example/article', false]],
+	);
+});
+
+test('omnibox: a pinned TabLodge tab is not navigated away', async () => {
+	const {harness, enter} = omniboxHarness({keepLodgePinned: true});
+	const lodge = harness.tabs.find((tab) => tab.id === 3)!;
+	Object.assign(lodge, {pinned: true, active: true});
+	harness.tabs.find((tab) => tab.id === 1)!.active = false;
+	await enter('bookmark:bookmark-1', 'currentTab');
+	assert.equal(lodge.url, 'chrome-extension://tablodge/newtab.html');
+	assert.equal(harness.openedTabs.length, 1);
+});
+
+test('omnibox: entering a session opens the dashboard focused on it', async () => {
+	const {harness, enter} = omniboxHarness();
+	await enter('session:session-1');
+	assert.equal(
+		harness.tabs.find((tab) => tab.id === 3)?.url,
+		'chrome-extension://tablodge/newtab.html?group=session-1',
+	);
+});
+
+test('omnibox: entering plain text searches in the dashboard', async () => {
+	const {harness, enter} = omniboxHarness();
+	await enter('some words');
+	assert.equal(
+		harness.tabs.find((tab) => tab.id === 3)?.url,
+		'chrome-extension://tablodge/newtab.html?q=some+words',
+	);
+});
+
+test('omnibox: a bookmark saved after the first search shows up in the next one', async () => {
+	const {harness, suggest} = omniboxHarness();
+	assert.deepEqual(await suggest('lemmings'), []);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Lemmings fan site', url: 'https://lemmings.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal((await suggest('lemmings')).length, 1);
 });
