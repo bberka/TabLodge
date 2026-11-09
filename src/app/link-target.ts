@@ -42,18 +42,29 @@ export async function isPinnedLodgeTab(): Promise<boolean> {
 }
 
 /**
-Opens `url` according to the settings (or the explicit `requested` menu choice).
+Opens `url` according to the settings (or the explicit `requested` menu choice). From the palette window
+(`where`), "current" means the active tab of that window, which comes to the front.
 */
 export async function openLink(
 	url: string,
 	kind: LinkKind,
 	settings: Settings,
 	requested?: 'current' | 'new',
+	where?: {windowId?: number},
 ): Promise<void> {
 	const destination = settings.removeTrackingParameters
 		? stripTrackingParameters(url)
 		: url;
-	const pinned = settings.keepLodgePinned ? await isPinnedLodgeTab() : false;
+	const target = where ? await activeTabOf(where.windowId) : undefined;
+	const pinned = where
+		? Boolean(
+				settings.keepLodgePinned &&
+				target?.pinned &&
+				target.url?.startsWith(chrome.runtime.getURL('')),
+			)
+		: settings.keepLodgePinned
+			? await isPinnedLodgeTab()
+			: false;
 	// Places that cannot show a bookmark menu (the search palette) open the link like the default setting.
 	const resolved = resolveLinkTarget(kind, settings, {
 		requested,
@@ -71,12 +82,38 @@ export async function openLink(
 		return;
 	}
 
+	if (where) {
+		if (action === 'current' && target?.id !== undefined) {
+			await chrome.tabs.update(target.id, {url: destination, active: true});
+		} else {
+			await chrome.tabs.create({url: destination, windowId: where.windowId});
+		}
+
+		if (where.windowId !== undefined) {
+			await chrome.windows.update(where.windowId, {focused: true});
+		}
+
+		return;
+	}
+
 	if (action === 'new') {
 		await chrome.tabs.create({url: destination});
 		return;
 	}
 
 	globalThis.location.assign(destination);
+}
+
+async function activeTabOf(windowId: number | undefined) {
+	if (windowId === undefined) {
+		return undefined;
+	}
+
+	try {
+		return (await chrome.tabs.query({active: true, windowId}))[0];
+	} catch {
+		return undefined;
+	}
 }
 
 /**

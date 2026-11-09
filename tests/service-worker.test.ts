@@ -8932,6 +8932,75 @@ test('the bookmark shortcut opens the add-bookmark window for a web page only', 
 	assert.equal(internal.windowCreateCalls.length, 0);
 });
 
+test('the palette shortcut opens one palette window over the focused window on any page, and a second press closes it', async () => {
+	// A restricted page: the palette is a window of its own, so the page does not matter.
+	const harness = nameHarness({}, [
+		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
+	]);
+	const press = async () => {
+		(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+			'open-palette',
+			{id: 1, windowId: 10},
+		);
+		await settle();
+	};
+
+	await press();
+	assert.equal(harness.windowCreateCalls.length, 1);
+	const call = harness.windowCreateCalls[0] as {
+		type: string;
+		url: string;
+		focused: boolean;
+	};
+	assert.equal(call.type, 'popup');
+	assert.equal(call.focused, true);
+	const url = new URL(call.url);
+	assert.equal(url.pathname, '/palette.html');
+	assert.equal(url.searchParams.get('window'), '10');
+
+	// The palette window is now open; pressing the shortcut again closes it instead of opening a second one.
+	await press();
+	assert.equal(harness.windowCreateCalls.length, 1);
+	assert.equal(
+		harness.createdWindows.length,
+		1,
+		'the palette window was created once',
+	);
+});
+
+test('messages from the palette window act on the window it was opened over', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({restoreTarget: 'current-window', restoreMode: 'keep'}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://front.example/',
+			},
+			{
+				id: 2,
+				windowId: 20,
+				index: 0,
+				active: true,
+				url: 'chrome-extension://tablodge/palette.html?window=10',
+			},
+		],
+		{extraWindows: [20]},
+	);
+	const response = await harness.sendMessage(
+		{type: 'RESTORE_GROUP', groupId: 'session-1'},
+		{
+			url: 'chrome-extension://tablodge/palette.html?window=10',
+			tab: {id: 2, windowId: 20},
+		} as never,
+	);
+	assert.equal(response.ok, true, response.error);
+	assert.ok(harness.openedTabs.length > 0);
+	assert.ok(harness.openedTabs.every((tab) => tab.windowId === 10));
+});
+
 test('an all-windows toolbar save asks once for every session it created', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({

@@ -517,6 +517,21 @@ export function SessionManager({
 				break;
 			}
 
+			case 'restore-session': {
+				const group = groups.find((entry) => entry.id === detail.id);
+				if (group) {
+					void restoreGroup(
+						group,
+						false,
+						undefined,
+						undefined,
+						detail.newWindow ? 'always-new-window' : undefined,
+					);
+				}
+
+				break;
+			}
+
 			case 'select-folder': {
 				setFolderId(detail.id);
 				setQuery('');

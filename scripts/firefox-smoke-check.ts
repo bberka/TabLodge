@@ -28,6 +28,7 @@ const PAGES = [
 	'sidepanel.html',
 	'name-session.html',
 	'add-bookmark.html',
+	'palette.html',
 ];
 
 type Reply = {ok: boolean; error?: string};

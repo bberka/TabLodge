@@ -62,7 +62,7 @@ function describe(item: FinderItem, query: string): string {
 
 /**
 The best matches for the typed text, in the finder's order but with at most a few of each kind so bookmarks
-cannot push sessions off the list. An empty query lists the open tabs.
+cannot push sessions off the list. An empty query lists the recent sessions and open tabs.
 */
 export function omniboxSuggestions(
 	query: string,

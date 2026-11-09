@@ -172,8 +172,51 @@ test('the group holding the best match comes first, and a better title ranks fir
 	assert.equal(hit?.id, 'bookmark:x2');
 });
 
-test('a blank query lists commands and open tabs only', () => {
-	assert.deepEqual(kinds(''), ['tab', 'command']);
+test('a blank query lists recent sessions, then open tabs and commands', () => {
+	assert.deepEqual(kinds(''), ['session', 'tab', 'command']);
+});
+
+test('a blank query lists sessions by last use, newest first, up to a cap', () => {
+	const make = (id: string, updatedAt: number, lastOpenedAt?: number) =>
+		({...session, id, name: id, updatedAt, lastOpenedAt}) as Session;
+	const many = Array.from({length: 12}, (_, number) =>
+		make(`s${number}`, number),
+	);
+	// An old session restored just now counts as the most recent.
+	many[0] = make('opened-today', 0, 1000);
+	const listed = flattenSections(
+		searchFinder('', buildFinderIndex({...sources, groups: many})),
+	).filter((item) => item.kind === 'session');
+	assert.equal(listed.length, 8);
+	assert.equal(listed[0].ref, 'opened-today');
+	assert.deepEqual(
+		listed.slice(1, 3).map((item) => item.ref),
+		['s11', 's10'],
+	);
+});
+
+test('archived sessions stay out of the blank-query session list', () => {
+	const archivedFolder: Folder = {
+		id: 'archived',
+		name: 'Archived',
+		createdAt: 0,
+		isDefault: false,
+	};
+	const archived = {...session, id: 'old', folderId: 'archived'};
+	const listed = flattenSections(
+		searchFinder(
+			'',
+			buildFinderIndex({
+				...sources,
+				folders: [folder, archivedFolder],
+				groups: [session, archived],
+			}),
+		),
+	).filter((item) => item.kind === 'session');
+	assert.deepEqual(
+		listed.map((item) => item.ref),
+		['s1'],
+	);
 });
 
 test('typed addresses offer "Go to" first', () => {

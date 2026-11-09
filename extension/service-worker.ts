@@ -2840,6 +2840,92 @@ async function openBookmarkPrompt(
 	return {ok: true};
 }
 
+const PALETTE_WIDTH = 640;
+const PALETTE_HEIGHT = 520;
+
+/**
+The "Open the search palette" shortcut: opens the palette in a small window of its own, which works on every page
+(web pages that bind Ctrl+K, chrome:// pages, the Web Store, the PDF viewer). A second press closes it again. The
+address carries the window that was in front, so the palette's links, searches and restores go there.
+*/
+async function openPalette(commandTab?: chrome.tabs.Tab) {
+	const palettePrefix = chrome.runtime.getURL('palette.html');
+	const open = (await chrome.tabs.query({windowType: 'popup'})).filter(
+		(tab) => tab.url?.startsWith(palettePrefix) && isInteger(tab.windowId),
+	);
+	if (open.length > 0) {
+		await Promise.all(
+			open.map(async (tab) => chrome.windows.remove(tab.windowId)),
+		);
+		return;
+	}
+
+	let anchor: chrome.windows.Window | undefined;
+	try {
+		const own =
+			commandTab && isInteger(commandTab.windowId)
+				? await chrome.windows.get(commandTab.windowId)
+				: undefined;
+		anchor =
+			own?.type === 'normal'
+				? own
+				: await chrome.windows.getLastFocused({windowTypes: ['normal']});
+	} catch {
+		/*
+		Without the window the browser places the palette itself and links open in the last focused window.
+		*/
+	}
+
+	const options: chrome.windows.CreateData = {
+		type: 'popup',
+		url: `${palettePrefix}${isInteger(anchor?.id) ? `?window=${anchor.id}` : ''}`,
+		width: PALETTE_WIDTH,
+		height: PALETTE_HEIGHT,
+		focused: true,
+	};
+	if (
+		anchor &&
+		isInteger(anchor.left) &&
+		isInteger(anchor.top) &&
+		isInteger(anchor.width)
+	) {
+		options.left = Math.max(
+			0,
+			anchor.left + Math.round((anchor.width - PALETTE_WIDTH) / 2),
+		);
+		options.top = Math.max(0, anchor.top + 80);
+	}
+
+	await chrome.windows.create({...options, incognito: privateContext});
+}
+
+/**
+Messages from the palette window act on the window it was opened over, not on the palette's own window (which is
+no place to restore tabs into): the sender becomes the active tab of that window.
+*/
+async function paletteSender(
+	sender: chrome.runtime.MessageSender,
+): Promise<chrome.runtime.MessageSender> {
+	const palettePrefix = chrome.runtime.getURL('palette.html');
+	if (!sender.url?.startsWith(palettePrefix)) {
+		return sender;
+	}
+
+	const id = Number(new URL(sender.url).searchParams.get('window'));
+	if (!isInteger(id)) {
+		return sender;
+	}
+
+	try {
+		const tab = (await chrome.tabs.query({active: true, windowId: id})).find(
+			(candidate) => candidate.active,
+		);
+		return tab ? {...sender, tab} : sender;
+	} catch {
+		return sender;
+	}
+}
+
 /**
 The name the next save would get, for the Settings preview: the same formatter, the given (unsaved) style and
 template, and the tabs of the sender's (or last-focused) window.
@@ -8780,7 +8866,10 @@ async function handleMessage(
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-	Promise.resolve(handleMessage(message as TabLodgeMessage | undefined, sender))
+	Promise.resolve(paletteSender(sender))
+		.then(async (effective) =>
+			handleMessage(message as TabLodgeMessage | undefined, effective),
+		)
 		.then(sendResponse)
 		.catch((error: unknown) => {
 			sendResponse({
@@ -8811,6 +8900,16 @@ chrome.commands.onCommand.addListener((command, tab) => {
 
 	if (command === 'open-dashboard') {
 		void openDashboardForTab(tab);
+	}
+
+	if (command === 'open-palette') {
+		// The window is the feedback, so only a failure flashes the badge.
+		openPalette(tab).catch((error: unknown) => {
+			console.warn(
+				errorMessage(error) || `${APP_NAME} could not open the search palette.`,
+			);
+			flashBadge(tab, false);
+		});
 	}
 
 	if (command === 'toggle-side-panel') {

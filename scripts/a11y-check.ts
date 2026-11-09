@@ -26,7 +26,14 @@ import {createDevFixture, type DevStore} from './dev-fixture.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-const PAGES = ['newtab', 'options', 'help', 'popup', 'sidepanel'] as const;
+const PAGES = [
+	'newtab',
+	'options',
+	'help',
+	'popup',
+	'sidepanel',
+	'palette',
+] as const;
 const THEMES = ['light', 'dark'] as const;
 const EVIDENCE_VIEWPORTS = [
 	[440, 956],
@@ -3424,6 +3431,48 @@ async function main() {
 					assert.deepEqual(lines, []);
 				});
 			}
+		}
+
+		for (const theme of THEMES) {
+			await check(`palette window keyboard use (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'palette');
+				await setTheme(page, theme);
+				const input = page.getByRole('combobox', {name: 'Search'});
+				await input.waitFor({timeout: 5000});
+				await page.locator('input[role="combobox"]:focus').waitFor({
+					timeout: 2000,
+				});
+				const listbox = page.getByRole('listbox', {name: 'Results'});
+				assert.equal(
+					await input.getAttribute('aria-controls'),
+					await listbox.getAttribute('id'),
+				);
+				const first = await input.getAttribute('aria-activedescendant');
+				await page.keyboard.press('ArrowDown');
+				const second = await input.getAttribute('aria-activedescendant');
+				assert.ok(first, 'A result is active when the palette opens');
+				assert.notEqual(second, first, 'Arrow keys move');
+				assert.equal(
+					await page.locator(`#${second}`).getAttribute('aria-selected'),
+					'true',
+				);
+				await page.keyboard.type('zzzz');
+				await page
+					.getByRole('option', {name: /Search the web for/})
+					.waitFor({timeout: 2000});
+				assert.equal(
+					await page.getByRole('status').filter({hasText: 'result'}).count(),
+					1,
+					'A new search announces how many results it found',
+				);
+				await page.screenshot({
+					path: `.dev/evidence/palette-keyboard-${theme}.png`,
+				});
+				// Escape closes the window, which ends the key press call itself.
+				const closed = page.waitForEvent('close', {timeout: 3000});
+				await page.keyboard.press('Escape').catch(() => {});
+				await closed;
+			});
 		}
 
 		for (const theme of THEMES) {
