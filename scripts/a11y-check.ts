@@ -1988,6 +1988,49 @@ async function main() {
 			);
 
 			await check(
+				`bookmark board layout settings change by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					const layout = [
+						['Bookmark column width', 'Wide', 'bookmarkColumnWidth', 'wide'],
+						['Columns per row', '2 columns', 'bookmarkColumnsPerRow', 2],
+						['Bookmark density', 'Compact', 'bookmarkDensity', 'compact'],
+					] as const;
+					for (const [label, option, key, value] of layout) {
+						const select = page.getByRole('combobox', {
+							name: label,
+							exact: true,
+						});
+						await select.focus();
+						await page.keyboard.press('Space');
+						await page.getByRole('option', {name: option, exact: true}).click();
+						await until(
+							async () => (await readDevStore(page)).settings[key] === value,
+							`${label} to save`,
+						);
+						assert.equal(
+							await page.locator(':focus').getAttribute('aria-label'),
+							label,
+							`focus returns to ${label}`,
+						);
+					}
+
+					const violations = await axeViolationLines(page, axeSource);
+					assert.deepEqual(violations, [], 'layout settings should pass axe');
+					const reset = createDevFixture(await readDevStore(page));
+					reset.settings = {
+						...reset.settings,
+						bookmarkColumnWidth: 'default',
+						bookmarkColumnsPerRow: 0,
+						bookmarkDensity: 'comfortable',
+					};
+					await writeDevStore(page, reset);
+					await page.close();
+				},
+			);
+
+			await check(
 				`changing import scope cancels a pending read (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'options');

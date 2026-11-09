@@ -763,6 +763,43 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'bookmarkColumnWidth',
+				label: 'Bookmark column width',
+				help: 'The narrowest a column in Board view can get before the grid fits fewer across. Default keeps the layout set by Dashboard width. Focus view always shows one column beside the list.',
+				type: 'select',
+				options: [
+					['narrow', 'Narrow'],
+					['default', 'Default'],
+					['wide', 'Wide'],
+					['extra-wide', 'Extra wide'],
+				],
+			},
+			{
+				name: 'bookmarkColumnsPerRow',
+				label: 'Columns per row',
+				help: 'The most columns Board view puts in a row. Automatic fits as many as the width allows. A narrow window still shows fewer, so columns never get too small.',
+				type: 'number-select',
+				options: [
+					['0', 'Automatic'],
+					['1', '1 column'],
+					['2', '2 columns'],
+					['3', '3 columns'],
+					['4', '4 columns'],
+					['5', '5 columns'],
+					['6', '6 columns'],
+				],
+			},
+			{
+				name: 'bookmarkDensity',
+				label: 'Bookmark density',
+				help: 'Compact tightens the gaps, padding, and row height of the bookmark board in both Board and Focus views, so more bookmarks fit on screen.',
+				type: 'select',
+				options: [
+					['comfortable', 'Comfortable'],
+					['compact', 'Compact'],
+				],
+			},
+			{
 				name: 'limitBookmarksPerColumn',
 				label: 'Limit bookmarks shown at a time',
 				help: 'On by default. Each column in Board and Focus keeps the number below visible and scrolls through the rest. All bookmarks stay loaded. Off keeps the current display behavior.',

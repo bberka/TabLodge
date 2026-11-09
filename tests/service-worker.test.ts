@@ -4762,6 +4762,71 @@ test('bookmarkBoardView defaults to board, validates choices, and resets', async
 	assert.equal(reset.settings.bookmarkBoardView, 'board');
 });
 
+test('bookmark board layout settings default to the current layout, validate choices, and reset', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	const {settings} = await defaults.sendMessage({type: 'GET_STATE'});
+	assert.equal(settings.bookmarkColumnWidth, 'default');
+	assert.equal(settings.bookmarkColumnsPerRow, 0);
+	assert.equal(settings.bookmarkDensity, 'comfortable');
+
+	const configured = createWorkerHarness(
+		stateWithSession({
+			bookmarkColumnWidth: 'extra-wide',
+			bookmarkColumnsPerRow: 4,
+			bookmarkDensity: 'compact',
+		}),
+	);
+	const kept = (await configured.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(kept.bookmarkColumnWidth, 'extra-wide');
+	assert.equal(kept.bookmarkColumnsPerRow, 4);
+	assert.equal(kept.bookmarkDensity, 'compact');
+
+	const invalid = createWorkerHarness(
+		stateWithSession({
+			bookmarkColumnWidth: 'huge',
+			bookmarkColumnsPerRow: 'many',
+			bookmarkDensity: 'tight',
+		}),
+	);
+	const fallback = (await invalid.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(fallback.bookmarkColumnWidth, 'default');
+	assert.equal(fallback.bookmarkColumnsPerRow, 0);
+	assert.equal(fallback.bookmarkDensity, 'comfortable');
+
+	for (const [stored, expected] of [
+		[-3, 0],
+		[99, 6],
+		[2.9, 2],
+	] as const) {
+		const clamped = createWorkerHarness(
+			stateWithSession({bookmarkColumnsPerRow: stored}),
+		);
+		assert.equal(
+			(await clamped.sendMessage({type: 'GET_STATE'})).settings
+				.bookmarkColumnsPerRow,
+			expected,
+		);
+	}
+
+	const updated = await invalid.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			bookmarkColumnWidth: 'narrow',
+			bookmarkColumnsPerRow: 3,
+			bookmarkDensity: 'compact',
+		},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(invalid.state.settings.bookmarkColumnWidth, 'narrow');
+	assert.equal(invalid.state.settings.bookmarkColumnsPerRow, 3);
+	assert.equal(invalid.state.settings.bookmarkDensity, 'compact');
+
+	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.bookmarkColumnWidth, 'default');
+	assert.equal(reset.settings.bookmarkColumnsPerRow, 0);
+	assert.equal(reset.settings.bookmarkDensity, 'comfortable');
+});
+
 test("bookmark imports with a target column ignore the file's columns and fill only that column", async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	harness.state.bookmarkColumns = [

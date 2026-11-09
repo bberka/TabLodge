@@ -495,6 +495,9 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	showSessionFaviconPreviews: true,
 	sessionQuickActions: ['archive'],
 	stretchBookmarkColumns: true,
+	bookmarkColumnWidth: 'default',
+	bookmarkColumnsPerRow: 0,
+	bookmarkDensity: 'comfortable',
 	limitBookmarksPerColumn: true,
 	bookmarkColumnPageSize: 16,
 	pasteLinkToBookmark: true,
@@ -1557,6 +1560,15 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		showSessionFaviconPreviews: raw.showSessionFaviconPreviews !== false,
 		sessionQuickActions: normalizeSessionQuickActions(raw),
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
+		bookmarkColumnWidth: isOneOf(
+			['narrow', 'default', 'wide', 'extra-wide'],
+			raw.bookmarkColumnWidth,
+		)
+			? raw.bookmarkColumnWidth
+			: 'default',
+		bookmarkColumnsPerRow: clampInteger(raw.bookmarkColumnsPerRow, 0, 6, 0),
+		bookmarkDensity:
+			raw.bookmarkDensity === 'compact' ? 'compact' : 'comfortable',
 		limitBookmarksPerColumn: raw.limitBookmarksPerColumn !== false,
 		bookmarkColumnPageSize: clampInteger(
 			raw.bookmarkColumnPageSize,
