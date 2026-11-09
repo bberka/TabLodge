@@ -508,6 +508,7 @@ export type LinkEntry = {
 	title?: string;
 };
 export type EraseScope = 'sessions' | 'bookmarks' | 'all';
+export type SessionWindowMode = 'replace' | 'append';
 /**
 Which tabs SAVE_TABS captures; the "-tab" scopes are relative to the sender (or active) tab.
 */
@@ -606,6 +607,17 @@ export type TabLodgeMessages = {
 		targetTabId?: string | null;
 		position?: InsertPosition;
 	};
+	/**
+	Changes a session from the sender's window without opening or closing any tab. `replace` swaps the session's links for the
+	window's web tabs; `append` adds the ones the session lacks at the end. Excluded sites, pinned tabs, and the save duplicate
+	setting apply as for a save. The session keeps its name, folder, description, and notes of links it still holds.
+	*/
+	UPDATE_GROUP_FROM_WINDOW: {groupId: string; mode: SessionWindowMode};
+	/**
+	Moves the chosen links into a new session placed after the source, in the same folder. A split view pair stays together
+	only when both halves move. The source keeps at least one link.
+	*/
+	SPLIT_GROUP: {groupId: string; tabIds: string[]; name?: string};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
 	ADD_BOOKMARKS: {
@@ -816,6 +828,19 @@ export type TabLodgeResponses = {
 		trashId?: string;
 	};
 	ADD_LINKS_TO_SESSION: {added: number; skipped: number} & Undoable;
+	/**
+	`count`: links in the session now; `added`/`removed`: links new to it and links no longer in it; `skipped`: window tabs left out as duplicates.
+	*/
+	UPDATE_GROUP_FROM_WINDOW: {
+		count: number;
+		added: number;
+		removed: number;
+		skipped: number;
+	} & Undoable;
+	/**
+	`groupId`: the new session; `count`: links moved into it.
+	*/
+	SPLIT_GROUP: {groupId: string; count: number} & Undoable;
 	UPDATE_TAB: {shared: number};
 	MERGE_GROUPS: {added: number; skipped: number} & Undoable;
 	ADD_BOOKMARK: {bookmark: Bookmark};

@@ -9,7 +9,9 @@
 // Axe and keyboard checks do not judge reading order or screen reader announcements; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
+import {createServer, type Server} from 'node:http';
 import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import type {AddressInfo} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
@@ -324,6 +326,36 @@ async function seedLongBookmarkColumn(page: Page, count: number) {
 	await writeDevStore(page, fixture);
 }
 
+// Tiny local pages, so the test window has web tabs that a replace or append can read.
+async function startPageServer() {
+	const server = createServer((request, response) => {
+		response.setHeader('content-type', 'text/html');
+		response.end(`<title>Local ${request.url}</title><h1>${request.url}</h1>`);
+	});
+	await new Promise<void>((resolve) => {
+		server.listen(0, '127.0.0.1', resolve);
+	});
+	return {
+		server,
+		origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+	};
+}
+
+async function closeServer(server: Server) {
+	await new Promise<void>((resolve) => {
+		server.close(() => {
+			resolve();
+		});
+	});
+}
+
+async function sessionUrls(page: Page, groupId: string) {
+	const store = await readDevStore(page);
+	return store.groups
+		.find((group) => group.id === groupId)
+		?.tabs.map((tab) => tab.url);
+}
+
 async function groupFolderId(page: Page, groupId: string) {
 	const state = (await page.evaluate(async () => {
 		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
@@ -473,6 +505,37 @@ async function withMobileEmulation(
 		await device.send('Emulation.clearDeviceMetricsOverride');
 		await device.detach();
 	}
+}
+
+// Screenshots of the current page state at the four evidence profiles; the phone profile uses device emulation.
+async function captureViewports(page: Page, name: string, theme: string) {
+	await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+	for (const [width, height] of EVIDENCE_VIEWPORTS) {
+		await page.setViewportSize({width, height});
+		if (width === 440) {
+			await withMobileEmulation(page, {width, height}, async (device) => {
+				// The toast fades in; let it settle so the capture shows it opaque.
+				await page.waitForTimeout(600);
+				const {data} = await device.send('Page.captureScreenshot', {
+					format: 'png',
+					captureBeyondViewport: false,
+				});
+				await writeFile(
+					fromRoot(
+						`.dev/evidence/${name}-${width}x${height}-dsf3-${theme}.png`,
+					),
+					Buffer.from(data, 'base64'),
+				);
+			});
+		} else {
+			await page.screenshot({
+				animations: 'disabled',
+				path: fromRoot(`.dev/evidence/${name}-${width}x${height}-${theme}.png`),
+			});
+		}
+	}
+
+	await page.setViewportSize({width: 1440, height: 900});
 }
 
 async function captureEvidence(
@@ -4154,6 +4217,156 @@ async function main() {
 
 				await page.close();
 			});
+
+			await check(
+				`replace, append and split a session by keyboard with Undo (${theme})`,
+				async () => {
+					const {server, origin} = await startPageServer();
+					const page = await openPage(context, extensionId, 'newtab');
+					const other = await context.newPage();
+					try {
+						await seed(page);
+						await page.reload();
+						await setTheme(page, theme);
+						await other.goto(`${origin}/alpha`);
+						await page.bringToFront();
+						const snapshot = await readDevStore(page);
+						const original = (await sessionUrls(page, 'dev-session-1'))!;
+						// Puts the seeded sessions back between the evidence captures.
+						const reset = async () => {
+							await writeDevStore(page, snapshot);
+							await page.reload();
+						};
+
+						assert.ok(original.length > 2);
+						const trigger = page.getByRole('button', {
+							name: 'More actions for Home lab rebuild',
+						});
+						const undoButton = page.getByRole('button', {name: 'Undo'});
+						const sessionMenuItem = async (name: string) => {
+							await trigger.focus();
+							await page.keyboard.press('Enter');
+							await page.getByRole('menuitem', {name, exact: true}).focus();
+							await page.keyboard.press('Enter');
+						};
+
+						await until(async () => {
+							await trigger.focus();
+							await page.keyboard.press('Enter');
+							const enabled = await page
+								.getByRole('menuitem', {name: 'Replace with this window'})
+								.isEnabled();
+							await page.keyboard.press('Escape');
+							return enabled;
+						}, 'the window actions to become available');
+
+						await trigger.focus();
+						await page.keyboard.press('Enter');
+						await page
+							.getByRole('menuitem', {name: 'Replace with this window'})
+							.waitFor();
+						await captureViewports(page, 'session-window-actions-menu', theme);
+						await page.keyboard.press('Escape');
+
+						await page.setViewportSize({width: 1440, height: 900});
+						await sessionMenuItem('Add this window');
+						await undoButton.waitFor();
+						assert.deepEqual(await sessionUrls(page, 'dev-session-1'), [
+							...original,
+							`${origin}/alpha`,
+						]);
+						await undoButton.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								JSON.stringify(await sessionUrls(page, 'dev-session-1')) ===
+								JSON.stringify(original),
+							'Undo to restore the session after appending',
+						);
+
+						await sessionMenuItem('Add this window');
+						await undoButton.waitFor();
+						await captureViewports(page, 'session-append-result', theme);
+						await reset();
+
+						await sessionMenuItem('Replace with this window');
+						await undoButton.waitFor();
+						assert.deepEqual(await sessionUrls(page, 'dev-session-1'), [
+							`${origin}/alpha`,
+						]);
+						await undoButton.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								JSON.stringify(await sessionUrls(page, 'dev-session-1')) ===
+								JSON.stringify(original),
+							'Undo to restore the session after replacing',
+						);
+
+						await sessionMenuItem('Replace with this window');
+						await undoButton.waitFor();
+						await captureViewports(page, 'session-replace-result', theme);
+						await reset();
+
+						const expand = page.getByRole('button', {
+							name: 'Show tabs in Home lab rebuild',
+						});
+						const collapse = page.getByRole('button', {
+							name: 'Hide tabs in Home lab rebuild',
+						});
+						const ensureExpanded = async () => {
+							await expand.or(collapse).waitFor();
+							if (!((await expand.count()) > 0)) {
+								return;
+							}
+
+							await expand.focus();
+							await page.keyboard.press('Enter');
+						};
+
+						await ensureExpanded();
+
+						const firstLink = page
+							.getByRole('checkbox', {
+								name: /^Select .* from Home lab rebuild$/,
+							})
+							.first();
+						await firstLink.focus();
+						await page.keyboard.press('Space');
+						await sessionMenuItem('Split selected links');
+						await undoButton.waitFor();
+						const split = (await readDevStore(page)).groups;
+						const source = split.find((group) => group.id === 'dev-session-1')!;
+						assert.equal(source.tabs.length, original.length - 1);
+						assert.equal(
+							split.find((group) => group.name === 'Home lab rebuild (split)')
+								?.tabs.length,
+							1,
+						);
+						await undoButton.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								JSON.stringify(await sessionUrls(page, 'dev-session-1')) ===
+								JSON.stringify(original),
+							'Undo to restore the session after splitting',
+						);
+
+						await ensureExpanded();
+
+						await firstLink.focus();
+						await page.keyboard.press('Space');
+						await sessionMenuItem('Split selected links');
+						await undoButton.waitFor();
+						await captureViewports(page, 'session-split-result', theme);
+						await reset();
+					} finally {
+						await other.close();
+						await page.close();
+						await closeServer(server);
+					}
+				},
+			);
 
 			await check(
 				`share all sessions from the Sessions menu (${theme})`,

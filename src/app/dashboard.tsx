@@ -26,14 +26,17 @@ import {
 	Merge,
 	History,
 	LayoutGrid,
+	ListPlus,
 	MoreHorizontal,
 	MoreVertical,
 	PanelTop,
 	Pencil,
+	Replace,
 	RotateCcw,
 	Save,
 	Search,
 	Share2,
+	Split,
 	Trash2,
 	Upload,
 	X,
@@ -113,6 +116,7 @@ import type {
 	SessionFields,
 	SessionQuickAction,
 	SessionSort,
+	SessionWindowMode,
 	Settings,
 	TabLodgeState,
 } from './types';
@@ -773,6 +777,59 @@ export function SessionManager({
 		await reload();
 	}
 
+	async function updateFromWindow(group: Session, mode: SessionWindowMode) {
+		const result = await send('UPDATE_GROUP_FROM_WINDOW', {
+			groupId: group.id,
+			mode,
+		});
+		if (!result?.ok) {
+			showStatus(
+				result?.error ||
+					(mode === 'replace'
+						? 'Could not replace this session.'
+						: 'Could not add this window to the session.'),
+				true,
+			);
+			return;
+		}
+
+		await reload();
+		const duplicates = result.skipped
+			? ` ${plural(result.skipped, 'duplicate')} skipped.`
+			: '';
+		offerUndo(
+			mode === 'replace'
+				? `Replaced the links in “${group.name}” with this window: ${plural(result.count, 'link')}, ${result.added} new, ${result.removed} removed.${duplicates}`
+				: `Added ${plural(result.added, 'link')} from this window to “${group.name}”.${duplicates}`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
+	}
+
+	async function splitSelected(group: Session) {
+		const tabIds = group.tabs
+			.filter((tab) => selected.has(tabKey(group.id, tab.id)))
+			.map((tab) => tab.id);
+		const result = await send('SPLIT_GROUP', {groupId: group.id, tabIds});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not split this session.', true);
+			return;
+		}
+
+		setSelected(new Set());
+		setAnchor(null);
+		await reload();
+		revealRef.current = {id: result.groupId, focus: false};
+		setRevealTick((tick) => tick + 1);
+		offerUndo(
+			`Moved ${plural(result.count, 'link')} from “${group.name}” into a new session.`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
+	}
+
 	async function restoreTab(
 		group: Session,
 		tab: SavedTabRecord,
@@ -1202,6 +1259,9 @@ export function SessionManager({
 		restoreMode: (group, mode) => restoreGroup(group, false, undefined, mode),
 		forceRestore: (group) => restoreGroup(group, true),
 		switchTo: switchToGroup,
+		replaceFromWindow: (group) => updateFromWindow(group, 'replace'),
+		appendWindow: (group) => updateFromWindow(group, 'append'),
+		splitSelected,
 		restoreTab,
 		updateGroup,
 		archive: archiveGroup,
@@ -1577,6 +1637,16 @@ export function SessionManager({
 	}
 
 	const selectedCount = selectedTabCount();
+	const selectedSources = selectedGroups();
+	// Splitting needs links of one session, and leaves at least one link behind.
+	const splitSource =
+		selectedSources.length === 1
+			? groups.find(
+					(group) =>
+						group.id === selectedSources[0].id &&
+						group.tabs.length > selectedSources[0].tabs.length,
+				)
+			: undefined;
 	const selectedFolder = folders.find((folder) => folder.id === folderId);
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
 	return (
@@ -1951,6 +2021,16 @@ export function SessionManager({
 								<Share2 className="h-4 w-4" />
 								Share
 							</Button>
+							{splitSource && (
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => void splitSelected(splitSource)}
+								>
+									<Split className="h-4 w-4" />
+									Split
+								</Button>
+							)}
 						</div>
 						<span className="text-sm font-semibold" aria-live="polite">
 							{selectedCount} {selectedCount === 1 ? 'tab' : 'tabs'} selected
@@ -2491,6 +2571,12 @@ type CardActions = {
 	restoreMode: (group: Session, mode: RestoreMode) => void;
 	forceRestore: (group: Session) => void;
 	switchTo: (group: Session) => void;
+	replaceFromWindow: (group: Session) => void;
+	appendWindow: (group: Session) => void;
+	/**
+	Moves the group's selected links into a new session.
+	*/
+	splitSelected: (group: Session) => void;
 	restoreTab: (
 		group: Session,
 		tab: SavedTabRecord,
@@ -2616,7 +2702,7 @@ type GroupCardProps = {
 	selectedTabsForDrag: SavedTabRecord[];
 	selectionActive: boolean;
 	/**
-	This window has tabs a workspace switch could save; without any, switching is off.
+	This window has tabs a save could store; without any, switching and the replace and add actions are off.
 	*/
 	canSwitch: boolean;
 	actions: CardActions;
@@ -2816,6 +2902,28 @@ const GroupCard = memo(
 				icon: ArrowLeftRight,
 				disabled: !canSwitch,
 				onSelect: () => handlers.switchTo(group),
+			},
+			{
+				id: 'replace-with-window',
+				label: 'Replace with this window',
+				icon: Replace,
+				disabled: !canSwitch,
+				onSelect: () => handlers.replaceFromWindow(group),
+			},
+			{
+				id: 'append-window',
+				label: 'Add this window',
+				icon: ListPlus,
+				disabled: !canSwitch,
+				onSelect: () => handlers.appendWindow(group),
+			},
+			{
+				id: 'split-selected',
+				label: 'Split selected links',
+				icon: Split,
+				disabled:
+					selectedTabs.size === 0 || selectedTabs.size === group.tabs.length,
+				onSelect: () => handlers.splitSelected(group),
 			},
 			{type: 'separator'},
 			{

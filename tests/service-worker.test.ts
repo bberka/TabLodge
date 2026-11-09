@@ -9284,3 +9284,311 @@ test('browser bookmark: existing TabLodge bookmarks and a disabled board are ign
 	await existing.runTimers();
 	assert.equal(existing.windowCreateCalls.length, 0);
 });
+
+function sessionToEdit(settings: Record<string, unknown> = {}): StoredState {
+	const state = stateWithSession({openDashboardAfterSave: false, ...settings});
+	Object.assign(state.groups[0], {
+		description: 'Keep this',
+		tabs: [
+			{
+				id: 'old',
+				title: 'Old page',
+				url: 'https://old.example/',
+				notes: 'old note',
+				pinned: false,
+				originalIndex: 0,
+			},
+			{
+				id: 'kept',
+				title: 'Saved page',
+				url: 'https://saved.example/article',
+				notes: 'my note',
+				pinned: false,
+				originalIndex: 1,
+			},
+		],
+	});
+	return state;
+}
+
+test('UPDATE_GROUP_FROM_WINDOW replace swaps the links for the window, keeps the session identity and notes, and undoes', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), windowTabs);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 2);
+	assert.equal(result.added, 1);
+	assert.equal(result.removed, 1);
+	const group = harness.state.groups[0];
+	assert.equal(harness.state.groups.length, 1);
+	assert.equal(group.id, 'session-1');
+	assert.equal(group.name, 'Research');
+	assert.equal(group.description, 'Keep this');
+	assert.deepEqual(
+		group.tabs.map((tab) => tab.url),
+		['https://one.example/', 'https://saved.example/article'],
+		'pinned tabs stay out by default',
+	);
+	assert.equal(group.tabs[1].notes, 'my note');
+	assert.deepEqual(harness.removedTabIds, [], 'the window keeps its tabs');
+	assert.equal(harness.createdWindows.length, 0);
+
+	const undo = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undo.ok, true, undo.error);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['old', 'kept'],
+	);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW follows the excluded sites and pinned tab settings', async () => {
+	const harness = createWorkerHarness(
+		sessionToEdit({includePinnedTabs: true, excludedOrigins: ['one.example']}),
+		windowTabs,
+	);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => [tab.url, tab.pinned]),
+		[
+			['https://pinned.example/', true],
+			['https://saved.example/article', false],
+		],
+	);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW replace refuses a window with nothing to save and leaves the session alone', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'chrome://settings/',
+			title: 'Settings',
+		},
+	]);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, false);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['old', 'kept'],
+	);
+	const missing = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'nope',
+		mode: 'append',
+	});
+	assert.equal(missing.ok, false);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW append adds only new addresses at the end and undoes', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), windowTabs);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'append',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 3);
+	assert.equal(result.added, 1);
+	assert.equal(result.skipped, 1);
+	assert.equal(result.removed, 0);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.url),
+		[
+			'https://old.example/',
+			'https://saved.example/article',
+			'https://one.example/',
+		],
+	);
+	assert.equal(harness.state.groups[0].tabs[1].notes, 'my note');
+
+	const again = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'append',
+	});
+	assert.equal(again.ok, false, 'nothing new to add');
+	assert.equal(harness.state.groups[0].tabs.length, 3);
+
+	const undo = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undo.ok, true, undo.error);
+	assert.equal(harness.state.groups[0].tabs.length, 2);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW honors duplicate rejection against other sessions', async () => {
+	const state = sessionToEdit({saveDuplicateHandling: 'reject'});
+	state.groups.push({
+		...structuredClone(state.groups[0]),
+		id: 'session-2',
+		name: 'Other',
+		tabs: [
+			{
+				id: 'o1',
+				title: 'One elsewhere',
+				url: 'https://one.example/',
+				pinned: false,
+				originalIndex: 0,
+			},
+		],
+	});
+	const replaced = createWorkerHarness(structuredClone(state), windowTabs);
+	const replace = await replaced.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(replace.ok, true, replace.error);
+	assert.equal(replace.skipped, 1);
+	assert.deepEqual(
+		replaced.state.groups[0].tabs.map((tab) => tab.url),
+		['https://saved.example/article'],
+		"its own links don't count as duplicates, other sessions' do",
+	);
+
+	const allowed = createWorkerHarness(
+		{
+			...structuredClone(state),
+			settings: {...state.settings, saveDuplicateHandling: 'allow'},
+		},
+		windowTabs,
+	);
+	const allow = await allowed.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(allow.ok, true, allow.error);
+	assert.equal(allowed.state.groups[0].tabs.length, 2);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW keeps split pairs from the window and refuses a session over the link limit', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), splitWindowTabs());
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(savedUrlsAndSplits(harness.state.groups[0]), [
+		['left', 0],
+		['right', 1],
+		['plain', null],
+		['docs', 0],
+		['notes', 1],
+	]);
+
+	const full = sessionToEdit();
+	full.groups[0].tabs = Array.from({length: 1000}, (_, index) => ({
+		id: `t${index}`,
+		title: `T${index}`,
+		url: `https://full.example/${index}`,
+		pinned: false,
+		originalIndex: index,
+	}));
+	const overflow = createWorkerHarness(full, windowTabs);
+	const refused = await overflow.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'append',
+	});
+	assert.equal(refused.ok, false);
+	assert.equal(overflow.state.groups[0].tabs.length, 1000);
+});
+
+function splittable(): StoredState {
+	const state = reorderState();
+	state.groups[0].tabs[2].notes = 'keep me';
+	return state;
+}
+
+test('SPLIT_GROUP moves the chosen links into a new session next to the source and undoes', async () => {
+	const harness = createWorkerHarness(splittable());
+	const result = await harness.sendMessage({
+		type: 'SPLIT_GROUP',
+		groupId: 'A',
+		tabIds: ['a3', 'a1'],
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 2);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['A', result.groupId, 'B', 'C'],
+	);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a2']);
+	const created = harness.state.groups[1];
+	assert.deepEqual(
+		created.tabs.map((tab) => tab.id),
+		['a1', 'a3'],
+		'links keep their order from the source',
+	);
+	assert.equal(created.name, 'A (split)');
+	assert.equal(created.folderId, harness.state.groups[0].folderId);
+	assert.equal(
+		harness.state.groups
+			.flatMap((group) => group.tabs)
+			.filter((tab) => tab.split).length,
+		0,
+		'a pair broken by the split loses its split info',
+	);
+
+	const undo = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undo.ok, true, undo.error);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['A', 'B', 'C'],
+	);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a1', 'a2', 'a3']);
+});
+
+test('SPLIT_GROUP keeps a whole split pair together, uses the given name, and rejects empty or complete selections', async () => {
+	const harness = createWorkerHarness(splittable());
+	const result = await harness.sendMessage({
+		type: 'SPLIT_GROUP',
+		groupId: 'A',
+		tabIds: ['a1', 'a2'],
+		name: 'Pair',
+	});
+	assert.equal(result.ok, true, result.error);
+	const created = harness.state.groups.find(
+		(group) => group.id === result.groupId,
+	)!;
+	assert.equal(created.name, 'Pair');
+	assert.deepEqual(
+		created.tabs.map((tab) => [tab.id, tab.split?.position]),
+		[
+			['a1', 0],
+			['a2', 1],
+		],
+	);
+	assert.equal(created.tabs[0].split!.id, created.tabs[1].split!.id);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a3']);
+
+	for (const tabIds of [[], ['nope'], ['a3']]) {
+		const refused = await harness.sendMessage({
+			type: 'SPLIT_GROUP',
+			groupId: 'A',
+			tabIds,
+		});
+		assert.equal(refused.ok, false, JSON.stringify(tabIds));
+	}
+
+	const missing = await harness.sendMessage({
+		type: 'SPLIT_GROUP',
+		groupId: 'zzz',
+		tabIds: ['a1'],
+	});
+	assert.equal(missing.ok, false);
+});
