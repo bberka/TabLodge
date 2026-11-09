@@ -2,12 +2,13 @@ import {basename, resolve} from 'node:path';
 import react from '@vitejs/plugin-react';
 import {defineConfig, type Plugin} from 'vite-plus';
 import {
-	OUT_DIR,
 	SOURCE_DIR,
 	alias,
 	appName,
 	copyStatic,
+	outDirFor,
 	sharedBuild,
+	targetFromEnv,
 	writeManifest,
 } from './scripts/vite-shared.ts';
 
@@ -45,6 +46,10 @@ const sourceEntryPlugin: Plugin = {
 	},
 };
 
+// The target comes from TABLODGE_TARGET, which scripts/build.ts sets.
+const target = targetFromEnv();
+const outDir = outDirFor(target);
+
 export default defineConfig({
 	root: SOURCE_DIR,
 	base: './',
@@ -52,13 +57,13 @@ export default defineConfig({
 	plugins: [
 		sourceEntryPlugin,
 		react(),
-		writeManifest(SOURCE_DIR, OUT_DIR),
-		copyStatic(SOURCE_DIR, OUT_DIR, ['icons']),
+		writeManifest(SOURCE_DIR, outDir, target),
+		copyStatic(SOURCE_DIR, outDir, ['icons']),
 	],
 	resolve: {alias},
 	build: {
-		...sharedBuild,
-		outDir: OUT_DIR,
+		...sharedBuild(target),
+		outDir,
 		minify: true,
 		rollupOptions: {
 			input: Object.fromEntries(

@@ -44,6 +44,11 @@ import {
 	IconTooltip,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
+import {
+	canOpenSidePanel,
+	isFirefox,
+	openSidePanel as openPanel,
+} from '../shared/browser';
 import {ThemeProvider} from '../shared/theme';
 import {
 	LoadingLine,
@@ -81,8 +86,8 @@ Stable fallback so memoized values do not see a new array on every render.
 const NO_SESSIONS: Session[] = [];
 const NO_ORIGINS: readonly string[] = [];
 
-// Older Chromium builds and some forks lack the side panel API.
-const hasSidePanel = typeof chrome.sidePanel?.open === 'function';
+// Older Chromium builds and some forks lack the side panel API; Firefox opens its sidebar instead.
+const hasSidePanel = canOpenSidePanel;
 
 // Web tabs from chrome.tabs.query, which always carries an id for tabs in normal windows.
 type WebTab = chrome.tabs.Tab & {id: number; url: string};
@@ -373,11 +378,12 @@ function Popup() {
 	}
 
 	function openSidePanel() {
-		if (windowId === undefined) {
+		// Firefox opens the sidebar in the current window and needs no window id.
+		if (windowId === undefined && !isFirefox) {
 			return;
 		}
 
-		chrome.sidePanel.open({windowId}).then(
+		openPanel(windowId).then(
 			() => window.close(),
 			(reason: unknown) =>
 				showStatus(

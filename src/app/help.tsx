@@ -28,7 +28,8 @@ import {
 import {Badge, Button, Input, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
-import {AppHeader, openShortcutsPage, type IconComponent} from './common';
+import {SHORTCUTS_HINT, isFirefox, openShortcutsPage} from '../shared/browser';
+import {AppHeader, type IconComponent} from './common';
 import {PROJECT} from './project';
 
 const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
@@ -138,7 +139,7 @@ function Help() {
 				},
 				{
 					title: 'Use the side panel',
-					body: 'Choose Open the side panel in Settings under Toolbar button action, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
+					body: 'In Chromium browsers, choose Open the side panel in Settings under Toolbar button action. In every browser you can open it from the popup, the toolbar button’s right-click menu, the browser’s sidebar menu, or a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
 					searchText:
 						'side panel sidebar session list beside page toolbar icon settings keyboard shortcut',
 				},
@@ -482,7 +483,9 @@ function Help() {
 			entries: [
 				{
 					title: 'Private windows',
-					body: 'Enable Allow in Incognito in the browser’s extension settings, then open the dashboard from the toolbar popup or its shortcut. On the first visit, choose shared normal storage, separate saved storage, or separate temporary storage. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
+					body: isFirefox
+						? `${PROJECT.name} does not run in Firefox private windows: it cannot see their tabs, so it never saves them, and its pages are not available there.`
+						: 'Enable Allow in Incognito in the browser’s extension settings, then open the dashboard from the toolbar popup or its shortcut. On the first visit, choose shared normal storage, separate saved storage, or separate temporary storage. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
 					searchText:
 						'private incognito storage shared separate saved temporary restart dashboard first setup',
 				},
@@ -829,8 +832,8 @@ function Help() {
 														role="alert"
 														className="text-xs text-muted-foreground"
 													>
-														Your browser did not open the shortcuts page. Paste{' '}
-														<code>{SHORTCUTS_URL}</code> into the address bar.
+														Your browser did not open the shortcuts page.{' '}
+														{SHORTCUTS_HINT}
 													</p>
 												)}
 										</div>

@@ -35,11 +35,11 @@ const faq = [
 	},
 	{
 		q: 'Which browsers does TabLodge support?',
-		a: 'Chromium-based browsers that support Manifest V3 and Chrome 116 or newer: Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera and others. Split-view restore needs Chromium 155 or newer; older versions open those tabs side by side as normal tabs.',
+		a: 'Chromium-based browsers that support Manifest V3 and Chrome 116 or newer: Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera and others. Split-view restore needs Chromium 155 or newer; older versions open those tabs side by side as normal tabs. TabLodge also runs on desktop Firefox 140 or newer. The Firefox package on the release page is not signed or listed on Firefox Add-ons yet, so Firefox loads it as a temporary add-on. Safari and mobile browsers are not supported.',
 	},
 	{
 		q: 'Can I use TabLodge in private windows?',
-		a: 'Yes. Enable Allow in Incognito in the browser’s extension settings, then open the dashboard from the toolbar popup or its shortcut. The first private visit asks whether to share normal storage, keep separate saved storage, or use temporary storage that clears on browser restart. You can change this in Settings under Private windows. The browser’s private new tab page is not replaced.',
+		a: 'Yes. Enable Allow in Incognito in the browser’s extension settings, then open the dashboard from the toolbar popup or its shortcut. The first private visit asks whether to share normal storage, keep separate saved storage, or use temporary storage that clears on browser restart. You can change this in Settings under Private windows. The browser’s private new tab page is not replaced. Firefox private windows are not supported: TabLodge does not run there.',
 	},
 	{
 		q: 'Does TabLodge collect any data?',
@@ -55,11 +55,11 @@ const faq = [
 	},
 	{
 		q: 'Will TabLodge replace my new tab page?',
-		a: 'Yes, it shows your bookmark board and sessions on the new tab page. If you would rather keep your current new tab, turn it off in Settings and use the toolbar popup, side panel or shortcuts instead.',
+		a: 'Yes, it shows your bookmark board and sessions on the new tab page. If you would rather keep your current new tab, turn it off in Settings and use the toolbar popup, side panel or shortcuts instead. In Firefox the setting is hidden: Firefox does not let an add-on hand a new tab back to its own page, so the new tab page stays TabLodge while the add-on is enabled.',
 	},
 	{
 		q: 'How do I update TabLodge?',
-		a: 'Chrome Web Store installations update automatically in supported Chromium browsers.',
+		a: 'Chrome Web Store installations update automatically in supported Chromium browsers. A Firefox package loaded from the release page does not update itself; load the new release over it.',
 	},
 ];
 
@@ -212,6 +212,7 @@ const jsonLd = [
 			<div>
 				<h2>Get TabLodge</h2>
 				<p>Available in Chrome, Brave, Edge, Vivaldi, Opera, and other Chromium browsers. Updates are automatic. TabLodge opens the dashboard in a new tab after installation.</p>
+				<p>Using desktop Firefox 140 or newer? Download the unsigned Firefox package from the <a href={SITE.releases} rel="noopener">latest release</a>; the README explains how to load it.</p>
 				<p><a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a></p>
 			</div>
 		</div>

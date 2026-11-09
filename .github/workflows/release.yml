@@ -2,7 +2,7 @@ name: Release
 
 # Manual only: Actions → Release → Run workflow (on the default branch).
 # Version = 0.<VERSION file>.<patch>, where patch continues from the latest v0.<VERSION>.* tag
-# (see scripts/release-version.ts). Publishes a GitHub release with an unpacked-extension zip.
+# (see scripts/release-version.ts). Publishes a GitHub release with a Chromium zip and a Firefox zip.
 on:
   workflow_dispatch:
 
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   release:
-    name: Build and publish release zip
+    name: Build and publish release zips
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +49,7 @@ jobs:
       - run: pnpm exec vp run check
       - run: pnpm exec vp run build
 
-      - name: Package unpacked extension
+      - name: Package unpacked extensions
         id: package
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -57,27 +57,38 @@ jobs:
           pnpm exec vp run pack
           name="$(node -p "require('./package.json').name")"
           zip_path="release/$name-$VERSION.zip"
+          firefox_zip_path="release/$name-$VERSION-firefox.zip"
           test -f "$zip_path"
+          test -f "$firefox_zip_path"
           echo "zip=$zip_path" >> "$GITHUB_OUTPUT"
+          echo "firefox_zip=$firefox_zip_path" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: ${{ steps.package.outputs.zip }}
+          FIREFOX_ZIP: ${{ steps.package.outputs.firefox_zip }}
         run: |
           app_name="$(node -p "require('./extension/manifest.json').short_name")"
           zip_file="$(basename "$ZIP")"
+          firefox_zip_file="$(basename "$FIREFOX_ZIP")"
           cat > release/notes.md <<EOF
           ## Install
+
+          ### Chromium browsers (Chrome, Brave, Edge, Vivaldi, Opera)
 
           1. Download **$zip_file** below and unzip it into a folder you will keep (the browser loads the extension from it).
           2. Open your browser's extensions page (\`chrome://extensions\`, \`brave://extensions\`, \`edge://extensions\`, …) and turn on **Developer mode**.
           3. Click **Load unpacked** and select the unzipped folder (the one containing \`manifest.json\`).
 
           To update, replace the folder's contents with the new release and click the reload button on the extension's card. Keep the same folder so your saved data stays with the extension.
+
+          ### Firefox 140 or newer (desktop)
+
+          **$firefox_zip_file** is unsigned. To try it, open \`about:debugging#/runtime/this-firefox\`, click **Load Temporary Add-on**, and select the ZIP; Firefox removes it when it restarts. Firefox ESR, Developer Edition, Nightly, and unbranded builds can keep it installed after you set \`xpinstall.signatures.required\` to \`false\` in \`about:config\`. See the README for the differences from the Chromium version.
           EOF
-          gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" \
+          gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$FIREFOX_ZIP" "$FIREFOX_ZIP.sha256" \
             --target "$GITHUB_SHA" \
             --title "$app_name v$VERSION" \
             --notes-file release/notes.md \

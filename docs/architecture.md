@@ -4,15 +4,45 @@ This guide explains how TabLodge is built, where data lives, and which behavior 
 
 ## Build and startup
 
-`scripts/build.ts` runs several Vite+ builds into `dist/tablodge/`:
+`scripts/build.ts` runs several Vite+ builds for each browser target: `dist/tablodge/` for Chromium and `dist/tablodge-firefox/` for Firefox. Both come from the same sources. Pass `--target chrome` or `--target firefox` to build one, which is also how `--watch` works (Chromium by default).
 
-* **Pages:** `vite.pages.config.ts` builds the HTML shells in `extension/` with their React entries in `src/app/`. It replaces `%APP_NAME%` in page titles, bundles assets locally, writes the manifest, and copies icons.
-* **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The manifest does not declare it as a module.
+* **Pages:** `vite.pages.config.ts` builds the HTML shells in `extension/` with their React entries in `src/app/`. It replaces `%APP_NAME%` in page titles, bundles assets locally, writes the manifest, and copies icons. The manifest source is `extension/manifest.json`, written for Chromium. `scripts/manifest-targets.ts` derives the Firefox manifest from it.
+* **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The Chromium manifest does not declare it as a module, and the Firefox manifest lists it under `background.scripts`, which makes it an event page.
 * **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme and accent color before the first paint. The new-tab head also loads `extension/newtab-preload.ts`, starting the state request while the page bundle loads. Its React hook adopts that request, and the page stays blank until the state arrives.
 
-`scripts/verify-build.ts` checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest. After building, `scripts/package.ts` writes a versioned ZIP and SHA256 checksum under `release/`. The release workflow uses the same task.
+`scripts/verify-build.ts` verifies every target. It checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest. It also checks that each manifest holds only what its browser knows: the Firefox manifest has no `service_worker`, `side_panel`, `favicon`, or `sidePanel`, and the Chromium manifest has no Firefox keys. After building, `scripts/package.ts` writes a versioned ZIP and SHA256 checksum per target under `release/`: `tablodge-<version>.zip` for Chromium, which the Chrome Web Store workflow downloads, and `tablodge-<version>-firefox.zip`. The release workflow uses the same task.
 
-Load only `dist/tablodge/` in the browser. `extension/` and the repository root are source directories. Each build recreates the output directory, so don't run two builds at once.
+Load only `dist/tablodge/` (Chromium) or `dist/tablodge-firefox/` (Firefox) in the browser. `extension/` and the repository root are source directories. Each build recreates the output directory, so don't run two builds at once.
+
+## Browser support
+
+TabLodge targets Chromium browsers (Chrome 116 or newer) and desktop Firefox 140 or newer. Firefox 140 is the first ESR release with tab groups, `tabs.group`, and the data collection permissions key. Safari and mobile browsers are not supported. Safari needs an Apple developer account and an app wrapper, and Firefox for Android lacks the bookmarks, windows, and new tab override APIs.
+
+One codebase serves both. Differences the code can find by looking for an API (`chrome.tabGroups`, `chrome.sidePanel`, `chrome.tabs.createSplit`) stay feature checks. The few that it cannot are keyed off `IS_FIREFOX` in the service worker and `isFirefox` in `src/shared/browser.ts`, both derived from the `moz-extension:` address of the extension's own pages. Page code should call the helpers in `src/shared/browser.ts` instead of testing the browser itself.
+
+| Capability | Chromium | Firefox 140 or newer |
+| --- | --- | --- |
+| Sessions: save, restore, folders, notes, archive, trash | Yes | Yes |
+| Bookmark board, imports, exports, full backup, recovery snapshots | Yes | Yes |
+| Native tab groups | Saved and recreated | Saved and recreated |
+| Split view | Restored as a split on Chromium 155 or newer | Reopens as neighboring tabs; the setting is hidden |
+| New tab page | Replaced; can be switched off in Settings | Replaced while enabled; the switch is hidden |
+| Side panel | Chromium Side Panel; can open from the toolbar button | Sidebar (`sidebar_action`); opens from the popup, the toolbar menu, or a shortcut |
+| Site icons | Browser favicon cache | Letter tile; the side panel's open tabs use the tab's own icon |
+| Private windows | Optional, with shared or separate storage | Not available; the manifest sets `incognito` to `not_allowed` |
+| Shortcuts and context menus | Yes | Yes |
+| Downloads copy of backups | Optional `downloads` permission | Optional `downloads` permission |
+| Snapshots and automatic backups (`alarms`) | Yes | Yes |
+| Updates | Chrome Web Store, or reload a manual copy | Reload the add-on; no signed listing yet |
+
+Why Firefox differs:
+
+* **Worker lifecycle.** Firefox has no extension service workers, so the same script runs as an event page. Both are non persistent and restart on events, and the code already keeps durable state in storage, so one script serves both.
+* **Starting windows.** Chromium maps `chrome://newtab/` to the new tab page. Firefox refuses `chrome:` and `about:newtab` in `tabs.create` and `windows.create`, so a restore starts its window on `about:blank` (removed once the tabs are open), and an emptied window gets a tab with no address.
+* **New tab hand off.** Chromium reports `chrome://newtab/` as a new tab's pending address, which lets the worker tell a real new tab from the dashboard opened on purpose and send it elsewhere. Firefox opens every tab as `about:blank` before the add-on's page loads, so the worker cannot tell them apart, and Firefox gives add-ons no way to open its own new tab page. The worker reports **Use TabLodge for new tabs** as on in Firefox.
+* **Sidebar.** `sidebarAction.open()` works only inside a user action, so it runs straight from the click, command, or menu handler. A toolbar button that opens the panel would need the settings read first, which loses the user action, so Firefox keeps the popup for that mode.
+* **Private windows.** Chromium offers a `split` mode with a separate extension context. Firefox has only `spanning`, where private and normal windows would share one context and one storage area, so the Firefox build opts out.
+* **Favicons.** Firefox has no `_favicon/` service. TabLodge does not request icons from sites or a third party, so it uses the tab's own icon where one is known and a letter tile otherwise.
 
 ## Names, versions, and persistent identifiers
 
@@ -176,6 +206,8 @@ Moving or deleting a bookmark selection sends the existing mutation messages in 
 
 ## New tab behavior
 
+Firefox is the exception: its hand off cannot work (see [Browser support](#browser-support)), so the switch is hidden and the override stays on.
+
 Chromium declares the new tab override statically. Turning off **Use TabLodge for new tabs** cannot remove that declaration. Instead, the worker redirects newly created tabs to the browser's own page, a blank page, or a custom HTTP or HTTPS URL.
 
 `newtab.html` also asks `HANDOFF_NEW_TAB` whether a redirect is needed before rendering. A counter prevents redirect loops: after one retry, the tab goes to `about:blank`. Opening the dashboard deliberately still works. Address bar focus depends on the destination and browser.
@@ -207,3 +239,5 @@ Files above 45 MB, or expanding beyond 60 MB, are refused. All export formats ar
 ## Testing
 
 The worker harness runs the source in a fresh Node VM with mocked `chrome.*` APIs. Pure helpers also have direct unit tests. These tests cover storage and browser logic, not full browser behavior. Use the unpacked build for a manual smoke test, especially for worker restarts, native groups, split view, and side panel gestures.
+
+`tests/manifest-targets.test.ts` covers the Firefox manifest, and the worker harness has a Firefox mode (`firefox: true`) for the differences above. `vp run browser:firefox` (`scripts/firefox-smoke-check.ts`) goes one level up: it installs `dist/tablodge-firefox/` as a temporary add-on in headless Firefox through Selenium and drives the worker with its own messages. It opens all seven pages, saves a window with a pinned tab and a tab group, restores it into a new window, adds a bookmark, imports browser bookmarks, exports a full backup, and checks that data survives a browser restart. It needs Firefox installed. Selenium downloads a matching geckodriver if there is none on the `PATH`, and `FIREFOX_BIN` overrides the browser binary. Safari has no automated check because it is not supported.

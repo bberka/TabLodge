@@ -1,6 +1,6 @@
 name: Test
 
-# Runs on every push to the main branch and on pull requests: lint (XO), typecheck, tests, build, and package.
+# Runs on every push to the main branch and on pull requests: lint (XO), typecheck, tests, build, package, and the Firefox smoke check.
 on:
   push:
     branches: [master, main]
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   test:
-    name: Lint, typecheck, test, build, package
+    name: Lint, typecheck, test, build, package, Firefox smoke check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,3 +29,5 @@ jobs:
       - run: pnpm exec vp run check
       - run: pnpm exec vp run build
       - run: pnpm exec vp run pack
+      # Installs the Firefox package in the runner's Firefox and runs the core workflows.
+      - run: pnpm exec vp run browser:firefox

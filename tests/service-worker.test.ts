@@ -135,6 +135,10 @@ type HarnessOptions = {
 	*/
 	now?: number;
 	locale?: string;
+	/**
+	Run as Firefox: `moz-extension:` addresses, no Side Panel API but a sidebar, and `chrome:` addresses refused.
+	*/
+	firefox?: boolean;
 };
 type MenuItem = {
 	id?: string;
@@ -194,6 +198,7 @@ function createWorkerHarness(
 	const removedTabIds: number[] = [];
 	const sidePanelCalls: SidePanelCall[] = [];
 	const sidePanelOpened: Array<{windowId: number}> = [];
+	let sidebarOpened = 0;
 	const popupCalls: string[] = [];
 	const createdWindows: Array<Omit<MockWindow, 'tabs'> & {tabs: undefined}> =
 		[];
@@ -358,10 +363,23 @@ function createWorkerHarness(
 				?.delete(callback as (...args: unknown[]) => unknown);
 		},
 	});
+	// Firefox refuses addresses of its own pages (`chrome:`, `about:newtab`) in tabs.create and windows.create.
+	const refuseBrowserUrls = (url: string | string[] | undefined) => {
+		if (
+			options.firefox &&
+			[url ?? []]
+				.flat()
+				.some((entry) => /^(?:chrome:|about:(?!blank))/.test(entry))
+		) {
+			throw new Error(`Illegal URL: ${[url].flat().join(',')}`);
+		}
+	};
+
 	const chrome = {
 		extension: {inIncognitoContext: options.incognitoContext === true},
 		runtime: {
-			getURL: (file: string) => `chrome-extension://tablodge/${file}`,
+			getURL: (file: string) =>
+				`${options.firefox ? 'moz-extension' : 'chrome-extension'}://tablodge/${file}`,
 			getManifest: () => ({...manifest}),
 			onMessage: {
 				addListener(callback: MessageListener) {
@@ -535,6 +553,7 @@ function createWorkerHarness(
 				} = {},
 			) {
 				windowCreateCalls.push({...properties});
+				refuseBrowserUrls(properties.url);
 				if (
 					options.rejectWindowBounds &&
 					(properties.left !== undefined || properties.top !== undefined)
@@ -582,6 +601,7 @@ function createWorkerHarness(
 				return {...findTab(id)};
 			},
 			async create(properties: MockCreateProperties) {
+				refuseBrowserUrls(properties.url);
 				if ((options.failedCreateUrls || []).includes(properties.url ?? '')) {
 					throw new Error('Mock browser refused the tab.');
 				}
@@ -759,23 +779,33 @@ function createWorkerHarness(
 			},
 			onClicked: event('actionClicked'),
 		},
-		sidePanel: {
-			async open(value: {windowId: number}) {
-				sidePanelOpened.push(value);
-			},
-			async setOptions(value: SidePanelCall['value']) {
-				sidePanelCalls.push({
-					method: 'setOptions',
-					value: structuredClone(value),
-				});
-			},
-			async setPanelBehavior(value: SidePanelCall['value']) {
-				sidePanelCalls.push({
-					method: 'setPanelBehavior',
-					value: structuredClone(value),
-				});
-			},
-		},
+		...(options.firefox
+			? {
+					sidebarAction: {
+						async open() {
+							sidebarOpened++;
+						},
+					},
+				}
+			: {
+					sidePanel: {
+						async open(value: {windowId: number}) {
+							sidePanelOpened.push(value);
+						},
+						async setOptions(value: SidePanelCall['value']) {
+							sidePanelCalls.push({
+								method: 'setOptions',
+								value: structuredClone(value),
+							});
+						},
+						async setPanelBehavior(value: SidePanelCall['value']) {
+							sidePanelCalls.push({
+								method: 'setPanelBehavior',
+								value: structuredClone(value),
+							});
+						},
+					},
+				}),
 		commands: {onCommand: event('onCommand')},
 		...(!options.noAlarms && {
 			alarms: {
@@ -876,6 +906,7 @@ function createWorkerHarness(
 		removedTabIds,
 		sidePanelCalls,
 		sidePanelOpened,
+		sidebarOpened: () => sidebarOpened,
 		popupCalls,
 		createdWindows,
 		windowCreateCalls,
@@ -2196,6 +2227,96 @@ test('the toggle-side-panel command opens the side panel for the window', async 
 	const harness = createWorkerHarness(stateWithSession());
 	await harness.fire('onCommand', 'toggle-side-panel', {id: 1, windowId: 7});
 	assert.deepEqual(structuredClone(harness.sidePanelOpened), [{windowId: 7}]);
+});
+
+// Firefox: the same worker runs as an event page. These cover where its browser differs from Chromium.
+test('Firefox restores into a new window that starts blank, then removes that bootstrap tab', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({restoreTarget: 'always-new-window'}),
+		undefined,
+		{firefox: true},
+	);
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.windowCreateCalls[0].url, 'about:blank');
+	assert.equal(harness.createdWindows.length, 1);
+	assert.equal(harness.openedTabs[0].windowId, harness.createdWindows[0].id);
+	assert.equal(harness.removedTabIds.length, 1, 'the bootstrap tab is removed');
+});
+
+test('Firefox keeps an emptied window open on the new tab page without naming a browser address', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({
+			closeOnSave: true,
+			openDashboardAfterSave: false,
+			emptyWindowAfterSave: 'new-tab',
+		}),
+		undefined,
+		{firefox: true},
+	);
+	const response = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.tabsForWindow(10).length, 1, 'the window keeps a tab');
+});
+
+test('Firefox shows the popup for the side panel toolbar mode and opens its sidebar from commands and the menu', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		firefox: true,
+	});
+	const result = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {actionMode: 'sidepanel'},
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(harness.popupCalls.at(-1), 'popup.html');
+	assert.equal(harness.sidePanelCalls.length, 0);
+
+	await harness.fire('onInstalled', {reason: 'update'});
+	await new Promise((resolve) => {
+		setTimeout(resolve, 0);
+	});
+	await harness.fire('onCommand', 'toggle-side-panel', {id: 1, windowId: 7});
+	assert.equal(harness.sidebarOpened(), 1);
+	assert.equal(harness.sidePanelOpened.length, 0);
+
+	await harness.fire(
+		'contextMenuClicked',
+		{
+			menuItemId: 'tablodge-action-side-panel',
+		},
+		{id: 1, windowId: 7},
+	);
+	assert.equal(harness.sidebarOpened(), 2);
+	assert.equal(
+		harness.menuItems.some((item) => item.id === 'tablodge-action-side-panel'),
+		true,
+		'the toolbar menu offers the sidebar',
+	);
+});
+
+test('Firefox always keeps the new-tab page on, since it cannot hand a new tab on', async () => {
+	const firefox = createWorkerHarness(
+		stateWithSession({newTabEnabled: false}),
+		undefined,
+		{firefox: true},
+	);
+	assert.equal(
+		(await firefox.sendMessage({type: 'GET_STATE'})).settings.newTabEnabled,
+		true,
+	);
+	const chromium = createWorkerHarness(
+		stateWithSession({newTabEnabled: false}),
+	);
+	assert.equal(
+		(await chromium.sendMessage({type: 'GET_STATE'})).settings.newTabEnabled,
+		false,
+	);
 });
 
 test('column delete preserves bookmarks, including when the built-in or last column is removed', async () => {
