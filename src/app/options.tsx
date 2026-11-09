@@ -745,7 +745,7 @@ const settingsGroups: Array<{
 			{
 				name: 'bookmarkQuickActions',
 				label: 'Quick actions on bookmarks',
-				help: 'Choose up to three buttons from the bookmark menu and reorder them in the picker. Remove all to hide them. Delete still asks first.',
+				help: 'Choose up to three buttons from the bookmark menu and reorder them in the picker. Remove all to hide them.',
 				type: 'checkbox-dropdown',
 				maxActions: 3,
 				options: [
@@ -1022,7 +1022,8 @@ type DataRowDef = {
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const loadedSettingsRef = useRef(false);
-	const pendingSettingWritesRef = useRef(0);
+	// Saves still waiting for the service worker. A reload that lands meanwhile may predate them.
+	const savesInFlightRef = useRef(0);
 	const [status, showStatus] = useStatus();
 	const {theme, setTheme, accent, systemColor, setAccent} = useTheme();
 	const [settings, setSettings] = useState<Partial<Settings>>({});
@@ -1186,17 +1187,12 @@ function Options() {
 	}, []);
 
 	useEffect(() => {
-		if (!state?.settings) {
+		if (!state?.settings || savesInFlightRef.current > 0) {
 			return;
 		}
 
 		loadedSettingsRef.current = true;
-		if (pendingSettingWritesRef.current > 0) {
-			setSettings((current) => ({...state.settings, ...current}));
-		} else {
-			setSettings(state.settings);
-		}
-
+		setSettings(state.settings);
 		setExcluded(state.settings.excludedOrigins || []);
 	}, [state]);
 
@@ -1255,8 +1251,8 @@ function Options() {
 			}
 		}
 
-		pendingSettingWritesRef.current += 1;
 		setSettings((current) => ({...current, [name]: value}));
+		savesInFlightRef.current += 1;
 		try {
 			const result = await send('UPDATE_SETTINGS', {
 				settings: {[name]: value},
@@ -1267,8 +1263,8 @@ function Options() {
 				showStatus(result?.error || 'Could not save that setting.', true);
 			}
 		} finally {
-			pendingSettingWritesRef.current -= 1;
-			if (pendingSettingWritesRef.current === 0) {
+			savesInFlightRef.current -= 1;
+			if (savesInFlightRef.current === 0) {
 				await reload();
 			}
 		}
