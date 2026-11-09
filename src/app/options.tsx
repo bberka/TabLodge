@@ -744,7 +744,7 @@ const settingsGroups: Array<{
 			{
 				name: 'bookmarkQuickActions',
 				label: 'Quick actions on bookmarks',
-				help: 'Choose up to three buttons from the bookmark menu and reorder them in the picker. Remove all to hide them. Delete still asks first.',
+				help: 'Choose up to three buttons from the bookmark menu and reorder them in the picker. Remove all to hide them.',
 				type: 'checkbox-dropdown',
 				maxActions: 3,
 				options: [
