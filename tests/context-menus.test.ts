@@ -3,7 +3,6 @@ import {webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import vm from 'node:vm';
-import {transformWithOxc} from 'vite-plus';
 import {afterEach, beforeEach, test, vi} from 'vite-plus/test';
 import type {
 	Bookmark,
@@ -13,6 +12,7 @@ import type {
 	Settings,
 	TabLodgeMessage,
 } from '../src/app/types';
+import {buildWorkerSource} from './worker-source';
 
 // Right-click menus. Like tests/service-worker.test.ts, this runs the type-stripped service worker in a
 // fresh VM context per harness. Its chrome mock is smaller but stricter about context menus: it uses the
@@ -24,11 +24,7 @@ const workerPath = join(
 	'extension',
 	'service-worker.ts',
 );
-const {code: workerSource} = await transformWithOxc(
-	readFileSync(workerPath, 'utf8'),
-	workerPath,
-	{lang: 'ts'},
-);
+const workerSource = await buildWorkerSource();
 const storageKey = 'tablodge.state';
 const manifest = JSON.parse(
 	readFileSync(

@@ -1,5 +1,12 @@
-// Types come from the shared model via import() type queries rather than an import statement: the
-// stripped output must stay a classic script (an `import type` would leave an `export {}` behind).
+import {
+	findOmniboxItem,
+	omniboxIndex,
+	omniboxSuggestions,
+} from '../src/app/omnibox';
+
+// Types come from the shared model via import() type queries rather than an `import type` statement, which
+// would leave an `export {}` behind. The one value import above is bundled into the classic script by the
+// build, and by tests/worker-source.ts for the tests.
 type ActionFailure = import('../src/app/types').ActionFailure;
 type TabLodgeMessageType = import('../src/app/types').TabLodgeMessageType;
 type ActionResult<K extends TabLodgeMessageType = TabLodgeMessageType> =
@@ -6205,7 +6212,13 @@ change of `tablodge.state`, whoever wrote it. Callers must treat the result as r
 */
 let settingsCache: Settings | undefined;
 let settingsGeneration = 0;
+/**
+The library as the address bar search last read it; dropped with the settings cache whenever the library changes.
+*/
+let omniboxStore: Promise<Store> | undefined;
+
 function invalidateSettings() {
+	omniboxStore = undefined;
 	settingsCache = undefined;
 	settingsGeneration += 1;
 }
@@ -8803,6 +8816,118 @@ chrome.commands.onCommand.addListener((command, tab) => {
 	if (command === 'toggle-side-panel') {
 		openSidePanel(tab);
 	}
+});
+
+// Address bar search: "tl <text>" lists matching open tabs, bookmarks, saved tabs and sessions, ranked by the
+// finder's scorer (src/app/omnibox.ts). The store it reads is cached until invalidateSettings drops it.
+async function omniboxCatalog() {
+	omniboxStore ??= getStore();
+	const [store, tabs] = await Promise.all([
+		omniboxStore.catch((error: unknown) => {
+			omniboxStore = undefined;
+			throw error;
+		}),
+		chrome.tabs.query({}),
+	]);
+	const own = chrome.runtime.getURL('');
+	return {
+		store,
+		index: omniboxIndex({
+			groups: store.groups,
+			folders: store.folders,
+			bookmarks: store.bookmarks,
+			columns: store.bookmarkColumns,
+			tabs: tabs.flatMap((tab) =>
+				isInteger(tab.id) && tab.url && !tab.url.startsWith(own)
+					? [
+							{
+								id: tab.id,
+								windowId: tab.windowId,
+								title: tab.title ?? '',
+								url: tab.url,
+							},
+						]
+					: [],
+			),
+		}),
+	};
+}
+
+async function omniboxEnter(
+	text: string,
+	disposition: `${chrome.omnibox.OnInputEnteredDisposition}`,
+) {
+	const {store, index} = await omniboxCatalog();
+	const item = findOmniboxItem(text, index);
+	if (item?.kind === 'tab') {
+		try {
+			await chrome.tabs.update(Number(item.ref), {active: true});
+			if (item.windowId !== undefined) {
+				await chrome.windows.update(item.windowId, {focused: true});
+			}
+
+			return;
+		} catch {
+			// The tab closed since the list was shown; search for it in the dashboard instead.
+			await searchDashboard(item.title);
+			return;
+		}
+	}
+
+	if (item?.kind === 'session') {
+		await openDashboard(
+			await currentWindowId(),
+			`?${new URLSearchParams({group: item.ref ?? ''})}`,
+			store.settings.dashboardBehavior,
+		);
+		return;
+	}
+
+	if (item?.url) {
+		const url = store.settings.removeTrackingParameters
+			? stripTrackingParameters(item.url)
+			: item.url;
+		const [active] =
+			disposition === 'currentTab'
+				? await chrome.tabs.query({active: true, lastFocusedWindow: true})
+				: [];
+		// The pinned TabLodge tab stays put: a link meant for the current tab opens beside it.
+		const keepsPinned =
+			store.settings.keepLodgePinned && active?.pinned && isLodgeTab(active);
+		if (isInteger(active?.id) && !keepsPinned) {
+			await chrome.tabs.update(active.id, {url});
+		} else {
+			await chrome.tabs.create({
+				url,
+				active: disposition !== 'newBackgroundTab',
+			});
+		}
+
+		return;
+	}
+
+	// Enter on the typed text itself opens the dashboard with that search.
+	await searchDashboard(text);
+}
+
+void chrome.omnibox?.setDefaultSuggestion?.({
+	description: `Search ${APP_NAME} for <match>%s</match>`,
+});
+chrome.omnibox?.onInputChanged?.addListener((text, suggest) => {
+	omniboxCatalog()
+		.then(({index}) => {
+			suggest(omniboxSuggestions(text, index));
+		})
+		.catch(() => {
+			suggest([]);
+		});
+});
+chrome.omnibox?.onInputEntered?.addListener((text, disposition) => {
+	omniboxEnter(text, disposition).catch(() => {
+		/*
+		The address bar has nowhere to report a failed open.
+		*/
+	});
 });
 
 /**
