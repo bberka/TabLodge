@@ -608,9 +608,9 @@ function Help() {
 				},
 				{
 					title: 'Control saved data',
-					body: 'Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data.',
+					body: 'Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data. Under Data, Statistics is a read-only summary: how many sessions and saved tabs you have, how many tabs are open, the ten open tabs you have not used for the longest, and a rough memory estimate. The estimate assumes about 100 MB per loaded tab and 5 MB per unloaded tab, so use the browser Task Manager (Shift+Esc) for real figures.',
 					searchText:
-						'sessions bookmarks data delete erase export restore defaults recovery settings',
+						'sessions bookmarks data delete erase export restore defaults recovery settings statistics stats counts saved tabs open tabs oldest unused memory ram',
 				},
 			],
 			action: {label: 'Open Settings', href: 'options.html', icon: Settings2},

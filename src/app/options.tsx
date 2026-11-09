@@ -19,6 +19,7 @@ import {
 	Bookmark,
 	Database,
 	Plus,
+	ChartColumn,
 	Eraser,
 	LifeBuoy,
 	MousePointerClick,
@@ -96,6 +97,7 @@ import {
 	ImportDialog,
 	RecoveryTools,
 	SnapshotsDialog,
+	TabStatsDialog,
 	TrashDialog,
 } from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
@@ -1043,6 +1045,7 @@ function Options() {
 	const [importOpen, setImportOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
+	const [statsOpen, setStatsOpen] = useState(false);
 	const [downloadsGranted, setDownloadsGranted] = useState(false);
 	useEffect(() => {
 		void Promise.resolve(
@@ -1628,6 +1631,33 @@ function Options() {
 				>
 					<Upload className="h-4 w-4" />
 					Import
+				</Button>
+			),
+		},
+		{
+			key: 'statistics',
+			icon: ChartColumn,
+			label: 'Statistics',
+			help: 'See how many sessions and tabs you have saved, which open tabs you have not used for the longest, and a rough memory estimate.',
+			words: [
+				'stats',
+				'count',
+				'saved tabs',
+				'oldest tabs',
+				'open tabs',
+				'memory',
+				'RAM',
+				'unused',
+			],
+			action: (
+				<Button
+					variant="outline"
+					className="w-full sm:w-32"
+					disabled={!state}
+					onClick={() => setStatsOpen(true)}
+				>
+					<ChartColumn className="h-4 w-4" />
+					View
 				</Button>
 			),
 		},
@@ -2351,6 +2381,11 @@ function Options() {
 				showStatus={showStatus}
 				onOpenChange={setSnapshotsOpen}
 				onSessionsChanged={reload}
+			/>
+			<TabStatsDialog
+				open={statsOpen}
+				sessions={state?.groups ?? []}
+				onOpenChange={setStatsOpen}
 			/>
 			<TrashDialog
 				confirmDestructive
