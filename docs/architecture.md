@@ -158,7 +158,7 @@ UI primitives live in `src/components/ui/`, with composed helpers in `src/shared
 
 ## Saving and restoring sessions
 
-Save scopes include selected tabs, the current window, all windows, a native tab group, the active tab, and tabs to either side. Toolbar actions, context menus, and shortcuts share worker logic. The `save-window` shortcut uses `selected-or-window`, so a selection takes precedence over the window.
+Save scopes include selected tabs, the current window, all windows, a native tab group, the active tab, and tabs to either side. Toolbar actions, context menus, and shortcuts share worker logic. The page menu's **Send this tab to session** submenu lists the ten most recently changed sessions outside the Archived folder, plus **New session**. It adds the tab through the same path as the toolbar's current tab mode, so excluded sites, the duplicate setting, and **Close tabs after saving** apply. The menus rebuild when that list of sessions or their names change. The `save-window` shortcut uses `selected-or-window`, so a selection takes precedence over the window.
 
 Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during capture. Native group metadata is restored where browser APIs allow it.
 

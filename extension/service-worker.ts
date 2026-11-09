@@ -5701,9 +5701,14 @@ async function updateSettings(
 			scheduleLodgeCheck();
 		}
 
+		const sessions = menuSessions(store.groups, store.folders);
 		if (
-			contextMenuSignature(previousSettings, store.bookmarkColumns) !==
-			contextMenuSignature(store.settings, store.bookmarkColumns)
+			contextMenuSignature(
+				previousSettings,
+				store.bookmarkColumns,
+				sessions,
+			) !==
+			contextMenuSignature(store.settings, store.bookmarkColumns, sessions)
 		) {
 			await rebuildContextMenus(store);
 		}
@@ -8226,7 +8231,7 @@ async function handleMessage(
 		}
 
 		case 'SAVE_CURRENT_TAB_TO_GROUP': {
-			return saveCurrentTabToFirstGroup(sender.tab);
+			return saveCurrentTabToGroup(sender.tab);
 		}
 
 		case 'RESTORE_TAB': {
@@ -8633,8 +8638,12 @@ async function syncToolbarAction(settings: Settings) {
 	});
 }
 
-async function saveCurrentTabToFirstGroup(
+/**
+Adds the tab to the session `groupId`, or to the first session when none is named.
+*/
+async function saveCurrentTabToGroup(
 	senderTab?: chrome.tabs.Tab,
+	groupId?: string,
 ): Promise<ActionResult<'SAVE_CURRENT_TAB_TO_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -8657,11 +8666,13 @@ async function saveCurrentTabToFirstGroup(
 			return {ok: false, error: 'There is no eligible web tab to save.'};
 		}
 
-		const group = store.groups[0];
+		const group = groupId ? findGroup(store, groupId) : store.groups[0];
 		if (!group) {
 			return {
 				ok: false,
-				error: 'Create a session before sending this tab to a session.',
+				error: groupId
+					? 'That saved session no longer exists.'
+					: 'Create a session before sending this tab to a session.',
 			};
 		}
 
@@ -8764,7 +8775,7 @@ async function saveCurrentTabToFirstGroup(
 async function handleToolbarAction(tab?: chrome.tabs.Tab) {
 	const settings = await readSettings();
 	if (settings.actionMode === 'current-tab-to-group') {
-		const result = await saveCurrentTabToFirstGroup(tab);
+		const result = await saveCurrentTabToGroup(tab);
 		if (!result?.ok) {
 			console.warn(
 				result?.error ||
@@ -8819,6 +8830,8 @@ const MENU = {
 	pageRoot: 'tablodge-page-root',
 	pageBookmark: 'tablodge-page-bookmark',
 	pageBookmarkNew: 'tablodge-page-bookmark-new',
+	pageSend: 'tablodge-page-send',
+	pageSendNew: 'tablodge-page-send-new',
 	selectionRoot: 'tablodge-selection-root',
 	selectionSearch: 'tablodge-selection-search',
 	actionOpen: 'tablodge-action-open',
@@ -8833,6 +8846,14 @@ Column items are `${prefix}${columnId}`; the Unfiled pseudo-column uses BOOKMARK
 */
 const LINK_COLUMN_PREFIX = 'tablodge-link-bookmark:';
 const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
+/**
+"Send this tab to session" items are `${PAGE_SEND_PREFIX}${sessionId}`.
+*/
+const PAGE_SEND_PREFIX = 'tablodge-page-send:';
+/**
+How many sessions the "Send this tab to session" submenu lists, most recently changed first.
+*/
+const MENU_SESSION_LIMIT = 10;
 /**
 The page menu's save actions, reusing the SAVE_TABS scopes.
 */
@@ -8879,7 +8900,11 @@ const badgeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 /**
 Everything the menu tree depends on: the switches, the enabled systems, and the column names and order.
 */
-function contextMenuSignature(settings: Settings, columns: BookmarkColumn[]) {
+function contextMenuSignature(
+	settings: Settings,
+	columns: BookmarkColumn[],
+	sessions: MenuSession[],
+) {
 	return JSON.stringify([
 		settings.contextMenusEnabled,
 		settings.contextMenuLinksEnabled,
@@ -8887,7 +8912,38 @@ function contextMenuSignature(settings: Settings, columns: BookmarkColumn[]) {
 		settings.contextMenuSelectionEnabled,
 		settings.contextMenuActionEnabled,
 		columns.map((column) => [column.id, column.name]),
+		settings.contextMenuPageEnabled
+			? sessions.map((session) => [session.id, session.name])
+			: [],
 	]);
+}
+
+type MenuSession = {id: string; name: string};
+
+/**
+The sessions the page menu offers: the most recently changed ones, leaving out the Archived folder.
+Takes stored data, so every entry is checked.
+*/
+function menuSessions(rawGroups: unknown, rawFolders: unknown): MenuSession[] {
+	const archived = archivedFolderIds(rawFolders);
+	return arrayOf(rawGroups)
+		.filter(
+			(group): group is Raw & {id: string} =>
+				isRecord(group) &&
+				typeof group.id === 'string' &&
+				group.id !== '' &&
+				!archived.has(cleanText(group.folderId, '', 100)),
+		)
+		.toSorted(
+			(a, b) =>
+				positiveOr(b.updatedAt, positiveOr(b.createdAt, 0)) -
+				positiveOr(a.updatedAt, positiveOr(a.createdAt, 0)),
+		)
+		.slice(0, MENU_SESSION_LIMIT)
+		.map((group) => ({
+			id: group.id,
+			name: cleanText(group.name, 'Untitled session', 60),
+		}));
 }
 
 /**
@@ -8897,6 +8953,7 @@ function contextMenuSignature(settings: Settings, columns: BookmarkColumn[]) {
 function contextMenuPlan(
 	settings: Settings,
 	columns: BookmarkColumn[],
+	sessions: MenuSession[],
 	excludeState: {checked: boolean; enabled: boolean} = {
 		checked: false,
 		enabled: true,
@@ -8997,11 +9054,43 @@ function contextMenuPlan(
 		);
 
 		items.push({
-			id: 'tablodge-page-separator',
-			type: 'separator',
+			id: MENU.pageSend,
+			title: 'Send this tab to session',
 			parentId: MENU.pageRoot,
 			...page,
 		});
+		for (const session of sessions) {
+			items.push({
+				id: `${PAGE_SEND_PREFIX}${session.id}`,
+				title: session.name,
+				parentId: MENU.pageSend,
+				...page,
+			});
+		}
+
+		if (sessions.length > 0) {
+			items.push({
+				id: `${MENU.pageSend}-separator`,
+				type: 'separator',
+				parentId: MENU.pageSend,
+				...page,
+			});
+		}
+
+		items.push(
+			{
+				id: MENU.pageSendNew,
+				title: 'New session',
+				parentId: MENU.pageSend,
+				...page,
+			},
+			{
+				id: 'tablodge-page-separator',
+				type: 'separator',
+				parentId: MENU.pageRoot,
+				...page,
+			},
+		);
 
 		// The tab-group item stays enabled: Chrome has no contextMenus.onShown to toggle it per tab, and a
 		// click outside a tab group just logs "The active tab is not in a tab group." Browsers with onShown refine it.
@@ -9183,12 +9272,13 @@ async function excludeMenuState(settings: Settings, tab?: chrome.tabs.Tab) {
  after removeAll settles, so two rebuilds can never interleave and hit duplicate ids.
  */
 function rebuildContextMenus(
-	source?: Pick<Store, 'settings' | 'bookmarkColumns'>,
+	source?: Pick<Store, 'settings' | 'bookmarkColumns' | 'groups' | 'folders'>,
 ): Promise<void> {
 	if (source) {
 		menuSignature = contextMenuSignature(
 			source.settings,
 			source.bookmarkColumns,
+			menuSessions(source.groups, source.folders),
 		);
 	}
 
@@ -9199,13 +9289,16 @@ function rebuildContextMenus(
 
 		try {
 			const store = source || (await getStore());
+			const sessions = menuSessions(store.groups, store.folders);
 			menuSignature = contextMenuSignature(
 				store.settings,
 				store.bookmarkColumns,
+				sessions,
 			);
 			const plan = contextMenuPlan(
 				store.settings,
 				store.bookmarkColumns,
+				sessions,
 				await excludeMenuState(store.settings),
 			);
 			menuGeneration += 1;
@@ -9302,10 +9395,12 @@ onLibraryChanged((changes, areaName) => {
 	const nextSignature = contextMenuSignature(
 		nextSettings,
 		normalizeBookmarkColumns(change.newValue.bookmarkColumns),
+		menuSessions(change.newValue.groups, change.newValue.folders),
 	);
 	const previousSignature = contextMenuSignature(
 		normalizeSettings(previous.settings as RawSettings | undefined),
 		normalizeBookmarkColumns(previous.bookmarkColumns),
+		menuSessions(previous.groups, previous.folders),
 	);
 	if (nextSignature !== previousSignature && nextSignature !== menuSignature) {
 		scheduleContextMenuRebuild();
@@ -9773,6 +9868,18 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 				);
 			},
 			id !== MENU.pageBookmarkNew,
+		);
+		return;
+	}
+
+	if (id.startsWith(PAGE_SEND_PREFIX) || id === MENU.pageSendNew) {
+		runMenuAction(
+			tab,
+			`${APP_NAME} could not send this tab to a session.`,
+			() =>
+				id === MENU.pageSendNew
+					? saveTabs('this-tab', tab, DEFAULT_FOLDER_ID, {promptName: true})
+					: saveCurrentTabToGroup(tab, id.slice(PAGE_SEND_PREFIX.length)),
 		);
 		return;
 	}

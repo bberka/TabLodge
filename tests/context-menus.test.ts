@@ -538,6 +538,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	assert.deepEqual(pageRoots[0].contexts, ['page', 'frame']);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-root')), [
 		'Bookmark this page to',
+		'Send this tab to session',
 		'---',
 		'Save this tab',
 		'Save this window',
@@ -554,6 +555,11 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'---',
 		'New column',
 	]);
+	assert.deepEqual(
+		titles(harness.childrenOf('tablodge-page-send')),
+		['New session'],
+		'with no saved sessions the picker only offers a new one',
+	);
 
 	assert.deepEqual(
 		harness.topLevel('selection').map((item) => item.id),
@@ -1005,6 +1011,206 @@ test('Save link for later respects rejected duplicates and appends to an existin
 		harness.state.groups[0].tabs.map((tab) => tab.url),
 		['https://old.example/', 'https://new.example/'],
 	);
+});
+
+function sessionEntry(
+	id: string,
+	name: string,
+	updatedAt: number,
+	extra: Record<string, unknown> = {},
+) {
+	return {
+		id,
+		name,
+		folderId: 'unfiled',
+		createdAt: 1,
+		updatedAt,
+		tabs: [{id: `${id}-tab`, title: 'Old', url: `https://${id}.example/`}],
+		...extra,
+	};
+}
+
+test('the send-to-session picker lists the ten most recent sessions, skips Archived, and ends with a new session', async () => {
+	const many = Array.from({length: 12}, (_, index) =>
+		sessionEntry(`s${index}`, `Session ${index}`, 100 + index),
+	);
+	const harness = createHarness(
+		baseState(
+			{},
+			{
+				folders: [
+					{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true},
+					{id: 'archive', name: 'Archived', createdAt: 0},
+				],
+				groups: [
+					...many,
+					sessionEntry('old', 'Archived one', 999, {folderId: 'archive'}),
+					sessionEntry('blank', '', 50),
+				],
+			},
+		),
+	);
+	await harness.install();
+	assert.deepEqual(harness.menuErrors, []);
+	const children = harness.childrenOf('tablodge-page-send');
+	assert.deepEqual(titles(children), [
+		...Array.from({length: 10}, (_, index) => `Session ${11 - index}`),
+		'---',
+		'New session',
+	]);
+	assert.equal(children[0].id, 'tablodge-page-send:s11');
+	assert.deepEqual(children[0].contexts, ['page', 'frame']);
+	assert.equal(harness.item('tablodge-page-send:old'), undefined);
+});
+
+test('the send-to-session picker follows session renames, additions and deletions', async () => {
+	const harness = createHarness(
+		baseState({}, {groups: [sessionEntry('a', 'Alpha', 10)]}),
+	);
+	await harness.install();
+	const sessionTitles = () => titles(harness.childrenOf('tablodge-page-send'));
+	assert.deepEqual(sessionTitles(), ['Alpha', '---', 'New session']);
+
+	await harness.send({
+		type: 'UPDATE_GROUP',
+		groupId: 'a',
+		fields: {name: 'Alpha renamed'},
+	});
+	await wait(REBUILD_WAIT);
+	assert.deepEqual(sessionTitles(), ['Alpha renamed', '---', 'New session']);
+
+	await harness.click({
+		menuItemId: 'tablodge-page-send-new',
+		pageUrl: 'https://current.example/page',
+	});
+	await wait(REBUILD_WAIT);
+	assert.equal(sessionTitles().length, 4, 'the new session joins the picker');
+
+	await harness.send({type: 'DELETE_GROUP', groupId: 'a'});
+	await wait(REBUILD_WAIT);
+	assert.equal(harness.item('tablodge-page-send:a'), undefined);
+	assert.deepEqual(harness.menuErrors, []);
+
+	await harness.send({
+		type: 'UPDATE_SETTINGS',
+		settings: {contextMenuPageEnabled: false},
+	});
+	await wait(REBUILD_WAIT);
+	assert.equal(harness.item('tablodge-page-send'), undefined);
+});
+
+test('sending this tab to a session appends it, leaves the page open when closing is off, and allows repeats', async () => {
+	const harness = createHarness(
+		baseState(
+			{closeOnSave: false},
+			{
+				groups: [sessionEntry('a', 'Alpha', 10), sessionEntry('b', 'Beta', 20)],
+			},
+		),
+	);
+	await harness.install();
+	await harness.click({menuItemId: 'tablodge-page-send:a'});
+	const alpha = harness.state.groups.find((group) => group.id === 'a')!;
+	assert.deepEqual(
+		alpha.tabs.map((tab) => [tab.title, tab.url]),
+		[
+			['Old', 'https://a.example/'],
+			['Current page', 'https://current.example/page'],
+		],
+	);
+	assert.equal(
+		harness.state.groups.find((group) => group.id === 'b')!.tabs.length,
+		1,
+		'other sessions are untouched',
+	);
+	assert.ok((alpha.updatedAt ?? 0) > 10);
+	assert.equal(harness.badges.at(0)?.text, '✓');
+	assert.equal(harness.tabs.length, 1, 'the tab stays open');
+
+	// Allowed duplicates may repeat an address in another session, matching the toolbar behavior.
+	await harness.click({menuItemId: 'tablodge-page-send:b'});
+	assert.equal(
+		harness.state.groups.find((group) => group.id === 'b')!.tabs.length,
+		2,
+	);
+});
+
+test('sending this tab honors rejected duplicates, excluded sites, close on save, and a vanished session', async () => {
+	const rejecting = createHarness(
+		baseState(
+			{saveDuplicateHandling: 'reject', closeOnSave: false},
+			{
+				groups: [
+					sessionEntry('a', 'Alpha', 10, {
+						tabs: [
+							{id: 't', title: 'Seen', url: 'https://current.example/page'},
+						],
+					}),
+					sessionEntry('b', 'Beta', 20),
+				],
+			},
+		),
+	);
+	await rejecting.install();
+	await rejecting.click({menuItemId: 'tablodge-page-send:b'});
+	assert.equal(
+		rejecting.state.groups.find((group) => group.id === 'b')!.tabs.length,
+		1,
+		'an address saved anywhere is not added again',
+	);
+
+	const excluded = createHarness(
+		baseState(
+			{excludedOrigins: ['current.example']},
+			{groups: [sessionEntry('a', 'Alpha', 10)]},
+		),
+	);
+	await excluded.install();
+	await excluded.click({menuItemId: 'tablodge-page-send:a'});
+	assert.equal(excluded.state.groups[0].tabs.length, 1);
+	assert.match(excluded.warnings.join('\n'), /no eligible web tab/);
+	assert.equal(excluded.badges.at(0)?.text, '!');
+
+	const closing = createHarness(
+		baseState(
+			{closeOnSave: true, openDashboardAfterSave: false},
+			{groups: [sessionEntry('a', 'Alpha', 10)]},
+		),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://current.example/page',
+				title: 'Current page',
+			},
+			{
+				id: 2,
+				windowId: 10,
+				index: 1,
+				active: false,
+				url: 'https://other.example/',
+				title: 'Other',
+			},
+		],
+	);
+	await closing.install();
+	await closing.click({menuItemId: 'tablodge-page-send:a'});
+	assert.equal(closing.state.groups[0].tabs.length, 2);
+	assert.deepEqual(
+		closing.tabs.map((tab) => tab.id),
+		[2],
+		'the sent tab closes like any other save',
+	);
+
+	const missing = createHarness(
+		baseState({}, {groups: [sessionEntry('a', 'Alpha', 10)]}),
+	);
+	await missing.install();
+	await missing.click({menuItemId: 'tablodge-page-send:gone'});
+	assert.match(missing.warnings.join('\n'), /no longer exists/);
+	assert.equal(missing.state.groups[0].tabs.length, 1);
 });
 
 test('the selection search opens the dashboard with ?q=', async () => {
