@@ -219,8 +219,8 @@ const xoConfig: XoConfigItem[] = [
 		},
 	},
 	{
-		// `homepage_url` is a manifest key, not our naming choice.
-		files: ['scripts/vite-shared.ts'],
+		// `homepage_url`, `sidebar_action` and the other manifest keys are not our naming choice.
+		files: ['scripts/vite-shared.ts', 'scripts/manifest-targets.ts'],
 		rules: {'@typescript-eslint/naming-convention': 'off'},
 	},
 	{

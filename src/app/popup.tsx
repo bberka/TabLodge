@@ -24,6 +24,7 @@ import {
 	PanelRightOpen,
 	Pin,
 	AppWindow,
+	CopyMinus,
 	X,
 } from 'lucide-react';
 import {
@@ -44,6 +45,11 @@ import {
 	IconTooltip,
 } from '../shared/ui';
 import '../../styles/extension-app.css';
+import {
+	canOpenSidePanel,
+	isFirefox,
+	openSidePanel as openPanel,
+} from '../shared/browser';
 import {ThemeProvider} from '../shared/theme';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {
@@ -68,6 +74,10 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {webUrl} from './web-url';
+import {
+	closeDuplicateTabs,
+	useDuplicateTabCount,
+} from './duplicate-tabs-action';
 import type {BookmarkColumnDraft} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
@@ -82,13 +92,16 @@ Stable fallback so memoized values do not see a new array on every render.
 const NO_SESSIONS: Session[] = [];
 const NO_ORIGINS: readonly string[] = [];
 
-// Older Chromium builds and some forks lack the side panel API.
-const hasSidePanel = typeof chrome.sidePanel?.open === 'function';
+// Older Chromium builds and some forks lack the side panel API; Firefox opens its sidebar instead.
+const hasSidePanel = canOpenSidePanel;
 
 // Web tabs from chrome.tabs.query, which always carries an id for tabs in normal windows.
 type WebTab = chrome.tabs.Tab & {id: number; url: string};
 
 function Popup() {
+	const popupHeight = chrome.extension.inIncognitoContext
+		? 'h-[500px]'
+		: 'h-[560px]';
 	const {state, error, reload} = useTabLodgeState();
 	const [status, showStatus] = useStatus();
 	const [busy, setBusy] = useState('');
@@ -129,6 +142,7 @@ function Popup() {
 		state?.settings?.includePinnedTabs === true,
 		state?.settings?.excludedOrigins ?? NO_ORIGINS,
 	);
+	const duplicateCount = useDuplicateTabCount();
 	const recentSessions = useMemo(
 		() => groups.toSorted((a, b) => b.createdAt - a.createdAt).slice(0, 5),
 		[groups],
@@ -374,11 +388,12 @@ function Popup() {
 	}
 
 	function openSidePanel() {
-		if (windowId === undefined) {
+		// Firefox opens the sidebar in the current window and needs no window id.
+		if (windowId === undefined && !isFirefox) {
 			return;
 		}
 
-		chrome.sidePanel.open({windowId}).then(
+		openPanel(windowId).then(
 			() => window.close(),
 			(reason: unknown) =>
 				showStatus(
@@ -402,10 +417,16 @@ function Popup() {
 
 	// Chrome sizes the popup to its content (max 800x600) and 100vh is circular there, so the
 	// popup has a fixed size: a stable header and footer with the body scrolling in between.
+	// The private-window banner uses part of the height limit, so its frame is shorter.
 	// Keep the popup's fixed frame while the saved state arrives.
 	if (!state && !error) {
 		return (
-			<main className="flex h-[560px] w-[380px] items-center justify-center text-foreground">
+			<main
+				className={cn(
+					'flex w-[380px] items-center justify-center text-foreground',
+					popupHeight,
+				)}
+			>
 				<LoadingLine className="py-0" />
 			</main>
 		);
@@ -429,7 +450,12 @@ function Popup() {
 		},
 	];
 	return (
-		<main className="flex h-[560px] w-[380px] flex-col overflow-hidden text-foreground">
+		<main
+			className={cn(
+				'flex w-[380px] flex-col overflow-hidden text-foreground',
+				popupHeight,
+			)}
+		>
 			<header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
 				<h1 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
 					<span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
@@ -573,6 +599,18 @@ function Popup() {
 					>
 						<PanelsTopLeft className="h-4 w-4" />
 						Save tabs in all windows
+					</Button>
+					<Button
+						size="sm"
+						variant="outline"
+						className="w-full justify-start gap-3 px-3"
+						disabled={busy !== '' || duplicateCount === 0}
+						onClick={() => void closeDuplicateTabs(showStatus)}
+					>
+						<CopyMinus className="h-4 w-4" aria-hidden="true" />
+						{duplicateCount === 0
+							? 'No duplicate tabs'
+							: `Close ${plural(duplicateCount, 'duplicate tab')}`}
 					</Button>
 					{!state?.settings?.includePinnedTabs && (
 						<div className="flex h-8 items-center justify-between gap-3 rounded-md border border-dashed border-border px-3">

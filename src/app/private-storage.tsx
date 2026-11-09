@@ -21,7 +21,6 @@ import {
 	PRIVATE_RELOAD_FOCUS_KEY,
 	reloadPrivatePage,
 } from './private-config';
-import {PrivateWindowMark} from './private-window-appearance';
 
 export const PRIVATE_STORAGE_TITLE = 'Private windows';
 export const PRIVATE_STORAGE_WORDS = [
@@ -61,12 +60,6 @@ const choices: Array<{
 			'Start with an empty library for private windows. It stays when those windows close, then clears when the browser restarts.',
 	},
 ];
-
-const modeSummary: Record<PrivateStorageMode, string> = {
-	shared: 'Same library as regular windows',
-	saved: 'Separate library saved on this device',
-	temporary: 'Separate library clears on browser restart',
-};
 
 const modeStatus: Record<PrivateStorageMode, string> = {
 	shared: 'Private windows will use the same library as regular windows.',
@@ -373,34 +366,7 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 	}
 
 	if (config?.configured) {
-		return (
-			<>
-				<aside
-					aria-label="Private window"
-					className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-muted px-5 py-3 text-sm sm:px-8"
-				>
-					<div className="flex min-w-0 items-center gap-3">
-						<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-							<PrivateWindowMark className="h-5 w-5" />
-						</span>
-						<div className="min-w-0">
-							<p className="font-semibold">You’re in a private window</p>
-							<p className="text-sm text-muted-foreground">
-								{modeSummary[config.mode]}
-							</p>
-						</div>
-					</div>
-					<a
-						data-private-settings
-						href="options.html#settings-private-windows"
-						className="rounded-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					>
-						Private window settings
-					</a>
-				</aside>
-				{children}
-			</>
-		);
+		return children;
 	}
 
 	return (

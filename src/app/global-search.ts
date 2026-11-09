@@ -44,6 +44,10 @@ export type FinderItem = {
 	*/
 	ref?: string;
 	windowId?: number;
+	/**
+	Sessions only: when it was last restored or changed, to list the most recently used first.
+	*/
+	recency?: number;
 };
 
 export type FinderSection = {
@@ -103,12 +107,13 @@ const SECTION_LIMIT: Partial<Record<FinderKind, number>> = {
 };
 
 /**
-How many open tabs and commands the finder lists before anything is typed.
+How many sessions, open tabs and commands the finder lists before anything is typed, in display order.
 */
-const EMPTY_LIMIT: Partial<Record<FinderKind, number>> = {
-	tab: 5,
-	command: 8,
-};
+const EMPTY_LIMIT: Array<[FinderKind, number]> = [
+	['session', 8],
+	['tab', 5],
+	['command', 8],
+];
 
 /**
 Most items per group that the (slow) typo pass looks at, so a huge library cannot stall a keystroke.
@@ -281,6 +286,7 @@ function cachedSessionItems(
 				detail: `${count} ${count === 1 ? 'tab' : 'tabs'}`,
 				texts: [group.name, clip(group.description)],
 				ref: group.id,
+				recency: group.lastOpenedAt ?? group.updatedAt ?? group.createdAt,
 			}),
 		);
 		for (const tab of group.tabs) {
@@ -362,19 +368,16 @@ export function searchFinder(
 	};
 
 	if (terms.length === 0) {
-		for (const kind of KIND_ORDER) {
-			const limit = EMPTY_LIMIT[kind];
-			if (limit) {
-				section(
-					kind,
-					index.filter((item) => item.kind === kind).slice(0, limit),
-				);
+		for (const [kind, limit] of EMPTY_LIMIT) {
+			const items = index.filter((item) => item.kind === kind);
+			if (kind === 'session') {
+				items.sort((a, b) => (b.recency ?? 0) - (a.recency ?? 0));
 			}
+
+			section(kind, items.slice(0, limit));
 		}
 
-		return sections.toSorted(
-			(a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
-		);
+		return sections;
 	}
 
 	const scored = new Map<

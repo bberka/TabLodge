@@ -37,6 +37,9 @@
 		},
 		"default_popup": "popup.html"
 	},
+	"omnibox": {
+		"keyword": "tl"
+	},
 	"options_page": "options.html",
 	"side_panel": {
 		"default_path": "sidepanel.html"
@@ -56,6 +59,13 @@
 				"default": "Alt+Shift+D"
 			},
 			"description": "Bookmark this page"
+		},
+		"open-palette": {
+			"suggested_key": {
+				"default": "Ctrl+Shift+K",
+				"mac": "Command+Shift+K"
+			},
+			"description": "Open the search palette"
 		},
 		"toggle-side-panel": {
 			"description": "Open the TabLodge side panel"

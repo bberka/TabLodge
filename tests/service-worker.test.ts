@@ -4,7 +4,6 @@ import {webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import vm from 'node:vm';
-import {transformWithOxc} from 'vite-plus';
 import {test} from 'vite-plus/test';
 import {ICON_IDS} from '../src/app/icon-ids';
 import type {
@@ -18,6 +17,7 @@ import type {
 	TabLodgeMessage,
 	TabLodgeMessageType,
 } from '../src/app/types';
+import {buildWorkerSource} from './worker-source';
 
 // The service worker is a classic script with no exports, so each harness runs the
 // type-stripped source in a fresh VM context against a mocked chrome.* API.
@@ -27,11 +27,7 @@ const workerPath = join(
 	'extension',
 	'service-worker.ts',
 );
-const {code: workerSource} = await transformWithOxc(
-	readFileSync(workerPath, 'utf8'),
-	workerPath,
-	{lang: 'ts'},
-);
+const workerSource = await buildWorkerSource();
 const storageKey = 'tablodge.state';
 const manifest = JSON.parse(
 	readFileSync(
@@ -135,6 +131,10 @@ type HarnessOptions = {
 	*/
 	now?: number;
 	locale?: string;
+	/**
+	Run as Firefox: `moz-extension:` addresses, no Side Panel API but a sidebar, and `chrome:` addresses refused.
+	*/
+	firefox?: boolean;
 };
 type MenuItem = {
 	id?: string;
@@ -194,6 +194,7 @@ function createWorkerHarness(
 	const removedTabIds: number[] = [];
 	const sidePanelCalls: SidePanelCall[] = [];
 	const sidePanelOpened: Array<{windowId: number}> = [];
+	let sidebarOpened = 0;
 	const popupCalls: string[] = [];
 	const createdWindows: Array<Omit<MockWindow, 'tabs'> & {tabs: undefined}> =
 		[];
@@ -212,6 +213,7 @@ function createWorkerHarness(
 	const alarmCalls: string[] = [];
 	const downloads: Array<{url: string; filename: string}> = [];
 	const windowUpdates: Array<{id: number; properties: unknown}> = [];
+	const defaultSuggestions: string[] = [];
 	const timers = new Map<number, {callback: () => void; delay: number}>();
 	let nextTimerId = 1;
 	let nextTabId = 200;
@@ -358,10 +360,23 @@ function createWorkerHarness(
 				?.delete(callback as (...args: unknown[]) => unknown);
 		},
 	});
+	// Firefox refuses addresses of its own pages (`chrome:`, `about:newtab`) in tabs.create and windows.create.
+	const refuseBrowserUrls = (url: string | string[] | undefined) => {
+		if (
+			options.firefox &&
+			[url ?? []]
+				.flat()
+				.some((entry) => /^(?:chrome:|about:(?!blank))/.test(entry))
+		) {
+			throw new Error(`Illegal URL: ${[url].flat().join(',')}`);
+		}
+	};
+
 	const chrome = {
 		extension: {inIncognitoContext: options.incognitoContext === true},
 		runtime: {
-			getURL: (file: string) => `chrome-extension://tablodge/${file}`,
+			getURL: (file: string) =>
+				`${options.firefox ? 'moz-extension' : 'chrome-extension'}://tablodge/${file}`,
 			getManifest: () => ({...manifest}),
 			onMessage: {
 				addListener(callback: MessageListener) {
@@ -535,6 +550,7 @@ function createWorkerHarness(
 				} = {},
 			) {
 				windowCreateCalls.push({...properties});
+				refuseBrowserUrls(properties.url);
 				if (
 					options.rejectWindowBounds &&
 					(properties.left !== undefined || properties.top !== undefined)
@@ -570,11 +586,22 @@ function createWorkerHarness(
 			},
 		},
 		tabs: {
-			async query(query: {windowId?: number} = {}) {
+			async query(
+				query: {
+					windowId?: number;
+					active?: boolean;
+					lastFocusedWindow?: boolean;
+				} = {},
+			) {
 				return tabs
 					.filter(
 						(tab) =>
-							query.windowId === undefined || tab.windowId === query.windowId,
+							(query.windowId === undefined ||
+								tab.windowId === query.windowId) &&
+							(query.active === undefined ||
+								Boolean(tab.active) === query.active) &&
+							(!query.lastFocusedWindow ||
+								tab.windowId === lastFocusedWindowId),
 					)
 					.map((tab) => ({...tab}));
 			},
@@ -582,6 +609,7 @@ function createWorkerHarness(
 				return {...findTab(id)};
 			},
 			async create(properties: MockCreateProperties) {
+				refuseBrowserUrls(properties.url);
 				if ((options.failedCreateUrls || []).includes(properties.url ?? '')) {
 					throw new Error('Mock browser refused the tab.');
 				}
@@ -759,24 +787,41 @@ function createWorkerHarness(
 			},
 			onClicked: event('actionClicked'),
 		},
-		sidePanel: {
-			async open(value: {windowId: number}) {
-				sidePanelOpened.push(value);
-			},
-			async setOptions(value: SidePanelCall['value']) {
-				sidePanelCalls.push({
-					method: 'setOptions',
-					value: structuredClone(value),
-				});
-			},
-			async setPanelBehavior(value: SidePanelCall['value']) {
-				sidePanelCalls.push({
-					method: 'setPanelBehavior',
-					value: structuredClone(value),
-				});
-			},
-		},
+		...(options.firefox
+			? {
+					sidebarAction: {
+						async open() {
+							sidebarOpened++;
+						},
+					},
+				}
+			: {
+					sidePanel: {
+						async open(value: {windowId: number}) {
+							sidePanelOpened.push(value);
+						},
+						async setOptions(value: SidePanelCall['value']) {
+							sidePanelCalls.push({
+								method: 'setOptions',
+								value: structuredClone(value),
+							});
+						},
+						async setPanelBehavior(value: SidePanelCall['value']) {
+							sidePanelCalls.push({
+								method: 'setPanelBehavior',
+								value: structuredClone(value),
+							});
+						},
+					},
+				}),
 		commands: {onCommand: event('onCommand')},
+		omnibox: {
+			async setDefaultSuggestion(suggestion: {description: string}) {
+				defaultSuggestions.push(suggestion.description);
+			},
+			onInputChanged: event('omniboxInputChanged'),
+			onInputEntered: event('omniboxInputEntered'),
+		},
 		...(!options.noAlarms && {
 			alarms: {
 				async create(
@@ -854,6 +899,7 @@ function createWorkerHarness(
 		Date: FrozenDate,
 		navigator: {language: options.locale ?? 'en-US'},
 		URL,
+		URLSearchParams,
 		console,
 		crypto: webcrypto,
 		structuredClone,
@@ -876,6 +922,7 @@ function createWorkerHarness(
 		removedTabIds,
 		sidePanelCalls,
 		sidePanelOpened,
+		sidebarOpened: () => sidebarOpened,
 		popupCalls,
 		createdWindows,
 		windowCreateCalls,
@@ -890,6 +937,7 @@ function createWorkerHarness(
 		alarmCalls,
 		downloads,
 		windowUpdates,
+		defaultSuggestions,
 		timers,
 		/**
 		Runs every pending manual timer (and any they schedule), then lets the queued async work settle.
@@ -1912,6 +1960,30 @@ test('SWITCH_WORKSPACE saves the window, opens the chosen session there, and clo
 	);
 });
 
+test('SWITCH_WORKSPACE does not save the window again when a saved session already has exactly those pages', async () => {
+	const state = stateWithSession({openDashboardAfterSave: false});
+	state.groups.push({
+		id: 'same-as-window',
+		name: 'Same as the window',
+		tabs: [
+			{id: 'a', url: 'https://saved.example/article', title: 'Article'},
+			{id: 'b', url: 'https://one.example/', title: 'One'},
+		],
+	});
+	const harness = createWorkerHarness(state, windowTabs);
+	const before = harness.state.groups.length;
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'session-1',
+	});
+
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.saved, 0);
+	assert.equal(response.savedGroupId, 'same-as-window');
+	assert.equal(harness.state.groups.length, before, 'no duplicate session');
+	assert.equal(response.closed, 2, 'the window still switches over');
+});
+
 test('SWITCH_WORKSPACE keeps the window open when the chosen session cannot be restored', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({openDashboardAfterSave: false}),
@@ -2250,6 +2322,96 @@ test('the toggle-side-panel command opens the side panel for the window', async 
 	const harness = createWorkerHarness(stateWithSession());
 	await harness.fire('onCommand', 'toggle-side-panel', {id: 1, windowId: 7});
 	assert.deepEqual(structuredClone(harness.sidePanelOpened), [{windowId: 7}]);
+});
+
+// Firefox: the same worker runs as an event page. These cover where its browser differs from Chromium.
+test('Firefox restores into a new window that starts blank, then removes that bootstrap tab', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({restoreTarget: 'always-new-window'}),
+		undefined,
+		{firefox: true},
+	);
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.windowCreateCalls[0].url, 'about:blank');
+	assert.equal(harness.createdWindows.length, 1);
+	assert.equal(harness.openedTabs[0].windowId, harness.createdWindows[0].id);
+	assert.equal(harness.removedTabIds.length, 1, 'the bootstrap tab is removed');
+});
+
+test('Firefox keeps an emptied window open on the new tab page without naming a browser address', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({
+			closeOnSave: true,
+			openDashboardAfterSave: false,
+			emptyWindowAfterSave: 'new-tab',
+		}),
+		undefined,
+		{firefox: true},
+	);
+	const response = await harness.sendMessage({
+		type: 'SAVE_TABS',
+		scope: 'window',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.tabsForWindow(10).length, 1, 'the window keeps a tab');
+});
+
+test('Firefox shows the popup for the side panel toolbar mode and opens its sidebar from commands and the menu', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		firefox: true,
+	});
+	const result = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {actionMode: 'sidepanel'},
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(harness.popupCalls.at(-1), 'popup.html');
+	assert.equal(harness.sidePanelCalls.length, 0);
+
+	await harness.fire('onInstalled', {reason: 'update'});
+	await new Promise((resolve) => {
+		setTimeout(resolve, 0);
+	});
+	await harness.fire('onCommand', 'toggle-side-panel', {id: 1, windowId: 7});
+	assert.equal(harness.sidebarOpened(), 1);
+	assert.equal(harness.sidePanelOpened.length, 0);
+
+	await harness.fire(
+		'contextMenuClicked',
+		{
+			menuItemId: 'tablodge-action-side-panel',
+		},
+		{id: 1, windowId: 7},
+	);
+	assert.equal(harness.sidebarOpened(), 2);
+	assert.equal(
+		harness.menuItems.some((item) => item.id === 'tablodge-action-side-panel'),
+		true,
+		'the toolbar menu offers the sidebar',
+	);
+});
+
+test('Firefox always keeps the new-tab page on, since it cannot hand a new tab on', async () => {
+	const firefox = createWorkerHarness(
+		stateWithSession({newTabEnabled: false}),
+		undefined,
+		{firefox: true},
+	);
+	assert.equal(
+		(await firefox.sendMessage({type: 'GET_STATE'})).settings.newTabEnabled,
+		true,
+	);
+	const chromium = createWorkerHarness(
+		stateWithSession({newTabEnabled: false}),
+	);
+	assert.equal(
+		(await chromium.sendMessage({type: 'GET_STATE'})).settings.newTabEnabled,
+		false,
+	);
 });
 
 test('column delete preserves bookmarks, including when the built-in or last column is removed', async () => {
@@ -4669,6 +4831,71 @@ test('bookmarkBoardView defaults to board, validates choices, and resets', async
 
 	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
 	assert.equal(reset.settings.bookmarkBoardView, 'board');
+});
+
+test('bookmark board layout settings default to the current layout, validate choices, and reset', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	const {settings} = await defaults.sendMessage({type: 'GET_STATE'});
+	assert.equal(settings.bookmarkColumnWidth, 'default');
+	assert.equal(settings.bookmarkColumnsPerRow, 0);
+	assert.equal(settings.bookmarkDensity, 'comfortable');
+
+	const configured = createWorkerHarness(
+		stateWithSession({
+			bookmarkColumnWidth: 'extra-wide',
+			bookmarkColumnsPerRow: 4,
+			bookmarkDensity: 'compact',
+		}),
+	);
+	const kept = (await configured.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(kept.bookmarkColumnWidth, 'extra-wide');
+	assert.equal(kept.bookmarkColumnsPerRow, 4);
+	assert.equal(kept.bookmarkDensity, 'compact');
+
+	const invalid = createWorkerHarness(
+		stateWithSession({
+			bookmarkColumnWidth: 'huge',
+			bookmarkColumnsPerRow: 'many',
+			bookmarkDensity: 'tight',
+		}),
+	);
+	const fallback = (await invalid.sendMessage({type: 'GET_STATE'})).settings;
+	assert.equal(fallback.bookmarkColumnWidth, 'default');
+	assert.equal(fallback.bookmarkColumnsPerRow, 0);
+	assert.equal(fallback.bookmarkDensity, 'comfortable');
+
+	for (const [stored, expected] of [
+		[-3, 0],
+		[99, 6],
+		[2.9, 2],
+	] as const) {
+		const clamped = createWorkerHarness(
+			stateWithSession({bookmarkColumnsPerRow: stored}),
+		);
+		assert.equal(
+			(await clamped.sendMessage({type: 'GET_STATE'})).settings
+				.bookmarkColumnsPerRow,
+			expected,
+		);
+	}
+
+	const updated = await invalid.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			bookmarkColumnWidth: 'narrow',
+			bookmarkColumnsPerRow: 3,
+			bookmarkDensity: 'compact',
+		},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(invalid.state.settings.bookmarkColumnWidth, 'narrow');
+	assert.equal(invalid.state.settings.bookmarkColumnsPerRow, 3);
+	assert.equal(invalid.state.settings.bookmarkDensity, 'compact');
+
+	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.bookmarkColumnWidth, 'default');
+	assert.equal(reset.settings.bookmarkColumnsPerRow, 0);
+	assert.equal(reset.settings.bookmarkDensity, 'comfortable');
 });
 
 test("bookmark imports with a target column ignore the file's columns and fill only that column", async () => {
@@ -8759,6 +8986,75 @@ test('the bookmark shortcut opens the add-bookmark window for a web page only', 
 	assert.equal(internal.windowCreateCalls.length, 0);
 });
 
+test('the palette shortcut opens one palette window over the focused window on any page, and a second press closes it', async () => {
+	// A restricted page: the palette is a window of its own, so the page does not matter.
+	const harness = nameHarness({}, [
+		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
+	]);
+	const press = async () => {
+		(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+			'open-palette',
+			{id: 1, windowId: 10},
+		);
+		await settle();
+	};
+
+	await press();
+	assert.equal(harness.windowCreateCalls.length, 1);
+	const call = harness.windowCreateCalls[0] as {
+		type: string;
+		url: string;
+		focused: boolean;
+	};
+	assert.equal(call.type, 'popup');
+	assert.equal(call.focused, true);
+	const url = new URL(call.url);
+	assert.equal(url.pathname, '/palette.html');
+	assert.equal(url.searchParams.get('window'), '10');
+
+	// The palette window is now open; pressing the shortcut again closes it instead of opening a second one.
+	await press();
+	assert.equal(harness.windowCreateCalls.length, 1);
+	assert.equal(
+		harness.createdWindows.length,
+		1,
+		'the palette window was created once',
+	);
+});
+
+test('messages from the palette window act on the window it was opened over', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession({restoreTarget: 'current-window', restoreMode: 'keep'}),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://front.example/',
+			},
+			{
+				id: 2,
+				windowId: 20,
+				index: 0,
+				active: true,
+				url: 'chrome-extension://tablodge/palette.html?window=10',
+			},
+		],
+		{extraWindows: [20]},
+	);
+	const response = await harness.sendMessage(
+		{type: 'RESTORE_GROUP', groupId: 'session-1'},
+		{
+			url: 'chrome-extension://tablodge/palette.html?window=10',
+			tab: {id: 2, windowId: 20},
+		} as never,
+	);
+	assert.equal(response.ok, true, response.error);
+	assert.ok(harness.openedTabs.length > 0);
+	assert.ok(harness.openedTabs.every((tab) => tab.windowId === 10));
+});
+
 test('an all-windows toolbar save asks once for every session it created', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({
@@ -9192,4 +9488,469 @@ test('browser bookmark: existing TabLodge bookmarks and a disabled board are ign
 	existing.listeners.bookmarkCreated('b1', starNode());
 	await existing.runTimers();
 	assert.equal(existing.windowCreateCalls.length, 0);
+});
+
+function sessionToEdit(settings: Record<string, unknown> = {}): StoredState {
+	const state = stateWithSession({openDashboardAfterSave: false, ...settings});
+	Object.assign(state.groups[0], {
+		description: 'Keep this',
+		tabs: [
+			{
+				id: 'old',
+				title: 'Old page',
+				url: 'https://old.example/',
+				notes: 'old note',
+				pinned: false,
+				originalIndex: 0,
+			},
+			{
+				id: 'kept',
+				title: 'Saved page',
+				url: 'https://saved.example/article',
+				notes: 'my note',
+				pinned: false,
+				originalIndex: 1,
+			},
+		],
+	});
+	return state;
+}
+
+test('UPDATE_GROUP_FROM_WINDOW replace swaps the links for the window, keeps the session identity and notes, and undoes', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), windowTabs);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 2);
+	assert.equal(result.added, 1);
+	assert.equal(result.removed, 1);
+	const group = harness.state.groups[0];
+	assert.equal(harness.state.groups.length, 1);
+	assert.equal(group.id, 'session-1');
+	assert.equal(group.name, 'Research');
+	assert.equal(group.description, 'Keep this');
+	assert.deepEqual(
+		group.tabs.map((tab) => tab.url),
+		['https://one.example/', 'https://saved.example/article'],
+		'pinned tabs stay out by default',
+	);
+	assert.equal(group.tabs[1].notes, 'my note');
+	assert.deepEqual(harness.removedTabIds, [], 'the window keeps its tabs');
+	assert.equal(harness.createdWindows.length, 0);
+
+	const undo = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undo.ok, true, undo.error);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['old', 'kept'],
+	);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW follows the excluded sites and pinned tab settings', async () => {
+	const harness = createWorkerHarness(
+		sessionToEdit({includePinnedTabs: true, excludedOrigins: ['one.example']}),
+		windowTabs,
+	);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => [tab.url, tab.pinned]),
+		[
+			['https://pinned.example/', true],
+			['https://saved.example/article', false],
+		],
+	);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW replace refuses a window with nothing to save and leaves the session alone', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'chrome://settings/',
+			title: 'Settings',
+		},
+	]);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, false);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.id),
+		['old', 'kept'],
+	);
+	const missing = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'nope',
+		mode: 'append',
+	});
+	assert.equal(missing.ok, false);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW append adds only new addresses at the end and undoes', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), windowTabs);
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'append',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 3);
+	assert.equal(result.added, 1);
+	assert.equal(result.skipped, 1);
+	assert.equal(result.removed, 0);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.url),
+		[
+			'https://old.example/',
+			'https://saved.example/article',
+			'https://one.example/',
+		],
+	);
+	assert.equal(harness.state.groups[0].tabs[1].notes, 'my note');
+
+	const again = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'append',
+	});
+	assert.equal(again.ok, false, 'nothing new to add');
+	assert.equal(harness.state.groups[0].tabs.length, 3);
+
+	const undo = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undo.ok, true, undo.error);
+	assert.equal(harness.state.groups[0].tabs.length, 2);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW honors duplicate rejection against other sessions', async () => {
+	const state = sessionToEdit({saveDuplicateHandling: 'reject'});
+	state.groups.push({
+		...structuredClone(state.groups[0]),
+		id: 'session-2',
+		name: 'Other',
+		tabs: [
+			{
+				id: 'o1',
+				title: 'One elsewhere',
+				url: 'https://one.example/',
+				pinned: false,
+				originalIndex: 0,
+			},
+		],
+	});
+	const replaced = createWorkerHarness(structuredClone(state), windowTabs);
+	const replace = await replaced.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(replace.ok, true, replace.error);
+	assert.equal(replace.skipped, 1);
+	assert.deepEqual(
+		replaced.state.groups[0].tabs.map((tab) => tab.url),
+		['https://saved.example/article'],
+		"its own links don't count as duplicates, other sessions' do",
+	);
+
+	const allowed = createWorkerHarness(
+		{
+			...structuredClone(state),
+			settings: {...state.settings, saveDuplicateHandling: 'allow'},
+		},
+		windowTabs,
+	);
+	const allow = await allowed.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(allow.ok, true, allow.error);
+	assert.equal(allowed.state.groups[0].tabs.length, 2);
+});
+
+test('UPDATE_GROUP_FROM_WINDOW keeps split pairs from the window and refuses a session over the link limit', async () => {
+	const harness = createWorkerHarness(sessionToEdit(), splitWindowTabs());
+	const result = await harness.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'replace',
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(savedUrlsAndSplits(harness.state.groups[0]), [
+		['left', 0],
+		['right', 1],
+		['plain', null],
+		['docs', 0],
+		['notes', 1],
+	]);
+
+	const full = sessionToEdit();
+	full.groups[0].tabs = Array.from({length: 1000}, (_, index) => ({
+		id: `t${index}`,
+		title: `T${index}`,
+		url: `https://full.example/${index}`,
+		pinned: false,
+		originalIndex: index,
+	}));
+	const overflow = createWorkerHarness(full, windowTabs);
+	const refused = await overflow.sendMessage({
+		type: 'UPDATE_GROUP_FROM_WINDOW',
+		groupId: 'session-1',
+		mode: 'append',
+	});
+	assert.equal(refused.ok, false);
+	assert.equal(overflow.state.groups[0].tabs.length, 1000);
+});
+
+function splittable(): StoredState {
+	const state = reorderState();
+	state.groups[0].tabs[2].notes = 'keep me';
+	return state;
+}
+
+test('SPLIT_GROUP moves the chosen links into a new session next to the source and undoes', async () => {
+	const harness = createWorkerHarness(splittable());
+	const result = await harness.sendMessage({
+		type: 'SPLIT_GROUP',
+		groupId: 'A',
+		tabIds: ['a3', 'a1'],
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 2);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['A', result.groupId, 'B', 'C'],
+	);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a2']);
+	const created = harness.state.groups[1];
+	assert.deepEqual(
+		created.tabs.map((tab) => tab.id),
+		['a1', 'a3'],
+		'links keep their order from the source',
+	);
+	assert.equal(created.name, 'A (split)');
+	assert.equal(created.folderId, harness.state.groups[0].folderId);
+	assert.equal(
+		harness.state.groups
+			.flatMap((group) => group.tabs)
+			.filter((tab) => tab.split).length,
+		0,
+		'a pair broken by the split loses its split info',
+	);
+
+	const undo = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undo.ok, true, undo.error);
+	assert.deepEqual(
+		harness.state.groups.map((group) => group.id),
+		['A', 'B', 'C'],
+	);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a1', 'a2', 'a3']);
+});
+
+test('SPLIT_GROUP keeps a whole split pair together, uses the given name, and rejects empty or complete selections', async () => {
+	const harness = createWorkerHarness(splittable());
+	const result = await harness.sendMessage({
+		type: 'SPLIT_GROUP',
+		groupId: 'A',
+		tabIds: ['a1', 'a2'],
+		name: 'Pair',
+	});
+	assert.equal(result.ok, true, result.error);
+	const created = harness.state.groups.find(
+		(group) => group.id === result.groupId,
+	)!;
+	assert.equal(created.name, 'Pair');
+	assert.deepEqual(
+		created.tabs.map((tab) => [tab.id, tab.split?.position]),
+		[
+			['a1', 0],
+			['a2', 1],
+		],
+	);
+	assert.equal(created.tabs[0].split!.id, created.tabs[1].split!.id);
+	assert.deepEqual(tabIdsOf(harness.state, 'A'), ['a3']);
+
+	for (const tabIds of [[], ['nope'], ['a3']]) {
+		const refused = await harness.sendMessage({
+			type: 'SPLIT_GROUP',
+			groupId: 'A',
+			tabIds,
+		});
+		assert.equal(refused.ok, false, JSON.stringify(tabIds));
+	}
+
+	const missing = await harness.sendMessage({
+		type: 'SPLIT_GROUP',
+		groupId: 'zzz',
+		tabIds: ['a1'],
+	});
+	assert.equal(missing.ok, false);
+});
+
+type OmniboxSuggestion = {content: string; description: string};
+
+function omniboxHarness(settings: Record<string, unknown> = {}) {
+	const state = stateWithSession(settings);
+	state.bookmarks = [
+		{
+			id: 'bookmark-1',
+			title: 'Hacker News',
+			url: 'https://news.ycombinator.com/?utm_source=x',
+			columnId: 'bookmark-default',
+			createdAt: 1,
+			updatedAt: 1,
+		},
+	];
+	const harness = createWorkerHarness(state, [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'https://current.example/',
+			title: 'Current',
+		},
+		{
+			id: 2,
+			windowId: 11,
+			index: 0,
+			active: true,
+			url: 'https://news.example/',
+			title: 'Hacker daily',
+		},
+		{
+			id: 3,
+			windowId: 10,
+			index: 1,
+			active: false,
+			url: 'chrome-extension://tablodge/newtab.html',
+			title: 'TabLodge',
+		},
+	]);
+	return {
+		harness,
+		async suggest(text: string) {
+			let suggestions: OmniboxSuggestion[] = [];
+			(
+				harness.listeners.omniboxInputChanged as (
+					text: string,
+					suggest: (list: OmniboxSuggestion[]) => void,
+				) => void
+			)(text, (list) => {
+				suggestions = list;
+			});
+			await settle();
+			return [...suggestions];
+		},
+		async enter(text: string, disposition = 'currentTab') {
+			(
+				harness.listeners.omniboxInputEntered as (
+					text: string,
+					disposition: string,
+				) => void
+			)(text, disposition);
+			await settle();
+		},
+	};
+}
+
+test('omnibox: suggests open tabs, saved tabs, bookmarks and sessions, never the dashboard tab', async () => {
+	const {harness, suggest} = omniboxHarness();
+	assert.match(harness.defaultSuggestions[0], /%s/);
+	assert.deepEqual(
+		(await suggest('hacker')).map((entry) => entry.content),
+		['tab:2', 'bookmark:bookmark-1'],
+	);
+	assert.deepEqual(
+		(await suggest('research')).map((entry) => entry.content),
+		['session:session-1', 'saved-tab:session-1:saved-tab-1'],
+	);
+	assert.deepEqual(
+		(await suggest('saved page')).map((entry) => entry.content),
+		['saved-tab:session-1:saved-tab-1'],
+	);
+	assert.deepEqual(await suggest('tablodge'), []);
+	assert.deepEqual(await suggest('zzzzqqq'), []);
+});
+
+test('omnibox: entering an open tab switches to it and focuses its window', async () => {
+	const {harness, enter} = omniboxHarness();
+	await enter('tab:2');
+	assert.equal(harness.tabs.find((tab) => tab.id === 2)?.active, true);
+	assert.ok(harness.windowUpdates.some((update) => update.id === 11));
+	assert.equal(harness.openedTabs.length, 0);
+});
+
+test('omnibox: entering a bookmark follows the address bar disposition', async () => {
+	const current = omniboxHarness();
+	await current.enter('bookmark:bookmark-1', 'currentTab');
+	assert.equal(
+		current.harness.tabs.find((tab) => tab.id === 1)?.url,
+		'https://news.ycombinator.com/?utm_source=x',
+	);
+	assert.equal(current.harness.openedTabs.length, 0);
+
+	const foreground = omniboxHarness({removeTrackingParameters: true});
+	await foreground.enter('bookmark:bookmark-1', 'newForegroundTab');
+	assert.deepEqual(
+		foreground.harness.openedTabs.map((tab) => [tab.url, tab.active]),
+		[['https://news.ycombinator.com/', true]],
+	);
+
+	const background = omniboxHarness();
+	await background.enter('saved-tab:session-1:saved-tab-1', 'newBackgroundTab');
+	assert.deepEqual(
+		background.harness.openedTabs.map((tab) => [tab.url, tab.active]),
+		[['https://saved.example/article', false]],
+	);
+});
+
+test('omnibox: a pinned TabLodge tab is not navigated away', async () => {
+	const {harness, enter} = omniboxHarness({keepLodgePinned: true});
+	const lodge = harness.tabs.find((tab) => tab.id === 3)!;
+	Object.assign(lodge, {pinned: true, active: true});
+	harness.tabs.find((tab) => tab.id === 1)!.active = false;
+	await enter('bookmark:bookmark-1', 'currentTab');
+	assert.equal(lodge.url, 'chrome-extension://tablodge/newtab.html');
+	assert.equal(harness.openedTabs.length, 1);
+});
+
+test('omnibox: entering a session opens the dashboard focused on it', async () => {
+	const {harness, enter} = omniboxHarness();
+	await enter('session:session-1');
+	assert.equal(
+		harness.tabs.find((tab) => tab.id === 3)?.url,
+		'chrome-extension://tablodge/newtab.html?group=session-1',
+	);
+});
+
+test('omnibox: entering plain text searches in the dashboard', async () => {
+	const {harness, enter} = omniboxHarness();
+	await enter('some words');
+	assert.equal(
+		harness.tabs.find((tab) => tab.id === 3)?.url,
+		'chrome-extension://tablodge/newtab.html?q=some+words',
+	);
+});
+
+test('omnibox: a bookmark saved after the first search shows up in the next one', async () => {
+	const {harness, suggest} = omniboxHarness();
+	assert.deepEqual(await suggest('lemmings'), []);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Lemmings fan site', url: 'https://lemmings.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal((await suggest('lemmings')).length, 1);
 });

@@ -42,16 +42,20 @@ function icon(url: string, size: number, round = false) {
 		background: 'rgb(var(--muted))',
 		display: 'inline-block',
 	});
-	const image = document.createElement('img');
-	image.src = faviconUrl(url);
-	image.alt = '';
-	Object.assign(image.style, {
-		width: '100%',
-		height: '100%',
-		objectFit: 'contain',
-		background: 'rgb(var(--card))',
-	});
-	wrapper.append(image);
+	const source = faviconUrl(url);
+	if (source) {
+		const image = document.createElement('img');
+		image.src = source;
+		image.alt = '';
+		Object.assign(image.style, {
+			width: '100%',
+			height: '100%',
+			objectFit: 'contain',
+			background: 'rgb(var(--card))',
+		});
+		wrapper.append(image);
+	}
+
 	return wrapper;
 }
 

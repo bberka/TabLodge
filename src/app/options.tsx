@@ -19,6 +19,7 @@ import {
 	Bookmark,
 	Database,
 	Plus,
+	ChartColumn,
 	Eraser,
 	LifeBuoy,
 	MousePointerClick,
@@ -61,6 +62,12 @@ import {
 import '../../styles/extension-app.css';
 import {ACCENTS, DEFAULT_ACCENT} from '../shared/accents';
 import {ThemeProvider, useTheme} from '../shared/theme';
+import {
+	SHORTCUTS_HINT,
+	isFirefox,
+	toolbarOpensSidePanel,
+	openShortcutsPage,
+} from '../shared/browser';
 import {radioTargetIndex} from '../shared/radio-keys';
 import {AccentPalette} from './accent-palette';
 import {
@@ -72,7 +79,6 @@ import {
 	SectionCard,
 	StatusLine,
 	messageOf,
-	openShortcutsPage,
 	plural,
 	send,
 	useStatus,
@@ -91,6 +97,7 @@ import {
 	ImportDialog,
 	RecoveryTools,
 	SnapshotsDialog,
+	TabStatsDialog,
 	TrashDialog,
 } from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
@@ -227,6 +234,8 @@ const settingsGroups: Array<{
 				label: `Use ${PROJECT.name} for new tabs`,
 				help: `Show saved bookmarks and sessions on ${PROJECT.name}’s local new-tab page.`,
 				type: 'switch',
+				// Firefox cannot tell a new tab from the dashboard being opened, so it cannot hand a new tab on.
+				when: () => !isFirefox,
 			},
 			{
 				name: 'newTabFallback',
@@ -254,9 +263,10 @@ const settingsGroups: Array<{
 			{
 				name: 'autoFocusSearchOnNewTab',
 				label: 'Focus search when opening a new tab',
-				help: 'Opens the search palette whenever a new tab opens. Chromium may keep focus in the address bar until you click the page.',
+				help: 'Opens the search palette whenever a new tab opens. The browser may keep focus in the address bar until you click the page.',
 				type: 'switch',
-				requires: 'newTabEnabled',
+				// Firefox always keeps the new tab page on and hides its switch, so this row stands alone there.
+				requires: isFirefox ? undefined : 'newTabEnabled',
 			},
 			{
 				name: 'keepLodgePinned',
@@ -284,11 +294,17 @@ const settingsGroups: Array<{
 			{
 				name: 'actionMode',
 				label: 'Toolbar button action',
-				help: 'The default is a compact popup. Only Open Dashboard opens the full page in a separate tab. The side panel is also available from the browser’s sidebar or menu, and via the “Open side panel” shortcut.',
+				help: toolbarOpensSidePanel
+					? 'The default is a compact popup. Only Open Dashboard opens the full page in a separate tab. The side panel is also available from the browser’s sidebar or menu, and via the “Open side panel” shortcut.'
+					: 'The default is a compact popup. Only Open Dashboard opens the full page in a separate tab. The side panel opens as a sidebar from the popup, the toolbar button’s menu, or the “Open side panel” shortcut.',
 				type: 'select',
 				options: [
 					['popup', 'Open the quick action popup'],
-					['sidepanel', 'Open the side panel'],
+					...(toolbarOpensSidePanel
+						? ([['sidepanel', 'Open the side panel']] as Array<
+								[string, string]
+							>)
+						: []),
 					['current-window', 'Save selected tabs, or this window'],
 					['full-window', 'Save the whole window'],
 					['current-group', 'Save the active tab group'],
@@ -522,7 +538,7 @@ const settingsGroups: Array<{
 				name: 'contextMenuPageEnabled',
 				requires: 'contextMenusEnabled',
 				label: 'Page',
-				help: 'Bookmark the page to a column, or save this tab, this window, a tab group, or the tabs beside it.',
+				help: 'Bookmark the page to a column, send this tab to a recent session, or save this tab, this window, a tab group, or the tabs beside it.',
 				type: 'switch',
 			},
 			{
@@ -604,11 +620,13 @@ const settingsGroups: Array<{
 					['split', 'Keep them side by side'],
 					['separate', 'Open as separate tabs'],
 				],
+				// Firefox has no split view; saved pairs always reopen as neighboring tabs.
+				when: () => !isFirefox,
 			},
 			{
 				name: 'unloadRestoredTabs',
 				label: 'Unload background restored tabs',
-				help: 'Ask Chromium to discard background tabs after restore when the browser supports it. Active, pinned, and split view tabs are left alone.',
+				help: 'Ask the browser to discard background tabs after restore when the browser supports it. Active, pinned, and split view tabs are left alone.',
 				type: 'switch',
 			},
 			{
@@ -746,6 +764,43 @@ const settingsGroups: Array<{
 				label: 'Extend bookmark columns to available height',
 				help: 'Columns in the same row match the tallest one.',
 				type: 'switch',
+			},
+			{
+				name: 'bookmarkColumnWidth',
+				label: 'Bookmark column width',
+				help: 'The narrowest a column in Board view can get before the grid fits fewer across. Default keeps the layout set by Dashboard width. Focus view always shows one column beside the list.',
+				type: 'select',
+				options: [
+					['narrow', 'Narrow'],
+					['default', 'Default'],
+					['wide', 'Wide'],
+					['extra-wide', 'Extra wide'],
+				],
+			},
+			{
+				name: 'bookmarkColumnsPerRow',
+				label: 'Columns per row',
+				help: 'The most columns Board view puts in a row. Automatic fits as many as the width allows. A narrow window still shows fewer, so columns never get too small.',
+				type: 'number-select',
+				options: [
+					['0', 'Automatic'],
+					['1', '1 column'],
+					['2', '2 columns'],
+					['3', '3 columns'],
+					['4', '4 columns'],
+					['5', '5 columns'],
+					['6', '6 columns'],
+				],
+			},
+			{
+				name: 'bookmarkDensity',
+				label: 'Bookmark density',
+				help: 'Compact tightens the gaps, padding, and row height of the bookmark board in both Board and Focus views, so more bookmarks fit on screen.',
+				type: 'select',
+				options: [
+					['comfortable', 'Comfortable'],
+					['compact', 'Compact'],
+				],
 			},
 			{
 				name: 'limitBookmarksPerColumn',
@@ -942,7 +997,8 @@ const settingsNavigationLabels: Record<string, string> = {
 const settingsNavigation = [
 	{title: APPEARANCE.title, icon: Sun},
 	{title: SHORTCUTS.title, icon: Keyboard},
-	{title: PRIVATE_STORAGE_TITLE, icon: Database},
+	// Firefox keeps the add-on out of private windows, so there is no private storage to choose.
+	...(isFirefox ? [] : [{title: PRIVATE_STORAGE_TITLE, icon: Database}]),
 	...settingsGroups.map(({title, icon}) => ({title, icon})),
 	{title: DATA.title, icon: Database},
 	{title: EXCLUDED.title, icon: Globe},
@@ -991,6 +1047,7 @@ function Options() {
 	const [importOpen, setImportOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
+	const [statsOpen, setStatsOpen] = useState(false);
 	const [downloadsGranted, setDownloadsGranted] = useState(false);
 	useEffect(() => {
 		void Promise.resolve(
@@ -1153,7 +1210,11 @@ function Options() {
 			return;
 		}
 
-		if (name === 'actionMode' && value === 'sidepanel' && !chrome.sidePanel) {
+		if (
+			name === 'actionMode' &&
+			value === 'sidepanel' &&
+			!toolbarOpensSidePanel
+		) {
 			showStatus(
 				'The browser Side Panel API is unavailable in this version.',
 				true,
@@ -1588,6 +1649,33 @@ function Options() {
 			),
 		},
 		{
+			key: 'statistics',
+			icon: ChartColumn,
+			label: 'Statistics',
+			help: 'See how many sessions and tabs you have saved, which open tabs you have not used for the longest, and a rough memory estimate.',
+			words: [
+				'stats',
+				'count',
+				'saved tabs',
+				'oldest tabs',
+				'open tabs',
+				'memory',
+				'RAM',
+				'unused',
+			],
+			action: (
+				<Button
+					variant="outline"
+					className="w-full sm:w-32"
+					disabled={!state}
+					onClick={() => setStatsOpen(true)}
+				>
+					<ChartColumn className="h-4 w-4" />
+					View
+				</Button>
+			),
+		},
+		{
 			key: 'erase',
 			icon: Eraser,
 			label: 'Erase',
@@ -1629,10 +1717,9 @@ function Options() {
 		DEFAULTS.help,
 		...DEFAULTS.words,
 	]);
-	const showPrivate = matchesQuery(query, [
-		PRIVATE_STORAGE_TITLE,
-		...PRIVATE_STORAGE_WORDS,
-	]);
+	const showPrivate =
+		!isFirefox &&
+		matchesQuery(query, [PRIVATE_STORAGE_TITLE, ...PRIVATE_STORAGE_WORDS]);
 	const matchCount =
 		Number(showPrivate) +
 		Number(showAppearance) +
@@ -2309,6 +2396,11 @@ function Options() {
 				onOpenChange={setSnapshotsOpen}
 				onSessionsChanged={reload}
 			/>
+			<TabStatsDialog
+				open={statsOpen}
+				sessions={state?.groups ?? []}
+				onOpenChange={setStatsOpen}
+			/>
 			<TrashDialog
 				confirmDestructive
 				open={trashOpen}
@@ -2506,8 +2598,6 @@ function Options() {
 	);
 }
 
-const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
-
 /**
 The current shortcut for each command (read with chrome.commands), and a button to the browser's page that changes them.
 */
@@ -2570,8 +2660,7 @@ function ShortcutsCard({
 			</div>
 			{failed && (
 				<p role="alert" className="mt-2 text-xs text-muted-foreground">
-					Your browser did not open it. Paste <code>{SHORTCUTS_URL}</code> into
-					the address bar.
+					Your browser did not open it. {SHORTCUTS_HINT}
 				</p>
 			)}
 			{commands.length > 0 && (

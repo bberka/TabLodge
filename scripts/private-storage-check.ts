@@ -483,8 +483,14 @@ try {
 	await privatePage.keyboard.press('Enter');
 	await privatePage.getByRole('dialog').waitFor({state: 'hidden'});
 	await privatePage.getByRole('main').waitFor();
-	const privateBanner = privatePage.getByLabel('Private window');
+	const privateBanner = privatePage.locator(
+		'aside[aria-label="Private window"]',
+	);
 	await privateBanner.getByText('You’re in a private window').waitFor();
+	await privateBanner
+		.getByText('Separate library saved on this device', {exact: true})
+		.waitFor();
+	assert.equal(await privateBanner.count(), 1);
 	await privatePage
 		.getByRole('link', {name: 'Private window settings'})
 		.waitFor();
@@ -506,26 +512,77 @@ try {
 		);
 	}
 
-	for (const page of [
-		'options.html',
-		'help.html',
-		'popup.html',
-		'sidepanel.html',
-		'add-bookmark.html',
-		'name-session.html',
-	]) {
-		await privatePage.goto(`chrome-extension://${id}/${page}`);
-		await privatePage.locator('[data-private-window-appearance]').waitFor();
-		assert.equal(
-			await privatePage.evaluate(
-				() =>
-					(globalThis as typeof globalThis & ChromeGlobal).chrome.extension
-						.inIncognitoContext,
-			),
-			true,
-			`${page} should know it is in a private window`,
-		);
-		await assertPrivateMarkAppearance(privatePage);
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		for (const page of [
+			'options.html',
+			'help.html',
+			'popup.html',
+			'sidepanel.html',
+			'add-bookmark.html',
+			'name-session.html',
+		]) {
+			await privatePage.goto(`chrome-extension://${id}/${page}`);
+			await privatePage.locator('[data-private-window-appearance]').waitFor();
+			assert.equal(
+				await privatePage.evaluate(
+					() =>
+						(globalThis as typeof globalThis & ChromeGlobal).chrome.extension
+							.inIncognitoContext,
+				),
+				true,
+				`${page} should know it is in a private window`,
+			);
+			const banner = privatePage.locator('aside[aria-label="Private window"]');
+			assert.equal(
+				await banner.count(),
+				1,
+				`${page} should show one private banner`,
+			);
+			await banner
+				.getByText('You’re in a private window', {exact: true})
+				.waitFor();
+			await banner
+				.getByText('Separate library saved on this device', {exact: true})
+				.waitFor();
+			assert.equal(
+				await banner
+					.getByText('You’re in a private window', {exact: true})
+					.count(),
+				1,
+				`${page} should label the private window`,
+			);
+			assert.equal(
+				await banner
+					.getByText('Separate library saved on this device', {exact: true})
+					.count(),
+				1,
+				`${page} should explain the active storage mode`,
+			);
+			if (page === 'popup.html') {
+				await privatePage.setViewportSize({width: 380, height: 600});
+				const documentHeight = await privatePage
+					.locator('html')
+					.evaluate((node: {scrollHeight: number}) => node.scrollHeight);
+				assert.ok(
+					documentHeight <= 600,
+					`private popup content exceeds Chrome's 600px height limit (${documentHeight}px)`,
+				);
+				await privatePage.screenshot({
+					animations: 'disabled',
+					path: fromRoot(`.dev/evidence/private-popup-${theme}-380x600.png`),
+				});
+			}
+
+			await assertPrivateMarkAppearance(privatePage);
+			if (page === 'options.html' || page === 'help.html') {
+				await captureEvidence(
+					privatePage,
+					privatePage.locator('body'),
+					`private-${page.slice(0, -5)}-${theme}`,
+				);
+			}
+		}
 	}
 
 	await privatePage.goto(`chrome-extension://${id}/newtab.html`);
@@ -603,6 +660,10 @@ try {
 		assert.deepEqual(await bookmarkTitles(page), ['Saved private']);
 		await configure(normalRestarted, page, 'shared');
 		assert.deepEqual(await bookmarkTitles(page), ['Normal only']);
+		await page
+			.locator('aside[aria-label="Private window"]')
+			.getByText('Same library as regular windows', {exact: true})
+			.waitFor();
 		await Promise.all(
 			Array.from({length: 10}, async (_, index) =>
 				send(index % 2 === 0 ? page : normalRestarted, {

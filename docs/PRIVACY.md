@@ -28,11 +28,13 @@ These keys use `chrome.storage.local`. A copy of the theme and accent choices al
 
 Snapshots contain tab titles, URLs, pinned state, tab groups, split view pairs, the active tab, and window layout information. They skip incognito windows, excluded sites, and pages other than ordinary HTTP or HTTPS websites. Snapshots are enabled by default; you can turn them off in **Settings › Recovery & backups**.
 
-TabLodge reads tab metadata to save and restore sessions, detect duplicates, show and search open tabs, and capture recovery snapshots. It reads your browser's bookmark tree only when you ask to import it. If you enable **When you bookmark a page in the browser**, it also watches for newly created bookmarks to offer to add that page, or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.
+TabLodge reads tab metadata to save and restore sessions, detect duplicates, close duplicate open tabs when you ask, show and search open tabs, show the **Settings › Data › Statistics** summary, and capture recovery snapshots. It reads your browser's bookmark tree only when you ask to import it. If you enable **When you bookmark a page in the browser**, it also watches for newly created bookmarks to offer to add that page, or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.
 
 ## Retention and deletion
 
 ### Private windows
+
+The Firefox version of TabLodge does not run in private windows, so it cannot read or save them, and the rest of this section applies to Chromium browsers only.
 
 Private access requires the browser's **Allow in Incognito** permission. The first private dashboard visit requires a storage choice, also available in **Settings › Private windows**. By default, private windows use the same library as regular windows. Private saves then remain in the shared library after private windows close. New private tabs redirect to the TabLodge dashboard by default; you can turn this off in **Settings › Private windows**.
 
@@ -56,7 +58,7 @@ Exports are not encrypted. JSON, HTML, CSV, Markdown, URL lists, and full backup
 
 ## Permissions
 
-The [README permissions table](README.md#permissions-and-privacy) explains each required permission. TabLodge requests no website access.
+The [README permissions table](README.md#permissions-and-privacy) explains each required permission. TabLodge requests no website access. The Firefox version leaves out `favicon` and `sidePanel`, which only Chromium has, and declares in its manifest that it collects no data.
 
 The only optional permission is `downloads`. The browser asks for it when you turn on backup copies in Downloads. Turning that setting off removes the permission.
 

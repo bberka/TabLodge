@@ -74,6 +74,8 @@ export type BookmarkClickAction = LinkClickAction | 'menu';
 export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
 export type DashboardWidth = 'default' | 'wider' | 'full' | 'narrower';
 export type BookmarkBoardView = 'board' | 'focus';
+export type BookmarkColumnWidth = 'narrow' | 'default' | 'wide' | 'extra-wide';
+export type BookmarkDensity = 'comfortable' | 'compact';
 
 export type BrowserBookmarkAction = 'off' | 'ask' | 'add';
 
@@ -131,6 +133,18 @@ export type Settings = {
 	Dashboard bookmark board: columns in the same row grow to the tallest one's height (default on).
 	*/
 	stretchBookmarkColumns: boolean;
+	/**
+	Minimum width of a bookmark column in the Board view; the default keeps the grid sized by Dashboard width (default: default).
+	*/
+	bookmarkColumnWidth: BookmarkColumnWidth;
+	/**
+	Most columns in one Board row, 0 for as many as fit (default 0, up to 6).
+	*/
+	bookmarkColumnsPerRow: number;
+	/**
+	Spacing of the bookmark board; compact tightens gaps, padding, and rows (default: comfortable).
+	*/
+	bookmarkDensity: BookmarkDensity;
 	/**
 	Cap each column at the number of bookmarks below and scroll inside it (default on).
 	*/
@@ -512,6 +526,7 @@ export type LinkEntry = {
 	title?: string;
 };
 export type EraseScope = 'sessions' | 'bookmarks' | 'all';
+export type SessionWindowMode = 'replace' | 'append';
 /**
 Which tabs SAVE_TABS captures; the "-tab" scopes are relative to the sender (or active) tab.
 */
@@ -611,6 +626,17 @@ export type TabLodgeMessages = {
 		targetTabId?: string | null;
 		position?: InsertPosition;
 	};
+	/**
+	Changes a session from the sender's window without opening or closing any tab. `replace` swaps the session's links for the
+	window's web tabs; `append` adds the ones the session lacks at the end. Excluded sites, pinned tabs, and the save duplicate
+	setting apply as for a save. The session keeps its name, folder, description, and notes of links it still holds.
+	*/
+	UPDATE_GROUP_FROM_WINDOW: {groupId: string; mode: SessionWindowMode};
+	/**
+	Moves the chosen links into a new session placed after the source, in the same folder. A split view pair stays together
+	only when both halves move. The source keeps at least one link.
+	*/
+	SPLIT_GROUP: {groupId: string; tabIds: string[]; name?: string};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
 	ADD_BOOKMARKS: {
@@ -796,7 +822,8 @@ export type TabLodgeResponses = {
 	RESTORE_TAB: RestoreResult;
 	RESTORE_GROUP: RestoreResult;
 	/**
-	`saved`/`savedGroupId`: the tabs of the old window and the session they went into; `closed`: old tabs closed.
+	`saved`/`savedGroupId`: the tabs of the old window and the session they went into. When a saved session already
+	has exactly those pages, nothing is saved (`saved` is 0) and `savedGroupId` names that session. `closed`: old tabs closed.
 	*/
 	SWITCH_WORKSPACE: RestoreResult & {
 		saved: number;
@@ -821,6 +848,19 @@ export type TabLodgeResponses = {
 		trashId?: string;
 	};
 	ADD_LINKS_TO_SESSION: {added: number; skipped: number} & Undoable;
+	/**
+	`count`: links in the session now; `added`/`removed`: links new to it and links no longer in it; `skipped`: window tabs left out as duplicates.
+	*/
+	UPDATE_GROUP_FROM_WINDOW: {
+		count: number;
+		added: number;
+		removed: number;
+		skipped: number;
+	} & Undoable;
+	/**
+	`groupId`: the new session; `count`: links moved into it.
+	*/
+	SPLIT_GROUP: {groupId: string; count: number} & Undoable;
 	UPDATE_TAB: {shared: number};
 	MERGE_GROUPS: {added: number; skipped: number} & Undoable;
 	ADD_BOOKMARK: {bookmark: Bookmark};

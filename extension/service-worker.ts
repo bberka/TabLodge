@@ -1,5 +1,12 @@
-// Types come from the shared model via import() type queries rather than an import statement: the
-// stripped output must stay a classic script (an `import type` would leave an `export {}` behind).
+import {
+	findOmniboxItem,
+	omniboxIndex,
+	omniboxSuggestions,
+} from '../src/app/omnibox';
+
+// Types come from the shared model via import() type queries rather than an `import type` statement, which
+// would leave an `export {}` behind. The one value import above is bundled into the classic script by the
+// build, and by tests/worker-source.ts for the tests.
 type ActionFailure = import('../src/app/types').ActionFailure;
 type TabLodgeMessageType = import('../src/app/types').TabLodgeMessageType;
 type ActionResult<K extends TabLodgeMessageType = TabLodgeMessageType> =
@@ -21,6 +28,7 @@ type SavedTab = import('../src/app/types').SavedTab;
 type SaveScope = import('../src/app/types').SaveScope;
 type Session = import('../src/app/types').Session;
 type SessionFields = import('../src/app/types').SessionFields;
+type SessionWindowMode = import('../src/app/types').SessionWindowMode;
 type SplitInfo = import('../src/app/types').SplitInfo;
 type Settings = import('../src/app/types').Settings;
 type Store = import('../src/app/types').Store;
@@ -171,6 +179,19 @@ const STORAGE_KEY = 'tablodge.state';
 const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
 const PRIVATE_PREFIX = 'tablodge.private.';
 const privateContext = Boolean(chrome.extension?.inIncognitoContext);
+// The same worker runs in Chromium (a service worker) and in Firefox (an event page). Differences the code cannot
+// find by looking for an API are keyed off this; the addresses of extension pages tell the two apart.
+const IS_FIREFOX = chrome.runtime.getURL('').startsWith('moz-extension:');
+// The page a starting window or an emptied window opens: Chromium maps `chrome://newtab/` to the new-tab page,
+// Firefox refuses `chrome:` and `about:newtab` addresses, so a window starts blank and a tab starts without an address.
+const START_WINDOW_URL = IS_FIREFOX ? 'about:blank' : 'chrome://newtab/';
+const NEW_TAB_PAGE_URL = IS_FIREFOX ? undefined : 'chrome://newtab/';
+// Chromium's Side Panel and Firefox's sidebar both show sidepanel.html; either opens only from a user action.
+const {sidebarAction} = chrome as typeof chrome & {
+	sidebarAction?: {open?: () => Promise<void>};
+};
+const HAS_SIDE_PANEL =
+	Boolean(chrome.sidePanel) || Boolean(sidebarAction?.open);
 let privateConfig: PrivateConfig = {
 	mode: 'shared',
 	configured: false,
@@ -485,6 +506,9 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	showSessionFaviconPreviews: true,
 	sessionQuickActions: ['archive'],
 	stretchBookmarkColumns: true,
+	bookmarkColumnWidth: 'default',
+	bookmarkColumnsPerRow: 0,
+	bookmarkDensity: 'comfortable',
 	limitBookmarksPerColumn: true,
 	bookmarkColumnPageSize: 16,
 	pasteLinkToBookmark: true,
@@ -1498,7 +1522,9 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		openDashboardOnStartup: Boolean(raw.openDashboardOnStartup),
 		startupBehavior:
 			raw.startupBehavior === 'last-session' ? 'last-session' : 'dashboard',
-		newTabEnabled: raw.newTabEnabled !== false,
+		// Firefox opens a new tab as a blank page before the add-on's page loads, so the worker cannot tell it from the
+		// dashboard being opened and cannot hand it on.
+		newTabEnabled: IS_FIREFOX || raw.newTabEnabled !== false,
 		newTabFallback: isOneOf(['browser', 'blank', 'custom'], raw.newTabFallback)
 			? raw.newTabFallback
 			: 'browser',
@@ -1545,6 +1571,15 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		showSessionFaviconPreviews: raw.showSessionFaviconPreviews !== false,
 		sessionQuickActions: normalizeSessionQuickActions(raw),
 		stretchBookmarkColumns: raw.stretchBookmarkColumns !== false,
+		bookmarkColumnWidth: isOneOf(
+			['narrow', 'default', 'wide', 'extra-wide'],
+			raw.bookmarkColumnWidth,
+		)
+			? raw.bookmarkColumnWidth
+			: 'default',
+		bookmarkColumnsPerRow: clampInteger(raw.bookmarkColumnsPerRow, 0, 6, 0),
+		bookmarkDensity:
+			raw.bookmarkDensity === 'compact' ? 'compact' : 'comfortable',
 		limitBookmarksPerColumn: raw.limitBookmarksPerColumn !== false,
 		bookmarkColumnPageSize: clampInteger(
 			raw.bookmarkColumnPageSize,
@@ -2064,20 +2099,23 @@ async function getWindowGroups(
 	}
 }
 
-async function captureTabs(
+type CaptureEntry = {
+	sourceTabId: number | undefined;
+	splitViewId: number | null;
+	saved: SavedTab;
+};
+
+/**
+The tabs a save would store, before duplicate handling: web pages only, no excluded sites, pinned tabs only when allowed.
+*/
+async function captureEntriesOf(
 	tabs: chrome.tabs.Tab[],
 	window: PopulatedWindow,
 	settings: Settings,
-	store: Store,
-	folderId = DEFAULT_FOLDER_ID,
-	useNativeGroupTitle = false,
-	requestedName = '',
-	windowNumber = 0,
-	saveWindowBounds = false,
-): Promise<CaptureResult | null> {
-	const timestamp = Date.now();
+	timestamp: number,
+): Promise<CaptureEntry[]> {
 	const nativeGroups = await getWindowGroups(window.id);
-	const captureEntries = tabs
+	return tabs
 		.filter(
 			(tab) =>
 				(!tab.pinned || settings.includePinnedTabs) &&
@@ -2108,6 +2146,60 @@ async function captureTabs(
 				// IsCapturable guarantees a web URL;
 			} as SavedTab,
 		}));
+}
+
+/**
+Gives both halves of each split view in `entries` a shared pair key. Call it only after exclusions, pinned
+filtering, and duplicate rejection, so a pair whose partner was dropped is stored as a plain tab.
+*/
+function assignSplitPairs(entries: CaptureEntry[]) {
+	const splitMembers = new Map<number, CaptureEntry[]>();
+	for (const entry of entries) {
+		if (entry.splitViewId === null) {
+			continue;
+		}
+
+		splitMembers.set(entry.splitViewId, [
+			...(splitMembers.get(entry.splitViewId) || []),
+			entry,
+		]);
+	}
+
+	for (const members of splitMembers.values()) {
+		if (members.length !== 2) {
+			continue;
+		}
+
+		const pairKey = makeId();
+		for (const [position, entry] of members
+			.toSorted((a, b) => a.saved.originalIndex - b.saved.originalIndex)
+			.entries()) {
+			entry.saved.split = {
+				id: pairKey,
+				position: position as SplitInfo['position'],
+			};
+		}
+	}
+}
+
+async function captureTabs(
+	tabs: chrome.tabs.Tab[],
+	window: PopulatedWindow,
+	settings: Settings,
+	store: Store,
+	folderId = DEFAULT_FOLDER_ID,
+	useNativeGroupTitle = false,
+	requestedName = '',
+	windowNumber = 0,
+	saveWindowBounds = false,
+): Promise<CaptureResult | null> {
+	const timestamp = Date.now();
+	const captureEntries = await captureEntriesOf(
+		tabs,
+		window,
+		settings,
+		timestamp,
+	);
 	if (captureEntries.length === 0) {
 		return null;
 	}
@@ -2172,35 +2264,7 @@ async function captureTabs(
 		newEntries.push(entry);
 	}
 
-	// Split info is assigned only after exclusions, pinned filtering, and duplicate rejection, so a pair whose
-	// partner was dropped is stored as a plain tab.
-	const splitMembers = new Map<number, typeof newEntries>();
-	for (const entry of newEntries) {
-		if (entry.splitViewId === null) {
-			continue;
-		}
-
-		splitMembers.set(entry.splitViewId, [
-			...(splitMembers.get(entry.splitViewId) || []),
-			entry,
-		]);
-	}
-
-	for (const members of splitMembers.values()) {
-		if (members.length !== 2) {
-			continue;
-		}
-
-		const pairKey = makeId();
-		for (const [position, entry] of members
-			.toSorted((a, b) => a.saved.originalIndex - b.saved.originalIndex)
-			.entries()) {
-			entry.saved.split = {
-				id: pairKey,
-				position: position as SplitInfo['position'],
-			};
-		}
-	}
+	assignSplitPairs(newEntries);
 
 	const captured = pairSplits(newEntries.map(({saved}) => saved));
 
@@ -2346,7 +2410,7 @@ async function captureTabs(
 				windowId: window.id,
 				url: useDashboard
 					? `${DASHBOARD_URL}?group=${encodeURIComponent(group.id!)}`
-					: 'chrome://newtab/',
+					: NEW_TAB_PAGE_URL,
 				active: useDashboard,
 			});
 		}
@@ -2780,6 +2844,92 @@ async function openBookmarkPrompt(
 	return {ok: true};
 }
 
+const PALETTE_WIDTH = 640;
+const PALETTE_HEIGHT = 520;
+
+/**
+The "Open the search palette" shortcut: opens the palette in a small window of its own, which works on every page
+(web pages that bind Ctrl+K, chrome:// pages, the Web Store, the PDF viewer). A second press closes it again. The
+address carries the window that was in front, so the palette's links, searches and restores go there.
+*/
+async function openPalette(commandTab?: chrome.tabs.Tab) {
+	const palettePrefix = chrome.runtime.getURL('palette.html');
+	const open = (await chrome.tabs.query({windowType: 'popup'})).filter(
+		(tab) => tab.url?.startsWith(palettePrefix) && isInteger(tab.windowId),
+	);
+	if (open.length > 0) {
+		await Promise.all(
+			open.map(async (tab) => chrome.windows.remove(tab.windowId)),
+		);
+		return;
+	}
+
+	let anchor: chrome.windows.Window | undefined;
+	try {
+		const own =
+			commandTab && isInteger(commandTab.windowId)
+				? await chrome.windows.get(commandTab.windowId)
+				: undefined;
+		anchor =
+			own?.type === 'normal'
+				? own
+				: await chrome.windows.getLastFocused({windowTypes: ['normal']});
+	} catch {
+		/*
+		Without the window the browser places the palette itself and links open in the last focused window.
+		*/
+	}
+
+	const options: chrome.windows.CreateData = {
+		type: 'popup',
+		url: `${palettePrefix}${isInteger(anchor?.id) ? `?window=${anchor.id}` : ''}`,
+		width: PALETTE_WIDTH,
+		height: PALETTE_HEIGHT,
+		focused: true,
+	};
+	if (
+		anchor &&
+		isInteger(anchor.left) &&
+		isInteger(anchor.top) &&
+		isInteger(anchor.width)
+	) {
+		options.left = Math.max(
+			0,
+			anchor.left + Math.round((anchor.width - PALETTE_WIDTH) / 2),
+		);
+		options.top = Math.max(0, anchor.top + 80);
+	}
+
+	await chrome.windows.create({...options, incognito: privateContext});
+}
+
+/**
+Messages from the palette window act on the window it was opened over, not on the palette's own window (which is
+no place to restore tabs into): the sender becomes the active tab of that window.
+*/
+async function paletteSender(
+	sender: chrome.runtime.MessageSender,
+): Promise<chrome.runtime.MessageSender> {
+	const palettePrefix = chrome.runtime.getURL('palette.html');
+	if (!sender.url?.startsWith(palettePrefix)) {
+		return sender;
+	}
+
+	const id = Number(new URL(sender.url).searchParams.get('window'));
+	if (!isInteger(id)) {
+		return sender;
+	}
+
+	try {
+		const tab = (await chrome.tabs.query({active: true, windowId: id})).find(
+			(candidate) => candidate.active,
+		);
+		return tab ? {...sender, tab} : sender;
+	} catch {
+		return sender;
+	}
+}
+
 /**
 The name the next save would get, for the Settings preview: the same formatter, the given (unsaved) style and
 template, and the tabs of the sender's (or last-focused) window.
@@ -3073,7 +3223,7 @@ async function createRestoreWindow(bounds?: Session['windowBounds']): Promise<{
 	bootstrapTabId: number | null;
 }> {
 	const properties: chrome.windows.CreateData = {
-		url: 'chrome://newtab/',
+		url: START_WINDOW_URL,
 		focused: true,
 		type: 'normal',
 		incognito: privateContext,
@@ -3094,7 +3244,7 @@ async function createRestoreWindow(bounds?: Session['windowBounds']): Promise<{
 
 		// Chromium rejects bounds that are mostly outside the visible desktop on some displays.
 		created = await chrome.windows.create({
-			url: 'chrome://newtab/',
+			url: START_WINDOW_URL,
 			focused: true,
 			type: 'normal',
 			incognito: privateContext,
@@ -3654,8 +3804,8 @@ async function restoreGroup(
 }
 
 /**
-Workspace switch: saves the window's web tabs as a new session, opens another session in the same window, and then
-closes the tabs that were saved. The old tabs stay open until the other session is open, so a failed restore never
+Workspace switch: saves the window's web tabs as a new session (unless a saved session already has exactly those
+pages), opens another session in the same window, and then closes those tabs. The old tabs stay open until the other session is open, so a failed restore never
 leaves the window empty. Pinned tabs, excluded sites, and pages that are not web pages stay where they are.
 */
 async function switchWorkspace(
@@ -3684,7 +3834,20 @@ async function switchWorkspace(
 	);
 	let saved = 0;
 	let savedGroupId: string | null = null;
-	if (outgoing.size > 0) {
+	// A window that already shows a saved session (restored with "keep", say) is not saved a second time.
+	const sortedUrls = (urls: Iterable<string | null>) =>
+		[...urls].map(String).toSorted((a, b) => a.localeCompare(b));
+	const outgoingUrls = sortedUrls(outgoing.values());
+	const alreadySaved = store.groups.find((group) => {
+		const urls = sortedUrls(group.tabs.map((tab) => normalizeUrl(tab.url)));
+		return (
+			urls.length === outgoingUrls.length &&
+			urls.every((url, index) => url === outgoingUrls[index])
+		);
+	});
+	if (alreadySaved) {
+		savedGroupId = alreadySaved.id;
+	} else if (outgoing.size > 0) {
 		const save = await saveTabs('window', senderTab, DEFAULT_FOLDER_ID, {
 			tabIds: [...outgoing.keys()],
 			keepTabsOpen: true,
@@ -4196,6 +4359,179 @@ async function addLinksToSession(
 			group.updatedAt = now;
 			await writeStore(store);
 			return {ok: true, added: added.length, skipped};
+		}),
+	);
+}
+
+/**
+Replaces a session's links with the sender's window, or appends the window's links the session lacks. No tab is opened
+or closed. The save rules apply: web pages only, no excluded sites, pinned tabs only when allowed, and the save duplicate
+setting (a replaced session's own links never count as duplicates). A link the session already held keeps its notes
+(and its title unless the setting prefers the latest). Name, folder, and description stay. Undo restores the session.
+*/
+async function updateGroupFromWindow(
+	groupId: string,
+	mode: SessionWindowMode,
+	senderTab: chrome.tabs.Tab | undefined,
+): Promise<ActionResult<'UPDATE_GROUP_FROM_WINDOW'>> {
+	if (mode !== 'replace' && mode !== 'append') {
+		return {ok: false, error: 'Choose replace or append.'};
+	}
+
+	return mutate(() =>
+		withUndo(
+			mode === 'replace' ? 'Replace session contents' : 'Add window to session',
+			[STORAGE_KEY],
+			async () => {
+				const store = await getStore();
+				const group = findGroup(store, groupId);
+				if (!group) {
+					return {ok: false, error: 'That saved session no longer exists.'};
+				}
+
+				const windowId = await currentWindowId(senderTab);
+				if (!isInteger(windowId)) {
+					return {ok: false, error: 'Open a browser window first.'};
+				}
+
+				const win = (await chrome.windows.get(windowId, {
+					populate: true,
+				})) as PopulatedWindow;
+				const {settings} = store;
+				const now = Date.now();
+				const entries = await captureEntriesOf(win.tabs, win, settings, now);
+				const own = new Map(group.tabs.map((tab) => [tab.url, tab]));
+				const known = new Map(own);
+				const elsewhere = new Set<string>();
+				for (const other of store.groups) {
+					if (other === group) {
+						continue;
+					}
+
+					for (const tab of other.tabs) {
+						elsewhere.add(tab.url);
+						if (!known.has(tab.url)) {
+							known.set(tab.url, tab);
+						}
+					}
+				}
+
+				const reject = settings.saveDuplicateHandling === 'reject';
+				const kept: CaptureEntry[] = [];
+				const seen = new Set<string>();
+				let skipped = 0;
+				for (const entry of entries) {
+					const {url} = entry.saved;
+					const existing = known.get(url);
+					if (
+						(mode === 'append' && own.has(url)) ||
+						(reject && (elsewhere.has(url) || seen.has(url)))
+					) {
+						skipped += 1;
+						continue;
+					}
+
+					seen.add(url);
+					if (existing) {
+						entry.saved.notes = existing.notes || '';
+						if (settings.saveDuplicateTitle !== 'latest') {
+							entry.saved.title = existing.title;
+						}
+					}
+
+					kept.push(entry);
+				}
+
+				assignSplitPairs(kept);
+				const incoming = pairSplits(kept.map(({saved}) => saved));
+				if (incoming.length === 0) {
+					return {
+						ok: false,
+						error:
+							skipped > 0
+								? 'Every tab in this window is already saved.'
+								: 'There are no unpinned web tabs to save.',
+					};
+				}
+
+				const tabs =
+					mode === 'replace' ? incoming : [...group.tabs, ...incoming];
+				if (tabs.length > MAX_TABS_PER_SESSION) {
+					return {ok: false, error: sessionFullError()};
+				}
+
+				const before = new Set(group.tabs.map((tab) => tab.url));
+				const after = new Set(tabs.map((tab) => tab.url));
+				const result = {
+					count: tabs.length,
+					added: incoming.filter((tab) => !before.has(tab.url)).length,
+					removed: group.tabs.filter((tab) => !after.has(tab.url)).length,
+					skipped,
+				};
+				group.tabs = tabs;
+				group.updatedAt = now;
+				await writeStore(store);
+				return {ok: true, ...result};
+			},
+		),
+	);
+}
+
+/**
+Moves the chosen links into a new session placed right after the source, in the same folder. Undo restores the source.
+*/
+async function splitGroup(
+	groupId: string,
+	tabIds: string[] = [],
+	requestedName = '',
+): Promise<ActionResult<'SPLIT_GROUP'>> {
+	return mutate(() =>
+		withUndo('Split session', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			const group = findGroup(store, groupId);
+			if (!group) {
+				return {ok: false, error: 'That saved session no longer exists.'};
+			}
+
+			const chosen = new Set(Array.isArray(tabIds) ? tabIds.map(String) : []);
+			const moved = group.tabs.filter((tab) => chosen.has(tab.id));
+			if (moved.length === 0) {
+				return {ok: false, error: 'Select the links to move first.'};
+			}
+
+			if (moved.length === group.tabs.length) {
+				return {
+					ok: false,
+					error:
+						'Leave at least one link in the session, or rename it instead.',
+				};
+			}
+
+			if (store.groups.length >= MAX_SESSIONS) {
+				return {ok: false, error: sessionLimitError()};
+			}
+
+			const now = Date.now();
+			group.tabs = pairSplits(group.tabs.filter((tab) => !chosen.has(tab.id)));
+			group.updatedAt = now;
+			const created: Session = {
+				id: makeId(),
+				name: cleanText(
+					requestedName || `${group.name.slice(0, 100)} (split)`,
+					'Saved session',
+					120,
+				),
+				folderId: group.folderId,
+				description: '',
+				createdAt: now,
+				updatedAt: now,
+				sourceWindowName: group.sourceWindowName,
+				sourceWindowId: group.sourceWindowId,
+				tabs: pairSplits(moved),
+			};
+			store.groups.splice(store.groups.indexOf(group) + 1, 0, created);
+			await writeStore(store);
+			return {ok: true, groupId: created.id, count: moved.length};
 		}),
 	);
 }
@@ -5677,9 +6013,14 @@ async function updateSettings(
 			scheduleLodgeCheck();
 		}
 
+		const sessions = menuSessions(store.groups, store.folders);
 		if (
-			contextMenuSignature(previousSettings, store.bookmarkColumns) !==
-			contextMenuSignature(store.settings, store.bookmarkColumns)
+			contextMenuSignature(
+				previousSettings,
+				store.bookmarkColumns,
+				sessions,
+			) !==
+			contextMenuSignature(store.settings, store.bookmarkColumns, sessions)
 		) {
 			await rebuildContextMenus(store);
 		}
@@ -6000,7 +6341,13 @@ change of `tablodge.state`, whoever wrote it. Callers must treat the result as r
 */
 let settingsCache: Settings | undefined;
 let settingsGeneration = 0;
+/**
+The library as the address bar search last read it; dropped with the settings cache whenever the library changes.
+*/
+let omniboxStore: Promise<Store> | undefined;
+
 function invalidateSettings() {
+	omniboxStore = undefined;
 	settingsCache = undefined;
 	settingsGeneration += 1;
 }
@@ -8262,7 +8609,7 @@ async function handleMessage(
 		}
 
 		case 'SAVE_CURRENT_TAB_TO_GROUP': {
-			return saveCurrentTabToFirstGroup(sender.tab);
+			return saveCurrentTabToGroup(sender.tab);
 		}
 
 		case 'RESTORE_TAB': {
@@ -8342,6 +8689,22 @@ async function handleMessage(
 				message.links,
 				message.targetTabId || null,
 				message.position,
+			);
+		}
+
+		case 'UPDATE_GROUP_FROM_WINDOW': {
+			return updateGroupFromWindow(
+				String(message.groupId),
+				message.mode,
+				sender.tab,
+			);
+		}
+
+		case 'SPLIT_GROUP': {
+			return splitGroup(
+				String(message.groupId),
+				message.tabIds,
+				typeof message.name === 'string' ? message.name : '',
 			);
 		}
 
@@ -8567,7 +8930,10 @@ async function handleMessage(
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-	Promise.resolve(handleMessage(message as TabLodgeMessage | undefined, sender))
+	Promise.resolve(paletteSender(sender))
+		.then(async (effective) =>
+			handleMessage(message as TabLodgeMessage | undefined, effective),
+		)
 		.then(sendResponse)
 		.catch((error: unknown) => {
 			sendResponse({
@@ -8600,9 +8966,131 @@ chrome.commands.onCommand.addListener((command, tab) => {
 		void openDashboardForTab(tab);
 	}
 
+	if (command === 'open-palette') {
+		// The window is the feedback, so only a failure flashes the badge.
+		openPalette(tab).catch((error: unknown) => {
+			console.warn(
+				errorMessage(error) || `${APP_NAME} could not open the search palette.`,
+			);
+			flashBadge(tab, false);
+		});
+	}
+
 	if (command === 'toggle-side-panel') {
 		openSidePanel(tab);
 	}
+});
+
+// Address bar search: "tl <text>" lists matching open tabs, bookmarks, saved tabs and sessions, ranked by the
+// finder's scorer (src/app/omnibox.ts). The store it reads is cached until invalidateSettings drops it.
+async function omniboxCatalog() {
+	omniboxStore ??= getStore();
+	const [store, tabs] = await Promise.all([
+		omniboxStore.catch((error: unknown) => {
+			omniboxStore = undefined;
+			throw error;
+		}),
+		chrome.tabs.query({}),
+	]);
+	const own = chrome.runtime.getURL('');
+	return {
+		store,
+		index: omniboxIndex({
+			groups: store.groups,
+			folders: store.folders,
+			bookmarks: store.bookmarks,
+			columns: store.bookmarkColumns,
+			tabs: tabs.flatMap((tab) =>
+				isInteger(tab.id) && tab.url && !tab.url.startsWith(own)
+					? [
+							{
+								id: tab.id,
+								windowId: tab.windowId,
+								title: tab.title ?? '',
+								url: tab.url,
+							},
+						]
+					: [],
+			),
+		}),
+	};
+}
+
+async function omniboxEnter(
+	text: string,
+	disposition: `${chrome.omnibox.OnInputEnteredDisposition}`,
+) {
+	const {store, index} = await omniboxCatalog();
+	const item = findOmniboxItem(text, index);
+	if (item?.kind === 'tab') {
+		try {
+			await chrome.tabs.update(Number(item.ref), {active: true});
+			if (item.windowId !== undefined) {
+				await chrome.windows.update(item.windowId, {focused: true});
+			}
+
+			return;
+		} catch {
+			// The tab closed since the list was shown; search for it in the dashboard instead.
+			await searchDashboard(item.title);
+			return;
+		}
+	}
+
+	if (item?.kind === 'session') {
+		await openDashboard(
+			await currentWindowId(),
+			`?${new URLSearchParams({group: item.ref ?? ''})}`,
+			store.settings.dashboardBehavior,
+		);
+		return;
+	}
+
+	if (item?.url) {
+		const url = store.settings.removeTrackingParameters
+			? stripTrackingParameters(item.url)
+			: item.url;
+		const [active] =
+			disposition === 'currentTab'
+				? await chrome.tabs.query({active: true, lastFocusedWindow: true})
+				: [];
+		// The pinned TabLodge tab stays put: a link meant for the current tab opens beside it.
+		const keepsPinned =
+			store.settings.keepLodgePinned && active?.pinned && isLodgeTab(active);
+		if (isInteger(active?.id) && !keepsPinned) {
+			await chrome.tabs.update(active.id, {url});
+		} else {
+			await chrome.tabs.create({
+				url,
+				active: disposition !== 'newBackgroundTab',
+			});
+		}
+
+		return;
+	}
+
+	// Enter on the typed text itself opens the dashboard with that search.
+	await searchDashboard(text);
+}
+
+void chrome.omnibox?.setDefaultSuggestion?.({
+	description: `Search ${APP_NAME} for <match>%s</match>`,
+});
+chrome.omnibox?.onInputChanged?.addListener((text, suggest) => {
+	omniboxCatalog()
+		.then(({index}) => {
+			suggest(omniboxSuggestions(text, index));
+		})
+		.catch(() => {
+			suggest([]);
+		});
+});
+chrome.omnibox?.onInputEntered?.addListener((text, disposition) => {
+	omniboxEnter(text, disposition).catch(() => {
+		/*
+		The address bar has nowhere to report a failed open.
+		*/
+	});
 });
 
 /**
@@ -8611,6 +9099,11 @@ Opens the side panel for the tab's window. Must run synchronously inside a user 
 */
 function openSidePanel(tab?: chrome.tabs.Tab) {
 	if (!chrome.sidePanel?.open) {
+		void sidebarAction?.open?.().catch(() => {
+			/*
+			The sidebar can only open from a user action; ignore refusals.
+			*/
+		});
 		return;
 	}
 
@@ -8654,17 +9147,22 @@ async function syncToolbarAction(settings: Settings) {
 		return;
 	}
 
+	// A browser that cannot open the panel from the toolbar button (Firefox, old Chromium) keeps the popup.
 	await chrome.action.setPopup({
-		popup: sidePanelEnabled
-			? ''
-			: settings.actionMode === 'popup'
+		popup:
+			settings.actionMode === 'popup' ||
+			(settings.actionMode === 'sidepanel' && !sidePanelEnabled)
 				? 'popup.html'
 				: '',
 	});
 }
 
-async function saveCurrentTabToFirstGroup(
+/**
+Adds the tab to the session `groupId`, or to the first session when none is named.
+*/
+async function saveCurrentTabToGroup(
 	senderTab?: chrome.tabs.Tab,
+	groupId?: string,
 ): Promise<ActionResult<'SAVE_CURRENT_TAB_TO_GROUP'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -8687,11 +9185,13 @@ async function saveCurrentTabToFirstGroup(
 			return {ok: false, error: 'There is no eligible web tab to save.'};
 		}
 
-		const group = store.groups[0];
+		const group = groupId ? findGroup(store, groupId) : store.groups[0];
 		if (!group) {
 			return {
 				ok: false,
-				error: 'Create a session before sending this tab to a session.',
+				error: groupId
+					? 'That saved session no longer exists.'
+					: 'Create a session before sending this tab to a session.',
 			};
 		}
 
@@ -8767,7 +9267,7 @@ async function saveCurrentTabToFirstGroup(
 						windowId,
 						url: useDashboard
 							? `${DASHBOARD_URL}?group=${encodeURIComponent(group.id)}`
-							: 'chrome://newtab/',
+							: NEW_TAB_PAGE_URL,
 						active: useDashboard,
 					});
 				}
@@ -8794,7 +9294,7 @@ async function saveCurrentTabToFirstGroup(
 async function handleToolbarAction(tab?: chrome.tabs.Tab) {
 	const settings = await readSettings();
 	if (settings.actionMode === 'current-tab-to-group') {
-		const result = await saveCurrentTabToFirstGroup(tab);
+		const result = await saveCurrentTabToGroup(tab);
 		if (!result?.ok) {
 			console.warn(
 				result?.error ||
@@ -8849,6 +9349,8 @@ const MENU = {
 	pageRoot: 'tablodge-page-root',
 	pageBookmark: 'tablodge-page-bookmark',
 	pageBookmarkNew: 'tablodge-page-bookmark-new',
+	pageSend: 'tablodge-page-send',
+	pageSendNew: 'tablodge-page-send-new',
 	selectionRoot: 'tablodge-selection-root',
 	selectionSearch: 'tablodge-selection-search',
 	actionOpen: 'tablodge-action-open',
@@ -8863,6 +9365,14 @@ Column items are `${prefix}${columnId}`; the Unfiled pseudo-column uses BOOKMARK
 */
 const LINK_COLUMN_PREFIX = 'tablodge-link-bookmark:';
 const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
+/**
+"Send this tab to session" items are `${PAGE_SEND_PREFIX}${sessionId}`.
+*/
+const PAGE_SEND_PREFIX = 'tablodge-page-send:';
+/**
+How many sessions the "Send this tab to session" submenu lists, most recently changed first.
+*/
+const MENU_SESSION_LIMIT = 10;
 /**
 The page menu's save actions, reusing the SAVE_TABS scopes.
 */
@@ -8909,7 +9419,11 @@ const badgeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 /**
 Everything the menu tree depends on: the switches, the enabled systems, and the column names and order.
 */
-function contextMenuSignature(settings: Settings, columns: BookmarkColumn[]) {
+function contextMenuSignature(
+	settings: Settings,
+	columns: BookmarkColumn[],
+	sessions: MenuSession[],
+) {
 	return JSON.stringify([
 		settings.contextMenusEnabled,
 		settings.contextMenuLinksEnabled,
@@ -8917,7 +9431,38 @@ function contextMenuSignature(settings: Settings, columns: BookmarkColumn[]) {
 		settings.contextMenuSelectionEnabled,
 		settings.contextMenuActionEnabled,
 		columns.map((column) => [column.id, column.name]),
+		settings.contextMenuPageEnabled
+			? sessions.map((session) => [session.id, session.name])
+			: [],
 	]);
+}
+
+type MenuSession = {id: string; name: string};
+
+/**
+The sessions the page menu offers: the most recently changed ones, leaving out the Archived folder.
+Takes stored data, so every entry is checked.
+*/
+function menuSessions(rawGroups: unknown, rawFolders: unknown): MenuSession[] {
+	const archived = archivedFolderIds(rawFolders);
+	return arrayOf(rawGroups)
+		.filter(
+			(group): group is Raw & {id: string} =>
+				isRecord(group) &&
+				typeof group.id === 'string' &&
+				group.id !== '' &&
+				!archived.has(cleanText(group.folderId, '', 100)),
+		)
+		.toSorted(
+			(a, b) =>
+				positiveOr(b.updatedAt, positiveOr(b.createdAt, 0)) -
+				positiveOr(a.updatedAt, positiveOr(a.createdAt, 0)),
+		)
+		.slice(0, MENU_SESSION_LIMIT)
+		.map((group) => ({
+			id: group.id,
+			name: cleanText(group.name, 'Untitled session', 60),
+		}));
 }
 
 /**
@@ -8927,6 +9472,7 @@ function contextMenuSignature(settings: Settings, columns: BookmarkColumn[]) {
 function contextMenuPlan(
 	settings: Settings,
 	columns: BookmarkColumn[],
+	sessions: MenuSession[],
 	excludeState: {checked: boolean; enabled: boolean} = {
 		checked: false,
 		enabled: true,
@@ -9027,11 +9573,43 @@ function contextMenuPlan(
 		);
 
 		items.push({
-			id: 'tablodge-page-separator',
-			type: 'separator',
+			id: MENU.pageSend,
+			title: 'Send this tab to session',
 			parentId: MENU.pageRoot,
 			...page,
 		});
+		for (const session of sessions) {
+			items.push({
+				id: `${PAGE_SEND_PREFIX}${session.id}`,
+				title: session.name,
+				parentId: MENU.pageSend,
+				...page,
+			});
+		}
+
+		if (sessions.length > 0) {
+			items.push({
+				id: `${MENU.pageSend}-separator`,
+				type: 'separator',
+				parentId: MENU.pageSend,
+				...page,
+			});
+		}
+
+		items.push(
+			{
+				id: MENU.pageSendNew,
+				title: 'New session',
+				parentId: MENU.pageSend,
+				...page,
+			},
+			{
+				id: 'tablodge-page-separator',
+				type: 'separator',
+				parentId: MENU.pageRoot,
+				...page,
+			},
+		);
 
 		// The tab-group item stays enabled: Chrome has no contextMenus.onShown to toggle it per tab, and a
 		// click outside a tab group just logs "The active tab is not in a tab group." Browsers with onShown refine it.
@@ -9059,7 +9637,7 @@ function contextMenuPlan(
 	if (settings.contextMenuActionEnabled) {
 		const action = {contexts: ['action']} satisfies Partial<MenuItemProperties>;
 		items.push({id: MENU.actionOpen, title: 'Open dashboard', ...action});
-		if (chrome.sidePanel) {
+		if (HAS_SIDE_PANEL) {
 			items.push({
 				id: MENU.actionSidePanel,
 				title: 'Open side panel',
@@ -9213,12 +9791,13 @@ async function excludeMenuState(settings: Settings, tab?: chrome.tabs.Tab) {
  after removeAll settles, so two rebuilds can never interleave and hit duplicate ids.
  */
 function rebuildContextMenus(
-	source?: Pick<Store, 'settings' | 'bookmarkColumns'>,
+	source?: Pick<Store, 'settings' | 'bookmarkColumns' | 'groups' | 'folders'>,
 ): Promise<void> {
 	if (source) {
 		menuSignature = contextMenuSignature(
 			source.settings,
 			source.bookmarkColumns,
+			menuSessions(source.groups, source.folders),
 		);
 	}
 
@@ -9229,13 +9808,16 @@ function rebuildContextMenus(
 
 		try {
 			const store = source || (await getStore());
+			const sessions = menuSessions(store.groups, store.folders);
 			menuSignature = contextMenuSignature(
 				store.settings,
 				store.bookmarkColumns,
+				sessions,
 			);
 			const plan = contextMenuPlan(
 				store.settings,
 				store.bookmarkColumns,
+				sessions,
 				await excludeMenuState(store.settings),
 			);
 			menuGeneration += 1;
@@ -9332,10 +9914,12 @@ onLibraryChanged((changes, areaName) => {
 	const nextSignature = contextMenuSignature(
 		nextSettings,
 		normalizeBookmarkColumns(change.newValue.bookmarkColumns),
+		menuSessions(change.newValue.groups, change.newValue.folders),
 	);
 	const previousSignature = contextMenuSignature(
 		normalizeSettings(previous.settings as RawSettings | undefined),
 		normalizeBookmarkColumns(previous.bookmarkColumns),
+		menuSessions(previous.groups, previous.folders),
 	);
 	if (nextSignature !== previousSignature && nextSignature !== menuSignature) {
 		scheduleContextMenuRebuild();
@@ -9803,6 +10387,18 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 				);
 			},
 			id !== MENU.pageBookmarkNew,
+		);
+		return;
+	}
+
+	if (id.startsWith(PAGE_SEND_PREFIX) || id === MENU.pageSendNew) {
+		runMenuAction(
+			tab,
+			`${APP_NAME} could not send this tab to a session.`,
+			() =>
+				id === MENU.pageSendNew
+					? saveTabs('this-tab', tab, DEFAULT_FOLDER_ID, {promptName: true})
+					: saveCurrentTabToGroup(tab, id.slice(PAGE_SEND_PREFIX.length)),
 		);
 		return;
 	}

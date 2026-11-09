@@ -9,7 +9,9 @@
 // Axe and keyboard checks do not judge reading order or screen reader announcements; see docs/CONTRIBUTING.md.
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
+import {createServer, type Server} from 'node:http';
 import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import type {AddressInfo} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
@@ -24,7 +26,14 @@ import {createDevFixture, type DevStore} from './dev-fixture.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-const PAGES = ['newtab', 'options', 'help', 'popup', 'sidepanel'] as const;
+const PAGES = [
+	'newtab',
+	'options',
+	'help',
+	'popup',
+	'sidepanel',
+	'palette',
+] as const;
 const THEMES = ['light', 'dark'] as const;
 const EVIDENCE_VIEWPORTS = [
 	[440, 956],
@@ -36,6 +45,7 @@ const EVIDENCE_VIEWPORTS = [
 type ExtensionApi = {
 	runtime: {sendMessage(message: unknown): Promise<unknown>};
 	storage: {local: {set(items: Record<string, unknown>): Promise<void>}};
+	tabs: {query(info: {url: string}): Promise<unknown[]>};
 };
 type AxeResults = {
 	violations: Array<{
@@ -223,6 +233,13 @@ async function readDevStore(page: Page) {
 	return store;
 }
 
+async function countTabs(page: Page, url: string) {
+	return page.evaluate(async (address) => {
+		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
+		return (await chrome.tabs.query({url: address})).length;
+	}, url);
+}
+
 async function writeDevStore(page: Page, store: DevStore) {
 	await page.evaluate(async (data) => {
 		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
@@ -322,6 +339,36 @@ async function seedLongBookmarkColumn(page: Page, count: number) {
 		bookmarkColumnPageSize: 10,
 	};
 	await writeDevStore(page, fixture);
+}
+
+// Tiny local pages, so the test window has web tabs that a replace or append can read.
+async function startPageServer() {
+	const server = createServer((request, response) => {
+		response.setHeader('content-type', 'text/html');
+		response.end(`<title>Local ${request.url}</title><h1>${request.url}</h1>`);
+	});
+	await new Promise<void>((resolve) => {
+		server.listen(0, '127.0.0.1', resolve);
+	});
+	return {
+		server,
+		origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+	};
+}
+
+async function closeServer(server: Server) {
+	await new Promise<void>((resolve) => {
+		server.close(() => {
+			resolve();
+		});
+	});
+}
+
+async function sessionUrls(page: Page, groupId: string) {
+	const store = await readDevStore(page);
+	return store.groups
+		.find((group) => group.id === groupId)
+		?.tabs.map((tab) => tab.url);
 }
 
 async function groupFolderId(page: Page, groupId: string) {
@@ -473,6 +520,37 @@ async function withMobileEmulation(
 		await device.send('Emulation.clearDeviceMetricsOverride');
 		await device.detach();
 	}
+}
+
+// Screenshots of the current page state at the four evidence profiles; the phone profile uses device emulation.
+async function captureViewports(page: Page, name: string, theme: string) {
+	await mkdir(fromRoot('.dev/evidence'), {recursive: true});
+	for (const [width, height] of EVIDENCE_VIEWPORTS) {
+		await page.setViewportSize({width, height});
+		if (width === 440) {
+			await withMobileEmulation(page, {width, height}, async (device) => {
+				// The toast fades in; let it settle so the capture shows it opaque.
+				await page.waitForTimeout(600);
+				const {data} = await device.send('Page.captureScreenshot', {
+					format: 'png',
+					captureBeyondViewport: false,
+				});
+				await writeFile(
+					fromRoot(
+						`.dev/evidence/${name}-${width}x${height}-dsf3-${theme}.png`,
+					),
+					Buffer.from(data, 'base64'),
+				);
+			});
+		} else {
+			await page.screenshot({
+				animations: 'disabled',
+				path: fromRoot(`.dev/evidence/${name}-${width}x${height}-${theme}.png`),
+			});
+		}
+	}
+
+	await page.setViewportSize({width: 1440, height: 900});
 }
 
 async function captureEvidence(
@@ -1605,23 +1683,29 @@ async function main() {
 					});
 					await remove.focus();
 					await board.keyboard.press('Enter');
-					const confirmation = board.getByRole('dialog');
-					await confirmation.waitFor();
-					await confirmation
-						.getByRole('heading', {name: 'Delete “Gmail”?', exact: true})
-						.waitFor();
 					assert.equal(
-						await board.locator('[data-bookmark-title="Gmail"]').count(),
-						1,
-						'bookmark remains until the confirmation is accepted',
+						await board.getByRole('dialog').count(),
+						0,
+						'Delete runs without a confirmation dialog',
 					);
-					const cancel = confirmation.getByRole('button', {
-						name: 'Cancel',
+					const undo = board.getByRole('button', {
+						name: 'Undo',
 						exact: true,
 					});
-					await cancel.focus();
+					await undo.waitFor();
+					assert.equal(
+						await board.locator('[data-bookmark-title="Gmail"]').count(),
+						0,
+						'bookmark is removed right away',
+					);
+					await undo.focus();
 					await board.keyboard.press('Enter');
-					await confirmation.waitFor({state: 'hidden'});
+					await until(
+						async () =>
+							(await board.locator('[data-bookmark-title="Gmail"]').count()) ===
+							1,
+						'Undo to restore the bookmark from the trash',
+					);
 					await seedQuickActions(board, ['open-new']);
 					await board.close();
 				},
@@ -1932,6 +2016,78 @@ async function main() {
 						bookmarkColumnPageSize: 16,
 					};
 					await writeDevStore(page, reset);
+					await page.close();
+				},
+			);
+
+			await check(
+				`bookmark board layout settings change by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					const layout = [
+						['Bookmark column width', 'Wide', 'bookmarkColumnWidth', 'wide'],
+						['Columns per row', '2 columns', 'bookmarkColumnsPerRow', 2],
+						['Bookmark density', 'Compact', 'bookmarkDensity', 'compact'],
+					] as const;
+					for (const [label, option, key, value] of layout) {
+						const select = page.getByRole('combobox', {
+							name: label,
+							exact: true,
+						});
+						await select.focus();
+						await page.keyboard.press('Space');
+						await page.getByRole('option', {name: option, exact: true}).click();
+						await until(
+							async () => (await readDevStore(page)).settings[key] === value,
+							`${label} to save`,
+						);
+						assert.equal(
+							await page.locator(':focus').getAttribute('aria-label'),
+							label,
+							`focus returns to ${label}`,
+						);
+					}
+
+					const violations = await axeViolationLines(page, axeSource);
+					assert.deepEqual(violations, [], 'layout settings should pass axe');
+					const reset = createDevFixture(await readDevStore(page));
+					reset.settings = {
+						...reset.settings,
+						bookmarkColumnWidth: 'default',
+						bookmarkColumnsPerRow: 0,
+						bookmarkDensity: 'comfortable',
+					};
+					await writeDevStore(page, reset);
+					await page.close();
+				},
+			);
+
+			await check(
+				`Statistics opens by keyboard, lists tabs and returns focus (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					const opener = page.getByRole('button', {name: 'View', exact: true});
+					await opener.focus();
+					await page.keyboard.press('Enter');
+					const dialog = page.getByRole('dialog', {name: 'Statistics'});
+					await dialog.waitFor();
+					await dialog.getByRole('heading', {name: 'Open now'}).waitFor();
+					await dialog
+						.getByRole('term')
+						.filter({hasText: 'Open tabs'})
+						.waitFor();
+					assert.ok(
+						(await dialog.getByRole('list').count()) <= 1,
+						'one tab list at most',
+					);
+					await page.keyboard.press('Escape');
+					await dialog.waitFor({state: 'hidden'});
+					await until(
+						async () => (await page.locator(':focus').innerText()) === 'View',
+						'focus returns to the View button',
+					);
 					await page.close();
 				},
 			);
@@ -3296,6 +3452,129 @@ async function main() {
 		}
 
 		for (const theme of THEMES) {
+			await check(`palette window keyboard use (${theme})`, async () => {
+				const page = await openPage(context, extensionId, 'palette');
+				await setTheme(page, theme);
+				const input = page.getByRole('combobox', {name: 'Search'});
+				await input.waitFor({timeout: 5000});
+				await page.locator('input[role="combobox"]:focus').waitFor({
+					timeout: 2000,
+				});
+				const listbox = page.getByRole('listbox', {name: 'Results'});
+				assert.equal(
+					await input.getAttribute('aria-controls'),
+					await listbox.getAttribute('id'),
+				);
+				const first = await input.getAttribute('aria-activedescendant');
+				await page.keyboard.press('ArrowDown');
+				const second = await input.getAttribute('aria-activedescendant');
+				assert.ok(first, 'A result is active when the palette opens');
+				assert.notEqual(second, first, 'Arrow keys move');
+				assert.equal(
+					await page.locator(`#${second}`).getAttribute('aria-selected'),
+					'true',
+				);
+				await page.keyboard.type('zzzz');
+				await page
+					.getByRole('option', {name: /Search the web for/})
+					.waitFor({timeout: 2000});
+				assert.equal(
+					await page.getByRole('status').filter({hasText: 'result'}).count(),
+					1,
+					'A new search announces how many results it found',
+				);
+				await page.screenshot({
+					path: `.dev/evidence/palette-keyboard-${theme}.png`,
+				});
+				// Escape closes the window, which ends the key press call itself.
+				const closed = page.waitForEvent('close', {timeout: 3000});
+				await page.keyboard.press('Escape').catch(() => {});
+				await closed;
+			});
+		}
+
+		for (const theme of THEMES) {
+			await check(`palette actions menu keyboard use (${theme})`, async () => {
+				const seeding = await openPage(context, extensionId, 'newtab');
+				await seed(seeding);
+				await seeding.close();
+				const page = await openPage(context, extensionId, 'palette');
+				await setTheme(page, theme);
+				const input = page.getByRole('combobox', {name: 'Search'});
+				await input.waitFor({timeout: 5000});
+				await page.keyboard.type('Lisbon trip');
+				await page
+					.getByRole('option', {name: /Lisbon trip/})
+					.first()
+					.waitFor({timeout: 2000});
+				const results = await input.getAttribute('aria-controls');
+				await page.keyboard.press('ArrowRight');
+				const menu = page.getByRole('listbox', {name: /^Actions for/});
+				await menu.waitFor({timeout: 2000});
+				assert.equal(
+					await page
+						.getByRole('combobox', {name: 'Filter actions'})
+						.getAttribute('aria-controls'),
+					await menu.getAttribute('id'),
+				);
+				assert.notStrictEqual(
+					await menu.getAttribute('id'),
+					results,
+					'The menu is its own listbox',
+				);
+				await page
+					.getByRole('navigation', {name: 'Breadcrumb'})
+					.waitFor({timeout: 1000});
+				assert.match(
+					(await page.getByRole('status').allTextContents()).join(' '),
+					/Actions for .*\d actions/,
+					'Opening the menu is announced',
+				);
+				const first = await page
+					.getByRole('combobox', {name: 'Filter actions'})
+					.getAttribute('aria-activedescendant');
+				await page.keyboard.press('ArrowDown');
+				assert.notEqual(
+					await page
+						.getByRole('combobox', {name: 'Filter actions'})
+						.getAttribute('aria-activedescendant'),
+					first,
+					'Arrow keys move through actions',
+				);
+				await page.screenshot({
+					path: `.dev/evidence/palette-actions-${theme}.png`,
+				});
+				await page.keyboard.type('window');
+				assert.equal(
+					await menu.getByRole('option').count(),
+					1,
+					'Typing filters the actions',
+				);
+				await page.keyboard.press('Backspace');
+				for (let at = 0; at < 'window'.length - 1; at++) {
+					await page.keyboard.press('Backspace');
+				}
+
+				await page.keyboard.press('Backspace');
+				await menu.waitFor({state: 'hidden', timeout: 1000});
+				assert.equal(
+					await page.locator('input[role="combobox"]:focus').count(),
+					1,
+					'Focus stays in the search box going back',
+				);
+				assert.equal(await input.inputValue(), 'Lisbon trip');
+				await page.keyboard.press('ArrowRight');
+				await menu.waitFor({timeout: 1000});
+				// Escape goes up one level first, so the window is still there afterwards.
+				await page.keyboard.press('Escape');
+				await menu.waitFor({state: 'hidden', timeout: 1000});
+				const closed = page.waitForEvent('close', {timeout: 3000});
+				await page.keyboard.press('Escape').catch(() => {});
+				await closed;
+			});
+		}
+
+		for (const theme of THEMES) {
 			await check(`bookmark selection mode and ranges (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
 				await seed(page);
@@ -4097,6 +4376,96 @@ async function main() {
 			);
 		}
 
+		for (const theme of THEMES) {
+			await check(
+				`close duplicate tabs and undo by keyboard (${theme})`,
+				async () => {
+					const address = 'https://duplicates.test/page';
+					await context.route('https://duplicates.test/**', async (route) =>
+						route.fulfill({
+							contentType: 'text/html',
+							body: '<title>Duplicate page</title><p>Duplicate page</p>',
+						}),
+					);
+					const copies: Page[] = [];
+					for (let copy = 0; copy < 3; copy++) {
+						const page = await context.newPage();
+						await page.goto(address);
+						copies.push(page);
+					}
+
+					const panel = await openPage(context, extensionId, 'sidepanel');
+					await setTheme(panel, theme);
+					const copiesOpen = async () => countTabs(panel, address);
+					assert.equal(await copiesOpen(), 3);
+					await panel.getByRole('tab', {name: /Tabs/}).focus();
+					await panel.keyboard.press('Enter');
+					const closeButton = panel.getByRole('button', {
+						name: /^Close \d+ duplicate tabs?$/,
+					});
+					await closeButton.waitFor();
+					await captureEvidence(panel, `close-duplicates-before-${theme}.png`);
+					await closeButton.focus();
+					await panel.keyboard.press('Enter');
+					await until(
+						async () => (await copiesOpen()) === 1,
+						'duplicates closed',
+					);
+					const undo = panel.getByRole('button', {name: 'Undo'});
+					await undo.waitFor();
+					await panel
+						.getByRole('button', {name: 'No duplicate tabs'})
+						.waitFor();
+					await captureEvidence(panel, `close-duplicates-after-${theme}.png`);
+					await undo.focus();
+					await panel.keyboard.press('Enter');
+					await until(async () => (await copiesOpen()) === 3, 'Undo reopens');
+					await panel
+						.getByRole('button', {name: 'Close 2 duplicate tabs'})
+						.waitFor();
+					await captureEvidence(panel, `close-duplicates-undone-${theme}.png`);
+					await panel.close();
+
+					const popup = await openPage(context, extensionId, 'popup');
+					await setTheme(popup, theme);
+					await popup.setViewportSize({width: 380, height: 560});
+					const popupButton = popup.getByRole('button', {
+						name: /^Close \d+ duplicate tabs?$/,
+					});
+					await popupButton.waitFor();
+					if (process.env.TABLODGE_CAPTURE_EVIDENCE === '1') {
+						await popup.screenshot({
+							path: fromRoot(
+								`.dev/evidence/close-duplicates-popup-before-${theme}.png`,
+							),
+						});
+					}
+
+					await popupButton.focus();
+					await popup.keyboard.press('Enter');
+					await popup.getByRole('button', {name: 'Undo'}).waitFor();
+					if (process.env.TABLODGE_CAPTURE_EVIDENCE === '1') {
+						await popup.screenshot({
+							path: fromRoot(
+								`.dev/evidence/close-duplicates-popup-after-${theme}.png`,
+							),
+						});
+					}
+
+					await until(
+						async () => (await countTabs(popup, address)) === 1,
+						'popup closes duplicates',
+					);
+					await popup.close();
+					for (const page of copies) {
+						await page.close().catch(() => undefined);
+					}
+
+					await context.unroute('https://duplicates.test/**');
+				},
+			);
+		}
+
 		await check(
 			'Archived sessions are hidden from popup and side panel',
 			async () => {
@@ -4166,6 +4535,156 @@ async function main() {
 
 				await page.close();
 			});
+
+			await check(
+				`replace, append and split a session by keyboard with Undo (${theme})`,
+				async () => {
+					const {server, origin} = await startPageServer();
+					const page = await openPage(context, extensionId, 'newtab');
+					const other = await context.newPage();
+					try {
+						await seed(page);
+						await page.reload();
+						await setTheme(page, theme);
+						await other.goto(`${origin}/alpha`);
+						await page.bringToFront();
+						const snapshot = await readDevStore(page);
+						const original = (await sessionUrls(page, 'dev-session-1'))!;
+						// Puts the seeded sessions back between the evidence captures.
+						const reset = async () => {
+							await writeDevStore(page, snapshot);
+							await page.reload();
+						};
+
+						assert.ok(original.length > 2);
+						const trigger = page.getByRole('button', {
+							name: 'More actions for Home lab rebuild',
+						});
+						const undoButton = page.getByRole('button', {name: 'Undo'});
+						const sessionMenuItem = async (name: string) => {
+							await trigger.focus();
+							await page.keyboard.press('Enter');
+							await page.getByRole('menuitem', {name, exact: true}).focus();
+							await page.keyboard.press('Enter');
+						};
+
+						await until(async () => {
+							await trigger.focus();
+							await page.keyboard.press('Enter');
+							const enabled = await page
+								.getByRole('menuitem', {name: 'Replace with this window'})
+								.isEnabled();
+							await page.keyboard.press('Escape');
+							return enabled;
+						}, 'the window actions to become available');
+
+						await trigger.focus();
+						await page.keyboard.press('Enter');
+						await page
+							.getByRole('menuitem', {name: 'Replace with this window'})
+							.waitFor();
+						await captureViewports(page, 'session-window-actions-menu', theme);
+						await page.keyboard.press('Escape');
+
+						await page.setViewportSize({width: 1440, height: 900});
+						await sessionMenuItem('Add this window');
+						await undoButton.waitFor();
+						assert.deepEqual(await sessionUrls(page, 'dev-session-1'), [
+							...original,
+							`${origin}/alpha`,
+						]);
+						await undoButton.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								JSON.stringify(await sessionUrls(page, 'dev-session-1')) ===
+								JSON.stringify(original),
+							'Undo to restore the session after appending',
+						);
+
+						await sessionMenuItem('Add this window');
+						await undoButton.waitFor();
+						await captureViewports(page, 'session-append-result', theme);
+						await reset();
+
+						await sessionMenuItem('Replace with this window');
+						await undoButton.waitFor();
+						assert.deepEqual(await sessionUrls(page, 'dev-session-1'), [
+							`${origin}/alpha`,
+						]);
+						await undoButton.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								JSON.stringify(await sessionUrls(page, 'dev-session-1')) ===
+								JSON.stringify(original),
+							'Undo to restore the session after replacing',
+						);
+
+						await sessionMenuItem('Replace with this window');
+						await undoButton.waitFor();
+						await captureViewports(page, 'session-replace-result', theme);
+						await reset();
+
+						const expand = page.getByRole('button', {
+							name: 'Show tabs in Home lab rebuild',
+						});
+						const collapse = page.getByRole('button', {
+							name: 'Hide tabs in Home lab rebuild',
+						});
+						const ensureExpanded = async () => {
+							await expand.or(collapse).waitFor();
+							if (!((await expand.count()) > 0)) {
+								return;
+							}
+
+							await expand.focus();
+							await page.keyboard.press('Enter');
+						};
+
+						await ensureExpanded();
+
+						const firstLink = page
+							.getByRole('checkbox', {
+								name: /^Select .* from Home lab rebuild$/,
+							})
+							.first();
+						await firstLink.focus();
+						await page.keyboard.press('Space');
+						await sessionMenuItem('Split selected links');
+						await undoButton.waitFor();
+						const split = (await readDevStore(page)).groups;
+						const source = split.find((group) => group.id === 'dev-session-1')!;
+						assert.equal(source.tabs.length, original.length - 1);
+						assert.equal(
+							split.find((group) => group.name === 'Home lab rebuild (split)')
+								?.tabs.length,
+							1,
+						);
+						await undoButton.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								JSON.stringify(await sessionUrls(page, 'dev-session-1')) ===
+								JSON.stringify(original),
+							'Undo to restore the session after splitting',
+						);
+
+						await ensureExpanded();
+
+						await firstLink.focus();
+						await page.keyboard.press('Space');
+						await sessionMenuItem('Split selected links');
+						await undoButton.waitFor();
+						await captureViewports(page, 'session-split-result', theme);
+						await reset();
+					} finally {
+						await other.close();
+						await page.close();
+						await closeServer(server);
+					}
+				},
+			);
 
 			await check(
 				`share all sessions from the Sessions menu (${theme})`,

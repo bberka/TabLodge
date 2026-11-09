@@ -1,6 +1,20 @@
-import type {ReactNode} from 'react';
+import {useEffect, useState, type ReactNode} from 'react';
+import {PRIVATE_CONFIG_KEY} from './private-config';
+import {send} from './message-client';
+import type {PrivateStorageMode} from './types';
 
-export function PrivateWindowMark({className}: {className: string}) {
+const PRIVATE_WINDOW_MODE_SUMMARY: Record<PrivateStorageMode, string> = {
+	shared: 'Same library as regular windows',
+	saved: 'Separate library saved on this device',
+	temporary: 'Separate library clears on browser restart',
+};
+
+type ModeState =
+	| {status: 'loading'}
+	| {status: 'unavailable'}
+	| {status: 'ready'; mode: PrivateStorageMode};
+
+function PrivateWindowMark({className}: {className: string}) {
 	return (
 		<svg
 			aria-hidden="true"
@@ -28,9 +42,47 @@ export function PrivateWindowMark({className}: {className: string}) {
 }
 
 export function PrivateWindowAppearance({children}: {children: ReactNode}) {
-	if (!chrome.extension.inIncognitoContext) {
-		return children;
-	}
+	return chrome.extension.inIncognitoContext ? (
+		<PrivateWindowFrame>{children}</PrivateWindowFrame>
+	) : (
+		children
+	);
+}
+
+function PrivateWindowFrame({children}: {children: ReactNode}) {
+	const [modeState, setModeState] = useState<ModeState>({status: 'loading'});
+	useEffect(() => {
+		let mounted = true;
+		const load = () => {
+			void send('GET_PRIVATE_CONFIG').then((result) => {
+				if (!mounted) {
+					return;
+				}
+
+				setModeState(
+					result.ok
+						? {status: 'ready', mode: result.mode}
+						: {status: 'unavailable'},
+				);
+			});
+		};
+
+		const changed = (
+			changes: Record<string, chrome.storage.StorageChange>,
+			area: chrome.storage.AreaName,
+		) => {
+			if (area === 'local' && Object.hasOwn(changes, PRIVATE_CONFIG_KEY)) {
+				load();
+			}
+		};
+
+		load();
+		chrome.storage.onChanged.addListener(changed);
+		return () => {
+			mounted = false;
+			chrome.storage.onChanged.removeListener(changed);
+		};
+	}, []);
 
 	return (
 		<div
@@ -47,7 +99,36 @@ export function PrivateWindowAppearance({children}: {children: ReactNode}) {
 					</div>
 				))}
 			</div>
-			<div className="relative z-10">{children}</div>
+			<div className="relative z-10">
+				<aside
+					aria-label="Private window"
+					className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-muted px-5 py-3 text-sm sm:px-8"
+				>
+					<div className="flex min-w-0 items-center gap-3">
+						<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+							<PrivateWindowMark className="h-5 w-5" />
+						</span>
+						<div className="min-w-0">
+							<p className="font-semibold">You’re in a private window</p>
+							<p aria-live="polite" className="text-sm text-muted-foreground">
+								{modeState.status === 'ready'
+									? PRIVATE_WINDOW_MODE_SUMMARY[modeState.mode]
+									: modeState.status === 'unavailable'
+										? 'Storage mode unavailable'
+										: 'Checking storage mode…'}
+							</p>
+						</div>
+					</div>
+					<a
+						data-private-settings
+						href="options.html#settings-private-windows"
+						className="rounded-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						Private window settings
+					</a>
+				</aside>
+				{children}
+			</div>
 		</div>
 	);
 }

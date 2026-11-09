@@ -28,8 +28,9 @@ import {
 import {Badge, Button, Input, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
+import {SHORTCUTS_HINT, isFirefox, openShortcutsPage} from '../shared/browser';
 import {PrivateWindowAppearance} from './private-window-appearance';
-import {AppHeader, openShortcutsPage, type IconComponent} from './common';
+import {AppHeader, type IconComponent} from './common';
 import {PROJECT} from './project';
 
 const SHORTCUTS_URL = 'chrome://extensions/shortcuts';
@@ -139,9 +140,15 @@ function Help() {
 				},
 				{
 					title: 'Use the side panel',
-					body: 'Choose Open the side panel in Settings under Toolbar button action, open it from your browser sidebar, or assign it a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
+					body: 'In Chromium browsers, choose Open the side panel in Settings under Toolbar button action. In every browser you can open it from the popup, the toolbar button’s right-click menu, the browser’s sidebar menu, or a keyboard shortcut. The side panel keeps your session list beside the page you are viewing. Its header has icons for the dashboard, recent snapshots, trash bin, and Settings. The TabLodge title and dashboard icon open the dashboard in a new tab.',
 					searchText:
 						'side panel sidebar session list beside page toolbar icon settings keyboard shortcut',
+				},
+				{
+					title: 'Close duplicate tabs',
+					body: 'Use Close duplicate tabs in the popup or at the top of the side panel Tabs section to close extra copies of the same page. Two tabs are duplicates when their web addresses match exactly, so a different query or fragment counts as a different page. It checks the tabs in all your normal windows. The most recently used copy stays open. Pinned tabs and the tab you are viewing in each window are never closed, and when one of them has duplicates, the other copies are closed. A toast offers Undo, which reopens the tabs in their window and position. Reopened tabs load fresh, so they lose scroll position and form data.',
+					searchText:
+						'close duplicate tabs remove extra copies same page address url pinned active most recently used all windows undo reopen popup side panel',
 				},
 			],
 			action: {label: 'Open Settings', href: 'options.html', icon: Settings2},
@@ -236,6 +243,12 @@ function Help() {
 						'switch workspace context swap replace current window save open another session pinned tabs',
 				},
 				{
+					title: 'Update or split a session',
+					body: 'In the menu of a session on the dashboard, choose Replace with this window to swap its links for the web tabs in this window, or Add this window to append the tabs the session does not hold yet. Excluded sites, pinned tabs, and the duplicate setting work as they do when saving, and no tab is opened or closed. The session keeps its name, folder, description, and the notes on links it still holds. To split a session, select some of its links with their checkboxes and choose Split in the selection bar, or Split selected links in the session menu. The links move into a new session next to it. A split view pair moves only when you select both halves, and at least one link must stay behind. Each action shows an Undo button for a couple of minutes.',
+					searchText:
+						'replace append add window update refresh session split divide new session selected links undo current window',
+				},
+				{
 					title: 'Use a click modifier',
 					body: (
 						<>
@@ -284,7 +297,7 @@ function Help() {
 				},
 				{
 					title: 'Bookmark quick actions',
-					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete still asks for confirmation.',
+					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete moves the bookmark to the trash and offers Undo in a toast.',
 					searchText:
 						'quick action buttons open new tab bookmark menu copy edit delete checkbox settings',
 				},
@@ -299,6 +312,12 @@ function Help() {
 					body: 'Use the view button in the bookmarks toolbar to switch between Board and Focus. Board shows every column in a grid. Focus shows a column list next to one open column. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of making the page tall. The choice is saved in Settings › Bookmark board.',
 					searchText:
 						'board focus view column list single column switch layout grid panel scroll busy column',
+				},
+				{
+					title: 'Change column width and spacing',
+					body: 'In Settings › Bookmark board, Bookmark column width sets how narrow a column can get in Board view, from Narrow to Extra wide. Columns per row sets the most columns in a row, and a smaller window still shows fewer. Default width with Automatic columns keeps the layout from Dashboard width. Bookmark density set to Compact tightens the gaps, padding, and rows in Board and Focus so more bookmarks fit on screen. Focus view always shows one column beside the list, so width and columns per row only change Board.',
+					searchText:
+						'column width narrow wide extra wide columns per row grid density compact comfortable spacing padding margin tighter board focus layout settings',
 				},
 				{
 					title: 'Keep long columns compact',
@@ -360,9 +379,9 @@ function Help() {
 				{
 					title: 'On a page',
 					gesture: {label: 'Right-click the page', icon: MousePointerClick},
-					body: 'Bookmark the current page, or save this tab, its tab group, the whole window, or the tabs to its left or right.',
+					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, or save this tab, its tab group, the whole window, or the tabs to its left or right.',
 					searchText:
-						'right-click page bookmark current tab tab group whole window left right save',
+						'right-click page bookmark current tab send tab to session recent new session tab group whole window left right save',
 				},
 				{
 					title: 'On selected text',
@@ -425,11 +444,31 @@ function Help() {
 							On the dashboard, press <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
 							<Key>K</Key>, or press <Key>/</Key> when you are not typing in a
 							field. Search bookmarks, sessions, open tabs, commands, or the
-							web.
+							web. Your recent sessions are listed before you type. Choose one
+							to restore it, or press <Key>Shift</Key> + <Key>Enter</Key> to
+							reveal it on the dashboard instead.
 						</>
 					),
 					searchText:
-						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette',
+						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter',
+				},
+				{
+					title: 'Open the palette from any page',
+					body: (
+						<>
+							Press <Key>Ctrl</Key> + <Key>Shift</Key> + <Key>K</Key> (
+							<Key>⌘</Key> + <Key>Shift</Key> + <Key>K</Key> on macOS) on any
+							page, including pages that use <Key>Ctrl</Key> + <Key>K</Key>{' '}
+							themselves and browser pages. The palette opens in a small window.
+							Choosing a session restores it into the window you were in, and{' '}
+							<Key>Ctrl</Key> or <Key>⌘</Key> + <Key>Enter</Key> restores it in
+							a new window. Links and web searches open in that window&apos;s
+							active tab. Press the shortcut again or <Key>Esc</Key> to close
+							the window. It also closes when you click another window.
+						</>
+					),
+					searchText:
+						'any page global shortcut ctrl shift k command palette window browser pages restore session new window open search palette close click away focus',
 				},
 				{
 					title: 'Navigate results',
@@ -445,17 +484,47 @@ function Help() {
 						'up down arrows navigate results enter open ctrl command cmd meta new tab escape esc close palette',
 				},
 				{
+					title: 'More actions for a result',
+					body: (
+						<>
+							Press <Key>→</Key> on a session, bookmark, saved tab, or open tab
+							(or right-click it) to see its other actions: restore a session
+							here or in a new window, reveal it on the dashboard, open a link
+							in a new tab or window, copy a link, switch to a tab, or close it.
+							Type to filter the actions. Press <Key>Esc</Key> or{' '}
+							<Key>Backspace</Key> to go back to the results.
+						</>
+					),
+					searchText:
+						'more actions sub menu submenu right arrow context menu restore here new window reveal open copy link switch close tab filter back escape backspace breadcrumb palette',
+				},
+				{
+					title: 'Search from the address bar',
+					body: (
+						<>
+							Type <Key>tl</Key>, then press <Key>Space</Key> or <Key>Tab</Key>,
+							and keep typing. Suggestions list open tabs, bookmarks, saved
+							tabs, and sessions. <Key>Enter</Key> opens one, or <Key>Alt</Key>{' '}
+							+ <Key>Enter</Key> opens it in a new tab. Pressing{' '}
+							<Key>Enter</Key> on your own text searches the dashboard.
+						</>
+					),
+					searchText:
+						'address bar omnibox url bar keyword tl type space tab suggestions open tabs bookmarks saved tabs sessions enter alt new tab',
+				},
+				{
 					title: 'Change keyboard shortcuts',
 					body: (
 						<>
 							The suggested shortcuts are <Key>Alt</Key> + <Key>Shift</Key> +{' '}
 							<Key>S</Key> to save tabs and <Key>Alt</Key> + <Key>Shift</Key> +{' '}
-							<Key>D</Key> to bookmark this page. Your browser can change these
-							and assign keys to other actions.
+							<Key>D</Key> to bookmark this page, and <Key>Ctrl</Key> +{' '}
+							<Key>Shift</Key> + <Key>K</Key> to open the search palette. Your
+							browser can change these and assign keys to other actions.
 						</>
 					),
 					searchText:
-						'alt shift s save tabs alt shift d bookmark page browser configure customize shortcut side panel dashboard',
+						'alt shift s save tabs alt shift d bookmark page ctrl shift k search palette browser configure customize shortcut side panel dashboard',
 				},
 			],
 			action: {
@@ -483,7 +552,9 @@ function Help() {
 			entries: [
 				{
 					title: 'Private windows',
-					body: 'Enable Allow in Incognito in the browser’s extension settings. New private tabs redirect to the dashboard by default. Turn this off in Settings under Private windows to keep the browser’s page. On the first visit, choose the same library as regular windows, a separate saved library, or a separate temporary library. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
+					body: isFirefox
+						? `${PROJECT.name} does not run in Firefox private windows: it cannot see their tabs, so it never saves them, and its pages are not available there.`
+						: 'Enable Allow in Incognito in the browser’s extension settings. New private tabs redirect to the dashboard by default. Turn this off in Settings under Private windows to keep the browser’s page. You can also open the dashboard from the toolbar popup or its shortcut. On the first visit, choose the same library as regular windows, a separate saved library, or a separate temporary library. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
 					searchText:
 						'private incognito storage shared separate saved temporary restart dashboard first setup new tab redirect',
 				},
@@ -543,8 +614,8 @@ function Help() {
 							shortcut. You can also open the bin from the{' '}
 							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
 							the side panel header, or the search palette. Dashboard deletes,
-							imports, and actions that open many tabs also offer Undo for a few
-							seconds.
+							imports, actions that open many tabs, and closing duplicate tabs
+							also offer Undo for a few seconds.
 						</>
 					),
 					searchText:
@@ -588,15 +659,15 @@ function Help() {
 				},
 				{
 					title: 'Common choices',
-					body: `Set dashboard width, startup behavior, session sorting, and automatic archiving for sessions you have not opened in a while. The Archived folder appears when it contains sessions. Archive an active session with its card button or menu. Archived sessions leave active lists but remain available in that folder. In Archived, use Move to folder in the session menu to bring a session back. Choose up to five direct menu actions as session card quick actions: Archive, Delete, Share, Export session, Edit details, Move up, Move down, and Switch to this session. Archive is selected by default and Delete is off. Expanded cards keep enabled quick actions visible without hovering. Choose up to three direct menu actions as bookmark quick actions, including opening, copying, editing, deleting, and moving a bookmark or changing its order. Open in new tab is selected by default, and Delete still asks first. You can also set URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Remove common tracking parameters, including the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. Choose Board or Focus as the bookmark view; Focus shows a column list and one open column. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
+					body: `Set dashboard width, startup behavior, session sorting, and automatic archiving for sessions you have not opened in a while. The Archived folder appears when it contains sessions. Archive an active session with its card button or menu. Archived sessions leave active lists but remain available in that folder. In Archived, use Move to folder in the session menu to bring a session back. Choose up to five direct menu actions as session card quick actions: Archive, Delete, Share, Export session, Edit details, Move up, Move down, and Switch to this session. Archive is selected by default and Delete is off. Expanded cards keep enabled quick actions visible without hovering. Choose up to three direct menu actions as bookmark quick actions, including opening, copying, editing, deleting, and moving a bookmark or changing its order. Open in new tab is selected by default, and Delete still asks first. You can also set URL display, bookmark clicks, site exclusions, right-click menus, and whether to open ${PROJECT.name} after saving. Remove common tracking parameters, including the share tracking X, YouTube and Spotify add to links, when opening or copying saved links and when restoring sessions and snapshots. This leaves saved URLs unchanged and is off by default. Wider uses the full width on a 1080p screen and fits four columns. Full width fits as many columns as the screen can hold, while Narrower keeps the board to two columns. Choose Board or Focus as the bookmark view; Focus shows a column list and one open column. Set the bookmark column width, the most columns per row, and a compact density in Settings › Bookmark board. The theme follows your system by default. The accent color for buttons and focus rings starts as TabLodge’s own color. You can pick a preset, any custom color, or System, which follows your operating system’s accent color where it has one, and Reset brings the default back.`,
 					searchText:
-						'dashboard width narrow narrower default wider full width columns layout board focus view column list startup behavior session sorting archive old sessions not opened days archive delete share export edit details move up move down switch session session card quick actions hover expanded menu Archived folder move to folder restore move back bookmark quick actions open in this tab open in new tab copy edit delete move to URL tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
+						'dashboard width narrow narrower default wider full width columns layout board focus view column list column width columns per row density compact comfortable startup behavior session sorting archive old sessions not opened days archive delete share export edit details move up move down switch session session card quick actions hover expanded menu Archived folder move to folder restore move back bookmark quick actions open in this tab open in new tab copy edit delete move to URL tracking parameters utm fbclid gclid site exclusions right-click menus open after save theme system light dark accent color',
 				},
 				{
 					title: 'Control saved data',
-					body: 'Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data.',
+					body: 'Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data. Under Data, Statistics is a read-only summary: how many sessions and saved tabs you have, how many tabs are open, the ten open tabs you have not used for the longest, and a rough memory estimate. The estimate assumes about 100 MB per loaded tab and 5 MB per unloaded tab, so use the browser Task Manager (Shift+Esc) for real figures.',
 					searchText:
-						'sessions bookmarks data delete erase export restore defaults recovery settings',
+						'sessions bookmarks data delete erase export restore defaults recovery settings statistics stats counts saved tabs open tabs oldest unused memory ram',
 				},
 			],
 			action: {label: 'Open Settings', href: 'options.html', icon: Settings2},
@@ -830,8 +901,8 @@ function Help() {
 														role="alert"
 														className="text-xs text-muted-foreground"
 													>
-														Your browser did not open the shortcuts page. Paste{' '}
-														<code>{SHORTCUTS_URL}</code> into the address bar.
+														Your browser did not open the shortcuts page.{' '}
+														{SHORTCUTS_HINT}
 													</p>
 												)}
 										</div>

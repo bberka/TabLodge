@@ -47,7 +47,8 @@ Closes this window when Escape is pressed, for the small prompt windows the serv
 export function useCloseOnEscape() {
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
+			// A key some control already used (closing a menu inside the window) does not also close it.
+			if (event.key === 'Escape' && !event.defaultPrevented) {
 				window.close();
 			}
 		};
@@ -234,13 +235,20 @@ export function restoreSummary(result: {
 One-line result of a workspace switch, for the toast after "Switch to this session".
 */
 export function switchSummary(
-	result: {saved: number; count: number; failed?: number},
+	result: {
+		saved: number;
+		count: number;
+		failed?: number;
+		savedGroupId?: string | null;
+	},
 	name: string,
 ) {
 	const parts = [
 		result.saved > 0
 			? `Saved ${plural(result.saved, 'tab')}`
-			: 'Nothing to save',
+			: result.savedGroupId
+				? 'Already saved'
+				: 'Nothing to save',
 		`opened ${plural(result.count, 'tab')} from “${name}”`,
 	];
 	if (result.failed) {
@@ -828,18 +836,6 @@ export function AppHeader({
 			<div id={MAIN_CONTENT_ID} tabIndex={-1} className="outline-none" />
 		</>
 	);
-}
-
-/**
-Opens the browser's extension-shortcuts page. Plain links to chrome:// pages are blocked, so this uses tabs.create.
-*/
-export async function openShortcutsPage(): Promise<boolean> {
-	try {
-		await chrome.tabs.create({url: 'chrome://extensions/shortcuts'});
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 // Shown in place of a page when its saved state definitively failed to load.

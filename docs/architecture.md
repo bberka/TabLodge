@@ -4,15 +4,45 @@ This guide explains how TabLodge is built, where data lives, and which behavior 
 
 ## Build and startup
 
-`scripts/build.ts` runs several Vite+ builds into `dist/tablodge/`:
+`scripts/build.ts` runs several Vite+ builds for each browser target: `dist/tablodge/` for Chromium and `dist/tablodge-firefox/` for Firefox. Both come from the same sources. Pass `--target chrome` or `--target firefox` to build one, which is also how `--watch` works (Chromium by default).
 
-* **Pages:** `vite.pages.config.ts` builds the HTML shells in `extension/` with their React entries in `src/app/`. It replaces `%APP_NAME%` in page titles, bundles assets locally, writes the manifest, and copies icons.
-* **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The manifest does not declare it as a module.
+* **Pages:** `vite.pages.config.ts` builds the HTML shells in `extension/` with their React entries in `src/app/`. It replaces `%APP_NAME%` in page titles, bundles assets locally, writes the manifest, and copies icons. The manifest source is `extension/manifest.json`, written for Chromium. `scripts/manifest-targets.ts` derives the Firefox manifest from it.
+* **Service worker:** `extension/service-worker.ts` becomes a single classic IIFE script. The Chromium manifest does not declare it as a module, and the Firefox manifest lists it under `background.scripts`, which makes it an event page.
 * **Theme boot:** `extension/theme-boot.ts` becomes a small classic script loaded synchronously in each page's head. It applies the saved theme and accent color before the first paint. The new-tab head also loads `extension/newtab-preload.ts`, starting the state request while the page bundle loads. Its React hook adopts that request, and the page stays blank until the state arrives.
 
-`scripts/verify-build.ts` checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest. After building, `scripts/package.ts` writes a versioned ZIP and SHA256 checksum under `release/`. The release workflow uses the same task.
+`scripts/verify-build.ts` verifies every target. It checks that manifest files exist, HTML references only local bundles, classic scripts parse correctly and contain no `process.env`, the theme script runs before page modules, and package metadata matches the manifest. It also checks that each manifest holds only what its browser knows: the Firefox manifest has no `service_worker`, `side_panel`, `favicon`, or `sidePanel`, and the Chromium manifest has no Firefox keys. After building, `scripts/package.ts` writes a versioned ZIP and SHA256 checksum per target under `release/`: `tablodge-<version>.zip` for Chromium, which the Chrome Web Store workflow downloads, and `tablodge-<version>-firefox.zip`. The release workflow uses the same task.
 
-Load only `dist/tablodge/` in the browser. `extension/` and the repository root are source directories. Each build recreates the output directory, so don't run two builds at once.
+Load only `dist/tablodge/` (Chromium) or `dist/tablodge-firefox/` (Firefox) in the browser. `extension/` and the repository root are source directories. Each build recreates the output directory, so don't run two builds at once.
+
+## Browser support
+
+TabLodge targets Chromium browsers (Chrome 116 or newer) and desktop Firefox 140 or newer. Firefox 140 is the first ESR release with tab groups, `tabs.group`, and the data collection permissions key. Safari and mobile browsers are not supported. Safari needs an Apple developer account and an app wrapper, and Firefox for Android lacks the bookmarks, windows, and new tab override APIs.
+
+One codebase serves both. Differences the code can find by looking for an API (`chrome.tabGroups`, `chrome.sidePanel`, `chrome.tabs.createSplit`) stay feature checks. The few that it cannot are keyed off `IS_FIREFOX` in the service worker and `isFirefox` in `src/shared/browser.ts`, both derived from the `moz-extension:` address of the extension's own pages. Page code should call the helpers in `src/shared/browser.ts` instead of testing the browser itself.
+
+| Capability | Chromium | Firefox 140 or newer |
+| --- | --- | --- |
+| Sessions: save, restore, folders, notes, archive, trash | Yes | Yes |
+| Bookmark board, imports, exports, full backup, recovery snapshots | Yes | Yes |
+| Native tab groups | Saved and recreated | Saved and recreated |
+| Split view | Restored as a split on Chromium 155 or newer | Reopens as neighboring tabs; the setting is hidden |
+| New tab page | Replaced; can be switched off in Settings | Replaced while enabled; the switch is hidden |
+| Side panel | Chromium Side Panel; can open from the toolbar button | Sidebar (`sidebar_action`); opens from the popup, the toolbar menu, or a shortcut |
+| Site icons | Browser favicon cache | Letter tile; the side panel's open tabs use the tab's own icon |
+| Private windows | Optional, with shared or separate storage | Not available; the manifest sets `incognito` to `not_allowed` |
+| Shortcuts and context menus | Yes | Yes |
+| Downloads copy of backups | Optional `downloads` permission | Optional `downloads` permission |
+| Snapshots and automatic backups (`alarms`) | Yes | Yes |
+| Updates | Chrome Web Store, or reload a manual copy | Reload the add-on; no signed listing yet |
+
+Why Firefox differs:
+
+* **Worker lifecycle.** Firefox has no extension service workers, so the same script runs as an event page. Both are non persistent and restart on events, and the code already keeps durable state in storage, so one script serves both.
+* **Starting windows.** Chromium maps `chrome://newtab/` to the new tab page. Firefox refuses `chrome:` and `about:newtab` in `tabs.create` and `windows.create`, so a restore starts its window on `about:blank` (removed once the tabs are open), and an emptied window gets a tab with no address.
+* **New tab hand off.** Chromium reports `chrome://newtab/` as a new tab's pending address, which lets the worker tell a real new tab from the dashboard opened on purpose and send it elsewhere. Firefox opens every tab as `about:blank` before the add-on's page loads, so the worker cannot tell them apart, and Firefox gives add-ons no way to open its own new tab page. The worker reports **Use TabLodge for new tabs** as on in Firefox.
+* **Sidebar.** `sidebarAction.open()` works only inside a user action, so it runs straight from the click, command, or menu handler. A toolbar button that opens the panel would need the settings read first, which loses the user action, so Firefox keeps the popup for that mode.
+* **Private windows.** Chromium offers a `split` mode with a separate extension context. Firefox has only `spanning`, where private and normal windows would share one context and one storage area, so the Firefox build opts out.
+* **Favicons.** Firefox has no `_favicon/` service. TabLodge does not request icons from sites or a third party, so it uses the tab's own icon where one is known and a letter tile otherwise.
 
 ## Names, versions, and persistent identifiers
 
@@ -116,11 +146,19 @@ Opening more than 10 saved links or bookmarks, or restoring a snapshot, also off
 
 The new tab dashboard contains sessions and bookmark columns. Settings and Help have their own pages. The popup is a compact chooser; its **Open TabLodge** action opens the dashboard. The side panel has bookmarks, sessions, and open tabs, with search and actions suited to its narrow layout.
 
+**Close duplicate tabs** (popup and side panel Tabs section) runs in the page, not the service worker. `findDuplicateTabs` in `src/app/duplicate-tabs.ts` groups web tabs from `chrome.tabs.query` in normal windows by their canonical address (the same exact match saving uses) and protects pinned and active tabs. Without one, the copy with the latest `lastAccessed` stays. The page then calls `chrome.tabs.remove`, and the Undo toast reopens each tab with `chrome.tabs.create` in its old window and index, rejoining its tab group if that still exists. No extra permission is needed and nothing is stored.
+
+The `open-palette` shortcut opens `palette.html` in a small popup window (`openPalette` in the service worker), so it works on every page, restricted ones included, and the page never sees the key. The address carries `?window=<id>`, the window that was in front. Messages from that page go through `paletteSender`, which replaces the sender tab with the active tab of that window, so a restore or save acts on the window the user came from and not on the palette's own window. A second press closes the window, and so does another window taking the focus (`useCloseWhenUnfocused`, which acts only when `chrome.windows.getCurrent()` reports a popup, so the same page opened as a tab stays open). The page reuses `FinderPaletteWindow` from `src/app/finder.tsx`, with the `standalone` option that sends links, searches, and restores to that window. Before a query is typed the finder lists the eight most recently used sessions (`lastOpenedAt`, else `updatedAt`), then open tabs and commands. The right arrow opens a second level of actions for the highlighted result (`itemActions` in `src/app/finder-menu.ts`): the search box stays the combobox, switches `aria-controls` to the actions listbox, and filters it, with a breadcrumb above and `Esc` or `Backspace` to go back. The actions use APIs the extension already has (`chrome.windows.create`, `chrome.tabs.remove`, the clipboard), so no permission changes. The shortcut is a command without a content script or the `scripting` permission, so no permission changes.
+
 The toolbar icon action is configured in **Settings › Opening TabLodge › Toolbar button action**. The side panel is an action choice alongside the popup and save actions. A shortcut and browser side panel menu can open the panel independently.
+
+The `tl` address bar keyword is handled by the service worker, which needs no permission for it. `onInputChanged` reads the library (cached until storage changes) and the open tabs, builds the finder index, and ranks it with the same scorer as the palette (`src/app/omnibox.ts`). A suggestion's content is the finder item id. `onInputEntered` maps it back: an open tab is focused, a bookmark or saved tab opens by the address bar disposition (a pinned TabLodge tab is never navigated away), a session opens the dashboard with `?group=`, and any other text opens the dashboard with `?q=`. The worker is bundled from its imports at build time, and the worker tests bundle it the same way (`tests/worker-source.ts`).
 
 **Settings › Dashboard › Dashboard width** controls the dashboard container and bookmark grid together. The default keeps the existing 1,440 pixel maximum and three column desktop grid. Wider uses up to 1,920 pixels and four columns on a 1,920 pixel viewport. Full width removes the maximum and fits as many columns as the available space allows, with a 288 pixel minimum column width. Narrower uses a 1,024 pixel maximum and two columns. Small screens still use one column where two would not fit. The worker normalizes invalid values back to the default.
 
 **Settings › Bookmark board › Bookmark view** switches between Board, the column grid, and Focus, a column list next to one open column. The same setting is available from the view button in the bookmarks toolbar. Limit bookmarks shown at a time is on by default, so columns in both views use a capped height and scroll through all of their bookmarks, and a busy column does not make the page taller. With the limit off, columns grow with the page. The worker normalizes invalid values back to Board.
+
+**Settings › Bookmark board** also has three layout settings. **Bookmark column width** (narrow, default, wide, extra wide) sets the minimum column size in Board view to 224, 288, 384, or 512 pixels at the default font size. **Columns per row** caps how many columns share a row, from 1 to 6, and Automatic (0) has no cap. When both are at their defaults, the grid follows Dashboard width as before. Otherwise the grid uses `repeat(auto-fit, minmax(...))` from `src/app/bookmark-layout.ts`, so a narrow window still shows fewer columns than the cap instead of shrinking them below the minimum. Focus view always shows one column beside the list and ignores both. **Bookmark density** (comfortable or compact) applies to Board and Focus: compact uses a smaller grid gap and tighter column header, body, row, and rail spacing, and scales the capped column height to match, so the same number of bookmarks stay visible. The worker normalizes invalid values back to Default, Automatic, and Comfortable, and clamps columns per row to 0 through 6.
 
 **Settings › Dashboard › Remove tracking parameters** is off by default. When enabled, opening saved links, copying a link with **Copy link**, restoring sessions, and restoring snapshots removes common query parameters such as `utm_source`, `fbclid`, and `gclid`. A few generic names are removed only on the sites that use them as share tracking: `s` and `t` on x.com and twitter.com status links, `ref_src`, `ref_url` and `cxt` on those hosts, and `si` on YouTube and Spotify. Saved URLs and exports keep their original values. The page helper and classic service worker maintain matching parameter lists.
 
@@ -128,7 +166,7 @@ UI primitives live in `src/components/ui/`, with composed helpers in `src/shared
 
 ## Saving and restoring sessions
 
-Save scopes include selected tabs, the current window, all windows, a native tab group, the active tab, and tabs to either side. Toolbar actions, context menus, and shortcuts share worker logic. The `save-window` shortcut uses `selected-or-window`, so a selection takes precedence over the window.
+Save scopes include selected tabs, the current window, all windows, a native tab group, the active tab, and tabs to either side. Toolbar actions, context menus, and shortcuts share worker logic. The page menu's **Send this tab to session** submenu lists the ten most recently changed sessions outside the Archived folder, plus **New session**. It adds the tab through the same path as the toolbar's current tab mode, so excluded sites, the duplicate setting, and **Close tabs after saving** apply. The menus rebuild when that list of sessions or their names change. The `save-window` shortcut uses `selected-or-window`, so a selection takes precedence over the window.
 
 Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during capture. Native group metadata is restored where browser APIs allow it.
 
@@ -138,7 +176,13 @@ The default restore destination is a new window unless the current window contai
 
 ### Switching workspaces
 
-`SWITCH_WORKSPACE` saves the window's web tabs, opens another session in the same window, and then closes the saved tabs. The save uses the normal naming and duplicate rules but leaves the tabs open and skips **Open dashboard after saving**. The restore ignores the restore target and duplicate preferences, so a URL that is already open still opens, and it follows the keep or remove preference as usual. The old tabs are closed only after the other session opened at least one tab, and only if their URL still matches what was saved. If the restore fails, the window keeps its tabs and the new session stays saved. Pinned tabs (unless saved), excluded sites, and pages that are not web pages are left alone, so the dashboard stays open. The dashboard menu item and the popup and side panel buttons are disabled while the window has no such tab (`useHasSavableTabs`, which follows tab events).
+`SWITCH_WORKSPACE` saves the window's web tabs (unless a saved session already has exactly those pages, in which case that session is reused and nothing new is saved), opens another session in the same window, and then closes the saved tabs. The save uses the normal naming and duplicate rules but leaves the tabs open and skips **Open dashboard after saving**. The restore ignores the restore target and duplicate preferences, so a URL that is already open still opens, and it follows the keep or remove preference as usual. The old tabs are closed only after the other session opened at least one tab, and only if their URL still matches what was saved. If the restore fails, the window keeps its tabs and the new session stays saved. Pinned tabs (unless saved), excluded sites, and pages that are not web pages are left alone, so the dashboard stays open. The dashboard menu item and the popup and side panel buttons are disabled while the window has no such tab (`useHasSavableTabs`, which follows tab events).
+
+### Updating and splitting sessions
+
+`UPDATE_GROUP_FROM_WINDOW` changes a session from the sender's window without touching any tab. `replace` swaps the session's links for the window's, and `append` adds the ones the session does not hold yet at the end. It captures with the same helper as a save (`captureEntriesOf`), so only web pages, no excluded sites, pinned tabs only when allowed, and split pairs recorded the same way. Duplicate handling follows **When a saved URL is saved again**: with rejection, a tab already saved in another session (or repeated in the window) is skipped, and the replaced session's own links never count as duplicates. Appending never adds an address the session already holds. A link the session already had keeps its notes, and its title unless **Title when a URL is already saved** is set to the latest. The name, folder, description, and timestamps other than `updatedAt` stay. A result over 1,000 links is refused rather than split across sessions.
+
+`SPLIT_GROUP` moves the chosen links into a new session placed right after the source in the same folder, named `<source> (split)` unless a name is given. Link IDs and notes move with them. Split pairs survive only when both halves move, and the source must keep at least one link. Both actions run in `withUndo` over the main storage key, so they follow the Undo rules above. Neither changes the stored schema, so backups and imports are unaffected.
 
 ### Titles and names
 
@@ -176,6 +220,8 @@ Moving or deleting a bookmark selection sends the existing mutation messages in 
 
 ## New tab behavior
 
+Firefox is the exception: its hand off cannot work (see [Browser support](#browser-support)), so the switch is hidden and the override stays on.
+
 Chromium declares the new tab override statically. Turning off **Use TabLodge for new tabs** cannot remove that declaration. Instead, the worker redirects newly created tabs to the browser's own page, a blank page, or a custom HTTP or HTTPS URL.
 
 `newtab.html` also asks `HANDOFF_NEW_TAB` whether a redirect is needed before rendering. A counter prevents redirect loops: after one retry, the tab goes to `about:blank`. Opening the dashboard deliberately still works. Address bar focus depends on the destination and browser.
@@ -207,3 +253,5 @@ Files above 45 MB, or expanding beyond 60 MB, are refused. All export formats ar
 ## Testing
 
 The worker harness runs the source in a fresh Node VM with mocked `chrome.*` APIs. Pure helpers also have direct unit tests. These tests cover storage and browser logic, not full browser behavior. Use the unpacked build for a manual smoke test, especially for worker restarts, native groups, split view, and side panel gestures.
+
+`tests/manifest-targets.test.ts` covers the Firefox manifest, and the worker harness has a Firefox mode (`firefox: true`) for the differences above. `vp run browser:firefox` (`scripts/firefox-smoke-check.ts`) goes one level up: it installs `dist/tablodge-firefox/` as a temporary add-on in headless Firefox through Selenium and drives the worker with its own messages. It opens all seven pages, saves a window with a pinned tab and a tab group, restores it into a new window, adds a bookmark, imports browser bookmarks, exports a full backup, and checks that data survives a browser restart. It needs Firefox installed. Selenium downloads a matching geckodriver if there is none on the `PATH`, and `FIREFOX_BIN` overrides the browser binary. Safari has no automated check because it is not supported.

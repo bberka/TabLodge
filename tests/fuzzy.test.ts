@@ -8,7 +8,7 @@ import {
 	scoreQuery,
 	searchTerms,
 } from '../src/app/fuzzy';
-import {withSearchParam} from '../src/app/page-params';
+import {paletteWindowId, withSearchParam} from '../src/app/page-params';
 
 test('a blank query matches everything and every word must match', () => {
 	assert.equal(matchesQuery('', ['Anything']), true);
@@ -258,4 +258,18 @@ test('highlighting marks only the best kind of match', () => {
 		{text: 'side', match: true},
 		{text: 'bar', match: false},
 	]);
+});
+
+test('the palette window reads the window it was opened over from its address', () => {
+	assert.equal(paletteWindowId('?window=42'), 42);
+	for (const search of [
+		'',
+		'?window=',
+		'?window=-1',
+		'?window=1.5',
+		'?window=abc',
+		'?window=99999999999',
+	]) {
+		assert.equal(paletteWindowId(search), undefined, search);
+	}
 });

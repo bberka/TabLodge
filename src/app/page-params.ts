@@ -20,6 +20,15 @@ export const newColumnRequested = (value: string | null | undefined) =>
 	value === 'new';
 
 /**
+`?window=` on palette.html: the id of the browser window the shortcut was pressed in; undefined when missing or not a whole number.
+*/
+export function paletteWindowId(search: string): number | undefined {
+	const value = new URLSearchParams(search).get('window');
+	const id = value && /^\d{1,10}$/.test(value) ? Number(value) : undefined;
+	return id !== undefined && Number.isSafeInteger(id) ? id : undefined;
+}
+
+/**
 The current address without the given query parameters, for history.replaceState.
 */
 export function stripSearchParams(

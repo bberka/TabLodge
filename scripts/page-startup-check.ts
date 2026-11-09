@@ -107,6 +107,7 @@ try {
 		'sidepanel',
 		'name-session',
 		'add-bookmark',
+		'palette',
 	]);
 	for (const pageName of [
 		'newtab',
@@ -116,6 +117,7 @@ try {
 		'sidepanel',
 		'name-session',
 		'add-bookmark',
+		'palette',
 	]) {
 		const page = pageName === 'newtab' ? dashboard : await context.newPage();
 		page.setDefaultTimeout(10_000);
@@ -188,7 +190,7 @@ try {
 	console.log(
 		`New tab dashboard ready ${Math.round(dashboardReadyMs - domContentLoadedMs)} ms after DOMContentLoaded (250 ms delayed state response).`,
 	);
-	console.log('Startup check passed for all seven extension pages.');
+	console.log('Startup check passed for all eight extension pages.');
 } finally {
 	await context?.close();
 	await rm(profile, {recursive: true, force: true});
