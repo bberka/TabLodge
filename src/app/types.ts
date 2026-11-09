@@ -70,6 +70,8 @@ export type BookmarkClickAction = LinkClickAction | 'menu';
 export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
 export type DashboardWidth = 'default' | 'wider' | 'full' | 'narrower';
 export type BookmarkBoardView = 'board' | 'focus';
+export type BookmarkColumnWidth = 'narrow' | 'default' | 'wide' | 'extra-wide';
+export type BookmarkDensity = 'comfortable' | 'compact';
 
 export type BrowserBookmarkAction = 'off' | 'ask' | 'add';
 
@@ -127,6 +129,18 @@ export type Settings = {
 	Dashboard bookmark board: columns in the same row grow to the tallest one's height (default on).
 	*/
 	stretchBookmarkColumns: boolean;
+	/**
+	Minimum width of a bookmark column in the Board view; the default keeps the grid sized by Dashboard width (default: default).
+	*/
+	bookmarkColumnWidth: BookmarkColumnWidth;
+	/**
+	Most columns in one Board row, 0 for as many as fit (default 0, up to 6).
+	*/
+	bookmarkColumnsPerRow: number;
+	/**
+	Spacing of the bookmark board; compact tightens gaps, padding, and rows (default: comfortable).
+	*/
+	bookmarkDensity: BookmarkDensity;
 	/**
 	Cap each column at the number of bookmarks below and scroll inside it (default on).
 	*/

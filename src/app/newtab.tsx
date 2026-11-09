@@ -122,6 +122,7 @@ import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {displayUrl} from './url-display';
+import {bookmarkGridTemplate} from './bookmark-layout';
 import {siteName, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
 import {InsecureMarkFor} from './insecure-mark';
@@ -445,12 +446,20 @@ function NewTab() {
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const bookmarkView = settings.bookmarkBoardView ?? 'board';
+	const compactBoard = settings.bookmarkDensity === 'compact';
+	const bookmarkGridTemplateColumns = bookmarkGridTemplate(
+		settings.bookmarkColumnWidth ?? 'default',
+		settings.bookmarkColumnsPerRow ?? 0,
+		compactBoard ? 'compact' : 'comfortable',
+	);
 	const [focusColumnId, setFocusColumnId] = useState('');
 	const [railDropId, setRailDropId] = useState<string | null>(null);
 	// The Board view caps a column when the limit setting is on, so scrolling
 	// inside the column loads the next batch instead of growing the page.
+	// Estimated row height and body padding in rem, per density.
+	const [rowRem, bodyPaddingRem] = compactBoard ? [2.1, 0.5] : [2.5, 1];
 	const cappedColumnBodyHeight = settings.limitBookmarksPerColumn
-		? `${Math.min(Math.max(bookmarkPageSize, 1), 16) * 2.5 + 1}rem`
+		? `${Math.min(Math.max(bookmarkPageSize, 1), 16) * rowRem + bodyPaddingRem}rem`
 		: undefined;
 	const changeBookmarkView = useCallback(
 		async (next: BookmarkBoardView) => {
@@ -2266,7 +2275,12 @@ function NewTab() {
 					Search titles, web addresses, and domains.
 				</EmptyState>
 			) : bookmarkView === 'focus' ? (
-				<div className="flex flex-col gap-4 md:flex-row">
+				<div
+					className={cn(
+						'flex flex-col md:flex-row',
+						compactBoard ? 'gap-2' : 'gap-4',
+					)}
+				>
 					<nav aria-label="Bookmark columns" className="md:w-56 md:shrink-0">
 						<ul className="flex gap-1 overflow-x-auto pb-1 md:block md:space-y-1 md:overflow-visible md:pb-0">
 							{focusItems.map((item) => {
@@ -2286,7 +2300,8 @@ function NewTab() {
 										aria-current={active ? 'true' : undefined}
 										aria-controls="focus-column-panel"
 										className={cn(
-											'flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm md:whitespace-normal',
+											'flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm md:whitespace-normal',
+											compactBoard ? 'py-1' : 'py-1.5',
 											active
 												? 'bg-primary/10 font-semibold text-primary'
 												: 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -2370,6 +2385,7 @@ function NewTab() {
 								scrollBody={settings.limitBookmarksPerColumn === true}
 								renderAll={settings.limitBookmarksPerColumn === true}
 								bodyMaxHeight={cappedColumnBodyHeight}
+								compact={compactBoard}
 								column={activeFocus.column}
 								selected={selectedBookmarks}
 								selectionMode={bookmarkSelectionMode}
@@ -2412,10 +2428,16 @@ function NewTab() {
 			) : (
 				<div
 					className={cn(
-						'grid gap-4',
-						bookmarkGridColumnsClass,
+						'grid',
+						compactBoard ? 'gap-2' : 'gap-4',
+						!bookmarkGridTemplateColumns && bookmarkGridColumnsClass,
 						stretchColumns ? 'items-stretch' : 'items-start',
 					)}
+					style={
+						bookmarkGridTemplateColumns
+							? {gridTemplateColumns: bookmarkGridTemplateColumns}
+							: undefined
+					}
 				>
 					{columns.map((column, index) => (
 						<BookmarkColumn
@@ -2432,6 +2454,7 @@ function NewTab() {
 							renderAll={settings.limitBookmarksPerColumn === true}
 							scrollBody={settings.limitBookmarksPerColumn === true}
 							bodyMaxHeight={cappedColumnBodyHeight}
+							compact={compactBoard}
 							dropIndicator={
 								columnDropIndicator?.columnId === column.id
 									? columnDropIndicator
@@ -2463,6 +2486,7 @@ function NewTab() {
 							renderAll={settings.limitBookmarksPerColumn === true}
 							scrollBody={settings.limitBookmarksPerColumn === true}
 							bodyMaxHeight={cappedColumnBodyHeight}
+							compact={compactBoard}
 							dropIndicator={
 								columnDropIndicator?.columnId === UNFILED_COLUMN.id
 									? columnDropIndicator
@@ -3436,6 +3460,10 @@ type BookmarkColumnProps = {
 	*/
 	renderAll?: boolean;
 	/**
+	Tighter header, body, and row spacing (the compact bookmark density).
+	*/
+	compact?: boolean;
+	/**
 	Header without the column icon, menu, or drag handle, used by Unfiled.
 	*/
 	simpleHeader?: boolean;
@@ -3472,6 +3500,7 @@ const BookmarkColumn = memo(
 		scrollBody = false,
 		bodyMaxHeight,
 		renderAll = false,
+		compact = false,
 		simpleHeader = false,
 		allowColumnDrag = true,
 		allowColumnDrop = true,
@@ -3510,7 +3539,12 @@ const BookmarkColumn = memo(
 			dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
 		const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
 		const header = simpleHeader ? (
-			<header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+			<header
+				className={cn(
+					'flex shrink-0 items-center gap-2 border-b border-border',
+					compact ? 'px-2 py-1' : 'px-3 py-2',
+				)}
+			>
 				<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
 					{column.name}
 				</h3>
@@ -3522,7 +3556,8 @@ const BookmarkColumn = memo(
 				data-drag-column={allowColumnDrag ? column.id : undefined}
 				title={allowColumnDrag ? 'Drag to reorder' : undefined}
 				className={cn(
-					'flex shrink-0 items-center gap-2 border-b border-border px-3 py-2',
+					'flex shrink-0 items-center gap-2 border-b border-border',
+					compact ? 'px-2 py-1' : 'px-3 py-2',
 					allowColumnDrag && 'cursor-grab touch-none active:cursor-grabbing',
 				)}
 				onPointerDown={
@@ -3567,12 +3602,17 @@ const BookmarkColumn = memo(
 				}
 				style={scrollBody ? {maxHeight: bodyMaxHeight} : undefined}
 				className={cn(
-					'flex flex-1 flex-col p-2',
-					scrollBody ? 'min-h-0 overflow-y-auto' : 'min-h-24',
+					'flex flex-1 flex-col',
+					compact ? 'p-1' : 'p-2',
+					scrollBody
+						? 'min-h-0 overflow-y-auto'
+						: compact
+							? 'min-h-16'
+							: 'min-h-24',
 				)}
 			>
 				{shown.length > 0 ? (
-					<div className="space-y-1">
+					<div className={compact ? undefined : 'space-y-1'}>
 						{shown.map((bookmark) => {
 							const targeted = bookmarkDrop?.targetBookmarkId === bookmark.id;
 							return (
@@ -3590,6 +3630,7 @@ const BookmarkColumn = memo(
 									clickOpensMenu={clickOpensMenu}
 									urlSettings={urlSettings}
 									quickActions={quickActions}
+									compact={compact}
 									sessions={actions}
 									onAction={actions.bookmark}
 								/>
@@ -3697,6 +3738,7 @@ type BookmarkCardProps = {
 	dropActive?: boolean;
 	canMoveEarlier?: boolean;
 	canMoveLater?: boolean;
+	compact?: boolean;
 };
 
 type UrlSettings = Pick<
@@ -3729,6 +3771,7 @@ const BookmarkCard = memo(
 		dropActive = false,
 		canMoveEarlier = false,
 		canMoveLater = false,
+		compact = false,
 	}: BookmarkCardProps) => {
 		const [menuOpen, setMenuOpen] = useState(false);
 		const act = (action: BookmarkAction) => () => {
@@ -3838,8 +3881,15 @@ const BookmarkCard = memo(
 					<article
 						draggable
 						className={cn(
-							'group relative flex min-w-0 items-center gap-1 rounded-md px-2',
-							showUrl ? 'py-1.5' : 'py-1',
+							'group relative flex min-w-0 items-center gap-1 rounded-md',
+							compact ? 'px-1.5' : 'px-2',
+							showUrl
+								? compact
+									? 'py-1'
+									: 'py-1.5'
+								: compact
+									? 'py-0.5'
+									: 'py-1',
 							'transition-colors hover:bg-muted/75',
 							(dropActive || selected) && 'bg-primary/10',
 						)}
@@ -3907,7 +3957,7 @@ const BookmarkCard = memo(
 								url={bookmark.url}
 								label={siteName(bookmark.url)}
 								className={cn(
-									showUrl ? 'h-6 w-6' : 'h-5 w-5',
+									showUrl && !compact ? 'h-6 w-6' : 'h-5 w-5',
 									'rounded',
 									selectionMode !== 'off' &&
 										(selectionMode === 'on' || selected
