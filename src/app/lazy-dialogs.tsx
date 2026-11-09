@@ -12,6 +12,7 @@ import {useRetainedValue} from '../shared/ui';
 import type {ShowStatus} from './common';
 import type * as DataTransfer from './data-transfer';
 import type * as Recovery from './recovery';
+import type * as TabStats from './tab-stats-dialog';
 
 /**
 Wraps a lazily imported dialog: nothing is loaded or mounted until `open` is first true.
@@ -55,6 +56,10 @@ export const SnapshotsDialog = lazyDialog<
 export const TrashDialog = lazyDialog<
 	ComponentProps<typeof Recovery.TrashDialog>
 >(async () => (await import('./recovery')).TrashDialog);
+
+export const TabStatsDialog = lazyDialog<
+	ComponentProps<typeof TabStats.TabStatsDialog>
+>(async () => (await import('./tab-stats-dialog')).TabStatsDialog);
 
 const RecoveryToolsLoaded = lazy(async () => ({
 	default: (await import('./recovery')).RecoveryTools,

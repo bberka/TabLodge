@@ -2031,6 +2031,35 @@ async function main() {
 			);
 
 			await check(
+				`Statistics opens by keyboard, lists tabs and returns focus (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					const opener = page.getByRole('button', {name: 'View', exact: true});
+					await opener.focus();
+					await page.keyboard.press('Enter');
+					const dialog = page.getByRole('dialog', {name: 'Statistics'});
+					await dialog.waitFor();
+					await dialog.getByRole('heading', {name: 'Open now'}).waitFor();
+					await dialog
+						.getByRole('term')
+						.filter({hasText: 'Open tabs'})
+						.waitFor();
+					assert.ok(
+						(await dialog.getByRole('list').count()) <= 1,
+						'one tab list at most',
+					);
+					await page.keyboard.press('Escape');
+					await dialog.waitFor({state: 'hidden'});
+					await until(
+						async () => (await page.locator(':focus').innerText()) === 'View',
+						'focus returns to the View button',
+					);
+					await page.close();
+				},
+			);
+
+			await check(
 				`changing import scope cancels a pending read (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'options');
