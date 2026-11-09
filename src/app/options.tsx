@@ -1021,6 +1021,8 @@ type DataRowDef = {
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const loadedSettingsRef = useRef(false);
+	// Saves still waiting for the service worker. A reload that lands meanwhile may predate them.
+	const savesInFlightRef = useRef(0);
 	const [status, showStatus] = useStatus();
 	const {theme, setTheme, accent, systemColor, setAccent} = useTheme();
 	const [settings, setSettings] = useState<Partial<Settings>>({});
@@ -1184,7 +1186,7 @@ function Options() {
 	}, []);
 
 	useEffect(() => {
-		if (!state?.settings) {
+		if (!state?.settings || savesInFlightRef.current > 0) {
 			return;
 		}
 
@@ -1249,11 +1251,18 @@ function Options() {
 		}
 
 		setSettings((current) => ({...current, [name]: value}));
+		savesInFlightRef.current += 1;
 		const result = await send('UPDATE_SETTINGS', {
 			settings: {[name]: value},
+		}).finally(() => {
+			savesInFlightRef.current -= 1;
 		});
 		if (result?.ok) {
 			showStatus(savedMessage);
+			if (savesInFlightRef.current === 0) {
+				// A reload that began before this save may still be in flight; this one supersedes it.
+				await reload();
+			}
 		} else {
 			await reload();
 			showStatus(result?.error || 'Could not save that setting.', true);
