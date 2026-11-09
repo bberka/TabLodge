@@ -3476,6 +3476,87 @@ async function main() {
 		}
 
 		for (const theme of THEMES) {
+			await check(`palette actions menu keyboard use (${theme})`, async () => {
+				const seeding = await openPage(context, extensionId, 'newtab');
+				await seed(seeding);
+				await seeding.close();
+				const page = await openPage(context, extensionId, 'palette');
+				await setTheme(page, theme);
+				const input = page.getByRole('combobox', {name: 'Search'});
+				await input.waitFor({timeout: 5000});
+				await page.keyboard.type('Lisbon trip');
+				await page
+					.getByRole('option', {name: /Lisbon trip/})
+					.first()
+					.waitFor({timeout: 2000});
+				const results = await input.getAttribute('aria-controls');
+				await page.keyboard.press('ArrowRight');
+				const menu = page.getByRole('listbox', {name: /^Actions for/});
+				await menu.waitFor({timeout: 2000});
+				assert.equal(
+					await page
+						.getByRole('combobox', {name: 'Filter actions'})
+						.getAttribute('aria-controls'),
+					await menu.getAttribute('id'),
+				);
+				assert.notStrictEqual(
+					await menu.getAttribute('id'),
+					results,
+					'The menu is its own listbox',
+				);
+				await page
+					.getByRole('navigation', {name: 'Breadcrumb'})
+					.waitFor({timeout: 1000});
+				assert.match(
+					(await page.getByRole('status').allTextContents()).join(' '),
+					/Actions for .*\d actions/,
+					'Opening the menu is announced',
+				);
+				const first = await page
+					.getByRole('combobox', {name: 'Filter actions'})
+					.getAttribute('aria-activedescendant');
+				await page.keyboard.press('ArrowDown');
+				assert.notEqual(
+					await page
+						.getByRole('combobox', {name: 'Filter actions'})
+						.getAttribute('aria-activedescendant'),
+					first,
+					'Arrow keys move through actions',
+				);
+				await page.screenshot({
+					path: `.dev/evidence/palette-actions-${theme}.png`,
+				});
+				await page.keyboard.type('window');
+				assert.equal(
+					await menu.getByRole('option').count(),
+					1,
+					'Typing filters the actions',
+				);
+				await page.keyboard.press('Backspace');
+				for (let at = 0; at < 'window'.length - 1; at++) {
+					await page.keyboard.press('Backspace');
+				}
+
+				await page.keyboard.press('Backspace');
+				await menu.waitFor({state: 'hidden', timeout: 1000});
+				assert.equal(
+					await page.locator('input[role="combobox"]:focus').count(),
+					1,
+					'Focus stays in the search box going back',
+				);
+				assert.equal(await input.inputValue(), 'Lisbon trip');
+				await page.keyboard.press('ArrowRight');
+				await menu.waitFor({timeout: 1000});
+				// Escape goes up one level first, so the window is still there afterwards.
+				await page.keyboard.press('Escape');
+				await menu.waitFor({state: 'hidden', timeout: 1000});
+				const closed = page.waitForEvent('close', {timeout: 3000});
+				await page.keyboard.press('Escape').catch(() => {});
+				await closed;
+			});
+		}
+
+		for (const theme of THEMES) {
 			await check(`bookmark selection mode and ranges (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
 				await seed(page);

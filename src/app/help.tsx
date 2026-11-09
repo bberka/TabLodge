@@ -463,11 +463,11 @@ function Help() {
 							<Key>Ctrl</Key> or <Key>⌘</Key> + <Key>Enter</Key> restores it in
 							a new window. Links and web searches open in that window&apos;s
 							active tab. Press the shortcut again or <Key>Esc</Key> to close
-							the window.
+							the window. It also closes when you click another window.
 						</>
 					),
 					searchText:
-						'any page global shortcut ctrl shift k command palette window browser pages restore session new window open search palette',
+						'any page global shortcut ctrl shift k command palette window browser pages restore session new window open search palette close click away focus',
 				},
 				{
 					title: 'Navigate results',
@@ -481,6 +481,21 @@ function Help() {
 					),
 					searchText:
 						'up down arrows navigate results enter open ctrl command cmd meta new tab escape esc close palette',
+				},
+				{
+					title: 'More actions for a result',
+					body: (
+						<>
+							Press <Key>→</Key> on a session, bookmark, saved tab, or open tab
+							(or right-click it) to see its other actions: restore a session
+							here or in a new window, reveal it on the dashboard, open a link
+							in a new tab or window, copy a link, switch to a tab, or close it.
+							Type to filter the actions. Press <Key>Esc</Key> or{' '}
+							<Key>Backspace</Key> to go back to the results.
+						</>
+					),
+					searchText:
+						'more actions sub menu submenu right arrow context menu restore here new window reveal open copy link switch close tab filter back escape backspace breadcrumb palette',
 				},
 				{
 					title: 'Search from the address bar',
