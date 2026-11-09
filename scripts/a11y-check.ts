@@ -1189,8 +1189,26 @@ async function main() {
 						['Share', 'Export session', 'Edit details', 'Move down'],
 						'session',
 					);
+					for (const label of [
+						'Archive',
+						'Share',
+						'Export session',
+						'Edit details',
+						'Move down',
+					]) {
+						assert.equal(
+							await menu
+								.getByRole('button', {
+									name: `Remove ${label}`,
+									exact: true,
+								})
+								.count(),
+							1,
+							`${label} stays selected after adding five quick actions`,
+						);
+					}
 
-					for (const label of ['Move up', 'Switch to this session']) {
+					for (const label of ['Delete', 'Move up', 'Switch to this session']) {
 						const option = menu.getByRole('button', {
 							name: `Add ${label}`,
 							exact: true,

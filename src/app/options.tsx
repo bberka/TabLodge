@@ -965,6 +965,7 @@ type DataRowDef = {
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const loadedSettingsRef = useRef(false);
+	const pendingSettingWritesRef = useRef(0);
 	const [status, showStatus] = useStatus();
 	const {theme, setTheme, accent, systemColor, setAccent} = useTheme();
 	const [settings, setSettings] = useState<Partial<Settings>>({});
@@ -1132,7 +1133,12 @@ function Options() {
 		}
 
 		loadedSettingsRef.current = true;
-		setSettings(state.settings);
+		if (pendingSettingWritesRef.current > 0) {
+			setSettings((current) => ({...state.settings, ...current}));
+		} else {
+			setSettings(state.settings);
+		}
+
 		setExcluded(state.settings.excludedOrigins || []);
 	}, [state]);
 
@@ -1187,15 +1193,22 @@ function Options() {
 			}
 		}
 
+		pendingSettingWritesRef.current += 1;
 		setSettings((current) => ({...current, [name]: value}));
-		const result = await send('UPDATE_SETTINGS', {
-			settings: {[name]: value},
-		});
-		if (result?.ok) {
-			showStatus(savedMessage);
-		} else {
-			await reload();
-			showStatus(result?.error || 'Could not save that setting.', true);
+		try {
+			const result = await send('UPDATE_SETTINGS', {
+				settings: {[name]: value},
+			});
+			if (result?.ok) {
+				showStatus(savedMessage);
+			} else {
+				showStatus(result?.error || 'Could not save that setting.', true);
+			}
+		} finally {
+			pendingSettingWritesRef.current -= 1;
+			if (pendingSettingWritesRef.current === 0) {
+				await reload();
+			}
 		}
 	}
 
