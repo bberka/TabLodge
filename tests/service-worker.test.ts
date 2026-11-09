@@ -1858,6 +1858,30 @@ test('SWITCH_WORKSPACE saves the window, opens the chosen session there, and clo
 	);
 });
 
+test('SWITCH_WORKSPACE does not save the window again when a saved session already has exactly those pages', async () => {
+	const state = stateWithSession({openDashboardAfterSave: false});
+	state.groups.push({
+		id: 'same-as-window',
+		name: 'Same as the window',
+		tabs: [
+			{id: 'a', url: 'https://saved.example/article', title: 'Article'},
+			{id: 'b', url: 'https://one.example/', title: 'One'},
+		],
+	});
+	const harness = createWorkerHarness(state, windowTabs);
+	const before = harness.state.groups.length;
+	const response = await harness.sendMessage({
+		type: 'SWITCH_WORKSPACE',
+		groupId: 'session-1',
+	});
+
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.saved, 0);
+	assert.equal(response.savedGroupId, 'same-as-window');
+	assert.equal(harness.state.groups.length, before, 'no duplicate session');
+	assert.equal(response.closed, 2, 'the window still switches over');
+});
+
 test('SWITCH_WORKSPACE keeps the window open when the chosen session cannot be restored', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({openDashboardAfterSave: false}),

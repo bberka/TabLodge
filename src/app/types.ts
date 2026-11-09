@@ -790,7 +790,8 @@ export type TabLodgeResponses = {
 	RESTORE_TAB: RestoreResult;
 	RESTORE_GROUP: RestoreResult;
 	/**
-	`saved`/`savedGroupId`: the tabs of the old window and the session they went into; `closed`: old tabs closed.
+	`saved`/`savedGroupId`: the tabs of the old window and the session they went into. When a saved session already
+	has exactly those pages, nothing is saved (`saved` is 0) and `savedGroupId` names that session. `closed`: old tabs closed.
 	*/
 	SWITCH_WORKSPACE: RestoreResult & {
 		saved: number;
