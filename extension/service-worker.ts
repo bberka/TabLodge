@@ -3665,8 +3665,8 @@ async function restoreGroup(
 }
 
 /**
-Workspace switch: saves the window's web tabs as a new session, opens another session in the same window, and then
-closes the tabs that were saved. The old tabs stay open until the other session is open, so a failed restore never
+Workspace switch: saves the window's web tabs as a new session (unless a saved session already has exactly those
+pages), opens another session in the same window, and then closes those tabs. The old tabs stay open until the other session is open, so a failed restore never
 leaves the window empty. Pinned tabs, excluded sites, and pages that are not web pages stay where they are.
 */
 async function switchWorkspace(
@@ -3695,7 +3695,20 @@ async function switchWorkspace(
 	);
 	let saved = 0;
 	let savedGroupId: string | null = null;
-	if (outgoing.size > 0) {
+	// A window that already shows a saved session (restored with "keep", say) is not saved a second time.
+	const sortedUrls = (urls: Iterable<string | null>) =>
+		[...urls].map(String).toSorted((a, b) => a.localeCompare(b));
+	const outgoingUrls = sortedUrls(outgoing.values());
+	const alreadySaved = store.groups.find((group) => {
+		const urls = sortedUrls(group.tabs.map((tab) => normalizeUrl(tab.url)));
+		return (
+			urls.length === outgoingUrls.length &&
+			urls.every((url, index) => url === outgoingUrls[index])
+		);
+	});
+	if (alreadySaved) {
+		savedGroupId = alreadySaved.id;
+	} else if (outgoing.size > 0) {
 		const save = await saveTabs('window', senderTab, DEFAULT_FOLDER_ID, {
 			tabIds: [...outgoing.keys()],
 			keepTabsOpen: true,
