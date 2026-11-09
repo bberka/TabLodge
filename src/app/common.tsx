@@ -837,18 +837,6 @@ export function AppHeader({
 	);
 }
 
-/**
-Opens the browser's extension-shortcuts page. Plain links to chrome:// pages are blocked, so this uses tabs.create.
-*/
-export async function openShortcutsPage(): Promise<boolean> {
-	try {
-		await chrome.tabs.create({url: 'chrome://extensions/shortcuts'});
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 // Shown in place of a page when its saved state definitively failed to load.
 export function LoadError({
 	message,

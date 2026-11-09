@@ -153,8 +153,8 @@ export async function openDevBrowser(
 		await context?.close().catch(() => {});
 		console.warn(
 			options.headless
-				? 'Could not launch headless Chromium. Run `vp run browser:install`, then retry `vp run dev:headless`. The build watcher is still running.'
-				: 'Could not launch a browser. Run `vp run browser:install` or set CHROME_BIN to your browser executable, then run `vp run dev` again. The build watcher is still running.',
+				? 'Could not launch headless Chromium. Run `vp run browser:install`, then retry `vp run dev:chrome:headless`. The build watcher is still running.'
+				: 'Could not launch a browser. Run `vp run browser:install` or set CHROME_BIN to your browser executable, then run `vp run dev:chrome` again. The build watcher is still running.',
 		);
 		console.warn(error instanceof Error ? error.message : String(error));
 	}

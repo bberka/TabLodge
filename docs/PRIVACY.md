@@ -34,6 +34,8 @@ TabLodge reads tab metadata to save and restore sessions, detect duplicates, sho
 
 ### Private windows
 
+The Firefox version of TabLodge does not run in private windows, so it cannot read or save them, and the rest of this section applies to Chromium browsers only.
+
 Private access requires the browser's **Allow in Incognito** permission. The first private dashboard visit requires a storage choice, also available in **Settings › Private windows**. **Share normal storage** is selected by default: anything saved privately in that mode is part of the normal library and remains after private windows close.
 
 **Separate, saved storage** keeps a private library in `chrome.storage.local`. **Separate, temporary storage** keeps a different library in `chrome.storage.session`, which clears on browser restart, not when the last private window closes or the extension worker stops. Each separate library includes its sessions, bookmarks, preferences, trash, backups, and Undo records under keys prefixed with `tablodge.private.`. The mode and setup completion are stored in `chrome.storage.local` under `tablodge.private.config`. Appearance is shared.
@@ -56,7 +58,7 @@ Exports are not encrypted. JSON, HTML, CSV, Markdown, URL lists, and full backup
 
 ## Permissions
 
-The [README permissions table](README.md#permissions-and-privacy) explains each required permission. TabLodge requests no website access.
+The [README permissions table](README.md#permissions-and-privacy) explains each required permission. TabLodge requests no website access. The Firefox version leaves out `favicon` and `sidePanel`, which only Chromium has, and declares in its manifest that it collects no data.
 
 The only optional permission is `downloads`. The browser asks for it when you turn on backup copies in Downloads. Turning that setting off removes the permission.
 

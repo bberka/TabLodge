@@ -1,20 +1,41 @@
-// Checks that the built package (dist/tablodge by default) is a loadable MV3 extension: every
-// manifest-referenced file exists, built HTML only loads local bundles, classic scripts really are
-// classic scripts, and the manifest metadata matches package.json.
+// Checks that each built package (dist/tablodge for Chromium, dist/tablodge-firefox for Firefox) is a
+// loadable MV3 extension: every manifest-referenced file exists, built HTML only loads local bundles,
+// classic scripts really are classic scripts, the manifest metadata matches package.json, and each
+// manifest holds only what its browser understands.
 //
-//   node scripts/verify-build.ts [--dir dist/tablodge]
+//   node scripts/verify-build.ts                      verify every target
+//   node scripts/verify-build.ts --target firefox     verify one target
+//   node scripts/verify-build.ts --dir path           verify the Chromium package at another path
 import {readFile, readdir, stat} from 'node:fs/promises';
 import {basename, dirname, isAbsolute, relative, resolve, sep} from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {Script} from 'node:vm';
-import {OUT_DIR, readPackageJson} from './vite-shared.ts';
+import {CHROMIUM_ONLY_PERMISSIONS} from './manifest-targets.ts';
+import {
+	TARGETS,
+	outDirFor,
+	parseTarget,
+	readPackageJson,
+	type Target,
+} from './vite-shared.ts';
 
 type Manifest = {
 	version?: string;
 	homepage_url?: string;
-	background?: {service_worker?: string; type?: string};
+	incognito?: string;
+	minimum_chrome_version?: string;
+	permissions?: string[];
+	background?: {service_worker?: string; scripts?: string[]; type?: string};
+	sidebar_action?: {default_panel?: string};
+	browser_specific_settings?: {
+		gecko?: {
+			id?: string;
+			strict_min_version?: string;
+			data_collection_permissions?: {required?: string[]};
+		};
+	};
 	action?: {
 		default_popup?: string;
 		default_icon?: string | Record<string, string>;
@@ -31,10 +52,8 @@ type Manifest = {
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const {values} = parseArgs({
-	options: {dir: {type: 'string', default: relative(projectRoot, OUT_DIR)}},
+	options: {dir: {type: 'string'}, target: {type: 'string'}},
 });
-const root = resolve(projectRoot, values.dir);
-const name = relative(projectRoot, root);
 const errors: string[] = [];
 
 const messageOf = (error: unknown) =>
@@ -116,7 +135,85 @@ async function verifyClassicScript(file: string, label: string) {
 	}
 }
 
-async function verifyExtension() {
+/**
+Checks that a manifest holds what its target browser needs and nothing the other browser's package carries.
+*/
+function verifyTargetManifest(
+	manifest: Manifest,
+	target: Target,
+	name: string,
+) {
+	if (target === 'chrome') {
+		if (!manifest.background?.service_worker) {
+			errors.push(
+				`${name}: the Chromium manifest needs background.service_worker`,
+			);
+		}
+
+		if (manifest.background?.scripts) {
+			errors.push(
+				`${name}: background.scripts belongs to the Firefox manifest`,
+			);
+		}
+
+		if (manifest.browser_specific_settings || manifest.sidebar_action) {
+			errors.push(
+				`${name}: browser_specific_settings and sidebar_action belong to the Firefox manifest`,
+			);
+		}
+
+		return;
+	}
+
+	const scripts = manifest.background?.scripts;
+	if (!scripts || scripts.length === 0) {
+		errors.push(`${name}: the Firefox manifest needs background.scripts`);
+	}
+
+	if (manifest.background?.service_worker) {
+		errors.push(
+			`${name}: Firefox has no extension service workers; remove background.service_worker`,
+		);
+	}
+
+	const permissions = manifest.permissions ?? [];
+	for (const permission of CHROMIUM_ONLY_PERMISSIONS) {
+		if (permissions.includes(permission)) {
+			errors.push(
+				`${name}: Firefox does not know the "${permission}" permission`,
+			);
+		}
+	}
+
+	if (manifest.side_panel || manifest.minimum_chrome_version) {
+		errors.push(
+			`${name}: side_panel and minimum_chrome_version belong to the Chromium manifest`,
+		);
+	}
+
+	// The dashboard shares one storage area, so the add-on stays out of private windows (Firefox has no "split").
+	if (manifest.incognito !== 'not_allowed') {
+		errors.push(
+			`${name}: the Firefox manifest must set incognito to not_allowed`,
+		);
+	}
+
+	const gecko = manifest.browser_specific_settings?.gecko;
+	if (!gecko?.id || !gecko.strict_min_version) {
+		errors.push(
+			`${name}: the Firefox manifest needs browser_specific_settings.gecko id and strict_min_version`,
+		);
+	}
+
+	if (gecko?.data_collection_permissions?.required?.join(',') !== 'none') {
+		errors.push(
+			`${name}: gecko.data_collection_permissions.required must be ["none"]`,
+		);
+	}
+}
+
+async function verifyExtension(root: string, target: Target) {
+	const name = relative(projectRoot, root);
 	const manifestPath = resolve(root, 'manifest.json');
 	if (!(await isFile(manifestPath))) {
 		errors.push(`${name}: missing manifest.json in ${root}`);
@@ -131,8 +228,12 @@ async function verifyExtension() {
 		return;
 	}
 
+	verifyTargetManifest(manifest, target, name);
+
 	const required = [
 		manifest.background?.service_worker,
+		...(manifest.background?.scripts ?? []),
+		manifest.sidebar_action?.default_panel,
 		manifest.action?.default_popup,
 		...objectPaths(manifest.action?.default_icon),
 		manifest.options_page,
@@ -161,10 +262,14 @@ async function verifyExtension() {
 
 	const classicScripts = [
 		...(manifest.content_scripts || []).flatMap((entry) => entry.js || []),
-		...(manifest.background?.service_worker &&
-		manifest.background.type !== 'module'
-			? [manifest.background.service_worker]
-			: []),
+		...(manifest.background?.type === 'module'
+			? []
+			: [
+					...(manifest.background?.service_worker
+						? [manifest.background.service_worker]
+						: []),
+					...(manifest.background?.scripts ?? []),
+				]),
 	];
 	for (const resource of classicScripts) {
 		const file = packagePath(root, root, resource, `${name}: manifest`);
@@ -298,7 +403,17 @@ async function verifyExtension() {
 	);
 }
 
-await verifyExtension();
+const targets: readonly Target[] = values.dir
+	? ['chrome']
+	: values.target === undefined || values.target === 'all'
+		? TARGETS
+		: [parseTarget(values.target)];
+for (const target of targets) {
+	await verifyExtension(
+		values.dir ? resolve(projectRoot, values.dir) : outDirFor(target),
+		target,
+	);
+}
 
 if (errors.length > 0) {
 	for (const error of errors) {
@@ -308,6 +423,6 @@ if (errors.length > 0) {
 	process.exitCode = 1;
 } else {
 	console.log(
-		`Build verification passed for ${name}: no missing package resources, source HTML references, remote scripts/styles, or module syntax in classic scripts.`,
+		`Build verification passed for ${targets.join(' and ')}: no missing package resources, source HTML references, remote scripts/styles, or module syntax in classic scripts.`,
 	);
 }

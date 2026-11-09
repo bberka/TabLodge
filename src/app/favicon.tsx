@@ -1,4 +1,5 @@
 import {memo, useState} from 'react';
+import {isFirefox} from '../shared/browser';
 import {displayUrl} from './url-display';
 import {hostOf} from './web-url';
 import {InsecureMarkFor} from './insecure-mark';
@@ -15,8 +16,14 @@ const devFaviconFor = (url: string) => {
 	}
 };
 
+// Chromium serves cached site icons to extensions at _favicon/. Firefox has no such service, and TabLodge never
+// asks a site or a third party for its icon, so there it shows the tab's own icon where one is known, else a letter tile.
 export const faviconUrl = (url: string) =>
-	chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
+	isFirefox
+		? ''
+		: chrome.runtime.getURL(
+				`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`,
+			);
 
 type FaviconProps = {
 	url: string;
@@ -41,9 +48,12 @@ decodes off the main thread, and falls back to a letter tile when no icon can be
 export const Favicon = memo(
 	({url, label, className = '', fallbackSrc}: FaviconProps) => {
 		const devFallbackSrc = devFaviconFor(url);
+		const serviceSrc = faviconUrl(url);
 		const [failed, setFailed] = useState('');
 		const [triedFallback, setTriedFallback] = useState(false);
-		if (failed === url) {
+		// Without an icon service the tab's own icon is the first choice.
+		const useFallback = Boolean(fallbackSrc) && (triedFallback || !serviceSrc);
+		if (failed === url || (!devFallbackSrc && !serviceSrc && !fallbackSrc)) {
 			return (
 				<span
 					aria-hidden="true"
@@ -57,16 +67,13 @@ export const Favicon = memo(
 		return (
 			<img
 				className={`shrink-0 object-contain ${className}`}
-				src={
-					devFallbackSrc ||
-					(triedFallback && fallbackSrc ? fallbackSrc : faviconUrl(url))
-				}
+				src={devFallbackSrc || (useFallback ? fallbackSrc : serviceSrc)}
 				alt=""
 				data-favicon=""
 				loading="lazy"
 				decoding="async"
 				onError={() => {
-					if (fallbackSrc && !triedFallback) {
+					if (fallbackSrc && serviceSrc && !triedFallback) {
 						setTriedFallback(true);
 						return;
 					}

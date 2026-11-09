@@ -171,6 +171,20 @@ const STORAGE_KEY = 'tablodge.state';
 const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
 const PRIVATE_PREFIX = 'tablodge.private.';
 const privateContext = Boolean(chrome.extension?.inIncognitoContext);
+
+// The same worker runs in Chromium (a service worker) and in Firefox (an event page). Differences the code cannot
+// find by looking for an API are keyed off this; the addresses of extension pages tell the two apart.
+const IS_FIREFOX = chrome.runtime.getURL('').startsWith('moz-extension:');
+// The page a starting window or an emptied window opens: Chromium maps `chrome://newtab/` to the new-tab page,
+// Firefox refuses `chrome:` and `about:newtab` addresses, so a window starts blank and a tab starts without an address.
+const START_WINDOW_URL = IS_FIREFOX ? 'about:blank' : 'chrome://newtab/';
+const NEW_TAB_PAGE_URL = IS_FIREFOX ? undefined : 'chrome://newtab/';
+// Chromium's Side Panel and Firefox's sidebar both show sidepanel.html; either opens only from a user action.
+const {sidebarAction} = chrome as typeof chrome & {
+	sidebarAction?: {open?: () => Promise<void>};
+};
+const HAS_SIDE_PANEL =
+	Boolean(chrome.sidePanel) || Boolean(sidebarAction?.open);
 let privateConfig: PrivateConfig = {mode: 'shared', configured: false};
 
 function normalizePrivateConfig(value: unknown): PrivateConfig {
@@ -1493,7 +1507,9 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		openDashboardOnStartup: Boolean(raw.openDashboardOnStartup),
 		startupBehavior:
 			raw.startupBehavior === 'last-session' ? 'last-session' : 'dashboard',
-		newTabEnabled: raw.newTabEnabled !== false,
+		// Firefox opens a new tab as a blank page before the add-on's page loads, so the worker cannot tell it from the
+		// dashboard being opened and cannot hand it on.
+		newTabEnabled: IS_FIREFOX || raw.newTabEnabled !== false,
 		newTabFallback: isOneOf(['browser', 'blank', 'custom'], raw.newTabFallback)
 			? raw.newTabFallback
 			: 'browser',
@@ -2341,7 +2357,7 @@ async function captureTabs(
 				windowId: window.id,
 				url: useDashboard
 					? `${DASHBOARD_URL}?group=${encodeURIComponent(group.id!)}`
-					: 'chrome://newtab/',
+					: NEW_TAB_PAGE_URL,
 				active: useDashboard,
 			});
 		}
@@ -3068,7 +3084,7 @@ async function createRestoreWindow(bounds?: Session['windowBounds']): Promise<{
 	bootstrapTabId: number | null;
 }> {
 	const properties: chrome.windows.CreateData = {
-		url: 'chrome://newtab/',
+		url: START_WINDOW_URL,
 		focused: true,
 		type: 'normal',
 		incognito: privateContext,
@@ -3089,7 +3105,7 @@ async function createRestoreWindow(bounds?: Session['windowBounds']): Promise<{
 
 		// Chromium rejects bounds that are mostly outside the visible desktop on some displays.
 		created = await chrome.windows.create({
-			url: 'chrome://newtab/',
+			url: START_WINDOW_URL,
 			focused: true,
 			type: 'normal',
 			incognito: privateContext,
@@ -8559,6 +8575,11 @@ Opens the side panel for the tab's window. Must run synchronously inside a user 
 */
 function openSidePanel(tab?: chrome.tabs.Tab) {
 	if (!chrome.sidePanel?.open) {
+		void sidebarAction?.open?.().catch(() => {
+			/*
+			The sidebar can only open from a user action; ignore refusals.
+			*/
+		});
 		return;
 	}
 
@@ -8602,10 +8623,11 @@ async function syncToolbarAction(settings: Settings) {
 		return;
 	}
 
+	// A browser that cannot open the panel from the toolbar button (Firefox, old Chromium) keeps the popup.
 	await chrome.action.setPopup({
-		popup: sidePanelEnabled
-			? ''
-			: settings.actionMode === 'popup'
+		popup:
+			settings.actionMode === 'popup' ||
+			(settings.actionMode === 'sidepanel' && !sidePanelEnabled)
 				? 'popup.html'
 				: '',
 	});
@@ -8715,7 +8737,7 @@ async function saveCurrentTabToFirstGroup(
 						windowId,
 						url: useDashboard
 							? `${DASHBOARD_URL}?group=${encodeURIComponent(group.id)}`
-							: 'chrome://newtab/',
+							: NEW_TAB_PAGE_URL,
 						active: useDashboard,
 					});
 				}
@@ -9007,7 +9029,7 @@ function contextMenuPlan(
 	if (settings.contextMenuActionEnabled) {
 		const action = {contexts: ['action']} satisfies Partial<MenuItemProperties>;
 		items.push({id: MENU.actionOpen, title: 'Open dashboard', ...action});
-		if (chrome.sidePanel) {
+		if (HAS_SIDE_PANEL) {
 			items.push({
 				id: MENU.actionSidePanel,
 				title: 'Open side panel',

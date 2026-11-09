@@ -90,7 +90,7 @@ function ResultIcon({
 	commandIcon?: IconComponent;
 }) {
 	const [failed, setFailed] = useState(false);
-	if (item.url && !failed && item.kind !== 'url') {
+	if (item.url && !failed && item.kind !== 'url' && faviconUrl(item.url)) {
 		return (
 			<img
 				src={faviconUrl(item.url)}
