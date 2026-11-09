@@ -29,6 +29,7 @@ import {Badge, Button, Input, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {SHORTCUTS_HINT, isFirefox, openShortcutsPage} from '../shared/browser';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {AppHeader, type IconComponent} from './common';
 import {PROJECT} from './project';
 
@@ -553,9 +554,9 @@ function Help() {
 					title: 'Private windows',
 					body: isFirefox
 						? `${PROJECT.name} does not run in Firefox private windows: it cannot see their tabs, so it never saves them, and its pages are not available there.`
-						: 'Enable Allow in Incognito in the browser’s extension settings, then open the dashboard from the toolbar popup or its shortcut. On the first visit, choose shared normal storage, separate saved storage, or separate temporary storage. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
+						: 'Enable Allow in Incognito in the browser’s extension settings. New private tabs redirect to the dashboard by default. Turn this off in Settings under Private windows to keep the browser’s page. You can also open the dashboard from the toolbar popup or its shortcut. On the first visit, choose the same library as regular windows, a separate saved library, or a separate temporary library. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
 					searchText:
-						'private incognito storage shared separate saved temporary restart dashboard first setup',
+						'private incognito storage shared separate saved temporary restart dashboard first setup new tab redirect',
 				},
 				{
 					title: 'Where data is stored',
@@ -963,8 +964,10 @@ function Help() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<Help />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<Help />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

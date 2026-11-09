@@ -154,6 +154,7 @@ import type {
 } from './types';
 import {ColumnSelect} from './column-select';
 import {PrivateSetupGate} from './private-storage';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {
 	BookmarkColumnPicker,
 	NEW_BOOKMARK_COLUMN,
@@ -4039,10 +4040,12 @@ const BookmarkCard = memo(
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<PrivateSetupGate>
-				<NewTab />
-			</PrivateSetupGate>
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<PrivateSetupGate>
+					<NewTab />
+				</PrivateSetupGate>
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

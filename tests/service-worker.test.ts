@@ -1697,6 +1697,60 @@ test('new tab hand-off only happens for browser-opened new tabs while TabLodge n
 	assert.equal(on.tabs[0].url, '');
 });
 
+test('private browser new tabs redirect to the dashboard by default', async () => {
+	const created = createWorkerHarness(
+		stateWithSession({newTabEnabled: false}),
+		[{id: 14, windowId: 10, index: 0, active: true, incognito: true, url: ''}],
+		{incognitoContext: true},
+	);
+	await created.fire('tabCreated', {
+		id: 14,
+		incognito: true,
+		pendingUrl: 'chrome://newtab/',
+	});
+	assert.equal(created.tabs[0].url, 'chrome-extension://tablodge/newtab.html');
+
+	const updated = createWorkerHarness(
+		stateWithSession(),
+		[{id: 15, windowId: 10, index: 0, active: true, incognito: true, url: ''}],
+		{incognitoContext: true},
+	);
+	await updated.fire('tabCreated', {id: 15, incognito: true});
+	await updated.fire(
+		'tabUpdated',
+		15,
+		{url: 'edge://newtab/'},
+		{id: 15, incognito: true, url: 'edge://newtab/'},
+	);
+	assert.equal(updated.tabs[0].url, 'chrome-extension://tablodge/newtab.html');
+});
+
+test('private new-tab redirect can be disabled without completing private setup', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession(),
+		[{id: 16, windowId: 10, index: 0, active: true, incognito: true, url: ''}],
+		{incognitoContext: true},
+	);
+	const disabled = await harness.sendMessage({
+		type: 'SET_PRIVATE_NEW_TAB_REDIRECT',
+		enabled: false,
+	});
+	assert.equal(disabled.ok, true, disabled.error);
+	assert.equal(disabled.redirectNewTabs, false);
+	assert.equal(disabled.configured, false);
+
+	await harness.sendMessage({type: 'SET_PRIVATE_CONFIG', mode: 'saved'});
+	const config = await harness.sendMessage({type: 'GET_PRIVATE_CONFIG'});
+	assert.equal(config.redirectNewTabs, false);
+
+	await harness.fire('tabCreated', {
+		id: 16,
+		incognito: true,
+		pendingUrl: 'chrome://newtab/',
+	});
+	assert.equal(harness.tabs[0].url, '');
+});
+
 test('concurrent new tabs retain separate hand-off claims', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({newTabEnabled: false}),

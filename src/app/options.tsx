@@ -124,6 +124,7 @@ import {
 	PRIVATE_STORAGE_TITLE,
 	PRIVATE_STORAGE_WORDS,
 } from './private-storage';
+import {PrivateWindowAppearance} from './private-window-appearance';
 import {cn} from '@/lib/utils';
 
 // Settings keys whose value has the given type, so switch rows only bind boolean settings and select rows string ones.
@@ -1252,20 +1253,20 @@ function Options() {
 
 		setSettings((current) => ({...current, [name]: value}));
 		savesInFlightRef.current += 1;
-		const result = await send('UPDATE_SETTINGS', {
-			settings: {[name]: value},
-		}).finally(() => {
+		try {
+			const result = await send('UPDATE_SETTINGS', {
+				settings: {[name]: value},
+			});
+			if (result?.ok) {
+				showStatus(savedMessage);
+			} else {
+				showStatus(result?.error || 'Could not save that setting.', true);
+			}
+		} finally {
 			savesInFlightRef.current -= 1;
-		});
-		if (result?.ok) {
-			showStatus(savedMessage);
 			if (savesInFlightRef.current === 0) {
-				// A reload that began before this save may still be in flight; this one supersedes it.
 				await reload();
 			}
-		} else {
-			await reload();
-			showStatus(result?.error || 'Could not save that setting.', true);
 		}
 	}
 
@@ -1988,7 +1989,7 @@ function Options() {
 						<SectionCard
 							id={sectionId(PRIVATE_STORAGE_TITLE)}
 							title={PRIVATE_STORAGE_TITLE}
-							description="Choose whether private windows share your normal library or use their own. This choice applies to all private windows."
+							description="Choose whether private windows use the same library as regular windows or a separate one. This applies to every private window."
 							icon={Database}
 							className={SECTION_SCROLL_CLASS}
 						>
@@ -3184,8 +3185,10 @@ function PageTop() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<TooltipProvider>
-			<Options />
-		</TooltipProvider>
+		<PrivateWindowAppearance>
+			<TooltipProvider>
+				<Options />
+			</TooltipProvider>
+		</PrivateWindowAppearance>
 	</ThemeProvider>,
 );

@@ -127,11 +127,11 @@ The **Open the search palette** shortcut (suggested `Ctrl+Shift+K`, `Command+Shi
 
 This applies to Chromium browsers. TabLodge does not run in Firefox private windows.
 
-Enable **Allow in Incognito** (or your browser's equivalent) in the extension's browser settings. Open the dashboard from the toolbar popup or the **Open dashboard** shortcut. Chromium does not replace the private new tab page with an extension dashboard.
+Enable **Allow in Incognito** (or your browser's equivalent) in the extension's browser settings. Chromium opens its private new tab page first, then TabLodge redirects to the dashboard by default. Turn off **Redirect private new tabs to the dashboard** in **Settings › Private windows** to keep the browser's page. You can also open the dashboard from the toolbar popup or the **Open dashboard** shortcut.
 
-On your first private dashboard visit, choose **Share normal storage** (the default), **Separate, saved storage**, or **Separate, temporary storage**. You must finish setup before using the private library. You can also configure this in **Settings › Private windows**.
+On your first private dashboard visit, choose **Use the same library as regular windows** (the default), **Use a separate saved library**, or **Use a separate temporary library**. You must finish setup before using the private library. You can also configure this in **Settings › Private windows**.
 
-Shared mode uses your normal sessions, bookmarks, and preferences. The separate modes start empty. Saved private data stays after browser restarts. Temporary data survives closing private windows and extension worker restarts, but clears on browser restart. Switching modes does not copy, merge, or delete existing libraries. Switch back to reopen one. Appearance is shared across modes. Automatic snapshots and backups do not run in private windows. Exports and manual backup downloads are ordinary files and are not cleared with temporary storage. See [Privacy](PRIVACY.md#private-windows) for storage and deletion details.
+The shared mode uses the same sessions, bookmarks, and preferences as regular windows. The separate modes start empty. Saved private data stays after browser restarts. Temporary data survives closing private windows and extension worker restarts, but clears on browser restart. Switching modes does not copy, merge, or delete existing libraries. Switch back to reopen one. Appearance is shared across modes. Automatic snapshots and backups do not run in private windows. Exports and manual backup downloads are ordinary files and are not cleared with temporary storage. See [Privacy](PRIVACY.md#private-windows) for storage and deletion details.
 
 ### Move from a manual installation to the Chrome Web Store
 

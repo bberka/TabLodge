@@ -11,6 +11,7 @@ import {
 	DialogTitle,
 	RadioCard,
 	RadioCardGroup,
+	Switch,
 } from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
 import type {PrivateConfig, PrivateStorageMode} from './types';
@@ -31,6 +32,8 @@ export const PRIVATE_STORAGE_WORDS = [
 	'temporary',
 	'restart',
 	'private',
+	'new tab',
+	'redirect',
 ];
 
 const choices: Array<{
@@ -40,23 +43,29 @@ const choices: Array<{
 }> = [
 	{
 		value: 'shared',
-		title: 'Share normal storage',
+		title: 'Use the same library as regular windows',
 		description:
-			'Use the same sessions, bookmarks, and preferences in normal and private windows. Changes appear in both.',
+			'Private and regular windows use the same sessions, bookmarks, and preferences. Changes appear in both.',
 	},
 	{
 		value: 'saved',
-		title: 'Separate, saved storage',
+		title: 'Use a separate saved library',
 		description:
-			'Start with an empty private library. Keep it on this device after private windows close and the browser restarts.',
+			'Start with an empty library for private windows. Keep it on this device after the browser restarts.',
 	},
 	{
 		value: 'temporary',
-		title: 'Separate, temporary storage',
+		title: 'Use a separate temporary library',
 		description:
-			'Start with an empty private library. Keep it when private windows close, but clear it when the browser restarts.',
+			'Start with an empty library for private windows. It stays when those windows close, then clears when the browser restarts.',
 	},
 ];
+
+const modeStatus: Record<PrivateStorageMode, string> = {
+	shared: 'Private windows will use the same library as regular windows.',
+	saved: 'Private windows will use a separate saved library.',
+	temporary: 'Private windows will use a separate temporary library.',
+};
 
 function PrivateStorageForm({
 	config,
@@ -106,7 +115,7 @@ function PrivateStorageForm({
 			}}
 		>
 			<RadioCardGroup
-				label="Private window storage"
+				label="Choose a library for private windows"
 				value={mode}
 				disabled={busy || disabled}
 				onValueChange={(value) => {
@@ -151,7 +160,36 @@ function PrivateStorageForm({
 export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [config, setConfig] = useState<PrivateConfig>();
 	const [incognitoAllowed, setIncognitoAllowed] = useState<boolean>();
+	const [savingRedirect, setSavingRedirect] = useState(false);
 	const [error, setError] = useState('');
+	const saveRedirect = async (enabled: boolean) => {
+		if (!config || savingRedirect) {
+			return;
+		}
+
+		setSavingRedirect(true);
+		setError('');
+		try {
+			const result = await send('SET_PRIVATE_NEW_TAB_REDIRECT', {enabled});
+			if (!result.ok) {
+				throw new Error(result.error);
+			}
+
+			setConfig(result);
+			showStatus(
+				enabled
+					? 'New private tabs will open the TabLodge dashboard.'
+					: 'New private tabs will use the browser’s page.',
+			);
+		} catch (reason) {
+			setError(
+				messageOf(reason) || 'Could not save the private new tab setting.',
+			);
+		} finally {
+			setSavingRedirect(false);
+		}
+	};
+
 	useEffect(() => {
 		const checkAccess = () => {
 			void chrome.extension
@@ -206,9 +244,9 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 		<>
 			{incognitoAllowed !== false && (
 				<p className="mb-4 text-sm text-muted-foreground">
-					Open the private dashboard from the toolbar popup or the Open
-					dashboard shortcut. The browser does not replace its private new tab
-					page.
+					Chromium does not let extensions replace the private new tab page.
+					Turn on the option below to redirect new private tabs to the dashboard
+					after they open.
 				</p>
 			)}
 			{error && <p role="alert">{error}</p>}
@@ -224,18 +262,42 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 				</p>
 			)}
 			{config && incognitoAllowed === true && (
-				<PrivateStorageForm
-					key={`${config.mode}:${config.configured}`}
-					config={config}
-					showContinue={false}
-					onSaved={(next) => {
-						setConfig(next);
-						const title =
-							choices.find((choice) => choice.value === next.mode)?.title ??
-							'updated';
-						showStatus(`Private window storage set to ${title}.`);
-					}}
-				/>
+				<div className="space-y-5">
+					<div className="flex items-start justify-between gap-4 border-b border-border pb-5">
+						<div className="space-y-1">
+							<label
+								htmlFor="private-new-tab-redirect"
+								className="block font-medium"
+							>
+								Redirect private new tabs to the dashboard
+							</label>
+							<p
+								id="private-new-tab-redirect-description"
+								className="text-sm text-muted-foreground"
+							>
+								The browser opens its private new tab first, then TabLodge
+								redirects it to the dashboard. Turn this off to keep the
+								browser’s page.
+							</p>
+						</div>
+						<Switch
+							id="private-new-tab-redirect"
+							checked={config.redirectNewTabs}
+							disabled={savingRedirect}
+							aria-describedby="private-new-tab-redirect-description"
+							onCheckedChange={(enabled) => void saveRedirect(enabled)}
+						/>
+					</div>
+					<PrivateStorageForm
+						key={`${config.mode}:${config.configured}`}
+						config={config}
+						showContinue={false}
+						onSaved={(next) => {
+							setConfig(next);
+							showStatus(modeStatus[next.mode]);
+						}}
+					/>
+				</div>
 			)}
 		</>
 	);
@@ -265,7 +327,19 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 			changes: Record<string, chrome.storage.StorageChange>,
 			area: chrome.storage.AreaName,
 		) => {
-			if (!(area === 'local' && Object.hasOwn(changes, PRIVATE_CONFIG_KEY))) {
+			if (area !== 'local' || !Object.hasOwn(changes, PRIVATE_CONFIG_KEY)) {
+				return;
+			}
+
+			const {newValue, oldValue} = changes[PRIVATE_CONFIG_KEY];
+			const previous = oldValue as PrivateConfig | undefined;
+			const next = newValue as PrivateConfig | undefined;
+			if (
+				previous &&
+				next &&
+				previous.mode === next.mode &&
+				previous.configured === next.configured
+			) {
 				return;
 			}
 
@@ -292,26 +366,7 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 	}
 
 	if (config?.configured) {
-		return (
-			<>
-				<aside
-					aria-label="Private storage"
-					className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-b border-border bg-muted px-5 py-2 text-sm"
-				>
-					<span>
-						{choices.find((choice) => choice.value === config.mode)?.title}
-					</span>
-					<a
-						data-private-settings
-						href="options.html#settings-private-windows"
-						className="rounded-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					>
-						Change private storage
-					</a>
-				</aside>
-				{children}
-			</>
-		);
+		return children;
 	}
 
 	return (

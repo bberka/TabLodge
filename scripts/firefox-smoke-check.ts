@@ -13,7 +13,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import process from 'node:process';
 import {By, until} from 'selenium-webdriver';
-import type firefox from 'selenium-webdriver/firefox.js';
+import type * as Firefox from 'selenium-webdriver/firefox.js';
 import {
 	evaluateInPage,
 	launchFirefox,
@@ -44,7 +44,7 @@ await new Promise<void>((resolve) => {
 });
 const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 const profile = await mkdtemp(join(tmpdir(), 'tablodge-firefox-'));
-let driver: firefox.Driver | undefined;
+let driver: Firefox.Driver | undefined;
 let steps = 0;
 const pass = (message: string) => {
 	console.log(`ok   ${message}`);

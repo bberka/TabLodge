@@ -6,15 +6,17 @@
 // need to sign it. It is pinned to a fixed internal UUID so its pages have a known address.
 import assert from 'node:assert/strict';
 import process from 'node:process';
-import firefox from 'selenium-webdriver/firefox.js';
+import firefoxModule from 'selenium-webdriver/firefox.js';
+import type * as Firefox from 'selenium-webdriver/firefox.js';
 import {GECKO_ID} from './manifest-targets.ts';
 import {outDirFor} from './vite-shared.ts';
 
 const UUID = '7a1f0c2e-5b7d-4f43-9a41-4f1c2b9d0a11';
-export const EXTENSION_BASE = `moz-extension://${UUID}/`;
+const firefox = firefoxModule as typeof Firefox;
+const EXTENSION_BASE = `moz-extension://${UUID}/`;
 
 export type FirefoxSession = {
-	driver: firefox.Driver;
+	driver: Firefox.Driver;
 	/**
 	The geckodriver address; a WebDriver client can attach to the session through it.
 	*/
@@ -61,7 +63,7 @@ export async function launchFirefox(
 /**
 Opens an extension page in a new tab and switches to it.
 */
-export async function openExtensionPage(driver: firefox.Driver, page: string) {
+export async function openExtensionPage(driver: Firefox.Driver, page: string) {
 	const before = await driver.getAllWindowHandles();
 	await driver.setContext(firefox.Context.CHROME);
 	await driver.executeScript(
@@ -102,7 +104,7 @@ const EVALUATE_WRAPPER = [
 Runs an async function body in the current extension page, where `chrome.*` is the add-on's own API.
 */
 export async function evaluateInPage<T>(
-	driver: firefox.Driver,
+	driver: Firefox.Driver,
 	body: string,
 ): Promise<T> {
 	const raw = await driver.executeAsyncScript<string>(
