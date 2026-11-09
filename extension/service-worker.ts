@@ -21,6 +21,7 @@ type SavedTab = import('../src/app/types').SavedTab;
 type SaveScope = import('../src/app/types').SaveScope;
 type Session = import('../src/app/types').Session;
 type SessionFields = import('../src/app/types').SessionFields;
+type SessionWindowMode = import('../src/app/types').SessionWindowMode;
 type SplitInfo = import('../src/app/types').SplitInfo;
 type Settings = import('../src/app/types').Settings;
 type Store = import('../src/app/types').Store;
@@ -2075,20 +2076,23 @@ async function getWindowGroups(
 	}
 }
 
-async function captureTabs(
+type CaptureEntry = {
+	sourceTabId: number | undefined;
+	splitViewId: number | null;
+	saved: SavedTab;
+};
+
+/**
+The tabs a save would store, before duplicate handling: web pages only, no excluded sites, pinned tabs only when allowed.
+*/
+async function captureEntriesOf(
 	tabs: chrome.tabs.Tab[],
 	window: PopulatedWindow,
 	settings: Settings,
-	store: Store,
-	folderId = DEFAULT_FOLDER_ID,
-	useNativeGroupTitle = false,
-	requestedName = '',
-	windowNumber = 0,
-	saveWindowBounds = false,
-): Promise<CaptureResult | null> {
-	const timestamp = Date.now();
+	timestamp: number,
+): Promise<CaptureEntry[]> {
 	const nativeGroups = await getWindowGroups(window.id);
-	const captureEntries = tabs
+	return tabs
 		.filter(
 			(tab) =>
 				(!tab.pinned || settings.includePinnedTabs) &&
@@ -2119,6 +2123,60 @@ async function captureTabs(
 				// IsCapturable guarantees a web URL;
 			} as SavedTab,
 		}));
+}
+
+/**
+Gives both halves of each split view in `entries` a shared pair key. Call it only after exclusions, pinned
+filtering, and duplicate rejection, so a pair whose partner was dropped is stored as a plain tab.
+*/
+function assignSplitPairs(entries: CaptureEntry[]) {
+	const splitMembers = new Map<number, CaptureEntry[]>();
+	for (const entry of entries) {
+		if (entry.splitViewId === null) {
+			continue;
+		}
+
+		splitMembers.set(entry.splitViewId, [
+			...(splitMembers.get(entry.splitViewId) || []),
+			entry,
+		]);
+	}
+
+	for (const members of splitMembers.values()) {
+		if (members.length !== 2) {
+			continue;
+		}
+
+		const pairKey = makeId();
+		for (const [position, entry] of members
+			.toSorted((a, b) => a.saved.originalIndex - b.saved.originalIndex)
+			.entries()) {
+			entry.saved.split = {
+				id: pairKey,
+				position: position as SplitInfo['position'],
+			};
+		}
+	}
+}
+
+async function captureTabs(
+	tabs: chrome.tabs.Tab[],
+	window: PopulatedWindow,
+	settings: Settings,
+	store: Store,
+	folderId = DEFAULT_FOLDER_ID,
+	useNativeGroupTitle = false,
+	requestedName = '',
+	windowNumber = 0,
+	saveWindowBounds = false,
+): Promise<CaptureResult | null> {
+	const timestamp = Date.now();
+	const captureEntries = await captureEntriesOf(
+		tabs,
+		window,
+		settings,
+		timestamp,
+	);
 	if (captureEntries.length === 0) {
 		return null;
 	}
@@ -2183,35 +2241,7 @@ async function captureTabs(
 		newEntries.push(entry);
 	}
 
-	// Split info is assigned only after exclusions, pinned filtering, and duplicate rejection, so a pair whose
-	// partner was dropped is stored as a plain tab.
-	const splitMembers = new Map<number, typeof newEntries>();
-	for (const entry of newEntries) {
-		if (entry.splitViewId === null) {
-			continue;
-		}
-
-		splitMembers.set(entry.splitViewId, [
-			...(splitMembers.get(entry.splitViewId) || []),
-			entry,
-		]);
-	}
-
-	for (const members of splitMembers.values()) {
-		if (members.length !== 2) {
-			continue;
-		}
-
-		const pairKey = makeId();
-		for (const [position, entry] of members
-			.toSorted((a, b) => a.saved.originalIndex - b.saved.originalIndex)
-			.entries()) {
-			entry.saved.split = {
-				id: pairKey,
-				position: position as SplitInfo['position'],
-			};
-		}
-	}
+	assignSplitPairs(newEntries);
 
 	const captured = pairSplits(newEntries.map(({saved}) => saved));
 
@@ -4220,6 +4250,179 @@ async function addLinksToSession(
 			group.updatedAt = now;
 			await writeStore(store);
 			return {ok: true, added: added.length, skipped};
+		}),
+	);
+}
+
+/**
+Replaces a session's links with the sender's window, or appends the window's links the session lacks. No tab is opened
+or closed. The save rules apply: web pages only, no excluded sites, pinned tabs only when allowed, and the save duplicate
+setting (a replaced session's own links never count as duplicates). A link the session already held keeps its notes
+(and its title unless the setting prefers the latest). Name, folder, and description stay. Undo restores the session.
+*/
+async function updateGroupFromWindow(
+	groupId: string,
+	mode: SessionWindowMode,
+	senderTab: chrome.tabs.Tab | undefined,
+): Promise<ActionResult<'UPDATE_GROUP_FROM_WINDOW'>> {
+	if (mode !== 'replace' && mode !== 'append') {
+		return {ok: false, error: 'Choose replace or append.'};
+	}
+
+	return mutate(() =>
+		withUndo(
+			mode === 'replace' ? 'Replace session contents' : 'Add window to session',
+			[STORAGE_KEY],
+			async () => {
+				const store = await getStore();
+				const group = findGroup(store, groupId);
+				if (!group) {
+					return {ok: false, error: 'That saved session no longer exists.'};
+				}
+
+				const windowId = await currentWindowId(senderTab);
+				if (!isInteger(windowId)) {
+					return {ok: false, error: 'Open a browser window first.'};
+				}
+
+				const win = (await chrome.windows.get(windowId, {
+					populate: true,
+				})) as PopulatedWindow;
+				const {settings} = store;
+				const now = Date.now();
+				const entries = await captureEntriesOf(win.tabs, win, settings, now);
+				const own = new Map(group.tabs.map((tab) => [tab.url, tab]));
+				const known = new Map(own);
+				const elsewhere = new Set<string>();
+				for (const other of store.groups) {
+					if (other === group) {
+						continue;
+					}
+
+					for (const tab of other.tabs) {
+						elsewhere.add(tab.url);
+						if (!known.has(tab.url)) {
+							known.set(tab.url, tab);
+						}
+					}
+				}
+
+				const reject = settings.saveDuplicateHandling === 'reject';
+				const kept: CaptureEntry[] = [];
+				const seen = new Set<string>();
+				let skipped = 0;
+				for (const entry of entries) {
+					const {url} = entry.saved;
+					const existing = known.get(url);
+					if (
+						(mode === 'append' && own.has(url)) ||
+						(reject && (elsewhere.has(url) || seen.has(url)))
+					) {
+						skipped += 1;
+						continue;
+					}
+
+					seen.add(url);
+					if (existing) {
+						entry.saved.notes = existing.notes || '';
+						if (settings.saveDuplicateTitle !== 'latest') {
+							entry.saved.title = existing.title;
+						}
+					}
+
+					kept.push(entry);
+				}
+
+				assignSplitPairs(kept);
+				const incoming = pairSplits(kept.map(({saved}) => saved));
+				if (incoming.length === 0) {
+					return {
+						ok: false,
+						error:
+							skipped > 0
+								? 'Every tab in this window is already saved.'
+								: 'There are no unpinned web tabs to save.',
+					};
+				}
+
+				const tabs =
+					mode === 'replace' ? incoming : [...group.tabs, ...incoming];
+				if (tabs.length > MAX_TABS_PER_SESSION) {
+					return {ok: false, error: sessionFullError()};
+				}
+
+				const before = new Set(group.tabs.map((tab) => tab.url));
+				const after = new Set(tabs.map((tab) => tab.url));
+				const result = {
+					count: tabs.length,
+					added: incoming.filter((tab) => !before.has(tab.url)).length,
+					removed: group.tabs.filter((tab) => !after.has(tab.url)).length,
+					skipped,
+				};
+				group.tabs = tabs;
+				group.updatedAt = now;
+				await writeStore(store);
+				return {ok: true, ...result};
+			},
+		),
+	);
+}
+
+/**
+Moves the chosen links into a new session placed right after the source, in the same folder. Undo restores the source.
+*/
+async function splitGroup(
+	groupId: string,
+	tabIds: string[] = [],
+	requestedName = '',
+): Promise<ActionResult<'SPLIT_GROUP'>> {
+	return mutate(() =>
+		withUndo('Split session', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			const group = findGroup(store, groupId);
+			if (!group) {
+				return {ok: false, error: 'That saved session no longer exists.'};
+			}
+
+			const chosen = new Set(Array.isArray(tabIds) ? tabIds.map(String) : []);
+			const moved = group.tabs.filter((tab) => chosen.has(tab.id));
+			if (moved.length === 0) {
+				return {ok: false, error: 'Select the links to move first.'};
+			}
+
+			if (moved.length === group.tabs.length) {
+				return {
+					ok: false,
+					error:
+						'Leave at least one link in the session, or rename it instead.',
+				};
+			}
+
+			if (store.groups.length >= MAX_SESSIONS) {
+				return {ok: false, error: sessionLimitError()};
+			}
+
+			const now = Date.now();
+			group.tabs = pairSplits(group.tabs.filter((tab) => !chosen.has(tab.id)));
+			group.updatedAt = now;
+			const created: Session = {
+				id: makeId(),
+				name: cleanText(
+					requestedName || `${group.name.slice(0, 100)} (split)`,
+					'Saved session',
+					120,
+				),
+				folderId: group.folderId,
+				description: '',
+				createdAt: now,
+				updatedAt: now,
+				sourceWindowName: group.sourceWindowName,
+				sourceWindowId: group.sourceWindowId,
+				tabs: pairSplits(moved),
+			};
+			store.groups.splice(store.groups.indexOf(group) + 1, 0, created);
+			await writeStore(store);
+			return {ok: true, groupId: created.id, count: moved.length};
 		}),
 	);
 }
@@ -8311,6 +8514,22 @@ async function handleMessage(
 				message.links,
 				message.targetTabId || null,
 				message.position,
+			);
+		}
+
+		case 'UPDATE_GROUP_FROM_WINDOW': {
+			return updateGroupFromWindow(
+				String(message.groupId),
+				message.mode,
+				sender.tab,
+			);
+		}
+
+		case 'SPLIT_GROUP': {
+			return splitGroup(
+				String(message.groupId),
+				message.tabIds,
+				typeof message.name === 'string' ? message.name : '',
 			);
 		}
 
