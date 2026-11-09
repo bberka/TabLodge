@@ -12,7 +12,11 @@ export type ActionMode =
 	| 'current-tab'
 	| 'current-tab-to-group';
 export type PrivateStorageMode = 'shared' | 'saved' | 'temporary';
-export type PrivateConfig = {mode: PrivateStorageMode; configured: boolean};
+export type PrivateConfig = {
+	mode: PrivateStorageMode;
+	configured: boolean;
+	redirectNewTabs: boolean;
+};
 export type RestoreTarget =
 	'current-window' | 'new-window-unless-only-tab' | 'always-new-window';
 export type RestoreMode = 'keep' | 'remove';
@@ -530,6 +534,7 @@ Every message the TabLodge pages send to the service worker, keyed by `type`.
 export type TabLodgeMessages = {
 	GET_PRIVATE_CONFIG: {};
 	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
+	SET_PRIVATE_NEW_TAB_REDIRECT: {enabled: boolean};
 	GET_STATE: {};
 	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
@@ -779,6 +784,7 @@ Success payload of each message (merged with `{ ok: true }`). Fields marked opti
 export type TabLodgeResponses = {
 	GET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_CONFIG: PrivateConfig;
+	SET_PRIVATE_NEW_TAB_REDIRECT: PrivateConfig;
 	GET_STATE: Store;
 	GET_SETTINGS_DEFAULTS: {settings: Settings};
 	SAVE_TABS: SaveResult;

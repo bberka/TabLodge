@@ -1892,7 +1892,7 @@ function Options() {
 						<SectionCard
 							id={sectionId(PRIVATE_STORAGE_TITLE)}
 							title={PRIVATE_STORAGE_TITLE}
-							description="Choose whether private windows share your normal library or use their own. This choice applies to all private windows."
+							description="Choose whether private windows use the same library as regular windows or a separate one. This applies to every private window."
 							icon={Database}
 							className={SECTION_SCROLL_CLASS}
 						>

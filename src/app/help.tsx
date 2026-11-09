@@ -482,9 +482,9 @@ function Help() {
 			entries: [
 				{
 					title: 'Private windows',
-					body: 'Enable Allow in Incognito in the browser’s extension settings, then open the dashboard from the toolbar popup or its shortcut. On the first visit, choose shared normal storage, separate saved storage, or separate temporary storage. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
+					body: 'Enable Allow in Incognito in the browser’s extension settings. New private tabs redirect to the dashboard by default. Turn this off in Settings under Private windows to keep the browser’s page. On the first visit, choose the same library as regular windows, a separate saved library, or a separate temporary library. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
 					searchText:
-						'private incognito storage shared separate saved temporary restart dashboard first setup',
+						'private incognito storage shared separate saved temporary restart dashboard first setup new tab redirect',
 				},
 				{
 					title: 'Where data is stored',

@@ -171,7 +171,11 @@ const STORAGE_KEY = 'tablodge.state';
 const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
 const PRIVATE_PREFIX = 'tablodge.private.';
 const privateContext = Boolean(chrome.extension?.inIncognitoContext);
-let privateConfig: PrivateConfig = {mode: 'shared', configured: false};
+let privateConfig: PrivateConfig = {
+	mode: 'shared',
+	configured: false,
+	redirectNewTabs: true,
+};
 
 function normalizePrivateConfig(value: unknown): PrivateConfig {
 	const raw = isRecord(value) ? value : {};
@@ -180,6 +184,7 @@ function normalizePrivateConfig(value: unknown): PrivateConfig {
 	return {
 		mode,
 		configured: raw.configured === true && raw.mode === mode,
+		redirectNewTabs: raw.redirectNewTabs !== false,
 	};
 }
 
@@ -5744,6 +5749,36 @@ async function eraseData(
 const NEW_TAB_URL = /^(?:chrome|brave|edge):\/\/(?:newtab|new-tab-page)\/?$/;
 const CLAIMS_KEY = 'newTabClaims';
 const claimsMutate = serialQueue();
+const privateNewTabRedirects = new Set<number>();
+
+function redirectPrivateNewTab(
+	tab: chrome.tabs.Tab,
+	url = tab.pendingUrl || tab.url || '',
+) {
+	if (
+		!privateContext ||
+		!tab.incognito ||
+		!isInteger(tab.id) ||
+		!NEW_TAB_URL.test(url) ||
+		privateNewTabRedirects.has(tab.id)
+	) {
+		return;
+	}
+
+	const tabId = tab.id;
+	privateNewTabRedirects.add(tabId);
+	void privateConfigReady.then(async () => {
+		if (!privateConfig.redirectNewTabs) {
+			return;
+		}
+
+		try {
+			await chrome.tabs.update(tabId, {
+				url: chrome.runtime.getURL('newtab.html'),
+			});
+		} catch {}
+	});
+}
 
 async function readClaims(): Promise<Record<string, number>> {
 	try {
@@ -5826,11 +5861,20 @@ async function handOffNewTab(
 }
 
 chrome.tabs.onCreated?.addListener((tab) => {
-	if (isInteger(tab.id) && NEW_TAB_URL.test(tab.pendingUrl || tab.url || '')) {
+	redirectPrivateNewTab(tab);
+	if (
+		isInteger(tab.id) &&
+		NEW_TAB_URL.test(tab.pendingUrl || tab.url || '') &&
+		!privateContext
+	) {
 		void handOffNewTab(tab.id, false, true);
 	}
 });
+chrome.tabs.onUpdated?.addListener((_tabId, change, tab) => {
+	redirectPrivateNewTab(tab, change.url);
+});
 chrome.tabs.onRemoved?.addListener((tabId) => {
+	privateNewTabRedirects.delete(tabId);
 	void claimsMutate(async () => {
 		const claims = await readClaims();
 		const {[String(tabId)]: gone, ...rest} = claims;
@@ -8144,9 +8188,12 @@ async function handleMessage(
 	if (
 		privateContext &&
 		!privateConfig.configured &&
-		!['GET_PRIVATE_CONFIG', 'SET_PRIVATE_CONFIG', 'HANDOFF_NEW_TAB'].includes(
-			message?.type || '',
-		)
+		![
+			'GET_PRIVATE_CONFIG',
+			'SET_PRIVATE_CONFIG',
+			'SET_PRIVATE_NEW_TAB_REDIRECT',
+			'HANDOFF_NEW_TAB',
+		].includes(message?.type || '')
 	) {
 		return {
 			ok: false,
@@ -8164,7 +8211,25 @@ async function handleMessage(
 				return {ok: false, error: 'Choose a valid private storage mode.'};
 			}
 
-			const config: PrivateConfig = {mode: message.mode, configured: true};
+			const config: PrivateConfig = {
+				...privateConfig,
+				mode: message.mode,
+				configured: true,
+			};
+			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
+			await mutationQueue;
+			return {ok: true, ...config};
+		}
+
+		case 'SET_PRIVATE_NEW_TAB_REDIRECT': {
+			if (typeof message.enabled !== 'boolean') {
+				return {
+					ok: false,
+					error: 'Choose whether private new tabs open the TabLodge dashboard.',
+				};
+			}
+
+			const config = {...privateConfig, redirectNewTabs: message.enabled};
 			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
 			await mutationQueue;
 			return {ok: true, ...config};

@@ -11,6 +11,7 @@ import {
 	DialogTitle,
 	RadioCard,
 	RadioCardGroup,
+	Switch,
 } from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
 import type {PrivateConfig, PrivateStorageMode} from './types';
@@ -31,6 +32,8 @@ export const PRIVATE_STORAGE_WORDS = [
 	'temporary',
 	'restart',
 	'private',
+	'new tab',
+	'redirect',
 ];
 
 const choices: Array<{
@@ -40,23 +43,62 @@ const choices: Array<{
 }> = [
 	{
 		value: 'shared',
-		title: 'Share normal storage',
+		title: 'Use the same library as regular windows',
 		description:
-			'Use the same sessions, bookmarks, and preferences in normal and private windows. Changes appear in both.',
+			'Private and regular windows use the same sessions, bookmarks, and preferences. Changes appear in both.',
 	},
 	{
 		value: 'saved',
-		title: 'Separate, saved storage',
+		title: 'Use a separate saved library',
 		description:
-			'Start with an empty private library. Keep it on this device after private windows close and the browser restarts.',
+			'Start with an empty library for private windows. Keep it on this device after the browser restarts.',
 	},
 	{
 		value: 'temporary',
-		title: 'Separate, temporary storage',
+		title: 'Use a separate temporary library',
 		description:
-			'Start with an empty private library. Keep it when private windows close, but clear it when the browser restarts.',
+			'Start with an empty library for private windows. It stays when those windows close, then clears when the browser restarts.',
 	},
 ];
+
+const modeSummary: Record<PrivateStorageMode, string> = {
+	shared: 'Same library as regular windows',
+	saved: 'Separate library saved on this device',
+	temporary: 'Separate library clears on browser restart',
+};
+
+const modeStatus: Record<PrivateStorageMode, string> = {
+	shared: 'Private windows will use the same library as regular windows.',
+	saved: 'Private windows will use a separate saved library.',
+	temporary: 'Private windows will use a separate temporary library.',
+};
+
+function PrivateWindowMark({className}: {className: string}) {
+	return (
+		<svg
+			aria-hidden="true"
+			className={className}
+			viewBox="0 0 64 64"
+			fill="none"
+		>
+			<path
+				d="M12 24c.7-6.2 4.5-10.7 10.6-12.8l3-4.7h12.8l3 4.7C47.5 13.3 51.3 17.8 52 24H12Z"
+				fill="currentColor"
+			/>
+			<path
+				d="M5.5 27h53c.8 0 1.3.8.9 1.5-2.2 4.3-9.2 6.4-27.4 6.4S6.8 32.8 4.6 28.5c-.4-.7.1-1.5.9-1.5Z"
+				fill="currentColor"
+			/>
+			<path
+				d="M8 40h5m38 0h5M28.5 40h7M13 39.5h15l-1.4 7a6.4 6.4 0 0 1-12.5 0l-1.1-7Zm23 0h15l-1.1 7a6.4 6.4 0 0 1-12.5 0l-1.4-7Z"
+				stroke="currentColor"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth="3"
+			/>
+		</svg>
+	);
+}
 
 function PrivateStorageForm({
 	config,
@@ -106,7 +148,7 @@ function PrivateStorageForm({
 			}}
 		>
 			<RadioCardGroup
-				label="Private window storage"
+				label="Choose a library for private windows"
 				value={mode}
 				disabled={busy || disabled}
 				onValueChange={(value) => {
@@ -151,7 +193,36 @@ function PrivateStorageForm({
 export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [config, setConfig] = useState<PrivateConfig>();
 	const [incognitoAllowed, setIncognitoAllowed] = useState<boolean>();
+	const [savingRedirect, setSavingRedirect] = useState(false);
 	const [error, setError] = useState('');
+	const saveRedirect = async (enabled: boolean) => {
+		if (!config || savingRedirect) {
+			return;
+		}
+
+		setSavingRedirect(true);
+		setError('');
+		try {
+			const result = await send('SET_PRIVATE_NEW_TAB_REDIRECT', {enabled});
+			if (!result.ok) {
+				throw new Error(result.error);
+			}
+
+			setConfig(result);
+			showStatus(
+				enabled
+					? 'New private tabs will open the TabLodge dashboard.'
+					: 'New private tabs will use the browser’s page.',
+			);
+		} catch (reason) {
+			setError(
+				messageOf(reason) || 'Could not save the private new tab setting.',
+			);
+		} finally {
+			setSavingRedirect(false);
+		}
+	};
+
 	useEffect(() => {
 		const checkAccess = () => {
 			void chrome.extension
@@ -206,9 +277,9 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 		<>
 			{incognitoAllowed !== false && (
 				<p className="mb-4 text-sm text-muted-foreground">
-					Open the private dashboard from the toolbar popup or the Open
-					dashboard shortcut. The browser does not replace its private new tab
-					page.
+					Chromium does not let extensions replace the private new tab page.
+					Turn on the option below to redirect new private tabs to the dashboard
+					after they open.
 				</p>
 			)}
 			{error && <p role="alert">{error}</p>}
@@ -224,18 +295,42 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 				</p>
 			)}
 			{config && incognitoAllowed === true && (
-				<PrivateStorageForm
-					key={`${config.mode}:${config.configured}`}
-					config={config}
-					showContinue={false}
-					onSaved={(next) => {
-						setConfig(next);
-						const title =
-							choices.find((choice) => choice.value === next.mode)?.title ??
-							'updated';
-						showStatus(`Private window storage set to ${title}.`);
-					}}
-				/>
+				<div className="space-y-5">
+					<div className="flex items-start justify-between gap-4 border-b border-border pb-5">
+						<div className="space-y-1">
+							<label
+								htmlFor="private-new-tab-redirect"
+								className="block font-medium"
+							>
+								Redirect private new tabs to the dashboard
+							</label>
+							<p
+								id="private-new-tab-redirect-description"
+								className="text-sm text-muted-foreground"
+							>
+								The browser opens its private new tab first, then TabLodge
+								redirects it to the dashboard. Turn this off to keep the
+								browser’s page.
+							</p>
+						</div>
+						<Switch
+							id="private-new-tab-redirect"
+							checked={config.redirectNewTabs}
+							disabled={savingRedirect}
+							aria-describedby="private-new-tab-redirect-description"
+							onCheckedChange={(enabled) => void saveRedirect(enabled)}
+						/>
+					</div>
+					<PrivateStorageForm
+						key={`${config.mode}:${config.configured}`}
+						config={config}
+						showContinue={false}
+						onSaved={(next) => {
+							setConfig(next);
+							showStatus(modeStatus[next.mode]);
+						}}
+					/>
+				</div>
 			)}
 		</>
 	);
@@ -265,7 +360,19 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 			changes: Record<string, chrome.storage.StorageChange>,
 			area: chrome.storage.AreaName,
 		) => {
-			if (!(area === 'local' && Object.hasOwn(changes, PRIVATE_CONFIG_KEY))) {
+			if (area !== 'local' || !Object.hasOwn(changes, PRIVATE_CONFIG_KEY)) {
+				return;
+			}
+
+			const {newValue, oldValue} = changes[PRIVATE_CONFIG_KEY];
+			const previous = oldValue as PrivateConfig | undefined;
+			const next = newValue as PrivateConfig | undefined;
+			if (
+				previous &&
+				next &&
+				previous.mode === next.mode &&
+				previous.configured === next.configured
+			) {
 				return;
 			}
 
@@ -293,24 +400,45 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 
 	if (config?.configured) {
 		return (
-			<>
-				<aside
-					aria-label="Private storage"
-					className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-b border-border bg-muted px-5 py-2 text-sm"
+			<div className="relative isolate min-h-screen">
+				<div
+					aria-hidden="true"
+					className="pointer-events-none fixed inset-0 z-0 overflow-hidden text-muted-foreground/10"
 				>
-					<span>
-						{choices.find((choice) => choice.value === config.mode)?.title}
-					</span>
+					<PrivateWindowMark className="absolute left-1/2 top-1/4 h-16 w-16 -rotate-12 sm:h-20 sm:w-20" />
+					<PrivateWindowMark className="absolute right-1/6 top-1/3 h-20 w-20 rotate-12" />
+					<PrivateWindowMark className="absolute left-1/3 top-1/2 h-14 w-14 rotate-6" />
+					<PrivateWindowMark className="absolute right-1/4 top-2/3 h-20 w-20 -rotate-6" />
+					<PrivateWindowMark className="absolute left-1/6 bottom-1/6 h-12 w-12 rotate-12" />
+					<PrivateWindowMark className="absolute right-2/5 top-1/2 h-16 w-16 -rotate-12" />
+					<PrivateWindowMark className="absolute left-3/5 top-1/4 h-14 w-14 rotate-6" />
+					<PrivateWindowMark className="absolute right-1/5 top-5/6 h-16 w-16 rotate-12" />
+				</div>
+				<aside
+					aria-label="Private window"
+					className="relative z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-muted px-5 py-3 text-sm sm:px-8"
+				>
+					<div className="flex min-w-0 items-center gap-3">
+						<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+							<PrivateWindowMark className="h-5 w-5" />
+						</span>
+						<div className="min-w-0">
+							<p className="font-semibold">You’re in a private window</p>
+							<p className="text-sm text-muted-foreground">
+								{modeSummary[config.mode]}
+							</p>
+						</div>
+					</div>
 					<a
 						data-private-settings
 						href="options.html#settings-private-windows"
 						className="rounded-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					>
-						Change private storage
+						Private window settings
 					</a>
 				</aside>
-				{children}
-			</>
+				<div className="relative z-10">{children}</div>
+			</div>
 		);
 	}
 

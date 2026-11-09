@@ -32,9 +32,9 @@ async function configure(
 		new URL('options.html#settings-private-windows', normal.url()).href,
 	);
 	const titles = {
-		shared: 'Share normal storage',
-		saved: 'Separate, saved storage',
-		temporary: 'Separate, temporary storage',
+		shared: 'Use the same library as regular windows',
+		saved: 'Use a separate saved library',
+		temporary: 'Use a separate temporary library',
 	};
 	const choice = normal.getByRole('radio', {
 		name: new RegExp(`^${titles[mode]}`),
@@ -44,9 +44,14 @@ async function configure(
 		privatePage.waitForEvent('load'),
 		normal.keyboard.press('Space'),
 	]);
+	const status = {
+		shared: 'Private windows will use the same library as regular windows.',
+		saved: 'Private windows will use a separate saved library.',
+		temporary: 'Private windows will use a separate temporary library.',
+	};
 	await normal
 		.getByRole('status')
-		.getByText(`Private window storage set to ${titles[mode]}.`, {exact: true})
+		.getByText(status[mode], {exact: true})
 		.waitFor();
 	await privatePage.getByRole('main').waitFor();
 }
@@ -65,6 +70,32 @@ async function send(
 	assert.ok(isRecord(result));
 	assert.equal(result.ok, true, JSON.stringify(result));
 	return result;
+}
+
+async function openPrivateNewTab(normal: Page): Promise<Page> {
+	const pagePromise = normal.context().waitForEvent('page');
+	void pagePromise.catch(() => undefined);
+	await normal.evaluate(async () =>
+		(globalThis as typeof globalThis & ChromeGlobal).chrome.windows.create({
+			incognito: true,
+			url: 'chrome://newtab/',
+		}),
+	);
+	return pagePromise;
+}
+
+async function setPrivatePageTheme(
+	settingsPage: Page,
+	privatePage: Page,
+	theme: 'light' | 'dark',
+) {
+	await settingsPage
+		.getByRole('radio', {
+			name: theme === 'light' ? 'Light' : 'Dark',
+			exact: true,
+		})
+		.click();
+	await privatePage.locator(`html[data-theme="${theme}"]`).waitFor();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -171,7 +202,7 @@ try {
 	assert.equal(normalBookmark.ok, true);
 	await normal.goto(`chrome-extension://${id}/options.html`);
 	const privateSettingsRadios = normal
-		.getByRole('radiogroup', {name: 'Private window storage'})
+		.getByRole('radiogroup', {name: 'Choose a library for private windows'})
 		.getByRole('radio');
 	await normal
 		.getByText(
@@ -230,7 +261,7 @@ try {
 	normal = await context.newPage();
 	await normal.goto(`chrome-extension://${id}/options.html`);
 	const enabledPrivateSettingsRadios = normal
-		.getByRole('radiogroup', {name: 'Private window storage'})
+		.getByRole('radiogroup', {name: 'Choose a library for private windows'})
 		.getByRole('radio');
 	for (const radio of await enabledPrivateSettingsRadios.all()) {
 		assert.equal(
@@ -244,6 +275,47 @@ try {
 		await normal.getByRole('button', {name: /Save private settings/}).count(),
 		0,
 		'Settings should apply private storage changes without a Save button.',
+	);
+	for (const theme of ['Light', 'Dark'] as const) {
+		await normal.getByRole('radio', {name: theme, exact: true}).click();
+		await captureEvidence(
+			normal,
+			normal.locator('#settings-private-windows'),
+			`private-window-settings-${theme.toLowerCase()}`,
+			true,
+		);
+	}
+
+	const redirectSwitch = normal.getByRole('switch', {
+		name: 'Redirect private new tabs to the dashboard',
+	});
+	assert.equal(await redirectSwitch.getAttribute('aria-checked'), 'true');
+	const redirectedPage = await openPrivateNewTab(normal);
+	redirectedPage.on('pageerror', (error) => {
+		errors.push(error.message);
+	});
+	await redirectedPage.waitForURL(`chrome-extension://${id}/newtab.html`);
+	assert.equal(
+		await redirectedPage.evaluate(
+			() =>
+				(globalThis as typeof globalThis & ChromeGlobal).chrome.extension
+					.inIncognitoContext,
+		),
+		true,
+	);
+	console.log('ok a new private tab redirects to the TabLodge dashboard');
+	await redirectedPage.close();
+	await redirectSwitch.click();
+	await normal
+		.getByRole('status')
+		.getByText('New private tabs will use the browser’s page.', {exact: true})
+		.waitFor();
+	const nativePage = await openPrivateNewTab(normal);
+	await nativePage.waitForLoadState();
+	assert.equal(nativePage.url(), 'chrome://newtab/');
+	await nativePage.close();
+	console.log(
+		'ok disabling the setting keeps the browser private new tab page',
 	);
 	await normal.goto(`chrome-extension://${id}/newtab.html`);
 	const popupPromise = context.waitForEvent('page');
@@ -287,7 +359,7 @@ try {
 	);
 	assert.equal(
 		await privatePage
-			.getByRole('radio', {name: /Share normal storage/})
+			.getByRole('radio', {name: /Use the same library as regular windows/})
 			.isChecked(),
 		true,
 	);
@@ -300,14 +372,8 @@ try {
 		'utf8',
 	);
 	await normal.goto(`chrome-extension://${id}/options.html`);
-	for (const theme of ['light', 'dark']) {
-		await normal
-			.getByRole('radio', {
-				name: theme === 'light' ? 'Light' : 'Dark',
-				exact: true,
-			})
-			.click();
-		await privatePage.locator(`html[data-theme="${theme}"]`).waitFor();
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
 		await privatePage.evaluate(async () => {
 			const {document, requestAnimationFrame} =
 				globalThis as typeof globalThis & {
@@ -346,19 +412,19 @@ try {
 		});
 		assert.deepEqual(violations, []);
 		await privatePage
-			.getByRole('radio', {name: /Share normal storage/})
+			.getByRole('radio', {name: /Use the same library as regular windows/})
 			.focus();
 		await privatePage.keyboard.press('ArrowDown');
 		assert.equal(
 			await privatePage
-				.getByRole('radio', {name: /Separate, saved storage/})
+				.getByRole('radio', {name: /Use a separate saved library/})
 				.isChecked(),
 			true,
 		);
 		await privatePage.keyboard.press('ArrowUp');
 		assert.equal(
 			await privatePage
-				.getByRole('radio', {name: /Share normal storage/})
+				.getByRole('radio', {name: /Use the same library as regular windows/})
 				.isChecked(),
 			true,
 		);
@@ -369,11 +435,13 @@ try {
 
 	await privatePage.setViewportSize({width: 1440, height: 900});
 
-	await privatePage.getByRole('radio', {name: /Share normal storage/}).focus();
+	await privatePage
+		.getByRole('radio', {name: /Use the same library as regular windows/})
+		.focus();
 	await privatePage.keyboard.press('ArrowDown');
 	assert.equal(
 		await privatePage
-			.getByRole('radio', {name: /Separate, saved storage/})
+			.getByRole('radio', {name: /Use a separate saved library/})
 			.isChecked(),
 		true,
 	);
@@ -385,17 +453,28 @@ try {
 	await privatePage.keyboard.press('Enter');
 	await privatePage.getByRole('dialog').waitFor({state: 'hidden'});
 	await privatePage.getByRole('main').waitFor();
+	const privateBanner = privatePage.getByLabel('Private window');
+	await privateBanner.getByText('You’re in a private window').waitFor();
 	await privatePage
-		.getByRole('link', {name: 'Change private storage'})
+		.getByRole('link', {name: 'Private window settings'})
 		.waitFor();
 	assert.match(
-		(await privatePage.getByLabel('Private storage').textContent()) ?? '',
-		/Separate, saved storage/,
+		(await privatePage.getByLabel('Private window').textContent()) ?? '',
+		/You’re in a private window[\s\S]*Separate library saved on this device/,
 	);
 	assert.equal(
 		await privatePage.locator(':focus').textContent(),
-		'Change private storage',
+		'Private window settings',
 	);
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		await captureEvidence(
+			privatePage,
+			privatePage.locator('body'),
+			`private-dashboard-${theme}`,
+		);
+	}
+
 	assert.equal(
 		await privatePage.getByRole('button', {name: /Don.t show again/}).count(),
 		0,
