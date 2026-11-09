@@ -359,9 +359,9 @@ function Help() {
 				{
 					title: 'On a page',
 					gesture: {label: 'Right-click the page', icon: MousePointerClick},
-					body: 'Bookmark the current page, or save this tab, its tab group, the whole window, or the tabs to its left or right.',
+					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, or save this tab, its tab group, the whole window, or the tabs to its left or right.',
 					searchText:
-						'right-click page bookmark current tab tab group whole window left right save',
+						'right-click page bookmark current tab send tab to session recent new session tab group whole window left right save',
 				},
 				{
 					title: 'On selected text',

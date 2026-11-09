@@ -521,7 +521,7 @@ const settingsGroups: Array<{
 				name: 'contextMenuPageEnabled',
 				requires: 'contextMenusEnabled',
 				label: 'Page',
-				help: 'Bookmark the page to a column, or save this tab, this window, a tab group, or the tabs beside it.',
+				help: 'Bookmark the page to a column, send this tab to a recent session, or save this tab, this window, a tab group, or the tabs beside it.',
 				type: 'switch',
 			},
 			{
