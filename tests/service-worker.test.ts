@@ -9042,10 +9042,17 @@ test('the palette shortcut opens one palette window over the focused window on a
 	);
 });
 
-test('the palette location setting defaults to the window and normalizes unknown values', async () => {
+test('the palette location setting defaults to the current page, keeps an explicit window choice, and normalizes unknown values', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
 		(await defaults.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
+		'page',
+	);
+	const explicit = createWorkerHarness(
+		stateWithSession({paletteLocation: 'window'}),
+	);
+	assert.equal(
+		(await explicit.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
 		'window',
 	);
 	const invalid = createWorkerHarness(
@@ -9053,20 +9060,20 @@ test('the palette location setting defaults to the window and normalizes unknown
 	);
 	assert.equal(
 		(await invalid.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
-		'window',
+		'page',
 	);
 	const updated = await invalid.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {paletteLocation: 'page'},
+		settings: {paletteLocation: 'window'},
 	});
 	assert.equal(updated.ok, true, updated.error);
-	assert.equal(invalid.state.settings.paletteLocation, 'page');
+	assert.equal(invalid.state.settings.paletteLocation, 'window');
 	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.paletteLocation, 'window');
+	assert.equal(reset.settings.paletteLocation, 'page');
 });
 
-test('with the palette set to the current page, the shortcut injects the overlay on demand and opens no window', async () => {
-	const harness = nameHarness({paletteLocation: 'page'}, [
+test('by default the shortcut injects the overlay on demand and opens no window', async () => {
+	const harness = nameHarness({}, [
 		webTab(1, 10, 0, {active: true, url: 'https://page.example/', title: 'P'}),
 	]);
 	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
@@ -9084,7 +9091,7 @@ test('with the palette set to the current page, the shortcut injects the overlay
 	assert.equal(url.searchParams.get('window'), '10');
 });
 
-test('with the palette set to the current page, pages that cannot be scripted open the window instead', async () => {
+test('by default, pages that cannot be scripted open the window instead', async () => {
 	const press = async (
 		harness: ReturnType<typeof nameHarness>,
 		tab: Record<string, unknown>,
@@ -9097,7 +9104,7 @@ test('with the palette set to the current page, pages that cannot be scripted op
 	};
 
 	// Browser pages are never injected into.
-	const restricted = nameHarness({paletteLocation: 'page'}, [
+	const restricted = nameHarness({}, [
 		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
 	]);
 	await press(restricted, {id: 1, windowId: 10, url: 'chrome://settings/'});
@@ -9106,7 +9113,7 @@ test('with the palette set to the current page, pages that cannot be scripted op
 
 	// A web page the browser refuses to script (Web Store, PDF viewer, no activeTab grant) falls back too.
 	const refused = nameHarness(
-		{paletteLocation: 'page'},
+		{},
 		[
 			webTab(1, 10, 0, {
 				active: true,
@@ -9124,8 +9131,8 @@ test('with the palette set to the current page, pages that cannot be scripted op
 	assert.equal(refused.executeScriptCalls.length, 1);
 	assert.equal(refused.windowCreateCalls.length, 1);
 
-	// The default setting never touches scripting.
-	const standard = nameHarness({}, [
+	// Choosing the window never touches scripting.
+	const standard = nameHarness({paletteLocation: 'window'}, [
 		webTab(1, 10, 0, {active: true, url: 'https://page.example/', title: 'P'}),
 	]);
 	await press(standard, {id: 1, windowId: 10, url: 'https://page.example/'});

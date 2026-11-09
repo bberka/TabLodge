@@ -459,15 +459,16 @@ function Help() {
 							Press <Key>Ctrl</Key> + <Key>Shift</Key> + <Key>K</Key> (
 							<Key>⌘</Key> + <Key>Shift</Key> + <Key>K</Key> on macOS) on any
 							page, including pages that use <Key>Ctrl</Key> + <Key>K</Key>{' '}
-							themselves and browser pages. The palette opens in a small window.
-							In Settings, Opening TabLodge, you can choose to show it in the
-							current page instead. Browser pages, the Web Store and the PDF
-							viewer cannot show it there, so the window opens on them. Choosing
-							a session restores it into the window you were in, and{' '}
+							themselves and browser pages. The palette appears over the page
+							you are on. Browser pages, the Web Store and the PDF viewer cannot
+							show it there, so a small window opens on them instead. In
+							Settings, Opening TabLodge, you can choose the window everywhere.
+							Choosing a session restores it into the window you were in, and{' '}
 							<Key>Ctrl</Key> or <Key>⌘</Key> + <Key>Enter</Key> restores it in
 							a new window. Links and web searches open in that window&apos;s
 							active tab. Press the shortcut again or <Key>Esc</Key> to close
-							the window. It also closes when you click another window.
+							the palette. A palette window also closes when you click another
+							window.
 						</>
 					),
 					searchText:

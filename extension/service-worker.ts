@@ -502,7 +502,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	unloadRestoredTabsThreshold: 5,
 	restoreSplitTabs: 'split',
 	saveSplitTabs: 'both',
-	paletteLocation: 'window',
+	paletteLocation: 'page',
 	sessionSort: 'newest',
 	expandSessionsByDefault: false,
 	showSessionFaviconPreviews: true,
@@ -1563,7 +1563,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		restoreSplitTabs:
 			raw.restoreSplitTabs === 'separate' ? 'separate' : 'split',
 		saveSplitTabs: raw.saveSplitTabs === 'focused' ? 'focused' : 'both',
-		paletteLocation: raw.paletteLocation === 'page' ? 'page' : 'window',
+		paletteLocation: raw.paletteLocation === 'window' ? 'window' : 'page',
 		sessionSort: isOneOf(
 			['newest', 'oldest', 'opened', 'name', 'tabs', 'custom'],
 			raw.sessionSort,
@@ -2882,13 +2882,15 @@ const PALETTE_WIDTH = 640;
 const PALETTE_HEIGHT = 520;
 
 /**
-The "Open the search palette" shortcut: opens the palette in a small window of its own, which works on every page
-(web pages that bind Ctrl+K, chrome:// pages, the Web Store, the PDF viewer). A second press closes it again. The
-address carries the window that was in front, so the palette's links, searches and restores go there.
+The "Open the search palette" shortcut: by default shows the palette over the page (see openPaletteInPage), and falls
+back without any message to a small window of its own wherever that is not possible (chrome:// pages, the Web Store,
+the PDF viewer, extension pages, no activeTab grant) or when the setting says Window. The window works on every page,
+including ones that bind Ctrl+K. A second press closes it again. The address carries the window that was in front, so
+the palette's links, searches and restores go there.
 */
 async function openPalette(commandTab?: chrome.tabs.Tab) {
 	if (
-		(await readSettings()).paletteLocation === 'page' &&
+		(await readSettings()).paletteLocation !== 'window' &&
 		(await openPaletteInPage(commandTab))
 	) {
 		return;

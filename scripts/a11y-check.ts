@@ -3629,6 +3629,48 @@ async function main() {
 		}
 
 		for (const theme of THEMES) {
+			await check(
+				`opening settings layout and palette default (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					const row = (name: string) =>
+						page.locator(`[data-setting-row="${name}"]`);
+					const location = row('paletteLocation').getByRole('combobox');
+					await location.waitFor();
+					assert.match(
+						(await location.innerText()).trim(),
+						/In the current page/,
+						'the palette opens in the current page by default',
+					);
+					const hangs = async (name: string) =>
+						Boolean(
+							(await row(name).getAttribute('class'))?.includes('border-l-2'),
+						);
+					assert.ok(
+						await hangs('autoFocusSearchOnNewTab'),
+						'a dependent setting hangs from its parent',
+					);
+					for (const name of [
+						'newTabEnabled',
+						'paletteLocation',
+						'keepLodgePinned',
+						'openDashboardOnStartup',
+						'actionMode',
+						'dashboardBehavior',
+					]) {
+						assert.ok(
+							!(await hangs(name)),
+							`${name} is not drawn as a dependent setting`,
+						);
+					}
+
+					await page.close();
+				},
+			);
+		}
+
+		for (const theme of THEMES) {
 			await check(`palette actions menu keyboard use (${theme})`, async () => {
 				const seeding = await openPage(context, extensionId, 'newtab');
 				await seed(seeding);
