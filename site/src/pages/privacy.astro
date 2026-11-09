@@ -17,6 +17,7 @@ const permissions = [
 	['sidePanel (Chromium only)', 'Showing bookmarks, sessions and open tabs in the browser side panel. Firefox shows the same page in its sidebar, which needs no permission.'],
 	['search', 'Running a web search with your default engine, only when you choose "Search the web".'],
 	['alarms', 'Scheduling crash-recovery snapshots, automatic backups, trash bin cleanup and archiving old sessions.'],
+	['activeTab, scripting', 'Only if you choose to show the search palette in the current page: the palette shortcut shows it over that one page when you press it. No install warning, no site access, and nothing runs on pages until you press the shortcut.'],
 	['downloads (optional)', 'Saving backup copies to your Downloads folder, only if you turn that on; turning it off gives the permission back.'],
 ];
 ---
@@ -54,7 +55,7 @@ const permissions = [
 			<li>No accounts, servers or cloud sync. TabLodge has no backend.</li>
 			<li>No analytics, telemetry, crash reporting or advertising.</li>
 			<li>No network requests of its own. All code, styles, fonts and icons are bundled in the extension; nothing is loaded from a CDN.</li>
-			<li>No website access. TabLodge requests no host permissions, injects no content scripts and never reads page contents.</li>
+			<li>No website access. TabLodge requests no host permissions, declares no content scripts and never reads page contents. The optional in-page search palette is drawn over a page only when you press its shortcut.</li>
 			<li>No sale or sharing of data with anyone.</li>
 		</ul>
 

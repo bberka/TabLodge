@@ -29,6 +29,13 @@ export function paletteWindowId(search: string): number | undefined {
 }
 
 /**
+`?overlay=1` on palette.html: the palette is shown in a frame over a web page, not in a window of its own.
+*/
+export function paletteOverlay(search: string): boolean {
+	return new URLSearchParams(search).get('overlay') === '1';
+}
+
+/**
 The current address without the given query parameters, for history.replaceState.
 */
 export function stripSearchParams(

@@ -121,7 +121,7 @@ The side panel header has icons for the dashboard, recent snapshots, trash bin, 
 
 Find the available keyboard shortcuts in **Settings › Keyboard shortcuts**. **Configure shortcuts** opens your browser's shortcut settings.
 
-The **Open the search palette** shortcut (suggested `Ctrl+Shift+K`, `Command+Shift+K` on macOS) opens the search palette from any page, including pages that use `Ctrl+K` themselves and browser pages such as `chrome://settings`. The browser handles the shortcut before the page sees the key, so the page is not affected. The palette opens in a small window of its own. It lists your recent sessions before you type, and choosing one restores it into the window you were in, following your restore settings. `Ctrl` or `Cmd` with `Enter` restores it in a new window instead. Links and web searches open in the active tab of that window, or in a new tab with `Ctrl` or `Cmd`. Press the shortcut again or `Esc` to close the window, or click another window and it closes by itself. In either palette, press the right arrow on a session, a bookmark, a saved tab, or an open tab to see more actions for it, such as restoring a session in a new window, opening a link in a new window, copying a link, or closing a tab. `Esc` or `Backspace` goes back. On the dashboard, `Ctrl+K` and `/` still open the palette over the page, where `Shift` with `Enter` reveals a session instead of restoring it.
+The **Open the search palette** shortcut (suggested `Ctrl+Shift+K`, `Command+Shift+K` on macOS) opens the search palette from any page, including pages that use `Ctrl+K` themselves and browser pages such as `chrome://settings`. The browser handles the shortcut before the page sees the key, so the page is not affected. By default the palette opens in a small window of its own. In **Settings › Opening TabLodge › Open the search palette** you can choose **In the current page** instead, which shows it over the page you are on. That option works on ordinary web pages. Browser pages, the Web Store, the PDF viewer, extension pages, and local files cannot show it, so the window opens there. It lists your recent sessions before you type, and choosing one restores it into the window you were in, following your restore settings. `Ctrl` or `Cmd` with `Enter` restores it in a new window instead. Links and web searches open in the active tab of that window, or in a new tab with `Ctrl` or `Cmd`. Press the shortcut again or `Esc` to close the window, or click another window and it closes by itself. In either palette, press the right arrow on a session, a bookmark, a saved tab, or an open tab to see more actions for it, such as restoring a session in a new window, opening a link in a new window, copying a link, or closing a tab. `Esc` or `Backspace` goes back. On the dashboard, `Ctrl+K` and `/` still open the palette over the page, where `Shift` with `Enter` reveals a session instead of restoring it.
 
 ### Private windows
 
@@ -224,7 +224,7 @@ skills-lock.json        Pinned agent skills, restored with `vp run skills:instal
 
 ## Permissions and privacy
 
-TabLodge has no website host permissions, injects no content scripts, and makes no network requests of its own. By default, opening a saved page uses its saved URL. The optional tracking setting removes common tracking parameters from the destination but leaves your saved data unchanged. Choosing **Search the web** sends a search through your browser's default engine.
+TabLodge has no website host permissions, declares no content scripts, and makes no network requests of its own. With **In the current page** selected, the shortcut injects the palette into the page you pressed it on, once, using the access the shortcut grants for that tab only. By default, opening a saved page uses its saved URL. The optional tracking setting removes common tracking parameters from the destination but leaves your saved data unchanged. Choosing **Search the web** sends a search through your browser's default engine.
 
 | Permission         | Why it's needed                                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------- |
@@ -239,12 +239,14 @@ TabLodge has no website host permissions, injects no content scripts, and makes 
 | `sidePanel`        | Show bookmarks, sessions, and open tabs in the browser side panel (Chromium only; Firefox uses its sidebar, which needs no permission) |
 | `search`           | Use the default search engine when you choose **Search the web**                          |
 | `alarms`           | Schedule snapshots, backups, trash cleanup, and archiving                                 |
+| `activeTab`        | Let the search palette shortcut show the palette over the current page, for that tab only (no install warning) |
+| `scripting`        | Inject the palette into that page on demand, only when you chose **In the current page** (no install warning) |
 
 The optional `downloads` permission is requested only when you enable **Settings › Recovery & backups › Also save a copy to Downloads**. It writes backup JSON files to `Downloads/TabLodge/`. Turning the setting off removes the permission.
 
 The Firefox package asks for the same permissions except those two. Its manifest also declares that TabLodge collects no data, which Firefox shows in its install prompt. Everything else in this section holds in both browsers.
 
-The manifest also replaces the new tab page and declares keyboard shortcuts and the `tl` address bar keyword. The keyword needs no permission. You can change what new tabs show in Settings without disabling the rest of TabLodge.
+The manifest also makes `palette.html` available to web pages so the palette can be framed over them. This is not a permission and shows no warning, but a web page can tell that TabLodge is installed by requesting that file. The manifest also replaces the new tab page and declares keyboard shortcuts and the `tl` address bar keyword. The keyword needs no permission. You can change what new tabs show in Settings without disabling the rest of TabLodge.
 
 See [Privacy](PRIVACY.md) for what is stored, how recovery data is retained, and how to remove it.
 

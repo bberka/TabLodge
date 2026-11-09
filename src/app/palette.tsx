@@ -6,13 +6,14 @@ import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadingLine, send, useTabLodgeState} from './common';
 import {FinderPaletteWindow, type FinderAction} from './finder';
-import {paletteWindowId} from './page-params';
+import {paletteOverlay, paletteWindowId} from './page-params';
 
 // The small window the service worker opens for the "Open the search palette" shortcut. It works on every page,
 // restricted ones included, because it is a window of its own and not part of the page. `window` in the address
 // is the browser window that was in front; links, searches and restores go there.
 function PalettePage() {
 	const windowId = paletteWindowId(location.search);
+	const overlay = paletteOverlay(location.search);
 	const {state, error} = useTabLodgeState();
 	const {setTheme} = useTheme();
 	const actions = useMemo<FinderAction[]>(() => {
@@ -83,7 +84,12 @@ function PalettePage() {
 	}
 
 	return (
-		<FinderPaletteWindow state={state} actions={actions} windowId={windowId} />
+		<FinderPaletteWindow
+			state={state}
+			actions={actions}
+			windowId={windowId}
+			overlay={overlay}
+		/>
 	);
 }
 

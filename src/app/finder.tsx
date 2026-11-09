@@ -1,6 +1,7 @@
 // The global finder: the command palette (Ctrl/Cmd+K) with one search box, one ranking (global-search.ts) and one
 // way of opening results.
 import {
+	useCallback,
 	useDeferredValue,
 	useEffect,
 	useMemo,
@@ -1070,8 +1071,12 @@ Closes the palette window when another window takes the focus, the way a menu cl
 real popup window does this: the same page opened as a tab by address stays open. The short wait skips the
 blur the browser sends while the window is still being focused, and a focus that came back in between.
 */
-function useCloseWhenUnfocused() {
+function useCloseWhenUnfocused(enabled: boolean) {
 	useEffect(() => {
+		if (!enabled) {
+			return;
+		}
+
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let popup = false;
 		void Promise.resolve(chrome.windows.getCurrent())
@@ -1096,7 +1101,7 @@ function useCloseWhenUnfocused() {
 			globalThis.removeEventListener('blur', onBlur);
 			globalThis.removeEventListener('focus', onFocus);
 		};
-	}, []);
+	}, [enabled]);
 }
 
 /**
@@ -1107,13 +1112,41 @@ export function FinderPaletteWindow({
 	state,
 	actions,
 	windowId,
+	overlay = false,
 }: {
 	state: TabLodgeState;
 	actions: readonly FinderAction[];
 	windowId?: number;
+	/**
+	The palette is a frame over a web page (see palette-overlay.ts): closing asks the page to remove the frame, and Tab
+	stays inside it.
+	*/
+	overlay?: boolean;
 }) {
-	useCloseOnEscape();
-	useCloseWhenUnfocused();
+	const close = useCallback(() => {
+		if (overlay) {
+			globalThis.parent.postMessage({type: 'tablodge-palette-close'}, '*');
+		} else {
+			globalThis.close();
+		}
+	}, [overlay]);
+	useCloseOnEscape(close);
+	useCloseWhenUnfocused(!overlay);
+	useEffect(() => {
+		if (!overlay) {
+			return;
+		}
+
+		// The search box is the only stop, so Tab has nowhere to go inside the frame and must not reach the page.
+		const trap = (event: KeyboardEvent) => {
+			if (event.key === 'Tab') {
+				event.preventDefault();
+			}
+		};
+
+		document.addEventListener('keydown', trap);
+		return () => document.removeEventListener('keydown', trap);
+	}, [overlay]);
 	const standalone = useMemo(() => ({windowId}), [windowId]);
 	return (
 		<main
@@ -1124,7 +1157,7 @@ export function FinderPaletteWindow({
 				state={state}
 				actions={actions}
 				standalone={standalone}
-				onDone={() => globalThis.close()}
+				onDone={close}
 			/>
 		</main>
 	);

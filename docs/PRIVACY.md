@@ -7,7 +7,8 @@ TabLodge keeps your sessions, bookmarks, and settings in your browser profile. I
 - No analytics, telemetry, crash reporting, or advertising.
 - No cloud sync or sale of data.
 - No network requests of its own. Code, styles, fonts, and icons are bundled with the extension.
-- No website host permissions or content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages.
+- No website host permissions and no declared content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages. If you choose to show the search palette in the current page, the shortcut injects the palette into that one page when you press it. The injected code only draws the palette. It reads nothing from the page, and the page cannot read your library.
+- A web page can detect that TabLodge is installed by requesting `palette.html`, which the manifest exposes so the palette can be framed over pages. Nothing else of the extension is exposed.
 
 Opening a saved link loads that website normally. An optional setting removes common tracking parameters from the destination URL when opening saved links or restoring sessions and snapshots. It is off by default and does not change the URLs stored in your library. Choosing **Search the web** sends your query to the browser's default search engine. These are actions you request, not background reporting by TabLodge.
 
@@ -58,7 +59,7 @@ Exports are not encrypted. JSON, HTML, CSV, Markdown, URL lists, and full backup
 
 ## Permissions
 
-The [README permissions table](README.md#permissions-and-privacy) explains each required permission. TabLodge requests no website access. The Firefox version leaves out `favicon` and `sidePanel`, which only Chromium has, and declares in its manifest that it collects no data.
+The [README permissions table](README.md#permissions-and-privacy) explains each required permission. TabLodge requests no website access. `activeTab` and `scripting` let the palette shortcut show the palette over the current page when you choose that in Settings. Browsers show no install warning for them and no prompt appears when they are used. The Firefox version leaves out `favicon` and `sidePanel`, which only Chromium has, and declares in its manifest that it collects no data.
 
 The only optional permission is `downloads`. The browser asks for it when you turn on backup copies in Downloads. Turning that setting off removes the permission.
 

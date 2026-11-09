@@ -269,6 +269,16 @@ const settingsGroups: Array<{
 				requires: isFirefox ? undefined : 'newTabEnabled',
 			},
 			{
+				name: 'paletteLocation',
+				label: 'Open the search palette',
+				help: 'Where the “Open the search palette” shortcut shows the palette. “In the current page” appears over the page you are on, and only when the shortcut is pressed. Browser pages, the Web Store and the PDF viewer cannot show it, so they open the window instead.',
+				type: 'select',
+				options: [
+					['window', 'Window'],
+					['page', 'In the current page'],
+				],
+			},
+			{
 				name: 'keepLodgePinned',
 				label: `Keep ${PROJECT.name} pinned and always open`,
 				help: `Pins one ${PROJECT.name} tab per window and keeps it open. Links opened from it always open in a new tab.`,

@@ -135,6 +135,10 @@ type HarnessOptions = {
 	Run as Firefox: `moz-extension:` addresses, no Side Panel API but a sidebar, and `chrome:` addresses refused.
 	*/
 	firefox?: boolean;
+	/**
+	Chrome.scripting.executeScript rejects, as it does on pages an extension cannot script or without an activeTab grant.
+	*/
+	scriptingFails?: boolean;
 };
 type MenuItem = {
 	id?: string;
@@ -193,6 +197,8 @@ function createWorkerHarness(
 	const openedTabs: MockTab[] = [];
 	const removedTabIds: number[] = [];
 	const sidePanelCalls: SidePanelCall[] = [];
+	const executeScriptCalls: Array<{target: {tabId: number}; args: unknown[]}> =
+		[];
 	const sidePanelOpened: Array<{windowId: number}> = [];
 	let sidebarOpened = 0;
 	const popupCalls: string[] = [];
@@ -787,6 +793,19 @@ function createWorkerHarness(
 			},
 			onClicked: event('actionClicked'),
 		},
+		scripting: {
+			async executeScript(injection: {
+				target: {tabId: number};
+				args: unknown[];
+			}) {
+				executeScriptCalls.push(injection);
+				if (options.scriptingFails) {
+					throw new Error('Cannot access contents of the page.');
+				}
+
+				return [{result: true}];
+			},
+		},
 		...(options.firefox
 			? {
 					sidebarAction: {
@@ -918,6 +937,7 @@ function createWorkerHarness(
 	vm.runInContext(workerSource, context, {filename: workerPath});
 
 	return {
+		executeScriptCalls,
 		openedTabs,
 		removedTabIds,
 		sidePanelCalls,
@@ -9020,6 +9040,97 @@ test('the palette shortcut opens one palette window over the focused window on a
 		1,
 		'the palette window was created once',
 	);
+});
+
+test('the palette location setting defaults to the window and normalizes unknown values', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
+		'window',
+	);
+	const invalid = createWorkerHarness(
+		stateWithSession({paletteLocation: 'tab'}),
+	);
+	assert.equal(
+		(await invalid.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
+		'window',
+	);
+	const updated = await invalid.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {paletteLocation: 'page'},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(invalid.state.settings.paletteLocation, 'page');
+	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.paletteLocation, 'window');
+});
+
+test('with the palette set to the current page, the shortcut injects the overlay on demand and opens no window', async () => {
+	const harness = nameHarness({paletteLocation: 'page'}, [
+		webTab(1, 10, 0, {active: true, url: 'https://page.example/', title: 'P'}),
+	]);
+	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+		'open-palette',
+		{id: 1, windowId: 10, url: 'https://page.example/'},
+	);
+	await settle();
+	assert.equal(harness.windowCreateCalls.length, 0);
+	assert.equal(harness.executeScriptCalls.length, 1);
+	const [call] = harness.executeScriptCalls;
+	assert.equal(call.target.tabId, 1);
+	const url = new URL(String(call.args[0]));
+	assert.equal(url.pathname, '/palette.html');
+	assert.equal(url.searchParams.get('overlay'), '1');
+	assert.equal(url.searchParams.get('window'), '10');
+});
+
+test('with the palette set to the current page, pages that cannot be scripted open the window instead', async () => {
+	const press = async (
+		harness: ReturnType<typeof nameHarness>,
+		tab: Record<string, unknown>,
+	) => {
+		(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+			'open-palette',
+			tab,
+		);
+		await settle();
+	};
+
+	// Browser pages are never injected into.
+	const restricted = nameHarness({paletteLocation: 'page'}, [
+		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
+	]);
+	await press(restricted, {id: 1, windowId: 10, url: 'chrome://settings/'});
+	assert.equal(restricted.executeScriptCalls.length, 0);
+	assert.equal(restricted.windowCreateCalls.length, 1);
+
+	// A web page the browser refuses to script (Web Store, PDF viewer, no activeTab grant) falls back too.
+	const refused = nameHarness(
+		{paletteLocation: 'page'},
+		[
+			webTab(1, 10, 0, {
+				active: true,
+				url: 'https://chromewebstore.google.com/',
+				title: 'S',
+			}),
+		],
+		{scriptingFails: true},
+	);
+	await press(refused, {
+		id: 1,
+		windowId: 10,
+		url: 'https://chromewebstore.google.com/',
+	});
+	assert.equal(refused.executeScriptCalls.length, 1);
+	assert.equal(refused.windowCreateCalls.length, 1);
+
+	// The default setting never touches scripting.
+	const standard = nameHarness({}, [
+		webTab(1, 10, 0, {active: true, url: 'https://page.example/', title: 'P'}),
+	]);
+	await press(standard, {id: 1, windowId: 10, url: 'https://page.example/'});
+	assert.equal(standard.executeScriptCalls.length, 0);
+	assert.equal(standard.windowCreateCalls.length, 1);
 });
 
 test('messages from the palette window act on the window it was opened over', async () => {
