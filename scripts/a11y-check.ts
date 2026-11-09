@@ -3521,6 +3521,26 @@ async function main() {
 					1,
 					'A new search announces how many results it found',
 				);
+				// With a single result the spare room is between the list and the shortcut bar, not below the bar.
+				const gap = await page.evaluate(() => {
+					const {document, innerHeight} = globalThis as typeof globalThis & {
+						document: {
+							querySelector(selector: string): {
+								getBoundingClientRect(): {bottom: number};
+							} | null;
+						};
+						innerHeight: number;
+					};
+					const bar = document.querySelector('main div.border-t');
+					return (
+						innerHeight - Math.round(bar?.getBoundingClientRect().bottom ?? 0)
+					);
+				});
+				assert.equal(
+					gap,
+					0,
+					'The shortcut bar sits at the bottom of the window',
+				);
 				await page.screenshot({
 					path: `.dev/evidence/palette-keyboard-${theme}.png`,
 				});

@@ -627,12 +627,14 @@ function revealColumn(id: string) {
 function ResultList({
 	finder,
 	listId,
+	areaClassName,
 	viewportClassName,
 	standalone,
 }: {
 	finder: ReturnType<typeof useFinder>;
 	listId: string;
-	viewportClassName: string;
+	areaClassName?: string;
+	viewportClassName?: string;
 	standalone: boolean;
 }) {
 	const {
@@ -654,7 +656,10 @@ function ResultList({
 			<p role="status" className="sr-only">
 				{query.trim() ? `${count} ${count === 1 ? 'result' : 'results'}` : ''}
 			</p>
-			<ScrollArea viewportClassName={viewportClassName}>
+			<ScrollArea
+				className={areaClassName}
+				viewportClassName={viewportClassName}
+			>
 				<div
 					id={listId}
 					role="listbox"
@@ -753,11 +758,13 @@ filters these actions; the breadcrumb names where you are.
 function ActionMenu({
 	finder,
 	listId,
+	areaClassName,
 	viewportClassName,
 }: {
 	finder: ReturnType<typeof useFinder>;
 	listId: string;
-	viewportClassName: string;
+	areaClassName?: string;
+	viewportClassName?: string;
 }) {
 	const {menu, menuActions, menuSelected, setMenuIndex, runAction} = finder;
 	if (!menu) {
@@ -768,7 +775,7 @@ function ActionMenu({
 		<>
 			<nav
 				aria-label="Breadcrumb"
-				className="flex items-center gap-1 px-4 py-2 text-xs text-muted-foreground"
+				className="flex shrink-0 items-center gap-1 px-4 py-2 text-xs text-muted-foreground"
 			>
 				<ol className="flex min-w-0 items-center gap-1">
 					<li className="shrink-0">
@@ -790,7 +797,10 @@ function ActionMenu({
 					</li>
 				</ol>
 			</nav>
-			<ScrollArea viewportClassName={viewportClassName}>
+			<ScrollArea
+				className={areaClassName}
+				viewportClassName={viewportClassName}
+			>
 				<div
 					id={listId}
 					role="listbox"
@@ -930,20 +940,26 @@ function PaletteBody(props: {
 	const hasActions =
 		current !== undefined &&
 		itemActions(current, Boolean(props.standalone)).length > 0;
-	// The breadcrumb takes a line off the list in the actions menu.
-	let viewportClassName = props.standalone
-		? 'max-h-[calc(100vh-6.5rem)]'
+	// The dialog caps the list height. The palette window fills its height instead: the list takes the spare room
+	// (and scrolls when it overflows) so the shortcut bar stays at the bottom edge.
+	let viewportClassName: string | undefined = finder.menu
+		? 'max-h-[min(26rem,calc(80vh-9rem))]'
 		: 'max-h-[min(26rem,calc(80vh-6.5rem))]';
-	if (finder.menu) {
-		viewportClassName = props.standalone
-			? 'max-h-[calc(100vh-9rem)]'
-			: 'max-h-[min(26rem,calc(80vh-9rem))]';
+	if (props.standalone) {
+		viewportClassName = undefined;
 	}
+
+	const areaClassName = props.standalone ? 'min-h-0 flex-1' : undefined;
 
 	const modifier = isMac ? '⌘' : 'Ctrl';
 	return (
-		<div className="flex min-h-0 flex-col">
-			<div className="flex items-center gap-2.5 border-b border-border px-4 focus-within:shadow-[inset_0_-2px_0_0_rgb(var(--ring))]">
+		<div
+			className={cn(
+				'flex min-h-0 flex-col',
+				props.standalone && 'h-full flex-1',
+			)}
+		>
+			<div className="flex shrink-0 items-center gap-2.5 border-b border-border px-4 focus-within:shadow-[inset_0_-2px_0_0_rgb(var(--ring))]">
 				<Search
 					className="h-4 w-4 shrink-0 text-muted-foreground"
 					aria-hidden="true"
@@ -992,17 +1008,19 @@ function PaletteBody(props: {
 				<ActionMenu
 					finder={finder}
 					listId={listId}
+					areaClassName={areaClassName}
 					viewportClassName={viewportClassName}
 				/>
 			) : (
 				<ResultList
 					finder={finder}
 					listId={listId}
+					areaClassName={areaClassName}
 					viewportClassName={viewportClassName}
 					standalone={Boolean(props.standalone)}
 				/>
 			)}
-			<div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
+			<div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
 				<span className="flex items-center gap-1">
 					<Kbd>↑</Kbd>
 					<Kbd>↓</Kbd> Navigate
@@ -1098,7 +1116,10 @@ export function FinderPaletteWindow({
 	useCloseWhenUnfocused();
 	const standalone = useMemo(() => ({windowId}), [windowId]);
 	return (
-		<main aria-label="Search TabLodge" className="min-h-screen bg-background">
+		<main
+			aria-label="Search TabLodge"
+			className="flex h-screen flex-col bg-background"
+		>
 			<PaletteBody
 				state={state}
 				actions={actions}
