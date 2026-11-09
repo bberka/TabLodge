@@ -24,6 +24,7 @@ import {
 	Square,
 	SquareCheck,
 	SquarePlus,
+	Copy,
 	Download,
 	FolderPlus,
 	HelpCircle,
@@ -102,6 +103,7 @@ import {
 } from './finder';
 import {
 	BackupDialog,
+	DuplicateBookmarksDialog,
 	ImportDialog,
 	SnapshotsDialog,
 	TrashDialog,
@@ -286,6 +288,7 @@ function NewTab() {
 		singleColumn: boolean;
 	} | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
@@ -2158,6 +2161,12 @@ function NewTab() {
 								disabled: bookmarks.length === 0,
 								onSelect: () => shareBookmarks(),
 							},
+							{
+								id: 'duplicates',
+								label: 'Find duplicate bookmarks',
+								icon: Copy,
+								onSelect: () => setDuplicatesOpen(true),
+							},
 							{type: 'separator'},
 							{
 								id: 'trash',
@@ -2606,6 +2615,14 @@ function NewTab() {
 				singleColumn={backupRequest?.singleColumn ?? false}
 				showStatus={showStatus}
 				onOpenChange={(open) => !open && setBackupRequest(null)}
+			/>
+			<DuplicateBookmarksDialog
+				open={duplicatesOpen}
+				bookmarks={bookmarks}
+				columns={columns}
+				showStatus={showStatus}
+				onOpenChange={setDuplicatesOpen}
+				onChanged={reload}
 			/>
 			<ImportDialog
 				open={importOpen}

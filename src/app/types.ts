@@ -656,6 +656,10 @@ export type TabLodgeMessages = {
 	};
 	UPDATE_BOOKMARK: {bookmarkId: string; fields: BookmarkFields};
 	DELETE_BOOKMARK: {bookmarkId: string};
+	/**
+	Removes extra copies of addresses saved more than once on the board, moving each to the trash. Every address keeps at least one copy outside `bookmarkIds`; the request fails otherwise. At most 500 per message, the trash limit.
+	*/
+	REMOVE_DUPLICATE_BOOKMARKS: {bookmarkIds: string[]};
 	CREATE_BOOKMARK_COLUMN: {name: string; icon?: string};
 	/**
 	`icon` omitted keeps the current icon; an empty string resets it to the default.
@@ -876,6 +880,10 @@ export type TabLodgeResponses = {
 	} & Undoable;
 	UPDATE_BOOKMARK: {bookmark: Bookmark};
 	DELETE_BOOKMARK: {trashId?: string};
+	/**
+	`trashIds` are in deletion order; restore them in reverse to put every copy back where it was.
+	*/
+	REMOVE_DUPLICATE_BOOKMARKS: {removed: number; trashIds: string[]};
 	CREATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
 	UPDATE_BOOKMARK_COLUMN: {column: BookmarkColumn};
 	/**
