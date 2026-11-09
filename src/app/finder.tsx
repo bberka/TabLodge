@@ -4,6 +4,7 @@ import {
 	useDeferredValue,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 	type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
@@ -28,7 +29,7 @@ import {
 	ScrollArea,
 } from '../shared/ui';
 import {scrollBehavior} from '../shared/motion';
-import type {IconComponent} from './common';
+import {send, useCloseOnEscape, type IconComponent} from './common';
 import {
 	buildFinderIndex,
 	flattenSections,
@@ -49,7 +50,7 @@ A command the finder lists; `run` is called when it is chosen.
 */
 export type FinderAction = FinderCommand & {
 	icon: IconComponent;
-	run: () => void;
+	run: () => void | Promise<void>;
 };
 
 /**
@@ -58,6 +59,7 @@ Window event used to ask the sessions area (a separate component) to reveal a se
 export const FINDER_EVENT = 'tablodge:finder';
 export type FinderEventDetail =
 	| {type: 'reveal-session'; id: string}
+	| {type: 'restore-session'; id: string; newWindow: boolean}
 	| {type: 'select-folder'; id: string}
 	| {type: 'new-folder'}
 	| {type: 'backup-sessions'}
@@ -162,15 +164,23 @@ type FinderProps = {
 	*/
 	onDone?: () => void;
 	active: boolean;
+	/**
+	Set when the finder runs in its own palette window (opened by the browser shortcut) instead of over the dashboard.
+	Links, searches and session restores then go to `windowId`, the window that was in front when the shortcut was
+	pressed, and the palette window closes after the action succeeded.
+	*/
+	standalone?: {windowId?: number};
 };
 
-function useFinder({state, actions, onDone, active}: FinderProps) {
+function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 	const [query, setQuery] = useState('');
 	const [index, setIndex] = useState(0);
+	const [error, setError] = useState('');
 	// A new query starts again from the first result.
 	const changeQuery = (value: string) => {
 		setQuery(value);
 		setIndex(0);
+		setError('');
 	};
 
 	const tabs = useOpenTabs(active);
@@ -203,13 +213,33 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 	const flat = useMemo(() => flattenSections(sections), [sections]);
 	const selected = flat.length > 0 ? Math.min(index, flat.length - 1) : -1;
 
-	async function run(item: FinderItem, newTab: boolean) {
+	/**
+	`newTab` (Ctrl/Cmd) opens in a new tab, or a session in a new window. `secondary` (Shift) reveals a session on the
+	dashboard instead of restoring it.
+	*/
+	async function run(item: FinderItem, newTab: boolean, secondary = false) {
 		const requested = newTab ? 'new' : undefined;
+		// Over the dashboard the palette closes first; in its own window it closes once the action worked.
+		const closeFirst = () => {
+			if (!standalone) {
+				onDone?.();
+			}
+		};
+
+		const closeLast = () => {
+			if (standalone) {
+				onDone?.();
+			}
+		};
+
+		const where = standalone ? {windowId: standalone.windowId} : undefined;
+		setError('');
 		try {
 			switch (item.kind) {
 				case 'command': {
-					onDone?.();
-					actions.find((action) => action.id === item.ref)?.run();
+					closeFirst();
+					await actions.find((action) => action.id === item.ref)?.run();
+					closeLast();
 					return;
 				}
 
@@ -224,48 +254,77 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 				}
 
 				case 'bookmark': {
-					onDone?.();
-					await openLink(item.url!, 'bookmark', settings, requested);
+					closeFirst();
+					await openLink(item.url!, 'bookmark', settings, requested, where);
+					closeLast();
 					return;
 				}
 
 				case 'saved-tab': {
-					onDone?.();
-					await openLink(item.url!, 'session', settings, requested);
+					closeFirst();
+					await openLink(item.url!, 'session', settings, requested, where);
+					closeLast();
 					return;
 				}
 
 				case 'url': {
-					onDone?.();
+					closeFirst();
 					await openLink(
 						item.url!,
 						'bookmark',
 						settings,
 						requested ?? 'current',
+						where,
 					);
+					closeLast();
 					return;
 				}
 
 				case 'session': {
+					if (standalone) {
+						const result = await send('RESTORE_GROUP', {
+							groupId: item.ref!,
+							restoreTarget: newTab ? 'always-new-window' : undefined,
+						});
+						if (!result?.ok) {
+							setError(result?.error || 'Could not restore this session.');
+							return;
+						}
+
+						await focusWindow(standalone.windowId, newTab);
+						onDone?.();
+						return;
+					}
+
 					onDone?.();
-					emitFinderEvent({type: 'reveal-session', id: item.ref!});
+					emitFinderEvent(
+						secondary
+							? {type: 'reveal-session', id: item.ref!}
+							: {type: 'restore-session', id: item.ref!, newWindow: newTab},
+					);
 					return;
 				}
 
 				case 'folder': {
-					onDone?.();
+					closeFirst();
 					emitFinderEvent({type: 'select-folder', id: item.ref!});
 					return;
 				}
 
 				case 'column': {
-					onDone?.();
+					closeFirst();
 					revealColumn(item.ref!);
 					return;
 				}
 
 				case 'web': {
-					onDone?.();
+					closeFirst();
+					if (standalone) {
+						await searchInWindow(item.ref!, standalone.windowId, newTab);
+						closeLast();
+						return;
+					}
+
 					const pinned = settings.keepLodgePinned && (await isPinnedLodgeTab());
 					await chrome.search.query({
 						text: item.ref!,
@@ -273,8 +332,15 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 					});
 				}
 			}
-		} catch {
-			// The page may already be navigating away; a failed open has nowhere useful to report.
+		} catch (error_) {
+			// Over the dashboard the page may already be navigating away. In the palette window the user is still looking.
+			if (standalone) {
+				setError(
+					error_ instanceof Error && error_.message
+						? error_.message
+						: 'Could not do that.',
+				);
+			}
 		}
 	}
 
@@ -291,7 +357,7 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 			}
 		} else if (event.key === 'Enter' && selected >= 0) {
 			event.preventDefault();
-			void run(flat[selected], event.ctrlKey || event.metaKey);
+			void run(flat[selected], event.ctrlKey || event.metaKey, event.shiftKey);
 		}
 	}
 
@@ -303,6 +369,7 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 		commandIcons,
 		query,
 		resultQuery,
+		error,
 		changeQuery,
 		sections,
 		flat,
@@ -311,6 +378,41 @@ function useFinder({state, actions, onDone, active}: FinderProps) {
 		run,
 		onKeyDown,
 	};
+}
+
+/**
+Brings the window the palette was opened over back to the front. A restore into a new window already focuses that one.
+*/
+async function focusWindow(windowId: number | undefined, newWindow: boolean) {
+	if (windowId === undefined || newWindow) {
+		return;
+	}
+
+	try {
+		await chrome.windows.update(windowId, {focused: true});
+	} catch {
+		// The window may have closed meanwhile; the restore itself worked.
+	}
+}
+
+/**
+Searches the web with the default search engine in the active tab of `windowId`, or in a new tab.
+*/
+async function searchInWindow(
+	text: string,
+	windowId: number | undefined,
+	newTab: boolean,
+) {
+	const [active] =
+		windowId === undefined
+			? []
+			: await chrome.tabs.query({active: true, windowId});
+	const tab =
+		newTab || active?.id === undefined
+			? await chrome.tabs.create({windowId, url: 'about:blank'})
+			: active;
+	await chrome.search.query({text, tabId: tab.id});
+	await focusWindow(windowId, false);
 }
 
 /**
@@ -406,7 +508,11 @@ function ResultList({
 										onMouseMove={() => !active && setIndex(at)}
 										onMouseDown={(event) => event.preventDefault()}
 										onClick={(event) =>
-											void run(item, event.ctrlKey || event.metaKey)
+											void run(
+												item,
+												event.ctrlKey || event.metaKey,
+												event.shiftKey,
+											)
 										}
 									>
 										<ResultIcon
@@ -504,10 +610,20 @@ function PaletteBody(props: {
 	state: TabLodgeState;
 	actions: readonly FinderAction[];
 	onDone: () => void;
+	standalone?: {windowId?: number};
 }) {
 	const finder = useFinder({...props, active: true});
 	const listId = 'finder-palette';
+	const inputRef = useRef<HTMLInputElement>(null);
 	useScrollActiveIntoView(listId, finder.selected);
+	// The palette window has no dialog to move focus into the input.
+	useEffect(() => {
+		if (props.standalone) {
+			inputRef.current?.focus();
+		}
+	}, [props.standalone]);
+	const onSession = finder.flat[finder.selected]?.kind === 'session';
+	const modifier = isMac ? '⌘' : 'Ctrl';
 	return (
 		<div className="flex min-h-0 flex-col">
 			<div className="flex items-center gap-2.5 border-b border-border px-4 focus-within:shadow-[inset_0_-2px_0_0_rgb(var(--ring))]">
@@ -516,6 +632,7 @@ function PaletteBody(props: {
 					aria-hidden="true"
 				/>
 				<input
+					ref={inputRef}
 					data-autofocus
 					role="combobox"
 					aria-expanded="true"
@@ -533,10 +650,19 @@ function PaletteBody(props: {
 					onKeyDown={finder.onKeyDown}
 				/>
 			</div>
+			{finder.error && (
+				<p role="alert" className="px-4 py-2 text-xs text-destructive">
+					{finder.error}
+				</p>
+			)}
 			<ResultList
 				finder={finder}
 				listId={listId}
-				viewportClassName="max-h-[min(26rem,calc(80vh-6.5rem))]"
+				viewportClassName={
+					props.standalone
+						? 'max-h-[calc(100vh-6.5rem)]'
+						: 'max-h-[min(26rem,calc(80vh-6.5rem))]'
+				}
 			/>
 			<div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
 				<span className="flex items-center gap-1">
@@ -544,17 +670,50 @@ function PaletteBody(props: {
 					<Kbd>↓</Kbd> Navigate
 				</span>
 				<span className="flex items-center gap-1">
-					<Kbd>Enter</Kbd> Open
+					<Kbd>Enter</Kbd> {onSession ? 'Restore' : 'Open'}
 				</span>
 				<span className="flex items-center gap-1">
-					<Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd>
-					<Kbd>Enter</Kbd> New tab
+					<Kbd>{modifier}</Kbd>
+					<Kbd>Enter</Kbd> {onSession ? 'New window' : 'New tab'}
 				</span>
+				{onSession && !props.standalone && (
+					<span className="flex items-center gap-1">
+						<Kbd>Shift</Kbd>
+						<Kbd>Enter</Kbd> Reveal
+					</span>
+				)}
 				<span className="flex items-center gap-1">
 					<Kbd>Esc</Kbd> Close
 				</span>
 			</div>
 		</div>
+	);
+}
+
+/**
+The palette as the whole page of its own small window (palette.html), opened by the "Open the search palette"
+browser shortcut from any page. `windowId` is the window the shortcut was pressed in. Escape closes the window.
+*/
+export function FinderPaletteWindow({
+	state,
+	actions,
+	windowId,
+}: {
+	state: TabLodgeState;
+	actions: readonly FinderAction[];
+	windowId?: number;
+}) {
+	useCloseOnEscape();
+	const standalone = useMemo(() => ({windowId}), [windowId]);
+	return (
+		<main aria-label="Search TabLodge" className="min-h-screen bg-background">
+			<PaletteBody
+				state={state}
+				actions={actions}
+				standalone={standalone}
+				onDone={() => globalThis.close()}
+			/>
+		</main>
 	);
 }
 

@@ -443,11 +443,31 @@ function Help() {
 							On the dashboard, press <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
 							<Key>K</Key>, or press <Key>/</Key> when you are not typing in a
 							field. Search bookmarks, sessions, open tabs, commands, or the
-							web.
+							web. Your recent sessions are listed before you type. Choose one
+							to restore it, or press <Key>Shift</Key> + <Key>Enter</Key> to
+							reveal it on the dashboard instead.
 						</>
 					),
 					searchText:
-						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette',
+						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter',
+				},
+				{
+					title: 'Open the palette from any page',
+					body: (
+						<>
+							Press <Key>Ctrl</Key> + <Key>Shift</Key> + <Key>K</Key> (
+							<Key>⌘</Key> + <Key>Shift</Key> + <Key>K</Key> on macOS) on any
+							page, including pages that use <Key>Ctrl</Key> + <Key>K</Key>{' '}
+							themselves and browser pages. The palette opens in a small window.
+							Choosing a session restores it into the window you were in, and{' '}
+							<Key>Ctrl</Key> or <Key>⌘</Key> + <Key>Enter</Key> restores it in
+							a new window. Links and web searches open in that window&apos;s
+							active tab. Press the shortcut again or <Key>Esc</Key> to close
+							the window.
+						</>
+					),
+					searchText:
+						'any page global shortcut ctrl shift k command palette window browser pages restore session new window open search palette',
 				},
 				{
 					title: 'Navigate results',
@@ -482,12 +502,13 @@ function Help() {
 						<>
 							The suggested shortcuts are <Key>Alt</Key> + <Key>Shift</Key> +{' '}
 							<Key>S</Key> to save tabs and <Key>Alt</Key> + <Key>Shift</Key> +{' '}
-							<Key>D</Key> to bookmark this page. Your browser can change these
-							and assign keys to other actions.
+							<Key>D</Key> to bookmark this page, and <Key>Ctrl</Key> +{' '}
+							<Key>Shift</Key> + <Key>K</Key> to open the search palette. Your
+							browser can change these and assign keys to other actions.
 						</>
 					),
 					searchText:
-						'alt shift s save tabs alt shift d bookmark page browser configure customize shortcut side panel dashboard',
+						'alt shift s save tabs alt shift d bookmark page ctrl shift k search palette browser configure customize shortcut side panel dashboard',
 				},
 			],
 			action: {

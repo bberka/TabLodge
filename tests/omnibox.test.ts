@@ -91,10 +91,10 @@ test('does not suggest web search, typed addresses, columns or folders', () => {
 	assert.deepEqual(omniboxSuggestions('zzzzqqq', index), []);
 });
 
-test('lists open tabs when nothing is typed yet', () => {
+test('lists recent sessions and open tabs when nothing is typed yet', () => {
 	assert.deepEqual(
 		omniboxSuggestions('', index).map((s) => s.content),
-		['tab:7'],
+		['session:s1', 'tab:7'],
 	);
 });
 
