@@ -234,13 +234,20 @@ export function restoreSummary(result: {
 One-line result of a workspace switch, for the toast after "Switch to this session".
 */
 export function switchSummary(
-	result: {saved: number; count: number; failed?: number},
+	result: {
+		saved: number;
+		count: number;
+		failed?: number;
+		savedGroupId?: string | null;
+	},
 	name: string,
 ) {
 	const parts = [
 		result.saved > 0
 			? `Saved ${plural(result.saved, 'tab')}`
-			: 'Nothing to save',
+			: result.savedGroupId
+				? 'Already saved'
+				: 'Nothing to save',
 		`opened ${plural(result.count, 'tab')} from “${name}”`,
 	];
 	if (result.failed) {
