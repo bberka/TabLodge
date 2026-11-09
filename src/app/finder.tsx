@@ -11,6 +11,7 @@ import {
 import {
 	AppWindow,
 	Bookmark,
+	ChevronRight,
 	Columns3,
 	CornerDownLeft,
 	Folder,
@@ -40,6 +41,13 @@ import {
 	type OpenTabInfo,
 } from './global-search';
 import {faviconUrl} from './favicon';
+import {
+	filterItemActions,
+	itemActions,
+	type ItemAction,
+	type ItemActionId,
+} from './finder-menu';
+import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
 import {isPinnedLodgeTab, openLink} from './link-target';
 import type {TabLodgeState} from './types';
@@ -181,9 +189,35 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		setQuery(value);
 		setIndex(0);
 		setError('');
+		setMessage('');
 	};
 
-	const tabs = useOpenTabs(active);
+	// The actions menu: the result it was opened for, the highlighted action and the filter typed into it.
+	const [menu, setMenu] = useState<{item: FinderItem} | undefined>();
+	const [menuIndex, setMenuIndex] = useState(0);
+	const [menuFilter, setMenuFilter] = useState('');
+	// Heard by a screen reader but not shown: where the keyboard just went.
+	const [announcement, setAnnouncement] = useState('');
+	// Shown, and heard: the outcome of an action that leaves the palette open.
+	const [message, setMessage] = useState('');
+	const [closedTabs, setClosedTabs] = useState<readonly number[]>([]);
+	const openTabs = useOpenTabs(active);
+	const tabs = useMemo(
+		() => openTabs.filter((tab) => !closedTabs.includes(tab.id)),
+		[openTabs, closedTabs],
+	);
+	const menuActions = useMemo(
+		() =>
+			menu
+				? filterItemActions(
+						itemActions(menu.item, Boolean(standalone)),
+						menuFilter,
+					)
+				: [],
+		[menu, menuFilter, standalone],
+	);
+	const menuSelected =
+		menuActions.length > 0 ? Math.min(menuIndex, menuActions.length - 1) : -1;
 	const {settings} = state;
 	const catalog = useMemo(
 		() =>
@@ -344,12 +378,138 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		}
 	}
 
+	function openMenu(item: FinderItem | undefined) {
+		if (!item) {
+			return;
+		}
+
+		const available = itemActions(item, Boolean(standalone));
+		if (available.length === 0) {
+			return;
+		}
+
+		setMenu({item});
+		setMenuIndex(0);
+		setMenuFilter('');
+		setError('');
+		setMessage('');
+		setAnnouncement(`Actions for ${item.title}, ${available.length} actions`);
+	}
+
+	/**
+	Leaves the actions menu for the results. Returns false when no menu was open.
+	*/
+	function closeMenu() {
+		if (!menu) {
+			return false;
+		}
+
+		setMenu(undefined);
+		setAnnouncement('Back to results');
+		return true;
+	}
+
+	async function runAction(item: FinderItem, action: ItemActionId) {
+		setError('');
+		try {
+			switch (action) {
+				case 'restore':
+				case 'open':
+				case 'switch': {
+					await run(item, false);
+					return;
+				}
+
+				case 'restore-new-window':
+				case 'open-new-tab': {
+					await run(item, true);
+					return;
+				}
+
+				case 'reveal': {
+					await run(item, false, true);
+					return;
+				}
+
+				case 'open-new-window': {
+					await chrome.windows.create({url: item.url});
+					onDone?.();
+					return;
+				}
+
+				case 'copy-link': {
+					await writeClipboard({text: item.url ?? '', html: ''});
+					setMenu(undefined);
+					setMessage('Link copied.');
+					return;
+				}
+
+				case 'close-tab': {
+					await chrome.tabs.remove(Number(item.ref));
+					setClosedTabs((closed) => [...closed, Number(item.ref)]);
+					setMenu(undefined);
+					setMessage('Tab closed.');
+				}
+			}
+		} catch (error_) {
+			setError(
+				error_ instanceof Error && error_.message
+					? error_.message
+					: 'Could not do that.',
+			);
+		}
+	}
+
+	function onMenuKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+		if (!menu) {
+			return;
+		}
+
+		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			if (menuActions.length > 0) {
+				const step = event.key === 'ArrowDown' ? 1 : -1;
+				setMenuIndex(
+					(menuSelected + step + menuActions.length) % menuActions.length,
+				);
+			}
+		} else if (event.key === 'Enter' && menuSelected >= 0) {
+			event.preventDefault();
+			void runAction(menu.item, menuActions[menuSelected].id);
+		} else if (
+			event.key === 'Escape' ||
+			(event.key === 'Backspace' && menuFilter === '')
+		) {
+			// Escape goes up one level before it closes the palette; the window and dialog handlers skip a handled key.
+			event.preventDefault();
+			closeMenu();
+		}
+	}
+
 	function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
 		if (event.nativeEvent.isComposing) {
 			return;
 		}
 
-		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+		if (menu) {
+			onMenuKeyDown(event);
+			return;
+		}
+
+		const input = event.currentTarget;
+		const atEnd =
+			input.selectionStart === input.value.length &&
+			input.selectionEnd === input.value.length;
+		if (
+			event.key === 'ArrowRight' &&
+			atEnd &&
+			!event.shiftKey &&
+			selected >= 0 &&
+			itemActions(flat[selected], Boolean(standalone)).length > 0
+		) {
+			event.preventDefault();
+			openMenu(flat[selected]);
+		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			event.preventDefault();
 			if (flat.length > 0) {
 				const step = event.key === 'ArrowDown' ? 1 : -1;
@@ -371,6 +531,20 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		resultQuery,
 		error,
 		changeQuery,
+		menu,
+		menuActions,
+		menuSelected,
+		setMenuIndex,
+		menuFilter,
+		changeMenuFilter(value: string) {
+			setMenuFilter(value);
+			setMenuIndex(0);
+		},
+		openMenu,
+		closeMenu,
+		runAction,
+		announcement,
+		message,
 		sections,
 		flat,
 		selected,
@@ -454,10 +628,12 @@ function ResultList({
 	finder,
 	listId,
 	viewportClassName,
+	standalone,
 }: {
 	finder: ReturnType<typeof useFinder>;
 	listId: string;
 	viewportClassName: string;
+	standalone: boolean;
 }) {
 	const {
 		resultQuery: query,
@@ -507,6 +683,11 @@ function ResultList({
 										)}
 										onMouseMove={() => !active && setIndex(at)}
 										onMouseDown={(event) => event.preventDefault()}
+										onContextMenu={(event) => {
+											event.preventDefault();
+											setIndex(at);
+											finder.openMenu(item);
+										}}
 										onClick={(event) =>
 											void run(
 												item,
@@ -541,6 +722,13 @@ function ResultList({
 												</span>
 											)}
 										</span>
+										{active &&
+											itemActions(item, Boolean(standalone)).length > 0 && (
+												<ChevronRight
+													className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+													aria-hidden="true"
+												/>
+											)}
 										{active && (
 											<CornerDownLeft
 												className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -552,6 +740,97 @@ function ResultList({
 							})}
 						</div>
 					))}
+				</div>
+			</ScrollArea>
+		</>
+	);
+}
+
+/**
+The second level: what can be done with the result chosen with the right arrow. The search box stays the combobox and
+filters these actions; the breadcrumb names where you are.
+*/
+function ActionMenu({
+	finder,
+	listId,
+	viewportClassName,
+}: {
+	finder: ReturnType<typeof useFinder>;
+	listId: string;
+	viewportClassName: string;
+}) {
+	const {menu, menuActions, menuSelected, setMenuIndex, runAction} = finder;
+	if (!menu) {
+		return null;
+	}
+
+	return (
+		<>
+			<nav
+				aria-label="Breadcrumb"
+				className="flex items-center gap-1 px-4 py-2 text-xs text-muted-foreground"
+			>
+				<ol className="flex min-w-0 items-center gap-1">
+					<li className="shrink-0">
+						<button
+							type="button"
+							tabIndex={-1}
+							className="rounded underline-offset-2 hover:text-foreground hover:underline"
+							onMouseDown={(event) => event.preventDefault()}
+							onClick={() => finder.closeMenu()}
+						>
+							Search
+						</button>
+					</li>
+					<li aria-hidden="true" className="shrink-0">
+						<ChevronRight className="h-3 w-3" />
+					</li>
+					<li aria-current="page" className="min-w-0 truncate text-foreground">
+						{menu.item.title}
+					</li>
+				</ol>
+			</nav>
+			<ScrollArea viewportClassName={viewportClassName}>
+				<div
+					id={listId}
+					role="listbox"
+					aria-label={`Actions for ${menu.item.title}`}
+					className="px-2 pb-2"
+				>
+					{menuActions.map((action: ItemAction, at: number) => {
+						const active = at === menuSelected;
+						return (
+							<div
+								key={action.id}
+								id={`${listId}-${at}`}
+								role="option"
+								aria-selected={active}
+								data-active={active || undefined}
+								className={cn(
+									'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2',
+									active && 'bg-accent text-accent-foreground',
+								)}
+								onMouseMove={() => !active && setMenuIndex(at)}
+								onMouseDown={(event) => event.preventDefault()}
+								onClick={() => void runAction(menu.item, action.id)}
+							>
+								<span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+									{action.label}
+								</span>
+								{active && (
+									<CornerDownLeft
+										className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+										aria-hidden="true"
+									/>
+								)}
+							</div>
+						);
+					})}
+					{menuActions.length === 0 && (
+						<p className="px-2 py-3 text-xs text-muted-foreground">
+							No matching actions.
+						</p>
+					)}
 				</div>
 			</ScrollArea>
 		</>
@@ -587,6 +866,7 @@ export function FinderPalette({
 	state: TabLodgeState;
 	actions: readonly FinderAction[];
 }) {
+	const backRef = useRef<() => boolean>(() => false);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -594,13 +874,23 @@ export function FinderPalette({
 				data-finder=""
 				className="top-[14vh] max-h-[min(34rem,80vh)] -translate-y-0 gap-0 overflow-hidden p-0"
 				size="lg"
+				// Escape leaves the actions menu first and closes the palette on the next press.
+				onEscapeKeyDown={(event) => {
+					if (backRef.current()) {
+						event.preventDefault();
+					}
+				}}
 			>
 				<DialogTitle className="sr-only">Search TabLodge</DialogTitle>
 				<DialogDescription className="sr-only">
 					Search bookmarks, saved sessions, open tabs and commands, or search
 					the web.
 				</DialogDescription>
-				<PaletteBody {...rest} onDone={() => onOpenChange(false)} />
+				<PaletteBody
+					{...rest}
+					backRef={backRef}
+					onDone={() => onOpenChange(false)}
+				/>
 			</DialogContent>
 		</Dialog>
 	);
@@ -611,18 +901,45 @@ function PaletteBody(props: {
 	actions: readonly FinderAction[];
 	onDone: () => void;
 	standalone?: {windowId?: number};
+	/**
+	Filled with a function that leaves the actions menu (true when one was open), for a Escape handler outside.
+	*/
+	backRef?: {current: () => boolean};
 }) {
 	const finder = useFinder({...props, active: true});
-	const listId = 'finder-palette';
+	const {backRef} = props;
+	const {closeMenu} = finder;
+	useEffect(() => {
+		if (backRef) {
+			backRef.current = closeMenu;
+		}
+	});
+
+	const listId = finder.menu ? 'finder-actions' : 'finder-palette';
+	const activeIndex = finder.menu ? finder.menuSelected : finder.selected;
 	const inputRef = useRef<HTMLInputElement>(null);
-	useScrollActiveIntoView(listId, finder.selected);
+	useScrollActiveIntoView(listId, activeIndex);
 	// The palette window has no dialog to move focus into the input.
 	useEffect(() => {
 		if (props.standalone) {
 			inputRef.current?.focus();
 		}
 	}, [props.standalone]);
-	const onSession = finder.flat[finder.selected]?.kind === 'session';
+	const current = finder.flat[finder.selected];
+	const onSession = current?.kind === 'session';
+	const hasActions =
+		current !== undefined &&
+		itemActions(current, Boolean(props.standalone)).length > 0;
+	// The breadcrumb takes a line off the list in the actions menu.
+	let viewportClassName = props.standalone
+		? 'max-h-[calc(100vh-6.5rem)]'
+		: 'max-h-[min(26rem,calc(80vh-6.5rem))]';
+	if (finder.menu) {
+		viewportClassName = props.standalone
+			? 'max-h-[calc(100vh-9rem)]'
+			: 'max-h-[min(26rem,calc(80vh-9rem))]';
+	}
+
 	const modifier = isMac ? '⌘' : 'Ctrl';
 	return (
 		<div className="flex min-h-0 flex-col">
@@ -638,15 +955,23 @@ function PaletteBody(props: {
 					aria-expanded="true"
 					aria-controls={listId}
 					aria-activedescendant={
-						finder.selected >= 0 ? `${listId}-${finder.selected}` : undefined
+						activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined
 					}
-					aria-label="Search"
+					aria-label={finder.menu ? 'Filter actions' : 'Search'}
 					autoComplete="off"
 					spellCheck={false}
-					placeholder="Search bookmarks, sessions, open tabs, commands, or the web"
-					value={finder.query}
+					placeholder={
+						finder.menu
+							? 'Filter actions'
+							: 'Search bookmarks, sessions, open tabs, commands, or the web'
+					}
+					value={finder.menu ? finder.menuFilter : finder.query}
 					className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-					onChange={(event) => finder.changeQuery(event.target.value)}
+					onChange={(event) =>
+						finder.menu
+							? finder.changeMenuFilter(event.target.value)
+							: finder.changeQuery(event.target.value)
+					}
 					onKeyDown={finder.onKeyDown}
 				/>
 			</div>
@@ -655,39 +980,105 @@ function PaletteBody(props: {
 					{finder.error}
 				</p>
 			)}
-			<ResultList
-				finder={finder}
-				listId={listId}
-				viewportClassName={
-					props.standalone
-						? 'max-h-[calc(100vh-6.5rem)]'
-						: 'max-h-[min(26rem,calc(80vh-6.5rem))]'
-				}
-			/>
+			<p role="status" className="sr-only">
+				{finder.announcement}
+			</p>
+			{finder.message && (
+				<p role="status" className="px-4 py-2 text-xs text-muted-foreground">
+					{finder.message}
+				</p>
+			)}
+			{finder.menu ? (
+				<ActionMenu
+					finder={finder}
+					listId={listId}
+					viewportClassName={viewportClassName}
+				/>
+			) : (
+				<ResultList
+					finder={finder}
+					listId={listId}
+					viewportClassName={viewportClassName}
+					standalone={Boolean(props.standalone)}
+				/>
+			)}
 			<div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
 				<span className="flex items-center gap-1">
 					<Kbd>↑</Kbd>
 					<Kbd>↓</Kbd> Navigate
 				</span>
-				<span className="flex items-center gap-1">
-					<Kbd>Enter</Kbd> {onSession ? 'Restore' : 'Open'}
-				</span>
-				<span className="flex items-center gap-1">
-					<Kbd>{modifier}</Kbd>
-					<Kbd>Enter</Kbd> {onSession ? 'New window' : 'New tab'}
-				</span>
-				{onSession && !props.standalone && (
-					<span className="flex items-center gap-1">
-						<Kbd>Shift</Kbd>
-						<Kbd>Enter</Kbd> Reveal
-					</span>
+				{finder.menu ? (
+					<>
+						<span className="flex items-center gap-1">
+							<Kbd>Enter</Kbd> Run
+						</span>
+						<span className="flex items-center gap-1">
+							<Kbd>Esc</Kbd>
+							<Kbd>Backspace</Kbd> Back
+						</span>
+					</>
+				) : (
+					<>
+						<span className="flex items-center gap-1">
+							<Kbd>Enter</Kbd> {onSession ? 'Restore' : 'Open'}
+						</span>
+						<span className="flex items-center gap-1">
+							<Kbd>{modifier}</Kbd>
+							<Kbd>Enter</Kbd> {onSession ? 'New window' : 'New tab'}
+						</span>
+						{onSession && !props.standalone && (
+							<span className="flex items-center gap-1">
+								<Kbd>Shift</Kbd>
+								<Kbd>Enter</Kbd> Reveal
+							</span>
+						)}
+						{hasActions && (
+							<span className="flex items-center gap-1">
+								<Kbd>→</Kbd> Actions
+							</span>
+						)}
+						<span className="flex items-center gap-1">
+							<Kbd>Esc</Kbd> Close
+						</span>
+					</>
 				)}
-				<span className="flex items-center gap-1">
-					<Kbd>Esc</Kbd> Close
-				</span>
 			</div>
 		</div>
 	);
+}
+
+/**
+Closes the palette window when another window takes the focus, the way a menu closes when you click away. Only a
+real popup window does this: the same page opened as a tab by address stays open. The short wait skips the
+blur the browser sends while the window is still being focused, and a focus that came back in between.
+*/
+function useCloseWhenUnfocused() {
+	useEffect(() => {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let popup = false;
+		void Promise.resolve(chrome.windows.getCurrent())
+			.then((current) => {
+				popup = current.type === 'popup';
+			})
+			.catch(() => {});
+		const onBlur = () => {
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				if (popup && !document.hasFocus()) {
+					globalThis.close();
+				}
+			}, 150);
+		};
+
+		const onFocus = () => clearTimeout(timer);
+		globalThis.addEventListener('blur', onBlur);
+		globalThis.addEventListener('focus', onFocus);
+		return () => {
+			clearTimeout(timer);
+			globalThis.removeEventListener('blur', onBlur);
+			globalThis.removeEventListener('focus', onFocus);
+		};
+	}, []);
 }
 
 /**
@@ -704,6 +1095,7 @@ export function FinderPaletteWindow({
 	windowId?: number;
 }) {
 	useCloseOnEscape();
+	useCloseWhenUnfocused();
 	const standalone = useMemo(() => ({windowId}), [windowId]);
 	return (
 		<main aria-label="Search TabLodge" className="min-h-screen bg-background">

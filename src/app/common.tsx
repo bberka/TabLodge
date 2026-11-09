@@ -47,7 +47,8 @@ Closes this window when Escape is pressed, for the small prompt windows the serv
 export function useCloseOnEscape() {
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
+			// A key some control already used (closing a menu inside the window) does not also close it.
+			if (event.key === 'Escape' && !event.defaultPrevented) {
 				window.close();
 			}
 		};
