@@ -13,6 +13,7 @@ import {
 	Bookmark,
 	Check,
 	ChevronRight,
+	CopyMinus,
 	ExternalLink,
 	History,
 	Layers,
@@ -64,6 +65,10 @@ import {Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
 import {InsecureMarkFor} from './insecure-mark';
 import {savedUrlSet} from './saved-urls';
+import {
+	closeDuplicateTabs,
+	useDuplicateTabCount,
+} from './duplicate-tabs-action';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
@@ -281,6 +286,7 @@ function SidePanel() {
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
 	const windowTabs = useWindowTabs();
+	const duplicateCount = useDuplicateTabCount();
 	const [sectionLimit, moreSections] = usePagedLimit(
 		`${chosenPanel}|${query.trim()}`,
 		SECTION_PAGE,
@@ -975,6 +981,20 @@ function SidePanel() {
 							))
 						))}
 
+					{panel === 'tabs' && (
+						<Button
+							variant="outline"
+							size="sm"
+							className="w-full justify-start gap-2"
+							disabled={duplicateCount === 0}
+							onClick={() => void closeDuplicateTabs(showStatus)}
+						>
+							<CopyMinus className="h-4 w-4" aria-hidden="true" />
+							{duplicateCount === 0
+								? 'No duplicate tabs'
+								: `Close ${plural(duplicateCount, 'duplicate tab')}`}
+						</Button>
+					)}
 					{panel === 'tabs' &&
 						(visibleTabs.length === 0 ? (
 							<EmptyState
