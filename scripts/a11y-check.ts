@@ -38,6 +38,7 @@ const EVIDENCE_VIEWPORTS = [
 type ExtensionApi = {
 	runtime: {sendMessage(message: unknown): Promise<unknown>};
 	storage: {local: {set(items: Record<string, unknown>): Promise<void>}};
+	tabs: {query(info: {url: string}): Promise<unknown[]>};
 };
 type AxeResults = {
 	violations: Array<{
@@ -223,6 +224,13 @@ async function readDevStore(page: Page) {
 	});
 	const {ok: _ok, ...store} = base as {ok: boolean} & DevStore;
 	return store;
+}
+
+async function countTabs(page: Page, url: string) {
+	return page.evaluate(async (address) => {
+		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
+		return (await chrome.tabs.query({url: address})).length;
+	}, url);
 }
 
 async function writeDevStore(page: Page, store: DevStore) {
@@ -4216,6 +4224,96 @@ async function main() {
 						'the next session tooltip must not appear after the move',
 					);
 					await page.close();
+				},
+			);
+		}
+
+		for (const theme of THEMES) {
+			await check(
+				`close duplicate tabs and undo by keyboard (${theme})`,
+				async () => {
+					const address = 'https://duplicates.test/page';
+					await context.route('https://duplicates.test/**', async (route) =>
+						route.fulfill({
+							contentType: 'text/html',
+							body: '<title>Duplicate page</title><p>Duplicate page</p>',
+						}),
+					);
+					const copies: Page[] = [];
+					for (let copy = 0; copy < 3; copy++) {
+						const page = await context.newPage();
+						await page.goto(address);
+						copies.push(page);
+					}
+
+					const panel = await openPage(context, extensionId, 'sidepanel');
+					await setTheme(panel, theme);
+					const copiesOpen = async () => countTabs(panel, address);
+					assert.equal(await copiesOpen(), 3);
+					await panel.getByRole('tab', {name: /Tabs/}).focus();
+					await panel.keyboard.press('Enter');
+					const closeButton = panel.getByRole('button', {
+						name: /^Close \d+ duplicate tabs?$/,
+					});
+					await closeButton.waitFor();
+					await captureEvidence(panel, `close-duplicates-before-${theme}.png`);
+					await closeButton.focus();
+					await panel.keyboard.press('Enter');
+					await until(
+						async () => (await copiesOpen()) === 1,
+						'duplicates closed',
+					);
+					const undo = panel.getByRole('button', {name: 'Undo'});
+					await undo.waitFor();
+					await panel
+						.getByRole('button', {name: 'No duplicate tabs'})
+						.waitFor();
+					await captureEvidence(panel, `close-duplicates-after-${theme}.png`);
+					await undo.focus();
+					await panel.keyboard.press('Enter');
+					await until(async () => (await copiesOpen()) === 3, 'Undo reopens');
+					await panel
+						.getByRole('button', {name: 'Close 2 duplicate tabs'})
+						.waitFor();
+					await captureEvidence(panel, `close-duplicates-undone-${theme}.png`);
+					await panel.close();
+
+					const popup = await openPage(context, extensionId, 'popup');
+					await setTheme(popup, theme);
+					await popup.setViewportSize({width: 380, height: 560});
+					const popupButton = popup.getByRole('button', {
+						name: /^Close \d+ duplicate tabs?$/,
+					});
+					await popupButton.waitFor();
+					if (process.env.TABLODGE_CAPTURE_EVIDENCE === '1') {
+						await popup.screenshot({
+							path: fromRoot(
+								`.dev/evidence/close-duplicates-popup-before-${theme}.png`,
+							),
+						});
+					}
+
+					await popupButton.focus();
+					await popup.keyboard.press('Enter');
+					await popup.getByRole('button', {name: 'Undo'}).waitFor();
+					if (process.env.TABLODGE_CAPTURE_EVIDENCE === '1') {
+						await popup.screenshot({
+							path: fromRoot(
+								`.dev/evidence/close-duplicates-popup-after-${theme}.png`,
+							),
+						});
+					}
+
+					await until(
+						async () => (await countTabs(popup, address)) === 1,
+						'popup closes duplicates',
+					);
+					await popup.close();
+					for (const page of copies) {
+						await page.close().catch(() => undefined);
+					}
+
+					await context.unroute('https://duplicates.test/**');
 				},
 			);
 		}

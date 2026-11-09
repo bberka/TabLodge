@@ -143,6 +143,12 @@ function Help() {
 					searchText:
 						'side panel sidebar session list beside page toolbar icon settings keyboard shortcut',
 				},
+				{
+					title: 'Close duplicate tabs',
+					body: 'Use Close duplicate tabs in the popup or at the top of the side panel Tabs section to close extra copies of the same page. Two tabs are duplicates when their web addresses match exactly, so a different query or fragment counts as a different page. It checks the tabs in all your normal windows. The most recently used copy stays open. Pinned tabs and the tab you are viewing in each window are never closed, and when one of them has duplicates, the other copies are closed. A toast offers Undo, which reopens the tabs in their window and position. Reopened tabs load fresh, so they lose scroll position and form data.',
+					searchText:
+						'close duplicate tabs remove extra copies same page address url pinned active most recently used all windows undo reopen popup side panel',
+				},
 			],
 			action: {label: 'Open Settings', href: 'options.html', icon: Settings2},
 		},
@@ -557,8 +563,8 @@ function Help() {
 							shortcut. You can also open the bin from the{' '}
 							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
 							the side panel header, or the search palette. Dashboard deletes,
-							imports, and actions that open many tabs also offer Undo for a few
-							seconds.
+							imports, actions that open many tabs, and closing duplicate tabs
+							also offer Undo for a few seconds.
 						</>
 					),
 					searchText:

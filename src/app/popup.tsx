@@ -24,6 +24,7 @@ import {
 	PanelRightOpen,
 	Pin,
 	AppWindow,
+	CopyMinus,
 	X,
 } from 'lucide-react';
 import {
@@ -72,6 +73,10 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {webUrl} from './web-url';
+import {
+	closeDuplicateTabs,
+	useDuplicateTabCount,
+} from './duplicate-tabs-action';
 import type {BookmarkColumnDraft} from './bookmark-column-picker';
 import {cn} from '@/lib/utils';
 
@@ -133,6 +138,7 @@ function Popup() {
 		state?.settings?.includePinnedTabs === true,
 		state?.settings?.excludedOrigins ?? NO_ORIGINS,
 	);
+	const duplicateCount = useDuplicateTabCount();
 	const recentSessions = useMemo(
 		() => groups.toSorted((a, b) => b.createdAt - a.createdAt).slice(0, 5),
 		[groups],
@@ -578,6 +584,18 @@ function Popup() {
 					>
 						<PanelsTopLeft className="h-4 w-4" />
 						Save tabs in all windows
+					</Button>
+					<Button
+						size="sm"
+						variant="outline"
+						className="w-full justify-start gap-3 px-3"
+						disabled={busy !== '' || duplicateCount === 0}
+						onClick={() => void closeDuplicateTabs(showStatus)}
+					>
+						<CopyMinus className="h-4 w-4" aria-hidden="true" />
+						{duplicateCount === 0
+							? 'No duplicate tabs'
+							: `Close ${plural(duplicateCount, 'duplicate tab')}`}
 					</Button>
 					{!state?.settings?.includePinnedTabs && (
 						<div className="flex h-8 items-center justify-between gap-3 rounded-md border border-dashed border-border px-3">
