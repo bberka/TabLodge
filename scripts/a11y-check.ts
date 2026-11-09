@@ -73,7 +73,14 @@ function watchConsole(target: Page | Worker, source: string) {
 	});
 }
 
+// A11Y_ONLY=text runs only the checks whose name contains the text, to repeat one check.
+const onlyChecks = process.env.A11Y_ONLY;
+
 async function check(name: string, run: () => Promise<void>) {
+	if (onlyChecks && !name.includes(onlyChecks)) {
+		return;
+	}
+
 	try {
 		await run();
 		console.log(`ok   ${name}`);
@@ -86,9 +93,9 @@ async function check(name: string, run: () => Promise<void>) {
 	}
 }
 
-// Polls until the condition holds; the pages redraw asynchronously after each action.
+// Polls until the condition holds, for up to 15 seconds. The pages redraw asynchronously after each action.
 async function until(condition: () => Promise<boolean>, what: string) {
-	for (let attempt = 0; attempt < 50; attempt += 1) {
+	for (let attempt = 0; attempt < 150; attempt += 1) {
 		if (await condition()) {
 			return;
 		}
@@ -383,7 +390,40 @@ async function groupFolderId(page: Page, groupId: string) {
 async function setTheme(page: Page, theme: (typeof THEMES)[number]) {
 	await page.emulateMedia({colorScheme: theme});
 	// Colors transition between themes; measure contrast after they settle.
-	await page.waitForTimeout(600);
+	await page.evaluate(async () => {
+		const {document, requestAnimationFrame} =
+			globalThis as typeof globalThis & {
+				document: {getAnimations(): Array<{finished: Promise<unknown>}>};
+				requestAnimationFrame(callback: () => void): number;
+			};
+		// The style change applies on the next frame, which is when its transitions start.
+		await new Promise<void>((resolve) => {
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					resolve();
+				});
+			});
+		});
+		await Promise.allSettled(
+			document.getAnimations().map(async (animation) => animation.finished),
+		);
+	});
+}
+
+// Opens a menu from its trigger by keyboard. A card can redraw right after the page settles and drop
+// focus, so the key press is repeated until a menu is open. An open menu hides the trigger from the
+// accessibility tree, so the menu itself is checked rather than the trigger.
+async function openMenuByKeyboard(page: Page, trigger: Locator) {
+	const menu = page.getByRole('menu');
+	await until(async () => {
+		if ((await menu.count()) > 0) {
+			return true;
+		}
+
+		await trigger.focus();
+		await page.keyboard.press('Enter');
+		return (await menu.count()) > 0;
+	}, 'the menu to open');
 }
 
 async function openMenuItemByKeyboard(
@@ -391,8 +431,7 @@ async function openMenuItemByKeyboard(
 	trigger: Locator,
 	name: string,
 ) {
-	await trigger.focus();
-	await page.keyboard.press('Enter');
+	await openMenuByKeyboard(page, trigger);
 	await page.getByRole('menuitem', {name, exact: true}).focus();
 	await page.keyboard.press('Enter');
 }
@@ -772,11 +811,14 @@ async function main() {
 			`--load-extension=${OUT_DIR}`,
 		],
 	});
+	// Waits end as soon as their condition holds; the longer limit only matters on a loaded machine.
+	context.setDefaultTimeout(60_000);
+	context.setDefaultNavigationTimeout(60_000);
 	try {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 		const worker =
 			context.serviceWorkers()[0] ??
-			(await context.waitForEvent('serviceworker', {timeout: 15_000}));
+			(await context.waitForEvent('serviceworker', {timeout: 60_000}));
 		watchConsole(worker, 'service worker');
 		const extensionId = new URL(worker.url()).hostname;
 		const axeSource = await readFile(
@@ -2024,10 +2066,12 @@ async function main() {
 							async () => (await readDevStore(page)).settings[key] === value,
 							`${label} to save`,
 						);
-						assert.equal(
-							await page.locator(':focus').getAttribute('aria-label'),
-							label,
-							`focus returns to ${label}`,
+						// The menu hands focus back after its close animation, so wait for it.
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('aria-label')) ===
+								label,
+							`focus to return to ${label}`,
 						);
 					}
 
@@ -3377,6 +3421,18 @@ async function main() {
 							name: 'One column',
 							exact: true,
 						});
+						// The dialog moves focus to Import on the next frame after the review appears; a key
+						// pressed before that lands on Import and would run the import.
+						await until(
+							async () =>
+								dialog
+									.getByRole('button', {name: 'Import 1 bookmark', exact: true})
+									.evaluate(
+										(element: {ownerDocument: {activeElement: unknown}}) =>
+											element === element.ownerDocument.activeElement,
+									),
+							'focus to move to the Import button',
+						);
 						await oneColumnMode.press('Space');
 						await until(
 							() => oneColumnMode.isChecked(),
@@ -4146,8 +4202,7 @@ async function main() {
 					const card = page.locator(`#session-${sessionId}`);
 					await card.waitFor();
 					const trigger = card.locator('[data-move-focus]');
-					await trigger.focus();
-					await page.keyboard.press('Enter');
+					await openMenuByKeyboard(page, trigger);
 					const menuItems = page.getByRole('menuitem');
 					const labels = await menuItems.allTextContents();
 					const archiveIndex = labels.findIndex((label) =>
@@ -4241,8 +4296,7 @@ async function main() {
 					);
 					await card.waitFor();
 
-					await trigger.focus();
-					await page.keyboard.press('Enter');
+					await openMenuByKeyboard(page, trigger);
 					await page.getByRole('menuitem', {name: 'Archive session'}).focus();
 					await page.keyboard.press('Enter');
 					await until(
@@ -4257,8 +4311,7 @@ async function main() {
 					await page.keyboard.press('Enter');
 					await card.waitFor();
 					const archivedTrigger = card.locator('[data-move-focus]');
-					await archivedTrigger.focus();
-					await page.keyboard.press('Enter');
+					await openMenuByKeyboard(page, archivedTrigger);
 					assert.equal(
 						await page.getByRole('menuitem', {name: 'Archive session'}).count(),
 						0,
@@ -4313,8 +4366,7 @@ async function main() {
 					await movedCard.waitFor();
 					await nextCard.waitFor();
 					const trigger = movedCard.locator('[data-move-focus]');
-					await trigger.focus();
-					await page.keyboard.press('Enter');
+					await openMenuByKeyboard(page, trigger);
 					await page.getByRole('menuitem', {name: 'Move to folder'}).focus();
 					await page.keyboard.press('ArrowRight');
 					await page
