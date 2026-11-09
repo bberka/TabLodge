@@ -3552,6 +3552,65 @@ async function main() {
 		}
 
 		for (const theme of THEMES) {
+			await check(`palette overlay frame keyboard use (${theme})`, async () => {
+				// The overlay is palette.html in a frame; a stand-in parent page receives its close request.
+				const page = await openPage(context, extensionId, 'help');
+				await setTheme(page, theme);
+				await page.evaluate((address) => {
+					const {document, addEventListener} =
+						globalThis as typeof globalThis & {
+							document: {
+								title: string;
+								body: {append(element: unknown): void};
+								createElement(tag: string): {
+									title: string;
+									src: string;
+									style: {cssText: string};
+								};
+							};
+							addEventListener(
+								type: string,
+								listener: (event: {data?: {type?: string}}) => void,
+							): void;
+						};
+					addEventListener('message', (event) => {
+						if (event.data?.type === 'tablodge-palette-close') {
+							document.title = 'palette-close-requested';
+						}
+					});
+					const frame = document.createElement('iframe');
+					frame.title = 'Search TabLodge';
+					frame.src = address;
+					frame.style.cssText =
+						'position:fixed;top:40px;left:40px;width:640px;height:520px;z-index:99';
+					document.body.append(frame);
+				}, `chrome-extension://${extensionId}/palette.html?overlay=1`);
+				const frame = page.frameLocator('iframe[title="Search TabLodge"]');
+				const input = frame.getByRole('combobox', {name: 'Search'});
+				await input.waitFor({timeout: 5000});
+				// The service worker's injected script hands focus to the frame; the search box takes it from there.
+				await input.focus();
+				await page.keyboard.press('Tab');
+				await page.keyboard.press('Shift+Tab');
+				assert.equal(
+					await input.evaluate(
+						(element: {ownerDocument: {activeElement: unknown}}) =>
+							element === element.ownerDocument.activeElement,
+					),
+					true,
+					'Tab and Shift+Tab stay in the palette frame',
+				);
+				await page.keyboard.press('Escape');
+				await page.waitForFunction(
+					() =>
+						(globalThis as typeof globalThis & {document: {title: string}})
+							.document.title === 'palette-close-requested',
+				);
+				await page.close();
+			});
+		}
+
+		for (const theme of THEMES) {
 			await check(`palette actions menu keyboard use (${theme})`, async () => {
 				const seeding = await openPage(context, extensionId, 'newtab');
 				await seed(seeding);

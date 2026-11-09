@@ -459,7 +459,10 @@ function Help() {
 							<Key>⌘</Key> + <Key>Shift</Key> + <Key>K</Key> on macOS) on any
 							page, including pages that use <Key>Ctrl</Key> + <Key>K</Key>{' '}
 							themselves and browser pages. The palette opens in a small window.
-							Choosing a session restores it into the window you were in, and{' '}
+							In Settings, Opening TabLodge, you can choose to show it in the
+							current page instead. Browser pages, the Web Store and the PDF
+							viewer cannot show it there, so the window opens on them. Choosing
+							a session restores it into the window you were in, and{' '}
 							<Key>Ctrl</Key> or <Key>⌘</Key> + <Key>Enter</Key> restores it in
 							a new window. Links and web searches open in that window&apos;s
 							active tab. Press the shortcut again or <Key>Esc</Key> to close
@@ -467,7 +470,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'any page global shortcut ctrl shift k command palette window browser pages restore session new window open search palette close click away focus',
+						'any page global shortcut ctrl shift k command palette window in the current page overlay browser pages restore session new window open search palette close click away focus',
 				},
 				{
 					title: 'Navigate results',

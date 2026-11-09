@@ -38,6 +38,10 @@ export type SessionNameFallback = Exclude<SessionNameStyle, 'ask'>;
 For selection saves while the active tab is in a split view: keep both halves, or only the focused one.
 */
 export type SaveSplitTabs = 'both' | 'focused';
+/**
+Where the "Open the search palette" shortcut shows the palette: a small window, or over the current page.
+*/
+export type PaletteLocation = 'window' | 'page';
 
 export type BookmarkQuickAction =
 	| 'open-current'
@@ -112,6 +116,7 @@ export type Settings = {
 	unloadRestoredTabsThreshold: number;
 	restoreSplitTabs: RestoreSplitTabs;
 	saveSplitTabs: SaveSplitTabs;
+	paletteLocation: PaletteLocation;
 	sessionSort: SessionSort;
 	/**
 	Session cards start expanded on the TabLodge page (default off: collapsed); each can still be toggled during the visit.

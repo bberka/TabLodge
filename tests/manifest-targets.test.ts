@@ -79,3 +79,20 @@ test('the Firefox manifest keeps the pages, commands and new-tab override of the
 		assert.deepEqual(manifest[key], source[key], key);
 	}
 });
+
+test('the palette overlay needs no site access: activeTab and scripting, no host permissions or content scripts', () => {
+	// Host permissions and content scripts are what make browsers warn at install or block an update until approved.
+	for (const manifest of [source, firefoxManifest()]) {
+		assert.ok(manifest.permissions.includes('activeTab'));
+		assert.ok(manifest.permissions.includes('scripting'));
+		assert.equal(manifest.host_permissions, undefined);
+		assert.equal(manifest.content_scripts, undefined);
+		assert.equal(manifest.optional_host_permissions, undefined);
+		assert.deepEqual(
+			(
+				manifest.web_accessible_resources as Array<{resources: string[]}>
+			).flatMap((entry) => entry.resources),
+			['palette.html'],
+		);
+	}
+});

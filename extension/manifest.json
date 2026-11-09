@@ -23,9 +23,17 @@
 		"clipboardWrite",
 		"sidePanel",
 		"search",
-		"alarms"
+		"alarms",
+		"activeTab",
+		"scripting"
 	],
 	"optional_permissions": ["downloads"],
+	"web_accessible_resources": [
+		{
+			"resources": ["palette.html"],
+			"matches": ["http://*/*", "https://*/*"]
+		}
+	],
 	"background": {
 		"service_worker": "service-worker.js"
 	},

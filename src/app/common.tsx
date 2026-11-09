@@ -44,18 +44,22 @@ export const messageOf = (reason: unknown) =>
 /**
 Closes this window when Escape is pressed, for the small prompt windows the service worker opens.
 */
-export function useCloseOnEscape() {
+export function useCloseOnEscape(
+	close: () => void = () => {
+		window.close();
+	},
+) {
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			// A key some control already used (closing a menu inside the window) does not also close it.
 			if (event.key === 'Escape' && !event.defaultPrevented) {
-				window.close();
+				close();
 			}
 		};
 
 		document.addEventListener('keydown', onKey);
 		return () => document.removeEventListener('keydown', onKey);
-	}, []);
+	}, [close]);
 }
 
 /**

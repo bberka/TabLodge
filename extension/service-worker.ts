@@ -3,6 +3,7 @@ import {
 	omniboxIndex,
 	omniboxSuggestions,
 } from '../src/app/omnibox';
+import {togglePaletteOverlay} from '../src/app/palette-overlay';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
 // would leave an `export {}` behind. The one value import above is bundled into the classic script by the
@@ -497,6 +498,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	unloadRestoredTabsThreshold: 5,
 	restoreSplitTabs: 'split',
 	saveSplitTabs: 'both',
+	paletteLocation: 'window',
 	sessionSort: 'newest',
 	expandSessionsByDefault: false,
 	showSessionFaviconPreviews: true,
@@ -1557,6 +1559,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		restoreSplitTabs:
 			raw.restoreSplitTabs === 'separate' ? 'separate' : 'split',
 		saveSplitTabs: raw.saveSplitTabs === 'focused' ? 'focused' : 'both',
+		paletteLocation: raw.paletteLocation === 'page' ? 'page' : 'window',
 		sessionSort: isOneOf(
 			['newest', 'oldest', 'opened', 'name', 'tabs', 'custom'],
 			raw.sessionSort,
@@ -2840,6 +2843,37 @@ async function openBookmarkPrompt(
 	return {ok: true};
 }
 
+/**
+Shows the palette over the page the shortcut was pressed on. The shortcut is the user gesture that grants activeTab for
+that tab, which is all the access needed to inject the overlay once, so no content script runs on any page and no
+site permission is requested. Returns false where scripts cannot be injected (browser pages, the Web Store, the PDF
+viewer, extension pages, file addresses); the caller opens the window then.
+*/
+async function openPaletteInPage(commandTab?: chrome.tabs.Tab) {
+	if (
+		!isInteger(commandTab?.id) ||
+		!isInteger(commandTab?.windowId) ||
+		!commandTab.url ||
+		!/^https?:/i.test(commandTab.url)
+	) {
+		return false;
+	}
+
+	const frameUrl = chrome.runtime.getURL(
+		`palette.html?overlay=1&window=${commandTab.windowId}`,
+	);
+	try {
+		const [result] = await chrome.scripting.executeScript({
+			target: {tabId: commandTab.id},
+			func: togglePaletteOverlay,
+			args: [frameUrl],
+		});
+		return result?.result === true;
+	} catch {
+		return false;
+	}
+}
+
 const PALETTE_WIDTH = 640;
 const PALETTE_HEIGHT = 520;
 
@@ -2849,6 +2883,13 @@ The "Open the search palette" shortcut: opens the palette in a small window of i
 address carries the window that was in front, so the palette's links, searches and restores go there.
 */
 async function openPalette(commandTab?: chrome.tabs.Tab) {
+	if (
+		(await readSettings()).paletteLocation === 'page' &&
+		(await openPaletteInPage(commandTab))
+	) {
+		return;
+	}
+
 	const palettePrefix = chrome.runtime.getURL('palette.html');
 	const open = (await chrome.tabs.query({windowType: 'popup'})).filter(
 		(tab) => tab.url?.startsWith(palettePrefix) && isInteger(tab.windowId),
