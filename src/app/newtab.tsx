@@ -1179,6 +1179,23 @@ function NewTab() {
 		// ShowStatus is recreated every render; the handlers only need the latest reload.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `reload` on purpose
 	}, [reload]);
+	// Waits for the Move dialog to close, then rescues focus if it fell back to the page body.
+	function keepFocusAfterMove() {
+		let attempts = 0;
+		const timer = setInterval(() => {
+			attempts += 1;
+			if (document.querySelector('[role="dialog"]') && attempts < 20) {
+				return;
+			}
+
+			clearInterval(timer);
+			const active = document.activeElement;
+			if (!active || active === document.body) {
+				document.querySelector<HTMLElement>('#bookmark-title')?.focus();
+			}
+		}, 100);
+	}
+
 	async function moveBookmarks(
 		bookmarkIds: string[],
 		targetColumnId: string,
@@ -1218,7 +1235,10 @@ function NewTab() {
 
 			// The selection was only there to pick what to move.
 			setSelectedBookmarks(new Set());
+			bookmarkSelectionAnchorRef.current = null;
 			showStatus(`Moved ${plural(bookmarkIds.length, 'bookmark')}.`);
+			// The selection bar (and the dialog opened from it) is gone, so keep focus on the page.
+			keepFocusAfterMove();
 			return true;
 		} finally {
 			await reload();

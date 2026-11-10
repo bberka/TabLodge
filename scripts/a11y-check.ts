@@ -4749,10 +4749,23 @@ async function main() {
 						).slice(-2),
 						ids,
 					);
+					await page
+						.getByRole('group', {name: 'Selected bookmarks'})
+						.waitFor({state: 'hidden'});
 					await until(
-						async () => (await focusedLabel(page)) === 'Move bookmarks',
-						'focus after moving',
+						async () =>
+							(await page.locator(':focus').count()) === 1 &&
+							(await page.locator('body:focus').count()) === 0,
+						'focus to stay off the page body after the selection ends',
 					);
+					for (const id of ids) {
+						await page
+							.locator(`[data-bookmark-id="${id}"]`)
+							.getByRole('checkbox')
+							.focus();
+						await page.keyboard.press('Space');
+					}
+
 					await page
 						.getByRole('button', {
 							name: 'Delete',
@@ -4849,9 +4862,24 @@ async function main() {
 					);
 					return moved.slice(-2).join(',') === ids.join(',');
 				}, 'both bookmarks to move together in order');
+				await page
+					.getByRole('group', {name: 'Selected bookmarks'})
+					.waitFor({state: 'hidden'});
 				const movedCard = page.locator(
 					`[data-bookmark-id="${ids[0]}"] article`,
 				);
+				// Moving ends the selection, so pick the pair again before each drag.
+				const selectPair = async () => {
+					for (const id of ids) {
+						await page
+							.locator(`[data-bookmark-id="${id}"]`)
+							.getByRole('checkbox')
+							.focus();
+						await page.keyboard.press('Space');
+					}
+				};
+
+				await selectPair();
 				const target = destination.locator('[data-bookmark-id]').first();
 				const targetId = await target.getAttribute('data-bookmark-id');
 				await movedCard.dragTo(target, {targetPosition: {x: 60, y: 2}});
@@ -4868,6 +4896,10 @@ async function main() {
 							.join(',') === [...ids, targetId].join(','),
 					'the selection to move before a bookmark',
 				);
+				await page
+					.getByRole('group', {name: 'Selected bookmarks'})
+					.waitFor({state: 'hidden'});
+				await selectPair();
 				const sameTarget = page.locator(`[data-bookmark-id="${targetId}"]`);
 				const box = await sameTarget.boundingBox();
 				assert.ok(box);
