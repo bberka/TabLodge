@@ -95,6 +95,7 @@ import {
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {SessionManager} from './dashboard';
+import {createPageAutoscroller, watchDragAutoscroll} from './drag-autoscroll';
 import {
 	FinderPalette,
 	FinderTrigger,
@@ -218,6 +219,8 @@ type PointerColumnDrag = {
 	startX: number;
 	startY: number;
 	dragging: boolean;
+	lastX: number;
+	lastY: number;
 	targetColumnId: string | null;
 	position: InsertPosition;
 };
@@ -673,9 +676,12 @@ function NewTab() {
 
 		document.addEventListener('dragover', guard);
 		document.addEventListener('drop', guard);
+		// One watcher scrolls the page for every drag on it, bookmarks and saved sessions alike.
+		const stopAutoscroll = watchDragAutoscroll();
 		return () => {
 			document.removeEventListener('dragover', guard);
 			document.removeEventListener('drop', guard);
+			stopAutoscroll();
 		};
 	}, []);
 
@@ -1045,6 +1051,8 @@ function NewTab() {
 			startX: event.clientX,
 			startY: event.clientY,
 			dragging: false,
+			lastX: event.clientX,
+			lastY: event.clientY,
 			targetColumnId: null,
 			position: 'before',
 		};
@@ -1058,6 +1066,29 @@ function NewTab() {
 	}
 
 	useEffect(() => {
+		// Works out the column under the pointer; runs on every move and again after the view scrolls.
+		const retarget = () => {
+			const drag = pointerColumnDragRef.current;
+			if (!drag?.dragging) {
+				return;
+			}
+
+			const target = document
+				.elementFromPoint(drag.lastX, drag.lastY)
+				?.closest<HTMLElement>('[data-column-id]');
+			const targetColumnId = target?.dataset.columnId || null;
+			const rect = target?.getBoundingClientRect();
+			drag.targetColumnId = targetColumnId;
+			drag.position =
+				rect && drag.lastX >= rect.left + rect.width / 2 ? 'after' : 'before';
+			markDrop(
+				targetColumnId
+					? {kind: 'column', columnId: targetColumnId, position: drag.position}
+					: null,
+			);
+		};
+
+		const autoscroll = createPageAutoscroller(retarget);
 		const onMove = (event: PointerEvent) => {
 			const drag = pointerColumnDragRef.current;
 			if (
@@ -1071,22 +1102,11 @@ function NewTab() {
 			}
 
 			drag.dragging = true;
+			drag.lastX = event.clientX;
+			drag.lastY = event.clientY;
 			event.preventDefault();
-			const target = document
-				.elementFromPoint(event.clientX, event.clientY)
-				?.closest<HTMLElement>('[data-column-id]');
-			const targetColumnId = target?.dataset.columnId || null;
-			const rect = target?.getBoundingClientRect();
-			drag.targetColumnId = targetColumnId;
-			drag.position =
-				rect && event.clientX >= rect.left + rect.width / 2
-					? 'after'
-					: 'before';
-			markDrop(
-				targetColumnId
-					? {kind: 'column', columnId: targetColumnId, position: drag.position}
-					: null,
-			);
+			retarget();
+			autoscroll.update(event.clientX, event.clientY);
 		};
 
 		const finish = async (event: PointerEvent) => {
@@ -1096,6 +1116,7 @@ function NewTab() {
 			}
 
 			pointerColumnDragRef.current = null;
+			autoscroll.stop();
 			markDrop(null);
 			if (
 				!drag.dragging ||
@@ -1123,6 +1144,7 @@ function NewTab() {
 			}
 
 			pointerColumnDragRef.current = null;
+			autoscroll.stop();
 			markDrop(null);
 		};
 
@@ -1133,6 +1155,7 @@ function NewTab() {
 			document.removeEventListener('pointermove', onMove);
 			document.removeEventListener('pointerup', finish);
 			document.removeEventListener('pointercancel', cancel);
+			autoscroll.stop();
 		};
 		// ShowStatus is recreated every render; the handlers only need the latest reload.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `reload` on purpose
