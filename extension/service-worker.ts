@@ -2012,11 +2012,6 @@ async function getStore(): Promise<Store> {
 		);
 	}
 
-	if (exists && saved[STORAGE_KEY]?.schemaVersion === SCHEMA_VERSION) {
-		// Already current: a later mutation has nothing to migrate.
-		migrationChecked = true;
-	}
-
 	// Read paths never write: the schema migration is persisted once, inside `mutate` (see migrateStoreOnce).
 	return normalizeStore(exists ? saved[STORAGE_KEY] : null);
 }
@@ -6593,7 +6588,7 @@ async function readSettings(): Promise<Settings> {
 	const generation = settingsGeneration;
 	// The index holds the settings, so no session is read.
 	const meta = await libraryState.readMeta();
-	if (meta.schemaVersion === SCHEMA_VERSION) {
+	if (meta.layout === 'records' && meta.schemaVersion === SCHEMA_VERSION) {
 		migrationChecked = true;
 	}
 

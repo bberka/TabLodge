@@ -990,3 +990,15 @@ test('a checkpoint survives the library being removed', async () => {
 	await store.restoreCheckpoint(delta);
 	assert.deepEqual(await store.read(), {...base, schemaVersion: 10});
 });
+
+test('an entry in the app state shape stamped with the current schema is still the old layout', async () => {
+	const stamped = {...library(), schemaVersion: 10};
+	const backend = new MemoryBackend({[STATE_KEY]: stamped});
+	const store = createLibraryState(backend);
+	assert.equal((await store.readMeta()).layout, 'legacy');
+	await store.write(normalize(library(2)));
+	assert.equal(stateOf(backend)!.layout, undefined);
+	await store.migrate(normalize);
+	assert.equal(stateOf(backend)!.layout, 'records');
+	assert.equal(((await store.read())!.groups as Raw[]).length, 2);
+});

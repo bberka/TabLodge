@@ -8475,6 +8475,23 @@ test('a worker restart after an interrupted migration finishes it without losing
 	);
 });
 
+test('a library written by a dev tool in the current state shape is migrated and stays editable', async () => {
+	const seed = legacyLibrary(3);
+	seed.schemaVersion = 10;
+	const harness = createWorkerHarness(seed, undefined, {legacyLayout: true});
+	await settle();
+	assert.equal(
+		(harness.extraStorage[storageKey] as {layout?: string}).layout,
+		'records',
+	);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://tool.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal(harness.state.bookmarks.length, 1);
+});
+
 test('a library saved by a newer version is left alone', async () => {
 	const future = {schemaVersion: 11, groups: [], note: 'newer'};
 	const harness = createWorkerHarness(future, undefined, {

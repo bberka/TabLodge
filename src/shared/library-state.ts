@@ -347,10 +347,6 @@ export function createLibraryState(
 		}
 
 		if (isRecord(current) && !isRecordsEntry(current)) {
-			if (Number(current.schemaVersion) > LEGACY_SCHEMA_VERSION) {
-				throw new Error('This library was saved by a newer version.');
-			}
-
 			await backend.set({
 				[STATE_KEY]: {...raw, schemaVersion: LEGACY_SCHEMA_VERSION},
 			});
@@ -626,7 +622,8 @@ export function createLibraryState(
 			return {status: 'current'};
 		}
 
-		if (Number(entry.schemaVersion) > LEGACY_SCHEMA_VERSION) {
+		// Dev tools write the app's own state shape (stamped with the current schema) without an index: that is the old layout too.
+		if (Number(entry.schemaVersion) > LAYOUT_VERSION) {
 			return {status: 'newer'};
 		}
 
