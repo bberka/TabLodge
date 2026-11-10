@@ -162,6 +162,7 @@ import {
 } from './save-target';
 import {inPrivateWindow} from './private-config';
 import {PrivateSetupGate} from './private-storage';
+import {PrivateLockGate} from './private-lock-ui';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {
 	BookmarkColumnPicker,
@@ -4184,7 +4185,9 @@ createRoot(document.querySelector('#root')!).render(
 		<PrivateWindowAppearance>
 			<TooltipProvider>
 				<PrivateSetupGate>
-					<NewTab />
+					<PrivateLockGate>
+						<NewTab />
+					</PrivateLockGate>
 				</PrivateSetupGate>
 			</TooltipProvider>
 		</PrivateWindowAppearance>

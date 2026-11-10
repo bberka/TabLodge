@@ -77,6 +77,7 @@ import {archivedFolderId} from './session-folders';
 import {siteName, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
 import {ACTION_ICONS} from './action-icons';
+import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
 type PanelTab = 'bookmarks' | 'sessions' | 'tabs';
@@ -1070,7 +1071,9 @@ const hostname = (value: string) => siteName(value) || value || 'Untitled';
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<TooltipProvider>
-			<SidePanel />
+			<PrivateLockGate>
+				<SidePanel />
+			</PrivateLockGate>
 		</TooltipProvider>
 	</ThemeProvider>,
 );

@@ -125,6 +125,7 @@ import {
 	PRIVATE_STORAGE_WORDS,
 } from './private-storage';
 import {PrivateWindowAppearance} from './private-window-appearance';
+import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
 // Settings keys whose value has the given type, so switch rows only bind boolean settings and select rows string ones.
@@ -3195,7 +3196,9 @@ createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<PrivateWindowAppearance>
 			<TooltipProvider>
-				<Options />
+				<PrivateLockGate>
+					<Options />
+				</PrivateLockGate>
 			</TooltipProvider>
 		</PrivateWindowAppearance>
 	</ThemeProvider>,

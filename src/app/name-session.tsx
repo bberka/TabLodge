@@ -4,6 +4,7 @@ import {TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {PrivateWindowAppearance} from './private-window-appearance';
+import {PrivateLockGate} from './private-lock-ui';
 import {LoadingLine, send, useCloseOnEscape} from './common';
 import {NameSessionForm} from './name-session-dialog';
 import {
@@ -101,7 +102,9 @@ createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<PrivateWindowAppearance>
 			<TooltipProvider>
-				<NameSessionPrompt />
+				<PrivateLockGate>
+					<NameSessionPrompt />
+				</PrivateLockGate>
 			</TooltipProvider>
 		</PrivateWindowAppearance>
 	</ThemeProvider>,

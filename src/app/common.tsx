@@ -16,15 +16,17 @@ import {
 	CardTitle,
 } from '../shared/ui';
 import {PrivateWindowMark} from './private-window-appearance';
-import type {ActionFailure, ActionResult, TabLodgeState} from './types';
-import {send} from './message-client';
-import {PROJECT} from './project';
+import {PrivateLockButton} from './private-lock-ui';
 import {
+	inPrivateWindow,
 	PRIVATE_CONFIG_KEY,
 	PRIVATE_STORAGE_PREFIX,
 	privateConfigNeedsReload,
 	reloadPrivatePage,
 } from './private-config';
+import type {ActionFailure, ActionResult, TabLodgeState} from './types';
+import {send} from './message-client';
+import {PROJECT} from './project';
 import {hostIsExcluded} from './excluded-sites';
 import {webUrl} from './web-url';
 import {cn} from '@/lib/utils';
@@ -852,9 +854,10 @@ export function AppHeader({
 						})}
 					</nav>
 				</div>
-				{Boolean(children) && (
+				{(Boolean(children) || inPrivateWindow()) && (
 					<div className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center justify-end gap-2">
 						{children}
+						<PrivateLockButton />
 					</div>
 				)}
 			</header>

@@ -19,6 +19,11 @@ import {AccentPalette} from './accent-palette';
 import type {PrivateConfig, PrivateStorageMode} from './types';
 import {PROJECT} from './project';
 import {
+	modeLockedReason,
+	PrivateLockSettings,
+	usePrivateLockInfo,
+} from './private-lock-ui';
+import {
 	PRIVATE_ACCENT_DEFAULT,
 	PRIVATE_ACCENT_SAME,
 	PRIVATE_CONFIG_KEY,
@@ -79,11 +84,16 @@ function PrivateStorageForm({
 	onSaved,
 	disabled = false,
 	showContinue = false,
+	lockedReason = null,
 }: {
 	config: PrivateConfig;
 	onSaved: (config: PrivateConfig) => void;
 	disabled?: boolean;
 	showContinue?: boolean;
+	/**
+	Set while a lock protects the saved library: the mode cannot change, and this says why.
+	*/
+	lockedReason?: string | null;
 }) {
 	const [mode, setMode] = useState(config.mode);
 	const [busy, setBusy] = useState(false);
@@ -124,7 +134,7 @@ function PrivateStorageForm({
 			<RadioCardGroup
 				label="Choose a library for private windows"
 				value={mode}
-				disabled={busy || disabled}
+				disabled={busy || disabled || lockedReason !== null}
 				onValueChange={(value) => {
 					const choice = choices.find((choice) => choice.value === value);
 					if (!choice || choice.value === mode) {
@@ -147,6 +157,11 @@ function PrivateStorageForm({
 				snapshots and backups do not run in private windows. Exports and manual
 				backup downloads remain on disk, even in temporary mode.
 			</p>
+			{lockedReason && (
+				<p id="private-mode-locked" className="text-sm font-medium">
+					{lockedReason}
+				</p>
+			)}
 			{error && (
 				<p role="alert" className="text-sm text-destructive">
 					{error}
@@ -169,6 +184,7 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [incognitoAllowed, setIncognitoAllowed] = useState<boolean>();
 	const [savingRedirect, setSavingRedirect] = useState(false);
 	const [error, setError] = useState('');
+	const lock = usePrivateLockInfo();
 	const {systemColor} = useTheme();
 	const [savingAccent, setSavingAccent] = useState(false);
 	const saveAccent = async (accent: string) => {
@@ -364,11 +380,13 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 						key={`${config.mode}:${config.configured}`}
 						config={config}
 						showContinue={false}
+						lockedReason={modeLockedReason(lock.info)}
 						onSaved={(next) => {
 							setConfig(next);
 							showStatus(modeStatus[next.mode]);
 						}}
 					/>
+					<PrivateLockSettings showStatus={showStatus} lock={lock} />
 				</div>
 			)}
 		</>

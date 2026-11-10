@@ -86,6 +86,7 @@ import {
 	useDuplicateTabCount,
 } from './duplicate-tabs-action';
 import type {BookmarkColumnDraft} from './bookmark-column-picker';
+import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
 // Keep the icon registry out of the popup's initial load.
@@ -1046,7 +1047,9 @@ function Popup() {
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<TooltipProvider>
-			<Popup />
+			<PrivateLockGate>
+				<Popup />
+			</PrivateLockGate>
 		</TooltipProvider>
 	</ThemeProvider>,
 );
