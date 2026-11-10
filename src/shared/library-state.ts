@@ -745,6 +745,43 @@ export function createLibraryState(
 	}
 
 	/**
+	Removes the records the last commit replaced now, instead of at the next commit, and clears the index's list.
+	For an action that must not leave the old text readable in storage (moving links into the locked area). The
+	records go before the list does, so a crash in between leaves a list of keys that are already gone, which the
+	next commit removes without trouble. Returns how many records it removed.
+	*/
+	async function purgeGarbage(): Promise<number> {
+		const entry = await getOne(STATE_KEY);
+		if (
+			!isRecordsEntry(entry) ||
+			Number(entry.schemaVersion) > LAYOUT_VERSION
+		) {
+			return 0;
+		}
+
+		const {garbage} = parseIndex(entry);
+		if (garbage.length === 0) {
+			return 0;
+		}
+
+		await removeKeys(garbage);
+		await backend.set({[STATE_KEY]: {...entry, garbage: []}});
+		return garbage.length;
+	}
+
+	/**
+	Drops the exact copy of the old single entry that a migration keeps for a week. Returns true when it removed one.
+	*/
+	async function dropRecoveryCopy(): Promise<boolean> {
+		if ((await getOne(PREMIGRATION_KEY)) === undefined) {
+			return false;
+		}
+
+		await backend.remove([PREMIGRATION_KEY]);
+		return true;
+	}
+
+	/**
 	Storage used by the library, recovery copy and marker included.
 	*/
 	async function bytesInUse(): Promise<number> {
@@ -871,6 +908,8 @@ export function createLibraryState(
 		verify,
 		migrate,
 		pruneRecoveryCopy,
+		purgeGarbage,
+		dropRecoveryCopy,
 		bytesInUse,
 		beginCheckpoint,
 		endCheckpoint,

@@ -45,6 +45,10 @@ export const IDLE_MINUTES_CHOICES = [1, 5, 15, 30, 60, 0] as const;
 export const DEFAULT_IDLE_MINUTES = 5;
 export const MAX_LOCKED_ITEMS = 2000;
 export const MAX_LOCKED_TITLE = 500;
+/**
+Bookmarks per write when a move adds many at once, so one storage write stays small and other work can run in between.
+*/
+export const MOVE_BATCH = 200;
 const MAX_LOCKED_URL = 16_384;
 /**
 After this many wrong entries in a row, further tries wait.
@@ -172,7 +176,7 @@ export function readLockedRecord(value: unknown): LockedRecord | null {
 /**
 The http or https address in canonical form, or null.
 */
-function lockedUrl(value: unknown): string | null {
+export function lockedUrl(value: unknown): string | null {
 	if (typeof value !== 'string' || value.length > MAX_LOCKED_URL) {
 		return null;
 	}
@@ -602,6 +606,52 @@ export function createLockedStore(backend: LockedBackend) {
 
 				return {added, skipped};
 			});
+		},
+
+		/**
+		Adds many addresses in batches of `batchSize`, one encrypted write each. Everything is checked first: an invalid
+		address or too many bookmarks throws before anything is written. A failure later (the area locked or storage
+		failed) leaves the batches before it stored, which is harmless to a caller that removes the originals only
+		after this returns.
+		*/
+		async addMany(
+			entries: Array<{title?: unknown; url: unknown}>,
+			batchSize = MOVE_BATCH,
+		): Promise<AddResult> {
+			await serial(async () => {
+				const unlocked = await open();
+				const known = new Set(unlocked.items.map((item) => item.url));
+				const fresh = new Set<string>();
+				for (const entry of entries) {
+					const url = lockedUrl(entry.url);
+					if (!url) {
+						throw new LockedError(
+							'invalid',
+							'Only http and https addresses can be saved.',
+						);
+					}
+
+					if (!known.has(url)) {
+						fresh.add(url);
+					}
+				}
+
+				if (unlocked.items.length + fresh.size > MAX_LOCKED_ITEMS) {
+					throw new LockedError(
+						'full',
+						`The locked area holds at most ${MAX_LOCKED_ITEMS} bookmarks.`,
+					);
+				}
+			});
+			const added: LockedBookmark[] = [];
+			let skipped = 0;
+			for (let at = 0; at < entries.length; at += batchSize) {
+				const result = await store.add(entries.slice(at, at + batchSize));
+				added.push(...result.added);
+				skipped += result.skipped;
+			}
+
+			return {added, skipped};
 		},
 
 		async update(

@@ -351,12 +351,22 @@ function Help() {
 							choose (5 minutes by default) and always locks when the browser
 							closes. Use Lock now to lock it at once. In the dialog you can
 							also change the PIN or password, move a bookmark to the board, or
-							remove the lock. Locked bookmarks are not available in private
-							windows, and Erase in Settings leaves them alone.
+							remove the lock. To put bookmarks you already have into it, choose
+							Move to locked area from a bookmark's menu, the selection bar, a
+							column's menu, or a saved session's menu. The window says what
+							will happen: the links are encrypted first and removed from the
+							board second, they do not go to the trash bin, and Undo is
+							cleared. A column moves without grouping and is removed, and a
+							session can be kept or deleted afterwards. Existing backups,
+							exports, files in Downloads, and your browser history keep their
+							copies; you can also delete {PROJECT.name}'s own backups and
+							recovery snapshots in the same window. Locked bookmarks are not
+							available in private windows, and Erase in Settings leaves them
+							alone.
 						</>
 					),
 					searchText:
-						'locked area lock locked bookmarks hidden private secret PIN password unlock lock now auto-lock idle minutes change remove forgotten lost recover encrypted profile files weak bookmark to locked area',
+						'locked area lock locked bookmarks hidden private secret PIN password unlock lock now auto-lock idle minutes change remove forgotten lost recover encrypted profile files weak bookmark to locked area move into locked area column session selected bookmarks trash undo backups',
 				},
 				{
 					title: 'Find duplicate bookmarks',
