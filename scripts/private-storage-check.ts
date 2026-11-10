@@ -609,7 +609,7 @@ async function runLockChecks(
 	await privatePage.goto(
 		`chrome-extension://${id}/options.html#settings-private-windows`,
 	);
-	const change = privatePage.getByRole('button', {name: /^Change Password/});
+	const change = privatePage.getByRole('button', {name: /^Change password/});
 	await change.focus();
 	await privatePage.keyboard.press('Enter');
 	const changeDialog = privatePage.getByRole('dialog', {
