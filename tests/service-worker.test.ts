@@ -46,9 +46,11 @@ type MockTab = {
 	title?: string;
 	pinned?: boolean;
 	incognito?: boolean;
+	discarded?: boolean;
 	highlighted?: boolean;
 	groupId?: number;
 	splitViewId?: number;
+	status?: 'loading' | 'complete';
 };
 type MockCreateProperties = Partial<MockTab> & {splitWithTabId?: number};
 type MockWindow = {
@@ -118,6 +120,10 @@ type HarnessOptions = {
 	New tabs start with only a pendingUrl, as before their first navigation commits.
 	*/
 	pendingNavigation?: boolean;
+	/**
+	Tabs the worker creates stay `loading` until `completeLoading()`.
+	*/
+	loadingTabs?: boolean;
 	/**
 	Chrome.alarms is missing in this browser build.
 	*/
@@ -668,6 +674,10 @@ function createWorkerHarness(
 					created.url = '';
 				}
 
+				if (options.loadingTabs) {
+					created.status = 'loading';
+				}
+
 				tabs.push(created);
 				placeAt(created, position);
 				if (partner) {
@@ -740,6 +750,7 @@ function createWorkerHarness(
 			onDetached: event('tabDetached'),
 			async discard(id: number) {
 				discardedTabs.push(id);
+				findTab(id).discarded = true;
 				return tabs.find((entry) => entry.id === id);
 			},
 			// Like Chromium, grouping moves the tabs together (in the given order) at the first tab's position.
@@ -947,6 +958,11 @@ function createWorkerHarness(
 		createdWindows,
 		windowCreateCalls,
 		discardedTabs,
+		completeLoading() {
+			for (const tab of tabs) {
+				tab.status = 'complete';
+			}
+		},
 		menuItems,
 		listeners,
 		tabs,
@@ -10260,4 +10276,112 @@ test('omnibox: a bookmark saved after the first search shows up in the next one'
 	});
 	assert.equal(added.ok, true, added.error);
 	assert.equal((await suggest('lemmings')).length, 1);
+});
+
+// ---- Batched restores ----
+
+const manyTabsSession = (
+	count: number,
+	settings: Record<string, unknown> = {},
+) => {
+	const state = stateWithSession(settings);
+	state.groups[0].tabs = Array.from({length: count}, (_, index) => ({
+		id: `bulk-${index}`,
+		title: `Bulk ${index}`,
+		url: `https://bulk${index}.example/${index}`,
+	}));
+	return state;
+};
+
+const realPause = async (ms: number) =>
+	new Promise<void>((resolve) => {
+		setTimeout(resolve, ms);
+	});
+
+test('a large restore opens tabs in batches and waits for each batch to load', async () => {
+	const harness = createWorkerHarness(manyTabsSession(130), undefined, {
+		loadingTabs: true,
+		manualTimers: true,
+	});
+	const restoring = harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	const seen: number[] = [];
+	for (let batch = 0; batch < 5; batch += 1) {
+		// A full batch is open and the next one waits while its tabs are still loading.
+		await settle();
+		seen.push(harness.openedTabs.length);
+		await harness.runTimers();
+		assert.equal(harness.openedTabs.length, seen[batch], 'still waiting');
+		harness.completeLoading();
+		await harness.runTimers();
+	}
+
+	const response = await restoring;
+	assert.equal(response.ok, true, response.error);
+	assert.deepEqual(seen, [25, 50, 75, 100, 125]);
+	assert.equal(harness.openedTabs.length, 130);
+	assert.equal(response.count, 130);
+});
+
+test('a restore at or below the batch threshold opens every tab without waiting', async () => {
+	const harness = createWorkerHarness(manyTabsSession(100), undefined, {
+		loadingTabs: true,
+	});
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(harness.openedTabs.length, 100);
+});
+
+test('a batch that never finishes loading does not hold the restore forever', async () => {
+	const harness = createWorkerHarness(manyTabsSession(101), undefined, {
+		loadingTabs: true,
+	});
+	const response = await harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.count, 101);
+}, 30_000);
+
+test('with unloading on, each batch is unloaded before the next opens, and the active tab stays', async () => {
+	const harness = createWorkerHarness(
+		manyTabsSession(130, {
+			unloadRestoredTabs: true,
+			unloadRestoredTabsThreshold: 5,
+		}),
+		undefined,
+		{loadingTabs: true, manualTimers: true},
+	);
+	const restoring = harness.sendMessage({
+		type: 'RESTORE_GROUP',
+		groupId: 'session-1',
+	});
+	await settle();
+	assert.equal(harness.openedTabs.length, 25);
+	assert.equal(
+		harness.discardedTabs.length,
+		0,
+		'nothing unloaded while it loads',
+	);
+	harness.completeLoading();
+	await harness.runTimers();
+	// The first batch finished loading and was unloaded except its first tab; the second batch is open.
+	assert.equal(harness.openedTabs.length, 50);
+	assert.equal(harness.discardedTabs.length, 24);
+	for (let batch = 0; batch < 4; batch += 1) {
+		harness.completeLoading();
+		await harness.runTimers();
+	}
+
+	const response = await restoring;
+	assert.equal(response.ok, true, response.error);
+	assert.equal(response.count, 130);
+	assert.equal(harness.openedTabs.length, 130);
+	assert.equal(harness.discardedTabs.length, 129);
 });
