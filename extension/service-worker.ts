@@ -2855,6 +2855,19 @@ viewer, extension pages, file addresses); the caller opens the window then.
 */
 async function openPaletteInPage(commandTab?: chrome.tabs.Tab) {
 	if (
+		isInteger(commandTab?.id) &&
+		commandTab.url?.startsWith(chrome.runtime.getURL('newtab.html'))
+	) {
+		// The dashboard has a search palette of its own, so the shortcut toggles that one instead of injecting a frame.
+		try {
+			await chrome.tabs.sendMessage(commandTab.id, {type: 'toggle-finder'});
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	if (
 		!isInteger(commandTab?.id) ||
 		!isInteger(commandTab?.windowId) ||
 		!commandTab.url ||
