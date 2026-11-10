@@ -13,12 +13,17 @@ import {
 	RadioCardGroup,
 	Switch,
 } from '../shared/ui';
+import {useTheme} from '../shared/theme';
 import {messageOf, send, type ShowStatus} from './common';
+import {AccentPalette} from './accent-palette';
 import type {PrivateConfig, PrivateStorageMode} from './types';
 import {PROJECT} from './project';
 import {
+	PRIVATE_ACCENT_DEFAULT,
+	PRIVATE_ACCENT_SAME,
 	PRIVATE_CONFIG_KEY,
 	PRIVATE_RELOAD_FOCUS_KEY,
+	privateConfigNeedsReload,
 	reloadPrivatePage,
 } from './private-config';
 
@@ -34,6 +39,8 @@ export const PRIVATE_STORAGE_WORDS = [
 	'private',
 	'new tab',
 	'redirect',
+	'accent',
+	'color',
 ];
 
 const choices: Array<{
@@ -162,6 +169,34 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [incognitoAllowed, setIncognitoAllowed] = useState<boolean>();
 	const [savingRedirect, setSavingRedirect] = useState(false);
 	const [error, setError] = useState('');
+	const {systemColor} = useTheme();
+	const [savingAccent, setSavingAccent] = useState(false);
+	const saveAccent = async (accent: string) => {
+		if (!config || savingAccent) {
+			return;
+		}
+
+		setSavingAccent(true);
+		setError('');
+		try {
+			const result = await send('SET_PRIVATE_ACCENT', {accent});
+			if (!result.ok) {
+				throw new Error(result.error);
+			}
+
+			setConfig(result);
+			showStatus(
+				accent === PRIVATE_ACCENT_SAME
+					? 'Private windows use the regular accent.'
+					: 'Private window accent saved.',
+			);
+		} catch (reason) {
+			setError(messageOf(reason) || 'Could not save the private accent.');
+		} finally {
+			setSavingAccent(false);
+		}
+	};
+
 	const saveRedirect = async (enabled: boolean) => {
 		if (!config || savingRedirect) {
 			return;
@@ -288,6 +323,43 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 							onCheckedChange={(enabled) => void saveRedirect(enabled)}
 						/>
 					</div>
+					<div className="space-y-3 border-b border-border pb-5">
+						<div className="flex items-start justify-between gap-4">
+							<div className="space-y-1">
+								<label
+									htmlFor="private-accent-switch"
+									className="block font-medium"
+								>
+									Use a different accent in private windows
+								</label>
+								<p
+									id="private-accent-description"
+									className="text-sm text-muted-foreground"
+								>
+									Tints buttons, focus rings, and selections in private windows
+									so they stand out. Light and dark follow your regular choice.
+								</p>
+							</div>
+							<Switch
+								id="private-accent-switch"
+								checked={config.accent !== PRIVATE_ACCENT_SAME}
+								disabled={savingAccent}
+								aria-describedby="private-accent-description"
+								onCheckedChange={(enabled) =>
+									void saveAccent(
+										enabled ? PRIVATE_ACCENT_DEFAULT : PRIVATE_ACCENT_SAME,
+									)
+								}
+							/>
+						</div>
+						{config.accent !== PRIVATE_ACCENT_SAME && (
+							<AccentPalette
+								accent={config.accent}
+								systemColor={systemColor}
+								onChange={(next) => void saveAccent(next)}
+							/>
+						)}
+					</div>
 					<PrivateStorageForm
 						key={`${config.mode}:${config.configured}`}
 						config={config}
@@ -334,16 +406,9 @@ export function PrivateSetupGate({children}: {children: ReactNode}) {
 			const {newValue, oldValue} = changes[PRIVATE_CONFIG_KEY];
 			const previous = oldValue as PrivateConfig | undefined;
 			const next = newValue as PrivateConfig | undefined;
-			if (
-				previous &&
-				next &&
-				previous.mode === next.mode &&
-				previous.configured === next.configured
-			) {
-				return;
+			if (privateConfigNeedsReload(previous, next)) {
+				reloadPrivatePage();
 			}
-
-			reloadPrivatePage();
 		};
 
 		chrome.storage.onChanged.addListener(changed);

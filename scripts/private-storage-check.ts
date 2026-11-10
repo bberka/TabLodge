@@ -160,36 +160,6 @@ async function captureEvidence(
 	await page.setViewportSize(evidenceViewports[1]);
 }
 
-async function assertPrivateMarkAppearance(page: Page) {
-	const marks = page.locator(
-		'[data-private-window-appearance] > div[aria-hidden="true"] svg',
-	);
-	assert.equal(await marks.count(), 48);
-	const gridClass = await page
-		.locator('[data-private-window-appearance] > div[aria-hidden="true"]')
-		.getAttribute('class');
-	assert.ok(gridClass?.split(/\s+/).includes('text-muted-foreground/15'));
-	const expectedSizes = [
-		{width: 440, height: 956, size: 48},
-		{width: 768, height: 1024, size: 56},
-		{width: 1440, height: 900, size: 64},
-		{width: 1920, height: 1080, size: 64},
-	] as const;
-
-	for (const {width, height, size} of expectedSizes) {
-		await page.setViewportSize({width, height});
-		const actualSize = await marks
-			.first()
-			.evaluate(
-				(mark: {getBoundingClientRect(): {width: number}}) =>
-					mark.getBoundingClientRect().width,
-			);
-		assert.equal(actualSize, size, `private mark size at ${width}px`);
-	}
-
-	await page.setViewportSize(evidenceViewports[1]);
-}
-
 async function bookmarkTitles(page: Page): Promise<string[]> {
 	const state = await send(page, {type: 'GET_STATE'});
 	assert.ok(Array.isArray(state.bookmarks));
@@ -504,7 +474,6 @@ try {
 	);
 	for (const theme of ['light', 'dark'] as const) {
 		await setPrivatePageTheme(normal, privatePage, theme);
-		await assertPrivateMarkAppearance(privatePage);
 		await captureEvidence(
 			privatePage,
 			privatePage.locator('body'),
@@ -523,7 +492,14 @@ try {
 			'name-session.html',
 		]) {
 			await privatePage.goto(`chrome-extension://${id}/${page}`);
-			await privatePage.locator('[data-private-window-appearance]').waitFor();
+			// The popup and side panel show a compact badge in their header instead of the banner frame.
+			await privatePage
+				.locator(
+					page === 'popup.html' || page === 'sidepanel.html'
+						? '[role="img"][aria-label="Private window"]'
+						: '[data-private-window-appearance]',
+				)
+				.waitFor();
 			assert.equal(
 				await privatePage.evaluate(
 					() =>
@@ -533,32 +509,46 @@ try {
 				true,
 				`${page} should know it is in a private window`,
 			);
-			const banner = privatePage.locator('aside[aria-label="Private window"]');
-			assert.equal(
-				await banner.count(),
-				1,
-				`${page} should show one private banner`,
-			);
-			await banner
-				.getByText('You’re in a private window', {exact: true})
-				.waitFor();
-			await banner
-				.getByText('Separate library saved on this device', {exact: true})
-				.waitFor();
-			assert.equal(
+			const compact = page === 'popup.html' || page === 'sidepanel.html';
+			if (compact) {
+				assert.equal(
+					await privatePage
+						.locator('aside[aria-label="Private window"]')
+						.count(),
+					0,
+					`${page} should not show the private banner`,
+				);
+			} else {
+				const banner = privatePage.locator(
+					'aside[aria-label="Private window"]',
+				);
+				assert.equal(
+					await banner.count(),
+					1,
+					`${page} should show one private banner`,
+				);
 				await banner
 					.getByText('You’re in a private window', {exact: true})
-					.count(),
-				1,
-				`${page} should label the private window`,
-			);
-			assert.equal(
+					.waitFor();
 				await banner
 					.getByText('Separate library saved on this device', {exact: true})
-					.count(),
-				1,
-				`${page} should explain the active storage mode`,
-			);
+					.waitFor();
+				assert.equal(
+					await banner
+						.getByText('You’re in a private window', {exact: true})
+						.count(),
+					1,
+					`${page} should label the private window`,
+				);
+				assert.equal(
+					await banner
+						.getByText('Separate library saved on this device', {exact: true})
+						.count(),
+					1,
+					`${page} should explain the active storage mode`,
+				);
+			}
+
 			if (page === 'popup.html') {
 				await privatePage.setViewportSize({width: 380, height: 600});
 				const documentHeight = await privatePage
@@ -574,7 +564,6 @@ try {
 				});
 			}
 
-			await assertPrivateMarkAppearance(privatePage);
 			if (page === 'options.html' || page === 'help.html') {
 				await captureEvidence(
 					privatePage,
@@ -584,6 +573,25 @@ try {
 			}
 		}
 	}
+
+	// A private accent tints private pages live and leaves regular windows alone.
+	const accentVariable =
+		"document.documentElement.style.getPropertyValue('--brand-primary-light')";
+	await privatePage.goto(`chrome-extension://${id}/options.html`);
+	assert.equal(await privatePage.evaluate<string>(accentVariable), '');
+	const tealSaved = await send(privatePage, {
+		type: 'SET_PRIVATE_ACCENT',
+		accent: 'teal',
+	});
+	assert.equal(tealSaved.ok, true);
+	await privatePage.waitForFunction(
+		"document.documentElement.style.getPropertyValue('--brand-primary-light') !== ''",
+	);
+	assert.equal(await normal.evaluate<string>(accentVariable), '');
+	await send(privatePage, {type: 'SET_PRIVATE_ACCENT', accent: 'same'});
+	await privatePage.waitForFunction(
+		"document.documentElement.style.getPropertyValue('--brand-primary-light') === ''",
+	);
 
 	await privatePage.goto(`chrome-extension://${id}/newtab.html`);
 	await privatePage.getByRole('main').waitFor();

@@ -14,6 +14,8 @@ import {
 	applyAccent,
 	systemAccentColor,
 	isAccent,
+	readPrivateAccent,
+	PRIVATE_ACCENT_MIRROR,
 	readSavedAccent,
 	watchSystemAccent,
 	type Rgb,
@@ -37,6 +39,7 @@ const THEMES = new Set<unknown>(['system', 'light', 'dark']);
 const isTheme = (value: unknown): value is Theme => THEMES.has(value);
 const THEME_KEY = 'uiTheme';
 const ACCENT_KEY = 'uiAccent';
+const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
 
 function applyDocumentTheme(theme: Theme, systemDark: boolean) {
 	document.documentElement.dataset.theme = theme;
@@ -64,6 +67,10 @@ export function ThemeProvider({children}: {children?: ReactNode}) {
 		return isTheme(current) ? current : 'system';
 	});
 	const [accent, setAccent] = useState(readSavedAccent);
+	// Only a private window has its own accent; regular windows ignore it.
+	const [privateAccent, setPrivateAccent] = useState(() =>
+		chrome.extension.inIncognitoContext ? readPrivateAccent() : undefined,
+	);
 	const [systemDark, setSystemDark] = useState(
 		() =>
 			globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false,
@@ -86,6 +93,27 @@ export function ThemeProvider({children}: {children?: ReactNode}) {
 			remember(ACCENT_MIRROR_KEY, next);
 		};
 
+		const syncPrivateAccent = (config: unknown) => {
+			if (!chrome.extension.inIncognitoContext) {
+				return;
+			}
+
+			const value = (config as {accent?: unknown} | undefined)?.accent;
+			const next = isAccent(value) ? value : undefined;
+			setPrivateAccent(next);
+			if (next) {
+				remember(PRIVATE_ACCENT_MIRROR, next);
+			} else {
+				try {
+					localStorage.removeItem(PRIVATE_ACCENT_MIRROR);
+				} catch {
+					/*
+					Optional.
+					*/
+				}
+			}
+		};
+
 		const onStorage = (
 			changes: Record<string, chrome.storage.StorageChange>,
 			area: chrome.storage.AreaName,
@@ -97,13 +125,18 @@ export function ThemeProvider({children}: {children?: ReactNode}) {
 			if (area === 'local' && Object.hasOwn(changes, ACCENT_KEY)) {
 				syncAccent(changes[ACCENT_KEY].newValue);
 			}
+
+			if (area === 'local' && Object.hasOwn(changes, PRIVATE_CONFIG_KEY)) {
+				syncPrivateAccent(changes[PRIVATE_CONFIG_KEY].newValue);
+			}
 		};
 
 		chrome.storage.local
-			.get([THEME_KEY, ACCENT_KEY])
+			.get([THEME_KEY, ACCENT_KEY, PRIVATE_CONFIG_KEY])
 			.then((stored) => {
 				syncTheme(stored?.[THEME_KEY]);
 				syncAccent(stored?.[ACCENT_KEY]);
+				syncPrivateAccent(stored?.[PRIVATE_CONFIG_KEY]);
 			})
 			.catch(() => {});
 		chrome.storage.onChanged.addListener(onStorage);
@@ -115,12 +148,13 @@ export function ThemeProvider({children}: {children?: ReactNode}) {
 
 	useEffect(() => applyDocumentTheme(theme, systemDark), [theme, systemDark]);
 	const [systemColor, setSystemColor] = useState(systemAccentColor);
+	const shownAccent = privateAccent ?? accent;
 	useEffect(() => {
-		if (accent === SYSTEM_ACCENT) {
+		if (shownAccent === SYSTEM_ACCENT) {
 			return watchSystemAccent(setSystemColor);
 		}
-	}, [accent]);
-	useEffect(() => applyAccent(accent), [accent, systemColor]);
+	}, [shownAccent]);
+	useEffect(() => applyAccent(shownAccent), [shownAccent, systemColor]);
 	// Every page mounts this provider, so it also keeps focus from falling to <body> when an item is removed.
 	useEffect(() => installFocusRescue(), []);
 

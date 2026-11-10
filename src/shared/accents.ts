@@ -211,3 +211,24 @@ export function readSavedAccent(): string {
 		return DEFAULT_ACCENT;
 	}
 }
+
+// A private window's own accent, mirrored into its (separate) localStorage by the theme provider.
+// "same" or a missing value means the regular accent applies.
+export const PRIVATE_ACCENT_MIRROR = 'tablodge.privateAccent';
+
+export function readPrivateAccent(): string | undefined {
+	try {
+		const saved = localStorage.getItem(PRIVATE_ACCENT_MIRROR);
+		return isAccent(saved) ? saved : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+// The accent this page shows: a private window's own accent when set, otherwise the saved one.
+export function readEffectiveAccent(): string {
+	return (
+		(chrome.extension?.inIncognitoContext ? readPrivateAccent() : undefined) ??
+		readSavedAccent()
+	);
+}
