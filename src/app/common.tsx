@@ -15,12 +15,14 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../shared/ui';
+import {PrivateWindowMark} from './private-window-appearance';
 import type {ActionFailure, ActionResult, TabLodgeState} from './types';
 import {send} from './message-client';
 import {PROJECT} from './project';
 import {
 	PRIVATE_CONFIG_KEY,
 	PRIVATE_STORAGE_PREFIX,
+	privateConfigNeedsReload,
 	reloadPrivatePage,
 } from './private-config';
 import {hostIsExcluded} from './excluded-sites';
@@ -446,7 +448,11 @@ export function useTabLodgeState(
 				area === 'local' &&
 				Object.hasOwn(changes, PRIVATE_CONFIG_KEY)
 			) {
-				reloadPrivatePage();
+				const {oldValue, newValue} = changes[PRIVATE_CONFIG_KEY];
+				if (privateConfigNeedsReload(oldValue, newValue)) {
+					reloadPrivatePage();
+				}
+
 				return;
 			}
 
@@ -736,12 +742,16 @@ export function Brand({
 	link = 'newtab.html',
 	label = PROJECT.name,
 	newTab = false,
+	privateBadge = false,
 }: {
 	compact?: boolean;
 	link?: string;
 	label?: string;
 	newTab?: boolean;
+	// Shows the filled private window badge in place of the logo tile inside a private window.
+	privateBadge?: boolean;
 }) {
+	const showPrivate = privateBadge && chrome.extension.inIncognitoContext;
 	return (
 		<a
 			href={link}
@@ -750,9 +760,20 @@ export function Brand({
 			className="inline-flex min-w-0 items-center gap-2.5 rounded-lg text-sm font-extrabold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			aria-label={label}
 		>
-			<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-				<TabLodgeMark className="h-[22px] w-[22px]" />
-			</span>
+			{showPrivate ? (
+				<span
+					role="img"
+					aria-label="Private window"
+					title="Private window"
+					className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
+				>
+					<PrivateWindowMark className="h-7 w-7" />
+				</span>
+			) : (
+				<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+					<TabLodgeMark className="h-[22px] w-[22px]" />
+				</span>
+			)}
 			{!compact && <span className="truncate">{PROJECT.name}</span>}
 		</a>
 	);

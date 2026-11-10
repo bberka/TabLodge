@@ -274,8 +274,8 @@ const settingsGroups: Array<{
 				help: 'Where the “Open the search palette” shortcut shows the palette. “In the current page” appears over the page you are on, and only when the shortcut is pressed. Browser pages, the Web Store and the PDF viewer cannot show it, so they open the window instead.',
 				type: 'select',
 				options: [
-					['window', 'Window'],
 					['page', 'In the current page'],
+					['window', 'Window'],
 				],
 			},
 			{
@@ -2049,11 +2049,9 @@ function Options() {
 														.filter((label) => matchesAnyTerm(query, label))
 												: undefined
 										}
+										// `when` only decides whether the row exists, so it does not make a row dependent.
 										inset={Boolean(
-											field.requires ||
-											field.enabled ||
-											field.parent ||
-											field.when,
+											field.requires || field.enabled || field.parent,
 										)}
 										highlight={query}
 									>

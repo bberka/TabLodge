@@ -332,6 +332,23 @@ function Help() {
 						'select multiple bulk bookmarks alt option shift range ctrl command checkbox drag move delete undo keyboard space escape',
 				},
 				{
+					title: 'Find duplicate bookmarks',
+					body: (
+						<>
+							Use the <MenuLocation label="Bookmarks toolbar" /> and choose Find
+							duplicate bookmarks to list web addresses saved more than once on
+							the board, in any column. Each address shows its copies and the
+							column each is in. The oldest copy is kept unless you choose
+							another. Remove extra copies moves the rest to the trash bin, and
+							Undo restores them. Nothing is removed until you choose it.
+							Sessions are not checked, because the same address in two sessions
+							is normal.
+						</>
+					),
+					searchText:
+						'find duplicate bookmarks cleanup remove extra copies same address url saved twice columns keep oldest undo trash bookmarks toolbar menu',
+				},
+				{
 					title: 'Import or export bookmarks',
 					body: (
 						<>
@@ -459,15 +476,16 @@ function Help() {
 							Press <Key>Ctrl</Key> + <Key>Shift</Key> + <Key>K</Key> (
 							<Key>⌘</Key> + <Key>Shift</Key> + <Key>K</Key> on macOS) on any
 							page, including pages that use <Key>Ctrl</Key> + <Key>K</Key>{' '}
-							themselves and browser pages. The palette opens in a small window.
-							In Settings, Opening TabLodge, you can choose to show it in the
-							current page instead. Browser pages, the Web Store and the PDF
-							viewer cannot show it there, so the window opens on them. Choosing
-							a session restores it into the window you were in, and{' '}
+							themselves and browser pages. The palette appears over the page
+							you are on. Browser pages, the Web Store and the PDF viewer cannot
+							show it there, so a small window opens on them instead. In
+							Settings, Opening TabLodge, you can choose the window everywhere.
+							Choosing a session restores it into the window you were in, and{' '}
 							<Key>Ctrl</Key> or <Key>⌘</Key> + <Key>Enter</Key> restores it in
 							a new window. Links and web searches open in that window&apos;s
 							active tab. Press the shortcut again or <Key>Esc</Key> to close
-							the window. It also closes when you click another window.
+							the palette. A palette window also closes when you click another
+							window.
 						</>
 					),
 					searchText:
@@ -557,7 +575,7 @@ function Help() {
 					title: 'Private windows',
 					body: isFirefox
 						? `${PROJECT.name} does not run in Firefox private windows: it cannot see their tabs, so it never saves them, and its pages are not available there.`
-						: 'Enable Allow in Incognito in the browser’s extension settings. New private tabs redirect to the dashboard by default. Turn this off in Settings under Private windows to keep the browser’s page. You can also open the dashboard from the toolbar popup or its shortcut. On the first visit, choose the same library as regular windows, a separate saved library, or a separate temporary library. Change this later in Settings under Private windows. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
+						: 'Enable Allow in Incognito in the browser’s extension settings. New private tabs redirect to the dashboard by default. Turn this off in Settings under Private windows to keep the browser’s page. You can also open the dashboard from the toolbar popup or its shortcut. On the first visit, choose the same library as regular windows, a separate saved library, or a separate temporary library. Change this later in Settings under Private windows. Private windows use their own accent color by default; change or turn it off there. Temporary data clears on browser restart, not when private windows close. Switching modes does not copy or delete libraries. Automatic snapshots and backups do not run privately. Exported files remain on disk.',
 					searchText:
 						'private incognito storage shared separate saved temporary restart dashboard first setup new tab redirect',
 				},
@@ -599,8 +617,10 @@ function Help() {
 							everything, one window, or save a copy as a session. On the
 							dashboard, open them with the button beside session search and
 							sort, from the Recent snapshots icon in the side panel header, or
-							the dashboard search palette. Crash detection is a best guess
-							because browsers do not tell extensions when they shut down.
+							the dashboard search palette. Private windows never take
+							snapshots, so these entry points are hidden there; save a session
+							by hand instead. Crash detection is a best guess because browsers
+							do not tell extensions when they shut down.
 						</>
 					),
 					searchText:

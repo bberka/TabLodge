@@ -57,7 +57,7 @@ import {
 	openSidePanel as openPanel,
 } from '../shared/browser';
 import {ThemeProvider} from '../shared/theme';
-import {PrivateWindowAppearance} from './private-window-appearance';
+import {PrivateWindowMark} from './private-window-appearance';
 import {
 	LoadingLine,
 	StatusLine,
@@ -106,9 +106,7 @@ const hasSidePanel = canOpenSidePanel;
 type WebTab = chrome.tabs.Tab & {id: number; url: string};
 
 function Popup() {
-	const popupHeight = chrome.extension.inIncognitoContext
-		? 'h-[500px]'
-		: 'h-[560px]';
+	const privateWindow = chrome.extension.inIncognitoContext;
 	const {state, error, reload} = useTabLodgeState();
 	const [status, showStatus] = useStatus();
 	const [busy, setBusy] = useState('');
@@ -514,7 +512,7 @@ function Popup() {
 			<main
 				className={cn(
 					'flex w-[380px] items-center justify-center text-foreground',
-					popupHeight,
+					'h-[560px]',
 				)}
 			>
 				<LoadingLine className="py-0" />
@@ -543,14 +541,25 @@ function Popup() {
 		<main
 			className={cn(
 				'flex w-[380px] flex-col overflow-hidden text-foreground',
-				popupHeight,
+				'h-[560px]',
 			)}
 		>
 			<header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
 				<h1 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
-					<span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
-						<TabLodgeMark className="h-[18px] w-[18px]" />
-					</span>
+					{privateWindow ? (
+						<span
+							role="img"
+							aria-label="Private window"
+							title="Private window"
+							className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground"
+						>
+							<PrivateWindowMark className="h-6 w-6" />
+						</span>
+					) : (
+						<span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
+							<TabLodgeMark className="h-[18px] w-[18px]" />
+						</span>
+					)}
 					{PROJECT.name}
 				</h1>
 				<div className="flex items-center gap-1">
@@ -1010,10 +1019,8 @@ function Popup() {
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<PrivateWindowAppearance>
-			<TooltipProvider>
-				<Popup />
-			</TooltipProvider>
-		</PrivateWindowAppearance>
+		<TooltipProvider>
+			<Popup />
+		</TooltipProvider>
 	</ThemeProvider>,
 );

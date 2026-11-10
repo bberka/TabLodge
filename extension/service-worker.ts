@@ -197,7 +197,16 @@ let privateConfig: PrivateConfig = {
 	mode: 'shared',
 	configured: false,
 	redirectNewTabs: true,
+	accent: 'teal',
 };
+
+function isPrivateAccent(value: unknown): value is string {
+	return (
+		value === 'same' ||
+		(typeof value === 'string' &&
+			(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value)))
+	);
+}
 
 function normalizePrivateConfig(value: unknown): PrivateConfig {
 	const raw = isRecord(value) ? value : {};
@@ -207,6 +216,7 @@ function normalizePrivateConfig(value: unknown): PrivateConfig {
 		mode,
 		configured: raw.configured === true && raw.mode === mode,
 		redirectNewTabs: raw.redirectNewTabs !== false,
+		accent: isPrivateAccent(raw.accent) ? raw.accent : 'teal',
 	};
 }
 
@@ -502,7 +512,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	unloadRestoredTabsThreshold: 5,
 	restoreSplitTabs: 'split',
 	saveSplitTabs: 'both',
-	paletteLocation: 'window',
+	paletteLocation: 'page',
 	sessionSort: 'newest',
 	expandSessionsByDefault: false,
 	showSessionFaviconPreviews: true,
@@ -1563,7 +1573,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		restoreSplitTabs:
 			raw.restoreSplitTabs === 'separate' ? 'separate' : 'split',
 		saveSplitTabs: raw.saveSplitTabs === 'focused' ? 'focused' : 'both',
-		paletteLocation: raw.paletteLocation === 'page' ? 'page' : 'window',
+		paletteLocation: raw.paletteLocation === 'window' ? 'window' : 'page',
 		sessionSort: isOneOf(
 			['newest', 'oldest', 'opened', 'name', 'tabs', 'custom'],
 			raw.sessionSort,
@@ -2855,6 +2865,19 @@ viewer, extension pages, file addresses); the caller opens the window then.
 */
 async function openPaletteInPage(commandTab?: chrome.tabs.Tab) {
 	if (
+		isInteger(commandTab?.id) &&
+		commandTab.url?.startsWith(chrome.runtime.getURL('newtab.html'))
+	) {
+		// The dashboard has a search palette of its own, so the shortcut toggles that one instead of injecting a frame.
+		try {
+			await chrome.tabs.sendMessage(commandTab.id, {type: 'toggle-finder'});
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	if (
 		!isInteger(commandTab?.id) ||
 		!isInteger(commandTab?.windowId) ||
 		!commandTab.url ||
@@ -2882,13 +2905,15 @@ const PALETTE_WIDTH = 640;
 const PALETTE_HEIGHT = 520;
 
 /**
-The "Open the search palette" shortcut: opens the palette in a small window of its own, which works on every page
-(web pages that bind Ctrl+K, chrome:// pages, the Web Store, the PDF viewer). A second press closes it again. The
-address carries the window that was in front, so the palette's links, searches and restores go there.
+The "Open the search palette" shortcut: by default shows the palette over the page (see openPaletteInPage), and falls
+back without any message to a small window of its own wherever that is not possible (chrome:// pages, the Web Store,
+the PDF viewer, extension pages, no activeTab grant) or when the setting says Window. The window works on every page,
+including ones that bind Ctrl+K. A second press closes it again. The address carries the window that was in front, so
+the palette's links, searches and restores go there.
 */
 async function openPalette(commandTab?: chrome.tabs.Tab) {
 	if (
-		(await readSettings()).paletteLocation === 'page' &&
+		(await readSettings()).paletteLocation !== 'window' &&
 		(await openPaletteInPage(commandTab))
 	) {
 		return;
@@ -5234,6 +5259,96 @@ async function deleteBookmark(
 	});
 }
 
+async function removeDuplicateBookmarks(
+	bookmarkIds: unknown,
+): Promise<ActionResult<'REMOVE_DUPLICATE_BOOKMARKS'>> {
+	if (
+		!Array.isArray(bookmarkIds) ||
+		bookmarkIds.length === 0 ||
+		bookmarkIds.some((id) => typeof id !== 'string')
+	) {
+		return {ok: false, error: 'Choose the copies to remove.'};
+	}
+
+	if (bookmarkIds.length > TRASH_MAX_ITEMS) {
+		return {
+			ok: false,
+			error: `Remove at most ${TRASH_MAX_ITEMS} copies at a time.`,
+		};
+	}
+
+	const doomed = new Set<string>(bookmarkIds);
+	if (doomed.size !== bookmarkIds.length) {
+		return {ok: false, error: 'Those copies were listed more than once.'};
+	}
+
+	return mutate(async () => {
+		const store = await getStore();
+		const urlOf = (bookmark: Bookmark) =>
+			normalizeUrl(bookmark.url) ?? bookmark.url;
+		const kept = new Set<string>();
+		let found = 0;
+		for (const bookmark of store.bookmarks) {
+			if (doomed.has(bookmark.id)) {
+				found += 1;
+			} else {
+				kept.add(urlOf(bookmark));
+			}
+		}
+
+		if (found !== doomed.size) {
+			return {
+				ok: false,
+				error: 'Some of those bookmarks no longer exist. Check again.',
+			};
+		}
+
+		if (
+			store.bookmarks.some(
+				(bookmark) => doomed.has(bookmark.id) && !kept.has(urlOf(bookmark)),
+			)
+		) {
+			return {
+				ok: false,
+				error: 'That would remove every copy of an address. Check again.',
+			};
+		}
+
+		const columnName = (columnId: string) =>
+			store.bookmarkColumns.find((column) => column.id === columnId)?.name ??
+			'Unfiled';
+		const entries: Array<Omit<TrashEntry, 'id' | 'deletedAt'>> = [];
+		for (const id of bookmarkIds) {
+			const index = store.bookmarks.findIndex((bookmark) => bookmark.id === id);
+			const [removed] = store.bookmarks.splice(index, 1);
+			// The flat list interleaves columns, so look for the nearest neighbors in this column.
+			const before = store.bookmarks
+				.slice(0, index)
+				.findLast((bookmark) => bookmark.columnId === removed.columnId);
+			const after = store.bookmarks
+				.slice(index)
+				.find((bookmark) => bookmark.columnId === removed.columnId);
+			entries.push({
+				kind: 'bookmark',
+				label: removed.title || removed.url,
+				origin: columnName(removed.columnId),
+				count: 1,
+				data: {
+					bookmark: removed,
+					columnId: removed.columnId,
+					index,
+					prevId: before?.id ?? null,
+					nextId: after?.id ?? null,
+				},
+			});
+		}
+
+		const trashIds = await trashAddMany(store.settings, entries);
+		await writeStore(store);
+		return {ok: true, removed: trashIds.length, trashIds};
+	});
+}
+
 async function createBookmarkColumn(
 	name: string,
 	icon?: unknown,
@@ -6866,6 +6981,10 @@ async function openUrlSet(): Promise<Set<string>> {
 	return urls;
 }
 
+function privateSnapshotsError(): {ok: false; error: string} {
+	return {ok: false, error: 'Private windows do not use snapshots.'};
+}
+
 async function getSnapshots(): Promise<ActionResult<'GET_SNAPSHOTS'>> {
 	return snapshotMutate(async () => {
 		const settings = await readSettings();
@@ -7869,6 +7988,30 @@ function trashAdd(
 	});
 }
 
+/**
+`trashAdd` for several items with one read and write of the trash. Ids come back in the order given.
+*/
+function trashAddMany(
+	settings: Settings,
+	items: Array<Omit<TrashEntry, 'id' | 'deletedAt'>>,
+): Promise<string[]> {
+	return trashMutate(async () => {
+		const deletedAt = Date.now();
+		const entries = items.map((item): TrashEntry => {
+			const entry = {...item, id: makeId(), deletedAt};
+			trashSize(entry);
+			return entry;
+		});
+		await writeTrash(
+			pruneTrash(
+				[...entries.toReversed(), ...(await readTrash())],
+				settings.trashRetentionDays,
+			),
+		);
+		return entries.map((entry) => entry.id);
+	});
+}
+
 function purgeTrash(): Promise<void> {
 	return trashMutate(async () => {
 		const settings = await readSettings();
@@ -8580,6 +8723,7 @@ async function handleMessage(
 			'GET_PRIVATE_CONFIG',
 			'SET_PRIVATE_CONFIG',
 			'SET_PRIVATE_NEW_TAB_REDIRECT',
+			'SET_PRIVATE_ACCENT',
 			'HANDOFF_NEW_TAB',
 		].includes(message?.type || '')
 	) {
@@ -8618,6 +8762,17 @@ async function handleMessage(
 			}
 
 			const config = {...privateConfig, redirectNewTabs: message.enabled};
+			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
+			await mutationQueue;
+			return {ok: true, ...config};
+		}
+
+		case 'SET_PRIVATE_ACCENT': {
+			if (!isPrivateAccent(message.accent)) {
+				return {ok: false, error: 'Choose a valid accent for private windows.'};
+			}
+
+			const config = {...privateConfig, accent: message.accent};
 			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
 			await mutationQueue;
 			return {ok: true, ...config};
@@ -8787,6 +8942,10 @@ async function handleMessage(
 			return deleteBookmark(message.bookmarkId);
 		}
 
+		case 'REMOVE_DUPLICATE_BOOKMARKS': {
+			return removeDuplicateBookmarks(message.bookmarkIds);
+		}
+
 		case 'CREATE_BOOKMARK_COLUMN': {
 			return createBookmarkColumn(message.name, message.icon);
 		}
@@ -8879,27 +9038,42 @@ async function handleMessage(
 		}
 
 		case 'GET_SNAPSHOTS': {
-			return getSnapshots();
+			// Private windows take no snapshots, and in shared storage mode the library holds the regular windows' snapshots.
+			return privateContext
+				? {
+						ok: true,
+						enabled: false,
+						snapshots: [],
+						live: null,
+						recovery: null,
+					}
+				: getSnapshots();
 		}
 
 		case 'RESTORE_SNAPSHOT': {
-			return restoreSnapshot(message.id, message.windowIndex);
+			return privateContext
+				? privateSnapshotsError()
+				: restoreSnapshot(message.id, message.windowIndex);
 		}
 
 		case 'SAVE_SNAPSHOT_AS_SESSION': {
-			return saveSnapshotAsSession(message.id, message.windowIndex);
+			return privateContext
+				? privateSnapshotsError()
+				: saveSnapshotAsSession(message.id, message.windowIndex);
 		}
 
 		case 'DELETE_SNAPSHOT': {
-			return deleteSnapshot(message.id);
+			return privateContext
+				? privateSnapshotsError()
+				: deleteSnapshot(message.id);
 		}
 
 		case 'CLEAR_SNAPSHOTS': {
-			return clearSnapshots();
+			return privateContext ? privateSnapshotsError() : clearSnapshots();
 		}
 
 		case 'DISMISS_RECOVERY': {
-			return dismissRecovery();
+			return privateContext ? privateSnapshotsError() : dismissRecovery();
 		}
 
 		case 'GET_BACKUPS': {

@@ -1745,6 +1745,32 @@ test('private browser new tabs redirect to the dashboard by default', async () =
 	assert.equal(updated.tabs[0].url, 'chrome-extension://tablodge/newtab.html');
 });
 
+test('private windows cannot read or change the regular windows snapshots', async () => {
+	const harness = recoveryHarness({}, undefined, {
+		storage: {
+			...cleanStorage(seededSnapshotStorage({sessionOpen: false})),
+			'tablodge.private.config': {mode: 'shared', configured: true},
+		},
+		incognitoContext: true,
+	});
+	const listed = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
+	assert.equal(listed.ok, true);
+	assert.equal(listed.snapshots.length, 0);
+	assert.equal(listed.recovery, null);
+	assert.equal(
+		(await harness.sendMessage({type: 'RESTORE_SNAPSHOT', id: 'x'})).ok,
+		false,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'DELETE_SNAPSHOT', id: 'x'})).ok,
+		false,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'CLEAR_SNAPSHOTS'})).ok,
+		false,
+	);
+});
+
 test('private new-tab redirect can be disabled without completing private setup', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession(),
@@ -1769,6 +1795,32 @@ test('private new-tab redirect can be disabled without completing private setup'
 		pendingUrl: 'chrome://newtab/',
 	});
 	assert.equal(harness.tabs[0].url, '');
+});
+
+test('private accent defaults to teal and rejects unknown values', async () => {
+	const harness = createWorkerHarness(stateWithSession(), [], {
+		incognitoContext: true,
+	});
+	const initial = await harness.sendMessage({type: 'GET_PRIVATE_CONFIG'});
+	assert.equal(initial.accent, 'teal');
+
+	const rejected = await harness.sendMessage({
+		type: 'SET_PRIVATE_ACCENT',
+		accent: 'chartreuse',
+	});
+	assert.equal(rejected.ok, false);
+
+	const saved = await harness.sendMessage({
+		type: 'SET_PRIVATE_ACCENT',
+		accent: 'same',
+	});
+	assert.equal(saved.ok, true, saved.error);
+	assert.equal(saved.accent, 'same');
+	assert.equal(saved.configured, false);
+
+	await harness.sendMessage({type: 'SET_PRIVATE_CONFIG', mode: 'saved'});
+	const config = await harness.sendMessage({type: 'GET_PRIVATE_CONFIG'});
+	assert.equal(config.accent, 'same');
 });
 
 test('concurrent new tabs retain separate hand-off claims', async () => {
@@ -6657,6 +6709,143 @@ function bookmarksState(count = 3): StoredState {
 	return state;
 }
 
+function duplicateBookmarksState(): StoredState {
+	const state = bookmarksState(0);
+	const add = (
+		id: string,
+		url: string,
+		columnId: string,
+		createdAt: number,
+	) => {
+		state.bookmarks.push({
+			id,
+			title: id,
+			url,
+			columnId,
+			createdAt,
+			updatedAt: createdAt,
+		});
+	};
+
+	add('a-1', 'https://dup.example/', 'bookmark-default', 1);
+	add('solo', 'https://solo.example/', 'bookmark-default', 2);
+	add('a-2', 'https://dup.example/', 'col-news', 3);
+	add('b-1', 'https://other.example/', 'col-news', 4);
+	add('a-3', 'https://dup.example/', 'col-news', 5);
+	return state;
+}
+
+test('REMOVE_DUPLICATE_BOOKMARKS trashes the extra copies and Undo restores them in place', async () => {
+	const harness = createWorkerHarness(duplicateBookmarksState());
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['a-2', 'a-3'],
+	});
+	assert.equal(removed.ok, true, removed.error);
+	assert.equal(removed.removed, 2);
+	assert.equal(removed.trashIds.length, 2);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.id),
+		['a-1', 'solo', 'b-1'],
+	);
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.ok(trash.ok);
+	assert.equal(trash.items.length, 2);
+	assert.equal(trash.items[0].kind, 'bookmark');
+	// Undo restores in reverse order, as the page does.
+	for (const id of removed.trashIds.toReversed()) {
+		const restored = await harness.sendMessage({type: 'RESTORE_TRASH', id});
+		assert.equal(restored.ok, true, restored.error);
+	}
+
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.id),
+		['a-1', 'solo', 'a-2', 'b-1', 'a-3'],
+	);
+	assert.equal(harness.state.bookmarks[2].columnId, 'col-news');
+});
+
+test('REMOVE_DUPLICATE_BOOKMARKS Undo keeps each column in its old order', async () => {
+	const state = bookmarksState(0);
+	const row = (
+		id: string,
+		url: string,
+		columnId: string,
+		createdAt: number,
+	) => ({
+		id,
+		title: id,
+		url,
+		columnId,
+		createdAt,
+		updatedAt: createdAt,
+	});
+	state.bookmarks = [
+		row('r1', 'https://r.example/', 'bookmark-default', 1),
+		row('s1', 'https://s.example/', 'bookmark-default', 2),
+		row('r2', 'https://r.example/', 'col-news', 3),
+		row('d1', 'https://d.example/', 'bookmark-default', 4),
+		row('d2', 'https://d.example/', 'col-news', 5),
+		row('r3', 'https://r.example/', 'bookmark-default', 6),
+	];
+	const harness = createWorkerHarness(state);
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['r2', 'r3', 'd1'],
+	});
+	assert.equal(removed.ok, true, removed.error);
+	for (const id of removed.trashIds.toReversed()) {
+		await harness.sendMessage({type: 'RESTORE_TRASH', id});
+	}
+
+	for (const columnId of ['bookmark-default', 'col-news']) {
+		assert.deepEqual(
+			harness.state.bookmarks
+				.filter((bookmark) => bookmark.columnId === columnId)
+				.map((bookmark) => bookmark.id),
+			state.bookmarks
+				.filter((bookmark) => bookmark.columnId === columnId)
+				.map((bookmark) => bookmark.id),
+		);
+	}
+});
+
+test('REMOVE_DUPLICATE_BOOKMARKS never removes the last copy of an address', async () => {
+	const harness = createWorkerHarness(duplicateBookmarksState());
+	const all = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['a-1', 'a-2', 'a-3'],
+	});
+	assert.equal(all.ok, false);
+	const single = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['solo'],
+	});
+	assert.equal(single.ok, false);
+	assert.equal(harness.state.bookmarks.length, 5);
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.ok(trash.ok);
+	assert.equal(trash.items.length, 0);
+});
+
+test('REMOVE_DUPLICATE_BOOKMARKS rejects unknown ids, repeated ids and oversized requests', async () => {
+	const harness = createWorkerHarness(duplicateBookmarksState());
+	for (const bookmarkIds of [
+		['missing'],
+		['a-2', 'a-2'],
+		[],
+		Array.from({length: 501}, (_, index) => `x${index}`),
+	]) {
+		const response = await harness.sendMessage({
+			type: 'REMOVE_DUPLICATE_BOOKMARKS',
+			bookmarkIds,
+		});
+		assert.equal(response.ok, false);
+	}
+
+	assert.equal(harness.state.bookmarks.length, 5);
+});
+
 test('BACKUP_NOW stores a full export that the importer reads, and keeps settings in it', async () => {
 	const harness = createWorkerHarness(bookmarksState());
 	const response = await harness.sendMessage({type: 'BACKUP_NOW'});
@@ -9042,10 +9231,17 @@ test('the palette shortcut opens one palette window over the focused window on a
 	);
 });
 
-test('the palette location setting defaults to the window and normalizes unknown values', async () => {
+test('the palette location setting defaults to the current page, keeps an explicit window choice, and normalizes unknown values', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
 		(await defaults.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
+		'page',
+	);
+	const explicit = createWorkerHarness(
+		stateWithSession({paletteLocation: 'window'}),
+	);
+	assert.equal(
+		(await explicit.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
 		'window',
 	);
 	const invalid = createWorkerHarness(
@@ -9053,20 +9249,20 @@ test('the palette location setting defaults to the window and normalizes unknown
 	);
 	assert.equal(
 		(await invalid.sendMessage({type: 'GET_STATE'})).settings.paletteLocation,
-		'window',
+		'page',
 	);
 	const updated = await invalid.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {paletteLocation: 'page'},
+		settings: {paletteLocation: 'window'},
 	});
 	assert.equal(updated.ok, true, updated.error);
-	assert.equal(invalid.state.settings.paletteLocation, 'page');
+	assert.equal(invalid.state.settings.paletteLocation, 'window');
 	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.paletteLocation, 'window');
+	assert.equal(reset.settings.paletteLocation, 'page');
 });
 
-test('with the palette set to the current page, the shortcut injects the overlay on demand and opens no window', async () => {
-	const harness = nameHarness({paletteLocation: 'page'}, [
+test('by default the shortcut injects the overlay on demand and opens no window', async () => {
+	const harness = nameHarness({}, [
 		webTab(1, 10, 0, {active: true, url: 'https://page.example/', title: 'P'}),
 	]);
 	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
@@ -9084,7 +9280,7 @@ test('with the palette set to the current page, the shortcut injects the overlay
 	assert.equal(url.searchParams.get('window'), '10');
 });
 
-test('with the palette set to the current page, pages that cannot be scripted open the window instead', async () => {
+test('by default, pages that cannot be scripted open the window instead', async () => {
 	const press = async (
 		harness: ReturnType<typeof nameHarness>,
 		tab: Record<string, unknown>,
@@ -9097,7 +9293,7 @@ test('with the palette set to the current page, pages that cannot be scripted op
 	};
 
 	// Browser pages are never injected into.
-	const restricted = nameHarness({paletteLocation: 'page'}, [
+	const restricted = nameHarness({}, [
 		webTab(1, 10, 0, {active: true, url: 'chrome://settings/', title: 'S'}),
 	]);
 	await press(restricted, {id: 1, windowId: 10, url: 'chrome://settings/'});
@@ -9106,7 +9302,7 @@ test('with the palette set to the current page, pages that cannot be scripted op
 
 	// A web page the browser refuses to script (Web Store, PDF viewer, no activeTab grant) falls back too.
 	const refused = nameHarness(
-		{paletteLocation: 'page'},
+		{},
 		[
 			webTab(1, 10, 0, {
 				active: true,
@@ -9124,8 +9320,8 @@ test('with the palette set to the current page, pages that cannot be scripted op
 	assert.equal(refused.executeScriptCalls.length, 1);
 	assert.equal(refused.windowCreateCalls.length, 1);
 
-	// The default setting never touches scripting.
-	const standard = nameHarness({}, [
+	// Choosing the window never touches scripting.
+	const standard = nameHarness({paletteLocation: 'window'}, [
 		webTab(1, 10, 0, {active: true, url: 'https://page.example/', title: 'P'}),
 	]);
 	await press(standard, {id: 1, windowId: 10, url: 'https://page.example/'});

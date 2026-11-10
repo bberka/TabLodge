@@ -2203,6 +2203,102 @@ async function main() {
 				},
 			);
 
+			await check(
+				`duplicate bookmarks dialog works by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					const store = createDevFixture(await readDevStore(page));
+					const columnId = store.bookmarkColumns[0].id;
+					const extra = (id: string, createdAt: number) => ({
+						id,
+						title: `Copy ${id}`,
+						url: 'https://dup.example/page',
+						columnId,
+						createdAt,
+						updatedAt: createdAt,
+					});
+					store.bookmarks = [
+						extra('one', 1),
+						extra('two', 2),
+						extra('three', 3),
+					];
+					await writeDevStore(page, store);
+					await page.reload();
+					await setTheme(page, theme);
+					const trigger = page.getByRole('button', {
+						name: 'Import, back up and share bookmarks',
+					});
+					await openMenuItemByKeyboard(
+						page,
+						trigger,
+						'Find duplicate bookmarks',
+					);
+					const dialog = page.getByRole('dialog', {
+						name: 'Find duplicate bookmarks',
+					});
+					await dialog.waitFor();
+					const group = dialog.getByRole('radiogroup', {
+						name: 'dup.example/page',
+					});
+					assert.equal(await group.getByRole('radio').count(), 3);
+					assert.equal(
+						await group.getByRole('radio', {name: /Copy one/}).isChecked(),
+						true,
+						'the oldest copy is kept by default',
+					);
+					await group.getByRole('radio', {name: /Copy one/}).focus();
+					await page.keyboard.press('ArrowDown');
+					assert.equal(
+						await group.getByRole('radio', {name: /Copy two/}).isChecked(),
+						true,
+						'arrow keys change the copy to keep',
+					);
+					await page.keyboard.press('Escape');
+					await dialog.waitFor({state: 'hidden'});
+					await until(
+						async () =>
+							(await page.locator(':focus').getAttribute('aria-label')) ===
+							'Import, back up and share bookmarks',
+						'focus returns to the bookmark menu button',
+					);
+					await openMenuItemByKeyboard(
+						page,
+						trigger,
+						'Find duplicate bookmarks',
+					);
+					await dialog.waitFor();
+					await dialog
+						.getByRole('button', {name: 'Remove 2 extra copies'})
+						.focus();
+					await page.keyboard.press('Enter');
+					await dialog.waitFor({state: 'hidden'});
+					await until(
+						async () =>
+							(await page.locator('[data-bookmark-title^="Copy "]').count()) ===
+							1,
+						'the extra copies to be removed',
+					);
+					const undo = page.getByRole('button', {name: 'Undo', exact: true});
+					await undo.focus();
+					await page.keyboard.press('Enter');
+					await until(
+						async () =>
+							(await page.locator('[data-bookmark-title^="Copy "]').count()) ===
+							3,
+						'Undo to restore the copies',
+					);
+					await openMenuItemByKeyboard(
+						page,
+						trigger,
+						'Find duplicate bookmarks',
+					);
+					await dialog.waitFor();
+					await dialog.getByRole('button', {name: 'Cancel'}).waitFor();
+					await page.keyboard.press('Escape');
+					await page.close();
+				},
+			);
+
 			await check(`bookmark import scrolling (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
 				await seed(page);
@@ -3626,6 +3722,48 @@ async function main() {
 				);
 				await page.close();
 			});
+		}
+
+		for (const theme of THEMES) {
+			await check(
+				`opening settings layout and palette default (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					const row = (name: string) =>
+						page.locator(`[data-setting-row="${name}"]`);
+					const location = row('paletteLocation').getByRole('combobox');
+					await location.waitFor();
+					assert.match(
+						(await location.innerText()).trim(),
+						/In the current page/,
+						'the palette opens in the current page by default',
+					);
+					const hangs = async (name: string) =>
+						Boolean(
+							(await row(name).getAttribute('class'))?.includes('border-l-2'),
+						);
+					assert.ok(
+						await hangs('autoFocusSearchOnNewTab'),
+						'a dependent setting hangs from its parent',
+					);
+					for (const name of [
+						'newTabEnabled',
+						'paletteLocation',
+						'keepLodgePinned',
+						'openDashboardOnStartup',
+						'actionMode',
+						'dashboardBehavior',
+					]) {
+						assert.ok(
+							!(await hangs(name)),
+							`${name} is not drawn as a dependent setting`,
+						);
+					}
+
+					await page.close();
+				},
+			);
 		}
 
 		for (const theme of THEMES) {

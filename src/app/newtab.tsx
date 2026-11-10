@@ -24,6 +24,7 @@ import {
 	Square,
 	SquareCheck,
 	SquarePlus,
+	Copy,
 	Download,
 	FolderPlus,
 	HelpCircle,
@@ -102,6 +103,7 @@ import {
 } from './finder';
 import {
 	BackupDialog,
+	DuplicateBookmarksDialog,
 	ImportDialog,
 	SnapshotsDialog,
 	TrashDialog,
@@ -158,6 +160,7 @@ import {
 	SaveTargetSessionField,
 	type SaveTarget,
 } from './save-target';
+import {inPrivateWindow} from './private-config';
 import {PrivateSetupGate} from './private-storage';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {
@@ -291,6 +294,7 @@ function NewTab() {
 		singleColumn: boolean;
 	} | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
@@ -1887,13 +1891,23 @@ function NewTab() {
 				icon: ArchiveRestore,
 				run: () => emitFinderEvent({type: 'import-sessions'}),
 			},
-			{
-				id: 'recent-snapshots',
-				title: 'Recent snapshots',
-				keywords: ['crash', 'recover', 'restore session', 'history', 'windows'],
-				icon: History,
-				run: () => emitRecoveryEvent({type: 'snapshots'}),
-			},
+			...(inPrivateWindow()
+				? []
+				: [
+						{
+							id: 'recent-snapshots',
+							title: 'Recent snapshots',
+							keywords: [
+								'crash',
+								'recover',
+								'restore session',
+								'history',
+								'windows',
+							],
+							icon: History,
+							run: () => emitRecoveryEvent({type: 'snapshots'}),
+						},
+					]),
 			{
 				id: 'open-trash',
 				title: 'Trash bin',
@@ -1956,6 +1970,18 @@ function NewTab() {
 
 		document.addEventListener('keydown', onKeyDown);
 		return () => document.removeEventListener('keydown', onKeyDown);
+	}, []);
+
+	// The "Open the search palette" browser shortcut pressed on this page toggles the palette here (see service-worker.ts).
+	useEffect(() => {
+		const onMessage = (message: unknown) => {
+			if ((message as {type?: string} | null)?.type === 'toggle-finder') {
+				setFinderOpen((open) => !open);
+			}
+		};
+
+		chrome.runtime.onMessage.addListener(onMessage);
+		return () => chrome.runtime.onMessage.removeListener(onMessage);
 	}, []);
 
 	// "Focus search when opening a new tab": opens the palette once per page load (not for ?q= links, which prefill
@@ -2258,6 +2284,12 @@ function NewTab() {
 								icon: Share2,
 								disabled: bookmarks.length === 0,
 								onSelect: () => shareBookmarks(),
+							},
+							{
+								id: 'duplicates',
+								label: 'Find duplicate bookmarks',
+								icon: Copy,
+								onSelect: () => setDuplicatesOpen(true),
 							},
 							{type: 'separator'},
 							{
@@ -2707,6 +2739,14 @@ function NewTab() {
 				singleColumn={backupRequest?.singleColumn ?? false}
 				showStatus={showStatus}
 				onOpenChange={(open) => !open && setBackupRequest(null)}
+			/>
+			<DuplicateBookmarksDialog
+				open={duplicatesOpen}
+				bookmarks={bookmarks}
+				columns={columns}
+				showStatus={showStatus}
+				onOpenChange={setDuplicatesOpen}
+				onChanged={reload}
 			/>
 			<ImportDialog
 				open={importOpen}
