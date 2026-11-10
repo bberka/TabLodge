@@ -9154,7 +9154,7 @@ async function handleMessage(
 	message: TabLodgeMessage | undefined,
 	sender: chrome.runtime.MessageSender,
 ): Promise<ActionResult> {
-	if (message?.type.startsWith('LOCKED_')) {
+	if (typeof message?.type === 'string' && message.type.startsWith('LOCKED_')) {
 		return handleLockedMessage(message);
 	}
 

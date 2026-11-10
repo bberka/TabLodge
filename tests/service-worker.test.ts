@@ -7433,6 +7433,15 @@ const LOCKED_PASSWORD = 'correct horse battery';
 const LOCKED_ALARM_NAME = 'tablodge-locked-idle';
 const LOCKED_NOW = 1_800_000_000_000;
 
+/**
+Menu clicks are not awaited by the worker, and Web Crypto finishes off the event loop, so a fixed settle can be too short.
+*/
+async function eventually(done: () => boolean | Promise<boolean>) {
+	for (let attempt = 0; attempt < 100 && !(await done()); attempt += 1) {
+		await settle();
+	}
+}
+
 async function lockedHarness(options: HarnessOptions = {}) {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
 		now: LOCKED_NOW,
@@ -7816,6 +7825,10 @@ test('locked area: the menus offer a locked save that saves straight away when u
 		},
 		{id: 1, windowId: 10},
 	);
+	await eventually(
+		async () =>
+			(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length === 3,
+	);
 	const listed = await harness.sendMessage({type: 'LOCKED_LIST'});
 	assert.deepEqual(
 		Array.from(listed.bookmarks, (item) => item.title).slice(-1),
@@ -7829,16 +7842,14 @@ test('locked area: the menus offer a locked save that saves straight away when u
 		{menuItemId: 'tablodge-page-locked', pageUrl: 'https://current.example/'},
 		{id: 1, windowId: 10, url: 'https://current.example/', title: 'Current'},
 	);
+	await eventually(() => harness.windowCreateCalls.length > 0);
 	assert.equal(harness.windowCreateCalls.length, 1);
 	assert.match(
 		String(harness.windowCreateCalls[0].url),
 		/add-bookmark\.html\?url=https%3A%2F%2Fcurrent\.example%2F.*&destination=locked$/,
 	);
-	assert.equal(
-		(await harness.sendMessage({type: 'LOCKED_STATUS'})).locked.configured &&
-			(await harness.sendMessage({type: 'LOCKED_LIST'})).ok,
-		false,
-	);
+	// The locked page was not saved behind the person's back.
+	assert.equal((await harness.sendMessage({type: 'LOCKED_LIST'})).ok, false);
 });
 
 test('GET_FULL_BACKUP returns the state, theme, snapshot history and trash', async () => {

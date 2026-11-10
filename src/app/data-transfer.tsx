@@ -198,6 +198,7 @@ const FULL_BACKUP_CONTENTS = [
 	'All settings and excluded sites',
 	'Theme',
 	'Crash snapshots and the trash bin',
+	'The locked area, if you set one up, still encrypted with its own PIN or password',
 ];
 
 const BACKUP_TITLES: Record<ExportKind, (count: number) => string> = {
