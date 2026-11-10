@@ -7,6 +7,10 @@
 // The data key lives only in `chrome.storage.session`, which the browser keeps in memory and never writes to disk.
 // It is gone after a browser restart, an extension reload, or Lock now, and the idle timeout removes it too.
 //
+// Closing the last private window locks too, but the private worker is not woken for that close, so nothing runs at
+// that moment. Instead the worker keeps the ids of the private windows that were open while unlocked, and compares them
+// with the windows that exist before it serves anything (see judgePrivateWindows). The key stays in memory until then.
+//
 // Enabling and removing the lock rewrite every stored value. Both are resumable: each value is either sealed or plain,
 // readers accept both, and the lock record's `state` says which way the pass is going, so an interrupted pass is
 // finished the next time the key is available and never leaves data that cannot be read.
@@ -26,10 +30,15 @@ When the library was last used, in its own session key. A late write of this can
 */
 export const LOCK_ACTIVITY_KEY = 'tablodge.privatelock.active';
 export const LOCK_ATTEMPTS_KEY = 'tablodge.privatelock.attempts';
+/**
+Ids of the private windows that were open while the library was unlocked, in their own session key. It is written with the
+data key and removed with it.
+*/
+export const LOCK_WINDOWS_KEY = 'tablodge.privatelock.windows';
 
 export const DEFAULT_IDLE_MINUTES = 5;
 /**
-Minutes of inactivity before the library locks again; 0 keeps it unlocked until the browser closes.
+Minutes of inactivity before the library locks again; 0 keeps it unlocked until the last private window or the browser closes.
 */
 export const IDLE_MINUTE_CHOICES = [1, 5, 15, 30, 60, 0] as const;
 
@@ -121,6 +130,47 @@ export function parseLockRecord(value: unknown): LockRecord | null {
 	}
 
 	return value as LockRecord;
+}
+
+// Private windows -------------------------------------------------------------------------------------------------
+
+export type WindowVerdict = {lock: true} | {lock: false; tracked: number[]};
+
+const isWindowId = (value: unknown): value is number =>
+	typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+/**
+The window ids stored beside the key, or undefined when they are missing or malformed.
+*/
+export function parseWindowIds(value: unknown): number[] | undefined {
+	return Array.isArray(value) && value.every((id) => isWindowId(id))
+		? [...new Set(value)]
+		: undefined;
+}
+
+const sameIds = (a: readonly number[] | undefined, b: readonly number[]) =>
+	a?.length === b.length && b.every((id) => a.includes(id));
+
+/**
+Decides whether closing windows should have locked the library. `tracked` holds the ids of the private windows that were
+open while it was unlocked, `open` the private windows that exist now.
+
+- Some tracked window still exists: the private session never ended. Keep it unlocked and track every open window, so
+  windows opened while the worker slept belong to it from now on.
+- None exists (or nothing was tracked): the last private window closed at some point, so lock. This also covers windows
+  that opened and closed while the worker slept, and it locks when unsure.
+
+Chromium numbers windows from a counter that only goes up while the browser runs, and the tracked ids are cleared when it
+closes, so an id cannot come back for a different window.
+*/
+export function judgePrivateWindows(
+	tracked: readonly number[] | undefined,
+	open: readonly number[],
+): WindowVerdict {
+	const now = new Set(open);
+	return tracked?.some((id) => now.has(id))
+		? {lock: false, tracked: [...now]}
+		: {lock: true};
 }
 
 // Base64 -------------------------------------------------------------------------------------------------------
@@ -368,6 +418,11 @@ export type LockEnv = {
 	reserved: string[];
 	now(): number;
 	/**
+	The ids of the private windows that exist now. Only the private worker sets it; without it the library does not
+	lock when the last private window closes (a regular worker cannot see private windows).
+	*/
+	openWindows?(): Promise<number[]>;
+	/**
 	Passed to convertValues; tests use small batches.
 	*/
 	batch?: {batchKeys?: number; batchChars?: number};
@@ -396,6 +451,14 @@ export type Gate = {
 export function createPrivateLock(env: LockEnv) {
 	let cachedKey: {raw: string; key: CryptoKey} | undefined;
 	let lastTouchWrite = 0;
+	// Storing, removing, and window checks of the key run one at a time, so a check never judges against a half
+	// written unlock or removes a key that a newer unlock stored.
+	let keyQueue: Promise<unknown> = Promise.resolve();
+	const exclusive = <T>(task: () => Promise<T>): Promise<T> => {
+		const run = keyQueue.then(task, task);
+		keyQueue = run.catch(() => undefined);
+		return run;
+	};
 
 	async function readRecord(): Promise<LockRecord | null | undefined> {
 		const saved = await env.local.get([LOCK_RECORD_KEY]);
@@ -435,9 +498,54 @@ export function createPrivateLock(env: LockEnv) {
 		record.idleMinutes > 0 &&
 		env.now() - payload.at >= record.idleMinutes * 60_000;
 
-	async function removeKey() {
+	async function dropKey() {
 		cachedKey = undefined;
-		await env.session.remove([LOCK_SESSION_KEY, LOCK_ACTIVITY_KEY]);
+		await env.session.remove([
+			LOCK_SESSION_KEY,
+			LOCK_ACTIVITY_KEY,
+			LOCK_WINDOWS_KEY,
+		]);
+	}
+
+	const removeKey = () => exclusive(dropKey);
+
+	/**
+	Locks the library when no private window that was open while it was unlocked exists any more. `closed` is a window
+	that just closed and may still be listed. Returns true when the key is gone afterwards, whether this check removed it
+	or another one already had. A read that fetched the key before that must not use it, which is why the answer is
+	checked inside the queue. The private worker cannot see the last window close, so this runs before every read of the
+	key and on every window event the worker does see.
+	*/
+	async function lockWhenWindowsClosed(closed?: number): Promise<boolean> {
+		if (!env.openWindows) {
+			return false;
+		}
+
+		const {openWindows} = env;
+		return exclusive(async () => {
+			const saved = await env.session.get([LOCK_SESSION_KEY, LOCK_WINDOWS_KEY]);
+			if (!isKeyValue(saved[LOCK_SESSION_KEY])) {
+				return true;
+			}
+
+			// A window list that cannot be read counts as no windows: the library locks rather than guessing.
+			const open = await openWindows().then(
+				(ids) => ids.filter((id) => id !== closed),
+				() => [],
+			);
+			const tracked = parseWindowIds(saved[LOCK_WINDOWS_KEY]);
+			const verdict = judgePrivateWindows(tracked, open);
+			if (verdict.lock) {
+				await dropKey();
+				return true;
+			}
+
+			if (!sameIds(tracked, verdict.tracked)) {
+				await env.session.set({[LOCK_WINDOWS_KEY]: verdict.tracked});
+			}
+
+			return false;
+		});
 	}
 
 	async function importCached(raw: string): Promise<CryptoKey> {
@@ -467,6 +575,10 @@ export function createPrivateLock(env: LockEnv) {
 			return null;
 		}
 
+		if (await lockWhenWindowsClosed()) {
+			return null;
+		}
+
 		if (touch && env.now() - lastTouchWrite >= TOUCH_WRITE_MS) {
 			lastTouchWrite = env.now();
 			await env.session.set({[LOCK_ACTIVITY_KEY]: env.now()});
@@ -481,11 +593,19 @@ export function createPrivateLock(env: LockEnv) {
 	}
 
 	async function storeKey(raw: Uint8Array) {
-		cachedKey = undefined;
-		lastTouchWrite = env.now();
-		await env.session.set({
-			[LOCK_SESSION_KEY]: {key: toBase64(raw)},
-			[LOCK_ACTIVITY_KEY]: env.now(),
+		return exclusive(async () => {
+			cachedKey = undefined;
+			lastTouchWrite = env.now();
+			// The windows are written in the same call as the key. If they cannot be read none are tracked, and the
+			// next read locks again.
+			const windows = env.openWindows
+				? await env.openWindows().catch(() => [])
+				: undefined;
+			await env.session.set({
+				[LOCK_SESSION_KEY]: {key: toBase64(raw)},
+				[LOCK_ACTIVITY_KEY]: env.now(),
+				...(windows && {[LOCK_WINDOWS_KEY]: [...new Set(windows)]}),
+			});
 		});
 	}
 
@@ -705,6 +825,12 @@ export function createPrivateLock(env: LockEnv) {
 		async lock() {
 			await removeKey();
 		},
+
+		/**
+		Locks the library if every private window that was open while it was unlocked has closed. The private worker calls
+		this on its window events; every read of the key does it too. `closed` is a window that just closed.
+		*/
+		lockWhenWindowsClosed,
 
 		/**
 		Opens the library with the credential and finishes an interrupted pass if one is waiting.

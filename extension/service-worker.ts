@@ -247,10 +247,24 @@ const privateConfigReady = chrome.storage.local
 		privateConfig = normalizePrivateConfig(saved[PRIVATE_CONFIG_KEY]);
 	});
 
+/**
+The ids of the private windows that exist now (extension pages count as windows too). chrome.windows needs no
+permission. Only the private worker sees them: a regular worker has no private windows to list.
+*/
+async function privateWindowIds() {
+	const all = await chrome.windows.getAll();
+	return all.flatMap((win) =>
+		win.incognito && win.id !== undefined ? [win.id] : [],
+	);
+}
+
 /*
 The optional PIN or password lock of the saved separate private library (src/app/private-lock.ts). The lock record
 is in local storage, the data key only in session storage. Every read and write of the library passes `rawLibrary`
 below, which seals and opens values there, so nothing above it knows the lock exists.
+
+The private worker is not woken when the last private window closes, so the lock also compares the private windows
+that were open while unlocked with the ones that exist whenever the key is read (see judgePrivateWindows).
 */
 const privateLock = createPrivateLock({
 	local: chrome.storage.local,
@@ -258,6 +272,7 @@ const privateLock = createPrivateLock({
 	prefix: PRIVATE_PREFIX,
 	reserved: [PRIVATE_CONFIG_KEY, LOCK_RECORD_KEY],
 	now: () => Date.now(),
+	...(privateContext && {openWindows: privateWindowIds}),
 });
 const ALARM_PRIVATE_LOCK = 'tablodge-private-lock';
 
@@ -9106,7 +9121,16 @@ void mutate(async () => {
 }).catch(() => undefined);
 // A lock pass that was cut off (the browser closed, the worker stopped) finishes as soon as the key is in memory.
 if (privateContext) {
+	// Private windows that closed while the worker was stopped lock the library as soon as it starts, before any page
+	// asks. A new window never counts as one of them, and the check shares one queue with unlocking in the lock.
+	void privateLock.lockWhenWindowsClosed().catch(() => undefined);
 	void resumePrivateLock().catch(() => undefined);
+	chrome.windows?.onCreated?.addListener?.(() => {
+		void privateLock.lockWhenWindowsClosed().catch(() => undefined);
+	});
+	chrome.windows?.onRemoved?.addListener?.((windowId) => {
+		void privateLock.lockWhenWindowsClosed(windowId).catch(() => undefined);
+	});
 }
 
 /**
