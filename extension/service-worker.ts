@@ -5234,6 +5234,96 @@ async function deleteBookmark(
 	});
 }
 
+async function removeDuplicateBookmarks(
+	bookmarkIds: unknown,
+): Promise<ActionResult<'REMOVE_DUPLICATE_BOOKMARKS'>> {
+	if (
+		!Array.isArray(bookmarkIds) ||
+		bookmarkIds.length === 0 ||
+		bookmarkIds.some((id) => typeof id !== 'string')
+	) {
+		return {ok: false, error: 'Choose the copies to remove.'};
+	}
+
+	if (bookmarkIds.length > TRASH_MAX_ITEMS) {
+		return {
+			ok: false,
+			error: `Remove at most ${TRASH_MAX_ITEMS} copies at a time.`,
+		};
+	}
+
+	const doomed = new Set<string>(bookmarkIds);
+	if (doomed.size !== bookmarkIds.length) {
+		return {ok: false, error: 'Those copies were listed more than once.'};
+	}
+
+	return mutate(async () => {
+		const store = await getStore();
+		const urlOf = (bookmark: Bookmark) =>
+			normalizeUrl(bookmark.url) ?? bookmark.url;
+		const kept = new Set<string>();
+		let found = 0;
+		for (const bookmark of store.bookmarks) {
+			if (doomed.has(bookmark.id)) {
+				found += 1;
+			} else {
+				kept.add(urlOf(bookmark));
+			}
+		}
+
+		if (found !== doomed.size) {
+			return {
+				ok: false,
+				error: 'Some of those bookmarks no longer exist. Check again.',
+			};
+		}
+
+		if (
+			store.bookmarks.some(
+				(bookmark) => doomed.has(bookmark.id) && !kept.has(urlOf(bookmark)),
+			)
+		) {
+			return {
+				ok: false,
+				error: 'That would remove every copy of an address. Check again.',
+			};
+		}
+
+		const columnName = (columnId: string) =>
+			store.bookmarkColumns.find((column) => column.id === columnId)?.name ??
+			'Unfiled';
+		const entries: Array<Omit<TrashEntry, 'id' | 'deletedAt'>> = [];
+		for (const id of bookmarkIds) {
+			const index = store.bookmarks.findIndex((bookmark) => bookmark.id === id);
+			const [removed] = store.bookmarks.splice(index, 1);
+			// The flat list interleaves columns, so look for the nearest neighbors in this column.
+			const before = store.bookmarks
+				.slice(0, index)
+				.findLast((bookmark) => bookmark.columnId === removed.columnId);
+			const after = store.bookmarks
+				.slice(index)
+				.find((bookmark) => bookmark.columnId === removed.columnId);
+			entries.push({
+				kind: 'bookmark',
+				label: removed.title || removed.url,
+				origin: columnName(removed.columnId),
+				count: 1,
+				data: {
+					bookmark: removed,
+					columnId: removed.columnId,
+					index,
+					prevId: before?.id ?? null,
+					nextId: after?.id ?? null,
+				},
+			});
+		}
+
+		const trashIds = await trashAddMany(store.settings, entries);
+		await writeStore(store);
+		return {ok: true, removed: trashIds.length, trashIds};
+	});
+}
+
 async function createBookmarkColumn(
 	name: string,
 	icon?: unknown,
@@ -7869,6 +7959,30 @@ function trashAdd(
 	});
 }
 
+/**
+`trashAdd` for several items with one read and write of the trash. Ids come back in the order given.
+*/
+function trashAddMany(
+	settings: Settings,
+	items: Array<Omit<TrashEntry, 'id' | 'deletedAt'>>,
+): Promise<string[]> {
+	return trashMutate(async () => {
+		const deletedAt = Date.now();
+		const entries = items.map((item): TrashEntry => {
+			const entry = {...item, id: makeId(), deletedAt};
+			trashSize(entry);
+			return entry;
+		});
+		await writeTrash(
+			pruneTrash(
+				[...entries.toReversed(), ...(await readTrash())],
+				settings.trashRetentionDays,
+			),
+		);
+		return entries.map((entry) => entry.id);
+	});
+}
+
 function purgeTrash(): Promise<void> {
 	return trashMutate(async () => {
 		const settings = await readSettings();
@@ -8785,6 +8899,10 @@ async function handleMessage(
 
 		case 'DELETE_BOOKMARK': {
 			return deleteBookmark(message.bookmarkId);
+		}
+
+		case 'REMOVE_DUPLICATE_BOOKMARKS': {
+			return removeDuplicateBookmarks(message.bookmarkIds);
 		}
 
 		case 'CREATE_BOOKMARK_COLUMN': {

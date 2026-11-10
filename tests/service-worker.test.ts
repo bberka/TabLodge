@@ -6657,6 +6657,143 @@ function bookmarksState(count = 3): StoredState {
 	return state;
 }
 
+function duplicateBookmarksState(): StoredState {
+	const state = bookmarksState(0);
+	const add = (
+		id: string,
+		url: string,
+		columnId: string,
+		createdAt: number,
+	) => {
+		state.bookmarks.push({
+			id,
+			title: id,
+			url,
+			columnId,
+			createdAt,
+			updatedAt: createdAt,
+		});
+	};
+
+	add('a-1', 'https://dup.example/', 'bookmark-default', 1);
+	add('solo', 'https://solo.example/', 'bookmark-default', 2);
+	add('a-2', 'https://dup.example/', 'col-news', 3);
+	add('b-1', 'https://other.example/', 'col-news', 4);
+	add('a-3', 'https://dup.example/', 'col-news', 5);
+	return state;
+}
+
+test('REMOVE_DUPLICATE_BOOKMARKS trashes the extra copies and Undo restores them in place', async () => {
+	const harness = createWorkerHarness(duplicateBookmarksState());
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['a-2', 'a-3'],
+	});
+	assert.equal(removed.ok, true, removed.error);
+	assert.equal(removed.removed, 2);
+	assert.equal(removed.trashIds.length, 2);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.id),
+		['a-1', 'solo', 'b-1'],
+	);
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.ok(trash.ok);
+	assert.equal(trash.items.length, 2);
+	assert.equal(trash.items[0].kind, 'bookmark');
+	// Undo restores in reverse order, as the page does.
+	for (const id of removed.trashIds.toReversed()) {
+		const restored = await harness.sendMessage({type: 'RESTORE_TRASH', id});
+		assert.equal(restored.ok, true, restored.error);
+	}
+
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.id),
+		['a-1', 'solo', 'a-2', 'b-1', 'a-3'],
+	);
+	assert.equal(harness.state.bookmarks[2].columnId, 'col-news');
+});
+
+test('REMOVE_DUPLICATE_BOOKMARKS Undo keeps each column in its old order', async () => {
+	const state = bookmarksState(0);
+	const row = (
+		id: string,
+		url: string,
+		columnId: string,
+		createdAt: number,
+	) => ({
+		id,
+		title: id,
+		url,
+		columnId,
+		createdAt,
+		updatedAt: createdAt,
+	});
+	state.bookmarks = [
+		row('r1', 'https://r.example/', 'bookmark-default', 1),
+		row('s1', 'https://s.example/', 'bookmark-default', 2),
+		row('r2', 'https://r.example/', 'col-news', 3),
+		row('d1', 'https://d.example/', 'bookmark-default', 4),
+		row('d2', 'https://d.example/', 'col-news', 5),
+		row('r3', 'https://r.example/', 'bookmark-default', 6),
+	];
+	const harness = createWorkerHarness(state);
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['r2', 'r3', 'd1'],
+	});
+	assert.equal(removed.ok, true, removed.error);
+	for (const id of removed.trashIds.toReversed()) {
+		await harness.sendMessage({type: 'RESTORE_TRASH', id});
+	}
+
+	for (const columnId of ['bookmark-default', 'col-news']) {
+		assert.deepEqual(
+			harness.state.bookmarks
+				.filter((bookmark) => bookmark.columnId === columnId)
+				.map((bookmark) => bookmark.id),
+			state.bookmarks
+				.filter((bookmark) => bookmark.columnId === columnId)
+				.map((bookmark) => bookmark.id),
+		);
+	}
+});
+
+test('REMOVE_DUPLICATE_BOOKMARKS never removes the last copy of an address', async () => {
+	const harness = createWorkerHarness(duplicateBookmarksState());
+	const all = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['a-1', 'a-2', 'a-3'],
+	});
+	assert.equal(all.ok, false);
+	const single = await harness.sendMessage({
+		type: 'REMOVE_DUPLICATE_BOOKMARKS',
+		bookmarkIds: ['solo'],
+	});
+	assert.equal(single.ok, false);
+	assert.equal(harness.state.bookmarks.length, 5);
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.ok(trash.ok);
+	assert.equal(trash.items.length, 0);
+});
+
+test('REMOVE_DUPLICATE_BOOKMARKS rejects unknown ids, repeated ids and oversized requests', async () => {
+	const harness = createWorkerHarness(duplicateBookmarksState());
+	for (const bookmarkIds of [
+		['missing'],
+		['a-2', 'a-2'],
+		[],
+		Array.from({length: 501}, (_, index) => `x${index}`),
+	]) {
+		const response = await harness.sendMessage({
+			type: 'REMOVE_DUPLICATE_BOOKMARKS',
+			bookmarkIds,
+		});
+		assert.equal(response.ok, false);
+	}
+
+	assert.equal(harness.state.bookmarks.length, 5);
+});
+
 test('BACKUP_NOW stores a full export that the importer reads, and keeps settings in it', async () => {
 	const harness = createWorkerHarness(bookmarksState());
 	const response = await harness.sendMessage({type: 'BACKUP_NOW'});

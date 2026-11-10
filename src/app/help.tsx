@@ -332,6 +332,23 @@ function Help() {
 						'select multiple bulk bookmarks alt option shift range ctrl command checkbox drag move delete undo keyboard space escape',
 				},
 				{
+					title: 'Find duplicate bookmarks',
+					body: (
+						<>
+							Use the <MenuLocation label="Bookmarks toolbar" /> and choose Find
+							duplicate bookmarks to list web addresses saved more than once on
+							the board, in any column. Each address shows its copies and the
+							column each is in. The oldest copy is kept unless you choose
+							another. Remove extra copies moves the rest to the trash bin, and
+							Undo restores them. Nothing is removed until you choose it.
+							Sessions are not checked, because the same address in two sessions
+							is normal.
+						</>
+					),
+					searchText:
+						'find duplicate bookmarks cleanup remove extra copies same address url saved twice columns keep oldest undo trash bookmarks toolbar menu',
+				},
+				{
 					title: 'Import or export bookmarks',
 					body: (
 						<>
