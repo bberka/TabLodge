@@ -6,6 +6,7 @@ import {
 	PIN_MAX_LENGTH,
 	PIN_MIN_LENGTH,
 	validateCredential,
+	clampCredentialInput,
 } from '../src/app/passcode';
 
 test('the limits are the documented ones', () => {
@@ -57,4 +58,19 @@ test('length counts characters, not UTF-16 units', () => {
 		validateCredential('password', '🔑'.repeat(129)) ?? '',
 		/at most 128/,
 	);
+});
+
+test('fields stop input at the limit and a PIN keeps only digits', () => {
+	assert.equal(clampCredentialInput('pin', '12 34-ab5'), '12345');
+	assert.equal(clampCredentialInput('pin', '1234 5678 9012'), '12345678');
+	assert.equal(clampCredentialInput('password', '12 34-ab5'), '12 34-ab5');
+	assert.equal(clampCredentialInput('password', 'a'.repeat(200)).length, 128);
+	assert.equal(clampCredentialInput(undefined, 'ab1 '.repeat(50)).length, 128);
+	assert.equal(clampCredentialInput(undefined, 'abc'), 'abc');
+});
+
+test('an emoji password is capped by characters, not UTF-16 units', () => {
+	const clamped = clampCredentialInput('password', '😀'.repeat(200));
+	assert.equal([...clamped].length, 128);
+	assert.equal(validateCredential('password', clamped), null);
 });
