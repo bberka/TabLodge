@@ -153,7 +153,11 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 import {ColumnSelect} from './column-select';
-import {SaveTargetFields, type SaveTarget} from './save-target';
+import {
+	SaveTargetChoice,
+	SaveTargetSessionField,
+	type SaveTarget,
+} from './save-target';
 import {PrivateSetupGate} from './private-storage';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {
@@ -2733,6 +2737,13 @@ function NewTab() {
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
+							{!bookmarkEdit?.id && (
+								<SaveTargetChoice
+									target={saveTarget}
+									sessions={pasteSessions}
+									onTargetChange={setSaveTarget}
+								/>
+							)}
 							{editedBookmark && (
 								<LinkSummary
 									settings={settings}
@@ -2769,19 +2780,15 @@ function NewTab() {
 									}
 								/>
 							</div>
-							{bookmarkEdit?.id ? (
-								columnFields
-							) : (
-								<SaveTargetFields
-									idPrefix="bookmark"
-									target={saveTarget}
+							{bookmarkToSession ? (
+								<SaveTargetSessionField
+									id="bookmark-session"
 									sessions={pasteSessions}
-									sessionId={pasteSessionId}
-									onTargetChange={setSaveTarget}
-									onSessionChange={setSaveSessionId}
-								>
-									{columnFields}
-								</SaveTargetFields>
+									value={pasteSessionId}
+									onValueChange={setSaveSessionId}
+								/>
+							) : (
+								columnFields
 							)}
 						</DialogBody>
 						<DialogFooter className="justify-between">
@@ -2835,6 +2842,11 @@ function NewTab() {
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
+							<SaveTargetChoice
+								target={saveTarget}
+								sessions={pasteSessions}
+								onTargetChange={setSaveTarget}
+							/>
 							<ScrollArea className="max-h-72 rounded-md border border-border">
 								<ul
 									className="divide-y divide-border"
@@ -2882,14 +2894,14 @@ function NewTab() {
 									))}
 								</ul>
 							</ScrollArea>
-							<SaveTargetFields
-								idPrefix="pasted-links"
-								target={saveTarget}
-								sessions={pasteSessions}
-								sessionId={pasteSessionId}
-								onTargetChange={setSaveTarget}
-								onSessionChange={setSaveSessionId}
-							>
+							{toSession ? (
+								<SaveTargetSessionField
+									id="pasted-links-session"
+									sessions={pasteSessions}
+									value={pasteSessionId}
+									onValueChange={setSaveSessionId}
+								/>
+							) : (
 								<div className="space-y-1.5">
 									<Label htmlFor="pasted-links-column">Column</Label>
 									<BookmarkColumnPicker
@@ -2901,7 +2913,7 @@ function NewTab() {
 										onValueChange={setPastedColumn}
 									/>
 								</div>
-							</SaveTargetFields>
+							)}
 						</DialogBody>
 						<DialogFooter>
 							<Button
