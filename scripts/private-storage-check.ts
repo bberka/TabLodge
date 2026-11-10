@@ -685,6 +685,24 @@ try {
 		console.log(
 			'ok concurrent normal and private saves preserve every bookmark in shared mode',
 		);
+		const snapshots = await send(page, {type: 'GET_SNAPSHOTS'});
+		assert.equal(snapshots.enabled, false);
+		assert.deepEqual(snapshots.snapshots, []);
+		assert.equal(snapshots.recovery, null);
+		await page.getByRole('main').waitFor();
+		assert.equal(
+			await page.getByRole('button', {name: 'Recent snapshots'}).count(),
+			0,
+		);
+		await normalRestarted.reload();
+		await normalRestarted
+			.getByRole('button', {name: 'Recent snapshots'})
+			.first()
+			.waitFor();
+		await captureEvidence(page, page.getByRole('main'), 'private-no-snapshots');
+		console.log(
+			'ok private windows show no snapshot controls and read no snapshots in shared mode',
+		);
 		await page.close();
 		await send(normalRestarted, {
 			type: 'ADD_BOOKMARK',

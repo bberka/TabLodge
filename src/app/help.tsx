@@ -617,8 +617,10 @@ function Help() {
 							everything, one window, or save a copy as a session. On the
 							dashboard, open them with the button beside session search and
 							sort, from the Recent snapshots icon in the side panel header, or
-							the dashboard search palette. Crash detection is a best guess
-							because browsers do not tell extensions when they shut down.
+							the dashboard search palette. Private windows never take
+							snapshots, so these entry points are hidden there; save a session
+							by hand instead. Crash detection is a best guess because browsers
+							do not tell extensions when they shut down.
 						</>
 					),
 					searchText:

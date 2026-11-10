@@ -6958,6 +6958,10 @@ async function openUrlSet(): Promise<Set<string>> {
 	return urls;
 }
 
+function privateSnapshotsError(): {ok: false; error: string} {
+	return {ok: false, error: 'Private windows do not use snapshots.'};
+}
+
 async function getSnapshots(): Promise<ActionResult<'GET_SNAPSHOTS'>> {
 	return snapshotMutate(async () => {
 		const settings = await readSettings();
@@ -8999,27 +9003,42 @@ async function handleMessage(
 		}
 
 		case 'GET_SNAPSHOTS': {
-			return getSnapshots();
+			// Private windows take no snapshots, and in shared storage mode the library holds the regular windows' snapshots.
+			return privateContext
+				? {
+						ok: true,
+						enabled: false,
+						snapshots: [],
+						live: null,
+						recovery: null,
+					}
+				: getSnapshots();
 		}
 
 		case 'RESTORE_SNAPSHOT': {
-			return restoreSnapshot(message.id, message.windowIndex);
+			return privateContext
+				? privateSnapshotsError()
+				: restoreSnapshot(message.id, message.windowIndex);
 		}
 
 		case 'SAVE_SNAPSHOT_AS_SESSION': {
-			return saveSnapshotAsSession(message.id, message.windowIndex);
+			return privateContext
+				? privateSnapshotsError()
+				: saveSnapshotAsSession(message.id, message.windowIndex);
 		}
 
 		case 'DELETE_SNAPSHOT': {
-			return deleteSnapshot(message.id);
+			return privateContext
+				? privateSnapshotsError()
+				: deleteSnapshot(message.id);
 		}
 
 		case 'CLEAR_SNAPSHOTS': {
-			return clearSnapshots();
+			return privateContext ? privateSnapshotsError() : clearSnapshots();
 		}
 
 		case 'DISMISS_RECOVERY': {
-			return dismissRecovery();
+			return privateContext ? privateSnapshotsError() : dismissRecovery();
 		}
 
 		case 'GET_BACKUPS': {

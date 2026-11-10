@@ -155,6 +155,7 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 import {ColumnSelect} from './column-select';
+import {inPrivateWindow} from './private-config';
 import {PrivateSetupGate} from './private-storage';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {
@@ -1831,13 +1832,23 @@ function NewTab() {
 				icon: ArchiveRestore,
 				run: () => emitFinderEvent({type: 'import-sessions'}),
 			},
-			{
-				id: 'recent-snapshots',
-				title: 'Recent snapshots',
-				keywords: ['crash', 'recover', 'restore session', 'history', 'windows'],
-				icon: History,
-				run: () => emitRecoveryEvent({type: 'snapshots'}),
-			},
+			...(inPrivateWindow()
+				? []
+				: [
+						{
+							id: 'recent-snapshots',
+							title: 'Recent snapshots',
+							keywords: [
+								'crash',
+								'recover',
+								'restore session',
+								'history',
+								'windows',
+							],
+							icon: History,
+							run: () => emitRecoveryEvent({type: 'snapshots'}),
+						},
+					]),
 			{
 				id: 'open-trash',
 				title: 'Trash bin',
