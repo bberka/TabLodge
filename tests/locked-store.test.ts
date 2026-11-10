@@ -409,6 +409,111 @@ test('the area refuses to grow past its limit', async () => {
 	assert.equal((await store.list()).length, MAX_LOCKED_ITEMS);
 });
 
+test('addMany stores in batches, one encrypted write each, and skips what is already there', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	await store.add([{title: 'Old', url: 'https://example.com/3'}]);
+	let writes = 0;
+	const write = t.backend.local.set;
+	t.backend.local.set = async (key, value) => {
+		writes += 1;
+		return write(key, value);
+	};
+
+	const entries = Array.from({length: 7}, (_, index) => ({
+		title: `Link ${index}`,
+		url: `https://example.com/${index}`,
+	}));
+	const result = await store.addMany(entries, 3);
+	assert.equal(result.added.length, 6);
+	assert.equal(result.skipped, 1);
+	assert.equal(writes, 3);
+	assert.equal((await store.list()).length, 7);
+});
+
+test('addMany checks everything before it writes: an invalid address or too many links store nothing', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	const before = JSON.stringify(t.local.get(LOCKED_KEY));
+	assert.equal(
+		(
+			await failure(
+				store.addMany([{url: 'https://a.example/'}, {url: 'chrome://flags'}]),
+			)
+		).code,
+		'invalid',
+	);
+	assert.equal(JSON.stringify(t.local.get(LOCKED_KEY)), before);
+
+	await store.add(
+		Array.from({length: MAX_LOCKED_ITEMS - 1}, (_, index) => ({
+			url: `https://fill.example/${index}`,
+		})),
+	);
+	const full = JSON.stringify(t.local.get(LOCKED_KEY));
+	assert.equal(
+		(
+			await failure(
+				store.addMany(
+					[{url: 'https://x.example/1'}, {url: 'https://x.example/2'}],
+					1,
+				),
+			)
+		).code,
+		'full',
+	);
+	assert.equal(JSON.stringify(t.local.get(LOCKED_KEY)), full);
+});
+
+test('addMany interrupted after the first batch leaves that batch stored and the entry readable', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	let writes = 0;
+	const write = t.backend.local.set;
+	t.backend.local.set = async (key, value) => {
+		writes += 1;
+		if (writes === 2) {
+			throw new Error('storage write failed');
+		}
+
+		return write(key, value);
+	};
+
+	const entries = Array.from({length: 5}, (_, index) => ({
+		url: `https://example.com/${index}`,
+	}));
+	await assert.rejects(store.addMany(entries, 2), /storage write failed/);
+	// The caller removes the originals only after addMany returns, so they are still in the library.
+	assert.deepEqual(
+		(await store.list()).map((item) => item.url),
+		['https://example.com/0', 'https://example.com/1'],
+	);
+	// Running it again stores the rest and skips the first batch.
+	t.backend.local.set = write;
+	const again = await store.addMany(entries, 2);
+	assert.equal(again.added.length, 3);
+	assert.equal(again.skipped, 2);
+	assert.equal((await store.list()).length, 5);
+});
+
+test('addMany while locked or not set up is refused', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	assert.equal(
+		(await failure(store.addMany([{url: 'https://a.example/'}]))).code,
+		'not-set-up',
+	);
+	await store.setup(password);
+	await store.lock();
+	assert.equal(
+		(await failure(store.addMany([{url: 'https://a.example/'}]))).code,
+		'locked',
+	);
+});
+
 test('update changes the title or address and keeps addresses unique', async () => {
 	const t = rig();
 	const store = createLockedStore(t.backend);

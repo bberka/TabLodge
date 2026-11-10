@@ -113,6 +113,7 @@ import {
 	useShareDialog,
 } from './lazy-dialogs';
 import {RecoveryBanner} from './recovery-banner';
+import {LockedMoveDialog, type LockedMoveRequest} from './locked-move';
 import {
 	emitRecoveryEvent,
 	offerCloseTabsUndo,
@@ -192,6 +193,7 @@ type BookmarkAction =
 	| 'copy'
 	| 'select'
 	| 'select-range'
+	| 'move-locked'
 	| 'delete';
 type OnBookmarkAction = (
 	action: BookmarkAction,
@@ -248,6 +250,10 @@ Stable fallbacks so memoized values and effects do not see a new array on every 
 */
 const NO_COLUMNS: BookmarkColumnData[] = [];
 const NO_BOOKMARKS: Bookmark[] = [];
+/**
+The locked area is for normal windows; private windows have no access to it.
+*/
+const LOCKED_AVAILABLE = !chrome.extension.inIncognitoContext;
 const UNFILED_COLUMN: BookmarkColumnData = {
 	id: 'bookmark-unfiled',
 	name: 'Unfiled',
@@ -304,8 +310,8 @@ function NewTab() {
 		title: string;
 		url: string;
 	} | null>(null);
-	// The locked area is for normal windows; private windows have no access to it.
-	const lockedAvailable = !chrome.extension.inIncognitoContext;
+	const [lockedMove, setLockedMove] = useState<LockedMoveRequest | null>(null);
+	const lockedAvailable = LOCKED_AVAILABLE;
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
@@ -1550,6 +1556,11 @@ function NewTab() {
 			return;
 		}
 
+		if (action === 'move-locked') {
+			setLockedMove({kind: 'bookmarks', ids: [bookmark.id]});
+			return;
+		}
+
 		if (action === 'move-up' || action === 'move-down') {
 			await moveBookmarkStep(
 				bookmark,
@@ -2108,6 +2119,13 @@ function NewTab() {
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
 		sessionTargets,
+		moveColumnToLocked: (column) =>
+			setLockedMove({
+				kind: 'column',
+				columnId: column.id,
+				name: column.name,
+				count: bookmarks.filter((entry) => entry.columnId === column.id).length,
+			}),
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
@@ -2418,6 +2436,19 @@ function NewTab() {
 								</SelectContent>
 							</Select>
 						)}
+						{lockedAvailable && (
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={busy === 'bookmark-batch'}
+								onClick={() =>
+									setLockedMove({kind: 'bookmarks', ids: selectedBookmarkIds})
+								}
+							>
+								<Lock className="h-4 w-4" />
+								Move to locked area
+							</Button>
+						)}
 						<Button
 							variant="outline"
 							size="sm"
@@ -2698,6 +2729,7 @@ function NewTab() {
 				state={state}
 				error={error}
 				reload={reload}
+				onOpenLocked={() => setLockedOpen(true)}
 			/>
 		</section>
 	);
@@ -2800,6 +2832,20 @@ function NewTab() {
 						showStatus={showStatus}
 						onOpenChange={setLockedOpen}
 						onBoardChanged={() => void reload()}
+					/>
+					<LockedMoveDialog
+						request={lockedMove}
+						showStatus={showStatus}
+						onOpenChange={(open) => !open && setLockedMove(null)}
+						onSetup={() => {
+							setLockedMove(null);
+							setLockedOpen(true);
+						}}
+						onMoved={() => {
+							setSelectedBookmarks(new Set());
+							bookmarkSelectionAnchorRef.current = null;
+							void reload();
+						}}
 					/>
 					<LockedSaveDialog
 						open={lockedSave !== null}
@@ -3567,6 +3613,7 @@ type BoardActions = {
 	Sessions a bookmark can be added to (read when a menu opens, never while rendering).
 	*/
 	sessionTargets: () => Array<{id: string; name: string}>;
+	moveColumnToLocked: (column: BookmarkColumnData) => void;
 	remove: (column: BookmarkColumnData) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
@@ -3615,6 +3662,14 @@ function columnMenuActions(
 			icon: Download,
 			disabled: siblings.length === 0,
 			onSelect: () => actions.exportColumn(column),
+		},
+		{
+			id: 'move-locked',
+			label: 'Move to locked area',
+			icon: Lock,
+			hidden: !LOCKED_AVAILABLE,
+			disabled: siblings.length === 0,
+			onSelect: () => actions.moveColumnToLocked(column),
 		},
 		{type: 'separator'},
 		{
@@ -4065,6 +4120,13 @@ const BookmarkCard = memo(
 							: target.name,
 					onSelect: () => sessions.addToSession(bookmark, target),
 				})),
+			},
+			{
+				id: 'move-locked',
+				label: 'Move to locked area',
+				icon: Lock,
+				hidden: !LOCKED_AVAILABLE,
+				onSelect: act('move-locked'),
 			},
 			{
 				id: 'move-up',

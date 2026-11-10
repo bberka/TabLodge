@@ -818,6 +818,17 @@ export type TabLodgeMessages = {
 	Copies bookmarks to a board column, then deletes them from the locked area.
 	*/
 	LOCKED_MOVE_TO_BOARD: {ids: string[]; columnId?: string | null};
+	/**
+	Moves existing library content into the locked area as one operation (see `moveIntoLocked` in the worker). The
+	links are added to the encrypted entry first and removed from the library second. Nothing goes to the trash, and
+	the Undo list is cleared, so no readable copy stays behind in TabLodge. While locked, a `credential` unlocks first.
+	`deleteCopies` also deletes TabLodge's own backups and recovery snapshots, which may hold the links.
+	*/
+	LOCKED_MOVE_IN: {
+		source: LockedMoveSource;
+		credential?: string;
+		deleteCopies?: boolean;
+	};
 	LOCKED_SET_IDLE: {idleMinutes: number};
 	LOCKED_CHANGE_CREDENTIAL: {
 		current: string;
@@ -870,6 +881,49 @@ export type LockedBookmark = {
 	url: string;
 	createdAt: number;
 	updatedAt: number;
+};
+
+/**
+What a move into the locked area takes. The locked area has no columns or sessions, so a column or a session keeps
+none of its name, notes or grouping: only its links move, flat.
+*/
+export type LockedMoveSource =
+	| {kind: 'bookmarks'; ids: string[]}
+	| {kind: 'column'; columnId: string}
+	/**
+	`afterwards` says what happens to the session once its links are in the locked area.
+	*/
+	| {kind: 'session'; groupId: string; afterwards: 'keep' | 'delete'};
+
+export type LockedMoveResult = {
+	/**
+	Links now in the locked area: new ones plus ones that were already there.
+	*/
+	copied: number;
+	/**
+	Of `copied`, how many were new to the locked area.
+	*/
+	added: number;
+	/**
+	Links removed from the library. A session that is kept loses none.
+	*/
+	removed: number;
+	/**
+	Links that did not move: not an http or https address, or changed while the move ran. They stay where they were.
+	*/
+	left: number;
+	/**
+	True when the column or session was emptied and removed too.
+	*/
+	removedContainer: boolean;
+	/**
+	Backups and recovery snapshots deleted because the person asked for it.
+	*/
+	copiesDeleted: number;
+	/**
+	False when the library's replaced records could not all be removed right away; the next change removes them.
+	*/
+	cleaned: boolean;
 };
 
 export type LockedStatus =
@@ -1131,6 +1185,7 @@ export type TabLodgeResponses = {
 	LOCKED_UPDATE: {bookmark: LockedBookmark};
 	LOCKED_REMOVE: {removed: number};
 	LOCKED_MOVE_TO_BOARD: {moved: number; skipped: number};
+	LOCKED_MOVE_IN: LockedMoveResult;
 	LOCKED_SET_IDLE: {locked: LockedStatus};
 	LOCKED_CHANGE_CREDENTIAL: {locked: LockedStatus};
 	/**

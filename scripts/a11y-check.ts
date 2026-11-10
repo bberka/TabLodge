@@ -2812,6 +2812,115 @@ async function main() {
 			);
 
 			await check(
+				`moving a bookmark, a column and a session into the locked area works by keyboard and passes axe (${theme})`,
+				async () => {
+					const credential = 'correct horse battery';
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					await page.evaluate(async (secret: string) => {
+						const {chrome} = globalThis as typeof globalThis & {
+							chrome: ExtensionApi;
+						};
+						await chrome.runtime.sendMessage({
+							type: 'LOCKED_SETUP',
+							kind: 'password',
+							value: secret,
+						});
+						await chrome.runtime.sendMessage({
+							type: 'LOCKED_UNLOCK',
+							credential: secret,
+						});
+					}, credential);
+					const dialog = page.getByRole('dialog', {
+						name: 'Move to locked area',
+					});
+					// A column and a session open the same confirmation. Each passes axe and Escape closes it.
+					await openMenuItemByKeyboard(
+						page,
+						page
+							.locator(
+								'button[aria-label^="Options for "][aria-label$=" column"]',
+							)
+							.first(),
+						'Move to locked area',
+					);
+					await dialog.waitFor();
+					// The dialog fades in; axe judges contrast on the final colors.
+					await page.waitForTimeout(600);
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource),
+						[],
+						'the column move should pass axe',
+					);
+					await captureEvidence(page, `locked-move-column-${theme}.png`);
+					await page.keyboard.press('Escape');
+					await dialog.waitFor({state: 'hidden'});
+					await openMenuItemByKeyboard(
+						page,
+						page.locator('button[aria-label^="More actions for "]').first(),
+						'Move links to locked area',
+					);
+					await dialog.waitFor();
+					// The dialog fades in; axe judges contrast on the final colors.
+					await page.waitForTimeout(600);
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource),
+						[],
+						'the session move should pass axe',
+					);
+					await captureEvidence(page, `locked-move-session-${theme}.png`);
+					await page.keyboard.press('Escape');
+					await dialog.waitFor({state: 'hidden'});
+					// A bookmark moves with the keyboard alone, and focus does not fall back to the page body.
+					await openMenuItemByKeyboard(
+						page,
+						page.locator('button[aria-label^="Actions for "]').first(),
+						'Move to locked area',
+					);
+					await dialog.waitFor();
+					// The dialog fades in; axe judges contrast on the final colors.
+					await page.waitForTimeout(600);
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource),
+						[],
+						'the bookmark move should pass axe',
+					);
+					await dialog.getByRole('button', {name: 'Move 1 bookmark'}).focus();
+					await page.keyboard.press('Enter');
+					await dialog.waitFor({state: 'hidden'});
+					await page
+						.getByText('Moved 1 bookmark to the locked area.')
+						.first()
+						.waitFor();
+					await until(
+						async () => (await page.locator('body:focus').count()) === 0,
+						'focus to stay on the page after the move',
+					);
+					const count = await page.evaluate(async () => {
+						const {chrome} = globalThis as typeof globalThis & {
+							chrome: ExtensionApi;
+						};
+						const result = (await chrome.runtime.sendMessage({
+							type: 'LOCKED_LIST',
+						})) as {bookmarks: unknown[]};
+						return result.bookmarks.length;
+					});
+					assert.equal(count, 1, 'one bookmark should be in the locked area');
+					await page.evaluate(async (secret: string) => {
+						const {chrome} = globalThis as typeof globalThis & {
+							chrome: ExtensionApi;
+						};
+						await chrome.runtime.sendMessage({
+							type: 'LOCKED_REMOVE_LOCK',
+							credential: secret,
+							bookmarks: 'board',
+						});
+					}, credential);
+					await page.close();
+				},
+			);
+
+			await check(
 				`duplicate bookmarks dialog works by keyboard (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'newtab');

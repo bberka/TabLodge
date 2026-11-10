@@ -104,6 +104,10 @@ type HarnessOptions = {
 	*/
 	tabEvents?: boolean;
 	/**
+	Runs after each local storage write lands, so a test can change things between two writes of one operation.
+	*/
+	afterLocalSet?: (values: Record<string, unknown>) => void;
+	/**
 	Other chrome.* storage keys present at start (snapshots, backups, trash ...).
 	*/
 	storage?: Record<string, unknown>;
@@ -490,6 +494,7 @@ function createWorkerHarness(
 
 					pullState();
 					notifyChanged(changes);
+					options.afterLocalSet?.(values);
 				},
 				async remove(keys: string | string[]) {
 					pushState();
@@ -1078,6 +1083,10 @@ function createWorkerHarness(
 		setStorageFailure(error: Error, key?: string) {
 			storageFailure = error;
 			storageFailureKey = key;
+		},
+		clearStorageFailure() {
+			storageFailure = null;
+			storageFailureKey = undefined;
 		},
 		state,
 		storageGets,
@@ -8391,6 +8400,593 @@ test('locked area: removing the lock can discard what it holds', async () => {
 	assert.equal(removed.discarded, 2);
 	assert.equal(harness.state.bookmarks.length, before);
 	assert.equal('tablodge.locked' in harness.extraStorage, false);
+});
+
+// Moving library content into the locked area. The words below appear in titles and addresses that must be gone
+// from every plaintext place after a move.
+const MOVE_WORDS = ['alpine', 'birch', 'cedar', 'dune', 'elm-trip', 'fir-map'];
+
+function moveState(): StoredState {
+	const state = bookmarksState(0);
+	const add = (id: string, title: string, url: string, columnId: string) => {
+		state.bookmarks.push({
+			id,
+			title,
+			url,
+			columnId,
+			createdAt: 1,
+			updatedAt: 1,
+		});
+	};
+
+	add(
+		'bm-a',
+		'Alpine ledger',
+		'https://alpine-ledger.example/a',
+		'bookmark-default',
+	);
+	add(
+		'bm-b',
+		'Birch notes',
+		'https://birch-notes.example/b',
+		'bookmark-default',
+	);
+	add('bm-c', 'Cedar plan', 'https://cedar-plan.example/c', 'col-news');
+	add('bm-d', 'Dune memo', 'https://dune-memo.example/d', 'col-news');
+	add('bm-z', 'Zinc stays', 'https://zinc-stays.example/', 'col-news');
+	state.groups = [
+		{
+			...state.groups[0],
+			id: 'trip',
+			name: 'Trip',
+			tabs: [
+				{
+					id: 't1',
+					title: 'Elm map',
+					url: 'https://elm-trip.example/1',
+					pinned: false,
+					originalIndex: 0,
+				},
+				{
+					id: 't2',
+					title: 'Fir hotel',
+					url: 'https://fir-map.example/2',
+					pinned: false,
+					originalIndex: 1,
+				},
+			],
+		},
+	] as StoredState['groups'];
+	return state;
+}
+
+async function moveHarness(options: HarnessOptions = {}) {
+	const harness = createWorkerHarness(moveState(), undefined, {
+		now: LOCKED_NOW,
+		...options,
+	});
+	const made = await harness.sendMessage({
+		type: 'LOCKED_SETUP',
+		kind: 'password',
+		value: LOCKED_PASSWORD,
+	});
+	assert.equal(made.ok, true, made.error);
+	return harness;
+}
+
+/**
+The words found anywhere TabLodge keeps data except inside the encrypted entry: local and session storage, the
+logical state pages read, and the full backup the app would export.
+*/
+async function plaintextLeaks(
+	harness: ReturnType<typeof createWorkerHarness>,
+	words = MOVE_WORDS,
+	ignoreKeys: string[] = [],
+) {
+	const full = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	const {locked: _locked, ...exported} = full as Record<string, unknown>;
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	const text = JSON.stringify([
+		Object.entries(harness.extraStorage).filter(
+			([key]) => key !== 'tablodge.locked' && !ignoreKeys.includes(key),
+		),
+		harness.sessionStore,
+		exported,
+		state,
+	]).toLowerCase();
+	return words.filter((word) => text.includes(word));
+}
+
+const lockedTitles = async (harness: ReturnType<typeof createWorkerHarness>) =>
+	Array.from(
+		(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks,
+		(item) => item.title,
+	).toSorted();
+
+test('locked move: bookmarks go into the locked area and leave no readable copy behind', async () => {
+	const harness = await moveHarness();
+	// Things that normally hold the moved links: an Undo record from an earlier edit, a backup, and a snapshot.
+	const edit = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		bookmarks: [{title: 'Gold extra', url: 'https://gold-extra.example/'}],
+		columnId: 'bookmark-default',
+		undoable: true,
+	});
+	assert.ok(edit.undoId);
+	assert.equal(undoRecordsOf(harness).length, 1);
+	const backupsBefore = backupsOf(harness).auto.length;
+	await harness.sendMessage({type: 'BACKUP_NOW'});
+	assert.equal(backupsOf(harness).auto.length, backupsBefore + 1);
+	assert.ok((await plaintextLeaks(harness)).includes('alpine'));
+
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a', 'bm-c']},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.copied, 2);
+	assert.equal(moved.added, 2);
+	assert.equal(moved.removed, 2);
+	assert.equal(moved.left, 0);
+	assert.equal(moved.cleaned, true);
+	assert.equal(moved.copiesDeleted, 0);
+	assert.deepEqual(await lockedTitles(harness), [
+		'Alpine ledger',
+		'Cedar plan',
+	]);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.title),
+		['Birch notes', 'Dune memo', 'Zinc stays', 'Gold extra'],
+	);
+	// No trash entry, no Undo record, no safety backup.
+	assert.equal(trashOf(harness).length, 0);
+	assert.equal(undoRecordsOf(harness).length, 0);
+	assert.equal(backupsOf(harness).safety.length, 0);
+	const undone = await harness.sendMessage({type: 'UNDO', id: edit.undoId});
+	assert.equal(undone.ok, false);
+	// The records the commit replaced are gone at once, not at the next commit.
+	const index = harness.extraStorage['tablodge.state'] as {
+		garbage: string[];
+		bookmarks: {rev: number};
+	};
+	assert.deepEqual(index.garbage, []);
+	assert.deepEqual(
+		Object.keys(harness.extraStorage).filter((key) =>
+			key.startsWith('tablodge.bookmarks.'),
+		),
+		[`tablodge.bookmarks.${index.bookmarks.rev}`],
+	);
+	// Everywhere except the existing backup is clean. The move cannot rewrite that backup, so it keeps its copy.
+	assert.deepEqual(
+		await plaintextLeaks(harness, ['alpine', 'cedar'], ['tablodge.backups']),
+		[],
+	);
+	assert.ok(
+		JSON.stringify(backupsOf(harness)).toLowerCase().includes('alpine'),
+		'an existing backup keeps its copy',
+	);
+});
+
+test('locked move: asking to delete copies removes backups, safety copies and snapshots too, and nothing leaks', async () => {
+	const copy = (kind: string) => ({
+		id: `${kind}-1`,
+		at: LOCKED_NOW - 9000,
+		kind,
+		reason: 'test',
+		sessions: 0,
+		tabs: 0,
+		bookmarks: 1,
+		bytes: 80,
+		sig: kind,
+		json: JSON.stringify({
+			bookmarks: [
+				{title: 'Alpine ledger', url: 'https://alpine-ledger.example/a'},
+			],
+		}),
+	});
+	const harness = await moveHarness({
+		storage: {
+			'tablodge.backups': {
+				version: 1,
+				auto: [copy('auto')],
+				safety: [copy('safety')],
+				downloadError: '',
+				lastAutoCheckAt: 0,
+			},
+			'tablodge.snapshots': {
+				version: 1,
+				history: [
+					{
+						id: 'snap-1',
+						at: LOCKED_NOW - 5000,
+						windows: [
+							{
+								id: 1,
+								tabs: [
+									{
+										url: 'https://alpine-ledger.example/a',
+										title: 'Alpine ledger',
+									},
+								],
+							},
+						],
+					},
+				],
+			},
+		},
+	});
+	assert.ok((await plaintextLeaks(harness)).includes('alpine'));
+	const kept = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-b']},
+	});
+	assert.equal(kept.ok, true, kept.error);
+	assert.equal(kept.copiesDeleted, 0);
+	assert.equal(backupsOf(harness).auto.length, 1);
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a', 'bm-c', 'bm-d']},
+		deleteCopies: true,
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.removed, 3);
+	assert.equal(moved.copiesDeleted, 3);
+	assert.equal(backupsOf(harness).auto.length, 0);
+	assert.equal(backupsOf(harness).safety.length, 0);
+	assert.deepEqual(
+		await plaintextLeaks(harness, ['alpine', 'birch', 'cedar', 'dune']),
+		[],
+	);
+	assert.equal(JSON.stringify(trashOf(harness)).includes('Alpine'), false);
+});
+
+test('locked move: a column moves flat and the column goes with its links', async () => {
+	const harness = await moveHarness();
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'column', columnId: 'col-news'},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.removed, 3);
+	assert.equal(moved.removedContainer, true);
+	assert.deepEqual(await lockedTitles(harness), [
+		'Cedar plan',
+		'Dune memo',
+		'Zinc stays',
+	]);
+	assert.deepEqual(
+		harness.state.bookmarkColumns.map((column) => column.id),
+		['bookmark-default'],
+	);
+	assert.equal(
+		harness.state.bookmarks.some(
+			(bookmark) => bookmark.columnId === 'col-news',
+		),
+		false,
+	);
+	assert.equal(trashOf(harness).length, 0);
+	assert.deepEqual(
+		await plaintextLeaks(harness, ['cedar', 'dune', 'zinc', 'news']),
+		[],
+	);
+});
+
+test('locked move: unfiled bookmarks move without a column to remove', async () => {
+	const state = moveState();
+	for (const bookmark of state.bookmarks) {
+		bookmark.columnId = 'bookmark-unfiled';
+	}
+
+	const harness = createWorkerHarness(state, undefined, {now: LOCKED_NOW});
+	await harness.sendMessage({
+		type: 'LOCKED_SETUP',
+		kind: 'password',
+		value: LOCKED_PASSWORD,
+	});
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'column', columnId: 'bookmark-unfiled'},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.removed, 5);
+	assert.equal(moved.removedContainer, false);
+	assert.equal(harness.state.bookmarks.length, 0);
+	assert.equal(harness.state.bookmarkColumns.length, 2);
+});
+
+test('locked move: a session can be kept or deleted after its links are copied', async () => {
+	const kept = await moveHarness();
+	const copied = await kept.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'session', groupId: 'trip', afterwards: 'keep'},
+	});
+	assert.equal(copied.ok, true, copied.error);
+	assert.equal(copied.copied, 2);
+	assert.equal(copied.removed, 0);
+	assert.equal(copied.left, 0);
+	assert.equal(copied.removedContainer, false);
+	assert.equal(kept.state.groups[0].tabs.length, 2);
+	assert.deepEqual(await lockedTitles(kept), ['Elm map', 'Fir hotel']);
+
+	const deleted = await moveHarness();
+	const moved = await deleted.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'session', groupId: 'trip', afterwards: 'delete'},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.removed, 2);
+	assert.equal(moved.left, 0);
+	assert.equal(moved.removedContainer, true);
+	assert.equal(deleted.state.groups.length, 0);
+	assert.equal(trashOf(deleted).length, 0);
+	assert.deepEqual(
+		await plaintextLeaks(deleted, ['elm-trip', 'fir-map', 'trip']),
+		[],
+	);
+});
+
+test('locked move: a tab edited while a session moves stays in the session', async () => {
+	let edit: (() => void) | undefined;
+	const harness = await moveHarness({
+		afterLocalSet(values) {
+			if (!('tablodge.locked' in values)) {
+				return;
+			}
+
+			edit?.();
+			edit = undefined;
+		},
+	});
+	edit = () => {
+		harness.state.groups[0].tabs[0].title = 'Elm renamed';
+	};
+
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'session', groupId: 'trip', afterwards: 'delete'},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.removed, 1);
+	assert.equal(moved.left, 1);
+	assert.equal(moved.removedContainer, false);
+	assert.deepEqual(
+		harness.state.groups[0].tabs.map((tab) => tab.title),
+		['Elm renamed'],
+	);
+});
+
+test('locked move: links already in the locked area are counted, not stored twice', async () => {
+	const harness = await moveHarness();
+	await harness.sendMessage({
+		type: 'LOCKED_ADD',
+		bookmarks: [{title: 'Old alpine', url: 'https://alpine-ledger.example/a'}],
+	});
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a', 'bm-b']},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.copied, 2);
+	assert.equal(moved.added, 1);
+	assert.equal(moved.removed, 2);
+	assert.deepEqual(await lockedTitles(harness), ['Birch notes', 'Old alpine']);
+});
+
+test('locked move: it needs a set up, unlocked area and changes nothing otherwise', async () => {
+	const none = createWorkerHarness(moveState(), undefined, {now: LOCKED_NOW});
+	const notSetUp = await none.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a']},
+	});
+	assert.equal(notSetUp.ok, false);
+	assert.equal((notSetUp as {code?: string}).code, 'not-set-up');
+	assert.equal(none.state.bookmarks.length, 5);
+
+	const harness = await moveHarness();
+	await harness.sendMessage({type: 'LOCKED_LOCK'});
+	const locked = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a']},
+	});
+	assert.equal((locked as {code?: string}).code, 'locked');
+	const wrong = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a']},
+		credential: 'not the password',
+	});
+	assert.equal((wrong as {code?: string}).code, 'wrong-credential');
+	assert.equal(harness.state.bookmarks.length, 5);
+	assert.equal(trashOf(harness).length, 0);
+
+	// With the credential the same message unlocks and moves.
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a']},
+		credential: LOCKED_PASSWORD,
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.removed, 1);
+
+	for (const source of [
+		{kind: 'bookmarks' as const, ids: ['nope']},
+		{kind: 'column' as const, columnId: 'nope'},
+		{kind: 'session' as const, groupId: 'nope', afterwards: 'delete' as const},
+	]) {
+		const missing = await harness.sendMessage({type: 'LOCKED_MOVE_IN', source});
+		assert.equal(missing.ok, false);
+		assert.match(missing.error ?? '', /no longer exist/);
+	}
+
+	const bad = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'everything'},
+	} as unknown as TabLodgeMessage);
+	assert.equal(bad.ok, false);
+});
+
+test('locked move: private windows cannot move anything', async () => {
+	const harness = createWorkerHarness(moveState(), undefined, {
+		incognitoContext: true,
+		storage: {'tablodge.private.config': {mode: 'shared', configured: true}},
+	});
+	const refused = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a']},
+	});
+	assert.equal(refused.ok, false);
+	assert.equal(harness.state.bookmarks.length, 5);
+});
+
+test('locked move: a failed library write leaves a copy in both places, and running it again finishes', async () => {
+	const harness = await moveHarness();
+	harness.setStorageFailure(new Error('disk full'), 'tablodge.state');
+	const failed = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a', 'bm-b']},
+	});
+	assert.equal(failed.ok, false);
+	assert.match(failed.error ?? '', /in the locked area/);
+	assert.match(failed.error ?? '', /Nothing was lost/);
+	// Interrupted between the two writes: the links are in both places, never in neither.
+	assert.deepEqual(await lockedTitles(harness), [
+		'Alpine ledger',
+		'Birch notes',
+	]);
+	assert.ok(harness.state.bookmarks.some((bookmark) => bookmark.id === 'bm-a'));
+	assert.ok(harness.state.bookmarks.some((bookmark) => bookmark.id === 'bm-b'));
+
+	harness.clearStorageFailure();
+	const again = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a', 'bm-b']},
+	});
+	assert.equal(again.ok, true, again.error);
+	assert.equal(again.copied, 2);
+	assert.equal(again.added, 0);
+	assert.equal(again.removed, 2);
+	assert.deepEqual(await lockedTitles(harness), [
+		'Alpine ledger',
+		'Birch notes',
+	]);
+	assert.equal(
+		harness.state.bookmarks.some((bookmark) => bookmark.id === 'bm-a'),
+		false,
+	);
+});
+
+test('locked move: a failed write to the locked area removes nothing from the library', async () => {
+	const harness = await moveHarness();
+	harness.setStorageFailure(new Error('quota'), 'tablodge.locked');
+	const failed = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a']},
+	});
+	assert.equal(failed.ok, false);
+	assert.match(failed.error ?? '', /Nothing was removed/);
+	assert.equal(harness.state.bookmarks.length, 5);
+	assert.equal(trashOf(harness).length, 0);
+});
+
+test('locked move: a link edited while the move ran stays where it is', async () => {
+	let edit: (() => void) | undefined;
+	const harness = await moveHarness({
+		afterLocalSet(values) {
+			if (!('tablodge.locked' in values)) {
+				return;
+			}
+
+			edit?.();
+			edit = undefined;
+		},
+	});
+	// The title changes after the copy was stored and before the library is changed.
+	edit = () => {
+		const bookmark = harness.state.bookmarks.find(
+			(entry) => entry.id === 'bm-a',
+		);
+		if (bookmark) {
+			bookmark.title = 'Alpine renamed';
+		}
+	};
+
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'bookmarks', ids: ['bm-a', 'bm-b']},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.copied, 2);
+	assert.equal(moved.removed, 1);
+	assert.equal(moved.left, 1);
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((bookmark) => bookmark.id === 'bm-a' || bookmark.id === 'bm-b')
+			.map((bookmark) => bookmark.title),
+		['Alpine renamed'],
+	);
+});
+
+test('locked move: hundreds of links move in batches, and the area refuses what does not fit', async () => {
+	const state = bookmarksState(0);
+	state.bookmarks = Array.from({length: 450}, (_, index) => ({
+		id: `many-${index}`,
+		title: `Many ${index}`,
+		url: `https://many${index}.example/`,
+		columnId: 'col-news',
+		createdAt: index,
+		updatedAt: index,
+	}));
+	const harness = createWorkerHarness(state, undefined, {now: LOCKED_NOW});
+	await harness.sendMessage({
+		type: 'LOCKED_SETUP',
+		kind: 'password',
+		value: LOCKED_PASSWORD,
+	});
+	harness.storageSets.length = 0;
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'column', columnId: 'col-news'},
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.copied, 450);
+	assert.equal(moved.removed, 450);
+	// 200 per write: three writes to the encrypted entry, then one library commit.
+	assert.equal(
+		harness.storageSets.filter((keys) => keys.includes('tablodge.locked'))
+			.length,
+		3,
+	);
+	assert.equal(harness.state.bookmarks.length, 0);
+	assert.equal(
+		(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length,
+		450,
+	);
+
+	const big = bookmarksState(0);
+	big.bookmarks = Array.from({length: 2100}, (_, index) => ({
+		id: `big-${index}`,
+		title: `Big ${index}`,
+		url: `https://big${index}.example/`,
+		columnId: 'col-news',
+		createdAt: index,
+		updatedAt: index,
+	}));
+	const full = createWorkerHarness(big, undefined, {now: LOCKED_NOW});
+	await full.sendMessage({
+		type: 'LOCKED_SETUP',
+		kind: 'password',
+		value: LOCKED_PASSWORD,
+	});
+	const refused = await full.sendMessage({
+		type: 'LOCKED_MOVE_IN',
+		source: {kind: 'column', columnId: 'col-news'},
+	});
+	assert.equal(refused.ok, false);
+	assert.equal((refused as {code?: string}).code, 'full');
+	assert.equal(full.state.bookmarks.length, 2100);
+	assert.equal(
+		(await full.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length,
+		0,
+	);
 });
 
 test('locked area: changing the credential keeps the bookmarks and the worker restarts cleanly after it', async () => {
