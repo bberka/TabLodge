@@ -1216,6 +1216,8 @@ function NewTab() {
 				}
 			}
 
+			// The selection was only there to pick what to move.
+			setSelectedBookmarks(new Set());
 			showStatus(`Moved ${plural(bookmarkIds.length, 'bookmark')}.`);
 			return true;
 		} finally {
