@@ -371,18 +371,20 @@ export function watchDragAutoscroll(
 	};
 
 	const ending = ['dragend', 'drop', 'pointermove', 'pointerdown', 'keydown'];
-	source.addEventListener('dragover', onOver, {capture: true});
-	source.addEventListener('dragleave', onLeave, {capture: true});
+	// The same options object for add and remove: some runtimes ignore a bare `true` when removing.
+	const capture = {capture: true};
+	source.addEventListener('dragover', onOver, capture);
+	source.addEventListener('dragleave', onLeave, capture);
 	for (const type of ending) {
-		source.addEventListener(type, stop, {capture: true});
+		source.addEventListener(type, stop, capture);
 	}
 
 	return () => {
 		stop();
-		source.removeEventListener('dragover', onOver, true);
-		source.removeEventListener('dragleave', onLeave, true);
+		source.removeEventListener('dragover', onOver, capture);
+		source.removeEventListener('dragleave', onLeave, capture);
 		for (const type of ending) {
-			source.removeEventListener(type, stop, true);
+			source.removeEventListener(type, stop, capture);
 		}
 	};
 }
