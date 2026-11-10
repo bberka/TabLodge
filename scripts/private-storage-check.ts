@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
 import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
-import {chromium, type Locator, type Page} from 'playwright';
+import {
+	chromium,
+	type BrowserContext,
+	type Locator,
+	type Page,
+} from 'playwright';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 type ChromeGlobal = {
@@ -171,6 +176,474 @@ async function bookmarkTitles(page: Page): Promise<string[]> {
 
 		return bookmark.title;
 	});
+}
+
+type StorageGlobal = {
+	chrome: {
+		storage: {
+			local: {get(keys: null): Promise<Record<string, unknown>>};
+			session: {
+				get(keys: string[]): Promise<Record<string, unknown>>;
+				set(values: Record<string, unknown>): Promise<void>;
+			};
+		};
+	};
+};
+
+async function sendRaw(
+	page: Page,
+	message: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+	const result = await page.evaluate(
+		async (payload) =>
+			(
+				globalThis as typeof globalThis & ChromeGlobal
+			).chrome.runtime.sendMessage(payload),
+		message,
+	);
+	assert.ok(isRecord(result));
+	return result;
+}
+
+async function openPrivatePage(normal: Page, url: string): Promise<Page> {
+	const pagePromise = normal.context().waitForEvent('page');
+	void pagePromise.catch(() => undefined);
+	await normal.evaluate(
+		async (target) =>
+			(globalThis as typeof globalThis & ChromeGlobal).chrome.windows.create({
+				incognito: true,
+				url: target,
+			}),
+		url,
+	);
+	const page = await pagePromise;
+	await page.waitForLoadState();
+	return page;
+}
+
+const LOCK_KEY = 'tablodge.privatelock.key';
+const LOCK_PASSWORD = 'correct horse battery';
+
+async function storedPrivateValues(normal: Page) {
+	return normal.evaluate(async () => {
+		const all = await (
+			globalThis as typeof globalThis & StorageGlobal
+		).chrome.storage.local.get(null);
+		return Object.entries(all).filter(
+			([key]) =>
+				key.startsWith('tablodge.private.') &&
+				key !== 'tablodge.private.config' &&
+				key !== 'tablodge.private.lock',
+		);
+	});
+}
+
+async function axeViolations(page: Page, axeSource: string) {
+	await page.evaluate(axeSource);
+	return page.evaluate(async () => {
+		const {axe} = globalThis as typeof globalThis & {
+			axe: {
+				run(
+					options: unknown,
+				): Promise<{violations: Array<{id: string; help: string}>}>;
+			};
+		};
+		return (
+			await axe.run({
+				runOnly: {
+					type: 'tag',
+					values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'],
+				},
+			})
+		).violations;
+	});
+}
+
+type DocumentGlobal = {
+	document: {
+		activeElement: {tagName: string; textContent: string | null} | null;
+	};
+};
+
+async function focused(page: Page) {
+	return page.evaluate(() => {
+		const {activeElement} = (globalThis as typeof globalThis & DocumentGlobal)
+			.document;
+		return {
+			tag: activeElement?.tagName ?? '',
+			text: activeElement?.textContent,
+		};
+	});
+}
+
+const lockedHeading = (page: Page) =>
+	page.getByRole('heading', {name: /Private TabLodge is locked/});
+
+async function unlockWith(page: Page, value: string) {
+	await page.getByLabel('PIN or password', {exact: true}).fill(value);
+	await page.keyboard.press('Enter');
+}
+
+/**
+The PIN or password lock of the saved separate private library, in a real browser (issue #142).
+*/
+async function runLockChecks(
+	context: BrowserContext,
+	id: string,
+	errors: string[],
+	phase: 'enable' | 'afterBrowserRestart',
+) {
+	const axeSource = await readFile(
+		fromRoot('node_modules/axe-core/axe.min.js'),
+		'utf8',
+	);
+	const normal = await context.newPage();
+	await normal.goto(
+		`chrome-extension://${id}/options.html#settings-private-windows`,
+	);
+
+	if (phase === 'afterBrowserRestart') {
+		// The browser closed with the library unlocked, so the key is gone and the library opens locked.
+		const page = await openPrivatePage(
+			normal,
+			`chrome-extension://${id}/newtab.html`,
+		);
+		page.on('pageerror', (error) => {
+			errors.push(error.message);
+		});
+		await lockedHeading(page).waitFor();
+		assert.equal(
+			(
+				await normal.evaluate(
+					async (key) =>
+						(
+							globalThis as typeof globalThis & StorageGlobal
+						).chrome.storage.session.get([key]),
+					LOCK_KEY,
+				)
+			)[LOCK_KEY],
+			undefined,
+		);
+		await unlockWith(page, 'wrong wrong wrong');
+		await page.getByRole('alert').getByText('not correct').waitFor();
+		await unlockWith(page, LOCK_PASSWORD);
+		await page.getByText('Saved private', {exact: true}).waitFor();
+		console.log(
+			'ok a browser restart locks the library and the password opens it',
+		);
+		// Removing the lock leaves the original plain data.
+		const removed = await sendRaw(page, {
+			type: 'REMOVE_PRIVATE_LOCK',
+			credential: LOCK_PASSWORD,
+		});
+		assert.equal(removed.ok, true);
+		const values = await storedPrivateValues(normal);
+		assert.ok(values.length > 0);
+		assert.ok(
+			values.every(([, value]) => !(isRecord(value) && value.tlock === 1)),
+			'every value is plain again',
+		);
+		assert.match(JSON.stringify(values), /saved-private\.example/);
+		console.log('ok removing the lock restores plain, readable private data');
+		await page.close();
+		await normal.close();
+		return;
+	}
+
+	assert.equal(
+		(await sendRaw(normal, {type: 'SET_PRIVATE_CONFIG', mode: 'saved'})).ok,
+		true,
+	);
+	const privatePage = await openPrivatePage(
+		normal,
+		`chrome-extension://${id}/options.html#settings-private-windows`,
+	);
+	privatePage.on('pageerror', (error) => {
+		errors.push(error.message);
+	});
+	const turnOn = privatePage.getByRole('button', {name: 'Turn on lock…'});
+	await turnOn.waitFor();
+	// A regular window shows the status but cannot change the lock.
+	await normal.reload();
+	await normal
+		.getByText('Open Settings in a private window to turn the lock on', {
+			exact: false,
+		})
+		.waitFor();
+	assert.equal(
+		await normal.getByRole('button', {name: 'Turn on lock…'}).count(),
+		0,
+	);
+
+	// Turn the lock on by keyboard, in both themes, at every viewport.
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		await captureEvidence(
+			privatePage,
+			privatePage.locator('[data-private-lock-settings]'),
+			`lock-settings-off-${theme}`,
+		);
+	}
+
+	await turnOn.focus();
+	await privatePage.keyboard.press('Enter');
+	const enableDialog = privatePage.getByRole('dialog', {
+		name: 'Lock private windows',
+	});
+	await enableDialog.waitFor();
+	assert.ok(
+		await enableDialog
+			.getByText('Nothing can recover', {exact: false})
+			.or(enableDialog.getByText('cannot be recovered', {exact: false}))
+			.first()
+			.isVisible(),
+		'the lost credential warning shows before enabling',
+	);
+	const submit = enableDialog.getByRole('button', {name: 'Turn on lock'});
+	assert.equal(await submit.isDisabled(), true);
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		await captureEvidence(
+			privatePage,
+			enableDialog,
+			`lock-enable-dialog-${theme}`,
+		);
+		assert.deepEqual(await axeViolations(privatePage, axeSource), []);
+	}
+
+	await enableDialog.getByText('PIN', {exact: true}).click();
+	assert.ok(
+		await enableDialog
+			.getByText('Short PINs are weak against copied profile files', {
+				exact: false,
+			})
+			.isVisible(),
+	);
+	await enableDialog.getByText('Password', {exact: true}).first().click();
+	await enableDialog
+		.getByRole('textbox', {name: 'Password', exact: true})
+		.fill(LOCK_PASSWORD);
+	await enableDialog
+		.getByRole('textbox', {name: 'Confirm Password'})
+		.fill(LOCK_PASSWORD);
+	await enableDialog.getByRole('checkbox').check();
+	await submit.click();
+	await privatePage
+		.getByRole('status')
+		.getByText('Private windows are locked.', {exact: true})
+		.waitFor();
+	await enableDialog.waitFor({state: 'hidden'});
+	const sealed = await storedPrivateValues(normal);
+	assert.ok(sealed.length >= 2);
+	assert.ok(
+		sealed.every(([, value]) => isRecord(value) && value.tlock === 1),
+		'every private library value is encrypted at rest',
+	);
+	assert.doesNotMatch(
+		JSON.stringify(sealed),
+		/saved-private\.example|Saved private/,
+	);
+	assert.ok(
+		isRecord(
+			(
+				await normal.evaluate(
+					async (key) =>
+						(
+							globalThis as typeof globalThis & StorageGlobal
+						).chrome.storage.session.get([key]),
+					LOCK_KEY,
+				)
+			)[LOCK_KEY],
+		),
+		'the key is in session storage',
+	);
+	console.log(
+		'ok turning the lock on encrypts every private library value at rest',
+	);
+
+	// The mode cannot change while the lock is on, from a regular window or by message.
+	await normal.reload();
+	const modeRadios = normal
+		.getByRole('radiogroup', {name: 'Choose a library for private windows'})
+		.getByRole('radio');
+	for (const radio of await modeRadios.all()) {
+		assert.equal(await radio.isDisabled(), true);
+	}
+
+	await normal
+		.getByText(
+			'Remove the lock in a private window before choosing another storage mode',
+			{
+				exact: false,
+			},
+		)
+		.first()
+		.waitFor();
+	const blocked = await sendRaw(normal, {
+		type: 'SET_PRIVATE_CONFIG',
+		mode: 'shared',
+	});
+	assert.equal(blocked.ok, false);
+	assert.match(String(blocked.error), /remove the lock/);
+	await captureEvidence(
+		normal,
+		normal.locator('#settings-private-windows'),
+		'lock-mode-blocked',
+		true,
+	);
+	console.log('ok the storage mode cannot change while the library is locked');
+
+	// Lock now, from the header by keyboard.
+	await privatePage.goto(`chrome-extension://${id}/newtab.html`);
+	await privatePage.getByText('Saved private', {exact: true}).waitFor();
+	const lockNow = privatePage.getByRole('button', {
+		name: 'Lock private windows now',
+	});
+	await lockNow.focus();
+	await privatePage.keyboard.press('Enter');
+	await lockedHeading(privatePage).waitFor();
+	assert.equal(
+		(await focused(privatePage)).tag,
+		'INPUT',
+		'focus lands in the credential field',
+	);
+	assert.equal(await privatePage.getByText('Saved private').count(), 0);
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		await captureEvidence(
+			privatePage,
+			privatePage.locator('body'),
+			`lock-screen-${theme}`,
+		);
+		assert.deepEqual(await axeViolations(privatePage, axeSource), []);
+	}
+
+	// Locked: the worker refuses reads, writes, and backups.
+	for (const message of [
+		{type: 'GET_STATE'},
+		{type: 'GET_FULL_BACKUP'},
+		{type: 'ADD_BOOKMARK', bookmark: {title: 'x', url: 'https://x.example/'}},
+	]) {
+		const refused = await sendRaw(privatePage, message);
+		assert.equal(refused.ok, false, message.type);
+		assert.equal(refused.locked, true, message.type);
+	}
+
+	for (const page of ['popup.html', 'sidepanel.html']) {
+		await privatePage.goto(`chrome-extension://${id}/${page}`);
+		await lockedHeading(privatePage).waitFor();
+		if (page !== 'popup.html') {
+			continue;
+		}
+
+		await privatePage.setViewportSize({width: 380, height: 600});
+		await privatePage.screenshot({
+			animations: 'disabled',
+			path: fromRoot('.dev/evidence/lock-popup-380x600.png'),
+		});
+	}
+
+	await privatePage.goto(`chrome-extension://${id}/newtab.html`);
+	await lockedHeading(privatePage).waitFor();
+	await privatePage.setViewportSize({width: 1440, height: 900});
+	await unlockWith(privatePage, 'wrong wrong wrong');
+	const wrong = privatePage.getByRole('alert').getByText('not correct');
+	await wrong.waitFor();
+	assert.equal(await lockedHeading(privatePage).isVisible(), true);
+	await captureEvidence(
+		privatePage,
+		privatePage.locator('body'),
+		'lock-screen-wrong-credential',
+	);
+	await unlockWith(privatePage, LOCK_PASSWORD);
+	await privatePage.getByText('Saved private', {exact: true}).waitFor();
+	for (
+		let attempt = 0;
+		attempt < 100 && (await focused(privatePage)).tag === 'BODY';
+		attempt += 1
+	) {
+		await privatePage.waitForTimeout(100);
+	}
+
+	assert.notEqual(
+		(await focused(privatePage)).tag,
+		'BODY',
+		'focus is not left on the page body after unlocking',
+	);
+
+	console.log(
+		'ok the lock screen blocks the page, rejects a wrong password, and opens with the right one',
+	);
+
+	// A restarted worker keeps the library open while the browser keeps running.
+	const probe = await context.newPage();
+	await probe.goto(`chrome-extension://${id}/options.html`);
+	const cdp = await context.newCDPSession(probe);
+	await cdp.send('ServiceWorker.enable');
+	await cdp.send('ServiceWorker.stopAllWorkers');
+	assert.deepEqual(await bookmarkTitles(privatePage), ['Saved private']);
+	await probe.close();
+	console.log('ok a restarted private worker keeps the library unlocked');
+
+	// The idle timeout locks the page by itself.
+	assert.equal(
+		(await sendRaw(privatePage, {type: 'SET_PRIVATE_LOCK_IDLE', minutes: 1}))
+			.ok,
+		true,
+	);
+	await normal.evaluate(async () => {
+		const {session} = (globalThis as typeof globalThis & StorageGlobal).chrome
+			.storage;
+		const saved = await session.get(['tablodge.privatelock.active']);
+		await session.set({
+			'tablodge.privatelock.active':
+				(saved['tablodge.privatelock.active'] as number) - 2 * 60_000,
+		});
+	});
+	await lockedHeading(privatePage).waitFor({timeout: 15_000});
+	console.log('ok the idle timeout locks an open private page');
+	await unlockWith(privatePage, LOCK_PASSWORD);
+	await privatePage.getByText('Saved private', {exact: true}).waitFor();
+
+	// Change the credential from Settings by keyboard.
+	await privatePage.goto(
+		`chrome-extension://${id}/options.html#settings-private-windows`,
+	);
+	const change = privatePage.getByRole('button', {name: /^Change password/});
+	await change.focus();
+	await privatePage.keyboard.press('Enter');
+	const changeDialog = privatePage.getByRole('dialog', {
+		name: 'Change PIN or password',
+	});
+	await changeDialog.waitFor();
+	await captureEvidence(privatePage, changeDialog, 'lock-change-dialog');
+	await privatePage.keyboard.press('Escape');
+	await changeDialog.waitFor({state: 'hidden'});
+	assert.equal(
+		(await focused(privatePage)).text,
+		await change.textContent(),
+		'focus returns to the control that opened the dialog',
+	);
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		await captureEvidence(
+			privatePage,
+			privatePage.locator('[data-private-lock-settings]'),
+			`lock-settings-on-${theme}`,
+		);
+	}
+
+	// Closing private windows does not lock: the key lives in session storage until the browser closes.
+	await privatePage.close();
+	const reopened = await openPrivatePage(
+		normal,
+		`chrome-extension://${id}/newtab.html`,
+	);
+	await reopened.getByText('Saved private', {exact: true}).waitFor();
+	console.log(
+		'ok the library stays unlocked across private windows until the browser closes',
+	);
+	await normal.close();
 }
 
 const evidence = fromRoot('.dev/evidence');
@@ -728,6 +1201,20 @@ try {
 		);
 	} finally {
 		await restarted.close();
+	}
+
+	const lockContext = await launch();
+	try {
+		await runLockChecks(lockContext, id, errors, 'enable');
+	} finally {
+		await lockContext.close();
+	}
+
+	const afterRestart = await launch();
+	try {
+		await runLockChecks(afterRestart, id, errors, 'afterBrowserRestart');
+	} finally {
+		await afterRestart.close();
 	}
 
 	assert.deepEqual(errors, []);

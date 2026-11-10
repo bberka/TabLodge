@@ -134,6 +134,14 @@ On your first private dashboard visit, choose **Use the same library as regular 
 
 The shared mode uses the same sessions, bookmarks, and preferences as regular windows. The separate modes start empty. Saved private data stays after browser restarts. Temporary data survives closing private windows and extension worker restarts, but clears on browser restart. Switching modes does not copy, merge, or delete existing libraries. Switch back to reopen one. Appearance is shared across modes, except that private windows use their own teal accent color by default. Turn this off or pick another color in **Settings › Private windows**. Automatic snapshots and backups do not run in private windows. Exports and manual backup downloads are ordinary files and are not cleared with temporary storage. See [Privacy](PRIVACY.md#private-windows) for storage and deletion details.
 
+#### Lock a separate saved library
+
+With **Use a separate saved library**, you can protect the private library with a PIN (4 to 8 digits) or a password (8 to 128 characters). Open **Settings › Private windows** in a private window and choose **Turn on lock**. The dialog warns that nothing can recover a lost PIN or password, and that a short PIN gives little protection if someone copies your browser profile. TabLodge then encrypts the private library's sessions, bookmarks, settings, trash, Undo records, and backups on this device. Private dashboards, popups, side panels, and Settings show a lock screen until you enter the PIN or password.
+
+The library locks again when you choose **Lock now** (in the header of private pages or in Settings), after the idle time you pick (5 minutes by default, or never), and when the browser closes. Closing private windows does not lock it. In the same place you can change the PIN or password, change the idle time, or remove the lock, which decrypts the library again. Changing or removing the lock asks for the current PIN or password. Regular windows show whether the lock is on but cannot change it.
+
+While the lock is on, the storage mode cannot change. Remove the lock first, so no data is left encrypted or hidden. Exports and backups you make from an unlocked private library are plain files unless you protect a full backup. Nothing can be exported while the library is locked. See [Privacy](PRIVACY.md#private-windows) and the [architecture notes](architecture.md#private-library-lock).
+
 ### Move from a manual installation to the Chrome Web Store
 
 The manual and Chrome Web Store installations may have separate storage. Before removing the manual copy, open it and create a full backup in **Settings › Data › Back up › Everything**. Install TabLodge from the Chrome Web Store, import that ZIP from **Settings › Data**, and check that your sessions and bookmarks are there. Remove the manual copy only after confirming the import. Uninstalling an extension removes its browser storage.
@@ -168,7 +176,7 @@ TabLodge uses TypeScript, React 19, Radix primitives, Lucide icons, and Tailwind
 | `vp run lint`                        | Check code with XO                                                  |
 | `vp run lint:fix` or `vp run format` | Fix lint issues and format with XO                                  |
 | `vp run check`                       | Run lint, type checks, and tests                                    |
-| `vp run test:private`                | Check private setup and storage lifecycle in Chromium after building |
+| `vp run test:private`                | Check private setup, storage lifecycle, and the private library lock in Chromium after building |
 | `vp run verify`                      | Verify an existing build                                            |
 | `vp run clean`                       | Remove build output and TypeScript build caches                     |
 

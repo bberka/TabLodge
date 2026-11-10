@@ -4,6 +4,7 @@ import {Home, LifeBuoy, Save, Settings2, SunMoon} from 'lucide-react';
 import {TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
+import {PrivateLockGate} from './private-lock-ui';
 import {LoadingLine, send, useTabLodgeState} from './common';
 import {FinderPaletteWindow, type FinderAction} from './finder';
 import {paletteOverlay, paletteWindowId} from './page-params';
@@ -96,7 +97,9 @@ function PalettePage() {
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<TooltipProvider>
-			<PalettePage />
+			<PrivateLockGate>
+				<PalettePage />
+			</PrivateLockGate>
 		</TooltipProvider>
 	</ThemeProvider>,
 );

@@ -5,6 +5,7 @@ import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {PrivateWindowAppearance} from './private-window-appearance';
+import {PrivateLockGate} from './private-lock-ui';
 import {LoadingLine, send, useCloseOnEscape, useTabLodgeState} from './common';
 import {LinkSummary} from './favicon';
 import {IconLabel} from './icon-label';
@@ -210,7 +211,9 @@ createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
 		<PrivateWindowAppearance>
 			<TooltipProvider>
-				<AddBookmarkPrompt />
+				<PrivateLockGate>
+					<AddBookmarkPrompt />
+				</PrivateLockGate>
 			</TooltipProvider>
 		</PrivateWindowAppearance>
 	</ThemeProvider>,

@@ -82,7 +82,7 @@ Before schema 10 the whole library was one value, so saving a single tab rewrote
 | `tablodge.migration` | Progress marker, present only while a migration is unfinished |
 | `tablodge.state.premigration` | An exact copy of the old single entry, kept for seven days after a verified migration |
 
-Private libraries use the same keys under their prefix and area, so shared, saved, and temporary modes need no special case.
+Private libraries use the same keys under their prefix and area, so shared, saved, and temporary modes need no special case. A saved private library can be encrypted value by value (see [Private library lock](#private-library-lock)).
 
 ### Commits
 
@@ -123,6 +123,19 @@ Record level sync needs a stable id, a revision stamp, a tombstone, and an order
 ### Undo
 
 `withUndo` keeps the library as a delta. `beginCheckpoint` notes the index, and while the action runs, each commit copies the records it replaces (still present, because garbage is removed one commit later). The undo record stores the old index and only those records. `UNDO` is valid only while the index is the exact commit the action ended on (`fingerprint`), then `restoreCheckpoint` writes the old library back as one more commit that rewrites only what differs. If a copy could not be taken, or the library is still in the old layout, the action gets no delta and falls back to a full copy or no Undo, never a wrong one.
+
+### Private library lock
+
+`src/app/private-lock.ts` holds the optional PIN or password lock for the saved separate private library (schema 10 layout, `library` seam). It reuses `validateCredential` from `passcode.ts` and the envelope from `crypto-envelope.ts` without changing either.
+
+* **Keys.** A random 256 bit data key encrypts each stored value with AES-GCM, so a save costs no key stretching. The storage key name is authenticated data, so a sealed value cannot be moved to another key. A sealed value is stored as `{tlock: 1, iv, ct}` (base64). The data key is wrapped with `encryptBytes` (the credential envelope) and stored in the lock record `tablodge.private.lock` in local storage: `{version, state, kind, wrapped, idleMinutes}`. `tablodge.private.config`, the lock record, and the unprefixed appearance keys are never sealed.
+* **Where it plugs in.** The worker seals and opens in `rawLibrary`, below `libraryState`, so the index, session and bookmark records, trash, Undo, safety backups, and the migration marker are all covered and nothing above the seam knows. It applies only to a private worker in saved mode. While the library is locked, every read, write, and removal there throws a `PrivateLockError` ('locked'), and `handleMessage` answers locked messages with `{ok: false, locked: true}` before reading anything, except `GET_PRIVATE_CONFIG`, `GET_PRIVATE_LOCK`, `UNLOCK_PRIVATE`, `LOCK_PRIVATE`, `TOUCH_PRIVATE_LOCK`, and `HANDOFF_NEW_TAB`. Exports, backups, and the full backup are ordinary messages, so they are refused while locked. Storage change events report sealed values as absent, so menus and caches never see ciphertext, and `invalidateSettings` drops the worker's caches whenever the key goes.
+* **Key lifetime.** The key lives in `chrome.storage.session` (`tablodge.privatelock.key`), with the last use time in `tablodge.privatelock.active`. They are separate so a late activity write cannot bring back a key that was removed. Session storage survives worker restarts, so a restarted private worker stays unlocked, and it is cleared when the browser closes or the extension reloads. Closing private windows does not clear it: the private worker is not woken for that. An alarm (`tablodge-private-lock`, every minute while unlocked) and every library read check the idle time, and pages also set a timer from `expiresAt`. A page unmounts its content on lock, so nothing stays in the page. Five wrong entries in a row start a growing wait.
+* **Turning it on and off.** Both rewrite every value and run inside the mutation queue, only from a private window (the key and the queue belong to the private worker). Enabling writes the key to session storage, then the lock record in state `encrypting`, then seals each value in batches, then sets `encrypted`. Removing sets `decrypting`, opens each value, then deletes the record last. Each value is either sealed or plain and readers accept both, so a pass cut off anywhere leaves a readable library: writes made meanwhile are sealed (`encrypting`) or plain (`decrypting`) to match the pass, and the next start with the key in memory, or the next unlock, finishes it. A cut off pass without the key shows the lock screen. An old single entry private library is sealed whole and migrated afterwards through the same seam.
+* **Changing the credential** wraps the same data key again with one write, so it cannot be cut off halfway. It does not re-encrypt the data: someone who kept an old copy of the profile and the old credential can still open that copy.
+* **Storage mode.** `SET_PRIVATE_CONFIG` refuses any mode other than `saved` while a lock record exists, in regular and private workers, and the Settings radios are disabled with the reason. A malformed lock record keeps the library closed rather than being treated as no lock.
+
+Tests: `tests/private-lock.test.ts` covers the crypto, the state machine, and a cut off at every write of enabling and removing. `tests/service-worker.test.ts` covers the worker seam, and `vp run test:private` runs the lock in Chromium with real private windows.
 
 ## Locked area
 
