@@ -45,7 +45,6 @@ import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {inPrivateWindow} from './private-config';
-import {PrivateWindowAppearance} from './private-window-appearance';
 import {
 	Brand,
 	EmptyState,
@@ -768,7 +767,7 @@ function SidePanel() {
 			<div className="shrink-0 px-3 pt-3">
 				<header className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
 					<h1 className="sr-only">{PROJECT.name} side panel</h1>
-					<Brand newTab />
+					<Brand newTab privateBadge />
 					<div className="flex shrink-0 items-center gap-1">
 						<IconTooltip label="Open dashboard">
 							<Button asChild variant="ghost" size="icon" className="h-8 w-8">
@@ -1070,10 +1069,8 @@ const hostname = (value: string) => siteName(value) || value || 'Untitled';
 
 createRoot(document.querySelector('#root')!).render(
 	<ThemeProvider>
-		<PrivateWindowAppearance>
-			<TooltipProvider>
-				<SidePanel />
-			</TooltipProvider>
-		</PrivateWindowAppearance>
+		<TooltipProvider>
+			<SidePanel />
+		</TooltipProvider>
 	</ThemeProvider>,
 );

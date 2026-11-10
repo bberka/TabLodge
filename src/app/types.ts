@@ -16,6 +16,8 @@ export type PrivateConfig = {
 	mode: PrivateStorageMode;
 	configured: boolean;
 	redirectNewTabs: boolean;
+	// An accent id or "#rrggbb" for private windows, or "same" to use the regular accent.
+	accent: string;
 };
 export type RestoreTarget =
 	'current-window' | 'new-window-unless-only-tab' | 'always-new-window';
@@ -555,6 +557,7 @@ export type TabLodgeMessages = {
 	GET_PRIVATE_CONFIG: {};
 	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
 	SET_PRIVATE_NEW_TAB_REDIRECT: {enabled: boolean};
+	SET_PRIVATE_ACCENT: {accent: string};
 	GET_STATE: {};
 	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
@@ -820,6 +823,7 @@ export type TabLodgeResponses = {
 	GET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_NEW_TAB_REDIRECT: PrivateConfig;
+	SET_PRIVATE_ACCENT: PrivateConfig;
 	GET_STATE: Store;
 	GET_SETTINGS_DEFAULTS: {settings: Settings};
 	SAVE_TABS: SaveResult;

@@ -197,7 +197,16 @@ let privateConfig: PrivateConfig = {
 	mode: 'shared',
 	configured: false,
 	redirectNewTabs: true,
+	accent: 'teal',
 };
+
+function isPrivateAccent(value: unknown): value is string {
+	return (
+		value === 'same' ||
+		(typeof value === 'string' &&
+			(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value)))
+	);
+}
 
 function normalizePrivateConfig(value: unknown): PrivateConfig {
 	const raw = isRecord(value) ? value : {};
@@ -207,6 +216,7 @@ function normalizePrivateConfig(value: unknown): PrivateConfig {
 		mode,
 		configured: raw.configured === true && raw.mode === mode,
 		redirectNewTabs: raw.redirectNewTabs !== false,
+		accent: isPrivateAccent(raw.accent) ? raw.accent : 'teal',
 	};
 }
 
@@ -8713,6 +8723,7 @@ async function handleMessage(
 			'GET_PRIVATE_CONFIG',
 			'SET_PRIVATE_CONFIG',
 			'SET_PRIVATE_NEW_TAB_REDIRECT',
+			'SET_PRIVATE_ACCENT',
 			'HANDOFF_NEW_TAB',
 		].includes(message?.type || '')
 	) {
@@ -8751,6 +8762,17 @@ async function handleMessage(
 			}
 
 			const config = {...privateConfig, redirectNewTabs: message.enabled};
+			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
+			await mutationQueue;
+			return {ok: true, ...config};
+		}
+
+		case 'SET_PRIVATE_ACCENT': {
+			if (!isPrivateAccent(message.accent)) {
+				return {ok: false, error: 'Choose a valid accent for private windows.'};
+			}
+
+			const config = {...privateConfig, accent: message.accent};
 			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
 			await mutationQueue;
 			return {ok: true, ...config};

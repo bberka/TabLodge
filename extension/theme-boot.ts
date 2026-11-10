@@ -2,7 +2,7 @@
 // wrong background or accent. src/shared/theme.tsx mirrors the chosen theme and accent (stored in
 // chrome.storage) into this extension's localStorage. Every page loads the built theme-boot.js as a
 // classic script in <head>.
-import {applyAccent, readSavedAccent} from '../src/shared/accents';
+import {applyAccent, readEffectiveAccent} from '../src/shared/accents';
 
 (() => {
 	try {
@@ -16,5 +16,5 @@ import {applyAccent, readSavedAccent} from '../src/shared/accents';
 		*/
 	}
 
-	applyAccent(readSavedAccent());
+	applyAccent(readEffectiveAccent());
 })();

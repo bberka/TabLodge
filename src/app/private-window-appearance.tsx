@@ -14,7 +14,7 @@ type ModeState =
 	| {status: 'unavailable'}
 	| {status: 'ready'; mode: PrivateStorageMode};
 
-function PrivateWindowMark({className}: {className: string}) {
+export function PrivateWindowMark({className}: {className: string}) {
 	return (
 		<svg
 			aria-hidden="true"
@@ -89,24 +89,14 @@ function PrivateWindowFrame({children}: {children: ReactNode}) {
 			data-private-window-appearance
 			className="relative isolate min-h-screen bg-background text-foreground"
 		>
-			<div
-				aria-hidden="true"
-				className="pointer-events-none fixed inset-0 z-0 grid grid-cols-4 grid-rows-12 text-muted-foreground/15 sm:grid-cols-6 sm:grid-rows-8 lg:grid-cols-8 lg:grid-rows-6"
-			>
-				{Array.from({length: 48}, (_, index) => (
-					<div key={index} className="grid place-items-center">
-						<PrivateWindowMark className="h-12 w-12 sm:h-14 sm:w-14 lg:h-16 lg:w-16" />
-					</div>
-				))}
-			</div>
 			<div className="relative z-10">
 				<aside
 					aria-label="Private window"
 					className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-muted px-5 py-3 text-sm sm:px-8"
 				>
 					<div className="flex min-w-0 items-center gap-3">
-						<span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-							<PrivateWindowMark className="h-5 w-5" />
+						<span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+							<PrivateWindowMark className="h-8 w-8" />
 						</span>
 						<div className="min-w-0">
 							<p className="font-semibold">You’re in a private window</p>
