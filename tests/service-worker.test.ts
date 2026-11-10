@@ -195,8 +195,10 @@ type StoredState = {
 // `error` are checked at runtime by each test's assertions.
 type TestResponse<K extends TabLodgeMessageType> = Omit<
 	ActionSuccess<K>,
-	'ok'
-> & {ok: boolean; error?: string; locked?: boolean};
+	'ok' | 'locked'
+> & {ok: boolean; error?: string} & (ActionSuccess<K> extends {locked: infer L}
+		? {locked: L}
+		: {locked?: boolean});
 
 function createWorkerHarness(
 	initialState: Partial<StoredState>,
@@ -7991,7 +7993,7 @@ const LOCKED_NOW = 1_800_000_000_000;
 /**
 Menu clicks are not awaited by the worker, and Web Crypto finishes off the event loop, so a fixed settle can be too short.
 */
-async function eventually(done: () => boolean | Promise<boolean>) {
+async function eventuallyDone(done: () => boolean | Promise<boolean>) {
 	for (let attempt = 0; attempt < 100 && !(await done()); attempt += 1) {
 		await settle();
 	}
@@ -8380,7 +8382,7 @@ test('locked area: the menus offer a locked save that saves straight away when u
 		},
 		{id: 1, windowId: 10},
 	);
-	await eventually(
+	await eventuallyDone(
 		async () =>
 			(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length === 3,
 	);
@@ -8397,7 +8399,7 @@ test('locked area: the menus offer a locked save that saves straight away when u
 		{menuItemId: 'tablodge-page-locked', pageUrl: 'https://current.example/'},
 		{id: 1, windowId: 10, url: 'https://current.example/', title: 'Current'},
 	);
-	await eventually(() => harness.windowCreateCalls.length > 0);
+	await eventuallyDone(() => harness.windowCreateCalls.length > 0);
 	assert.equal(harness.windowCreateCalls.length, 1);
 	assert.match(
 		String(harness.windowCreateCalls[0].url),
