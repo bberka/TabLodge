@@ -153,6 +153,7 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 import {ColumnSelect} from './column-select';
+import {SaveTargetFields, type SaveTarget} from './save-target';
 import {PrivateSetupGate} from './private-storage';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {
@@ -312,6 +313,9 @@ function NewTab() {
 		Array<LinkEntry & {include: boolean}>
 	>([]);
 	const [pastedColumn, setPastedColumn] = useState(UNFILED_COLUMN.id);
+	// Where an added link goes in the Add bookmark and pasted links dialogs. The choice sticks for the page's lifetime.
+	const [saveTarget, setSaveTarget] = useState<SaveTarget>('bookmark');
+	const [saveSessionId, setSaveSessionId] = useState('');
 	const [pastedNewColumn, setPastedNewColumn] = useState<BookmarkColumnDraft>({
 		name: '',
 	});
@@ -730,6 +734,12 @@ function NewTab() {
 
 		setBusy('paste-links');
 		try {
+			if (toSession) {
+				await addLinksToChosenSession(links);
+				setDialog(null);
+				return;
+			}
+
 			const columnId = await resolveBookmarkColumn(
 				pastedColumn,
 				pastedNewColumn,
@@ -853,6 +863,20 @@ function NewTab() {
 
 		setBusy('bookmark-save');
 		try {
+			if (bookmarkToSession) {
+				try {
+					await addLinksToChosenSession([
+						{title: bookmarkEdit.title, url: bookmarkEdit.url},
+					]);
+					setDialog(null);
+					setBookmarkEdit(null);
+				} catch (reason) {
+					showStatus((reason as Error).message, true);
+				}
+
+				return;
+			}
+
 			let {columnId} = bookmarkEdit;
 			// "New column…": create the column first, then save the bookmark into it.
 			if (columnId === NEW_COLUMN) {
@@ -1374,6 +1398,37 @@ function NewTab() {
 				id: group.id,
 				name: group.name.trim() || 'Untitled session',
 			}));
+	}
+
+	// The session picker's options, and the destination actually in effect: a session only while one exists to choose.
+	const pasteSessions = sessionTargets();
+	const pasteSessionId = pasteSessions.some(
+		(session) => session.id === saveSessionId,
+	)
+		? saveSessionId
+		: (pasteSessions[0]?.id ?? '');
+	const toSession = pasteSessions.length > 0 && saveTarget === 'session';
+	const bookmarkToSession = toSession && !bookmarkEdit?.id;
+
+	async function addLinksToChosenSession(links: LinkEntry[]) {
+		const name =
+			pasteSessions.find((session) => session.id === pasteSessionId)?.name ??
+			'';
+		const result = await send('ADD_LINKS_TO_SESSION', {
+			groupId: pasteSessionId,
+			links,
+		});
+		if (!result?.ok) {
+			throw new Error(result?.error || 'Could not add those links.');
+		}
+
+		await reload();
+		offerUndo(
+			`Added ${plural(result.added, 'link')} to “${name}”.${skippedNote(result.skipped)}`,
+			result.undoId,
+			showStatus,
+			reload,
+		);
 	}
 
 	async function addSelectedBookmarksToSession(target: {
@@ -1931,6 +1986,48 @@ function NewTab() {
 	const unfiledFiltered =
 		columnBookmarks.shown.get(UNFILED_COLUMN.id) ?? NO_BOOKMARKS;
 	const includeUnfiled = unfiledAll.length > 0 || columns.length === 0;
+	const columnFields = (
+		<>
+			<div className="space-y-1.5">
+				<Label htmlFor="bookmark-column">Column</Label>
+				<ColumnSelect
+					columns={columns}
+					value={bookmarkEdit?.columnId || columns[0]?.id || NEW_COLUMN}
+					id="bookmark-column"
+					onValueChange={(value) =>
+						setBookmarkEdit((old) => old && {...old, columnId: value})
+					}
+				>
+					<SelectItem value={NEW_COLUMN}>
+						<IconLabel icon={Plus}>New column</IconLabel>
+					</SelectItem>
+				</ColumnSelect>
+			</div>
+			{bookmarkEdit?.columnId === NEW_COLUMN && (
+				<IconNameField
+					id="bookmark-new-column"
+					label="New column name"
+					nameLabel="New column name"
+					icon={bookmarkEdit.newColumnIcon}
+					defaultIcon={DEFAULT_COLUMN_ICON}
+					inputProps={{
+						required: true,
+						maxLength: 60,
+						placeholder: 'Reading list',
+						...({'data-autofocus': ''} as object),
+						value: bookmarkEdit.newColumnName || '',
+						onChange: (e) =>
+							setBookmarkEdit(
+								(old) => old && {...old, newColumnName: e.target.value},
+							),
+					}}
+					onIconChange={(icon) =>
+						setBookmarkEdit((old) => old && {...old, newColumnIcon: icon})
+					}
+				/>
+			)}
+		</>
+	);
 	const sessionTargetsForBookmarks = sessionTargets();
 
 	// One stable set of callbacks for every column and bookmark, so memoized ones skip re-rendering.
@@ -2623,10 +2720,16 @@ function NewTab() {
 					<form onSubmit={saveBookmark}>
 						<DialogHeader>
 							<DialogTitle>
-								{bookmarkEdit?.id ? 'Edit bookmark' : 'Add bookmark'}
+								{bookmarkEdit?.id
+									? 'Edit bookmark'
+									: bookmarkToSession
+										? 'Add link to session'
+										: 'Add bookmark'}
 							</DialogTitle>
 							<DialogDescription>
-								Save a web link to a local column.
+								{bookmarkToSession
+									? 'Add a web link to a saved session.'
+									: 'Save a web link to a local column.'}
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
@@ -2666,45 +2769,19 @@ function NewTab() {
 									}
 								/>
 							</div>
-							<div className="space-y-1.5">
-								<Label htmlFor="bookmark-column">Column</Label>
-								<ColumnSelect
-									columns={columns}
-									value={bookmarkEdit?.columnId || columns[0]?.id || NEW_COLUMN}
-									id="bookmark-column"
-									onValueChange={(value) =>
-										setBookmarkEdit((old) => old && {...old, columnId: value})
-									}
+							{bookmarkEdit?.id ? (
+								columnFields
+							) : (
+								<SaveTargetFields
+									idPrefix="bookmark"
+									target={saveTarget}
+									sessions={pasteSessions}
+									sessionId={pasteSessionId}
+									onTargetChange={setSaveTarget}
+									onSessionChange={setSaveSessionId}
 								>
-									<SelectItem value={NEW_COLUMN}>
-										<IconLabel icon={Plus}>New column</IconLabel>
-									</SelectItem>
-								</ColumnSelect>
-							</div>
-							{bookmarkEdit?.columnId === NEW_COLUMN && (
-								<IconNameField
-									id="bookmark-new-column"
-									label="New column name"
-									nameLabel="New column name"
-									icon={bookmarkEdit.newColumnIcon}
-									defaultIcon={DEFAULT_COLUMN_ICON}
-									inputProps={{
-										required: true,
-										maxLength: 60,
-										placeholder: 'Reading list',
-										...({'data-autofocus': ''} as object),
-										value: bookmarkEdit.newColumnName || '',
-										onChange: (e) =>
-											setBookmarkEdit(
-												(old) => old && {...old, newColumnName: e.target.value},
-											),
-									}}
-									onIconChange={(icon) =>
-										setBookmarkEdit(
-											(old) => old && {...old, newColumnIcon: icon},
-										)
-									}
-								/>
+									{columnFields}
+								</SaveTargetFields>
 							)}
 						</DialogBody>
 						<DialogFooter className="justify-between">
@@ -2729,11 +2806,13 @@ function NewTab() {
 								</Button>
 								<Button type="submit" disabled={busy === 'bookmark-save'}>
 									<Save aria-hidden="true" />
-									{bookmarkEdit?.columnId === NEW_COLUMN
-										? 'Create column and save'
-										: bookmarkEdit?.id
-											? 'Save changes'
-											: 'Save bookmark'}
+									{bookmarkToSession
+										? 'Add to session'
+										: bookmarkEdit?.columnId === NEW_COLUMN
+											? 'Create column and save'
+											: bookmarkEdit?.id
+												? 'Save changes'
+												: 'Save bookmark'}
 								</Button>
 							</div>
 						</DialogFooter>
@@ -2748,7 +2827,8 @@ function NewTab() {
 					<form onSubmit={addPastedLinks}>
 						<DialogHeader>
 							<DialogTitle>
-								Add {plural(pastedLinks.length, 'bookmark')}
+								Add{' '}
+								{plural(pastedLinks.length, toSession ? 'link' : 'bookmark')}
 							</DialogTitle>
 							<DialogDescription>
 								Untick any link you don't want to add.
@@ -2802,17 +2882,26 @@ function NewTab() {
 									))}
 								</ul>
 							</ScrollArea>
-							<div className="space-y-1.5">
-								<Label htmlFor="pasted-links-column">Column</Label>
-								<BookmarkColumnPicker
-									columns={columns}
-									value={pastedColumn}
-									id="pasted-links-column"
-									draft={pastedNewColumn}
-									onDraftChange={setPastedNewColumn}
-									onValueChange={setPastedColumn}
-								/>
-							</div>
+							<SaveTargetFields
+								idPrefix="pasted-links"
+								target={saveTarget}
+								sessions={pasteSessions}
+								sessionId={pasteSessionId}
+								onTargetChange={setSaveTarget}
+								onSessionChange={setSaveSessionId}
+							>
+								<div className="space-y-1.5">
+									<Label htmlFor="pasted-links-column">Column</Label>
+									<BookmarkColumnPicker
+										columns={columns}
+										value={pastedColumn}
+										id="pasted-links-column"
+										draft={pastedNewColumn}
+										onDraftChange={setPastedNewColumn}
+										onValueChange={setPastedColumn}
+									/>
+								</div>
+							</SaveTargetFields>
 						</DialogBody>
 						<DialogFooter>
 							<Button
@@ -2834,7 +2923,7 @@ function NewTab() {
 								Add{' '}
 								{plural(
 									pastedLinks.filter((link) => link.include).length,
-									'bookmark',
+									toSession ? 'link' : 'bookmark',
 								)}
 							</Button>
 						</DialogFooter>
