@@ -197,7 +197,7 @@ let privateConfig: PrivateConfig = {
 	mode: 'shared',
 	configured: false,
 	redirectNewTabs: true,
-	accent: 'same',
+	accent: 'teal',
 };
 
 function isPrivateAccent(value: unknown): value is string {
@@ -216,7 +216,7 @@ function normalizePrivateConfig(value: unknown): PrivateConfig {
 		mode,
 		configured: raw.configured === true && raw.mode === mode,
 		redirectNewTabs: raw.redirectNewTabs !== false,
-		accent: isPrivateAccent(raw.accent) ? raw.accent : 'same',
+		accent: isPrivateAccent(raw.accent) ? raw.accent : 'teal',
 	};
 }
 

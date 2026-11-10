@@ -2,9 +2,7 @@ export const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
 export const PRIVATE_STORAGE_PREFIX = 'tablodge.private.';
 export const PRIVATE_RELOAD_FOCUS_KEY = 'tablodge.private.focus';
 
-export const PRIVATE_ACCENT_SAME = 'same';
-// The accent a private window gets when the user first turns its own accent on.
-export const PRIVATE_ACCENT_DEFAULT = 'teal';
+export {PRIVATE_ACCENT_DEFAULT, PRIVATE_ACCENT_SAME} from '../shared/accents';
 
 /**
 Only a change of library mode or setup needs a page reload; the redirect and accent apply live.

@@ -1797,12 +1797,12 @@ test('private new-tab redirect can be disabled without completing private setup'
 	assert.equal(harness.tabs[0].url, '');
 });
 
-test('private accent defaults to the regular one and rejects unknown values', async () => {
+test('private accent defaults to teal and rejects unknown values', async () => {
 	const harness = createWorkerHarness(stateWithSession(), [], {
 		incognitoContext: true,
 	});
 	const initial = await harness.sendMessage({type: 'GET_PRIVATE_CONFIG'});
-	assert.equal(initial.accent, 'same');
+	assert.equal(initial.accent, 'teal');
 
 	const rejected = await harness.sendMessage({
 		type: 'SET_PRIVATE_ACCENT',
@@ -1812,15 +1812,15 @@ test('private accent defaults to the regular one and rejects unknown values', as
 
 	const saved = await harness.sendMessage({
 		type: 'SET_PRIVATE_ACCENT',
-		accent: 'teal',
+		accent: 'same',
 	});
 	assert.equal(saved.ok, true, saved.error);
-	assert.equal(saved.accent, 'teal');
+	assert.equal(saved.accent, 'same');
 	assert.equal(saved.configured, false);
 
 	await harness.sendMessage({type: 'SET_PRIVATE_CONFIG', mode: 'saved'});
 	const config = await harness.sendMessage({type: 'GET_PRIVATE_CONFIG'});
-	assert.equal(config.accent, 'teal');
+	assert.equal(config.accent, 'same');
 });
 
 test('concurrent new tabs retain separate hand-off claims', async () => {

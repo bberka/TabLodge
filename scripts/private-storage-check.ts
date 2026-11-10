@@ -574,23 +574,23 @@ try {
 		}
 	}
 
-	// A private accent tints private pages live and leaves regular windows alone.
+	// Private pages get their own accent by default, live, and regular windows keep theirs.
 	const accentVariable =
 		"document.documentElement.style.getPropertyValue('--brand-primary-light')";
 	await privatePage.goto(`chrome-extension://${id}/options.html`);
-	assert.equal(await privatePage.evaluate<string>(accentVariable), '');
-	const tealSaved = await send(privatePage, {
-		type: 'SET_PRIVATE_ACCENT',
-		accent: 'teal',
-	});
-	assert.equal(tealSaved.ok, true);
-	await privatePage.waitForFunction(
-		"document.documentElement.style.getPropertyValue('--brand-primary-light') !== ''",
-	);
+	assert.notEqual(await privatePage.evaluate<string>(accentVariable), '');
 	assert.equal(await normal.evaluate<string>(accentVariable), '');
-	await send(privatePage, {type: 'SET_PRIVATE_ACCENT', accent: 'same'});
+	const sameSaved = await send(privatePage, {
+		type: 'SET_PRIVATE_ACCENT',
+		accent: 'same',
+	});
+	assert.equal(sameSaved.ok, true);
 	await privatePage.waitForFunction(
 		"document.documentElement.style.getPropertyValue('--brand-primary-light') === ''",
+	);
+	await send(privatePage, {type: 'SET_PRIVATE_ACCENT', accent: 'teal'});
+	await privatePage.waitForFunction(
+		"document.documentElement.style.getPropertyValue('--brand-primary-light') !== ''",
 	);
 
 	await privatePage.goto(`chrome-extension://${id}/newtab.html`);

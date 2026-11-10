@@ -15,7 +15,10 @@ import {
 	systemAccentColor,
 	isAccent,
 	readPrivateAccent,
+	resolvePrivateAccent,
 	PRIVATE_ACCENT_MIRROR,
+	PRIVATE_ACCENT_SAME,
+	PRIVATE_ACCENT_DEFAULT,
 	readSavedAccent,
 	watchSystemAccent,
 	type Rgb,
@@ -99,19 +102,13 @@ export function ThemeProvider({children}: {children?: ReactNode}) {
 			}
 
 			const value = (config as {accent?: unknown} | undefined)?.accent;
-			const next = isAccent(value) ? value : undefined;
-			setPrivateAccent(next);
-			if (next) {
-				remember(PRIVATE_ACCENT_MIRROR, next);
-			} else {
-				try {
-					localStorage.removeItem(PRIVATE_ACCENT_MIRROR);
-				} catch {
-					/*
-					Optional.
-					*/
-				}
-			}
+			setPrivateAccent(resolvePrivateAccent(value));
+			remember(
+				PRIVATE_ACCENT_MIRROR,
+				isAccent(value) || value === PRIVATE_ACCENT_SAME
+					? String(value)
+					: PRIVATE_ACCENT_DEFAULT,
+			);
 		};
 
 		const onStorage = (
