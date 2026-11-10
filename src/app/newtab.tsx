@@ -1913,6 +1913,18 @@ function NewTab() {
 		return () => document.removeEventListener('keydown', onKeyDown);
 	}, []);
 
+	// The "Open the search palette" browser shortcut pressed on this page toggles the palette here (see service-worker.ts).
+	useEffect(() => {
+		const onMessage = (message: unknown) => {
+			if ((message as {type?: string} | null)?.type === 'toggle-finder') {
+				setFinderOpen((open) => !open);
+			}
+		};
+
+		chrome.runtime.onMessage.addListener(onMessage);
+		return () => chrome.runtime.onMessage.removeListener(onMessage);
+	}, []);
+
 	// "Focus search when opening a new tab": opens the palette once per page load (not for ?q= links, which prefill
 	// the page search instead). A tab loaded in the background gets its input focused once it becomes visible.
 	useEffect(() => {
