@@ -32,6 +32,7 @@ import {
 	SegmentedControl,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
+import {inPrivateWindow} from './private-config';
 import {messageOf, plural, send, type ShowStatus} from './common';
 import {
 	reportSnapshotRestore,
@@ -907,10 +908,12 @@ export function RecoveryTools({
 						<Save className="h-4 w-4" />
 						{busy === 'backup' ? 'Backing up' : 'Back up now'}
 					</Button>
-					<Button size="sm" variant="outline" onClick={onOpenSnapshots}>
-						<History className="h-4 w-4" />
-						Recent snapshots
-					</Button>
+					{!inPrivateWindow() && (
+						<Button size="sm" variant="outline" onClick={onOpenSnapshots}>
+							<History className="h-4 w-4" />
+							Recent snapshots
+						</Button>
+					)}
 					<Button size="sm" variant="outline" onClick={onOpenTrash}>
 						<Trash2 className="h-4 w-4" />
 						Trash bin

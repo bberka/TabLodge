@@ -44,6 +44,7 @@ import {
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
+import {inPrivateWindow} from './private-config';
 import {
 	Brand,
 	EmptyState,
@@ -780,17 +781,19 @@ function SidePanel() {
 								</a>
 							</Button>
 						</IconTooltip>
-						<IconTooltip label="Recent snapshots">
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8"
-								aria-label="Recent snapshots"
-								onClick={() => setSnapshotsOpen(true)}
-							>
-								<History className="h-4 w-4" aria-hidden="true" />
-							</Button>
-						</IconTooltip>
+						{!inPrivateWindow() && (
+							<IconTooltip label="Recent snapshots">
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									aria-label="Recent snapshots"
+									onClick={() => setSnapshotsOpen(true)}
+								>
+									<History className="h-4 w-4" aria-hidden="true" />
+								</Button>
+							</IconTooltip>
+						)}
 						<IconTooltip label="Trash bin">
 							<Button
 								variant="ghost"

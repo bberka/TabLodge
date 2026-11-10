@@ -23,6 +23,7 @@ import {
 	Info,
 	PanelRightOpen,
 	Pin,
+	ListPlus,
 	AppWindow,
 	CopyMinus,
 	X,
@@ -40,6 +41,11 @@ import {
 	Input,
 	Label,
 	ScrollArea,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
 	Switch,
 	TooltipProvider,
 	IconTooltip,
@@ -74,6 +80,7 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {webUrl} from './web-url';
+import {offerUndo} from './recovery-core';
 import {
 	closeDuplicateTabs,
 	useDuplicateTabCount,
@@ -110,6 +117,12 @@ function Popup() {
 	} | null>(null);
 	const [columnId, setColumnId] = useState('');
 	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
+	const [sessionOpen, setSessionOpen] = useState(false);
+	const [sessionTab, setSessionTab] = useState<{
+		title: string;
+		url: string;
+	} | null>(null);
+	const [sessionId, setSessionId] = useState('');
 	const [chooseOpen, setChooseOpen] = useState(false);
 	const [currentTabs, setCurrentTabs] = useState<WebTab[]>([]);
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -143,6 +156,10 @@ function Popup() {
 	const duplicateCount = useDuplicateTabCount();
 	const recentSessions = useMemo(
 		() => groups.toSorted((a, b) => b.createdAt - a.createdAt).slice(0, 5),
+		[groups],
+	);
+	const pickerSessions = useMemo(
+		() => groups.toSorted((a, b) => b.updatedAt - a.updatedAt),
 		[groups],
 	);
 	const columns = state?.bookmarkColumns || [];
@@ -285,6 +302,79 @@ function Popup() {
 		} catch {
 			showStatus(
 				'Could not read the current page. Open a regular web page and try again.',
+				true,
+			);
+		} finally {
+			setBusy('');
+		}
+	}
+
+	async function startAddToSession() {
+		if (pickerSessions.length === 0) {
+			showStatus('Save a session first, then add pages to it.', true);
+			return;
+		}
+
+		setBusy('session-current');
+		try {
+			const [tab] = await chrome.tabs.query({
+				active: true,
+				lastFocusedWindow: true,
+			});
+			const url = webUrl(tab?.url);
+			if (!url) {
+				showStatus('Open a regular web page to add it to a session.', true);
+				return;
+			}
+
+			setSessionTab({title: tab.title || url, url});
+			setSessionId(pickerSessions[0].id);
+			setSessionOpen(true);
+		} catch {
+			showStatus(
+				'Could not read the current page. Open a regular web page and try again.',
+				true,
+			);
+		} finally {
+			setBusy('');
+		}
+	}
+
+	async function addToSession(event: SyntheticEvent<HTMLFormElement>) {
+		event.preventDefault();
+		const target = pickerSessions.find((group) => group.id === sessionId);
+		if (!sessionTab || !target || busy === 'session-save') {
+			return;
+		}
+
+		setBusy('session-save');
+		try {
+			const result = await send('ADD_LINKS_TO_SESSION', {
+				groupId: target.id,
+				links: [sessionTab],
+			});
+			if (!result?.ok) {
+				showStatus(
+					result?.error || 'Could not add this page to the session.',
+					true,
+				);
+				return;
+			}
+
+			setSessionOpen(false);
+			setSessionTab(null);
+			await reload();
+			offerUndo(
+				`Added to “${target.name}”.`,
+				result.undoId,
+				showStatus,
+				reload,
+			);
+		} catch (reason) {
+			showStatus(
+				reason instanceof Error
+					? reason.message
+					: 'Could not add this page to the session.',
 				true,
 			);
 		} finally {
@@ -564,6 +654,20 @@ function Popup() {
 						Bookmark this page
 					</Button>
 					<Button
+						size="sm"
+						className="w-full justify-start gap-3 px-3"
+						variant="outline"
+						disabled={busy !== ''}
+						onClick={startAddToSession}
+					>
+						{busy === 'session-current' ? (
+							<LoaderCircle className="h-4 w-4 animate-spin" />
+						) : (
+							<ListPlus className="h-4 w-4" />
+						)}{' '}
+						Add this page to a session
+					</Button>
+					<Button
 						className="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left"
 						variant="default"
 						disabled={busy !== ''}
@@ -799,6 +903,59 @@ function Popup() {
 				</Button>
 			</footer>
 			{nameDialog}
+			<Dialog open={sessionOpen} onOpenChange={setSessionOpen}>
+				<DialogContent size="sm">
+					<form onSubmit={addToSession}>
+						<DialogHeader>
+							<DialogTitle>Add this page to a session</DialogTitle>
+							<DialogDescription className="[overflow-wrap:anywhere]">
+								The page stays open and is added at the end of the session.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogBody>
+							{sessionTab && (
+								<LinkSummary
+									title={sessionTab.title}
+									url={sessionTab.url}
+									settings={state?.settings}
+								/>
+							)}
+							<div className="space-y-1.5">
+								<Label htmlFor="popup-session">Session</Label>
+								<Select value={sessionId} onValueChange={setSessionId}>
+									<SelectTrigger id="popup-session">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{pickerSessions.map((group) => (
+											<SelectItem key={group.id} value={group.id}>
+												{group.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						</DialogBody>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setSessionOpen(false)}
+							>
+								<X aria-hidden="true" />
+								Cancel
+							</Button>
+							<Button
+								type="submit"
+								disabled={!sessionTab || busy === 'session-save'}
+							>
+								<ListPlus aria-hidden="true" />
+								{busy === 'session-save' ? 'Adding' : 'Add to session'}
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
 			<Dialog open={bookmarkOpen} onOpenChange={setBookmarkOpen}>
 				<DialogContent size="sm">
 					<form onSubmit={saveBookmark}>

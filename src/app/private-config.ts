@@ -21,6 +21,12 @@ export function privateConfigNeedsReload(
 	);
 }
 
+/**
+True in a private (incognito) window. Automatic snapshots never run there, so their entry points are hidden.
+*/
+export const inPrivateWindow = () =>
+	Boolean(globalThis.chrome?.extension?.inIncognitoContext);
+
 export function reloadPrivatePage() {
 	sessionStorage.setItem(PRIVATE_RELOAD_FOCUS_KEY, 'true');
 	location.reload();
