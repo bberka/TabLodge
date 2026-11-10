@@ -52,7 +52,7 @@ The manifest version must match `package.json`; build verification checks this. 
 
 These identifiers are part of stored data or external formats. Changing them requires a migration:
 
-* The main storage key, `tablodge.state`, and recovery keys listed below.
+* The main storage key, `tablodge.state`, the session and bookmark record keys (`tablodge.session.`, `tablodge.bookmarks.`), and the recovery keys listed below.
 * The theme key `uiTheme` and accent key `uiAccent` in extension storage, and their `tablodge.uiTheme` and `tablodge.uiAccent` mirrors in page `localStorage`.
 * Export format identifiers such as `tablodge-sessions`, `tablodge`, `tablodge-backup`, and `tablodge-full-backup`.
 * Drag MIME types `application/x-tablodge-session`, `application/x-tablodge-column`, and `application/x-tablodge-bookmark`.
@@ -64,9 +64,65 @@ The installation path matters too. An unpacked extension gets its ID from the fo
 
 `src/app/types.ts` defines the data model and typed messages. Pages call `send()` from `src/app/common.tsx`; the worker handles storage and browser operations. Mutations are serialized so concurrent messages don't overwrite one another.
 
-Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state`. The current schema is version 9. Older data is normalized on load. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library. Normalization creates the Archived folder when missing. Sessions in that folder stay stored but are left out of active session lists and global search.
+Sessions, folders, bookmarks, columns, and settings live in `chrome.storage.local` under `tablodge.state` and the record keys it points to (see [Library storage](#library-storage)). The current schema is version 10. Older data is normalized on load and moved to the current layout by a resumable migration. Data from a newer schema is refused rather than overwritten. Recovery data has separate keys so a snapshot doesn't rewrite the whole library. Normalization creates the Archived folder when missing. Sessions in that folder stay stored but are left out of active session lists and global search.
 
-The manifest uses split incognito mode so extension pages can open inside private windows. `tablodge.private.config` in local storage holds the global private mode, setup completion, and the private new tab redirect preference, independently of library imports and preference resets. The redirect is enabled by default. Chromium does not allow an extension to statically replace the private new tab page, so the private worker redirects newly created browser new tabs to the dashboard after creation. Private messages and mutations are blocked until setup is complete. Normal windows always use the normal library. Private workers route library and recovery keys through `library`: shared mode keeps the original keys, saved mode prefixes them with `tablodge.private.` in local storage, and temporary mode uses the same prefix in session storage. Session storage survives worker and private window restarts but is cleared by a browser restart. Existing data needs no migration and mode changes do not copy or delete libraries. Mode changes join the worker's mutation queue and invalidate its settings and migration caches. Private pages reload when the mode changes. Changing the redirect preference does not reload open private pages. Light and dark appearance remains shared. `tablodge.private.config` also holds an optional private accent (`teal` by default, `same` to follow the regular accent). Private pages apply it over the regular accent, and mirror it into the private context's own localStorage so `theme-boot.ts` can paint it before React loads. Changing it does not reload open private pages. Private workers do not run automatic recovery, backups, or browser bookmark monitoring, and they refuse the snapshot messages so shared mode never exposes the regular windows' snapshots. Dashboard lookup and new restore windows respect the private context.
+The manifest uses split incognito mode so extension pages can open inside private windows. `tablodge.private.config` in local storage holds the global private mode, setup completion, and the private new tab redirect preference, independently of library imports and preference resets. The redirect is enabled by default. Chromium does not allow an extension to statically replace the private new tab page, so the private worker redirects newly created browser new tabs to the dashboard after creation. Private messages and mutations are blocked until setup is complete. Normal windows always use the normal library. Private workers route library and recovery keys through `library`: shared mode keeps the original keys, saved mode prefixes them with `tablodge.private.` in local storage, and temporary mode uses the same prefix in session storage. Session storage survives worker and private window restarts but is cleared by a browser restart. A separate private library migrates to the current layout the same way, under its own prefix, and mode changes do not copy or delete libraries. Mode changes join the worker's mutation queue and invalidate its settings and migration caches. Private pages reload when the mode changes. Changing the redirect preference does not reload open private pages. Light and dark appearance remains shared. `tablodge.private.config` also holds an optional private accent (`teal` by default, `same` to follow the regular accent). Private pages apply it over the regular accent, and mirror it into the private context's own localStorage so `theme-boot.ts` can paint it before React loads. Changing it does not reload open private pages. Private workers do not run automatic recovery, backups, or browser bookmark monitoring, and they refuse the snapshot messages so shared mode never exposes the regular windows' snapshots. Dashboard lookup and new restore windows respect the private context.
+
+## Library storage
+
+`src/shared/library-state.ts` owns how the library is laid out in storage. Its index and commit planning live in `library-index.ts`, the sync shapes in `library-sync.ts`, and hashing in `library-values.ts`. The rest of the worker still sees one logical value under `tablodge.state`, in the shape it always had (`groups`, `folders`, `bookmarkColumns`, `bookmarks`, `settings`, `updatedAt`), through the worker's `library` object. `library.get`, `set`, and `remove` route that key to the module and pass every other key straight through, so `getStore`, `writeStore`, Undo, erase, and backup restore did not change shape. The module takes a plain key and value backend and never touches `chrome.*`, which is how the tests make any storage call fail on purpose. Sync and encryption plug in here.
+
+Before schema 10 the whole library was one value, so saving a single tab rewrote every session. Now a save writes the changed sessions and a small index.
+
+| Key | Contents |
+| --- | --- |
+| `tablodge.state` | The **index** (`layout: 'records'`, `schemaVersion: 10`): `rev` (a commit counter), folders, bookmark columns, settings, `updatedAt`, one entry per session in display order (`id`, `rev`, `hash`, tab count, name, folder, timestamps), the bookmarks reference, `garbage`, and sync reservations (below) |
+| `tablodge.session.<id>.<rev>` | One session with all its tabs. Never edited in place: a changed session is written to a new key |
+| `tablodge.bookmarks.<rev>` | `{items}`, all bookmarks. Rewritten only when they change. Per bookmark records can reuse the same module later |
+| `tablodge.migration` | Progress marker, present only while a migration is unfinished |
+| `tablodge.state.premigration` | An exact copy of the old single entry, kept for seven days after a verified migration |
+
+Private libraries use the same keys under their prefix and area, so shared, saved, and temporary modes need no special case.
+
+### Commits
+
+Every write is a copy on write commit with one commit point:
+
+1. Write each changed session (found by comparing a content hash with the index entry) to a new key at `rev + 1`.
+2. Remove the keys the previous commit listed as garbage. Nothing reads them any more.
+3. Write the index. This single key write is the commit. A crash before it leaves the previous library, after it the new one. It can leave unreferenced keys but never a half applied save.
+4. The keys this commit replaced become the index's `garbage`, removed by the next commit, so a reader that fetched the previous index can still finish. A reader that finds a record missing re-reads the index and retries; a record still missing from a stable index is reported as damage and nothing is written over it.
+
+The index is written by every commit, so pages and the context menu code that watch `tablodge.state` keep working. Its session entries carry the name, folder, and timestamps the menus need without reading any tabs. `readSettings` reads only the index.
+
+### Migration from the single entry
+
+`migrateStoreOnce` runs inside `mutate` (so inside the mutation queue and the shared storage lock) at each worker start, and again on a later mutation if it failed. While the library is still in the old layout, reads and writes keep working on the old entry (writes stamp schema 9, so older builds can still open it).
+
+1. Detect the old entry. A newer schema is refused.
+2. Take a safety backup through the usual backup list (`Before upgrading how the library is stored`), unless an interrupted attempt already did.
+3. Write `tablodge.state.premigration`, read it back, and compare its hash.
+4. Normalize the old entry with `normalizeStore`, so the records hold what the app showed before. Check that every session, saved tab, bookmark, folder, and column has a stable id that no sibling shares; any failure leaves the old entry in charge, before anything is written.
+5. Write `tablodge.migration`, then the records in batches of about 2 MB or 50 sessions. The marker names a batch's keys before they are written. A resumed attempt skips records that are already correct.
+6. Read every record back and compare its hash and tab count with the plan. A mismatch aborts.
+7. Write the index with `rev: 1`. This is the switch. Keys the marker names that the index does not reference become garbage.
+8. Remove the marker. A crash between 7 and 8 leaves only the marker, which the next run removes.
+
+If the old entry changes between attempts (a write on the old layout), the marker's hash no longer matches and the migration starts over, still cleaning up the first attempt's keys. After a failure the worker waits five minutes (or a restart) before trying again. `pruneRecoveryCopy` removes the recovery copy once its seven days have passed.
+
+### Sync reservations
+
+Record level sync needs a stable id, a revision stamp, a tombstone, and an order key for every record kind. The layout reserves them without any sync code. All of it is invisible to the app, so imports cannot inject it and exports cannot leak it, and every write carries it along.
+
+* **Ids.** Present on every record already and checked at migration. Preferences are addressed by their setting key.
+* **Stamp and order key.** `{h, d, o}`: a hybrid logical clock string, the writing device's id, and a fractional index among siblings. Stored in the index (`sessions[i].sync`, `folderSync`, `columnSync`, `preferenceSync`), in a session record's `$sync.tabs` (flagged by `sessions[i].tabSync`), and in the bookmarks record's `$sync.items` (flagged by `bookmarks.sync`). Nothing writes them yet. A missing stamp means never stamped, with the record's `updatedAt` as its implied stamp. A missing order key means its position in the stored array, which stays authoritative until sync assigns keys in one pass, so adding them needs no further migration.
+* **Tombstones.** The index's `tombstones` list holds `{kind, id, parentId?, deletedAt, purgeAfter, sync?}` for sessions, tabs, bookmarks, columns, folders, and preferences, and a commit drops the expired ones. The trash and Undo are unchanged and remain the user facing delete.
+* **Device id.** The index's `device`, assigned when sync is switched on. It lives only in the index, so restoring a backup elsewhere cannot copy it.
+* **Carrying.** A rewritten session or bookmarks record keeps its sidecar minus entries for records that are gone, reading the old record only when the index flags one. Malformed sync data is dropped instead of making the library unreadable.
+
+### Undo
+
+`withUndo` keeps the library as a delta. `beginCheckpoint` notes the index, and while the action runs, each commit copies the records it replaces (still present, because garbage is removed one commit later). The undo record stores the old index and only those records. `UNDO` is valid only while the index is the exact commit the action ended on (`fingerprint`), then `restoreCheckpoint` writes the old library back as one more commit that rewrites only what differs. If a copy could not be taken, or the library is still in the old layout, the action gets no delta and falls back to a full copy or no Undo, never a wrong one.
 
 ## Recovery
 
@@ -136,7 +192,7 @@ On the dashboard, actions that can be undone run immediately and show an Undo to
 
 `showStatus(message, false, {action: {label, onClick}})` displays an action toast for six seconds. Delete responses include `trashId`; Undo sends `RESTORE_TRASH`. Undoing removal after a restore brings saved links back but leaves the opened tabs alone. Undoing a move sends a reverse `MOVE_TAB`. Undo after saving and closing tabs restores the saved session into the current window.
 
-For actions the trash cannot represent, the worker's `withUndo` copies affected storage keys before the action and stores hashes of their resulting values afterward. The response includes `undoId`. `UNDO` succeeds only within two minutes and only if all affected keys still match those hashes. Later edits to the same data cause Undo to be refused.
+For actions the trash cannot represent, the worker's `withUndo` copies affected storage keys before the action and stores hashes of their resulting values afterward. The library is kept as a delta of changed records (see [Library storage](#undo)) instead of a copy of everything. The response includes `undoId`. `UNDO` succeeds only within two minutes and only if all affected keys still match those hashes, or the library is still at the commit the action ended on. Later edits to the same data cause Undo to be refused.
 
 Undo runs through the mutation queue and relevant recovery queues. It resynchronizes alarms, toolbar behavior, and menus after restoring state. At most three records are kept, with expired copies removed by an alarm and on worker startup. Undoing snapshot deletion restores history, not the live capture or crash banner, and is refused if another snapshot was captured in the meantime.
 
@@ -256,6 +312,6 @@ Files above 45 MB, or expanding beyond 60 MB, are refused. All export formats ar
 
 ## Testing
 
-The worker harness runs the source in a fresh Node VM with mocked `chrome.*` APIs. Pure helpers also have direct unit tests. These tests cover storage and browser logic, not full browser behavior. Use the unpacked build for a manual smoke test, especially for worker restarts, native groups, split view, and side panel gestures.
+The worker harness runs the source in a fresh Node VM with mocked `chrome.*` APIs. Fixtures start in the per-record layout; `legacyLayout: true` starts from the old single entry so the worker has to migrate it. `tests/library-state.test.ts` drives the storage module with a backend that loses or tears any call, including a crash at every step of a commit and of a migration, then resumes. A 10,000 tab test in `tests/service-worker.test.ts` prints the bytes written and the time per edit. Pure helpers also have direct unit tests. These tests cover storage and browser logic, not full browser behavior. Use the unpacked build for a manual smoke test, especially for worker restarts, native groups, split view, and side panel gestures.
 
 `tests/manifest-targets.test.ts` covers the Firefox manifest, and the worker harness has a Firefox mode (`firefox: true`) for the differences above. `vp run browser:firefox` (`scripts/firefox-smoke-check.ts`) goes one level up: it installs `dist/tablodge-firefox/` as a temporary add-on in headless Firefox through Selenium and drives the worker with its own messages. It opens all seven pages, saves a window with a pinned tab and a tab group, restores it into a new window, adds a bookmark, imports browser bookmarks, exports a full backup, and checks that data survives a browser restart. It needs Firefox installed. Selenium downloads a matching geckodriver if there is none on the `PATH`, and `FIREFOX_BIN` overrides the browser binary. Safari has no automated check because it is not supported.

@@ -18,7 +18,8 @@ Data stays in local extension storage within your browser profile.
 
 | Storage key                                                                | Contents                                                                                                                                   |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tablodge.state`                                                           | Saved sessions, titles, URLs, notes, pinned state, tab groups, split view pairs, saved window size and position, folders, bookmarks, columns, settings, and excluded sites |
+| `tablodge.state`, `tablodge.session.*`, `tablodge.bookmarks.*`             | Saved sessions, titles, URLs, notes, pinned state, tab groups, split view pairs, saved window size and position, folders, bookmarks, columns, settings, and excluded sites. `tablodge.state` is a small index; each session has its own key and the bookmarks share one |
+| `tablodge.state.premigration`, `tablodge.migration`                        | For one week after an update that moves the library to this layout, an exact copy of the library as it was; a short progress note while that move is unfinished |
 | `uiTheme`, `uiAccent`                                                      | Your system, light, or dark theme choice and your accent color (a preset name, `browser`, or a hex color)                                                                             |
 | `tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta` | Snapshots of open windows and flags used to detect a possible browser crash                                                                |
 | `tablodge.backups`                                                         | Automatic, manual, and safety backups of sessions, bookmarks, and settings                                                                 |
@@ -51,7 +52,7 @@ Two temporary coordination keys, `tablodge.lock.normal` and `tablodge.lock.priva
 
 Your saved sessions and bookmarks stay until you delete them. The optional auto-archive setting only moves old sessions into an Archived folder; it never deletes them. Deleted items go to the trash bin for 7, 30, or 90 days, depending on your setting. Snapshots, backups, trash, and Undo records have retention or size limits. You can clear recovery data from **Settings › Recovery & backups**.
 
-Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data creates a safety backup and offers Undo, so check the backup history too if you want to remove retained copies. Removing the extension deletes its browser storage.
+Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data creates a safety backup and offers Undo, so check the backup history too if you want to remove retained copies. After an update that changes how the library is stored, TabLodge keeps a full copy of the old library for seven days and takes a safety backup, so the copy can hold items you deleted soon afterwards. Removing the extension deletes its browser storage.
 
 If you enable **Also save a copy to Downloads**, TabLodge writes backup JSON files to `Downloads/TabLodge/`. It doesn't upload them. Turning the option off or uninstalling the extension doesn't delete files already written there; you must remove those yourself.
 

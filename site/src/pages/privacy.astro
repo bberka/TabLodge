@@ -62,9 +62,9 @@ const permissions = [
 		<h2>What TabLodge stores, and where</h2>
 		<p>Everything is stored locally in your browser profile:</p>
 		<ul>
-			<li><strong>Extension storage</strong> (<code>chrome.storage.local</code>, key <code>tablodge.state</code>): your saved sessions (tab titles, URLs, notes, pinned, tab-group and split-view info), folders, bookmark columns and bookmarks, settings, and excluded websites.</li>
+			<li><strong>Extension storage</strong> (<code>chrome.storage.local</code>, keys <code>tablodge.state</code>, <code>tablodge.session.*</code> and <code>tablodge.bookmarks.*</code>): your saved sessions (tab titles, URLs, notes, pinned, tab-group and split-view info), folders, bookmark columns and bookmarks, settings, and excluded websites.</li>
 			<li><strong>Extension storage</strong> (<code>uiTheme</code>, <code>uiAccent</code>) and the extension's <code>localStorage</code> (<code>tablodge.uiTheme</code>, <code>tablodge.uiAccent</code>): your Light, Dark or System appearance choice and accent color, and a copy used to paint each page in the right theme before it loads.</li>
-			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). Snapshots skip private windows and excluded websites.</li>
+			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). After an update that changes how your library is stored, a full copy of the old library is kept for seven days. Snapshots skip private windows and excluded websites.</li>
 		</ul>
 		<p>
 			TabLodge reads tab details to save and restore sessions, find duplicates, show and search open tabs, and capture recovery snapshots. Snapshots are enabled by default and can be turned off in Settings, under Recovery &amp; backups. It reads your browser's bookmark tree only when you ask to import it. If you enable the browser bookmark setting, it also watches for newly created bookmarks to offer to add that page or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.

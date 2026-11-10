@@ -4,9 +4,18 @@ import {
 	omniboxSuggestions,
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
+import {
+	createLibraryState,
+	isUndoDelta,
+	LAYOUT_VERSION,
+	MIGRATION_KEY,
+	STATE_KEY,
+	type UndoDelta,
+} from '../src/shared/library-state';
+import {hashText} from '../src/shared/library-values';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
-// would leave an `export {}` behind. The one value import above is bundled into the classic script by the
+// would leave an `export {}` behind. The value imports above are bundled into the classic script by the
 // build, and by tests/worker-source.ts for the tests.
 type ActionFailure = import('../src/app/types').ActionFailure;
 type TabLodgeMessageType = import('../src/app/types').TabLodgeMessageType;
@@ -176,7 +185,7 @@ const APP_NAME =
 	chrome.runtime.getManifest().short_name ?? chrome.runtime.getManifest().name;
 // Persistent identifiers (storage keys, export formats, menu ids) use the "tablodge" prefix and are
 // independent of the display name: changing one would orphan saved data.
-const STORAGE_KEY = 'tablodge.state';
+const STORAGE_KEY = STATE_KEY;
 const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
 const PRIVATE_PREFIX = 'tablodge.private.';
 const privateContext = Boolean(chrome.extension?.inIncognitoContext);
@@ -362,7 +371,8 @@ function storageParts(keys: string[]) {
 }
 
 // Each split worker owns its mutation queue. Mode changes join that queue so a write cannot change libraries midway.
-const library = {
+// This is the plain key/value view of the library's storage area; `library` below adds the logical state key.
+const rawLibrary = {
 	async get<T = Record<string, unknown>>(keys: string[]): Promise<T> {
 		await privateConfigReady;
 		const entries = await Promise.all(
@@ -398,6 +408,78 @@ const library = {
 			),
 		);
 		return sizes.reduce((total, size) => total + size, 0);
+	},
+};
+
+/**
+How the rest of the worker sees the library. The logical key STORAGE_KEY is the whole library in the shape the
+single `tablodge.state` entry always had (`groups`, `bookmarks`, ...), whichever way it is stored: sessions live
+in their own keys behind it (see src/shared/library-state.ts). Other keys pass straight through.
+*/
+const libraryState = createLibraryState({
+	async get(keys) {
+		return rawLibrary.get(keys);
+	},
+	async set(values) {
+		await rawLibrary.set(values);
+	},
+	async remove(keys) {
+		await rawLibrary.remove(keys);
+	},
+	async getBytesInUse(keys) {
+		return rawLibrary.getBytesInUse(keys);
+	},
+});
+
+const library = {
+	async get<T = Record<string, unknown>>(keys: string[]): Promise<T> {
+		if (!keys.includes(STORAGE_KEY)) {
+			return rawLibrary.get<T>(keys);
+		}
+
+		const others = keys.filter((key) => key !== STORAGE_KEY);
+		const saved: Raw = others.length > 0 ? await rawLibrary.get(others) : {};
+		const state = await libraryState.read();
+		if (state !== null) {
+			saved[STORAGE_KEY] = state;
+		}
+
+		return saved as T;
+	},
+	async set(values: Record<string, unknown>) {
+		const {[STORAGE_KEY]: state, ...rest} = values;
+		if (Object.keys(rest).length > 0) {
+			await rawLibrary.set(rest);
+		}
+
+		if (!Object.hasOwn(values, STORAGE_KEY)) {
+			return;
+		}
+
+		if (!isRecord(state)) {
+			throw new TypeError('The library state must be an object.');
+		}
+
+		await libraryState.write(state);
+	},
+	async remove(keys: string | string[]) {
+		const list = [keys].flat();
+		const rest = list.filter((key) => key !== STORAGE_KEY);
+		if (rest.length > 0) {
+			await rawLibrary.remove(rest);
+		}
+
+		if (list.includes(STORAGE_KEY)) {
+			await libraryState.remove();
+		}
+	},
+	async getBytesInUse(keys: string[]) {
+		const rest = keys.filter((key) => key !== STORAGE_KEY);
+		const [others, state] = await Promise.all([
+			rest.length > 0 ? rawLibrary.getBytesInUse(rest) : 0,
+			keys.includes(STORAGE_KEY) ? libraryState.bytesInUse() : 0,
+		]);
+		return others + state;
 	},
 };
 
@@ -456,7 +538,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 	});
 	mutationQueue = update.catch(() => undefined);
 });
-const SCHEMA_VERSION = 9;
+// 10: sessions and bookmarks live in their own storage keys (src/shared/library-state.ts); the data model is unchanged from 9.
+const SCHEMA_VERSION = LAYOUT_VERSION;
 const DEFAULT_FOLDER_ID = 'unfiled';
 const ARCHIVED_FOLDER_ID = 'archived-sessions';
 const ARCHIVED_FOLDER_NAME = 'Archived';
@@ -1939,38 +2022,50 @@ async function getStore(): Promise<Store> {
 }
 
 let migrationChecked = false;
+let migrationRetryAt = 0;
+// After a failed migration the old layout keeps working; the next try waits this long (or a worker restart).
+const MIGRATION_RETRY_MS = 300_000;
 /**
-Writes the normalized store back once per worker run when it is missing or saved by an older schema.
-Runs inside the mutation queue, so it can never race a mutation or a concurrent read-only caller.
+Moves the library to the per-record layout once per worker run, and only when it is still in the old single entry.
+Runs inside the mutation queue, so it can never race a mutation or a concurrent read-only caller. The old entry
+stays the library until the final verified step; if anything fails it stays, and the app keeps using it.
 */
 async function migrateStoreOnce() {
-	if (migrationChecked) {
+	if (migrationChecked || Date.now() < migrationRetryAt) {
 		return;
 	}
 
 	try {
-		const saved = await library.get<Record<string, Raw | null | undefined>>([
-			STORAGE_KEY,
-		]);
-		const raw = saved[STORAGE_KEY];
-		const exists = raw && typeof raw === 'object';
-		if (exists && (Number(raw.schemaVersion) || 0) > SCHEMA_VERSION) {
+		const meta = await libraryState.readMeta();
+		if (meta.schemaVersion > SCHEMA_VERSION) {
 			// Refused (and reported) by getStore; never overwritten.
 			return;
 		}
 
-		if (!exists || raw.schemaVersion !== SCHEMA_VERSION) {
-			await library.set({
-				[STORAGE_KEY]: normalizeStore(exists ? raw : null),
-			});
+		if (meta.layout === 'legacy') {
+			// A restorable copy through the usual recovery list; skipped when an interrupted attempt already took one.
+			const started = (await rawLibrary.get([MIGRATION_KEY]))[MIGRATION_KEY];
+			if (started === undefined) {
+				await safetyBackup(
+					await getStore(),
+					'Before upgrading how the library is stored',
+				);
+			}
+
+			await libraryState.migrate((raw) => normalizeStore(raw));
 			invalidateSettings();
 		}
 
 		migrationChecked = true;
-	} catch {
+	} catch (error) {
 		/*
-		Best effort: the operation reports its own storage error, and the next mutation retries.
+		The old layout still works: the operation reports its own storage error, and a later mutation retries.
 		*/
+		migrationRetryAt = Date.now() + MIGRATION_RETRY_MS;
+		console.warn(
+			'TabLodge could not upgrade how the library is stored yet.',
+			error,
+		);
 	}
 }
 
@@ -6448,33 +6543,6 @@ const snapshotMutate = serialQueue();
 const backupMutate = serialQueue();
 const trashMutate = serialQueue();
 
-/**
-A short non-cryptographic hash (cyrb53) used to spot a snapshot or backup identical to the previous one.
-*/
-/* eslint-disable no-bitwise -- a hash is bit arithmetic */
-function hashText(text: string): string {
-	let h1 = 0xde_ad_be_ef ^ text.length;
-	let h2 = 0x41_c6_ce_57 ^ text.length;
-	for (let index = 0; index < text.length; index += 1) {
-		const code = text.codePointAt(index)!;
-		h1 = Math.imul(h1 ^ code, 2_654_435_761);
-		h2 = Math.imul(h2 ^ code, 1_597_334_677);
-	}
-
-	h1 =
-		Math.imul(h1 ^ (h1 >>> 16), 2_246_822_507) ^
-		Math.imul(h2 ^ (h2 >>> 13), 3_266_489_909);
-	h2 =
-		Math.imul(h2 ^ (h2 >>> 16), 2_246_822_507) ^
-		Math.imul(h1 ^ (h1 >>> 13), 3_266_489_909);
-	return (
-		(4_294_967_296 * (2_097_151 & h2) + (h1 >>> 0)).toString(36) +
-		text.length.toString(36)
-	);
-}
-
-/* eslint-enable no-bitwise */
-
 const pad2 = (value: number) => String(value).padStart(2, '0');
 const localDate = (time: number) => {
 	const date = new Date(time);
@@ -6523,16 +6591,13 @@ async function readSettings(): Promise<Settings> {
 	}
 
 	const generation = settingsGeneration;
-	const saved = await library.get<Record<string, Raw | undefined>>([
-		STORAGE_KEY,
-	]);
-	if (saved[STORAGE_KEY]?.schemaVersion === SCHEMA_VERSION) {
+	// The index holds the settings, so no session is read.
+	const meta = await libraryState.readMeta();
+	if (meta.schemaVersion === SCHEMA_VERSION) {
 		migrationChecked = true;
 	}
 
-	const settings = normalizeSettings(
-		saved[STORAGE_KEY]?.settings as RawSettings | undefined,
-	);
+	const settings = normalizeSettings(meta.settings as RawSettings | undefined);
 	// A change that landed while this read was in flight makes its result possibly stale: use it once, do not keep it.
 	if (generation === settingsGeneration) {
 		settingsCache = settings;
@@ -8418,18 +8483,59 @@ async function withUndo<K extends TabLodgeMessageType>(
 	keys: string[],
 	run: () => Promise<ActionResult<K>>,
 ): Promise<ActionResult<K>> {
-	const before = await library.get<Raw>(keys);
-	const result = await run();
+	// The library is kept as a delta (its index plus the records the action replaced), not as a copy of everything.
+	const others = keys.filter((key) => key !== STORAGE_KEY);
+	const before = await library.get<Raw>(others);
+	const tracksState = keys.includes(STORAGE_KEY);
+	const checkpoint = tracksState ? await libraryState.beginCheckpoint() : null;
+	const fingerprintBefore = checkpoint
+		? await libraryState.fingerprint()
+		: undefined;
+	// Without the record layout (a migration that could not run) the whole value is copied, as it always was.
+	const stateBefore =
+		tracksState && !checkpoint
+			? (await library.get<Raw>([STORAGE_KEY]))[STORAGE_KEY]
+			: undefined;
+	let result: ActionResult<K>;
+	let delta: UndoDelta | null = null;
+	try {
+		result = await run();
+	} finally {
+		if (checkpoint) {
+			delta = libraryState.endCheckpoint(checkpoint);
+		}
+	}
+
 	if (!result.ok) {
 		return result;
 	}
 
 	try {
-		const now = await library.get<Raw>(keys);
-		const after = Object.fromEntries(
-			keys.map((key) => [key, undoHash(now[key])]),
+		const now = await library.get<Raw>(others);
+		const after: Record<string, string> = Object.fromEntries(
+			others.map((key) => [key, undoHash(now[key])]),
 		);
-		if (keys.every((key) => after[key] === undoHash(before[key]))) {
+		let changed = others.some((key) => after[key] !== undoHash(before[key]));
+		if (tracksState) {
+			if (checkpoint) {
+				const fingerprintAfter = await libraryState.fingerprint();
+				after[STORAGE_KEY] = fingerprintAfter ?? 'none';
+				if (fingerprintAfter !== fingerprintBefore) {
+					if (!delta) {
+						// A record the action replaced could not be copied: better no Undo than a wrong one.
+						return result;
+					}
+
+					changed = true;
+				}
+			} else {
+				const stateNow = (await library.get<Raw>([STORAGE_KEY]))[STORAGE_KEY];
+				after[STORAGE_KEY] = undoHash(stateNow);
+				changed ||= after[STORAGE_KEY] !== undoHash(stateBefore);
+			}
+		}
+
+		if (!changed) {
 			return result;
 		}
 
@@ -8438,7 +8544,11 @@ async function withUndo<K extends TabLodgeMessageType>(
 			label,
 			createdAt: Date.now(),
 			keys,
-			before,
+			before: {
+				...before,
+				...(delta && {[STORAGE_KEY]: delta}),
+				...(stateBefore !== undefined && {[STORAGE_KEY]: stateBefore}),
+			},
 			after,
 		};
 		await undoMutate(async () => {
@@ -8498,9 +8608,20 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 		}
 
 		return run(record.keys, async () => {
-			const current = await library.get<Raw>(record.keys);
+			const delta = isUndoDelta(record.before[STORAGE_KEY])
+				? record.before[STORAGE_KEY]
+				: undefined;
+			const others = record.keys.filter((key) => key !== STORAGE_KEY);
+			const current = await library.get<Raw>(delta ? others : record.keys);
+			// A delta is only valid for the exact commit the action ended on; any later commit refuses it.
+			const stateChanged =
+				delta &&
+				(await libraryState.fingerprint()) !== record.after[STORAGE_KEY];
 			if (
-				record.keys.some((key) => undoHash(current[key]) !== record.after[key])
+				stateChanged ||
+				(delta ? others : record.keys).some(
+					(key) => undoHash(current[key]) !== record.after[key],
+				)
 			) {
 				await undoMutate(async () => {
 					await writeUndo(
@@ -8512,7 +8633,7 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 
 			const restore: Raw = {};
 			const drop: string[] = [];
-			for (const key of record.keys) {
+			for (const key of delta ? others : record.keys) {
 				if (record.before[key] === undefined) {
 					drop.push(key);
 				} else {
@@ -8523,6 +8644,10 @@ function undoAction(id: string): Promise<ActionResult<'UNDO'>> {
 			await library.set(restore);
 			if (drop.length > 0) {
 				await library.remove(drop);
+			}
+
+			if (delta) {
+				await libraryState.restoreCheckpoint(delta);
 			}
 
 			invalidateSettings();
@@ -8709,6 +8834,11 @@ chrome.windows?.onRemoved?.addListener?.(() => {
 void readSettings()
 	.then((settings) => syncRecoveryAlarms(settings))
 	.catch(() => undefined);
+
+// An update moves the library to the per-record layout now, not at the first edit; later runs find it current.
+void mutate(async () => {
+	await libraryState.pruneRecoveryCopy();
+}).catch(() => undefined);
 
 async function handleMessage(
 	message: TabLodgeMessage | undefined,
@@ -10156,18 +10286,21 @@ onLibraryChanged((changes, areaName) => {
 	}
 
 	const previous = isRecord(change.oldValue) ? change.oldValue : {};
+	// The index lists sessions as `sessions` (with names and folders); the old single entry held them as `groups`.
+	const sessionsOf = (state: Raw) =>
+		state.layout === 'records' ? state.sessions : state.groups;
 	const nextSettings = normalizeSettings(
 		change.newValue.settings as RawSettings | undefined,
 	);
 	const nextSignature = contextMenuSignature(
 		nextSettings,
 		normalizeBookmarkColumns(change.newValue.bookmarkColumns),
-		menuSessions(change.newValue.groups, change.newValue.folders),
+		menuSessions(sessionsOf(change.newValue), change.newValue.folders),
 	);
 	const previousSignature = contextMenuSignature(
 		normalizeSettings(previous.settings as RawSettings | undefined),
 		normalizeBookmarkColumns(previous.bookmarkColumns),
-		menuSessions(previous.groups, previous.folders),
+		menuSessions(sessionsOf(previous), previous.folders),
 	);
 	if (nextSignature !== previousSignature && nextSignature !== menuSignature) {
 		scheduleContextMenuRebuild();
