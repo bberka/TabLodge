@@ -137,14 +137,18 @@ export async function encryptBytes(
 	return envelope;
 }
 
+type ParsedEnvelope = {
+	header: Uint8Array<ArrayBuffer>;
+	salt: Uint8Array<ArrayBuffer>;
+	iv: Uint8Array<ArrayBuffer>;
+	iterations: number;
+	body: Uint8Array<ArrayBuffer>;
+};
+
 /**
-Decrypts an envelope. Returns all of the data or throws an EnvelopeError; never partial output.
-A wrong credential and a changed file both give 'wrong-credential', so a caller learns nothing more from the failure.
+Checks the shape of an envelope before any key work and splits it into its parts. Throws the same EnvelopeErrors a decryption does.
 */
-export async function decryptBytes(
-	envelope: Uint8Array,
-	credential: string,
-): Promise<Uint8Array> {
+function parseEnvelope(envelope: Uint8Array): ParsedEnvelope {
 	if (!looksEncrypted(envelope)) {
 		throw new EnvelopeError('not-encrypted', 'This file is not encrypted.');
 	}
@@ -188,26 +192,207 @@ export async function decryptBytes(
 		throw damaged;
 	}
 
+	return {
+		header: envelope.slice(0, headerLength),
+		salt: envelope.slice(FIXED_HEADER_BYTES, FIXED_HEADER_BYTES + saltLength),
+		iv: envelope.slice(FIXED_HEADER_BYTES + saltLength, headerLength),
+		iterations,
+		body: envelope.slice(headerLength),
+	};
+}
+
+function parseForCredential(
+	envelope: Uint8Array,
+	credential: string,
+): ParsedEnvelope {
+	// Checked in this order so a damaged file is still reported as damaged whatever was typed.
 	if (credential.length > MAX_DECRYPT_CREDENTIAL_LENGTH) {
+		parseEnvelope(envelope);
 		throw new EnvelopeError('wrong-credential', WRONG);
 	}
 
-	const header = envelope.slice(0, headerLength);
-	const salt = envelope.slice(
-		FIXED_HEADER_BYTES,
-		FIXED_HEADER_BYTES + saltLength,
-	);
-	const iv = envelope.slice(FIXED_HEADER_BYTES + saltLength, headerLength);
+	return parseEnvelope(envelope);
+}
+
+async function openWithKey(
+	parsed: ParsedEnvelope,
+	key: CryptoKey,
+): Promise<Uint8Array> {
 	try {
-		const key = await deriveKey(credential, salt, iterations, 'decrypt');
 		return new Uint8Array(
 			await crypto.subtle.decrypt(
-				{name: 'AES-GCM', iv, additionalData: header, tagLength: TAG_BYTES * 8},
+				{
+					name: 'AES-GCM',
+					iv: parsed.iv,
+					additionalData: parsed.header,
+					tagLength: TAG_BYTES * 8,
+				},
 				key,
-				envelope.slice(headerLength),
+				parsed.body,
 			),
 		);
 	} catch {
 		throw new EnvelopeError('wrong-credential', WRONG);
 	}
+}
+
+/**
+Decrypts an envelope. Returns all of the data or throws an EnvelopeError; never partial output.
+A wrong credential and a changed file both give 'wrong-credential', so a caller learns nothing more from the failure.
+*/
+export async function decryptBytes(
+	envelope: Uint8Array,
+	credential: string,
+): Promise<Uint8Array> {
+	const parsed = parseForCredential(envelope, credential);
+	let key: CryptoKey;
+	try {
+		key = await deriveKey(
+			credential,
+			parsed.salt,
+			parsed.iterations,
+			'decrypt',
+		);
+	} catch {
+		throw new EnvelopeError('wrong-credential', WRONG);
+	}
+
+	return openWithKey(parsed, key);
+}
+
+// A session key: the AES key the credential derives, kept as raw bytes so a feature that stays unlocked for a while
+// (locked storage) can open and reseal its data without asking again. Whoever holds the bytes can open every envelope
+// made with the same salt, so callers keep them in memory only (browser session storage) and never write them out.
+export type SessionKey = Uint8Array;
+
+async function deriveRawKey(
+	credential: string,
+	salt: Uint8Array<ArrayBuffer>,
+	iterations: number,
+): Promise<SessionKey> {
+	const material = await crypto.subtle.importKey(
+		'raw',
+		new TextEncoder().encode(credential.normalize('NFKC')),
+		'PBKDF2',
+		false,
+		['deriveBits'],
+	);
+	return new Uint8Array(
+		await crypto.subtle.deriveBits(
+			{name: 'PBKDF2', hash: 'SHA-256', salt, iterations},
+			material,
+			256,
+		),
+	);
+}
+
+async function importSessionKey(
+	key: SessionKey,
+	usage: 'encrypt' | 'decrypt',
+): Promise<CryptoKey> {
+	return crypto.subtle.importKey(
+		'raw',
+		new Uint8Array(key),
+		{name: 'AES-GCM'},
+		false,
+		[usage],
+	);
+}
+
+/**
+Like `decryptBytes`, and also returns the session key so the data can be resealed without the credential.
+*/
+export async function decryptBytesKeepingKey(
+	envelope: Uint8Array,
+	credential: string,
+): Promise<{data: Uint8Array; key: SessionKey}> {
+	const parsed = parseForCredential(envelope, credential);
+	const key = await deriveRawKey(credential, parsed.salt, parsed.iterations);
+	return {
+		data: await openWithKey(parsed, await importSessionKey(key, 'decrypt')),
+		key,
+	};
+}
+
+/**
+Decrypts with a session key from `decryptBytesKeepingKey` or `encryptBytesKeepingKey`. Same errors as `decryptBytes`.
+*/
+export async function decryptBytesWithKey(
+	envelope: Uint8Array,
+	key: SessionKey,
+): Promise<Uint8Array> {
+	const parsed = parseEnvelope(envelope);
+	let imported: CryptoKey;
+	try {
+		imported = await importSessionKey(key, 'decrypt');
+	} catch {
+		throw new EnvelopeError('wrong-credential', WRONG);
+	}
+
+	return openWithKey(parsed, imported);
+}
+
+/**
+Like `encryptBytes`, and also returns the session key that opens the result.
+*/
+export async function encryptBytesKeepingKey(
+	data: Uint8Array,
+	credential: Credential,
+): Promise<{envelope: Uint8Array; key: SessionKey}> {
+	const problem = validateCredential(credential.kind, credential.value);
+	if (problem) {
+		throw new EnvelopeError('invalid-credential', problem);
+	}
+
+	const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+	const key = await deriveRawKey(
+		credential.value,
+		salt,
+		ENVELOPE_MIN_ITERATIONS,
+	);
+	return {
+		envelope: await sealWithKey(data, key, salt, ENVELOPE_MIN_ITERATIONS),
+		key,
+	};
+}
+
+/**
+Encrypts again under a session key, keeping the salt and work factor of `previous` (the envelope the key came from) and drawing a fresh nonce.
+*/
+export async function encryptBytesWithKey(
+	data: Uint8Array,
+	key: SessionKey,
+	previous: Uint8Array,
+): Promise<Uint8Array> {
+	const {salt, iterations} = parseEnvelope(previous);
+	return sealWithKey(data, key, salt, iterations);
+}
+
+async function sealWithKey(
+	data: Uint8Array,
+	key: SessionKey,
+	salt: Uint8Array,
+	iterations: number,
+): Promise<Uint8Array> {
+	const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+	const header = new Uint8Array(FIXED_HEADER_BYTES + salt.length + IV_BYTES);
+	header.set(MAGIC, 0);
+	header[4] = VERSION;
+	header[5] = KDF_PBKDF2_SHA256;
+	new DataView(header.buffer).setUint32(6, iterations);
+	header[10] = salt.length;
+	header[11] = IV_BYTES;
+	header.set(salt, FIXED_HEADER_BYTES);
+	header.set(iv, FIXED_HEADER_BYTES + salt.length);
+	const sealed = new Uint8Array(
+		await crypto.subtle.encrypt(
+			{name: 'AES-GCM', iv, additionalData: header, tagLength: TAG_BYTES * 8},
+			await importSessionKey(key, 'encrypt'),
+			new Uint8Array(data),
+		),
+	);
+	const envelope = new Uint8Array(header.length + sealed.length);
+	envelope.set(header, 0);
+	envelope.set(sealed, header.length);
+	return envelope;
 }

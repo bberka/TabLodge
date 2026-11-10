@@ -2394,6 +2394,227 @@ async function main() {
 			);
 
 			await check(
+				`the locked area is set up, used, locked and unlocked by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					const credential = 'correct horse battery';
+					try {
+						await setTheme(page, theme);
+						const trigger = page.getByRole('button', {
+							name: 'Import, back up and share bookmarks',
+						});
+						await openMenuItemByKeyboard(page, trigger, 'Locked bookmarks');
+						await page
+							.getByRole('dialog', {name: 'Set up the locked area'})
+							.waitFor();
+						// The dialog's name changes with each step, so the steps below address it without one.
+						const dialog = page.getByRole('dialog');
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('type')) ===
+								'password',
+							'focus to land in the first field of the setup',
+						);
+						assert.match(
+							await dialog.innerText(),
+							/cannot be recovered/,
+							'the loss warning shows before the lock is created',
+						);
+						assert.deepEqual(
+							await axeViolationLines(page, axeSource),
+							[],
+							'the setup step should pass axe',
+						);
+						const fields = dialog.locator('input[type="password"]');
+						await fields.nth(0).fill(credential);
+						await fields.nth(1).fill(credential);
+						const create = dialog.getByRole('button', {
+							name: 'Create locked area',
+						});
+						assert.equal(
+							await create.isDisabled(),
+							true,
+							'creating needs the acknowledgement',
+						);
+						await dialog.getByRole('checkbox').focus();
+						await page.keyboard.press('Space');
+						await create.focus();
+						await page.keyboard.press('Enter');
+						const heading = dialog.getByRole('heading', {
+							name: '0 locked bookmarks',
+						});
+						await heading.waitFor();
+						await until(
+							async () =>
+								(await page.locator(':focus').textContent()) ===
+								'0 locked bookmarks',
+							'focus to move to the list heading after setup',
+						);
+						await dialog
+							.getByRole('button', {name: 'Add', exact: true})
+							.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('id')) ===
+								'locked-edit-title',
+							'focus to move into the add form',
+						);
+						await page.keyboard.type('Locked diary');
+						await page.keyboard.press('Tab');
+						await page.keyboard.type('https://diary.example/entry');
+						assert.deepEqual(
+							await axeViolationLines(page, axeSource),
+							[],
+							'the add step should pass axe',
+						);
+						await page.keyboard.press('Enter');
+						await dialog.getByRole('link', {name: /Locked diary/}).waitFor();
+						assert.deepEqual(
+							await axeViolationLines(page, axeSource),
+							[],
+							'the list should pass axe',
+						);
+						await captureEvidence(page, `locked-area-list-${theme}.png`);
+
+						// Lock now, then the unlock screen takes focus and a wrong entry is announced.
+						await dialog.getByRole('button', {name: 'Lock now'}).focus();
+						await page.keyboard.press('Enter');
+						await dialog.getByRole('button', {name: 'Unlock'}).waitFor();
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('type')) ===
+								'password',
+							'focus to move to the credential field after locking',
+						);
+						assert.deepEqual(
+							await axeViolationLines(page, axeSource),
+							[],
+							'the unlock screen should pass axe',
+						);
+						await page.keyboard.type('wrong horse battery');
+						await page.keyboard.press('Enter');
+						await dialog
+							.getByRole('alert')
+							.filter({hasText: 'wrong'})
+							.waitFor();
+						assert.equal(
+							await dialog.getByRole('link').count(),
+							0,
+							'a wrong entry shows nothing',
+						);
+						await captureEvidence(page, `locked-area-unlock-${theme}.png`);
+						await dialog.locator('input').first().fill(credential);
+						await page.keyboard.press('Enter');
+						await dialog.getByRole('link', {name: /Locked diary/}).waitFor();
+
+						// Escape closes the dialog and hands focus back to the menu button.
+						await page.keyboard.press('Escape');
+						await dialog.waitFor({state: 'hidden'});
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('aria-label')) ===
+								'Import, back up and share bookmarks',
+							'focus to return to the bookmark menu button',
+						);
+					} finally {
+						await page.evaluate(async (secret: string) => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: ExtensionApi;
+							};
+							await chrome.runtime.sendMessage({
+								type: 'LOCKED_REMOVE_LOCK',
+								credential: secret,
+								bookmarks: 'delete',
+							});
+						}, credential);
+						await page.close();
+					}
+				},
+			);
+
+			await check(
+				`saving to the locked area from the popup passes axe and keeps focus in the dialog (${theme})`,
+				async () => {
+					const credential = 'correct horse battery';
+					const setup = await openPage(context, extensionId, 'newtab');
+					await setup.evaluate(async (secret: string) => {
+						const {chrome} = globalThis as typeof globalThis & {
+							chrome: ExtensionApi;
+						};
+						await chrome.runtime.sendMessage({
+							type: 'LOCKED_SETUP',
+							kind: 'password',
+							value: secret,
+						});
+						await chrome.runtime.sendMessage({type: 'LOCKED_LOCK'});
+					}, credential);
+					await setup.close();
+					const url = `https://example.com/popup-locked-${theme}`;
+					const webPage = await context.newPage();
+					await webPage.route(url, async (route) =>
+						route.fulfill({
+							contentType: 'text/html',
+							body: '<title>Locked popup test</title>',
+						}),
+					);
+					await webPage.goto(url);
+					const popup = await openPopupOver(context, extensionId, url);
+					try {
+						await setTheme(popup, theme);
+						// The popup saves the active tab, so the page goes to the front first.
+						await webPage.bringToFront();
+						const button = popup.getByRole('button', {
+							name: 'Bookmark to locked area',
+						});
+						await button.focus();
+						await popup.keyboard.press('Enter');
+						const dialog = popup.getByRole('dialog', {
+							name: 'Bookmark to locked area',
+						});
+						await dialog.waitFor();
+						await until(
+							async () =>
+								(await popup.locator(':focus').getAttribute('type')) ===
+								'password',
+							'focus to land in the credential field',
+						);
+						assert.deepEqual(
+							await axeViolationLines(popup, axeSource),
+							[],
+							'the locked save should pass axe',
+						);
+						await popup.keyboard.type(credential);
+						await popup.keyboard.press('Enter');
+						await popup
+							.getByText('Saved to the locked area.')
+							.first()
+							.waitFor();
+						await dialog.waitFor({state: 'hidden'});
+					} finally {
+						await popup.close();
+						await webPage.close();
+						const cleanup = await openPage(context, extensionId, 'newtab');
+						await cleanup.evaluate(async (secret: string) => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: ExtensionApi;
+							};
+							await chrome.runtime.sendMessage({
+								type: 'LOCKED_UNLOCK',
+								credential: secret,
+							});
+							await chrome.runtime.sendMessage({
+								type: 'LOCKED_REMOVE_LOCK',
+								credential: secret,
+								bookmarks: 'delete',
+							});
+						}, credential);
+						await cleanup.close();
+					}
+				},
+			);
+
+			await check(
 				`duplicate bookmarks dialog works by keyboard (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'newtab');

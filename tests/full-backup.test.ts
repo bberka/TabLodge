@@ -173,3 +173,30 @@ test('the protected file name keeps the date and says it is encrypted', () => {
 		'tablodge-full-2026-03-04.zip.enc',
 	);
 });
+
+test('the locked area travels in the ZIP as the encrypted entry it is, and older backups simply lack it', () => {
+	const locked = {
+		version: 1,
+		kind: 'pin',
+		idleMinutes: 5,
+		rev: 3,
+		envelope: 'VExFTg==',
+		updatedAt: 9,
+	};
+	const withLocked = buildFullBackup({...parts, locked}, {appVersion: '1'});
+	assert.deepEqual(Object.keys(unzipSync(withLocked.bytes)).toSorted(), [
+		'data.json',
+		'locked.json',
+		'manifest.json',
+		'preferences.json',
+		'snapshots.json',
+		'trash.json',
+	]);
+	assert.deepEqual(readFullBackup(withLocked.bytes)?.locked, locked);
+
+	for (const none of [undefined, null]) {
+		const plain = buildFullBackup({...parts, locked: none}, {appVersion: '1'});
+		assert.equal('locked.json' in unzipSync(plain.bytes), false);
+		assert.equal(readFullBackup(plain.bytes)?.locked, undefined);
+	}
+});

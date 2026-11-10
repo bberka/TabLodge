@@ -24,6 +24,7 @@ import {
 	PanelRightOpen,
 	Pin,
 	ListPlus,
+	Lock,
 	AppWindow,
 	CopyMinus,
 	X,
@@ -80,6 +81,7 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {webUrl} from './web-url';
+import {LockedSaveDialog} from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
 import {
 	closeDuplicateTabs,
@@ -118,6 +120,10 @@ function Popup() {
 	} | null>(null);
 	const [columnId, setColumnId] = useState('');
 	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
+	const [lockedTab, setLockedTab] = useState<{
+		title: string;
+		url: string;
+	} | null>(null);
 	const [sessionOpen, setSessionOpen] = useState(false);
 	const [sessionTab, setSessionTab] = useState<{
 		title: string;
@@ -317,6 +323,30 @@ function Popup() {
 			setColumnId(columns[0]?.id || newColumnValue);
 			setNewColumn({name: ''});
 			setBookmarkOpen(true);
+		} catch {
+			showStatus(
+				'Could not read the current page. Open a regular web page and try again.',
+				true,
+			);
+		} finally {
+			setBusy('');
+		}
+	}
+
+	async function startLockedBookmark() {
+		setBusy('bookmark-locked');
+		try {
+			const [tab] = await chrome.tabs.query({
+				active: true,
+				lastFocusedWindow: true,
+			});
+			const url = webUrl(tab?.url);
+			if (!url) {
+				showStatus('Open a regular web page to bookmark it.', true);
+				return;
+			}
+
+			setLockedTab({title: tab.title || url, url});
 		} catch {
 			showStatus(
 				'Could not read the current page. Open a regular web page and try again.',
@@ -678,6 +708,24 @@ function Popup() {
 						)}{' '}
 						Bookmark this page
 					</Button>
+					{!privateWindow && (
+						<Button
+							size="sm"
+							className="w-full justify-start gap-3 px-3"
+							variant="outline"
+							disabled={busy !== '' || !pageSavable}
+							title={pageSavable ? undefined : 'This page cannot be saved'}
+							aria-describedby={pageSavable ? undefined : 'page-unsavable'}
+							onClick={startLockedBookmark}
+						>
+							{busy === 'bookmark-locked' ? (
+								<LoaderCircle className="h-4 w-4 animate-spin" />
+							) : (
+								<Lock className="h-4 w-4" />
+							)}{' '}
+							Bookmark to locked area
+						</Button>
+					)}
 					<Button
 						size="sm"
 						className="w-full justify-start gap-3 px-3"
@@ -983,6 +1031,16 @@ function Popup() {
 					</form>
 				</DialogContent>
 			</Dialog>
+			{!privateWindow && (
+				<LockedSaveDialog
+					open={lockedTab !== null}
+					title={lockedTab?.title ?? ''}
+					url={lockedTab?.url ?? ''}
+					settings={state?.settings}
+					showStatus={showStatus}
+					onOpenChange={(open) => !open && setLockedTab(null)}
+				/>
+			)}
 			<Dialog open={bookmarkOpen} onOpenChange={setBookmarkOpen}>
 				<DialogContent size="sm">
 					<form onSubmit={saveBookmark}>

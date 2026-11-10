@@ -4,7 +4,11 @@ import {
 	EnvelopeError,
 	ENVELOPE_MIN_ITERATIONS,
 	decryptBytes,
+	decryptBytesKeepingKey,
+	decryptBytesWithKey,
 	encryptBytes,
+	encryptBytesKeepingKey,
+	encryptBytesWithKey,
 	looksEncrypted,
 } from '../src/app/crypto-envelope';
 
@@ -156,4 +160,54 @@ test('the same password typed in composed or decomposed form decrypts', async ()
 		value: composed,
 	});
 	assert.deepEqual(await decryptBytes(envelope, decomposed), plain);
+});
+
+test('a session key reseals data without the credential, and the credential still opens the result', async () => {
+	const first = await encryptBytesKeepingKey(plain, password);
+	assert.equal(first.key.length, 32);
+	assert.deepEqual(await decryptBytes(first.envelope, password.value), plain);
+	assert.deepEqual(await decryptBytesWithKey(first.envelope, first.key), plain);
+
+	const changed = new TextEncoder().encode('{"secret":"changed"}');
+	const again = await encryptBytesWithKey(changed, first.key, first.envelope);
+	assert.deepEqual(await decryptBytes(again, password.value), changed);
+	// Same salt and work factor, a fresh nonce.
+	assert.deepEqual(again.slice(0, 12 + 16), first.envelope.slice(0, 12 + 16));
+	assert.notDeepEqual(again.slice(28, 40), first.envelope.slice(28, 40));
+});
+
+test('opening with the credential also hands back the key that opens it', async () => {
+	const envelope = await encryptBytes(plain, password);
+	const opened = await decryptBytesKeepingKey(envelope, password.value);
+	assert.deepEqual(opened.data, plain);
+	assert.deepEqual(await decryptBytesWithKey(envelope, opened.key), plain);
+	await failure(decryptBytesKeepingKey(envelope, 'wrong credential'));
+});
+
+test('a wrong session key or a changed file fails like a wrong credential', async () => {
+	const first = await encryptBytesKeepingKey(plain, password);
+	const other = await encryptBytesKeepingKey(plain, password);
+	const error = await failure(decryptBytesWithKey(first.envelope, other.key));
+	assert.equal(error.code, 'wrong-credential');
+	const damaged = new Uint8Array(first.envelope);
+	damaged[5] = 9;
+	assert.equal(
+		(await failure(decryptBytesWithKey(damaged, first.key))).code,
+		'unsupported',
+	);
+	assert.equal(
+		(await failure(decryptBytesWithKey(new Uint8Array(5), first.key))).code,
+		'not-encrypted',
+	);
+	const tail = new Uint8Array(first.envelope);
+	tail[tail.length - 1] = (tail.at(-1) ?? 0) === 0 ? 1 : 0;
+	assert.equal(
+		(await failure(decryptBytesWithKey(tail, first.key))).code,
+		'wrong-credential',
+	);
+	assert.equal(
+		(await failure(encryptBytesKeepingKey(plain, {kind: 'pin', value: '12'})))
+			.code,
+		'invalid-credential',
+	);
 });

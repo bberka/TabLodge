@@ -25,8 +25,9 @@ Data stays in local extension storage within your browser profile.
 | `tablodge.backups`                                                         | Automatic, manual, and safety backups of sessions, bookmarks, and settings                                                                 |
 | `tablodge.trash`                                                           | Deleted sessions, saved links, bookmarks, and columns                                                                                      |
 | `tablodge.undo`                                                            | Temporary copies used to undo recent actions, kept for up to two minutes                                                                   |
+| `tablodge.locked`                                                          | The locked area: one encrypted entry holding its bookmarks, plus the kind of credential (PIN or password) and the automatic lock time, which are not secret |
 
-These keys use `chrome.storage.local`. A copy of the theme and accent choices also lives in the extension's `localStorage` under `tablodge.uiTheme` and `tablodge.uiAccent` so pages can apply it before rendering. A temporary flag in `chrome.storage.session` helps ignore bulk browser bookmark imports.
+These keys use `chrome.storage.local`. A copy of the theme and accent choices also lives in the extension's `localStorage` under `tablodge.uiTheme` and `tablodge.uiAccent` so pages can apply it before rendering. A temporary flag in `chrome.storage.session` helps ignore bulk browser bookmark imports. While the locked area is unlocked, `chrome.storage.session` also holds its key (see [Locked area](#locked-area)).
 
 Snapshots contain tab titles, URLs, pinned state, tab groups, split view pairs, the active tab, and window layout information. They skip incognito windows, excluded sites, and pages other than ordinary HTTP or HTTPS websites. Snapshots are enabled by default; you can turn them off in **Settings › Recovery & backups**.
 
@@ -50,6 +51,16 @@ Temporary private data also clears if the extension is disabled, reloaded, or up
 
 Two temporary coordination keys, `tablodge.lock.normal` and `tablodge.lock.private`, hold only write order numbers and flags in browser session storage. They prevent concurrent saves from overwriting one another and contain no browsing data.
 
+### Locked area
+
+The locked area is optional and off until you set it up from the bookmark toolbar menu or **Settings › Data**. You choose a PIN (4 to 8 digits) or a password (8 to 128 characters). TabLodge encrypts the bookmarks in it with AES-256 in GCM mode, using a key derived with PBKDF2 (SHA-256, 600,000 iterations) and a random salt and nonce, the same scheme as protected backups. The PIN or password is never stored, sent, or saved as a hint, so a lost one cannot be recovered. TabLodge says so before it creates the lock.
+
+Titles and addresses in the locked area exist in plain text only in memory while it is unlocked. They are not in `tablodge.state` or the bookmark records, so search, the palette, the address bar, the saved page indicator, duplicate checks, statistics, snapshots, the trash bin, Undo records, automatic and safety backups, and JSON, HTML, CSV, Markdown, and URL list exports never include them. A full backup ZIP carries the encrypted entry as it is, as `locked.json`. Restoring a backup that has one replaces your locked area and leaves it locked. Locked bookmarks that you move to the board become ordinary bookmarks. Deleting from the locked area is permanent, because the trash bin is not encrypted. Erase in **Settings › Data** does not remove the locked area; use **Remove the lock** for that.
+
+Unlocking derives a key from your entry and keeps that key in `chrome.storage.session`, which lives in memory and is cleared when the browser closes. It is never written to disk by TabLodge and is not part of any backup. The area locks again after the idle time you set (5 minutes by default, or never until the browser closes), when you choose **Lock now**, and on browser restart. After five wrong entries in a row, further tries wait 30 seconds. Private windows cannot reach the locked area.
+
+A PIN has at most 100 million combinations. Someone who copies your browser profile files can try all of them offline, so a short PIN protects little against that. A password is much stronger. The lock does not hide that TabLodge has a locked area or how many bookmarks it holds, and it does not protect you from someone who uses your unlocked browser while the area is open.
+
 ### Saved data
 
 Your saved sessions and bookmarks stay until you delete them. The optional auto-archive setting only moves old sessions into an Archived folder; it never deletes them. Deleted items go to the trash bin for 7, 30, or 90 days, depending on your setting. Snapshots, backups, trash, and Undo records have retention or size limits. You can clear recovery data from **Settings › Recovery & backups**.
@@ -58,7 +69,7 @@ Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data cr
 
 If you enable **Also save a copy to Downloads**, TabLodge writes backup JSON files to `Downloads/TabLodge/`. It doesn't upload them. Turning the option off or uninstalling the extension doesn't delete files already written there; you must remove those yourself.
 
-Exports are not encrypted unless you choose to protect a full backup. JSON, HTML, CSV, Markdown, and URL list exports, and full backup ZIP files you leave unprotected, may contain sensitive titles, URLs, or notes. The full backup also includes settings, excluded sites, theme and accent, snapshot history, and trash. Keep these files private and remember that a folder you sync through another app may upload them.
+Exports are not encrypted unless you choose to protect a full backup (the locked area in a full backup stays encrypted either way). JSON, HTML, CSV, Markdown, and URL list exports, and full backup ZIP files you leave unprotected, may contain sensitive titles, URLs, or notes. The full backup also includes settings, excluded sites, theme and accent, snapshot history, and trash. Keep these files private and remember that a folder you sync through another app may upload them.
 
 When you back up everything, you can protect the file with a PIN or a password. TabLodge then encrypts it on your device with AES-256 in GCM mode, using a key derived from your entry with PBKDF2 (SHA-256, 600,000 iterations) and a random salt and nonce per file. The PIN or password is never stored, sent, or saved as a hint, so a lost one cannot be recovered. A PIN has at most 100 million combinations, so anyone who copies the file can try them all offline; use a password for sensitive data. Encryption protects only the file you export. The automatic backups kept in the extension's storage, the Downloads copies, safety backups, snapshots, and the library itself are not encrypted. Only the full backup ZIP can be protected.
 

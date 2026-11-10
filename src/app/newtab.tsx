@@ -34,6 +34,7 @@ import {
 	History,
 	Inbox,
 	LayoutGrid,
+	Lock,
 	MoreHorizontal,
 	PanelLeft,
 	Pencil,
@@ -105,6 +106,8 @@ import {
 	BackupDialog,
 	DuplicateBookmarksDialog,
 	ImportDialog,
+	LockedDialog,
+	LockedSaveDialog,
 	SnapshotsDialog,
 	TrashDialog,
 	useShareDialog,
@@ -296,6 +299,13 @@ function NewTab() {
 	} | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+	const [lockedOpen, setLockedOpen] = useState(false);
+	const [lockedSave, setLockedSave] = useState<{
+		title: string;
+		url: string;
+	} | null>(null);
+	// The locked area is for normal windows; private windows have no access to it.
+	const lockedAvailable = !chrome.extension.inIncognitoContext;
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
@@ -612,6 +622,19 @@ function NewTab() {
 		})();
 	}, [holding]);
 
+	// `?locked=1` (the popup and the save window send people here to set the locked area up) opens it once.
+	useEffect(() => {
+		if (new URLSearchParams(location.search).get('locked') !== '1') {
+			return;
+		}
+
+		history.replaceState(null, '', stripSearchParams(location, ['locked']));
+		if (lockedAvailable) {
+			setLockedOpen(true);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on purpose
+	}, []);
+
 	// Drops the one-time `?q=` from the address bar after the first render.
 	useEffect(() => {
 		if (initialQuery) {
@@ -867,6 +890,19 @@ function NewTab() {
 	async function saveBookmark(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!bookmarkEdit || busy === 'bookmark-save') {
+			return;
+		}
+
+		// The "Save to locked area" button submits this form too, to get the same field checks.
+		const {submitter} = event.nativeEvent as SubmitEvent;
+		if (submitter?.dataset.destination === 'locked') {
+			const address = webUrl(bookmarkEdit.url);
+			if (address) {
+				setLockedSave({title: bookmarkEdit.title, url: address});
+				setDialog(null);
+				setBookmarkEdit(null);
+			}
+
 			return;
 		}
 
@@ -2292,6 +2328,13 @@ function NewTab() {
 								icon: Copy,
 								onSelect: () => setDuplicatesOpen(true),
 							},
+							{
+								id: 'locked',
+								label: 'Locked bookmarks',
+								icon: Lock,
+								hidden: !lockedAvailable,
+								onSelect: () => setLockedOpen(true),
+							},
 							{type: 'separator'},
 							{
 								id: 'trash',
@@ -2749,6 +2792,29 @@ function NewTab() {
 				onOpenChange={setDuplicatesOpen}
 				onChanged={reload}
 			/>
+			{lockedAvailable && (
+				<>
+					<LockedDialog
+						open={lockedOpen}
+						columns={columns}
+						showStatus={showStatus}
+						onOpenChange={setLockedOpen}
+						onBoardChanged={() => void reload()}
+					/>
+					<LockedSaveDialog
+						open={lockedSave !== null}
+						title={lockedSave?.title ?? ''}
+						url={lockedSave?.url ?? ''}
+						settings={settings}
+						showStatus={showStatus}
+						onSetup={() => {
+							setLockedSave(null);
+							setLockedOpen(true);
+						}}
+						onOpenChange={(open) => !open && setLockedSave(null)}
+					/>
+				</>
+			)}
 			<ImportDialog
 				open={importOpen}
 				initialKind="bookmarks"
@@ -2852,6 +2918,20 @@ function NewTab() {
 									<X aria-hidden="true" />
 									Cancel
 								</Button>
+								{lockedAvailable &&
+									!bookmarkEdit?.id &&
+									!bookmarkToSession &&
+									bookmarkEdit?.columnId !== NEW_COLUMN && (
+										<Button
+											type="submit"
+											variant="outline"
+											data-destination="locked"
+											disabled={busy === 'bookmark-save'}
+										>
+											<Lock aria-hidden="true" />
+											Save to locked area
+										</Button>
+									)}
 								<Button type="submit" disabled={busy === 'bookmark-save'}>
 									<Save aria-hidden="true" />
 									{bookmarkToSession

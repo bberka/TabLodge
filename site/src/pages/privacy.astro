@@ -16,7 +16,7 @@ const permissions = [
 	['clipboardWrite', 'Copying bookmark URLs and session links when you ask.'],
 	['sidePanel (Chromium only)', 'Showing bookmarks, sessions and open tabs in the browser side panel. Firefox shows the same page in its sidebar, which needs no permission.'],
 	['search', 'Running a web search with your default engine, only when you choose "Search the web".'],
-	['alarms', 'Scheduling crash-recovery snapshots, automatic backups, trash bin cleanup and archiving old sessions.'],
+	['alarms', 'Scheduling crash-recovery snapshots, automatic backups, trash bin cleanup, archiving old sessions and the idle timer of the locked area.'],
 	['activeTab, scripting', 'Used by the palette shortcut, which shows the palette over that one page when you press it (the default; Settings can switch to a window). No install warning, no site access, and nothing runs on pages until you press the shortcut.'],
 	['downloads (optional)', 'Saving backup copies to your Downloads folder, only if you turn that on; turning it off gives the permission back.'],
 ];
@@ -68,6 +68,9 @@ const permissions = [
 		</ul>
 		<p>
 			TabLodge reads tab details to save and restore sessions, find duplicates, show and search open tabs, and capture recovery snapshots. Snapshots are enabled by default and can be turned off in Settings, under Recovery &amp; backups. It reads your browser's bookmark tree only when you ask to import it. If you enable the browser bookmark setting, it also watches for newly created bookmarks to offer to add that page or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.
+		</p>
+		<p>
+			The optional <strong>locked area</strong> keeps bookmarks in one encrypted entry (<code>tablodge.locked</code>) that opens only with a PIN or password you choose. TabLodge encrypts it on your device with AES-256-GCM and a key derived by PBKDF2, and stores neither the PIN or password nor a hint, so a lost one cannot be recovered. While the area is unlocked, its key is kept in browser session storage, which lives in memory and clears when the browser closes. The area locks after the idle time you set (5 minutes by default) and when you choose Lock now. Locked bookmarks are not in search, snapshots, the trash bin, Undo copies, automatic backups, or exports. A full backup includes the entry still encrypted. A PIN has at most 100 million combinations, so someone who copies your profile files can try them all offline; use a password for anything sensitive. Private windows cannot open the locked area.
 		</p>
 		<p>
 			Saved sessions and bookmarks stay until you delete them. Trash is kept for 7, 30 or 90 days, depending on your setting. Snapshots, backups and Undo copies also have retention or size limits. You can clear recovery data in <strong>Settings &rsaquo; Recovery &amp; backups</strong>. Erasing sessions or bookmarks in <strong>Settings &rsaquo; Data</strong> creates a safety backup, so check the backup history too if you want to remove retained copies. Removing the extension deletes its browser storage.
