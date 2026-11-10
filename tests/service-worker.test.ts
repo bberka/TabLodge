@@ -3,6 +3,7 @@ import {Buffer} from 'node:buffer';
 import {webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
+import process from 'node:process';
 import vm from 'node:vm';
 import {test} from 'vite-plus/test';
 import {ICON_IDS} from '../src/app/icon-ids';
@@ -17,6 +18,12 @@ import type {
 	TabLodgeMessage,
 	TabLodgeMessageType,
 } from '../src/app/types';
+import {
+	logicalState,
+	recordsLayout,
+	sortKeysDeep,
+	storeLibrary,
+} from './library-fixtures';
 import {buildWorkerSource} from './worker-source';
 
 // The service worker is a classic script with no exports, so each harness runs the
@@ -76,6 +83,15 @@ type SidePanelCall = {
  `misplacedCreateUrls` opens those tabs at the start of the window, as if the browser placed them elsewhere.
  */
 type HarnessOptions = {
+	/**
+	Start with the library in the old single entry, as before the update, so the worker has to migrate it.
+	By default the fixture is stored in the per-record layout.
+	*/
+	legacyLayout?: boolean;
+	/**
+	Skip keeping `state` in step with storage (it re-reads the whole library on every storage call). For timing runs.
+	*/
+	withoutStateMirror?: boolean;
 	incognitoContext?: boolean;
 	failedCreateUrls?: string[];
 	bookmarkTree?: unknown[];
@@ -198,8 +214,8 @@ function createWorkerHarness(
 ) {
 	let messageListener: MessageListener | undefined;
 	const listeners: Record<string, EventListener> = {};
-	// Seeded with the fixture; the worker's storage writes replace it with the normalized store.
-	const state = structuredClone(initialState) as StoredState;
+	// Storage holds the fixture as the old single entry; the worker migrates it to the per-record layout on its
+	// first mutation. `state` below is the library as the app sees it, whichever way it is stored.
 	const openedTabs: MockTab[] = [];
 	const removedTabIds: number[] = [];
 	const sidePanelCalls: SidePanelCall[] = [];
@@ -215,9 +231,43 @@ function createWorkerHarness(
 	const menuItems: MenuItem[] = [];
 	let storageFailure: Error | null = null;
 	let storageFailureKey: string | undefined;
-	const extraStorage: Record<string, unknown> = structuredClone(
-		options.storage ?? {},
-	);
+	const extraStorage: Record<string, unknown> = {
+		...(!options.legacyLayout && recordsLayout(structuredClone(initialState))),
+		...structuredClone(options.storage ?? {}),
+	};
+	extraStorage[storageKey] ??= structuredClone(initialState);
+	// `state` is a plain object that mirrors the stored library: a test can edit it in place, and what the worker
+	// writes shows up in it. The two are synced whenever the worker touches storage.
+	const state = (logicalState(extraStorage) ?? {}) as StoredState;
+	let syncedState = JSON.stringify(state);
+	const pushState = () => {
+		if (options.withoutStateMirror) {
+			return;
+		}
+
+		const now = JSON.stringify(state);
+		if (now === syncedState) {
+			return;
+		}
+
+		storeLibrary(extraStorage, structuredClone(state));
+		syncedState = now;
+	};
+
+	const pullState = () => {
+		if (options.withoutStateMirror) {
+			return;
+		}
+
+		const next = (logicalState(extraStorage) ?? {}) as StoredState;
+		for (const key of Object.keys(state)) {
+			Reflect.deleteProperty(state, key);
+		}
+
+		Object.assign(state, next);
+		syncedState = JSON.stringify(state);
+	};
+
 	const alarms = new Map<
 		string,
 		{name: string; periodInMinutes?: number; delayInMinutes?: number}
@@ -333,6 +383,8 @@ function createWorkerHarness(
 	// Every storage.local.get / set / remove, so tests can assert what a code path reads and writes.
 	const storageGets: string[][] = [];
 	const storageSets: string[][] = [];
+	// Serialized characters handed to storage.local.set, to see how much a code path writes.
+	const storageWrites = {calls: 0, chars: 0};
 	const changeListeners: Array<
 		(changes: Record<string, unknown>, area: string) => void
 	> = [];
@@ -401,19 +453,19 @@ function createWorkerHarness(
 		storage: {
 			local: {
 				async get(keys: string[]) {
+					pushState();
 					storageGets.push([...keys]);
 					const out: Record<string, unknown> = {};
 					for (const key of keys) {
-						if (key === storageKey && state) {
-							out[key] = structuredClone(state);
-						} else if (Object.hasOwn(extraStorage, key)) {
-							out[key] = structuredClone(extraStorage[key]);
+						if (Object.hasOwn(extraStorage, key)) {
+							out[key] = sortKeysDeep(structuredClone(extraStorage[key]));
 						}
 					}
 
 					return out;
 				},
 				async set(values: Record<string, unknown>) {
+					pushState();
 					if (
 						storageFailure &&
 						(!storageFailureKey || Object.hasOwn(values, storageFailureKey))
@@ -422,34 +474,33 @@ function createWorkerHarness(
 					}
 
 					storageSets.push(Object.keys(values));
+					storageWrites.calls += 1;
+					storageWrites.chars += JSON.stringify(values).length;
 					const changes: Record<string, unknown> = {};
 					for (const [key, value] of Object.entries(values)) {
-						if (key === storageKey) {
-							const oldValue = structuredClone(state);
-							Object.assign(state, structuredClone(value));
-							changes[key] = {oldValue, newValue: structuredClone(state)};
-						} else {
-							const oldValue = structuredClone(extraStorage[key]);
-							extraStorage[key] = structuredClone(value);
-							changes[key] = {oldValue, newValue: structuredClone(value)};
-						}
+						const oldValue = structuredClone(extraStorage[key]);
+						extraStorage[key] = structuredClone(value);
+						changes[key] = {oldValue, newValue: structuredClone(value)};
 					}
 
+					pullState();
 					notifyChanged(changes);
 				},
 				async remove(keys: string | string[]) {
+					pushState();
 					const changes: Record<string, unknown> = {};
 					for (const key of [keys].flat()) {
 						changes[key] = {oldValue: structuredClone(extraStorage[key])};
 						Reflect.deleteProperty(extraStorage, key);
 					}
 
+					pullState();
 					notifyChanged(changes);
 				},
 				async getBytesInUse(keys: string[]) {
 					let total = 0;
 					for (const key of keys) {
-						const value = key === storageKey ? state : extraStorage[key];
+						const value = extraStorage[key];
 						total += value === undefined ? 0 : JSON.stringify(value).length;
 					}
 
@@ -1023,14 +1074,29 @@ function createWorkerHarness(
 		state,
 		storageGets,
 		storageSets,
+		storageWrites,
+		/**
+		Calls `listener` with the keys of every storage write, as the browser would tell pages.
+		*/
+		onStorageChanged(listener: (keys: string[]) => void) {
+			changeListeners.push((changes) => {
+				listener(Object.keys(changes));
+			});
+		},
 		/**
 		Another extension context (a page) writing the state: the worker only learns of it through storage.onChanged.
 		*/
 		externalSetState(next: Partial<StoredState>) {
-			const oldValue = structuredClone(state);
+			pushState();
+			const oldValue = structuredClone(extraStorage[storageKey]);
 			Object.assign(state, structuredClone(next));
+			storeLibrary(extraStorage, structuredClone(state));
+			syncedState = JSON.stringify(state);
 			notifyChanged({
-				[storageKey]: {oldValue, newValue: structuredClone(state)},
+				[storageKey]: {
+					oldValue,
+					newValue: structuredClone(extraStorage[storageKey]),
+				},
 			});
 		},
 		async sendMessage<M extends TabLodgeMessage>(
@@ -6133,7 +6199,9 @@ test('ARCHIVE_GROUP uses an existing Archived folder', async () => {
 });
 
 test('auto-archive is off by default, runs at browser start, and its alarm follows the setting', async () => {
-	const off = createWorkerHarness(stateWithSession());
+	const off = createWorkerHarness(stateWithSession(), undefined, {
+		legacyLayout: true,
+	});
 	await off.fire('alarm', {name: 'tablodge-archive'});
 	assert.equal(off.state.groups[0].folderId, 'unfiled');
 	assert.equal(off.state.folders.length, 2);
@@ -8254,28 +8322,263 @@ test('the trash is capped by total size, dropping the oldest items first', async
 	);
 });
 
-test('the schema migration is written once, inside a mutation, and reads never write', async () => {
+// ---- Storage layout migration ----
+
+const PREMIGRATION = 'tablodge.state.premigration';
+const MIGRATION_MARKER = 'tablodge.migration';
+const sessionKeysOf = (storage: Record<string, unknown>) =>
+	Object.keys(storage).filter((key) => key.startsWith('tablodge.session.'));
+
+/**
+A library of `count` sessions with `tabs` links each, in the old single entry.
+*/
+function legacyLibrary(count: number, tabs = 3): StoredState {
 	const state = stateWithSession();
-	state.schemaVersion = 3;
-	const harness = createWorkerHarness(state);
-	const stateWrites = () =>
-		harness.storageSets.filter((keys) => keys.includes(storageKey)).length;
-	await harness.sendMessage({type: 'GET_STATE'});
-	await harness.sendMessage({type: 'GET_STATE'});
-	assert.equal(stateWrites(), 0, 'reads do not migrate');
-	assert.notEqual(harness.state.schemaVersion, 7);
-	const first = await harness.sendMessage({
-		type: 'ADD_BOOKMARK',
-		bookmark: {url: 'https://one.example/'},
+	state.groups = Array.from({length: count}, (_, index) => ({
+		id: `legacy-${index}`,
+		name: `Legacy ${index}`,
+		folderId: 'unfiled',
+		createdAt: 1_700_000_000_000 + index,
+		updatedAt: 1_700_000_000_000 + index,
+		tabs: Array.from({length: tabs}, (_unused, tab) => ({
+			id: `legacy-${index}-${tab}`,
+			url: `https://legacy${index}.example/${tab}`,
+			title: `Legacy ${index} tab ${tab}`,
+			createdAt: 1_700_000_000_000,
+		})),
+	}));
+	return state;
+}
+
+test('an old single entry library is moved to per-session records when the worker starts', async () => {
+	const seed = legacyLibrary(5);
+	const harness = createWorkerHarness(seed, undefined, {legacyLayout: true});
+	await settle();
+	const index = harness.extraStorage[storageKey] as {
+		layout: string;
+		schemaVersion: number;
+		sessions: unknown[];
+	};
+	assert.equal(index.layout, 'records');
+	assert.equal(index.schemaVersion, 10);
+	assert.equal(index.sessions.length, 5);
+	assert.equal(sessionKeysOf(harness.extraStorage).length, 5);
+	assert.equal(harness.extraStorage[MIGRATION_MARKER], undefined);
+	const copy = harness.extraStorage[PREMIGRATION] as {state: unknown};
+	assert.deepEqual(copy.state, seed, 'the old entry is kept exactly as it was');
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	assert.deepEqual(
+		structuredClone(response.groups?.map((group) => group.id)),
+		seed.groups.map((group) => group.id),
+	);
+	assert.equal(
+		response.groups?.[2].tabs[1].url,
+		'https://legacy2.example/1',
+		'tabs survive the move',
+	);
+	assert.equal(backupsOf(harness).safety.length, 1);
+	assert.equal(
+		backupsOf(harness).safety[0].reason,
+		'Before upgrading how the library is stored',
+	);
+});
+
+test('an upgraded library is not migrated again, and a save writes only the changed session', async () => {
+	const harness = createWorkerHarness(legacyLibrary(30, 20), undefined, {
+		legacyLayout: true,
 	});
-	assert.equal(first.ok, true, first.error);
-	assert.equal(stateWrites(), 2, 'one migration write plus the mutation');
-	const second = await harness.sendMessage({
-		type: 'ADD_BOOKMARK',
-		bookmark: {url: 'https://two.example/'},
+	await settle();
+	const copyBefore = structuredClone(harness.extraStorage[PREMIGRATION]);
+	harness.storageSets.length = 0;
+	const renamed = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'legacy-7',
+		fields: {name: 'Renamed'},
 	});
-	assert.equal(second.ok, true, second.error);
-	assert.equal(stateWrites(), 3, 'no further migration');
+	assert.equal(renamed.ok, true, renamed.error);
+	const written = harness.storageSets.flat();
+	assert.deepEqual(
+		written.filter((key) => key.startsWith('tablodge.session.')),
+		['tablodge.session.legacy-7.2'],
+		'only the edited session is written',
+	);
+	assert.equal(
+		written.some((key) => key.startsWith('tablodge.bookmarks.')),
+		false,
+		'unchanged bookmarks are not rewritten',
+	);
+	assert.deepEqual(harness.extraStorage[PREMIGRATION], copyBefore);
+	assert.equal(backupsOf(harness).safety.length, 1, 'one backup for the move');
+	const settings = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {closeOnSave: true},
+	});
+	assert.equal(settings.ok, true, settings.error);
+	assert.equal(
+		harness.storageSets
+			.flat()
+			.filter((key) => key.startsWith('tablodge.session.')).length,
+		1,
+		'a settings change writes no session',
+	);
+});
+
+test('a migration that cannot finish leaves the old library in charge and working', async () => {
+	const seed = legacyLibrary(4);
+	const harness = createWorkerHarness(seed, undefined, {legacyLayout: true});
+	harness.setStorageFailure(
+		new Error('QUOTA_BYTES quota exceeded'),
+		'tablodge.bookmarks.1',
+	);
+	await settle();
+	const entry = harness.extraStorage[storageKey] as Record<string, unknown>;
+	assert.equal(entry.layout, undefined, 'still the old single entry');
+	assert.ok(sessionKeysOf(harness.extraStorage).length <= 4);
+	assert.deepEqual(
+		(harness.extraStorage[PREMIGRATION] as {state: unknown}).state,
+		seed,
+		'the recovery copy exists before anything else is written',
+	);
+	const read = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(read.groups?.length, 4, 'the app still reads the old entry');
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'While broken', url: 'https://broken.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	const after = harness.extraStorage[storageKey] as {
+		bookmarks: Array<{title: string}>;
+		schemaVersion: number;
+	};
+	assert.equal(after.schemaVersion, 9, 'older builds can still open it');
+	assert.equal(after.bookmarks.at(-1)?.title, 'While broken');
+});
+
+test('a worker restart after an interrupted migration finishes it without losing or duplicating a session', async () => {
+	const seed = legacyLibrary(6, 4);
+	const first = createWorkerHarness(seed, undefined, {legacyLayout: true});
+	first.setStorageFailure(new Error('worker stopped'), 'tablodge.bookmarks.1');
+	await settle();
+	assert.ok(
+		first.extraStorage[MIGRATION_MARKER],
+		'the marker records the unfinished work',
+	);
+	const restarted = createWorkerHarness(seed, undefined, {
+		legacyLayout: true,
+		storage: structuredClone(first.extraStorage),
+	});
+	await settle();
+	const index = restarted.extraStorage[storageKey] as {
+		layout: string;
+		sessions: Array<{id: string}>;
+	};
+	assert.equal(index.layout, 'records');
+	assert.deepEqual(
+		structuredClone(index.sessions.map((entry) => entry.id)),
+		seed.groups.map((group) => group.id),
+	);
+	assert.equal(restarted.extraStorage[MIGRATION_MARKER], undefined);
+	const response = await restarted.sendMessage({type: 'GET_STATE'});
+	assert.equal(response.groups?.length, 6);
+	assert.equal(
+		response.groups?.reduce((sum, group) => sum + group.tabs.length, 0),
+		24,
+	);
+	assert.equal(
+		backupsOf(restarted).safety.length,
+		1,
+		'the resumed run does not take another safety backup',
+	);
+});
+
+test('a library written by a dev tool in the current state shape is migrated and stays editable', async () => {
+	const seed = legacyLibrary(3);
+	seed.schemaVersion = 10;
+	const harness = createWorkerHarness(seed, undefined, {legacyLayout: true});
+	await settle();
+	assert.equal(
+		(harness.extraStorage[storageKey] as {layout?: string}).layout,
+		'records',
+	);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://tool.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal(harness.state.bookmarks.length, 1);
+});
+
+test('a library saved by a newer version is left alone', async () => {
+	const future = {schemaVersion: 11, groups: [], note: 'newer'};
+	const harness = createWorkerHarness(future, undefined, {
+		legacyLayout: true,
+	});
+	await settle();
+	assert.deepEqual(harness.extraStorage[storageKey], future);
+	const response = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(response.ok, false);
+	assert.match(response.error ?? '', /newer version/);
+	const write = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://x.example/'},
+	});
+	assert.equal(write.ok, false);
+	assert.deepEqual(harness.extraStorage[storageKey], future);
+});
+
+test('Undo restores a library across the per-record layout', async () => {
+	const harness = createWorkerHarness(legacyLibrary(4), undefined, {
+		legacyLayout: true,
+	});
+	await settle();
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_GROUP',
+		groupId: 'legacy-1',
+	});
+	assert.equal(deleted.ok, true, deleted.error);
+	assert.equal(harness.state.groups.length, 3);
+	const erased = await harness.sendMessage({
+		type: 'ERASE_DATA',
+		scope: 'sessions',
+	});
+	assert.equal(erased.ok, true, erased.error);
+	assert.equal(harness.state.groups.length, 0);
+	assert.ok(erased.undoId);
+	const undone = await harness.sendMessage({type: 'UNDO', id: erased.undoId});
+	assert.equal(undone.ok, true, undone.error);
+	assert.deepEqual(
+		structuredClone(harness.state.groups.map((group) => group.id)),
+		['legacy-0', 'legacy-2', 'legacy-3'],
+	);
+	assert.deepEqual(
+		structuredClone(harness.state.groups[1].tabs.map((tab) => tab.url)),
+		[0, 1, 2].map((tab) => `https://legacy2.example/${tab}`),
+	);
+});
+
+test('the dashboard reloads and the menus follow when a commit writes the index', async () => {
+	const harness = createWorkerHarness(legacyLibrary(3), undefined, {
+		legacyLayout: true,
+	});
+	await settle();
+	const changes: string[][] = [];
+	harness.onStorageChanged((keys) => {
+		changes.push(keys);
+	});
+	await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'legacy-0',
+		fields: {name: 'Renamed for menus'},
+	});
+	assert.ok(
+		changes.some((keys) => keys.includes(storageKey)),
+		'every commit changes tablodge.state, which pages and menus watch',
+	);
+	assert.equal(
+		changes.some((keys) => keys.length > 1 && keys.includes(storageKey)),
+		false,
+		'the index is written on its own, after the records',
+	);
 });
 
 test('favicon URLs are no longer stored and are stripped from older data', async () => {
@@ -10277,6 +10580,141 @@ test('omnibox: a bookmark saved after the first search shows up in the next one'
 	assert.equal(added.ok, true, added.error);
 	assert.equal((await suggest('lemmings')).length, 1);
 });
+
+// ---- Scale: 10,000+ saved tabs ----
+
+/**
+`sessions` sessions of `tabs` saved tabs each, plus bookmarks, in the old single entry.
+*/
+function bigLibrary(sessions: number, tabs: number): StoredState {
+	const state = legacyLibrary(sessions, tabs);
+	state.bookmarks = Array.from({length: 300}, (_, index) => ({
+		id: `big-bookmark-${index}`,
+		title: `Bookmark ${index}`,
+		url: `https://bookmark${index}.example/`,
+		columnId: 'bookmark-default',
+		createdAt: 1_700_000_000_000,
+		updatedAt: 1_700_000_000_000,
+	}));
+	return state;
+}
+
+test(
+	'a 10,000+ tab library saves a small edit by writing a small part of it',
+	{timeout: 120_000},
+	async () => {
+		const seed = bigLibrary(25, 450);
+		const total = seed.groups.reduce(
+			(sum, group) => sum + group.tabs.length,
+			0,
+		);
+		assert.ok(total >= 10_000, `fixture has ${total} tabs`);
+		const libraryChars = JSON.stringify(seed).length;
+		const harness = createWorkerHarness(seed, undefined, {
+			legacyLayout: true,
+			withoutStateMirror: true,
+		});
+		const startedAt = performance.now();
+		await settle();
+		// Includes the harness's settle ticks: compare runs, not absolute numbers.
+		const startupMs = performance.now() - startedAt;
+		// Each edit runs several times; the numbers are per edit. A first edit settles anything the start left over.
+		const warmUp = await harness.sendMessage({
+			type: 'UPDATE_SETTINGS',
+			settings: {closeOnSave: false},
+		});
+		assert.equal(warmUp.ok, true, warmUp.error);
+		const measure = async (
+			label: string,
+			run: (round: number) => Promise<unknown>,
+			rounds = 5,
+		) => {
+			harness.storageWrites.calls = 0;
+			harness.storageWrites.chars = 0;
+			const began = performance.now();
+			for (let round = 0; round < rounds; round += 1) {
+				await run(round);
+			}
+
+			return {
+				label,
+				ms: Math.round((performance.now() - began) / rounds),
+				chars: Math.round(harness.storageWrites.chars / rounds),
+				calls: harness.storageWrites.calls / rounds,
+			};
+		};
+
+		const rename = await measure('rename one session', async (round) => {
+			const response = await harness.sendMessage({
+				type: 'UPDATE_GROUP',
+				groupId: 'legacy-12',
+				fields: {name: `Renamed ${round}`},
+			});
+			assert.equal(response.ok, true, response.error);
+		});
+		const linkAdded = await measure(
+			'add one link to a session',
+			async (round) => {
+				const response = await harness.sendMessage({
+					type: 'ADD_LINKS_TO_SESSION',
+					groupId: 'legacy-3',
+					links: [{url: `https://added${round}.example/`, title: 'Added'}],
+				});
+				assert.equal(response.ok, true, response.error);
+			},
+		);
+		const toggle = await measure('change one setting', async (round) => {
+			const response = await harness.sendMessage({
+				type: 'UPDATE_SETTINGS',
+				settings: {closeOnSave: round % 2 === 0},
+			});
+			assert.equal(response.ok, true, response.error);
+		});
+		const bookmark = await measure('add one bookmark', async (round) => {
+			const response = await harness.sendMessage({
+				type: 'ADD_BOOKMARK',
+				bookmark: {url: `https://one-more${round}.example/`},
+			});
+			assert.equal(response.ok, true, response.error);
+		});
+		const read = await measure(
+			'read the whole library',
+			async () => {
+				const response = await harness.sendMessage({type: 'GET_STATE'});
+				assert.equal(response.groups?.length, 25);
+			},
+			3,
+		);
+		const rows = [rename, linkAdded, toggle, bookmark, read];
+		process.stdout.write(
+			`SCALE tabs=${total} libraryChars=${libraryChars} startupMs=${Math.round(startupMs)}\n` +
+				rows
+					.map(
+						(row) =>
+							`SCALE ${row.label.padEnd(28)} chars=${String(row.chars).padStart(9)} sets=${row.calls} ms=${row.ms}`,
+					)
+					.join('\n') +
+				'\n',
+		);
+		const response = await harness.sendMessage({type: 'GET_STATE'});
+		assert.equal(
+			response.groups?.reduce((sum, group) => sum + group.tabs.length, 0),
+			total + 5,
+			'no tab lost or duplicated',
+		);
+		const stored = harness.extraStorage[storageKey] as {layout?: string};
+		if (stored.layout !== 'records') {
+			return;
+		}
+
+		assert.ok(rename.chars < libraryChars / 10, 'a rename writes one session');
+		assert.ok(toggle.chars < libraryChars / 10, 'a setting writes no session');
+		assert.ok(
+			bookmark.chars < libraryChars / 5,
+			'a bookmark writes no session',
+		);
+	},
+);
 
 // ---- Batched restores ----
 

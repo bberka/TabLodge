@@ -12,6 +12,7 @@ import type {
 	Settings,
 	TabLodgeMessage,
 } from '../src/app/types';
+import {logicalState, sortKeysDeep, storeLibrary} from './library-fixtures';
 import {buildWorkerSource} from './worker-source';
 
 // Right-click menus. Like tests/service-worker.test.ts, this runs the type-stripped service worker in a
@@ -25,7 +26,6 @@ const workerPath = join(
 	'service-worker.ts',
 );
 const workerSource = await buildWorkerSource();
-const storageKey = 'tablodge.state';
 const manifest = JSON.parse(
 	readFileSync(
 		join(import.meta.dirname, '..', 'extension', 'manifest.json'),
@@ -154,7 +154,18 @@ function createHarness(
 				sendResponse: (response: Response) => void,
 		  ) => unknown)
 		| undefined;
-	const state = structuredClone(initialState);
+	// Storage holds every key the worker writes; `state` mirrors the library the way the app sees it.
+	const stored: Record<string, unknown> = {};
+	storeLibrary(stored, structuredClone(initialState));
+	const state = (logicalState(stored) ?? {}) as typeof initialState;
+	const pullState = () => {
+		for (const key of Object.keys(state)) {
+			Reflect.deleteProperty(state, key);
+		}
+
+		Object.assign(state, logicalState(stored));
+	};
+
 	const sessionStorage: Record<string, unknown> = {};
 	const tabs = structuredClone(initialTabs);
 	const openedTabs: MockTab[] = [];
@@ -214,28 +225,38 @@ function createHarness(
 			},
 			local: {
 				async get(keys: string[]) {
-					return keys.includes(storageKey)
-						? {[storageKey]: structuredClone(state)}
-						: {};
+					return Object.fromEntries(
+						keys
+							.filter((key) => Object.hasOwn(stored, key))
+							.map((key) => [key, sortKeysDeep(structuredClone(stored[key]))]),
+					);
 				},
 				async set(values: Record<string, unknown>) {
-					if (!Object.hasOwn(values, storageKey)) {
-						return;
+					const changes = Object.fromEntries(
+						Object.entries(values).map(([key, value]) => [
+							key,
+							{
+								oldValue: structuredClone(stored[key]),
+								newValue: structuredClone(value),
+							},
+						]),
+					);
+					for (const [key, value] of Object.entries(values)) {
+						stored[key] = structuredClone(value);
 					}
 
-					const oldValue = structuredClone(state);
-					Object.assign(state, structuredClone(values[storageKey]));
-					const newValue = structuredClone(state);
+					pullState();
 					// Chrome delivers onChanged after the write, asynchronously.
-					setTimeout(
-						() =>
-							fire(
-								'storageChanged',
-								{[storageKey]: {oldValue, newValue}},
-								'local',
-							),
-						0,
-					);
+					setTimeout(() => {
+						fire('storageChanged', changes, 'local');
+					}, 0);
+				},
+				async remove(keys: string | string[]) {
+					for (const key of [keys].flat()) {
+						Reflect.deleteProperty(stored, key);
+					}
+
+					pullState();
 				},
 			},
 			onChanged: on('storageChanged'),

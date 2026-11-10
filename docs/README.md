@@ -207,7 +207,7 @@ See [Contributing](CONTRIBUTING.md) for code conventions, testing, and releases.
 extension/              Manifest, icons, HTML shells, service worker, and theme boot script
 src/app/                Extension pages, shared page code, data types, and messages
 src/components/ui/      Local UI primitives built with Radix and Tailwind
-src/shared/             Shared UI helpers, theme handling, and the browser difference helpers (`browser.ts`)
+src/shared/             Shared UI helpers, theme handling, the browser difference helpers (`browser.ts`), and the library storage layout (`library-state.ts`)
 src/lib/                Small utilities
 styles/                 Tailwind entry and theme tokens
 tests/                  Vitest suites and mocked browser APIs
