@@ -13,6 +13,7 @@ import type {ShowStatus} from './common';
 import type * as DuplicateBookmarks from './duplicate-bookmarks-dialog';
 import type * as DataTransfer from './data-transfer';
 import type * as Locked from './locked';
+import type * as LockedDialogModule from './locked-dialog';
 import type * as Recovery from './recovery';
 import type * as TabStats from './tab-stats-dialog';
 
@@ -71,8 +72,8 @@ export const DuplicateBookmarksDialog = lazyDialog<
 );
 
 export const LockedDialog = lazyDialog<
-	ComponentProps<typeof Locked.LockedDialog>
->(async () => (await import('./locked')).LockedDialog);
+	ComponentProps<typeof LockedDialogModule.LockedDialog>
+>(async () => (await import('./locked-dialog')).LockedDialog);
 
 export const LockedSaveDialog = lazyDialog<
 	ComponentProps<typeof Locked.LockedSaveDialog>
