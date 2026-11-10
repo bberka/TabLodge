@@ -10293,11 +10293,6 @@ const manyTabsSession = (
 	return state;
 };
 
-const realPause = async (ms: number) =>
-	new Promise<void>((resolve) => {
-		setTimeout(resolve, ms);
-	});
-
 test('a large restore opens tabs in batches and waits for each batch to load', async () => {
 	const harness = createWorkerHarness(manyTabsSession(130), undefined, {
 		loadingTabs: true,
