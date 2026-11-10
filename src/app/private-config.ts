@@ -7,15 +7,14 @@ export {PRIVATE_ACCENT_DEFAULT, PRIVATE_ACCENT_SAME} from '../shared/accents';
 /**
 Only a change of library mode or setup needs a page reload; the redirect and accent apply live.
 */
-export function privateConfigNeedsReload(
-	previous: {mode?: unknown; configured?: unknown} | undefined,
-	next: {mode?: unknown; configured?: unknown} | undefined,
-) {
+export function privateConfigNeedsReload(previous: unknown, next: unknown) {
+	const before = previous as {mode?: unknown; configured?: unknown} | undefined;
+	const after = next as {mode?: unknown; configured?: unknown} | undefined;
 	return !(
-		previous &&
-		next &&
-		previous.mode === next.mode &&
-		previous.configured === next.configured
+		before &&
+		after &&
+		before.mode === after.mode &&
+		before.configured === after.configured
 	);
 }
 
