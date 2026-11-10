@@ -28,6 +28,7 @@ import {
 	LOCKED_ALARM,
 	LockedError,
 	createLockedStore,
+	lockedUrl,
 } from '../src/shared/locked-store';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
@@ -46,6 +47,7 @@ type Folder = import('../src/app/types').Folder;
 type ImportOptions = import('../src/app/types').ImportOptions;
 type InsertPosition = import('../src/app/types').InsertPosition;
 type LinkEntry = import('../src/app/types').LinkEntry;
+type LockedMoveSource = import('../src/app/types').LockedMoveSource;
 type NativeGroup = import('../src/app/types').NativeGroup;
 type RestoreFailure = import('../src/app/types').RestoreFailure;
 type RestoreOptions = import('../src/app/types').RestoreOptions;
@@ -7575,18 +7577,26 @@ function deleteSnapshot(id: string): Promise<ActionResult<'DELETE_SNAPSHOT'>> {
 	);
 }
 
+/**
+Empties the snapshot history and the live snapshot. Call it inside `snapshotMutate`. Returns how many it removed.
+*/
+async function emptySnapshots(): Promise<number> {
+	const history = await readSnapshotHistory();
+	await writeSnapshotHistory([]);
+	await library.remove(SNAPSHOT_LIVE_KEY);
+	const meta = await readSnapshotMeta();
+	meta.liveSig = '';
+	meta.recovery = null;
+	await writeSnapshotMeta(meta);
+	return history.length;
+}
+
 function clearSnapshots(): Promise<ActionResult<'CLEAR_SNAPSHOTS'>> {
 	return snapshotMutate(() =>
-		withUndo('Clear snapshots', [SNAPSHOTS_KEY], async () => {
-			const history = await readSnapshotHistory();
-			await writeSnapshotHistory([]);
-			await library.remove(SNAPSHOT_LIVE_KEY);
-			const meta = await readSnapshotMeta();
-			meta.liveSig = '';
-			meta.recovery = null;
-			await writeSnapshotMeta(meta);
-			return {ok: true, count: history.length};
-		}),
+		withUndo('Clear snapshots', [SNAPSHOTS_KEY], async () => ({
+			ok: true,
+			count: await emptySnapshots(),
+		})),
 	);
 }
 
@@ -8760,6 +8770,252 @@ function lockedFailure(error: unknown): ActionFailure {
 }
 
 /**
+Deletes the backups and recovery snapshots TabLodge keeps in the browser, and the week long copy a storage upgrade
+leaves. Each holds a whole copy of the library, so each may hold links that were just moved into the locked area.
+There is no Undo and no trash for this: the point is to leave nothing readable behind. Backup files already saved to
+Downloads are outside the browser's storage and stay. Returns how many copies it removed.
+*/
+function deleteLibraryCopies(): Promise<number> {
+	// The same nesting as UNDO and a full restore, so the queues never wait on each other.
+	return snapshotMutate(() =>
+		backupMutate(async () => {
+			const backups = await readBackups();
+			let count = backups.auto.length + backups.safety.length;
+			if (count > 0) {
+				await writeBackups({...backups, auto: [], safety: []});
+			}
+
+			count += await emptySnapshots();
+			if (await libraryState.dropRecoveryCopy()) {
+				count += 1;
+			}
+
+			return count;
+		}),
+	);
+}
+
+type MoveLink = {id: string; title: string; url: string};
+
+function isMoveSource(value: unknown): value is LockedMoveSource {
+	if (!isRecord(value)) {
+		return false;
+	}
+
+	switch (value.kind) {
+		case 'bookmarks': {
+			return Array.isArray(value.ids);
+		}
+
+		case 'column': {
+			return typeof value.columnId === 'string';
+		}
+
+		case 'session': {
+			return (
+				typeof value.groupId === 'string' &&
+				(value.afterwards === 'keep' || value.afterwards === 'delete')
+			);
+		}
+
+		default: {
+			return false;
+		}
+	}
+}
+
+/**
+The links a move takes, in board or session order, or why there are none.
+*/
+function linksToMove(
+	store: Store,
+	source: LockedMoveSource,
+): MoveLink[] | string {
+	if (source.kind === 'bookmarks') {
+		const wanted = new Set(source.ids.map(String));
+		const links = store.bookmarks.filter((bookmark) => wanted.has(bookmark.id));
+		return links.length > 0 ? links : 'Those bookmarks no longer exist.';
+	}
+
+	if (source.kind === 'column') {
+		if (
+			source.columnId !== BOOKMARK_UNFILED_ID &&
+			store.bookmarkColumns.every((column) => column.id !== source.columnId)
+		) {
+			return 'That bookmark column no longer exists.';
+		}
+
+		const links = store.bookmarks.filter(
+			(bookmark) => bookmark.columnId === source.columnId,
+		);
+		return links.length > 0 ? links : 'That column has no bookmarks to move.';
+	}
+
+	const group = findGroup(store, source.groupId);
+	if (!group) {
+		return 'That saved session no longer exists.';
+	}
+
+	return group.tabs.length > 0 ? group.tabs : 'That session has no links.';
+}
+
+/**
+Moves bookmarks, a column's bookmarks, or a session's links into the locked area as one operation.
+
+The order is the safety property. The encrypted entry is written first, in batches, and the library is changed only
+after every batch stored, so a crash or a failure in between leaves a copy in both places and never none. Running the
+move again finds the links already in the locked area and finishes the removal.
+
+Nothing readable is left behind in TabLodge: the moved links never enter the trash, the Undo list is cleared before the
+library changes (an Undo record would hold them), the records the commit replaced are removed at once, and no safety
+backup is taken. Backups and snapshots that already exist keep their copies unless `deleteCopies` removes them; files
+already exported or downloaded, and the browser's history, are out of reach.
+
+The library is changed only for links that are still exactly what was copied, so an edit made while the move ran is kept.
+*/
+async function moveIntoLocked(
+	message: Extract<TabLodgeMessage, {type: 'LOCKED_MOVE_IN'}>,
+): Promise<ActionResult<'LOCKED_MOVE_IN'>> {
+	const {source} = message;
+	if (!isMoveSource(source)) {
+		return {ok: false, error: 'Choose what to move into the locked area.'};
+	}
+
+	const status = await lockedStore.status();
+	if (!status.configured) {
+		throw new LockedError('not-set-up', 'The locked area is not set up.');
+	}
+
+	if (!status.unlocked) {
+		if (typeof message.credential !== 'string') {
+			throw new LockedError('locked', 'The locked area is locked.');
+		}
+
+		await lockedStore.unlock(message.credential);
+	}
+
+	// A library still in the old layout is upgraded first, so its safety backup is taken before any link is read.
+	await mutate(async () => undefined);
+	const found = linksToMove(await getStore(), source);
+	if (typeof found === 'string') {
+		return {ok: false, error: found};
+	}
+
+	const movable = found.filter((link) => lockedUrl(link.url) !== null);
+	if (movable.length === 0) {
+		return {
+			ok: false,
+			error:
+				'None of these links can be stored in the locked area. Only http and https addresses can.',
+		};
+	}
+
+	let stored;
+	try {
+		stored = await lockedStore.addMany(
+			movable.map(({title, url}) => ({title, url})),
+		);
+	} catch (error) {
+		const failure = lockedFailure(error);
+		return {
+			...failure,
+			error: `${failure.error} Nothing was removed from your library.`,
+		};
+	}
+
+	const keepSession = source.kind === 'session' && source.afterwards === 'keep';
+	let removed = 0;
+	let removedContainer = false;
+	let cleaned = true;
+	let copiesDeleted = 0;
+	if (!keepSession) {
+		try {
+			await mutate(async () => {
+				const store = await getStore();
+				const copied = new Map(movable.map((link) => [link.id, link]));
+				const unchanged = (link: MoveLink) => {
+					const original = copied.get(link.id);
+					return (
+						original !== undefined &&
+						original.url === link.url &&
+						original.title === link.title
+					);
+				};
+
+				if (source.kind === 'session') {
+					const group = findGroup(store, source.groupId);
+					if (group) {
+						const before = group.tabs.length;
+						group.tabs = group.tabs.filter((tab) => !unchanged(tab));
+						removed = before - group.tabs.length;
+						removedContainer = group.tabs.length === 0;
+						if (removed > 0 && !removedContainer) {
+							group.updatedAt = Date.now();
+						}
+
+						store.groups = store.groups.filter(
+							(entry) => entry.id !== group.id || entry.tabs.length > 0,
+						);
+					}
+				} else {
+					const before = store.bookmarks.length;
+					store.bookmarks = store.bookmarks.filter(
+						(bookmark) => !unchanged(bookmark),
+					);
+					removed = before - store.bookmarks.length;
+					if (
+						source.kind === 'column' &&
+						source.columnId !== BOOKMARK_UNFILED_ID &&
+						store.bookmarks.every(
+							(bookmark) => bookmark.columnId !== source.columnId,
+						)
+					) {
+						// An empty column would still show its name, so the column goes with its links.
+						store.bookmarkColumns = store.bookmarkColumns.filter(
+							(column) => column.id !== source.columnId,
+						);
+						removedContainer = true;
+					}
+				}
+
+				if (removed === 0) {
+					return;
+				}
+
+				// Undo would keep the old library, links included, so it goes before the library changes.
+				await undoMutate(() => library.remove(UNDO_KEY));
+				await writeStore(store);
+				try {
+					await libraryState.purgeGarbage();
+				} catch {
+					cleaned = false;
+				}
+
+				if (message.deleteCopies === true) {
+					copiesDeleted = await deleteLibraryCopies();
+				}
+			});
+		} catch (error) {
+			return {
+				ok: false,
+				error: `The links are in the locked area, but ${APP_NAME} could not remove them from your library (${errorMessage(error) ?? 'a storage error'}). Nothing was lost. Try the move again to finish it.`,
+			};
+		}
+	}
+
+	return {
+		ok: true,
+		copied: stored.added.length + stored.skipped,
+		added: stored.added.length,
+		removed,
+		left: keepSession ? found.length - movable.length : found.length - removed,
+		removedContainer,
+		copiesDeleted,
+		cleaned,
+	};
+}
+
+/**
 Messages for the locked area. They run outside the library's mutation queue because they never touch the library, except
 to put bookmarks on the board, and they stay in the normal windows' worker: a private worker answers none of them.
 */
@@ -8858,6 +9114,10 @@ async function handleLockedMessage(
 				// Added to the board first, so an interruption leaves a copy in both places rather than none.
 				await lockedStore.remove(chosen.map((item) => item.id));
 				return {ok: true, moved: result.count, skipped: result.skipped};
+			}
+
+			case 'LOCKED_MOVE_IN': {
+				return await moveIntoLocked(message);
 			}
 
 			case 'LOCKED_SET_IDLE': {

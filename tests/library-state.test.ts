@@ -871,6 +871,100 @@ test('saving keeps stamps, order keys, tombstones, and the device id, and drops 
 	assert.deepEqual(await store.verify(), []);
 });
 
+test('purgeGarbage removes the replaced records at once, keeps the library whole, and survives a cut off', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend, {now: () => 5000});
+	const base = normalize(library(3, 4));
+	await store.write(base);
+	const edited = structuredClone(base);
+	edited.bookmarks = (edited.bookmarks as Raw[]).filter(
+		(bookmark) => bookmark.id !== 'b1',
+	);
+	edited.groups = (edited.groups as Raw[]).slice(1);
+	await store.write(edited);
+	const garbage = stateOf(backend)!.garbage as string[];
+	assert.ok(garbage.length >= 2, 'the commit left the replaced records behind');
+	for (const key of garbage) {
+		assert.ok(backend.data.has(key), key);
+	}
+
+	// A cut off at each storage call: the library stays readable, and a later purge finishes the job.
+	const startCalls = backend.calls;
+	for (let failAt = 1; failAt <= 3; failAt += 1) {
+		const copy = new MemoryBackend(Object.fromEntries(backend.data));
+		const run = createLibraryState(copy, {now: () => 5000});
+		copy.failAt = copy.calls + failAt;
+		await assert.rejects(run.purgeGarbage(), /crash/);
+		copy.failAt = undefined;
+		assert.deepEqual(
+			await run.read(),
+			{...edited, schemaVersion: 10},
+			`cut ${failAt}`,
+		);
+		assert.equal((await run.purgeGarbage()) >= 0, true);
+		assert.deepEqual(stateOf(copy)!.garbage, []);
+		assert.deepEqual(leakedKeys(copy), []);
+	}
+
+	assert.equal(backend.calls, startCalls);
+	assert.equal(await store.purgeGarbage(), garbage.length);
+	for (const key of garbage) {
+		assert.equal(backend.data.has(key), false, key);
+	}
+
+	assert.deepEqual(stateOf(backend)!.garbage, []);
+	assert.deepEqual(leakedKeys(backend), []);
+	assert.deepEqual(await store.read(), {...edited, schemaVersion: 10});
+	assert.deepEqual(await store.verify(), []);
+	assert.equal(await store.purgeGarbage(), 0);
+	// The next commit has nothing left to clean up and still works.
+	await store.write({...edited, updatedAt: 9000});
+	assert.deepEqual(await store.verify(), []);
+});
+
+test('moved bookmarks leave no text behind in the bookmarks record, its sync sidecar, or the tombstones', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend, {now: () => 5000});
+	const base = normalize(library(5, 5));
+	await store.write(base);
+	stampLibrary(backend);
+	const edited = structuredClone(base);
+	edited.bookmarks = (edited.bookmarks as Raw[]).filter(
+		(bookmark) => bookmark.id !== 'b0' && bookmark.id !== 'b1',
+	);
+	await store.write(edited);
+	await store.purgeGarbage();
+	const stored = JSON.stringify([...backend.data]);
+	for (const word of [
+		'Bookmark 0',
+		'Bookmark 1',
+		'example.com/b0',
+		'example.com/b1',
+		'"removed-bookmark"',
+	]) {
+		assert.equal(stored.includes(word), false, word);
+	}
+
+	const index = stateOf(backend)!;
+	assert.equal(
+		JSON.stringify(
+			backend.data.get(
+				`${BOOKMARKS_KEY_PREFIX}${(index.bookmarks as {rev: number}).rev}`,
+			),
+		).includes('"b1"'),
+		false,
+	);
+	assert.deepEqual(await store.verify(), []);
+});
+
+test('dropRecoveryCopy removes the week long copy of the old library and reports whether there was one', async () => {
+	const backend = new MemoryBackend({[PREMIGRATION_KEY]: library()});
+	const store = createLibraryState(backend);
+	assert.equal(await store.dropRecoveryCopy(), true);
+	assert.equal(backend.data.has(PREMIGRATION_KEY), false);
+	assert.equal(await store.dropRecoveryCopy(), false);
+});
+
 test('a save that touches nothing stamped does not read or rewrite sidecars', async () => {
 	const backend = new MemoryBackend();
 	const store = createLibraryState(backend);
