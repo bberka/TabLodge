@@ -8896,6 +8896,11 @@ async function handleLockedMessage(
 				return {ok: true, moved, discarded: total - moved};
 			}
 
+			case 'LOCKED_RESET': {
+				await lockedStore.reset(message.confirm);
+				return {ok: true, locked: await lockedStore.status()};
+			}
+
 			default: {
 				return {ok: false, error: `Unknown ${APP_NAME} action.`};
 			}

@@ -51,6 +51,15 @@ After this many wrong entries in a row, further tries wait.
 */
 export const FREE_ATTEMPTS = 5;
 export const COOLDOWN_MS = 30_000;
+/**
+From this many wrong entries in a row the unlock screen offers to reset the area. Earlier than the wait, so someone who
+forgot the credential is not stuck guessing, but not on the first slip of a finger.
+*/
+export const RESET_OFFER_ATTEMPTS = 3;
+/**
+The message field a page must send to reset the area. The worker refuses a reset without it.
+*/
+export const LOCKED_RESET_CONFIRMATION = 'delete-everything-in-the-locked-area';
 // A record is far smaller than this; a bigger one is not something this module wrote.
 const MAX_RECORD_CHARS = 16 * 1024 * 1024;
 
@@ -63,7 +72,8 @@ export type LockedErrorCode =
 	| 'invalid-credential'
 	| 'invalid'
 	| 'full'
-	| 'damaged';
+	| 'damaged'
+	| 'not-confirmed';
 
 export class LockedError extends Error {
 	constructor(
@@ -343,6 +353,16 @@ export function createLockedStore(backend: LockedBackend) {
 		}
 	}
 
+	async function failedAttempts(): Promise<number> {
+		const stored = await backend.session.get(LOCKED_ATTEMPTS_KEY);
+		return isRecord(stored) &&
+			typeof stored.count === 'number' &&
+			Number.isSafeInteger(stored.count) &&
+			stored.count > 0
+			? stored.count
+			: 0;
+	}
+
 	async function cooldownLeft(): Promise<number> {
 		const stored = await backend.session.get(LOCKED_ATTEMPTS_KEY);
 		return !isRecord(stored) || typeof stored.until !== 'number'
@@ -456,12 +476,14 @@ export function createLockedStore(backend: LockedBackend) {
 					}
 
 					const wait = await cooldownLeft();
+					const failed = await failedAttempts();
 					return {
 						configured: true,
 						unlocked: false,
 						kind: record.kind,
 						idleMinutes: record.idleMinutes,
 						...(wait > 0 && {retryAfterMs: wait}),
+						...(failed > 0 && {failedAttempts: failed}),
 					};
 				}
 			});
@@ -722,6 +744,27 @@ export function createLockedStore(backend: LockedBackend) {
 				await backend.local.remove(LOCKED_KEY);
 				await lockNow();
 				return unlocked.items.length;
+			});
+		},
+
+		/**
+		Deletes the area without the credential, for someone who forgot it: the entry, the key, and the count of wrong entries,
+		so the area is back to not set up and a new credential can create it. Works locked or unlocked, and when nothing is set
+		up. The key goes first and the entry second: a crash between them leaves a locked area that can be reset again, never
+		a half deleted one. A page must pass `LOCKED_RESET_CONFIRMATION`.
+		*/
+		async reset(confirmation: unknown): Promise<void> {
+			return serial(async () => {
+				if (confirmation !== LOCKED_RESET_CONFIRMATION) {
+					throw new LockedError(
+						'not-confirmed',
+						'Resetting the locked area needs a confirmation.',
+					);
+				}
+
+				await lockNow();
+				await backend.local.remove(LOCKED_KEY);
+				await backend.session.remove(LOCKED_ATTEMPTS_KEY);
 			});
 		},
 

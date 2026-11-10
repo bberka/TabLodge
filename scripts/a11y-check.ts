@@ -2534,6 +2534,203 @@ async function main() {
 			);
 
 			await check(
+				`a forgotten PIN or password is reset by keyboard after wrong entries (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					const secret = 'correct horse battery';
+					const resetWord = 'delete-everything-in-the-locked-area';
+					try {
+						await setTheme(page, theme);
+						await page.evaluate(
+							async ({pass, label}: {pass: string; label: string}) => {
+								const {chrome} = globalThis as typeof globalThis & {
+									chrome: ExtensionApi;
+								};
+								await chrome.runtime.sendMessage({
+									type: 'LOCKED_SETUP',
+									kind: 'password',
+									value: pass,
+								});
+								await chrome.runtime.sendMessage({
+									type: 'LOCKED_ADD',
+									bookmarks: [
+										{
+											title: `Private ${label} diary`,
+											url: `https://diary-${label}.example/entry`,
+										},
+									],
+								});
+								await chrome.runtime.sendMessage({type: 'LOCKED_LOCK'});
+							},
+							{pass: secret, label: theme},
+						);
+						const trigger = page.getByRole('button', {
+							name: 'Import, back up and share bookmarks',
+						});
+						await openMenuItemByKeyboard(page, trigger, 'Locked bookmarks');
+						const dialog = page.getByRole('dialog');
+						await dialog.getByRole('button', {name: 'Unlock'}).waitFor();
+						const offer = dialog.getByRole('button', {
+							name: 'Reset the locked area',
+						});
+
+						// Two wrong entries are a slip of the fingers: no way to delete anything is offered yet.
+						for (let attempt = 1; attempt <= 2; attempt += 1) {
+							await until(
+								async () =>
+									(await page.locator(':focus').getAttribute('type')) ===
+									'password',
+								'focus to be in the credential field',
+							);
+							await page.keyboard.type(`wrong entry ${attempt}`);
+							await page.keyboard.press('Enter');
+							await dialog
+								.getByRole('alert')
+								.filter({hasText: 'wrong'})
+								.waitFor();
+							assert.equal(await offer.count(), 0);
+							await dialog.locator('input').first().fill('');
+							await dialog.locator('input').first().focus();
+						}
+
+						await page.keyboard.type('wrong entry 3');
+						await page.keyboard.press('Enter');
+						await offer.waitFor();
+						assert.deepEqual(
+							await axeViolationLines(page, axeSource),
+							[],
+							'the unlock screen with the reset offer should pass axe',
+						);
+						await captureEvidence(page, `locked-reset-offer-${theme}.png`);
+
+						// The offer is reachable by keyboard and leads to a confirmation that takes focus.
+						await offer.focus();
+						await page.keyboard.press('Enter');
+						await dialog
+							.getByRole('heading', {name: 'Reset the locked area'})
+							.waitFor();
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('id'))?.endsWith(
+									'-word',
+								) === true,
+							'focus to move to the confirmation field',
+						);
+						const confirmText = await dialog.innerText();
+						assert.match(confirmText, /permanently deletes everything/);
+						assert.match(confirmText, /cannot be undone/);
+						assert.match(confirmText, /new PIN or password/);
+						const destroy = dialog.getByRole('button', {
+							name: 'Delete everything and reset',
+						});
+						assert.equal(
+							await destroy.isDisabled(),
+							true,
+							'the button needs the typed word',
+						);
+						await page.keyboard.type('rese');
+						assert.equal(await destroy.isDisabled(), true);
+						assert.deepEqual(
+							await axeViolationLines(page, axeSource),
+							[],
+							'the confirmation should pass axe',
+						);
+						await page.keyboard.type('t');
+						assert.equal(await destroy.isDisabled(), false);
+						await captureEvidence(page, `locked-reset-confirm-${theme}.png`);
+
+						// Back returns to the unlock screen with focus in the credential field and the data untouched.
+						await dialog.getByRole('button', {name: 'Back'}).focus();
+						await page.keyboard.press('Enter');
+						await dialog.getByRole('button', {name: 'Unlock'}).waitFor();
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('type')) ===
+								'password',
+							'focus to return to the credential field',
+						);
+						await offer.focus();
+						await page.keyboard.press('Enter');
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('id'))?.endsWith(
+									'-word',
+								) === true,
+							'focus to move to the confirmation field again',
+						);
+						await page.keyboard.type('RESET');
+						await page.keyboard.press('Enter');
+
+						// Straight to the setup form, with focus in it and the reset announced.
+						await dialog
+							.getByRole('heading', {name: 'Set up the locked area'})
+							.waitFor();
+						await until(
+							async () =>
+								(await page.locator(':focus').getAttribute('type')) ===
+								'password',
+							'focus to move to the first field of the setup',
+						);
+						assert.match(
+							await dialog
+								.locator('[role="status"]')
+								.allInnerTexts()
+								.then(String),
+							/was reset and everything in it deleted/,
+						);
+						// The confirmation toast fades in; measure contrast once it has settled.
+						await page.waitForTimeout(600);
+						assert.deepEqual(
+							await axeViolationLines(page, axeSource),
+							[],
+							'the setup form after a reset should pass axe',
+						);
+						await captureEvidence(page, `locked-reset-setup-${theme}.png`);
+
+						// Nothing of the old area is left in storage.
+						const leftovers = await page.evaluate(async () => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: {
+									storage: {
+										local: {get(keys: null): Promise<Record<string, unknown>>};
+										session: {
+											get(keys: null): Promise<Record<string, unknown>>;
+										};
+									};
+								};
+							};
+							const [local, session] = await Promise.all([
+								chrome.storage.local.get(null),
+								chrome.storage.session.get(null),
+							]);
+							return {
+								keys: [...Object.keys(local), ...Object.keys(session)].filter(
+									(key) => key.startsWith('tablodge.locked'),
+								),
+								text: JSON.stringify({local, session}),
+							};
+						});
+						assert.deepEqual(
+							leftovers.keys.filter((key) => key !== 'tablodge.locked.flag'),
+							[],
+						);
+						assert.equal(leftovers.text.includes('diary'), false);
+						assert.equal(leftovers.text.includes(secret), false);
+						await page.keyboard.press('Escape');
+						await dialog.waitFor({state: 'hidden'});
+					} finally {
+						await page.evaluate(async (confirm: string) => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: ExtensionApi;
+							};
+							await chrome.runtime.sendMessage({type: 'LOCKED_RESET', confirm});
+						}, resetWord);
+						await page.close();
+					}
+				},
+			);
+
+			await check(
 				`saving to the locked area from the popup passes axe and keeps focus in the dialog (${theme})`,
 				async () => {
 					const credential = 'correct horse battery';

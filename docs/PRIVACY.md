@@ -59,6 +59,8 @@ Titles and addresses in the locked area exist in plain text only in memory while
 
 Unlocking derives a key from your entry and keeps that key in `chrome.storage.session`, which lives in memory and is cleared when the browser closes. It is never written to disk by TabLodge and is not part of any backup. The area locks again after the idle time you set (5 minutes by default, or never until the browser closes), when you choose **Lock now**, and on browser restart. After five wrong entries in a row, further tries wait 30 seconds. Private windows cannot reach the locked area.
 
+If you forget the PIN or password, the unlock screen offers **Reset the locked area** from the third wrong entry in a row. It asks you to type RESET, then deletes the encrypted entry (`tablodge.locked`), the session key, and the count of wrong entries, without asking for the old PIN or password. Nothing in it can be recovered, and you can then set up a new area. A full backup made earlier still holds the old encrypted entry, so restoring it brings back the old locked area and its old PIN or password.
+
 A PIN has at most 100 million combinations. Someone who copies your browser profile files can try all of them offline, so a short PIN protects little against that. A password is much stronger. The lock does not hide that TabLodge has a locked area or how many bookmarks it holds, and it does not protect you from someone who uses your unlocked browser while the area is open.
 
 ### Saved data
