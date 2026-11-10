@@ -6,6 +6,8 @@ import {CircleAlert, Eye, EyeOff, TriangleAlert} from 'lucide-react';
 import {Checkbox, Input, Label, SegmentedControl} from '../shared/ui';
 import {
 	CREDENTIAL_LABELS,
+	clampCredentialInput,
+	credentialMaxLength,
 	LOST_CREDENTIAL_NOTE,
 	PIN_WEAKNESS_NOTE,
 	credentialRule,
@@ -97,11 +99,14 @@ function ShowHideField({
 					autoComplete={autoComplete}
 					autoCapitalize="off"
 					spellCheck={false}
+					maxLength={credentialMaxLength(kind)}
 					value={value}
 					disabled={disabled}
 					aria-invalid={problem ? true : undefined}
 					aria-describedby={describedBy}
-					onChange={(event) => onChange(event.target.value)}
+					onChange={(event) =>
+						onChange(clampCredentialInput(kind, event.target.value))
+					}
 				/>
 				{onToggleShown && (
 					<ShowHideButton
@@ -259,12 +264,19 @@ export function PasscodeEntry({
 					autoCapitalize="off"
 					spellCheck={false}
 					inputMode={kind === 'pin' ? 'numeric' : undefined}
+					maxLength={credentialMaxLength(kind ?? 'password')}
 					value={value}
 					disabled={disabled}
 					data-autofocus=""
 					aria-invalid={error ? true : undefined}
 					aria-describedby={error ? `${id}-entry-error` : undefined}
-					onChange={(event) => onChange(event.target.value)}
+					onChange={(event) =>
+						onChange(
+							kind
+								? clampCredentialInput(kind, event.target.value)
+								: event.target.value,
+						)
+					}
 				/>
 				<ShowHideButton
 					shown={shown}

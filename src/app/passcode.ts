@@ -19,6 +19,17 @@ const LIMITS: Record<CredentialKind, {min: number; max: number}> = {
 	password: {min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH},
 };
 
+/**
+The longest value a field for this kind accepts, so a form stops the input instead of reporting it afterwards.
+*/
+export const credentialMaxLength = (kind: CredentialKind) => LIMITS[kind].max;
+
+/**
+What a field keeps of typed or pasted text: a PIN keeps only its digits.
+*/
+export const clampCredentialInput = (kind: CredentialKind, value: string) =>
+	kind === 'pin' ? value.replaceAll(/\D/g, '') : value;
+
 export const CREDENTIAL_LABELS: Record<CredentialKind, string> = {
 	pin: 'PIN',
 	password: 'Password',

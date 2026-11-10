@@ -6,6 +6,8 @@ import {
 	PIN_MAX_LENGTH,
 	PIN_MIN_LENGTH,
 	validateCredential,
+	clampCredentialInput,
+	credentialMaxLength,
 } from '../src/app/passcode';
 
 test('the limits are the documented ones', () => {
@@ -57,4 +59,11 @@ test('length counts characters, not UTF-16 units', () => {
 		validateCredential('password', '🔑'.repeat(129)) ?? '',
 		/at most 128/,
 	);
+});
+
+test('fields stop input at the limit and a PIN keeps only digits', () => {
+	assert.equal(credentialMaxLength('pin'), 8);
+	assert.equal(credentialMaxLength('password'), 128);
+	assert.equal(clampCredentialInput('pin', '12 34-ab5'), '12345');
+	assert.equal(clampCredentialInput('password', '12 34-ab5'), '12 34-ab5');
 });
