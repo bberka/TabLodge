@@ -82,6 +82,7 @@ import {DropIndicator} from '../components/ui/drop-indicator';
 import {scrollBehavior} from '../shared/motion';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
+import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
 	LoadingLine,
@@ -1731,17 +1732,19 @@ export function SessionManager({
 								</DropdownMenuRadioGroup>
 							</DropdownMenuContent>
 						</DropdownMenu>
-						<IconTooltip label="Recent snapshots">
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8"
-								aria-label="Recent snapshots"
-								onClick={() => emitRecoveryEvent({type: 'snapshots'})}
-							>
-								<History />
-							</Button>
-						</IconTooltip>
+						{!inPrivateWindow() && (
+							<IconTooltip label="Recent snapshots">
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									aria-label="Recent snapshots"
+									onClick={() => emitRecoveryEvent({type: 'snapshots'})}
+								>
+									<History />
+								</Button>
+							</IconTooltip>
+						)}
 						<DropdownMenu>
 							<IconTooltip label="Import and back up sessions">
 								<DropdownMenuTrigger asChild>

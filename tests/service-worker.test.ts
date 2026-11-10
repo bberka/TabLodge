@@ -1745,6 +1745,32 @@ test('private browser new tabs redirect to the dashboard by default', async () =
 	assert.equal(updated.tabs[0].url, 'chrome-extension://tablodge/newtab.html');
 });
 
+test('private windows cannot read or change the regular windows snapshots', async () => {
+	const harness = recoveryHarness({}, undefined, {
+		storage: {
+			...cleanStorage(seededSnapshotStorage({sessionOpen: false})),
+			'tablodge.private.config': {mode: 'shared', configured: true},
+		},
+		incognitoContext: true,
+	});
+	const listed = await harness.sendMessage({type: 'GET_SNAPSHOTS'});
+	assert.equal(listed.ok, true);
+	assert.equal(listed.snapshots.length, 0);
+	assert.equal(listed.recovery, null);
+	assert.equal(
+		(await harness.sendMessage({type: 'RESTORE_SNAPSHOT', id: 'x'})).ok,
+		false,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'DELETE_SNAPSHOT', id: 'x'})).ok,
+		false,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'CLEAR_SNAPSHOTS'})).ok,
+		false,
+	);
+});
+
 test('private new-tab redirect can be disabled without completing private setup', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession(),
