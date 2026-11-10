@@ -21,6 +21,7 @@ import {
 	Plus,
 	ChartColumn,
 	Eraser,
+	Lock,
 	LifeBuoy,
 	MousePointerClick,
 	Globe,
@@ -95,6 +96,7 @@ import type {
 import {
 	BackupDialog,
 	ImportDialog,
+	LockedDialog,
 	RecoveryTools,
 	SnapshotsDialog,
 	TabStatsDialog,
@@ -1059,6 +1061,7 @@ function Options() {
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
 	const [statsOpen, setStatsOpen] = useState(false);
+	const [lockedOpen, setLockedOpen] = useState(false);
 	const [downloadsGranted, setDownloadsGranted] = useState(false);
 	useEffect(() => {
 		void Promise.resolve(
@@ -1681,6 +1684,36 @@ function Options() {
 				</Button>
 			),
 		},
+		...(chrome.extension.inIncognitoContext
+			? []
+			: [
+					{
+						key: 'locked',
+						icon: Lock,
+						label: 'Locked area',
+						help: 'Bookmarks hidden behind a PIN or password, kept out of search, exports, and backups. Set it up, unlock it, or change the lock. Erase does not remove it.',
+						words: [
+							'lock',
+							'locked',
+							'private',
+							'hidden',
+							'PIN',
+							'password',
+							'auto-lock',
+							'secret',
+						],
+						action: (
+							<Button
+								variant="outline"
+								className="w-full sm:w-32"
+								onClick={() => setLockedOpen(true)}
+							>
+								<Lock className="h-4 w-4" />
+								Open
+							</Button>
+						),
+					},
+				]),
 		{
 			key: 'erase',
 			icon: Eraser,
@@ -2399,6 +2432,13 @@ function Options() {
 				showStatus={showStatus}
 				onOpenChange={setSnapshotsOpen}
 				onSessionsChanged={reload}
+			/>
+			<LockedDialog
+				open={lockedOpen}
+				columns={state?.bookmarkColumns ?? []}
+				showStatus={showStatus}
+				onOpenChange={setLockedOpen}
+				onBoardChanged={() => void reload()}
 			/>
 			<TabStatsDialog
 				open={statsOpen}

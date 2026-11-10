@@ -1,6 +1,6 @@
 import {useState, type SyntheticEvent} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Plus, Save, X} from 'lucide-react';
+import {Lock, Plus, Save, X} from 'lucide-react';
 import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
@@ -11,6 +11,7 @@ import {IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {DEFAULT_COLUMN_ICON} from './icon-registry';
 import {ColumnSelect} from './column-select';
+import {LockedSaveForm} from './locked';
 
 const NEW_COLUMN = '__new-column__';
 
@@ -21,6 +22,9 @@ function AddBookmarkPrompt() {
 	const params = new URLSearchParams(location.search);
 	const url = params.get('url') || '';
 	const fromBrowser = params.get('source') === 'browser';
+	// The right-click menu opens this window on the locked area when it cannot save there directly (locked or not set up).
+	const startsLocked = params.get('destination') === 'locked';
+	const lockedAvailable = !chrome.extension.inIncognitoContext;
 	const {state, error: stateError} = useTabLodgeState();
 	const [title, setTitle] = useState(params.get('title') || url);
 	const [columnId, setColumnId] = useState('');
@@ -28,6 +32,7 @@ function AddBookmarkPrompt() {
 	const [newIcon, setNewIcon] = useState<string | undefined>();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
+	const [toLocked, setToLocked] = useState(startsLocked && lockedAvailable);
 
 	useCloseOnEscape();
 
@@ -83,6 +88,26 @@ function AddBookmarkPrompt() {
 		}
 
 		window.close();
+	}
+
+	if (toLocked) {
+		return (
+			<main className="min-h-screen p-5">
+				<div className="mb-4">
+					<h1 className="text-base font-semibold">Bookmark to locked area</h1>
+					<p className="mt-1 text-sm text-muted-foreground">
+						Saved in the encrypted locked area, not on the board.
+					</p>
+				</div>
+				<LockedSaveForm
+					title={title}
+					url={url}
+					settings={state.settings}
+					onCancel={() => (startsLocked ? window.close() : setToLocked(false))}
+					onSaved={() => window.close()}
+				/>
+			</main>
+		);
 	}
 
 	return (
@@ -151,7 +176,18 @@ function AddBookmarkPrompt() {
 						{error}
 					</p>
 				)}
-				<div className="flex justify-end gap-2">
+				<div className="flex flex-wrap justify-end gap-2">
+					{lockedAvailable && selected !== NEW_COLUMN && (
+						<Button
+							type="button"
+							variant="outline"
+							disabled={busy}
+							onClick={() => setToLocked(true)}
+						>
+							<Lock aria-hidden="true" />
+							Save to locked area
+						</Button>
+					)}
 					<Button
 						type="button"
 						variant="outline"

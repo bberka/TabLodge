@@ -985,8 +985,11 @@ function createWorkerHarness(
 		crypto: webcrypto,
 		structuredClone,
 		TextEncoder,
+		TextDecoder,
 		// eslint-disable-next-line no-restricted-globals -- the worker uses btoa, so the mock context provides it
 		btoa,
+		// eslint-disable-next-line no-restricted-globals -- the locked area reads base64 back with atob
+		atob,
 		globalThis: null,
 		setTimeout: options.manualTimers ? manualSetTimeout : setTimeout,
 		clearTimeout: options.manualTimers
@@ -7423,6 +7426,430 @@ test('RESTORE_FULL_BACKUP rejects a newer format, another format and missing dat
 	);
 	assert.equal(harness.state.bookmarks.length, 3);
 	assert.equal(backupsOf(harness).safety.length, 0);
+});
+
+// The locked area: the worker owns the key, and nothing reaches the library, search, backups or exports.
+const LOCKED_PASSWORD = 'correct horse battery';
+const LOCKED_ALARM_NAME = 'tablodge-locked-idle';
+const LOCKED_NOW = 1_800_000_000_000;
+
+/**
+Menu clicks are not awaited by the worker, and Web Crypto finishes off the event loop, so a fixed settle can be too short.
+*/
+async function eventually(done: () => boolean | Promise<boolean>) {
+	for (let attempt = 0; attempt < 100 && !(await done()); attempt += 1) {
+		await settle();
+	}
+}
+
+async function lockedHarness(options: HarnessOptions = {}) {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		now: LOCKED_NOW,
+		...options,
+	});
+	const made = await harness.sendMessage({
+		type: 'LOCKED_SETUP',
+		kind: 'password',
+		value: LOCKED_PASSWORD,
+	});
+	assert.equal(made.ok, true, made.error);
+	const added = await harness.sendMessage({
+		type: 'LOCKED_ADD',
+		bookmarks: [
+			{title: 'Zebra diary', url: 'https://zebra-diary.example/entry'},
+			{title: 'Mole mail', url: 'https://mole-mail.example/'},
+		],
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.equal(added.added, 2);
+	return harness;
+}
+
+/**
+A new worker on the same browser profile: local storage always carries over, session storage only for a worker restart.
+*/
+function restartedLockedWorker(
+	previous: ReturnType<typeof createWorkerHarness>,
+	options: HarnessOptions & {browserRestart?: boolean} = {},
+) {
+	const {browserRestart, ...rest} = options;
+	return createWorkerHarness(bookmarksState(), undefined, {
+		...rest,
+		storage: structuredClone(previous.extraStorage),
+		...(!browserRestart && {sessionStorage: previous.sessionStore}),
+	});
+}
+
+test('locked area: titles and addresses stay out of the library, search, backups, snapshots and the trash', async () => {
+	const harness = await lockedHarness();
+	const secrets = ['zebra', 'mole'];
+	const leaks = (value: unknown) =>
+		secrets.filter((word) =>
+			JSON.stringify(value).toLowerCase().includes(word),
+		);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.deepEqual(leaks(state), []);
+	for (const text of ['zebra', 'mole', 'diary', 'mail']) {
+		let suggestions: unknown[] = [];
+		(
+			harness.listeners.omniboxInputChanged as (
+				text: string,
+				suggest: (list: unknown[]) => void,
+			) => void
+		)(text, (list) => {
+			suggestions = list;
+		});
+		await settle();
+		assert.equal(suggestions.length, 0, text);
+	}
+
+	await harness.sendMessage({type: 'BACKUP_NOW'});
+	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: 'bm-0'});
+	const full = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(full.ok, true, full.error);
+	const {locked, ...library} = full;
+	assert.deepEqual(leaks(library), []);
+	assert.deepEqual(leaks(locked), []);
+	assert.equal(typeof (locked as {envelope: string}).envelope, 'string');
+	// Everything the extension wrote to storage, the unlocked state included: the only trace is the encrypted entry and the key in memory.
+	assert.deepEqual(leaks(harness.extraStorage), []);
+	assert.deepEqual(leaks(harness.sessionStore), []);
+	assert.equal(
+		JSON.stringify(harness.extraStorage).includes(LOCKED_PASSWORD),
+		false,
+	);
+	assert.equal(
+		JSON.stringify(harness.sessionStore).includes(LOCKED_PASSWORD),
+		false,
+	);
+	assert.deepEqual(
+		Object.keys(harness.sessionStore).filter((key) =>
+			key.startsWith('tablodge.locked'),
+		),
+		['tablodge.locked.key', 'tablodge.locked.flag'],
+	);
+	assert.equal('tablodge.locked.key' in harness.extraStorage, false);
+	assert.equal('tablodge.locked' in harness.extraStorage, true);
+});
+
+test('locked area: it is unlocked after a worker restart and locked after a browser restart', async () => {
+	const first = await lockedHarness();
+	const worker = restartedLockedWorker(first);
+	const status = await worker.sendMessage({type: 'LOCKED_STATUS'});
+	assert.deepEqual(
+		{...status.locked, configured: true},
+		{
+			configured: true,
+			unlocked: true,
+			kind: 'password',
+			idleMinutes: 5,
+			count: 2,
+		},
+	);
+	const listed = await worker.sendMessage({type: 'LOCKED_LIST'});
+	assert.deepEqual(
+		Array.from(listed.bookmarks, (item) => item.title),
+		['Zebra diary', 'Mole mail'],
+	);
+
+	const browser = restartedLockedWorker(first, {browserRestart: true});
+	const closed = await browser.sendMessage({type: 'LOCKED_STATUS'});
+	assert.equal(closed.locked.configured && closed.locked.unlocked, false);
+	const refused = await browser.sendMessage({type: 'LOCKED_LIST'});
+	assert.equal(refused.ok, false);
+	assert.equal((refused as {code?: string}).code, 'locked');
+	const unlocked = await browser.sendMessage({
+		type: 'LOCKED_UNLOCK',
+		credential: LOCKED_PASSWORD,
+	});
+	assert.equal(unlocked.ok, true, unlocked.error);
+	assert.equal(
+		(await browser.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length,
+		2,
+	);
+});
+
+test('locked area: the idle alarm locks it, and so does a read after the time is up', async () => {
+	const first = await lockedHarness();
+	const alarm = first.alarms.get(LOCKED_ALARM_NAME) as {when?: number};
+	assert.equal(alarm.when, LOCKED_NOW + 5 * 60_000);
+
+	// The alarm fires in a worker that has just woken up.
+	const woken = restartedLockedWorker(first, {now: LOCKED_NOW + 6 * 60_000});
+	await woken.fire('alarm', {name: LOCKED_ALARM_NAME});
+	assert.equal('tablodge.locked.key' in woken.sessionStore, false);
+	assert.deepEqual(woken.sessionStore['tablodge.locked.flag'], {
+		unlocked: false,
+	});
+
+	// The alarm never fires; the clock still decides.
+	const late = restartedLockedWorker(first, {now: LOCKED_NOW + 6 * 60_000});
+	const refused = await late.sendMessage({type: 'LOCKED_LIST'});
+	assert.equal((refused as {code?: string}).code, 'locked');
+
+	// Using it moves the deadline, and a longer time can be chosen.
+	const used = restartedLockedWorker(first, {now: LOCKED_NOW + 4 * 60_000});
+	assert.equal((await used.sendMessage({type: 'LOCKED_LIST'})).ok, true);
+	assert.equal(
+		(used.alarms.get(LOCKED_ALARM_NAME) as {when?: number}).when,
+		LOCKED_NOW + 9 * 60_000,
+	);
+	assert.equal(
+		(await used.sendMessage({type: 'LOCKED_SET_IDLE', idleMinutes: 0})).ok,
+		true,
+	);
+	assert.equal(used.alarms.has(LOCKED_ALARM_NAME), false);
+	assert.equal(
+		(await used.sendMessage({type: 'LOCKED_SET_IDLE', idleMinutes: 3})).ok,
+		false,
+	);
+});
+
+test('locked area: Lock now removes the key at once, and the browser start locks leftovers', async () => {
+	const harness = await lockedHarness();
+	const locked = await harness.sendMessage({type: 'LOCKED_LOCK'});
+	assert.equal(locked.ok, true, locked.error);
+	assert.equal('tablodge.locked.key' in harness.sessionStore, false);
+	assert.equal(harness.alarms.has(LOCKED_ALARM_NAME), false);
+	const again = await harness.sendMessage({
+		type: 'LOCKED_UNLOCK',
+		credential: LOCKED_PASSWORD,
+	});
+	assert.equal(again.ok, true, again.error);
+	await harness.fire('onStartup');
+	assert.equal('tablodge.locked.key' in harness.sessionStore, false);
+});
+
+test('locked area: a wrong PIN or password is refused with a code, and a save can unlock in one step', async () => {
+	const harness = await lockedHarness();
+	await harness.sendMessage({type: 'LOCKED_LOCK'});
+	const noCredential = await harness.sendMessage({
+		type: 'LOCKED_ADD',
+		bookmarks: [{url: 'https://late.example/'}],
+	});
+	assert.equal((noCredential as {code?: string}).code, 'locked');
+	const wrong = await harness.sendMessage({
+		type: 'LOCKED_ADD',
+		bookmarks: [{url: 'https://late.example/'}],
+		credential: 'not the password',
+	});
+	assert.equal((wrong as {code?: string}).code, 'wrong-credential');
+	const right = await harness.sendMessage({
+		type: 'LOCKED_ADD',
+		bookmarks: [{title: 'Late', url: 'https://late.example/'}],
+		credential: LOCKED_PASSWORD,
+	});
+	assert.equal(right.ok, true, right.error);
+	const listed = await harness.sendMessage({type: 'LOCKED_LIST'});
+	assert.deepEqual(
+		Array.from(listed.bookmarks, (item) => item.title),
+		['Zebra diary', 'Mole mail', 'Late'],
+	);
+});
+
+test('locked area: private windows get no access', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		incognitoContext: true,
+		storage: {'tablodge.private.config': {mode: 'shared', configured: true}},
+	});
+	for (const message of [
+		{type: 'LOCKED_STATUS' as const},
+		{
+			type: 'LOCKED_SETUP' as const,
+			kind: 'password' as const,
+			value: LOCKED_PASSWORD,
+		},
+	]) {
+		const refused = await harness.sendMessage(message);
+		assert.equal(refused.ok, false);
+		assert.match(refused.error ?? '', /private windows/);
+	}
+
+	assert.equal('tablodge.locked' in harness.extraStorage, false);
+	assert.equal(
+		(
+			(await harness.sendMessage({type: 'GET_FULL_BACKUP'})) as {
+				locked: unknown;
+			}
+		).locked,
+		null,
+	);
+});
+
+test('locked area: moving bookmarks to the board and removing the lock', async () => {
+	const harness = await lockedHarness();
+	const listed = await harness.sendMessage({type: 'LOCKED_LIST'});
+	const moved = await harness.sendMessage({
+		type: 'LOCKED_MOVE_TO_BOARD',
+		ids: [listed.bookmarks[0].id],
+	});
+	assert.equal(moved.ok, true, moved.error);
+	assert.equal(moved.moved, 1);
+	assert.ok(
+		harness.state.bookmarks.some(
+			(bookmark) => bookmark.url === 'https://zebra-diary.example/entry',
+		),
+	);
+	assert.deepEqual(
+		Array.from(
+			(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks,
+			(item) => item.title,
+		),
+		['Mole mail'],
+	);
+
+	const wrong = await harness.sendMessage({
+		type: 'LOCKED_REMOVE_LOCK',
+		credential: 'not the password',
+		bookmarks: 'delete',
+	});
+	assert.equal((wrong as {code?: string}).code, 'wrong-credential');
+	assert.equal('tablodge.locked' in harness.extraStorage, true);
+
+	const removed = await harness.sendMessage({
+		type: 'LOCKED_REMOVE_LOCK',
+		credential: LOCKED_PASSWORD,
+		bookmarks: 'board',
+	});
+	assert.equal(removed.ok, true, removed.error);
+	assert.equal(removed.moved, 1);
+	assert.ok(
+		harness.state.bookmarks.some(
+			(bookmark) => bookmark.url === 'https://mole-mail.example/',
+		),
+	);
+	assert.equal('tablodge.locked' in harness.extraStorage, false);
+	assert.equal(
+		(await harness.sendMessage({type: 'LOCKED_STATUS'})).locked.configured,
+		false,
+	);
+});
+
+test('locked area: removing the lock can discard what it holds', async () => {
+	const harness = await lockedHarness();
+	const before = harness.state.bookmarks.length;
+	const removed = await harness.sendMessage({
+		type: 'LOCKED_REMOVE_LOCK',
+		credential: LOCKED_PASSWORD,
+		bookmarks: 'delete',
+	});
+	assert.equal(removed.ok, true, removed.error);
+	assert.equal(removed.discarded, 2);
+	assert.equal(harness.state.bookmarks.length, before);
+	assert.equal('tablodge.locked' in harness.extraStorage, false);
+});
+
+test('locked area: changing the credential keeps the bookmarks and the worker restarts cleanly after it', async () => {
+	const harness = await lockedHarness();
+	const changed = await harness.sendMessage({
+		type: 'LOCKED_CHANGE_CREDENTIAL',
+		current: LOCKED_PASSWORD,
+		kind: 'pin',
+		value: '2468',
+	});
+	assert.equal(changed.ok, true, changed.error);
+	const worker = restartedLockedWorker(harness);
+	assert.equal(
+		(await worker.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length,
+		2,
+	);
+	const browser = restartedLockedWorker(harness, {browserRestart: true});
+	const old = await browser.sendMessage({
+		type: 'LOCKED_UNLOCK',
+		credential: LOCKED_PASSWORD,
+	});
+	assert.equal((old as {code?: string}).code, 'wrong-credential');
+	const fresh = await browser.sendMessage({
+		type: 'LOCKED_UNLOCK',
+		credential: '2468',
+	});
+	assert.equal(fresh.ok, true, fresh.error);
+	assert.equal(fresh.locked.configured && fresh.locked.kind, 'pin');
+});
+
+test('locked area: a full backup carries the encrypted entry, and restoring it brings the area back locked', async () => {
+	const source = await lockedHarness();
+	const full = await source.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(full.ok, true, full.error);
+	const target = createWorkerHarness(bookmarksState(), undefined, {
+		now: LOCKED_NOW,
+	});
+	const restored = await target.sendMessage({
+		...fullBackupInput({state: full.state}),
+		locked: full.locked,
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.equal(restored.lockedRestored, true);
+	const status = await target.sendMessage({type: 'LOCKED_STATUS'});
+	assert.equal(status.locked.configured && status.locked.unlocked, false);
+	const opened = await target.sendMessage({
+		type: 'LOCKED_UNLOCK',
+		credential: LOCKED_PASSWORD,
+	});
+	assert.equal(opened.ok, true, opened.error);
+	assert.equal(
+		(await target.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length,
+		2,
+	);
+});
+
+test('locked area: a backup without one leaves the current area alone, and a damaged one is ignored', async () => {
+	const harness = await lockedHarness();
+	const without = await harness.sendMessage(fullBackupInput());
+	assert.equal(without.ok, true, without.error);
+	assert.equal(without.lockedRestored, undefined);
+	assert.equal(
+		(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length,
+		2,
+	);
+	const damaged = await harness.sendMessage({
+		...fullBackupInput(),
+		locked: {version: 1, envelope: 'AAAA'},
+	});
+	assert.equal(damaged.ok, true, damaged.error);
+	assert.equal(damaged.lockedRestored, false);
+	assert.equal(
+		(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length,
+		2,
+	);
+});
+
+test('locked area: the menus offer a locked save that saves straight away when unlocked and asks otherwise', async () => {
+	const harness = await lockedHarness();
+	await harness.fire(
+		'contextMenuClicked',
+		{
+			menuItemId: 'tablodge-link-locked',
+			linkUrl: 'https://clicked.example/a',
+			linkText: 'Clicked link',
+		},
+		{id: 1, windowId: 10},
+	);
+	await eventually(
+		async () =>
+			(await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks.length === 3,
+	);
+	const listed = await harness.sendMessage({type: 'LOCKED_LIST'});
+	assert.deepEqual(
+		Array.from(listed.bookmarks, (item) => item.title).slice(-1),
+		['Clicked link'],
+	);
+	assert.equal(harness.windowCreateCalls.length, 0);
+
+	await harness.sendMessage({type: 'LOCKED_LOCK'});
+	await harness.fire(
+		'contextMenuClicked',
+		{menuItemId: 'tablodge-page-locked', pageUrl: 'https://current.example/'},
+		{id: 1, windowId: 10, url: 'https://current.example/', title: 'Current'},
+	);
+	await eventually(() => harness.windowCreateCalls.length > 0);
+	assert.equal(harness.windowCreateCalls.length, 1);
+	assert.match(
+		String(harness.windowCreateCalls[0].url),
+		/add-bookmark\.html\?url=https%3A%2F%2Fcurrent\.example%2F.*&destination=locked$/,
+	);
+	// The locked page was not saved behind the person's back.
+	assert.equal((await harness.sendMessage({type: 'LOCKED_LIST'})).ok, false);
 });
 
 test('GET_FULL_BACKUP returns the state, theme, snapshot history and trash', async () => {
