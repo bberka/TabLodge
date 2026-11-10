@@ -15,6 +15,7 @@ type ChromeGlobal = {
 		extension: {inIncognitoContext: boolean};
 		windows: {
 			create(options: {incognito: boolean; url: string}): Promise<unknown>;
+			getAll(): Promise<Array<{id?: number; incognito: boolean}>>;
 		};
 		developerPrivate: {
 			updateProfileConfiguration(options: {
@@ -222,7 +223,76 @@ async function openPrivatePage(normal: Page, url: string): Promise<Page> {
 }
 
 const LOCK_KEY = 'tablodge.privatelock.key';
+const LOCK_ACTIVE_KEY = 'tablodge.privatelock.active';
+const LOCK_WINDOWS_KEY = 'tablodge.privatelock.windows';
 const LOCK_PASSWORD = 'correct horse battery';
+
+/**
+The ids of the private windows, as a private page sees them.
+*/
+async function privateWindowIds(privatePage: Page): Promise<number[]> {
+	const ids = await privatePage.evaluate(async () => {
+		const windows = await (
+			globalThis as typeof globalThis & ChromeGlobal
+		).chrome.windows.getAll();
+		return windows.flatMap((win) =>
+			win.incognito && win.id !== undefined ? [win.id] : [],
+		);
+	});
+	return ids.toSorted((a, b) => a - b);
+}
+
+/**
+What the private lock keeps in session storage: the key, the last use, and the private windows it tracks.
+*/
+async function lockSession(normal: Page) {
+	const saved = await normal.evaluate(
+		async (keys) =>
+			(
+				globalThis as typeof globalThis & StorageGlobal
+			).chrome.storage.session.get(keys),
+		[LOCK_KEY, LOCK_ACTIVE_KEY, LOCK_WINDOWS_KEY],
+	);
+	return {
+		hasKey: saved[LOCK_KEY] !== undefined,
+		hasActive: saved[LOCK_ACTIVE_KEY] !== undefined,
+		windows: Array.isArray(saved[LOCK_WINDOWS_KEY])
+			? (saved[LOCK_WINDOWS_KEY] as number[]).toSorted((a, b) => a - b)
+			: undefined,
+	};
+}
+
+async function waitFor<T>(
+	read: () => Promise<T>,
+	done: (value: T) => boolean,
+	what: string,
+	timeout = 10_000,
+): Promise<T> {
+	const deadline = Date.now() + timeout;
+	for (;;) {
+		const value = await read();
+		if (done(value)) {
+			return value;
+		}
+
+		if (Date.now() > deadline) {
+			assert.fail(`Timed out waiting for ${what}: ${JSON.stringify(value)}`);
+		}
+
+		await new Promise((resolve) => {
+			setTimeout(resolve, 100);
+		});
+	}
+}
+
+async function stopWorkers(context: BrowserContext, id: string) {
+	const probe = await context.newPage();
+	await probe.goto(`chrome-extension://${id}/options.html`);
+	const cdp = await context.newCDPSession(probe);
+	await cdp.send('ServiceWorker.enable');
+	await cdp.send('ServiceWorker.stopAllWorkers');
+	await probe.close();
+}
 
 async function storedPrivateValues(normal: Page) {
 	return normal.evaluate(async () => {
@@ -576,13 +646,8 @@ async function runLockChecks(
 	);
 
 	// A restarted worker keeps the library open while the browser keeps running.
-	const probe = await context.newPage();
-	await probe.goto(`chrome-extension://${id}/options.html`);
-	const cdp = await context.newCDPSession(probe);
-	await cdp.send('ServiceWorker.enable');
-	await cdp.send('ServiceWorker.stopAllWorkers');
+	await stopWorkers(context, id);
 	assert.deepEqual(await bookmarkTitles(privatePage), ['Saved private']);
-	await probe.close();
 	console.log('ok a restarted private worker keeps the library unlocked');
 
 	// The idle timeout locks the page by itself.
@@ -633,17 +698,128 @@ async function runLockChecks(
 		);
 	}
 
-	// Closing private windows does not lock: the key lives in session storage until the browser closes.
-	await privatePage.close();
-	const reopened = await openPrivatePage(
-		normal,
-		`chrome-extension://${id}/newtab.html`,
-	);
-	await reopened.getByText('Saved private', {exact: true}).waitFor();
-	console.log(
-		'ok the library stays unlocked across private windows until the browser closes',
-	);
+	await runWindowLockChecks(context, normal, privatePage, id, errors);
 	await normal.close();
+}
+
+/**
+Closing the last private window locks the library; closing one of several, or restarting the worker, does not.
+The private worker is not woken when a private window closes, so the lock is judged on the next wake.
+*/
+async function runWindowLockChecks(
+	context: BrowserContext,
+	normal: Page,
+	first: Page,
+	id: string,
+	errors: string[],
+) {
+	const newtab = `chrome-extension://${id}/newtab.html`;
+	const watch = (page: Page) => {
+		page.on('pageerror', (error) => {
+			errors.push(error.message);
+		});
+	};
+
+	// Unlocking recorded the private window that was open.
+	const [firstId] = await privateWindowIds(first);
+	assert.equal((await privateWindowIds(first)).length, 1);
+	await waitFor(
+		() => lockSession(normal),
+		(state) => state.hasKey && state.windows?.join(',') === String(firstId),
+		'the unlocked library to track the open private window',
+	);
+
+	// A second private window opens unlocked, because the first is still open.
+	const second = await openPrivatePage(normal, newtab);
+	watch(second);
+	await second.getByText('Saved private', {exact: true}).waitFor();
+	const [, secondId] = await privateWindowIds(second);
+	assert.ok(secondId > firstId, 'window ids only count up');
+	await waitFor(
+		() => lockSession(normal),
+		(state) => state.windows?.join(',') === `${firstId},${secondId}`,
+		'both private windows to be tracked',
+	);
+
+	// Closing one of two keeps it unlocked, and so does a worker restart with a window still open.
+	await first.close();
+	await stopWorkers(context, id);
+	assert.deepEqual(await bookmarkTitles(second), ['Saved private']);
+	await second.reload();
+	await second.getByText('Saved private', {exact: true}).waitFor();
+	assert.equal((await lockSession(normal)).hasKey, true);
+	assert.ok((await lockSession(normal)).windows?.includes(secondId));
+	console.log(
+		'ok closing one of two private windows, and restarting the worker, keep the library unlocked',
+	);
+
+	// Close the only private window while the worker is stopped: nothing runs, so the key stays in memory.
+	await stopWorkers(context, id);
+	await second.close();
+	await new Promise((resolve) => {
+		setTimeout(resolve, 1500);
+	});
+	const afterClose = await lockSession(normal);
+	console.log(
+		`   after the last close with the worker stopped: key ${afterClose.hasKey ? 'still in session memory' : 'already gone'}`,
+	);
+
+	// The next private window shows the lock screen and the key is gone before it can read anything.
+	const third = await openPrivatePage(normal, newtab);
+	watch(third);
+	await lockedHeading(third).waitFor();
+	assert.deepEqual(await lockSession(normal), {
+		hasKey: false,
+		hasActive: false,
+		windows: undefined,
+	});
+	const [thirdId] = await privateWindowIds(third);
+	assert.ok(thirdId > secondId, 'a new window never reuses an id');
+	for (const message of [{type: 'GET_STATE'}, {type: 'GET_FULL_BACKUP'}]) {
+		const refused = await sendRaw(third, message);
+		assert.equal(refused.ok, false, message.type);
+		assert.equal(refused.locked, true, message.type);
+	}
+
+	assert.equal(await third.getByText('Saved private').count(), 0);
+	await captureEvidence(
+		third,
+		third.locator('body'),
+		'lock-screen-after-last-close',
+	);
+	console.log(
+		'ok after the last private window closed, the next one shows the lock screen and no key remains in session storage',
+	);
+
+	// Unlocking again tracks the new window. This time the worker is awake when the last window closes.
+	await unlockWith(third, LOCK_PASSWORD);
+	await third.getByText('Saved private', {exact: true}).waitFor();
+	await waitFor(
+		() => lockSession(normal),
+		(state) => state.hasKey && state.windows?.join(',') === String(thirdId),
+		'the new window to be tracked',
+	);
+	await third.close();
+	const awake = await waitFor(
+		() => lockSession(normal),
+		(state) => !state.hasKey,
+		'an awake worker to lock when the last window closed',
+		5000,
+	).catch(() => undefined);
+	console.log(
+		`   after the last close with the worker awake: ${awake ? 'locked at once' : 'key still in session memory'}`,
+	);
+	const fourth = await openPrivatePage(normal, newtab);
+	watch(fourth);
+	await lockedHeading(fourth).waitFor();
+	assert.equal((await lockSession(normal)).hasKey, false);
+	console.log(
+		'ok the next window after an awake close shows the lock screen too',
+	);
+
+	// Leave the library unlocked with a window open, as the browser restart check expects.
+	await unlockWith(fourth, LOCK_PASSWORD);
+	await fourth.getByText('Saved private', {exact: true}).waitFor();
 }
 
 const evidence = fromRoot('.dev/evidence');

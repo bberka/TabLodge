@@ -5,11 +5,14 @@ import {
 	generateDataKey,
 	importDataKey,
 	isSealed,
+	judgePrivateWindows,
 	LOCK_ACTIVITY_KEY,
 	LOCK_RECORD_KEY,
 	LOCK_SESSION_KEY,
+	LOCK_WINDOWS_KEY,
 	openValue,
 	parseLockRecord,
+	parseWindowIds,
 	PrivateLockError,
 	readStored,
 	sealValue,
@@ -26,12 +29,18 @@ const password = {kind: 'password', value: 'correct horse battery'} as const;
 /**
 Two in-memory storage areas and a clock, shaped like chrome.storage.local and chrome.storage.session.
 `failSetAfter` lets that many local writes through, then every later one throws: the browser stopping mid pass.
+With `windows`, the lock also watches the private windows: `control.windows` is the list the browser reports.
 */
-function createEnv(seed: Record<string, unknown> = {}) {
+function createEnv(seed: Record<string, unknown> = {}, windows?: number[]) {
 	const local = new Map<string, unknown>(Object.entries(structuredClone(seed)));
 	const session = new Map<string, unknown>();
 	const clock = {now: 1_000_000};
-	const control = {failSetAfter: Infinity, localSets: 0};
+	const control = {
+		failSetAfter: Infinity,
+		localSets: 0,
+		windows: windows ?? [],
+		windowsFail: false,
+	};
 	const area = (store: Map<string, unknown>, counted: boolean) => ({
 		async get(keys: string[] | null) {
 			const wanted = keys ?? [...store.keys()];
@@ -67,6 +76,15 @@ function createEnv(seed: Record<string, unknown> = {}) {
 		reserved: [CONFIG_KEY, LOCK_RECORD_KEY],
 		now: () => clock.now,
 		batch: {batchKeys: 2, batchChars: 400},
+		...(windows && {
+			async openWindows() {
+				if (control.windowsFail) {
+					throw new Error('windows are unavailable');
+				}
+
+				return [...control.windows];
+			},
+		}),
 	};
 	return {env, local, session, clock, control};
 }
@@ -554,4 +572,222 @@ test('a sealed value moved to another key is refused', async () => {
 		(await failure(readStored(gate.key, 'tablodge.session.b.2', moved))).code,
 		'damaged',
 	);
+});
+
+// Private windows ---------------------------------------------------------------------------------------------------
+
+test('closing every tracked window locks; one that remains keeps the library open and adopts new ones', () => {
+	const cases: Array<{
+		name: string;
+		tracked: number[] | undefined;
+		open: number[];
+		expected: ReturnType<typeof judgePrivateWindows>;
+	}> = [
+		{
+			name: 'all windows remain',
+			tracked: [4, 7],
+			open: [4, 7],
+			expected: {lock: false, tracked: [4, 7]},
+		},
+		{
+			name: 'one of two remains',
+			tracked: [4, 7],
+			open: [7],
+			expected: {lock: false, tracked: [7]},
+		},
+		{
+			name: 'the only window closed',
+			tracked: [4],
+			open: [],
+			expected: {lock: true},
+		},
+		{
+			name: 'a new window replaced the only one',
+			tracked: [4],
+			open: [9],
+			expected: {lock: true},
+		},
+		{
+			name: 'a window opened while the worker slept next to a tracked one',
+			tracked: [4],
+			open: [4, 9],
+			expected: {lock: false, tracked: [4, 9]},
+		},
+		{
+			name: 'windows opened and closed while the worker slept, the first still open',
+			tracked: [4, 5],
+			open: [4, 8],
+			expected: {lock: false, tracked: [4, 8]},
+		},
+		{
+			name: 'nothing was tracked',
+			tracked: undefined,
+			open: [4],
+			expected: {lock: true},
+		},
+		{
+			name: 'an empty list was tracked',
+			tracked: [],
+			open: [4],
+			expected: {lock: true},
+		},
+		{
+			name: 'nothing tracked or open',
+			tracked: [],
+			open: [],
+			expected: {lock: true},
+		},
+	];
+	for (const {name, tracked, open, expected} of cases) {
+		assert.deepEqual(judgePrivateWindows(tracked, open), expected, name);
+	}
+});
+
+test('a reused window id would keep the library open, so the tracked ids must not outlive the browser session', async () => {
+	// Chromium counts windows up for as long as the browser runs, so an id never returns for another window. If one
+	// did, the judgement could not tell the two apart. The ids live in session storage, which a browser restart empties.
+	assert.deepEqual(judgePrivateWindows([3], [3]), {lock: false, tracked: [3]});
+	const {env, session} = createEnv(library, [3]);
+	await createPrivateLock(env).enable(password);
+	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [3]);
+	session.clear();
+	const restarted = createPrivateLock(env);
+	assert.equal((await restarted.gate())?.key, null);
+	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
+});
+
+test('stored window ids that are malformed count as nothing tracked', () => {
+	assert.deepEqual(parseWindowIds([2, 2, 5]), [2, 5]);
+	for (const bad of [undefined, null, 'x', {}, [1.5], [-1], ['1'], [NaN]]) {
+		assert.equal(parseWindowIds(bad), undefined);
+	}
+});
+
+test('unlocking tracks the private windows, and closing the only one locks before the next read', async () => {
+	const {env, session, control} = createEnv(library, [11]);
+	const lock = createPrivateLock(env);
+	await lock.enable(password);
+	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [11]);
+	assert.ok((await lock.gate())?.key);
+
+	control.windows = [];
+	assert.equal((await lock.gate())?.key, null);
+	assert.equal(session.has(LOCK_SESSION_KEY), false);
+	assert.equal(session.has(LOCK_ACTIVITY_KEY), false);
+	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
+	assert.equal((await lock.status()).locked, true);
+
+	// The next private window sees the lock screen, and unlocking tracks that window only.
+	control.windows = [12];
+	assert.equal((await lock.gate())?.key, null);
+	await lock.unlock(password.value);
+	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [12]);
+	assert.ok((await lock.gate())?.key);
+});
+
+test('with two private windows closing one keeps the library open; closing the other locks it', async () => {
+	const {env, session, control} = createEnv(library, [1, 2]);
+	const lock = createPrivateLock(env);
+	await lock.enable(password);
+	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [1, 2]);
+	control.windows = [2];
+	assert.ok((await lock.gate())?.key);
+	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [2]);
+	control.windows = [];
+	assert.equal(await lock.lockWhenWindowsClosed(), true);
+	assert.equal(session.has(LOCK_SESSION_KEY), false);
+});
+
+test('a restarted worker keeps the library open while a tracked window exists, and adopts windows opened meanwhile', async () => {
+	const {env, session, control} = createEnv(library, [1]);
+	await createPrivateLock(env).enable(password);
+	control.windows = [1, 6];
+	const restarted = createPrivateLock(env);
+	assert.ok((await restarted.gate())?.key);
+	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [1, 6]);
+	// Window 1 closed while the worker slept; window 6 stays, and it was tracked at the last wake.
+	control.windows = [6];
+	assert.ok((await createPrivateLock(env).gate())?.key);
+	// Both closed while it slept, and window 9 opened: nothing tracked remains.
+	control.windows = [9];
+	assert.equal((await createPrivateLock(env).gate())?.key, null);
+});
+
+test('a window that opens as the last one closes cannot inherit the unlocked library, whichever check runs first', async () => {
+	for (const order of ['event first', 'read first', 'together'] as const) {
+		const {env, session, control} = createEnv(library, [1]);
+		const lock = createPrivateLock(env);
+		await lock.enable(password);
+		// Window 1 closed while the worker slept and window 2 just opened.
+		control.windows = [2];
+		if (order === 'event first') {
+			await lock.lockWhenWindowsClosed();
+			assert.equal((await lock.gate())?.key, null, order);
+		} else if (order === 'read first') {
+			assert.equal((await lock.gate())?.key, null, order);
+			await lock.lockWhenWindowsClosed();
+		} else {
+			const [gate] = await Promise.all([
+				lock.gate(),
+				lock.lockWhenWindowsClosed(),
+				lock.status(),
+			]);
+			assert.equal(gate?.key, null, order);
+		}
+
+		assert.equal(session.has(LOCK_SESSION_KEY), false, order);
+		assert.equal(session.has(LOCK_WINDOWS_KEY), false, order);
+	}
+});
+
+test('a window close the browser still lists is ignored, so a worker that is awake locks at once', async () => {
+	const {env, session} = createEnv(library, [1, 2]);
+	const lock = createPrivateLock(env);
+	await lock.enable(password);
+	// Window 2 closed but is still listed: it stops counting, window 1 keeps the library open.
+	assert.equal(await lock.lockWhenWindowsClosed(2), false);
+	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [1]);
+	// Window 1 closes the same way, and nothing is left.
+	assert.equal(await lock.lockWhenWindowsClosed(1), true);
+	assert.equal(session.has(LOCK_SESSION_KEY), false);
+	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
+});
+
+test('a window list that cannot be read, or an unlock that tracked none, locks instead of guessing', async () => {
+	const failing = createEnv(library, [1]);
+	const lock = createPrivateLock(failing.env);
+	await lock.enable(password);
+	failing.control.windowsFail = true;
+	assert.equal((await lock.gate())?.key, null);
+	assert.equal(failing.session.has(LOCK_SESSION_KEY), false);
+
+	const blind = createEnv(library, []);
+	const unseen = createPrivateLock(blind.env);
+	await unseen.enable(password);
+	assert.equal(blind.session.has(LOCK_SESSION_KEY), false);
+	assert.equal((await unseen.gate())?.key, null);
+});
+
+test('Lock now clears the tracked windows, and a lock without a window list never locks on windows', async () => {
+	const {env, session} = createEnv(library, [1]);
+	const lock = createPrivateLock(env);
+	await lock.enable(password);
+	await lock.lock();
+	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
+
+	// A regular worker reads the same status but cannot see private windows.
+	const plain = createEnv(library);
+	const regular = createPrivateLock(plain.env);
+	await regular.enable(password);
+	assert.equal(plain.session.has(LOCK_WINDOWS_KEY), false);
+	assert.ok((await regular.gate())?.key);
+	assert.equal(await regular.lockWhenWindowsClosed(), false);
+});
+
+test('the window check writes nothing while there is no key', async () => {
+	const none = createEnv(library, []);
+	const lock = createPrivateLock(none.env);
+	assert.equal(await lock.lockWhenWindowsClosed(), true);
+	assert.equal(await lock.gate(), null);
+	assert.deepEqual([...none.session.keys()], []);
 });
