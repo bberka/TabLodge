@@ -1371,6 +1371,7 @@ export function ImportDialog({
 				preferences: full.preferences,
 				snapshots: full.snapshots,
 				trash: full.trash,
+				locked: full.locked,
 			});
 			if (!result?.ok) {
 				throw new Error(result?.error || 'Could not import this backup.');
@@ -1379,7 +1380,7 @@ export function ImportDialog({
 			onOpenChange(false);
 			await onImported?.();
 			offerUndo(
-				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.`,
+				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.${result.lockedRestored ? ' The locked area was replaced and is locked.' : ''}`,
 				result.undoId,
 				showStatus,
 				async () => onImported?.(),
@@ -2105,9 +2106,10 @@ export function ImportDialog({
 	);
 }
 
-function fullBackupDetails({manifest}: FullBackupContents) {
+function fullBackupDetails({manifest, locked}: FullBackupContents) {
 	const created = new Date(manifest.createdAt);
 	const parts = [
+		locked ? 'Includes the locked area, which replaces yours' : '',
 		Number.isNaN(created.getTime())
 			? ''
 			: `Created ${created.toLocaleString()}`,

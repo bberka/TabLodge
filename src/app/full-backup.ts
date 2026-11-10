@@ -19,6 +19,10 @@ export type FullBackupParts = {
 	preferences: unknown;
 	snapshots: unknown;
 	trash: unknown;
+	/**
+	The locked area as stored, still encrypted, or absent when there is none. A backup never holds its contents in plain text.
+	*/
+	locked?: unknown;
 };
 
 export type FullBackupCounts = {
@@ -55,6 +59,7 @@ const FILES = {
 	preferences: 'preferences.json',
 	snapshots: 'snapshots.json',
 	trash: 'trash.json',
+	locked: 'locked.json',
 } as const;
 // Everything is sent to the worker in one message, which Chromium caps near 64 MB.
 const MAX_UNPACKED_BYTES = 60 * 1024 * 1024;
@@ -159,6 +164,8 @@ export function buildFullBackup(
 			[FILES.preferences]: json(parts.preferences),
 			[FILES.snapshots]: json(parts.snapshots),
 			[FILES.trash]: json(parts.trash),
+			...(parts.locked !== undefined &&
+				parts.locked !== null && {[FILES.locked]: json(parts.locked)}),
 		},
 		{level: 6, mtime: now},
 	);
@@ -240,6 +247,7 @@ export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
 		preferences: parseEntry(files, FILES.preferences),
 		snapshots: parseEntry(files, FILES.snapshots),
 		trash: parseEntry(files, FILES.trash),
+		locked: parseEntry(files, FILES.locked),
 	};
 	const counts = countFullBackup(parts);
 	return {

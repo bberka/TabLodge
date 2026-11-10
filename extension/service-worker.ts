@@ -13,6 +13,11 @@ import {
 	type UndoDelta,
 } from '../src/shared/library-state';
 import {hashText} from '../src/shared/library-values';
+import {
+	LOCKED_ALARM,
+	LockedError,
+	createLockedStore,
+} from '../src/shared/locked-store';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
 // would leave an `export {}` behind. The value imports above are bundled into the classic script by the
@@ -2893,7 +2898,18 @@ without opening anything.
 */
 async function openBookmarkPrompt(
 	commandTab?: chrome.tabs.Tab,
-	prefill?: {title?: string; fromBrowser?: boolean},
+	prefill?: {
+		title?: string;
+		fromBrowser?: boolean;
+		/**
+		Bookmarks this address instead of the tab's, such as a clicked link.
+		*/
+		url?: string;
+		/**
+		Opens on the locked area save, which asks for the PIN or password when the area is locked.
+		*/
+		locked?: boolean;
+	},
 ): Promise<MenuOutcome> {
 	let tab = commandTab?.url ? commandTab : undefined;
 	let anchor: chrome.windows.Window | undefined;
@@ -2910,7 +2926,7 @@ async function openBookmarkPrompt(
 		*/
 	}
 
-	const url = normalizeUrl(tab?.url);
+	const url = normalizeUrl(prefill?.url ?? tab?.url);
 	if (!url) {
 		return {
 			ok: false,
@@ -2925,7 +2941,7 @@ async function openBookmarkPrompt(
 	);
 	const options: chrome.windows.CreateData = {
 		type: 'popup',
-		url: `${chrome.runtime.getURL('add-bookmark.html')}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${prefill?.fromBrowser ? '&source=browser' : ''}`,
+		url: `${chrome.runtime.getURL('add-bookmark.html')}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${prefill?.fromBrowser ? '&source=browser' : ''}${prefill?.locked ? '&destination=locked' : ''}`,
 		width: BOOKMARK_PROMPT_WIDTH,
 		height: BOOKMARK_PROMPT_HEIGHT,
 		focused: true,
@@ -7829,6 +7845,8 @@ async function getFullBackup(): Promise<ActionResult<'GET_FULL_BACKUP'>> {
 		},
 		snapshots: {version: 1, history: await readSnapshotHistory()},
 		trash: {version: 1, items: await readTrash()},
+		// Still encrypted, and readable while locked. A private worker has no locked area to give.
+		locked: privateContext ? null : await lockedStore.exportRecord(),
 	};
 }
 
@@ -8048,6 +8066,14 @@ function restoreFullBackup(
 			await syncRecoveryAlarms(store.settings);
 			await syncToolbarAction(store.settings);
 			await rebuildContextMenus(store);
+			// The library is restored; the locked area follows when the backup carried one. It comes back locked.
+			if (
+				!privateContext &&
+				input.locked !== undefined &&
+				input.locked !== null
+			) {
+				result.lockedRestored = await lockedStore.importRecord(input.locked);
+			}
 		}
 
 		return result;
@@ -8512,6 +8538,209 @@ function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
 // nothing else has changed those keys since.
 const UNDO_KEY = 'tablodge.undo';
 const ALARM_UNDO = 'tablodge-undo';
+
+/**
+The locked area. Its key and unlock state live in session storage and its data in one encrypted local entry, so a
+restarted worker picks up where the last one stopped. The idle alarm is a backstop: every read also checks the clock.
+*/
+const lockedStore = createLockedStore({
+	local: {
+		async get(key) {
+			return (await chrome.storage.local.get([key]))[key];
+		},
+		async set(key, value) {
+			await chrome.storage.local.set({[key]: value});
+		},
+		async remove(key) {
+			await chrome.storage.local.remove(key);
+		},
+	},
+	session: {
+		async get(key) {
+			return (await chrome.storage.session.get([key]))[key];
+		},
+		async set(key, value) {
+			await chrome.storage.session.set({[key]: value});
+		},
+		async remove(key) {
+			await chrome.storage.session.remove(key);
+		},
+	},
+	now: () => Date.now(),
+	alarm: {
+		async set(whenMs) {
+			await chrome.alarms?.create?.(LOCKED_ALARM, {when: whenMs});
+		},
+		async clear() {
+			await chrome.alarms?.clear?.(LOCKED_ALARM);
+		},
+	},
+});
+
+function lockedFailure(error: unknown): ActionFailure {
+	if (error instanceof LockedError) {
+		return {
+			ok: false,
+			error: error.message,
+			code: error.code,
+			...(error.retryAfterMs !== undefined && {
+				retryAfterMs: error.retryAfterMs,
+			}),
+		};
+	}
+
+	return {
+		ok: false,
+		error: `${APP_NAME} could not use the locked area.`,
+	};
+}
+
+/**
+Messages for the locked area. They run outside the library's mutation queue because they never touch the library, except
+to put bookmarks on the board, and they stay in the normal windows' worker: a private worker answers none of them.
+*/
+async function handleLockedMessage(
+	message: TabLodgeMessage,
+): Promise<ActionResult> {
+	if (privateContext) {
+		return {
+			ok: false,
+			error: 'The locked area is not available in private windows.',
+		};
+	}
+
+	try {
+		switch (message.type) {
+			case 'LOCKED_STATUS': {
+				return {ok: true, locked: await lockedStore.status()};
+			}
+
+			case 'LOCKED_SETUP': {
+				await lockedStore.setup(
+					{kind: message.kind, value: String(message.value)},
+					message.idleMinutes,
+				);
+				return {ok: true, locked: await lockedStore.status()};
+			}
+
+			case 'LOCKED_UNLOCK': {
+				await lockedStore.unlock(String(message.credential));
+				return {ok: true, locked: await lockedStore.status()};
+			}
+
+			case 'LOCKED_LOCK': {
+				await lockedStore.lock();
+				return {ok: true, locked: await lockedStore.status()};
+			}
+
+			case 'LOCKED_TOUCH': {
+				await lockedStore.touch();
+				return {ok: true};
+			}
+
+			case 'LOCKED_LIST': {
+				return {ok: true, bookmarks: await lockedStore.list()};
+			}
+
+			case 'LOCKED_ADD': {
+				const status = await lockedStore.status();
+				if (
+					status.configured &&
+					!status.unlocked &&
+					typeof message.credential === 'string'
+				) {
+					await lockedStore.unlock(message.credential);
+				}
+
+				const {added, skipped} = await lockedStore.add(
+					arrayOf(message.bookmarks).slice(0, 500) as Array<{
+						title?: string;
+						url: string;
+					}>,
+				);
+				return {ok: true, added: added.length, skipped};
+			}
+
+			case 'LOCKED_UPDATE': {
+				return {
+					ok: true,
+					bookmark: await lockedStore.update(
+						String(message.id),
+						message.fields ?? {},
+					),
+				};
+			}
+
+			case 'LOCKED_REMOVE': {
+				return {
+					ok: true,
+					removed: await lockedStore.remove(arrayOf(message.ids).map(String)),
+				};
+			}
+
+			case 'LOCKED_MOVE_TO_BOARD': {
+				const ids = new Set(arrayOf(message.ids).map(String));
+				const chosen = (await lockedStore.list()).filter((item) =>
+					ids.has(item.id),
+				);
+				const result = await addBookmarks(
+					chosen.map(({title, url}) => ({title, url})),
+					message.columnId ?? null,
+				);
+				if (!result.ok) {
+					return result;
+				}
+
+				// Added to the board first, so an interruption leaves a copy in both places rather than none.
+				await lockedStore.remove(chosen.map((item) => item.id));
+				return {ok: true, moved: result.count, skipped: result.skipped};
+			}
+
+			case 'LOCKED_SET_IDLE': {
+				await lockedStore.setIdleMinutes(Number(message.idleMinutes));
+				return {ok: true, locked: await lockedStore.status()};
+			}
+
+			case 'LOCKED_CHANGE_CREDENTIAL': {
+				await lockedStore.changeCredential(String(message.current), {
+					kind: message.kind,
+					value: String(message.value),
+				});
+				return {ok: true, locked: await lockedStore.status()};
+			}
+
+			case 'LOCKED_REMOVE_LOCK': {
+				let moved = 0;
+				const total = await lockedStore.removeLock(
+					String(message.credential),
+					async (items) => {
+						if (message.bookmarks !== 'board' || items.length === 0) {
+							return;
+						}
+
+						const result = await addBookmarks(
+							items.map(({title, url}) => ({title, url})),
+							message.columnId ?? null,
+						);
+						if (!result.ok) {
+							throw new Error(result.error);
+						}
+
+						moved = items.length;
+					},
+				);
+				return {ok: true, moved, discarded: total - moved};
+			}
+
+			default: {
+				return {ok: false, error: `Unknown ${APP_NAME} action.`};
+			}
+		}
+	} catch (error) {
+		return lockedFailure(error);
+	}
+}
+
 const UNDO_WINDOW_MS = 120_000;
 const UNDO_KEEP = 3;
 const undoMutate = serialQueue();
@@ -8861,17 +9090,19 @@ chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 	}
 
 	const work =
-		alarm.name === ALARM_SNAPSHOT
-			? takeSnapshot('interval', true)
-			: alarm.name === ALARM_BACKUP
-				? runScheduledBackup()
-				: alarm.name === ALARM_TRASH
-					? purgeTrash()
-					: alarm.name === ALARM_UNDO
-						? purgeUndo()
-						: alarm.name === ALARM_ARCHIVE
-							? archiveStaleSessions()
-							: undefined;
+		alarm.name === LOCKED_ALARM
+			? lockedStore.checkIdle()
+			: alarm.name === ALARM_SNAPSHOT
+				? takeSnapshot('interval', true)
+				: alarm.name === ALARM_BACKUP
+					? runScheduledBackup()
+					: alarm.name === ALARM_TRASH
+						? purgeTrash()
+						: alarm.name === ALARM_UNDO
+							? purgeUndo()
+							: alarm.name === ALARM_ARCHIVE
+								? archiveStaleSessions()
+								: undefined;
 	void work?.catch(() => undefined);
 });
 
@@ -8923,6 +9154,10 @@ async function handleMessage(
 	message: TabLodgeMessage | undefined,
 	sender: chrome.runtime.MessageSender,
 ): Promise<ActionResult> {
+	if (message?.type.startsWith('LOCKED_')) {
+		return handleLockedMessage(message);
+	}
+
 	await privateConfigReady;
 	await mutationQueue;
 	if (
@@ -9769,11 +10004,13 @@ const MENU = {
 	linkRoot: 'tablodge-link-root',
 	linkBookmark: 'tablodge-link-bookmark',
 	linkBookmarkNew: 'tablodge-link-bookmark-new',
+	linkLocked: 'tablodge-link-locked',
 	linkSend: 'tablodge-link-send',
 	linkSave: 'tablodge-link-save',
 	pageRoot: 'tablodge-page-root',
 	pageBookmark: 'tablodge-page-bookmark',
 	pageBookmarkNew: 'tablodge-page-bookmark-new',
+	pageLocked: 'tablodge-page-locked',
 	pageSend: 'tablodge-page-send',
 	pageSendNew: 'tablodge-page-send-new',
 	selectionRoot: 'tablodge-selection-root',
@@ -9971,12 +10208,20 @@ function contextMenuPlan(
 			{targetUrlPatterns: WEB_URL_PATTERNS},
 		);
 
-		items.push({
-			id: MENU.linkSend,
-			title: 'Save link to session',
-			parentId: MENU.linkRoot,
-			...link,
-		});
+		items.push(
+			{
+				id: MENU.linkLocked,
+				title: 'Bookmark link to locked area',
+				parentId: MENU.linkRoot,
+				...link,
+			},
+			{
+				id: MENU.linkSend,
+				title: 'Save link to session',
+				parentId: MENU.linkRoot,
+				...link,
+			},
+		);
 		// The Saved links entry below stands in for that session, so it is not listed twice.
 		const savedLinksName = SAVED_LINKS_SESSION.toLocaleLowerCase();
 		for (const session of sessions) {
@@ -10029,12 +10274,20 @@ function contextMenuPlan(
 			{documentUrlPatterns: WEB_URL_PATTERNS},
 		);
 
-		items.push({
-			id: MENU.pageSend,
-			title: 'Send this tab to session',
-			parentId: MENU.pageRoot,
-			...page,
-		});
+		items.push(
+			{
+				id: MENU.pageLocked,
+				title: 'Bookmark this page to locked area',
+				parentId: MENU.pageRoot,
+				...page,
+			},
+			{
+				id: MENU.pageSend,
+				title: 'Send this tab to session',
+				parentId: MENU.pageRoot,
+				...page,
+			},
+		);
 		for (const session of sessions) {
 			items.push({
 				id: `${PAGE_SEND_PREFIX}${session.id}`,
@@ -10616,6 +10869,31 @@ async function openPrefilledBookmarkDialog(
 }
 
 /**
+Saves to the locked area straight away when it is unlocked. A locked or missing area cannot take a write without the PIN or
+password, so the save window opens on it instead and asks there.
+*/
+async function bookmarkToLockedArea(
+	url: string,
+	title: string,
+	tab?: chrome.tabs.Tab,
+): Promise<MenuOutcome> {
+	const status = await lockedStore.status();
+	if (status.configured && status.unlocked) {
+		try {
+			await lockedStore.add([{title, url}]);
+		} catch (error) {
+			flashBadge(tab, false);
+			return lockedFailure(error);
+		}
+
+		flashBadge(tab, true);
+		return {ok: true};
+	}
+
+	return openBookmarkPrompt(tab, {url, title, locked: true});
+}
+
+/**
 Appends a link without opening it, to the session `groupId` or, when none is named, to the "Saved links" session
 (created when missing).
 */
@@ -10789,6 +11067,38 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 	if (scope) {
 		runMenuAction(tab, `${APP_NAME} could not save these tabs.`, () =>
 			saveTabs(scope, tab, DEFAULT_FOLDER_ID, {promptName: true}),
+		);
+		return;
+	}
+
+	if (id === MENU.linkLocked || id === MENU.pageLocked) {
+		const isLink = id === MENU.linkLocked;
+		const url = normalizeUrl(
+			isLink ? info.linkUrl : (tab?.url ?? info.pageUrl),
+		);
+		runMenuAction(
+			tab,
+			`${APP_NAME} could not bookmark this to the locked area.`,
+			async () => {
+				if (!url) {
+					return {
+						ok: false,
+						error: isLink
+							? 'Only http and https links can be saved.'
+							: 'Open a regular web page to bookmark it.',
+					};
+				}
+
+				const title = isLink
+					? await menuLinkTitle(info, url)
+					: pageTitle(
+							tab?.title,
+							linkHost(url),
+							(await readSettings()).cleanTitles,
+						);
+				return bookmarkToLockedArea(url, title, tab);
+			},
+			false,
 		);
 		return;
 	}
@@ -11091,5 +11401,10 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+	if (!privateContext) {
+		// A new browser session always starts locked, whatever session storage still holds.
+		void lockedStore.startup().catch(() => undefined);
+	}
+
 	void initializeExtension(true);
 });
