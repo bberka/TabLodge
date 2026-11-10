@@ -850,7 +850,7 @@ const settingsGroups: Array<{
 			{
 				name: 'pasteLinkToBookmark',
 				label: 'Paste a link to add a bookmark',
-				help: `Pasting a link anywhere on the ${PROJECT.name} page except a text field opens Add bookmark with the link and its title filled in. Several links, one per line, open a list to add them all.`,
+				help: `Pasting a link anywhere on the ${PROJECT.name} page except a text field opens Add bookmark with the link and its title filled in. Several links, one per line, open a list to add them all. Both dialogs can add to a saved session instead of a column.`,
 				type: 'switch',
 			},
 		],
