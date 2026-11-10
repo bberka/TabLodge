@@ -9386,6 +9386,7 @@ const MENU = {
 	linkRoot: 'tablodge-link-root',
 	linkBookmark: 'tablodge-link-bookmark',
 	linkBookmarkNew: 'tablodge-link-bookmark-new',
+	linkSend: 'tablodge-link-send',
 	linkSave: 'tablodge-link-save',
 	pageRoot: 'tablodge-page-root',
 	pageBookmark: 'tablodge-page-bookmark',
@@ -9411,7 +9412,11 @@ const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
 */
 const PAGE_SEND_PREFIX = 'tablodge-page-send:';
 /**
-How many sessions the "Send this tab to session" submenu lists, most recently changed first.
+"Save link to session" items are `${LINK_SEND_PREFIX}${sessionId}`.
+*/
+const LINK_SEND_PREFIX = 'tablodge-link-send:';
+/**
+How many sessions the "Send this tab to session" and "Save link to session" submenus list, most recently changed first.
 */
 const MENU_SESSION_LIMIT = 10;
 /**
@@ -9442,7 +9447,7 @@ const MENU_SAVE_SCOPES: Record<string, SaveScope> = {
 	[MENU.actionSaveWindow]: 'selected-or-window',
 };
 /**
-"Save link for later" collects links in this session (matched by name, case-insensitively).
+The "Saved links" entry of "Save link to session" collects links in this session (matched by name, case-insensitively).
 */
 const SAVED_LINKS_SESSION = 'Saved links';
 const WEB_URL_PATTERNS = ['http://*/*', 'https://*/*'];
@@ -9472,7 +9477,7 @@ function contextMenuSignature(
 		settings.contextMenuSelectionEnabled,
 		settings.contextMenuActionEnabled,
 		columns.map((column) => [column.id, column.name]),
-		settings.contextMenuPageEnabled
+		settings.contextMenuPageEnabled || settings.contextMenuLinksEnabled
 			? sessions.map((session) => [session.id, session.name])
 			: [],
 	]);
@@ -9584,9 +9589,37 @@ function contextMenuPlan(
 		);
 
 		items.push({
-			id: MENU.linkSave,
-			title: 'Save link for later',
+			id: MENU.linkSend,
+			title: 'Save link to session',
 			parentId: MENU.linkRoot,
+			...link,
+		});
+		// The Saved links entry below stands in for that session, so it is not listed twice.
+		const savedLinksName = SAVED_LINKS_SESSION.toLocaleLowerCase();
+		for (const session of sessions) {
+			if (session.name.toLocaleLowerCase() !== savedLinksName) {
+				items.push({
+					id: `${LINK_SEND_PREFIX}${session.id}`,
+					title: session.name,
+					parentId: MENU.linkSend,
+					...link,
+				});
+			}
+		}
+
+		if (items.some((item) => item.parentId === MENU.linkSend)) {
+			items.push({
+				id: `${MENU.linkSend}-separator`,
+				type: 'separator',
+				parentId: MENU.linkSend,
+				...link,
+			});
+		}
+
+		items.push({
+			id: MENU.linkSave,
+			title: SAVED_LINKS_SESSION,
+			parentId: MENU.linkSend,
 			...link,
 		});
 	}
@@ -10197,11 +10230,13 @@ async function openPrefilledBookmarkDialog(
 }
 
 /**
-Appends a link to the "Saved links" session (created when missing) without opening it.
+Appends a link without opening it, to the session `groupId` or, when none is named, to the "Saved links" session
+(created when missing).
 */
-async function saveLinkForLater(
+async function saveLinkToSession(
 	rawUrl: unknown,
 	title: string,
+	groupId?: string,
 ): Promise<Result<{added: boolean; groupId: string | null}>> {
 	const url = normalizeUrl(rawUrl);
 	if (!url) {
@@ -10211,13 +10246,17 @@ async function saveLinkForLater(
 	return mutate(async () => {
 		const store = await getStore();
 		const name = SAVED_LINKS_SESSION.toLocaleLowerCase();
-		let group = store.groups.find(
-			(entry) => entry.name.toLocaleLowerCase() === name,
-		);
+		let group = groupId
+			? findGroup(store, groupId)
+			: store.groups.find((entry) => entry.name.toLocaleLowerCase() === name);
+		if (groupId && !group) {
+			return {ok: false, error: 'That saved session no longer exists.'};
+		}
+
 		const copies = store.groups
 			.flatMap((entry) => entry.tabs)
 			.filter((entry) => entry.url === url);
-		// Already in "Saved links", or saved anywhere while duplicates are rejected: nothing to add.
+		// Already in the session, or saved anywhere while duplicates are rejected: nothing to add.
 		if (
 			group?.tabs.some((entry) => entry.url === url) ||
 			(copies.length > 0 && store.settings.saveDuplicateHandling === 'reject')
@@ -10370,6 +10409,7 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 
 	if (
 		id.startsWith(LINK_COLUMN_PREFIX) ||
+		id.startsWith(LINK_SEND_PREFIX) ||
 		id === MENU.linkBookmarkNew ||
 		id === MENU.linkSave
 	) {
@@ -10384,7 +10424,15 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 
 				const title = await menuLinkTitle(info, url);
 				if (id === MENU.linkSave) {
-					return saveLinkForLater(url, title);
+					return saveLinkToSession(url, title);
+				}
+
+				if (id.startsWith(LINK_SEND_PREFIX)) {
+					return saveLinkToSession(
+						url,
+						title,
+						id.slice(LINK_SEND_PREFIX.length),
+					);
 				}
 
 				if (id === MENU.linkBookmarkNew) {
