@@ -774,10 +774,6 @@ export type TabLodgeMessages = {
 		preferences?: unknown;
 		snapshots?: unknown;
 		trash?: unknown;
-		/**
-		The locked area exactly as it was exported: still encrypted. Replaces the current one and locks it. Absent in backups made before the locked area existed, which leave it alone.
-		*/
-		locked?: unknown;
 	};
 	GET_TRASH: {};
 	RESTORE_TRASH: {id: string};
@@ -787,66 +783,6 @@ export type TabLodgeMessages = {
 	Puts back what an action with an `undoId` changed, if that was under two minutes ago and nothing else has changed that data since.
 	*/
 	UNDO: {id: string};
-	/**
-	The locked area (src/shared/locked-store.ts). The worker owns the key; these messages are the only way a page reads or changes locked bookmarks, and only the normal windows' worker answers them.
-	*/
-	LOCKED_STATUS: {};
-	/**
-	Creates the area, empty and unlocked. `idleMinutes` is 1, 5, 15, 30, 60, or 0 for until the browser closes.
-	*/
-	LOCKED_SETUP: {kind: 'pin' | 'password'; value: string; idleMinutes?: number};
-	LOCKED_UNLOCK: {credential: string};
-	LOCKED_LOCK: {};
-	/**
-	Reports use, so the idle timer starts again. Ignored while locked.
-	*/
-	LOCKED_TOUCH: {};
-	LOCKED_LIST: {};
-	/**
-	Adds bookmarks. While locked, a `credential` unlocks first so one message can both unlock and save; without one a locked area answers with code `locked`.
-	*/
-	LOCKED_ADD: {
-		bookmarks: Array<{title?: string; url: string}>;
-		credential?: string;
-	};
-	LOCKED_UPDATE: {id: string; fields: {title?: string; url?: string}};
-	/**
-	Deletes for good. The locked area has no trash.
-	*/
-	LOCKED_REMOVE: {ids: string[]};
-	/**
-	Copies bookmarks to a board column, then deletes them from the locked area.
-	*/
-	LOCKED_MOVE_TO_BOARD: {ids: string[]; columnId?: string | null};
-	/**
-	Moves existing library content into the locked area as one operation (see `moveIntoLocked` in the worker). The
-	links are added to the encrypted entry first and removed from the library second. Nothing goes to the trash, and
-	the Undo list is cleared, so no readable copy stays behind in TabLodge. While locked, a `credential` unlocks first.
-	`deleteCopies` also deletes TabLodge's own backups and recovery snapshots, which may hold the links.
-	*/
-	LOCKED_MOVE_IN: {
-		source: LockedMoveSource;
-		credential?: string;
-		deleteCopies?: boolean;
-	};
-	LOCKED_SET_IDLE: {idleMinutes: number};
-	LOCKED_CHANGE_CREDENTIAL: {
-		current: string;
-		kind: 'pin' | 'password';
-		value: string;
-	};
-	/**
-	Deletes the area after checking the credential. `bookmarks` says what happens to what it holds: `board` puts it in a board column first, `delete` discards it.
-	*/
-	LOCKED_REMOVE_LOCK: {
-		credential: string;
-		bookmarks: 'board' | 'delete';
-		columnId?: string | null;
-	};
-	/**
-	For a forgotten PIN or password: deletes the area and everything in it without the credential, so a new one can be set up. The worker refuses it unless `confirm` is `LOCKED_RESET_CONFIRMATION`.
-	*/
-	LOCKED_RESET: {confirm: string};
 	GET_STORAGE_USAGE: {};
 };
 
@@ -862,93 +798,7 @@ export type ActionFailure = {
 	Set when the private library is locked: the page shows the lock screen instead of the error.
 	*/
 	locked?: true;
-	/**
-	Set by actions that a page reacts to beyond showing the message, such as `locked` or `wrong-credential` from the locked area.
-	*/
-	code?: string;
-	/**
-	Milliseconds until another PIN or password try is accepted.
-	*/
-	retryAfterMs?: number;
 };
-
-/**
-One bookmark in the locked area. It lives only inside the encrypted entry, so it has no column.
-*/
-export type LockedBookmark = {
-	id: string;
-	title: string;
-	url: string;
-	createdAt: number;
-	updatedAt: number;
-};
-
-/**
-What a move into the locked area takes. The locked area has no columns or sessions, so a column or a session keeps
-none of its name, notes or grouping: only its links move, flat.
-*/
-export type LockedMoveSource =
-	| {kind: 'bookmarks'; ids: string[]}
-	| {kind: 'column'; columnId: string}
-	/**
-	`afterwards` says what happens to the session once its links are in the locked area.
-	*/
-	| {kind: 'session'; groupId: string; afterwards: 'keep' | 'delete'};
-
-export type LockedMoveResult = {
-	/**
-	Links now in the locked area: new ones plus ones that were already there.
-	*/
-	copied: number;
-	/**
-	Of `copied`, how many were new to the locked area.
-	*/
-	added: number;
-	/**
-	Links removed from the library. A session that is kept loses none.
-	*/
-	removed: number;
-	/**
-	Links that did not move: not an http or https address, or changed while the move ran. They stay where they were.
-	*/
-	left: number;
-	/**
-	True when the column or session was emptied and removed too.
-	*/
-	removedContainer: boolean;
-	/**
-	Backups and recovery snapshots deleted because the person asked for it.
-	*/
-	copiesDeleted: number;
-	/**
-	False when the library's replaced records could not all be removed right away; the next change removes them.
-	*/
-	cleaned: boolean;
-};
-
-export type LockedStatus =
-	| {configured: false}
-	| {
-			configured: true;
-			unlocked: false;
-			kind: 'pin' | 'password';
-			idleMinutes: number;
-			/**
-			Set while too many wrong entries make the next try wait.
-			*/
-			retryAfterMs?: number;
-			/**
-			Wrong entries in a row so far. The unlock screen offers a reset from the third.
-			*/
-			failedAttempts?: number;
-	  }
-	| {
-			configured: true;
-			unlocked: true;
-			kind: 'pin' | 'password';
-			idleMinutes: number;
-			count: number;
-	  };
 
 export type SaveResult = {
 	count: number;
@@ -1152,20 +1002,12 @@ export type TabLodgeResponses = {
 		preferences: unknown;
 		snapshots: unknown;
 		trash: unknown;
-		/**
-		The locked area as stored (encrypted), or null when there is none.
-		*/
-		locked: unknown;
 	};
 	RESTORE_FULL_BACKUP: {
 		sessions: number;
 		bookmarks: number;
 		snapshots: number;
 		trash: number;
-		/**
-		True when the backup carried a locked area and it replaced the current one.
-		*/
-		lockedRestored?: boolean;
 	} & Undoable;
 	GET_TRASH: {items: TrashSummary[]};
 	/**
@@ -1175,24 +1017,6 @@ export type TabLodgeResponses = {
 	DELETE_TRASH: Undoable;
 	EMPTY_TRASH: {count: number} & Undoable;
 	UNDO: {label: string};
-	LOCKED_STATUS: {locked: LockedStatus};
-	LOCKED_SETUP: {locked: LockedStatus};
-	LOCKED_UNLOCK: {locked: LockedStatus};
-	LOCKED_LOCK: {locked: LockedStatus};
-	LOCKED_TOUCH: {};
-	LOCKED_LIST: {bookmarks: LockedBookmark[]};
-	LOCKED_ADD: {added: number; skipped: number};
-	LOCKED_UPDATE: {bookmark: LockedBookmark};
-	LOCKED_REMOVE: {removed: number};
-	LOCKED_MOVE_TO_BOARD: {moved: number; skipped: number};
-	LOCKED_MOVE_IN: LockedMoveResult;
-	LOCKED_SET_IDLE: {locked: LockedStatus};
-	LOCKED_CHANGE_CREDENTIAL: {locked: LockedStatus};
-	/**
-	`moved`: bookmarks put on the board; `discarded`: bookmarks deleted with the area.
-	*/
-	LOCKED_REMOVE_LOCK: {moved: number; discarded: number};
-	LOCKED_RESET: {locked: LockedStatus};
 	GET_STORAGE_USAGE: {usage: StorageUsage};
 };
 

@@ -527,7 +527,6 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	]);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-link-root')), [
 		'Bookmark link to',
-		'Bookmark link to locked area',
 		'Save link to session',
 	]);
 	assert.deepEqual(
@@ -561,7 +560,6 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	assert.deepEqual(pageRoots[0].contexts, ['page', 'frame']);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-root')), [
 		'Bookmark this page to',
-		'Bookmark this page to locked area',
 		'Send this tab to session',
 		'---',
 		'Save this tab',

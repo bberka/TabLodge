@@ -1,6 +1,6 @@
 // The credential a person chooses to protect something with: a PIN or a password.
-// Shared by every feature that asks for one (encrypted backups today; locked storage and the private
-// window password later), so the limits, the check and the wording live in one place. Pure, no browser APIs.
+// Shared by every feature that asks for one (encrypted backups and the private window lock), so the limits, the
+// check and the wording live in one place. Pure, no browser APIs.
 
 export type CredentialKind = 'pin' | 'password';
 
