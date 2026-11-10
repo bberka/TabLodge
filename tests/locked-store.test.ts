@@ -8,9 +8,11 @@ import {
 	LOCKED_ATTEMPTS_KEY,
 	LOCKED_FLAG_KEY,
 	LOCKED_KEY,
+	LOCKED_RESET_CONFIRMATION,
 	LOCKED_SESSION_KEY,
 	LockedError,
 	MAX_LOCKED_ITEMS,
+	RESET_OFFER_ATTEMPTS,
 	base64ToBytes,
 	bytesToBase64,
 	createLockedStore,
@@ -36,6 +38,10 @@ type Rig = {
 	Makes the next `set` of the key succeed in local storage and then throw, as if the worker died right after.
 	*/
 	crashAfterNextSet(area: 'local' | 'session', key: string): void;
+	/**
+	Makes the next `remove` of the key fail before it deletes anything.
+	*/
+	failNextRemove(area: 'local' | 'session', key: string): void;
 };
 
 function rig(): Rig {
@@ -45,6 +51,7 @@ function rig(): Rig {
 	const alarm = {at: null as number | null, sets: [] as number[]};
 	const fail = {local: false, session: false};
 	const crashKey = {local: '', session: ''};
+	const failRemove = {local: '', session: ''};
 	const area = (
 		name: 'local' | 'session',
 		map: Map<string, unknown>,
@@ -67,6 +74,11 @@ function rig(): Rig {
 			throw new Error('worker stopped after the write');
 		},
 		async remove(key) {
+			if (failRemove[name] === key) {
+				failRemove[name] = '';
+				throw new Error('storage remove failed');
+			}
+
 			map.delete(key);
 		},
 	});
@@ -94,6 +106,9 @@ function rig(): Rig {
 		},
 		crashAfterNextSet(name, key) {
 			crashKey[name] = key;
+		},
+		failNextRemove(name, key) {
+			failRemove[name] = key;
 		},
 	};
 }
@@ -754,4 +769,185 @@ test('operations queue behind each other, so two quick adds both land', async ()
 		store.add([{url: 'https://c.example/'}]),
 	]);
 	assert.equal((await store.list()).length, 3);
+});
+
+test('a reset deletes the area from the lock screen without the credential, and a new credential starts empty', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	await store.add([page]);
+	await store.lock();
+	await store.reset(LOCKED_RESET_CONFIRMATION);
+	assert.deepEqual(await store.status(), {configured: false});
+	assert.equal(t.local.has(LOCKED_KEY), false);
+	assert.equal(t.session.has(LOCKED_SESSION_KEY), false);
+	assert.equal(t.alarm.at, null);
+	assert.equal((await failure(store.list())).code, 'not-set-up');
+	assert.equal(
+		(await failure(store.unlock(password.value))).code,
+		'not-set-up',
+	);
+
+	await store.setup(pin);
+	assert.deepEqual(await store.list(), []);
+	await store.lock();
+	assert.equal(
+		(await failure(store.unlock(password.value))).code,
+		'wrong-credential',
+	);
+	await store.unlock(pin.value);
+	assert.deepEqual(await store.list(), []);
+});
+
+test('a reset also works while the area is open', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	await store.add([page]);
+	await store.reset(LOCKED_RESET_CONFIRMATION);
+	assert.deepEqual(await store.status(), {configured: false});
+	assert.equal(t.local.has(LOCKED_KEY), false);
+	assert.equal(t.session.has(LOCKED_SESSION_KEY), false);
+	assert.deepEqual(t.session.get(LOCKED_FLAG_KEY), {unlocked: false});
+});
+
+test('a reset without the confirmation changes nothing', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	await store.add([page]);
+	await store.lock();
+	const before = JSON.stringify(t.local.get(LOCKED_KEY));
+	for (const confirmation of [undefined, '', 'RESET', true, 1]) {
+		assert.equal(
+			(await failure(store.reset(confirmation))).code,
+			'not-confirmed',
+		);
+	}
+
+	assert.equal(JSON.stringify(t.local.get(LOCKED_KEY)), before);
+	await store.unlock(password.value);
+	assert.equal((await store.list()).length, 1);
+});
+
+test('a reset clears the wrong entries and the wait, so the new area opens at once', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(pin);
+	await store.lock();
+	for (let attempt = 1; attempt <= FREE_ATTEMPTS; attempt++) {
+		await failure(store.unlock('0000'));
+	}
+
+	assert.equal(
+		((await store.status()) as {retryAfterMs?: number}).retryAfterMs,
+		COOLDOWN_MS,
+	);
+	assert.equal(t.session.has(LOCKED_ATTEMPTS_KEY), true);
+	await store.reset(LOCKED_RESET_CONFIRMATION);
+	assert.equal(t.session.has(LOCKED_ATTEMPTS_KEY), false);
+	await store.setup(pin);
+	await store.lock();
+	assert.deepEqual(await store.status(), {
+		configured: true,
+		unlocked: false,
+		kind: 'pin',
+		idleMinutes: 5,
+	});
+	await store.unlock(pin.value);
+	assert.equal(((await store.status()) as {unlocked: boolean}).unlocked, true);
+});
+
+test('the status counts wrong entries so the lock screen knows when to offer a reset', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(pin);
+	await store.lock();
+	for (let attempt = 1; attempt < RESET_OFFER_ATTEMPTS; attempt++) {
+		await failure(store.unlock('0000'));
+	}
+
+	assert.equal(
+		((await store.status()) as {failedAttempts?: number}).failedAttempts,
+		RESET_OFFER_ATTEMPTS - 1,
+	);
+	await failure(store.unlock('0000'));
+	assert.equal(
+		((await store.status()) as {failedAttempts?: number}).failedAttempts,
+		RESET_OFFER_ATTEMPTS,
+	);
+	await store.unlock(pin.value);
+	assert.equal('failedAttempts' in (await store.status()), false);
+});
+
+test('a reset that stops before the entry is deleted leaves a locked area that can be reset again', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	await store.add([page]);
+	t.failNextRemove('local', LOCKED_KEY);
+	await store.reset(LOCKED_RESET_CONFIRMATION).then(
+		() => assert.fail('the reset should have failed'),
+		() => undefined,
+	);
+	// Locked, nothing lost: the credential still opens it.
+	assert.equal(t.session.has(LOCKED_SESSION_KEY), false);
+	assert.equal((await store.status()).configured, true);
+	await store.unlock(password.value);
+	assert.equal((await store.list()).length, 1);
+
+	t.failNextRemove('local', LOCKED_KEY);
+	await store.reset(LOCKED_RESET_CONFIRMATION).catch(() => undefined);
+	await store.reset(LOCKED_RESET_CONFIRMATION);
+	assert.deepEqual(await store.status(), {configured: false});
+});
+
+test('a reset that stops after the entry is deleted is complete: not set up, old credential opens nothing, setup works', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(pin);
+	await store.add([page]);
+	await store.lock();
+	await failure(store.unlock('0000'));
+	t.failNextRemove('session', LOCKED_ATTEMPTS_KEY);
+	await store.reset(LOCKED_RESET_CONFIRMATION).then(
+		() => assert.fail('the reset should have failed'),
+		() => undefined,
+	);
+	assert.equal(t.local.has(LOCKED_KEY), false);
+	assert.equal(t.session.has(LOCKED_SESSION_KEY), false);
+	assert.deepEqual(await store.status(), {configured: false});
+	assert.equal((await failure(store.unlock(pin.value))).code, 'not-set-up');
+
+	// The leftover count does not carry into the new area.
+	await store.setup(password);
+	assert.equal(t.session.has(LOCKED_ATTEMPTS_KEY), false);
+	assert.deepEqual(await store.list(), []);
+	await store.lock();
+	assert.equal(
+		(await failure(store.unlock(pin.value))).code,
+		'wrong-credential',
+	);
+});
+
+test('a reset when nothing is set up is harmless', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.reset(LOCKED_RESET_CONFIRMATION);
+	assert.deepEqual(await store.status(), {configured: false});
+	await store.setup(pin);
+	assert.deepEqual(await store.list(), []);
+});
+
+test('after a reset the old entry from a backup is the only way back to the old credential', async () => {
+	const t = rig();
+	const store = createLockedStore(t.backend);
+	await store.setup(password);
+	await store.add([page]);
+	const backup = await store.exportRecord();
+	await store.reset(LOCKED_RESET_CONFIRMATION);
+	await store.setup(pin);
+	assert.equal(await store.importRecord(backup), true);
+	await store.unlock(password.value);
+	assert.equal((await store.list())[0].title, 'Tax portal');
 });

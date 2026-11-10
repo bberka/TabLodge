@@ -340,33 +340,38 @@ function Help() {
 							bookmarks, or from Settings under Data. Setting it up asks for a
 							PIN (4 to 8 digits) or a password (8 to 128 characters). A lost
 							PIN or password cannot be recovered, and {PROJECT.name} stores
-							neither it nor a hint. A PIN is weak against someone who copies
-							your browser profile files, so choose a password for anything
-							sensitive. Save to it with Bookmark to locked area in the popup,
-							the right-click menu, or the Add bookmark dialog. The locked area
-							never appears in search, the palette, the address bar, the saved
-							page indicator, duplicate checks, statistics, snapshots, the trash
-							bin, exports, or automatic backups. A full backup carries it still
-							encrypted. It unlocks until it has gone unused for the time you
-							choose (5 minutes by default) and always locks when the browser
-							closes. Use Lock now to lock it at once. In the dialog you can
-							also change the PIN or password, move a bookmark to the board, or
-							remove the lock. To put bookmarks you already have into it, choose
-							Move to locked area from a bookmark's menu, the selection bar, a
-							column's menu, or a saved session's menu. The window says what
-							will happen: the links are encrypted first and removed from the
-							board second, they do not go to the trash bin, and Undo is
-							cleared. A column moves without grouping and is removed, and a
-							session can be kept or deleted afterwards. Existing backups,
-							exports, files in Downloads, and your browser history keep their
-							copies; you can also delete {PROJECT.name}'s own backups and
-							recovery snapshots in the same window. Locked bookmarks are not
-							available in private windows, and Erase in Settings leaves them
-							alone.
+							neither it nor a hint. If you forget it, the unlock screen offers
+							Reset the locked area after three wrong entries in a row. That
+							permanently deletes everything in the locked area, cannot be
+							undone, and lets you set up a new PIN or password. A full backup
+							made earlier still holds the old copy, and restoring it brings
+							back the old area and its old PIN or password. A PIN is weak
+							against someone who copies your browser profile files, so choose a
+							password for anything sensitive. Save to it with Bookmark to
+							locked area in the popup, the right-click menu, or the Add
+							bookmark dialog. The locked area never appears in search, the
+							palette, the address bar, the saved page indicator, duplicate
+							checks, statistics, snapshots, the trash bin, exports, or
+							automatic backups. A full backup carries it still encrypted. It
+							unlocks until it has gone unused for the time you choose (5
+							minutes by default) and always locks when the browser closes. Use
+							Lock now to lock it at once. In the dialog you can also change the
+							PIN or password, move a bookmark to the board, or remove the lock.
+							To put bookmarks you already have into it, choose Move to locked
+							area from a bookmark's menu, the selection bar, a column's menu,
+							or a saved session's menu. The window says what will happen: the
+							links are encrypted first and removed from the board second, they
+							do not go to the trash bin, and Undo is cleared. A column moves
+							without grouping and is removed, and a session can be kept or
+							deleted afterwards. Existing backups, exports, files in Downloads,
+							and your browser history keep their copies; you can also delete{' '}
+							{PROJECT.name}'s own backups and recovery snapshots in the same
+							window. Locked bookmarks are not available in private windows, and
+							Erase in Settings leaves them alone.
 						</>
 					),
 					searchText:
-						'locked area lock locked bookmarks hidden private secret PIN password unlock lock now auto-lock idle minutes change remove forgotten lost recover encrypted profile files weak bookmark to locked area move into locked area column session selected bookmarks trash undo backups',
+						'locked area lock locked bookmarks hidden private secret PIN password unlock lock now auto-lock idle minutes change remove forgotten lost recover reset delete encrypted profile files weak bookmark to locked area move into locked area column session selected bookmarks trash undo backups',
 				},
 				{
 					title: 'Find duplicate bookmarks',

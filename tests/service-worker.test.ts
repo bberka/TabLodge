@@ -7,6 +7,7 @@ import process from 'node:process';
 import vm from 'node:vm';
 import {test} from 'vite-plus/test';
 import {ICON_IDS} from '../src/app/icon-ids';
+import {LOCKED_RESET_CONFIRMATION} from '../src/shared/locked-store';
 import type {
 	ActionSuccess,
 	Bookmark,
@@ -8240,6 +8241,102 @@ test('locked area: private windows get no access', async () => {
 		).locked,
 		null,
 	);
+});
+
+test('locked area: a reset from the lock screen deletes the entry, the key and the wrong entries, and needs the confirmation field', async () => {
+	const harness = await lockedHarness();
+	await harness.sendMessage({type: 'LOCKED_LOCK'});
+	for (let attempt = 0; attempt < 5; attempt += 1) {
+		await harness.sendMessage({
+			type: 'LOCKED_UNLOCK',
+			credential: 'not the password',
+		});
+	}
+
+	const waiting = await harness.sendMessage({type: 'LOCKED_STATUS'});
+	assert.equal((waiting.locked as {failedAttempts?: number}).failedAttempts, 5);
+	assert.ok((waiting.locked as {retryAfterMs?: number}).retryAfterMs);
+	assert.ok('tablodge.locked.attempts' in harness.sessionStore);
+
+	// A message without the field, or with a wrong one, deletes nothing.
+	for (const message of [
+		{type: 'LOCKED_RESET' as const},
+		{type: 'LOCKED_RESET' as const, confirm: 'RESET'},
+		{type: 'LOCKED_RESET' as const, confirm: true},
+	]) {
+		const refused = await harness.sendMessage(message as never);
+		assert.equal(refused.ok, false);
+		assert.equal((refused as {code?: string}).code, 'not-confirmed');
+	}
+
+	assert.ok('tablodge.locked' in harness.extraStorage);
+
+	const reset = await harness.sendMessage({
+		type: 'LOCKED_RESET',
+		confirm: LOCKED_RESET_CONFIRMATION,
+	});
+	assert.equal(reset.ok, true, reset.error);
+	assert.equal(JSON.stringify(reset.locked), '{"configured":false}');
+	// No locked content is left anywhere the extension stores data.
+	const leaks = (value: unknown) =>
+		['zebra', 'mole', LOCKED_PASSWORD].filter((word) =>
+			JSON.stringify(value).toLowerCase().includes(word.toLowerCase()),
+		);
+	assert.equal('tablodge.locked' in harness.extraStorage, false);
+	assert.deepEqual(leaks(harness.extraStorage), []);
+	assert.deepEqual(leaks(harness.sessionStore), []);
+	assert.deepEqual(
+		Object.keys(harness.sessionStore).filter(
+			(key) =>
+				key.startsWith('tablodge.locked') && key !== 'tablodge.locked.flag',
+		),
+		[],
+	);
+	assert.equal(harness.alarms.has(LOCKED_ALARM_NAME), false);
+	assert.equal(
+		(
+			(await harness.sendMessage({type: 'GET_FULL_BACKUP'})) as {
+				locked: unknown;
+			}
+		).locked,
+		null,
+	);
+
+	// A new area starts empty and opens at once; the old password opens nothing.
+	const made = await harness.sendMessage({
+		type: 'LOCKED_SETUP',
+		kind: 'pin',
+		value: '4821',
+	});
+	assert.equal(made.ok, true, made.error);
+	assert.deepEqual(
+		Array.from((await harness.sendMessage({type: 'LOCKED_LIST'})).bookmarks),
+		[],
+	);
+	await harness.sendMessage({type: 'LOCKED_LOCK'});
+	const old = await harness.sendMessage({
+		type: 'LOCKED_UNLOCK',
+		credential: LOCKED_PASSWORD,
+	});
+	assert.equal((old as {code?: string}).code, 'wrong-credential');
+	const fresh = await harness.sendMessage({
+		type: 'LOCKED_UNLOCK',
+		credential: '4821',
+	});
+	assert.equal(fresh.ok, true, fresh.error);
+});
+
+test('locked area: a reset is refused in private windows', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		incognitoContext: true,
+		storage: {'tablodge.private.config': {mode: 'shared', configured: true}},
+	});
+	const refused = await harness.sendMessage({
+		type: 'LOCKED_RESET',
+		confirm: LOCKED_RESET_CONFIRMATION,
+	});
+	assert.equal(refused.ok, false);
+	assert.match(refused.error ?? '', /private windows/);
 });
 
 test('locked area: moving bookmarks to the board and removing the lock', async () => {

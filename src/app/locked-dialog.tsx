@@ -47,6 +47,8 @@ import {
 import {
 	IDLE_MINUTES_CHOICES,
 	DEFAULT_IDLE_MINUTES,
+	LOCKED_RESET_CONFIRMATION,
+	RESET_OFFER_ATTEMPTS,
 } from '../shared/locked-store';
 import type {
 	ActionFailure,
@@ -113,6 +115,7 @@ export function LockedDialog({
 	const [view, setView] = useState<View>({name: 'list'});
 	const [items, setItems] = useState<LockedBookmark[]>([]);
 	const [announce, setAnnounce] = useState('');
+	const [resetting, setResetting] = useState(false);
 	const bodyRef = useRef<HTMLDivElement>(null);
 	const unlocked = status?.configured === true && status.unlocked;
 	const wasUnlockedRef = useRef(false);
@@ -152,7 +155,15 @@ export function LockedDialog({
 
 		setView({name: 'list'});
 		setAnnounce('');
+		setResetting(false);
 	}, [open]);
+
+	// Another page opened the area while the reset question was showing: nothing to reset from here.
+	useEffect(() => {
+		if (unlocked) {
+			setResetting(false);
+		}
+	}, [unlocked]);
 
 	// Moves focus to the first field (or the heading) whenever the screen changes, so a keyboard or screen reader user is
 	// never left on a control that just disappeared.
@@ -162,7 +173,9 @@ export function LockedDialog({
 			: status.configured
 				? status.unlocked
 					? view.name
-					: 'unlock'
+					: resetting
+						? 'reset'
+						: 'unlock'
 				: 'setup';
 	useEffect(() => {
 		if (!open) {
@@ -392,6 +405,22 @@ export function LockedDialog({
 				);
 			}
 		}
+	} else if (resetting) {
+		title = 'Reset the locked area';
+		description = 'Use this only if you forgot your PIN or password.';
+		body = (
+			<ResetView
+				onBack={() => setResetting(false)}
+				onReset={(next) => {
+					setResetting(false);
+					setStatus(next);
+					setAnnounce(
+						'The locked area was reset and everything in it deleted. Choose a new PIN or password.',
+					);
+					showStatus('The locked area was reset.', false, {toast: true});
+				}}
+			/>
+		);
 	} else {
 		title = 'Locked area';
 		description = 'Enter your PIN or password to open it.';
@@ -402,6 +431,8 @@ export function LockedDialog({
 					setStatus(next);
 					setAnnounce('The locked area is open.');
 				}}
+				onFailed={() => void refresh()}
+				onReset={() => setResetting(true)}
 				onCancel={() => onOpenChange(false)}
 			/>
 		);
@@ -524,10 +555,17 @@ function IdleField({
 function UnlockView({
 	status,
 	onUnlocked,
+	onFailed,
+	onReset,
 	onCancel,
 }: {
 	status: Extract<LockedStatus, {configured: true; unlocked: false}>;
 	onUnlocked: (status: LockedStatus) => void;
+	/**
+	Called after a wrong entry, so the status (and with it the reset offer) catches up.
+	*/
+	onFailed: () => void;
+	onReset: () => void;
 	onCancel: () => void;
 }) {
 	const [credential, setCredential] = useState('');
@@ -550,6 +588,7 @@ function UnlockView({
 		if (!result?.ok) {
 			setError(failureText(result, 'Could not unlock.'));
 			setRetryAfterMs((result as ActionFailure | undefined)?.retryAfterMs);
+			onFailed();
 			return;
 		}
 
@@ -576,6 +615,19 @@ function UnlockView({
 					A forgotten {status.kind === 'pin' ? 'PIN' : 'password'} cannot be
 					recovered. {PROJECT.name} stores neither it nor a hint.
 				</p>
+				{(wait > 0 || (status.failedAttempts ?? 0) >= RESET_OFFER_ATTEMPTS) && (
+					<p className="text-xs leading-5">
+						Forgot your {status.kind === 'pin' ? 'PIN' : 'password'}?{' '}
+						<Button
+							type="button"
+							variant="link"
+							className="h-auto p-0 text-xs"
+							onClick={onReset}
+						>
+							Reset the locked area
+						</Button>
+					</p>
+				)}
 			</DialogBody>
 			<DialogFooter>
 				<Button type="button" variant="outline" onClick={onCancel}>
@@ -588,6 +640,102 @@ function UnlockView({
 				>
 					<LockOpen aria-hidden="true" />
 					{busy ? 'Unlocking' : 'Unlock'}
+				</Button>
+			</DialogFooter>
+		</form>
+	);
+}
+
+/**
+The way out of a forgotten PIN or password: delete the area and set up a new one. It asks for no credential, so it says
+what is lost and wants a typed word before the button works.
+*/
+function ResetView({
+	onBack,
+	onReset,
+}: {
+	onBack: () => void;
+	onReset: (status: LockedStatus) => void;
+}) {
+	const [word, setWord] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState('');
+	const id = useId();
+	const confirmed = word.trim().toUpperCase() === 'RESET';
+
+	async function reset(event: SyntheticEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (busy || !confirmed) {
+			return;
+		}
+
+		setBusy(true);
+		setError('');
+		const result = await send('LOCKED_RESET', {
+			confirm: LOCKED_RESET_CONFIRMATION,
+		});
+		setBusy(false);
+		if (!result?.ok) {
+			setError(failureText(result, 'Could not reset the locked area.'));
+			return;
+		}
+
+		onReset(result.locked);
+	}
+
+	return (
+		<form onSubmit={(event) => void reset(event)}>
+			<DialogBody>
+				<Note>
+					<strong>
+						Resetting permanently deletes everything in the locked area.
+					</strong>{' '}
+					Every locked bookmark, with its title and address, is erased. This
+					cannot be undone and {PROJECT.name} cannot bring any of it back. Your
+					board, sessions, and other data are not touched.
+				</Note>
+				<p className="text-sm leading-6">
+					Afterwards you can set a new PIN or password and start with an empty
+					locked area.
+				</p>
+				<p className="text-xs leading-5 text-muted-foreground">
+					A full backup made earlier still holds the old encrypted copy.
+					Restoring it brings back the old locked area and its old PIN or
+					password.
+				</p>
+				<div className="grid gap-1.5">
+					<Label htmlFor={`${id}-word`}>Type RESET to confirm</Label>
+					<Input
+						id={`${id}-word`}
+						value={word}
+						disabled={busy}
+						autoComplete="off"
+						autoCapitalize="characters"
+						spellCheck={false}
+						data-autofocus=""
+						aria-invalid={error ? true : undefined}
+						aria-describedby={error ? `${id}-error` : undefined}
+						onChange={(event) => setWord(event.target.value)}
+					/>
+					{error && (
+						<div id={`${id}-error`}>
+							<ErrorLine>{error}</ErrorLine>
+						</div>
+					)}
+				</div>
+			</DialogBody>
+			<DialogFooter>
+				<Button type="button" variant="outline" onClick={onBack}>
+					<ArrowLeft aria-hidden="true" />
+					Back
+				</Button>
+				<Button
+					type="submit"
+					variant="destructive"
+					disabled={busy || !confirmed}
+				>
+					<Trash2 aria-hidden="true" />
+					{busy ? 'Resetting' : 'Delete everything and reset'}
 				</Button>
 			</DialogFooter>
 		</form>

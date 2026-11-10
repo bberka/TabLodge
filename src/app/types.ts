@@ -843,6 +843,10 @@ export type TabLodgeMessages = {
 		bookmarks: 'board' | 'delete';
 		columnId?: string | null;
 	};
+	/**
+	For a forgotten PIN or password: deletes the area and everything in it without the credential, so a new one can be set up. The worker refuses it unless `confirm` is `LOCKED_RESET_CONFIRMATION`.
+	*/
+	LOCKED_RESET: {confirm: string};
 	GET_STORAGE_USAGE: {};
 };
 
@@ -933,6 +937,10 @@ export type LockedStatus =
 			Set while too many wrong entries make the next try wait.
 			*/
 			retryAfterMs?: number;
+			/**
+			Wrong entries in a row so far. The unlock screen offers a reset from the third.
+			*/
+			failedAttempts?: number;
 	  }
 	| {
 			configured: true;
@@ -1184,6 +1192,7 @@ export type TabLodgeResponses = {
 	`moved`: bookmarks put on the board; `discarded`: bookmarks deleted with the area.
 	*/
 	LOCKED_REMOVE_LOCK: {moved: number; discarded: number};
+	LOCKED_RESET: {locked: LockedStatus};
 	GET_STORAGE_USAGE: {usage: StorageUsage};
 };
 
