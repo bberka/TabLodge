@@ -34,7 +34,6 @@ import {
 	History,
 	Inbox,
 	LayoutGrid,
-	Lock,
 	MoreHorizontal,
 	PanelLeft,
 	Pencil,
@@ -106,14 +105,11 @@ import {
 	BackupDialog,
 	DuplicateBookmarksDialog,
 	ImportDialog,
-	LockedDialog,
-	LockedSaveDialog,
 	SnapshotsDialog,
 	TrashDialog,
 	useShareDialog,
 } from './lazy-dialogs';
 import {RecoveryBanner} from './recovery-banner';
-import {LockedMoveDialog, type LockedMoveRequest} from './locked-move';
 import {
 	emitRecoveryEvent,
 	offerCloseTabsUndo,
@@ -193,7 +189,6 @@ type BookmarkAction =
 	| 'copy'
 	| 'select'
 	| 'select-range'
-	| 'move-locked'
 	| 'delete';
 type OnBookmarkAction = (
 	action: BookmarkAction,
@@ -250,10 +245,6 @@ Stable fallbacks so memoized values and effects do not see a new array on every 
 */
 const NO_COLUMNS: BookmarkColumnData[] = [];
 const NO_BOOKMARKS: Bookmark[] = [];
-/**
-The locked area is for normal windows; private windows have no access to it.
-*/
-const LOCKED_AVAILABLE = !chrome.extension.inIncognitoContext;
 const UNFILED_COLUMN: BookmarkColumnData = {
 	id: 'bookmark-unfiled',
 	name: 'Unfiled',
@@ -305,13 +296,6 @@ function NewTab() {
 	} | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
-	const [lockedOpen, setLockedOpen] = useState(false);
-	const [lockedSave, setLockedSave] = useState<{
-		title: string;
-		url: string;
-	} | null>(null);
-	const [lockedMove, setLockedMove] = useState<LockedMoveRequest | null>(null);
-	const lockedAvailable = LOCKED_AVAILABLE;
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
@@ -628,19 +612,6 @@ function NewTab() {
 		})();
 	}, [holding]);
 
-	// `?locked=1` (the popup and the save window send people here to set the locked area up) opens it once.
-	useEffect(() => {
-		if (new URLSearchParams(location.search).get('locked') !== '1') {
-			return;
-		}
-
-		history.replaceState(null, '', stripSearchParams(location, ['locked']));
-		if (lockedAvailable) {
-			setLockedOpen(true);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on purpose
-	}, []);
-
 	// Drops the one-time `?q=` from the address bar after the first render.
 	useEffect(() => {
 		if (initialQuery) {
@@ -896,19 +867,6 @@ function NewTab() {
 	async function saveBookmark(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!bookmarkEdit || busy === 'bookmark-save') {
-			return;
-		}
-
-		// The "Save to locked area" button submits this form too, to get the same field checks.
-		const {submitter} = event.nativeEvent as SubmitEvent;
-		if (submitter?.dataset.destination === 'locked') {
-			const address = webUrl(bookmarkEdit.url);
-			if (address) {
-				setLockedSave({title: bookmarkEdit.title, url: address});
-				setDialog(null);
-				setBookmarkEdit(null);
-			}
-
 			return;
 		}
 
@@ -1556,11 +1514,6 @@ function NewTab() {
 			return;
 		}
 
-		if (action === 'move-locked') {
-			setLockedMove({kind: 'bookmarks', ids: [bookmark.id]});
-			return;
-		}
-
 		if (action === 'move-up' || action === 'move-down') {
 			await moveBookmarkStep(
 				bookmark,
@@ -2119,13 +2072,6 @@ function NewTab() {
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
 		sessionTargets,
-		moveColumnToLocked: (column) =>
-			setLockedMove({
-				kind: 'column',
-				columnId: column.id,
-				name: column.name,
-				count: bookmarks.filter((entry) => entry.columnId === column.id).length,
-			}),
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
@@ -2346,13 +2292,6 @@ function NewTab() {
 								icon: Copy,
 								onSelect: () => setDuplicatesOpen(true),
 							},
-							{
-								id: 'locked',
-								label: 'Locked bookmarks',
-								icon: Lock,
-								hidden: !lockedAvailable,
-								onSelect: () => setLockedOpen(true),
-							},
 							{type: 'separator'},
 							{
 								id: 'trash',
@@ -2435,19 +2374,6 @@ function NewTab() {
 									))}
 								</SelectContent>
 							</Select>
-						)}
-						{lockedAvailable && (
-							<Button
-								variant="outline"
-								size="sm"
-								disabled={busy === 'bookmark-batch'}
-								onClick={() =>
-									setLockedMove({kind: 'bookmarks', ids: selectedBookmarkIds})
-								}
-							>
-								<Lock className="h-4 w-4" />
-								Move to locked area
-							</Button>
 						)}
 						<Button
 							variant="outline"
@@ -2729,7 +2655,6 @@ function NewTab() {
 				state={state}
 				error={error}
 				reload={reload}
-				onOpenLocked={() => setLockedOpen(true)}
 			/>
 		</section>
 	);
@@ -2824,43 +2749,6 @@ function NewTab() {
 				onOpenChange={setDuplicatesOpen}
 				onChanged={reload}
 			/>
-			{lockedAvailable && (
-				<>
-					<LockedDialog
-						open={lockedOpen}
-						columns={columns}
-						showStatus={showStatus}
-						onOpenChange={setLockedOpen}
-						onBoardChanged={() => void reload()}
-					/>
-					<LockedMoveDialog
-						request={lockedMove}
-						showStatus={showStatus}
-						onOpenChange={(open) => !open && setLockedMove(null)}
-						onSetup={() => {
-							setLockedMove(null);
-							setLockedOpen(true);
-						}}
-						onMoved={() => {
-							setSelectedBookmarks(new Set());
-							bookmarkSelectionAnchorRef.current = null;
-							void reload();
-						}}
-					/>
-					<LockedSaveDialog
-						open={lockedSave !== null}
-						title={lockedSave?.title ?? ''}
-						url={lockedSave?.url ?? ''}
-						settings={settings}
-						showStatus={showStatus}
-						onSetup={() => {
-							setLockedSave(null);
-							setLockedOpen(true);
-						}}
-						onOpenChange={(open) => !open && setLockedSave(null)}
-					/>
-				</>
-			)}
 			<ImportDialog
 				open={importOpen}
 				initialKind="bookmarks"
@@ -2964,20 +2852,6 @@ function NewTab() {
 									<X aria-hidden="true" />
 									Cancel
 								</Button>
-								{lockedAvailable &&
-									!bookmarkEdit?.id &&
-									!bookmarkToSession &&
-									bookmarkEdit?.columnId !== NEW_COLUMN && (
-										<Button
-											type="submit"
-											variant="outline"
-											data-destination="locked"
-											disabled={busy === 'bookmark-save'}
-										>
-											<Lock aria-hidden="true" />
-											Save to locked area
-										</Button>
-									)}
 								<Button type="submit" disabled={busy === 'bookmark-save'}>
 									<Save aria-hidden="true" />
 									{bookmarkToSession
@@ -3613,7 +3487,6 @@ type BoardActions = {
 	Sessions a bookmark can be added to (read when a menu opens, never while rendering).
 	*/
 	sessionTargets: () => Array<{id: string; name: string}>;
-	moveColumnToLocked: (column: BookmarkColumnData) => void;
 	remove: (column: BookmarkColumnData) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
@@ -3662,14 +3535,6 @@ function columnMenuActions(
 			icon: Download,
 			disabled: siblings.length === 0,
 			onSelect: () => actions.exportColumn(column),
-		},
-		{
-			id: 'move-locked',
-			label: 'Move to locked area',
-			icon: Lock,
-			hidden: !LOCKED_AVAILABLE,
-			disabled: siblings.length === 0,
-			onSelect: () => actions.moveColumnToLocked(column),
 		},
 		{type: 'separator'},
 		{
@@ -4120,13 +3985,6 @@ const BookmarkCard = memo(
 							: target.name,
 					onSelect: () => sessions.addToSession(bookmark, target),
 				})),
-			},
-			{
-				id: 'move-locked',
-				label: 'Move to locked area',
-				icon: Lock,
-				hidden: !LOCKED_AVAILABLE,
-				onSelect: act('move-locked'),
 			},
 			{
 				id: 'move-up',

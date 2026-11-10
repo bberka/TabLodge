@@ -174,29 +174,18 @@ test('the protected file name keeps the date and says it is encrypted', () => {
 	);
 });
 
-test('the locked area travels in the ZIP as the encrypted entry it is, and older backups simply lack it', () => {
-	const locked = {
-		version: 1,
-		kind: 'pin',
-		idleMinutes: 5,
-		rev: 3,
-		envelope: 'VExFTg==',
-		updatedAt: 9,
-	};
-	const withLocked = buildFullBackup({...parts, locked}, {appVersion: '1'});
-	assert.deepEqual(Object.keys(unzipSync(withLocked.bytes)).toSorted(), [
-		'data.json',
-		'locked.json',
-		'manifest.json',
-		'preferences.json',
-		'snapshots.json',
-		'trash.json',
-	]);
-	assert.deepEqual(readFullBackup(withLocked.bytes)?.locked, locked);
-
-	for (const none of [undefined, null]) {
-		const plain = buildFullBackup({...parts, locked: none}, {appVersion: '1'});
-		assert.equal('locked.json' in unzipSync(plain.bytes), false);
-		assert.equal(readFullBackup(plain.bytes)?.locked, undefined);
+test('a backup made while the locked area existed restores without it, even when locked.json is damaged', () => {
+	const {bytes} = buildFullBackup(parts, {appVersion: '1'});
+	const files = unzipSync(bytes);
+	for (const locked of [
+		strToU8(JSON.stringify({version: 1, kind: 'pin', envelope: 'VExFTg=='})),
+		strToU8('{oops'),
+	]) {
+		const older = zipSync({...files, 'locked.json': locked});
+		const read = readFullBackup(older);
+		assert.ok(read);
+		assert.equal('locked' in read, false);
+		assert.deepEqual(read.state, parts.state);
+		assert.deepEqual(read.counts, countFullBackup(parts));
 	}
 });

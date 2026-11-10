@@ -27,7 +27,6 @@ import {
 	History,
 	LayoutGrid,
 	ListPlus,
-	Lock,
 	MoreHorizontal,
 	MoreVertical,
 	PanelTop,
@@ -98,7 +97,6 @@ import {
 	plural,
 } from './common';
 import {BackupDialog, ImportDialog, useShareDialog} from './lazy-dialogs';
-import {LockedMoveDialog, type LockedMoveRequest} from './locked-move';
 import type {ExportData} from './export-formats';
 import {
 	activateSessionTitle,
@@ -273,17 +271,12 @@ export function SessionManager({
 	state,
 	error,
 	reload,
-	onOpenLocked,
 }: {
 	embedded?: boolean;
 	initialQuery?: string;
 	state: TabLodgeState | null;
 	error: string;
 	reload: () => Promise<TabLodgeState | null>;
-	/**
-	Opens the locked area dialog, where it is set up. Without it the dashboard opens in a tab.
-	*/
-	onOpenLocked?: () => void;
 }) {
 	const [status, showStatus] = useStatus();
 	const [folderId, setFolderId] = useState(ALL);
@@ -296,7 +289,6 @@ export function SessionManager({
 	const [selected, setSelected] = useState(() => new Set<string>());
 	const [anchor, setAnchor] = useState<string | null>(null);
 	const [dialog, setDialog] = useState<DialogState>(null);
-	const [lockedMove, setLockedMove] = useState<LockedMoveRequest | null>(null);
 	const [editingGroup, setEditingGroup] = useState<Session | null>(null);
 	// Set when a session title click opens the details dialog: the name field gets focus with its text selected.
 	const [focusGroupName, setFocusGroupName] = useState(false);
@@ -1291,13 +1283,6 @@ export function SessionManager({
 		archive: archiveGroup,
 		share: (group) => openShare({title: group.name, groups: [group]}),
 		exportSession: openSessionExport,
-		moveToLocked: (group) =>
-			setLockedMove({
-				kind: 'session',
-				groupId: group.id,
-				name: group.name.trim() || 'Untitled session',
-				count: group.tabs.length,
-			}),
 		openTab,
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
@@ -2149,21 +2134,6 @@ export function SessionManager({
 					setSingleSessionExport(false);
 				}}
 			/>
-			{LOCKED_AVAILABLE && (
-				<LockedMoveDialog
-					request={lockedMove}
-					showStatus={showStatus}
-					onOpenChange={(open) => !open && setLockedMove(null)}
-					onSetup={
-						onOpenLocked &&
-						(() => {
-							setLockedMove(null);
-							onOpenLocked();
-						})
-					}
-					onMoved={() => void reload()}
-				/>
-			)}
 			<ImportDialog
 				open={importOpen}
 				initialKind="sessions"
@@ -2633,7 +2603,6 @@ type CardActions = {
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
 	exportSession: (group: Session) => void;
-	moveToLocked: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
@@ -2764,10 +2733,6 @@ type SessionQuickActionButton = {
 	disabled?: boolean;
 	onClick: () => void;
 };
-/**
-The locked area is for normal windows; private windows have no access to it.
-*/
-const LOCKED_AVAILABLE = !chrome.extension.inIncognitoContext;
 const GroupCard = memo(
 	({
 		group,
@@ -2990,14 +2955,6 @@ const GroupCard = memo(
 				label: 'Export session',
 				icon: Download,
 				onSelect: () => handlers.exportSession(group),
-			},
-			{
-				id: 'move-locked',
-				label: 'Move links to locked area',
-				icon: Lock,
-				hidden: !LOCKED_AVAILABLE,
-				disabled: group.tabs.length === 0,
-				onSelect: () => handlers.moveToLocked(group),
 			},
 			{type: 'separator'},
 			{

@@ -162,25 +162,6 @@ try {
 	assert.equal(added.ok, true, added.error);
 	pass('added a bookmark');
 
-	// The locked area keeps its key in session storage and its idle timer in an alarm, which both browsers must honor.
-	const made = await send('LOCKED_SETUP', {
-		kind: 'password',
-		value: 'correct horse battery',
-	});
-	assert.equal(made.ok, true, made.error);
-	const hidden = await send('LOCKED_ADD', {
-		bookmarks: [{title: 'Zebra diary', url: 'https://zebra-diary.example/'}],
-	});
-	assert.equal(hidden.ok, true, hidden.error);
-	assert.equal(
-		JSON.stringify(await getState()).includes('zebra'),
-		false,
-		'locked bookmarks stay out of the library',
-	);
-	pass(
-		'set up the locked area and saved a bookmark into it, out of the library',
-	);
-
 	const imported = await send('IMPORT_BROWSER_BOOKMARKS');
 	assert.equal(imported.ok, true, imported.error);
 	const backup = await send('GET_FULL_BACKUP');
@@ -205,18 +186,6 @@ try {
 		after.bookmarks.some((bookmark) => bookmark.url === 'https://example.com/'),
 	);
 	pass('sessions and bookmarks persist across a browser restart');
-	const closed = await send('LOCKED_LIST');
-	assert.equal(closed.ok, false, 'a browser restart locks the locked area');
-	const opened = await send('LOCKED_UNLOCK', {
-		credential: 'correct horse battery',
-	});
-	assert.equal(opened.ok, true, opened.error);
-	const kept = await send<{bookmarks: Array<{title: string}>}>('LOCKED_LIST');
-	assert.equal(kept.bookmarks[0].title, 'Zebra diary');
-	pass(
-		'the locked area is locked after a browser restart and unlocks with its password',
-	);
-
 	console.log(`Firefox smoke check passed (${steps} steps).`);
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));

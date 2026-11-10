@@ -230,29 +230,18 @@ export function PasscodeEntry({
 	error,
 	disabled,
 	inputRef,
-	kind,
-	label,
 }: {
 	value: string;
 	onChange: (value: string) => void;
 	error?: string;
 	disabled?: boolean;
 	inputRef?: React.Ref<HTMLInputElement>;
-	/**
-	When the kind is known (locked storage records it), the field is named for it and a PIN gets a numeric keypad.
-	*/
-	kind?: CredentialKind;
-	/**
-	Replaces the field name, such as "Current password" when changing it.
-	*/
-	label?: string;
 }) {
 	const id = useId();
 	const [shown, setShown] = useState(false);
-	const name = label ?? (kind ? CREDENTIAL_LABELS[kind] : 'PIN or password');
 	return (
 		<div className="grid gap-1.5">
-			<Label htmlFor={`${id}-entry`}>{name}</Label>
+			<Label htmlFor={`${id}-entry`}>PIN or password</Label>
 			<div className="flex items-center gap-2">
 				<Input
 					ref={inputRef}
@@ -261,19 +250,18 @@ export function PasscodeEntry({
 					autoComplete="off"
 					autoCapitalize="off"
 					spellCheck={false}
-					inputMode={kind === 'pin' ? 'numeric' : undefined}
 					value={value}
 					disabled={disabled}
 					data-autofocus=""
 					aria-invalid={error ? true : undefined}
 					aria-describedby={error ? `${id}-entry-error` : undefined}
 					onChange={(event) =>
-						onChange(clampCredentialInput(kind, event.target.value))
+						onChange(clampCredentialInput(undefined, event.target.value))
 					}
 				/>
 				<ShowHideButton
 					shown={shown}
-					label={name}
+					label="PIN or password"
 					onToggle={() => setShown(!shown)}
 				/>
 			</div>

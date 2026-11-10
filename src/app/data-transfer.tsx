@@ -198,7 +198,6 @@ const FULL_BACKUP_CONTENTS = [
 	'All settings and excluded sites',
 	'Theme',
 	'Crash snapshots and the trash bin',
-	'The locked area, if you set one up, still encrypted with its own PIN or password',
 ];
 
 const BACKUP_TITLES: Record<ExportKind, (count: number) => string> = {
@@ -1372,7 +1371,6 @@ export function ImportDialog({
 				preferences: full.preferences,
 				snapshots: full.snapshots,
 				trash: full.trash,
-				locked: full.locked,
 			});
 			if (!result?.ok) {
 				throw new Error(result?.error || 'Could not import this backup.');
@@ -1381,7 +1379,7 @@ export function ImportDialog({
 			onOpenChange(false);
 			await onImported?.();
 			offerUndo(
-				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.${result.lockedRestored ? ' The locked area was replaced and is locked.' : ''}`,
+				`Imported the full backup: ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}, with settings.`,
 				result.undoId,
 				showStatus,
 				async () => onImported?.(),
@@ -2107,10 +2105,9 @@ export function ImportDialog({
 	);
 }
 
-function fullBackupDetails({manifest, locked}: FullBackupContents) {
+function fullBackupDetails({manifest}: FullBackupContents) {
 	const created = new Date(manifest.createdAt);
 	const parts = [
-		locked ? 'Includes the locked area, which replaces yours' : '',
 		Number.isNaN(created.getTime())
 			? ''
 			: `Created ${created.toLocaleString()}`,
