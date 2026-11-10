@@ -21,6 +21,7 @@ import {
 	CircleAlert,
 	Archive,
 	Download,
+	Lock,
 	FileJson,
 	FileSpreadsheet,
 	FileText,
@@ -36,6 +37,7 @@ import {
 import {
 	Badge,
 	Button,
+	Checkbox,
 	Dialog,
 	DialogBody,
 	DialogContent,
@@ -100,9 +102,20 @@ import {
 	buildFullBackup,
 	fullBackupFilename,
 	looksLikeZip,
+	protectFullBackup,
+	protectedFullBackupFilename,
 	readFullBackup,
+	readProtectedFullBackup,
 	type FullBackupContents,
 } from './full-backup';
+import {looksEncrypted} from './crypto-envelope';
+import {
+	EMPTY_PASSCODE_DRAFT,
+	PasscodeEntry,
+	PasscodeSetup,
+	passcodeDraftProblem,
+	type PasscodeDraft,
+} from './passcode-fields';
 import {
 	BookmarkColumnSelect,
 	BookmarkColumnNameField,
@@ -246,17 +259,24 @@ export function BackupDialog({
 	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
 	const [saving, setSaving] = useState(false);
+	// Optional password protection of the full backup ZIP; the secret lives only in this state.
+	const [protect, setProtect] = useState(false);
+	const [passcode, setPasscode] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
 	const [switched, setSwitched] = useState<BackupScope | null>(null);
 	const [individualChoice, setIndividualChoice] = useState<ExportChoice['id']>(
 		singleColumn ? 'column' : 'current',
 	);
 	useEffect(() => {
 		if (!open) {
+			// Drop the typed secret as soon as the dialog closes.
+			setPasscode((current) => ({...current, value: '', confirm: ''}));
 			return;
 		}
 
 		setFormat('json');
 		setSaving(false);
+		setProtect(false);
+		setPasscode(EMPTY_PASSCODE_DRAFT);
 		setSwitched(initialScope ?? null);
 		setIndividualChoice(singleColumn ? 'column' : 'current');
 	}, [open, initialScope, singleColumn]);
@@ -341,8 +361,12 @@ export function BackupDialog({
 				: singleColumn
 					? shown?.columns?.[0]?.name
 					: undefined;
+	const protectProblem =
+		full && protect ? passcodeDraftProblem(passcode) : null;
 	const filename = full
-		? fullBackupFilename(PROJECT.name)
+		? protect
+			? protectedFullBackupFilename(PROJECT.name)
+			: fullBackupFilename(PROJECT.name)
 		: exportFilename(PROJECT.name, kind, format, new Date(), exportName);
 	const summary = full
 		? 'All data and settings'
@@ -360,10 +384,21 @@ export function BackupDialog({
 			const {bytes, manifest} = buildFullBackup(result, {
 				appVersion: PROJECT.version,
 			});
-			downloadFile(new Uint8Array(bytes), 'application/zip', filename);
+			const protectedBytes = protect
+				? await protectFullBackup(bytes, {
+						kind: passcode.kind,
+						value: passcode.value,
+					})
+				: undefined;
+			downloadFile(
+				new Uint8Array(protectedBytes ?? bytes),
+				protectedBytes ? 'application/octet-stream' : 'application/zip',
+				filename,
+			);
+			setPasscode(EMPTY_PASSCODE_DRAFT);
 			onOpenChange(false);
 			showStatus(
-				`Saved a full backup (${plural(manifest.counts.sessions, 'session')}, ${plural(manifest.counts.bookmarks, 'bookmark')}, and settings) to ${filename}.`,
+				`Saved ${protectedBytes ? 'an encrypted' : 'a'} full backup (${plural(manifest.counts.sessions, 'session')}, ${plural(manifest.counts.bookmarks, 'bookmark')}, and settings) to ${filename}.`,
 				false,
 				{toast: true},
 			);
@@ -425,7 +460,9 @@ export function BackupDialog({
 					</DialogTitle>
 					<DialogDescription>
 						{full
-							? 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted.'
+							? protect
+								? 'One encrypted file you can restore with Import and the PIN or password you choose. It is saved to your downloads.'
+								: 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted unless you protect it below.'
 							: singleSession
 								? selectedIndividualChoice?.id === 'all'
 									? 'Choose a format for these sessions. The file is saved to your downloads; it is not encrypted.'
@@ -475,22 +512,60 @@ export function BackupDialog({
 						/>
 					)}
 					{full ? (
-						<div className="rounded-lg border border-border p-4">
-							<p className="flex items-center gap-2 text-sm font-medium">
-								<Archive
-									className="h-4 w-4 text-muted-foreground"
-									aria-hidden="true"
-								/>
-								Full backup (ZIP)
-							</p>
-							<ul className="mt-2 grid gap-1 pl-6 text-sm text-muted-foreground sm:grid-cols-2">
-								{FULL_BACKUP_CONTENTS.map((item) => (
-									<li key={item} className="list-disc">
-										{item}
-									</li>
-								))}
-							</ul>
-						</div>
+						<>
+							<div className="rounded-lg border border-border p-4">
+								<p className="flex items-center gap-2 text-sm font-medium">
+									<Archive
+										className="h-4 w-4 text-muted-foreground"
+										aria-hidden="true"
+									/>
+									Full backup (ZIP)
+								</p>
+								<ul className="mt-2 grid gap-1 pl-6 text-sm text-muted-foreground sm:grid-cols-2">
+									{FULL_BACKUP_CONTENTS.map((item) => (
+										<li key={item} className="list-disc">
+											{item}
+										</li>
+									))}
+								</ul>
+							</div>
+							<div className="rounded-lg border border-border p-4">
+								<div className="flex items-start gap-2">
+									<Checkbox
+										id="backup-protect"
+										checked={protect}
+										disabled={saving}
+										onCheckedChange={(checked) => {
+											setProtect(checked === true);
+											setPasscode(EMPTY_PASSCODE_DRAFT);
+										}}
+									/>
+									<div className="min-w-0">
+										<Label
+											htmlFor="backup-protect"
+											className="flex items-center gap-1.5 text-sm font-medium"
+										>
+											<Lock className="h-3.5 w-3.5" aria-hidden="true" />
+											Protect with a PIN or password
+										</Label>
+										<p className="mt-1 text-xs leading-5 text-muted-foreground">
+											Optional. Encrypts the whole backup file on this device.
+											Only full backups can be protected; other exports and
+											automatic backups stay plain text.
+										</p>
+									</div>
+								</div>
+								{protect && (
+									<div className="mt-4">
+										<PasscodeSetup
+											draft={passcode}
+											disabled={saving}
+											onChange={setPasscode}
+										/>
+									</div>
+								)}
+							</div>
+						</>
 					) : (
 						<RadioCardGroup
 							label="File format"
@@ -550,7 +625,11 @@ export function BackupDialog({
 					</Button>
 					<Button
 						type="button"
-						disabled={saving || (!full && !counts.items && !counts.groups)}
+						disabled={
+							saving ||
+							(!full && !counts.items && !counts.groups) ||
+							protectProblem !== null
+						}
 						onClick={download}
 					>
 						<Download />
@@ -958,7 +1037,7 @@ type ImportDialogProps = {
 };
 
 const SUPPORTED_FILES =
-	'Full backups (ZIP), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, and Toby.';
+	'Full backups (ZIP, including protected ones), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, and Toby.';
 
 function importSummary(
 	kind: ImportKind,
@@ -999,6 +1078,13 @@ export function ImportDialog({
 	const [source, setSource] = useState<ImportSource | null>(null);
 	const [parsed, setParsed] = useState<ParsedImport | null>(null);
 	const [full, setFull] = useState<FullBackupContents | null>(null);
+	// An encrypted backup waiting for its PIN or password; nothing is read from it until it opens.
+	const [locked, setLocked] = useState<{
+		name: string;
+		bytes: Uint8Array;
+	} | null>(null);
+	const [credential, setCredential] = useState('');
+	const [unlocking, setUnlocking] = useState(false);
 	const [error, setError] = useState('');
 	const [reading, setReading] = useState(false);
 	const [busy, setBusy] = useState(false);
@@ -1010,6 +1096,8 @@ export function ImportDialog({
 	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
 	const fileRef = useRef<HTMLInputElement>(null);
 	const importButtonRef = useRef<HTMLButtonElement>(null);
+	const chooseButtonRef = useRef<HTMLButtonElement>(null);
+	const credentialRef = useRef<HTMLInputElement>(null);
 	const readGenerationRef = useRef(0);
 	const columns = state?.bookmarkColumns ?? [];
 
@@ -1025,6 +1113,9 @@ export function ImportDialog({
 		setSource(null);
 		setParsed(null);
 		setFull(null);
+		setLocked(null);
+		setCredential('');
+		setUnlocking(false);
 		setError('');
 		setReading(false);
 		setBusy(false);
@@ -1065,6 +1156,12 @@ export function ImportDialog({
 			requestAnimationFrame(() => importButtonRef.current?.focus());
 		}
 	}, [open, step]);
+	// The source step's button unmounts when the credential field appears; put focus in the field.
+	useEffect(() => {
+		if (open && locked) {
+			requestAnimationFrame(() => credentialRef.current?.focus());
+		}
+	}, [open, locked]);
 	const nothingNew = Boolean(
 		preview &&
 		duplicateMode === 'skip' &&
@@ -1104,6 +1201,17 @@ export function ImportDialog({
 		try {
 			const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
 			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
+			if (looksEncrypted(header)) {
+				const bytes = new Uint8Array(await file.arrayBuffer());
+				if (generation !== readGenerationRef.current) {
+					return;
+				}
+
+				setLocked({name: file.name, bytes});
+				setCredential('');
 				return;
 			}
 
@@ -1155,6 +1263,49 @@ export function ImportDialog({
 		} finally {
 			if (generation === readGenerationRef.current) {
 				setReading(false);
+			}
+		}
+	}
+
+	async function unlock() {
+		if (!locked || unlocking || credential === '') {
+			return;
+		}
+
+		const generation = ++readGenerationRef.current;
+		setError('');
+		setUnlocking(true);
+		try {
+			const contents = await readProtectedFullBackup(locked.bytes, credential);
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
+			if (!contents) {
+				setError(
+					`“${locked.name}” opened, but it is not a ${PROJECT.name} full backup.`,
+				);
+				return;
+			}
+
+			setFull(contents);
+			setSource({type: 'file', name: locked.name});
+			setLocked(null);
+			setCredential('');
+		} catch (reason) {
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
+			setError(
+				reason instanceof FullBackupError
+					? reason.message
+					: `Could not open “${locked.name}”.`,
+			);
+			credentialRef.current?.focus();
+		} finally {
+			if (generation === readGenerationRef.current) {
+				setUnlocking(false);
 			}
 		}
 	}
@@ -1331,24 +1482,28 @@ export function ImportDialog({
 		}
 	}
 
-	const title = full
-		? 'Review full backup'
-		: everything
-			? 'Import everything'
-			: step === 'preview'
-				? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
-				: kind === 'sessions'
-					? 'Import sessions'
-					: 'Import bookmarks';
-	const description = full
-		? 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
-		: everything
-			? `Restore a ${PROJECT.name} full backup. It replaces sessions, bookmarks, and settings, and you can undo it right after.`
-			: step === 'preview'
-				? 'Nothing is saved until you choose Import.'
-				: kind === 'sessions'
-					? `Restore a backup or bring in tabs saved by another tab manager. Each group of tabs becomes a ${PROJECT.name} session.`
-					: 'Restore a backup, or bring in bookmarks from a browser or another tool. Folders become columns.';
+	const title = locked
+		? 'Unlock encrypted backup'
+		: full
+			? 'Review full backup'
+			: everything
+				? 'Import everything'
+				: step === 'preview'
+					? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
+					: kind === 'sessions'
+						? 'Import sessions'
+						: 'Import bookmarks';
+	const description = locked
+		? `“${locked.name}” is protected. Enter the PIN or password you chose when you made it. Nothing in your library changes until you confirm the import.`
+		: full
+			? 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
+			: everything
+				? `Restore a ${PROJECT.name} full backup. It replaces sessions, bookmarks, and settings, and you can undo it right after.`
+				: step === 'preview'
+					? 'Nothing is saved until you choose Import.'
+					: kind === 'sessions'
+						? `Restore a backup or bring in tabs saved by another tab manager. Each group of tabs becomes a ${PROJECT.name} session.`
+						: 'Restore a backup, or bring in bookmarks from a browser or another tool. Folders become columns.';
 	const kindSwitch =
 		// A full backup restores everything, so choosing Bookmarks or Sessions would only mislead.
 		!full && source?.type !== 'browser' ? (
@@ -1398,7 +1553,58 @@ export function ImportDialog({
 					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>{description}</DialogDescription>
 				</DialogHeader>
-				{step === 'source' ? (
+				{locked && step === 'source' ? (
+					<form
+						className="contents"
+						onSubmit={(event) => {
+							event.preventDefault();
+							void unlock();
+						}}
+					>
+						<DialogBody>
+							<PasscodeEntry
+								inputRef={credentialRef}
+								value={credential}
+								error={error}
+								onChange={(value) => {
+									setCredential(value);
+									setError('');
+								}}
+							/>
+						</DialogBody>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								className="mr-auto"
+								disabled={unlocking}
+								onClick={() => {
+									readGenerationRef.current += 1;
+									setLocked(null);
+									setCredential('');
+									setError('');
+									requestAnimationFrame(() => chooseButtonRef.current?.focus());
+								}}
+							>
+								<ArrowLeft />
+								Back
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								disabled={unlocking}
+								onClick={() => onOpenChange(false)}
+							>
+								<X aria-hidden="true" />
+								Cancel
+							</Button>
+							<Button type="submit" disabled={unlocking || credential === ''}>
+								<Lock aria-hidden="true" />
+								{unlocking ? 'Unlocking' : 'Unlock'}
+							</Button>
+						</DialogFooter>
+					</form>
+				) : step === 'source' ? (
 					<>
 						<DialogBody>
 							{kindSwitch && <div>{kindSwitch}</div>}
@@ -1442,11 +1648,12 @@ export function ImportDialog({
 									</h3>
 									<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
 										{everything
-											? `A ${PROJECT.name} full backup (.zip), made with Back up › Everything.`
+											? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Back up › Everything.`
 											: SUPPORTED_FILES}
 									</p>
 								</div>
 								<Button
+									ref={chooseButtonRef}
 									type="button"
 									variant="outline"
 									size="sm"
@@ -1465,8 +1672,8 @@ export function ImportDialog({
 									aria-hidden="true"
 									accept={
 										everything
-											? '.zip,application/zip'
-											: '.zip,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown'
+											? '.zip,.enc,application/zip'
+											: '.zip,.enc,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown'
 									}
 									onChange={(event) => void readFile(event.target.files?.[0])}
 								/>

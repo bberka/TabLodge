@@ -303,7 +303,7 @@ function Help() {
 				},
 				{
 					title: 'Move and add links',
-					body: 'Drag bookmarks between columns to move or reorder them. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark.',
+					body: 'Drag bookmarks between columns to move or reorder them. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark. Choose Session there to add the links to a saved session instead of a column.',
 					searchText:
 						'drag reorder move keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column',
 				},
@@ -602,12 +602,17 @@ function Help() {
 							>
 								Data settings
 							</a>{' '}
-							to back up, import, or erase data. Importing a full ZIP replaces
+							to back up, import, or erase data. When you back up everything,
+							you can protect the file with a PIN or a password. Choose a
+							password for anything sensitive: a PIN is weak, because anyone
+							with the file can try every PIN. TabLodge cannot recover a lost
+							PIN or password. Importing a protected file asks for it first, and
+							a wrong entry changes nothing. Importing a full backup replaces
 							the current data and offers Undo for a short time.
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo',
+						'sessions menu share all sessions archived individual session export bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',
@@ -646,7 +651,7 @@ function Help() {
 				},
 				{
 					title: 'Automatic backups',
-					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Choose backup frequency, retention, and an optional Downloads copy in Settings.',
+					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Choose backup frequency, retention, and an optional Downloads copy in Settings. Automatic and safety backups are not encrypted. Only a full backup ZIP that you export yourself can be protected with a PIN or password.',
 					searchText:
 						'automatic backups off default dated copies sessions bookmarks settings safety backup before erase import delete frequency retention downloads permission',
 				},

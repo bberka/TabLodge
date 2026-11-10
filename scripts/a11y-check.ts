@@ -2204,6 +2204,162 @@ async function main() {
 			);
 
 			await check(
+				`a protected full backup is exported and opened by keyboard (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'options');
+					await setTheme(page, theme);
+					await page
+						.getByRole('button', {name: 'Back up', exact: true})
+						.click();
+					const dialog = page.getByRole('dialog');
+					const protect = dialog.getByRole('checkbox', {
+						name: 'Protect with a PIN or password',
+					});
+					await protect.focus();
+					await page.keyboard.press('Space');
+					const download = dialog.getByRole('button', {
+						name: 'Download',
+						exact: true,
+					});
+					assert.equal(await download.isDisabled(), true);
+					const password = dialog.getByRole('textbox', {
+						name: 'Password',
+						exact: true,
+					});
+					const confirm = dialog.getByRole('textbox', {
+						name: 'Confirm Password',
+					});
+					await password.focus();
+					await page.keyboard.type('short');
+					assert.match(
+						(await dialog.textContent()) ?? '',
+						/needs at least 8 characters/,
+					);
+					await page.keyboard.type('er horse battery');
+					await confirm.focus();
+					await page.keyboard.type('different');
+					assert.match((await dialog.textContent()) ?? '', /do not match/);
+					assert.equal(await download.isDisabled(), true);
+					await confirm.fill('shorter horse battery');
+					assert.equal(
+						await download.isDisabled(),
+						true,
+						'the notice must be acknowledged first',
+					);
+					const show = dialog.getByRole('button', {name: 'Show Password'});
+					await show.focus();
+					await page.keyboard.press('Enter');
+					assert.equal(await password.getAttribute('type'), 'text');
+					assert.equal(
+						await dialog
+							.getByRole('button', {name: 'Hide Password'})
+							.getAttribute('aria-pressed'),
+						'true',
+					);
+					const acknowledge = dialog.getByRole('checkbox', {
+						name: /cannot be recovered/,
+					});
+					await acknowledge.focus();
+					await page.keyboard.press('Space');
+					assert.equal(await download.isEnabled(), true);
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource),
+						[],
+						'the protect form should pass axe',
+					);
+					const pinChoice = dialog.getByRole('radio', {name: 'PIN'});
+					await pinChoice.focus();
+					await page.keyboard.press('Space');
+					assert.match(
+						(await dialog.textContent()) ?? '',
+						/A PIN is weak/,
+						'a PIN shows the offline cracking warning',
+					);
+					assert.equal(
+						await download.isDisabled(),
+						true,
+						'switching type clears the entry',
+					);
+					await dialog.getByRole('radio', {name: 'Password'}).focus();
+					await page.keyboard.press('Space');
+					await password.fill('shorter horse battery');
+					await confirm.fill('shorter horse battery');
+					await acknowledge.focus();
+					await page.keyboard.press('Space');
+					const downloadPromise = page.waitForEvent('download');
+					await download.focus();
+					await page.keyboard.press('Enter');
+					const saved = await downloadPromise;
+					assert.match(
+						saved.suggestedFilename(),
+						/^tablodge-full-\d{4}-\d{2}-\d{2}\.zip\.enc$/,
+					);
+					const savedPath = await saved.path();
+					assert.ok(savedPath);
+					const bytes = await readFile(savedPath);
+					assert.equal(bytes.subarray(0, 4).toString('latin1'), 'TLEN');
+					const text = bytes.toString('latin1');
+					assert.equal(text.includes('Quarterly planning'), false);
+					assert.equal(text.includes('https://'), false);
+					await dialog.waitFor({state: 'hidden'});
+
+					await page.getByRole('button', {name: 'Import', exact: true}).click();
+					const importDialog = page.getByRole('dialog');
+					await importDialog
+						.getByRole('radio', {name: 'Everything'})
+						.check({force: true});
+					await importDialog.locator('input[type="file"]').setInputFiles({
+						name: 'protected.zip.enc',
+						mimeType: 'application/octet-stream',
+						buffer: bytes,
+					});
+					await importDialog
+						.getByRole('heading', {name: 'Unlock encrypted backup'})
+						.waitFor();
+					assert.deepEqual(
+						await axeViolationLines(page, axeSource),
+						[],
+						'the unlock step should pass axe',
+					);
+					await until(
+						async () =>
+							(await page.locator(':focus').getAttribute('type')) ===
+							'password',
+						'focus to move to the credential field',
+					);
+					await page.keyboard.type('wrong horse battery');
+					await page.keyboard.press('Enter');
+					await importDialog
+						.getByRole('alert')
+						.filter({hasText: 'wrong'})
+						.waitFor();
+					assert.equal(
+						await importDialog
+							.getByRole('heading', {name: 'Review full backup'})
+							.count(),
+						0,
+						'a wrong entry must not open the backup',
+					);
+					await until(
+						async () =>
+							(await page.locator(':focus').getAttribute('type')) ===
+							'password',
+						'focus to stay in the credential field after an error',
+					);
+					await importDialog
+						.getByRole('textbox', {name: 'PIN or password'})
+						.fill('shorter horse battery');
+					await page.keyboard.press('Enter');
+					await importDialog
+						.getByRole('heading', {name: 'Review full backup'})
+						.waitFor();
+					await page.keyboard.press('Escape');
+					await importDialog.waitFor({state: 'hidden'});
+					await page.close();
+				},
+			);
+
+			await check(
 				`duplicate bookmarks dialog works by keyboard (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'newtab');

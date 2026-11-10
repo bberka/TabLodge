@@ -3557,6 +3557,47 @@ async function unloadWhenCommitted(
 	chrome.tabs.onRemoved?.addListener?.(onRemoved);
 }
 
+// A restore of more tabs than this opens them in batches, so the browser never has hundreds of pages loading at once.
+const RESTORE_BATCH_THRESHOLD = 100;
+const RESTORE_BATCH_SIZE = 25;
+// How long a batch may keep loading before the next one starts, and how often that is checked.
+const RESTORE_BATCH_WAIT_MS = 3000;
+const RESTORE_BATCH_POLL_MS = 250;
+// A few slow pages do not hold the next batch back.
+const RESTORE_BATCH_SLACK = 5;
+
+/**
+Resolves when at most RESTORE_BATCH_SLACK of `tabIds` are still loading, or after RESTORE_BATCH_WAIT_MS, with the window's tabs as last seen.
+Never rejects: a tab that closed or a window that went away just ends the wait.
+*/
+async function waitUntilLoaded(
+	windowId: number | undefined,
+	tabIds: number[],
+): Promise<chrome.tabs.Tab[]> {
+	const wanted = new Set(tabIds);
+	const deadline = Date.now() + RESTORE_BATCH_WAIT_MS;
+	for (;;) {
+		let tabs: chrome.tabs.Tab[];
+		try {
+			tabs = await chrome.tabs.query({windowId});
+		} catch {
+			return [];
+		}
+
+		const loading = tabs.filter(
+			(tab) =>
+				tab.id !== undefined && wanted.has(tab.id) && tab.status === 'loading',
+		).length;
+		if (loading <= RESTORE_BATCH_SLACK || Date.now() >= deadline) {
+			return tabs;
+		}
+
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, RESTORE_BATCH_POLL_MS);
+		});
+	}
+}
+
 async function restoreRecords(
 	records: SavedTab[],
 	settings: Settings,
@@ -3623,6 +3664,44 @@ async function restoreRecords(
 		{tabIds: number[]; metadata: NativeGroup; groupId?: number}
 	>();
 	let skipped = 0;
+	const batched = valid.length > RESTORE_BATCH_THRESHOLD;
+	const unloadAsYouGo =
+		batched &&
+		settings.unloadRestoredTabs &&
+		valid.length > settings.unloadRestoredTabsThreshold &&
+		typeof chrome.tabs.discard === 'function';
+	let batch: typeof opened = [];
+	/**
+	Waits for the batch to load. With unloading on, it then unloads the batch's tabs, so memory use stays near one batch.
+	The tab that will be active and split pairs stay loaded, as they do at the end of a restore.
+	*/
+	const finishBatch = async () => {
+		const seen = await waitUntilLoaded(
+			target.id,
+			batch.flatMap((entry) =>
+				entry.tabId === undefined ? [] : [entry.tabId],
+			),
+		);
+		if (unloadAsYouGo) {
+			const keepId = (
+				opened.find((entry) => entry.saved.id === options.activeSavedId) ??
+				opened[0]
+			)?.tabId;
+			await unloadWhenCommitted(
+				batch.flatMap((entry) =>
+					entry.tabId === undefined ||
+					entry.tabId === keepId ||
+					entry.saved.pinned ||
+					entry.saved.split
+						? []
+						: [entry.tabId],
+				),
+				seen,
+			);
+		}
+
+		batch = [];
+	};
 
 	// Tabs open in saved order, so the two halves of a pair are created next to each other.
 	for (const saved of valid) {
@@ -3642,6 +3721,11 @@ async function restoreRecords(
 				pinned: saved.pinned,
 			});
 			opened.push({saved, tabId: created.id});
+			batch.push({saved, tabId: created.id});
+			if (batched && batch.length >= RESTORE_BATCH_SIZE) {
+				await finishBatch();
+			}
+
 			// Tabs.create always resolves with a tab that has an id.
 			openedIds.set(saved, created.id!);
 			existing.add(url);

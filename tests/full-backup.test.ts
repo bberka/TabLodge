@@ -7,9 +7,13 @@ import {
 	countFullBackup,
 	fullBackupFilename,
 	looksLikeZip,
+	protectFullBackup,
+	protectedFullBackupFilename,
 	readFullBackup,
+	readProtectedFullBackup,
 	type FullBackupParts,
 } from '../src/app/full-backup';
+import {looksEncrypted} from '../src/app/crypto-envelope';
 
 const parts: FullBackupParts = {
 	state: {
@@ -119,4 +123,53 @@ test('optional files may be missing', () => {
 	assert.ok(read);
 	assert.equal(read.preferences, undefined);
 	assert.equal(read.counts.snapshots, 0);
+});
+
+test('a protected full backup is not a ZIP and reads back with the credential', async () => {
+	const {bytes} = buildFullBackup(parts, {appVersion: '1.2.3'});
+	const protectedBytes = await protectFullBackup(bytes, {
+		kind: 'password',
+		value: 'correct horse battery',
+	});
+	assert.equal(looksLikeZip(protectedBytes), false);
+	assert.equal(looksEncrypted(protectedBytes), true);
+	const text = new TextDecoder('latin1').decode(protectedBytes);
+	for (const readable of ['example', 'manifest', 'tablodge', 'uiTheme']) {
+		assert.equal(text.includes(readable), false, readable);
+	}
+
+	const read = await readProtectedFullBackup(
+		protectedBytes,
+		'correct horse battery',
+	);
+	assert.ok(read);
+	assert.deepEqual(read.state, parts.state);
+	assert.deepEqual(read.counts, countFullBackup(parts));
+});
+
+test('a wrong credential reads nothing from a protected backup', async () => {
+	const {bytes} = buildFullBackup(parts, {appVersion: '1.2.3'});
+	const protectedBytes = await protectFullBackup(bytes, {
+		kind: 'pin',
+		value: '2468',
+	});
+	await assert.rejects(
+		readProtectedFullBackup(protectedBytes, '1357'),
+		(error) => error instanceof FullBackupError && /wrong/i.test(error.message),
+	);
+});
+
+test('a protected file that holds something else is not a full backup', async () => {
+	const other = await protectFullBackup(strToU8('just text'), {
+		kind: 'pin',
+		value: '2468',
+	});
+	assert.equal(await readProtectedFullBackup(other, '2468'), null);
+});
+
+test('the protected file name keeps the date and says it is encrypted', () => {
+	assert.equal(
+		protectedFullBackupFilename('TabLodge', new Date(2026, 2, 4)),
+		'tablodge-full-2026-03-04.zip.enc',
+	);
 });

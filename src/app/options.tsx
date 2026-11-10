@@ -850,7 +850,7 @@ const settingsGroups: Array<{
 			{
 				name: 'pasteLinkToBookmark',
 				label: 'Paste a link to add a bookmark',
-				help: `Pasting a link anywhere on the ${PROJECT.name} page except a text field opens Add bookmark with the link and its title filled in. Several links, one per line, open a list to add them all.`,
+				help: `Pasting a link anywhere on the ${PROJECT.name} page except a text field opens Add bookmark with the link and its title filled in. Several links, one per line, open a list to add them all. Both dialogs can add to a saved session instead of a column.`,
 				type: 'switch',
 			},
 		],
@@ -893,7 +893,7 @@ const settingsGroups: Array<{
 			{
 				name: 'autoBackup',
 				label: 'Automatic backups',
-				help: 'Keeps dated copies of your sessions, bookmarks and settings inside the extension’s storage. They can be restored or downloaded below.',
+				help: 'Keeps dated copies of your sessions, bookmarks and settings inside the extension’s storage. They can be restored or downloaded below. Automatic backups are plain text and are never password protected; only a full backup ZIP you export yourself can be.',
 				type: 'select',
 				options: [
 					['off', 'Off'],
