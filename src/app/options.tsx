@@ -893,7 +893,7 @@ const settingsGroups: Array<{
 			{
 				name: 'autoBackup',
 				label: 'Automatic backups',
-				help: 'Keeps dated copies of your sessions, bookmarks and settings inside the extension’s storage. They can be restored or downloaded below.',
+				help: 'Keeps dated copies of your sessions, bookmarks and settings inside the extension’s storage. They can be restored or downloaded below. Automatic backups are plain text and are never password protected; only a full backup ZIP you export yourself can be.',
 				type: 'select',
 				options: [
 					['off', 'Off'],
