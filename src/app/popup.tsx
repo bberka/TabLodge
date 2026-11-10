@@ -130,6 +130,8 @@ function Popup() {
 	const [allowPinnedOnce, setAllowPinnedOnce] = useState(false);
 	// Read ahead of the click: sidePanel.open must run inside the user gesture, without awaiting anything first.
 	const [windowId, setWindowId] = useState<number | undefined>();
+	// False on pages that cannot be saved (new tab, browser pages); stays true until the active tab is read.
+	const [pageSavable, setPageSavable] = useState(true);
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(
 		state?.settings,
 	);
@@ -180,6 +182,21 @@ function Popup() {
 			.getCurrent()
 			.then((current) => setWindowId(current.id))
 			.catch(() => undefined);
+	}, []);
+
+	useEffect(() => {
+		let alive = true;
+		chrome.tabs
+			.query({active: true, lastFocusedWindow: true})
+			.then(([tab]) => {
+				if (alive) {
+					setPageSavable(Boolean(webUrl(tab?.url)));
+				}
+			})
+			.catch(() => undefined);
+		return () => {
+			alive = false;
+		};
 	}, []);
 
 	useEffect(() => {
@@ -643,7 +660,8 @@ function Popup() {
 						size="sm"
 						className="w-full justify-start gap-3 px-3"
 						variant="outline"
-						disabled={busy !== ''}
+						disabled={busy !== '' || !pageSavable}
+						title={pageSavable ? undefined : 'This page cannot be saved'}
 						onClick={startBookmark}
 					>
 						{busy === 'bookmark-current' ? (
@@ -657,7 +675,8 @@ function Popup() {
 						size="sm"
 						className="w-full justify-start gap-3 px-3"
 						variant="outline"
-						disabled={busy !== ''}
+						disabled={busy !== '' || !pageSavable}
+						title={pageSavable ? undefined : 'This page cannot be saved'}
 						onClick={startAddToSession}
 					>
 						{busy === 'session-current' ? (
