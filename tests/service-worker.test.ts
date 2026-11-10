@@ -123,7 +123,7 @@ type HarnessOptions = {
 	*/
 	extraWindows?: number[];
 	/**
-	Mark window ids as incognito.
+	Mark window ids as incognito. A private worker (`incognitoContext`) starts with window 10 private unless this says otherwise.
 	*/
 	incognitoWindows?: number[];
 	tabGroups?: Array<{
@@ -290,6 +290,8 @@ function createWorkerHarness(
 	let nextSplitId = 900;
 	let lastFocusedWindowId = 10;
 	const tabs = structuredClone(initialTabs);
+	const privateWindowIds =
+		options.incognitoWindows ?? (options.incognitoContext ? [10] : []);
 	const windows: MockWindow[] = [
 		{
 			id: 10,
@@ -301,7 +303,7 @@ function createWorkerHarness(
 			width: 1280,
 			height: 900,
 			tabs,
-			incognito: (options.incognitoWindows ?? []).includes(10),
+			incognito: privateWindowIds.includes(10),
 		},
 		...(options.extraWindows ?? []).map((id) => ({
 			id,
@@ -309,7 +311,7 @@ function createWorkerHarness(
 			focused: false,
 			title: `Window ${id}`,
 			tabs: [] as MockTab[],
-			incognito: (options.incognitoWindows ?? []).includes(id),
+			incognito: privateWindowIds.includes(id),
 		})),
 	];
 	// Tab-strip order: `index` is kept contiguous per window, like Chromium's tab strip.
@@ -614,6 +616,7 @@ function createWorkerHarness(
 				properties: {
 					type?: string;
 					focused?: boolean;
+					incognito?: boolean;
 					url?: string | string[];
 					left?: number;
 					top?: number;
@@ -637,6 +640,7 @@ function createWorkerHarness(
 					focused: properties.focused !== false,
 					title: 'Restored window',
 					tabs: [],
+					incognito: properties.incognito === true,
 				};
 				windows.push(win);
 				createdWindows.push({...win, tabs: undefined});
@@ -1060,9 +1064,31 @@ function createWorkerHarness(
 			await settle();
 		},
 		/**
-		Closes a window the way the browser does: its tabs go, then windows.onRemoved fires.
+		Opens a window the way the browser does and fires windows.onCreated. Pass `fire: false` for a window that opened
+		while the worker was stopped, so the worker only finds it by listing windows.
 		*/
-		async closeWindow(id: number) {
+		async openWindow({incognito = false, fire = true} = {}) {
+			const id = nextWindowId++;
+			windows.push({
+				id,
+				type: 'normal',
+				focused: false,
+				title: `Window ${id}`,
+				tabs: [] as MockTab[],
+				incognito,
+			});
+			if (fire) {
+				listeners.windowCreated?.({id, incognito});
+				await settle();
+			}
+
+			return id;
+		},
+		/**
+		Closes a window the way the browser does: its tabs go, then windows.onRemoved fires. Pass `fire: false` when it
+		closed while the worker was stopped, so no event reaches the worker.
+		*/
+		async closeWindow(id: number, {fire = true} = {}) {
 			const at = windows.findIndex((win) => win.id === id);
 			if (at !== -1) {
 				windows.splice(at, 1);
@@ -1074,7 +1100,10 @@ function createWorkerHarness(
 				}
 			}
 
-			listeners.windowRemoved?.(id);
+			if (fire) {
+				listeners.windowRemoved?.(id);
+			}
+
 			await settle();
 		},
 		apiLog,
@@ -1571,6 +1600,202 @@ test('the private worker keeps the library open across a restart, and a browser 
 	assert.equal(status.enabled, true);
 	assert.equal(status.locked, true);
 	assert.equal(status.manageHere, true);
+});
+
+const LOCK_WINDOWS = 'tablodge.privatelock.windows';
+const ownedLock = (harness: ReturnType<typeof createWorkerHarness>) => ({
+	key: harness.sessionStore[LOCK_KEY],
+	active: harness.sessionStore[LOCK_ACTIVITY],
+	windows: harness.sessionStore[LOCK_WINDOWS],
+});
+
+test('unlocking records the open private windows, and Lock now forgets them', async () => {
+	const harness = await plainPrivateLibrary({
+		extraWindows: [50, 51],
+		incognitoWindows: [10, 50],
+	});
+	await enableLock(harness);
+	assert.deepEqual(harness.sessionStore[LOCK_WINDOWS], [10, 50]);
+	// A private window opening while unlocked joins the set, and a regular one never does.
+	const opened = await harness.openWindow({incognito: true});
+	await harness.openWindow();
+	assert.deepEqual(harness.sessionStore[LOCK_WINDOWS], [10, 50, opened]);
+	await harness.closeWindow(50);
+	assert.deepEqual(harness.sessionStore[LOCK_WINDOWS], [10, opened]);
+	await harness.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.deepEqual(ownedLock(harness), {
+		key: undefined,
+		active: undefined,
+		windows: undefined,
+	});
+});
+
+test('closing the last private window locks at once while the worker is awake, and a window left open does not', async () => {
+	const harness = await plainPrivateLibrary({
+		extraWindows: [20],
+		incognitoWindows: [10, 20],
+	});
+	await enableLock(harness);
+	await harness.closeWindow(10);
+	assert.ok(harness.sessionStore[LOCK_KEY], 'window 20 keeps it open');
+	assert.equal((await harness.sendMessage({type: 'GET_STATE'})).ok, true);
+	await harness.closeWindow(20);
+	assert.deepEqual(ownedLock(harness), {
+		key: undefined,
+		active: undefined,
+		windows: undefined,
+	});
+	const locked = await harness.sendMessage({type: 'GET_STATE'});
+	assert.deepEqual([locked.ok, locked.locked], [false, true]);
+	await harness.sendMessage({type: 'GET_PRIVATE_LOCK'});
+	assert.equal(harness.alarms.has('tablodge-private-lock'), false);
+});
+
+test('a private worker that was stopped when the last private window closed locks before it serves anything', async () => {
+	const first = await plainPrivateLibrary();
+	await enableLock(first);
+	assert.deepEqual(first.sessionStore[LOCK_WINDOWS], [10]);
+	// Window 10 closed with no worker running; a new private window 20 opened. Window 10 stands in as a regular window.
+	const next = restartPrivate(
+		first,
+		{},
+		{
+			extraWindows: [20],
+			incognitoWindows: [20],
+		},
+	);
+	const state = await next.sendMessage({type: 'GET_STATE'});
+	assert.deepEqual([state.ok, state.locked], [false, true]);
+	assert.equal(JSON.stringify(state).includes('Hidden'), false);
+	assert.deepEqual(ownedLock(next), {
+		key: undefined,
+		active: undefined,
+		windows: undefined,
+	});
+	const status = await next.sendMessage({type: 'GET_PRIVATE_LOCK'});
+	assert.equal(status.locked, true);
+	// The next unlock belongs to the new window.
+	const opened = await next.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(opened.ok, true, opened.error);
+	assert.deepEqual(next.sessionStore[LOCK_WINDOWS], [20]);
+	const kept = await next.sendMessage({type: 'GET_STATE'});
+	assert.equal(kept.bookmarks?.[0]?.title, 'Hidden');
+});
+
+test('every kind of first message to a worker that missed the last close finds the library locked', async () => {
+	const first = await plainPrivateLibrary();
+	await enableLock(first);
+	for (const message of [
+		{type: 'GET_PRIVATE_LOCK'},
+		{type: 'GET_STATE'},
+		{type: 'TOUCH_PRIVATE_LOCK'},
+		{type: 'GET_FULL_BACKUP'},
+	] as TabLodgeMessage[]) {
+		const next = restartPrivate(
+			first,
+			{},
+			{
+				extraWindows: [20],
+				incognitoWindows: [20],
+			},
+		);
+		const answer = await next.sendMessage(message);
+		assert.equal(
+			JSON.stringify(answer).includes('Hidden'),
+			false,
+			message.type,
+		);
+		assert.equal(next.sessionStore[LOCK_KEY], undefined, message.type);
+		assert.notEqual(answer.locked, false, message.type);
+	}
+
+	// The worker's own startup also locks, before any page asks.
+	const waking = restartPrivate(
+		first,
+		{},
+		{
+			extraWindows: [20],
+			incognitoWindows: [20],
+		},
+	);
+	await waking.fire('alarm', {name: 'unrelated'});
+	assert.equal(waking.sessionStore[LOCK_KEY], undefined);
+});
+
+test('a worker evicted while a private window stays open keeps the library unlocked', async () => {
+	const first = await plainPrivateLibrary({
+		extraWindows: [20],
+		incognitoWindows: [10, 20],
+	});
+	await enableLock(first);
+	// Window 20 closed and window 30 opened while the worker slept; window 10 never closed.
+	const next = restartPrivate(
+		first,
+		{},
+		{
+			extraWindows: [30],
+			incognitoWindows: [10, 30],
+		},
+	);
+	const state = await next.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.ok, true, state.error);
+	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
+	assert.deepEqual(next.sessionStore[LOCK_WINDOWS], [10, 30]);
+	// After another sleep only a window nobody tracked is left, so both earlier windows have closed.
+	const later = restartPrivate(
+		next,
+		{},
+		{
+			extraWindows: [40],
+			incognitoWindows: [40],
+		},
+	);
+	assert.equal((await later.sendMessage({type: 'GET_STATE'})).locked, true);
+});
+
+test('a window that opens as the last one closes cannot read the library, whichever message arrives first', async () => {
+	for (const order of ['window first', 'page first', 'together'] as const) {
+		const first = await plainPrivateLibrary();
+		await enableLock(first);
+		const next = restartPrivate(
+			first,
+			{},
+			{
+				extraWindows: [20],
+				incognitoWindows: [20],
+			},
+		);
+		if (order === 'window first') {
+			await next.fire('windowCreated', {id: 20, incognito: true});
+		}
+
+		const [state] = await Promise.all([
+			next.sendMessage({type: 'GET_STATE'}),
+			order === 'together'
+				? next.fire('windowCreated', {id: 20, incognito: true})
+				: undefined,
+		]);
+		assert.deepEqual([state.ok, state.locked], [false, true], order);
+		assert.equal(JSON.stringify(state).includes('Hidden'), false, order);
+		assert.equal(next.sessionStore[LOCK_KEY], undefined, order);
+	}
+});
+
+test('regular windows only show the lock status and never lock on windows', async () => {
+	const first = await plainPrivateLibrary();
+	await enableLock(first);
+	const normal = createWorkerHarness(stateWithSession(), undefined, {
+		storage: structuredClone(first.extraStorage),
+		sessionStorage: structuredClone(first.sessionStore),
+	});
+	const status = await normal.sendMessage({type: 'GET_PRIVATE_LOCK'});
+	assert.equal(status.locked, false);
+	assert.ok(normal.sessionStore[LOCK_KEY]);
+	await normal.closeWindow(10);
+	assert.ok(normal.sessionStore[LOCK_KEY]);
 });
 
 test('the idle timeout locks the library and the alarm checks it', async () => {

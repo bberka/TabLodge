@@ -28,7 +28,7 @@ import {DEFAULT_IDLE_MINUTES, IDLE_MINUTE_CHOICES} from './private-lock';
 import type {PrivateLockInfo} from './types';
 
 const IDLE_LABELS: Record<number, string> = {
-	0: 'Never, until the browser closes',
+	0: 'Never, until private windows close',
 	1: '1 minute',
 	5: '5 minutes',
 	15: '15 minutes',
@@ -161,8 +161,8 @@ export function EnableDialog({
 							</li>
 							<li>
 								It locks when you choose Lock now, when the idle time passes,
-								and when the browser closes. Closing private windows does not
-								lock it.
+								when the last private window closes, and when the browser
+								closes.
 							</li>
 							<li>
 								The private storage mode cannot change while the lock is on.
