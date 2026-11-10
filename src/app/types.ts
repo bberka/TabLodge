@@ -19,6 +19,22 @@ export type PrivateConfig = {
 	// An accent id or "#rrggbb" for private windows, or "same" to use the regular accent.
 	accent: string;
 };
+/**
+Where the optional PIN or password lock of the saved separate private library stands (see src/app/private-lock.ts).
+`state` is `encrypting` or `decrypting` while a pass is unfinished; it finishes after the next unlock.
+`available`: this worker's private library can be locked (separate saved storage, set up). `manageHere`: false in regular windows, which only show the status.
+`expiresAt`: when the idle timeout locks the library, or null.
+*/
+export type PrivateLockInfo = {
+	available: boolean;
+	manageHere: boolean;
+	enabled: boolean;
+	state: 'none' | 'encrypting' | 'encrypted' | 'decrypting' | 'damaged';
+	locked: boolean;
+	kind: 'pin' | 'password' | null;
+	idleMinutes: number;
+	expiresAt: number | null;
+};
 export type RestoreTarget =
 	'current-window' | 'new-window-unless-only-tab' | 'always-new-window';
 export type RestoreMode = 'keep' | 'remove';
@@ -558,6 +574,22 @@ export type TabLodgeMessages = {
 	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
 	SET_PRIVATE_NEW_TAB_REDIRECT: {enabled: boolean};
 	SET_PRIVATE_ACCENT: {accent: string};
+	GET_PRIVATE_LOCK: {};
+	UNLOCK_PRIVATE: {credential: string};
+	LOCK_PRIVATE: {};
+	TOUCH_PRIVATE_LOCK: {};
+	ENABLE_PRIVATE_LOCK: {
+		kind: 'pin' | 'password';
+		credential: string;
+		idleMinutes?: number;
+	};
+	CHANGE_PRIVATE_LOCK_CREDENTIAL: {
+		current: string;
+		kind: 'pin' | 'password';
+		credential: string;
+	};
+	REMOVE_PRIVATE_LOCK: {credential: string};
+	SET_PRIVATE_LOCK_IDLE: {minutes: number};
 	GET_STATE: {};
 	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
@@ -762,6 +794,10 @@ export type TabLodgeMessage = {
 export type ActionFailure = {
 	ok: false;
 	error: string;
+	/**
+	Set when the private library is locked: the page shows the lock screen instead of the error.
+	*/
+	locked?: true;
 };
 
 export type SaveResult = {
@@ -824,6 +860,14 @@ export type TabLodgeResponses = {
 	SET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_NEW_TAB_REDIRECT: PrivateConfig;
 	SET_PRIVATE_ACCENT: PrivateConfig;
+	GET_PRIVATE_LOCK: PrivateLockInfo;
+	UNLOCK_PRIVATE: PrivateLockInfo;
+	LOCK_PRIVATE: PrivateLockInfo;
+	TOUCH_PRIVATE_LOCK: PrivateLockInfo;
+	ENABLE_PRIVATE_LOCK: PrivateLockInfo;
+	CHANGE_PRIVATE_LOCK_CREDENTIAL: PrivateLockInfo;
+	REMOVE_PRIVATE_LOCK: PrivateLockInfo;
+	SET_PRIVATE_LOCK_IDLE: PrivateLockInfo;
 	GET_STATE: Store;
 	GET_SETTINGS_DEFAULTS: {settings: Settings};
 	SAVE_TABS: SaveResult;

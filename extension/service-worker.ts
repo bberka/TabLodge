@@ -5,6 +5,17 @@ import {
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
 import {
+	createPrivateLock,
+	type Gate,
+	isSealed,
+	LOCK_RECORD_KEY,
+	LOCK_SESSION_KEY,
+	LOCKED_MESSAGE,
+	PrivateLockError,
+	readStored,
+	sealValue,
+} from '../src/app/private-lock';
+import {
 	createLibraryState,
 	isUndoDelta,
 	LAYOUT_VERSION,
@@ -47,6 +58,7 @@ type TabGroupColor = import('../src/app/types').TabGroupColor;
 type TabLodgeMessage = import('../src/app/types').TabLodgeMessage;
 type TitlePolicy = import('../src/app/types').TitlePolicy;
 type PrivateConfig = import('../src/app/types').PrivateConfig;
+type PrivateLockInfo = import('../src/app/types').PrivateLockInfo;
 
 /**
 Untrusted object (stored state or import file): every field is checked before use.
@@ -235,6 +247,46 @@ const privateConfigReady = chrome.storage.local
 		privateConfig = normalizePrivateConfig(saved[PRIVATE_CONFIG_KEY]);
 	});
 
+/*
+The optional PIN or password lock of the saved separate private library (src/app/private-lock.ts). The lock record
+is in local storage, the data key only in session storage. Every read and write of the library passes `rawLibrary`
+below, which seals and opens values there, so nothing above it knows the lock exists.
+*/
+const privateLock = createPrivateLock({
+	local: chrome.storage.local,
+	session: chrome.storage.session,
+	prefix: PRIVATE_PREFIX,
+	reserved: [PRIVATE_CONFIG_KEY, LOCK_RECORD_KEY],
+	now: () => Date.now(),
+});
+const ALARM_PRIVATE_LOCK = 'tablodge-private-lock';
+
+/**
+The lock state for this worker's library, or null when none applies (regular windows, shared and temporary storage, no lock set).
+*/
+async function lockGate(): Promise<Gate | null> {
+	await privateConfigReady;
+	return privateContext && privateConfig.mode === 'saved'
+		? privateLock.gate()
+		: null;
+}
+
+/**
+The key to seal or open the values of one storage part with, undefined when the part is not sealed.
+Throws while the library is locked.
+*/
+function keyFor(gate: Gate | null, prefix: string) {
+	if (!gate || prefix === '') {
+		return undefined;
+	}
+
+	if (!gate.key) {
+		throw new PrivateLockError('locked', LOCKED_MESSAGE);
+	}
+
+	return gate.key;
+}
+
 // Web Locks are partitioned between normal and private contexts, but extension storage is shared.
 // The two workers use Lamport's bakery lock, with one slot each and normal winning ticket ties.
 const ownLockKey = `tablodge.lock.${privateContext ? 'private' : 'normal'}`;
@@ -375,37 +427,53 @@ function storageParts(keys: string[]) {
 const rawLibrary = {
 	async get<T = Record<string, unknown>>(keys: string[]): Promise<T> {
 		await privateConfigReady;
+		const gate = await lockGate();
 		const entries = await Promise.all(
 			storageParts(keys).map(async ({area, prefix, keys: part}) => {
-				const saved = await area.get(part.map((key) => prefix + key));
-				return Object.entries(saved).map(([key, value]) => [
-					key.slice(prefix.length),
-					value,
-				]);
+				const key = keyFor(gate, prefix);
+				const saved = await area.get(part.map((name) => prefix + name));
+				return Promise.all(
+					Object.entries(saved).map(async ([stored, value]) => {
+						const name = stored.slice(prefix.length);
+						return [name, key ? await readStored(key, name, value) : value];
+					}),
+				);
 			}),
 		);
 		return Object.fromEntries(entries.flat()) as T;
 	},
 	async set(values: Record<string, unknown>) {
 		await privateConfigReady;
+		const gate = await lockGate();
 		for (const {area, prefix, keys} of storageParts(Object.keys(values))) {
-			await area.set(
-				Object.fromEntries(keys.map((key) => [prefix + key, values[key]])),
+			const key = keyFor(gate, prefix);
+			// While the lock is being removed new writes stay plain, so that pass can finish.
+			const seal = key && gate?.state !== 'decrypting' ? key : undefined;
+			const entries = await Promise.all(
+				keys.map(async (name): Promise<[string, unknown]> => [
+					prefix + name,
+					seal ? await sealValue(seal, name, values[name]) : values[name],
+				]),
 			);
+			await area.set(Object.fromEntries(entries));
 		}
 	},
 	async remove(keys: string | string[]) {
 		await privateConfigReady;
+		const gate = await lockGate();
 		for (const {area, prefix, keys: part} of storageParts([keys].flat())) {
+			keyFor(gate, prefix);
 			await area.remove(part.map((key) => prefix + key));
 		}
 	},
 	async getBytesInUse(keys: string[]) {
 		await privateConfigReady;
+		const gate = await lockGate();
 		const sizes = await Promise.all(
-			storageParts(keys).map(async ({area, prefix, keys: part}) =>
-				area.getBytesInUse(part.map((key) => prefix + key)),
-			),
+			storageParts(keys).map(async ({area, prefix, keys: part}) => {
+				keyFor(gate, prefix);
+				return area.getBytesInUse(part.map((key) => prefix + key));
+			}),
 		);
 		return sizes.reduce((total, size) => total + size, 0);
 	},
@@ -483,6 +551,18 @@ const library = {
 	},
 };
 
+/**
+A change as the rest of the worker sees it: a sealed value is ciphertext, so it is reported as absent rather than as data.
+*/
+function withoutSealedValues(change: chrome.storage.StorageChange) {
+	return isSealed(change.newValue) || isSealed(change.oldValue)
+		? {
+				newValue: isSealed(change.newValue) ? undefined : change.newValue,
+				oldValue: isSealed(change.oldValue) ? undefined : change.oldValue,
+			}
+		: change;
+}
+
 function onLibraryChanged(
 	listener: (
 		changes: Record<string, chrome.storage.StorageChange>,
@@ -506,7 +586,10 @@ function onLibraryChanged(
 						? key.startsWith(scope.prefix) && key !== PRIVATE_CONFIG_KEY
 						: !key.startsWith(PRIVATE_PREFIX),
 				)
-				.map(([key, value]) => [key.slice(scope.prefix.length), value]),
+				.map(([key, value]) => [
+					key.slice(scope.prefix.length),
+					withoutSealedValues(value),
+				]),
 		);
 		listener(translated, 'local');
 	});
@@ -538,6 +621,87 @@ chrome.storage.onChanged.addListener((changes, area) => {
 	});
 	mutationQueue = update.catch(() => undefined);
 });
+/**
+Lock state for pages. Regular windows get the status too (the key is in shared session storage) but cannot change it.
+*/
+async function privateLockInfo(): Promise<PrivateLockInfo> {
+	await privateConfigReady;
+	const status = await privateLock.status();
+	syncPrivateLockAlarm(status);
+	return {
+		...status,
+		available: privateConfig.mode === 'saved' && privateConfig.configured,
+		manageHere: privateContext,
+	};
+}
+
+// The alarm checks the idle timeout while the library is unlocked, so pages lock even if nothing reads the library.
+let privateLockAlarmArmed = false;
+function syncPrivateLockAlarm(status: {
+	enabled: boolean;
+	locked: boolean;
+	idleMinutes: number;
+}) {
+	const wanted = status.enabled && !status.locked && status.idleMinutes > 0;
+	if (wanted === privateLockAlarmArmed) {
+		return;
+	}
+
+	privateLockAlarmArmed = wanted;
+	if (wanted) {
+		void chrome.alarms?.create?.(ALARM_PRIVATE_LOCK, {
+			delayInMinutes: 1,
+			periodInMinutes: 1,
+		});
+	} else {
+		void chrome.alarms?.clear?.(ALARM_PRIVATE_LOCK);
+	}
+}
+
+/**
+Anything the worker kept from the unlocked library goes when the key does.
+*/
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (!(area === 'session' && Object.hasOwn(changes, LOCK_SESSION_KEY))) {
+		return;
+	}
+
+	invalidateSettings();
+	if (changes[LOCK_SESSION_KEY].newValue !== undefined) {
+		return;
+	}
+
+	privateLockAlarmArmed = false;
+	void chrome.alarms?.clear?.(ALARM_PRIVATE_LOCK);
+});
+
+function privateLockFailure(error: unknown): ActionFailure | undefined {
+	if (error instanceof PrivateLockError) {
+		return {
+			ok: false,
+			error: error.message,
+			...(error.code === 'locked' && {locked: true as const}),
+		};
+	}
+
+	return undefined;
+}
+
+/**
+Finishes a lock pass that was cut off, inside the mutation queue. Does nothing while locked or when none is pending.
+*/
+function resumePrivateLock() {
+	return mutate(async () => {
+		if (
+			privateContext &&
+			privateConfig.mode === 'saved' &&
+			(await privateLock.resume())
+		) {
+			invalidateSettings();
+		}
+	});
+}
+
 // 10: sessions and bookmarks live in their own storage keys (src/shared/library-state.ts); the data model is unchanged from 9.
 const SCHEMA_VERSION = LAYOUT_VERSION;
 const DEFAULT_FOLDER_ID = 'unfiled';
@@ -8856,6 +9020,12 @@ async function runStartupRecovery() {
 }
 
 chrome.alarms?.onAlarm?.addListener?.((alarm) => {
+	if (alarm.name === ALARM_PRIVATE_LOCK) {
+		// Reading the status locks the library once the idle time has passed.
+		void privateLockInfo().catch(() => undefined);
+		return;
+	}
+
 	if (privateContext) {
 		return;
 	}
@@ -8918,6 +9088,152 @@ void readSettings()
 void mutate(async () => {
 	await libraryState.pruneRecoveryCopy();
 }).catch(() => undefined);
+// A lock pass that was cut off (the browser closed, the worker stopped) finishes as soon as the key is in memory.
+if (privateContext) {
+	void resumePrivateLock().catch(() => undefined);
+}
+
+/**
+Messages that work while the private library is locked: they read no library data.
+*/
+const PRIVATE_LOCK_OPEN_MESSAGES = new Set<string>([
+	'GET_PRIVATE_CONFIG',
+	'GET_PRIVATE_LOCK',
+	'UNLOCK_PRIVATE',
+	'LOCK_PRIVATE',
+	'TOUCH_PRIVATE_LOCK',
+	'HANDOFF_NEW_TAB',
+]);
+
+const isCredentialKind = (value: unknown): value is 'pin' | 'password' =>
+	value === 'pin' || value === 'password';
+
+async function handlePrivateLockMessage(
+	message: TabLodgeMessage,
+): Promise<ActionResult> {
+	if (!privateContext) {
+		return {
+			ok: false,
+			error:
+				'Open Settings in a private window to manage the lock. Regular windows only show its status.',
+		};
+	}
+
+	await privateConfigReady;
+	try {
+		switch (message.type) {
+			case 'UNLOCK_PRIVATE': {
+				if (typeof message.credential !== 'string') {
+					return {ok: false, error: 'Enter your PIN or password.'};
+				}
+
+				await privateLock.unlock(message.credential);
+				invalidateSettings();
+				await resumePrivateLock();
+				break;
+			}
+
+			case 'LOCK_PRIVATE': {
+				await privateLock.lock();
+				invalidateSettings();
+				break;
+			}
+
+			case 'TOUCH_PRIVATE_LOCK': {
+				await privateLock.touch();
+				// Also what the Settings button "Finish" sends after an interrupted pass.
+				const status = await privateLock.status();
+				if (!status.locked && status.state !== 'encrypted') {
+					await resumePrivateLock();
+				}
+
+				break;
+			}
+
+			case 'ENABLE_PRIVATE_LOCK': {
+				if (privateConfig.mode !== 'saved' || !privateConfig.configured) {
+					return {
+						ok: false,
+						error:
+							'The lock needs a separate saved private library. Choose it in Settings first.',
+					};
+				}
+
+				if (
+					!isCredentialKind(message.kind) ||
+					typeof message.credential !== 'string'
+				) {
+					return {ok: false, error: 'Choose a PIN or password.'};
+				}
+
+				const {kind, credential} = message;
+				await mutate(async () => {
+					await privateLock.enable(
+						{kind, value: credential},
+						message.idleMinutes,
+					);
+				});
+				invalidateSettings();
+				break;
+			}
+
+			case 'CHANGE_PRIVATE_LOCK_CREDENTIAL': {
+				if (
+					!isCredentialKind(message.kind) ||
+					typeof message.credential !== 'string' ||
+					typeof message.current !== 'string'
+				) {
+					return {ok: false, error: 'Choose a new PIN or password.'};
+				}
+
+				const {kind, credential, current} = message;
+				await mutate(async () => {
+					await privateLock.changeCredential(current, {
+						kind,
+						value: credential,
+					});
+				});
+				break;
+			}
+
+			case 'REMOVE_PRIVATE_LOCK': {
+				if (typeof message.credential !== 'string') {
+					return {ok: false, error: 'Enter your PIN or password.'};
+				}
+
+				const {credential} = message;
+				await mutate(async () => {
+					await privateLock.disable(credential);
+				});
+				invalidateSettings();
+				break;
+			}
+
+			case 'SET_PRIVATE_LOCK_IDLE': {
+				const {minutes} = message;
+				await mutate(async () => {
+					await privateLock.setIdleMinutes(minutes);
+				});
+				break;
+			}
+
+			default: {
+				return {ok: false, error: `Unknown ${APP_NAME} action.`};
+			}
+		}
+	} catch (error) {
+		return (
+			privateLockFailure(error) ?? {
+				ok: false,
+				error:
+					errorMessage(error) ||
+					`${APP_NAME} could not change the private lock.`,
+			}
+		);
+	}
+
+	return {ok: true, ...(await privateLockInfo())};
+}
 
 async function handleMessage(
 	message: TabLodgeMessage | undefined,
@@ -8930,6 +9246,7 @@ async function handleMessage(
 		!privateConfig.configured &&
 		![
 			'GET_PRIVATE_CONFIG',
+			'GET_PRIVATE_LOCK',
 			'SET_PRIVATE_CONFIG',
 			'SET_PRIVATE_NEW_TAB_REDIRECT',
 			'SET_PRIVATE_ACCENT',
@@ -8942,14 +9259,48 @@ async function handleMessage(
 		};
 	}
 
+	if (privateContext && !PRIVATE_LOCK_OPEN_MESSAGES.has(message?.type ?? '')) {
+		const gate = await lockGate();
+		if (gate && !gate.key) {
+			return {ok: false, error: LOCKED_MESSAGE, locked: true};
+		}
+	}
+
 	switch (message?.type) {
 		case 'GET_PRIVATE_CONFIG': {
 			return {ok: true, ...privateConfig};
 		}
 
+		case 'GET_PRIVATE_LOCK': {
+			return {ok: true, ...(await privateLockInfo())};
+		}
+
+		case 'UNLOCK_PRIVATE':
+		case 'LOCK_PRIVATE':
+		case 'TOUCH_PRIVATE_LOCK':
+		case 'ENABLE_PRIVATE_LOCK':
+		case 'CHANGE_PRIVATE_LOCK_CREDENTIAL':
+		case 'REMOVE_PRIVATE_LOCK':
+		case 'SET_PRIVATE_LOCK_IDLE': {
+			return handlePrivateLockMessage(message);
+		}
+
 		case 'SET_PRIVATE_CONFIG': {
 			if (!['shared', 'saved', 'temporary'].includes(message.mode)) {
 				return {ok: false, error: 'Choose a valid private storage mode.'};
+			}
+
+			// A lock only protects the saved separate library. Moving away from it would leave that data encrypted
+			// and unreachable, or show another library in its place, so the lock has to come off first.
+			if (
+				message.mode !== 'saved' &&
+				(await privateLock.readRecord()) !== undefined
+			) {
+				return {
+					ok: false,
+					error:
+						'The saved private library is locked with a PIN or password. Open Settings in a private window, unlock it, and remove the lock before choosing another storage mode. No data was changed.',
+				};
 			}
 
 			const config: PrivateConfig = {
@@ -9339,12 +9690,21 @@ async function handleMessage(
 
 		case 'HANDOFF_NEW_TAB': {
 			const tabId = sender.tab?.id;
-			return {
-				ok: true,
-				handedOff:
-					isInteger(tabId) &&
-					(await handOffNewTab(tabId, message.brave === true, false)),
-			};
+			try {
+				return {
+					ok: true,
+					handedOff:
+						isInteger(tabId) &&
+						(await handOffNewTab(tabId, message.brave === true, false)),
+				};
+			} catch (error) {
+				// The new tab setting sits in the locked library; the page shows the lock screen instead.
+				if (error instanceof PrivateLockError && error.code === 'locked') {
+					return {ok: true, handedOff: false};
+				}
+
+				throw error;
+			}
 		}
 
 		default: {
@@ -9360,11 +9720,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 		)
 		.then(sendResponse)
 		.catch((error: unknown) => {
-			sendResponse({
-				ok: false,
-				error:
-					errorMessage(error) || `${APP_NAME} could not complete that action.`,
-			});
+			sendResponse(
+				privateLockFailure(error) ?? {
+					ok: false,
+					error:
+						errorMessage(error) ||
+						`${APP_NAME} could not complete that action.`,
+				},
+			);
 		});
 	return true;
 });

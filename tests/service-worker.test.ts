@@ -196,7 +196,7 @@ type StoredState = {
 type TestResponse<K extends TabLodgeMessageType> = Omit<
 	ActionSuccess<K>,
 	'ok'
-> & {ok: boolean; error?: string};
+> & {ok: boolean; error?: string; locked?: boolean};
 
 function createWorkerHarness(
 	initialState: Partial<StoredState>,
@@ -452,11 +452,13 @@ function createWorkerHarness(
 		},
 		storage: {
 			local: {
-				async get(keys: string[]) {
+				async get(keys: string[] | null) {
 					pushState();
-					storageGets.push([...keys]);
+					// `null` reads everything, as chrome.storage does; the private lock lists its keys that way.
+					const wanted = keys ?? Object.keys(extraStorage);
+					storageGets.push([...wanted]);
 					const out: Record<string, unknown> = {};
-					for (const key of keys) {
+					for (const key of wanted) {
 						if (Object.hasOwn(extraStorage, key)) {
 							out[key] = sortKeysDeep(structuredClone(extraStorage[key]));
 						}
@@ -985,8 +987,11 @@ function createWorkerHarness(
 		crypto: webcrypto,
 		structuredClone,
 		TextEncoder,
-		// eslint-disable-next-line no-restricted-globals -- the worker uses btoa, so the mock context provides it
+		TextDecoder,
+		// eslint-disable-next-line no-restricted-globals -- the worker uses btoa and atob, so the mock context provides them
 		btoa,
+		// eslint-disable-next-line no-restricted-globals
+		atob,
 		globalThis: null,
 		setTimeout: options.manualTimers ? manualSetTimeout : setTimeout,
 		clearTimeout: options.manualTimers
@@ -1339,6 +1344,559 @@ test('separate private backups and deleted bookmarks never enter normal recovery
 	assert.equal(harness.extraStorage['tablodge.trash'], undefined);
 	assert.equal(harness.extraStorage['tablodge.backups'], undefined);
 	assert.equal(harness.state.groups[0]?.name, 'Research');
+});
+
+const PRIVATE_PREFIX = 'tablodge.private.';
+const LOCK_RECORD = 'tablodge.private.lock';
+const LOCK_KEY = 'tablodge.privatelock.key';
+const lockPassword = 'correct horse battery';
+const privateDataKeys = (storage: Record<string, unknown>) =>
+	Object.keys(storage).filter(
+		(key) =>
+			key.startsWith(PRIVATE_PREFIX) &&
+			key !== 'tablodge.private.config' &&
+			key !== LOCK_RECORD,
+	);
+/**
+Waits for work that runs on Web Crypto's thread pool, which `settle()` does not cover.
+*/
+async function eventually(check: () => boolean) {
+	for (let attempt = 0; attempt < 500 && !check(); attempt += 1) {
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 10);
+		});
+	}
+}
+
+const LOCK_ACTIVITY = 'tablodge.privatelock.active';
+/**
+Pretends the library has been idle for this many minutes.
+*/
+const ageLock = (
+	harness: {sessionStore: Record<string, unknown>},
+	minutes: number,
+) => {
+	harness.sessionStore[LOCK_ACTIVITY] =
+		(harness.sessionStore[LOCK_ACTIVITY] as number) - minutes * 60_000;
+};
+
+const isSealedValue = (value: unknown) =>
+	typeof value === 'object' &&
+	value !== null &&
+	(value as {tlock?: unknown}).tlock === 1;
+
+/**
+A saved separate private library with a bookmark and a folder, no lock yet.
+*/
+async function plainPrivateLibrary(
+	extra: HarnessOptions = {},
+	storage: Record<string, unknown> = {},
+) {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			uiTheme: 'dark',
+			...storage,
+		},
+		...extra,
+	});
+	const bookmark = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Hidden', url: 'https://secret-bookmark.example/'},
+	});
+	assert.equal(bookmark.ok, true, bookmark.error);
+	const folder = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'Secret folder',
+	});
+	assert.equal(folder.ok, true, folder.error);
+	return harness;
+}
+
+/**
+The same worker after a restart: storage stays, and the session store stays unless the browser restarted.
+*/
+function restartPrivate(
+	before: ReturnType<typeof createWorkerHarness>,
+	{browserRestart = false}: {browserRestart?: boolean} = {},
+	extra: HarnessOptions = {},
+) {
+	return createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		storage: structuredClone(before.extraStorage),
+		sessionStorage: browserRestart ? {} : structuredClone(before.sessionStore),
+		...extra,
+	});
+}
+
+const enableLock = (harness: ReturnType<typeof createWorkerHarness>) =>
+	harness.sendMessage({
+		type: 'ENABLE_PRIVATE_LOCK',
+		kind: 'password',
+		credential: lockPassword,
+	});
+
+test('the private lock encrypts the saved library at rest and leaves the config, appearance, and regular library alone', async () => {
+	const harness = await plainPrivateLibrary();
+	const enabled = await enableLock(harness);
+	assert.equal(enabled.ok, true, enabled.error);
+	assert.equal(enabled.locked, false);
+	assert.equal(enabled.state, 'encrypted');
+	const keys = privateDataKeys(harness.extraStorage);
+	assert.ok(keys.includes('tablodge.private.tablodge.state'));
+	assert.ok(keys.length >= 2, 'the index and the bookmarks exist');
+	for (const key of keys) {
+		assert.equal(isSealedValue(harness.extraStorage[key]), true, key);
+	}
+
+	const stored = JSON.stringify(harness.extraStorage);
+	assert.equal(stored.includes('secret-bookmark.example'), false);
+	assert.equal(stored.includes('Secret folder'), false);
+	assert.equal(stored.includes(lockPassword), false);
+	assert.deepEqual(harness.extraStorage['tablodge.private.config'], {
+		mode: 'saved',
+		configured: true,
+	});
+	assert.equal(harness.extraStorage.uiTheme, 'dark');
+	assert.equal(harness.state.groups[0]?.name, 'Research');
+	// Unlocked, the app sees the same library and keeps writing sealed values.
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.bookmarks?.length, 1);
+	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Later', url: 'https://later-secret.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	for (const key of privateDataKeys(harness.extraStorage)) {
+		assert.equal(isSealedValue(harness.extraStorage[key]), true, key);
+	}
+
+	assert.equal(
+		JSON.stringify(harness.extraStorage).includes('later-secret.example'),
+		false,
+	);
+	// The key is in session storage only.
+	assert.ok(harness.sessionStore[LOCK_KEY]);
+	assert.equal(
+		JSON.stringify(harness.extraStorage).includes(
+			(harness.sessionStore[LOCK_KEY] as {key: string}).key,
+		),
+		false,
+	);
+	assert.ok(harness.alarms.has('tablodge-private-lock'));
+});
+
+test('a locked private library refuses reads, writes, backups, and exports until the credential is entered', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	const locked = await harness.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.equal(locked.ok, true, locked.error);
+	assert.equal(locked.locked, true);
+	assert.equal(harness.sessionStore[LOCK_KEY], undefined);
+	assert.equal(harness.sessionStore[LOCK_ACTIVITY], undefined);
+	assert.equal(harness.alarms.has('tablodge-private-lock'), false);
+	for (const message of [
+		{type: 'GET_STATE'},
+		{type: 'ADD_BOOKMARK', bookmark: {title: 'x', url: 'https://x.example/'}},
+		{type: 'GET_FULL_BACKUP'},
+		{type: 'GET_BACKUP_DATA'},
+		{type: 'BACKUP_NOW'},
+		{type: 'GET_TRASH'},
+		{type: 'GET_STORAGE_USAGE'},
+		{type: 'ERASE_DATA'},
+		{type: 'SET_PRIVATE_CONFIG', mode: 'shared'},
+	] as TabLodgeMessage[]) {
+		const refused = await harness.sendMessage(message);
+		assert.equal(refused.ok, false, message.type);
+		assert.equal(refused.locked, true, message.type);
+	}
+
+	// Nothing the refused messages did reached storage.
+	assert.equal(
+		JSON.stringify(harness.extraStorage).includes('x.example'),
+		false,
+	);
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_PRIVATE_CONFIG'})).mode,
+		'saved',
+	);
+	const handoff = await harness.sendMessage({type: 'HANDOFF_NEW_TAB'});
+	assert.deepEqual([handoff.ok, handoff.handedOff], [true, false]);
+	const wrong = await harness.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: 'wrong wrong wrong',
+	});
+	assert.equal(wrong.ok, false);
+	assert.equal(wrong.locked, undefined);
+	assert.match(wrong.error ?? '', /not correct/);
+	assert.equal((await harness.sendMessage({type: 'GET_STATE'})).ok, false);
+	const opened = await harness.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(opened.ok, true, opened.error);
+	assert.equal(opened.locked, false);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(backup.ok, true, backup.error);
+});
+
+test('the private worker keeps the library open across a restart, and a browser restart locks it', async () => {
+	const first = await plainPrivateLibrary();
+	await enableLock(first);
+	const restarted = restartPrivate(first);
+	const kept = await restarted.sendMessage({type: 'GET_STATE'});
+	assert.equal(kept.ok, true, kept.error);
+	assert.equal(kept.bookmarks?.[0]?.title, 'Hidden');
+	const afterBrowser = restartPrivate(first, {browserRestart: true});
+	const locked = await afterBrowser.sendMessage({type: 'GET_STATE'});
+	assert.equal(locked.ok, false);
+	assert.equal(locked.locked, true);
+	const status = await afterBrowser.sendMessage({type: 'GET_PRIVATE_LOCK'});
+	assert.equal(status.ok, true);
+	assert.equal(status.enabled, true);
+	assert.equal(status.locked, true);
+	assert.equal(status.manageHere, true);
+});
+
+test('the idle timeout locks the library and the alarm checks it', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	ageLock(harness, 6);
+	await harness.fire('alarm', {name: 'tablodge-private-lock'});
+	assert.equal(harness.sessionStore[LOCK_KEY], undefined);
+	assert.equal((await harness.sendMessage({type: 'GET_STATE'})).locked, true);
+	await harness.sendMessage({type: 'UNLOCK_PRIVATE', credential: lockPassword});
+	const shortened = await harness.sendMessage({
+		type: 'SET_PRIVATE_LOCK_IDLE',
+		minutes: 1,
+	});
+	assert.equal(shortened.idleMinutes, 1);
+	ageLock(harness, 2);
+	// Even without the alarm, the next library read finds the library idle and locked.
+	const late = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(late.locked, true);
+	const invalid = await harness.sendMessage({
+		type: 'SET_PRIVATE_LOCK_IDLE',
+		minutes: 7,
+	});
+	assert.equal(invalid.ok, false);
+});
+
+test('the lock needs the saved separate library, and regular windows cannot manage it', async () => {
+	const shared = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		storage: {'tablodge.private.config': {mode: 'shared', configured: true}},
+	});
+	const refused = await enableLock(shared);
+	assert.equal(refused.ok, false);
+	assert.match(refused.error ?? '', /separate saved private library/);
+	const status = await shared.sendMessage({type: 'GET_PRIVATE_LOCK'});
+	assert.equal(status.available, false);
+	const normal = createWorkerHarness(stateWithSession(), undefined, {
+		storage: {'tablodge.private.config': {mode: 'saved', configured: true}},
+	});
+	const normalRefused = await enableLock(normal);
+	assert.equal(normalRefused.ok, false);
+	assert.match(normalRefused.error ?? '', /private window/);
+	assert.equal(
+		(await normal.sendMessage({type: 'GET_PRIVATE_LOCK'})).manageHere,
+		false,
+	);
+});
+
+test('a weak credential is refused and nothing is encrypted', async () => {
+	const harness = await plainPrivateLibrary();
+	const refused = await harness.sendMessage({
+		type: 'ENABLE_PRIVATE_LOCK',
+		kind: 'pin',
+		credential: '12',
+	});
+	assert.equal(refused.ok, false);
+	assert.equal(harness.extraStorage[LOCK_RECORD], undefined);
+	for (const key of privateDataKeys(harness.extraStorage)) {
+		assert.equal(isSealedValue(harness.extraStorage[key]), false, key);
+	}
+});
+
+test('changing the storage mode is refused while a lock exists, locked or not, from either kind of window', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	const before = structuredClone(harness.extraStorage);
+	const blocked = await harness.sendMessage({
+		type: 'SET_PRIVATE_CONFIG',
+		mode: 'temporary',
+	});
+	assert.equal(blocked.ok, false);
+	assert.match(blocked.error ?? '', /remove the lock/);
+	assert.deepEqual(harness.extraStorage, before);
+	// A regular window reads the same lock record and refuses the same way.
+	const regular = createWorkerHarness(stateWithSession(), undefined, {
+		storage: structuredClone(before),
+	});
+	const refusedThere = await regular.sendMessage({
+		type: 'SET_PRIVATE_CONFIG',
+		mode: 'shared',
+	});
+	assert.equal(refusedThere.ok, false);
+	assert.match(refusedThere.error ?? '', /remove the lock/);
+	assert.deepEqual(
+		regular.extraStorage['tablodge.private.config'],
+		before['tablodge.private.config'],
+	);
+	// Choosing the mode it already has is not a change.
+	const same = await regular.sendMessage({
+		type: 'SET_PRIVATE_CONFIG',
+		mode: 'saved',
+	});
+	assert.equal(same.ok, true, same.error);
+	// After the lock is removed the mode can change, and the library stays plain and intact.
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	assert.equal(removed.ok, true, removed.error);
+	const changed = await harness.sendMessage({
+		type: 'SET_PRIVATE_CONFIG',
+		mode: 'temporary',
+	});
+	assert.equal(changed.ok, true, changed.error);
+});
+
+test('removing the lock restores the plain library byte for byte', async () => {
+	const harness = await plainPrivateLibrary();
+	const plain = structuredClone(
+		Object.fromEntries(
+			privateDataKeys(harness.extraStorage).map((key) => [
+				key,
+				harness.extraStorage[key],
+			]),
+		),
+	);
+	await enableLock(harness);
+	const wrong = await harness.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: 'wrong wrong wrong',
+	});
+	assert.equal(wrong.ok, false);
+	assert.ok(harness.extraStorage[LOCK_RECORD]);
+	for (const key of privateDataKeys(harness.extraStorage)) {
+		assert.equal(isSealedValue(harness.extraStorage[key]), true, key);
+	}
+
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	assert.equal(removed.ok, true, removed.error);
+	assert.equal(removed.enabled, false);
+	assert.equal(harness.extraStorage[LOCK_RECORD], undefined);
+	assert.equal(harness.sessionStore[LOCK_KEY], undefined);
+	for (const [key, value] of Object.entries(plain)) {
+		// Storage keeps JSON, which drops undefined fields.
+		assert.deepEqual(
+			harness.extraStorage[key],
+			// eslint-disable-next-line unicorn/prefer-structured-clone -- JSON drops undefined fields, as storage does
+			JSON.parse(JSON.stringify(value)),
+			key,
+		);
+	}
+
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
+});
+
+test('the credential can change, and only the new one unlocks', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	const refused = await harness.sendMessage({
+		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+		current: 'wrong wrong wrong',
+		kind: 'pin',
+		credential: '2468',
+	});
+	assert.equal(refused.ok, false);
+	const changed = await harness.sendMessage({
+		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+		current: lockPassword,
+		kind: 'pin',
+		credential: '2468',
+	});
+	assert.equal(changed.ok, true, changed.error);
+	assert.equal(changed.kind, 'pin');
+	await harness.sendMessage({type: 'LOCK_PRIVATE'});
+	const old = await harness.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(old.ok, false);
+	const fresh = await harness.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: '2468',
+	});
+	assert.equal(fresh.ok, true, fresh.error);
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_STATE'})).bookmarks?.[0]?.title,
+		'Hidden',
+	);
+});
+
+test('an enable cut off before any value was sealed finishes on the next worker start', async () => {
+	const harness = await plainPrivateLibrary();
+	harness.setStorageFailure(
+		new Error('worker stopped'),
+		'tablodge.private.tablodge.state',
+	);
+	const failed = await enableLock(harness);
+	assert.equal(failed.ok, false);
+	assert.equal(
+		(harness.extraStorage[LOCK_RECORD] as {state: string}).state,
+		'encrypting',
+	);
+	assert.equal(
+		isSealedValue(harness.extraStorage['tablodge.private.tablodge.state']),
+		false,
+	);
+	// Reads keep working on the plain values while the pass is open.
+	const restarted = restartPrivate(harness);
+	await eventually(
+		() =>
+			(restarted.extraStorage[LOCK_RECORD] as {state: string}).state ===
+			'encrypted',
+	);
+	assert.equal(
+		(restarted.extraStorage[LOCK_RECORD] as {state: string}).state,
+		'encrypted',
+	);
+	for (const key of privateDataKeys(restarted.extraStorage)) {
+		assert.equal(isSealedValue(restarted.extraStorage[key]), true, key);
+	}
+
+	const state = await restarted.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
+});
+
+test('a half sealed library stays readable, and unlocking after a browser restart finishes the pass', async () => {
+	const harness = await plainPrivateLibrary();
+	const plainBookmarksKey = privateDataKeys(harness.extraStorage).find((key) =>
+		key.startsWith('tablodge.private.tablodge.bookmarks.'),
+	)!;
+	const plainBookmarks = structuredClone(
+		harness.extraStorage[plainBookmarksKey],
+	);
+	await enableLock(harness);
+	// Put one value back the way an interrupted pass would have left it.
+	harness.extraStorage[plainBookmarksKey] = plainBookmarks;
+	(harness.extraStorage[LOCK_RECORD] as {state: string}).state = 'encrypting';
+	const open = restartPrivate(harness);
+	await eventually(() => isSealedValue(open.extraStorage[plainBookmarksKey]));
+	// The restart with the key in memory finished the pass at startup.
+	assert.equal(isSealedValue(open.extraStorage[plainBookmarksKey]), true);
+	assert.equal(
+		(open.extraStorage[LOCK_RECORD] as {state: string}).state,
+		'encrypted',
+	);
+	// Without the key (the browser closed mid pass) the library is locked even though some values are plain.
+	harness.extraStorage[plainBookmarksKey] = plainBookmarks;
+	(harness.extraStorage[LOCK_RECORD] as {state: string}).state = 'encrypting';
+	const closed = restartPrivate(harness, {browserRestart: true});
+	await settle();
+	assert.equal((await closed.sendMessage({type: 'GET_STATE'})).locked, true);
+	const unlocked = await closed.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: lockPassword,
+	});
+	assert.equal(unlocked.ok, true, unlocked.error);
+	assert.equal(unlocked.state, 'encrypted');
+	assert.equal(isSealedValue(closed.extraStorage[plainBookmarksKey]), true);
+	assert.equal(
+		(await closed.sendMessage({type: 'GET_STATE'})).bookmarks?.[0]?.title,
+		'Hidden',
+	);
+});
+
+test('a private library still in the old single entry layout is sealed whole, then migrated while sealed', async () => {
+	const legacy = stateWithSession();
+	legacy.groups[0].name = 'Old private session';
+	legacy.groups[0].tabs[0].url = 'https://old-private.example/page';
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			'tablodge.private.tablodge.state': legacy,
+		},
+	});
+	const enabled = await enableLock(harness);
+	assert.equal(enabled.ok, true, enabled.error);
+	assert.equal(
+		isSealedValue(harness.extraStorage['tablodge.private.tablodge.state']),
+		true,
+	);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.groups?.[0]?.name, 'Old private session');
+	// A write migrates the library to the per record layout, and every new key is sealed.
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'New', url: 'https://new-private.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	const keys = privateDataKeys(harness.extraStorage);
+	assert.ok(keys.some((key) => key.includes('tablodge.session.')));
+	for (const key of keys) {
+		assert.equal(isSealedValue(harness.extraStorage[key]), true, key);
+	}
+
+	const stored = JSON.stringify(harness.extraStorage);
+	assert.equal(stored.includes('old-private.example'), false);
+	// Going back removes the lock and leaves plain per record keys that still hold the session.
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	assert.equal(removed.ok, true, removed.error);
+	assert.equal(
+		JSON.stringify(harness.extraStorage).includes('old-private.example'),
+		true,
+	);
+	const after = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(after.groups?.[0]?.name, 'Old private session');
+	assert.equal(after.bookmarks?.[0]?.title, 'New');
+});
+
+test('deleted private items and undo records are sealed too', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	const id = state.bookmarks?.[0]?.id ?? '';
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK',
+		bookmarkId: id,
+	});
+	assert.equal(deleted.ok, true, deleted.error);
+	assert.equal(
+		isSealedValue(harness.extraStorage['tablodge.private.tablodge.trash']),
+		true,
+	);
+	assert.equal(
+		JSON.stringify(harness.extraStorage).includes('secret-bookmark.example'),
+		false,
+	);
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.ok(trash.ok);
+	assert.equal(trash.items.length, 1);
+});
+
+test('a damaged lock record blocks the library instead of being ignored', async () => {
+	const harness = await plainPrivateLibrary();
+	harness.extraStorage[LOCK_RECORD] = {version: 1, state: 'oops'};
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(state.ok, false);
+	assert.match(state.error ?? '', /damaged/);
+	const status = await harness.sendMessage({type: 'GET_PRIVATE_LOCK'});
+	assert.equal(status.state, 'damaged');
 });
 
 test('RESTORE_GROUP opens a valid saved URL and reports successful session restoration', async () => {
