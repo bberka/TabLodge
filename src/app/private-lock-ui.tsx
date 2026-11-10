@@ -435,27 +435,32 @@ export function PrivateLockSettings({
 							</Button>
 						</div>
 					)}
-					<div className="grid gap-1.5">
-						<span className="text-sm font-medium">Lock after</span>
-						<IdleSelect
-							label="Lock after"
-							value={info.idleMinutes}
-							disabled={savingIdle}
-							onChange={(minutes) => void saveIdle(minutes)}
-						/>
-					</div>
-					<div className="flex flex-wrap gap-2">
-						<Button variant="outline" onClick={() => void send('LOCK_PRIVATE')}>
-							<Lock aria-hidden="true" />
-							Lock now
-						</Button>
-						<Button variant="outline" onClick={() => setDialog('change')}>
-							Change {label}…
-						</Button>
-						<Button variant="outline" onClick={() => setDialog('remove')}>
-							<LockOpen aria-hidden="true" />
-							Remove lock…
-						</Button>
+					<div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+						<div className="grid gap-1.5">
+							<span className="text-sm font-medium">Lock after</span>
+							<IdleSelect
+								label="Lock after"
+								value={info.idleMinutes}
+								disabled={savingIdle}
+								onChange={(minutes) => void saveIdle(minutes)}
+							/>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							<Button
+								variant="outline"
+								onClick={() => void send('LOCK_PRIVATE')}
+							>
+								<Lock aria-hidden="true" />
+								Lock now
+							</Button>
+							<Button variant="outline" onClick={() => setDialog('change')}>
+								Change {label}…
+							</Button>
+							<Button variant="outline" onClick={() => setDialog('remove')}>
+								<LockOpen aria-hidden="true" />
+								Remove lock…
+							</Button>
+						</div>
 					</div>
 				</div>
 			)}
