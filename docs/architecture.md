@@ -254,7 +254,31 @@ A session has one description, capped at 10,502 characters. Older separate `note
 
 Automatic backup history and Undo records are not included. Import recognizes the ZIP header and format identifier, shows counts, and sends `RESTORE_FULL_BACKUP`. The worker rejects newer versions, normalizes entries, takes a safety backup, and replaces the affected data inside one undoable action. It then resynchronizes alarms, toolbar behavior, and menus.
 
-Files above 45 MB, or expanding beyond 60 MB, are refused. All export formats are unencrypted; see [Privacy](PRIVACY.md) before sharing backups.
+Files above 45 MB, or expanding beyond 60 MB, are refused. JSON, HTML, CSV, Markdown, and URL list exports are always unencrypted; see [Privacy](PRIVACY.md) before sharing backups.
+
+#### Protected full backup
+
+The Back up dialog can protect a full backup with a PIN or password. The page builds the ZIP as usual, then `protectFullBackup` encrypts those bytes and the file is saved as `tablodge-full-YYYY-MM-DD.zip.enc`. Import recognizes the envelope magic, asks for the PIN or password, and passes the decrypted ZIP to the same reader as an unprotected backup. The worker never sees the credential or an encrypted file: it receives the same `RESTORE_FULL_BACKUP` message after the page has opened the file, so a wrong entry cannot change the library. Unprotected ZIPs import as before.
+
+Two modules hold the reusable parts, so locked storage and private window passwords can share them:
+
+- `src/app/passcode.ts` defines the two credential types and one `validateCredential` check used by the forms and by encryption. A PIN is 0 to 9, 4 to 8 digits. A password is any characters, 8 to 128 (counted as characters, not UTF-16 units). The module also holds the warning text for weak PINs and for lost credentials. `src/app/passcode-fields.tsx` has the matching form pieces.
+- `src/app/crypto-envelope.ts` uses Web Crypto only. PBKDF2-SHA-256 (600,000 iterations or more) derives an AES-GCM-256 key. The credential is normalized to NFKC first. Each encryption draws a fresh 16 byte salt and 12 byte nonce.
+
+The envelope is self-describing, so the work factor can rise later without breaking older files. Integers are big-endian:
+
+| Bytes | Field |
+| --- | --- |
+| 0 to 3 | Magic `TLEN` |
+| 4 | Envelope version (1) |
+| 5 | KDF id (1 is PBKDF2-SHA-256) |
+| 6 to 9 | KDF iterations |
+| 10, 11 | Salt length (16), nonce length (12) |
+| then | Salt, nonce, and the AES-GCM ciphertext with its 16 byte tag |
+
+The entire header is authenticated as additional data, so changing any header byte fails decryption. Reading refuses an unknown version or KDF, and a work factor above 20 million, before doing any key work. A wrong credential and a changed file both fail the authentication tag and give the same error, with no partial output. No credential, key, or hint is stored.
+
+Automatic backups are JSON records kept in `chrome.storage.local` and optional JSON files in Downloads. They are not encrypted. The credential has nowhere safe to live in a service worker without being stored, so the worker does not encrypt them.
 
 ## Testing
 

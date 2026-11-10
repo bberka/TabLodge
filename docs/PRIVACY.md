@@ -55,7 +55,9 @@ Use **Settings › Data** to erase sessions, bookmarks, or both. Erasing data cr
 
 If you enable **Also save a copy to Downloads**, TabLodge writes backup JSON files to `Downloads/TabLodge/`. It doesn't upload them. Turning the option off or uninstalling the extension doesn't delete files already written there; you must remove those yourself.
 
-Exports are not encrypted. JSON, HTML, CSV, Markdown, URL lists, and full backup ZIP files may contain sensitive titles, URLs, or notes. The full backup also includes settings, excluded sites, theme and accent, snapshot history, and trash. Keep these files private and remember that a folder you sync through another app may upload them.
+Exports are not encrypted unless you choose to protect a full backup. JSON, HTML, CSV, Markdown, and URL list exports, and full backup ZIP files you leave unprotected, may contain sensitive titles, URLs, or notes. The full backup also includes settings, excluded sites, theme and accent, snapshot history, and trash. Keep these files private and remember that a folder you sync through another app may upload them.
+
+When you back up everything, you can protect the file with a PIN or a password. TabLodge then encrypts it on your device with AES-256 in GCM mode, using a key derived from your entry with PBKDF2 (SHA-256, 600,000 iterations) and a random salt and nonce per file. The PIN or password is never stored, sent, or saved as a hint, so a lost one cannot be recovered. A PIN has at most 100 million combinations, so anyone who copies the file can try them all offline; use a password for sensitive data. Encryption protects only the file you export. The automatic backups kept in the extension's storage, the Downloads copies, safety backups, snapshots, and the library itself are not encrypted. Only the full backup ZIP can be protected.
 
 ## Permissions
 

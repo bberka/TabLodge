@@ -8,6 +8,8 @@ import {
 	fileNamePrefix,
 } from './backup-format';
 import {dateStamp} from './export-formats';
+import {EnvelopeError, decryptBytes, encryptBytes} from './crypto-envelope';
+import type {Credential} from './passcode';
 
 /**
 What the worker hands over for a full backup: stored values, as they are in `chrome.storage.local`.
@@ -95,6 +97,47 @@ export function countFullBackup(parts: FullBackupParts): FullBackupCounts {
 
 export function fullBackupFilename(appName: string, date = new Date()) {
 	return `${fileNamePrefix(appName)}-full-${dateStamp(date)}.zip`;
+}
+
+/**
+Name of a protected backup. It is not a ZIP until decrypted, so it does not end in plain ".zip".
+*/
+export function protectedFullBackupFilename(
+	appName: string,
+	date = new Date(),
+) {
+	return `${fullBackupFilename(appName, date)}.enc`;
+}
+
+/**
+Encrypts a full-backup ZIP with a PIN or password (see crypto-envelope.ts). Only this ZIP is ever protected.
+*/
+export function protectFullBackup(
+	zip: Uint8Array,
+	credential: Credential,
+): Promise<Uint8Array> {
+	return encryptBytes(zip, credential);
+}
+
+/**
+Decrypts and reads a protected full backup. Throws a FullBackupError with a message for the user when the credential is wrong or the file is damaged, and reads nothing in that case. Returns null when it decrypts to something that is not a TabLodge full backup.
+*/
+export async function readProtectedFullBackup(
+	bytes: Uint8Array,
+	credential: string,
+): Promise<FullBackupContents | null> {
+	let zip: Uint8Array;
+	try {
+		zip = await decryptBytes(bytes, credential);
+	} catch (error) {
+		throw new FullBackupError(
+			error instanceof EnvelopeError
+				? error.message
+				: 'This file could not be decrypted.',
+		);
+	}
+
+	return readFullBackup(zip);
 }
 
 export function buildFullBackup(
