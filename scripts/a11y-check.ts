@@ -45,7 +45,13 @@ const EVIDENCE_VIEWPORTS = [
 type ExtensionApi = {
 	runtime: {sendMessage(message: unknown): Promise<unknown>};
 	storage: {local: {set(items: Record<string, unknown>): Promise<void>}};
-	tabs: {query(info: {url: string}): Promise<unknown[]>};
+	tabs: {
+		query(info: {
+			url?: string;
+			active?: boolean;
+			lastFocusedWindow?: boolean;
+		}): Promise<unknown[]>;
+	};
 };
 type AxeResults = {
 	violations: Array<{
@@ -799,6 +805,34 @@ async function captureResetEvidence(
 	} finally {
 		await page.setViewportSize(viewport);
 	}
+}
+
+// The popup is opened as a tab here, so its own tab would be the active one. The first read of the active tab
+// reports `activeUrl` as the page the popup was opened over.
+async function openPopupOver(
+	context: BrowserContext,
+	extensionId: string,
+	activeUrl: string,
+) {
+	const page = await context.newPage();
+	watchConsole(page, 'popup page');
+	await page.addInitScript((url) => {
+		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
+		const query = chrome.tabs.query.bind(chrome.tabs);
+		let first = true;
+		chrome.tabs.query = async (info) => {
+			if (first && info.active && info.lastFocusedWindow) {
+				first = false;
+				return [{id: 1, url, active: true}];
+			}
+
+			return query(info);
+		};
+	}, activeUrl);
+	await page.setViewportSize({width: 380, height: 560});
+	await page.goto(`chrome-extension://${extensionId}/popup.html`);
+	await page.waitForLoadState('networkidle');
+	return page;
 }
 
 async function main() {
@@ -3509,6 +3543,34 @@ async function main() {
 			);
 		}
 
+		await check(
+			'toolbar popup disables page buttons on unsavable pages',
+			async () => {
+				const popup = await openPopupOver(
+					context,
+					extensionId,
+					'chrome://newtab/',
+				);
+				for (const name of [
+					'Bookmark this page',
+					'Add this page to a session',
+				]) {
+					const button = popup.getByRole('button', {name, exact: true});
+					assert.equal(await button.isDisabled(), true, `${name} is disabled`);
+					assert.equal(
+						await button.getAttribute('aria-describedby'),
+						'page-unsavable',
+					);
+				}
+
+				assert.equal(
+					await popup.locator('#page-unsavable').textContent(),
+					'This page cannot be saved.',
+				);
+				await popup.close();
+			},
+		);
+
 		for (const theme of THEMES) {
 			await check(
 				`toolbar popup bookmarks into a new column (${theme})`,
@@ -3522,8 +3584,7 @@ async function main() {
 						}),
 					);
 					await webPage.goto(url);
-					const popup = await openPage(context, extensionId, 'popup');
-					await popup.setViewportSize({width: 380, height: 560});
+					const popup = await openPopupOver(context, extensionId, url);
 					await setTheme(popup, theme);
 					const name = `Popup ${theme}`;
 					for (const save of [false, true]) {
