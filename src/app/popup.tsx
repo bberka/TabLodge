@@ -656,12 +656,18 @@ function Popup() {
 					</dl>
 				)}
 				<div className="space-y-2">
+					{!pageSavable && (
+						<p id="page-unsavable" className="sr-only">
+							This page cannot be saved.
+						</p>
+					)}
 					<Button
 						size="sm"
 						className="w-full justify-start gap-3 px-3"
 						variant="outline"
 						disabled={busy !== '' || !pageSavable}
 						title={pageSavable ? undefined : 'This page cannot be saved'}
+						aria-describedby={pageSavable ? undefined : 'page-unsavable'}
 						onClick={startBookmark}
 					>
 						{busy === 'bookmark-current' ? (
@@ -677,6 +683,7 @@ function Popup() {
 						variant="outline"
 						disabled={busy !== '' || !pageSavable}
 						title={pageSavable ? undefined : 'This page cannot be saved'}
+						aria-describedby={pageSavable ? undefined : 'page-unsavable'}
 						onClick={startAddToSession}
 					>
 						{busy === 'session-current' ? (
