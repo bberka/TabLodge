@@ -1,4 +1,4 @@
-import {useEffect, useId, useRef, useState} from 'react';
+import {type Ref, useEffect, useId, useRef, useState} from 'react';
 import {
 	CircleCheck,
 	Cloud,
@@ -407,11 +407,69 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	};
 
 	const server = (status.url ?? '').replace(/^https?:\/\//, '');
-	const {title, note, Icon, tone, spin} = summarize(status);
 	// Covers a sync the worker started on its own as well as one started here.
 	const syncing = action === 'sync' || status.phase === 'syncing';
 	return (
 		<div className="space-y-4">
+			<SyncStatusLine status={status} server={server} />
+			{status.refused > 0 && (
+				<p className="text-sm text-muted-foreground">
+					The server turned down {status.refused} old{' '}
+					{status.refused === 1 ? 'change' : 'changes'} from this browser,
+					because {status.refused === 1 ? 'it was' : 'they were'} about items
+					deleted on another device long ago.
+				</p>
+			)}
+			{error && (
+				<p role="alert" className="text-sm text-destructive">
+					{error}
+				</p>
+			)}
+			<div className="flex flex-wrap gap-2">
+				<SyncNowButton
+					ref={syncNowRef}
+					busy={busy}
+					syncing={syncing}
+					onSync={syncNow}
+				/>
+				<Button
+					type="button"
+					variant="outline"
+					disabled={busy}
+					onClick={() => {
+						setConfirmDisconnect(true);
+					}}
+				>
+					<Link2Off aria-hidden="true" />
+					Disconnect
+				</Button>
+			</div>
+			<ConfirmationDialog
+				open={confirmDisconnect}
+				title="Disconnect from sync?"
+				description={`This browser stops syncing with ${server}. Everything stays on this device, and the server keeps its copy. If you connect again later, the two are merged.`}
+				confirmLabel="Disconnect"
+				onOpenChange={setConfirmDisconnect}
+				onConfirm={disconnect}
+			/>
+		</div>
+	);
+}
+
+/**
+How sync is doing, for the regular library and the private one: an icon, a headline, the server and the last sync,
+and the error when sync stopped.
+*/
+export function SyncStatusLine({
+	status,
+	server,
+}: {
+	status: SyncStatus;
+	server: string;
+}) {
+	const {title, note, Icon, tone, spin} = summarize(status);
+	return (
+		<>
 			<div className="flex gap-3">
 				<Icon
 					aria-hidden="true"
@@ -437,63 +495,47 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					{status.error}
 				</p>
 			)}
-			{status.refused > 0 && (
-				<p className="text-sm text-muted-foreground">
-					The server turned down {status.refused} old{' '}
-					{status.refused === 1 ? 'change' : 'changes'} from this browser,
-					because {status.refused === 1 ? 'it was' : 'they were'} about items
-					deleted on another device long ago.
-				</p>
-			)}
-			{error && (
-				<p role="alert" className="text-sm text-destructive">
-					{error}
-				</p>
-			)}
-			<div className="flex flex-wrap gap-2">
-				<Button
-					ref={syncNowRef}
-					type="button"
-					// Aria-disabled rather than disabled, so focus stays on the button while it syncs.
-					aria-disabled={busy || syncing}
-					className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-					onClick={() => {
-						if (!busy && !syncing) {
-							syncNow();
-						}
-					}}
-				>
-					<RefreshCw
-						aria-hidden="true"
-						className={syncing ? 'motion-safe:animate-spin' : undefined}
-					/>
-					{syncing ? 'Syncing…' : 'Sync now'}
-				</Button>
-				<Button
-					type="button"
-					variant="outline"
-					disabled={busy}
-					onClick={() => {
-						setConfirmDisconnect(true);
-					}}
-				>
-					<Link2Off aria-hidden="true" />
-					Disconnect
-				</Button>
-			</div>
-			<ConfirmationDialog
-				open={confirmDisconnect}
-				title="Disconnect from sync?"
-				description={`This browser stops syncing with ${server}. Everything stays on this device, and the server keeps its copy. If you connect again later, the two are merged.`}
-				confirmLabel="Disconnect"
-				onOpenChange={setConfirmDisconnect}
-				onConfirm={disconnect}
-			/>
-		</div>
+		</>
 	);
 }
 
-function FieldMessage({id, message}: {id: string; message?: string}) {
+/**
+Sync now, which reads Syncing… and ignores presses while a sync runs. It stays focusable meanwhile (aria-disabled
+rather than disabled), so focus is not dropped to the page.
+*/
+export function SyncNowButton({
+	ref,
+	busy,
+	syncing,
+	onSync,
+}: {
+	ref?: Ref<HTMLButtonElement>;
+	busy: boolean;
+	syncing: boolean;
+	onSync: () => void;
+}) {
+	return (
+		<Button
+			ref={ref}
+			type="button"
+			aria-disabled={busy || syncing}
+			className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+			onClick={() => {
+				if (!busy && !syncing) {
+					onSync();
+				}
+			}}
+		>
+			<RefreshCw
+				aria-hidden="true"
+				className={syncing ? 'motion-safe:animate-spin' : undefined}
+			/>
+			{syncing ? 'Syncing…' : 'Sync now'}
+		</Button>
+	);
+}
+
+export function FieldMessage({id, message}: {id: string; message?: string}) {
 	return (
 		<p
 			id={id}

@@ -11675,6 +11675,22 @@ function syncServer() {
 	};
 }
 
+/**
+Waits for work the worker finishes after it has answered a message.
+*/
+async function until(check: () => boolean, ms = 3000) {
+	const end = Date.now() + ms;
+	while (!check()) {
+		if (Date.now() > end) {
+			throw new Error('timed out');
+		}
+
+		await new Promise((resolve) => {
+			setTimeout(resolve, 20);
+		});
+	}
+}
+
 const SYNC_URL = 'https://sync.example.test';
 const regularSync = {
 	'tablodge.sync.config': {url: SYNC_URL, token: SYNC_TOKEN},
@@ -11854,15 +11870,8 @@ test('setting a PIN or password later encrypts what private sync already sent', 
 		/secret-bookmark/,
 	);
 	assert.equal((await enableLock(harness)).ok, true);
-	for (
-		let attempt = 0;
-		attempt < 50 && server.privateLog.key === null;
-		attempt += 1
-	) {
-		await new Promise((resolve) => {
-			setTimeout(resolve, 20);
-		});
-	}
+	// The worker protects the server's copy after it answers the lock message.
+	await until(() => server.privateLog.key !== null);
 
 	await harness.sendMessage({type: 'PRIVATE_SYNC_NOW'});
 	assert.notEqual(server.privateLog.key, null);
@@ -12044,15 +12053,7 @@ test('a new PIN or password rewraps the private sync key, so other browsers keep
 		credential: 'a brand new password',
 	});
 	assert.equal(changed.ok, true, changed.error);
-	for (
-		let attempt = 0;
-		attempt < 100 && server.privateLog.key === before;
-		attempt += 1
-	) {
-		await new Promise((resolve) => {
-			setTimeout(resolve, 20);
-		});
-	}
+	await until(() => server.privateLog.key !== before);
 
 	assert.notEqual(server.privateLog.key, before);
 	const late = createWorkerHarness({}, undefined, {

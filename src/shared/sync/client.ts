@@ -9,7 +9,7 @@ so a slow server never holds up the app. Rounds never overlap: a request during 
 */
 import type {Store} from '../../app/types';
 import {isRecord} from '../library-values';
-import type {PushResult} from './change-log';
+import {PROTOCOL_VERSION, type PushResult} from './change-log';
 import {parseChange, recordKey, type SyncChange} from './changes';
 import {
 	capture,
@@ -27,7 +27,7 @@ import {
 import {assemble, splitLibrary} from './library-records';
 
 export const SYNC_CONFIG_KEY = 'tablodge.sync.config';
-export const SYNC_STATE_KEY = 'tablodge.sync.state';
+const SYNC_STATE_KEY = 'tablodge.sync.state';
 export const SYNC_STATUS_KEY = 'tablodge.sync.status';
 export const SYNC_ALARM = 'tablodge-sync';
 /**
@@ -41,7 +41,6 @@ Minutes between fallback rounds, which also reopen a closed live socket.
 export const SYNC_ALARM_MINUTES = 5;
 export const MIN_TOKEN_LENGTH = 32;
 
-const PROTOCOL_VERSION = 1;
 const PULL_LIMIT = 500;
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 1500;
@@ -176,7 +175,7 @@ export function parseServerUrl(text: string): string {
 	return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
-function parseConfig(value: unknown): SyncConfig | undefined {
+export function parseConfig(value: unknown): SyncConfig | undefined {
 	return isRecord(value) &&
 		typeof value.url === 'string' &&
 		typeof value.token === 'string'
@@ -250,18 +249,57 @@ const ERROR_MESSAGES = new Map([
 	['not_configured', 'The sync server has no token set up yet.'],
 ]);
 
+export const SYNC_OFF: SyncStatus = {
+	connected: false,
+	url: null,
+	phase: 'off',
+	live: false,
+	lastSyncAt: null,
+	pending: 0,
+	refused: 0,
+	error: null,
+};
+
+/**
+One request to a sync server with the token. Throws SyncError for an unreachable server or a refused token, and
+leaves every other status to the caller.
+*/
+export async function callServer(
+	send: SyncHost['fetch'],
+	target: SyncConfig,
+	path: string,
+	init: RequestInit = {},
+): Promise<{status: number; body: unknown}> {
+	let response: Response;
+	try {
+		response = await send(`${target.url}${path}`, {
+			...init,
+			headers: [
+				['Authorization', `Bearer ${target.token}`],
+				['Content-Type', 'application/json'],
+			],
+		});
+	} catch {
+		throw new SyncError('offline', 'The sync server cannot be reached.');
+	}
+
+	if (response.status === 401) {
+		throw new SyncError('auth', 'The sync server refused the token.');
+	}
+
+	let body: unknown;
+	try {
+		body = await response.json();
+	} catch {
+		body = undefined;
+	}
+
+	return {status: response.status, body};
+}
+
 export function createSyncClient(host: SyncHost) {
 	let config: SyncConfig | undefined;
-	let status: SyncStatus = {
-		connected: false,
-		url: null,
-		phase: 'off',
-		live: false,
-		lastSyncAt: null,
-		pending: 0,
-		refused: 0,
-		error: null,
-	};
+	let status = SYNC_OFF;
 	let running: Promise<void> | undefined;
 	let again = false;
 	let applying = false;
@@ -304,37 +342,19 @@ export function createSyncClient(host: SyncHost) {
 		path: string,
 		init: RequestInit = {},
 	): Promise<unknown> {
-		let response: Response;
-		try {
-			response = await host.fetch(`${target.url}${path}`, {
-				...init,
-				headers: [
-					['Authorization', `Bearer ${target.token}`],
-					['Content-Type', 'application/json'],
-				],
-			});
-		} catch {
-			throw new SyncError('offline', 'The sync server cannot be reached.');
-		}
-
-		if (response.status === 401) {
-			throw new SyncError('auth', 'The sync server refused the token.');
-		}
-
-		let body: unknown;
-		try {
-			body = await response.json();
-		} catch {
-			body = undefined;
-		}
-
-		if (!response.ok) {
-			const code =
+		const {status: code, body} = await callServer(
+			host.fetch,
+			target,
+			path,
+			init,
+		);
+		if (code < 200 || code >= 300) {
+			const error =
 				isRecord(body) && typeof body.error === 'string' ? body.error : '';
 			throw new SyncError(
 				'server',
-				ERROR_MESSAGES.get(code) ??
-					`The sync server answered with an error (${response.status}).`,
+				ERROR_MESSAGES.get(error) ??
+					`The sync server answered with an error (${code}).`,
 			);
 		}
 

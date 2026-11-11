@@ -164,7 +164,11 @@ How private windows sync depends on their storage, chosen in **Settings › Priv
 * **Separate saved library:** it does not sync until you turn on **Sync private windows** in **Settings › Sync**, opened from a private window. It then goes to the same server as a second library, under `/private`, and needs no setup there. Turn it on in each browser whose private windows should share it.
 * **Separate temporary library:** it never syncs, because it is meant to disappear when the browser closes.
 
-If the separate library is locked with a PIN or password, TabLodge asks for it when you turn private sync on, and encrypts every item before it leaves the browser. The first browser makes a random key and stores it on the server wrapped with that PIN or password; the server only ever sees the wrapped key and the encrypted items. Another browser asks for the same PIN or password once, then keeps the key in its own private library. Changing the PIN or password wraps the same key again, so the other browsers keep syncing; a browser that turns private sync on later uses the new one. Setting a first PIN or password on a library that already synced encrypts the server's copy too. The server can still see how many items there are and when they change, and a short PIN can be guessed by whoever holds the server's data, so use a password if that matters to you.
+If the separate library is locked with a PIN or password, TabLodge asks for it when you turn private sync on and encrypts every item before it leaves the browser. The first browser makes a random key and stores it on the server wrapped with that PIN or password, so the server only ever holds the wrapped key and encrypted items. Each other browser asks for the same PIN or password once, then keeps the key in its own private library.
+
+Changing the PIN or password wraps the same key again, so the other browsers keep syncing, and a browser that turns private sync on later uses the new one. Setting a first PIN or password on a library that already synced encrypts the server's copy too.
+
+The server can still see how many private items there are and when they change. Whoever holds the server's data can try every short PIN, so use a password if that matters to you.
 
 Private sync runs only while a private window is open and its library is unlocked, so changes from other browsers arrive the next time you open one.
 
@@ -178,18 +182,38 @@ Private sync runs only while a private window is open and its library is unlocke
 
 ### Update
 
-On a VPS:
+TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge, and a feature that needs a newer server says so where you turn it on, for example "This sync server cannot hold private windows yet. Update it". To hear about new server versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**); server releases are tagged `sync-server-v…`.
+
+Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
+
+**Cloudflare.** In your copy of the repository:
+
+```sh
+git pull
+pnpm install
+pnpm run cf:deploy
+```
+
+`cf:deploy` uploads the new Worker and leaves the token alone (`cf:setup` does the same and also creates a token if the Worker has none). The library stays in the Durable Object's storage, and the new code runs from the next request. The private windows' library, if you use it, is a second object of the same kind and needs nothing extra. If you deployed from a fork on GitHub, choose **Sync fork** there before `git pull`.
+
+**VPS:**
 
 ```sh
 docker compose -f compose.https.yaml pull
 docker compose -f compose.https.yaml up -d
 ```
 
-With a single `docker run` container, run `docker pull ghcr.io/bberka/tablodge-sync:latest`, then `docker rm -f tablodge-sync`, then start it again with the same command and token. The library is in the `tablodge-sync` volume and stays.
-
-On Cloudflare, run `git pull`, `pnpm install`, and `pnpm run cf:setup` in your copy of the repository. The token stays.
+**Single container:** run `docker pull ghcr.io/bberka/tablodge-sync:latest`, then `docker rm -f tablodge-sync`, then start it again with the same command and token. The library is in the `tablodge-sync` volume and stays.
 
 `latest` is the newest released server. `edge` follows development and can change at any time.
+
+To check the update, ask for the status. The `features` list shows what the server supports:
+
+```sh
+curl -H "Authorization: Bearer <token>" https://sync.example.com/v1/status
+```
+
+Do not remove the `migrations` entry in `server/wrangler.jsonc` or add a `deleted_classes` migration for `SyncLibrary`: Cloudflare would delete the stored library with it.
 
 ### Back up and restore
 

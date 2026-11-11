@@ -9,11 +9,9 @@ import {bodyLimit} from 'hono/body-limit';
 import {except} from 'hono/combine';
 import {compress} from 'hono/compress';
 import {cors} from 'hono/cors';
-import type {SyncLog} from '../../src/shared/sync/change-log';
+import {PROTOCOL_VERSION, type SyncLog} from '../../src/shared/sync/change-log';
 import {parseChange, type SyncChange} from '../../src/shared/sync/changes';
 import {LIVE_PATH} from './live';
-
-export const PROTOCOL_VERSION = 1;
 
 /**
 The extension calls the server from its own origin. CORS lets it do that without asking the browser for access to
@@ -58,7 +56,7 @@ const MAX_KEY_CHARS = 4096;
 Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
 second library at /private for private windows; `key` is /v1/key.
 */
-export const FEATURES = ['private', 'key'];
+const FEATURES = ['private', 'key'];
 export const PRIVATE_PREFIX = '/private';
 const DEFAULT_PULL = 500;
 const MAX_PULL = 1000;

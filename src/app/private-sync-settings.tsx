@@ -1,5 +1,6 @@
-import {useEffect, useId, useRef, useState} from 'react';
-import {Lock, LockOpen, RefreshCw} from 'lucide-react';
+import {type RefObject, useEffect, useId, useRef, useState} from 'react';
+import {Lock, LockOpen} from 'lucide-react';
+import {SYNC_STATUS_KEY} from '../shared/sync/client';
 import {
 	Button,
 	Dialog,
@@ -14,8 +15,8 @@ import {
 	Switch,
 } from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
+import {FieldMessage, SyncNowButton, SyncStatusLine} from './sync-settings';
 import type {PrivateSyncInfo} from './types';
-import {cn} from '@/lib/utils';
 
 const UNAVAILABLE: Record<
 	Exclude<PrivateSyncInfo['availability'], 'ready'>,
@@ -31,29 +32,6 @@ const UNAVAILABLE: Record<
 	locked: 'Unlock private windows to change how they sync.',
 };
 
-function statusLine(info: PrivateSyncInfo): string {
-	const {status} = info;
-	if (status.phase === 'syncing') {
-		return 'Syncing…';
-	}
-
-	if (status.phase === 'offline') {
-		return 'Cannot reach the server. Changes made here are sent once it is back.';
-	}
-
-	if (status.phase === 'error') {
-		return status.error ?? 'Sync stopped.';
-	}
-
-	if (status.pending > 0) {
-		return `${status.pending} ${status.pending === 1 ? 'change' : 'changes'} waiting to be sent.`;
-	}
-
-	return status.lastSyncAt
-		? `Up to date. Last synced ${new Date(status.lastSyncAt).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'})}.`
-		: 'Not synced yet.';
-}
-
 /**
 Settings › Sync in a private window: whether the separate private library syncs too.
 */
@@ -61,15 +39,12 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [info, setInfo] = useState<PrivateSyncInfo>();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
+	// The question the worker asked for a PIN or password, while the dialog is open.
 	const [ask, setAsk] = useState<string>();
-	const [credential, setCredential] = useState('');
 	const [credentialError, setCredentialError] = useState('');
 	const switchRef = useRef<HTMLButtonElement>(null);
-	const credentialRef = useRef<HTMLInputElement>(null);
 	const switchId = useId();
 	const helpId = useId();
-	const credentialId = useId();
-	const credentialErrorId = useId();
 
 	useEffect(() => {
 		const refresh = () => {
@@ -80,9 +55,9 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			});
 		};
 
-		// The private client keeps its status in the private library's storage, under its prefix.
+		// The private client keeps its status under the private library's prefix.
 		const onChanged = (changes: Record<string, unknown>) => {
-			if (Object.keys(changes).some((key) => key.includes('tablodge.sync.'))) {
+			if (Object.keys(changes).some((key) => key.endsWith(SYNC_STATUS_KEY))) {
 				refresh();
 			}
 		};
@@ -106,32 +81,22 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		);
 	}
 
-	const on = info.status.connected;
-	const enable = async (entered?: string) => {
+	const enable = async (credential?: string) => {
 		setBusy(true);
 		setError('');
 		try {
-			const result = await send('PRIVATE_SYNC_ENABLE', {credential: entered});
+			const result = await send('PRIVATE_SYNC_ENABLE', {credential});
 			if (result.ok) {
 				setInfo(result.privateSync);
 				setAsk(undefined);
-				setCredential('');
 				showStatus('Private windows sync now.');
-				return;
+			} else if (result.field !== 'credential') {
+				setError(result.error);
+			} else if (ask === undefined) {
+				setAsk(result.error);
+			} else {
+				setCredentialError(result.error);
 			}
-
-			if (result.field === 'credential') {
-				if (ask === undefined) {
-					setAsk(result.error);
-				} else {
-					setCredentialError(result.error);
-					credentialRef.current?.focus();
-				}
-
-				return;
-			}
-
-			setError(result.error);
 		} catch (reason) {
 			setError(messageOf(reason) || 'Private sync could not be turned on.');
 		} finally {
@@ -154,12 +119,14 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		}
 	};
 
+	const {status} = info;
 	const encryption = info.encrypted
 		? 'Encrypted with a PIN or password before it leaves this browser. Other browsers need the same one to read it.'
 		: info.lock
 			? 'Encrypted with this private library’s PIN or password before it leaves this browser.'
 			: 'Not encrypted. Set a PIN or password under Private windows to encrypt it before it leaves this browser.';
 	const Icon = info.encrypted || info.lock ? Lock : LockOpen;
+	const server = info.server?.replace(/^https?:\/\//, '') ?? '';
 	return (
 		<div className="space-y-4">
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -167,7 +134,7 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					<Label htmlFor={switchId}>Sync private windows</Label>
 					<p id={helpId} className="text-xs leading-5 text-muted-foreground">
 						Keeps this private library the same in your other browsers, as a
-						separate library on {info.server?.replace(/^https?:\/\//, '')}.
+						separate library on {server}.
 					</p>
 					<p className="flex gap-1.5 text-xs leading-5 text-muted-foreground">
 						<Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
@@ -178,164 +145,175 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					ref={switchRef}
 					id={switchId}
 					aria-describedby={helpId}
-					checked={on}
+					checked={status.connected}
 					disabled={busy}
 					onCheckedChange={(checked) => {
 						void (checked ? enable() : disable());
 					}}
 				/>
 			</div>
-			{on && (
-				<div className="flex flex-wrap items-center gap-3">
-					<p
-						role="status"
-						className={cn(
-							'text-sm',
-							info.status.phase === 'error'
-								? 'text-destructive'
-								: 'text-muted-foreground',
-						)}
-					>
-						{statusLine(info)}
-					</p>
-					{info.status.needsKey ? (
-						<Button
-							type="button"
-							size="sm"
-							onClick={() => {
-								setAsk(info.status.error ?? undefined);
-							}}
-						>
-							Enter PIN or password
-						</Button>
-					) : (
-						<Button
-							type="button"
-							size="sm"
-							variant="outline"
-							aria-disabled={busy || info.status.phase === 'syncing'}
-							className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-							onClick={() => {
-								if (busy || info.status.phase === 'syncing') {
-									return;
-								}
-
-								void send('PRIVATE_SYNC_NOW').then((result) => {
-									if (result.ok) {
-										setInfo(result.privateSync);
-									}
-								});
-							}}
-						>
-							<RefreshCw
-								aria-hidden="true"
-								className={
-									info.status.phase === 'syncing'
-										? 'motion-safe:animate-spin'
-										: undefined
-								}
+			{status.connected && (
+				<>
+					<SyncStatusLine status={status} server={server} />
+					<div className="flex flex-wrap gap-2">
+						{status.needsKey ? (
+							<Button
+								type="button"
+								onClick={() => {
+									setAsk(status.error ?? undefined);
+								}}
+							>
+								<Lock aria-hidden="true" />
+								Enter PIN or password
+							</Button>
+						) : (
+							<SyncNowButton
+								busy={busy}
+								syncing={status.phase === 'syncing'}
+								onSync={() => {
+									void send('PRIVATE_SYNC_NOW').then((result) => {
+										if (result.ok) {
+											setInfo(result.privateSync);
+										}
+									});
+								}}
 							/>
-							{info.status.phase === 'syncing' ? 'Syncing…' : 'Sync now'}
-						</Button>
-					)}
-				</div>
+						)}
+					</div>
+				</>
 			)}
 			{error && (
 				<p role="alert" className="text-sm text-destructive">
 					{error}
 				</p>
 			)}
-			<Dialog
-				open={ask !== undefined}
-				onOpenChange={(open) => {
-					if (open) {
-						return;
-					}
-
+			<CredentialDialog
+				// A fresh dialog each time it opens, so nothing typed before is kept.
+				key={ask ?? 'closed'}
+				question={ask}
+				busy={busy}
+				error={credentialError}
+				returnFocus={switchRef}
+				onSubmit={(credential) => {
+					void enable(credential);
+				}}
+				onClose={() => {
 					setAsk(undefined);
-					setCredential('');
 					setCredentialError('');
 				}}
+				onEdit={() => {
+					setCredentialError('');
+				}}
+			/>
+		</div>
+	);
+}
+
+/**
+Asks for the PIN or password the worker needs to turn private sync on. Open while `question` is set.
+*/
+function CredentialDialog({
+	question,
+	busy,
+	error,
+	returnFocus,
+	onSubmit,
+	onClose,
+	onEdit,
+}: {
+	question: string | undefined;
+	busy: boolean;
+	error: string;
+	returnFocus: RefObject<HTMLButtonElement | null>;
+	onSubmit: (credential: string) => void;
+	onClose: () => void;
+	onEdit: () => void;
+}) {
+	const [credential, setCredential] = useState('');
+	const [empty, setEmpty] = useState(false);
+	const inputRef = useRef<HTMLInputElement>(null);
+	const inputId = useId();
+	const errorId = useId();
+	const message = empty ? 'Enter the PIN or password.' : error;
+
+	// A wrong entry comes back after the check; focus goes back to the field for the next try.
+	useEffect(() => {
+		if (error) {
+			inputRef.current?.focus();
+		}
+	}, [error]);
+
+	return (
+		<Dialog
+			open={question !== undefined}
+			onOpenChange={(open) => {
+				if (!open) {
+					onClose();
+				}
+			}}
+		>
+			<DialogContent
+				onOpenAutoFocus={(event) => {
+					event.preventDefault();
+					inputRef.current?.focus();
+				}}
+				onCloseAutoFocus={(event) => {
+					event.preventDefault();
+					returnFocus.current?.focus();
+				}}
 			>
-				<DialogContent
-					onOpenAutoFocus={(event) => {
+				<form
+					noValidate
+					onSubmit={(event) => {
 						event.preventDefault();
-						credentialRef.current?.focus();
-					}}
-					onCloseAutoFocus={(event) => {
-						event.preventDefault();
-						switchRef.current?.focus();
+						if (credential === '') {
+							setEmpty(true);
+							inputRef.current?.focus();
+							return;
+						}
+
+						onSubmit(credential);
 					}}
 				>
-					<form
-						noValidate
-						onSubmit={(event) => {
-							event.preventDefault();
-							if (credential === '') {
-								setCredentialError('Enter the PIN or password.');
-								credentialRef.current?.focus();
-								return;
-							}
-
-							void enable(credential);
-						}}
-					>
-						<DialogHeader>
-							<DialogTitle>Encrypt private sync</DialogTitle>
-							<DialogDescription>{ask}</DialogDescription>
-						</DialogHeader>
-						<DialogBody>
-							<div className="grid gap-2">
-								<Label htmlFor={credentialId}>PIN or password</Label>
-								<Input
-									ref={credentialRef}
-									id={credentialId}
-									type="password"
-									autoComplete="off"
-									spellCheck={false}
-									value={credential}
-									// Read only rather than disabled while checking, so focus stays here for a wrong entry.
-									readOnly={busy}
-									aria-invalid={Boolean(credentialError)}
-									aria-describedby={
-										credentialError ? credentialErrorId : undefined
-									}
-									className="aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive"
-									onChange={(event) => {
-										setCredential(event.target.value);
-										setCredentialError('');
-									}}
-								/>
-								<p
-									id={credentialErrorId}
-									aria-live="polite"
-									className={cn(
-										'text-xs font-medium text-destructive',
-										!credentialError && 'sr-only',
-									)}
-								>
-									{credentialError}
-								</p>
-							</div>
-						</DialogBody>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => {
-									setAsk(undefined);
+					<DialogHeader>
+						<DialogTitle>Encrypt private sync</DialogTitle>
+						<DialogDescription>{question}</DialogDescription>
+					</DialogHeader>
+					<DialogBody>
+						<div className="grid gap-2">
+							<Label htmlFor={inputId}>PIN or password</Label>
+							<Input
+								ref={inputRef}
+								id={inputId}
+								type="password"
+								autoComplete="off"
+								spellCheck={false}
+								value={credential}
+								// Read only rather than disabled while checking, so focus stays here for a wrong entry.
+								readOnly={busy}
+								aria-invalid={Boolean(message)}
+								aria-describedby={message ? errorId : undefined}
+								className="aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive"
+								onChange={(event) => {
+									setCredential(event.target.value);
+									setEmpty(false);
+									onEdit();
 								}}
-							>
-								Cancel
-							</Button>
-							<Button type="submit" disabled={busy}>
-								<Lock aria-hidden="true" />
-								{busy ? 'Checking…' : 'Turn on'}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-		</div>
+							/>
+							<FieldMessage id={errorId} message={message} />
+						</div>
+					</DialogBody>
+					<DialogFooter>
+						<Button type="button" variant="outline" onClick={onClose}>
+							Cancel
+						</Button>
+						<Button type="submit" disabled={busy}>
+							<Lock aria-hidden="true" />
+							{busy ? 'Checking…' : 'Turn on'}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
 	);
 }

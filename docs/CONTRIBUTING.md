@@ -80,7 +80,7 @@ Run **Actions › Release › Run workflow** on `master` to publish a release. T
 
 ### Sync server image
 
-The sync server is versioned separately from the extension. Pull requests that touch `server/` or the shared sync code build its image, and every push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. To release it, push a tag such as `sync-server-v1.0.0`; the **Sync server image** workflow publishes `1.0.0`, `1.0`, and `latest`. Bump the server's `PROTOCOL_VERSION` only for a change old extensions cannot use, because the extension refuses a server with a different protocol version.
+The sync server is versioned separately from the extension. Pull requests that touch `server/` or the shared sync code build its image, and every push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. To release it, push a tag such as `sync-server-v1.0.0`; the **Sync server image** workflow publishes `1.0.0`, `1.0`, and `latest`. Bump `PROTOCOL_VERSION` in `src/shared/sync/change-log.ts`, which the server and the extension share, only for a change old extensions cannot use, because the extension refuses a server with a different protocol version.
 
 ### Chrome Web Store publishing
 
