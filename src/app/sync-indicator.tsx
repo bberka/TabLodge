@@ -1,11 +1,5 @@
 import {useEffect, useState} from 'react';
-import {
-	Cloud,
-	CloudAlert,
-	CloudOff,
-	CloudUpload,
-	RefreshCw,
-} from 'lucide-react';
+import {CloudAlert, CloudOff, RefreshCw} from 'lucide-react';
 import {SYNC_STATUS_KEY, type SyncStatus} from '../shared/sync/client';
 import {isRecord} from '../shared/library-values';
 import {Button, IconTooltip} from '../shared/ui';
@@ -62,12 +56,13 @@ function describe(status: SyncStatus) {
 		}
 
 		default: {
-			return status.pending > 0
-				? {
-						label: `Sync: ${status.pending} ${status.pending === 1 ? 'change waits' : 'changes wait'} to be sent`,
-						Icon: CloudUpload,
-					}
-				: {label: 'Sync: up to date', Icon: Cloud};
+			return {
+				label:
+					status.pending > 0
+						? `Sync: ${status.pending} ${status.pending === 1 ? 'change waits' : 'changes wait'} to be sent`
+						: 'Sync: up to date',
+				Icon: RefreshCw,
+			};
 		}
 	}
 }

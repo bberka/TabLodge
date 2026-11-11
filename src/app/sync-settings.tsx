@@ -22,6 +22,8 @@ export const SYNC_WORDS = [
 	'token',
 	'connect',
 	'disconnect',
+	'private windows',
+	'encrypt',
 ];
 
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;
@@ -207,7 +209,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			async () => {
 				const result = await send('SYNC_CONNECT', {url: address, token});
 				if (!result.ok) {
-					throw result.field
+					throw result.field === 'url' || result.field === 'token'
 						? new FieldError(result.field, result.error)
 						: new Error(result.error);
 				}

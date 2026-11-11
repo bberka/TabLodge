@@ -126,6 +126,7 @@ import {
 	PRIVATE_STORAGE_WORDS,
 } from './private-storage';
 import {PrivateWindowAppearance} from './private-window-appearance';
+import {PrivateSyncSettings} from './private-sync-settings';
 import {SYNC_TITLE, SYNC_WORDS, SyncSettings} from './sync-settings';
 import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
@@ -1015,10 +1016,7 @@ const settingsNavigation = [
 	...(isFirefox ? [] : [{title: PRIVATE_STORAGE_TITLE, icon: Database}]),
 	...settingsGroups.map(({title, icon}) => ({title, icon})),
 	{title: DATA.title, icon: Database},
-	// Private windows never sync; their worker refuses the sync messages.
-	...(chrome.extension?.inIncognitoContext
-		? []
-		: [{title: SYNC_TITLE, icon: RefreshCw}]),
+	{title: SYNC_TITLE, icon: RefreshCw},
 	{title: EXCLUDED.title, icon: Globe},
 	{title: DEFAULTS.title, icon: RotateCcw},
 ].map(({title, icon}) => ({
@@ -1754,9 +1752,7 @@ function Options() {
 		DEFAULTS.help,
 		...DEFAULTS.words,
 	]);
-	const showSync =
-		!chrome.extension?.inIncognitoContext &&
-		matchesQuery(query, [SYNC_TITLE, ...SYNC_WORDS]);
+	const showSync = matchesQuery(query, [SYNC_TITLE, ...SYNC_WORDS]);
 	const showPrivate =
 		!isFirefox &&
 		matchesQuery(query, [PRIVATE_STORAGE_TITLE, ...PRIVATE_STORAGE_WORDS]);
@@ -2287,7 +2283,20 @@ function Options() {
 							icon={RefreshCw}
 							className={SECTION_SCROLL_CLASS}
 						>
-							<SyncSettings showStatus={showStatus} />
+							{chrome.extension?.inIncognitoContext ? (
+								<PrivateSyncSettings showStatus={showStatus} />
+							) : (
+								<>
+									<SyncSettings showStatus={showStatus} />
+									{!isFirefox && (
+										<p className="mt-4 text-xs leading-5 text-muted-foreground">
+											Private windows with their own saved storage sync
+											separately. To include them, open Settings in a private
+											window.
+										</p>
+									)}
+								</>
+							)}
 						</SectionCard>
 					)}
 

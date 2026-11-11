@@ -1,12 +1,18 @@
 /*
 The Cloudflare deployment: a Worker in front of one Durable Object that holds the library in its SQLite storage
-and the devices' live WebSockets. A self hosted deployment serves one library, so the object is always named
-"default". The Worker answers health checks and refuses a wrong token itself, so those requests never wake the
+and the devices' live WebSockets. A self hosted deployment serves one library, in the object named "default",
+plus the private windows' library under /private, in the object named "private". The Worker answers health checks and refuses a wrong token itself, so those requests never wake the
 object. Live sockets use the hibernation API: an idle object with open sockets is not billed for duration, and
 keepalive pings are answered without waking it.
 */
 import {DurableObject} from 'cloudflare:workers';
-import {CORS_HEADERS, createApi, DEFAULT_LIMITS, MIN_TOKEN_LENGTH} from './api';
+import {
+	CORS_HEADERS,
+	createApi,
+	DEFAULT_LIMITS,
+	MIN_TOKEN_LENGTH,
+	PRIVATE_PREFIX,
+} from './api';
 import {
 	cursorMessage,
 	isAuthMessage,
@@ -149,7 +155,18 @@ export class SyncLibrary extends DurableObject<Env> {
 
 export default {
 	async fetch(request, env): Promise<Response> {
-		const {pathname} = new URL(request.url);
+		const url = new URL(request.url);
+		// The private windows' library is the same API under /private, kept in its own object.
+		const space =
+			url.pathname === PRIVATE_PREFIX ||
+			url.pathname.startsWith(`${PRIVATE_PREFIX}/`)
+				? 'private'
+				: 'default';
+		if (space === 'private') {
+			url.pathname = url.pathname.slice(PRIVATE_PREFIX.length) || '/';
+		}
+
+		const {pathname} = url;
 		// Answered here like the token check below, so neither wakes the Durable Object.
 		if (request.method === 'OPTIONS') {
 			return new Response(null, {status: 204, headers: CORS_HEADERS});
@@ -179,6 +196,8 @@ export default {
 			}
 		}
 
-		return env.LIBRARY.get(env.LIBRARY.idFromName('default')).fetch(request);
+		return env.LIBRARY.get(env.LIBRARY.idFromName(space)).fetch(
+			space === 'default' ? request : new Request(url, request),
+		);
 	},
 } satisfies ExportedHandler<Env>;
