@@ -4,6 +4,7 @@ runtimes have synchronous SQLite: `node:sqlite` in the Docker server and the sto
 Cloudflare, so one implementation serves both through the small `Sql` interface.
 */
 import {
+	mustResync,
 	pushResult,
 	type PullResponse,
 	type PushResult,
@@ -100,8 +101,9 @@ export class SqlChangeLog implements SyncLog {
 		});
 	}
 
-	pull(cursor: number, limit: number): PullResponse {
-		if (cursor > 0 && cursor < Number(this.meta('purgedSeq') ?? 0)) {
+	pull(cursor: number, limit: number, seen = 0): PullResponse {
+		const purged = Number(this.meta('purgedSeq') ?? 0);
+		if (mustResync(cursor, seen, purged)) {
 			return {resync: true};
 		}
 
@@ -119,6 +121,7 @@ export class SqlChangeLog implements SyncLog {
 					? Number(page.at(-1)!.seq)
 					: Math.max(cursor, this.cursor),
 			more: rows.length > limit,
+			purged,
 		};
 	}
 

@@ -4,9 +4,12 @@ Docker server implement over their own storage, and the fake server the client t
 
 Every accepted change gets the next sequence number. A device pulls the changes after the last number it saw
 (its cursor), and only the newest change per record is kept, so a pull after a long time offline returns one
-change per record instead of a replay. Tombstones are kept for a retention window and then purged. A device whose
-cursor is older than the newest purge has missed deletes it can no longer be told about, so it must drop its copy
-and pull everything again from cursor 0 (`resync`). A pull from 0 is always allowed.
+change per record instead of a replay. Tombstones are kept for a retention window and then purged.
+
+Each pull answer carries `purged`, the highest sequence number among purged tombstones, and the device sends back
+the value it last saw. When a purge since then removed tombstones after the device's cursor, the device missed
+deletes it can no longer be told about, so it must pull everything again from cursor 0 (`resync`). A device paging
+through a fresh pull is not sent back to the start: purges older than its first page took nothing it had.
 */
 import {MAX_CLOCK_DRIFT_MS, parseStamp, stampAt} from './clock';
 import {recordKey, supersedes, type SyncChange} from './changes';
@@ -21,8 +24,20 @@ import {recordKey, supersedes, type SyncChange} from './changes';
 export type PushResult = 'applied' | 'superseded' | 'stale' | 'clock';
 
 export type PullResponse =
-	| {resync: false; changes: SyncChange[]; cursor: number; more: boolean}
+	| {
+			resync: false;
+			changes: SyncChange[];
+			cursor: number;
+			more: boolean;
+			purged: number;
+	  }
 	| {resync: true};
+
+/**
+True when tombstones after `cursor` were purged since the device last saw the purge marker (`seen`).
+*/
+export const mustResync = (cursor: number, seen: number, purgedSeq: number) =>
+	cursor > 0 && cursor < purgedSeq && seen < purgedSeq;
 
 /**
 What every server storage implements, with the rules of `ChangeLog`.
@@ -34,7 +49,10 @@ export type SyncLog = {
 	*/
 	readonly size: number;
 	push(changes: readonly SyncChange[], now: number): PushResult[];
-	pull(cursor: number, limit: number): PullResponse;
+	/**
+	`seen` is the `purged` value of the device's previous pull.
+	*/
+	pull(cursor: number, limit: number, seen?: number): PullResponse;
 	/**
 	Drops tombstones written before `before` (a wall time in milliseconds).
 	*/
@@ -101,8 +119,8 @@ export class ChangeLog implements SyncLog {
 		});
 	}
 
-	pull(cursor: number, limit: number): PullResponse {
-		if (cursor > 0 && cursor < this.purgedSeq) {
+	pull(cursor: number, limit: number, seen = 0): PullResponse {
+		if (mustResync(cursor, seen, this.purgedSeq)) {
 			return {resync: true};
 		}
 
@@ -115,6 +133,7 @@ export class ChangeLog implements SyncLog {
 			changes: page.map((entry) => entry.change),
 			cursor: page.at(-1)?.seq ?? Math.max(cursor, this.seq),
 			more: after.length > limit,
+			purged: this.purgedSeq,
 		};
 	}
 

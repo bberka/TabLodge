@@ -81,7 +81,7 @@ All paths except `/health` need `Authorization: Bearer <token>`.
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
 | `GET /v1/status` | Protocol version, current cursor, record count, and limits |
-| `GET /v1/changes?cursor=<n>&limit=<n>` | The changes after `cursor` (at most 1000), the new cursor, and whether more are waiting, or `{"resync":true}` when the device must start again from cursor 0 |
+| `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor` (at most 1000), the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the device sends back with its next pull. Or `{"resync":true}` when deletes the device has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change: `applied`, `superseded`, `stale`, or `clock`, and the new cursor. At most 500 changes and 8 MB per request, and 256 KB per change |
 | `GET /v1/live` (WebSocket) | Send `{"type":"auth","token":"..."}` first. The server answers `{"type":"ready","cursor":n}` and then `{"type":"cursor","cursor":n}` after every push that changed something. Send `ping` to get `pong` |
 

@@ -86,13 +86,18 @@ export function createApi(options: ApiOptions) {
 	app.get('/v1/changes', (c) => {
 		const cursor = Number(c.req.query('cursor') ?? 0);
 		const limit = Number(c.req.query('limit') ?? DEFAULT_PULL);
-		if (!Number.isSafeInteger(cursor) || cursor < 0) {
+		const seen = Number(c.req.query('purged') ?? 0);
+		if (
+			[cursor, seen].some(
+				(value) => !(Number.isSafeInteger(value) && value >= 0),
+			)
+		) {
 			return c.json(problem('bad_cursor'), 400);
 		}
 
 		return !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PULL
 			? c.json(problem('bad_limit', {max: MAX_PULL}), 400)
-			: c.json(options.log().pull(cursor, limit));
+			: c.json(options.log().pull(cursor, limit, seen));
 	});
 
 	app.post(

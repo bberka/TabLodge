@@ -225,6 +225,7 @@ for (const [name, makeLog] of LOGS) {
 			changes: [change],
 			cursor: 1,
 			more: false,
+			purged: 0,
 		});
 	});
 }
@@ -261,6 +262,7 @@ for (const [name, makeLog] of LOGS) {
 			changes: [],
 			cursor: 9,
 			more: false,
+			purged: 0,
 		});
 	});
 }
@@ -301,6 +303,7 @@ type Device = {
 	records: Map<string, SyncChange>;
 	outbox: Map<string, SyncChange>;
 	cursor: number;
+	purged: number;
 };
 
 function makeDevice(id: string): Device {
@@ -310,6 +313,7 @@ function makeDevice(id: string): Device {
 		records: new Map(),
 		outbox: new Map(),
 		cursor: 0,
+		purged: 0,
 	};
 }
 
@@ -353,7 +357,7 @@ function sync(
 	}
 
 	for (;;) {
-		const response = log.pull(device.cursor, 4);
+		const response = log.pull(device.cursor, 4, device.purged);
 		if (response.resync) {
 			outcomes.add('resync');
 			device.records = new Map();
@@ -363,6 +367,7 @@ function sync(
 
 		receive(device, response.changes, now);
 		device.cursor = response.cursor;
+		device.purged = response.purged;
 		if (!response.more) {
 			return;
 		}

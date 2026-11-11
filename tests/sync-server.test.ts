@@ -75,6 +75,7 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 		changes: [change],
 		cursor: 1,
 		more: false,
+		purged: 0,
 	});
 	assert.deepEqual((await call('/v1/status')).body, {
 		protocol: 1,
