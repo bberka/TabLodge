@@ -13,6 +13,7 @@
 		"start": "node dist/node.js",
 		"cf:dev": "wrangler dev",
 		"cf:deploy": "wrangler deploy",
+		"cf:delete": "wrangler delete",
 		"cf:setup": "node scripts/setup-cloudflare.ts"
 	},
 	"dependencies": {

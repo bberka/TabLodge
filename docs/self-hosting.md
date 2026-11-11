@@ -107,7 +107,7 @@ This runs the server as a Worker with one Durable Object on your own Cloudflare 
 git clone https://github.com/bberka/TabLodge.git
 cd TabLodge
 pnpm install
-pnpm --filter tablodge-sync-server cf:setup
+pnpm run cf:setup
 ```
 
 The script opens a browser window to log in to Cloudflare if needed. It then deploys the Worker, creates a token, stores it as a Worker secret, and prints the address (`https://tablodge-sync.<your-subdomain>.workers.dev`) and the token. The token is shown only once, so save it.
@@ -126,7 +126,7 @@ In the Cloudflare dashboard, open the `tablodge-sync` Worker and add a custom do
 
 ### Settings on Cloudflare
 
-`MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are under `vars` in `server/wrangler.jsonc`. Change them and run `cf:setup` again. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.dev.vars` and run `pnpm --filter tablodge-sync-server cf:dev`.
+`MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are under `vars` in `server/wrangler.jsonc`. Change them and run `cf:setup` again. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.dev.vars` and run `pnpm run cf:dev`.
 
 ## Option C: Docker on this computer
 
@@ -187,7 +187,7 @@ docker compose -f compose.https.yaml up -d
 
 With a single `docker run` container, run `docker pull ghcr.io/bberka/tablodge-sync:latest`, then `docker rm -f tablodge-sync`, then start it again with the same command and token. The library is in the `tablodge-sync` volume and stays.
 
-On Cloudflare, run `git pull`, `pnpm install`, and `pnpm --filter tablodge-sync-server cf:setup` in your copy of the repository. The token stays.
+On Cloudflare, run `git pull`, `pnpm install`, and `pnpm run cf:setup` in your copy of the repository. The token stays.
 
 `latest` is the newest released server. `edge` follows development and can change at any time.
 
@@ -229,7 +229,7 @@ Do this if the token may have leaked.
 
 * VPS: put a new token in `.env` (`openssl rand -base64 32`), then run `docker compose -f compose.https.yaml up -d`. The library is kept.
 * Single container: remove it and start it again with a new `TABLODGE_SYNC_TOKEN`.
-* Cloudflare: run `pnpm --filter tablodge-sync-server cf:setup --rotate-token` and save the new token it prints.
+* Cloudflare: run `pnpm run cf:setup --rotate-token` and save the new token it prints.
 
 Then in each browser, open **Settings › Sync**, choose **Disconnect**, and connect again with the new token. Nothing is lost: each browser keeps its library and merges with the server again.
 
@@ -248,7 +248,7 @@ This works in every direction, for example from a VPS to Cloudflare.
 2. Delete the server and its data:
    * VPS: `docker compose -f compose.https.yaml down -v` deletes the containers, the library, and Caddy's certificates.
    * Single container: `docker rm -f tablodge-sync && docker volume rm tablodge-sync`.
-   * Cloudflare: run `pnpm exec wrangler delete` in `server/`, or delete the `tablodge-sync` Worker in the dashboard. This deletes the library with it: deploying again afterwards starts with an empty server and a new token.
+   * Cloudflare: run `pnpm run cf:delete`, or delete the `tablodge-sync` Worker in the dashboard. This deletes the library with it: deploying again afterwards starts with an empty server and a new token.
 
 ### Resources
 
@@ -269,6 +269,20 @@ One library is light. On a test machine the container used about 20 MB of memory
 | The token was printed by `cf:setup` and lost | Cloudflare keeps secrets unreadable | Run `cf:setup --rotate-token` and reconnect the browsers |
 
 ## Reference
+
+### Commands
+
+Run these from the root of your copy of the repository. Anything after the command name is passed on, as in `pnpm run cf:setup --rotate-token`.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm run cf:setup` | Deploys to Cloudflare, creating and printing a token on the first run. `--rotate-token` replaces the token |
+| `pnpm run cf:deploy` | Deploys an update without touching the token |
+| `pnpm run cf:dev` | Runs the Worker on this computer, with the token from `server/.dev.vars` |
+| `pnpm run cf:delete` | Deletes the Worker and its library from Cloudflare |
+| `pnpm run server:build` | Builds the Node server into `server/dist/node.js` |
+| `pnpm run server:start` | Starts that build, with the token from `TABLODGE_SYNC_TOKEN` |
+| `node server/scripts/transfer.ts export\|import` | Backs up or restores a library, see [Back up and restore](#back-up-and-restore) |
 
 ### Settings
 
