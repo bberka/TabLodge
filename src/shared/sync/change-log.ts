@@ -57,6 +57,15 @@ export type SyncLog = {
 	Drops tombstones written before `before` (a wall time in milliseconds).
 	*/
 	purge(before: number): void;
+	/**
+	The library's wrapped encryption key, stored for the devices but never read by the server. Null when the
+	library is not encrypted.
+	*/
+	readonly key: string | null;
+	/**
+	Replaces the key only while it is still `expected`, so two devices cannot overwrite each other's key.
+	*/
+	replaceKey(next: string, expected: string | null): boolean;
 };
 
 /**
@@ -92,6 +101,20 @@ export class ChangeLog implements SyncLog {
 	Newest stamp among purged tombstones.
 	*/
 	private purgedH = '';
+	private storedKey: string | null = null;
+
+	get key() {
+		return this.storedKey;
+	}
+
+	replaceKey(next: string, expected: string | null) {
+		if (this.storedKey !== expected) {
+			return false;
+		}
+
+		this.storedKey = next;
+		return true;
+	}
 
 	get cursor() {
 		return this.seq;

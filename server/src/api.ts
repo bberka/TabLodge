@@ -53,6 +53,13 @@ const MINUTE_MS = 60 * 1000;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_PUSH_CHANGES = 500;
 const MAX_CHANGE_BYTES = 256 * 1024;
+const MAX_KEY_CHARS = 4096;
+/**
+Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
+second library at /private for private windows; `key` is /v1/key.
+*/
+export const FEATURES = ['private', 'key'];
+export const PRIVATE_PREFIX = '/private';
 const DEFAULT_PULL = 500;
 const MAX_PULL = 1000;
 const PURGE_EVERY_MS = 60 * 60 * 1000;
@@ -142,8 +149,45 @@ export function createApi(options: ApiOptions) {
 			cursor: log.cursor,
 			records: log.size,
 			limits,
+			features: FEATURES,
 		});
 	});
+
+	app.get('/v1/key', (c) => c.json({key: options.log().key}));
+
+	app.post(
+		'/v1/key',
+		bodyLimit({
+			maxSize: MAX_KEY_CHARS * 2,
+			onError: (c) => c.json(problem('too_large'), 413),
+		}),
+		async (c) => {
+			let body: unknown;
+			try {
+				body = await c.req.json();
+			} catch {
+				return c.json(problem('bad_json'), 400);
+			}
+
+			const {key, previous} = (body ?? {}) as {
+				key?: unknown;
+				previous?: unknown;
+			};
+			if (
+				typeof key !== 'string' ||
+				key === '' ||
+				key.length > MAX_KEY_CHARS ||
+				!(previous === null || typeof previous === 'string')
+			) {
+				return c.json(problem('bad_key'), 400);
+			}
+
+			const log = options.log();
+			return log.replaceKey(key, previous)
+				? c.json({key})
+				: c.json(problem('key_changed', {key: log.key}), 409);
+		},
+	);
 
 	app.get('/v1/changes', (c) => {
 		const cursor = Number(c.req.query('cursor') ?? 0);

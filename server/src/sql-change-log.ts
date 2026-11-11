@@ -58,6 +58,7 @@ export class SqlChangeLog implements SyncLog {
 	private purgedSeq: number;
 	private purgedH: string;
 	private count: number;
+	private storedKey: string | null;
 
 	constructor(private readonly sql: Sql) {
 		for (const statement of SCHEMA) {
@@ -72,6 +73,7 @@ export class SqlChangeLog implements SyncLog {
 		this.seq = Number(meta.get('seq') ?? 0);
 		this.purgedSeq = Number(meta.get('purgedSeq') ?? 0);
 		this.purgedH = meta.get('purgedH') ?? '';
+		this.storedKey = meta.get('key') ?? null;
 		// Kept in `meta` so a Durable Object waking from hibernation does not read every row to count them.
 		const stored = meta.get('count');
 		if (stored === undefined) {
@@ -92,6 +94,20 @@ export class SqlChangeLog implements SyncLog {
 
 	get cursor() {
 		return this.seq;
+	}
+
+	get key() {
+		return this.storedKey;
+	}
+
+	replaceKey(next: string, expected: string | null) {
+		if (this.storedKey !== expected) {
+			return false;
+		}
+
+		this.setMeta('key', next);
+		this.storedKey = next;
+		return true;
 	}
 
 	get size() {

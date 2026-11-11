@@ -11,10 +11,22 @@ import {
 	LOCK_RECORD_KEY,
 	LOCK_SESSION_KEY,
 	LOCKED_MESSAGE,
+	parseLockRecord,
 	PrivateLockError,
 	readStored,
 	sealValue,
+	unwrapDataKey,
 } from '../src/app/private-lock';
+import {
+	createPrivateCodec,
+	createSyncKey,
+	joinSyncKey,
+	parsePrivateSyncKey,
+	parseServerKey,
+	type PrivateSyncKey,
+	rewrapSyncKey,
+	serverKeyText,
+} from '../src/app/private-sync';
 import {
 	createLibraryState,
 	isUndoDelta,
@@ -28,8 +40,11 @@ import {
 	createSyncClient,
 	SYNC_ALARM,
 	SYNC_ALARM_MINUTES,
+	SYNC_CONFIG_KEY,
 	SYNC_NUDGE_KEY,
+	type SyncConfig,
 	SyncError,
+	type SyncStatus,
 } from '../src/shared/sync/client';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
@@ -45,7 +60,7 @@ type BookmarkFields = import('../src/app/types').BookmarkFields;
 type DuplicateMode = import('../src/app/types').DuplicateMode;
 type EraseScope = import('../src/app/types').EraseScope;
 type Folder = import('../src/app/types').Folder;
-type SyncStatus = import('../src/shared/sync/client').SyncStatus;
+type PrivateSyncInfo = import('../src/app/types').PrivateSyncInfo;
 type ImportOptions = import('../src/app/types').ImportOptions;
 type InsertPosition = import('../src/app/types').InsertPosition;
 type LinkEntry = import('../src/app/types').LinkEntry;
@@ -643,6 +658,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 		await replacePrivateConfig(next);
 	});
 	mutationQueue = update.catch(() => undefined);
+	// Private sync runs only with separate saved storage.
+	void update.then(wakeSync).catch(() => undefined);
 });
 /**
 Lock state for pages. Regular windows get the status too (the key is in shared session storage) but cannot change it.
@@ -690,6 +707,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 	}
 
 	invalidateSettings();
+	// The private library opened or closed: private sync follows it.
+	void wakeSync().catch(() => undefined);
 	if (changes[LOCK_SESSION_KEY].newValue !== undefined) {
 		return;
 	}
@@ -2274,7 +2293,7 @@ async function writeStore(store: Store): Promise<Store> {
 	};
 	await library.set({[STORAGE_KEY]: next});
 	invalidateSettings();
-	syncClient?.localChanged();
+	(syncClient ?? privateSync)?.localChanged();
 	if (privateContext && privateConfig.mode === 'shared') {
 		await chrome.storage.local.set({[SYNC_NUDGE_KEY]: Date.now()});
 	}
@@ -2330,23 +2349,398 @@ const syncClient = privateContext
 		});
 
 chrome.storage.onChanged.addListener((changes, area) => {
-	if (area === 'local' && Object.hasOwn(changes, SYNC_NUDGE_KEY)) {
+	if (area !== 'local') {
+		return;
+	}
+
+	if (Object.hasOwn(changes, SYNC_NUDGE_KEY)) {
 		syncClient?.localChanged();
 	}
+
+	// Private sync uses the regular connection: a new server or token, or none, starts it over.
+	if (!(privateContext && Object.hasOwn(changes, SYNC_CONFIG_KEY))) {
+		return;
+	}
+
+	privateSync?.stop();
+	privateSync = undefined;
+	void wakeSync().catch(() => undefined);
 });
+
+/*
+Private windows with separate saved storage can sync that library too, when turned on from Settings in a private
+window. It goes to the regular sync's server under /private, so it follows the regular connection: no server there
+means no private sync. With a PIN or password, values are encrypted first (src/app/private-sync.ts). Everything
+private sync keeps on this device, the sync key included, is in the private library's storage, which the lock seals.
+The client exists only while that library can be read: it stops when the library locks or the storage mode changes.
+*/
+const PRIVATE_SYNC_ON_KEY = 'sync.private.on';
+const PRIVATE_SYNC_KEY_KEY = 'sync.private.key';
+let privateSync: ReturnType<typeof createSyncClient> | undefined;
+
+const regularSyncConfig = async (): Promise<SyncConfig | undefined> => {
+	const value = (await chrome.storage.local.get([SYNC_CONFIG_KEY]))[
+		SYNC_CONFIG_KEY
+	] as Partial<SyncConfig> | undefined;
+	return typeof value?.url === 'string' && typeof value.token === 'string'
+		? {url: value.url, token: value.token}
+		: undefined;
+};
+
+const privateSyncTarget = (regular: SyncConfig): SyncConfig => ({
+	url: `${regular.url}/private`,
+	token: regular.token,
+});
+
+function assertPrivateSyncStorage() {
+	if (!(privateConfig.mode === 'saved' && privateConfig.configured)) {
+		throw new SyncError(
+			'config',
+			'Private windows sync only with separate saved private storage.',
+		);
+	}
+}
+
+async function privateRead(name: string): Promise<unknown> {
+	assertPrivateSyncStorage();
+	return (await rawLibrary.get<Raw>([name]))[name];
+}
+
+async function privateWrite(values: Record<string, unknown>) {
+	assertPrivateSyncStorage();
+	await rawLibrary.set(values);
+}
+
+function createPrivateSyncClient() {
+	return createSyncClient({
+		async get(key) {
+			// The connection is the regular one under /private, so it changes and ends with it.
+			if (key === SYNC_CONFIG_KEY) {
+				const regular = await regularSyncConfig();
+				return regular && (await privateRead(PRIVATE_SYNC_ON_KEY)) === true
+					? privateSyncTarget(regular)
+					: undefined;
+			}
+
+			return privateRead(key);
+		},
+		async set(key, value) {
+			await privateWrite(
+				key === SYNC_CONFIG_KEY
+					? {[PRIVATE_SYNC_ON_KEY]: true}
+					: {[key]: value},
+			);
+		},
+		async remove(keys) {
+			assertPrivateSyncStorage();
+			await rawLibrary.remove(
+				keys.map((key) =>
+					key === SYNC_CONFIG_KEY ? PRIVATE_SYNC_ON_KEY : key,
+				),
+			);
+		},
+		fetch: (url, init) => fetch(url, init),
+		openSocket:
+			typeof WebSocket === 'function' ? (url) => new WebSocket(url) : undefined,
+		async mutate(work) {
+			return mutate(async () => {
+				assertPrivateSyncStorage();
+				return work();
+			});
+		},
+		readLibrary: getStore,
+		async writeLibrary(store) {
+			await writeStore(normalizeStore(store));
+		},
+		async backup(store, reason) {
+			await safetyBackup(store, reason);
+		},
+		codec: createPrivateCodec({
+			load: async () =>
+				parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY)),
+			async save(key) {
+				await privateWrite({[PRIVATE_SYNC_KEY_KEY]: key});
+			},
+		}),
+		randomId: makeId,
+		now: Date.now,
+	});
+}
+
+/**
+What keeps the private library from syncing here, or 'ready'.
+*/
+async function privateSyncAvailability(): Promise<
+	PrivateSyncInfo['availability']
+> {
+	await privateConfigReady;
+	if (!(await regularSyncConfig())) {
+		return 'no-server';
+	}
+
+	if (privateConfig.mode !== 'saved') {
+		return privateConfig.mode;
+	}
+
+	if (!privateConfig.configured) {
+		return 'setup';
+	}
+
+	return (await privateLock.status()).locked ? 'locked' : 'ready';
+}
+
+/**
+Creates the private client when its library can be read, or stops it when it cannot. `wakeSync` then wakes it.
+*/
+async function refreshPrivateSync() {
+	if (!privateContext) {
+		return;
+	}
+
+	if ((await privateSyncAvailability()) !== 'ready') {
+		privateSync?.stop();
+		privateSync = undefined;
+		return;
+	}
+
+	privateSync ??= createPrivateSyncClient();
+}
+
+async function privateSyncInfo(): Promise<PrivateSyncInfo> {
+	const availability = await privateSyncAvailability();
+	const regular = await regularSyncConfig();
+	const ready = availability === 'ready';
+	const off: SyncStatus = {
+		connected: false,
+		url: null,
+		phase: 'off',
+		live: false,
+		lastSyncAt: null,
+		pending: 0,
+		refused: 0,
+		error: null,
+	};
+	return {
+		availability,
+		server: regular?.url ?? null,
+		lock: Boolean(
+			parseLockRecord(
+				(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
+			),
+		),
+		encrypted:
+			ready &&
+			parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY)) !==
+				undefined,
+		status: ready && privateSync ? await privateSync.status() : off,
+	};
+}
+
+/**
+A request to the sync server outside the sync client, for setting up the private library's key.
+*/
+async function syncServerCall(
+	target: SyncConfig,
+	path: string,
+	init: RequestInit = {},
+): Promise<{status: number; body: Record<string, unknown>}> {
+	let response: Response;
+	try {
+		response = await fetch(`${target.url}${path}`, {
+			...init,
+			headers: [
+				['Authorization', `Bearer ${target.token}`],
+				['Content-Type', 'application/json'],
+			],
+		});
+	} catch {
+		throw new SyncError('offline', 'The sync server cannot be reached.');
+	}
+
+	if (response.status === 401) {
+		throw new SyncError('auth', 'The sync server refused the token.');
+	}
+
+	let body: unknown;
+	try {
+		body = await response.json();
+	} catch {
+		body = undefined;
+	}
+
+	return {
+		status: response.status,
+		body:
+			body && typeof body === 'object' ? (body as Record<string, unknown>) : {},
+	};
+}
+
+const storeServerKey = async (
+	target: SyncConfig,
+	key: PrivateSyncKey,
+	previous: string | null,
+) =>
+	(
+		await syncServerCall(target, '/v1/key', {
+			method: 'POST',
+			body: JSON.stringify({key: serverKeyText(key), previous}),
+		})
+	).status === 200;
+
+async function enablePrivateSync(
+	credential: string | undefined,
+): Promise<ActionResult<'PRIVATE_SYNC_ENABLE'>> {
+	const availability = await privateSyncAvailability();
+	const regular = await regularSyncConfig();
+	if (availability !== 'ready' || !regular) {
+		return {
+			ok: false,
+			error:
+				availability === 'locked'
+					? LOCKED_MESSAGE
+					: 'Private windows sync only with separate saved private storage and a sync server connected in a regular window.',
+		};
+	}
+
+	const server = await syncServerCall(regular, '/v1/status');
+	if (
+		!Array.isArray(server.body.features) ||
+		!server.body.features.includes('private')
+	) {
+		return {
+			ok: false,
+			error:
+				'This sync server cannot hold private windows yet. Update it, then try again.',
+		};
+	}
+
+	const target = privateSyncTarget(regular);
+	const serverKey = parseServerKey(
+		(await syncServerCall(target, '/v1/key')).body.key,
+	);
+	const lock = parseLockRecord(
+		(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
+	);
+	let key: PrivateSyncKey | undefined;
+	if (serverKey || lock) {
+		if (!credential) {
+			return {
+				ok: false,
+				field: 'credential',
+				error: serverKey
+					? 'Enter the PIN or password that protects private data on the sync server.'
+					: 'Enter this private library’s PIN or password, so what it syncs is encrypted.',
+			};
+		}
+
+		try {
+			if (serverKey) {
+				key = await joinSyncKey(serverKey, credential);
+			} else if (lock) {
+				// Checked against this library's own lock, so a typo cannot protect the server's copy with an unknown PIN.
+				await unwrapDataKey(lock.wrapped, credential);
+				key = await createSyncKey({kind: lock.kind, value: credential});
+				if (!(await storeServerKey(target, key, null))) {
+					return {
+						ok: false,
+						error:
+							'Another browser protected private sync at the same moment. Try again.',
+					};
+				}
+			}
+		} catch (error) {
+			if (
+				error instanceof PrivateLockError &&
+				error.code === 'wrong-credential'
+			) {
+				return {
+					ok: false,
+					field: 'credential',
+					error: serverKey
+						? 'That is not the PIN or password protecting private data on the sync server.'
+						: 'That is not this private library’s PIN or password.',
+				};
+			}
+
+			throw error;
+		}
+	}
+
+	await mutate(async () => {
+		await (key
+			? privateWrite({[PRIVATE_SYNC_KEY_KEY]: key})
+			: rawLibrary.remove([PRIVATE_SYNC_KEY_KEY]));
+	});
+	privateSync ??= createPrivateSyncClient();
+	await privateSync.connect(target.url, target.token);
+	await wakeSync();
+	return {ok: true, privateSync: await privateSyncInfo()};
+}
+
+/**
+After this private library gets its first PIN or password: a library that synced unencrypted is protected from now
+on, so the server's copy is replaced by an encrypted one. Best effort; the lock is on either way.
+*/
+async function protectPrivateSync(credential: {
+	kind: 'pin' | 'password';
+	value: string;
+}) {
+	const regular = await regularSyncConfig();
+	if (!privateSync?.enabled || !regular) {
+		return;
+	}
+
+	const target = privateSyncTarget(regular);
+	if (
+		parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY)) ||
+		parseServerKey((await syncServerCall(target, '/v1/key')).body.key)
+	) {
+		return;
+	}
+
+	const key = await createSyncKey(credential);
+	if (!(await storeServerKey(target, key, null))) {
+		return;
+	}
+
+	await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: key}));
+	await privateSync.resendAll();
+}
+
+/**
+After a new PIN or password: the server's copy of the sync key is wrapped with it instead. Best effort.
+*/
+async function rewrapPrivateSyncKey(credential: {
+	kind: 'pin' | 'password';
+	value: string;
+}) {
+	const regular = await regularSyncConfig();
+	const key = parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY));
+	if (!privateSync?.enabled || !regular || !key) {
+		return;
+	}
+
+	const next = await rewrapSyncKey(key, credential);
+	if (
+		await storeServerKey(privateSyncTarget(regular), next, serverKeyText(key))
+	) {
+		await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: next}));
+	}
+}
 
 /**
 Keeps the fallback alarm in line with whether sync is on, then catches up and reopens the live socket.
 */
 async function wakeSync() {
-	if (!syncClient) {
-		return;
+	if (privateContext) {
+		await refreshPrivateSync();
 	}
 
-	await (syncClient.enabled
+	const client = syncClient ?? privateSync;
+	await (client?.enabled
 		? chrome.alarms?.create?.(SYNC_ALARM, {periodInMinutes: SYNC_ALARM_MINUTES})
 		: chrome.alarms?.clear?.(SYNC_ALARM));
-	await syncClient.wake();
+	await client?.wake();
 }
 
 async function currentWindowId(
@@ -9215,6 +9609,7 @@ const PRIVATE_LOCK_OPEN_MESSAGES = new Set<string>([
 	'LOCK_PRIVATE',
 	'TOUCH_PRIVATE_LOCK',
 	'HANDOFF_NEW_TAB',
+	'PRIVATE_SYNC_STATUS',
 ]);
 
 const isCredentialKind = (value: unknown): value is 'pin' | 'password' =>
@@ -9242,6 +9637,7 @@ async function handlePrivateLockMessage(
 				await privateLock.unlock(message.credential);
 				invalidateSettings();
 				await resumePrivateLock();
+				void wakeSync().catch(() => undefined);
 				break;
 			}
 
@@ -9286,6 +9682,9 @@ async function handlePrivateLockMessage(
 					);
 				});
 				invalidateSettings();
+				void protectPrivateSync({kind, value: credential}).catch(
+					() => undefined,
+				);
 				break;
 			}
 
@@ -9305,6 +9704,9 @@ async function handlePrivateLockMessage(
 						value: credential,
 					});
 				});
+				void rewrapPrivateSyncKey({kind, value: credential}).catch(
+					() => undefined,
+				);
 				break;
 			}
 
@@ -9391,6 +9793,67 @@ async function handleSyncMessage(
 	}
 
 	return {ok: true, status: await syncClient.status()};
+}
+
+async function handlePrivateSyncMessage(
+	message: Extract<
+		TabLodgeMessage,
+		{
+			type:
+				| 'PRIVATE_SYNC_STATUS'
+				| 'PRIVATE_SYNC_ENABLE'
+				| 'PRIVATE_SYNC_DISABLE'
+				| 'PRIVATE_SYNC_NOW';
+		}
+	>,
+): Promise<ActionResult> {
+	if (!privateContext) {
+		return {
+			ok: false,
+			error: 'Turn private window sync on from Settings in a private window.',
+		};
+	}
+
+	try {
+		switch (message.type) {
+			case 'PRIVATE_SYNC_ENABLE': {
+				return await enablePrivateSync(
+					typeof message.credential === 'string' && message.credential !== ''
+						? message.credential
+						: undefined,
+				);
+			}
+
+			case 'PRIVATE_SYNC_DISABLE': {
+				if (privateSync) {
+					await privateSync.disconnect();
+					await mutate(async () => {
+						await rawLibrary.remove([PRIVATE_SYNC_KEY_KEY]);
+					});
+				}
+
+				await wakeSync();
+				break;
+			}
+
+			case 'PRIVATE_SYNC_NOW': {
+				await privateSync?.syncNow();
+				break;
+			}
+
+			default: {
+				break;
+			}
+		}
+	} catch (error) {
+		if (error instanceof SyncError) {
+			return {ok: false, error: error.message};
+		}
+
+		throw error;
+	}
+
+	return {ok: true, privateSync: await privateSyncInfo()};
 }
 
 async function handleMessage(
@@ -9851,6 +10314,13 @@ async function handleMessage(
 		case 'SYNC_DISCONNECT':
 		case 'SYNC_NOW': {
 			return handleSyncMessage(message);
+		}
+
+		case 'PRIVATE_SYNC_STATUS':
+		case 'PRIVATE_SYNC_ENABLE':
+		case 'PRIVATE_SYNC_DISABLE':
+		case 'PRIVATE_SYNC_NOW': {
+			return handlePrivateSyncMessage(message);
 		}
 
 		case 'HANDOFF_NEW_TAB': {

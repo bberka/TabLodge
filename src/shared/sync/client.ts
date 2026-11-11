@@ -70,6 +70,10 @@ export type SyncStatus = {
 	*/
 	refused: number;
 	error: string | null;
+	/**
+	The library on the server is encrypted and this device needs the PIN or password to read it.
+	*/
+	needsKey?: boolean;
 };
 
 export type SyncSocket = {
@@ -85,6 +89,25 @@ export type SyncSocket = {
 	): void;
 };
 
+/**
+Encrypts record values before they leave this device and opens them as they arrive. Used for the private windows'
+library; the regular library has none.
+*/
+export type SyncCodec = {
+	/**
+	Runs before each round with a way to call this server, so the codec can fetch or store its wrapped key. Throws a
+	SyncError to stop the round.
+	*/
+	prepare(
+		call: (path: string, init?: RequestInit) => Promise<unknown>,
+	): Promise<void>;
+	seal(change: SyncChange): Promise<SyncChange>;
+	/**
+	`reseal` is true for a value that arrived unencrypted, which this device then sends again encrypted.
+	*/
+	open(change: SyncChange): Promise<{change: SyncChange; reseal: boolean}>;
+};
+
 export type SyncHost = {
 	get(key: string): Promise<unknown>;
 	set(key: string, value: unknown): Promise<void>;
@@ -98,13 +121,17 @@ export type SyncHost = {
 	*/
 	writeLibrary(store: Store): Promise<void>;
 	backup(store: Store, reason: string): Promise<void>;
+	codec?: SyncCodec;
 	randomId(): string;
 	now(): number;
 };
 
 export class SyncError extends Error {
 	constructor(
-		readonly kind: 'config' | 'offline' | 'auth' | 'server',
+		/**
+		`key`: the library is encrypted and this device does not have its key.
+		*/
+		readonly kind: 'config' | 'offline' | 'auth' | 'server' | 'key',
 		message: string,
 	) {
 		super(message);
@@ -356,6 +383,10 @@ export function createSyncClient(host: SyncHost) {
 
 	async function round(target: SyncConfig) {
 		await setStatus({phase: 'syncing'});
+		const {codec} = host;
+		await codec?.prepare(async (path, init) => request(target, path, init));
+		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
+		const reseal = new Set<string>();
 		/*
 		The whole pull is collected before any of it is applied. Records arrive in the order the server last changed
 		them, so a tab can come pages before its session, or a bookmark before its column. Applied page by page, the
@@ -397,7 +428,16 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			for (const change of page.changes) {
-				pulled.push(change);
+				if (codec && !change.deleted) {
+					const opened = await codec.open(change);
+					if (opened.reseal) {
+						reseal.add(recordKey(change));
+					}
+
+					pulled.push(opened.change);
+				} else {
+					pulled.push(change);
+				}
 			}
 
 			end = {cursor: page.cursor, purged: page.purged};
@@ -425,12 +465,20 @@ export function createSyncClient(host: SyncHost) {
 				await write(finished.records, finished.state, store);
 			}
 
-			const joined = finished.state.joined
-				? finished.state
-				: {
-						...capture(finished.state, finished.records, host.now()),
-						joined: true,
-					};
+			let next = finished.state;
+			if (reseal.size > 0) {
+				// Without a shadow entry the next capture stamps the record again, so it goes out encrypted.
+				const shadow = Object.fromEntries(
+					Object.entries(next.shadow).filter(
+						([key]) => !(reseal.has(key) && finished.records.has(key)),
+					),
+				);
+				next = {...next, shadow};
+			}
+
+			const joined = next.joined
+				? next
+				: {...capture(next, finished.records, host.now()), joined: true};
 			return {state: joined, result: undefined};
 		});
 
@@ -460,7 +508,11 @@ export function createSyncClient(host: SyncHost) {
 
 			const body = await request(target, '/v1/changes', {
 				method: 'POST',
-				body: JSON.stringify({changes: sent}),
+				body: JSON.stringify({
+					changes: codec
+						? await Promise.all(sent.map(async (change) => codec.seal(change)))
+						: sent,
+				}),
 			});
 			const results =
 				isRecord(body) && Array.isArray(body.results) ? body.results : [];
@@ -505,6 +557,7 @@ export function createSyncClient(host: SyncHost) {
 			pending: state.outbox.length,
 			refused: status.refused + refused,
 			error: null,
+			needsKey: false,
 		});
 	}
 
@@ -559,6 +612,7 @@ export function createSyncClient(host: SyncHost) {
 					await setStatus({
 						phase: failure.kind === 'offline' ? 'offline' : 'error',
 						error: failure.message,
+						needsKey: failure.kind === 'key',
 					});
 				}
 			} finally {
@@ -680,6 +734,32 @@ export function createSyncClient(host: SyncHost) {
 			openLive();
 			await syncNow();
 			return this.status();
+		},
+
+		/**
+		Sends every record again with a new stamp, as after the library became encrypted.
+		*/
+		async resendAll(): Promise<void> {
+			await ready;
+			if (!config) {
+				return;
+			}
+
+			await host.mutate(async () => {
+				const state = await loadState();
+				await host.set(SYNC_STATE_KEY, {...state, shadow: {}});
+			});
+			await syncNow();
+		},
+
+		/**
+		Closes the live socket and forgets the server until the next load, keeping everything stored. For a library
+		that cannot be read for now, such as a locked private one.
+		*/
+		stop() {
+			config = undefined;
+			clearTimeout(localTimer);
+			closeSocket();
 		},
 
 		/**

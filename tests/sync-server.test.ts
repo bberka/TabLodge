@@ -87,6 +87,7 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 		cursor: 1,
 		records: 1,
 		limits: {maxRecords: 500_000, retentionDays: 90, requestsPerMinute: 300},
+		features: ['private', 'key'],
 	});
 });
 
@@ -281,4 +282,34 @@ test('a library exported from one server and imported into another is the same l
 		importLibrary(target(to.app), notAnExport()),
 		/not a TabLodge sync export/,
 	);
+});
+
+test('the server keeps one wrapped key per library and never lets a device overwrite another device’s key', async () => {
+	const {call} = server();
+	assert.deepEqual((await call('/v1/status')).body.features, [
+		'private',
+		'key',
+	]);
+	assert.deepEqual((await call('/v1/key')).body, {key: null});
+	const set = (key: string, previous: string | null) =>
+		call('/v1/key', {method: 'POST', body: JSON.stringify({key, previous})});
+
+	assert.equal((await set('first', null)).status, 200);
+	const raced = await set('second', null);
+	assert.equal(raced.status, 409);
+	assert.equal(raced.body.key, 'first');
+	assert.equal((await set('rewrapped', 'first')).status, 200);
+	assert.deepEqual((await call('/v1/key')).body, {key: 'rewrapped'});
+	assert.equal((await set('', 'rewrapped')).status, 400);
+	assert.equal(
+		(await call('/v1/key', {method: 'POST', body: '{'})).status,
+		400,
+	);
+});
+
+test('the wrapped key survives a restart of the server', () => {
+	const database = sqlite(':memory:');
+	const first = new SqlChangeLog(database);
+	assert.equal(first.replaceKey('wrapped', null), true);
+	assert.equal(new SqlChangeLog(database).key, 'wrapped');
 });

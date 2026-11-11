@@ -795,6 +795,17 @@ export type TabLodgeMessages = {
 	*/
 	SYNC_DISCONNECT: {};
 	SYNC_NOW: {};
+	/**
+	Private windows only: the separate private library's sync, which uses the regular sync's server under /private.
+	*/
+	PRIVATE_SYNC_STATUS: {};
+	/**
+	Starts syncing the separate private library. `credential` is needed when it has a PIN or password, or when the
+	private data on the server is protected by one.
+	*/
+	PRIVATE_SYNC_ENABLE: {credential?: string};
+	PRIVATE_SYNC_DISABLE: {};
+	PRIVATE_SYNC_NOW: {};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -812,7 +823,29 @@ export type ActionFailure = {
 	/**
 	Set when connecting to a sync server failed because of one form field, so the page can show the error there.
 	*/
-	field?: 'url' | 'token';
+	field?: 'url' | 'token' | 'credential';
+};
+
+export type PrivateSyncInfo = {
+	/**
+	`ready` when the private library can sync; otherwise what is in the way: no regular sync server, private windows
+	sharing the regular library (which syncs with it), temporary private storage, setup not finished, or the lock.
+	*/
+	availability:
+		'ready' | 'no-server' | 'shared' | 'temporary' | 'setup' | 'locked';
+	/**
+	The regular sync server, which also holds the private library.
+	*/
+	server: string | null;
+	/**
+	The private library has a PIN or password.
+	*/
+	lock: boolean;
+	/**
+	Private records are encrypted before they are sent.
+	*/
+	encrypted: boolean;
+	status: SyncStatus;
 };
 
 export type SaveResult = {
@@ -1037,6 +1070,10 @@ export type TabLodgeResponses = {
 	SYNC_CONNECT: {status: SyncStatus};
 	SYNC_DISCONNECT: {status: SyncStatus};
 	SYNC_NOW: {status: SyncStatus};
+	PRIVATE_SYNC_STATUS: {privateSync: PrivateSyncInfo};
+	PRIVATE_SYNC_ENABLE: {privateSync: PrivateSyncInfo};
+	PRIVATE_SYNC_DISABLE: {privateSync: PrivateSyncInfo};
+	PRIVATE_SYNC_NOW: {privateSync: PrivateSyncInfo};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =
