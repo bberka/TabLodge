@@ -22,6 +22,7 @@ Paths below are relative to `site/`.
 | `src/pages/index.astro` | Main page, features, installation, imports, FAQ, and structured data |
 | `src/pages/alternatives.astro` | Comparison with OneTab, Session Buddy, and Toby |
 | `src/pages/privacy.astro` | Website and extension privacy policy |
+| `src/pages/terms.astro` | Terms of use, linked from the footer and the Google OAuth consent screen |
 | `src/layouts/Base.astro` | Shared layout, metadata, and structured data |
 | `src/assets/` | Extension screenshots in light and dark themes |
 | `public/` | Icons, social image, web manifest, `robots.txt`, and custom domain file |
