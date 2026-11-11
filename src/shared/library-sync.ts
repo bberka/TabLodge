@@ -26,7 +26,7 @@ export type Tombstone = {
 export type SyncMap = Record<string, RecordSync>;
 
 const SYNC_TEXT_MAX = 64;
-const TOMBSTONE_KINDS: ReadonlySet<string> = new Set([
+export const TOMBSTONE_KINDS: ReadonlySet<string> = new Set([
 	'session',
 	'tab',
 	'bookmark',

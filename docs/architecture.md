@@ -122,6 +122,10 @@ Record level sync needs a stable id, a revision stamp, a tombstone, and an order
 * **Device id.** The index's `device`, assigned when sync is switched on. It lives only in the index, so restoring a backup elsewhere cannot copy it.
 * **Carrying.** A rewritten session or bookmarks record keeps its sidecar minus entries for records that are gone, reading the old record only when the index flags one. Malformed sync data is dropped instead of making the library unreadable.
 
+### Sync protocol
+
+`src/shared/sync/` holds the record level sync protocol: the hybrid logical clock (`clock.ts`), order keys (`order-key.ts`), the change format and last writer wins merge (`changes.ts`), and an in memory reference of the server's change log (`change-log.ts`). It uses no browser or server APIs, and the extension does not call it yet. [ADR 1](adr/0001-record-level-sync-protocol.md) explains the rules and why they were chosen.
+
 ### Undo
 
 `withUndo` keeps the library as a delta. `beginCheckpoint` notes the index, and while the action runs, each commit copies the records it replaces (still present, because garbage is removed one commit later). The undo record stores the old index and only those records. `UNDO` is valid only while the index is the exact commit the action ended on (`fingerprint`), then `restoreCheckpoint` writes the old library back as one more commit that rewrites only what differs. If a copy could not be taken, or the library is still in the old layout, the action gets no delta and falls back to a full copy or no Undo, never a wrong one.
