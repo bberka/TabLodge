@@ -131,7 +131,9 @@ export class ChangeLog implements SyncLog {
 		return {
 			resync: false,
 			changes: page.map((entry) => entry.change),
-			cursor: page.at(-1)?.seq ?? Math.max(cursor, this.seq),
+			// The server's own cursor, even when it is behind the device's: that is how a device notices a server
+			// restored from an older backup.
+			cursor: page.at(-1)?.seq ?? this.seq,
 			more: after.length > limit,
 			purged: this.purgedSeq,
 		};

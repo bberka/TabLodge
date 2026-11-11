@@ -158,10 +158,7 @@ export class SqlChangeLog implements SyncLog {
 		return {
 			resync: false,
 			changes: page.flatMap((row) => readChange(row) ?? []),
-			cursor:
-				page.length > 0
-					? numberOf(page.at(-1)!.seq)
-					: Math.max(cursor, this.seq),
+			cursor: page.length > 0 ? numberOf(page.at(-1)!.seq) : this.seq,
 			more: rows.length > limit,
 			purged: this.purgedSeq,
 		};

@@ -19,6 +19,7 @@ import {
 	outgoing,
 	type Records,
 	receive,
+	restartAfterServerReset,
 	settle,
 	startResync,
 	type SyncState,
@@ -356,11 +357,17 @@ export function createSyncClient(host: SyncHost) {
 		library would drop such a tab or move such a bookmark, and the next capture would send that loss to every
 		device.
 		*/
-		let end = await step(async (state) => ({
+		const start = await step(async (state) => ({
 			state,
-			result: {cursor: state.cursor, purged: state.purged},
+			result: {
+				cursor: state.cursor,
+				purged: state.purged,
+				known: Math.max(state.known ?? 0, state.cursor),
+			},
 		}));
+		let end = {cursor: start.cursor, purged: start.purged};
 		let resync = false;
+		let serverReset = false;
 		const pulled: SyncChange[] = [];
 		for (;;) {
 			const page = parsePull(
@@ -376,6 +383,14 @@ export function createSyncClient(host: SyncHost) {
 				continue;
 			}
 
+			// The server is behind this device: it was restored from an older backup or replaced. Start over.
+			if (!serverReset && page.cursor < Math.max(end.cursor, start.known)) {
+				serverReset = true;
+				pulled.length = 0;
+				end = {cursor: 0, purged: 0};
+				continue;
+			}
+
 			for (const change of page.changes) {
 				pulled.push(change);
 			}
@@ -388,8 +403,9 @@ export function createSyncClient(host: SyncHost) {
 		}
 
 		await step(async (state, records, store) => {
+			const restarted = serverReset ? restartAfterServerReset(state) : state;
 			const applied = receive(
-				resync ? startResync(state) : state,
+				resync ? startResync(restarted) : restarted,
 				records,
 				{changes: pulled, ...end},
 				host.now(),
@@ -455,7 +471,11 @@ export function createSyncClient(host: SyncHost) {
 
 			const count = await step(async (state) => {
 				const settled = settle(state, sent, results as PushResult[]);
-				return {state: settled.state, result: settled.refused};
+				const known =
+					isRecord(body) && Number.isSafeInteger(body.cursor)
+						? Math.max(settled.state.known ?? 0, body.cursor as number)
+						: settled.state.known;
+				return {state: {...settled.state, known}, result: settled.refused};
 			});
 			refused += count;
 			appliedThisRound += results.filter(

@@ -38,6 +38,11 @@ export type SyncState = {
 	*/
 	purged: number;
 	/**
+	The highest server cursor this device has seen, from pulls and from its own pushes. A server that answers with
+	less was restored from an older backup or replaced.
+	*/
+	known?: number;
+	/**
 	False until the first full pull, so a new device takes the server's copy of records both sides have.
 	*/
 	joined: boolean;
@@ -435,6 +440,21 @@ function newestPerRecord(changes: readonly SyncChange[]): SyncChange[] {
 	}
 
 	return [...newest.values()];
+}
+
+/**
+Starts over after finding the server behind this device, which happens when it was restored from an older backup
+or replaced. The device pulls everything again and queues every record it knows, deletes included: the stamps
+decide record by record, so the server gets back whatever it lost and the device keeps whatever is newer.
+*/
+export function restartAfterServerReset(state: SyncState): SyncState {
+	return {
+		...state,
+		cursor: 0,
+		purged: 0,
+		known: 0,
+		outbox: Object.keys(state.shadow),
+	};
 }
 
 /**

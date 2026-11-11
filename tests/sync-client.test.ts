@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {createApi} from '../server/src/api';
 import {isAuthMessage} from '../server/src/live';
+import {exportLibrary, importLibrary} from '../server/src/transfer';
 import type {Settings, Store} from '../src/app/types';
 import {ChangeLog} from '../src/shared/sync/change-log';
 import {
@@ -21,21 +22,27 @@ The reference server behind a fake network, with live sockets that hear about ev
 */
 function makeServer() {
 	const sockets = new Set<FakeSocket>();
-	const app = createApi({
-		token: TOKEN,
-		log: (() => {
-			const log = new ChangeLog();
-			return () => log;
-		})(),
-		onApplied(cursor) {
-			for (const socket of sockets) {
-				socket.receive(JSON.stringify({type: 'cursor', cursor}));
-			}
-		},
-	});
+	const createServerApi = () =>
+		createApi({
+			token: TOKEN,
+			log: (() => {
+				const log = new ChangeLog();
+				return () => log;
+			})(),
+			onApplied(cursor) {
+				for (const socket of sockets) {
+					socket.receive(JSON.stringify({type: 'cursor', cursor}));
+				}
+			},
+		});
+	let app = createServerApi();
 	let online = true;
+	const fetchFromApp = async (url: string, init: RequestInit) =>
+		app.request(url, init);
 	return {
-		app,
+		get app() {
+			return app;
+		},
 		sockets,
 		setOnline(value: boolean) {
 			online = value;
@@ -46,6 +53,33 @@ function makeServer() {
 			}
 
 			return app.request(url, init);
+		},
+		/**
+		A copy of the library as `node node.js export` writes it.
+		*/
+		async export() {
+			const lines: string[] = [];
+			await exportLibrary(
+				{url: URL_BASE, token: TOKEN, fetch: fetchFromApp},
+				(line) => {
+					lines.push(line);
+				},
+			);
+			return lines;
+		},
+		/**
+		Wipes the server and loads `lines` into it, like restoring a backup.
+		*/
+		async restore(lines: string[]) {
+			app = createServerApi();
+			const read = async function* () {
+				yield* lines;
+			};
+
+			await importLibrary(
+				{url: URL_BASE, token: TOKEN, fetch: fetchFromApp},
+				read(),
+			);
 		},
 	};
 }
@@ -382,4 +416,29 @@ test('tabs pulled a page before their session are kept, and nothing is sent back
 		await server.app.request(`${URL_BASE}/v1/status`, {headers})
 	).json()) as {cursor: number};
 	assert.equal(after.cursor, before.cursor);
+});
+
+test('a server restored from an older backup gets back what it lost, and the device keeps its library', async () => {
+	const server = makeServer();
+	const device = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [bookmark('old')],
+	});
+	await device.client.connect(URL_BASE, TOKEN);
+	const backup = await server.export();
+	device.edit((store) => ({
+		...store,
+		bookmarks: [...store.bookmarks, bookmark('newer')],
+	}));
+	await device.client.syncNow();
+
+	await server.restore(backup);
+	await device.client.syncNow();
+	assert.deepEqual(ids(device.store), ['old', 'newer']);
+	const restored = await server.export();
+	assert.ok(
+		restored.some((line) => line.includes('"id":"newer"')),
+		'the server has the newer bookmark again',
+	);
+	assert.equal((await device.client.status()).pending, 0);
 });
