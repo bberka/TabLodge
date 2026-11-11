@@ -11,7 +11,7 @@ the value it last saw. When a purge since then removed tombstones after the devi
 deletes it can no longer be told about, so it must pull everything again from cursor 0 (`resync`). A device paging
 through a fresh pull is not sent back to the start: purges older than its first page took nothing it had.
 */
-import {MAX_CLOCK_DRIFT_MS, parseStamp, stampAt} from './clock';
+import {MAX_CLOCK_DRIFT_MS, parseStamp, type Stamp, stampAt} from './clock';
 import {recordKey, supersedes, type SyncChange} from './changes';
 
 /**
@@ -64,7 +64,7 @@ The outcome of pushing `change` when the server holds `current` for its record.
 */
 export function pushResult(
 	change: SyncChange,
-	current: SyncChange | undefined,
+	current: Stamp | undefined,
 	purgedH: string,
 	now: number,
 ): PushResult {

@@ -7,6 +7,7 @@ import {Hono} from 'hono';
 import {bearerAuth} from 'hono/bearer-auth';
 import {bodyLimit} from 'hono/body-limit';
 import {except} from 'hono/combine';
+import {compress} from 'hono/compress';
 import {cors} from 'hono/cors';
 import type {SyncLog} from '../../src/shared/sync/change-log';
 import {parseChange, type SyncChange} from '../../src/shared/sync/changes';
@@ -66,6 +67,10 @@ export type ApiOptions = {
 	*/
 	onApplied?: (cursor: number) => void;
 	now?: () => number;
+	/**
+	Gzip answers. The Docker server turns it on; Cloudflare compresses at its edge already.
+	*/
+	compress?: boolean;
 };
 
 const problem = (error: string, detail?: Record<string, unknown>) => ({
@@ -79,6 +84,11 @@ export function createApi(options: ApiOptions) {
 	let lastPurge = 0;
 
 	const app = new Hono();
+	if (options.compress) {
+		// Pull pages compress to a fraction of their size.
+		app.use('*', compress());
+	}
+
 	app.use(
 		'*',
 		cors({

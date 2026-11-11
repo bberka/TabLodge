@@ -19,6 +19,8 @@ import {createApi, DEFAULT_LIMITS, MIN_TOKEN_LENGTH} from './api';
 import {
 	cursorMessage,
 	isAuthMessage,
+	LIVE_AUTH_TIMEOUT_MS,
+	LIVE_MAX_SOCKETS,
 	LIVE_PATH,
 	LIVE_PING,
 	LIVE_PONG,
@@ -50,9 +52,13 @@ const dataDirectory = process.env.DATA_DIR ?? 'data';
 mkdirSync(dataDirectory, {recursive: true});
 const log = new SqlChangeLog(sqlite(join(dataDirectory, 'library.db')));
 const sockets = new Set<WSContext>();
+// Sockets that have not authenticated yet, with the timer that closes them.
+const waiting = new Map<WSContext, ReturnType<typeof setTimeout>>();
+let openSockets = 0;
 
 const app = createApi({
 	token,
+	compress: true,
 	log: () => log,
 	limits: {
 		maxRecords: positive('MAX_RECORDS', DEFAULT_LIMITS.maxRecords),
@@ -73,12 +79,28 @@ const {injectWebSocket, upgradeWebSocket} = createNodeWebSocket({app});
 app.get(
 	LIVE_PATH,
 	upgradeWebSocket(() => ({
+		onOpen(_event, socket) {
+			openSockets += 1;
+			if (openSockets > LIVE_MAX_SOCKETS) {
+				socket.close(1013, 'too many connections');
+				return;
+			}
+
+			waiting.set(
+				socket,
+				setTimeout(() => {
+					socket.close(LIVE_UNAUTHORIZED, 'unauthorized');
+				}, LIVE_AUTH_TIMEOUT_MS),
+			);
+		},
 		onMessage(event, socket) {
 			if (event.data === LIVE_PING) {
 				socket.send(LIVE_PONG);
 			} else if (sockets.has(socket)) {
 				// Authenticated devices have nothing else to say.
 			} else if (isAuthMessage(event.data, token)) {
+				clearTimeout(waiting.get(socket));
+				waiting.delete(socket);
 				sockets.add(socket);
 				socket.send(readyMessage(log.cursor));
 			} else {
@@ -86,6 +108,9 @@ app.get(
 			}
 		},
 		onClose(_event, socket) {
+			openSockets -= 1;
+			clearTimeout(waiting.get(socket));
+			waiting.delete(socket);
 			sockets.delete(socket);
 		},
 	})),

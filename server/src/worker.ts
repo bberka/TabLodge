@@ -10,6 +10,8 @@ import {CORS_HEADERS, createApi, DEFAULT_LIMITS, MIN_TOKEN_LENGTH} from './api';
 import {
 	cursorMessage,
 	isAuthMessage,
+	LIVE_AUTH_TIMEOUT_MS,
+	LIVE_MAX_SOCKETS,
 	LIVE_PATH,
 	LIVE_PING,
 	LIVE_PONG,
@@ -32,7 +34,7 @@ const positive = (raw: string | undefined, fallback: number) => {
 	return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 };
 
-type Attachment = {authenticated: boolean};
+type Attachment = {authenticated: boolean; openedAt: number};
 
 export class SyncLibrary extends DurableObject<Env> {
 	private readonly log: SqlChangeLog;
@@ -86,10 +88,43 @@ export class SyncLibrary extends DurableObject<Env> {
 			return new Response('Expected a WebSocket upgrade', {status: 426});
 		}
 
+		if (this.ctx.getWebSockets().length >= LIVE_MAX_SOCKETS) {
+			return new Response('Too many connections', {status: 503});
+		}
+
 		const pair = new WebSocketPair();
 		this.ctx.acceptWebSocket(pair[1]);
-		pair[1].serializeAttachment({authenticated: false} satisfies Attachment);
+		pair[1].serializeAttachment({
+			authenticated: false,
+			openedAt: Date.now(),
+		} satisfies Attachment);
+		// An alarm closes it if no token arrives in time; it fires only while such sockets exist.
+		if ((await this.ctx.storage.getAlarm()) === null) {
+			await this.ctx.storage.setAlarm(Date.now() + LIVE_AUTH_TIMEOUT_MS);
+		}
+
 		return new Response(null, {status: 101, webSocket: pair[0]});
+	}
+
+	override async alarm() {
+		const now = Date.now();
+		let waiting = false;
+		for (const socket of this.ctx.getWebSockets()) {
+			const attachment = socket.deserializeAttachment() as Attachment | null;
+			if (attachment?.authenticated) {
+				continue;
+			}
+
+			if (now - (attachment?.openedAt ?? 0) >= LIVE_AUTH_TIMEOUT_MS) {
+				socket.close(LIVE_UNAUTHORIZED, 'unauthorized');
+			} else {
+				waiting = true;
+			}
+		}
+
+		if (waiting) {
+			await this.ctx.storage.setAlarm(now + LIVE_AUTH_TIMEOUT_MS);
+		}
 	}
 
 	override async webSocketMessage(
@@ -101,7 +136,10 @@ export class SyncLibrary extends DurableObject<Env> {
 		}
 
 		if (isAuthMessage(message, this.env.TABLODGE_SYNC_TOKEN ?? '')) {
-			socket.serializeAttachment({authenticated: true} satisfies Attachment);
+			socket.serializeAttachment({
+				authenticated: true,
+				openedAt: 0,
+			} satisfies Attachment);
 			socket.send(readyMessage(this.log.cursor));
 		} else {
 			socket.close(LIVE_UNAUTHORIZED, 'unauthorized');

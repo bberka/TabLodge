@@ -6,7 +6,7 @@ with the same library whatever order they arrive in.
 */
 import {isRecord} from '../library-values';
 import {TOMBSTONE_KINDS, type TombstoneKind} from '../library-sync';
-import {compareStamps, parseStamp} from './clock';
+import {compareStamps, parseStamp, type Stamp} from './clock';
 import {isOrderKey} from './order-key';
 
 export type SyncChange = {
@@ -92,10 +92,8 @@ export function parseChange(value: unknown): SyncChange | undefined {
 /**
 True when `incoming` should replace `current`. Equal stamps are the same write, so it is not applied twice.
 */
-export const supersedes = (
-	incoming: SyncChange,
-	current: SyncChange | undefined,
-) => !current || compareStamps(incoming, current) > 0;
+export const supersedes = (incoming: Stamp, current: Stamp | undefined) =>
+	!current || compareStamps(incoming, current) > 0;
 
 /**
 Applies the changes that win to `records` (keyed by `recordKey`) and returns them. Deletes stay in the map as

@@ -13,6 +13,14 @@ export const LIVE_PATH = '/v1/live';
 export const LIVE_PING = 'ping';
 export const LIVE_PONG = 'pong';
 export const LIVE_UNAUTHORIZED = 4401;
+/**
+A socket that has not sent a valid token by then is closed, so idle strangers cannot hold connections open.
+*/
+export const LIVE_AUTH_TIMEOUT_MS = 10_000;
+/**
+More open sockets than one person's devices ever need; past it new ones are refused.
+*/
+export const LIVE_MAX_SOCKETS = 64;
 
 export const cursorMessage = (cursor: number) =>
 	JSON.stringify({type: 'cursor', cursor});

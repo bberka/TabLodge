@@ -54,6 +54,10 @@ docker run -d --name tablodge-sync -p 8787:8787 -v tablodge-sync:/data \
 	-e TABLODGE_SYNC_TOKEN="$(openssl rand -base64 32)" tablodge-sync
 ```
 
+### Resources
+
+One library is light. On a test machine the container used about 20 MB of memory and no measurable CPU at idle with a device connected, about 60 MB at most while 50,000 records were pushed and pulled, and about 23 MB of disk for those 50,000 records. The image caps Node's heap at 128 MB, and the Compose file limits the container to 256 MB of memory and half a CPU core, with logs capped at 2 MB. Answers are gzipped, which makes a full pull several times smaller. A 512 MB VPS is plenty.
+
 ### Settings
 
 | Variable | Default | Meaning |

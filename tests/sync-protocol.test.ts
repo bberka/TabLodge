@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import {mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {test} from 'vite-plus/test';
 import {sqlite} from '../server/src/node-sqlite';
 import {SqlChangeLog} from '../server/src/sql-change-log';
@@ -286,6 +289,7 @@ for (const [name, makeLog] of LOGS) {
 		log.purge(T0 + 31 * DAY);
 
 		assert.deepEqual(log.pull(staleCursor, 10), {resync: true});
+		assert.equal(log.size, 0);
 		assert.deepEqual(pullAll(log), []);
 		const offlineEdit = {
 			...created,
@@ -439,3 +443,36 @@ for (const [name, makeLog] of LOGS) {
 		);
 	});
 }
+
+test('a reopened SQLite log keeps its cursor, record count, and purge marks', () => {
+	const directory = mkdtempSync(join(tmpdir(), 'tablodge-log-'));
+	try {
+		const path = join(directory, 'library.db');
+		const first = new SqlChangeLog(sqlite(path));
+		first.push(
+			[
+				{kind: 'folder', id: 'a', h: stamp(0), d: 'x', value: 1},
+				{kind: 'folder', id: 'b', h: stamp(0), d: 'x', value: 2},
+			],
+			T0,
+		);
+		first.push(
+			[{kind: 'folder', id: 'a', h: stamp(DAY), d: 'x', deleted: true}],
+			T0 + DAY,
+		);
+		first.purge(T0 + 31 * DAY);
+		const reopened = new SqlChangeLog(sqlite(path));
+		assert.equal(reopened.cursor, 3);
+		assert.equal(reopened.size, 1);
+		assert.deepEqual(reopened.pull(1, 10), {resync: true});
+		assert.deepEqual(
+			reopened.push(
+				[{kind: 'folder', id: 'a', h: stamp(1), d: 'y', value: 3}],
+				T0,
+			),
+			['stale'],
+		);
+	} finally {
+		rmSync(directory, {recursive: true, force: true});
+	}
+});

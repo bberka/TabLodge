@@ -26,4 +26,5 @@ VOLUME /data
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s \
 	CMD node -e "fetch('http://127.0.0.1:' + process.env.PORT + '/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
-CMD ["node", "node.js"]
+# A sync server for one library needs little memory; capping the heap keeps it predictable on a small VPS.
+CMD ["node", "--max-old-space-size=128", "node.js"]

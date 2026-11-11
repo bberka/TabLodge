@@ -183,3 +183,33 @@ test('a runaway client is slowed down, and the next minute is open again', async
 	time += 40_000;
 	assert.equal((await status()).status, 200);
 });
+
+test('the Docker server gzips its answers', async () => {
+	const app = createApi({
+		token: TOKEN,
+		log: (() => {
+			const log = new SqlChangeLog(sqlite(':memory:'));
+			return () => log;
+		})(),
+		compress: true,
+		now: () => T0,
+	});
+	const headers = {
+		Authorization: `Bearer ${TOKEN}`,
+		'Content-Type': 'application/json',
+		'Accept-Encoding': 'gzip',
+	};
+	await app.request('/v1/changes', {
+		method: 'POST',
+		headers,
+		body: JSON.stringify({
+			changes: Array.from({length: 50}, (_, index) => folder(`f${index}`)),
+		}),
+	});
+	const pulled = await app.request('/v1/changes?cursor=0', {headers});
+	assert.equal(pulled.headers.get('Content-Encoding'), 'gzip');
+	const text = await new Response(
+		pulled.body!.pipeThrough(new DecompressionStream('gzip')),
+	).text();
+	assert.equal((JSON.parse(text) as {changes: unknown[]}).changes.length, 50);
+});
