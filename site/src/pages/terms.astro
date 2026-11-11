@@ -1,0 +1,88 @@
+---
+import Base from '../layouts/Base.astro';
+import {SITE} from '../site';
+
+const title = 'Terms of Use | TabLodge';
+const description =
+	'The terms for using TabLodge, a free and open source browser extension, and this website. TabLodge is provided as is under the MIT License.';
+const updated = '2026-11-11';
+---
+
+<Base
+	title={title}
+	description={description}
+	path="/terms/"
+	breadcrumbs={[
+		{name: 'Home', path: '/'},
+		{name: 'Terms', path: '/terms/'},
+	]}
+	jsonLd={[
+		{
+			'@type': 'WebPage',
+			'@id': 'https://tablodge.bbay.dev/terms/#webpage',
+			url: 'https://tablodge.bbay.dev/terms/',
+			name: title,
+			description,
+			dateModified: updated,
+			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
+		},
+	]}
+>
+	<article class="narrow prose page">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Terms</span></nav>
+		<h1>Terms of use</h1>
+		<p class="note">Last updated: {updated}</p>
+		<p class="lead">
+			TabLodge is a free, open source browser extension. By installing it or using this website, you agree to these terms. If you do not agree, do not use TabLodge.
+		</p>
+
+		<h2>License</h2>
+		<p>
+			TabLodge and its sync server are released under the <a href={SITE.license} rel="noopener">MIT License</a>. You may use, copy, change, and share them under that license. The license text takes precedence over this page where they differ.
+		</p>
+
+		<h2>No accounts, no service</h2>
+		<p>
+			TabLodge has no accounts, subscriptions, or payments, and no TabLodge servers. It keeps your library in your browser profile, as described in the <a href="/privacy/">privacy policy</a>. Optional sync connects only to a server you run yourself, with Docker or on your own Cloudflare account. You are responsible for that server, its security, its costs, and the terms of any host you run it on.
+		</p>
+
+		<h2>Your data</h2>
+		<p>
+			You own what you save in TabLodge. Because it lives on your device, nobody else can restore it for you. Keep backups of anything you care about (<strong>Settings › Data › Back up</strong>). A lost PIN or password for a locked private library or a protected backup cannot be recovered.
+		</p>
+
+		<h2>Acceptable use</h2>
+		<p>
+			Use TabLodge only in ways that are lawful where you are. Do not use it to break the terms of the websites you save, or of your browser or its extension store.
+		</p>
+
+		<h2>Websites and stores</h2>
+		<p>
+			Links you save open other websites, which have their own terms. The Chrome Web Store is run by Google, GitHub Releases and this site's hosting by GitHub, under their own terms. TabLodge is not affiliated with Google, Mozilla, Microsoft, Brave, or any other product named on this site.
+		</p>
+
+		<h2>No warranty</h2>
+		<p>
+			TabLodge is provided as is, without warranty of any kind, express or implied, including fitness for a particular purpose. To the extent the law allows, the authors are not liable for any claim, damages, or loss of data arising from its use, as the MIT License states.
+		</p>
+
+		<h2>Changes</h2>
+		<p>
+			These terms may change as TabLodge changes. The date at the top shows the latest version, and the history is public in the <a href={SITE.repo} rel="noopener">GitHub repository</a>. Using TabLodge after a change means you accept the new terms.
+		</p>
+
+		<h2>Contact</h2>
+		<p>Questions: <a href={SITE.issues} rel="noopener">open an issue on GitHub</a>.</p>
+	</article>
+</Base>
+
+<style>
+	.page {
+		padding-block: 3rem 5rem;
+	}
+	.crumbs {
+		font-size: 0.9rem;
+		color: var(--muted);
+		margin-bottom: 1rem;
+	}
+</style>
