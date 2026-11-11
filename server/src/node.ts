@@ -7,6 +7,7 @@ Environment:
 	DATA_DIR              default ./data; holds library.db
 	MAX_RECORDS           default 500000
 	RETENTION_DAYS        default 90
+	RATE_LIMIT_PER_MINUTE default 300; requests per minute before the server answers 429
 */
 import {mkdirSync} from 'node:fs';
 import {join} from 'node:path';
@@ -56,6 +57,10 @@ const app = createApi({
 	limits: {
 		maxRecords: positive('MAX_RECORDS', DEFAULT_LIMITS.maxRecords),
 		retentionDays: positive('RETENTION_DAYS', DEFAULT_LIMITS.retentionDays),
+		requestsPerMinute: positive(
+			'RATE_LIMIT_PER_MINUTE',
+			DEFAULT_LIMITS.requestsPerMinute,
+		),
 	},
 	onApplied(cursor) {
 		for (const socket of sockets) {

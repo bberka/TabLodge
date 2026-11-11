@@ -55,6 +55,7 @@ docker run -d --name tablodge-sync -p 8787:8787 -v tablodge-sync:/data \
 | `DATA_DIR` | `/data` in the image | Folder for `library.db` |
 | `MAX_RECORDS` | `500000` | Records the library may hold, deletes included |
 | `RETENTION_DAYS` | `90` | How long a delete is remembered for devices that are offline |
+| `RATE_LIMIT_PER_MINUTE` | `300` | Requests per minute before the server answers 429; one person's devices stay far below it |
 
 ## Cloudflare
 
@@ -69,7 +70,7 @@ pnpm --filter tablodge-sync-server cf:setup
 
 The script logs you in to Cloudflare if needed, deploys the Worker, creates a token, stores it as a Worker secret, and prints the address (`https://tablodge-sync.<your-subdomain>.workers.dev`) and the token. Run it again after pulling updates; the token stays the same unless you pass `--rotate-token`.
 
-To use your own domain, add a custom domain to the `tablodge-sync` Worker in the Cloudflare dashboard. `MAX_RECORDS` and `RETENTION_DAYS` are set under `vars` in `server/wrangler.jsonc`.
+To use your own domain, add a custom domain to the `tablodge-sync` Worker in the Cloudflare dashboard. `MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are set under `vars` in `server/wrangler.jsonc`.
 
 To try it locally without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.dev.vars` and run `pnpm --filter tablodge-sync-server cf:dev`.
 
@@ -85,4 +86,4 @@ All paths except `/health` need `Authorization: Bearer <token>`.
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change: `applied`, `superseded`, `stale`, or `clock`, and the new cursor. At most 500 changes and 8 MB per request, and 256 KB per change |
 | `GET /v1/live` (WebSocket) | Send `{"type":"auth","token":"..."}` first. The server answers `{"type":"ready","cursor":n}` and then `{"type":"cursor","cursor":n}` after every push that changed something. Send `ping` to get `pong` |
 
-A full library answers a push with status 507 unless every change in it is a delete.
+A full library answers a push with status 507 unless every change in it is a delete. More requests in a minute than the limit get status 429 with a `Retry-After` header.

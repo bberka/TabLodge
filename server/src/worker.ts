@@ -24,6 +24,7 @@ type Env = {
 	TABLODGE_SYNC_TOKEN?: string;
 	MAX_RECORDS?: string;
 	RETENTION_DAYS?: string;
+	RATE_LIMIT_PER_MINUTE?: string;
 };
 
 const positive = (raw: string | undefined, fallback: number) => {
@@ -55,6 +56,10 @@ export class SyncLibrary extends DurableObject<Env> {
 				retentionDays: positive(
 					env.RETENTION_DAYS,
 					DEFAULT_LIMITS.retentionDays,
+				),
+				requestsPerMinute: positive(
+					env.RATE_LIMIT_PER_MINUTE,
+					DEFAULT_LIMITS.requestsPerMinute,
 				),
 			},
 			onApplied(cursor) {

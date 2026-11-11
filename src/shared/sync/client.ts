@@ -210,6 +210,10 @@ const ERROR_MESSAGES = new Map([
 		'A session, tab, or bookmark is too large for the sync server.',
 	],
 	['bad_change', 'The sync server refused a change as malformed.'],
+	[
+		'rate_limited',
+		'The sync server asked TabLodge to slow down. Sync tries again in a few minutes.',
+	],
 	['not_configured', 'The sync server has no token set up yet.'],
 ]);
 

@@ -35,9 +35,19 @@ export type Limits = {
 	Days a delete is remembered so offline devices learn about it.
 	*/
 	retentionDays: number;
+	/**
+	Authenticated requests per minute. One person's devices stay far below it; it stops a runaway client from
+	running up the server's cost.
+	*/
+	requestsPerMinute: number;
 };
 
-export const DEFAULT_LIMITS: Limits = {maxRecords: 500_000, retentionDays: 90};
+export const DEFAULT_LIMITS: Limits = {
+	maxRecords: 500_000,
+	retentionDays: 90,
+	requestsPerMinute: 300,
+};
+const MINUTE_MS = 60 * 1000;
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_PUSH_CHANGES = 500;
@@ -93,6 +103,27 @@ export function createApi(options: ApiOptions) {
 			}),
 		),
 	);
+
+	// A fixed one minute window per server, which serves one library. Counted after the token check, so only the
+	// owner's devices can use it up.
+	let rateWindow = {start: 0, count: 0};
+	app.use('/v1/*', async (c, next) => {
+		const time = now();
+		if (time - rateWindow.start >= MINUTE_MS) {
+			rateWindow = {start: time, count: 0};
+		}
+
+		rateWindow.count += 1;
+		if (rateWindow.count > limits.requestsPerMinute) {
+			const retryAfter = Math.ceil(
+				(rateWindow.start + MINUTE_MS - time) / 1000,
+			);
+			c.header('Retry-After', String(retryAfter));
+			return c.json(problem('rate_limited', {retryAfter}), 429);
+		}
+
+		await next();
+	});
 
 	app.get('/v1/status', (c) => {
 		const log = options.log();

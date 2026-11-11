@@ -13,5 +13,6 @@
 	"vars": {
 		"MAX_RECORDS": "500000",
 		"RETENTION_DAYS": "90",
+		"RATE_LIMIT_PER_MINUTE": "300",
 	},
 }

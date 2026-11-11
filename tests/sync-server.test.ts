@@ -81,7 +81,7 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 		protocol: 1,
 		cursor: 1,
 		records: 1,
-		limits: {maxRecords: 500_000, retentionDays: 90},
+		limits: {maxRecords: 500_000, retentionDays: 90, requestsPerMinute: 300},
 	});
 });
 
@@ -158,4 +158,28 @@ test('the extension can call the server across origins without a host permission
 		headers: {Origin: 'chrome-extension://abc'},
 	});
 	assert.equal(refused.headers.get('Access-Control-Allow-Origin'), '*');
+});
+
+test('a runaway client is slowed down, and the next minute is open again', async () => {
+	let time = T0;
+	const app = createApi({
+		token: TOKEN,
+		log: (() => {
+			const log = new SqlChangeLog(sqlite(':memory:'));
+			return () => log;
+		})(),
+		limits: {requestsPerMinute: 2},
+		now: () => time,
+	});
+	const status = async () =>
+		app.request('/v1/status', {headers: {Authorization: `Bearer ${TOKEN}`}});
+	assert.equal((await status()).status, 200);
+	assert.equal((await status()).status, 200);
+	time += 20_000;
+	const limited = await status();
+	assert.equal(limited.status, 429);
+	assert.equal(limited.headers.get('Retry-After'), '40');
+	assert.equal((await app.request('/health')).status, 200);
+	time += 40_000;
+	assert.equal((await status()).status, 200);
 });
