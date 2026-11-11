@@ -2279,7 +2279,7 @@ function Options() {
 						<SectionCard
 							id={sectionId(SYNC_TITLE)}
 							title={hl(SYNC_TITLE)}
-							description="Keep this library the same on several devices with a server you run yourself."
+							description="Keep your sessions and bookmarks the same in every browser you use, through a server you run."
 							icon={RefreshCw}
 							className={SECTION_SCROLL_CLASS}
 						>
