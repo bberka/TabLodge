@@ -30,6 +30,8 @@ const xoConfig: XoConfigItem[] = [
 					'./tsconfig/worker.json',
 					'./tsconfig/test.json',
 					'./tsconfig/node.json',
+					'./server/tsconfig.json',
+					'./server/tsconfig.worker.json',
 				],
 				tsconfigRootDir: import.meta.dirname,
 			},
@@ -169,8 +171,18 @@ const xoConfig: XoConfigItem[] = [
 		},
 	},
 	{
+		// The Docker server's entry point starts the process and exits on bad configuration, like a CLI.
+		files: ['server/src/node.ts'],
+		rules: {'unicorn/no-process-exit': 'off'},
+	},
+	{
 		// The tsconfig files carry explanatory comments, so they are JSONC.
-		files: ['tsconfig.json', 'tsconfig/*.json'],
+		files: [
+			'tsconfig.json',
+			'tsconfig/*.json',
+			'server/tsconfig*.json',
+			'server/wrangler.jsonc',
+		],
 		language: 'json/jsonc',
 	},
 	{

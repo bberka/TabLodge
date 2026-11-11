@@ -1,0 +1,74 @@
+name: Sync server image
+
+# Builds the self hosted sync server image (server/Dockerfile) for amd64 and arm64.
+# Pull requests only build it. A push to master publishes ghcr.io/<owner>/tablodge-sync:edge, and a tag such as
+# sync-server-v1.2.0 publishes :1.2.0, :1.2 and :latest. See docs/self-hosting.md.
+on:
+  push:
+    branches: [master]
+    tags: ['sync-server-v*']
+    paths:
+      - server/**
+      - src/shared/sync/**
+      - src/shared/library-*.ts
+      - src/app/types.ts
+      - pnpm-lock.yaml
+      - .github/workflows/sync-server.yml
+  pull_request:
+    paths:
+      - server/**
+      - src/shared/sync/**
+      - src/shared/library-*.ts
+      - src/app/types.ts
+      - pnpm-lock.yaml
+      - .github/workflows/sync-server.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: Build and publish the sync server image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/tablodge-sync
+          tags: |
+            type=edge,branch=master
+            type=match,pattern=sync-server-v(\d+\.\d+\.\d+),group=1
+            type=match,pattern=sync-server-v(\d+\.\d+)\.\d+,group=1
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/sync-server-v') }}
+          labels: |
+            org.opencontainers.image.title=TabLodge sync server
+            org.opencontainers.image.description=Self hosted sync server for the TabLodge browser extension
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

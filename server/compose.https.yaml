@@ -1,0 +1,47 @@
+# The sync server behind Caddy, which gets and renews an HTTPS certificate for your domain by itself.
+# For a VPS with a domain (or subdomain) pointing at it and ports 80 and 443 open. Put these in a .env file next to
+# this one, then run `docker compose -f compose.https.yaml up -d`:
+#   TABLODGE_DOMAIN=sync.example.com
+#   TABLODGE_SYNC_TOKEN=<output of: openssl rand -base64 32>
+# See docs/self-hosting.md.
+services:
+  sync:
+    image: ${TABLODGE_IMAGE:-ghcr.io/bberka/tablodge-sync:latest}
+    restart: unless-stopped
+    environment:
+      TABLODGE_SYNC_TOKEN: ${TABLODGE_SYNC_TOKEN:?Set TABLODGE_SYNC_TOKEN in .env}
+    volumes:
+      - tablodge-sync:/data
+    # Not published on the host: only Caddy reaches it.
+    expose:
+      - "8787"
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+        max-file: "2"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${TABLODGE_DOMAIN:?Set TABLODGE_DOMAIN in .env} --to sync:8787
+    ports:
+      - "${TABLODGE_HTTP_PORT:-80}:80"
+      - "${TABLODGE_HTTPS_PORT:-443}:443"
+    volumes:
+      # Certificates live here, so a restart does not ask for new ones.
+      - caddy-data:/data
+    depends_on:
+      - sync
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+        max-file: "2"
+
+volumes:
+  tablodge-sync:
+  caddy-data:

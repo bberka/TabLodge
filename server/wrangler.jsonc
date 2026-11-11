@@ -1,0 +1,18 @@
+// Cloudflare deployment of the self hosted sync server. See docs/self-hosting.md.
+// The token is a secret, set with `wrangler secret put TABLODGE_SYNC_TOKEN` (the setup script does this).
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "tablodge-sync",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-10-01",
+	"observability": {"enabled": true},
+	"durable_objects": {
+		"bindings": [{"name": "LIBRARY", "class_name": "SyncLibrary"}],
+	},
+	"migrations": [{"tag": "v1", "new_sqlite_classes": ["SyncLibrary"]}],
+	"vars": {
+		"MAX_RECORDS": "500000",
+		"RETENTION_DAYS": "90",
+		"RATE_LIMIT_PER_MINUTE": "300",
+	},
+}

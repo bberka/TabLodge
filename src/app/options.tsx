@@ -11,6 +11,7 @@ import {
 	LayoutDashboard,
 	Moon,
 	RotateCcw,
+	RefreshCw,
 	Sun,
 	Keyboard,
 	Laptop,
@@ -125,6 +126,7 @@ import {
 	PRIVATE_STORAGE_WORDS,
 } from './private-storage';
 import {PrivateWindowAppearance} from './private-window-appearance';
+import {SYNC_TITLE, SYNC_WORDS, SyncSettings} from './sync-settings';
 import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
@@ -976,7 +978,8 @@ const APPEARANCE = {
 };
 const DATA = {
 	title: 'Data',
-	description: 'Sessions and bookmarks are stored only in this browser.',
+	description:
+		'Sessions and bookmarks are stored in this browser, and on your own server when Sync is on.',
 };
 const EXCLUDED = {
 	title: 'Excluded websites',
@@ -1012,6 +1015,10 @@ const settingsNavigation = [
 	...(isFirefox ? [] : [{title: PRIVATE_STORAGE_TITLE, icon: Database}]),
 	...settingsGroups.map(({title, icon}) => ({title, icon})),
 	{title: DATA.title, icon: Database},
+	// Private windows never sync; their worker refuses the sync messages.
+	...(chrome.extension?.inIncognitoContext
+		? []
+		: [{title: SYNC_TITLE, icon: RefreshCw}]),
 	{title: EXCLUDED.title, icon: Globe},
 	{title: DEFAULTS.title, icon: RotateCcw},
 ].map(({title, icon}) => ({
@@ -1069,6 +1076,29 @@ function Options() {
 			.catch(() => undefined);
 	}, []);
 	const dataRef = useRef<HTMLDivElement>(null);
+	// A link to a section (`options.html#settings-sync`) arrives before the sections exist, so the browser cannot
+	// jump to it. Once the settings have rendered, scroll there and move focus to the section, as the jump would.
+	const hashHandledRef = useRef(false);
+	useEffect(() => {
+		if (!state || hashHandledRef.current) {
+			return;
+		}
+
+		hashHandledRef.current = true;
+		const target = location.hash
+			? document.querySelector<HTMLElement>(
+					`#${CSS.escape(decodeURIComponent(location.hash.slice(1)))}`,
+				)
+			: null;
+		if (!target) {
+			return;
+		}
+
+		target.setAttribute('tabindex', '-1');
+		target.classList.add('focus:outline-none');
+		target.scrollIntoView({block: 'start'});
+		target.focus({preventScroll: true});
+	}, [state]);
 	// The search box: `?q=` keeps the query across reloads; "/" and Ctrl/Cmd+K focus it, Escape clears it.
 	const searchRef = useRef<HTMLInputElement>(null);
 	const [templateDraft, setTemplateDraft] = useState<string | null>(null);
@@ -1724,6 +1754,9 @@ function Options() {
 		DEFAULTS.help,
 		...DEFAULTS.words,
 	]);
+	const showSync =
+		!chrome.extension?.inIncognitoContext &&
+		matchesQuery(query, [SYNC_TITLE, ...SYNC_WORDS]);
 	const showPrivate =
 		!isFirefox &&
 		matchesQuery(query, [PRIVATE_STORAGE_TITLE, ...PRIVATE_STORAGE_WORDS]);
@@ -1738,6 +1771,7 @@ function Options() {
 			? 1
 			: 0) +
 		visibleData.length +
+		Number(showSync) +
 		Number(showExcluded) +
 		Number(showDefaults);
 	const visibleGroupTitles = new Set(
@@ -1760,6 +1794,10 @@ function Options() {
 
 					case DATA.title: {
 						return visibleData.length > 0;
+					}
+
+					case SYNC_TITLE: {
+						return showSync;
 					}
 
 					case EXCLUDED.title: {
@@ -2238,6 +2276,18 @@ function Options() {
 									{dataRowElements}
 								</div>
 							</div>
+						</SectionCard>
+					)}
+
+					{showSync && (
+						<SectionCard
+							id={sectionId(SYNC_TITLE)}
+							title={hl(SYNC_TITLE)}
+							description="Keep this library the same on several devices with a server you run yourself."
+							icon={RefreshCw}
+							className={SECTION_SCROLL_CLASS}
+						>
+							<SyncSettings showStatus={showStatus} />
 						</SectionCard>
 					)}
 

@@ -1,0 +1,10 @@
+{
+	// The Cloudflare Worker and Durable Object, with the Workers runtime types instead of Node's.
+	"extends": "../tsconfig/base.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "../node_modules/.tmp/tsconfig.server-worker.tsbuildinfo",
+		"lib": ["ES2024"],
+		"types": ["@cloudflare/workers-types"]
+	},
+	"include": ["src/worker.ts"]
+}

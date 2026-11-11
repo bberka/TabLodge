@@ -24,6 +24,11 @@ import {
 	type UndoDelta,
 } from '../src/shared/library-state';
 import {hashText} from '../src/shared/library-values';
+import {
+	createSyncClient,
+	SYNC_ALARM,
+	SYNC_ALARM_MINUTES,
+} from '../src/shared/sync/client';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
 // would leave an `export {}` behind. The value imports above are bundled into the classic script by the
@@ -2073,13 +2078,19 @@ function findOrAddArchivedFolder(folders: Folder[]): Folder {
 	if (folder) {
 		folder.name = ARCHIVED_FOLDER_NAME;
 	} else {
+		// Every read normalizes the library, so the added folder must come out the same each time: sync would
+		// otherwise see a new folder on every read and send it forever.
+		const taken = new Set(folders.map((entry) => entry.id));
+		let id = ARCHIVED_FOLDER_ID;
+		for (let suffix = 2; taken.has(id); suffix += 1) {
+			id = `${ARCHIVED_FOLDER_ID}-${suffix}`;
+		}
+
 		folder = {
-			id: folders.some((entry) => entry.id === ARCHIVED_FOLDER_ID)
-				? makeId()
-				: ARCHIVED_FOLDER_ID,
+			id,
 			name: ARCHIVED_FOLDER_NAME,
 			icon: 'archive',
-			createdAt: Date.now(),
+			createdAt: 0,
 			isDefault: false,
 		};
 		folders.push(folder);
@@ -2260,6 +2271,7 @@ async function writeStore(store: Store): Promise<Store> {
 	};
 	await library.set({[STORAGE_KEY]: next});
 	invalidateSettings();
+	syncClient?.localChanged();
 	return next;
 }
 
@@ -2280,6 +2292,48 @@ function mutate<T>(operation: () => Promise<T>): Promise<T> {
 	const result = mutationQueue.then(locked, locked);
 	mutationQueue = result.catch(() => undefined);
 	return result;
+}
+
+/*
+Sync with a self hosted server (src/shared/sync/client.ts). Private workers never sync: their library is separate
+and may be temporary. The client runs its own library reads and writes inside the mutation queue.
+*/
+const syncClient = privateContext
+	? undefined
+	: createSyncClient({
+			get: async (key) => (await chrome.storage.local.get([key]))[key],
+			set: (key, value) => chrome.storage.local.set({[key]: value}),
+			remove: (keys) => chrome.storage.local.remove(keys),
+			fetch: (url, init) => fetch(url, init),
+			openSocket:
+				typeof WebSocket === 'function'
+					? (url) => new WebSocket(url)
+					: undefined,
+			mutate,
+			readLibrary: getStore,
+			async writeLibrary(store) {
+				// The records came from other devices: normalized like an import before they are stored.
+				await writeStore(normalizeStore(store));
+			},
+			async backup(store, reason) {
+				await safetyBackup(store, reason);
+			},
+			randomId: makeId,
+			now: Date.now,
+		});
+
+/**
+Keeps the fallback alarm in line with whether sync is on, then catches up and reopens the live socket.
+*/
+async function wakeSync() {
+	if (!syncClient) {
+		return;
+	}
+
+	await (syncClient.enabled
+		? chrome.alarms?.create?.(SYNC_ALARM, {periodInMinutes: SYNC_ALARM_MINUTES})
+		: chrome.alarms?.clear?.(SYNC_ALARM));
+	await syncClient.wake();
 }
 
 async function currentWindowId(
@@ -9061,6 +9115,11 @@ chrome.alarms?.onAlarm?.addListener?.((alarm) => {
 		return;
 	}
 
+	if (alarm.name === SYNC_ALARM) {
+		void wakeSync().catch(() => undefined);
+		return;
+	}
+
 	const work =
 		alarm.name === ALARM_SNAPSHOT
 			? takeSnapshot('interval', true)
@@ -9273,6 +9332,38 @@ async function handlePrivateLockMessage(
 	}
 
 	return {ok: true, ...(await privateLockInfo())};
+}
+
+async function handleSyncMessage(
+	message: Extract<
+		TabLodgeMessage,
+		{type: 'SYNC_STATUS' | 'SYNC_CONNECT' | 'SYNC_DISCONNECT' | 'SYNC_NOW'}
+	>,
+): Promise<ActionResult> {
+	if (!syncClient) {
+		return {ok: false, error: 'Sync is not available in private windows.'};
+	}
+
+	if (message.type === 'SYNC_CONNECT') {
+		const status = await syncClient.connect(
+			String(message.url ?? ''),
+			String(message.token ?? ''),
+		);
+		await wakeSync();
+		return {ok: true, status};
+	}
+
+	if (message.type === 'SYNC_DISCONNECT') {
+		const status = await syncClient.disconnect();
+		await wakeSync();
+		return {ok: true, status};
+	}
+
+	if (message.type === 'SYNC_NOW') {
+		await syncClient.syncNow();
+	}
+
+	return {ok: true, status: await syncClient.status()};
 }
 
 async function handleMessage(
@@ -9726,6 +9817,13 @@ async function handleMessage(
 
 		case 'GET_STORAGE_USAGE': {
 			return getStorageUsage();
+		}
+
+		case 'SYNC_STATUS':
+		case 'SYNC_CONNECT':
+		case 'SYNC_DISCONNECT':
+		case 'SYNC_NOW': {
+			return handleSyncMessage(message);
 		}
 
 		case 'HANDOFF_NEW_TAB': {
@@ -11513,3 +11611,6 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
 	void initializeExtension(true);
 });
+
+// A worker that was stopped and started again by any event reopens the live socket and catches up.
+void wakeSync().catch(() => undefined);

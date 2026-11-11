@@ -5,13 +5,13 @@ import {SITE} from '../site';
 
 const title = 'OneTab, Session Buddy and Toby Alternative: TabLodge Compared';
 const description =
-	'Looking for a OneTab, Session Buddy or Toby alternative? Compare TabLodge, a free, open-source, local-only tab session manager for Chrome, Brave, Edge and Firefox, and import your tabs in a minute.';
+	'Looking for a OneTab, Session Buddy or Toby alternative? Compare TabLodge, a free, open-source, local-first tab session manager for Chrome, Brave, Edge and Firefox, and import your tabs in a minute.';
 
 const rows: [string, string, string, string, string][] = [
 	['Price', 'Free, MIT license', 'Free', 'Free, asks for donations', 'Free tier capped at 60 saved tabs per workspace; paid plans for more'],
 	['Account required', 'No', 'No', 'No', 'Yes'],
-	['Where your data lives', 'Locally in your browser; no servers', 'Locally; the optional "share as web page" uploads the list', 'Locally in the browser (IndexedDB)', 'Toby\'s cloud, synced across devices'],
-	['Cross-device sync', 'No, by design (export and import a backup)', 'Check OneTab for its current status', 'No', 'Yes'],
+	['Where your data lives', 'Locally in your browser; optionally also on a sync server you run', 'Locally; the optional "share as web page" uploads the list', 'Locally in the browser (IndexedDB)', 'Toby\'s cloud, synced across devices'],
+	['Cross-device sync', 'Yes, with a server you host yourself (Docker or Cloudflare)', 'Check OneTab for its current status', 'No', 'Yes'],
 	['Open source', 'Yes', 'No', 'No', 'No'],
 	['Bookmark board on the new tab', 'Yes', 'No', 'No', 'Yes'],
 	['Folders for saved sessions', 'Yes', 'Yes', 'Yes (collections)', 'Yes (spaces and collections)'],
@@ -49,7 +49,7 @@ const breadcrumbs = [
 		<h1>A OneTab, Session Buddy and Toby alternative</h1>
 		<p class="lead">
 			OneTab, Session Buddy and Toby are well-known ways to save tabs. TabLodge takes a different route: free,
-			open source, local-only, with a bookmark board on your new tab. Here is an honest look at how they differ,
+			open source, local-first, with a bookmark board on your new tab. Here is an honest look at how they differ,
 			so you can pick the one that fits.
 		</p>
 		<p>
@@ -90,12 +90,12 @@ const breadcrumbs = [
 
 		<h2>Toby alternative</h2>
 		<p>
-			Toby organizes tabs into cloud-synced spaces and collections, with sharing and team features, and requires an account. TabLodge is the opposite trade-off: no account and no cloud, so your data never leaves the device, but also no sync or team sharing. If you want a Toby-style board without the account and without a saved-tab cap, import your Toby JSON export and try it side by side.
+			Toby organizes tabs into cloud-synced spaces and collections, with sharing and team features, and requires an account. TabLodge is the opposite trade-off: no account and no TabLodge cloud. Your data stays on the device unless you sync it through a server you run yourself, and there is no team sharing. If you want a Toby-style board without the account and without a saved-tab cap, import your Toby JSON export and try it side by side.
 		</p>
 
 		<h2>When another tool is the better choice</h2>
 		<ul>
-			<li>You need to sync sessions between computers or share them with a team: Toby or a browser-native sync is a better fit.</li>
+			<li>You want sync without running a server, or you share sessions with a team: Toby or a browser-native sync is a better fit.</li>
 			<li>You prefer Session Buddy's collections and automatic history workflow: try it alongside TabLodge before switching.</li>
 			<li>You want the simplest possible one-click tab list: OneTab does exactly that.</li>
 		</ul>

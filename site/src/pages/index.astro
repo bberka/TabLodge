@@ -45,11 +45,11 @@ const faq = [
 	},
 	{
 		q: 'Does TabLodge collect any data?',
-		a: 'No. TabLodge has no servers, accounts, analytics or telemetry, and it makes no network requests of its own. It requests no website permissions and injects nothing into pages, except that the search palette shortcut draws the palette over the page you pressed it on, and only when you press it (Settings can switch it to a window). Your sessions and bookmarks are stored in your browser profile.',
+		a: 'No. TabLodge has no servers, accounts, analytics or telemetry, and it makes no network requests of its own unless you turn on sync with a server you run yourself. It requests no website permissions and injects nothing into pages, except that the search palette shortcut draws the palette over the page you pressed it on, and only when you press it (Settings can switch it to a window). Your sessions and bookmarks are stored in your browser profile.',
 	},
 	{
 		q: 'Does it sync between my computers?',
-		a: 'No, by design: syncing would need a server. You can save a full backup (one ZIP with everything, settings included) on one machine and import it on another. You can protect the backup with a PIN or password if you want.',
+		a: 'Yes, through a sync server you run yourself, with Docker or on your own Cloudflare account. There is no TabLodge cloud. Connect each browser in Settings under Sync, and sessions, bookmarks and display preferences stay the same on all of them, with changes showing up within a moment. The server stores your library in plain text, so run it somewhere you trust. The self hosting guide (docs/self-hosting.md in the TabLodge repository) walks through a VPS with Docker and automatic HTTPS, Cloudflare, and backups. Without a server, save a full backup (one ZIP with everything, settings included) on one machine and import it on another.',
 	},
 	{
 		q: 'Can I import my tabs from OneTab, Session Buddy, Tab Session Manager or Toby?',

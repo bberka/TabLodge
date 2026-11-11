@@ -1,8 +1,11 @@
 packages:
   - .
   - site
+  - server
 allowBuilds:
   esbuild: true
+  # wrangler's local runtime downloads its platform binary on install.
+  workerd: true
   # Prebuilt binaries come from optional dependencies; its postinstall check isn't needed.
   unrs-resolver: false
 catalog:
