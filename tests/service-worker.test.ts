@@ -11739,6 +11739,25 @@ test('sync refuses a plain http server and is off in private windows', async () 
 	assert.equal(off.ok, false);
 });
 
+test('a private window saving to the shared library tells the regular worker to sync, and a separate one does not', async () => {
+	for (const mode of ['shared', 'saved'] as const) {
+		const harness = createWorkerHarness(stateWithSession(), undefined, {
+			incognitoContext: true,
+			storage: {'tablodge.private.config': {mode, configured: true}},
+		});
+		harness.storageSets.length = 0;
+		await harness.sendMessage({
+			type: 'ADD_BOOKMARK',
+			bookmark: {title: 'Private', url: 'https://private.example/'},
+		});
+		assert.equal(
+			harness.storageSets.some((keys) => keys.includes('tablodge.sync.nudge')),
+			mode === 'shared',
+			mode,
+		);
+	}
+});
+
 test('a failed sync connect names the field the page should flag', async () => {
 	const server = syncServer();
 	const harness = createWorkerHarness(stateWithSession(), undefined, {

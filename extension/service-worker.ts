@@ -28,6 +28,7 @@ import {
 	createSyncClient,
 	SYNC_ALARM,
 	SYNC_ALARM_MINUTES,
+	SYNC_NUDGE_KEY,
 	SyncError,
 } from '../src/shared/sync/client';
 
@@ -2274,6 +2275,10 @@ async function writeStore(store: Store): Promise<Store> {
 	await library.set({[STORAGE_KEY]: next});
 	invalidateSettings();
 	syncClient?.localChanged();
+	if (privateContext && privateConfig.mode === 'shared') {
+		await chrome.storage.local.set({[SYNC_NUDGE_KEY]: Date.now()});
+	}
+
 	return next;
 }
 
@@ -2323,6 +2328,12 @@ const syncClient = privateContext
 			randomId: makeId,
 			now: Date.now,
 		});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (area === 'local' && Object.hasOwn(changes, SYNC_NUDGE_KEY)) {
+		syncClient?.localChanged();
+	}
+});
 
 /**
 Keeps the fallback alarm in line with whether sync is on, then catches up and reopens the live socket.

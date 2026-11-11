@@ -31,6 +31,11 @@ export const SYNC_STATE_KEY = 'tablodge.sync.state';
 export const SYNC_STATUS_KEY = 'tablodge.sync.status';
 export const SYNC_ALARM = 'tablodge-sync';
 /**
+Written by a private window's worker after it saves to the shared library, so the regular worker, which runs sync,
+sends the change right away. Split workers cannot message each other, but they share local storage.
+*/
+export const SYNC_NUDGE_KEY = 'tablodge.sync.nudge';
+/**
 Minutes between fallback rounds, which also reopen a closed live socket.
 */
 export const SYNC_ALARM_MINUTES = 5;
