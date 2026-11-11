@@ -152,9 +152,21 @@ Do this in every browser and browser profile that should share the library.
 
 The first browser sends its library to the server. Each further browser merges with it: items only it has are sent, and for items both sides have, the server's copy wins. Before the first sync writes anything, TabLodge saves a safety backup you can restore from **Settings › Recovery**. If two browsers already hold the same library from an imported backup, connect the one with the newest data first.
 
-While sync is on, a cloud icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings. **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
+While sync is on, a sync icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings. **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
 
-Sessions, saved tabs, folders, bookmark columns, bookmarks, and display preferences sync. Recovery snapshots, backups, the trash bin, private windows, and per browser settings such as the new tab page do not. When two browsers change the same item at the same time, the later change wins.
+Sessions, saved tabs, folders, bookmark columns, bookmarks, and display preferences sync. Recovery snapshots, backups, the trash bin, and per browser settings such as the new tab page do not. When two browsers change the same item at the same time, the later change wins.
+
+### Private windows
+
+How private windows sync depends on their storage, chosen in **Settings › Private windows**:
+
+* **Same library as regular windows:** private windows change the regular library, so their changes sync with it right away.
+* **Separate saved library:** it does not sync until you turn on **Sync private windows** in **Settings › Sync**, opened from a private window. It then goes to the same server as a second library, under `/private`, and needs no setup there. Turn it on in each browser whose private windows should share it.
+* **Separate temporary library:** it never syncs, because it is meant to disappear when the browser closes.
+
+If the separate library is locked with a PIN or password, TabLodge asks for it when you turn private sync on, and encrypts every item before it leaves the browser. The first browser makes a random key and stores it on the server wrapped with that PIN or password; the server only ever sees the wrapped key and the encrypted items. Another browser asks for the same PIN or password once, then keeps the key in its own private library. Changing the PIN or password wraps the same key again, so the other browsers keep syncing; a browser that turns private sync on later uses the new one. Setting a first PIN or password on a library that already synced encrypts the server's copy too. The server can still see how many items there are and when they change, and a short PIN can be guessed by whoever holds the server's data, so use a password if that matters to you.
+
+Private sync runs only while a private window is open and its library is unlocked, so changes from other browsers arrive the next time you open one.
 
 ## Look after the server
 
@@ -204,6 +216,8 @@ export TABLODGE_SYNC_TOKEN='<token>'
 node server/scripts/transfer.ts export --url https://sync.example.com > tablodge-sync-backup.jsonl
 node server/scripts/transfer.ts import --url https://sync.example.com < tablodge-sync-backup.jsonl
 ```
+
+The private windows' library is a second library on the same server: back it up with the same commands and `--url https://sync.example.com/private` (in the Docker image, `node node.js export --url http://127.0.0.1:8787/private`). If it is encrypted, the file holds the encrypted items and the wrapped key, so it can be restored but not read without the PIN or password.
 
 Importing keeps the newer version of anything the server already has, so it never overwrites newer work. After a server is restored from an older backup, connected browsers notice by themselves and send it everything it lost. Nothing needs to be done in TabLodge.
 
@@ -285,9 +299,13 @@ All paths except `/health` need `Authorization: Bearer <token>`. The server answ
 | Request | Answer |
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
-| `GET /v1/status` | Protocol version, current cursor, record count, and limits |
+| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private` and `key`) |
 | `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor`, the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
+| `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |
+| `POST /v1/key` with `{"key": "...", "previous": ...}` | Stores the key only while the server still holds `previous` (`null` for none); otherwise 409 with the current key |
 | `GET /v1/live` (WebSocket) | Send `{"type":"auth","token":"..."}` first. The server answers `{"type":"ready","cursor":n}`, then `{"type":"cursor","cursor":n}` after every push that changed something. `ping` gets `pong` |
+
+Every path is also served under `/private`, for the private windows' library, which is kept apart: a second Durable Object on Cloudflare, and `private.db` next to `library.db` on Docker, created the first time a browser uses it.
 
 A full library answers a push with 507 unless every change in it is a delete. Too many requests get 429 with a `Retry-After` header.

@@ -22,6 +22,8 @@ export const SYNC_WORDS = [
 	'token',
 	'connect',
 	'disconnect',
+	'private windows',
+	'encrypt',
 ];
 
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;

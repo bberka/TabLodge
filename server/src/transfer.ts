@@ -2,7 +2,8 @@
 Copies a library out of a sync server and into another one, through the sync API, so it works the same for the
 Docker server and for Cloudflare. Used for backups and for moving between servers. The file is JSON lines: a header,
 then one change per line, deletes included, with the stamps the server holds, so importing it anywhere gives the
-same library.
+same library. An encrypted library (private windows with a PIN or password) also carries its wrapped key in the
+header, which the import stores; the values stay encrypted throughout.
 
 The Docker image runs it as `node node.js export` and `node node.js import` against its own server, and
 server/scripts/transfer.ts runs it from a copy of the repository against any server, Cloudflare included. It
@@ -64,6 +65,33 @@ async function call(
 	}
 }
 
+async function storedKey(target: TransferTarget): Promise<string | null> {
+	const answer = await call(target, '/v1/key');
+	return isObject(answer) && typeof answer.key === 'string' ? answer.key : null;
+}
+
+/**
+Stores an export's wrapped key, unless the server already holds the same one. A different key would leave the
+imported values unreadable, so it stops the import.
+*/
+async function storeKey(target: TransferTarget, key: string) {
+	const current = await storedKey(target);
+	if (current === key) {
+		return;
+	}
+
+	if (current !== null) {
+		throw new Error(
+			'This server already holds a different encryption key for this library. Import into an empty one.',
+		);
+	}
+
+	await call(target, '/v1/key', {
+		method: 'POST',
+		body: JSON.stringify({key, previous: null}),
+	});
+}
+
 /**
 Writes the whole library, one line at a time, and returns how many changes it wrote.
 */
@@ -71,11 +99,13 @@ export async function exportLibrary(
 	target: TransferTarget,
 	write: (line: string) => void,
 ): Promise<number> {
+	const key = await storedKey(target);
 	write(
 		JSON.stringify({
 			format: EXPORT_FORMAT,
 			version: EXPORT_VERSION,
 			exportedAt: new Date().toISOString(),
+			...(key !== null && {key}),
 		}),
 	);
 	let cursor = 0;
@@ -151,6 +181,10 @@ export async function importLibrary(
 				value.version !== EXPORT_VERSION
 			) {
 				throw new Error('This is not a TabLodge sync export.');
+			}
+
+			if (typeof value.key === 'string') {
+				await storeKey(target, value.key);
 			}
 
 			continue;

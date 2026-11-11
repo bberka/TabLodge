@@ -152,7 +152,18 @@ function startServer() {
 	app.all(`${PRIVATE_PREFIX}/*`, async (c) => {
 		const url = new URL(c.req.url);
 		url.pathname = url.pathname.slice(PRIVATE_PREFIX.length);
-		return privateLibrary().api.fetch(new Request(url, c.req.raw));
+		const {method} = c.req;
+		// A new request rather than one built from the incoming one, which Node's server adapter does not allow.
+		return privateLibrary().api.fetch(
+			new Request(url, {
+				method,
+				headers: c.req.raw.headers,
+				body:
+					method === 'GET' || method === 'HEAD'
+						? undefined
+						: await c.req.arrayBuffer(),
+			}),
+		);
 	});
 	app.all('*', async (c) => main.api.fetch(c.req.raw));
 

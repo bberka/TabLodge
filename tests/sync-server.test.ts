@@ -226,6 +226,10 @@ test('a library exported from one server and imported into another is the same l
 	const deleted = {...folder('gone', 5), deleted: true};
 	delete deleted.value;
 	await from.push([folder('a'), folder('b'), deleted]);
+	await from.call('/v1/key', {
+		method: 'POST',
+		body: JSON.stringify({key: 'wrapped key', previous: null}),
+	});
 	const target = (app: ReturnType<typeof createApi>) => ({
 		url: 'https://sync.example.test',
 		token: TOKEN,
@@ -254,6 +258,7 @@ test('a library exported from one server and imported into another is the same l
 		stale: 0,
 		clock: 0,
 	});
+	assert.deepEqual((await to.call('/v1/key')).body, {key: 'wrapped key'});
 	const pull = async (app: ReturnType<typeof createApi>) =>
 		(await (
 			await app.request('/v1/changes?cursor=0', {
