@@ -3,7 +3,7 @@ Deploys the sync server to the Cloudflare account wrangler is logged in to, sets
 and token to enter in TabLodge. Run it again to deploy an update; the token stays the same unless `--rotate-token`
 is given. See docs/self-hosting.md.
 
-	pnpm --filter tablodge-sync-server cf:setup [--rotate-token]
+	pnpm run cf:setup [--rotate-token]   (from the repository root)
 */
 import {spawnSync} from 'node:child_process';
 import {randomBytes} from 'node:crypto';

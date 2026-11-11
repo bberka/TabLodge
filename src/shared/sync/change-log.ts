@@ -15,6 +15,12 @@ import {MAX_CLOCK_DRIFT_MS, parseStamp, type Stamp, stampAt} from './clock';
 import {recordKey, supersedes, type SyncChange} from './changes';
 
 /**
+The version of this protocol. A server and a device that disagree on it do not sync; bump it only for a change older
+devices cannot follow.
+*/
+export const PROTOCOL_VERSION = 1;
+
+/**
 - `applied`: the change is now the record's current version.
 - `superseded`: the server already has a newer version, which the device gets on its next pull.
 - `stale`: the change is about a record the server has no trace of and is older than the purge horizon, so the

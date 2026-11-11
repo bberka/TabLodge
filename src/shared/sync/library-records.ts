@@ -23,7 +23,7 @@ import {recordKey} from './changes';
 Preferences that describe how the library looks and behaves, so they follow the user. Everything else (new tab,
 toolbar, startup, context menus, snapshots, backups, browser bookmark monitoring) stays per device.
 */
-export const PORTABLE_PREFERENCES = [
+const PORTABLE_PREFERENCES = [
 	'excludedOrigins',
 	'saveDuplicateHandling',
 	'saveDuplicateTitle',

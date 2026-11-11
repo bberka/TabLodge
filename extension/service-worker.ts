@@ -39,12 +39,14 @@ import {hashText} from '../src/shared/library-values';
 import {
 	createSyncClient,
 	SYNC_ALARM,
+	callServer,
+	parseConfig,
 	SYNC_ALARM_MINUTES,
 	SYNC_CONFIG_KEY,
 	SYNC_NUDGE_KEY,
+	SYNC_OFF,
 	type SyncConfig,
 	SyncError,
-	type SyncStatus,
 } from '../src/shared/sync/client';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
@@ -61,6 +63,8 @@ type DuplicateMode = import('../src/app/types').DuplicateMode;
 type EraseScope = import('../src/app/types').EraseScope;
 type Folder = import('../src/app/types').Folder;
 type PrivateSyncInfo = import('../src/app/types').PrivateSyncInfo;
+type Credential = import('../src/app/passcode').Credential;
+type SyncStatus = import('../src/shared/sync/client').SyncStatus;
 type ImportOptions = import('../src/app/types').ImportOptions;
 type InsertPosition = import('../src/app/types').InsertPosition;
 type LinkEntry = import('../src/app/types').LinkEntry;
@@ -2378,14 +2382,10 @@ const PRIVATE_SYNC_ON_KEY = 'sync.private.on';
 const PRIVATE_SYNC_KEY_KEY = 'sync.private.key';
 let privateSync: ReturnType<typeof createSyncClient> | undefined;
 
-const regularSyncConfig = async (): Promise<SyncConfig | undefined> => {
-	const value = (await chrome.storage.local.get([SYNC_CONFIG_KEY]))[
-		SYNC_CONFIG_KEY
-	] as Partial<SyncConfig> | undefined;
-	return typeof value?.url === 'string' && typeof value.token === 'string'
-		? {url: value.url, token: value.token}
-		: undefined;
-};
+const regularSyncConfig = async () =>
+	parseConfig(
+		(await chrome.storage.local.get([SYNC_CONFIG_KEY]))[SYNC_CONFIG_KEY],
+	);
 
 const privateSyncTarget = (regular: SyncConfig): SyncConfig => ({
 	url: `${regular.url}/private`,
@@ -2510,16 +2510,6 @@ async function privateSyncInfo(): Promise<PrivateSyncInfo> {
 	const availability = await privateSyncAvailability();
 	const regular = await regularSyncConfig();
 	const ready = availability === 'ready';
-	const off: SyncStatus = {
-		connected: false,
-		url: null,
-		phase: 'off',
-		live: false,
-		lastSyncAt: null,
-		pending: 0,
-		refused: 0,
-		error: null,
-	};
 	return {
 		availability,
 		server: regular?.url ?? null,
@@ -2532,47 +2522,16 @@ async function privateSyncInfo(): Promise<PrivateSyncInfo> {
 			ready &&
 			parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY)) !==
 				undefined,
-		status: ready && privateSync ? await privateSync.status() : off,
+		status: ready && privateSync ? await privateSync.status() : SYNC_OFF,
 	};
 }
 
 /**
-A request to the sync server outside the sync client, for setting up the private library's key.
+A field of a sync server's JSON answer, for setting up the private library's key outside the sync client.
 */
-async function syncServerCall(
-	target: SyncConfig,
-	path: string,
-	init: RequestInit = {},
-): Promise<{status: number; body: Record<string, unknown>}> {
-	let response: Response;
-	try {
-		response = await fetch(`${target.url}${path}`, {
-			...init,
-			headers: [
-				['Authorization', `Bearer ${target.token}`],
-				['Content-Type', 'application/json'],
-			],
-		});
-	} catch {
-		throw new SyncError('offline', 'The sync server cannot be reached.');
-	}
-
-	if (response.status === 401) {
-		throw new SyncError('auth', 'The sync server refused the token.');
-	}
-
-	let body: unknown;
-	try {
-		body = await response.json();
-	} catch {
-		body = undefined;
-	}
-
-	return {
-		status: response.status,
-		body:
-			body && typeof body === 'object' ? (body as Record<string, unknown>) : {},
-	};
+async function serverField(target: SyncConfig, path: string, field: string) {
+	const {body} = await callServer(fetch, target, path);
+	return isRecord(body) ? body[field] : undefined;
 }
 
 const storeServerKey = async (
@@ -2581,7 +2540,7 @@ const storeServerKey = async (
 	previous: string | null,
 ) =>
 	(
-		await syncServerCall(target, '/v1/key', {
+		await callServer(fetch, target, '/v1/key', {
 			method: 'POST',
 			body: JSON.stringify({key: serverKeyText(key), previous}),
 		})
@@ -2602,11 +2561,8 @@ async function enablePrivateSync(
 		};
 	}
 
-	const server = await syncServerCall(regular, '/v1/status');
-	if (
-		!Array.isArray(server.body.features) ||
-		!server.body.features.includes('private')
-	) {
+	const features = await serverField(regular, '/v1/status', 'features');
+	if (!Array.isArray(features) || !features.includes('private')) {
 		return {
 			ok: false,
 			error:
@@ -2615,9 +2571,7 @@ async function enablePrivateSync(
 	}
 
 	const target = privateSyncTarget(regular);
-	const serverKey = parseServerKey(
-		(await syncServerCall(target, '/v1/key')).body.key,
-	);
+	const serverKey = parseServerKey(await serverField(target, '/v1/key', 'key'));
 	const lock = parseLockRecord(
 		(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
 	);
@@ -2681,10 +2635,7 @@ async function enablePrivateSync(
 After this private library gets its first PIN or password: a library that synced unencrypted is protected from now
 on, so the server's copy is replaced by an encrypted one. Best effort; the lock is on either way.
 */
-async function protectPrivateSync(credential: {
-	kind: 'pin' | 'password';
-	value: string;
-}) {
+async function protectPrivateSync(credential: Credential) {
 	const regular = await regularSyncConfig();
 	if (!privateSync?.enabled || !regular) {
 		return;
@@ -2693,7 +2644,7 @@ async function protectPrivateSync(credential: {
 	const target = privateSyncTarget(regular);
 	if (
 		parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY)) ||
-		parseServerKey((await syncServerCall(target, '/v1/key')).body.key)
+		parseServerKey(await serverField(target, '/v1/key', 'key'))
 	) {
 		return;
 	}
@@ -2710,10 +2661,7 @@ async function protectPrivateSync(credential: {
 /**
 After a new PIN or password: the server's copy of the sync key is wrapped with it instead. Best effort.
 */
-async function rewrapPrivateSyncKey(credential: {
-	kind: 'pin' | 'password';
-	value: string;
-}) {
+async function rewrapPrivateSyncKey(credential: Credential) {
 	const regular = await regularSyncConfig();
 	const key = parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY));
 	if (!privateSync?.enabled || !regular || !key) {
