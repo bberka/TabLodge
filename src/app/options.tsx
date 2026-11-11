@@ -2034,7 +2034,7 @@ function Options() {
 						<SectionCard
 							id={sectionId(PRIVATE_STORAGE_TITLE)}
 							title={PRIVATE_STORAGE_TITLE}
-							description="Choose whether private windows use the same library as regular windows or a separate one. This applies to every private window."
+							description="Where private windows keep their library, how it is locked, and how they look."
 							icon={Database}
 							className={SECTION_SCROLL_CLASS}
 						>

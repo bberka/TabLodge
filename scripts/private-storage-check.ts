@@ -436,9 +436,12 @@ async function runLockChecks(
 	// A regular window shows the status but cannot change the lock.
 	await normal.reload();
 	await normal
-		.getByText('Open Settings in a private window to turn the lock on', {
-			exact: false,
-		})
+		.getByText(
+			'To turn the lock on or off, or to change it, open Settings in a private window',
+			{
+				exact: false,
+			},
+		)
 		.waitFor();
 	assert.equal(
 		await normal.getByRole('button', {name: 'Turn on lock…'}).count(),
@@ -542,7 +545,7 @@ async function runLockChecks(
 
 	await normal
 		.getByText(
-			'Remove the lock in a private window before choosing another storage mode',
+			'To change it, remove the lock from Settings in a private window first',
 			{
 				exact: false,
 			},
