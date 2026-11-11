@@ -222,6 +222,7 @@ tests/                  Vitest suites and mocked browser APIs
 scripts/                Build, per browser manifests, Chrome development launch, package verification, Firefox smoke check, and release tooling
 docs/                   All documentation except AGENTS.md: this README, contributing, privacy, architecture, and agent workflow
 site/                   Astro website for tablodge.bbay.dev
+server/                 Self hosted sync server for Docker or Cloudflare (not used by the extension yet; see docs/self-hosting.md)
 tsconfig/               TypeScript projects for the pages, service worker, tests, and build tooling
 tsconfig.json           Solution file that `tsc -b` follows into tsconfig/
 vite.pages.config.ts    Extension page build configuration

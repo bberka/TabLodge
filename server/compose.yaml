@@ -1,0 +1,19 @@
+# Starts the self hosted sync server. Put TABLODGE_SYNC_TOKEN in a .env file next to this one
+# (generate it with `openssl rand -base64 32`), then run `docker compose up -d`.
+# See docs/self-hosting.md.
+services:
+  sync:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: tablodge-sync
+    restart: unless-stopped
+    environment:
+      TABLODGE_SYNC_TOKEN: ${TABLODGE_SYNC_TOKEN:?Set TABLODGE_SYNC_TOKEN in .env}
+    ports:
+      - "8787:8787"
+    volumes:
+      - tablodge-sync:/data
+
+volumes:
+  tablodge-sync:

@@ -36,6 +36,11 @@ function formatStamp({wall, counter}: Clock): string {
 	);
 }
 
+/**
+The smallest stamp at a wall time, for comparing stamps with a time as strings.
+*/
+export const stampAt = (wall: number) => formatStamp({wall, counter: 0});
+
 export function parseStamp(h: string): Clock | undefined {
 	if (!STAMP_PATTERN.test(h)) {
 		return undefined;

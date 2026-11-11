@@ -5,10 +5,10 @@ Docker server implement over their own storage, and the fake server the client t
 Every accepted change gets the next sequence number. A device pulls the changes after the last number it saw
 (its cursor), and only the newest change per record is kept, so a pull after a long time offline returns one
 change per record instead of a replay. Tombstones are kept for a retention window and then purged. A device whose
-cursor is older than the newest purge has missed deletes it can no longer be told about, so it must replace its
-copy with a snapshot (`resync`) instead of pulling.
+cursor is older than the newest purge has missed deletes it can no longer be told about, so it must drop its copy
+and pull everything again from cursor 0 (`resync`). A pull from 0 is always allowed.
 */
-import {MAX_CLOCK_DRIFT_MS, parseStamp} from './clock';
+import {MAX_CLOCK_DRIFT_MS, parseStamp, stampAt} from './clock';
 import {recordKey, supersedes, type SyncChange} from './changes';
 
 /**
@@ -24,9 +24,46 @@ export type PullResponse =
 	| {resync: false; changes: SyncChange[]; cursor: number; more: boolean}
 	| {resync: true};
 
+/**
+What every server storage implements, with the rules of `ChangeLog`.
+*/
+export type SyncLog = {
+	readonly cursor: number;
+	/**
+	Stored records, tombstones included.
+	*/
+	readonly size: number;
+	push(changes: readonly SyncChange[], now: number): PushResult[];
+	pull(cursor: number, limit: number): PullResponse;
+	/**
+	Drops tombstones written before `before` (a wall time in milliseconds).
+	*/
+	purge(before: number): void;
+};
+
+/**
+The outcome of pushing `change` when the server holds `current` for its record.
+*/
+export function pushResult(
+	change: SyncChange,
+	current: SyncChange | undefined,
+	purgedH: string,
+	now: number,
+): PushResult {
+	if (parseStamp(change.h)!.wall > now + MAX_CLOCK_DRIFT_MS) {
+		return 'clock';
+	}
+
+	if (!current && change.h <= purgedH) {
+		return 'stale';
+	}
+
+	return supersedes(change, current) ? 'applied' : 'superseded';
+}
+
 type Entry = {change: SyncChange; seq: number};
 
-export class ChangeLog {
+export class ChangeLog implements SyncLog {
 	private readonly entries = new Map<string, Entry>();
 	private seq = 0;
 	/**
@@ -42,30 +79,30 @@ export class ChangeLog {
 		return this.seq;
 	}
 
+	get size() {
+		return this.entries.size;
+	}
+
 	push(changes: readonly SyncChange[], now: number): PushResult[] {
 		return changes.map((change) => {
-			if (parseStamp(change.h)!.wall > now + MAX_CLOCK_DRIFT_MS) {
-				return 'clock';
-			}
-
 			const key = recordKey(change);
-			const current = this.entries.get(key)?.change;
-			if (!current && change.h <= this.purgedH) {
-				return 'stale';
+			const result = pushResult(
+				change,
+				this.entries.get(key)?.change,
+				this.purgedH,
+				now,
+			);
+			if (result === 'applied') {
+				this.seq += 1;
+				this.entries.set(key, {change, seq: this.seq});
 			}
 
-			if (!supersedes(change, current)) {
-				return 'superseded';
-			}
-
-			this.seq += 1;
-			this.entries.set(key, {change, seq: this.seq});
-			return 'applied';
+			return result;
 		});
 	}
 
 	pull(cursor: number, limit: number): PullResponse {
-		if (cursor < this.purgedSeq) {
+		if (cursor > 0 && cursor < this.purgedSeq) {
 			return {resync: true};
 		}
 
@@ -81,22 +118,10 @@ export class ChangeLog {
 		};
 	}
 
-	/**
-	Every live record and tombstone, and the cursor to pull from afterwards.
-	*/
-	snapshot(): {changes: SyncChange[]; cursor: number} {
-		return {
-			changes: [...this.entries.values()].map((entry) => entry.change),
-			cursor: this.seq,
-		};
-	}
-
-	/**
-	Drops tombstones written before `before` (a wall time in milliseconds).
-	*/
 	purge(before: number) {
+		const horizon = stampAt(before);
 		for (const [key, {change, seq}] of this.entries) {
-			if (!(change.deleted && parseStamp(change.h)!.wall < before)) {
+			if (!(change.deleted && change.h < horizon)) {
 				continue;
 			}
 

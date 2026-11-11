@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {ChangeLog} from '../src/shared/sync/change-log';
+import {sqlite} from '../server/src/node-sqlite';
+import {SqlChangeLog} from '../server/src/sql-change-log';
+import {ChangeLog, type SyncLog} from '../src/shared/sync/change-log';
 import {
 	mergeInto,
 	parseChange,
@@ -18,6 +20,32 @@ import {
 import {isOrderKey, keyBetween, spreadKeys} from '../src/shared/sync/order-key';
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/**
+Every server log runs the same tests: the in memory reference and the SQLite one the servers use.
+*/
+const LOGS: Array<[string, () => SyncLog]> = [
+	['memory', () => new ChangeLog()],
+	['sqlite', () => new SqlChangeLog(sqlite(':memory:'))],
+];
+
+/**
+Everything a device starting from cursor 0 receives.
+*/
+function pullAll(log: SyncLog): SyncChange[] {
+	const changes: SyncChange[] = [];
+	let cursor = 0;
+	for (;;) {
+		const response = log.pull(cursor, 100);
+		assert.ok(!response.resync);
+		changes.push(...response.changes);
+		cursor = response.cursor;
+		if (!response.more) {
+			return changes;
+		}
+	}
+}
+
 const T0 = Date.UTC(2026, 10, 1);
 
 /**
@@ -171,95 +199,101 @@ test('a tab is keyed under its session', () => {
 	);
 });
 
-test('the log refuses stamps far in the future and keeps the newer version', () => {
-	const log = new ChangeLog();
-	const change: SyncChange = {
-		kind: 'column',
-		id: 'c',
-		h: stamp(5),
-		d: 'a',
-		value: 1,
-	};
-	assert.deepEqual(
-		log.push(
-			[
-				change,
-				{...change, h: stamp(1)},
-				{...change, h: stamp(MAX_CLOCK_DRIFT_MS + 1)},
-			],
-			T0,
-		),
-		['applied', 'superseded', 'clock'],
-	);
-	assert.deepEqual(log.pull(0, 10), {
-		resync: false,
-		changes: [change],
-		cursor: 1,
-		more: false,
-	});
-});
-
-test('a pull returns one change per record, in pages', () => {
-	const log = new ChangeLog();
-	for (let edit = 0; edit < 3; edit += 1) {
-		log.push(
-			['a', 'b', 'c'].map((id) => ({
-				kind: 'folder',
-				id,
-				h: stamp(edit * 10),
-				d: 'x',
-				value: edit,
-			})),
-			T0,
+for (const [name, makeLog] of LOGS) {
+	test(`the log refuses stamps far in the future and keeps the newer version (${name})`, () => {
+		const log = makeLog();
+		const change: SyncChange = {
+			kind: 'column',
+			id: 'c',
+			h: stamp(5),
+			d: 'a',
+			value: 1,
+		};
+		assert.deepEqual(
+			log.push(
+				[
+					change,
+					{...change, h: stamp(1)},
+					{...change, h: stamp(MAX_CLOCK_DRIFT_MS + 1)},
+				],
+				T0,
+			),
+			['applied', 'superseded', 'clock'],
 		);
-	}
-
-	const first = log.pull(0, 2);
-	assert.ok(!first.resync);
-	assert.deepEqual(
-		first.changes.map((change) => change.value),
-		[2, 2],
-	);
-	assert.ok(first.more);
-	const second = log.pull(first.cursor, 2);
-	assert.ok(!second.resync);
-	assert.equal(second.changes.length, 1);
-	assert.ok(!second.more);
-	assert.deepEqual(log.pull(second.cursor, 2), {
-		resync: false,
-		changes: [],
-		cursor: 9,
-		more: false,
+		assert.deepEqual(log.pull(0, 10), {
+			resync: false,
+			changes: [change],
+			cursor: 1,
+			more: false,
+		});
 	});
-});
+}
 
-test('a device that missed a purged delete must resync, and its old edit cannot bring the record back', () => {
-	const log = new ChangeLog();
-	const created: SyncChange = {
-		kind: 'session',
-		id: 's',
-		h: stamp(0),
-		d: 'a',
-		value: 'Work',
-	};
-	log.push([created], T0);
-	const staleCursor = log.cursor;
-	log.push(
-		[{kind: 'session', id: 's', h: stamp(DAY), d: 'b', deleted: true}],
-		T0 + DAY,
-	);
-	log.purge(T0 + 31 * DAY);
+for (const [name, makeLog] of LOGS) {
+	test(`a pull returns one change per record, in pages (${name})`, () => {
+		const log = makeLog();
+		for (let edit = 0; edit < 3; edit += 1) {
+			log.push(
+				['a', 'b', 'c'].map((id) => ({
+					kind: 'folder',
+					id,
+					h: stamp(edit * 10),
+					d: 'x',
+					value: edit,
+				})),
+				T0,
+			);
+		}
 
-	assert.deepEqual(log.pull(staleCursor, 10), {resync: true});
-	assert.deepEqual(log.snapshot(), {changes: [], cursor: 2});
-	const offlineEdit = {
-		...created,
-		h: stamp(DAY / 2),
-		value: 'Work (renamed offline)',
-	};
-	assert.deepEqual(log.push([offlineEdit], T0 + 31 * DAY), ['stale']);
-	assert.deepEqual(log.snapshot().changes, []);
-});
+		const first = log.pull(0, 2);
+		assert.ok(!first.resync);
+		assert.deepEqual(
+			first.changes.map((change) => change.value),
+			[2, 2],
+		);
+		assert.ok(first.more);
+		const second = log.pull(first.cursor, 2);
+		assert.ok(!second.resync);
+		assert.equal(second.changes.length, 1);
+		assert.ok(!second.more);
+		assert.deepEqual(log.pull(second.cursor, 2), {
+			resync: false,
+			changes: [],
+			cursor: 9,
+			more: false,
+		});
+	});
+}
+
+for (const [name, makeLog] of LOGS) {
+	test(`a device that missed a purged delete must resync, and its old edit cannot bring the record back (${name})`, () => {
+		const log = makeLog();
+		const created: SyncChange = {
+			kind: 'session',
+			id: 's',
+			h: stamp(0),
+			d: 'a',
+			value: 'Work',
+		};
+		log.push([created], T0);
+		const staleCursor = log.cursor;
+		log.push(
+			[{kind: 'session', id: 's', h: stamp(DAY), d: 'b', deleted: true}],
+			T0 + DAY,
+		);
+		log.purge(T0 + 31 * DAY);
+
+		assert.deepEqual(log.pull(staleCursor, 10), {resync: true});
+		assert.deepEqual(pullAll(log), []);
+		const offlineEdit = {
+			...created,
+			h: stamp(DAY / 2),
+			value: 'Work (renamed offline)',
+		};
+		assert.deepEqual(log.push([offlineEdit], T0 + 31 * DAY), ['stale']);
+		assert.deepEqual(pullAll(log), []);
+	});
+}
 
 type Device = {
 	id: string;
@@ -304,7 +338,7 @@ Syncs one device and adds each push result, and `resync` when it had to resync, 
 */
 function sync(
 	device: Device,
-	log: ChangeLog,
+	log: SyncLog,
 	now: number,
 	outcomes = new Set<string>(),
 ) {
@@ -322,11 +356,9 @@ function sync(
 		const response = log.pull(device.cursor, 4);
 		if (response.resync) {
 			outcomes.add('resync');
-			const snapshot = log.snapshot();
 			device.records = new Map();
-			receive(device, snapshot.changes, now);
-			device.cursor = snapshot.cursor;
-			return;
+			device.cursor = 0;
+			continue;
 		}
 
 		receive(device, response.changes, now);
@@ -344,61 +376,61 @@ const live = (records: Map<string, SyncChange>): Record<string, unknown> =>
 			.map(([key, change]): [string, unknown] => [key, change.value]),
 	);
 
-test('devices editing offline and syncing in any order end with the same library', () => {
-	const outcomes = new Set<string>();
-	for (let seed = 1; seed <= 40; seed += 1) {
-		const next = random(seed);
-		const log = new ChangeLog();
-		const devices = ['a', 'b', 'c'].map((id) => makeDevice(id));
-		const skew = [0, -90_000, 120_000];
-		let now = T0;
+for (const [name, makeLog] of LOGS) {
+	test(`devices editing offline and syncing in any order end with the same library (${name})`, () => {
+		const outcomes = new Set<string>();
+		for (let seed = 1; seed <= 40; seed += 1) {
+			const next = random(seed);
+			const log = makeLog();
+			const devices = ['a', 'b', 'c'].map((id) => makeDevice(id));
+			const skew = [0, -90_000, 120_000];
+			let now = T0;
 
-		for (let step = 0; step < 300; step += 1) {
-			now += Math.floor(next() * 16 * 60 * 60 * 1000);
-			const index = Math.floor(next() * devices.length);
-			const device = devices[index];
-			const deviceNow = now + skew[index];
-			const roll = next();
-			const id = `s${Math.floor(next() * 12)}`;
-			if (roll < 0.45) {
-				write(device, deviceNow, {
-					kind: 'session',
-					id,
-					value: `${device.id}${step}`,
-				});
-			} else if (roll < 0.6) {
-				write(device, deviceNow, {kind: 'session', id, deleted: true});
-			} else if (roll < 0.95) {
-				// Device c is mostly offline, so it misses purged deletes and pushes old edits.
-				if (device.id !== 'c' || next() < 0.1) {
-					sync(device, log, now, outcomes);
+			for (let step = 0; step < 300; step += 1) {
+				now += Math.floor(next() * 16 * 60 * 60 * 1000);
+				const index = Math.floor(next() * devices.length);
+				const device = devices[index];
+				const deviceNow = now + skew[index];
+				const roll = next();
+				const id = `s${Math.floor(next() * 12)}`;
+				if (roll < 0.45) {
+					write(device, deviceNow, {
+						kind: 'session',
+						id,
+						value: `${device.id}${step}`,
+					});
+				} else if (roll < 0.6) {
+					write(device, deviceNow, {kind: 'session', id, deleted: true});
+				} else if (roll < 0.95) {
+					// Device c is mostly offline, so it misses purged deletes and pushes old edits.
+					if (device.id !== 'c' || next() < 0.1) {
+						sync(device, log, now, outcomes);
+					}
+				} else {
+					log.purge(now - 30 * DAY);
 				}
-			} else {
-				log.purge(now - 30 * DAY);
+			}
+
+			for (const device of [...devices, ...devices]) {
+				sync(device, log, now, outcomes);
+			}
+
+			const expected = live(
+				new Map(pullAll(log).map((change) => [recordKey(change), change])),
+			);
+			for (const device of devices) {
+				assert.deepEqual(
+					live(device.records),
+					expected,
+					`seed ${seed}, device ${device.id}`,
+				);
 			}
 		}
 
-		for (const device of [...devices, ...devices]) {
-			sync(device, log, now, outcomes);
-		}
-
-		const expected = live(
-			new Map(
-				log.snapshot().changes.map((change) => [recordKey(change), change]),
-			),
+		assert.deepEqual(
+			[...outcomes].toSorted(),
+			['applied', 'resync', 'stale', 'superseded'],
+			'the simulation reaches every path',
 		);
-		for (const device of devices) {
-			assert.deepEqual(
-				live(device.records),
-				expected,
-				`seed ${seed}, device ${device.id}`,
-			);
-		}
-	}
-
-	assert.deepEqual(
-		[...outcomes].toSorted(),
-		['applied', 'resync', 'stale', 'superseded'],
-		'the simulation reaches every path',
-	);
-});
+	});
+}
