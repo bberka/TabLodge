@@ -350,48 +350,57 @@ export function createSyncClient(host: SyncHost) {
 
 	async function round(target: SyncConfig) {
 		await setStatus({phase: 'syncing'});
-		// Taken once, before the first remote change is written over a library that never synced.
-		const backup = {taken: false};
+		/*
+		The whole pull is collected before any of it is applied. Records arrive in the order the server last changed
+		them, so a tab can come pages before its session, or a bookmark before its column. Applied page by page, the
+		library would drop such a tab or move such a bookmark, and the next capture would send that loss to every
+		device.
+		*/
+		let end = await step(async (state) => ({
+			state,
+			result: {cursor: state.cursor, purged: state.purged},
+		}));
+		let resync = false;
+		const pulled: SyncChange[] = [];
 		for (;;) {
-			const {cursor, purged} = await step(async (state) => ({
-				state,
-				result: state,
-			}));
 			const page = parsePull(
 				await request(
 					target,
-					`/v1/changes?cursor=${cursor}&purged=${purged}&limit=${PULL_LIMIT}`,
+					`/v1/changes?cursor=${end.cursor}&purged=${end.purged}&limit=${PULL_LIMIT}`,
 				),
 			);
-			if (!page.resync) {
-				seenCursor = Math.max(seenCursor, page.cursor);
+			if (page.resync) {
+				resync = true;
+				pulled.length = 0;
+				end = {cursor: 0, purged: end.purged};
+				continue;
 			}
 
-			const more = await step(async (state, records, store) => {
-				if (page.resync) {
-					return {state: startResync(state), result: true};
-				}
+			for (const change of page.changes) {
+				pulled.push(change);
+			}
 
-				const applied = receive(state, records, page, host.now());
-				if (applied.changed) {
-					if (!state.joined && !backup.taken) {
-						backup.taken = true;
-						await host.backup(store, 'Before the first sync');
-					}
-
-					await write(applied.records, applied.state, store);
-				}
-
-				return {state: applied.state, result: page.more};
-			});
-			if (!more) {
+			end = {cursor: page.cursor, purged: page.purged};
+			seenCursor = Math.max(seenCursor, page.cursor);
+			if (!page.more) {
 				break;
 			}
 		}
 
 		await step(async (state, records, store) => {
-			const finished = finishResync(state, records);
-			if (finished.changed) {
+			const applied = receive(
+				resync ? startResync(state) : state,
+				records,
+				{changes: pulled, ...end},
+				host.now(),
+			);
+			const finished = finishResync(applied.state, applied.records);
+			if (applied.changed || finished.changed) {
+				// A library that never synced gets a safety backup before the server's copy is written over it.
+				if (!state.joined) {
+					await host.backup(store, 'Before the first sync');
+				}
+
 				await write(finished.records, finished.state, store);
 			}
 

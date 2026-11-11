@@ -11,7 +11,7 @@ The state remembers, per record, the stamp, order key, and content hash it last 
 "shadow"). Comparing the library with it is how local edits are found, so the rest of the worker needs no sync
 code. Network calls happen between these steps, outside the worker's mutation queue.
 */
-import {canonicalJson, hashText} from '../library-values';
+import {canonicalJson, hashText, isRecord} from '../library-values';
 import type {PushResult} from './change-log';
 import {recordKey, supersedes, type SyncChange} from './changes';
 import {type Clock, observe, stampAt, startClock, tick} from './clock';
@@ -50,6 +50,11 @@ export type SyncState = {
 	During a resync: synced records not seen again yet. Whatever is left at the end was deleted remotely.
 	*/
 	unseen?: string[];
+	/**
+	Pulled changes waiting for the record they belong in (a tab's session, a bookmark's column, a session's folder).
+	Applied without it, the library would drop or move them and the next capture would send that loss back.
+	*/
+	held?: SyncChange[];
 };
 
 export type Records = Map<string, LibraryRecord>;
@@ -308,6 +313,51 @@ export function receive(
 	const unseen = state.unseen ? new Set(state.unseen) : undefined;
 	let {clock} = state;
 	let changed = false;
+
+	const apply = (change: SyncChange) => {
+		const key = recordKey(change);
+		const entry = shadow[key];
+		if (entry && !supersedes(change, entry)) {
+			return;
+		}
+
+		changed = true;
+		outbox.delete(key);
+		const base = {
+			kind: change.kind,
+			id: change.id,
+			...(change.parentId !== undefined && {parentId: change.parentId}),
+		};
+		if (change.deleted) {
+			next.delete(key);
+			shadow[key] = {
+				...base,
+				h: change.h,
+				d: change.d,
+				hash: '',
+				deleted: true,
+			};
+		} else {
+			next.set(key, {...base, value: change.value});
+			shadow[key] = {
+				...base,
+				h: change.h,
+				d: change.d,
+				hash: hashOf(change.value),
+				...(change.o !== undefined && {o: change.o}),
+			};
+		}
+	};
+
+	// A change waits while its parent is neither in the library nor known to be deleted.
+	const waits = (change: SyncChange) => {
+		const parent = parentOf(change);
+		return (
+			parent !== undefined && !next.has(parent) && !shadow[parent]?.deleted
+		);
+	};
+
+	let waiting: SyncChange[] = [...(state.held ?? [])];
 	for (const change of page.changes) {
 		try {
 			clock = observe(clock, change.h, now);
@@ -316,58 +366,75 @@ export function receive(
 			continue;
 		}
 
-		const key = recordKey(change);
-		unseen?.delete(key);
-		const entry = shadow[key];
-		if (entry && !supersedes(change, entry)) {
-			continue;
-		}
-
-		changed = true;
-		outbox.delete(key);
-		if (change.deleted) {
-			next.delete(key);
-			shadow[key] = {
-				kind: change.kind,
-				id: change.id,
-				...(change.parentId !== undefined && {parentId: change.parentId}),
-				h: change.h,
-				d: change.d,
-				hash: '',
-				deleted: true,
-			};
-		} else {
-			next.set(key, {
-				kind: change.kind,
-				id: change.id,
-				...(change.parentId !== undefined && {parentId: change.parentId}),
-				value: change.value,
-			});
-			shadow[key] = {
-				kind: change.kind,
-				id: change.id,
-				...(change.parentId !== undefined && {parentId: change.parentId}),
-				h: change.h,
-				d: change.d,
-				hash: hashOf(change.value),
-				...(change.o !== undefined && {o: change.o}),
-			};
-		}
+		unseen?.delete(recordKey(change));
+		waiting.push(change);
 	}
 
+	// Parents first: repeat while a pass applies something, so a folder, then its session, then its tabs all land.
+	for (let progress = true; progress;) {
+		const still: SyncChange[] = [];
+		for (const change of waiting) {
+			if (waits(change)) {
+				still.push(change);
+			} else {
+				apply(change);
+			}
+		}
+
+		progress = still.length < waiting.length;
+		waiting = still;
+	}
+
+	const held = newestPerRecord(waiting);
+	const {held: _previous, ...rest} = state;
 	return {
 		state: {
-			...state,
+			...rest,
 			clock,
 			shadow,
 			outbox: [...outbox],
 			cursor: page.cursor,
 			purged: page.purged,
 			...(unseen && {unseen: [...unseen]}),
+			...(held.length > 0 && {held}),
 		},
 		records: next,
 		changed,
 	};
+}
+
+/**
+The record a change belongs in, when the library cannot hold it without that record.
+*/
+function parentOf(change: SyncChange): string | undefined {
+	if (change.deleted) {
+		return undefined;
+	}
+
+	if (change.kind === 'tab') {
+		return `session:${change.parentId ?? ''}`;
+	}
+
+	const value = isRecord(change.value) ? change.value : {};
+	if (change.kind === 'bookmark' && typeof value.columnId === 'string') {
+		return `column:${value.columnId}`;
+	}
+
+	return change.kind === 'session' && typeof value.folderId === 'string'
+		? `folder:${value.folderId}`
+		: undefined;
+}
+
+function newestPerRecord(changes: readonly SyncChange[]): SyncChange[] {
+	const newest = new Map<string, SyncChange>();
+	for (const change of changes) {
+		const key = recordKey(change);
+		if (supersedes(change, newest.get(key))) {
+			newest.set(key, change);
+		}
+	}
+
+	return [...newest.values()];
 }
 
 /**

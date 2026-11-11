@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import type {Settings, Store} from '../src/app/types';
 import {ChangeLog} from '../src/shared/sync/change-log';
+import type {SyncChange} from '../src/shared/sync/changes';
 import {
 	capture,
 	finishResync,
@@ -271,4 +272,69 @@ test('syncing an unchanged library sends nothing', () => {
 	sync(a, log, T0 + 2000);
 	assert.equal(log.cursor, cursor);
 	assert.deepEqual(a.state.outbox, []);
+});
+
+test('a change waits for the record it belongs in, and is released if that record is deleted', () => {
+	const page = (changes: SyncChange[], cursor: number) => ({
+		changes,
+		cursor,
+		purged: 0,
+	});
+	const h = (offset: number) =>
+		(T0 + offset).toString(36).padStart(11, '0') + '00000';
+	let state: SyncState = {...newSyncState('b'), joined: true};
+	let records = splitLibrary(emptyStore());
+
+	const link = {
+		kind: 'bookmark',
+		id: 'link',
+		h: h(1),
+		d: 'a',
+		o: 'a0',
+		value: {
+			id: 'link',
+			title: 'Link',
+			url: 'https://example.com/',
+			columnId: 'reading',
+			createdAt: 0,
+			updatedAt: 0,
+		},
+	} as const;
+	({state, records} = receive(state, records, page([link], 1), T0));
+	assert.equal(records.has('bookmark:link'), false);
+	assert.equal(state.held?.length, 1);
+	// Nothing the device sends treats the waiting bookmark as deleted.
+	assert.ok(!capture(state, records, T0).outbox.includes('bookmark:link'));
+
+	const column = {
+		kind: 'column',
+		id: 'reading',
+		h: h(2),
+		d: 'a',
+		o: 'a0',
+		value: {id: 'reading', name: 'Reading', createdAt: 0, isDefault: false},
+	} as const;
+	({state, records} = receive(state, records, page([column], 2), T0));
+	assert.equal(records.has('bookmark:link'), true);
+	assert.equal(state.held, undefined);
+
+	const orphan = {
+		kind: 'tab',
+		id: 't',
+		parentId: 'gone',
+		h: h(3),
+		d: 'a',
+		o: 'a0',
+		value: tab('t'),
+	} as const;
+	({state, records} = receive(state, records, page([orphan], 3), T0));
+	assert.equal(state.held?.length, 1);
+	({state, records} = receive(
+		state,
+		records,
+		page([{kind: 'session', id: 'gone', h: h(4), d: 'a', deleted: true}], 4),
+		T0,
+	));
+	assert.equal(state.held, undefined);
+	assert.equal(records.has('tab:gone:t'), true);
 });

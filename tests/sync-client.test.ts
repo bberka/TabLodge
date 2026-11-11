@@ -11,6 +11,7 @@ import {
 	SyncError,
 	type SyncSocket,
 } from '../src/shared/sync/client';
+import {spreadKeys} from '../src/shared/sync/order-key';
 
 const TOKEN = 'client-test-token-0123456789-abcdefghij';
 const URL_BASE = 'https://sync.example.test';
@@ -313,4 +314,72 @@ test('a value that changes on every read cannot keep sync pushing', async () => 
 	).json()) as {cursor: number};
 	assert.ok(status.cursor < 20, `pushed ${status.cursor} changes`);
 	assert.notEqual((await device.client.status()).phase, 'error');
+});
+
+test('tabs pulled a page before their session are kept, and nothing is sent back', async () => {
+	const server = makeServer();
+	const device = makeDevice(server);
+	await device.client.connect(URL_BASE, TOKEN);
+	// Another device saved 600 tabs, then renamed their session, so the session comes after the tabs and the
+	// device gets the tabs on one page (500 changes) and the session on the next.
+	const now = Date.now();
+	const stamp = (offset: number) =>
+		(now + offset).toString(36).padStart(11, '0') + '00000';
+	const orderKeys = spreadKeys(600);
+	const tabs = Array.from({length: 600}, (_, index) => ({
+		kind: 'tab',
+		id: `t${index}`,
+		parentId: 'work',
+		h: stamp(index),
+		d: 'other',
+		o: orderKeys[index],
+		value: {
+			id: `t${index}`,
+			title: `Tab ${index}`,
+			url: `https://example.com/${index}`,
+			notes: '',
+			pinned: false,
+			nativeGroup: null,
+			savedAt: now,
+			originalIndex: index,
+		},
+	}));
+	const session = {
+		kind: 'session',
+		id: 'work',
+		h: stamp(1000),
+		d: 'other',
+		o: 'a0',
+		value: {
+			id: 'work',
+			name: 'Work',
+			folderId: 'unfiled',
+			description: '',
+			createdAt: now,
+			updatedAt: now,
+			sourceWindowName: '',
+		},
+	};
+	const headers = {
+		Authorization: `Bearer ${TOKEN}`,
+		'Content-Type': 'application/json',
+	};
+	for (const changes of [tabs.slice(0, 500), [...tabs.slice(500), session]]) {
+		await server.app.request(`${URL_BASE}/v1/changes`, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({changes}),
+		});
+	}
+
+	const before = (await (
+		await server.app.request(`${URL_BASE}/v1/status`, {headers})
+	).json()) as {cursor: number};
+	await device.client.syncNow();
+	assert.equal(device.store.groups.length, 1);
+	assert.equal(device.store.groups[0].tabs.length, 600);
+	const after = (await (
+		await server.app.request(`${URL_BASE}/v1/status`, {headers})
+	).json()) as {cursor: number};
+	assert.equal(after.cursor, before.cursor);
 });
