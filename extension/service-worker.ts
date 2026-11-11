@@ -28,6 +28,7 @@ import {
 	createSyncClient,
 	SYNC_ALARM,
 	SYNC_ALARM_MINUTES,
+	SyncError,
 } from '../src/shared/sync/client';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
@@ -43,6 +44,7 @@ type BookmarkFields = import('../src/app/types').BookmarkFields;
 type DuplicateMode = import('../src/app/types').DuplicateMode;
 type EraseScope = import('../src/app/types').EraseScope;
 type Folder = import('../src/app/types').Folder;
+type SyncStatus = import('../src/shared/sync/client').SyncStatus;
 type ImportOptions = import('../src/app/types').ImportOptions;
 type InsertPosition = import('../src/app/types').InsertPosition;
 type LinkEntry = import('../src/app/types').LinkEntry;
@@ -9345,10 +9347,24 @@ async function handleSyncMessage(
 	}
 
 	if (message.type === 'SYNC_CONNECT') {
-		const status = await syncClient.connect(
-			String(message.url ?? ''),
-			String(message.token ?? ''),
-		);
+		let status: SyncStatus;
+		try {
+			status = await syncClient.connect(
+				String(message.url ?? ''),
+				String(message.token ?? ''),
+			);
+		} catch (error) {
+			if (error instanceof SyncError && error.kind !== 'config') {
+				return {
+					ok: false,
+					error: error.message,
+					field: error.kind === 'auth' ? 'token' : 'url',
+				};
+			}
+
+			throw error;
+		}
+
 		await wakeSync();
 		return {ok: true, status};
 	}

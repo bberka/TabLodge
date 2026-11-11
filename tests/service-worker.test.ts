@@ -8,6 +8,7 @@ import vm from 'node:vm';
 import {test} from 'vite-plus/test';
 import {ICON_IDS} from '../src/app/icon-ids';
 import type {
+	ActionFailure,
 	ActionSuccess,
 	Bookmark,
 	BookmarkColumn,
@@ -206,7 +207,11 @@ type StoredState = {
 type TestResponse<K extends TabLodgeMessageType> = Omit<
 	ActionSuccess<K>,
 	'ok' | 'locked'
-> & {ok: boolean; error?: string} & (ActionSuccess<K> extends {locked: infer L}
+> & {
+	ok: boolean;
+	error?: string;
+	field?: ActionFailure['field'];
+} & (ActionSuccess<K> extends {locked: infer L}
 		? {locked: L}
 		: {locked?: boolean});
 
@@ -11732,6 +11737,33 @@ test('sync refuses a plain http server and is off in private windows', async () 
 	});
 	const off = await privateWorker.sendMessage({type: 'SYNC_STATUS'});
 	assert.equal(off.ok, false);
+});
+
+test('a failed sync connect names the field the page should flag', async () => {
+	const server = syncServer();
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+	});
+	const wrongToken = await harness.sendMessage({
+		type: 'SYNC_CONNECT',
+		url: 'https://sync.example.test',
+		token: 'x'.repeat(SYNC_TOKEN.length),
+	});
+	assert.equal(wrongToken.ok, false);
+	assert.equal(wrongToken.field, 'token');
+
+	const unreachable = createWorkerHarness(stateWithSession(), undefined, {
+		async fetch() {
+			throw new TypeError('Failed to fetch');
+		},
+	});
+	const offline = await unreachable.sendMessage({
+		type: 'SYNC_CONNECT',
+		url: 'https://sync.example.test',
+		token: SYNC_TOKEN,
+	});
+	assert.equal(offline.ok, false);
+	assert.equal(offline.field, 'url');
 });
 
 test('syncing an unchanged library sends nothing, even when normalizing adds the Archived folder', async () => {
