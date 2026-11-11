@@ -182,7 +182,7 @@ Private sync runs only while a private window is open and its library is unlocke
 
 ### Update
 
-TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge, and a feature that needs a newer server says so where you turn it on, for example "This sync server cannot hold private windows yet. Update it". To hear about new server versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**); server releases are tagged `sync-server-v…`.
+TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge, and a feature that needs a newer server says so where you turn it on, for example "This sync server cannot hold private windows yet. Update it". Each TabLodge release also publishes the server with the same version number, so to hear about new versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**).
 
 Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
 
@@ -205,7 +205,7 @@ docker compose -f compose.https.yaml up -d
 
 **Single container:** run `docker pull ghcr.io/bberka/tablodge-sync:latest`, then `docker rm -f tablodge-sync`, then start it again with the same command and token. The library is in the `tablodge-sync` volume and stays.
 
-`latest` is the newest released server. `edge` follows development and can change at any time.
+`latest` is the server from the newest TabLodge release, and each release is also tagged with its version, such as `0.1.9`. `edge` follows development and can change at any time.
 
 To check the update, ask for the status. The `features` list shows what the server supports:
 
