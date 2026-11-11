@@ -1076,6 +1076,29 @@ function Options() {
 			.catch(() => undefined);
 	}, []);
 	const dataRef = useRef<HTMLDivElement>(null);
+	// A link to a section (`options.html#settings-sync`) arrives before the sections exist, so the browser cannot
+	// jump to it. Once the settings have rendered, scroll there and move focus to the section, as the jump would.
+	const hashHandledRef = useRef(false);
+	useEffect(() => {
+		if (!state || hashHandledRef.current) {
+			return;
+		}
+
+		hashHandledRef.current = true;
+		const target = location.hash
+			? document.querySelector<HTMLElement>(
+					`#${CSS.escape(decodeURIComponent(location.hash.slice(1)))}`,
+				)
+			: null;
+		if (!target) {
+			return;
+		}
+
+		target.setAttribute('tabindex', '-1');
+		target.classList.add('focus:outline-none');
+		target.scrollIntoView({block: 'start'});
+		target.focus({preventScroll: true});
+	}, [state]);
 	// The search box: `?q=` keeps the query across reloads; "/" and Ctrl/Cmd+K focus it, Escape clears it.
 	const searchRef = useRef<HTMLInputElement>(null);
 	const [templateDraft, setTemplateDraft] = useState<string | null>(null);

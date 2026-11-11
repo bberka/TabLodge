@@ -110,6 +110,7 @@ import {
 	TrashDialog,
 	useShareDialog,
 } from './lazy-dialogs';
+import {SyncIndicator} from './sync-indicator';
 import {RecoveryBanner} from './recovery-banner';
 import {
 	emitRecoveryEvent,
@@ -2729,6 +2730,7 @@ function NewTab() {
 						</span>
 					</Button>
 				)}
+				<SyncIndicator />
 				{settings.showTrashBinButton !== false && (
 					<IconTooltip label="Trash bin">
 						<Button
