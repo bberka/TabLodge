@@ -1,5 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
-import {ArrowRight} from 'lucide-react';
+import {ArrowRight, Lock} from 'lucide-react';
 import {
 	Button,
 	Dialog,
@@ -57,19 +57,19 @@ const choices: Array<{
 		value: 'shared',
 		title: 'Use the same library as regular windows',
 		description:
-			'Private and regular windows use the same sessions, bookmarks, and preferences. Changes appear in both.',
+			'Private and regular windows share sessions, bookmarks, and settings. Changes show up in both.',
 	},
 	{
 		value: 'saved',
 		title: 'Use a separate saved library',
 		description:
-			'Start with an empty library for private windows. Keep it on this device after the browser restarts.',
+			'Starts empty and stays on this device after the browser restarts. It can be locked with a PIN or password.',
 	},
 	{
 		value: 'temporary',
 		title: 'Use a separate temporary library',
 		description:
-			'Start with an empty library for private windows. It stays when those windows close, then clears when the browser restarts.',
+			'Starts empty and stays while the browser runs, then clears when the browser restarts.',
 	},
 ];
 
@@ -131,6 +131,15 @@ function PrivateStorageForm({
 				void saveMode(mode);
 			}}
 		>
+			{lockedReason && (
+				<p
+					id="private-mode-locked"
+					className="flex gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm"
+				>
+					<Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+					{lockedReason}
+				</p>
+			)}
 			<RadioCardGroup
 				label="Choose a library for private windows"
 				value={mode}
@@ -151,17 +160,11 @@ function PrivateStorageForm({
 					<RadioCard key={choice.value} {...choice} />
 				))}
 			</RadioCardGroup>
-			<p className="text-sm text-muted-foreground">
-				Switching modes does not copy, merge, or delete a library. Switching
-				back reopens its existing data. Appearance is shared. Automatic
-				snapshots and backups do not run in private windows. Exports and manual
-				backup downloads remain on disk, even in temporary mode.
+			<p className="text-xs leading-5 text-muted-foreground">
+				Switching does not copy, merge, or delete a library, and switching back
+				reopens it. Snapshots and automatic backups never run in private
+				windows. Files you export stay on disk, even with a temporary library.
 			</p>
-			{lockedReason && (
-				<p id="private-mode-locked" className="text-sm font-medium">
-					{lockedReason}
-				</p>
-			)}
 			{error && (
 				<p role="alert" className="text-sm text-destructive">
 					{error}
@@ -293,16 +296,9 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 	}, []);
 	return (
 		<>
-			{incognitoAllowed !== false && (
-				<p className="mb-4 text-sm text-muted-foreground">
-					Chromium does not let extensions replace the private new tab page.
-					Turn on the option below to redirect new private tabs to the dashboard
-					after they open.
-				</p>
-			)}
 			{error && <p role="alert">{error}</p>}
 			{incognitoAllowed === undefined && (
-				<p role="status" className="sr-only mb-4 text-sm text-muted-foreground">
+				<p role="status" className="sr-only">
 					Checking private window access…
 				</p>
 			)}
@@ -313,22 +309,42 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 				</p>
 			)}
 			{config && incognitoAllowed === true && (
-				<div className="space-y-5">
-					<div className="flex items-start justify-between gap-4 border-b border-border pb-5">
+				<div className="divide-y divide-border">
+					<div className="space-y-4 pb-5">
 						<div className="space-y-1">
+							<h3 className="text-sm font-medium">Library</h3>
+							<p className="text-xs leading-5 text-muted-foreground">
+								Where private windows keep their sessions and bookmarks. This
+								applies to every private window.
+							</p>
+						</div>
+						<PrivateStorageForm
+							key={`${config.mode}:${config.configured}`}
+							config={config}
+							showContinue={false}
+							lockedReason={modeLockedReason(lock.info)}
+							onSaved={(next) => {
+								setConfig(next);
+								showStatus(modeStatus[next.mode]);
+							}}
+						/>
+					</div>
+					<PrivateLockSettings showStatus={showStatus} lock={lock} />
+					<div className="flex items-start justify-between gap-4 py-5">
+						<div className="min-w-0 space-y-1">
 							<label
 								htmlFor="private-new-tab-redirect"
-								className="block font-medium"
+								className="block text-sm font-medium"
 							>
 								Redirect private new tabs to the dashboard
 							</label>
 							<p
 								id="private-new-tab-redirect-description"
-								className="text-sm text-muted-foreground"
+								className="text-xs leading-5 text-muted-foreground"
 							>
-								The browser opens its private new tab first, then TabLodge
-								redirects it to the dashboard. Turn this off to keep the
-								browser’s page.
+								Chromium does not let extensions replace the private new tab
+								page, so the browser’s page opens first and then switches to the
+								dashboard. Turn this off to keep the browser’s page.
 							</p>
 						</div>
 						<Switch
@@ -339,21 +355,22 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 							onCheckedChange={(enabled) => void saveRedirect(enabled)}
 						/>
 					</div>
-					<div className="space-y-3 border-b border-border pb-5">
+					<div className="space-y-3 pt-5">
 						<div className="flex items-start justify-between gap-4">
-							<div className="space-y-1">
+							<div className="min-w-0 space-y-1">
 								<label
 									htmlFor="private-accent-switch"
-									className="block font-medium"
+									className="block text-sm font-medium"
 								>
 									Use a different accent in private windows
 								</label>
 								<p
 									id="private-accent-description"
-									className="text-sm text-muted-foreground"
+									className="text-xs leading-5 text-muted-foreground"
 								>
-									Tints buttons, focus rings, and selections in private windows
-									so they stand out. Light and dark follow your regular choice.
+									Tints buttons, focus rings, and selections so private windows
+									are easy to tell apart. Light and dark follow your regular
+									choice.
 								</p>
 							</div>
 							<Switch
@@ -376,17 +393,6 @@ export function PrivateStorageSettings({showStatus}: {showStatus: ShowStatus}) {
 							/>
 						)}
 					</div>
-					<PrivateStorageForm
-						key={`${config.mode}:${config.configured}`}
-						config={config}
-						showContinue={false}
-						lockedReason={modeLockedReason(lock.info)}
-						onSaved={(next) => {
-							setConfig(next);
-							showStatus(modeStatus[next.mode]);
-						}}
-					/>
-					<PrivateLockSettings showStatus={showStatus} lock={lock} />
 				</div>
 			)}
 		</>

@@ -368,18 +368,15 @@ export function PrivateLockSettings({
 
 	const label = kindWord(info.kind);
 	return (
-		<div
-			data-private-lock-settings
-			className="space-y-3 border-t border-border pt-5"
-		>
+		<div data-private-lock-settings className="space-y-3 py-5">
 			<div className="space-y-1">
-				<h3 className="flex items-center gap-2 font-medium">
+				<h3 className="flex items-center gap-2 text-sm font-medium">
 					<Lock className="h-4 w-4" aria-hidden="true" />
 					Lock with a PIN or password
 				</h3>
-				<p className="text-sm text-muted-foreground">
+				<p className="text-xs leading-5 text-muted-foreground">
 					Encrypts the separate saved library on this device and shows a lock
-					screen in private windows until you unlock it. Only the saved separate
+					screen in private windows until you enter it. Only a separate saved
 					library can be locked.
 				</p>
 			</div>
@@ -398,13 +395,17 @@ export function PrivateLockSettings({
 				</p>
 			)}
 			{!info.manageHere && (
-				<p className="text-sm text-muted-foreground" role="status">
-					{info.enabled
-						? `The private library is locked with a ${label}. It is ${info.locked ? 'locked' : 'unlocked'} now.`
-						: 'The private library is not locked.'}{' '}
-					Open Settings in a private window to turn the lock on, change it, or
-					remove it.
-				</p>
+				<div className="space-y-1 text-sm">
+					<p role="status" className="font-medium">
+						{info.enabled
+							? `On, with a ${label}. ${info.locked ? 'Currently locked.' : 'Currently unlocked.'}`
+							: 'Off.'}
+					</p>
+					<p className="text-xs leading-5 text-muted-foreground">
+						To turn the lock on or off, or to change it, open Settings in a
+						private window.
+					</p>
+				</div>
 			)}
 			{info.manageHere && !info.enabled && (
 				<>
@@ -420,8 +421,8 @@ export function PrivateLockSettings({
 			)}
 			{info.manageHere && info.enabled && info.state !== 'damaged' && (
 				<div className="space-y-3">
-					<p className="text-sm" role="status">
-						Locked with a {label}. Unlocked now.
+					<p className="text-sm font-medium" role="status">
+						On, with a {label}. Currently unlocked.
 					</p>
 					{info.state !== 'encrypted' && (
 						<div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -492,6 +493,6 @@ Why the storage mode cannot change right now, or null when it can.
 */
 export function modeLockedReason(info: PrivateLockInfo | undefined) {
 	return info?.enabled
-		? 'The saved private library is locked with a PIN or password. Remove the lock in a private window before choosing another storage mode, so no data is lost or left unreadable.'
+		? 'The separate library has a lock, so this choice is fixed. To change it, remove the lock from Settings in a private window first, so nothing is left encrypted.'
 		: null;
 }
