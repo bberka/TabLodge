@@ -133,7 +133,10 @@ export function splitLibrary(store: Store): Map<string, LibraryRecord> {
 	}
 
 	for (const key of PORTABLE_PREFERENCES) {
-		add({kind: 'preference', id: key, value: store.settings[key]});
+		// A missing value has nothing to send; a change always carries a value or a delete.
+		if (store.settings[key] !== undefined) {
+			add({kind: 'preference', id: key, value: store.settings[key]});
+		}
 	}
 
 	return records;

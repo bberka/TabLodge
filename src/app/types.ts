@@ -1,6 +1,7 @@
 // Shared TabLodge data model and message protocol, used by the service worker
 // (extension/service-worker.ts) and the extension pages in src/app.
 // Only types live here so the classic service-worker bundle stays import-free.
+import type {SyncStatus} from '../shared/sync/client';
 
 export type ActionMode =
 	| 'popup'
@@ -784,6 +785,16 @@ export type TabLodgeMessages = {
 	*/
 	UNDO: {id: string};
 	GET_STORAGE_USAGE: {};
+	SYNC_STATUS: {};
+	/**
+	Checks the self hosted server and token, then starts syncing this library with it.
+	*/
+	SYNC_CONNECT: {url: string; token: string};
+	/**
+	Stops syncing; the library on this device stays.
+	*/
+	SYNC_DISCONNECT: {};
+	SYNC_NOW: {};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -1018,6 +1029,10 @@ export type TabLodgeResponses = {
 	EMPTY_TRASH: {count: number} & Undoable;
 	UNDO: {label: string};
 	GET_STORAGE_USAGE: {usage: StorageUsage};
+	SYNC_STATUS: {status: SyncStatus};
+	SYNC_CONNECT: {status: SyncStatus};
+	SYNC_DISCONNECT: {status: SyncStatus};
+	SYNC_NOW: {status: SyncStatus};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =

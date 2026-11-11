@@ -2,9 +2,9 @@
 import Base from '../layouts/Base.astro';
 import {SITE} from '../site';
 
-const title = 'Privacy Policy: a Local-Only Tab Manager | TabLodge';
+const title = 'Privacy Policy: a Local-First Tab Manager | TabLodge';
 const description =
-	'TabLodge keeps your tab sessions and bookmarks on your device. No accounts, no servers, no analytics, no network requests. Read what it stores and why each permission is needed.';
+	'TabLodge keeps your tab sessions and bookmarks on your device. No accounts, no TabLodge servers, no analytics. Optional sync goes only to a server you run. Read what it stores and why each permission is needed.';
 
 const permissions = [
 	['tabs', 'Reading tab URLs, titles and placement to save sessions; opening tabs to restore them.'],
@@ -47,14 +47,14 @@ const permissions = [
 		<h1>Privacy</h1>
 		<p class="note">Last updated: 2026-10-31</p>
 		<p class="lead">
-			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect or upload your data.</strong>
+			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect your data.</strong> It uploads your library only to a sync server you run yourself, and only after you connect one.
 		</p>
 
 		<h2>What TabLodge does not do</h2>
 		<ul>
-			<li>No accounts, servers or cloud sync. TabLodge has no backend.</li>
+			<li>No accounts and no TabLodge servers or cloud. Optional sync talks only to a server you run yourself; it is off until you enter its address and token, and that server stores your library in plain text.</li>
 			<li>No analytics, telemetry, crash reporting or advertising.</li>
-			<li>No network requests of its own. All code, styles, fonts and icons are bundled in the extension; nothing is loaded from a CDN.</li>
+			<li>No network requests of its own unless you turn on sync. All code, styles, fonts and icons are bundled in the extension; nothing is loaded from a CDN.</li>
 			<li>No website access. TabLodge requests no host permissions, declares no content scripts and never reads page contents. The search palette is drawn over a page only when you press its shortcut, and Settings can switch it to a window.</li>
 			<li>No sale or sharing of data with anyone.</li>
 		</ul>

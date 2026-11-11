@@ -6,7 +6,7 @@ object. Live sockets use the hibernation API: an idle object with open sockets i
 keepalive pings are answered without waking it.
 */
 import {DurableObject} from 'cloudflare:workers';
-import {createApi, DEFAULT_LIMITS, MIN_TOKEN_LENGTH} from './api';
+import {CORS_HEADERS, createApi, DEFAULT_LIMITS, MIN_TOKEN_LENGTH} from './api';
 import {
 	cursorMessage,
 	isAuthMessage,
@@ -107,13 +107,21 @@ export class SyncLibrary extends DurableObject<Env> {
 export default {
 	async fetch(request, env): Promise<Response> {
 		const {pathname} = new URL(request.url);
+		// Answered here like the token check below, so neither wakes the Durable Object.
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {status: 204, headers: CORS_HEADERS});
+		}
+
 		if (pathname === '/health') {
-			return Response.json({ok: true});
+			return Response.json({ok: true}, {headers: CORS_HEADERS});
 		}
 
 		const token = env.TABLODGE_SYNC_TOKEN ?? '';
 		if (token.length < MIN_TOKEN_LENGTH) {
-			return Response.json({error: 'not_configured'}, {status: 503});
+			return Response.json(
+				{error: 'not_configured'},
+				{status: 503, headers: CORS_HEADERS},
+			);
 		}
 
 		if (pathname !== LIVE_PATH) {
@@ -121,7 +129,10 @@ export default {
 				/^Bearer (.+)$/.exec(request.headers.get('Authorization') ?? '')?.[1] ??
 				'';
 			if (!sameToken(given, token)) {
-				return Response.json({error: 'unauthorized'}, {status: 401});
+				return Response.json(
+					{error: 'unauthorized'},
+					{status: 401, headers: CORS_HEADERS},
+				);
 			}
 		}
 

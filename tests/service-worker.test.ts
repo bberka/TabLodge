@@ -18,6 +18,8 @@ import type {
 	TabLodgeMessage,
 	TabLodgeMessageType,
 } from '../src/app/types';
+import {createApi} from '../server/src/api';
+import {ChangeLog} from '../src/shared/sync/change-log';
 import {
 	logicalState,
 	recordsLayout,
@@ -102,6 +104,10 @@ type HarnessOptions = {
 	Fire tabs.onRemoved when the worker removes a tab (off by default so other tests stay quiet).
 	*/
 	tabEvents?: boolean;
+	/**
+	The network the worker sees, for the sync tests; missing means no `fetch` at all.
+	*/
+	fetch?: (url: string, init: RequestInit) => Promise<Response>;
 	/**
 	Runs after each local storage write lands, so a test can change things between two writes of one operation.
 	*/
@@ -1004,6 +1010,9 @@ function createWorkerHarness(
 		// eslint-disable-next-line no-restricted-globals -- the worker reads base64 back with atob
 		atob,
 		globalThis: null,
+		fetch: options.fetch,
+		setInterval,
+		clearInterval,
 		setTimeout: options.manualTimers ? manualSetTimeout : setTimeout,
 		clearTimeout: options.manualTimers
 			? (id: number) => {
@@ -11640,4 +11649,87 @@ test('with unloading on, each batch is unloaded before the next opens, and the a
 	assert.equal(response.count, 130);
 	assert.equal(harness.openedTabs.length, 130);
 	assert.equal(harness.discardedTabs.length, 129);
+});
+
+const SYNC_TOKEN = 'worker-sync-token-0123456789-abcdefghij';
+
+function syncServer() {
+	const log = new ChangeLog();
+	const app = createApi({token: SYNC_TOKEN, log: () => log});
+	return {
+		log,
+		fetch: async (url: string, init: RequestInit) => app.request(url, init),
+	};
+}
+
+test('two workers connected to one server share sessions and bookmarks', async () => {
+	const server = syncServer();
+	const first = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+	});
+	const second = createWorkerHarness(
+		{...stateWithSession(), groups: []},
+		undefined,
+		{fetch: server.fetch},
+	);
+	const connect = {
+		type: 'SYNC_CONNECT',
+		url: 'https://sync.example.test',
+		token: SYNC_TOKEN,
+	} as const;
+
+	const connected = await first.sendMessage(connect);
+	assert.equal(connected.ok, true, connected.error);
+	assert.equal(connected.status?.phase, 'idle');
+	assert.equal(connected.status?.pending, 0);
+	assert.ok(server.log.cursor > 0);
+
+	assert.equal((await second.sendMessage(connect)).ok, true);
+	assert.deepEqual(
+		second.state.groups.map((group) => group.name),
+		['Research'],
+	);
+	assert.equal(
+		second.state.groups[0]?.tabs[0]?.url,
+		'https://saved.example/article',
+	);
+
+	await second.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'From the second device', url: 'https://second.example/'},
+	});
+	await second.sendMessage({type: 'SYNC_NOW'});
+	await first.sendMessage({type: 'SYNC_NOW'});
+	assert.ok(
+		first.state.bookmarks?.some(
+			(bookmark) => bookmark.url === 'https://second.example/',
+		),
+	);
+
+	const status = await first.sendMessage({type: 'SYNC_DISCONNECT'});
+	assert.equal(status.status?.connected, false);
+	assert.equal(first.state.groups[0]?.name, 'Research');
+});
+
+test('sync refuses a plain http server and is off in private windows', async () => {
+	const server = syncServer();
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+	});
+	const refused = await harness.sendMessage({
+		type: 'SYNC_CONNECT',
+		// eslint-disable-next-line unicorn/prefer-https -- plain HTTP to another host is what is refused
+		url: 'http://sync.example.test',
+		token: SYNC_TOKEN,
+	});
+	assert.equal(refused.ok, false);
+	assert.match(refused.error ?? '', /https/);
+	assert.equal(server.log.cursor, 0);
+
+	const privateWorker = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		storage: {'tablodge.private.config': {mode: 'temporary', configured: true}},
+	});
+	const off = await privateWorker.sendMessage({type: 'SYNC_STATUS'});
+	assert.equal(off.ok, false);
 });

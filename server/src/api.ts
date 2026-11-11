@@ -7,11 +7,23 @@ import {Hono} from 'hono';
 import {bearerAuth} from 'hono/bearer-auth';
 import {bodyLimit} from 'hono/body-limit';
 import {except} from 'hono/combine';
+import {cors} from 'hono/cors';
 import type {SyncLog} from '../../src/shared/sync/change-log';
 import {parseChange, type SyncChange} from '../../src/shared/sync/changes';
 import {LIVE_PATH} from './live';
 
 export const PROTOCOL_VERSION = 1;
+
+/**
+The extension calls the server from its own origin. CORS lets it do that without asking the browser for access to
+the server's site; the token, not the origin, is what protects the library. WebSockets are not subject to CORS.
+*/
+export const CORS_HEADERS = {
+	'Access-Control-Allow-Origin': '*',
+	'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+	'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+	'Access-Control-Max-Age': '86400',
+};
 export const MIN_TOKEN_LENGTH = 32;
 
 export type Limits = {
@@ -57,6 +69,15 @@ export function createApi(options: ApiOptions) {
 	let lastPurge = 0;
 
 	const app = new Hono();
+	app.use(
+		'*',
+		cors({
+			origin: '*',
+			allowMethods: ['GET', 'POST', 'OPTIONS'],
+			allowHeaders: ['Authorization', 'Content-Type'],
+			maxAge: 86_400,
+		}),
+	);
 	app.get('/health', (c) => c.json({ok: true}));
 	// The live channel authenticates in its first message; see live.ts.
 	const unauthorized = {error: 'unauthorized'};

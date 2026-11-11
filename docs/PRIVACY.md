@@ -1,12 +1,12 @@
 # Privacy
 
-TabLodge keeps your sessions, bookmarks, and settings in your browser profile. It has no accounts or backend, and does not collect or upload your data.
+TabLodge keeps your sessions, bookmarks, and settings in your browser profile. It has no accounts or backend, and does not collect your data. It uploads your library only to a sync server you run yourself, and only after you connect one.
 
 ## What it doesn't do
 
 - No analytics, telemetry, crash reporting, or advertising.
-- No cloud sync or sale of data.
-- No network requests of its own. Code, styles, fonts, and icons are bundled with the extension.
+- No TabLodge cloud and no sale of data. There is no TabLodge operated sync service.
+- No network requests of its own unless you turn on sync (see [Sync with your own server](#sync-with-your-own-server)). Code, styles, fonts, and icons are bundled with the extension.
 - No website host permissions and no declared content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages. By default the search palette appears over the current page, so the shortcut injects the palette into that one page when you press it. Choosing **Window** in Settings turns this off. The injected code only draws the palette. It reads nothing from the page, and the page cannot read your library.
 - A web page can detect that TabLodge is installed by requesting `palette.html`, which the manifest exposes so the palette can be framed over pages. Nothing else of the extension is exposed.
 
@@ -31,6 +31,17 @@ These keys use `chrome.storage.local`. A copy of the theme and accent choices al
 Snapshots contain tab titles, URLs, pinned state, tab groups, split view pairs, the active tab, and window layout information. They skip incognito windows, excluded sites, and pages other than ordinary HTTP or HTTPS websites. Snapshots are enabled by default; you can turn them off in **Settings › Recovery & backups**.
 
 TabLodge reads tab metadata to save and restore sessions, detect duplicates, close duplicate open tabs when you ask, show and search open tabs, show the **Settings › Data › Statistics** summary, and capture recovery snapshots. It reads your browser's bookmark tree only when you ask to import it. If you enable **When you bookmark a page in the browser**, it also watches for newly created bookmarks to offer to add that page, or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.
+
+## Sync with your own server
+
+Sync is off until you enter a server address and token in **Settings › Sync**. The server is one you run yourself ([Self hosting](self-hosting.md)); TabLodge runs no server of its own and receives nothing.
+
+- **What is sent.** Sessions (name, folder, description, dates), saved tabs (title, URL, notes, pinned state, tab group), folders, bookmark columns, bookmarks, and a list of display and saving preferences, each with a time stamp and a random id for this browser. Deletes are sent so other devices remove the item too.
+- **What stays here.** Recovery snapshots, automatic and safety backups, the trash bin, the window a session was saved from and its position, when it was last opened, new tab, toolbar, startup, context menu, snapshot, backup, and browser bookmark settings, and anything in private windows.
+- **How it travels.** HTTPS to the address you enter (plain HTTP only to `localhost`), with the token in each request. The server stores the library in plain text, not encrypted end to end, so whoever runs it can read your URLs, titles, and notes.
+- **What this browser keeps.** The server address and token, the sync position, and a list of what it last agreed with the server, in extension storage under `tablodge.sync.config`, `tablodge.sync.state`, and `tablodge.sync.status`. The token is stored there in plain text, like the rest of the library.
+- **Stopping.** **Disconnect** removes those keys and stops all requests. The library on this device stays as it is. Data already on the server stays there until you delete it on the server.
+- **Before the first sync,** TabLodge takes a safety backup if the server has data to bring in.
 
 ## Retention and deletion
 

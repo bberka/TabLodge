@@ -137,3 +137,25 @@ test('the live channel needs the token in its first message', () => {
 	assert.ok(!sameToken('', TOKEN));
 	assert.ok(!sameToken(TOKEN.slice(0, -1), TOKEN));
 });
+
+test('the extension can call the server across origins without a host permission', async () => {
+	const {app} = server();
+	const preflight = await app.request('/v1/changes', {
+		method: 'OPTIONS',
+		headers: {
+			Origin: 'chrome-extension://abc',
+			'Access-Control-Request-Method': 'POST',
+			'Access-Control-Request-Headers': 'authorization, content-type',
+		},
+	});
+	assert.equal(preflight.status, 204);
+	assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), '*');
+	assert.match(
+		preflight.headers.get('Access-Control-Allow-Headers') ?? '',
+		/Authorization/,
+	);
+	const refused = await app.request('/v1/status', {
+		headers: {Origin: 'chrome-extension://abc'},
+	});
+	assert.equal(refused.headers.get('Access-Control-Allow-Origin'), '*');
+});
