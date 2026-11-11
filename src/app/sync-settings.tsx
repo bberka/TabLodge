@@ -1,12 +1,22 @@
 import {useEffect, useId, useRef, useState} from 'react';
-import {Link2, Link2Off, RefreshCw} from 'lucide-react';
+import {
+	CircleCheck,
+	Cloud,
+	CloudAlert,
+	CloudOff,
+	CloudUpload,
+	Link2,
+	Link2Off,
+	type LucideIcon,
+	RefreshCw,
+} from 'lucide-react';
 import {
 	MIN_TOKEN_LENGTH,
 	parseServerUrl,
 	SYNC_STATUS_KEY,
 	type SyncStatus,
 } from '../shared/sync/client';
-import {Button, Input, Label} from '../shared/ui';
+import {Button, ConfirmationDialog, Input, Label} from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
 import {PROJECT} from './project';
 import {cn} from '@/lib/utils';
@@ -26,27 +36,55 @@ export const SYNC_WORDS = [
 
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;
 
-function describe(status: SyncStatus): string {
-	const when = status.lastSyncAt
-		? `Last synced ${new Date(status.lastSyncAt).toLocaleString()}.`
-		: 'Not synced yet.';
+/**
+When the last sync happened: the time alone for today, the date and time before that.
+*/
+function syncedAt(time: number): string {
+	const date = new Date(time);
+	return date.toDateString() === new Date().toDateString()
+		? `today at ${date.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}`
+		: date.toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
+}
+
+function summarize(status: SyncStatus): {
+	title: string;
+	note?: string;
+	Icon: LucideIcon;
+	tone?: string;
+	spin?: boolean;
+} {
 	switch (status.phase) {
 		case 'syncing': {
-			return 'Syncing…';
+			return {title: 'Syncing…', Icon: RefreshCw, spin: true};
 		}
 
 		case 'offline': {
-			return `The server cannot be reached. Changes wait on this device until it can. ${when}`;
+			return {
+				title: 'Cannot reach the server',
+				note: 'Changes made here are kept and sent once it is back.',
+				Icon: CloudOff,
+			};
 		}
 
 		case 'error': {
-			return when;
+			return {
+				title: 'Sync stopped',
+				Icon: CloudAlert,
+				tone: 'text-destructive',
+			};
 		}
 
 		default: {
-			return status.live
-				? `Up to date. Changes from other devices arrive right away. ${when}`
-				: when;
+			if (status.pending > 0) {
+				return {
+					title: `${status.pending} ${status.pending === 1 ? 'change' : 'changes'} waiting to be sent`,
+					Icon: CloudUpload,
+				};
+			}
+
+			return status.lastSyncAt
+				? {title: 'Up to date', Icon: CircleCheck, tone: 'text-primary'}
+				: {title: 'Not synced yet', Icon: Cloud};
 		}
 	}
 }
@@ -54,6 +92,7 @@ function describe(status: SyncStatus): string {
 type Field = 'url' | 'token';
 type FieldErrors = Partial<Record<Field, string>>;
 type FocusTarget = Field | 'sync' | undefined;
+type Action = 'connect' | 'sync' | 'disconnect';
 
 function checkAddress(text: string): string | undefined {
 	if (text.trim() === '') {
@@ -103,7 +142,9 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [status, setStatus] = useState<SyncStatus>();
 	const [address, setAddress] = useState('');
 	const [token, setToken] = useState('');
-	const [busy, setBusy] = useState(false);
+	const [action, setAction] = useState<Action>();
+	const busy = action !== undefined;
+	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [error, setError] = useState('');
 	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 	const addressRef = useRef<HTMLInputElement>(null);
@@ -165,11 +206,12 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	when the action failed, to `focus.failed`.
 	*/
 	const run = async (
+		name: Action,
 		work: () => Promise<SyncStatus>,
 		done: string,
 		focus: {done: FocusTarget; failed: FocusTarget},
 	) => {
-		setBusy(true);
+		setAction(name);
 		setError('');
 		setFieldErrors({});
 		try {
@@ -186,7 +228,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				setError(messageOf(reason) || 'Sync could not complete that action.');
 			}
 		} finally {
-			setBusy(false);
+			setAction(undefined);
 		}
 	};
 
@@ -204,6 +246,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		}
 
 		await run(
+			'connect',
 			async () => {
 				const result = await send('SYNC_CONNECT', {url: address, token});
 				if (!result.ok) {
@@ -328,29 +371,78 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		);
 	}
 
+	const syncNow = () => {
+		void run(
+			'sync',
+			async () => {
+				const result = await send('SYNC_NOW');
+				if (!result.ok) {
+					throw new Error(result.error);
+				}
+
+				return result.status;
+			},
+			'Synced.',
+			{done: 'sync', failed: 'sync'},
+		);
+	};
+
+	const disconnect = () => {
+		setConfirmDisconnect(false);
+		void run(
+			'disconnect',
+			async () => {
+				const result = await send('SYNC_DISCONNECT');
+				if (!result.ok) {
+					throw new Error(result.error);
+				}
+
+				return result.status;
+			},
+			'Sync is off. Everything stays on this device.',
+			{done: 'url', failed: 'sync'},
+		);
+	};
+
+	const server = (status.url ?? '').replace(/^https?:\/\//, '');
+	const {title, note, Icon, tone, spin} = summarize(status);
+	// Covers a sync the worker started on its own as well as one started here.
+	const syncing = action === 'sync' || status.phase === 'syncing';
 	return (
 		<div className="space-y-4">
-			<div className="space-y-1 text-sm">
-				<p className="font-medium">Syncing with {status.url}</p>
-				<p role="status" className="text-muted-foreground">
-					{describe(status)}
-					{status.pending > 0 &&
-						` ${status.pending} ${status.pending === 1 ? 'change waits' : 'changes wait'} to be sent.`}
-				</p>
-				{status.phase === 'error' && status.error && (
-					<p role="alert" className="text-destructive">
-						{status.error}
+			<div className="flex gap-3">
+				<Icon
+					aria-hidden="true"
+					className={cn(
+						'mt-0.5 size-5 shrink-0',
+						tone ?? 'text-muted-foreground',
+						spin && 'motion-safe:animate-spin',
+					)}
+				/>
+				<div role="status" className="min-w-0 space-y-0.5 text-sm">
+					<p className="font-medium">{title}</p>
+					<p className="text-muted-foreground [overflow-wrap:anywhere]">
+						{server}
+						{status.lastSyncAt
+							? ` · Last synced ${syncedAt(status.lastSyncAt)}`
+							: ''}
 					</p>
-				)}
-				{status.refused > 0 && (
-					<p className="text-muted-foreground">
-						The server refused {status.refused} old{' '}
-						{status.refused === 1 ? 'change' : 'changes'} from this device,
-						because {status.refused === 1 ? 'it was' : 'they were'} about items
-						deleted elsewhere long ago.
-					</p>
-				)}
+					{note && <p className="text-muted-foreground">{note}</p>}
+				</div>
 			</div>
+			{status.phase === 'error' && status.error && (
+				<p role="alert" className="text-sm text-destructive">
+					{status.error}
+				</p>
+			)}
+			{status.refused > 0 && (
+				<p className="text-sm text-muted-foreground">
+					The server turned down {status.refused} old{' '}
+					{status.refused === 1 ? 'change' : 'changes'} from this browser,
+					because {status.refused === 1 ? 'it was' : 'they were'} about items
+					deleted on another device long ago.
+				</p>
+			)}
 			{error && (
 				<p role="alert" className="text-sm text-destructive">
 					{error}
@@ -360,52 +452,41 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				<Button
 					ref={syncNowRef}
 					type="button"
-					disabled={busy}
+					// Aria-disabled rather than disabled, so focus stays on the button while it syncs.
+					aria-disabled={busy || syncing}
+					className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
 					onClick={() => {
-						void run(
-							async () => {
-								const result = await send('SYNC_NOW');
-								if (!result.ok) {
-									throw new Error(result.error);
-								}
-
-								return result.status;
-							},
-							'Synced.',
-							{done: 'sync', failed: 'sync'},
-						);
+						if (!busy && !syncing) {
+							syncNow();
+						}
 					}}
 				>
-					<RefreshCw aria-hidden="true" />
-					Sync now
+					<RefreshCw
+						aria-hidden="true"
+						className={syncing ? 'motion-safe:animate-spin' : undefined}
+					/>
+					{syncing ? 'Syncing…' : 'Sync now'}
 				</Button>
 				<Button
 					type="button"
 					variant="outline"
 					disabled={busy}
 					onClick={() => {
-						void run(
-							async () => {
-								const result = await send('SYNC_DISCONNECT');
-								if (!result.ok) {
-									throw new Error(result.error);
-								}
-
-								return result.status;
-							},
-							'Sync is off. The library on this device is unchanged.',
-							{done: 'url', failed: 'sync'},
-						);
+						setConfirmDisconnect(true);
 					}}
 				>
 					<Link2Off aria-hidden="true" />
 					Disconnect
 				</Button>
 			</div>
-			<p className="text-sm text-muted-foreground">
-				Disconnecting keeps everything on this device. Connecting again later
-				merges this device&apos;s library with the server&apos;s.
-			</p>
+			<ConfirmationDialog
+				open={confirmDisconnect}
+				title="Disconnect from sync?"
+				description={`This browser stops syncing with ${server}. Everything stays on this device, and the server keeps its copy. If you connect again later, the two are merged.`}
+				confirmLabel="Disconnect"
+				onOpenChange={setConfirmDisconnect}
+				onConfirm={disconnect}
+			/>
 		</div>
 	);
 }
