@@ -4,6 +4,11 @@ import {createApi, type Limits} from '../server/src/api';
 import {isAuthMessage, sameToken} from '../server/src/live';
 import {sqlite} from '../server/src/node-sqlite';
 import {SqlChangeLog} from '../server/src/sql-change-log';
+import {
+	EXPORT_FORMAT,
+	exportLibrary,
+	importLibrary,
+} from '../server/src/transfer';
 import type {SyncChange} from '../src/shared/sync/changes';
 import {startClock, tick} from '../src/shared/sync/clock';
 
@@ -212,4 +217,68 @@ test('the Docker server gzips its answers', async () => {
 		pulled.body!.pipeThrough(new DecompressionStream('gzip')),
 	).text();
 	assert.equal((JSON.parse(text) as {changes: unknown[]}).changes.length, 50);
+});
+
+test('a library exported from one server and imported into another is the same library', async () => {
+	const from = server();
+	const to = server();
+	const deleted = {...folder('gone', 5), deleted: true};
+	delete deleted.value;
+	await from.push([folder('a'), folder('b'), deleted]);
+	const target = (app: ReturnType<typeof createApi>) => ({
+		url: 'https://sync.example.test',
+		token: TOKEN,
+		fetch: async (url: string, init: RequestInit) => app.request(url, init),
+	});
+
+	const lines: string[] = [];
+	assert.equal(
+		await exportLibrary(target(from.app), (line) => {
+			lines.push(line);
+		}),
+		3,
+	);
+	assert.equal(
+		(JSON.parse(lines[0]) as {format: string}).format,
+		EXPORT_FORMAT,
+	);
+
+	const read = async function* () {
+		yield* lines;
+	};
+
+	assert.deepEqual(await importLibrary(target(to.app), read()), {
+		applied: 3,
+		superseded: 0,
+		stale: 0,
+		clock: 0,
+	});
+	const pull = async (app: ReturnType<typeof createApi>) =>
+		(await (
+			await app.request('/v1/changes?cursor=0', {
+				headers: {Authorization: `Bearer ${TOKEN}`},
+			})
+		).json()) as {
+			changes: unknown[];
+		};
+	assert.deepEqual(
+		(await pull(to.app)).changes,
+		(await pull(from.app)).changes,
+	);
+	// Importing the same file again changes nothing.
+	assert.deepEqual(await importLibrary(target(to.app), read()), {
+		applied: 0,
+		superseded: 3,
+		stale: 0,
+		clock: 0,
+	});
+
+	const notAnExport = async function* () {
+		yield '{"format":"something-else"}';
+	};
+
+	await assert.rejects(
+		importLibrary(target(to.app), notAnExport()),
+		/not a TabLodge sync export/,
+	);
 });
