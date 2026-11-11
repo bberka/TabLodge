@@ -118,7 +118,7 @@ The script opens a browser window to log in to Cloudflare if needed. It then dep
 curl https://tablodge-sync.<your-subdomain>.workers.dev/health
 ```
 
-It answers `{"ok":true}`. Then [connect your browsers](#connect-your-browsers).
+It answers `{"ok":true}`. For a few seconds right after the first deploy, Cloudflare may answer `error code: 1042` instead; wait a moment and try again. Then [connect your browsers](#connect-your-browsers).
 
 ### Your own domain
 
@@ -234,7 +234,7 @@ This works in every direction, for example from a VPS to Cloudflare.
 2. Delete the server and its data:
    * VPS: `docker compose -f compose.https.yaml down -v` deletes the containers, the library, and Caddy's certificates.
    * Single container: `docker rm -f tablodge-sync && docker volume rm tablodge-sync`.
-   * Cloudflare: run `pnpm exec wrangler delete` in `server/`, or delete the `tablodge-sync` Worker in the dashboard. Check in the dashboard that no Durable Object namespace for it is left.
+   * Cloudflare: run `pnpm exec wrangler delete` in `server/`, or delete the `tablodge-sync` Worker in the dashboard. This deletes the library with it: deploying again afterwards starts with an empty server and a new token.
 
 ### Resources
 
