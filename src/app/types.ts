@@ -809,6 +809,10 @@ export type ActionFailure = {
 	Set when the private library is locked: the page shows the lock screen instead of the error.
 	*/
 	locked?: true;
+	/**
+	Set when connecting to a sync server failed because of one form field, so the page can show the error there.
+	*/
+	field?: 'url' | 'token';
 };
 
 export type SaveResult = {

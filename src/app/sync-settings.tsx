@@ -1,9 +1,15 @@
 import {useEffect, useId, useRef, useState} from 'react';
 import {Link2, Link2Off, RefreshCw} from 'lucide-react';
-import {SYNC_STATUS_KEY, type SyncStatus} from '../shared/sync/client';
+import {
+	MIN_TOKEN_LENGTH,
+	parseServerUrl,
+	SYNC_STATUS_KEY,
+	type SyncStatus,
+} from '../shared/sync/client';
 import {Button, Input, Label} from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
 import {PROJECT} from './project';
+import {cn} from '@/lib/utils';
 
 export const SYNC_TITLE = 'Sync';
 export const SYNC_WORDS = [
@@ -45,7 +51,53 @@ function describe(status: SyncStatus): string {
 	}
 }
 
-type FocusTarget = 'address' | 'sync' | undefined;
+type Field = 'url' | 'token';
+type FieldErrors = Partial<Record<Field, string>>;
+type FocusTarget = Field | 'sync' | undefined;
+
+function checkAddress(text: string): string | undefined {
+	if (text.trim() === '') {
+		return 'Enter the server address.';
+	}
+
+	try {
+		parseServerUrl(text);
+		return undefined;
+	} catch (error) {
+		return messageOf(error);
+	}
+}
+
+function checkToken(text: string): string | undefined {
+	const token = text.trim();
+	if (token === '') {
+		return 'Enter the token the server printed when you set it up.';
+	}
+
+	return token.length < MIN_TOKEN_LENGTH
+		? `This token is too short. A sync token is at least ${MIN_TOKEN_LENGTH} characters, so copy all of it.`
+		: undefined;
+}
+
+const CHECKS: Record<Field, (text: string) => string | undefined> = {
+	url: checkAddress,
+	token: checkToken,
+};
+
+/**
+Fails a connect attempt on one field, so the form shows the message under that field.
+*/
+class FieldError extends Error {
+	constructor(
+		readonly field: Field,
+		message: string,
+	) {
+		super(message);
+	}
+}
+
+const FIELD_ERROR_CLASS =
+	'aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive';
 
 export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [status, setStatus] = useState<SyncStatus>();
@@ -53,11 +105,15 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [token, setToken] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
+	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 	const addressRef = useRef<HTMLInputElement>(null);
+	const tokenRef = useRef<HTMLInputElement>(null);
 	const syncNowRef = useRef<HTMLButtonElement>(null);
 	const focusAfterRef = useRef<FocusTarget>(undefined);
 	const addressId = useId();
 	const tokenId = useId();
+	const addressErrorId = useId();
+	const tokenErrorId = useId();
 	const helpId = useId();
 
 	useEffect(() => {
@@ -91,10 +147,10 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			return;
 		}
 
-		if (focusAfterRef.current === 'sync') {
-			syncNowRef.current?.focus();
-		} else if (focusAfterRef.current === 'address') {
-			addressRef.current?.focus();
+		const target = focusAfterRef.current;
+		if (target) {
+			const refs = {sync: syncNowRef, url: addressRef, token: tokenRef};
+			refs[target].current?.focus();
 		}
 
 		focusAfterRef.current = undefined;
@@ -115,38 +171,80 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	) => {
 		setBusy(true);
 		setError('');
+		setFieldErrors({});
 		try {
 			const next = await work();
 			focusAfterRef.current = focus.done;
 			setStatus(next);
 			showStatus(next.error ?? done, Boolean(next.error));
 		} catch (reason) {
-			focusAfterRef.current = focus.failed;
-			setError(messageOf(reason) || 'Sync could not complete that action.');
+			if (reason instanceof FieldError) {
+				focusAfterRef.current = reason.field;
+				setFieldErrors({[reason.field]: reason.message});
+			} else {
+				focusAfterRef.current = focus.failed;
+				setError(messageOf(reason) || 'Sync could not complete that action.');
+			}
 		} finally {
 			setBusy(false);
 		}
 	};
 
 	const connect = async () => {
+		const found: FieldErrors = {
+			url: checkAddress(address),
+			token: checkToken(token),
+		};
+		const first = found.url ? 'url' : found.token ? 'token' : undefined;
+		if (first) {
+			setFieldErrors(found);
+			setError('');
+			(first === 'url' ? addressRef : tokenRef).current?.focus();
+			return;
+		}
+
 		await run(
 			async () => {
 				const result = await send('SYNC_CONNECT', {url: address, token});
 				if (!result.ok) {
-					throw new Error(result.error);
+					throw result.field
+						? new FieldError(result.field, result.error)
+						: new Error(result.error);
 				}
 
 				setToken('');
 				return result.status;
 			},
 			'Sync is on.',
-			{done: 'sync', failed: 'address'},
+			{done: 'sync', failed: 'url'},
 		);
+	};
+
+	/**
+	Rechecks a field as it is edited once it shows an error, so the error goes away as soon as it is fixed.
+	*/
+	const recheck = (field: Field, value: string) => {
+		setFieldErrors((errors) => ({...errors, [field]: CHECKS[field](value)}));
+	};
+
+	const edit = (field: Field, value: string) => {
+		setError('');
+		if (fieldErrors[field] !== undefined) {
+			recheck(field, value);
+		}
+	};
+
+	// Leaving a filled in field checks it; an empty one is only flagged on Connect.
+	const leave = (field: Field, value: string) => {
+		if (value.trim() !== '') {
+			recheck(field, value);
+		}
 	};
 
 	if (!status.connected) {
 		return (
 			<form
+				noValidate
 				className="space-y-4"
 				aria-describedby={helpId}
 				onSubmit={(event) => {
@@ -171,33 +269,51 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					<Label htmlFor={addressId}>Server address</Label>
 					<Input
 						ref={addressRef}
-						required
+						aria-required
 						id={addressId}
 						type="url"
 						inputMode="url"
 						autoComplete="url"
+						spellCheck={false}
 						placeholder="https://sync.example.com"
 						value={address}
 						disabled={busy}
+						aria-invalid={Boolean(fieldErrors.url)}
+						aria-describedby={fieldErrors.url ? addressErrorId : undefined}
+						className={FIELD_ERROR_CLASS}
 						onChange={(event) => {
 							setAddress(event.target.value);
+							edit('url', event.target.value);
+						}}
+						onBlur={(event) => {
+							leave('url', event.target.value);
 						}}
 					/>
+					<FieldMessage id={addressErrorId} message={fieldErrors.url} />
 				</div>
 				<div className="grid gap-2">
 					<Label htmlFor={tokenId}>Token</Label>
 					<Input
-						required
+						ref={tokenRef}
+						aria-required
 						id={tokenId}
 						type="password"
 						autoComplete="off"
 						spellCheck={false}
 						value={token}
 						disabled={busy}
+						aria-invalid={Boolean(fieldErrors.token)}
+						aria-describedby={fieldErrors.token ? tokenErrorId : undefined}
+						className={FIELD_ERROR_CLASS}
 						onChange={(event) => {
 							setToken(event.target.value);
+							edit('token', event.target.value);
+						}}
+						onBlur={(event) => {
+							leave('token', event.target.value);
 						}}
 					/>
+					<FieldMessage id={tokenErrorId} message={fieldErrors.token} />
 				</div>
 				{error && (
 					<p role="alert" className="text-sm text-destructive">
@@ -278,7 +394,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 								return result.status;
 							},
 							'Sync is off. The library on this device is unchanged.',
-							{done: 'address', failed: 'sync'},
+							{done: 'url', failed: 'sync'},
 						);
 					}}
 				>
@@ -291,5 +407,20 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				merges this device&apos;s library with the server&apos;s.
 			</p>
 		</div>
+	);
+}
+
+function FieldMessage({id, message}: {id: string; message?: string}) {
+	return (
+		<p
+			id={id}
+			aria-live="polite"
+			className={cn(
+				'text-xs font-medium text-destructive',
+				!message && 'sr-only',
+			)}
+		>
+			{message}
+		</p>
 	);
 }
