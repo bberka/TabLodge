@@ -78,6 +78,10 @@ The root `VERSION` file holds the minor number. The release workflow computes th
 
 Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, publishes the Chromium and Firefox ZIPs with their SHA256 checksums under a `v0.x.y` tag, and triggers the website deployment. It also dispatches the Chrome Web Store workflow, which verifies the release ZIP, uploads it to the existing listing, and submits it for publication. Google review may delay when the update becomes available. The Firefox ZIP is unsigned and is published only as a release asset. A Firefox Add-ons listing would need `tablodge@bbay.dev` (the add-on ID in `scripts/manifest-targets.ts`, permanent once signed) submitted with the source ZIP and the build steps from the [README](README.md#build-from-source). To build and package the extension locally, follow the [README build steps](README.md#build-from-source).
 
+### Sync server image
+
+The sync server is versioned separately from the extension. Pull requests that touch `server/` or the shared sync code build its image, and every push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. To release it, push a tag such as `sync-server-v1.0.0`; the **Sync server image** workflow publishes `1.0.0`, `1.0`, and `latest`. Bump the server's `PROTOCOL_VERSION` only for a change old extensions cannot use, because the extension refuses a server with a different protocol version.
+
 ### Chrome Web Store publishing
 
 Before the first release, enable the Chrome Web Store API in a Google Cloud project and create OAuth credentials authorized with the `https://www.googleapis.com/auth/chromewebstore` scope. Generate a refresh token for the Google account that owns the existing listing. If the OAuth consent screen remains in Testing, Google may expire the refresh token after seven days, so configure a production consent screen for ongoing automation.

@@ -18,7 +18,15 @@ To replace a leaked token, set a new one and restart the server (Docker) or run 
 
 ## Docker
 
-You need Docker with Compose and a copy of this repository.
+The image is published as `ghcr.io/bberka/tablodge-sync` for amd64 and arm64, so it also runs on a Raspberry Pi. `latest` is the newest sync server release and `edge` follows the development branch. Create a token, note it down, and start the server with it:
+
+```sh
+TOKEN="$(openssl rand -base64 32)" && echo "$TOKEN"
+docker run -d --name tablodge-sync --restart unless-stopped -p 8787:8787 -v tablodge-sync:/data \
+	-e TABLODGE_SYNC_TOKEN="$TOKEN" ghcr.io/bberka/tablodge-sync:latest
+```
+
+To build from a copy of this repository instead, use Compose:
 
 ```sh
 cd server
@@ -36,9 +44,9 @@ sync.example.com {
 }
 ```
 
-To update, pull the repository and run `docker compose up -d --build`. The library stays in the volume. To back it up, copy `library.db` while the server is stopped, or keep using TabLodge's own full backup.
+To update the published image, run `docker pull ghcr.io/bberka/tablodge-sync:latest`, then remove the container and start it again with the same command and token. With Compose, pull the repository and run `docker compose up -d --build`. The library stays in the volume. To back it up, copy `library.db` while the server is stopped, or keep using TabLodge's own full backup.
 
-Without Compose, build and run the image from the repository root:
+To build the image yourself without Compose, run this from the repository root:
 
 ```sh
 docker build -f server/Dockerfile -t tablodge-sync .
