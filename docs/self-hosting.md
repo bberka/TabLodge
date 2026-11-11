@@ -2,7 +2,7 @@
 
 The sync server keeps one TabLodge library and passes changes between your devices. You can run it with Docker on your own machine or server, or on your own Cloudflare account. Both run the same code and follow the same rules ([ADR 1](adr/0001-record-level-sync-protocol.md)).
 
-Once the server runs, open **Settings › Sync** in TabLodge on each browser, enter the server address and token, and choose **Connect**. The address must use HTTPS; plain HTTP works only for a server on the same computer (`localhost` or `127.0.0.1`). The server answers with CORS headers, so the extension needs no permission for its site.
+Once the server runs, open **Settings › Sync** in TabLodge on each browser, enter the server address and token, and choose **Connect**. The address must use HTTPS; plain HTTP works only for a server on the same computer (`localhost` or `127.0.0.1`). In Firefox, a plain HTTP server on the same computer syncs when something changes, every five minutes, and on **Sync now**, but without instant updates: Firefox upgrades the live connection to a secure one, which a plain HTTP server cannot answer. The server answers with CORS headers, so the extension needs no permission for its site.
 
 The server sees your library in plain text: URLs, titles, and notes. Run it somewhere you trust, and always put it behind HTTPS.
 

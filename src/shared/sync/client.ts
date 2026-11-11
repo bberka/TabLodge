@@ -10,7 +10,7 @@ so a slow server never holds up the app. Rounds never overlap: a request during 
 import type {Store} from '../../app/types';
 import {isRecord} from '../library-values';
 import type {PushResult} from './change-log';
-import {parseChange, type SyncChange} from './changes';
+import {parseChange, recordKey, type SyncChange} from './changes';
 import {
 	capture,
 	finishResync,
@@ -237,6 +237,13 @@ export function createSyncClient(host: SyncHost) {
 	let pingTimer: ReturnType<typeof setInterval> | undefined;
 	let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 	let reconnectDelay = RECONNECT_MIN_MS;
+	/*
+	The highest server cursor this device has pulled or pushed up to, and the highest one a live notice announced.
+	A notice only means something new while it is ahead of what this device has seen. A notice for this device's
+	own push can arrive before the push's answer does, so the two are compared once a round ends, not on arrival.
+	*/
+	let seenCursor = 0;
+	let noticeCursor = 0;
 	const ready = load();
 
 	async function load() {
@@ -356,6 +363,10 @@ export function createSyncClient(host: SyncHost) {
 					`/v1/changes?cursor=${cursor}&purged=${purged}&limit=${PULL_LIMIT}`,
 				),
 			);
+			if (!page.resync) {
+				seenCursor = Math.max(seenCursor, page.cursor);
+			}
+
 			const more = await step(async (state, records, store) => {
 				if (page.resync) {
 					return {state: startResync(state), result: true};
@@ -394,13 +405,27 @@ export function createSyncClient(host: SyncHost) {
 		});
 
 		let refused = 0;
+		const sentKeys = new Set<string>();
+		let appliedThisRound = 0;
 		for (;;) {
-			const sent = await step(async (state, records) => ({
+			const {sent, pulledCursor} = await step(async (state, records) => ({
 				state,
-				result: outgoing(state, records, PUSH_LIMIT),
+				result: {
+					sent: outgoing(state, records, PUSH_LIMIT),
+					pulledCursor: state.cursor,
+				},
 			}));
-			if (sent.length === 0) {
+			// A record that changed again while it was being sent goes out in the next round, so a value that keeps
+			// changing can never keep one round pushing.
+			if (
+				sent.length === 0 ||
+				sent.some((change) => sentKeys.has(recordKey(change)))
+			) {
 				break;
+			}
+
+			for (const change of sent) {
+				sentKeys.add(recordKey(change));
 			}
 
 			const body = await request(target, '/v1/changes', {
@@ -424,6 +449,19 @@ export function createSyncClient(host: SyncHost) {
 				return {state: settled.state, result: settled.refused};
 			});
 			refused += count;
+			appliedThisRound += results.filter(
+				(result) => result === 'applied',
+			).length;
+			if (!isRecord(body) || !Number.isSafeInteger(body.cursor)) {
+				continue;
+			}
+
+			seenCursor = Math.max(seenCursor, body.cursor as number);
+			// The server took more changes than this round applied since its pull: another device pushed in between,
+			// and its live notice may already have been dismissed as this device's own echo. Pull again.
+			if ((body.cursor as number) > pulledCursor + appliedThisRound) {
+				again = true;
+			}
 		}
 
 		const state = await loadState();
@@ -450,13 +488,30 @@ export function createSyncClient(host: SyncHost) {
 			return running;
 		}
 
-		const target = config;
+		return startRound(config);
+	}
+
+	/**
+	A live notice: runs a round when it announces changes this device has not seen.
+	*/
+	function noticed(cursor: number) {
+		noticeCursor = Math.max(noticeCursor, cursor);
+		if (!running && noticeCursor > seenCursor) {
+			void syncNow();
+		}
+	}
+
+	function startRound(target: SyncConfig): Promise<void> {
 		running = (async () => {
 			try {
 				for (;;) {
 					again = false;
 
 					await round(target);
+					if (noticeCursor > seenCursor) {
+						again = true;
+					}
+
 					if (!again || config !== target) {
 						break;
 					}
@@ -519,8 +574,11 @@ export function createSyncClient(host: SyncHost) {
 				reconnectDelay = RECONNECT_MIN_MS;
 				void setStatus({live: true});
 				void syncNow();
-			} else if (message.type === 'cursor') {
-				void syncNow();
+			} else if (
+				message.type === 'cursor' &&
+				Number.isSafeInteger(message.cursor)
+			) {
+				noticed(message.cursor as number);
 			}
 		});
 		live.addEventListener('close', () => {

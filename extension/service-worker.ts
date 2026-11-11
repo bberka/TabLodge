@@ -2078,13 +2078,19 @@ function findOrAddArchivedFolder(folders: Folder[]): Folder {
 	if (folder) {
 		folder.name = ARCHIVED_FOLDER_NAME;
 	} else {
+		// Every read normalizes the library, so the added folder must come out the same each time: sync would
+		// otherwise see a new folder on every read and send it forever.
+		const taken = new Set(folders.map((entry) => entry.id));
+		let id = ARCHIVED_FOLDER_ID;
+		for (let suffix = 2; taken.has(id); suffix += 1) {
+			id = `${ARCHIVED_FOLDER_ID}-${suffix}`;
+		}
+
 		folder = {
-			id: folders.some((entry) => entry.id === ARCHIVED_FOLDER_ID)
-				? makeId()
-				: ARCHIVED_FOLDER_ID,
+			id,
 			name: ARCHIVED_FOLDER_NAME,
 			icon: 'archive',
-			createdAt: Date.now(),
+			createdAt: 0,
 			isDefault: false,
 		};
 		folders.push(folder);

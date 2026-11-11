@@ -11733,3 +11733,36 @@ test('sync refuses a plain http server and is off in private windows', async () 
 	const off = await privateWorker.sendMessage({type: 'SYNC_STATUS'});
 	assert.equal(off.ok, false);
 });
+
+test('syncing an unchanged library sends nothing, even when normalizing adds the Archived folder', async () => {
+	const server = syncServer();
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+	});
+	assert.ok(
+		!stateWithSession().folders?.some(
+			(folder) => (folder as {name?: string}).name === 'Archived',
+		),
+		'the fixture has no stored Archived folder',
+	);
+	const connected = await harness.sendMessage({
+		type: 'SYNC_CONNECT',
+		url: 'https://sync.example.test',
+		token: SYNC_TOKEN,
+	});
+	assert.equal(connected.ok, true, connected.error);
+	const {cursor} = server.log;
+	for (let round = 0; round < 3; round += 1) {
+		// Normalizing at a later time must not make the added folder look new.
+		await new Promise((resolve) => {
+			setTimeout(resolve, 5);
+		});
+		await harness.sendMessage({type: 'SYNC_NOW'});
+	}
+
+	assert.equal(server.log.cursor, cursor);
+	assert.equal(
+		(await harness.sendMessage({type: 'SYNC_STATUS'})).status?.pending,
+		0,
+	);
+});

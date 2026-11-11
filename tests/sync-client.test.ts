@@ -283,3 +283,34 @@ test('disconnecting keeps the library and stops syncing', async () => {
 	assert.equal(server.sockets.size, 0);
 	assert.equal([...a.storage.keys()].length, 0);
 });
+
+test('a value that changes on every read cannot keep sync pushing', async () => {
+	const server = makeServer();
+	const device = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [bookmark('flaky')],
+	});
+	let reads = 0;
+	const steady = device.store;
+	Object.defineProperty(device, 'store', {
+		get() {
+			reads += 1;
+			return {
+				...steady,
+				bookmarks: [{...bookmark('flaky'), title: `read ${reads}`}],
+			};
+		},
+		set() {},
+	});
+	await device.client.connect(URL_BASE, TOKEN);
+	await new Promise((resolve) => {
+		setTimeout(resolve, 300);
+	});
+	const status = (await (
+		await server.app.request('/v1/status', {
+			headers: {Authorization: `Bearer ${TOKEN}`},
+		})
+	).json()) as {cursor: number};
+	assert.ok(status.cursor < 20, `pushed ${status.cursor} changes`);
+	assert.notEqual((await device.client.status()).phase, 'error');
+});
