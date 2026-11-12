@@ -6513,6 +6513,52 @@ test('bookmark columns store a registry icon and drop unknown ones', async () =>
 	assert.equal('icon' in reset.column, false);
 });
 
+test('a column with domains takes matching bookmarks when none is chosen', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const dev = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Dev',
+		domains: ['https://www.GitHub.com/x', 'github.com', 'nope', ''],
+	});
+	assert.equal(dev.ok, true, dev.error);
+	assert.deepEqual([...dev.column.domains!], ['github.com']);
+	const docs = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Docs',
+		domains: ['docs.github.com'],
+	});
+
+	const add = async (url: string) =>
+		(await harness.sendMessage({type: 'ADD_BOOKMARK', bookmark: {url}}))
+			.bookmark.columnId;
+	assert.equal(await add('https://github.com/a'), dev.column.id);
+	assert.equal(await add('https://gist.github.com/a'), dev.column.id);
+	assert.equal(await add('https://docs.github.com/a'), docs.column.id);
+	assert.notEqual(await add('https://notgithub.com/a'), dev.column.id);
+
+	// An explicit column still wins over the domain.
+	const explicit = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://github.com/b', columnId: docs.column.id},
+	});
+	assert.equal(explicit.bookmark.columnId, docs.column.id);
+
+	// Omitting domains keeps them; an empty list clears them.
+	const kept = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: dev.column.id,
+		name: 'Dev',
+	});
+	assert.deepEqual([...kept.column.domains!], ['github.com']);
+	const cleared = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: dev.column.id,
+		name: 'Dev',
+		domains: [],
+	});
+	assert.equal('domains' in cleared.column, false);
+});
+
 test('stored column icons are validated on load and kept by imports', async () => {
 	const state = stateWithSession();
 	state.bookmarkColumns = [

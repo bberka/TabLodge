@@ -1508,11 +1508,60 @@ function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 		id,
 		name: cleanText(raw.name, 'New column', 60),
 		...iconField(raw.icon),
+		...domainsField(raw.domains),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
 			: Date.now(),
 		isDefault: id === DEFAULT_BOOKMARK_COLUMN_ID,
 	};
+}
+
+const MAX_COLUMN_DOMAINS = 50;
+
+/**
+A column's domains as distinct bare host names, or `{}` when none remain, so a column without domains stores no field.
+*/
+function domainsField(value: unknown): {domains?: string[]} {
+	const hosts = new Set<string>();
+	for (const entry of Array.isArray(value) ? value : []) {
+		const host = normalizeExcludedHost(entry);
+		if (host) {
+			hosts.add(host);
+		}
+	}
+
+	return hosts.size > 0
+		? {domains: [...hosts].slice(0, MAX_COLUMN_DOMAINS)}
+		: {};
+}
+
+/**
+The column whose domain covers the address (the domain itself or a subdomain). When several match, the most
+specific domain wins, then the earlier column. Null when no column claims the address.
+*/
+function columnForUrl(store: Store, url: string): BookmarkColumn | null {
+	const host = urlHost(url)?.replace(/^www\./, '');
+	if (!host) {
+		return null;
+	}
+
+	let best: BookmarkColumn | null = null;
+	let bestLength = -1;
+	for (const column of store.bookmarkColumns) {
+		for (const domain of column.domains ?? []) {
+			if (!(
+				(host === domain || host.endsWith(`.${domain}`)) &&
+				domain.length > bestLength
+			)) {
+				continue;
+			}
+
+			best = column;
+			bestLength = domain.length;
+		}
+	}
+
+	return best;
 }
 
 function normalizeBookmarkColumns(rawColumns: unknown): BookmarkColumn[] {
@@ -3544,6 +3593,23 @@ async function openBookmarkPrompt(
 		cleanText(tab?.title, linkHost(url), 500),
 		500,
 	);
+	// A column that claims this site takes the bookmark without asking.
+	const store = await getStore();
+	const claimed = columnForUrl(store, url);
+	if (claimed) {
+		if (
+			store.bookmarks.some(
+				(bookmark) => bookmark.url === url && bookmark.columnId === claimed.id,
+			)
+		) {
+			return {ok: true};
+		}
+
+		const result = await addBookmark({title, url, columnId: claimed.id});
+		flashBadge(tab, result.ok);
+		return result.ok ? {ok: true} : {ok: false, error: result.error};
+	}
+
 	const options: chrome.windows.CreateData = {
 		type: 'popup',
 		url: `${chrome.runtime.getURL('add-bookmark.html')}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${prefill?.fromBrowser ? '&source=browser' : ''}`,
@@ -5625,7 +5691,8 @@ async function addBookmark(
 			(column) => column.id === fields.columnId,
 		)
 			? fields.columnId!
-			: store.bookmarkColumns.find(
+			: columnForUrl(store, url)?.id ||
+				store.bookmarkColumns.find(
 					(column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID,
 				)?.id ||
 				store.bookmarkColumns[0]?.id ||
@@ -6147,6 +6214,7 @@ async function removeDuplicateBookmarks(
 async function createBookmarkColumn(
 	name: string,
 	icon?: unknown,
+	domains?: unknown,
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -6166,6 +6234,7 @@ async function createBookmarkColumn(
 			id: makeId(),
 			name: columnName,
 			...iconField(icon),
+			...domainsField(domains),
 			createdAt: Date.now(),
 			isDefault: false,
 		};
@@ -6179,6 +6248,7 @@ async function updateBookmarkColumn(
 	columnId: string,
 	name: string,
 	icon?: unknown,
+	domains?: unknown,
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -6207,6 +6277,16 @@ async function updateBookmarkColumn(
 				column.icon = nextIcon;
 			} else {
 				delete column.icon;
+			}
+		}
+
+		// `domains` omitted keeps the current list; an empty list clears it.
+		if (domains !== undefined) {
+			const {domains: nextDomains} = domainsField(domains);
+			if (nextDomains) {
+				column.domains = nextDomains;
+			} else {
+				delete column.domains;
 			}
 		}
 
@@ -10102,11 +10182,16 @@ async function handleMessage(
 		}
 
 		case 'CREATE_BOOKMARK_COLUMN': {
-			return createBookmarkColumn(message.name, message.icon);
+			return createBookmarkColumn(message.name, message.icon, message.domains);
 		}
 
 		case 'UPDATE_BOOKMARK_COLUMN': {
-			return updateBookmarkColumn(message.columnId, message.name, message.icon);
+			return updateBookmarkColumn(
+				message.columnId,
+				message.name,
+				message.icon,
+				message.domains,
+			);
 		}
 
 		case 'DELETE_BOOKMARK_COLUMN': {
@@ -12027,11 +12112,13 @@ async function handleBrowserBookmark(node: chrome.bookmarks.BookmarkTreeNode) {
 		return;
 	}
 
-	const columnId = store.bookmarkColumns.some(
-		(column) => column.id === settings.browserBookmarkColumn,
-	)
-		? settings.browserBookmarkColumn
-		: store.bookmarkColumns[0]?.id;
+	const columnId =
+		columnForUrl(store, url)?.id ??
+		(store.bookmarkColumns.some(
+			(column) => column.id === settings.browserBookmarkColumn,
+		)
+			? settings.browserBookmarkColumn
+			: store.bookmarkColumns[0]?.id);
 	const result = await addBookmark({title: node.title, url, columnId});
 	flashBadge(active, result.ok);
 }

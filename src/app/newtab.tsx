@@ -71,6 +71,7 @@ import {
 	TooltipProvider,
 	IconTooltip,
 	ExpandingSearch,
+	Textarea,
 	type MenuAction,
 } from '../shared/ui';
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
@@ -211,6 +212,7 @@ type ColumnDraft = {
 	id: string | null;
 	name: string;
 	icon?: string;
+	domains: string;
 };
 type MoveDraft = {bookmarkIds: string[]; targetColumnId: string};
 type BookmarkSelectionMode = 'off' | 'hover' | 'on';
@@ -867,6 +869,7 @@ function NewTab() {
 			id: column?.id || null,
 			name: column?.name || '',
 			icon: column?.icon,
+			domains: (column?.domains ?? []).join('\n'),
 		});
 		setDialog('column');
 	}
@@ -942,15 +945,18 @@ function NewTab() {
 			return;
 		}
 
+		const domains = columnEdit.domains.split(/[\s,]+/).filter(Boolean);
 		const result = columnEdit.id
 			? await send('UPDATE_BOOKMARK_COLUMN', {
 					columnId: columnEdit.id,
 					name: columnEdit.name,
 					icon: columnEdit.icon ?? '',
+					domains,
 				})
 			: await send('CREATE_BOOKMARK_COLUMN', {
 					name: columnEdit.name,
 					icon: columnEdit.icon,
+					domains,
 				});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save that column.', true);
@@ -3041,7 +3047,8 @@ function NewTab() {
 								{columnEdit?.id ? 'Edit column' : 'Add column'}
 							</DialogTitle>
 							<DialogDescription>
-								Choose a name and icon for this bookmark column.
+								Choose a name and icon for this bookmark column, and optionally
+								the websites that belong in it.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
@@ -3065,6 +3072,30 @@ function NewTab() {
 									setColumnEdit((old) => old && {...old, icon})
 								}
 							/>
+							<div className="space-y-1.5">
+								<Label htmlFor="column-domains">Websites (optional)</Label>
+								<Textarea
+									id="column-domains"
+									rows={4}
+									spellCheck={false}
+									placeholder={'One website per line, e.g.\ngithub.com'}
+									value={columnEdit?.domains ?? ''}
+									aria-describedby="column-domains-hint"
+									onChange={(e) =>
+										setColumnEdit(
+											(old) => old && {...old, domains: e.target.value},
+										)
+									}
+								/>
+								<p
+									id="column-domains-hint"
+									className="text-xs text-muted-foreground"
+								>
+									Bookmarking a page on these sites, and their subdomains, with
+									the shortcut or the browser's bookmark button saves it here
+									without asking.
+								</p>
+							</div>
 						</DialogBody>
 						<DialogFooter>
 							<Button
