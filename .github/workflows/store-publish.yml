@@ -1,0 +1,143 @@
+name: Store publishing
+
+# The release workflow sends this dispatch after publishing the GitHub release.
+# Manual runs can retry one store, or both, for an existing v0.x.y release.
+on:
+  repository_dispatch:
+    types: [tablodge-release-published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: GitHub release version to submit, for example 0.2.1
+        required: true
+        type: string
+      store:
+        description: Store to submit to
+        required: true
+        default: all
+        type: choice
+        options: [all, chrome, firefox]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Resolve release version
+    if: github.repository == 'bberka/TabLodge'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - id: release
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          MANUAL_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${DISPATCH_VERSION:-$MANUAL_VERSION}"
+          version="${version#v}"
+          if [[ ! "$version" =~ ^0\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Expected a release version like 0.2.1."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  chrome:
+    name: Submit release to Chrome Web Store
+    needs: version
+    if: github.event_name == 'repository_dispatch' || github.event.inputs.store != 'firefox'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: chrome-web-store-${{ needs.version.outputs.version }}
+      cancel-in-progress: false
+    steps:
+      - name: Download and verify GitHub release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh release download "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "tablodge-$VERSION.zip*" \
+            --dir release
+          zip="release/tablodge-$VERSION.zip"
+          checksum="release/tablodge-$VERSION.zip.sha256"
+          test -s "$zip"
+          test -s "$checksum"
+          (cd release && sha256sum --check "tablodge-$VERSION.zip.sha256")
+
+      - name: Upload and submit package to Chrome Web Store
+        env:
+          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          EXTENSION_ID: ekidoclgpdfhpdlidlkcjccgihbndoib
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          zip="release/tablodge-$VERSION.zip"
+          npm exec --yes --package=chrome-webstore-upload-cli@4.0.2 -- \
+            chrome-webstore-upload \
+            --source "$zip" \
+            --max-await-in-progress 300
+
+  firefox:
+    name: Submit release to Firefox Add-ons
+    needs: version
+    if: github.event_name == 'repository_dispatch' || github.event.inputs.store != 'chrome'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: firefox-addons-${{ needs.version.outputs.version }}
+      cancel-in-progress: false
+    steps:
+      # AMO requires the source of bundled and minified code. The tag is the release source.
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.version.outputs.version }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Download and verify GitHub release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh release download "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "tablodge-$VERSION-firefox.zip*" \
+            --dir release
+          (cd release && sha256sum --check "tablodge-$VERSION-firefox.zip.sha256")
+          mkdir -p release/package
+          unzip -q "release/tablodge-$VERSION-firefox.zip" -d release/package
+          test -s release/package/manifest.json
+
+      - name: Package the source code
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: git archive --format=zip -o "release/tablodge-$VERSION-source.zip" "v$VERSION"
+
+      # Submits the version to the listed channel and returns once it is queued, not after review.
+      - name: Submit package and source to Firefox Add-ons
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm exec --yes --package=web-ext@10.8.0 -- \
+            web-ext sign \
+            --channel=listed \
+            --source-dir release/package \
+            --artifacts-dir release/artifacts \
+            --upload-source-code "release/tablodge-$VERSION-source.zip" \
+            --approval-timeout=0 \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET"
