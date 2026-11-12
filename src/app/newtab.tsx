@@ -44,6 +44,7 @@ import {
 	X,
 	PanelsTopLeft,
 	Upload,
+	ChevronRight,
 } from 'lucide-react';
 import {
 	ActionContextMenu,
@@ -71,6 +72,7 @@ import {
 	TooltipProvider,
 	IconTooltip,
 	ExpandingSearch,
+	Textarea,
 	type MenuAction,
 } from '../shared/ui';
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
@@ -211,6 +213,7 @@ type ColumnDraft = {
 	id: string | null;
 	name: string;
 	icon?: string;
+	domains: string;
 };
 type MoveDraft = {bookmarkIds: string[]; targetColumnId: string};
 type BookmarkSelectionMode = 'off' | 'hover' | 'on';
@@ -867,6 +870,7 @@ function NewTab() {
 			id: column?.id || null,
 			name: column?.name || '',
 			icon: column?.icon,
+			domains: (column?.domains ?? []).join('\n'),
 		});
 		setDialog('column');
 	}
@@ -942,15 +946,18 @@ function NewTab() {
 			return;
 		}
 
+		const domains = columnEdit.domains.split(/[\s,]+/).filter(Boolean);
 		const result = columnEdit.id
 			? await send('UPDATE_BOOKMARK_COLUMN', {
 					columnId: columnEdit.id,
 					name: columnEdit.name,
 					icon: columnEdit.icon ?? '',
+					domains,
 				})
 			: await send('CREATE_BOOKMARK_COLUMN', {
 					name: columnEdit.name,
 					icon: columnEdit.icon,
+					domains,
 				});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save that column.', true);
@@ -3065,6 +3072,45 @@ function NewTab() {
 									setColumnEdit((old) => old && {...old, icon})
 								}
 							/>
+							<details
+								className="group rounded-md border border-border"
+								open={Boolean(columnEdit?.domains)}
+							>
+								<summary className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<ChevronRight
+										className="h-4 w-4 transition-transform group-open:rotate-90"
+										aria-hidden="true"
+									/>
+									Advanced: file automatically
+								</summary>
+								<div className="space-y-1.5 px-3 pb-3">
+									<Label htmlFor="column-domains">Websites</Label>
+									<Textarea
+										id="column-domains"
+										rows={4}
+										spellCheck={false}
+										placeholder={
+											'One per line, e.g.\ngithub.com\ngithub.com/bberka'
+										}
+										value={columnEdit?.domains ?? ''}
+										aria-describedby="column-domains-hint"
+										onChange={(e) =>
+											setColumnEdit(
+												(old) => old && {...old, domains: e.target.value},
+											)
+										}
+									/>
+									<p
+										id="column-domains-hint"
+										className="text-xs text-muted-foreground"
+									>
+										A site covers its subdomains. Add a path such as
+										github.com/bberka to match only that part. Pages saved from
+										the toolbar popup, the shortcut or the browser's bookmark
+										button go here without asking. The longest match wins.
+									</p>
+								</div>
+							</details>
 						</DialogBody>
 						<DialogFooter>
 							<Button

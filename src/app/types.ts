@@ -393,6 +393,11 @@ export type BookmarkColumn = {
 	Icon id from the icon registry; missing means the default column icon.
 	*/
 	icon?: string;
+	/**
+	Sites that belong in this column: a host name (which also covers its subdomains) or a host with a path prefix such as `github.com/bberka`. Bookmarking a page on one of them
+	(shortcut, browser bookmark) saves it here without asking for a column.
+	*/
+	domains?: string[];
 	createdAt: number;
 	isDefault: boolean;
 };
@@ -696,11 +701,16 @@ export type TabLodgeMessages = {
 	Removes extra copies of addresses saved more than once on the board, moving each to the trash. Every address keeps at least one copy outside `bookmarkIds`; the request fails otherwise. At most 500 per message, the trash limit.
 	*/
 	REMOVE_DUPLICATE_BOOKMARKS: {bookmarkIds: string[]};
-	CREATE_BOOKMARK_COLUMN: {name: string; icon?: string};
+	CREATE_BOOKMARK_COLUMN: {name: string; icon?: string; domains?: string[]};
 	/**
-	`icon` omitted keeps the current icon; an empty string resets it to the default.
+	`icon` omitted keeps the current icon; an empty string resets it to the default. `domains` omitted keeps the list; an empty array clears it.
 	*/
-	UPDATE_BOOKMARK_COLUMN: {columnId: string; name: string; icon?: string};
+	UPDATE_BOOKMARK_COLUMN: {
+		columnId: string;
+		name: string;
+		icon?: string;
+		domains?: string[];
+	};
 	/**
 	Moves the column's bookmarks to `targetColumnId` (a remaining column or the Unfiled id), or deletes them when `discardBookmarks` is true.
 	*/
