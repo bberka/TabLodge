@@ -1,6 +1,7 @@
 import {useState, type ReactNode} from 'react';
 import {createRoot} from 'react-dom/client';
 import {
+	Code,
 	ArrowUpRight,
 	BookOpen,
 	Bookmark,
@@ -10,7 +11,6 @@ import {
 	Database,
 	ExternalLink,
 	Globe,
-	Github,
 	Keyboard,
 	Layers2,
 	LifeBuoy,
@@ -739,7 +739,7 @@ function Help() {
 		href: string;
 	}> = [
 		{icon: Globe, label: 'Website', href: PROJECT.websiteUrl},
-		{icon: Github, label: 'Source code', href: PROJECT.repoUrl},
+		{icon: Code, label: 'Source code', href: PROJECT.repoUrl},
 		{icon: Bug, label: 'Report an issue', href: PROJECT.issuesUrl},
 		{icon: Tag, label: 'Releases and changelog', href: PROJECT.changelogUrl},
 		{
