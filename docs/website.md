@@ -44,7 +44,7 @@ The fixture is synthetic and deterministic. Seeding replaces TabLodge data in th
 
 ## Deploy to GitHub Pages
 
-`.github/workflows/pages.yml` builds and deploys changes to `site/**` on `master`. The release workflow dispatches a website build after publishing each release, so the version shown on the landing page stays current. Other builds read the latest GitHub release version. You can also run **Actions › Website › Run workflow**.
+`.github/workflows/pages.yml` builds and deploys changes to `site/**` on `master`. The release workflow dispatches a website build after publishing each release, so the version shown on the landing page stays current. Other builds read the latest GitHub release version. You can also run **Actions › Website › Run workflow**. Pull requests run the build job only (no deploy), so a broken site fails the required `Build site` check.
 
 For the initial setup:
 
