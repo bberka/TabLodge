@@ -168,7 +168,7 @@ section {
 	flex: none;
 	fill: currentColor;
 }
-.btn svg.icon-outline {
+svg.button-icon.icon-outline {
 	fill: none;
 	stroke: currentColor;
 	stroke-width: 1.8;
