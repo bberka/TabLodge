@@ -97,6 +97,7 @@ import {
 	restoreFailureText,
 	plural,
 } from './common';
+import {defaultBookmarkColumnId} from './default-column';
 import {BackupDialog, ImportDialog, useShareDialog} from './lazy-dialogs';
 import type {ExportData} from './export-formats';
 import {
@@ -1342,7 +1343,7 @@ export function SessionManager({
 		setSavingBookmark(true);
 		try {
 			const columnId = await resolveBookmarkColumn(
-				bookmarkTab.columnId || columns[0]?.id || NEW_BOOKMARK_COLUMN,
+				bookmarkTab.columnId || defaultColumnId || NEW_BOOKMARK_COLUMN,
 				newBookmarkColumn,
 			);
 			setBookmarkTab((old) => old && {...old, columnId});
@@ -1377,7 +1378,7 @@ export function SessionManager({
 		setSavingBookmark(true);
 		try {
 			const columnId = await resolveBookmarkColumn(
-				bookmarkSelectedColumn || columns[0]?.id || NEW_BOOKMARK_COLUMN,
+				bookmarkSelectedColumn || defaultColumnId || NEW_BOOKMARK_COLUMN,
 				newBookmarkColumn,
 			);
 			const result = await send('ADD_BOOKMARKS', {
@@ -1640,7 +1641,7 @@ export function SessionManager({
 
 	function openSelectedBookmarkPicker() {
 		setBookmarkSelectedTabs(selectedGroups().flatMap((group) => group.tabs));
-		setBookmarkSelectedColumn(columns[0]?.id || NEW_BOOKMARK_COLUMN);
+		setBookmarkSelectedColumn(defaultColumnId || NEW_BOOKMARK_COLUMN);
 		setNewBookmarkColumn({name: ''});
 		setDialog('bookmark-selected');
 	}
@@ -1666,6 +1667,10 @@ export function SessionManager({
 			: undefined;
 	const selectedFolder = folders.find((folder) => folder.id === folderId);
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
+	const defaultColumnId = defaultBookmarkColumnId(
+		columns,
+		state?.bookmarks ?? [],
+	);
 	return (
 		<div
 			className={
@@ -2263,7 +2268,7 @@ export function SessionManager({
 									columns={columns}
 									value={
 										bookmarkTab?.columnId ||
-										columns[0]?.id ||
+										defaultColumnId ||
 										NEW_BOOKMARK_COLUMN
 									}
 									id="bookmark-column-select"
@@ -2314,7 +2319,7 @@ export function SessionManager({
 									columns={columns}
 									value={
 										bookmarkSelectedColumn ||
-										columns[0]?.id ||
+										defaultColumnId ||
 										NEW_BOOKMARK_COLUMN
 									}
 									id="selected-bookmark-column-select"

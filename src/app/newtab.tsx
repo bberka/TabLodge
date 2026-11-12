@@ -159,6 +159,7 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 import {ColumnSelect} from './column-select';
+import {defaultBookmarkColumnId} from './default-column';
 import {
 	SaveTargetChoice,
 	SaveTargetSessionField,
@@ -371,6 +372,10 @@ function NewTab() {
 	const autoOpenedFinderRef = useRef(false);
 	const {setTheme} = useTheme();
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
+	const defaultColumnId = defaultBookmarkColumnId(
+		columns,
+		state?.bookmarks ?? NO_BOOKMARKS,
+	);
 	const editedBookmark = bookmarkEdit?.id
 		? state?.bookmarks.find((entry) => entry.id === bookmarkEdit.id)
 		: undefined;
@@ -653,7 +658,7 @@ function NewTab() {
 		const columnId = newColumnRequested(requested)
 			? NEW_COLUMN
 			: columns.find((column) => column.id === requested)?.id ||
-				columns[0]?.id ||
+				defaultColumnId ||
 				NEW_COLUMN;
 		setBookmarkEdit({
 			title: params.get('bookmarkTitle') || siteName(url),
@@ -662,7 +667,7 @@ function NewTab() {
 			newColumnName: '',
 		});
 		setDialog('bookmark');
-	}, [state, externalPromptHandled, columns]);
+	}, [state, externalPromptHandled, columns, defaultColumnId]);
 
 	// Bookmarks are only added by drops on a column or Unfiled. Elsewhere, link drags show the
 	// "no drop" cursor and a stray drop is swallowed so the page does not navigate to the link.
@@ -714,7 +719,7 @@ function NewTab() {
 				event.preventDefault();
 				void pastedLinkTitles(several).then((links) => {
 					setPastedLinks(links.map((link) => ({...link, include: true})));
-					setPastedColumn(columns[0]?.id || UNFILED_COLUMN.id);
+					setPastedColumn(defaultColumnId || UNFILED_COLUMN.id);
 					setPastedNewColumn({name: ''});
 					setDialog('paste-links');
 				});
@@ -732,7 +737,7 @@ function NewTab() {
 					id: null,
 					title,
 					url: link.url,
-					columnId: columns[0]?.id || NEW_COLUMN,
+					columnId: defaultColumnId || NEW_COLUMN,
 				});
 				setDialog('bookmark');
 			});
@@ -740,7 +745,7 @@ function NewTab() {
 
 		document.addEventListener('paste', onPaste);
 		return () => document.removeEventListener('paste', onPaste);
-	}, [pasteToBookmark, columns]);
+	}, [pasteToBookmark, columns, defaultColumnId]);
 
 	async function addPastedLinks(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -850,7 +855,7 @@ function NewTab() {
 
 	function openBookmarkEditor(
 		bookmark: Bookmark | null = null,
-		preferredColumn = columns[0]?.id || NEW_COLUMN,
+		preferredColumn = defaultColumnId || NEW_COLUMN,
 	) {
 		// A bookmark left in the board's Unfiled area has no column to show, so it starts on the preferred one.
 		const own = columns.some((column) => column.id === bookmark?.columnId)
@@ -2076,7 +2081,7 @@ function NewTab() {
 				<Label htmlFor="bookmark-column">Column</Label>
 				<ColumnSelect
 					columns={columns}
-					value={bookmarkEdit?.columnId || columns[0]?.id || NEW_COLUMN}
+					value={bookmarkEdit?.columnId || defaultColumnId || NEW_COLUMN}
 					id="bookmark-column"
 					onValueChange={(value) =>
 						setBookmarkEdit((old) => old && {...old, columnId: value})
