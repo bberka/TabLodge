@@ -2,7 +2,7 @@
 	"expo": {
 		"name": "TabLodge",
 		"slug": "tablodge",
-		"version": "1.0.0",
+		"version": "0.1.0",
 		"orientation": "portrait",
 		"icon": "./assets/icon.png",
 		"userInterfaceStyle": "automatic",
@@ -17,6 +17,17 @@
 			"package": "com.bberka.tablodge"
 		},
 		"scheme": "tablodge",
-		"platforms": ["android"]
+		"platforms": ["android"],
+		"plugins": [
+			"expo-sqlite",
+			"expo-secure-store",
+			[
+				"expo-share-intent",
+				{
+					"disableIOS": true,
+					"androidIntentFilters": ["text/*"]
+				}
+			]
+		]
 	}
 }

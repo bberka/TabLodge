@@ -14,6 +14,9 @@ catalog:
   vite-plus: 1.6.0
 minimumReleaseAgeExclude:
   - expo@58.0.25
+  - expo-dev-client@58.0.20
+  - expo-dev-launcher@58.0.20
+  - expo-sqlite@58.0.17
 overrides:
   vite@*: "catalog:"
 peerDependencyRules:

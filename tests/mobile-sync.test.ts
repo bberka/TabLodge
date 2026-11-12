@@ -1,0 +1,140 @@
+import assert from 'node:assert/strict';
+import {test} from 'vite-plus/test';
+import {createApi} from '../server/src/api';
+import {addBookmark, emptyStore, removeBookmark} from '../mobile/src/library';
+import type {Session, Store} from '../src/app/types';
+import {ChangeLog} from '../src/shared/sync/change-log';
+import {createSyncClient} from '../src/shared/sync/client';
+
+const TOKEN = 'mobile-test-token-0123456789-abcdefghijk';
+const URL_BASE = 'https://sync.example.test';
+const NOW = 1000;
+
+type Device = {
+	store: Store;
+	client: ReturnType<typeof createSyncClient>;
+};
+
+function makeDevice(
+	name: string,
+	app: ReturnType<typeof createApi>,
+	store: Store,
+) {
+	const storage = new Map<string, unknown>();
+	let queue = Promise.resolve();
+	let count = 0;
+	const device: Device = {
+		store,
+		client: createSyncClient({
+			get: async (key) => structuredClone(storage.get(key)),
+			async set(key, value) {
+				storage.set(key, structuredClone(value));
+			},
+			async remove(keys) {
+				for (const key of keys) {
+					storage.delete(key);
+				}
+			},
+			fetch: async (url, init) => app.request(url, init),
+			mutate<T>(work: () => Promise<T>) {
+				const result = queue.then(work);
+				queue = result.then(
+					() => undefined,
+					() => undefined,
+				);
+				return result;
+			},
+			readLibrary: async () => structuredClone(device.store),
+			async writeLibrary(next) {
+				device.store = structuredClone(next);
+			},
+			async backup() {},
+			randomId() {
+				count += 1;
+				return `${name}-${count}`;
+			},
+			now: () => NOW + count,
+		}),
+	};
+	return device;
+}
+
+const session: Session = {
+	id: 's1',
+	name: 'Research',
+	folderId: 'f1',
+	description: '',
+	createdAt: NOW,
+	updatedAt: NOW,
+	sourceWindowName: '',
+	sourceWindowId: null,
+	tabs: [
+		{
+			id: 't1',
+			title: 'Docs',
+			url: 'https://example.com/docs',
+			notes: '',
+			pinned: false,
+			nativeGroup: null,
+			savedAt: NOW,
+			originalIndex: 0,
+		},
+	],
+};
+
+test('a phone starting empty receives the extension library and sends back its own links', async () => {
+	const log = new ChangeLog();
+	const app = createApi({token: TOKEN, log: () => log});
+	const desktopStore: Store = {
+		...emptyStore(NOW),
+		folders: [{id: 'f1', name: 'Work', createdAt: NOW, isDefault: true}],
+		groups: [session],
+		bookmarkColumns: [
+			{id: 'c1', name: 'Read later', createdAt: NOW, isDefault: true},
+		],
+		bookmarks: [
+			{
+				id: 'b1',
+				title: 'First',
+				url: 'https://example.com/first',
+				columnId: 'c1',
+				createdAt: NOW,
+				updatedAt: NOW,
+			},
+		],
+	};
+	const desktop = makeDevice('desktop', app, desktopStore);
+	const phone = makeDevice('phone', app, emptyStore(NOW));
+
+	await desktop.client.connect(URL_BASE, TOKEN);
+	await phone.client.connect(URL_BASE, TOKEN);
+
+	assert.deepEqual(
+		phone.store.bookmarks.map((bookmark) => bookmark.id),
+		['b1'],
+	);
+	assert.equal(phone.store.groups[0]?.tabs[0]?.url, 'https://example.com/docs');
+	assert.equal(phone.store.bookmarkColumns[0]?.name, 'Read later');
+
+	phone.store = addBookmark(
+		phone.store,
+		{url: 'https://example.com/shared', title: 'Shared', columnId: 'c1'},
+		'b2',
+		NOW + 10,
+	);
+	await phone.client.syncNow();
+	await desktop.client.syncNow();
+	assert.deepEqual(
+		desktop.store.bookmarks.map((bookmark) => bookmark.id),
+		['b2', 'b1'],
+	);
+
+	phone.store = removeBookmark(phone.store, 'b1', NOW + 20);
+	await phone.client.syncNow();
+	await desktop.client.syncNow();
+	assert.deepEqual(
+		desktop.store.bookmarks.map((bookmark) => bookmark.id),
+		['b2'],
+	);
+	assert.equal(desktop.store.groups.length, 1);
+});
