@@ -1,14 +1,14 @@
 # Contributing to TabLodge
 
-Bug reports, ideas, and pull requests are welcome. If you're planning a larger change, open an issue first so we can discuss the approach before you spend time on it.
+Bug reports, ideas, and pull requests are welcome. Before a larger change, open an issue first so we can agree on the approach before you spend time on it.
 
 ## Get set up
 
 Follow the [source installation steps](README.md#build-from-source) and load `dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
 
-Install the Vite+ CLI once as described in [README Development](README.md#development), then run `vp run dev:chrome` while you work. It rebuilds when files change and opens Chrome or Chromium with the extension loaded in a dedicated profile for this worktree. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. `vp run dev:chrome` loads the Chromium build. `vp run dev:firefox` does the same for the Firefox build in its own Firefox profile; reload the add-on at `about:debugging#/runtime/this-firefox` after a rebuild. `vp run browser:firefox` checks the core workflows in headless Firefox. Test a change on both browsers when it touches anything they treat differently (see [Browser support](architecture.md#browser-support)). This profile keeps test data separate from your regular browser profile. Use `vp run <task>` for the other scripts in the [README command list](README.md#development).
+Install the Vite+ CLI once as described in [README Development](README.md#development), then run `vp run dev:chrome` while you work. It loads the Chromium build, rebuilds when files change, and opens Chrome or Chromium with the extension loaded in a profile for this worktree, separate from your regular browser profile. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. `vp run dev:firefox` does the same for the Firefox build in its own Firefox profile. Reload the add-on at `about:debugging#/runtime/this-firefox` after a rebuild. `vp run browser:firefox` checks the core workflows in headless Firefox. Test a change on both browsers when it touches anything they treat differently (see [Browser support](architecture.md#browser-support)). Use `vp run <task>` for the other scripts in the [README command list](README.md#development).
 
-`pnpm install` also turns on the Git hooks in `.vite-hooks/`. Before each commit they refuse commits on `master`, lint the staged files, and type check; before each push they run `vp run check`. Fix what they report rather than skipping them; see [Git hooks](agent-validation.md#git-hooks).
+`pnpm install` also turns on the Git hooks in `.vite-hooks/`. Before each commit they refuse a commit on `master` or `main`, lint the staged files, and type check. Before each push they run `vp run check`. Fix what they report instead of skipping them (see [Git hooks](agent-validation.md#git-hooks)).
 
 For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](architecture.md).
 
@@ -30,7 +30,7 @@ Agents validate with the headless dev browser to avoid interrupting the desktop.
 
 TabLodge is used by keyboard and with screen readers, so every UI change meets [WCAG 2.2 AA](https://www.w3.org/TR/WCAG22/) for what it touches. Check these before you write the UI, not after:
 
-- **Everything works from the keyboard.** Anything done by dragging, hovering, or right-clicking has a keyboard alternative. Reordering sessions, bookmark columns, and bookmarks is available as **Move up**, **Move down**, **Move left**, and **Move right** in their menus. Keep drag as well; do not replace it.
+- **Everything works from the keyboard.** Anything done by dragging, hovering, or right clicking has a keyboard alternative. Reordering sessions, bookmark columns, and bookmarks is available as **Move up**, **Move down**, **Move left**, and **Move right** in their menus. Keep drag as well, and do not replace it.
 - **Use the native element or the Radix primitive.** A `button` for actions, an `a` for navigation, Radix for dialogs, menus, selects, and tooltips. If you build a custom control, follow its [WAI-ARIA pattern](https://www.w3.org/WAI/ARIA/apg/patterns/): roles, states, and keys. A radio group, for example, has one tab stop and uses arrow keys (see `src/shared/radio-keys.ts`).
 - **Name and state.** Icon only buttons have an `aria-label` that includes what they act on. Toggles expose `aria-expanded`, `aria-pressed`, `aria-checked`, or `aria-current`. Decorative icons and duplicate images are `aria-hidden`.
 - **Focus.** Focus is visible, follows reading order, and never ends up on the page body. After an action that removes or moves the focused element, put focus somewhere sensible: `src/shared/focus-rescue.ts` covers removal, and `focusAfterMove` in `src/app/reorder.ts` covers moving. Dialogs return focus to what opened them without extra code (the shared dialog components do it, including for a dialog opened from a menu item), and menus do the same.
@@ -46,7 +46,7 @@ Use plain language, short paragraphs, and direct instructions. Describe what a p
 
 Do not use em dashes or en dashes in prose. Rewrite sentences instead of using a dash as punctuation. Avoid hyphenated wording when a natural alternative exists. Keep hyphens only where needed for Markdown syntax, exact names, paths, URLs, commands, code, or a technical term that would be unclear without one.
 
-Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. For every change, check whether Help (`src/app/help.tsx`) needs an update. Update it when the change affects user-visible behavior, settings, or workflows; otherwise leave it unchanged. Also check the README, architecture notes, privacy policy, and website when behavior changes. Update screenshots when the UI they show changes; [website setup](website.md#screenshots) explains how they're captured.
+Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. For every change, check whether Help (`src/app/help.tsx`) needs an update. Update it when the change affects behavior, settings, or workflows that users see. Otherwise leave it unchanged. Also check the README, architecture notes, privacy policy, and website when behavior changes. Update screenshots when the UI they show changes. [Website setup](website.md#screenshots) explains how to capture them.
 
 ## Test your change
 
@@ -68,7 +68,7 @@ In the pull request, explain what changed, why it changed, and how you tested it
 Agents follow [AGENTS.md](../AGENTS.md). In short:
 
 - Work in a worktree on a new branch, commit in logical groups, and open a pull request as soon as the work is done. Nobody, human or agent, pushes to `master` directly.
-- Wait for CI. Fix failures caused by the change and try again, up to three attempts; for anything else, tell the maintainer.
+- Wait for CI. Fix failures caused by the change and try again, up to three attempts. For anything else, tell the maintainer.
 - The pull request names the model that did the work, and commits carry only the human author.
 - Every fix or feature includes proof in the pull request, such as a screenshot, recording, or test output, with a before and after for a fix.
 - Before pushing, run the `unslop-*` skills on the changed files only. Install the pinned skills in `skills-lock.json` with `vp run skills:install`.
@@ -77,15 +77,15 @@ Agents follow [AGENTS.md](../AGENTS.md). In short:
 
 TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
 
-The root `VERSION` file holds the minor number. The release workflow computes the patch from the latest matching tag. For example, with `VERSION` set to `1` and a latest release of `0.1.1`, the next release is `0.1.2`. Set `VERSION` to `2` and the next release is `0.2.0`. The minor number cannot go below the latest released minor.
+The root `VERSION` file holds the minor number. The release workflow computes the patch from the latest `v0.<minor>.*` tag. For example, with `VERSION` set to `1` and a latest release of `0.1.1`, the next release is `0.1.2`. Set `VERSION` to `2` and the next release is `0.2.0`. The minor number cannot go below the latest released minor.
 
-Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, publishes the Chromium and Firefox ZIPs with their SHA256 checksums under a `v0.x.y` tag, and triggers the website deployment. It also dispatches the Chrome Web Store workflow, which verifies the release ZIP, uploads it to the existing listing, and submits it for publication. Google review may delay when the update becomes available. The Firefox ZIP is unsigned and is published only as a release asset. A Firefox Add-ons listing would need `tablodge@bbay.dev` (the add-on ID in `scripts/manifest-targets.ts`, permanent once signed) submitted with the source ZIP and the build steps from the [README](README.md#build-from-source). To build and package the extension locally, follow the [README build steps](README.md#build-from-source).
+Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, and publishes the Chromium and Firefox ZIPs with their SHA256 checksums under a `v0.x.y` tag. It then sends one `tablodge-release-published` dispatch, which starts the website deployment and the Chrome Web Store workflow. That workflow verifies the release ZIP against its checksum, uploads it to the existing listing, and submits it for publication. Google review may delay when the update becomes available. The Firefox ZIP is unsigned and is published only as a release asset. A Firefox Add-ons listing would need `tablodge@bbay.dev` (the add-on ID in `scripts/manifest-targets.ts`, permanent once signed), submitted with the source ZIP and the [README build steps](README.md#build-from-source), which also cover building and packaging locally.
 
 ### Sync server image
 
-The sync server image shares the extension's version. Pull requests that touch `server/` or the shared sync code build it, and every such push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. The **Release** workflow publishes it after the release zips, as `ghcr.io/bberka/tablodge-sync:<version>` and `:latest`, by calling the **Sync server image** workflow. The package must be public on GitHub for others to pull it; new packages start private, so set it once in the package's settings. Bump `PROTOCOL_VERSION` in `src/shared/sync/change-log.ts`, which the server and the extension share, only for a change old extensions cannot use, because the extension refuses a server with a different protocol version.
+The sync server image shares the extension's version. Pull requests that touch `server/` or the shared sync code build it, and every such push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. After the release ZIPs, the **Release** workflow calls the **Sync server image** workflow, which publishes `ghcr.io/bberka/tablodge-sync:<version>` and `:latest`. The package must be public on GitHub for others to pull it. New packages start private, so make it public once in the package's settings. Bump `PROTOCOL_VERSION` in `src/shared/sync/change-log.ts`, which the server and the extension share, only for a change old extensions cannot use, because the extension refuses a server with a different protocol version.
 
-The **Deploy to Cloudflare** button copies only `server/cloudflare-deploy/`, so that folder holds a prebuilt `worker.js` instead of the source. After changing `server/src` or `src/shared/sync`, run `pnpm run cf:bundle` and commit the new `worker.js`; a test fails while it is out of date. Keep the Durable Object binding, class, migrations, and `vars` in its `wrangler.jsonc` the same as in `server/wrangler.jsonc`, which another test checks, so a button deploy and `cf:setup` can take over from each other.
+The **Deploy to Cloudflare** button copies only `server/cloudflare-deploy/`, so that folder holds a prebuilt `worker.js` instead of the source. After changing `server/src` or `src/shared/sync`, run `pnpm run cf:bundle` and commit the new `worker.js`. A test in `tests/cloudflare-deploy.test.ts` fails while it is out of date. Keep `name`, `compatibility_date`, the Durable Object binding and class, `migrations`, and `vars` in its `wrangler.jsonc` the same as in `server/wrangler.jsonc`, so a button deploy and `cf:setup` can take over from each other. Another test in the same file checks this.
 
 ### Chrome Web Store publishing
 
@@ -97,7 +97,7 @@ In GitHub repository **Settings › Secrets and variables › Actions**, add the
 - `CWS_CLIENT_SECRET`
 - `CWS_REFRESH_TOKEN`
 
-The workflow already uses TabLodge's existing extension ID. It runs after each GitHub release. If a submission needs to be retried, run **Actions › Chrome Web Store › Run workflow** and enter the published version, such as `0.1.4`.
+The workflow already has TabLodge's extension ID. It runs after each GitHub release. If a submission needs to be retried, run **Actions › Chrome Web Store › Run workflow** and enter the published version, such as `0.1.4`.
 
 `vp run version:next` shows the next version based on your local tags.
 

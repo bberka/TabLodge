@@ -16,7 +16,7 @@
 
 TabLodge is a browser extension for Chromium browsers (Chrome, Brave, Edge, Vivaldi, Opera) and desktop Firefox. Save a window as a named session, close it, and bring it back later. Your new tab page becomes a board of bookmark columns.
 
-No accounts, no analytics. Your data stays in your browser profile, and TabLodge talks to no server unless you turn on sync with one you run yourself.
+TabLodge has no accounts and no analytics. Your data stays in your browser profile, and TabLodge talks to no server unless you turn on sync with one you run yourself.
 
 ## Features
 
@@ -25,11 +25,11 @@ No accounts, no analytics. Your data stays in your browser profile, and TabLodge
 - **Search.** A palette (`Ctrl+Shift+K` on any page, `Ctrl+K` or `/` on the dashboard) and the `tl` address bar keyword find open tabs, bookmarks, saved tabs, and sessions.
 - **Import and export.** Bring data from OneTab, Session Buddy, Tab Session Manager, Toby, or browser bookmarks. Export as JSON, HTML, CSV, Markdown, or links, or save a full backup ZIP, optionally protected with a password.
 - **Recovery.** Crash snapshots, a trash bin, Undo, and optional automatic backups.
-- **Sync with your own server.** Keep the library the same in all your browsers through a server you run with Docker or on your Cloudflare account, where a Deploy to Cloudflare button sets it up without installing anything. See [Self hosting](self-hosting.md).
+- **Sync with your own server.** Keep the library the same in all your browsers through a server you run yourself, with Docker or on your Cloudflare account. On Cloudflare, a Deploy to Cloudflare button sets it up without installing anything. See [Self hosting](self-hosting.md).
 - **Private windows.** Use the regular library or a separate one, optionally locked with a PIN or password. See [Private windows](#private-windows).
 - **Popup, dashboard, and side panel**, with light and dark themes and your choice of accent color.
 
-The in app Help page explains every feature and setting in detail.
+The in app Help page explains every feature and setting.
 
 ## Screenshots
 
@@ -99,6 +99,7 @@ Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [
 
 ```text
 extension/   Manifest, icons, HTML shells, service worker
+styles/      Tailwind stylesheet for the extension pages
 src/app/     Extension pages, data types, and messages
 src/shared/  Shared helpers, library storage, and the sync protocol (src/shared/sync/)
 src/components/ui/  UI primitives (Radix and Tailwind)
@@ -107,6 +108,7 @@ tests/       Vitest suites with mocked browser APIs
 scripts/     Build, packaging, dev browser, and release tooling
 site/        Website for tablodge.bbay.dev (vp run site:dev)
 docs/        All documentation except AGENTS.md
+.vite-hooks/ Git hooks that run the checks before commits and pushes
 ```
 
 ## Permissions and privacy
