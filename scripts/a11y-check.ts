@@ -1076,33 +1076,76 @@ async function main() {
 						name: 'Delete session Home lab rebuild',
 					});
 					await sessionDeleteButton.hover();
+					// The computed value is serialized in oklab, so compare it as the color it paints over white.
 					const deleteHoverBackground = async () =>
 						sessionDeleteButton.evaluate(
 							(button: {
 								ownerDocument: {
+									createElement(name: 'canvas'): {
+										width: number;
+										height: number;
+										getContext(kind: '2d'): {
+											fillStyle: string;
+											fillRect(
+												x: number,
+												y: number,
+												w: number,
+												h: number,
+											): void;
+											getImageData(
+												x: number,
+												y: number,
+												w: number,
+												h: number,
+											): {data: number[]};
+										} | null;
+									};
 									defaultView: {
 										getComputedStyle(element: unknown): {
 											backgroundColor: string;
 										};
 									} | null;
 								};
-							}) =>
-								button.ownerDocument.defaultView?.getComputedStyle(button)
-									.backgroundColor,
+							}) => {
+								const paint = button.ownerDocument
+									.createElement('canvas')
+									.getContext('2d');
+								const color =
+									button.ownerDocument.defaultView?.getComputedStyle(
+										button,
+									).backgroundColor;
+								if (!paint || !color) {
+									return [];
+								}
+
+								paint.fillStyle = '#ffffff';
+								paint.fillRect(0, 0, 1, 1);
+								paint.fillStyle = color;
+								paint.fillRect(0, 0, 1, 1);
+								return paint.getImageData(0, 0, 1, 1).data.slice(0, 3);
+							},
 						);
-					const expectedDeleteHoverBackground =
-						theme === 'light'
-							? 'rgba(220, 38, 38, 0.1)'
-							: 'rgba(248, 113, 113, 0.1)';
+					const [red, green, blue] =
+						theme === 'light' ? [220, 38, 38] : [248, 113, 113];
+					const expectedDeleteHoverBackground = [red, green, blue].map(
+						(channel) => Math.round(channel * 0.1 + 255 * 0.9),
+					);
+					const deleteHoverMatches = async () => {
+						const painted = await deleteHoverBackground();
+						return (
+							painted.length === 3 &&
+							painted.every(
+								(channel, index) =>
+									Math.abs(channel - expectedDeleteHoverBackground[index]) <= 2,
+							)
+						);
+					};
+
 					await until(
-						async () =>
-							(await deleteHoverBackground()) === expectedDeleteHoverBackground,
+						deleteHoverMatches,
 						'Delete button hover background transition',
 					);
-					assert.equal(
-						await deleteHoverBackground(),
-						expectedDeleteHoverBackground,
-					);
+					assert.ok(await deleteHoverMatches());
 					assert.deepEqual(
 						await axeViolationLines(page, axeSource, {
 							type: 'rule',

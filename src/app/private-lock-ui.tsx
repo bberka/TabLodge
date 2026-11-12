@@ -169,7 +169,7 @@ function LockScreen({
 			className="grid min-h-screen place-items-center p-4"
 			aria-labelledby={headingId}
 		>
-			<section className="grid w-full max-w-sm gap-4 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+			<section className="grid w-full max-w-sm gap-4 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-xs">
 				<div className="grid gap-2">
 					<Lock className="h-6 w-6 text-primary" aria-hidden="true" />
 					<h1 id={headingId} className="text-lg font-semibold">

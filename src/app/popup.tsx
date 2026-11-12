@@ -935,7 +935,7 @@ function Popup() {
 					<form onSubmit={addToSession}>
 						<DialogHeader>
 							<DialogTitle>Add this page to a session</DialogTitle>
-							<DialogDescription className="[overflow-wrap:anywhere]">
+							<DialogDescription className="wrap-anywhere">
 								The page stays open and is added at the end of the session.
 							</DialogDescription>
 						</DialogHeader>
@@ -988,7 +988,7 @@ function Popup() {
 					<form onSubmit={saveBookmark}>
 						<DialogHeader>
 							<DialogTitle>Bookmark this page</DialogTitle>
-							<DialogDescription className="[overflow-wrap:anywhere]">
+							<DialogDescription className="wrap-anywhere">
 								Choose a local {PROJECT.name} column.
 							</DialogDescription>
 						</DialogHeader>

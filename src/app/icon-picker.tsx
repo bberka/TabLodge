@@ -176,7 +176,7 @@ function IconPickerDialog({
 											data-icon-id={icon.id}
 											data-selected={active}
 											className={cn(
-												'grid h-10 w-10 place-items-center rounded-md text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+												'grid h-10 w-10 place-items-center rounded-md text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
 												active
 													? 'bg-primary text-primary-foreground'
 													: 'hover:bg-accent',
@@ -269,7 +269,7 @@ export function IconNameField({
 						setOpen(true);
 					}}
 				>
-					<Icon className="!size-5" />
+					<Icon className="size-5!" />
 				</Button>
 				<Input
 					{...inputProps}

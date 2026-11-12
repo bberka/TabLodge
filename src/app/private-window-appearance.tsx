@@ -112,7 +112,7 @@ function PrivateWindowFrame({children}: {children: ReactNode}) {
 					<a
 						data-private-settings
 						href="options.html#settings-private-windows"
-						className="rounded-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="rounded-xs underline underline-offset-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Private window settings
 					</a>

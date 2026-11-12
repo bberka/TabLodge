@@ -96,7 +96,7 @@ function MenuLocation({label}: {label: string}) {
 
 function Key({children}: {children: ReactNode}) {
 	return (
-		<kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-medium text-foreground">
+		<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-medium text-foreground">
 			{children}
 		</kbd>
 	);
@@ -604,7 +604,7 @@ function Help() {
 							sites, theme, snapshots, and the trash bin. Open{' '}
 							<a
 								href="options.html?q=Data"
-								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 							>
 								Data settings
 							</a>{' '}
@@ -839,7 +839,7 @@ function Help() {
 						<a
 							key={id}
 							href={`#${id}`}
-							className="inline-flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							className="inline-flex min-h-9 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 						>
 							<Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
 							{title}
@@ -876,7 +876,7 @@ function Help() {
 											</p>
 										</div>
 									</header>
-									<div className="mt-4 divide-y divide-border border-t border-border sm:ml-[3.25rem]">
+									<div className="mt-4 divide-y divide-border border-t border-border sm:ml-13">
 										{section.visibleEntries.map((entry) => (
 											<div
 												key={entry.title}
@@ -895,7 +895,7 @@ function Help() {
 										))}
 									</div>
 									{section.action && (
-										<div className="mt-4 flex flex-wrap items-center gap-3 sm:ml-[3.25rem]">
+										<div className="mt-4 flex flex-wrap items-center gap-3 sm:ml-13">
 											{section.action.href === SHORTCUTS_URL ? (
 												<Button
 													variant="outline"
@@ -914,7 +914,7 @@ function Help() {
 											) : (
 												<a
 													href={section.action.href}
-													className="inline-flex min-h-9 items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+													className="inline-flex min-h-9 items-center gap-1.5 rounded-md text-sm font-medium text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 												>
 													{section.action.icon && (
 														<section.action.icon
@@ -942,7 +942,7 @@ function Help() {
 										</div>
 									)}
 									{section.id === 'about' && (
-										<div className="mt-4 flex flex-wrap gap-2 sm:ml-[3.25rem]">
+										<div className="mt-4 flex flex-wrap gap-2 sm:ml-13">
 											{projectLinks.map(({icon: LinkIcon, label, href}) => (
 												<Button key={label} asChild variant="outline" size="sm">
 													<a
@@ -962,7 +962,7 @@ function Help() {
 										</div>
 									)}
 									{terms.length === 0 && section.id === 'right-click' && (
-										<p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground sm:ml-[3.25rem]">
+										<p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground sm:ml-13">
 											<Check className="h-4 w-4 shrink-0" aria-hidden="true" />
 											Each menu location can be enabled separately.
 										</p>

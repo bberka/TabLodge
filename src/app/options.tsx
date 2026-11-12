@@ -1093,7 +1093,7 @@ function Options() {
 		}
 
 		target.setAttribute('tabindex', '-1');
-		target.classList.add('focus:outline-none');
+		target.classList.add('focus:outline-hidden');
 		target.scrollIntoView({block: 'start'});
 		target.focus({preventScroll: true});
 	}, [state]);
@@ -1865,7 +1865,7 @@ function Options() {
 					<button
 						type="button"
 						aria-label="Clear search"
-						className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 						onClick={() => {
 							updateQuery('');
 							searchRef.current?.focus();
@@ -1878,7 +1878,7 @@ function Options() {
 						className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-[11px] text-muted-foreground sm:flex"
 						aria-hidden="true"
 					>
-						<kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-sans">
+						<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans">
 							/
 						</kbd>
 					</span>
@@ -1895,7 +1895,7 @@ function Options() {
 							href={`#${id}`}
 							aria-current={activeSection === id ? 'location' : undefined}
 							className={cn(
-								'inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+								'inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring',
 								activeSection === id
 									? 'bg-primary/10 font-medium text-primary'
 									: 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -2265,7 +2265,7 @@ function Options() {
 							<div
 								ref={dataRef}
 								tabIndex={-1}
-								className="focus-visible:outline-none"
+								className="focus-visible:outline-hidden"
 								aria-label="Session and bookmark data"
 							>
 								<div className="divide-y divide-border/70">
@@ -2562,7 +2562,7 @@ function Options() {
 												{showInvalid ? 'Hide' : 'Show'} ignored lines
 											</button>
 											{showInvalid && (
-												<ul className="mt-1 max-h-20 overflow-auto font-mono [overflow-wrap:anywhere]">
+												<ul className="mt-1 max-h-20 overflow-auto font-mono wrap-anywhere">
 													{bulk.invalid.map((line, index) => (
 														<li key={`${index}-${line}`}>{line}</li>
 													))}
@@ -2584,7 +2584,7 @@ function Options() {
 										spellCheck={false}
 										aria-invalid={Boolean(siteFieldError)}
 										aria-describedby="excluded-origin-message"
-										className="aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive"
+										className="aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive"
 										onChange={(event) => {
 											setExcludedDraft(event.target.value);
 											setSiteError('');
@@ -2650,7 +2650,7 @@ function Options() {
 								href={href}
 								target={external ? '_blank' : undefined}
 								rel={external ? 'noopener noreferrer' : undefined}
-								className="rounded-sm font-medium hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								className="rounded-xs font-medium hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 							>
 								{label}
 							</a>
@@ -2739,7 +2739,7 @@ function ShortcutsCard({
 							</dt>
 							<dd className="shrink-0">
 								{command.shortcut ? (
-									<kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
+									<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
 										{command.shortcut}
 									</kbd>
 								) : (
@@ -2845,7 +2845,7 @@ function QuickActionsSetting<
 								return (
 									<div
 										key={action}
-										className="flex min-h-9 items-center gap-1 rounded-sm px-2 text-sm hover:bg-accent"
+										className="flex min-h-9 items-center gap-1 rounded-xs px-2 text-sm hover:bg-accent"
 									>
 										<Check
 											aria-hidden="true"
@@ -2977,7 +2977,7 @@ function SettingRow({
 			// A setting that depends on the one above sits on a line hanging from it.
 			className={cn(
 				'flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between',
-				inset && 'ml-2 border-l-2 border-primary/50 pl-4',
+				inset && 'ml-2 border-l-2 border-border pl-4',
 			)}
 		>
 			<div className="min-w-0">

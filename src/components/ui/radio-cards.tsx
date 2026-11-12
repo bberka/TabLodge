@@ -91,9 +91,9 @@ function RadioCard({
 		<label
 			className={cn(
 				'group/radio relative flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border bg-card px-3.5 py-3 text-left transition-colors',
-				'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background',
+				'has-focus-visible:ring-2 has-focus-visible:ring-ring has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-background',
 				checked
-					? 'border-primary bg-primary/[.06]'
+					? 'border-primary bg-primary/6'
 					: 'border-border hover:border-primary/40 hover:bg-muted/50',
 				isDisabled && 'cursor-not-allowed opacity-50',
 				className,
@@ -126,7 +126,7 @@ function RadioCard({
 					{badge}
 				</span>
 				{Boolean(description) && (
-					<span className="mt-0.5 block text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
+					<span className="mt-0.5 block text-xs leading-5 text-muted-foreground wrap-anywhere">
 						{description}
 					</span>
 				)}
@@ -191,9 +191,9 @@ function SegmentedControl<T extends string>({
 						key={option.value}
 						className={cn(
 							fullWidth && 'flex-1',
-							'relative flex cursor-pointer items-center justify-center rounded-[5px] px-3 text-center text-xs font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+							'relative flex cursor-pointer items-center justify-center rounded-[5px] px-3 text-center text-xs font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring',
 							checked
-								? 'bg-card text-foreground shadow-sm'
+								? 'bg-card text-foreground shadow-xs'
 								: 'text-muted-foreground hover:text-foreground',
 							option.disabled && 'cursor-not-allowed opacity-50',
 						)}

@@ -67,10 +67,10 @@ type DialogSize = keyof typeof DIALOG_SIZES;
 /**
 Overlay and panel styles, shared with alert-dialog.tsx. Long content scrolls inside the panel.
 */
-const dialogOverlayClass = 'tn-dialog-overlay fixed inset-0 z-[90] bg-black/40';
+const dialogOverlayClass = 'tn-dialog-overlay fixed inset-0 z-90 bg-black/40';
 const dialogPanelClass = (size: DialogSize) =>
 	cn(
-		'tn-dialog-content fixed left-1/2 top-1/2 z-[91] flex max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-lg border border-border bg-card p-6 text-card-foreground shadow-lg outline-none',
+		'tn-dialog-content fixed left-1/2 top-1/2 z-91 flex max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto rounded-lg border border-border bg-card p-6 text-card-foreground shadow-lg outline-hidden',
 		DIALOG_SIZES[size],
 	);
 
@@ -295,10 +295,7 @@ const DialogBody = ({
 	...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
 	<div
-		className={cn(
-			'grid min-w-0 gap-4 text-sm [overflow-wrap:anywhere]',
-			className,
-		)}
+		className={cn('grid min-w-0 gap-4 text-sm wrap-anywhere', className)}
 		{...props}
 	/>
 );
@@ -327,7 +324,7 @@ const DialogTitle = React.forwardRef<
 	<DialogPrimitive.Title
 		ref={ref}
 		className={cn(
-			'text-base font-semibold leading-snug tracking-tight [overflow-wrap:anywhere]',
+			'text-base font-semibold leading-snug tracking-tight wrap-anywhere',
 			className,
 		)}
 		{...props}
@@ -342,7 +339,7 @@ const DialogDescription = React.forwardRef<
 	<DialogPrimitive.Description
 		ref={ref}
 		className={cn(
-			'text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]',
+			'text-sm leading-relaxed text-muted-foreground wrap-anywhere',
 			className,
 		)}
 		{...props}

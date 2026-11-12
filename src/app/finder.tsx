@@ -783,7 +783,7 @@ function ActionMenu({
 						<button
 							type="button"
 							tabIndex={-1}
-							className="rounded underline-offset-2 hover:text-foreground hover:underline"
+							className="rounded-sm underline-offset-2 hover:text-foreground hover:underline"
 							onMouseDown={(event) => event.preventDefault()}
 							onClick={() => finder.closeMenu()}
 						>
@@ -858,7 +858,7 @@ function useScrollActiveIntoView(listId: string, selected: number) {
 
 function Kbd({children}: {children: string}) {
 	return (
-		<kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
+		<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
 			{children}
 		</kbd>
 	);
@@ -883,7 +883,7 @@ export function FinderPalette({
 			<DialogContent
 				hideClose
 				data-finder=""
-				className="top-[14vh] max-h-[min(34rem,80vh)] -translate-y-0 gap-0 overflow-hidden p-0"
+				className="top-[14vh] max-h-[min(34rem,80vh)] translate-y-0 gap-0 overflow-hidden p-0"
 				size="lg"
 				// Escape leaves the actions menu first and closes the palette on the next press.
 				onEscapeKeyDown={(event) => {
@@ -983,7 +983,7 @@ function PaletteBody(props: {
 							: 'Search bookmarks, sessions, open tabs, commands, or the web'
 					}
 					value={finder.menu ? finder.menuFilter : finder.query}
-					className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+					className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
 					onChange={(event) =>
 						finder.menu
 							? finder.changeMenuFilter(event.target.value)

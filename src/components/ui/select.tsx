@@ -16,7 +16,7 @@ const SelectTrigger = React.forwardRef<
 	<SelectPrimitive.Trigger
 		ref={ref}
 		className={cn(
-			'tn-select-trigger flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+			'tn-select-trigger flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background data-placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
 			className,
 		)}
 		{...props}
@@ -43,7 +43,7 @@ const SelectContent = React.forwardRef<
 			<SelectPrimitive.Content
 				ref={ref}
 				className={cn(
-					'tn-select-content relative z-[100] max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-[8rem] max-w-[min(var(--radix-select-content-available-width),32rem)] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground',
+					'tn-select-content relative z-100 max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-32 max-w-[min(var(--radix-select-content-available-width),32rem)] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground',
 					className,
 				)}
 				position={position}
@@ -57,10 +57,9 @@ const SelectContent = React.forwardRef<
 					<SelectPrimitive.Viewport asChild>
 						<ScrollAreaPrimitive.Viewport
 							className={cn(
-								'min-h-0 w-full p-1 [&>div]:!block',
-								'[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-								position === 'popper' &&
-									'min-w-[var(--radix-select-trigger-width)]',
+								'min-h-0 w-full p-1 [&>div]:block!',
+								'scrollbar-none [&::-webkit-scrollbar]:hidden',
+								position === 'popper' && 'min-w-(--radix-select-trigger-width)',
 							)}
 						>
 							{children}
@@ -81,7 +80,7 @@ const SelectItem = React.forwardRef<
 	<SelectPrimitive.Item
 		ref={ref}
 		className={cn(
-			'relative flex w-full min-w-0 cursor-default [&>span:last-child]:min-w-0 [&>span:last-child]:flex-1 [&>span:last-child]:truncate select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+			'relative flex w-full min-w-0 cursor-default [&>span:last-child]:min-w-0 [&>span:last-child]:flex-1 [&>span:last-child]:truncate select-none items-center rounded-xs py-1.5 pl-2 pr-8 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
 			className,
 		)}
 		{...props}

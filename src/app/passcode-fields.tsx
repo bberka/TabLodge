@@ -52,7 +52,7 @@ function ShowHideButton({
 	return (
 		<button
 			type="button"
-			className="grid size-9 shrink-0 place-items-center rounded-md border border-input text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			className="grid size-9 shrink-0 place-items-center rounded-md border border-input text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 			aria-label={`${shown ? 'Hide' : 'Show'} ${label}`}
 			aria-pressed={shown}
 			onClick={onToggle}
@@ -196,7 +196,7 @@ export function PasscodeSetup({
 					<span className="min-w-0">{PIN_WEAKNESS_NOTE}</span>
 				</p>
 			)}
-			<p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/[.06] px-3 py-2 text-xs leading-5">
+			<p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-5">
 				<CircleAlert
 					className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
 					aria-hidden="true"
