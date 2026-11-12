@@ -14,56 +14,32 @@ const heroLight = await screenshotSet('dashboard', 'light');
 const heroSizes = '(min-width: 1160px) 1120px, calc(100vw - 2.5rem)';
 
 const features = [
-	{title: 'Save tabs as sessions', text: 'Save one tab, selected tabs, a tab group, or whole windows, and name them for later.'},
-	{title: 'Restore tab groups', text: 'Sessions come back with their group names, colors, collapsed state, and pinned tabs.'},
-	{title: 'Bookmark board', text: 'Columns of links on every new tab, in a Board grid or a Focus view, one column at a time.'},
-	{title: 'Search everything', text: 'Find tabs, sessions, and bookmarks with a shortcut on any page, or type tl in the address bar.'},
-	{title: 'Organize sessions', text: 'Sort sessions into folders, archive old ones, merge, refresh, or split them, with Undo for every change.'},
-	{title: 'Flexible restores', text: 'Restore in this window or a new one, skip tabs already open, and strip tracking parameters if you like.'},
-	{title: 'Close duplicate tabs', text: 'Close extra copies of the same page in one click. Pinned tabs stay, and Undo reopens the rest.'},
-	{title: 'Tidy bookmarks', text: 'Find links saved more than once on your board and keep one copy. Removed ones go to the trash bin.'},
-	{title: 'Side panel and popup', text: 'Reach your library from the side panel, toolbar popup, right click menus, and keyboard shortcuts.'},
-	{title: 'Import and back up', text: 'Bring data from OneTab, Session Buddy, Toby, and more, or save a full backup, optionally with a password.'},
-	{title: 'Sync on your own server', text: 'Keep every browser the same through a server you run with Docker or on your Cloudflare account.'},
-	{title: 'Private windows', text: 'Use the regular library or a separate one, optionally locked and encrypted with a PIN or password.'},
+	{title: 'Save tabs as sessions', text: 'Save one tab, a window, or everything open, name it, and restore it whenever you want.'},
+	{title: 'Bookmark board', text: 'Columns of links on every new tab, ready when you open one.'},
+	{title: 'Search everything', text: 'Find any session, bookmark, or open tab from one search box, on any page.'},
+	{title: 'Import, back up, sync', text: 'Bring data from OneTab, Session Buddy, or Toby, and sync through a server you run.'},
 ];
 
 const faq = [
 	{
 		q: 'Is TabLodge free?',
-		a: 'Yes. TabLodge is free and open source under the MIT license. There is no paid tier, no account and no limit on saved tabs other than your browser storage.',
-	},
-	{
-		q: 'Is TabLodge on the Chrome Web Store?',
-		a: 'Yes. Install TabLodge from the Chrome Web Store in Chrome, Brave, Edge, Vivaldi, Opera, or another compatible Chromium browser.',
+		a: 'Yes. It is free and open source under the MIT license, with no paid tier and no account.',
 	},
 	{
 		q: 'Which browsers does TabLodge support?',
-		a: 'Chromium-based browsers that support Manifest V3 and Chrome 116 or newer: Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera and others. Split-view restore needs Chromium 155 or newer; older versions open those tabs side by side as normal tabs. TabLodge also runs on desktop Firefox 140 or newer. The Firefox package on the release page is not signed or listed on Firefox Add-ons yet, so Firefox loads it as a temporary add-on. Safari and mobile browsers are not supported.',
-	},
-	{
-		q: 'Can I use TabLodge in private windows?',
-		a: 'In Chromium, enable Allow in Incognito in the browser’s extension settings. New private tabs redirect to the TabLodge dashboard by default. Turn this off in Settings under Private windows to keep the browser’s private new tab page. You can also open the dashboard from the toolbar popup or its shortcut. The first private visit asks whether to use the same library as regular windows, use a separate saved library, or use a separate temporary library that clears on browser restart. A separate saved library can be locked with a PIN or password, which encrypts it on your device and shows a lock screen in private windows. It locks again when the last private window closes. A lost PIN or password cannot be recovered. Firefox private windows are not supported: TabLodge does not run there.',
+		a: 'Chromium-based browsers on Chrome 116 or newer, such as Chrome, Brave, Edge, Vivaldi, and Opera. Desktop Firefox 140 or newer works with an unsigned package from the release page. Safari and mobile browsers are not supported.',
 	},
 	{
 		q: 'Does TabLodge collect any data?',
-		a: 'No. TabLodge has no servers, accounts, analytics or telemetry, and it makes no network requests of its own unless you turn on sync with a server you run yourself. It requests no website permissions and injects nothing into pages, except that the search palette shortcut draws the palette over the page you pressed it on, and only when you press it (Settings can switch it to a window). Your sessions and bookmarks are stored in your browser profile.',
+		a: 'No. There are no accounts, analytics, or telemetry, and it makes no network requests unless you turn on sync with a server you run. Your library is stored in your browser profile.',
 	},
 	{
 		q: 'Does it sync between my computers?',
-		a: 'Yes, through a sync server you run yourself, with Docker or on your own Cloudflare account. There is no TabLodge cloud. Connect each browser in Settings under Sync, and sessions, bookmarks and display preferences stay the same on all of them, with changes showing up within a moment. The server stores your library in plain text, so run it somewhere you trust. Private windows with their own library can sync too if you turn it on, encrypted when they have a PIN or password. On Cloudflare, a Deploy to Cloudflare button sets the server up from your browser, with nothing to install. The self hosting guide (docs/self-hosting.md in the TabLodge repository) walks through that, a VPS with Docker and automatic HTTPS, and backups. Without a server, save a full backup (one ZIP with everything, settings included) on one machine and import it on another.',
-	},
-	{
-		q: 'Can I import my tabs from OneTab, Session Buddy, Tab Session Manager or Toby?',
-		a: 'Yes. Open Settings, choose Data, then import the file you exported from the other tool. You get a review screen before anything is saved, and duplicates can be skipped.',
+		a: 'Yes, through a server you run yourself with Docker or on your Cloudflare account. There is no TabLodge cloud. Without a server, save a backup on one machine and import it on another.',
 	},
 	{
 		q: 'Will TabLodge replace my new tab page?',
-		a: 'Yes, it shows your bookmark board and sessions on the new tab page. If you would rather keep your current new tab, turn it off in Settings and use the toolbar popup, side panel or shortcuts instead. In Firefox the setting is hidden: Firefox does not let an add-on hand a new tab back to its own page, so the new tab page stays TabLodge while the add-on is enabled.',
-	},
-	{
-		q: 'How do I update TabLodge?',
-		a: 'Chrome Web Store installations update automatically in supported Chromium browsers. A Firefox package loaded from the release page does not update itself; load the new release over it.',
+		a: 'Yes, it shows your bookmark board and sessions there. You can turn this off in Settings and use the popup, side panel, or shortcuts instead.',
 	},
 ];
 
@@ -152,7 +128,7 @@ const jsonLd = [
 	<section id="features" class="alt">
 		<div class="wrap">
 			<p class="eyebrow">Features</p>
-			<h2>Everything you need to keep tabs under control</h2>
+			<h2>What it does</h2>
 			<ul class="grid">
 				{
 					features.map((f) => (
@@ -211,18 +187,7 @@ const jsonLd = [
 		</div>
 	</section>
 
-	<section id="install" class="alt">
-		<div class="wrap split">
-			<div>
-				<h2>Get TabLodge</h2>
-				<p>Available in Chrome, Brave, Edge, Vivaldi, Opera, and other Chromium browsers. Updates are automatic. TabLodge opens the dashboard in a new tab after installation.</p>
-				<p>Using desktop Firefox 140 or newer? Download the unsigned Firefox package from the <a href={SITE.releases} rel="noopener">latest release</a>; the README explains how to load it.</p>
-				<p><a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a></p>
-			</div>
-		</div>
-	</section>
-
-	<section id="faq" class="alt">
+	<section id="faq">
 		<div class="narrow">
 			<p class="eyebrow">FAQ</p>
 			<h2>Quick answers</h2>
@@ -239,7 +204,7 @@ const jsonLd = [
 		</div>
 	</section>
 
-	<section class="cta">
+	<section id="install" class="cta">
 		<div class="wrap center">
 			<h2>Give your tabs a lodge</h2>
 			<div class="actions center">

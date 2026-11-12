@@ -19,7 +19,7 @@ Paths below are relative to `site/`.
 
 | Path | Contents |
 | --- | --- |
-| `src/pages/index.astro` | Main page, features, installation, imports, FAQ, and structured data |
+| `src/pages/index.astro` | Main page, features, FAQ, and structured data |
 | `src/pages/alternatives.astro` | Comparison with OneTab, Session Buddy, and Toby |
 | `src/pages/privacy.astro` | Website and extension privacy policy |
 | `src/pages/terms.astro` | Terms of use, linked from the footer and the Google OAuth consent screen |
