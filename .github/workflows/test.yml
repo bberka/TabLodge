@@ -29,5 +29,7 @@ jobs:
       - run: pnpm exec vp run check
       - run: pnpm exec vp run build
       - run: pnpm exec vp run pack
+      # Bundles the Android app's JavaScript with Metro; no Android SDK is needed.
+      - run: pnpm run mobile:export
       # Installs the Firefox package in the runner's Firefox and runs the core workflows.
       - run: pnpm exec vp run browser:firefox

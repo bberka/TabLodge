@@ -44,6 +44,10 @@ Sync is off until you enter a server address and token in **Settings › Sync**.
 - **Before the first sync,** TabLodge takes a safety backup if the server has data to bring in.
 - **Private windows.** When private windows use the regular library, their changes are part of it and sync with it. A separate saved private library syncs only after you turn on **Sync private windows** from Settings in a private window, and then goes to the same server as a second library. If that library has a PIN or password, every item is encrypted in the browser (AES-GCM) with a random key, and the server keeps that key only wrapped with your PIN or password (PBKDF2, the same as the lock), so it cannot read the items. It can still see how many there are and when they change, and a short PIN can be guessed by whoever holds the server's data. Without a PIN or password, the private library is stored on the server in plain text like the regular one. A temporary private library never syncs. Turning private sync off stops it and removes the key from this browser; what is on the server stays there.
 
+### Android app
+
+The Android app in `mobile/` (in development) uses the same sync and sends the same data to the same server, and nothing to anyone else. It keeps the server token in the Android keystore (through `expo-secure-store`) and the library on the phone in an app private SQLite database. It never reads other apps or your browser. It sees a link only when you type it or share it to TabLodge from another app. Disconnect removes the token and the sync position and leaves the library on the phone.
+
 ## Retention and deletion
 
 ### Private windows

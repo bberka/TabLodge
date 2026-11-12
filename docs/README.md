@@ -102,9 +102,16 @@ Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [
 
 ### Android app
 
-`mobile/` holds an Android companion app, still in development, that saves links to bookmark columns, opens them, shows sessions read only, and syncs with your own server. [ADR 3](adr/0003-mobile-app-framework.md) explains the framework choice. It is not published and is not part of the extension build.
+`mobile/` holds an Android app, still in development. It is a small link saver in the style of Raindrop:
 
-To run it you need JDK 17 or newer and the Android SDK (`ANDROID_HOME` set), then `pnpm run mobile:android` builds a development build and installs it on a connected device or emulator. `pnpm run mobile:doctor` checks the Expo setup.
+- Bookmark columns: browse, search, add, and delete bookmarks, and tap one to open it.
+- Share sheet: choose TabLodge from another app's share menu to save a link into a column.
+- Sessions: saved sessions are listed read only, and a tap opens a tab's link. A phone browser cannot create them.
+- Sync: it connects to your [sync server](self-hosting.md) with the same address and token as the extension, using the shared client in `src/shared/sync/`.
+
+[ADR 3](adr/0003-mobile-app-framework.md) explains the framework choice. The app is not published and is not part of the extension build.
+
+To run it you need JDK 17 or newer and the Android SDK (`ANDROID_HOME` set). `pnpm run mobile:android` builds a development build and installs it on a connected device or emulator, and `pnpm run mobile:start` serves the JavaScript to it. `pnpm run mobile:doctor` checks the Expo setup, and `pnpm run mobile:export` bundles the JavaScript without a device. The sharing logic is tested in `tests/mobile-library.test.ts` and `tests/mobile-sync.test.ts`.
 
 ### Project structure
 
