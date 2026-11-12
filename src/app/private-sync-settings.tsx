@@ -15,6 +15,7 @@ import {
 	Switch,
 } from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
+import {PRIVATE_SYNC_ASK} from './private-sync';
 import {FieldMessage, SyncNowButton, SyncStatusLine} from './sync-settings';
 import type {PrivateSyncInfo} from './types';
 
@@ -69,18 +70,6 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		};
 	}, []);
 
-	if (!info) {
-		return null;
-	}
-
-	if (info.availability !== 'ready') {
-		return (
-			<p className="text-sm text-muted-foreground">
-				{UNAVAILABLE[info.availability]}
-			</p>
-		);
-	}
-
 	const enable = async (credential?: string) => {
 		setBusy(true);
 		setError('');
@@ -103,6 +92,38 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			setBusy(false);
 		}
 	};
+
+	// A regular window opened this page to turn private sync on (see PrivateSyncPrompt). Starts it as if the
+	// switch were turned on, so a PIN or password is asked for here.
+	const askedRef = useRef(false);
+	useEffect(() => {
+		if (!info || askedRef.current) {
+			return;
+		}
+
+		askedRef.current = true;
+		if (!location.search.includes(PRIVATE_SYNC_ASK)) {
+			return;
+		}
+
+		// Dropped from the address, so a reload does not start it again.
+		history.replaceState(null, '', `${location.pathname}${location.hash}`);
+		if (info.availability === 'ready' && !info.status.connected) {
+			void enable();
+		}
+	});
+
+	if (!info) {
+		return null;
+	}
+
+	if (info.availability !== 'ready') {
+		return (
+			<p className="text-sm text-muted-foreground">
+				{UNAVAILABLE[info.availability]}
+			</p>
+		);
+	}
 
 	const disable = async () => {
 		setBusy(true);

@@ -8,6 +8,7 @@ import {
 	Link2,
 	Link2Off,
 	type LucideIcon,
+	Lock,
 	RefreshCw,
 } from 'lucide-react';
 import {
@@ -16,7 +17,18 @@ import {
 	SYNC_STATUS_KEY,
 	type SyncStatus,
 } from '../shared/sync/client';
-import {Button, ConfirmationDialog, Input, Label} from '../shared/ui';
+import {
+	Button,
+	ConfirmationDialog,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	Input,
+	Label,
+} from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
 import {PROJECT} from './project';
 import {cn} from '@/lib/utils';
@@ -149,6 +161,8 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [error, setError] = useState('');
 	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+	// After connecting, whether to offer syncing the separate private library too.
+	const [askPrivate, setAskPrivate] = useState(false);
 	const addressRef = useRef<HTMLInputElement>(null);
 	const tokenRef = useRef<HTMLInputElement>(null);
 	const syncNowRef = useRef<HTMLButtonElement>(null);
@@ -258,6 +272,11 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				}
 
 				setToken('');
+				void send('GET_PRIVATE_CONFIG').then((config) => {
+					setAskPrivate(
+						config.ok && config.mode === 'saved' && config.configured,
+					);
+				});
 				return result.status;
 			},
 			'Sync is on.',
@@ -452,7 +471,73 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				onOpenChange={setConfirmDisconnect}
 				onConfirm={disconnect}
 			/>
+			<PrivateSyncPrompt
+				open={askPrivate}
+				showStatus={showStatus}
+				onOpenChange={setAskPrivate}
+			/>
 		</div>
+	);
+}
+
+/**
+Asks, right after connecting, whether the separate private library should sync too. That can only be turned on in a
+private window, which can read the library and ask for its PIN or password, so Yes opens Settings there.
+*/
+function PrivateSyncPrompt({
+	open,
+	onOpenChange,
+	showStatus,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	showStatus: ShowStatus;
+}) {
+	const [opening, setOpening] = useState(false);
+	const openPrivateWindow = async () => {
+		setOpening(true);
+		const result = await send('OPEN_PRIVATE_SYNC');
+		setOpening(false);
+		onOpenChange(false);
+		if (!result.ok) {
+			showStatus(result.error, true);
+		}
+	};
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Sync private windows too?</DialogTitle>
+					<DialogDescription>
+						Private windows in this browser keep a separate library. It can sync
+						to the same server, encrypted if it has a PIN or password. You turn
+						this on in a private window, which opens next.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button
+						type="button"
+						variant="outline"
+						onClick={() => {
+							onOpenChange(false);
+						}}
+					>
+						Not now
+					</Button>
+					<Button
+						type="button"
+						disabled={opening}
+						onClick={() => {
+							void openPrivateWindow();
+						}}
+					>
+						<Lock aria-hidden="true" />
+						Open a private window
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 

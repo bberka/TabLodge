@@ -26,6 +26,7 @@ import {
 	type PrivateSyncKey,
 	rewrapSyncKey,
 	serverKeyText,
+	PRIVATE_SYNC_ASK,
 } from '../src/app/private-sync';
 import {
 	createLibraryState,
@@ -2673,6 +2674,31 @@ async function rewrapPrivateSyncKey(credential: Credential) {
 		await storeServerKey(privateSyncTarget(regular), next, serverKeyText(key))
 	) {
 		await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: next}));
+	}
+}
+
+/**
+From a regular window: opens Settings › Sync in a new private window, which turns private sync on there. Only a
+private window can read the private library and ask for its PIN or password.
+*/
+async function openPrivateSync(): Promise<ActionResult<'OPEN_PRIVATE_SYNC'>> {
+	if (privateContext) {
+		return {ok: false, error: 'This is already a private window.'};
+	}
+
+	try {
+		await chrome.windows.create({
+			url: chrome.runtime.getURL(
+				`options.html?${PRIVATE_SYNC_ASK}#settings-sync`,
+			),
+			incognito: true,
+		});
+		return {ok: true};
+	} catch {
+		return {
+			ok: false,
+			error: `Allow ${APP_NAME} in private windows on the extensions page (Allow in Incognito), then try again.`,
+		};
 	}
 }
 
@@ -10269,6 +10295,10 @@ async function handleMessage(
 		case 'PRIVATE_SYNC_DISABLE':
 		case 'PRIVATE_SYNC_NOW': {
 			return handlePrivateSyncMessage(message);
+		}
+
+		case 'OPEN_PRIVATE_SYNC': {
+			return openPrivateSync();
 		}
 
 		case 'HANDOFF_NEW_TAB': {

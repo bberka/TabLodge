@@ -32,6 +32,11 @@ The sync key as this device keeps it: `raw` is the key itself (base64), `wrapped
 */
 export type PrivateSyncKey = {id: string; raw: string; wrapped: string};
 
+/**
+The query a regular window adds when it opens Settings in a private window to turn private sync on there.
+*/
+export const PRIVATE_SYNC_ASK = 'privateSync=ask';
+
 type ServerKey = {v: 1; id: string; wrapped: string};
 
 export const NEEDS_KEY_MESSAGE =
