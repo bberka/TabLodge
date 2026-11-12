@@ -11,6 +11,7 @@ const xoConfig: XoConfigItem[] = [
 			'release/**',
 			'docs/**',
 			'site/**',
+			'server/cloudflare-deploy/worker.js',
 			'.agents/**',
 			'.claude/worktrees/**',
 			'skills-lock.json',

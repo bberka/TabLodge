@@ -18,7 +18,7 @@ This guide covers setting the server up, connecting your browsers, and looking a
 
 | | Option A: VPS with Docker | Option B: Cloudflare | Option C: this computer |
 | --- | --- | --- | --- |
-| You need | A small Linux server, a domain or subdomain | A Cloudflare account, Node.js on your computer | Docker |
+| You need | A small Linux server, a domain or subdomain | A Cloudflare account and a GitHub or GitLab account, nothing to install | Docker |
 | Cost | The server (a 512 MB VPS is plenty) | Usually nothing on the Workers Free plan | Nothing |
 | HTTPS | Automatic, through Caddy | Automatic | Not needed for the same computer |
 | Works from other devices | Yes | Yes | No, only browsers on this computer |
@@ -96,12 +96,20 @@ For nginx, the location needs `proxy_http_version 1.1`, `proxy_set_header Upgrad
 
 This runs the server as a Worker with one Durable Object on your own Cloudflare account. SQLite backed Durable Objects are part of the Workers Free plan within its daily limits, which one person's library should stay far under; check Cloudflare's pricing page for the current numbers. Idle live connections cost nothing, and requests with a wrong token are turned away before they reach your data.
 
-### 1. What you need
+### 1. Deploy with the button
 
-* A Cloudflare account.
-* Node.js 24 or later, pnpm, and Git on your computer.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/master/server/cloudflare-deploy)
 
-### 2. Deploy
+1. [Create a token](#create-a-token) and keep it at hand.
+2. Choose the button and log in to Cloudflare, or create a free account.
+3. Connect your GitHub or GitLab account when asked. Cloudflare copies the server into a new repository there and deploys it from that repository.
+4. Paste the token as the value of `TABLODGE_SYNC_TOKEN`, keep the other settings, and deploy.
+
+When it finishes, Cloudflare shows the Worker's address, such as `https://tablodge-sync.<your-subdomain>.workers.dev`. That and the token are what you enter in TabLodge.
+
+### Or deploy from your computer
+
+This needs Node.js 24 or later, pnpm, and Git, and creates the token for you:
 
 ```sh
 git clone https://github.com/bberka/TabLodge.git
@@ -112,7 +120,9 @@ pnpm run cf:setup
 
 The script opens a browser window to log in to Cloudflare if needed. It then deploys the Worker, creates a token, stores it as a Worker secret, and prints the address (`https://tablodge-sync.<your-subdomain>.workers.dev`) and the token. The token is shown only once, so save it.
 
-### 3. Check it
+### 2. Check it
+
+Open `https://tablodge-sync.<your-subdomain>.workers.dev/health` in a browser, or run:
 
 ```sh
 curl https://tablodge-sync.<your-subdomain>.workers.dev/health
@@ -186,7 +196,9 @@ TabLodge updates itself from the browser store, but your server does not. An old
 
 Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
 
-**Cloudflare.** In your copy of the repository:
+**Cloudflare, deployed with the button.** Open the repository Cloudflare created for you on GitHub or GitLab and replace `worker.js` with the newest [`server/cloudflare-deploy/worker.js`](https://github.com/bberka/TabLodge/blob/master/server/cloudflare-deploy/worker.js) from TabLodge: open the file, choose **Edit**, paste, and commit. Cloudflare deploys the commit by itself.
+
+**Cloudflare, deployed from your computer.** In your copy of the repository:
 
 ```sh
 git pull
@@ -253,7 +265,7 @@ Do this if the token may have leaked.
 
 * VPS: put a new token in `.env` (`openssl rand -base64 32`), then run `docker compose -f compose.https.yaml up -d`. The library is kept.
 * Single container: remove it and start it again with a new `TABLODGE_SYNC_TOKEN`.
-* Cloudflare: run `pnpm run cf:setup --rotate-token` and save the new token it prints.
+* Cloudflare: run `pnpm run cf:setup --rotate-token` and save the new token it prints. With the button, open the Worker in the Cloudflare dashboard, then **Settings › Variables and Secrets**, and replace the value of `TABLODGE_SYNC_TOKEN`.
 
 Then in each browser, open **Settings › Sync**, choose **Disconnect**, and connect again with the new token. Nothing is lost: each browser keeps its library and merges with the server again.
 

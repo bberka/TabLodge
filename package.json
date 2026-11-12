@@ -45,6 +45,7 @@
 		"cf:deploy": "pnpm --filter tablodge-sync-server cf:deploy",
 		"cf:dev": "pnpm --filter tablodge-sync-server cf:dev",
 		"cf:delete": "pnpm --filter tablodge-sync-server cf:delete",
+		"cf:bundle": "node server/scripts/cloudflare-deploy.ts",
 		"version:next": "node scripts/release-version.ts next",
 		"test": "vp test run",
 		"test:watch": "vp test",
