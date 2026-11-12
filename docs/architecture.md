@@ -33,7 +33,7 @@ One codebase serves both. Differences the code can find by looking for an API (`
 | Shortcuts and context menus | Yes | Yes |
 | Downloads copy of backups | Optional `downloads` permission | Optional `downloads` permission |
 | Snapshots and automatic backups (`alarms`) | Yes | Yes |
-| Updates | Chrome Web Store, or reload a manual copy | Reload the add-on; no signed listing yet |
+| Updates | Chrome Web Store, or reload a manual copy | Firefox Add-ons, or reload a temporary add-on |
 
 Why Firefox differs:
 

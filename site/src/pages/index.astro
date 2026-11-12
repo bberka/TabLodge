@@ -7,7 +7,7 @@ import {screenshotSet} from '../lib/screens';
 
 const title = 'TabLodge: Save Tabs for Later';
 const description =
-	'Save tab sessions and bookmarks in your Chromium browser. Free, open source, and private.';
+	'Save tab sessions and bookmarks in Chromium browsers and Firefox. Free, open source, and private.';
 
 const heroDark = await screenshotSet('dashboard', 'dark');
 const heroLight = await screenshotSet('dashboard', 'light');
@@ -39,7 +39,7 @@ const faq = [
 	},
 	{
 		q: 'Will TabLodge replace my new tab page?',
-		a: 'Yes, it shows your bookmark board and sessions there. You can turn this off in Settings and use the popup, side panel, or shortcuts instead.',
+		a: 'Yes, it shows your bookmark board and sessions there. In Chromium browsers you can turn this off in Settings and use the popup, side panel, or shortcuts instead. In Firefox it always replaces the new tab page.',
 	},
 ];
 
@@ -54,8 +54,8 @@ const jsonLd = [
 		image: abs(SITE.ogImage),
 		applicationCategory: 'BrowserApplication',
 		applicationSubCategory: 'Tab manager',
-		operatingSystem: 'Windows, macOS, Linux, ChromeOS (Chromium-based browsers, Manifest V3)',
-		browserRequirements: 'Requires a Chromium-based browser, version 116 or newer',
+		operatingSystem: 'Windows, macOS, Linux, ChromeOS (Chromium-based browsers and desktop Firefox, Manifest V3)',
+		browserRequirements: 'Requires a Chromium-based browser, version 116 or newer, or desktop Firefox 140 or newer',
 		softwareVersion: SITE.version,
 		downloadUrl: SITE.releases,
 		installUrl: SITE.chromeWebStore,
@@ -113,7 +113,7 @@ const jsonLd = [
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 			<p class="note">
-				TabLodge v{SITE.version} &middot; Chrome 116+ &middot; MIT license
+				TabLodge v{SITE.version} &middot; Chrome 116+ &middot; Firefox 140+ &middot; MIT license
 			</p>
 			<div class="hero-shot">
 				<Screenshot

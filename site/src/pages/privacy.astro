@@ -16,7 +16,7 @@ const permissions = [
 	['clipboardWrite', 'Copying bookmark URLs and session links when you ask.'],
 	['sidePanel (Chromium only)', 'Showing bookmarks, sessions and open tabs in the browser side panel. Firefox shows the same page in its sidebar, which needs no permission.'],
 	['search', 'Running a web search with your default engine, only when you choose "Search the web".'],
-	['alarms', 'Scheduling crash-recovery snapshots, automatic backups, trash bin cleanup, archiving old sessions and the idle lock of the private library.'],
+	['alarms', 'Scheduling crash-recovery snapshots, automatic backups, trash bin cleanup, archiving old sessions, sync, and the idle lock of the private library.'],
 	['activeTab, scripting', 'Used by the palette shortcut, which shows the palette over that one page when you press it (the default; Settings can switch to a window). No install warning, no site access, and nothing runs on pages until you press the shortcut.'],
 	['downloads (optional)', 'Saving backup copies to your Downloads folder, only if you turn that on; turning it off gives the permission back.'],
 ];
@@ -37,7 +37,7 @@ const permissions = [
 			url: 'https://tablodge.bbay.dev/privacy/',
 			name: title,
 			description,
-			dateModified: '2026-10-31',
+			dateModified: '2026-11-12',
 			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
 		},
 	]}
@@ -45,7 +45,7 @@ const permissions = [
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Privacy</span></nav>
 		<h1>Privacy</h1>
-		<p class="note">Last updated: 2026-10-31</p>
+		<p class="note">Last updated: 2026-11-12</p>
 		<p class="lead">
 			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect your data.</strong> It uploads your library only to a sync server you run yourself, and only after you connect one.
 		</p>
@@ -67,7 +67,7 @@ const permissions = [
 			<li><strong>Recovery data</strong> (extension storage): rolling snapshots of your open windows for crash recovery, automatic and safety backups, the trash bin, and short-lived Undo copies (kept for two minutes). After an update that changes how your library is stored, a full copy of the old library is kept for seven days. Snapshots skip private windows and excluded websites.</li>
 		</ul>
 		<p>
-			TabLodge reads tab details to save and restore sessions, find duplicates, show and search open tabs, and capture recovery snapshots. Snapshots are enabled by default and can be turned off in Settings, under Recovery &amp; backups. It reads your browser's bookmark tree only when you ask to import it. If you enable the browser bookmark setting, it also watches for newly created bookmarks to offer to add that page or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache.
+			TabLodge reads tab details to save and restore sessions, find duplicates, show and search open tabs, and capture recovery snapshots. Snapshots are enabled by default and can be turned off in Settings, under Recovery &amp; backups. It reads your browser's bookmark tree only when you ask to import it. If you enable the browser bookmark setting, it also watches for newly created bookmarks to offer to add that page or add it automatically. That setting is off by default. Site icons come from the browser's local favicon cache. Firefox has no such cache, so there TabLodge shows an open tab's own icon where the browser provides one, and a letter tile otherwise.
 		</p>
 		<p>
 			Saved sessions and bookmarks stay until you delete them. Trash is kept for 7, 30 or 90 days, depending on your setting. Snapshots, backups and Undo copies also have retention or size limits. You can clear recovery data in <strong>Settings &rsaquo; Recovery &amp; backups</strong>. Erasing sessions or bookmarks in <strong>Settings &rsaquo; Data</strong> creates a safety backup, so check the backup history too if you want to remove retained copies. Removing the extension deletes its browser storage.
@@ -96,7 +96,7 @@ const permissions = [
 
 		<h2>This website</h2>
 		<p>
-			This site (tablodge.bbay.dev) is a static page with no analytics, cookies or third-party scripts. It is hosted on GitHub Pages, which, like any web host, may keep ordinary server logs; see <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub's privacy statement</a>. Manual release downloads are served by GitHub Releases. Chrome Web Store listings, installations, and updates are handled by Google through the <a href={SITE.chromeWebStore} rel="noopener">store</a>.
+			This site (tablodge.bbay.dev) is a static page with no analytics, cookies or third-party scripts. It is hosted on GitHub Pages, which, like any web host, may keep ordinary server logs; see <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub's privacy statement</a>. Manual release downloads are served by GitHub Releases. Store listings, installations, and updates are handled by Google through the <a href={SITE.chromeWebStore} rel="noopener">Chrome Web Store</a> and by Mozilla through <a href={SITE.firefoxAddons} rel="noopener">Firefox Add-ons</a>.
 		</p>
 
 		<h2>Contact</h2>

@@ -9,7 +9,7 @@ This file tells the engineering skills how to read the domain documentation when
 - **`docs/GLOSSARY.md`**: the project's domain terms.
 - **`docs/adr/`**: read ADRs that touch the area you're about to work in.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence, and don't suggest creating them up front. The `/domain-modeling` skill (reached through `/grill-with-docs` and `/improve-codebase-architecture`) creates them when terms or decisions get resolved.
+If any of these files don't exist, **proceed silently**. Don't flag their absence, and don't suggest creating them up front. The `/domain-modeling` skill (reached through `/improve-codebase-architecture`, `/triage`, and `/wayfinder`) creates them when terms or decisions get resolved.
 
 ## File structure
 
