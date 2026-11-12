@@ -80,7 +80,7 @@ TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
 
 The root `VERSION` file holds the minor number. The release workflow computes the patch from the latest `v0.<minor>.*` tag. For example, with `VERSION` set to `1` and a latest release of `0.1.1`, the next release is `0.1.2`. Set `VERSION` to `2` and the next release is `0.2.0`. The minor number cannot go below the latest released minor.
 
-Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, and publishes the Chromium and Firefox ZIPs with their SHA256 checksums under a `v0.x.y` tag. It then sends one `tablodge-release-published` dispatch, which starts the website deployment and the Chrome Web Store workflow. That workflow verifies the release ZIP against its checksum, uploads it to the existing listing, and submits it for publication. Google review may delay when the update becomes available. The Firefox ZIP is unsigned and is published only as a release asset. A Firefox Add-ons listing would need `tablodge@bbay.dev` (the add-on ID in `scripts/manifest-targets.ts`, permanent once signed), submitted with the source ZIP and the [README build steps](README.md#build-from-source), which also cover building and packaging locally.
+Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, and publishes the Chromium and Firefox ZIPs with their SHA256 checksums under a `v0.x.y` tag. It then sends one `tablodge-release-published` dispatch, which starts the website deployment and the Store publishing workflow. That workflow runs two independent jobs. The Chrome job verifies the release ZIP against its checksum, uploads it to the existing listing, and submits it for publication, and Google review may delay when the update becomes available. The Firefox job verifies the Firefox ZIP, packages the source at the release tag, and submits both to the listed add-on, and the job finishes once AMO has queued the version, not after review. The unsigned Firefox ZIP is also published as a release asset. To build and package the extension locally, follow the [README build steps](README.md#build-from-source).
 
 ### Sync server image
 
@@ -98,7 +98,16 @@ In GitHub repository **Settings › Secrets and variables › Actions**, add the
 - `CWS_CLIENT_SECRET`
 - `CWS_REFRESH_TOKEN`
 
-The workflow already has TabLodge's extension ID. It runs after each GitHub release. If a submission needs to be retried, run **Actions › Chrome Web Store › Run workflow** and enter the published version, such as `0.1.4`.
+The workflow already has TabLodge's extension ID. It runs after each GitHub release. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.1.4`, and choose `chrome`.
+
+### Firefox Add-ons publishing
+
+Submit the first version of `tablodge@bbay.dev` by hand on addons.mozilla.org, with the source ZIP and build notes, and fill in the listing. After that, create API credentials under **Developer Hub › Manage API Keys** and add these repository secrets in **Settings › Secrets and variables › Actions**:
+
+- `AMO_JWT_ISSUER`
+- `AMO_JWT_SECRET`
+
+The workflow runs after each GitHub release and submits the Firefox ZIP with `web-ext sign --channel=listed`. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.2.2`, and choose `firefox`. AMO rejects a version number it has already received, so a retry only helps when the earlier run failed before the upload.
 
 `vp run version:next` shows the next version based on your local tags.
 

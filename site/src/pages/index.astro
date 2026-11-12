@@ -27,7 +27,7 @@ const faq = [
 	},
 	{
 		q: 'Which browsers does TabLodge support?',
-		a: 'Chromium-based browsers on Chrome 116 or newer, such as Chrome, Brave, Edge, Vivaldi, and Opera. Desktop Firefox 140 or newer works with an unsigned package from the release page. Safari and mobile browsers are not supported.',
+		a: 'Chromium-based browsers on Chrome 116 or newer, such as Chrome, Brave, Edge, Vivaldi, and Opera. Desktop Firefox 140 or newer works too, from Firefox Add-ons. Safari and mobile browsers are not supported.',
 	},
 	{
 		q: 'Does TabLodge collect any data?',
@@ -109,6 +109,7 @@ const jsonLd = [
 			<p class="lead">Save tabs for later. Restore them with tab groups intact.</p>
 			<div class="actions">
 				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 			<p class="note">
@@ -209,6 +210,7 @@ const jsonLd = [
 			<h2>Give your tabs a lodge</h2>
 			<div class="actions center">
 				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 		</div>
