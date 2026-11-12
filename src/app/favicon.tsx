@@ -101,7 +101,7 @@ export function LinkSummary({
 }) {
 	return (
 		<span className="flex min-w-0 items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2 text-left">
-			<Favicon url={url} label={title} className="h-6 w-6 rounded" />
+			<Favicon url={url} label={title} className="h-6 w-6 rounded-sm" />
 			<span className="min-w-0 flex-1">
 				{title && title !== url && (
 					<strong
@@ -112,7 +112,7 @@ export function LinkSummary({
 					</strong>
 				)}
 				<small
-					className="block text-[11px] leading-4 text-muted-foreground [overflow-wrap:anywhere]"
+					className="block text-[11px] leading-4 text-muted-foreground wrap-anywhere"
 					title={url}
 				>
 					<InsecureMarkFor url={url} settings={settings} />

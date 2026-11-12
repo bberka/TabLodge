@@ -609,7 +609,7 @@ export function BackupDialog({
 					>
 						<span>{summary}</span>
 						<span aria-hidden="true">→</span>
-						<span className="min-w-0 font-mono text-foreground [overflow-wrap:anywhere]">
+						<span className="min-w-0 font-mono text-foreground wrap-anywhere">
 							{filename}
 						</span>
 					</p>
@@ -753,7 +753,7 @@ function SharePreviewPanel({
 			) : preview.format === 'html' ? (
 				<div className="mt-3 max-h-[min(24rem,50dvh)] overflow-y-auto rounded-md border border-border bg-background p-3">
 					<div className="mx-auto max-w-xl">
-						<h4 className="text-base font-semibold leading-tight [overflow-wrap:anywhere]">
+						<h4 className="text-base font-semibold leading-tight wrap-anywhere">
 							{pageTitle}
 						</h4>
 						<p className="mt-1 text-[11px] text-muted-foreground">
@@ -778,7 +778,7 @@ function SharePreviewPanel({
 											<div className="flex items-baseline justify-between gap-2 border-b border-border px-3 py-2">
 												<div className="min-w-0">
 													{!repeatedTitle && (
-														<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
+														<h5 className="text-xs font-semibold wrap-anywhere">
 															{group.name}
 														</h5>
 													)}
@@ -799,7 +799,7 @@ function SharePreviewPanel({
 											</div>
 										)}
 										{group.description && (
-											<p className="whitespace-pre-wrap px-3 py-2 text-xs [overflow-wrap:anywhere]">
+											<p className="whitespace-pre-wrap px-3 py-2 text-xs wrap-anywhere">
 												{group.description}
 											</p>
 										)}
@@ -810,10 +810,10 @@ function SharePreviewPanel({
 														key={`${tab.url}-${tabIndex}`}
 														className="border-t border-border py-1.5 pl-1"
 													>
-														<span className="block text-xs font-semibold text-primary [overflow-wrap:anywhere]">
+														<span className="block text-xs font-semibold text-primary wrap-anywhere">
 															{tab.title || tab.url}
 														</span>
-														<span className="mt-0.5 block text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
+														<span className="mt-0.5 block text-[10px] text-muted-foreground wrap-anywhere">
 															{tab.url}
 															{tab.pinned ? ' · Pinned' : ''}
 															{tab.nativeGroup?.title
@@ -836,21 +836,21 @@ function SharePreviewPanel({
 					</div>
 				</div>
 			) : preview.format === 'markdown' || preview.format === 'links' ? (
-				<pre className="mt-3 max-h-[min(24rem,50dvh)] overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
+				<pre className="mt-3 max-h-[min(24rem,50dvh)] overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
 					{preview.text}
 				</pre>
 			) : (
 				<div className="mt-3 max-h-[min(24rem,50dvh)] space-y-3 overflow-y-auto rounded-md border border-border bg-background p-3">
 					{preview.groups.map((group, groupIndex) => (
 						<div key={`${group.name}-${groupIndex}`}>
-							<h5 className="text-xs font-semibold [overflow-wrap:anywhere]">
+							<h5 className="text-xs font-semibold wrap-anywhere">
 								{group.name}
 							</h5>
 							<ul className="mt-2 list-disc space-y-1 pl-5">
 								{group.tabs.map((tab, tabIndex) => (
 									<li key={`${tab.url}-${tabIndex}`}>
 										<span
-											className="text-xs font-medium text-primary underline underline-offset-2 [overflow-wrap:anywhere]"
+											className="text-xs font-medium text-primary underline underline-offset-2 wrap-anywhere"
 											title={tab.url}
 										>
 											{tab.title || tab.url}
@@ -1613,7 +1613,7 @@ export function ImportDialog({
 								className={cn(
 									'flex flex-col items-center gap-3 rounded-lg border-2 border-dashed px-5 py-6 text-center transition-colors',
 									dragging
-										? 'border-primary bg-primary/[.06]'
+										? 'border-primary bg-primary/6'
 										: 'border-border bg-muted/30',
 								)}
 								onDragOver={(event) => {
@@ -1713,7 +1713,7 @@ export function ImportDialog({
 							{error && (
 								<p
 									role="alert"
-									className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/[.06] px-3 py-2 text-xs leading-5 text-foreground"
+									className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-5 text-foreground"
 								>
 									<CircleAlert
 										className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
@@ -1742,7 +1742,7 @@ export function ImportDialog({
 									<Archive className="h-4 w-4" aria-hidden="true" />
 								</span>
 								<div className="min-w-0 flex-1">
-									<p className="text-sm font-medium [overflow-wrap:anywhere]">
+									<p className="text-sm font-medium wrap-anywhere">
 										{source.type === 'file' ? source.name : ''}
 									</p>
 									<p className="mt-0.5 text-xs text-muted-foreground">
@@ -1819,7 +1819,7 @@ export function ImportDialog({
 										)}
 									</span>
 									<div className="min-w-0 flex-1">
-										<p className="text-sm font-medium [overflow-wrap:anywhere]">
+										<p className="text-sm font-medium wrap-anywhere">
 											{source.type === 'browser'
 												? 'This browser’s bookmarks'
 												: source.name}

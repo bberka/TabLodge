@@ -1669,7 +1669,7 @@ export function SessionManager({
 		<div
 			className={
 				embedded
-					? 'w-full space-y-6'
+					? 'flex w-full flex-col gap-6'
 					: 'mx-auto w-full max-w-6xl px-5 py-6 sm:px-8 sm:py-9'
 			}
 		>
@@ -1994,7 +1994,7 @@ export function SessionManager({
 				</nav>
 				{selectedCount > 0 && (
 					<div
-						className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
+						className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5.5 px-4 py-3"
 						role="group"
 						aria-label="Selected session tabs"
 					>
@@ -3066,7 +3066,7 @@ const GroupCard = memo(
 						orientation="horizontal"
 						className={cn(
 							'inset-x-0',
-							mark.position === 'before' ? '-top-[5px]' : '-bottom-[5px]',
+							mark.position === 'before' ? 'top-[-5px]' : 'bottom-[-5px]',
 						)}
 					/>
 				)}
@@ -3075,7 +3075,7 @@ const GroupCard = memo(
 					className={cn(
 						'tn-card-lazy group/session cursor-pointer overflow-hidden rounded-xl border bg-card transition-shadow',
 						isExpanded
-							? 'border-primary/30 shadow-sm'
+							? 'border-primary/30 shadow-xs'
 							: 'border-border hover:border-primary/25',
 						mark?.kind === 'into' && 'border-primary ring-2 ring-primary/40',
 						draggingSelf && 'opacity-50',
@@ -3299,7 +3299,7 @@ const GroupCard = memo(
 						<div className="border-t border-border">
 							{group.description && (
 								<div className="min-w-0 border-b border-border bg-muted/30 px-4 py-2.5 sm:pl-14">
-									<p className="min-w-0 whitespace-pre-wrap break-words text-sm [overflow-wrap:anywhere]">
+									<p className="min-w-0 whitespace-pre-wrap wrap-break-word text-sm wrap-anywhere">
 										{group.description}
 									</p>
 								</div>
@@ -3577,7 +3577,7 @@ const SavedTab = memo(
 					<Favicon
 						url={tab.url}
 						label={label}
-						className={cn(compact ? 'h-5 w-5' : 'mt-0.5 h-6 w-6', 'rounded-sm')}
+						className={cn(compact ? 'h-5 w-5' : 'mt-0.5 h-6 w-6', 'rounded-xs')}
 					/>
 					<div className="min-w-0 flex-1">
 						<span className="flex min-w-0 items-center gap-1.5">
@@ -3635,7 +3635,7 @@ const SavedTab = memo(
 							{tab.pinned && <Badge>Pinned</Badge>}
 							{tab.nativeGroup?.title && (
 								<Badge
-									className="min-w-0 max-w-[12rem]"
+									className="min-w-0 max-w-48"
 									title={tab.nativeGroup.title}
 								>
 									<span className="truncate">{tab.nativeGroup.title}</span>
@@ -3652,7 +3652,7 @@ const SavedTab = memo(
 							</p>
 						)}
 						{tab.notes && (
-							<p className="mt-1 whitespace-pre-wrap break-words text-xs italic text-muted-foreground [overflow-wrap:anywhere]">
+							<p className="mt-1 whitespace-pre-wrap wrap-break-word text-xs italic text-muted-foreground wrap-anywhere">
 								{tab.notes}
 							</p>
 						)}

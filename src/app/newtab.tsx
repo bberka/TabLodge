@@ -2352,7 +2352,7 @@ function NewTab() {
 			</div>
 			{selectedBookmarkIds.length > 0 && (
 				<div
-					className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/[.055] px-4 py-3"
+					className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5.5 px-4 py-3"
 					role="group"
 					aria-label="Selected bookmarks"
 				>
@@ -3861,8 +3861,8 @@ const BookmarkColumn = memo(
 						className={cn(
 							'inset-y-0',
 							dropIndicator.position === 'before'
-								? '-left-[9px]'
-								: '-right-[9px]',
+								? 'left-[-9px]'
+								: 'right-[-9px]',
 						)}
 					/>
 				)}
@@ -4067,7 +4067,7 @@ const BookmarkCard = memo(
 					// The column body has its own right-click menu; a card keeps its own.
 					onContextMenu={(event) => event.stopPropagation()}
 				>
-					{dropBefore && <InsertionLine className="inset-x-1 -top-[3px]" />}
+					{dropBefore && <InsertionLine className="inset-x-1 top-[-3px]" />}
 					<article
 						draggable
 						className={cn(
@@ -4148,7 +4148,7 @@ const BookmarkCard = memo(
 								label={siteName(bookmark.url)}
 								className={cn(
 									showUrl && !compact ? 'h-6 w-6' : 'h-5 w-5',
-									'rounded',
+									'rounded-sm',
 									selectionMode !== 'off' &&
 										(selectionMode === 'on' || selected
 											? 'invisible'
@@ -4220,7 +4220,7 @@ const BookmarkCard = memo(
 							onOpenChange={setMenuOpen}
 						/>
 					</article>
-					{dropAfter && <InsertionLine className="inset-x-1 -bottom-[3px]" />}
+					{dropAfter && <InsertionLine className="inset-x-1 bottom-[-3px]" />}
 				</div>
 			</ActionContextMenu>
 		);

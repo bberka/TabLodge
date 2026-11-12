@@ -187,10 +187,15 @@ const xoConfig: XoConfigItem[] = [
 		language: 'json/jsonc',
 	},
 	{
-		// Tailwind's `@tailwind base|components|utilities` directives are not standard CSS.
+		// Tailwind's `@theme` and `@source` directives are not standard CSS.
 		files: ['styles/**/*.css'],
 		languageOptions: {
-			customSyntax: {atrules: {tailwind: {prelude: '<ident>'}}},
+			customSyntax: {
+				atrules: {
+					theme: {prelude: '<ident>*'},
+					source: {prelude: '<string> | not <string>'},
+				},
+			},
 		},
 	},
 	{

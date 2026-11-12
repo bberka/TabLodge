@@ -65,7 +65,7 @@ export function RecoveryBanner({
 	return (
 		<section
 			aria-label="Session recovery"
-			className="mb-6 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/[.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+			className="mb-6 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/6 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
 		>
 			<div className="flex min-w-0 items-start gap-3">
 				<span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">

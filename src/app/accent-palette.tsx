@@ -227,7 +227,7 @@ export function AccentPalette({
 					<button
 						type="button"
 						aria-label={`Accent color: ${selectedChoice.label}`}
-						className="tn-select-trigger flex h-9 w-56 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="tn-select-trigger flex h-9 w-56 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<Circle small choice={selectedChoice} color={current} />
 						<span className="min-w-0 flex-1 truncate text-left">
@@ -251,7 +251,7 @@ export function AccentPalette({
 							}
 							aria-label="Search colors"
 							placeholder="Search colors or type #rrggbb"
-							className="h-10 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+							className="h-10 w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
 							value={query}
 							onChange={(event) => {
 								setQuery(event.target.value);

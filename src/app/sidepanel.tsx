@@ -244,7 +244,7 @@ function Collapsible({
 				<button
 					type="button"
 					aria-expanded={open}
-					className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					onClick={onToggle}
 				>
 					<ChevronRight
@@ -473,13 +473,13 @@ function SidePanel() {
 						target="_blank"
 						rel="noopener noreferrer"
 						title={`${title}\n${url}`}
-						className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 						onClick={(event) => linkClick(event, url, kind, openMenu)}
 					>
 						<Favicon
 							url={url}
 							label={hostname(url)}
-							className="h-6 w-6 rounded"
+							className="h-6 w-6 rounded-sm"
 						/>
 						<span className="min-w-0">
 							<strong className="block truncate text-xs font-medium">
@@ -655,14 +655,14 @@ function SidePanel() {
 				<button
 					type="button"
 					title={`${title}\n${url}`}
-					className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					onClick={() => void activate(tab)}
 				>
 					<Favicon
 						url={url}
 						label={hostname(url)}
 						fallbackSrc={tab.favIconUrl}
-						className="h-6 w-6 rounded"
+						className="h-6 w-6 rounded-sm"
 					/>
 					<span className="min-w-0">
 						<strong
@@ -847,8 +847,8 @@ function SidePanel() {
 							aria-controls="sp-panel"
 							tabIndex={panel === id ? 0 : -1}
 							className={cn(
-								'flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-								panel === id && 'bg-background text-foreground shadow-sm',
+								'flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+								panel === id && 'bg-background text-foreground shadow-xs',
 							)}
 							onClick={() => setChosenPanel(id)}
 						>

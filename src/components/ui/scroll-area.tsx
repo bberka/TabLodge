@@ -40,9 +40,9 @@ const ScrollArea = React.forwardRef<
 			<ScrollAreaPrimitive.Viewport
 				ref={viewportRef}
 				className={cn(
-					'h-full w-full rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-					'[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-					!horizontal && '[&>div]:!block',
+					'h-full w-full rounded-[inherit] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+					'scrollbar-none [&::-webkit-scrollbar]:hidden',
+					!horizontal && '[&>div]:block!',
 					viewportClassName,
 				)}
 			>

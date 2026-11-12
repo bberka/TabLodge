@@ -314,7 +314,7 @@ function CredentialDialog({
 								readOnly={busy}
 								aria-invalid={Boolean(message)}
 								aria-describedby={message ? errorId : undefined}
-								className="aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive"
+								className="aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive"
 								onChange={(event) => {
 									setCredential(event.target.value);
 									setEmpty(false);
