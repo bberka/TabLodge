@@ -1,0 +1,2 @@
+# The same checks CI runs first: lint, type checks, and the tests.
+vp run check

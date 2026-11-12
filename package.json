@@ -19,6 +19,7 @@
 	},
 	"packageManager": "pnpm@12.15.0",
 	"scripts": {
+		"prepare": "vp hooks enable",
 		"build": "node scripts/build.ts && node scripts/verify-build.ts",
 		"pack": "node scripts/package.ts",
 		"dev:chrome": "node scripts/build.ts --target chrome --watch --open-browser",
