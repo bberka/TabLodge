@@ -9,6 +9,7 @@ export const SITE = {
 	releases: 'https://github.com/bberka/TabLodge/releases/latest',
 	chromeWebStore:
 		'https://chromewebstore.google.com/detail/tablodge-%E2%80%93-tab-session-ma/ekidoclgpdfhpdlidlkcjccgihbndoib',
+	firefoxAddons: 'https://addons.mozilla.org/firefox/addon/tab-lodge/',
 	issues: 'https://github.com/bberka/TabLodge/issues',
 	license: 'https://github.com/bberka/TabLodge/blob/master/LICENSE',
 	version,

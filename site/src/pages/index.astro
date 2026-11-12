@@ -34,12 +34,12 @@ const faq = [
 		a: 'Yes. TabLodge is free and open source under the MIT license. There is no paid tier, no account and no limit on saved tabs other than your browser storage.',
 	},
 	{
-		q: 'Is TabLodge on the Chrome Web Store?',
-		a: 'Yes. Install TabLodge from the Chrome Web Store in Chrome, Brave, Edge, Vivaldi, Opera, or another compatible Chromium browser.',
+		q: 'Where can I install TabLodge?',
+		a: 'Install TabLodge from the Chrome Web Store in Chrome, Brave, Edge, Vivaldi, Opera, or another compatible Chromium browser. In desktop Firefox, install it from Firefox Add-ons.',
 	},
 	{
 		q: 'Which browsers does TabLodge support?',
-		a: 'Chromium-based browsers that support Manifest V3 and Chrome 116 or newer: Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera and others. Split-view restore needs Chromium 155 or newer; older versions open those tabs side by side as normal tabs. TabLodge also runs on desktop Firefox 140 or newer. The Firefox package on the release page is not signed or listed on Firefox Add-ons yet, so Firefox loads it as a temporary add-on. Safari and mobile browsers are not supported.',
+		a: 'Chromium-based browsers that support Manifest V3 and Chrome 116 or newer: Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera and others. Split-view restore needs Chromium 155 or newer; older versions open those tabs side by side as normal tabs. TabLodge also runs on desktop Firefox 140 or newer. Safari and mobile browsers are not supported.',
 	},
 	{
 		q: 'Can I use TabLodge in private windows?',
@@ -63,7 +63,7 @@ const faq = [
 	},
 	{
 		q: 'How do I update TabLodge?',
-		a: 'Chrome Web Store installations update automatically in supported Chromium browsers. A Firefox package loaded from the release page does not update itself; load the new release over it.',
+		a: 'Chrome Web Store and Firefox Add-ons installations update automatically. A package loaded manually from the release page does not update itself; load the new release over it.',
 	},
 ];
 
@@ -133,6 +133,7 @@ const jsonLd = [
 			<p class="lead">Save tabs for later. Restore them with tab groups intact.</p>
 			<div class="actions">
 				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 			<p class="note">
@@ -216,8 +217,11 @@ const jsonLd = [
 			<div>
 				<h2>Get TabLodge</h2>
 				<p>Available in Chrome, Brave, Edge, Vivaldi, Opera, and other Chromium browsers. Updates are automatic. TabLodge opens the dashboard in a new tab after installation.</p>
-				<p>Using desktop Firefox 140 or newer? Download the unsigned Firefox package from the <a href={SITE.releases} rel="noopener">latest release</a>; the README explains how to load it.</p>
-				<p><a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a></p>
+				<p>Using desktop Firefox 140 or newer? Install TabLodge from Firefox Add-ons. Updates are automatic there too. To load a package by hand instead, use the unsigned Firefox ZIP from the <a href={SITE.releases} rel="noopener">latest release</a>; the README explains how.</p>
+				<p class="actions">
+					<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+					<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
+				</p>
 			</div>
 		</div>
 	</section>
@@ -244,6 +248,7 @@ const jsonLd = [
 			<h2>Give your tabs a lodge</h2>
 			<div class="actions center">
 				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
+				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 		</div>

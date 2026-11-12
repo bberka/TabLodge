@@ -89,7 +89,9 @@ jobs:
 
           ### Firefox 140 or newer (desktop)
 
-          **$firefox_zip_file** is unsigned. To try it, open \`about:debugging#/runtime/this-firefox\`, click **Load Temporary Add-on**, and select the ZIP; Firefox removes it when it restarts. Firefox ESR, Developer Edition, Nightly, and unbranded builds can keep it installed after you set \`xpinstall.signatures.required\` to \`false\` in \`about:config\`. See the README for the differences from the Chromium version.
+          Install TabLodge from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tab-lodge/). It updates itself.
+
+          To load a package by hand instead, **$firefox_zip_file** is unsigned. To try it, open \`about:debugging#/runtime/this-firefox\`, click **Load Temporary Add-on**, and select the ZIP; Firefox removes it when it restarts. Firefox ESR, Developer Edition, Nightly, and unbranded builds can keep it installed after you set \`xpinstall.signatures.required\` to \`false\` in \`about:config\`. See the README for the differences from the Chromium version.
           EOF
           gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$FIREFOX_ZIP" "$FIREFOX_ZIP.sha256" \
             --target "$GITHUB_SHA" \
