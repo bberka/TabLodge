@@ -29,6 +29,10 @@ import {assemble, splitLibrary} from './library-records';
 export const SYNC_CONFIG_KEY = 'tablodge.sync.config';
 const SYNC_STATE_KEY = 'tablodge.sync.state';
 export const SYNC_STATUS_KEY = 'tablodge.sync.status';
+/**
+Whether this browser syncs its settings. Missing means yes; only an explicit `false` turns it off.
+*/
+export const SYNC_SETTINGS_KEY = 'tablodge.sync.settings';
 export const SYNC_ALARM = 'tablodge-sync';
 /**
 Written by a private window's worker after it saves to the shared library, so the regular worker, which runs sync,
@@ -306,6 +310,38 @@ export async function callServer(
 	return {status: response.status, body};
 }
 
+/**
+Stamps local edits to everything but the settings, which keep what was last agreed with the server. Settings that
+are not recorded here would otherwise look deleted.
+*/
+function captureWithoutSettings(
+	state: SyncState,
+	records: Records,
+	now: number,
+): SyncState {
+	const isSetting = (key: string) => state.shadow[key]?.kind === 'preference';
+	const settings = Object.fromEntries(
+		Object.entries(state.shadow).filter(([key]) => isSetting(key)),
+	);
+	const queued = state.outbox.filter((key) => isSetting(key));
+	const captured = capture(
+		{
+			...state,
+			shadow: Object.fromEntries(
+				Object.entries(state.shadow).filter(([key]) => !isSetting(key)),
+			),
+			outbox: state.outbox.filter((key) => !isSetting(key)),
+		},
+		new Map([...records].filter(([, record]) => record.kind !== 'preference')),
+		now,
+	);
+	return {
+		...captured,
+		shadow: {...captured.shadow, ...settings},
+		outbox: [...captured.outbox, ...queued],
+	};
+}
+
 export function createSyncClient(host: SyncHost) {
 	let config: SyncConfig | undefined;
 	let status = SYNC_OFF;
@@ -377,10 +413,17 @@ export function createSyncClient(host: SyncHost) {
 		);
 	}
 
+	async function settingsOn() {
+		return (await host.get(SYNC_SETTINGS_KEY)) !== false;
+	}
+
 	async function write(records: Records, state: SyncState, base: Store) {
+		const syncSettings = await settingsOn();
 		applying = true;
 		try {
-			await host.writeLibrary(assemble(inOrder(state, records), base));
+			await host.writeLibrary(
+				assemble(inOrder(state, records), base, syncSettings),
+			);
 		} finally {
 			applying = false;
 		}
@@ -401,7 +444,9 @@ export function createSyncClient(host: SyncHost) {
 			const records = splitLibrary(store);
 			let state = await loadState();
 			if (state.joined) {
-				state = capture(state, records, host.now());
+				state = (await settingsOn())
+					? capture(state, records, host.now())
+					: captureWithoutSettings(state, records, host.now());
 			}
 
 			const done = await work(state, records, store);
@@ -507,7 +552,12 @@ export function createSyncClient(host: SyncHost) {
 
 			const joined = next.joined
 				? next
-				: {...capture(next, finished.records, host.now()), joined: true};
+				: {
+						...((await settingsOn())
+							? capture(next, finished.records, host.now())
+							: captureWithoutSettings(next, finished.records, host.now())),
+						joined: true,
+					};
 			return {state: joined, result: undefined};
 		});
 
