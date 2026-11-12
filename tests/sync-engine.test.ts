@@ -338,3 +338,21 @@ test('a change waits for the record it belongs in, and is released if that recor
 	assert.equal(state.held, undefined);
 	assert.equal(records.has('tab:gone:t'), true);
 });
+
+test('a column keeps its sites through a sync round trip', () => {
+	const store = emptyStore();
+	store.bookmarkColumns = [
+		{
+			id: 'mine',
+			name: 'Mine',
+			domains: ['github.com/bberka', 'gitlab.com'],
+			createdAt: 0,
+			isDefault: false,
+		},
+	];
+	const records = [...splitLibrary(store).values()];
+	assert.deepEqual(assemble(records, emptyStore()).bookmarkColumns[0].domains, [
+		'github.com/bberka',
+		'gitlab.com',
+	]);
+});

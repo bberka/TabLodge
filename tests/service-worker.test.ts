@@ -6571,6 +6571,23 @@ test('a column with domains takes matching bookmarks when none is chosen', async
 	assert.equal('domains' in cleared.column, false);
 });
 
+test('stored column sites are normalized on load, as for columns that arrive from sync', async () => {
+	const state = stateWithSession();
+	state.bookmarkColumns = [
+		{
+			id: 'column-a',
+			name: 'Alpha',
+			domains: ['GitHub.com/bberka/', 'junk', 7, 'github.com/bberka?x=1'],
+		},
+		{id: 'column-b', name: 'Beta', domains: 'github.com'},
+	] as unknown as typeof state.bookmarkColumns;
+	const harness = createWorkerHarness(state);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	const [alpha, beta] = loaded.bookmarkColumns;
+	assert.deepEqual([...alpha.domains!], ['github.com/bberka']);
+	assert.equal('domains' in beta, false);
+});
+
 test('stored column icons are validated on load and kept by imports', async () => {
 	const state = stateWithSession();
 	state.bookmarkColumns = [
