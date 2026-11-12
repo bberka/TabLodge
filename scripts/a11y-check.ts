@@ -5127,11 +5127,22 @@ async function main() {
 							await page.keyboard.press('Enter');
 						};
 
+						const windowMenuItem = async (name: string) => {
+							await trigger.focus();
+							await page.keyboard.press('Enter');
+							await page
+								.getByRole('menuitem', {name: 'Update from this window'})
+								.focus();
+							await page.keyboard.press('ArrowRight');
+							await page.getByRole('menuitem', {name, exact: true}).focus();
+							await page.keyboard.press('Enter');
+						};
+
 						await until(async () => {
 							await trigger.focus();
 							await page.keyboard.press('Enter');
 							const enabled = await page
-								.getByRole('menuitem', {name: 'Replace with this window'})
+								.getByRole('menuitem', {name: 'Update from this window'})
 								.isEnabled();
 							await page.keyboard.press('Escape');
 							return enabled;
@@ -5140,13 +5151,17 @@ async function main() {
 						await trigger.focus();
 						await page.keyboard.press('Enter');
 						await page
-							.getByRole('menuitem', {name: 'Replace with this window'})
+							.getByRole('menuitem', {name: 'Update from this window'})
+							.focus();
+						await page.keyboard.press('ArrowRight');
+						await page
+							.getByRole('menuitem', {name: 'Replace all links'})
 							.waitFor();
 						await captureViewports(page, 'session-window-actions-menu', theme);
 						await page.keyboard.press('Escape');
 
 						await page.setViewportSize({width: 1440, height: 900});
-						await sessionMenuItem('Add this window');
+						await windowMenuItem('Add missing tabs');
 						await undoButton.waitFor();
 						assert.deepEqual(await sessionUrls(page, 'dev-session-1'), [
 							...original,
@@ -5161,12 +5176,12 @@ async function main() {
 							'Undo to restore the session after appending',
 						);
 
-						await sessionMenuItem('Add this window');
+						await windowMenuItem('Add missing tabs');
 						await undoButton.waitFor();
 						await captureViewports(page, 'session-append-result', theme);
 						await reset();
 
-						await sessionMenuItem('Replace with this window');
+						await windowMenuItem('Replace all links');
 						await undoButton.waitFor();
 						assert.deepEqual(await sessionUrls(page, 'dev-session-1'), [
 							`${origin}/alpha`,
@@ -5180,7 +5195,7 @@ async function main() {
 							'Undo to restore the session after replacing',
 						);
 
-						await sessionMenuItem('Replace with this window');
+						await windowMenuItem('Replace all links');
 						await undoButton.waitFor();
 						await captureViewports(page, 'session-replace-result', theme);
 						await reset();

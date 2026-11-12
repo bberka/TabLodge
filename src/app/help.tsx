@@ -240,13 +240,13 @@ function Help() {
 					title: 'Switch workspaces',
 					body: 'Choose Switch to this session in the menu of a session on the dashboard, or the switch button next to a session in the popup or side panel, to save the tabs in this window as a new session and open that session in their place. Pinned tabs and pages that cannot be saved stay open. The item is off while this window has no tab it could save.',
 					searchText:
-						'switch workspace context swap replace current window save open another session pinned tabs',
+						'switch workspace context swap current window save open another session pinned tabs',
 				},
 				{
 					title: 'Update or split a session',
-					body: 'In the menu of a session on the dashboard, choose Replace with this window to swap its links for the web tabs in this window, or Add this window to append the tabs the session does not hold yet. Excluded sites, pinned tabs, and the duplicate setting work as they do when saving, and no tab is opened or closed. The session keeps its name, folder, description, and the notes on links it still holds. To split a session, select some of its links with their checkboxes and choose Split in the selection bar, or Split selected links in the session menu. The links move into a new session next to it. A split view pair moves only when you select both halves, and at least one link must stay behind. Each action shows an Undo button for a couple of minutes.',
+					body: 'In the menu of a session on the dashboard, Update from this window copies the tabs of the window you are in into the saved session. Replace all links swaps its links for the web tabs in this window, and Add missing tabs appends the tabs the session does not hold yet. Excluded sites, pinned tabs, and the duplicate setting work as they do when saving, and no tab is opened or closed. The session keeps its name, folder, description, and the notes on links it still holds. To split a session, select some of its links with their checkboxes and choose Split in the selection bar, or Split selected links in the session menu. The links move into a new session next to it. A split view pair moves only when you select both halves, and at least one link must stay behind. Each action shows an Undo button for a couple of minutes.',
 					searchText:
-						'replace append add window update refresh session split divide new session selected links undo current window',
+						'update from this window replace all links add missing tabs append refresh session split divide new session selected links undo current window',
 				},
 				{
 					title: 'Use a click modifier',
