@@ -1519,45 +1519,82 @@ function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 const MAX_COLUMN_DOMAINS = 50;
 
 /**
-A column's domains as distinct bare host names, or `{}` when none remain, so a column without domains stores no field.
+A column site entry: a bare host ("github.com"), or a host with a path prefix ("github.com/bberka"). Query and fragment
+are dropped and a trailing slash is ignored. Null when the host is not usable.
+*/
+function normalizeColumnSite(value: unknown): string | null {
+	const host = normalizeExcludedHost(value);
+	if (!host || typeof value !== 'string') {
+		return null;
+	}
+
+	let path = '';
+	try {
+		const text = value.trim().replace(/^([a-z][\d+\-.a-z]*:\/\/)?\*\./i, '$1');
+		path = new URL(
+			/^[a-z][\d+\-.a-z]*:\/\//i.test(text) ? text : `https://${text}`,
+		).pathname.replace(/\/+$/, '');
+	} catch {
+		return null;
+	}
+
+	return `${host}${path}`;
+}
+
+/**
+A column's sites as distinct entries, or `{}` when none remain, so a column without sites stores no field.
 */
 function domainsField(value: unknown): {domains?: string[]} {
-	const hosts = new Set<string>();
+	const sites = new Set<string>();
 	for (const entry of Array.isArray(value) ? value : []) {
-		const host = normalizeExcludedHost(entry);
-		if (host) {
-			hosts.add(host);
+		const site = normalizeColumnSite(entry);
+		if (site) {
+			sites.add(site);
 		}
 	}
 
-	return hosts.size > 0
-		? {domains: [...hosts].slice(0, MAX_COLUMN_DOMAINS)}
+	return sites.size > 0
+		? {domains: [...sites].slice(0, MAX_COLUMN_DOMAINS)}
 		: {};
 }
 
 /**
-The column whose domain covers the address (the domain itself or a subdomain). When several match, the most
-specific domain wins, then the earlier column. Null when no column claims the address.
+The column whose site entry covers the address: the host or a subdomain of it and, when the entry has a path, that
+path or anything under it. When several match, the longer path wins, then the longer host, then the earlier column.
+Null when no column claims the address.
 */
 function columnForUrl(store: Store, url: string): BookmarkColumn | null {
-	const host = urlHost(url)?.replace(/^www\./, '');
-	if (!host) {
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
 		return null;
 	}
 
+	const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
 	let best: BookmarkColumn | null = null;
-	let bestLength = -1;
+	let bestScore = -1;
 	for (const column of store.bookmarkColumns) {
-		for (const domain of column.domains ?? []) {
-			if (!(
-				(host === domain || host.endsWith(`.${domain}`)) &&
-				domain.length > bestLength
-			)) {
+		for (const site of column.domains ?? []) {
+			const slash = site.indexOf('/');
+			const siteHost = slash === -1 ? site : site.slice(0, slash);
+			const sitePath = slash === -1 ? '' : site.slice(slash);
+			if (
+				(host !== siteHost && !host.endsWith(`.${siteHost}`)) ||
+				(sitePath &&
+					parsed.pathname !== sitePath &&
+					!parsed.pathname.startsWith(`${sitePath}/`))
+			) {
+				continue;
+			}
+
+			const score = sitePath.length * 1000 + siteHost.length;
+			if (!(score > bestScore)) {
 				continue;
 			}
 
 			best = column;
-			bestLength = domain.length;
+			bestScore = score;
 		}
 	}
 

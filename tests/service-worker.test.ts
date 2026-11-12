@@ -6518,7 +6518,7 @@ test('a column with domains takes matching bookmarks when none is chosen', async
 	const dev = await harness.sendMessage({
 		type: 'CREATE_BOOKMARK_COLUMN',
 		name: 'Dev',
-		domains: ['https://www.GitHub.com/x', 'github.com', 'nope', ''],
+		domains: ['https://www.GitHub.com/', 'github.com', 'nope', ''],
 	});
 	assert.equal(dev.ok, true, dev.error);
 	assert.deepEqual([...dev.column.domains!], ['github.com']);
@@ -6535,6 +6535,18 @@ test('a column with domains takes matching bookmarks when none is chosen', async
 	assert.equal(await add('https://gist.github.com/a'), dev.column.id);
 	assert.equal(await add('https://docs.github.com/a'), docs.column.id);
 	assert.notEqual(await add('https://notgithub.com/a'), dev.column.id);
+
+	// A path entry matches that path and below, and beats a bare host.
+	const repo = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Mine',
+		domains: ['https://github.com/bberka/?tab=x#y'],
+	});
+	assert.deepEqual([...repo.column.domains!], ['github.com/bberka']);
+	assert.equal(await add('https://github.com/bberka'), repo.column.id);
+	assert.equal(await add('https://github.com/bberka/TabLodge'), repo.column.id);
+	assert.equal(await add('https://github.com/bberkaa/x'), dev.column.id);
+	assert.equal(await add('https://github.com/other'), dev.column.id);
 
 	// An explicit column still wins over the domain.
 	const explicit = await harness.sendMessage({

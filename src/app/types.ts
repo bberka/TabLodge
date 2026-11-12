@@ -394,7 +394,7 @@ export type BookmarkColumn = {
 	*/
 	icon?: string;
 	/**
-	Sites that belong in this column, as bare host names that also cover their subdomains. Bookmarking one of them
+	Sites that belong in this column: a host name (which also covers its subdomains) or a host with a path prefix such as `github.com/bberka`. Bookmarking a page on one of them
 	(shortcut, browser bookmark) saves it here without asking for a column.
 	*/
 	domains?: string[];
