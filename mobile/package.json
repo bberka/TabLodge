@@ -1,0 +1,25 @@
+{
+	"name": "tablodge-mobile",
+	"version": "0.1.0",
+	"private": true,
+	"description": "TabLodge for Android: save links to bookmark columns and open them, synced with your own server.",
+	"license": "MIT",
+	"main": "./index.ts",
+	"scripts": {
+		"start": "expo start",
+		"android": "expo run:android",
+		"prebuild": "expo prebuild --platform android",
+		"doctor": "expo-doctor",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"expo": "~58.0.25",
+		"expo-status-bar": "~58.0.5",
+		"react": "19.3.0",
+		"react-native": "0.88.1"
+	},
+	"devDependencies": {
+		"@types/react": "~19.3.0",
+		"typescript": "~6.0.3"
+	}
+}

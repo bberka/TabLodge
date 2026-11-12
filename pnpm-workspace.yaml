@@ -2,6 +2,7 @@ packages:
   - .
   - site
   - server
+  - mobile
 allowBuilds:
   esbuild: true
   # wrangler's local runtime downloads its platform binary on install.
@@ -11,6 +12,8 @@ allowBuilds:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0
+minimumReleaseAgeExclude:
+  - expo@58.0.25
 overrides:
   vite@*: "catalog:"
 peerDependencyRules:
