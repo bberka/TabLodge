@@ -8,6 +8,7 @@ import {emptyStore} from './library';
 
 export function sampleStore(now: number): Store {
 	const base = emptyStore(now);
+	// The fixture has its own loose types; tests/mobile-library.test.ts checks the result has the library's shape.
 	return createDevFixture({
 		...base,
 		settings: {},

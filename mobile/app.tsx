@@ -1,48 +1,67 @@
 import {ShareIntentProvider, useShareIntentContext} from 'expo-share-intent';
 import {StatusBar} from 'expo-status-bar';
-import {useEffect, useState} from 'react';
-import {AppState, Pressable, StyleSheet, Text, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {useCallback, useEffect, useState} from 'react';
+import {
+	AppState,
+	BackHandler,
+	Platform,
+	StyleSheet,
+	ToastAndroid,
+	View,
+} from 'react-native';
+import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
+import {BottomSheet} from './src/bottom-sheet';
+import {splitShared} from './src/library';
 import {startLibrary, syncClient} from './src/library-store';
+import {loadPreferences} from './src/preferences';
 import {BookmarksScreen} from './src/screens/bookmarks';
-import {SaveLinkScreen} from './src/screens/save-link';
+import {SaveLinkForm} from './src/screens/save-link';
 import {SessionsScreen} from './src/screens/sessions';
 import {SettingsScreen} from './src/screens/settings';
-import {TARGET, useColors} from './src/theme';
-import {Icon, type IconName} from './src/ui';
+import {SnackbarHost, showSnack} from './src/snackbar';
+import {type BarTab, TabBar} from './src/tab-bar';
+import {useColors} from './src/theme';
 
 type Tab = 'bookmarks' | 'sessions' | 'settings';
-const TABS: Array<{id: Tab; label: string; icon: IconName; active: IconName}> =
-	[
-		{
-			id: 'bookmarks',
-			label: 'Bookmarks',
-			icon: 'bookmark-outline',
-			active: 'bookmark',
-		},
-		{
-			id: 'sessions',
-			label: 'Sessions',
-			icon: 'albums-outline',
-			active: 'albums',
-		},
-		{
-			id: 'settings',
-			label: 'Settings',
-			icon: 'settings-outline',
-			active: 'settings',
-		},
-	];
+const TABS: Array<BarTab<Tab>> = [
+	{
+		id: 'bookmarks',
+		label: 'Bookmarks',
+		icon: 'bookmark-outline',
+		active: 'bookmark',
+	},
+	{id: 'sessions', label: 'Sessions', icon: 'albums-outline', active: 'albums'},
+	{
+		id: 'settings',
+		label: 'Settings',
+		icon: 'settings-outline',
+		active: 'settings',
+	},
+];
+
+// A share that arrives this soon after the JavaScript starts launched the app, so the app can send the user back
+// to where they came from once the link is saved.
+const BOOT = Date.now();
+const COLD_MS = 6000;
+
+type Draft = {key: number; text: string; title: string; quick: boolean};
 
 function Main() {
 	const colors = useColors();
 	const {hasShareIntent, shareIntent, resetShareIntent} =
 		useShareIntentContext();
 	const [tab, setTab] = useState<Tab>('bookmarks');
-	const [adding, setAdding] = useState(false);
+	const [selecting, setSelecting] = useState(false);
+	const [draft, setDraft] = useState<Draft>({
+		key: 0,
+		text: '',
+		title: '',
+		quick: false,
+	});
+	const [open, setOpen] = useState(false);
 
 	useEffect(() => {
-		void startLibrary();
+		void loadPreferences().then(startLibrary);
 		const subscription = AppState.addEventListener('change', (state) => {
 			if (state === 'active') {
 				void syncClient.wake().catch(() => undefined);
@@ -53,109 +72,95 @@ function Main() {
 		};
 	}, []);
 
-	const saving = adding || hasShareIntent;
-	const close = () => {
-		setAdding(false);
+	// A link shared from another app opens the drawer with it filled in.
+	useEffect(() => {
+		if (!hasShareIntent) {
+			return;
+		}
+
+		// Browsers share "Page title https://example.com"; the words around the link become the title.
+		const full = shareIntent.text ?? shareIntent.webUrl ?? '';
+		const parts = splitShared(full);
+		setDraft((current) => ({
+			key: current.key + 1,
+			text: shareIntent.webUrl ?? parts.url ?? full,
+			title: shareIntent.meta?.title || parts.title,
+			quick: Date.now() - BOOT < COLD_MS,
+		}));
+		setTab('bookmarks');
+		setOpen(true);
 		resetShareIntent();
+	}, [hasShareIntent, shareIntent, resetShareIntent]);
+
+	const openBlank = useCallback(() => {
+		setDraft((current) => ({
+			key: current.key + 1,
+			text: '',
+			title: '',
+			quick: false,
+		}));
+		setOpen(true);
+	}, []);
+
+	const finish = (saved?: string) => {
+		setOpen(false);
+		if (saved) {
+			if (Platform.OS === 'android' && draft.quick) {
+				ToastAndroid.show(`Saved to ${saved}`, ToastAndroid.SHORT);
+			} else {
+				showSnack(`Saved to ${saved}`);
+			}
+		}
+
+		// Opened by a share: go back to the app the link came from.
+		if (draft.quick) {
+			setTimeout(() => {
+				BackHandler.exitApp();
+			}, 250);
+		}
 	};
 
 	return (
-		<SafeAreaView style={[styles.screen, {backgroundColor: colors.background}]}>
-			<StatusBar style="auto" />
-			{saving ? (
-				<SaveLinkScreen
-					key={shareIntent.webUrl ?? shareIntent.text ?? 'new'}
-					initialText={shareIntent.webUrl ?? shareIntent.text ?? ''}
-					initialTitle={shareIntent.meta?.title ?? ''}
-					onDone={close}
+		<View style={[styles.screen, {backgroundColor: colors.background}]}>
+			<SafeAreaView edges={['top']} style={styles.body}>
+				<StatusBar style="auto" />
+				{tab === 'bookmarks' && (
+					<BookmarksScreen onAdd={openBlank} onSelecting={setSelecting} />
+				)}
+				{tab === 'sessions' && <SessionsScreen />}
+				{tab === 'settings' && <SettingsScreen />}
+			</SafeAreaView>
+			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={setTab} />
+			<SnackbarHost />
+			<BottomSheet
+				visible={open}
+				label="Save link"
+				onClose={() => {
+					finish();
+				}}
+			>
+				<SaveLinkForm
+					key={draft.key}
+					initialText={draft.text}
+					initialTitle={draft.title}
+					onDone={finish}
 				/>
-			) : (
-				<>
-					<View style={styles.body}>
-						{tab === 'bookmarks' && (
-							<BookmarksScreen
-								onAdd={() => {
-									setAdding(true);
-								}}
-							/>
-						)}
-						{tab === 'sessions' && <SessionsScreen />}
-						{tab === 'settings' && <SettingsScreen />}
-					</View>
-					<View
-						accessibilityRole="tablist"
-						style={[
-							styles.bar,
-							{borderColor: colors.border, backgroundColor: colors.surface},
-						]}
-					>
-						{TABS.map((item) => {
-							const on = item.id === tab;
-							return (
-								<Pressable
-									key={item.id}
-									accessibilityRole="tab"
-									accessibilityState={{selected: on}}
-									android_ripple={{color: colors.pressed}}
-									style={styles.tab}
-									onPress={() => {
-										setTab(item.id);
-									}}
-								>
-									<View
-										style={[
-											styles.pill,
-											on && {backgroundColor: colors.accentSoft},
-										]}
-									>
-										<Icon
-											name={on ? item.active : item.icon}
-											color={on ? colors.accent : colors.muted}
-										/>
-									</View>
-									<Text
-										style={{
-											color: on ? colors.accent : colors.muted,
-											fontWeight: on ? '700' : '500',
-											fontSize: 12,
-										}}
-									>
-										{item.label}
-									</Text>
-								</Pressable>
-							);
-						})}
-					</View>
-				</>
-			)}
-		</SafeAreaView>
+			</BottomSheet>
+		</View>
 	);
 }
 
 export default function App() {
 	return (
-		<ShareIntentProvider>
-			<Main />
-		</ShareIntentProvider>
+		<SafeAreaProvider>
+			<ShareIntentProvider>
+				<Main />
+			</ShareIntentProvider>
+		</SafeAreaProvider>
 	);
 }
 
 const styles = StyleSheet.create({
 	screen: {flex: 1},
 	body: {flex: 1},
-	bar: {flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth},
-	tab: {
-		flex: 1,
-		minHeight: TARGET + 16,
-		alignItems: 'center',
-		justifyContent: 'center',
-		gap: 2,
-	},
-	pill: {
-		width: 64,
-		height: 32,
-		borderRadius: 16,
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
 });

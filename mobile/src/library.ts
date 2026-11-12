@@ -10,7 +10,7 @@ export const DEFAULT_COLUMN_ID = 'bookmark-default';
 export const UNFILED_ID = 'bookmark-unfiled';
 export const DEFAULT_COLUMN_NAME = 'Bookmarks';
 
-export type ColumnView = {id: string; name: string};
+type ColumnView = {id: string; name: string};
 
 export function emptyStore(now: number): Store {
 	return {
@@ -107,7 +107,7 @@ export function addColumn(
 	};
 }
 
-export type NewBookmark = {url: string; title: string; columnId: string};
+type NewBookmark = {url: string; title: string; columnId: string};
 
 /**
 Adds a bookmark at the top of its column. When the library has no column yet, the extension's default one is
@@ -154,29 +154,87 @@ export function addBookmark(
 	return {...next, bookmarks: [bookmark, ...next.bookmarks], updatedAt: now};
 }
 
-export function removeBookmark(store: Store, id: string, now: number): Store {
-	return {
-		...store,
-		bookmarks: store.bookmarks.filter((bookmark) => bookmark.id !== id),
-		updatedAt: now,
-	};
-}
-
-export function moveBookmark(
+/**
+Removes several bookmarks at once.
+*/
+export function removeBookmarks(
 	store: Store,
-	id: string,
-	columnId: string,
+	ids: ReadonlySet<string>,
 	now: number,
 ): Store {
-	if (store.bookmarkColumns.every((column) => column.id !== columnId)) {
+	if (ids.size === 0) {
 		return store;
 	}
 
 	return {
 		...store,
-		bookmarks: store.bookmarks.map((bookmark) =>
-			bookmark.id === id ? {...bookmark, columnId, updatedAt: now} : bookmark,
-		),
+		bookmarks: store.bookmarks.filter((bookmark) => !ids.has(bookmark.id)),
 		updatedAt: now,
 	};
+}
+
+/**
+Moves several bookmarks to the top of another column, keeping their order.
+*/
+export function moveBookmarks(
+	store: Store,
+	ids: ReadonlySet<string>,
+	columnId: string,
+	now: number,
+): Store {
+	if (
+		ids.size === 0 ||
+		store.bookmarkColumns.every((column) => column.id !== columnId)
+	) {
+		return store;
+	}
+
+	const moved = store.bookmarks
+		.filter((bookmark) => ids.has(bookmark.id))
+		.map((bookmark) => ({...bookmark, columnId, updatedAt: now}));
+	const rest = store.bookmarks.filter((bookmark) => !ids.has(bookmark.id));
+	return {...store, bookmarks: [...moved, ...rest], updatedAt: now};
+}
+
+/**
+Puts bookmarks back after an undo. They get new ids, because the server may already have recorded the delete of
+the old ones and refuses to bring a deleted id back.
+*/
+export function restoreBookmarks(
+	store: Store,
+	removed: Bookmark[],
+	newIds: string[],
+	now: number,
+): Store {
+	const known = new Set(store.bookmarkColumns.map((column) => column.id));
+	const restored = removed.map((bookmark, index) => ({
+		...bookmark,
+		id: newIds[index],
+		columnId: known.has(bookmark.columnId)
+			? bookmark.columnId
+			: (store.bookmarkColumns[0]?.id ?? bookmark.columnId),
+		updatedAt: now,
+	}));
+	return {
+		...store,
+		bookmarks: [...restored, ...store.bookmarks],
+		updatedAt: now,
+	};
+}
+
+/**
+Splits text shared from another app into its link and a title. Browsers share "Page title https://example.com",
+so the words around the link become the title.
+*/
+export function splitShared(text: string): {url?: string; title: string} {
+	const url = extractUrl(text);
+	if (!url) {
+		return {title: ''};
+	}
+
+	const match = /https?:\/\/[^\s"'<>]+/i.exec(text);
+	const rest = match
+		? `${text.slice(0, match.index)} ${text.slice(match.index + match[0].length)}`
+		: text;
+	return {url, title: rest.replaceAll(/\s+/g, ' ').trim()};
 }

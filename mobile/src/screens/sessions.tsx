@@ -10,16 +10,20 @@ import {
 import type {Session} from '../../../src/app/types';
 import {hostOf} from '../library';
 import {useLibrary} from '../library-store';
+import {useBarSpace} from '../tab-bar';
 import {TARGET, useColors} from '../theme';
-import {Avatar, Card, Empty, Header, Icon} from '../ui';
+import {openAll} from '../open-links';
+import {Avatar, Card, Empty, Header, Icon, IconButton} from '../ui';
 
 /**
 Sessions saved in the browser extension, read only: a phone browser cannot create them.
 */
 export function SessionsScreen() {
 	const colors = useColors();
+	const space = useBarSpace();
 	const store = useLibrary();
 	const [open, setOpen] = useState<string | undefined>();
+	const [pressing, setPressing] = useState<string | undefined>();
 
 	if (store.groups.length === 0) {
 		return (
@@ -52,31 +56,55 @@ export function SessionsScreen() {
 		const expanded = open === session.id;
 		const count = `${session.tabs.length} ${session.tabs.length === 1 ? 'tab' : 'tabs'}`;
 		return (
-			<Card key={session.id}>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{expanded}}
-					accessibilityLabel={`${session.name}, ${count}`}
-					android_ripple={{color: colors.pressed}}
-					style={({pressed}) => [
-						styles.sessionHead,
-						{backgroundColor: pressed ? colors.pressed : 'transparent'},
+			<Card key={session.id} flush>
+				<View
+					style={[
+						styles.headRow,
+						{
+							backgroundColor:
+								pressing === session.id ? colors.pressed : 'transparent',
+						},
 					]}
-					onPress={() => {
-						setOpen(expanded ? undefined : session.id);
-					}}
 				>
-					<View style={styles.texts}>
-						<Text style={[styles.name, {color: colors.text}]}>
-							{session.name}
-						</Text>
-						<Text style={{color: colors.muted}}>{count}</Text>
-					</View>
-					<Icon
-						name={expanded ? 'chevron-up' : 'chevron-down'}
-						color={colors.muted}
+					<Pressable
+						accessibilityRole="button"
+						accessibilityState={{expanded}}
+						accessibilityLabel={`${session.name}, ${count}`}
+						android_ripple={{color: colors.pressed}}
+						style={styles.sessionHead}
+						onPressIn={() => {
+							setPressing(session.id);
+						}}
+						onPressOut={() => {
+							setPressing(undefined);
+						}}
+						onPress={() => {
+							setOpen(expanded ? undefined : session.id);
+						}}
+					>
+						<View style={styles.texts}>
+							<Text style={[styles.name, {color: colors.text}]}>
+								{session.name}
+							</Text>
+							<Text style={{color: colors.muted}}>{count}</Text>
+						</View>
+						<Icon
+							name={expanded ? 'chevron-up' : 'chevron-down'}
+							color={colors.muted}
+						/>
+					</Pressable>
+					<IconButton
+						icon="albums-outline"
+						label={`Open all ${count} in ${session.name}`}
+						color={colors.accent}
+						onPress={() => {
+							openAll(
+								session.tabs.map((tab) => tab.url),
+								session.name,
+							);
+						}}
 					/>
-				</Pressable>
+				</View>
 				{expanded &&
 					session.tabs.map((tab) => (
 						<Pressable
@@ -113,7 +141,9 @@ export function SessionsScreen() {
 	};
 
 	return (
-		<ScrollView contentContainerStyle={styles.list}>
+		<ScrollView
+			contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
+		>
 			<Header
 				title="Sessions"
 				subtitle={`${store.groups.length} from your browser, read only`}
@@ -143,12 +173,15 @@ const styles = StyleSheet.create({
 		textTransform: 'uppercase',
 		letterSpacing: 0.5,
 	},
+	headRow: {flexDirection: 'row', alignItems: 'center', paddingRight: 8},
 	sessionHead: {
-		minHeight: TARGET,
+		flex: 1,
+		minHeight: TARGET + 24,
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 8,
-		borderRadius: 8,
+		paddingHorizontal: 16,
+		paddingVertical: 12,
 	},
 	texts: {flex: 1, gap: 2},
 	name: {fontSize: 16, fontWeight: '600'},
@@ -158,6 +191,6 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: 12,
 		paddingVertical: 8,
-		borderRadius: 8,
+		paddingHorizontal: 16,
 	},
 });

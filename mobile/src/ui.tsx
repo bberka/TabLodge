@@ -2,15 +2,17 @@ import {Ionicons} from '@expo/vector-icons';
 import {type ComponentProps, type ReactNode, useState} from 'react';
 import {
 	ActivityIndicator,
+	Platform,
 	Pressable,
 	StyleSheet,
+	Switch as NativeSwitch,
 	Text,
 	TextInput,
 	type TextInputProps,
 	useColorScheme,
 	View,
 } from 'react-native';
-import {avatarColor, TARGET, useColors} from './theme';
+import {avatarColor, TARGET, useColors, useShape} from './theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -43,6 +45,7 @@ export function Button({
 	loading?: boolean;
 }) {
 	const colors = useColors();
+	const shape = useShape();
 	const inactive = disabled || loading;
 	const filled = kind === 'primary';
 	const ink = filled
@@ -55,17 +58,20 @@ export function Button({
 			accessibilityRole="button"
 			accessibilityState={{disabled: inactive, busy: loading}}
 			disabled={inactive}
-			android_ripple={{color: `${ink}33`}}
+			android_ripple={shape.ios ? undefined : {color: `${ink}33`}}
 			style={({pressed}) => [
 				styles.button,
 				{
+					minHeight: shape.buttonHeight,
+					borderRadius: shape.buttonRadius,
 					backgroundColor: filled
 						? colors.accent
-						: pressed
+						: pressed && !shape.ios
 							? colors.pressed
 							: 'transparent',
-					borderColor: filled ? colors.accent : colors.border,
-					opacity: disabled ? 0.45 : pressed && filled ? 0.85 : 1,
+					// IOS plain buttons are bare text; Material ones are outlined.
+					borderColor: filled || shape.ios ? 'transparent' : colors.border,
+					opacity: disabled ? 0.4 : pressed && (filled || shape.ios) ? 0.6 : 1,
 				},
 			]}
 			onPress={onPress}
@@ -75,7 +81,18 @@ export function Button({
 			) : (
 				icon && <Icon name={icon} size={20} color={ink} />
 			)}
-			<Text style={[styles.buttonLabel, {color: ink}]}>{label}</Text>
+			<Text
+				style={[
+					styles.buttonLabel,
+					{
+						color: ink,
+						fontSize: shape.ios ? 17 : 15,
+						fontWeight: shape.ios && !filled ? '400' : '600',
+					},
+				]}
+			>
+				{label}
+			</Text>
 		</Pressable>
 	);
 }
@@ -94,18 +111,22 @@ export function IconButton({
 	disabled?: boolean;
 }) {
 	const colors = useColors();
+	const shape = useShape();
 	return (
 		<Pressable
 			accessibilityRole="button"
 			accessibilityLabel={label}
 			accessibilityState={{disabled}}
 			disabled={disabled}
-			android_ripple={{color: colors.pressed, radius: TARGET / 2}}
+			android_ripple={
+				shape.ios ? undefined : {color: colors.pressed, radius: TARGET / 2}
+			}
 			style={({pressed}) => [
 				styles.iconButton,
 				{
-					backgroundColor: pressed ? colors.pressed : 'transparent',
-					opacity: disabled ? 0.45 : 1,
+					backgroundColor:
+						pressed && !shape.ios ? colors.pressed : 'transparent',
+					opacity: disabled ? 0.4 : pressed && shape.ios ? 0.5 : 1,
 				},
 			]}
 			onPress={onPress}
@@ -128,6 +149,7 @@ export function Field({
 	onClear?: () => void;
 }) {
 	const colors = useColors();
+	const shape = useShape();
 	const [focused, setFocused] = useState(false);
 	const border = error
 		? colors.danger
@@ -144,11 +166,19 @@ export function Field({
 			<View
 				style={[
 					styles.inputBox,
-					{
-						borderColor: border,
-						borderWidth: focused || error ? 2 : 1,
-						backgroundColor: colors.surface,
-					},
+					shape.ios
+						? {
+								borderRadius: shape.fieldRadius,
+								borderColor: error ? colors.danger : 'transparent',
+								borderWidth: error ? 1 : 0,
+								backgroundColor: colors.pressed,
+							}
+						: {
+								borderRadius: shape.fieldRadius,
+								borderColor: border,
+								borderWidth: focused || error ? 2 : 1,
+								backgroundColor: colors.surface,
+							},
 				]}
 			>
 				{icon && <Icon name={icon} size={20} color={colors.muted} />}
@@ -197,6 +227,7 @@ export function Chips({
 	onSelect: (id: string) => void;
 }) {
 	const colors = useColors();
+	const shape = useShape();
 	return (
 		<View accessibilityRole="tablist" style={styles.chips}>
 			{items.map((item) => {
@@ -206,10 +237,11 @@ export function Chips({
 						key={item.id}
 						accessibilityRole="tab"
 						accessibilityState={{selected: on}}
-						android_ripple={{color: colors.pressed}}
+						android_ripple={shape.ios ? undefined : {color: colors.pressed}}
 						style={({pressed}) => [
 							styles.chip,
 							{
+								borderRadius: shape.chipRadius,
 								backgroundColor: on
 									? colors.accentSoft
 									: pressed
@@ -222,7 +254,9 @@ export function Chips({
 							onSelect(item.id);
 						}}
 					>
-						{on && <Icon name="checkmark" size={16} color={colors.accent} />}
+						{on && !shape.ios && (
+							<Icon name="checkmark" size={16} color={colors.accent} />
+						)}
 						<Text
 							style={{
 								color: on ? colors.accent : colors.text,
@@ -293,16 +327,155 @@ export function Header({
 	);
 }
 
-export function Card({children}: {children: ReactNode}) {
+/**
+A rounded surface. With `flush`, its children run edge to edge and are clipped to the corners, so a pressable row
+inside highlights the whole width.
+*/
+export function Card({
+	children,
+	flush = false,
+}: {
+	children: ReactNode;
+	flush?: boolean;
+}) {
 	const colors = useColors();
+	const shape = useShape();
 	return (
 		<View
 			style={[
 				styles.card,
-				{backgroundColor: colors.surface, borderColor: colors.border},
+				flush && styles.flush,
+				{
+					borderRadius: shape.cardRadius,
+					backgroundColor: colors.surface,
+					borderColor: shape.ios ? 'transparent' : colors.border,
+				},
 			]}
 		>
 			{children}
+		</View>
+	);
+}
+
+/**
+A native-looking switch: the system one on Android, and a drawn iOS one (green track, white knob) when the app
+imitates iOS, since React Native's Android switch cannot look like it.
+*/
+export function Switch({
+	value,
+	onValueChange,
+	label,
+}: {
+	value: boolean;
+	onValueChange: (value: boolean) => void;
+	label: string;
+}) {
+	const colors = useColors();
+	const shape = useShape();
+	if (shape.ios && Platform.OS !== 'ios') {
+		return (
+			<Pressable
+				accessibilityRole="switch"
+				accessibilityLabel={label}
+				accessibilityState={{checked: value}}
+				style={[
+					styles.iosTrack,
+					{backgroundColor: value ? '#34c759' : colors.border},
+				]}
+				onPress={() => {
+					onValueChange(!value);
+				}}
+			>
+				<View
+					style={[
+						styles.iosKnob,
+						{alignSelf: value ? 'flex-end' : 'flex-start'},
+					]}
+				/>
+			</Pressable>
+		);
+	}
+
+	return (
+		<NativeSwitch
+			accessibilityLabel={label}
+			value={value}
+			trackColor={{
+				true: shape.ios ? '#34c759' : colors.accent,
+				false: colors.border,
+			}}
+			thumbColor={
+				Platform.OS === 'android'
+					? value
+						? colors.onAccent
+						: colors.muted
+					: undefined
+			}
+			onValueChange={onValueChange}
+		/>
+	);
+}
+
+/**
+Pick one of a few options: a Material segmented button row, or an iOS segmented control.
+*/
+export function Segmented<T extends string>({
+	items,
+	selected,
+	onSelect,
+	label,
+}: {
+	items: Array<{id: T; name: string}>;
+	selected: T;
+	onSelect: (id: T) => void;
+	label: string;
+}) {
+	const colors = useColors();
+	const shape = useShape();
+	return (
+		<View
+			accessibilityRole="radiogroup"
+			accessibilityLabel={label}
+			style={[
+				styles.segmented,
+				shape.ios
+					? {backgroundColor: colors.pressed, borderRadius: 9, padding: 2}
+					: {borderColor: colors.border, borderWidth: 1, borderRadius: 20},
+			]}
+		>
+			{items.map((item) => {
+				const on = item.id === selected;
+				return (
+					<Pressable
+						key={item.id}
+						accessibilityRole="radio"
+						accessibilityState={{checked: on}}
+						style={[
+							styles.segment,
+							{
+								borderRadius: shape.ios ? 7 : 18,
+								backgroundColor: on
+									? shape.ios
+										? colors.surface
+										: colors.accentSoft
+									: 'transparent',
+							},
+						]}
+						onPress={() => {
+							onSelect(item.id);
+						}}
+					>
+						<Text
+							style={{
+								color: on && !shape.ios ? colors.accent : colors.text,
+								fontWeight: on ? '600' : '400',
+							}}
+						>
+							{item.name}
+						</Text>
+					</Pressable>
+				);
+			})}
 		</View>
 	);
 }
@@ -389,6 +562,28 @@ const styles = StyleSheet.create({
 	headerText: {flex: 1, gap: 2},
 	title: {fontSize: 26, fontWeight: '700'},
 	card: {borderWidth: 1, borderRadius: 16, padding: 16, gap: 12},
+	flush: {padding: 0, gap: 0, overflow: 'hidden'},
+	iosTrack: {
+		width: 51,
+		height: 31,
+		borderRadius: 16,
+		padding: 2,
+		justifyContent: 'center',
+	},
+	iosKnob: {
+		width: 27,
+		height: 27,
+		borderRadius: 14,
+		backgroundColor: '#ffffff',
+		elevation: 2,
+	},
+	segmented: {flexDirection: 'row'},
+	segment: {
+		flex: 1,
+		minHeight: 36,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
 	empty: {padding: 32, alignItems: 'center', gap: 12},
 	emptyIcon: {
 		width: 72,

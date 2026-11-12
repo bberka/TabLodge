@@ -1,32 +1,58 @@
-import {useMemo, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import {
-	Alert,
 	FlatList,
-	Linking,
 	Pressable,
 	ScrollView,
 	StyleSheet,
 	Text,
 	View,
 } from 'react-native';
-import type {Bookmark} from '../../../src/app/types';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {
 	bookmarksIn,
 	columnViews,
-	hostOf,
-	removeBookmark,
+	moveBookmarks,
+	removeBookmarks,
+	restoreBookmarks,
 	searchBookmarks,
 } from '../library';
-import {edit, refreshStatus, syncClient, useLibrary} from '../library-store';
-import {TARGET, useColors} from '../theme';
-import {Avatar, Chips, Empty, Field, Header, Icon, IconButton} from '../ui';
+import {
+	edit,
+	newId,
+	refreshStatus,
+	syncClient,
+	useLibrary,
+} from '../library-store';
+import {openAll} from '../open-links';
+import {showSnack} from '../snackbar';
+import {useBarSpace} from '../tab-bar';
+import {useColors, useShape} from '../theme';
+import {useSelection} from '../use-selection';
+import {Chips, Empty, Field, Header, Icon, IconButton} from '../ui';
+import {BookmarkRow, MoveSheet, SelectionBar} from './bookmark-parts';
 
-export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
+export function BookmarksScreen({
+	onAdd,
+	onSelecting,
+}: {
+	onAdd: () => void;
+	onSelecting: (selecting: boolean) => void;
+}) {
 	const colors = useColors();
+	const shape = useShape();
+	const insets = useSafeAreaInsets();
+	const space = useBarSpace();
 	const store = useLibrary();
+	const selection = useSelection();
 	const [picked, setPicked] = useState('');
 	const [query, setQuery] = useState('');
 	const [refreshing, setRefreshing] = useState(false);
+	// The drawer for choosing a column to move the selection to.
+	const [moving, setMoving] = useState(false);
+
+	useEffect(() => {
+		onSelecting(selection.active);
+	}, [selection.active, onSelecting]);
 
 	const columns = useMemo(
 		() =>
@@ -40,23 +66,40 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 		? picked
 		: (columns[0]?.id ?? '');
 	const searching = query.trim().length > 0;
-	const shown = searching
-		? searchBookmarks(store, query)
-		: bookmarksIn(store, columnId);
+	const shown = useMemo(
+		() =>
+			searching ? searchBookmarks(store, query) : bookmarksIn(store, columnId),
+		[store, query, columnId, searching],
+	);
+	const columnName = columns.find((column) => column.id === columnId)?.name;
+	const allSelected = shown.length > 0 && selection.ids.size === shown.length;
 
-	const confirmRemove = (bookmark: Bookmark) => {
-		Alert.alert('Delete bookmark?', bookmark.title, [
-			{text: 'Cancel', style: 'cancel'},
+	const remove = (ids: ReadonlySet<string>) => {
+		const gone = store.bookmarks.filter((bookmark) => ids.has(bookmark.id));
+		if (gone.length === 0) {
+			return;
+		}
+
+		void edit((current) => removeBookmarks(current, ids, Date.now()));
+		selection.stop();
+		showSnack(
+			gone.length === 1
+				? 'Bookmark deleted'
+				: `${gone.length} bookmarks deleted`,
 			{
-				text: 'Delete',
-				style: 'destructive',
-				onPress() {
+				label: 'Undo',
+				run() {
 					void edit((current) =>
-						removeBookmark(current, bookmark.id, Date.now()),
+						restoreBookmarks(
+							current,
+							gone,
+							gone.map(() => newId()),
+							Date.now(),
+						),
 					);
 				},
 			},
-		]);
+		);
 	};
 
 	const refresh = async () => {
@@ -71,19 +114,79 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 		}
 	};
 
+	const headerActions = selection.active ? (
+		<>
+			<IconButton
+				icon={allSelected ? 'remove-circle-outline' : 'checkmark-done'}
+				label={allSelected ? 'Select none' : 'Select all'}
+				onPress={() => {
+					selection.setAll(
+						allSelected ? [] : shown.map((bookmark) => bookmark.id),
+					);
+				}}
+			/>
+			<IconButton
+				icon="close"
+				label="Done selecting"
+				onPress={selection.stop}
+			/>
+		</>
+	) : (
+		<>
+			{!searching && shown.length > 0 && (
+				<IconButton
+					icon="albums-outline"
+					label={`Open all ${shown.length} in ${columnName}`}
+					onPress={() => {
+						openAll(
+							shown.map((bookmark) => bookmark.url),
+							columnName ?? 'This column',
+						);
+					}}
+				/>
+			)}
+			<IconButton
+				icon="checkbox-outline"
+				label="Select bookmarks"
+				onPress={() => {
+					selection.start();
+				}}
+			/>
+			{shape.ios && (
+				<IconButton
+					icon="add"
+					label="Add link"
+					color={colors.accent}
+					onPress={onAdd}
+				/>
+			)}
+		</>
+	);
+
 	return (
 		<View style={styles.screen}>
 			<FlatList
 				data={shown}
+				extraData={selection.ids}
 				keyExtractor={(bookmark) => bookmark.id}
 				refreshing={refreshing}
-				contentContainerStyle={styles.list}
+				contentContainerStyle={[
+					styles.list,
+					{paddingBottom: (selection.active ? 72 + insets.bottom : space) + 72},
+				]}
 				keyboardShouldPersistTaps="handled"
 				ListHeaderComponent={
 					<View style={styles.head}>
 						<Header
-							title="Bookmarks"
-							subtitle={`${store.bookmarks.length} saved`}
+							title={
+								selection.active
+									? `${selection.ids.size} selected`
+									: 'Bookmarks'
+							}
+							subtitle={
+								selection.active ? undefined : `${store.bookmarks.length} saved`
+							}
+							right={headerActions}
 						/>
 						<View style={styles.search}>
 							<Field
@@ -123,66 +226,81 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 					)
 				}
 				renderItem={({item}) => (
-					<View style={[styles.row, {borderColor: colors.border}]}>
-						<Pressable
-							accessibilityRole="link"
-							accessibilityLabel={`${item.title}, ${hostOf(item.url)}`}
-							accessibilityHint="Opens the link"
-							android_ripple={{color: colors.pressed}}
-							style={({pressed}) => [
-								styles.main,
-								{backgroundColor: pressed ? colors.pressed : 'transparent'},
-							]}
-							onPress={() => {
-								void Linking.openURL(item.url);
-							}}
-							onLongPress={() => {
-								confirmRemove(item);
-							}}
-						>
-							<Avatar host={hostOf(item.url)} />
-							<View style={styles.texts}>
-								<Text
-									numberOfLines={2}
-									style={[styles.title, {color: colors.text}]}
-								>
-									{item.title}
-								</Text>
-								<Text numberOfLines={1} style={{color: colors.muted}}>
-									{hostOf(item.url)}
-								</Text>
-							</View>
-							<Icon name="open-outline" size={18} color={colors.muted} />
-						</Pressable>
-						<IconButton
-							icon="trash-outline"
-							label={`Delete ${item.title}`}
-							color={colors.danger}
-							onPress={() => {
-								confirmRemove(item);
-							}}
-						/>
-					</View>
+					<BookmarkRow
+						bookmark={item}
+						selecting={selection.active}
+						checked={selection.ids.has(item.id)}
+						onToggle={() => {
+							selection.toggle(item.id);
+						}}
+						onSelect={() => {
+							selection.start(item.id);
+						}}
+						onDelete={() => {
+							remove(new Set([item.id]));
+						}}
+					/>
 				)}
 				onRefresh={() => {
 					void refresh();
 				}}
 			/>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="Add link"
-				android_ripple={{color: '#ffffff33'}}
-				style={({pressed}) => [
-					styles.fab,
-					{backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1},
-				]}
-				onPress={onAdd}
-			>
-				<Icon name="add" size={24} color={colors.onAccent} />
-				<Text style={[styles.fabLabel, {color: colors.onAccent}]}>
-					Add link
-				</Text>
-			</Pressable>
+			{!selection.active && !shape.ios && (
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel="Add link"
+					android_ripple={{color: '#ffffff33'}}
+					style={({pressed}) => [
+						styles.fab,
+						{
+							bottom: space,
+							backgroundColor: colors.accent,
+							opacity: pressed ? 0.85 : 1,
+						},
+					]}
+					onPress={onAdd}
+				>
+					<Icon name="add" size={24} color={colors.onAccent} />
+					<Text style={[styles.fabLabel, {color: colors.onAccent}]}>
+						Add link
+					</Text>
+				</Pressable>
+			)}
+			{selection.active && (
+				<SelectionBar
+					count={selection.ids.size}
+					canMove={store.bookmarkColumns.length > 1}
+					onOpen={() => {
+						openAll(
+							shown
+								.filter((bookmark) => selection.ids.has(bookmark.id))
+								.map((bookmark) => bookmark.url),
+							`${selection.ids.size} selected`,
+						);
+					}}
+					onMove={() => {
+						setMoving(true);
+					}}
+					onDelete={() => {
+						remove(selection.ids);
+					}}
+				/>
+			)}
+			<MoveSheet
+				visible={moving}
+				count={selection.ids.size}
+				columns={store.bookmarkColumns.map(({id, name}) => ({id, name}))}
+				onClose={() => {
+					setMoving(false);
+				}}
+				onPick={(id) => {
+					void edit((current) =>
+						moveBookmarks(current, selection.ids, id, Date.now()),
+					);
+					setMoving(false);
+					selection.stop();
+				}}
+			/>
 		</View>
 	);
 }
@@ -191,28 +309,10 @@ const styles = StyleSheet.create({
 	screen: {flex: 1},
 	head: {gap: 8},
 	search: {paddingHorizontal: 16, gap: 12, paddingBottom: 8},
-	list: {paddingBottom: 96, flexGrow: 1},
-	row: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		borderBottomWidth: StyleSheet.hairlineWidth,
-		paddingRight: 4,
-	},
-	main: {
-		flex: 1,
-		minHeight: TARGET + 16,
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: 12,
-		paddingVertical: 10,
-		paddingHorizontal: 16,
-	},
-	texts: {flex: 1, gap: 2},
-	title: {fontSize: 16, fontWeight: '500'},
+	list: {flexGrow: 1},
 	fab: {
 		position: 'absolute',
 		right: 16,
-		bottom: 16,
 		minHeight: 56,
 		paddingHorizontal: 20,
 		borderRadius: 28,

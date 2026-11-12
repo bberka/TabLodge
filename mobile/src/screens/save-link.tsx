@@ -8,20 +8,24 @@ import {
 	extractUrl,
 } from '../library';
 import {edit, newId, useLibrary} from '../library-store';
+import {getPreferences, setPreferences} from '../preferences';
 import {useColors} from '../theme';
-import {Button, Chips, Field, Header, IconButton} from '../ui';
+import {Button, Chips, Field, IconButton} from '../ui';
 
 /**
-Saves a link into a column. Opened by Add link, or by the Android share sheet with the shared text filled in.
+The body of the save drawer. Opened by Add link, or by the Android share sheet with the shared text filled in.
 */
-export function SaveLinkScreen({
+export function SaveLinkForm({
 	initialText,
 	initialTitle,
 	onDone,
 }: {
 	initialText: string;
 	initialTitle: string;
-	onDone: () => void;
+	/**
+	Called when the drawer should close; `saved` is the column name when a link was saved.
+	*/
+	onDone: (saved?: string) => void;
 }) {
 	const colors = useColors();
 	const store = useLibrary();
@@ -38,7 +42,9 @@ export function SaveLinkScreen({
 
 	const columnId = columns.some((column) => column.id === picked)
 		? picked
-		: (columns.find((column) => column.id === DEFAULT_COLUMN_ID)?.id ??
+		: (columns.find((column) => column.id === getPreferences().lastColumnId)
+				?.id ??
+			columns.find((column) => column.id === DEFAULT_COLUMN_ID)?.id ??
 			columns[0]?.id ??
 			DEFAULT_COLUMN_ID);
 	const url = extractUrl(text);
@@ -60,16 +66,33 @@ export function SaveLinkScreen({
 		await edit((current) =>
 			addBookmark(current, {url, title, columnId: target}, newId(), Date.now()),
 		);
-		onDone();
+		setPreferences({lastColumnId: target});
+		onDone(
+			name ||
+				columns.find((column) => column.id === target)?.name ||
+				'Bookmarks',
+		);
 	};
 
 	return (
 		<View style={styles.screen}>
-			<Header
-				title="Save link"
-				right={<IconButton icon="close" label="Close" onPress={onDone} />}
-			/>
+			<View style={styles.top}>
+				<Text
+					accessibilityRole="header"
+					style={[styles.title, {color: colors.text}]}
+				>
+					Save link
+				</Text>
+				<IconButton
+					icon="close"
+					label="Close"
+					onPress={() => {
+						onDone();
+					}}
+				/>
+			</View>
 			<ScrollView
+				style={styles.scroll}
 				contentContainerStyle={styles.body}
 				keyboardShouldPersistTaps="handled"
 			>
@@ -114,14 +137,23 @@ export function SaveLinkScreen({
 					loading={saving}
 					onPress={() => void save()}
 				/>
-				<Button label="Cancel" kind="plain" onPress={onDone} />
 			</ScrollView>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	screen: {flex: 1},
-	body: {padding: 16, gap: 16},
+	// Sized to its content: the sheet only grows as far as its own maximum height, then the body scrolls.
+	screen: {flexShrink: 1},
+	top: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingLeft: 20,
+		paddingRight: 8,
+	},
+	title: {fontSize: 20, fontWeight: '700'},
+	scroll: {flexGrow: 0},
+	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},
 });

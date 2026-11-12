@@ -8,8 +8,10 @@ import {
 	DEFAULT_COLUMN_ID,
 	emptyStore,
 	extractUrl,
-	moveBookmark,
-	removeBookmark,
+	moveBookmarks,
+	removeBookmarks,
+	restoreBookmarks,
+	splitShared,
 	searchBookmarks,
 	UNFILED_ID,
 } from '../mobile/src/library';
@@ -78,24 +80,16 @@ describe('bookmarks', () => {
 		);
 	});
 
-	test('moves, finds, and removes a bookmark', () => {
-		let store = addColumn(
-			addColumn(emptyStore(NOW), 'One', 'c1', NOW),
-			'Two',
-			'c2',
-			NOW,
-		);
+	test('finds a bookmark by words in its title or address', () => {
+		let store = addColumn(emptyStore(NOW), 'One', 'c1', NOW);
 		store = addBookmark(
 			store,
 			{url: 'https://a.test/page', title: 'Alpha', columnId: 'c1'},
 			'a',
 			NOW,
 		);
-		store = moveBookmark(store, 'a', 'c2', NOW + 1);
-		assert.deepEqual(ids(store, 'c2'), ['a']);
 		assert.equal(searchBookmarks(store, 'alpha page').length, 1);
 		assert.equal(searchBookmarks(store, 'missing').length, 0);
-		assert.equal(removeBookmark(store, 'a', NOW + 2).bookmarks.length, 0);
 	});
 
 	test('shows bookmarks of a missing column under Unfiled', () => {
@@ -128,5 +122,61 @@ describe('sample data', () => {
 		);
 		const sessionIds = store.groups.map((session) => session.id);
 		assert.equal(new Set(sessionIds).size, sessionIds.length);
+	});
+});
+
+describe('several bookmarks', () => {
+	const build = () => {
+		let store = addColumn(
+			addColumn(emptyStore(NOW), 'One', 'c1', NOW),
+			'Two',
+			'c2',
+			NOW,
+		);
+		for (const id of ['a', 'b', 'c']) {
+			store = addBookmark(
+				store,
+				{url: `https://${id}.test`, title: id, columnId: 'c1'},
+				id,
+				NOW,
+			);
+		}
+
+		return store;
+	};
+
+	test('removes and moves a selection, keeping the rest', () => {
+		const store = build();
+		assert.deepEqual(
+			ids(removeBookmarks(store, new Set(['a', 'c']), NOW), 'c1'),
+			['b'],
+		);
+		const moved = moveBookmarks(store, new Set(['a', 'b']), 'c2', NOW + 1);
+		assert.deepEqual(ids(moved, 'c2'), ['b', 'a']);
+		assert.deepEqual(ids(moved, 'c1'), ['c']);
+		assert.equal(moveBookmarks(store, new Set(['a']), 'missing', NOW), store);
+	});
+
+	test('restores removed bookmarks under new ids', () => {
+		const store = build();
+		const gone = store.bookmarks.filter((bookmark) => bookmark.id === 'b');
+		const without = removeBookmarks(store, new Set(['b']), NOW);
+		const back = restoreBookmarks(without, gone, ['b2'], NOW + 1);
+		assert.deepEqual(ids(back, 'c1'), ['b2', 'c', 'a']);
+		assert.equal(back.bookmarks[0].title, 'b');
+	});
+});
+
+describe('splitShared', () => {
+	test('uses the words around a shared link as the title', () => {
+		assert.deepEqual(splitShared('Great read https://example.com/post'), {
+			url: 'https://example.com/post',
+			title: 'Great read',
+		});
+		assert.deepEqual(splitShared('https://example.com'), {
+			url: 'https://example.com/',
+			title: '',
+		});
+		assert.deepEqual(splitShared('just words'), {title: ''});
 	});
 });

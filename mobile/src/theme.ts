@@ -1,4 +1,5 @@
 import {useColorScheme} from 'react-native';
+import {usePreferences} from './preferences';
 
 const light = {
 	background: '#faf9f7',
@@ -15,7 +16,7 @@ const light = {
 	warn: '#8a5a00',
 };
 
-const dark: typeof light = {
+const darkMaterial: typeof light = {
 	background: '#16151b',
 	surface: '#1f1e26',
 	pressed: '#2b2a35',
@@ -32,8 +33,85 @@ const dark: typeof light = {
 
 export type Colors = typeof light;
 
-export const useColors = (): Colors =>
-	useColorScheme() === 'dark' ? dark : light;
+// The iOS look uses the system colors: grouped gray background, white cards, and the system blue.
+const iosLight: Colors = {
+	background: '#f2f2f7',
+	surface: '#ffffff',
+	pressed: '#e5e5ea',
+	text: '#000000',
+	muted: '#6c6c70',
+	border: '#c6c6c8',
+	accent: '#007aff',
+	accentSoft: '#e5f0ff',
+	onAccent: '#ffffff',
+	danger: '#ff3b30',
+	ok: '#248a3d',
+	warn: '#b25000',
+};
+
+const iosDark: Colors = {
+	background: '#000000',
+	surface: '#1c1c1e',
+	pressed: '#2c2c2e',
+	text: '#ffffff',
+	muted: '#98989f',
+	border: '#38383a',
+	accent: '#0a84ff',
+	accentSoft: '#0a2a4d',
+	onAccent: '#ffffff',
+	danger: '#ff453a',
+	ok: '#32d74b',
+	warn: '#ff9f0a',
+};
+
+export const useColors = (): Colors => {
+	const dark = useColorScheme() === 'dark';
+	const {look} = usePreferences();
+	if (look === 'ios') {
+		return dark ? iosDark : iosLight;
+	}
+
+	return dark ? darkMaterial : light;
+};
+
+/**
+Shape and size choices that differ between the two looks.
+*/
+type Shape = {
+	ios: boolean;
+	buttonRadius: number;
+	buttonHeight: number;
+	fieldRadius: number;
+	cardRadius: number;
+	sheetRadius: number;
+	chipRadius: number;
+	titleSize: number;
+};
+
+const materialShape: Shape = {
+	ios: false,
+	buttonRadius: 24,
+	buttonHeight: 48,
+	fieldRadius: 12,
+	cardRadius: 16,
+	sheetRadius: 28,
+	chipRadius: 20,
+	titleSize: 28,
+};
+
+const iosShape: Shape = {
+	ios: true,
+	buttonRadius: 12,
+	buttonHeight: 50,
+	fieldRadius: 10,
+	cardRadius: 12,
+	sheetRadius: 14,
+	chipRadius: 9,
+	titleSize: 34,
+};
+
+export const useShape = (): Shape =>
+	usePreferences().look === 'ios' ? iosShape : materialShape;
 
 // Android asks for touch targets of at least 48dp.
 export const TARGET = 48;
@@ -52,3 +130,6 @@ export function avatarColor(host: string, scheme: 'light' | 'dark'): string {
 	const hue = AVATAR_HUES[hash % AVATAR_HUES.length];
 	return scheme === 'dark' ? `hsl(${hue} 45% 38%)` : `hsl(${hue} 55% 42%)`;
 }
+
+export const BAR_HEIGHT = 64;
+export const BAR_MARGIN = 12;

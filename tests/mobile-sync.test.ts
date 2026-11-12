@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {createApi} from '../server/src/api';
-import {addBookmark, emptyStore, removeBookmark} from '../mobile/src/library';
+import {addBookmark, emptyStore, removeBookmarks} from '../mobile/src/library';
 import type {Session, Store} from '../src/app/types';
 import {ChangeLog} from '../src/shared/sync/change-log';
 import {createSyncClient} from '../src/shared/sync/client';
@@ -129,7 +129,7 @@ test('a phone starting empty receives the extension library and sends back its o
 		['b2', 'b1'],
 	);
 
-	phone.store = removeBookmark(phone.store, 'b1', NOW + 20);
+	phone.store = removeBookmarks(phone.store, new Set(['b1']), NOW + 20);
 	await phone.client.syncNow();
 	await desktop.client.syncNow();
 	assert.deepEqual(

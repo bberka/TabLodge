@@ -11,8 +11,19 @@ import {
 	useLibrary,
 	useSyncStatus,
 } from '../library-store';
+import {useBarSpace} from '../tab-bar';
 import {type Colors, useColors} from '../theme';
-import {Button, Card, Field, Header, Icon, type IconName} from '../ui';
+import {setPreferences, usePreferences} from '../preferences';
+import {
+	Button,
+	Card,
+	Field,
+	Header,
+	Icon,
+	type IconName,
+	Segmented,
+	Switch,
+} from '../ui';
 
 function describe(
 	status: SyncStatus,
@@ -49,7 +60,9 @@ function describe(
 
 export function SettingsScreen() {
 	const colors = useColors();
+	const space = useBarSpace();
 	const status = useSyncStatus();
+	const prefs = usePreferences();
 	useLibrary();
 	const [url, setUrl] = useState('');
 	const [token, setToken] = useState('');
@@ -96,11 +109,51 @@ export function SettingsScreen() {
 	const state = describe(status, colors);
 	return (
 		<ScrollView
-			contentContainerStyle={styles.screen}
+			contentContainerStyle={[styles.screen, {paddingBottom: space + 8}]}
 			keyboardShouldPersistTaps="handled"
 		>
 			<Header title="Settings" />
 			<View style={styles.cards}>
+				<Card>
+					<Text
+						accessibilityRole="header"
+						style={[styles.heading, {color: colors.text}]}
+					>
+						Appearance
+					</Text>
+					<Text style={{color: colors.muted}}>
+						Make the app look like Android or like iOS. It follows your phone by
+						default.
+					</Text>
+					<Segmented
+						label="Style"
+						items={[
+							{id: 'material', name: 'Android'},
+							{id: 'ios', name: 'iOS'},
+						]}
+						selected={prefs.look}
+						onSelect={(look) => {
+							setPreferences({look});
+						}}
+					/>
+					<View style={styles.switchRow}>
+						<View style={styles.switchText}>
+							<Text style={{color: colors.text, fontSize: 16}}>
+								Floating tab bar
+							</Text>
+							<Text style={{color: colors.muted}}>
+								A rounded bar above the content
+							</Text>
+						</View>
+						<Switch
+							label="Floating tab bar"
+							value={prefs.floatingBar}
+							onValueChange={(floatingBar) => {
+								setPreferences({floatingBar});
+							}}
+						/>
+					</View>
+				</Card>
 				<Card>
 					<Text
 						accessibilityRole="header"
@@ -225,4 +278,6 @@ const styles = StyleSheet.create({
 	heading: {fontSize: 18, fontWeight: '600'},
 	state: {flexDirection: 'row', alignItems: 'center', gap: 10},
 	stateText: {flex: 1},
+	switchRow: {flexDirection: 'row', alignItems: 'center', gap: 12},
+	switchText: {flex: 1},
 });
