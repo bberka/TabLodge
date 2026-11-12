@@ -158,7 +158,7 @@ function Help() {
 			title: 'Saving sessions',
 			icon: Layers2,
 			intro:
-				'Save a set of tabs to come back to later. Nothing closes unless you turn on close after saving.',
+				'Save a set of tabs to come back to later. By default the saved tabs close; turn off Close tabs after saving to keep them open.',
 			keywords: [
 				'save tabs',
 				'selected tabs',
@@ -193,7 +193,7 @@ function Help() {
 				},
 				{
 					title: 'Close tabs after saving',
-					body: `This is optional. ${PROJECT.name} saves and checks the session before closing tabs. Pinned tabs close only when Include pinned tabs is on. If a save closes every tab in a window, that window keeps a new tab by default. In Settings you can have it close instead when another browser window is open, and the browser switches to that window. The last window always stays open.`,
+					body: `This is on by default, and you can turn it off in Settings. ${PROJECT.name} saves and checks the session before closing tabs. Pinned tabs close only when Include pinned tabs is on. If a save closes every tab in a window, that window keeps a new tab by default. In Settings you can have it close instead when another browser window is open, and the browser switches to that window. The last window always stays open.`,
 					searchText:
 						'close tabs after saving delete remove verify pinned tabs include empty window close extra second window',
 				},
@@ -261,7 +261,7 @@ function Help() {
 				},
 				{
 					title: 'Restore one tab or a split view',
-					body: 'For one tab, Settings chooses whether it becomes active or opens in the background. Tabs saved side by side reopen as a split view in Chromium 155 or newer. Settings can instead open them as separate tabs, and the browser may do the same if it cannot recreate the split.',
+					body: 'For one tab, Settings chooses whether it becomes active or opens in the background. Tabs saved side by side reopen as a split view in Chromium 155 or newer. Settings can instead open them as separate tabs, and the browser may do the same if it cannot recreate the split. Firefox has no split view, so the pair opens as neighboring tabs.',
 					searchText:
 						'single tab active background split view side by side chromium 155 separate neighboring tabs',
 				},
@@ -353,16 +353,18 @@ function Help() {
 					body: (
 						<>
 							On the dashboard, use the{' '}
-							<MenuLocation label="Bookmarks toolbar" /> to import a JSON file
-							or your browser bookmarks, or export bookmarks. Import lets you
-							skip or allow duplicates. Browser bookmark folders become columns;
-							folders with the same name merge, and links without a folder go in
-							the first column. Use a column’s menu to export that column or all
-							bookmarks.
+							<MenuLocation label="Bookmarks toolbar" /> to import a file or
+							your browser bookmarks, or to back up or share bookmarks. Import
+							reads JSON, browser bookmark HTML, CSV, Markdown, and plain URL
+							lists, and lets you skip or add duplicates again. With Columns
+							from folders, bookmark folders become columns; folders with the
+							same name merge, and links without a folder go in the first
+							column. One column puts every link in a column you choose. Use a
+							column’s menu to export that column or all bookmarks.
 						</>
 					),
 					searchText:
-						'dashboard bookmarks toolbar menu import export JSON browser bookmarks duplicates skip allow',
+						'dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
 				},
 			],
 			action: {
@@ -396,9 +398,9 @@ function Help() {
 				{
 					title: 'On a page',
 					gesture: {label: 'Right-click the page', icon: MousePointerClick},
-					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, or save this tab, its tab group, the whole window, or the tabs to its left or right.',
+					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, or save this tab, its tab group, the whole window, the selected tabs, all tabs except this one, the tabs to its left or right, or the tabs in all windows.',
 					searchText:
-						'right-click page bookmark current tab send tab to session recent new session tab group whole window left right save',
+						'right-click page bookmark current tab send tab to session recent new session tab group whole window selected tabs except this one left right all windows save',
 				},
 				{
 					title: 'On selected text',
@@ -559,7 +561,7 @@ function Help() {
 			title: 'Data and recovery',
 			icon: Database,
 			intro:
-				'Sessions, bookmarks, and backups stay in this browser unless you export or download a copy.',
+				'Sessions, bookmarks, and backups stay in this browser unless you export a copy or turn on sync.',
 			keywords: [
 				'privacy',
 				'local storage',
@@ -587,7 +589,7 @@ function Help() {
 				},
 				{
 					title: 'Sync between devices',
-					body: `Run the ${PROJECT.name} sync server yourself, with Docker or on your own Cloudflare account (without a server, Settings under Sync walks you through it: Generate token makes and copies a token, and Deploy to Cloudflare sets the server up on your free Cloudflare account without installing anything), and connect each browser in Settings under Sync with the server address and its token. Sessions, saved tabs, folders, bookmark columns, bookmarks, and display preferences then stay the same on every connected browser, and a change shows up on the others within a moment while they are open. Edits to different items on different devices combine; when two devices change the same item at once, the later edit wins. Snapshots, backups, the trash bin, and per device settings such as the new tab page do not sync. Private windows that use the regular library sync with it. A separate saved private library syncs only if you turn on Sync private windows in Settings from a private window (after you connect, Settings offers to open one); with a PIN or password it is encrypted before it leaves the browser, and other browsers need the same PIN or password to read it. A temporary private library never syncs. Changes made offline are sent when the server can be reached again. While sync is on, the sync icon in the dashboard header shows whether it is up to date, waiting to send changes, or unable to reach the server, and opens the Sync settings. The server stores your library in plain text, so only use one you trust. Disconnect stops syncing and keeps everything on this device.`,
+					body: `Run the ${PROJECT.name} sync server yourself, with Docker or on your own Cloudflare account (without a server, Settings under Sync walks you through it: Generate token makes and copies a token, and Deploy to Cloudflare sets the server up on your free Cloudflare account without installing anything), and connect each browser in Settings under Sync with the server address and its token. Sessions, saved tabs, folders, bookmark columns, bookmarks, excluded sites, and preferences for how the library looks and behaves then stay the same on every connected browser, and a change shows up on the others within a moment while they are open. Edits to different items on different devices combine; when two devices change the same item at once, the later edit wins. Snapshots, backups, the trash bin, and per device settings such as the new tab page do not sync.${isFirefox ? '' : ' Private windows that use the regular library sync with it. A separate saved private library syncs only if you turn on Sync private windows in Settings from a private window (after you connect, Settings offers to open one); with a PIN or password it is encrypted before it leaves the browser, and other browsers need the same PIN or password to read it. A temporary private library never syncs.'} Changes made offline are sent when the server can be reached again. While sync is on, the sync icon in the dashboard header shows whether it is up to date, waiting to send changes, or unable to reach the server, and opens the Sync settings. The server stores your library in plain text, so only use one you trust. Disconnect stops syncing and keeps everything on this device.`,
 					searchText:
 						'sync server self hosted docker cloudflare devices computers token connect disconnect offline merge conflict',
 				},
@@ -597,11 +599,14 @@ function Help() {
 						<>
 							Session import and export are in the{' '}
 							<MenuLocation label="Sessions" />. It can also share all sessions,
-							including archived sessions. A session menu can export just that
-							session in any format. Bookmark import and export are in the{' '}
-							<MenuLocation label="Bookmarks toolbar" />. Settings can export
-							bookmarks or create a full ZIP backup with settings, excluded
-							sites, theme, snapshots, and the trash bin. Open{' '}
+							including archived sessions. Session import also reads exports
+							from OneTab, Session Buddy, Tab Session Manager, and Toby. A
+							session menu can export just that session in any format. Bookmark
+							import and export are in the{' '}
+							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
+							saves only bookmarks or sessions, or Everything as a full ZIP
+							backup with settings, excluded sites, theme, snapshots, and the
+							trash bin. Open{' '}
 							<a
 								href="options.html?q=Data"
 								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
@@ -618,7 +623,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export bookmark toolbar menu import export full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',
@@ -643,9 +648,9 @@ function Help() {
 						<>
 							Deleted sessions, saved links, bookmarks, and columns stay in the
 							trash until their retention period ends. Settings controls how
-							long. On the dashboard, use the Trash bin icon in the header or
-							the Sessions menu. Dashboard settings can hide either header
-							shortcut. You can also open the bin from the{' '}
+							long. On the dashboard, open it from the Sessions menu, or turn on
+							Show Trash bin button in the header in Settings › Dashboard. You
+							can also open the bin from the{' '}
 							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
 							the side panel header, or the search palette. Dashboard deletes,
 							imports, actions that open many tabs, and closing duplicate tabs
@@ -699,7 +704,7 @@ function Help() {
 				},
 				{
 					title: 'Control saved data',
-					body: 'Settings lets you export bookmarks, erase sessions or bookmarks, restore defaults, and manage recovery data. Under Data, Statistics is a read-only summary: how many sessions and saved tabs you have, how many tabs are open, the ten open tabs you have not used for the longest, and a rough memory estimate. The estimate assumes about 100 MB per loaded tab and 5 MB per unloaded tab, so use the browser Task Manager (Shift+Esc) for real figures.',
+					body: 'Settings lets you back up or import data, erase sessions or bookmarks, restore defaults, and manage recovery data. Under Data, Statistics is a read-only summary: how many sessions and saved tabs you have, how many tabs are open, the ten open tabs you have not used for the longest, and a rough memory estimate. The estimate assumes about 100 MB per loaded tab and 5 MB per unloaded tab, so use the browser Task Manager (Shift+Esc) for real figures.',
 					searchText:
 						'sessions bookmarks data delete erase export restore defaults recovery settings statistics stats counts saved tabs open tabs oldest unused memory ram',
 				},
