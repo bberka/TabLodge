@@ -8,6 +8,8 @@ Follow the [source installation steps](README.md#build-from-source) and load `di
 
 Install the Vite+ CLI once as described in [README Development](README.md#development), then run `vp run dev:chrome` while you work. It rebuilds when files change and opens Chrome or Chromium with the extension loaded in a dedicated profile for this worktree. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. `vp run dev:chrome` loads the Chromium build. `vp run dev:firefox` does the same for the Firefox build in its own Firefox profile; reload the add-on at `about:debugging#/runtime/this-firefox` after a rebuild. `vp run browser:firefox` checks the core workflows in headless Firefox. Test a change on both browsers when it touches anything they treat differently (see [Browser support](architecture.md#browser-support)). This profile keeps test data separate from your regular browser profile. Use `vp run <task>` for the other scripts in the [README command list](README.md#development).
 
+`pnpm install` also turns on the Git hooks in `.vite-hooks/`. Before each commit they refuse commits on `master`, lint the staged files, and type check; before each push they run `vp run check`. Fix what they report rather than skipping them; see [Git hooks](agent-validation.md#git-hooks).
+
 For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](architecture.md).
 
 Agents validate with the headless dev browser to avoid interrupting the desktop. See [Browser access](agent-validation.md#browser-access) for automation and shutdown instructions. Manual development can keep using the visible browser above.
@@ -65,7 +67,8 @@ In the pull request, explain what changed, why it changed, and how you tested it
 
 Agents follow [AGENTS.md](../AGENTS.md). In short:
 
-- Work on a branch and open a pull request. Nobody, human or agent, pushes to `master` directly.
+- Work in a worktree on a new branch, commit in logical groups, and open a pull request as soon as the work is done. Nobody, human or agent, pushes to `master` directly.
+- Wait for CI. Fix failures caused by the change and try again, up to three attempts; for anything else, tell the maintainer.
 - The pull request names the model that did the work, and commits carry only the human author.
 - Every fix or feature includes proof in the pull request, such as a screenshot, recording, or test output, with a before and after for a fix.
 - Before pushing, run the `unslop-*` skills on the changed files only. Install the pinned skills in `skills-lock.json` with `vp run skills:install`.
