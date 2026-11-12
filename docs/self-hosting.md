@@ -161,7 +161,7 @@ Sessions, saved tabs, folders, bookmark columns, bookmarks, and display preferen
 How private windows sync depends on their storage, chosen in **Settings › Private windows**:
 
 * **Same library as regular windows:** private windows change the regular library, so their changes sync with it right away.
-* **Separate saved library:** it does not sync until you turn on **Sync private windows** in **Settings › Sync**, opened from a private window. It then goes to the same server as a second library, under `/private`, and needs no setup there. Turn it on in each browser whose private windows should share it.
+* **Separate saved library:** it does not sync until you turn on **Sync private windows** in **Settings › Sync**, opened from a private window. When you connect sync in a regular window, TabLodge offers to open that private window for you. It then goes to the same server as a second library, under `/private`, and needs no setup there. Turn it on in each browser whose private windows should share it.
 * **Separate temporary library:** it never syncs, because it is meant to disappear when the browser closes.
 
 If the separate library is locked with a PIN or password, TabLodge asks for it when you turn private sync on and encrypts every item before it leaves the browser. The first browser makes a random key and stores it on the server wrapped with that PIN or password, so the server only ever holds the wrapped key and encrypted items. Each other browser asks for the same PIN or password once, then keeps the key in its own private library.

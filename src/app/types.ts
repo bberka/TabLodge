@@ -806,6 +806,10 @@ export type TabLodgeMessages = {
 	PRIVATE_SYNC_ENABLE: {credential?: string};
 	PRIVATE_SYNC_DISABLE: {};
 	PRIVATE_SYNC_NOW: {};
+	/**
+	Regular windows only: opens Settings in a new private window to turn private sync on there.
+	*/
+	OPEN_PRIVATE_SYNC: {};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -1074,6 +1078,7 @@ export type TabLodgeResponses = {
 	PRIVATE_SYNC_ENABLE: {privateSync: PrivateSyncInfo};
 	PRIVATE_SYNC_DISABLE: {privateSync: PrivateSyncInfo};
 	PRIVATE_SYNC_NOW: {privateSync: PrivateSyncInfo};
+	OPEN_PRIVATE_SYNC: {};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =

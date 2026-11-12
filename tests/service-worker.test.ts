@@ -11743,6 +11743,29 @@ test('a separate private library syncs to its own space on the server, apart fro
 	assert.equal(off.privateSync?.status.connected, false);
 });
 
+test('a regular window opens Settings in a private window to turn private sync on', async () => {
+	const regular = createWorkerHarness(stateWithSession(), undefined, {
+		storage: {'tablodge.private.config': {mode: 'saved', configured: true}},
+	});
+	assert.equal(
+		(await regular.sendMessage({type: 'OPEN_PRIVATE_SYNC'})).ok,
+		true,
+	);
+	assert.equal(regular.windowCreateCalls.length, 1);
+	assert.equal(regular.windowCreateCalls[0].incognito, true);
+	assert.match(
+		String(regular.windowCreateCalls[0].url),
+		/options\.html\?privateSync=ask#settings-sync$/,
+	);
+
+	const inPrivate = await plainPrivateLibrary({});
+	assert.equal(
+		(await inPrivate.sendMessage({type: 'OPEN_PRIVATE_SYNC'})).ok,
+		false,
+	);
+	assert.equal(inPrivate.windowCreateCalls.length, 0);
+});
+
 test('private sync waits for a regular sync server and separate saved storage', async () => {
 	const server = syncServer();
 	const noServer = await plainPrivateLibrary({fetch: server.fetch});
