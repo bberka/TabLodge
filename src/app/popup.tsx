@@ -663,8 +663,7 @@ function Popup() {
 						</p>
 					)}
 					<Button
-						size="sm"
-						className="w-full justify-start gap-3 px-3"
+						className="h-11 w-full justify-start gap-3 px-3 text-sm"
 						variant="outline"
 						disabled={busy !== '' || !pageSavable}
 						title={pageSavable ? undefined : 'This page cannot be saved'}
