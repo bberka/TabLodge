@@ -24,6 +24,7 @@
 		"sidePanel",
 		"search",
 		"alarms",
+		"idle",
 		"activeTab",
 		"scripting"
 	],

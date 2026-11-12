@@ -563,6 +563,7 @@ function createWorkerHarness(
 				},
 			},
 		},
+		idle: {onStateChanged: event('idleStateChanged')},
 		windows: {
 			async get(id: number, query: {populate?: boolean} = {}) {
 				const win = windows.find((entry) => entry.id === id);
@@ -1834,6 +1835,16 @@ test('the idle timeout locks the library and the alarm checks it', async () => {
 		minutes: 7,
 	});
 	assert.equal(invalid.ok, false);
+});
+
+test('locking the screen locks the library, other idle states do not', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	await harness.fire('idleStateChanged', 'idle');
+	assert.ok(harness.sessionStore[LOCK_KEY]);
+	await harness.fire('idleStateChanged', 'locked');
+	assert.equal(harness.sessionStore[LOCK_KEY], undefined);
+	assert.equal((await harness.sendMessage({type: 'GET_STATE'})).locked, true);
 });
 
 test('the lock needs the saved separate library, and regular windows cannot manage it', async () => {

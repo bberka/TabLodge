@@ -9571,6 +9571,12 @@ if (privateContext) {
 	chrome.windows?.onRemoved?.addListener?.((windowId) => {
 		void privateLock.lockWhenWindowsClosed(windowId).catch(() => undefined);
 	});
+	// Locking the screen locks the library too. The browser wakes the worker for this event.
+	chrome.idle?.onStateChanged?.addListener?.((state) => {
+		if (state === 'locked') {
+			void privateLock.lock().catch(() => undefined);
+		}
+	});
 }
 
 /**

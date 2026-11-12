@@ -77,7 +77,7 @@ In Chromium, turn on **Allow in Incognito** for TabLodge. The first private dash
 
 ### Lock a separate saved library
 
-A separate saved library can be locked with a PIN (4 to 8 digits) or a password (8 to 128 characters) from **Settings › Private windows** in a private window. TabLodge then encrypts it on this device and shows a lock screen until you enter it. It locks again on **Lock now**, after an idle time, and when the last private window or the browser closes. Nothing can recover a lost PIN or password, and a short PIN is easy to guess for someone with a copy of your profile. See [Privacy](PRIVACY.md#private-windows) for details.
+A separate saved library can be locked with a PIN (4 to 8 digits) or a password (8 to 128 characters) from **Settings › Private windows** in a private window. TabLodge then encrypts it on this device and shows a lock screen until you enter it. It locks again on **Lock now**, after an idle time, when you lock your screen, and when the last private window or the browser closes. Nothing can recover a lost PIN or password, and a short PIN is easy to guess for someone with a copy of your profile. See [Privacy](PRIVACY.md#private-windows) for details.
 
 ## Development
 
@@ -129,6 +129,7 @@ TabLodge has no website host permissions and no content scripts, and makes no ne
 | `sidePanel` | The side panel (Chromium; Firefox uses its sidebar) |
 | `search` | **Search the web** with your default engine |
 | `alarms` | Snapshots, backups, trash cleanup, archiving, sync, and the private lock |
+| `idle` | Lock the private library when you lock your screen |
 | `activeTab`, `scripting` | Show the search palette over the current page when you press its shortcut |
 
 `downloads` is optional and requested only for backup copies in `Downloads/TabLodge/`. A web page can tell TabLodge is installed by requesting `palette.html`, which the palette needs. See [Privacy](PRIVACY.md) for everything TabLodge stores and sends.
