@@ -137,7 +137,7 @@ const AlertDialogTitle = React.forwardRef<
 	<AlertDialogPrimitive.Title
 		ref={ref}
 		className={cn(
-			'text-base font-semibold leading-snug tracking-tight [overflow-wrap:anywhere]',
+			'text-base font-semibold leading-snug tracking-tight wrap-anywhere',
 			className,
 		)}
 		{...props}
@@ -152,7 +152,7 @@ const AlertDialogDescription = React.forwardRef<
 	<AlertDialogPrimitive.Description
 		ref={ref}
 		className={cn(
-			'text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]',
+			'text-sm leading-relaxed text-muted-foreground wrap-anywhere',
 			className,
 		)}
 		{...props}

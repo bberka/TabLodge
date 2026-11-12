@@ -9,7 +9,7 @@ export function Highlight({text, query}: {text: string; query: string}) {
 				segment.match ? (
 					<mark
 						key={index}
-						className="rounded-sm bg-primary/20 px-0 text-inherit"
+						className="rounded-xs bg-primary/20 px-0 text-inherit"
 					>
 						{segment.text}
 					</mark>

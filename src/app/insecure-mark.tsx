@@ -21,7 +21,7 @@ function InsecureMark({className = ''}: {className?: string}) {
 				// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
 				tabIndex={0}
 				aria-label={REASON}
-				className={`inline-block rounded-sm text-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400 ${className}`}
+				className={`inline-block rounded-xs text-amber-600 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400 ${className}`}
 			>
 				<LockOpen className="h-3 w-3" aria-hidden="true" />
 			</span>

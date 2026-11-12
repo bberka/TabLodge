@@ -130,7 +130,7 @@ function SnapshotRow({
 			<button
 				type="button"
 				aria-expanded={open}
-				className="mt-2 inline-flex items-center gap-1 rounded text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				className="mt-2 inline-flex items-center gap-1 rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 				onClick={() => setOpen((value) => !value)}
 			>
 				<Chevron className="h-3.5 w-3.5" aria-hidden="true" />

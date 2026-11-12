@@ -155,7 +155,7 @@ class FieldError extends Error {
 }
 
 const FIELD_ERROR_CLASS =
-	'aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive';
+	'aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive';
 
 export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [status, setStatus] = useState<SyncStatus>();
@@ -679,7 +679,7 @@ export function SyncStatusLine({
 				/>
 				<div role="status" className="min-w-0 space-y-0.5 text-sm">
 					<p className="font-medium">{title}</p>
-					<p className="text-muted-foreground [overflow-wrap:anywhere]">
+					<p className="text-muted-foreground wrap-anywhere">
 						{server}
 						{status.lastSyncAt
 							? ` · Last synced ${syncedAt(status.lastSyncAt)}`

@@ -148,7 +148,7 @@ export function DuplicateBookmarksDialog({
 									<li key={group.url} className="min-w-0">
 										<p
 											id={`duplicate-${group.copies[0].id}`}
-											className="mb-1.5 text-sm font-medium [overflow-wrap:anywhere]"
+											className="mb-1.5 text-sm font-medium wrap-anywhere"
 										>
 											{displayUrl(group.url)}
 										</p>
