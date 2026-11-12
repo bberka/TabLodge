@@ -49,6 +49,7 @@ export const SYNC_WORDS = [
 ];
 
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;
+const CLOUDFLARE_DEPLOY_URL = `https://deploy.workers.cloudflare.com/?url=${PROJECT.repoUrl}/tree/master/server/cloudflare-deploy`;
 
 /**
 When the last sync happened: the time alone for today, the date and time before that.
@@ -319,15 +320,28 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				<p id={helpId} className="text-sm text-muted-foreground">
 					Run the server yourself, with Docker or on your own Cloudflare
 					account. It receives your sessions, saved tabs, bookmarks, and notes
-					in plain text, so only connect to one you trust.{' '}
+					in plain text, so only connect to one you trust.
+				</p>
+				<p className="text-sm text-muted-foreground">
+					No server yet?{' '}
+					<a
+						className="underline underline-offset-2"
+						href={CLOUDFLARE_DEPLOY_URL}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						Deploy one to Cloudflare
+					</a>{' '}
+					from your browser, with nothing to install, or read{' '}
 					<a
 						className="underline underline-offset-2"
 						href={GUIDE_URL}
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						How to set up a server
+						how to set up a server
 					</a>
+					.
 				</p>
 				<div className="grid gap-2">
 					<Label htmlFor={addressId}>Server address</Label>
