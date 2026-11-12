@@ -1700,9 +1700,8 @@ async function main() {
 						name: 'Add Edit',
 						exact: true,
 					});
-					assert.equal(
-						await fourth.isDisabled(),
-						true,
+					await until(
+						async () => fourth.isDisabled(),
 						'a fourth action is disabled while three are selected',
 					);
 					await until(
@@ -1820,9 +1819,8 @@ async function main() {
 						name: 'Add Move up',
 						exact: true,
 					});
-					assert.equal(
-						await fourthAction.isDisabled(),
-						true,
+					await until(
+						async () => fourthAction.isDisabled(),
 						'a fourth bookmark action is disabled when three are selected',
 					);
 					const moveDownAction = menu.getByRole('button', {
