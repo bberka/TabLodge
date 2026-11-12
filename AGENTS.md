@@ -7,14 +7,24 @@
 - **Every pull request names the model that did the work.** Fill in the **Model** line of the pull request template with the product name and exact model ID, such as `Claude Sonnet 5.5 (claude-sonnet-5-5)`. If several models contributed, list each with what it did. The model goes in the pull request, never in a commit.
 - **Every fix or feature carries proof in the pull request.** Show that the bug is gone or the feature works: a before and after screenshot, a short recording, or console and test output from the dev browser. For every UI change, include after screenshots at all four viewport profiles defined in [Proof](docs/agent-validation.md#proof), and attach them to the pull request when possible. Use the existing tools in [Agent validation and PR gate](docs/agent-validation.md). A passing build or unit test alone is not proof for runtime behavior.
 - **Unslop the diff before every push.** Run the matching `unslop-*` skills on the changed files only, fix what they find, rerun the checks, and commit the fixes. Do not run a whole repo pass, do not commit `.unslop/` output, and do not paste an unslop report into the pull request. Details are in [Agent validation and PR gate](docs/agent-validation.md#unslop-the-diff).
-- **Every UI change must work without a pointer and expose correct semantics to screen readers.** Before writing UI, read [Accessibility](docs/CONTRIBUTING.md#accessibility). Anything done by dragging, hovering, or right-clicking needs a keyboard alternative, custom controls follow their WAI-ARIA pattern, and focus is never left on the page body. Run `vp run a11y` and test the affected workflow by keyboard in both themes before pushing. Use available screen reader or accessibility inspection tools to check semantics and announcements. Do not require manual screen reader testing; report the tools used or that none were available, along with any gaps.
+- **Every UI change must work without a pointer and expose correct semantics to screen readers.** Before writing UI, read [Accessibility](docs/CONTRIBUTING.md#accessibility). Anything done by dragging, hovering, or right clicking needs a keyboard alternative, custom controls follow their WAI-ARIA pattern, and focus is never left on the page body. Run `vp run a11y` and test the affected workflow by keyboard in both themes before pushing. Use available screen reader or accessibility inspection tools to check semantics and announcements. Do not require manual screen reader testing; report the tools used or that none were available, along with any gaps.
 - **Finish the gate before pushing.** Do not push or open a pull request until the checks, browser proof, unslop pass, and scope review are done. If one is blocked, stop and report what is blocked.
+- **Do not bypass the Git hooks.** The pre-commit and pre-push hooks run the local checks (see [Git hooks](docs/agent-validation.md#git-hooks)). Never commit or push with `--no-verify`, never set `VP_GIT_HOOKS=0`, `VITE_GIT_HOOKS=0`, or `HUSKY=0`, and never run `vp hooks disable`. When a hook fails, fix the cause and commit again.
+- **Keep the docs and this file current.** A change is not done while a document still describes the old behavior. See [Keep documentation current](#keep-documentation-current).
+
+## Workflow for each task
+
+1. **Work in a worktree.** Start each task in its own Git worktree on a new `<type>/<short-topic>` branch from the latest `origin/master`, so parallel tasks and the maintainer's checkout stay apart. Run `pnpm install` in the new worktree. It also turns on the Git hooks.
+2. **Do the work and pass the gate** in [Agent validation and PR gate](docs/agent-validation.md).
+3. **Commit in logical groups.** Make one commit per self contained step (for example the hooks, then the docs that describe them), and make each commit pass the hooks on its own. Do not mix unrelated changes in one commit or split one change across several.
+4. **Open the pull request as soon as the work is done.** Push and open it right away, without waiting to be asked.
+5. **Wait for CI and fix failures.** Watch the pull request's checks until they finish. If one fails because of the change, fix it, push, and wait again, up to three attempts in total. If CI still fails after three, or fails for a reason outside the change (an outage, a runner or service problem, a missing secret, a flaky test that passes locally), stop and tell the user what failed and why. See [After the pull request is open](docs/agent-validation.md#after-the-pull-request-is-open).
 
 ## Setup
 
 Use the headless dev browser for agent validation so it does not interrupt the user's desktop. See [Browser access](docs/agent-validation.md#browser-access) for commands and automation access. Open a visible browser only when the user asks for one.
 
-Install the Vite+ CLI once as described in [README Development](docs/README.md#development). Use `vp run lint:fix` for formatting. For selected files, use `pnpm exec xo --fix <files>`. Never run `vp fmt`, plain `prettier`, or another formatter; their styles differ and can rewrite unrelated files.
+Install the Vite+ CLI once as described in [README Development](docs/README.md#development). `pnpm install` enables the Git hooks through the `prepare` script, and `vp hooks status` shows whether they are on. Use `vp run lint:fix` for formatting. For selected files, use `pnpm exec xo --fix <files>`. Never run `vp fmt`, plain `prettier`, or another formatter. Their styles differ and can rewrite unrelated files.
 
 Agent skills are pinned in `skills-lock.json` and installed per machine into `.agents/skills/`, which git ignores. A fresh clone or a new worktree starts without them.
 
@@ -58,11 +68,11 @@ Issues and pull requests live on GitHub for `bberka/TabLodge`, used through the 
 
 ### Triage labels
 
-The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+The five default labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single context. The glossary is `docs/GLOSSARY.md` and decisions are in `docs/adr/`. Both are created when first needed. See `docs/agents/domain.md`.
+Single context. The glossary is `docs/GLOSSARY.md`, which does not exist yet and is created when first needed. Decisions are in `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Documentation style
 

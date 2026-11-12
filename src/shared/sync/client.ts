@@ -41,6 +41,15 @@ Minutes between fallback rounds, which also reopen a closed live socket.
 export const SYNC_ALARM_MINUTES = 5;
 export const MIN_TOKEN_LENGTH = 32;
 
+/**
+A new server token: 32 random bytes as 64 hex characters, which paste cleanly into any form.
+*/
+export function createSyncToken(): string {
+	return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+		byte.toString(16).padStart(2, '0'),
+	).join('');
+}
+
 const PULL_LIMIT = 500;
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 1500;

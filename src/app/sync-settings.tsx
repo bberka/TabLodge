@@ -5,6 +5,8 @@ import {
 	CloudAlert,
 	CloudOff,
 	CloudUpload,
+	ExternalLink,
+	KeyRound,
 	Link2,
 	Link2Off,
 	type LucideIcon,
@@ -12,6 +14,7 @@ import {
 	RefreshCw,
 } from 'lucide-react';
 import {
+	createSyncToken,
 	MIN_TOKEN_LENGTH,
 	parseServerUrl,
 	SYNC_STATUS_KEY,
@@ -30,6 +33,7 @@ import {
 	Label,
 } from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
+import {writeClipboard} from './interaction-actions';
 import {PROJECT} from './project';
 import {cn} from '@/lib/utils';
 
@@ -49,6 +53,7 @@ export const SYNC_WORDS = [
 ];
 
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;
+const CLOUDFLARE_DEPLOY_URL = `https://deploy.workers.cloudflare.com/?url=${PROJECT.repoUrl}/tree/master/server/cloudflare-deploy`;
 
 /**
 When the last sync happened: the time alone for today, the date and time before that.
@@ -319,16 +324,15 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				<p id={helpId} className="text-sm text-muted-foreground">
 					Run the server yourself, with Docker or on your own Cloudflare
 					account. It receives your sessions, saved tabs, bookmarks, and notes
-					in plain text, so only connect to one you trust.{' '}
-					<a
-						className="underline underline-offset-2"
-						href={GUIDE_URL}
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						How to set up a server
-					</a>
+					in plain text, so only connect to one you trust.
 				</p>
+				<ServerSetupGuide
+					showStatus={showStatus}
+					onToken={(next) => {
+						setToken(next);
+						setFieldErrors((errors) => ({...errors, token: undefined}));
+					}}
+				/>
 				<div className="grid gap-2">
 					<Label htmlFor={addressId}>Server address</Label>
 					<Input
@@ -538,6 +542,115 @@ function PrivateSyncPrompt({
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+/**
+For someone without a server: make a token, deploy the server to Cloudflare with it, and come back with the address.
+Cloudflare cannot hand the address back, so the last step stays manual.
+*/
+function ServerSetupGuide({
+	showStatus,
+	onToken,
+}: {
+	showStatus: ShowStatus;
+	onToken: (token: string) => void;
+}) {
+	const [token, setToken] = useState('');
+	const headingId = useId();
+
+	const copy = async (text: string, fresh: boolean) => {
+		try {
+			await writeClipboard({text, html: null});
+			showStatus(
+				fresh ? 'Token copied, and filled in below.' : 'Token copied again.',
+			);
+		} catch {
+			showStatus(
+				'The token is filled in below, but it could not be copied. Generate one again to retry.',
+				true,
+			);
+		}
+	};
+
+	return (
+		<section
+			aria-labelledby={headingId}
+			className="space-y-3 rounded-lg border border-border bg-muted/30 p-4"
+		>
+			<h3 id={headingId} className="text-sm font-semibold">
+				No server yet?
+			</h3>
+			<ol className="space-y-3 text-sm">
+				<li className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+					<span>
+						<span className="font-medium">1.</span> Make a token. It is copied
+						and filled in below.
+					</span>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="self-start sm:self-auto"
+						onClick={() => {
+							if (token) {
+								void copy(token, false);
+								return;
+							}
+
+							const next = createSyncToken();
+							setToken(next);
+							onToken(next);
+							void copy(next, true);
+						}}
+					>
+						<KeyRound aria-hidden="true" />
+						{token ? 'Copy token' : 'Generate token'}
+					</Button>
+				</li>
+				<li className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+					<span>
+						<span className="font-medium">2.</span> Deploy the server to your
+						free Cloudflare account, and paste the token when it asks for{' '}
+						<code className="text-xs">TABLODGE_SYNC_TOKEN</code>.
+					</span>
+					<Button
+						asChild
+						variant="outline"
+						size="sm"
+						className="self-start sm:self-auto"
+					>
+						<a
+							href={CLOUDFLARE_DEPLOY_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<ExternalLink aria-hidden="true" />
+							Deploy to Cloudflare
+						</a>
+					</Button>
+				</li>
+				<li>
+					<span className="font-medium">3.</span> Paste the address Cloudflare
+					shows, such as{' '}
+					<code className="text-xs">https://tablodge-sync.you.workers.dev</code>
+					, into Server address, then choose Connect.
+				</li>
+			</ol>
+			<p className="text-xs text-muted-foreground">
+				Cloudflare also asks you to sign in with GitHub or GitLab, where it
+				keeps a copy of the server. To run it with Docker instead, read{' '}
+				<a
+					className="underline underline-offset-2"
+					href={GUIDE_URL}
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					how to set up a server
+				</a>
+				.
+			</p>
+		</section>
 	);
 }
 

@@ -1,6 +1,6 @@
 # TabLodge website
 
-The website at <https://tablodge.bbay.dev> is a static [Astro](https://astro.build) site. It uses scoped CSS and system fonts, with no JavaScript shipped to the browser.
+The website at <https://tablodge.bbay.dev> is a static [Astro](https://astro.build) site. It uses scoped CSS and system fonts and ships no JavaScript to the browser.
 
 ## Local development
 
@@ -23,10 +23,11 @@ Paths below are relative to `site/`.
 | `src/pages/alternatives.astro` | Comparison with OneTab, Session Buddy, and Toby |
 | `src/pages/privacy.astro` | Website and extension privacy policy |
 | `src/pages/terms.astro` | Terms of use, linked from the footer and the Google OAuth consent screen |
-| `src/layouts/Base.astro` | Shared layout, metadata, and structured data |
+| `src/pages/404.astro` | Page not found |
+| `src/layouts/Base.astro` | Shared layout, header, footer, metadata, and structured data |
 | `src/assets/` | Extension screenshots in light and dark themes |
 | `public/` | Icons, social image, web manifest, `robots.txt`, and custom domain file |
-| `src/site.ts` | Shared site values; deployment uses the latest release version and local builds fall back to `package.json` |
+| `src/site.ts` | Shared site values. The version comes from `SITE_VERSION`, which deployment sets to the latest release, and local builds fall back to `package.json` |
 
 Follow the [documentation style](CONTRIBUTING.md#writing-documentation) for website copy. Keep extension privacy details consistent with [PRIVACY.md](PRIVACY.md). Check TabLodge comparisons against the current app, and competitor claims against their own documentation. The [comparison notes](https://github.com/bberka/TabLodge/issues/21#issuecomment-6470138750) are background, not a live feature checklist.
 
@@ -40,15 +41,15 @@ After changing UI shown in a screenshot:
 2. Capture the affected dashboard, search palette, Settings, or side panel in light and dark themes from the opened dev browser.
 3. Save WebP files in `site/src/assets/`, keeping the existing names: for example, `dashboard-light.webp` and `dashboard-dark.webp`.
 
-The fixture is synthetic and deterministic. Seeding replaces TabLodge data in the isolated dev profile and loads local icons from `~/.cache/tablodge/dev-favicons.json`, a machine wide cache shared by worktrees. The first run fetches missing icons from sample sites. Delete the cache file to fetch them again. This network activity only happens when you explicitly run `vp run dev:chrome:seed`; the extension itself does not fetch favicons or gain extra permissions. This is a manual capture process; there is no dedicated screenshot command. Astro optimizes the images during the site build.
+The fixture is synthetic and deterministic. Seeding replaces TabLodge data in the isolated dev profile and loads local icons from `~/.cache/tablodge/dev-favicons.json`, a machine wide cache shared by worktrees. The first run fetches missing icons from sample sites. Delete the cache file to fetch them again. This network activity happens only when you run `vp run dev:chrome:seed`. The extension itself does not fetch favicons or gain extra permissions. Capture is manual, and there is no screenshot command. Astro optimizes the images during the site build.
 
 ## Deploy to GitHub Pages
 
-`.github/workflows/pages.yml` builds and deploys changes to `site/**` on `master`. The release workflow dispatches a website build after publishing each release, so the version shown on the landing page stays current. Other builds read the latest GitHub release version. You can also run **Actions › Website › Run workflow**.
+`.github/workflows/pages.yml` builds and deploys the site when a push to `master` changes `site/`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, or the workflow itself. The release workflow dispatches a website build after publishing each release, so the version shown on the landing page stays current. Other builds read the latest GitHub release version. You can also run **Actions › Website › Run workflow**. Every pull request runs the build job without deploying, so a broken site fails the required `Build site` check.
 
 For the initial setup:
 
 1. In the repository, open **Settings › Pages › Build and deployment** and choose **GitHub Actions** as the source.
 2. At the DNS provider for `bbay.dev`, add a `CNAME` record named `tablodge` pointing to `bberka.github.io`. Don't add an `A` record for that name.
 3. Run the website workflow. `site/public/CNAME` sets the custom domain to `tablodge.bbay.dev`.
-4. In **Settings › Pages**, confirm the domain and wait for the DNS check. Enable **Enforce HTTPS** when the certificate is ready; issuance can take up to an hour.
+4. In **Settings › Pages**, confirm the domain and wait for the DNS check. Enable **Enforce HTTPS** when the certificate is ready. Issuance can take up to an hour.

@@ -1,6 +1,6 @@
 # Self hosting the sync server
 
-TabLodge can keep your library the same on several browsers through a sync server that you run yourself. There is no TabLodge cloud: the server belongs to you, holds one library, and is protected by one token.
+TabLodge can keep your library the same on several browsers through a sync server that you run yourself. There is no TabLodge cloud. The server belongs to you, holds one library, and is protected by one token.
 
 This guide covers setting the server up, connecting your browsers, and looking after it. For how sync decides between two edits, see [ADR 1](adr/0001-record-level-sync-protocol.md). For what is sent, see [Privacy](PRIVACY.md#sync-with-your-own-server).
 
@@ -18,13 +18,13 @@ This guide covers setting the server up, connecting your browsers, and looking a
 
 | | Option A: VPS with Docker | Option B: Cloudflare | Option C: this computer |
 | --- | --- | --- | --- |
-| You need | A small Linux server, a domain or subdomain | A Cloudflare account, Node.js on your computer | Docker |
+| You need | A small Linux server, a domain or subdomain | A Cloudflare account and a GitHub or GitLab account, nothing to install | Docker |
 | Cost | The server (a 512 MB VPS is plenty) | Usually nothing on the Workers Free plan | Nothing |
 | HTTPS | Automatic, through Caddy | Automatic | Not needed for the same computer |
 | Works from other devices | Yes | Yes | No, only browsers on this computer |
 | Your data lives | On your server | In your Cloudflare account | On this computer |
 
-The server stores your sessions, saved tabs, bookmarks, and notes in plain text. Whoever runs the machine can read them, so pick a place you trust. Every option keeps working if the server goes away: each browser keeps its own complete library.
+The server stores your sessions, saved tabs, bookmarks, and notes in plain text. Whoever runs the machine can read them, so pick a place you trust. If the server goes away, every option leaves each browser with its own complete library.
 
 ## Create a token
 
@@ -34,7 +34,9 @@ The token is the only thing that protects the server. Every browser sends it wit
 openssl rand -base64 32
 ```
 
-Keep it somewhere safe, such as a password manager. You enter it once in each browser.
+Or, in TabLodge, open **Settings › Sync** and choose **Generate token** in the **No server yet?** box. It makes a random token of 64 hexadecimal characters in the browser, copies it, and fills it in for you.
+
+Keep the token somewhere safe, such as a password manager. You enter it once in each browser.
 
 ## Option A: a VPS with Docker and HTTPS
 
@@ -96,12 +98,20 @@ For nginx, the location needs `proxy_http_version 1.1`, `proxy_set_header Upgrad
 
 This runs the server as a Worker with one Durable Object on your own Cloudflare account. SQLite backed Durable Objects are part of the Workers Free plan within its daily limits, which one person's library should stay far under; check Cloudflare's pricing page for the current numbers. Idle live connections cost nothing, and requests with a wrong token are turned away before they reach your data.
 
-### 1. What you need
+### 1. Deploy with the button
 
-* A Cloudflare account.
-* Node.js 24 or later, pnpm, and Git on your computer.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/master/server/cloudflare-deploy)
 
-### 2. Deploy
+1. [Create a token](#create-a-token) and keep it at hand. The **No server yet?** box in **Settings › Sync** walks through these same steps and has the button too.
+2. Choose the button and log in to Cloudflare, or create a free account.
+3. Connect your GitHub or GitLab account when asked. Cloudflare copies the server into a new repository there and deploys it from that repository.
+4. Paste the token as the value of `TABLODGE_SYNC_TOKEN`, keep the other settings, and deploy.
+
+When it finishes, Cloudflare shows the Worker's address, such as `https://tablodge-sync.<your-subdomain>.workers.dev`. That and the token are what you enter in TabLodge.
+
+### Or deploy from your computer
+
+This needs Node.js 24 or later, pnpm, and Git, and creates the token for you:
 
 ```sh
 git clone https://github.com/bberka/TabLodge.git
@@ -112,7 +122,9 @@ pnpm run cf:setup
 
 The script opens a browser window to log in to Cloudflare if needed. It then deploys the Worker, creates a token, stores it as a Worker secret, and prints the address (`https://tablodge-sync.<your-subdomain>.workers.dev`) and the token. The token is shown only once, so save it.
 
-### 3. Check it
+### 2. Check it
+
+Open `https://tablodge-sync.<your-subdomain>.workers.dev/health` in a browser, or run:
 
 ```sh
 curl https://tablodge-sync.<your-subdomain>.workers.dev/health
@@ -126,7 +138,7 @@ In the Cloudflare dashboard, open the `tablodge-sync` Worker and add a custom do
 
 ### Settings on Cloudflare
 
-`MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are under `vars` in `server/wrangler.jsonc`. Change them and run `cf:setup` again. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.dev.vars` and run `pnpm run cf:dev`.
+`MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are under `vars` in `wrangler.jsonc`. If you deployed with the button, edit that file in the repository Cloudflare created and commit; Cloudflare deploys the commit. If you deployed from your computer, edit `server/wrangler.jsonc` and run `pnpm run cf:deploy`. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.dev.vars` and run `pnpm run cf:dev`.
 
 ## Option C: Docker on this computer
 
@@ -138,9 +150,9 @@ docker run -d --name tablodge-sync --restart unless-stopped -p 127.0.0.1:8787:87
 	-e TABLODGE_SYNC_TOKEN="$TOKEN" ghcr.io/bberka/tablodge-sync:latest
 ```
 
-Connect with `http://localhost:8787`. TabLodge accepts plain HTTP only for `localhost` and `127.0.0.1`; any other address needs HTTPS, because the token and your library travel with every request. Firefox upgrades the live connection to a secure one, which a plain HTTP server cannot answer, so in Firefox this setup syncs when something changes, every five minutes, and on **Sync now**, but not instantly.
+Connect with `http://localhost:8787`. TabLodge accepts plain HTTP only for `localhost`, `127.0.0.1`, and `[::1]`. Any other address needs HTTPS, because the token and your library travel with every request. Firefox upgrades the live connection to a secure one, which a plain HTTP server cannot answer, so in Firefox this setup syncs when something changes, every five minutes, and on **Sync now**, but not instantly.
 
-To build the image from a copy of this repository instead, run `docker compose up -d` in `server/` after putting `TABLODGE_SYNC_TOKEN=<token>` in `server/.env`.
+To build the image from a copy of this repository instead, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.env` and run `docker compose up -d` in `server/`. Unlike the command above, `server/compose.yaml` publishes port 8787 on every network interface, so other devices on your network can reach it.
 
 ## Connect your browsers
 
@@ -154,15 +166,15 @@ The first browser sends its library to the server. Each further browser merges w
 
 While sync is on, a sync icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings. **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
 
-Sessions, saved tabs, folders, bookmark columns, bookmarks, and display preferences sync. Recovery snapshots, backups, the trash bin, and per browser settings such as the new tab page do not. When two browsers change the same item at the same time, the later change wins.
+Sessions, saved tabs, folders, bookmark columns, bookmarks, and display and saving preferences (excluded sites among them) sync. Recovery snapshots, backups, the trash bin, and per browser settings such as the new tab page do not. When two browsers change the same item at the same time, the later change wins.
 
 ### Private windows
 
 How private windows sync depends on their storage, chosen in **Settings › Private windows**:
 
-* **Same library as regular windows:** private windows change the regular library, so their changes sync with it right away.
-* **Separate saved library:** it does not sync until you turn on **Sync private windows** in **Settings › Sync**, opened from a private window. When you connect sync in a regular window, TabLodge offers to open that private window for you. It then goes to the same server as a second library, under `/private`, and needs no setup there. Turn it on in each browser whose private windows should share it.
-* **Separate temporary library:** it never syncs, because it is meant to disappear when the browser closes.
+* **Same library as regular windows.** Private windows change the regular library, so their changes sync with it right away.
+* **Separate saved library.** It does not sync until you turn on **Sync private windows** in **Settings › Sync**, opened from a private window. When you connect sync in a regular window, TabLodge offers to open that private window for you. It then goes to the same server as a second library, under `/private`, and needs no setup there. Turn it on in each browser whose private windows should share it.
+* **Separate temporary library.** It never syncs, because it is meant to disappear when the browser closes.
 
 If the separate library is locked with a PIN or password, TabLodge asks for it when you turn private sync on and encrypts every item before it leaves the browser. The first browser makes a random key and stores it on the server wrapped with that PIN or password, so the server only ever holds the wrapped key and encrypted items. Each other browser asks for the same PIN or password once, then keeps the key in its own private library.
 
@@ -170,7 +182,7 @@ Changing the PIN or password wraps the same key again, so the other browsers kee
 
 The server can still see how many private items there are and when they change. Whoever holds the server's data can try every short PIN, so use a password if that matters to you.
 
-Private sync runs only while a private window is open and its library is unlocked, so changes from other browsers arrive the next time you open one.
+Private sync runs only while a private window is open and its library is unlocked, so changes from other browsers arrive the next time you open one. [ADR 2](adr/0002-private-window-sync.md) explains the design.
 
 ## Look after the server
 
@@ -186,7 +198,9 @@ TabLodge updates itself from the browser store, but your server does not. An old
 
 Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
 
-**Cloudflare.** In your copy of the repository:
+**Cloudflare, deployed with the button.** Open the repository Cloudflare created for you on GitHub or GitLab and replace `worker.js` with the newest [`server/cloudflare-deploy/worker.js`](https://github.com/bberka/TabLodge/blob/master/server/cloudflare-deploy/worker.js) from TabLodge: open the file, choose **Edit**, paste, and commit. Cloudflare deploys the commit by itself.
+
+**Cloudflare, deployed from your computer.** In your copy of the repository:
 
 ```sh
 git pull
@@ -205,7 +219,7 @@ docker compose -f compose.https.yaml up -d
 
 **Single container:** run `docker pull ghcr.io/bberka/tablodge-sync:latest`, then `docker rm -f tablodge-sync`, then start it again with the same command and token. The library is in the `tablodge-sync` volume and stays.
 
-`latest` is the server from the newest TabLodge release, and each release is also tagged with its version, such as `0.1.9`. `edge` follows development and can change at any time.
+`latest` is the server from the newest TabLodge release, and each release is also tagged with its version, such as `0.1.9`. `edge` is built from `master` whenever the server code changes there, and can change at any time.
 
 To check the update, ask for the status. The `features` list shows what the server supports:
 
@@ -213,7 +227,7 @@ To check the update, ask for the status. The `features` list shows what the serv
 curl -H "Authorization: Bearer <token>" https://sync.example.com/v1/status
 ```
 
-Do not remove the `migrations` entry in `server/wrangler.jsonc` or add a `deleted_classes` migration for `SyncLibrary`: Cloudflare would delete the stored library with it.
+Do not remove the `migrations` entry in `wrangler.jsonc` (in `server/`, or in the repository the button created) or add a `deleted_classes` migration for `SyncLibrary`: Cloudflare would delete the stored library with it.
 
 ### Back up and restore
 
@@ -233,7 +247,7 @@ docker compose -f compose.https.yaml exec -T sync node node.js import < tablodge
 
 With a single `docker run` container, use `docker exec -i tablodge-sync node node.js export` and `import` the same way.
 
-For any server, Cloudflare included, a copy of the repository and Node.js 24 do the same over the network:
+For any server, Cloudflare included, a copy of the repository and Node.js 24 do the same over the network. `--token <token>` can replace the variable:
 
 ```sh
 export TABLODGE_SYNC_TOKEN='<token>'
@@ -253,7 +267,7 @@ Do this if the token may have leaked.
 
 * VPS: put a new token in `.env` (`openssl rand -base64 32`), then run `docker compose -f compose.https.yaml up -d`. The library is kept.
 * Single container: remove it and start it again with a new `TABLODGE_SYNC_TOKEN`.
-* Cloudflare: run `pnpm run cf:setup --rotate-token` and save the new token it prints.
+* Cloudflare: run `pnpm run cf:setup --rotate-token` and save the new token it prints. With the button, open the Worker in the Cloudflare dashboard, then **Settings › Variables and Secrets**, and replace the value of `TABLODGE_SYNC_TOKEN`.
 
 Then in each browser, open **Settings › Sync**, choose **Disconnect**, and connect again with the new token. Nothing is lost: each browser keeps its library and merges with the server again.
 
@@ -289,7 +303,10 @@ One library is light. On a test machine the container used about 20 MB of memory
 | Changes arrive only every few minutes | The live WebSocket does not get through | Make sure the reverse proxy passes WebSocket upgrades on `/v1/live`. In Firefox with a plain HTTP `localhost` server this is expected |
 | "The sync server asked TabLodge to slow down." | More requests than `RATE_LIMIT_PER_MINUTE` | Sync tries again by itself. Raise the limit if it keeps happening |
 | "The sync server is full." | More items than `MAX_RECORDS` | Delete sessions or bookmarks you no longer need, or raise the limit |
-| "The server refused N old changes from this device" | The browser was offline for longer than `RETENTION_DAYS` and edited items deleted elsewhere meanwhile | The edited items stay in that browser but are not sent to the server. Recreate them if other browsers should have them |
+| "The server turned down N old changes from this browser" | The browser was offline for longer than `RETENTION_DAYS` and edited items deleted elsewhere meanwhile, or its clock was more than a day ahead | The edited items stay in that browser but are not sent to the server. Recreate them if other browsers should have them |
+| "The sync server has no token set up yet." | On Cloudflare, `TABLODGE_SYNC_TOKEN` is missing or shorter than 32 characters | Set it under **Settings › Variables and Secrets** for the Worker, or run `pnpm run cf:setup --rotate-token` |
+| The sync container keeps restarting | `TABLODGE_SYNC_TOKEN` is missing or shorter than 32 characters; the logs say so | Put a token of at least 32 characters in `.env` and start it again |
+| "A session, tab, or bookmark is too large for the sync server." | One item is over 256 KB | Shorten that item's notes or description |
 | The token was printed by `cf:setup` and lost | Cloudflare keeps secrets unreadable | Run `cf:setup --rotate-token` and reconnect the browsers |
 
 ## Reference
@@ -306,7 +323,8 @@ Run these from the root of your copy of the repository. Anything after the comma
 | `pnpm run cf:delete` | Deletes the Worker and its library from Cloudflare |
 | `pnpm run server:build` | Builds the Node server into `server/dist/node.js` |
 | `pnpm run server:start` | Starts that build, with the token from `TABLODGE_SYNC_TOKEN` |
-| `node server/scripts/transfer.ts export\|import` | Backs up or restores a library, see [Back up and restore](#back-up-and-restore) |
+| `pnpm run cf:bundle` | Rebuilds `server/cloudflare-deploy/worker.js`, the Worker the button deploys, from `server/src`. `--check` only reports whether the committed file is out of date |
+| `node server/scripts/transfer.ts export\|import` | Backs up or restores a library, with `--url` and optionally `--token`. See [Back up and restore](#back-up-and-restore) |
 
 ### Settings
 
@@ -314,8 +332,10 @@ Run these from the root of your copy of the repository. Anything after the comma
 | --- | --- | --- |
 | `TABLODGE_SYNC_TOKEN` | none, required | The token browsers send, at least 32 characters |
 | `TABLODGE_DOMAIN` | none | Your domain, for `compose.https.yaml` |
+| `TABLODGE_IMAGE` | `ghcr.io/bberka/tablodge-sync:latest` | The image `compose.https.yaml` runs, for example to pin a version |
+| `TABLODGE_HTTP_PORT`, `TABLODGE_HTTPS_PORT` | `80`, `443` | Host ports Caddy listens on in `compose.https.yaml` |
 | `PORT` | `8787` | Port the sync server listens on |
-| `DATA_DIR` | `/data` in the image | Folder for `library.db` |
+| `DATA_DIR` | `/data` in the image, `./data` otherwise | Folder for `library.db` and `private.db` |
 | `MAX_RECORDS` | `500000` | Items the library may hold, deletes included |
 | `RETENTION_DAYS` | `90` | How long a delete is remembered for browsers that are offline |
 | `RATE_LIMIT_PER_MINUTE` | `300` | Requests per minute before the server answers 429 |
@@ -328,7 +348,7 @@ Run these from the root of your copy of the repository. Anything after the comma
 | Request size | 8 MB |
 | One item | 256 KB |
 | Changes per pull | 1000 |
-| Live connections | 64 on Docker; one that sends no valid token in 10 seconds is closed |
+| Live connections | 64 for both libraries together on Docker, 64 per library on Cloudflare. One that sends no valid token in 10 seconds is closed |
 
 ### API
 
@@ -338,7 +358,7 @@ All paths except `/health` need `Authorization: Bearer <token>`. The server answ
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
 | `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private` and `key`) |
-| `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor`, the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
+| `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor` (500 unless `limit` says otherwise, at most 1000), the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
 | `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |
 | `POST /v1/key` with `{"key": "...", "previous": ...}` | Stores the key only while the server still holds `previous` (`null` for none); otherwise 409 with the current key |

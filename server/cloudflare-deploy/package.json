@@ -1,0 +1,23 @@
+{
+	"name": "tablodge-sync",
+	"private": true,
+	"description": "TabLodge sync server on Cloudflare Workers, for the Deploy to Cloudflare button.",
+	"license": "MIT",
+	"type": "module",
+	"engines": {
+		"node": ">=22"
+	},
+	"scripts": {
+		"deploy": "wrangler deploy"
+	},
+	"devDependencies": {
+		"wrangler": "^4.160.0"
+	},
+	"cloudflare": {
+		"bindings": {
+			"TABLODGE_SYNC_TOKEN": {
+				"description": "The password your browsers use to reach this server: at least 32 random characters. A password manager can generate one, or run `openssl rand -base64 32`. Save it, because you enter it in TabLodge with the Worker's address."
+			}
+		}
+	}
+}

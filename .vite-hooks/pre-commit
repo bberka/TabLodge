@@ -1,0 +1,12 @@
+# Work happens on a branch; master and main change only through pull requests (AGENTS.md).
+branch=$(git branch --show-current)
+if [ "$branch" = master ] || [ "$branch" = main ]; then
+	echo "Commits go on a branch, not $branch. Create one first: git switch -c <type>/<topic>" >&2
+	exit 1
+fi
+
+# Lint the staged files, then type check the project. The full test suite runs before a push.
+# XO only checks here and never edits files, so lint-staged's backup stash is not needed; it would also go on
+# the stash list that every worktree shares. --quiet drops the warning about the missing backup, not lint errors.
+vp staged --no-stash --quiet
+pnpm exec tsc -b
