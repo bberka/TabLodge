@@ -11,7 +11,7 @@ import type {Session} from '../../../src/app/types';
 import {hostOf} from '../library';
 import {useLibrary} from '../library-store';
 import {TARGET, useColors} from '../theme';
-import {Empty} from '../ui';
+import {Avatar, Card, Empty, Header, Icon} from '../ui';
 
 /**
 Sessions saved in the browser extension, read only: a phone browser cannot create them.
@@ -23,10 +23,13 @@ export function SessionsScreen() {
 
 	if (store.groups.length === 0) {
 		return (
-			<Empty>
-				No sessions yet. Sessions saved in the TabLodge extension appear here
-				once this phone is synced with your server.
-			</Empty>
+			<View style={styles.screen}>
+				<Header title="Sessions" />
+				<Empty icon="albums-outline" title="No sessions yet">
+					Sessions saved in the TabLodge extension appear here once this phone
+					is synced with your server. Saving a session needs a desktop browser.
+				</Empty>
+			</View>
 		);
 	}
 
@@ -47,26 +50,32 @@ export function SessionsScreen() {
 
 	const renderSession = (session: Session) => {
 		const expanded = open === session.id;
+		const count = `${session.tabs.length} ${session.tabs.length === 1 ? 'tab' : 'tabs'}`;
 		return (
-			<View
-				key={session.id}
-				style={[styles.session, {borderColor: colors.border}]}
-			>
+			<Card key={session.id}>
 				<Pressable
 					accessibilityRole="button"
 					accessibilityState={{expanded}}
-					accessibilityLabel={`${session.name}, ${session.tabs.length} tabs`}
-					style={styles.sessionHead}
+					accessibilityLabel={`${session.name}, ${count}`}
+					android_ripple={{color: colors.pressed}}
+					style={({pressed}) => [
+						styles.sessionHead,
+						{backgroundColor: pressed ? colors.pressed : 'transparent'},
+					]}
 					onPress={() => {
 						setOpen(expanded ? undefined : session.id);
 					}}
 				>
-					<Text style={[styles.name, {color: colors.text}]}>
-						{session.name}
-					</Text>
-					<Text style={{color: colors.muted}}>
-						{session.tabs.length} {session.tabs.length === 1 ? 'tab' : 'tabs'}
-					</Text>
+					<View style={styles.texts}>
+						<Text style={[styles.name, {color: colors.text}]}>
+							{session.name}
+						</Text>
+						<Text style={{color: colors.muted}}>{count}</Text>
+					</View>
+					<Icon
+						name={expanded ? 'chevron-up' : 'chevron-down'}
+						color={colors.muted}
+					/>
 				</Pressable>
 				{expanded &&
 					session.tabs.map((tab) => (
@@ -75,25 +84,40 @@ export function SessionsScreen() {
 							accessibilityRole="link"
 							accessibilityLabel={`${tab.title || hostOf(tab.url)}, ${hostOf(tab.url)}`}
 							accessibilityHint="Opens the link"
-							style={styles.tab}
+							android_ripple={{color: colors.pressed}}
+							style={({pressed}) => [
+								styles.tab,
+								{backgroundColor: pressed ? colors.pressed : 'transparent'},
+							]}
 							onPress={() => {
 								void Linking.openURL(tab.url);
 							}}
 						>
-							<Text numberOfLines={2} style={{color: colors.text}}>
-								{tab.title || tab.url}
-							</Text>
-							<Text numberOfLines={1} style={{color: colors.muted}}>
-								{hostOf(tab.url)}
-							</Text>
+							<Avatar host={hostOf(tab.url)} size={32} />
+							<View style={styles.texts}>
+								<Text numberOfLines={2} style={{color: colors.text}}>
+									{tab.title || tab.url}
+								</Text>
+								<Text
+									numberOfLines={1}
+									style={{color: colors.muted, fontSize: 13}}
+								>
+									{hostOf(tab.url)}
+								</Text>
+							</View>
+							<Icon name="open-outline" size={18} color={colors.muted} />
 						</Pressable>
 					))}
-			</View>
+			</Card>
 		);
 	};
 
 	return (
-		<ScrollView contentContainerStyle={styles.screen}>
+		<ScrollView contentContainerStyle={styles.list}>
+			<Header
+				title="Sessions"
+				subtitle={`${store.groups.length} from your browser, read only`}
+			/>
 			{sections.map((section) => (
 				<View key={section.id} style={styles.section}>
 					<Text
@@ -110,15 +134,30 @@ export function SessionsScreen() {
 }
 
 const styles = StyleSheet.create({
-	screen: {padding: 16, gap: 18},
-	section: {gap: 6},
-	folder: {fontSize: 13, fontWeight: '600', textTransform: 'uppercase'},
-	session: {borderBottomWidth: StyleSheet.hairlineWidth},
-	sessionHead: {
-		minHeight: TARGET + 8,
-		justifyContent: 'center',
-		paddingVertical: 8,
+	screen: {flex: 1},
+	list: {paddingBottom: 24, gap: 8},
+	section: {gap: 8, paddingHorizontal: 16, paddingTop: 8},
+	folder: {
+		fontSize: 13,
+		fontWeight: '600',
+		textTransform: 'uppercase',
+		letterSpacing: 0.5,
 	},
-	name: {fontSize: 16, fontWeight: '500'},
-	tab: {minHeight: TARGET, paddingVertical: 8, paddingLeft: 16, gap: 2},
+	sessionHead: {
+		minHeight: TARGET,
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+		borderRadius: 8,
+	},
+	texts: {flex: 1, gap: 2},
+	name: {fontSize: 16, fontWeight: '600'},
+	tab: {
+		minHeight: TARGET,
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 12,
+		paddingVertical: 8,
+		borderRadius: 8,
+	},
 });

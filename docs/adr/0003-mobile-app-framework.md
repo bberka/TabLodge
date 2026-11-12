@@ -15,6 +15,7 @@ The extension and the sync server are TypeScript, and the sync client in `src/sh
 * **Development builds, not Expo Go.** The share sheet target needs native configuration, which `expo prebuild` generates. The `android/` folder is generated and ignored.
 * **Shared code by import.** The app imports the model types and the sync client straight from `src/` with relative paths, and Metro watches the repository root. Both are free of browser APIs, so nothing moved and the extension is untouched. `mobile/src/chrome.d.ts` declares the one Chrome type the model names. If the app later needs more shared code, it moves to a package then.
 * **Storage.** The token is in the Android keystore (expo-secure-store). The library and sync state are in SQLite (expo-sqlite key value store), which has no size limit like AsyncStorage.
+* **Development data.** Dev builds seed the extension's dev fixture into an empty library (`mobile/src/seed.ts`). It is required inside a `__DEV__` conditional so Metro drops it from release bundles, and it is never synced.
 * **Share sheet.** `expo-share-intent` adds the Android `SEND text/*` filter. Prebuild generates it in the manifest.
 
 ## Rejected

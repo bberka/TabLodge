@@ -13,6 +13,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@expo/vector-icons": "^15.1.1",
 		"expo": "~58.0.25",
 		"expo-constants": "~58.0.16",
 		"expo-crypto": "~58.0.8",

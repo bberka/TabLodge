@@ -13,6 +13,7 @@ import {
 	searchBookmarks,
 	UNFILED_ID,
 } from '../mobile/src/library';
+import {sampleStore} from '../mobile/src/seed';
 
 const NOW = 1000;
 const ids = (store: ReturnType<typeof emptyStore>, columnId: string) =>
@@ -113,5 +114,19 @@ describe('bookmarks', () => {
 		};
 		assert.deepEqual(columnViews(store), [{id: UNFILED_ID, name: 'Unfiled'}]);
 		assert.deepEqual(ids(store, UNFILED_ID), ['a']);
+	});
+});
+
+describe('sample data', () => {
+	test('matches the extension dev fixture and groups bookmarks into real columns', () => {
+		const store = sampleStore(NOW);
+		assert.equal(store.groups.length, 6);
+		assert.equal(store.bookmarks.length, 16);
+		assert.equal(
+			columnViews(store).some((view) => view.id === UNFILED_ID),
+			false,
+		);
+		const sessionIds = store.groups.map((session) => session.id);
+		assert.equal(new Set(sessionIds).size, sessionIds.length);
 	});
 });

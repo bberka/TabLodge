@@ -1,5 +1,5 @@
-import {StatusBar} from 'expo-status-bar';
 import {ShareIntentProvider, useShareIntentContext} from 'expo-share-intent';
+import {StatusBar} from 'expo-status-bar';
 import {useEffect, useState} from 'react';
 import {AppState, Pressable, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -9,13 +9,30 @@ import {SaveLinkScreen} from './src/screens/save-link';
 import {SessionsScreen} from './src/screens/sessions';
 import {SettingsScreen} from './src/screens/settings';
 import {TARGET, useColors} from './src/theme';
+import {Icon, type IconName} from './src/ui';
 
 type Tab = 'bookmarks' | 'sessions' | 'settings';
-const TABS: Array<{id: Tab; label: string}> = [
-	{id: 'bookmarks', label: 'Bookmarks'},
-	{id: 'sessions', label: 'Sessions'},
-	{id: 'settings', label: 'Settings'},
-];
+const TABS: Array<{id: Tab; label: string; icon: IconName; active: IconName}> =
+	[
+		{
+			id: 'bookmarks',
+			label: 'Bookmarks',
+			icon: 'bookmark-outline',
+			active: 'bookmark',
+		},
+		{
+			id: 'sessions',
+			label: 'Sessions',
+			icon: 'albums-outline',
+			active: 'albums',
+		},
+		{
+			id: 'settings',
+			label: 'Settings',
+			icon: 'settings-outline',
+			active: 'settings',
+		},
+	];
 
 function Main() {
 	const colors = useColors();
@@ -79,15 +96,28 @@ function Main() {
 									key={item.id}
 									accessibilityRole="tab"
 									accessibilityState={{selected: on}}
+									android_ripple={{color: colors.pressed}}
 									style={styles.tab}
 									onPress={() => {
 										setTab(item.id);
 									}}
 								>
+									<View
+										style={[
+											styles.pill,
+											on && {backgroundColor: colors.accentSoft},
+										]}
+									>
+										<Icon
+											name={on ? item.active : item.icon}
+											color={on ? colors.accent : colors.muted}
+										/>
+									</View>
 									<Text
 										style={{
 											color: on ? colors.accent : colors.muted,
 											fontWeight: on ? '700' : '500',
+											fontSize: 12,
 										}}
 									>
 										{item.label}
@@ -116,7 +146,15 @@ const styles = StyleSheet.create({
 	bar: {flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth},
 	tab: {
 		flex: 1,
-		minHeight: TARGET + 8,
+		minHeight: TARGET + 16,
+		alignItems: 'center',
+		justifyContent: 'center',
+		gap: 2,
+	},
+	pill: {
+		width: 64,
+		height: 32,
+		borderRadius: 16,
 		alignItems: 'center',
 		justifyContent: 'center',
 	},

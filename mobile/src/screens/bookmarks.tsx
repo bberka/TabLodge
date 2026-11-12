@@ -4,6 +4,7 @@ import {
 	FlatList,
 	Linking,
 	Pressable,
+	ScrollView,
 	StyleSheet,
 	Text,
 	View,
@@ -18,7 +19,7 @@ import {
 } from '../library';
 import {edit, refreshStatus, syncClient, useLibrary} from '../library-store';
 import {TARGET, useColors} from '../theme';
-import {Button, Chips, Empty, Field} from '../ui';
+import {Avatar, Chips, Empty, Field, Header, Icon, IconButton} from '../ui';
 
 export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 	const colors = useColors();
@@ -27,7 +28,14 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 	const [query, setQuery] = useState('');
 	const [refreshing, setRefreshing] = useState(false);
 
-	const columns = useMemo(() => columnViews(store), [store]);
+	const columns = useMemo(
+		() =>
+			columnViews(store).map((column) => ({
+				...column,
+				count: bookmarksIn(store, column.id).length,
+			})),
+		[store],
+	);
 	const columnId = columns.some((column) => column.id === picked)
 		? picked
 		: (columns[0]?.id ?? '');
@@ -37,7 +45,7 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 		: bookmarksIn(store, columnId);
 
 	const confirmRemove = (bookmark: Bookmark) => {
-		Alert.alert('Delete bookmark', bookmark.title, [
+		Alert.alert('Delete bookmark?', bookmark.title, [
 			{text: 'Cancel', style: 'cancel'},
 			{
 				text: 'Delete',
@@ -56,7 +64,7 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 		try {
 			await syncClient.syncNow();
 		} catch {
-			// The status line in Settings shows why.
+			// The status card in Settings shows why.
 		} finally {
 			await refreshStatus();
 			setRefreshing(false);
@@ -65,30 +73,54 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 
 	return (
 		<View style={styles.screen}>
-			<View style={styles.head}>
-				<Field
-					label="Search bookmarks"
-					value={query}
-					autoCapitalize="none"
-					autoCorrect={false}
-					returnKeyType="search"
-					onChangeText={setQuery}
-				/>
-				{!searching && columns.length > 0 && (
-					<Chips items={columns} selected={columnId} onSelect={setPicked} />
-				)}
-			</View>
 			<FlatList
 				data={shown}
 				keyExtractor={(bookmark) => bookmark.id}
 				refreshing={refreshing}
 				contentContainerStyle={styles.list}
+				keyboardShouldPersistTaps="handled"
+				ListHeaderComponent={
+					<View style={styles.head}>
+						<Header
+							title="Bookmarks"
+							subtitle={`${store.bookmarks.length} saved`}
+						/>
+						<View style={styles.search}>
+							<Field
+								label="Search bookmarks"
+								icon="search"
+								value={query}
+								autoCapitalize="none"
+								autoCorrect={false}
+								returnKeyType="search"
+								onChangeText={setQuery}
+								onClear={() => {
+									setQuery('');
+								}}
+							/>
+							{!searching && columns.length > 0 && (
+								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
+									<Chips
+										items={columns}
+										selected={columnId}
+										onSelect={setPicked}
+									/>
+								</ScrollView>
+							)}
+						</View>
+					</View>
+				}
 				ListEmptyComponent={
-					<Empty>
-						{searching
-							? 'No bookmark matches.'
-							: 'Nothing here yet. Save a link with Add link, share one from your browser, or connect your sync server in Settings.'}
-					</Empty>
+					searching ? (
+						<Empty icon="search" title="No match">
+							Nothing saved matches that search.
+						</Empty>
+					) : (
+						<Empty icon="bookmark-outline" title="No bookmarks yet">
+							Save a link with Add link, share one from your browser, or connect
+							your sync server in Settings.
+						</Empty>
+					)
 				}
 				renderItem={({item}) => (
 					<View style={[styles.row, {borderColor: colors.border}]}>
@@ -96,7 +128,11 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 							accessibilityRole="link"
 							accessibilityLabel={`${item.title}, ${hostOf(item.url)}`}
 							accessibilityHint="Opens the link"
-							style={styles.main}
+							android_ripple={{color: colors.pressed}}
+							style={({pressed}) => [
+								styles.main,
+								{backgroundColor: pressed ? colors.pressed : 'transparent'},
+							]}
 							onPress={() => {
 								void Linking.openURL(item.url);
 							}}
@@ -104,57 +140,86 @@ export function BookmarksScreen({onAdd}: {onAdd: () => void}) {
 								confirmRemove(item);
 							}}
 						>
-							<Text
-								numberOfLines={2}
-								style={[styles.title, {color: colors.text}]}
-							>
-								{item.title}
-							</Text>
-							<Text numberOfLines={1} style={{color: colors.muted}}>
-								{hostOf(item.url)}
-							</Text>
+							<Avatar host={hostOf(item.url)} />
+							<View style={styles.texts}>
+								<Text
+									numberOfLines={2}
+									style={[styles.title, {color: colors.text}]}
+								>
+									{item.title}
+								</Text>
+								<Text numberOfLines={1} style={{color: colors.muted}}>
+									{hostOf(item.url)}
+								</Text>
+							</View>
+							<Icon name="open-outline" size={18} color={colors.muted} />
 						</Pressable>
-						<Pressable
-							accessibilityRole="button"
-							accessibilityLabel={`Delete ${item.title}`}
-							style={styles.delete}
+						<IconButton
+							icon="trash-outline"
+							label={`Delete ${item.title}`}
+							color={colors.danger}
 							onPress={() => {
 								confirmRemove(item);
 							}}
-						>
-							<Text style={{color: colors.danger, fontWeight: '600'}}>
-								Delete
-							</Text>
-						</Pressable>
+						/>
 					</View>
 				)}
 				onRefresh={() => {
 					void refresh();
 				}}
 			/>
-			<View style={styles.foot}>
-				<Button label="Add link" onPress={onAdd} />
-			</View>
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel="Add link"
+				android_ripple={{color: '#ffffff33'}}
+				style={({pressed}) => [
+					styles.fab,
+					{backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1},
+				]}
+				onPress={onAdd}
+			>
+				<Icon name="add" size={24} color={colors.onAccent} />
+				<Text style={[styles.fabLabel, {color: colors.onAccent}]}>
+					Add link
+				</Text>
+			</Pressable>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	screen: {flex: 1},
-	head: {padding: 16, gap: 12},
-	list: {paddingHorizontal: 16, flexGrow: 1},
+	head: {gap: 8},
+	search: {paddingHorizontal: 16, gap: 12, paddingBottom: 8},
+	list: {paddingBottom: 96, flexGrow: 1},
 	row: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		borderBottomWidth: StyleSheet.hairlineWidth,
+		paddingRight: 4,
 	},
-	main: {flex: 1, minHeight: TARGET + 8, paddingVertical: 10, gap: 2},
+	main: {
+		flex: 1,
+		minHeight: TARGET + 16,
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 12,
+		paddingVertical: 10,
+		paddingHorizontal: 16,
+	},
+	texts: {flex: 1, gap: 2},
 	title: {fontSize: 16, fontWeight: '500'},
-	delete: {
-		minHeight: TARGET,
-		minWidth: TARGET,
-		justifyContent: 'center',
-		paddingLeft: 12,
+	fab: {
+		position: 'absolute',
+		right: 16,
+		bottom: 16,
+		minHeight: 56,
+		paddingHorizontal: 20,
+		borderRadius: 28,
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+		elevation: 4,
 	},
-	foot: {padding: 16},
+	fabLabel: {fontWeight: '600', fontSize: 15},
 });

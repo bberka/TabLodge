@@ -9,7 +9,7 @@ import {
 } from '../library';
 import {edit, newId, useLibrary} from '../library-store';
 import {useColors} from '../theme';
-import {Button, Chips, Field} from '../ui';
+import {Button, Chips, Field, Header, IconButton} from '../ui';
 
 /**
 Saves a link into a column. Opened by Add link, or by the Android share sheet with the shared text filled in.
@@ -34,6 +34,7 @@ export function SaveLinkScreen({
 	const [title, setTitle] = useState(initialTitle);
 	const [picked, setPicked] = useState('');
 	const [newName, setNewName] = useState('');
+	const [saving, setSaving] = useState(false);
 
 	const columnId = columns.some((column) => column.id === picked)
 		? picked
@@ -47,6 +48,7 @@ export function SaveLinkScreen({
 			return;
 		}
 
+		setSaving(true);
 		let target = columnId;
 		const name = newName.trim();
 		if (name) {
@@ -62,46 +64,64 @@ export function SaveLinkScreen({
 	};
 
 	return (
-		<ScrollView
-			contentContainerStyle={styles.screen}
-			keyboardShouldPersistTaps="handled"
-		>
-			<Field
-				label="Link"
-				value={text}
-				autoCapitalize="none"
-				autoCorrect={false}
-				keyboardType="url"
-				onChangeText={setText}
+		<View style={styles.screen}>
+			<Header
+				title="Save link"
+				right={<IconButton icon="close" label="Close" onPress={onDone} />}
 			/>
-			{text.length > 0 && !url && (
-				<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
-					Enter a web address that starts with http:// or https://.
-				</Text>
-			)}
-			<Field label="Title (optional)" value={title} onChangeText={setTitle} />
-			{columns.length > 0 && (
-				<View style={styles.group}>
-					<Text style={{color: colors.muted}}>Column</Text>
-					<Chips items={columns} selected={columnId} onSelect={setPicked} />
-				</View>
-			)}
-			<Field
-				label={
-					columns.length > 0
-						? 'Or create a new column'
-						: 'Column name (optional)'
-				}
-				value={newName}
-				onChangeText={setNewName}
-			/>
-			<Button label="Save" disabled={!url} onPress={() => void save()} />
-			<Button label="Cancel" kind="plain" onPress={onDone} />
-		</ScrollView>
+			<ScrollView
+				contentContainerStyle={styles.body}
+				keyboardShouldPersistTaps="handled"
+			>
+				<Field
+					label="Link"
+					icon="link-outline"
+					value={text}
+					autoCapitalize="none"
+					autoCorrect={false}
+					keyboardType="url"
+					error={
+						text.length > 0 && !url
+							? 'Enter a web address that starts with http:// or https://.'
+							: undefined
+					}
+					onChangeText={setText}
+					onClear={() => {
+						setText('');
+					}}
+				/>
+				<Field label="Title (optional)" value={title} onChangeText={setTitle} />
+				{columns.length > 0 && (
+					<View style={styles.group}>
+						<Text style={{color: colors.muted}}>Column</Text>
+						<Chips items={columns} selected={columnId} onSelect={setPicked} />
+					</View>
+				)}
+				<Field
+					label={
+						columns.length > 0
+							? 'Or create a new column'
+							: 'Column name (optional)'
+					}
+					icon="folder-outline"
+					value={newName}
+					onChangeText={setNewName}
+				/>
+				<Button
+					label="Save"
+					icon="checkmark"
+					disabled={!url}
+					loading={saving}
+					onPress={() => void save()}
+				/>
+				<Button label="Cancel" kind="plain" onPress={onDone} />
+			</ScrollView>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create({
-	screen: {padding: 16, gap: 14},
-	group: {gap: 6},
+	screen: {flex: 1},
+	body: {padding: 16, gap: 16},
+	group: {gap: 8},
 });
