@@ -7,6 +7,8 @@ import type {Settings, Store} from '../src/app/types';
 import {ChangeLog} from '../src/shared/sync/change-log';
 import {
 	createSyncClient,
+	createSyncToken,
+	MIN_TOKEN_LENGTH,
 	parseServerUrl,
 	SYNC_CONFIG_KEY,
 	SyncError,
@@ -15,6 +17,15 @@ import {
 import {spreadKeys} from '../src/shared/sync/order-key';
 
 const TOKEN = 'client-test-token-0123456789-abcdefghij';
+
+test('a generated token is long enough, safe to paste anywhere, and different every time', () => {
+	const tokens = new Set(Array.from({length: 50}, () => createSyncToken()));
+	assert.equal(tokens.size, 50);
+	for (const token of tokens) {
+		assert.ok(token.length >= MIN_TOKEN_LENGTH, token);
+		assert.match(token, /^[\w-]+$/);
+	}
+});
 const URL_BASE = 'https://sync.example.test';
 
 /**

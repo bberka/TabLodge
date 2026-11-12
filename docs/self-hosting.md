@@ -100,7 +100,7 @@ This runs the server as a Worker with one Durable Object on your own Cloudflare 
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/master/server/cloudflare-deploy)
 
-1. [Create a token](#create-a-token) and keep it at hand.
+1. [Create a token](#create-a-token) and keep it at hand. In TabLodge, **Settings › Sync** has the same steps with a **Generate token** button, which copies a token and fills it in for you.
 2. Choose the button and log in to Cloudflare, or create a free account.
 3. Connect your GitHub or GitLab account when asked. Cloudflare copies the server into a new repository there and deploys it from that repository.
 4. Paste the token as the value of `TABLODGE_SYNC_TOKEN`, keep the other settings, and deploy.
