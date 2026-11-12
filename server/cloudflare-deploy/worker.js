@@ -5,7 +5,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // src/worker.ts
 import { DurableObject } from "cloudflare:workers";
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/http-exception.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/http-exception.js
 var HTTPException = class extends Error {
   static {
     __name(this, "HTTPException");
@@ -36,10 +36,10 @@ var HTTPException = class extends Error {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/request/constants.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/request/constants.js
 var GET_MATCH_RESULT = /* @__PURE__ */ Symbol();
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/crypto.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/crypto.js
 var sha256 = /* @__PURE__ */ __name(async (data) => {
   return await createHash(data, {
     name: "SHA-256",
@@ -60,7 +60,7 @@ var createHash = /* @__PURE__ */ __name(async (data, algorithm) => {
   return null;
 }, "createHash");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/buffer.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/buffer.js
 var constantTimeEqualString = /* @__PURE__ */ __name((a, b) => {
   const aLen = a.length;
   const bLen = b.length;
@@ -92,7 +92,7 @@ var bufferToFormData = /* @__PURE__ */ __name((arrayBuffer, contentType) => {
   return new Response(arrayBuffer, { headers: { "Content-Type": contentType.replace(/^[^;]+/, (mediaType) => mediaType.toLowerCase()) } }).formData();
 }, "bufferToFormData");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/body.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/body.js
 var MAX_NESTED_OBJECTS = 1e4;
 var isRawRequest = /* @__PURE__ */ __name((request) => "headers" in request, "isRawRequest");
 var parseBody = /* @__PURE__ */ __name(async (request, options = /* @__PURE__ */ Object.create(null)) => {
@@ -158,14 +158,14 @@ var throwNestingLimitExceeded = /* @__PURE__ */ __name(() => {
   throw new Error("Nesting limit exceeded");
 }, "throwNestingLimitExceeded");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/url.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/url.js
 var splitPath = /* @__PURE__ */ __name((path) => {
   const paths = path.split("/");
   if (paths[0] === "") paths.shift();
   return paths;
 }, "splitPath");
-var splitRoutingPath = /* @__PURE__ */ __name((routePath) => {
-  const { groups, path } = extractGroupsFromPath(routePath);
+var splitRoutingPath = /* @__PURE__ */ __name((routePath2) => {
+  const { groups, path } = extractGroupsFromPath(routePath2);
   const paths = splitPath(path);
   return replaceGroupMarks(paths, groups);
 }, "splitRoutingPath");
@@ -230,7 +230,7 @@ var tryDecode = /* @__PURE__ */ __name((str, decoder) => {
     });
   }
 }, "tryDecode");
-var tryDecodeURI = /* @__PURE__ */ __name((str) => tryDecode(str, decodeURI), "tryDecodeURI");
+var decodeURIWithPreservedPercent = /* @__PURE__ */ __name((value) => decodeURI(value.includes("%25") ? value.replace(/%25/g, "%2525") : value), "decodeURIWithPreservedPercent");
 var getPath = /* @__PURE__ */ __name((request) => {
   const url = request.url;
   const start = url.indexOf("/", url.indexOf(":") + 4);
@@ -242,7 +242,13 @@ var getPath = /* @__PURE__ */ __name((request) => {
       const hashIndex = url.indexOf("#", i);
       const end = queryIndex === -1 ? hashIndex === -1 ? void 0 : hashIndex : hashIndex === -1 ? queryIndex : Math.min(queryIndex, hashIndex);
       const path = url.slice(start, end);
-      return tryDecodeURI(path.includes("%25") ? path.replace(/%25/g, "%2525") : path);
+      const decoded = tryDecode(path, decodeURIWithPreservedPercent);
+      if (/%(?![0-9A-Fa-f]{2})/.test(path)) {
+        const rewritten = new URL("http://localhost");
+        rewritten.pathname = decoded.replace(/[\\\t\n\r]/g, encodeURIComponent);
+        if (tryDecode(rewritten.pathname, decodeURIWithPreservedPercent) !== decoded) return tryDecode(path.replace(/%(?![0-9A-Fa-f]{2})/g, "%25"), decodeURIWithPreservedPercent);
+      }
+      return decoded;
     } else if (charCode === 63 || charCode === 35) break;
   }
   return url.slice(start, i);
@@ -251,15 +257,6 @@ var getPathNoStrict = /* @__PURE__ */ __name((request) => {
   const result = getPath(request);
   return result.length > 1 && result.at(-1) === "/" ? result.slice(0, -1) : result;
 }, "getPathNoStrict");
-var stripPathPrefix = /* @__PURE__ */ __name((rawPath, decodedPath, prefixLength) => {
-  if (rawPath.at(-1) === "/" && decodedPath.at(-1) !== "/") rawPath = rawPath.slice(0, -1);
-  let index = 0;
-  for (let i = decodedPath.indexOf("/"); i !== -1 && i < prefixLength; i = decodedPath.indexOf("/", i + 1)) {
-    index = rawPath.indexOf("/", index + 1);
-    if (index === -1) return "/";
-  }
-  return rawPath.slice(index) || "/";
-}, "stripPathPrefix");
 var mergePath = /* @__PURE__ */ __name((base, sub, ...rest) => {
   if (rest.length) sub = mergePath(sub, ...rest);
   return `${base?.[0] === "/" ? "" : "/"}${base}${sub === "/" ? "" : `${base?.at(-1) === "/" ? "" : "/"}${sub?.[0] === "/" ? sub.slice(1) : sub}`}`;
@@ -343,7 +340,7 @@ var getQueryParams = /* @__PURE__ */ __name((url, key) => {
 }, "getQueryParams");
 var decodeURIComponent_ = decodeURIComponent;
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/request.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/request.js
 var HonoRequest = class {
   static {
     __name(this, "HonoRequest");
@@ -616,7 +613,7 @@ var HonoRequest = class {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/html.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/html.js
 var HtmlEscapedCallbackPhase = {
   Stringify: 1,
   BeforeStream: 2,
@@ -646,7 +643,7 @@ var resolveCallback = /* @__PURE__ */ __name(async (str, phase, preserveCallback
   else return resStr;
 }, "resolveCallback");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/context.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/context.js
 var TEXT_PLAIN = "text/plain; charset=UTF-8";
 var setDefaultContentType = /* @__PURE__ */ __name((contentType, headers) => {
   return {
@@ -1027,7 +1024,7 @@ var Context = class {
   }, "notFound");
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/compose.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/compose.js
 var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
   return (context, next) => {
     let index = -1;
@@ -1059,7 +1056,11 @@ var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
   };
 }, "compose");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/helper/route/index.js
+var matchedRoutes = /* @__PURE__ */ __name((c) => c.req[GET_MATCH_RESULT][0].map(([[, route]]) => route), "matchedRoutes");
+var routePath = /* @__PURE__ */ __name((c, index) => matchedRoutes(c).at(index ?? c.req.routeIndex)?.path ?? "", "routePath");
+
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router.js
 var METHODS = [
   "get",
   "post",
@@ -1076,21 +1077,27 @@ var UnsupportedPathError = class extends Error {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/constants.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/constants.js
 var COMPOSED_HANDLER = "__COMPOSED_HANDLER";
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/mount.js
-var getPathPrefixLength = /* @__PURE__ */ __name((c, pathPrefix, routePath) => {
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/mount.js
+var countTrailingSlashes = /* @__PURE__ */ __name((path) => {
+  let index = path.length;
+  while (index > 0 && path.charCodeAt(index - 1) === 47) index--;
+  return path.length - index;
+}, "countTrailingSlashes");
+var getPathPrefixLength = /* @__PURE__ */ __name((c, pathPrefix, routePath2) => {
   if (!/[:*]/.test(pathPrefix)) return pathPrefix.length;
   const path = c.req.path;
   const matchResult = c.req[GET_MATCH_RESULT];
   const paramNames = /* @__PURE__ */ new Set();
   let length = 0;
   for (const part of splitRoutingPath(pathPrefix)) {
+    if (part[0] === ":" && part.endsWith("}?")) throw new Error(`mount(): Optional regular expression parameters are not supported in "${routePath2}".`);
     const pattern = getPattern(part);
     if (pattern && pattern !== "*") {
       const name = pattern[1];
-      if (paramNames.has(name)) throw new Error(`mount(): Duplicate path parameter "${name}" in "${routePath}".`);
+      if (paramNames.has(name)) throw new Error(`mount(): Duplicate path parameter "${name}" in "${routePath2}".`);
       paramNames.add(name);
     }
     if (pattern && pattern !== "*" && pattern[2] !== true) {
@@ -1103,14 +1110,24 @@ var getPathPrefixLength = /* @__PURE__ */ __name((c, pathPrefix, routePath) => {
   }
   return length;
 }, "getPathPrefixLength");
-var createMountedRequest = /* @__PURE__ */ __name((c, pathPrefix, routePath) => {
-  if (/[^/]\*$/.test(routePath)) throw new Error(`mount(): Wildcard must follow "/" in "${routePath}".`);
-  const url = new URL(c.req.raw.url);
-  url.pathname = stripPathPrefix(url.pathname, c.req.path, getPathPrefixLength(c, pathPrefix, routePath));
+var createMountedRequest = /* @__PURE__ */ __name((c, pathPrefix, routePath2) => {
+  if (/[^/]\*$/.test(routePath2)) throw new Error(`mount(): Wildcard must follow "/" in "${routePath2}".`);
+  const prefixLength = getPathPrefixLength(c, pathPrefix, routePath2);
+  const path = c.req.path.slice(prefixLength) || "/";
+  if (prefixLength > c.req.path.length || path[0] !== "/" || /\/(?:\.|%2e){1,2}(?:\/|$)/i.test(path)) throw new HTTPException(400, { message: "Invalid mounted path" });
+  const rawUrl = c.req.raw.url;
+  if (/^[^/?#]*\/\/[^/?#\\]*[?#\\]/.test(rawUrl)) throw new HTTPException(400, { message: "Invalid mounted path" });
+  const rawPathEnd = rawUrl.search(/[?#]/);
+  const rawTrailingSlashes = countTrailingSlashes(rawPathEnd === -1 ? rawUrl : rawUrl.slice(0, rawPathEnd));
+  if (rawTrailingSlashes > 1 && countTrailingSlashes(c.req.path) === rawTrailingSlashes - 1) throw new HTTPException(400, { message: "Invalid mounted path" });
+  const url = new URL(rawUrl);
+  url.pathname = path.replace(/[\\\t\n\r]/g, encodeURIComponent);
+  if (path.includes("%")) {
+  }
   return new Request(url, c.req.raw);
 }, "createMountedRequest");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/hono-base.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/hono-base.js
 var notFoundHandler = /* @__PURE__ */ __name((c) => {
   return c.text("404 Not Found", 404);
 }, "notFoundHandler");
@@ -1289,6 +1306,8 @@ var Hono = class Hono2 {
   * @param {Function} applicationHandler - other Request Handler
   * @param {MountOptions} [options] - options of `.mount()`
   * @returns {Hono} mounted Hono instance
+  * @throws {Error} If automatic request rewriting encounters duplicate path parameter names or an optional regular expression parameter.
+  * @throws {HTTPException} With status 400 if automatic request rewriting cannot safely preserve the routed path.
   *
   * @example
   * ```ts
@@ -1334,8 +1353,10 @@ var Hono = class Hono2 {
       }
       return [c.env, executionContext];
     };
-    const mergedPath = mergePath(this._basePath, path);
-    const defaultReplaceRequest = /* @__PURE__ */ __name((c) => createMountedRequest(c, mergedPath.replace(/\/$/, ""), mergePath(mergedPath, "*")), "defaultReplaceRequest");
+    const defaultReplaceRequest = /* @__PURE__ */ __name((c) => {
+      const mountedRoutePath = routePath(c);
+      return createMountedRequest(c, mountedRoutePath.replace(/\/?\*$/, ""), mountedRoutePath);
+    }, "defaultReplaceRequest");
     const handler = /* @__PURE__ */ __name(async (c, next) => {
       const res = await applicationHandler(replaceRequest ? replaceRequest(c.req.raw) : defaultReplaceRequest(c), ...getOptions(c));
       if (res) return res;
@@ -1447,10 +1468,10 @@ var Hono = class Hono2 {
   }, "fire");
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/utils.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/utils.js
 var createNullObject = /* @__PURE__ */ __name(() => /* @__PURE__ */ Object.create(null), "createNullObject");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/reg-exp-router/matcher.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/reg-exp-router/matcher.js
 var emptyParam = [];
 function match(method, path) {
   const matchers = this.buildAllMatchers();
@@ -1468,7 +1489,7 @@ function match(method, path) {
 }
 __name(match, "match");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/reg-exp-router/node.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/reg-exp-router/node.js
 var LABEL_REG_EXP_STR = "[^/]+";
 var ONLY_WILDCARD_REG_EXP_STR = "[^]*";
 var TAIL_WILDCARD_REG_EXP_STR = "(?:|/[^]*)";
@@ -1556,7 +1577,7 @@ var Node = class Node2 {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/reg-exp-router/trie.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/reg-exp-router/trie.js
 var Trie = class {
   static {
     __name(this, "Trie");
@@ -1634,7 +1655,7 @@ var Trie = class {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/reg-exp-router/router.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/reg-exp-router/router.js
 function endsWithWildcard(keys) {
   const tail = keys[keys.length - 1];
   return tail === "[^]*" || tail === "(?:|/[^]*)";
@@ -1721,7 +1742,7 @@ var RegExpRouter = class {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/smart-router/router.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/smart-router/router.js
 var SmartRouter = class {
   static {
     __name(this, "SmartRouter");
@@ -1771,7 +1792,7 @@ var SmartRouter = class {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/trie-router/node.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/trie-router/node.js
 var emptyParams = createNullObject();
 var order = 0;
 var Node3 = class Node4 {
@@ -1904,7 +1925,7 @@ var Node3 = class Node4 {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/router/trie-router/router.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/router/trie-router/router.js
 var TrieRouter = class {
   static {
     __name(this, "TrieRouter");
@@ -1919,7 +1940,7 @@ var TrieRouter = class {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/hono.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/hono.js
 var Hono3 = class extends Hono {
   static {
     __name(this, "Hono");
@@ -1935,7 +1956,7 @@ var Hono3 = class extends Hono {
   }
 };
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/middleware/bearer-auth/index.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/middleware/bearer-auth/index.js
 var TOKEN_STRINGS = "[A-Za-z0-9._~+/-]+=*";
 var PREFIX = "Bearer";
 var HEADER = "Authorization";
@@ -2000,7 +2021,7 @@ var bearerAuth = /* @__PURE__ */ __name((options) => {
   }, "bearerAuth");
 }, "bearerAuth");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/middleware/body-limit/index.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/middleware/body-limit/index.js
 var ERROR_MESSAGE = "Payload Too Large";
 var bodyLimit = /* @__PURE__ */ __name((options) => {
   const onError = options.onError || (() => {
@@ -2013,28 +2034,27 @@ var bodyLimit = /* @__PURE__ */ __name((options) => {
     const hasTransferEncoding = c.req.raw.headers.has("transfer-encoding");
     if (c.req.raw.headers.has("content-length") && !hasTransferEncoding) return parseInt(c.req.raw.headers.get("content-length") || "0", 10) > maxSize ? onError(c) : next();
     let size = 0;
-    const chunks = [];
+    let buffer = /* @__PURE__ */ new Uint8Array(0);
     const rawReader = c.req.raw.body.getReader();
     for (; ; ) {
       const { done, value } = await rawReader.read();
       if (done) break;
+      const offset = size;
       size += value.length;
       if (size > maxSize) return onError(c);
-      chunks.push(value);
+      if (size > buffer.length) {
+        const grown = new Uint8Array(Math.min(maxSize, Math.max(size, buffer.length * 2)));
+        grown.set(buffer.subarray(0, offset));
+        buffer = grown;
+      }
+      buffer.set(value, offset);
     }
-    const requestInit = {
-      body: new ReadableStream({ start(controller) {
-        for (const chunk of chunks) controller.enqueue(chunk);
-        controller.close();
-      } }),
-      duplex: "half"
-    };
-    c.req.raw = new Request(c.req.raw, requestInit);
+    c.req.raw = new Request(c.req.raw, { body: buffer.subarray(0, size) });
     return next();
   }, "bodyLimit");
 }, "bodyLimit");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/middleware/combine/index.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/middleware/combine/index.js
 var some = /* @__PURE__ */ __name((...middleware) => {
   return /* @__PURE__ */ __name(async function some2(c, next) {
     let isNextCalled = false;
@@ -2087,7 +2107,7 @@ var except = /* @__PURE__ */ __name((condition, ...middleware) => {
   }, "except");
 }, "except");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/accept.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/accept.js
 var isWhitespace = /* @__PURE__ */ __name((char) => char === 32 || char === 9 || char === 10 || char === 13, "isWhitespace");
 var consumeWhitespace = /* @__PURE__ */ __name((acceptHeader, startIndex) => {
   while (startIndex < acceptHeader.length) {
@@ -2279,10 +2299,10 @@ var parseQuality = /* @__PURE__ */ __name((qVal) => {
   return num;
 }, "parseQuality");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/utils/compress.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/utils/compress.js
 var COMPRESSIBLE_CONTENT_TYPE_REGEX = /^\s*(?:text\/(?!event-stream(?:[;\s]|$))[^;\s]+|application\/(?:javascript|json|xml|xml-dtd|ecmascript|dart|msgpack|postscript|rtf|tar|toml|vnd\.dart|vnd\.ms-fontobject|vnd\.ms-opentype|vnd\.msgpack|wasm|x-httpd-php|x-javascript|x-msgpack|x-ns-proxy-autoconfig|x-sh|x-tar|x-virtualbox-hdd|x-virtualbox-ova|x-virtualbox-ovf|x-virtualbox-vbox|x-virtualbox-vdi|x-virtualbox-vhd|x-virtualbox-vmdk|x-www-form-urlencoded)|font\/(?:otf|ttf)|image\/(?:bmp|vnd\.adobe\.photoshop|vnd\.microsoft\.icon|vnd\.ms-dds|x-icon|x-ms-bmp)|message\/rfc822|model\/gltf-binary|x-shader\/x-fragment|x-shader\/x-vertex|[^;\s]+?\+(?:json|text|xml|yaml|msgpack))(?:[;\s]|$)/i;
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/middleware/compress/index.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/middleware/compress/index.js
 var ENCODING_TYPES = ["gzip", "deflate"];
 var cacheControlNoTransformRegExp = /(?:^|,)\s*?no-transform\s*?(?:,|$)/i;
 var selectEncoding = /* @__PURE__ */ __name((header, candidates) => {
@@ -2335,7 +2355,7 @@ var shouldTransform = /* @__PURE__ */ __name((res) => {
   return !cacheControl || !cacheControlNoTransformRegExp.test(cacheControl);
 }, "shouldTransform");
 
-// ../node_modules/.pnpm/hono@4.13.17/node_modules/hono/dist/middleware/cors/index.js
+// ../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/middleware/cors/index.js
 var cors = /* @__PURE__ */ __name((options) => {
   const opts = {
     origin: "*",
