@@ -91,12 +91,20 @@ Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then us
 | `vp run a11y` | Accessibility and keyboard checks on the built extension |
 | `vp run build` / `vp run pack` | Build and verify both browsers, then package them |
 | `vp run lint:fix` | Fix lint issues and format with XO |
+| `pnpm run mobile:start` | Start Metro for the Android app in `mobile/` (needs a development build; see [Android app](#android-app)) |
+| `pnpm run mobile:export` | Bundle the Android app's JavaScript to check that it builds |
 | `pnpm run cf:setup` | Deploy the sync server to Cloudflare (see [Self hosting](self-hosting.md)) |
 | `pnpm run cf:bundle` | Rebuild `server/cloudflare-deploy/worker.js` after changing the server or the sync code |
 
 The test browser keeps its own profile in `.dev/`, apart from your regular one. After a rebuild, reload TabLodge on the extensions page. Headless variants (`dev:chrome:headless`, `dev:firefox:headless`) are for automated checks; see [Agent validation](agent-validation.md#browser-access).
 
 Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [Architecture](architecture.md) for storage, messages, and sync. AI agents also follow [AGENTS.md](../AGENTS.md).
+
+### Android app
+
+`mobile/` holds an Android companion app, still in development, that saves links to bookmark columns, opens them, shows sessions read only, and syncs with your own server. [ADR 3](adr/0003-mobile-app-framework.md) explains the framework choice. It is not published and is not part of the extension build.
+
+To run it you need JDK 17 or newer and the Android SDK (`ANDROID_HOME` set), then `pnpm run mobile:android` builds a development build and installs it on a connected device or emulator. `pnpm run mobile:doctor` checks the Expo setup.
 
 ### Project structure
 
@@ -107,6 +115,7 @@ src/app/     Extension pages, data types, and messages
 src/shared/  Shared helpers, library storage, and the sync protocol (src/shared/sync/)
 src/components/ui/  UI primitives (Radix and Tailwind)
 server/      Self hosted sync server for Docker and Cloudflare (cloudflare-deploy/ is what the Deploy to Cloudflare button copies)
+mobile/      Android app (Expo and React Native), in progress
 tests/       Vitest suites with mocked browser APIs
 scripts/     Build, packaging, dev browser, and release tooling
 site/        Website for tablodge.bbay.dev (vp run site:dev)
