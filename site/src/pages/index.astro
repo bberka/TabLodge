@@ -14,16 +14,18 @@ const heroLight = await screenshotSet('dashboard', 'light');
 const heroSizes = '(min-width: 1160px) 1120px, calc(100vw - 2.5rem)';
 
 const features = [
-	{title: 'Save tabs as sessions', text: 'Save one tab, selected tabs, or a whole window for later.'},
-	{title: 'Restore with tab groups', text: 'Bring back group names, colors, and collapsed state.'},
-	{title: 'A bookmark board on your new tab', text: 'Keep links in columns, add them by dragging or pasting, and switch between a Board grid and a Focus view that opens one column at a time. Large columns scroll inside a capped pane by default, and you can set the column width, columns per row, and a compact density.'},
-	{title: 'Search everything', text: 'Find sessions, saved tabs, bookmarks, and open tabs together, type tl in the address bar, or open the search palette from any page with a keyboard shortcut, over the current page or in a window.'},
-	{title: 'Organize your sessions', text: 'Sort sessions into folders, archive them manually or automatically, merge without duplicates, refresh a session from the current window, split one in two, and undo changes.'},
-	{title: 'Flexible restores', text: 'Restore in this or a new window, skip duplicates, and choose what stays open. An optional setting removes common tracking parameters when opening or copying saved links.'},
-	{title: 'Close duplicate tabs', text: 'Close extra copies of the same page in one click. The most recently used copy stays, pinned and visible tabs are never closed, and Undo reopens what you closed.'},
-	{title: 'Clean up duplicate bookmarks', text: 'Find addresses saved more than once on your bookmark board, keep the copy you want, and remove the rest. Removed copies go to the trash bin and Undo brings them back.'},
-	{title: 'Side panel and quick actions', text: 'Browse your library from the side panel, popup, menus, or shortcuts.'},
-	{title: 'Import and back up', text: 'Import from other tab tools or export selected data or a full backup.'},
+	{title: 'Save tabs as sessions', text: 'Save one tab, selected tabs, a tab group, or whole windows, and name them for later.'},
+	{title: 'Restore tab groups', text: 'Sessions come back with their group names, colors, collapsed state, and pinned tabs.'},
+	{title: 'Bookmark board', text: 'Columns of links on every new tab, in a Board grid or a Focus view, one column at a time.'},
+	{title: 'Search everything', text: 'Find tabs, sessions, and bookmarks with a shortcut on any page, or type tl in the address bar.'},
+	{title: 'Organize sessions', text: 'Sort sessions into folders, archive old ones, merge, refresh, or split them, with Undo for every change.'},
+	{title: 'Flexible restores', text: 'Restore in this window or a new one, skip tabs already open, and strip tracking parameters if you like.'},
+	{title: 'Close duplicate tabs', text: 'Close extra copies of the same page in one click. Pinned tabs stay, and Undo reopens the rest.'},
+	{title: 'Tidy bookmarks', text: 'Find links saved more than once on your board and keep one copy. Removed ones go to the trash bin.'},
+	{title: 'Side panel and popup', text: 'Reach your library from the side panel, toolbar popup, right click menus, and keyboard shortcuts.'},
+	{title: 'Import and back up', text: 'Bring data from OneTab, Session Buddy, Toby, and more, or save a full backup, optionally with a password.'},
+	{title: 'Sync on your own server', text: 'Keep every browser the same through a server you run with Docker or on your Cloudflare account.'},
+	{title: 'Private windows', text: 'Use the regular library or a separate one, optionally locked and encrypted with a PIN or password.'},
 ];
 
 const faq = [
