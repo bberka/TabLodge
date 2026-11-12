@@ -79,6 +79,7 @@ import {archivedFolderId} from './session-folders';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
+import {columnForUrl} from './column-sites';
 import {webUrl} from './web-url';
 import {offerUndo} from './recovery-core';
 import {
@@ -308,6 +309,32 @@ function Popup() {
 			const url = webUrl(tab?.url);
 			if (!url) {
 				showStatus('Open a regular web page to bookmark it.', true);
+				return;
+			}
+
+			// A column that claims this site takes the page without asking.
+			const claimed = columnForUrl(columns, url);
+			if (claimed) {
+				if (
+					state?.bookmarks.some(
+						(bookmark) =>
+							bookmark.url === url && bookmark.columnId === claimed.id,
+					)
+				) {
+					showStatus(`Already in “${claimed.name}”.`, false, {toast: true});
+					return;
+				}
+
+				const added = await send('ADD_BOOKMARK', {
+					bookmark: {title: tab.title || url, url, columnId: claimed.id},
+				});
+				if (!added?.ok) {
+					showStatus(added?.error || 'Could not bookmark this page.', true);
+					return;
+				}
+
+				showStatus(`Saved to “${claimed.name}”.`, false, {toast: true});
+				await reload();
 				return;
 			}
 

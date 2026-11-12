@@ -291,7 +291,7 @@ function Help() {
 			entries: [
 				{
 					title: 'Add a page or link',
-					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, choose New column in the column selector to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically. Under Advanced in the Edit column dialog, list websites (or a site and path such as github.com/bberka) for the column, and pages on those sites (and their subdomains) saved with the Bookmark this page shortcut or the browser star go into that column without asking. The longest match wins when several columns match.',
+					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, choose New column in the column selector to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically. Under Advanced in the Edit column dialog, list websites (or a site and path such as github.com/bberka) for the column, and pages on those sites (and their subdomains) saved with the toolbar popup, the Bookmark this page shortcut, or the browser star go into that column without asking. The longest match wins when several columns match.',
 					searchText:
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},

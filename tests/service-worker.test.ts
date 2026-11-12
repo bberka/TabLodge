@@ -10409,6 +10409,33 @@ test('the bookmark shortcut opens the add-bookmark window for a web page only', 
 	assert.equal(internal.windowCreateCalls.length, 0);
 });
 
+test('the bookmark shortcut saves into a column that claims the site without opening the window', async () => {
+	const harness = nameHarness({}, [
+		webTab(1, 10, 0, {
+			active: true,
+			url: 'https://github.com/bberka/asdadsads',
+			title: 'Repo',
+		}),
+	]);
+	const column = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Mine',
+		domains: ['github.com/bberka'],
+	});
+	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+		'bookmark-page',
+		{id: 1, windowId: 10},
+	);
+	await settle();
+	assert.equal(harness.windowCreateCalls.length, 0);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	const saved = state.bookmarks.find(
+		(bookmark: {url: string}) =>
+			bookmark.url === 'https://github.com/bberka/asdadsads',
+	);
+	assert.equal(saved?.columnId, column.column.id);
+});
+
 test('the palette shortcut opens one palette window over the focused window on any page, and a second press closes it', async () => {
 	// A restricted page: the palette is a window of its own, so the page does not matter.
 	const harness = nameHarness({}, [

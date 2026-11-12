@@ -3105,9 +3105,9 @@ function NewTab() {
 										className="text-xs text-muted-foreground"
 									>
 										A site covers its subdomains. Add a path such as
-										github.com/bberka to match only that part. Pages saved with
-										the shortcut or the browser's bookmark button go here
-										without asking. The longest match wins.
+										github.com/bberka to match only that part. Pages saved from
+										the toolbar popup, the shortcut or the browser's bookmark
+										button go here without asking. The longest match wins.
 									</p>
 								</div>
 							</details>
