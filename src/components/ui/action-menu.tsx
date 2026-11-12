@@ -49,6 +49,7 @@ export type MenuAction =
 			id: string;
 			label: string;
 			icon?: LucideIcon;
+			disabled?: boolean;
 			hidden?: boolean;
 			items: MenuAction[];
 	  };
@@ -138,7 +139,7 @@ function renderActions(actions: MenuAction[], kit: Kit): ReactNode {
 		if (action.type === 'submenu') {
 			return (
 				<kit.Sub key={action.id}>
-					<kit.SubTrigger>
+					<kit.SubTrigger disabled={action.disabled}>
 						{Icon && <Icon />}
 						<span>{action.label}</span>
 					</kit.SubTrigger>
