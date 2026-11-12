@@ -11,6 +11,7 @@ import {
 	MIN_TOKEN_LENGTH,
 	parseServerUrl,
 	SYNC_CONFIG_KEY,
+	SYNC_SETTINGS_KEY,
 	SyncError,
 	type SyncSocket,
 } from '../src/shared/sync/client';
@@ -452,4 +453,35 @@ test('a server restored from an older backup gets back what it lost, and the dev
 		'the server has the newer bookmark again',
 	);
 	assert.equal((await device.client.status()).pending, 0);
+});
+
+test('settings sync by default and stay put when this device turns it off', async () => {
+	const server = makeServer();
+	const a = makeDevice(server);
+	const b = makeDevice(server);
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+
+	a.edit((store) => ({
+		...store,
+		settings: {...store.settings, sessionSort: 'name'},
+	}));
+	await until(() => b.store.settings.sessionSort === 'name');
+
+	b.storage.set(SYNC_SETTINGS_KEY, false);
+	a.edit((store) => ({
+		...store,
+		settings: {...store.settings, sessionSort: 'newest'},
+	}));
+	await a.client.syncNow();
+	await b.client.syncNow();
+	assert.equal(b.store.settings.sessionSort, 'name');
+
+	b.edit((store) => ({
+		...store,
+		settings: {...store.settings, sessionSort: 'oldest'},
+	}));
+	await b.client.syncNow();
+	await a.client.syncNow();
+	assert.equal(a.store.settings.sessionSort, 'newest');
 });

@@ -1,6 +1,6 @@
 /*
 How a library splits into sync records and goes back together. Each folder, session (without its tabs), saved tab,
-bookmark column, bookmark, and portable preference is one record. Order is not part of a record's value: siblings
+bookmark column, bookmark, and portable setting is one record. Order is not part of a record's value: siblings
 share an order group and the sync engine gives each one an order key.
 
 Some fields belong to one device and never travel: the browser window a session came from, its window position,
@@ -20,10 +20,44 @@ import {isRecord} from '../library-values';
 import {recordKey} from './changes';
 
 /**
-Preferences that describe how the library looks and behaves, so they follow the user. Everything else (new tab,
-toolbar, startup, context menus, snapshots, backups, browser bookmark monitoring) stays per device.
+Settings that follow the user to every connected browser, unless settings sync is turned off on a device. Recovery
+snapshots, automatic backups, and browser bookmark monitoring stay per device: they depend on that browser's
+permissions, storage, and downloads folder.
 */
 const PORTABLE_PREFERENCES = [
+	'closeOnSave',
+	'emptyWindowAfterSave',
+	'includePinnedTabs',
+	'ignoreTabGroups',
+	'openDashboardAfterSave',
+	'openDashboardOnStartup',
+	'startupBehavior',
+	'newTabEnabled',
+	'newTabFallback',
+	'newTabFallbackUrl',
+	'autoFocusSearchOnNewTab',
+	'actionMode',
+	'restoreTarget',
+	'restoreWindowBounds',
+	'restoreMode',
+	'singleTabBehavior',
+	'unloadRestoredTabs',
+	'unloadRestoredTabsThreshold',
+	'restoreSplitTabs',
+	'saveSplitTabs',
+	'paletteLocation',
+	'pasteLinkToBookmark',
+	'showSaveWindowButton',
+	'showTrashBinButton',
+	'dashboardWidth',
+	'bookmarkBoardView',
+	'keepLodgePinned',
+	'dashboardBehavior',
+	'contextMenusEnabled',
+	'contextMenuLinksEnabled',
+	'contextMenuPageEnabled',
+	'contextMenuSelectionEnabled',
+	'contextMenuActionEnabled',
 	'excludedOrigins',
 	'saveDuplicateHandling',
 	'saveDuplicateTitle',
@@ -149,6 +183,7 @@ values came from other devices, so the result must still go through the worker's
 export function assemble(
 	records: Iterable<LibraryRecord>,
 	local: Store,
+	syncSettings = true,
 ): Store {
 	const localSessions = new Map(
 		local.groups.map((session) => [session.id, session]),
@@ -202,7 +237,10 @@ export function assemble(
 			}
 
 			case 'preference': {
-				if ((PORTABLE_PREFERENCES as readonly string[]).includes(record.id)) {
+				if (
+					syncSettings &&
+					(PORTABLE_PREFERENCES as readonly string[]).includes(record.id)
+				) {
 					settings[record.id] = record.value;
 				}
 
