@@ -227,7 +227,7 @@ export function AccentPalette({
 	}
 
 	return (
-		<div className="relative inline-block">
+		<div className="relative block w-full sm:inline-block sm:w-auto">
 			<Popover
 				open={open}
 				onOpenChange={(next) => {
@@ -245,7 +245,7 @@ export function AccentPalette({
 					<button
 						type="button"
 						aria-label={`${forColumn ? 'Column' : 'Accent'} color: ${selectedChoice.label}`}
-						className="tn-select-trigger flex h-9 w-56 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						className="tn-select-trigger flex h-9 w-full items-center sm:w-56 gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<Circle small choice={selectedChoice} color={current} />
 						<span className="min-w-0 flex-1 truncate text-left">
@@ -254,7 +254,7 @@ export function AccentPalette({
 						<ChevronDown className="h-4 w-4 opacity-50" aria-hidden="true" />
 					</button>
 				</PopoverTrigger>
-				<PopoverContent className="w-80 p-0">
+				<PopoverContent className="w-[min(20rem,calc(100vw-2rem))] p-0">
 					<div className="flex items-center gap-2 border-b border-border px-3">
 						<Search
 							className="h-4 w-4 shrink-0 opacity-50"

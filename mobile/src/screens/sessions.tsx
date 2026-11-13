@@ -1,6 +1,7 @@
 import {memo, useCallback, useMemo, useState} from 'react';
 import {
 	FlatList,
+	useColorScheme,
 	Linking,
 	Pressable,
 	ScrollView,
@@ -9,7 +10,7 @@ import {
 	View,
 } from 'react-native';
 import type {Session} from '../../../src/app/types';
-import {columnGlyph, useChipLook} from '../column-icons';
+import {columnGlyph, columnTint, useChipLook} from '../column-icons';
 import {ALL_SESSIONS_ID, hostOf, sessionFolders, sessionsIn} from '../library';
 import {useLibrary} from '../library-store';
 import {linkToOpen} from '../links';
@@ -21,6 +22,7 @@ import {useLinkSettings} from '../use-link-settings';
 import {useView} from '../view';
 import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
+import {SessionColorSheet} from './session-color-sheet';
 
 const PREVIEW_TABS = 4;
 
@@ -74,17 +76,24 @@ function TabPreview({session}: {session: Session}) {
 function SessionCardView({
 	session,
 	folderName,
-	tint,
+	tint: folderTint,
 	expanded,
 	onToggle,
+	onColor,
 }: {
 	session: Session;
 	folderName: string;
 	tint: string;
 	expanded: boolean;
 	onToggle: (id: string) => void;
+	/**
+	Opens the color drawer for this session; missing where the library is read only.
+	*/
+	onColor?: (session: Session) => void;
 }) {
 	const colors = useColors();
+	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+	const tint = columnTint(session.color, scheme) ?? folderTint;
 	const links = useLinkSettings();
 	const [pressing, setPressing] = useState(false);
 	const count = `${session.tabs.length} ${session.tabs.length === 1 ? 'tab' : 'tabs'}`;
@@ -102,12 +111,25 @@ function SessionCardView({
 					accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
 					android_ripple={{color: colors.pressed}}
 					style={styles.headMain}
+					accessibilityActions={
+						onColor ? [{name: 'color', label: 'Change color'}] : undefined
+					}
 					onPressIn={() => {
 						setPressing(true);
 					}}
 					onPressOut={() => {
 						setPressing(false);
 					}}
+					onAccessibilityAction={() => {
+						onColor?.(session);
+					}}
+					onLongPress={
+						onColor
+							? () => {
+									onColor(session);
+								}
+							: undefined
+					}
 					onPress={() => {
 						onToggle(session.id);
 					}}
@@ -197,6 +219,18 @@ function SessionCardView({
 							<Icon name="open-outline" size={18} color={colors.muted} />
 						</Pressable>
 					))}
+					{onColor && (
+						<View style={styles.colorRow}>
+							<Button
+								kind="plain"
+								label="Change color"
+								icon="color-palette-outline"
+								onPress={() => {
+									onColor(session);
+								}}
+							/>
+						</View>
+					)}
 				</View>
 			)}
 		</Card>
@@ -220,6 +254,8 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	const [query, setQuery] = useState('');
 	const [open, setOpen] = useState<string | undefined>();
+	const [coloringId, setColoringId] = useState<string>();
+	const coloring = store.groups.find((session) => session.id === coloringId);
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
 	const folderId = folders.some((folder) => folder.id === picked)
@@ -261,6 +297,9 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 		() => look({id: 'other', name: 'Other', count: 0}).tint,
 		[look],
 	);
+	const colorOf = useCallback((session: Session) => {
+		setColoringId(session.id);
+	}, []);
 	const toggle = useCallback((id: string) => {
 		setOpen((current) => (current === id ? undefined : id));
 	}, []);
@@ -290,67 +329,76 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 
 	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library, read only' : 'saved'}`;
 	return (
-		<FlatList
-			removeClippedSubviews
-			data={shown}
-			extraData={open}
-			keyExtractor={(session) => session.id}
-			contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
-			keyboardShouldPersistTaps="handled"
-			// Long libraries draw only what is on screen, and a little around it.
-			initialNumToRender={6}
-			windowSize={7}
-			maxToRenderPerBatch={6}
-			ListHeaderComponent={
-				<View>
-					<Header
-						title="Sessions"
-						subtitle={subtitle}
-						right={<PrivateSwitch />}
-					/>
-					<View style={styles.pad}>
-						<Field
-							label="Search sessions"
-							icon="search"
-							value={query}
-							onChangeText={setQuery}
-							onClear={() => {
-								setQuery('');
-							}}
+		<>
+			<FlatList
+				removeClippedSubviews
+				data={shown}
+				extraData={open}
+				keyExtractor={(session) => session.id}
+				contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
+				keyboardShouldPersistTaps="handled"
+				// Long libraries draw only what is on screen, and a little around it.
+				initialNumToRender={6}
+				windowSize={7}
+				maxToRenderPerBatch={6}
+				ListHeaderComponent={
+					<View>
+						<Header
+							title="Sessions"
+							subtitle={subtitle}
+							right={<PrivateSwitch />}
 						/>
-						<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-							<Chips
-								items={folders.map((folder) => look(folder))}
-								selected={folderId}
-								onSelect={setPicked}
+						<View style={styles.pad}>
+							<Field
+								label="Search sessions"
+								icon="search"
+								value={query}
+								onChangeText={setQuery}
+								onClear={() => {
+									setQuery('');
+								}}
 							/>
-						</ScrollView>
+							<ScrollView horizontal showsHorizontalScrollIndicator={false}>
+								<Chips
+									items={folders.map((folder) => look(folder))}
+									selected={folderId}
+									onSelect={setPicked}
+								/>
+							</ScrollView>
+						</View>
 					</View>
-				</View>
-			}
-			ListEmptyComponent={
-				<Empty
-					icon={needle ? 'search' : 'albums-outline'}
-					title={needle ? 'No match' : 'Nothing here'}
-				>
-					{needle
-						? 'No session or tab matches that search.'
-						: 'This folder has no sessions.'}
-				</Empty>
-			}
-			ItemSeparatorComponent={Gap}
-			renderItem={({item}) => (
-				<View style={styles.cardRow}>
-					<SessionCard
-						session={item}
-						folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
-						tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
-						expanded={open === item.id}
-						onToggle={toggle}
-					/>
-				</View>
-			)}
-		/>
+				}
+				ListEmptyComponent={
+					<Empty
+						icon={needle ? 'search' : 'albums-outline'}
+						title={needle ? 'No match' : 'Nothing here'}
+					>
+						{needle
+							? 'No session or tab matches that search.'
+							: 'This folder has no sessions.'}
+					</Empty>
+				}
+				ItemSeparatorComponent={Gap}
+				renderItem={({item}) => (
+					<View style={styles.cardRow}>
+						<SessionCard
+							session={item}
+							folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
+							tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
+							expanded={open === item.id}
+							onToggle={toggle}
+							onColor={view === 'private' ? undefined : colorOf}
+						/>
+					</View>
+				)}
+			/>
+			<SessionColorSheet
+				session={coloring}
+				onClose={() => {
+					setColoringId(undefined);
+				}}
+			/>
+		</>
 	);
 }
 
@@ -359,6 +407,7 @@ function Gap() {
 }
 
 const styles = StyleSheet.create({
+	colorRow: {padding: 8},
 	screen: {flex: 1},
 	list: {paddingBottom: 24, gap: 8},
 	pad: {paddingHorizontal: 16, gap: 12},

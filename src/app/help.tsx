@@ -225,6 +225,12 @@ function Help() {
 						'session card collapsed favicon icons preview strip hide overflow count settings session board',
 				},
 				{
+					title: 'Session colors',
+					body: 'Open Edit details from a session’s menu and choose a Color, from the same selector as the accent color and column colors, or type any #rrggbb. The color shows as a line along the top of the session card and syncs with the session. Choose None to remove it.',
+					searchText:
+						'session color colour card line accent hex edit details tint label',
+				},
+				{
 					title: 'Device names on sessions',
 					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
 					searchText:

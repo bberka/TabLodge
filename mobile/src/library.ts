@@ -380,6 +380,36 @@ export function updateColumn(
 }
 
 /**
+Sets a session's color, a preset id or `#rrggbb`, or removes it with an empty or unknown value. An unknown session
+leaves the store as it was.
+*/
+export function setSessionColor(
+	store: Store,
+	id: string,
+	color: string,
+	now: number,
+): Store {
+	const current = store.groups.find((session) => session.id === id);
+	if (!current) {
+		return store;
+	}
+
+	const {color: _color, ...rest} = current;
+	const changed = {
+		...rest,
+		...(isColumnColor(color) && {color}),
+		updatedAt: now,
+	};
+	return {
+		...store,
+		groups: store.groups.map((session) =>
+			session.id === id ? changed : session,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
 Deletes a column. Its bookmarks move to `moveTo` (another column, going after that column's own), or are deleted with
 it when `moveTo` is null. With no other column to take them they go to the Unfiled bucket, as the extension does.
 */

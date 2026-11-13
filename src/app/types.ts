@@ -387,6 +387,10 @@ export type Session = {
 	deviceName?: string;
 	deviceKind?: 'desktop' | 'mobile';
 	/**
+	A preset accent id or `#rrggbb` from the accent colors (never "default" or "system"); missing means no color.
+	*/
+	color?: string;
+	/**
 	Window geometry captured when this session was saved from a whole window.
 	*/
 	windowBounds?: WindowBounds;
@@ -573,7 +577,7 @@ export type RestoreOptions = {
 };
 
 export type SessionFields = Partial<
-	Pick<Session, 'name' | 'description' | 'folderId'>
+	Pick<Session, 'name' | 'description' | 'folderId' | 'color'>
 >;
 export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'url'>>;
 export type BookmarkFields = Partial<

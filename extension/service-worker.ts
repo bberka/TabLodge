@@ -1954,6 +1954,7 @@ function normalizeGroup(
 		createdAt,
 		updatedAt: positiveOr(raw.updatedAt, createdAt),
 		...(lastOpenedAt > 0 && {lastOpenedAt}),
+		...colorField(raw.color),
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
 		sourceWindowId: isInteger(raw.sourceWindowId) ? raw.sourceWindowId : null,
 		...deviceStamp(
@@ -5191,6 +5192,16 @@ async function updateGroup(
 			group.description = normalizeSessionText(fields.description);
 		}
 
+		// `color` omitted keeps the current color; "" or anything that is not a color removes it.
+		if (fields.color !== undefined) {
+			const {color} = colorField(fields.color);
+			if (color) {
+				group.color = color;
+			} else {
+				delete group.color;
+			}
+		}
+
 		if (typeof fields.folderId === 'string') {
 			if (store.folders.every((folder) => folder.id !== fields.folderId)) {
 				return {ok: false, error: 'Choose an existing folder.'};
@@ -5891,6 +5902,7 @@ async function splitGroup(
 				sourceWindowName: group.sourceWindowName,
 				sourceWindowId: group.sourceWindowId,
 				...deviceStamp(group.deviceName ?? '', group.deviceKind ?? 'desktop'),
+				...(group.color && {color: group.color}),
 				tabs: pairSplits(moved),
 			};
 			store.groups.splice(store.groups.indexOf(group) + 1, 0, created);

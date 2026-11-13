@@ -12487,3 +12487,28 @@ test('a session keeps the device that saved it, and a bad device kind is read as
 	});
 	assert.equal(plain.groups[0].deviceName, undefined);
 });
+
+test('a session takes a color like a column does: a preset or a hex, kept when omitted, removed with an empty one', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const update = async (fields: Record<string, unknown>) =>
+		harness.sendMessage({
+			type: 'UPDATE_GROUP',
+			groupId: 'session-1',
+			fields: fields as never,
+		});
+	assert.equal((await update({color: 'blue'})).group.color, 'blue');
+	assert.equal((await update({name: 'Renamed'})).group.color, 'blue');
+	assert.equal((await update({color: '#12ab9f'})).group.color, '#12ab9f');
+	for (const bad of ['system', 'default', 'chartreuse', '#12']) {
+		assert.equal((await update({color: bad})).group.color, undefined, bad);
+	}
+
+	assert.equal((await update({color: 'red'})).group.color, 'red');
+	assert.equal((await update({color: ''})).group.color, undefined);
+	const state = stateWithSession();
+	Object.assign(state.groups[0], {color: 'nope'});
+	const {groups} = await createWorkerHarness(state).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(groups[0].color, undefined);
+});

@@ -20,6 +20,7 @@ import {
 	deleteColumn,
 	updateColumn,
 	addSession,
+	setSessionColor,
 	addTabsToSession,
 	ALL_SESSIONS_ID,
 	extractUrls,
@@ -487,5 +488,37 @@ describe('editing columns', () => {
 		assert.equal(single.bookmarks.length, 3);
 		const store = build();
 		assert.equal(deleteColumn(store, 'missing', null, NOW), store);
+	});
+});
+
+describe('session colors', () => {
+	test('a session takes a preset or a hex, and an empty or unknown value removes it', () => {
+		const base = addSession(
+			emptyStore(NOW),
+			{name: 's', urls: ['https://a.test/']},
+			's1',
+			['t1'],
+			NOW,
+		);
+		const blue = setSessionColor(base, 's1', 'blue', NOW + 1);
+		assert.equal(blue.groups[0].color, 'blue');
+		assert.equal(blue.groups[0].updatedAt, NOW + 1);
+		assert.equal(
+			setSessionColor(blue, 's1', '#12AB9F', NOW).groups[0].color,
+			undefined,
+		);
+		assert.equal(
+			setSessionColor(blue, 's1', '#12ab9f', NOW).groups[0].color,
+			'#12ab9f',
+		);
+		assert.equal(
+			setSessionColor(blue, 's1', '', NOW).groups[0].color,
+			undefined,
+		);
+		assert.equal(
+			setSessionColor(blue, 's1', 'system', NOW).groups[0].color,
+			undefined,
+		);
+		assert.equal(setSessionColor(blue, 'missing', 'red', NOW), blue);
 	});
 });

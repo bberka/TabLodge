@@ -159,6 +159,8 @@ import {
 	type BookmarkColumnDraft,
 } from './bookmark-column-picker';
 import {LinkPreview, useLinkPreviewsOn} from './link-preview';
+import {AccentPalette} from './accent-palette';
+import {COLUMN_COLOR_BAR, columnColorVars} from './column-color';
 import {cn} from '@/lib/utils';
 
 /**
@@ -306,6 +308,8 @@ export function SessionManager({
 	const [focusGroupName, setFocusGroupName] = useState(false);
 	// Session details: the chosen folder, or NEW_FOLDER with the new folder's icon (its name is a form field).
 	const [detailsFolder, setDetailsFolder] = useState('unfiled');
+	// Session details: the chosen color, a preset id or `#rrggbb`, or '' for none.
+	const [detailsColor, setDetailsColor] = useState('');
 	const [newFolderIcon, setNewFolderIcon] = useState<string | undefined>();
 	const groupNameRef = useRef<HTMLInputElement>(null);
 	const [bookmarkTab, setBookmarkTab] = useState<BookmarkDraft | null>(null);
@@ -1453,6 +1457,7 @@ export function SessionManager({
 			name: String(form.get('name') || ''),
 			description: String(form.get('description') || ''),
 			folderId: targetFolderId,
+			color: detailsColor,
 		};
 		const result = await send('UPDATE_GROUP', {
 			groupId: editingGroup.id,
@@ -1471,6 +1476,7 @@ export function SessionManager({
 	function openGroupDetails(group: Session, focusName = false) {
 		setEditingGroup(group);
 		setDetailsFolder(group.folderId || 'unfiled');
+		setDetailsColor(group.color ?? '');
 		setNewFolderIcon(undefined);
 		setFocusGroupName(focusName);
 		setDialog('details');
@@ -2445,6 +2451,21 @@ export function SessionManager({
 									</SelectContent>
 								</Select>
 							</div>
+							<div className="space-y-1.5">
+								<Label id="group-color-label" className="block">
+									Color
+								</Label>
+								<div>
+									<AccentPalette
+										forColumn
+										accent={detailsColor || 'default'}
+										systemColor={undefined}
+										onChange={(accent) => {
+											setDetailsColor(accent === 'default' ? '' : accent);
+										}}
+									/>
+								</div>
+							</div>
 							{detailsFolder === NEW_FOLDER && (
 								<IconNameField
 									id="group-new-folder"
@@ -3121,7 +3142,9 @@ const GroupCard = memo(
 				)}
 				<article
 					id={`session-${group.id}`}
+					style={columnColorVars(group.color)}
 					className={cn(
+						group.color && COLUMN_COLOR_BAR,
 						'tn-card-lazy group/session cursor-pointer overflow-hidden rounded-xl border bg-card transition-shadow',
 						isExpanded
 							? 'border-primary/30 shadow-xs'
