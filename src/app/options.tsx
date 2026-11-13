@@ -368,6 +368,12 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'linkPreviews',
+				label: 'Preview links on hover',
+				help: 'Rest the pointer on a bookmark or saved tab, or focus it, to see its page image and description. Needs a sync server, which fetches the page, so the server and the site see its address. Off by default and kept on this browser.',
+				type: 'switch',
+			},
+			{
 				name: 'showTrashBinButton',
 				label: 'Show Trash bin button in the header',
 				help: 'Hide this shortcut to keep the header compact. The Trash bin remains in the Sessions menu, Bookmarks menu, side panel, and search palette.',

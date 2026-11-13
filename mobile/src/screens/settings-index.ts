@@ -21,6 +21,10 @@ export const ROWS = {
 		label: 'Clean links when saving',
 		hint: 'Remove tracking parameters such as utm_source',
 	},
+	siteIcons: {
+		label: 'Site icons',
+		hint: "Show each site's icon. Loaded through your sync server when connected, otherwise from the site itself",
+	},
 	cleanTitles: {
 		label: 'Clean page titles',
 		hint: 'Remove counters such as (3) from titles',
@@ -64,8 +68,24 @@ export const SECTIONS = {
 	},
 	bookmarks: {
 		title: 'Bookmarks',
-		aliases: ['gesture', 'swipe', 'tap', 'open', 'edit', 'move', 'delete'],
-		rows: [ROWS.tap, ROWS.swipeRight, ROWS.swipeLeft, ROWS.cleanOnSave],
+		aliases: [
+			'gesture',
+			'swipe',
+			'tap',
+			'open',
+			'edit',
+			'move',
+			'delete',
+			'favicon',
+			'icon',
+		],
+		rows: [
+			ROWS.tap,
+			ROWS.swipeRight,
+			ROWS.swipeLeft,
+			ROWS.cleanOnSave,
+			ROWS.siteIcons,
+		],
 	},
 	extension: {
 		title: 'Same as your extension',

@@ -77,6 +77,9 @@ const permissions = [
 			If you enable backup copies in Downloads, TabLodge writes JSON files to <code>Downloads/TabLodge/</code>. Turning the setting off or uninstalling does not delete those files. Exports, including JSON, HTML, CSV, Markdown, URL lists and full backup ZIP files, are not encrypted unless you protect a full backup with a PIN or password. If you do, TabLodge encrypts the file on your device (AES-256-GCM, with a key derived from your entry by PBKDF2) and stores neither the PIN or password nor a hint, so a lost one cannot be recovered. A PIN is weak because anyone with the file can try every PIN offline; use a password for sensitive data. Automatic backups and Downloads copies are never encrypted. Keep unprotected files private if their titles, URLs or notes are sensitive. A folder synced by another app may upload them.
 		</p>
 		<p>
+			Two optional switches, both off by default, load site icons and page previews through your own sync server: <strong>Site icons</strong> in the Android app and <strong>Preview links on hover</strong> in the extension. Your server fetches the site, so the site sees your server and not your device, and no third party is involved. The Android app can also load an icon straight from each site when no server is connected, which tells that site your IP address.
+		</p>
+		<p>
 			Opening a saved link loads that website normally. An optional setting, off by default, removes common tracking parameters from the destination when opening saved links or restoring sessions and snapshots. It leaves the URLs in your library unchanged. Choosing <strong>Search the web</strong> sends your query to the browser's default search engine. Choosing <strong>Open in Internet Archive</strong> on a saved link opens the Internet Archive's page for that address in a new tab, so the address goes to archive.org when you choose it. These are actions you request, not background reporting by TabLodge.
 		</p>
 

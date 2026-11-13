@@ -55,6 +55,7 @@ import {
 // would leave an `export {}` behind. The value imports above are bundled into the classic script by the
 // build, and by tests/worker-source.ts for the tests.
 type ActionFailure = import('../src/app/types').ActionFailure;
+type LinkPreviewData = import('../src/app/types').LinkPreviewData;
 type TabLodgeMessageType = import('../src/app/types').TabLodgeMessageType;
 type ActionResult<K extends TabLodgeMessageType = TabLodgeMessageType> =
 	import('../src/app/types').ActionResult<K>;
@@ -825,6 +826,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	bookmarkQuickActions: ['open-new'],
 	sessionsOnTop: false,
 	showSaveWindowButton: true,
+	linkPreviews: false,
 	showTrashBinButton: false,
 	keepLodgePinned: false,
 	browserBookmarkAction: 'off',
@@ -2176,6 +2178,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		bookmarkQuickActions: normalizeBookmarkQuickActions(raw),
 		sessionsOnTop: raw.sessionsOnTop === true,
 		showSaveWindowButton: raw.showSaveWindowButton !== false,
+		linkPreviews: raw.linkPreviews === true,
 		showTrashBinButton: raw.showTrashBinButton === true,
 		dashboardWidth: isOneOf(
 			['default', 'wider', 'full', 'narrower'],
@@ -2791,6 +2794,59 @@ async function privateSyncInfo(): Promise<PrivateSyncInfo> {
 				undefined,
 		status: ready && privateSync ? await privateSync.status() : SYNC_OFF,
 	};
+}
+
+const PREVIEW_CACHE_SIZE = 200;
+const previewCache = new Map<string, LinkPreviewData | null>();
+
+/**
+The title, description, and image of a page, asked of the sync server, which fetches the page itself. Nothing is
+asked unless the setting is on and a server is connected; answers, including misses, are kept while the worker runs.
+*/
+async function linkPreview(url: string): Promise<LinkPreviewData | null> {
+	if (!/^https?:\/\//i.test(url) || url.length > 2048) {
+		return null;
+	}
+
+	const target = await regularSyncConfig();
+	if (!target || !(await getStore()).settings.linkPreviews) {
+		return null;
+	}
+
+	const hit = previewCache.get(url);
+	if (hit !== undefined) {
+		return hit;
+	}
+
+	let found: LinkPreviewData | null = null;
+	try {
+		const {status, body} = await callServer(
+			fetch,
+			target,
+			`/v1/preview?url=${encodeURIComponent(url)}`,
+		);
+		if (status === 200 && isRecord(body)) {
+			const text = (value: unknown) =>
+				typeof value === 'string' && value ? value : undefined;
+			found = {
+				title: text(body.title),
+				description: text(body.description),
+				image: String(body.image).startsWith('data:image/')
+					? text(body.image)
+					: undefined,
+			};
+		}
+	} catch {
+		// Offline or refused: no card, and the next hover asks again.
+		return null;
+	}
+
+	if (previewCache.size >= PREVIEW_CACHE_SIZE) {
+		previewCache.delete(previewCache.keys().next().value!);
+	}
+
+	previewCache.set(url, found);
+	return found;
 }
 
 /**
@@ -10300,6 +10356,10 @@ async function handleMessage(
 	switch (message?.type) {
 		case 'GET_PRIVATE_CONFIG': {
 			return {ok: true, ...privateConfig};
+		}
+
+		case 'GET_LINK_PREVIEW': {
+			return {ok: true, preview: await linkPreview(message.url)};
 		}
 
 		case 'GET_PRIVATE_LOCK': {

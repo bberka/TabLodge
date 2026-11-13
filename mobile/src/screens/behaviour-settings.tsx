@@ -129,6 +129,13 @@ export function BookmarkBehaviourCard() {
 					setPreferences({cleanOnSave});
 				}}
 			/>
+			<Toggle
+				row={ROWS.siteIcons}
+				value={prefs.siteIcons}
+				onChange={(siteIcons) => {
+					setPreferences({siteIcons});
+				}}
+			/>
 		</SettingsCard>
 	);
 }

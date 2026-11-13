@@ -19,7 +19,8 @@ import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
 import {useView} from '../view';
-import {Avatar, Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
+import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
+import {SiteIcon} from '../site-icon';
 
 const PREVIEW_TABS = 4;
 
@@ -60,7 +61,7 @@ function TabPreview({session}: {session: Session}) {
 						},
 					]}
 				>
-					<Avatar host={hostOf(tab.url)} size={22} />
+					<SiteIcon host={hostOf(tab.url)} size={22} />
 				</View>
 			))}
 			{more > 0 && (
@@ -175,7 +176,7 @@ function SessionCardView({
 								void Linking.openURL(linkToOpen(tab.url, links));
 							}}
 						>
-							<Avatar host={hostOf(tab.url)} size={32} />
+							<SiteIcon host={hostOf(tab.url)} size={32} />
 							<View style={styles.texts}>
 								<Text numberOfLines={2} style={{color: colors.text}}>
 									{tab.title || tab.url}

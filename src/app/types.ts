@@ -13,6 +13,15 @@ export type ActionMode =
 	| 'current-tab'
 	| 'current-tab-to-group';
 export type PrivateStorageMode = 'shared' | 'saved' | 'temporary';
+/**
+What the sync server read from a page: a title, a short description, and the share image as a data URL.
+*/
+export type LinkPreviewData = {
+	title?: string;
+	description?: string;
+	image?: string;
+};
+
 export type PrivateConfig = {
 	mode: PrivateStorageMode;
 	configured: boolean;
@@ -205,6 +214,11 @@ export type Settings = {
 	Show the Save this window shortcut in the dashboard header (default on).
 	*/
 	showSaveWindowButton: boolean;
+	/**
+	Show a page's image and description when a bookmark or saved tab is hovered or focused for a moment. Needs a sync
+	server, which fetches the page; the setting stays on this browser (default off).
+	*/
+	linkPreviews: boolean;
 	/**
 	Show the Trash bin shortcut in the dashboard header (default off).
 	*/
@@ -586,6 +600,7 @@ Every message the TabLodge pages send to the service worker, keyed by `type`.
 */
 export type TabLodgeMessages = {
 	GET_PRIVATE_CONFIG: {};
+	GET_LINK_PREVIEW: {url: string};
 	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
 	SET_PRIVATE_NEW_TAB_REDIRECT: {enabled: boolean};
 	SET_PRIVATE_ACCENT: {accent: string};
@@ -944,6 +959,7 @@ Success payload of each message (merged with `{ ok: true }`). Fields marked opti
 */
 export type TabLodgeResponses = {
 	GET_PRIVATE_CONFIG: PrivateConfig;
+	GET_LINK_PREVIEW: {preview: LinkPreviewData | null};
 	SET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_NEW_TAB_REDIRECT: PrivateConfig;
 	SET_PRIVATE_ACCENT: PrivateConfig;

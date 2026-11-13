@@ -225,6 +225,12 @@ function Help() {
 						'session card collapsed favicon icons preview strip hide overflow count settings session board',
 				},
 				{
+					title: 'Preview links on hover',
+					body: 'With a sync server connected, turn on Settings › Preview links on hover. Rest the pointer on a bookmark or saved tab, or move keyboard focus to it, and a card shows the page image, title, and description. Escape closes it. The server fetches the page, so the server and the site see its address, and nothing goes to any other service. It is off by default and stays on this browser.',
+					searchText:
+						'link preview hover card page image description og image sync server thumbnail focus escape',
+				},
+				{
 					title: 'Keep or remove restored tabs',
 					body: 'Settings controls whether restored tabs stay in their session or are removed after a successful restore. You can also choose the destination window and what to do when a URL is already open.',
 					searchText:

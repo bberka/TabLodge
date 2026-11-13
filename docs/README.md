@@ -110,6 +110,7 @@ Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [
 - Share sheet: choose TabLodge from another app's share menu and a drawer slides up with the link and title filled in. When the share started the app, saving returns you to the app you came from.
 - Sessions: saved sessions are listed by folder, as in the extension: **All** (without Archived), each folder with its count, and **Archived** last. Tap a tab to open it, or **Open all** for the whole session. A phone browser cannot list its own tabs, so the app cannot capture them. Instead, share several links at once (in Chrome, select tabs in the tab switcher and choose Share tabs; in Firefox, Share all tabs) and a drawer asks whether to save them as bookmarks, as a new session, or into a session that exists.
 - Private library: the eye button on Bookmarks and Sessions shows the private windows' library, read only, from the same server. If it has a PIN or password, the app asks for it once and keeps the key in the Android keystore. **Settings › Private library** forgets it on the phone.
+- Site icons: an optional switch (off by default). With sync connected, icons are loaded through your server; without it, each icon comes straight from its site. A letter tile shows until an icon arrives or when a site has none.
 - Settings sync: with sync on, your settings follow your other devices, including this app's own (look, floating bar, tap and swipe actions, cleaning links on save). It is on by default and **Settings › Sync settings** turns settings sync off for one phone, the same switch the extension has. The app's own settings travel in the library's `mobileApp` setting, which the extension keeps but does not use.
 - Columns: every column selector shows the column's icon and color, and ends with **New column**, which asks for a name, an icon, and a color. The palette icon in the Bookmarks header changes the open column's name, icon, and color, or deletes it (its bookmarks move to another column, or are deleted with it). The color and icon sync with the extension, where a column's color is set in its Edit column dialog with the same selector as the accent color.
 - Settings search: the box at the top of Settings filters the cards and rows as you type. It matches a setting's name or its hint, so `swipe`, `tracking`, or `private` find what you mean.
@@ -155,6 +156,8 @@ TabLodge has no website host permissions and no content scripts, and makes no ne
 | `alarms` | Snapshots, backups, trash cleanup, archiving, sync, and the private lock |
 | `idle` | Lock the private library when you lock your screen |
 | `activeTab`, `scripting` | Show the search palette over the current page when you press its shortcut |
+
+Preview cards (**Settings › Preview links on hover**, off by default) need no extra permission: the extension asks the sync server it is already connected to, and the server fetches the page.
 
 `downloads` is optional and requested only for backup copies in `Downloads/TabLodge/`. A web page can tell TabLodge is installed by requesting `palette.html`, which the palette needs. See [Privacy](PRIVACY.md) for everything TabLodge stores and sends.
 

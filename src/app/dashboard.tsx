@@ -156,6 +156,7 @@ import {
 	resolveBookmarkColumn,
 	type BookmarkColumnDraft,
 } from './bookmark-column-picker';
+import {LinkPreview, useLinkPreviewsOn} from './link-preview';
 import {cn} from '@/lib/utils';
 
 /**
@@ -3454,6 +3455,7 @@ const SavedTab = memo(
 		const modifierRef = useRef<ClickModifiers>({});
 		const label = tab.title?.trim() || hostOf(tab.url);
 		const urlOnly = displayMode === 'url-only';
+		const previews = useLinkPreviewsOn();
 		const simplify = settings.simplifyUrls !== false;
 		const rowText = urlOnly ? simplifiedUrl(tab.url, simplify) : label;
 		const displayUrl = urlDisplay(tab.url, displayMode, simplify);
@@ -3632,48 +3634,50 @@ const SavedTab = memo(
 					/>
 					<div className="min-w-0 flex-1">
 						<span className="flex min-w-0 items-center gap-1.5">
-							<a
-								className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
-								href={
-									settings.removeTrackingParameters
-										? stripTrackingParameters(tab.url)
-										: tab.url
-								}
-								target="_blank"
-								rel="noopener noreferrer"
-								title={urlOnly ? tab.url : label}
-								aria-label={
-									urlOnly && tab.title?.trim()
-										? `${tab.title.trim()} (${tab.url})`
-										: undefined
-								}
-								onClick={(event) => {
-									if (event.ctrlKey || event.metaKey || event.shiftKey) {
-										return;
+							<LinkPreview url={tab.url}>
+								<a
+									className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
+									href={
+										settings.removeTrackingParameters
+											? stripTrackingParameters(tab.url)
+											: tab.url
 									}
-
-									event.preventDefault();
-									if (event.altKey) {
-										onSelect(!selected, {});
-										return;
+									target="_blank"
+									rel="noopener noreferrer"
+									title={previews ? undefined : urlOnly ? tab.url : label}
+									aria-label={
+										urlOnly && tab.title?.trim()
+											? `${tab.title.trim()} (${tab.url})`
+											: undefined
 									}
+									onClick={(event) => {
+										if (event.ctrlKey || event.metaKey || event.shiftKey) {
+											return;
+										}
 
-									if (
-										resolveLinkTarget('session', settings as Settings) ===
-										'none'
-									) {
-										onSelect(!selected, {});
-										return;
-									}
+										event.preventDefault();
+										if (event.altKey) {
+											onSelect(!selected, {});
+											return;
+										}
 
-									onOpen();
-								}}
-							>
-								{(urlOnly || compact) && (
-									<InsecureMarkFor url={tab.url} settings={settings} />
-								)}
-								{rowText}
-							</a>
+										if (
+											resolveLinkTarget('session', settings as Settings) ===
+											'none'
+										) {
+											onSelect(!selected, {});
+											return;
+										}
+
+										onOpen();
+									}}
+								>
+									{(urlOnly || compact) && (
+										<InsecureMarkFor url={tab.url} settings={settings} />
+									)}
+									{rowText}
+								</a>
+							</LinkPreview>
 							{splitBadge && (
 								<Badge
 									className="shrink-0 gap-1 px-1.5"

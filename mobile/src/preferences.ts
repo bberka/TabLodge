@@ -51,6 +51,12 @@ type Preferences = {
 	On by default, like the extension's portable settings. This choice itself stays on this phone.
 	*/
 	syncSettings: boolean;
+	/**
+	Show each site's own icon instead of a letter tile. Icons come from the sync server when one is connected,
+	otherwise straight from the site. Off by default, because either way the site or the server is asked for each
+	address that is shown. Stays on this phone.
+	*/
+	siteIcons: boolean;
 };
 
 const KEY = 'tablodge.prefs';
@@ -64,6 +70,7 @@ const defaults: Preferences = {
 	swipeLeft: 'edit',
 	cleanOnSave: true,
 	syncSettings: true,
+	siteIcons: false,
 };
 
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
@@ -87,6 +94,7 @@ export async function loadPreferences(): Promise<void> {
 		swipeLeft,
 		cleanOnSave,
 		syncSettings,
+		siteIcons,
 	} = saved as Partial<Preferences>;
 	current = {
 		look: look === 'ios' || look === 'material' ? look : defaults.look,
@@ -100,6 +108,7 @@ export async function loadPreferences(): Promise<void> {
 			typeof cleanOnSave === 'boolean' ? cleanOnSave : defaults.cleanOnSave,
 		syncSettings:
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
+		siteIcons: siteIcons === true,
 	};
 	for (const listener of listeners) {
 		listener();

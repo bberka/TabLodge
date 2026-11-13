@@ -10,7 +10,8 @@ import {type RowAction, usePreferences} from '../preferences';
 import {type SwipeAction, SwipeRow} from '../swipe-row';
 import {useLinkSettings} from '../use-link-settings';
 import {TARGET, useColors, useShape} from '../theme';
-import {Avatar, Button, Chips, Icon, type IconName} from '../ui';
+import {Button, Chips, Icon, type IconName} from '../ui';
+import {SiteIcon} from '../site-icon';
 import {SaveLinkForm} from './save-link';
 
 /**
@@ -140,7 +141,7 @@ export function BookmarkRow({
 						color={checked ? colors.accent : colors.muted}
 					/>
 				) : (
-					<Avatar host={host} />
+					<SiteIcon host={host} />
 				)}
 				<View style={styles.texts}>
 					<Text numberOfLines={2} style={[styles.title, {color: colors.text}]}>
