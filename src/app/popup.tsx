@@ -1,6 +1,4 @@
 import {
-	lazy,
-	Suspense,
 	useEffect,
 	useMemo,
 	useState,
@@ -74,7 +72,7 @@ import {
 	duplicatesNote,
 	plural,
 } from './common';
-import type {SaveScope, Session} from './types';
+import type {ActionResult, SaveScope, Session} from './types';
 import {archivedFolderId} from './session-folders';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
@@ -91,10 +89,8 @@ import type {BookmarkColumnDraft} from './bookmark-column-picker';
 import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
-// Keep the icon registry out of the popup's initial load.
-const BookmarkColumnPicker = lazy(async () => ({
-	default: (await import('./bookmark-column-picker')).BookmarkColumnPicker,
-}));
+// Keep the icon registry out of the popup's first paint; it is loaded right after, before anyone can click Bookmark.
+const loadColumnPicker = async () => import('./bookmark-column-picker');
 
 /**
 Stable fallback so memoized values do not see a new array on every render.
@@ -119,6 +115,13 @@ function Popup() {
 		url: string;
 	} | null>(null);
 	const [columnId, setColumnId] = useState('');
+	const [picker, setPicker] = useState<Awaited<
+		ReturnType<typeof loadColumnPicker>
+	> | null>(null);
+	// The columns for the active page, asked for as soon as the popup opens so the dialog never waits for the library.
+	const [earlyColumns, setEarlyColumns] = useState<
+		ActionResult<'GET_BOOKMARK_PROMPT'> | undefined
+	>();
 	const [newColumn, setNewColumn] = useState<BookmarkColumnDraft>({name: ''});
 	const [sessionOpen, setSessionOpen] = useState(false);
 	const [sessionTab, setSessionTab] = useState<{
@@ -167,11 +170,11 @@ function Popup() {
 		() => groups.toSorted((a, b) => b.updatedAt - a.updatedAt),
 		[groups],
 	);
-	const columns = state?.bookmarkColumns || [];
-	const defaultColumnId = defaultBookmarkColumnId(
-		columns,
-		state?.bookmarks ?? [],
-	);
+	const early = earlyColumns?.ok ? earlyColumns : undefined;
+	const columns = state?.bookmarkColumns ?? early?.bookmarkColumns ?? [];
+	const defaultColumnId = state
+		? defaultBookmarkColumnId(columns, state.bookmarks)
+		: early?.defaultColumnId;
 	const eligibleTabs = useMemo(
 		() =>
 			currentTabs.filter(
@@ -304,6 +307,36 @@ function Popup() {
 		);
 	}
 
+	useEffect(() => {
+		let active = true;
+		void loadColumnPicker().then((loaded) => {
+			if (active) {
+				setPicker(loaded);
+			}
+		});
+		void (async () => {
+			try {
+				const [tab] = await chrome.tabs.query({
+					active: true,
+					lastFocusedWindow: true,
+				});
+				const url = webUrl(tab?.url);
+				const result = url
+					? await send('GET_BOOKMARK_PROMPT', {url})
+					: undefined;
+				if (active) {
+					setEarlyColumns(result);
+				}
+			} catch {
+				// Clicking Bookmark falls back to the full library.
+			}
+		})();
+
+		return () => {
+			active = false;
+		};
+	}, []);
+
 	async function startBookmark() {
 		setBusy('bookmark-current');
 		try {
@@ -318,13 +351,30 @@ function Popup() {
 			}
 
 			// A column that claims this site takes the page without asking.
-			const claimed = columnForUrl(columns, url);
+			// A click before either read has landed asks for the columns itself.
+			let ready = state ?? early;
+			if (!ready) {
+				const fetched = await send('GET_BOOKMARK_PROMPT', {url});
+				if (fetched.ok) {
+					ready = fetched;
+					setEarlyColumns(fetched);
+				}
+			}
+
+			const claimed = columnForUrl(
+				state?.bookmarkColumns ?? ready?.bookmarkColumns ?? columns,
+				url,
+			);
 			if (claimed) {
 				if (
-					state?.bookmarks.some(
-						(bookmark) =>
-							bookmark.url === url && bookmark.columnId === claimed.id,
-					)
+					state
+						? state.bookmarks.some(
+								(bookmark) =>
+									bookmark.url === url && bookmark.columnId === claimed.id,
+							)
+						: (ready && 'existingColumnId' in ready
+								? ready.existingColumnId
+								: undefined) === claimed.id
 				) {
 					showStatus(`Already in “${claimed.name}”.`, false, {toast: true});
 					return;
@@ -343,10 +393,15 @@ function Popup() {
 				return;
 			}
 
-			const {NEW_BOOKMARK_COLUMN: newColumnValue} =
-				await import('./bookmark-column-picker');
+			const {NEW_BOOKMARK_COLUMN: newColumnValue} = await loadColumnPicker();
 			setBookmarkTab({title: tab.title || url, url});
-			setColumnId(defaultColumnId || newColumnValue);
+			setColumnId(
+				(ready && 'defaultColumnId' in ready
+					? ready.defaultColumnId
+					: undefined) ||
+					defaultColumnId ||
+					newColumnValue,
+			);
 			setNewColumn({name: ''});
 			setBookmarkOpen(true);
 		} catch {
@@ -1033,14 +1088,8 @@ function Popup() {
 							)}
 							<div className="space-y-1.5">
 								<Label htmlFor="bookmark-column">Bookmark column</Label>
-								<Suspense
-									fallback={
-										<p className="sr-only" role="status">
-											Loading columns
-										</p>
-									}
-								>
-									<BookmarkColumnPicker
+								{picker ? (
+									<picker.BookmarkColumnPicker
 										id="bookmark-column"
 										columns={columns}
 										value={columnId}
@@ -1048,7 +1097,11 @@ function Popup() {
 										onDraftChange={setNewColumn}
 										onValueChange={setColumnId}
 									/>
-								</Suspense>
+								) : (
+									<p className="sr-only" role="status">
+										Loading columns
+									</p>
+								)}
 							</div>
 						</DialogBody>
 						<DialogFooter>
