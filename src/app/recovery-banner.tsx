@@ -1,8 +1,13 @@
 import {useEffect, useState} from 'react';
-import {History, LifeBuoy, RotateCcw} from 'lucide-react';
+import {History, LifeBuoy, RotateCcw, Save} from 'lucide-react';
 import {Button} from '../shared/ui';
 import {messageOf, plural, send, type ShowStatus} from './common';
-import {reportSnapshotRestore, useSnapshots, whenText} from './recovery-core';
+import {
+	reportSnapshotRestore,
+	saveSnapshotAsSession,
+	useSnapshots,
+	whenText,
+} from './recovery-core';
 
 /**
 "Restore your last browsing session? N windows · M tabs" shown on the dashboard after an unclean exit.
@@ -10,9 +15,11 @@ import {reportSnapshotRestore, useSnapshots, whenText} from './recovery-core';
 export function RecoveryBanner({
 	showStatus,
 	onReview,
+	onSessionsChanged,
 }: {
 	showStatus: ShowStatus;
 	onReview: () => void;
+	onSessionsChanged?: () => unknown;
 }) {
 	const {data, reload} = useSnapshots(true);
 	const [busy, setBusy] = useState(false);
@@ -57,6 +64,25 @@ export function RecoveryBanner({
 		await reload();
 	}
 
+	async function saveAsSession() {
+		if (busy || !recovery) {
+			return;
+		}
+
+		setBusy(true);
+		try {
+			if (
+				await saveSnapshotAsSession(recovery.snapshotId, undefined, showStatus)
+			) {
+				await onSessionsChanged?.();
+			}
+		} catch (reason) {
+			showStatus(messageOf(reason) || 'Could not save that session.', true);
+		}
+
+		setBusy(false);
+	}
+
 	async function dismiss() {
 		await send('DISMISS_RECOVERY');
 		await reload();
@@ -86,6 +112,15 @@ export function RecoveryBanner({
 				<Button size="sm" disabled={busy} onClick={() => void restore()}>
 					<RotateCcw className="h-4 w-4" />
 					{busy ? 'Restoring' : 'Restore'}
+				</Button>
+				<Button
+					size="sm"
+					variant="outline"
+					disabled={busy}
+					onClick={() => void saveAsSession()}
+				>
+					<Save className="h-4 w-4" />
+					Save as session
 				</Button>
 				<Button size="sm" variant="outline" onClick={onReview}>
 					<History className="h-4 w-4" />
