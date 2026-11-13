@@ -8,6 +8,8 @@ import {
 	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import type {Bookmark} from '../../../src/app/types';
+import {BottomSheet} from '../bottom-sheet';
 import {
 	bookmarksIn,
 	columnViews,
@@ -30,6 +32,7 @@ import {useColors, useShape} from '../theme';
 import {useSelection} from '../use-selection';
 import {Chips, Empty, Field, Header, Icon, IconButton} from '../ui';
 import {BookmarkRow, MoveSheet, SelectionBar} from './bookmark-parts';
+import {SaveLinkForm} from './save-link';
 
 export function BookmarksScreen({
 	onAdd,
@@ -49,6 +52,8 @@ export function BookmarksScreen({
 	const [refreshing, setRefreshing] = useState(false);
 	// The drawer for choosing a column to move the selection to.
 	const [moving, setMoving] = useState(false);
+	// The bookmark whose edit drawer is open.
+	const [editing, setEditing] = useState<Bookmark>();
 
 	useEffect(() => {
 		onSelecting(selection.active);
@@ -236,6 +241,9 @@ export function BookmarksScreen({
 						onSelect={() => {
 							selection.start(item.id);
 						}}
+						onEdit={() => {
+							setEditing(item);
+						}}
 						onDelete={() => {
 							remove(new Set([item.id]));
 						}}
@@ -278,6 +286,11 @@ export function BookmarksScreen({
 							`${selection.ids.size} selected`,
 						);
 					}}
+					onEdit={() => {
+						setEditing(
+							shown.find((bookmark) => selection.ids.has(bookmark.id)),
+						);
+					}}
 					onMove={() => {
 						setMoving(true);
 					}}
@@ -286,6 +299,26 @@ export function BookmarksScreen({
 					}}
 				/>
 			)}
+			<BottomSheet
+				visible={Boolean(editing)}
+				label="Edit link"
+				onClose={() => {
+					setEditing(undefined);
+				}}
+			>
+				{editing && (
+					<SaveLinkForm
+						key={editing.id}
+						editing={editing}
+						initialText={editing.url}
+						initialTitle={editing.title}
+						onDone={() => {
+							setEditing(undefined);
+							selection.stop();
+						}}
+					/>
+				)}
+			</BottomSheet>
 			<MoveSheet
 				visible={moving}
 				count={selection.ids.size}

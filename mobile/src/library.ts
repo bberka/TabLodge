@@ -155,6 +155,42 @@ export function addBookmark(
 }
 
 /**
+Changes a bookmark's link, title, or column. It keeps its place, unless the column changes: then it goes to the
+top of the new column. An unusable link or a missing bookmark or column leaves the store as it was.
+*/
+export function updateBookmark(
+	store: Store,
+	id: string,
+	input: NewBookmark,
+	now: number,
+): Store {
+	const current = store.bookmarks.find((bookmark) => bookmark.id === id);
+	const url = extractUrl(input.url);
+	if (
+		!current ||
+		!url ||
+		store.bookmarkColumns.every((column) => column.id !== input.columnId)
+	) {
+		return store;
+	}
+
+	const changed: Bookmark = {
+		...current,
+		url,
+		title: input.title.trim() || hostOf(url),
+		columnId: input.columnId,
+		updatedAt: now,
+	};
+	const bookmarks =
+		current.columnId === input.columnId
+			? store.bookmarks.map((bookmark) =>
+					bookmark.id === id ? changed : bookmark,
+				)
+			: [changed, ...store.bookmarks.filter((bookmark) => bookmark.id !== id)];
+	return {...store, bookmarks, updatedAt: now};
+}
+
+/**
 Removes several bookmarks at once.
 */
 export function removeBookmarks(

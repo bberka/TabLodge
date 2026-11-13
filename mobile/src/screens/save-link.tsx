@@ -1,11 +1,13 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
+import type {Bookmark} from '../../../src/app/types';
 import {
 	addBookmark,
 	addColumn,
 	columnViews,
 	DEFAULT_COLUMN_ID,
 	extractUrl,
+	updateBookmark,
 } from '../library';
 import {edit, newId, useLibrary} from '../library-store';
 import {getPreferences, setPreferences} from '../preferences';
@@ -18,10 +20,15 @@ The body of the save drawer. Opened by Add link, or by the Android share sheet w
 export function SaveLinkForm({
 	initialText,
 	initialTitle,
+	editing,
 	onDone,
 }: {
 	initialText: string;
 	initialTitle: string;
+	/**
+	A bookmark to change instead of saving a new one. The initial text and title are then its own.
+	*/
+	editing?: Bookmark;
 	/**
 	Called when the drawer should close; `saved` is the column name when a link was saved.
 	*/
@@ -36,7 +43,7 @@ export function SaveLinkForm({
 		() => extractUrl(initialText) ?? initialText,
 	);
 	const [title, setTitle] = useState(initialTitle);
-	const [picked, setPicked] = useState('');
+	const [picked, setPicked] = useState(editing?.columnId ?? '');
 	const [newName, setNewName] = useState('');
 	const [saving, setSaving] = useState(false);
 
@@ -64,7 +71,19 @@ export function SaveLinkForm({
 		}
 
 		await edit((current) =>
-			addBookmark(current, {url, title, columnId: target}, newId(), Date.now()),
+			editing
+				? updateBookmark(
+						current,
+						editing.id,
+						{url, title, columnId: target},
+						Date.now(),
+					)
+				: addBookmark(
+						current,
+						{url, title, columnId: target},
+						newId(),
+						Date.now(),
+					),
 		);
 		setPreferences({lastColumnId: target});
 		onDone(
@@ -81,7 +100,7 @@ export function SaveLinkForm({
 					accessibilityRole="header"
 					style={[styles.title, {color: colors.text}]}
 				>
-					Save link
+					{editing ? 'Edit link' : 'Save link'}
 				</Text>
 				<IconButton
 					icon="close"

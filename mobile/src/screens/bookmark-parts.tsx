@@ -17,6 +17,7 @@ export function BookmarkRow({
 	checked,
 	onToggle,
 	onSelect,
+	onEdit,
 	onDelete,
 }: {
 	bookmark: Bookmark;
@@ -24,6 +25,7 @@ export function BookmarkRow({
 	checked: boolean;
 	onToggle: () => void;
 	onSelect: () => void;
+	onEdit: () => void;
 	onDelete: () => void;
 }) {
 	const colors = useColors();
@@ -57,6 +59,7 @@ export function BookmarkRow({
 				accessibilityActions={[
 					{name: 'open', label: 'Open in browser'},
 					{name: 'select', label: 'Select'},
+					{name: 'edit', label: 'Edit'},
 					{name: 'delete', label: 'Delete'},
 				]}
 				android_ripple={shape.ios ? undefined : {color: colors.pressed}}
@@ -80,6 +83,11 @@ export function BookmarkRow({
 
 						case 'select': {
 							onSelect();
+							break;
+						}
+
+						case 'edit': {
+							onEdit();
 							break;
 						}
 
@@ -163,12 +171,14 @@ export function SelectionBar({
 	count,
 	canMove,
 	onOpen,
+	onEdit,
 	onMove,
 	onDelete,
 }: {
 	count: number;
 	canMove: boolean;
 	onOpen: () => void;
+	onEdit: () => void;
 	onMove: () => void;
 	onDelete: () => void;
 }) {
@@ -191,6 +201,12 @@ export function SelectionBar({
 				label="Open"
 				disabled={none}
 				onPress={onOpen}
+			/>
+			<ActionButton
+				icon="create-outline"
+				label="Edit"
+				disabled={count !== 1}
+				onPress={onEdit}
 			/>
 			<ActionButton
 				icon="folder-open-outline"

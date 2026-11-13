@@ -14,6 +14,7 @@ import {
 	splitShared,
 	searchBookmarks,
 	UNFILED_ID,
+	updateBookmark,
 } from '../mobile/src/library';
 import {sampleStore} from '../mobile/src/seed';
 
@@ -155,6 +156,40 @@ describe('several bookmarks', () => {
 		assert.deepEqual(ids(moved, 'c2'), ['b', 'a']);
 		assert.deepEqual(ids(moved, 'c1'), ['c']);
 		assert.equal(moveBookmarks(store, new Set(['a']), 'missing', NOW), store);
+	});
+
+	test('edits a bookmark in place and moves it only when the column changes', () => {
+		const store = build();
+		const same = updateBookmark(
+			store,
+			'b',
+			{url: 'see https://new.example/x.', title: ' Renamed ', columnId: 'c1'},
+			NOW + 1,
+		);
+		assert.deepEqual(ids(same, 'c1'), ['c', 'b', 'a']);
+		const edited = same.bookmarks.find((bookmark) => bookmark.id === 'b');
+		assert.equal(edited?.url, 'https://new.example/x');
+		assert.equal(edited?.title, 'Renamed');
+		const elsewhere = updateBookmark(
+			store,
+			'b',
+			{url: 'https://b.example', title: '', columnId: 'c2'},
+			NOW + 2,
+		);
+		assert.deepEqual(ids(elsewhere, 'c2'), ['b']);
+		assert.equal(
+			updateBookmark(store, 'b', {url: 'nope', title: '', columnId: 'c1'}, NOW),
+			store,
+		);
+		assert.equal(
+			updateBookmark(
+				store,
+				'missing',
+				{url: 'https://a.example', title: '', columnId: 'c1'},
+				NOW,
+			),
+			store,
+		);
 	});
 
 	test('restores removed bookmarks under new ids', () => {

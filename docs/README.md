@@ -104,7 +104,7 @@ Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [
 
 `mobile/` holds an Android app, still in development. It is a small link saver in the style of Raindrop:
 
-- Bookmarks: browse columns, search, add links, and tap one to open it. Swipe a row right to open it or left to delete it (with Undo), or long press to select several, then open, move, or delete them together. **Open all** opens every link in a column.
+- Bookmarks: browse columns, search, add links, and tap one to open it. Swipe a row right to open it or left to delete it (with Undo), or long press to select several, then open, move, or delete them together. Selecting one row also offers Edit for its link, title, and column. **Open all** opens every link in a column.
 - Share sheet: choose TabLodge from another app's share menu and a drawer slides up with the link and title filled in. When the share started the app, saving returns you to the app you came from.
 - Sessions: saved sessions are listed read only. Tap a tab to open it, or **Open all** for the whole session. A phone browser cannot create sessions.
 - Sync: it connects to your [sync server](self-hosting.md) with the same address and token as the extension, using the shared client in `src/shared/sync/`.
