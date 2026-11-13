@@ -41,6 +41,8 @@ After changing UI shown in a screenshot:
 2. Capture the affected dashboard, search palette, Settings, or side panel in light and dark themes from the opened dev browser.
 3. Save WebP files in `site/src/assets/`, keeping the existing names: for example, `dashboard-light.webp` and `dashboard-dark.webp`.
 
+The Android section shows `android-bookmarks` and `android-sessions` in both themes. Capture them from the app's release build on an emulator that syncs from a server holding the same synthetic fixture (a development build shows the dev menu button over the screen), set the theme with `adb shell cmd uimode night yes` or `no`, and save them as WebP in `site/src/assets/` at the screen's own size.
+
 The fixture is synthetic and deterministic. Seeding replaces TabLodge data in the isolated dev profile and loads local icons from `~/.cache/tablodge/dev-favicons.json`, a machine wide cache shared by worktrees. The first run fetches missing icons from sample sites. Delete the cache file to fetch them again. This network activity happens only when you run `vp run dev:chrome:seed`. The extension itself does not fetch favicons or gain extra permissions. Capture is manual, and there is no screenshot command. Astro optimizes the images during the site build.
 
 ## Deploy to GitHub Pages

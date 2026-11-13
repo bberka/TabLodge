@@ -57,6 +57,8 @@ The in app Help page explains every feature and setting.
 
 In Firefox, TabLodge always replaces the new tab page, the side panel is Firefox's sidebar, saved items show letter tiles instead of site icons, private windows are not supported, and split view tabs reopen as neighboring tabs. See [Browser support](architecture.md#browser-support).
 
+**Android:** Android 7 or newer. Download `tablodge.apk` from the [latest release](https://github.com/bberka/TabLodge/releases/latest), open it on your phone, and allow your browser or file manager to install apps when Android asks. There is no store listing yet, and the app does not update itself: install the next release's APK over the old one, and your data stays. Compare the file with `tablodge.apk.sha256` if you want to check the download. The app saves links and shows your bookmarks and sessions from your [sync server](self-hosting.md); see [Android app](#android-app).
+
 ### Build from source
 
 You need Git, Node.js 22.18+ or 24.11+, and the [Vite+ CLI](https://viteplus.dev/).
@@ -102,7 +104,7 @@ Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [
 
 ### Android app
 
-`mobile/` holds an Android app, still in development. It is a small link saver in the style of Raindrop:
+`mobile/` holds an Android app, still in development. Each [release](https://github.com/bberka/TabLodge/releases/latest) attaches a signed APK (see [Install](#install)), and pull requests that touch the app build a debug APK as a workflow artifact. It is a small link saver in the style of Raindrop:
 
 - Bookmarks: browse columns, search, add links, and tap one to open it. Swipe a row right to open it or left to delete it (with Undo), or long press to select several, then open, move, or delete them together. Selecting one row also offers Edit for its link, title, and column. **Open all** opens every link in a column.
 - Share sheet: choose TabLodge from another app's share menu and a drawer slides up with the link and title filled in. When the share started the app, saving returns you to the app you came from.

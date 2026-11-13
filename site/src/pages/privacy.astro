@@ -37,7 +37,7 @@ const permissions = [
 			url: 'https://tablodge.bbay.dev/privacy/',
 			name: title,
 			description,
-			dateModified: '2026-11-12',
+			dateModified: '2026-11-13',
 			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
 		},
 	]}
@@ -45,7 +45,7 @@ const permissions = [
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Privacy</span></nav>
 		<h1>Privacy</h1>
-		<p class="note">Last updated: 2026-11-12</p>
+		<p class="note">Last updated: 2026-11-13</p>
 		<p class="lead">
 			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect your data.</strong> It uploads your library only to a sync server you run yourself, and only after you connect one.
 		</p>
@@ -83,6 +83,11 @@ const permissions = [
 		<p>The Firefox version does not run in private windows, so it cannot read or save them, and the rest of this section applies to Chromium browsers.</p>
 		<p>After you enable Allow in Incognito in your browser's extension settings, the first private dashboard visit requires a storage choice. By default, private windows use the same library as regular windows, so private saves appear in the shared library. You can instead use a separate saved library in local extension storage or a separate temporary library in browser session storage. Temporary data clears on browser restart, not when private windows close. Both separate libraries start empty. Switching modes does not copy, merge or delete data. Appearance remains shared. New private tabs redirect to the TabLodge dashboard by default; you can turn this off in Settings under Private windows.</p>
 		<p>The storage choice and redirect preference are kept in <code>tablodge.private.config</code>; separate library and recovery keys have the prefix <code>tablodge.private.</code>. The redirect preference does not record private browsing activity. Saved private data is not encrypted or hidden from someone with access to your browser profile unless you lock it. You can lock a separate saved library with a PIN or a password in Settings under Private windows. TabLodge then encrypts every value of it on your device, keeps the key only in memory until you lock it, the idle time passes, the last private window closes or the browser closes, and stores no copy of the PIN or password, so a lost one cannot be recovered. A short PIN is weak against someone who copies your profile files, and exports from an unlocked private library are plain unless you protect a full backup. Temporary data also clears if the extension is disabled, reloaded or updated. Automatic snapshots, automatic backups and browser bookmark monitoring do not run in private windows. Explicit exports and manual backup downloads can still leave files on disk after temporary data clears. To erase a saved private library and its recovery copies, select that mode and open Settings from its private dashboard.</p>
+
+		<h2>Android app</h2>
+		<p>
+			The Android app uses the same sync and sends the same data to the same server, and nothing to anyone else. It has one permission, the internet, to reach that server. The server token is kept in the Android keystore and your library in a database only the app can read. It never reads other apps or your browser: it sees a link only when you type it or share it to TabLodge. If you open the private windows' library on the phone, it keeps that library's key in the same keystore until you choose Forget on this phone, and it only reads that library. Disconnecting removes the token and the sync position and leaves the library on the phone.
+		</p>
 
 		<h2>Permissions</h2>
 		<div class="table-wrap">

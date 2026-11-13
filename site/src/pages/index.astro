@@ -18,6 +18,7 @@ const features = [
 	{title: 'Bookmark board', text: 'Columns of links on every new tab, ready when you open one.'},
 	{title: 'Search everything', text: 'Find any session, bookmark, or open tab from one search box, on any page.'},
 	{title: 'Import, back up, sync', text: 'Bring data from OneTab, Session Buddy, or Toby, and sync through a server you run.'},
+	{title: 'Android app', text: 'Save links from your phone and open your bookmarks and sessions, synced through the same server.'},
 ];
 
 const faq = [
@@ -27,7 +28,7 @@ const faq = [
 	},
 	{
 		q: 'Which browsers does TabLodge support?',
-		a: 'Chromium-based browsers on Chrome 116 or newer, such as Chrome, Brave, Edge, Vivaldi, and Opera. Desktop Firefox 140 or newer works too, from Firefox Add-ons. Safari and mobile browsers are not supported.',
+		a: 'Chromium-based browsers on Chrome 116 or newer, such as Chrome, Brave, Edge, Vivaldi, and Opera. Desktop Firefox 140 or newer works too, from Firefox Add-ons. Safari and mobile browsers cannot run the extension, but there is an Android app for your phone.',
 	},
 	{
 		q: 'Does TabLodge collect any data?',
@@ -36,6 +37,10 @@ const faq = [
 	{
 		q: 'Does it sync between my computers?',
 		a: 'Yes, through a server you run yourself with Docker or on your Cloudflare account. There is no TabLodge cloud. Without a server, save a backup on one machine and import it on another.',
+	},
+	{
+		q: 'Is there a mobile app?',
+		a: 'Yes, for Android 7 or newer. It saves links you share from other apps, shows and opens your bookmarks and sessions, and syncs through the same server you run. Download the APK from the latest release, since there is no store listing yet. A phone browser cannot give another app its open tabs, so sessions are saved on a computer or from a shared list of links. There is no iPhone app.',
 	},
 	{
 		q: 'Will TabLodge replace my new tab page?',
@@ -67,6 +72,22 @@ const jsonLd = [
 		codeRepository: SITE.repo,
 		screenshot: abs('/og.png'),
 		featureList: features.map((f) => f.title),
+	},
+	{
+		'@type': 'MobileApplication',
+		'@id': `${SITE.url}/#android`,
+		name: 'TabLodge for Android',
+		description: 'Save links from other apps, and open your TabLodge bookmarks and sessions on your phone.',
+		url: `${SITE.url}/#android`,
+		applicationCategory: 'ProductivityApplication',
+		operatingSystem: 'Android 7.0 or newer',
+		softwareVersion: SITE.version,
+		downloadUrl: SITE.androidApk,
+		license: SITE.license,
+		isAccessibleForFree: true,
+		offers: {'@type': 'Offer', price: '0', priceCurrency: 'USD'},
+		author: {'@type': 'Person', name: SITE.author},
+		codeRepository: SITE.repo,
 	},
 	{
 		'@type': 'FAQPage',
@@ -177,7 +198,44 @@ const jsonLd = [
 		</div>
 	</section>
 
-	<section id="privacy">
+	<section id="android">
+		<div class="wrap split">
+			<div>
+				<p class="eyebrow">Android</p>
+				<h2>Your links on your phone</h2>
+				<p class="lead">Share a link from any app to save it. Open your bookmarks and sessions anywhere, synced through your own server.</p>
+				<ul class="points">
+					<li>Swipe a bookmark to edit, move, or delete it, or select several and open them all at once.</li>
+					<li>Share a browser's tabs to TabLodge to save them as bookmarks or a session.</li>
+					<li>Needs Android 7 or newer. Install it from the latest release.</li>
+				</ul>
+				<p class="actions">
+					<a class="btn primary" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="store" />Download the APK</a>
+					<a class="btn ghost" href={SITE.releases} rel="noopener">All releases</a>
+				</p>
+			</div>
+			<div class="phones">
+				<div class="phone">
+					<Screenshot
+						name="android-bookmarks"
+						alt="TabLodge Android app showing bookmark columns with icons and a list of saved links"
+						sizes="(min-width: 900px) 240px, 42vw"
+						widths={[360, 540, 720]}
+					/>
+				</div>
+				<div class="phone">
+					<Screenshot
+						name="android-sessions"
+						alt="TabLodge Android app showing saved sessions filtered by folder"
+						sizes="(min-width: 900px) 240px, 42vw"
+						widths={[360, 540, 720]}
+					/>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section id="privacy" class="alt">
 		<div class="wrap split">
 			<div>
 				<p class="eyebrow">Privacy</p>
@@ -211,6 +269,7 @@ const jsonLd = [
 			<div class="actions center">
 				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
 				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
+				<a class="btn ghost" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="store" />Android APK</a>
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
 			</div>
 		</div>
@@ -264,6 +323,21 @@ const jsonLd = [
 		max-width: 320px;
 		width: 60vw;
 		justify-self: center;
+	}
+	.points {
+		margin: 1rem 0 1.4rem;
+		padding-left: 1.2rem;
+		color: var(--muted);
+	}
+	.phones {
+		display: flex;
+		gap: 1rem;
+		justify-content: center;
+		align-items: flex-start;
+	}
+	.phone {
+		max-width: 240px;
+		width: 42vw;
 	}
 	.faq details {
 		background: var(--card);

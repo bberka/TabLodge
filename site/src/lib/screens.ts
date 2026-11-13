@@ -1,7 +1,13 @@
 import {getImage} from 'astro:assets';
 import type {ImageMetadata} from 'astro';
 
-export type ScreenName = 'dashboard' | 'palette' | 'settings' | 'sidepanel';
+export type ScreenName =
+	| 'dashboard'
+	| 'palette'
+	| 'settings'
+	| 'sidepanel'
+	| 'android-bookmarks'
+	| 'android-sessions';
 export type Theme = 'dark' | 'light';
 
 const files = import.meta.glob<{default: ImageMetadata}>('../assets/*.webp', {
