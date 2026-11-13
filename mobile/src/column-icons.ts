@@ -1,5 +1,6 @@
 import {useCallback} from 'react';
 import {useColorScheme} from 'react-native';
+import {columnColorShades, rgbToHex} from '../../src/shared/accent-colors';
 import {ICON_IDS, type IconId} from '../../src/app/icon-ids';
 import {avatarColor} from './theme';
 import type {IconName} from './ui';
@@ -287,15 +288,29 @@ export const COLUMN_ICONS: Array<{id: IconId; glyph: IconName}> = ICON_IDS.map(
 );
 
 /**
-Gives a column or folder chip its icon and a steady color taken from its name, so each one is easy to spot.
+The color a column was given, as the shade that reads on the current theme, or undefined for a column without one.
+*/
+export function columnTint(
+	color: string | undefined,
+	scheme: 'light' | 'dark',
+): string | undefined {
+	const shades = columnColorShades(color);
+	return shades ? rgbToHex(shades[scheme]) : undefined;
+}
+
+/**
+Gives a column or folder chip its icon and its color: the one chosen for the column, or else a steady one taken from
+its name, so each one is easy to spot.
 */
 export function useChipLook() {
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	return useCallback(
-		<Item extends {icon?: string; name: string}>(item: Item) => ({
+		<Item extends {icon?: string; name: string; color?: string}>(
+			item: Item,
+		) => ({
 			...item,
 			glyph: columnGlyph(item.icon),
-			tint: avatarColor(item.name, scheme),
+			tint: columnTint(item.color, scheme) ?? avatarColor(item.name, scheme),
 		}),
 		[scheme],
 	);

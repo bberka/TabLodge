@@ -399,6 +399,10 @@ export type BookmarkColumn = {
 	*/
 	icon?: string;
 	/**
+	A preset id or `#rrggbb` from the accent colors (never "default" or "system"); missing means no color.
+	*/
+	color?: string;
+	/**
 	Sites that belong in this column: a host name (which also covers its subdomains) or a host with a path prefix such as `github.com/bberka`. Bookmarking a page on one of them
 	(shortcut, browser bookmark) saves it here without asking for a column.
 	*/
@@ -716,14 +720,20 @@ export type TabLodgeMessages = {
 	Removes extra copies of addresses saved more than once on the board, moving each to the trash. Every address keeps at least one copy outside `bookmarkIds`; the request fails otherwise. At most 500 per message, the trash limit.
 	*/
 	REMOVE_DUPLICATE_BOOKMARKS: {bookmarkIds: string[]};
-	CREATE_BOOKMARK_COLUMN: {name: string; icon?: string; domains?: string[]};
+	CREATE_BOOKMARK_COLUMN: {
+		name: string;
+		icon?: string;
+		color?: string;
+		domains?: string[];
+	};
 	/**
-	`icon` omitted keeps the current icon; an empty string resets it to the default. `domains` omitted keeps the list; an empty array clears it.
+	`icon` omitted keeps the current icon; an empty string resets it to the default. `color` the same: omitted keeps it, an empty string removes it. `domains` omitted keeps the list; an empty array clears it.
 	*/
 	UPDATE_BOOKMARK_COLUMN: {
 		columnId: string;
 		name: string;
 		icon?: string;
+		color?: string;
 		domains?: string[];
 	};
 	/**

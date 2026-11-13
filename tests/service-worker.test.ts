@@ -6585,6 +6585,96 @@ test('bookmark columns store a registry icon and drop unknown ones', async () =>
 	assert.equal('icon' in reset.column, false);
 });
 
+test('bookmark columns store a color from the accent palette and drop anything else', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const created = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Reading',
+		color: 'teal',
+	});
+	assert.equal(created.ok, true, created.error);
+	assert.equal(created.column.color, 'teal');
+	for (const [name, color] of [
+		['Default one', 'default'],
+		['System one', 'system'],
+		['Odd one', 'chartreuse'],
+		['Short hex', '#abc'],
+		['Upper hex', '#ABCDEF'],
+	] as const) {
+		const made = await harness.sendMessage({
+			type: 'CREATE_BOOKMARK_COLUMN',
+			name,
+			color,
+		});
+		assert.equal(made.ok, true, made.error);
+		assert.equal('color' in made.column, false, `${name} stores no color`);
+	}
+
+	const custom = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Custom',
+		color: '#a1b2c3',
+	});
+	assert.equal(custom.column.color, '#a1b2c3');
+
+	// Renaming without a color keeps it; a valid one replaces it; an empty string removes it.
+	const renamed = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+	});
+	assert.equal(renamed.column.color, 'teal');
+	const swapped = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+		color: 'rose',
+	});
+	assert.equal(swapped.column.color, 'rose');
+	const reset = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+		color: '',
+	});
+	assert.equal(reset.ok, true, reset.error);
+	assert.equal('color' in reset.column, false);
+});
+
+test('stored column colors are validated on load and kept by imports', async () => {
+	const state = stateWithSession();
+	state.bookmarkColumns = [
+		{id: 'bookmark-default', name: 'Bookmarks', color: 'bogus'},
+		{id: 'column-a', name: 'Alpha', color: 'violet'},
+		{id: 'column-b', name: 'Beta', color: '#102030'},
+	];
+	const harness = createWorkerHarness(state);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(loaded.bookmarkColumns[0].color, undefined);
+	assert.equal(loaded.bookmarkColumns[1].color, 'violet');
+	assert.equal(loaded.bookmarkColumns[2].color, '#102030');
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: {
+			bookmarkColumns: [
+				{id: 'x', name: 'Imported', color: 'green'},
+				{id: 'y', name: 'Other', color: 'nope'},
+			],
+			bookmarks: [{url: 'https://a.example/', columnId: 'x'}],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	const columns = harness.state.bookmarkColumns;
+	assert.equal(
+		columns.find((column) => column.name === 'Imported')?.color,
+		'green',
+	);
+	assert.equal(
+		columns.find((column) => column.name === 'Other')?.color,
+		undefined,
+	);
+});
+
 test('a column with domains takes matching bookmarks when none is chosen', async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	const dev = await harness.sendMessage({

@@ -9,6 +9,7 @@ import type {
 	Settings,
 	Store,
 } from '../../src/app/types';
+import {isColumnColor} from '../../src/shared/accent-colors';
 import {LAYOUT_VERSION} from '../../src/shared/library-index';
 
 // Ids the extension gives its first column and the bucket for bookmarks whose column is gone.
@@ -16,7 +17,7 @@ export const DEFAULT_COLUMN_ID = 'bookmark-default';
 export const UNFILED_ID = 'bookmark-unfiled';
 export const DEFAULT_COLUMN_NAME = 'Bookmarks';
 
-type ColumnView = {id: string; name: string; icon?: string};
+type ColumnView = {id: string; name: string; icon?: string; color?: string};
 
 export const isStore = (value: unknown): value is Store =>
 	typeof value === 'object' &&
@@ -87,11 +88,9 @@ The columns to show: the library's own, plus "Unfiled" when a bookmark points at
 */
 export function columnViews(store: Store): ColumnView[] {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
-	const views: ColumnView[] = store.bookmarkColumns.map(({id, name, icon}) => ({
-		id,
-		name,
-		icon,
-	}));
+	const views: ColumnView[] = store.bookmarkColumns.map(
+		({id, name, icon, color}) => ({id, name, icon, color}),
+	);
 	if (store.bookmarks.some((bookmark) => !known.has(bookmark.columnId))) {
 		views.push({id: UNFILED_ID, name: 'Unfiled'});
 	}
@@ -117,7 +116,7 @@ export function searchBookmarks(store: Store, query: string): Bookmark[] {
 }
 
 /**
-Adds a column with an optional icon id from the extension's icon set.
+Adds a column with an optional icon id from the extension's icon set, and an optional color from its accent palette.
 */
 export function addColumn(
 	store: Store,
@@ -125,6 +124,7 @@ export function addColumn(
 	id: string,
 	now: number,
 	icon?: string,
+	color?: string,
 ): Store {
 	const trimmed = name.trim();
 	if (!trimmed) {
@@ -141,6 +141,7 @@ export function addColumn(
 				createdAt: now,
 				isDefault: false,
 				...(icon && {icon}),
+				...(isColumnColor(color) && {color}),
 			},
 		],
 		updatedAt: now,
@@ -313,6 +314,106 @@ export function splitShared(text: string): {url?: string; title: string} {
 		? `${text.slice(0, match.index)} ${text.slice(match.index + match[0].length)}`
 		: text;
 	return {url, title: rest.replaceAll(/\s+/g, ' ').trim()};
+}
+
+const MAX_COLUMN_NAME = 60;
+
+/**
+Why a column cannot have this name, or undefined when it can. The rules are the extension's: not empty, not "All
+bookmarks", and not the name of another column, ignoring case. `exceptId` is the column being renamed.
+*/
+export function columnNameProblem(
+	store: Store,
+	name: string,
+	exceptId?: string,
+): string | undefined {
+	const trimmed = name.trim();
+	if (!trimmed) {
+		return 'Give the column a name.';
+	}
+
+	if (trimmed.toLocaleLowerCase() === 'all bookmarks') {
+		return 'Choose a different column name.';
+	}
+
+	const taken = store.bookmarkColumns.some(
+		(column) =>
+			column.id !== exceptId &&
+			column.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase(),
+	);
+	return taken ? 'A column with that name already exists.' : undefined;
+}
+
+export type ColumnEdit = {name: string; icon: string; color: string};
+
+/**
+Changes a column's name, icon, and color, and keeps everything else about it, such as the sites that file into it. An
+empty icon or color removes it. A bad name or an unknown column leaves the store as it was.
+*/
+export function updateColumn(
+	store: Store,
+	id: string,
+	edit: ColumnEdit,
+	now: number,
+): Store {
+	const current = store.bookmarkColumns.find((column) => column.id === id);
+	if (!current || columnNameProblem(store, edit.name, id)) {
+		return store;
+	}
+
+	// The icon and color are rebuilt, so an empty or unknown value drops the field rather than leaving the old one.
+	const {icon: _icon, color: _color, ...rest} = current;
+	const changed = {
+		...rest,
+		name: edit.name.trim().slice(0, MAX_COLUMN_NAME),
+		...(edit.icon && {icon: edit.icon}),
+		...(isColumnColor(edit.color) && {color: edit.color}),
+	};
+	return {
+		...store,
+		bookmarkColumns: store.bookmarkColumns.map((column) =>
+			column.id === id ? changed : column,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
+Deletes a column. Its bookmarks move to `moveTo` (another column, going after that column's own), or are deleted with
+it when `moveTo` is null. With no other column to take them they go to the Unfiled bucket, as the extension does.
+*/
+export function deleteColumn(
+	store: Store,
+	id: string,
+	moveTo: string | null,
+	now: number,
+): Store {
+	if (store.bookmarkColumns.every((column) => column.id !== id)) {
+		return store;
+	}
+
+	const remaining = store.bookmarkColumns.filter((column) => column.id !== id);
+	const own = store.bookmarks.filter((bookmark) => bookmark.columnId === id);
+	const others = store.bookmarks.filter((bookmark) => bookmark.columnId !== id);
+	let bookmarks = others;
+	if (moveTo !== null && own.length > 0) {
+		const target =
+			remaining.length === 0
+				? UNFILED_ID
+				: (remaining.find((column) => column.id === moveTo)?.id ??
+					remaining[0]?.id ??
+					UNFILED_ID);
+		bookmarks = [
+			...others,
+			...own.map((bookmark) => ({
+				...bookmark,
+				columnId: target,
+				updatedAt: now,
+			})),
+		];
+	}
+
+	return {...store, bookmarkColumns: remaining, bookmarks, updatedAt: now};
 }
 
 export const ALL_SESSIONS_ID = 'all';

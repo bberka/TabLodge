@@ -29,6 +29,7 @@ import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
 import {useView} from '../view';
 import {Chips, Empty, Field, Header, IconButton} from '../ui';
+import {ColumnSheet} from './column-sheet';
 import {
 	AddButton,
 	BookmarkRow,
@@ -37,10 +38,17 @@ import {
 	SelectionBar,
 } from './bookmark-parts';
 
+// The last chip: choosing it opens the form for a new column instead of showing one.
+const NEW_COLUMN_CHIP = '__new-column__';
+
 /**
-The drawer that is open over the list, if any: one bookmark's edit form, or the choice of a column to move to.
+The drawer that is open over the list, if any: one bookmark's edit form, the choice of a column to move to, or the form
+for making or changing a column.
 */
-type Sheet = {kind: 'edit'; bookmark: Bookmark} | {kind: 'move'};
+type Sheet =
+	| {kind: 'edit'; bookmark: Bookmark}
+	| {kind: 'move'}
+	| {kind: 'column'; id?: string};
 
 export function BookmarksScreen({
 	onAdd,
@@ -67,6 +75,10 @@ export function BookmarksScreen({
 	const [sheet, setSheet] = useState<Sheet>();
 	const editing = sheet?.kind === 'edit' ? sheet.bookmark : undefined;
 	const moving = sheet?.kind === 'move';
+	const editingColumn =
+		sheet?.kind === 'column'
+			? store.bookmarkColumns.find((column) => column.id === sheet.id)
+			: undefined;
 
 	useEffect(() => {
 		onSelecting(selection.active);
@@ -90,6 +102,10 @@ export function BookmarksScreen({
 		[store, query, columnId, searching],
 	);
 	const columnName = columns.find((column) => column.id === columnId)?.name;
+	// The Unfiled bucket is not a column of its own and cannot be changed.
+	const editableColumn = store.bookmarkColumns.some(
+		(column) => column.id === columnId,
+	);
 	const allSelected = shown.length > 0 && selection.ids.size === shown.length;
 
 	const remove = (ids: ReadonlySet<string>) => {
@@ -164,6 +180,15 @@ export function BookmarksScreen({
 					}}
 				/>
 			)}
+			{!readOnly && !searching && editableColumn && (
+				<IconButton
+					icon="color-palette-outline"
+					label={`Edit the ${columnName} column`}
+					onPress={() => {
+						setSheet({kind: 'column', id: columnId});
+					}}
+				/>
+			)}
 			{!readOnly && (
 				<IconButton
 					icon="checkbox-outline"
@@ -229,12 +254,30 @@ export function BookmarksScreen({
 									setQuery('');
 								}}
 							/>
-							{!searching && columns.length > 0 && (
+							{!searching && (columns.length > 0 || !readOnly) && (
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
-										items={columns.map((column) => chipLook(column))}
+										items={[
+											...columns.map((column) => chipLook(column)),
+											...(readOnly
+												? []
+												: [
+														{
+															id: NEW_COLUMN_CHIP,
+															name: 'New column',
+															glyph: 'add' as const,
+															tint: colors.accent,
+														},
+													]),
+										]}
 										selected={columnId}
-										onSelect={setPicked}
+										onSelect={(id) => {
+											if (id === NEW_COLUMN_CHIP) {
+												setSheet({kind: 'column'});
+											} else {
+												setPicked(id);
+											}
+										}}
 									/>
 								</ScrollView>
 							)}
@@ -317,13 +360,25 @@ export function BookmarksScreen({
 					selection.stop();
 				}}
 			/>
+			<ColumnSheet
+				visible={sheet?.kind === 'column'}
+				column={editingColumn}
+				onClose={(id) => {
+					setSheet(undefined);
+					// A column that was just made is shown, so the new link or move lands where the person can see it.
+					if (id && !editingColumn) {
+						setPicked(id);
+					}
+				}}
+			/>
 			<MoveSheet
 				visible={moving}
 				count={selection.ids.size}
-				columns={store.bookmarkColumns.map(({id, name, icon}) => ({
+				columns={store.bookmarkColumns.map(({id, name, icon, color}) => ({
 					id,
 					name,
 					icon,
+					color,
 				}))}
 				onClose={() => {
 					setSheet(undefined);

@@ -16,6 +16,9 @@ import {
 	UNFILED_ID,
 	updateBookmark,
 	addBookmarks,
+	columnNameProblem,
+	deleteColumn,
+	updateColumn,
 	addSession,
 	addTabsToSession,
 	ALL_SESSIONS_ID,
@@ -336,5 +339,139 @@ describe('shared link lists', () => {
 			made,
 		);
 		assert.equal(addSession(made, {name: 'x', urls: []}, 's2', [], NOW), made);
+	});
+});
+
+describe('editing columns', () => {
+	const build = () => {
+		let store = addColumn(
+			addColumn(emptyStore(NOW), 'One', 'c1', NOW, 'star', 'teal'),
+			'Two',
+			'c2',
+			NOW,
+		);
+		store = {
+			...store,
+			bookmarkColumns: store.bookmarkColumns.map((column) =>
+				column.id === 'c1' ? {...column, domains: ['github.com']} : column,
+			),
+		};
+		for (const [id, column] of [
+			['a', 'c1'],
+			['b', 'c1'],
+			['c', 'c2'],
+		] as const) {
+			store = addBookmark(
+				store,
+				{url: `https://${id}.test`, title: id, columnId: column},
+				id,
+				NOW,
+			);
+		}
+
+		return store;
+	};
+
+	const column = (store: ReturnType<typeof emptyStore>, id: string) =>
+		store.bookmarkColumns.find((entry) => entry.id === id);
+
+	test('a new column keeps a valid color and drops the rest', () => {
+		const store = build();
+		assert.equal(column(store, 'c1')?.color, 'teal');
+		const odd = addColumn(store, 'Odd', 'c3', NOW, undefined, 'chartreuse');
+		assert.equal(column(odd, 'c3')?.color, undefined);
+		const hex = addColumn(store, 'Hex', 'c4', NOW, undefined, '#a1b2c3');
+		assert.equal(column(hex, 'c4')?.color, '#a1b2c3');
+	});
+
+	test('renaming and recoloring keeps the rest, and empty values remove the icon and color', () => {
+		const store = build();
+		const changed = updateColumn(
+			store,
+			'c1',
+			{name: '  Reading ', icon: 'book-open', color: 'rose'},
+			NOW + 1,
+		);
+		assert.deepEqual(
+			{
+				name: column(changed, 'c1')?.name,
+				icon: column(changed, 'c1')?.icon,
+				color: column(changed, 'c1')?.color,
+				domains: column(changed, 'c1')?.domains,
+			},
+			{
+				name: 'Reading',
+				icon: 'book-open',
+				color: 'rose',
+				domains: ['github.com'],
+			},
+		);
+		const cleared = updateColumn(
+			changed,
+			'c1',
+			{name: 'Reading', icon: '', color: ''},
+			NOW + 2,
+		);
+		assert.equal(column(cleared, 'c1')?.icon, undefined);
+		assert.equal(column(cleared, 'c1')?.color, undefined);
+		assert.deepEqual(column(cleared, 'c1')?.domains, ['github.com']);
+		// An unknown color is dropped, not stored.
+		const bad = updateColumn(
+			store,
+			'c1',
+			{name: 'One', icon: 'star', color: 'chartreuse'},
+			NOW + 3,
+		);
+		assert.equal(column(bad, 'c1')?.color, undefined);
+	});
+
+	test('a name that is empty, reserved, or taken is refused', () => {
+		const store = build();
+		assert.equal(columnNameProblem(store, ' '), 'Give the column a name.');
+		assert.match(columnNameProblem(store, 'All Bookmarks') ?? '', /different/);
+		assert.match(columnNameProblem(store, 'two') ?? '', /already exists/);
+		assert.equal(
+			columnNameProblem(store, 'One', 'c1'),
+			undefined,
+			'its own name is fine',
+		);
+		assert.equal(
+			updateColumn(store, 'c1', {name: 'Two', icon: '', color: ''}, NOW),
+			store,
+		);
+		assert.equal(
+			updateColumn(store, 'missing', {name: 'X', icon: '', color: ''}, NOW),
+			store,
+		);
+	});
+
+	test('deleting a column moves its bookmarks to another, or deletes them with it', () => {
+		const store = build();
+		const moved = deleteColumn(store, 'c1', 'c2', NOW + 1);
+		assert.deepEqual(
+			moved.bookmarkColumns.map((entry) => entry.id),
+			['c2'],
+		);
+		assert.deepEqual(ids(moved, 'c2'), ['c', 'b', 'a']);
+		const gone = deleteColumn(store, 'c1', null, NOW + 1);
+		assert.equal(gone.bookmarks.length, 1);
+		assert.equal(gone.bookmarks[0]?.id, 'c');
+	});
+
+	test('the last column sends its bookmarks to Unfiled, and a missing column changes nothing', () => {
+		const single = deleteColumn(
+			deleteColumn(build(), 'c2', 'c1', NOW),
+			'c1',
+			'c1',
+			NOW,
+		);
+		assert.deepEqual(single.bookmarkColumns, []);
+		assert.equal(
+			single.bookmarks.every((bookmark) => bookmark.columnId === UNFILED_ID),
+			true,
+		);
+		assert.equal(single.bookmarks.length, 3);
+		const store = build();
+		assert.equal(deleteColumn(store, 'missing', null, NOW), store);
 	});
 });

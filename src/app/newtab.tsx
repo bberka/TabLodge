@@ -82,6 +82,12 @@ import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
+import {AccentPalette} from './accent-palette';
+import {
+	COLUMN_COLOR_BAR,
+	COLUMN_COLOR_TEXT,
+	columnColorVars,
+} from './column-color';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {
 	AppHeader,
@@ -217,6 +223,7 @@ type ColumnDraft = {
 	id: string | null;
 	name: string;
 	icon?: string;
+	color?: string;
 	domains: string;
 };
 type MoveDraft = {bookmarkIds: string[]; targetColumnId: string};
@@ -913,6 +920,7 @@ function NewTab() {
 			id: column?.id || null,
 			name: column?.name || '',
 			icon: column?.icon,
+			color: column?.color,
 			domains: (column?.domains ?? []).join('\n'),
 		});
 		setDialog('column');
@@ -995,11 +1003,13 @@ function NewTab() {
 					columnId: columnEdit.id,
 					name: columnEdit.name,
 					icon: columnEdit.icon ?? '',
+					color: columnEdit.color ?? '',
 					domains,
 				})
 			: await send('CREATE_BOOKMARK_COLUMN', {
 					name: columnEdit.name,
 					icon: columnEdit.icon,
+					color: columnEdit.color,
 					domains,
 				});
 		if (!result?.ok) {
@@ -3142,7 +3152,7 @@ function NewTab() {
 								{columnEdit?.id ? 'Edit column' : 'Add column'}
 							</DialogTitle>
 							<DialogDescription>
-								Choose a name and icon for this bookmark column.
+								Choose a name, icon, and color for this bookmark column.
 							</DialogDescription>
 						</DialogHeader>
 						<DialogBody>
@@ -3166,6 +3176,27 @@ function NewTab() {
 									setColumnEdit((old) => old && {...old, icon})
 								}
 							/>
+							<div className="space-y-1.5">
+								<Label id="column-color-label" className="block">
+									Color
+								</Label>
+								<div>
+									<AccentPalette
+										forColumn
+										accent={columnEdit?.color ?? 'default'}
+										systemColor={undefined}
+										onChange={(accent) =>
+											setColumnEdit(
+												(old) =>
+													old && {
+														...old,
+														color: accent === 'default' ? undefined : accent,
+													},
+											)
+										}
+									/>
+								</div>
+							</div>
 							<details
 								className="group rounded-md border border-border"
 								open={Boolean(columnEdit?.domains)}
@@ -3865,6 +3896,7 @@ const BookmarkColumn = memo(
 				actions,
 			);
 		const ColumnIcon = getIcon(column.icon, DEFAULT_COLUMN_ICON).component;
+		const colorVars = columnColorVars(column.color);
 		const bookmarkDrop =
 			dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
 		const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
@@ -3885,9 +3917,11 @@ const BookmarkColumn = memo(
 				draggable={allowColumnDrag}
 				data-drag-column={allowColumnDrag ? column.id : undefined}
 				title={allowColumnDrag ? 'Drag to reorder' : undefined}
+				style={colorVars}
 				className={cn(
 					'flex shrink-0 items-center gap-2 border-b border-border',
 					compact ? 'px-2 py-1' : 'px-3 py-2',
+					colorVars && COLUMN_COLOR_BAR,
 					allowColumnDrag && 'cursor-grab touch-none active:cursor-grabbing',
 				)}
 				onPointerDown={
@@ -3901,7 +3935,12 @@ const BookmarkColumn = memo(
 						: undefined
 				}
 			>
-				<ColumnIcon className="size-4 shrink-0 text-muted-foreground" />
+				<ColumnIcon
+					className={cn(
+						'size-4 shrink-0',
+						colorVars ? COLUMN_COLOR_TEXT : 'text-muted-foreground',
+					)}
+				/>
 				<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
 					{column.name}
 				</h3>

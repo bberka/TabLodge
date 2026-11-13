@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
+import {ColorPicker} from './color-picker';
 import {columnGlyph, useChipLook} from './column-icons';
 import {IconPicker} from './icon-picker';
 import {addColumn, columnViews, DEFAULT_COLUMN_ID} from './library';
@@ -23,6 +24,7 @@ export function useColumnChoice(initial = '') {
 	const [picked, setPicked] = useState(initial);
 	const [newName, setNewName] = useState('');
 	const [newIcon, setNewIcon] = useState('');
+	const [newColor, setNewColor] = useState('');
 
 	const creating = picked === NEW_COLUMN || columns.length === 0;
 	const columnId = columns.some((column) => column.id === picked)
@@ -42,6 +44,8 @@ export function useColumnChoice(initial = '') {
 		setNewName,
 		newIcon,
 		setNewIcon,
+		newColor,
+		setNewColor,
 		/**
 		A new column was chosen but has no name yet.
 		*/
@@ -59,7 +63,7 @@ export function useColumnChoice(initial = '') {
 
 			const id = newId();
 			await edit((current) =>
-				addColumn(current, name, id, Date.now(), newIcon),
+				addColumn(current, name, id, Date.now(), newIcon, newColor),
 			);
 			return {id, name};
 		},
@@ -98,6 +102,10 @@ export function ColumnChoice({
 						onChangeText={choice.setNewName}
 					/>
 					<IconPicker selected={choice.newIcon} onSelect={choice.setNewIcon} />
+					<ColorPicker
+						selected={choice.newColor}
+						onSelect={choice.setNewColor}
+					/>
 				</View>
 			)}
 		</>

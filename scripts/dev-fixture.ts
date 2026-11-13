@@ -26,7 +26,7 @@ type DevFolder = {
 	createdAt: number;
 	isDefault: boolean;
 };
-type DevBookmarkColumn = DevFolder;
+type DevBookmarkColumn = DevFolder & {color?: string};
 type DevBookmark = {
 	id: string;
 	title: string;
@@ -213,6 +213,7 @@ const bookmarkColumns: DevBookmarkColumn[] = [
 		id: 'bookmark-daily',
 		name: 'Daily',
 		icon: 'star',
+		color: 'amber',
 		createdAt,
 		isDefault: false,
 	},
@@ -220,6 +221,7 @@ const bookmarkColumns: DevBookmarkColumn[] = [
 		id: 'bookmark-dev',
 		name: 'Dev',
 		icon: 'wrench',
+		color: 'blue',
 		createdAt,
 		isDefault: false,
 	},
@@ -227,6 +229,7 @@ const bookmarkColumns: DevBookmarkColumn[] = [
 		id: 'bookmark-reading',
 		name: 'Reading',
 		icon: 'book-open',
+		color: 'green',
 		createdAt,
 		isDefault: false,
 	},

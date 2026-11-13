@@ -1513,6 +1513,19 @@ function iconField(value: unknown): {icon?: string} {
 	return typeof value === 'string' && ICON_IDS.has(value) ? {icon: value} : {};
 }
 
+/**
+The `color` property for a stored column: a preset accent id or `#rrggbb`. "default", "system", and anything else are dropped,
+so a column without a color stores no field.
+*/
+function colorField(value: unknown): {color?: string} {
+	return typeof value === 'string' &&
+		value !== 'default' &&
+		value !== 'system' &&
+		(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value))
+		? {color: value}
+		: {};
+}
+
 function normalizeFolder(raw: unknown): Folder | null {
 	if (!isRecord(raw)) {
 		return null;
@@ -1652,6 +1665,7 @@ function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 		id,
 		name: cleanText(raw.name, 'New column', 60),
 		...iconField(raw.icon),
+		...colorField(raw.color),
 		...domainsField(raw.domains),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
@@ -6535,6 +6549,7 @@ async function removeDuplicateBookmarks(
 async function createBookmarkColumn(
 	name: string,
 	icon?: unknown,
+	color?: unknown,
 	domains?: unknown,
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
@@ -6555,6 +6570,7 @@ async function createBookmarkColumn(
 			id: makeId(),
 			name: columnName,
 			...iconField(icon),
+			...colorField(color),
 			...domainsField(domains),
 			createdAt: Date.now(),
 			isDefault: false,
@@ -6569,6 +6585,7 @@ async function updateBookmarkColumn(
 	columnId: string,
 	name: string,
 	icon?: unknown,
+	color?: unknown,
 	domains?: unknown,
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
@@ -6598,6 +6615,16 @@ async function updateBookmarkColumn(
 				column.icon = nextIcon;
 			} else {
 				delete column.icon;
+			}
+		}
+
+		// `color` omitted keeps the current color; "" or anything that is not a color removes it.
+		if (color !== undefined) {
+			const {color: nextColor} = colorField(color);
+			if (nextColor) {
+				column.color = nextColor;
+			} else {
+				delete column.color;
 			}
 		}
 
@@ -10534,7 +10561,12 @@ async function handleMessage(
 		}
 
 		case 'CREATE_BOOKMARK_COLUMN': {
-			return createBookmarkColumn(message.name, message.icon, message.domains);
+			return createBookmarkColumn(
+				message.name,
+				message.icon,
+				message.color,
+				message.domains,
+			);
 		}
 
 		case 'UPDATE_BOOKMARK_COLUMN': {
@@ -10542,6 +10574,7 @@ async function handleMessage(
 				message.columnId,
 				message.name,
 				message.icon,
+				message.color,
 				message.domains,
 			);
 		}
