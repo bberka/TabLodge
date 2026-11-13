@@ -111,6 +111,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 				<Field
 					label="Search settings"
 					icon="search"
+					placeholder="Swipe, sync, private, icons"
 					value={query}
 					onChangeText={setQuery}
 					onClear={() => {

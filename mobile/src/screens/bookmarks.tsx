@@ -231,6 +231,7 @@ export function BookmarksScreen({
 							<Field
 								label="Search bookmarks"
 								icon="search"
+								placeholder="Title or address"
 								value={query}
 								autoCapitalize="none"
 								autoCorrect={false}

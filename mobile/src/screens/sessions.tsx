@@ -352,6 +352,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							<Field
 								label="Search sessions"
 								icon="search"
+								placeholder="Session name, tab title or address"
 								value={query}
 								onChangeText={setQuery}
 								onClear={() => {
