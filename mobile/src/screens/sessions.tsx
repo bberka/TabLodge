@@ -95,16 +95,10 @@ function SessionCardView({
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	const tint = columnTint(session.color, scheme) ?? folderTint;
 	const links = useLinkSettings();
-	const [pressing, setPressing] = useState(false);
 	const count = `${session.tabs.length} ${session.tabs.length === 1 ? 'tab' : 'tabs'}`;
 	return (
 		<Card flush>
-			<View
-				style={[
-					styles.head,
-					{backgroundColor: pressing ? colors.pressed : 'transparent'},
-				]}
-			>
+			<View style={styles.head}>
 				<Pressable
 					accessibilityRole="button"
 					accessibilityState={{expanded}}
@@ -114,12 +108,6 @@ function SessionCardView({
 					accessibilityActions={
 						onColor ? [{name: 'color', label: 'Change color'}] : undefined
 					}
-					onPressIn={() => {
-						setPressing(true);
-					}}
-					onPressOut={() => {
-						setPressing(false);
-					}}
 					onAccessibilityAction={() => {
 						onColor?.(session);
 					}}
