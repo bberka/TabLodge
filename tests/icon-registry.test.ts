@@ -19,7 +19,7 @@ test('the registry has one unique, kebab-case entry per icon id', () => {
 		assert.ok(icon.keywords.length > 0);
 	}
 
-	assert.ok(ICONS.length >= 100);
+	assert.ok(ICONS.length >= 250);
 });
 
 test('default icons exist and getIcon falls back for unknown ids', () => {
@@ -40,4 +40,14 @@ test('searchIcons matches names, keywords and subsequences, best first', () => {
 	assert.ok(searchIcons('GITBR').some((icon) => icon.id === 'git-branch'));
 	assert.equal(searchIcons('zzzzqqq').length, 0);
 	assert.equal(searchIcons('star')[0].id, 'star');
+});
+
+test('searchIcons forgives typos, initials and loose letters', () => {
+	assert.equal(searchIcons('bokmark')[0].id, 'bookmark');
+	assert.equal(searchIcons('bkmrk')[0].id, 'bookmark');
+	assert.ok(searchIcons('gtbr').some((icon) => icon.id === 'git-branch'));
+	assert.ok(searchIcons('doker').some((icon) => icon.id === 'container'));
+	assert.strictEqual(searchIcons('docker')[0].id, 'container');
+	assert.ok(searchIcons('burger').some((icon) => icon.id === 'hamburger'));
+	assert.ok(searchIcons('robot').some((icon) => icon.id === 'bot'));
 });
