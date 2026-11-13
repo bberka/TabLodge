@@ -55,6 +55,7 @@ const PORTABLE_PREFERENCES = [
 	'sessionNameStyle',
 	'sessionNameTemplate',
 	'sessionNameFallback',
+	'mobileApp',
 ] as const satisfies ReadonlyArray<keyof Settings>;
 
 const SESSION_LOCAL_FIELDS = [

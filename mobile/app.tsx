@@ -13,6 +13,7 @@ import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/bottom-sheet';
 import {extractUrls, splitShared} from './src/library';
 import {startLibrary, syncClient} from './src/library-store';
+import {startPreferencesSync} from './src/preferences-sync';
 import {startPrivate} from './src/private-library';
 import {loadPreferences} from './src/preferences';
 import {BookmarksScreen} from './src/screens/bookmarks';
@@ -73,7 +74,10 @@ function Main() {
 	const [open, setOpen] = useState(false);
 
 	useEffect(() => {
-		void loadPreferences().then(startLibrary).then(startPrivate);
+		void loadPreferences()
+			.then(startLibrary)
+			.then(startPrivate)
+			.then(startPreferencesSync);
 		const subscription = AppState.addEventListener('change', (state) => {
 			if (state === 'active') {
 				void syncClient.wake().catch(() => undefined);

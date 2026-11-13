@@ -24,7 +24,11 @@ import {
 	Segmented,
 	Switch,
 } from '../ui';
-import {BookmarkBehaviourCard, SyncedSettingsCard} from './behaviour-settings';
+import {
+	BookmarkBehaviourCard,
+	SyncedSettingsCard,
+	Toggle,
+} from './behaviour-settings';
 import {PrivateCard} from './private-settings';
 
 function describe(
@@ -155,6 +159,16 @@ export function SettingsScreen() {
 							}}
 						/>
 					</View>
+				</Card>
+				<Card>
+					<Toggle
+						label="Sync app settings"
+						hint="Look, tab bar, tap and swipe actions follow your other phones when sync is on. Turning it on sends this phone's settings."
+						value={prefs.syncSettings}
+						onChange={(syncSettings) => {
+							setPreferences({syncSettings});
+						}}
+					/>
 				</Card>
 				<BookmarkBehaviourCard />
 				<SyncedSettingsCard />

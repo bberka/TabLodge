@@ -197,6 +197,13 @@ export const useSyncStatus = (): SyncStatus =>
 	useSyncExternalStore(subscribeTo(statusListeners), () => syncStatus);
 
 /**
+Runs `listener` whenever the regular library changes, including what sync brings in.
+*/
+export const subscribeLibrary = core.subscribe;
+
+export const getLibrary = (): Store => core.store;
+
+/**
 Changes one extension setting that travels with the library, and sends it on the next sync.
 */
 export async function setSyncedSetting<Key extends keyof Settings>(

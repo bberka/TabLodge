@@ -854,6 +854,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionNameStyle: 'date-title',
 	sessionNameTemplate: '{date} · {title}',
 	sessionNameFallback: 'date-title',
+	mobileApp: {},
 });
 // Mirrors src/app/icon-ids.ts (the worker cannot import); a test keeps both lists identical.
 const ICON_IDS = new Set<unknown>([
@@ -1796,6 +1797,27 @@ function normalizeSessionQuickActions(raw: RawSettings): SessionQuickAction[] {
 	return selected.slice(0, 5);
 }
 
+const MOBILE_APP_KEYS_MAX = 20;
+const MOBILE_APP_TEXT_MAX = 40;
+
+/**
+The Android app's preferences, kept as they are so they sync between phones: a few short keys with plain values.
+*/
+function normalizeMobileApp(value: unknown): Settings['mobileApp'] {
+	const kept: Array<[string, string | number | boolean]> = [];
+	for (const [key, item] of isRecord(value) ? Object.entries(value) : []) {
+		const plain =
+			typeof item === 'boolean' ||
+			(typeof item === 'number' && Number.isFinite(item)) ||
+			(typeof item === 'string' && item.length <= MOBILE_APP_TEXT_MAX);
+		if (plain && key.length <= MOBILE_APP_TEXT_MAX) {
+			kept.push([key, item]);
+		}
+	}
+
+	return Object.fromEntries(kept.slice(0, MOBILE_APP_KEYS_MAX));
+}
+
 function normalizeSettings(input: RawSettings | null = {}): Settings {
 	// A missing, null or non-object stored value means "no saved preferences": every field falls back to its default.
 	const raw: RawSettings = isRecord(input) ? input : {};
@@ -1993,6 +2015,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			DEFAULT_SETTINGS.sessionNameTemplate,
 			SESSION_NAME_TEMPLATE_MAX,
 		),
+		mobileApp: normalizeMobileApp(raw.mobileApp),
 	};
 	return settings;
 }

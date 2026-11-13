@@ -311,6 +311,11 @@ export type Settings = {
 	The style used when `sessionNameStyle` is `ask` and the name is left empty (default "date-title").
 	*/
 	sessionNameFallback: SessionNameFallback;
+	/**
+	Preferences of the Android app. The extension never reads them; it keeps them so they sync between the phones that
+	share this library (plain strings, numbers, and booleans only).
+	*/
+	mobileApp: Record<string, string | number | boolean>;
 };
 
 export type NativeGroup = {

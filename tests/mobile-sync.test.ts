@@ -138,3 +138,43 @@ test('a phone starting empty receives the extension library and sends back its o
 	);
 	assert.equal(desktop.store.groups.length, 1);
 });
+
+test('the app settings travel between two phones and the extension keeps them', async () => {
+	const log = new ChangeLog();
+	const app = createApi({token: TOKEN, log: () => log});
+	const first = makeDevice('first', app, emptyStore(NOW));
+	const second = makeDevice('second', app, emptyStore(NOW));
+	const desktop = makeDevice('desktop', app, emptyStore(NOW));
+	await first.client.connect(URL_BASE, TOKEN);
+	await second.client.connect(URL_BASE, TOKEN);
+	await desktop.client.connect(URL_BASE, TOKEN);
+
+	first.store = {
+		...first.store,
+		settings: {
+			...first.store.settings,
+			mobileApp: {look: 'ios', swipeLeft: 'delete', floatingBar: true},
+		},
+		updatedAt: NOW + 5,
+	};
+	await first.client.syncNow();
+	await second.client.syncNow();
+	await desktop.client.syncNow();
+
+	const expected = {look: 'ios', swipeLeft: 'delete', floatingBar: true};
+	assert.deepEqual(second.store.settings.mobileApp, expected);
+	assert.deepEqual(desktop.store.settings.mobileApp, expected);
+
+	// The second phone changes one value and the first follows.
+	second.store = {
+		...second.store,
+		settings: {
+			...second.store.settings,
+			mobileApp: {...expected, swipeLeft: 'edit'},
+		},
+		updatedAt: NOW + 10,
+	};
+	await second.client.syncNow();
+	await first.client.syncNow();
+	assert.equal(first.store.settings.mobileApp.swipeLeft, 'edit');
+});

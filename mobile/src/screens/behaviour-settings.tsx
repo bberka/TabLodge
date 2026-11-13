@@ -31,7 +31,7 @@ function Heading({children}: {children: string}) {
 	);
 }
 
-function Toggle({
+export function Toggle({
 	label,
 	hint,
 	value,

@@ -10093,6 +10093,35 @@ test('PREVIEW_SESSION_NAME formats the next save from the window tabs', async ()
 	assert.equal(datetime.name, 'Sat, Oct 25 · 10:42 PM');
 });
 
+test('the Android app preferences are kept as plain values so they sync between phones', async () => {
+	const harness = nameHarness();
+	const saved = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			mobileApp: {
+				look: 'ios',
+				floatingBar: true,
+				swipes: 2,
+				nested: {a: 1},
+				long: 'x'.repeat(100),
+			},
+		} as unknown as Partial<Settings>,
+	});
+	assert.deepEqual(
+		{...saved.settings.mobileApp},
+		{
+			look: 'ios',
+			floatingBar: true,
+			swipes: 2,
+		},
+	);
+	const reset = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {mobileApp: 'nope'} as unknown as Partial<Settings>,
+	});
+	assert.deepEqual({...reset.settings.mobileApp}, {});
+});
+
 test('session name setting: "Ask each time" and its fallback are validated and reset', async () => {
 	const harness = nameHarness();
 	assert.equal(
