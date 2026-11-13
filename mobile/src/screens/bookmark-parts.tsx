@@ -306,6 +306,16 @@ export function MoveSheet({
 }
 
 const styles = StyleSheet.create({
+	menuButton: {
+		position: 'absolute',
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		borderWidth: 1,
+		alignItems: 'center',
+		justifyContent: 'center',
+		elevation: 3,
+	},
 	fab: {
 		position: 'absolute',
 		right: 16,
@@ -377,6 +387,41 @@ export function AddButton({
 			onPress={onPress}
 		>
 			<Icon name="add" size={28} color={colors.onAccent} />
+		</Pressable>
+	);
+}
+
+/**
+A small round button for the screen's menu, beside the add button where a thumb rests, instead of in the header at the
+top of the screen. `right` is how far it sits from the screen's right edge.
+*/
+export function MenuButton({
+	bottom,
+	right,
+	onPress,
+}: {
+	bottom: number;
+	right: number;
+	onPress: () => void;
+}) {
+	const colors = useColors();
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityLabel="More actions"
+			android_ripple={{color: colors.pressed}}
+			style={({pressed}) => [
+				styles.menuButton,
+				{
+					bottom: bottom + 16 + 4,
+					right,
+					backgroundColor: pressed ? colors.pressed : colors.surface,
+					borderColor: colors.border,
+				},
+			]}
+			onPress={onPress}
+		>
+			<Icon name="ellipsis-horizontal" size={24} color={colors.text} />
 		</Pressable>
 	);
 }

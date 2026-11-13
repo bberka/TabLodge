@@ -20,6 +20,8 @@ import {
 	deleteColumn,
 	updateColumn,
 	addSession,
+	moveBookmark,
+	moveColumn,
 	setSessionColor,
 	addTabsToSession,
 	ALL_SESSIONS_ID,
@@ -520,5 +522,50 @@ describe('session colors', () => {
 			undefined,
 		);
 		assert.equal(setSessionColor(blue, 'missing', 'red', NOW), blue);
+	});
+});
+
+describe('ordering', () => {
+	const base = () => sampleStore(NOW);
+	test('a column moves one place at a time and stops at the ends', () => {
+		const store = base();
+		const order = store.bookmarkColumns.map((column) => column.id);
+		const first = order[0];
+		assert.equal(moveColumn(store, first, -1, NOW), store);
+		const moved = moveColumn(store, first, 1, NOW + 1);
+		assert.deepEqual(
+			moved.bookmarkColumns.map((column) => column.id),
+			[order[1], order[0], ...order.slice(2)],
+		);
+		assert.equal(moved.updatedAt, NOW + 1);
+		const last = order.at(-1)!;
+		assert.equal(moveColumn(store, last, 1, NOW), store);
+		assert.equal(moveColumn(store, 'missing', 1, NOW), store);
+	});
+
+	test('a bookmark moves within its own column only', () => {
+		const store = base();
+		const column = store.bookmarkColumns[0].id;
+		const inColumn = () => (s: typeof store) =>
+			s.bookmarks.filter((b) => b.columnId === column).map((b) => b.id);
+		const before = inColumn()(store);
+		assert.ok(before.length >= 3);
+		const others = store.bookmarks
+			.filter((b) => b.columnId !== column)
+			.map((b) => b.id);
+		const down = moveBookmark(store, before[0], 'down', NOW + 1);
+		assert.deepEqual(inColumn()(down).slice(0, 2), [before[1], before[0]]);
+		assert.deepEqual(
+			down.bookmarks.filter((b) => b.columnId !== column).map((b) => b.id),
+			others,
+		);
+		assert.equal(moveBookmark(store, before[0], 'up', NOW), store);
+		assert.equal(moveBookmark(store, before.at(-1)!, 'down', NOW), store);
+		const top = moveBookmark(store, before.at(-1)!, 'top', NOW);
+		assert.equal(inColumn()(top)[0], before.at(-1));
+		const bottom = moveBookmark(store, before[0], 'bottom', NOW);
+		assert.equal(inColumn()(bottom).at(-1), before[0]);
+		assert.equal(inColumn()(bottom).length, before.length);
+		assert.equal(moveBookmark(store, 'missing', 'up', NOW), store);
 	});
 });

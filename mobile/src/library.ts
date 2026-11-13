@@ -410,6 +410,71 @@ export function setSessionColor(
 }
 
 /**
+Moves a column one place earlier (-1) or later (1) in the order the selectors and the extension show. A column at an
+end, or one that does not exist, leaves the store as it was.
+*/
+export function moveColumn(
+	store: Store,
+	id: string,
+	step: -1 | 1,
+	now: number,
+): Store {
+	const from = store.bookmarkColumns.findIndex((column) => column.id === id);
+	const to = from + step;
+	if (from === -1 || to < 0 || to >= store.bookmarkColumns.length) {
+		return store;
+	}
+
+	const columns = [...store.bookmarkColumns];
+	const [moved] = columns.splice(from, 1);
+	columns.splice(to, 0, moved);
+	return {...store, bookmarkColumns: columns, updatedAt: now};
+}
+
+export type BookmarkMove = 'up' | 'down' | 'top' | 'bottom';
+
+/**
+Moves a bookmark within its own column: one place earlier or later, or to the top or the bottom. Other columns keep
+their order. A bookmark already there, or one that does not exist, leaves the store as it was.
+*/
+export function moveBookmark(
+	store: Store,
+	id: string,
+	move: BookmarkMove,
+	now: number,
+): Store {
+	const bookmark = store.bookmarks.find((item) => item.id === id);
+	if (!bookmark) {
+		return store;
+	}
+
+	// The positions in the library's list that belong to this bookmark's column, in order.
+	const slots = store.bookmarks.flatMap((item, index) =>
+		item.columnId === bookmark.columnId ? [index] : [],
+	);
+	const here = slots.findIndex((index) => store.bookmarks[index]?.id === id);
+	const target = {
+		up: here - 1,
+		down: here + 1,
+		top: 0,
+		bottom: slots.length - 1,
+	}[move];
+	if (target < 0 || target >= slots.length || target === here) {
+		return store;
+	}
+
+	const order = slots.map((index) => store.bookmarks[index]);
+	const [moved] = order.splice(here, 1);
+	order.splice(target, 0, moved);
+	const bookmarks = [...store.bookmarks];
+	for (const [position, index] of slots.entries()) {
+		bookmarks[index] = order[position]!;
+	}
+
+	return {...store, bookmarks, updatedAt: now};
+}
+
+/**
 Deletes a column. Its bookmarks move to `moveTo` (another column, going after that column's own), or are deleted with
 it when `moveTo` is null. With no other column to take them they go to the Unfiled bucket, as the extension does.
 */

@@ -7,6 +7,8 @@ import {useBackAction} from '../back-actions';
 import {useChipLook} from '../column-icons';
 import {
 	bookmarksIn,
+	moveBookmark,
+	type BookmarkMove,
 	columnViews,
 	moveBookmarks,
 	removeBookmarks,
@@ -32,8 +34,11 @@ import {useSelection} from '../use-selection';
 import {useView} from '../view';
 import {Button, Chips, Empty, Field, Header, IconButton} from '../ui';
 import {ColumnSheet} from './column-sheet';
+import {ColumnsSheet} from './columns-sheet';
+import {ReorderRow} from './reorder-row';
 import {
 	AddButton,
+	MenuButton,
 	BookmarkRow,
 	EditSheet,
 	MoveSheet,
@@ -75,6 +80,9 @@ export function BookmarksScreen({
 	const [query, setQuery] = useState('');
 	const [refreshing, setRefreshing] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [columnsOpen, setColumnsOpen] = useState(false);
+	// While true, rows show buttons that move them instead of opening them.
+	const [reordering, setReordering] = useState(false);
 	// The drawer for choosing a column to move the selection to.
 	// The bookmark whose edit drawer is open.
 	const [sheet, setSheet] = useState<Sheet>();
@@ -86,6 +94,9 @@ export function BookmarksScreen({
 			: undefined;
 
 	useBackAction(selection.active, selection.stop);
+	useBackAction(reordering, () => {
+		setReordering(false);
+	});
 
 	useEffect(() => {
 		onSelecting(selection.active);
@@ -143,6 +154,10 @@ export function BookmarksScreen({
 		);
 	};
 
+	const reorder = (id: string, move: BookmarkMove) => {
+		void edit((current) => moveBookmark(current, id, move, Date.now()));
+	};
+
 	const refresh = async () => {
 		setRefreshing(true);
 		try {
@@ -172,18 +187,18 @@ export function BookmarksScreen({
 				onPress={selection.stop}
 			/>
 		</>
+	) : reordering ? (
+		<IconButton
+			icon="checkmark"
+			label="Done reordering"
+			color={colors.accent}
+			onPress={() => {
+				setReordering(false);
+			}}
+		/>
 	) : (
 		<>
 			<PrivateSwitch />
-			{shown.length > 0 && (
-				<IconButton
-					icon="ellipsis-vertical"
-					label="More actions"
-					onPress={() => {
-						setMenuOpen(true);
-					}}
-				/>
-			)}
 			{shape.ios && !readOnly && (
 				<IconButton
 					icon="add"
@@ -218,12 +233,16 @@ export function BookmarksScreen({
 							title={
 								selection.active
 									? `${selection.ids.size} selected`
-									: 'Bookmarks'
+									: reordering
+										? `Order ${columnName ?? ''}`
+										: 'Bookmarks'
 							}
 							subtitle={
 								selection.active
 									? undefined
-									: `${store.bookmarks.length} saved${readOnly ? ', private, read only' : ''}`
+									: reordering
+										? 'Move bookmarks up or down, then tap Done'
+										: `${store.bookmarks.length} saved${readOnly ? ', private, read only' : ''}`
 							}
 							right={headerActions}
 						/>
@@ -299,36 +318,62 @@ export function BookmarksScreen({
 						</Empty>
 					)
 				}
-				renderItem={({item}) => (
-					<BookmarkRow
-						bookmark={item}
-						readOnly={readOnly}
-						selecting={selection.active}
-						checked={selection.ids.has(item.id)}
-						onToggle={() => {
-							selection.toggle(item.id);
-						}}
-						onSelect={() => {
-							selection.start(item.id);
-						}}
-						onEdit={() => {
-							setSheet({kind: 'edit', bookmark: item});
-						}}
-						onMove={() => {
-							selection.start(item.id);
-							setSheet({kind: 'move'});
-						}}
-						onDelete={() => {
-							remove(new Set([item.id]));
-						}}
-					/>
-				)}
+				renderItem={({item, index}) =>
+					reordering ? (
+						<ReorderRow
+							bookmark={item}
+							first={index === 0}
+							last={index === shown.length - 1}
+							onTop={() => {
+								reorder(item.id, 'top');
+							}}
+							onUp={() => {
+								reorder(item.id, 'up');
+							}}
+							onDown={() => {
+								reorder(item.id, 'down');
+							}}
+						/>
+					) : (
+						<BookmarkRow
+							bookmark={item}
+							readOnly={readOnly}
+							selecting={selection.active}
+							checked={selection.ids.has(item.id)}
+							onToggle={() => {
+								selection.toggle(item.id);
+							}}
+							onSelect={() => {
+								selection.start(item.id);
+							}}
+							onEdit={() => {
+								setSheet({kind: 'edit', bookmark: item});
+							}}
+							onMove={() => {
+								selection.start(item.id);
+								setSheet({kind: 'move'});
+							}}
+							onDelete={() => {
+								remove(new Set([item.id]));
+							}}
+						/>
+					)
+				}
 				onRefresh={() => {
 					void refresh();
 				}}
 			/>
-			{!selection.active && !shape.ios && !readOnly && (
+			{!selection.active && !reordering && !shape.ios && !readOnly && (
 				<AddButton bottom={space} onPress={onAdd} />
+			)}
+			{!selection.active && !reordering && (
+				<MenuButton
+					bottom={space}
+					right={shape.ios || readOnly ? 16 : 16 + 56 + 12}
+					onPress={() => {
+						setMenuOpen(true);
+					}}
+				/>
 			)}
 			{selection.active && (
 				<SelectionBar
@@ -377,6 +422,26 @@ export function BookmarksScreen({
 					...(readOnly
 						? []
 						: [
+								{
+									icon: 'list-outline' as const,
+									label: 'Manage columns',
+									hint: 'Open, put in order, or change any column',
+									onPress() {
+										setColumnsOpen(true);
+									},
+								},
+								...(!searching && shown.length > 1
+									? [
+											{
+												icon: 'swap-vertical-outline' as const,
+												label: 'Put bookmarks in order',
+												hint: `Move bookmarks up and down in ${columnName}`,
+												onPress() {
+													setReordering(true);
+												},
+											},
+										]
+									: []),
 								...(!searching && editableColumn
 									? [
 											{
@@ -401,6 +466,25 @@ export function BookmarksScreen({
 				]}
 				onClose={() => {
 					setMenuOpen(false);
+				}}
+			/>
+			<ColumnsSheet
+				visible={columnsOpen}
+				columns={columns}
+				selected={columnId}
+				onClose={() => {
+					setColumnsOpen(false);
+				}}
+				onPick={(id) => {
+					setPicked(id);
+				}}
+				onEdit={(id) => {
+					setColumnsOpen(false);
+					setSheet({kind: 'column', id});
+				}}
+				onNew={() => {
+					setColumnsOpen(false);
+					setSheet({kind: 'column'});
 				}}
 			/>
 			<EditSheet
