@@ -15,19 +15,22 @@ import {type Colors, useColors} from '../theme';
 import {setPreferences, usePreferences} from '../preferences';
 import {
 	Button,
-	Card,
+	Empty,
+	Field,
 	Header,
 	Icon,
 	type IconName,
 	Segmented,
-	Switch,
 } from '../ui';
 import {
 	BookmarkBehaviourCard,
+	Group,
 	SyncedSettingsCard,
 	Toggle,
 } from './behaviour-settings';
 import {ConnectSheet} from './connect-sheet';
+import {SettingsCard, SettingsQuery} from './settings-card';
+import {normalizeQuery, ROWS, SECTIONS, sectionVisible} from './settings-index';
 import {PrivateCard} from './private-settings';
 
 function describe(
@@ -70,6 +73,13 @@ export function SettingsScreen() {
 	const prefs = usePreferences();
 	useLibrary();
 	const [connecting, setConnecting] = useState(false);
+	const [query, setQuery] = useState('');
+	const needle = normalizeQuery(query);
+	const noMatch =
+		needle !== '' &&
+		Object.values(SECTIONS).every(
+			(section) => !sectionVisible(section, needle),
+		);
 	const [busy, setBusy] = useState<'sync' | 'disconnect'>();
 
 	const syncNow = async () => {
@@ -98,145 +108,154 @@ export function SettingsScreen() {
 			keyboardShouldPersistTaps="handled"
 		>
 			<Header title="Settings" />
-			<View style={styles.cards}>
-				<Card>
-					<Text
-						accessibilityRole="header"
-						style={[styles.heading, {color: colors.text}]}
-					>
-						Appearance
-					</Text>
-					<Text style={{color: colors.muted}}>
-						Make the app look like Android or like iOS. It follows your phone by
-						default.
-					</Text>
-					<Segmented
-						label="Style"
-						items={[
-							{id: 'material', name: 'Android', icon: 'logo-android'},
-							{id: 'ios', name: 'iOS', icon: 'logo-apple'},
-						]}
-						selected={prefs.look}
-						onSelect={(look) => {
-							setPreferences({look});
-						}}
-					/>
-					<View style={styles.switchRow}>
-						<View style={styles.switchText}>
-							<Text style={{color: colors.text, fontSize: 16}}>
-								Floating tab bar
-							</Text>
-							<Text style={{color: colors.muted}}>
-								A rounded bar above the content
-							</Text>
-						</View>
-						<Switch
-							label="Floating tab bar"
-							value={prefs.floatingBar}
-							onValueChange={(floatingBar) => {
-								setPreferences({floatingBar});
-							}}
-						/>
-					</View>
-				</Card>
-				<Card>
-					<Toggle
-						label="Sync app settings"
-						hint="Look, tab bar, tap and swipe actions follow your other phones when sync is on. Turning it on sends this phone's settings."
-						value={prefs.syncSettings}
-						onChange={(syncSettings) => {
-							setPreferences({syncSettings});
-						}}
-					/>
-				</Card>
-				<BookmarkBehaviourCard />
-				<SyncedSettingsCard />
-				<PrivateCard />
-				<Card>
-					<Text
-						accessibilityRole="header"
-						style={[styles.heading, {color: colors.text}]}
-					>
-						Sync
-					</Text>
-					{status.connected ? (
-						<>
-							<Text style={{color: colors.text}}>
-								Connected to {status.url}
-							</Text>
-							<View
-								accessible
-								accessibilityLiveRegion="polite"
-								style={styles.state}
-							>
-								<Icon name={state.icon} color={state.color} />
-								<Text style={[styles.stateText, {color: colors.text}]}>
-									{state.text}
-								</Text>
-							</View>
-							<Button
-								label="Sync now"
-								icon="sync"
-								loading={busy === 'sync'}
-								disabled={busy !== undefined}
-								onPress={() => void syncNow()}
-							/>
-							<Button
-								label="Disconnect"
-								kind="danger"
-								icon="log-out-outline"
-								loading={busy === 'disconnect'}
-								disabled={busy !== undefined}
-								onPress={() => void disconnect()}
-							/>
-						</>
-					) : (
-						<>
-							<Text style={{color: colors.muted}}>
-								Connect to the server you run yourself. Bookmarks and sessions
-								stay the same on every device you connect.
-							</Text>
-							<Button
-								label="Connect to a server"
-								icon="link"
-								onPress={() => {
-									setConnecting(true);
-								}}
-							/>
-						</>
-					)}
-				</Card>
-				{__DEV__ && (
-					<Card>
+			<View style={styles.search}>
+				<Field
+					label="Search settings"
+					icon="search"
+					value={query}
+					onChangeText={setQuery}
+					onClear={() => {
+						setQuery('');
+					}}
+				/>
+			</View>
+			<SettingsQuery value={needle}>
+				<View style={styles.cards}>
+					<SettingsCard section={SECTIONS.appearance}>
 						<Text
 							accessibilityRole="header"
 							style={[styles.heading, {color: colors.text}]}
 						>
-							Development
+							Appearance
 						</Text>
 						<Text style={{color: colors.muted}}>
-							{status.connected
-								? 'Sample data is off while a server is connected, so it cannot reach it.'
-								: isSampleData()
-									? 'The library holds sample data.'
-									: 'Load the same sample sessions and bookmarks as the extension dev build.'}
+							Make the app look like Android or like iOS. It follows your phone
+							by default.
 						</Text>
-						<Button
-							label="Load sample data"
-							icon="flask-outline"
-							disabled={status.connected}
-							onPress={() => void loadSampleData()}
+						<Group row={ROWS.style}>
+							<Segmented
+								label="Style"
+								items={[
+									{id: 'material', name: 'Android', icon: 'logo-android'},
+									{id: 'ios', name: 'iOS', icon: 'logo-apple'},
+								]}
+								selected={prefs.look}
+								onSelect={(look) => {
+									setPreferences({look});
+								}}
+							/>
+						</Group>
+						<Toggle
+							row={ROWS.floatingBar}
+							value={prefs.floatingBar}
+							onChange={(floatingBar) => {
+								setPreferences({floatingBar});
+							}}
 						/>
-						<Button
-							label="Clear library"
-							kind="danger"
-							icon="trash-outline"
-							disabled={status.connected}
-							onPress={() => void clearLibrary()}
+					</SettingsCard>
+					<SettingsCard section={SECTIONS.syncApp}>
+						<Toggle
+							row={ROWS.syncSettings}
+							value={prefs.syncSettings}
+							onChange={(syncSettings) => {
+								setPreferences({syncSettings});
+							}}
 						/>
-					</Card>
-				)}
-			</View>
+					</SettingsCard>
+					<BookmarkBehaviourCard />
+					<SyncedSettingsCard />
+					<PrivateCard />
+					<SettingsCard section={SECTIONS.sync}>
+						<Text
+							accessibilityRole="header"
+							style={[styles.heading, {color: colors.text}]}
+						>
+							Sync
+						</Text>
+						{status.connected ? (
+							<>
+								<Text style={{color: colors.text}}>
+									Connected to {status.url}
+								</Text>
+								<View
+									accessible
+									accessibilityLiveRegion="polite"
+									style={styles.state}
+								>
+									<Icon name={state.icon} color={state.color} />
+									<Text style={[styles.stateText, {color: colors.text}]}>
+										{state.text}
+									</Text>
+								</View>
+								<Button
+									label="Sync now"
+									icon="sync"
+									loading={busy === 'sync'}
+									disabled={busy !== undefined}
+									onPress={() => void syncNow()}
+								/>
+								<Button
+									label="Disconnect"
+									kind="danger"
+									icon="log-out-outline"
+									loading={busy === 'disconnect'}
+									disabled={busy !== undefined}
+									onPress={() => void disconnect()}
+								/>
+							</>
+						) : (
+							<>
+								<Text style={{color: colors.muted}}>
+									Connect to the server you run yourself. Bookmarks and sessions
+									stay the same on every device you connect.
+								</Text>
+								<Button
+									label="Connect to a server"
+									icon="link"
+									onPress={() => {
+										setConnecting(true);
+									}}
+								/>
+							</>
+						)}
+					</SettingsCard>
+					{__DEV__ && (
+						<SettingsCard section={SECTIONS.development}>
+							<Text
+								accessibilityRole="header"
+								style={[styles.heading, {color: colors.text}]}
+							>
+								Development
+							</Text>
+							<Text style={{color: colors.muted}}>
+								{status.connected
+									? 'Sample data is off while a server is connected, so it cannot reach it.'
+									: isSampleData()
+										? 'The library holds sample data.'
+										: 'Load the same sample sessions and bookmarks as the extension dev build.'}
+							</Text>
+							<Button
+								label="Load sample data"
+								icon="flask-outline"
+								disabled={status.connected}
+								onPress={() => void loadSampleData()}
+							/>
+							<Button
+								label="Clear library"
+								kind="danger"
+								icon="trash-outline"
+								disabled={status.connected}
+								onPress={() => void clearLibrary()}
+							/>
+						</SettingsCard>
+					)}
+					{noMatch && (
+						<Empty icon="search" title="No setting matches">
+							Try another word, such as swipe, sync, or private.
+						</Empty>
+					)}
+				</View>
+			</SettingsQuery>
 			<ConnectSheet
 				visible={connecting}
 				onClose={() => {
@@ -249,6 +268,7 @@ export function SettingsScreen() {
 
 const styles = StyleSheet.create({
 	screen: {paddingBottom: 24},
+	search: {paddingHorizontal: 16, paddingBottom: 12},
 	cards: {paddingHorizontal: 16, gap: 16},
 	heading: {fontSize: 18, fontWeight: '600'},
 	state: {flexDirection: 'row', alignItems: 'center', gap: 10},

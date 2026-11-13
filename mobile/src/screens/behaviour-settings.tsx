@@ -9,7 +9,9 @@ import {
 import {rowActionLook} from '../row-actions';
 import {useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
-import {Card, Chips, Segmented, Switch} from '../ui';
+import {Chips, Segmented, Switch} from '../ui';
+import {SettingsCard, useRowVisible} from './settings-card';
+import {type Row, ROWS, SECTIONS} from './settings-index';
 
 /**
 The swipe choices, each with the icon and color it has when it appears under a row.
@@ -35,17 +37,20 @@ function Heading({children}: {children: string}) {
 }
 
 export function Toggle({
-	label,
-	hint,
+	row: {label, hint},
 	value,
 	onChange,
 }: {
-	label: string;
-	hint?: string;
+	row: Row;
 	value: boolean;
 	onChange: (value: boolean) => void;
 }) {
 	const colors = useColors();
+	const visible = useRowVisible({label, hint});
+	if (!visible) {
+		return null;
+	}
+
 	return (
 		<View style={styles.switchRow}>
 			<View style={styles.switchText}>
@@ -57,11 +62,16 @@ export function Toggle({
 	);
 }
 
-function Group({label, children}: {label: string; children: React.ReactNode}) {
+export function Group({row, children}: {row: Row; children: React.ReactNode}) {
 	const colors = useColors();
+	const visible = useRowVisible(row);
+	if (!visible) {
+		return null;
+	}
+
 	return (
 		<View style={styles.group}>
-			<Text style={{color: colors.muted}}>{label}</Text>
+			<Text style={{color: colors.muted}}>{row.label}</Text>
 			{children}
 		</View>
 	);
@@ -75,13 +85,13 @@ export function BookmarkBehaviourCard() {
 	const prefs = usePreferences();
 	const actions = useActionChoices();
 	return (
-		<Card>
+		<SettingsCard section={SECTIONS.bookmarks}>
 			<Heading>Bookmarks</Heading>
 			<Text style={{color: colors.muted}}>
 				Choose what a tap and a swipe do. Screen reader users find every action
 				in the actions menu of a bookmark.
 			</Text>
-			<Group label="Tap a bookmark">
+			<Group row={ROWS.tap}>
 				<Segmented
 					label="Tap a bookmark"
 					items={[
@@ -94,7 +104,7 @@ export function BookmarkBehaviourCard() {
 					}}
 				/>
 			</Group>
-			<Group label="Swipe right">
+			<Group row={ROWS.swipeRight}>
 				<Chips
 					items={actions}
 					selected={prefs.swipeRight}
@@ -103,7 +113,7 @@ export function BookmarkBehaviourCard() {
 					}}
 				/>
 			</Group>
-			<Group label="Swipe left">
+			<Group row={ROWS.swipeLeft}>
 				<Chips
 					items={actions}
 					selected={prefs.swipeLeft}
@@ -113,14 +123,13 @@ export function BookmarkBehaviourCard() {
 				/>
 			</Group>
 			<Toggle
-				label="Clean links when saving"
-				hint="Remove tracking parameters such as utm_source"
+				row={ROWS.cleanOnSave}
 				value={prefs.cleanOnSave}
 				onChange={(cleanOnSave) => {
 					setPreferences({cleanOnSave});
 				}}
 			/>
-		</Card>
+		</SettingsCard>
 	);
 }
 
@@ -131,28 +140,26 @@ export function SyncedSettingsCard() {
 	const colors = useColors();
 	const settings = useLinkSettings(true);
 	return (
-		<Card>
+		<SettingsCard section={SECTIONS.extension}>
 			<Heading>Same as your extension</Heading>
 			<Text style={{color: colors.muted}}>
 				These sync with the browser extension.
 			</Text>
 			<Toggle
-				label="Clean page titles"
-				hint="Remove counters such as (3) from titles"
+				row={ROWS.cleanTitles}
 				value={settings.cleanTitles}
 				onChange={(value) => {
 					void setSyncedSetting('cleanTitles', value);
 				}}
 			/>
 			<Toggle
-				label="Remove tracking parameters"
-				hint="When opening links. Saved links stay as they are"
+				row={ROWS.removeTracking}
 				value={settings.removeTrackingParameters}
 				onChange={(value) => {
 					void setSyncedSetting('removeTrackingParameters', value);
 				}}
 			/>
-			<Group label="Show under a title">
+			<Group row={ROWS.showUnder}>
 				<Segmented
 					label="Show under a title"
 					items={[
@@ -168,30 +175,27 @@ export function SyncedSettingsCard() {
 				/>
 			</Group>
 			<Toggle
-				label="Shorten addresses"
-				hint="Hide https:// and www."
+				row={ROWS.shortenAddresses}
 				value={settings.simplifyUrls}
 				onChange={(value) => {
 					void setSyncedSetting('simplifyUrls', value);
 				}}
 			/>
 			<Toggle
-				label="Mark links that are not secure"
-				hint="An open lock next to http:// links"
+				row={ROWS.markInsecure}
 				value={settings.markInsecureLinks}
 				onChange={(value) => {
 					void setSyncedSetting('markInsecureLinks', value);
 				}}
 			/>
 			<Toggle
-				label="Mark local links too"
-				hint="Addresses on this device or home network"
+				row={ROWS.markLocal}
 				value={settings.markLocalLinks}
 				onChange={(value) => {
 					void setSyncedSetting('markLocalLinks', value);
 				}}
 			/>
-			<Group label="Bookmark spacing">
+			<Group row={ROWS.spacing}>
 				<Segmented
 					label="Bookmark spacing"
 					items={[
@@ -208,7 +212,7 @@ export function SyncedSettingsCard() {
 					}}
 				/>
 			</Group>
-			<Group label="Sort sessions">
+			<Group row={ROWS.sortSessions}>
 				<Chips
 					items={[
 						{id: 'newest', name: 'Newest', glyph: 'arrow-down-outline'},
@@ -227,7 +231,7 @@ export function SyncedSettingsCard() {
 					}}
 				/>
 			</Group>
-		</Card>
+		</SettingsCard>
 	);
 }
 

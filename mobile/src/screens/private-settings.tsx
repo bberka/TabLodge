@@ -1,7 +1,9 @@
 import {Alert, StyleSheet, Text} from 'react-native';
 import {lockPrivate, usePrivateStatus} from '../private-library';
 import {useColors} from '../theme';
-import {Button, Card} from '../ui';
+import {Button} from '../ui';
+import {SettingsCard} from './settings-card';
+import {SECTIONS} from './settings-index';
 
 /**
 What this phone keeps of the private windows' library, and a way to forget it.
@@ -10,7 +12,7 @@ export function PrivateCard() {
 	const colors = useColors();
 	const status = usePrivateStatus();
 	return (
-		<Card>
+		<SettingsCard section={SECTIONS.private}>
 			<Text
 				accessibilityRole="header"
 				style={[styles.heading, {color: colors.text}]}
@@ -46,7 +48,7 @@ export function PrivateCard() {
 					}}
 				/>
 			)}
-		</Card>
+		</SettingsCard>
 	);
 }
 
