@@ -4,7 +4,7 @@ import {createApi} from '../server/src/api';
 import {addBookmark, emptyStore, removeBookmarks} from '../mobile/src/library';
 import type {Session, Store} from '../src/app/types';
 import {ChangeLog} from '../src/shared/sync/change-log';
-import {createSyncClient} from '../src/shared/sync/client';
+import {createSyncClient, type SyncSocket} from '../src/shared/sync/client';
 
 const TOKEN = 'mobile-test-token-0123456789-abcdefghijk';
 const URL_BASE = 'https://sync.example.test';
@@ -19,6 +19,7 @@ function makeDevice(
 	name: string,
 	app: ReturnType<typeof createApi>,
 	store: Store,
+	openSocket?: (url: string) => SyncSocket,
 ) {
 	const storage = new Map<string, unknown>();
 	let queue = Promise.resolve();
@@ -36,6 +37,7 @@ function makeDevice(
 				}
 			},
 			fetch: async (url, init) => app.request(url, init),
+			openSocket,
 			mutate<T>(work: () => Promise<T>) {
 				const result = queue.then(work);
 				queue = result.then(
@@ -177,4 +179,50 @@ test('the app settings travel between two phones and the extension keeps them', 
 	await second.client.syncNow();
 	await first.client.syncNow();
 	assert.equal(first.store.settings.mobileApp.swipeLeft, 'edit');
+});
+
+class FakeSocket implements SyncSocket {
+	closed = false;
+	send() {}
+	close() {
+		this.closed = true;
+	}
+
+	addEventListener() {}
+}
+
+test('pausing sends a waiting change and closes the live socket, and waking opens it again', async () => {
+	const log = new ChangeLog();
+	const app = createApi({token: TOKEN, log: () => log});
+	const sockets: FakeSocket[] = [];
+	const phone = makeDevice('phone', app, emptyStore(NOW), () => {
+		const socket = new FakeSocket();
+		sockets.push(socket);
+		return socket;
+	});
+	const desktop = makeDevice('desktop', app, emptyStore(NOW));
+	await phone.client.connect(URL_BASE, TOKEN);
+	await desktop.client.connect(URL_BASE, TOKEN);
+	assert.equal(sockets.length, 1);
+	assert.equal(sockets[0]?.closed, false);
+
+	// A change made just before the app goes to the background is not left waiting for the delay.
+	phone.store = addBookmark(
+		emptyStore(NOW),
+		{url: 'https://example.com/late', title: 'Late', columnId: 'c1'},
+		'late',
+		NOW + 5,
+	);
+	phone.client.localChanged();
+	await phone.client.pause();
+	assert.equal(sockets[0]?.closed, true);
+	await desktop.client.syncNow();
+	assert.deepEqual(
+		desktop.store.bookmarks.map((bookmark) => bookmark.id),
+		['late'],
+	);
+
+	await phone.client.wake();
+	assert.equal(sockets.length, 2);
+	assert.equal(sockets[1]?.closed, false);
 });

@@ -12,9 +12,9 @@ import {
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/bottom-sheet';
 import {extractUrls, splitShared} from './src/library';
-import {startLibrary, syncClient} from './src/library-store';
+import {pauseSync, startLibrary, wakeSync} from './src/library-store';
 import {startPreferencesSync} from './src/preferences-sync';
-import {startPrivate} from './src/private-library';
+import {pausePrivate, startPrivate, wakePrivate} from './src/private-library';
 import {loadPreferences} from './src/preferences';
 import {BookmarksScreen} from './src/screens/bookmarks';
 import {SaveLinkForm} from './src/screens/save-link';
@@ -79,8 +79,13 @@ function Main() {
 			.then(startPrivate)
 			.then(startPreferencesSync);
 		const subscription = AppState.addEventListener('change', (state) => {
+			// Behind other apps, the live connection and its timers stop; in front they resume and catch up.
 			if (state === 'active') {
-				void syncClient.wake().catch(() => undefined);
+				void wakeSync();
+				void wakePrivate();
+			} else if (state === 'background') {
+				void pauseSync();
+				void pausePrivate();
 			}
 		});
 		return () => {

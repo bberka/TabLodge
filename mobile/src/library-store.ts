@@ -197,6 +197,20 @@ export const useSyncStatus = (): SyncStatus =>
 	useSyncExternalStore(subscribeTo(statusListeners), () => syncStatus);
 
 /**
+For the app going to the background: sends what is waiting and closes the live connection, so nothing keeps the
+radio awake. `wakeSync` reopens it when the app returns.
+*/
+export async function pauseSync(): Promise<void> {
+	await syncClient.pause().catch(() => undefined);
+	await refreshStatus();
+}
+
+export async function wakeSync(): Promise<void> {
+	await syncClient.wake().catch(() => undefined);
+	await refreshStatus();
+}
+
+/**
 Runs `listener` whenever the regular library changes, including what sync brings in.
 */
 export const subscribeLibrary = core.subscribe;

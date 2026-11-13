@@ -1,3 +1,4 @@
+import {useCallback} from 'react';
 import {useColorScheme} from 'react-native';
 import {ICON_IDS, type IconId} from '../../src/app/icon-ids';
 import {avatarColor} from './theme';
@@ -148,9 +149,12 @@ Gives a column or folder chip its icon and a steady color taken from its name, s
 */
 export function useChipLook() {
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-	return <Item extends {icon?: string; name: string}>(item: Item) => ({
-		...item,
-		glyph: columnGlyph(item.icon),
-		tint: avatarColor(item.name, scheme),
-	});
+	return useCallback(
+		<Item extends {icon?: string; name: string}>(item: Item) => ({
+			...item,
+			glyph: columnGlyph(item.icon),
+			tint: avatarColor(item.name, scheme),
+		}),
+		[scheme],
+	);
 }

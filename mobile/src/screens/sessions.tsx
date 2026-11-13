@@ -1,8 +1,8 @@
-import {useMemo, useState} from 'react';
+import {memo, useCallback, useMemo, useState} from 'react';
 import {
+	FlatList,
 	Linking,
 	Pressable,
-	ScrollView,
 	StyleSheet,
 	Text,
 	View,
@@ -69,7 +69,7 @@ function TabPreview({session}: {session: Session}) {
 	);
 }
 
-function SessionCard({
+function SessionCardView({
 	session,
 	folderName,
 	tint,
@@ -80,7 +80,7 @@ function SessionCard({
 	folderName: string;
 	tint: string;
 	expanded: boolean;
-	onToggle: () => void;
+	onToggle: (id: string) => void;
 }) {
 	const colors = useColors();
 	const links = useLinkSettings();
@@ -106,7 +106,9 @@ function SessionCard({
 					onPressOut={() => {
 						setPressing(false);
 					}}
-					onPress={onToggle}
+					onPress={() => {
+						onToggle(session.id);
+					}}
 				>
 					<View style={[styles.tile, {backgroundColor: soften(tint)}]}>
 						<Icon name="albums" size={22} color={tint} />
@@ -182,6 +184,9 @@ function SessionCard({
 	);
 }
 
+// Cards re-draw only when their own session, folder, or expanded state changes, not on every keystroke in the search.
+const SessionCard = memo(SessionCardView);
+
 /**
 Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its
 own tabs, so there is no capture here.
@@ -197,7 +202,7 @@ export function SessionsScreen() {
 	const [query, setQuery] = useState('');
 	const [open, setOpen] = useState<string | undefined>();
 
-	const folders = sessionFolders(store);
+	const folders = useMemo(() => sessionFolders(store), [store]);
 	const folderId = folders.some((folder) => folder.id === picked)
 		? picked
 		: ALL_SESSIONS_ID;
@@ -206,10 +211,41 @@ export function SessionsScreen() {
 		const inFolder = sessionsIn(store, folderId, links.sessionSort);
 		return needle ? inFolder.filter((s) => matches(s, needle)) : inFolder;
 	}, [store, folderId, links.sessionSort, needle]);
-	const folderOf = useMemo(
-		() => new Map(store.folders.map((folder) => [folder.id, folder.name])),
-		[store.folders],
+	const look = useCallback(
+		(folder: {id: string; name: string; icon?: string; count: number}) => {
+			if (folder.id === ALL_SESSIONS_ID) {
+				return {
+					...folder,
+					glyph: 'albums-outline' as const,
+					tint: colors.accent,
+				};
+			}
+
+			return folder.name.toLocaleLowerCase() === 'archived'
+				? {...folder, glyph: 'archive-outline' as const, tint: colors.muted}
+				: {...chipLook(folder), glyph: columnGlyph(folder.icon)};
+		},
+		[chipLook, colors.accent, colors.muted],
 	);
+	// The name and color of each session's folder, worked out once per library change, not per card per render.
+	const folderInfo = useMemo(
+		() =>
+			new Map(
+				store.folders.map((folder) => [
+					folder.id,
+					{name: folder.name, tint: look({...folder, count: 0}).tint},
+				]),
+			),
+		[store.folders, look],
+	);
+	const otherTint = useMemo(
+		() => look({id: 'other', name: 'Other', count: 0}).tint,
+		[look],
+	);
+	const toggle = useCallback((id: string) => {
+		setOpen((current) => (current === id ? undefined : id));
+	}, []);
+
 	if (store.groups.length === 0) {
 		return (
 			<View style={styles.screen}>
@@ -223,78 +259,80 @@ export function SessionsScreen() {
 		);
 	}
 
-	const look = (folder: (typeof folders)[number]) => {
-		if (folder.id === ALL_SESSIONS_ID) {
-			return {...folder, glyph: 'albums-outline' as const, tint: colors.accent};
-		}
-
-		return folder.name.toLocaleLowerCase() === 'archived'
-			? {...folder, glyph: 'archive-outline' as const, tint: colors.muted}
-			: {...chipLook(folder), glyph: columnGlyph(folder.icon)};
-	};
-
-	const tintOf = (session: Session) =>
-		look({
-			id: session.folderId,
-			name: folderOf.get(session.folderId) ?? 'Other',
-			count: 0,
-		}).tint;
 	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library, read only' : 'saved'}`;
 	return (
-		<ScrollView
+		<FlatList
+			removeClippedSubviews
+			data={shown}
+			extraData={open}
+			keyExtractor={(session) => session.id}
 			contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
 			keyboardShouldPersistTaps="handled"
-		>
-			<Header title="Sessions" subtitle={subtitle} right={<PrivateSwitch />} />
-			<View style={styles.pad}>
-				<Field
-					label="Search sessions"
-					icon="search"
-					value={query}
-					onChangeText={setQuery}
-					onClear={() => {
-						setQuery('');
-					}}
-				/>
-				<Chips
-					items={folders.map((folder) => look(folder))}
-					selected={folderId}
-					onSelect={setPicked}
-				/>
-			</View>
-			<View style={styles.cards}>
-				{shown.length === 0 && (
-					<Empty
-						icon={needle ? 'search' : 'albums-outline'}
-						title={needle ? 'No match' : 'Nothing here'}
-					>
-						{needle
-							? 'No session or tab matches that search.'
-							: 'This folder has no sessions.'}
-					</Empty>
-				)}
-				{shown.map((session) => (
-					<SessionCard
-						key={session.id}
-						session={session}
-						folderName={folderOf.get(session.folderId) ?? 'Other'}
-						tint={tintOf(session)}
-						expanded={open === session.id}
-						onToggle={() => {
-							setOpen(open === session.id ? undefined : session.id);
-						}}
+			// Long libraries draw only what is on screen, and a little around it.
+			initialNumToRender={6}
+			windowSize={7}
+			maxToRenderPerBatch={6}
+			ListHeaderComponent={
+				<View>
+					<Header
+						title="Sessions"
+						subtitle={subtitle}
+						right={<PrivateSwitch />}
 					/>
-				))}
-			</View>
-		</ScrollView>
+					<View style={styles.pad}>
+						<Field
+							label="Search sessions"
+							icon="search"
+							value={query}
+							onChangeText={setQuery}
+							onClear={() => {
+								setQuery('');
+							}}
+						/>
+						<Chips
+							items={folders.map((folder) => look(folder))}
+							selected={folderId}
+							onSelect={setPicked}
+						/>
+					</View>
+				</View>
+			}
+			ListEmptyComponent={
+				<Empty
+					icon={needle ? 'search' : 'albums-outline'}
+					title={needle ? 'No match' : 'Nothing here'}
+				>
+					{needle
+						? 'No session or tab matches that search.'
+						: 'This folder has no sessions.'}
+				</Empty>
+			}
+			ItemSeparatorComponent={Gap}
+			renderItem={({item}) => (
+				<View style={styles.cardRow}>
+					<SessionCard
+						session={item}
+						folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
+						tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
+						expanded={open === item.id}
+						onToggle={toggle}
+					/>
+				</View>
+			)}
+		/>
 	);
+}
+
+function Gap() {
+	return <View style={styles.gap} />;
 }
 
 const styles = StyleSheet.create({
 	screen: {flex: 1},
 	list: {paddingBottom: 24, gap: 8},
 	pad: {paddingHorizontal: 16, gap: 12},
-	cards: {paddingHorizontal: 16, gap: 12, paddingTop: 4},
+	cardRow: {paddingHorizontal: 16},
+	gap: {height: 12},
 	head: {gap: 4, paddingBottom: 12},
 	headMain: {
 		flexDirection: 'row',

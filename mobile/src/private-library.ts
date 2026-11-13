@@ -308,6 +308,18 @@ export async function syncPrivate(): Promise<void> {
 	await refreshPrivateStatus();
 }
 
+/**
+Closes the private library's live connection while the app is in the background, and opens it again in front.
+*/
+export async function pausePrivate(): Promise<void> {
+	await client?.pause().catch(() => undefined);
+}
+
+export async function wakePrivate(): Promise<void> {
+	await client?.wake().catch(() => undefined);
+	await refreshPrivateStatus();
+}
+
 export const isPrivateOpen = (): boolean => enabled;
 
 export const usePrivateStore = () =>

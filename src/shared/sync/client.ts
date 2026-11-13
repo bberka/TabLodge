@@ -313,6 +313,8 @@ export function createSyncClient(host: SyncHost) {
 	let again = false;
 	let applying = false;
 	let localTimer: ReturnType<typeof setTimeout> | undefined;
+	// A local change is waiting for its delayed round.
+	let localPending = false;
 	let socket: SyncSocket | undefined;
 	let pingTimer: ReturnType<typeof setInterval> | undefined;
 	let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -788,6 +790,7 @@ export function createSyncClient(host: SyncHost) {
 		stop() {
 			config = undefined;
 			clearTimeout(localTimer);
+			localPending = false;
 			closeSocket();
 		},
 
@@ -823,9 +826,32 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			clearTimeout(localTimer);
+			localPending = true;
 			localTimer = setTimeout(() => {
+				localPending = false;
 				void syncNow();
 			}, LOCAL_CHANGE_DELAY_MS);
+		},
+
+		/**
+		For a device that goes to the background: sends a change that was still waiting, then closes the live socket and
+		its timers so nothing wakes the radio. The server stays configured; `wake` starts it again.
+		*/
+		async pause() {
+			await ready;
+			if (!config) {
+				return;
+			}
+
+			clearTimeout(localTimer);
+			closeSocket();
+			void setStatus({live: false});
+			if (!localPending) {
+				return;
+			}
+
+			localPending = false;
+			await syncNow();
 		},
 
 		/**

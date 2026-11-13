@@ -177,6 +177,7 @@ export function BookmarksScreen({
 	return (
 		<View style={styles.screen}>
 			<FlatList
+				removeClippedSubviews
 				data={shown}
 				extraData={selection.ids}
 				keyExtractor={(bookmark) => bookmark.id}
@@ -186,6 +187,10 @@ export function BookmarksScreen({
 					{paddingBottom: (selection.active ? 72 + insets.bottom : space) + 72},
 				]}
 				keyboardShouldPersistTaps="handled"
+				// Long columns draw only what is on screen, and a little around it.
+				initialNumToRender={14}
+				windowSize={9}
+				maxToRenderPerBatch={10}
 				ListHeaderComponent={
 					<View style={styles.head}>
 						<Header
