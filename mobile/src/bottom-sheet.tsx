@@ -30,12 +30,58 @@ export function BottomSheet({
 	label: string;
 	children: ReactNode;
 }) {
+	// The drawer is only mounted while it is open or sliding away, so every opening starts from a clean state: nothing
+	// measured, nothing animated, and so nothing left over from the last time to flash on the first frame.
+	const [mounted, setMounted] = useState(visible);
+	if (visible && !mounted) {
+		setMounted(true);
+	}
+
+	if (!mounted) {
+		return null;
+	}
+
+	return (
+		<Modal
+			transparent
+			statusBarTranslucent
+			navigationBarTranslucent
+			visible
+			animationType="none"
+			onRequestClose={onClose}
+		>
+			<Sheet
+				open={visible}
+				label={label}
+				onClose={onClose}
+				onGone={() => {
+					setMounted(false);
+				}}
+			>
+				{children}
+			</Sheet>
+		</Modal>
+	);
+}
+
+function Sheet({
+	open,
+	onClose,
+	onGone,
+	label,
+	children,
+}: {
+	open: boolean;
+	onClose: () => void;
+	onGone: () => void;
+	label: string;
+	children: ReactNode;
+}) {
 	const colors = useColors();
 	const shape = useShape();
 	const insets = useSafeAreaInsets();
-	const [mounted, setMounted] = useState(visible);
 	const [height, setHeight] = useState(0);
-	// 0 is open; `height` is fully below the screen.
+	// 0 is open; `height` is fully below the screen. It starts far below, and the sheet is hidden until measured.
 	const slide = useRef(new Animated.Value(1000)).current;
 	const scrim = useRef(new Animated.Value(0)).current;
 	const lift = useRef(new Animated.Value(0)).current;
@@ -43,19 +89,23 @@ export function BottomSheet({
 	heightRef.current = height;
 	const closeRef = useRef(onClose);
 	closeRef.current = onClose;
+	const goneRef = useRef(onGone);
+	goneRef.current = onGone;
+	const openedRef = useRef(false);
 
+	// The open animation runs once. The content can change size a moment after it is first measured (icons loading, a
+	// scroll area settling), and restarting the slide for each of those made the drawer flicker.
 	useEffect(() => {
-		if (visible) {
-			setMounted(true);
-		}
-	}, [visible]);
-
-	useEffect(() => {
-		if (!mounted) {
+		if (height === 0) {
 			return;
 		}
 
-		if (visible && height > 0) {
+		if (open) {
+			if (openedRef.current) {
+				return;
+			}
+
+			openedRef.current = true;
 			Animated.parallel([
 				Animated.timing(slide, {
 					toValue: 0,
@@ -69,26 +119,35 @@ export function BottomSheet({
 					useNativeDriver: true,
 				}),
 			]).start();
-		} else if (!visible && height > 0) {
-			Animated.parallel([
-				Animated.timing(slide, {
-					toValue: height,
-					duration: 200,
-					easing: Easing.in(Easing.cubic),
-					useNativeDriver: true,
-				}),
-				Animated.timing(scrim, {
-					toValue: 0,
-					duration: 200,
-					useNativeDriver: true,
-				}),
-			]).start(({finished}) => {
-				if (finished) {
-					setMounted(false);
-				}
-			});
+			return;
 		}
-	}, [visible, mounted, height, slide, scrim]);
+
+		openedRef.current = false;
+		Animated.parallel([
+			Animated.timing(slide, {
+				toValue: height,
+				duration: 200,
+				easing: Easing.in(Easing.cubic),
+				useNativeDriver: true,
+			}),
+			Animated.timing(scrim, {
+				toValue: 0,
+				duration: 200,
+				useNativeDriver: true,
+			}),
+		]).start(({finished}) => {
+			if (finished) {
+				goneRef.current();
+			}
+		});
+	}, [open, height, slide, scrim]);
+
+	// A drawer closed before it was ever measured has nothing to animate away.
+	useEffect(() => {
+		if (!open && heightRef.current === 0) {
+			goneRef.current();
+		}
+	}, [open]);
 
 	// The keyboard lifts the sheet, since a Modal is not resized by the window.
 	useEffect(() => {
@@ -132,65 +191,57 @@ export function BottomSheet({
 	).current;
 
 	return (
-		<Modal
-			transparent
-			statusBarTranslucent
-			navigationBarTranslucent
-			visible={mounted}
-			animationType="none"
-			onRequestClose={onClose}
-		>
-			<View style={styles.root}>
-				<Animated.View
-					style={[styles.scrim, {opacity: scrim}]}
-					importantForAccessibility="no"
-				>
-					<Pressable
-						accessibilityLabel="Close"
-						accessibilityRole="button"
-						style={StyleSheet.absoluteFill}
-						onPress={onClose}
-					/>
-				</Animated.View>
-				<Animated.View
-					accessibilityViewIsModal
-					accessibilityLabel={label}
-					style={[
-						styles.sheet,
-						{
-							backgroundColor: colors.surface,
-							borderTopLeftRadius: shape.sheetRadius,
-							borderTopRightRadius: shape.sheetRadius,
-							paddingBottom: Math.max(insets.bottom, 16),
-							// Hidden until measured, so it does not flash at the wrong place.
-							opacity: height > 0 ? 1 : 0,
-							transform: [{translateY: Animated.subtract(slide, lift)}],
-						},
-					]}
-					onLayout={(event) => {
-						const next = event.nativeEvent.layout.height;
-						if (!(next > 0 && Math.abs(next - heightRef.current) > 0.5)) {
-							return;
-						}
+		<View style={styles.root}>
+			<Animated.View
+				style={[styles.scrim, {opacity: scrim}]}
+				importantForAccessibility="no"
+			>
+				<Pressable
+					accessibilityLabel="Close"
+					accessibilityRole="button"
+					style={StyleSheet.absoluteFill}
+					onPress={onClose}
+				/>
+			</Animated.View>
+			<Animated.View
+				accessibilityViewIsModal
+				accessibilityLabel={label}
+				style={[
+					styles.sheet,
+					{
+						backgroundColor: colors.surface,
+						borderTopLeftRadius: shape.sheetRadius,
+						borderTopRightRadius: shape.sheetRadius,
+						paddingBottom: Math.max(insets.bottom, 16),
+						// Hidden until measured, so it does not flash at the wrong place.
+						opacity: height > 0 ? 1 : 0,
+						transform: [{translateY: Animated.subtract(slide, lift)}],
+					},
+				]}
+				onLayout={(event) => {
+					const next = event.nativeEvent.layout.height;
+					if (!(next > 0 && Math.abs(next - heightRef.current) > 0.5)) {
+						return;
+					}
 
-						if (heightRef.current === 0) {
-							slide.setValue(next);
-						}
+					// The first measurement places the sheet just below the screen before it is shown.
+					if (heightRef.current === 0) {
+						slide.setValue(next);
+					}
 
-						setHeight(next);
-					}}
+					setHeight(next);
+				}}
+			>
+				<View
+					{...drag.panHandlers}
+					accessible={false}
+					style={styles.handleArea}
 				>
-					<View
-						{...drag.panHandlers}
-						accessible={false}
-						style={styles.handleArea}
-					>
-						<View style={[styles.handle, {backgroundColor: colors.border}]} />
-					</View>
-					{children}
-				</Animated.View>
-			</View>
-		</Modal>
+					<View style={[styles.handle, {backgroundColor: colors.border}]} />
+				</View>
+				{children}
+			</Animated.View>
+		</View>
 	);
 }
 

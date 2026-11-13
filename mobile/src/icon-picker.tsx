@@ -1,12 +1,23 @@
-import {Pressable, ScrollView, StyleSheet, View} from 'react-native';
+import {memo} from 'react';
+import {FlatList, Pressable, StyleSheet, View} from 'react-native';
 import {COLUMN_ICONS} from './column-icons';
 import {TARGET, useColors} from './theme';
 import {Icon} from './ui';
 
+const COLUMNS = 7;
+const HEIGHT = 188;
+
+// The icons in rows, so the list can draw the first few rows only and the rest as they are scrolled to. Drawing about a
+// hundred buttons at once held up the drawer that shows them.
+const ROWS = Array.from(
+	{length: Math.ceil(COLUMN_ICONS.length / COLUMNS)},
+	(_, row) => COLUMN_ICONS.slice(row * COLUMNS, (row + 1) * COLUMNS),
+);
+
 /**
 A grid of the icons a bookmark column can have. Choosing the selected one again clears it.
 */
-export function IconPicker({
+function IconPickerView({
 	selected,
 	onSelect,
 }: {
@@ -15,53 +26,70 @@ export function IconPicker({
 }) {
 	const colors = useColors();
 	return (
-		<ScrollView
+		<FlatList
 			nestedScrollEnabled
-			style={[styles.scroll, {borderColor: colors.border}]}
+			accessibilityRole="radiogroup"
+			data={ROWS}
+			extraData={selected}
+			keyExtractor={(row) => row[0]?.id ?? ''}
+			style={[styles.list, {borderColor: colors.border}]}
+			contentContainerStyle={styles.content}
 			keyboardShouldPersistTaps="handled"
-		>
-			<View accessibilityRole="radiogroup" style={styles.grid}>
-				{COLUMN_ICONS.map(({id, glyph}) => {
-					const on = id === selected;
-					return (
-						<Pressable
-							key={id}
-							accessibilityRole="radio"
-							accessibilityLabel={id.replaceAll('-', ' ')}
-							accessibilityState={{selected: on}}
-							style={({pressed}) => [
-								styles.cell,
-								{
-									backgroundColor: on
-										? colors.accentSoft
-										: pressed
-											? colors.pressed
-											: 'transparent',
-									borderColor: on ? colors.accent : 'transparent',
-								},
-							]}
-							onPress={() => {
-								onSelect(on ? '' : id);
-							}}
-						>
-							<Icon
-								name={glyph}
-								size={22}
-								color={on ? colors.accent : colors.text}
-							/>
-						</Pressable>
-					);
-				})}
-			</View>
-		</ScrollView>
+			initialNumToRender={3}
+			maxToRenderPerBatch={3}
+			windowSize={5}
+			renderItem={({item: row}) => (
+				<View style={styles.row}>
+					{row.map(({id, glyph}) => {
+						const on = id === selected;
+						return (
+							<Pressable
+								key={id}
+								accessibilityRole="radio"
+								accessibilityLabel={id.replaceAll('-', ' ')}
+								accessibilityState={{selected: on}}
+								style={({pressed}) => [
+									styles.cell,
+									{
+										backgroundColor: on
+											? colors.accentSoft
+											: pressed
+												? colors.pressed
+												: 'transparent',
+										borderColor: on ? colors.accent : 'transparent',
+									},
+								]}
+								onPress={() => {
+									onSelect(on ? '' : id);
+								}}
+							>
+								<Icon
+									name={glyph}
+									size={22}
+									color={on ? colors.accent : colors.text}
+								/>
+							</Pressable>
+						);
+					})}
+					{Array.from({length: COLUMNS - row.length}, (_, index) => (
+						<View key={`gap-${index}`} style={styles.cell} />
+					))}
+				</View>
+			)}
+		/>
 	);
 }
 
+// Typing in the name field must not draw the grid again.
+export const IconPicker = memo(IconPickerView);
+
 const styles = StyleSheet.create({
-	scroll: {maxHeight: 188, borderWidth: 1, borderRadius: 12},
-	grid: {flexDirection: 'row', flexWrap: 'wrap', padding: 4},
+	// A fixed height, so the drawer is the same size before the rows are drawn and after.
+	list: {height: HEIGHT, flexGrow: 0, borderWidth: 1, borderRadius: 12},
+	content: {padding: 4},
+	row: {flexDirection: 'row'},
 	cell: {
-		width: TARGET,
+		flex: 1,
 		height: TARGET,
 		alignItems: 'center',
 		justifyContent: 'center',
