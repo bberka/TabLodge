@@ -28,7 +28,6 @@ import {
 	SyncedSettingsCard,
 	Toggle,
 } from './behaviour-settings';
-import {ConnectSheet} from './connect-sheet';
 import {SettingsCard, SettingsQuery} from './settings-card';
 import {normalizeQuery, ROWS, SECTIONS, sectionVisible} from './settings-index';
 import {PrivateCard} from './private-settings';
@@ -66,13 +65,12 @@ function describe(
 	}
 }
 
-export function SettingsScreen() {
+export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const colors = useColors();
 	const space = useBarSpace();
 	const status = useSyncStatus();
 	const prefs = usePreferences();
 	useLibrary();
-	const [connecting, setConnecting] = useState(false);
 	const [query, setQuery] = useState('');
 	const needle = normalizeQuery(query);
 	const noMatch =
@@ -121,50 +119,6 @@ export function SettingsScreen() {
 			</View>
 			<SettingsQuery value={needle}>
 				<View style={styles.cards}>
-					<SettingsCard section={SECTIONS.appearance}>
-						<Text
-							accessibilityRole="header"
-							style={[styles.heading, {color: colors.text}]}
-						>
-							Appearance
-						</Text>
-						<Text style={{color: colors.muted}}>
-							Make the app look like Android or like iOS. It follows your phone
-							by default.
-						</Text>
-						<Group row={ROWS.style}>
-							<Segmented
-								label="Style"
-								items={[
-									{id: 'material', name: 'Android', icon: 'logo-android'},
-									{id: 'ios', name: 'iOS', icon: 'logo-apple'},
-								]}
-								selected={prefs.look}
-								onSelect={(look) => {
-									setPreferences({look});
-								}}
-							/>
-						</Group>
-						<Toggle
-							row={ROWS.floatingBar}
-							value={prefs.floatingBar}
-							onChange={(floatingBar) => {
-								setPreferences({floatingBar});
-							}}
-						/>
-					</SettingsCard>
-					<SettingsCard section={SECTIONS.syncApp}>
-						<Toggle
-							row={ROWS.syncSettings}
-							value={prefs.syncSettings}
-							onChange={(syncSettings) => {
-								setPreferences({syncSettings});
-							}}
-						/>
-					</SettingsCard>
-					<BookmarkBehaviourCard />
-					<SyncedSettingsCard />
-					<PrivateCard />
 					<SettingsCard section={SECTIONS.sync}>
 						<Text
 							accessibilityRole="header"
@@ -212,13 +166,55 @@ export function SettingsScreen() {
 								<Button
 									label="Connect to a server"
 									icon="link"
-									onPress={() => {
-										setConnecting(true);
-									}}
+									onPress={onConnect}
 								/>
 							</>
 						)}
 					</SettingsCard>
+					<SettingsCard section={SECTIONS.appearance}>
+						<Text
+							accessibilityRole="header"
+							style={[styles.heading, {color: colors.text}]}
+						>
+							Appearance
+						</Text>
+						<Text style={{color: colors.muted}}>
+							Make the app look like Android or like iOS. It follows your phone
+							by default.
+						</Text>
+						<Group row={ROWS.style}>
+							<Segmented
+								label="Style"
+								items={[
+									{id: 'material', name: 'Android', icon: 'logo-android'},
+									{id: 'ios', name: 'iOS', icon: 'logo-apple'},
+								]}
+								selected={prefs.look}
+								onSelect={(look) => {
+									setPreferences({look});
+								}}
+							/>
+						</Group>
+						<Toggle
+							row={ROWS.floatingBar}
+							value={prefs.floatingBar}
+							onChange={(floatingBar) => {
+								setPreferences({floatingBar});
+							}}
+						/>
+					</SettingsCard>
+					<SettingsCard section={SECTIONS.syncApp}>
+						<Toggle
+							row={ROWS.syncSettings}
+							value={prefs.syncSettings}
+							onChange={(syncSettings) => {
+								setPreferences({syncSettings});
+							}}
+						/>
+					</SettingsCard>
+					<BookmarkBehaviourCard />
+					<SyncedSettingsCard />
+					<PrivateCard />
 					{__DEV__ && (
 						<SettingsCard section={SECTIONS.development}>
 							<Text
@@ -256,12 +252,6 @@ export function SettingsScreen() {
 					)}
 				</View>
 			</SettingsQuery>
-			<ConnectSheet
-				visible={connecting}
-				onClose={() => {
-					setConnecting(false);
-				}}
-			/>
 		</ScrollView>
 	);
 }

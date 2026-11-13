@@ -66,7 +66,7 @@ export function PrivateSwitch() {
 	return (
 		<>
 			<IconButton
-				icon={priv ? 'eye-outline' : 'eye-off-outline'}
+				icon={priv ? 'lock-open-outline' : 'lock-closed-outline'}
 				label={priv ? 'Back to your regular library' : 'Show private library'}
 				color={priv ? colors.accent : undefined}
 				onPress={() => {

@@ -12,11 +12,13 @@ import {
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/bottom-sheet';
 import {extractUrls, splitShared} from './src/library';
+import {runBackAction} from './src/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library-store';
 import {startPreferencesSync} from './src/preferences-sync';
 import {pausePrivate, startPrivate, wakePrivate} from './src/private-library';
 import {loadPreferences} from './src/preferences';
 import {BookmarksScreen} from './src/screens/bookmarks';
+import {ConnectSheet} from './src/screens/connect-sheet';
 import {SaveLinkForm} from './src/screens/save-link';
 import {SaveLinksForm} from './src/screens/save-links';
 import {SessionsScreen} from './src/screens/sessions';
@@ -72,6 +74,33 @@ function Main() {
 		quick: false,
 	});
 	const [open, setOpen] = useState(false);
+	// The connect drawer is here so an empty screen and Settings can both open it.
+	const [connecting, setConnecting] = useState(false);
+	const connect = useCallback(() => {
+		setConnecting(true);
+	}, []);
+
+	// Back ends a selection first, then returns to Bookmarks from another tab, and only then leaves the app.
+	useEffect(() => {
+		const subscription = BackHandler.addEventListener(
+			'hardwareBackPress',
+			() => {
+				if (runBackAction()) {
+					return true;
+				}
+
+				if (tab === 'bookmarks') {
+					return false;
+				}
+
+				setTab('bookmarks');
+				return true;
+			},
+		);
+		return () => {
+			subscription.remove();
+		};
+	}, [tab]);
 
 	useEffect(() => {
 		void loadPreferences()
@@ -150,13 +179,23 @@ function Main() {
 			<SafeAreaView edges={['top']} style={styles.body}>
 				<StatusBar style="auto" />
 				{tab === 'bookmarks' && (
-					<BookmarksScreen onAdd={openBlank} onSelecting={setSelecting} />
+					<BookmarksScreen
+						onAdd={openBlank}
+						onConnect={connect}
+						onSelecting={setSelecting}
+					/>
 				)}
-				{tab === 'sessions' && <SessionsScreen />}
-				{tab === 'settings' && <SettingsScreen />}
+				{tab === 'sessions' && <SessionsScreen onConnect={connect} />}
+				{tab === 'settings' && <SettingsScreen onConnect={connect} />}
 			</SafeAreaView>
 			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={setTab} />
 			<SnackbarHost />
+			<ConnectSheet
+				visible={connecting}
+				onClose={() => {
+					setConnecting(false);
+				}}
+			/>
 			<BottomSheet
 				visible={open}
 				label={draft.urls.length > 1 ? 'Save links' : 'Save link'}

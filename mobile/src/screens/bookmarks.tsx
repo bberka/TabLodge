@@ -2,6 +2,8 @@ import {useEffect, useMemo, useState} from 'react';
 import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../src/app/types';
+import {ActionSheet} from '../action-sheet';
+import {useBackAction} from '../back-actions';
 import {useChipLook} from '../column-icons';
 import {
 	bookmarksIn,
@@ -28,7 +30,7 @@ import {PrivateSwitch} from '../private-switch';
 import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
 import {useView} from '../view';
-import {Chips, Empty, Field, Header, IconButton} from '../ui';
+import {Button, Chips, Empty, Field, Header, IconButton} from '../ui';
 import {ColumnSheet} from './column-sheet';
 import {
 	AddButton,
@@ -52,9 +54,11 @@ type Sheet =
 
 export function BookmarksScreen({
 	onAdd,
+	onConnect,
 	onSelecting,
 }: {
 	onAdd: () => void;
+	onConnect: () => void;
 	onSelecting: (selecting: boolean) => void;
 }) {
 	const colors = useColors();
@@ -70,6 +74,7 @@ export function BookmarksScreen({
 	const [picked, setPicked] = useState('');
 	const [query, setQuery] = useState('');
 	const [refreshing, setRefreshing] = useState(false);
+	const [menuOpen, setMenuOpen] = useState(false);
 	// The drawer for choosing a column to move the selection to.
 	// The bookmark whose edit drawer is open.
 	const [sheet, setSheet] = useState<Sheet>();
@@ -79,6 +84,8 @@ export function BookmarksScreen({
 		sheet?.kind === 'column'
 			? store.bookmarkColumns.find((column) => column.id === sheet.id)
 			: undefined;
+
+	useBackAction(selection.active, selection.stop);
 
 	useEffect(() => {
 		onSelecting(selection.active);
@@ -168,33 +175,12 @@ export function BookmarksScreen({
 	) : (
 		<>
 			<PrivateSwitch />
-			{!searching && shown.length > 0 && (
+			{shown.length > 0 && (
 				<IconButton
-					icon="albums-outline"
-					label={`Open all ${shown.length} in ${columnName}`}
+					icon="ellipsis-vertical"
+					label="More actions"
 					onPress={() => {
-						openAll(
-							shown.map((bookmark) => linkToOpen(bookmark.url, links)),
-							columnName ?? 'This column',
-						);
-					}}
-				/>
-			)}
-			{!readOnly && !searching && editableColumn && (
-				<IconButton
-					icon="color-palette-outline"
-					label={`Edit the ${columnName} column`}
-					onPress={() => {
-						setSheet({kind: 'column', id: columnId});
-					}}
-				/>
-			)}
-			{!readOnly && (
-				<IconButton
-					icon="checkbox-outline"
-					label="Select bookmarks"
-					onPress={() => {
-						selection.start();
+						setMenuOpen(true);
 					}}
 				/>
 			)}
@@ -290,9 +276,25 @@ export function BookmarksScreen({
 							Nothing saved matches that search.
 						</Empty>
 					) : (
-						<Empty icon="bookmark-outline" title="No bookmarks yet">
-							Save a link with Add link, share one from your browser, or connect
-							your sync server in Settings.
+						<Empty
+							icon="bookmark-outline"
+							title="No bookmarks yet"
+							action={
+								readOnly ? undefined : (
+									<View style={styles.emptyActions}>
+										<Button label="Add a link" icon="add" onPress={onAdd} />
+										<Button
+											kind="plain"
+											label="Connect to your server"
+											onPress={onConnect}
+										/>
+									</View>
+								)
+							}
+						>
+							{readOnly
+								? 'Nothing is saved in the private library yet.'
+								: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
 						</Empty>
 					)
 				}
@@ -353,6 +355,53 @@ export function BookmarksScreen({
 					}}
 				/>
 			)}
+			<ActionSheet
+				visible={menuOpen}
+				title={columnName ?? 'Bookmarks'}
+				actions={[
+					...(searching
+						? []
+						: [
+								{
+									icon: 'albums-outline' as const,
+									label: `Open all ${shown.length} in ${columnName}`,
+									onPress() {
+										openAll(
+											shown.map((bookmark) => linkToOpen(bookmark.url, links)),
+											columnName ?? 'This column',
+										);
+									},
+								},
+							]),
+					...(readOnly
+						? []
+						: [
+								...(!searching && editableColumn
+									? [
+											{
+												icon: 'color-palette-outline' as const,
+												label: 'Edit column',
+												hint: 'Rename it, or change its icon and color',
+												onPress() {
+													setSheet({kind: 'column', id: columnId});
+												},
+											},
+										]
+									: []),
+								{
+									icon: 'checkbox-outline' as const,
+									label: 'Select bookmarks',
+									hint: 'Move, open or delete several at once',
+									onPress() {
+										selection.start();
+									},
+								},
+							]),
+				]}
+				onClose={() => {
+					setMenuOpen(false);
+				}}
+			/>
 			<EditSheet
 				bookmark={editing}
 				onClose={() => {
@@ -400,4 +449,5 @@ const styles = StyleSheet.create({
 	head: {gap: 8},
 	search: {paddingHorizontal: 16, gap: 12, paddingBottom: 8},
 	list: {flexGrow: 1},
+	emptyActions: {alignSelf: 'stretch', gap: 8, paddingTop: 12},
 });

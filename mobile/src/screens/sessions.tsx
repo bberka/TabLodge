@@ -3,6 +3,7 @@ import {
 	FlatList,
 	Linking,
 	Pressable,
+	ScrollView,
 	StyleSheet,
 	Text,
 	View,
@@ -18,7 +19,7 @@ import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
 import {useView} from '../view';
-import {Avatar, Card, Chips, Empty, Field, Header, Icon} from '../ui';
+import {Avatar, Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
 
 const PREVIEW_TABS = 4;
 
@@ -203,7 +204,7 @@ const SessionCard = memo(SessionCardView);
 Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its
 own tabs, so there is no capture here.
 */
-export function SessionsScreen() {
+export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const colors = useColors();
 	const space = useBarSpace();
 	const store = useLibrary();
@@ -262,7 +263,17 @@ export function SessionsScreen() {
 		return (
 			<View style={styles.screen}>
 				<Header title="Sessions" right={<PrivateSwitch />} />
-				<Empty icon="albums-outline" title="No sessions yet">
+				<Empty
+					icon="albums-outline"
+					title="No sessions yet"
+					action={
+						<Button
+							label="Connect to your server"
+							icon="sync-outline"
+							onPress={onConnect}
+						/>
+					}
+				>
 					Sessions saved in the TabLodge extension appear here once this phone
 					is synced with your server. To save one from here, share several links
 					from your browser to TabLodge.
@@ -301,11 +312,13 @@ export function SessionsScreen() {
 								setQuery('');
 							}}
 						/>
-						<Chips
-							items={folders.map((folder) => look(folder))}
-							selected={folderId}
-							onSelect={setPicked}
-						/>
+						<ScrollView horizontal showsHorizontalScrollIndicator={false}>
+							<Chips
+								items={folders.map((folder) => look(folder))}
+								selected={folderId}
+								onSelect={setPicked}
+							/>
+						</ScrollView>
 					</View>
 				</View>
 			}
