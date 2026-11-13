@@ -87,7 +87,7 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 		cursor: 1,
 		records: 1,
 		limits: {maxRecords: 500_000, retentionDays: 90, requestsPerMinute: 300},
-		features: ['private', 'key'],
+		features: ['private', 'key', 'preview'],
 	});
 });
 
@@ -294,6 +294,7 @@ test('the server keeps one wrapped key per library and never lets a device overw
 	assert.deepEqual((await call('/v1/status')).body.features, [
 		'private',
 		'key',
+		'preview',
 	]);
 	assert.deepEqual((await call('/v1/key')).body, {key: null});
 	const set = (key: string, previous: string | null) =>

@@ -15,6 +15,7 @@ Commands, run inside the container with `docker exec`:
 	node node.js import   reads such a file from stdin into the server
 */
 import {mkdirSync} from 'node:fs';
+import {lookup} from 'node:dns/promises';
 import {join} from 'node:path';
 import process from 'node:process';
 import {serve} from '@hono/node-server';
@@ -41,6 +42,14 @@ import {
 import {sqlite} from './node-sqlite';
 import {SqlChangeLog} from './sql-change-log';
 import {runTransfer} from './transfer';
+
+/**
+Every address a host name points at, so a site that points at this server's own network is refused.
+*/
+async function resolveAddresses(host: string) {
+	const found = await lookup(host, {all: true});
+	return found.map(({address}) => address);
+}
 
 function positive(name: string, fallback: number): number {
 	const raw = process.env[name];
@@ -84,6 +93,7 @@ function startServer() {
 		const api = createApi({
 			token,
 			compress: true,
+			preview: {resolve: resolveAddresses},
 			log: () => log,
 			limits,
 			onApplied(cursor) {
