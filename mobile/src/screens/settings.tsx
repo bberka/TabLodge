@@ -13,23 +13,17 @@ import {
 import {useBarSpace} from '../tab-bar';
 import {type Colors, useColors} from '../theme';
 import {setPreferences, usePreferences} from '../preferences';
-import {
-	Button,
-	Empty,
-	Field,
-	Header,
-	Icon,
-	type IconName,
-	Segmented,
-} from '../ui';
+import {Button, Empty, Field, Header, Icon, type IconName} from '../ui';
 import {systemAccent} from '../../modules/open-links';
+import {ACCENTS} from '../../../src/shared/accent-colors';
 import {APP_ACCENT} from '../accent';
 import {ColorPicker, type LeadingChoice} from '../color-picker';
+import {BottomSheet} from '../bottom-sheet';
+import {SelectRow, ValueRow} from './select-row';
 import {DeviceNameField} from './device-name-field';
 import {
 	BookmarkBehaviourCard,
 	SessionSettingsCard,
-	Group,
 	SyncedSettingsCard,
 	Toggle,
 } from './behaviour-settings';
@@ -76,6 +70,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const status = useSyncStatus();
 	const prefs = usePreferences();
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+	const [pickingAccent, setPickingAccent] = useState(false);
 	const accentChoices: LeadingChoice[] = [
 		{
 			id: 'system',
@@ -90,6 +85,13 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 			hex: APP_ACCENT,
 		},
 	];
+	const chosen = accentChoices.find((choice) => choice.id === prefs.accent);
+	const accentName =
+		chosen?.label ?? ACCENT_NAMES.get(prefs.accent) ?? 'Custom';
+	const accentSwatch =
+		chosen?.hex ??
+		ACCENTS.find((accent) => accent.id === prefs.accent)?.hex ??
+		prefs.accent;
 	useLibrary();
 	const [query, setQuery] = useState('');
 	const needle = normalizeQuery(query);
@@ -147,51 +149,41 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 						>
 							Appearance
 						</Text>
-						<Text style={{color: colors.muted}}>
-							Make the app look like Android or like iOS. It follows your phone
-							by default.
-						</Text>
-						<Group row={ROWS.style}>
-							<Segmented
-								label="Style"
-								items={[
-									{id: 'material', name: 'Android', icon: 'logo-android'},
-									{id: 'ios', name: 'iOS', icon: 'logo-apple'},
-								]}
-								selected={prefs.look}
-								onSelect={(look) => {
-									setPreferences({look});
-								}}
-							/>
-						</Group>
-						<Group row={ROWS.theme}>
-							<Segmented
-								label="Theme"
-								items={[
-									{
-										id: 'system',
-										name: 'System',
-										icon: 'phone-portrait-outline',
-									},
-									{id: 'light', name: 'Light', icon: 'sunny-outline'},
-									{id: 'dark', name: 'Dark', icon: 'moon-outline'},
-								]}
-								selected={prefs.theme}
-								onSelect={(theme) => {
-									setPreferences({theme});
-								}}
-							/>
-						</Group>
-						<Group row={ROWS.accent}>
-							<ColorPicker
-								keepSelected
-								selected={prefs.accent}
-								leading={accentChoices}
-								onSelect={(accent) => {
-									setPreferences({accent});
-								}}
-							/>
-						</Group>
+						<SelectRow
+							row={ROWS.theme}
+							value={prefs.theme}
+							choices={[
+								{id: 'system', name: 'System', icon: 'phone-portrait-outline'},
+								{id: 'light', name: 'Light', icon: 'sunny-outline'},
+								{id: 'dark', name: 'Dark', icon: 'moon-outline'},
+							]}
+							onChange={(theme) => {
+								setPreferences({theme});
+							}}
+						/>
+						<ValueRow
+							row={ROWS.accent}
+							value={accentName}
+							swatch={accentSwatch}
+							onPress={() => {
+								setPickingAccent(true);
+							}}
+						/>
+						<SelectRow
+							row={ROWS.style}
+							value={prefs.look}
+							choices={[
+								{
+									id: 'material',
+									name: 'Android',
+									hint: 'Follows your phone by default',
+								},
+								{id: 'ios', name: 'iOS look'},
+							]}
+							onChange={(look) => {
+								setPreferences({look});
+							}}
+						/>
 						<Toggle
 							row={ROWS.floatingBar}
 							value={prefs.floatingBar}
@@ -226,6 +218,13 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 										{state.text}
 									</Text>
 								</View>
+								<Toggle
+									row={ROWS.syncSettings}
+									value={prefs.syncSettings}
+									onChange={(syncSettings) => {
+										setPreferences({syncSettings});
+									}}
+								/>
 								<DeviceNameField />
 								<Button
 									label="Sync now"
@@ -246,8 +245,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 						) : (
 							<>
 								<Text style={{color: colors.muted}}>
-									Connect to the server you run yourself. Bookmarks and sessions
-									stay the same on every device you connect.
+									Keep bookmarks and sessions the same on every device.
 								</Text>
 								<Button
 									label="Connect to a server"
@@ -256,15 +254,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 								/>
 							</>
 						)}
-					</SettingsCard>
-					<SettingsCard section={SECTIONS.syncApp}>
-						<Toggle
-							row={ROWS.syncSettings}
-							value={prefs.syncSettings}
-							onChange={(syncSettings) => {
-								setPreferences({syncSettings});
-							}}
-						/>
 					</SettingsCard>
 					{__DEV__ && (
 						<SettingsCard section={SECTIONS.development}>
@@ -303,11 +292,47 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 					)}
 				</View>
 			</SettingsQuery>
+			<BottomSheet
+				visible={pickingAccent}
+				label="Accent color"
+				onClose={() => {
+					setPickingAccent(false);
+				}}
+			>
+				<View style={styles.accentSheet}>
+					<Text
+						accessibilityRole="header"
+						style={[styles.heading, {color: colors.text}]}
+					>
+						Accent color
+					</Text>
+					<ColorPicker
+						keepSelected
+						selected={prefs.accent}
+						leading={accentChoices}
+						onSelect={(accent) => {
+							setPreferences({accent});
+						}}
+					/>
+					<Button
+						label="Done"
+						icon="checkmark"
+						onPress={() => {
+							setPickingAccent(false);
+						}}
+					/>
+				</View>
+			</BottomSheet>
 		</ScrollView>
 	);
 }
 
+const ACCENT_NAMES = new Map<string, string>(
+	ACCENTS.map((accent) => [accent.id, accent.label]),
+);
+
 const styles = StyleSheet.create({
+	accentSheet: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	screen: {paddingBottom: 24},
 	search: {paddingHorizontal: 16, paddingBottom: 12},
 	cards: {paddingHorizontal: 16, gap: 16},

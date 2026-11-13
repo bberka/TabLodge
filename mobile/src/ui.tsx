@@ -384,10 +384,12 @@ export function Switch({
 	value,
 	onValueChange,
 	label,
+	hint,
 }: {
 	value: boolean;
 	onValueChange: (value: boolean) => void;
 	label: string;
+	hint?: string;
 }) {
 	const colors = useColors();
 	const shape = useShape();
@@ -396,6 +398,7 @@ export function Switch({
 			<Pressable
 				accessibilityRole="switch"
 				accessibilityLabel={label}
+				accessibilityHint={hint}
 				accessibilityState={{checked: value}}
 				style={[
 					styles.iosTrack,
@@ -418,6 +421,7 @@ export function Switch({
 	return (
 		<NativeSwitch
 			accessibilityLabel={label}
+			accessibilityHint={hint}
 			value={value}
 			trackColor={{
 				true: shape.ios ? '#34c759' : colors.accent,
@@ -426,7 +430,7 @@ export function Switch({
 			thumbColor={
 				Platform.OS === 'android'
 					? value
-						? colors.onAccent
+						? '#ffffff'
 						: colors.muted
 					: undefined
 			}

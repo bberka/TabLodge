@@ -25,9 +25,8 @@ export function PrivateCard() {
 			</Text>
 			<Text style={{color: colors.muted}}>
 				{status.connected
-					? (status.error ??
-						'Open. It is read only here, and every private bookmark and session is opened in your browser like any other.')
-					: 'Open the private windows’ library from your server and read it here. If it has a PIN or password, you enter it once.'}
+					? (status.error ?? 'Open, and read only here.')
+					: 'Read the private windows’ library from your server.'}
 			</Text>
 			<PrivateSwitch button />
 			<Toggle

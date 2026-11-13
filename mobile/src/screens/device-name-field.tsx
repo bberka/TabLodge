@@ -37,8 +37,7 @@ export function DeviceNameField() {
 				onSubmitEditing={commit}
 			/>
 			<Text style={{color: colors.muted}}>
-				Sessions saved here say they came from this phone, for example “Berkay’s
-				Pixel”. Empty uses “{fallback}”. Saved sessions keep the name they had.
+				Shown on sessions saved here. Empty uses “{fallback}”.
 			</Text>
 		</>
 	);

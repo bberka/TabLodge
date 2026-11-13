@@ -24,9 +24,9 @@ describe('settings search', () => {
 	});
 
 	test('finds a card through one of its settings, by label or by hint', () => {
-		assert.deepEqual(visible('utm_source'), ['Bookmarks']);
+		assert.deepEqual(visible('utm_source'), ['Links and titles']);
 		assert.ok(visible('swipe').includes('Bookmarks'));
-		assert.deepEqual(visible('counters'), ['Same as your extension']);
+		assert.deepEqual(visible('counters'), ['Links and titles']);
 	});
 
 	test('finds a card by an alias', () => {

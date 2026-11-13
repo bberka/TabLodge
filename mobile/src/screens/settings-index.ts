@@ -12,7 +12,7 @@ export const ROWS = {
 	},
 	syncSettings: {
 		label: 'Sync settings',
-		hint: "Your settings follow your other devices when sync is on: this app's look and gestures, and the extension's settings. Turning it on sends this phone's.",
+		hint: 'Look and gestures follow your other devices',
 	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
@@ -25,30 +25,30 @@ export const ROWS = {
 	},
 	sessionIcons: {
 		label: 'Tab icons on session cards',
-		hint: 'The small icons under a session name. Same as the extension',
+		hint: 'Small icons under the session name',
 	},
 	showSavedOn: {
 		label: 'Show where a session was saved',
-		hint: 'The device name on a session card',
+		hint: 'The device name on the card',
 	},
 	expandSessions: {
 		label: 'Keep sessions expanded',
-		hint: "Show every session's tabs without opening it. Same as the extension",
+		hint: 'Show all tabs without opening a card',
 	},
 	showPrivateButton: {
 		label: 'Lock button on the main screens',
-		hint: 'A shortcut on Bookmarks and Sessions. Off hides that a private library exists; Settings always has the entry',
+		hint: 'Off keeps a private library out of sight',
 	},
 	tap: {label: 'Tap a bookmark'},
 	swipeRight: {label: 'Swipe right'},
 	swipeLeft: {label: 'Swipe left'},
 	cleanOnSave: {
 		label: 'Clean links when saving',
-		hint: 'Remove tracking parameters such as utm_source',
+		hint: 'Removes utm_source and similar',
 	},
 	siteIcons: {
 		label: 'Site icons',
-		hint: "Show each site's icon. Loaded through your sync server when connected, otherwise from the site itself",
+		hint: 'Through your server, or from the site itself',
 	},
 	cleanTitles: {
 		label: 'Clean page titles',
@@ -58,7 +58,7 @@ export const ROWS = {
 		label: 'Remove tracking parameters',
 		hint: 'When opening links. Saved links stay as they are',
 	},
-	showUnder: {label: 'Show under a title'},
+	showUnder: {label: 'Under a bookmark title'},
 	shortenAddresses: {
 		label: 'Shorten addresses',
 		hint: 'Hide https:// and www.',
@@ -71,7 +71,7 @@ export const ROWS = {
 		label: 'Mark local links too',
 		hint: 'Addresses on this device or home network',
 	},
-	spacing: {label: 'Bookmark spacing'},
+	spacing: {label: 'Compact bookmarks', hint: 'Tighter rows'},
 	sortSessions: {label: 'Sort sessions'},
 } satisfies Record<string, Row>;
 
@@ -122,6 +122,7 @@ export const SECTIONS = {
 			'address',
 		],
 		rows: [
+			ROWS.sortSessions,
 			ROWS.compactSessions,
 			ROWS.sessionIcons,
 			ROWS.showSavedOn,
@@ -145,22 +146,21 @@ export const SECTIONS = {
 			ROWS.tap,
 			ROWS.swipeRight,
 			ROWS.swipeLeft,
-			ROWS.cleanOnSave,
+			ROWS.showUnder,
+			ROWS.spacing,
 			ROWS.siteIcons,
 		],
 	},
 	extension: {
-		title: 'Same as your extension',
+		title: 'Links and titles',
 		aliases: ['browser', 'url', 'link', 'address', 'sessions', 'density'],
 		rows: [
 			ROWS.cleanTitles,
 			ROWS.removeTracking,
-			ROWS.showUnder,
 			ROWS.shortenAddresses,
 			ROWS.markInsecure,
 			ROWS.markLocal,
-			ROWS.spacing,
-			ROWS.sortSessions,
+			ROWS.cleanOnSave,
 		],
 	},
 	private: {
