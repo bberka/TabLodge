@@ -81,6 +81,7 @@ import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import {ACTION_ICONS} from './action-icons';
+import {openArchivedCopy} from './archive-link';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {
 	AppHeader,
@@ -4044,6 +4045,12 @@ const BookmarkCard = memo(
 			icon: ACTION_ICONS.copy,
 			onSelect: act('copy'),
 		};
+		const archiveCopy: MenuAction = {
+			id: 'archive-copy',
+			label: 'Open in Internet Archive',
+			icon: ACTION_ICONS.archiveCopy,
+			onSelect: () => void openArchivedCopy(bookmark.url, urlSettings),
+		};
 		const remove: MenuAction = {
 			id: 'delete',
 			label: 'Delete',
@@ -4064,6 +4071,7 @@ const BookmarkCard = memo(
 			{type: 'separator'},
 			edit,
 			copy,
+			archiveCopy,
 			{
 				id: 'move',
 				label: 'Move to',

@@ -135,6 +135,7 @@ import {hostOf, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
 import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
+import {openArchivedCopy} from './archive-link';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
@@ -3459,6 +3460,12 @@ const SavedTab = memo(
 				label: 'Copy link',
 				icon: ACTION_ICONS.copy,
 				onSelect: () => handlers.copyTab(tab),
+			},
+			{
+				id: 'archive-copy',
+				label: 'Open in Internet Archive',
+				icon: ACTION_ICONS.archiveCopy,
+				onSelect: () => void openArchivedCopy(tab.url, settings),
 			},
 			{
 				id: 'bookmark',

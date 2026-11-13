@@ -38,7 +38,7 @@ const permissions = [
 			url: 'https://tablodge.bbay.dev/privacy/',
 			name: title,
 			description,
-			dateModified: '2026-11-13',
+			dateModified: '2026-11-14',
 			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
 		},
 	]}
@@ -46,7 +46,7 @@ const permissions = [
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Privacy</span></nav>
 		<h1>Privacy</h1>
-		<p class="note">Last updated: 2026-11-13</p>
+		<p class="note">Last updated: 2026-11-14</p>
 		<p class="lead">
 			TabLodge keeps your sessions, bookmarks and settings in your browser profile. It has no accounts or backend, and <strong>does not collect your data.</strong> It uploads your library only to a sync server you run yourself, and only after you connect one.
 		</p>
@@ -77,7 +77,7 @@ const permissions = [
 			If you enable backup copies in Downloads, TabLodge writes JSON files to <code>Downloads/TabLodge/</code>. Turning the setting off or uninstalling does not delete those files. Exports, including JSON, HTML, CSV, Markdown, URL lists and full backup ZIP files, are not encrypted unless you protect a full backup with a PIN or password. If you do, TabLodge encrypts the file on your device (AES-256-GCM, with a key derived from your entry by PBKDF2) and stores neither the PIN or password nor a hint, so a lost one cannot be recovered. A PIN is weak because anyone with the file can try every PIN offline; use a password for sensitive data. Automatic backups and Downloads copies are never encrypted. Keep unprotected files private if their titles, URLs or notes are sensitive. A folder synced by another app may upload them.
 		</p>
 		<p>
-			Opening a saved link loads that website normally. An optional setting, off by default, removes common tracking parameters from the destination when opening saved links or restoring sessions and snapshots. It leaves the URLs in your library unchanged. Choosing <strong>Search the web</strong> sends your query to the browser's default search engine. These are actions you request, not background reporting by TabLodge.
+			Opening a saved link loads that website normally. An optional setting, off by default, removes common tracking parameters from the destination when opening saved links or restoring sessions and snapshots. It leaves the URLs in your library unchanged. Choosing <strong>Search the web</strong> sends your query to the browser's default search engine. Choosing <strong>Open in Internet Archive</strong> on a saved link opens the Internet Archive's page for that address in a new tab, so the address goes to archive.org when you choose it. These are actions you request, not background reporting by TabLodge.
 		</p>
 
 		<h2>Private windows</h2>

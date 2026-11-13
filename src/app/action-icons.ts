@@ -3,6 +3,7 @@ import {
 	Copy,
 	ExternalLink,
 	FolderInput,
+	History,
 	Pencil,
 	Trash2,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ export const ACTION_ICONS = {
 	openHere: ArrowUpRight,
 	openNew: ExternalLink,
 	copy: Copy,
+	archiveCopy: History,
 	edit: Pencil,
 	remove: Trash2,
 	move: FolderInput,

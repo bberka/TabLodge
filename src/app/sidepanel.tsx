@@ -77,6 +77,7 @@ import {archivedFolderId} from './session-folders';
 import {siteName, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
 import {ACTION_ICONS} from './action-icons';
+import {openArchivedCopy} from './archive-link';
 import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
@@ -447,6 +448,16 @@ function SidePanel() {
 				label: 'Copy link',
 				icon: ACTION_ICONS.copy,
 				onSelect: () => void copy(url),
+			},
+			{
+				id: 'archive-copy',
+				label: 'Open in Internet Archive',
+				icon: ACTION_ICONS.archiveCopy,
+				onSelect: () =>
+					void attempt(
+						() => openArchivedCopy(url, settings ?? undefined),
+						'Could not open the Internet Archive.',
+					),
 			},
 			...extra,
 		];
