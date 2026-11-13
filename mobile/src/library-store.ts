@@ -8,6 +8,7 @@ import type {Settings, Store} from '../../src/app/types';
 import {
 	createSyncClient,
 	SYNC_OFF,
+	SYNC_SETTINGS_KEY,
 	SYNC_STATUS_KEY,
 	type SyncStatus,
 } from '../../src/shared/sync/client';
@@ -16,6 +17,7 @@ import {createLibraryCore} from './library-core';
 import {usePrivateStore} from './private-library';
 import {useView} from './view';
 import type * as SeedModuleNamespace from './seed';
+import {getPreferences} from './preferences';
 import {readJson, removeKeys, writeJson} from './storage';
 
 // The sample data is required inside a `__DEV__` conditional, which Metro removes from release bundles.
@@ -37,7 +39,9 @@ let syncStatus: SyncStatus = SYNC_OFF;
 const statusListeners = new Set<() => void>();
 
 export const syncClient = createSyncClient({
-	get: readJson,
+	// One switch on this phone decides whether settings, the app's own and the extension's, travel through sync.
+	get: async (key) =>
+		key === SYNC_SETTINGS_KEY ? getPreferences().syncSettings : readJson(key),
 	async set(key, value) {
 		await writeJson(key, value);
 		if (key === SYNC_STATUS_KEY) {

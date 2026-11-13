@@ -184,7 +184,7 @@ test('fields that belong to one device stay on it', () => {
 	assert.equal(b.store.groups[0].lastOpenedAt, 9);
 });
 
-test('only portable preferences travel', () => {
+test('only portable settings travel', () => {
 	const log = new ChangeLog();
 	const a = device('a');
 	const b = device('b');
@@ -196,12 +196,14 @@ test('only portable preferences travel', () => {
 			...a.store.settings,
 			sessionSort: 'name',
 			closeOnSave: false,
+			snapshotKeep: 50,
 		},
 	};
 	sync(a, log, T0 + 1000);
 	sync(b, log, T0 + 2000);
 	assert.equal(b.store.settings.sessionSort, 'name');
-	assert.equal(b.store.settings.closeOnSave, true);
+	assert.equal(b.store.settings.closeOnSave, false);
+	assert.notEqual(b.store.settings.snapshotKeep, 50);
 });
 
 test('a new device takes the server copy of shared records and adds its own', () => {
@@ -337,4 +339,22 @@ test('a change waits for the record it belongs in, and is released if that recor
 	));
 	assert.equal(state.held, undefined);
 	assert.equal(records.has('tab:gone:t'), true);
+});
+
+test('a column keeps its sites through a sync round trip', () => {
+	const store = emptyStore();
+	store.bookmarkColumns = [
+		{
+			id: 'mine',
+			name: 'Mine',
+			domains: ['github.com/bberka', 'gitlab.com'],
+			createdAt: 0,
+			isDefault: false,
+		},
+	];
+	const records = [...splitLibrary(store).values()];
+	assert.deepEqual(assemble(records, emptyStore()).bookmarkColumns[0].domains, [
+		'github.com/bberka',
+		'gitlab.com',
+	]);
 });

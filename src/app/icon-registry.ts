@@ -116,9 +116,152 @@ import {
 	Wifi,
 	Wrench,
 	Zap,
+	AlarmClock,
+	Anchor,
+	Aperture,
+	Atom,
+	Award,
+	Baby,
+	Backpack,
+	Banana,
+	Bandage,
+	Battery,
+	Beer,
+	Bike,
+	Binary,
+	Bird,
+	Blocks,
+	Bluetooth,
+	Bomb,
+	Bone,
+	Bot,
+	Box,
+	Boxes,
+	Braces,
+	Bus,
+	Cake,
+	Candy,
+	Carrot,
+	Castle,
+	ChefHat,
+	Cherry,
+	Church,
+	CircuitBoard,
+	Clapperboard,
+	Clover,
+	Cog,
+	Command,
+	Contact,
+	Container,
+	Cookie,
+	Crop,
+	Crown,
+	Disc,
+	Dna,
+	Drama,
+	Droplet,
+	Ear,
+	Earth,
+	Egg,
+	Eye,
+	FileCode,
+	Fish,
+	Flame,
+	Footprints,
+	Fuel,
+	Funnel,
+	Gauge,
+	Gem,
+	Ghost,
+	Glasses,
+	Grape,
+	Guitar,
+	Hamburger,
+	Hand,
+	Handshake,
+	HardDrive,
+	Hash,
+	HeartPulse,
+	Hospital,
+	Hotel,
+	Hourglass,
+	IceCreamCone,
+	Infinity as InfinityIcon,
+	Joystick,
+	Keyboard,
+	Laptop,
+	Layers,
+	LifeBuoy,
+	Mailbox,
+	Medal,
+	Microscope,
+	Milk,
+	Monitor,
+	MousePointer,
+	Network,
+	Paintbrush,
+	PawPrint,
+	Percent,
+	Piano,
+	Pipette,
+	Plug,
+	Popcorn,
+	Printer,
+	Puzzle,
+	QrCode,
+	Rabbit,
+	Radar,
+	Radio,
+	Rainbow,
+	Router,
+	Ruler,
+	Sailboat,
+	Salad,
+	Sandwich,
+	Satellite,
+	Save,
+	Scale,
+	Scissors,
+	Scroll,
+	ScrollText,
+	Shapes,
+	Ship,
+	Shirt,
+	Signal,
+	Skull,
+	Smartphone,
+	Snowflake,
+	Soup,
+	Speaker,
+	Sprout,
+	Squirrel,
+	Swords,
+	Syringe,
+	Table,
+	Tablet,
+	Telescope,
+	Thermometer,
+	Ticket,
+	Timer,
+	Tractor,
+	TrainFront,
+	Trash,
+	Truck,
+	Turtle,
+	Umbrella,
+	Vault,
+	Wand,
+	Warehouse,
+	Watch,
+	Webhook,
+	Wheat,
+	Wind,
+	Wine,
+	Workflow,
 	type LucideIcon,
 } from 'lucide-react';
 import {ICON_IDS, type IconId} from './icon-ids';
+import {rankByQuery, searchTerms} from './fuzzy';
 
 type IconCategory =
 	| 'general'
@@ -470,6 +613,500 @@ const DEFINITIONS: Record<
 	},
 	cat: {category: 'nature', keywords: 'pet animal', component: Cat},
 	dog: {category: 'nature', keywords: 'pet animal', component: Dog},
+	crown: {
+		category: 'general',
+		keywords: 'king royal premium vip',
+		component: Crown,
+	},
+	gem: {
+		category: 'general',
+		keywords: 'diamond jewel precious',
+		component: Gem,
+	},
+	award: {
+		category: 'general',
+		keywords: 'prize badge achievement',
+		component: Award,
+	},
+	medal: {
+		category: 'general',
+		keywords: 'winner rank achievement',
+		component: Medal,
+	},
+	hourglass: {
+		category: 'general',
+		keywords: 'wait timer time',
+		component: Hourglass,
+	},
+	timer: {
+		category: 'general',
+		keywords: 'stopwatch countdown pomodoro',
+		component: Timer,
+	},
+	'alarm-clock': {
+		category: 'general',
+		keywords: 'alarm wake reminder',
+		component: AlarmClock,
+	},
+	infinity: {
+		category: 'general',
+		keywords: 'loop endless forever',
+		component: InfinityIcon,
+	},
+	hash: {
+		category: 'general',
+		keywords: 'number tag hashtag channel',
+		component: Hash,
+	},
+	percent: {
+		category: 'general',
+		keywords: 'discount sale rate',
+		component: Percent,
+	},
+	layers: {
+		category: 'general',
+		keywords: 'stack levels design',
+		component: Layers,
+	},
+	shapes: {
+		category: 'general',
+		keywords: 'geometry design forms',
+		component: Shapes,
+	},
+	puzzle: {
+		category: 'general',
+		keywords: 'plugin extension game piece',
+		component: Puzzle,
+	},
+	wand: {category: 'general', keywords: 'magic wizard auto', component: Wand},
+	'qr-code': {category: 'general', keywords: 'scan barcode', component: QrCode},
+	eye: {category: 'general', keywords: 'view watch visible', component: Eye},
+	hand: {category: 'general', keywords: 'stop wave gesture', component: Hand},
+	handshake: {
+		category: 'work',
+		keywords: 'deal partner agreement',
+		component: Handshake,
+	},
+	ticket: {
+		category: 'general',
+		keywords: 'event pass coupon',
+		component: Ticket,
+	},
+	trash: {
+		category: 'general',
+		keywords: 'delete bin garbage remove',
+		component: Trash,
+	},
+	save: {category: 'general', keywords: 'disk floppy store', component: Save},
+	scissors: {category: 'general', keywords: 'cut clip', component: Scissors},
+	ruler: {category: 'general', keywords: 'measure size', component: Ruler},
+	scale: {
+		category: 'general',
+		keywords: 'balance law weight',
+		component: Scale,
+	},
+	gauge: {
+		category: 'general',
+		keywords: 'speed meter performance dashboard',
+		component: Gauge,
+	},
+	box: {
+		category: 'general',
+		keywords: 'package cube container',
+		component: Box,
+	},
+	boxes: {
+		category: 'general',
+		keywords: 'packages inventory stock',
+		component: Boxes,
+	},
+	anchor: {
+		category: 'general',
+		keywords: 'ship harbor fixed',
+		component: Anchor,
+	},
+	'life-buoy': {
+		category: 'general',
+		keywords: 'help support rescue',
+		component: LifeBuoy,
+	},
+	mailbox: {
+		category: 'work',
+		keywords: 'post letters inbox',
+		component: Mailbox,
+	},
+	contact: {
+		category: 'work',
+		keywords: 'address book person card',
+		component: Contact,
+	},
+	table: {
+		category: 'work',
+		keywords: 'spreadsheet grid rows data',
+		component: Table,
+	},
+	printer: {category: 'work', keywords: 'print paper', component: Printer},
+	'file-code': {
+		category: 'dev',
+		keywords: 'source script snippet',
+		component: FileCode,
+	},
+	'scroll-text': {
+		category: 'work',
+		keywords: 'contract log changelog',
+		component: ScrollText,
+	},
+	vault: {category: 'finance', keywords: 'safe bank secure', component: Vault},
+	warehouse: {
+		category: 'work',
+		keywords: 'storage logistics depot',
+		component: Warehouse,
+	},
+	hospital: {
+		category: 'health',
+		keywords: 'clinic medical doctor',
+		component: Hospital,
+	},
+	church: {category: 'home', keywords: 'religion worship', component: Church},
+	castle: {category: 'games', keywords: 'fortress medieval', component: Castle},
+	hotel: {
+		category: 'travel',
+		keywords: 'stay booking lodging',
+		component: Hotel,
+	},
+	bot: {
+		category: 'dev',
+		keywords: 'robot assistant chatbot ai agent',
+		component: Bot,
+	},
+	binary: {category: 'dev', keywords: 'bits zero one data', component: Binary},
+	braces: {category: 'dev', keywords: 'json curly code', component: Braces},
+	blocks: {
+		category: 'dev',
+		keywords: 'modules lego building',
+		component: Blocks,
+	},
+	'circuit-board': {
+		category: 'dev',
+		keywords: 'electronics hardware pcb',
+		component: CircuitBoard,
+	},
+	cog: {category: 'dev', keywords: 'gear settings machine', component: Cog},
+	command: {
+		category: 'dev',
+		keywords: 'cmd key shortcut mac',
+		component: Command,
+	},
+	container: {
+		category: 'dev',
+		keywords: 'docker kubernetes deploy',
+		component: Container,
+	},
+	webhook: {
+		category: 'dev',
+		keywords: 'api callback integration',
+		component: Webhook,
+	},
+	keyboard: {
+		category: 'dev',
+		keywords: 'typing keys input',
+		component: Keyboard,
+	},
+	laptop: {
+		category: 'dev',
+		keywords: 'computer notebook device',
+		component: Laptop,
+	},
+	monitor: {
+		category: 'dev',
+		keywords: 'screen display desktop computer',
+		component: Monitor,
+	},
+	smartphone: {
+		category: 'dev',
+		keywords: 'mobile phone android ios device',
+		component: Smartphone,
+	},
+	tablet: {category: 'dev', keywords: 'ipad device', component: Tablet},
+	'hard-drive': {
+		category: 'dev',
+		keywords: 'disk storage ssd backup',
+		component: HardDrive,
+	},
+	network: {
+		category: 'dev',
+		keywords: 'graph nodes connections lan',
+		component: Network,
+	},
+	router: {category: 'dev', keywords: 'wifi modem internet', component: Router},
+	signal: {
+		category: 'dev',
+		keywords: 'bars reception strength',
+		component: Signal,
+	},
+	bluetooth: {
+		category: 'dev',
+		keywords: 'wireless pairing',
+		component: Bluetooth,
+	},
+	radio: {
+		category: 'media',
+		keywords: 'podcast broadcast fm audio',
+		component: Radio,
+	},
+	plug: {category: 'dev', keywords: 'power socket connect', component: Plug},
+	battery: {
+		category: 'dev',
+		keywords: 'power charge energy',
+		component: Battery,
+	},
+	satellite: {
+		category: 'dev',
+		keywords: 'orbit space gps',
+		component: Satellite,
+	},
+	workflow: {
+		category: 'dev',
+		keywords: 'pipeline automation flow ci',
+		component: Workflow,
+	},
+	'mouse-pointer': {
+		category: 'dev',
+		keywords: 'cursor click',
+		component: MousePointer,
+	},
+	funnel: {category: 'dev', keywords: 'filter sales', component: Funnel},
+	radar: {category: 'dev', keywords: 'scan detect monitor', component: Radar},
+	paintbrush: {
+		category: 'media',
+		keywords: 'design art paint',
+		component: Paintbrush,
+	},
+	pipette: {
+		category: 'media',
+		keywords: 'color picker eyedropper',
+		component: Pipette,
+	},
+	crop: {category: 'media', keywords: 'photo edit resize', component: Crop},
+	aperture: {
+		category: 'media',
+		keywords: 'photography lens camera',
+		component: Aperture,
+	},
+	clapperboard: {
+		category: 'media',
+		keywords: 'movie film director',
+		component: Clapperboard,
+	},
+	disc: {category: 'media', keywords: 'cd album record vinyl', component: Disc},
+	speaker: {
+		category: 'media',
+		keywords: 'audio sound volume',
+		component: Speaker,
+	},
+	guitar: {
+		category: 'media',
+		keywords: 'music band instrument',
+		component: Guitar,
+	},
+	piano: {
+		category: 'media',
+		keywords: 'music keys instrument',
+		component: Piano,
+	},
+	popcorn: {
+		category: 'media',
+		keywords: 'movie cinema snack',
+		component: Popcorn,
+	},
+	drama: {
+		category: 'media',
+		keywords: 'theatre theater masks acting',
+		component: Drama,
+	},
+	shirt: {
+		category: 'shopping',
+		keywords: 'clothes fashion apparel',
+		component: Shirt,
+	},
+	glasses: {
+		category: 'shopping',
+		keywords: 'eyewear sunglasses reading',
+		component: Glasses,
+	},
+	watch: {
+		category: 'shopping',
+		keywords: 'wristwatch time accessory',
+		component: Watch,
+	},
+	backpack: {
+		category: 'travel',
+		keywords: 'bag school hiking',
+		component: Backpack,
+	},
+	bike: {category: 'travel', keywords: 'bicycle cycling ride', component: Bike},
+	bus: {
+		category: 'travel',
+		keywords: 'transit public transport',
+		component: Bus,
+	},
+	train: {
+		category: 'travel',
+		keywords: 'rail metro subway transit',
+		component: TrainFront,
+	},
+	truck: {
+		category: 'travel',
+		keywords: 'delivery shipping freight',
+		component: Truck,
+	},
+	ship: {category: 'travel', keywords: 'boat cruise sea', component: Ship},
+	sailboat: {
+		category: 'travel',
+		keywords: 'sailing yacht sea',
+		component: Sailboat,
+	},
+	tractor: {
+		category: 'nature',
+		keywords: 'farm agriculture',
+		component: Tractor,
+	},
+	fuel: {category: 'travel', keywords: 'gas petrol station', component: Fuel},
+	footprints: {
+		category: 'travel',
+		keywords: 'walking steps hike',
+		component: Footprints,
+	},
+	telescope: {
+		category: 'education',
+		keywords: 'astronomy stars space',
+		component: Telescope,
+	},
+	umbrella: {category: 'nature', keywords: 'rain weather', component: Umbrella},
+	earth: {category: 'travel', keywords: 'world planet globe', component: Earth},
+	syringe: {
+		category: 'health',
+		keywords: 'vaccine medicine shot',
+		component: Syringe,
+	},
+	thermometer: {
+		category: 'health',
+		keywords: 'temperature fever weather',
+		component: Thermometer,
+	},
+	'heart-pulse': {
+		category: 'health',
+		keywords: 'heartbeat cardio fitness',
+		component: HeartPulse,
+	},
+	bandage: {
+		category: 'health',
+		keywords: 'first aid injury',
+		component: Bandage,
+	},
+	ear: {category: 'health', keywords: 'hearing listen', component: Ear},
+	bone: {category: 'health', keywords: 'skeleton', component: Bone},
+	microscope: {
+		category: 'education',
+		keywords: 'science lab research',
+		component: Microscope,
+	},
+	baby: {category: 'home', keywords: 'child kid infant', component: Baby},
+	atom: {
+		category: 'education',
+		keywords: 'physics science chemistry',
+		component: Atom,
+	},
+	dna: {category: 'education', keywords: 'biology genetics', component: Dna},
+	scroll: {
+		category: 'education',
+		keywords: 'history parchment',
+		component: Scroll,
+	},
+	swords: {
+		category: 'games',
+		keywords: 'fight battle combat',
+		component: Swords,
+	},
+	joystick: {
+		category: 'games',
+		keywords: 'controller arcade',
+		component: Joystick,
+	},
+	bomb: {category: 'games', keywords: 'explosive boom', component: Bomb},
+	skull: {category: 'games', keywords: 'death danger spooky', component: Skull},
+	ghost: {category: 'games', keywords: 'halloween spooky', component: Ghost},
+	cake: {category: 'food', keywords: 'birthday dessert party', component: Cake},
+	cookie: {
+		category: 'food',
+		keywords: 'biscuit snack dessert',
+		component: Cookie,
+	},
+	candy: {category: 'food', keywords: 'sweet sugar', component: Candy},
+	egg: {category: 'food', keywords: 'breakfast', component: Egg},
+	fish: {category: 'food', keywords: 'seafood sushi', component: Fish},
+	salad: {
+		category: 'food',
+		keywords: 'healthy vegetables vegan',
+		component: Salad,
+	},
+	wine: {category: 'food', keywords: 'drink glass alcohol', component: Wine},
+	beer: {category: 'food', keywords: 'drink pub bar', component: Beer},
+	milk: {category: 'food', keywords: 'dairy drink', component: Milk},
+	soup: {category: 'food', keywords: 'bowl meal', component: Soup},
+	sandwich: {category: 'food', keywords: 'lunch sub', component: Sandwich},
+	hamburger: {
+		category: 'food',
+		keywords: 'burger fast food',
+		component: Hamburger,
+	},
+	carrot: {category: 'food', keywords: 'vegetable', component: Carrot},
+	banana: {category: 'food', keywords: 'fruit', component: Banana},
+	grape: {category: 'food', keywords: 'fruit wine', component: Grape},
+	cherry: {category: 'food', keywords: 'fruit', component: Cherry},
+	wheat: {category: 'food', keywords: 'bread grain farm', component: Wheat},
+	'ice-cream': {
+		category: 'food',
+		keywords: 'dessert cone sweet',
+		component: IceCreamCone,
+	},
+	'chef-hat': {
+		category: 'food',
+		keywords: 'cooking recipe kitchen',
+		component: ChefHat,
+	},
+	flame: {category: 'nature', keywords: 'fire hot trending', component: Flame},
+	snowflake: {
+		category: 'nature',
+		keywords: 'winter cold ice',
+		component: Snowflake,
+	},
+	droplet: {
+		category: 'nature',
+		keywords: 'water rain liquid',
+		component: Droplet,
+	},
+	wind: {category: 'nature', keywords: 'air breeze weather', component: Wind},
+	sprout: {
+		category: 'nature',
+		keywords: 'plant grow seedling',
+		component: Sprout,
+	},
+	clover: {category: 'nature', keywords: 'luck lucky green', component: Clover},
+	rabbit: {category: 'nature', keywords: 'bunny animal pet', component: Rabbit},
+	squirrel: {category: 'nature', keywords: 'animal', component: Squirrel},
+	bird: {category: 'nature', keywords: 'animal twitter fly', component: Bird},
+	turtle: {category: 'nature', keywords: 'animal slow', component: Turtle},
+	'paw-print': {
+		category: 'nature',
+		keywords: 'pet animal track',
+		component: PawPrint,
+	},
+	rainbow: {
+		category: 'nature',
+		keywords: 'colors weather pride',
+		component: Rainbow,
+	},
 };
 
 const titleCase = (id: string) =>
@@ -499,61 +1136,31 @@ export function getIcon(
 	return BY_ID.get(id ?? '') ?? BY_ID.get(fallback)!;
 }
 
-const normalize = (value: string) => value.toLocaleLowerCase().trim();
-
 /**
-Filters icons by every query word: a match in the id or keywords scores best, a subsequence ("gtbr" for git-branch) scores lower.
+Ranks icons with the shared fuzzy matcher over name, keywords and category: whole words and prefixes first,
+then initials, letters in order and one-letter typos ("bokmark"). Every query word must match. When nothing
+matches, a loose subsequence of the id ("gtbr" for git-branch) is the last resort.
 */
 export function searchIcons(query: string): readonly IconEntry[] {
-	const words = normalize(query).split(/\s+/).filter(Boolean);
-	if (words.length === 0) {
+	if (searchTerms(query).length === 0) {
 		return ICONS;
 	}
 
-	const scored: Array<{icon: IconEntry; score: number}> = [];
-	for (const icon of ICONS) {
-		const haystack = `${icon.id.replaceAll('-', ' ')} ${icon.keywords} ${icon.category}`;
-		let total = 0;
-		for (const word of words) {
-			const score = scoreWord(icon, haystack, word);
-			if (score === 0) {
-				total = 0;
-				break;
-			}
-
-			total += score;
-		}
-
-		if (total > 0) {
-			scored.push({icon, score: total});
-		}
+	const ranked = rankByQuery(query, ICONS, (icon) => [
+		icon.label,
+		icon.keywords,
+		icon.category,
+	]);
+	if (ranked.length > 0) {
+		return ranked;
 	}
 
-	return scored
-		.toSorted((a, b) => b.score - a.score)
-		.map((entry) => entry.icon);
-}
-
-function scoreWord(icon: IconEntry, haystack: string, word: string) {
-	if (icon.id === word) {
-		return 100;
-	}
-
-	if (icon.id.startsWith(word)) {
-		return 60;
-	}
-
-	if (haystack.split(' ').some((part) => part.startsWith(word))) {
-		return 40;
-	}
-
-	if (haystack.includes(word)) {
-		return 20;
-	}
-
-	return word.length > 3 && isSubsequence(word, icon.id.replaceAll('-', ''))
-		? 5
-		: 0;
+	const compact = query.toLocaleLowerCase().replaceAll(/\s+/g, '');
+	return compact.length > 3
+		? ICONS.filter((icon) =>
+				isSubsequence(compact, icon.id.replaceAll('-', '')),
+			)
+		: [];
 }
 
 function isSubsequence(word: string, text: string) {

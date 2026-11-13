@@ -12,6 +12,7 @@ import {IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {DEFAULT_COLUMN_ICON} from './icon-registry';
 import {ColumnSelect} from './column-select';
+import {defaultBookmarkColumnId} from './default-column';
 
 const NEW_COLUMN = '__new-column__';
 
@@ -45,7 +46,8 @@ function AddBookmarkPrompt() {
 	}
 
 	const columns = state.bookmarkColumns;
-	const selected = columnId || columns[0]?.id || NEW_COLUMN;
+	const defaultColumnId = defaultBookmarkColumnId(columns, state.bookmarks);
+	const selected = columnId || defaultColumnId || NEW_COLUMN;
 	const existing = state.bookmarks.find((bookmark) => bookmark.url === url);
 	const existingColumn = existing
 		? columns.find((column) => column.id === existing.columnId)

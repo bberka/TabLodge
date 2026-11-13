@@ -79,6 +79,8 @@ import {archivedFolderId} from './session-folders';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
+import {columnForUrl} from './column-sites';
+import {defaultBookmarkColumnId} from './default-column';
 import {webUrl} from './web-url';
 import {offerUndo} from './recovery-core';
 import {
@@ -166,6 +168,10 @@ function Popup() {
 		[groups],
 	);
 	const columns = state?.bookmarkColumns || [];
+	const defaultColumnId = defaultBookmarkColumnId(
+		columns,
+		state?.bookmarks ?? [],
+	);
 	const eligibleTabs = useMemo(
 		() =>
 			currentTabs.filter(
@@ -311,10 +317,36 @@ function Popup() {
 				return;
 			}
 
+			// A column that claims this site takes the page without asking.
+			const claimed = columnForUrl(columns, url);
+			if (claimed) {
+				if (
+					state?.bookmarks.some(
+						(bookmark) =>
+							bookmark.url === url && bookmark.columnId === claimed.id,
+					)
+				) {
+					showStatus(`Already in “${claimed.name}”.`, false, {toast: true});
+					return;
+				}
+
+				const added = await send('ADD_BOOKMARK', {
+					bookmark: {title: tab.title || url, url, columnId: claimed.id},
+				});
+				if (!added?.ok) {
+					showStatus(added?.error || 'Could not bookmark this page.', true);
+					return;
+				}
+
+				showStatus(`Saved to “${claimed.name}”.`, false, {toast: true});
+				await reload();
+				return;
+			}
+
 			const {NEW_BOOKMARK_COLUMN: newColumnValue} =
 				await import('./bookmark-column-picker');
 			setBookmarkTab({title: tab.title || url, url});
-			setColumnId(columns[0]?.id || newColumnValue);
+			setColumnId(defaultColumnId || newColumnValue);
 			setNewColumn({name: ''});
 			setBookmarkOpen(true);
 		} catch {
@@ -663,8 +695,7 @@ function Popup() {
 						</p>
 					)}
 					<Button
-						size="sm"
-						className="w-full justify-start gap-3 px-3"
+						className="h-11 w-full justify-start gap-3 px-3 text-sm"
 						variant="outline"
 						disabled={busy !== '' || !pageSavable}
 						title={pageSavable ? undefined : 'This page cannot be saved'}

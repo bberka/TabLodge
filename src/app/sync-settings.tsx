@@ -17,6 +17,7 @@ import {
 	createSyncToken,
 	MIN_TOKEN_LENGTH,
 	parseServerUrl,
+	SYNC_SETTINGS_KEY,
 	SYNC_STATUS_KEY,
 	type SyncStatus,
 } from '../shared/sync/client';
@@ -31,6 +32,7 @@ import {
 	DialogTitle,
 	Input,
 	Label,
+	Switch,
 } from '../shared/ui';
 import {messageOf, send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
@@ -164,6 +166,10 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [action, setAction] = useState<Action>();
 	const busy = action !== undefined;
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+	// Missing in storage means on.
+	const [syncSettings, setSyncSettings] = useState(true);
+	const settingsSwitchId = useId();
+	const settingsHelpId = useId();
 	const [error, setError] = useState('');
 	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 	// After connecting, whether to offer syncing the separate private library too.
@@ -197,6 +203,9 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		};
 
 		refresh();
+		void chrome.storage.local.get(SYNC_SETTINGS_KEY).then((stored) => {
+			setSyncSettings(stored[SYNC_SETTINGS_KEY] !== false);
+		});
 		chrome.storage.onChanged.addListener(onChanged);
 		return () => {
 			chrome.storage.onChanged.removeListener(onChanged);
@@ -466,6 +475,31 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					<Link2Off aria-hidden="true" />
 					Disconnect
 				</Button>
+			</div>
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div className="min-w-0 space-y-1">
+					<Label htmlFor={settingsSwitchId}>Sync settings</Label>
+					<p
+						id={settingsHelpId}
+						className="text-xs leading-5 text-muted-foreground"
+					>
+						Uses the same TabLodge settings in every browser you connect.
+						Recovery snapshots and automatic backups always stay on each device.
+						Turning this back on uploads this browser’s settings.
+					</p>
+				</div>
+				<Switch
+					id={settingsSwitchId}
+					aria-describedby={settingsHelpId}
+					checked={syncSettings}
+					disabled={busy}
+					onCheckedChange={(checked) => {
+						setSyncSettings(checked);
+						void chrome.storage.local
+							.set({[SYNC_SETTINGS_KEY]: checked})
+							.then(syncNow);
+					}}
+				/>
 			</div>
 			<ConfirmationDialog
 				open={confirmDisconnect}

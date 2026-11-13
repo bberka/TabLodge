@@ -5,9 +5,9 @@ import Screenshot from '../components/Screenshot.astro';
 import {SITE, abs} from '../site';
 import {screenshotSet} from '../lib/screens';
 
-const title = 'TabLodge: Save Tabs for Later';
+const title = 'TabLodge: Tab Session Manager and Bookmark Board';
 const description =
-	'Save tab sessions and bookmarks in Chromium browsers and Firefox. Free, open source, and private.';
+	'Free, open source tab session manager and bookmark board for Chrome, Brave, Edge and Firefox. Save tabs for later, restore tab groups, and keep your library private in your browser.';
 
 const heroDark = await screenshotSet('dashboard', 'dark');
 const heroLight = await screenshotSet('dashboard', 'light');
@@ -29,6 +29,10 @@ const faq = [
 	{
 		q: 'Which browsers does TabLodge support?',
 		a: 'Chromium-based browsers on Chrome 116 or newer, such as Chrome, Brave, Edge, Vivaldi, and Opera. Desktop Firefox 140 or newer works too, from Firefox Add-ons. Safari and mobile browsers cannot run the extension, but there is an Android app for your phone.',
+	},
+	{
+		q: 'Is TabLodge an alternative to OneTab, Session Buddy, or Toby?',
+		a: 'Yes. It saves tabs as sessions like they do, adds a bookmark board on the new tab, and imports your existing OneTab, Session Buddy, or Toby data. It is free, open source, and needs no account.',
 	},
 	{
 		q: 'Does TabLodge collect any data?',
@@ -70,8 +74,19 @@ const jsonLd = [
 		author: {'@type': 'Person', name: SITE.author},
 		publisher: {'@id': `${SITE.url}/#organization`},
 		codeRepository: SITE.repo,
+		sameAs: [SITE.chromeWebStore, SITE.firefoxAddons, SITE.repo],
 		screenshot: abs('/og.png'),
 		featureList: features.map((f) => f.title),
+	},
+	{
+		'@type': 'WebPage',
+		'@id': `${SITE.url}/#webpage`,
+		url: `${SITE.url}/`,
+		name: title,
+		description,
+		about: {'@id': `${SITE.url}/#software`},
+		isPartOf: {'@id': `${SITE.url}/#website`},
+		primaryImageOfPage: {'@type': 'ImageObject', url: abs(SITE.ogImage)},
 	},
 	{
 		'@type': 'MobileApplication',
@@ -127,7 +142,7 @@ const jsonLd = [
 		<div class="wrap">
 			<p class="eyebrow">Free &amp; open source</p>
 			<h1>Sessions and bookmarks in one quiet place.</h1>
-			<p class="lead">Save tabs for later. Restore them with tab groups intact.</p>
+			<p class="lead">A free tab session manager and bookmark board. Save tabs for later and restore them with tab groups intact.</p>
 			<div class="actions">
 				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
 				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>

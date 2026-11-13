@@ -44,6 +44,7 @@ import {
 	X,
 	PanelsTopLeft,
 	Upload,
+	ChevronRight,
 } from 'lucide-react';
 import {
 	ActionContextMenu,
@@ -71,6 +72,7 @@ import {
 	TooltipProvider,
 	IconTooltip,
 	ExpandingSearch,
+	Textarea,
 	type MenuAction,
 } from '../shared/ui';
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
@@ -157,6 +159,7 @@ import type {
 	BookmarkQuickAction,
 } from './types';
 import {ColumnSelect} from './column-select';
+import {defaultBookmarkColumnId} from './default-column';
 import {
 	SaveTargetChoice,
 	SaveTargetSessionField,
@@ -211,6 +214,7 @@ type ColumnDraft = {
 	id: string | null;
 	name: string;
 	icon?: string;
+	domains: string;
 };
 type MoveDraft = {bookmarkIds: string[]; targetColumnId: string};
 type BookmarkSelectionMode = 'off' | 'hover' | 'on';
@@ -368,6 +372,10 @@ function NewTab() {
 	const autoOpenedFinderRef = useRef(false);
 	const {setTheme} = useTheme();
 	const columns = state?.bookmarkColumns || NO_COLUMNS;
+	const defaultColumnId = defaultBookmarkColumnId(
+		columns,
+		state?.bookmarks ?? NO_BOOKMARKS,
+	);
 	const editedBookmark = bookmarkEdit?.id
 		? state?.bookmarks.find((entry) => entry.id === bookmarkEdit.id)
 		: undefined;
@@ -650,7 +658,7 @@ function NewTab() {
 		const columnId = newColumnRequested(requested)
 			? NEW_COLUMN
 			: columns.find((column) => column.id === requested)?.id ||
-				columns[0]?.id ||
+				defaultColumnId ||
 				NEW_COLUMN;
 		setBookmarkEdit({
 			title: params.get('bookmarkTitle') || siteName(url),
@@ -659,7 +667,7 @@ function NewTab() {
 			newColumnName: '',
 		});
 		setDialog('bookmark');
-	}, [state, externalPromptHandled, columns]);
+	}, [state, externalPromptHandled, columns, defaultColumnId]);
 
 	// Bookmarks are only added by drops on a column or Unfiled. Elsewhere, link drags show the
 	// "no drop" cursor and a stray drop is swallowed so the page does not navigate to the link.
@@ -711,7 +719,7 @@ function NewTab() {
 				event.preventDefault();
 				void pastedLinkTitles(several).then((links) => {
 					setPastedLinks(links.map((link) => ({...link, include: true})));
-					setPastedColumn(columns[0]?.id || UNFILED_COLUMN.id);
+					setPastedColumn(defaultColumnId || UNFILED_COLUMN.id);
 					setPastedNewColumn({name: ''});
 					setDialog('paste-links');
 				});
@@ -729,7 +737,7 @@ function NewTab() {
 					id: null,
 					title,
 					url: link.url,
-					columnId: columns[0]?.id || NEW_COLUMN,
+					columnId: defaultColumnId || NEW_COLUMN,
 				});
 				setDialog('bookmark');
 			});
@@ -737,7 +745,7 @@ function NewTab() {
 
 		document.addEventListener('paste', onPaste);
 		return () => document.removeEventListener('paste', onPaste);
-	}, [pasteToBookmark, columns]);
+	}, [pasteToBookmark, columns, defaultColumnId]);
 
 	async function addPastedLinks(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -847,7 +855,7 @@ function NewTab() {
 
 	function openBookmarkEditor(
 		bookmark: Bookmark | null = null,
-		preferredColumn = columns[0]?.id || NEW_COLUMN,
+		preferredColumn = defaultColumnId || NEW_COLUMN,
 	) {
 		// A bookmark left in the board's Unfiled area has no column to show, so it starts on the preferred one.
 		const own = columns.some((column) => column.id === bookmark?.columnId)
@@ -867,6 +875,7 @@ function NewTab() {
 			id: column?.id || null,
 			name: column?.name || '',
 			icon: column?.icon,
+			domains: (column?.domains ?? []).join('\n'),
 		});
 		setDialog('column');
 	}
@@ -942,15 +951,18 @@ function NewTab() {
 			return;
 		}
 
+		const domains = columnEdit.domains.split(/[\s,]+/).filter(Boolean);
 		const result = columnEdit.id
 			? await send('UPDATE_BOOKMARK_COLUMN', {
 					columnId: columnEdit.id,
 					name: columnEdit.name,
 					icon: columnEdit.icon ?? '',
+					domains,
 				})
 			: await send('CREATE_BOOKMARK_COLUMN', {
 					name: columnEdit.name,
 					icon: columnEdit.icon,
+					domains,
 				});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save that column.', true);
@@ -2069,7 +2081,7 @@ function NewTab() {
 				<Label htmlFor="bookmark-column">Column</Label>
 				<ColumnSelect
 					columns={columns}
-					value={bookmarkEdit?.columnId || columns[0]?.id || NEW_COLUMN}
+					value={bookmarkEdit?.columnId || defaultColumnId || NEW_COLUMN}
 					id="bookmark-column"
 					onValueChange={(value) =>
 						setBookmarkEdit((old) => old && {...old, columnId: value})
@@ -2759,6 +2771,7 @@ function NewTab() {
 			<RecoveryBanner
 				showStatus={showStatus}
 				onReview={() => setSnapshotsOpen(true)}
+				onSessionsChanged={reload}
 			/>
 			{sessionsOnTop ? sessionsSection : bookmarksSection}
 			<hr className="my-8 border-border" aria-hidden="true" />
@@ -3065,6 +3078,45 @@ function NewTab() {
 									setColumnEdit((old) => old && {...old, icon})
 								}
 							/>
+							<details
+								className="group rounded-md border border-border"
+								open={Boolean(columnEdit?.domains)}
+							>
+								<summary className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<ChevronRight
+										className="h-4 w-4 transition-transform group-open:rotate-90"
+										aria-hidden="true"
+									/>
+									Advanced: file automatically
+								</summary>
+								<div className="space-y-1.5 px-3 pb-3">
+									<Label htmlFor="column-domains">Websites</Label>
+									<Textarea
+										id="column-domains"
+										rows={4}
+										spellCheck={false}
+										placeholder={
+											'One per line, e.g.\ngithub.com\ngithub.com/bberka'
+										}
+										value={columnEdit?.domains ?? ''}
+										aria-describedby="column-domains-hint"
+										onChange={(e) =>
+											setColumnEdit(
+												(old) => old && {...old, domains: e.target.value},
+											)
+										}
+									/>
+									<p
+										id="column-domains-hint"
+										className="text-xs text-muted-foreground"
+									>
+										A site covers its subdomains. Add a path such as
+										github.com/bberka to match only that part. Pages saved from
+										the toolbar popup, the shortcut or the browser's bookmark
+										button go here without asking. The longest match wins.
+									</p>
+								</div>
+							</details>
 						</DialogBody>
 						<DialogFooter>
 							<Button

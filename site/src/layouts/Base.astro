@@ -35,7 +35,7 @@ const graph: Record<string, unknown>[] = [
 		name: SITE.name,
 		url: `${SITE.url}/`,
 		logo: abs('/icon-512.png'),
-		sameAs: [SITE.repo],
+		sameAs: [SITE.repo, SITE.chromeWebStore, SITE.firefoxAddons],
 	},
 	...jsonLd,
 ];
@@ -96,6 +96,7 @@ const footerGroups: Array<{title: string; links: FooterLink[]}> = [
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		<link rel="canonical" href={canonical} />
+		<meta name="author" content={SITE.author} />
 		<meta name="robots" content={noindex ? 'noindex' : 'index, follow, max-image-preview:large'} />
 		<meta name="theme-color" content="#fbfaff" media="(prefers-color-scheme: light)" />
 		<meta name="theme-color" content="#0d0b1a" media="(prefers-color-scheme: dark)" />
@@ -109,6 +110,7 @@ const footerGroups: Array<{title: string; links: FooterLink[]}> = [
 		<meta property="og:description" content={description} />
 		<meta property="og:url" content={canonical} />
 		<meta property="og:image" content={abs(SITE.ogImage)} />
+		<meta property="og:image:type" content="image/png" />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
 		<meta property="og:image:alt" content="TabLodge dashboard showing saved tab sessions and a bookmark board" />

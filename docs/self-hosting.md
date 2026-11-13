@@ -166,7 +166,7 @@ The first browser sends its library to the server. Each further browser merges w
 
 While sync is on, a sync icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings. **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
 
-Sessions, saved tabs, folders, bookmark columns, bookmarks, and display and saving preferences (excluded sites among them) sync. Recovery snapshots, backups, the trash bin, and per browser settings such as the new tab page do not. When two browsers change the same item at the same time, the later change wins.
+Sessions, saved tabs, folders, bookmark columns, bookmarks, and settings (excluded sites among them) sync. Recovery snapshots, automatic backups, browser bookmark monitoring, and the trash bin do not. **Sync settings** in **Settings › Sync** is on by default; turn it off in a browser to keep its settings separate, and turning it back on sends that browser's settings. When two browsers change the same item at the same time, the later change wins.
 
 ### Private windows
 

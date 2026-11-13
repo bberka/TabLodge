@@ -11,8 +11,8 @@ export const ROWS = {
 		hint: 'A rounded bar above the content',
 	},
 	syncSettings: {
-		label: 'Sync app settings',
-		hint: "Look, tab bar, tap and swipe actions follow your other phones when sync is on. Turning it on sends this phone's settings.",
+		label: 'Sync settings',
+		hint: "Your settings follow your other devices when sync is on: this app's look and gestures, and the extension's settings. Turning it on sends this phone's.",
 	},
 	tap: {label: 'Tap a bookmark'},
 	swipeRight: {label: 'Swipe right'},
@@ -58,7 +58,7 @@ export const SECTIONS = {
 		rows: [ROWS.style, ROWS.floatingBar],
 	},
 	syncApp: {
-		title: 'Sync app settings',
+		title: 'Sync settings',
 		aliases: ['phones', 'devices', 'share settings'],
 		rows: [ROWS.syncSettings],
 	},

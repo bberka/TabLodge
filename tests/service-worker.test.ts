@@ -563,6 +563,7 @@ function createWorkerHarness(
 				},
 			},
 		},
+		idle: {onStateChanged: event('idleStateChanged')},
 		windows: {
 			async get(id: number, query: {populate?: boolean} = {}) {
 				const win = windows.find((entry) => entry.id === id);
@@ -1834,6 +1835,16 @@ test('the idle timeout locks the library and the alarm checks it', async () => {
 		minutes: 7,
 	});
 	assert.equal(invalid.ok, false);
+});
+
+test('locking the screen locks the library, other idle states do not', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	await harness.fire('idleStateChanged', 'idle');
+	assert.ok(harness.sessionStore[LOCK_KEY]);
+	await harness.fire('idleStateChanged', 'locked');
+	assert.equal(harness.sessionStore[LOCK_KEY], undefined);
+	assert.equal((await harness.sendMessage({type: 'GET_STATE'})).locked, true);
 });
 
 test('the lock needs the saved separate library, and regular windows cannot manage it', async () => {
@@ -6513,6 +6524,81 @@ test('bookmark columns store a registry icon and drop unknown ones', async () =>
 	assert.equal('icon' in reset.column, false);
 });
 
+test('a column with domains takes matching bookmarks when none is chosen', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const dev = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Dev',
+		domains: ['https://www.GitHub.com/', 'github.com', 'nope', ''],
+	});
+	assert.equal(dev.ok, true, dev.error);
+	assert.deepEqual([...dev.column.domains!], ['github.com']);
+	const docs = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Docs',
+		domains: ['docs.github.com'],
+	});
+
+	const add = async (url: string) =>
+		(await harness.sendMessage({type: 'ADD_BOOKMARK', bookmark: {url}}))
+			.bookmark.columnId;
+	assert.equal(await add('https://github.com/a'), dev.column.id);
+	assert.equal(await add('https://gist.github.com/a'), dev.column.id);
+	assert.equal(await add('https://docs.github.com/a'), docs.column.id);
+	assert.notEqual(await add('https://notgithub.com/a'), dev.column.id);
+
+	// A path entry matches that path and below, and beats a bare host.
+	const repo = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Mine',
+		domains: ['https://github.com/bberka/?tab=x#y'],
+	});
+	assert.deepEqual([...repo.column.domains!], ['github.com/bberka']);
+	assert.equal(await add('https://github.com/bberka'), repo.column.id);
+	assert.equal(await add('https://github.com/bberka/TabLodge'), repo.column.id);
+	assert.equal(await add('https://github.com/bberkaa/x'), dev.column.id);
+	assert.equal(await add('https://github.com/other'), dev.column.id);
+
+	// An explicit column still wins over the domain.
+	const explicit = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://github.com/b', columnId: docs.column.id},
+	});
+	assert.equal(explicit.bookmark.columnId, docs.column.id);
+
+	// Omitting domains keeps them; an empty list clears them.
+	const kept = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: dev.column.id,
+		name: 'Dev',
+	});
+	assert.deepEqual([...kept.column.domains!], ['github.com']);
+	const cleared = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: dev.column.id,
+		name: 'Dev',
+		domains: [],
+	});
+	assert.equal('domains' in cleared.column, false);
+});
+
+test('stored column sites are normalized on load, as for columns that arrive from sync', async () => {
+	const state = stateWithSession();
+	state.bookmarkColumns = [
+		{
+			id: 'column-a',
+			name: 'Alpha',
+			domains: ['GitHub.com/bberka/', 'junk', 7, 'github.com/bberka?x=1'],
+		},
+		{id: 'column-b', name: 'Beta', domains: 'github.com'},
+	] as unknown as typeof state.bookmarkColumns;
+	const harness = createWorkerHarness(state);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	const [alpha, beta] = loaded.bookmarkColumns;
+	assert.deepEqual([...alpha.domains!], ['github.com/bberka']);
+	assert.equal('domains' in beta, false);
+});
+
 test('stored column icons are validated on load and kept by imports', async () => {
 	const state = stateWithSession();
 	state.bookmarkColumns = [
@@ -10378,6 +10464,33 @@ test('the bookmark shortcut opens the add-bookmark window for a web page only', 
 	);
 	await settle();
 	assert.equal(internal.windowCreateCalls.length, 0);
+});
+
+test('the bookmark shortcut saves into a column that claims the site without opening the window', async () => {
+	const harness = nameHarness({}, [
+		webTab(1, 10, 0, {
+			active: true,
+			url: 'https://github.com/bberka/asdadsads',
+			title: 'Repo',
+		}),
+	]);
+	const column = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Mine',
+		domains: ['github.com/bberka'],
+	});
+	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+		'bookmark-page',
+		{id: 1, windowId: 10},
+	);
+	await settle();
+	assert.equal(harness.windowCreateCalls.length, 0);
+	const state = await harness.sendMessage({type: 'GET_STATE'});
+	const saved = state.bookmarks.find(
+		(bookmark: {url: string}) =>
+			bookmark.url === 'https://github.com/bberka/asdadsads',
+	);
+	assert.equal(saved?.columnId, column.column.id);
 });
 
 test('the palette shortcut opens one palette window over the focused window on any page, and a second press closes it', async () => {

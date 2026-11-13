@@ -975,6 +975,148 @@ const ICON_IDS = new Set<unknown>([
 	'mountain',
 	'cat',
 	'dog',
+	'crown',
+	'gem',
+	'award',
+	'medal',
+	'hourglass',
+	'timer',
+	'alarm-clock',
+	'infinity',
+	'hash',
+	'percent',
+	'layers',
+	'shapes',
+	'puzzle',
+	'wand',
+	'qr-code',
+	'eye',
+	'hand',
+	'handshake',
+	'ticket',
+	'trash',
+	'save',
+	'scissors',
+	'ruler',
+	'scale',
+	'gauge',
+	'box',
+	'boxes',
+	'anchor',
+	'life-buoy',
+	'mailbox',
+	'contact',
+	'table',
+	'printer',
+	'file-code',
+	'scroll-text',
+	'vault',
+	'warehouse',
+	'hospital',
+	'church',
+	'castle',
+	'hotel',
+	'bot',
+	'binary',
+	'braces',
+	'blocks',
+	'circuit-board',
+	'cog',
+	'command',
+	'container',
+	'webhook',
+	'keyboard',
+	'laptop',
+	'monitor',
+	'smartphone',
+	'tablet',
+	'hard-drive',
+	'network',
+	'router',
+	'signal',
+	'bluetooth',
+	'radio',
+	'plug',
+	'battery',
+	'satellite',
+	'workflow',
+	'mouse-pointer',
+	'funnel',
+	'radar',
+	'paintbrush',
+	'pipette',
+	'crop',
+	'aperture',
+	'clapperboard',
+	'disc',
+	'speaker',
+	'guitar',
+	'piano',
+	'popcorn',
+	'drama',
+	'shirt',
+	'glasses',
+	'watch',
+	'backpack',
+	'bike',
+	'bus',
+	'train',
+	'truck',
+	'ship',
+	'sailboat',
+	'tractor',
+	'fuel',
+	'footprints',
+	'telescope',
+	'umbrella',
+	'earth',
+	'syringe',
+	'thermometer',
+	'heart-pulse',
+	'bandage',
+	'ear',
+	'bone',
+	'microscope',
+	'baby',
+	'atom',
+	'dna',
+	'scroll',
+	'swords',
+	'joystick',
+	'bomb',
+	'skull',
+	'ghost',
+	'cake',
+	'cookie',
+	'candy',
+	'egg',
+	'fish',
+	'salad',
+	'wine',
+	'beer',
+	'milk',
+	'soup',
+	'sandwich',
+	'hamburger',
+	'carrot',
+	'banana',
+	'grape',
+	'cherry',
+	'wheat',
+	'ice-cream',
+	'chef-hat',
+	'flame',
+	'snowflake',
+	'droplet',
+	'wind',
+	'sprout',
+	'clover',
+	'rabbit',
+	'squirrel',
+	'bird',
+	'turtle',
+	'paw-print',
+	'rainbow',
 ]);
 const GROUP_COLORS = new Set<unknown>([
 	'grey',
@@ -1509,11 +1651,97 @@ function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 		id,
 		name: cleanText(raw.name, 'New column', 60),
 		...iconField(raw.icon),
+		...domainsField(raw.domains),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
 			: Date.now(),
 		isDefault: id === DEFAULT_BOOKMARK_COLUMN_ID,
 	};
+}
+
+const MAX_COLUMN_DOMAINS = 50;
+
+/**
+A column site entry: a bare host ("github.com"), or a host with a path prefix ("github.com/bberka"). Query and fragment
+are dropped and a trailing slash is ignored. Null when the host is not usable.
+*/
+function normalizeColumnSite(value: unknown): string | null {
+	const host = normalizeExcludedHost(value);
+	if (!host || typeof value !== 'string') {
+		return null;
+	}
+
+	let path = '';
+	try {
+		const text = value.trim().replace(/^([a-z][\d+\-.a-z]*:\/\/)?\*\./i, '$1');
+		path = new URL(
+			/^[a-z][\d+\-.a-z]*:\/\//i.test(text) ? text : `https://${text}`,
+		).pathname.replace(/\/+$/, '');
+	} catch {
+		return null;
+	}
+
+	return `${host}${path}`;
+}
+
+/**
+A column's sites as distinct entries, or `{}` when none remain, so a column without sites stores no field.
+*/
+function domainsField(value: unknown): {domains?: string[]} {
+	const sites = new Set<string>();
+	for (const entry of Array.isArray(value) ? value : []) {
+		const site = normalizeColumnSite(entry);
+		if (site) {
+			sites.add(site);
+		}
+	}
+
+	return sites.size > 0
+		? {domains: [...sites].slice(0, MAX_COLUMN_DOMAINS)}
+		: {};
+}
+
+/**
+The column whose site entry covers the address: the host or a subdomain of it and, when the entry has a path, that
+path or anything under it. When several match, the longer path wins, then the longer host, then the earlier column.
+Null when no column claims the address.
+*/
+function columnForUrl(store: Store, url: string): BookmarkColumn | null {
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return null;
+	}
+
+	const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+	let best: BookmarkColumn | null = null;
+	let bestScore = -1;
+	for (const column of store.bookmarkColumns) {
+		for (const site of column.domains ?? []) {
+			const slash = site.indexOf('/');
+			const siteHost = slash === -1 ? site : site.slice(0, slash);
+			const sitePath = slash === -1 ? '' : site.slice(slash);
+			if (
+				(host !== siteHost && !host.endsWith(`.${siteHost}`)) ||
+				(sitePath &&
+					parsed.pathname !== sitePath &&
+					!parsed.pathname.startsWith(`${sitePath}/`))
+			) {
+				continue;
+			}
+
+			const score = sitePath.length * 1000 + siteHost.length;
+			if (!(score > bestScore)) {
+				continue;
+			}
+
+			best = column;
+			bestScore = score;
+		}
+	}
+
+	return best;
 }
 
 function normalizeBookmarkColumns(rawColumns: unknown): BookmarkColumn[] {
@@ -3567,6 +3795,23 @@ async function openBookmarkPrompt(
 		cleanText(tab?.title, linkHost(url), 500),
 		500,
 	);
+	// A column that claims this site takes the bookmark without asking.
+	const store = await getStore();
+	const claimed = columnForUrl(store, url);
+	if (claimed) {
+		if (
+			store.bookmarks.some(
+				(bookmark) => bookmark.url === url && bookmark.columnId === claimed.id,
+			)
+		) {
+			return {ok: true};
+		}
+
+		const result = await addBookmark({title, url, columnId: claimed.id});
+		flashBadge(tab, result.ok);
+		return result.ok ? {ok: true} : {ok: false, error: result.error};
+	}
+
 	const options: chrome.windows.CreateData = {
 		type: 'popup',
 		url: `${chrome.runtime.getURL('add-bookmark.html')}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}${prefill?.fromBrowser ? '&source=browser' : ''}`,
@@ -5648,7 +5893,8 @@ async function addBookmark(
 			(column) => column.id === fields.columnId,
 		)
 			? fields.columnId!
-			: store.bookmarkColumns.find(
+			: columnForUrl(store, url)?.id ||
+				store.bookmarkColumns.find(
 					(column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID,
 				)?.id ||
 				store.bookmarkColumns[0]?.id ||
@@ -6170,6 +6416,7 @@ async function removeDuplicateBookmarks(
 async function createBookmarkColumn(
 	name: string,
 	icon?: unknown,
+	domains?: unknown,
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -6189,6 +6436,7 @@ async function createBookmarkColumn(
 			id: makeId(),
 			name: columnName,
 			...iconField(icon),
+			...domainsField(domains),
 			createdAt: Date.now(),
 			isDefault: false,
 		};
@@ -6202,6 +6450,7 @@ async function updateBookmarkColumn(
 	columnId: string,
 	name: string,
 	icon?: unknown,
+	domains?: unknown,
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -6230,6 +6479,16 @@ async function updateBookmarkColumn(
 				column.icon = nextIcon;
 			} else {
 				delete column.icon;
+			}
+		}
+
+		// `domains` omitted keeps the current list; an empty list clears it.
+		if (domains !== undefined) {
+			const {domains: nextDomains} = domainsField(domains);
+			if (nextDomains) {
+				column.domains = nextDomains;
+			} else {
+				delete column.domains;
 			}
 		}
 
@@ -9594,6 +9853,12 @@ if (privateContext) {
 	chrome.windows?.onRemoved?.addListener?.((windowId) => {
 		void privateLock.lockWhenWindowsClosed(windowId).catch(() => undefined);
 	});
+	// Locking the screen locks the library too. The browser wakes the worker for this event.
+	chrome.idle?.onStateChanged?.addListener?.((state) => {
+		if (state === 'locked') {
+			void privateLock.lock().catch(() => undefined);
+		}
+	});
 }
 
 /**
@@ -10125,11 +10390,16 @@ async function handleMessage(
 		}
 
 		case 'CREATE_BOOKMARK_COLUMN': {
-			return createBookmarkColumn(message.name, message.icon);
+			return createBookmarkColumn(message.name, message.icon, message.domains);
 		}
 
 		case 'UPDATE_BOOKMARK_COLUMN': {
-			return updateBookmarkColumn(message.columnId, message.name, message.icon);
+			return updateBookmarkColumn(
+				message.columnId,
+				message.name,
+				message.icon,
+				message.domains,
+			);
 		}
 
 		case 'DELETE_BOOKMARK_COLUMN': {
@@ -12050,11 +12320,13 @@ async function handleBrowserBookmark(node: chrome.bookmarks.BookmarkTreeNode) {
 		return;
 	}
 
-	const columnId = store.bookmarkColumns.some(
-		(column) => column.id === settings.browserBookmarkColumn,
-	)
-		? settings.browserBookmarkColumn
-		: store.bookmarkColumns[0]?.id;
+	const columnId =
+		columnForUrl(store, url)?.id ??
+		(store.bookmarkColumns.some(
+			(column) => column.id === settings.browserBookmarkColumn,
+		)
+			? settings.browserBookmarkColumn
+			: store.bookmarkColumns[0]?.id);
 	const result = await addBookmark({title: node.title, url, columnId});
 	flashBadge(active, result.ok);
 }

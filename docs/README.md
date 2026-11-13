@@ -79,7 +79,7 @@ In Chromium, turn on **Allow in Incognito** for TabLodge. The first private dash
 
 ### Lock a separate saved library
 
-A separate saved library can be locked with a PIN (4 to 8 digits) or a password (8 to 128 characters) from **Settings › Private windows** in a private window. TabLodge then encrypts it on this device and shows a lock screen until you enter it. It locks again on **Lock now**, after an idle time, and when the last private window or the browser closes. Nothing can recover a lost PIN or password, and a short PIN is easy to guess for someone with a copy of your profile. See [Privacy](PRIVACY.md#private-windows) for details.
+A separate saved library can be locked with a PIN (4 to 8 digits) or a password (8 to 128 characters) from **Settings › Private windows** in a private window. TabLodge then encrypts it on this device and shows a lock screen until you enter it. It locks again on **Lock now**, after an idle time, when you lock your screen, and when the last private window or the browser closes. Nothing can recover a lost PIN or password, and a short PIN is easy to guess for someone with a copy of your profile. See [Privacy](PRIVACY.md#private-windows) for details.
 
 ## Development
 
@@ -110,7 +110,7 @@ Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [
 - Share sheet: choose TabLodge from another app's share menu and a drawer slides up with the link and title filled in. When the share started the app, saving returns you to the app you came from.
 - Sessions: saved sessions are listed by folder, as in the extension: **All** (without Archived), each folder with its count, and **Archived** last. Tap a tab to open it, or **Open all** for the whole session. A phone browser cannot list its own tabs, so the app cannot capture them. Instead, share several links at once (in Chrome, select tabs in the tab switcher and choose Share tabs; in Firefox, Share all tabs) and a drawer asks whether to save them as bookmarks, as a new session, or into a session that exists.
 - Private library: the eye button on Bookmarks and Sessions shows the private windows' library, read only, from the same server. If it has a PIN or password, the app asks for it once and keeps the key in the Android keystore. **Settings › Private library** forgets it on the phone.
-- Settings sync: with sync on, the app's own settings (look, floating bar, tap and swipe actions, cleaning links on save) follow your other phones. It is on by default and **Settings › Sync app settings** turns it off for one phone. They travel in the library's `mobileApp` setting, which the extension keeps but does not use.
+- Settings sync: with sync on, your settings follow your other devices, including this app's own (look, floating bar, tap and swipe actions, cleaning links on save). It is on by default and **Settings › Sync settings** turns settings sync off for one phone, the same switch the extension has. The app's own settings travel in the library's `mobileApp` setting, which the extension keeps but does not use.
 - Columns: every column selector shows the column's icon, and ends with **New column**, which asks for a name and an icon.
 - Settings search: the box at the top of Settings filters the cards and rows as you type. It matches a setting's name or its hint, so `swipe`, `tracking`, or `private` find what you mean.
 - Behavior: **Settings › Bookmarks** chooses what a tap does (open or edit) and what a swipe right and left do (open, edit, move, delete, or nothing). **Settings › Same as your extension** changes the extension settings that sync: clean titles, tracking parameters, how addresses show, bookmark spacing, and session sorting. Settings that only make sense in a desktop browser (new tab, side panel, context menus, windows, snapshots) are not shown.
@@ -153,6 +153,7 @@ TabLodge has no website host permissions and no content scripts, and makes no ne
 | `sidePanel` | The side panel (Chromium; Firefox uses its sidebar) |
 | `search` | **Search the web** with your default engine |
 | `alarms` | Snapshots, backups, trash cleanup, archiving, sync, and the private lock |
+| `idle` | Lock the private library when you lock your screen |
 | `activeTab`, `scripting` | Show the search palette over the current page when you press its shortcut |
 
 `downloads` is optional and requested only for backup copies in `Downloads/TabLodge/`. A web page can tell TabLodge is installed by requesting `palette.html`, which the palette needs. See [Privacy](PRIVACY.md) for everything TabLodge stores and sends.
