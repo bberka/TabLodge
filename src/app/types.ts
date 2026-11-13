@@ -597,6 +597,7 @@ export type TabLodgeMessages = {
 	REMOVE_PRIVATE_LOCK: {credential: string};
 	SET_PRIVATE_LOCK_IDLE: {minutes: number};
 	GET_STATE: {};
+	GET_BOOKMARK_PROMPT: {url: string};
 	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
 		scope?: SaveScope;
@@ -931,6 +932,15 @@ export type TabLodgeResponses = {
 	REMOVE_PRIVATE_LOCK: PrivateLockInfo;
 	SET_PRIVATE_LOCK_IDLE: PrivateLockInfo;
 	GET_STATE: Store;
+	/**
+	Just what the add-bookmark window needs, so it never waits for the whole library.
+	*/
+	GET_BOOKMARK_PROMPT: {
+		bookmarkColumns: BookmarkColumn[];
+		defaultColumnId?: string;
+		existingColumnId?: string;
+		settings: Settings;
+	};
 	GET_SETTINGS_DEFAULTS: {settings: Settings};
 	SAVE_TABS: SaveResult;
 	/**

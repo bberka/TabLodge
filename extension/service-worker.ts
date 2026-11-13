@@ -4,6 +4,7 @@ import {
 	omniboxSuggestions,
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
+import {defaultBookmarkColumnId} from '../src/app/default-column';
 import {
 	createPrivateLock,
 	type Gate,
@@ -10200,6 +10201,22 @@ async function handleMessage(
 
 		case 'GET_STATE': {
 			return {ok: true, ...(await getStore())};
+		}
+
+		case 'GET_BOOKMARK_PROMPT': {
+			const store = await getStore();
+			return {
+				ok: true,
+				bookmarkColumns: store.bookmarkColumns,
+				defaultColumnId: defaultBookmarkColumnId(
+					store.bookmarkColumns,
+					store.bookmarks,
+				),
+				existingColumnId: store.bookmarks.find(
+					(bookmark) => bookmark.url === message.url,
+				)?.columnId,
+				settings: store.settings,
+			};
 		}
 
 		case 'GET_SETTINGS_DEFAULTS': {
