@@ -120,6 +120,41 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 			</View>
 			<SettingsQuery value={needle}>
 				<View style={styles.cards}>
+					<SettingsCard section={SECTIONS.appearance}>
+						<Text
+							accessibilityRole="header"
+							style={[styles.heading, {color: colors.text}]}
+						>
+							Appearance
+						</Text>
+						<Text style={{color: colors.muted}}>
+							Make the app look like Android or like iOS. It follows your phone
+							by default.
+						</Text>
+						<Group row={ROWS.style}>
+							<Segmented
+								label="Style"
+								items={[
+									{id: 'material', name: 'Android', icon: 'logo-android'},
+									{id: 'ios', name: 'iOS', icon: 'logo-apple'},
+								]}
+								selected={prefs.look}
+								onSelect={(look) => {
+									setPreferences({look});
+								}}
+							/>
+						</Group>
+						<Toggle
+							row={ROWS.floatingBar}
+							value={prefs.floatingBar}
+							onChange={(floatingBar) => {
+								setPreferences({floatingBar});
+							}}
+						/>
+					</SettingsCard>
+					<BookmarkBehaviourCard />
+					<SyncedSettingsCard />
+					<PrivateCard />
 					<SettingsCard section={SECTIONS.sync}>
 						<Text
 							accessibilityRole="header"
@@ -173,38 +208,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 							</>
 						)}
 					</SettingsCard>
-					<SettingsCard section={SECTIONS.appearance}>
-						<Text
-							accessibilityRole="header"
-							style={[styles.heading, {color: colors.text}]}
-						>
-							Appearance
-						</Text>
-						<Text style={{color: colors.muted}}>
-							Make the app look like Android or like iOS. It follows your phone
-							by default.
-						</Text>
-						<Group row={ROWS.style}>
-							<Segmented
-								label="Style"
-								items={[
-									{id: 'material', name: 'Android', icon: 'logo-android'},
-									{id: 'ios', name: 'iOS', icon: 'logo-apple'},
-								]}
-								selected={prefs.look}
-								onSelect={(look) => {
-									setPreferences({look});
-								}}
-							/>
-						</Group>
-						<Toggle
-							row={ROWS.floatingBar}
-							value={prefs.floatingBar}
-							onChange={(floatingBar) => {
-								setPreferences({floatingBar});
-							}}
-						/>
-					</SettingsCard>
 					<SettingsCard section={SECTIONS.syncApp}>
 						<Toggle
 							row={ROWS.syncSettings}
@@ -214,9 +217,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 							}}
 						/>
 					</SettingsCard>
-					<BookmarkBehaviourCard />
-					<SyncedSettingsCard />
-					<PrivateCard />
 					{__DEV__ && (
 						<SettingsCard section={SECTIONS.development}>
 							<Text
