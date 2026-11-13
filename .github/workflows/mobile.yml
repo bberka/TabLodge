@@ -71,8 +71,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      # Accepts the Android SDK licenses, so Gradle can fetch the platform and NDK the build asks for.
-      - uses: android-actions/setup-android@v3
+      # The runner image has the SDK. Accepting its licenses lets Gradle fetch the platform and NDK the build asks for.
+      - name: Accept the Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - uses: gradle/actions/setup-gradle@v5
       - run: pnpm install --frozen-lockfile
       - name: Test the app's code

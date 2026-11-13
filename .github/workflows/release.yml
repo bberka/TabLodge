@@ -166,7 +166,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - name: Accept the Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
         if: steps.signing.outputs.enabled == 'true'
       - uses: gradle/actions/setup-gradle@v5
         if: steps.signing.outputs.enabled == 'true'
