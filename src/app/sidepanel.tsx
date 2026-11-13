@@ -836,7 +836,7 @@ function SidePanel() {
 					<Input
 						type="search"
 						aria-label={searchLabel}
-						placeholder="Search everything"
+						placeholder={searchLabel}
 						value={query}
 						className="pl-9"
 						onChange={(event) => setQuery(event.target.value)}
@@ -886,7 +886,7 @@ function SidePanel() {
 								title={search ? 'No bookmarks match' : 'No bookmarks yet'}
 							>
 								{search ? (
-									'Try another title or address.'
+									'Try another title or address. Sessions and open tabs have their own search in the other tabs.'
 								) : (
 									<a
 										className="font-semibold text-primary hover:underline"

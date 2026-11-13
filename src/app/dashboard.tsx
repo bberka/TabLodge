@@ -33,6 +33,7 @@ import {
 	Pencil,
 	RefreshCw,
 	Replace,
+	PanelsTopLeft,
 	RotateCcw,
 	Save,
 	Search,
@@ -274,8 +275,13 @@ export function SessionManager({
 	state,
 	error,
 	reload,
+	onSaveWindow,
 }: {
 	embedded?: boolean;
+	/**
+	Saves the current window. Shown in the empty state when the page has no Save button of its own.
+	*/
+	onSaveWindow?: () => void;
 	initialQuery?: string;
 	state: TabLodgeState | null;
 	error: string;
@@ -2077,8 +2083,33 @@ export function SessionManager({
 				)}
 
 				{groups.length === 0 ? (
-					<EmptyState icon={TabLodgeMark} title="No saved sessions">
-						Save tabs from the popup, a shortcut, or the right-click menu.
+					<EmptyState
+						icon={TabLodgeMark}
+						title="No saved sessions"
+						action={
+							<div className="flex flex-wrap justify-center gap-2">
+								{onSaveWindow && (
+									<Button size="sm" onClick={onSaveWindow}>
+										<PanelsTopLeft />
+										Save this window
+									</Button>
+								)}
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={() => {
+										setImportOpen(true);
+									}}
+								>
+									<Upload />
+									Import sessions
+								</Button>
+							</div>
+						}
+					>
+						Save the tabs of this window, or bring sessions from OneTab, Toby or
+						a TabLodge backup. You can also save from the popup, a shortcut, or
+						the right-click menu.
 					</EmptyState>
 				) : visibleGroups.length === 0 ? (
 					<EmptyState
@@ -3238,7 +3269,7 @@ const GroupCard = memo(
 										className={cn(
 											'flex items-center gap-0.5',
 											!isExpanded &&
-												'opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100',
+												'opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 [@media(hover:none)]:opacity-100',
 										)}
 									>
 										{quickActions.map(
@@ -3568,7 +3599,7 @@ const SavedTab = memo(
 							'flex w-6 shrink-0 justify-center transition-opacity',
 							selected || selectionActive
 								? 'opacity-100'
-								: 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100',
+								: 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100 [@media(hover:none)]:opacity-100',
 						)}
 					>
 						<Checkbox
@@ -3677,7 +3708,7 @@ const SavedTab = memo(
 							</p>
 						)}
 					</div>
-					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100">
+					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100 [@media(hover:none)]:opacity-100">
 						<IconTooltip label="Restore tab">
 							<Button
 								variant="ghost"

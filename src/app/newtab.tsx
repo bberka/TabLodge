@@ -2773,6 +2773,7 @@ function NewTab() {
 				state={state}
 				error={error}
 				reload={reload}
+				onSaveWindow={() => void saveWindow()}
 			/>
 		</section>
 	);
@@ -4278,7 +4279,7 @@ const BookmarkCard = memo(
 									'absolute left-2 top-1/2 z-10 size-6 -translate-y-1/2',
 									selectionMode === 'hover' &&
 										!selected &&
-										'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+										'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
 								)}
 								onClick={(event) =>
 									void onAction(
