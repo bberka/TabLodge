@@ -368,7 +368,8 @@ export function AddButton({
 			style={({pressed}) => [
 				styles.fab,
 				{
-					bottom,
+					// Clear of the tab bar below, whose own shadow would otherwise reach the button.
+					bottom: bottom + 16,
 					backgroundColor: colors.accent,
 					opacity: pressed ? 0.85 : 1,
 				},
