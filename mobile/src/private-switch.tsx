@@ -1,7 +1,9 @@
 import {useState} from 'react';
 import {Alert, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from './bottom-sheet';
+import {usePreferences} from './preferences';
 import {isPrivateOpen, openPrivate} from './private-library';
+import {useSyncStatus} from './library-store';
 import {useColors} from './theme';
 import {Button, Field, IconButton} from './ui';
 import {setView, useView} from './view';
@@ -12,12 +14,16 @@ const UNAVAILABLE =
 	'This server has no private library. Turn on Sync private windows in the extension, or update the server.';
 
 /**
-The header button that flips between the regular library and the private windows' library. The private one asks
-for its PIN or password the first time, when it has one.
+Flips between the regular library and the private windows' library. The private one asks for its PIN or password the
+first time, when it has one. As a header icon (the default) it appears only when the person turned the button on in
+Settings, and only while a server is connected, or while the private library is open, so there is always a way back;
+with `button` it is a labeled button that is always there, for Settings.
 */
-export function PrivateSwitch() {
+export function PrivateSwitch({button = false}: {button?: boolean}) {
 	const colors = useColors();
 	const view = useView();
+	const {showPrivateButton} = usePreferences();
+	const {connected} = useSyncStatus();
 	const [asking, setAsking] = useState(false);
 	const [secret, setSecret] = useState('');
 	const [problem, setProblem] = useState<string>();
@@ -63,22 +69,38 @@ export function PrivateSwitch() {
 	};
 
 	const priv = view === 'private';
+	const toggle = () => {
+		if (priv) {
+			setView('regular');
+		} else if (isPrivateOpen()) {
+			setView('private');
+		} else {
+			void enter();
+		}
+	};
+
+	const visible = button || priv || (showPrivateButton && connected);
 	return (
 		<>
-			<IconButton
-				icon={priv ? 'lock-open-outline' : 'lock-closed-outline'}
-				label={priv ? 'Back to your regular library' : 'Show private library'}
-				color={priv ? colors.accent : undefined}
-				onPress={() => {
-					if (priv) {
-						setView('regular');
-					} else if (isPrivateOpen()) {
-						setView('private');
-					} else {
-						void enter();
-					}
-				}}
-			/>
+			{visible &&
+				(button ? (
+					<Button
+						label={
+							priv ? 'Back to your regular library' : 'Open the private library'
+						}
+						icon={priv ? 'lock-open-outline' : 'lock-closed-outline'}
+						onPress={toggle}
+					/>
+				) : (
+					<IconButton
+						icon={priv ? 'lock-open-outline' : 'lock-closed-outline'}
+						label={
+							priv ? 'Back to your regular library' : 'Show private library'
+						}
+						color={priv ? colors.accent : undefined}
+						onPress={toggle}
+					/>
+				))}
 			<BottomSheet
 				visible={asking}
 				label="Unlock private library"

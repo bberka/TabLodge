@@ -17,6 +17,8 @@ export type LinkSettings = Pick<
 	| 'markLocalLinks'
 	| 'bookmarkDensity'
 	| 'sessionSort'
+	| 'showSessionFaviconPreviews'
+	| 'expandSessionsByDefault'
 >;
 
 // The extension's own defaults, so a phone that has not synced yet behaves the same.
@@ -29,6 +31,8 @@ const DEFAULTS: LinkSettings = {
 	markLocalLinks: false,
 	bookmarkDensity: 'comfortable',
 	sessionSort: 'newest',
+	showSessionFaviconPreviews: true,
+	expandSessionsByDefault: false,
 };
 
 /**

@@ -13,11 +13,12 @@ import type {Session} from '../../../src/app/types';
 import {columnGlyph, columnTint, useChipLook} from '../column-icons';
 import {ALL_SESSIONS_ID, hostOf, sessionFolders, sessionsIn} from '../library';
 import {useLibrary} from '../library-store';
-import {linkToOpen} from '../links';
+import {linkToOpen, rowText} from '../links';
 import {openAll} from '../open-links';
 import {PrivateSwitch} from '../private-switch';
 import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
+import {usePreferences} from '../preferences';
 import {useLinkSettings} from '../use-link-settings';
 import {useView} from '../view';
 import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
@@ -95,6 +96,8 @@ function SessionCardView({
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	const tint = columnTint(session.color, scheme) ?? folderTint;
 	const links = useLinkSettings();
+	const prefs = usePreferences();
+	const compact = prefs.compactSessions;
 	const count = `${session.tabs.length} ${session.tabs.length === 1 ? 'tab' : 'tabs'}`;
 	return (
 		<Card flush>
@@ -132,27 +135,17 @@ function SessionCardView({
 						<Text numberOfLines={1} style={{color: colors.muted}}>
 							{count} · {folderName} · {shortDate(session.updatedAt)}
 						</Text>
-						{session.deviceName && (
-							<Text numberOfLines={1} style={{color: colors.muted}}>
-								Saved on {session.deviceName}
-							</Text>
+						{session.deviceName &&
+							prefs.showSavedOn &&
+							!prefs.compactSessions && (
+								<Text numberOfLines={1} style={{color: colors.muted}}>
+									Saved on {session.deviceName}
+								</Text>
+							)}
+						{links.showSessionFaviconPreviews && !prefs.compactSessions && (
+							<TabPreview session={session} />
 						)}
-						<TabPreview session={session} />
 					</View>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityLabel={`Open all ${count} in ${session.name}`}
-					android_ripple={{color: tint, radius: 22}}
-					style={[styles.round, {backgroundColor: soften(colors.accent)}]}
-					onPress={() => {
-						openAll(
-							session.tabs.map((tab) => linkToOpen(tab.url, links)),
-							session.name,
-						);
-					}}
-				>
-					<Icon name="albums-outline" size={22} color={colors.accent} />
 				</Pressable>
 				<Pressable
 					accessibilityRole="button"
@@ -176,49 +169,78 @@ function SessionCardView({
 			</View>
 			{expanded && (
 				<View style={[styles.tabs, {borderColor: colors.border}]}>
-					{session.tabs.map((tab) => (
-						<Pressable
-							key={tab.id}
-							accessibilityRole="link"
-							accessibilityLabel={`${tab.title || hostOf(tab.url)}, ${hostOf(tab.url)}`}
-							accessibilityHint="Opens the link"
-							android_ripple={{color: colors.pressed}}
-							style={({pressed}) => [
-								styles.tab,
-								{backgroundColor: pressed ? colors.pressed : 'transparent'},
-							]}
-							onPress={() => {
-								void Linking.openURL(linkToOpen(tab.url, links));
-							}}
-						>
-							<SiteIcon host={hostOf(tab.url)} size={32} />
-							<View style={styles.texts}>
-								<Text numberOfLines={2} style={{color: colors.text}}>
-									{tab.title || tab.url}
-								</Text>
-								<Text
-									numberOfLines={1}
-									style={{color: colors.muted, fontSize: 13}}
-								>
-									{hostOf(tab.url)}
-								</Text>
-							</View>
-							{tab.pinned && <Icon name="pin" size={15} color={colors.muted} />}
-							<Icon name="open-outline" size={18} color={colors.muted} />
-						</Pressable>
-					))}
-					{onColor && (
-						<View style={styles.colorRow}>
+					{session.tabs.map((tab) => {
+						const text = rowText(
+							{title: tab.title || tab.url, url: tab.url},
+							links,
+						);
+						return (
+							<Pressable
+								key={tab.id}
+								accessibilityRole="link"
+								accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
+								accessibilityHint="Opens the link"
+								android_ripple={{color: colors.pressed}}
+								style={({pressed}) => [
+									styles.tab,
+									compact && styles.tabCompact,
+									{backgroundColor: pressed ? colors.pressed : 'transparent'},
+								]}
+								onPress={() => {
+									void Linking.openURL(linkToOpen(tab.url, links));
+								}}
+							>
+								<SiteIcon host={hostOf(tab.url)} size={compact ? 24 : 32} />
+								<View style={styles.texts}>
+									<Text
+										numberOfLines={compact ? 1 : 2}
+										style={{color: colors.text}}
+									>
+										{text.main}
+									</Text>
+									{text.sub !== undefined && !compact && (
+										<Text
+											numberOfLines={1}
+											style={{color: colors.muted, fontSize: 13}}
+										>
+											{text.sub}
+										</Text>
+									)}
+								</View>
+								{tab.pinned && (
+									<Icon name="pin" size={15} color={colors.muted} />
+								)}
+								<Icon name="open-outline" size={18} color={colors.muted} />
+							</Pressable>
+						);
+					})}
+					<View style={styles.footer}>
+						<View style={styles.footerButton}>
 							<Button
 								kind="plain"
-								label="Change color"
-								icon="color-palette-outline"
+								label={`Open all ${session.tabs.length}`}
+								icon="albums-outline"
 								onPress={() => {
-									onColor(session);
+									openAll(
+										session.tabs.map((tab) => linkToOpen(tab.url, links)),
+										session.name,
+									);
 								}}
 							/>
 						</View>
-					)}
+						{onColor && (
+							<View style={styles.footerButton}>
+								<Button
+									kind="plain"
+									label="Change color"
+									icon="color-palette-outline"
+									onPress={() => {
+										onColor(session);
+									}}
+								/>
+							</View>
+						)}
+					</View>
 				</View>
 			)}
 		</Card>
@@ -241,7 +263,10 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const chipLook = useChipLook();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	const [query, setQuery] = useState('');
-	const [open, setOpen] = useState<string | undefined>();
+	// The sessions whose state was flipped from the default: opened when the default is collapsed, closed when it is
+	// expanded.
+	const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
+	const expandAll = links.expandSessionsByDefault;
 	const [coloringId, setColoringId] = useState<string>();
 	const coloring = store.groups.find((session) => session.id === coloringId);
 
@@ -289,7 +314,14 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 		setColoringId(session.id);
 	}, []);
 	const toggle = useCallback((id: string) => {
-		setOpen((current) => (current === id ? undefined : id));
+		setFlipped((current) => {
+			const next = new Set(current);
+			if (!next.delete(id)) {
+				next.add(id);
+			}
+
+			return next;
+		});
 	}, []);
 
 	if (store.groups.length === 0) {
@@ -321,7 +353,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 			<FlatList
 				removeClippedSubviews
 				data={shown}
-				extraData={open}
+				extraData={[flipped, expandAll]}
 				keyExtractor={(session) => session.id}
 				contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
 				keyboardShouldPersistTaps="handled"
@@ -374,7 +406,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							session={item}
 							folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
 							tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
-							expanded={open === item.id}
+							expanded={expandAll !== flipped.has(item.id)}
 							onToggle={toggle}
 							onColor={view === 'private' ? undefined : colorOf}
 						/>
@@ -396,7 +428,9 @@ function Gap() {
 }
 
 const styles = StyleSheet.create({
-	colorRow: {padding: 8},
+	footer: {flexDirection: 'row', gap: 8, padding: 8},
+	footerButton: {flex: 1},
+	tabCompact: {minHeight: 40, paddingVertical: 4},
 	screen: {flex: 1},
 	list: {paddingBottom: 24, gap: 8},
 	pad: {paddingHorizontal: 16, gap: 12},
@@ -424,7 +458,7 @@ const styles = StyleSheet.create({
 	preview: {flexDirection: 'row', alignItems: 'center', paddingTop: 6},
 	badge: {borderWidth: 2, borderRadius: 13},
 	more: {marginLeft: 6, fontSize: 13, fontWeight: '600'},
-	// Round buttons at the end of the header: Open all, and the chevron that shows the tabs.
+	// The round chevron at the end of the header, which shows the tabs.
 	round: {
 		width: TARGET,
 		height: TARGET,

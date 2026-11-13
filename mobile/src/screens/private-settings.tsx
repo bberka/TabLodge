@@ -1,9 +1,12 @@
 import {Alert, StyleSheet, Text} from 'react-native';
+import {PrivateSwitch} from '../private-switch';
+import {setPreferences, usePreferences} from '../preferences';
 import {lockPrivate, usePrivateStatus} from '../private-library';
 import {useColors} from '../theme';
 import {Button} from '../ui';
 import {SettingsCard} from './settings-card';
-import {SECTIONS} from './settings-index';
+import {Toggle} from './behaviour-settings';
+import {ROWS, SECTIONS} from './settings-index';
 
 /**
 What this phone keeps of the private windows' library, and a way to forget it.
@@ -11,6 +14,7 @@ What this phone keeps of the private windows' library, and a way to forget it.
 export function PrivateCard() {
 	const colors = useColors();
 	const status = usePrivateStatus();
+	const prefs = usePreferences();
 	return (
 		<SettingsCard section={SECTIONS.private}>
 			<Text
@@ -23,8 +27,16 @@ export function PrivateCard() {
 				{status.connected
 					? (status.error ??
 						'Open. It is read only here, and every private bookmark and session is opened in your browser like any other.')
-					: 'Use the eye button on Bookmarks or Sessions to read the private windows’ library from your server. If it has a PIN or password, you enter it once.'}
+					: 'Open the private windows’ library from your server and read it here. If it has a PIN or password, you enter it once.'}
 			</Text>
+			<PrivateSwitch button />
+			<Toggle
+				row={ROWS.showPrivateButton}
+				value={prefs.showPrivateButton}
+				onChange={(showPrivateButton) => {
+					setPreferences({showPrivateButton});
+				}}
+			/>
 			{status.connected && (
 				<Button
 					label="Forget on this phone"

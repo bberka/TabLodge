@@ -141,6 +141,53 @@ export function BookmarkBehaviourCard() {
 }
 
 /**
+How session cards look. The tab icons and expanded-by-default switches are the extension's own settings, so they
+change there too; the other two are this app's and sync with its look.
+*/
+export function SessionSettingsCard() {
+	const colors = useColors();
+	const prefs = usePreferences();
+	const settings = useLinkSettings(true);
+	return (
+		<SettingsCard section={SECTIONS.sessions}>
+			<Heading>Sessions</Heading>
+			<Text style={{color: colors.muted}}>
+				Fewer details make the list shorter. Links under a tab's title follow
+				Show under a title, below.
+			</Text>
+			<Toggle
+				row={ROWS.compactSessions}
+				value={prefs.compactSessions}
+				onChange={(compactSessions) => {
+					setPreferences({compactSessions});
+				}}
+			/>
+			<Toggle
+				row={ROWS.sessionIcons}
+				value={settings.showSessionFaviconPreviews}
+				onChange={(value) => {
+					void setSyncedSetting('showSessionFaviconPreviews', value);
+				}}
+			/>
+			<Toggle
+				row={ROWS.showSavedOn}
+				value={prefs.showSavedOn}
+				onChange={(showSavedOn) => {
+					setPreferences({showSavedOn});
+				}}
+			/>
+			<Toggle
+				row={ROWS.expandSessions}
+				value={settings.expandSessionsByDefault}
+				onChange={(value) => {
+					void setSyncedSetting('expandSessionsByDefault', value);
+				}}
+			/>
+		</SettingsCard>
+	);
+}
+
+/**
 The extension settings that follow you between devices, so changing one here changes it in the browser too.
 */
 export function SyncedSettingsCard() {

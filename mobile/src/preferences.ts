@@ -2,13 +2,25 @@
 Settings that belong to this phone only and never sync: how the app looks. Loaded once at startup; screens read
 them with `usePreferences`.
 */
-import {Platform} from 'react-native';
+import {Appearance, Platform} from 'react-native';
 import {useSyncExternalStore} from 'react';
 import {isAccent} from '../../src/shared/accent-colors';
 import {cleanDeviceName} from '../../src/shared/device';
 import {readJson, writeJson} from './storage';
 
 export type Look = 'material' | 'ios';
+export type Theme = 'system' | 'light' | 'dark';
+
+const THEMES = new Set<unknown>(['system', 'light', 'dark']);
+const isTheme = (value: unknown): value is Theme => THEMES.has(value);
+
+/**
+Makes the whole app, and the system dialogs it opens, follow the chosen theme; `system` hands the choice back to the phone.
+*/
+function applyTheme(theme: Theme) {
+	// `unspecified` hands the choice back to the phone.
+	Appearance.setColorScheme(theme === 'system' ? 'unspecified' : theme);
+}
 
 /**
 What a swipe on a bookmark does.
@@ -65,6 +77,24 @@ type Preferences = {
 	*/
 	accent: string;
 	/**
+	Light, dark, or the phone's own setting (the default). Syncs with the rest of the app's look.
+	*/
+	theme: Theme;
+	/**
+	Show the lock button that opens the private library on Bookmarks and Sessions. Off by default, because a button on the
+	main screens tells anyone holding the phone that a private library exists. Stays on this phone.
+	*/
+	showPrivateButton: boolean;
+	/**
+	Session cards without the tab icon strip and the saved-on line, and with tighter tab rows. Syncs with the rest of the
+	app's look.
+	*/
+	compactSessions: boolean;
+	/**
+	Show which device saved a session on its card. Syncs with the rest of the app's look.
+	*/
+	showSavedOn: boolean;
+	/**
 	The name this phone puts on the sessions it saves. Empty means the phone's own make and model. Stays on this phone.
 	*/
 	deviceName: string;
@@ -83,6 +113,10 @@ const defaults: Preferences = {
 	syncSettings: true,
 	siteIcons: false,
 	accent: 'system',
+	theme: 'system',
+	showPrivateButton: false,
+	compactSessions: false,
+	showSavedOn: true,
 	deviceName: '',
 };
 
@@ -110,6 +144,10 @@ export async function loadPreferences(): Promise<void> {
 		siteIcons,
 		deviceName,
 		accent,
+		theme,
+		showPrivateButton,
+		compactSessions,
+		showSavedOn,
 	} = saved as Partial<Preferences>;
 	current = {
 		look: look === 'ios' || look === 'material' ? look : defaults.look,
@@ -125,8 +163,13 @@ export async function loadPreferences(): Promise<void> {
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
 		siteIcons: siteIcons === true,
 		accent: isAccent(accent) ? accent : defaults.accent,
+		theme: isTheme(theme) ? theme : defaults.theme,
+		showPrivateButton: showPrivateButton === true,
+		compactSessions: compactSessions === true,
+		showSavedOn: showSavedOn !== false,
 		deviceName: cleanDeviceName(deviceName),
 	};
+	applyTheme(current.theme);
 	for (const listener of listeners) {
 		listener();
 	}
@@ -151,6 +194,10 @@ export function setPreferences(
 	fromSync = false,
 ): void {
 	current = {...current, ...change};
+	if (change.theme) {
+		applyTheme(change.theme);
+	}
+
 	for (const listener of listeners) {
 		listener();
 	}
@@ -182,6 +229,9 @@ const SYNCED_KEYS = [
 	'swipeLeft',
 	'cleanOnSave',
 	'accent',
+	'theme',
+	'compactSessions',
+	'showSavedOn',
 ] as const;
 
 /**
@@ -224,6 +274,18 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 	const left = ROW_ACTIONS.find((action) => action === raw.swipeLeft);
 	if (left) {
 		found.swipeLeft = left;
+	}
+
+	if (typeof raw.compactSessions === 'boolean') {
+		found.compactSessions = raw.compactSessions;
+	}
+
+	if (typeof raw.showSavedOn === 'boolean') {
+		found.showSavedOn = raw.showSavedOn;
+	}
+
+	if (isTheme(raw.theme)) {
+		found.theme = raw.theme;
 	}
 
 	if (isAccent(raw.accent)) {

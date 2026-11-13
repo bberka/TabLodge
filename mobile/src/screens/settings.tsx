@@ -28,6 +28,7 @@ import {ColorPicker, type LeadingChoice} from '../color-picker';
 import {DeviceNameField} from './device-name-field';
 import {
 	BookmarkBehaviourCard,
+	SessionSettingsCard,
 	Group,
 	SyncedSettingsCard,
 	Toggle,
@@ -163,6 +164,24 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 								}}
 							/>
 						</Group>
+						<Group row={ROWS.theme}>
+							<Segmented
+								label="Theme"
+								items={[
+									{
+										id: 'system',
+										name: 'System',
+										icon: 'phone-portrait-outline',
+									},
+									{id: 'light', name: 'Light', icon: 'sunny-outline'},
+									{id: 'dark', name: 'Dark', icon: 'moon-outline'},
+								]}
+								selected={prefs.theme}
+								onSelect={(theme) => {
+									setPreferences({theme});
+								}}
+							/>
+						</Group>
 						<Group row={ROWS.accent}>
 							<ColorPicker
 								keepSelected
@@ -181,6 +200,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 							}}
 						/>
 					</SettingsCard>
+					<SessionSettingsCard />
 					<BookmarkBehaviourCard />
 					<SyncedSettingsCard />
 					<PrivateCard />
