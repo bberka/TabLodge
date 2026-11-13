@@ -22,6 +22,7 @@ import {
 	type IconName,
 	Segmented,
 } from '../ui';
+import {DeviceNameField} from './device-name-field';
 import {
 	BookmarkBehaviourCard,
 	Group,
@@ -141,6 +142,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 										{state.text}
 									</Text>
 								</View>
+								<DeviceNameField />
 								<Button
 									label="Sync now"
 									icon="sync"

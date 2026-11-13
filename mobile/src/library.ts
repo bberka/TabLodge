@@ -10,6 +10,7 @@ import type {
 	Store,
 } from '../../src/app/types';
 import {isColumnColor} from '../../src/shared/accent-colors';
+import type {DeviceStamp} from '../../src/shared/device';
 import {LAYOUT_VERSION} from '../../src/shared/library-index';
 
 // Ids the extension gives its first column and the bucket for bookmarks whose column is gone.
@@ -574,7 +575,15 @@ Saves links as a new session, in the chosen folder or the default one. `tabIds` 
 */
 export function addSession(
 	store: Store,
-	input: {name: string; urls: readonly string[]; folderId?: string},
+	input: {
+		name: string;
+		urls: readonly string[];
+		folderId?: string;
+		/**
+		Where it was saved: the device's name and kind.
+		*/
+		device?: DeviceStamp;
+	},
 	id: string,
 	tabIds: readonly string[],
 	now: number,
@@ -604,6 +613,7 @@ export function addSession(
 		updatedAt: now,
 		sourceWindowName: 'Phone',
 		sourceWindowId: null,
+		...input.device,
 		tabs: input.urls.map((url, index) =>
 			savedTab(url, tabIds[index] ?? `${id}-${index}`, index, now),
 		),

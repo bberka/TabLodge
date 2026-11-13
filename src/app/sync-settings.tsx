@@ -34,6 +34,7 @@ import {
 	Label,
 	Switch,
 } from '../shared/ui';
+import {DeviceNameField} from './device-name';
 import {messageOf, send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
 import {PROJECT} from './project';
@@ -501,6 +502,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					}}
 				/>
 			</div>
+			<DeviceNameField />
 			<ConfirmationDialog
 				open={confirmDisconnect}
 				title="Disconnect from sync?"

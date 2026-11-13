@@ -381,6 +381,12 @@ export type Session = {
 	sourceWindowName: string;
 	sourceWindowId: number | null;
 	/**
+	The name of the device that saved this session, as it was named then, and whether it is a computer or a phone.
+	Missing on sessions saved before devices had names.
+	*/
+	deviceName?: string;
+	deviceKind?: 'desktop' | 'mobile';
+	/**
 	Window geometry captured when this session was saved from a whole window.
 	*/
 	windowBounds?: WindowBounds;

@@ -4,6 +4,7 @@ them with `usePreferences`.
 */
 import {Platform} from 'react-native';
 import {useSyncExternalStore} from 'react';
+import {cleanDeviceName} from '../../src/shared/device';
 import {readJson, writeJson} from './storage';
 
 export type Look = 'material' | 'ios';
@@ -57,6 +58,10 @@ type Preferences = {
 	address that is shown. Stays on this phone.
 	*/
 	siteIcons: boolean;
+	/**
+	The name this phone puts on the sessions it saves. Empty means the phone's own make and model. Stays on this phone.
+	*/
+	deviceName: string;
 };
 
 const KEY = 'tablodge.prefs';
@@ -71,6 +76,7 @@ const defaults: Preferences = {
 	cleanOnSave: true,
 	syncSettings: true,
 	siteIcons: false,
+	deviceName: '',
 };
 
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
@@ -95,6 +101,7 @@ export async function loadPreferences(): Promise<void> {
 		cleanOnSave,
 		syncSettings,
 		siteIcons,
+		deviceName,
 	} = saved as Partial<Preferences>;
 	current = {
 		look: look === 'ios' || look === 'material' ? look : defaults.look,
@@ -109,6 +116,7 @@ export async function loadPreferences(): Promise<void> {
 		syncSettings:
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
 		siteIcons: siteIcons === true,
+		deviceName: cleanDeviceName(deviceName),
 	};
 	for (const listener of listeners) {
 		listener();

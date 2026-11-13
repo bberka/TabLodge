@@ -37,6 +37,14 @@ import {
 	STATE_KEY,
 	type UndoDelta,
 } from '../src/shared/library-state';
+import {
+	cleanDeviceName,
+	defaultBrowserDeviceName,
+	DEVICE_KEY,
+	deviceStamp,
+	isDeviceKind,
+	MAX_DEVICE_NAME,
+} from '../src/shared/device';
 import {hashText} from '../src/shared/library-values';
 import {
 	createSyncClient,
@@ -1948,6 +1956,10 @@ function normalizeGroup(
 		...(lastOpenedAt > 0 && {lastOpenedAt}),
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
 		sourceWindowId: isInteger(raw.sourceWindowId) ? raw.sourceWindowId : null,
+		...deviceStamp(
+			cleanText(raw.deviceName, '', MAX_DEVICE_NAME),
+			isDeviceKind(raw.deviceKind) ? raw.deviceKind : 'desktop',
+		),
 		...(isRecord(raw.windowBounds) &&
 			[
 				raw.windowBounds.left,
@@ -2796,6 +2808,35 @@ async function privateSyncInfo(): Promise<PrivateSyncInfo> {
 	};
 }
 
+/**
+The name this browser gives the sessions it saves: the one set in Settings, else the browser and system. Read once at
+start and again whenever the setting changes; functions that save a session wait for the first read.
+*/
+let thisDevice = '';
+async function readDeviceName() {
+	const stored = (await chrome.storage.local.get([DEVICE_KEY]))[DEVICE_KEY] as
+		{name?: unknown} | undefined;
+	const custom = cleanDeviceName(stored?.name);
+	if (custom) {
+		thisDevice = custom;
+		return;
+	}
+
+	try {
+		const {os} = await chrome.runtime.getPlatformInfo();
+		thisDevice = defaultBrowserDeviceName(globalThis.navigator?.userAgent, os);
+	} catch {
+		thisDevice = defaultBrowserDeviceName(globalThis.navigator?.userAgent, '');
+	}
+}
+
+const deviceReady = readDeviceName();
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (area === 'local' && changes[DEVICE_KEY] !== undefined) {
+		void readDeviceName();
+	}
+});
+
 const PREVIEW_CACHE_SIZE = 200;
 const previewCache = new Map<string, LinkPreviewData | null>();
 
@@ -3232,6 +3273,7 @@ async function captureTabs(
 	windowNumber = 0,
 	saveWindowBounds = false,
 ): Promise<CaptureResult | null> {
+	await deviceReady;
 	const timestamp = Date.now();
 	const captureEntries = await captureEntriesOf(
 		tabs,
@@ -3349,6 +3391,7 @@ async function captureTabs(
 					updatedAt: timestamp,
 					sourceWindowName: cleanText(window.title, '', 180),
 					sourceWindowId: window.id,
+					...deviceStamp(thisDevice, 'desktop'),
 					...(saveWindowBounds &&
 						Number.isFinite(window.left) &&
 						Number.isFinite(window.top) &&
@@ -5720,6 +5763,7 @@ async function createSessionFromLinks(
 	entries: LinkEntry[] = [],
 	requestedName = '',
 ): Promise<ActionResult<'CREATE_SESSION_FROM_LINKS'>> {
+	await deviceReady;
 	return mutate(() =>
 		withUndo('Create session from links', [STORAGE_KEY], async () => {
 			const store = await getStore();
@@ -5786,6 +5830,7 @@ async function createSessionFromLinks(
 				updatedAt: now,
 				sourceWindowName: '',
 				sourceWindowId: null,
+				...deviceStamp(thisDevice, 'desktop'),
 				tabs,
 			};
 			store.groups.unshift(created);
@@ -5845,6 +5890,7 @@ async function splitGroup(
 				updatedAt: now,
 				sourceWindowName: group.sourceWindowName,
 				sourceWindowId: group.sourceWindowId,
+				...deviceStamp(group.deviceName ?? '', group.deviceKind ?? 'desktop'),
 				tabs: pairSplits(moved),
 			};
 			store.groups.splice(store.groups.indexOf(group) + 1, 0, created);
@@ -12130,6 +12176,7 @@ async function saveLinkToSession(
 	title: string,
 	groupId?: string,
 ): Promise<Result<{added: boolean; groupId: string | null}>> {
+	await deviceReady;
 	const url = normalizeUrl(rawUrl);
 	if (!url) {
 		return {ok: false, error: 'Only http and https links can be saved.'};
@@ -12175,6 +12222,7 @@ async function saveLinkToSession(
 				updatedAt: now,
 				sourceWindowName: '',
 				sourceWindowId: null,
+				...deviceStamp(thisDevice, 'desktop'),
 				tabs: [],
 			};
 			store.groups.unshift(group);

@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
+import {phoneStamp} from '../device';
 import {stripTrackingParameters} from '../../../src/app/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../column-choice';
 import {
@@ -66,7 +67,7 @@ export function SaveLinksForm({
 			await edit((current) =>
 				addSession(
 					current,
-					{name: label, urls: links},
+					{name: label, urls: links, device: phoneStamp()},
 					newId(),
 					ids(),
 					Date.now(),

@@ -316,6 +316,20 @@ describe('shared link lists', () => {
 		);
 		assert.equal(made.folders[0].id, 'unfiled');
 		assert.equal(made.groups[0].name, 'Shared links');
+		assert.equal(made.groups[0].deviceName, undefined);
+		const stamped = addSession(
+			emptyStore(NOW),
+			{
+				name: 'x',
+				urls: ['https://a.test/'],
+				device: {deviceName: 'Pixel', deviceKind: 'mobile'},
+			},
+			's9',
+			['t9'],
+			NOW,
+		);
+		assert.equal(stamped.groups[0].deviceName, 'Pixel');
+		assert.equal(stamped.groups[0].deviceKind, 'mobile');
 		assert.deepEqual(
 			made.groups[0].tabs.map((tab) => [tab.id, tab.originalIndex, tab.title]),
 			[

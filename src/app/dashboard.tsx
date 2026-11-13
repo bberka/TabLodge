@@ -33,11 +33,13 @@ import {
 	Pencil,
 	RefreshCw,
 	Replace,
+	Monitor,
 	PanelsTopLeft,
 	RotateCcw,
 	Save,
 	Search,
 	Share2,
+	Smartphone,
 	Split,
 	Trash2,
 	Upload,
@@ -363,6 +365,7 @@ export function SessionManager({
 						group.name,
 						group.description,
 						group.sourceWindowName,
+						group.deviceName,
 						...group.tabs.flatMap((tab) => [
 							tab.title,
 							tab.url,
@@ -3234,6 +3237,20 @@ const GroupCard = memo(
 									</span>
 									<span aria-hidden="true">·</span>
 									<span>{dateText(group.createdAt)}</span>
+									{group.deviceName && (
+										<>
+											<span aria-hidden="true">·</span>
+											<span className="inline-flex items-center gap-1">
+												{group.deviceKind === 'mobile' ? (
+													<Smartphone className="size-3" aria-hidden="true" />
+												) : (
+													<Monitor className="size-3" aria-hidden="true" />
+												)}
+												<span className="sr-only">Saved on </span>
+												{group.deviceName}
+											</span>
+										</>
+									)}
 									{folderName && (
 										<>
 											<span aria-hidden="true">·</span>

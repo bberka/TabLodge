@@ -12470,3 +12470,20 @@ test('a new PIN or password rewraps the private sync key, so other browsers keep
 	const synced = await first.sendMessage({type: 'PRIVATE_SYNC_NOW'});
 	assert.equal(synced.privateSync?.status.error, null);
 });
+
+test('a session keeps the device that saved it, and a bad device kind is read as a computer', async () => {
+	const state = stateWithSession();
+	Object.assign(state.groups[0], {
+		deviceName: " Berkay's  Mac ",
+		deviceKind: 'toaster',
+	});
+	const {groups} = await createWorkerHarness(state).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(groups[0].deviceName, "Berkay's Mac");
+	assert.equal(groups[0].deviceKind, 'desktop');
+	const plain = await createWorkerHarness(stateWithSession()).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(plain.groups[0].deviceName, undefined);
+});

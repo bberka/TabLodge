@@ -99,7 +99,7 @@ function SessionCardView({
 				<Pressable
 					accessibilityRole="button"
 					accessibilityState={{expanded}}
-					accessibilityLabel={`${session.name}, ${count}, ${folderName}`}
+					accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
 					android_ripple={{color: colors.pressed}}
 					style={styles.headMain}
 					onPressIn={() => {
@@ -122,6 +122,11 @@ function SessionCardView({
 						<Text numberOfLines={1} style={{color: colors.muted}}>
 							{count} · {folderName} · {shortDate(session.updatedAt)}
 						</Text>
+						{session.deviceName && (
+							<Text numberOfLines={1} style={{color: colors.muted}}>
+								Saved on {session.deviceName}
+							</Text>
+						)}
 						<TabPreview session={session} />
 					</View>
 				</Pressable>

@@ -225,6 +225,12 @@ function Help() {
 						'session card collapsed favicon icons preview strip hide overflow count settings session board',
 				},
 				{
+					title: 'Device names on sessions',
+					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
+					searchText:
+						'device name which device saved session computer phone mobile desktop sync settings rename where saved from',
+				},
+				{
 					title: 'Preview links on hover',
 					body: 'With a sync server connected, turn on Settings › Preview links on hover. Rest the pointer on a bookmark or saved tab, or move keyboard focus to it, and a card shows the page image, title, and description. Escape closes it. The server fetches the page, so the server and the site see its address, and nothing goes to any other service. It is off by default and stays on this browser.',
 					searchText:
