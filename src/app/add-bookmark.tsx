@@ -1,4 +1,4 @@
-import {useState, type SyntheticEvent} from 'react';
+import {useEffect, useState, type SyntheticEvent} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Plus, Save, X} from 'lucide-react';
 import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
@@ -6,16 +6,63 @@ import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {PrivateLockGate} from './private-lock-ui';
-import {LoadingLine, send, useCloseOnEscape, useTabLodgeState} from './common';
+import {LoadingLine, send, useCloseOnEscape} from './common';
 import {LinkSummary} from './favicon';
 import {IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {DEFAULT_COLUMN_ICON} from './icon-registry';
 import {ColumnSelect} from './column-select';
-import {defaultBookmarkColumnId} from './default-column';
-import {takeStateRequest} from './state-preload';
+import type {ActionResult} from './types';
 
-const initialStateRequest = takeStateRequest();
+type PromptRequest = Promise<ActionResult<'GET_BOOKMARK_PROMPT'> | undefined>;
+
+// Extension/add-bookmark-preload.ts starts this read from the page head, while the bundle loads.
+const preloaded = (
+	globalThis as unknown as {__tablodgeBookmarkPrompt?: PromptRequest}
+).__tablodgeBookmarkPrompt;
+const RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
+
+const wait = async (ms: number) =>
+	new Promise<void>((resolve) => {
+		setTimeout(resolve, ms);
+	});
+
+// The service worker may still be waking up, so an empty answer is retried quietly.
+function useBookmarkPrompt(url: string) {
+	const [prompt, setPrompt] = useState<
+		Extract<ActionResult<'GET_BOOKMARK_PROMPT'>, {ok: true}> | undefined
+	>();
+	const [error, setError] = useState('');
+	useEffect(() => {
+		let active = true;
+		void (async () => {
+			let result = await preloaded;
+			for (
+				let attempt = 0;
+				!result && attempt < RETRY_DELAYS_MS.length;
+				attempt += 1
+			) {
+				await wait(RETRY_DELAYS_MS[attempt]);
+				result = await send('GET_BOOKMARK_PROMPT', {url});
+			}
+
+			if (!active) {
+				return;
+			}
+
+			if (result?.ok) {
+				setPrompt(result);
+			} else {
+				setError(result?.error || 'TabLodge could not load saved data.');
+			}
+		})();
+
+		return () => {
+			active = false;
+		};
+	}, [url]);
+	return {prompt, error};
+}
 
 const NEW_COLUMN = '__new-column__';
 
@@ -26,7 +73,7 @@ function AddBookmarkPrompt() {
 	const params = new URLSearchParams(location.search);
 	const url = params.get('url') || '';
 	const fromBrowser = params.get('source') === 'browser';
-	const {state, error: stateError} = useTabLodgeState(initialStateRequest);
+	const {prompt, error: stateError} = useBookmarkPrompt(url);
 	const [title, setTitle] = useState(params.get('title') || url);
 	const [columnId, setColumnId] = useState('');
 	const [newName, setNewName] = useState('');
@@ -36,7 +83,7 @@ function AddBookmarkPrompt() {
 
 	useCloseOnEscape();
 
-	if (!state) {
+	if (!prompt) {
 		return stateError ? (
 			<p role="alert" className="p-5 text-sm text-destructive">
 				{stateError}
@@ -48,13 +95,11 @@ function AddBookmarkPrompt() {
 		);
 	}
 
-	const columns = state.bookmarkColumns;
-	const defaultColumnId = defaultBookmarkColumnId(columns, state.bookmarks);
-	const selected = columnId || defaultColumnId || NEW_COLUMN;
-	const existing = state.bookmarks.find((bookmark) => bookmark.url === url);
-	const existingColumn = existing
-		? columns.find((column) => column.id === existing.columnId)
-		: undefined;
+	const columns = prompt.bookmarkColumns;
+	const selected = columnId || prompt.defaultColumnId || NEW_COLUMN;
+	const existingColumn = columns.find(
+		(column) => column.id === prompt.existingColumnId,
+	);
 
 	async function save(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -115,7 +160,7 @@ function AddBookmarkPrompt() {
 						onChange={(event) => setTitle(event.target.value)}
 					/>
 				</div>
-				<LinkSummary url={url} settings={state.settings} />
+				<LinkSummary url={url} settings={prompt.settings} />
 				<div className="space-y-1.5">
 					<Label htmlFor="add-bookmark-column">Column</Label>
 					<ColumnSelect
@@ -128,7 +173,7 @@ function AddBookmarkPrompt() {
 							<IconLabel icon={Plus}>New column</IconLabel>
 						</SelectItem>
 					</ColumnSelect>
-					{existing && existingColumn && (
+					{existingColumn && (
 						<p className="text-xs text-muted-foreground">
 							Already in “{existingColumn.name}”.
 						</p>
