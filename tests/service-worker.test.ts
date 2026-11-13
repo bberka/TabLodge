@@ -6129,6 +6129,67 @@ test('MOVE_TAB moves a link to another session, drops split info for both halves
 	);
 });
 
+test('CREATE_SESSION_FROM_LINKS builds a named session from web links, drops repeats and others, and undoes', async () => {
+	const harness = createWorkerHarness(reorderState());
+	const before = harness.state.groups.length;
+	const result = await harness.sendMessage({
+		type: 'CREATE_SESSION_FROM_LINKS',
+		name: '  Reading list ',
+		links: [
+			{url: 'https://example.com/one', title: 'One'},
+			{url: 'https://example.com/one', title: 'One again'},
+			{url: 'chrome://settings', title: 'Settings'},
+			{url: 'https://example.com/two', title: 'Two'},
+		],
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.count, 2);
+	assert.equal(result.skipped, 1);
+	assert.equal(harness.state.groups.length, before + 1);
+	const created = harness.state.groups.find(
+		(group) => group.id === result.groupId,
+	)!;
+	assert.equal(created.name, 'Reading list');
+	assert.deepEqual(
+		created.tabs.map((tab) => tab.url),
+		['https://example.com/one', 'https://example.com/two'],
+	);
+
+	const undo = await harness.sendMessage({type: 'UNDO', id: result.undoId!});
+	assert.equal(undo.ok, true, undo.error);
+	assert.equal(harness.state.groups.length, before);
+
+	const none = await harness.sendMessage({
+		type: 'CREATE_SESSION_FROM_LINKS',
+		links: [{url: 'about:blank', title: ''}],
+	});
+	assert.equal(none.ok, false);
+});
+
+test('CREATE_SESSION_FROM_LINKS names an unnamed session by the session name settings, and previews that name', async () => {
+	const harness = nameHarness({sessionNameStyle: 'title'}, []);
+	const links = [
+		{url: 'https://docs.example/a', title: 'Docs'},
+		{url: 'https://docs.example/b', title: 'More docs'},
+	];
+	const preview = await harness.sendMessage({
+		type: 'PREVIEW_SESSION_NAME',
+		links,
+	});
+	assert.equal(preview.ok, true);
+	assert.equal(preview.name, 'Docs');
+	const result = await harness.sendMessage({
+		type: 'CREATE_SESSION_FROM_LINKS',
+		links,
+		name: ' '.repeat(3),
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(
+		harness.state.groups.find((group) => group.id === result.groupId)!.name,
+		'Docs',
+	);
+});
+
 test('ADD_LINKS_TO_SESSION inserts web links at the target, skips known addresses, and rejects others', async () => {
 	const harness = createWorkerHarness(reorderState());
 	const known = 'https://example.com/known';

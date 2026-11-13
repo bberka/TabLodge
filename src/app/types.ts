@@ -602,6 +602,7 @@ export type TabLodgeMessages = {
 	REMOVE_PRIVATE_LOCK: {credential: string};
 	SET_PRIVATE_LOCK_IDLE: {minutes: number};
 	GET_STATE: {};
+	GET_BOOKMARK_PROMPT: {url: string};
 	GET_SETTINGS_DEFAULTS: {};
 	SAVE_TABS: {
 		scope?: SaveScope;
@@ -623,6 +624,10 @@ export type TabLodgeMessages = {
 		*/
 		scope?: SaveScope;
 		tabIds?: number[];
+		/**
+		Preview for a session made from these links (pasted or dropped) instead of the window's tabs.
+		*/
+		links?: LinkEntry[];
 	};
 	SAVE_CURRENT_TAB_TO_GROUP: {};
 	RESTORE_TAB: {groupId: string; tabId: string} & RestoreOptions;
@@ -677,6 +682,11 @@ export type TabLodgeMessages = {
 		targetTabId?: string | null;
 		position?: InsertPosition;
 	};
+	/**
+	Creates a session holding the given links (pasted or dropped from a page), in the default folder. An empty name gets the default
+	one from the session naming settings. Addresses repeated in `links` are kept once.
+	*/
+	CREATE_SESSION_FROM_LINKS: {links: LinkEntry[]; name?: string};
 	/**
 	Changes a session from the sender's window without opening or closing any tab. `replace` swaps the session's links for the
 	window's web tabs; `append` adds the ones the session lacks at the end. Excluded sites, pinned tabs, and the save duplicate
@@ -936,6 +946,15 @@ export type TabLodgeResponses = {
 	REMOVE_PRIVATE_LOCK: PrivateLockInfo;
 	SET_PRIVATE_LOCK_IDLE: PrivateLockInfo;
 	GET_STATE: Store;
+	/**
+	Just what the add-bookmark window needs, so it never waits for the whole library.
+	*/
+	GET_BOOKMARK_PROMPT: {
+		bookmarkColumns: BookmarkColumn[];
+		defaultColumnId?: string;
+		existingColumnId?: string;
+		settings: Settings;
+	};
 	GET_SETTINGS_DEFAULTS: {settings: Settings};
 	SAVE_TABS: SaveResult;
 	/**
@@ -972,6 +991,11 @@ export type TabLodgeResponses = {
 		trashId?: string;
 	};
 	ADD_LINKS_TO_SESSION: {added: number; skipped: number} & Undoable;
+	CREATE_SESSION_FROM_LINKS: {
+		groupId: string;
+		count: number;
+		skipped: number;
+	} & Undoable;
 	/**
 	`count`: links in the session now; `added`/`removed`: links new to it and links no longer in it; `skipped`: window tabs left out as duplicates.
 	*/

@@ -4,6 +4,7 @@ import {
 	omniboxSuggestions,
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
+import {defaultBookmarkColumnId} from '../src/app/default-column';
 import {
 	createPrivateLock,
 	type Gate,
@@ -3986,10 +3987,19 @@ async function previewSessionName(
 		template?: unknown;
 		scope?: unknown;
 		tabIds?: unknown;
+		links?: unknown;
 	},
 	senderTab?: chrome.tabs.Tab,
 ): Promise<ActionResult<'PREVIEW_SESSION_NAME'>> {
 	const settings = await readSettings();
+	if (Array.isArray(request.links)) {
+		return {
+			ok: true,
+			asks: false,
+			name: linksSessionName(settings, request.links as LinkEntry[]),
+		};
+	}
+
 	const style = isOneOf(SESSION_NAME_STYLES, request.style)
 		? request.style
 		: settings.sessionNameStyle;
@@ -5603,6 +5613,115 @@ async function updateGroupFromWindow(
 				return {ok: true, ...result};
 			},
 		),
+	);
+}
+
+/**
+The default name for a session made from pasted or dropped links, by the session naming settings (an `ask` style uses
+its fallback style).
+*/
+function linksSessionName(
+	settings: Settings,
+	entries: LinkEntry[],
+	now = new Date(),
+): string {
+	const links = entries
+		.map((entry) => ({title: entry?.title, url: normalizeUrl(entry?.url)}))
+		.filter((entry): entry is {title: string; url: string} =>
+			Boolean(entry.url),
+		);
+	const first = links[0];
+	return formatSessionName({
+		style: builtNameStyle(settings),
+		template: settings.sessionNameTemplate,
+		title: first ? pageTitle(first.title, first.url, settings.cleanTitles) : '',
+		url: first?.url ?? '',
+		count: Math.max(new Set(links.map((link) => link.url)).size, 1),
+		now,
+		locale: browserLocale(),
+	});
+}
+
+/**
+Creates a session in the default folder from pasted or dropped links. Repeated addresses are kept once and counted as
+skipped. Undo removes the session again.
+*/
+async function createSessionFromLinks(
+	entries: LinkEntry[] = [],
+	requestedName = '',
+): Promise<ActionResult<'CREATE_SESSION_FROM_LINKS'>> {
+	return mutate(() =>
+		withUndo('Create session from links', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			if (store.groups.length >= MAX_SESSIONS) {
+				return {ok: false, error: sessionLimitError()};
+			}
+
+			const known = new Set<string>();
+			const now = Date.now();
+			const tabs: SavedTab[] = [];
+			let skipped = 0;
+			for (const entry of (Array.isArray(entries) ? entries : []).slice(
+				0,
+				MAX_TABS_PER_SESSION,
+			)) {
+				const url = normalizeUrl(entry?.url);
+				if (!url) {
+					continue;
+				}
+
+				if (known.has(url)) {
+					skipped += 1;
+					continue;
+				}
+
+				known.add(url);
+				tabs.push({
+					id: makeId(),
+					title: await bestBookmarkTitle(
+						entry?.title,
+						url,
+						store.settings.cleanTitles,
+					),
+					url,
+					notes: '',
+					pinned: false,
+					nativeGroup: null,
+					savedAt: now,
+					originalIndex: tabs.length,
+				});
+			}
+
+			if (tabs.length === 0) {
+				return {
+					ok: false,
+					error: 'Only regular http and https pages can be saved.',
+				};
+			}
+
+			const created: Session = {
+				id: makeId(),
+				name: cleanText(
+					requestedName,
+					linksSessionName(
+						store.settings,
+						tabs.map((tab) => ({title: tab.title, url: tab.url})),
+						new Date(now),
+					),
+					120,
+				),
+				folderId: DEFAULT_FOLDER_ID,
+				description: '',
+				createdAt: now,
+				updatedAt: now,
+				sourceWindowName: '',
+				sourceWindowId: null,
+				tabs,
+			};
+			store.groups.unshift(created);
+			await writeStore(store);
+			return {ok: true, groupId: created.id, count: tabs.length, skipped};
+		}),
 	);
 }
 
@@ -10227,6 +10346,22 @@ async function handleMessage(
 			return {ok: true, ...(await getStore())};
 		}
 
+		case 'GET_BOOKMARK_PROMPT': {
+			const store = await getStore();
+			return {
+				ok: true,
+				bookmarkColumns: store.bookmarkColumns,
+				defaultColumnId: defaultBookmarkColumnId(
+					store.bookmarkColumns,
+					store.bookmarks,
+				),
+				existingColumnId: store.bookmarks.find(
+					(bookmark) => bookmark.url === message.url,
+				)?.columnId,
+				settings: store.settings,
+			};
+		}
+
 		case 'GET_SETTINGS_DEFAULTS': {
 			return {ok: true, settings: {...DEFAULT_SETTINGS}};
 		}
@@ -10330,6 +10465,13 @@ async function handleMessage(
 				message.links,
 				message.targetTabId || null,
 				message.position,
+			);
+		}
+
+		case 'CREATE_SESSION_FROM_LINKS': {
+			return createSessionFromLinks(
+				message.links,
+				typeof message.name === 'string' ? message.name : '',
 			);
 		}
 

@@ -67,6 +67,16 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
+		// Starts the add-bookmark window's read while the React page bundle is loading.
+		{
+			label: 'add-bookmark-preload.js',
+			config: scriptConfig({
+				entry: resolve(SOURCE_DIR, 'add-bookmark-preload.ts'),
+				outDir,
+				fileName: 'add-bookmark-preload.js',
+				target,
+			}),
+		},
 	];
 }
 

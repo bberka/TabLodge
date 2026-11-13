@@ -162,10 +162,12 @@ import type {
 import {ColumnSelect} from './column-select';
 import {defaultBookmarkColumnId} from './default-column';
 import {
+	NEW_SESSION,
 	SaveTargetChoice,
 	SaveTargetSessionField,
 	type SaveTarget,
 } from './save-target';
+import {SESSION_NAME_MAX} from './session-name';
 import {inPrivateWindow} from './private-config';
 import {PrivateSetupGate} from './private-storage';
 import {PrivateLockGate} from './private-lock-ui';
@@ -331,6 +333,11 @@ function NewTab() {
 		Array<LinkEntry & {include: boolean}>
 	>([]);
 	const [pastedColumn, setPastedColumn] = useState(UNFILED_COLUMN.id);
+	// Several pasted links can also become a new session (the NEW_SESSION choice in the session picker), named by `pastedSessionName`.
+	const [pastedSession, setPastedSession] = useState('');
+	const [pastedSessionName, setPastedSessionName] = useState('');
+	// The name from the session naming settings; it comes back if the field is left empty.
+	const [pastedDefaultName, setPastedDefaultName] = useState('');
 	// Where an added link goes in the Add bookmark and pasted links dialogs. The choice sticks for the page's lifetime.
 	const [saveTarget, setSaveTarget] = useState<SaveTarget>('bookmark');
 	const [saveSessionId, setSaveSessionId] = useState('');
@@ -722,7 +729,17 @@ function NewTab() {
 					setPastedLinks(links.map((link) => ({...link, include: true})));
 					setPastedColumn(defaultColumnId || UNFILED_COLUMN.id);
 					setPastedNewColumn({name: ''});
+					setPastedSession('');
+					setPastedSessionName('');
 					setDialog('paste-links');
+					void send('PREVIEW_SESSION_NAME', {links}).then((preview) => {
+						if (!preview?.ok) {
+							return;
+						}
+
+						setPastedDefaultName(preview.name);
+						setPastedSessionName(preview.name);
+					});
 				});
 				return;
 			}
@@ -759,8 +776,28 @@ function NewTab() {
 
 		setBusy('paste-links');
 		try {
-			if (toSession) {
-				await addLinksToChosenSession(links);
+			if (pastedNewSession) {
+				const result = await send('CREATE_SESSION_FROM_LINKS', {
+					links,
+					name: pastedSessionName.trim() || undefined,
+				});
+				if (!result?.ok) {
+					throw new Error(result?.error || 'Could not create that session.');
+				}
+
+				await reload();
+				setDialog(null);
+				offerUndo(
+					`Created a session with ${plural(result.count, 'link')}.${skippedNote(result.skipped)}`,
+					result.undoId,
+					showStatus,
+					reload,
+				);
+				return;
+			}
+
+			if (pastedToExisting) {
+				await addLinksToChosenSession(links, pastedSessionPick);
 				setDialog(null);
 				return;
 			}
@@ -1477,13 +1514,25 @@ function NewTab() {
 		: (pasteSessions[0]?.id ?? '');
 	const toSession = pasteSessions.length > 0 && saveTarget === 'session';
 	const bookmarkToSession = toSession && !bookmarkEdit?.id;
+	// The pasted links dialog also lets the session picker create a session, so it can pick one even with none saved.
+	const pastedSessionPick =
+		pastedSession === NEW_SESSION || pasteSessions.length === 0
+			? NEW_SESSION
+			: pasteSessions.some((session) => session.id === pastedSession)
+				? pastedSession
+				: pasteSessionId;
+	const pastedInSession = saveTarget === 'session';
+	const pastedNewSession = pastedInSession && pastedSessionPick === NEW_SESSION;
+	const pastedToExisting = pastedInSession && !pastedNewSession;
 
-	async function addLinksToChosenSession(links: LinkEntry[]) {
+	async function addLinksToChosenSession(
+		links: LinkEntry[],
+		sessionId = pasteSessionId,
+	) {
 		const name =
-			pasteSessions.find((session) => session.id === pasteSessionId)?.name ??
-			'';
+			pasteSessions.find((session) => session.id === sessionId)?.name ?? '';
 		const result = await send('ADD_LINKS_TO_SESSION', {
-			groupId: pasteSessionId,
+			groupId: sessionId,
 			links,
 		});
 		if (!result?.ok) {
@@ -2843,7 +2892,9 @@ function NewTab() {
 								<SaveTargetChoice
 									target={saveTarget}
 									sessions={pasteSessions}
-									onTargetChange={setSaveTarget}
+									onTargetChange={(target) =>
+										setSaveTarget(target === 'session' ? 'session' : 'bookmark')
+									}
 								/>
 							)}
 							{editedBookmark && (
@@ -2937,7 +2988,10 @@ function NewTab() {
 						<DialogHeader>
 							<DialogTitle>
 								Add{' '}
-								{plural(pastedLinks.length, toSession ? 'link' : 'bookmark')}
+								{plural(
+									pastedLinks.length,
+									pastedInSession ? 'link' : 'bookmark',
+								)}
 							</DialogTitle>
 							<DialogDescription>
 								Untick any link you don't want to add.
@@ -2945,6 +2999,7 @@ function NewTab() {
 						</DialogHeader>
 						<DialogBody>
 							<SaveTargetChoice
+								allowNewSession
 								target={saveTarget}
 								sessions={pasteSessions}
 								onTargetChange={setSaveTarget}
@@ -2996,13 +3051,44 @@ function NewTab() {
 									))}
 								</ul>
 							</ScrollArea>
-							{toSession ? (
-								<SaveTargetSessionField
-									id="pasted-links-session"
-									sessions={pasteSessions}
-									value={pasteSessionId}
-									onValueChange={setSaveSessionId}
-								/>
+							{pastedInSession ? (
+								<>
+									<SaveTargetSessionField
+										allowNewSession
+										id="pasted-links-session"
+										sessions={pasteSessions}
+										value={pastedSessionPick}
+										onValueChange={(id) => {
+											setPastedSession(id);
+											if (id !== NEW_SESSION) {
+												setSaveSessionId(id);
+											}
+										}}
+									/>
+									{pastedNewSession && (
+										<div className="space-y-1.5">
+											<Label htmlFor="pasted-links-session-name">
+												New session name
+											</Label>
+											<Input
+												autoFocus
+												id="pasted-links-session-name"
+												value={pastedSessionName}
+												maxLength={SESSION_NAME_MAX}
+												placeholder={pastedDefaultName}
+												onFocus={(event) => event.target.select()}
+												onChange={(event) =>
+													setPastedSessionName(event.target.value)
+												}
+												onBlur={() =>
+													setPastedSessionName((name) =>
+														name.trim() ? name : pastedDefaultName,
+													)
+												}
+											/>
+										</div>
+									)}
+								</>
 							) : (
 								<div className="space-y-1.5">
 									<Label htmlFor="pasted-links-column">Column</Label>
@@ -3034,11 +3120,12 @@ function NewTab() {
 								}
 							>
 								<ListPlus aria-hidden="true" />
-								Add{' '}
-								{plural(
-									pastedLinks.filter((link) => link.include).length,
-									toSession ? 'link' : 'bookmark',
-								)}
+								{pastedNewSession
+									? 'Create session'
+									: `Add ${plural(
+											pastedLinks.filter((link) => link.include).length,
+											pastedInSession ? 'link' : 'bookmark',
+										)}`}
 							</Button>
 						</DialogFooter>
 					</form>

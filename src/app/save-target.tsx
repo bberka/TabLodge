@@ -1,4 +1,4 @@
-import {Bookmark, PanelsTopLeft} from 'lucide-react';
+import {Bookmark, PanelsTopLeft, Plus} from 'lucide-react';
 import {
 	Label,
 	SegmentedControl,
@@ -12,6 +12,11 @@ import {
 export type SaveTarget = 'bookmark' | 'session';
 
 type SessionOption = {id: string; name: string};
+
+/**
+The session picker's value for "create a new session", like the new column choice in the column picker.
+*/
+export const NEW_SESSION = '__new-session__';
 
 const OPTIONS = [
 	{
@@ -42,12 +47,17 @@ export function SaveTargetChoice({
 	target,
 	onTargetChange,
 	sessions,
+	allowNewSession = false,
 }: {
 	target: SaveTarget;
 	onTargetChange: (target: SaveTarget) => void;
 	sessions: readonly SessionOption[];
+	/**
+	Offer the Session choice even with no saved session, since the picker can create one.
+	*/
+	allowNewSession?: boolean;
 }) {
-	if (sessions.length === 0) {
+	if (sessions.length === 0 && !allowNewSession) {
 		return null;
 	}
 
@@ -70,11 +80,13 @@ export function SaveTargetSessionField({
 	sessions,
 	value,
 	onValueChange,
+	allowNewSession = false,
 }: {
 	id: string;
 	sessions: readonly SessionOption[];
 	value: string;
 	onValueChange: (id: string) => void;
+	allowNewSession?: boolean;
 }) {
 	return (
 		<div className="space-y-1.5">
@@ -89,6 +101,14 @@ export function SaveTargetSessionField({
 							{session.name}
 						</SelectItem>
 					))}
+					{allowNewSession && (
+						<SelectItem value={NEW_SESSION}>
+							<span className="inline-flex items-center gap-2">
+								<Plus className="h-4 w-4" aria-hidden="true" />
+								New session
+							</span>
+						</SelectItem>
+					)}
 				</SelectContent>
 			</Select>
 		</div>
