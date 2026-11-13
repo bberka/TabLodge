@@ -108,9 +108,9 @@ export function SaveLinksForm({
 				<Segmented
 					label="Save as"
 					items={[
-						{id: 'bookmarks', name: 'Bookmarks'},
-						{id: 'session', name: 'New session'},
-						{id: 'existing', name: 'Add to session'},
+						{id: 'bookmarks', name: 'Bookmarks', icon: 'bookmark-outline'},
+						{id: 'session', name: 'New session', icon: 'add-circle-outline'},
+						{id: 'existing', name: 'Add to', icon: 'albums-outline'},
 					]}
 					selected={mode}
 					onSelect={setMode}

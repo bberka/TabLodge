@@ -1,4 +1,6 @@
+import {useColorScheme} from 'react-native';
 import {ICON_IDS, type IconId} from '../../src/app/icon-ids';
+import {avatarColor} from './theme';
 import type {IconName} from './ui';
 
 /**
@@ -142,9 +144,13 @@ export const COLUMN_ICONS: Array<{id: IconId; glyph: IconName}> = ICON_IDS.map(
 );
 
 /**
-A column or folder with the glyph for its icon, ready for a chip.
+Gives a column or folder chip its icon and a steady color taken from its name, so each one is easy to spot.
 */
-export const withGlyph = <Item extends {icon?: string}>(item: Item) => ({
-	...item,
-	glyph: columnGlyph(item.icon),
-});
+export function useChipLook() {
+	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+	return <Item extends {icon?: string; name: string}>(item: Item) => ({
+		...item,
+		glyph: columnGlyph(item.icon),
+		tint: avatarColor(item.name, scheme),
+	});
+}

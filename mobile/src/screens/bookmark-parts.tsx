@@ -2,41 +2,15 @@ import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../src/app/types';
 import {BottomSheet} from '../bottom-sheet';
-import {withGlyph} from '../column-icons';
+import {useChipLook} from '../column-icons';
 import {hostOf} from '../library';
 import {linkToOpen, rowText} from '../links';
+import {rowActionLook} from '../row-actions';
 import {type RowAction, usePreferences} from '../preferences';
 import {type SwipeAction, SwipeRow} from '../swipe-row';
 import {useLinkSettings} from '../use-link-settings';
-import {type Colors, TARGET, useColors, useShape} from '../theme';
+import {TARGET, useColors, useShape} from '../theme';
 import {Avatar, Button, Chips, Icon, type IconName} from '../ui';
-
-const ACTION_LOOK: Record<
-	RowAction,
-	(colors: Colors) => {label: string; icon: IconName; color: string}
-> = {
-	none: (colors) => ({label: '', icon: 'ellipse', color: colors.muted}),
-	open: (colors) => ({
-		label: 'Open',
-		icon: 'open-outline',
-		color: colors.accent,
-	}),
-	edit: (colors) => ({
-		label: 'Edit',
-		icon: 'create-outline',
-		color: colors.accent,
-	}),
-	move: (colors) => ({
-		label: 'Move',
-		icon: 'folder-open-outline',
-		color: colors.ok,
-	}),
-	delete: (colors) => ({
-		label: 'Delete',
-		icon: 'trash-outline',
-		color: colors.danger,
-	}),
-};
 
 /**
 One bookmark: tap to open, swipe right to open or left to delete, long press to select. Screen reader users get
@@ -85,7 +59,7 @@ export function BookmarkRow({
 	};
 	const swipe = (action: RowAction): SwipeAction | undefined => {
 		const onTrigger = run[action];
-		return onTrigger && {...ACTION_LOOK[action](colors), onTrigger};
+		return onTrigger && {...rowActionLook(action, colors), onTrigger};
 	};
 
 	return (
@@ -308,6 +282,7 @@ export function MoveSheet({
 	onClose: () => void;
 }) {
 	const colors = useColors();
+	const chipLook = useChipLook();
 	return (
 		<BottomSheet visible={visible} label="Move to column" onClose={onClose}>
 			<View style={styles.moveBody}>
@@ -318,7 +293,7 @@ export function MoveSheet({
 					Move {count} to
 				</Text>
 				<Chips
-					items={columns.map((column) => withGlyph(column))}
+					items={columns.map((column) => chipLook(column))}
 					selected=""
 					onSelect={onPick}
 				/>

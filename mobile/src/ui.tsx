@@ -12,7 +12,7 @@ import {
 	useColorScheme,
 	View,
 } from 'react-native';
-import {avatarColor, TARGET, useColors, useShape} from './theme';
+import {avatarColor, soften, TARGET, useColors, useShape} from './theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -230,6 +230,10 @@ export function Chips({
 		A glyph drawn before the name.
 		*/
 		glyph?: IconName;
+		/**
+		A color for this chip's icon, and for its fill and outline while selected.
+		*/
+		tint?: string;
 	}>;
 	selected: string;
 	onSelect: (id: string) => void;
@@ -240,6 +244,7 @@ export function Chips({
 		<View accessibilityRole="tablist" style={styles.chips}>
 			{items.map((item) => {
 				const on = item.id === selected;
+				const tint = item.tint ?? colors.accent;
 				return (
 					<Pressable
 						key={item.id}
@@ -251,11 +256,11 @@ export function Chips({
 							{
 								borderRadius: shape.chipRadius,
 								backgroundColor: on
-									? colors.accentSoft
+									? soften(tint)
 									: pressed
 										? colors.pressed
 										: colors.surface,
-								borderColor: on ? colors.accent : colors.border,
+								borderColor: on ? tint : colors.border,
 							},
 						]}
 						onPress={() => {
@@ -266,12 +271,12 @@ export function Chips({
 							<Icon
 								name={item.glyph}
 								size={16}
-								color={on ? colors.accent : colors.muted}
+								color={item.tint ?? (on ? colors.accent : colors.muted)}
 							/>
 						)}
 						<Text
 							style={{
-								color: on ? colors.accent : colors.text,
+								color: on ? tint : colors.text,
 								fontWeight: on ? '600' : '400',
 							}}
 						>
@@ -437,7 +442,7 @@ export function Segmented<T extends string>({
 	onSelect,
 	label,
 }: {
-	items: Array<{id: T; name: string}>;
+	items: Array<{id: T; name: string; icon?: IconName}>;
 	selected: T;
 	onSelect: (id: T) => void;
 	label: string;
@@ -477,6 +482,13 @@ export function Segmented<T extends string>({
 							onSelect(item.id);
 						}}
 					>
+						{item.icon && (
+							<Icon
+								name={item.icon}
+								size={16}
+								color={on && !shape.ios ? colors.accent : colors.muted}
+							/>
+						)}
 						<Text
 							style={{
 								color: on && !shape.ios ? colors.accent : colors.text,
@@ -593,6 +605,8 @@ const styles = StyleSheet.create({
 	segment: {
 		flex: 1,
 		minHeight: 36,
+		flexDirection: 'row',
+		gap: 6,
 		alignItems: 'center',
 		justifyContent: 'center',
 	},

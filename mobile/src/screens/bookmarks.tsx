@@ -3,7 +3,7 @@ import {FlatList, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../src/app/types';
 import {BottomSheet} from '../bottom-sheet';
-import {withGlyph} from '../column-icons';
+import {useChipLook} from '../column-icons';
 import {
 	bookmarksIn,
 	columnViews,
@@ -41,6 +41,7 @@ export function BookmarksScreen({
 	onSelecting: (selecting: boolean) => void;
 }) {
 	const colors = useColors();
+	const chipLook = useChipLook();
 	const shape = useShape();
 	const insets = useSafeAreaInsets();
 	const space = useBarSpace();
@@ -216,7 +217,7 @@ export function BookmarksScreen({
 							{!searching && columns.length > 0 && (
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
-										items={columns.map((column) => withGlyph(column))}
+										items={columns.map((column) => chipLook(column))}
 										selected={columnId}
 										onSelect={setPicked}
 									/>

@@ -134,8 +134,8 @@ export function SettingsScreen() {
 					<Segmented
 						label="Style"
 						items={[
-							{id: 'material', name: 'Android'},
-							{id: 'ios', name: 'iOS'},
+							{id: 'material', name: 'Android', icon: 'logo-android'},
+							{id: 'ios', name: 'iOS', icon: 'logo-apple'},
 						]}
 						selected={prefs.look}
 						onSelect={(look) => {

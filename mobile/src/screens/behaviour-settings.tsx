@@ -6,18 +6,21 @@ import {
 	setPreferences,
 	usePreferences,
 } from '../preferences';
+import {rowActionLook} from '../row-actions';
 import {useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
 import {Card, Chips, Segmented, Switch} from '../ui';
 
-const ACTION_NAMES: Record<RowAction, string> = {
-	none: 'Nothing',
-	open: 'Open',
-	edit: 'Edit',
-	move: 'Move',
-	delete: 'Delete',
-};
-const ACTIONS = ROW_ACTIONS.map((id) => ({id, name: ACTION_NAMES[id]}));
+/**
+The swipe choices, each with the icon and color it has when it appears under a row.
+*/
+function useActionChoices() {
+	const colors = useColors();
+	return ROW_ACTIONS.map((id) => {
+		const look = rowActionLook(id, colors);
+		return {id, name: look.label, glyph: look.icon, tint: look.color};
+	});
+}
 
 function Heading({children}: {children: string}) {
 	const colors = useColors();
@@ -70,6 +73,7 @@ What tapping and swiping a bookmark do, and how links are cleaned when saved. Th
 export function BookmarkBehaviourCard() {
 	const colors = useColors();
 	const prefs = usePreferences();
+	const actions = useActionChoices();
 	return (
 		<Card>
 			<Heading>Bookmarks</Heading>
@@ -81,8 +85,8 @@ export function BookmarkBehaviourCard() {
 				<Segmented
 					label="Tap a bookmark"
 					items={[
-						{id: 'open', name: 'Open it'},
-						{id: 'edit', name: 'Edit it'},
+						{id: 'open', name: 'Open it', icon: 'open-outline'},
+						{id: 'edit', name: 'Edit it', icon: 'create-outline'},
 					]}
 					selected={prefs.tapAction}
 					onSelect={(tapAction) => {
@@ -92,7 +96,7 @@ export function BookmarkBehaviourCard() {
 			</Group>
 			<Group label="Swipe right">
 				<Chips
-					items={ACTIONS}
+					items={actions}
 					selected={prefs.swipeRight}
 					onSelect={(id) => {
 						setPreferences({swipeRight: id as RowAction});
@@ -101,7 +105,7 @@ export function BookmarkBehaviourCard() {
 			</Group>
 			<Group label="Swipe left">
 				<Chips
-					items={ACTIONS}
+					items={actions}
 					selected={prefs.swipeLeft}
 					onSelect={(id) => {
 						setPreferences({swipeLeft: id as RowAction});
@@ -152,10 +156,10 @@ export function SyncedSettingsCard() {
 				<Segmented
 					label="Show under a title"
 					items={[
-						{id: 'full', name: 'Address'},
-						{id: 'domain', name: 'Site'},
-						{id: 'url-only', name: 'Only address'},
-						{id: 'none', name: 'Nothing'},
+						{id: 'full', name: 'Address', icon: 'link-outline'},
+						{id: 'domain', name: 'Site', icon: 'globe-outline'},
+						{id: 'url-only', name: 'Only', icon: 'text-outline'},
+						{id: 'none', name: 'None', icon: 'eye-off-outline'},
 					]}
 					selected={settings.urlDisplayMode}
 					onSelect={(value) => {
@@ -191,8 +195,12 @@ export function SyncedSettingsCard() {
 				<Segmented
 					label="Bookmark spacing"
 					items={[
-						{id: 'comfortable', name: 'Comfortable'},
-						{id: 'compact', name: 'Compact'},
+						{
+							id: 'comfortable',
+							name: 'Comfortable',
+							icon: 'reorder-two-outline',
+						},
+						{id: 'compact', name: 'Compact', icon: 'reorder-four-outline'},
 					]}
 					selected={settings.bookmarkDensity}
 					onSelect={(value) => {
@@ -203,12 +211,12 @@ export function SyncedSettingsCard() {
 			<Group label="Sort sessions">
 				<Chips
 					items={[
-						{id: 'newest', name: 'Newest'},
-						{id: 'oldest', name: 'Oldest'},
-						{id: 'opened', name: 'Last opened'},
-						{id: 'name', name: 'Name'},
-						{id: 'tabs', name: 'Most tabs'},
-						{id: 'custom', name: 'Your order'},
+						{id: 'newest', name: 'Newest', glyph: 'arrow-down-outline'},
+						{id: 'oldest', name: 'Oldest', glyph: 'arrow-up-outline'},
+						{id: 'opened', name: 'Last opened', glyph: 'time-outline'},
+						{id: 'name', name: 'Name', glyph: 'text-outline'},
+						{id: 'tabs', name: 'Most tabs', glyph: 'albums-outline'},
+						{id: 'custom', name: 'Your order', glyph: 'reorder-three-outline'},
 					]}
 					selected={settings.sessionSort}
 					onSelect={(value) => {

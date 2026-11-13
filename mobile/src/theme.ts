@@ -131,5 +131,14 @@ export function avatarColor(host: string, scheme: 'light' | 'dark'): string {
 	return scheme === 'dark' ? `hsl(${hue} 45% 38%)` : `hsl(${hue} 55% 42%)`;
 }
 
+/**
+A see-through version of a color, for the fill behind a tinted icon or chip. Takes `#rrggbb` or `hsl(h s% l%)`.
+*/
+export function soften(color: string): string {
+	return color.startsWith('#')
+		? `${color}26`
+		: color.replace(/^hsl\((\d+) (\d+)% (\d+)%\)$/, 'hsla($1, $2%, $3%, 0.18)');
+}
+
 export const BAR_HEIGHT = 64;
 export const BAR_MARGIN = 12;

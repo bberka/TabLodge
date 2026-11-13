@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import {columnGlyph, withGlyph} from './column-icons';
+import {columnGlyph, useChipLook} from './column-icons';
 import {IconPicker} from './icon-picker';
 import {addColumn, columnViews, DEFAULT_COLUMN_ID} from './library';
 import {edit, newId, useLibrary} from './library-store';
@@ -75,13 +75,14 @@ export function ColumnChoice({
 	choice: ReturnType<typeof useColumnChoice>;
 }) {
 	const colors = useColors();
+	const chipLook = useChipLook();
 	return (
 		<>
 			<View style={styles.group}>
 				<Text style={{color: colors.muted}}>Column</Text>
 				<Chips
 					items={[
-						...choice.columns.map((column) => withGlyph(column)),
+						...choice.columns.map((column) => chipLook(column)),
 						{id: NEW_COLUMN, name: 'New column', glyph: 'add'},
 					]}
 					selected={choice.creating ? NEW_COLUMN : choice.columnId}
