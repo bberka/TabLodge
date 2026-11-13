@@ -1,9 +1,0 @@
-expo.modules.tablodgecrypto.tablodge-crypto-pngs-0 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/build/generated/res/pngs/debug
-expo.modules.tablodgecrypto.tablodge-crypto-updated_navigation_xml-1 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/build/generated/updated_navigation_xml/debug
-expo.modules.tablodgecrypto.tablodge-crypto-mergeDebugResources-2 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/build/intermediates/incremental/debug/mergeDebugResources/merged.dir
-expo.modules.tablodgecrypto.tablodge-crypto-mergeDebugResources-3 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/build/intermediates/incremental/debug/mergeDebugResources/stripped.dir
-expo.modules.tablodgecrypto.tablodge-crypto-debug-4 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/build/intermediates/merged_res/debug/mergeDebugResources
-expo.modules.tablodgecrypto.tablodge-crypto-debug-5 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/build/intermediates/packaged_res/debug/packageDebugResources
-expo.modules.tablodgecrypto.tablodge-crypto-debug-6 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/src/debug/res
-expo.modules.tablodgecrypto.tablodge-crypto-main-7 /home/berg/.t3/worktrees/TabLodge/t3-052c8df3-c60080329c1dce6a/mobile/modules/tablodge-crypto/android/src/main/res
-gradleHome-0 /home/berg/.gradle

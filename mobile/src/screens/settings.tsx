@@ -1,9 +1,8 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
-import {SyncError, type SyncStatus} from '../../../src/shared/sync/client';
+import type {SyncStatus} from '../../../src/shared/sync/client';
 import {
 	clearLibrary,
-	connectServer,
 	isSampleData,
 	loadSampleData,
 	refreshStatus,
@@ -17,7 +16,6 @@ import {setPreferences, usePreferences} from '../preferences';
 import {
 	Button,
 	Card,
-	Field,
 	Header,
 	Icon,
 	type IconName,
@@ -29,6 +27,7 @@ import {
 	SyncedSettingsCard,
 	Toggle,
 } from './behaviour-settings';
+import {ConnectSheet} from './connect-sheet';
 import {PrivateCard} from './private-settings';
 
 function describe(
@@ -70,28 +69,8 @@ export function SettingsScreen() {
 	const status = useSyncStatus();
 	const prefs = usePreferences();
 	useLibrary();
-	const [url, setUrl] = useState('');
-	const [token, setToken] = useState('');
-	const [busy, setBusy] = useState<'connect' | 'sync' | 'disconnect'>();
-	const [error, setError] = useState('');
-
-	const connect = async () => {
-		setBusy('connect');
-		setError('');
-		try {
-			await connectServer(url, token);
-			setToken('');
-		} catch (error_) {
-			setError(
-				error_ instanceof SyncError
-					? error_.message
-					: 'Could not reach the server.',
-			);
-		} finally {
-			await refreshStatus();
-			setBusy(undefined);
-		}
-	};
+	const [connecting, setConnecting] = useState(false);
+	const [busy, setBusy] = useState<'sync' | 'disconnect'>();
 
 	const syncNow = async () => {
 		setBusy('sync');
@@ -217,42 +196,13 @@ export function SettingsScreen() {
 								Connect to the server you run yourself. Bookmarks and sessions
 								stay the same on every device you connect.
 							</Text>
-							<Field
-								label="Server address"
-								icon="globe-outline"
-								value={url}
-								placeholder="https://tablodge.example.com"
-								autoCapitalize="none"
-								autoCorrect={false}
-								keyboardType="url"
-								onChangeText={setUrl}
-								onClear={() => {
-									setUrl('');
+							<Button
+								label="Connect to a server"
+								icon="link"
+								onPress={() => {
+									setConnecting(true);
 								}}
 							/>
-							<Field
-								secureTextEntry
-								label="Token"
-								icon="key-outline"
-								value={token}
-								autoCapitalize="none"
-								autoCorrect={false}
-								error={error || undefined}
-								onChangeText={setToken}
-							/>
-							<Button
-								label="Connect"
-								icon="link"
-								loading={busy === 'connect'}
-								disabled={busy !== undefined || !url || !token}
-								onPress={() => void connect()}
-							/>
-							{isSampleData() && (
-								<Text style={{color: colors.warn}}>
-									Sample data is removed when you connect, so it never reaches
-									your server.
-								</Text>
-							)}
 						</>
 					)}
 				</Card>
@@ -287,6 +237,12 @@ export function SettingsScreen() {
 					</Card>
 				)}
 			</View>
+			<ConnectSheet
+				visible={connecting}
+				onClose={() => {
+					setConnecting(false);
+				}}
+			/>
 		</ScrollView>
 	);
 }
