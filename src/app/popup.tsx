@@ -80,6 +80,7 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {columnForUrl} from './column-sites';
+import {defaultBookmarkColumnId} from './default-column';
 import {webUrl} from './web-url';
 import {offerUndo} from './recovery-core';
 import {
@@ -167,6 +168,10 @@ function Popup() {
 		[groups],
 	);
 	const columns = state?.bookmarkColumns || [];
+	const defaultColumnId = defaultBookmarkColumnId(
+		columns,
+		state?.bookmarks ?? [],
+	);
 	const eligibleTabs = useMemo(
 		() =>
 			currentTabs.filter(
@@ -341,7 +346,7 @@ function Popup() {
 			const {NEW_BOOKMARK_COLUMN: newColumnValue} =
 				await import('./bookmark-column-picker');
 			setBookmarkTab({title: tab.title || url, url});
-			setColumnId(columns[0]?.id || newColumnValue);
+			setColumnId(defaultColumnId || newColumnValue);
 			setNewColumn({name: ''});
 			setBookmarkOpen(true);
 		} catch {
