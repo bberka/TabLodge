@@ -483,9 +483,9 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 						id={settingsHelpId}
 						className="text-xs leading-5 text-muted-foreground"
 					>
-						Keeps this browser’s settings the same as your other browsers.
+						Uses the same TabLodge settings in every browser you connect.
 						Recovery snapshots and automatic backups always stay on each device.
-						Turning this back on sends this browser’s settings.
+						Turning this back on uploads this browser’s settings.
 					</p>
 				</div>
 				<Switch
