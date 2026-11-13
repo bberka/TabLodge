@@ -7,6 +7,7 @@
 // CLI (used by .github/workflows/release.yml):
 //   node scripts/release-version.ts next        print the next release version
 //   node scripts/release-version.ts set 0.2.0   write a version into package.json and extension/manifest.json
+//   node scripts/release-version.ts set-android 0.2.0   write the version and version code into mobile/app.json
 import {execFileSync} from 'node:child_process';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
@@ -88,6 +89,40 @@ export function stampVersion(text: string, version: string): string {
 	return stamped;
 }
 
+/**
+The Android version code of a release. Android only installs an update with a higher code, so it grows with the
+version: 0.2.5 gives 2005, and a minor number or patch of 1000 or more is refused rather than collide.
+*/
+export function androidVersionCode(version: string): number {
+	const match = VERSION_PATTERN.exec(version);
+	if (!match) {
+		throw new Error(`Not a ZeroVer version (0.x.y): "${version}".`);
+	}
+
+	const [minor, patch] = [Number(match[1]), Number(match[2])];
+	if (minor >= 1000 || patch >= 1000) {
+		throw new Error(
+			`Version ${version} is too large for an Android version code.`,
+		);
+	}
+
+	return minor * 1000 + patch;
+}
+
+/**
+Writes the release version and version code into the text of mobile/app.json. The file is rewritten as JSON with
+tab indentation, which is how the repo keeps it.
+*/
+export function stampAndroid(text: string, version: string): string {
+	const code = androidVersionCode(version);
+	const config = JSON.parse(text) as {
+		expo: {version: string; android: {versionCode: number}};
+	};
+	config.expo.version = version;
+	config.expo.android.versionCode = code;
+	return `${JSON.stringify(config, undefined, '\t')}\n`;
+}
+
 function setVersion(version: string) {
 	for (const file of ['package.json', 'extension/manifest.json']) {
 		const path = resolve(projectRoot, file);
@@ -113,8 +148,13 @@ if (
 		console.log(nextVersion(minor, tags));
 	} else if (command === 'set' && argument) {
 		setVersion(argument);
+	} else if (command === 'set-android' && argument) {
+		const path = resolve(projectRoot, 'mobile/app.json');
+		writeFileSync(path, stampAndroid(readFileSync(path, 'utf8'), argument));
 	} else {
-		console.error('Usage: node scripts/release-version.ts next | set <0.x.y>');
+		console.error(
+			'Usage: node scripts/release-version.ts next | set <0.x.y> | set-android <0.x.y>',
+		);
 		process.exitCode = 1;
 	}
 }

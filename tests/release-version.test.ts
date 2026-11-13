@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
+	androidVersionCode,
 	nextVersion,
 	parseMinor,
 	parseReleaseTag,
+	stampAndroid,
 	stampVersion,
 } from '../scripts/release-version.ts';
 
@@ -60,4 +62,27 @@ test('stamping a version only touches the top-level version value', () => {
 		() => stampVersion('{\n\t"name": "x"\n}\n', '0.1.0'),
 		/version/,
 	);
+});
+
+test('the Android version code grows with the release version', () => {
+	assert.equal(androidVersionCode('0.1.5'), 1005);
+	assert.equal(androidVersionCode('0.2.0'), 2000);
+	assert.ok(androidVersionCode('0.1.11') > androidVersionCode('0.1.9'));
+	assert.ok(androidVersionCode('0.2.0') > androidVersionCode('0.1.999'));
+	assert.throws(() => androidVersionCode('0.1.1000'), /too large/);
+	assert.throws(() => androidVersionCode('1.0.0'), /ZeroVer/);
+});
+
+test('stamping the app config sets the version and code and keeps the rest', () => {
+	const config = JSON.parse(
+		stampAndroid(
+			'{\n\t"expo": {\n\t\t"name": "TabLodge",\n\t\t"version": "0.1.0",\n\t\t"android": {"package": "a.b", "versionCode": 1}\n\t}\n}\n',
+			'0.3.4',
+		),
+	) as {
+		expo: {name: string; version: string; android: Record<string, unknown>};
+	};
+	assert.equal(config.expo.version, '0.3.4');
+	assert.deepEqual(config.expo.android, {package: 'a.b', versionCode: 3004});
+	assert.equal(config.expo.name, 'TabLodge');
 });

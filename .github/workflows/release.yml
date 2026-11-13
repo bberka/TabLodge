@@ -3,7 +3,8 @@ name: Release
 # Manual only: Actions → Release → Run workflow (on the default branch).
 # Version = 0.<VERSION file>.<patch>, where patch continues from the latest v0.<VERSION>.* tag
 # (see scripts/release-version.ts). Publishes a GitHub release with a Chromium zip and a Firefox zip, then the sync
-# server image with the same version (sync-server.yml).
+# server image with the same version (sync-server.yml) and the signed Android APK. The APK needs the signing secrets
+# described in docs/CONTRIBUTING.md; without them that job only prints a warning.
 on:
   workflow_dispatch:
 
@@ -92,6 +93,10 @@ jobs:
           Install TabLodge from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tab-lodge/). It updates itself.
 
           To load a package by hand instead, **$firefox_zip_file** is unsigned. To try it, open \`about:debugging#/runtime/this-firefox\`, click **Load Temporary Add-on**, and select the ZIP; Firefox removes it when it restarts. Firefox ESR, Developer Edition, Nightly, and unbranded builds can keep it installed after you set \`xpinstall.signatures.required\` to \`false\` in \`about:config\`. See the README for the differences from the Chromium version.
+
+          ### Android 7 or newer
+
+          Download **tablodge.apk** below, open it on your phone, and allow your browser or file manager to install apps when Android asks. It saves links and shows your bookmarks and sessions from your sync server. To update, install the next release's APK over it. Check the download against \`tablodge.apk.sha256\`. It is attached a few minutes after the release, once it has been built and signed.
           EOF
           gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$FIREFOX_ZIP" "$FIREFOX_ZIP.sha256" \
             --target "$GITHUB_SHA" \
@@ -118,3 +123,78 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+  android:
+    name: Build and attach the signed Android APK
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      # The release key, created once as described in docs/CONTRIBUTING.md.
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - name: Check the signing secrets
+        id: signing
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::The Android signing secrets are not set, so v$VERSION has no APK. See docs/CONTRIBUTING.md."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      # The tag the release job made, so the APK is built from exactly the released commit.
+      - uses: actions/checkout@v7
+        if: steps.signing.outputs.enabled == 'true'
+        with:
+          ref: v${{ needs.release.outputs.version }}
+      - uses: pnpm/action-setup@v6
+        if: steps.signing.outputs.enabled == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.signing.outputs.enabled == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v5
+        if: steps.signing.outputs.enabled == 'true'
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        if: steps.signing.outputs.enabled == 'true'
+      - uses: gradle/actions/setup-gradle@v5
+        if: steps.signing.outputs.enabled == 'true'
+      - name: Install and stamp the version
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          node scripts/release-version.ts set-android "$VERSION"
+      - name: Generate the Android project
+        if: steps.signing.outputs.enabled == 'true'
+        run: pnpm --filter tablodge-mobile exec expo prebuild --platform android --no-install
+      - name: Build the release APK
+        if: steps.signing.outputs.enabled == 'true'
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease -x lint -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+      # Gradle signs the release build with a throwaway debug key. This aligns it and signs it again with the real one.
+      - name: Sign, check, and upload the APK
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          mkdir release
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$tools/zipalign" -f -p 4 mobile/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" sign \
+            --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            --out release/tablodge.apk "$RUNNER_TEMP/aligned.apk"
+          rm -f "$RUNNER_TEMP/release.keystore"
+          "$tools/apksigner" verify --print-certs release/tablodge.apk
+          (cd release && sha256sum tablodge.apk > tablodge.apk.sha256)
+          gh release upload "v$VERSION" release/tablodge.apk release/tablodge.apk.sha256
