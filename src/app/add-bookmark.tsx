@@ -13,6 +13,9 @@ import {IconNameField} from './icon-picker';
 import {DEFAULT_COLUMN_ICON} from './icon-registry';
 import {ColumnSelect} from './column-select';
 import {defaultBookmarkColumnId} from './default-column';
+import {takeStateRequest} from './state-preload';
+
+const initialStateRequest = takeStateRequest();
 
 const NEW_COLUMN = '__new-column__';
 
@@ -23,7 +26,7 @@ function AddBookmarkPrompt() {
 	const params = new URLSearchParams(location.search);
 	const url = params.get('url') || '';
 	const fromBrowser = params.get('source') === 'browser';
-	const {state, error: stateError} = useTabLodgeState();
+	const {state, error: stateError} = useTabLodgeState(initialStateRequest);
 	const [title, setTitle] = useState(params.get('title') || url);
 	const [columnId, setColumnId] = useState('');
 	const [newName, setNewName] = useState('');

@@ -57,13 +57,13 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
-		// Starts the new-tab state read while the React page bundle is loading.
+		// Starts the state read for the new tab and add-bookmark pages while the React page bundle is loading.
 		{
-			label: 'newtab-preload.js',
+			label: 'state-preload.js',
 			config: scriptConfig({
-				entry: resolve(SOURCE_DIR, 'newtab-preload.ts'),
+				entry: resolve(SOURCE_DIR, 'state-preload.ts'),
 				outDir,
-				fileName: 'newtab-preload.js',
+				fileName: 'state-preload.js',
 				target,
 			}),
 		},
