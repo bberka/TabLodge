@@ -7016,7 +7016,9 @@ async function importGroups(
 		withUndo('Import', [STORAGE_KEY], async () => {
 			const store = await getStore();
 			const candidates =
-				importMode === 'bookmarks' ? [] : importCandidates(input).slice(0, 500);
+				importMode === 'bookmarks'
+					? []
+					: importCandidates(input).slice(0, MAX_SESSIONS);
 			const hasBookmarkData =
 				importMode !== 'sessions' &&
 				(Array.isArray(input?.bookmarks) ||

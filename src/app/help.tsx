@@ -600,9 +600,11 @@ function Help() {
 							Session import and export are in the{' '}
 							<MenuLocation label="Sessions" />. It can also share all sessions,
 							including archived sessions. Session import also reads exports
-							from OneTab, Session Buddy, Tab Session Manager, and Toby. A
-							session menu can export just that session in any format. Bookmark
-							import and export are in the{' '}
+							from OneTab, Session Buddy, Tab Session Manager, and Toby.
+							Bookmark import also reads a Raindrop.io export (CSV or HTML): its
+							collections become columns, and its tags and highlights are not
+							imported. A session menu can export just that session in any
+							format. Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
 							saves only bookmarks or sessions, or Everything as a full ZIP
 							backup with settings, excluded sites, theme, snapshots, and the
@@ -618,12 +620,15 @@ function Help() {
 							password for anything sensitive: a PIN is weak, because anyone
 							with the file can try every PIN. TabLodge cannot recover a lost
 							PIN or password. Importing a protected file asks for it first, and
-							a wrong entry changes nothing. Importing a full backup replaces
-							the current data and offers Undo for a short time.
+							a wrong entry changes nothing. Importing a file adds to what you
+							have and skips links you already saved. Importing a full backup
+							asks whether to add it to the current data (the default; settings,
+							snapshots, and the trash bin stay as they are) or to replace
+							everything, and it offers Undo for a short time.
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',
@@ -662,7 +667,7 @@ function Help() {
 				},
 				{
 					title: 'Automatic backups',
-					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Choose backup frequency, retention, and an optional Downloads copy in Settings. Automatic and safety backups are not encrypted. Only a full backup ZIP that you export yourself can be protected with a PIN or password.',
+					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Restore replaces your sessions and bookmarks with a backup; Add keeps what you have and adds only what is new. Choose backup frequency, retention, and an optional Downloads copy in Settings. Automatic and safety backups are not encrypted. Only a full backup ZIP that you export yourself can be protected with a PIN or password.',
 					searchText:
 						'automatic backups off default dated copies sessions bookmarks settings safety backup before erase import delete frequency retention downloads permission',
 				},

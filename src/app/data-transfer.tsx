@@ -55,6 +55,7 @@ import {
 import {downloadFile} from '../shared/download';
 import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
+import {mergeSummary} from './merge-summary';
 import {writeClipboard} from './interaction-actions';
 import {
 	shareCounts,
@@ -1037,7 +1038,7 @@ type ImportDialogProps = {
 };
 
 const SUPPORTED_FILES =
-	'Full backups (ZIP, including protected ones), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, and Toby.';
+	'Full backups (ZIP, including protected ones), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, Toby, and Raindrop.io.';
 
 function importSummary(
 	kind: ImportKind,
@@ -1078,6 +1079,8 @@ export function ImportDialog({
 	const [source, setSource] = useState<ImportSource | null>(null);
 	const [parsed, setParsed] = useState<ParsedImport | null>(null);
 	const [full, setFull] = useState<FullBackupContents | null>(null);
+	// A full backup is added to the library by default; Replace swaps everything, settings included.
+	const [fullMode, setFullMode] = useState<'merge' | 'replace'>('merge');
 	// An encrypted backup waiting for its PIN or password; nothing is read from it until it opens.
 	const [locked, setLocked] = useState<{
 		name: string;
@@ -1364,6 +1367,25 @@ export function ImportDialog({
 
 		setBusy(true);
 		try {
+			if (fullMode === 'merge') {
+				// The same merge as importing a JSON backup: new sessions, bookmarks and columns are added, links
+				// already saved are skipped, and settings, snapshots, and trash stay as they are.
+				const merged = await send('IMPORT_GROUPS', {
+					data: full.state,
+					importOptions: {duplicateMode: 'skip', titlePolicy: 'existing'},
+				});
+				if (!merged?.ok) {
+					throw new Error(merged?.error || 'Could not add this backup.');
+				}
+
+				onOpenChange(false);
+				await onImported?.();
+				offerUndo(mergeSummary(merged), merged.undoId, showStatus, async () =>
+					onImported?.(),
+				);
+				return;
+			}
+
 			const result = await send('RESTORE_FULL_BACKUP', {
 				format: full.manifest.format,
 				version: full.manifest.version,
@@ -1496,9 +1518,11 @@ export function ImportDialog({
 	const description = locked
 		? `“${locked.name}” is protected. Enter the PIN or password you chose when you made it. Nothing in your library changes until you confirm the import.`
 		: full
-			? 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
+			? fullMode === 'merge'
+				? 'This adds the backup’s sessions and bookmarks to yours and skips links you already have. Your settings, snapshots, and trash bin stay as they are. You can undo it right after.'
+				: 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
 			: everything
-				? `Restore a ${PROJECT.name} full backup. It replaces sessions, bookmarks, and settings, and you can undo it right after.`
+				? `Bring in a ${PROJECT.name} full backup. You choose whether to add it to what you have or replace everything, and you can undo it right after.`
 				: step === 'preview'
 					? 'Nothing is saved until you choose Import.'
 					: kind === 'sessions'
@@ -1759,13 +1783,44 @@ export function ImportDialog({
 								<Stat label="Snapshots" value={full.counts.snapshots} />
 								<Stat label="Trash bin items" value={full.counts.trash} />
 							</dl>
+							<div className="rounded-lg bg-muted/40 p-3">
+								<OptionRow
+									inlineControl
+									id="full-import-mode"
+									label="How to bring it in"
+									help={
+										fullMode === 'merge'
+											? 'Adds what is new and skips links you already have.'
+											: 'Swaps all your data for the backup.'
+									}
+								>
+									<SegmentedControl
+										aria-labelledby="full-import-mode"
+										value={fullMode}
+										options={[
+											{value: 'merge', label: 'Add to mine'},
+											{value: 'replace', label: 'Replace everything'},
+										]}
+										onValueChange={setFullMode}
+									/>
+								</OptionRow>
+							</div>
 							<ul className="space-y-1 text-xs leading-5 text-muted-foreground">
-								<Note>
-									Settings, excluded sites, and the theme are replaced too.
-								</Note>
-								<Note>
-									A safety backup of your current data is taken first.
-								</Note>
+								{fullMode === 'merge' ? (
+									<Note>
+										Your settings, snapshots, trash bin, and theme stay as they
+										are.
+									</Note>
+								) : (
+									<>
+										<Note>
+											Settings, excluded sites, and the theme are replaced too.
+										</Note>
+										<Note>
+											A safety backup of your current data is taken first.
+										</Note>
+									</>
+								)}
 							</ul>
 						</DialogBody>
 						<DialogFooter>
@@ -1799,7 +1854,11 @@ export function ImportDialog({
 								onClick={() => void runFullImport()}
 							>
 								<FileUp aria-hidden="true" />
-								{busy ? 'Importing' : 'Replace everything'}
+								{busy
+									? 'Importing'
+									: fullMode === 'merge'
+										? 'Add to my library'
+										: 'Replace everything'}
 							</Button>
 						</DialogFooter>
 					</>

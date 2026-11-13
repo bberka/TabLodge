@@ -24,7 +24,7 @@ TabLodge has no accounts and no analytics. Your data stays in your browser profi
 - **Sessions.** Save tabs, a tab group, a window, or all windows, and restore them with their groups and pinned tabs. Organize sessions in folders, archive old ones, and replace, extend, or split a session from the current window.
 - **Bookmark board.** Columns of links on every new tab, in a Board or Focus view. Drag or use the keyboard to reorder, paste lists of links, and find duplicates.
 - **Search.** A palette (`Ctrl+Shift+K` on any page, `Ctrl+K` or `/` on the dashboard) and the `tl` address bar keyword find open tabs, bookmarks, saved tabs, and sessions.
-- **Import and export.** Bring data from OneTab, Session Buddy, Tab Session Manager, Toby, or browser bookmarks. Export as JSON, HTML, CSV, Markdown, or links, or save a full backup ZIP, optionally protected with a password.
+- **Import and export.** Bring data from OneTab, Session Buddy, Tab Session Manager, Toby, Raindrop.io, or browser bookmarks. Imports add to what you have and skip links you already saved; a full backup can be added or can replace everything. Export as JSON, HTML, CSV, Markdown, or links, or save a full backup ZIP, optionally protected with a password.
 - **Recovery.** Crash snapshots, a trash bin, Undo, and optional automatic backups.
 - **Sync with your own server.** Keep the library the same in all your browsers through a server you run yourself, with Docker or on your Cloudflare account. On Cloudflare, a Deploy to Cloudflare button sets it up without installing anything. See [Self hosting](self-hosting.md).
 - **Private windows.** Use the regular library or a separate one, optionally locked with a PIN or password. See [Private windows](#private-windows).

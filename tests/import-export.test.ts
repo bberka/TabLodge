@@ -1104,3 +1104,88 @@ test('an old session export with both description and notes imports as one descr
 	// The backup goes to the service worker as is; it does the same merge there.
 	assert.equal(sessionImportPayload(parsed), parsed.native?.data);
 });
+
+// Synthetic files in the shape Raindrop.io writes (checked against a real export; none of its content is kept here).
+const RAINDROP_CSV = [
+	'id,title,note,excerpt,url,folder,tags,created,cover,highlights,favorite',
+	'101,"Loose link",,A short summary,https://loose.example/a,Unsorted,,2026-10-26T20:47:09.579Z,https://cover.example/a.png,,false',
+	'102,"Second loose link",,,https://loose.example/b,Unsorted,,2026-10-25T10:00:00.000Z,,,false',
+	'103,"Dev guide","A note of mine","A summary with a comma, and a ""quote""\nand a second line",https://dev.example/guide,Dev,"rust, tools",2026-10-20T06:01:13.216Z,,"Highlight:something worth keeping",true',
+	'104,"Dev docs",,,https://dev.example/docs,Dev,,2026-10-19T06:01:13.216Z,,,false',
+	'105,"Elsewhere",,,https://elsewhere.example/,Reading,,2026-10-18T06:01:13.216Z,,,false',
+].join('\n');
+
+const RAINDROP_HTML = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Raindrop.io Bookmarks</TITLE>
+<link rel="stylesheet" href="data:text/css;base64,ZHQgYSB7IGRpc3BsYXk6IGJsb2NrOyB9" type="text/css">
+<H1>Raindrop.io Bookmarks</H1>
+<DL><p>
+	<DT><H3 ADD_DATE="0" LAST_MODIFIED="0">Unsorted</H3>
+	<DL><p>
+		<DT><A HREF="https://loose.example/a" ADD_DATE="1793047629" LAST_MODIFIED="1793047629" TAGS="" DATA-COVER="https://cover.example/a.png" DATA-IMPORTANT="false">Loose link</A>
+		<DT><A HREF="https://loose.example/b" ADD_DATE="1792969871" LAST_MODIFIED="1792969871" TAGS="" DATA-COVER="" DATA-IMPORTANT="false">Second loose link</A>
+	</DL><p>
+	<DT><H3 ADD_DATE="1790964390" LAST_MODIFIED="1794582986">Dev</H3>
+	<DL><p>
+		<DT><A HREF="https://dev.example/guide" ADD_DATE="1790503933" LAST_MODIFIED="1790964427" TAGS="rust,tools" DATA-COVER="" DATA-IMPORTANT="true">Dev guide</A>
+		<DD>A note of mine<blockquote COLOR="undefined" ADD_DATE="1790505066">Highlight text</blockquote>
+		<DT><A HREF="https://dev.example/docs" ADD_DATE="1790505066" LAST_MODIFIED="1790964287" TAGS="" DATA-COVER="" DATA-IMPORTANT="false">Dev docs</A>
+	</DL><p>
+	<DT><H3 ADD_DATE="1790964361" LAST_MODIFIED="1794582986">Reading</H3>
+	<DL><p>
+		<DT><A HREF="https://elsewhere.example/" ADD_DATE="1790508663" LAST_MODIFIED="1790964234" TAGS="" DATA-COVER="" DATA-IMPORTANT="false">Elsewhere</A>
+	</DL><p>
+</DL><p>
+`;
+
+for (const [name, source, filename, label] of [
+	['CSV', RAINDROP_CSV, 'Raindrop.csv', 'Raindrop.io export (CSV)'],
+	['HTML', RAINDROP_HTML, 'Raindrop.html', 'Raindrop.io export (HTML)'],
+] as const) {
+	test(`a Raindrop.io ${name} export is recognized and its collections become columns`, () => {
+		const parsed = parseImportFile(source, filename);
+		assert.equal(parsed.label, label);
+		assert.equal(parsed.confidence, 'verified');
+		assert.equal(parsed.invalid, 0);
+		const byName = Object.fromEntries(
+			parsed.bookmarks.map((entry) => [entry.name, entry.links.length]),
+		);
+		// Unsorted joins the default column (no name) instead of becoming a column that repeats it.
+		assert.deepEqual(byName, {'': 2, Dev: 2, Reading: 1});
+		assert.equal(parsed.bookmarks[0]?.name, '');
+		const dev = parsed.bookmarks.find((entry) => entry.name === 'Dev');
+		assert.equal(dev?.links[0]?.url, 'https://dev.example/guide');
+		assert.equal(typeof dev?.links[0]?.createdAt, 'number');
+	});
+
+	test(`a Raindrop.io ${name} export says that its tags and highlights are not imported`, () => {
+		const parsed = parseImportFile(source, filename);
+		assert.equal(parsed.warnings.length, 1);
+		assert.match(parsed.warnings[0] ?? '', /1 bookmark has tags/);
+		assert.match(parsed.warnings[0] ?? '', /not imported/);
+	});
+}
+
+test('a Raindrop.io CSV keeps the note and reads quoted summaries with commas and line breaks', () => {
+	const parsed = parseImportFile(RAINDROP_CSV, 'Raindrop.csv');
+	const guide = parsed.bookmarks
+		.flatMap((entry) => entry.links)
+		.find((link) => link.url === 'https://dev.example/guide');
+	assert.equal(guide?.title, 'Dev guide');
+	assert.equal(guide?.notes, 'A note of mine');
+	assert.equal(parsed.bookmarks.flatMap((entry) => entry.links).length, 5);
+});
+
+test('a plain spreadsheet with a folder column is not mistaken for Raindrop.io', () => {
+	const parsed = parseImportFile(
+		'title,url,folder\nA,https://a.example/,Work\nB,https://b.example/,Unsorted\n',
+		'links.csv',
+	);
+	assert.equal(parsed.label, 'Spreadsheet (CSV)');
+	assert.deepEqual(parsed.bookmarks.map((entry) => entry.name).toSorted(), [
+		'Unsorted',
+		'Work',
+	]);
+	assert.deepEqual(parsed.warnings, []);
+});

@@ -11,6 +11,7 @@ import {
 	Download,
 	History,
 	LayoutGrid,
+	Merge,
 	PanelsTopLeft,
 	RotateCcw,
 	Save,
@@ -34,6 +35,7 @@ import {
 import {downloadFile} from '../shared/download';
 import {inPrivateWindow} from './private-config';
 import {messageOf, plural, send, type ShowStatus} from './common';
+import {mergeSummary} from './merge-summary';
 import {
 	reportSnapshotRestore,
 	saveSnapshotAsSession,
@@ -669,12 +671,14 @@ function BackupRow({
 	backup,
 	busy,
 	onRestore,
+	onMerge,
 	onDownload,
 	onDelete,
 }: {
 	backup: BackupSummary;
 	busy: boolean;
 	onRestore: () => void;
+	onMerge: () => void;
 	onDownload: () => void;
 	onDelete: () => void;
 }) {
@@ -694,6 +698,17 @@ function BackupRow({
 				</p>
 			</div>
 			<div className="flex gap-1">
+				<Button
+					size="sm"
+					variant="outline"
+					aria-label={`Add the backup from ${whenText(backup.at)} to your library`}
+					title="Adds what is new and skips links you already have"
+					disabled={busy}
+					onClick={onMerge}
+				>
+					<Merge className="h-4 w-4" />
+					Add
+				</Button>
 				<Button size="sm" variant="outline" disabled={busy} onClick={onRestore}>
 					<RotateCcw className="h-4 w-4" />
 					Restore
@@ -806,6 +821,38 @@ export function RecoveryTools({
 				downloadFile(result.json, 'application/json', result.filename);
 			} else {
 				showStatus(result?.error || 'Could not read that backup.', true);
+			}
+		});
+
+	// Adds a backup's sessions and bookmarks to what is here, the way importing its file does, instead of replacing.
+	const mergeBackup = (backup: BackupSummary) =>
+		run(`merge:${backup.id}`, async () => {
+			const data = await send('GET_BACKUP_DATA', {id: backup.id});
+			if (!data?.ok) {
+				showStatus(data?.error || 'Could not read that backup.', true);
+				return;
+			}
+
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(data.json);
+			} catch {
+				showStatus('That backup could not be read.', true);
+				return;
+			}
+
+			const result = await send('IMPORT_GROUPS', {
+				data: parsed,
+				importOptions: {duplicateMode: 'skip', titlePolicy: 'existing'},
+			});
+			if (result?.ok) {
+				offerUndo(mergeSummary(result), result.undoId, showStatus, async () => {
+					await refresh();
+					await onDataChanged();
+				});
+				await onDataChanged();
+			} else {
+				showStatus(result?.error || 'Could not add that backup.', true);
 			}
 		});
 
@@ -933,10 +980,11 @@ export function RecoveryTools({
 				<p className="text-sm font-medium">Backups</p>
 				<p className="mt-1 text-xs leading-5 text-muted-foreground">
 					Each backup holds your sessions, bookmarks and settings as a regular
-					JSON export that Import can read. Restoring replaces sessions and
-					bookmarks, keeps your current settings, and first saves a safety
-					backup of what you have now. Safety backups are taken automatically
-					before erasing data, large imports, and deleting many bookmarks.
+					JSON export that Import can read. Add keeps what you have and adds
+					only what is new. Restore replaces sessions and bookmarks, keeps your
+					current settings, and first saves a safety backup of what you have
+					now. Safety backups are taken automatically before erasing data, large
+					imports, and deleting many bookmarks.
 				</p>
 				{backups?.downloadError && (
 					<p
@@ -958,6 +1006,7 @@ export function RecoveryTools({
 								backup={backup}
 								busy={busy !== ''}
 								onRestore={() => setPending({kind: 'restore', backup})}
+								onMerge={() => void mergeBackup(backup)}
 								onDownload={() => void download(backup)}
 								// A single backup is deleted at once; Undo brings it back.
 								onDelete={() => void removeBackup(backup)}
@@ -980,7 +1029,7 @@ export function RecoveryTools({
 						? 'Every recent snapshot is removed. You can undo this right after.'
 						: pending?.kind === 'trash'
 							? 'Everything in the trash bin is deleted for good. You can undo this right after.'
-							: 'Your sessions and bookmarks are replaced by this backup. A safety backup of what you have now is kept, and you can undo this right after.'
+							: 'Your sessions and bookmarks are replaced by this backup. To keep what you have and add only what is new, use Add instead. A safety backup of what you have now is kept, and you can undo this right after.'
 				}
 				confirmLabel={
 					pending?.kind === 'snapshots'

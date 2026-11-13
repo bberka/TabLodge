@@ -7892,6 +7892,78 @@ test('BACKUP_NOW stores a full export that the importer reads, and keeps setting
 	assert.equal('json' in listed.auto[0], false, 'listing never ships the data');
 });
 
+test('adding a backup to the library merges it: both are kept, duplicates are skipped, settings stay', async () => {
+	const mine = createWorkerHarness(bookmarksState(3));
+	const before = mine.state.settings.closeOnSave;
+	// Another library: the same three bookmarks and session, two more bookmarks, another session, other settings.
+	const theirsState = bookmarksState(5);
+	theirsState.settings = {...theirsState.settings, closeOnSave: !before};
+	theirsState.groups = [
+		...theirsState.groups,
+		{
+			id: 'session-2',
+			name: 'Other session',
+			folderId: 'unfiled',
+			createdAt: 1,
+			updatedAt: 1,
+			tabs: [
+				{
+					id: 'other-tab',
+					title: 'Other page',
+					url: 'https://other.example/page',
+					pinned: false,
+					originalIndex: 0,
+				},
+			],
+		},
+	];
+	const theirs = createWorkerHarness(theirsState);
+	await theirs.sendMessage({type: 'BACKUP_NOW'});
+	const backup = JSON.parse(backupsOf(theirs).auto[0].json) as unknown;
+
+	const merged = await mine.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: backup,
+		importOptions: {duplicateMode: 'skip', titlePolicy: 'existing'},
+	});
+	assert.equal(merged.ok, true, merged.error);
+	assert.equal(merged.groups, 1, 'only the session that was new');
+	assert.equal(merged.bookmarks, 2, 'only the two bookmarks that were new');
+	assert.ok(merged.skipped >= 4, 'the repeated tab and bookmarks are skipped');
+	assert.deepEqual(
+		mine.state.groups
+			.map((group) => String(group.name))
+			.toSorted((a, b) => a.localeCompare(b)),
+		['Other session', 'Research'],
+	);
+	assert.equal(mine.state.bookmarks.length, 5);
+	assert.equal(
+		mine.state.settings.closeOnSave,
+		before,
+		'a merge never changes the settings',
+	);
+	// One Undo puts the library back as it was.
+	assert.ok(merged.undoId);
+	const undone = await mine.sendMessage({type: 'UNDO', id: merged.undoId});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(mine.state.bookmarks.length, 3);
+	assert.equal(mine.state.groups.length, 1);
+});
+
+test('importing a file takes every session in it, up to the library limit', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const groups = Array.from({length: 600}, (_, index) => ({
+		name: `Imported ${index}`,
+		tabs: [{url: `https://many${index}.example/`, title: `Page ${index}`}],
+	}));
+	const result = await harness.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: {groups},
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.groups, 600, 'no session past the 500th is dropped');
+});
+
 test('automatic backups follow the schedule, skip unchanged data, and rotate', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {});
 	assert.equal(harness.alarms.has('tablodge-backup'), false);
