@@ -189,6 +189,28 @@ export function reportSnapshotRestore(
 	);
 }
 
+/**
+Saves a snapshot, or one of its windows, as sessions and reports the result. Returns whether it saved.
+*/
+export async function saveSnapshotAsSession(
+	id: string,
+	windowIndex: number | undefined,
+	showStatus: ShowStatus,
+): Promise<boolean> {
+	const result = await send('SAVE_SNAPSHOT_AS_SESSION', {id, windowIndex});
+	if (result?.ok) {
+		showStatus(
+			`Saved ${plural(result.count, 'tab')} as ${plural(result.groups, 'session')}.`,
+			false,
+			{toast: true},
+		);
+		return true;
+	}
+
+	showStatus(result?.error || 'Could not save that snapshot.', true);
+	return false;
+}
+
 export type SnapshotsData = ActionSuccess<'GET_SNAPSHOTS'>;
 
 export function useSnapshots(active: boolean) {

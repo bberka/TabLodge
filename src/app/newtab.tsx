@@ -2771,6 +2771,7 @@ function NewTab() {
 			<RecoveryBanner
 				showStatus={showStatus}
 				onReview={() => setSnapshotsOpen(true)}
+				onSessionsChanged={reload}
 			/>
 			{sessionsOnTop ? sessionsSection : bookmarksSection}
 			<hr className="my-8 border-border" aria-hidden="true" />

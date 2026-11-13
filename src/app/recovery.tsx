@@ -36,6 +36,7 @@ import {inPrivateWindow} from './private-config';
 import {messageOf, plural, send, type ShowStatus} from './common';
 import {
 	reportSnapshotRestore,
+	saveSnapshotAsSession,
 	useSnapshots,
 	whenText,
 	bytesText,
@@ -232,16 +233,8 @@ export function SnapshotsDialog({
 
 	const saveAsSession = (id: string, windowIndex?: number) =>
 		run(async () => {
-			const result = await send('SAVE_SNAPSHOT_AS_SESSION', {id, windowIndex});
-			if (result?.ok) {
-				showStatus(
-					`Saved ${plural(result.count, 'tab')} as ${plural(result.groups, 'session')}.`,
-					false,
-					{toast: true},
-				);
+			if (await saveSnapshotAsSession(id, windowIndex, showStatus)) {
 				await onSessionsChanged?.();
-			} else {
-				showStatus(result?.error || 'Could not save that snapshot.', true);
 			}
 		});
 
