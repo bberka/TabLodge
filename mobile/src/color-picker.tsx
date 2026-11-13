@@ -11,7 +11,21 @@ import {
 import {ACCENTS, isColumnColor} from '../../src/shared/accent-colors';
 import {hexToHsl, hslToHex} from '../../src/shared/color-math';
 import {TARGET, useColors} from './theme';
-import {Field, Icon} from './ui';
+import {Field, Icon, type IconName} from './ui';
+
+export type LeadingChoice = {
+	id: string;
+	label: string;
+	icon: IconName;
+	/**
+	The color it stands for, drawn as the swatch; without one the swatch is plain.
+	*/
+	hex?: string;
+};
+
+const NO_COLOR: LeadingChoice[] = [
+	{id: '', label: 'No color', icon: 'ban-outline'},
+];
 
 const SWATCH = 40;
 const HEX = /^#[\da-f]{6}$/i;
@@ -112,9 +126,20 @@ lower case hex, the same text the extension stores.
 export function ColorPicker({
 	selected,
 	onSelect,
+	leading = NO_COLOR,
+	keepSelected = false,
 }: {
 	selected: string;
 	onSelect: (color: string) => void;
+	/**
+	The choices before the palette. Colors of a column or session start with "No color"; the app's accent starts with the
+	phone's color and TabLodge's own.
+	*/
+	leading?: LeadingChoice[];
+	/**
+	Choosing the selected color again keeps it, instead of clearing it.
+	*/
+	keepSelected?: boolean;
 }) {
 	const colors = useColors();
 	const custom = selected.startsWith('#') && isColumnColor(selected);
@@ -127,11 +152,11 @@ export function ColorPicker({
 	const [typed, setTyped] = useState(custom ? selected : '');
 	const bad = typed !== '' && !HEX.test(typed);
 	const preview = hslToHex(hue, SATURATION, lightnessAt(shade));
+	const lead = leading.find((choice) => choice.id === selected);
 	const name =
-		selected === ''
-			? 'No color'
-			: (ACCENTS.find((accent) => accent.id === selected)?.label ??
-				(custom ? `Custom ${selected}` : 'This color is not available'));
+		lead?.label ??
+		ACCENTS.find((accent) => accent.id === selected)?.label ??
+		(custom ? `Custom ${selected}` : 'This color is not available');
 	const commit = (nextHue: number, nextShade: number) => {
 		const hex = hslToHex(nextHue, SATURATION, lightnessAt(nextShade));
 		setTyped(hex);
@@ -151,7 +176,8 @@ export function ColorPicker({
 						{
 							backgroundColor: custom
 								? selected
-								: (ACCENTS.find((accent) => accent.id === selected)?.hex ??
+								: (lead?.hex ??
+									ACCENTS.find((accent) => accent.id === selected)?.hex ??
 									colors.surface),
 							borderColor: colors.border,
 						},
@@ -160,25 +186,35 @@ export function ColorPicker({
 				<Text style={{color: colors.text, fontWeight: '600'}}>{name}</Text>
 			</View>
 			<View accessibilityRole="radiogroup" style={styles.swatches}>
-				<Pressable
-					accessibilityRole="radio"
-					accessibilityLabel="No color"
-					accessibilityState={{selected: selected === ''}}
-					hitSlop={4}
-					style={[
-						styles.swatch,
-						{
-							borderColor: selected === '' ? colors.accent : colors.border,
-							backgroundColor: colors.surface,
-						},
-					]}
-					onPress={() => {
-						setTyped('');
-						onSelect('');
-					}}
-				>
-					<Icon name="ban-outline" size={20} color={colors.muted} />
-				</Pressable>
+				{leading.map((choice) => {
+					const on = selected === choice.id;
+					return (
+						<Pressable
+							key={choice.id}
+							accessibilityRole="radio"
+							accessibilityLabel={choice.label}
+							accessibilityState={{selected: on}}
+							hitSlop={4}
+							style={[
+								styles.swatch,
+								{
+									borderColor: on ? colors.accent : colors.border,
+									backgroundColor: choice.hex ?? colors.surface,
+								},
+							]}
+							onPress={() => {
+								setTyped('');
+								onSelect(choice.id);
+							}}
+						>
+							<Icon
+								name={choice.icon}
+								size={20}
+								color={choice.hex ? '#ffffff' : colors.muted}
+							/>
+						</Pressable>
+					);
+				})}
 				{ACCENTS.map((accent) => {
 					const on = selected === accent.id;
 					return (
@@ -197,7 +233,7 @@ export function ColorPicker({
 							]}
 							onPress={() => {
 								setTyped('');
-								onSelect(on ? '' : accent.id);
+								onSelect(on && !keepSelected ? '' : accent.id);
 							}}
 						>
 							{on && <Icon name="checkmark" size={20} color="#ffffff" />}

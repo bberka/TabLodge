@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {ScrollView, StyleSheet, Text, View} from 'react-native';
+import {ScrollView, useColorScheme, StyleSheet, Text, View} from 'react-native';
 import type {SyncStatus} from '../../../src/shared/sync/client';
 import {
 	clearLibrary,
@@ -22,6 +22,9 @@ import {
 	type IconName,
 	Segmented,
 } from '../ui';
+import {systemAccent} from '../../modules/open-links';
+import {APP_ACCENT} from '../accent';
+import {ColorPicker, type LeadingChoice} from '../color-picker';
 import {DeviceNameField} from './device-name-field';
 import {
 	BookmarkBehaviourCard,
@@ -71,6 +74,21 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const space = useBarSpace();
 	const status = useSyncStatus();
 	const prefs = usePreferences();
+	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+	const accentChoices: LeadingChoice[] = [
+		{
+			id: 'system',
+			label: 'System color',
+			icon: 'phone-portrait-outline',
+			hex: systemAccent()?.[scheme] ?? APP_ACCENT,
+		},
+		{
+			id: 'default',
+			label: 'TabLodge',
+			icon: 'layers-outline',
+			hex: APP_ACCENT,
+		},
+	];
 	useLibrary();
 	const [query, setQuery] = useState('');
 	const needle = normalizeQuery(query);
@@ -142,6 +160,16 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 								selected={prefs.look}
 								onSelect={(look) => {
 									setPreferences({look});
+								}}
+							/>
+						</Group>
+						<Group row={ROWS.accent}>
+							<ColorPicker
+								keepSelected
+								selected={prefs.accent}
+								leading={accentChoices}
+								onSelect={(accent) => {
+									setPreferences({accent});
 								}}
 							/>
 						</Group>

@@ -4,6 +4,7 @@ them with `usePreferences`.
 */
 import {Platform} from 'react-native';
 import {useSyncExternalStore} from 'react';
+import {isAccent} from '../../src/shared/accent-colors';
 import {cleanDeviceName} from '../../src/shared/device';
 import {readJson, writeJson} from './storage';
 
@@ -59,6 +60,11 @@ type Preferences = {
 	*/
 	siteIcons: boolean;
 	/**
+	The accent color: `system` (the phone's own, the default), `default` (TabLodge's), a preset id, or `#rrggbb`. Syncs with
+	the rest of the app's look.
+	*/
+	accent: string;
+	/**
 	The name this phone puts on the sessions it saves. Empty means the phone's own make and model. Stays on this phone.
 	*/
 	deviceName: string;
@@ -76,6 +82,7 @@ const defaults: Preferences = {
 	cleanOnSave: true,
 	syncSettings: true,
 	siteIcons: false,
+	accent: 'system',
 	deviceName: '',
 };
 
@@ -102,6 +109,7 @@ export async function loadPreferences(): Promise<void> {
 		syncSettings,
 		siteIcons,
 		deviceName,
+		accent,
 	} = saved as Partial<Preferences>;
 	current = {
 		look: look === 'ios' || look === 'material' ? look : defaults.look,
@@ -116,6 +124,7 @@ export async function loadPreferences(): Promise<void> {
 		syncSettings:
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
 		siteIcons: siteIcons === true,
+		accent: isAccent(accent) ? accent : defaults.accent,
 		deviceName: cleanDeviceName(deviceName),
 	};
 	for (const listener of listeners) {
@@ -172,6 +181,7 @@ const SYNCED_KEYS = [
 	'swipeRight',
 	'swipeLeft',
 	'cleanOnSave',
+	'accent',
 ] as const;
 
 /**
@@ -214,6 +224,10 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 	const left = ROW_ACTIONS.find((action) => action === raw.swipeLeft);
 	if (left) {
 		found.swipeLeft = left;
+	}
+
+	if (isAccent(raw.accent)) {
+		found.accent = raw.accent;
 	}
 
 	if (typeof raw.cleanOnSave === 'boolean') {

@@ -1,4 +1,7 @@
+import {useMemo} from 'react';
 import {useColorScheme} from 'react-native';
+import {systemAccent} from '../modules/open-links';
+import {resolveAccent} from './accent';
 import {usePreferences} from './preferences';
 
 const light = {
@@ -64,14 +67,31 @@ const iosDark: Colors = {
 	warn: '#ff9f0a',
 };
 
+// The phone's accent is read once, when the app starts.
+const system = systemAccent();
+
 export const useColors = (): Colors => {
 	const dark = useColorScheme() === 'dark';
-	const {look} = usePreferences();
-	if (look === 'ios') {
-		return dark ? iosDark : iosLight;
-	}
-
-	return dark ? darkMaterial : light;
+	const {look, accent} = usePreferences();
+	return useMemo(() => {
+		const base =
+			look === 'ios'
+				? dark
+					? iosDark
+					: iosLight
+				: dark
+					? darkMaterial
+					: light;
+		const chosen = resolveAccent(
+			accent,
+			dark ? 'dark' : 'light',
+			look === 'ios',
+			base.background,
+			base.surface,
+			system,
+		);
+		return chosen ? {...base, ...chosen} : base;
+	}, [look, accent, dark]);
 };
 
 /**

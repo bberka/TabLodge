@@ -3,6 +3,7 @@ package expo.modules.openlinks
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -14,6 +15,19 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class OpenLinksModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OpenLinks")
+
+    // The phone's own accent color, as the light and the dark shade Android's Material You palette uses for a
+    // primary color, or null before Android 12, which has no such palette.
+    Function("systemAccent") {
+      val context = appContext.currentActivity ?: appContext.reactContext
+      if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        null
+      } else {
+        val resources = context.resources
+        fun hex(id: Int) = String.format("#%06x", resources.getColor(id, context.theme) and 0xFFFFFF)
+        listOf(hex(android.R.color.system_accent1_600), hex(android.R.color.system_accent1_200))
+      }
+    }
 
     Function("openAll") { urls: List<String> ->
       val context = appContext.currentActivity ?: appContext.reactContext

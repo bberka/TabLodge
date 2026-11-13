@@ -14,6 +14,10 @@ export const ROWS = {
 		label: 'Sync settings',
 		hint: "Your settings follow your other devices when sync is on: this app's look and gestures, and the extension's settings. Turning it on sends this phone's.",
 	},
+	accent: {
+		label: 'Accent color',
+		hint: "Buttons and highlights. System follows your phone's color",
+	},
 	tap: {label: 'Tap a bookmark'},
 	swipeRight: {label: 'Swipe right'},
 	swipeLeft: {label: 'Swipe left'},
@@ -58,8 +62,20 @@ export type Section = {title: string; aliases: string[]; rows: Row[]};
 export const SECTIONS = {
 	appearance: {
 		title: 'Appearance',
-		aliases: ['look', 'theme', 'design', 'android', 'ios', 'material'],
-		rows: [ROWS.style, ROWS.floatingBar],
+		aliases: [
+			'look',
+			'theme',
+			'design',
+			'android',
+			'ios',
+			'material',
+			'color',
+			'colour',
+			'primary',
+			'material you',
+			'dynamic',
+		],
+		rows: [ROWS.style, ROWS.accent, ROWS.floatingBar],
 	},
 	syncApp: {
 		title: 'Sync settings',
