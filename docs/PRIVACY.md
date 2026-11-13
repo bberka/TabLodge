@@ -46,7 +46,7 @@ Sync is off until you enter a server address and token in **Settings › Sync**.
 
 ### Android app
 
-The Android app in `mobile/` (in development) uses the same sync and sends the same data to the same server, and nothing to anyone else. It keeps the server token in the Android keystore (through `expo-secure-store`) and the library on the phone in an app private SQLite database. It never reads other apps or your browser. It sees a link only when you type it or share it to TabLodge from another app. Disconnect removes the token and the sync position and leaves the library on the phone.
+The Android app in `mobile/` (in development) uses the same sync and sends the same data to the same server, and nothing to anyone else. It keeps the server token in the Android keystore (through `expo-secure-store`) and the library on the phone in an app private SQLite database. It never reads other apps or your browser. If you open the private windows' library on the phone, it keeps that library's sync key in the same keystore and a copy of the library in the same private database, until you choose Forget on this phone; the phone only reads it and never sends changes to it. It sees a link only when you type it or share it to TabLodge from another app. Disconnect removes the token and the sync position and leaves the library on the phone.
 
 ## Retention and deletion
 

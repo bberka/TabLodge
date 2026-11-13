@@ -1,4 +1,4 @@
-import type {IconId} from '../../src/app/icon-ids';
+import {ICON_IDS, type IconId} from '../../src/app/icon-ids';
 import type {IconName} from './ui';
 
 /**
@@ -133,3 +133,18 @@ export function columnGlyph(icon: string | undefined): IconName {
 		: undefined;
 	return glyph ?? 'folder-outline';
 }
+
+/**
+Every icon a column can use, in the extension's order, with the glyph this app draws for it.
+*/
+export const COLUMN_ICONS: Array<{id: IconId; glyph: IconName}> = ICON_IDS.map(
+	(id) => ({id, glyph: GLYPHS[id]}),
+);
+
+/**
+A column or folder with the glyph for its icon, ready for a chip.
+*/
+export const withGlyph = <Item extends {icon?: string}>(item: Item) => ({
+	...item,
+	glyph: columnGlyph(item.icon),
+});

@@ -8,49 +8,59 @@ import {
 	View,
 } from 'react-native';
 import type {Session} from '../../../src/app/types';
-import {hostOf} from '../library';
+import {columnGlyph} from '../column-icons';
+import {ALL_SESSIONS_ID, hostOf, sessionFolders, sessionsIn} from '../library';
 import {useLibrary} from '../library-store';
 import {useBarSpace} from '../tab-bar';
 import {TARGET, useColors} from '../theme';
+import {linkToOpen} from '../links';
 import {openAll} from '../open-links';
-import {Avatar, Card, Empty, Header, Icon, IconButton} from '../ui';
+import {PrivateSwitch} from '../private-switch';
+import {useLinkSettings} from '../use-link-settings';
+import {useView} from '../view';
+import {Avatar, Card, Chips, Empty, Header, Icon, IconButton} from '../ui';
+
+const folderGlyph = (folder: {id: string; name: string; icon?: string}) => {
+	if (folder.id === ALL_SESSIONS_ID) {
+		return 'albums-outline';
+	}
+
+	return folder.name.toLocaleLowerCase() === 'archived'
+		? 'archive-outline'
+		: columnGlyph(folder.icon);
+};
 
 /**
-Sessions saved in the browser extension, read only: a phone browser cannot create them.
+Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its own tabs, so there is no capture here.
 */
 export function SessionsScreen() {
 	const colors = useColors();
 	const space = useBarSpace();
 	const store = useLibrary();
+	const links = useLinkSettings();
+	const view = useView();
 	const [open, setOpen] = useState<string | undefined>();
+	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	const [pressing, setPressing] = useState<string | undefined>();
 
 	if (store.groups.length === 0) {
 		return (
 			<View style={styles.screen}>
-				<Header title="Sessions" />
+				<Header title="Sessions" right={<PrivateSwitch />} />
 				<Empty icon="albums-outline" title="No sessions yet">
 					Sessions saved in the TabLodge extension appear here once this phone
-					is synced with your server. Saving a session needs a desktop browser.
+					is synced with your server. To save one from here, share several links
+					from your browser to TabLodge.
 				</Empty>
 			</View>
 		);
 	}
 
-	const sections = store.folders
-		.map((folder) => ({
-			id: folder.id,
-			name: folder.name,
-			sessions: store.groups.filter(
-				(session) => session.folderId === folder.id,
-			),
-		}))
-		.filter((section) => section.sessions.length > 0);
-	const known = new Set(store.folders.map((folder) => folder.id));
-	const loose = store.groups.filter((session) => !known.has(session.folderId));
-	if (loose.length > 0) {
-		sections.push({id: 'loose', name: 'Other', sessions: loose});
-	}
+	const folders = sessionFolders(store);
+	const folderId = folders.some((folder) => folder.id === picked)
+		? picked
+		: ALL_SESSIONS_ID;
+	const shown = sessionsIn(store, folderId, links.sessionSort);
 
 	const renderSession = (session: Session) => {
 		const expanded = open === session.id;
@@ -99,7 +109,7 @@ export function SessionsScreen() {
 						color={colors.accent}
 						onPress={() => {
 							openAll(
-								session.tabs.map((tab) => tab.url),
+								session.tabs.map((tab) => linkToOpen(tab.url, links)),
 								session.name,
 							);
 						}}
@@ -118,7 +128,7 @@ export function SessionsScreen() {
 								{backgroundColor: pressed ? colors.pressed : 'transparent'},
 							]}
 							onPress={() => {
-								void Linking.openURL(tab.url);
+								void Linking.openURL(linkToOpen(tab.url, links));
 							}}
 						>
 							<Avatar host={hostOf(tab.url)} size={32} />
@@ -146,19 +156,25 @@ export function SessionsScreen() {
 		>
 			<Header
 				title="Sessions"
-				subtitle={`${store.groups.length} from your browser, read only`}
+				subtitle={`${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library, read only' : 'saved'}`}
+				right={<PrivateSwitch />}
 			/>
-			{sections.map((section) => (
-				<View key={section.id} style={styles.section}>
-					<Text
-						accessibilityRole="header"
-						style={[styles.folder, {color: colors.muted}]}
-					>
-						{section.name}
-					</Text>
-					{section.sessions.map((session) => renderSession(session))}
-				</View>
-			))}
+			<View style={styles.filters}>
+				<Chips
+					items={folders.map((folder) => ({
+						...folder,
+						glyph: folderGlyph(folder),
+					}))}
+					selected={folderId}
+					onSelect={setPicked}
+				/>
+			</View>
+			<View style={styles.section}>
+				{shown.length === 0 && (
+					<Text style={{color: colors.muted}}>Nothing in this folder.</Text>
+				)}
+				{shown.map((session) => renderSession(session))}
+			</View>
 		</ScrollView>
 	);
 }
@@ -167,12 +183,7 @@ const styles = StyleSheet.create({
 	screen: {flex: 1},
 	list: {paddingBottom: 24, gap: 8},
 	section: {gap: 8, paddingHorizontal: 16, paddingTop: 8},
-	folder: {
-		fontSize: 13,
-		fontWeight: '600',
-		textTransform: 'uppercase',
-		letterSpacing: 0.5,
-	},
+	filters: {paddingHorizontal: 16, paddingTop: 4},
 	headRow: {flexDirection: 'row', alignItems: 'center', paddingRight: 8},
 	sessionHead: {
 		flex: 1,

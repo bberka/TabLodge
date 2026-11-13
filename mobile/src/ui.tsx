@@ -12,7 +12,6 @@ import {
 	useColorScheme,
 	View,
 } from 'react-native';
-import {columnGlyph} from './column-icons';
 import {avatarColor, TARGET, useColors, useShape} from './theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -223,7 +222,15 @@ export function Chips({
 	selected,
 	onSelect,
 }: {
-	items: Array<{id: string; name: string; count?: number; icon?: string}>;
+	items: Array<{
+		id: string;
+		name: string;
+		count?: number;
+		/**
+		A glyph drawn before the name.
+		*/
+		glyph?: IconName;
+	}>;
 	selected: string;
 	onSelect: (id: string) => void;
 }) {
@@ -255,11 +262,13 @@ export function Chips({
 							onSelect(item.id);
 						}}
 					>
-						<Icon
-							name={columnGlyph(item.icon)}
-							size={16}
-							color={on ? colors.accent : colors.muted}
-						/>
+						{item.glyph && (
+							<Icon
+								name={item.glyph}
+								size={16}
+								color={on ? colors.accent : colors.muted}
+							/>
+						)}
 						<Text
 							style={{
 								color: on ? colors.accent : colors.text,

@@ -2,10 +2,41 @@ import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../src/app/types';
 import {BottomSheet} from '../bottom-sheet';
+import {withGlyph} from '../column-icons';
 import {hostOf} from '../library';
-import {SwipeRow} from '../swipe-row';
-import {TARGET, useColors, useShape} from '../theme';
+import {linkToOpen, rowText} from '../links';
+import {type RowAction, usePreferences} from '../preferences';
+import {type SwipeAction, SwipeRow} from '../swipe-row';
+import {useLinkSettings} from '../use-link-settings';
+import {type Colors, TARGET, useColors, useShape} from '../theme';
 import {Avatar, Button, Chips, Icon, type IconName} from '../ui';
+
+const ACTION_LOOK: Record<
+	RowAction,
+	(colors: Colors) => {label: string; icon: IconName; color: string}
+> = {
+	none: (colors) => ({label: '', icon: 'ellipse', color: colors.muted}),
+	open: (colors) => ({
+		label: 'Open',
+		icon: 'open-outline',
+		color: colors.accent,
+	}),
+	edit: (colors) => ({
+		label: 'Edit',
+		icon: 'create-outline',
+		color: colors.accent,
+	}),
+	move: (colors) => ({
+		label: 'Move',
+		icon: 'folder-open-outline',
+		color: colors.ok,
+	}),
+	delete: (colors) => ({
+		label: 'Delete',
+		icon: 'trash-outline',
+		color: colors.danger,
+	}),
+};
 
 /**
 One bookmark: tap to open, swipe right to open or left to delete, long press to select. Screen reader users get
@@ -18,53 +49,71 @@ export function BookmarkRow({
 	onToggle,
 	onSelect,
 	onEdit,
+	onMove,
 	onDelete,
+	readOnly = false,
 }: {
 	bookmark: Bookmark;
+	/**
+	The private library cannot be changed here: tapping opens, and there is no swipe or selection.
+	*/
+	readOnly?: boolean;
 	selecting: boolean;
 	checked: boolean;
 	onToggle: () => void;
 	onSelect: () => void;
 	onEdit: () => void;
+	onMove: () => void;
 	onDelete: () => void;
 }) {
 	const colors = useColors();
 	const shape = useShape();
+	const prefs = usePreferences();
+	const settings = useLinkSettings();
 	const host = hostOf(bookmark.url);
+	const text = rowText(bookmark, settings);
 	const open = () => {
-		void Linking.openURL(bookmark.url);
+		void Linking.openURL(linkToOpen(bookmark.url, settings));
+	};
+
+	const run: Record<RowAction, (() => void) | undefined> = {
+		none: undefined,
+		open,
+		edit: onEdit,
+		move: onMove,
+		delete: onDelete,
+	};
+	const swipe = (action: RowAction): SwipeAction | undefined => {
+		const onTrigger = run[action];
+		return onTrigger && {...ACTION_LOOK[action](colors), onTrigger};
 	};
 
 	return (
 		<SwipeRow
-			disabled={selecting}
-			left={{
-				label: 'Open',
-				icon: 'open-outline',
-				color: colors.accent,
-				onTrigger: open,
-			}}
-			right={{
-				label: 'Delete',
-				icon: 'trash-outline',
-				color: colors.danger,
-				onTrigger: onDelete,
-			}}
+			disabled={selecting || readOnly}
+			left={readOnly ? undefined : swipe(prefs.swipeRight)}
+			right={readOnly ? undefined : swipe(prefs.swipeLeft)}
 		>
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
-				accessibilityLabel={`${bookmark.title}, ${host}`}
+				accessibilityLabel={`${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
-				accessibilityActions={[
-					{name: 'open', label: 'Open in browser'},
-					{name: 'select', label: 'Select'},
-					{name: 'edit', label: 'Edit'},
-					{name: 'delete', label: 'Delete'},
-				]}
+				accessibilityActions={
+					readOnly
+						? [{name: 'open', label: 'Open in browser'}]
+						: [
+								{name: 'open', label: 'Open in browser'},
+								{name: 'select', label: 'Select'},
+								{name: 'edit', label: 'Edit'},
+								{name: 'move', label: 'Move to column'},
+								{name: 'delete', label: 'Delete'},
+							]
+				}
 				android_ripple={shape.ios ? undefined : {color: colors.pressed}}
 				style={({pressed}) => [
 					styles.row,
+					settings.bookmarkDensity === 'compact' && styles.compact,
 					{
 						backgroundColor: checked
 							? colors.accentSoft
@@ -91,6 +140,11 @@ export function BookmarkRow({
 							break;
 						}
 
+						case 'move': {
+							onMove();
+							break;
+						}
+
 						case 'delete': {
 							onDelete();
 							break;
@@ -99,8 +153,10 @@ export function BookmarkRow({
 						default:
 					}
 				}}
-				onPress={selecting ? onToggle : open}
-				onLongPress={selecting ? onToggle : onSelect}
+				onPress={
+					selecting ? onToggle : prefs.tapAction === 'edit' ? onEdit : open
+				}
+				onLongPress={readOnly ? undefined : selecting ? onToggle : onSelect}
 			>
 				{selecting ? (
 					<Icon
@@ -113,11 +169,21 @@ export function BookmarkRow({
 				)}
 				<View style={styles.texts}>
 					<Text numberOfLines={2} style={[styles.title, {color: colors.text}]}>
-						{bookmark.title}
+						{text.main}
 					</Text>
-					<Text numberOfLines={1} style={{color: colors.muted}}>
-						{host}
-					</Text>
+					{text.sub !== undefined && (
+						<View style={styles.address}>
+							{text.insecure && (
+								<Icon name="lock-open-outline" size={13} color={colors.warn} />
+							)}
+							<Text
+								numberOfLines={1}
+								style={[styles.addressText, {color: colors.muted}]}
+							>
+								{text.sub}
+							</Text>
+						</View>
+					)}
 				</View>
 				{!selecting && (
 					<Icon
@@ -251,7 +317,11 @@ export function MoveSheet({
 				>
 					Move {count} to
 				</Text>
-				<Chips items={columns} selected="" onSelect={onPick} />
+				<Chips
+					items={columns.map((column) => withGlyph(column))}
+					selected=""
+					onSelect={onPick}
+				/>
 				<Button label="Cancel" kind="plain" onPress={onClose} />
 			</View>
 		</BottomSheet>
@@ -268,7 +338,10 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		borderBottomWidth: StyleSheet.hairlineWidth,
 	},
+	compact: {minHeight: TARGET, paddingVertical: 4},
 	texts: {flex: 1, gap: 2},
+	address: {flexDirection: 'row', alignItems: 'center', gap: 4},
+	addressText: {flexShrink: 1},
 	title: {fontSize: 16, fontWeight: '500'},
 	actions: {
 		position: 'absolute',

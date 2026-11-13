@@ -3,7 +3,7 @@ import {Animated, PanResponder, StyleSheet, Text, View} from 'react-native';
 import {useColors} from './theme';
 import {Icon, type IconName} from './ui';
 
-type SwipeAction = {
+export type SwipeAction = {
 	label: string;
 	icon: IconName;
 	color: string;
@@ -72,7 +72,7 @@ export function SwipeRow({
 
 		const range = side === 'left' ? [0, TRIGGER] : [-TRIGGER, 0];
 		return (
-			<View
+			<Animated.View
 				pointerEvents="none"
 				importantForAccessibility="no-hide-descendants"
 				style={[
@@ -82,6 +82,12 @@ export function SwipeRow({
 						backgroundColor: action.color,
 						justifyContent: 'center',
 						alignItems: side === 'left' ? 'flex-start' : 'flex-end',
+						// Both layers sit under the row; only the one on the dragged side may show.
+						opacity: x.interpolate({
+							inputRange: side === 'left' ? [0, 1] : [-1, 0],
+							outputRange: side === 'left' ? [0, 1] : [1, 0],
+							extrapolate: 'clamp',
+						}),
 					},
 				]}
 			>
@@ -109,7 +115,7 @@ export function SwipeRow({
 					<Icon name={action.icon} color="#ffffff" />
 					<Text style={styles.label}>{action.label}</Text>
 				</Animated.View>
-			</View>
+			</Animated.View>
 		);
 	};
 

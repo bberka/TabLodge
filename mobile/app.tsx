@@ -11,11 +11,13 @@ import {
 } from 'react-native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/bottom-sheet';
-import {splitShared} from './src/library';
+import {extractUrls, splitShared} from './src/library';
 import {startLibrary, syncClient} from './src/library-store';
+import {startPrivate} from './src/private-library';
 import {loadPreferences} from './src/preferences';
 import {BookmarksScreen} from './src/screens/bookmarks';
 import {SaveLinkForm} from './src/screens/save-link';
+import {SaveLinksForm} from './src/screens/save-links';
 import {SessionsScreen} from './src/screens/sessions';
 import {SettingsScreen} from './src/screens/settings';
 import {SnackbarHost, showSnack} from './src/snackbar';
@@ -44,7 +46,16 @@ const TABS: Array<BarTab<Tab>> = [
 const BOOT = Date.now();
 const COLD_MS = 6000;
 
-type Draft = {key: number; text: string; title: string; quick: boolean};
+type Draft = {
+	key: number;
+	text: string;
+	title: string;
+	/**
+	Every link in a share. More than one asks where to save them.
+	*/
+	urls: string[];
+	quick: boolean;
+};
 
 function Main() {
 	const colors = useColors();
@@ -56,12 +67,13 @@ function Main() {
 		key: 0,
 		text: '',
 		title: '',
+		urls: [],
 		quick: false,
 	});
 	const [open, setOpen] = useState(false);
 
 	useEffect(() => {
-		void loadPreferences().then(startLibrary);
+		void loadPreferences().then(startLibrary).then(startPrivate);
 		const subscription = AppState.addEventListener('change', (state) => {
 			if (state === 'active') {
 				void syncClient.wake().catch(() => undefined);
@@ -85,6 +97,7 @@ function Main() {
 			key: current.key + 1,
 			text: shareIntent.webUrl ?? parts.url ?? full,
 			title: shareIntent.meta?.title || parts.title,
+			urls: extractUrls(full),
 			quick: Date.now() - BOOT < COLD_MS,
 		}));
 		setTab('bookmarks');
@@ -97,6 +110,7 @@ function Main() {
 			key: current.key + 1,
 			text: '',
 			title: '',
+			urls: [],
 			quick: false,
 		}));
 		setOpen(true);
@@ -105,10 +119,12 @@ function Main() {
 	const finish = (saved?: string) => {
 		setOpen(false);
 		if (saved) {
+			// A single link reports its column; a list of links says what happened in full.
+			const message = draft.urls.length > 1 ? saved : `Saved to ${saved}`;
 			if (Platform.OS === 'android' && draft.quick) {
-				ToastAndroid.show(`Saved to ${saved}`, ToastAndroid.SHORT);
+				ToastAndroid.show(message, ToastAndroid.SHORT);
 			} else {
-				showSnack(`Saved to ${saved}`);
+				showSnack(message);
 			}
 		}
 
@@ -134,17 +150,21 @@ function Main() {
 			<SnackbarHost />
 			<BottomSheet
 				visible={open}
-				label="Save link"
+				label={draft.urls.length > 1 ? 'Save links' : 'Save link'}
 				onClose={() => {
 					finish();
 				}}
 			>
-				<SaveLinkForm
-					key={draft.key}
-					initialText={draft.text}
-					initialTitle={draft.title}
-					onDone={finish}
-				/>
+				{draft.urls.length > 1 ? (
+					<SaveLinksForm key={draft.key} urls={draft.urls} onDone={finish} />
+				) : (
+					<SaveLinkForm
+						key={draft.key}
+						initialText={draft.text}
+						initialTitle={draft.title}
+						onDone={finish}
+					/>
+				)}
 			</BottomSheet>
 		</View>
 	);

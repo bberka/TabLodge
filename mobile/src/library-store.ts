@@ -4,14 +4,17 @@ sync client. Screens read it with `useLibrary` and the sync state with `useSyncS
 */
 import {randomUUID} from 'expo-crypto';
 import {useSyncExternalStore} from 'react';
-import type {Store} from '../../src/app/types';
+import type {Settings, Store} from '../../src/app/types';
 import {
 	createSyncClient,
 	SYNC_OFF,
 	SYNC_STATUS_KEY,
 	type SyncStatus,
 } from '../../src/shared/sync/client';
-import {emptyStore} from './library';
+import {emptyStore, isStore} from './library';
+import {createLibraryCore} from './library-core';
+import {usePrivateStore} from './private-library';
+import {useView} from './view';
 import type * as SeedModuleNamespace from './seed';
 import {readJson, removeKeys, writeJson} from './storage';
 
@@ -25,43 +28,13 @@ const LIBRARY_KEY = 'tablodge.library';
 // Dev builds only: 'on' while the library holds sample data, 'off' once it was cleared or a server was connected.
 const SEED_KEY = 'tablodge.dev.seed';
 
-let store = emptyStore(Date.now());
+const core = createLibraryCore(LIBRARY_KEY);
+const {mutate, write, notify: notifyStore} = core;
 let loaded = false;
 let sampleOn = false;
-let queue: Promise<unknown> = Promise.resolve();
-const storeListeners = new Set<() => void>();
 
 let syncStatus: SyncStatus = SYNC_OFF;
 const statusListeners = new Set<() => void>();
-
-/**
-Runs library reads and writes one after another, the way the extension's service worker does.
-*/
-function mutate<T>(work: () => Promise<T>): Promise<T> {
-	const run = queue.then(work, work);
-	queue = run.catch(() => undefined);
-	return run;
-}
-
-function notifyStore() {
-	for (const listener of storeListeners) {
-		listener();
-	}
-}
-
-async function write(next: Store): Promise<void> {
-	store = next;
-	await writeJson(LIBRARY_KEY, next);
-	notifyStore();
-}
-
-const isStore = (value: unknown): value is Store =>
-	typeof value === 'object' &&
-	value !== null &&
-	Array.isArray((value as Store).bookmarks) &&
-	Array.isArray((value as Store).bookmarkColumns) &&
-	Array.isArray((value as Store).groups) &&
-	Array.isArray((value as Store).folders);
 
 export const syncClient = createSyncClient({
 	get: readJson,
@@ -75,7 +48,7 @@ export const syncClient = createSyncClient({
 	fetch: async (url, init) => fetch(url, init),
 	openSocket: (url) => new WebSocket(url),
 	mutate,
-	readLibrary: async () => store,
+	readLibrary: async () => core.store,
 	writeLibrary: write,
 	// Every write here is either the user's edit or a merge of the server's records; the extension keeps its own
 	// copy, so the phone has no backup to restore from.
@@ -102,8 +75,7 @@ export async function startLibrary(): Promise<void> {
 	loaded = true;
 	const saved = await readJson(LIBRARY_KEY);
 	if (isStore(saved)) {
-		store = saved;
-		notifyStore();
+		core.load(saved);
 	}
 
 	await refreshStatus();
@@ -185,8 +157,8 @@ Changes the library and sends the change to the server after a short delay.
 */
 export async function edit(change: (current: Store) => Store): Promise<void> {
 	await mutate(async () => {
-		const next = change(store);
-		if (next !== store) {
+		const next = change(core.store);
+		if (next !== core.store) {
 			await write(next);
 		}
 	});
@@ -206,8 +178,34 @@ function subscribeTo(listeners: Set<() => void>) {
 	};
 }
 
-export const useLibrary = (): Store =>
-	useSyncExternalStore(subscribeTo(storeListeners), () => store);
+/**
+The library on screen: the regular one, or the private one while that view is on.
+*/
+export const useLibrary = (): Store => {
+	const regular = useSyncExternalStore(core.subscribe, () => core.store);
+	const priv = usePrivateStore();
+	return useView() === 'private' ? priv : regular;
+};
+
+/**
+The regular library whichever view is on, for settings that belong to it.
+*/
+export const useRegularLibrary = (): Store =>
+	useSyncExternalStore(core.subscribe, () => core.store);
 
 export const useSyncStatus = (): SyncStatus =>
 	useSyncExternalStore(subscribeTo(statusListeners), () => syncStatus);
+
+/**
+Changes one extension setting that travels with the library, and sends it on the next sync.
+*/
+export async function setSyncedSetting<Key extends keyof Settings>(
+	key: Key,
+	value: Settings[Key],
+): Promise<void> {
+	await edit((current) => ({
+		...current,
+		settings: {...current.settings, [key]: value},
+		updatedAt: Date.now(),
+	}));
+}

@@ -1,15 +1,9 @@
 import {useEffect, useMemo, useState} from 'react';
-import {
-	FlatList,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-} from 'react-native';
+import {FlatList, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../src/app/types';
 import {BottomSheet} from '../bottom-sheet';
+import {withGlyph} from '../column-icons';
 import {
 	bookmarksIn,
 	columnViews,
@@ -25,11 +19,16 @@ import {
 	syncClient,
 	useLibrary,
 } from '../library-store';
+import {linkToOpen} from '../links';
 import {openAll} from '../open-links';
+import {useLinkSettings} from '../use-link-settings';
 import {showSnack} from '../snackbar';
 import {useBarSpace} from '../tab-bar';
 import {useColors, useShape} from '../theme';
+import {PrivateSwitch} from '../private-switch';
+import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
+import {useView} from '../view';
 import {Chips, Empty, Field, Header, Icon, IconButton} from '../ui';
 import {BookmarkRow, MoveSheet, SelectionBar} from './bookmark-parts';
 import {SaveLinkForm} from './save-link';
@@ -47,6 +46,9 @@ export function BookmarksScreen({
 	const space = useBarSpace();
 	const store = useLibrary();
 	const selection = useSelection();
+	const view = useView();
+	const readOnly = view === 'private';
+	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
 	const [query, setQuery] = useState('');
 	const [refreshing, setRefreshing] = useState(false);
@@ -110,7 +112,7 @@ export function BookmarksScreen({
 	const refresh = async () => {
 		setRefreshing(true);
 		try {
-			await syncClient.syncNow();
+			await (view === 'private' ? syncPrivate() : syncClient.syncNow());
 		} catch {
 			// The status card in Settings shows why.
 		} finally {
@@ -138,26 +140,29 @@ export function BookmarksScreen({
 		</>
 	) : (
 		<>
+			<PrivateSwitch />
 			{!searching && shown.length > 0 && (
 				<IconButton
 					icon="albums-outline"
 					label={`Open all ${shown.length} in ${columnName}`}
 					onPress={() => {
 						openAll(
-							shown.map((bookmark) => bookmark.url),
+							shown.map((bookmark) => linkToOpen(bookmark.url, links)),
 							columnName ?? 'This column',
 						);
 					}}
 				/>
 			)}
-			<IconButton
-				icon="checkbox-outline"
-				label="Select bookmarks"
-				onPress={() => {
-					selection.start();
-				}}
-			/>
-			{shape.ios && (
+			{!readOnly && (
+				<IconButton
+					icon="checkbox-outline"
+					label="Select bookmarks"
+					onPress={() => {
+						selection.start();
+					}}
+				/>
+			)}
+			{shape.ios && !readOnly && (
 				<IconButton
 					icon="add"
 					label="Add link"
@@ -189,7 +194,9 @@ export function BookmarksScreen({
 									: 'Bookmarks'
 							}
 							subtitle={
-								selection.active ? undefined : `${store.bookmarks.length} saved`
+								selection.active
+									? undefined
+									: `${store.bookmarks.length} saved${readOnly ? ', private, read only' : ''}`
 							}
 							right={headerActions}
 						/>
@@ -209,7 +216,7 @@ export function BookmarksScreen({
 							{!searching && columns.length > 0 && (
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
-										items={columns}
+										items={columns.map((column) => withGlyph(column))}
 										selected={columnId}
 										onSelect={setPicked}
 									/>
@@ -233,6 +240,7 @@ export function BookmarksScreen({
 				renderItem={({item}) => (
 					<BookmarkRow
 						bookmark={item}
+						readOnly={readOnly}
 						selecting={selection.active}
 						checked={selection.ids.has(item.id)}
 						onToggle={() => {
@@ -244,6 +252,10 @@ export function BookmarksScreen({
 						onEdit={() => {
 							setEditing(item);
 						}}
+						onMove={() => {
+							selection.start(item.id);
+							setMoving(true);
+						}}
 						onDelete={() => {
 							remove(new Set([item.id]));
 						}}
@@ -253,7 +265,7 @@ export function BookmarksScreen({
 					void refresh();
 				}}
 			/>
-			{!selection.active && !shape.ios && (
+			{!selection.active && !shape.ios && !readOnly && (
 				<Pressable
 					accessibilityRole="button"
 					accessibilityLabel="Add link"
@@ -268,10 +280,7 @@ export function BookmarksScreen({
 					]}
 					onPress={onAdd}
 				>
-					<Icon name="add" size={24} color={colors.onAccent} />
-					<Text style={[styles.fabLabel, {color: colors.onAccent}]}>
-						Add link
-					</Text>
+					<Icon name="add" size={28} color={colors.onAccent} />
 				</Pressable>
 			)}
 			{selection.active && (
@@ -282,7 +291,7 @@ export function BookmarksScreen({
 						openAll(
 							shown
 								.filter((bookmark) => selection.ids.has(bookmark.id))
-								.map((bookmark) => bookmark.url),
+								.map((bookmark) => linkToOpen(bookmark.url, links)),
 							`${selection.ids.size} selected`,
 						);
 					}}
@@ -350,13 +359,11 @@ const styles = StyleSheet.create({
 	fab: {
 		position: 'absolute',
 		right: 16,
-		minHeight: 56,
-		paddingHorizontal: 20,
+		width: 56,
+		height: 56,
 		borderRadius: 28,
-		flexDirection: 'row',
 		alignItems: 'center',
-		gap: 8,
+		justifyContent: 'center',
 		elevation: 4,
 	},
-	fabLabel: {fontWeight: '600', fontSize: 15},
 });

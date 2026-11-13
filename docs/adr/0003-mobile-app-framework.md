@@ -28,5 +28,6 @@ The extension and the sync server are TypeScript, and the sync client in `src/sh
 
 * A second toolchain (JDK, Android SDK, Gradle) for anyone building the app.
 * Expo pins exact versions, so `mobile/package.json` is exempt from the caret range lint rule.
-* Sessions are read only on the phone. Restoring windows and tab groups has no phone equivalent.
+* A phone browser exposes no tab list to other apps, so sessions cannot be captured on the phone. They are listed and opened, and a shared list of links can be saved as a session or added to one. Restoring windows and tab groups has no phone equivalent.
+* The private library is read only on the phone. Opening its PIN or password protected values needs PBKDF2 and AES-GCM, which a small local native module (`mobile/modules/tablodge-crypto`) does, because 600,000 rounds are too slow in JavaScript. A second module (`mobile/modules/open-links`) opens many links at once, since Android stops a background app from starting more screens after the first link brings the browser forward.
 * iOS needs a share extension, a US$99 yearly developer account, and a pass through App Review guideline 4.2.2. That decision is left open.

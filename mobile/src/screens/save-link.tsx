@@ -1,18 +1,15 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {Bookmark} from '../../../src/app/types';
-import {
-	addBookmark,
-	addColumn,
-	columnViews,
-	DEFAULT_COLUMN_ID,
-	extractUrl,
-	updateBookmark,
-} from '../library';
-import {edit, newId, useLibrary} from '../library-store';
+import {stripTrackingParameters} from '../../../src/app/tracking-parameters';
+import {ColumnChoice, useColumnChoice} from '../column-choice';
+import {addBookmark, extractUrl, updateBookmark} from '../library';
+import {edit, newId} from '../library-store';
+import {cleanPageTitle} from '../links';
 import {getPreferences, setPreferences} from '../preferences';
+import {useLinkSettings} from '../use-link-settings';
 import {useColors} from '../theme';
-import {Button, Chips, Field, IconButton} from '../ui';
+import {Button, Field, IconButton} from '../ui';
 
 /**
 The body of the save drawer. Opened by Add link, or by the Android share sheet with the shared text filled in.
@@ -35,25 +32,14 @@ export function SaveLinkForm({
 	onDone: (saved?: string) => void;
 }) {
 	const colors = useColors();
-	const store = useLibrary();
-	const columns = columnViews(store).filter((column) =>
-		store.bookmarkColumns.some((own) => own.id === column.id),
-	);
+	const settings = useLinkSettings();
+	const choice = useColumnChoice(editing?.columnId);
 	const [text, setText] = useState(
 		() => extractUrl(initialText) ?? initialText,
 	);
 	const [title, setTitle] = useState(initialTitle);
-	const [picked, setPicked] = useState(editing?.columnId ?? '');
-	const [newName, setNewName] = useState('');
 	const [saving, setSaving] = useState(false);
 
-	const columnId = columns.some((column) => column.id === picked)
-		? picked
-		: (columns.find((column) => column.id === getPreferences().lastColumnId)
-				?.id ??
-			columns.find((column) => column.id === DEFAULT_COLUMN_ID)?.id ??
-			columns[0]?.id ??
-			DEFAULT_COLUMN_ID);
 	const url = extractUrl(text);
 
 	const save = async () => {
@@ -62,35 +48,29 @@ export function SaveLinkForm({
 		}
 
 		setSaving(true);
-		let target = columnId;
-		const name = newName.trim();
-		if (name) {
-			target = newId();
-			const id = target;
-			await edit((current) => addColumn(current, name, id, Date.now()));
-		}
+		const {id: target, name} = await choice.resolve();
+		const saved = {
+			url: getPreferences().cleanOnSave ? stripTrackingParameters(url) : url,
+			title: cleanPageTitle(title, settings.cleanTitles),
+		};
 
 		await edit((current) =>
 			editing
 				? updateBookmark(
 						current,
 						editing.id,
-						{url, title, columnId: target},
+						{...saved, columnId: target},
 						Date.now(),
 					)
 				: addBookmark(
 						current,
-						{url, title, columnId: target},
+						{...saved, columnId: target},
 						newId(),
 						Date.now(),
 					),
 		);
 		setPreferences({lastColumnId: target});
-		onDone(
-			name ||
-				columns.find((column) => column.id === target)?.name ||
-				'Bookmarks',
-		);
+		onDone(name);
 	};
 
 	return (
@@ -133,26 +113,11 @@ export function SaveLinkForm({
 					}}
 				/>
 				<Field label="Title (optional)" value={title} onChangeText={setTitle} />
-				{columns.length > 0 && (
-					<View style={styles.group}>
-						<Text style={{color: colors.muted}}>Column</Text>
-						<Chips items={columns} selected={columnId} onSelect={setPicked} />
-					</View>
-				)}
-				<Field
-					label={
-						columns.length > 0
-							? 'Or create a new column'
-							: 'Column name (optional)'
-					}
-					icon="folder-outline"
-					value={newName}
-					onChangeText={setNewName}
-				/>
+				<ColumnChoice choice={choice} />
 				<Button
 					label="Save"
 					icon="checkmark"
-					disabled={!url}
+					disabled={!url || choice.incomplete}
 					loading={saving}
 					onPress={() => void save()}
 				/>

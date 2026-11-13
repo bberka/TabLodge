@@ -24,6 +24,8 @@ import {
 	Segmented,
 	Switch,
 } from '../ui';
+import {BookmarkBehaviourCard, SyncedSettingsCard} from './behaviour-settings';
+import {PrivateCard} from './private-settings';
 
 function describe(
 	status: SyncStatus,
@@ -154,6 +156,9 @@ export function SettingsScreen() {
 						/>
 					</View>
 				</Card>
+				<BookmarkBehaviourCard />
+				<SyncedSettingsCard />
+				<PrivateCard />
 				<Card>
 					<Text
 						accessibilityRole="header"

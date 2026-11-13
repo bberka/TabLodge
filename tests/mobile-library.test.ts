@@ -15,6 +15,13 @@ import {
 	searchBookmarks,
 	UNFILED_ID,
 	updateBookmark,
+	addBookmarks,
+	addSession,
+	addTabsToSession,
+	ALL_SESSIONS_ID,
+	extractUrls,
+	sessionFolders,
+	sessionsIn,
 } from '../mobile/src/library';
 import {sampleStore} from '../mobile/src/seed';
 
@@ -213,5 +220,121 @@ describe('splitShared', () => {
 			title: '',
 		});
 		assert.deepEqual(splitShared('just words'), {title: ''});
+	});
+});
+
+describe('session folders', () => {
+	const folder = (id: string, name: string) => ({
+		id,
+		name,
+		createdAt: 1,
+		isDefault: false,
+	});
+	const session = (id: string, folderId: string, createdAt: number) => ({
+		id,
+		name: id,
+		folderId,
+		description: '',
+		createdAt,
+		updatedAt: createdAt,
+		sourceWindowName: '',
+		sourceWindowId: null,
+		tabs: [],
+	});
+	const store = {
+		...emptyStore(NOW),
+		folders: [
+			folder('unfiled', 'Unfiled'),
+			folder('archived-sessions', 'Archived'),
+			folder('work', 'Work'),
+		],
+		groups: [
+			session('a', 'unfiled', 1),
+			session('b', 'work', 3),
+			session('c', 'archived-sessions', 2),
+			session('d', 'gone', 4),
+		],
+	};
+
+	test('lists All without archived, then folders with Archived last', () => {
+		assert.deepEqual(
+			sessionFolders(store).map(({id, count}) => [id, count]),
+			[
+				[ALL_SESSIONS_ID, 3],
+				['unfiled', 1],
+				['work', 1],
+				['other-sessions', 1],
+				['archived-sessions', 1],
+			],
+		);
+	});
+
+	test('filters by folder and sorts like the extension', () => {
+		const names = (id: string, sort: Parameters<typeof sessionsIn>[2]) =>
+			sessionsIn(store, id, sort).map((s) => s.id);
+		assert.deepEqual(names(ALL_SESSIONS_ID, 'newest'), ['d', 'b', 'a']);
+		assert.deepEqual(names(ALL_SESSIONS_ID, 'oldest'), ['a', 'b', 'd']);
+		assert.deepEqual(names('archived-sessions', 'newest'), ['c']);
+		assert.deepEqual(names('other-sessions', 'newest'), ['d']);
+	});
+});
+
+describe('shared link lists', () => {
+	test('finds every link once, in order', () => {
+		assert.deepEqual(
+			extractUrls(
+				'Tabs\nhttps://a.test/x\nhttps://b.test (see https://a.test/x), https://c.test.',
+			),
+			['https://a.test/x', 'https://b.test/', 'https://c.test/'],
+		);
+		assert.deepEqual(extractUrls('no links'), []);
+	});
+
+	test('saves them as bookmarks, keeping the order', () => {
+		const base = addColumn(emptyStore(NOW), 'One', 'c1', NOW);
+		const store = addBookmarks(
+			base,
+			['https://a.test', 'https://b.test'],
+			'c1',
+			['x', 'y'],
+			NOW,
+		);
+		assert.equal(store.bookmarks.length, 2);
+		assert.equal(new Set(store.bookmarks.map((b) => b.id)).size, 2);
+	});
+
+	test('saves them as a session in the default folder, or adds to one', () => {
+		const made = addSession(
+			emptyStore(NOW),
+			{name: ' ', urls: ['https://a.test/', 'https://b.test/']},
+			's1',
+			['t1', 't2'],
+			NOW,
+		);
+		assert.equal(made.folders[0].id, 'unfiled');
+		assert.equal(made.groups[0].name, 'Shared links');
+		assert.deepEqual(
+			made.groups[0].tabs.map((tab) => [tab.id, tab.originalIndex, tab.title]),
+			[
+				['t1', 0, 'a.test'],
+				['t2', 1, 'b.test'],
+			],
+		);
+		const more = addTabsToSession(
+			made,
+			's1',
+			['https://c.test/'],
+			['t3'],
+			NOW + 1,
+		);
+		assert.deepEqual(
+			more.groups[0].tabs.map((tab) => tab.originalIndex),
+			[0, 1, 2],
+		);
+		assert.equal(
+			addTabsToSession(made, 'missing', ['https://c.test/'], [], NOW),
+			made,
+		);
+		assert.equal(addSession(made, {name: 'x', urls: []}, 's2', [], NOW), made);
 	});
 });
