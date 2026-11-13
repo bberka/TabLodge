@@ -322,7 +322,11 @@ export function BookmarksScreen({
 			<MoveSheet
 				visible={moving}
 				count={selection.ids.size}
-				columns={store.bookmarkColumns.map(({id, name}) => ({id, name}))}
+				columns={store.bookmarkColumns.map(({id, name, icon}) => ({
+					id,
+					name,
+					icon,
+				}))}
 				onClose={() => {
 					setMoving(false);
 				}}

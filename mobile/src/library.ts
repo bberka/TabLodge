@@ -10,7 +10,7 @@ export const DEFAULT_COLUMN_ID = 'bookmark-default';
 export const UNFILED_ID = 'bookmark-unfiled';
 export const DEFAULT_COLUMN_NAME = 'Bookmarks';
 
-type ColumnView = {id: string; name: string};
+type ColumnView = {id: string; name: string; icon?: string};
 
 export function emptyStore(now: number): Store {
 	return {
@@ -58,7 +58,11 @@ The columns to show: the library's own, plus "Unfiled" when a bookmark points at
 */
 export function columnViews(store: Store): ColumnView[] {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
-	const views = store.bookmarkColumns.map(({id, name}) => ({id, name}));
+	const views: ColumnView[] = store.bookmarkColumns.map(({id, name, icon}) => ({
+		id,
+		name,
+		icon,
+	}));
 	if (store.bookmarks.some((bookmark) => !known.has(bookmark.columnId))) {
 		views.push({id: UNFILED_ID, name: 'Unfiled'});
 	}

@@ -237,7 +237,7 @@ export function MoveSheet({
 }: {
 	visible: boolean;
 	count: number;
-	columns: Array<{id: string; name: string}>;
+	columns: Array<{id: string; name: string; icon?: string}>;
 	onPick: (columnId: string) => void;
 	onClose: () => void;
 }) {
