@@ -39,6 +39,7 @@ export function SaveLinkForm({
 	);
 	const [title, setTitle] = useState(initialTitle);
 	const [saving, setSaving] = useState(false);
+	const [problem, setProblem] = useState('');
 
 	const url = extractUrl(text);
 
@@ -48,29 +49,37 @@ export function SaveLinkForm({
 		}
 
 		setSaving(true);
-		const {id: target, name} = await choice.resolve();
-		const saved = {
-			url: getPreferences().cleanOnSave ? stripTrackingParameters(url) : url,
-			title: cleanPageTitle(title, settings.cleanTitles),
-		};
+		setProblem('');
+		try {
+			const {id: target, name} = await choice.resolve();
+			const saved = {
+				url: getPreferences().cleanOnSave ? stripTrackingParameters(url) : url,
+				title: cleanPageTitle(title, settings.cleanTitles),
+			};
 
-		await edit((current) =>
-			editing
-				? updateBookmark(
-						current,
-						editing.id,
-						{...saved, columnId: target},
-						Date.now(),
-					)
-				: addBookmark(
-						current,
-						{...saved, columnId: target},
-						newId(),
-						Date.now(),
-					),
-		);
-		setPreferences({lastColumnId: target});
-		onDone(name);
+			await edit((current) =>
+				editing
+					? updateBookmark(
+							current,
+							editing.id,
+							{...saved, columnId: target},
+							Date.now(),
+						)
+					: addBookmark(
+							current,
+							{...saved, columnId: target},
+							newId(),
+							Date.now(),
+						),
+			);
+			setPreferences({lastColumnId: target});
+			onDone(name);
+		} catch {
+			// A full disk or a storage fault: say so, and let the person try again instead of a button that spins.
+			setProblem('Could not save. Try again.');
+		} finally {
+			setSaving(false);
+		}
 	};
 
 	return (
@@ -114,6 +123,11 @@ export function SaveLinkForm({
 				/>
 				<Field label="Title (optional)" value={title} onChangeText={setTitle} />
 				<ColumnChoice choice={choice} />
+				{problem !== '' && (
+					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
+						{problem}
+					</Text>
+				)}
 				<Button
 					label="Save"
 					icon="checkmark"

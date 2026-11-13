@@ -134,6 +134,11 @@ export type SyncHost = {
 	writeLibrary(store: Store): Promise<void>;
 	backup(store: Store, reason: string): Promise<void>;
 	codec?: SyncCodec;
+	/**
+	This device only reads: it pulls and applies the server's records and never sends one, not even after a server
+	reset or a restore that would otherwise send everything again. For a library shown read only.
+	*/
+	readOnly?: boolean;
 	randomId(): string;
 	now(): number;
 };
@@ -570,7 +575,7 @@ export function createSyncClient(host: SyncHost) {
 			const {sent, pulledCursor} = await step(async (state, records) => ({
 				state,
 				result: {
-					sent: outgoing(state, records, PUSH_LIMIT),
+					sent: host.readOnly ? [] : outgoing(state, records, PUSH_LIMIT),
 					pulledCursor: state.cursor,
 				},
 			}));
@@ -896,12 +901,14 @@ export function createSyncClient(host: SyncHost) {
 			clearTimeout(localTimer);
 			closeSocket();
 			void setStatus({live: false});
-			if (!localPending) {
-				return;
-			}
-
+			// A change waiting for its delay, or one a failed or offline round left unsent, goes out before the pause.
+			const waiting =
+				localPending ||
+				(!host.readOnly && (await loadState()).outbox.length > 0);
 			localPending = false;
-			await syncNow();
+			if (waiting) {
+				await syncNow();
+			}
 		},
 
 		/**

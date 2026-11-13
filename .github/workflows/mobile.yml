@@ -9,9 +9,12 @@ on:
     branches: [master, main]
     paths:
       - mobile/**
+      - server/**
       - src/shared/**
       - src/app/types.ts
       - src/app/icon-ids.ts
+      - src/app/crypto-envelope.ts
+      - src/app/passcode.ts
       - src/app/private-lock.ts
       - src/app/private-sync.ts
       - src/app/tracking-parameters.ts
@@ -26,9 +29,12 @@ on:
   pull_request:
     paths:
       - mobile/**
+      - server/**
       - src/shared/**
       - src/app/types.ts
       - src/app/icon-ids.ts
+      - src/app/crypto-envelope.ts
+      - src/app/passcode.ts
       - src/app/private-lock.ts
       - src/app/private-sync.ts
       - src/app/tracking-parameters.ts

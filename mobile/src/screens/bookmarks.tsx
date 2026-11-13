@@ -1,8 +1,7 @@
 import {useEffect, useMemo, useState} from 'react';
-import {FlatList, Pressable, ScrollView, StyleSheet, View} from 'react-native';
+import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../src/app/types';
-import {BottomSheet} from '../bottom-sheet';
 import {useChipLook} from '../column-icons';
 import {
 	bookmarksIn,
@@ -29,9 +28,19 @@ import {PrivateSwitch} from '../private-switch';
 import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
 import {useView} from '../view';
-import {Chips, Empty, Field, Header, Icon, IconButton} from '../ui';
-import {BookmarkRow, MoveSheet, SelectionBar} from './bookmark-parts';
-import {SaveLinkForm} from './save-link';
+import {Chips, Empty, Field, Header, IconButton} from '../ui';
+import {
+	AddButton,
+	BookmarkRow,
+	EditSheet,
+	MoveSheet,
+	SelectionBar,
+} from './bookmark-parts';
+
+/**
+The drawer that is open over the list, if any: one bookmark's edit form, or the choice of a column to move to.
+*/
+type Sheet = {kind: 'edit'; bookmark: Bookmark} | {kind: 'move'};
 
 export function BookmarksScreen({
 	onAdd,
@@ -54,9 +63,10 @@ export function BookmarksScreen({
 	const [query, setQuery] = useState('');
 	const [refreshing, setRefreshing] = useState(false);
 	// The drawer for choosing a column to move the selection to.
-	const [moving, setMoving] = useState(false);
 	// The bookmark whose edit drawer is open.
-	const [editing, setEditing] = useState<Bookmark>();
+	const [sheet, setSheet] = useState<Sheet>();
+	const editing = sheet?.kind === 'edit' ? sheet.bookmark : undefined;
+	const moving = sheet?.kind === 'move';
 
 	useEffect(() => {
 		onSelecting(selection.active);
@@ -256,11 +266,11 @@ export function BookmarksScreen({
 							selection.start(item.id);
 						}}
 						onEdit={() => {
-							setEditing(item);
+							setSheet({kind: 'edit', bookmark: item});
 						}}
 						onMove={() => {
 							selection.start(item.id);
-							setMoving(true);
+							setSheet({kind: 'move'});
 						}}
 						onDelete={() => {
 							remove(new Set([item.id]));
@@ -272,22 +282,7 @@ export function BookmarksScreen({
 				}}
 			/>
 			{!selection.active && !shape.ios && !readOnly && (
-				<Pressable
-					accessibilityRole="button"
-					accessibilityLabel="Add link"
-					android_ripple={{color: '#ffffff33'}}
-					style={({pressed}) => [
-						styles.fab,
-						{
-							bottom: space,
-							backgroundColor: colors.accent,
-							opacity: pressed ? 0.85 : 1,
-						},
-					]}
-					onPress={onAdd}
-				>
-					<Icon name="add" size={28} color={colors.onAccent} />
-				</Pressable>
+				<AddButton bottom={space} onPress={onAdd} />
 			)}
 			{selection.active && (
 				<SelectionBar
@@ -302,38 +297,26 @@ export function BookmarksScreen({
 						);
 					}}
 					onEdit={() => {
-						setEditing(
-							shown.find((bookmark) => selection.ids.has(bookmark.id)),
-						);
+						const bookmark = shown.find((item) => selection.ids.has(item.id));
+						if (bookmark) {
+							setSheet({kind: 'edit', bookmark});
+						}
 					}}
 					onMove={() => {
-						setMoving(true);
+						setSheet({kind: 'move'});
 					}}
 					onDelete={() => {
 						remove(selection.ids);
 					}}
 				/>
 			)}
-			<BottomSheet
-				visible={Boolean(editing)}
-				label="Edit link"
+			<EditSheet
+				bookmark={editing}
 				onClose={() => {
-					setEditing(undefined);
+					setSheet(undefined);
+					selection.stop();
 				}}
-			>
-				{editing && (
-					<SaveLinkForm
-						key={editing.id}
-						editing={editing}
-						initialText={editing.url}
-						initialTitle={editing.title}
-						onDone={() => {
-							setEditing(undefined);
-							selection.stop();
-						}}
-					/>
-				)}
-			</BottomSheet>
+			/>
 			<MoveSheet
 				visible={moving}
 				count={selection.ids.size}
@@ -343,13 +326,13 @@ export function BookmarksScreen({
 					icon,
 				}))}
 				onClose={() => {
-					setMoving(false);
+					setSheet(undefined);
 				}}
 				onPick={(id) => {
 					void edit((current) =>
 						moveBookmarks(current, selection.ids, id, Date.now()),
 					);
-					setMoving(false);
+					setSheet(undefined);
 					selection.stop();
 				}}
 			/>
@@ -362,14 +345,4 @@ const styles = StyleSheet.create({
 	head: {gap: 8},
 	search: {paddingHorizontal: 16, gap: 12, paddingBottom: 8},
 	list: {flexGrow: 1},
-	fab: {
-		position: 'absolute',
-		right: 16,
-		width: 56,
-		height: 56,
-		borderRadius: 28,
-		alignItems: 'center',
-		justifyContent: 'center',
-		elevation: 4,
-	},
 });

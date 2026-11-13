@@ -250,6 +250,8 @@ export function Chips({
 						key={item.id}
 						accessibilityRole="tab"
 						accessibilityState={{selected: on}}
+						// The chip is 40dp tall; this brings the touch target to the 48dp Android asks for.
+						hitSlop={{top: 4, bottom: 4}}
 						android_ripple={shape.ios ? undefined : {color: colors.pressed}}
 						style={({pressed}) => [
 							styles.chip,
@@ -467,6 +469,8 @@ export function Segmented<T extends string>({
 						key={item.id}
 						accessibilityRole="radio"
 						accessibilityState={{checked: on}}
+						// The segment is 36dp tall; this brings the touch target to 48dp.
+						hitSlop={{top: 6, bottom: 6}}
 						style={[
 							styles.segment,
 							{

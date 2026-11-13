@@ -11,6 +11,7 @@ import {type SwipeAction, SwipeRow} from '../swipe-row';
 import {useLinkSettings} from '../use-link-settings';
 import {TARGET, useColors, useShape} from '../theme';
 import {Avatar, Button, Chips, Icon, type IconName} from '../ui';
+import {SaveLinkForm} from './save-link';
 
 /**
 One bookmark: tap to open, swipe right to open or left to delete, long press to select. Screen reader users get
@@ -304,6 +305,16 @@ export function MoveSheet({
 }
 
 const styles = StyleSheet.create({
+	fab: {
+		position: 'absolute',
+		right: 16,
+		width: 56,
+		height: 56,
+		borderRadius: 28,
+		alignItems: 'center',
+		justifyContent: 'center',
+		elevation: 4,
+	},
 	row: {
 		minHeight: TARGET + 16,
 		flexDirection: 'row',
@@ -336,3 +347,63 @@ const styles = StyleSheet.create({
 	moveBody: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	moveTitle: {fontSize: 20, fontWeight: '700'},
 });
+
+/**
+The round plus button that opens the Add link drawer, on the Material look.
+*/
+export function AddButton({
+	bottom,
+	onPress,
+}: {
+	bottom: number;
+	onPress: () => void;
+}) {
+	const colors = useColors();
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityLabel="Add link"
+			android_ripple={{color: '#ffffff33'}}
+			style={({pressed}) => [
+				styles.fab,
+				{
+					bottom,
+					backgroundColor: colors.accent,
+					opacity: pressed ? 0.85 : 1,
+				},
+			]}
+			onPress={onPress}
+		>
+			<Icon name="add" size={28} color={colors.onAccent} />
+		</Pressable>
+	);
+}
+
+/**
+The drawer for changing a bookmark's link, title, or column. It is open while a bookmark is given.
+*/
+export function EditSheet({
+	bookmark,
+	onClose,
+}: {
+	bookmark?: Bookmark;
+	onClose: () => void;
+}) {
+	return (
+		<BottomSheet
+			visible={Boolean(bookmark)}
+			label="Edit link"
+			onClose={onClose}
+		>
+			{bookmark && (
+				<SaveLinkForm
+					key={bookmark.id}
+					editing={bookmark}
+					initialText={bookmark.url}
+					initialTitle={bookmark.title}
+					onDone={onClose}
+				/>
+			)}
+		</BottomSheet>
+	);
+}

@@ -90,9 +90,12 @@ const codec: SyncCodec = {
 
 		syncKey = local.raw;
 	},
-	// This phone never sends a change, so there is nothing to seal.
-	async seal(change) {
-		return change;
+	// Not reached: the client is read only. If it ever were, sending a record unsealed would be worse than failing.
+	async seal() {
+		throw new SyncError(
+			'key',
+			'The private library is read only on this phone.',
+		);
 	},
 	async open(change) {
 		if (!isSealed(change.value)) {
@@ -147,6 +150,8 @@ function createClient() {
 		writeLibrary: core.write,
 		async backup() {},
 		codec,
+		// The extension owns this library: the phone reads it and can never send a record into it.
+		readOnly: true,
 		randomId: () => randomUUID(),
 		now: Date.now,
 	});

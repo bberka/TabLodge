@@ -33,6 +33,12 @@ const SEED_KEY = 'tablodge.dev.seed';
 const core = createLibraryCore(LIBRARY_KEY);
 const {mutate, write, notify: notifyStore} = core;
 let loaded = false;
+/*
+A save that arrives before the saved library has been read would be written over it, or would start from an empty
+library and send a delete for everything. An edit made that early, such as a link shared into a cold start, waits.
+*/
+const {promise: libraryLoaded, resolve: finishLoading} =
+	Promise.withResolvers<void>();
 let sampleOn = false;
 
 let syncStatus: SyncStatus = SYNC_OFF;
@@ -77,29 +83,41 @@ export async function startLibrary(): Promise<void> {
 	}
 
 	loaded = true;
-	const saved = await readJson(LIBRARY_KEY);
-	if (isStore(saved)) {
-		core.load(saved);
-	}
-
-	await refreshStatus();
-	if (__DEV__) {
-		const seed = await readJson(SEED_KEY);
-		sampleOn = seed === 'on';
-		// A fresh dev install starts with sample data, unless a server is connected or EXPO_PUBLIC_SEED_DATA=0.
-		if (
-			seed === undefined &&
-			// eslint-disable-next-line n/prefer-global/process -- Expo inlines the literal `process.env.EXPO_PUBLIC_*` at bundle time
-			process.env.EXPO_PUBLIC_SEED_DATA !== '0' &&
-			!syncStatus.connected &&
-			!isStore(saved)
-		) {
-			await loadSampleData();
-		}
+	try {
+		await loadSaved();
+	} finally {
+		finishLoading();
 	}
 
 	await syncClient.wake().catch(() => undefined);
 	await refreshStatus();
+}
+
+async function loadSaved(): Promise<void> {
+	const saved = await readJson(LIBRARY_KEY);
+	if (isStore(saved)) {
+		await mutate(async () => {
+			core.load(saved);
+		});
+	}
+
+	await refreshStatus();
+	if (!__DEV__) {
+		return;
+	}
+
+	const seed = await readJson(SEED_KEY);
+	sampleOn = seed === 'on';
+	// A fresh dev install starts with sample data, unless a server is connected or EXPO_PUBLIC_SEED_DATA=0.
+	if (
+		seed === undefined &&
+		// eslint-disable-next-line n/prefer-global/process -- Expo inlines the literal `process.env.EXPO_PUBLIC_*` at bundle time
+		process.env.EXPO_PUBLIC_SEED_DATA !== '0' &&
+		!syncStatus.connected &&
+		!isStore(saved)
+	) {
+		await loadSampleData();
+	}
 }
 
 export const isSampleData = (): boolean => __DEV__ && sampleOn;
@@ -160,6 +178,7 @@ export async function connectServer(
 Changes the library and sends the change to the server after a short delay.
 */
 export async function edit(change: (current: Store) => Store): Promise<void> {
+	await libraryLoaded;
 	await mutate(async () => {
 		const next = change(core.store);
 		if (next !== core.store) {

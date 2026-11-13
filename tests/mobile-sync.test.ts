@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
-import {test} from 'vite-plus/test';
+import {describe, test} from 'vite-plus/test';
 import {createApi} from '../server/src/api';
-import {addBookmark, emptyStore, removeBookmarks} from '../mobile/src/library';
+import {
+	addBookmark,
+	addColumn,
+	emptyStore,
+	removeBookmarks,
+} from '../mobile/src/library';
 import type {Session, Store} from '../src/app/types';
 import {ChangeLog} from '../src/shared/sync/change-log';
 import {createSyncClient, type SyncSocket} from '../src/shared/sync/client';
@@ -20,6 +25,7 @@ function makeDevice(
 	app: ReturnType<typeof createApi>,
 	store: Store,
 	openSocket?: (url: string) => SyncSocket,
+	readOnly = false,
 ) {
 	const storage = new Map<string, unknown>();
 	let queue = Promise.resolve();
@@ -38,6 +44,7 @@ function makeDevice(
 			},
 			fetch: async (url, init) => app.request(url, init),
 			openSocket,
+			readOnly,
 			mutate<T>(work: () => Promise<T>) {
 				const result = queue.then(work);
 				queue = result.then(
@@ -225,4 +232,58 @@ test('pausing sends a waiting change and closes the live socket, and waking open
 	await phone.client.wake();
 	assert.equal(sockets.length, 2);
 	assert.equal(sockets[1]?.closed, false);
+});
+
+describe('a read only device', () => {
+	const recordsOn = async (app: ReturnType<typeof createApi>) => {
+		const response = await app.request(`${URL_BASE}/v1/status`, {
+			headers: [['Authorization', `Bearer ${TOKEN}`]],
+		});
+		return ((await response.json()) as {records: number}).records;
+	};
+
+	// The server is replaced after the device has pulled: it is empty and behind, so a device that sends would send
+	// every record it holds all over again.
+	const afterServerReplaced = async (readOnly: boolean) => {
+		const firstLog = new ChangeLog();
+		const secondLog = new ChangeLog();
+		const original = createApi({token: TOKEN, log: () => firstLog});
+		const replacement = createApi({token: TOKEN, log: () => secondLog});
+		let current = original;
+		const proxy = {
+			request: async (url: string, init?: RequestInit) =>
+				current.request(url, init),
+		} as unknown as ReturnType<typeof createApi>;
+		const desktop = makeDevice(
+			'desktop',
+			original,
+			addBookmark(
+				addColumn(emptyStore(NOW), 'Column', 'c1', NOW),
+				{url: 'https://example.com/one', title: 'One', columnId: 'c1'},
+				'b1',
+				NOW,
+			),
+		);
+		const reader = makeDevice(
+			'reader',
+			proxy,
+			emptyStore(NOW),
+			undefined,
+			readOnly,
+		);
+		await desktop.client.connect(URL_BASE, TOKEN);
+		await reader.client.connect(URL_BASE, TOKEN);
+		assert.equal(reader.store.bookmarks.length, 1);
+		current = replacement;
+		await reader.client.syncNow();
+		return recordsOn(replacement);
+	};
+
+	test('never sends a record, even to a server that was replaced', async () => {
+		assert.equal(await afterServerReplaced(true), 0);
+	});
+
+	test('a device that may send does send them again, so the test above can fail', async () => {
+		assert.ok((await afterServerReplaced(false)) > 0);
+	});
 });

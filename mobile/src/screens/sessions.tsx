@@ -130,6 +130,7 @@ function SessionCardView({
 				<Pressable
 					accessibilityRole="button"
 					accessibilityLabel={`Open all ${count} in ${session.name}`}
+					hitSlop={{top: 4, bottom: 4}}
 					android_ripple={{color: tint}}
 					style={[styles.openAll, {backgroundColor: soften(colors.accent)}]}
 					onPress={() => {

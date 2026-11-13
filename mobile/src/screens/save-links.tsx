@@ -39,6 +39,7 @@ export function SaveLinksForm({
 	const [name, setName] = useState('');
 	const [target, setTarget] = useState('');
 	const [saving, setSaving] = useState(false);
+	const [problem, setProblem] = useState('');
 
 	const sessionId = sessions.some((session) => session.id === target)
 		? target
@@ -51,8 +52,7 @@ export function SaveLinksForm({
 		(mode === 'bookmarks' && choice.incomplete) ||
 		(mode === 'existing' && !sessionId);
 
-	const save = async () => {
-		setSaving(true);
+	const saveLinks = async () => {
 		const count = `${links.length} links`;
 		if (mode === 'bookmarks') {
 			const column = await choice.resolve();
@@ -80,6 +80,19 @@ export function SaveLinksForm({
 			onDone(
 				`${count} added to ${sessions.find((s) => s.id === sessionId)?.name ?? 'the session'}`,
 			);
+		}
+	};
+
+	const save = async () => {
+		setSaving(true);
+		setProblem('');
+		try {
+			await saveLinks();
+		} catch {
+			// A full disk or a storage fault: say so, and let the person try again instead of a button that spins.
+			setProblem('Could not save. Try again.');
+		} finally {
+			setSaving(false);
 		}
 	};
 
@@ -145,6 +158,11 @@ export function SaveLinksForm({
 							/>
 						</View>
 					))}
+				{problem !== '' && (
+					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
+						{problem}
+					</Text>
+				)}
 				<Button
 					label={`Save ${urls.length} links`}
 					icon="checkmark"
