@@ -303,9 +303,9 @@ function Help() {
 				},
 				{
 					title: 'Move and add links',
-					body: 'Drag bookmarks between columns to move or reorder them. The page scrolls on its own while you hold a drag near the top or bottom edge of the window or of a scrolling column, faster the closer you get. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark. Choose Session there to add the links to a saved session instead of a column.',
+					body: 'Drag bookmarks between columns to move or reorder them. The page scrolls on its own while you hold a drag near the top or bottom edge of the window or of a scrolling column, faster the closer you get. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark. Choose Session there to add the links to a saved session instead of a column. When you paste several links, choose New session in the session list to save them as a new session, with a name if you like.',
 					searchText:
-						'drag reorder move scroll edge keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column',
+						'drag reorder move scroll edge keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column new session',
 				},
 				{
 					title: 'Choose Board or Focus view',
