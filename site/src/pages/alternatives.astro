@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
-import ButtonIcon from '../components/ButtonIcon.astro';
+import DownloadButtons from '../components/DownloadButtons.astro';
 import {SITE} from '../site';
 
 const title = 'OneTab, Session Buddy and Toby Alternative: TabLodge Compared';
@@ -52,10 +52,7 @@ const breadcrumbs = [
 			open source, local-first, with a bookmark board on your new tab. Here is an honest look at how they differ,
 			so you can pick the one that fits.
 		</p>
-		<p>
-			<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from the Chrome Web Store</a>
-			<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
-		</p>
+		<DownloadButtons />
 
 		<h2>At a glance</h2>
 		<div class="table-wrap">

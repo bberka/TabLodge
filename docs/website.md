@@ -24,12 +24,29 @@ Paths below are relative to `site/`.
 | `src/pages/privacy.astro` | Website and extension privacy policy |
 | `src/pages/terms.astro` | Terms of use, linked from the footer and the Google OAuth consent screen |
 | `src/pages/404.astro` | Page not found |
+| `src/components/DownloadButtons.astro` | The Chrome Web Store, Firefox Add-ons, and Android buttons used on the home and alternatives pages. A small script picks the one that suits the visitor's device and puts it first |
+| `src/lib/platform.ts` | Works out the visitor's device from the user agent: Chromium and Firefox on a computer, Android, iPhone and iPad, Safari, and anything else. Tested in `tests/site-platform.test.ts` |
 | `src/layouts/Base.astro` | Shared layout, header, footer, metadata, and structured data |
 | `src/assets/` | Extension screenshots in light and dark themes |
 | `public/` | Icons, social image, web manifest, `robots.txt`, and custom domain file |
 | `src/site.ts` | Shared site values. The version comes from `SITE_VERSION`, which deployment sets to the latest release, and local builds fall back to `package.json` |
 
 Follow the [documentation style](CONTRIBUTING.md#writing-documentation) for website copy. Keep extension privacy details consistent with [PRIVACY.md](PRIVACY.md). Check TabLodge comparisons against the current app, and competitor claims against their own documentation. The [comparison notes](https://github.com/bberka/TabLodge/issues/21#issuecomment-6470138750) are background, not a live feature checklist.
+
+## Download buttons
+
+The page carries all three downloads in a fixed order, so it works without scripts and search engines see every link. In a browser, `DownloadButtons.astro` runs `detectPlatform` and reorders them:
+
+| Visitor | Shown first | Under the buttons |
+| --- | --- | --- |
+| Chrome, Edge, Brave, Vivaldi, Opera, or ChromeOS | Chrome Web Store | Nothing, or a note to update when older than Chrome 116 |
+| Firefox on a computer | Firefox Add-ons | Nothing, or a note to update when older than Firefox 140 |
+| Android phone or tablet, any browser | Android app | The extensions are for a computer |
+| iPhone or iPad, any browser | Nothing highlighted | There is no iPhone app, and Safari cannot run the extension |
+| Safari on a Mac | Nothing highlighted | Safari is not supported, use Chrome or Firefox |
+| Anything else | Nothing highlighted | We could not tell which browser you use |
+
+Only the matched download is a filled button; the others stay outlined. To change the rules, edit `src/lib/platform.ts` and its test, and keep the table above in step.
 
 ## Screenshots
 

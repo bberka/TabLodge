@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import ButtonIcon from '../components/ButtonIcon.astro';
+import DownloadButtons from '../components/DownloadButtons.astro';
 import Screenshot from '../components/Screenshot.astro';
 import {SITE, abs} from '../site';
 import {screenshotSet} from '../lib/screens';
@@ -143,11 +144,9 @@ const jsonLd = [
 			<p class="eyebrow">Free &amp; open source</p>
 			<h1>Sessions and bookmarks in one quiet place.</h1>
 			<p class="lead">A free tab session manager and bookmark board. Save tabs for later and restore them with tab groups intact.</p>
-			<div class="actions">
-				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
-				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
+			<DownloadButtons>
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
-			</div>
+			</DownloadButtons>
 			<p class="note">
 				TabLodge v{SITE.version} &middot; Chrome 116+ &middot; Firefox 140+ &middot; MIT license
 			</p>
@@ -281,12 +280,9 @@ const jsonLd = [
 	<section id="install" class="cta">
 		<div class="wrap center">
 			<h2>Give your tabs a lodge</h2>
-			<div class="actions center">
-				<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from Chrome Web Store</a>
-				<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
-				<a class="btn ghost" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="store" />Android APK</a>
+			<DownloadButtons center>
 				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
-			</div>
+			</DownloadButtons>
 		</div>
 	</section>
 </Base>
