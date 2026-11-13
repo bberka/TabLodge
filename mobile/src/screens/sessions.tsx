@@ -122,17 +122,12 @@ function SessionCardView({
 						</Text>
 						<TabPreview session={session} />
 					</View>
-					<Icon
-						name={expanded ? 'chevron-up' : 'chevron-down'}
-						color={colors.muted}
-					/>
 				</Pressable>
 				<Pressable
 					accessibilityRole="button"
 					accessibilityLabel={`Open all ${count} in ${session.name}`}
-					hitSlop={{top: 4, bottom: 4}}
-					android_ripple={{color: tint}}
-					style={[styles.openAll, {backgroundColor: soften(colors.accent)}]}
+					android_ripple={{color: tint, radius: 22}}
+					style={[styles.round, {backgroundColor: soften(colors.accent)}]}
 					onPress={() => {
 						openAll(
 							session.tabs.map((tab) => linkToOpen(tab.url, links)),
@@ -140,10 +135,26 @@ function SessionCardView({
 						);
 					}}
 				>
-					<Icon name="open-outline" size={18} color={colors.accent} />
-					<Text style={[styles.openText, {color: colors.accent}]}>
-						Open all
-					</Text>
+					<Icon name="albums-outline" size={22} color={colors.accent} />
+				</Pressable>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityState={{expanded}}
+					accessibilityLabel={
+						expanded
+							? `Hide tabs in ${session.name}`
+							: `Show tabs in ${session.name}`
+					}
+					android_ripple={{color: colors.pressed, radius: 22}}
+					style={styles.round}
+					onPress={() => {
+						onToggle(session.id);
+					}}
+				>
+					<Icon
+						name={expanded ? 'chevron-up' : 'chevron-down'}
+						color={colors.muted}
+					/>
 				</Pressable>
 			</View>
 			{expanded && (
@@ -334,14 +345,14 @@ const styles = StyleSheet.create({
 	pad: {paddingHorizontal: 16, gap: 12},
 	cardRow: {paddingHorizontal: 16},
 	gap: {height: 12},
-	head: {gap: 4, paddingBottom: 12},
+	head: {flexDirection: 'row', alignItems: 'center', paddingRight: 8},
 	headMain: {
+		flex: 1,
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 12,
-		paddingHorizontal: 16,
-		paddingTop: 14,
-		paddingBottom: 6,
+		paddingLeft: 16,
+		paddingVertical: 14,
 		minHeight: TARGET + 24,
 	},
 	tile: {
@@ -356,18 +367,14 @@ const styles = StyleSheet.create({
 	preview: {flexDirection: 'row', alignItems: 'center', paddingTop: 6},
 	badge: {borderWidth: 2, borderRadius: 13},
 	more: {marginLeft: 6, fontSize: 13, fontWeight: '600'},
-	openAll: {
-		alignSelf: 'flex-start',
-		marginLeft: 72,
-		minHeight: 40,
-		paddingHorizontal: 14,
-		borderRadius: 20,
-		flexDirection: 'row',
+	// Round buttons at the end of the header: Open all, and the chevron that shows the tabs.
+	round: {
+		width: TARGET,
+		height: TARGET,
+		borderRadius: TARGET / 2,
 		alignItems: 'center',
-		gap: 6,
-		overflow: 'hidden',
+		justifyContent: 'center',
 	},
-	openText: {fontWeight: '600'},
 	tabs: {borderTopWidth: StyleSheet.hairlineWidth},
 	tab: {
 		minHeight: TARGET,
