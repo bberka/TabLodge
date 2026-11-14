@@ -227,7 +227,9 @@ export function AccentPalette({
 	}
 
 	return (
-		<div className="relative block w-full sm:inline-block sm:w-auto">
+		<div
+			className={`relative block w-full ${forColumn ? '' : 'sm:inline-block sm:w-auto'}`}
+		>
 			<Popover
 				open={open}
 				onOpenChange={(next) => {
@@ -245,7 +247,7 @@ export function AccentPalette({
 					<button
 						type="button"
 						aria-label={`${forColumn ? 'Column' : 'Accent'} color: ${selectedChoice.label}`}
-						className="tn-select-trigger flex h-9 w-full items-center sm:w-56 gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						className={`tn-select-trigger flex h-9 w-full items-center ${forColumn ? '' : 'sm:w-56'} gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring`}
 					>
 						<Circle small choice={selectedChoice} color={current} />
 						<span className="min-w-0 flex-1 truncate text-left">

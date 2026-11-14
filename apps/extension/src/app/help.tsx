@@ -231,6 +231,12 @@ function Help() {
 						'session color colour card line accent hex edit details tint label',
 				},
 				{
+					title: 'Folder colors',
+					body: 'Edit a folder (or create one) and choose a Color. The folder’s icon takes that color in the folder selectors. Turn on Update session colors to folder color when moved and a session you move into that folder, from its menu, by dragging it onto the folder, or in Edit details, takes the folder’s color. Colors already set stay as they are, and a color you pick in Edit details in the same save wins. The Android app keeps the color and the switch but does not apply them when you move a session there.',
+					searchText:
+						'folder color colour switch update session colors move drag edit folder icon tint',
+				},
+				{
 					title: 'Device names on sessions',
 					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
 					searchText:
@@ -327,9 +333,9 @@ function Help() {
 				},
 				{
 					title: 'Choose Board or Focus view',
-					body: 'Use the view button in the bookmarks toolbar to switch between Board and Focus. Board shows every column in a grid. Focus shows a column list next to one open column. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of making the page tall. The choice is saved in Settings › Bookmark board.',
+					body: 'Use the view button in the bookmarks toolbar to switch between Board and Focus. Board shows every column in a grid. Focus shows a column list next to one open column. Drag a column in that list to reorder it, or use Move up and Move down in its menu. With more than six columns, a banner above the board offers the switch to Focus; Not now hides it for good on this browser. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of making the page tall. The choice is saved in Settings › Bookmark board.',
 					searchText:
-						'board focus view column list single column switch layout grid panel scroll busy column',
+						'board focus view column list single column switch layout grid panel scroll busy column drag reorder many columns banner suggestion',
 				},
 				{
 					title: 'Change column width and spacing',
