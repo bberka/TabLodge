@@ -187,7 +187,9 @@ function Main() {
 						onSelecting={setSelecting}
 					/>
 				)}
-				{tab === 'sessions' && <SessionsScreen onConnect={connect} />}
+				{tab === 'sessions' && (
+					<SessionsScreen onConnect={connect} onAdd={openBlank} />
+				)}
 				{tab === 'settings' && <SettingsScreen onConnect={connect} />}
 			</SafeAreaView>
 			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={setTab} />

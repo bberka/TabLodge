@@ -15,8 +15,14 @@ import {
 import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
 import {type Colors, useColors} from '../theme';
-import {resolveLook, setPreferences, usePreferences} from '../preferences';
-import {Button, Empty, Field, Header, Icon, type IconName} from '../ui';
+import {
+	resetPreferences,
+	resolveLook,
+	setPreferences,
+	usePreferences,
+} from '../preferences';
+import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
+import {Button, Empty, Header, Icon, type IconName} from '../ui';
 import {systemAccent} from '../../modules/open-links';
 import {ACCENTS} from '../../../extension/src/shared/accent-colors';
 import {APP_ACCENT} from '../accent';
@@ -104,9 +110,9 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 		ACCENTS.find((accent) => accent.id === prefs.accent)?.hex ??
 		prefs.accent;
 	useLibrary();
-	const [query, setQuery] = useState('');
-	const needle = normalizeQuery(query);
-	const noMatch =
+	const search = useSearch();
+	const needle = normalizeQuery(search.query);
+	const isNoMatch =
 		needle !== '' &&
 		Object.values(SECTIONS).every(
 			(section) => !sectionVisible(section, needle),
@@ -143,229 +149,255 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 
 	const state = describe(status, colors);
 	return (
-		<ScrollView
-			contentContainerStyle={[styles.screen, {paddingBottom: space + 8}]}
-			keyboardShouldPersistTaps="handled"
-			scrollEventThrottle={16}
-			onScroll={trackScroll}
-		>
-			<Header title="Settings" />
-			<View style={styles.search}>
-				<Field
-					label="Search settings"
-					icon="search"
-					placeholder="Swipe, sync, private, icons"
-					value={query}
-					onChangeText={setQuery}
-					onClear={() => {
-						setQuery('');
-					}}
-				/>
-			</View>
-			<SettingsQuery value={needle}>
-				<View style={styles.cards}>
-					<SettingsCard
-						section={SECTIONS.appearance}
-						icon="color-palette-outline"
-						description="Theme, accent color, and how the app looks."
-					>
-						<SelectRow
-							row={ROWS.theme}
-							value={prefs.theme}
-							choices={[
-								{id: 'system', name: 'System', icon: 'phone-portrait-outline'},
-								{id: 'light', name: 'Light', icon: 'sunny-outline'},
-								{id: 'dark', name: 'Dark', icon: 'moon-outline'},
-							]}
-							onChange={(theme) => {
-								setPreferences({theme});
-							}}
-						/>
-						<ValueRow
-							row={ROWS.accent}
-							value={accentName}
-							swatch={accentSwatch}
-							onPress={() => {
-								setPickingAccent(true);
-							}}
-						/>
-						<SelectRow
-							row={ROWS.style}
-							value={prefs.look}
-							choices={[
-								{
-									id: 'auto',
-									name: 'Automatic',
-									hint: `Matches your phone: ${LOOK_NAMES[resolveLook('auto')]} here`,
-								},
-								{id: 'material', name: 'Android look'},
-								{id: 'oneui', name: 'Samsung One UI look'},
-								{id: 'ios', name: 'iOS look'},
-							]}
-							onChange={(look) => {
-								setPreferences({look});
-							}}
-						/>
-						<Toggle
-							row={ROWS.floatingBar}
-							value={prefs.floatingBar}
-							onChange={(floatingBar) => {
-								setPreferences({floatingBar});
-							}}
-						/>
-						{prefs.floatingBar && (
+		<View style={styles.root}>
+			<ScrollView
+				contentContainerStyle={[styles.screen, {paddingBottom: space + 8}]}
+				keyboardShouldPersistTaps="handled"
+				scrollEventThrottle={16}
+				onScroll={trackScroll}
+			>
+				<Header title="Settings" />
+				<SettingsQuery value={needle}>
+					<View style={styles.cards}>
+						<SettingsCard
+							section={SECTIONS.appearance}
+							icon="color-palette-outline"
+							description="Theme, accent color, and how the app looks."
+						>
 							<SelectRow
-								row={ROWS.barSize}
-								value={prefs.barSize}
+								row={ROWS.theme}
+								value={prefs.theme}
 								choices={[
-									{id: 'full', name: 'Full width', hint: 'Icons and names'},
 									{
-										id: 'scroll',
-										name: 'Small while scrolling',
-										hint: 'Shrinks when you scroll down, grows when you scroll up',
+										id: 'system',
+										name: 'System',
+										icon: 'phone-portrait-outline',
 									},
-									{
-										id: 'compact',
-										name: 'Always small',
-										hint: 'A narrow bar with icons only',
-									},
+									{id: 'light', name: 'Light', icon: 'sunny-outline'},
+									{id: 'dark', name: 'Dark', icon: 'moon-outline'},
 								]}
-								onChange={(barSize) => {
-									setPreferences({barSize});
+								onChange={(theme) => {
+									setPreferences({theme});
 								}}
 							/>
-						)}
-					</SettingsCard>
-					<SessionSettingsCard />
-					<BookmarkBehaviourCard />
-					<SyncedSettingsCard />
-					<OpenLinksCard />
-					<DataCard />
-					<PrivateCard />
-					<SettingsCard
-						section={SECTIONS.sync}
-						icon="sync-outline"
-						description="Keep this phone in step with your server."
-					>
-						{status.connected ? (
-							<>
-								<Text style={{color: colors.text}}>
-									Connected to {status.url}
-								</Text>
-								<View
-									accessible
-									accessibilityLiveRegion="polite"
-									style={styles.state}
-								>
-									<Icon name={state.icon} color={state.color} />
-									<Text style={[styles.stateText, {color: colors.text}]}>
-										{state.text}
-									</Text>
-								</View>
-								<Toggle
-									row={ROWS.syncSettings}
-									value={prefs.syncSettings}
-									onChange={(syncSettings) => {
-										setPreferences({syncSettings});
+							<ValueRow
+								row={ROWS.accent}
+								value={accentName}
+								swatch={accentSwatch}
+								onPress={() => {
+									setPickingAccent(true);
+								}}
+							/>
+							<SelectRow
+								row={ROWS.style}
+								value={prefs.look}
+								choices={[
+									{
+										id: 'auto',
+										name: 'Automatic',
+										hint: `Matches your phone: ${LOOK_NAMES[resolveLook('auto')]} here`,
+									},
+									{id: 'material', name: 'Android look'},
+									{id: 'oneui', name: 'Samsung One UI look'},
+									{id: 'ios', name: 'iOS look'},
+								]}
+								onChange={(look) => {
+									setPreferences({look});
+								}}
+							/>
+							<Toggle
+								row={ROWS.floatingBar}
+								value={prefs.floatingBar}
+								onChange={(floatingBar) => {
+									setPreferences({floatingBar});
+								}}
+							/>
+							{prefs.floatingBar && (
+								<SelectRow
+									row={ROWS.barSize}
+									value={prefs.barSize}
+									choices={[
+										{id: 'full', name: 'Full width', hint: 'Icons and names'},
+										{
+											id: 'scroll',
+											name: 'Small while scrolling',
+											hint: 'Shrinks when you scroll down, grows when you scroll up',
+										},
+										{
+											id: 'compact',
+											name: 'Always small',
+											hint: 'A narrow bar with icons only',
+										},
+									]}
+									onChange={(barSize) => {
+										setPreferences({barSize});
 									}}
 								/>
-								<DeviceNameField />
-								<Button
-									label="Sync now"
-									icon="sync"
-									loading={busy === 'sync'}
-									disabled={busy !== undefined}
-									onPress={() => void syncNow()}
-								/>
-								<Button
-									label="Disconnect"
-									kind="danger"
-									icon="log-out-outline"
-									loading={busy === 'disconnect'}
-									disabled={busy !== undefined}
-									onPress={confirmDisconnect}
-								/>
-							</>
-						) : (
-							<>
+							)}
+						</SettingsCard>
+						<SessionSettingsCard />
+						<BookmarkBehaviourCard />
+						<SyncedSettingsCard />
+						<OpenLinksCard />
+						<DataCard />
+						<PrivateCard />
+						<SettingsCard
+							section={SECTIONS.sync}
+							icon="sync-outline"
+							description="Keep this phone in step with your server."
+						>
+							{status.connected ? (
+								<>
+									<Text style={{color: colors.text}}>
+										Connected to {status.url}
+									</Text>
+									<View
+										accessible
+										accessibilityLiveRegion="polite"
+										style={styles.state}
+									>
+										<Icon name={state.icon} color={state.color} />
+										<Text style={[styles.stateText, {color: colors.text}]}>
+											{state.text}
+										</Text>
+									</View>
+									<Toggle
+										row={ROWS.syncSettings}
+										value={prefs.syncSettings}
+										onChange={(syncSettings) => {
+											setPreferences({syncSettings});
+										}}
+									/>
+									<DeviceNameField />
+									<Button
+										label="Sync now"
+										icon="sync"
+										loading={busy === 'sync'}
+										disabled={busy !== undefined}
+										onPress={() => void syncNow()}
+									/>
+									<Button
+										label="Disconnect"
+										kind="danger"
+										icon="log-out-outline"
+										loading={busy === 'disconnect'}
+										disabled={busy !== undefined}
+										onPress={confirmDisconnect}
+									/>
+								</>
+							) : (
+								<>
+									<Text style={{color: colors.muted}}>
+										Keep bookmarks and sessions the same on every device.
+									</Text>
+									<Button
+										label="Connect to a server"
+										icon="link"
+										onPress={onConnect}
+									/>
+								</>
+							)}
+						</SettingsCard>
+						{__DEV__ && (
+							<SettingsCard
+								section={SECTIONS.development}
+								icon="construct-outline"
+								description="Only in development builds."
+							>
 								<Text style={{color: colors.muted}}>
-									Keep bookmarks and sessions the same on every device.
+									{status.connected
+										? 'Sample data is off while a server is connected, so it cannot reach it.'
+										: isSampleData()
+											? 'The library holds sample data.'
+											: 'Load the same sample sessions and bookmarks as the extension dev build.'}
 								</Text>
 								<Button
-									label="Connect to a server"
-									icon="link"
-									onPress={onConnect}
+									label="Load sample data"
+									icon="flask-outline"
+									disabled={status.connected}
+									onPress={() => void loadSampleData()}
 								/>
-							</>
+								<Button
+									label="Clear library"
+									kind="danger"
+									icon="trash-outline"
+									disabled={status.connected}
+									onPress={() => void clearLibrary()}
+								/>
+							</SettingsCard>
 						)}
-					</SettingsCard>
-					{__DEV__ && (
 						<SettingsCard
-							section={SECTIONS.development}
-							icon="construct-outline"
-							description="Only in development builds."
+							section={SECTIONS.restore}
+							icon="refresh-outline"
+							description="Puts this app's settings back the way they were at install. Your library is not touched, and the extension's settings stay as they are."
 						>
-							<Text style={{color: colors.muted}}>
-								{status.connected
-									? 'Sample data is off while a server is connected, so it cannot reach it.'
-									: isSampleData()
-										? 'The library holds sample data.'
-										: 'Load the same sample sessions and bookmarks as the extension dev build.'}
-							</Text>
 							<Button
-								label="Load sample data"
-								icon="flask-outline"
-								disabled={status.connected}
-								onPress={() => void loadSampleData()}
-							/>
-							<Button
-								label="Clear library"
+								label="Restore default preferences"
 								kind="danger"
-								icon="trash-outline"
-								disabled={status.connected}
-								onPress={() => void clearLibrary()}
+								icon="refresh-outline"
+								onPress={() => {
+									confirm(
+										'Restore default preferences?',
+										'Every setting in this app goes back to its default. Your bookmarks, sessions and server connection stay. Phones that sync settings get the defaults too.',
+										{label: 'Restore', destructive: true},
+										resetPreferences,
+									);
+								}}
 							/>
 						</SettingsCard>
-					)}
-					{noMatch && (
-						<Empty icon="search" title="No setting matches">
-							Try another word, such as swipe, sync, or private.
-						</Empty>
-					)}
-				</View>
-			</SettingsQuery>
-			<BottomSheet
-				visible={pickingAccent}
-				label="Accent color"
-				onClose={() => {
-					setPickingAccent(false);
-				}}
-			>
-				<View style={styles.accentSheet}>
-					<Text
-						accessibilityRole="header"
-						style={[styles.heading, {color: colors.text}]}
-					>
-						Accent color
-					</Text>
-					<ColorPicker
-						keepSelected
-						selected={prefs.accent}
-						leading={accentChoices}
-						onSelect={(accent) => {
-							setPreferences({accent});
-						}}
-					/>
-					<Button
-						label="Done"
-						icon="checkmark"
-						onPress={() => {
-							setPickingAccent(false);
-						}}
-					/>
-				</View>
-			</BottomSheet>
-		</ScrollView>
+						{isNoMatch && (
+							<Empty icon="search" title="No setting matches">
+								Try another word, such as swipe, sync, or private.
+							</Empty>
+						)}
+					</View>
+				</SettingsQuery>
+				<BottomSheet
+					visible={pickingAccent}
+					label="Accent color"
+					onClose={() => {
+						setPickingAccent(false);
+					}}
+				>
+					<View style={styles.accentSheet}>
+						<Text
+							accessibilityRole="header"
+							style={[styles.heading, {color: colors.text}]}
+						>
+							Accent color
+						</Text>
+						<ColorPicker
+							keepSelected
+							selected={prefs.accent}
+							leading={accentChoices}
+							onSelect={(accent) => {
+								setPreferences({accent});
+							}}
+						/>
+						<Button
+							label="Done"
+							icon="checkmark"
+							onPress={() => {
+								setPickingAccent(false);
+							}}
+						/>
+					</View>
+				</BottomSheet>
+			</ScrollView>
+			{!search.open && (
+				<FloatingActions bottom={space} onSearch={search.show} />
+			)}
+			{search.open && (
+				<SearchDock
+					label="Search settings"
+					placeholder="Swipe, sync, private, icons"
+					bottom={space}
+					query={search.query}
+					onChange={search.setQuery}
+					onClose={search.close}
+				/>
+			)}
+		</View>
 	);
 }
 
@@ -376,7 +408,7 @@ const ACCENT_NAMES = new Map<string, string>(
 const styles = StyleSheet.create({
 	accentSheet: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	screen: {paddingBottom: 24},
-	search: {paddingHorizontal: 16, paddingBottom: 12},
+	root: {flex: 1},
 	cards: {paddingHorizontal: 16, gap: 16},
 	heading: {fontSize: 18, fontWeight: '600'},
 	state: {flexDirection: 'row', alignItems: 'center', gap: 10},

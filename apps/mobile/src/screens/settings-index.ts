@@ -54,6 +54,7 @@ export const ROWS = {
 		hint: 'Off keeps a private library out of sight',
 	},
 	sessionTap: {label: 'Tap a session'},
+	sessionMain: {label: 'Main button on a session'},
 	sessionSwipeRight: {label: 'Swipe a session right'},
 	sessionSwipeLeft: {label: 'Swipe a session left'},
 	tap: {label: 'Tap a bookmark'},
@@ -148,6 +149,7 @@ export const SECTIONS = {
 		rows: [
 			ROWS.sortSessions,
 			ROWS.sessionTap,
+			ROWS.sessionMain,
 			ROWS.sessionSwipeRight,
 			ROWS.sessionSwipeLeft,
 			ROWS.compactSessions,
@@ -256,6 +258,11 @@ export const SECTIONS = {
 			'sync now',
 			'offline',
 		],
+		rows: [],
+	},
+	restore: {
+		title: 'Restore defaults',
+		aliases: ['reset', 'default', 'preferences', 'settings'],
 		rows: [],
 	},
 	development: {

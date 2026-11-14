@@ -21,7 +21,12 @@ function useActionChoices() {
 	const colors = useColors();
 	return ROW_ACTIONS.map((id) => {
 		const look = rowActionLook(id, colors);
-		return {id, name: look.label, icon: look.icon, color: look.color};
+		return {
+			id,
+			name: look.label,
+			icon: look.icon,
+			color: look.color,
+		};
 	});
 }
 
@@ -29,7 +34,12 @@ function useSessionActionChoices() {
 	const colors = useColors();
 	return SESSION_ACTIONS.map((id) => {
 		const look = sessionActionLook(id, colors);
-		return {id, name: look.label, icon: look.icon, color: look.color};
+		return {
+			id,
+			name: look.label,
+			icon: look.icon,
+			color: look.color,
+		};
 	});
 }
 
@@ -43,8 +53,8 @@ export function Toggle({
 	onChange: (value: boolean) => void;
 }) {
 	const colors = useColors();
-	const visible = useRowVisible({label, hint});
-	if (!visible) {
+	const isVisible = useRowVisible({label, hint});
+	if (!isVisible) {
 		return null;
 	}
 
@@ -66,8 +76,8 @@ export function Toggle({
 
 export function Group({row, children}: {row: Row; children: React.ReactNode}) {
 	const colors = useColors();
-	const visible = useRowVisible(row);
-	if (!visible) {
+	const isVisible = useRowVisible(row);
+	if (!isVisible) {
 		return null;
 	}
 
@@ -162,7 +172,12 @@ export function BookmarkBehaviourCard() {
 						hint: 'Without a server, this phone asks each site',
 						icon: 'globe-outline',
 					},
-					{id: 'off', name: 'Off', hint: 'Letter tiles', icon: 'text-outline'},
+					{
+						id: 'off',
+						name: 'Off',
+						hint: 'Letter tiles',
+						icon: 'text-outline',
+					},
 				]}
 				onChange={(siteIcons) => {
 					setPreferences({siteIcons});
@@ -206,6 +221,14 @@ export function SessionSettingsCard() {
 				]}
 				onChange={(value) => {
 					void setSyncedSetting('sessionSort', value);
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sessionMain}
+				value={prefs.sessionMain}
+				choices={sessionActions.filter((choice) => choice.id !== 'none')}
+				onChange={(sessionMain) => {
+					setPreferences({sessionMain});
 				}}
 			/>
 			<SelectRow

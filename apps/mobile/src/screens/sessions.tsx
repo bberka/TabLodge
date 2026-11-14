@@ -13,13 +13,13 @@ import type {
 	Settings,
 	Store,
 } from '../../../extension/src/shared/types';
-import {confirm} from '../dialog';
 import {columnGlyph, columnTint, useChipLook} from '../column-icons';
 import {
 	ALL_SESSIONS_ID,
 	archiveSession,
 	canChangeFolder,
 	deleteFolder,
+	restoreFolder,
 	describeSession,
 	folderNameProblem,
 	hostOf,
@@ -43,6 +43,7 @@ import {
 } from '../library-store';
 import {ActionSheet, type SheetAction} from '../action-sheet';
 import {showSnack} from '../snackbar';
+import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
 import {sessionActionLook} from '../row-actions';
 import {SwipeRow} from '../swipe-row';
 import {type SessionAction, usePreferences} from '../preferences';
@@ -55,7 +56,7 @@ import {soften, TARGET, useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
 import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
-import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
+import {Button, Card, Chips, Empty, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
 import {FolderSheet, RenameSheet} from './session-sheets';
 import {SessionColorSheet} from './session-color-sheet';
@@ -150,7 +151,9 @@ function SessionCardView({
 	const tint = columnTint(session.color, scheme) ?? folderTint;
 	const links = useLinkSettings();
 	const prefs = usePreferences();
-	const compact = prefs.compactSessions;
+	const isCompact = prefs.compactSessions;
+	const main = prefs.sessionMain;
+	const mainLook = sessionActionLook(main, colors);
 	const swipe = (action: SessionAction) =>
 		action === 'none'
 			? undefined
@@ -276,7 +279,7 @@ function SessionCardView({
 									accessibilityHint="Opens the link"
 									style={({pressed}) => [
 										styles.tab,
-										compact && styles.tabCompact,
+										isCompact && styles.tabCompact,
 										{backgroundColor: pressed ? colors.pressed : 'transparent'},
 									]}
 									accessibilityActions={
@@ -298,15 +301,15 @@ function SessionCardView({
 										openLink(linkToOpen(tab.url, links));
 									}}
 								>
-									<SiteIcon host={hostOf(tab.url)} size={compact ? 24 : 32} />
+									<SiteIcon host={hostOf(tab.url)} size={isCompact ? 24 : 32} />
 									<View style={styles.texts}>
 										<Text
-											numberOfLines={compact ? 1 : 2}
+											numberOfLines={isCompact ? 1 : 2}
 											style={{color: colors.text}}
 										>
 											{text.main}
 										</Text>
-										{text.sub !== undefined && !compact && (
+										{text.sub !== undefined && !isCompact && (
 											<Text
 												numberOfLines={1}
 												style={{color: colors.muted, fontSize: 13}}
@@ -326,10 +329,14 @@ function SessionCardView({
 							<View style={styles.footerButton}>
 								<Button
 									kind="plain"
-									label={`Open all ${session.tabs.length}`}
-									icon="albums-outline"
+									label={
+										main === 'open'
+											? `Open all ${session.tabs.length}`
+											: mainLook.label
+									}
+									icon={mainLook.icon}
 									onPress={() => {
-										onAct('open', session);
+										onAct(main, session);
 									}}
 								/>
 							</View>
@@ -361,7 +368,13 @@ const SessionCard = memo(SessionCardView);
 Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its
 own tabs, so there is no capture here.
 */
-export function SessionsScreen({onConnect}: {onConnect: () => void}) {
+export function SessionsScreen({
+	onConnect,
+	onAdd,
+}: {
+	onConnect: () => void;
+	onAdd: () => void;
+}) {
 	const colors = useColors();
 	const space = useRoomBelow(useBarSpace());
 	const store = useLibrary();
@@ -371,11 +384,12 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const [syncing, setSyncing] = useState(false);
 	const chipLook = useChipLook();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
-	const [query, setQuery] = useState('');
+	const search = useSearch();
+	const {query} = search;
 	// The sessions whose state was flipped from the default: opened when the default is collapsed, closed when it is
 	// expanded.
 	const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
-	const expandAll = links.expandSessionsByDefault;
+	const isExpandAll = links.expandSessionsByDefault;
 	const [coloringId, setColoringId] = useState<string>();
 	const coloring = store.groups.find((session) => session.id === coloringId);
 	const [renamingId, setRenamingId] = useState<string>();
@@ -618,6 +632,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							? 'This phone is connected to your server, but the library has no sessions yet. Sessions saved in the TabLodge extension appear here after they sync. To save one from here, share several links from your browser to TabLodge.'
 							: 'Sessions saved in the TabLodge extension appear here once this phone is synced with your server. To save one from here, share several links from your browser to TabLodge.'}
 				</Empty>
+				<FloatingActions bottom={space} buttonLabel="Add links" onAdd={onAdd} />
 			</View>
 		);
 	}
@@ -629,7 +644,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				removeClippedSubviews
 				scrollEventThrottle={16}
 				data={shown}
-				extraData={[flipped, expandAll]}
+				extraData={[flipped, isExpandAll]}
 				keyExtractor={(session) => session.id}
 				contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
 				keyboardShouldPersistTaps="handled"
@@ -645,16 +660,6 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							right={<PrivateSwitch />}
 						/>
 						<View style={styles.pad}>
-							<Field
-								label="Search sessions"
-								icon="search"
-								placeholder="Session name, tab title or address"
-								value={query}
-								onChangeText={setQuery}
-								onClear={() => {
-									setQuery('');
-								}}
-							/>
 							<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 								<Chips
 									items={folders.map((folder) => look(folder))}
@@ -683,7 +688,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							session={item}
 							folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
 							tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
-							expanded={expandAll !== flipped.has(item.id)}
+							expanded={isExpandAll !== flipped.has(item.id)}
 							onToggle={toggle}
 							onAct={act}
 							onMenu={openMenu}
@@ -775,6 +780,24 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 					setColoringId(undefined);
 				}}
 			/>
+			{!search.open && (
+				<FloatingActions
+					bottom={space}
+					buttonLabel="Add links"
+					onAdd={onAdd}
+					onSearch={search.show}
+				/>
+			)}
+			{search.open && (
+				<SearchDock
+					label="Search sessions"
+					placeholder="Session name, tab title or address"
+					bottom={space}
+					query={query}
+					onChange={search.setQuery}
+					onClose={search.close}
+				/>
+			)}
 		</>
 	);
 }
@@ -888,17 +911,17 @@ function folderMenuFor(
 				label: 'Delete folder',
 				destructive: true,
 				onPress() {
-					confirm(
-						`Delete ${folder.name}?`,
-						sessions.length === 0
-							? 'The folder is empty.'
-							: `Its ${sessions.length} ${sessions.length === 1 ? 'session moves' : 'sessions move'} to Unfiled.`,
-						{label: 'Delete folder', destructive: true},
-						() => {
-							void edit((current) => deleteFolder(current, id, Date.now()));
-							removed(id);
+					const held = sessions.map((session) => session.id);
+					void edit((current) => deleteFolder(current, id, Date.now()));
+					removed(id);
+					showSnack(`Deleted ${folder.name}`, {
+						label: 'Undo',
+						run() {
+							void edit((current) =>
+								restoreFolder(current, folder, held, Date.now()),
+							);
 						},
-					);
+					});
 				},
 			},
 		);

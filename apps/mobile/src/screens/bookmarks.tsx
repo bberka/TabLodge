@@ -8,7 +8,7 @@ import {
 	findDuplicateBookmarks,
 	removalIds,
 } from '../../../extension/src/shared/duplicate-bookmarks';
-import {confirm, notify} from '../dialog';
+import {notify} from '../dialog';
 import {useChipLook} from '../column-icons';
 import {
 	bookmarksIn,
@@ -36,19 +36,18 @@ import {useLinkSettings} from '../use-link-settings';
 import {showSnack} from '../snackbar';
 import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
-import {useColors, useShape} from '../theme';
+import {useColors} from '../theme';
 import {PrivateSwitch} from '../private-switch';
 import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
 import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
-import {Button, Chips, Empty, Field, Header, IconButton} from '../ui';
+import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
+import {Button, Chips, Empty, Header, IconButton} from '../ui';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
 import {ReorderRow} from './reorder-row';
 import {
-	AddButton,
-	MenuButton,
 	BookmarkRow,
 	EditSheet,
 	MoveSheet,
@@ -78,18 +77,18 @@ export function BookmarksScreen({
 }) {
 	const colors = useColors();
 	const chipLook = useChipLook();
-	const shape = useShape();
 	const insets = useSafeAreaInsets();
 	const barSpace = useBarSpace();
 	const space = useRoomBelow(barSpace);
-	const keyboardOpen = space !== barSpace;
+	const isKeyboardOpen = space !== barSpace;
 	const store = useLibrary();
 	const selection = useSelection();
 	const view = useView();
 	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
-	const [query, setQuery] = useState('');
+	const search = useSearch();
+	const {query} = search;
 	const [refreshing, setRefreshing] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [columnsOpen, setColumnsOpen] = useState(false);
@@ -101,7 +100,7 @@ export function BookmarksScreen({
 	// The bookmark whose edit drawer is open.
 	const [sheet, setSheet] = useState<Sheet>();
 	const editing = sheet?.kind === 'edit' ? sheet.bookmark : undefined;
-	const moving = sheet?.kind === 'move';
+	const isMoving = sheet?.kind === 'move';
 	const editingColumn =
 		sheet?.kind === 'column'
 			? store.bookmarkColumns.find((column) => column.id === sheet.id)
@@ -127,18 +126,20 @@ export function BookmarksScreen({
 	const columnId = columns.some((column) => column.id === picked)
 		? picked
 		: (columns[0]?.id ?? '');
-	const searching = query.trim().length > 0;
+	const isSearching = query.trim().length > 0;
 	const shown = useMemo(
 		() =>
-			searching ? searchBookmarks(store, query) : bookmarksIn(store, columnId),
-		[store, query, columnId, searching],
+			isSearching
+				? searchBookmarks(store, query)
+				: bookmarksIn(store, columnId),
+		[store, query, columnId, isSearching],
 	);
 	const columnName = columns.find((column) => column.id === columnId)?.name;
 	// The Unfiled bucket is not a column of its own and cannot be changed.
-	const editableColumn = store.bookmarkColumns.some(
+	const isEditableColumn = store.bookmarkColumns.some(
 		(column) => column.id === columnId,
 	);
-	const allSelected = shown.length > 0 && selection.ids.size === shown.length;
+	const isAllSelected = shown.length > 0 && selection.ids.size === shown.length;
 	const chipMenu = chipMenuId
 		? columnMenu(chipMenuId, store, {
 				links,
@@ -188,19 +189,12 @@ export function BookmarksScreen({
 			return;
 		}
 
-		confirm(
-			`Remove ${ids.length} duplicate ${ids.length === 1 ? 'bookmark' : 'bookmarks'}?`,
-			'Each address keeps its oldest copy. You can undo this right after.',
-			{label: `Remove ${ids.length}`, destructive: true},
-			() => {
-				remove(new Set(ids));
-			},
-		);
+		remove(new Set(ids));
 	};
 
 	// What the 3 dot menu offers, from what is on screen: nothing to open, select, or put in order in an empty column.
 	const menuActions: SheetAction[] = [
-		...(!searching && shown.length > 0 && columnName
+		...(!isSearching && shown.length > 0 && columnName
 			? [
 					{
 						icon: 'albums-outline' as const,
@@ -226,7 +220,7 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
-		...(!searching && shown.length > 1
+		...(!isSearching && shown.length > 1
 			? [
 					{
 						icon: 'swap-vertical-outline' as const,
@@ -238,7 +232,7 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
-		...(!searching && editableColumn
+		...(!isSearching && isEditableColumn
 			? [
 					{
 						icon: 'color-palette-outline' as const,
@@ -250,7 +244,7 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
-		...(!searching && store.bookmarks.length > 1
+		...(!isSearching && store.bookmarks.length > 1
 			? [
 					{
 						icon: 'copy-outline' as const,
@@ -293,11 +287,11 @@ export function BookmarksScreen({
 	const headerActions = selection.active ? (
 		<>
 			<IconButton
-				icon={allSelected ? 'remove-circle-outline' : 'checkmark-done'}
-				label={allSelected ? 'Select none' : 'Select all'}
+				icon={isAllSelected ? 'remove-circle-outline' : 'checkmark-done'}
+				label={isAllSelected ? 'Select none' : 'Select all'}
 				onPress={() => {
 					selection.setAll(
-						allSelected ? [] : shown.map((bookmark) => bookmark.id),
+						isAllSelected ? [] : shown.map((bookmark) => bookmark.id),
 					);
 				}}
 			/>
@@ -317,17 +311,7 @@ export function BookmarksScreen({
 			}}
 		/>
 	) : (
-		<>
-			<PrivateSwitch />
-			{shape.ios && (
-				<IconButton
-					icon="add"
-					label="Add link"
-					color={colors.accent}
-					onPress={onAdd}
-				/>
-			)}
-		</>
+		<PrivateSwitch />
 	);
 
 	return (
@@ -342,7 +326,7 @@ export function BookmarksScreen({
 				contentContainerStyle={[
 					styles.list,
 					{
-						paddingBottom: keyboardOpen
+						paddingBottom: isKeyboardOpen
 							? space + 8
 							: (selection.active ? 72 + insets.bottom : space) + 72,
 					},
@@ -372,20 +356,7 @@ export function BookmarksScreen({
 							right={headerActions}
 						/>
 						<View style={styles.search}>
-							<Field
-								label="Search bookmarks"
-								icon="search"
-								placeholder="Title or address"
-								value={query}
-								autoCapitalize="none"
-								autoCorrect={false}
-								returnKeyType="search"
-								onChangeText={setQuery}
-								onClear={() => {
-									setQuery('');
-								}}
-							/>
-							{!searching && (
+							{!isSearching && (
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
 										items={[
@@ -417,7 +388,7 @@ export function BookmarksScreen({
 					</View>
 				}
 				ListEmptyComponent={
-					searching ? (
+					isSearching ? (
 						<Empty icon="search" title="No match">
 							Nothing saved matches that search.
 						</Empty>
@@ -491,16 +462,28 @@ export function BookmarksScreen({
 					void refresh();
 				}}
 			/>
-			{!selection.active && !reordering && !shape.ios && (
-				<AddButton bottom={space} onPress={onAdd} />
-			)}
-			{!selection.active && !reordering && menuActions.length > 0 && (
-				<MenuButton
+			{!selection.active && !reordering && !search.open && (
+				<FloatingActions
 					bottom={space}
-					right={shape.ios ? 16 : 16 + 56 + 12}
-					onPress={() => {
-						setMenuOpen(true);
-					}}
+					onAdd={onAdd}
+					onSearch={search.show}
+					onMenu={
+						menuActions.length > 0
+							? () => {
+									setMenuOpen(true);
+								}
+							: undefined
+					}
+				/>
+			)}
+			{search.open && (
+				<SearchDock
+					label="Search bookmarks"
+					placeholder="Title or address"
+					bottom={space}
+					query={query}
+					onChange={search.setQuery}
+					onClose={search.close}
 				/>
 			)}
 			{selection.active && (
@@ -583,7 +566,7 @@ export function BookmarksScreen({
 				}}
 			/>
 			<MoveSheet
-				visible={moving}
+				visible={isMoving}
 				count={selection.ids.size}
 				columns={store.bookmarkColumns.map(({id, name, icon, color}) => ({
 					id,
@@ -638,7 +621,7 @@ function columnMenu(
 
 	const bookmarks = bookmarksIn(store, id);
 	const index = store.bookmarkColumns.findIndex((column) => column.id === id);
-	const real = index !== -1;
+	const isReal = index !== -1;
 	const actions: SheetAction[] = [];
 	if (bookmarks.length > 0) {
 		actions.push({
@@ -653,7 +636,7 @@ function columnMenu(
 		});
 	}
 
-	if (real) {
+	if (isReal) {
 		actions.push({
 			icon: 'color-palette-outline',
 			label: 'Edit column',

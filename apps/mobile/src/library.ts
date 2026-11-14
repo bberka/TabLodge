@@ -533,6 +533,39 @@ export function deleteColumn(
 	return {...store, bookmarkColumns: remaining, bookmarks, updatedAt: now};
 }
 
+/**
+Puts back a column that was deleted, with the bookmarks it held (as they were), for Undo. A bookmark that was moved to
+another column comes back to this one; one that was deleted with it is added again.
+*/
+export function restoreColumn(
+	store: Store,
+	column: Store['bookmarkColumns'][number],
+	bookmarks: ReadonlyArray<Store['bookmarks'][number]>,
+	now: number,
+): Store {
+	if (store.bookmarkColumns.some((entry) => entry.id === column.id)) {
+		return store;
+	}
+
+	const back = new Map(bookmarks.map((bookmark) => [bookmark.id, bookmark]));
+	const kept = store.bookmarks.map((bookmark) => {
+		const original = back.get(bookmark.id);
+		back.delete(bookmark.id);
+		return original
+			? {...bookmark, columnId: column.id, updatedAt: now}
+			: bookmark;
+	});
+	return {
+		...store,
+		bookmarkColumns: [...store.bookmarkColumns, column],
+		bookmarks: [
+			...kept,
+			...[...back.values()].map((bookmark) => ({...bookmark, updatedAt: now})),
+		],
+		updatedAt: now,
+	};
+}
+
 export const ALL_SESSIONS_ID = 'all';
 const ARCHIVED_FOLDER_ID = 'archived-sessions';
 const OTHER_FOLDER_ID = 'other-sessions';
@@ -632,6 +665,32 @@ export function deleteFolder(store: Store, id: string, now: number): Store {
 		groups: store.groups.map((session) =>
 			session.folderId === id
 				? {...session, folderId: target, updatedAt: now}
+				: session,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
+Puts back a folder that was deleted, with the sessions it held, for Undo.
+*/
+export function restoreFolder(
+	store: Store,
+	folder: Store['folders'][number],
+	sessionIds: readonly string[],
+	now: number,
+): Store {
+	if (store.folders.some((entry) => entry.id === folder.id)) {
+		return store;
+	}
+
+	const back = new Set(sessionIds);
+	return {
+		...store,
+		folders: [...store.folders, folder],
+		groups: store.groups.map((session) =>
+			back.has(session.id)
+				? {...session, folderId: folder.id, updatedAt: now}
 				: session,
 		),
 		updatedAt: now,

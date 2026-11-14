@@ -122,6 +122,10 @@ type Preferences = {
 	*/
 	sessionTap: 'expand' | 'open';
 	/**
+	The button at the foot of an open session card. Open all by default.
+	*/
+	sessionMain: SessionAction;
+	/**
 	Remove tracking parameters (utm_source and the like) from a link when it is saved.
 	*/
 	cleanOnSave: boolean;
@@ -197,6 +201,7 @@ const defaults: Preferences = {
 	sessionSwipeRight: 'archive',
 	sessionSwipeLeft: 'delete',
 	sessionTap: 'expand',
+	sessionMain: 'open',
 	cleanOnSave: true,
 	syncSettings: true,
 	siteIcons: 'server',
@@ -269,6 +274,7 @@ export async function loadPreferences(): Promise<void> {
 		sessionSwipeRight,
 		sessionSwipeLeft,
 		sessionTap,
+		sessionMain,
 		cleanOnSave,
 		syncSettings,
 		siteIcons,
@@ -302,6 +308,7 @@ export async function loadPreferences(): Promise<void> {
 			defaults.sessionSwipeLeft,
 		),
 		sessionTap: sessionTap === 'open' ? 'open' : 'expand',
+		sessionMain: sessionAction(sessionMain, defaults.sessionMain),
 		cleanOnSave:
 			typeof cleanOnSave === 'boolean' ? cleanOnSave : defaults.cleanOnSave,
 		syncSettings:
@@ -365,6 +372,18 @@ export function setPreferences(
 	}
 }
 
+/**
+Puts every preference back to its default. This phone's name, the column last saved to, and whether settings sync stay.
+*/
+export function resetPreferences(): void {
+	setPreferences({
+		...defaults,
+		deviceName: current.deviceName,
+		lastColumnId: current.lastColumnId,
+		syncSettings: current.syncSettings,
+	});
+}
+
 export const getPreferences = (): Preferences => current;
 
 export const usePreferences = (): Preferences =>
@@ -388,6 +407,7 @@ const SYNCED_KEYS = [
 	'sessionSwipeRight',
 	'sessionSwipeLeft',
 	'sessionTap',
+	'sessionMain',
 	'cleanOnSave',
 	'accent',
 	'theme',

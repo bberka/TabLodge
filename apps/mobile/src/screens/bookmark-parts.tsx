@@ -217,7 +217,7 @@ export function SelectionBar({
 }) {
 	const colors = useColors();
 	const insets = useSafeAreaInsets();
-	const none = count === 0;
+	const isNone = count === 0;
 	return (
 		<View
 			style={[
@@ -232,7 +232,7 @@ export function SelectionBar({
 			<ActionButton
 				icon="albums-outline"
 				label="Open"
-				disabled={none}
+				disabled={isNone}
 				onPress={onOpen}
 			/>
 			<ActionButton
@@ -244,14 +244,14 @@ export function SelectionBar({
 			<ActionButton
 				icon="folder-open-outline"
 				label="Move"
-				disabled={none || !canMove}
+				disabled={isNone || !canMove}
 				onPress={onMove}
 			/>
 			<ActionButton
 				icon="trash-outline"
 				label="Delete"
 				color={colors.danger}
-				disabled={none}
+				disabled={isNone}
 				onPress={onDelete}
 			/>
 		</View>
@@ -297,26 +297,6 @@ export function MoveSheet({
 }
 
 const styles = StyleSheet.create({
-	menuButton: {
-		position: 'absolute',
-		width: 48,
-		height: 48,
-		borderRadius: 24,
-		borderWidth: 1,
-		alignItems: 'center',
-		justifyContent: 'center',
-		elevation: 3,
-	},
-	fab: {
-		position: 'absolute',
-		right: 16,
-		width: 56,
-		height: 56,
-		borderRadius: 28,
-		alignItems: 'center',
-		justifyContent: 'center',
-		elevation: 4,
-	},
 	row: {
 		minHeight: TARGET + 16,
 		flexDirection: 'row',
@@ -349,71 +329,6 @@ const styles = StyleSheet.create({
 	moveBody: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	moveTitle: {fontSize: 20, fontWeight: '700'},
 });
-
-/**
-The round plus button that opens the Add link drawer, on the Material look.
-*/
-export function AddButton({
-	bottom,
-	onPress,
-}: {
-	bottom: number;
-	onPress: () => void;
-}) {
-	const colors = useColors();
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel="Add link"
-			style={({pressed}) => [
-				styles.fab,
-				{
-					// Clear of the tab bar below, whose own shadow would otherwise reach the button.
-					bottom: bottom + 16,
-					backgroundColor: colors.accent,
-					opacity: pressed ? 0.85 : 1,
-				},
-			]}
-			onPress={onPress}
-		>
-			<Icon name="add" size={28} color={colors.onAccent} />
-		</Pressable>
-	);
-}
-
-/**
-A small round button for the screen's menu, beside the add button where a thumb rests, instead of in the header at the
-top of the screen. `right` is how far it sits from the screen's right edge.
-*/
-export function MenuButton({
-	bottom,
-	right,
-	onPress,
-}: {
-	bottom: number;
-	right: number;
-	onPress: () => void;
-}) {
-	const colors = useColors();
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel="More actions"
-			style={({pressed}) => [
-				styles.menuButton,
-				{
-					bottom: bottom + 16 + 4,
-					right,
-					backgroundColor: pressed ? colors.pressed : colors.surface,
-					borderColor: colors.border,
-				},
-			]}
-			onPress={onPress}
-		>
-			<Icon name="ellipsis-horizontal" size={24} color={colors.text} />
-		</Pressable>
-	);
-}
 
 /**
 The drawer for changing a bookmark's link, title, or column. It is open while a bookmark is given.

@@ -5,66 +5,44 @@ import type {Store} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {ColorPicker} from '../color-picker';
 import {columnGlyph} from '../column-icons';
-import {type DialogAction, showDialog} from '../dialog';
 import {IconPicker} from '../icon-picker';
-import {addColumn, deleteColumn, updateColumn} from '../library';
+import {addColumn, deleteColumn, restoreColumn, updateColumn} from '../library';
+import {showSnack} from '../snackbar';
 import {edit, newId, useLibrary} from '../library-store';
 import {useColors} from '../theme';
 import {Button, Field, IconButton} from '../ui';
 
 /**
-Asks what to do with a column's bookmarks, then deletes the column: move them to another column, or delete them too.
-`onDeleted` runs once it is done.
+Deletes a column at once and offers Undo. Its bookmarks move to another column; with no other column they stay unfiled.
+`onDeleted` runs right after.
 */
 export function confirmDeleteColumn(
 	store: Store,
 	column: {id: string; name: string},
 	onDeleted: () => void,
 ): void {
+	const whole = store.bookmarkColumns.find((entry) => entry.id === column.id);
+	if (!whole) {
+		return;
+	}
+
+	const own = store.bookmarks.filter(
+		(bookmark) => bookmark.columnId === column.id,
+	);
 	const others = store.bookmarkColumns.filter(
 		(entry) => entry.id !== column.id,
 	);
-	const count = store.bookmarks.filter(
-		(bookmark) => bookmark.columnId === column.id,
-	).length;
 	const target = others.find((entry) => entry.isDefault) ?? others[0];
-	const finish = async (moveTo: string | null) => {
-		await edit((current) =>
-			deleteColumn(current, column.id, moveTo, Date.now()),
-		);
-		onDeleted();
-	};
-
-	const noun = count === 1 ? 'bookmark' : 'bookmarks';
-	const buttons: DialogAction[] = [{label: 'Cancel', kind: 'cancel'}];
-	if (count > 0 && target) {
-		buttons.push({
-			label: `Move ${count} to ${target.name}`,
-			run: () => void finish(target.id),
-		});
-	}
-
-	if (count > 0 && !target) {
-		// The only column: its bookmarks have nowhere to go but the Unfiled bucket.
-		buttons.push({
-			label: `Keep ${count} unfiled`,
-			run: () => void finish(''),
-		});
-	}
-
-	buttons.push({
-		label: count === 0 ? 'Delete' : `Delete ${count} ${noun}`,
-		kind: 'destructive',
-		run: () => void finish(null),
-	});
-
-	showDialog(
-		`Delete ${column.name}?`,
-		count === 0
-			? 'The column is empty.'
-			: `It holds ${count} ${noun}. Move them to another column, or delete them with it.`,
-		buttons,
+	void edit((current) =>
+		deleteColumn(current, column.id, target?.id ?? '', Date.now()),
 	);
+	onDeleted();
+	showSnack(`Deleted ${column.name}`, {
+		label: 'Undo',
+		run() {
+			void edit((current) => restoreColumn(current, whole, own, Date.now()));
+		},
+	});
 }
 
 type Editing = {id: string; name: string; icon?: string; color?: string};
