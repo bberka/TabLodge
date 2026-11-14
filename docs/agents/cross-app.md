@@ -4,7 +4,7 @@ The apps share one library format and one sync protocol, so a feature in one app
 
 ## Shared code
 
-`apps/extension/src/shared/` and `apps/extension/src/app/types.ts` (plus a few helpers the Android app imports, such as `tracking-parameters.ts`, `url-display.ts`, `private-lock.ts`) are used by the extension, the server, and the Android app. `grep -rn "extension/src" apps/mobile apps/server` lists every import. When you change one of these files:
+`apps/extension/src/shared/` is the code the extension, the server, and the Android app share: the data types (`types.ts`), library storage, the sync protocol and client, private library crypto, and link helpers. Page code in `src/app/` is extension only, and a lint rule stops the server and the Android app importing it. `grep -rn "extension/src" apps/mobile apps/server` lists every shared import. When you change one of these files:
 
 - Keep it free of browser and Node APIs.
 - Run `vp run check`, which type checks and tests all apps, and `pnpm run mobile:export` when the Android app imports it.

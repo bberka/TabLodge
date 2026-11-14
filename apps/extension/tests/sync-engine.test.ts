@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import type {Settings, Store} from '../src/app/types';
+import type {Settings, Store} from '../src/shared/types';
 import {ChangeLog} from '../src/shared/sync/change-log';
 import type {SyncChange} from '../src/shared/sync/changes';
 import {

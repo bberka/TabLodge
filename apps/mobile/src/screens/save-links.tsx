@@ -1,7 +1,7 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {phoneStamp} from '../device';
-import {stripTrackingParameters} from '../../../extension/src/app/tracking-parameters';
+import {stripTrackingParameters} from '../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../column-choice';
 import {
 	addBookmarks,

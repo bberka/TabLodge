@@ -177,6 +177,24 @@ const xoConfig: XoConfigItem[] = [
 		rules: {'package-json/dependency-version-range': 'off'},
 	},
 	{
+		// The server and the Android app share `apps/extension/src/shared`; the extension's pages and build scripts are not theirs to import.
+		files: ['apps/mobile/**/*.{ts,tsx}', 'apps/server/**/*.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['**/extension/src/app/*', '**/extension/scripts/*'],
+							message:
+								'Import shared code from apps/extension/src/shared instead (see docs/agents/cross-app.md).',
+						},
+					],
+				},
+			],
+		},
+	},
+	{
 		// The Docker server's entry point starts the process and exits on bad configuration, like a CLI.
 		files: ['apps/server/src/node.ts'],
 		rules: {'unicorn/no-process-exit': 'off'},

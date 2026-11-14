@@ -1,4 +1,4 @@
-import type {Bookmark} from './types';
+import type {Bookmark} from '../shared/types';
 import {webUrl} from './web-url';
 
 export type DuplicateCopy = Pick<

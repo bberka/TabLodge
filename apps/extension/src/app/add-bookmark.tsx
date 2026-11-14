@@ -4,6 +4,7 @@ import {Plus, Save, X} from 'lucide-react';
 import {Button, Input, Label, SelectItem, TooltipProvider} from '../shared/ui';
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
+import type {ActionResult} from '../shared/types';
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {PrivateLockGate} from './private-lock-ui';
 import {LoadingLine, send, useCloseOnEscape} from './common';
@@ -12,7 +13,6 @@ import {IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {DEFAULT_COLUMN_ICON} from './icon-registry';
 import {ColumnSelect} from './column-select';
-import type {ActionResult} from './types';
 
 type PromptRequest = Promise<ActionResult<'GET_BOOKMARK_PROMPT'> | undefined>;
 

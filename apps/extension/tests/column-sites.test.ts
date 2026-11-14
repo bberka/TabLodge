@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {columnForUrl} from '../src/app/column-sites';
-import type {BookmarkColumn} from '../src/app/types';
+import type {BookmarkColumn} from '../src/shared/types';
 
 const column = (id: string, domains: string[]): BookmarkColumn => ({
 	id,

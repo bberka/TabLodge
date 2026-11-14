@@ -1,7 +1,7 @@
 // "Open in Internet Archive": the address of the Wayback Machine's newest capture of a saved link. The page is
 // opened only when someone chooses the menu item, so the address goes to archive.org on that click and nowhere else,
 // and TabLodge stores nothing about it.
-import {stripTrackingParameters} from './tracking-parameters';
+import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {webUrl} from './web-url';
 
 export const ARCHIVE_ORIGIN = 'https://web.archive.org/web/';

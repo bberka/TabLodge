@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
-import type {Folder, Session} from '../../../extension/src/app/types';
+import type {Folder, Session} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {TARGET, useColors} from '../theme';
 import {Button, Field, Icon} from '../ui';

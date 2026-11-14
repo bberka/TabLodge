@@ -1,4 +1,4 @@
-import type {ActionResult} from './types';
+import type {ActionResult} from '../shared/types';
 import {send} from './message-client';
 
 type StateRequest = Promise<ActionResult<'GET_STATE'> | undefined>;

@@ -11,9 +11,9 @@ Changing the PIN or password rewraps the same key, so nothing has to be encrypte
 syncing. A library synced before any device had a lock holds plain values; a device with the key sends each one
 again sealed as it pulls it (`reseal`).
 */
-import {recordKey, type SyncChange} from '../shared/sync/changes';
-import {SyncError, type SyncCodec} from '../shared/sync/client';
-import {isRecord} from '../shared/library-values';
+import {recordKey, type SyncChange} from './sync/changes';
+import {SyncError, type SyncCodec} from './sync/client';
+import {isRecord} from './library-values';
 import type {Credential} from './passcode';
 import {
 	fromBase64,

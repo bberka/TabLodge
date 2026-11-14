@@ -14,10 +14,10 @@ import {
 	Label,
 	Switch,
 } from '../shared/ui';
+import {PRIVATE_SYNC_ASK} from '../shared/private-sync';
+import type {PrivateSyncInfo} from '../shared/types';
 import {messageOf, send, type ShowStatus} from './common';
-import {PRIVATE_SYNC_ASK} from './private-sync';
 import {FieldMessage, SyncNowButton, SyncStatusLine} from './sync-settings';
-import type {PrivateSyncInfo} from './types';
 
 const UNAVAILABLE: Record<
 	Exclude<PrivateSyncInfo['availability'], 'ready'>,

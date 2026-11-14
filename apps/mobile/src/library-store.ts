@@ -4,7 +4,7 @@ sync client. Screens read it with `useLibrary` and the sync state with `useSyncS
 */
 import {randomUUID} from 'expo-crypto';
 import {useSyncExternalStore} from 'react';
-import type {Settings, Store} from '../../extension/src/app/types';
+import type {Settings, Store} from '../../extension/src/shared/types';
 import {
 	createSyncClient,
 	SYNC_OFF,

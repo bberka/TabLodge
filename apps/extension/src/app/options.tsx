@@ -70,6 +70,21 @@ import {
 	openShortcutsPage,
 } from '../shared/browser';
 import {radioTargetIndex} from '../shared/radio-keys';
+import type {
+	ActionResult,
+	BookmarkQuickAction,
+	EraseScope,
+	SessionQuickAction,
+	Settings,
+} from '../shared/types';
+import {
+	matchesAnyTerm,
+	matchesQuery,
+	rankByQuery,
+	scoreQuery,
+	sortByQuery,
+	searchTerms,
+} from '../shared/fuzzy';
 import {AccentPalette} from './accent-palette';
 import {
 	EmptyState,
@@ -86,13 +101,6 @@ import {
 	useTabLodgeState,
 	type IconComponent,
 } from './common';
-import type {
-	ActionResult,
-	BookmarkQuickAction,
-	EraseScope,
-	SessionQuickAction,
-	Settings,
-} from './types';
 import {
 	BackupDialog,
 	ImportDialog,
@@ -109,14 +117,6 @@ import {
 	normalizeExcludedHost,
 	parseExcludedLines,
 } from './excluded-sites';
-import {
-	matchesAnyTerm,
-	matchesQuery,
-	rankByQuery,
-	scoreQuery,
-	sortByQuery,
-	searchTerms,
-} from './fuzzy';
 import {Highlight} from './highlight';
 import {PROJECT} from './project';
 import {ColumnSelect} from './column-select';

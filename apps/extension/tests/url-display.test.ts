@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {displayUrl, isInsecureLink} from '../src/app/url-display';
+import {displayUrl, isInsecureLink} from '../src/shared/url-display';
 
 test('displayUrl drops https://, www. and a lone trailing slash', () => {
 	assert.equal(displayUrl('https://www.icloud.com/mail'), 'icloud.com/mail');

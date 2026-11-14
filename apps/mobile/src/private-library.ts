@@ -7,13 +7,16 @@ change, so it cannot alter or re-encrypt what the extension keeps there.
 */
 import {randomUUID} from 'expo-crypto';
 import {useSyncExternalStore} from 'react';
-import {isSealed, type SealedValue} from '../../extension/src/app/private-lock';
+import {
+	isSealed,
+	type SealedValue,
+} from '../../extension/src/shared/private-lock';
 import {
 	NEEDS_KEY_MESSAGE,
 	parsePrivateSyncKey,
 	parseServerKey,
 	type PrivateSyncKey,
-} from '../../extension/src/app/private-sync';
+} from '../../extension/src/shared/private-sync';
 import {isRecord} from '../../extension/src/shared/library-values';
 import {recordKey} from '../../extension/src/shared/sync/changes';
 import {

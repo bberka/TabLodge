@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {fold, scoreFolded, scoreQuery, searchTerms} from '../src/app/fuzzy';
+import {fold, scoreFolded, scoreQuery, searchTerms} from '../src/shared/fuzzy';
 import {buildFinderIndex, searchFinder} from '../src/app/global-search';
 
 const folded = (...texts: string[]) => texts.map((text) => fold(text));

@@ -1,5 +1,5 @@
 import {Fragment} from 'react';
-import {highlightSegments} from './fuzzy';
+import {highlightSegments} from '../shared/fuzzy';
 
 // A subtle <mark> around the parts of `text` that match the search query; the text itself never changes, so nothing shifts.
 export function Highlight({text, query}: {text: string; query: string}) {

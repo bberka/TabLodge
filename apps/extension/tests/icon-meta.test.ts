@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {ICON_IDS} from '../src/app/icon-ids';
-import {ICON_INFOS, searchIconInfos} from '../src/app/icon-meta';
+import {ICON_IDS} from '../src/shared/icon-ids';
+import {ICON_INFOS, searchIconInfos} from '../src/shared/icon-meta';
 
 describe('icon search data', () => {
 	test('every icon has a name and the search finds it by topic or a typo', () => {

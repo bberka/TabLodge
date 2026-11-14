@@ -12,6 +12,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '../shared/ui';
+import {displayUrl} from '../shared/url-display';
+import type {Session} from '../shared/types';
 import {plural} from './common';
 import {
 	estimateTabMemoryMb,
@@ -20,8 +22,6 @@ import {
 	memoryEstimateText,
 	savedStats,
 } from './tab-stats';
-import {displayUrl} from './url-display';
-import type {Session} from './types';
 
 const OLDEST_SHOWN = 10;
 

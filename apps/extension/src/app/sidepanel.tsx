@@ -44,6 +44,12 @@ import {
 import '../../styles/extension-app.css';
 import {ThemeProvider} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
+import type {
+	Bookmark as SavedBookmark,
+	Session,
+	Settings,
+} from '../shared/types';
+import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {inPrivateWindow} from './private-config';
 import {
 	Brand,
@@ -71,11 +77,9 @@ import {
 	useDuplicateTabCount,
 } from './duplicate-tabs-action';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
-import type {Bookmark as SavedBookmark, Session, Settings} from './types';
 import {PROJECT} from './project';
 import {archivedFolderId} from './session-folders';
 import {siteName, webUrl} from './web-url';
-import {stripTrackingParameters} from './tracking-parameters';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {PrivateLockGate} from './private-lock-ui';

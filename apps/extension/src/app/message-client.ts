@@ -2,7 +2,7 @@ import type {
 	ActionResult,
 	TabLodgeMessages,
 	TabLodgeMessageType,
-} from './types';
+} from '../shared/types';
 import {PROJECT} from './project';
 
 type OptionalFields<K extends TabLodgeMessageType> =

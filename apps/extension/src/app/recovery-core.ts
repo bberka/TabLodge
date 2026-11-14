@@ -1,8 +1,8 @@
 // Small recovery helpers shared by the pages: formatting, the open-dialog event, and the Undo toasts. The heavy
 // dialogs live in recovery.tsx and are loaded only when opened.
 import {useCallback, useEffect, useState} from 'react';
+import type {ActionSuccess} from '../shared/types';
 import {messageOf, plural, send, type ShowStatus} from './common';
-import type {ActionSuccess} from './types';
 
 /**
 A date and time in the user's locale, such as "Oct 25, 2026, 2:32 PM".

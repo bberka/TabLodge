@@ -31,6 +31,7 @@ import {
 	ScrollArea,
 } from '../shared/ui';
 import {scrollBehavior} from '../shared/motion';
+import type {TabLodgeState} from '../shared/types';
 import {send, useCloseOnEscape, type IconComponent} from './common';
 import {
 	buildFinderIndex,
@@ -51,7 +52,6 @@ import {
 import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
 import {isPinnedLodgeTab, openLink} from './link-target';
-import type {TabLodgeState} from './types';
 import {cn} from '@/lib/utils';
 
 /**

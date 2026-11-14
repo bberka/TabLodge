@@ -36,7 +36,7 @@ import type {
 	Folder,
 	SavedTab,
 	Session,
-} from '../src/app/types';
+} from '../src/shared/types';
 
 const urls = (
 	parsed: ParsedImport,

@@ -1,5 +1,5 @@
 import {Text, View} from 'react-native';
-import type {Session} from '../../../extension/src/app/types';
+import type {Session} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {ColorPicker} from '../color-picker';
 import {setSessionColor} from '../library';

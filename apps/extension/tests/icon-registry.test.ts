@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {ICON_IDS} from '../src/app/icon-ids';
+import {ICON_IDS} from '../src/shared/icon-ids';
 import {
 	DEFAULT_COLUMN_ICON,
 	DEFAULT_FOLDER_ICON,

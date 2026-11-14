@@ -19,9 +19,9 @@ import {
 	Input,
 	Label,
 } from '../shared/ui';
+import type {SaveScope, Settings} from '../shared/types';
 import {send} from './common';
 import {SESSION_NAME_MAX, typedSessionName} from './session-name';
-import type {SaveScope, Settings} from './types';
 
 /**
 The "Name this session" form: one input, Cancel and Save. Used inside the in-page dialog and as the whole page of

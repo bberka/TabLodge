@@ -11,7 +11,7 @@ import type {
 	Session,
 	Settings,
 	TabLodgeMessage,
-} from '../src/app/types';
+} from '../src/shared/types';
 import {logicalState, sortKeysDeep, storeLibrary} from './library-fixtures';
 import {buildWorkerSource} from './worker-source';
 

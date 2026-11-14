@@ -1,7 +1,7 @@
 import {useEffect, useMemo, useState} from 'react';
 import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import type {Bookmark} from '../../../extension/src/app/types';
+import type {Bookmark} from '../../../extension/src/shared/types';
 import {ActionSheet} from '../action-sheet';
 import {useBackAction} from '../back-actions';
 import {useChipLook} from '../column-icons';

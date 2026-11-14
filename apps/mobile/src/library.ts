@@ -8,7 +8,7 @@ import type {
 	Session,
 	Settings,
 	Store,
-} from '../../extension/src/app/types';
+} from '../../extension/src/shared/types';
 import {isColumnColor} from '../../extension/src/shared/accent-colors';
 import type {DeviceStamp} from '../../extension/src/shared/device';
 import {LAYOUT_VERSION} from '../../extension/src/shared/library-index';

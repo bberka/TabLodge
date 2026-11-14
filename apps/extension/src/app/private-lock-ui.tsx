@@ -1,6 +1,6 @@
 // The PIN or password lock of private windows, on the page side: the lock screen that replaces a private page
 // until it is unlocked, the Lock button, and the Settings panel to turn it on, change it, or remove it.
-// All state lives in the worker (see src/app/private-lock.ts); the credential only passes through form state.
+// All state lives in the worker (see src/shared/private-lock.ts); the credential only passes through form state.
 import {
 	useCallback,
 	useEffect,
@@ -11,6 +11,12 @@ import {
 } from 'react';
 import {Lock, LockOpen, ShieldAlert} from 'lucide-react';
 import {Button, IconTooltip} from '../shared/ui';
+import {
+	LOCK_ACTIVITY_KEY,
+	LOCK_RECORD_KEY,
+	LOCK_SESSION_KEY,
+} from '../shared/private-lock';
+import type {PrivateLockInfo} from '../shared/types';
 import {send} from './message-client';
 import {
 	ChangeDialog,
@@ -20,13 +26,7 @@ import {
 } from './private-lock-dialogs';
 import type {ShowStatus} from './common';
 import {PasscodeEntry} from './passcode-fields';
-import {
-	LOCK_ACTIVITY_KEY,
-	LOCK_RECORD_KEY,
-	LOCK_SESSION_KEY,
-} from './private-lock';
 import {PROJECT} from './project';
-import type {PrivateLockInfo} from './types';
 
 const kindWord = (kind: PrivateLockInfo['kind']) =>
 	kind === 'pin' ? 'PIN' : kind === 'password' ? 'password' : 'PIN or password';

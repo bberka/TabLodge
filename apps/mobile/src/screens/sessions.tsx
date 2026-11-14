@@ -10,7 +10,7 @@ import {
 	Text,
 	View,
 } from 'react-native';
-import type {Session} from '../../../extension/src/app/types';
+import type {Session} from '../../../extension/src/shared/types';
 import {columnGlyph, columnTint, useChipLook} from '../column-icons';
 import {
 	ALL_SESSIONS_ID,

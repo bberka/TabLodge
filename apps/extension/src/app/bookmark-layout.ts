@@ -1,4 +1,4 @@
-import type {BookmarkColumnWidth, BookmarkDensity} from './types';
+import type {BookmarkColumnWidth, BookmarkDensity} from '../shared/types';
 
 const MIN_WIDTH_REM: Record<BookmarkColumnWidth, number> = {
 	narrow: 14,

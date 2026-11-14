@@ -1,7 +1,7 @@
-import type {BookmarkClickAction, Settings} from './types';
-import {stripTrackingParameters} from './tracking-parameters';
+import type {BookmarkClickAction, Settings} from '../shared/types';
+import {stripTrackingParameters} from '../shared/tracking-parameters';
 
-export type {LinkClickAction} from './types';
+export type {LinkClickAction} from '../shared/types';
 
 type LinkKind = 'bookmark' | 'session';
 

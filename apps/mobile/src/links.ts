@@ -2,12 +2,12 @@
 How links and titles are cleaned and shown, following the extension settings that sync with the library. Pure, so
 the rules are tested without the app.
 */
-import type {Settings} from '../../extension/src/app/types';
-import {stripTrackingParameters} from '../../extension/src/app/tracking-parameters';
+import type {Settings} from '../../extension/src/shared/types';
+import {stripTrackingParameters} from '../../extension/src/shared/tracking-parameters';
 import {
 	displayUrl,
 	showsInsecureMark,
-} from '../../extension/src/app/url-display';
+} from '../../extension/src/shared/url-display';
 import {hostOf} from './library';
 
 export type LinkSettings = Pick<

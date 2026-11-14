@@ -14,7 +14,7 @@ import type {
 	Session,
 	Settings,
 	Store,
-} from '../../app/types';
+} from '../types';
 import type {TombstoneKind} from '../library-sync';
 import {isRecord} from '../library-values';
 import {recordKey} from './changes';

@@ -86,6 +86,23 @@ import {DropIndicator} from '../components/ui/drop-indicator';
 import {scrollBehavior} from '../shared/motion';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
+import type {
+	BookmarkColumn,
+	Folder,
+	InsertPosition,
+	RestoreMode,
+	RestoreTarget,
+	SavedTab as SavedTabRecord,
+	Session,
+	SessionFields,
+	SessionQuickAction,
+	SessionSort,
+	SessionWindowMode,
+	Settings,
+	TabLodgeState,
+} from '../shared/types';
+import {stripTrackingParameters} from '../shared/tracking-parameters';
+import {displayUrl as simplifiedUrl} from '../shared/url-display';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -111,21 +128,6 @@ import {
 	shouldBlockDocumentDrop,
 	writeClipboard,
 } from './interaction-actions';
-import type {
-	BookmarkColumn,
-	Folder,
-	InsertPosition,
-	RestoreMode,
-	RestoreTarget,
-	SavedTab as SavedTabRecord,
-	Session,
-	SessionFields,
-	SessionQuickAction,
-	SessionSort,
-	SessionWindowMode,
-	Settings,
-	TabLodgeState,
-} from './types';
 import {
 	ARCHIVED_FOLDER_NAME,
 	archivedFolderId,
@@ -135,14 +137,12 @@ import {
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {hostOf, webUrl} from './web-url';
-import {stripTrackingParameters} from './tracking-parameters';
 import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
-import {displayUrl as simplifiedUrl} from './url-display';
 import {InsecureMarkFor} from './insecure-mark';
 import {FINDER_EVENT, type FinderEventDetail} from './finder';
 import {

@@ -2,7 +2,7 @@
 // `domains` entries are a host ("github.com", which also covers its subdomains) or a host with a path prefix
 // ("github.com/bberka"). The longest path wins, then the longest host, then the earlier column.
 
-import type {BookmarkColumn} from './types';
+import type {BookmarkColumn} from '../shared/types';
 
 export function columnForUrl(
 	columns: readonly BookmarkColumn[],

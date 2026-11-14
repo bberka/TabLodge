@@ -1,5 +1,5 @@
-import {ICON_IDS} from '../src/app/icon-ids';
-import {stripTrackingParameters} from '../src/app/tracking-parameters';
+import {ICON_IDS} from '../src/shared/icon-ids';
+import {stripTrackingParameters} from '../src/shared/tracking-parameters';
 import {columnForUrl} from '../src/app/column-sites';
 import {
 	BACKUP_FORMAT_ID,
@@ -27,7 +27,7 @@ import {
 	readStored,
 	sealValue,
 	unwrapDataKey,
-} from '../src/app/private-lock';
+} from '../src/shared/private-lock';
 import {
 	createPrivateCodec,
 	createSyncKey,
@@ -38,7 +38,7 @@ import {
 	rewrapSyncKey,
 	serverKeyText,
 	PRIVATE_SYNC_ASK,
-} from '../src/app/private-sync';
+} from '../src/shared/private-sync';
 import {
 	createLibraryState,
 	isUndoDelta,
@@ -72,41 +72,41 @@ import {
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
 // would leave an `export {}` behind. The value imports above are bundled into the classic script by the
 // build, and by tests/worker-source.ts for the tests.
-type ActionFailure = import('../src/app/types').ActionFailure;
-type LinkPreviewData = import('../src/app/types').LinkPreviewData;
-type TabLodgeMessageType = import('../src/app/types').TabLodgeMessageType;
+type ActionFailure = import('../src/shared/types').ActionFailure;
+type LinkPreviewData = import('../src/shared/types').LinkPreviewData;
+type TabLodgeMessageType = import('../src/shared/types').TabLodgeMessageType;
 type ActionResult<K extends TabLodgeMessageType = TabLodgeMessageType> =
-	import('../src/app/types').ActionResult<K>;
-type Bookmark = import('../src/app/types').Bookmark;
-type BookmarkColumn = import('../src/app/types').BookmarkColumn;
-type BookmarkFields = import('../src/app/types').BookmarkFields;
-type DuplicateMode = import('../src/app/types').DuplicateMode;
-type EraseScope = import('../src/app/types').EraseScope;
-type Folder = import('../src/app/types').Folder;
-type PrivateSyncInfo = import('../src/app/types').PrivateSyncInfo;
-type Credential = import('../src/app/passcode').Credential;
+	import('../src/shared/types').ActionResult<K>;
+type Bookmark = import('../src/shared/types').Bookmark;
+type BookmarkColumn = import('../src/shared/types').BookmarkColumn;
+type BookmarkFields = import('../src/shared/types').BookmarkFields;
+type DuplicateMode = import('../src/shared/types').DuplicateMode;
+type EraseScope = import('../src/shared/types').EraseScope;
+type Folder = import('../src/shared/types').Folder;
+type PrivateSyncInfo = import('../src/shared/types').PrivateSyncInfo;
+type Credential = import('../src/shared/passcode').Credential;
 type SyncStatus = import('../src/shared/sync/client').SyncStatus;
-type ImportOptions = import('../src/app/types').ImportOptions;
-type InsertPosition = import('../src/app/types').InsertPosition;
-type LinkEntry = import('../src/app/types').LinkEntry;
-type NativeGroup = import('../src/app/types').NativeGroup;
-type RestoreFailure = import('../src/app/types').RestoreFailure;
-type RestoreOptions = import('../src/app/types').RestoreOptions;
-type RestoreTarget = import('../src/app/types').RestoreTarget;
-type SavedTab = import('../src/app/types').SavedTab;
-type SaveScope = import('../src/app/types').SaveScope;
-type Session = import('../src/app/types').Session;
-type SessionFields = import('../src/app/types').SessionFields;
-type SessionWindowMode = import('../src/app/types').SessionWindowMode;
-type SplitInfo = import('../src/app/types').SplitInfo;
-type Settings = import('../src/app/types').Settings;
-type Store = import('../src/app/types').Store;
-type TabFields = import('../src/app/types').TabFields;
-type TabGroupColor = import('../src/app/types').TabGroupColor;
-type TabLodgeMessage = import('../src/app/types').TabLodgeMessage;
-type TitlePolicy = import('../src/app/types').TitlePolicy;
-type PrivateConfig = import('../src/app/types').PrivateConfig;
-type PrivateLockInfo = import('../src/app/types').PrivateLockInfo;
+type ImportOptions = import('../src/shared/types').ImportOptions;
+type InsertPosition = import('../src/shared/types').InsertPosition;
+type LinkEntry = import('../src/shared/types').LinkEntry;
+type NativeGroup = import('../src/shared/types').NativeGroup;
+type RestoreFailure = import('../src/shared/types').RestoreFailure;
+type RestoreOptions = import('../src/shared/types').RestoreOptions;
+type RestoreTarget = import('../src/shared/types').RestoreTarget;
+type SavedTab = import('../src/shared/types').SavedTab;
+type SaveScope = import('../src/shared/types').SaveScope;
+type Session = import('../src/shared/types').Session;
+type SessionFields = import('../src/shared/types').SessionFields;
+type SessionWindowMode = import('../src/shared/types').SessionWindowMode;
+type SplitInfo = import('../src/shared/types').SplitInfo;
+type Settings = import('../src/shared/types').Settings;
+type Store = import('../src/shared/types').Store;
+type TabFields = import('../src/shared/types').TabFields;
+type TabGroupColor = import('../src/shared/types').TabGroupColor;
+type TabLodgeMessage = import('../src/shared/types').TabLodgeMessage;
+type TitlePolicy = import('../src/shared/types').TitlePolicy;
+type PrivateConfig = import('../src/shared/types').PrivateConfig;
+type PrivateLockInfo = import('../src/shared/types').PrivateLockInfo;
 
 /**
 Untrusted object (stored state or import file): every field is checked before use.
@@ -303,7 +303,7 @@ async function privateWindowIds() {
 }
 
 /*
-The optional PIN or password lock of the saved separate private library (src/app/private-lock.ts). The lock record
+The optional PIN or password lock of the saved separate private library (src/shared/private-lock.ts). The lock record
 is in local storage, the data key only in session storage. Every read and write of the library passes `rawLibrary`
 below, which seals and opens values there, so nothing above it knows the lock exists.
 
@@ -2252,7 +2252,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 /*
 Private windows with separate saved storage can sync that library too, when turned on from Settings in a private
 window. It goes to the regular sync's server under /private, so it follows the regular connection: no server there
-means no private sync. With a PIN or password, values are encrypted first (src/app/private-sync.ts). Everything
+means no private sync. With a PIN or password, values are encrypted first (src/shared/private-sync.ts). Everything
 private sync keeps on this device, the sync key included, is in the private library's storage, which the lock seals.
 The client exists only while that library can be read: it stops when the library locks or the storage mode changes.
 */
@@ -7349,18 +7349,18 @@ const BULK_DELETE_THRESHOLD = 10;
 const LARGE_IMPORT_THRESHOLD = 50;
 const DAY_MS = 86_400_000;
 
-type SnapshotTab = import('../src/app/types').SnapshotTab;
-type SnapshotGroup = import('../src/app/types').SnapshotGroup;
-type SnapshotWindow = import('../src/app/types').SnapshotWindow;
-type SnapshotReason = import('../src/app/types').SnapshotReason;
-type Snapshot = import('../src/app/types').Snapshot;
-type SnapshotSummary = import('../src/app/types').SnapshotSummary;
-type RecoveryInfo = import('../src/app/types').RecoveryInfo;
-type BackupKind = import('../src/app/types').BackupKind;
-type BackupSummary = import('../src/app/types').BackupSummary;
-type TrashKind = import('../src/app/types').TrashKind;
-type TrashSummary = import('../src/app/types').TrashSummary;
-type StorageUsage = import('../src/app/types').StorageUsage;
+type SnapshotTab = import('../src/shared/types').SnapshotTab;
+type SnapshotGroup = import('../src/shared/types').SnapshotGroup;
+type SnapshotWindow = import('../src/shared/types').SnapshotWindow;
+type SnapshotReason = import('../src/shared/types').SnapshotReason;
+type Snapshot = import('../src/shared/types').Snapshot;
+type SnapshotSummary = import('../src/shared/types').SnapshotSummary;
+type RecoveryInfo = import('../src/shared/types').RecoveryInfo;
+type BackupKind = import('../src/shared/types').BackupKind;
+type BackupSummary = import('../src/shared/types').BackupSummary;
+type TrashKind = import('../src/shared/types').TrashKind;
+type TrashSummary = import('../src/shared/types').TrashSummary;
+type StorageUsage = import('../src/shared/types').StorageUsage;
 
 /**
 A small FIFO runner: each operation starts after the previous one settled, so read-modify-write cycles on one storage key never interleave.

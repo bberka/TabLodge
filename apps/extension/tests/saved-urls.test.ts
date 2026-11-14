@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {savedUrlSet} from '../src/app/saved-urls';
-import type {Bookmark, Session} from '../src/app/types';
+import type {Bookmark, Session} from '../src/shared/types';
 
 test('savedUrlSet collects bookmark and session tab URLs with exact matching', () => {
 	const urls = savedUrlSet(

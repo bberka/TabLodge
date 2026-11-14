@@ -1,7 +1,7 @@
 // The column an Add bookmark dialog starts on: the one that took the newest bookmark, else the first column.
 // It is read from the bookmarks themselves, so there is nothing to store, sync, or clean up when a column is deleted.
 
-import type {Bookmark, BookmarkColumn} from './types';
+import type {Bookmark, BookmarkColumn} from '../shared/types';
 
 export function defaultBookmarkColumnId(
 	columns: readonly BookmarkColumn[],

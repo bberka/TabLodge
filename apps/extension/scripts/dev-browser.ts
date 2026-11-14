@@ -5,7 +5,7 @@ import {
 	createDevFixture,
 	devFixtureUrls,
 	type DevStore,
-} from './dev-fixture.ts';
+} from '../src/shared/dev-fixture.ts';
 import {loadDevFavicons} from './dev-favicon-cache.ts';
 import {stopWatchersWhenBrowserCloses} from './dev-browser-lifecycle.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';

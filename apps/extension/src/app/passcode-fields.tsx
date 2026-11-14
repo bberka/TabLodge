@@ -12,7 +12,7 @@ import {
 	credentialRule,
 	validateCredential,
 	type CredentialKind,
-} from './passcode';
+} from '../shared/passcode';
 
 export type PasscodeDraft = {
 	kind: CredentialKind;

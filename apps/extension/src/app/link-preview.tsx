@@ -8,8 +8,8 @@ import {
 	type ReactNode,
 } from 'react';
 import {createPortal} from 'react-dom';
+import type {LinkPreviewData} from '../shared/types';
 import {send} from './message-client';
-import type {LinkPreviewData} from './types';
 
 const SHOW_AFTER_MS = 600;
 const CARD_WIDTH = 288;

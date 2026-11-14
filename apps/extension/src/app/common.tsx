@@ -15,6 +15,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../shared/ui';
+import type {ActionFailure, ActionResult, TabLodgeState} from '../shared/types';
 import {PrivateWindowMark} from './private-window-appearance';
 import {PrivateLockButton} from './private-lock-ui';
 import {
@@ -24,7 +25,6 @@ import {
 	privateConfigNeedsReload,
 	reloadPrivatePage,
 } from './private-config';
-import type {ActionFailure, ActionResult, TabLodgeState} from './types';
 import {send} from './message-client';
 import {PROJECT} from './project';
 import {hostIsExcluded} from './excluded-sites';

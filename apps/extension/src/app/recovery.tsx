@@ -33,6 +33,14 @@ import {
 	SegmentedControl,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
+import type {
+	ActionSuccess,
+	BackupSummary,
+	SnapshotReason,
+	SnapshotSummary,
+	TrashKind,
+	TrashSummary,
+} from '../shared/types';
 import {inPrivateWindow} from './private-config';
 import {messageOf, plural, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
@@ -45,14 +53,6 @@ import {
 	offerUndo,
 	type TrashFilter,
 } from './recovery-core';
-import type {
-	ActionSuccess,
-	BackupSummary,
-	SnapshotReason,
-	SnapshotSummary,
-	TrashKind,
-	TrashSummary,
-} from './types';
 
 // Short badge text, with the full explanation shown on hover.
 const REASON_LABELS: Record<

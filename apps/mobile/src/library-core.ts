@@ -1,4 +1,4 @@
-import type {Store} from '../../extension/src/app/types';
+import type {Store} from '../../extension/src/shared/types';
 import {emptyStore} from './library';
 import {writeJson} from './storage';
 

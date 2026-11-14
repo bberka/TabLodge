@@ -16,10 +16,10 @@ import {
 	RadioCardGroup,
 } from '../shared/ui';
 import {LoadMore} from '../shared/load-more';
+import type {Bookmark, BookmarkColumn} from '../shared/types';
+import {displayUrl} from '../shared/url-display';
 import {plural, send, type ShowStatus} from './common';
 import {findDuplicateBookmarks, removalIds} from './duplicate-bookmarks';
-import type {Bookmark, BookmarkColumn} from './types';
-import {displayUrl} from './url-display';
 
 const GROUPS_PER_BATCH = 25;
 /**

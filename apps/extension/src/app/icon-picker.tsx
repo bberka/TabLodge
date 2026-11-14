@@ -18,8 +18,8 @@ import {
 	Label,
 	ScrollArea,
 } from '../shared/ui';
+import type {IconId} from '../shared/icon-ids';
 import {getIcon, isIconId, searchIcons} from './icon-registry';
-import type {IconId} from './icon-ids';
 import {cn} from '@/lib/utils';
 
 type IconPickerDialogProps = {

@@ -17,7 +17,7 @@ import type {
 	Settings,
 	TabLodgeMessage,
 	TabLodgeMessageType,
-} from '../src/app/types';
+} from '../src/shared/types';
 import {createApi} from '../../server/src/api';
 import {ChangeLog} from '../src/shared/sync/change-log';
 import {

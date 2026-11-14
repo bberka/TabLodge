@@ -1,6 +1,6 @@
 # Extension (`apps/extension`)
 
-The Chrome, Brave, and Firefox extension (Manifest V3). It also holds the code the other apps share: `src/shared/` (library storage, the sync protocol and client) and the data types in `src/app/types.ts`. A change there can reach the server and the Android app, so read [Cross app work](cross-app.md) before editing it.
+The Chrome, Brave, and Firefox extension (Manifest V3). It also holds the code the other apps share: `src/shared/` (library storage, the sync protocol and client) and the data types. A change there can reach the server and the Android app, so read [Cross app work](cross-app.md) before editing it.
 
 ## Where things are
 

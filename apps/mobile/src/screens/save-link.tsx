@@ -1,7 +1,7 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
-import type {Bookmark} from '../../../extension/src/app/types';
-import {stripTrackingParameters} from '../../../extension/src/app/tracking-parameters';
+import type {Bookmark} from '../../../extension/src/shared/types';
+import {stripTrackingParameters} from '../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../column-choice';
 import {addBookmark, extractUrl, updateBookmark} from '../library';
 import {edit, newId} from '../library-store';

@@ -7,7 +7,12 @@ import {
 	searchFinder,
 	type FinderSources,
 } from '../src/app/global-search';
-import type {Bookmark, BookmarkColumn, Folder, Session} from '../src/app/types';
+import type {
+	Bookmark,
+	BookmarkColumn,
+	Folder,
+	Session,
+} from '../src/shared/types';
 
 const column = (id: string, name: string): BookmarkColumn => ({
 	id,

@@ -13,7 +13,7 @@ import javax.crypto.spec.SecretKeySpec
 
 /**
  * The two operations the private library needs, done natively because 600,000 PBKDF2 rounds are far too slow in
- * JavaScript. The formats follow apps/extension/src/app/crypto-envelope.ts and private-lock.ts.
+ * JavaScript. The formats follow apps/extension/src/shared/crypto-envelope.ts and private-lock.ts.
  */
 class TablodgeCryptoModule : Module() {
   override fun definition() = ModuleDefinition {

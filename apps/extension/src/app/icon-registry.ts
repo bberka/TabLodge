@@ -260,8 +260,8 @@ import {
 	Workflow,
 	type LucideIcon,
 } from 'lucide-react';
-import type {IconId} from './icon-ids';
-import {type IconInfo, ICON_INFOS, searchIconInfos} from './icon-meta';
+import type {IconId} from '../shared/icon-ids';
+import {type IconInfo, ICON_INFOS, searchIconInfos} from '../shared/icon-meta';
 
 export type IconEntry = IconInfo & {component: LucideIcon};
 

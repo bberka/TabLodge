@@ -3,7 +3,7 @@ import {test} from 'vite-plus/test';
 import {createApi} from '../src/api';
 import {isAuthMessage} from '../src/live';
 import {exportLibrary, importLibrary} from '../src/transfer';
-import type {Settings, Store} from '../../extension/src/app/types';
+import type {Settings, Store} from '../../extension/src/shared/types';
 import {ChangeLog} from '../../extension/src/shared/sync/change-log';
 import {
 	createSyncClient,

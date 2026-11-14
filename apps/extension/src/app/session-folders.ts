@@ -1,4 +1,4 @@
-import type {Folder, Session} from './types';
+import type {Folder, Session} from '../shared/types';
 
 export const ARCHIVED_FOLDER_NAME = 'Archived';
 

@@ -1,6 +1,6 @@
 import {LockOpen} from 'lucide-react';
 import {IconTooltip} from '../shared/ui';
-import {showsInsecureMark} from './url-display';
+import {showsInsecureMark} from '../shared/url-display';
 
 const REASON =
 	'Not secure: this page uses http, so what you send or see on it can be read or changed by others on the network. Your browser will also mark it Not secure.';

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {createDevFixture, type DevStore} from '../scripts/dev-fixture.ts';
+import {createDevFixture, type DevStore} from '../src/shared/dev-fixture.ts';
 
 const baseStore = {
 	schemaVersion: 9,

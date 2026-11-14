@@ -3,13 +3,17 @@
 // this module only builds the archive and reads it back, with limits against oversized or damaged files.
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
 import {
+	EnvelopeError,
+	decryptBytes,
+	encryptBytes,
+} from '../shared/crypto-envelope';
+import type {Credential} from '../shared/passcode';
+import {
 	FULL_BACKUP_FORMAT_ID,
 	FULL_BACKUP_VERSION,
 	fileNamePrefix,
 } from './backup-format';
 import {dateStamp} from './export-formats';
-import {EnvelopeError, decryptBytes, encryptBytes} from './crypto-envelope';
-import type {Credential} from './passcode';
 
 /**
 What the worker hands over for a full backup: stored values, as they are in `chrome.storage.local`.

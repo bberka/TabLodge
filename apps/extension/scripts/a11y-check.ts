@@ -22,7 +22,7 @@ import {
 	type Page,
 	type Worker,
 } from 'playwright';
-import {createDevFixture, type DevStore} from './dev-fixture.ts';
+import {createDevFixture, type DevStore} from '../src/shared/dev-fixture.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];

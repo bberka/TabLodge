@@ -4,7 +4,7 @@ A local first tab session and bookmark manager. A pnpm workspace of four apps th
 
 ## Layout
 
-- `apps/extension`: Chrome, Brave, and Firefox extension. Its `src/shared` and `src/app/types.ts` are also imported by the server and the Android app
+- `apps/extension`: Chrome, Brave, and Firefox extension. Its `src/shared` and `src/shared/types.ts` are also imported by the server and the Android app
 - `apps/server`: Self hosted sync server (Docker or Cloudflare)
 - `apps/mobile`: Android app (Expo, React Native)
 - `apps/site`: Website, tablodge.bbay.dev (Astro)

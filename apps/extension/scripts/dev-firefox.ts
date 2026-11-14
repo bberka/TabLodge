@@ -6,7 +6,7 @@
 // process, to close Firefox and the build watchers.
 import {mkdir} from 'node:fs/promises';
 import process from 'node:process';
-import {createDevFixture, type DevStore} from './dev-fixture.ts';
+import {createDevFixture, type DevStore} from '../src/shared/dev-fixture.ts';
 import {
 	evaluateInPage,
 	launchFirefox,

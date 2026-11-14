@@ -9,7 +9,7 @@ import {
 	omniboxSuggestions,
 	type OmniboxSources,
 } from '../src/app/omnibox';
-import type {Bookmark, BookmarkColumn, Session} from '../src/app/types';
+import type {Bookmark, BookmarkColumn, Session} from '../src/shared/types';
 
 const column: BookmarkColumn = {
 	id: 'c1',

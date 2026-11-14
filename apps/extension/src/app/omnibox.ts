@@ -1,8 +1,8 @@
 // Address bar search ("tl <query>"): turns the finder's ranking (global-search.ts) into omnibox suggestions
 // and maps an entered suggestion back to the item it stands for. Pure, so the service worker only has to
 // gather the data and open the result.
+import {highlightSegments} from '../shared/fuzzy';
 import {escapeHtml} from './escape-html';
-import {highlightSegments} from './fuzzy';
 import {
 	buildFinderIndex,
 	flattenSections,

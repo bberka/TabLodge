@@ -7,7 +7,7 @@ import {
 	PIN_MIN_LENGTH,
 	validateCredential,
 	clampCredentialInput,
-} from '../src/app/passcode';
+} from '../src/shared/passcode';
 
 test('the limits are the documented ones', () => {
 	assert.equal(PIN_MIN_LENGTH, 4);

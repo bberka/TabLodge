@@ -6,7 +6,7 @@ import {
 	decryptBytes,
 	encryptBytes,
 	looksEncrypted,
-} from '../src/app/crypto-envelope';
+} from '../src/shared/crypto-envelope';
 
 const plain = new TextEncoder().encode(
 	'{"secret":"https://example.com/private"}',

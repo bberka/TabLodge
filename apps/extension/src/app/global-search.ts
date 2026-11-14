@@ -1,7 +1,7 @@
 // Pure logic for the global finder (command palette): builds a flat index of everything searchable, ranks it
 // with the shared fuzzy scorer, groups the hits by type, and recognizes typed web addresses.
-import {fold, scoreFolded, searchTerms} from './fuzzy';
-import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
+import {fold, scoreFolded, searchTerms} from '../shared/fuzzy';
+import type {Bookmark, BookmarkColumn, Folder, Session} from '../shared/types';
 import {archivedFolderId} from './session-folders';
 import {siteName} from './web-url';
 

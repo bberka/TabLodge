@@ -7,7 +7,7 @@ import {
 	rankByQuery,
 	scoreQuery,
 	searchTerms,
-} from '../src/app/fuzzy';
+} from '../src/shared/fuzzy';
 import {paletteWindowId, withSearchParam} from '../src/app/page-params';
 
 test('a blank query matches everything and every word must match', () => {

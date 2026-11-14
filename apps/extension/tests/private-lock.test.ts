@@ -20,7 +20,7 @@ import {
 	wrapDataKey,
 	type LockEnv,
 	type LockRecord,
-} from '../src/app/private-lock';
+} from '../src/shared/private-lock';
 
 const PREFIX = 'tablodge.private.';
 const CONFIG_KEY = `${PREFIX}config`;

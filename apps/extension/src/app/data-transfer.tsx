@@ -53,6 +53,13 @@ import {
 	useRetainedValue,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
+import type {
+	DuplicateMode,
+	ImportOptions,
+	TabLodgeState,
+	TitlePolicy,
+} from '../shared/types';
+import {looksEncrypted} from '../shared/crypto-envelope';
 import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
@@ -90,12 +97,6 @@ import {
 	type ImportKind,
 	type ParsedImport,
 } from './import-formats';
-import type {
-	DuplicateMode,
-	ImportOptions,
-	TabLodgeState,
-	TitlePolicy,
-} from './types';
 import {PROJECT} from './project';
 import {fileNamePrefix} from './backup-format';
 import {
@@ -109,7 +110,6 @@ import {
 	readProtectedFullBackup,
 	type FullBackupContents,
 } from './full-backup';
-import {looksEncrypted} from './crypto-envelope';
 import {
 	EMPTY_PASSCODE_DRAFT,
 	PasscodeEntry,

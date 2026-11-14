@@ -1,6 +1,6 @@
 import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import type {Bookmark} from '../../../extension/src/app/types';
+import type {Bookmark} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {useChipLook} from '../column-icons';
 import {hostOf} from '../library';

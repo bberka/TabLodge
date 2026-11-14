@@ -55,6 +55,7 @@ import {
 	openSidePanel as openPanel,
 } from '../shared/browser';
 import {ThemeProvider} from '../shared/theme';
+import type {ActionResult, SaveScope, Session} from '../shared/types';
 import {PrivateWindowMark} from './private-window-appearance';
 import {
 	LoadingLine,
@@ -72,7 +73,6 @@ import {
 	duplicatesNote,
 	plural,
 } from './common';
-import type {ActionResult, SaveScope, Session} from './types';
 import {archivedFolderId} from './session-folders';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';

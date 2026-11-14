@@ -7,7 +7,7 @@ A round: stamp local edits, pull and apply the server's changes page by page, th
 read and write happens inside the worker's mutation queue (`host.mutate`); the network calls happen between them,
 so a slow server never holds up the app. Rounds never overlap: a request during a round runs one more after it.
 */
-import type {Store} from '../../app/types';
+import type {Store} from '../types';
 import {isRecord} from '../library-values';
 import {PROTOCOL_VERSION, type PushResult} from './change-log';
 import {parseChange, recordKey, type SyncChange} from './changes';

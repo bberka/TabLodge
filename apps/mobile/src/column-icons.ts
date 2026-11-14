@@ -4,7 +4,7 @@ import {
 	columnColorShades,
 	rgbToHex,
 } from '../../extension/src/shared/accent-colors';
-import {ICON_IDS, type IconId} from '../../extension/src/app/icon-ids';
+import {ICON_IDS, type IconId} from '../../extension/src/shared/icon-ids';
 import {avatarColor} from './theme';
 import type {IconName} from './ui';
 

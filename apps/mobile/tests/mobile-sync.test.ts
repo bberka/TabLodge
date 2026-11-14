@@ -7,7 +7,7 @@ import {
 	emptyStore,
 	removeBookmarks,
 } from '../src/library';
-import type {Session, Store} from '../../extension/src/app/types';
+import type {Session, Store} from '../../extension/src/shared/types';
 import {ChangeLog} from '../../extension/src/shared/sync/change-log';
 import {
 	createSyncClient,

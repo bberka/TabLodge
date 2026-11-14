@@ -13,7 +13,7 @@ import {
 	readProtectedFullBackup,
 	type FullBackupParts,
 } from '../src/app/full-backup';
-import {looksEncrypted} from '../src/app/crypto-envelope';
+import {looksEncrypted} from '../src/shared/crypto-envelope';
 
 const parts: FullBackupParts = {
 	state: {

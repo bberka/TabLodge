@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {stripTrackingParameters} from '../src/app/tracking-parameters';
+import {stripTrackingParameters} from '../src/shared/tracking-parameters';
 
 test('removes common tracking parameters while keeping useful query values and fragments', () => {
 	assert.equal(

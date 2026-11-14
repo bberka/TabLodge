@@ -80,6 +80,17 @@ import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
+import {displayUrl} from '../shared/url-display';
+import {stripTrackingParameters} from '../shared/tracking-parameters';
+import type {
+	Bookmark,
+	BookmarkBoardView,
+	BookmarkColumn as BookmarkColumnData,
+	InsertPosition,
+	LinkEntry,
+	Settings,
+	BookmarkQuickAction,
+} from '../shared/types';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {AccentPalette} from './accent-palette';
@@ -134,10 +145,8 @@ import {archivedFolderId} from './session-folders';
 import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
-import {displayUrl} from './url-display';
 import {bookmarkGridTemplate} from './bookmark-layout';
 import {siteName, webUrl} from './web-url';
-import {stripTrackingParameters} from './tracking-parameters';
 import {InsecureMarkFor} from './insecure-mark';
 import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
@@ -156,15 +165,6 @@ import {
 	parseSessionDragData,
 	shouldBlockDocumentDrop,
 } from './interaction-actions';
-import type {
-	Bookmark,
-	BookmarkBoardView,
-	BookmarkColumn as BookmarkColumnData,
-	InsertPosition,
-	LinkEntry,
-	Settings,
-	BookmarkQuickAction,
-} from './types';
 import {ColumnSelect} from './column-select';
 import {defaultBookmarkColumnId} from './default-column';
 import {

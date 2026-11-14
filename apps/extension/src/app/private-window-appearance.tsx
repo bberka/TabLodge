@@ -1,7 +1,7 @@
 import {useEffect, useState, type ReactNode} from 'react';
+import type {PrivateStorageMode} from '../shared/types';
 import {PRIVATE_CONFIG_KEY} from './private-config';
 import {send} from './message-client';
-import type {PrivateStorageMode} from './types';
 
 const PRIVATE_WINDOW_MODE_SUMMARY: Record<PrivateStorageMode, string> = {
 	shared: 'Same library as regular windows',

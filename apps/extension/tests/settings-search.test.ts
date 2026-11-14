@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {rankByQuery, sortByQuery} from '../src/app/fuzzy';
+import {rankByQuery, sortByQuery} from '../src/shared/fuzzy';
 
 // Rows as Settings searches them: label, help, then option labels.
 type Row = [label: string, help: string, ...options: string[]];

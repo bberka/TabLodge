@@ -1,5 +1,5 @@
 import {StyleSheet, Text, View} from 'react-native';
-import type {Bookmark} from '../../../extension/src/app/types';
+import type {Bookmark} from '../../../extension/src/shared/types';
 import {hostOf} from '../library';
 import {SiteIcon} from '../site-icon';
 import {TARGET, useColors} from '../theme';

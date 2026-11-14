@@ -1,7 +1,7 @@
 // Shared TabLodge data model and message protocol, used by the service worker
 // (shell/service-worker.ts) and the extension pages in src/app.
 // Only types live here so the classic service-worker bundle stays import-free.
-import type {SyncStatus} from '../shared/sync/client';
+import type {SyncStatus} from './sync/client';
 
 export type ActionMode =
 	| 'popup'
@@ -30,7 +30,7 @@ export type PrivateConfig = {
 	accent: string;
 };
 /**
-Where the optional PIN or password lock of the saved separate private library stands (see src/app/private-lock.ts).
+Where the optional PIN or password lock of the saved separate private library stands (see src/shared/private-lock.ts).
 `state` is `encrypting` or `decrypting` while a pass is unfinished; it finishes after the next unlock.
 `available`: this worker's private library can be locked (separate saved storage, set up). `manageHere`: false in regular windows, which only show the status.
 `expiresAt`: when the idle timeout locks the library, or null.

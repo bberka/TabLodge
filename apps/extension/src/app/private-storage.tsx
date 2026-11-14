@@ -14,9 +14,9 @@ import {
 	Switch,
 } from '../shared/ui';
 import {useTheme} from '../shared/theme';
+import type {PrivateConfig, PrivateStorageMode} from '../shared/types';
 import {messageOf, send, type ShowStatus} from './common';
 import {AccentPalette} from './accent-palette';
-import type {PrivateConfig, PrivateStorageMode} from './types';
 import {PROJECT} from './project';
 import {
 	modeLockedReason,

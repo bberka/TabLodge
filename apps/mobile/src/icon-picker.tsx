@@ -1,6 +1,6 @@
 import {memo, useMemo, useState} from 'react';
 import {FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
-import {searchIconInfos} from '../../extension/src/app/icon-meta';
+import {searchIconInfos} from '../../extension/src/shared/icon-meta';
 import {BottomSheet} from './bottom-sheet';
 import {columnGlyph} from './column-icons';
 import {TARGET, useColors} from './theme';

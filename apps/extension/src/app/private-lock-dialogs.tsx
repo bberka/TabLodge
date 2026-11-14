@@ -16,6 +16,11 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '../shared/ui';
+import {
+	DEFAULT_IDLE_MINUTES,
+	IDLE_MINUTE_CHOICES,
+} from '../shared/private-lock';
+import type {PrivateLockInfo} from '../shared/types';
 import {send} from './message-client';
 import {
 	EMPTY_PASSCODE_DRAFT,
@@ -24,8 +29,6 @@ import {
 	passcodeDraftProblem,
 	type PasscodeDraft,
 } from './passcode-fields';
-import {DEFAULT_IDLE_MINUTES, IDLE_MINUTE_CHOICES} from './private-lock';
-import type {PrivateLockInfo} from './types';
 
 const IDLE_LABELS: Record<number, string> = {
 	0: 'Never, until private windows close',
