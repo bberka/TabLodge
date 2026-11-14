@@ -22,7 +22,6 @@ export function PrivateCard() {
 					: 'Read the private windows’ library from your server.'
 			}
 		>
-			<PrivateSwitch button />
 			<Toggle
 				row={ROWS.showPrivateButton}
 				value={prefs.showPrivateButton}
@@ -38,6 +37,7 @@ export function PrivateCard() {
 					onPress={askToLock}
 				/>
 			)}
+			<PrivateSwitch button />
 		</SettingsCard>
 	);
 }
