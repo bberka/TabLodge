@@ -12,6 +12,7 @@ import {
 	columnViews,
 	moveBookmarks,
 	removeBookmarks,
+	removedBookmarks,
 	restoreBookmarks,
 	searchBookmarks,
 } from '../library';
@@ -127,7 +128,7 @@ export function BookmarksScreen({
 	const allSelected = shown.length > 0 && selection.ids.size === shown.length;
 
 	const remove = (ids: ReadonlySet<string>) => {
-		const gone = store.bookmarks.filter((bookmark) => ids.has(bookmark.id));
+		const gone = removedBookmarks(store, ids);
 		if (gone.length === 0) {
 			return;
 		}

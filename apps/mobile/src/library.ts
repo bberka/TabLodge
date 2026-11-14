@@ -278,29 +278,75 @@ export function moveBookmarks(
 }
 
 /**
-Puts bookmarks back after an undo. They get new ids, because the server may already have recorded the delete of
-the old ones and refuses to bring a deleted id back.
+A bookmark about to be removed, with where it sat: `after` is the bookmark before it in the same column that stays,
+or null when it was first there.
+*/
+export type RemovedBookmark = {bookmark: Bookmark; after: string | null};
+
+/**
+The bookmarks of `ids`, each with its place, so an undo can put them back where they were.
+*/
+export function removedBookmarks(
+	store: Store,
+	ids: ReadonlySet<string>,
+): RemovedBookmark[] {
+	const removed: RemovedBookmark[] = [];
+	const lastKept = new Map<string, string>();
+	for (const bookmark of store.bookmarks) {
+		if (ids.has(bookmark.id)) {
+			removed.push({
+				bookmark,
+				after: lastKept.get(bookmark.columnId) ?? null,
+			});
+		} else {
+			lastKept.set(bookmark.columnId, bookmark.id);
+		}
+	}
+
+	return removed;
+}
+
+/**
+Puts bookmarks back after an undo, where they were in their column, as the extension's undo does. They get new ids,
+because the server may already have recorded the delete of the old ones and refuses to bring a deleted id back. A
+bookmark whose column is gone goes to the first column, at its start.
 */
 export function restoreBookmarks(
 	store: Store,
-	removed: Bookmark[],
+	removed: readonly RemovedBookmark[],
 	newIds: string[],
 	now: number,
 ): Store {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
-	const restored = removed.map((bookmark, index) => ({
-		...bookmark,
-		id: newIds[index],
-		columnId: known.has(bookmark.columnId)
-			? bookmark.columnId
-			: (store.bookmarkColumns[0]?.id ?? bookmark.columnId),
-		updatedAt: now,
-	}));
-	return {
-		...store,
-		bookmarks: [...restored, ...store.bookmarks],
-		updatedAt: now,
-	};
+	const bookmarks = [...store.bookmarks];
+	// The last bookmark restored behind each anchor, so neighbours removed together come back in their old order.
+	const lastBehind = new Map<string, string>();
+	for (const [index, {bookmark, after}] of removed.entries()) {
+		const moved = !known.has(bookmark.columnId);
+		const columnId = moved
+			? (store.bookmarkColumns[0]?.id ?? bookmark.columnId)
+			: bookmark.columnId;
+		const restored = {...bookmark, id: newIds[index], columnId, updatedAt: now};
+		const key = `${columnId}\n${moved ? '' : (after ?? '')}`;
+		const behind = lastBehind.get(key) ?? (moved ? null : after);
+		const anchor = behind
+			? bookmarks.findIndex((entry) => entry.id === behind)
+			: -1;
+		const firstInColumn = bookmarks.findIndex(
+			(entry) => entry.columnId === columnId,
+		);
+		let at = bookmarks.length;
+		if (anchor !== -1) {
+			at = anchor + 1;
+		} else if (firstInColumn !== -1) {
+			at = firstInColumn;
+		}
+
+		bookmarks.splice(at, 0, restored);
+		lastBehind.set(key, restored.id);
+	}
+
+	return {...store, bookmarks, updatedAt: now};
 }
 
 /**
