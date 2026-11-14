@@ -10,6 +10,10 @@ export const ROWS = {
 		label: 'Floating tab bar',
 		hint: 'A rounded bar above the content',
 	},
+	barSize: {
+		label: 'Floating bar size',
+		hint: 'Full, small while scrolling, or always small',
+	},
 	syncSettings: {
 		label: 'Sync settings',
 		hint: 'Look and gestures follow your other devices',
@@ -36,7 +40,7 @@ export const ROWS = {
 		hint: 'Show all tabs without opening a card',
 	},
 	showPrivateButton: {
-		label: 'Lock button on the main screens',
+		label: 'Private library button',
 		hint: 'Off keeps a private library out of sight',
 	},
 	sessionTap: {label: 'Tap a session'},
@@ -102,7 +106,7 @@ export const SECTIONS = {
 			'light',
 			'night',
 		],
-		rows: [ROWS.style, ROWS.theme, ROWS.accent, ROWS.floatingBar],
+		rows: [ROWS.style, ROWS.theme, ROWS.accent, ROWS.floatingBar, ROWS.barSize],
 	},
 	syncApp: {
 		title: 'Sync settings',
@@ -181,6 +185,9 @@ export const SECTIONS = {
 			'password',
 			'forget',
 			'lock',
+			'lock now',
+			'eye',
+			'glasses',
 		],
 		rows: [ROWS.showPrivateButton],
 	},

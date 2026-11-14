@@ -86,7 +86,6 @@ export function BookmarkRow({
 								{name: 'delete', label: 'Delete'},
 							]
 				}
-				android_ripple={shape.ios ? undefined : {color: colors.pressed}}
 				style={({pressed}) => [
 					styles.row,
 					settings.bookmarkDensity === 'compact' && styles.compact,
@@ -374,7 +373,6 @@ export function AddButton({
 		<Pressable
 			accessibilityRole="button"
 			accessibilityLabel="Add link"
-			android_ripple={{color: '#ffffff33'}}
 			style={({pressed}) => [
 				styles.fab,
 				{
@@ -409,7 +407,6 @@ export function MenuButton({
 		<Pressable
 			accessibilityRole="button"
 			accessibilityLabel="More actions"
-			android_ripple={{color: colors.pressed}}
 			style={({pressed}) => [
 				styles.menuButton,
 				{

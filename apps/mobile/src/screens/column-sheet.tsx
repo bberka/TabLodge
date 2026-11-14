@@ -1,16 +1,10 @@
 import {useState} from 'react';
-import {
-	Alert,
-	type AlertButton,
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-} from 'react-native';
+import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {columnNameProblem} from '../../../extension/src/shared/bookmark-rules';
 import {BottomSheet} from '../bottom-sheet';
 import {ColorPicker} from '../color-picker';
 import {columnGlyph} from '../column-icons';
+import {type DialogAction, showDialog} from '../dialog';
 import {IconPicker} from '../icon-picker';
 import {addColumn, deleteColumn, updateColumn} from '../library';
 import {edit, newId, useRegularLibrary} from '../library-store';
@@ -87,29 +81,29 @@ function ColumnForm({
 		};
 
 		const noun = count === 1 ? 'bookmark' : 'bookmarks';
-		const buttons: AlertButton[] = [{text: 'Cancel', style: 'cancel'}];
+		const buttons: DialogAction[] = [{label: 'Cancel', kind: 'cancel'}];
 		if (count > 0 && target) {
 			buttons.push({
-				text: `Move ${count} to ${target.name}`,
-				onPress: () => void finish(target.id),
+				label: `Move ${count} to ${target.name}`,
+				run: () => void finish(target.id),
 			});
 		}
 
 		if (count > 0 && !target) {
 			// The only column: its bookmarks have nowhere to go but the Unfiled bucket.
 			buttons.push({
-				text: `Keep ${count} unfiled`,
-				onPress: () => void finish(''),
+				label: `Keep ${count} unfiled`,
+				run: () => void finish(''),
 			});
 		}
 
 		buttons.push({
-			text: count === 0 ? 'Delete' : `Delete ${count} ${noun}`,
-			style: 'destructive',
-			onPress: () => void finish(null),
+			label: count === 0 ? 'Delete' : `Delete ${count} ${noun}`,
+			kind: 'destructive',
+			run: () => void finish(null),
 		});
 
-		Alert.alert(
+		showDialog(
 			`Delete ${column.name}?`,
 			count === 0
 				? 'The column is empty.'

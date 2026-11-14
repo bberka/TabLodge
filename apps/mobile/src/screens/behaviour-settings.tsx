@@ -33,18 +33,6 @@ function useSessionActionChoices() {
 	});
 }
 
-function Heading({children}: {children: string}) {
-	const colors = useColors();
-	return (
-		<Text
-			accessibilityRole="header"
-			style={[styles.heading, {color: colors.text}]}
-		>
-			{children}
-		</Text>
-	);
-}
-
 export function Toggle({
 	row: {label, hint},
 	value,
@@ -99,8 +87,11 @@ export function BookmarkBehaviourCard() {
 	const settings = useLinkSettings(true);
 	const actions = useActionChoices();
 	return (
-		<SettingsCard section={SECTIONS.bookmarks}>
-			<Heading>Bookmarks</Heading>
+		<SettingsCard
+			section={SECTIONS.bookmarks}
+			icon="bookmark-outline"
+			description="How taps, swipes, and the list behave."
+		>
 			<SelectRow
 				row={ROWS.tap}
 				value={prefs.tapAction}
@@ -175,8 +166,11 @@ export function SessionSettingsCard() {
 	const settings = useLinkSettings(true);
 	const sessionActions = useSessionActionChoices();
 	return (
-		<SettingsCard section={SECTIONS.sessions}>
-			<Heading>Sessions</Heading>
+		<SettingsCard
+			section={SECTIONS.sessions}
+			icon="albums-outline"
+			description="How saved sessions look and act."
+		>
 			<SelectRow
 				row={ROWS.sortSessions}
 				value={settings.sessionSort}
@@ -257,8 +251,11 @@ The extension settings that follow you between devices, so changing one here cha
 export function SyncedSettingsCard() {
 	const settings = useLinkSettings(true);
 	return (
-		<SettingsCard section={SECTIONS.extension}>
-			<Heading>Links and titles</Heading>
+		<SettingsCard
+			section={SECTIONS.extension}
+			icon="link-outline"
+			description="Shared with the extension, so a change here reaches your browser."
+		>
 			<Toggle
 				row={ROWS.cleanTitles}
 				value={settings.cleanTitles}

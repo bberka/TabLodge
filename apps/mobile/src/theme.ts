@@ -29,7 +29,7 @@ const darkMaterial: typeof light = {
 	accent: '#a99fff',
 	accentSoft: '#2f2b52',
 	onAccent: '#16151b',
-	danger: '#f2b8b5',
+	danger: '#e5484d',
 	ok: '#7fd9a0',
 	warn: '#f0c36d',
 };
@@ -158,6 +158,27 @@ export function soften(color: string): string {
 	return color.startsWith('#')
 		? `${color}26`
 		: color.replace(/^hsl\((\d+) (\d+)% (\d+)%\)$/, 'hsla($1, $2%, $3%, 0.18)');
+}
+
+/**
+White or near black text, whichever reads better on a solid `color` (`#rrggbb` or `hsl(h s% l%)`).
+*/
+export function readableOn(color: string): string {
+	const hsl = /^hsl\(\d+ \d+% (\d+)%\)$/.exec(color);
+	const bright = hsl
+		? Number(hsl[1]) > 60
+		: color.startsWith('#') && luminance(color) > 0.4;
+	return bright ? '#1b1b1f' : '#ffffff';
+}
+
+function luminance(hex: string): number {
+	const [r, g, b] = [1, 3, 5].map((at) => {
+		const channel = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+		return channel <= 0.03928
+			? channel / 12.92
+			: ((channel + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 export const BAR_HEIGHT = 64;

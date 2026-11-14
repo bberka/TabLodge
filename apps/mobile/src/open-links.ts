@@ -1,5 +1,6 @@
-import {Alert, Linking} from 'react-native';
+import {Linking} from 'react-native';
 import {openLinksTogether} from '../modules/open-links';
+import {confirm} from './dialog';
 
 const DELAY_MS = 350;
 const ASK_ABOVE = 3;
@@ -45,17 +46,12 @@ export function openAll(urls: string[], from: string): void {
 		return;
 	}
 
-	Alert.alert(
+	confirm(
 		`Open ${urls.length} links?`,
 		`${from} will open in your browser.`,
-		[
-			{text: 'Cancel', style: 'cancel'},
-			{
-				text: 'Open all',
-				onPress() {
-					void openLinks(urls);
-				},
-			},
-		],
+		{label: 'Open all'},
+		() => {
+			void openLinks(urls);
+		},
 	);
 }

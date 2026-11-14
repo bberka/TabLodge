@@ -10,6 +10,7 @@ import {
 	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {motion, spring} from './motion';
 import {useColors, useShape} from './theme';
 
 const CLOSE_DRAG = 80;
@@ -109,13 +110,13 @@ function Sheet({
 			Animated.parallel([
 				Animated.timing(slide, {
 					toValue: 0,
-					duration: 260,
+					duration: motion(260),
 					easing: Easing.out(Easing.cubic),
 					useNativeDriver: true,
 				}),
 				Animated.timing(scrim, {
 					toValue: 1,
-					duration: 260,
+					duration: motion(260),
 					useNativeDriver: true,
 				}),
 			]).start();
@@ -126,13 +127,13 @@ function Sheet({
 		Animated.parallel([
 			Animated.timing(slide, {
 				toValue: height,
-				duration: 200,
+				duration: motion(200),
 				easing: Easing.in(Easing.cubic),
 				useNativeDriver: true,
 			}),
 			Animated.timing(scrim, {
 				toValue: 0,
-				duration: 200,
+				duration: motion(200),
 				useNativeDriver: true,
 			}),
 		]).start(({finished}) => {
@@ -154,14 +155,14 @@ function Sheet({
 		const show = Keyboard.addListener('keyboardDidShow', (event) => {
 			Animated.timing(lift, {
 				toValue: event.endCoordinates.height,
-				duration: 180,
+				duration: motion(180),
 				useNativeDriver: true,
 			}).start();
 		});
 		const hide = Keyboard.addListener('keyboardDidHide', () => {
 			Animated.timing(lift, {
 				toValue: 0,
-				duration: 180,
+				duration: motion(180),
 				useNativeDriver: true,
 			}).start();
 		});
@@ -181,10 +182,7 @@ function Sheet({
 				if (gesture.dy > CLOSE_DRAG || gesture.vy > CLOSE_VELOCITY) {
 					closeRef.current();
 				} else {
-					Animated.spring(slide, {
-						toValue: 0,
-						useNativeDriver: true,
-					}).start();
+					spring(slide, 0).start();
 				}
 			},
 		}),

@@ -26,7 +26,13 @@ import {
 	sessionLinks,
 	sessionsIn,
 } from '../library';
-import {edit, useLibrary} from '../library-store';
+import {
+	edit,
+	refreshStatus,
+	syncClient,
+	useLibrary,
+	useSyncStatus,
+} from '../library-store';
 import {ActionSheet, type SheetAction} from '../action-sheet';
 import {showSnack} from '../snackbar';
 import {sessionActionLook} from '../row-actions';
@@ -38,6 +44,7 @@ import {PrivateSwitch} from '../private-switch';
 import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
+import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
 import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
@@ -162,8 +169,10 @@ function SessionCardView({
 						accessibilityRole="button"
 						accessibilityState={{expanded}}
 						accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
-						android_ripple={{color: colors.pressed}}
-						style={styles.headMain}
+						style={({pressed}) => [
+							styles.headMain,
+							pressed && {backgroundColor: colors.pressed},
+						]}
 						accessibilityActions={SESSION_MENU.map(([name, label]) => ({
 							name,
 							label,
@@ -224,8 +233,11 @@ function SessionCardView({
 									? `Hide tabs in ${session.name}`
 									: `Show tabs in ${session.name}`
 							}
-							android_ripple={{color: colors.pressed, radius: 22}}
-							style={[styles.round, styles.roundEnd]}
+							style={({pressed}) => [
+								styles.round,
+								styles.roundEnd,
+								pressed && {backgroundColor: colors.pressed},
+							]}
 							onPress={() => {
 								onToggle(session.id);
 							}}
@@ -247,7 +259,6 @@ function SessionCardView({
 									accessibilityRole="link"
 									accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
 									accessibilityHint="Opens the link"
-									android_ripple={{color: colors.pressed}}
 									style={({pressed}) => [
 										styles.tab,
 										compact && styles.tabCompact,
@@ -310,8 +321,10 @@ function SessionCardView({
 							<Pressable
 								accessibilityRole="button"
 								accessibilityLabel={`More actions for ${session.name}`}
-								android_ripple={{color: colors.pressed, radius: 22}}
-								style={styles.round}
+								style={({pressed}) => [
+									styles.round,
+									pressed && {backgroundColor: colors.pressed},
+								]}
 								onPress={() => {
 									onMenu(session);
 								}}
@@ -339,6 +352,8 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const store = useLibrary();
 	const links = useLinkSettings();
 	const view = useView();
+	const {connected} = useSyncStatus();
+	const [syncing, setSyncing] = useState(false);
 	const chipLook = useChipLook();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	const [query, setQuery] = useState('');
@@ -553,16 +568,36 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 					icon="albums-outline"
 					title="No sessions yet"
 					action={
-						<Button
-							label="Connect to your server"
-							icon="sync-outline"
-							onPress={onConnect}
-						/>
+						view === 'private' ? undefined : connected ? (
+							<Button
+								label="Sync now"
+								icon="sync-outline"
+								loading={syncing}
+								onPress={() => {
+									setSyncing(true);
+									void syncClient
+										.syncNow()
+										.catch(() => undefined)
+										.then(refreshStatus)
+										.finally(() => {
+											setSyncing(false);
+										});
+								}}
+							/>
+						) : (
+							<Button
+								label="Connect to your server"
+								icon="sync-outline"
+								onPress={onConnect}
+							/>
+						)
 					}
 				>
-					Sessions saved in the TabLodge extension appear here once this phone
-					is synced with your server. To save one from here, share several links
-					from your browser to TabLodge.
+					{view === 'private'
+						? 'Nothing is saved in the private library yet.'
+						: connected
+							? 'This phone is connected to your server, but the library has no sessions yet. Sessions saved in the TabLodge extension appear here after they sync. To save one from here, share several links from your browser to TabLodge.'
+							: 'Sessions saved in the TabLodge extension appear here once this phone is synced with your server. To save one from here, share several links from your browser to TabLodge.'}
 				</Empty>
 			</View>
 		);
@@ -573,6 +608,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 		<>
 			<FlatList
 				removeClippedSubviews
+				scrollEventThrottle={16}
 				data={shown}
 				extraData={[flipped, expandAll]}
 				keyExtractor={(session) => session.id}
@@ -635,6 +671,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 						/>
 					</View>
 				)}
+				onScroll={trackScroll}
 			/>
 			<ActionSheet
 				visible={menuFor !== undefined}
@@ -729,6 +766,7 @@ const styles = StyleSheet.create({
 	roundEnd: {marginRight: 8},
 	tabs: {borderTopWidth: StyleSheet.hairlineWidth},
 	tab: {
+		borderRadius: 12,
 		minHeight: TARGET,
 		flexDirection: 'row',
 		alignItems: 'center',

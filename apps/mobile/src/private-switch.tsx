@@ -1,8 +1,9 @@
 import {useState} from 'react';
-import {Alert, StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from './bottom-sheet';
+import {confirm, notify} from './dialog';
 import {usePreferences} from './preferences';
-import {isPrivateOpen, openPrivate} from './private-library';
+import {isPrivateOpen, lockPrivate, openPrivate} from './private-library';
 import {useSyncStatus} from './library-store';
 import {useColors} from './theme';
 import {Button, Field, IconButton} from './ui';
@@ -12,6 +13,19 @@ const NOT_CONNECTED =
 	'Connect to your sync server in Settings first. The private library is read from the same server.';
 const UNAVAILABLE =
 	'This server has no private library. Turn on Sync private windows in the extension, or update the server.';
+
+/**
+Asks before locking the private library: its key and its copy leave this phone, so opening it again needs the PIN or
+password and the server.
+*/
+export function askToLock(): void {
+	confirm(
+		'Lock the private library?',
+		'This removes its key and its copy from this phone. Your server keeps it, and you can open it again with the PIN or password.',
+		{label: 'Lock now', destructive: true},
+		() => void lockPrivate(),
+	);
+}
 
 /**
 Flips between the regular library and the private windows' library. The private one asks for its PIN or password the
@@ -53,17 +67,17 @@ export function PrivateSwitch({button = false}: {button?: boolean}) {
 			}
 
 			case 'not-connected': {
-				Alert.alert('Not connected', NOT_CONNECTED);
+				notify('Not connected', NOT_CONNECTED);
 				break;
 			}
 
 			case 'unavailable': {
-				Alert.alert('No private library', UNAVAILABLE);
+				notify('No private library', UNAVAILABLE);
 				break;
 			}
 
 			default: {
-				Alert.alert('Could not open it', result.message ?? 'Try again.');
+				notify('Could not open it', result.message ?? 'Try again.');
 			}
 		}
 	};
@@ -88,18 +102,27 @@ export function PrivateSwitch({button = false}: {button?: boolean}) {
 						label={
 							priv ? 'Back to your regular library' : 'Open the private library'
 						}
-						icon={priv ? 'lock-open-outline' : 'lock-closed-outline'}
+						icon={priv ? 'arrow-back-outline' : 'glasses-outline'}
 						onPress={toggle}
 					/>
 				) : (
-					<IconButton
-						icon={priv ? 'lock-open-outline' : 'lock-closed-outline'}
-						label={
-							priv ? 'Back to your regular library' : 'Show private library'
-						}
-						color={priv ? colors.accent : undefined}
-						onPress={toggle}
-					/>
+					<>
+						{priv && (
+							<IconButton
+								icon="lock-closed-outline"
+								label="Lock now"
+								onPress={askToLock}
+							/>
+						)}
+						<IconButton
+							icon={priv ? 'glasses' : 'glasses-outline'}
+							label={
+								priv ? 'Back to your regular library' : 'Show private library'
+							}
+							color={priv ? colors.accent : undefined}
+							onPress={toggle}
+						/>
+					</>
 				))}
 			<BottomSheet
 				visible={asking}

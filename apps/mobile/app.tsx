@@ -23,6 +23,7 @@ import {SaveLinkForm} from './src/screens/save-link';
 import {SaveLinksForm} from './src/screens/save-links';
 import {SessionsScreen} from './src/screens/sessions';
 import {SettingsScreen} from './src/screens/settings';
+import {DialogHost} from './src/dialog';
 import {SnackbarHost, showSnack} from './src/snackbar';
 import {type BarTab, TabBar} from './src/tab-bar';
 import {useColors} from './src/theme';
@@ -190,6 +191,7 @@ function Main() {
 			</SafeAreaView>
 			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={setTab} />
 			<SnackbarHost />
+			<DialogHost />
 			<ConnectSheet
 				visible={connecting}
 				onClose={() => {

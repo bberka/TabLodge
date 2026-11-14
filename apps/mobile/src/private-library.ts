@@ -290,7 +290,7 @@ export async function openPrivate(credential?: string): Promise<OpenResult> {
 }
 
 /**
-Forgets the private library on this phone: the key, the saved copy, and its sync position. The server keeps it.
+Locks the private library on this phone by forgetting the key, the saved copy, and its sync position. The server keeps it.
 */
 export async function lockPrivate(): Promise<void> {
 	client?.stop();

@@ -22,6 +22,7 @@ import {
 	refreshStatus,
 	syncClient,
 	useLibrary,
+	useSyncStatus,
 } from '../library-store';
 import {linkToOpen} from '../links';
 import {openAll} from '../open-links';
@@ -32,6 +33,7 @@ import {useColors, useShape} from '../theme';
 import {PrivateSwitch} from '../private-switch';
 import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
+import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
 import {Button, Chips, Empty, Field, Header, IconButton} from '../ui';
 import {ColumnSheet} from './column-sheet';
@@ -75,6 +77,7 @@ export function BookmarksScreen({
 	const store = useLibrary();
 	const selection = useSelection();
 	const view = useView();
+	const {connected} = useSyncStatus();
 	const readOnly = view === 'private';
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
@@ -215,6 +218,7 @@ export function BookmarksScreen({
 		<View style={styles.screen}>
 			<FlatList
 				removeClippedSubviews
+				scrollEventThrottle={16}
 				data={shown}
 				extraData={selection.ids}
 				keyExtractor={(bookmark) => bookmark.id}
@@ -304,18 +308,22 @@ export function BookmarksScreen({
 								readOnly ? undefined : (
 									<View style={styles.emptyActions}>
 										<Button label="Add a link" icon="add" onPress={onAdd} />
-										<Button
-											kind="plain"
-											label="Connect to your server"
-											onPress={onConnect}
-										/>
+										{!connected && (
+											<Button
+												kind="plain"
+												label="Connect to your server"
+												onPress={onConnect}
+											/>
+										)}
 									</View>
 								)
 							}
 						>
 							{readOnly
 								? 'Nothing is saved in the private library yet.'
-								: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
+								: connected
+									? 'This phone is connected to your server, but the library has no bookmarks yet. Save a link, or share one from your browser or the extension.'
+									: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
 						</Empty>
 					)
 				}
@@ -360,6 +368,7 @@ export function BookmarksScreen({
 						/>
 					)
 				}
+				onScroll={trackScroll}
 				onRefresh={() => {
 					void refresh();
 				}}

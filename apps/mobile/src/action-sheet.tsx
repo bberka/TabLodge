@@ -42,7 +42,6 @@ export function ActionSheet({
 						key={action.label}
 						accessibilityRole="button"
 						accessibilityLabel={action.label}
-						android_ripple={{color: colors.pressed}}
 						style={({pressed}) => [
 							styles.row,
 							{backgroundColor: pressed ? colors.pressed : 'transparent'},
@@ -77,6 +76,7 @@ const styles = StyleSheet.create({
 		paddingBottom: 6,
 	},
 	row: {
+		borderRadius: 12,
 		minHeight: TARGET + 8,
 		flexDirection: 'row',
 		alignItems: 'center',

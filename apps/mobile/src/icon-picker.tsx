@@ -157,8 +157,13 @@ function IconPickerView({
 				accessibilityRole="button"
 				accessibilityLabel={`Icon, ${selected === '' ? 'default' : label(selected)}`}
 				accessibilityHint="Opens a list of icons to search"
-				android_ripple={{color: colors.pressed}}
-				style={[styles.button, {borderColor: colors.border}]}
+				style={({pressed}) => [
+					styles.button,
+					{
+						borderColor: colors.border,
+						backgroundColor: pressed ? colors.pressed : 'transparent',
+					},
+				]}
 				onPress={() => {
 					setOpen(true);
 				}}

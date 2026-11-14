@@ -58,7 +58,6 @@ export function Button({
 			accessibilityRole="button"
 			accessibilityState={{disabled: inactive, busy: loading}}
 			disabled={inactive}
-			android_ripple={shape.ios ? undefined : {color: `${ink}33`}}
 			style={({pressed}) => [
 				styles.button,
 				{
@@ -118,9 +117,6 @@ export function IconButton({
 			accessibilityLabel={label}
 			accessibilityState={{disabled}}
 			disabled={disabled}
-			android_ripple={
-				shape.ios ? undefined : {color: colors.pressed, radius: TARGET / 2}
-			}
 			style={({pressed}) => [
 				styles.iconButton,
 				{
@@ -166,21 +162,32 @@ export function Field({
 			<View
 				style={[
 					styles.inputBox,
+					// The border width never changes, so focusing or flagging a field cannot move what is around it.
 					shape.ios
 						? {
 								borderRadius: shape.fieldRadius,
 								borderColor: error ? colors.danger : 'transparent',
-								borderWidth: error ? 1 : 0,
+								borderWidth: 1,
 								backgroundColor: colors.pressed,
 							}
 						: {
 								borderRadius: shape.fieldRadius,
-								borderColor: border,
-								borderWidth: focused || error ? 2 : 1,
+								borderColor: error ? colors.danger : colors.border,
+								borderWidth: 1,
 								backgroundColor: colors.surface,
 							},
 				]}
 			>
+				{!shape.ios && (focused || error) && (
+					// A thicker ring drawn over the border, outside the layout.
+					<View
+						pointerEvents="none"
+						style={[
+							styles.ring,
+							{borderRadius: shape.fieldRadius + 1, borderColor: border},
+						]}
+					/>
+				)}
 				{icon && <Icon name={icon} size={20} color={colors.muted} />}
 				<TextInput
 					accessibilityLabel={label}
@@ -252,7 +259,6 @@ export function Chips({
 						accessibilityState={{selected: on}}
 						// The chip is 40dp tall; this brings the touch target to the 48dp Android asks for.
 						hitSlop={{top: 4, bottom: 4}}
-						android_ripple={shape.ios ? undefined : {color: colors.pressed}}
 						style={({pressed}) => [
 							styles.chip,
 							{
@@ -561,6 +567,14 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 	},
 	field: {gap: 4},
+	ring: {
+		position: 'absolute',
+		top: -1,
+		left: -1,
+		right: -1,
+		bottom: -1,
+		borderWidth: 2,
+	},
 	label: {fontSize: 13},
 	inputBox: {
 		minHeight: TARGET,

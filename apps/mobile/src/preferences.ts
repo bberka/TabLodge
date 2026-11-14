@@ -67,6 +67,11 @@ type Preferences = {
 	*/
 	floatingBar: boolean;
 	/**
+	With the floating bar: `full` spans the screen with labels, `compact` is a small pill of icons, and `scroll` is full
+	until the list is scrolled down.
+	*/
+	barSize: BarSize;
+	/**
 	The column the last link was saved to, offered first next time.
 	*/
 	lastColumnId: string;
@@ -137,6 +142,7 @@ const KEY = 'tablodge.prefs';
 const defaults: Preferences = {
 	look: Platform.OS === 'ios' ? 'ios' : 'material',
 	floatingBar: false,
+	barSize: 'scroll',
 	lastColumnId: '',
 	tapAction: 'open',
 	swipeRight: 'delete',
@@ -149,11 +155,16 @@ const defaults: Preferences = {
 	siteIcons: false,
 	accent: 'system',
 	theme: 'system',
-	showPrivateButton: false,
+	showPrivateButton: true,
 	compactSessions: false,
 	showSavedOn: true,
 	deviceName: '',
 };
+
+const BAR_SIZES = ['full', 'scroll', 'compact'] as const;
+export type BarSize = (typeof BAR_SIZES)[number];
+const isBarSize = (value: unknown): value is BarSize =>
+	BAR_SIZES.includes(value as BarSize);
 
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
 	ROW_ACTIONS.find((action) => action === value) ?? fallback;
@@ -176,6 +187,7 @@ export async function loadPreferences(): Promise<void> {
 	const {
 		look,
 		floatingBar,
+		barSize,
 		lastColumnId,
 		tapAction,
 		swipeRight,
@@ -197,6 +209,7 @@ export async function loadPreferences(): Promise<void> {
 		look: look === 'ios' || look === 'material' ? look : defaults.look,
 		floatingBar:
 			typeof floatingBar === 'boolean' ? floatingBar : defaults.floatingBar,
+		barSize: isBarSize(barSize) ? barSize : defaults.barSize,
 		lastColumnId: typeof lastColumnId === 'string' ? lastColumnId : '',
 		tapAction: tapAction === 'edit' ? 'edit' : 'open',
 		swipeRight: rowAction(swipeRight, defaults.swipeRight),
@@ -217,7 +230,10 @@ export async function loadPreferences(): Promise<void> {
 		siteIcons: siteIcons === true,
 		accent: isAccent(accent) ? accent : defaults.accent,
 		theme: isTheme(theme) ? theme : defaults.theme,
-		showPrivateButton: showPrivateButton === true,
+		showPrivateButton:
+			typeof showPrivateButton === 'boolean'
+				? showPrivateButton
+				: defaults.showPrivateButton,
 		compactSessions: compactSessions === true,
 		showSavedOn: showSavedOn !== false,
 		deviceName: cleanDeviceName(deviceName),
@@ -277,6 +293,7 @@ export const usePreferences = (): Preferences =>
 const SYNCED_KEYS = [
 	'look',
 	'floatingBar',
+	'barSize',
 	'tapAction',
 	'swipeRight',
 	'swipeLeft',
@@ -316,6 +333,10 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 
 	if (typeof raw.floatingBar === 'boolean') {
 		found.floatingBar = raw.floatingBar;
+	}
+
+	if (isBarSize(raw.barSize)) {
+		found.barSize = raw.barSize;
 	}
 
 	if (raw.tapAction === 'open' || raw.tapAction === 'edit') {

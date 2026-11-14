@@ -95,8 +95,10 @@ export function ValueRow({
 			accessibilityRole="button"
 			accessibilityLabel={`${row.label}, ${value}`}
 			accessibilityHint={row.hint}
-			android_ripple={{color: colors.pressed}}
-			style={styles.row}
+			style={({pressed}) => [
+				styles.row,
+				pressed && {backgroundColor: colors.pressed},
+			]}
 			onPress={onPress}
 		>
 			<Text style={[styles.label, {color: colors.text}]}>{row.label}</Text>
@@ -155,8 +157,10 @@ export function ChoiceList<T extends string>({
 							accessibilityState={{checked: on}}
 							accessibilityLabel={choice.name}
 							accessibilityHint={choice.hint}
-							android_ripple={{color: colors.pressed}}
-							style={styles.choice}
+							style={({pressed}) => [
+								styles.choice,
+								pressed && {backgroundColor: colors.pressed},
+							]}
 							onPress={() => {
 								onPick(choice.id);
 							}}
@@ -194,6 +198,7 @@ export function ChoiceList<T extends string>({
 
 const styles = StyleSheet.create({
 	row: {
+		borderRadius: 12,
 		minHeight: TARGET,
 		flexDirection: 'row',
 		alignItems: 'center',
@@ -211,6 +216,7 @@ const styles = StyleSheet.create({
 	},
 	list: {flexGrow: 0},
 	choice: {
+		borderRadius: 12,
 		minHeight: TARGET + 8,
 		flexDirection: 'row',
 		alignItems: 'center',

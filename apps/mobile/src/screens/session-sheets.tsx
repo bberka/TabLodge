@@ -100,8 +100,10 @@ export function FolderSheet({
 							accessibilityRole="radio"
 							accessibilityState={{selected: here}}
 							accessibilityLabel={folder.name}
-							android_ripple={{color: colors.pressed}}
-							style={styles.row}
+							style={({pressed}) => [
+								styles.row,
+								pressed && {backgroundColor: colors.pressed},
+							]}
 							onPress={() => {
 								onClose();
 								if (!here) {
@@ -126,6 +128,7 @@ const styles = StyleSheet.create({
 	body: {gap: 12, paddingHorizontal: 20, paddingBottom: 8},
 	title: {fontSize: 20, fontWeight: '700'},
 	row: {
+		borderRadius: 12,
 		minHeight: TARGET + 8,
 		flexDirection: 'row',
 		alignItems: 'center',

@@ -67,8 +67,10 @@ export function ColumnsSheet({
 								accessibilityRole="button"
 								accessibilityLabel={`${column.name}, ${column.count} ${column.count === 1 ? 'bookmark' : 'bookmarks'}${column.id === selected ? ', showing' : ''}`}
 								accessibilityHint="Shows this column"
-								android_ripple={{color: colors.pressed}}
-								style={styles.main}
+								style={({pressed}) => [
+									styles.main,
+									pressed && {backgroundColor: colors.pressed},
+								]}
 								onPress={() => {
 									onPick(column.id);
 									onClose();

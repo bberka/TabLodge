@@ -1,5 +1,7 @@
 import {useState} from 'react';
 import {ScrollView, useColorScheme, StyleSheet, Text, View} from 'react-native';
+import {confirm} from '../dialog';
+import {trackScroll} from '../scroll-state';
 import type {SyncStatus} from '../../../extension/src/shared/sync/client';
 import {
 	clearLibrary,
@@ -114,6 +116,15 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 		}
 	};
 
+	const confirmDisconnect = () => {
+		confirm(
+			'Disconnect from the server?',
+			'This phone stops syncing and forgets the server address and token. Your bookmarks and sessions stay on the phone, and the server keeps its copy.',
+			{label: 'Disconnect', destructive: true},
+			() => void disconnect(),
+		);
+	};
+
 	const disconnect = async () => {
 		setBusy('disconnect');
 		await syncClient.disconnect();
@@ -126,6 +137,8 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 		<ScrollView
 			contentContainerStyle={[styles.screen, {paddingBottom: space + 8}]}
 			keyboardShouldPersistTaps="handled"
+			scrollEventThrottle={16}
+			onScroll={trackScroll}
 		>
 			<Header title="Settings" />
 			<View style={styles.search}>
@@ -142,13 +155,11 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 			</View>
 			<SettingsQuery value={needle}>
 				<View style={styles.cards}>
-					<SettingsCard section={SECTIONS.appearance}>
-						<Text
-							accessibilityRole="header"
-							style={[styles.heading, {color: colors.text}]}
-						>
-							Appearance
-						</Text>
+					<SettingsCard
+						section={SECTIONS.appearance}
+						icon="color-palette-outline"
+						description="Theme, accent color, and how the app looks."
+					>
 						<SelectRow
 							row={ROWS.theme}
 							value={prefs.theme}
@@ -191,18 +202,38 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 								setPreferences({floatingBar});
 							}}
 						/>
+						{prefs.floatingBar && (
+							<SelectRow
+								row={ROWS.barSize}
+								value={prefs.barSize}
+								choices={[
+									{id: 'full', name: 'Full width', hint: 'Icons and names'},
+									{
+										id: 'scroll',
+										name: 'Small while scrolling',
+										hint: 'Shrinks when you scroll down, grows when you scroll up',
+									},
+									{
+										id: 'compact',
+										name: 'Always small',
+										hint: 'A narrow bar with icons only',
+									},
+								]}
+								onChange={(barSize) => {
+									setPreferences({barSize});
+								}}
+							/>
+						)}
 					</SettingsCard>
 					<SessionSettingsCard />
 					<BookmarkBehaviourCard />
 					<SyncedSettingsCard />
 					<PrivateCard />
-					<SettingsCard section={SECTIONS.sync}>
-						<Text
-							accessibilityRole="header"
-							style={[styles.heading, {color: colors.text}]}
-						>
-							Sync
-						</Text>
+					<SettingsCard
+						section={SECTIONS.sync}
+						icon="sync-outline"
+						description="Keep this phone in step with your server."
+					>
 						{status.connected ? (
 							<>
 								<Text style={{color: colors.text}}>
@@ -239,7 +270,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 									icon="log-out-outline"
 									loading={busy === 'disconnect'}
 									disabled={busy !== undefined}
-									onPress={() => void disconnect()}
+									onPress={confirmDisconnect}
 								/>
 							</>
 						) : (
@@ -256,13 +287,11 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 						)}
 					</SettingsCard>
 					{__DEV__ && (
-						<SettingsCard section={SECTIONS.development}>
-							<Text
-								accessibilityRole="header"
-								style={[styles.heading, {color: colors.text}]}
-							>
-								Development
-							</Text>
+						<SettingsCard
+							section={SECTIONS.development}
+							icon="construct-outline"
+							description="Only in development builds."
+						>
 							<Text style={{color: colors.muted}}>
 								{status.connected
 									? 'Sample data is off while a server is connected, so it cannot reach it.'

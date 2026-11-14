@@ -1,6 +1,7 @@
 import {type ReactNode, useRef} from 'react';
 import {Animated, PanResponder, StyleSheet, Text, View} from 'react-native';
-import {useColors} from './theme';
+import {spring} from './motion';
+import {readableOn, useColors} from './theme';
 import {Icon, type IconName} from './ui';
 
 export type SwipeAction = {
@@ -58,14 +59,10 @@ export function SwipeRow({
 					r.onTrigger();
 				}
 
-				Animated.spring(x, {
-					toValue: 0,
-					useNativeDriver: true,
-					friction: 8,
-				}).start();
+				spring(x, 0, {friction: 8}).start();
 			},
 			onPanResponderTerminate() {
-				Animated.spring(x, {toValue: 0, useNativeDriver: true}).start();
+				spring(x, 0).start();
 			},
 		}),
 	).current;
@@ -76,6 +73,7 @@ export function SwipeRow({
 		}
 
 		const range = side === 'left' ? [0, TRIGGER] : [-TRIGGER, 0];
+		const ink = readableOn(action.color);
 		return (
 			<Animated.View
 				pointerEvents="none"
@@ -117,8 +115,8 @@ export function SwipeRow({
 						},
 					]}
 				>
-					<Icon name={action.icon} color="#ffffff" />
-					<Text style={styles.label}>{action.label}</Text>
+					<Icon name={action.icon} color={ink} />
+					<Text style={[styles.label, {color: ink}]}>{action.label}</Text>
 				</Animated.View>
 			</Animated.View>
 		);
@@ -145,5 +143,5 @@ const styles = StyleSheet.create({
 	wrap: {overflow: 'hidden'},
 	action: {paddingHorizontal: 20},
 	glyph: {alignItems: 'center', gap: 2},
-	label: {color: '#ffffff', fontSize: 12, fontWeight: '600'},
+	label: {fontSize: 12, fontWeight: '600'},
 });
