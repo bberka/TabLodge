@@ -9,8 +9,24 @@ import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 
 /**
+What the browser calls itself: its user agent brands, plus Brave, which only says so through its own API.
+*/
+async function browserBrands(): Promise<string[]> {
+	const {userAgentData, brave} = navigator as Navigator & {
+		userAgentData?: {brands?: Array<{brand: string}>};
+		brave?: {isBrave?: () => Promise<boolean>};
+	};
+	const brands = (userAgentData?.brands ?? []).map(({brand}) => brand);
+	if (await brave?.isBrave?.().catch(() => false)) {
+		brands.push('Brave');
+	}
+
+	return brands;
+}
+
+/**
 The name this browser puts on the sessions it saves, so a session list shared between devices says where each one
-came from. It stays on this browser, starts as the browser and system, and an empty field goes back to that.
+came from. It stays on this browser, starts filled in with the browser and system, and clearing the field goes back to that.
 */
 export function DeviceNameField() {
 	const id = useId();
@@ -25,20 +41,26 @@ export function DeviceNameField() {
 				DEVICE_KEY
 			] as {name?: unknown} | undefined;
 			const name = cleanDeviceName(stored?.name);
-			setSaved(name);
-			setDraft(name);
+			const brands = await browserBrands();
+			let detected: string;
 			try {
 				const {os} = await chrome.runtime.getPlatformInfo();
-				setFallback(defaultBrowserDeviceName(navigator.userAgent, os));
+				detected = defaultBrowserDeviceName(navigator.userAgent, os, brands);
 			} catch {
-				setFallback(defaultBrowserDeviceName(navigator.userAgent, ''));
+				detected = defaultBrowserDeviceName(navigator.userAgent, '', brands);
 			}
+
+			setFallback(detected);
+			setSaved(name);
+			setDraft(name || detected);
 		})();
 	}, []);
 
 	const commit = () => {
-		const name = cleanDeviceName(draft);
-		setDraft(name);
+		const typed = cleanDeviceName(draft);
+		// The detected name is not stored, so it keeps following the browser; only a different name is saved.
+		const name = typed === fallback ? '' : typed;
+		setDraft(name || fallback);
 		if (name === saved) {
 			return;
 		}
@@ -70,8 +92,9 @@ export function DeviceNameField() {
 			/>
 			<p id={helpId} className="text-xs leading-5 text-muted-foreground">
 				Sessions you save here say they came from this device, for example
-				“Berkay’s MacBook”. It is kept on this browser only, and leaving it
-				empty uses “{fallback}”. Sessions already saved keep the name they had.
+				“Berkay’s MacBook”. It starts as the browser and system, is kept on this
+				browser only, and clearing it goes back to “{fallback}”. Sessions
+				already saved keep the name they had.
 			</p>
 		</div>
 	);
