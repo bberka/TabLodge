@@ -46,6 +46,30 @@ export function useBarSpace(): number {
 	return (floatingBar ? floating : DOCKED_HEIGHT) + insets.bottom;
 }
 
+// The gap between the small bar and the round buttons above it, less than the full bar's, so the buttons sit close to it.
+const SMALL_BAR_GAP_SAVED = 16;
+
+/**
+How far the round buttons above the bar move down while it is small, so they follow it and stay close instead of
+floating high above a shrunken bar. 0 while the bar is full or docked. Screens leave the room of a full bar while it
+only shrinks on scroll, so that case also covers the bar's lost height.
+*/
+export function useBarDrop(): number {
+	const {floatingBar, barSize} = usePreferences();
+	const scrolledDown = useScrolledDown();
+	if (!floatingBar) {
+		return 0;
+	}
+
+	if (barSize === 'compact') {
+		return SMALL_BAR_GAP_SAVED;
+	}
+
+	return barSize === 'scroll' && scrolledDown
+		? BAR_HEIGHT - COMPACT_HEIGHT + SMALL_BAR_GAP_SAVED
+		: 0;
+}
+
 /**
 The bottom tab bar, in one of three forms: a Material navigation bar, an iOS tab bar, or a rounded bar that floats
 above the content (either look). The selected tab animates, and the bar slides away while the keyboard is open or

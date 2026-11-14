@@ -1,8 +1,10 @@
-import {useState} from 'react';
-import {Animated, Pressable, StyleSheet, TextInput, View} from 'react-native';
+import {useEffect, useRef, useState} from 'react';
+import {Animated, Easing, Pressable, StyleSheet, TextInput} from 'react-native';
 import {usePreferences} from '../settings/preferences';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
+import {motion} from './motion';
 import {useColors} from './theme';
+import {useBarDrop} from './tab-bar';
 import {Icon, IconButton, type IconName} from './ui';
 
 /**
@@ -93,9 +95,26 @@ export function FloatingActions({
 	onAdd?: () => void;
 	buttonLabel?: string;
 }) {
+	// The row eases down with the tab bar when that shrinks, instead of staying high above it.
+	const drop = useBarDrop();
+	const shift = useRef(new Animated.Value(drop)).current;
+	useEffect(() => {
+		Animated.timing(shift, {
+			toValue: drop,
+			duration: motion(260),
+			easing: Easing.out(Easing.cubic),
+			useNativeDriver: true,
+		}).start();
+	}, [drop, shift]);
 	return (
 		// Clear of the tab bar below, whose own shadow would otherwise reach the buttons.
-		<View pointerEvents="box-none" style={[styles.row, {bottom: bottom + 16}]}>
+		<Animated.View
+			pointerEvents="box-none"
+			style={[
+				styles.row,
+				{bottom: bottom + 16, transform: [{translateY: shift}]},
+			]}
+		>
 			{onMenu && (
 				<RoundButton
 					icon="ellipsis-horizontal"
@@ -109,7 +128,7 @@ export function FloatingActions({
 			{onAdd && (
 				<RoundButton primary icon="add" label={buttonLabel} onPress={onAdd} />
 			)}
-		</View>
+		</Animated.View>
 	);
 }
 
