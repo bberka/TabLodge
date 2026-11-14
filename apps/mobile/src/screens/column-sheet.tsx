@@ -192,6 +192,7 @@ export function ColumnSheet({
 }) {
 	return (
 		<BottomSheet
+			scroll={false}
 			visible={visible}
 			label={column ? 'Edit column' : 'New column'}
 			onClose={() => {

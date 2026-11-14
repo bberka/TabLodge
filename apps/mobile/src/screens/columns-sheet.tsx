@@ -40,7 +40,12 @@ export function ColumnsSheet({
 	const store = useRegularLibrary();
 	const real = new Set(store.bookmarkColumns.map((column) => column.id));
 	return (
-		<BottomSheet visible={visible} label="Columns" onClose={onClose}>
+		<BottomSheet
+			scroll={false}
+			visible={visible}
+			label="Columns"
+			onClose={onClose}
+		>
 			<View style={styles.top}>
 				<Text
 					accessibilityRole="header"
@@ -152,7 +157,7 @@ const styles = StyleSheet.create({
 		paddingRight: 8,
 	},
 	title: {fontSize: 20, fontWeight: '700'},
-	list: {flexGrow: 0},
+	list: {flexGrow: 0, flexShrink: 1},
 	content: {paddingHorizontal: 12, paddingVertical: 4},
 	row: {flexDirection: 'row', alignItems: 'center'},
 	main: {

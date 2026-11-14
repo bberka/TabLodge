@@ -436,6 +436,7 @@ export function EditSheet({
 }) {
 	return (
 		<BottomSheet
+			scroll={false}
 			visible={Boolean(bookmark)}
 			label="Edit link"
 			onClose={onClose}

@@ -1,5 +1,15 @@
 import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
-import {Animated, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+	Animated,
+	Modal,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	View,
+} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {keyboardInset} from './keyboard';
 import {motion} from './motion';
 import {TARGET, useColors, useShape} from './theme';
 
@@ -105,10 +115,14 @@ export function DialogHost() {
 
 	const colors = useColors();
 	const shape = useShape();
+	const insets = useSafeAreaInsets();
 	if (!shown) {
 		return null;
 	}
 
+	const keyboard = keyboardInset();
+
+	// While the keyboard is up the dialog centers in what is left above it, and a long message scrolls.
 	const close = (action?: DialogAction) => {
 		current = undefined;
 		setOpen(false);
@@ -131,7 +145,12 @@ export function DialogHost() {
 				close(cancel);
 			}}
 		>
-			<View style={styles.root}>
+			<Animated.View
+				style={[
+					styles.root,
+					{paddingTop: insets.top + 16, paddingBottom: keyboard},
+				]}
+			>
 				<Animated.View style={[styles.scrim, {opacity: progress}]}>
 					<Pressable
 						accessibilityLabel="Dismiss"
@@ -168,9 +187,11 @@ export function DialogHost() {
 						{shown.title}
 					</Text>
 					{shown.message !== undefined && (
-						<Text style={[styles.message, {color: colors.muted}]}>
-							{shown.message}
-						</Text>
+						<ScrollView style={styles.body}>
+							<Text style={[styles.message, {color: colors.muted}]}>
+								{shown.message}
+							</Text>
+						</ScrollView>
 					)}
 					<View style={stacked ? styles.stack : styles.row}>
 						{shown.actions.map((action) => {
@@ -204,7 +225,7 @@ export function DialogHost() {
 						})}
 					</View>
 				</Animated.View>
-			</View>
+			</Animated.View>
 		</Modal>
 	);
 }
@@ -212,7 +233,8 @@ export function DialogHost() {
 const styles = StyleSheet.create({
 	root: {flex: 1, justifyContent: 'center', paddingHorizontal: 28},
 	scrim: {...StyleSheet.absoluteFill, backgroundColor: '#000000aa'},
-	card: {padding: 24, gap: 12, elevation: 12},
+	card: {padding: 24, gap: 12, elevation: 12, maxHeight: '100%'},
+	body: {flexGrow: 0},
 	title: {fontSize: 20, fontWeight: '700'},
 	message: {fontSize: 15, lineHeight: 21},
 	row: {flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8},

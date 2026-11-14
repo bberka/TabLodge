@@ -49,6 +49,7 @@ export function SelectRow<T extends string>({
 				}}
 			/>
 			<BottomSheet
+				scroll={false}
 				visible={open}
 				label={row.label}
 				onClose={() => {
@@ -149,7 +150,7 @@ export function ChoiceList<T extends string>({
 }) {
 	const colors = useColors();
 	return (
-		<View>
+		<View style={styles.fill}>
 			<Text
 				accessibilityRole="header"
 				style={[styles.title, {color: colors.text}]}
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		paddingBottom: 6,
 	},
-	list: {flexGrow: 0},
+	list: {flexGrow: 0, flexShrink: 1},
 	choice: {
 		borderRadius: 12,
 		minHeight: TARGET + 8,
@@ -238,4 +239,5 @@ const styles = StyleSheet.create({
 		paddingVertical: 8,
 	},
 	choiceText: {flex: 1},
+	fill: {flexShrink: 1},
 });

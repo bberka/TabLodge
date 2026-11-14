@@ -37,7 +37,12 @@ function IconSheet({
 	const [query, setQuery] = useState('');
 	const rows = useMemo(() => rowsFor(query), [query]);
 	return (
-		<BottomSheet visible={visible} label="Choose an icon" onClose={onClose}>
+		<BottomSheet
+			scroll={false}
+			visible={visible}
+			label="Choose an icon"
+			onClose={onClose}
+		>
 			<View style={styles.sheet}>
 				<Text
 					accessibilityRole="header"
@@ -203,7 +208,7 @@ const styles = StyleSheet.create({
 	sheet: {gap: 12, paddingHorizontal: 20, paddingBottom: 8},
 	title: {fontSize: 20, fontWeight: '700'},
 	// A fixed height, so the drawer is the same size before the rows are drawn and after.
-	list: {height: HEIGHT, flexGrow: 0},
+	list: {height: HEIGHT, flexGrow: 0, flexShrink: 1},
 	none: {height: HEIGHT},
 	row: {flexDirection: 'row'},
 	cell: {

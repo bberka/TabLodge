@@ -2,14 +2,15 @@ import {type ReactNode, useEffect, useRef, useState} from 'react';
 import {
 	Animated,
 	Easing,
-	Keyboard,
 	Modal,
 	PanResponder,
 	Pressable,
+	ScrollView,
 	StyleSheet,
 	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {keyboardInset} from './keyboard';
 import {motion, spring} from './motion';
 import {useColors, useShape} from './theme';
 
@@ -19,16 +20,20 @@ const CLOSE_VELOCITY = 0.8;
 /**
 A drawer that slides up from the bottom and is only as tall as its content. A tap on the dimmed area, the Android
 back button, a swipe down on the handle, or the content's own close button dismisses it; the parent owns `visible`.
+While the keyboard is open the drawer shrinks to the room above it and its content scrolls. Content that is a scrolling
+list itself passes `scroll={false}` to keep its own scrolling.
 */
 export function BottomSheet({
 	visible,
 	onClose,
 	label,
+	scroll = true,
 	children,
 }: {
 	visible: boolean;
 	onClose: () => void;
 	label: string;
+	scroll?: boolean;
 	children: ReactNode;
 }) {
 	// The drawer is only mounted while it is open or sliding away, so every opening starts from a clean state: nothing
@@ -54,6 +59,7 @@ export function BottomSheet({
 			<Sheet
 				open={visible}
 				label={label}
+				scroll={scroll}
 				onClose={onClose}
 				onGone={() => {
 					setMounted(false);
@@ -70,12 +76,14 @@ function Sheet({
 	onClose,
 	onGone,
 	label,
+	scroll,
 	children,
 }: {
 	open: boolean;
 	onClose: () => void;
 	onGone: () => void;
 	label: string;
+	scroll: boolean;
 	children: ReactNode;
 }) {
 	const colors = useColors();
@@ -85,7 +93,7 @@ function Sheet({
 	// 0 is open; `height` is fully below the screen. It starts far below, and the sheet is hidden until measured.
 	const slide = useRef(new Animated.Value(1000)).current;
 	const scrim = useRef(new Animated.Value(0)).current;
-	const lift = useRef(new Animated.Value(0)).current;
+	const keyboard = keyboardInset();
 	const heightRef = useRef(0);
 	heightRef.current = height;
 	const closeRef = useRef(onClose);
@@ -150,28 +158,6 @@ function Sheet({
 		}
 	}, [open]);
 
-	// The keyboard lifts the sheet, since a Modal is not resized by the window.
-	useEffect(() => {
-		const show = Keyboard.addListener('keyboardDidShow', (event) => {
-			Animated.timing(lift, {
-				toValue: event.endCoordinates.height,
-				duration: motion(180),
-				useNativeDriver: true,
-			}).start();
-		});
-		const hide = Keyboard.addListener('keyboardDidHide', () => {
-			Animated.timing(lift, {
-				toValue: 0,
-				duration: motion(180),
-				useNativeDriver: true,
-			}).start();
-		});
-		return () => {
-			show.remove();
-			hide.remove();
-		};
-	}, [lift]);
-
 	const drag = useRef(
 		PanResponder.create({
 			onStartShouldSetPanResponder: () => true,
@@ -189,7 +175,14 @@ function Sheet({
 	).current;
 
 	return (
-		<View style={styles.root}>
+		// The room the keyboard takes is padding here, so the drawer inside shrinks to what is left above it. It is a
+		// layout value, so it animates on the JS thread, apart from the drawer's own slide on the native one.
+		<Animated.View
+			style={[
+				styles.root,
+				{paddingTop: insets.top + 8, paddingBottom: keyboard},
+			]}
+		>
 			<Animated.View
 				style={[styles.scrim, {opacity: scrim}]}
 				importantForAccessibility="no"
@@ -210,10 +203,9 @@ function Sheet({
 						backgroundColor: colors.surface,
 						borderTopLeftRadius: shape.sheetRadius,
 						borderTopRightRadius: shape.sheetRadius,
-						paddingBottom: Math.max(insets.bottom, 16),
 						// Hidden until measured, so it does not flash at the wrong place.
 						opacity: height > 0 ? 1 : 0,
-						transform: [{translateY: Animated.subtract(slide, lift)}],
+						transform: [{translateY: slide}],
 					},
 				]}
 				onLayout={(event) => {
@@ -230,16 +222,41 @@ function Sheet({
 					setHeight(next);
 				}}
 			>
-				<View
-					{...drag.panHandlers}
-					accessible={false}
-					style={styles.handleArea}
+				<Animated.View
+					style={[
+						styles.inner,
+						{
+							// The keyboard covers the bottom edge, so its room replaces the bottom inset.
+							paddingBottom: keyboard.interpolate({
+								inputRange: [0, 120],
+								outputRange: [Math.max(insets.bottom, 16), 8],
+								extrapolate: 'clamp',
+							}),
+						},
+					]}
 				>
-					<View style={[styles.handle, {backgroundColor: colors.border}]} />
-				</View>
-				{children}
+					<View
+						{...drag.panHandlers}
+						accessible={false}
+						style={styles.handleArea}
+					>
+						<View style={[styles.handle, {backgroundColor: colors.border}]} />
+					</View>
+					{scroll ? (
+						<ScrollView
+							bounces={false}
+							keyboardShouldPersistTaps="handled"
+							showsVerticalScrollIndicator={false}
+							style={styles.scroll}
+						>
+							{children}
+						</ScrollView>
+					) : (
+						<View style={styles.fill}>{children}</View>
+					)}
+				</Animated.View>
 			</Animated.View>
-		</View>
+		</Animated.View>
 	);
 }
 
@@ -252,9 +269,13 @@ const styles = StyleSheet.create({
 	sheet: {
 		borderTopLeftRadius: 28,
 		borderTopRightRadius: 28,
-		maxHeight: '88%',
+		maxHeight: '100%',
 		elevation: 12,
 	},
+	// Shrinks with the drawer, so a tall body gives way to the keyboard and scrolls instead of running off the top.
+	inner: {flexShrink: 1},
+	scroll: {flexGrow: 0},
+	fill: {flexShrink: 1},
 	handleArea: {height: 28, alignItems: 'center', justifyContent: 'center'},
 	handle: {width: 36, height: 4, borderRadius: 2},
 });

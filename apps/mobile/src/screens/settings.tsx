@@ -12,6 +12,7 @@ import {
 	useLibrary,
 	useSyncStatus,
 } from '../library-store';
+import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
 import {type Colors, useColors} from '../theme';
 import {setPreferences, usePreferences} from '../preferences';
@@ -69,7 +70,7 @@ function describe(
 
 export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const colors = useColors();
-	const space = useBarSpace();
+	const space = useRoomBelow(useBarSpace());
 	const status = useSyncStatus();
 	const prefs = usePreferences();
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';

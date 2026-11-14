@@ -28,6 +28,7 @@ import {linkToOpen} from '../links';
 import {openAll} from '../open-links';
 import {useLinkSettings} from '../use-link-settings';
 import {showSnack} from '../snackbar';
+import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
 import {useColors, useShape} from '../theme';
 import {PrivateSwitch} from '../private-switch';
@@ -73,7 +74,9 @@ export function BookmarksScreen({
 	const chipLook = useChipLook();
 	const shape = useShape();
 	const insets = useSafeAreaInsets();
-	const space = useBarSpace();
+	const barSpace = useBarSpace();
+	const space = useRoomBelow(barSpace);
+	const keyboardOpen = space !== barSpace;
 	const store = useLibrary();
 	const selection = useSelection();
 	const view = useView();
@@ -225,7 +228,11 @@ export function BookmarksScreen({
 				refreshing={refreshing}
 				contentContainerStyle={[
 					styles.list,
-					{paddingBottom: (selection.active ? 72 + insets.bottom : space) + 72},
+					{
+						paddingBottom: keyboardOpen
+							? space + 8
+							: (selection.active ? 72 + insets.bottom : space) + 72,
+					},
 				]}
 				keyboardShouldPersistTaps="handled"
 				// Long columns draw only what is on screen, and a little around it.

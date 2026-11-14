@@ -40,6 +40,7 @@ import {type SessionAction, usePreferences} from '../preferences';
 import {linkToOpen, rowText} from '../links';
 import {openAll, openLink} from '../open-links';
 import {PrivateSwitch} from '../private-switch';
+import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
@@ -347,7 +348,7 @@ own tabs, so there is no capture here.
 */
 export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const colors = useColors();
-	const space = useBarSpace();
+	const space = useRoomBelow(useBarSpace());
 	const store = useLibrary();
 	const links = useLinkSettings();
 	const view = useView();

@@ -199,6 +199,7 @@ function Main() {
 				}}
 			/>
 			<BottomSheet
+				scroll={false}
 				visible={open}
 				label={draft.urls.length > 1 ? 'Save links' : 'Save link'}
 				onClose={() => {
