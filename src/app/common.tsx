@@ -959,13 +959,13 @@ export function SectionCard({
 }) {
 	return (
 		<Card id={id} className={cn('overflow-hidden', className)}>
-			<CardHeader className="flex-row items-center gap-3 space-y-0 border-b border-border bg-muted/60 px-4 py-3">
+			<CardHeader className="flex-row flex-wrap items-center gap-3 space-y-0 border-b border-border bg-muted/60 px-4 py-3">
 				{Icon && (
 					<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-card text-primary">
 						<Icon className="h-4 w-4" aria-hidden="true" />
 					</span>
 				)}
-				<div className="min-w-0 flex-1">
+				<div className="min-w-[12rem] flex-1">
 					<CardTitle className="text-[15px] leading-6">{title}</CardTitle>
 					{Boolean(description) && (
 						<CardDescription className="text-xs leading-5">
@@ -973,7 +973,11 @@ export function SectionCard({
 						</CardDescription>
 					)}
 				</div>
-				{Boolean(action) && <div className="shrink-0">{action}</div>}
+				{Boolean(action) && (
+					<div className="max-sm:basis-full max-sm:[&>*]:w-full sm:shrink-0">
+						{action}
+					</div>
+				)}
 			</CardHeader>
 			<CardContent className="pt-4">{children}</CardContent>
 		</Card>
