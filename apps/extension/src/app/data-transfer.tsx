@@ -94,11 +94,6 @@ import {
 	type ParsedImport,
 } from '../shared/import-formats';
 import {fileNamePrefix} from '../shared/backup-format';
-import {offerUndo} from './recovery-core';
-import {messageOf, send, type ShowStatus} from './common';
-import {mergeSummary} from './merge-summary';
-import {writeClipboard} from './interaction-actions';
-import {PROJECT} from './project';
 import {
 	FullBackupError,
 	buildFullBackup,
@@ -109,7 +104,12 @@ import {
 	readFullBackup,
 	readProtectedFullBackup,
 	type FullBackupContents,
-} from './full-backup';
+} from '../shared/full-backup';
+import {offerUndo} from './recovery-core';
+import {messageOf, send, type ShowStatus} from './common';
+import {mergeSummary} from './merge-summary';
+import {writeClipboard} from './interaction-actions';
+import {PROJECT} from './project';
 import {
 	EMPTY_PASSCODE_DRAFT,
 	PasscodeEntry,

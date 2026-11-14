@@ -73,7 +73,7 @@ export function BookmarkRow({
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
 				accessibilityActions={[
 					{name: 'open', label: 'Open in browser'},
-					{name: 'select', label: 'Select'},
+					{name: 'select', label: 'More actions'},
 					{name: 'edit', label: 'Edit'},
 					{name: 'move', label: 'Move to column'},
 					{name: 'delete', label: 'Delete'},
@@ -208,6 +208,7 @@ export function SelectionBar({
 	canMove,
 	onOpen,
 	onEdit,
+	onExport,
 	onMove,
 	onDelete,
 }: {
@@ -215,6 +216,7 @@ export function SelectionBar({
 	canMove: boolean;
 	onOpen: () => void;
 	onEdit: () => void;
+	onExport: () => void;
 	onMove: () => void;
 	onDelete: () => void;
 }) {
@@ -243,6 +245,12 @@ export function SelectionBar({
 				label="Edit"
 				disabled={count !== 1}
 				onPress={onEdit}
+			/>
+			<ActionButton
+				icon="download-outline"
+				label="Export"
+				disabled={isNone}
+				onPress={onExport}
 			/>
 			<ActionButton
 				icon="folder-open-outline"

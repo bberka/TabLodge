@@ -2,6 +2,7 @@ import {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {Folder, Session} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
+import {ColorPicker} from '../color-picker';
 import {TARGET, useColors} from '../theme';
 import {Button, Field, Icon} from '../ui';
 
@@ -14,6 +15,7 @@ export function RenameSheet({
 	title = 'Rename session',
 	label = 'Session name',
 	description,
+	color,
 	check,
 	onSave,
 	onClose,
@@ -25,19 +27,25 @@ export function RenameSheet({
 	When given, a description field is shown too, starting with this text, and `onSave` receives it.
 	*/
 	description?: string;
+	/**
+	When given, a color picker is shown too, starting with this color (empty for none), and `onSave` receives the choice.
+	*/
+	color?: string;
 	check?: (name: string) => string | undefined;
-	onSave: (name: string, description?: string) => void;
+	onSave: (name: string, description?: string, color?: string) => void;
 	onClose: () => void;
 }) {
 	const colors = useColors();
 	const [name, setName] = useState('');
 	const [notes, setNotes] = useState('');
+	const [tint, setTint] = useState('');
 	const id = session?.id;
 	const original = session?.name ?? '';
 	useEffect(() => {
 		setName(original);
 		setNotes(description ?? '');
-	}, [id, original, description]);
+		setTint(color ?? '');
+	}, [id, original, description, color]);
 	const problem = name.trim() === '' ? 'Enter a name' : check?.(name);
 	return (
 		<BottomSheet
@@ -74,12 +82,22 @@ export function RenameSheet({
 						onChangeText={setNotes}
 					/>
 				)}
+				{color !== undefined && (
+					<>
+						<Text style={{color: colors.muted}}>Color</Text>
+						<ColorPicker selected={tint} onSelect={setTint} />
+					</>
+				)}
 				<Button
 					label="Save"
 					icon="checkmark"
 					disabled={Boolean(problem)}
 					onPress={() => {
-						onSave(name, description === undefined ? undefined : notes);
+						onSave(
+							name,
+							description === undefined ? undefined : notes,
+							color === undefined ? undefined : tint,
+						);
 					}}
 				/>
 			</View>

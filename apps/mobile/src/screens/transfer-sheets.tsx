@@ -1,4 +1,4 @@
-import {useMemo, useState} from 'react';
+import {useMemo, useState, useSyncExternalStore} from 'react';
 import {Share, StyleSheet, Text, View} from 'react-native';
 import {
 	ImportFormatError,
@@ -18,10 +18,15 @@ import {
 	shareLinks,
 	shareMarkdown,
 } from '../../../extension/src/shared/share-formats';
+import {
+	LOST_CREDENTIAL_NOTE,
+	validateCredential,
+} from '../../../extension/src/shared/passcode';
 import type {Session, Store} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {notify} from '../dialog';
-import {shareTextFile} from '../files';
+import {buildBackup} from '../backup';
+import {shareBinaryFile, shareTextFile} from '../files';
 import {edit, newId, useLibrary} from '../library-store';
 import {showSnack} from '../snackbar';
 import {useColors} from '../theme';
@@ -239,29 +244,89 @@ function exportData(store: Store, kind: ExportKind): ExportData {
 }
 
 /**
-Saves the library as a file the person can keep or send: sessions or bookmarks, in the formats the extension exports.
+One thing to export instead of the whole library: a session, a folder, a column, or some bookmarks.
+*/
+export type ExportScope = {title: string; data: ExportData};
+
+let openScope: ExportScope | undefined;
+const scopeListeners = new Set<() => void>();
+
+/**
+Opens the export drawer for one thing. `ExportHost`, mounted once near the root, draws it.
+*/
+export function openExport(scope: ExportScope | undefined): void {
+	openScope = scope;
+	for (const listener of scopeListeners) {
+		listener();
+	}
+}
+
+export function ExportHost() {
+	const scope = useSyncExternalStore(
+		(listener) => {
+			scopeListeners.add(listener);
+			return () => {
+				scopeListeners.delete(listener);
+			};
+		},
+		() => openScope,
+	);
+	return (
+		<ExportSheet
+			visible={scope !== undefined}
+			scope={scope}
+			onClose={() => {
+				openExport(undefined);
+			}}
+		/>
+	);
+}
+
+type ExportWhat = ExportKind | 'backup';
+
+/**
+Saves the library, or one part of it, as a file the person can keep or send: sessions or bookmarks in the formats the
+extension exports, or everything as a backup ZIP the extension can restore, with an optional password.
 */
 export function ExportSheet({
 	visible,
+	scope,
 	onClose,
 }: {
 	visible: boolean;
+	scope?: ExportScope;
 	onClose: () => void;
 }) {
+	const colors = useColors();
 	const store = useLibrary();
-	const [kind, setKind] = useState<ExportKind>('sessions');
+	const [what, setWhat] = useState<ExportWhat>('sessions');
 	const [format, setFormat] = useState<ExportFormat>('json');
+	const [password, setPassword] = useState('');
 	const [busy, setBusy] = useState(false);
 	const sessions = store.groups.length;
 	const bookmarks = store.bookmarks.length;
-	const empty = (kind === 'sessions' ? sessions : bookmarks) === 0;
+	const isBackup = scope === undefined && what === 'backup';
+	const empty =
+		scope === undefined &&
+		!isBackup &&
+		(what === 'sessions' ? sessions : bookmarks) === 0;
+	const problem =
+		isBackup && password !== ''
+			? (validateCredential('password', password) ?? undefined)
+			: undefined;
 	const run = async () => {
 		setBusy(true);
 		try {
-			const file = buildExport(exportData(store, kind), format, {
-				appName: APP_NAME,
-			});
-			await shareTextFile(file.filename, file.mime, file.content);
+			if (isBackup) {
+				const file = await buildBackup(store, APP_NAME, password);
+				await shareBinaryFile(file.filename, file.mime, file.bytes);
+			} else {
+				const data = scope?.data ?? exportData(store, what as ExportKind);
+				const file = buildExport(data, format, {appName: APP_NAME});
+				await shareTextFile(file.filename, file.mime, file.content);
+			}
+
+			setPassword('');
 			onClose();
 		} catch {
 			notify('Could not export', 'Try again.');
@@ -273,28 +338,54 @@ export function ExportSheet({
 	return (
 		<BottomSheet visible={visible} label="Export" onClose={onClose}>
 			<View style={styles.body}>
-				<Title>Export</Title>
-				<Chips
-					items={[
-						{id: 'sessions', name: 'Sessions', count: sessions},
-						{id: 'bookmarks', name: 'Bookmarks', count: bookmarks},
-					]}
-					selected={kind}
-					onSelect={(id) => {
-						setKind(id as ExportKind);
-					}}
-				/>
-				<Chips
-					items={EXPORT_FORMAT_CHOICES}
-					selected={format}
-					onSelect={(id) => {
-						setFormat(id as ExportFormat);
-					}}
-				/>
+				<Title>{scope ? `Export ${scope.title}` : 'Export'}</Title>
+				{scope === undefined && (
+					<Chips
+						items={[
+							{id: 'sessions', name: 'Sessions', count: sessions},
+							{id: 'bookmarks', name: 'Bookmarks', count: bookmarks},
+							{id: 'backup', name: 'Everything'},
+						]}
+						selected={what}
+						onSelect={(id) => {
+							setWhat(id as ExportWhat);
+						}}
+					/>
+				)}
+				{isBackup ? (
+					<>
+						<Text style={{color: colors.muted}}>
+							A ZIP with your sessions, bookmarks and settings in the
+							extension's own layout, which the extension can restore. A
+							password locks it; without one the file is readable by anyone.
+						</Text>
+						<Field
+							secureTextEntry
+							label="Password (optional)"
+							icon="lock-closed-outline"
+							value={password}
+							autoCapitalize="none"
+							autoCorrect={false}
+							error={problem}
+							onChangeText={setPassword}
+						/>
+						{password !== '' && (
+							<Text style={{color: colors.muted}}>{LOST_CREDENTIAL_NOTE}</Text>
+						)}
+					</>
+				) : (
+					<Chips
+						items={EXPORT_FORMAT_CHOICES}
+						selected={format}
+						onSelect={(id) => {
+							setFormat(id as ExportFormat);
+						}}
+					/>
+				)}
 				<Button
 					label="Export"
 					icon="share-outline"
-					disabled={empty}
+					disabled={empty || Boolean(problem)}
 					loading={busy}
 					onPress={() => void run()}
 				/>

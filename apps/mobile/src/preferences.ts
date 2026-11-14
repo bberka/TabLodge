@@ -66,19 +66,11 @@ export const ROW_ACTIONS: readonly RowAction[] = [
 What a swipe on a session card does.
 */
 export type SessionAction =
-	| 'none'
-	| 'open'
-	| 'color'
-	| 'rename'
-	| 'move'
-	| 'archive'
-	| 'share'
-	| 'delete';
+	'none' | 'open' | 'rename' | 'move' | 'archive' | 'share' | 'delete';
 export const SESSION_ACTIONS: readonly SessionAction[] = [
 	'none',
 	'open',
 	'rename',
-	'color',
 	'move',
 	'share',
 	'archive',
@@ -418,6 +410,8 @@ const SYNCED_KEYS = [
 	'sessionTap',
 	'sessionMain',
 	'cleanOnSave',
+	'savePreview',
+	'siteIcons',
 	'accent',
 	'theme',
 	'compactSessions',
@@ -486,6 +480,19 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 
 	if (raw.sessionTap === 'expand' || raw.sessionTap === 'open') {
 		found.sessionTap = raw.sessionTap;
+	}
+
+	const main = SESSION_ACTIONS.find((action) => action === raw.sessionMain);
+	if (main && main !== 'none') {
+		found.sessionMain = main;
+	}
+
+	if (typeof raw.savePreview === 'boolean') {
+		found.savePreview = raw.savePreview;
+	}
+
+	if (['off', 'server', 'direct'].includes(String(raw.siteIcons))) {
+		found.siteIcons = raw.siteIcons as Preferences['siteIcons'];
 	}
 
 	if (typeof raw.compactSessions === 'boolean') {
