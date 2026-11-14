@@ -21,7 +21,7 @@ function useActionChoices() {
 	const colors = useColors();
 	return ROW_ACTIONS.map((id) => {
 		const look = rowActionLook(id, colors);
-		return {id, name: look.label, glyph: look.icon, tint: look.color};
+		return {id, name: look.label, icon: look.icon, color: look.color};
 	});
 }
 
@@ -29,7 +29,7 @@ function useSessionActionChoices() {
 	const colors = useColors();
 	return SESSION_ACTIONS.map((id) => {
 		const look = sessionActionLook(id, colors);
-		return {id, name: look.label, glyph: look.icon, tint: look.color};
+		return {id, name: look.label, icon: look.icon, color: look.color};
 	});
 }
 

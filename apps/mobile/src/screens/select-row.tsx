@@ -42,6 +42,8 @@ export function SelectRow<T extends string>({
 			<ValueRow
 				row={row}
 				value={current?.name ?? ''}
+				icon={current?.icon}
+				tint={current?.color}
 				onPress={() => {
 					setOpen(true);
 				}}
@@ -74,10 +76,17 @@ export function ValueRow({
 	row,
 	value,
 	swatch,
+	icon,
+	tint,
 	onPress,
 }: {
 	row: Row;
 	value: string;
+	/**
+	An icon drawn before the value, in `tint` when there is one.
+	*/
+	icon?: IconName;
+	tint?: string;
 	/**
 	A color dot drawn before the value.
 	*/
@@ -110,7 +119,11 @@ export function ValueRow({
 					]}
 				/>
 			)}
-			<Text numberOfLines={1} style={[styles.value, {color: colors.muted}]}>
+			{icon && <Icon name={icon} size={18} color={tint ?? colors.muted} />}
+			<Text
+				numberOfLines={1}
+				style={[styles.value, {color: tint ?? colors.muted}]}
+			>
 				{value}
 			</Text>
 			<Icon name="chevron-forward" size={18} color={colors.muted} />
@@ -175,7 +188,7 @@ export function ChoiceList<T extends string>({
 							<View style={styles.choiceText}>
 								<Text
 									style={{
-										color: colors.text,
+										color: choice.color ?? colors.text,
 										fontSize: 16,
 										fontWeight: on ? '700' : '400',
 									}}
