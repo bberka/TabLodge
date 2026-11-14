@@ -66,6 +66,14 @@ export function parseServerKey(value: unknown): ServerKey | undefined {
 		: undefined;
 }
 
+/**
+The connection the private library syncs over: the regular server address with `/private` added, and the same token.
+*/
+export const privateSyncTarget = (regular: {url: string; token: string}) => ({
+	url: `${regular.url}/private`,
+	token: regular.token,
+});
+
 export const serverKeyText = (key: PrivateSyncKey) =>
 	JSON.stringify({v: 1, id: key.id, wrapped: key.wrapped} satisfies ServerKey);
 

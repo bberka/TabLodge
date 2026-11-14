@@ -14,6 +14,7 @@ import {
 import {
 	NEEDS_KEY_MESSAGE,
 	parsePrivateSyncKey,
+	privateSyncTarget,
 	parseServerKey,
 	type PrivateSyncKey,
 } from '../../extension/src/shared/private-sync';
@@ -58,7 +59,7 @@ async function target(): Promise<{url: string; token: string} | undefined> {
 	return isRecord(regular) &&
 		typeof regular.url === 'string' &&
 		typeof regular.token === 'string'
-		? {url: `${regular.url}/private`, token: regular.token}
+		? privateSyncTarget({url: regular.url, token: regular.token})
 		: undefined;
 }
 

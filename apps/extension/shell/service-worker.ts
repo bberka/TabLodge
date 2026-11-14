@@ -33,6 +33,7 @@ import {
 	createSyncKey,
 	joinSyncKey,
 	parsePrivateSyncKey,
+	privateSyncTarget,
 	parseServerKey,
 	type PrivateSyncKey,
 	rewrapSyncKey,
@@ -2264,11 +2265,6 @@ const regularSyncConfig = async () =>
 	parseConfig(
 		(await chrome.storage.local.get([SYNC_CONFIG_KEY]))[SYNC_CONFIG_KEY],
 	);
-
-const privateSyncTarget = (regular: SyncConfig): SyncConfig => ({
-	url: `${regular.url}/private`,
-	token: regular.token,
-});
 
 function assertPrivateSyncStorage() {
 	if (!(privateConfig.mode === 'saved' && privateConfig.configured)) {
