@@ -131,12 +131,16 @@ export function BookmarksScreen({
 			})),
 		[store],
 	);
-	// The All column is the first and the default; a column that no longer exists falls back to it.
+	// The All column is the first and the default unless it is turned off. A column that no longer exists falls back
+	// to it, or to the first column when it is off.
+	const showAll = links.showAllBookmarks;
+	const hasPicked = columns.some((column) => column.id === picked);
 	const columnId =
-		picked !== ALL_BOOKMARKS_ID &&
-		columns.every((column) => column.id !== picked)
+		showAll && (picked === ALL_BOOKMARKS_ID || !hasPicked)
 			? ALL_BOOKMARKS_ID
-			: picked;
+			: hasPicked
+				? picked
+				: (columns[0]?.id ?? '');
 	const isSearching = query.trim().length > 0;
 	const shown = useMemo(
 		() =>
@@ -505,13 +509,17 @@ export function BookmarksScreen({
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
 										items={[
-											{
-												id: ALL_BOOKMARKS_ID,
-												name: 'All',
-												count: store.bookmarks.length,
-												glyph: 'layers-outline' as const,
-												tint: colors.accent,
-											},
+											...(showAll
+												? [
+														{
+															id: ALL_BOOKMARKS_ID,
+															name: 'All',
+															count: store.bookmarks.length,
+															glyph: 'layers-outline' as const,
+															tint: colors.accent,
+														},
+													]
+												: []),
 											...columns.map((column) => chipLook(column)),
 											{
 												id: NEW_COLUMN_CHIP,

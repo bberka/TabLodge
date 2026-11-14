@@ -756,6 +756,12 @@ const settingsGroups: Array<{
 				],
 			},
 			{
+				name: 'showAllBookmarks',
+				label: 'Show All in the bookmark list',
+				help: 'The first item of the Focus view, and of the Android app, that lists every bookmark of every column. Turn it off to start in a column. The Android app follows this too.',
+				type: 'switch',
+			},
+			{
 				name: 'bookmarkClickAction',
 				label: 'When clicking a bookmark',
 				help: 'Choose what happens when you click a bookmark. The bookmark menu can always open it either way.',

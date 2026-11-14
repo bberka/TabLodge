@@ -178,6 +178,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	urlDisplayMode: 'full',
 	dashboardWidth: 'default',
 	bookmarkBoardView: 'focus',
+	showAllBookmarks: true,
 	removeTrackingParameters: false,
 	simplifyUrls: true,
 	markInsecureLinks: true,
@@ -988,6 +989,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		bookmarkBoardView: isOneOf(['board', 'focus'], raw.bookmarkBoardView)
 			? raw.bookmarkBoardView
 			: 'focus',
+		showAllBookmarks: raw.showAllBookmarks !== false,
 		keepLodgePinned: raw.keepLodgePinned === true,
 		browserBookmarkAction: isOneOf(
 			['off', 'ask', 'add'],

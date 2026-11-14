@@ -147,6 +147,13 @@ export function BookmarkBehaviourCard() {
 				}}
 			/>
 			<Toggle
+				row={ROWS.showAll}
+				value={settings.showAllBookmarks}
+				onChange={(value) => {
+					void setSyncedSetting('showAllBookmarks', value);
+				}}
+			/>
+			<Toggle
 				row={ROWS.spacing}
 				value={settings.bookmarkDensity === 'compact'}
 				onChange={(value) => {

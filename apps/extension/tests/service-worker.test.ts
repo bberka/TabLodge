@@ -5466,6 +5466,7 @@ for (const [key, fallback] of [
 	['showSaveWindowButton', true],
 	['showTrashBinButton', false],
 	['linkPreviews', false],
+	['showAllBookmarks', true],
 	['stretchBookmarkColumns', true],
 	['limitBookmarksPerColumn', true],
 ] as const) {

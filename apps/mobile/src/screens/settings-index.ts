@@ -106,6 +106,10 @@ export const ROWS = {
 		hint: 'Addresses on this device or home network',
 	},
 	spacing: {label: 'Compact bookmarks', hint: 'Tighter rows'},
+	showAll: {
+		label: 'Show All in the bookmark list',
+		hint: 'The first item, listing every bookmark. Shared with the extension',
+	},
 	sortSessions: {label: 'Sort sessions'},
 } satisfies Record<string, Row>;
 
@@ -189,6 +193,7 @@ export const SECTIONS = {
 			ROWS.swipeLeft,
 			ROWS.showUnder,
 			ROWS.spacing,
+			ROWS.showAll,
 			ROWS.siteIcons,
 			ROWS.savePreview,
 		],

@@ -19,6 +19,7 @@ export type LinkSettings = Pick<
 	| 'markInsecureLinks'
 	| 'markLocalLinks'
 	| 'bookmarkDensity'
+	| 'showAllBookmarks'
 	| 'sessionSort'
 	| 'showSessionFaviconPreviews'
 	| 'expandSessionsByDefault'
@@ -33,6 +34,7 @@ const DEFAULTS: LinkSettings = {
 	markInsecureLinks: true,
 	markLocalLinks: false,
 	bookmarkDensity: 'comfortable',
+	showAllBookmarks: true,
 	sessionSort: 'newest',
 	showSessionFaviconPreviews: true,
 	expandSessionsByDefault: false,

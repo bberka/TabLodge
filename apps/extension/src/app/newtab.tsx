@@ -2220,13 +2220,17 @@ function NewTab() {
 	const railAxis = () =>
 		globalThis.matchMedia('(min-width: 768px)').matches ? 'y' : 'x';
 	const focusItems: FocusColumnItem[] = [
-		{
-			id: ALL_COLUMN.id,
-			name: ALL_COLUMN.name,
-			count: bookmarks.length,
-			column: ALL_COLUMN,
-			all: true,
-		},
+		...(settings.showAllBookmarks === false
+			? []
+			: [
+					{
+						id: ALL_COLUMN.id,
+						name: ALL_COLUMN.name,
+						count: bookmarks.length,
+						column: ALL_COLUMN,
+						all: true,
+					},
+				]),
 		...columns.map((column) => ({
 			id: column.id,
 			name: column.name,
