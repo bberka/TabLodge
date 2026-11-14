@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../../extension/src/shared/types';
@@ -52,6 +52,7 @@ import {
 } from '../../ui/floating-actions';
 import {Button, Chips, Empty, Header, IconButton} from '../../ui/ui';
 import {openShare} from '../transfer/transfer-sheets';
+import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
 import {ReorderRow} from './reorder-row';
@@ -98,6 +99,7 @@ export function BookmarksScreen({
 	const search = useSearch();
 	const {query} = search;
 	const [refreshing, setRefreshing] = useState(false);
+	const listRef = useRef<FlatList<Bookmark>>(null);
 	const [menuOpen, setMenuOpen] = useState(false);
 	// The bookmark whose menu is open, from holding down its row.
 	const [rowMenuId, setRowMenuId] = useState<string>();
@@ -179,7 +181,7 @@ export function BookmarksScreen({
 				{
 					icon: 'create-outline',
 					label: 'Edit',
-					color: colors.warn,
+					color: colors.teal,
 					hint: 'Its link, title, and column',
 					onPress() {
 						setSheet({kind: 'edit', bookmark: rowMenuBookmark});
@@ -337,7 +339,7 @@ export function BookmarksScreen({
 					{
 						icon: 'create-outline' as const,
 						label: 'Edit column',
-						color: colors.warn,
+						color: colors.teal,
 						hint: 'Rename it, or change its icon and color',
 						onPress() {
 							setSheet({kind: 'column', id: columnId});
@@ -472,10 +474,22 @@ export function BookmarksScreen({
 		</>
 	);
 
+	// Three fingers dragged over the rows select them.
+	const dragSelect = useDragSelect({data: shown, selection, listRef});
+
 	return (
-		<View style={styles.screen}>
+		<View
+			ref={dragSelect.containerRef}
+			collapsable={false}
+			style={styles.screen}
+			{...dragSelect.panHandlers}
+			onLayout={dragSelect.onContainerLayout}
+		>
 			<FlatList
+				ref={listRef}
 				removeClippedSubviews
+				CellRendererComponent={dragSelect.CellRenderer}
+				scrollEnabled={dragSelect.scrollEnabled}
 				scrollEventThrottle={16}
 				data={shown}
 				extraData={selection.ids}
@@ -635,7 +649,10 @@ export function BookmarksScreen({
 						/>
 					)
 				}
-				onScroll={trackScroll}
+				onScroll={(event) => {
+					dragSelect.onScroll(event);
+					trackScroll(event);
+				}}
 				onRefresh={() => {
 					void refresh();
 				}}

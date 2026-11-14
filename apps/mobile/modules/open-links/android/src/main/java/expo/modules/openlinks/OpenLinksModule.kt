@@ -14,6 +14,8 @@ import java.io.ByteArrayOutputStream
 import android.net.Uri
 import android.os.Build
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -62,6 +64,18 @@ class OpenLinksModule : Module() {
     OnDestroy {
       screenOffReceiver?.let { appContext.reactContext?.unregisterReceiver(it) }
       screenOffReceiver = null
+    }
+
+    // How much of the screen's bottom the on-screen keyboard covers right now, in dp (0 while it is closed). It is read
+    // from the window itself, so it is right even when the keyboard's show and hide events were missed.
+    Function("keyboardHeight") {
+      val activity = appContext.currentActivity
+      val insets = activity?.window?.decorView?.let { ViewCompat.getRootWindowInsets(it) }
+      if (activity == null || insets == null || !insets.isVisible(WindowInsetsCompat.Type.ime())) {
+        0.0
+      } else {
+        insets.getInsets(WindowInsetsCompat.Type.ime()).bottom / activity.resources.displayMetrics.density.toDouble()
+      }
     }
 
     // The phone's own accent color, as the light and the dark shade Android's Material You palette uses for a

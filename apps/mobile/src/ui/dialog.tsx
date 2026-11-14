@@ -106,6 +106,7 @@ export function DialogHost() {
 			return;
 		}
 
+		settleKeyboard();
 		const timer = setTimeout(settleKeyboard, 400);
 		return () => {
 			clearTimeout(timer);
@@ -147,6 +148,7 @@ export function DialogHost() {
 		shown.actions.reduce((sum, action) => sum + action.label.length, 0) > 28;
 	return (
 		<Modal
+			hardwareAccelerated
 			transparent
 			statusBarTranslucent
 			navigationBarTranslucent

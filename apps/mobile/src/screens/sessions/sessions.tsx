@@ -660,7 +660,7 @@ export function SessionsScreen({
 					{
 						icon: 'create-outline',
 						label: 'Edit',
-						color: colorsNow.warn,
+						color: colorsNow.teal,
 						onPress() {
 							setEditingTab({session: tabMenuSession, tabId: tabMenuTab.id});
 						},
@@ -1053,7 +1053,7 @@ function folderMenuFor(
 			{
 				icon: 'create-outline',
 				label: 'Edit folder',
-				color: colors.warn,
+				color: colors.teal,
 				hint: 'Rename it, or change its icon and color',
 				onPress() {
 					editFolder(id);

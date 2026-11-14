@@ -9,6 +9,7 @@ type OpenLinksModule = {
 	openAll: (urls: string[], how: string, packageName: string | null) => boolean;
 	browsers: () => string[][];
 	systemAccent: () => [string, string] | null;
+	keyboardHeight: () => number;
 };
 
 const native = requireOptionalNativeModule<OpenLinksModule>('OpenLinks');
@@ -67,4 +68,12 @@ export function onScreenOff(callback: () => void): (() => void) | false {
 	return () => {
 		subscription.remove();
 	};
+}
+
+/**
+How much of the screen's bottom the on-screen keyboard covers right now, in dp, read from the window itself, or
+undefined on a build without native support. The keyboard's show and hide events can be missed; this cannot.
+*/
+export function nativeKeyboardHeight(): number | undefined {
+	return native?.keyboardHeight();
 }

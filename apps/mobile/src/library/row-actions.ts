@@ -15,7 +15,7 @@ export function rowActionLook(
 		}
 
 		case 'edit': {
-			return {label: 'Edit', icon: 'create-outline', color: colors.warn};
+			return {label: 'Edit', icon: 'create-outline', color: colors.teal};
 		}
 
 		case 'move': {
@@ -53,7 +53,7 @@ export function sessionActionLook(
 			return {
 				label: 'Edit details',
 				icon: 'create-outline',
-				color: colors.warn,
+				color: colors.teal,
 			};
 		}
 
@@ -67,9 +67,9 @@ export function sessionActionLook(
 				? {
 						label: 'Unarchive',
 						icon: 'arrow-undo-outline',
-						color: colors.teal,
+						color: colors.warn,
 					}
-				: {label: 'Archive', icon: 'archive-outline', color: colors.teal};
+				: {label: 'Archive', icon: 'archive-outline', color: colors.warn};
 		}
 
 		case 'share': {
