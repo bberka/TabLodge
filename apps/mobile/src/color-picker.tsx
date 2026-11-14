@@ -5,7 +5,6 @@ import {
 	type LayoutChangeEvent,
 	Pressable,
 	StyleSheet,
-	Text,
 	View,
 } from 'react-native';
 import {ACCENTS, isColumnColor} from '../../extension/src/shared/accent-colors';
@@ -152,11 +151,6 @@ export function ColorPicker({
 	const [typed, setTyped] = useState(custom ? selected : '');
 	const bad = typed !== '' && !HEX.test(typed);
 	const preview = hslToHex(hue, SATURATION, lightnessAt(shade));
-	const lead = leading.find((choice) => choice.id === selected);
-	const name =
-		lead?.label ??
-		ACCENTS.find((accent) => accent.id === selected)?.label ??
-		(custom ? `Custom ${selected}` : 'This color is not available');
 	const commit = (nextHue: number, nextShade: number) => {
 		const hex = hslToHex(nextHue, SATURATION, lightnessAt(nextShade));
 		setTyped(hex);
@@ -165,26 +159,6 @@ export function ColorPicker({
 
 	return (
 		<View style={styles.group}>
-			<View
-				accessible
-				accessibilityLiveRegion="polite"
-				style={styles.selection}
-			>
-				<View
-					style={[
-						styles.dot,
-						{
-							backgroundColor: custom
-								? selected
-								: (lead?.hex ??
-									ACCENTS.find((accent) => accent.id === selected)?.hex ??
-									colors.surface),
-							borderColor: colors.border,
-						},
-					]}
-				/>
-				<Text style={{color: colors.text, fontWeight: '600'}}>{name}</Text>
-			</View>
 			<View accessibilityRole="radiogroup" style={styles.swatches}>
 				{leading.map((choice) => {
 					const on = selected === choice.id;
@@ -331,9 +305,8 @@ export function ColorPicker({
 
 const styles = StyleSheet.create({
 	group: {gap: 12},
-	selection: {flexDirection: 'row', alignItems: 'center', gap: 10},
-	dot: {width: 22, height: 22, borderRadius: 11, borderWidth: 1},
 	swatches: {flexDirection: 'row', flexWrap: 'wrap', gap: 10},
+	dot: {width: 22, height: 22, borderRadius: 11, borderWidth: 1},
 	swatch: {
 		width: Math.max(SWATCH, TARGET - 8),
 		height: Math.max(SWATCH, TARGET - 8),

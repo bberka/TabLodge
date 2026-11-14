@@ -26,8 +26,11 @@ export type BarTab<T extends string> = {
 // the highlighted pill, which iOS's own 49 point bar was too short for.
 const DOCKED_HEIGHT = 76;
 const PILL_HEIGHT = 56;
-const COMPACT_HEIGHT = 48;
-const COMPACT_TAB_WIDTH = 56;
+// The small bar keeps a touch target as big as the round search and add buttons (52), and its icons grow a little to
+// fill the room the labels leave.
+const COMPACT_HEIGHT = 56;
+const COMPACT_TAB_WIDTH = 72;
+const COMPACT_ICON_SCALE = 1.2;
 const BAR_PADDING = 6;
 
 /**
@@ -241,19 +244,32 @@ export function TabBar<T extends string>({
 								style={{
 									transform: [
 										{
-											scale: pop.interpolate({
+											scale: shrink.interpolate({
 												inputRange: [0, 1],
-												outputRange: [1, 1.15],
+												outputRange: [1, COMPACT_ICON_SCALE],
 											}),
 										},
 									],
 								}}
 							>
-								<Icon
-									name={on ? tab.active : tab.icon}
-									color={ink}
-									size={ios ? 25 : 24}
-								/>
+								<Animated.View
+									style={{
+										transform: [
+											{
+												scale: pop.interpolate({
+													inputRange: [0, 1],
+													outputRange: [1, 1.15],
+												}),
+											},
+										],
+									}}
+								>
+									<Icon
+										name={on ? tab.active : tab.icon}
+										color={ink}
+										size={ios ? 25 : 24}
+									/>
+								</Animated.View>
 							</Animated.View>
 							<Animated.View
 								style={

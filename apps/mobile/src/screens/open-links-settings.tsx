@@ -22,7 +22,11 @@ Chrome ignores a request for a private tab from another app, so private links ge
 export function OpenLinksCard() {
 	const prefs = usePreferences();
 	const browsers = useMemo(() => installedBrowsers(), []);
-	const browserChoices = browsers.map(({id, name}) => ({id, name}));
+	const browserChoices = browsers.map(({id, name, icon}) => ({
+		id,
+		name,
+		image: icon,
+	}));
 	// A browser is picked as soon as the choice is made, so the row never reads blank.
 	const first = browsers[0]?.id;
 	const privateChoices: Array<{

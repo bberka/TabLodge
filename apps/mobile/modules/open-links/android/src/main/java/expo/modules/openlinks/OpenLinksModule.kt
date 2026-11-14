@@ -6,6 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import android.net.Uri
 import android.os.Build
 import androidx.browser.customtabs.CustomTabsIntent
@@ -19,6 +24,16 @@ import expo.modules.kotlin.modules.ModuleDefinition
  */
 class OpenLinksModule : Module() {
   private var screenOffReceiver: BroadcastReceiver? = null
+
+  // An app's icon as a 96 pixel PNG in base64, drawn whatever kind of drawable it is (launcher icons are adaptive).
+  private fun iconBase64(drawable: Drawable, size: Int = 96): String {
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    drawable.setBounds(0, 0, size, size)
+    drawable.draw(Canvas(bitmap))
+    val out = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+    return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+  }
 
   override fun definition() = ModuleDefinition {
     Name("OpenLinks")
@@ -62,7 +77,8 @@ class OpenLinksModule : Module() {
       }
     }
 
-    // The browsers installed on the phone, as [package name, label] pairs, for the "open links in" choice.
+    // The browsers installed on the phone, as [package name, label, icon] triples, for the "open links in" choice. The
+    // icon is a small PNG as base64, drawn from the app's own launcher icon.
     Function("browsers") {
       val context = appContext.currentActivity ?: appContext.reactContext
       if (context == null) {
@@ -70,12 +86,16 @@ class OpenLinksModule : Module() {
       } else {
         val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE)
         @Suppress("DEPRECATION")
+        val icons = mutableMapOf<String, String>()
         context.packageManager.queryIntentActivities(probe, PackageManager.MATCH_ALL)
-          .map { it.activityInfo.packageName to it.loadLabel(context.packageManager).toString() }
+          .map {
+            icons.putIfAbsent(it.activityInfo.packageName, iconBase64(it.loadIcon(context.packageManager)))
+            it.activityInfo.packageName to it.loadLabel(context.packageManager).toString()
+          }
           .filter { it.first != context.packageName }
           .distinctBy { it.first }
           .sortedBy { it.second.lowercase() }
-          .map { listOf(it.first, it.second) }
+          .map { listOf(it.first, it.second, icons[it.first] ?: "") }
       }
     }
 

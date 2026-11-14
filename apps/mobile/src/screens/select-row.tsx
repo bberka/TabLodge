@@ -1,5 +1,12 @@
 import {type ReactNode, useState} from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {
+	Image,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	View,
+} from 'react-native';
 import {BottomSheet} from '../bottom-sheet';
 import {TARGET, useColors} from '../theme';
 import {Icon, type IconName} from '../ui';
@@ -14,6 +21,10 @@ export type Choice<T extends string> = {
 	*/
 	hint?: string;
 	icon?: IconName;
+	/**
+	A picture drawn in place of the icon, such as an app's own icon, as an image address.
+	*/
+	image?: string;
 	/**
 	The color of the icon, for choices that have one of their own.
 	*/
@@ -43,6 +54,7 @@ export function SelectRow<T extends string>({
 				row={row}
 				value={current?.name ?? ''}
 				icon={current?.icon}
+				image={current?.image}
 				tint={current?.color}
 				onPress={() => {
 					setOpen(true);
@@ -78,6 +90,7 @@ export function ValueRow({
 	value,
 	swatch,
 	icon,
+	image,
 	tint,
 	onPress,
 }: {
@@ -87,6 +100,10 @@ export function ValueRow({
 	An icon drawn before the value, in `tint` when there is one.
 	*/
 	icon?: IconName;
+	/**
+	An image drawn before the value, instead of the icon.
+	*/
+	image?: string;
 	tint?: string;
 	/**
 	A color dot drawn before the value.
@@ -120,7 +137,11 @@ export function ValueRow({
 					]}
 				/>
 			)}
-			{icon && <Icon name={icon} size={18} color={tint ?? colors.muted} />}
+			{image ? (
+				<Image source={{uri: image}} style={styles.smallImage} />
+			) : (
+				icon && <Icon name={icon} size={18} color={tint ?? colors.muted} />
+			)}
 			<Text
 				numberOfLines={1}
 				style={[styles.value, {color: tint ?? colors.muted}]}
@@ -179,12 +200,16 @@ export function ChoiceList<T extends string>({
 								onPick(choice.id);
 							}}
 						>
-							{choice.icon && (
-								<Icon
-									name={choice.icon}
-									size={22}
-									color={choice.color ?? colors.muted}
-								/>
+							{choice.image ? (
+								<Image source={{uri: choice.image}} style={styles.image} />
+							) : (
+								choice.icon && (
+									<Icon
+										name={choice.icon}
+										size={22}
+										color={choice.color ?? colors.muted}
+									/>
+								)
 							)}
 							<View style={styles.choiceText}>
 								<Text
@@ -222,6 +247,8 @@ const styles = StyleSheet.create({
 	label: {flex: 1, fontSize: 16},
 	value: {maxWidth: '50%', fontSize: 15},
 	dot: {width: 16, height: 16, borderRadius: 8, borderWidth: 1},
+	smallImage: {width: 20, height: 20, borderRadius: 5},
+	image: {width: 32, height: 32, borderRadius: 8},
 	title: {
 		fontSize: 20,
 		fontWeight: '700',

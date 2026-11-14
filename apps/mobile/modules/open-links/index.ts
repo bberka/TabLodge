@@ -30,8 +30,19 @@ export function openLinksTogether(
 /**
 The browsers installed on this phone, or none on a build without native support.
 */
-export function installedBrowsers(): Array<{id: string; name: string}> {
-	return (native?.browsers() ?? []).map(([id, name]) => ({id, name}));
+export function installedBrowsers(): Array<{
+	id: string;
+	name: string;
+	/**
+	The app's icon as a `data:` address, or undefined when it could not be read.
+	*/
+	icon?: string;
+}> {
+	return (native?.browsers() ?? []).map(([id, name, icon]) => ({
+		id,
+		name,
+		icon: icon ? `data:image/png;base64,${icon}` : undefined,
+	}));
 }
 
 /**
