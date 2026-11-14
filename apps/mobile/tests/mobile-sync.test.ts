@@ -6,7 +6,7 @@ import {
 	addColumn,
 	emptyStore,
 	removeBookmarks,
-} from '../src/library';
+} from '../src/library/library';
 import type {Session, Store} from '../../extension/src/shared/types';
 import {ChangeLog} from '../../extension/src/shared/sync/change-log';
 import {

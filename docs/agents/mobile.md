@@ -6,7 +6,13 @@ Expo and React Native, TypeScript. It syncs with the user's own sync server and 
 
 | Path | Holds |
 | --- | --- |
-| `src/` | App code: library, sync wiring, screens, settings |
+| `src/ui/` | Look and shared components: theme, sheets, dialogs, the tab bar, keyboard and motion helpers |
+| `src/library/` | The library: edits, the store, links, the view, the row actions |
+| `src/transfer/` | Import, export, backups, and files |
+| `src/settings/` | The app's own preferences and their sync |
+| `src/private/` | The private library: its lock, sheets, switch, and auto-lock |
+| `src/platform/` | Device, storage, open links, and polyfills |
+| `src/screens/` | One folder per area: `bookmarks`, `sessions`, `save`, `settings`, `transfer` |
 | `modules/tablodge-crypto/` | Local native module (PBKDF2 and AES-GCM for the private library) |
 | `scripts/build-apk.mts` | `pnpm run mobile:apk`: a standalone APK from this checkout |
 | `tests/` | Vitest suites for the logic that does not need a device |

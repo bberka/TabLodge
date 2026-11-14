@@ -49,8 +49,8 @@ import {
 	restoreColumn,
 	allBookmarks,
 	updateSessionTab,
-} from '../src/library';
-import {sampleStore} from '../src/seed';
+} from '../src/library/library';
+import {sampleStore} from '../src/library/seed';
 
 const NOW = 1000;
 const ids = (store: ReturnType<typeof emptyStore>, columnId: string) =>
