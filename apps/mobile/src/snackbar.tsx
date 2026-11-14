@@ -1,5 +1,11 @@
 import {useEffect, useRef, useSyncExternalStore} from 'react';
-import {Animated, Pressable, StyleSheet, Text} from 'react-native';
+import {
+	Animated,
+	Pressable,
+	StyleSheet,
+	Text,
+	useColorScheme,
+} from 'react-native';
 import {motion} from './motion';
 import {useBarSpace} from './tab-bar';
 import {useColors, useShape} from './theme';
@@ -77,6 +83,9 @@ export function SnackbarHost() {
 		}).start();
 	}, [snack, shown]);
 
+	// The bar is dark, so its action needs a light color: the accent in dark theme (a pale tone there), its tint in light.
+	const actionColor =
+		useColorScheme() === 'dark' ? colors.accent : colors.accentSoft;
 	const view = snack ?? lastRef.current;
 	if (!view) {
 		return null;
@@ -89,7 +98,8 @@ export function SnackbarHost() {
 			style={[
 				styles.wrap,
 				{
-					bottom: space + 8,
+					// Above the round buttons that float at the screen's bottom corner.
+					bottom: space + 16 + 52 + 12,
 					opacity: shown,
 					transform: [
 						{
@@ -106,7 +116,7 @@ export function SnackbarHost() {
 				style={[
 					styles.bar,
 					{
-						backgroundColor: shape.ios ? colors.text : '#322f3a',
+						backgroundColor: '#322f3a',
 						borderRadius: shape.ios ? 14 : 8,
 					},
 				]}
@@ -121,7 +131,7 @@ export function SnackbarHost() {
 							dismiss();
 						}}
 					>
-						<Text style={[styles.actionLabel, {color: colors.accentSoft}]}>
+						<Text style={[styles.actionLabel, {color: actionColor}]}>
 							{view.actionLabel}
 						</Text>
 					</Pressable>
