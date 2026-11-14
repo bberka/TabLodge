@@ -49,11 +49,11 @@ export type SessionAction =
 export const SESSION_ACTIONS: readonly SessionAction[] = [
 	'none',
 	'open',
-	'color',
 	'rename',
+	'color',
 	'move',
-	'archive',
 	'share',
+	'archive',
 	'delete',
 ];
 

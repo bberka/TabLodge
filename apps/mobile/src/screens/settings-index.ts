@@ -212,6 +212,24 @@ export const SECTIONS = {
 			ROWS.privateOpenApp,
 		],
 	},
+	data: {
+		title: 'Import and export',
+		aliases: [
+			'import',
+			'export',
+			'backup',
+			'file',
+			'paste',
+			'json',
+			'csv',
+			'html',
+			'markdown',
+			'onetab',
+			'bookmarks file',
+			'restore',
+		],
+		rows: [],
+	},
 	private: {
 		title: 'Private library',
 		aliases: [

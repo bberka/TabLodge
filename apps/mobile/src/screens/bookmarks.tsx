@@ -440,11 +440,11 @@ export function BookmarksScreen({
 						? []
 						: [
 								{
-									icon: 'list-outline' as const,
-									label: 'Manage columns',
-									hint: 'Open, put in order, or change any column',
+									icon: 'checkbox-outline' as const,
+									label: 'Select bookmarks',
+									hint: 'Move, open or delete several at once',
 									onPress() {
-										setColumnsOpen(true);
+										selection.start();
 									},
 								},
 								...(!searching && shown.length > 1
@@ -472,11 +472,11 @@ export function BookmarksScreen({
 										]
 									: []),
 								{
-									icon: 'checkbox-outline' as const,
-									label: 'Select bookmarks',
-									hint: 'Move, open or delete several at once',
+									icon: 'list-outline' as const,
+									label: 'Manage columns',
+									hint: 'Open, put in order, or change any column',
 									onPress() {
-										selection.start();
+										setColumnsOpen(true);
 									},
 								},
 							]),

@@ -4,7 +4,6 @@ import {
 	useColorScheme,
 	Pressable,
 	ScrollView,
-	Share,
 	StyleSheet,
 	Text,
 	View,
@@ -22,7 +21,6 @@ import {
 	renameSession,
 	restoreSession,
 	sessionFolders,
-	sessionLinks,
 	sessionsIn,
 } from '../library';
 import {
@@ -50,6 +48,7 @@ import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
 import {FolderSheet, RenameSheet} from './session-sheets';
 import {SessionColorSheet} from './session-color-sheet';
+import {ShareSessionSheet} from './transfer-sheets';
 
 const PREVIEW_TABS = 4;
 
@@ -57,11 +56,11 @@ const PREVIEW_TABS = 4;
 const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
 	['expand', 'Show or hide tabs'],
 	['open', 'Open all tabs'],
-	['color', 'Change color'],
 	['rename', 'Rename'],
+	['color', 'Change color'],
 	['move', 'Move to folder'],
-	['archive', 'Archive'],
 	['share', 'Share links'],
+	['archive', 'Archive'],
 	['delete', 'Delete'],
 	['more', 'More actions'],
 ];
@@ -368,6 +367,8 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const [movingId, setMovingId] = useState<string>();
 	const moving = store.groups.find((session) => session.id === movingId);
 	const [menuId, setMenuId] = useState<string>();
+	const [sharingId, setSharingId] = useState<string>();
+	const sharing = store.groups.find((session) => session.id === sharingId);
 	const menuFor = store.groups.find((session) => session.id === menuId);
 	const readOnly = view === 'private';
 	const colorsNow = useColors();
@@ -472,7 +473,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				}
 
 				case 'share': {
-					void Share.share({message: sessionLinks(session)});
+					setSharingId(session.id);
 					break;
 				}
 
@@ -531,11 +532,11 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				? (['open', 'share'] as const)
 				: ([
 						'open',
-						'color',
 						'rename',
+						'color',
 						'move',
-						'archive',
 						'share',
+						'archive',
 						'delete',
 					] as const)
 			).map((action) => {
@@ -543,6 +544,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				return {
 					icon: actionLook.icon,
 					label: actionLook.label,
+					destructive: action === 'delete',
 					onPress() {
 						act(action, menuFor);
 					},
@@ -708,6 +710,12 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				}}
 				onClose={() => {
 					setMovingId(undefined);
+				}}
+			/>
+			<ShareSessionSheet
+				session={sharing}
+				onClose={() => {
+					setSharingId(undefined);
 				}}
 			/>
 			<SessionColorSheet
