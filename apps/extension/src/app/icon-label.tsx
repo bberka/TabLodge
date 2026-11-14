@@ -53,9 +53,16 @@ export function ColumnLabel({
 	);
 }
 
-export function FolderLabel({folder}: {folder: {name: string; icon?: string}}) {
+export function FolderLabel({
+	folder,
+}: {
+	folder: {name: string; icon?: string; color?: string};
+}) {
 	return (
-		<IconLabel icon={getIcon(folder.icon, DEFAULT_FOLDER_ICON).component}>
+		<IconLabel
+			icon={getIcon(folder.icon, DEFAULT_FOLDER_ICON).component}
+			color={folder.color}
+		>
 			{folder.name}
 		</IconLabel>
 	);

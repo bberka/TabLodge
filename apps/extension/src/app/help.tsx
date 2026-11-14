@@ -231,6 +231,12 @@ function Help() {
 						'session color colour card line accent hex edit details tint label',
 				},
 				{
+					title: 'Folder colors',
+					body: 'Edit a folder (or create one) and choose a Color. The folder’s icon takes that color in the folder selectors. Turn on Update session colors to folder color when moved and a session you move into that folder, from its menu, by dragging it onto the folder, or in Edit details, takes the folder’s color. Colors already set stay as they are, and a color you pick in Edit details in the same save wins. The Android app keeps the color and the switch but does not apply them when you move a session there.',
+					searchText:
+						'folder color colour switch update session colors move drag edit folder icon tint',
+				},
+				{
 					title: 'Device names on sessions',
 					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
 					searchText:

@@ -69,6 +69,7 @@ import {
 	Input,
 	IconTooltip,
 	Label,
+	Switch,
 	Select,
 	SelectContent,
 	SelectItem,
@@ -182,6 +183,14 @@ type FolderDialog = {
 	The icon chosen so far in the open dialog.
 	*/
 	icon?: string;
+	/**
+	The color chosen so far; an empty string or missing means none.
+	*/
+	color?: string;
+	/**
+	Whether a session moved into the folder takes its color.
+	*/
+	colorSessions?: boolean;
 };
 type DialogState =
 	'bookmark' | 'bookmark-selected' | 'details' | FolderDialog | null;
@@ -1597,8 +1606,15 @@ export function SessionManager({
 						folderId,
 						name,
 						icon: folderDialog.icon ?? '',
+						color: folderDialog.color ?? '',
+						colorSessions: Boolean(folderDialog.colorSessions),
 					})
-				: await send('CREATE_FOLDER', {name, icon: folderDialog?.icon});
+				: await send('CREATE_FOLDER', {
+						name,
+						icon: folderDialog?.icon,
+						color: folderDialog?.color,
+						colorSessions: folderDialog?.colorSessions,
+					});
 		if (!result?.ok) {
 			showStatus(result?.error || 'Could not save this folder.', true);
 			return;
@@ -1914,6 +1930,8 @@ export function SessionManager({
 													mode: 'rename',
 													folder,
 													icon: folder.icon,
+													color: folder.color,
+													colorSessions: folder.colorSessions,
 												});
 											},
 										},
@@ -1995,6 +2013,8 @@ export function SessionManager({
 												mode: 'rename',
 												folder: selectedFolder,
 												icon: selectedFolder.icon,
+												color: selectedFolder.color,
+												colorSessions: selectedFolder.colorSessions,
 											})
 										}
 									>
@@ -2435,7 +2455,21 @@ export function SessionManager({
 							</div>
 							<div className="min-w-0 space-y-1.5">
 								<Label htmlFor="group-folder">Folder</Label>
-								<Select value={detailsFolder} onValueChange={setDetailsFolder}>
+								<Select
+									value={detailsFolder}
+									onValueChange={(next) => {
+										setDetailsFolder(next);
+										const target = folders.find((folder) => folder.id === next);
+										// Moving into a folder that colors its sessions picks its color here; it can still be changed before saving.
+										if (
+											next !== editingGroup?.folderId &&
+											target?.colorSessions &&
+											target.color
+										) {
+											setDetailsColor(target.color);
+										}
+									}}
+								>
 									<SelectTrigger id="group-folder">
 										<SelectValue />
 									</SelectTrigger>
@@ -2549,6 +2583,39 @@ export function SessionManager({
 									)
 								}
 							/>
+							<div className="space-y-1.5">
+								<Label id="folder-color-label" className="block">
+									Color
+								</Label>
+								<AccentPalette
+									forColumn
+									accent={folderDialog?.color || 'default'}
+									systemColor={undefined}
+									onChange={(accent) =>
+										setDialog((old) =>
+											typeof old === 'object' && old
+												? {...old, color: accent === 'default' ? '' : accent}
+												: old,
+										)
+									}
+								/>
+							</div>
+							<div className="flex items-center justify-between gap-3">
+								<Label htmlFor="folder-color-sessions">
+									Update session colors to folder color when moved
+								</Label>
+								<Switch
+									id="folder-color-sessions"
+									checked={Boolean(folderDialog?.colorSessions)}
+									onCheckedChange={(colorSessions) =>
+										setDialog((old) =>
+											typeof old === 'object' && old
+												? {...old, colorSessions}
+												: old,
+										)
+									}
+								/>
+							</div>
 						</DialogBody>
 						<DialogFooter>
 							<Button
