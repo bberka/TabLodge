@@ -6,12 +6,14 @@ import {
 	StyleSheet,
 	Text,
 	useWindowDimensions,
+	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {resolveLook, usePreferences} from '../settings/preferences';
 import {useKeyboardHeight} from './keyboard';
 import {motion, spring} from './motion';
 import {resetScroll, useScrolledDown} from './scroll-state';
+import {useSearchAction} from './search-action';
 import {BAR_HEIGHT, useColors, useShape} from './theme';
 import {Icon, type IconName} from './ui';
 
@@ -103,6 +105,7 @@ export function TabBar<T extends string>({
 	);
 	// The shared keyboard state is checked against the window, so a keyboard that closed unnoticed does not keep the bar away.
 	const keyboard = useKeyboardHeight() > 0;
+	const searchAction = useSearchAction();
 	// 0 is the full bar, 1 the small one. Width and height are layout, so this one runs on the JS thread.
 	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
 	// 0 shows the names under the icons, 1 hides them.
@@ -337,6 +340,29 @@ export function TabBar<T extends string>({
 						</Pressable>
 					);
 				})}
+				{!floatingBar && searchAction && (
+					// Search sits at the bar's right end, with the tabs on its left.
+					<Pressable
+						accessibilityRole="button"
+						accessibilityLabel="Search"
+						style={styles.tab}
+						onPress={searchAction}
+					>
+						<Icon name="search" color={colors.muted} size={ios ? 25 : 24} />
+						<View style={styles.label}>
+							<Text
+								numberOfLines={1}
+								style={{
+									color: colors.muted,
+									fontWeight: '500',
+									fontSize: ios ? 11 : 12,
+								}}
+							>
+								Search
+							</Text>
+						</View>
+					</Pressable>
+				)}
 			</Animated.View>
 		</Animated.View>
 	);

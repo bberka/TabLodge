@@ -13,6 +13,7 @@ import {usePreferences} from '../settings/preferences';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
 import {motion} from './motion';
 import {useScrolledDown} from './scroll-state';
+import {setSearchAction} from './search-action';
 import {useBarHeight} from './tab-bar';
 import {useColors, useShape} from './theme';
 import {Icon, IconButton, type IconName} from './ui';
@@ -36,6 +37,20 @@ Search that opens from a button. `open` and `query` belong to the screen, which 
 export function useSearch() {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState('');
+	// A docked tab bar holds the search button itself, so the screen on show hands it what to do.
+	const {floatingBar} = usePreferences();
+	useEffect(() => {
+		if (floatingBar) {
+			return;
+		}
+
+		setSearchAction(() => {
+			setOpen(true);
+		});
+		return () => {
+			setSearchAction(undefined);
+		};
+	}, [floatingBar]);
 	return {
 		open,
 		query,
@@ -135,7 +150,8 @@ export function FloatingActions({
 		}).start();
 	}, [barHeight, size]);
 	const each = floatingBar ? size : SIZE;
-	const search = onSearch && (
+	// With a docked bar, the search button is in the bar.
+	const search = onSearch && floatingBar && (
 		<RoundButton icon="search" label="Search" size={each} onPress={onSearch} />
 	);
 	const add = onAdd && (
