@@ -1,6 +1,7 @@
 name: Test
 
-# Runs on every push to the main branch and on pull requests: lint (XO), typecheck, tests, build, package, and the Firefox smoke check.
+# Runs on every push to the main branch and on pull requests. Three independent jobs run in parallel:
+# lint, typecheck and tests; extension build, package and Firefox smoke check; and the Android bundle.
 on:
   push:
     branches: [master, main]
@@ -14,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Lint, typecheck, test, build, package, Firefox smoke check
+  check:
+    name: Lint, typecheck, test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -27,9 +28,45 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec vp run check
+
+  extension:
+    name: Build, package, Firefox smoke check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec vp run build
       - run: pnpm exec vp run pack
-      # Bundles the Android app's JavaScript with Metro; no Android SDK is needed.
-      - run: pnpm run mobile:export
       # Installs the Firefox package in the runner's Firefox and runs the core workflows.
       - run: pnpm exec vp run browser:firefox
+
+  mobile:
+    name: Bundle Android app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Bundles the Android app's JavaScript with Metro; no Android SDK is needed.
+      - run: pnpm run mobile:export
+
+  # The branch ruleset requires this check name. It passes only when the three jobs above pass.
+  test:
+    name: Lint, typecheck, test, build, package, Firefox smoke check
+    needs: [check, extension, mobile]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          test "${{ needs.check.result }}" = success
+          test "${{ needs.extension.result }}" = success
+          test "${{ needs.mobile.result }}" = success
