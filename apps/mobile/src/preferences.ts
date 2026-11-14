@@ -8,15 +8,35 @@ import {isAccent} from '../../extension/src/shared/accent-colors';
 import {cleanDeviceName} from '../../extension/src/shared/device';
 import {readJson, writeJson} from './storage';
 
-const LOOKS = ['auto', 'material', 'ios'] as const;
+const LOOKS = ['auto', 'material', 'oneui', 'ios'] as const;
 export type Look = (typeof LOOKS)[number];
 const isLook = (value: unknown): value is Look => LOOKS.includes(value as Look);
 
 /**
-The look to draw: the one chosen, or for Automatic the phone's own, which is iOS on an iPhone and Material on Android.
+Whether this is a Samsung phone, which has its own One UI look.
 */
-export const resolveLook = (look: Look): 'material' | 'ios' =>
-	look === 'auto' ? (Platform.OS === 'ios' ? 'ios' : 'material') : look;
+const samsung = (): boolean =>
+	Platform.OS === 'android' &&
+	(
+		Platform.constants as {Manufacturer?: string}
+	).Manufacturer?.toLowerCase() === 'samsung';
+
+/**
+The look to draw: the one chosen, or for Automatic the phone's own: iOS on an iPhone, One UI on a Samsung phone, and
+Material on any other Android phone.
+*/
+export const resolveLook = (look: Look): 'material' | 'oneui' | 'ios' => {
+	if (look !== 'auto') {
+		return look;
+	}
+
+	if (Platform.OS === 'ios') {
+		return 'ios';
+	}
+
+	return samsung() ? 'oneui' : 'material';
+};
+
 export type Theme = 'system' | 'light' | 'dark';
 
 const THEMES = new Set<unknown>(['system', 'light', 'dark']);
@@ -168,7 +188,7 @@ const KEY = 'tablodge.prefs';
 
 const defaults: Preferences = {
 	look: 'auto',
-	floatingBar: false,
+	floatingBar: true,
 	barSize: 'scroll',
 	lastColumnId: '',
 	tapAction: 'open',

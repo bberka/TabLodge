@@ -34,6 +34,37 @@ const darkMaterial: typeof light = {
 	warn: '#f0c36d',
 };
 
+// Samsung One UI: a light gray page with white cards, a black page in the dark theme, and Samsung's blue.
+const oneUiLight: typeof light = {
+	background: '#f6f6f6',
+	surface: '#ffffff',
+	pressed: '#ececec',
+	text: '#000000',
+	muted: '#6a6a6a',
+	border: '#e4e4e4',
+	accent: '#3e91ff',
+	accentSoft: '#e3eeff',
+	onAccent: '#ffffff',
+	danger: '#d93a3a',
+	ok: '#2e8b57',
+	warn: '#a35f00',
+};
+
+const oneUiDark: typeof light = {
+	background: '#000000',
+	surface: '#1f1f1f',
+	pressed: '#2c2c2c',
+	text: '#ffffff',
+	muted: '#a8a8a8',
+	border: '#333333',
+	accent: '#4d9bff',
+	accentSoft: '#12294a',
+	onAccent: '#000000',
+	danger: '#e5484d',
+	ok: '#6fd49a',
+	warn: '#f0c36d',
+};
+
 export type Colors = typeof light;
 
 // The iOS look uses the system colors: grouped gray background, white cards, and the system blue.
@@ -70,19 +101,28 @@ const iosDark: Colors = {
 // The phone's accent is read once, when the app starts.
 const system = systemAccent();
 
+function palette(look: ReturnType<typeof resolveLook>, dark: boolean): Colors {
+	switch (look) {
+		case 'ios': {
+			return dark ? iosDark : iosLight;
+		}
+
+		case 'oneui': {
+			return dark ? oneUiDark : oneUiLight;
+		}
+
+		default: {
+			return dark ? darkMaterial : light;
+		}
+	}
+}
+
 export const useColors = (): Colors => {
 	const dark = useColorScheme() === 'dark';
 	const {look: choice, accent} = usePreferences();
 	const look = resolveLook(choice);
 	return useMemo(() => {
-		const base =
-			look === 'ios'
-				? dark
-					? iosDark
-					: iosLight
-				: dark
-					? darkMaterial
-					: light;
+		const base = palette(look, dark);
 		const chosen = resolveAccent(
 			accent,
 			dark ? 'dark' : 'light',
@@ -107,6 +147,10 @@ type Shape = {
 	sheetRadius: number;
 	chipRadius: number;
 	titleSize: number;
+	/**
+	The gap around a floating tab bar, at its sides and below it.
+	*/
+	barGap: number;
 };
 
 const materialShape: Shape = {
@@ -118,6 +162,7 @@ const materialShape: Shape = {
 	sheetRadius: 28,
 	chipRadius: 20,
 	titleSize: 28,
+	barGap: 12,
 };
 
 const iosShape: Shape = {
@@ -129,10 +174,25 @@ const iosShape: Shape = {
 	sheetRadius: 14,
 	chipRadius: 9,
 	titleSize: 34,
+	barGap: 12,
 };
 
-export const useShape = (): Shape =>
-	resolveLook(usePreferences().look) === 'ios' ? iosShape : materialShape;
+// One UI draws everything rounder: large cards, pill buttons, and a floating bar with a wide gap around it.
+const oneUiShape: Shape = {
+	ios: false,
+	buttonRadius: 28,
+	buttonHeight: 52,
+	fieldRadius: 20,
+	cardRadius: 28,
+	sheetRadius: 32,
+	chipRadius: 22,
+	titleSize: 34,
+	barGap: 20,
+};
+
+const SHAPES = {material: materialShape, oneui: oneUiShape, ios: iosShape};
+
+export const useShape = (): Shape => SHAPES[resolveLook(usePreferences().look)];
 
 // Android asks for touch targets of at least 48dp.
 export const TARGET = 48;
@@ -183,4 +243,3 @@ function luminance(hex: string): number {
 }
 
 export const BAR_HEIGHT = 64;
-export const BAR_MARGIN = 12;

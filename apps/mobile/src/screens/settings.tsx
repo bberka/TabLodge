@@ -1,12 +1,5 @@
 import {useState} from 'react';
-import {
-	Platform,
-	ScrollView,
-	useColorScheme,
-	StyleSheet,
-	Text,
-	View,
-} from 'react-native';
+import {ScrollView, useColorScheme, StyleSheet, Text, View} from 'react-native';
 import {confirm} from '../dialog';
 import {trackScroll} from '../scroll-state';
 import type {SyncStatus} from '../../../extension/src/shared/sync/client';
@@ -22,7 +15,7 @@ import {
 import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
 import {type Colors, useColors} from '../theme';
-import {setPreferences, usePreferences} from '../preferences';
+import {resolveLook, setPreferences, usePreferences} from '../preferences';
 import {Button, Empty, Field, Header, Icon, type IconName} from '../ui';
 import {systemAccent} from '../../modules/open-links';
 import {ACCENTS} from '../../../extension/src/shared/accent-colors';
@@ -75,6 +68,12 @@ function describe(
 		}
 	}
 }
+
+const LOOK_NAMES = {
+	material: 'the Android look',
+	oneui: 'the Samsung One UI look',
+	ios: 'the iOS look',
+};
 
 export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const colors = useColors();
@@ -197,9 +196,10 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 								{
 									id: 'auto',
 									name: 'Automatic',
-									hint: `Matches your phone: the ${Platform.OS === 'ios' ? 'iOS' : 'Android'} look here`,
+									hint: `Matches your phone: ${LOOK_NAMES[resolveLook('auto')]} here`,
 								},
 								{id: 'material', name: 'Android look'},
+								{id: 'oneui', name: 'Samsung One UI look'},
 								{id: 'ios', name: 'iOS look'},
 							]}
 							onChange={(look) => {

@@ -354,12 +354,16 @@ export function Header({
 	right?: ReactNode;
 }) {
 	const colors = useColors();
+	const shape = useShape();
 	return (
 		<View style={styles.header}>
 			<View style={styles.headerText}>
 				<Text
 					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
+					style={[
+						styles.title,
+						{color: colors.text, fontSize: shape.titleSize},
+					]}
 				>
 					{title}
 				</Text>

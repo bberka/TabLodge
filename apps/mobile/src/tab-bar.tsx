@@ -12,7 +12,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {motion, spring} from './motion';
 import {resolveLook, usePreferences} from './preferences';
 import {resetScroll, useScrolledDown} from './scroll-state';
-import {BAR_HEIGHT, BAR_MARGIN, useColors} from './theme';
+import {BAR_HEIGHT, useColors, useShape} from './theme';
 import {Icon, type IconName} from './ui';
 
 export type BarTab<T extends string> = {
@@ -36,9 +36,10 @@ How tall the bar is, including the space below it, so a screen can leave that mu
 export function useBarSpace(): number {
 	const insets = useSafeAreaInsets();
 	const {floatingBar, barSize} = usePreferences();
+	const {barGap} = useShape();
 	// Small while scrolling floats over the content without changing the room the screens leave, so lists do not jump.
 	const floating =
-		(barSize === 'compact' ? COMPACT_HEIGHT : BAR_HEIGHT) + BAR_MARGIN * 2;
+		(barSize === 'compact' ? COMPACT_HEIGHT : BAR_HEIGHT) + barGap * 2;
 	return (floatingBar ? floating : DOCKED_HEIGHT) + insets.bottom;
 }
 
@@ -63,6 +64,7 @@ export function TabBar<T extends string>({
 	const {width: screenWidth} = useWindowDimensions();
 	const {look: chosen, floatingBar, barSize} = usePreferences();
 	const look = resolveLook(chosen);
+	const {barGap} = useShape();
 	const scrolledDown = useScrolledDown();
 	const small =
 		floatingBar &&
@@ -127,9 +129,9 @@ export function TabBar<T extends string>({
 
 	const dockedHeight = DOCKED_HEIGHT + insets.bottom;
 	const travel = floatingBar
-		? BAR_HEIGHT + BAR_MARGIN * 2 + insets.bottom
+		? BAR_HEIGHT + barGap * 2 + insets.bottom
 		: dockedHeight;
-	const fullWidth = screenWidth - BAR_MARGIN * 2;
+	const fullWidth = screenWidth - barGap * 2;
 	const smallWidth = COMPACT_TAB_WIDTH * count + BAR_PADDING * 2;
 	const tabWidth = shrink.interpolate({
 		inputRange: [0, 1],
@@ -143,7 +145,7 @@ export function TabBar<T extends string>({
 			pointerEvents={away ? 'none' : 'box-none'}
 			style={[
 				floatingBar ? styles.floating : styles.docked,
-				floatingBar && {bottom: BAR_MARGIN + insets.bottom},
+				floatingBar && {bottom: barGap + insets.bottom},
 				{
 					opacity: hide.interpolate({
 						inputRange: [0, 1],
