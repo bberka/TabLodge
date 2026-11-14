@@ -99,6 +99,7 @@ import {openArchivedCopy} from './archive-link';
 import {AccentPalette} from './accent-palette';
 import {
 	COLUMN_COLOR_BAR,
+	COLUMN_COLOR_ACTIVE_TEXT,
 	COLUMN_COLOR_EDGE,
 	COLUMN_COLOR_SOFT,
 	COLUMN_COLOR_TEXT,
@@ -2532,7 +2533,7 @@ function NewTab() {
 												? railColor
 													? cn(
 															'font-semibold',
-															COLUMN_COLOR_TEXT,
+															COLUMN_COLOR_ACTIVE_TEXT,
 															COLUMN_COLOR_SOFT,
 															COLUMN_COLOR_EDGE,
 														)

@@ -13,7 +13,13 @@ export const COLUMN_COLOR_BAR =
 A soft wash of the column's color, for the background of its active item.
 */
 export const COLUMN_COLOR_SOFT =
-	'bg-[rgb(var(--column-light)/0.06)] dark:bg-transparent';
+	'bg-[rgb(var(--column-light)/0.12)] dark:bg-[rgb(var(--column-dark)/0.16)]';
+/**
+The column's color as text on its own wash: pushed toward black in the light theme and toward white in the dark one, so
+the label stays readable on the tint.
+*/
+export const COLUMN_COLOR_ACTIVE_TEXT =
+	'text-[color-mix(in_srgb,rgb(var(--column-light))_75%,black)] dark:text-[color-mix(in_srgb,rgb(var(--column-dark))_70%,white)]';
 export const COLUMN_COLOR_EDGE =
 	'shadow-[inset_3px_0_0_rgb(var(--column-light))] dark:shadow-[inset_3px_0_0_rgb(var(--column-dark))]';
 
