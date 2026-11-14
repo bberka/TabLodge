@@ -17,6 +17,7 @@ import {
 } from '../shared/ui';
 import type {ActionFailure, ActionResult, TabLodgeState} from '../shared/types';
 import {webUrl} from '../shared/web-url';
+import {hostIsExcluded} from '../shared/excluded-sites';
 import {PrivateWindowMark} from './private-window-appearance';
 import {PrivateLockButton} from './private-lock-ui';
 import {
@@ -28,7 +29,6 @@ import {
 } from './private-config';
 import {send} from './message-client';
 import {PROJECT} from './project';
-import {hostIsExcluded} from './excluded-sites';
 import {plural} from './plural';
 import {cn} from '@/lib/utils';
 

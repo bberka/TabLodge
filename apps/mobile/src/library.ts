@@ -112,6 +112,18 @@ export function bookmarksIn(store: Store, columnId: string): Bookmark[] {
 	);
 }
 
+/**
+The id of the system column that lists every bookmark of every column. It is not stored and cannot be changed.
+*/
+export const ALL_BOOKMARKS_ID = 'all-bookmarks';
+
+/**
+Every bookmark, column by column in the columns' order and the Unfiled bucket last, each column in its own order.
+*/
+export function allBookmarks(store: Store): Bookmark[] {
+	return columnViews(store).flatMap((column) => bookmarksIn(store, column.id));
+}
+
 export function searchBookmarks(store: Store, query: string): Bookmark[] {
 	const words = query.toLowerCase().split(/\s+/).filter(Boolean);
 	return store.bookmarks.filter((bookmark) => {
@@ -1184,6 +1196,37 @@ export function restoreSession(
 /**
 Takes one tab out of a session.
 */
+/**
+Changes the title and address of one saved tab. An address that is not a web address leaves the library as it was.
+*/
+export function updateSessionTab(
+	store: Store,
+	id: string,
+	tabId: string,
+	change: {title: string; url: string},
+	now: number,
+): Store {
+	const url = extractUrl(change.url);
+	if (!url) {
+		return store;
+	}
+
+	return changeSession(
+		store,
+		id,
+		(session) => ({
+			...session,
+			tabs: session.tabs.map((tab) =>
+				tab.id === tabId
+					? {...tab, url, title: change.title.trim().slice(0, 500) || url}
+					: tab,
+			),
+			updatedAt: now,
+		}),
+		now,
+	);
+}
+
 export function removeSessionTab(
 	store: Store,
 	id: string,

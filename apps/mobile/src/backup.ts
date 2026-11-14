@@ -4,13 +4,19 @@ library as `data.json`. A password wraps the ZIP in the same envelope the extens
 PBKDF2 and AES-GCM, since Hermes has no WebCrypto.
 */
 import Constants from 'expo-constants';
+import {looksEncrypted} from '../../extension/src/shared/crypto-envelope';
 import {
 	buildFullBackup,
+	FullBackupError,
+	type FullBackupCounts,
 	fullBackupFilename,
 	protectedFullBackupFilename,
+	readFullBackup,
 } from '../../extension/src/shared/full-backup';
 import type {Store} from '../../extension/src/shared/types';
-import {wrapKey} from '../modules/tablodge-crypto';
+import {unwrapKey, wrapKey} from '../modules/tablodge-crypto';
+import {backupPreferences} from './preferences';
+import {isStore} from './library';
 
 const CHUNK = 0x80_00;
 
@@ -49,7 +55,15 @@ export async function buildBackup(
 ): Promise<BackupFile> {
 	const now = new Date();
 	const {bytes} = buildFullBackup(
-		{state: store, preferences: null, snapshots: null, trash: null},
+		{
+			state: {
+				...store,
+				settings: {...store.settings, mobileApp: backupPreferences()},
+			},
+			preferences: null,
+			snapshots: null,
+			trash: null,
+		},
 		{appVersion: Constants.expoConfig?.version ?? '', now},
 	);
 	if (password === undefined || password === '') {
@@ -66,4 +80,83 @@ export async function buildBackup(
 		bytes: fromBase64(wrapped),
 		mime: 'application/octet-stream',
 	};
+}
+
+export type BackupRead =
+	| {
+			ok: true;
+			store: Store;
+			/**
+			The phone's own settings in the backup, or undefined when it was made by the extension.
+			*/
+			phoneSettings: unknown;
+			createdAt: string;
+			counts: FullBackupCounts;
+	  }
+	| {ok: false; reason: 'password' | 'wrong' | 'damaged'; message: string};
+
+/**
+Reads a backup file: a full-backup ZIP, or the same inside the credential envelope, which asks for its password first.
+*/
+export async function readBackup(
+	bytes: Uint8Array,
+	password?: string,
+): Promise<BackupRead> {
+	let zip = bytes;
+	if (looksEncrypted(bytes)) {
+		if (password === undefined || password === '') {
+			return {
+				ok: false,
+				reason: 'password',
+				message: 'This backup is locked with a password.',
+			};
+		}
+
+		try {
+			const opened = await unwrapKey(toBase64(bytes), password);
+			if (opened === null) {
+				return {
+					ok: false,
+					reason: 'wrong',
+					message: 'The password is wrong, or the file has been changed.',
+				};
+			}
+
+			zip = fromBase64(opened);
+		} catch {
+			return {
+				ok: false,
+				reason: 'damaged',
+				message: 'This encrypted file is damaged.',
+			};
+		}
+	}
+
+	try {
+		const contents = readFullBackup(zip);
+		if (!contents || !isStore(contents.state)) {
+			return {
+				ok: false,
+				reason: 'damaged',
+				message: 'This is not a TabLodge backup.',
+			};
+		}
+
+		return {
+			ok: true,
+			store: contents.state,
+			phoneSettings: contents.state.settings?.mobileApp,
+			createdAt: contents.manifest.createdAt,
+			counts: contents.counts,
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			reason: 'damaged',
+			message:
+				error instanceof FullBackupError
+					? error.message
+					: 'This file could not be read.',
+		};
+	}
 }

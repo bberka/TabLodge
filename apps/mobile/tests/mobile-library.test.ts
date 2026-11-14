@@ -47,6 +47,8 @@ import {
 	updateFolder,
 	restoreFolder,
 	restoreColumn,
+	allBookmarks,
+	updateSessionTab,
 } from '../src/library';
 import {sampleStore} from '../src/seed';
 
@@ -831,6 +833,69 @@ describe('session folders', () => {
 			false,
 		);
 		assert.equal(next.groups[0].folderId, 'unfiled');
+	});
+});
+
+describe('editing a saved tab', () => {
+	test('changes its title and address, and refuses an address that is not a web address', () => {
+		const store = addSession(
+			emptyStore(NOW),
+			{name: 'S', urls: ['https://a.example/'], folderId: 'unfiled'},
+			's1',
+			['t1'],
+			NOW,
+		);
+		const changed = updateSessionTab(
+			store,
+			's1',
+			't1',
+			{title: ' New title ', url: 'https://b.example/page'},
+			NOW + 1,
+		);
+		assert.equal(changed.groups[0].tabs[0].url, 'https://b.example/page');
+		assert.equal(changed.groups[0].tabs[0].title, 'New title');
+		assert.equal(
+			updateSessionTab(store, 's1', 't1', {title: 'x', url: 'nope'}, NOW),
+			store,
+		);
+	});
+});
+
+describe('the All column', () => {
+	test('lists every bookmark column by column, with the Unfiled ones last', () => {
+		let store = emptyStore(NOW);
+		store = addColumn(store, 'Work', 'work', NOW);
+		store = addColumn(store, 'Home', 'home', NOW);
+		store = addBookmark(
+			store,
+			{url: 'https://h.example/', title: 'H', columnId: 'home'},
+			'b1',
+			NOW,
+		);
+		store = addBookmark(
+			store,
+			{url: 'https://w.example/', title: 'W', columnId: 'work'},
+			'b2',
+			NOW,
+		);
+		store = {
+			...store,
+			bookmarks: [
+				...store.bookmarks,
+				{
+					id: 'b3',
+					title: 'X',
+					url: 'https://x.example/',
+					columnId: 'gone',
+					createdAt: NOW,
+					updatedAt: NOW,
+				},
+			],
+		};
+		assert.deepEqual(
+			allBookmarks(store).map((bookmark) => bookmark.id),
+			['b2', 'b1', 'b3'],
+		);
 	});
 });
 

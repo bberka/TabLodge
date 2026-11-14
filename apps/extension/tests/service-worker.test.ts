@@ -5770,21 +5770,21 @@ test('dashboardWidth defaults to the existing layout, validates choices, and res
 	assert.equal(reset.settings.dashboardWidth, 'default');
 });
 
-test('bookmarkBoardView defaults to board, validates choices, and resets', async () => {
+test('bookmarkBoardView defaults to focus, validates choices, and resets', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
 		(await defaults.sendMessage({type: 'GET_STATE'})).settings
 			.bookmarkBoardView,
-		'board',
+		'focus',
 	);
 
 	const configured = createWorkerHarness(
-		stateWithSession({bookmarkBoardView: 'focus'}),
+		stateWithSession({bookmarkBoardView: 'board'}),
 	);
 	assert.equal(
 		(await configured.sendMessage({type: 'GET_STATE'})).settings
 			.bookmarkBoardView,
-		'focus',
+		'board',
 	);
 
 	const invalid = createWorkerHarness(
@@ -5792,18 +5792,18 @@ test('bookmarkBoardView defaults to board, validates choices, and resets', async
 	);
 	assert.equal(
 		(await invalid.sendMessage({type: 'GET_STATE'})).settings.bookmarkBoardView,
-		'board',
+		'focus',
 	);
 
 	const updated = await invalid.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {bookmarkBoardView: 'focus'},
+		settings: {bookmarkBoardView: 'board'},
 	});
 	assert.equal(updated.ok, true, updated.error);
-	assert.equal(invalid.state.settings.bookmarkBoardView, 'focus');
+	assert.equal(invalid.state.settings.bookmarkBoardView, 'board');
 
 	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.bookmarkBoardView, 'board');
+	assert.equal(reset.settings.bookmarkBoardView, 'focus');
 });
 
 test('bookmark board layout settings default to the current layout, validate choices, and reset', async () => {

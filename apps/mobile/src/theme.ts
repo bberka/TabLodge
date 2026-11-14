@@ -17,6 +17,8 @@ const light = {
 	danger: '#b3261e',
 	ok: '#1f7a45',
 	warn: '#8a5a00',
+	info: '#1d5fbf',
+	teal: '#0b7a75',
 };
 
 const darkMaterial: typeof light = {
@@ -32,6 +34,8 @@ const darkMaterial: typeof light = {
 	danger: '#e5484d',
 	ok: '#7fd9a0',
 	warn: '#f0c36d',
+	info: '#7db4ff',
+	teal: '#5fd3c8',
 };
 
 export type Colors = typeof light;
@@ -50,6 +54,8 @@ const iosLight: Colors = {
 	danger: '#ff3b30',
 	ok: '#248a3d',
 	warn: '#b25000',
+	info: '#0a60c8',
+	teal: '#0a7d73',
 };
 
 const iosDark: Colors = {
@@ -65,6 +71,8 @@ const iosDark: Colors = {
 	danger: '#ff453a',
 	ok: '#32d74b',
 	warn: '#ff9f0a',
+	info: '#64a8ff',
+	teal: '#40d0c4',
 };
 
 // The phone's accent is read once, when the app starts.

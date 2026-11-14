@@ -34,6 +34,7 @@ import {
 	History,
 	Inbox,
 	LayoutGrid,
+	Library,
 	MoreHorizontal,
 	PanelLeft,
 	Pencil,
@@ -262,6 +263,10 @@ type FocusColumnItem = {
 	count: number;
 	column: BookmarkColumnData;
 	unfiled?: boolean;
+	/**
+	The All item, which lists every bookmark and is not a column.
+	*/
+	all?: boolean;
 };
 
 /**
@@ -274,6 +279,15 @@ const UNFILED_COLUMN: BookmarkColumnData = {
 	name: 'Unfiled',
 	createdAt: 0,
 	isDefault: true,
+};
+/**
+The system column of the Focus view that lists every bookmark of every column. It is not stored.
+*/
+const ALL_COLUMN: BookmarkColumnData = {
+	id: 'bookmark-all',
+	name: 'All',
+	createdAt: 0,
+	isDefault: false,
 };
 const MoveBookmarkIcon = ACTION_ICONS.move;
 /**
@@ -426,7 +440,7 @@ function NewTab() {
 		: COLUMN_PAGE;
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
-	const bookmarkView = settings.bookmarkBoardView ?? 'board';
+	const bookmarkView = settings.bookmarkBoardView ?? 'focus';
 	const compactBoard = settings.bookmarkDensity === 'compact';
 	const bookmarkGridTemplateColumns = bookmarkGridTemplate(
 		settings.bookmarkColumnWidth ?? 'default',
@@ -555,6 +569,16 @@ function NewTab() {
 		previousGroupsRef.current = {all, shown};
 		return {all, shown};
 	}, [bookmarks, filteredBookmarks]);
+	// What the Focus view's All item lists: every column's bookmarks in the columns' order, the Unfiled ones last.
+	const everyBookmark = useMemo(() => {
+		const ids = [...columns.map((column) => column.id), UNFILED_COLUMN.id];
+		const join = (grouped: Map<string, Bookmark[]>) =>
+			ids.flatMap((id) => grouped.get(id) ?? NO_BOOKMARKS);
+		return {
+			all: join(columnBookmarks.all),
+			shown: join(columnBookmarks.shown),
+		};
+	}, [columns, columnBookmarks]);
 
 	// With "Use TabLodge for new tabs" off, a tab the browser opened as a new tab is sent on to the browser's page
 	// (the service worker decides whether this tab was one); any other visit shows the dashboard as usual.
@@ -2196,6 +2220,13 @@ function NewTab() {
 	const railAxis = () =>
 		globalThis.matchMedia('(min-width: 768px)').matches ? 'y' : 'x';
 	const focusItems: FocusColumnItem[] = [
+		{
+			id: ALL_COLUMN.id,
+			name: ALL_COLUMN.name,
+			count: bookmarks.length,
+			column: ALL_COLUMN,
+			all: true,
+		},
 		...columns.map((column) => ({
 			id: column.id,
 			name: column.name,
@@ -2494,15 +2525,18 @@ function NewTab() {
 						<ul className="flex gap-1 overflow-x-auto pb-1 md:block md:space-y-1 md:overflow-visible md:pb-0">
 							{focusItems.map((item) => {
 								const active = item.id === activeFocus?.id;
-								const ItemIcon = item.unfiled
-									? Inbox
-									: getIcon(item.icon, DEFAULT_COLUMN_ICON).component;
+								const ItemIcon = item.all
+									? Library
+									: item.unfiled
+										? Inbox
+										: getIcon(item.icon, DEFAULT_COLUMN_ICON).component;
 								const itemIndex = columns.findIndex(
 									(column) => column.id === item.id,
 								);
 								const itemSiblings =
 									columnBookmarks.all.get(item.id) ?? NO_BOOKMARKS;
-								const railColor = item.unfiled
+								const isSystem = item.unfiled || item.all === true;
+								const railColor = isSystem
 									? undefined
 									: columnColorVars(item.column.color);
 								const railButton = (
@@ -2524,7 +2558,7 @@ function NewTab() {
 												'ring-2 ring-primary ring-offset-2 ring-offset-background',
 										)}
 										onDragOver={(event) => {
-											if (!acceptsDrop(event, !item.unfiled)) {
+											if (item.all || !acceptsDrop(event, !item.unfiled)) {
 												return;
 											}
 
@@ -2555,7 +2589,7 @@ function NewTab() {
 										}}
 										onDrop={(event) => {
 											setRailDrop(null);
-											if (!acceptsDrop(event, !item.unfiled)) {
+											if (item.all || !acceptsDrop(event, !item.unfiled)) {
 												return;
 											}
 
@@ -2583,8 +2617,8 @@ function NewTab() {
 									<li
 										key={item.id}
 										// The item, not the button, is the drag handle: Firefox does not drag buttons.
-										draggable={!item.unfiled}
-										data-drag-column={item.unfiled ? undefined : item.id}
+										draggable={!isSystem}
+										data-drag-column={isSystem ? undefined : item.id}
 										className="relative shrink-0 md:block"
 										onDragStart={(event) => handleInternalDragStart(event)}
 										onDragEnd={() => {
@@ -2603,7 +2637,7 @@ function NewTab() {
 												)}
 											/>
 										)}
-										{item.unfiled ? (
+										{isSystem ? (
 											railButton
 										) : (
 											<ActionContextMenu
@@ -2644,15 +2678,26 @@ function NewTab() {
 								column={activeFocus.column}
 								selected={selectedBookmarks}
 								selectionMode={bookmarkSelectionMode}
-								canMoveEarlier={!activeFocus.unfiled && activeFocusIndex > 0}
+								canMoveEarlier={
+									!activeFocus.unfiled &&
+									!activeFocus.all &&
+									activeFocusIndex > 0
+								}
 								canMoveLater={
-									!activeFocus.unfiled && activeFocusIndex < columns.length - 1
+									!activeFocus.unfiled &&
+									!activeFocus.all &&
+									activeFocusIndex < columns.length - 1
 								}
 								bookmarks={
-									columnBookmarks.shown.get(activeFocus.id) ?? NO_BOOKMARKS
+									activeFocus.all
+										? everyBookmark.shown
+										: (columnBookmarks.shown.get(activeFocus.id) ??
+											NO_BOOKMARKS)
 								}
 								siblings={
-									columnBookmarks.all.get(activeFocus.id) ?? NO_BOOKMARKS
+									activeFocus.all
+										? everyBookmark.all
+										: (columnBookmarks.all.get(activeFocus.id) ?? NO_BOOKMARKS)
 								}
 								pageSize={bookmarkPageSize}
 								dropIndicator={
@@ -2665,16 +2710,22 @@ function NewTab() {
 								urlSettings={urlSettings}
 								quickActions={quickActions}
 								actions={boardActions}
-								simpleHeader={activeFocus.unfiled}
+								simpleHeader={activeFocus.unfiled || activeFocus.all}
 								allowColumnDrag={false}
-								allowColumnDrop={!activeFocus.unfiled}
+								allowColumnDrop={!activeFocus.unfiled && !activeFocus.all}
 								ariaLabel={
-									activeFocus.unfiled ? 'Unfiled bookmarks' : undefined
+									activeFocus.all
+										? 'All bookmarks'
+										: activeFocus.unfiled
+											? 'Unfiled bookmarks'
+											: undefined
 								}
 								emptyMessage={
-									activeFocus.unfiled
-										? 'No columns yet. New bookmarks will be kept here until you add a column.'
-										: undefined
+									activeFocus.all
+										? 'No bookmarks yet.'
+										: activeFocus.unfiled
+											? 'No columns yet. New bookmarks will be kept here until you add a column.'
+											: undefined
 								}
 							/>
 						</div>

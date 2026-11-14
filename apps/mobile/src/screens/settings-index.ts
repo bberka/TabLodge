@@ -241,6 +241,11 @@ export const SECTIONS = {
 			'onetab',
 			'bookmarks file',
 			'restore',
+			'statistics',
+			'stats',
+			'erase',
+			'delete everything',
+			'clear',
 		],
 		rows: [],
 	},
@@ -276,6 +281,11 @@ export const SECTIONS = {
 			'private',
 		],
 		rows: [ROWS.syncPrivate],
+	},
+	excluded: {
+		title: 'Excluded websites',
+		aliases: ['exclude', 'block', 'ignore', 'domains', 'sites', 'hosts'],
+		rows: [],
 	},
 	restore: {
 		title: 'Restore defaults',

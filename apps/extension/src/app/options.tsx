@@ -86,6 +86,11 @@ import {
 	searchTerms,
 } from '../shared/fuzzy';
 import type {ExportData} from '../shared/export-formats';
+import {
+	excludedHostError,
+	normalizeExcludedHost,
+	parseExcludedLines,
+} from '../shared/excluded-sites';
 import {AccentPalette} from './accent-palette';
 import {
 	EmptyState,
@@ -112,11 +117,6 @@ import {
 } from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
 import {initialSearchQuery, withSearchParam} from './page-params';
-import {
-	excludedHostError,
-	normalizeExcludedHost,
-	parseExcludedLines,
-} from './excluded-sites';
 import {Highlight} from './highlight';
 import {PROJECT} from './project';
 import {ColumnSelect} from './column-select';
@@ -748,11 +748,11 @@ const settingsGroups: Array<{
 			{
 				name: 'bookmarkBoardView',
 				label: 'Bookmark view',
-				help: 'Board shows every column in a grid. Focus shows a column list next to one open column. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of stretching the page.',
+				help: 'Focus (the default) shows a column list, starting with All, next to one open column. Board shows every column in a grid. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of stretching the page.',
 				type: 'select',
 				options: [
-					['board', 'Board'],
 					['focus', 'Focus'],
+					['board', 'Board'],
 				],
 			},
 			{

@@ -8,8 +8,16 @@ import {
 	addSession,
 	addTabsToSession,
 	sessionsIn,
+	hostOf,
 } from '../library';
-import {editIn, type LibraryName, newId, useLibraryOf} from '../library-store';
+import {
+	editIn,
+	type LibraryName,
+	newId,
+	useLibraryOf,
+	useRegularLibrary,
+} from '../library-store';
+import {hostIsExcluded} from '../../../extension/src/shared/excluded-sites';
 import {LibraryChoice} from '../library-choice';
 import {useView} from '../view';
 import {getPreferences, setPreferences} from '../preferences';
@@ -51,11 +59,18 @@ export function SaveLinksForm({
 	const sessionId = sessions.some((session) => session.id === target)
 		? target
 		: sessions[0]?.id;
+	const excludedSites = useRegularLibrary().settings.excludedOrigins ?? [];
+	// Links to excluded websites are left out, as in the extension.
+	const allowed = urls.filter(
+		(url) => !hostIsExcluded(hostOf(url), excludedSites),
+	);
+	const skipped = urls.length - allowed.length;
 	const links = getPreferences().cleanOnSave
-		? urls.map((url) => stripTrackingParameters(url))
-		: urls;
+		? allowed.map((url) => stripTrackingParameters(url))
+		: allowed;
 	const ids = () => links.map(() => newId());
 	const blocked =
+		links.length === 0 ||
 		(mode === 'bookmarks' && choice.incomplete) ||
 		(mode === 'existing' && !sessionId);
 
@@ -120,6 +135,14 @@ export function SaveLinksForm({
 					}}
 				/>
 			</View>
+			{skipped > 0 && (
+				<Text
+					accessibilityLiveRegion="polite"
+					style={{color: colors.muted, paddingHorizontal: 20}}
+				>
+					{`${skipped} ${skipped === 1 ? 'link is' : 'links are'} from excluded websites and will not be saved.`}
+				</Text>
+			)}
 			<ScrollView
 				style={styles.scroll}
 				contentContainerStyle={styles.body}
@@ -172,7 +195,7 @@ export function SaveLinksForm({
 					</Text>
 				)}
 				<Button
-					label={`Save ${urls.length} links`}
+					label={`Save ${links.length} ${links.length === 1 ? 'link' : 'links'}`}
 					icon="checkmark"
 					disabled={blocked}
 					loading={saving}

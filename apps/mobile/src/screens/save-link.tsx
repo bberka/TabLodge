@@ -20,7 +20,14 @@ import {
 	updateBookmark,
 } from '../library';
 import {phoneStamp} from '../device';
-import {editIn, type LibraryName, newId, useLibraryOf} from '../library-store';
+import {
+	editIn,
+	type LibraryName,
+	newId,
+	useLibraryOf,
+	useRegularLibrary,
+} from '../library-store';
+import {hostIsExcluded} from '../../../extension/src/shared/excluded-sites';
 import {LibraryChoice} from '../library-choice';
 import {useView} from '../view';
 import {cleanPageTitle} from '../links';
@@ -84,6 +91,10 @@ export function SaveLinkForm({
 	const [problem, setProblem] = useState('');
 
 	const url = extractUrl(text);
+	const excludedSites = useRegularLibrary().settings.excludedOrigins ?? [];
+	// A site in the excluded list is not saved, as in the extension; changing a link already saved is still allowed.
+	const isExcluded =
+		!editing && url !== undefined && hostIsExcluded(hostOf(url), excludedSites);
 	const {savePreview} = usePreferences();
 	const {loading, preview} = useLinkPreview(url, savePreview && !editing);
 	useEffect(() => {
@@ -212,7 +223,9 @@ export function SaveLinkForm({
 					error={
 						text.length > 0 && !url
 							? 'Enter a web address that starts with http:// or https://.'
-							: undefined
+							: isExcluded
+								? 'This website is in your excluded websites, so it is not saved.'
+								: undefined
 					}
 					onChangeText={setText}
 					onClear={() => {
@@ -288,7 +301,7 @@ export function SaveLinkForm({
 				<Button
 					label="Save"
 					icon="checkmark"
-					disabled={!url || (!toSession && choice.incomplete)}
+					disabled={!url || isExcluded || (!toSession && choice.incomplete)}
 					loading={saving}
 					onPress={() => void save()}
 				/>

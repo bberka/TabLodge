@@ -1,8 +1,9 @@
 import {useState} from 'react';
 import {Animated, Pressable, StyleSheet, TextInput, View} from 'react-native';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
+import {usePreferences} from './preferences';
 import {useColors} from './theme';
-import {Icon, type IconName} from './ui';
+import {Icon, IconButton, type IconName} from './ui';
 
 /**
 Every round button in the row, and the search drawer, share this size, so the add, search and menu buttons read as one set.
@@ -128,12 +129,21 @@ export function SearchDock({
 	const colors = useColors();
 	const keyboardOpen = useKeyboardHeight() > 0;
 	const inset = keyboardInset();
+	// A floating tab bar gets a floating, rounded search bar; a docked one gets a banner across the screen.
+	const {floatingBar} = usePreferences();
 	return (
 		<Animated.View
 			style={[
 				styles.dock,
+				floatingBar ? styles.floating : styles.banner,
 				{
-					bottom: keyboardOpen ? Animated.add(inset, 8) : bottom + 8,
+					bottom: floatingBar
+						? keyboardOpen
+							? Animated.add(inset, 8)
+							: bottom + 8
+						: keyboardOpen
+							? inset
+							: bottom,
 					backgroundColor: colors.surface,
 					borderColor: colors.border,
 				},
@@ -152,6 +162,16 @@ export function SearchDock({
 				style={[styles.input, {color: colors.text}]}
 				onChangeText={onChange}
 			/>
+			{query !== '' && (
+				<IconButton
+					icon="close-circle"
+					label="Clear search"
+					color={colors.muted}
+					onPress={() => {
+						onChange('');
+					}}
+				/>
+			)}
 			<Pressable
 				accessibilityRole="button"
 				accessibilityLabel="Close search"
@@ -161,7 +181,7 @@ export function SearchDock({
 				]}
 				onPress={onClose}
 			>
-				<Icon name="close" color={colors.text} />
+				<Icon name="chevron-down" color={colors.text} />
 			</Pressable>
 		</Animated.View>
 	);
@@ -185,16 +205,24 @@ const styles = StyleSheet.create({
 	},
 	dock: {
 		position: 'absolute',
-		left: 16,
-		right: 16,
 		height: SIZE,
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 10,
 		paddingLeft: 18,
 		paddingRight: 4,
+	},
+	floating: {
+		left: 16,
+		right: 16,
 		borderRadius: SIZE / 2,
 		borderWidth: 1,
+		elevation: 6,
+	},
+	banner: {
+		left: 0,
+		right: 0,
+		borderTopWidth: StyleSheet.hairlineWidth,
 		elevation: 6,
 	},
 	input: {flex: 1, fontSize: 16, paddingVertical: 0},

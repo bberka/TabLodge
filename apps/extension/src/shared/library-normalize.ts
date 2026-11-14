@@ -177,7 +177,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
 	dashboardWidth: 'default',
-	bookmarkBoardView: 'board',
+	bookmarkBoardView: 'focus',
 	removeTrackingParameters: false,
 	simplifyUrls: true,
 	markInsecureLinks: true,
@@ -987,7 +987,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 			: 'default',
 		bookmarkBoardView: isOneOf(['board', 'focus'], raw.bookmarkBoardView)
 			? raw.bookmarkBoardView
-			: 'board',
+			: 'focus',
 		keepLodgePinned: raw.keepLodgePinned === true,
 		browserBookmarkAction: isOneOf(
 			['off', 'ask', 'add'],
@@ -1108,7 +1108,7 @@ export function urlHost(url: string): string | null {
 /**
 An excluded-site entry as a bare lower-case host name, or null when it is not a usable web host. Accepts
 "google.com", "*.google.com", "https://google.com:8080/path" and old stored origins; a leading "www." is dropped.
-Entries cover the host and all its subdomains. (Duplicated in src/app/excluded-sites.ts for the pages.)
+Entries cover the host and all its subdomains. (Duplicated in src/shared/excluded-sites.ts for the pages and the phone.)
 */
 export function normalizeExcludedHost(value: unknown): string | null {
 	if (typeof value !== 'string') {

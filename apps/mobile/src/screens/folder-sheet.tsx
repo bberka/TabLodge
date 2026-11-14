@@ -95,15 +95,10 @@ function FolderForm({
 					<ColorPicker selected={color} onSelect={setColor} />
 				</View>
 				{color !== '' && (
-					<View accessible={false} style={styles.switchRow}>
-						<View style={styles.switchText}>
-							<Text style={{color: colors.text, fontSize: 16}}>
-								Color its sessions
-							</Text>
-							<Text style={{color: colors.muted}}>
-								A session moved into this folder takes its color
-							</Text>
-						</View>
+					<View style={styles.switchRow}>
+						<Text style={[styles.switchLabel, {color: colors.text}]}>
+							Color its sessions
+						</Text>
 						<Switch
 							label="Color its sessions"
 							hint="A session moved into this folder takes its color"
@@ -171,5 +166,5 @@ const styles = StyleSheet.create({
 	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},
 	switchRow: {flexDirection: 'row', alignItems: 'center', gap: 12},
-	switchText: {flex: 1, gap: 2},
+	switchLabel: {flex: 1, fontSize: 16},
 });

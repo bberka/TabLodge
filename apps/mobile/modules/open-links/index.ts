@@ -1,6 +1,11 @@
 import {requireOptionalNativeModule} from 'expo';
 
 type OpenLinksModule = {
+	// Native modules are event emitters; this one sends `screenOff`.
+	addListener: (
+		name: 'screenOff',
+		callback: () => void,
+	) => {remove: () => void};
 	openAll: (urls: string[], how: string, packageName: string | null) => boolean;
 	browsers: () => string[][];
 	systemAccent: () => [string, string] | null;
@@ -38,24 +43,16 @@ export function systemAccent(): {light: string; dark: string} | undefined {
 	return found ? {light: found[0], dark: found[1]} : undefined;
 }
 
-type ScreenOffEvents = {
-	addListener: (
-		name: 'screenOff',
-		callback: () => void,
-	) => {remove: () => void};
-};
-
 /**
 Calls `callback` when the screen turns off, which is when the phone locks. Returns a function that stops listening;
 on a build without native support it never calls back, and `false` says so.
 */
 export function onScreenOff(callback: () => void): (() => void) | false {
-	const emitter = native as unknown as ScreenOffEvents | undefined;
-	if (!emitter?.addListener) {
+	if (!native) {
 		return false;
 	}
 
-	const subscription = emitter.addListener('screenOff', callback);
+	const subscription = native.addListener('screenOff', callback);
 	return () => {
 		subscription.remove();
 	};

@@ -11,6 +11,10 @@ export type SheetAction = {
 	*/
 	hint?: string;
 	/**
+	The icon's color, for an action that has one of its own (the swipe actions' colors). Defaults to the accent.
+	*/
+	color?: string;
+	/**
 	Drawn in the danger color, for an action that removes something.
 	*/
 	destructive?: boolean;
@@ -59,7 +63,11 @@ export function ActionSheet({
 						<Icon
 							name={action.icon}
 							size={24}
-							color={action.destructive ? colors.danger : colors.accent}
+							color={
+								action.destructive
+									? colors.danger
+									: (action.color ?? colors.accent)
+							}
 						/>
 						<View style={styles.texts}>
 							<Text

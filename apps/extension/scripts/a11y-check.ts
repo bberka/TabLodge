@@ -22,7 +22,10 @@ import {
 	type Page,
 	type Worker,
 } from 'playwright';
-import {createDevFixture, type DevStore} from '../src/shared/dev-fixture.ts';
+import {
+	createDevFixture as createBaseFixture,
+	type DevStore,
+} from '../src/shared/dev-fixture.ts';
 import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -258,6 +261,15 @@ async function writeDevStore(page: Page, store: DevStore) {
 		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
 		await chrome.storage.local.set({'tablodge.state': data});
 	}, store);
+}
+
+// The checks were written for the Board view; the real default is Focus, which the Focus checks set up themselves.
+function createDevFixture(base: DevStore): DevStore {
+	const fixture = createBaseFixture(base);
+	return {
+		...fixture,
+		settings: {...fixture.settings, bookmarkBoardView: 'board'},
+	};
 }
 
 async function seed(page: Page) {
@@ -2077,8 +2089,21 @@ async function main() {
 						'the view button switches to the Board action',
 					);
 
+					const all = rail.getByRole('button', {name: /^All/});
 					const daily = rail.getByRole('button', {name: /^Daily/});
 					const dev = rail.getByRole('button', {name: /^Dev/});
+					assert.equal(
+						await all.getAttribute('aria-current'),
+						'true',
+						'the All item is open first',
+					);
+					assert.ok(
+						(await page.getByRole('region', {name: 'All bookmarks'}).count()) >
+							0,
+						'the All panel lists every bookmark',
+					);
+					await daily.focus();
+					await page.keyboard.press('Enter');
 					assert.equal(await daily.getAttribute('aria-current'), 'true');
 
 					await dev.focus();

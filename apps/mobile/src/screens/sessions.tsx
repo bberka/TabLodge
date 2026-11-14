@@ -58,6 +58,12 @@ import {useView} from '../view';
 import {Button, Card, Chips, Empty, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
 import {FolderEditSheet} from './folder-sheet';
+import {
+	AddLinksSheet,
+	type BookmarkLinks,
+	EditLinkSheet,
+	SaveAsBookmarksSheet,
+} from './session-link-sheets';
 import {openExport, ShareLinksSheet, type ShareTarget} from './transfer-sheets';
 import {FolderSheet, RenameSheet} from './session-sheets';
 
@@ -68,7 +74,6 @@ const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
 	['expand', 'Show or hide tabs'],
 	['open', 'Open all tabs'],
 	['rename', 'Edit details'],
-	['move', 'Move to folder'],
 	['share', 'Share links'],
 	['archive', 'Archive'],
 	['delete', 'Delete'],
@@ -129,7 +134,7 @@ function SessionCardView({
 	expanded,
 	onToggle,
 	onAct,
-	onRemoveTab,
+	onTabMenu,
 	onMenu,
 }: {
 	session: Session;
@@ -141,7 +146,10 @@ function SessionCardView({
 	Runs a session action; missing where the library is read only, which allows only opening and sharing.
 	*/
 	onAct: (action: SessionAction, session: Session) => void;
-	onRemoveTab?: (session: Session, tabId: string) => void;
+	/**
+	Opens the menu of one link in the session: edit, add to bookmarks, delete.
+	*/
+	onTabMenu?: (session: Session, tabId: string) => void;
 	onMenu: (session: Session) => void;
 }) {
 	const colors = useColors();
@@ -281,17 +289,15 @@ function SessionCardView({
 										{backgroundColor: pressed ? colors.pressed : 'transparent'},
 									]}
 									accessibilityActions={
-										onRemoveTab
-											? [{name: 'remove', label: 'Remove from session'}]
-											: undefined
+										onTabMenu ? [{name: 'menu', label: 'Link menu'}] : undefined
 									}
 									onAccessibilityAction={() => {
-										onRemoveTab?.(session, tab.id);
+										onTabMenu?.(session, tab.id);
 									}}
 									onLongPress={
-										onRemoveTab
+										onTabMenu
 											? () => {
-													onRemoveTab(session, tab.id);
+													onTabMenu(session, tab.id);
 												}
 											: undefined
 									}
@@ -395,6 +401,14 @@ export function SessionsScreen({
 	const [movingId, setMovingId] = useState<string>();
 	const moving = store.groups.find((session) => session.id === movingId);
 	const [menuId, setMenuId] = useState<string>();
+	// A link of a session, for its menu from holding it down, and the drawers that menu and the session menu open.
+	const [tabMenu, setTabMenu] = useState<{sessionId: string; tabId: string}>();
+	const [editingTab, setEditingTab] = useState<{
+		session: Session;
+		tabId: string;
+	}>();
+	const [addingToId, setAddingToId] = useState<string>();
+	const [bookmarking, setBookmarking] = useState<BookmarkLinks>();
 	const [shareTarget, setShareTarget] = useState<ShareTarget>();
 	// The folder whose menu is open, from holding down its chip, and the one being renamed.
 	const [folderMenuId, setFolderMenuId] = useState<string>();
@@ -555,41 +569,116 @@ export function SessionsScreen({
 	const openMenu = useCallback((session: Session) => {
 		setMenuId(session.id);
 	}, []);
+	const openTabMenu = useCallback((session: Session, tabId: string) => {
+		setTabMenu({sessionId: session.id, tabId});
+	}, []);
+	const menuItem = (action: SessionAction, session: Session): SheetAction => {
+		const actionLook = sessionActionLook(action, colorsNow);
+		return {
+			icon: actionLook.icon,
+			label: actionLook.label,
+			color: actionLook.color,
+			destructive: action === 'delete',
+			onPress() {
+				act(action, session);
+			},
+		};
+	};
+
 	const menu: SheetAction[] = menuFor
-		? (
-				['open', 'rename', 'move', 'share', 'archive', 'delete'] as const
-			).flatMap((action) => {
-				const actionLook = sessionActionLook(action, colorsNow);
-				const item: SheetAction = {
-					icon: actionLook.icon,
-					label: actionLook.label,
-					destructive: action === 'delete',
+		? [
+				...(['open', 'rename'] as const).map((action) =>
+					menuItem(action, menuFor),
+				),
+				{
+					icon: 'add-circle-outline' as const,
+					label: 'Add links',
+					color: colorsNow.accent,
 					onPress() {
-						act(action, menuFor);
+						setAddingToId(menuFor.id);
 					},
-				};
-				return action === 'share'
-					? [
-							item,
-							{
-								icon: 'download-outline' as const,
-								label: 'Export',
-								hint: 'JSON, HTML, CSV or Markdown file',
-								onPress() {
-									openExport({
-										title: menuFor.name,
-										data: {
-											kind: 'sessions',
-											groups: [menuFor],
-											folders: store.folders,
-										},
-									});
-								},
+				},
+				{
+					icon: 'bookmark-outline' as const,
+					label: 'Save links as bookmarks',
+					color: colorsNow.ok,
+					onPress() {
+						setBookmarking({
+							title: menuFor.name,
+							links: menuFor.tabs.map((tab) => ({
+								title: tab.title,
+								url: tab.url,
+							})),
+						});
+					},
+				},
+				menuItem('share', menuFor),
+				{
+					icon: 'download-outline' as const,
+					label: 'Export',
+					color: colorsNow.info,
+					onPress() {
+						openExport({
+							title: menuFor.name,
+							data: {
+								kind: 'sessions',
+								groups: [menuFor],
+								folders: store.folders,
 							},
-						]
-					: [item];
-			})
+						});
+					},
+				},
+				...(['archive', 'delete'] as const).map((action) =>
+					menuItem(action, menuFor),
+				),
+			]
 		: [];
+	const tabMenuSession = store.groups.find(
+		(session) => session.id === tabMenu?.sessionId,
+	);
+	const tabMenuTab = tabMenuSession?.tabs.find(
+		(tab) => tab.id === tabMenu?.tabId,
+	);
+	// What holding a link of a session offers: nothing that removes it unless asked for by name.
+	const tabActions: SheetAction[] =
+		tabMenuSession && tabMenuTab
+			? [
+					{
+						icon: 'open-outline',
+						label: 'Open',
+						onPress() {
+							openLink(linkToOpen(tabMenuTab.url, links));
+						},
+					},
+					{
+						icon: 'create-outline',
+						label: 'Edit',
+						color: colorsNow.warn,
+						onPress() {
+							setEditingTab({session: tabMenuSession, tabId: tabMenuTab.id});
+						},
+					},
+					{
+						icon: 'bookmark-outline',
+						label: 'Add to bookmarks',
+						color: colorsNow.ok,
+						onPress() {
+							setBookmarking({
+								title: tabMenuTab.title || tabMenuTab.url,
+								links: [{title: tabMenuTab.title, url: tabMenuTab.url}],
+							});
+						},
+					},
+					{
+						icon: 'trash-outline',
+						label: 'Delete',
+						destructive: true,
+						onPress() {
+							removeTab(tabMenuSession, tabMenuTab.id);
+						},
+					},
+				]
+			: [];
 	const toggle = useCallback((id: string) => {
 		setFlipped((current) => {
 			const next = new Set(current);
@@ -718,7 +807,7 @@ export function SessionsScreen({
 							onToggle={toggle}
 							onAct={act}
 							onMenu={openMenu}
-							onRemoveTab={removeTab}
+							onTabMenu={openTabMenu}
 						/>
 					</View>
 				)}
@@ -737,21 +826,34 @@ export function SessionsScreen({
 				title="Edit details"
 				description={renaming?.description ?? ''}
 				color={renaming?.color ?? ''}
-				onSave={(name, description, color) => {
+				folders={store.folders}
+				folderId={renaming?.folderId}
+				onSave={(name, description, color, chosenFolderId) => {
 					if (renaming) {
-						void edit((current) =>
-							setSessionColor(
-								describeSession(
-									renameSession(current, renaming.id, name, Date.now()),
-									renaming.id,
-									description ?? '',
-									Date.now(),
-								),
+						void edit((current) => {
+							const renamed = describeSession(
+								renameSession(current, renaming.id, name, Date.now()),
+								renaming.id,
+								description ?? '',
+								Date.now(),
+							);
+							// Moved first, so a color chosen in the same save wins over the folder's.
+							const moved =
+								chosenFolderId && chosenFolderId !== renaming.folderId
+									? moveSession(
+											renamed,
+											renaming.id,
+											chosenFolderId,
+											Date.now(),
+										)
+									: renamed;
+							return setSessionColor(
+								moved,
 								renaming.id,
 								color ?? '',
 								Date.now(),
-							),
-						);
+							);
+						});
 					}
 
 					setRenamingId(undefined);
@@ -786,6 +888,32 @@ export function SessionsScreen({
 				actions={folderMenu?.actions ?? []}
 				onClose={() => {
 					setFolderMenuId(undefined);
+				}}
+			/>
+			<ActionSheet
+				visible={tabMenuTab !== undefined}
+				title={tabMenuTab?.title || tabMenuTab?.url || ''}
+				actions={tabActions}
+				onClose={() => {
+					setTabMenu(undefined);
+				}}
+			/>
+			<EditLinkSheet
+				target={editingTab}
+				onClose={() => {
+					setEditingTab(undefined);
+				}}
+			/>
+			<AddLinksSheet
+				session={store.groups.find((session) => session.id === addingToId)}
+				onClose={() => {
+					setAddingToId(undefined);
+				}}
+			/>
+			<SaveAsBookmarksSheet
+				target={bookmarking}
+				onClose={() => {
+					setBookmarking(undefined);
 				}}
 			/>
 			<FolderEditSheet

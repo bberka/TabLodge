@@ -11,6 +11,8 @@ import {
 import {notify} from '../dialog';
 import {useChipLook} from '../column-icons';
 import {
+	ALL_BOOKMARKS_ID,
+	allBookmarks,
 	bookmarksIn,
 	moveBookmark,
 	type BookmarkMove,
@@ -124,18 +126,26 @@ export function BookmarksScreen({
 			})),
 		[store],
 	);
-	const columnId = columns.some((column) => column.id === picked)
-		? picked
-		: (columns[0]?.id ?? '');
+	// The All column is the first and the default; a column that no longer exists falls back to it.
+	const columnId =
+		picked !== ALL_BOOKMARKS_ID &&
+		columns.every((column) => column.id !== picked)
+			? ALL_BOOKMARKS_ID
+			: picked;
 	const isSearching = query.trim().length > 0;
 	const shown = useMemo(
 		() =>
 			isSearching
 				? searchBookmarks(store, query)
-				: bookmarksIn(store, columnId),
+				: columnId === ALL_BOOKMARKS_ID
+					? allBookmarks(store)
+					: bookmarksIn(store, columnId),
 		[store, query, columnId, isSearching],
 	);
-	const columnName = columns.find((column) => column.id === columnId)?.name;
+	const columnName =
+		columnId === ALL_BOOKMARKS_ID
+			? 'All'
+			: columns.find((column) => column.id === columnId)?.name;
 	// The Unfiled bucket is not a column of its own and cannot be changed.
 	const isEditableColumn = store.bookmarkColumns.some(
 		(column) => column.id === columnId,
@@ -160,6 +170,7 @@ export function BookmarksScreen({
 				{
 					icon: 'create-outline',
 					label: 'Edit',
+					color: colors.warn,
 					hint: 'Its link, title, and column',
 					onPress() {
 						setSheet({kind: 'edit', bookmark: rowMenuBookmark});
@@ -170,6 +181,7 @@ export function BookmarksScreen({
 							{
 								icon: 'folder-open-outline' as const,
 								label: 'Move to column',
+								color: colors.ok,
 								onPress() {
 									selection.start(rowMenuBookmark.id);
 									setSheet({kind: 'move'});
@@ -188,6 +200,7 @@ export function BookmarksScreen({
 				{
 					icon: 'download-outline',
 					label: 'Export',
+					color: colors.info,
 					hint: 'JSON, HTML, CSV or Markdown file',
 					onPress() {
 						openExport({
@@ -279,7 +292,7 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
-		...(!isSearching && shown.length > 1
+		...(!isSearching && shown.length > 1 && columnId !== ALL_BOOKMARKS_ID
 			? [
 					{
 						icon: 'swap-vertical-outline' as const,
@@ -486,6 +499,13 @@ export function BookmarksScreen({
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
 										items={[
+											{
+												id: ALL_BOOKMARKS_ID,
+												name: 'All',
+												count: store.bookmarks.length,
+												glyph: 'layers-outline' as const,
+												tint: colors.accent,
+											},
 											...columns.map((column) => chipLook(column)),
 											{
 												id: NEW_COLUMN_CHIP,

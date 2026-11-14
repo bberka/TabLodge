@@ -30,6 +30,7 @@ import {APP_ACCENT} from '../accent';
 import {ColorPicker, type LeadingChoice} from '../color-picker';
 import {BottomSheet} from '../bottom-sheet';
 import {DataCard} from './data-settings';
+import {ExcludedCard} from './excluded-settings';
 import {OpenLinksCard} from './open-links-settings';
 import {SelectRow, ValueRow} from './select-row';
 import {DeviceNameField} from './device-name-field';
@@ -239,6 +240,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 						<SyncedSettingsCard />
 						<OpenLinksCard />
 						<DataCard />
+						<ExcludedCard />
 						<PrivateCard />
 						<SettingsCard
 							section={SECTIONS.sync}

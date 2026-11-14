@@ -354,11 +354,6 @@ export function ExportSheet({
 				)}
 				{isBackup ? (
 					<>
-						<Text style={{color: colors.muted}}>
-							A ZIP with your sessions, bookmarks and settings in the
-							extension's own layout, which the extension can restore. A
-							password locks it; without one the file is readable by anyone.
-						</Text>
 						<Field
 							secureTextEntry
 							label="Password (optional)"

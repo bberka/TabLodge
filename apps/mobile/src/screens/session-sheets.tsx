@@ -1,10 +1,11 @@
 import {useEffect, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, useColorScheme, View} from 'react-native';
 import type {Folder, Session} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {ColorPicker} from '../color-picker';
+import {columnGlyph, columnTint} from '../column-icons';
 import {TARGET, useColors} from '../theme';
-import {Button, Field, Icon} from '../ui';
+import {Button, Chips, Field, Icon} from '../ui';
 
 /**
 The drawer for renaming a session, or another named thing such as a folder when `title` and `label` say so. `check`
@@ -16,6 +17,8 @@ export function RenameSheet({
 	label = 'Session name',
 	description,
 	color,
+	folders,
+	folderId,
 	check,
 	onSave,
 	onClose,
@@ -31,21 +34,34 @@ export function RenameSheet({
 	When given, a color picker is shown too, starting with this color (empty for none), and `onSave` receives the choice.
 	*/
 	color?: string;
+	/**
+	When given with `folderId`, the folders to choose from, and `onSave` receives the chosen one.
+	*/
+	folders?: Folder[];
+	folderId?: string;
 	check?: (name: string) => string | undefined;
-	onSave: (name: string, description?: string, color?: string) => void;
+	onSave: (
+		name: string,
+		description?: string,
+		color?: string,
+		folderId?: string,
+	) => void;
 	onClose: () => void;
 }) {
 	const colors = useColors();
+	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 	const [name, setName] = useState('');
 	const [notes, setNotes] = useState('');
 	const [tint, setTint] = useState('');
+	const [folder, setFolder] = useState('');
 	const id = session?.id;
 	const original = session?.name ?? '';
 	useEffect(() => {
 		setName(original);
 		setNotes(description ?? '');
 		setTint(color ?? '');
-	}, [id, original, description, color]);
+		setFolder(folderId ?? '');
+	}, [id, original, description, color, folderId]);
 	const problem = name.trim() === '' ? 'Enter a name' : check?.(name);
 	return (
 		<BottomSheet
@@ -82,6 +98,21 @@ export function RenameSheet({
 						onChangeText={setNotes}
 					/>
 				)}
+				{folders !== undefined && (
+					<>
+						<Text style={{color: colors.muted}}>Folder</Text>
+						<Chips
+							items={folders.map((entry) => ({
+								id: entry.id,
+								name: entry.name,
+								glyph: columnGlyph(entry.icon),
+								tint: columnTint(entry.color, scheme) ?? colors.accent,
+							}))}
+							selected={folder}
+							onSelect={setFolder}
+						/>
+					</>
+				)}
 				{color !== undefined && (
 					<>
 						<Text style={{color: colors.muted}}>Color</Text>
@@ -97,6 +128,7 @@ export function RenameSheet({
 							name,
 							description === undefined ? undefined : notes,
 							color === undefined ? undefined : tint,
+							folders === undefined ? undefined : folder,
 						);
 					}}
 				/>

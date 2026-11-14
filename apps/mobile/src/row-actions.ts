@@ -61,11 +61,11 @@ export function sessionActionLook(
 		}
 
 		case 'archive': {
-			return {label: 'Archive', icon: 'archive-outline', color: colors.muted};
+			return {label: 'Archive', icon: 'archive-outline', color: colors.teal};
 		}
 
 		case 'share': {
-			return {label: 'Share links', icon: 'share-outline', color: colors.ok};
+			return {label: 'Share links', icon: 'share-outline', color: colors.info};
 		}
 
 		case 'delete': {

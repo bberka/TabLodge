@@ -68,3 +68,29 @@ export async function shareBinaryFile(
 	await file.write(bytes);
 	await Sharing.shareAsync(file.uri, {mimeType: mime, dialogTitle: filename});
 }
+
+export type PickedBytes = {name: string; bytes: Uint8Array};
+
+// A full backup holds the whole library; the extension reads up to this much of one too.
+const MAX_BACKUP_BYTES = 60 * 1024 * 1024;
+
+/**
+Lets the person pick a file and reads it as bytes, for a backup ZIP. Nothing is returned when they back out.
+*/
+export async function pickBinaryFile(): Promise<PickedBytes | undefined> {
+	const result = await DocumentPicker.getDocumentAsync({
+		type: '*/*',
+		copyToCacheDirectory: true,
+		multiple: false,
+	});
+	const asset = result.canceled ? undefined : result.assets[0];
+	if (!asset) {
+		return undefined;
+	}
+
+	if ((asset.size ?? 0) > MAX_BACKUP_BYTES) {
+		throw new FileTooLargeError('That file is too large to restore.');
+	}
+
+	return {name: asset.name, bytes: await new File(asset.uri).bytes()};
+}
