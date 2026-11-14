@@ -69,9 +69,19 @@ const CUSTOM_CHOICE: Choice = {
 	background: RAINBOW,
 	icon: 'pipette',
 };
-const buildChoices = (systemColor: Rgb | undefined): Choice[] => [
-	DEFAULT_CHOICE,
-	systemChoice(systemColor),
+// A column's color is optional, so the first choice is none, and there is no system accent to follow.
+const NO_COLOR_CHOICE: Choice = {
+	id: DEFAULT_ACCENT,
+	label: 'None',
+	detail: 'No color: the icon stays neutral',
+	background: 'rgb(var(--muted-foreground) / 0.35)',
+};
+const buildChoices = (
+	systemColor: Rgb | undefined,
+	forColumn: boolean,
+): Choice[] => [
+	forColumn ? NO_COLOR_CHOICE : DEFAULT_CHOICE,
+	...(forColumn ? [] : [systemChoice(systemColor)]),
 	...ACCENTS.map(({id, label, hex}) => ({
 		id,
 		label,
@@ -120,10 +130,15 @@ export function AccentPalette({
 	accent,
 	systemColor,
 	onChange,
+	forColumn = false,
 }: {
 	accent: string;
 	systemColor: Rgb | undefined;
 	onChange: (accent: string) => void;
+	/**
+	Choosing the color of a bookmark column rather than the page accent: no system accent, and the default is "None".
+	*/
+	forColumn?: boolean;
 }) {
 	const listId = useId();
 	const pickerRef = useRef<HTMLInputElement>(null);
@@ -142,7 +157,10 @@ export function AccentPalette({
 	const [index, setIndex] = useState(0);
 	const custom = isCustomAccent(accent);
 	const current = accentColor(accent) ?? systemColor;
-	const allChoices = useMemo(() => buildChoices(systemColor), [systemColor]);
+	const allChoices = useMemo(
+		() => buildChoices(systemColor, forColumn),
+		[systemColor, forColumn],
+	);
 	const selectedChoice: Choice =
 		allChoices.find(({id}) => id === accent) ??
 		({
@@ -209,7 +227,7 @@ export function AccentPalette({
 	}
 
 	return (
-		<div className="relative inline-block">
+		<div className="relative block w-full sm:inline-block sm:w-auto">
 			<Popover
 				open={open}
 				onOpenChange={(next) => {
@@ -226,8 +244,8 @@ export function AccentPalette({
 				<PopoverTrigger asChild>
 					<button
 						type="button"
-						aria-label={`Accent color: ${selectedChoice.label}`}
-						className="tn-select-trigger flex h-9 w-56 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						aria-label={`${forColumn ? 'Column' : 'Accent'} color: ${selectedChoice.label}`}
+						className="tn-select-trigger flex h-9 w-full items-center sm:w-56 gap-2 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<Circle small choice={selectedChoice} color={current} />
 						<span className="min-w-0 flex-1 truncate text-left">
@@ -236,7 +254,7 @@ export function AccentPalette({
 						<ChevronDown className="h-4 w-4 opacity-50" aria-hidden="true" />
 					</button>
 				</PopoverTrigger>
-				<PopoverContent className="w-80 p-0">
+				<PopoverContent className="w-[min(20rem,calc(100vw-2rem))] p-0">
 					<div className="flex items-center gap-2 border-b border-border px-3">
 						<Search
 							className="h-4 w-4 shrink-0 opacity-50"
@@ -331,11 +349,11 @@ export function AccentPalette({
 							size="sm"
 							disabled={accent === DEFAULT_ACCENT}
 							onClick={() => {
-								choose(DEFAULT_CHOICE);
+								choose(forColumn ? NO_COLOR_CHOICE : DEFAULT_CHOICE);
 							}}
 						>
 							<RotateCcw className="h-3.5 w-3.5" />
-							Reset
+							{forColumn ? 'Clear' : 'Reset'}
 						</Button>
 					</div>
 				</PopoverContent>
@@ -343,7 +361,7 @@ export function AccentPalette({
 			<input
 				ref={pickerRef}
 				type="color"
-				aria-label="Custom accent color"
+				aria-label={forColumn ? 'Custom column color' : 'Custom accent color'}
 				tabIndex={-1}
 				className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
 				value={draft ?? (custom ? accent : rgbToHex(current ?? [98, 84, 215]))}

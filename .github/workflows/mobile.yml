@@ -1,0 +1,93 @@
+name: Mobile
+
+# Builds the Android app's debug APK, and runs its tests, when a pull request or a push to the main branch touches the app
+# or the code it shares with the extension and the sync server. Lint, typecheck, and every test also run in test.yml for
+# every change; this adds what they cannot check, the native Android build. The APK is kept as a build artifact for two
+# weeks so a reviewer can install it. Releases are built in release.yml.
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - mobile/**
+      - server/**
+      - src/shared/**
+      - src/app/types.ts
+      - src/app/icon-ids.ts
+      - src/app/crypto-envelope.ts
+      - src/app/passcode.ts
+      - src/app/private-lock.ts
+      - src/app/private-sync.ts
+      - src/app/tracking-parameters.ts
+      - src/app/url-display.ts
+      - scripts/dev-fixture.ts
+      - scripts/release-version.ts
+      - tests/mobile-*.test.ts
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/mobile.yml
+  pull_request:
+    paths:
+      - mobile/**
+      - server/**
+      - src/shared/**
+      - src/app/types.ts
+      - src/app/icon-ids.ts
+      - src/app/crypto-envelope.ts
+      - src/app/passcode.ts
+      - src/app/private-lock.ts
+      - src/app/private-sync.ts
+      - src/app/tracking-parameters.ts
+      - src/app/url-display.ts
+      - scripts/dev-fixture.ts
+      - scripts/release-version.ts
+      - tests/mobile-*.test.ts
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/mobile.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Test the app and build the debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      # Uses the pnpm version pinned in package.json "packageManager".
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      # The runner image has the SDK. Accepting its licenses lets Gradle fetch the platform and NDK the build asks for.
+      - name: Accept the Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+      - uses: gradle/actions/setup-gradle@v5
+      - run: pnpm install --frozen-lockfile
+      - name: Test the app's code
+        run: pnpm exec vp test run mobile release-version
+      - name: Bundle the JavaScript
+        run: pnpm run mobile:export
+      - name: Generate the Android project
+        run: pnpm --filter tablodge-mobile exec expo prebuild --platform android --no-install
+      - name: Build the debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug -x lint -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+      - uses: actions/upload-artifact@v5
+        with:
+          name: tablodge-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

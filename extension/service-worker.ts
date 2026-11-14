@@ -37,6 +37,14 @@ import {
 	STATE_KEY,
 	type UndoDelta,
 } from '../src/shared/library-state';
+import {
+	cleanDeviceName,
+	defaultBrowserDeviceName,
+	DEVICE_KEY,
+	deviceStamp,
+	isDeviceKind,
+	MAX_DEVICE_NAME,
+} from '../src/shared/device';
 import {hashText} from '../src/shared/library-values';
 import {
 	createSyncClient,
@@ -55,6 +63,7 @@ import {
 // would leave an `export {}` behind. The value imports above are bundled into the classic script by the
 // build, and by tests/worker-source.ts for the tests.
 type ActionFailure = import('../src/app/types').ActionFailure;
+type LinkPreviewData = import('../src/app/types').LinkPreviewData;
 type TabLodgeMessageType = import('../src/app/types').TabLodgeMessageType;
 type ActionResult<K extends TabLodgeMessageType = TabLodgeMessageType> =
 	import('../src/app/types').ActionResult<K>;
@@ -825,6 +834,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	bookmarkQuickActions: ['open-new'],
 	sessionsOnTop: false,
 	showSaveWindowButton: true,
+	linkPreviews: false,
 	showTrashBinButton: false,
 	keepLodgePinned: false,
 	browserBookmarkAction: 'off',
@@ -855,6 +865,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionNameStyle: 'date-title',
 	sessionNameTemplate: '{date} · {title}',
 	sessionNameFallback: 'date-title',
+	mobileApp: {},
 });
 // Mirrors src/app/icon-ids.ts (the worker cannot import); a test keeps both lists identical.
 const ICON_IDS = new Set<unknown>([
@@ -1512,6 +1523,19 @@ function iconField(value: unknown): {icon?: string} {
 	return typeof value === 'string' && ICON_IDS.has(value) ? {icon: value} : {};
 }
 
+/**
+The `color` property for a stored column: a preset accent id or `#rrggbb`. "default", "system", and anything else are dropped,
+so a column without a color stores no field.
+*/
+function colorField(value: unknown): {color?: string} {
+	return typeof value === 'string' &&
+		value !== 'default' &&
+		value !== 'system' &&
+		(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value))
+		? {color: value}
+		: {};
+}
+
 function normalizeFolder(raw: unknown): Folder | null {
 	if (!isRecord(raw)) {
 		return null;
@@ -1651,6 +1675,7 @@ function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 		id,
 		name: cleanText(raw.name, 'New column', 60),
 		...iconField(raw.icon),
+		...colorField(raw.color),
 		...domainsField(raw.domains),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
@@ -1929,8 +1954,13 @@ function normalizeGroup(
 		createdAt,
 		updatedAt: positiveOr(raw.updatedAt, createdAt),
 		...(lastOpenedAt > 0 && {lastOpenedAt}),
+		...colorField(raw.color),
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
 		sourceWindowId: isInteger(raw.sourceWindowId) ? raw.sourceWindowId : null,
+		...deviceStamp(
+			cleanText(raw.deviceName, '', MAX_DEVICE_NAME),
+			isDeviceKind(raw.deviceKind) ? raw.deviceKind : 'desktop',
+		),
 		...(isRecord(raw.windowBounds) &&
 			[
 				raw.windowBounds.left,
@@ -2023,6 +2053,27 @@ function normalizeSessionQuickActions(raw: RawSettings): SessionQuickAction[] {
 	}
 
 	return selected.slice(0, 5);
+}
+
+const MOBILE_APP_KEYS_MAX = 20;
+const MOBILE_APP_TEXT_MAX = 40;
+
+/**
+The Android app's preferences, kept as they are so they sync between phones: a few short keys with plain values.
+*/
+function normalizeMobileApp(value: unknown): Settings['mobileApp'] {
+	const kept: Array<[string, string | number | boolean]> = [];
+	for (const [key, item] of isRecord(value) ? Object.entries(value) : []) {
+		const plain =
+			typeof item === 'boolean' ||
+			(typeof item === 'number' && Number.isFinite(item)) ||
+			(typeof item === 'string' && item.length <= MOBILE_APP_TEXT_MAX);
+		if (plain && key.length <= MOBILE_APP_TEXT_MAX) {
+			kept.push([key, item]);
+		}
+	}
+
+	return Object.fromEntries(kept.slice(0, MOBILE_APP_KEYS_MAX));
 }
 
 function normalizeSettings(input: RawSettings | null = {}): Settings {
@@ -2140,6 +2191,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 		bookmarkQuickActions: normalizeBookmarkQuickActions(raw),
 		sessionsOnTop: raw.sessionsOnTop === true,
 		showSaveWindowButton: raw.showSaveWindowButton !== false,
+		linkPreviews: raw.linkPreviews === true,
 		showTrashBinButton: raw.showTrashBinButton === true,
 		dashboardWidth: isOneOf(
 			['default', 'wider', 'full', 'narrower'],
@@ -2222,6 +2274,7 @@ function normalizeSettings(input: RawSettings | null = {}): Settings {
 			DEFAULT_SETTINGS.sessionNameTemplate,
 			SESSION_NAME_TEMPLATE_MAX,
 		),
+		mobileApp: normalizeMobileApp(raw.mobileApp),
 	};
 	return settings;
 }
@@ -2757,6 +2810,88 @@ async function privateSyncInfo(): Promise<PrivateSyncInfo> {
 }
 
 /**
+The name this browser gives the sessions it saves: the one set in Settings, else the browser and system. Read once at
+start and again whenever the setting changes; functions that save a session wait for the first read.
+*/
+let thisDevice = '';
+async function readDeviceName() {
+	const stored = (await chrome.storage.local.get([DEVICE_KEY]))[DEVICE_KEY] as
+		{name?: unknown} | undefined;
+	const custom = cleanDeviceName(stored?.name);
+	if (custom) {
+		thisDevice = custom;
+		return;
+	}
+
+	try {
+		const {os} = await chrome.runtime.getPlatformInfo();
+		thisDevice = defaultBrowserDeviceName(globalThis.navigator?.userAgent, os);
+	} catch {
+		thisDevice = defaultBrowserDeviceName(globalThis.navigator?.userAgent, '');
+	}
+}
+
+const deviceReady = readDeviceName();
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (area === 'local' && changes[DEVICE_KEY] !== undefined) {
+		void readDeviceName();
+	}
+});
+
+const PREVIEW_CACHE_SIZE = 200;
+const previewCache = new Map<string, LinkPreviewData | null>();
+
+/**
+The title, description, and image of a page, asked of the sync server, which fetches the page itself. Nothing is
+asked unless the setting is on and a server is connected; answers, including misses, are kept while the worker runs.
+*/
+async function linkPreview(url: string): Promise<LinkPreviewData | null> {
+	if (!/^https?:\/\//i.test(url) || url.length > 2048) {
+		return null;
+	}
+
+	const target = await regularSyncConfig();
+	if (!target || !(await getStore()).settings.linkPreviews) {
+		return null;
+	}
+
+	const hit = previewCache.get(url);
+	if (hit !== undefined) {
+		return hit;
+	}
+
+	let found: LinkPreviewData | null = null;
+	try {
+		const {status, body} = await callServer(
+			fetch,
+			target,
+			`/v1/preview?url=${encodeURIComponent(url)}`,
+		);
+		if (status === 200 && isRecord(body)) {
+			const text = (value: unknown) =>
+				typeof value === 'string' && value ? value : undefined;
+			found = {
+				title: text(body.title),
+				description: text(body.description),
+				image: String(body.image).startsWith('data:image/')
+					? text(body.image)
+					: undefined,
+			};
+		}
+	} catch {
+		// Offline or refused: no card, and the next hover asks again.
+		return null;
+	}
+
+	if (previewCache.size >= PREVIEW_CACHE_SIZE) {
+		previewCache.delete(previewCache.keys().next().value!);
+	}
+
+	previewCache.set(url, found);
+	return found;
+}
+
+/**
 A field of a sync server's JSON answer, for setting up the private library's key outside the sync client.
 */
 async function serverField(target: SyncConfig, path: string, field: string) {
@@ -3139,6 +3274,7 @@ async function captureTabs(
 	windowNumber = 0,
 	saveWindowBounds = false,
 ): Promise<CaptureResult | null> {
+	await deviceReady;
 	const timestamp = Date.now();
 	const captureEntries = await captureEntriesOf(
 		tabs,
@@ -3256,6 +3392,7 @@ async function captureTabs(
 					updatedAt: timestamp,
 					sourceWindowName: cleanText(window.title, '', 180),
 					sourceWindowId: window.id,
+					...deviceStamp(thisDevice, 'desktop'),
 					...(saveWindowBounds &&
 						Number.isFinite(window.left) &&
 						Number.isFinite(window.top) &&
@@ -5055,6 +5192,16 @@ async function updateGroup(
 			group.description = normalizeSessionText(fields.description);
 		}
 
+		// `color` omitted keeps the current color; "" or anything that is not a color removes it.
+		if (fields.color !== undefined) {
+			const {color} = colorField(fields.color);
+			if (color) {
+				group.color = color;
+			} else {
+				delete group.color;
+			}
+		}
+
 		if (typeof fields.folderId === 'string') {
 			if (store.folders.every((folder) => folder.id !== fields.folderId)) {
 				return {ok: false, error: 'Choose an existing folder.'};
@@ -5627,6 +5774,7 @@ async function createSessionFromLinks(
 	entries: LinkEntry[] = [],
 	requestedName = '',
 ): Promise<ActionResult<'CREATE_SESSION_FROM_LINKS'>> {
+	await deviceReady;
 	return mutate(() =>
 		withUndo('Create session from links', [STORAGE_KEY], async () => {
 			const store = await getStore();
@@ -5693,6 +5841,7 @@ async function createSessionFromLinks(
 				updatedAt: now,
 				sourceWindowName: '',
 				sourceWindowId: null,
+				...deviceStamp(thisDevice, 'desktop'),
 				tabs,
 			};
 			store.groups.unshift(created);
@@ -5752,6 +5901,8 @@ async function splitGroup(
 				updatedAt: now,
 				sourceWindowName: group.sourceWindowName,
 				sourceWindowId: group.sourceWindowId,
+				...deviceStamp(group.deviceName ?? '', group.deviceKind ?? 'desktop'),
+				...(group.color && {color: group.color}),
 				tabs: pairSplits(moved),
 			};
 			store.groups.splice(store.groups.indexOf(group) + 1, 0, created);
@@ -6512,6 +6663,7 @@ async function removeDuplicateBookmarks(
 async function createBookmarkColumn(
 	name: string,
 	icon?: unknown,
+	color?: unknown,
 	domains?: unknown,
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
@@ -6532,6 +6684,7 @@ async function createBookmarkColumn(
 			id: makeId(),
 			name: columnName,
 			...iconField(icon),
+			...colorField(color),
 			...domainsField(domains),
 			createdAt: Date.now(),
 			isDefault: false,
@@ -6546,6 +6699,7 @@ async function updateBookmarkColumn(
 	columnId: string,
 	name: string,
 	icon?: unknown,
+	color?: unknown,
 	domains?: unknown,
 ): Promise<ActionResult<'UPDATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
@@ -6575,6 +6729,16 @@ async function updateBookmarkColumn(
 				column.icon = nextIcon;
 			} else {
 				delete column.icon;
+			}
+		}
+
+		// `color` omitted keeps the current color; "" or anything that is not a color removes it.
+		if (color !== undefined) {
+			const {color: nextColor} = colorField(color);
+			if (nextColor) {
+				column.color = nextColor;
+			} else {
+				delete column.color;
 			}
 		}
 
@@ -7112,7 +7276,9 @@ async function importGroups(
 		withUndo('Import', [STORAGE_KEY], async () => {
 			const store = await getStore();
 			const candidates =
-				importMode === 'bookmarks' ? [] : importCandidates(input).slice(0, 500);
+				importMode === 'bookmarks'
+					? []
+					: importCandidates(input).slice(0, MAX_SESSIONS);
 			const hasBookmarkData =
 				importMode !== 'sessions' &&
 				(Array.isArray(input?.bookmarks) ||
@@ -10250,6 +10416,10 @@ async function handleMessage(
 			return {ok: true, ...privateConfig};
 		}
 
+		case 'GET_LINK_PREVIEW': {
+			return {ok: true, preview: await linkPreview(message.url)};
+		}
+
 		case 'GET_PRIVATE_LOCK': {
 			return {ok: true, ...(await privateLockInfo())};
 		}
@@ -10509,7 +10679,12 @@ async function handleMessage(
 		}
 
 		case 'CREATE_BOOKMARK_COLUMN': {
-			return createBookmarkColumn(message.name, message.icon, message.domains);
+			return createBookmarkColumn(
+				message.name,
+				message.icon,
+				message.color,
+				message.domains,
+			);
 		}
 
 		case 'UPDATE_BOOKMARK_COLUMN': {
@@ -10517,6 +10692,7 @@ async function handleMessage(
 				message.columnId,
 				message.name,
 				message.icon,
+				message.color,
 				message.domains,
 			);
 		}
@@ -12012,6 +12188,7 @@ async function saveLinkToSession(
 	title: string,
 	groupId?: string,
 ): Promise<Result<{added: boolean; groupId: string | null}>> {
+	await deviceReady;
 	const url = normalizeUrl(rawUrl);
 	if (!url) {
 		return {ok: false, error: 'Only http and https links can be saved.'};
@@ -12057,6 +12234,7 @@ async function saveLinkToSession(
 				updatedAt: now,
 				sourceWindowName: '',
 				sourceWindowId: null,
+				...deviceStamp(thisDevice, 'desktop'),
 				tabs: [],
 			};
 			store.groups.unshift(group);

@@ -22,9 +22,9 @@ TabLodge has no accounts and no analytics. Your data stays in your browser profi
 ## Features
 
 - **Sessions.** Save tabs, a tab group, a window, or all windows, and restore them with their groups and pinned tabs. Organize sessions in folders, archive old ones, and replace, extend, or split a session from the current window.
-- **Bookmark board.** Columns of links on every new tab, in a Board or Focus view. Drag or use the keyboard to reorder, paste lists of links, and find duplicates.
+- **Bookmark board.** Columns of links on every new tab, in a Board or Focus view, each with its own icon and color. Drag or use the keyboard to reorder, paste lists of links, and find duplicates.
 - **Search.** A palette (`Ctrl+Shift+K` on any page, `Ctrl+K` or `/` on the dashboard) and the `tl` address bar keyword find open tabs, bookmarks, saved tabs, and sessions.
-- **Import and export.** Bring data from OneTab, Session Buddy, Tab Session Manager, Toby, or browser bookmarks. Export as JSON, HTML, CSV, Markdown, or links, or save a full backup ZIP, optionally protected with a password.
+- **Import and export.** Bring data from OneTab, Session Buddy, Tab Session Manager, Toby, Raindrop.io, or browser bookmarks. Imports add to what you have and skip links you already saved; a full backup can be added or can replace everything. Export as JSON, HTML, CSV, Markdown, or links, or save a full backup ZIP, optionally protected with a password.
 - **Recovery.** Crash snapshots, a trash bin, Undo, and optional automatic backups.
 - **Sync with your own server.** Keep the library the same in all your browsers through a server you run yourself, with Docker or on your Cloudflare account. On Cloudflare, a Deploy to Cloudflare button sets it up without installing anything. See [Self hosting](self-hosting.md).
 - **Private windows.** Use the regular library or a separate one, optionally locked with a PIN or password. See [Private windows](#private-windows).
@@ -56,6 +56,8 @@ The in app Help page explains every feature and setting.
 - To keep it, use Firefox ESR, Developer Edition, Nightly, or an unbranded build, set `xpinstall.signatures.required` to `false` in `about:config`, and install the ZIP from `about:addons`.
 
 In Firefox, TabLodge always replaces the new tab page, the side panel is Firefox's sidebar, saved items show letter tiles instead of site icons, private windows are not supported, and split view tabs reopen as neighboring tabs. See [Browser support](architecture.md#browser-support).
+
+**Android:** Android 7 or newer. Download `tablodge.apk` from the [latest release](https://github.com/bberka/TabLodge/releases/latest), open it on your phone, and allow your browser or file manager to install apps when Android asks. There is no store listing yet, and the app does not update itself: install the next release's APK over the old one, and your data stays. Compare the file with `tablodge.apk.sha256` if you want to check the download. The app saves links and shows your bookmarks and sessions from your [sync server](self-hosting.md); see [Android app](#android-app).
 
 ### Build from source
 
@@ -91,12 +93,39 @@ Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then us
 | `vp run a11y` | Accessibility and keyboard checks on the built extension |
 | `vp run build` / `vp run pack` | Build and verify both browsers, then package them |
 | `vp run lint:fix` | Fix lint issues and format with XO |
+| `pnpm run mobile:start` | Start Metro for the Android app in `mobile/` (needs a development build; see [Android app](#android-app)) |
+| `pnpm run mobile:export` | Bundle the Android app's JavaScript to check that it builds |
 | `pnpm run cf:setup` | Deploy the sync server to Cloudflare (see [Self hosting](self-hosting.md)) |
 | `pnpm run cf:bundle` | Rebuild `server/cloudflare-deploy/worker.js` after changing the server or the sync code |
 
 The test browser keeps its own profile in `.dev/`, apart from your regular one. After a rebuild, reload TabLodge on the extensions page. Headless variants (`dev:chrome:headless`, `dev:firefox:headless`) are for automated checks; see [Agent validation](agent-validation.md#browser-access).
 
 Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [Architecture](architecture.md) for storage, messages, and sync. AI agents also follow [AGENTS.md](../AGENTS.md).
+
+### Android app
+
+`mobile/` holds an Android app, still in development. Each [release](https://github.com/bberka/TabLodge/releases/latest) attaches a signed APK (see [Install](#install)), and pull requests that touch the app build a debug APK as a workflow artifact. It is a small link saver in the style of Raindrop:
+
+- Bookmarks: browse columns, search, add links, and tap one to open it. Swipe a row right to open it or left to delete it (with Undo), or long press to select several, then open, move, or delete them together. Selecting one row also offers Edit for its link, title, and column. **Open all** opens every link in a column.
+- Share sheet: choose TabLodge from another app's share menu and a drawer slides up with the link and title filled in. When the share started the app, saving returns you to the app you came from.
+- Sessions: saved sessions are listed by folder, as in the extension: **All** (without Archived), each folder with its count, and **Archived** last. Tap a tab to open it, or **Open all** for the whole session. A phone browser cannot list its own tabs, so the app cannot capture them. Instead, share several links at once (in Chrome, select tabs in the tab switcher and choose Share tabs; in Firefox, Share all tabs) and a drawer asks whether to save them as bookmarks, as a new session, or into a session that exists.
+- Private library: the eye button on Bookmarks and Sessions shows the private windows' library, read only, from the same server. If it has a PIN or password, the app asks for it once and keeps the key in the Android keystore. **Settings › Private library** forgets it on the phone.
+- Device names: with sync on, **Settings › Sync** has a Device name (a computer defaults to the browser and system, a phone to its make and model). New sessions record it, and session cards show where each was saved. Each device has its own name, kept on that device; a rename does not change sessions already saved.
+- Site icons: an optional switch (off by default). With sync connected, icons are loaded through your server; without it, each icon comes straight from its site. A letter tile shows until an icon arrives or when a site has none.
+- Session actions: long press a session card, or use its **More** button, for Open all, Change color, Rename, Move to folder, Archive, Share links, and Delete (with Undo). Long press a tab to remove it. **Settings › Sessions** chooses what a tap does (show tabs or open all) and what a swipe right and left do; the default is Archive on the right and Delete on the left. The private library allows only opening and sharing.
+- Settings sync: with sync on, your settings follow your other devices, including this app's own (look, floating bar, tap and swipe actions, cleaning links on save). It is on by default and **Settings › Sync settings** turns settings sync off for one phone, the same switch the extension has. The app's own settings travel in the library's `mobileApp` setting, which the extension keeps but does not use.
+- Accent color (Android): **Settings › Appearance › Accent color**. The default is **System color**, the phone's own Material You color (Android 12 and later, read once when the app starts; older phones and the iOS look keep TabLodge's own). **TabLodge** brings back the app's purple, and the palette and the palette swatch give a preset or any color. Colors are moved toward black or white until text in them is readable, and the choice syncs with the app's other look settings.
+- Color picker (Android): the color drawers show the selected color's name, the preset swatches, and a palette swatch that opens hue and shade bars you drag (a screen reader steps them) and a hex field. A drag saves once, when the finger lifts.
+- Session colors: a session can have a color, set in **Session details** in the extension (the same selector as column colors) and with **Change color** in an expanded card on Android (or a long press on the card). The color shows as a line on the top of the card in the extension and tints the card's tile on Android. It syncs with the session.
+- Columns: every column selector shows the column's icon and color, and ends with **New column**, which asks for a name, an icon, and a color. The palette icon in the Bookmarks header changes the open column's name, icon, and color, or deletes it (its bookmarks move to another column, or are deleted with it). The color and icon sync with the extension, where a column's color is set in its Edit column dialog with the same selector as the accent color.
+- Settings search: the box at the top of Settings filters the cards and rows as you type. It matches a setting's name or its hint, so `swipe`, `tracking`, or `private` find what you mean.
+- Behavior: **Settings › Bookmarks** chooses what a tap does (open or edit) and what a swipe right and left do (open, edit, move, delete, or nothing). **Settings › Same as your extension** changes the extension settings that sync: clean titles, tracking parameters, how addresses show, bookmark spacing, and session sorting. Settings that only make sense in a desktop browser (new tab, side panel, context menus, windows, snapshots) are not shown.
+- Sync: it connects to your [sync server](self-hosting.md) with the same address and token as the extension, using the shared client in `src/shared/sync/`. While the app is in front, a live connection brings changes in within a second or two. When you leave the app, it first sends any change that is still waiting, then closes that connection and its timers, so it does not keep the radio or the battery busy. When you come back it reconnects and catches up. A change made with no connection is kept and goes out by itself once the server is reachable again. There is no background sync, so changes from other devices show up when you open the app.
+- Look: **Settings › Appearance** switches between an Android (Material) and an iOS look, which follows the phone by default, and turns the floating tab bar on or off.
+
+[ADR 3](adr/0003-mobile-app-framework.md) explains the framework choice. The app is not published and is not part of the extension build.
+
+To run it you need JDK 17 or newer and the Android SDK (`ANDROID_HOME` set). `pnpm run mobile:android` builds a development build and installs it on a connected device or emulator, and `pnpm run mobile:start` serves the JavaScript to it. `pnpm run mobile:doctor` checks the Expo setup, and `pnpm run mobile:export` bundles the JavaScript without a device. In a development build, the app starts with the same sample sessions and bookmarks as `dev:chrome:seed` (the fixture in `scripts/dev-fixture.ts`), once, when its library is empty and no server is connected. Set `EXPO_PUBLIC_SEED_DATA=0` to start empty instead. **Settings › Development** can load the samples again or clear the library. Sample data never reaches a server: those buttons are off while a server is connected, and connecting removes the samples first. Release builds do not contain the sample data. The sharing logic is tested in `tests/mobile-library.test.ts` and `tests/mobile-sync.test.ts`.
 
 ### Project structure
 
@@ -107,6 +136,7 @@ src/app/     Extension pages, data types, and messages
 src/shared/  Shared helpers, library storage, and the sync protocol (src/shared/sync/)
 src/components/ui/  UI primitives (Radix and Tailwind)
 server/      Self hosted sync server for Docker and Cloudflare (cloudflare-deploy/ is what the Deploy to Cloudflare button copies)
+mobile/      Android app (Expo and React Native), in progress
 tests/       Vitest suites with mocked browser APIs
 scripts/     Build, packaging, dev browser, and release tooling
 site/        Website for tablodge.bbay.dev (vp run site:dev)
@@ -131,6 +161,8 @@ TabLodge has no website host permissions and no content scripts, and makes no ne
 | `alarms` | Snapshots, backups, trash cleanup, archiving, sync, and the private lock |
 | `idle` | Lock the private library when you lock your screen |
 | `activeTab`, `scripting` | Show the search palette over the current page when you press its shortcut |
+
+Preview cards (**Settings › Preview links on hover**, off by default) need no extra permission: the extension asks the sync server it is already connected to, and the server fetches the page.
 
 `downloads` is optional and requested only for backup copies in `Downloads/TabLodge/`. A web page can tell TabLodge is installed by requesting `palette.html`, which the palette needs. See [Privacy](PRIVACY.md) for everything TabLodge stores and sends.
 

@@ -1,0 +1,74 @@
+---
+import ButtonIcon from './ButtonIcon.astro';
+import {SITE} from '../site';
+
+interface Props {
+	center?: boolean;
+}
+const {center = false} = Astro.props;
+---
+
+<!--
+All three downloads are in the page, so it works without scripts, in this order. The script below moves the one that
+suits the visitor's device to the front and highlights it, and adds a line when the device has no match.
+-->
+<div class="downloads" data-downloads>
+	<div class:list={['actions', center && 'center']}>
+		<a class="btn primary" data-store="chrome" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" /><span class="lead-in">Install from </span>Chrome Web Store</a>
+		<a class="btn ghost" data-store="firefox" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
+		<a class="btn ghost" data-store="android" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="store" />Get for Android</a>
+		<slot />
+	</div>
+	<p class:list={['note', 'download-note', center && 'center']} data-note role="status" hidden></p>
+</div>
+
+<style>
+	/* Anything slotted in (a link to the source) stays after the downloads. */
+	.downloads .actions > :global(:not([data-store])) {
+		order: 9;
+	}
+	/* On a phone the buttons stack at full width, each on one line, so none wraps or sits narrower than the rest. */
+	@media (max-width: 560px) {
+		.downloads .actions {
+			flex-direction: column;
+			align-items: stretch;
+		}
+		.downloads .actions > :global(.btn) {
+			justify-content: center;
+			white-space: nowrap;
+		}
+		.lead-in {
+			display: none;
+		}
+	}
+	.download-note {
+		max-width: 60ch;
+		margin-top: 0;
+	}
+	.download-note.center {
+		margin-inline: auto;
+	}
+</style>
+
+<script>
+	import {detectPlatform, readHints} from '../lib/platform';
+
+	const platform = detectPlatform(navigator.userAgent, readHints(navigator));
+	for (const root of document.querySelectorAll<HTMLElement>('[data-downloads]')) {
+		root.dataset.platform = platform.id;
+		for (const [index, store] of platform.order.entries()) {
+			const link = root.querySelector<HTMLElement>(`[data-store="${store}"]`);
+			if (!link) continue;
+			const primary = store === platform.primary;
+			link.style.order = String(index);
+			link.classList.toggle('primary', primary);
+			link.classList.toggle('ghost', !primary);
+		}
+
+		const note = root.querySelector<HTMLElement>('[data-note]');
+		if (note && platform.note) {
+			note.textContent = platform.note;
+			note.hidden = false;
+		}
+	}
+</script>

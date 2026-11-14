@@ -81,6 +81,13 @@ import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
 import {useStableCallbacks} from '../shared/use-stable';
 import {ACTION_ICONS} from './action-icons';
+import {openArchivedCopy} from './archive-link';
+import {AccentPalette} from './accent-palette';
+import {
+	COLUMN_COLOR_BAR,
+	COLUMN_COLOR_TEXT,
+	columnColorVars,
+} from './column-color';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {
 	AppHeader,
@@ -178,6 +185,11 @@ import {
 	type BookmarkColumnDraft,
 } from './bookmark-column-picker';
 import {takeStateRequest} from './state-preload';
+import {
+	LinkPreview,
+	LinkPreviewProvider,
+	useLinkPreviewsOn,
+} from './link-preview';
 import {cn} from '@/lib/utils';
 
 const initialStateRequest = takeStateRequest();
@@ -216,6 +228,7 @@ type ColumnDraft = {
 	id: string | null;
 	name: string;
 	icon?: string;
+	color?: string;
 	domains: string;
 };
 type MoveDraft = {bookmarkIds: string[]; targetColumnId: string};
@@ -912,6 +925,7 @@ function NewTab() {
 			id: column?.id || null,
 			name: column?.name || '',
 			icon: column?.icon,
+			color: column?.color,
 			domains: (column?.domains ?? []).join('\n'),
 		});
 		setDialog('column');
@@ -994,11 +1008,13 @@ function NewTab() {
 					columnId: columnEdit.id,
 					name: columnEdit.name,
 					icon: columnEdit.icon ?? '',
+					color: columnEdit.color ?? '',
 					domains,
 				})
 			: await send('CREATE_BOOKMARK_COLUMN', {
 					name: columnEdit.name,
 					icon: columnEdit.icon,
+					color: columnEdit.color,
 					domains,
 				});
 		if (!result?.ok) {
@@ -2762,199 +2778,351 @@ function NewTab() {
 				state={state}
 				error={error}
 				reload={reload}
+				onSaveWindow={() => void saveWindow()}
 			/>
 		</section>
 	);
 
 	return (
-		<main
-			className={cn(
-				'mx-auto',
-				dashboardMaxWidthClass,
-				'px-5 py-6 sm:px-8 sm:py-9',
-			)}
-		>
-			<AppHeader active="dashboard">
-				<FinderTrigger onClick={() => setFinderOpen(true)} />
-				{settings.showSaveWindowButton !== false && (
-					<Button
-						size="sm"
-						disabled={busy !== ''}
-						aria-label={saveWindowLabel(tabSelection)}
-						onClick={saveWindow}
-					>
-						<PanelsTopLeft />
-						<span className="hidden sm:inline">
-							{busy === 'save-window'
-								? 'Saving'
-								: saveWindowLabel(tabSelection)}
-						</span>
-					</Button>
+		<LinkPreviewProvider enabled={settings.linkPreviews === true}>
+			<main
+				className={cn(
+					'mx-auto',
+					dashboardMaxWidthClass,
+					'px-5 py-6 sm:px-8 sm:py-9',
 				)}
-				<SyncIndicator />
-				{settings.showTrashBinButton !== false && (
-					<IconTooltip label="Trash bin">
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-8 w-8"
-							aria-label="Trash bin"
-							onClick={() => {
-								setTrashFilter('all');
-								setTrashOpen(true);
-							}}
-						>
-							<Trash2 />
-						</Button>
-					</IconTooltip>
-				)}
-			</AppHeader>
-
-			<FinderPalette
-				open={finderOpen}
-				state={state}
-				actions={finderActions}
-				onOpenChange={setFinderOpen}
-			/>
-
-			<RecoveryBanner
-				showStatus={showStatus}
-				onReview={() => setSnapshotsOpen(true)}
-				onSessionsChanged={reload}
-			/>
-			{sessionsOnTop ? sessionsSection : bookmarksSection}
-			<hr className="my-8 border-border" aria-hidden="true" />
-			{sessionsOnTop ? bookmarksSection : sessionsSection}
-			<StatusLine status={error ? {message: error, error: true} : status} />
-
-			{shareDialog}
-			{nameDialog}
-			<SnapshotsDialog
-				open={snapshotsOpen}
-				showStatus={showStatus}
-				onOpenChange={setSnapshotsOpen}
-				onSessionsChanged={reload}
-			/>
-			<TrashDialog
-				open={trashOpen}
-				initialFilter={trashFilter}
-				showStatus={showStatus}
-				onOpenChange={setTrashOpen}
-				onChanged={reload}
-			/>
-			<BackupDialog
-				state={state}
-				data={backupRequest?.data ?? null}
-				open={Boolean(backupRequest)}
-				singleColumn={backupRequest?.singleColumn ?? false}
-				showStatus={showStatus}
-				onOpenChange={(open) => !open && setBackupRequest(null)}
-			/>
-			<DuplicateBookmarksDialog
-				open={duplicatesOpen}
-				bookmarks={bookmarks}
-				columns={columns}
-				showStatus={showStatus}
-				onOpenChange={setDuplicatesOpen}
-				onChanged={reload}
-			/>
-			<ImportDialog
-				open={importOpen}
-				initialKind="bookmarks"
-				state={state}
-				showStatus={showStatus}
-				onOpenChange={setImportOpen}
-				onImported={() => void reload()}
-			/>
-			<Dialog
-				open={dialog === 'bookmark'}
-				onOpenChange={(open) => !open && setDialog(null)}
 			>
-				<DialogContent>
-					<form onSubmit={saveBookmark}>
-						<DialogHeader>
-							<DialogTitle>
-								{bookmarkEdit?.id
-									? 'Edit bookmark'
-									: bookmarkToSession
-										? 'Add link to session'
-										: 'Add bookmark'}
-							</DialogTitle>
-							<DialogDescription>
-								{bookmarkToSession
-									? 'Add a web link to a saved session.'
-									: 'Save a web link to a local column.'}
-							</DialogDescription>
-						</DialogHeader>
-						<DialogBody>
-							{!bookmarkEdit?.id && (
+				<AppHeader active="dashboard">
+					<FinderTrigger onClick={() => setFinderOpen(true)} />
+					{settings.showSaveWindowButton !== false && (
+						<Button
+							size="sm"
+							disabled={busy !== ''}
+							aria-label={saveWindowLabel(tabSelection)}
+							onClick={saveWindow}
+						>
+							<PanelsTopLeft />
+							<span className="hidden sm:inline">
+								{busy === 'save-window'
+									? 'Saving'
+									: saveWindowLabel(tabSelection)}
+							</span>
+						</Button>
+					)}
+					<SyncIndicator />
+					{settings.showTrashBinButton !== false && (
+						<IconTooltip label="Trash bin">
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8"
+								aria-label="Trash bin"
+								onClick={() => {
+									setTrashFilter('all');
+									setTrashOpen(true);
+								}}
+							>
+								<Trash2 />
+							</Button>
+						</IconTooltip>
+					)}
+				</AppHeader>
+
+				<FinderPalette
+					open={finderOpen}
+					state={state}
+					actions={finderActions}
+					onOpenChange={setFinderOpen}
+				/>
+
+				<RecoveryBanner
+					showStatus={showStatus}
+					onReview={() => setSnapshotsOpen(true)}
+					onSessionsChanged={reload}
+				/>
+				{sessionsOnTop ? sessionsSection : bookmarksSection}
+				<hr className="my-8 border-border" aria-hidden="true" />
+				{sessionsOnTop ? bookmarksSection : sessionsSection}
+				<StatusLine status={error ? {message: error, error: true} : status} />
+
+				{shareDialog}
+				{nameDialog}
+				<SnapshotsDialog
+					open={snapshotsOpen}
+					showStatus={showStatus}
+					onOpenChange={setSnapshotsOpen}
+					onSessionsChanged={reload}
+				/>
+				<TrashDialog
+					open={trashOpen}
+					initialFilter={trashFilter}
+					showStatus={showStatus}
+					onOpenChange={setTrashOpen}
+					onChanged={reload}
+				/>
+				<BackupDialog
+					state={state}
+					data={backupRequest?.data ?? null}
+					open={Boolean(backupRequest)}
+					singleColumn={backupRequest?.singleColumn ?? false}
+					showStatus={showStatus}
+					onOpenChange={(open) => !open && setBackupRequest(null)}
+				/>
+				<DuplicateBookmarksDialog
+					open={duplicatesOpen}
+					bookmarks={bookmarks}
+					columns={columns}
+					showStatus={showStatus}
+					onOpenChange={setDuplicatesOpen}
+					onChanged={reload}
+				/>
+				<ImportDialog
+					open={importOpen}
+					initialKind="bookmarks"
+					state={state}
+					showStatus={showStatus}
+					onOpenChange={setImportOpen}
+					onImported={() => void reload()}
+				/>
+				<Dialog
+					open={dialog === 'bookmark'}
+					onOpenChange={(open) => !open && setDialog(null)}
+				>
+					<DialogContent>
+						<form onSubmit={saveBookmark}>
+							<DialogHeader>
+								<DialogTitle>
+									{bookmarkEdit?.id
+										? 'Edit bookmark'
+										: bookmarkToSession
+											? 'Add link to session'
+											: 'Add bookmark'}
+								</DialogTitle>
+								<DialogDescription>
+									{bookmarkToSession
+										? 'Add a web link to a saved session.'
+										: 'Save a web link to a local column.'}
+								</DialogDescription>
+							</DialogHeader>
+							<DialogBody>
+								{!bookmarkEdit?.id && (
+									<SaveTargetChoice
+										target={saveTarget}
+										sessions={pasteSessions}
+										onTargetChange={(target) =>
+											setSaveTarget(
+												target === 'session' ? 'session' : 'bookmark',
+											)
+										}
+									/>
+								)}
+								{editedBookmark && (
+									<LinkSummary
+										settings={settings}
+										title={editedBookmark.title}
+										url={editedBookmark.url}
+									/>
+								)}
+								<div className="space-y-1.5">
+									<Label htmlFor="bookmark-edit-title">Title</Label>
+									<Input
+										required
+										id="bookmark-edit-title"
+										maxLength={500}
+										value={bookmarkEdit?.title || ''}
+										onChange={(e) =>
+											setBookmarkEdit(
+												(old) => old && {...old, title: e.target.value},
+											)
+										}
+									/>
+								</div>
+								<div className="space-y-1.5">
+									<Label htmlFor="bookmark-url">Web address</Label>
+									<Input
+										required
+										id="bookmark-url"
+										type="url"
+										placeholder="https://example.com"
+										value={bookmarkEdit?.url || ''}
+										onChange={(e) =>
+											setBookmarkEdit(
+												(old) => old && {...old, url: e.target.value},
+											)
+										}
+									/>
+								</div>
+								{bookmarkToSession ? (
+									<SaveTargetSessionField
+										id="bookmark-session"
+										sessions={pasteSessions}
+										value={pasteSessionId}
+										onValueChange={setSaveSessionId}
+									/>
+								) : (
+									columnFields
+								)}
+							</DialogBody>
+							<DialogFooter className="justify-between">
+								{editedBookmark && (
+									<Button
+										type="button"
+										variant="destructive"
+										onClick={() => deleteBookmark(editedBookmark, true)}
+									>
+										<Trash2 />
+										Delete
+									</Button>
+								)}
+								<div className="ml-auto flex flex-wrap justify-end gap-2">
+									<Button
+										type="button"
+										variant="outline"
+										onClick={() => setDialog(null)}
+									>
+										<X aria-hidden="true" />
+										Cancel
+									</Button>
+									<Button type="submit" disabled={busy === 'bookmark-save'}>
+										<Save aria-hidden="true" />
+										{bookmarkToSession
+											? 'Add to session'
+											: bookmarkEdit?.columnId === NEW_COLUMN
+												? 'Create column and save'
+												: bookmarkEdit?.id
+													? 'Save changes'
+													: 'Save bookmark'}
+									</Button>
+								</div>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+				<Dialog
+					open={dialog === 'paste-links'}
+					onOpenChange={(open) => !open && setDialog(null)}
+				>
+					<DialogContent size="md">
+						<form onSubmit={addPastedLinks}>
+							<DialogHeader>
+								<DialogTitle>
+									Add{' '}
+									{plural(
+										pastedLinks.length,
+										pastedInSession ? 'link' : 'bookmark',
+									)}
+								</DialogTitle>
+								<DialogDescription>
+									Untick any link you don't want to add.
+								</DialogDescription>
+							</DialogHeader>
+							<DialogBody>
 								<SaveTargetChoice
+									allowNewSession
 									target={saveTarget}
 									sessions={pasteSessions}
-									onTargetChange={(target) =>
-										setSaveTarget(target === 'session' ? 'session' : 'bookmark')
-									}
+									onTargetChange={setSaveTarget}
 								/>
-							)}
-							{editedBookmark && (
-								<LinkSummary
-									settings={settings}
-									title={editedBookmark.title}
-									url={editedBookmark.url}
-								/>
-							)}
-							<div className="space-y-1.5">
-								<Label htmlFor="bookmark-edit-title">Title</Label>
-								<Input
-									required
-									id="bookmark-edit-title"
-									maxLength={500}
-									value={bookmarkEdit?.title || ''}
-									onChange={(e) =>
-										setBookmarkEdit(
-											(old) => old && {...old, title: e.target.value},
-										)
-									}
-								/>
-							</div>
-							<div className="space-y-1.5">
-								<Label htmlFor="bookmark-url">Web address</Label>
-								<Input
-									required
-									id="bookmark-url"
-									type="url"
-									placeholder="https://example.com"
-									value={bookmarkEdit?.url || ''}
-									onChange={(e) =>
-										setBookmarkEdit(
-											(old) => old && {...old, url: e.target.value},
-										)
-									}
-								/>
-							</div>
-							{bookmarkToSession ? (
-								<SaveTargetSessionField
-									id="bookmark-session"
-									sessions={pasteSessions}
-									value={pasteSessionId}
-									onValueChange={setSaveSessionId}
-								/>
-							) : (
-								columnFields
-							)}
-						</DialogBody>
-						<DialogFooter className="justify-between">
-							{editedBookmark && (
-								<Button
-									type="button"
-									variant="destructive"
-									onClick={() => deleteBookmark(editedBookmark, true)}
-								>
-									<Trash2 />
-									Delete
-								</Button>
-							)}
-							<div className="ml-auto flex flex-wrap justify-end gap-2">
+								<ScrollArea className="max-h-72 rounded-md border border-border">
+									<ul
+										className="divide-y divide-border"
+										aria-label="Pasted links"
+									>
+										{pastedLinks.map((link, index) => (
+											<li key={link.url}>
+												<label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm">
+													<Checkbox
+														className="mt-0.5"
+														checked={link.include}
+														aria-label={`Add ${link.title || link.url}`}
+														onCheckedChange={(checked) =>
+															setPastedLinks((old) =>
+																old.map((entry, at) =>
+																	at === index
+																		? {...entry, include: checked === true}
+																		: entry,
+																),
+															)
+														}
+													/>
+													<Favicon
+														url={link.url}
+														label={link.title || link.url}
+														className="mt-0.5 h-5 w-5 shrink-0"
+													/>
+													<span className="min-w-0 flex-1">
+														<span className="block truncate font-medium">
+															{link.title}
+														</span>
+														<span className="block truncate text-xs text-muted-foreground">
+															<InsecureMarkFor
+																url={link.url}
+																settings={settings}
+															/>
+															{displayUrl(
+																link.url,
+																settings.simplifyUrls !== false,
+															)}
+														</span>
+													</span>
+												</label>
+											</li>
+										))}
+									</ul>
+								</ScrollArea>
+								{pastedInSession ? (
+									<>
+										<SaveTargetSessionField
+											allowNewSession
+											id="pasted-links-session"
+											sessions={pasteSessions}
+											value={pastedSessionPick}
+											onValueChange={(id) => {
+												setPastedSession(id);
+												if (id !== NEW_SESSION) {
+													setSaveSessionId(id);
+												}
+											}}
+										/>
+										{pastedNewSession && (
+											<div className="space-y-1.5">
+												<Label htmlFor="pasted-links-session-name">
+													New session name
+												</Label>
+												<Input
+													autoFocus
+													id="pasted-links-session-name"
+													value={pastedSessionName}
+													maxLength={SESSION_NAME_MAX}
+													placeholder={pastedDefaultName}
+													onFocus={(event) => event.target.select()}
+													onChange={(event) =>
+														setPastedSessionName(event.target.value)
+													}
+													onBlur={() =>
+														setPastedSessionName((name) =>
+															name.trim() ? name : pastedDefaultName,
+														)
+													}
+												/>
+											</div>
+										)}
+									</>
+								) : (
+									<div className="space-y-1.5">
+										<Label htmlFor="pasted-links-column">Column</Label>
+										<BookmarkColumnPicker
+											columns={columns}
+											value={pastedColumn}
+											id="pasted-links-column"
+											draft={pastedNewColumn}
+											onDraftChange={setPastedNewColumn}
+											onValueChange={setPastedColumn}
+										/>
+									</div>
+								)}
+							</DialogBody>
+							<DialogFooter>
 								<Button
 									type="button"
 									variant="outline"
@@ -2963,434 +3131,311 @@ function NewTab() {
 									<X aria-hidden="true" />
 									Cancel
 								</Button>
-								<Button type="submit" disabled={busy === 'bookmark-save'}>
-									<Save aria-hidden="true" />
-									{bookmarkToSession
-										? 'Add to session'
-										: bookmarkEdit?.columnId === NEW_COLUMN
-											? 'Create column and save'
-											: bookmarkEdit?.id
-												? 'Save changes'
-												: 'Save bookmark'}
-								</Button>
-							</div>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-			<Dialog
-				open={dialog === 'paste-links'}
-				onOpenChange={(open) => !open && setDialog(null)}
-			>
-				<DialogContent size="md">
-					<form onSubmit={addPastedLinks}>
-						<DialogHeader>
-							<DialogTitle>
-								Add{' '}
-								{plural(
-									pastedLinks.length,
-									pastedInSession ? 'link' : 'bookmark',
-								)}
-							</DialogTitle>
-							<DialogDescription>
-								Untick any link you don't want to add.
-							</DialogDescription>
-						</DialogHeader>
-						<DialogBody>
-							<SaveTargetChoice
-								allowNewSession
-								target={saveTarget}
-								sessions={pasteSessions}
-								onTargetChange={setSaveTarget}
-							/>
-							<ScrollArea className="max-h-72 rounded-md border border-border">
-								<ul
-									className="divide-y divide-border"
-									aria-label="Pasted links"
-								>
-									{pastedLinks.map((link, index) => (
-										<li key={link.url}>
-											<label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm">
-												<Checkbox
-													className="mt-0.5"
-													checked={link.include}
-													aria-label={`Add ${link.title || link.url}`}
-													onCheckedChange={(checked) =>
-														setPastedLinks((old) =>
-															old.map((entry, at) =>
-																at === index
-																	? {...entry, include: checked === true}
-																	: entry,
-															),
-														)
-													}
-												/>
-												<Favicon
-													url={link.url}
-													label={link.title || link.url}
-													className="mt-0.5 h-5 w-5 shrink-0"
-												/>
-												<span className="min-w-0 flex-1">
-													<span className="block truncate font-medium">
-														{link.title}
-													</span>
-													<span className="block truncate text-xs text-muted-foreground">
-														<InsecureMarkFor
-															url={link.url}
-															settings={settings}
-														/>
-														{displayUrl(
-															link.url,
-															settings.simplifyUrls !== false,
-														)}
-													</span>
-												</span>
-											</label>
-										</li>
-									))}
-								</ul>
-							</ScrollArea>
-							{pastedInSession ? (
-								<>
-									<SaveTargetSessionField
-										allowNewSession
-										id="pasted-links-session"
-										sessions={pasteSessions}
-										value={pastedSessionPick}
-										onValueChange={(id) => {
-											setPastedSession(id);
-											if (id !== NEW_SESSION) {
-												setSaveSessionId(id);
-											}
-										}}
-									/>
-									{pastedNewSession && (
-										<div className="space-y-1.5">
-											<Label htmlFor="pasted-links-session-name">
-												New session name
-											</Label>
-											<Input
-												autoFocus
-												id="pasted-links-session-name"
-												value={pastedSessionName}
-												maxLength={SESSION_NAME_MAX}
-												placeholder={pastedDefaultName}
-												onFocus={(event) => event.target.select()}
-												onChange={(event) =>
-													setPastedSessionName(event.target.value)
-												}
-												onBlur={() =>
-													setPastedSessionName((name) =>
-														name.trim() ? name : pastedDefaultName,
-													)
-												}
-											/>
-										</div>
-									)}
-								</>
-							) : (
-								<div className="space-y-1.5">
-									<Label htmlFor="pasted-links-column">Column</Label>
-									<BookmarkColumnPicker
-										columns={columns}
-										value={pastedColumn}
-										id="pasted-links-column"
-										draft={pastedNewColumn}
-										onDraftChange={setPastedNewColumn}
-										onValueChange={setPastedColumn}
-									/>
-								</div>
-							)}
-						</DialogBody>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setDialog(null)}
-							>
-								<X aria-hidden="true" />
-								Cancel
-							</Button>
-							<Button
-								type="submit"
-								disabled={
-									busy === 'paste-links' ||
-									pastedLinks.filter((link) => link.include).length === 0
-								}
-							>
-								<ListPlus aria-hidden="true" />
-								{pastedNewSession
-									? 'Create session'
-									: `Add ${plural(
-											pastedLinks.filter((link) => link.include).length,
-											pastedInSession ? 'link' : 'bookmark',
-										)}`}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-			<Dialog
-				open={dialog === 'column'}
-				onOpenChange={(open) => !open && setDialog(null)}
-			>
-				<DialogContent size="sm">
-					<form onSubmit={saveColumn}>
-						<DialogHeader>
-							<DialogTitle>
-								{columnEdit?.id ? 'Edit column' : 'Add column'}
-							</DialogTitle>
-							<DialogDescription>
-								Choose a name and icon for this bookmark column.
-							</DialogDescription>
-						</DialogHeader>
-						<DialogBody>
-							<IconNameField
-								id="column-name"
-								label="Name"
-								nameLabel="Column name"
-								icon={columnEdit?.icon}
-								defaultIcon={DEFAULT_COLUMN_ICON}
-								inputProps={{
-									required: true,
-									autoFocus: true,
-									maxLength: 60,
-									value: columnEdit?.name || '',
-									onChange: (e) =>
-										setColumnEdit(
-											(old) => old && {...old, name: e.target.value},
-										),
-								}}
-								onIconChange={(icon) =>
-									setColumnEdit((old) => old && {...old, icon})
-								}
-							/>
-							<details
-								className="group rounded-md border border-border"
-								open={Boolean(columnEdit?.domains)}
-							>
-								<summary className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-									<ChevronRight
-										className="h-4 w-4 transition-transform group-open:rotate-90"
-										aria-hidden="true"
-									/>
-									Advanced: file automatically
-								</summary>
-								<div className="space-y-1.5 px-3 pb-3">
-									<Label htmlFor="column-domains">Websites</Label>
-									<Textarea
-										id="column-domains"
-										rows={4}
-										spellCheck={false}
-										placeholder={
-											'One per line, e.g.\ngithub.com\ngithub.com/bberka'
-										}
-										value={columnEdit?.domains ?? ''}
-										aria-describedby="column-domains-hint"
-										onChange={(e) =>
-											setColumnEdit(
-												(old) => old && {...old, domains: e.target.value},
-											)
-										}
-									/>
-									<p
-										id="column-domains-hint"
-										className="text-xs text-muted-foreground"
-									>
-										A site covers its subdomains. Add a path such as
-										github.com/bberka to match only that part. Pages saved from
-										the toolbar popup, the shortcut or the browser's bookmark
-										button go here without asking. The longest match wins.
-									</p>
-								</div>
-							</details>
-						</DialogBody>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setDialog(null)}
-							>
-								<X aria-hidden="true" />
-								Cancel
-							</Button>
-							<Button type="submit">
-								{columnEdit?.id ? (
-									<Save aria-hidden="true" />
-								) : (
-									<FolderPlus aria-hidden="true" />
-								)}
-								{columnEdit?.id ? 'Save changes' : 'Add column'}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-			<Dialog
-				open={dialog === 'delete-column'}
-				onOpenChange={(open) => !open && setDialog(null)}
-			>
-				<DialogContent size="sm">
-					<form onSubmit={confirmDeleteColumn}>
-						<DialogHeader>
-							<DialogTitle>
-								Delete column “{columnDelete?.column.name}”?
-							</DialogTitle>
-							<DialogDescription>
-								It has {plural(columnDelete?.count ?? 0, 'bookmark')}. You can
-								undo this right after.
-							</DialogDescription>
-						</DialogHeader>
-						<DialogBody>
-							{columns.some((item) => item.id !== columnDelete?.column.id) ? (
-								<RadioCardGroup
-									label="Its bookmarks"
-									value={columnDelete?.mode ?? 'move'}
-									onValueChange={(value) =>
-										setColumnDelete(
-											(old) =>
-												old && {...old, mode: value as 'move' | 'delete'},
-										)
+								<Button
+									type="submit"
+									disabled={
+										busy === 'paste-links' ||
+										pastedLinks.filter((link) => link.include).length === 0
 									}
 								>
-									<RadioCard
-										value="move"
-										icon={ACTION_ICONS.move}
-										title="Move them to another column"
-										description="They go to the end of the column you pick."
-									/>
-									<RadioCard
-										value="delete"
-										icon={Trash2}
-										title="Delete them too"
-										description="They go to the trash bin with the column."
-									/>
-								</RadioCardGroup>
-							) : null}
-							{columnDelete?.mode === 'move' &&
-							columns.some((item) => item.id !== columnDelete.column.id) ? (
+									<ListPlus aria-hidden="true" />
+									{pastedNewSession
+										? 'Create session'
+										: `Add ${plural(
+												pastedLinks.filter((link) => link.include).length,
+												pastedInSession ? 'link' : 'bookmark',
+											)}`}
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+				<Dialog
+					open={dialog === 'column'}
+					onOpenChange={(open) => !open && setDialog(null)}
+				>
+					<DialogContent size="sm">
+						<form onSubmit={saveColumn}>
+							<DialogHeader>
+								<DialogTitle>
+									{columnEdit?.id ? 'Edit column' : 'Add column'}
+								</DialogTitle>
+								<DialogDescription>
+									Choose a name, icon, and color for this bookmark column.
+								</DialogDescription>
+							</DialogHeader>
+							<DialogBody>
+								<IconNameField
+									id="column-name"
+									label="Name"
+									nameLabel="Column name"
+									icon={columnEdit?.icon}
+									defaultIcon={DEFAULT_COLUMN_ICON}
+									inputProps={{
+										required: true,
+										autoFocus: true,
+										maxLength: 60,
+										value: columnEdit?.name || '',
+										onChange: (e) =>
+											setColumnEdit(
+												(old) => old && {...old, name: e.target.value},
+											),
+									}}
+									onIconChange={(icon) =>
+										setColumnEdit((old) => old && {...old, icon})
+									}
+								/>
 								<div className="space-y-1.5">
-									<Label htmlFor="delete-column-target">
-										Move bookmarks to
+									<Label id="column-color-label" className="block">
+										Color
 									</Label>
-									<Select
-										value={columnDelete.targetColumnId}
+									<div>
+										<AccentPalette
+											forColumn
+											accent={columnEdit?.color ?? 'default'}
+											systemColor={undefined}
+											onChange={(accent) =>
+												setColumnEdit(
+													(old) =>
+														old && {
+															...old,
+															color: accent === 'default' ? undefined : accent,
+														},
+												)
+											}
+										/>
+									</div>
+								</div>
+								<details
+									className="group rounded-md border border-border"
+									open={Boolean(columnEdit?.domains)}
+								>
+									<summary className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+										<ChevronRight
+											className="h-4 w-4 transition-transform group-open:rotate-90"
+											aria-hidden="true"
+										/>
+										Advanced: file automatically
+									</summary>
+									<div className="space-y-1.5 px-3 pb-3">
+										<Label htmlFor="column-domains">Websites</Label>
+										<Textarea
+											id="column-domains"
+											rows={4}
+											spellCheck={false}
+											placeholder={
+												'One per line, e.g.\ngithub.com\ngithub.com/bberka'
+											}
+											value={columnEdit?.domains ?? ''}
+											aria-describedby="column-domains-hint"
+											onChange={(e) =>
+												setColumnEdit(
+													(old) => old && {...old, domains: e.target.value},
+												)
+											}
+										/>
+										<p
+											id="column-domains-hint"
+											className="text-xs text-muted-foreground"
+										>
+											A site covers its subdomains. Add a path such as
+											github.com/bberka to match only that part. Pages saved
+											from the toolbar popup, the shortcut or the browser's
+											bookmark button go here without asking. The longest match
+											wins.
+										</p>
+									</div>
+								</details>
+							</DialogBody>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setDialog(null)}
+								>
+									<X aria-hidden="true" />
+									Cancel
+								</Button>
+								<Button type="submit">
+									{columnEdit?.id ? (
+										<Save aria-hidden="true" />
+									) : (
+										<FolderPlus aria-hidden="true" />
+									)}
+									{columnEdit?.id ? 'Save changes' : 'Add column'}
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+				<Dialog
+					open={dialog === 'delete-column'}
+					onOpenChange={(open) => !open && setDialog(null)}
+				>
+					<DialogContent size="sm">
+						<form onSubmit={confirmDeleteColumn}>
+							<DialogHeader>
+								<DialogTitle>
+									Delete column “{columnDelete?.column.name}”?
+								</DialogTitle>
+								<DialogDescription>
+									It has {plural(columnDelete?.count ?? 0, 'bookmark')}. You can
+									undo this right after.
+								</DialogDescription>
+							</DialogHeader>
+							<DialogBody>
+								{columns.some((item) => item.id !== columnDelete?.column.id) ? (
+									<RadioCardGroup
+										label="Its bookmarks"
+										value={columnDelete?.mode ?? 'move'}
 										onValueChange={(value) =>
 											setColumnDelete(
+												(old) =>
+													old && {...old, mode: value as 'move' | 'delete'},
+											)
+										}
+									>
+										<RadioCard
+											value="move"
+											icon={ACTION_ICONS.move}
+											title="Move them to another column"
+											description="They go to the end of the column you pick."
+										/>
+										<RadioCard
+											value="delete"
+											icon={Trash2}
+											title="Delete them too"
+											description="They go to the trash bin with the column."
+										/>
+									</RadioCardGroup>
+								) : null}
+								{columnDelete?.mode === 'move' &&
+								columns.some((item) => item.id !== columnDelete.column.id) ? (
+									<div className="space-y-1.5">
+										<Label htmlFor="delete-column-target">
+											Move bookmarks to
+										</Label>
+										<Select
+											value={columnDelete.targetColumnId}
+											onValueChange={(value) =>
+												setColumnDelete(
+													(old) => old && {...old, targetColumnId: value},
+												)
+											}
+										>
+											<SelectTrigger id="delete-column-target">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												{columns
+													.filter((item) => item.id !== columnDelete.column.id)
+													.map((item) => (
+														<SelectItem key={item.id} value={item.id}>
+															<ColumnLabel column={item} />
+														</SelectItem>
+													))}
+											</SelectContent>
+										</Select>
+									</div>
+								) : null}
+								{columns.every(
+									(item) => item.id === columnDelete?.column.id,
+								) ? (
+									<p className="text-sm text-muted-foreground">
+										This is your last column, so its bookmarks are deleted with
+										it and go to the trash bin.
+									</p>
+								) : null}
+							</DialogBody>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setDialog(null)}
+								>
+									<X aria-hidden="true" />
+									Cancel
+								</Button>
+								<Button type="submit" variant="destructive">
+									<Trash2 />
+									Delete column
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+				<Dialog
+					open={dialog === 'move'}
+					onOpenChange={(open) => !open && setDialog(null)}
+				>
+					<DialogContent size="sm">
+						<form onSubmit={moveBookmarkToColumn}>
+							<DialogHeader>
+								<DialogTitle>
+									{moveBookmark?.bookmarkIds.length === 1
+										? 'Move bookmark to'
+										: 'Move bookmarks to'}
+								</DialogTitle>
+								<DialogDescription>
+									Bookmarks go to the end of the column you choose, in their
+									current order.
+								</DialogDescription>
+							</DialogHeader>
+							<DialogBody>
+								{movingBookmark ? (
+									<LinkSummary
+										settings={settings}
+										title={movingBookmark.title}
+										url={movingBookmark.url}
+									/>
+								) : (
+									<p className="text-sm">
+										{plural(moveBookmark?.bookmarkIds.length || 0, 'bookmark')}{' '}
+										selected
+									</p>
+								)}
+								<div className="space-y-1.5">
+									<Label htmlFor="move-bookmark-column">Column</Label>
+									<BookmarkColumnPicker
+										columns={columns}
+										value={
+											moveBookmark?.targetColumnId ||
+											columns[0]?.id ||
+											NEW_BOOKMARK_COLUMN
+										}
+										id="move-bookmark-column"
+										newColumnLabel="Add column"
+										draft={moveBookmarkColumnDraft}
+										onValueChange={(value) =>
+											setMoveBookmark(
 												(old) => old && {...old, targetColumnId: value},
 											)
 										}
-									>
-										<SelectTrigger id="delete-column-target">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{columns
-												.filter((item) => item.id !== columnDelete.column.id)
-												.map((item) => (
-													<SelectItem key={item.id} value={item.id}>
-														<ColumnLabel column={item} />
-													</SelectItem>
-												))}
-										</SelectContent>
-									</Select>
+										onDraftChange={setMoveBookmarkColumnDraft}
+									/>
 								</div>
-							) : null}
-							{columns.every((item) => item.id === columnDelete?.column.id) ? (
-								<p className="text-sm text-muted-foreground">
-									This is your last column, so its bookmarks are deleted with it
-									and go to the trash bin.
-								</p>
-							) : null}
-						</DialogBody>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setDialog(null)}
-							>
-								<X aria-hidden="true" />
-								Cancel
-							</Button>
-							<Button type="submit" variant="destructive">
-								<Trash2 />
-								Delete column
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-			<Dialog
-				open={dialog === 'move'}
-				onOpenChange={(open) => !open && setDialog(null)}
-			>
-				<DialogContent size="sm">
-					<form onSubmit={moveBookmarkToColumn}>
-						<DialogHeader>
-							<DialogTitle>
-								{moveBookmark?.bookmarkIds.length === 1
-									? 'Move bookmark to'
-									: 'Move bookmarks to'}
-							</DialogTitle>
-							<DialogDescription>
-								Bookmarks go to the end of the column you choose, in their
-								current order.
-							</DialogDescription>
-						</DialogHeader>
-						<DialogBody>
-							{movingBookmark ? (
-								<LinkSummary
-									settings={settings}
-									title={movingBookmark.title}
-									url={movingBookmark.url}
-								/>
-							) : (
-								<p className="text-sm">
-									{plural(moveBookmark?.bookmarkIds.length || 0, 'bookmark')}{' '}
-									selected
-								</p>
-							)}
-							<div className="space-y-1.5">
-								<Label htmlFor="move-bookmark-column">Column</Label>
-								<BookmarkColumnPicker
-									columns={columns}
-									value={
-										moveBookmark?.targetColumnId ||
-										columns[0]?.id ||
-										NEW_BOOKMARK_COLUMN
-									}
-									id="move-bookmark-column"
-									newColumnLabel="Add column"
-									draft={moveBookmarkColumnDraft}
-									onValueChange={(value) =>
-										setMoveBookmark(
-											(old) => old && {...old, targetColumnId: value},
-										)
-									}
-									onDraftChange={setMoveBookmarkColumnDraft}
-								/>
-							</div>
-						</DialogBody>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setDialog(null)}
-							>
-								<X aria-hidden="true" />
-								Cancel
-							</Button>
-							<Button type="submit" disabled={busy === 'bookmark-batch'}>
-								<ArrowRight aria-hidden="true" />
-								{moveBookmark?.bookmarkIds.length === 1
-									? 'Move bookmark'
-									: 'Move bookmarks'}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-		</main>
+							</DialogBody>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setDialog(null)}
+								>
+									<X aria-hidden="true" />
+									Cancel
+								</Button>
+								<Button type="submit" disabled={busy === 'bookmark-batch'}>
+									<ArrowRight aria-hidden="true" />
+									{moveBookmark?.bookmarkIds.length === 1
+										? 'Move bookmark'
+										: 'Move bookmarks'}
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+			</main>
+		</LinkPreviewProvider>
 	);
 }
 
@@ -3864,6 +3909,7 @@ const BookmarkColumn = memo(
 				actions,
 			);
 		const ColumnIcon = getIcon(column.icon, DEFAULT_COLUMN_ICON).component;
+		const colorVars = columnColorVars(column.color);
 		const bookmarkDrop =
 			dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
 		const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
@@ -3884,9 +3930,11 @@ const BookmarkColumn = memo(
 				draggable={allowColumnDrag}
 				data-drag-column={allowColumnDrag ? column.id : undefined}
 				title={allowColumnDrag ? 'Drag to reorder' : undefined}
+				style={colorVars}
 				className={cn(
 					'flex shrink-0 items-center gap-2 border-b border-border',
 					compact ? 'px-2 py-1' : 'px-3 py-2',
+					colorVars && COLUMN_COLOR_BAR,
 					allowColumnDrag && 'cursor-grab touch-none active:cursor-grabbing',
 				)}
 				onPointerDown={
@@ -3900,7 +3948,12 @@ const BookmarkColumn = memo(
 						: undefined
 				}
 			>
-				<ColumnIcon className="size-4 shrink-0 text-muted-foreground" />
+				<ColumnIcon
+					className={cn(
+						'size-4 shrink-0',
+						colorVars ? COLUMN_COLOR_TEXT : 'text-muted-foreground',
+					)}
+				/>
 				<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
 					{column.name}
 				</h3>
@@ -4131,6 +4184,12 @@ const BookmarkCard = memo(
 			icon: ACTION_ICONS.copy,
 			onSelect: act('copy'),
 		};
+		const archiveCopy: MenuAction = {
+			id: 'archive-copy',
+			label: 'Open in Internet Archive',
+			icon: ACTION_ICONS.archiveCopy,
+			onSelect: () => void openArchivedCopy(bookmark.url, urlSettings),
+		};
 		const remove: MenuAction = {
 			id: 'delete',
 			label: 'Delete',
@@ -4151,6 +4210,7 @@ const BookmarkCard = memo(
 			{type: 'separator'},
 			edit,
 			copy,
+			archiveCopy,
 			{
 				id: 'move',
 				label: 'Move to',
@@ -4189,6 +4249,7 @@ const BookmarkCard = memo(
 			{type: 'separator'},
 			remove,
 		];
+		const previews = useLinkPreviewsOn();
 		const showUrl = urlMode !== 'none';
 		const urlOnly = urlMode === 'url-only';
 		const cardName = urlOnly
@@ -4231,7 +4292,7 @@ const BookmarkCard = memo(
 									'absolute left-2 top-1/2 z-10 size-6 -translate-y-1/2',
 									selectionMode === 'hover' &&
 										!selected &&
-										'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+										'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
 								)}
 								onClick={(event) =>
 									void onAction(
@@ -4241,82 +4302,86 @@ const BookmarkCard = memo(
 								}
 							/>
 						)}
-						<a
-							href={
-								urlSettings.removeTrackingParameters
-									? stripTrackingParameters(bookmark.url)
-									: bookmark.url
-							}
-							rel="noopener noreferrer"
-							title={urlOnly ? bookmark.url : bookmark.title}
-							aria-label={
-								urlOnly && bookmark.title
-									? `${bookmark.title} (${bookmark.url})`
-									: undefined
-							}
-							className="flex min-w-0 flex-1 items-center gap-2.5"
-							onClick={(event) => {
-								if (event.ctrlKey || event.metaKey) {
-									return;
+						<LinkPreview url={bookmark.url}>
+							<a
+								href={
+									urlSettings.removeTrackingParameters
+										? stripTrackingParameters(bookmark.url)
+										: bookmark.url
 								}
+								rel="noopener noreferrer"
+								title={
+									previews ? undefined : urlOnly ? bookmark.url : bookmark.title
+								}
+								aria-label={
+									urlOnly && bookmark.title
+										? `${bookmark.title} (${bookmark.url})`
+										: undefined
+								}
+								className="flex min-w-0 flex-1 items-center gap-2.5"
+								onClick={(event) => {
+									if (event.ctrlKey || event.metaKey) {
+										return;
+									}
 
-								if (event.altKey || selectionMode !== 'off') {
+									if (event.altKey || selectionMode !== 'off') {
+										event.preventDefault();
+										void onAction(
+											event.shiftKey ? 'select-range' : 'select',
+											bookmark,
+										);
+										return;
+									}
+
+									if (event.button !== 0 || event.shiftKey) {
+										return;
+									}
+
 									event.preventDefault();
-									void onAction(
-										event.shiftKey ? 'select-range' : 'select',
-										bookmark,
-									);
-									return;
-								}
+									if (clickOpensMenu) {
+										setMenuOpen(true);
+										return;
+									}
 
-								if (event.button !== 0 || event.shiftKey) {
-									return;
-								}
-
-								event.preventDefault();
-								if (clickOpensMenu) {
-									setMenuOpen(true);
-									return;
-								}
-
-								void onAction('click', bookmark);
-							}}
-						>
-							<Favicon
-								url={bookmark.url}
-								label={siteName(bookmark.url)}
-								className={cn(
-									showUrl && !compact ? 'h-6 w-6' : 'h-5 w-5',
-									'rounded-sm',
-									selectionMode !== 'off' &&
-										(selectionMode === 'on' || selected
-											? 'invisible'
-											: 'group-hover:invisible group-focus-within:invisible'),
-								)}
-							/>
-							<span className="min-w-0 flex-1">
-								<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
-									{(urlOnly || !showUrl) && (
-										<InsecureMarkFor
-											url={bookmark.url}
-											settings={urlSettings}
-										/>
+									void onAction('click', bookmark);
+								}}
+							>
+								<Favicon
+									url={bookmark.url}
+									label={siteName(bookmark.url)}
+									className={cn(
+										showUrl && !compact ? 'h-6 w-6' : 'h-5 w-5',
+										'rounded-sm',
+										selectionMode !== 'off' &&
+											(selectionMode === 'on' || selected
+												? 'invisible'
+												: 'group-hover:invisible group-focus-within:invisible'),
 									)}
-									{cardName}
-								</strong>
-								{showUrl && !urlOnly && (
-									<small className="block truncate text-[11px] leading-4 text-muted-foreground">
-										<InsecureMarkFor
-											url={bookmark.url}
-											settings={urlSettings}
-										/>
-										{urlMode === 'domain'
-											? siteName(bookmark.url)
-											: displayUrl(bookmark.url, urlSettings.simplifyUrls)}
-									</small>
-								)}
-							</span>
-						</a>
+								/>
+								<span className="min-w-0 flex-1">
+									<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
+										{(urlOnly || !showUrl) && (
+											<InsecureMarkFor
+												url={bookmark.url}
+												settings={urlSettings}
+											/>
+										)}
+										{cardName}
+									</strong>
+									{showUrl && !urlOnly && (
+										<small className="block truncate text-[11px] leading-4 text-muted-foreground">
+											<InsecureMarkFor
+												url={bookmark.url}
+												settings={urlSettings}
+											/>
+											{urlMode === 'domain'
+												? siteName(bookmark.url)
+												: displayUrl(bookmark.url, urlSettings.simplifyUrls)}
+										</small>
+									)}
+								</span>
+							</a>
+						</LinkPreview>
 						{quickActions.map((quickAction) => {
 							const {
 								icon: QuickIcon,

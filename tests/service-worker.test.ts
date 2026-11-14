@@ -5466,6 +5466,7 @@ for (const [key, fallback] of [
 	['removeTrackingParameters', false],
 	['showSaveWindowButton', true],
 	['showTrashBinButton', false],
+	['linkPreviews', false],
 	['stretchBookmarkColumns', true],
 	['limitBookmarksPerColumn', true],
 ] as const) {
@@ -6583,6 +6584,96 @@ test('bookmark columns store a registry icon and drop unknown ones', async () =>
 	});
 	assert.equal(reset.ok, true, reset.error);
 	assert.equal('icon' in reset.column, false);
+});
+
+test('bookmark columns store a color from the accent palette and drop anything else', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const created = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Reading',
+		color: 'teal',
+	});
+	assert.equal(created.ok, true, created.error);
+	assert.equal(created.column.color, 'teal');
+	for (const [name, color] of [
+		['Default one', 'default'],
+		['System one', 'system'],
+		['Odd one', 'chartreuse'],
+		['Short hex', '#abc'],
+		['Upper hex', '#ABCDEF'],
+	] as const) {
+		const made = await harness.sendMessage({
+			type: 'CREATE_BOOKMARK_COLUMN',
+			name,
+			color,
+		});
+		assert.equal(made.ok, true, made.error);
+		assert.equal('color' in made.column, false, `${name} stores no color`);
+	}
+
+	const custom = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Custom',
+		color: '#a1b2c3',
+	});
+	assert.equal(custom.column.color, '#a1b2c3');
+
+	// Renaming without a color keeps it; a valid one replaces it; an empty string removes it.
+	const renamed = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+	});
+	assert.equal(renamed.column.color, 'teal');
+	const swapped = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+		color: 'rose',
+	});
+	assert.equal(swapped.column.color, 'rose');
+	const reset = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: created.column.id,
+		name: 'Reads',
+		color: '',
+	});
+	assert.equal(reset.ok, true, reset.error);
+	assert.equal('color' in reset.column, false);
+});
+
+test('stored column colors are validated on load and kept by imports', async () => {
+	const state = stateWithSession();
+	state.bookmarkColumns = [
+		{id: 'bookmark-default', name: 'Bookmarks', color: 'bogus'},
+		{id: 'column-a', name: 'Alpha', color: 'violet'},
+		{id: 'column-b', name: 'Beta', color: '#102030'},
+	];
+	const harness = createWorkerHarness(state);
+	const loaded = await harness.sendMessage({type: 'GET_STATE'});
+	assert.equal(loaded.bookmarkColumns[0].color, undefined);
+	assert.equal(loaded.bookmarkColumns[1].color, 'violet');
+	assert.equal(loaded.bookmarkColumns[2].color, '#102030');
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: {
+			bookmarkColumns: [
+				{id: 'x', name: 'Imported', color: 'green'},
+				{id: 'y', name: 'Other', color: 'nope'},
+			],
+			bookmarks: [{url: 'https://a.example/', columnId: 'x'}],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	const columns = harness.state.bookmarkColumns;
+	assert.equal(
+		columns.find((column) => column.name === 'Imported')?.color,
+		'green',
+	);
+	assert.equal(
+		columns.find((column) => column.name === 'Other')?.color,
+		undefined,
+	);
 });
 
 test('a column with domains takes matching bookmarks when none is chosen', async () => {
@@ -7951,6 +8042,78 @@ test('BACKUP_NOW stores a full export that the importer reads, and keeps setting
 	const listed = await harness.sendMessage({type: 'GET_BACKUPS'});
 	assert.equal(listed.auto.length, 1);
 	assert.equal('json' in listed.auto[0], false, 'listing never ships the data');
+});
+
+test('adding a backup to the library merges it: both are kept, duplicates are skipped, settings stay', async () => {
+	const mine = createWorkerHarness(bookmarksState(3));
+	const before = mine.state.settings.closeOnSave;
+	// Another library: the same three bookmarks and session, two more bookmarks, another session, other settings.
+	const theirsState = bookmarksState(5);
+	theirsState.settings = {...theirsState.settings, closeOnSave: !before};
+	theirsState.groups = [
+		...theirsState.groups,
+		{
+			id: 'session-2',
+			name: 'Other session',
+			folderId: 'unfiled',
+			createdAt: 1,
+			updatedAt: 1,
+			tabs: [
+				{
+					id: 'other-tab',
+					title: 'Other page',
+					url: 'https://other.example/page',
+					pinned: false,
+					originalIndex: 0,
+				},
+			],
+		},
+	];
+	const theirs = createWorkerHarness(theirsState);
+	await theirs.sendMessage({type: 'BACKUP_NOW'});
+	const backup = JSON.parse(backupsOf(theirs).auto[0].json) as unknown;
+
+	const merged = await mine.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: backup,
+		importOptions: {duplicateMode: 'skip', titlePolicy: 'existing'},
+	});
+	assert.equal(merged.ok, true, merged.error);
+	assert.equal(merged.groups, 1, 'only the session that was new');
+	assert.equal(merged.bookmarks, 2, 'only the two bookmarks that were new');
+	assert.ok(merged.skipped >= 4, 'the repeated tab and bookmarks are skipped');
+	assert.deepEqual(
+		mine.state.groups
+			.map((group) => String(group.name))
+			.toSorted((a, b) => a.localeCompare(b)),
+		['Other session', 'Research'],
+	);
+	assert.equal(mine.state.bookmarks.length, 5);
+	assert.equal(
+		mine.state.settings.closeOnSave,
+		before,
+		'a merge never changes the settings',
+	);
+	// One Undo puts the library back as it was.
+	assert.ok(merged.undoId);
+	const undone = await mine.sendMessage({type: 'UNDO', id: merged.undoId});
+	assert.equal(undone.ok, true, undone.error);
+	assert.equal(mine.state.bookmarks.length, 3);
+	assert.equal(mine.state.groups.length, 1);
+});
+
+test('importing a file takes every session in it, up to the library limit', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const groups = Array.from({length: 600}, (_, index) => ({
+		name: `Imported ${index}`,
+		tabs: [{url: `https://many${index}.example/`, title: `Page ${index}`}],
+	}));
+	const result = await harness.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: {groups},
+	});
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.groups, 600, 'no session past the 500th is dropped');
 });
 
 test('automatic backups follow the schedule, skip unchanged data, and rotate', async () => {
@@ -10240,6 +10403,35 @@ test('PREVIEW_SESSION_NAME formats the next save from the window tabs', async ()
 	assert.equal(datetime.name, 'Sat, Oct 25 · 10:42 PM');
 });
 
+test('the Android app preferences are kept as plain values so they sync between phones', async () => {
+	const harness = nameHarness();
+	const saved = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {
+			mobileApp: {
+				look: 'ios',
+				floatingBar: true,
+				swipes: 2,
+				nested: {a: 1},
+				long: 'x'.repeat(100),
+			},
+		} as unknown as Partial<Settings>,
+	});
+	assert.deepEqual(
+		{...saved.settings.mobileApp},
+		{
+			look: 'ios',
+			floatingBar: true,
+			swipes: 2,
+		},
+	);
+	const reset = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {mobileApp: 'nope'} as unknown as Partial<Settings>,
+	});
+	assert.deepEqual({...reset.settings.mobileApp}, {});
+});
+
 test('session name setting: "Ask each time" and its fallback are validated and reset', async () => {
 	const harness = nameHarness();
 	assert.equal(
@@ -12277,4 +12469,46 @@ test('a new PIN or password rewraps the private sync key, so other browsers keep
 	assert.equal(joined.ok, true, joined.error);
 	const synced = await first.sendMessage({type: 'PRIVATE_SYNC_NOW'});
 	assert.equal(synced.privateSync?.status.error, null);
+});
+
+test('a session keeps the device that saved it, and a bad device kind is read as a computer', async () => {
+	const state = stateWithSession();
+	Object.assign(state.groups[0], {
+		deviceName: " Berkay's  Mac ",
+		deviceKind: 'toaster',
+	});
+	const {groups} = await createWorkerHarness(state).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(groups[0].deviceName, "Berkay's Mac");
+	assert.equal(groups[0].deviceKind, 'desktop');
+	const plain = await createWorkerHarness(stateWithSession()).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(plain.groups[0].deviceName, undefined);
+});
+
+test('a session takes a color like a column does: a preset or a hex, kept when omitted, removed with an empty one', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const update = async (fields: Record<string, unknown>) =>
+		harness.sendMessage({
+			type: 'UPDATE_GROUP',
+			groupId: 'session-1',
+			fields: fields as never,
+		});
+	assert.equal((await update({color: 'blue'})).group.color, 'blue');
+	assert.equal((await update({name: 'Renamed'})).group.color, 'blue');
+	assert.equal((await update({color: '#12ab9f'})).group.color, '#12ab9f');
+	for (const bad of ['system', 'default', 'chartreuse', '#12']) {
+		assert.equal((await update({color: bad})).group.color, undefined, bad);
+	}
+
+	assert.equal((await update({color: 'red'})).group.color, 'red');
+	assert.equal((await update({color: ''})).group.color, undefined);
+	const state = stateWithSession();
+	Object.assign(state.groups[0], {color: 'nope'});
+	const {groups} = await createWorkerHarness(state).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(groups[0].color, undefined);
 });

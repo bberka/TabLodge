@@ -1,0 +1,33 @@
+# 3. Mobile app framework
+
+Status: proposed, 2026-11-12. Draft pull request on `feat/mobile-app`.
+
+## Context
+
+Issue #1 recommended staying extension first. The maintainer chose to build a phone app anyway, with a small scope: a link saver like Raindrop. It saves links into bookmark columns and opens them. It also shows sessions, because a phone browser cannot create them, and it syncs through the [self hosted server](../self-hosting.md). Android comes first, as an APK. iOS waits for a separate decision.
+
+The extension and the sync server are TypeScript, and the sync client in `src/shared/sync/` uses no browser APIs.
+
+## Decision
+
+* **Expo with React Native and TypeScript**, in a `mobile/` workspace of this repository.
+* **Android only for now.** `app.json` lists `android` as the only platform. The Android package id is `com.bberka.tablodge`.
+* **Development builds, not Expo Go.** The share sheet target needs native configuration, which `expo prebuild` generates. The `android/` folder is generated and ignored.
+* **Shared code by import.** The app imports the model types and the sync client straight from `src/` with relative paths, and Metro watches the repository root. Both are free of browser APIs, so nothing moved and the extension is untouched. `mobile/src/chrome.d.ts` declares the one Chrome type the model names. If the app later needs more shared code, it moves to a package then.
+* **Storage.** The token is in the Android keystore (expo-secure-store). The library and sync state are in SQLite (expo-sqlite key value store), which has no size limit like AsyncStorage.
+* **Development data.** Dev builds seed the extension's dev fixture into an empty library (`mobile/src/seed.ts`). It is required inside a `__DEV__` conditional so Metro drops it from release bundles, and it is never synced.
+* **Look.** Two looks, Material and iOS, switched in Settings and defaulting to the phone's own. They differ in colors, shapes, the tab bar, headers, switches, and where Add link sits. The tab bar can also float, which is off by default. Gestures (swipe rows, the drawer) use React Native's own `PanResponder` and `Animated`, so no native gesture library is needed. Every swipe action also exists as a screen reader action and in selection mode, so none depends on a gesture.
+* **Share sheet.** `expo-share-intent` adds the Android `SEND text/*` filter. Prebuild generates it in the manifest.
+
+## Rejected
+
+* **Flutter, Swift and Kotlin, Kotlin Multiplatform.** None share code with the TypeScript extension and server.
+* **Capacitor.** It reuses the most UI, but a web view feels less native and handles the share target poorly.
+
+## Consequences
+
+* A second toolchain (JDK, Android SDK, Gradle) for anyone building the app.
+* Expo pins exact versions, so `mobile/package.json` is exempt from the caret range lint rule.
+* A phone browser exposes no tab list to other apps, so sessions cannot be captured on the phone. They are listed and opened, and a shared list of links can be saved as a session or added to one. Restoring windows and tab groups has no phone equivalent.
+* The private library is read only on the phone. Opening its PIN or password protected values needs PBKDF2 and AES-GCM, which a small local native module (`mobile/modules/tablodge-crypto`) does, because 600,000 rounds are too slow in JavaScript. A second module (`mobile/modules/open-links`) opens many links at once, since Android stops a background app from starting more screens after the first link brings the browser forward.
+* iOS needs a share extension, a US$99 yearly developer account, and a pass through App Review guideline 4.2.2. That decision is left open.

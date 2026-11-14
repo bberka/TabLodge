@@ -33,10 +33,13 @@ import {
 	Pencil,
 	RefreshCw,
 	Replace,
+	Monitor,
+	PanelsTopLeft,
 	RotateCcw,
 	Save,
 	Search,
 	Share2,
+	Smartphone,
 	Split,
 	Trash2,
 	Upload,
@@ -135,6 +138,7 @@ import {hostOf, webUrl} from './web-url';
 import {stripTrackingParameters} from './tracking-parameters';
 import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
+import {openArchivedCopy} from './archive-link';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
@@ -154,6 +158,9 @@ import {
 	resolveBookmarkColumn,
 	type BookmarkColumnDraft,
 } from './bookmark-column-picker';
+import {LinkPreview, useLinkPreviewsOn} from './link-preview';
+import {AccentPalette} from './accent-palette';
+import {COLUMN_COLOR_BAR, columnColorVars} from './column-color';
 import {cn} from '@/lib/utils';
 
 /**
@@ -273,8 +280,13 @@ export function SessionManager({
 	state,
 	error,
 	reload,
+	onSaveWindow,
 }: {
 	embedded?: boolean;
+	/**
+	Saves the current window. Shown in the empty state when the page has no Save button of its own.
+	*/
+	onSaveWindow?: () => void;
 	initialQuery?: string;
 	state: TabLodgeState | null;
 	error: string;
@@ -296,6 +308,8 @@ export function SessionManager({
 	const [focusGroupName, setFocusGroupName] = useState(false);
 	// Session details: the chosen folder, or NEW_FOLDER with the new folder's icon (its name is a form field).
 	const [detailsFolder, setDetailsFolder] = useState('unfiled');
+	// Session details: the chosen color, a preset id or `#rrggbb`, or '' for none.
+	const [detailsColor, setDetailsColor] = useState('');
 	const [newFolderIcon, setNewFolderIcon] = useState<string | undefined>();
 	const groupNameRef = useRef<HTMLInputElement>(null);
 	const [bookmarkTab, setBookmarkTab] = useState<BookmarkDraft | null>(null);
@@ -355,6 +369,7 @@ export function SessionManager({
 						group.name,
 						group.description,
 						group.sourceWindowName,
+						group.deviceName,
 						...group.tabs.flatMap((tab) => [
 							tab.title,
 							tab.url,
@@ -1442,6 +1457,7 @@ export function SessionManager({
 			name: String(form.get('name') || ''),
 			description: String(form.get('description') || ''),
 			folderId: targetFolderId,
+			color: detailsColor,
 		};
 		const result = await send('UPDATE_GROUP', {
 			groupId: editingGroup.id,
@@ -1460,6 +1476,7 @@ export function SessionManager({
 	function openGroupDetails(group: Session, focusName = false) {
 		setEditingGroup(group);
 		setDetailsFolder(group.folderId || 'unfiled');
+		setDetailsColor(group.color ?? '');
 		setNewFolderIcon(undefined);
 		setFocusGroupName(focusName);
 		setDialog('details');
@@ -2076,8 +2093,33 @@ export function SessionManager({
 				)}
 
 				{groups.length === 0 ? (
-					<EmptyState icon={TabLodgeMark} title="No saved sessions">
-						Save tabs from the popup, a shortcut, or the right-click menu.
+					<EmptyState
+						icon={TabLodgeMark}
+						title="No saved sessions"
+						action={
+							<div className="flex flex-wrap justify-center gap-2">
+								{onSaveWindow && (
+									<Button size="sm" onClick={onSaveWindow}>
+										<PanelsTopLeft />
+										Save this window
+									</Button>
+								)}
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={() => {
+										setImportOpen(true);
+									}}
+								>
+									<Upload />
+									Import sessions
+								</Button>
+							</div>
+						}
+					>
+						Save the tabs of this window, or bring sessions from OneTab, Toby or
+						a TabLodge backup. You can also save from the popup, a shortcut, or
+						the right-click menu.
 					</EmptyState>
 				) : visibleGroups.length === 0 ? (
 					<EmptyState
@@ -2408,6 +2450,21 @@ export function SessionManager({
 										</SelectItem>
 									</SelectContent>
 								</Select>
+							</div>
+							<div className="space-y-1.5">
+								<Label id="group-color-label" className="block">
+									Color
+								</Label>
+								<div>
+									<AccentPalette
+										forColumn
+										accent={detailsColor || 'default'}
+										systemColor={undefined}
+										onChange={(accent) => {
+											setDetailsColor(accent === 'default' ? '' : accent);
+										}}
+									/>
+								</div>
 							</div>
 							{detailsFolder === NEW_FOLDER && (
 								<IconNameField
@@ -3085,7 +3142,9 @@ const GroupCard = memo(
 				)}
 				<article
 					id={`session-${group.id}`}
+					style={columnColorVars(group.color)}
 					className={cn(
+						group.color && COLUMN_COLOR_BAR,
 						'tn-card-lazy group/session cursor-pointer overflow-hidden rounded-xl border bg-card transition-shadow',
 						isExpanded
 							? 'border-primary/30 shadow-xs'
@@ -3201,6 +3260,20 @@ const GroupCard = memo(
 									</span>
 									<span aria-hidden="true">·</span>
 									<span>{dateText(group.createdAt)}</span>
+									{group.deviceName && (
+										<>
+											<span aria-hidden="true">·</span>
+											<span className="inline-flex items-center gap-1">
+												{group.deviceKind === 'mobile' ? (
+													<Smartphone className="size-3" aria-hidden="true" />
+												) : (
+													<Monitor className="size-3" aria-hidden="true" />
+												)}
+												<span className="sr-only">Saved on </span>
+												{group.deviceName}
+											</span>
+										</>
+									)}
 									{folderName && (
 										<>
 											<span aria-hidden="true">·</span>
@@ -3237,7 +3310,7 @@ const GroupCard = memo(
 										className={cn(
 											'flex items-center gap-0.5',
 											!isExpanded &&
-												'opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100',
+												'opacity-0 transition-opacity focus-within:opacity-100 group-hover/session:opacity-100 [@media(hover:none)]:opacity-100',
 										)}
 									>
 										{quickActions.map(
@@ -3422,6 +3495,7 @@ const SavedTab = memo(
 		const modifierRef = useRef<ClickModifiers>({});
 		const label = tab.title?.trim() || hostOf(tab.url);
 		const urlOnly = displayMode === 'url-only';
+		const previews = useLinkPreviewsOn();
 		const simplify = settings.simplifyUrls !== false;
 		const rowText = urlOnly ? simplifiedUrl(tab.url, simplify) : label;
 		const displayUrl = urlDisplay(tab.url, displayMode, simplify);
@@ -3459,6 +3533,12 @@ const SavedTab = memo(
 				label: 'Copy link',
 				icon: ACTION_ICONS.copy,
 				onSelect: () => handlers.copyTab(tab),
+			},
+			{
+				id: 'archive-copy',
+				label: 'Open in Internet Archive',
+				icon: ACTION_ICONS.archiveCopy,
+				onSelect: () => void openArchivedCopy(tab.url, settings),
 			},
 			{
 				id: 'bookmark',
@@ -3561,7 +3641,7 @@ const SavedTab = memo(
 							'flex w-6 shrink-0 justify-center transition-opacity',
 							selected || selectionActive
 								? 'opacity-100'
-								: 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100',
+								: 'opacity-0 focus-within:opacity-100 group-hover/tab:opacity-100 [@media(hover:none)]:opacity-100',
 						)}
 					>
 						<Checkbox
@@ -3594,48 +3674,50 @@ const SavedTab = memo(
 					/>
 					<div className="min-w-0 flex-1">
 						<span className="flex min-w-0 items-center gap-1.5">
-							<a
-								className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
-								href={
-									settings.removeTrackingParameters
-										? stripTrackingParameters(tab.url)
-										: tab.url
-								}
-								target="_blank"
-								rel="noopener noreferrer"
-								title={urlOnly ? tab.url : label}
-								aria-label={
-									urlOnly && tab.title?.trim()
-										? `${tab.title.trim()} (${tab.url})`
-										: undefined
-								}
-								onClick={(event) => {
-									if (event.ctrlKey || event.metaKey || event.shiftKey) {
-										return;
+							<LinkPreview url={tab.url}>
+								<a
+									className="truncate text-[13px] font-semibold hover:text-primary hover:underline"
+									href={
+										settings.removeTrackingParameters
+											? stripTrackingParameters(tab.url)
+											: tab.url
 									}
-
-									event.preventDefault();
-									if (event.altKey) {
-										onSelect(!selected, {});
-										return;
+									target="_blank"
+									rel="noopener noreferrer"
+									title={previews ? undefined : urlOnly ? tab.url : label}
+									aria-label={
+										urlOnly && tab.title?.trim()
+											? `${tab.title.trim()} (${tab.url})`
+											: undefined
 									}
+									onClick={(event) => {
+										if (event.ctrlKey || event.metaKey || event.shiftKey) {
+											return;
+										}
 
-									if (
-										resolveLinkTarget('session', settings as Settings) ===
-										'none'
-									) {
-										onSelect(!selected, {});
-										return;
-									}
+										event.preventDefault();
+										if (event.altKey) {
+											onSelect(!selected, {});
+											return;
+										}
 
-									onOpen();
-								}}
-							>
-								{(urlOnly || compact) && (
-									<InsecureMarkFor url={tab.url} settings={settings} />
-								)}
-								{rowText}
-							</a>
+										if (
+											resolveLinkTarget('session', settings as Settings) ===
+											'none'
+										) {
+											onSelect(!selected, {});
+											return;
+										}
+
+										onOpen();
+									}}
+								>
+									{(urlOnly || compact) && (
+										<InsecureMarkFor url={tab.url} settings={settings} />
+									)}
+									{rowText}
+								</a>
+							</LinkPreview>
 							{splitBadge && (
 								<Badge
 									className="shrink-0 gap-1 px-1.5"
@@ -3670,7 +3752,7 @@ const SavedTab = memo(
 							</p>
 						)}
 					</div>
-					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100">
+					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100 [@media(hover:none)]:opacity-100">
 						<IconTooltip label="Restore tab">
 							<Button
 								variant="ghost"

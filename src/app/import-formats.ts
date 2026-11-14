@@ -774,6 +774,8 @@ function parseHtml(source: string): ParsedImport {
 		);
 	const isNetscape = /<!doctype\s+netscape-bookmark-file/i.test(html);
 	const groups = new Map<string, ImportGroup>();
+	// Links that carry Raindrop tags or highlights, which are not imported.
+	const raindropTagged = new Set<ImportLink>();
 	const path: string[] = [];
 	let pendingFolder: {name: string; createdAt?: number} | null = null;
 	let capture: {
@@ -810,6 +812,10 @@ function parseHtml(source: string): ParsedImport {
 			});
 			lastLink = link;
 			if (link) {
+				if (capture.attrs.tags) {
+					raindropTagged.add(link);
+				}
+
 				const entry = groupFor(path);
 				if (
 					path.some(Boolean) &&
@@ -842,6 +848,12 @@ function parseHtml(source: string): ParsedImport {
 		}
 
 		const tag = rawTag.toLowerCase();
+		// Raindrop writes a link's highlights as a quote under it.
+		const quoted = lastLink as ImportLink | null;
+		if (!closing && tag === 'blockquote' && quoted) {
+			raindropTagged.add(quoted);
+		}
+
 		if (capture?.kind === 'dd' && !closing && tag !== 'br') {
 			finish();
 		}
@@ -916,6 +928,22 @@ function parseHtml(source: string): ParsedImport {
 	const list = mergeBookmarkFolders([...groups.values()]);
 	if (list.every((entry) => entry.links.length === 0) && !collector.invalid) {
 		throw new ImportFormatError('This HTML file has no links.');
+	}
+
+	// Raindrop.io writes its own name as the title of the Netscape file it exports.
+	const raindrop = isNetscape && /<title>\s*raindrop\.io\b/i.test(html);
+	if (raindrop) {
+		const withTags = list
+			.flatMap((entry) => entry.links)
+			.filter((link) => raindropTagged.has(link)).length;
+		return result(
+			'netscape-html',
+			'Raindrop.io export (HTML)',
+			'verified',
+			unsortedToDefault(list),
+			collector,
+			{warnings: raindropWarnings(withTags)},
+		);
 	}
 
 	return result(
@@ -1031,6 +1059,28 @@ function detectDelimiter(firstLine: string) {
 	return counts.toSorted((a, b) => b[1] - a[1])[0];
 }
 
+// Raindrop.io keeps links saved without a collection in "Unsorted". Here they belong in the default column, not in a
+// column of their own that would only repeat it.
+function unsortedToDefault(groups: ImportGroup[]): ImportGroup[] {
+	const unsorted = groups.filter(
+		(entry) =>
+			entry.name === '' || entry.name.toLocaleLowerCase() === 'unsorted',
+	);
+	if (unsorted.length === 0) {
+		return groups;
+	}
+
+	const loose: ImportGroup = {
+		...unsorted[0],
+		name: '',
+		links: unsorted.flatMap((entry) => entry.links),
+	};
+	return [loose, ...groups.filter((entry) => !unsorted.includes(entry))];
+}
+
+// The columns of a Raindrop.io CSV export, in its order. A file with all of the ones that no other tool writes is one.
+const RAINDROP_CSV_MARKERS = ['excerpt', 'cover', 'highlights', 'favorite'];
+
 function parseCsv(source: string): ParsedImport | null {
 	const firstLine = source.split(/\r?\n/, 1)[0];
 	const [delimiter, count] = detectDelimiter(firstLine);
@@ -1043,6 +1093,14 @@ function parseCsv(source: string): ParsedImport | null {
 	if (header.url < 0) {
 		return null;
 	}
+
+	const names = (rows[0] ?? []).map((cell) => cell.trim().toLowerCase());
+	const raindrop = RAINDROP_CSV_MARKERS.every((name) => names.includes(name));
+	// Raindrop's tags and highlights have no place in a bookmark here, so the preview says how many are left out.
+	const keptOut = raindrop
+		? ['tags', 'highlights'].map((name) => names.indexOf(name))
+		: [];
+	let withTagsOrHighlights = 0;
 
 	const collector = new Collector();
 	const groups = new Map<string, ImportGroup>();
@@ -1059,6 +1117,10 @@ function parseCsv(source: string): ParsedImport | null {
 		});
 		if (!link) {
 			continue;
+		}
+
+		if (keptOut.some((index) => cell(index) !== '')) {
+			withTagsOrHighlights += 1;
 		}
 
 		const name = cleanTitle(cell(groupIndex), MAX_GROUP_NAME);
@@ -1080,6 +1142,17 @@ function parseCsv(source: string): ParsedImport | null {
 		entry.links.push(link);
 	}
 
+	if (raindrop) {
+		return result(
+			'csv',
+			'Raindrop.io export (CSV)',
+			'verified',
+			unsortedToDefault([...groups.values()]),
+			collector,
+			{warnings: raindropWarnings(withTagsOrHighlights)},
+		);
+	}
+
 	return result(
 		'csv',
 		'Spreadsheet (CSV)',
@@ -1087,6 +1160,14 @@ function parseCsv(source: string): ParsedImport | null {
 		[...groups.values()],
 		collector,
 	);
+}
+
+function raindropWarnings(count: number): string[] {
+	return count > 0
+		? [
+				`${count} ${count === 1 ? 'bookmark has' : 'bookmarks have'} tags or highlights from Raindrop.io. They are not imported.`,
+			]
+		: [];
 }
 
 // OneTab "Export URLs": `url | title` per line, groups separated by blank lines, no header.

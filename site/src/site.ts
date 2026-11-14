@@ -10,6 +10,7 @@ export const SITE = {
 	chromeWebStore:
 		'https://chromewebstore.google.com/detail/tablodge-%E2%80%93-tab-session-ma/ekidoclgpdfhpdlidlkcjccgihbndoib',
 	firefoxAddons: 'https://addons.mozilla.org/firefox/addon/tab-lodge/',
+	androidApk: 'https://github.com/bberka/TabLodge/releases/latest/download/tablodge.apk',
 	issues: 'https://github.com/bberka/TabLodge/issues',
 	license: 'https://github.com/bberka/TabLodge/blob/master/LICENSE',
 	version,

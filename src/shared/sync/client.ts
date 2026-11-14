@@ -134,6 +134,11 @@ export type SyncHost = {
 	writeLibrary(store: Store): Promise<void>;
 	backup(store: Store, reason: string): Promise<void>;
 	codec?: SyncCodec;
+	/**
+	This device only reads: it pulls and applies the server's records and never sends one, not even after a server
+	reset or a restore that would otherwise send everything again. For a library shown read only.
+	*/
+	readOnly?: boolean;
 	randomId(): string;
 	now(): number;
 };
@@ -349,6 +354,8 @@ export function createSyncClient(host: SyncHost) {
 	let again = false;
 	let applying = false;
 	let localTimer: ReturnType<typeof setTimeout> | undefined;
+	// A local change is waiting for its delayed round.
+	let localPending = false;
 	let socket: SyncSocket | undefined;
 	let pingTimer: ReturnType<typeof setInterval> | undefined;
 	let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -568,7 +575,7 @@ export function createSyncClient(host: SyncHost) {
 			const {sent, pulledCursor} = await step(async (state, records) => ({
 				state,
 				result: {
-					sent: outgoing(state, records, PUSH_LIMIT),
+					sent: host.readOnly ? [] : outgoing(state, records, PUSH_LIMIT),
 					pulledCursor: state.cursor,
 				},
 			}));
@@ -838,6 +845,7 @@ export function createSyncClient(host: SyncHost) {
 		stop() {
 			config = undefined;
 			clearTimeout(localTimer);
+			localPending = false;
 			closeSocket();
 		},
 
@@ -873,9 +881,34 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			clearTimeout(localTimer);
+			localPending = true;
 			localTimer = setTimeout(() => {
+				localPending = false;
 				void syncNow();
 			}, LOCAL_CHANGE_DELAY_MS);
+		},
+
+		/**
+		For a device that goes to the background: sends a change that was still waiting, then closes the live socket and
+		its timers so nothing wakes the radio. The server stays configured; `wake` starts it again.
+		*/
+		async pause() {
+			await ready;
+			if (!config) {
+				return;
+			}
+
+			clearTimeout(localTimer);
+			closeSocket();
+			void setStatus({live: false});
+			// A change waiting for its delay, or one a failed or offline round left unsent, goes out before the pause.
+			const waiting =
+				localPending ||
+				(!host.readOnly && (await loadState()).outbox.length > 0);
+			localPending = false;
+			if (waiting) {
+				await syncNow();
+			}
 		},
 
 		/**

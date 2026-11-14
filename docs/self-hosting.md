@@ -357,13 +357,17 @@ All paths except `/health` need `Authorization: Bearer <token>`. The server answ
 | Request | Answer |
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
-| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private` and `key`) |
+| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, and `preview`) |
 | `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor` (500 unless `limit` says otherwise, at most 1000), the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
 | `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |
 | `POST /v1/key` with `{"key": "...", "previous": ...}` | Stores the key only while the server still holds `previous` (`null` for none); otherwise 409 with the current key |
+| `GET /v1/icon?host=<host>` | The site's icon as an image: the one its home page links, or `/favicon.ico`. 404 when there is none. Used by the Android app's **Site icons** setting |
+| `GET /v1/preview?url=<address>` | `{"title", "description", "image"}` read from the page, where `image` is the share image as a `data:` URL (at most 512 KB). 404 when the page cannot be read. Used by the extension's **Preview links on hover** setting |
 | `GET /v1/live` (WebSocket) | Send `{"type":"auth","token":"..."}` first. The server answers `{"type":"ready","cursor":n}`, then `{"type":"cursor","cursor":n}` after every push that changed something. `ping` gets `pong` |
 
 Every path is also served under `/private`, for the private windows' library, which is kept apart: a second Durable Object on Cloudflare, and `private.db` next to `library.db` on Docker, created the first time a browser uses it.
+
+The server fetches the page or icon itself, from its own network address, so the site sees the server and not your device. It refuses anything but public web addresses: other schemes, `localhost`, names ending in `.local` or `.internal`, hosts with no dot, credentials in the address, and any address that resolves to a private, loopback, link local, or shared range, checked again on every redirect (three at most). Pages are read up to their `</head>` (256 KB at most), and each request waits at most six seconds. Answers are kept in memory for a day. These two paths have their own allowance of 600 requests a minute, so a screen of links does not use up the library's. A site whose name resolves to a public address at the check and a private one at the fetch (DNS rebinding) is not caught on Docker; only the token holder can ask, so keep the token private.
 
 A full library answers a push with 507 unless every change in it is a delete. Too many requests get 429 with a `Retry-After` header.

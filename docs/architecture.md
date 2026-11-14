@@ -16,7 +16,7 @@ Load only `dist/tablodge/` (Chromium) or `dist/tablodge-firefox/` (Firefox) in t
 
 ## Browser support
 
-TabLodge targets Chromium browsers (Chrome 116 or newer) and desktop Firefox 140 or newer. Firefox 140 is the first ESR release with tab groups, `tabs.group`, and the data collection permissions key. Safari and mobile browsers are not supported. Safari needs an Apple developer account and an app wrapper, and Firefox for Android lacks the bookmarks, windows, and new tab override APIs.
+TabLodge targets Chromium browsers (Chrome 116 or newer) and desktop Firefox 140 or newer. Firefox 140 is the first ESR release with tab groups, `tabs.group`, and the data collection permissions key. Safari and mobile browsers are not supported by the extension; the Android app in `mobile/` is a separate companion ([ADR 3](adr/0003-mobile-app-framework.md)). Safari needs an Apple developer account and an app wrapper, and Firefox for Android lacks the bookmarks, windows, and new tab override APIs.
 
 One codebase serves both. Differences the code can find by looking for an API (`chrome.tabGroups`, `chrome.sidePanel`, `chrome.tabs.createSplit`) stay feature checks. The few that it cannot are keyed off `IS_FIREFOX` in the service worker and `isFirefox` in `src/shared/browser.ts`, both derived from the `moz-extension:` address of the extension's own pages. Page code should call the helpers in `src/shared/browser.ts` instead of testing the browser itself.
 
@@ -147,7 +147,7 @@ The worker runs `client.ts` as `syncClient` in `service-worker.ts`, wired to `ch
 
 `server/` is the self hosted sync server, a separate pnpm workspace package. [Self hosting](self-hosting.md) covers running it.
 
-* **API.** `api.ts` is the HTTP API (Hono), independent of the runtime. `/v1/key` stores a library's wrapped key, and `/v1/status` lists the optional `features`.
+* **API.** `api.ts` is the HTTP API (Hono), independent of the runtime. `/v1/key` stores a library's wrapped key, `/v1/status` lists the optional `features`, and `/v1/icon` and `/v1/preview` fetch a site's icon or page summary for a device (`preview.ts` holds the address checks and the page reader).
 * **Storage.** `sql-change-log.ts` implements the change log over SQLite through a small synchronous interface, which both `node:sqlite` and Durable Object storage provide. The protocol tests run every log test against it as well as against the in memory reference. It keeps the cursor, purge marks, record count, and wrapped key in a `meta` table and in memory, so a push reads only the stamps of the records it touches and a Durable Object waking from hibernation reads no records at all. A partial index finds old tombstones for the purge.
 * **Docker.** `node.ts` is the entry, bundled into one file by `server/vite.config.ts`. It serves `library.db` and, under `/private`, `private.db`. `node-sqlite.ts` tunes SQLite for a small server: WAL with `synchronous = NORMAL`, a capped WAL file and cache, reused statements, and incremental vacuum after a purge. `compose.https.yaml` runs the image behind Caddy for a VPS.
 * **Cloudflare.** `worker.ts` is a Worker that checks the token and forwards to a Durable Object, which holds the library and the hibernating WebSockets: the object named `default`, or `private` for paths under `/private`. `server/scripts/setup-cloudflare.ts` (`pnpm run cf:setup`) deploys it with wrangler.

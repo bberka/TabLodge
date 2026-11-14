@@ -3,7 +3,9 @@ import {afterEach, test, vi} from 'vite-plus/test';
 import {
 	ACCENTS,
 	applyAccent,
+	columnColorShades,
 	isAccent,
+	isColumnColor,
 	isCustomAccent,
 	rgbToHex,
 	watchSystemAccent,
@@ -158,4 +160,32 @@ test('watching the system accent reports changes on the timer and on focus, but 
 	page.accentColor = 'rgb(1, 2, 3)';
 	vi.advanceTimersByTime(4000);
 	assert.equal(seen.length, 3);
+});
+
+test('only a preset or a custom hex can color a column', () => {
+	assert.equal(isColumnColor('teal'), true);
+	assert.equal(isColumnColor('#12abef'), true);
+	for (const value of [
+		'default',
+		'system',
+		'chartreuse',
+		'#abc',
+		'#ABCDEF',
+		'',
+		7,
+		undefined,
+	]) {
+		assert.equal(isColumnColor(value), false, String(value));
+	}
+});
+
+test('a column color gets one shade for the light page and one for the dark page', () => {
+	assert.equal(columnColorShades('default'), undefined);
+	assert.equal(columnColorShades(undefined), undefined);
+	const slate = columnColorShades('slate');
+	assert.ok(slate);
+	// Slate is too dark to read on the dark page as it is, so its dark shade is lighter than its light shade.
+	const brightness = (rgb: number[]) => rgb[0] + rgb[1] + rgb[2];
+	assert.ok(brightness(slate.dark) > brightness(slate.light));
+	assert.equal(columnColorShades('#ffffff')?.light.length, 3);
 });

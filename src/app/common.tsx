@@ -29,15 +29,10 @@ import {send} from './message-client';
 import {PROJECT} from './project';
 import {hostIsExcluded} from './excluded-sites';
 import {webUrl} from './web-url';
+import {plural} from './plural';
 import {cn} from '@/lib/utils';
 
 const STORAGE_KEY = 'tablodge.state';
-
-/**
-"1 tab", "2 tabs": a count with its noun, `many` when the plural is not just an added "s".
-*/
-export const plural = (count: number, one: string, many = `${one}s`) =>
-	`${count} ${count === 1 ? one : many}`;
 
 /**
 The message of a rejection reason. Rejections are usually Errors, but any object with a message counts.
@@ -986,3 +981,5 @@ export function SectionCard({
 }
 
 export {send} from './message-client';
+
+export {plural} from './plural';

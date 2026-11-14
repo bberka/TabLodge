@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
-import ButtonIcon from '../components/ButtonIcon.astro';
+import DownloadButtons from '../components/DownloadButtons.astro';
 import {SITE} from '../site';
 
 const title = 'OneTab, Session Buddy and Toby Alternative: TabLodge Compared';
@@ -18,7 +18,7 @@ const rows: [string, string, string, string, string][] = [
 	['Automatic history or crash snapshots', 'Yes, stored locally', 'No', 'Yes', 'No'],
 	['Native tab groups and split view on restore', 'Yes (split view on Chromium 155+)', 'Not listed', 'Not listed', 'Not listed'],
 	['Export formats', 'JSON, HTML, CSV, Markdown, URL lists', 'Text URL list', 'JSON, CSV, Markdown, HTML', 'Export supported'],
-	['Import from other tools', 'OneTab, Session Buddy, Tab Session Manager, Toby, bookmarks, HTML, CSV', 'URL lists', 'Its own backups', 'Not verified'],
+	['Import from other tools', 'OneTab, Session Buddy, Tab Session Manager, Toby, Raindrop.io, bookmarks, HTML, CSV', 'URL lists', 'Its own backups', 'Not verified'],
 ];
 
 const breadcrumbs = [
@@ -52,10 +52,7 @@ const breadcrumbs = [
 			open source, local-first, with a bookmark board on your new tab. Here is an honest look at how they differ,
 			so you can pick the one that fits.
 		</p>
-		<p>
-			<a class="btn primary" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" />Install from the Chrome Web Store</a>
-			<a class="btn ghost" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
-		</p>
+		<DownloadButtons />
 
 		<h2>At a glance</h2>
 		<div class="table-wrap">
@@ -107,6 +104,7 @@ const breadcrumbs = [
 			<li>Export your data from the other tool: OneTab as text, Session Buddy, Tab Session Manager or Toby as JSON. Keep the old extension installed until you are happy with the result.</li>
 			<li>In TabLodge open Settings, then Data, choose the file and review what will be imported. Duplicates can be skipped.</li>
 		</ol>
+		<p>TabLodge also has an <a href={SITE.androidApk} rel="noopener">Android app</a> that saves links you share and opens your bookmarks and sessions through the sync server you run. The others are browser extensions only.</p>
 		<p>TabLodge also imports your browser bookmarks (and can offer to add pages you star in the browser), HTML bookmark files, CSV and plain URL lists.</p>
 
 		<p class="note">

@@ -33,6 +33,7 @@ const xoConfig: XoConfigItem[] = [
 					'./tsconfig/node.json',
 					'./server/tsconfig.json',
 					'./server/tsconfig.worker.json',
+					'./mobile/tsconfig.json',
 				],
 				tsconfigRootDir: import.meta.dirname,
 			},
@@ -255,6 +256,17 @@ const xoConfig: XoConfigItem[] = [
 		// Lucide-react marks its brand icons deprecated, but it is the only GitHub mark the bundled icon set offers.
 		files: ['src/app/help.tsx'],
 		rules: {'@typescript-eslint/no-deprecated': 'off'},
+	},
+	{
+		// Expo pins exact SDK versions (`expo install --check` enforces them), and Metro expects a CommonJS-style `main` entry.
+		files: ['mobile/package.json'],
+		rules: {
+			'package-json/dependency-version-range': 'off',
+			'package-json/prefer-type-module': 'off',
+			'package-json/prefer-exports': 'off',
+			'package-json/require-engines': 'off',
+			'package-json/no-orphan-script-hooks': 'off',
+		},
 	},
 ];
 

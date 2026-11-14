@@ -225,6 +225,24 @@ function Help() {
 						'session card collapsed favicon icons preview strip hide overflow count settings session board',
 				},
 				{
+					title: 'Session colors',
+					body: 'Open Edit details from a session’s menu and choose a Color, from the same selector as the accent color and column colors, or type any #rrggbb. The color shows as a line along the top of the session card and syncs with the session. Choose None to remove it.',
+					searchText:
+						'session color colour card line accent hex edit details tint label',
+				},
+				{
+					title: 'Device names on sessions',
+					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
+					searchText:
+						'device name which device saved session computer phone mobile desktop sync settings rename where saved from',
+				},
+				{
+					title: 'Preview links on hover',
+					body: 'With a sync server connected, turn on Settings › Preview links on hover. Rest the pointer on a bookmark or saved tab, or move keyboard focus to it, and a card shows the page image, title, and description. Escape closes it. The server fetches the page, so the server and the site see its address, and nothing goes to any other service. It is off by default and stays on this browser.',
+					searchText:
+						'link preview hover card page image description og image sync server thumbnail focus escape',
+				},
+				{
 					title: 'Keep or remove restored tabs',
 					body: 'Settings controls whether restored tabs stay in their session or are removed after a successful restore. You can also choose the destination window and what to do when a URL is already open.',
 					searchText:
@@ -291,7 +309,7 @@ function Help() {
 			entries: [
 				{
 					title: 'Add a page or link',
-					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, the column selector starts on the column that took your newest bookmark, or the first column if none has. Choose New column in it to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically. Under Advanced in the Edit column dialog, list websites (or a site and path such as github.com/bberka) for the column, and pages on those sites (and their subdomains) saved with the toolbar popup, the Bookmark this page shortcut, or the browser star go into that column without asking. The longest match wins when several columns match.',
+					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, the column selector starts on the column that took your newest bookmark, or the first column if none has. Choose New column in it to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically. Under Advanced in the Edit column dialog, list websites (or a site and path such as github.com/bberka) for the column, and pages on those sites (and their subdomains) saved with the toolbar popup, the Bookmark this page shortcut, or the browser star go into that column without asking. The longest match wins when several columns match. In the same dialog, give a column an icon and a color from the accent palette (or any #rrggbb): its icon takes the color and its header gets a line in it, and the color syncs with the Android app. None, or Clear, removes it.',
 					searchText:
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},
@@ -305,7 +323,7 @@ function Help() {
 					title: 'Move and add links',
 					body: 'Drag bookmarks between columns to move or reorder them. The page scrolls on its own while you hold a drag near the top or bottom edge of the window or of a scrolling column, faster the closer you get. Without a mouse, open a bookmark’s or column’s menu and choose Move up, Move down, Move left, or Move right; open a session’s menu to move it up or down. Move to sends a bookmark to another column, and Add to session saves its link in a saved session. Drag a browser link or a link from a saved session onto a column. Drop a browser link or a bookmark onto a saved session to add it there too. You can also paste one or more links on the dashboard, outside a text field, to open Add bookmark. Choose Session there to add the links to a saved session instead of a column. When you paste several links, choose New session in the session list to save them as a new session, with a name if you like.',
 					searchText:
-						'drag reorder move scroll edge keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column new session',
+						'drag reorder move scroll edge keyboard menu up down left right browser link saved session paste one several links dashboard text field add bookmark column new session color colour icon palette',
 				},
 				{
 					title: 'Choose Board or Focus view',
@@ -600,9 +618,11 @@ function Help() {
 							Session import and export are in the{' '}
 							<MenuLocation label="Sessions" />. It can also share all sessions,
 							including archived sessions. Session import also reads exports
-							from OneTab, Session Buddy, Tab Session Manager, and Toby. A
-							session menu can export just that session in any format. Bookmark
-							import and export are in the{' '}
+							from OneTab, Session Buddy, Tab Session Manager, and Toby.
+							Bookmark import also reads a Raindrop.io export (CSV or HTML): its
+							collections become columns, and its tags and highlights are not
+							imported. A session menu can export just that session in any
+							format. Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
 							saves only bookmarks or sessions, or Everything as a full ZIP
 							backup with settings, excluded sites, theme, snapshots, and the
@@ -618,12 +638,15 @@ function Help() {
 							password for anything sensitive: a PIN is weak, because anyone
 							with the file can try every PIN. TabLodge cannot recover a lost
 							PIN or password. Importing a protected file asks for it first, and
-							a wrong entry changes nothing. Importing a full backup replaces
-							the current data and offers Undo for a short time.
+							a wrong entry changes nothing. Importing a file adds to what you
+							have and skips links you already saved. Importing a full backup
+							asks whether to add it to the current data (the default; settings,
+							snapshots, and the trash bin stay as they are) or to replace
+							everything, and it offers Undo for a short time.
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',
@@ -662,7 +685,7 @@ function Help() {
 				},
 				{
 					title: 'Automatic backups',
-					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Choose backup frequency, retention, and an optional Downloads copy in Settings. Automatic and safety backups are not encrypted. Only a full backup ZIP that you export yourself can be protected with a PIN or password.',
+					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Restore replaces your sessions and bookmarks with a backup; Add keeps what you have and adds only what is new. Choose backup frequency, retention, and an optional Downloads copy in Settings. Automatic and safety backups are not encrypted. Only a full backup ZIP that you export yourself can be protected with a PIN or password.',
 					searchText:
 						'automatic backups off default dated copies sessions bookmarks settings safety backup before erase import delete frequency retention downloads permission',
 				},

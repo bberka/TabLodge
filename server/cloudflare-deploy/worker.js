@@ -2572,6 +2572,292 @@ function isAuthMessage(message, token) {
 }
 __name(isAuthMessage, "isAuthMessage");
 
+// src/preview.ts
+var FETCH_TIMEOUT_MS = 6e3;
+var MAX_REDIRECTS = 3;
+var MAX_HTML_BYTES = 256 * 1024;
+var MAX_ICON_BYTES = 128 * 1024;
+var MAX_IMAGE_BYTES = 512 * 1024;
+var IMAGE_TYPES = /* @__PURE__ */ new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/x-icon",
+  "image/vnd.microsoft.icon"
+]);
+var USER_AGENT = "Mozilla/5.0 (compatible; TabLodge link preview)";
+function isPrivateAddress(address) {
+  const text = address.toLowerCase().replaceAll(/^\[|\]$/g, "");
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(mapped?.[1] ?? text);
+  if (v4) {
+    const [a = 0, b = 0] = v4.slice(1).map(Number);
+    return a === 0 || a === 10 || a === 127 || a === 100 && b >= 64 && b <= 127 || a === 169 && b === 254 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168 || a === 192 && b === 0 || a >= 224;
+  }
+  if (text.includes(":")) {
+    return text === "::" || text === "::1" || /^f[cd]/.test(text) || /^fe[89ab]/.test(text);
+  }
+  return false;
+}
+__name(isPrivateAddress, "isPrivateAddress");
+function isIpLiteral(host) {
+  return /^\[.*\]$/.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host);
+}
+__name(isIpLiteral, "isIpLiteral");
+async function allowedUrl(text, deps = {}) {
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return void 0;
+  }
+  if (!(url.protocol === "https:" || url.protocol === "http:")) {
+    return void 0;
+  }
+  if (url.username || url.password) {
+    return void 0;
+  }
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || !(host.includes(".") || host.includes(":"))) {
+    return void 0;
+  }
+  if (isIpLiteral(host)) {
+    return isPrivateAddress(host) ? void 0 : url;
+  }
+  if (deps.resolve) {
+    try {
+      const addresses = await deps.resolve(host);
+      if (addresses.length === 0 || addresses.some((address) => isPrivateAddress(address))) {
+        return void 0;
+      }
+    } catch {
+      return void 0;
+    }
+  }
+  return url;
+}
+__name(allowedUrl, "allowedUrl");
+async function guardedFetch(start, deps, accept) {
+  const send = deps.fetch ?? fetch;
+  let url = start;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let response;
+    try {
+      response = await send(url, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: new Headers({ accept, "user-agent": USER_AGENT })
+      });
+    } catch {
+      return void 0;
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      await response.body?.cancel();
+      if (!location) {
+        return void 0;
+      }
+      const next = await allowedUrl(new URL(location, url).href, deps);
+      if (!next) {
+        return void 0;
+      }
+      url = next;
+      continue;
+    }
+    return response.ok ? { response, url } : void 0;
+  }
+  return void 0;
+}
+__name(guardedFetch, "guardedFetch");
+async function readLimited(response, max) {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return void 0;
+  }
+  const parts = [];
+  let total = 0;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.length;
+    if (total > max) {
+      await reader.cancel();
+      return void 0;
+    }
+    parts.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.length;
+  }
+  return bytes;
+}
+__name(readLimited, "readLimited");
+async function readHtml(response) {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return void 0;
+  }
+  const decoder = new TextDecoder();
+  let text = "";
+  let total = 0;
+  while (total < MAX_HTML_BYTES) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.length;
+    text += decoder.decode(value, { stream: true });
+    if (/<\/head>/i.test(text)) {
+      break;
+    }
+  }
+  await reader.cancel().catch(() => void 0);
+  return text;
+}
+__name(readHtml, "readHtml");
+function attributes(tag) {
+  const found = {};
+  for (const match2 of tag.matchAll(
+    /([\w\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g
+  )) {
+    found[(match2[1] ?? "").toLowerCase()] = decodeEntities(
+      match2[2] ?? match2[3] ?? match2[4] ?? ""
+    );
+  }
+  return found;
+}
+__name(attributes, "attributes");
+function decodeEntities(text) {
+  return text.replaceAll("&amp;", "&").replaceAll("&quot;", '"').replaceAll("&#39;", "'").replaceAll("&apos;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
+}
+__name(decodeEntities, "decodeEntities");
+function readPageMeta(html, base) {
+  const head = html.split(/<\/head>/i, 1)[0] ?? html;
+  const meta = /* @__PURE__ */ new Map();
+  const icons = [];
+  for (const [tag] of head.matchAll(/<(?:meta|link)\b[^>]*>/gi)) {
+    const attrs = attributes(tag);
+    if (tag.toLowerCase().startsWith("<meta")) {
+      const key = (attrs.property ?? attrs.name ?? "").toLowerCase();
+      if (key && attrs.content && !meta.has(key)) {
+        meta.set(key, attrs.content);
+      }
+    } else if (attrs.href) {
+      const rel = new Set((attrs.rel ?? "").toLowerCase().split(/\s+/));
+      if (rel.has("icon")) {
+        icons.push({ rank: 1, href: attrs.href });
+      } else if (rel.has("apple-touch-icon")) {
+        icons.push({ rank: 2, href: attrs.href });
+      }
+    }
+  }
+  const absolute = /* @__PURE__ */ __name((value) => {
+    if (!value) {
+      return void 0;
+    }
+    try {
+      const url = new URL(value, base);
+      return url.protocol === "https:" || url.protocol === "http:" ? url.href : void 0;
+    } catch {
+      return void 0;
+    }
+  }, "absolute");
+  const title = meta.get("og:title") ?? meta.get("twitter:title") ?? (/<title[^>]*>([^<]*)<\/title>/i.exec(head)?.[1] ? decodeEntities(/<title[^>]*>([^<]*)<\/title>/i.exec(head)[1].trim()) : void 0);
+  return {
+    title: title?.slice(0, 200) || void 0,
+    description: (meta.get("og:description") ?? meta.get("twitter:description") ?? meta.get("description"))?.slice(0, 400) || void 0,
+    image: absolute(meta.get("og:image") ?? meta.get("twitter:image")),
+    icon: absolute(icons.toSorted((a, b) => a.rank - b.rank)[0]?.href)
+  };
+}
+__name(readPageMeta, "readPageMeta");
+async function imageBytes(url, max, deps) {
+  const found = await guardedFetch(url, deps, "image/*");
+  if (!found) {
+    return void 0;
+  }
+  const type = (found.response.headers.get("content-type") ?? "").split(";", 1)[0].trim().toLowerCase();
+  const declared = Number(found.response.headers.get("content-length") ?? 0);
+  if (!IMAGE_TYPES.has(type) || declared > max) {
+    await found.response.body?.cancel();
+    return void 0;
+  }
+  const bytes = await readLimited(found.response, max);
+  return bytes && bytes.length > 0 ? { bytes, type } : void 0;
+}
+__name(imageBytes, "imageBytes");
+function dataUrl(image) {
+  let binary = "";
+  for (let index = 0; index < image.bytes.length; index += 32768) {
+    binary += String.fromCodePoint(
+      ...image.bytes.subarray(index, index + 32768)
+    );
+  }
+  return `data:${image.type};base64,${btoa(binary)}`;
+}
+__name(dataUrl, "dataUrl");
+async function fetchPreview(text, deps = {}) {
+  const start = await allowedUrl(text, deps);
+  if (!start) {
+    return void 0;
+  }
+  const found = await guardedFetch(start, deps, "text/html");
+  if (!found) {
+    return void 0;
+  }
+  const type = found.response.headers.get("content-type") ?? "";
+  if (!/html|xml/i.test(type)) {
+    await found.response.body?.cancel();
+    return void 0;
+  }
+  const html = await readHtml(found.response);
+  if (html === void 0) {
+    return void 0;
+  }
+  const meta = readPageMeta(html, found.url);
+  const imageUrl = meta.image ? await allowedUrl(meta.image, deps) : void 0;
+  const image = imageUrl ? await imageBytes(imageUrl, MAX_IMAGE_BYTES, deps) : void 0;
+  return {
+    title: meta.title,
+    description: meta.description,
+    image: image ? dataUrl(image) : void 0
+  };
+}
+__name(fetchPreview, "fetchPreview");
+async function fetchIcon(host, deps = {}) {
+  const home = await allowedUrl(`https://${host}/`, deps);
+  if (!home) {
+    return void 0;
+  }
+  const candidates = [];
+  const page = await guardedFetch(home, deps, "text/html");
+  if (page && /html/i.test(page.response.headers.get("content-type") ?? "")) {
+    const html = await readHtml(page.response);
+    const linked = html ? readPageMeta(html, page.url).icon : void 0;
+    const url = linked ? await allowedUrl(linked, deps) : void 0;
+    if (url) {
+      candidates.push(url);
+    }
+  } else {
+    await page?.response.body?.cancel();
+  }
+  candidates.push(new URL("/favicon.ico", home));
+  for (const url of candidates) {
+    const image = await imageBytes(url, MAX_ICON_BYTES, deps);
+    if (image) {
+      return image;
+    }
+  }
+  return void 0;
+}
+__name(fetchIcon, "fetchIcon");
+
 // src/api.ts
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -2590,7 +2876,10 @@ var MAX_BODY_BYTES = 8 * 1024 * 1024;
 var MAX_PUSH_CHANGES = 500;
 var MAX_CHANGE_BYTES = 256 * 1024;
 var MAX_KEY_CHARS = 4096;
-var FEATURES = ["private", "key"];
+var FEATURES = ["private", "key", "preview"];
+var PREVIEWS_PER_MINUTE = 600;
+var PREVIEW_CACHE_SIZE = 500;
+var PREVIEW_TTL_MS = 24 * 60 * 60 * 1e3;
 var PRIVATE_PREFIX = "/private";
 var DEFAULT_PULL = 500;
 var MAX_PULL = 1e3;
@@ -2633,6 +2922,9 @@ function createApi(options) {
   );
   let rateWindow = { start: 0, count: 0 };
   app.use("/v1/*", async (c, next) => {
+    if (c.req.path === "/v1/icon" || c.req.path === "/v1/preview") {
+      return next();
+    }
     const time = now();
     if (time - rateWindow.start >= MINUTE_MS) {
       rateWindow = { start: time, count: 0 };
@@ -2646,6 +2938,67 @@ function createApi(options) {
       return c.json(problem("rate_limited", { retryAfter }), 429);
     }
     await next();
+  });
+  let previewWindow = { start: 0, count: 0 };
+  const cache = /* @__PURE__ */ new Map();
+  const remember = /* @__PURE__ */ __name((key, value) => {
+    cache.delete(key);
+    cache.set(key, { at: now(), value });
+    if (cache.size > PREVIEW_CACHE_SIZE) {
+      cache.delete(cache.keys().next().value);
+    }
+  }, "remember");
+  const cached = /* @__PURE__ */ __name((key) => {
+    const hit = cache.get(key);
+    return hit && now() - hit.at < PREVIEW_TTL_MS ? hit : void 0;
+  }, "cached");
+  const previewLimit = /* @__PURE__ */ __name(async (c, next) => {
+    const time = now();
+    if (time - previewWindow.start >= MINUTE_MS) {
+      previewWindow = { start: time, count: 0 };
+    }
+    previewWindow.count += 1;
+    return previewWindow.count > PREVIEWS_PER_MINUTE ? c.json(problem("rate_limited"), 429) : next();
+  }, "previewLimit");
+  app.use("/v1/icon", previewLimit);
+  app.use("/v1/preview", previewLimit);
+  app.get("/v1/icon", async (c) => {
+    const host = (c.req.query("host") ?? "").toLowerCase();
+    if (!/^[\d\-.a-z]{3,253}$/.test(host)) {
+      return c.json(problem("bad_host"), 400);
+    }
+    const key = `icon:${host}`;
+    const hit = cached(key);
+    const icon = hit?.value ?? await fetchIcon(host, options.preview);
+    if (!hit) {
+      remember(key, icon ?? null);
+    }
+    if (!icon) {
+      c.header("Cache-Control", "private, max-age=86400");
+      return c.json(problem("no_icon"), 404);
+    }
+    return c.body(new Uint8Array(icon.bytes), 200, {
+      "Content-Type": icon.type,
+      "Cache-Control": "private, max-age=604800",
+      "X-Content-Type-Options": "nosniff"
+    });
+  });
+  app.get("/v1/preview", async (c) => {
+    const url = c.req.query("url") ?? "";
+    if (url.length === 0 || url.length > 2048) {
+      return c.json(problem("bad_url"), 400);
+    }
+    const key = `page:${url}`;
+    const hit = cached(key);
+    const preview = hit?.value ?? await fetchPreview(url, options.preview);
+    if (!hit) {
+      remember(key, preview ?? null);
+    }
+    if (!preview) {
+      return c.json(problem("no_preview"), 404);
+    }
+    c.header("Cache-Control", "private, max-age=86400");
+    return c.json(preview);
   });
   app.get("/v1/status", (c) => {
     const log = options.log();

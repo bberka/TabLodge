@@ -13,6 +13,15 @@ export type ActionMode =
 	| 'current-tab'
 	| 'current-tab-to-group';
 export type PrivateStorageMode = 'shared' | 'saved' | 'temporary';
+/**
+What the sync server read from a page: a title, a short description, and the share image as a data URL.
+*/
+export type LinkPreviewData = {
+	title?: string;
+	description?: string;
+	image?: string;
+};
+
 export type PrivateConfig = {
 	mode: PrivateStorageMode;
 	configured: boolean;
@@ -206,6 +215,11 @@ export type Settings = {
 	*/
 	showSaveWindowButton: boolean;
 	/**
+	Show a page's image and description when a bookmark or saved tab is hovered or focused for a moment. Needs a sync
+	server, which fetches the page; the setting stays on this browser (default off).
+	*/
+	linkPreviews: boolean;
+	/**
 	Show the Trash bin shortcut in the dashboard header (default off).
 	*/
 	showTrashBinButton: boolean;
@@ -311,6 +325,11 @@ export type Settings = {
 	The style used when `sessionNameStyle` is `ask` and the name is left empty (default "date-title").
 	*/
 	sessionNameFallback: SessionNameFallback;
+	/**
+	Preferences of the Android app. The extension never reads them; it keeps them so they sync between the phones that
+	share this library (plain strings, numbers, and booleans only).
+	*/
+	mobileApp: Record<string, string | number | boolean>;
 };
 
 export type NativeGroup = {
@@ -362,6 +381,16 @@ export type Session = {
 	sourceWindowName: string;
 	sourceWindowId: number | null;
 	/**
+	The name of the device that saved this session, as it was named then, and whether it is a computer or a phone.
+	Missing on sessions saved before devices had names.
+	*/
+	deviceName?: string;
+	deviceKind?: 'desktop' | 'mobile';
+	/**
+	A preset accent id or `#rrggbb` from the accent colors (never "default" or "system"); missing means no color.
+	*/
+	color?: string;
+	/**
 	Window geometry captured when this session was saved from a whole window.
 	*/
 	windowBounds?: WindowBounds;
@@ -393,6 +422,10 @@ export type BookmarkColumn = {
 	Icon id from the icon registry; missing means the default column icon.
 	*/
 	icon?: string;
+	/**
+	A preset id or `#rrggbb` from the accent colors (never "default" or "system"); missing means no color.
+	*/
+	color?: string;
 	/**
 	Sites that belong in this column: a host name (which also covers its subdomains) or a host with a path prefix such as `github.com/bberka`. Bookmarking a page on one of them
 	(shortcut, browser bookmark) saves it here without asking for a column.
@@ -544,7 +577,7 @@ export type RestoreOptions = {
 };
 
 export type SessionFields = Partial<
-	Pick<Session, 'name' | 'description' | 'folderId'>
+	Pick<Session, 'name' | 'description' | 'folderId' | 'color'>
 >;
 export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'url'>>;
 export type BookmarkFields = Partial<
@@ -577,6 +610,7 @@ Every message the TabLodge pages send to the service worker, keyed by `type`.
 */
 export type TabLodgeMessages = {
 	GET_PRIVATE_CONFIG: {};
+	GET_LINK_PREVIEW: {url: string};
 	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
 	SET_PRIVATE_NEW_TAB_REDIRECT: {enabled: boolean};
 	SET_PRIVATE_ACCENT: {accent: string};
@@ -711,14 +745,20 @@ export type TabLodgeMessages = {
 	Removes extra copies of addresses saved more than once on the board, moving each to the trash. Every address keeps at least one copy outside `bookmarkIds`; the request fails otherwise. At most 500 per message, the trash limit.
 	*/
 	REMOVE_DUPLICATE_BOOKMARKS: {bookmarkIds: string[]};
-	CREATE_BOOKMARK_COLUMN: {name: string; icon?: string; domains?: string[]};
+	CREATE_BOOKMARK_COLUMN: {
+		name: string;
+		icon?: string;
+		color?: string;
+		domains?: string[];
+	};
 	/**
-	`icon` omitted keeps the current icon; an empty string resets it to the default. `domains` omitted keeps the list; an empty array clears it.
+	`icon` omitted keeps the current icon; an empty string resets it to the default. `color` the same: omitted keeps it, an empty string removes it. `domains` omitted keeps the list; an empty array clears it.
 	*/
 	UPDATE_BOOKMARK_COLUMN: {
 		columnId: string;
 		name: string;
 		icon?: string;
+		color?: string;
 		domains?: string[];
 	};
 	/**
@@ -929,6 +969,7 @@ Success payload of each message (merged with `{ ok: true }`). Fields marked opti
 */
 export type TabLodgeResponses = {
 	GET_PRIVATE_CONFIG: PrivateConfig;
+	GET_LINK_PREVIEW: {preview: LinkPreviewData | null};
 	SET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_NEW_TAB_REDIRECT: PrivateConfig;
 	SET_PRIVATE_ACCENT: PrivateConfig;

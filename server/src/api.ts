@@ -3,7 +3,7 @@ The sync HTTP API, independent of the runtime. `node.ts` serves it in the Docker
 library's Durable Object on Cloudflare. Live updates (the WebSocket) are runtime specific and live in those files;
 this module only reports the new cursor after a push changed something.
 */
-import {Hono} from 'hono';
+import {Hono, type MiddlewareHandler} from 'hono';
 import {bearerAuth} from 'hono/bearer-auth';
 import {bodyLimit} from 'hono/body-limit';
 import {except} from 'hono/combine';
@@ -12,6 +12,12 @@ import {cors} from 'hono/cors';
 import {PROTOCOL_VERSION, type SyncLog} from '../../src/shared/sync/change-log';
 import {parseChange, type SyncChange} from '../../src/shared/sync/changes';
 import {LIVE_PATH} from './live';
+import {
+	fetchIcon,
+	fetchPreview,
+	type Preview,
+	type PreviewDeps,
+} from './preview';
 
 /**
 The extension calls the server from its own origin. CORS lets it do that without asking the browser for access to
@@ -56,7 +62,10 @@ const MAX_KEY_CHARS = 4096;
 Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
 second library at /private for private windows; `key` is /v1/key.
 */
-const FEATURES = ['private', 'key'];
+const FEATURES = ['private', 'key', 'preview'];
+const PREVIEWS_PER_MINUTE = 600;
+const PREVIEW_CACHE_SIZE = 500;
+const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000;
 export const PRIVATE_PREFIX = '/private';
 const DEFAULT_PULL = 500;
 const MAX_PULL = 1000;
@@ -76,6 +85,10 @@ export type ApiOptions = {
 	Gzip answers. The Docker server turns it on; Cloudflare compresses at its edge already.
 	*/
 	compress?: boolean;
+	/**
+	How the server reaches other sites for /v1/icon and /v1/preview.
+	*/
+	preview?: PreviewDeps;
 };
 
 const problem = (error: string, detail?: Record<string, unknown>) => ({
@@ -123,6 +136,10 @@ export function createApi(options: ApiOptions) {
 	// owner's devices can use it up.
 	let rateWindow = {start: 0, count: 0};
 	app.use('/v1/*', async (c, next) => {
+		if (c.req.path === '/v1/icon' || c.req.path === '/v1/preview') {
+			return next();
+		}
+
 		const time = now();
 		if (time - rateWindow.start >= MINUTE_MS) {
 			rateWindow = {start: time, count: 0};
@@ -138,6 +155,88 @@ export function createApi(options: ApiOptions) {
 		}
 
 		await next();
+	});
+
+	// Icons and previews have their own allowance: a screen of links asks for a dozen at once, and they must not use
+	// up the library's.
+	let previewWindow = {start: 0, count: 0};
+	const cache = new Map<string, {at: number; value: unknown}>();
+	const remember = (key: string, value: unknown) => {
+		cache.delete(key);
+		cache.set(key, {at: now(), value});
+		if (cache.size > PREVIEW_CACHE_SIZE) {
+			cache.delete(cache.keys().next().value!);
+		}
+	};
+
+	const cached = (key: string) => {
+		const hit = cache.get(key);
+		return hit && now() - hit.at < PREVIEW_TTL_MS ? hit : undefined;
+	};
+
+	const previewLimit: MiddlewareHandler = async (c, next) => {
+		const time = now();
+		if (time - previewWindow.start >= MINUTE_MS) {
+			previewWindow = {start: time, count: 0};
+		}
+
+		previewWindow.count += 1;
+		return previewWindow.count > PREVIEWS_PER_MINUTE
+			? c.json(problem('rate_limited'), 429)
+			: next();
+	};
+
+	app.use('/v1/icon', previewLimit);
+	app.use('/v1/preview', previewLimit);
+
+	app.get('/v1/icon', async (c) => {
+		const host = (c.req.query('host') ?? '').toLowerCase();
+		if (!/^[\d\-.a-z]{3,253}$/.test(host)) {
+			return c.json(problem('bad_host'), 400);
+		}
+
+		const key = `icon:${host}`;
+		const hit = cached(key);
+		const icon =
+			(hit?.value as {bytes: Uint8Array; type: string} | null | undefined) ??
+			(await fetchIcon(host, options.preview));
+		if (!hit) {
+			remember(key, icon ?? null);
+		}
+
+		if (!icon) {
+			c.header('Cache-Control', 'private, max-age=86400');
+			return c.json(problem('no_icon'), 404);
+		}
+
+		return c.body(new Uint8Array(icon.bytes), 200, {
+			'Content-Type': icon.type,
+			'Cache-Control': 'private, max-age=604800',
+			'X-Content-Type-Options': 'nosniff',
+		});
+	});
+
+	app.get('/v1/preview', async (c) => {
+		const url = c.req.query('url') ?? '';
+		if (url.length === 0 || url.length > 2048) {
+			return c.json(problem('bad_url'), 400);
+		}
+
+		const key = `page:${url}`;
+		const hit = cached(key);
+		const preview =
+			(hit?.value as Preview | null | undefined) ??
+			(await fetchPreview(url, options.preview));
+		if (!hit) {
+			remember(key, preview ?? null);
+		}
+
+		if (!preview) {
+			return c.json(problem('no_preview'), 404);
+		}
+
+		c.header('Cache-Control', 'private, max-age=86400');
+		return c.json(preview);
 	});
 
 	app.get('/v1/status', (c) => {
