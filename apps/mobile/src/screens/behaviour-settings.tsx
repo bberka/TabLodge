@@ -146,9 +146,24 @@ export function BookmarkBehaviourCard() {
 					);
 				}}
 			/>
-			<Toggle
+			<SelectRow
 				row={ROWS.siteIcons}
 				value={prefs.siteIcons}
+				choices={[
+					{
+						id: 'server',
+						name: 'Through my server',
+						hint: 'Your server fetches them, so sites never see this phone',
+						icon: 'cloud-outline',
+					},
+					{
+						id: 'direct',
+						name: 'From the sites too',
+						hint: 'Without a server, this phone asks each site',
+						icon: 'globe-outline',
+					},
+					{id: 'off', name: 'Off', hint: 'Letter tiles', icon: 'text-outline'},
+				]}
 				onChange={(siteIcons) => {
 					setPreferences({siteIcons});
 				}}

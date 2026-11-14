@@ -65,7 +65,7 @@ export const ROWS = {
 	},
 	siteIcons: {
 		label: 'Site icons',
-		hint: 'Through your server, or from the site itself',
+		hint: 'Through your server by default, or from the sites too',
 	},
 	savePreview: {
 		label: 'Preview links when saving',

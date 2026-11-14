@@ -131,11 +131,11 @@ type Preferences = {
 	*/
 	syncSettings: boolean;
 	/**
-	Show each site's own icon instead of a letter tile. Icons come from the sync server when one is connected,
-	otherwise straight from the site. Off by default, because either way the site or the server is asked for each
-	address that is shown. Stays on this phone.
+	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
+	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
+	itself when there is no server; `off` shows letter tiles. Stays on this phone.
 	*/
-	siteIcons: boolean;
+	siteIcons: SiteIcons;
 	/**
 	Look the page up while saving a link, to show its icon and fill in its title. Through the sync server when one is
 	connected, otherwise from the site itself. On by default, and stays on this phone.
@@ -199,7 +199,7 @@ const defaults: Preferences = {
 	sessionTap: 'expand',
 	cleanOnSave: true,
 	syncSettings: true,
-	siteIcons: false,
+	siteIcons: 'server',
 	savePreview: true,
 	accent: 'system',
 	theme: 'system',
@@ -211,6 +211,23 @@ const defaults: Preferences = {
 	compactSessions: false,
 	showSavedOn: true,
 	deviceName: '',
+};
+
+const SITE_ICONS = ['off', 'server', 'direct'] as const;
+export type SiteIcons = (typeof SITE_ICONS)[number];
+
+/**
+An earlier version kept this as a switch: on asked the server or the site, off showed none. On keeps its meaning;
+off, the default, becomes the server-only choice.
+*/
+const siteIconsChoice = (value: unknown): SiteIcons => {
+	if (value === true) {
+		return 'direct';
+	}
+
+	return SITE_ICONS.includes(value as SiteIcons)
+		? (value as SiteIcons)
+		: defaults.siteIcons;
 };
 
 const OPEN_WITH = ['system', 'inapp', 'app'] as const;
@@ -289,7 +306,7 @@ export async function loadPreferences(): Promise<void> {
 			typeof cleanOnSave === 'boolean' ? cleanOnSave : defaults.cleanOnSave,
 		syncSettings:
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
-		siteIcons: siteIcons === true,
+		siteIcons: siteIconsChoice(siteIcons),
 		savePreview:
 			typeof savePreview === 'boolean' ? savePreview : defaults.savePreview,
 		accent: isAccent(accent) ? accent : defaults.accent,

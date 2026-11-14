@@ -27,16 +27,18 @@ async function readToken(): Promise<string | undefined> {
 }
 
 /**
-Where to get a site's icon: the sync server when one is connected, otherwise the site's own favicon. Undefined while
-the token is still being read, and when icons are off.
+Where to get a site's icon: the sync server when one is connected, otherwise the site's own favicon when the setting
+allows asking sites. Undefined while the token is still being read, and when icons are off.
 */
 function useIconSource(host: string, always: boolean): Source | undefined {
 	const {siteIcons} = usePreferences();
+	// A place with its own reason to show the icon (the save preview) may ask the site itself.
+	const mode = always ? 'direct' : siteIcons;
 	const {connected, url} = useSyncStatus();
 	const [token, setToken] = useState<string>();
 	useEffect(() => {
 		let live = true;
-		if ((siteIcons || always) && connected && url) {
+		if (mode !== 'off' && connected && url) {
 			void serverToken(url).then((found) => {
 				if (live) {
 					setToken(found);
@@ -47,11 +49,8 @@ function useIconSource(host: string, always: boolean): Source | undefined {
 		return () => {
 			live = false;
 		};
-	}, [siteIcons, always, connected, url]);
-	if (
-		(!siteIcons && !always) ||
-		!/^[\da-z][\d\-.a-z]*\.[\d\-a-z]{2,}$/i.test(host)
-	) {
+	}, [mode, connected, url]);
+	if (mode === 'off' || !/^[\da-z][\d\-.a-z]*\.[\d\-a-z]{2,}$/i.test(host)) {
 		return undefined;
 	}
 
@@ -62,6 +61,10 @@ function useIconSource(host: string, always: boolean): Source | undefined {
 					headers: {Authorization: `Bearer ${token}`},
 				}
 			: undefined;
+	}
+
+	if (mode !== 'direct') {
+		return undefined;
 	}
 
 	return {
