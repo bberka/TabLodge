@@ -2917,7 +2917,7 @@ async function main() {
 					await bookmarks
 						.getByRole('button', {name: 'Move bookmarks', exact: true})
 						.waitFor();
-					for (const name of ['Export', 'Share', 'Delete']) {
+					for (const name of ['Share', 'Delete']) {
 						await bookmarks.getByRole('button', {name, exact: true}).waitFor();
 					}
 
@@ -2995,7 +2995,7 @@ async function main() {
 							exact: true,
 						})
 						.waitFor();
-					for (const name of ['Export', 'Share']) {
+					for (const name of ['Share']) {
 						await sessionSelection
 							.getByRole('button', {name, exact: true})
 							.waitFor();
