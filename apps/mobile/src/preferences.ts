@@ -8,7 +8,15 @@ import {isAccent} from '../../extension/src/shared/accent-colors';
 import {cleanDeviceName} from '../../extension/src/shared/device';
 import {readJson, writeJson} from './storage';
 
-export type Look = 'material' | 'ios';
+const LOOKS = ['auto', 'material', 'ios'] as const;
+export type Look = (typeof LOOKS)[number];
+const isLook = (value: unknown): value is Look => LOOKS.includes(value as Look);
+
+/**
+The look to draw: the one chosen, or for Automatic the phone's own, which is iOS on an iPhone and Material on Android.
+*/
+export const resolveLook = (look: Look): 'material' | 'ios' =>
+	look === 'auto' ? (Platform.OS === 'ios' ? 'ios' : 'material') : look;
 export type Theme = 'system' | 'light' | 'dark';
 
 const THEMES = new Set<unknown>(['system', 'light', 'dark']);
@@ -159,7 +167,7 @@ type Preferences = {
 const KEY = 'tablodge.prefs';
 
 const defaults: Preferences = {
-	look: Platform.OS === 'ios' ? 'ios' : 'material',
+	look: 'auto',
 	floatingBar: false,
 	barSize: 'scroll',
 	lastColumnId: '',
@@ -240,7 +248,7 @@ export async function loadPreferences(): Promise<void> {
 		showSavedOn,
 	} = saved as Partial<Preferences>;
 	current = {
-		look: look === 'ios' || look === 'material' ? look : defaults.look,
+		look: isLook(look) ? look : defaults.look,
 		floatingBar:
 			typeof floatingBar === 'boolean' ? floatingBar : defaults.floatingBar,
 		barSize: isBarSize(barSize) ? barSize : defaults.barSize,
@@ -370,7 +378,7 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 
 	const raw = value as Record<string, unknown>;
 	const found: Partial<Preferences> = {};
-	if (raw.look === 'ios' || raw.look === 'material') {
+	if (isLook(raw.look)) {
 		found.look = raw.look;
 	}
 

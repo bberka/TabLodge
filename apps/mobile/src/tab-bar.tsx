@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {motion, spring} from './motion';
-import {usePreferences} from './preferences';
+import {resolveLook, usePreferences} from './preferences';
 import {resetScroll, useScrolledDown} from './scroll-state';
 import {BAR_HEIGHT, BAR_MARGIN, useColors} from './theme';
 import {Icon, type IconName} from './ui';
@@ -22,8 +22,10 @@ export type BarTab<T extends string> = {
 	active: IconName;
 };
 
-const MATERIAL_HEIGHT = 80;
-const IOS_HEIGHT = 49;
+// The docked bar is the same in both looks: tall enough that the icon and its name sit clear of the bar's edges inside
+// the highlighted pill, which iOS's own 49 point bar was too short for.
+const DOCKED_HEIGHT = 76;
+const PILL_HEIGHT = 56;
 const COMPACT_HEIGHT = 48;
 const COMPACT_TAB_WIDTH = 56;
 const BAR_PADDING = 6;
@@ -33,12 +35,11 @@ How tall the bar is, including the space below it, so a screen can leave that mu
 */
 export function useBarSpace(): number {
 	const insets = useSafeAreaInsets();
-	const {look, floatingBar, barSize} = usePreferences();
-	const docked = look === 'ios' ? IOS_HEIGHT : MATERIAL_HEIGHT;
+	const {floatingBar, barSize} = usePreferences();
 	// Small while scrolling floats over the content without changing the room the screens leave, so lists do not jump.
 	const floating =
 		(barSize === 'compact' ? COMPACT_HEIGHT : BAR_HEIGHT) + BAR_MARGIN * 2;
-	return (floatingBar ? floating : docked) + insets.bottom;
+	return (floatingBar ? floating : DOCKED_HEIGHT) + insets.bottom;
 }
 
 /**
@@ -60,7 +61,8 @@ export function TabBar<T extends string>({
 	const colors = useColors();
 	const insets = useSafeAreaInsets();
 	const {width: screenWidth} = useWindowDimensions();
-	const {look, floatingBar, barSize} = usePreferences();
+	const {look: chosen, floatingBar, barSize} = usePreferences();
+	const look = resolveLook(chosen);
 	const scrolledDown = useScrolledDown();
 	const small =
 		floatingBar &&
@@ -123,7 +125,7 @@ export function TabBar<T extends string>({
 		}).start();
 	}, [away, hide]);
 
-	const dockedHeight = (ios ? IOS_HEIGHT : MATERIAL_HEIGHT) + insets.bottom;
+	const dockedHeight = DOCKED_HEIGHT + insets.bottom;
 	const travel = floatingBar
 		? BAR_HEIGHT + BAR_MARGIN * 2 + insets.bottom
 		: dockedHeight;
@@ -133,7 +135,7 @@ export function TabBar<T extends string>({
 		inputRange: [0, 1],
 		outputRange: [(fullWidth - BAR_PADDING * 2) / count, COMPACT_TAB_WIDTH],
 	});
-	const labelHeight = ios ? 12 : 16;
+	const labelHeight = ios ? 14 : 16;
 	const gone = {inputRange: [0, 1], outputRange: [1, 0]};
 
 	return (
@@ -214,7 +216,7 @@ export function TabBar<T extends string>({
 								onSelect(tab.id);
 							}}
 						>
-							{!floatingBar && !ios && (
+							{!floatingBar && (
 								<Animated.View
 									style={[
 										styles.indicator,
@@ -274,7 +276,7 @@ export function TabBar<T extends string>({
 									style={{
 										color: ink,
 										fontWeight: on && !ios ? '700' : '500',
-										fontSize: ios ? 10 : 12,
+										fontSize: ios ? 11 : 12,
 									}}
 								>
 									{tab.label}
@@ -310,13 +312,13 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
-	label: {marginTop: 2},
-	// A pill behind the icon and its label, centered in the 80 high tab.
+	label: {marginTop: 3},
+	// A pill behind the icon and its label, centered in the tab with room above and below.
 	indicator: {
 		position: 'absolute',
-		top: 12,
-		width: 72,
-		height: MATERIAL_HEIGHT - 24,
-		borderRadius: (MATERIAL_HEIGHT - 24) / 2,
+		top: (DOCKED_HEIGHT - PILL_HEIGHT) / 2,
+		width: 80,
+		height: PILL_HEIGHT,
+		borderRadius: PILL_HEIGHT / 2,
 	},
 });

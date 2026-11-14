@@ -1,5 +1,12 @@
 import {useState} from 'react';
-import {ScrollView, useColorScheme, StyleSheet, Text, View} from 'react-native';
+import {
+	Platform,
+	ScrollView,
+	useColorScheme,
+	StyleSheet,
+	Text,
+	View,
+} from 'react-native';
 import {confirm} from '../dialog';
 import {trackScroll} from '../scroll-state';
 import type {SyncStatus} from '../../../extension/src/shared/sync/client';
@@ -188,10 +195,11 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 							value={prefs.look}
 							choices={[
 								{
-									id: 'material',
-									name: 'Android',
-									hint: 'Follows your phone by default',
+									id: 'auto',
+									name: 'Automatic',
+									hint: `Matches your phone: the ${Platform.OS === 'ios' ? 'iOS' : 'Android'} look here`,
 								},
+								{id: 'material', name: 'Android look'},
 								{id: 'ios', name: 'iOS look'},
 							]}
 							onChange={(look) => {

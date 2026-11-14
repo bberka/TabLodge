@@ -2,7 +2,7 @@ import {useMemo} from 'react';
 import {useColorScheme} from 'react-native';
 import {systemAccent} from '../modules/open-links';
 import {resolveAccent} from './accent';
-import {usePreferences} from './preferences';
+import {resolveLook, usePreferences} from './preferences';
 
 const light = {
 	background: '#faf9f7',
@@ -72,7 +72,8 @@ const system = systemAccent();
 
 export const useColors = (): Colors => {
 	const dark = useColorScheme() === 'dark';
-	const {look, accent} = usePreferences();
+	const {look: choice, accent} = usePreferences();
+	const look = resolveLook(choice);
 	return useMemo(() => {
 		const base =
 			look === 'ios'
@@ -131,7 +132,7 @@ const iosShape: Shape = {
 };
 
 export const useShape = (): Shape =>
-	usePreferences().look === 'ios' ? iosShape : materialShape;
+	resolveLook(usePreferences().look) === 'ios' ? iosShape : materialShape;
 
 // Android asks for touch targets of at least 48dp.
 export const TARGET = 48;
