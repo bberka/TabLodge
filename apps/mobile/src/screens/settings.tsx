@@ -78,7 +78,6 @@ function describe(
 
 const LOOK_NAMES = {
 	material: 'the Android look',
-	oneui: 'the Samsung One UI look',
 	ios: 'the iOS look',
 };
 
@@ -199,7 +198,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 										hint: `Matches your phone: ${LOOK_NAMES[resolveLook('auto')]} here`,
 									},
 									{id: 'material', name: 'Android look'},
-									{id: 'oneui', name: 'Samsung One UI look'},
 									{id: 'ios', name: 'iOS look'},
 								]}
 								onChange={(look) => {

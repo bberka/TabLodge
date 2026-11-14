@@ -34,37 +34,6 @@ const darkMaterial: typeof light = {
 	warn: '#f0c36d',
 };
 
-// Samsung One UI: a light gray page with white cards, a black page in the dark theme, and Samsung's blue.
-const oneUiLight: typeof light = {
-	background: '#f6f6f6',
-	surface: '#ffffff',
-	pressed: '#ececec',
-	text: '#000000',
-	muted: '#6a6a6a',
-	border: '#e4e4e4',
-	accent: '#3e91ff',
-	accentSoft: '#e3eeff',
-	onAccent: '#ffffff',
-	danger: '#d93a3a',
-	ok: '#2e8b57',
-	warn: '#a35f00',
-};
-
-const oneUiDark: typeof light = {
-	background: '#000000',
-	surface: '#1f1f1f',
-	pressed: '#2c2c2c',
-	text: '#ffffff',
-	muted: '#a8a8a8',
-	border: '#333333',
-	accent: '#4d9bff',
-	accentSoft: '#12294a',
-	onAccent: '#000000',
-	danger: '#e5484d',
-	ok: '#6fd49a',
-	warn: '#f0c36d',
-};
-
 export type Colors = typeof light;
 
 // The iOS look uses the system colors: grouped gray background, white cards, and the system blue.
@@ -105,10 +74,6 @@ function palette(look: ReturnType<typeof resolveLook>, dark: boolean): Colors {
 	switch (look) {
 		case 'ios': {
 			return dark ? iosDark : iosLight;
-		}
-
-		case 'oneui': {
-			return dark ? oneUiDark : oneUiLight;
 		}
 
 		default: {
@@ -177,20 +142,7 @@ const iosShape: Shape = {
 	barGap: 12,
 };
 
-// One UI draws everything rounder: large cards, pill buttons, and a floating bar with a wide gap around it.
-const oneUiShape: Shape = {
-	ios: false,
-	buttonRadius: 28,
-	buttonHeight: 52,
-	fieldRadius: 20,
-	cardRadius: 28,
-	sheetRadius: 32,
-	chipRadius: 22,
-	titleSize: 34,
-	barGap: 20,
-};
-
-const SHAPES = {material: materialShape, oneui: oneUiShape, ios: iosShape};
+const SHAPES = {material: materialShape, ios: iosShape};
 
 export const useShape = (): Shape => SHAPES[resolveLook(usePreferences().look)];
 

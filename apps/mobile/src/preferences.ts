@@ -8,33 +8,19 @@ import {isAccent} from '../../extension/src/shared/accent-colors';
 import {cleanDeviceName} from '../../extension/src/shared/device';
 import {readJson, writeJson} from './storage';
 
-const LOOKS = ['auto', 'material', 'oneui', 'ios'] as const;
+const LOOKS = ['auto', 'material', 'ios'] as const;
 export type Look = (typeof LOOKS)[number];
 const isLook = (value: unknown): value is Look => LOOKS.includes(value as Look);
 
 /**
-Whether this is a Samsung phone, which has its own One UI look.
+The look to draw: the one chosen, or for Automatic the phone's own: iOS on an iPhone, and Material on Android.
 */
-const samsung = (): boolean =>
-	Platform.OS === 'android' &&
-	(
-		Platform.constants as {Manufacturer?: string}
-	).Manufacturer?.toLowerCase() === 'samsung';
-
-/**
-The look to draw: the one chosen, or for Automatic the phone's own: iOS on an iPhone, One UI on a Samsung phone, and
-Material on any other Android phone.
-*/
-export const resolveLook = (look: Look): 'material' | 'oneui' | 'ios' => {
+export const resolveLook = (look: Look): 'material' | 'ios' => {
 	if (look !== 'auto') {
 		return look;
 	}
 
-	if (Platform.OS === 'ios') {
-		return 'ios';
-	}
-
-	return samsung() ? 'oneui' : 'material';
+	return Platform.OS === 'ios' ? 'ios' : 'material';
 };
 
 export type Theme = 'system' | 'light' | 'dark';
@@ -254,12 +240,10 @@ const sessionAction = (
 let current = defaults;
 const listeners = new Set<() => void>();
 
-export async function loadPreferences(): Promise<void> {
-	const saved = await readJson(KEY);
-	if (typeof saved !== 'object' || saved === null) {
-		return;
-	}
-
+/**
+Reads stored or backed up preferences. A value that is missing or not valid falls back to its default.
+*/
+function parsePreferences(saved: Partial<Preferences>): Preferences {
 	const {
 		look,
 		floatingBar,
@@ -287,8 +271,8 @@ export async function loadPreferences(): Promise<void> {
 		privateOpenApp,
 		compactSessions,
 		showSavedOn,
-	} = saved as Partial<Preferences>;
-	current = {
+	} = saved;
+	return {
 		look: isLook(look) ? look : defaults.look,
 		floatingBar:
 			typeof floatingBar === 'boolean' ? floatingBar : defaults.floatingBar,
@@ -333,6 +317,15 @@ export async function loadPreferences(): Promise<void> {
 		showSavedOn: showSavedOn !== false,
 		deviceName: cleanDeviceName(deviceName),
 	};
+}
+
+export async function loadPreferences(): Promise<void> {
+	const saved = await readJson(KEY);
+	if (typeof saved !== 'object' || saved === null) {
+		return;
+	}
+
+	current = parsePreferences(saved);
 	applyTheme(current.theme);
 	for (const listener of listeners) {
 		listener();
@@ -383,6 +376,33 @@ export function resetPreferences(): void {
 		syncSettings: current.syncSettings,
 		syncPrivate: current.syncPrivate,
 	});
+}
+
+/**
+Every preference worth keeping in a backup: all but this phone's name and the column last saved to.
+*/
+export function backupPreferences(): Omit<
+	Preferences,
+	'deviceName' | 'lastColumnId'
+> {
+	const {deviceName: _name, lastColumnId: _column, ...rest} = current;
+	return rest;
+}
+
+/**
+Puts the preferences of a backup back, as one change. This phone's name and last column stay.
+*/
+export function restorePreferences(value: unknown): void {
+	if (typeof value !== 'object' || value === null) {
+		return;
+	}
+
+	const {
+		deviceName: _name,
+		lastColumnId: _column,
+		...rest
+	} = parsePreferences(value);
+	setPreferences(rest);
 }
 
 export const getPreferences = (): Preferences => current;
