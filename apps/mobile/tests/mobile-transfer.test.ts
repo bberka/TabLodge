@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {parseImportFile} from '../../extension/src/shared/import-formats';
-import {emptyStore} from '../src/library';
-import {importIntoStore, previewFor, shareGroupsOf} from '../src/transfer';
+import {emptyStore} from '../src/library/library';
+import {
+	importIntoStore,
+	previewFor,
+	shareGroupsOf,
+} from '../src/transfer/transfer';
 
 let counter = 0;
 const newId = () => {

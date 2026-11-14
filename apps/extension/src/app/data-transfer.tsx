@@ -71,14 +71,11 @@ import {
 	type ShareMethod,
 } from '../shared/share-formats';
 import {
-	bookmarkColumnExportChoices,
 	buildExport,
 	dateStamp,
 	exportCounts,
 	exportFilename,
-	sessionExportChoices,
 	type ExportData,
-	type ExportChoice,
 	type ExportFormat,
 	type ExportKind,
 } from '../shared/export-formats';
@@ -94,11 +91,6 @@ import {
 	type ParsedImport,
 } from '../shared/import-formats';
 import {fileNamePrefix} from '../shared/backup-format';
-import {offerUndo} from './recovery-core';
-import {messageOf, send, type ShowStatus} from './common';
-import {mergeSummary} from './merge-summary';
-import {writeClipboard} from './interaction-actions';
-import {PROJECT} from './project';
 import {
 	FullBackupError,
 	buildFullBackup,
@@ -109,7 +101,12 @@ import {
 	readFullBackup,
 	readProtectedFullBackup,
 	type FullBackupContents,
-} from './full-backup';
+} from '../shared/full-backup';
+import {offerUndo} from './recovery-core';
+import {messageOf, send, type ShowStatus} from './common';
+import {mergeSummary} from './merge-summary';
+import {writeClipboard} from './interaction-actions';
+import {PROJECT} from './project';
 import {
 	EMPTY_PASSCODE_DRAFT,
 	PasscodeEntry,
@@ -234,18 +231,11 @@ type BackupDialogProps = {
 	Opens on this choice instead of the requested kind; Settings opens on Everything.
 	*/
 	initialScope?: BackupScope;
-	/**
-	A single session export cannot switch to other data scopes.
-	*/
-	singleSession?: boolean;
-	/**
-	An individual column export can switch between that column and all bookmarks.
-	*/
-	singleColumn?: boolean;
 };
 
 /**
-"Back up sessions" / "Back up bookmarks" / "Export session" / "Export N selected tabs": pick a format, then download.
+"Back up sessions" / "Back up bookmarks" / "Back up everything": pick a format, then download. One session, one column, or
+some selected tabs are shared and saved from the Share dialog instead.
 */
 export function BackupDialog({
 	data,
@@ -254,8 +244,6 @@ export function BackupDialog({
 	showStatus,
 	state,
 	initialScope,
-	singleSession = false,
-	singleColumn = false,
 }: BackupDialogProps) {
 	const requested = useRetainedValue(data, open && data != null);
 	const [format, setFormat] = useState<ExportFormat>('json');
@@ -264,9 +252,6 @@ export function BackupDialog({
 	const [protect, setProtect] = useState(false);
 	const [passcode, setPasscode] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
 	const [switched, setSwitched] = useState<BackupScope | null>(null);
-	const [individualChoice, setIndividualChoice] = useState<ExportChoice['id']>(
-		singleColumn ? 'column' : 'current',
-	);
 	useEffect(() => {
 		if (!open) {
 			// Drop the typed secret as soon as the dialog closes.
@@ -279,34 +264,11 @@ export function BackupDialog({
 		setProtect(false);
 		setPasscode(EMPTY_PASSCODE_DRAFT);
 		setSwitched(initialScope ?? null);
-		setIndividualChoice(singleColumn ? 'column' : 'current');
-	}, [open, initialScope, singleColumn]);
-	const individualChoices = singleSession
-		? requested?.groups?.[0]
-			? sessionExportChoices(
-					requested.groups[0],
-					state?.groups ?? requested.groups,
-					state?.folders ?? requested.folders ?? [],
-				)
-			: []
-		: singleColumn && requested?.columns?.[0]
-			? bookmarkColumnExportChoices(
-					requested.columns[0],
-					state?.bookmarkColumns ?? requested.columns,
-					state?.bookmarks ?? requested.bookmarks ?? [],
-				)
-			: [];
-	const selectedIndividualChoice = individualChoices.find(
-		(choice) => choice.id === individualChoice,
-	);
+	}, [open, initialScope]);
 	const canSwitch = Boolean(
-		!singleSession &&
-		!singleColumn &&
-		state &&
-		requested &&
-		requested.kind !== 'selected',
+		state && requested && requested.kind !== 'selected',
 	);
-	let shown = selectedIndividualChoice?.data ?? requested;
+	let shown = requested;
 	if (
 		state &&
 		canSwitch &&
@@ -327,13 +289,9 @@ export function BackupDialog({
 	const kind = shown?.kind ?? 'sessions';
 	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
 	// "Everything" is the full backup ZIP; Bookmarks or Sessions pick a file format. Selected tabs never offer it.
-	const full =
-		!singleSession &&
-		!singleColumn &&
-		switched === 'everything' &&
-		kind !== 'selected';
+	const full = switched === 'everything' && kind !== 'selected';
 	const scopeOptions =
-		singleSession || singleColumn || kind === 'selected'
+		kind === 'selected'
 			? []
 			: [
 					{value: 'everything' as const, label: <EverythingLabel />},
@@ -354,21 +312,13 @@ export function BackupDialog({
 							]
 						: []),
 				];
-	const exportName =
-		selectedIndividualChoice?.id === 'all'
-			? undefined
-			: singleSession
-				? shown?.groups?.[0]?.name
-				: singleColumn
-					? shown?.columns?.[0]?.name
-					: undefined;
 	const protectProblem =
 		full && protect ? passcodeDraftProblem(passcode) : null;
 	const filename = full
 		? protect
 			? protectedFullBackupFilename(PROJECT.name)
 			: fullBackupFilename(PROJECT.name)
-		: exportFilename(PROJECT.name, kind, format, new Date(), exportName);
+		: exportFilename(PROJECT.name, kind, format, new Date());
 	const summary = full
 		? 'All data and settings'
 		: kind === 'bookmarks'
@@ -424,10 +374,7 @@ export function BackupDialog({
 		}
 
 		try {
-			const file = buildExport(shown, format, {
-				appName: PROJECT.name,
-				name: exportName,
-			});
+			const file = buildExport(shown, format, {appName: PROJECT.name});
 			downloadFile(file.content, file.mime, file.filename);
 			onOpenChange(false);
 			showStatus(`Saved ${summary} to ${file.filename}.`, false, {toast: true});
@@ -447,62 +394,17 @@ export function BackupDialog({
 			>
 				<DialogHeader>
 					<DialogTitle>
-						{full
-							? 'Back up everything'
-							: singleSession
-								? selectedIndividualChoice?.id === 'all'
-									? 'Back up sessions'
-									: 'Export session'
-								: singleColumn
-									? selectedIndividualChoice?.id === 'all'
-										? 'Back up bookmarks'
-										: 'Export column'
-									: BACKUP_TITLES[kind](counts.items)}
+						{full ? 'Back up everything' : BACKUP_TITLES[kind](counts.items)}
 					</DialogTitle>
 					<DialogDescription>
 						{full
 							? protect
 								? 'One encrypted file you can restore with Import and the PIN or password you choose. It is saved to your downloads.'
 								: 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted unless you protect it below.'
-							: singleSession
-								? selectedIndividualChoice?.id === 'all'
-									? 'Choose a format for these sessions. The file is saved to your downloads; it is not encrypted.'
-									: 'Choose a format for this session. The file is saved to your downloads; it is not encrypted.'
-								: singleColumn
-									? selectedIndividualChoice?.id === 'all'
-										? 'Choose a format for all bookmarks. The file is saved to your downloads; it is not encrypted.'
-										: 'Choose a format for this column. The file is saved to your downloads; it is not encrypted.'
-									: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
+							: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
-					{individualChoices.length > 0 && (
-						<RadioCardGroup
-							label="What to export"
-							value={selectedIndividualChoice?.id ?? individualChoices[0].id}
-							onValueChange={(value) =>
-								setIndividualChoice(value as ExportChoice['id'])
-							}
-						>
-							{individualChoices.map((choice) => {
-								const choiceCounts = exportCounts(choice.data);
-								const description =
-									choice.id === 'current'
-										? `${requested?.groups?.[0]?.name ?? 'Untitled session'} · ${plural(choiceCounts.items, 'tab')}`
-										: choice.id === 'column' || choice.data.kind === 'bookmarks'
-											? plural(choiceCounts.items, 'bookmark')
-											: `${plural(choiceCounts.groups, 'session')} · ${plural(choiceCounts.items, 'tab')}`;
-								return (
-									<RadioCard
-										key={choice.id}
-										value={choice.id}
-										title={choice.label}
-										description={description}
-									/>
-								);
-							})}
-						</RadioCardGroup>
-					)}
 					{scopeOptions.length > 1 && (
 						<SegmentedControl
 							fullWidth
@@ -591,13 +493,7 @@ export function BackupDialog({
 										) : undefined
 									}
 									description={
-										kind === 'bookmarks'
-											? choice.bookmarks
-											: singleSession &&
-												  selectedIndividualChoice?.id !== 'all' &&
-												  choice.id === 'json'
-												? 'A backup of this session you can restore here. Keeps notes, split views, tab groups, and order.'
-												: choice.sessions
+										kind === 'bookmarks' ? choice.bookmarks : choice.sessions
 									}
 									className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
 								/>
@@ -647,20 +543,34 @@ type ShareSource = {
 	label: string;
 	description?: string;
 	groups: ShareGroup[];
+	/**
+	The same thing as data, which also lets it be saved as a file (JSON, CSV, a bookmarks file) from the same dialog.
+	*/
+	data?: ExportData;
 };
 export type SharePayload = {
 	title: string;
 	groups?: readonly ShareGroup[];
 	sources?: ShareSource[];
+	data?: ExportData;
 };
 
-const SHARE_METHODS: ReadonlyArray<{
-	id: ShareMethod;
+type FileWay = `file-${'json' | 'csv' | 'html'}`;
+type ShareWay = ShareMethod | FileWay;
+
+type ShareChoice = {
+	id: ShareWay;
 	title: string;
 	icon: typeof FileJson;
 	description: string;
 	action: 'Download' | 'Copy';
-}> = [
+	/**
+	Saved as a file with the export formats, so it needs the data, not just the links.
+	*/
+	file?: boolean;
+};
+
+const SHARE_METHODS: readonly ShareChoice[] = [
 	{
 		id: 'html',
 		title: 'HTML page',
@@ -689,6 +599,30 @@ const SHARE_METHODS: ReadonlyArray<{
 		description: 'Clickable links that paste into documents and email.',
 		action: 'Copy',
 	},
+	{
+		id: 'file-json',
+		title: 'JSON file',
+		icon: FileJson,
+		description: 'Everything saved, to import again.',
+		action: 'Download',
+		file: true,
+	},
+	{
+		id: 'file-csv',
+		title: 'CSV file',
+		icon: FileText,
+		description: 'A table for a spreadsheet.',
+		action: 'Download',
+		file: true,
+	},
+	{
+		id: 'file-html',
+		title: 'Browser bookmarks (HTML)',
+		icon: Globe,
+		description: 'A bookmarks file other browsers import.',
+		action: 'Download',
+		file: true,
+	},
 ];
 
 type ShareDialogProps = {
@@ -697,6 +631,7 @@ type ShareDialogProps = {
 	title?: string;
 	groups?: readonly ShareGroup[];
 	sources?: ShareSource[];
+	data?: ExportData;
 	showStatus: ShowStatus;
 };
 
@@ -876,17 +811,18 @@ export function ShareDialog({
 	title = `Shared ${PROJECT.name} links`,
 	groups,
 	sources,
+	data,
 	showStatus,
 }: ShareDialogProps) {
 	const all: ShareSource[] = useMemo(
 		() =>
 			sources && sources.length > 0
 				? sources
-				: [{id: 'all', label: title, groups: [...(groups ?? [])]}],
-		[sources, groups, title],
+				: [{id: 'all', label: title, groups: [...(groups ?? [])], data}],
+		[sources, groups, title, data],
 	);
 	const [sourceId, setSourceId] = useState(all[0].id);
-	const [method, setMethod] = useState<ShareMethod>('html');
+	const [method, setMethod] = useState<ShareWay>('html');
 	useEffect(() => {
 		if (!open) {
 			return;
@@ -899,13 +835,32 @@ export function ShareDialog({
 	}, [open]);
 	const source = all.find((entry) => entry.id === sourceId) ?? all[0];
 	const counts = shareCounts(source.groups);
-	const preview = sharePreview(source.groups, method);
-	const chosen = SHARE_METHODS.find((entry) => entry.id === method)!;
+	const choices = SHARE_METHODS.filter(
+		(entry) => !entry.file || source.data !== undefined,
+	);
+	const chosen = choices.find((entry) => entry.id === method) ?? choices[0];
+	const isFile = chosen.file === true;
+	const preview = sharePreview(
+		source.groups,
+		isFile ? 'links' : (chosen.id as ShareMethod),
+	);
 	const pageTitle = source.groups.length === 1 ? source.groups[0].name : title;
 
 	async function run() {
 		try {
-			if (method === 'html') {
+			if (isFile && source.data) {
+				const file = buildExport(
+					source.data,
+					chosen.id.slice(5) as ExportFormat,
+					{
+						appName: PROJECT.name,
+						name:
+							source.groups.length === 1 ? source.groups[0].name : undefined,
+					},
+				);
+				downloadFile(file.content, file.mime, file.filename);
+				showStatus(`Saved ${file.filename}.`, false, {toast: true});
+			} else if (method === 'html') {
 				downloadFile(
 					shareHtmlPage(pageTitle, source.groups, PROJECT.name),
 					'text/html;charset=utf-8',
@@ -946,7 +901,8 @@ export function ShareDialog({
 				<DialogHeader className="shrink-0">
 					<DialogTitle>Share</DialogTitle>
 					<DialogDescription>
-						Choose what to share and how. Nothing leaves your browser.
+						Choose what to share and how. Links and pages stay in your browser;
+						files are saved to your downloads.
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody className="min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto pr-1">
@@ -973,9 +929,9 @@ export function ShareDialog({
 						label="How to share"
 						value={method}
 						className="sm:grid-cols-2"
-						onValueChange={(value) => setMethod(value as ShareMethod)}
+						onValueChange={(value) => setMethod(value as ShareWay)}
 					>
-						{SHARE_METHODS.map((entry) => (
+						{choices.map((entry) => (
 							<RadioCard
 								key={entry.id}
 								value={entry.id}
@@ -985,12 +941,19 @@ export function ShareDialog({
 							/>
 						))}
 					</RadioCardGroup>
-					<SharePreviewPanel
-						preview={preview}
-						pageTitle={pageTitle}
-						counts={counts}
-						formatLabel={chosen.title}
-					/>
+					{isFile ? (
+						<p className="text-xs text-muted-foreground">
+							{plural(counts.links, 'link')} in {plural(counts.groups, 'group')}
+							. The file is plain text, not encrypted.
+						</p>
+					) : (
+						<SharePreviewPanel
+							preview={preview}
+							pageTitle={pageTitle}
+							counts={counts}
+							formatLabel={chosen.title}
+						/>
+					)}
 				</DialogBody>
 				<DialogFooter className="shrink-0">
 					<Button

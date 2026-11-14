@@ -4,7 +4,7 @@ import {
 	hostIsExcluded,
 	normalizeExcludedHost,
 	parseExcludedLines,
-} from '../src/app/excluded-sites';
+} from '../src/shared/excluded-sites';
 
 test('entries normalize to a lower-case host', () => {
 	const cases: Array<[string, string | null]> = [

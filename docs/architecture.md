@@ -357,7 +357,7 @@ A session has one description, capped at 10,502 characters. Older separate `note
 
 ### Full backup ZIP
 
-`src/app/full-backup.ts` builds `tablodge-full-YYYY-MM-DD.zip` on the page using bundled `fflate`. The worker supplies data through `GET_FULL_BACKUP`.
+`src/shared/full-backup.ts` (shared with the Android app) builds `tablodge-full-YYYY-MM-DD.zip` on the page using bundled `fflate`. The worker supplies data through `GET_FULL_BACKUP`.
 
 | File | Contents |
 | --- | --- |

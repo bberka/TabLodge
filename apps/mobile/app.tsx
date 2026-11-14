@@ -10,24 +10,30 @@ import {
 	View,
 } from 'react-native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
-import {BottomSheet} from './src/bottom-sheet';
-import {extractUrls, splitShared} from './src/library';
-import {runBackAction} from './src/back-actions';
-import {pauseSync, startLibrary, wakeSync} from './src/library-store';
-import {startPreferencesSync} from './src/preferences-sync';
-import {pausePrivate, startPrivate, wakePrivate} from './src/private-library';
-import {loadPreferences} from './src/preferences';
-import {BookmarksScreen} from './src/screens/bookmarks';
-import {ConnectSheet} from './src/screens/connect-sheet';
-import {SaveLinkForm} from './src/screens/save-link';
-import {SaveLinksForm} from './src/screens/save-links';
-import {SessionsScreen} from './src/screens/sessions';
-import {SettingsScreen} from './src/screens/settings';
-import {DialogHost} from './src/dialog';
-import {PrivateSheetHost} from './src/private-sheets';
-import {SnackbarHost, showSnack} from './src/snackbar';
-import {type BarTab, TabBar} from './src/tab-bar';
-import {useColors} from './src/theme';
+import {BottomSheet} from './src/ui/bottom-sheet';
+import {extractUrls, splitShared} from './src/library/library';
+import {runBackAction} from './src/ui/back-actions';
+import {pauseSync, startLibrary, wakeSync} from './src/library/library-store';
+import {startPreferencesSync} from './src/settings/preferences-sync';
+import {markActive, startPrivateAutoLock} from './src/private/private-autolock';
+import {ShareHost} from './src/screens/transfer/transfer-sheets';
+import {
+	pausePrivate,
+	startPrivate,
+	wakePrivate,
+} from './src/private/private-library';
+import {loadPreferences} from './src/settings/preferences';
+import {BookmarksScreen} from './src/screens/bookmarks/bookmarks';
+import {ConnectSheet} from './src/screens/settings/connect-sheet';
+import {SaveLinkForm} from './src/screens/save/save-link';
+import {SaveLinksForm} from './src/screens/save/save-links';
+import {SessionsScreen} from './src/screens/sessions/sessions';
+import {SettingsScreen} from './src/screens/settings/settings';
+import {DialogHost} from './src/ui/dialog';
+import {PrivateSheetHost} from './src/private/private-sheets';
+import {SnackbarHost, showSnack} from './src/ui/snackbar';
+import {type BarTab, TabBar} from './src/ui/tab-bar';
+import {useColors} from './src/ui/theme';
 
 type Tab = 'bookmarks' | 'sessions' | 'settings';
 const TABS: Array<BarTab<Tab>> = [
@@ -124,6 +130,8 @@ function Main() {
 		};
 	}, []);
 
+	useEffect(() => startPrivateAutoLock(), []);
+
 	// A link shared from another app opens the drawer with it filled in.
 	useEffect(() => {
 		if (!hasShareIntent) {
@@ -177,7 +185,10 @@ function Main() {
 	};
 
 	return (
-		<View style={[styles.screen, {backgroundColor: colors.background}]}>
+		<View
+			style={[styles.screen, {backgroundColor: colors.background}]}
+			onTouchStart={markActive}
+		>
 			<SafeAreaView edges={['top']} style={styles.body}>
 				<StatusBar style="auto" />
 				{tab === 'bookmarks' && (
@@ -196,6 +207,7 @@ function Main() {
 			<SnackbarHost />
 			<DialogHost />
 			<PrivateSheetHost />
+			<ShareHost />
 			<ConnectSheet
 				visible={connecting}
 				onClose={() => {

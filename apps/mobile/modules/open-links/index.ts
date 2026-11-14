@@ -1,6 +1,11 @@
 import {requireOptionalNativeModule} from 'expo';
 
 type OpenLinksModule = {
+	// Native modules are event emitters; this one sends `screenOff`.
+	addListener: (
+		name: 'screenOff',
+		callback: () => void,
+	) => {remove: () => void};
 	openAll: (urls: string[], how: string, packageName: string | null) => boolean;
 	browsers: () => string[][];
 	systemAccent: () => [string, string] | null;
@@ -25,8 +30,19 @@ export function openLinksTogether(
 /**
 The browsers installed on this phone, or none on a build without native support.
 */
-export function installedBrowsers(): Array<{id: string; name: string}> {
-	return (native?.browsers() ?? []).map(([id, name]) => ({id, name}));
+export function installedBrowsers(): Array<{
+	id: string;
+	name: string;
+	/**
+	The app's icon as a `data:` address, or undefined when it could not be read.
+	*/
+	icon?: string;
+}> {
+	return (native?.browsers() ?? []).map(([id, name, icon]) => ({
+		id,
+		name,
+		icon: icon ? `data:image/png;base64,${icon}` : undefined,
+	}));
 }
 
 /**
@@ -36,4 +52,19 @@ Android before 12.
 export function systemAccent(): {light: string; dark: string} | undefined {
 	const found = native?.systemAccent();
 	return found ? {light: found[0], dark: found[1]} : undefined;
+}
+
+/**
+Calls `callback` when the screen turns off, which is when the phone locks. Returns a function that stops listening;
+on a build without native support it never calls back, and `false` says so.
+*/
+export function onScreenOff(callback: () => void): (() => void) | false {
+	if (!native) {
+		return false;
+	}
+
+	const subscription = native.addListener('screenOff', callback);
+	return () => {
+		subscription.remove();
+	};
 }

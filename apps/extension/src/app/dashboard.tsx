@@ -338,7 +338,6 @@ export function SessionManager({
 	// eslint-disable-next-line @eslint-react/use-state -- write-only on purpose
 	const [, setBusy] = useState('');
 	const [backupData, setBackupData] = useState<ExportData | null>(null);
-	const [singleSessionExport, setSingleSessionExport] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const dragItemRef = useRef<DragItem | null>(null);
@@ -573,7 +572,7 @@ export function SessionManager({
 			}
 
 			case 'backup-sessions': {
-				openBackup('sessions');
+				openBackup();
 
 				break;
 			}
@@ -721,25 +720,13 @@ export function SessionManager({
 		setAnchor(keys.at(-1) ?? null);
 	}
 
-	function openBackup(kind: 'sessions' | 'selected') {
-		setSingleSessionExport(false);
-		const exportGroups = kind === 'selected' ? selectedGroups() : groups;
-		if (exportGroups.length === 0) {
-			showStatus(
-				kind === 'selected'
-					? 'Select tabs to export first.'
-					: 'There are no sessions to back up.',
-				true,
-			);
+	function openBackup() {
+		if (groups.length === 0) {
+			showStatus('There are no sessions to back up.', true);
 			return;
 		}
 
-		setBackupData({kind, groups: exportGroups, folders});
-	}
-
-	function openSessionExport(group: Session) {
-		setSingleSessionExport(true);
-		setBackupData({kind: 'sessions', groups: [group], folders});
+		setBackupData({kind: 'sessions', groups, folders});
 	}
 
 	function selectedGroups() {
@@ -1307,8 +1294,24 @@ export function SessionManager({
 		restoreTab,
 		updateGroup,
 		archive: archiveGroup,
-		share: (group) => openShare({title: group.name, groups: [group]}),
-		exportSession: openSessionExport,
+		share: (group) =>
+			openShare({
+				title: group.name,
+				sources: [
+					{
+						id: 'current',
+						label: group.name,
+						groups: [group],
+						data: {kind: 'sessions', groups: [group], folders},
+					},
+					{
+						id: 'all',
+						label: 'All sessions',
+						groups,
+						data: {kind: 'sessions', groups, folders},
+					},
+				],
+			}),
 		openTab,
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
@@ -1802,12 +1805,18 @@ export function SessionManager({
 									<Upload className="h-4 w-4" />
 									Import sessions
 								</DropdownMenuItem>
-								<DropdownMenuItem onSelect={() => openBackup('sessions')}>
+								<DropdownMenuItem onSelect={() => openBackup()}>
 									<Download className="h-4 w-4" />
 									Back up sessions
 								</DropdownMenuItem>
 								<DropdownMenuItem
-									onSelect={() => openShare({title: 'Shared sessions', groups})}
+									onSelect={() =>
+										openShare({
+											title: 'Shared sessions',
+											groups,
+											data: {kind: 'sessions', groups, folders},
+										})
+									}
 								>
 									<Share2 className="h-4 w-4" />
 									Share all sessions
@@ -1909,18 +1918,44 @@ export function SessionManager({
 									</span>
 								</button>
 							);
+							const folderGroups =
+								folder.id === ALL
+									? groups
+									: groups.filter((group) => group.folderId === folder.id);
+							const shareFolder = {
+								id: 'share-folder',
+								label: 'Share',
+								icon: Share2,
+								disabled: folderGroups.length === 0,
+								onSelect() {
+									openShare({
+										title: folder.name,
+										groups: folderGroups,
+										data: {kind: 'sessions', groups: folderGroups, folders},
+									});
+								},
+							};
 							if (
 								!('createdAt' in folder) ||
 								folder.isDefault ||
 								isArchivedFolder(folder)
 							) {
-								return chip;
+								return (
+									<ActionContextMenu
+										key={folder.id}
+										actions={() => [shareFolder]}
+									>
+										{chip}
+									</ActionContextMenu>
+								);
 							}
 
 							return (
 								<ActionContextMenu
 									key={folder.id}
 									actions={() => [
+										shareFolder,
+										{type: 'separator'},
 										{
 											id: 'edit-folder',
 											label: 'Edit folder',
@@ -2064,18 +2099,15 @@ export function SessionManager({
 							<Button
 								variant="outline"
 								size="sm"
-								onClick={() => openBackup('selected')}
-							>
-								<Download className="h-4 w-4" />
-								Export
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
 								onClick={() =>
 									openShare({
 										title: 'Shared tabs',
 										groups: selectedGroups(),
+										data: {
+											kind: 'selected',
+											groups: selectedGroups(),
+											folders,
+										},
 									})
 								}
 							>
@@ -2191,7 +2223,6 @@ export function SessionManager({
 				data={backupData}
 				open={Boolean(backupData)}
 				state={state}
-				singleSession={singleSessionExport}
 				showStatus={showStatus}
 				onOpenChange={(open) => {
 					if (open) {
@@ -2199,7 +2230,6 @@ export function SessionManager({
 					}
 
 					setBackupData(null);
-					setSingleSessionExport(false);
 				}}
 			/>
 			<ImportDialog
@@ -2732,7 +2762,6 @@ type CardActions = {
 	) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
-	exportSession: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
@@ -2933,17 +2962,6 @@ const GroupCard = memo(
 								label: 'Share session',
 								icon: Share2,
 								onClick: () => handlers.share(group),
-							},
-						];
-					}
-
-					case 'export': {
-						return [
-							{
-								id: action,
-								label: 'Export session',
-								icon: Download,
-								onClick: () => handlers.exportSession(group),
 							},
 						];
 					}
@@ -3149,12 +3167,6 @@ const GroupCard = memo(
 				label: 'Share',
 				icon: Share2,
 				onSelect: () => handlers.share(group),
-			},
-			{
-				id: 'export-session',
-				label: 'Export session',
-				icon: Download,
-				onSelect: () => handlers.exportSession(group),
 			},
 			{type: 'separator'},
 			{

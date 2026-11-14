@@ -88,7 +88,6 @@ export type SessionQuickAction =
 	| 'archive'
 	| 'delete'
 	| 'share'
-	| 'export'
 	| 'edit'
 	| 'move-up'
 	| 'move-down'
@@ -231,6 +230,11 @@ export type Settings = {
 	Bookmark board layout: the grid of columns or the Focus column list (default: board).
 	*/
 	bookmarkBoardView: BookmarkBoardView;
+	/**
+	Whether the bookmark list starts with an All item that lists every bookmark: the Focus view on the dashboard, and the
+	bookmark columns of the Android app. Syncs, so both follow it.
+	*/
+	showAllBookmarks: boolean;
 	/**
 	Keep one pinned TabLodge tab per window open; links from it open in new tabs.
 	*/

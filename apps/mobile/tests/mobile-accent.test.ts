@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {resolveAccent} from '../src/accent';
+import {resolveAccent} from '../src/ui/accent';
 
 const SYSTEM = {light: '#6750a4', dark: '#d0bcff'};
 const LIGHT = {page: '#faf9f7', surface: '#ffffff'};

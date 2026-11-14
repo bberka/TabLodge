@@ -47,8 +47,13 @@ import {
 	updateFolder,
 	restoreFolder,
 	restoreColumn,
-} from '../src/library';
-import {sampleStore} from '../src/seed';
+	allBookmarks,
+	updateSessionTab,
+	libraryStats,
+	isArchivedSession,
+	unarchiveSession,
+} from '../src/library/library';
+import {sampleStore} from '../src/library/seed';
 
 const NOW = 1000;
 const ids = (store: ReturnType<typeof emptyStore>, columnId: string) =>
@@ -831,6 +836,129 @@ describe('session folders', () => {
 			false,
 		);
 		assert.equal(next.groups[0].folderId, 'unfiled');
+	});
+});
+
+describe('editing a saved tab', () => {
+	test('changes its title and address, and refuses an address that is not a web address', () => {
+		const store = addSession(
+			emptyStore(NOW),
+			{name: 'S', urls: ['https://a.example/'], folderId: 'unfiled'},
+			's1',
+			['t1'],
+			NOW,
+		);
+		const changed = updateSessionTab(
+			store,
+			's1',
+			't1',
+			{title: ' New title ', url: 'https://b.example/page'},
+			NOW + 1,
+		);
+		assert.equal(changed.groups[0].tabs[0].url, 'https://b.example/page');
+		assert.equal(changed.groups[0].tabs[0].title, 'New title');
+		assert.equal(
+			updateSessionTab(store, 's1', 't1', {title: 'x', url: 'nope'}, NOW),
+			store,
+		);
+	});
+});
+
+describe('library statistics', () => {
+	test('counts what is saved and ranks the sites that hold the most links', () => {
+		let store = emptyStore(NOW);
+		store = addColumn(store, 'Work', 'work', NOW);
+		store = addBookmark(
+			store,
+			{url: 'https://www.a.example/1', title: 'A1', columnId: 'work'},
+			'b1',
+			NOW,
+		);
+		store = addBookmark(
+			store,
+			{url: 'https://b.example/', title: 'B', columnId: 'work'},
+			'b2',
+			NOW + 5,
+		);
+		store = addSession(
+			store,
+			{
+				name: 'Big',
+				urls: [
+					'https://a.example/2',
+					'https://a.example/3',
+					'https://c.example/',
+				],
+				folderId: 'unfiled',
+			},
+			's1',
+			['t1', 't2', 't3'],
+			NOW + 10,
+		);
+		const stats = libraryStats(store);
+		assert.equal(stats.sessions, 1);
+		assert.equal(stats.tabs, 3);
+		assert.equal(stats.bookmarks, 2);
+		assert.equal(stats.columns, 1);
+		assert.deepEqual(stats.topSites[0], {host: 'a.example', count: 3});
+		assert.deepEqual(stats.largestSession, {name: 'Big', tabs: 3});
+		assert.equal(stats.since, NOW);
+		assert.deepEqual(libraryStats(emptyStore(NOW)).topSites, []);
+	});
+});
+
+describe('unarchiving a session', () => {
+	test('takes it out of Archived into Unfiled', () => {
+		const base = addSession(
+			emptyStore(NOW),
+			{name: 'S', urls: ['https://a.example/'], folderId: 'unfiled'},
+			's1',
+			['t1'],
+			NOW,
+		);
+		const archived = archiveSession(base, 's1', NOW + 1);
+		assert.equal(isArchivedSession(archived.folders, archived.groups[0]), true);
+		const back = unarchiveSession(archived, 's1', NOW + 2);
+		assert.equal(isArchivedSession(back.folders, back.groups[0]), false);
+		assert.equal(back.groups[0].folderId, 'unfiled');
+	});
+});
+
+describe('the All column', () => {
+	test('lists every bookmark column by column, with the Unfiled ones last', () => {
+		let store = emptyStore(NOW);
+		store = addColumn(store, 'Work', 'work', NOW);
+		store = addColumn(store, 'Home', 'home', NOW);
+		store = addBookmark(
+			store,
+			{url: 'https://h.example/', title: 'H', columnId: 'home'},
+			'b1',
+			NOW,
+		);
+		store = addBookmark(
+			store,
+			{url: 'https://w.example/', title: 'W', columnId: 'work'},
+			'b2',
+			NOW,
+		);
+		store = {
+			...store,
+			bookmarks: [
+				...store.bookmarks,
+				{
+					id: 'b3',
+					title: 'X',
+					url: 'https://x.example/',
+					columnId: 'gone',
+					createdAt: NOW,
+					updatedAt: NOW,
+				},
+			],
+		};
+		assert.deepEqual(
+			allBookmarks(store).map((bookmark) => bookmark.id),
+			['b2', 'b1', 'b3'],
+		);
 	});
 });
 

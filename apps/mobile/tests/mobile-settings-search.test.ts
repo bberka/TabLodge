@@ -7,7 +7,7 @@ import {
 	rowHit,
 	SECTIONS,
 	sectionVisible,
-} from '../src/screens/settings-index';
+} from '../src/screens/settings/settings-index';
 
 const visible = (query: string) =>
 	Object.values(SECTIONS)

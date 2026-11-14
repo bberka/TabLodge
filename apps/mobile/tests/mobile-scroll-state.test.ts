@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {beforeEach, test} from 'vite-plus/test';
 import type {NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
-import {isScrolledDown, resetScroll, trackScroll} from '../src/scroll-state';
+import {isScrolledDown, resetScroll, trackScroll} from '../src/ui/scroll-state';
 
 const scrollTo = (y: number) => {
 	trackScroll({

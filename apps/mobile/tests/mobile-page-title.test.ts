@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {readPage} from '../src/page-title';
+import {readPage} from '../src/library/page-title';
 
 describe('reading a page', () => {
 	test('takes the title tag, decoding entities and collapsing whitespace', () => {

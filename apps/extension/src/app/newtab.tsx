@@ -34,6 +34,7 @@ import {
 	History,
 	Inbox,
 	LayoutGrid,
+	Library,
 	MoreHorizontal,
 	PanelLeft,
 	Pencil,
@@ -99,6 +100,7 @@ import {AccentPalette} from './accent-palette';
 import {
 	COLUMN_COLOR_BAR,
 	COLUMN_COLOR_EDGE,
+	COLUMN_COLOR_SOFT,
 	COLUMN_COLOR_TEXT,
 	columnColorVars,
 } from './column-color';
@@ -262,6 +264,10 @@ type FocusColumnItem = {
 	count: number;
 	column: BookmarkColumnData;
 	unfiled?: boolean;
+	/**
+	The All item, which lists every bookmark and is not a column.
+	*/
+	all?: boolean;
 };
 
 /**
@@ -274,6 +280,15 @@ const UNFILED_COLUMN: BookmarkColumnData = {
 	name: 'Unfiled',
 	createdAt: 0,
 	isDefault: true,
+};
+/**
+The system column of the Focus view that lists every bookmark of every column. It is not stored.
+*/
+const ALL_COLUMN: BookmarkColumnData = {
+	id: 'bookmark-all',
+	name: 'All',
+	createdAt: 0,
+	isDefault: false,
 };
 const MoveBookmarkIcon = ACTION_ICONS.move;
 /**
@@ -314,10 +329,7 @@ function NewTab() {
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
-	const [backupRequest, setBackupRequest] = useState<{
-		data: ExportData;
-		singleColumn: boolean;
-	} | null>(null);
+	const [backupRequest, setBackupRequest] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
@@ -426,7 +438,7 @@ function NewTab() {
 		: COLUMN_PAGE;
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
-	const bookmarkView = settings.bookmarkBoardView ?? 'board';
+	const bookmarkView = settings.bookmarkBoardView ?? 'focus';
 	const compactBoard = settings.bookmarkDensity === 'compact';
 	const bookmarkGridTemplateColumns = bookmarkGridTemplate(
 		settings.bookmarkColumnWidth ?? 'default',
@@ -555,6 +567,16 @@ function NewTab() {
 		previousGroupsRef.current = {all, shown};
 		return {all, shown};
 	}, [bookmarks, filteredBookmarks]);
+	// What the Focus view's All item lists: every column's bookmarks in the columns' order, the Unfiled ones last.
+	const everyBookmark = useMemo(() => {
+		const ids = [...columns.map((column) => column.id), UNFILED_COLUMN.id];
+		const join = (grouped: Map<string, Bookmark[]>) =>
+			ids.flatMap((id) => grouped.get(id) ?? NO_BOOKMARKS);
+		return {
+			all: join(columnBookmarks.all),
+			shown: join(columnBookmarks.shown),
+		};
+	}, [columns, columnBookmarks]);
 
 	// With "Use TabLodge for new tabs" off, a tab the browser opened as a new tab is sent on to the browser's page
 	// (the service worker decides whether this tab was one); any other visit shows the dashboard as usual.
@@ -1791,24 +1813,6 @@ function NewTab() {
 		);
 	}
 
-	function openSelectedBookmarkExport() {
-		const selected = bookmarks.filter((bookmark) =>
-			selectedBookmarks.has(bookmark.id),
-		);
-		const columnIds = new Set(selected.map((bookmark) => bookmark.columnId));
-		setBackupRequest({
-			data: {
-				kind: 'bookmarks',
-				columns: [
-					...columns.filter((column) => columnIds.has(column.id)),
-					...(columnIds.has(UNFILED_COLUMN.id) ? [UNFILED_COLUMN] : []),
-				],
-				bookmarks: selected,
-			},
-			singleColumn: false,
-		});
-	}
-
 	function shareSelectedBookmarks() {
 		const selected = bookmarks.filter((bookmark) =>
 			selectedBookmarks.has(bookmark.id),
@@ -1825,7 +1829,19 @@ function NewTab() {
 				),
 			},
 		].filter((group) => group.tabs.length > 0);
-		openShare({title: 'Selected bookmarks', groups});
+		const columnIds = new Set(selected.map((bookmark) => bookmark.columnId));
+		openShare({
+			title: 'Selected bookmarks',
+			groups,
+			data: {
+				kind: 'bookmarks',
+				columns: [
+					...columns.filter((column) => columnIds.has(column.id)),
+					...(columnIds.has(UNFILED_COLUMN.id) ? [UNFILED_COLUMN] : []),
+				],
+				bookmarks: selected,
+			},
+		});
 	}
 
 	function openBookmarkBackup() {
@@ -1834,23 +1850,7 @@ function NewTab() {
 			return;
 		}
 
-		setBackupRequest({
-			data: {kind: 'bookmarks', columns, bookmarks},
-			singleColumn: false,
-		});
-	}
-
-	function openColumnExport(column: BookmarkColumnData) {
-		setBackupRequest({
-			data: {
-				kind: 'bookmarks',
-				columns: [column],
-				bookmarks: bookmarks.filter(
-					(bookmark) => bookmark.columnId === column.id,
-				),
-			},
-			singleColumn: true,
-		});
+		setBackupRequest({kind: 'bookmarks', columns, bookmarks});
 	}
 
 	function shareBookmarks(column?: BookmarkColumnData) {
@@ -1872,6 +1872,13 @@ function NewTab() {
 								label: column.name,
 								description: plural(groupFor(column).tabs.length, 'bookmark'),
 								groups: [groupFor(column)],
+								data: {
+									kind: 'bookmarks' as const,
+									columns: [column],
+									bookmarks: bookmarks.filter(
+										(bookmark) => bookmark.columnId === column.id,
+									),
+								},
 							},
 						]
 					: []),
@@ -1880,6 +1887,7 @@ function NewTab() {
 					label: 'All bookmarks',
 					description: plural(bookmarks.length, 'bookmark'),
 					groups: everything,
+					data: {kind: 'bookmarks', columns, bookmarks},
 				},
 			],
 		});
@@ -2132,7 +2140,6 @@ function NewTab() {
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
 		share: (column) => shareBookmarks(column),
-		exportColumn: openColumnExport,
 		add: (column) => openBookmarkEditor(null, column.id),
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
@@ -2196,6 +2203,17 @@ function NewTab() {
 	const railAxis = () =>
 		globalThis.matchMedia('(min-width: 768px)').matches ? 'y' : 'x';
 	const focusItems: FocusColumnItem[] = [
+		...(settings.showAllBookmarks === false
+			? []
+			: [
+					{
+						id: ALL_COLUMN.id,
+						name: ALL_COLUMN.name,
+						count: bookmarks.length,
+						column: ALL_COLUMN,
+						all: true,
+					},
+				]),
 		...columns.map((column) => ({
 			id: column.id,
 			name: column.name,
@@ -2402,15 +2420,6 @@ function NewTab() {
 							variant="outline"
 							size="sm"
 							disabled={busy === 'bookmark-batch'}
-							onClick={openSelectedBookmarkExport}
-						>
-							<Download className="h-4 w-4" />
-							Export
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={busy === 'bookmark-batch'}
 							onClick={shareSelectedBookmarks}
 						>
 							<Share2 className="h-4 w-4" />
@@ -2494,15 +2503,18 @@ function NewTab() {
 						<ul className="flex gap-1 overflow-x-auto pb-1 md:block md:space-y-1 md:overflow-visible md:pb-0">
 							{focusItems.map((item) => {
 								const active = item.id === activeFocus?.id;
-								const ItemIcon = item.unfiled
-									? Inbox
-									: getIcon(item.icon, DEFAULT_COLUMN_ICON).component;
+								const ItemIcon = item.all
+									? Library
+									: item.unfiled
+										? Inbox
+										: getIcon(item.icon, DEFAULT_COLUMN_ICON).component;
 								const itemIndex = columns.findIndex(
 									(column) => column.id === item.id,
 								);
 								const itemSiblings =
 									columnBookmarks.all.get(item.id) ?? NO_BOOKMARKS;
-								const railColor = item.unfiled
+								const isSystem = item.unfiled || item.all === true;
+								const railColor = isSystem
 									? undefined
 									: columnColorVars(item.column.color);
 								const railButton = (
@@ -2515,16 +2527,23 @@ function NewTab() {
 										className={cn(
 											'flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm md:whitespace-normal',
 											compactBoard ? 'py-1' : 'py-1.5',
+											// A column with a color is active in that color: its text, wash, and edge; the rest use the accent.
 											active
-												? 'bg-primary/10 font-semibold text-primary'
+												? railColor
+													? cn(
+															'font-semibold',
+															COLUMN_COLOR_TEXT,
+															COLUMN_COLOR_SOFT,
+															COLUMN_COLOR_EDGE,
+														)
+													: 'bg-primary/10 font-semibold text-primary'
 												: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-											active && railColor && COLUMN_COLOR_EDGE,
 											railDrop?.id === item.id &&
 												!railDrop.position &&
 												'ring-2 ring-primary ring-offset-2 ring-offset-background',
 										)}
 										onDragOver={(event) => {
-											if (!acceptsDrop(event, !item.unfiled)) {
+											if (item.all || !acceptsDrop(event, !item.unfiled)) {
 												return;
 											}
 
@@ -2555,7 +2574,7 @@ function NewTab() {
 										}}
 										onDrop={(event) => {
 											setRailDrop(null);
-											if (!acceptsDrop(event, !item.unfiled)) {
+											if (item.all || !acceptsDrop(event, !item.unfiled)) {
 												return;
 											}
 
@@ -2572,7 +2591,7 @@ function NewTab() {
 										/>
 										<span className="min-w-0 flex-1 truncate">{item.name}</span>
 										<Badge
-											variant={active ? 'accent' : 'secondary'}
+											variant={active && !railColor ? 'accent' : 'secondary'}
 											className="ml-1"
 										>
 											{item.count}
@@ -2583,8 +2602,8 @@ function NewTab() {
 									<li
 										key={item.id}
 										// The item, not the button, is the drag handle: Firefox does not drag buttons.
-										draggable={!item.unfiled}
-										data-drag-column={item.unfiled ? undefined : item.id}
+										draggable={!isSystem}
+										data-drag-column={isSystem ? undefined : item.id}
 										className="relative shrink-0 md:block"
 										onDragStart={(event) => handleInternalDragStart(event)}
 										onDragEnd={() => {
@@ -2603,7 +2622,7 @@ function NewTab() {
 												)}
 											/>
 										)}
-										{item.unfiled ? (
+										{isSystem ? (
 											railButton
 										) : (
 											<ActionContextMenu
@@ -2644,15 +2663,26 @@ function NewTab() {
 								column={activeFocus.column}
 								selected={selectedBookmarks}
 								selectionMode={bookmarkSelectionMode}
-								canMoveEarlier={!activeFocus.unfiled && activeFocusIndex > 0}
+								canMoveEarlier={
+									!activeFocus.unfiled &&
+									!activeFocus.all &&
+									activeFocusIndex > 0
+								}
 								canMoveLater={
-									!activeFocus.unfiled && activeFocusIndex < columns.length - 1
+									!activeFocus.unfiled &&
+									!activeFocus.all &&
+									activeFocusIndex < columns.length - 1
 								}
 								bookmarks={
-									columnBookmarks.shown.get(activeFocus.id) ?? NO_BOOKMARKS
+									activeFocus.all
+										? everyBookmark.shown
+										: (columnBookmarks.shown.get(activeFocus.id) ??
+											NO_BOOKMARKS)
 								}
 								siblings={
-									columnBookmarks.all.get(activeFocus.id) ?? NO_BOOKMARKS
+									activeFocus.all
+										? everyBookmark.all
+										: (columnBookmarks.all.get(activeFocus.id) ?? NO_BOOKMARKS)
 								}
 								pageSize={bookmarkPageSize}
 								dropIndicator={
@@ -2665,16 +2695,22 @@ function NewTab() {
 								urlSettings={urlSettings}
 								quickActions={quickActions}
 								actions={boardActions}
-								simpleHeader={activeFocus.unfiled}
+								simpleHeader={activeFocus.unfiled || activeFocus.all}
 								allowColumnDrag={false}
-								allowColumnDrop={!activeFocus.unfiled}
+								allowColumnDrop={!activeFocus.unfiled && !activeFocus.all}
 								ariaLabel={
-									activeFocus.unfiled ? 'Unfiled bookmarks' : undefined
+									activeFocus.all
+										? 'All bookmarks'
+										: activeFocus.unfiled
+											? 'Unfiled bookmarks'
+											: undefined
 								}
 								emptyMessage={
-									activeFocus.unfiled
-										? 'No columns yet. New bookmarks will be kept here until you add a column.'
-										: undefined
+									activeFocus.all
+										? 'No bookmarks yet.'
+										: activeFocus.unfiled
+											? 'No columns yet. New bookmarks will be kept here until you add a column.'
+											: undefined
 								}
 							/>
 						</div>
@@ -2859,9 +2895,8 @@ function NewTab() {
 				/>
 				<BackupDialog
 					state={state}
-					data={backupRequest?.data ?? null}
+					data={backupRequest}
 					open={Boolean(backupRequest)}
-					singleColumn={backupRequest?.singleColumn ?? false}
 					showStatus={showStatus}
 					onOpenChange={(open) => !open && setBackupRequest(null)}
 				/>
@@ -3483,7 +3518,6 @@ Handlers the board shares with every column and bookmark. The object never chang
 type BoardActions = {
 	bookmark: OnBookmarkAction;
 	share: (column: BookmarkColumnData) => void;
-	exportColumn: (column: BookmarkColumnData) => void;
 	add: (column: BookmarkColumnData) => void;
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
@@ -3563,13 +3597,6 @@ function columnMenuActions(
 			icon: Share2,
 			disabled: siblings.length === 0,
 			onSelect: () => actions.share(column),
-		},
-		{
-			id: 'export',
-			label: 'Export column',
-			icon: Download,
-			disabled: siblings.length === 0,
-			onSelect: () => actions.exportColumn(column),
 		},
 		{type: 'separator'},
 		{

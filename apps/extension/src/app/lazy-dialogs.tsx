@@ -113,6 +113,7 @@ export function useShareDialog(showStatus: ShowStatus) {
 					title={shown?.title}
 					groups={shown?.groups}
 					sources={shown?.sources}
+					data={shown?.data}
 					showStatus={showStatus}
 					onOpenChange={setOpen}
 				/>
