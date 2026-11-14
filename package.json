@@ -43,6 +43,7 @@
 		"mobile:start": "pnpm --filter tablodge-mobile start",
 		"mobile:android": "pnpm --filter tablodge-mobile android",
 		"mobile:doctor": "pnpm --filter tablodge-mobile doctor",
+		"mobile:apk": "node scripts/build-apk.ts",
 		"mobile:export": "pnpm --filter tablodge-mobile exec expo export --platform android",
 		"server:build": "pnpm --filter tablodge-sync-server build",
 		"server:start": "pnpm --filter tablodge-sync-server start",
