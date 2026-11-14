@@ -4,6 +4,11 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark, Store} from '../../../extension/src/shared/types';
 import {ActionSheet, type SheetAction} from '../action-sheet';
 import {useBackAction} from '../back-actions';
+import {
+	findDuplicateBookmarks,
+	removalIds,
+} from '../../../extension/src/shared/duplicate-bookmarks';
+import {confirm, notify} from '../dialog';
 import {useChipLook} from '../column-icons';
 import {
 	bookmarksIn,
@@ -174,6 +179,23 @@ export function BookmarksScreen({
 						),
 					);
 				},
+			},
+		);
+	};
+
+	const removeDuplicates = () => {
+		const ids = removalIds(findDuplicateBookmarks(store.bookmarks), new Map());
+		if (ids.length === 0) {
+			notify('No duplicates', 'Every saved address appears once.');
+			return;
+		}
+
+		confirm(
+			`Remove ${ids.length} duplicate ${ids.length === 1 ? 'bookmark' : 'bookmarks'}?`,
+			'Each address keeps its oldest copy. You can undo this right after.',
+			{label: `Remove ${ids.length}`, destructive: true},
+			() => {
+				remove(new Set(ids));
 			},
 		);
 	};
@@ -498,6 +520,16 @@ export function BookmarksScreen({
 												onPress() {
 													setSheet({kind: 'column', id: columnId});
 												},
+											},
+										]
+									: []),
+								...(!searching && store.bookmarks.length > 1
+									? [
+											{
+												icon: 'copy-outline' as const,
+												label: 'Remove duplicates',
+												hint: 'Keep the oldest copy of each saved address',
+												onPress: removeDuplicates,
 											},
 										]
 									: []),

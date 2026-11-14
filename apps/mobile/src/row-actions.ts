@@ -57,7 +57,11 @@ export function sessionActionLook(
 		}
 
 		case 'rename': {
-			return {label: 'Rename', icon: 'create-outline', color: colors.warn};
+			return {
+				label: 'Edit details',
+				icon: 'create-outline',
+				color: colors.warn,
+			};
 		}
 
 		case 'move': {

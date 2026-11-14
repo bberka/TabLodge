@@ -20,6 +20,7 @@ import {
 	archiveSession,
 	canChangeFolder,
 	deleteFolder,
+	describeSession,
 	folderNameProblem,
 	hostOf,
 	markSessionOpened,
@@ -66,7 +67,7 @@ const PREVIEW_TABS = 4;
 const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
 	['expand', 'Show or hide tabs'],
 	['open', 'Open all tabs'],
-	['rename', 'Rename'],
+	['rename', 'Edit details'],
 	['color', 'Change color'],
 	['move', 'Move to folder'],
 	['share', 'Share links'],
@@ -220,6 +221,11 @@ function SessionCardView({
 							<Text numberOfLines={1} style={{color: colors.muted}}>
 								{count} · {folderName} · {shortDate(session.updatedAt)}
 							</Text>
+							{session.description !== '' && !prefs.compactSessions && (
+								<Text numberOfLines={2} style={{color: colors.muted}}>
+									{session.description}
+								</Text>
+							)}
 							{session.deviceName &&
 								prefs.showSavedOn &&
 								!prefs.compactSessions && (
@@ -714,10 +720,17 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 			/>
 			<RenameSheet
 				session={renaming}
-				onSave={(name) => {
+				title="Edit details"
+				description={renaming?.description ?? ''}
+				onSave={(name, description) => {
 					if (renaming) {
 						void edit((current) =>
-							renameSession(current, renaming.id, name, Date.now()),
+							describeSession(
+								renameSession(current, renaming.id, name, Date.now()),
+								renaming.id,
+								description ?? '',
+								Date.now(),
+							),
 						);
 					}
 

@@ -41,6 +41,7 @@ import {
 	sessionsIn,
 	canChangeFolder,
 	deleteFolder,
+	describeSession,
 	renameFolder,
 } from '../src/library';
 import {sampleStore} from '../src/seed';
@@ -775,5 +776,60 @@ describe('session folders', () => {
 			false,
 		);
 		assert.equal(next.groups[0].folderId, 'unfiled');
+	});
+});
+
+describe('moving a session into a folder', () => {
+	const store = (folder: Record<string, unknown>) => ({
+		...addSession(
+			{
+				...emptyStore(NOW),
+				folders: [
+					{id: 'unfiled', name: 'Unfiled', createdAt: NOW, isDefault: true},
+					{
+						id: 'work',
+						name: 'Work',
+						createdAt: NOW,
+						isDefault: false,
+						...folder,
+					},
+				],
+			},
+			{name: 'Plans', urls: ['https://a.example/'], folderId: 'unfiled'},
+			's1',
+			['t1'],
+			NOW,
+		),
+	});
+
+	test('takes the folder color when the folder colors its sessions', () => {
+		const next = moveSession(
+			store({color: 'red', colorSessions: true}),
+			's1',
+			'work',
+			NOW + 1,
+		);
+		assert.equal(next.groups[0].color, 'red');
+	});
+
+	test('keeps its own color when the folder does not ask for one', () => {
+		const next = moveSession(store({color: 'red'}), 's1', 'work', NOW + 1);
+		assert.equal(next.groups[0].color, undefined);
+	});
+});
+
+describe('describing a session', () => {
+	test('sets and trims the description, cut to the extension limit', () => {
+		const store = addSession(
+			emptyStore(NOW),
+			{name: 'Plans', urls: ['https://a.example/']},
+			's1',
+			['t1'],
+			NOW,
+		);
+		const next = describeSession(store, 's1', '  What it is  ', NOW + 1);
+		assert.equal(next.groups[0].description, 'What it is');
+		const long = describeSession(store, 's1', 'x'.repeat(20_000), NOW + 1);
+		assert.equal(long.groups[0].description.length, 10_502);
 	});
 });

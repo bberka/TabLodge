@@ -914,6 +914,30 @@ export function renameSession(
 		: store;
 }
 
+// The longest description the extension keeps (`SESSION_TEXT_MAX` in its library-normalize.ts).
+const DESCRIPTION_MAX = 10_502;
+
+/**
+Sets a session's description, which the extension shows under its name and syncs. It is cut to the extension's limit.
+*/
+export function describeSession(
+	store: Store,
+	id: string,
+	description: string,
+	now: number,
+): Store {
+	return changeSession(
+		store,
+		id,
+		(session) => ({
+			...session,
+			description: description.trim().slice(0, DESCRIPTION_MAX),
+			updatedAt: now,
+		}),
+		now,
+	);
+}
+
 /**
 Puts a session in another folder. An unknown folder or session leaves the store as it was.
 */
@@ -923,14 +947,25 @@ export function moveSession(
 	folderId: string,
 	now: number,
 ): Store {
-	return store.folders.some((folder) => folder.id === folderId)
-		? changeSession(
-				store,
-				id,
-				(session) => ({...session, folderId, updatedAt: now}),
-				now,
-			)
-		: store;
+	const target = store.folders.find((folder) => folder.id === folderId);
+	if (!target) {
+		return store;
+	}
+
+	// A folder that colors its sessions gives a session moved into it the folder's color, as in the extension.
+	return changeSession(
+		store,
+		id,
+		(session) => ({
+			...session,
+			folderId,
+			updatedAt: now,
+			...(session.folderId !== folderId &&
+				target.colorSessions &&
+				target.color && {color: target.color}),
+		}),
+		now,
+	);
 }
 
 /**

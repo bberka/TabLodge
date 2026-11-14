@@ -18,8 +18,11 @@ import {
 import {LoadMore} from '../shared/load-more';
 import type {Bookmark, BookmarkColumn} from '../shared/types';
 import {displayUrl} from '../shared/url-display';
+import {
+	findDuplicateBookmarks,
+	removalIds,
+} from '../shared/duplicate-bookmarks';
 import {plural, send, type ShowStatus} from './common';
-import {findDuplicateBookmarks, removalIds} from './duplicate-bookmarks';
 
 const GROUPS_PER_BATCH = 25;
 /**

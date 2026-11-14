@@ -13,6 +13,7 @@ export function RenameSheet({
 	session,
 	title = 'Rename session',
 	label = 'Session name',
+	description,
 	check,
 	onSave,
 	onClose,
@@ -20,17 +21,23 @@ export function RenameSheet({
 	session: {id: string; name: string} | undefined;
 	title?: string;
 	label?: string;
+	/**
+	When given, a description field is shown too, starting with this text, and `onSave` receives it.
+	*/
+	description?: string;
 	check?: (name: string) => string | undefined;
-	onSave: (name: string) => void;
+	onSave: (name: string, description?: string) => void;
 	onClose: () => void;
 }) {
 	const colors = useColors();
 	const [name, setName] = useState('');
+	const [notes, setNotes] = useState('');
 	const id = session?.id;
 	const original = session?.name ?? '';
 	useEffect(() => {
 		setName(original);
-	}, [id, original]);
+		setNotes(description ?? '');
+	}, [id, original, description]);
 	const problem = name.trim() === '' ? 'Enter a name' : check?.(name);
 	return (
 		<BottomSheet
@@ -53,17 +60,26 @@ export function RenameSheet({
 					error={problem}
 					onChangeText={setName}
 					onSubmitEditing={() => {
-						if (!problem) {
+						if (!problem && description === undefined) {
 							onSave(name);
 						}
 					}}
 				/>
+				{description !== undefined && (
+					<Field
+						multiline
+						label="Description (optional)"
+						value={notes}
+						placeholder="What this session is for"
+						onChangeText={setNotes}
+					/>
+				)}
 				<Button
 					label="Save"
 					icon="checkmark"
 					disabled={Boolean(problem)}
 					onPress={() => {
-						onSave(name);
+						onSave(name, description === undefined ? undefined : notes);
 					}}
 				/>
 			</View>
