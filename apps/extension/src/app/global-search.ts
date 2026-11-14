@@ -2,8 +2,8 @@
 // with the shared fuzzy scorer, groups the hits by type, and recognizes typed web addresses.
 import {fold, scoreFolded, searchTerms} from '../shared/fuzzy';
 import type {Bookmark, BookmarkColumn, Folder, Session} from '../shared/types';
+import {siteName} from '../shared/web-url';
 import {archivedFolderId} from './session-folders';
-import {siteName} from './web-url';
 
 export type FinderKind =
 	| 'url'

@@ -5,6 +5,7 @@ the rules that need no component, so they run in tests without a browser.
 */
 import type {DragEvent} from 'react';
 import type {InsertPosition, LinkEntry} from '../shared/types';
+import {siteName, webUrl} from '../shared/web-url';
 import {
 	BOOKMARK_DRAG_TYPE,
 	applyLinkDrag,
@@ -12,7 +13,6 @@ import {
 	dragPayloadKind,
 	parseDraggedLink,
 } from './interaction-actions';
-import {siteName, webUrl} from './web-url';
 
 export type DragKind = NonNullable<ReturnType<typeof dragPayloadKind>>;
 

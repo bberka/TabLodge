@@ -104,6 +104,8 @@ import type {
 } from '../shared/types';
 import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {displayUrl as simplifiedUrl} from '../shared/url-display';
+import type {ExportData} from '../shared/export-formats';
+import {hostOf, webUrl} from '../shared/web-url';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -120,7 +122,6 @@ import {
 } from './common';
 import {defaultBookmarkColumnId} from './default-column';
 import {BackupDialog, ImportDialog, useShareDialog} from './lazy-dialogs';
-import type {ExportData} from './export-formats';
 import {
 	activateSessionTitle,
 	applyLinkDrag,
@@ -137,7 +138,6 @@ import {
 } from './session-folders';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
-import {hostOf, webUrl} from './web-url';
 import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';

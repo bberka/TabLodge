@@ -16,6 +16,7 @@ import {
 	CardTitle,
 } from '../shared/ui';
 import type {ActionFailure, ActionResult, TabLodgeState} from '../shared/types';
+import {webUrl} from '../shared/web-url';
 import {PrivateWindowMark} from './private-window-appearance';
 import {PrivateLockButton} from './private-lock-ui';
 import {
@@ -28,7 +29,6 @@ import {
 import {send} from './message-client';
 import {PROJECT} from './project';
 import {hostIsExcluded} from './excluded-sites';
-import {webUrl} from './web-url';
 import {plural} from './plural';
 import {cn} from '@/lib/utils';
 

@@ -1,7 +1,7 @@
 // Compact drag previews for the session manager: a small card instead of the full-width row.
 // The card is built offscreen, handed to setDragImage, and removed right after the browser snapshots it.
+import {hostOf} from '../shared/web-url';
 import {faviconUrl} from './favicon';
-import {hostOf} from './web-url';
 
 type PreviewLink = {url: string; title?: string};
 type ImageTarget = {

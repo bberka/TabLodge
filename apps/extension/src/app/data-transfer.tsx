@@ -60,10 +60,6 @@ import type {
 	TitlePolicy,
 } from '../shared/types';
 import {looksEncrypted} from '../shared/crypto-envelope';
-import {offerUndo} from './recovery-core';
-import {messageOf, send, type ShowStatus} from './common';
-import {mergeSummary} from './merge-summary';
-import {writeClipboard} from './interaction-actions';
 import {
 	shareCounts,
 	shareHtmlPage,
@@ -73,7 +69,7 @@ import {
 	shareRich,
 	type ShareGroup,
 	type ShareMethod,
-} from './share-formats';
+} from '../shared/share-formats';
 import {
 	bookmarkColumnExportChoices,
 	buildExport,
@@ -85,7 +81,7 @@ import {
 	type ExportChoice,
 	type ExportFormat,
 	type ExportKind,
-} from './export-formats';
+} from '../shared/export-formats';
 import {
 	ImportFormatError,
 	MAX_IMPORT_BYTES,
@@ -96,9 +92,13 @@ import {
 	sessionImportPayload,
 	type ImportKind,
 	type ParsedImport,
-} from './import-formats';
+} from '../shared/import-formats';
+import {fileNamePrefix} from '../shared/backup-format';
+import {offerUndo} from './recovery-core';
+import {messageOf, send, type ShowStatus} from './common';
+import {mergeSummary} from './merge-summary';
+import {writeClipboard} from './interaction-actions';
 import {PROJECT} from './project';
-import {fileNamePrefix} from './backup-format';
 import {
 	FullBackupError,
 	buildFullBackup,

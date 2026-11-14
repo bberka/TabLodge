@@ -1,7 +1,7 @@
 // Pure builders for every backup/export format (no DOM or chrome.* access), shared by the backup
 // dialog and tested in Vitest. JSON is the full, re-importable backup; the others trade fidelity
 // for portability (HTML), analysis (CSV) or readability (Markdown, plain URLs).
-import type {Bookmark, BookmarkColumn, Folder, Session} from '../shared/types';
+import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
 import {
 	BACKUP_VERSION,
 	BOOKMARKS_FORMAT_ID,

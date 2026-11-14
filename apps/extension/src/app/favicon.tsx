@@ -2,7 +2,7 @@ import {memo, useState} from 'react';
 import {isFirefox} from '../shared/browser';
 import {displayUrl} from '../shared/url-display';
 import type {Settings} from '../shared/types';
-import {hostOf} from './web-url';
+import {hostOf} from '../shared/web-url';
 import {InsecureMarkFor} from './insecure-mark';
 
 const devFaviconFor = (url: string) => {

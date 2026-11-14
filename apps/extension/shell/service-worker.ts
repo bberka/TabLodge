@@ -5,7 +5,7 @@ import {
 	BACKUP_VERSION,
 	FULL_BACKUP_FORMAT_ID,
 	FULL_BACKUP_VERSION,
-} from '../src/app/backup-format';
+} from '../src/shared/backup-format';
 import {isAccent} from '../src/shared/accent-colors';
 import {
 	LINK_COLUMN_PREFIX,

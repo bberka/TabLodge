@@ -91,6 +91,8 @@ import type {
 	Settings,
 	BookmarkQuickAction,
 } from '../shared/types';
+import {siteName, webUrl} from '../shared/web-url';
+import type {ExportData} from '../shared/export-formats';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {AccentPalette} from './accent-palette';
@@ -149,7 +151,6 @@ import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {bookmarkGridTemplate} from './bookmark-layout';
-import {siteName, webUrl} from './web-url';
 import {
 	handleInternalDragEnd,
 	handleInternalDragStart,
@@ -162,7 +163,6 @@ import {
 import {useBookmarkSelection} from './bookmark-selection';
 import {InsecureMarkFor} from './insecure-mark';
 import {openLink, openOwnPage} from './link-target';
-import type {ExportData} from './export-formats';
 import {
 	initialSearchQuery,
 	newColumnRequested,

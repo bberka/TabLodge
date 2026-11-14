@@ -1,4 +1,4 @@
-import {webUrl} from './web-url';
+import {webUrl} from '../shared/web-url';
 
 /**
 What Undo needs to put a closed duplicate back where it was.

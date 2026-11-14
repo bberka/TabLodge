@@ -85,6 +85,7 @@ import {
 	sortByQuery,
 	searchTerms,
 } from '../shared/fuzzy';
+import type {ExportData} from '../shared/export-formats';
 import {AccentPalette} from './accent-palette';
 import {
 	EmptyState,
@@ -110,7 +111,6 @@ import {
 	TrashDialog,
 } from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
-import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
 import {
 	excludedHostError,
