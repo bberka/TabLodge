@@ -28,6 +28,7 @@ import {
 	edit,
 	newId,
 	refreshStatus,
+	setSyncedSetting,
 	syncClient,
 	useLibrary,
 	useSyncStatus,
@@ -343,6 +344,24 @@ export function BookmarksScreen({
 						hint: 'Rename it, or change its icon and color',
 						onPress() {
 							setSheet({kind: 'column', id: columnId});
+						},
+					},
+				]
+			: []),
+		...(!isSearching && columnId === ALL_BOOKMARKS_ID
+			? [
+					{
+						icon: 'eye-off-outline' as const,
+						label: 'Hide All',
+						hint: 'Show it again in Settings, under Bookmarks',
+						onPress() {
+							void setSyncedSetting('showAllBookmarks', false);
+							showSnack('All is hidden', {
+								label: 'Undo',
+								run() {
+									void setSyncedSetting('showAllBookmarks', true);
+								},
+							});
 						},
 					},
 				]
