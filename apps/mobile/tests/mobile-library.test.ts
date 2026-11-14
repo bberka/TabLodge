@@ -14,6 +14,7 @@ import {
 	extractUrl,
 	moveBookmarks,
 	removeBookmarks,
+	removedBookmarks,
 	restoreBookmarks,
 	splitShared,
 	searchBookmarks,
@@ -244,13 +245,52 @@ describe('several bookmarks', () => {
 		);
 	});
 
-	test('restores removed bookmarks under new ids', () => {
+	test('restores removed bookmarks under new ids, where they were', () => {
 		const store = build();
-		const gone = store.bookmarks.filter((bookmark) => bookmark.id === 'b');
+		const gone = removedBookmarks(store, new Set(['b']));
 		const without = removeBookmarks(store, new Set(['b']), NOW);
 		const back = restoreBookmarks(without, gone, ['b2'], NOW + 1);
-		assert.deepEqual(ids(back, 'c1'), ['b2', 'a', 'c']);
-		assert.equal(back.bookmarks[0].title, 'b');
+		assert.deepEqual(ids(back, 'c1'), ['a', 'b2', 'c']);
+		assert.equal(
+			back.bookmarks.find((bookmark) => bookmark.id === 'b2')?.title,
+			'b',
+		);
+	});
+
+	test('restores neighbours removed together in their old order, and the first one first', () => {
+		const store = build();
+		const picked = new Set(['a', 'b']);
+		const back = restoreBookmarks(
+			removeBookmarks(store, picked, NOW),
+			removedBookmarks(store, picked),
+			['a2', 'b2'],
+			NOW + 1,
+		);
+		assert.deepEqual(ids(back, 'c1'), ['a2', 'b2', 'c']);
+		const last = new Set(['c']);
+		const again = restoreBookmarks(
+			removeBookmarks(store, last, NOW),
+			removedBookmarks(store, last),
+			['c2'],
+			NOW + 1,
+		);
+		assert.deepEqual(ids(again, 'c1'), ['a', 'b', 'c2']);
+	});
+
+	test('restores into the first column when the old one is gone', () => {
+		const store = build();
+		const gone = removedBookmarks(store, new Set(['b']));
+		const without = deleteColumn(
+			removeBookmarks(store, new Set(['b']), NOW),
+			'c1',
+			'c2',
+			NOW,
+		);
+		const back = restoreBookmarks(without, gone, ['b2'], NOW + 1);
+		assert.equal(
+			back.bookmarks.find((bookmark) => bookmark.id === 'b2')?.columnId,
+			'c2',
+		);
 	});
 });
 
