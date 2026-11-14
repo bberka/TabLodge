@@ -809,7 +809,6 @@ export const SESSION_QUICK_ACTIONS = [
 	'archive',
 	'delete',
 	'share',
-	'export',
 	'edit',
 	'move-up',
 	'move-down',

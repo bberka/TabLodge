@@ -56,7 +56,7 @@ import {openAll, openLink} from '../open-links';
 import {PrivateSwitch} from '../private-switch';
 import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
-import {soften, TARGET, useColors} from '../theme';
+import {type Colors, soften, TARGET, useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
 import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
@@ -69,7 +69,7 @@ import {
 	EditLinkSheet,
 	SaveAsBookmarksSheet,
 } from './session-link-sheets';
-import {openExport, ShareLinksSheet, type ShareTarget} from './transfer-sheets';
+import {openShare} from './transfer-sheets';
 import {FolderSheet, RenameSheet} from './session-sheets';
 
 const PREVIEW_TABS = 4;
@@ -79,7 +79,7 @@ const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
 	['expand', 'Show or hide tabs'],
 	['open', 'Open all tabs'],
 	['rename', 'Edit details'],
-	['share', 'Share links'],
+	['share', 'Share'],
 	['archive', 'Archive'],
 	['delete', 'Delete'],
 	['more', 'More actions'],
@@ -414,7 +414,6 @@ export function SessionsScreen({
 	}>();
 	const [addingToId, setAddingToId] = useState<string>();
 	const [bookmarking, setBookmarking] = useState<BookmarkLinks>();
-	const [shareTarget, setShareTarget] = useState<ShareTarget>();
 	// The folder whose menu is open, from holding down its chip, and the one being renamed.
 	const [folderMenuId, setFolderMenuId] = useState<string>();
 	// The folder whose edit drawer is open, or `{}` for a new one.
@@ -429,7 +428,7 @@ export function SessionsScreen({
 	const folderMenu = folderMenuId
 		? folderMenuFor(folderMenuId, store, folders, {
 				sort: links.sessionSort,
-				share: setShareTarget,
+				colors: colorsNow,
 				edit(id) {
 					setEditingFolder({id});
 				},
@@ -520,7 +519,10 @@ export function SessionsScreen({
 				}
 
 				case 'share': {
-					setShareTarget({title: session.name, sessions: [session]});
+					openShare({
+						title: session.name,
+						data: {kind: 'sessions', groups: [session], folders: store.folders},
+					});
 					break;
 				}
 
@@ -542,7 +544,7 @@ export function SessionsScreen({
 				default:
 			}
 		},
-		[links],
+		[links, store.folders],
 	);
 	const removeTab = useCallback((session: Session, tabId: string) => {
 		if (
@@ -618,21 +620,6 @@ export function SessionsScreen({
 					},
 				},
 				menuItem('share', menuFor),
-				{
-					icon: 'download-outline' as const,
-					label: 'Export',
-					color: colorsNow.info,
-					onPress() {
-						openExport({
-							title: menuFor.name,
-							data: {
-								kind: 'sessions',
-								groups: [menuFor],
-								folders: store.folders,
-							},
-						});
-					},
-				},
 				...(['archive', 'delete'] as const).map((action) =>
 					menuItem(action, menuFor),
 				),
@@ -884,12 +871,6 @@ export function SessionsScreen({
 					setMovingId(undefined);
 				}}
 			/>
-			<ShareLinksSheet
-				target={shareTarget}
-				onClose={() => {
-					setShareTarget(undefined);
-				}}
-			/>
 			<ActionSheet
 				visible={folderMenu !== undefined}
 				title={folderMenu?.title ?? ''}
@@ -1022,12 +1003,12 @@ function folderMenuFor(
 	folders: SessionFolderView[],
 	{
 		sort,
-		share,
+		colors,
 		edit: editFolder,
 		removed,
 	}: {
 		sort: Settings['sessionSort'];
-		share: (target: ShareTarget) => void;
+		colors: Colors;
 		edit: (id: string) => void;
 		removed: (id: string) => void;
 	},
@@ -1041,34 +1022,24 @@ function folderMenuFor(
 	const folder = store.folders.find((entry) => entry.id === id);
 	const actions: SheetAction[] = [];
 	if (sessions.length > 0) {
-		actions.push(
-			{
-				icon: 'share-outline',
-				label: 'Share links',
-				hint: `Every link in ${view.name}`,
-				onPress() {
-					share({title: view.name, sessions});
-				},
+		actions.push({
+			icon: 'share-outline',
+			label: 'Share',
+			onPress() {
+				openShare({
+					title: view.name,
+					data: {kind: 'sessions', groups: sessions, folders: store.folders},
+				});
 			},
-			{
-				icon: 'download-outline',
-				label: 'Export folder',
-				hint: 'JSON, HTML, CSV or Markdown file',
-				onPress() {
-					openExport({
-						title: view.name,
-						data: {kind: 'sessions', groups: sessions, folders: store.folders},
-					});
-				},
-			},
-		);
+		});
 	}
 
 	if (folder && canChangeFolder(folder)) {
 		actions.push(
 			{
-				icon: 'color-palette-outline',
+				icon: 'create-outline',
 				label: 'Edit folder',
+				color: colors.warn,
 				hint: 'Rename it, or change its icon and color',
 				onPress() {
 					editFolder(id);

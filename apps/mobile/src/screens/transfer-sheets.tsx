@@ -9,10 +9,10 @@ import {
 import {
 	buildExport,
 	type ExportData,
-	type ExportFormat,
 	type ExportKind,
 } from '../../../extension/src/shared/export-formats';
 import {
+	type ShareGroup,
 	shareCounts,
 	shareHtmlPage,
 	shareLinks,
@@ -22,7 +22,7 @@ import {
 	LOST_CREDENTIAL_NOTE,
 	validateCredential,
 } from '../../../extension/src/shared/passcode';
-import type {Session, Store} from '../../../extension/src/shared/types';
+import type {Store} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {notify} from '../dialog';
 import {buildBackup} from '../backup';
@@ -229,14 +229,6 @@ export function ImportSheet({
 	);
 }
 
-const EXPORT_FORMAT_CHOICES: Array<{id: ExportFormat; name: string}> = [
-	{id: 'json', name: 'JSON'},
-	{id: 'html', name: 'HTML page'},
-	{id: 'csv', name: 'CSV'},
-	{id: 'markdown', name: 'Markdown'},
-	{id: 'txt', name: 'Links'},
-];
-
 function exportData(store: Store, kind: ExportKind): ExportData {
 	return kind === 'sessions'
 		? {kind, groups: store.groups, folders: store.folders}
@@ -244,24 +236,24 @@ function exportData(store: Store, kind: ExportKind): ExportData {
 }
 
 /**
-One thing to export instead of the whole library: a session, a folder, a column, or some bookmarks.
+One thing to share instead of the whole library: a session, a folder, a column, or some bookmarks.
 */
-export type ExportScope = {title: string; data: ExportData};
+export type ShareScope = {title: string; data: ExportData};
 
-let openScope: ExportScope | undefined;
+let openScope: ShareScope | undefined;
 const scopeListeners = new Set<() => void>();
 
 /**
-Opens the export drawer for one thing. `ExportHost`, mounted once near the root, draws it.
+Opens the share drawer for one thing. `ShareHost`, mounted once near the root, draws it.
 */
-export function openExport(scope: ExportScope | undefined): void {
+export function openShare(scope: ShareScope | undefined): void {
 	openScope = scope;
 	for (const listener of scopeListeners) {
 		listener();
 	}
 }
 
-export function ExportHost() {
+export function ShareHost() {
 	const scope = useSyncExternalStore(
 		(listener) => {
 			scopeListeners.add(listener);
@@ -272,44 +264,83 @@ export function ExportHost() {
 		() => openScope,
 	);
 	return (
-		<ExportSheet
+		<ShareSheet
 			visible={scope !== undefined}
 			scope={scope}
 			onClose={() => {
-				openExport(undefined);
+				openShare(undefined);
 			}}
 		/>
 	);
 }
 
-type ExportWhat = ExportKind | 'backup';
+type Way = 'links' | 'markdown' | 'page' | 'json' | 'csv' | 'html';
+
+const WAYS: Array<{id: Way; name: string}> = [
+	{id: 'links', name: 'Links'},
+	{id: 'markdown', name: 'Markdown'},
+	{id: 'page', name: 'Web page'},
+	{id: 'json', name: 'JSON'},
+	{id: 'csv', name: 'CSV'},
+	{id: 'html', name: 'Bookmarks file'},
+];
 
 /**
-Saves the library, or one part of it, as a file the person can keep or send: sessions or bookmarks in the formats the
-extension exports, or everything as a backup ZIP the extension can restore, with an optional password.
+What a share or export holds, as the named lists of links the text formats take: a session each, or a column each.
 */
-export function ExportSheet({
+function groupsOf(data: ExportData): ShareGroup[] {
+	if (data.kind !== 'bookmarks') {
+		return shareGroupsOf(data.groups ?? []);
+	}
+
+	const names = new Map(
+		(data.columns ?? []).map((column) => [column.id, column.name]),
+	);
+	const grouped = new Map<string, ShareGroup>();
+	for (const bookmark of data.bookmarks ?? []) {
+		const name = names.get(bookmark.columnId) ?? 'Unfiled';
+		const group = grouped.get(name) ?? {name, tabs: []};
+		grouped.set(name, {
+			...group,
+			tabs: [...group.tabs, {title: bookmark.title, url: bookmark.url}],
+		});
+	}
+
+	return [...grouped.values()];
+}
+
+type What = ExportKind | 'backup';
+
+/**
+Shares or saves the library, or one part of it. Links and Markdown go through Android's share sheet as text, a web
+page, JSON, CSV and a bookmarks file as a file; in Settings, Everything makes a backup ZIP the extension can restore,
+with an optional password.
+*/
+export function ShareSheet({
 	visible,
 	scope,
 	onClose,
 }: {
 	visible: boolean;
-	scope?: ExportScope;
+	scope?: ShareScope;
 	onClose: () => void;
 }) {
 	const colors = useColors();
 	const store = useLibrary();
-	const [what, setWhat] = useState<ExportWhat>('sessions');
-	const [format, setFormat] = useState<ExportFormat>('json');
+	const [what, setWhat] = useState<What>('sessions');
+	const [way, setWay] = useState<Way>('links');
 	const [password, setPassword] = useState('');
 	const [busy, setBusy] = useState(false);
 	const sessions = store.groups.length;
 	const bookmarks = store.bookmarks.length;
 	const isBackup = scope === undefined && what === 'backup';
-	const empty =
-		scope === undefined &&
-		!isBackup &&
-		(what === 'sessions' ? sessions : bookmarks) === 0;
+	const data =
+		scope?.data ??
+		exportData(store, what === 'bookmarks' ? 'bookmarks' : 'sessions');
+	const groups = useMemo(() => groupsOf(data), [data]);
+	const {links} = shareCounts(groups);
+	const title =
+		scope?.title ?? (what === 'bookmarks' ? 'Bookmarks' : 'Sessions');
 	const problem =
 		isBackup && password !== ''
 			? (validateCredential('password', password) ?? undefined)
@@ -321,24 +352,49 @@ export function ExportSheet({
 				const file = await buildBackup(store, APP_NAME, password);
 				await shareBinaryFile(file.filename, file.mime, file.bytes);
 			} else {
-				const data = scope?.data ?? exportData(store, what as ExportKind);
-				const file = buildExport(data, format, {appName: APP_NAME});
-				await shareTextFile(file.filename, file.mime, file.content);
+				switch (way) {
+					case 'links': {
+						await Share.share({title, message: shareLinks(groups)});
+
+						break;
+					}
+
+					case 'markdown': {
+						await Share.share({title, message: shareMarkdown(groups)});
+
+						break;
+					}
+
+					case 'page': {
+						await shareTextFile(
+							`${title.replaceAll(/[^\w-]+/g, '-').slice(0, 40) || 'links'}.html`,
+							'text/html',
+							shareHtmlPage(title, groups, APP_NAME),
+						);
+
+						break;
+					}
+
+					default: {
+						const file = buildExport(data, way, {appName: APP_NAME});
+						await shareTextFile(file.filename, file.mime, file.content);
+					}
+				}
 			}
 
 			setPassword('');
 			onClose();
 		} catch {
-			notify('Could not export', 'Try again.');
+			notify('Could not share', 'Try again.');
 		} finally {
 			setBusy(false);
 		}
 	};
 
 	return (
-		<BottomSheet visible={visible} label="Export" onClose={onClose}>
+		<BottomSheet visible={visible} label="Share" onClose={onClose}>
 			<View style={styles.body}>
-				<Title>{scope ? `Export ${scope.title}` : 'Export'}</Title>
+				<Title>{scope ? `Share ${scope.title}` : 'Share or back up'}</Title>
 				{scope === undefined && (
 					<Chips
 						items={[
@@ -348,7 +404,7 @@ export function ExportSheet({
 						]}
 						selected={what}
 						onSelect={(id) => {
-							setWhat(id as ExportWhat);
+							setWhat(id as What);
 						}}
 					/>
 				)}
@@ -370,97 +426,26 @@ export function ExportSheet({
 					</>
 				) : (
 					<Chips
-						items={EXPORT_FORMAT_CHOICES}
-						selected={format}
+						items={WAYS}
+						selected={way}
 						onSelect={(id) => {
-							setFormat(id as ExportFormat);
+							setWay(id as Way);
 						}}
 					/>
 				)}
 				<Button
-					label="Export"
+					label="Share"
 					icon="share-outline"
-					disabled={empty || Boolean(problem)}
+					disabled={
+						Boolean(problem) ||
+						(!isBackup &&
+							(links === 0 ||
+								(scope === undefined &&
+									(what === 'sessions' ? sessions : bookmarks) === 0)))
+					}
 					loading={busy}
 					onPress={() => void run()}
 				/>
-			</View>
-		</BottomSheet>
-	);
-}
-
-type ShareMethod = 'links' | 'markdown' | 'html';
-
-const SHARE_METHODS: Array<{id: ShareMethod; name: string}> = [
-	{id: 'links', name: 'Links'},
-	{id: 'markdown', name: 'Markdown'},
-	{id: 'html', name: 'HTML page'},
-];
-
-export type ShareTarget = {title: string; sessions: Session[]};
-
-/**
-Shares the links of a session, or of every session in a folder, as plain addresses, as a Markdown list, or as a web
-page the receiver can open.
-*/
-export function ShareLinksSheet({
-	target,
-	onClose,
-}: {
-	target: ShareTarget | undefined;
-	onClose: () => void;
-}) {
-	const colors = useColors();
-	const [method, setMethod] = useState<ShareMethod>('links');
-	const groups = useMemo(
-		() => (target ? shareGroupsOf(target.sessions) : []),
-		[target],
-	);
-	const run = async () => {
-		if (!target) {
-			return;
-		}
-
-		try {
-			if (method === 'html') {
-				await shareTextFile(
-					`${target.title.replaceAll(/[^\w-]+/g, '-').slice(0, 40) || 'links'}.html`,
-					'text/html',
-					shareHtmlPage(target.title, groups, APP_NAME),
-				);
-			} else {
-				await Share.share({
-					title: target.title,
-					message:
-						method === 'markdown' ? shareMarkdown(groups) : shareLinks(groups),
-				});
-			}
-
-			onClose();
-		} catch {
-			notify('Could not share', 'Try again.');
-		}
-	};
-
-	return (
-		<BottomSheet
-			visible={target !== undefined}
-			label="Share links"
-			onClose={onClose}
-		>
-			<View style={styles.body}>
-				<Title>Share links</Title>
-				<Text style={{color: colors.muted}}>
-					{shareCounts(groups).links} links from {target?.title}
-				</Text>
-				<Chips
-					items={SHARE_METHODS}
-					selected={method}
-					onSelect={(id) => {
-						setMethod(id as ShareMethod);
-					}}
-				/>
-				<Button label="Share" icon="share-outline" onPress={() => void run()} />
 			</View>
 		</BottomSheet>
 	);

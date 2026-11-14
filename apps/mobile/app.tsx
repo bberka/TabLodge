@@ -16,7 +16,7 @@ import {runBackAction} from './src/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library-store';
 import {startPreferencesSync} from './src/preferences-sync';
 import {markActive, startPrivateAutoLock} from './src/private-autolock';
-import {ExportHost} from './src/screens/transfer-sheets';
+import {ShareHost} from './src/screens/transfer-sheets';
 import {pausePrivate, startPrivate, wakePrivate} from './src/private-library';
 import {loadPreferences} from './src/preferences';
 import {BookmarksScreen} from './src/screens/bookmarks';
@@ -203,7 +203,7 @@ function Main() {
 			<SnackbarHost />
 			<DialogHost />
 			<PrivateSheetHost />
-			<ExportHost />
+			<ShareHost />
 			<ConnectSheet
 				visible={connecting}
 				onClose={() => {

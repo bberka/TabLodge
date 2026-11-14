@@ -328,10 +328,7 @@ function NewTab() {
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
-	const [backupRequest, setBackupRequest] = useState<{
-		data: ExportData;
-		singleColumn: boolean;
-	} | null>(null);
+	const [backupRequest, setBackupRequest] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
@@ -1815,24 +1812,6 @@ function NewTab() {
 		);
 	}
 
-	function openSelectedBookmarkExport() {
-		const selected = bookmarks.filter((bookmark) =>
-			selectedBookmarks.has(bookmark.id),
-		);
-		const columnIds = new Set(selected.map((bookmark) => bookmark.columnId));
-		setBackupRequest({
-			data: {
-				kind: 'bookmarks',
-				columns: [
-					...columns.filter((column) => columnIds.has(column.id)),
-					...(columnIds.has(UNFILED_COLUMN.id) ? [UNFILED_COLUMN] : []),
-				],
-				bookmarks: selected,
-			},
-			singleColumn: false,
-		});
-	}
-
 	function shareSelectedBookmarks() {
 		const selected = bookmarks.filter((bookmark) =>
 			selectedBookmarks.has(bookmark.id),
@@ -1849,7 +1828,19 @@ function NewTab() {
 				),
 			},
 		].filter((group) => group.tabs.length > 0);
-		openShare({title: 'Selected bookmarks', groups});
+		const columnIds = new Set(selected.map((bookmark) => bookmark.columnId));
+		openShare({
+			title: 'Selected bookmarks',
+			groups,
+			data: {
+				kind: 'bookmarks',
+				columns: [
+					...columns.filter((column) => columnIds.has(column.id)),
+					...(columnIds.has(UNFILED_COLUMN.id) ? [UNFILED_COLUMN] : []),
+				],
+				bookmarks: selected,
+			},
+		});
 	}
 
 	function openBookmarkBackup() {
@@ -1858,23 +1849,7 @@ function NewTab() {
 			return;
 		}
 
-		setBackupRequest({
-			data: {kind: 'bookmarks', columns, bookmarks},
-			singleColumn: false,
-		});
-	}
-
-	function openColumnExport(column: BookmarkColumnData) {
-		setBackupRequest({
-			data: {
-				kind: 'bookmarks',
-				columns: [column],
-				bookmarks: bookmarks.filter(
-					(bookmark) => bookmark.columnId === column.id,
-				),
-			},
-			singleColumn: true,
-		});
+		setBackupRequest({kind: 'bookmarks', columns, bookmarks});
 	}
 
 	function shareBookmarks(column?: BookmarkColumnData) {
@@ -1896,6 +1871,13 @@ function NewTab() {
 								label: column.name,
 								description: plural(groupFor(column).tabs.length, 'bookmark'),
 								groups: [groupFor(column)],
+								data: {
+									kind: 'bookmarks' as const,
+									columns: [column],
+									bookmarks: bookmarks.filter(
+										(bookmark) => bookmark.columnId === column.id,
+									),
+								},
 							},
 						]
 					: []),
@@ -1904,6 +1886,7 @@ function NewTab() {
 					label: 'All bookmarks',
 					description: plural(bookmarks.length, 'bookmark'),
 					groups: everything,
+					data: {kind: 'bookmarks', columns, bookmarks},
 				},
 			],
 		});
@@ -2156,7 +2139,6 @@ function NewTab() {
 	const boardActions = useStableCallbacks<BoardActions>({
 		bookmark: bookmarkAction,
 		share: (column) => shareBookmarks(column),
-		exportColumn: openColumnExport,
 		add: (column) => openBookmarkEditor(null, column.id),
 		openAll: openAllInColumn,
 		edit: openColumnEditor,
@@ -2432,15 +2414,6 @@ function NewTab() {
 						>
 							<MoveBookmarkIcon className="h-4 w-4" />
 							Move
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={busy === 'bookmark-batch'}
-							onClick={openSelectedBookmarkExport}
-						>
-							<Download className="h-4 w-4" />
-							Export
 						</Button>
 						<Button
 							variant="outline"
@@ -2914,9 +2887,8 @@ function NewTab() {
 				/>
 				<BackupDialog
 					state={state}
-					data={backupRequest?.data ?? null}
+					data={backupRequest}
 					open={Boolean(backupRequest)}
-					singleColumn={backupRequest?.singleColumn ?? false}
 					showStatus={showStatus}
 					onOpenChange={(open) => !open && setBackupRequest(null)}
 				/>
@@ -3538,7 +3510,6 @@ Handlers the board shares with every column and bookmark. The object never chang
 type BoardActions = {
 	bookmark: OnBookmarkAction;
 	share: (column: BookmarkColumnData) => void;
-	exportColumn: (column: BookmarkColumnData) => void;
 	add: (column: BookmarkColumnData) => void;
 	openAll: (column: BookmarkColumnData) => void;
 	edit: (column: BookmarkColumnData) => void;
@@ -3618,13 +3589,6 @@ function columnMenuActions(
 			icon: Share2,
 			disabled: siblings.length === 0,
 			onSelect: () => actions.share(column),
-		},
-		{
-			id: 'export',
-			label: 'Export column',
-			icon: Download,
-			disabled: siblings.length === 0,
-			onSelect: () => actions.exportColumn(column),
 		},
 		{type: 'separator'},
 		{

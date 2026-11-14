@@ -10,7 +10,7 @@ import {Button} from '../ui';
 import {SettingsCard} from './settings-card';
 import {SECTIONS} from './settings-index';
 import {RestoreSheet, type RestoreSource} from './restore-sheet';
-import {ExportSheet, ImportSheet, type ImportSource} from './transfer-sheets';
+import {ShareSheet, ImportSheet, type ImportSource} from './transfer-sheets';
 
 const plural = (count: number, word: string) =>
 	`${count} ${count === 1 ? word : `${word}s`}`;
@@ -141,7 +141,7 @@ export function DataCard() {
 					},
 					{
 						icon: 'share-outline',
-						label: 'Export or back up',
+						label: 'Share or back up',
 						onPress() {
 							setExporting(true);
 						},
@@ -218,7 +218,7 @@ export function DataCard() {
 					setSource(undefined);
 				}}
 			/>
-			<ExportSheet
+			<ShareSheet
 				visible={exporting}
 				onClose={() => {
 					setExporting(false);

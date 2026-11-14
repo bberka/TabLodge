@@ -10,8 +10,6 @@ import {
 	csvCell,
 	exportCounts,
 	exportFilename,
-	bookmarkColumnExportChoices,
-	sessionExportChoices,
 	type ExportData,
 	type ExportFormat,
 } from '../src/shared/export-formats';
@@ -959,59 +957,6 @@ test('bookmark HTML folders merge by name and unfiled links use the first column
 		payload.bookmarks
 			.filter((entry) => entry.url === bookmarks[0].url)
 			.every((entry) => entry.columnId === 'import-column-1'),
-	);
-});
-
-test('individual export choices include current and all data', () => {
-	const sessionChoices = sessionExportChoices(groups[1], groups, folders);
-	assert.deepEqual(
-		sessionChoices.map(({id, label}) => ({id, label})),
-		[
-			{id: 'current', label: 'Current session'},
-			{id: 'all', label: 'All sessions'},
-		],
-	);
-	const currentSessionExport = JSON.parse(
-		buildExport(sessionChoices[0].data, 'json', {appName: 'TabLodge'}).content,
-	) as {groups: Array<{name: string}>};
-	assert.deepEqual(
-		currentSessionExport.groups.map((entry) => entry.name),
-		[groups[1].name],
-	);
-	const allSessionsExport = JSON.parse(
-		buildExport(sessionChoices[1].data, 'json', {appName: 'TabLodge'}).content,
-	) as {groups: Array<{name: string}>};
-	assert.deepEqual(
-		allSessionsExport.groups.map((entry) => entry.name),
-		groups.map((entry) => entry.name),
-	);
-
-	const columnChoices = bookmarkColumnExportChoices(
-		bookmarksData.columns![0],
-		bookmarksData.columns!,
-		bookmarksData.bookmarks!,
-	);
-	assert.deepEqual(
-		columnChoices.map(({id, label}) => ({id, label})),
-		[
-			{id: 'column', label: bookmarksData.columns![0].name},
-			{id: 'all', label: 'All bookmarks'},
-		],
-	);
-	const columnExport = JSON.parse(
-		buildExport(columnChoices[0].data, 'json', {appName: 'TabLodge'}).content,
-	) as {bookmarks: Array<{url: string}>};
-	assert.deepEqual(
-		columnExport.bookmarks.map((entry) => entry.url),
-		bookmarksData
-			.bookmarks!.filter(
-				(entry) => entry.columnId === bookmarksData.columns![0].id,
-			)
-			.map((entry) => entry.url),
-	);
-	assert.equal(
-		columnChoices[1].data.bookmarks?.length,
-		bookmarksData.bookmarks?.length,
 	);
 });
 

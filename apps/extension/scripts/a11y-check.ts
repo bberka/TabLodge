@@ -494,9 +494,9 @@ async function captureMobileExportEvidence(extensionId: string) {
 		const trigger = page
 			.locator('#session-dev-session-1 [data-move-focus]')
 			.first();
-		await openMenuItemByKeyboard(page, trigger, 'Export session');
+		await openMenuItemByKeyboard(page, trigger, 'Share');
 		await page.getByRole('menu').waitFor({state: 'hidden'});
-		await page.getByRole('radiogroup', {name: 'What to export'}).waitFor();
+		await page.getByRole('radiogroup', {name: 'What to share'}).waitFor();
 		await mkdir(fromRoot('.dev/evidence'), {recursive: true});
 		await page.screenshot({
 			path: fromRoot('.dev/evidence/session-export-440x956-dsf3.png'),
@@ -1395,13 +1395,13 @@ async function main() {
 					await selectQuickActions(
 						options,
 						menu,
-						['Share', 'Export session', 'Edit details', 'Move down'],
+						['Share', 'Move up', 'Edit details', 'Move down'],
 						'session',
 					);
 					for (const label of [
 						'Archive',
 						'Share',
-						'Export session',
+						'Move up',
 						'Edit details',
 						'Move down',
 					]) {
@@ -1417,7 +1417,7 @@ async function main() {
 						);
 					}
 
-					for (const label of ['Delete', 'Move up', 'Switch to this session']) {
+					for (const label of ['Delete', 'Switch to this session']) {
 						const option = menu.getByRole('button', {
 							name: `Add ${label}`,
 							exact: true,
@@ -1436,7 +1436,7 @@ async function main() {
 							JSON.stringify([
 								'archive',
 								'share',
-								'export',
+								'move-up',
 								'edit',
 								'move-down',
 							])
@@ -1463,7 +1463,7 @@ async function main() {
 					for (const label of [
 						'Archive session',
 						'Share session',
-						'Export session',
+						'Move up',
 						'Edit details',
 						'Move down',
 					]) {
@@ -3375,7 +3375,7 @@ async function main() {
 				},
 			);
 			await check(
-				`share and export one session from its menu by keyboard (${theme})`,
+				`share one session, or save it as a file, from its menu by keyboard (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'newtab');
 					await seed(page);
@@ -3408,39 +3408,25 @@ async function main() {
 					assert.doesNotMatch(shareHtml, /<h2>Home lab rebuild<\/h2>/);
 					await shareDialog.waitFor({state: 'hidden'});
 
-					await openMenuItemByKeyboard(page, trigger, 'Export session');
+					await openMenuItemByKeyboard(page, trigger, 'Share');
 					const exportDialog = page.getByRole('dialog');
 					await exportDialog.waitFor();
-					assert.equal(
-						await exportDialog
-							.getByRole('heading', {name: 'Export session'})
-							.count(),
-						1,
-					);
-					assert.equal(
-						await exportDialog
-							.getByRole('radiogroup', {name: 'What to back up'})
-							.count(),
-						0,
-					);
 					const exportScope = exportDialog.getByRole('radiogroup', {
-						name: 'What to export',
+						name: 'What to share',
 					});
 					assert.equal(await exportScope.count(), 1);
 					const allSessions = exportScope.getByRole('radio', {
-						name: 'All sessions',
+						name: /^All sessions/,
 					});
 					await exportScope
-						.getByRole('radio', {name: 'Current session'})
+						.getByRole('radio', {name: new RegExp(`^${name}`)})
 						.focus();
 					await page.keyboard.press('ArrowRight');
 					assert.equal(await allSessions.isChecked(), true);
-					assert.equal(
-						await exportDialog
-							.getByRole('heading', {name: 'Back up sessions'})
-							.count(),
-						1,
-					);
+					const jsonWay = exportDialog.getByRole('radio', {name: /^JSON file/});
+					await jsonWay.focus();
+					await page.keyboard.press('Space');
+					assert.equal(await jsonWay.isChecked(), true);
 					const allSessionsDownloadPromise = page.waitForEvent('download');
 					await exportDialog
 						.getByRole('button', {name: 'Download', exact: true})
@@ -3458,7 +3444,7 @@ async function main() {
 					assert.ok(allSessionsJson.groups.length > 1);
 					await exportDialog.waitFor({state: 'hidden'});
 
-					await openMenuItemByKeyboard(page, trigger, 'Export session');
+					await openMenuItemByKeyboard(page, trigger, 'Share');
 					const currentExportDialog = page.getByRole('dialog');
 					await currentExportDialog.waitFor();
 
@@ -3472,22 +3458,6 @@ async function main() {
 					await currentExportDialog.screenshot({
 						path: fromRoot(`.dev/evidence/session-export-${theme}.png`),
 					});
-					if (
-						process.env.TABLODGE_CAPTURE_EVIDENCE === '1' &&
-						theme === 'light'
-					) {
-						for (const [width, height] of EVIDENCE_VIEWPORTS) {
-							await page.setViewportSize({width, height});
-							await page.screenshot({
-								path: fromRoot(
-									`.dev/evidence/session-export-${width}x${height}.png`,
-								),
-							});
-						}
-
-						await page.setViewportSize({width: 1280, height: 900});
-					}
-
 					const exportDownloadPromise = page.waitForEvent('download');
 					await currentExportDialog
 						.getByRole('button', {name: 'Download', exact: true})
@@ -3543,7 +3513,7 @@ async function main() {
 				},
 			);
 			await check(
-				`bookmark column export offers this column or all bookmarks (${theme})`,
+				`bookmark column share saves this column or all bookmarks as a file (${theme})`,
 				async () => {
 					const page = await openPage(context, extensionId, 'newtab');
 					await seed(page);
@@ -3551,32 +3521,26 @@ async function main() {
 					await setTheme(page, theme);
 					const column = page.locator('section[data-column-id]').first();
 					const trigger = column.locator('header [data-move-focus]');
-					await openMenuItemByKeyboard(page, trigger, 'Export column');
+					await openMenuItemByKeyboard(page, trigger, 'Share');
 					const dialog = page.getByRole('dialog');
 					await dialog.waitFor();
 					const choices = dialog.getByRole('radiogroup', {
-						name: 'What to export',
+						name: 'What to share',
 					});
 					assert.equal(await choices.count(), 1);
-					const current = choices.getByRole('radio', {name: 'Daily'});
+					const current = choices.getByRole('radio', {name: /^Daily/});
 					const allBookmarks = choices.getByRole('radio', {
-						name: 'All bookmarks',
+						name: /^All bookmarks/,
 					});
 					await current.focus();
 					await page.keyboard.press('ArrowRight');
 					assert.equal(await allBookmarks.isChecked(), true);
-					assert.equal(
-						await dialog
-							.getByRole('heading', {name: 'Back up bookmarks'})
-							.count(),
-						1,
-					);
 					await page.keyboard.press('ArrowLeft');
 					assert.equal(await current.isChecked(), true);
-					assert.equal(
-						await dialog.getByRole('heading', {name: 'Export column'}).count(),
-						1,
-					);
+					const jsonWay = dialog.getByRole('radio', {name: /^JSON file/});
+					await jsonWay.focus();
+					await page.keyboard.press('Space');
+					assert.equal(await jsonWay.isChecked(), true);
 					await mkdir(fromRoot('.dev/evidence'), {recursive: true});
 					await dialog.screenshot({
 						path: fromRoot(`.dev/evidence/bookmark-export-${theme}.png`),
@@ -4491,7 +4455,7 @@ async function main() {
 				assert.equal(await selection.isVisible(), true);
 				assert.equal(
 					await selection
-						.getByRole('button', {name: 'Export', exact: true})
+						.getByRole('button', {name: 'Share', exact: true})
 						.isVisible(),
 					true,
 				);

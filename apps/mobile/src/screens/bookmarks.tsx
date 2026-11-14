@@ -53,7 +53,7 @@ import {
 import {Button, Chips, Empty, Header, IconButton} from '../ui';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
-import {openExport} from './transfer-sheets';
+import {openShare} from './transfer-sheets';
 import {ReorderRow} from './reorder-row';
 import {
 	BookmarkRow,
@@ -208,11 +208,10 @@ export function BookmarksScreen({
 				},
 				{
 					icon: 'download-outline',
-					label: 'Export',
+					label: 'Share',
 					color: colors.info,
-					hint: 'JSON, HTML, CSV or Markdown file',
 					onPress() {
-						openExport({
+						openShare({
 							title: rowMenuBookmark.title || rowMenuBookmark.url,
 							data: {
 								kind: 'bookmarks',
@@ -317,10 +316,9 @@ export function BookmarksScreen({
 			? [
 					{
 						icon: 'download-outline' as const,
-						label: 'Export column',
-						hint: 'JSON, HTML, CSV or Markdown file',
+						label: 'Share column',
 						onPress() {
-							openExport({
+							openShare({
 								title: columnName ?? 'column',
 								data: {
 									kind: 'bookmarks',
@@ -337,8 +335,9 @@ export function BookmarksScreen({
 		...(!isSearching && isEditableColumn
 			? [
 					{
-						icon: 'color-palette-outline' as const,
+						icon: 'create-outline' as const,
 						label: 'Edit column',
+						color: colors.warn,
 						hint: 'Rename it, or change its icon and color',
 						onPress() {
 							setSheet({kind: 'column', id: columnId});
@@ -666,9 +665,9 @@ export function BookmarksScreen({
 							`${selection.ids.size} selected`,
 						);
 					}}
-					onExport={() => {
+					onShare={() => {
 						const chosen = shown.filter((item) => selection.ids.has(item.id));
-						openExport({
+						openShare({
 							title: `${chosen.length} bookmarks`,
 							data: {
 								kind: 'bookmarks',

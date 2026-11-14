@@ -65,7 +65,7 @@ export function sessionActionLook(
 		}
 
 		case 'share': {
-			return {label: 'Share links', icon: 'share-outline', color: colors.info};
+			return {label: 'Share', icon: 'share-outline', color: colors.info};
 		}
 
 		case 'delete': {

@@ -88,7 +88,6 @@ export type SessionQuickAction =
 	| 'archive'
 	| 'delete'
 	| 'share'
-	| 'export'
 	| 'edit'
 	| 'move-up'
 	| 'move-down'

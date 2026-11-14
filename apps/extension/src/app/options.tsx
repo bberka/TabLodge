@@ -714,7 +714,6 @@ const settingsGroups: Array<{
 					['archive', 'Archive'],
 					['delete', 'Delete'],
 					['share', 'Share'],
-					['export', 'Export session'],
 					['edit', 'Edit details'],
 					['move-up', 'Move up'],
 					['move-down', 'Move down'],

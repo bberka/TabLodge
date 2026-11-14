@@ -5666,7 +5666,6 @@ test('session quick actions default to Archive and migrate the old switches', as
 		settings: {
 			sessionQuickActions: [
 				'share',
-				'export',
 				'edit',
 				'move-up',
 				'move-down',
@@ -5679,10 +5678,10 @@ test('session quick actions default to Archive and migrate the old switches', as
 	});
 	assert.deepEqual(Array.from(selected.settings.sessionQuickActions), [
 		'share',
-		'export',
 		'edit',
 		'move-up',
 		'move-down',
+		'switch-to',
 	]);
 
 	const cleared = await harness.sendMessage({

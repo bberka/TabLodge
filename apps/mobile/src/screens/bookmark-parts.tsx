@@ -208,7 +208,7 @@ export function SelectionBar({
 	canMove,
 	onOpen,
 	onEdit,
-	onExport,
+	onShare,
 	onMove,
 	onDelete,
 }: {
@@ -216,7 +216,7 @@ export function SelectionBar({
 	canMove: boolean;
 	onOpen: () => void;
 	onEdit: () => void;
-	onExport: () => void;
+	onShare: () => void;
 	onMove: () => void;
 	onDelete: () => void;
 }) {
@@ -247,10 +247,10 @@ export function SelectionBar({
 				onPress={onEdit}
 			/>
 			<ActionButton
-				icon="download-outline"
-				label="Export"
+				icon="share-outline"
+				label="Share"
 				disabled={isNone}
-				onPress={onExport}
+				onPress={onShare}
 			/>
 			<ActionButton
 				icon="folder-open-outline"
