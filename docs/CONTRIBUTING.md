@@ -4,124 +4,41 @@ Bug reports, ideas, and pull requests are welcome. Before a larger change, open 
 
 ## Get set up
 
-Follow the [source installation steps](README.md#build-from-source) and load `dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
+Follow the [source installation steps](README.md#build-from-source) and load `apps/extension/dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
 
 Install the Vite+ CLI once as described in [README Development](README.md#development), then run `vp run dev:chrome` while you work. It loads the Chromium build, rebuilds when files change, and opens Chrome or Chromium with the extension loaded in a profile for this worktree, separate from your regular browser profile. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. `vp run dev:firefox` does the same for the Firefox build in its own Firefox profile. Reload the add-on at `about:debugging#/runtime/this-firefox` after a rebuild. `vp run browser:firefox` checks the core workflows in headless Firefox. Test a change on both browsers when it touches anything they treat differently (see [Browser support](architecture.md#browser-support)). Use `vp run <task>` for the other scripts in the [README command list](README.md#development).
 
-`pnpm install` also turns on the Git hooks in `.vite-hooks/`. Before each commit they refuse a commit on `master` or `main`, lint the staged files, and type check. Before each push they run `vp run check`. Fix what they report instead of skipping them (see [Git hooks](agent-validation.md#git-hooks)).
+`pnpm install` also turns on the Git hooks in `.hooks/`. Before each commit they refuse a commit on `master` or `main`, lint the staged files, and type check. Before each push they run `vp run check`. Fix what they report instead of skipping them (see [Git hooks](agents/workflow.md#git-hooks)).
 
 For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](architecture.md).
 
-Agents validate with the headless dev browser to avoid interrupting the desktop. See [Browser access](agent-validation.md#browser-access) for automation and shutdown instructions. Manual development can keep using the visible browser above.
+## Conventions
 
-## Code conventions
+The rules for each part of the repository live next to the work, in [docs/agents/](agents/). People and agents follow the same files:
 
-- Use strict TypeScript without `any` escapes. Validate stored data, imports, and messages before using them. The service worker treats incoming data as untrusted.
-- Use XO for both linting and formatting. Run `vp run lint:fix`, or `pnpm exec xo --fix <files>` for just the files you changed. Don't run another formatter. Review automatic fixes because some can change behavior.
-- Keep rule exceptions in `xo.config.ts`, with a short reason and a narrow file scope. If one line needs an inline exception, explain it with `// eslint-disable-next-line <rule> -- <reason>`.
-- Use Tailwind theme tokens such as `bg-background` and `text-muted-foreground` rather than raw colors. Check both light and dark themes.
-- Tailwind 4 keeps real cascade layers, and Chrome adds an unlayered `body` rule to extension pages. A style that must beat it, like the `body` font in `styles/extension-app.css`, goes outside `@layer`. The theme is configured in that file (`@theme`), and there is no `tailwind.config` file. `@source` lines limit class scanning to `src/` and `extension/`.
-- Build controls from the local Radix components in `src/components/ui/`, exposed through `src/shared/ui.tsx`. To add a primitive, run `pnpm dlx shadcn@latest add <component>` and review the generated code.
-- Use icons from `lucide-react`. Controls must work with a keyboard, have visible focus, and have labels. Pair icon buttons with `aria-label` and `IconTooltip`. Announce feedback with an appropriate status or alert role.
-- Bundle dependencies locally. Don't add CDN imports, remote fonts, or network calls. A new permission needs a clear reason and documentation in the [permissions table](README.md#permissions-and-privacy) and [privacy policy](PRIVACY.md).
-- Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker. Both use the manifest's `short_name`. Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
-- External links should use `target="_blank" rel="noopener noreferrer"`.
-
-## Accessibility
-
-TabLodge is used by keyboard and with screen readers, so every UI change meets [WCAG 2.2 AA](https://www.w3.org/TR/WCAG22/) for what it touches. Check these before you write the UI, not after:
-
-- **Everything works from the keyboard.** Anything done by dragging, hovering, or right clicking has a keyboard alternative. Reordering sessions, bookmark columns, and bookmarks is available as **Move up**, **Move down**, **Move left**, and **Move right** in their menus. Keep drag as well, and do not replace it.
-- **Use the native element or the Radix primitive.** A `button` for actions, an `a` for navigation, Radix for dialogs, menus, selects, and tooltips. If you build a custom control, follow its [WAI-ARIA pattern](https://www.w3.org/WAI/ARIA/apg/patterns/): roles, states, and keys. A radio group, for example, has one tab stop and uses arrow keys (see `src/shared/radio-keys.ts`).
-- **Name and state.** Icon only buttons have an `aria-label` that includes what they act on. Toggles expose `aria-expanded`, `aria-pressed`, `aria-checked`, or `aria-current`. Decorative icons and duplicate images are `aria-hidden`.
-- **Focus.** Focus is visible, follows reading order, and never ends up on the page body. After an action that removes or moves the focused element, put focus somewhere sensible: `src/shared/focus-rescue.ts` covers removal, and `focusAfterMove` in `src/app/reorder.ts` covers moving. Dialogs return focus to what opened them without extra code (the shared dialog components do it, including for a dialog opened from a menu item), and menus do the same.
-- **Announce results.** Success, errors, and changes with no visible focus move go through `showStatus` so a screen reader hears them. A search says how many results it found (`status` on `ExpandingSearch`, or a `role="status"` region next to the field). Do not rely on color, position, or animation alone.
-- **Targets and contrast.** Interactive targets are at least 24 by 24 CSS pixels, or have enough spacing. Text and controls meet contrast in both themes. Respect reduced motion.
-- **Pages with the shared header** get the skip link from `AppHeader`. A new page with its own navigation adds one.
-
-Run `vp run build` and then `vp run a11y`. It runs axe-core on every extension page in both themes and exercises the keyboard workflows above. Add a check to `scripts/a11y-check.ts` when you add a workflow that needs the keyboard. Automated checks cannot judge reading order, announcements, or whether a workflow makes sense, so use available browser accessibility or screen reader tools to inspect the affected workflow. Manual screen reader testing is not required. In the pull request, report the tools used or that none were available, what you tested, and any gaps.
-
-## Writing documentation
-
-Use plain language, short paragraphs, and direct instructions. Describe what a person can do and what to expect, rather than listing implementation terms without context.
-
-Do not use em dashes or en dashes in prose. Rewrite sentences instead of using a dash as punctuation. Avoid hyphenated wording when a natural alternative exists. Keep hyphens only where needed for Markdown syntax, exact names, paths, URLs, commands, code, or a technical term that would be unclear without one.
-
-Keep each topic in one main place and link to it from elsewhere. Remove obsolete notes rather than leaving old behavior beside the current instructions. For every change, check whether Help (`src/app/help.tsx`) needs an update. Update it when the change affects behavior, settings, or workflows that users see. Otherwise leave it unchanged. Also check the README, architecture notes, privacy policy, and website when behavior changes. Update screenshots when the UI they show changes. [Website setup](website.md#screenshots) explains how to capture them.
+- Extension code: [Extension](agents/extension.md). UI and accessibility: [UI rules](agents/ui.md).
+- Android app: [Mobile](agents/mobile.md). Sync server: [Server](agents/server.md). Website: [Site](agents/site.md).
+- Changes that reach more than one app: [Cross app work](agents/cross-app.md).
+- Docs, Help, and website copy: [Documentation](agents/documentation.md).
+- Linting and formatting use XO only: `vp run lint:fix`, or `pnpm exec xo --fix <files>`. Keep rule exceptions in `xo.config.ts` with a short reason and a narrow scope.
 
 ## Test your change
 
-The worker tests run `extension/service-worker.ts` in a Node VM with mocked browser APIs. Add regression tests for bug fixes and cover behavior changes in the relevant suite. Extend the mock when you use another browser API. Pure helpers should have direct unit tests.
-
-Mocks can't catch everything. For runtime changes, follow [Agent validation and PR gate](agent-validation.md) to load the build in the dev browser, exercise the affected workflow, and record evidence. For UI changes, check keyboard use and both themes, and run `vp run a11y` (see [Accessibility](#accessibility)).
-
-Before opening a pull request, follow [Agent validation and PR gate](agent-validation.md) and run:
+Each app keeps its tests in `apps/<app>/tests/` (release tooling in `scripts/`), and `vp run test` runs every suite. Add a regression test for a bug fix and cover new behavior at the most direct existing boundary. Mocks cannot catch everything, so for runtime changes load the build in the dev browser and exercise the workflow ([Validation](agents/validation.md)). Before opening a pull request run:
 
 ```sh
 vp run check
 vp run build
 ```
 
-In the pull request, explain what changed, why it changed, and how you tested it. Mention any checks you couldn't run. Call out new permissions and storage changes, including how older data is handled. Describe changes people will notice so they can be included in release notes.
+In the pull request, explain what changed, why, and how you tested it. Mention checks you could not run. Call out new permissions and storage changes, including how older data is handled, and describe changes people will notice so they reach the release notes.
 
 ## Working with AI agents
 
-Agents follow [AGENTS.md](../AGENTS.md). In short:
-
-- Work in a worktree on a new branch, commit in logical groups, and open a pull request as soon as the work is done. Nobody, human or agent, pushes to `master` directly.
-- Wait for CI. Fix failures caused by the change and try again, up to three attempts. For anything else, tell the maintainer.
-- The pull request names the model that did the work, and commits carry only the human author.
-- Every fix or feature includes proof in the pull request, such as a screenshot, recording, or test output, with a before and after for a fix.
-- Before pushing, run the `unslop-*` skills on the changed files only. Install the pinned skills in `skills-lock.json` with `vp run skills:install`.
+Agents follow [AGENTS.md](../AGENTS.md): a worktree and branch per task, commits that name only the human author, a pull request that names the model, proof for every fix or feature, and no direct pushes to `master`. Install the pinned skills with `vp run skills:install`.
 
 ## Releases
 
-TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
-
-The root `VERSION` file holds the minor number. The release workflow computes the patch from the latest `v0.<minor>.*` tag. For example, with `VERSION` set to `1` and a latest release of `0.1.1`, the next release is `0.1.2`. Set `VERSION` to `2` and the next release is `0.2.0`. The minor number cannot go below the latest released minor.
-
-Run **Actions › Release › Run workflow** on `master` to publish a release. The workflow stamps the version into `package.json` and `extension/manifest.json`, runs the checks and build, and publishes the Chromium and Firefox ZIPs with their SHA256 checksums under a `v0.x.y` tag. It then sends one `tablodge-release-published` dispatch, which starts the website deployment and the Store publishing workflow. That workflow runs two independent jobs. The Chrome job verifies the release ZIP against its checksum, uploads it to the existing listing, and submits it for publication, and Google review may delay when the update becomes available. The Firefox job verifies the Firefox ZIP, packages the source at the release tag, and submits both to the listed add-on, and the job finishes once AMO has queued the version, not after review. The unsigned Firefox ZIP is also published as a release asset. To build and package the extension locally, follow the [README build steps](README.md#build-from-source). The same workflow then builds the Android app from the release tag, signs it, and attaches `tablodge.apk` and `tablodge.apk.sha256` to the release (see [Android app](#android-app)).
-
-### Android app
-
-The app has its own workflow, **Mobile**. Pull requests and pushes to `master` that touch `mobile/` or the code it shares (`src/shared/`, the types, the private library and link helpers, the mobile tests, the lockfile) run the app's tests, bundle its JavaScript, build the debug APK with Gradle, and keep the APK as a build artifact named `tablodge-debug-apk` for 14 days. Both the debug and the release APK carry the 64 bit and 32 bit ARM libraries that phones use, so they do not run on an x86 emulator; use `pnpm run mobile:android` there. To try the current checkout on a phone without waiting for CI, run `pnpm run mobile:apk` (see the [README](README.md#android-app)). The **Test** workflow still runs lint, typecheck, every test, and the JavaScript bundle on every change, so a mobile change is checked even when the path filter skips **Mobile**.
-
-The **Release** workflow adds an `android` job after the release is published. It checks out the release tag, writes the release version and a version code into `mobile/app.json` (`scripts/release-version.ts set-android`; the code is `minor * 1000 + patch`, so 0.2.5 is 2005, and it only goes up), builds a release APK for `arm64-v8a` and `armeabi-v7a`, signs it with the release key, verifies the signature, and uploads `tablodge.apk` and its checksum to the release.
-
-Android installs an update only when it is signed with the same key as the app it replaces, so create the release key once and keep it safe: losing it means people must uninstall the app and lose their local copy before installing a new APK.
-
-1. Create the key: `keytool -genkeypair -v -keystore tablodge-release.keystore -alias tablodge -keyalg RSA -keysize 4096 -validity 36500`. Use a strong password and keep the file and the password somewhere private and backed up.
-2. Add four repository secrets under **Settings › Secrets and variables › Actions**: `ANDROID_KEYSTORE_BASE64` (the output of `base64 -w0 tablodge-release.keystore`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`tablodge`), and `ANDROID_KEY_PASSWORD`.
-
-Without the secrets the `android` job prints a warning and the release has no APK; nothing else is affected. To retry a failed APK build, re-run that job from the release run. The APK is not published to Google Play yet.
-
-### Sync server image
-
-The sync server image shares the extension's version. Pull requests that touch `server/` or the shared sync code build it, and every such push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. After the release ZIPs, the **Release** workflow calls the **Sync server image** workflow, which publishes `ghcr.io/bberka/tablodge-sync:<version>` and `:latest`. The package must be public on GitHub for others to pull it. New packages start private, so make it public once in the package's settings. Bump `PROTOCOL_VERSION` in `src/shared/sync/change-log.ts`, which the server and the extension share, only for a change old extensions cannot use, because the extension refuses a server with a different protocol version.
-
-The **Deploy to Cloudflare** button copies only `server/cloudflare-deploy/`, so that folder holds a prebuilt `worker.js` instead of the source. After changing `server/src` or `src/shared/sync`, run `pnpm run cf:bundle` and commit the new `worker.js`. A test in `tests/cloudflare-deploy.test.ts` fails while it is out of date. Keep `name`, `compatibility_date`, the Durable Object binding and class, `migrations`, and `vars` in its `wrangler.jsonc` the same as in `server/wrangler.jsonc`, so a button deploy and `cf:setup` can take over from each other. Another test in the same file checks this.
-
-### Chrome Web Store publishing
-
-Before the first release, enable the Chrome Web Store API in a Google Cloud project and create OAuth credentials authorized with the `https://www.googleapis.com/auth/chromewebstore` scope. Generate a refresh token for the Google account that owns the existing listing. If the OAuth consent screen remains in Testing, Google may expire the refresh token after seven days, so configure a production consent screen for ongoing automation.
-
-In GitHub repository **Settings › Secrets and variables › Actions**, add the `CWS_PUBLISHER_ID` repository variable using the publisher ID from the Chrome Web Store Developer Dashboard. Add these repository secrets:
-
-- `CWS_CLIENT_ID`
-- `CWS_CLIENT_SECRET`
-- `CWS_REFRESH_TOKEN`
-
-The workflow already has TabLodge's extension ID. It runs after each GitHub release. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.1.4`, and choose `chrome`.
-
-### Firefox Add-ons publishing
-
-Submit the first version of `tablodge@bbay.dev` by hand on addons.mozilla.org, with the source ZIP and build notes, and fill in the listing. After that, create API credentials under **Developer Hub › Manage API Keys** and add these repository secrets in **Settings › Secrets and variables › Actions**:
-
-- `AMO_JWT_ISSUER`
-- `AMO_JWT_SECRET`
-
-The workflow runs after each GitHub release and submits the Firefox ZIP with `web-ext sign --channel=listed`. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.2.2`, and choose `firefox`. AMO rejects a version number it has already received, so a retry only helps when the earlier run failed before the upload.
-
-`vp run version:next` shows the next version based on your local tags.
+Releases are cut from the **Release** workflow and use [ZeroVer](https://0ver.org). See [CI and releases](agents/ci.md).
 
 By contributing, you agree to license your contributions under the [MIT License](../LICENSE).

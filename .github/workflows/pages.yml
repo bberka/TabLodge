@@ -1,14 +1,14 @@
 name: Website
 
-# Builds the Astro site in site/ and deploys it to GitHub Pages (https://tablodge.bbay.dev).
+# Builds the Astro site in apps/site/ and deploys it to GitHub Pages (https://tablodge.bbay.dev).
 # The site version comes from the latest GitHub release. Release workflow dispatches a build after publishing.
 # Pull requests only build the site, so a broken site fails the PR. Only master, dispatch, and manual runs deploy.
-# One-time setup: repository Settings > Pages > Source: GitHub Actions (see docs/website.md).
+# One-time setup: repository Settings > Pages > Source: GitHub Actions (see docs/agents/site.md).
 on:
   push:
     branches: [master]
     paths:
-      - 'site/**'
+      - 'apps/site/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -53,7 +53,7 @@ jobs:
           fi
           version="${version#v}"
           if [ -z "$version" ]; then
-            version="$(node -p "require('./package.json').version")"
+            version="$(node -p "require('./apps/extension/shell/manifest.json').version")"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - run: pnpm exec vp run site:build
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site/dist
+          path: apps/site/dist
 
   deploy:
     name: Deploy to GitHub Pages

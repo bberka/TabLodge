@@ -8,7 +8,7 @@ Issue #3 asks for instant sync across devices, a paid hosted service on Cloudfla
 
 ## Decision
 
-The unit of sync is one record: a session, a saved tab, a bookmark, a column, a folder, or a preference. The protocol code lives in `src/shared/sync/` and uses no browser or server APIs, so the extension, the Durable Object, and the Docker server share it.
+The unit of sync is one record: a session, a saved tab, a bookmark, a column, a folder, or a preference. The protocol code lives in `apps/extension/src/shared/sync/` and uses no browser or server APIs, so the extension, the Durable Object, and the Docker server share it.
 
 * **Changes.** A change carries the whole record, its stamp, and its order key, or marks the record deleted. The server never looks inside the record. Tabs are keyed under their session, because tab ids are only unique inside a session, so moving a tab between sessions is a delete and a create.
 * **Stamps.** A hybrid logical clock (`clock.ts`). The stamp `h` is the wall time in milliseconds and a counter, both fixed width base 36, so string order is causal order. Equal stamps are ordered by device id. A device moves its clock past every stamp it receives, so a device with a slow clock still writes after what it has seen. A stamp more than a day ahead of the receiver is refused, so one wrong clock cannot win every later edit.

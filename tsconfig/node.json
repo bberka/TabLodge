@@ -1,5 +1,5 @@
 {
-	// Build tooling run by Node (type stripping) or loaded by Vite+.
+	// Repository level tooling run by Node (type stripping) or loaded by Vite+.
 	"extends": "./base.json",
 	"compilerOptions": {
 		"tsBuildInfoFile": "../node_modules/.tmp/tsconfig.node.tsbuildinfo",
@@ -11,8 +11,9 @@
 	},
 	"include": [
 		"../vite.config.ts",
-		"../vite.*.config.ts",
 		"../xo.config.ts",
-		"../scripts/**/*.ts"
-	]
+		"../scripts/**/*.ts",
+		"../apps/mobile/scripts/**/*.mts"
+	],
+	"exclude": ["../scripts/**/*.test.ts"]
 }

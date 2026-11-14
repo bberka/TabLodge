@@ -6,8 +6,8 @@
 //
 // CLI (used by .github/workflows/release.yml):
 //   node scripts/release-version.ts next        print the next release version
-//   node scripts/release-version.ts set 0.2.0   write a version into package.json and extension/manifest.json
-//   node scripts/release-version.ts set-android 0.2.0   write the version and version code into mobile/app.json
+//   node scripts/release-version.ts set 0.2.0   write a version into apps/extension/shell/manifest.json
+//   node scripts/release-version.ts set-android 0.2.0   write the version and version code into apps/mobile/app.json
 import {execFileSync} from 'node:child_process';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
@@ -124,10 +124,8 @@ export function stampAndroid(text: string, version: string): string {
 }
 
 function setVersion(version: string) {
-	for (const file of ['package.json', 'extension/manifest.json']) {
-		const path = resolve(projectRoot, file);
-		writeFileSync(path, stampVersion(readFileSync(path, 'utf8'), version));
-	}
+	const path = resolve(projectRoot, 'apps/extension/shell/manifest.json');
+	writeFileSync(path, stampVersion(readFileSync(path, 'utf8'), version));
 }
 
 if (
@@ -149,7 +147,7 @@ if (
 	} else if (command === 'set' && argument) {
 		setVersion(argument);
 	} else if (command === 'set-android' && argument) {
-		const path = resolve(projectRoot, 'mobile/app.json');
+		const path = resolve(projectRoot, 'apps/mobile/app.json');
 		writeFileSync(path, stampAndroid(readFileSync(path, 'utf8'), argument));
 	} else {
 		console.error(

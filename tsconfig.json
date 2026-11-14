@@ -2,12 +2,13 @@
 	// Solution file: `vp run typecheck` runs `tsc -b`, which checks each project below.
 	"files": [],
 	"references": [
-		{"path": "./tsconfig/app.json"},
-		{"path": "./tsconfig/worker.json"},
+		{"path": "./apps/extension/tsconfig.json"},
+		{"path": "./apps/extension/tsconfig.worker.json"},
+		{"path": "./apps/extension/tsconfig.node.json"},
+		{"path": "./apps/server/tsconfig.json"},
+		{"path": "./apps/server/tsconfig.worker.json"},
+		{"path": "./apps/mobile/tsconfig.json"},
 		{"path": "./tsconfig/test.json"},
-		{"path": "./tsconfig/node.json"},
-		{"path": "./server/tsconfig.json"},
-		{"path": "./server/tsconfig.worker.json"},
-		{"path": "./mobile/tsconfig.json"}
+		{"path": "./tsconfig/node.json"}
 	]
 }

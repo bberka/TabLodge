@@ -1,8 +1,6 @@
 packages:
   - .
-  - site
-  - server
-  - mobile
+  - apps/*
 allowBuilds:
   esbuild: true
   # wrangler's local runtime downloads its platform binary on install.

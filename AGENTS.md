@@ -1,90 +1,40 @@
-# Agent instructions
+# TabLodge
+
+A local first tab session and bookmark manager. A pnpm workspace of four apps that share one library format and sync protocol. Humans start at [docs/README.md](docs/README.md); everything agents need is in [docs/agents/](docs/agents/), loaded on demand below.
+
+## Layout
+
+- `apps/extension`: Chrome, Brave, and Firefox extension. Its `src/shared` and `src/shared/types.ts` are also imported by the server and the Android app
+- `apps/server`: Self hosted sync server (Docker or Cloudflare)
+- `apps/mobile`: Android app (Expo, React Native)
+- `apps/site`: Website, tablodge.bbay.dev (Astro)
+- `scripts/`, `tsconfig/`: Repository wide tooling and shared TypeScript settings
+- `docs/`: All Markdown except this file. `docs/agents/` is for you
+
+Run tasks as `vp run <task>` from the root; scripts in the root `package.json` forward to the right app.
 
 ## Hard rules
 
-- **Never push to `master` or `main`.** Do not commit on it, force push it, or merge into it from a shell. Run `git branch --show-current` before the first commit. If it prints `master` or `main`, create a branch named `<type>/<short-topic>` (`feat/`, `fix/`, `docs/`, `chore/`, `refactor/`) first. Changes reach `master` only through a reviewed pull request that the maintainer merges.
-- **Commit messages list only the human author.** Never add `Co-Authored-By` trailers or any AI attribution to a commit. Write messages with the `unslop-git` skill.
-- **Every pull request names the model that did the work.** Fill in the **Model** line of the pull request template with the product name and exact model ID, such as `Claude Sonnet 5.5 (claude-sonnet-5-5)`. If several models contributed, list each with what it did. The model goes in the pull request, never in a commit.
-- **Every fix or feature carries proof in the pull request.** Show that the bug is gone or the feature works: a before and after screenshot, a short recording, or console and test output from the dev browser. For every UI change, include after screenshots at all four viewport profiles defined in [Proof](docs/agent-validation.md#proof), and attach them to the pull request when possible. Use the existing tools in [Agent validation and PR gate](docs/agent-validation.md). A passing build or unit test alone is not proof for runtime behavior.
-- **Unslop the diff before every push.** Run the matching `unslop-*` skills on the changed files only, fix what they find, rerun the checks, and commit the fixes. Do not run a whole repo pass, do not commit `.unslop/` output, and do not paste an unslop report into the pull request. Details are in [Agent validation and PR gate](docs/agent-validation.md#unslop-the-diff).
-- **Every UI change must work without a pointer and expose correct semantics to screen readers.** Before writing UI, read [Accessibility](docs/CONTRIBUTING.md#accessibility). Anything done by dragging, hovering, or right clicking needs a keyboard alternative, custom controls follow their WAI-ARIA pattern, and focus is never left on the page body. Run `vp run a11y` and test the affected workflow by keyboard in both themes before pushing. Use available screen reader or accessibility inspection tools to check semantics and announcements. Do not require manual screen reader testing; report the tools used or that none were available, along with any gaps.
-- **Finish the gate before pushing.** Do not push or open a pull request until the checks, browser proof, unslop pass, and scope review are done. If one is blocked, stop and report what is blocked.
-- **Do not bypass the Git hooks.** The pre-commit and pre-push hooks run the local checks (see [Git hooks](docs/agent-validation.md#git-hooks)). Never commit or push with `--no-verify`, never set `VP_GIT_HOOKS=0`, `VITE_GIT_HOOKS=0`, or `HUSKY=0`, and never run `vp hooks disable`. When a hook fails, fix the cause and commit again.
-- **Keep the docs and this file current.** A change is not done while a document still describes the old behavior. See [Keep documentation current](#keep-documentation-current).
+- Never commit on or push to `master` or `main`; work on a `<type>/<short-topic>` branch and open a pull request.
+- Commits name the human author only. The pull request names the model.
+- Every fix or feature carries proof in the pull request.
+- Run the `unslop-*` skills on the diff before every push.
+- Leave the Git hooks on, and finish the gate before pushing.
+- A change is not done while a document still describes the old behavior.
 
-## Workflow for each task
+## Load on demand
 
-1. **Work in a worktree.** Start each task in its own Git worktree on a new `<type>/<short-topic>` branch from the latest `origin/master`, so parallel tasks and the maintainer's checkout stay apart. Run `pnpm install` in the new worktree. It also turns on the Git hooks.
-2. **Do the work and pass the gate** in [Agent validation and PR gate](docs/agent-validation.md).
-3. **Commit in logical groups.** Make one commit per self contained step (for example the hooks, then the docs that describe them), and make each commit pass the hooks on its own. Do not mix unrelated changes in one commit or split one change across several.
-4. **Open the pull request as soon as the work is done.** Push and open it right away, without waiting to be asked.
-5. **Wait for CI and fix failures.** Watch the pull request's checks until they finish. If one fails because of the change, fix it, push, and wait again, up to three attempts in total. If CI still fails after three, or fails for a reason outside the change (an outage, a runner or service problem, a missing secret, a flaky test that passes locally), stop and tell the user what failed and why. See [After the pull request is open](docs/agent-validation.md#after-the-pull-request-is-open).
-
-## Setup
-
-Use the headless dev browser for agent validation so it does not interrupt the user's desktop. See [Browser access](docs/agent-validation.md#browser-access) for commands and automation access. Open a visible browser only when the user asks for one.
-
-Install the Vite+ CLI once as described in [README Development](docs/README.md#development). `pnpm install` enables the Git hooks through the `prepare` script, and `vp hooks status` shows whether they are on. Use `vp run lint:fix` for formatting. For selected files, use `pnpm exec xo --fix <files>`. Never run `vp fmt`, plain `prettier`, or another formatter. Their styles differ and can rewrite unrelated files.
-
-Agent skills are pinned in `skills-lock.json` and installed per machine into `.agents/skills/`, which git ignores. A fresh clone or a new worktree starts without them.
-
-**Check at the start of every session.** Run `ls .agents/skills`. If it is missing or empty, and the skills are not installed globally in `~/.agents/skills`, run `vp run skills:install` (it calls `npx skills experimental_install`).
-
-- A session that was already running may not list the newly installed skills. Read `.agents/skills/<name>/SKILL.md` directly and follow it.
-- If the restore fails, for example because there is no network, tell the user in your first message which skills are missing. The unslop pass, `pr` body, and `tdd` workflow depend on them. Do not skip those gates silently, and do not push until the skills are available or the user says to go on without them.
-
-Load a skill only when its description matches the task. The ones this repo relies on:
-
-| Skill                                                                           | Use it when                                     |
-| ------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `unslop-typescript`, `unslop-react`, `unslop-ui`, `unslop-tests`, `unslop-text` | Cleaning the diff before a push, by file type   |
-| `unslop-git`                                                                    | Writing a commit message                        |
-| `pr`                                                                            | Writing a pull request body                     |
-| `tdd`                                                                           | Fixing a bug or adding behavior test first      |
-| `diagnosing-bugs`                                                               | Something is broken, throwing, failing, or slow |
-| `code-review`                                                                   | Reviewing a branch or pull request              |
-
-## Documentation map
-
-All Markdown except this file lives in `docs/`. Do not read every document up front. Open a document when its row matches the task, follow its links only as far as the task needs, and skip the rest.
-
-| Document                                                                                                                                                                                                                                                                                   | Load it when                                                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)                                                                                                                                                                                                                                               | Writing code or docs, or changing releases. It holds code conventions, accessibility rules, the docs style, tests, and release process. |
-| [docs/agent-validation.md](docs/agent-validation.md)                                                                                                                                                                                                                                       | Before reporting work complete, committing, pushing, or opening a pull request.                                                         |
-| [docs/architecture.md](docs/architecture.md)                                                                                                                                                                                                                                               | Touching storage, the service worker, messages, import and export, or recovery.                                                         |
-| [docs/README.md](docs/README.md)                                                                                                                                                                                                                                                           | Changing features, commands, permissions, installation, or the project structure.                                                       |
-| [docs/PRIVACY.md](docs/PRIVACY.md)                                                                                                                                                                                                                                                         | Changing what is stored, which permissions are requested, or any network behavior.                                                      |
-| [docs/website.md](docs/website.md)                                                                                                                                                                                                                                                         | Editing `site/`, its screenshots, or deployment.                                                                                        |
-| [docs/self-hosting.md](docs/self-hosting.md)                                                                                                                                                                                                                                               | Changing `server/`, its Docker or Cloudflare setup, or the sync API.                                                                    |
-| [docs/agents/](docs/agents/)                                                                                                                                                                                                                                                               | Working with issues, triage labels, or domain terms. See the next section.                                                              |
-| Research notes are not in the repository. The mobile app memo is a comment on issue #1 and the tab manager comparison is a comment on issue #21. Read them with `gh issue view <number> --comments` only for roadmap or competitor questions. They are background, not feature checklists. |
-
-## Agent skills
-
-### Issue tracker
-
-Issues and pull requests live on GitHub for `bberka/TabLodge`, used through the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five default labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single context. The glossary is `docs/GLOSSARY.md`, which does not exist yet and is created when first needed. Decisions are in `docs/adr/`. See `docs/agents/domain.md`.
-
-## Documentation style
-
-Follow [Writing documentation](docs/CONTRIBUTING.md#writing-documentation) when editing docs, Help, or website copy. Write plainly and keep one main source for each topic. Do not use em dashes or en dashes in prose, or hyphens unless syntax or an exact technical name requires them. Use sentences, commas, or parentheses instead.
-
-## Keep documentation current
-
-Before finishing a change, check these places and update anything the change made inaccurate:
-
-- `docs/README.md`: features, installation, updates, permissions, commands, and project structure.
-- `site/src/pages/index.astro`: features, FAQ, installation, and backups. Also check `alternatives.astro` and `privacy.astro` for comparisons, permissions, and stored data. Update screenshots in `site/src/assets/` when the UI they show changes; see [docs/website.md](docs/website.md#screenshots).
-- `src/app/help.tsx`, `docs/architecture.md`, `docs/PRIVACY.md`, and `docs/CONTRIBUTING.md`: behavior and development details affected by the change.
-- `AGENTS.md` and `docs/agent-validation.md`: when the agent workflow itself changes.
-
-Check feature names, settings, defaults, permissions, and removed behavior. If none of these documents need an update, say so in the summary.
+- Committing, pushing, opening or watching a pull request, hooks → [workflow.md](docs/agents/workflow.md)
+- Reporting work complete, proof, checks, unslop → [validation.md](docs/agents/validation.md)
+- Extension code (`apps/extension`) → [extension.md](docs/agents/extension.md), then the section of [architecture](docs/architecture.md) you touch
+- UI, styling, accessibility → [ui.md](docs/agents/ui.md)
+- Android app (`apps/mobile`) → [mobile.md](docs/agents/mobile.md)
+- Sync server (`apps/server`) → [server.md](docs/agents/server.md)
+- Website (`apps/site`), its screenshots → [site.md](docs/agents/site.md)
+- Shared code, protocol, data model, new feature, or a feature another app could want → [cross-app.md](docs/agents/cross-app.md)
+- Workflows, releases, store publishing, Docker image → [ci.md](docs/agents/ci.md)
+- Editing docs, Help, or site copy; editing this file → [documentation.md](docs/agents/documentation.md)
+- Issues, labels, triage → [issue-tracker.md](docs/agents/issue-tracker.md)
+- Permissions, stored data, network behavior → [PRIVACY.md](docs/PRIVACY.md)
+- Self hosting behavior or the sync API → [self-hosting.md](docs/self-hosting.md)
+- A past design decision → [docs/adr/](docs/adr/)
