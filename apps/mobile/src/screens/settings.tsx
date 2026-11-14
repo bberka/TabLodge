@@ -22,7 +22,12 @@ import {
 	usePreferences,
 } from '../preferences';
 import {applyPrivateSyncSetting} from '../private-library';
-import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
+import {
+	FloatingActions,
+	ROOM_FOR_BUTTONS,
+	SearchDock,
+	useSearch,
+} from '../floating-actions';
 import {Button, Empty, Header, Icon, type IconName} from '../ui';
 import {systemAccent} from '../../modules/open-links';
 import {ACCENTS} from '../../../extension/src/shared/accent-colors';
@@ -152,7 +157,10 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	return (
 		<View style={styles.root}>
 			<ScrollView
-				contentContainerStyle={[styles.screen, {paddingBottom: space + 8}]}
+				contentContainerStyle={[
+					styles.screen,
+					{paddingBottom: space + 8 + ROOM_FOR_BUTTONS},
+				]}
 				keyboardShouldPersistTaps="handled"
 				scrollEventThrottle={16}
 				onScroll={trackScroll}

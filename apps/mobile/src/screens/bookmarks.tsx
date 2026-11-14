@@ -44,7 +44,12 @@ import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
 import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
-import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
+import {
+	FloatingActions,
+	ROOM_FOR_BUTTONS,
+	SearchDock,
+	useSearch,
+} from '../floating-actions';
 import {Button, Chips, Empty, Header, IconButton} from '../ui';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
@@ -466,8 +471,9 @@ export function BookmarksScreen({
 					styles.list,
 					{
 						paddingBottom: isKeyboardOpen
-							? space + 8
-							: (selection.active ? 72 + insets.bottom : space) + 72,
+							? space + 8 + (search.open ? ROOM_FOR_BUTTONS : 0)
+							: (selection.active ? 72 + insets.bottom : space) +
+								ROOM_FOR_BUTTONS,
 					},
 				]}
 				keyboardShouldPersistTaps="handled"

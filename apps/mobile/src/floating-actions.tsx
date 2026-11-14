@@ -11,6 +11,12 @@ Every round button in the row, and the search drawer, share this size, so the ad
 const SIZE = 52;
 
 /**
+The room a list leaves at its end so the round buttons, or the search bar that takes their place, never hide its last
+row: the bar's height and the gap around it.
+*/
+export const ROOM_FOR_BUTTONS = SIZE + 24;
+
+/**
 Search that opens from a button. `open` and `query` belong to the screen, which filters its own page by `query`.
 */
 export function useSearch() {

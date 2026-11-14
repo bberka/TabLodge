@@ -42,7 +42,12 @@ import {
 } from '../library-store';
 import {ActionSheet, type SheetAction} from '../action-sheet';
 import {showSnack} from '../snackbar';
-import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
+import {
+	FloatingActions,
+	ROOM_FOR_BUTTONS,
+	SearchDock,
+	useSearch,
+} from '../floating-actions';
 import {sessionActionLook} from '../row-actions';
 import {SwipeRow} from '../swipe-row';
 import {type SessionAction, usePreferences} from '../preferences';
@@ -743,7 +748,10 @@ export function SessionsScreen({
 				data={shown}
 				extraData={[flipped, isExpandAll]}
 				keyExtractor={(session) => session.id}
-				contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
+				contentContainerStyle={[
+					styles.list,
+					{paddingBottom: space + 8 + ROOM_FOR_BUTTONS},
+				]}
 				keyboardShouldPersistTaps="handled"
 				// Long libraries draw only what is on screen, and a little around it.
 				initialNumToRender={6}
