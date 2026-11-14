@@ -447,6 +447,7 @@ function SidePanel() {
 				icon: ACTION_ICONS.openNew,
 				onSelect: open('new'),
 			},
+			{type: 'separator'},
 			{
 				id: 'copy',
 				label: 'Copy link',
@@ -463,7 +464,7 @@ function SidePanel() {
 						'Could not open the Internet Archive.',
 					),
 			},
-			...extra,
+			...(extra.length > 0 ? [{type: 'separator' as const}, ...extra] : []),
 		];
 	}
 
@@ -627,6 +628,7 @@ function SidePanel() {
 				icon: ExternalLink,
 				onSelect: () => void activate(tab),
 			},
+			{type: 'separator'},
 			{
 				id: 'save',
 				label: 'Save this tab',

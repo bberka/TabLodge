@@ -68,8 +68,9 @@ export const PAGE_SAVE_ITEMS: ReadonlyArray<
 	readonly [id: string, title: string, scope: SaveScope]
 > = [
 	['tablodge-page-save-tab', 'Save this tab', 'this-tab'],
-	['tablodge-page-save-window', 'Save this window', 'window'],
 	['tablodge-page-save-selected', 'Save selected tabs', 'selected'],
+	['tablodge-page-save-group', 'Save this tab group', 'tab-group'],
+	['tablodge-page-save-window', 'Save this window', 'window'],
 	['tablodge-page-save-left', 'Save tabs to the left', 'left-of-tab'],
 	['tablodge-page-save-right', 'Save tabs to the right', 'right-of-tab'],
 	[
@@ -77,13 +78,21 @@ export const PAGE_SAVE_ITEMS: ReadonlyArray<
 		'Save all tabs except this one',
 		'except-this-tab',
 	],
-	['tablodge-page-save-group', 'Save this tab group', 'tab-group'],
 	[
 		'tablodge-page-save-all-windows',
 		'Save tabs from all windows',
 		'all-windows',
 	],
 ];
+
+/**
+The page menu's save actions end a group at these entries, which get a separator after them: this tab and its
+selection, then this window and the tabs around this one, then every window.
+*/
+const PAGE_SAVE_GROUP_ENDS: ReadonlySet<string> = new Set([
+	'tablodge-page-save-group',
+	'tablodge-page-save-except-tab',
+]);
 
 /**
 The "Saved links" entry of "Save link to session" collects links in this session (matched by name, case-insensitively).
@@ -323,6 +332,14 @@ export function contextMenuPlan(
 		// click outside a tab group just logs "The active tab is not in a tab group." Browsers with onShown refine it.
 		for (const [id, title] of PAGE_SAVE_ITEMS) {
 			items.push({id, title, parentId: MENU.pageRoot, ...page});
+			if (PAGE_SAVE_GROUP_ENDS.has(id)) {
+				items.push({
+					id: `${id}-separator`,
+					type: 'separator',
+					parentId: MENU.pageRoot,
+					...page,
+				});
+			}
 		}
 	}
 
