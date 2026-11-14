@@ -8,6 +8,9 @@ type TablodgeCrypto = {
 		cipher: string,
 		name: string,
 	): Promise<string | null>;
+	generateKey(): string;
+	wrapKey(key: string, credential: string): Promise<string>;
+	sealValue(key: string, name: string, json: string): Promise<string[]>;
 };
 
 const native = requireNativeModule<TablodgeCrypto>('TablodgeCrypto');
@@ -29,3 +32,23 @@ export const openSealed = async (
 	cipher: string,
 	name: string,
 ) => native.openSealed(key, iv, cipher, name);
+
+/**
+A new random 256-bit data key, as base64.
+*/
+export const generateKey = (): string => native.generateKey();
+
+/**
+Wraps a data key in the credential envelope, the format `unwrapKey` and the extension read. Returns it as base64.
+*/
+export const wrapKey = async (key: string, credential: string) =>
+	native.wrapKey(key, credential);
+
+/**
+Seals one record value (JSON text) with the data key. The record's key name is authenticated, so a value moved
+elsewhere fails to open. Returns the base64 iv and ciphertext.
+*/
+export const sealValue = async (key: string, name: string, json: string) => {
+	const [iv, ct] = await native.sealValue(key, name, json);
+	return {iv, ct};
+};

@@ -22,7 +22,7 @@ import type {Session, Store} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {notify} from '../dialog';
 import {shareTextFile} from '../files';
-import {edit, newId, useRegularLibrary} from '../library-store';
+import {edit, newId, useLibrary} from '../library-store';
 import {showSnack} from '../snackbar';
 import {useColors} from '../theme';
 import {importIntoStore, previewFor, shareGroupsOf} from '../transfer';
@@ -81,7 +81,7 @@ export function ImportSheet({
 	onClose: () => void;
 }) {
 	const colors = useColors();
-	const store = useRegularLibrary();
+	const store = useLibrary();
 	const [pasted, setPasted] = useState('');
 	const [skip, setSkip] = useState(true);
 	const [picked, setPicked] = useState<ImportKind>();
@@ -248,7 +248,7 @@ export function ExportSheet({
 	visible: boolean;
 	onClose: () => void;
 }) {
-	const store = useRegularLibrary();
+	const store = useLibrary();
 	const [kind, setKind] = useState<ExportKind>('sessions');
 	const [format, setFormat] = useState<ExportFormat>('json');
 	const [busy, setBusy] = useState(false);

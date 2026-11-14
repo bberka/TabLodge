@@ -2,7 +2,7 @@ import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from '../bottom-sheet';
 import {columnGlyph, useChipLook} from '../column-icons';
 import {moveColumn} from '../library';
-import {edit, useRegularLibrary} from '../library-store';
+import {edit, useLibrary} from '../library-store';
 import {soften, TARGET, useColors} from '../theme';
 import {Button, Icon, IconButton} from '../ui';
 
@@ -37,7 +37,7 @@ export function ColumnsSheet({
 }) {
 	const colors = useColors();
 	const chipLook = useChipLook();
-	const store = useRegularLibrary();
+	const store = useLibrary();
 	const real = new Set(store.bookmarkColumns.map((column) => column.id));
 	return (
 		<BottomSheet

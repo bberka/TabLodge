@@ -771,9 +771,10 @@ const savedTab = (
 	id: string,
 	index: number,
 	now: number,
+	title = '',
 ): SavedTab => ({
 	id,
-	title: hostOf(url),
+	title: title.trim() || hostOf(url),
 	url,
 	notes: '',
 	pinned: false,
@@ -795,6 +796,10 @@ export function addSession(
 		Where it was saved: the device's name and kind.
 		*/
 		device?: DeviceStamp;
+		/**
+		A title for each link, in order; a link without one is named by its site.
+		*/
+		titles?: readonly string[];
 	},
 	id: string,
 	tabIds: readonly string[],
@@ -827,7 +832,13 @@ export function addSession(
 		sourceWindowId: null,
 		...input.device,
 		tabs: input.urls.map((url, index) =>
-			savedTab(url, tabIds[index] ?? `${id}-${index}`, index, now),
+			savedTab(
+				url,
+				tabIds[index] ?? `${id}-${index}`,
+				index,
+				now,
+				input.titles?.[index],
+			),
 		),
 	};
 	return {
@@ -847,6 +858,7 @@ export function addTabsToSession(
 	urls: readonly string[],
 	tabIds: readonly string[],
 	now: number,
+	titles: readonly string[] = [],
 ): Store {
 	const session = store.groups.find((group) => group.id === sessionId);
 	if (!session || urls.length === 0) {
@@ -865,6 +877,7 @@ export function addTabsToSession(
 					tabIds[index] ?? `${sessionId}-${start + index}`,
 					start + index,
 					now,
+					titles[index],
 				),
 			),
 		],

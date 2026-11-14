@@ -4,6 +4,7 @@ import android.util.Base64
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.nio.ByteBuffer
+import java.security.SecureRandom
 import java.text.Normalizer
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -12,7 +13,7 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * The two operations the private library needs, done natively because 600,000 PBKDF2 rounds are far too slow in
+ * The operations the private library needs, done natively because 600,000 PBKDF2 rounds are far too slow in
  * JavaScript. The formats follow apps/extension/src/shared/crypto-envelope.ts and private-lock.ts.
  */
 class TablodgeCryptoModule : Module() {
@@ -49,6 +50,48 @@ class TablodgeCryptoModule : Module() {
       val data = Base64.decode(cipherBase64, Base64.DEFAULT)
       decrypt(key, iv, name.toByteArray(Charsets.UTF_8), data)?.toString(Charsets.UTF_8)
     }
+    // A new random 256-bit data key, as base64. The private library seals its values with one.
+    Function("generateKey") {
+      Base64.encodeToString(randomBytes(KEY_BYTES), Base64.NO_WRAP)
+    }
+
+    // Wraps a data key in the credential envelope (PBKDF2-SHA-256 into AES-GCM), the format unwrapKey reads and the
+    // extension writes: the whole header is authenticated data, and the credential is normalized to NFKC first.
+    AsyncFunction("wrapKey") { keyBase64: String, credential: String ->
+      val salt = randomBytes(SALT_BYTES)
+      val iv = randomBytes(IV_BYTES)
+      val header = ByteBuffer.allocate(FIXED_HEADER + SALT_BYTES + IV_BYTES)
+        .put(byteArrayOf(0x54, 0x4c, 0x45, 0x4e))
+        .put(1.toByte())
+        .put(1.toByte())
+        .putInt(WRITE_ITERATIONS)
+        .put(SALT_BYTES.toByte())
+        .put(IV_BYTES.toByte())
+        .put(salt)
+        .put(iv)
+        .array()
+      val spec = PBEKeySpec(Normalizer.normalize(credential, Normalizer.Form.NFKC).toCharArray(), salt, WRITE_ITERATIONS, 256)
+      val key = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+      val sealed = encrypt(key, iv, header, Base64.decode(keyBase64, Base64.DEFAULT))
+      Base64.encodeToString(header + sealed, Base64.NO_WRAP)
+    }
+
+    // Seals one record value (JSON text) with the data key. The record's key name is authenticated data. Returns the
+    // base64 iv and ciphertext, which the caller puts into the sealed value.
+    AsyncFunction("sealValue") { keyBase64: String, name: String, json: String ->
+      val iv = randomBytes(IV_BYTES)
+      val sealed = encrypt(Base64.decode(keyBase64, Base64.DEFAULT), iv, name.toByteArray(Charsets.UTF_8), json.toByteArray(Charsets.UTF_8))
+      listOf(Base64.encodeToString(iv, Base64.NO_WRAP), Base64.encodeToString(sealed, Base64.NO_WRAP))
+    }
+  }
+
+  private fun randomBytes(size: Int): ByteArray = ByteArray(size).also { SecureRandom().nextBytes(it) }
+
+  private fun encrypt(key: ByteArray, iv: ByteArray, aad: ByteArray, data: ByteArray): ByteArray {
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+    cipher.updateAAD(aad)
+    return cipher.doFinal(data)
   }
 
   private fun decrypt(key: ByteArray, iv: ByteArray, aad: ByteArray, data: ByteArray): ByteArray? =
@@ -64,5 +107,10 @@ class TablodgeCryptoModule : Module() {
   private companion object {
     const val FIXED_HEADER = 12
     const val MAX_ITERATIONS = 20_000_000
+    // What the extension writes (OWASP's figure for PBKDF2-HMAC-SHA256); an envelope keeps its own count.
+    const val WRITE_ITERATIONS = 600_000
+    const val KEY_BYTES = 32
+    const val SALT_BYTES = 16
+    const val IV_BYTES = 12
   }
 }

@@ -388,7 +388,6 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const [folderMenuId, setFolderMenuId] = useState<string>();
 	const [renamingFolderId, setRenamingFolderId] = useState<string>();
 	const menuFor = store.groups.find((session) => session.id === menuId);
-	const readOnly = view === 'private';
 	const colorsNow = useColors();
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
@@ -397,7 +396,6 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	);
 	const folderMenu = folderMenuId
 		? folderMenuFor(folderMenuId, store, folders, {
-				readOnly,
 				sort: links.sessionSort,
 				share: setShareTarget,
 				rename: setRenamingFolderId,
@@ -449,29 +447,15 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	);
 	const act = useCallback(
 		(action: SessionAction, session: Session) => {
-			const changes = new Set<SessionAction>([
-				'color',
-				'rename',
-				'move',
-				'archive',
-				'delete',
-			]);
-			if (readOnly && changes.has(action)) {
-				showSnack('The private library cannot be changed here');
-				return;
-			}
-
 			switch (action) {
 				case 'open': {
 					openAll(
 						session.tabs.map((tab) => linkToOpen(tab.url, links)),
 						session.name,
 					);
-					if (!readOnly) {
-						void edit((current) =>
-							markSessionOpened(current, session.id, Date.now()),
-						);
-					}
+					void edit((current) =>
+						markSessionOpened(current, session.id, Date.now()),
+					);
 
 					break;
 				}
@@ -529,7 +513,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				default:
 			}
 		},
-		[links, readOnly],
+		[links],
 	);
 	const removeTab = useCallback((session: Session, tabId: string) => {
 		if (
@@ -562,17 +546,16 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 		setMenuId(session.id);
 	}, []);
 	const menu: SheetAction[] = menuFor
-		? (readOnly
-				? (['open', 'share'] as const)
-				: ([
-						'open',
-						'rename',
-						'color',
-						'move',
-						'share',
-						'archive',
-						'delete',
-					] as const)
+		? (
+				[
+					'open',
+					'rename',
+					'color',
+					'move',
+					'share',
+					'archive',
+					'delete',
+				] as const
 			).map((action) => {
 				const actionLook = sessionActionLook(action, colorsNow);
 				return {
@@ -630,7 +613,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 					}
 				>
 					{view === 'private'
-						? 'Nothing is saved in the private library yet.'
+						? 'Nothing is saved in the private library yet. Choose Private when you save a link.'
 						: connected
 							? 'This phone is connected to your server, but the library has no sessions yet. Sessions saved in the TabLodge extension appear here after they sync. To save one from here, share several links from your browser to TabLodge.'
 							: 'Sessions saved in the TabLodge extension appear here once this phone is synced with your server. To save one from here, share several links from your browser to TabLodge.'}
@@ -639,7 +622,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 		);
 	}
 
-	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library, read only' : 'saved'}`;
+	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library' : 'saved'}`;
 	return (
 		<>
 			<FlatList
@@ -704,7 +687,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							onToggle={toggle}
 							onAct={act}
 							onMenu={openMenu}
-							onRemoveTab={readOnly ? undefined : removeTab}
+							onRemoveTab={removeTab}
 						/>
 					</View>
 				)}
@@ -854,20 +837,18 @@ const styles = StyleSheet.create({
 
 /**
 The menu for one folder chip: sharing its links, and for a folder that can change, renaming and deleting it. Sessions of
-a deleted folder move to Unfiled. The private library only shares.
+a deleted folder move to Unfiled.
 */
 function folderMenuFor(
 	id: string,
 	store: Store,
 	folders: SessionFolderView[],
 	{
-		readOnly,
 		sort,
 		share,
 		rename,
 		removed,
 	}: {
-		readOnly: boolean;
 		sort: Settings['sessionSort'];
 		share: (target: ShareTarget) => void;
 		rename: (id: string) => void;
@@ -893,7 +874,7 @@ function folderMenuFor(
 		});
 	}
 
-	if (folder && canChangeFolder(folder) && !readOnly) {
+	if (folder && canChangeFolder(folder)) {
 		actions.push(
 			{
 				icon: 'create-outline',

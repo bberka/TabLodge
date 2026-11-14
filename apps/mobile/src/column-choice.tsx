@@ -5,7 +5,7 @@ import {ColorPicker} from './color-picker';
 import {columnGlyph, useChipLook} from './column-icons';
 import {IconPicker} from './icon-picker';
 import {addColumn, columnViews} from './library';
-import {edit, newId, useLibrary} from './library-store';
+import {editIn, type LibraryName, newId, useLibraryOf} from './library-store';
 import {getPreferences} from './preferences';
 import {useColors} from './theme';
 import {Chips, Field} from './ui';
@@ -17,8 +17,11 @@ const NEW_COLUMN = '__new-column__';
 The state of a column selector: the existing columns plus a "New column" entry. `resolve` makes the new column when
 that entry is chosen and returns where to save.
 */
-export function useColumnChoice(initial = '') {
-	const store = useLibrary();
+export function useColumnChoice(
+	initial = '',
+	library: LibraryName = 'regular',
+) {
+	const store = useLibraryOf(library);
 	const columns = columnViews(store).filter((column) =>
 		store.bookmarkColumns.some((own) => own.id === column.id),
 	);
@@ -63,7 +66,7 @@ export function useColumnChoice(initial = '') {
 			}
 
 			const id = newId();
-			await edit((current) =>
+			await editIn(library, (current) =>
 				addColumn(current, name, id, Date.now(), newIcon, newColor),
 			);
 			return {id, name};

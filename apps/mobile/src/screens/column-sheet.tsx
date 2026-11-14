@@ -8,7 +8,7 @@ import {columnGlyph} from '../column-icons';
 import {type DialogAction, showDialog} from '../dialog';
 import {IconPicker} from '../icon-picker';
 import {addColumn, deleteColumn, updateColumn} from '../library';
-import {edit, newId, useRegularLibrary} from '../library-store';
+import {edit, newId, useLibrary} from '../library-store';
 import {useColors} from '../theme';
 import {Button, Field, IconButton} from '../ui';
 
@@ -83,7 +83,7 @@ function ColumnForm({
 	onDone: (id?: string) => void;
 }) {
 	const colors = useColors();
-	const store = useRegularLibrary();
+	const store = useLibrary();
 	const [name, setName] = useState(column?.name ?? '');
 	const [icon, setIcon] = useState(column?.icon ?? '');
 	const [color, setColor] = useState(column?.color ?? '');

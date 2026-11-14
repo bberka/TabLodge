@@ -24,6 +24,7 @@ import {SaveLinksForm} from './src/screens/save-links';
 import {SessionsScreen} from './src/screens/sessions';
 import {SettingsScreen} from './src/screens/settings';
 import {DialogHost} from './src/dialog';
+import {PrivateSheetHost} from './src/private-sheets';
 import {SnackbarHost, showSnack} from './src/snackbar';
 import {type BarTab, TabBar} from './src/tab-bar';
 import {useColors} from './src/theme';
@@ -192,6 +193,7 @@ function Main() {
 			<TabBar tabs={TABS} selected={tab} hidden={selecting} onSelect={setTab} />
 			<SnackbarHost />
 			<DialogHost />
+			<PrivateSheetHost />
 			<ConnectSheet
 				visible={connecting}
 				onClose={() => {

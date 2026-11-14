@@ -87,7 +87,6 @@ export function BookmarksScreen({
 	const selection = useSelection();
 	const view = useView();
 	const {connected} = useSyncStatus();
-	const readOnly = view === 'private';
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
 	const [query, setQuery] = useState('');
@@ -142,7 +141,6 @@ export function BookmarksScreen({
 	const allSelected = shown.length > 0 && selection.ids.size === shown.length;
 	const chipMenu = chipMenuId
 		? columnMenu(chipMenuId, store, {
-				readOnly,
 				links,
 				edit(id) {
 					setSheet({kind: 'column', id});
@@ -245,7 +243,7 @@ export function BookmarksScreen({
 	) : (
 		<>
 			<PrivateSwitch />
-			{shape.ios && !readOnly && (
+			{shape.ios && (
 				<IconButton
 					icon="add"
 					label="Add link"
@@ -293,7 +291,7 @@ export function BookmarksScreen({
 									? undefined
 									: reordering
 										? 'Move bookmarks up or down, then tap Done'
-										: `${store.bookmarks.length} saved${readOnly ? ', private, read only' : ''}`
+										: `${store.bookmarks.length} saved${view === 'private' ? ', private' : ''}`
 							}
 							right={headerActions}
 						/>
@@ -311,21 +309,17 @@ export function BookmarksScreen({
 									setQuery('');
 								}}
 							/>
-							{!searching && (columns.length > 0 || !readOnly) && (
+							{!searching && (
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
 										items={[
 											...columns.map((column) => chipLook(column)),
-											...(readOnly
-												? []
-												: [
-														{
-															id: NEW_COLUMN_CHIP,
-															name: 'New column',
-															glyph: 'add' as const,
-															tint: colors.accent,
-														},
-													]),
+											{
+												id: NEW_COLUMN_CHIP,
+												name: 'New column',
+												glyph: 'add' as const,
+												tint: colors.accent,
+											},
 										]}
 										selected={columnId}
 										onLongPress={(id) => {
@@ -356,22 +350,20 @@ export function BookmarksScreen({
 							icon="bookmark-outline"
 							title="No bookmarks yet"
 							action={
-								readOnly ? undefined : (
-									<View style={styles.emptyActions}>
-										<Button label="Add a link" icon="add" onPress={onAdd} />
-										{!connected && (
-											<Button
-												kind="plain"
-												label="Connect to your server"
-												onPress={onConnect}
-											/>
-										)}
-									</View>
-								)
+								<View style={styles.emptyActions}>
+									<Button label="Add a link" icon="add" onPress={onAdd} />
+									{!connected && (
+										<Button
+											kind="plain"
+											label="Connect to your server"
+											onPress={onConnect}
+										/>
+									)}
+								</View>
 							}
 						>
-							{readOnly
-								? 'Nothing is saved in the private library yet.'
+							{view === 'private'
+								? 'Nothing is saved in the private library yet. Save a link to start it.'
 								: connected
 									? 'This phone is connected to your server, but the library has no bookmarks yet. Save a link, or share one from your browser or the extension.'
 									: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
@@ -397,7 +389,6 @@ export function BookmarksScreen({
 					) : (
 						<BookmarkRow
 							bookmark={item}
-							readOnly={readOnly}
 							selecting={selection.active}
 							checked={selection.ids.has(item.id)}
 							onToggle={() => {
@@ -424,13 +415,13 @@ export function BookmarksScreen({
 					void refresh();
 				}}
 			/>
-			{!selection.active && !reordering && !shape.ios && !readOnly && (
+			{!selection.active && !reordering && !shape.ios && (
 				<AddButton bottom={space} onPress={onAdd} />
 			)}
 			{!selection.active && !reordering && (
 				<MenuButton
 					bottom={space}
-					right={shape.ios || readOnly ? 16 : 16 + 56 + 12}
+					right={shape.ios ? 16 : 16 + 56 + 12}
 					onPress={() => {
 						setMenuOpen(true);
 					}}
@@ -488,60 +479,57 @@ export function BookmarksScreen({
 									},
 								},
 							]),
-					...(readOnly
-						? []
-						: [
+
+					{
+						icon: 'checkbox-outline' as const,
+						label: 'Select bookmarks',
+						hint: 'Move, open or delete several at once',
+						onPress() {
+							selection.start();
+						},
+					},
+					...(!searching && shown.length > 1
+						? [
 								{
-									icon: 'checkbox-outline' as const,
-									label: 'Select bookmarks',
-									hint: 'Move, open or delete several at once',
+									icon: 'swap-vertical-outline' as const,
+									label: 'Put bookmarks in order',
+									hint: `Move bookmarks up and down in ${columnName}`,
 									onPress() {
-										selection.start();
+										setReordering(true);
 									},
 								},
-								...(!searching && shown.length > 1
-									? [
-											{
-												icon: 'swap-vertical-outline' as const,
-												label: 'Put bookmarks in order',
-												hint: `Move bookmarks up and down in ${columnName}`,
-												onPress() {
-													setReordering(true);
-												},
-											},
-										]
-									: []),
-								...(!searching && editableColumn
-									? [
-											{
-												icon: 'color-palette-outline' as const,
-												label: 'Edit column',
-												hint: 'Rename it, or change its icon and color',
-												onPress() {
-													setSheet({kind: 'column', id: columnId});
-												},
-											},
-										]
-									: []),
-								...(!searching && store.bookmarks.length > 1
-									? [
-											{
-												icon: 'copy-outline' as const,
-												label: 'Remove duplicates',
-												hint: 'Keep the oldest copy of each saved address',
-												onPress: removeDuplicates,
-											},
-										]
-									: []),
+							]
+						: []),
+					...(!searching && editableColumn
+						? [
 								{
-									icon: 'list-outline' as const,
-									label: 'Manage columns',
-									hint: 'Open, put in order, or change any column',
+									icon: 'color-palette-outline' as const,
+									label: 'Edit column',
+									hint: 'Rename it, or change its icon and color',
 									onPress() {
-										setColumnsOpen(true);
+										setSheet({kind: 'column', id: columnId});
 									},
 								},
-							]),
+							]
+						: []),
+					...(!searching && store.bookmarks.length > 1
+						? [
+								{
+									icon: 'copy-outline' as const,
+									label: 'Remove duplicates',
+									hint: 'Keep the oldest copy of each saved address',
+									onPress: removeDuplicates,
+								},
+							]
+						: []),
+					{
+						icon: 'list-outline' as const,
+						label: 'Manage columns',
+						hint: 'Open, put in order, or change any column',
+						onPress() {
+							setColumnsOpen(true);
+						},
+					},
 				]}
 				onClose={() => {
 					setMenuOpen(false);
@@ -617,19 +605,17 @@ const styles = StyleSheet.create({
 });
 
 /**
-The menu for one column chip: what holding it down offers. The Unfiled bucket and the private library only open their
+The menu for one column chip: what holding it down offers. The Unfiled bucket only opens its
 bookmarks.
 */
 function columnMenu(
 	id: string,
 	store: Store,
 	{
-		readOnly,
 		links,
 		edit: editColumn,
 		removed,
 	}: {
-		readOnly: boolean;
 		links: ReturnType<typeof useLinkSettings>;
 		edit: (id: string) => void;
 		removed: (id: string) => void;
@@ -657,7 +643,7 @@ function columnMenu(
 		});
 	}
 
-	if (real && !readOnly) {
+	if (real) {
 		actions.push({
 			icon: 'color-palette-outline',
 			label: 'Edit column',

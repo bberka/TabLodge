@@ -28,13 +28,8 @@ export function BookmarkRow({
 	onEdit,
 	onMove,
 	onDelete,
-	readOnly = false,
 }: {
 	bookmark: Bookmark;
-	/**
-	The private library cannot be changed here: tapping opens, and there is no swipe or selection.
-	*/
-	readOnly?: boolean;
 	selecting: boolean;
 	checked: boolean;
 	onToggle: () => void;
@@ -67,26 +62,22 @@ export function BookmarkRow({
 
 	return (
 		<SwipeRow
-			disabled={selecting || readOnly}
-			left={readOnly ? undefined : swipe(prefs.swipeRight)}
-			right={readOnly ? undefined : swipe(prefs.swipeLeft)}
+			disabled={selecting}
+			left={swipe(prefs.swipeRight)}
+			right={swipe(prefs.swipeLeft)}
 		>
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
 				accessibilityLabel={`${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
-				accessibilityActions={
-					readOnly
-						? [{name: 'open', label: 'Open in browser'}]
-						: [
-								{name: 'open', label: 'Open in browser'},
-								{name: 'select', label: 'Select'},
-								{name: 'edit', label: 'Edit'},
-								{name: 'move', label: 'Move to column'},
-								{name: 'delete', label: 'Delete'},
-							]
-				}
+				accessibilityActions={[
+					{name: 'open', label: 'Open in browser'},
+					{name: 'select', label: 'Select'},
+					{name: 'edit', label: 'Edit'},
+					{name: 'move', label: 'Move to column'},
+					{name: 'delete', label: 'Delete'},
+				]}
 				style={({pressed}) => [
 					styles.row,
 					settings.bookmarkDensity === 'compact' && styles.compact,
@@ -132,7 +123,7 @@ export function BookmarkRow({
 				onPress={
 					selecting ? onToggle : prefs.tapAction === 'edit' ? onEdit : open
 				}
-				onLongPress={readOnly ? undefined : selecting ? onToggle : onSelect}
+				onLongPress={selecting ? onToggle : onSelect}
 			>
 				{selecting ? (
 					<Icon

@@ -833,3 +833,32 @@ describe('describing a session', () => {
 		assert.equal(long.groups[0].description.length, 10_502);
 	});
 });
+
+describe('saving a link with its title to a session', () => {
+	test('a new session and an added tab keep the title, and fall back to the site', () => {
+		const made = addSession(
+			emptyStore(NOW),
+			{
+				name: 'Reading',
+				urls: ['https://a.example/x', 'https://b.example/y'],
+				titles: ['The title'],
+			},
+			's1',
+			['t1', 't2'],
+			NOW,
+		);
+		assert.deepEqual(
+			made.groups[0].tabs.map((tab) => tab.title),
+			['The title', 'b.example'],
+		);
+		const more = addTabsToSession(
+			made,
+			's1',
+			['https://c.example/z'],
+			['t3'],
+			NOW + 1,
+			['Third'],
+		);
+		assert.equal(more.groups[0].tabs[2].title, 'Third');
+	});
+});
