@@ -46,6 +46,7 @@ export function ActionSheet({
 						key={action.label}
 						accessibilityRole="button"
 						accessibilityLabel={action.label}
+						accessibilityHint={action.hint}
 						style={({pressed}) => [
 							styles.row,
 							{backgroundColor: pressed ? colors.pressed : 'transparent'},
@@ -69,9 +70,6 @@ export function ActionSheet({
 							>
 								{action.label}
 							</Text>
-							{action.hint && (
-								<Text style={{color: colors.muted}}>{action.hint}</Text>
-							)}
 						</View>
 					</Pressable>
 				))}
