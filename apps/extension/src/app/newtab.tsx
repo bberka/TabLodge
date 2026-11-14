@@ -156,6 +156,7 @@ import {
 	previewBookmarkDrop,
 	type DropIndicator,
 } from './bookmark-drag';
+import {useBookmarkSelection} from './bookmark-selection';
 import {InsecureMarkFor} from './insecure-mark';
 import {openLink, openOwnPage} from './link-target';
 import type {ExportData} from './export-formats';
@@ -364,13 +365,6 @@ function NewTab() {
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
 	const [moveBookmarkColumnDraft, setMoveBookmarkColumnDraft] =
 		useState<BookmarkColumnDraft>({name: ''});
-	const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(
-		() => new Set(),
-	);
-	const [selectionModifier, setSelectionModifier] = useState(false);
-	const [bookmarkSelectionEnabled, setBookmarkSelectionEnabled] =
-		useState(false);
-	const bookmarkSelectionAnchorRef = useRef<string | null>(null);
 	const draggedBookmarksRef = useRef<string[]>([]);
 	const bookmarkBatchRunningRef = useRef(false);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
@@ -397,6 +391,14 @@ function NewTab() {
 		? state?.bookmarks.find((entry) => entry.id === bookmarkEdit.id)
 		: undefined;
 	const bookmarks = state?.bookmarks || NO_BOOKMARKS;
+	const {
+		selected: selectedBookmarks,
+		modifier: selectionModifier,
+		enabled: bookmarkSelectionEnabled,
+		setEnabled: setBookmarkSelectionEnabled,
+		toggle: toggleBookmark,
+		clear: clearBookmarkSelection,
+	} = useBookmarkSelection(bookmarks);
 	const selectedBookmarkIds = bookmarks
 		.filter((bookmark) => selectedBookmarks.has(bookmark.id))
 		.map((bookmark) => bookmark.id);
@@ -412,73 +414,6 @@ function NewTab() {
 				)
 			: undefined;
 
-	useEffect(() => {
-		const onKey = (event: KeyboardEvent) => {
-			setSelectionModifier(event.altKey);
-			if (
-				!(event.type === 'keydown' && event.key === 'Escape') ||
-				event.defaultPrevented ||
-				document.querySelector('[role="dialog"], [role="menu"]')
-			) {
-				return;
-			}
-
-			setSelectedBookmarks(new Set());
-			setBookmarkSelectionEnabled(false);
-			bookmarkSelectionAnchorRef.current = null;
-		};
-
-		const reset = () => setSelectionModifier(false);
-		globalThis.addEventListener('keydown', onKey);
-		globalThis.addEventListener('keyup', onKey);
-		window.addEventListener('blur', reset);
-		return () => {
-			globalThis.removeEventListener('keydown', onKey);
-			globalThis.removeEventListener('keyup', onKey);
-			window.removeEventListener('blur', reset);
-		};
-	}, []);
-
-	function toggleBookmark(bookmark: Bookmark, range = false) {
-		const order = [
-			...document.querySelectorAll<HTMLElement>(
-				'#bookmark-library [data-bookmark-id]',
-			),
-		].map((card) => card.dataset.bookmarkId || '');
-		const first = order.indexOf(bookmarkSelectionAnchorRef.current || '');
-		const last = order.indexOf(bookmark.id);
-		const rangeIds =
-			range && first !== -1 && last !== -1
-				? order.slice(Math.min(first, last), Math.max(first, last) + 1)
-				: [bookmark.id];
-		setBookmarkSelectionEnabled(true);
-		setSelectedBookmarks((old) => {
-			const next = new Set(old);
-			if (range) {
-				for (const id of rangeIds) {
-					next.add(id);
-				}
-			} else if (next.has(bookmark.id)) {
-				next.delete(bookmark.id);
-			} else {
-				next.add(bookmark.id);
-			}
-
-			return next;
-		});
-		bookmarkSelectionAnchorRef.current = bookmark.id;
-	}
-
-	useEffect(() => {
-		setSelectedBookmarks((old) => {
-			const next = new Set(
-				[...old].filter((id) =>
-					bookmarks.some((bookmark) => bookmark.id === id),
-				),
-			);
-			return next.size === old.size ? old : next;
-		});
-	}, [bookmarks]);
 	const settings: Partial<Settings> = state?.settings || {};
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
@@ -1278,8 +1213,7 @@ function NewTab() {
 			}
 
 			// The selection was only there to pick what to move.
-			setSelectedBookmarks(new Set());
-			bookmarkSelectionAnchorRef.current = null;
+			clearBookmarkSelection();
 			showStatus(`Moved ${plural(bookmarkIds.length, 'bookmark')}.`);
 			// The selection bar (and the dialog opened from it) is gone, so keep focus on the page.
 			keepFocusAfterMove();
@@ -1593,7 +1527,7 @@ function NewTab() {
 
 	async function bookmarkAction(action: BookmarkAction, bookmark: Bookmark) {
 		if (action === 'select' || action === 'select-range') {
-			toggleBookmark(bookmark, action === 'select-range');
+			toggleBookmark(bookmark.id, action === 'select-range');
 			return;
 		}
 
@@ -2346,8 +2280,7 @@ function NewTab() {
 									return;
 								}
 
-								setSelectedBookmarks(new Set());
-								bookmarkSelectionAnchorRef.current = null;
+								clearBookmarkSelection();
 							}}
 						>
 							<SquareCheck />
@@ -2516,8 +2449,7 @@ function NewTab() {
 						disabled={busy === 'bookmark-batch'}
 						aria-label="Clear bookmark selection"
 						onClick={() => {
-							setSelectedBookmarks(new Set());
-							bookmarkSelectionAnchorRef.current = null;
+							clearBookmarkSelection();
 						}}
 					>
 						<X className="h-4 w-4" />
