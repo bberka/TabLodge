@@ -428,6 +428,8 @@ export function ShareSheet({
 							<Text style={{color: colors.muted}}>{LOST_CREDENTIAL_NOTE}</Text>
 						)}
 					</>
+				) : links === 0 ? (
+					<Text style={{color: colors.muted}}>Nothing to share yet.</Text>
 				) : (
 					<Chips
 						items={WAYS}

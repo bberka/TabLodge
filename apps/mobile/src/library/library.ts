@@ -4,6 +4,7 @@ apps/extension/src/shared/sync can merge it with the server; these functions onl
 */
 import type {
 	Bookmark,
+	Folder,
 	SavedTab,
 	Session,
 	Settings,
@@ -86,6 +87,84 @@ export function hostOf(url: string): string {
 	} catch {
 		return url;
 	}
+}
+
+export type LibraryStats = {
+	sessions: number;
+	/**
+	Saved tabs, across every session.
+	*/
+	tabs: number;
+	folders: number;
+	bookmarks: number;
+	columns: number;
+	/**
+	The sites that hold the most saved links (bookmarks and saved tabs), most first.
+	*/
+	topSites: Array<{host: string; count: number}>;
+	largestSession?: {name: string; tabs: number};
+	/**
+	When the oldest session or bookmark was saved, if any has a date.
+	*/
+	since?: number;
+};
+
+const TOP_SITES = 5;
+
+/**
+What the library holds, for the Statistics sheet.
+*/
+export function libraryStats(store: Store): LibraryStats {
+	const counts = new Map<string, number>();
+	const count = (url: string) => {
+		const host = hostOf(url);
+		counts.set(host, (counts.get(host) ?? 0) + 1);
+	};
+
+	let tabs = 0;
+	let largest: {name: string; tabs: number} | undefined;
+	let since: number | undefined;
+	const seen = (time: number | undefined) => {
+		if (
+			time !== undefined &&
+			time > 0 &&
+			(since === undefined || time < since)
+		) {
+			since = time;
+		}
+	};
+
+	for (const session of store.groups) {
+		tabs += session.tabs.length;
+		for (const tab of session.tabs) {
+			count(tab.url);
+		}
+
+		if (!largest || session.tabs.length > largest.tabs) {
+			largest = {name: session.name, tabs: session.tabs.length};
+		}
+
+		seen(session.createdAt);
+	}
+
+	for (const bookmark of store.bookmarks) {
+		count(bookmark.url);
+		seen(bookmark.createdAt);
+	}
+
+	return {
+		sessions: store.groups.length,
+		tabs,
+		folders: store.folders.length,
+		bookmarks: store.bookmarks.length,
+		columns: store.bookmarkColumns.length,
+		topSites: [...counts]
+			.map(([host, total]) => ({host, count: total}))
+			.toSorted((a, b) => b.count - a.count || a.host.localeCompare(b.host))
+			.slice(0, TOP_SITES),
+		largestSession: largest,
+		since,
+	};
 }
 
 /**
@@ -1148,6 +1227,47 @@ export function archiveSession(store: Store, id: string, now: number): Store {
 				],
 			};
 	return moveSession(withFolder, id, found?.id ?? ARCHIVED_FOLDER_ID, now);
+}
+
+/**
+Whether a session sits in the Archived folder.
+*/
+export function isArchivedSession(
+	folders: readonly Folder[],
+	session: Session,
+): boolean {
+	const folder = folders.find((entry) => entry.id === session.folderId);
+	return folder !== undefined && isArchived(folder);
+}
+
+/**
+Takes a session out of the Archived folder, into Unfiled (or the first folder that is not Archived; Unfiled is made
+when there is none).
+*/
+export function unarchiveSession(store: Store, id: string, now: number): Store {
+	const open = store.folders.filter((folder) => !isArchived(folder));
+	const target = open.find((folder) => folder.isDefault) ?? open[0];
+	if (target) {
+		return moveSession(store, id, target.id, now);
+	}
+
+	return moveSession(
+		{
+			...store,
+			folders: [
+				...store.folders,
+				{
+					id: DEFAULT_SESSION_FOLDER_ID,
+					name: 'Unfiled',
+					createdAt: now,
+					isDefault: true,
+				},
+			],
+		},
+		id,
+		DEFAULT_SESSION_FOLDER_ID,
+		now,
+	);
 }
 
 /**

@@ -1918,18 +1918,44 @@ export function SessionManager({
 									</span>
 								</button>
 							);
+							const folderGroups =
+								folder.id === ALL
+									? groups
+									: groups.filter((group) => group.folderId === folder.id);
+							const shareFolder = {
+								id: 'share-folder',
+								label: 'Share',
+								icon: Share2,
+								disabled: folderGroups.length === 0,
+								onSelect() {
+									openShare({
+										title: folder.name,
+										groups: folderGroups,
+										data: {kind: 'sessions', groups: folderGroups, folders},
+									});
+								},
+							};
 							if (
 								!('createdAt' in folder) ||
 								folder.isDefault ||
 								isArchivedFolder(folder)
 							) {
-								return chip;
+								return (
+									<ActionContextMenu
+										key={folder.id}
+										actions={() => [shareFolder]}
+									>
+										{chip}
+									</ActionContextMenu>
+								);
 							}
 
 							return (
 								<ActionContextMenu
 									key={folder.id}
 									actions={() => [
+										shareFolder,
+										{type: 'separator'},
 										{
 											id: 'edit-folder',
 											label: 'Edit folder',

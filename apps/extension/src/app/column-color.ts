@@ -9,6 +9,11 @@ export const COLUMN_COLOR_TEXT =
 	'text-[rgb(var(--column-light))] dark:text-[rgb(var(--column-dark))]';
 export const COLUMN_COLOR_BAR =
 	'shadow-[inset_0_2px_0_rgb(var(--column-light))] dark:shadow-[inset_0_2px_0_rgb(var(--column-dark))]';
+/**
+A soft wash of the column's color, for the background of its active item.
+*/
+export const COLUMN_COLOR_SOFT =
+	'bg-[rgb(var(--column-light)/0.06)] dark:bg-transparent';
 export const COLUMN_COLOR_EDGE =
 	'shadow-[inset_3px_0_0_rgb(var(--column-light))] dark:shadow-[inset_3px_0_0_rgb(var(--column-dark))]';
 

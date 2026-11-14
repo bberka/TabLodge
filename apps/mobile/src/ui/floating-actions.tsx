@@ -1,9 +1,17 @@
-import {useEffect, useRef, useState} from 'react';
-import {Animated, Easing, Pressable, StyleSheet, TextInput} from 'react-native';
+import {type ComponentRef, useEffect, useRef, useState} from 'react';
+import {
+	Animated,
+	Easing,
+	Pressable,
+	StyleSheet,
+	TextInput,
+	useWindowDimensions,
+} from 'react-native';
 import {usePreferences} from '../settings/preferences';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
 import {motion} from './motion';
 import {useColors} from './theme';
+import {useScrolledDown} from './scroll-state';
 import {useBarDrop} from './tab-bar';
 import {Icon, IconButton, type IconName} from './ui';
 
@@ -11,6 +19,8 @@ import {Icon, IconButton, type IconName} from './ui';
 Every round button in the row, and the search drawer, share this size, so the add, search and menu buttons read as one set.
 */
 const SIZE = 52;
+// The floating search bar when it has shrunk: the search icon and the close arrow.
+const SMALL_SEARCH_WIDTH = 120;
 
 /**
 The room a list leaves at its end so the round buttons, or the search bar that takes their place, never hide its last
@@ -79,18 +89,15 @@ function RoundButton({
 }
 
 /**
-The row of round buttons in a screen's bottom right corner: the menu, search, and add, each only when its handler is
-given. `bottom` is the room the tab bar takes.
+The row of round buttons in a screen's bottom right corner: search and add, each only when its handler is given. `bottom` is the room the tab bar takes.
 */
 export function FloatingActions({
 	bottom,
-	onMenu,
 	onSearch,
 	onAdd,
 	buttonLabel = 'Add link',
 }: {
 	bottom: number;
-	onMenu?: () => void;
 	onSearch?: () => void;
 	onAdd?: () => void;
 	buttonLabel?: string;
@@ -115,13 +122,6 @@ export function FloatingActions({
 				{bottom: bottom + 16, transform: [{translateY: shift}]},
 			]}
 		>
-			{onMenu && (
-				<RoundButton
-					icon="ellipsis-horizontal"
-					label="More actions"
-					onPress={onMenu}
-				/>
-			)}
 			{onSearch && (
 				<RoundButton icon="search" label="Search" onPress={onSearch} />
 			)}
@@ -156,11 +156,34 @@ export function SearchDock({
 	const inset = keyboardInset();
 	// A floating tab bar gets a floating, rounded search bar; a docked one gets a banner across the screen.
 	const {floatingBar} = usePreferences();
+	// While the page scrolls and the input has no focus, the floating bar shrinks to a small pill, as the tab bar does.
+	const {width: screenWidth} = useWindowDimensions();
+	const scrolledDown = useScrolledDown();
+	const [focused, setFocused] = useState(true);
+	const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+	// Android keeps an input focused after Back hides the keyboard, so a closed keyboard counts as no focus too.
+	const idle = !focused || !keyboardOpen;
+	const small = floatingBar && scrolledDown && idle && query === '';
+	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
+	useEffect(() => {
+		Animated.timing(shrink, {
+			toValue: small ? 1 : 0,
+			duration: motion(260),
+			easing: Easing.out(Easing.cubic),
+			useNativeDriver: false,
+		}).start();
+	}, [small, shrink]);
 	return (
 		<Animated.View
 			style={[
 				styles.dock,
 				floatingBar ? styles.floating : styles.banner,
+				floatingBar && {
+					width: shrink.interpolate({
+						inputRange: [0, 1],
+						outputRange: [screenWidth - 32, SMALL_SEARCH_WIDTH],
+					}),
+				},
 				{
 					bottom: floatingBar
 						? keyboardOpen
@@ -175,18 +198,37 @@ export function SearchDock({
 			]}
 		>
 			<Icon name="search" size={22} color={colors.muted} />
-			<TextInput
-				autoFocus
-				accessibilityLabel={label}
-				placeholder={placeholder}
-				placeholderTextColor={colors.muted}
-				value={query}
-				autoCapitalize="none"
-				autoCorrect={false}
-				returnKeyType="search"
-				style={[styles.input, {color: colors.text}]}
-				onChangeText={onChange}
-			/>
+			<Animated.View
+				style={[
+					styles.inputBox,
+					{
+						opacity: shrink.interpolate({
+							inputRange: [0, 1],
+							outputRange: [1, 0],
+						}),
+					},
+				]}
+			>
+				<TextInput
+					ref={inputRef}
+					autoFocus
+					accessibilityLabel={label}
+					placeholder={placeholder}
+					placeholderTextColor={colors.muted}
+					value={query}
+					autoCapitalize="none"
+					autoCorrect={false}
+					returnKeyType="search"
+					style={[styles.input, {color: colors.text}]}
+					onChangeText={onChange}
+					onFocus={() => {
+						setFocused(true);
+					}}
+					onBlur={() => {
+						setFocused(false);
+					}}
+				/>
+			</Animated.View>
 			{query !== '' && (
 				<IconButton
 					icon="close-circle"
@@ -208,6 +250,19 @@ export function SearchDock({
 			>
 				<Icon name="chevron-down" color={colors.text} />
 			</Pressable>
+			{small && (
+				// The small pill opens the full bar again and puts the cursor back in it.
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel={`${label}, expand`}
+					style={styles.expand}
+					onPress={() => {
+						// Blurred first, so an input that kept its focus shows the keyboard again.
+						inputRef.current?.blur();
+						inputRef.current?.focus();
+					}}
+				/>
+			)}
 		</Animated.View>
 	);
 }
@@ -238,8 +293,8 @@ const styles = StyleSheet.create({
 		paddingRight: 4,
 	},
 	floating: {
-		left: 16,
 		right: 16,
+		overflow: 'hidden',
 		borderRadius: SIZE / 2,
 		borderWidth: 1,
 		elevation: 6,
@@ -250,7 +305,9 @@ const styles = StyleSheet.create({
 		borderTopWidth: StyleSheet.hairlineWidth,
 		elevation: 6,
 	},
-	input: {flex: 1, fontSize: 16, paddingVertical: 0},
+	inputBox: {flex: 1},
+	input: {fontSize: 16, paddingVertical: 0},
+	expand: {position: 'absolute', top: 0, bottom: 0, left: 0, right: 0},
 	close: {
 		width: SIZE,
 		height: SIZE,

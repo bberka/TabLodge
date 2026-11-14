@@ -8,10 +8,10 @@ import {confirm, notify} from '../../ui/dialog';
 import {edit, useLibrary} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
 import {useView} from '../../library/view';
-import type {Store} from '../../../../extension/src/shared/types';
 import {ActionSheet} from '../../ui/action-sheet';
 import {Button} from '../../ui/ui';
 import {RestoreSheet, type RestoreSource} from '../transfer/restore-sheet';
+import {StatisticsSheet} from '../transfer/statistics-sheet';
 import {
 	ShareSheet,
 	ImportSheet,
@@ -19,22 +19,6 @@ import {
 } from '../transfer/transfer-sheets';
 import {SettingsCard} from './settings-card';
 import {SECTIONS} from './settings-index';
-
-const plural = (count: number, word: string) =>
-	`${count} ${count === 1 ? word : `${word}s`}`;
-
-/**
-What the library holds, in a few lines, for the Statistics button. The phone cannot list a browser's open tabs, so
-this is only what is saved.
-*/
-function describeLibrary(store: Store, view: 'regular' | 'private'): string {
-	const links = store.groups.reduce((sum, group) => sum + group.tabs.length, 0);
-	return [
-		view === 'private' ? 'The private library holds:' : 'This phone holds:',
-		`${plural(store.groups.length, 'session')} with ${plural(links, 'saved tab')} in ${plural(store.folders.length, 'folder')}`,
-		`${plural(store.bookmarks.length, 'bookmark')} in ${plural(store.bookmarkColumns.length, 'column')}`,
-	].join('\n');
-}
 
 type Erasing = 'sessions' | 'bookmarks' | 'everything';
 
@@ -47,6 +31,7 @@ export function DataCard() {
 	const [exporting, setExporting] = useState(false);
 	const [restoring, setRestoring] = useState<RestoreSource>();
 	const [menu, setMenu] = useState<'transfer' | 'erase'>();
+	const [statistics, setStatistics] = useState(false);
 	const store = useLibrary();
 	const view = useView();
 	const erase = (what: Erasing) => {
@@ -165,7 +150,7 @@ export function DataCard() {
 						icon: 'stats-chart-outline',
 						label: 'Statistics',
 						onPress() {
-							notify('Statistics', describeLibrary(store, view));
+							setStatistics(true);
 						},
 					},
 				]}
@@ -212,6 +197,12 @@ export function DataCard() {
 				]}
 				onClose={() => {
 					setMenu(undefined);
+				}}
+			/>
+			<StatisticsSheet
+				visible={statistics}
+				onClose={() => {
+					setStatistics(false);
 				}}
 			/>
 			<RestoreSheet

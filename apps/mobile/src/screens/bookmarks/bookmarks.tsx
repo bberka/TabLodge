@@ -458,7 +458,18 @@ export function BookmarksScreen({
 			}}
 		/>
 	) : (
-		<PrivateSwitch />
+		<>
+			<PrivateSwitch />
+			{menuActions.length > 0 && (
+				<IconButton
+					icon="ellipsis-horizontal"
+					label="More actions"
+					onPress={() => {
+						setMenuOpen(true);
+					}}
+				/>
+			)}
+		</>
 	);
 
 	return (
@@ -630,18 +641,7 @@ export function BookmarksScreen({
 				}}
 			/>
 			{!selection.active && !reordering && !search.open && (
-				<FloatingActions
-					bottom={space}
-					onAdd={onAdd}
-					onSearch={search.show}
-					onMenu={
-						menuActions.length > 0
-							? () => {
-									setMenuOpen(true);
-								}
-							: undefined
-					}
-				/>
+				<FloatingActions bottom={space} onAdd={onAdd} onSearch={search.show} />
 			)}
 			{search.open && (
 				<SearchDock

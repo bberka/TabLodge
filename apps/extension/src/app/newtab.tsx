@@ -100,6 +100,7 @@ import {AccentPalette} from './accent-palette';
 import {
 	COLUMN_COLOR_BAR,
 	COLUMN_COLOR_EDGE,
+	COLUMN_COLOR_SOFT,
 	COLUMN_COLOR_TEXT,
 	columnColorVars,
 } from './column-color';
@@ -2526,10 +2527,17 @@ function NewTab() {
 										className={cn(
 											'flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm md:whitespace-normal',
 											compactBoard ? 'py-1' : 'py-1.5',
+											// A column with a color is active in that color: its text, wash, and edge; the rest use the accent.
 											active
-												? 'bg-primary/10 font-semibold text-primary'
+												? railColor
+													? cn(
+															'font-semibold',
+															COLUMN_COLOR_TEXT,
+															COLUMN_COLOR_SOFT,
+															COLUMN_COLOR_EDGE,
+														)
+													: 'bg-primary/10 font-semibold text-primary'
 												: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-											active && railColor && COLUMN_COLOR_EDGE,
 											railDrop?.id === item.id &&
 												!railDrop.position &&
 												'ring-2 ring-primary ring-offset-2 ring-offset-background',
@@ -2583,7 +2591,7 @@ function NewTab() {
 										/>
 										<span className="min-w-0 flex-1 truncate">{item.name}</span>
 										<Badge
-											variant={active ? 'accent' : 'secondary'}
+											variant={active && !railColor ? 'accent' : 'secondary'}
 											className="ml-1"
 										>
 											{item.count}

@@ -42,6 +42,7 @@ How each session action looks in the swipe reveal, the settings, and the session
 export function sessionActionLook(
 	action: SessionAction,
 	colors: Colors,
+	archived = false,
 ): {label: string; icon: IconName; color: string} {
 	switch (action) {
 		case 'open': {
@@ -61,7 +62,14 @@ export function sessionActionLook(
 		}
 
 		case 'archive': {
-			return {label: 'Archive', icon: 'archive-outline', color: colors.teal};
+			// A session in the Archived folder is taken out of it instead.
+			return archived
+				? {
+						label: 'Unarchive',
+						icon: 'arrow-undo-outline',
+						color: colors.teal,
+					}
+				: {label: 'Archive', icon: 'archive-outline', color: colors.teal};
 		}
 
 		case 'share': {

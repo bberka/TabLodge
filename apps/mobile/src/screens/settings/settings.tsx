@@ -36,6 +36,7 @@ import {ColorPicker, type LeadingChoice} from '../../ui/color-picker';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {DataCard} from './data-settings';
 import {ExcludedCard} from './excluded-settings';
+import {SettingsFooter} from './settings-footer';
 import {OpenLinksCard} from './open-links-settings';
 import {SelectRow, ValueRow} from './select-row';
 import {DeviceNameField} from './device-name-field';
@@ -369,6 +370,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 						)}
 					</View>
 				</SettingsQuery>
+				{needle === '' && <SettingsFooter />}
 				<BottomSheet
 					visible={pickingAccent}
 					label="Accent color"

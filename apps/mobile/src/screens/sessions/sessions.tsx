@@ -17,6 +17,8 @@ import {columnGlyph, columnTint, useChipLook} from '../../ui/column-icons';
 import {
 	ALL_SESSIONS_ID,
 	archiveSession,
+	isArchivedSession,
+	unarchiveSession,
 	canChangeFolder,
 	deleteFolder,
 	restoreFolder,
@@ -135,6 +137,7 @@ function TabPreview({session}: {session: Session}) {
 function SessionCardView({
 	session,
 	folderName,
+	archived,
 	tint: folderTint,
 	expanded,
 	onToggle,
@@ -144,6 +147,10 @@ function SessionCardView({
 }: {
 	session: Session;
 	folderName: string;
+	/**
+	The session is in the Archived folder, so its Archive action takes it out instead.
+	*/
+	archived: boolean;
 	tint: string;
 	expanded: boolean;
 	onToggle: (id: string) => void;
@@ -164,12 +171,12 @@ function SessionCardView({
 	const prefs = usePreferences();
 	const isCompact = prefs.compactSessions;
 	const main = prefs.sessionMain;
-	const mainLook = sessionActionLook(main, colors);
+	const mainLook = sessionActionLook(main, colors, archived);
 	const swipe = (action: SessionAction) =>
 		action === 'none'
 			? undefined
 			: {
-					...sessionActionLook(action, colors),
+					...sessionActionLook(action, colors, archived),
 					onTrigger() {
 						onAct(action, session);
 					},
@@ -199,7 +206,7 @@ function SessionCardView({
 						]}
 						accessibilityActions={SESSION_MENU.map(([name, label]) => ({
 							name,
-							label,
+							label: name === 'archive' && archived ? 'Unarchive' : label,
 						}))}
 						onAccessibilityAction={(event) => {
 							const name = event.nativeEvent.actionName;
@@ -504,14 +511,18 @@ export function SessionsScreen({
 				}
 
 				case 'archive': {
+					const was = session.folderId;
+					const archived = isArchivedSession(store.folders, session);
 					void edit((current) =>
-						archiveSession(current, session.id, Date.now()),
+						archived
+							? unarchiveSession(current, session.id, Date.now())
+							: archiveSession(current, session.id, Date.now()),
 					);
-					showSnack(`Archived ${session.name}`, {
+					showSnack(`${archived ? 'Unarchived' : 'Archived'} ${session.name}`, {
 						label: 'Undo',
 						run() {
 							void edit((current) =>
-								moveSession(current, session.id, session.folderId, Date.now()),
+								moveSession(current, session.id, was, Date.now()),
 							);
 						},
 					});
@@ -580,7 +591,11 @@ export function SessionsScreen({
 		setTabMenu({sessionId: session.id, tabId});
 	}, []);
 	const menuItem = (action: SessionAction, session: Session): SheetAction => {
-		const actionLook = sessionActionLook(action, colorsNow);
+		const actionLook = sessionActionLook(
+			action,
+			colorsNow,
+			isArchivedSession(store.folders, session),
+		);
 		return {
 			icon: actionLook.icon,
 			label: actionLook.label,
@@ -797,6 +812,7 @@ export function SessionsScreen({
 						<SessionCard
 							session={item}
 							folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
+							archived={isArchivedSession(store.folders, item)}
 							tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
 							expanded={isExpandAll !== flipped.has(item.id)}
 							onToggle={toggle}
@@ -1021,18 +1037,16 @@ function folderMenuFor(
 	const sessions = sessionsIn(store, id, sort);
 	const folder = store.folders.find((entry) => entry.id === id);
 	const actions: SheetAction[] = [];
-	if (sessions.length > 0) {
-		actions.push({
-			icon: 'share-outline',
-			label: 'Share',
-			onPress() {
-				openShare({
-					title: view.name,
-					data: {kind: 'sessions', groups: sessions, folders: store.folders},
-				});
-			},
-		});
-	}
+	actions.push({
+		icon: 'share-outline',
+		label: 'Share',
+		onPress() {
+			openShare({
+				title: view.name,
+				data: {kind: 'sessions', groups: sessions, folders: store.folders},
+			});
+		},
+	});
 
 	if (folder && canChangeFolder(folder)) {
 		actions.push(
