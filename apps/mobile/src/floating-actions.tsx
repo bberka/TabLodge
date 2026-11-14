@@ -1,8 +1,8 @@
 import {useState} from 'react';
-import {Animated, Pressable, StyleSheet, View} from 'react-native';
+import {Animated, Pressable, StyleSheet, TextInput, View} from 'react-native';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
 import {useColors} from './theme';
-import {Field, Icon, type IconName} from './ui';
+import {Icon, type IconName} from './ui';
 
 /**
 Every round button in the row, and the search drawer, share this size, so the add, search and menu buttons read as one set.
@@ -107,7 +107,8 @@ export function FloatingActions({
 }
 
 /**
-The search input, docked at the bottom of the screen and riding just above the keyboard. Closing it clears the search.
+The search input, a rounded bar that floats above the tab bar with room on both sides, riding just above the keyboard
+while it is open. Closing it clears the search.
 */
 export function SearchDock({
 	label,
@@ -125,36 +126,32 @@ export function SearchDock({
 	onClose: () => void;
 }) {
 	const colors = useColors();
-	const isKeyboardOpen = useKeyboardHeight() > 0;
+	const keyboardOpen = useKeyboardHeight() > 0;
 	const inset = keyboardInset();
 	return (
 		<Animated.View
 			style={[
 				styles.dock,
 				{
-					bottom: isKeyboardOpen ? inset : bottom,
+					bottom: keyboardOpen ? Animated.add(inset, 8) : bottom + 8,
 					backgroundColor: colors.surface,
 					borderColor: colors.border,
 				},
 			]}
 		>
-			<View style={styles.input}>
-				<Field
-					autoFocus
-					hideLabel
-					label={label}
-					icon="search"
-					placeholder={placeholder}
-					value={query}
-					autoCapitalize="none"
-					autoCorrect={false}
-					returnKeyType="search"
-					onChangeText={onChange}
-					onClear={() => {
-						onChange('');
-					}}
-				/>
-			</View>
+			<Icon name="search" size={22} color={colors.muted} />
+			<TextInput
+				autoFocus
+				accessibilityLabel={label}
+				placeholder={placeholder}
+				placeholderTextColor={colors.muted}
+				value={query}
+				autoCapitalize="none"
+				autoCorrect={false}
+				returnKeyType="search"
+				style={[styles.input, {color: colors.text}]}
+				onChangeText={onChange}
+			/>
 			<Pressable
 				accessibilityRole="button"
 				accessibilityLabel="Close search"
@@ -188,19 +185,19 @@ const styles = StyleSheet.create({
 	},
 	dock: {
 		position: 'absolute',
-		left: 0,
-		right: 0,
+		left: 16,
+		right: 16,
+		height: SIZE,
 		flexDirection: 'row',
-		alignItems: 'flex-end',
-		gap: 4,
-		paddingLeft: 16,
-		paddingRight: 8,
-		paddingTop: 8,
-		paddingBottom: 8,
-		borderTopWidth: StyleSheet.hairlineWidth,
-		elevation: 8,
+		alignItems: 'center',
+		gap: 10,
+		paddingLeft: 18,
+		paddingRight: 4,
+		borderRadius: SIZE / 2,
+		borderWidth: 1,
+		elevation: 6,
 	},
-	input: {flex: 1},
+	input: {flex: 1, fontSize: 16, paddingVertical: 0},
 	close: {
 		width: SIZE,
 		height: SIZE,

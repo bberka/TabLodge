@@ -313,6 +313,12 @@ Whether the private library can be shown now: it exists and is not locked.
 */
 export const isPrivateOpen = (): boolean => exists && !state.locked;
 
+/**
+Whether the private library is open and has a PIN or password to lock it with, so locking it does something.
+*/
+export const canLockPrivate = (): boolean =>
+	exists && lock !== undefined && unlockedKey !== undefined;
+
 export const privateExists = (): boolean => exists;
 
 /**

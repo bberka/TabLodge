@@ -53,6 +53,14 @@ export const ROWS = {
 		label: 'Keep sessions expanded',
 		hint: 'Show all tabs without opening a card',
 	},
+	privateLockMode: {
+		label: 'Lock automatically',
+		hint: 'When the private library locks without you',
+	},
+	privateLockMinutes: {
+		label: 'Lock after',
+		hint: 'How long it waits without use',
+	},
 	showPrivateButton: {
 		label: 'Private library button',
 		hint: 'Off keeps a private library out of sight',
@@ -249,7 +257,11 @@ export const SECTIONS = {
 			'eye',
 			'glasses',
 		],
-		rows: [ROWS.showPrivateButton],
+		rows: [
+			ROWS.showPrivateButton,
+			ROWS.privateLockMode,
+			ROWS.privateLockMinutes,
+		],
 	},
 	sync: {
 		title: 'Sync',

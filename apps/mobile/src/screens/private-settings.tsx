@@ -1,7 +1,11 @@
 import {Text} from 'react-native';
 import {confirm} from '../dialog';
 import {lockNow, PrivateSwitch} from '../private-switch';
-import {setPreferences, usePreferences} from '../preferences';
+import {
+	PRIVATE_LOCK_MINUTES,
+	setPreferences,
+	usePreferences,
+} from '../preferences';
 import {
 	removePrivate,
 	usePrivateState,
@@ -11,6 +15,7 @@ import {openPrivateSheet} from '../private-sheets';
 import {useSyncStatus} from '../library-store';
 import {useColors} from '../theme';
 import {Button} from '../ui';
+import {SelectRow} from './select-row';
 import {SettingsCard} from './settings-card';
 import {Toggle} from './behaviour-settings';
 import {ROWS, SECTIONS} from './settings-index';
@@ -44,6 +49,57 @@ export function PrivateCard() {
 					setPreferences({showPrivateButton});
 				}}
 			/>
+			{state.lockedWith && (
+				<SelectRow
+					row={ROWS.privateLockMode}
+					value={prefs.privateLockMode}
+					choices={[
+						{
+							id: 'manual',
+							name: 'Never',
+							hint: 'Only with Lock now',
+							icon: 'hand-left-outline',
+						},
+						{
+							id: 'leave',
+							name: 'When I leave the app',
+							hint: 'It locks when another app comes in front',
+							icon: 'exit-outline',
+						},
+						{
+							id: 'screen',
+							name: 'When the screen locks',
+							hint: 'It locks when the screen turns off',
+							icon: 'phone-portrait-outline',
+						},
+						{
+							id: 'timeout',
+							name: 'After a while',
+							hint: 'It locks after some time without a touch',
+							icon: 'time-outline',
+						},
+					]}
+					onChange={(privateLockMode) => {
+						setPreferences({privateLockMode});
+					}}
+				/>
+			)}
+			{state.lockedWith && prefs.privateLockMode === 'timeout' && (
+				<SelectRow
+					row={ROWS.privateLockMinutes}
+					value={String(prefs.privateLockMinutes)}
+					choices={PRIVATE_LOCK_MINUTES.map((minutes) => ({
+						id: String(minutes),
+						name:
+							minutes === 60
+								? '1 hour'
+								: `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`,
+					}))}
+					onChange={(minutes) => {
+						setPreferences({privateLockMinutes: Number(minutes)});
+					}}
+				/>
+			)}
 			{state.exists && !state.locked && status.needsKey && (
 				<>
 					<Text style={{color: colors.warn}}>

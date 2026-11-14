@@ -1,7 +1,10 @@
 package expo.modules.openlinks
 
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -15,8 +18,36 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * the whole stack to the system at once, while this app is still in front.
  */
 class OpenLinksModule : Module() {
+  private var screenOffReceiver: BroadcastReceiver? = null
+
   override fun definition() = ModuleDefinition {
     Name("OpenLinks")
+
+    // Tells the app when the screen turns off, which is when the phone locks, so the private library can lock too.
+    Events("screenOff")
+
+    OnCreate {
+      val context = appContext.reactContext
+      if (context != null) {
+        val receiver = object : BroadcastReceiver() {
+          override fun onReceive(context: Context?, intent: Intent?) {
+            sendEvent("screenOff", mapOf<String, Any>())
+          }
+        }
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+          context.registerReceiver(receiver, filter)
+        }
+        screenOffReceiver = receiver
+      }
+    }
+
+    OnDestroy {
+      screenOffReceiver?.let { appContext.reactContext?.unregisterReceiver(it) }
+      screenOffReceiver = null
+    }
 
     // The phone's own accent color, as the light and the dark shade Android's Material You palette uses for a
     // primary color, or null before Android 12, which has no such palette.

@@ -37,3 +37,26 @@ export function systemAccent(): {light: string; dark: string} | undefined {
 	const found = native?.systemAccent();
 	return found ? {light: found[0], dark: found[1]} : undefined;
 }
+
+type ScreenOffEvents = {
+	addListener: (
+		name: 'screenOff',
+		callback: () => void,
+	) => {remove: () => void};
+};
+
+/**
+Calls `callback` when the screen turns off, which is when the phone locks. Returns a function that stops listening;
+on a build without native support it never calls back, and `false` says so.
+*/
+export function onScreenOff(callback: () => void): (() => void) | false {
+	const emitter = native as unknown as ScreenOffEvents | undefined;
+	if (!emitter?.addListener) {
+		return false;
+	}
+
+	const subscription = emitter.addListener('screenOff', callback);
+	return () => {
+		subscription.remove();
+	};
+}

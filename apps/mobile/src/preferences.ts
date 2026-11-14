@@ -63,6 +63,14 @@ export const SESSION_ACTIONS: readonly SessionAction[] = [
 	'delete',
 ];
 
+export const PRIVATE_LOCK_MODES = [
+	'manual',
+	'leave',
+	'screen',
+	'timeout',
+] as const;
+export const PRIVATE_LOCK_MINUTES = [1, 5, 15, 30, 60] as const;
+
 type Preferences = {
 	/**
 	Which platform's design the app imitates. Defaults to the phone's own.
@@ -128,7 +136,7 @@ type Preferences = {
 	*/
 	savePreview: boolean;
 	/**
-	The accent color: `system` (the phone's own, the default), `default` (TabLodge's), a preset id, or `#rrggbb`. Syncs with
+	The accent color: `default` (TabLodge's, the default), `system` (the phone's own), a preset id, or `#rrggbb`. Syncs with
 	the rest of the app's look.
 	*/
 	accent: string;
@@ -141,6 +149,16 @@ type Preferences = {
 	though it tells anyone holding the phone that a private library exists. Stays on this phone.
 	*/
 	showPrivateButton: boolean;
+	/**
+	When the private library locks by itself: `manual` only by hand, `leave` when the app goes behind another one,
+	`screen` when the screen turns off, `timeout` after a while without use. Only a library with a PIN or password locks.
+	This stays on this phone.
+	*/
+	privateLockMode: 'manual' | 'leave' | 'screen' | 'timeout';
+	/**
+	How many minutes without use `timeout` waits.
+	*/
+	privateLockMinutes: number;
 	/**
 	Where a link opens: the default browser, an in-app tab, or the browser in `openApp`. Stays on this phone.
 	*/
@@ -189,9 +207,11 @@ const defaults: Preferences = {
 	syncPrivate: true,
 	siteIcons: 'server',
 	savePreview: true,
-	accent: 'system',
+	accent: 'default',
 	theme: 'system',
 	showPrivateButton: true,
+	privateLockMode: 'manual',
+	privateLockMinutes: 5,
 	openWith: 'system',
 	openApp: '',
 	privateOpenWith: 'same',
@@ -265,6 +285,8 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		accent,
 		theme,
 		showPrivateButton,
+		privateLockMode,
+		privateLockMinutes,
 		openWith,
 		openApp,
 		privateOpenWith,
@@ -306,6 +328,14 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 			typeof showPrivateButton === 'boolean'
 				? showPrivateButton
 				: defaults.showPrivateButton,
+		privateLockMode: PRIVATE_LOCK_MODES.includes(privateLockMode as never)
+			? privateLockMode!
+			: defaults.privateLockMode,
+		privateLockMinutes: PRIVATE_LOCK_MINUTES.includes(
+			privateLockMinutes as never,
+		)
+			? privateLockMinutes!
+			: defaults.privateLockMinutes,
 		openWith: isOpenWith(openWith) ? openWith : defaults.openWith,
 		openApp: typeof openApp === 'string' ? openApp : '',
 		privateOpenWith:

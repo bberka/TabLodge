@@ -1,5 +1,5 @@
 import {useSyncExternalStore} from 'react';
-import {Animated, Dimensions, Easing, Keyboard} from 'react-native';
+import {Animated, Dimensions, Easing, Keyboard, TextInput} from 'react-native';
 import {motion} from './motion';
 
 let height = 0;
@@ -45,6 +45,18 @@ function watch(): void {
 	Keyboard.addListener('keyboardDidHide', () => {
 		setHeight(0);
 	});
+}
+
+/**
+Android does not always report the keyboard closing, for example when the input that had it goes away with a drawer, and
+a keyboard that is thought to be open leaves the next drawer or dialog floating in the middle of the screen. With no
+input focused there can be no keyboard, so this puts the height back to 0. Call it a moment after something opens, once
+an input that asks for focus has had it.
+*/
+export function settleKeyboard(): void {
+	if (height > 0 && !TextInput.State.currentlyFocusedInput()) {
+		setHeight(0);
+	}
 }
 
 /**

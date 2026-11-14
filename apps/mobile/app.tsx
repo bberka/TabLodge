@@ -15,6 +15,7 @@ import {extractUrls, splitShared} from './src/library';
 import {runBackAction} from './src/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library-store';
 import {startPreferencesSync} from './src/preferences-sync';
+import {markActive, startPrivateAutoLock} from './src/private-autolock';
 import {ExportHost} from './src/screens/transfer-sheets';
 import {pausePrivate, startPrivate, wakePrivate} from './src/private-library';
 import {loadPreferences} from './src/preferences';
@@ -125,6 +126,8 @@ function Main() {
 		};
 	}, []);
 
+	useEffect(() => startPrivateAutoLock(), []);
+
 	// A link shared from another app opens the drawer with it filled in.
 	useEffect(() => {
 		if (!hasShareIntent) {
@@ -178,7 +181,10 @@ function Main() {
 	};
 
 	return (
-		<View style={[styles.screen, {backgroundColor: colors.background}]}>
+		<View
+			style={[styles.screen, {backgroundColor: colors.background}]}
+			onTouchStart={markActive}
+		>
 			<SafeAreaView edges={['top']} style={styles.body}>
 				<StatusBar style="auto" />
 				{tab === 'bookmarks' && (

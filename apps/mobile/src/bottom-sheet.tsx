@@ -10,7 +10,7 @@ import {
 	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {keyboardInset} from './keyboard';
+import {keyboardInset, settleKeyboard} from './keyboard';
 import {motion, spring} from './motion';
 import {useColors, useShape} from './theme';
 
@@ -101,6 +101,13 @@ function Sheet({
 	const goneRef = useRef(onGone);
 	goneRef.current = onGone;
 	const openedRef = useRef(false);
+	// A keyboard left over from an earlier input would push this drawer up for nothing.
+	useEffect(() => {
+		const timer = setTimeout(settleKeyboard, 400);
+		return () => {
+			clearTimeout(timer);
+		};
+	}, []);
 
 	// The open animation runs once. The content can change size a moment after it is first measured (icons loading, a
 	// scroll area settling), and restarting the slide for each of those made the drawer flicker.

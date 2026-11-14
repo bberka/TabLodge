@@ -9,7 +9,7 @@ import {
 	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {keyboardInset} from './keyboard';
+import {keyboardInset, settleKeyboard} from './keyboard';
 import {motion} from './motion';
 import {TARGET, useColors, useShape} from './theme';
 
@@ -100,6 +100,17 @@ export function DialogHost() {
 		setShown(asked);
 		setOpen(true);
 	}
+
+	useEffect(() => {
+		if (!open) {
+			return;
+		}
+
+		const timer = setTimeout(settleKeyboard, 400);
+		return () => {
+			clearTimeout(timer);
+		};
+	}, [open]);
 
 	useEffect(() => {
 		Animated.timing(progress, {
