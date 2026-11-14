@@ -65,6 +65,10 @@ type Draft = {
 	Every link in a share. More than one asks where to save them.
 	*/
 	urls: string[];
+	/**
+	The drawer for pasting or typing several links, opened from Add link.
+	*/
+	many: boolean;
 	quick: boolean;
 };
 
@@ -79,6 +83,7 @@ function Main() {
 		text: '',
 		title: '',
 		urls: [],
+		many: false,
 		quick: false,
 	});
 	const [open, setOpen] = useState(false);
@@ -146,6 +151,7 @@ function Main() {
 			text: shareIntent.webUrl ?? parts.url ?? full,
 			title: shareIntent.meta?.title || parts.title,
 			urls: extractUrls(full),
+			many: false,
 			quick: Date.now() - BOOT < COLD_MS,
 		}));
 		setTab('bookmarks');
@@ -159,6 +165,7 @@ function Main() {
 			text: '',
 			title: '',
 			urls: [],
+			many: false,
 			quick: false,
 		}));
 		setOpen(true);
@@ -168,7 +175,8 @@ function Main() {
 		setOpen(false);
 		if (saved) {
 			// A single link reports its column; a list of links says what happened in full.
-			const message = draft.urls.length > 1 ? saved : `Saved to ${saved}`;
+			const message =
+				draft.urls.length > 1 || draft.many ? saved : `Saved to ${saved}`;
 			if (Platform.OS === 'android' && draft.quick) {
 				ToastAndroid.show(message, ToastAndroid.SHORT);
 			} else {
@@ -199,7 +207,11 @@ function Main() {
 					/>
 				)}
 				{tab === 'sessions' && (
-					<SessionsScreen onConnect={connect} onAdd={openBlank} />
+					<SessionsScreen
+						onConnect={connect}
+						onAdd={openBlank}
+						onSelecting={setSelecting}
+					/>
 				)}
 				{tab === 'settings' && <SettingsScreen onConnect={connect} />}
 			</SafeAreaView>
@@ -217,18 +229,33 @@ function Main() {
 			<BottomSheet
 				scroll={false}
 				visible={open}
-				label={draft.urls.length > 1 ? 'Save links' : 'Save link'}
+				label={draft.urls.length > 1 || draft.many ? 'Save links' : 'Save link'}
 				onClose={() => {
 					finish();
 				}}
 			>
-				{draft.urls.length > 1 ? (
-					<SaveLinksForm key={draft.key} urls={draft.urls} onDone={finish} />
+				{draft.urls.length > 1 || draft.many ? (
+					<SaveLinksForm
+						key={draft.key}
+						urls={draft.urls}
+						entry={draft.many}
+						initialText={draft.text}
+						onDone={finish}
+					/>
 				) : (
 					<SaveLinkForm
 						key={draft.key}
 						initialText={draft.text}
 						initialTitle={draft.title}
+						onMany={(text) => {
+							setDraft((current) => ({
+								...current,
+								key: current.key + 1,
+								text,
+								urls: [],
+								many: true,
+							}));
+						}}
 						onDone={finish}
 					/>
 				)}

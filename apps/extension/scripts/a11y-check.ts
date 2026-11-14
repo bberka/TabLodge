@@ -2139,6 +2139,21 @@ async function main() {
 						1,
 						'the rail column opens the same column menu on right click',
 					);
+					// The rail is a vertical list, so a column moves up or down, not left or right.
+					assert.equal(
+						await railMenu
+							.getByRole('menuitem', {name: /^Move (up|down)$/})
+							.count(),
+						2,
+						'the rail column menu moves a column up or down',
+					);
+					assert.equal(
+						await railMenu
+							.getByRole('menuitem', {name: /^Move (left|right)$/})
+							.count(),
+						0,
+						'the rail column menu has no left or right',
+					);
 					await page.keyboard.press('Escape');
 					await railMenu.waitFor({state: 'hidden'});
 

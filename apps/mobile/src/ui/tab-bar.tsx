@@ -1,17 +1,19 @@
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useRef} from 'react';
 import {
 	Animated,
 	Easing,
-	Keyboard,
 	Pressable,
 	StyleSheet,
 	Text,
 	useWindowDimensions,
+	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {resolveLook, usePreferences} from '../settings/preferences';
+import {useKeyboardHeight} from './keyboard';
 import {motion, spring} from './motion';
 import {resetScroll, useScrolledDown} from './scroll-state';
+import {useSearchAction} from './search-action';
 import {BAR_HEIGHT, useColors, useShape} from './theme';
 import {Icon, type IconName} from './ui';
 
@@ -29,7 +31,7 @@ const PILL_HEIGHT = 56;
 // The small bar keeps a touch target as big as the round search and add buttons (52), and its icons grow a little to
 // fill the room the labels leave.
 const COMPACT_HEIGHT = 56;
-const COMPACT_TAB_WIDTH = 72;
+const COMPACT_TAB_WIDTH = 68;
 const COMPACT_ICON_SCALE = 1.2;
 const BAR_PADDING = 6;
 
@@ -46,28 +48,25 @@ export function useBarSpace(): number {
 	return (floatingBar ? floating : DOCKED_HEIGHT) + insets.bottom;
 }
 
-// The gap between the small bar and the round buttons above it, less than the full bar's, so the buttons sit close to it.
-const SMALL_BAR_GAP_SAVED = 16;
+/**
+The widest the round search button gets (the full bar's height); it sits in the floating bar's row, at the screen's right edge, and its distance
+from that edge and from the bar. The bar leaves this much room on its right.
+*/
+const SIDE_BUTTON = BAR_HEIGHT;
+const SIDE_MARGIN = 16;
+const SIDE_GAP = 12;
 
 /**
-How far the round buttons above the bar move down while it is small, so they follow it and stay close instead of
-floating high above a shrunken bar. 0 while the bar is full or docked. Screens leave the room of a full bar while it
-only shrinks on scroll, so that case also covers the bar's lost height.
+How tall the floating bar is now: the full bar's height, or the small bar's while it is small. The round buttons beside it
+are as tall as the bar and follow it, so they stay level and the same size. A docked bar has no such row.
 */
-export function useBarDrop(): number {
+export function useBarHeight(): number {
 	const {floatingBar, barSize} = usePreferences();
 	const scrolledDown = useScrolledDown();
-	if (!floatingBar) {
-		return 0;
-	}
-
-	if (barSize === 'compact') {
-		return SMALL_BAR_GAP_SAVED;
-	}
-
-	return barSize === 'scroll' && scrolledDown
-		? BAR_HEIGHT - COMPACT_HEIGHT + SMALL_BAR_GAP_SAVED
-		: 0;
+	const small =
+		floatingBar &&
+		(barSize === 'compact' || (barSize === 'scroll' && scrolledDown));
+	return small ? COMPACT_HEIGHT : BAR_HEIGHT;
 }
 
 /**
@@ -96,15 +95,21 @@ export function TabBar<T extends string>({
 	const small =
 		floatingBar &&
 		(barSize === 'compact' || (barSize === 'scroll' && scrolledDown));
+	// The names are hidden whenever the bar is small, and in the Icons only size, which keeps the bar's size.
+	const unlabeled = small || (floatingBar && barSize === 'icons');
 	const ios = look === 'ios';
 	const count = tabs.length;
 	const index = Math.max(
 		0,
 		tabs.findIndex((tab) => tab.id === selected),
 	);
-	const [keyboard, setKeyboard] = useState(false);
+	// The shared keyboard state is checked against the window, so a keyboard that closed unnoticed does not keep the bar away.
+	const keyboard = useKeyboardHeight() > 0;
+	const searchAction = useSearchAction();
 	// 0 is the full bar, 1 the small one. Width and height are layout, so this one runs on the JS thread.
 	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
+	// 0 shows the names under the icons, 1 hides them.
+	const unlabel = useRef(new Animated.Value(unlabeled ? 1 : 0)).current;
 	// The highlight slides on the JS thread too, because its offset depends on the animated tab width.
 	const slide = useRef(new Animated.Value(index)).current;
 	const hide = useRef(new Animated.Value(0)).current;
@@ -126,24 +131,20 @@ export function TabBar<T extends string>({
 	}, [small, shrink]);
 
 	useEffect(() => {
+		Animated.timing(unlabel, {
+			toValue: unlabeled ? 1 : 0,
+			duration: motion(260),
+			easing: Easing.out(Easing.cubic),
+			useNativeDriver: false,
+		}).start();
+	}, [unlabeled, unlabel]);
+
+	useEffect(() => {
 		spring(slide, index, {friction: 9, tension: 90, native: false}).start();
 		for (const [i, pop] of pops.entries()) {
 			spring(pop, i === index ? 1 : 0, {friction: 6, tension: 160}).start();
 		}
 	}, [index, slide, pops]);
-
-	useEffect(() => {
-		const show = Keyboard.addListener('keyboardDidShow', () => {
-			setKeyboard(true);
-		});
-		const gone = Keyboard.addListener('keyboardDidHide', () => {
-			setKeyboard(false);
-		});
-		return () => {
-			show.remove();
-			gone.remove();
-		};
-	}, []);
 
 	const away = keyboard || forceHidden;
 	useEffect(() => {
@@ -158,8 +159,16 @@ export function TabBar<T extends string>({
 	const travel = floatingBar
 		? BAR_HEIGHT + barGap * 2 + insets.bottom
 		: dockedHeight;
-	const fullWidth = screenWidth - barGap * 2;
+	// The floating bar leaves room on its right for the search button in its row.
+	const sideRoom = SIDE_MARGIN + SIDE_BUTTON + SIDE_GAP;
+	const fullWidth = screenWidth - barGap - sideRoom;
 	const smallWidth = COMPACT_TAB_WIDTH * count + BAR_PADDING * 2;
+	// The small bar sits in the middle of the screen; on a narrow one it moves left just enough to clear the search
+	// button. The full bar starts at the screen's left margin.
+	const smallLeft = Math.min(
+		(screenWidth - smallWidth) / 2,
+		screenWidth - SIDE_MARGIN - SIDE_BUTTON - 4 - smallWidth,
+	);
 	const tabWidth = shrink.interpolate({
 		inputRange: [0, 1],
 		outputRange: [(fullWidth - BAR_PADDING * 2) / count, COMPACT_TAB_WIDTH],
@@ -172,7 +181,7 @@ export function TabBar<T extends string>({
 			pointerEvents={away ? 'none' : 'box-none'}
 			style={[
 				floatingBar ? styles.floating : styles.docked,
-				floatingBar && {bottom: barGap + insets.bottom},
+				floatingBar && {bottom: barGap + insets.bottom, left: 0, right: 0},
 				{
 					opacity: hide.interpolate({
 						inputRange: [0, 1],
@@ -201,6 +210,10 @@ export function TabBar<T extends string>({
 									width: shrink.interpolate({
 										inputRange: [0, 1],
 										outputRange: [fullWidth, smallWidth],
+									}),
+									marginLeft: shrink.interpolate({
+										inputRange: [0, 1],
+										outputRange: [barGap, Math.max(barGap, smallLeft)],
 									}),
 									height: shrink.interpolate({
 										inputRange: [0, 1],
@@ -300,12 +313,12 @@ export function TabBar<T extends string>({
 									floatingBar
 										? {
 												overflow: 'hidden',
-												opacity: shrink.interpolate(gone),
-												height: shrink.interpolate({
+												opacity: unlabel.interpolate(gone),
+												height: unlabel.interpolate({
 													inputRange: [0, 1],
 													outputRange: [labelHeight, 0],
 												}),
-												marginTop: shrink.interpolate({
+												marginTop: unlabel.interpolate({
 													inputRange: [0, 1],
 													outputRange: [2, 0],
 												}),
@@ -327,6 +340,29 @@ export function TabBar<T extends string>({
 						</Pressable>
 					);
 				})}
+				{!floatingBar && searchAction && (
+					// Search sits at the bar's right end, with the tabs on its left.
+					<Pressable
+						accessibilityRole="button"
+						accessibilityLabel="Search"
+						style={styles.tab}
+						onPress={searchAction}
+					>
+						<Icon name="search" color={colors.muted} size={ios ? 25 : 24} />
+						<View style={styles.label}>
+							<Text
+								numberOfLines={1}
+								style={{
+									color: colors.muted,
+									fontWeight: '500',
+									fontSize: ios ? 11 : 12,
+								}}
+							>
+								Search
+							</Text>
+						</View>
+					</Pressable>
+				)}
 			</Animated.View>
 		</Animated.View>
 	);
@@ -334,7 +370,7 @@ export function TabBar<T extends string>({
 
 const styles = StyleSheet.create({
 	docked: {position: 'absolute', left: 0, right: 0, bottom: 0},
-	floating: {position: 'absolute', left: 0, right: 0, alignItems: 'center'},
+	floating: {position: 'absolute', alignItems: 'flex-start'},
 	bar: {flexDirection: 'row', alignItems: 'center'},
 	floatingBar: {
 		borderRadius: BAR_HEIGHT / 2,

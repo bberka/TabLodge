@@ -49,6 +49,7 @@ export function BottomSheet({
 
 	return (
 		<Modal
+			hardwareAccelerated
 			transparent
 			statusBarTranslucent
 			navigationBarTranslucent
@@ -103,6 +104,7 @@ function Sheet({
 	const openedRef = useRef(false);
 	// A keyboard left over from an earlier input would push this drawer up for nothing.
 	useEffect(() => {
+		settleKeyboard();
 		const timer = setTimeout(settleKeyboard, 400);
 		return () => {
 			clearTimeout(timer);

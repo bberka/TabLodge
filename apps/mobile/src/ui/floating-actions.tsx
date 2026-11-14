@@ -6,13 +6,16 @@ import {
 	StyleSheet,
 	TextInput,
 	useWindowDimensions,
+	View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {usePreferences} from '../settings/preferences';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
 import {motion} from './motion';
-import {useColors} from './theme';
 import {useScrolledDown} from './scroll-state';
-import {useBarDrop} from './tab-bar';
+import {setSearchAction} from './search-action';
+import {useBarHeight} from './tab-bar';
+import {useColors, useShape} from './theme';
 import {Icon, IconButton, type IconName} from './ui';
 
 /**
@@ -34,6 +37,20 @@ Search that opens from a button. `open` and `query` belong to the screen, which 
 export function useSearch() {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState('');
+	// A docked tab bar holds the search button itself, so the screen on show hands it what to do.
+	const {floatingBar} = usePreferences();
+	useEffect(() => {
+		if (floatingBar) {
+			return;
+		}
+
+		setSearchAction(() => {
+			setOpen(true);
+		});
+		return () => {
+			setSearchAction(undefined);
+		};
+	}, [floatingBar]);
 	return {
 		open,
 		query,
@@ -52,39 +69,53 @@ function RoundButton({
 	icon,
 	label,
 	primary = false,
+	size,
 	onPress,
 }: {
 	icon: IconName;
 	label: string;
 	primary?: boolean;
+	/**
+	Its width and height; an animated value follows the tab bar as it shrinks.
+	*/
+	size: Animated.Value | number;
 	onPress: () => void;
 }) {
 	const colors = useColors();
+	// A shell that animates its size, with the pressable filling it, since a pressable's style cannot be animated.
 	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel={label}
-			style={({pressed}) => [
+		<Animated.View
+			style={[
 				styles.button,
-				primary
-					? {
-							backgroundColor: colors.accent,
-							opacity: pressed ? 0.85 : 1,
-						}
-					: {
-							backgroundColor: pressed ? colors.pressed : colors.surface,
-							borderColor: colors.border,
-							borderWidth: 1,
-						},
+				{
+					width: size,
+					height: size,
+					borderRadius:
+						typeof size === 'number' ? size / 2 : Animated.divide(size, 2),
+					backgroundColor: primary ? colors.accent : colors.surface,
+					borderColor: colors.border,
+					borderWidth: primary ? 0 : 1,
+				},
 			]}
-			onPress={onPress}
 		>
-			<Icon
-				name={icon}
-				size={primary ? 28 : 24}
-				color={primary ? colors.onAccent : colors.text}
-			/>
-		</Pressable>
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel={label}
+				style={({pressed}) => [
+					styles.fill,
+					pressed && {
+						backgroundColor: primary ? 'rgba(0, 0, 0, 0.15)' : colors.pressed,
+					},
+				]}
+				onPress={onPress}
+			>
+				<Icon
+					name={icon}
+					size={primary ? 28 : 24}
+					color={primary ? colors.onAccent : colors.text}
+				/>
+			</Pressable>
+		</Animated.View>
 	);
 }
 
@@ -102,33 +133,63 @@ export function FloatingActions({
 	onAdd?: () => void;
 	buttonLabel?: string;
 }) {
-	// The row eases down with the tab bar when that shrinks, instead of staying high above it.
-	const drop = useBarDrop();
-	const shift = useRef(new Animated.Value(drop)).current;
+	// With a floating tab bar the search button sits in its row, at the right edge, as tall as the bar, and the add
+	// button stacks above it at the same size. Both follow the bar's height as it shrinks. With a docked bar they are
+	// a row of smaller buttons above it.
+	const {floatingBar} = usePreferences();
+	const insets = useSafeAreaInsets();
+	const {barGap} = useShape();
+	const barHeight = useBarHeight();
+	const size = useRef(new Animated.Value(barHeight)).current;
 	useEffect(() => {
-		Animated.timing(shift, {
-			toValue: drop,
+		Animated.timing(size, {
+			toValue: barHeight,
 			duration: motion(260),
 			easing: Easing.out(Easing.cubic),
-			useNativeDriver: true,
+			useNativeDriver: false,
 		}).start();
-	}, [drop, shift]);
+	}, [barHeight, size]);
+	const each = floatingBar ? size : SIZE;
+	// With a docked bar, the search button is in the bar.
+	const search = onSearch && floatingBar && (
+		<RoundButton icon="search" label="Search" size={each} onPress={onSearch} />
+	);
+	const add = onAdd && (
+		<RoundButton
+			primary
+			icon="add"
+			label={buttonLabel}
+			size={each}
+			onPress={onAdd}
+		/>
+	);
 	return (
 		// Clear of the tab bar below, whose own shadow would otherwise reach the buttons.
-		<Animated.View
+		<View
 			pointerEvents="box-none"
 			style={[
 				styles.row,
-				{bottom: bottom + 16, transform: [{translateY: shift}]},
+				floatingBar
+					? {
+							bottom: barGap + insets.bottom,
+							flexDirection: 'column',
+							alignItems: 'flex-end',
+						}
+					: {bottom: bottom + 16},
 			]}
 		>
-			{onSearch && (
-				<RoundButton icon="search" label="Search" onPress={onSearch} />
+			{floatingBar ? (
+				<>
+					{add}
+					{search}
+				</>
+			) : (
+				<>
+					{search}
+					{add}
+				</>
 			)}
-			{onAdd && (
-				<RoundButton primary icon="add" label={buttonLabel} onPress={onAdd} />
-			)}
-		</Animated.View>
+		</View>
 	);
 }
 
@@ -275,14 +336,8 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: 12,
 	},
-	button: {
-		width: SIZE,
-		height: SIZE,
-		borderRadius: SIZE / 2,
-		alignItems: 'center',
-		justifyContent: 'center',
-		elevation: 3,
-	},
+	button: {overflow: 'hidden', elevation: 3},
+	fill: {flex: 1, alignItems: 'center', justifyContent: 'center'},
 	dock: {
 		position: 'absolute',
 		height: SIZE,

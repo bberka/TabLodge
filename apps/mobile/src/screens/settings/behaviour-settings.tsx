@@ -1,4 +1,5 @@
 import {StyleSheet, Text, View} from 'react-native';
+import {useServerFeatures} from '../../library/server-features';
 import {setSyncedSetting} from '../../library/library-store';
 import {
 	ROW_ACTIONS,
@@ -92,6 +93,25 @@ export function Group({row, children}: {row: Row; children: React.ReactNode}) {
 /**
 What tapping and swiping a bookmark do, and how links are cleaned when saved. These stay on this phone.
 */
+/**
+Says so when a setting that works through the sync server is on and the connected server is too old to do it: a server
+that was set up before icons and previews existed needs updating, and until then the setting shows nothing.
+*/
+function UpdateServerNote({needed}: {needed: boolean}) {
+	const colors = useColors();
+	const features = useServerFeatures();
+	if (!needed || features === undefined || features.includes('preview')) {
+		return null;
+	}
+
+	return (
+		<Text style={{color: colors.warn}}>
+			Your sync server is too old to fetch icons and previews. Update it and
+			they appear.
+		</Text>
+	);
+}
+
 export function BookmarkBehaviourCard() {
 	const prefs = usePreferences();
 	const settings = useLinkSettings(true);
@@ -190,6 +210,7 @@ export function BookmarkBehaviourCard() {
 					setPreferences({siteIcons});
 				}}
 			/>
+			<UpdateServerNote needed={prefs.siteIcons === 'server'} />
 			<Toggle
 				row={ROWS.savePreview}
 				value={prefs.savePreview}
@@ -197,6 +218,7 @@ export function BookmarkBehaviourCard() {
 					setPreferences({savePreview});
 				}}
 			/>
+			<UpdateServerNote needed={prefs.savePreview} />
 		</SettingsCard>
 	);
 }

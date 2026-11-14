@@ -237,6 +237,11 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											name: 'Always small',
 											hint: 'A narrow bar with icons only',
 										},
+										{
+											id: 'icons',
+											name: 'Icons only',
+											hint: 'Keeps the size, hides the names',
+										},
 									]}
 									onChange={(barSize) => {
 										setPreferences({barSize});

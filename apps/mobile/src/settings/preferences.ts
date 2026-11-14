@@ -81,8 +81,8 @@ type Preferences = {
 	*/
 	floatingBar: boolean;
 	/**
-	With the floating bar: `full` spans the screen with labels, `compact` is a small pill of icons, and `scroll` is full
-	until the list is scrolled down.
+	With the floating bar: `full` spans the screen with labels, `compact` is a small pill of icons, `scroll` is full
+	until the list is scrolled down, and `icons` keeps the bar's size but hides the labels.
 	*/
 	barSize: BarSize;
 	/**
@@ -151,7 +151,8 @@ type Preferences = {
 	showPrivateButton: boolean;
 	/**
 	When the private library locks by itself: `manual` only by hand, `leave` when the app goes behind another one,
-	`screen` when the screen turns off, `timeout` after a while without use. Only a library with a PIN or password locks.
+	`screen` (the default) when the screen turns off, `timeout` after a while without use. Only a library with a PIN or
+	password locks.
 	This stays on this phone.
 	*/
 	privateLockMode: 'manual' | 'leave' | 'screen' | 'timeout';
@@ -210,7 +211,7 @@ const defaults: Preferences = {
 	accent: 'default',
 	theme: 'system',
 	showPrivateButton: true,
-	privateLockMode: 'manual',
+	privateLockMode: 'screen',
 	privateLockMinutes: 5,
 	openWith: 'system',
 	openApp: '',
@@ -243,7 +244,7 @@ export type OpenWith = (typeof OPEN_WITH)[number];
 const isOpenWith = (value: unknown): value is OpenWith =>
 	OPEN_WITH.includes(value as OpenWith);
 
-const BAR_SIZES = ['full', 'scroll', 'compact'] as const;
+const BAR_SIZES = ['full', 'scroll', 'compact', 'icons'] as const;
 export type BarSize = (typeof BAR_SIZES)[number];
 const isBarSize = (value: unknown): value is BarSize =>
 	BAR_SIZES.includes(value as BarSize);

@@ -25,11 +25,11 @@ export function SettingsFooter() {
 				TabLodge keeps your bookmarks and sessions on this phone and syncs them
 				only with the server you connect. It never reads the pages you save.
 			</Text>
+			<Text style={{color: colors.muted}}>TabLodge v{version}</Text>
 			<View style={styles.links}>
-				<Text style={{color: colors.muted}}>TabLodge v{version}</Text>
-				{LINKS.map((link) => (
+				{LINKS.map((link, index) => (
 					<View key={link.label} style={styles.item}>
-						<Text style={{color: colors.muted}}>·</Text>
+						{index > 0 && <Text style={{color: colors.muted}}>·</Text>}
 						<Pressable
 							accessibilityRole="link"
 							accessibilityLabel={link.label}
