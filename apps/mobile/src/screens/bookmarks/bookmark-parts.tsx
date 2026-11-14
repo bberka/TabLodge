@@ -201,7 +201,41 @@ function ActionButton({
 }
 
 /**
-The bar shown while selecting: open, move, or delete what is picked.
+The bar shown while selecting: a row of buttons along the bottom of the screen.
+*/
+export function ActionBar({
+	actions,
+}: {
+	actions: Array<{
+		icon: IconName;
+		label: string;
+		onPress: () => void;
+		disabled: boolean;
+		color?: string;
+	}>;
+}) {
+	const colors = useColors();
+	const insets = useSafeAreaInsets();
+	return (
+		<View
+			style={[
+				styles.actions,
+				{
+					paddingBottom: insets.bottom,
+					backgroundColor: colors.surface,
+					borderColor: colors.border,
+				},
+			]}
+		>
+			{actions.map((action) => (
+				<ActionButton key={action.label} {...action} />
+			))}
+		</View>
+	);
+}
+
+/**
+The bar shown while selecting bookmarks: open, edit, share, move, or delete what is picked.
 */
 export function SelectionBar({
 	count,
@@ -221,51 +255,43 @@ export function SelectionBar({
 	onDelete: () => void;
 }) {
 	const colors = useColors();
-	const insets = useSafeAreaInsets();
 	const isNone = count === 0;
 	return (
-		<View
-			style={[
-				styles.actions,
+		<ActionBar
+			actions={[
 				{
-					paddingBottom: insets.bottom,
-					backgroundColor: colors.surface,
-					borderColor: colors.border,
+					icon: 'albums-outline',
+					label: 'Open',
+					disabled: isNone,
+					onPress: onOpen,
+				},
+				{
+					icon: 'create-outline',
+					label: 'Edit',
+					disabled: count !== 1,
+					onPress: onEdit,
+				},
+				{
+					icon: 'share-outline',
+					label: 'Share',
+					disabled: isNone,
+					onPress: onShare,
+				},
+				{
+					icon: 'folder-open-outline',
+					label: 'Move',
+					disabled: isNone || !canMove,
+					onPress: onMove,
+				},
+				{
+					icon: 'trash-outline',
+					label: 'Delete',
+					color: colors.danger,
+					disabled: isNone,
+					onPress: onDelete,
 				},
 			]}
-		>
-			<ActionButton
-				icon="albums-outline"
-				label="Open"
-				disabled={isNone}
-				onPress={onOpen}
-			/>
-			<ActionButton
-				icon="create-outline"
-				label="Edit"
-				disabled={count !== 1}
-				onPress={onEdit}
-			/>
-			<ActionButton
-				icon="share-outline"
-				label="Share"
-				disabled={isNone}
-				onPress={onShare}
-			/>
-			<ActionButton
-				icon="folder-open-outline"
-				label="Move"
-				disabled={isNone || !canMove}
-				onPress={onMove}
-			/>
-			<ActionButton
-				icon="trash-outline"
-				label="Delete"
-				color={colors.danger}
-				disabled={isNone}
-				onPress={onDelete}
-			/>
-		</View>
+		/>
 	);
 }
 

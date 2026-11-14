@@ -197,6 +197,57 @@ export function FolderSheet({
 	);
 }
 
+/**
+The drawer for choosing the folder several selected sessions move to.
+*/
+export function MoveSessionsSheet({
+	visible,
+	count,
+	folders,
+	onPick,
+	onClose,
+}: {
+	visible: boolean;
+	count: number;
+	folders: Folder[];
+	onPick: (folderId: string) => void;
+	onClose: () => void;
+}) {
+	const colors = useColors();
+	return (
+		<BottomSheet visible={visible} label="Move sessions" onClose={onClose}>
+			<View style={styles.body}>
+				<Text
+					accessibilityRole="header"
+					style={[styles.title, {color: colors.text}]}
+				>
+					Move {count} to
+				</Text>
+				{folders.map((folder) => (
+					<Pressable
+						key={folder.id}
+						accessibilityRole="button"
+						accessibilityLabel={folder.name}
+						style={({pressed}) => [
+							styles.row,
+							pressed && {backgroundColor: colors.pressed},
+						]}
+						onPress={() => {
+							onClose();
+							onPick(folder.id);
+						}}
+					>
+						<Icon name="folder-outline" size={24} color={colors.accent} />
+						<Text style={[styles.name, {color: colors.text}]}>
+							{folder.name}
+						</Text>
+					</Pressable>
+				))}
+			</View>
+		</BottomSheet>
+	);
+}
+
 const styles = StyleSheet.create({
 	body: {gap: 12, paddingHorizontal: 20, paddingBottom: 8},
 	title: {fontSize: 20, fontWeight: '700'},

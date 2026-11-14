@@ -199,7 +199,11 @@ function Main() {
 					/>
 				)}
 				{tab === 'sessions' && (
-					<SessionsScreen onConnect={connect} onAdd={openBlank} />
+					<SessionsScreen
+						onConnect={connect}
+						onAdd={openBlank}
+						onSelecting={setSelecting}
+					/>
 				)}
 				{tab === 'settings' && <SettingsScreen onConnect={connect} />}
 			</SafeAreaView>

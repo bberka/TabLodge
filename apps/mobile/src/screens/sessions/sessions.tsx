@@ -1,4 +1,4 @@
-import {memo, useCallback, useMemo, useState} from 'react';
+import {memo, useCallback, useEffect, useMemo, useState} from 'react';
 import {
 	FlatList,
 	useColorScheme,
@@ -8,6 +8,7 @@ import {
 	Text,
 	View,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {
 	Session,
 	Settings,
@@ -43,6 +44,9 @@ import {
 	useSyncStatus,
 } from '../../library/library-store';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
+import {useBackAction} from '../../ui/back-actions';
+import {useSelection} from '../../ui/use-selection';
+import {ActionBar} from '../bookmarks/bookmark-parts';
 import {showSnack} from '../../ui/snackbar';
 import {
 	FloatingActions,
@@ -62,7 +66,15 @@ import {type Colors, soften, TARGET, useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
-import {Button, Card, Chips, Empty, Header, Icon} from '../../ui/ui';
+import {
+	Button,
+	Card,
+	Chips,
+	Empty,
+	Header,
+	Icon,
+	IconButton,
+} from '../../ui/ui';
 import {SiteIcon} from '../../ui/site-icon';
 import {openShare} from '../transfer/transfer-sheets';
 import {FolderEditSheet} from './folder-sheet';
@@ -72,7 +84,7 @@ import {
 	EditLinkSheet,
 	SaveAsBookmarksSheet,
 } from './session-link-sheets';
-import {FolderSheet, RenameSheet} from './session-sheets';
+import {FolderSheet, MoveSessionsSheet, RenameSheet} from './session-sheets';
 
 const PREVIEW_TABS = 4;
 
@@ -140,6 +152,9 @@ function SessionCardView({
 	archived,
 	tint: folderTint,
 	expanded,
+	selecting,
+	checked,
+	onPick,
 	onToggle,
 	onAct,
 	onTabMenu,
@@ -153,6 +168,12 @@ function SessionCardView({
 	archived: boolean;
 	tint: string;
 	expanded: boolean;
+	/**
+	Selecting several sessions: a tap picks this one, and the card shows a check instead of its tile.
+	*/
+	selecting: boolean;
+	checked: boolean;
+	onPick: (id: string) => void;
 	onToggle: (id: string) => void;
 	/**
 	Runs a session action; missing where the library is read only, which allows only opening and sharing.
@@ -191,18 +212,21 @@ function SessionCardView({
 	return (
 		<SwipeRow
 			radius={16}
+			disabled={selecting}
 			left={swipe(prefs.sessionSwipeRight)}
 			right={swipe(prefs.sessionSwipeLeft)}
 		>
 			<Card flush>
 				<View style={styles.head}>
 					<Pressable
-						accessibilityRole="button"
-						accessibilityState={{expanded}}
+						accessibilityRole={selecting ? 'checkbox' : 'button'}
+						accessibilityState={selecting ? {checked} : {expanded}}
 						accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
 						style={({pressed}) => [
 							styles.headMain,
-							pressed && {backgroundColor: colors.pressed},
+							(checked || pressed) && {
+								backgroundColor: checked ? colors.accentSoft : colors.pressed,
+							},
 						]}
 						accessibilityActions={SESSION_MENU.map(([name, label]) => ({
 							name,
@@ -219,19 +243,35 @@ function SessionCardView({
 							}
 						}}
 						onLongPress={() => {
-							onMenu(session);
+							if (selecting) {
+								onPick(session.id);
+							} else {
+								onMenu(session);
+							}
 						}}
 						onPress={() => {
-							if (prefs.sessionTap === 'open') {
+							if (selecting) {
+								onPick(session.id);
+							} else if (prefs.sessionTap === 'open') {
 								onAct('open', session);
 							} else {
 								onToggle(session.id);
 							}
 						}}
 					>
-						<View style={[styles.tile, {backgroundColor: soften(tint)}]}>
-							<Icon name="albums" size={22} color={tint} />
-						</View>
+						{selecting ? (
+							<View style={styles.tile}>
+								<Icon
+									name={checked ? 'checkmark-circle' : 'ellipse-outline'}
+									size={28}
+									color={checked ? colors.accent : colors.muted}
+								/>
+							</View>
+						) : (
+							<View style={[styles.tile, {backgroundColor: soften(tint)}]}>
+								<Icon name="albums" size={22} color={tint} />
+							</View>
+						)}
 						<View style={styles.texts}>
 							<Text
 								numberOfLines={2}
@@ -258,9 +298,9 @@ function SessionCardView({
 								<TabPreview session={session} />
 							)}
 						</View>
-						{prefs.sessionTap !== 'open' && chevron}
+						{!selecting && prefs.sessionTap !== 'open' && chevron}
 					</Pressable>
-					{prefs.sessionTap === 'open' && (
+					{!selecting && prefs.sessionTap === 'open' && (
 						<Pressable
 							accessibilityRole="button"
 							accessibilityState={{expanded}}
@@ -282,7 +322,7 @@ function SessionCardView({
 						</Pressable>
 					)}
 				</View>
-				{expanded && (
+				{expanded && !selecting && (
 					<View style={[styles.tabs, {borderColor: colors.border}]}>
 						{session.tabs.map((tab) => {
 							const text = rowText(
@@ -380,6 +420,20 @@ function SessionCardView({
 // Cards re-draw only when their own session, folder, or expanded state changes, not on every keystroke in the search.
 const SessionCard = memo(SessionCardView);
 
+// Runs one library change per item, in order, on the store it was given.
+function applyAll<T>(
+	store: Store,
+	items: readonly T[],
+	step: (current: Store, item: T) => Store,
+): Store {
+	let next = store;
+	for (const item of items) {
+		next = step(next, item);
+	}
+
+	return next;
+}
+
 const NEW_FOLDER_CHIP = 'new-folder';
 
 /**
@@ -389,11 +443,17 @@ own tabs, so there is no capture here.
 export function SessionsScreen({
 	onConnect,
 	onAdd,
+	onSelecting,
 }: {
 	onConnect: () => void;
 	onAdd: () => void;
+	/**
+	Told when selecting starts or stops, so the tab bar can step aside for the action bar.
+	*/
+	onSelecting: (selecting: boolean) => void;
 }) {
 	const colors = useColors();
+	const insets = useSafeAreaInsets();
 	const space = useRoomBelow(useBarSpace());
 	const store = useLibrary();
 	const links = useLinkSettings();
@@ -404,6 +464,12 @@ export function SessionsScreen({
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	const search = useSearch();
 	const {query} = search;
+	const selection = useSelection();
+	const [movingSelected, setMovingSelected] = useState(false);
+	useBackAction(selection.active, selection.stop);
+	useEffect(() => {
+		onSelecting(selection.active);
+	}, [selection.active, onSelecting]);
 	// The sessions whose state was flipped from the default: opened when the default is collapsed, closed when it is
 	// expanded.
 	const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
@@ -613,6 +679,14 @@ export function SessionsScreen({
 					menuItem(action, menuFor),
 				),
 				{
+					icon: 'checkbox-outline' as const,
+					label: 'Select',
+					hint: 'Pick several to open, move, archive or delete',
+					onPress() {
+						selection.start(menuFor.id);
+					},
+				},
+				{
 					icon: 'add-circle-outline' as const,
 					label: 'Add links',
 					color: colorsNow.accent,
@@ -741,6 +815,63 @@ export function SessionsScreen({
 		);
 	}
 
+	const chosen = shown.filter((session) => selection.ids.has(session.id));
+	const isAllSelected = shown.length > 0 && chosen.length === shown.length;
+	const allArchived = chosen.every((session) =>
+		isArchivedSession(store.folders, session),
+	);
+	const plural = (count: number) =>
+		`${count} ${count === 1 ? 'session' : 'sessions'}`;
+	const deleteChosen = () => {
+		const gone = chosen;
+		if (gone.length === 0) {
+			return;
+		}
+
+		void edit((current) =>
+			applyAll(current, gone, (next, session) =>
+				removeSession(next, session.id, Date.now()),
+			),
+		);
+		selection.stop();
+		showSnack(`Deleted ${plural(gone.length)}`, {
+			label: 'Undo',
+			run() {
+				void edit((current) =>
+					applyAll(current, gone, (next, session) =>
+						restoreSession(next, session, Date.now()),
+					),
+				);
+			},
+		});
+	};
+
+	// Sessions in the Archived folder come out of it when the whole selection is archived already, and go in otherwise.
+	const archiveChosen = () => {
+		// The button is off while nothing is picked.
+		void edit((current) =>
+			applyAll(current, chosen, (next, session) =>
+				allArchived
+					? unarchiveSession(next, session.id, Date.now())
+					: archiveSession(next, session.id, Date.now()),
+			),
+		);
+		selection.stop();
+		showSnack(
+			`${allArchived ? 'Unarchived' : 'Archived'} ${plural(chosen.length)}`,
+			{
+				label: 'Undo',
+				run() {
+					void edit((current) =>
+						applyAll(current, chosen, (next, session) =>
+							moveSession(next, session.id, session.folderId, Date.now()),
+						),
+					);
+				},
+			},
+		);
+	};
+
 	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library' : 'saved'}`;
 	return (
 		<>
@@ -748,11 +879,15 @@ export function SessionsScreen({
 				removeClippedSubviews
 				scrollEventThrottle={16}
 				data={shown}
-				extraData={[flipped, isExpandAll]}
+				extraData={[flipped, isExpandAll, selection.ids, selection.active]}
 				keyExtractor={(session) => session.id}
 				contentContainerStyle={[
 					styles.list,
-					{paddingBottom: space + 8 + ROOM_FOR_BUTTONS},
+					{
+						paddingBottom: selection.active
+							? 72 + insets.bottom
+							: space + 8 + ROOM_FOR_BUTTONS,
+					},
 				]}
 				keyboardShouldPersistTaps="handled"
 				// Long libraries draw only what is on screen, and a little around it.
@@ -763,8 +898,37 @@ export function SessionsScreen({
 					<View>
 						<Header
 							title="Sessions"
-							subtitle={subtitle}
-							right={<PrivateSwitch />}
+							subtitle={
+								selection.active ? `${chosen.length} selected` : subtitle
+							}
+							right={
+								selection.active ? (
+									<>
+										<IconButton
+											icon={
+												isAllSelected
+													? 'remove-circle-outline'
+													: 'checkmark-done'
+											}
+											label={isAllSelected ? 'Select none' : 'Select all'}
+											onPress={() => {
+												selection.setAll(
+													isAllSelected
+														? []
+														: shown.map((session) => session.id),
+												);
+											}}
+										/>
+										<IconButton
+											icon="close"
+											label="Done selecting"
+											onPress={selection.stop}
+										/>
+									</>
+								) : (
+									<PrivateSwitch />
+								)
+							}
 						/>
 						<View style={styles.pad}>
 							<ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -815,6 +979,9 @@ export function SessionsScreen({
 							archived={isArchivedSession(store.folders, item)}
 							tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
 							expanded={isExpandAll !== flipped.has(item.id)}
+							selecting={selection.active}
+							checked={selection.ids.has(item.id)}
+							onPick={selection.toggle}
 							onToggle={toggle}
 							onAct={act}
 							onMenu={openMenu}
@@ -921,6 +1088,92 @@ export function SessionsScreen({
 					setBookmarking(undefined);
 				}}
 			/>
+			{selection.active && (
+				<ActionBar
+					actions={[
+						{
+							icon: 'albums-outline',
+							label: 'Open',
+							disabled: chosen.length === 0,
+							onPress() {
+								openAll(
+									chosen.flatMap((session) =>
+										session.tabs.map((tab) => linkToOpen(tab.url, links)),
+									),
+									plural(chosen.length),
+								);
+							},
+						},
+						{
+							icon: 'share-outline',
+							label: 'Share',
+							disabled: chosen.length === 0,
+							onPress() {
+								openShare({
+									title: plural(chosen.length),
+									data: {
+										kind: 'sessions',
+										groups: chosen,
+										folders: store.folders,
+									},
+								});
+							},
+						},
+						{
+							icon: 'folder-open-outline',
+							label: 'Move',
+							disabled: chosen.length === 0 || store.folders.length < 2,
+							onPress() {
+								setMovingSelected(true);
+							},
+						},
+						{
+							icon: allArchived ? 'arrow-undo-outline' : 'archive-outline',
+							label: allArchived ? 'Unarchive' : 'Archive',
+							color: colors.warn,
+							disabled: chosen.length === 0,
+							onPress: archiveChosen,
+						},
+						{
+							icon: 'trash-outline',
+							label: 'Delete',
+							color: colors.danger,
+							disabled: chosen.length === 0,
+							onPress: deleteChosen,
+						},
+					]}
+				/>
+			)}
+			<MoveSessionsSheet
+				visible={movingSelected}
+				count={chosen.length}
+				folders={store.folders}
+				onPick={(target) => {
+					const ids = chosen.map((session) => session.id);
+					const was = new Map(
+						chosen.map((session) => [session.id, session.folderId]),
+					);
+					void edit((current) =>
+						applyAll(current, ids, (next, id) =>
+							moveSession(next, id, target, Date.now()),
+						),
+					);
+					selection.stop();
+					showSnack(`Moved ${plural(ids.length)}`, {
+						label: 'Undo',
+						run() {
+							void edit((current) =>
+								applyAll(current, ids, (next, id) =>
+									moveSession(next, id, was.get(id) ?? target, Date.now()),
+								),
+							);
+						},
+					});
+				}}
+				onClose={() => {
+					setMovingSelected(false);
+				}}
+			/>
 			<FolderEditSheet
 				visible={editingFolder !== undefined}
 				folder={folderBeingEdited}
@@ -931,7 +1184,7 @@ export function SessionsScreen({
 					}
 				}}
 			/>
-			{!search.open && (
+			{!search.open && !selection.active && (
 				<FloatingActions
 					bottom={space}
 					buttonLabel="Add links"
