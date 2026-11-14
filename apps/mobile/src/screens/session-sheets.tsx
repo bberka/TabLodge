@@ -6,14 +6,21 @@ import {TARGET, useColors} from '../theme';
 import {Button, Field, Icon} from '../ui';
 
 /**
-The drawer for renaming a session.
+The drawer for renaming a session, or another named thing such as a folder when `title` and `label` say so. `check`
+returns what is wrong with a name, if anything, on top of it being empty.
 */
 export function RenameSheet({
 	session,
+	title = 'Rename session',
+	label = 'Session name',
+	check,
 	onSave,
 	onClose,
 }: {
-	session: Session | undefined;
+	session: {id: string; name: string} | undefined;
+	title?: string;
+	label?: string;
+	check?: (name: string) => string | undefined;
 	onSave: (name: string) => void;
 	onClose: () => void;
 }) {
@@ -24,11 +31,11 @@ export function RenameSheet({
 	useEffect(() => {
 		setName(original);
 	}, [id, original]);
-	const blank = name.trim() === '';
+	const problem = name.trim() === '' ? 'Enter a name' : check?.(name);
 	return (
 		<BottomSheet
 			visible={session !== undefined}
-			label="Rename session"
+			label={title}
 			onClose={onClose}
 		>
 			<View style={styles.body}>
@@ -36,17 +43,17 @@ export function RenameSheet({
 					accessibilityRole="header"
 					style={[styles.title, {color: colors.text}]}
 				>
-					Rename session
+					{title}
 				</Text>
 				<Field
 					autoFocus
-					label="Session name"
+					label={label}
 					value={name}
 					returnKeyType="done"
-					error={blank ? 'A session needs a name' : undefined}
+					error={problem}
 					onChangeText={setName}
 					onSubmitEditing={() => {
-						if (!blank) {
+						if (!problem) {
 							onSave(name);
 						}
 					}}
@@ -54,7 +61,7 @@ export function RenameSheet({
 				<Button
 					label="Save"
 					icon="checkmark"
-					disabled={blank}
+					disabled={Boolean(problem)}
 					onPress={() => {
 						onSave(name);
 					}}

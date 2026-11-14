@@ -228,6 +228,7 @@ export function Chips({
 	items,
 	selected,
 	onSelect,
+	onLongPress,
 }: {
 	items: Array<{
 		id: string;
@@ -244,6 +245,10 @@ export function Chips({
 	}>;
 	selected: string;
 	onSelect: (id: string) => void;
+	/**
+	Called with a chip's id when it is held down, to open that chip's menu. Screen readers get a More actions action.
+	*/
+	onLongPress?: (id: string) => void;
 }) {
 	const colors = useColors();
 	const shape = useShape();
@@ -271,6 +276,19 @@ export function Chips({
 								borderColor: on ? tint : colors.border,
 							},
 						]}
+						accessibilityActions={
+							onLongPress ? [{name: 'more', label: 'More actions'}] : undefined
+						}
+						onAccessibilityAction={() => {
+							onLongPress?.(item.id);
+						}}
+						onLongPress={
+							onLongPress
+								? () => {
+										onLongPress(item.id);
+									}
+								: undefined
+						}
 						onPress={() => {
 							onSelect(item.id);
 						}}

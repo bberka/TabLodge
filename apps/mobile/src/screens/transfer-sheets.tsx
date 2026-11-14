@@ -311,37 +311,40 @@ const SHARE_METHODS: Array<{id: ShareMethod; name: string}> = [
 	{id: 'html', name: 'HTML page'},
 ];
 
+export type ShareTarget = {title: string; sessions: Session[]};
+
 /**
-Shares a session's links as plain addresses, as a Markdown list, or as a web page the receiver can open.
+Shares the links of a session, or of every session in a folder, as plain addresses, as a Markdown list, or as a web
+page the receiver can open.
 */
-export function ShareSessionSheet({
-	session,
+export function ShareLinksSheet({
+	target,
 	onClose,
 }: {
-	session: Session | undefined;
+	target: ShareTarget | undefined;
 	onClose: () => void;
 }) {
 	const colors = useColors();
 	const [method, setMethod] = useState<ShareMethod>('links');
 	const groups = useMemo(
-		() => (session ? shareGroupsOf([session]) : []),
-		[session],
+		() => (target ? shareGroupsOf(target.sessions) : []),
+		[target],
 	);
 	const run = async () => {
-		if (!session) {
+		if (!target) {
 			return;
 		}
 
 		try {
 			if (method === 'html') {
 				await shareTextFile(
-					`${session.name.replaceAll(/[^\w-]+/g, '-').slice(0, 40) || 'links'}.html`,
+					`${target.title.replaceAll(/[^\w-]+/g, '-').slice(0, 40) || 'links'}.html`,
 					'text/html',
-					shareHtmlPage(session.name, groups, APP_NAME),
+					shareHtmlPage(target.title, groups, APP_NAME),
 				);
 			} else {
 				await Share.share({
-					title: session.name,
+					title: target.title,
 					message:
 						method === 'markdown' ? shareMarkdown(groups) : shareLinks(groups),
 				});
@@ -355,14 +358,14 @@ export function ShareSessionSheet({
 
 	return (
 		<BottomSheet
-			visible={session !== undefined}
+			visible={target !== undefined}
 			label="Share links"
 			onClose={onClose}
 		>
 			<View style={styles.body}>
 				<Title>Share links</Title>
 				<Text style={{color: colors.muted}}>
-					{shareCounts(groups).links} links from {session?.name}
+					{shareCounts(groups).links} links from {target?.title}
 				</Text>
 				<Chips
 					items={SHARE_METHODS}

@@ -39,6 +39,9 @@ import {
 	extractUrls,
 	sessionFolders,
 	sessionsIn,
+	canChangeFolder,
+	deleteFolder,
+	renameFolder,
 } from '../src/library';
 import {sampleStore} from '../src/seed';
 
@@ -715,5 +718,62 @@ describe('ordering', () => {
 		assert.equal(inColumn()(bottom).at(-1), before[0]);
 		assert.equal(inColumn()(bottom).length, before.length);
 		assert.equal(moveBookmark(store, 'missing', 'up', NOW), store);
+	});
+});
+
+describe('session folders', () => {
+	const withFolders = () => {
+		let store = emptyStore(NOW);
+		store = {
+			...store,
+			folders: [
+				{id: 'unfiled', name: 'Unfiled', createdAt: NOW, isDefault: true},
+				{id: 'work', name: 'Work', createdAt: NOW, isDefault: false},
+				{
+					id: 'archived-sessions',
+					name: 'Archived',
+					createdAt: NOW,
+					isDefault: false,
+				},
+			],
+		};
+		return addSession(
+			store,
+			{name: 'Plans', urls: ['https://a.example/'], folderId: 'work'},
+			's1',
+			['t1'],
+			NOW,
+		);
+	};
+
+	test('renaming keeps the sessions and refuses a taken or reserved name', () => {
+		const store = withFolders();
+		const renamed = renameFolder(store, 'work', '  Projects ', NOW + 1);
+		assert.equal(
+			renamed.folders.find((f) => f.id === 'work')?.name,
+			'Projects',
+		);
+		assert.equal(renamed.groups[0].folderId, 'work');
+		assert.equal(renameFolder(store, 'work', 'unfiled', NOW), store);
+		assert.equal(renameFolder(store, 'work', 'All sessions', NOW), store);
+		assert.equal(renameFolder(store, 'work', ' '.repeat(3), NOW), store);
+	});
+
+	test('Unfiled and Archived cannot be renamed or deleted', () => {
+		const store = withFolders();
+		assert.equal(renameFolder(store, 'unfiled', 'Home', NOW), store);
+		assert.equal(deleteFolder(store, 'unfiled', NOW), store);
+		assert.equal(deleteFolder(store, 'archived-sessions', NOW), store);
+		assert.equal(canChangeFolder(store.folders[0]), false);
+		assert.equal(canChangeFolder(store.folders[1]), true);
+	});
+
+	test('deleting a folder moves its sessions to Unfiled', () => {
+		const next = deleteFolder(withFolders(), 'work', NOW + 1);
+		assert.equal(
+			next.folders.some((f) => f.id === 'work'),
+			false,
+		);
+		assert.equal(next.groups[0].folderId, 'unfiled');
 	});
 });

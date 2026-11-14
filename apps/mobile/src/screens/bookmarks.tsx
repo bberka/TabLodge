@@ -1,8 +1,8 @@
 import {useEffect, useMemo, useState} from 'react';
 import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import type {Bookmark} from '../../../extension/src/shared/types';
-import {ActionSheet} from '../action-sheet';
+import type {Bookmark, Store} from '../../../extension/src/shared/types';
+import {ActionSheet, type SheetAction} from '../action-sheet';
 import {useBackAction} from '../back-actions';
 import {useChipLook} from '../column-icons';
 import {
@@ -11,6 +11,7 @@ import {
 	type BookmarkMove,
 	columnViews,
 	moveBookmarks,
+	moveColumn,
 	removeBookmarks,
 	removedBookmarks,
 	restoreBookmarks,
@@ -37,7 +38,7 @@ import {useSelection} from '../use-selection';
 import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
 import {Button, Chips, Empty, Field, Header, IconButton} from '../ui';
-import {ColumnSheet} from './column-sheet';
+import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
 import {ReorderRow} from './reorder-row';
 import {
@@ -88,6 +89,8 @@ export function BookmarksScreen({
 	const [refreshing, setRefreshing] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [columnsOpen, setColumnsOpen] = useState(false);
+	// The column whose menu is open, from holding down its chip.
+	const [chipMenuId, setChipMenuId] = useState<string>();
 	// While true, rows show buttons that move them instead of opening them.
 	const [reordering, setReordering] = useState(false);
 	// The drawer for choosing a column to move the selection to.
@@ -132,6 +135,20 @@ export function BookmarksScreen({
 		(column) => column.id === columnId,
 	);
 	const allSelected = shown.length > 0 && selection.ids.size === shown.length;
+	const chipMenu = chipMenuId
+		? columnMenu(chipMenuId, store, {
+				readOnly,
+				links,
+				edit(id) {
+					setSheet({kind: 'column', id});
+				},
+				removed(id) {
+					if (picked === id) {
+						setPicked('');
+					}
+				},
+			})
+		: undefined;
 
 	const remove = (ids: ReadonlySet<string>) => {
 		const gone = removedBookmarks(store, ids);
@@ -289,6 +306,11 @@ export function BookmarksScreen({
 													]),
 										]}
 										selected={columnId}
+										onLongPress={(id) => {
+											if (id !== NEW_COLUMN_CHIP) {
+												setChipMenuId(id);
+											}
+										}}
 										onSelect={(id) => {
 											if (id === NEW_COLUMN_CHIP) {
 												setSheet({kind: 'column'});
@@ -418,6 +440,14 @@ export function BookmarksScreen({
 					}}
 				/>
 			)}
+			<ActionSheet
+				visible={chipMenu !== undefined}
+				title={chipMenu?.title ?? ''}
+				actions={chipMenu?.actions ?? []}
+				onClose={() => {
+					setChipMenuId(undefined);
+				}}
+			/>
 			<ActionSheet
 				visible={menuOpen}
 				title={columnName ?? 'Bookmarks'}
@@ -553,3 +583,88 @@ const styles = StyleSheet.create({
 	list: {flexGrow: 1},
 	emptyActions: {alignSelf: 'stretch', gap: 8, paddingTop: 12},
 });
+
+/**
+The menu for one column chip: what holding it down offers. The Unfiled bucket and the private library only open their
+bookmarks.
+*/
+function columnMenu(
+	id: string,
+	store: Store,
+	{
+		readOnly,
+		links,
+		edit: editColumn,
+		removed,
+	}: {
+		readOnly: boolean;
+		links: ReturnType<typeof useLinkSettings>;
+		edit: (id: string) => void;
+		removed: (id: string) => void;
+	},
+): {title: string; actions: SheetAction[]} | undefined {
+	const view = columnViews(store).find((column) => column.id === id);
+	if (!view) {
+		return undefined;
+	}
+
+	const bookmarks = bookmarksIn(store, id);
+	const index = store.bookmarkColumns.findIndex((column) => column.id === id);
+	const real = index !== -1;
+	const actions: SheetAction[] = [];
+	if (bookmarks.length > 0) {
+		actions.push({
+			icon: 'albums-outline',
+			label: `Open all ${bookmarks.length}`,
+			onPress() {
+				openAll(
+					bookmarks.map((bookmark) => linkToOpen(bookmark.url, links)),
+					view.name,
+				);
+			},
+		});
+	}
+
+	if (real && !readOnly) {
+		actions.push({
+			icon: 'color-palette-outline',
+			label: 'Edit column',
+			hint: 'Rename it, or change its icon and color',
+			onPress() {
+				editColumn(id);
+			},
+		});
+		if (index > 0) {
+			actions.push({
+				icon: 'arrow-back-outline',
+				label: 'Move earlier',
+				onPress() {
+					void edit((current) => moveColumn(current, id, -1, Date.now()));
+				},
+			});
+		}
+
+		if (index < store.bookmarkColumns.length - 1) {
+			actions.push({
+				icon: 'arrow-forward-outline',
+				label: 'Move later',
+				onPress() {
+					void edit((current) => moveColumn(current, id, 1, Date.now()));
+				},
+			});
+		}
+
+		actions.push({
+			icon: 'trash-outline',
+			label: 'Delete column',
+			destructive: true,
+			onPress() {
+				confirmDeleteColumn(store, view, () => {
+					removed(id);
+				});
+			},
+		});
+	}
+
+	return {title: view.name, actions};
+}

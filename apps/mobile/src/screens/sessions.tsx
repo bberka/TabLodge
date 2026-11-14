@@ -8,18 +8,28 @@ import {
 	Text,
 	View,
 } from 'react-native';
-import type {Session} from '../../../extension/src/shared/types';
+import type {
+	Session,
+	Settings,
+	Store,
+} from '../../../extension/src/shared/types';
+import {confirm} from '../dialog';
 import {columnGlyph, columnTint, useChipLook} from '../column-icons';
 import {
 	ALL_SESSIONS_ID,
 	archiveSession,
+	canChangeFolder,
+	deleteFolder,
+	folderNameProblem,
 	hostOf,
 	markSessionOpened,
 	moveSession,
 	removeSession,
 	removeSessionTab,
+	renameFolder,
 	renameSession,
 	restoreSession,
+	type SessionFolderView,
 	sessionFolders,
 	sessionsIn,
 } from '../library';
@@ -48,7 +58,7 @@ import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
 import {FolderSheet, RenameSheet} from './session-sheets';
 import {SessionColorSheet} from './session-color-sheet';
-import {ShareSessionSheet} from './transfer-sheets';
+import {ShareLinksSheet, type ShareTarget} from './transfer-sheets';
 
 const PREVIEW_TABS = 4;
 
@@ -367,13 +377,31 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const [movingId, setMovingId] = useState<string>();
 	const moving = store.groups.find((session) => session.id === movingId);
 	const [menuId, setMenuId] = useState<string>();
-	const [sharingId, setSharingId] = useState<string>();
-	const sharing = store.groups.find((session) => session.id === sharingId);
+	const [shareTarget, setShareTarget] = useState<ShareTarget>();
+	// The folder whose menu is open, from holding down its chip, and the one being renamed.
+	const [folderMenuId, setFolderMenuId] = useState<string>();
+	const [renamingFolderId, setRenamingFolderId] = useState<string>();
 	const menuFor = store.groups.find((session) => session.id === menuId);
 	const readOnly = view === 'private';
 	const colorsNow = useColors();
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
+	const renamingFolder = store.folders.find(
+		(folder) => folder.id === renamingFolderId,
+	);
+	const folderMenu = folderMenuId
+		? folderMenuFor(folderMenuId, store, folders, {
+				readOnly,
+				sort: links.sessionSort,
+				share: setShareTarget,
+				rename: setRenamingFolderId,
+				removed(id) {
+					if (picked === id) {
+						setPicked(ALL_SESSIONS_ID);
+					}
+				},
+			})
+		: undefined;
 	const folderId = folders.some((folder) => folder.id === picked)
 		? picked
 		: ALL_SESSIONS_ID;
@@ -473,7 +501,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				}
 
 				case 'share': {
-					setSharingId(session.id);
+					setShareTarget({title: session.name, sessions: [session]});
 					break;
 				}
 
@@ -643,6 +671,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 									items={folders.map((folder) => look(folder))}
 									selected={folderId}
 									onSelect={setPicked}
+									onLongPress={setFolderMenuId}
 								/>
 							</ScrollView>
 						</View>
@@ -712,10 +741,36 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 					setMovingId(undefined);
 				}}
 			/>
-			<ShareSessionSheet
-				session={sharing}
+			<ShareLinksSheet
+				target={shareTarget}
 				onClose={() => {
-					setSharingId(undefined);
+					setShareTarget(undefined);
+				}}
+			/>
+			<ActionSheet
+				visible={folderMenu !== undefined}
+				title={folderMenu?.title ?? ''}
+				actions={folderMenu?.actions ?? []}
+				onClose={() => {
+					setFolderMenuId(undefined);
+				}}
+			/>
+			<RenameSheet
+				session={renamingFolder}
+				title="Rename folder"
+				label="Folder name"
+				check={(name) => folderNameProblem(store, name, renamingFolderId)}
+				onSave={(name) => {
+					if (renamingFolder) {
+						void edit((current) =>
+							renameFolder(current, renamingFolder.id, name, Date.now()),
+						);
+					}
+
+					setRenamingFolderId(undefined);
+				}}
+				onClose={() => {
+					setRenamingFolderId(undefined);
 				}}
 			/>
 			<SessionColorSheet
@@ -783,3 +838,77 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 	},
 });
+
+/**
+The menu for one folder chip: sharing its links, and for a folder that can change, renaming and deleting it. Sessions of
+a deleted folder move to Unfiled. The private library only shares.
+*/
+function folderMenuFor(
+	id: string,
+	store: Store,
+	folders: SessionFolderView[],
+	{
+		readOnly,
+		sort,
+		share,
+		rename,
+		removed,
+	}: {
+		readOnly: boolean;
+		sort: Settings['sessionSort'];
+		share: (target: ShareTarget) => void;
+		rename: (id: string) => void;
+		removed: (id: string) => void;
+	},
+): {title: string; actions: SheetAction[]} | undefined {
+	const view = folders.find((folder) => folder.id === id);
+	if (!view) {
+		return undefined;
+	}
+
+	const sessions = sessionsIn(store, id, sort);
+	const folder = store.folders.find((entry) => entry.id === id);
+	const actions: SheetAction[] = [];
+	if (sessions.length > 0) {
+		actions.push({
+			icon: 'share-outline',
+			label: 'Share links',
+			hint: `Every link in ${view.name}`,
+			onPress() {
+				share({title: view.name, sessions});
+			},
+		});
+	}
+
+	if (folder && canChangeFolder(folder) && !readOnly) {
+		actions.push(
+			{
+				icon: 'create-outline',
+				label: 'Rename folder',
+				onPress() {
+					rename(id);
+				},
+			},
+			{
+				icon: 'trash-outline',
+				label: 'Delete folder',
+				destructive: true,
+				onPress() {
+					confirm(
+						`Delete ${folder.name}?`,
+						sessions.length === 0
+							? 'The folder is empty.'
+							: `Its ${sessions.length} ${sessions.length === 1 ? 'session moves' : 'sessions move'} to Unfiled.`,
+						{label: 'Delete folder', destructive: true},
+						() => {
+							void edit((current) => deleteFolder(current, id, Date.now()));
+							removed(id);
+						},
+					);
+				},
+			},
+		);
+	}
+
+	return {title: view.name, actions};
+}

@@ -541,6 +541,103 @@ const isArchived = (folder: {id: string; name: string}) =>
 	folder.id === ARCHIVED_FOLDER_ID ||
 	folder.name.toLocaleLowerCase() === 'archived';
 
+/**
+Whether a session folder can be renamed or deleted: not Unfiled, which holds whatever has no other home, and not
+Archived, as in the extension.
+*/
+export const canChangeFolder = (folder: {
+	id: string;
+	name: string;
+	isDefault: boolean;
+}): boolean => !folder.isDefault && !isArchived(folder);
+
+const cleanFolderName = (name: string): string =>
+	name
+		.replaceAll(/\p{Control}/gu, ' ')
+		.trim()
+		.slice(0, 60);
+
+/**
+Why this name cannot be a folder's, or undefined when it can: empty, the reserved "All sessions", or another folder's.
+*/
+export function folderNameProblem(
+	store: Store,
+	name: string,
+	exceptId?: string,
+): string | undefined {
+	const clean = cleanFolderName(name);
+	if (clean === '' || clean.toLocaleLowerCase() === 'all sessions') {
+		return 'Choose a different folder name.';
+	}
+
+	const taken = store.folders.some(
+		(folder) =>
+			folder.id !== exceptId &&
+			folder.name.toLocaleLowerCase() === clean.toLocaleLowerCase(),
+	);
+	return taken ? 'A folder with that name already exists.' : undefined;
+}
+
+/**
+Renames a session folder. A folder that cannot change, or a name that is not allowed, leaves the library as it was.
+*/
+export function renameFolder(
+	store: Store,
+	id: string,
+	name: string,
+	now: number,
+): Store {
+	const folder = store.folders.find((entry) => entry.id === id);
+	if (
+		!folder ||
+		!canChangeFolder(folder) ||
+		folderNameProblem(store, name, id)
+	) {
+		return store;
+	}
+
+	return {
+		...store,
+		folders: store.folders.map((entry) =>
+			entry.id === id ? {...entry, name: cleanFolderName(name)} : entry,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
+Deletes a session folder and moves its sessions to Unfiled, as the extension does. A folder that cannot change leaves
+the library as it was.
+*/
+export function deleteFolder(store: Store, id: string, now: number): Store {
+	const folder = store.folders.find((entry) => entry.id === id);
+	if (!folder || !canChangeFolder(folder)) {
+		return store;
+	}
+
+	let {folders} = store;
+	let fallback = folders.find((entry) => entry.isDefault)?.id;
+	if (!fallback) {
+		fallback = DEFAULT_SESSION_FOLDER_ID;
+		folders = [
+			...folders,
+			{id: fallback, name: 'Unfiled', createdAt: now, isDefault: true},
+		];
+	}
+
+	const target = fallback;
+	return {
+		...store,
+		folders: folders.filter((entry) => entry.id !== id),
+		groups: store.groups.map((session) =>
+			session.folderId === id
+				? {...session, folderId: target, updatedAt: now}
+				: session,
+		),
+		updatedAt: now,
+	};
+}
+
 export type SessionFolderView = {
 	id: string;
 	name: string;
