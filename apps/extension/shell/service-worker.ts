@@ -1,3 +1,13 @@
+import {ICON_IDS} from '../src/app/icon-ids';
+import {stripTrackingParameters} from '../src/app/tracking-parameters';
+import {columnForUrl} from '../src/app/column-sites';
+import {
+	BACKUP_FORMAT_ID,
+	BACKUP_VERSION,
+	FULL_BACKUP_FORMAT_ID,
+	FULL_BACKUP_VERSION,
+} from '../src/app/backup-format';
+import {isAccent} from '../src/shared/accent-colors';
 import {
 	findOmniboxItem,
 	omniboxIndex,
@@ -260,11 +270,7 @@ let privateConfig: PrivateConfig = {
 };
 
 function isPrivateAccent(value: unknown): value is string {
-	return (
-		value === 'same' ||
-		(typeof value === 'string' &&
-			(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value)))
-	);
+	return value === 'same' || (typeof value === 'string' && isAccent(value));
 }
 
 function normalizePrivateConfig(value: unknown): PrivateConfig {
@@ -867,268 +873,7 @@ const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionNameFallback: 'date-title',
 	mobileApp: {},
 });
-// Mirrors src/app/icon-ids.ts (the worker cannot import); a test keeps both lists identical.
-const ICON_IDS = new Set<unknown>([
-	'bookmark',
-	'folder',
-	'star',
-	'heart',
-	'pin',
-	'flag',
-	'tag',
-	'bell',
-	'clock',
-	'calendar',
-	'lightbulb',
-	'zap',
-	'sparkles',
-	'archive',
-	'inbox',
-	'link',
-	'globe',
-	'search',
-	'rocket',
-	'target',
-	'briefcase',
-	'building',
-	'mail',
-	'clipboard',
-	'check-square',
-	'presentation',
-	'chart',
-	'trending-up',
-	'users',
-	'phone',
-	'file-text',
-	'kanban',
-	'code',
-	'terminal',
-	'git-branch',
-	'git-merge',
-	'database',
-	'server',
-	'cloud',
-	'cpu',
-	'bug',
-	'package',
-	'wrench',
-	'settings',
-	'shield',
-	'lock',
-	'key',
-	'music',
-	'video',
-	'film',
-	'image',
-	'camera',
-	'headphones',
-	'mic',
-	'tv',
-	'palette',
-	'book-open',
-	'book',
-	'newspaper',
-	'library',
-	'rss',
-	'bookmark-check',
-	'shopping-cart',
-	'shopping-bag',
-	'gift',
-	'store',
-	'credit-card',
-	'receipt',
-	'plane',
-	'map',
-	'map-pin',
-	'compass',
-	'car',
-	'tent',
-	'luggage',
-	'wallet',
-	'banknote',
-	'piggy-bank',
-	'landmark',
-	'coins',
-	'calculator',
-	'message-circle',
-	'message-square',
-	'share',
-	'thumbs-up',
-	'user',
-	'megaphone',
-	'home',
-	'sofa',
-	'bed',
-	'wifi',
-	'activity',
-	'dumbbell',
-	'stethoscope',
-	'pill',
-	'brain',
-	'graduation-cap',
-	'school',
-	'pencil',
-	'notebook',
-	'languages',
-	'flask',
-	'gamepad',
-	'dices',
-	'trophy',
-	'utensils',
-	'coffee',
-	'pizza',
-	'cooking-pot',
-	'leaf',
-	'trees',
-	'sun',
-	'moon',
-	'flower',
-	'mountain',
-	'cat',
-	'dog',
-	'crown',
-	'gem',
-	'award',
-	'medal',
-	'hourglass',
-	'timer',
-	'alarm-clock',
-	'infinity',
-	'hash',
-	'percent',
-	'layers',
-	'shapes',
-	'puzzle',
-	'wand',
-	'qr-code',
-	'eye',
-	'hand',
-	'handshake',
-	'ticket',
-	'trash',
-	'save',
-	'scissors',
-	'ruler',
-	'scale',
-	'gauge',
-	'box',
-	'boxes',
-	'anchor',
-	'life-buoy',
-	'mailbox',
-	'contact',
-	'table',
-	'printer',
-	'file-code',
-	'scroll-text',
-	'vault',
-	'warehouse',
-	'hospital',
-	'church',
-	'castle',
-	'hotel',
-	'bot',
-	'binary',
-	'braces',
-	'blocks',
-	'circuit-board',
-	'cog',
-	'command',
-	'container',
-	'webhook',
-	'keyboard',
-	'laptop',
-	'monitor',
-	'smartphone',
-	'tablet',
-	'hard-drive',
-	'network',
-	'router',
-	'signal',
-	'bluetooth',
-	'radio',
-	'plug',
-	'battery',
-	'satellite',
-	'workflow',
-	'mouse-pointer',
-	'funnel',
-	'radar',
-	'paintbrush',
-	'pipette',
-	'crop',
-	'aperture',
-	'clapperboard',
-	'disc',
-	'speaker',
-	'guitar',
-	'piano',
-	'popcorn',
-	'drama',
-	'shirt',
-	'glasses',
-	'watch',
-	'backpack',
-	'bike',
-	'bus',
-	'train',
-	'truck',
-	'ship',
-	'sailboat',
-	'tractor',
-	'fuel',
-	'footprints',
-	'telescope',
-	'umbrella',
-	'earth',
-	'syringe',
-	'thermometer',
-	'heart-pulse',
-	'bandage',
-	'ear',
-	'bone',
-	'microscope',
-	'baby',
-	'atom',
-	'dna',
-	'scroll',
-	'swords',
-	'joystick',
-	'bomb',
-	'skull',
-	'ghost',
-	'cake',
-	'cookie',
-	'candy',
-	'egg',
-	'fish',
-	'salad',
-	'wine',
-	'beer',
-	'milk',
-	'soup',
-	'sandwich',
-	'hamburger',
-	'carrot',
-	'banana',
-	'grape',
-	'cherry',
-	'wheat',
-	'ice-cream',
-	'chef-hat',
-	'flame',
-	'snowflake',
-	'droplet',
-	'wind',
-	'sprout',
-	'clover',
-	'rabbit',
-	'squirrel',
-	'bird',
-	'turtle',
-	'paw-print',
-	'rainbow',
-]);
+const ICON_ID_SET = new Set<unknown>(ICON_IDS);
 const GROUP_COLORS = new Set<unknown>([
 	'grey',
 	'blue',
@@ -1295,115 +1040,6 @@ function normalizeUrl(value: unknown): string | null {
 	}
 }
 
-// Mirrors src/app/tracking-parameters.ts; the classic worker cannot import the page helper.
-const TRACKING_PARAMETER_NAMES = new Set([
-	'_ga',
-	'_gl',
-	'_hsenc',
-	'_hsmi',
-	'__hsfp',
-	'__hssc',
-	'__hstc',
-	'dclid',
-	'epik',
-	'fb_action_ids',
-	'fb_action_types',
-	'fb_ref',
-	'fb_source',
-	'fbclid',
-	'gad_source',
-	'gclsrc',
-	'gclid',
-	'gbraid',
-	'hsctatracking',
-	'igsh',
-	'igshid',
-	'li_fat_id',
-	'mc_cid',
-	'mc_eid',
-	'mkt_tok',
-	'msclkid',
-	'rb_clickid',
-	's_cid',
-	'srsltid',
-	'ttclid',
-	'twclid',
-	'vero_conv',
-	'vero_id',
-	'wbraid',
-	'yclid',
-]);
-
-/**
-Parameters that are only trackers on certain sites. `s` and `t` are generic names, so they are removed on X status links and nowhere else.
-*/
-const SITE_TRACKING_RULES: ReadonlyArray<{
-	hosts: readonly string[];
-	path?: RegExp;
-	names: ReadonlySet<string>;
-}> = [
-	{
-		hosts: ['x.com', 'twitter.com'],
-		path: /\/status(?:es)?\/\d/,
-		names: new Set(['s', 't']),
-	},
-	{
-		hosts: ['x.com', 'twitter.com'],
-		names: new Set(['ref_src', 'ref_url', 'cxt']),
-	},
-	{
-		hosts: ['youtube.com', 'youtu.be', 'open.spotify.com'],
-		names: new Set(['si']),
-	},
-];
-
-function isTrackingParameter(name: string, url: URL) {
-	const normalized = name.toLowerCase();
-	return (
-		normalized.startsWith('utm_') ||
-		TRACKING_PARAMETER_NAMES.has(normalized) ||
-		SITE_TRACKING_RULES.some(
-			(rule) =>
-				rule.names.has(normalized) &&
-				rule.hosts.some(
-					(host) => url.hostname === host || url.hostname.endsWith(`.${host}`),
-				) &&
-				(!rule.path || rule.path.test(url.pathname)),
-		)
-	);
-}
-
-function stripTrackingParameters(rawUrl: string) {
-	try {
-		const url = new URL(rawUrl);
-		if (!['http:', 'https:'].includes(url.protocol)) {
-			return rawUrl;
-		}
-
-		const query = url.search.slice(1).split('&');
-		const kept = query.filter((part) => {
-			const separator = part.indexOf('=');
-			const key = separator === -1 ? part : part.slice(0, separator);
-			let name = key;
-			try {
-				name = decodeURIComponent(key.replaceAll('+', ' '));
-			} catch {
-				// Keep malformed keys unless their raw form is a known tracker.
-			}
-
-			return !isTrackingParameter(name, url);
-		});
-		if (kept.length === query.length) {
-			return rawUrl;
-		}
-
-		url.search = kept.length > 0 ? `?${kept.join('&')}` : '';
-		return url.href;
-	} catch {
-		return rawUrl;
-	}
-}
-
 function normalizeNativeGroup(
 	value: unknown,
 	fallbackKey: unknown = '',
@@ -1520,7 +1156,9 @@ function pairSplits(tabs: SavedTab[]): SavedTab[] {
 The `icon` property for a stored column or folder: only a registry id is kept, anything else is dropped.
 */
 function iconField(value: unknown): {icon?: string} {
-	return typeof value === 'string' && ICON_IDS.has(value) ? {icon: value} : {};
+	return typeof value === 'string' && ICON_ID_SET.has(value)
+		? {icon: value}
+		: {};
 }
 
 /**
@@ -1531,7 +1169,7 @@ function colorField(value: unknown): {color?: string} {
 	return typeof value === 'string' &&
 		value !== 'default' &&
 		value !== 'system' &&
-		(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value))
+		isAccent(value)
 		? {color: value}
 		: {};
 }
@@ -1724,49 +1362,6 @@ function domainsField(value: unknown): {domains?: string[]} {
 	return sites.size > 0
 		? {domains: [...sites].slice(0, MAX_COLUMN_DOMAINS)}
 		: {};
-}
-
-/**
-The column whose site entry covers the address: the host or a subdomain of it and, when the entry has a path, that
-path or anything under it. When several match, the longer path wins, then the longer host, then the earlier column.
-Null when no column claims the address.
-*/
-function columnForUrl(store: Store, url: string): BookmarkColumn | null {
-	let parsed: URL;
-	try {
-		parsed = new URL(url);
-	} catch {
-		return null;
-	}
-
-	const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-	let best: BookmarkColumn | null = null;
-	let bestScore = -1;
-	for (const column of store.bookmarkColumns) {
-		for (const site of column.domains ?? []) {
-			const slash = site.indexOf('/');
-			const siteHost = slash === -1 ? site : site.slice(0, slash);
-			const sitePath = slash === -1 ? '' : site.slice(slash);
-			if (
-				(host !== siteHost && !host.endsWith(`.${siteHost}`)) ||
-				(sitePath &&
-					parsed.pathname !== sitePath &&
-					!parsed.pathname.startsWith(`${sitePath}/`))
-			) {
-				continue;
-			}
-
-			const score = sitePath.length * 1000 + siteHost.length;
-			if (!(score > bestScore)) {
-				continue;
-			}
-
-			best = column;
-			bestScore = score;
-		}
-	}
-
-	return best;
 }
 
 function normalizeBookmarkColumns(rawColumns: unknown): BookmarkColumn[] {
@@ -3912,7 +3507,7 @@ async function openBookmarkPrompt(
 	);
 	// A column that claims this site takes the bookmark without asking.
 	const store = await getStore();
-	const claimed = columnForUrl(store, url);
+	const claimed = columnForUrl(store.bookmarkColumns, url);
 	if (claimed) {
 		if (
 			store.bookmarks.some(
@@ -6140,7 +5735,7 @@ async function addBookmark(
 			(column) => column.id === fields.columnId,
 		)
 			? fields.columnId!
-			: columnForUrl(store, url)?.id ||
+			: columnForUrl(store.bookmarkColumns, url)?.id ||
 				store.bookmarkColumns.find(
 					(column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID,
 				)?.id ||
@@ -7743,9 +7338,6 @@ const ALARM_SNAPSHOT = 'tablodge-snapshot';
 const ALARM_BACKUP = 'tablodge-backup';
 const ALARM_TRASH = 'tablodge-trash';
 const ALARM_ARCHIVE = 'tablodge-archive';
-// Mirrors BACKUP_FORMAT_ID and BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
-const BACKUP_FORMAT_ID = 'tablodge-backup';
-const BACKUP_VERSION = 1;
 const SAFETY_BACKUP_KEEP = 5;
 const BACKUP_MAX_CHARS = 40_000_000;
 // Chrome refuses URLs longer than 2 MB, which also limits data: URLs handed to downloads.download.
@@ -8943,28 +8535,9 @@ async function getBackupData(
 }
 
 // Full backup (ZIP): the page builds and reads the archive; the worker supplies and replaces the stored values.
-// Mirrors FULL_BACKUP_FORMAT_ID and FULL_BACKUP_VERSION in src/app/backup-format.ts (the worker cannot import).
-const FULL_BACKUP_FORMAT_ID = 'tablodge-full-backup';
-const FULL_BACKUP_VERSION = 1;
 // The page theme and accent color, kept in storage by the pages (src/shared/theme.tsx); the only preferences outside the state.
 const UI_THEME_KEY = 'uiTheme';
 const UI_ACCENT_KEY = 'uiAccent';
-// Mirrors ACCENTS and the custom hex rule in src/shared/accents.ts.
-const ACCENT_IDS = new Set([
-	'default',
-	'system',
-	'red',
-	'orange',
-	'amber',
-	'green',
-	'teal',
-	'cyan',
-	'blue',
-	'violet',
-	'pink',
-	'rose',
-	'slate',
-]);
 const SNAPSHOT_REASONS = new Set([
 	'interval',
 	'startup',
@@ -8986,10 +8559,7 @@ const asTheme = (value: unknown) =>
 	value === 'light' || value === 'dark' ? value : 'system';
 
 const asAccent = (value: unknown) =>
-	typeof value === 'string' &&
-	(ACCENT_IDS.has(value) || /^#[\da-f]{6}$/.test(value))
-		? value
-		: 'default';
+	typeof value === 'string' && isAccent(value) ? value : 'default';
 
 async function getFullBackup(): Promise<ActionResult<'GET_FULL_BACKUP'>> {
 	const store = await getStore();
@@ -12618,7 +12188,7 @@ async function handleBrowserBookmark(node: chrome.bookmarks.BookmarkTreeNode) {
 	}
 
 	const columnId =
-		columnForUrl(store, url)?.id ??
+		columnForUrl(store.bookmarkColumns, url)?.id ??
 		(store.bookmarkColumns.some(
 			(column) => column.id === settings.browserBookmarkColumn,
 		)

@@ -1,7 +1,7 @@
 // The accent color. It is "default" (TabLodge's own indigo, which the stylesheet defines), a preset
 // id, "system" (the operating system's accent, read from the CSS AccentColor keyword and kept current),
 // or a custom "#rrggbb". Every accent except the default is applied as inline CSS variables on
-// <html>. shell/service-worker.ts mirrors the ids and the hex rule (the worker cannot import).
+// <html>. shell/service-worker.ts reads the ids and the hex rule from accent-colors.ts.
 import {
 	ACCENT_MIRROR_KEY,
 	DARK_PAGE,

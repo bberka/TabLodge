@@ -1,4 +1,4 @@
-// The page-side copy of the service worker's column site matcher (the classic worker cannot import it). A column's
+// The column site matcher, used by the pages and the service worker. A column's
 // `domains` entries are a host ("github.com", which also covers its subdomains) or a host with a path prefix
 // ("github.com/bberka"). The longest path wins, then the longest host, then the earlier column.
 

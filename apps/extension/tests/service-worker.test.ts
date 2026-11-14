@@ -6,7 +6,6 @@ import {join} from 'node:path';
 import process from 'node:process';
 import vm from 'node:vm';
 import {test} from 'vite-plus/test';
-import {ICON_IDS} from '../src/app/icon-ids';
 import type {
 	ActionFailure,
 	ActionSuccess,
@@ -6532,17 +6531,6 @@ test('restoring into the current window leaves the pinned TabLodge tab in place'
 	assert.equal(response.ok, true, response.error);
 	assert.equal(harness.removedTabIds.length, 0);
 	assert.equal(pinnedLodges(harness, 10).length, 1);
-});
-
-test('the worker inlines exactly the icon ids of the icon registry', () => {
-	const inlined = /const ICON_IDS = new Set<unknown>\(\[([^\]]*)\]\)/.exec(
-		readFileSync(workerPath, 'utf8'),
-	);
-	assert.ok(inlined, 'the worker declares ICON_IDS');
-	const workerIds = [...inlined[1].matchAll(/'([-a-z]+)'/g)].map(
-		(match) => match[1],
-	);
-	assert.deepEqual(workerIds, [...ICON_IDS]);
 });
 
 test('bookmark columns store a registry icon and drop unknown ones', async () => {

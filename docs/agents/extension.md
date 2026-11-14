@@ -16,7 +16,7 @@ The Chrome, Brave, and Firefox extension (Manifest V3). It also holds the code t
 
 ## Rules
 
-- Strict TypeScript, no `any` escapes. Treat stored data, imports, and messages as untrusted and validate them. The service worker is one classic script and cannot import; mirrors of shared lists are kept equal by tests.
+- Strict TypeScript, no `any` escapes. Treat stored data, imports, and messages as untrusted and validate them. The service worker is built into one classic script, and it imports shared code from `src/` like the pages do: never copy a list or rule into it.
 - Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
 - Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker (both the manifest's `short_name`).
 - Bundle everything locally: no CDN imports, remote fonts, or network calls. A new permission needs a stated reason in the [README permissions table](../README.md#permissions-and-privacy) and the [privacy policy](../PRIVACY.md).
