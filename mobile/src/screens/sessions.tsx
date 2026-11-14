@@ -143,6 +143,12 @@ function SessionCardView({
 						onAct(action, session);
 					},
 				};
+	const chevron = (
+		<Icon
+			name={expanded ? 'chevron-up' : 'chevron-down'}
+			color={colors.muted}
+		/>
+	);
 	const count = `${session.tabs.length} ${session.tabs.length === 1 ? 'tab' : 'tabs'}`;
 	return (
 		<SwipeRow
@@ -207,26 +213,26 @@ function SessionCardView({
 								<TabPreview session={session} />
 							)}
 						</View>
+						{prefs.sessionTap !== 'open' && chevron}
 					</Pressable>
-					<Pressable
-						accessibilityRole="button"
-						accessibilityState={{expanded}}
-						accessibilityLabel={
-							expanded
-								? `Hide tabs in ${session.name}`
-								: `Show tabs in ${session.name}`
-						}
-						android_ripple={{color: colors.pressed, radius: 22}}
-						style={styles.round}
-						onPress={() => {
-							onToggle(session.id);
-						}}
-					>
-						<Icon
-							name={expanded ? 'chevron-up' : 'chevron-down'}
-							color={colors.muted}
-						/>
-					</Pressable>
+					{prefs.sessionTap === 'open' && (
+						<Pressable
+							accessibilityRole="button"
+							accessibilityState={{expanded}}
+							accessibilityLabel={
+								expanded
+									? `Hide tabs in ${session.name}`
+									: `Show tabs in ${session.name}`
+							}
+							android_ripple={{color: colors.pressed, radius: 22}}
+							style={[styles.round, styles.roundEnd]}
+							onPress={() => {
+								onToggle(session.id);
+							}}
+						>
+							{chevron}
+						</Pressable>
+					)}
 				</View>
 				{expanded && (
 					<View style={[styles.tabs, {borderColor: colors.border}]}>
@@ -700,13 +706,13 @@ const styles = StyleSheet.create({
 	pad: {paddingHorizontal: 16, gap: 12},
 	cardRow: {paddingHorizontal: 16},
 	gap: {height: 12},
-	head: {flexDirection: 'row', alignItems: 'center', paddingRight: 8},
+	head: {flexDirection: 'row', alignItems: 'center'},
 	headMain: {
 		flex: 1,
 		flexDirection: 'row',
 		alignItems: 'center',
 		gap: 12,
-		paddingLeft: 16,
+		paddingHorizontal: 16,
 		paddingVertical: 14,
 		minHeight: TARGET + 24,
 	},
@@ -730,6 +736,7 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
+	roundEnd: {marginRight: 8},
 	tabs: {borderTopWidth: StyleSheet.hairlineWidth},
 	tab: {
 		minHeight: TARGET,
