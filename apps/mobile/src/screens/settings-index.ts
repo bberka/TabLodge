@@ -67,6 +67,10 @@ export const ROWS = {
 		label: 'Site icons',
 		hint: 'Through your server, or from the site itself',
 	},
+	savePreview: {
+		label: 'Preview links when saving',
+		hint: 'Fetches the title and icon of the page you save',
+	},
 	cleanTitles: {
 		label: 'Clean page titles',
 		hint: 'Remove counters such as (3) from titles',
@@ -172,6 +176,7 @@ export const SECTIONS = {
 			ROWS.showUnder,
 			ROWS.spacing,
 			ROWS.siteIcons,
+			ROWS.savePreview,
 		],
 	},
 	extension: {

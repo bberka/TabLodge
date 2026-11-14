@@ -153,6 +153,13 @@ export function BookmarkBehaviourCard() {
 					setPreferences({siteIcons});
 				}}
 			/>
+			<Toggle
+				row={ROWS.savePreview}
+				value={prefs.savePreview}
+				onChange={(savePreview) => {
+					setPreferences({savePreview});
+				}}
+			/>
 		</SettingsCard>
 	);
 }

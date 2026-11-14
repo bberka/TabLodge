@@ -109,6 +109,11 @@ type Preferences = {
 	*/
 	siteIcons: boolean;
 	/**
+	Look the page up while saving a link, to show its icon and fill in its title. Through the sync server when one is
+	connected, otherwise from the site itself. On by default, and stays on this phone.
+	*/
+	savePreview: boolean;
+	/**
 	The accent color: `system` (the phone's own, the default), `default` (TabLodge's), a preset id, or `#rrggbb`. Syncs with
 	the rest of the app's look.
 	*/
@@ -167,6 +172,7 @@ const defaults: Preferences = {
 	cleanOnSave: true,
 	syncSettings: true,
 	siteIcons: false,
+	savePreview: true,
 	accent: 'system',
 	theme: 'system',
 	showPrivateButton: true,
@@ -221,6 +227,7 @@ export async function loadPreferences(): Promise<void> {
 		cleanOnSave,
 		syncSettings,
 		siteIcons,
+		savePreview,
 		deviceName,
 		accent,
 		theme,
@@ -255,6 +262,8 @@ export async function loadPreferences(): Promise<void> {
 		syncSettings:
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
 		siteIcons: siteIcons === true,
+		savePreview:
+			typeof savePreview === 'boolean' ? savePreview : defaults.savePreview,
 		accent: isAccent(accent) ? accent : defaults.accent,
 		theme: isTheme(theme) ? theme : defaults.theme,
 		showPrivateButton:

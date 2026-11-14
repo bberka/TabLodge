@@ -1,6 +1,7 @@
 import {useEffect, useState} from 'react';
 import {Image, StyleSheet, View} from 'react-native';
 import {SYNC_CONFIG_KEY} from '../../extension/src/shared/sync/client';
+import {USER_AGENT} from './link-preview';
 import {useSyncStatus} from './library-store';
 import {usePreferences} from './preferences';
 import {readJson} from './storage';
@@ -29,13 +30,13 @@ async function readToken(): Promise<string | undefined> {
 Where to get a site's icon: the sync server when one is connected, otherwise the site's own favicon. Undefined while
 the token is still being read, and when icons are off.
 */
-function useIconSource(host: string): Source | undefined {
+function useIconSource(host: string, always: boolean): Source | undefined {
 	const {siteIcons} = usePreferences();
 	const {connected, url} = useSyncStatus();
 	const [token, setToken] = useState<string>();
 	useEffect(() => {
 		let live = true;
-		if (siteIcons && connected && url) {
+		if ((siteIcons || always) && connected && url) {
 			void serverToken(url).then((found) => {
 				if (live) {
 					setToken(found);
@@ -46,8 +47,11 @@ function useIconSource(host: string): Source | undefined {
 		return () => {
 			live = false;
 		};
-	}, [siteIcons, connected, url]);
-	if (!siteIcons || !/^[\da-z][\d\-.a-z]*\.[\d\-a-z]{2,}$/i.test(host)) {
+	}, [siteIcons, always, connected, url]);
+	if (
+		(!siteIcons && !always) ||
+		!/^[\da-z][\d\-.a-z]*\.[\d\-a-z]{2,}$/i.test(host)
+	) {
 		return undefined;
 	}
 
@@ -60,14 +64,28 @@ function useIconSource(host: string): Source | undefined {
 			: undefined;
 	}
 
-	return {uri: `https://${host}/favicon.ico`};
+	return {
+		uri: `https://${host}/favicon.ico`,
+		headers: {'User-Agent': USER_AGENT},
+	};
 }
 
 /**
 A site's icon over its letter tile. The tile stays until the icon has loaded, and for good when it never does.
 */
-export function SiteIcon({host, size = 40}: {host: string; size?: number}) {
-	const source = useIconSource(host);
+export function SiteIcon({
+	host,
+	size = 40,
+	always = false,
+}: {
+	host: string;
+	size?: number;
+	/**
+	Show the icon even with the Site icons setting off, for a place that has its own reason to ask for it.
+	*/
+	always?: boolean;
+}) {
+	const source = useIconSource(host, always);
 	const [loaded, setLoaded] = useState(false);
 	const [failed, setFailed] = useState(false);
 	useEffect(() => {
