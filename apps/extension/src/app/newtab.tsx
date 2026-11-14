@@ -2634,6 +2634,8 @@ function NewTab() {
 														itemIndex > 0,
 														itemIndex < columns.length - 1,
 														boardActions,
+														// The rail is a vertical list from the md breakpoint, a row of chips below it.
+														globalThis.matchMedia('(min-width: 768px)').matches,
 													)
 												}
 											>
@@ -3555,6 +3557,10 @@ function columnMenuActions(
 	canMoveEarlier: boolean,
 	canMoveLater: boolean,
 	actions: BoardActions,
+	/**
+	The columns are in a vertical list, as in the Focus view's rail, so moving one goes up or down, not left or right.
+	*/
+	vertical = false,
 ): MenuAction[] {
 	return [
 		{
@@ -3578,16 +3584,16 @@ function columnMenuActions(
 			onSelect: () => actions.edit(column),
 		},
 		{
-			id: 'move-left',
-			label: 'Move left',
-			icon: ArrowLeft,
+			id: vertical ? 'move-up' : 'move-left',
+			label: vertical ? 'Move up' : 'Move left',
+			icon: vertical ? ArrowUp : ArrowLeft,
 			disabled: !canMoveEarlier,
 			onSelect: () => actions.moveColumn(column, 'earlier'),
 		},
 		{
-			id: 'move-right',
-			label: 'Move right',
-			icon: ArrowRight,
+			id: vertical ? 'move-down' : 'move-right',
+			label: vertical ? 'Move down' : 'Move right',
+			icon: vertical ? ArrowDown : ArrowRight,
 			disabled: !canMoveLater,
 			onSelect: () => actions.moveColumn(column, 'later'),
 		},
