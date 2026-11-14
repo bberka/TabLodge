@@ -725,7 +725,7 @@ function SharePreviewPanel({
 	return (
 		<section
 			aria-labelledby="share-preview-heading"
-			className="rounded-lg border border-border bg-muted/30 p-3"
+			className="min-w-0 rounded-lg border border-border bg-muted/30 p-3"
 		>
 			<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
 				<div className="flex items-center gap-2">
@@ -837,7 +837,7 @@ function SharePreviewPanel({
 					</div>
 				</div>
 			) : preview.format === 'markdown' || preview.format === 'links' ? (
-				<pre className="mt-3 max-h-[min(24rem,50dvh)] overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
+				<pre className="mt-3 max-h-[min(24rem,50dvh)] min-w-0 max-w-full overflow-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
 					{preview.text}
 				</pre>
 			) : (
@@ -949,7 +949,7 @@ export function ShareDialog({
 						Choose what to share and how. Nothing leaves your browser.
 					</DialogDescription>
 				</DialogHeader>
-				<DialogBody className="min-h-0 flex-1 overflow-y-auto pr-1">
+				<DialogBody className="min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto pr-1">
 					{all.length > 1 && (
 						<RadioCardGroup
 							label="What to share"

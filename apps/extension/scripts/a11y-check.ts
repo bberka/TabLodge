@@ -5062,6 +5062,40 @@ async function main() {
 			},
 		);
 
+		await check('share preview stays inside the dialog', async () => {
+			const page = await openPage(context, extensionId, 'newtab');
+			await page.setViewportSize({width: 900, height: 700});
+			await page
+				.getByRole('button', {name: 'More actions for Home lab rebuild'})
+				.click();
+			await page.getByRole('menuitem', {name: 'Share', exact: true}).click();
+			const dialog = page.getByRole('dialog');
+			await dialog.locator('label', {hasText: 'Markdown'}).first().click();
+			const preview = dialog.locator('pre').first();
+			// One address with no break points, as a long tracking link has, used to stretch the whole dialog.
+			await preview.evaluate((element) => {
+				const target = element as unknown as {textContent: string};
+				target.textContent = `- [Long](https://example.com/${'a%20b%3D'.repeat(120)})`;
+			});
+			const dialogBox = await dialog.boundingBox();
+			const previewBox = await preview.boundingBox();
+			const overflow = await preview.evaluate((element) => {
+				const {scrollWidth, clientWidth} = element as unknown as {
+					scrollWidth: number;
+					clientWidth: number;
+				};
+				return scrollWidth - clientWidth;
+			});
+			assert.ok(dialogBox);
+			assert.ok(previewBox);
+			assert.ok(
+				previewBox.width <= dialogBox.width,
+				`the preview is ${previewBox.width}px in a ${dialogBox.width}px dialog`,
+			);
+			assert.equal(overflow, 0, 'the preview wraps instead of scrolling');
+			await page.close();
+		});
+
 		for (const theme of THEMES) {
 			await check(`session action menu order (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
