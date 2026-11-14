@@ -96,6 +96,7 @@ import {openArchivedCopy} from './archive-link';
 import {AccentPalette} from './accent-palette';
 import {
 	COLUMN_COLOR_BAR,
+	COLUMN_COLOR_EDGE,
 	COLUMN_COLOR_TEXT,
 	columnColorVars,
 } from './column-color';
@@ -131,6 +132,8 @@ import {
 	useShareDialog,
 } from './lazy-dialogs';
 import {SyncIndicator} from './sync-indicator';
+import {FocusViewHint} from './focus-hint';
+import {suggestsFocusView} from './focus-hint-rule';
 import {RecoveryBanner} from './recovery-banner';
 import {
 	emitRecoveryEvent,
@@ -431,7 +434,11 @@ function NewTab() {
 		compactBoard ? 'compact' : 'comfortable',
 	);
 	const [focusColumnId, setFocusColumnId] = useState('');
-	const [railDropId, setRailDropId] = useState<string | null>(null);
+	// The rail item a drag is over; `position` is set only for a column drag, which reorders.
+	const [railDrop, setRailDrop] = useState<{
+		id: string;
+		position?: InsertPosition;
+	} | null>(null);
 	// The Board view caps a column when the limit setting is on, so scrolling
 	// inside the column loads the next batch instead of growing the page.
 	// Estimated row height and body padding in rem, per density.
@@ -1627,6 +1634,7 @@ function NewTab() {
 	async function dropOnColumn(
 		event: DragEvent<HTMLElement>,
 		column: ColumnRef,
+		axis: 'x' | 'y' = 'x',
 	) {
 		const data = event.dataTransfer;
 		const kind = dragPayloadKind(data.types);
@@ -1642,8 +1650,13 @@ function NewTab() {
 			}
 
 			const rect = event.currentTarget.getBoundingClientRect();
-			const position: InsertPosition =
-				event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+			const position: InsertPosition = (
+				axis === 'x'
+					? event.clientX < rect.left + rect.width / 2
+					: event.clientY < rect.top + rect.height / 2
+			)
+				? 'before'
+				: 'after';
 			const result = await send('REORDER_BOOKMARK_COLUMN', {
 				columnId,
 				targetColumnId: column.id,
@@ -2129,7 +2142,7 @@ function NewTab() {
 		remove: requestDeleteColumn,
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
-		drop: (event, column) => dropOnColumn(event, column),
+		drop: (event, column, axis) => dropOnColumn(event, column, axis),
 		dragStart(event) {
 			const card = (event.target as Element).closest<HTMLElement>(
 				'[data-bookmark-id]',
@@ -2179,6 +2192,9 @@ function NewTab() {
 		);
 	}
 
+	// The rail lists columns top to bottom from the md breakpoint and left to right below it.
+	const railAxis = () =>
+		globalThis.matchMedia('(min-width: 768px)').matches ? 'y' : 'x';
 	const focusItems: FocusColumnItem[] = [
 		...columns.map((column) => ({
 			id: column.id,
@@ -2457,6 +2473,12 @@ function NewTab() {
 					</Button>
 				</div>
 			)}
+			{suggestsFocusView(columns.length, bookmarkView) && (
+				<FocusViewHint
+					columnCount={columns.length}
+					onSwitch={() => void changeBookmarkView('focus')}
+				/>
+			)}
 			{bookmarkSearch.trim() && filteredBookmarks.length === 0 ? (
 				<EmptyState icon={Search} title="No bookmarks match">
 					Search titles, web addresses, and domains.
@@ -2480,9 +2502,13 @@ function NewTab() {
 								);
 								const itemSiblings =
 									columnBookmarks.all.get(item.id) ?? NO_BOOKMARKS;
+								const railColor = item.unfiled
+									? undefined
+									: columnColorVars(item.column.color);
 								const railButton = (
 									<button
 										type="button"
+										style={railColor}
 										data-focus-column={item.id}
 										aria-current={active ? 'true' : undefined}
 										aria-controls="focus-column-panel"
@@ -2492,16 +2518,31 @@ function NewTab() {
 											active
 												? 'bg-primary/10 font-semibold text-primary'
 												: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-											railDropId === item.id &&
+											active && railColor && COLUMN_COLOR_EDGE,
+											railDrop?.id === item.id &&
+												!railDrop.position &&
 												'ring-2 ring-primary ring-offset-2 ring-offset-background',
 										)}
 										onDragOver={(event) => {
-											if (!acceptsDrop(event, false)) {
+											if (!acceptsDrop(event, !item.unfiled)) {
 												return;
 											}
 
 											event.preventDefault();
-											setRailDropId(item.id);
+											const rect = event.currentTarget.getBoundingClientRect();
+											const before =
+												railAxis() === 'y'
+													? event.clientY < rect.top + rect.height / 2
+													: event.clientX < rect.left + rect.width / 2;
+											setRailDrop({
+												id: item.id,
+												position:
+													dragPayloadKind(event.dataTransfer.types) === 'column'
+														? before
+															? 'before'
+															: 'after'
+														: undefined,
+											});
 										}}
 										onDragLeave={(event) => {
 											if (
@@ -2509,21 +2550,26 @@ function NewTab() {
 													event.relatedTarget as Node | null,
 												)
 											) {
-												setRailDropId(null);
+												setRailDrop(null);
 											}
 										}}
 										onDrop={(event) => {
-											setRailDropId(null);
-											if (!acceptsDrop(event, false)) {
+											setRailDrop(null);
+											if (!acceptsDrop(event, !item.unfiled)) {
 												return;
 											}
 
 											event.preventDefault();
-											void boardActions.drop(event, item.column);
+											void boardActions.drop(event, item.column, railAxis());
 										}}
 										onClick={() => setFocusColumnId(item.id)}
 									>
-										<ItemIcon className="size-4 shrink-0" />
+										<ItemIcon
+											className={cn(
+												'size-4 shrink-0',
+												railColor && COLUMN_COLOR_TEXT,
+											)}
+										/>
 										<span className="min-w-0 flex-1 truncate">{item.name}</span>
 										<Badge
 											variant={active ? 'accent' : 'secondary'}
@@ -2534,7 +2580,29 @@ function NewTab() {
 									</button>
 								);
 								return (
-									<li key={item.id} className="shrink-0 md:block">
+									<li
+										key={item.id}
+										// The item, not the button, is the drag handle: Firefox does not drag buttons.
+										draggable={!item.unfiled}
+										data-drag-column={item.unfiled ? undefined : item.id}
+										className="relative shrink-0 md:block"
+										onDragStart={(event) => handleInternalDragStart(event)}
+										onDragEnd={() => {
+											handleInternalDragEnd();
+											setRailDrop(null);
+										}}
+									>
+										{railDrop?.id === item.id && railDrop.position && (
+											<span
+												aria-hidden="true"
+												className={cn(
+													'pointer-events-none absolute z-10 rounded-full bg-primary max-md:inset-y-0 max-md:w-0.5 md:inset-x-0 md:h-0.5',
+													railDrop.position === 'before'
+														? 'max-md:-left-px md:-top-px'
+														: 'max-md:-right-px md:-bottom-px',
+												)}
+											/>
+										)}
 										{item.unfiled ? (
 											railButton
 										) : (
@@ -3440,6 +3508,7 @@ type BoardActions = {
 	drop: (
 		event: DragEvent<HTMLElement>,
 		column: BookmarkColumnData,
+		axis?: 'x' | 'y',
 	) => Promise<void>;
 	dragStart: (event: DragEvent<HTMLElement>) => void;
 	dragEnd: () => void;
@@ -3643,11 +3712,9 @@ const BookmarkColumn = memo(
 				draggable={allowColumnDrag}
 				data-drag-column={allowColumnDrag ? column.id : undefined}
 				title={allowColumnDrag ? 'Drag to reorder' : undefined}
-				style={colorVars}
 				className={cn(
 					'flex shrink-0 items-center gap-2 border-b border-border',
 					compact ? 'px-2 py-1' : 'px-3 py-2',
-					colorVars && COLUMN_COLOR_BAR,
 					allowColumnDrag && 'cursor-grab touch-none active:cursor-grabbing',
 				)}
 				onPointerDown={
@@ -3773,8 +3840,11 @@ const BookmarkColumn = memo(
 				)}
 				<section
 					data-column-id={column.id}
+					// The color line is on the card itself, so it follows the rounded corners like a session card's.
+					style={colorVars}
 					className={cn(
 						'bookmark-column relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card',
+						colorVars && COLUMN_COLOR_BAR,
 						dropIndicator &&
 							dropIndicator.kind !== 'column' &&
 							'ring-2 ring-primary ring-offset-2 ring-offset-background',

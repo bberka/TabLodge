@@ -327,9 +327,9 @@ function Help() {
 				},
 				{
 					title: 'Choose Board or Focus view',
-					body: 'Use the view button in the bookmarks toolbar to switch between Board and Focus. Board shows every column in a grid. Focus shows a column list next to one open column. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of making the page tall. The choice is saved in Settings › Bookmark board.',
+					body: 'Use the view button in the bookmarks toolbar to switch between Board and Focus. Board shows every column in a grid. Focus shows a column list next to one open column. Drag a column in that list to reorder it, or use Move up and Move down in its menu. With more than six columns, a banner above the board offers the switch to Focus; Not now hides it for good on this browser. Limit bookmarks shown at a time is on by default, so a busy column scrolls inside the panel instead of making the page tall. The choice is saved in Settings › Bookmark board.',
 					searchText:
-						'board focus view column list single column switch layout grid panel scroll busy column',
+						'board focus view column list single column switch layout grid panel scroll busy column drag reorder many columns banner suggestion',
 				},
 				{
 					title: 'Change column width and spacing',
