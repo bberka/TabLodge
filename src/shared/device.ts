@@ -35,22 +35,59 @@ export function deviceStamp(name: string, kind: DeviceKind): DeviceStamp {
 }
 
 /**
-The browser's own name from its user agent, for "Chrome on Linux".
+Browsers that send a stock Chrome or Firefox user agent but name themselves elsewhere: in the user agent brand list
+(Chromium browsers), or by a token in the user agent string. The first match wins, so the specific names come first.
 */
-export function browserName(userAgent = ''): string {
-	if (/\bEdg\//.test(userAgent)) {
-		return 'Edge';
+const BRANDS: Array<[RegExp, string]> = [
+	[/^brave$/i, 'Brave'],
+	[/^vivaldi$/i, 'Vivaldi'],
+	[/^microsoft edge$/i, 'Edge'],
+	[/^opera/i, 'Opera'],
+	[/^yandex/i, 'Yandex'],
+	[/^samsung/i, 'Samsung Internet'],
+	[/^arc$/i, 'Arc'],
+	[/^duckduckgo/i, 'DuckDuckGo'],
+	[/^google chrome$/i, 'Chrome'],
+];
+
+const TOKENS: Array<[RegExp, string]> = [
+	[/\bEdg(?:e|A|iOS)?\//, 'Edge'],
+	[/\b(?:OPR|OPT)\//, 'Opera'],
+	[/\bVivaldi\//, 'Vivaldi'],
+	[/\bYaBrowser\//, 'Yandex'],
+	[/\bSamsungBrowser\//, 'Samsung Internet'],
+	[/\bDdg\//, 'DuckDuckGo'],
+	[/\bWaterfox\//, 'Waterfox'],
+	[/\bFloorp\//, 'Floorp'],
+	[/\bLibreWolf\//, 'LibreWolf'],
+	[/\bPaleMoon\//, 'Pale Moon'],
+	[/\bSeaMonkey\//, 'SeaMonkey'],
+	[/\bFirefox\//, 'Firefox'],
+	[/Chrome\//, 'Chrome'],
+];
+
+/**
+The browser's own name, for "Chrome on Linux". The brand list (from the browser's user agent data) is read first,
+because Brave and others send Chrome's user agent string. Then the user agent tokens. Forks that copy Firefox's user
+agent exactly (such as Zen) cannot be told apart and show as Firefox.
+*/
+export function browserName(
+	userAgent = '',
+	brands: readonly string[] = [],
+): string {
+	for (const [pattern, name] of BRANDS) {
+		if (brands.some((brand) => pattern.test(brand.trim()))) {
+			return name;
+		}
 	}
 
-	if (/\bOPR\//.test(userAgent)) {
-		return 'Opera';
+	for (const [pattern, name] of TOKENS) {
+		if (pattern.test(userAgent)) {
+			return name;
+		}
 	}
 
-	if (/\bFirefox\//.test(userAgent)) {
-		return 'Firefox';
-	}
-
-	return userAgent.includes('Chrome/') ? 'Chrome' : 'Browser';
+	return 'Browser';
 }
 
 const SYSTEMS: Record<string, string> = {
@@ -69,8 +106,9 @@ The name a desktop browser gets until its owner picks one: the browser and the s
 export function defaultBrowserDeviceName(
 	userAgent: string,
 	os: string,
+	brands: readonly string[] = [],
 ): string {
-	return `${browserName(userAgent)} on ${SYSTEMS[os] ?? 'this computer'}`;
+	return `${browserName(userAgent, brands)} on ${SYSTEMS[os] ?? 'this computer'}`;
 }
 
 /**

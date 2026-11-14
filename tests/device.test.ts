@@ -24,6 +24,23 @@ describe('device names', () => {
 			'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36';
 		assert.equal(browserName(chrome), 'Chrome');
 		assert.equal(browserName(`${chrome} Edg/130.0`), 'Edge');
+		assert.equal(browserName(chrome, ['Chromium', 'Brave']), 'Brave');
+		assert.equal(
+			browserName(chrome, ['Not.A/Brand', 'Chromium', 'Vivaldi']),
+			'Vivaldi',
+		);
+		assert.equal(browserName(chrome, ['Chromium', 'Google Chrome']), 'Chrome');
+		assert.equal(browserName(`${chrome} Vivaldi/7.0`), 'Vivaldi');
+		assert.equal(browserName(`${chrome} OPR/115.0`), 'Opera');
+		assert.equal(
+			browserName('Mozilla/5.0 Gecko/20100101 Firefox/132.0 Waterfox/6.0'),
+			'Waterfox',
+		);
+		assert.equal(
+			browserName(chrome.replace('Chrome/', 'HeadlessChrome/')),
+			'Chrome',
+		);
+		assert.equal(browserName(''), 'Browser');
 		assert.equal(
 			browserName('Mozilla/5.0 Gecko/20100101 Firefox/132.0'),
 			'Firefox',
