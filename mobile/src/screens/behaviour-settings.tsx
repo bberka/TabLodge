@@ -1,7 +1,12 @@
 import {StyleSheet, Text, View} from 'react-native';
 import {setSyncedSetting} from '../library-store';
-import {ROW_ACTIONS, setPreferences, usePreferences} from '../preferences';
-import {rowActionLook} from '../row-actions';
+import {
+	ROW_ACTIONS,
+	SESSION_ACTIONS,
+	setPreferences,
+	usePreferences,
+} from '../preferences';
+import {rowActionLook, sessionActionLook} from '../row-actions';
 import {useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
 import {Switch} from '../ui';
@@ -16,6 +21,14 @@ function useActionChoices() {
 	const colors = useColors();
 	return ROW_ACTIONS.map((id) => {
 		const look = rowActionLook(id, colors);
+		return {id, name: look.label, glyph: look.icon, tint: look.color};
+	});
+}
+
+function useSessionActionChoices() {
+	const colors = useColors();
+	return SESSION_ACTIONS.map((id) => {
+		const look = sessionActionLook(id, colors);
 		return {id, name: look.label, glyph: look.icon, tint: look.color};
 	});
 }
@@ -160,6 +173,7 @@ change there too; the other two are this app's and sync with its look.
 export function SessionSettingsCard() {
 	const prefs = usePreferences();
 	const settings = useLinkSettings(true);
+	const sessionActions = useSessionActionChoices();
 	return (
 		<SettingsCard section={SECTIONS.sessions}>
 			<Heading>Sessions</Heading>
@@ -176,6 +190,33 @@ export function SessionSettingsCard() {
 				]}
 				onChange={(value) => {
 					void setSyncedSetting('sessionSort', value);
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sessionTap}
+				value={prefs.sessionTap}
+				choices={[
+					{id: 'expand', name: 'Show its tabs', icon: 'chevron-down'},
+					{id: 'open', name: 'Open all tabs', icon: 'albums-outline'},
+				]}
+				onChange={(sessionTap) => {
+					setPreferences({sessionTap});
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sessionSwipeRight}
+				value={prefs.sessionSwipeRight}
+				choices={sessionActions}
+				onChange={(sessionSwipeRight) => {
+					setPreferences({sessionSwipeRight});
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sessionSwipeLeft}
+				value={prefs.sessionSwipeLeft}
+				choices={sessionActions}
+				onChange={(sessionSwipeLeft) => {
+					setPreferences({sessionSwipeLeft});
 				}}
 			/>
 			<Toggle

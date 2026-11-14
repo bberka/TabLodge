@@ -23,6 +23,14 @@ import {
 	moveBookmark,
 	moveColumn,
 	setSessionColor,
+	renameSession,
+	moveSession,
+	archiveSession,
+	removeSession,
+	restoreSession,
+	removeSessionTab,
+	markSessionOpened,
+	sessionLinks,
 	addTabsToSession,
 	ALL_SESSIONS_ID,
 	extractUrls,
@@ -522,6 +530,64 @@ describe('session colors', () => {
 			undefined,
 		);
 		assert.equal(setSessionColor(blue, 'missing', 'red', NOW), blue);
+	});
+});
+
+describe('session actions', () => {
+	const base = () =>
+		addSession(
+			emptyStore(NOW),
+			{name: 'Work', urls: ['https://a.example/', 'https://b.example/']},
+			's1',
+			['t1', 't2'],
+			NOW,
+		);
+	test('rename keeps the name non blank', () => {
+		const store = base();
+		assert.equal(
+			renameSession(store, 's1', ' Home ', NOW + 1).groups[0].name,
+			'Home',
+		);
+		assert.equal(renameSession(store, 's1', '  ', NOW + 1), store);
+		assert.equal(renameSession(store, 'missing', 'x', NOW + 1), store);
+	});
+
+	test('archive makes the Archived folder once and move needs a real folder', () => {
+		const once = archiveSession(base(), 's1', NOW + 1);
+		const archived = once.folders.find((folder) => folder.name === 'Archived');
+		assert.ok(archived);
+		assert.equal(once.groups[0].folderId, archived.id);
+		assert.equal(
+			archiveSession(once, 's1', NOW + 2).folders.length,
+			once.folders.length,
+		);
+		assert.equal(moveSession(once, 's1', 'nowhere', NOW), once);
+	});
+
+	test('a deleted session comes back with its id', () => {
+		const store = base();
+		const session = store.groups[0];
+		const gone = removeSession(store, 's1', NOW + 1);
+		assert.equal(gone.groups.length, 0);
+		assert.equal(restoreSession(gone, session, NOW + 2).groups[0].id, 's1');
+		assert.equal(restoreSession(store, session, NOW + 2), store);
+	});
+
+	test('a tab can be removed, and opening is noted', () => {
+		const store = base();
+		const fewer = removeSessionTab(store, 's1', 't1', NOW + 1);
+		assert.deepEqual(
+			fewer.groups[0].tabs.map((tab) => tab.id),
+			['t2'],
+		);
+		assert.equal(
+			markSessionOpened(store, 's1', NOW + 5).groups[0].lastOpenedAt,
+			NOW + 5,
+		);
+		assert.equal(
+			sessionLinks(store.groups[0]),
+			'https://a.example/\nhttps://b.example/',
+		);
 	});
 });
 

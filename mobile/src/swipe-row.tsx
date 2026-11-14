@@ -23,11 +23,16 @@ export function SwipeRow({
 	left,
 	right,
 	disabled = false,
+	radius = 0,
 }: {
 	children: ReactNode;
 	left?: SwipeAction;
 	right?: SwipeAction;
 	disabled?: boolean;
+	/**
+	Rounds the corners of the reveal to match a rounded row.
+	*/
+	radius?: number;
 }) {
 	const colors = useColors();
 	const x = useRef(new Animated.Value(0)).current;
@@ -120,13 +125,13 @@ export function SwipeRow({
 	};
 
 	return (
-		<View style={styles.wrap}>
+		<View style={[styles.wrap, {borderRadius: radius}]}>
 			{reveal(left, 'left')}
 			{reveal(right, 'right')}
 			<Animated.View
 				{...pan.panHandlers}
 				style={{
-					backgroundColor: colors.background,
+					backgroundColor: radius > 0 ? 'transparent' : colors.background,
 					transform: [{translateX: x}],
 				}}
 			>

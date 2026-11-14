@@ -34,6 +34,29 @@ export const ROW_ACTIONS: readonly RowAction[] = [
 	'delete',
 ];
 
+/**
+What a swipe on a session card does.
+*/
+export type SessionAction =
+	| 'none'
+	| 'open'
+	| 'color'
+	| 'rename'
+	| 'move'
+	| 'archive'
+	| 'share'
+	| 'delete';
+export const SESSION_ACTIONS: readonly SessionAction[] = [
+	'none',
+	'open',
+	'color',
+	'rename',
+	'move',
+	'archive',
+	'share',
+	'delete',
+];
+
 type Preferences = {
 	/**
 	Which platform's design the app imitates. Defaults to the phone's own.
@@ -56,6 +79,15 @@ type Preferences = {
 	*/
 	swipeRight: RowAction;
 	swipeLeft: RowAction;
+	/**
+	What swiping a session card to the right, and to the left, does. Sync with the rest of the app's look.
+	*/
+	sessionSwipeRight: SessionAction;
+	sessionSwipeLeft: SessionAction;
+	/**
+	What tapping a session card does: show its tabs, or open them all.
+	*/
+	sessionTap: 'expand' | 'open';
 	/**
 	Remove tracking parameters (utm_source and the like) from a link when it is saved.
 	*/
@@ -109,6 +141,9 @@ const defaults: Preferences = {
 	tapAction: 'open',
 	swipeRight: 'delete',
 	swipeLeft: 'edit',
+	sessionSwipeRight: 'archive',
+	sessionSwipeLeft: 'delete',
+	sessionTap: 'expand',
 	cleanOnSave: true,
 	syncSettings: true,
 	siteIcons: false,
@@ -122,6 +157,12 @@ const defaults: Preferences = {
 
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
 	ROW_ACTIONS.find((action) => action === value) ?? fallback;
+
+const sessionAction = (
+	value: unknown,
+	fallback: SessionAction,
+): SessionAction =>
+	SESSION_ACTIONS.find((action) => action === value) ?? fallback;
 
 let current = defaults;
 const listeners = new Set<() => void>();
@@ -139,6 +180,9 @@ export async function loadPreferences(): Promise<void> {
 		tapAction,
 		swipeRight,
 		swipeLeft,
+		sessionSwipeRight,
+		sessionSwipeLeft,
+		sessionTap,
 		cleanOnSave,
 		syncSettings,
 		siteIcons,
@@ -157,6 +201,15 @@ export async function loadPreferences(): Promise<void> {
 		tapAction: tapAction === 'edit' ? 'edit' : 'open',
 		swipeRight: rowAction(swipeRight, defaults.swipeRight),
 		swipeLeft: rowAction(swipeLeft, defaults.swipeLeft),
+		sessionSwipeRight: sessionAction(
+			sessionSwipeRight,
+			defaults.sessionSwipeRight,
+		),
+		sessionSwipeLeft: sessionAction(
+			sessionSwipeLeft,
+			defaults.sessionSwipeLeft,
+		),
+		sessionTap: sessionTap === 'open' ? 'open' : 'expand',
 		cleanOnSave:
 			typeof cleanOnSave === 'boolean' ? cleanOnSave : defaults.cleanOnSave,
 		syncSettings:
@@ -227,6 +280,9 @@ const SYNCED_KEYS = [
 	'tapAction',
 	'swipeRight',
 	'swipeLeft',
+	'sessionSwipeRight',
+	'sessionSwipeLeft',
+	'sessionTap',
 	'cleanOnSave',
 	'accent',
 	'theme',
@@ -274,6 +330,24 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 	const left = ROW_ACTIONS.find((action) => action === raw.swipeLeft);
 	if (left) {
 		found.swipeLeft = left;
+	}
+
+	const sessionRight = SESSION_ACTIONS.find(
+		(action) => action === raw.sessionSwipeRight,
+	);
+	if (sessionRight) {
+		found.sessionSwipeRight = sessionRight;
+	}
+
+	const sessionLeft = SESSION_ACTIONS.find(
+		(action) => action === raw.sessionSwipeLeft,
+	);
+	if (sessionLeft) {
+		found.sessionSwipeLeft = sessionLeft;
+	}
+
+	if (raw.sessionTap === 'expand' || raw.sessionTap === 'open') {
+		found.sessionTap = raw.sessionTap;
 	}
 
 	if (typeof raw.compactSessions === 'boolean') {

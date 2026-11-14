@@ -5,27 +5,59 @@ import {
 	Linking,
 	Pressable,
 	ScrollView,
+	Share,
 	StyleSheet,
 	Text,
 	View,
 } from 'react-native';
 import type {Session} from '../../../src/app/types';
 import {columnGlyph, columnTint, useChipLook} from '../column-icons';
-import {ALL_SESSIONS_ID, hostOf, sessionFolders, sessionsIn} from '../library';
-import {useLibrary} from '../library-store';
+import {
+	ALL_SESSIONS_ID,
+	archiveSession,
+	hostOf,
+	markSessionOpened,
+	moveSession,
+	removeSession,
+	removeSessionTab,
+	renameSession,
+	restoreSession,
+	sessionFolders,
+	sessionLinks,
+	sessionsIn,
+} from '../library';
+import {edit, useLibrary} from '../library-store';
+import {ActionSheet, type SheetAction} from '../action-sheet';
+import {showSnack} from '../snackbar';
+import {sessionActionLook} from '../row-actions';
+import {SwipeRow} from '../swipe-row';
+import {type SessionAction, usePreferences} from '../preferences';
 import {linkToOpen, rowText} from '../links';
 import {openAll} from '../open-links';
 import {PrivateSwitch} from '../private-switch';
 import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
-import {usePreferences} from '../preferences';
 import {useLinkSettings} from '../use-link-settings';
 import {useView} from '../view';
 import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
+import {FolderSheet, RenameSheet} from './session-sheets';
 import {SessionColorSheet} from './session-color-sheet';
 
 const PREVIEW_TABS = 4;
+
+// The actions a screen reader offers on a session card, besides the ones a swipe can also run.
+const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
+	['expand', 'Show or hide tabs'],
+	['open', 'Open all tabs'],
+	['color', 'Change color'],
+	['rename', 'Rename'],
+	['move', 'Move to folder'],
+	['archive', 'Archive'],
+	['share', 'Share links'],
+	['delete', 'Delete'],
+	['more', 'More actions'],
+];
 
 const shortDate = (time: number) =>
 	new Date(time).toLocaleDateString(undefined, {
@@ -80,7 +112,9 @@ function SessionCardView({
 	tint: folderTint,
 	expanded,
 	onToggle,
-	onColor,
+	onAct,
+	onRemoveTab,
+	onMenu,
 }: {
 	session: Session;
 	folderName: string;
@@ -88,9 +122,11 @@ function SessionCardView({
 	expanded: boolean;
 	onToggle: (id: string) => void;
 	/**
-	Opens the color drawer for this session; missing where the library is read only.
+	Runs a session action; missing where the library is read only, which allows only opening and sharing.
 	*/
-	onColor?: (session: Session) => void;
+	onAct: (action: SessionAction, session: Session) => void;
+	onRemoveTab?: (session: Session, tabId: string) => void;
+	onMenu: (session: Session) => void;
 }) {
 	const colors = useColors();
 	const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
@@ -98,152 +134,199 @@ function SessionCardView({
 	const links = useLinkSettings();
 	const prefs = usePreferences();
 	const compact = prefs.compactSessions;
+	const swipe = (action: SessionAction) =>
+		action === 'none'
+			? undefined
+			: {
+					...sessionActionLook(action, colors),
+					onTrigger() {
+						onAct(action, session);
+					},
+				};
 	const count = `${session.tabs.length} ${session.tabs.length === 1 ? 'tab' : 'tabs'}`;
 	return (
-		<Card flush>
-			<View style={styles.head}>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{expanded}}
-					accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
-					android_ripple={{color: colors.pressed}}
-					style={styles.headMain}
-					accessibilityActions={
-						onColor ? [{name: 'color', label: 'Change color'}] : undefined
-					}
-					onAccessibilityAction={() => {
-						onColor?.(session);
-					}}
-					onLongPress={
-						onColor
-							? () => {
-									onColor(session);
-								}
-							: undefined
-					}
-					onPress={() => {
-						onToggle(session.id);
-					}}
-				>
-					<View style={[styles.tile, {backgroundColor: soften(tint)}]}>
-						<Icon name="albums" size={22} color={tint} />
-					</View>
-					<View style={styles.texts}>
-						<Text numberOfLines={2} style={[styles.name, {color: colors.text}]}>
-							{session.name}
-						</Text>
-						<Text numberOfLines={1} style={{color: colors.muted}}>
-							{count} · {folderName} · {shortDate(session.updatedAt)}
-						</Text>
-						{session.deviceName &&
-							prefs.showSavedOn &&
-							!prefs.compactSessions && (
-								<Text numberOfLines={1} style={{color: colors.muted}}>
-									Saved on {session.deviceName}
-								</Text>
-							)}
-						{links.showSessionFaviconPreviews && !prefs.compactSessions && (
-							<TabPreview session={session} />
-						)}
-					</View>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityState={{expanded}}
-					accessibilityLabel={
-						expanded
-							? `Hide tabs in ${session.name}`
-							: `Show tabs in ${session.name}`
-					}
-					android_ripple={{color: colors.pressed, radius: 22}}
-					style={styles.round}
-					onPress={() => {
-						onToggle(session.id);
-					}}
-				>
-					<Icon
-						name={expanded ? 'chevron-up' : 'chevron-down'}
-						color={colors.muted}
-					/>
-				</Pressable>
-			</View>
-			{expanded && (
-				<View style={[styles.tabs, {borderColor: colors.border}]}>
-					{session.tabs.map((tab) => {
-						const text = rowText(
-							{title: tab.title || tab.url, url: tab.url},
-							links,
-						);
-						return (
-							<Pressable
-								key={tab.id}
-								accessibilityRole="link"
-								accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
-								accessibilityHint="Opens the link"
-								android_ripple={{color: colors.pressed}}
-								style={({pressed}) => [
-									styles.tab,
-									compact && styles.tabCompact,
-									{backgroundColor: pressed ? colors.pressed : 'transparent'},
-								]}
-								onPress={() => {
-									void Linking.openURL(linkToOpen(tab.url, links));
-								}}
-							>
-								<SiteIcon host={hostOf(tab.url)} size={compact ? 24 : 32} />
-								<View style={styles.texts}>
-									<Text
-										numberOfLines={compact ? 1 : 2}
-										style={{color: colors.text}}
-									>
-										{text.main}
-									</Text>
-									{text.sub !== undefined && !compact && (
-										<Text
-											numberOfLines={1}
-											style={{color: colors.muted, fontSize: 13}}
-										>
-											{text.sub}
-										</Text>
-									)}
-								</View>
-								{tab.pinned && (
-									<Icon name="pin" size={15} color={colors.muted} />
-								)}
-								<Icon name="open-outline" size={18} color={colors.muted} />
-							</Pressable>
-						);
-					})}
-					<View style={styles.footer}>
-						<View style={styles.footerButton}>
-							<Button
-								kind="plain"
-								label={`Open all ${session.tabs.length}`}
-								icon="albums-outline"
-								onPress={() => {
-									openAll(
-										session.tabs.map((tab) => linkToOpen(tab.url, links)),
-										session.name,
-									);
-								}}
-							/>
+		<SwipeRow
+			radius={16}
+			left={swipe(prefs.sessionSwipeRight)}
+			right={swipe(prefs.sessionSwipeLeft)}
+		>
+			<Card flush>
+				<View style={styles.head}>
+					<Pressable
+						accessibilityRole="button"
+						accessibilityState={{expanded}}
+						accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
+						android_ripple={{color: colors.pressed}}
+						style={styles.headMain}
+						accessibilityActions={SESSION_MENU.map(([name, label]) => ({
+							name,
+							label,
+						}))}
+						onAccessibilityAction={(event) => {
+							const name = event.nativeEvent.actionName;
+							if (name === 'expand') {
+								onToggle(session.id);
+							} else if (name === 'more') {
+								onMenu(session);
+							} else {
+								onAct(name as SessionAction, session);
+							}
+						}}
+						onLongPress={() => {
+							onMenu(session);
+						}}
+						onPress={() => {
+							if (prefs.sessionTap === 'open') {
+								onAct('open', session);
+							} else {
+								onToggle(session.id);
+							}
+						}}
+					>
+						<View style={[styles.tile, {backgroundColor: soften(tint)}]}>
+							<Icon name="albums" size={22} color={tint} />
 						</View>
-						{onColor && (
+						<View style={styles.texts}>
+							<Text
+								numberOfLines={2}
+								style={[styles.name, {color: colors.text}]}
+							>
+								{session.name}
+							</Text>
+							<Text numberOfLines={1} style={{color: colors.muted}}>
+								{count} · {folderName} · {shortDate(session.updatedAt)}
+							</Text>
+							{session.deviceName &&
+								prefs.showSavedOn &&
+								!prefs.compactSessions && (
+									<Text numberOfLines={1} style={{color: colors.muted}}>
+										Saved on {session.deviceName}
+									</Text>
+								)}
+							{links.showSessionFaviconPreviews && !prefs.compactSessions && (
+								<TabPreview session={session} />
+							)}
+						</View>
+					</Pressable>
+					<Pressable
+						accessibilityRole="button"
+						accessibilityState={{expanded}}
+						accessibilityLabel={
+							expanded
+								? `Hide tabs in ${session.name}`
+								: `Show tabs in ${session.name}`
+						}
+						android_ripple={{color: colors.pressed, radius: 22}}
+						style={styles.round}
+						onPress={() => {
+							onToggle(session.id);
+						}}
+					>
+						<Icon
+							name={expanded ? 'chevron-up' : 'chevron-down'}
+							color={colors.muted}
+						/>
+					</Pressable>
+				</View>
+				{expanded && (
+					<View style={[styles.tabs, {borderColor: colors.border}]}>
+						{session.tabs.map((tab) => {
+							const text = rowText(
+								{title: tab.title || tab.url, url: tab.url},
+								links,
+							);
+							return (
+								<Pressable
+									key={tab.id}
+									accessibilityRole="link"
+									accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
+									accessibilityHint="Opens the link"
+									android_ripple={{color: colors.pressed}}
+									style={({pressed}) => [
+										styles.tab,
+										compact && styles.tabCompact,
+										{backgroundColor: pressed ? colors.pressed : 'transparent'},
+									]}
+									accessibilityActions={
+										onRemoveTab
+											? [{name: 'remove', label: 'Remove from session'}]
+											: undefined
+									}
+									onAccessibilityAction={() => {
+										onRemoveTab?.(session, tab.id);
+									}}
+									onLongPress={
+										onRemoveTab
+											? () => {
+													onRemoveTab(session, tab.id);
+												}
+											: undefined
+									}
+									onPress={() => {
+										void Linking.openURL(linkToOpen(tab.url, links));
+									}}
+								>
+									<SiteIcon host={hostOf(tab.url)} size={compact ? 24 : 32} />
+									<View style={styles.texts}>
+										<Text
+											numberOfLines={compact ? 1 : 2}
+											style={{color: colors.text}}
+										>
+											{text.main}
+										</Text>
+										{text.sub !== undefined && !compact && (
+											<Text
+												numberOfLines={1}
+												style={{color: colors.muted, fontSize: 13}}
+											>
+												{text.sub}
+											</Text>
+										)}
+									</View>
+									{tab.pinned && (
+										<Icon name="pin" size={15} color={colors.muted} />
+									)}
+									<Icon name="open-outline" size={18} color={colors.muted} />
+								</Pressable>
+							);
+						})}
+						<View style={styles.footer}>
+							<View style={styles.footerButton}>
+								<Button
+									kind="plain"
+									label={`Open all ${session.tabs.length}`}
+									icon="albums-outline"
+									onPress={() => {
+										onAct('open', session);
+									}}
+								/>
+							</View>
 							<View style={styles.footerButton}>
 								<Button
 									kind="plain"
 									label="Change color"
 									icon="color-palette-outline"
 									onPress={() => {
-										onColor(session);
+										onAct('color', session);
 									}}
 								/>
 							</View>
-						)}
+							<Pressable
+								accessibilityRole="button"
+								accessibilityLabel={`More actions for ${session.name}`}
+								android_ripple={{color: colors.pressed, radius: 22}}
+								style={styles.round}
+								onPress={() => {
+									onMenu(session);
+								}}
+							>
+								<Icon name="ellipsis-horizontal" color={colors.muted} />
+							</Pressable>
+						</View>
 					</View>
-				</View>
-			)}
-		</Card>
+				)}
+			</Card>
+		</SwipeRow>
 	);
 }
 
@@ -269,6 +352,14 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const expandAll = links.expandSessionsByDefault;
 	const [coloringId, setColoringId] = useState<string>();
 	const coloring = store.groups.find((session) => session.id === coloringId);
+	const [renamingId, setRenamingId] = useState<string>();
+	const renaming = store.groups.find((session) => session.id === renamingId);
+	const [movingId, setMovingId] = useState<string>();
+	const moving = store.groups.find((session) => session.id === movingId);
+	const [menuId, setMenuId] = useState<string>();
+	const menuFor = store.groups.find((session) => session.id === menuId);
+	const readOnly = view === 'private';
+	const colorsNow = useColors();
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
 	const folderId = folders.some((folder) => folder.id === picked)
@@ -310,9 +401,143 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 		() => look({id: 'other', name: 'Other', count: 0}).tint,
 		[look],
 	);
-	const colorOf = useCallback((session: Session) => {
-		setColoringId(session.id);
+	const act = useCallback(
+		(action: SessionAction, session: Session) => {
+			const changes = new Set<SessionAction>([
+				'color',
+				'rename',
+				'move',
+				'archive',
+				'delete',
+			]);
+			if (readOnly && changes.has(action)) {
+				showSnack('The private library cannot be changed here');
+				return;
+			}
+
+			switch (action) {
+				case 'open': {
+					openAll(
+						session.tabs.map((tab) => linkToOpen(tab.url, links)),
+						session.name,
+					);
+					if (!readOnly) {
+						void edit((current) =>
+							markSessionOpened(current, session.id, Date.now()),
+						);
+					}
+
+					break;
+				}
+
+				case 'color': {
+					setColoringId(session.id);
+					break;
+				}
+
+				case 'rename': {
+					setRenamingId(session.id);
+					break;
+				}
+
+				case 'move': {
+					setMovingId(session.id);
+					break;
+				}
+
+				case 'archive': {
+					void edit((current) =>
+						archiveSession(current, session.id, Date.now()),
+					);
+					showSnack(`Archived ${session.name}`, {
+						label: 'Undo',
+						run() {
+							void edit((current) =>
+								moveSession(current, session.id, session.folderId, Date.now()),
+							);
+						},
+					});
+					break;
+				}
+
+				case 'share': {
+					void Share.share({message: sessionLinks(session)});
+					break;
+				}
+
+				case 'delete': {
+					void edit((current) =>
+						removeSession(current, session.id, Date.now()),
+					);
+					showSnack(`Deleted ${session.name}`, {
+						label: 'Undo',
+						run() {
+							void edit((current) =>
+								restoreSession(current, session, Date.now()),
+							);
+						},
+					});
+					break;
+				}
+
+				default:
+			}
+		},
+		[links, readOnly],
+	);
+	const removeTab = useCallback((session: Session, tabId: string) => {
+		if (
+			session.tabs.every((candidate) => candidate.id !== tabId) ||
+			session.tabs.length < 2
+		) {
+			showSnack('A session keeps at least one tab. Delete the session instead');
+			return;
+		}
+
+		void edit((current) =>
+			removeSessionTab(current, session.id, tabId, Date.now()),
+		);
+		showSnack('Removed from the session', {
+			label: 'Undo',
+			run() {
+				void edit((current) =>
+					restoreSession(
+						current.groups.some((group) => group.id === session.id)
+							? removeSession(current, session.id, Date.now())
+							: current,
+						session,
+						Date.now(),
+					),
+				);
+			},
+		});
 	}, []);
+	const openMenu = useCallback((session: Session) => {
+		setMenuId(session.id);
+	}, []);
+	const menu: SheetAction[] = menuFor
+		? (readOnly
+				? (['open', 'share'] as const)
+				: ([
+						'open',
+						'color',
+						'rename',
+						'move',
+						'archive',
+						'share',
+						'delete',
+					] as const)
+			).map((action) => {
+				const actionLook = sessionActionLook(action, colorsNow);
+				return {
+					icon: actionLook.icon,
+					label: actionLook.label,
+					onPress() {
+						act(action, menuFor);
+					},
+				};
+			})
+		: [];
 	const toggle = useCallback((id: string) => {
 		setFlipped((current) => {
 			const next = new Set(current);
@@ -408,10 +633,49 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
 							expanded={expandAll !== flipped.has(item.id)}
 							onToggle={toggle}
-							onColor={view === 'private' ? undefined : colorOf}
+							onAct={act}
+							onMenu={openMenu}
+							onRemoveTab={readOnly ? undefined : removeTab}
 						/>
 					</View>
 				)}
+			/>
+			<ActionSheet
+				visible={menuFor !== undefined}
+				title={menuFor?.name ?? 'Session'}
+				actions={menu}
+				onClose={() => {
+					setMenuId(undefined);
+				}}
+			/>
+			<RenameSheet
+				session={renaming}
+				onSave={(name) => {
+					if (renaming) {
+						void edit((current) =>
+							renameSession(current, renaming.id, name, Date.now()),
+						);
+					}
+
+					setRenamingId(undefined);
+				}}
+				onClose={() => {
+					setRenamingId(undefined);
+				}}
+			/>
+			<FolderSheet
+				session={moving}
+				folders={store.folders}
+				onPick={(target) => {
+					if (moving) {
+						void edit((current) =>
+							moveSession(current, moving.id, target, Date.now()),
+						);
+					}
+				}}
+				onClose={() => {
+					setMovingId(undefined);
+				}}
 			/>
 			<SessionColorSheet
 				session={coloring}

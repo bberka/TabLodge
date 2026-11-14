@@ -760,3 +760,166 @@ export function addTabsToSession(
 		updatedAt: now,
 	};
 }
+
+const changeSession = (
+	store: Store,
+	id: string,
+	change: (session: Session) => Session,
+	now: number,
+): Store =>
+	store.groups.some((session) => session.id === id)
+		? {
+				...store,
+				groups: store.groups.map((session) =>
+					session.id === id ? change(session) : session,
+				),
+				updatedAt: now,
+			}
+		: store;
+
+/**
+Renames a session. A blank name, or an unknown session, leaves the store as it was.
+*/
+export function renameSession(
+	store: Store,
+	id: string,
+	name: string,
+	now: number,
+): Store {
+	const trimmed = name.trim();
+	return trimmed
+		? changeSession(
+				store,
+				id,
+				(session) => ({...session, name: trimmed, updatedAt: now}),
+				now,
+			)
+		: store;
+}
+
+/**
+Puts a session in another folder. An unknown folder or session leaves the store as it was.
+*/
+export function moveSession(
+	store: Store,
+	id: string,
+	folderId: string,
+	now: number,
+): Store {
+	return store.folders.some((folder) => folder.id === folderId)
+		? changeSession(
+				store,
+				id,
+				(session) => ({...session, folderId, updatedAt: now}),
+				now,
+			)
+		: store;
+}
+
+/**
+Moves a session to the Archived folder, which is made when there is none yet.
+*/
+export function archiveSession(store: Store, id: string, now: number): Store {
+	const found = store.folders.find((folder) => isArchived(folder));
+	const withFolder: Store = found
+		? store
+		: {
+				...store,
+				folders: [
+					...store.folders,
+					{
+						id: ARCHIVED_FOLDER_ID,
+						name: 'Archived',
+						createdAt: now,
+						isDefault: false,
+					},
+				],
+			};
+	return moveSession(withFolder, id, found?.id ?? ARCHIVED_FOLDER_ID, now);
+}
+
+/**
+Deletes a session.
+*/
+export function removeSession(store: Store, id: string, now: number): Store {
+	return store.groups.some((session) => session.id === id)
+		? {
+				...store,
+				groups: store.groups.filter((session) => session.id !== id),
+				updatedAt: now,
+			}
+		: store;
+}
+
+/**
+Puts a deleted session back, under its own id, unless one with that id exists again. A folder that is gone sends it
+to the first folder.
+*/
+export function restoreSession(
+	store: Store,
+	session: Session,
+	now: number,
+): Store {
+	if (store.groups.some((existing) => existing.id === session.id)) {
+		return store;
+	}
+
+	const known = store.folders.some((folder) => folder.id === session.folderId);
+	return {
+		...store,
+		groups: [
+			{
+				...session,
+				folderId: known
+					? session.folderId
+					: (store.folders[0]?.id ?? session.folderId),
+				updatedAt: now,
+			},
+			...store.groups,
+		],
+		updatedAt: now,
+	};
+}
+
+/**
+Takes one tab out of a session.
+*/
+export function removeSessionTab(
+	store: Store,
+	id: string,
+	tabId: string,
+	now: number,
+): Store {
+	return changeSession(
+		store,
+		id,
+		(session) => ({
+			...session,
+			tabs: session.tabs.filter((tab) => tab.id !== tabId),
+			updatedAt: now,
+		}),
+		now,
+	);
+}
+
+/**
+The addresses of a session's tabs, one per line, for sharing or copying.
+*/
+export const sessionLinks = (session: Session): string =>
+	session.tabs.map((tab) => tab.url).join('\n');
+
+/**
+Notes that a session was opened now, which the "recently opened" sort uses.
+*/
+export function markSessionOpened(
+	store: Store,
+	id: string,
+	now: number,
+): Store {
+	return changeSession(
+		store,
+		id,
+		(session) => ({...session, lastOpenedAt: now}),
+		now,
+	);
+}
