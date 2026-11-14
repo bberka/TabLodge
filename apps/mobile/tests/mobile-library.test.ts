@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
+	BOOKMARK_UNFILED_ID,
+	columnNameProblem,
+	DEFAULT_BOOKMARK_COLUMN_ID,
+} from '../../extension/src/shared/bookmark-rules';
+import {
 	addBookmark,
 	addColumn,
 	bookmarksIn,
 	columnViews,
-	DEFAULT_COLUMN_ID,
 	emptyStore,
 	extractUrl,
 	moveBookmarks,
@@ -13,10 +17,8 @@ import {
 	restoreBookmarks,
 	splitShared,
 	searchBookmarks,
-	UNFILED_ID,
 	updateBookmark,
 	addBookmarks,
-	columnNameProblem,
 	deleteColumn,
 	updateColumn,
 	addSession,
@@ -66,13 +68,13 @@ describe('bookmarks', () => {
 			NOW,
 		);
 		assert.equal(store.bookmarkColumns.length, 1);
-		assert.equal(store.bookmarkColumns[0].id, DEFAULT_COLUMN_ID);
+		assert.equal(store.bookmarkColumns[0].id, DEFAULT_BOOKMARK_COLUMN_ID);
 		assert.equal(store.bookmarkColumns[0].isDefault, true);
 		assert.equal(store.bookmarks[0].title, 'example.com');
-		assert.equal(store.bookmarks[0].columnId, DEFAULT_COLUMN_ID);
+		assert.equal(store.bookmarks[0].columnId, DEFAULT_BOOKMARK_COLUMN_ID);
 	});
 
-	test('puts a new bookmark first in the chosen column', () => {
+	test('puts a new bookmark last in the chosen column, as the extension does', () => {
 		let store = addColumn(emptyStore(NOW), 'Read', 'c1', NOW);
 		store = addBookmark(
 			store,
@@ -86,7 +88,34 @@ describe('bookmarks', () => {
 			'b',
 			NOW,
 		);
-		assert.deepEqual(ids(store, 'c1'), ['b', 'a']);
+		assert.deepEqual(ids(store, 'c1'), ['a', 'b']);
+	});
+
+	test('files a link into the column that claims its site, then the default column', () => {
+		let store = addColumn(emptyStore(NOW), 'News', 'c1', NOW);
+		store = {
+			...store,
+			bookmarkColumns: store.bookmarkColumns.map((column) =>
+				column.id === 'c1' ? {...column, domains: ['news.example']} : column,
+			),
+		};
+		store = addBookmark(
+			store,
+			{url: 'https://news.example/a', title: '', columnId: 'gone'},
+			'a',
+			NOW,
+		);
+		assert.deepEqual(ids(store, 'c1'), ['a']);
+		store = addBookmark(
+			store,
+			{url: 'https://other.example', title: '', columnId: 'gone'},
+			'b',
+			NOW,
+		);
+		assert.equal(
+			store.bookmarks.find((bookmark) => bookmark.id === 'b')?.columnId,
+			store.bookmarkColumns[0].id,
+		);
 	});
 
 	test('ignores a link that is not a web address', () => {
@@ -128,8 +157,10 @@ describe('bookmarks', () => {
 				},
 			],
 		};
-		assert.deepEqual(columnViews(store), [{id: UNFILED_ID, name: 'Unfiled'}]);
-		assert.deepEqual(ids(store, UNFILED_ID), ['a']);
+		assert.deepEqual(columnViews(store), [
+			{id: BOOKMARK_UNFILED_ID, name: 'Unfiled'},
+		]);
+		assert.deepEqual(ids(store, BOOKMARK_UNFILED_ID), ['a']);
 	});
 });
 
@@ -139,7 +170,7 @@ describe('sample data', () => {
 		assert.equal(store.groups.length, 6);
 		assert.equal(store.bookmarks.length, 16);
 		assert.equal(
-			columnViews(store).some((view) => view.id === UNFILED_ID),
+			columnViews(store).some((view) => view.id === BOOKMARK_UNFILED_ID),
 			false,
 		);
 		const sessionIds = store.groups.map((session) => session.id);
@@ -174,7 +205,7 @@ describe('several bookmarks', () => {
 			['b'],
 		);
 		const moved = moveBookmarks(store, new Set(['a', 'b']), 'c2', NOW + 1);
-		assert.deepEqual(ids(moved, 'c2'), ['b', 'a']);
+		assert.deepEqual(ids(moved, 'c2'), ['a', 'b']);
 		assert.deepEqual(ids(moved, 'c1'), ['c']);
 		assert.equal(moveBookmarks(store, new Set(['a']), 'missing', NOW), store);
 	});
@@ -187,7 +218,7 @@ describe('several bookmarks', () => {
 			{url: 'see https://new.example/x.', title: ' Renamed ', columnId: 'c1'},
 			NOW + 1,
 		);
-		assert.deepEqual(ids(same, 'c1'), ['c', 'b', 'a']);
+		assert.deepEqual(ids(same, 'c1'), ['a', 'b', 'c']);
 		const edited = same.bookmarks.find((bookmark) => bookmark.id === 'b');
 		assert.equal(edited?.url, 'https://new.example/x');
 		assert.equal(edited?.title, 'Renamed');
@@ -218,7 +249,7 @@ describe('several bookmarks', () => {
 		const gone = store.bookmarks.filter((bookmark) => bookmark.id === 'b');
 		const without = removeBookmarks(store, new Set(['b']), NOW);
 		const back = restoreBookmarks(without, gone, ['b2'], NOW + 1);
-		assert.deepEqual(ids(back, 'c1'), ['b2', 'c', 'a']);
+		assert.deepEqual(ids(back, 'c1'), ['b2', 'a', 'c']);
 		assert.equal(back.bookmarks[0].title, 'b');
 	});
 });
@@ -452,11 +483,20 @@ describe('editing columns', () => {
 
 	test('a name that is empty, reserved, or taken is refused', () => {
 		const store = build();
-		assert.equal(columnNameProblem(store, ' '), 'Give the column a name.');
-		assert.match(columnNameProblem(store, 'All Bookmarks') ?? '', /different/);
-		assert.match(columnNameProblem(store, 'two') ?? '', /already exists/);
+		assert.match(
+			columnNameProblem(store.bookmarkColumns, ' ') ?? '',
+			/different/,
+		);
+		assert.match(
+			columnNameProblem(store.bookmarkColumns, 'All Bookmarks') ?? '',
+			/different/,
+		);
+		assert.match(
+			columnNameProblem(store.bookmarkColumns, 'two') ?? '',
+			/already exists/,
+		);
 		assert.equal(
-			columnNameProblem(store, 'One', 'c1'),
+			columnNameProblem(store.bookmarkColumns, 'One', 'c1'),
 			undefined,
 			'its own name is fine',
 		);
@@ -477,7 +517,7 @@ describe('editing columns', () => {
 			moved.bookmarkColumns.map((entry) => entry.id),
 			['c2'],
 		);
-		assert.deepEqual(ids(moved, 'c2'), ['c', 'b', 'a']);
+		assert.deepEqual(ids(moved, 'c2'), ['c', 'a', 'b']);
 		const gone = deleteColumn(store, 'c1', null, NOW + 1);
 		assert.equal(gone.bookmarks.length, 1);
 		assert.equal(gone.bookmarks[0]?.id, 'c');
@@ -492,7 +532,9 @@ describe('editing columns', () => {
 		);
 		assert.deepEqual(single.bookmarkColumns, []);
 		assert.equal(
-			single.bookmarks.every((bookmark) => bookmark.columnId === UNFILED_ID),
+			single.bookmarks.every(
+				(bookmark) => bookmark.columnId === BOOKMARK_UNFILED_ID,
+			),
 			true,
 		);
 		assert.equal(single.bookmarks.length, 3);

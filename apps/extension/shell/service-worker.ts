@@ -1,6 +1,6 @@
 import {ICON_IDS} from '../src/shared/icon-ids';
 import {stripTrackingParameters} from '../src/shared/tracking-parameters';
-import {columnForUrl} from '../src/app/column-sites';
+import {columnForUrl} from '../src/shared/column-sites';
 import {
 	BACKUP_FORMAT_ID,
 	BACKUP_VERSION,
@@ -8,6 +8,14 @@ import {
 	FULL_BACKUP_VERSION,
 } from '../src/app/backup-format';
 import {isAccent} from '../src/shared/accent-colors';
+import {
+	BOOKMARK_UNFILED_ID,
+	cleanColumnName,
+	columnNameTaken,
+	columnNameProblem,
+	DEFAULT_BOOKMARK_COLUMN_ID,
+	landingColumnId,
+} from '../src/shared/bookmark-rules';
 import {
 	findOmniboxItem,
 	omniboxIndex,
@@ -790,8 +798,6 @@ const DEFAULT_FOLDER = Object.freeze<Folder>({
 	createdAt: 0,
 	isDefault: true,
 });
-const DEFAULT_BOOKMARK_COLUMN_ID = 'bookmark-default';
-const BOOKMARK_UNFILED_ID = 'bookmark-unfiled';
 const DEFAULT_BOOKMARK_COLUMN = Object.freeze<BookmarkColumn>({
 	id: DEFAULT_BOOKMARK_COLUMN_ID,
 	name: 'Bookmarks',
@@ -5689,27 +5695,6 @@ async function updateTab(
 	});
 }
 
-function bookmarkColumnName(value: unknown) {
-	return typeof value === 'string'
-		? value
-				.replaceAll(/[\u0000-\u001F\u007F]/g, ' ')
-				.trim()
-				.slice(0, 60)
-		: '';
-}
-
-function bookmarkColumnNameExists(
-	store: Store,
-	name: string,
-	exceptId: string | null = null,
-) {
-	const normalized = name.toLocaleLowerCase();
-	return store.bookmarkColumns.some(
-		(column) =>
-			column.id !== exceptId && column.name.toLocaleLowerCase() === normalized,
-	);
-}
-
 function findBookmark(store: Store, bookmarkId: string) {
 	return store.bookmarks.find((bookmark) => bookmark.id === bookmarkId) || null;
 }
@@ -5727,16 +5712,9 @@ async function addBookmark(
 			};
 		}
 
-		const columnId = store.bookmarkColumns.some(
-			(column) => column.id === fields.columnId,
-		)
-			? fields.columnId!
-			: columnForUrl(store.bookmarkColumns, url)?.id ||
-				store.bookmarkColumns.find(
-					(column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID,
-				)?.id ||
-				store.bookmarkColumns[0]?.id ||
-				BOOKMARK_UNFILED_ID;
+		const columnId = landingColumnId(store.bookmarkColumns, fields.columnId, {
+			claimedId: columnForUrl(store.bookmarkColumns, url)?.id,
+		});
 		const now = Date.now();
 		const bookmark = {
 			id: makeId(),
@@ -5767,15 +5745,9 @@ async function addBookmarks(
 ): Promise<ActionResult<'ADD_BOOKMARKS'>> {
 	const run = async (): Promise<ActionResult<'ADD_BOOKMARKS'>> => {
 		const store = await getStore();
-		const targetColumnId =
-			store.bookmarkColumns.some((column) => column.id === columnId) ||
-			columnId === BOOKMARK_UNFILED_ID
-				? columnId!
-				: store.bookmarkColumns.find(
-						(column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID,
-					)?.id ||
-					store.bookmarkColumns[0]?.id ||
-					BOOKMARK_UNFILED_ID;
+		const targetColumnId = landingColumnId(store.bookmarkColumns, columnId, {
+			allowUnfiled: true,
+		});
 		const now = Date.now();
 		const added: Bookmark[] = [];
 		const known = new Set(
@@ -6259,17 +6231,12 @@ async function createBookmarkColumn(
 ): Promise<ActionResult<'CREATE_BOOKMARK_COLUMN'>> {
 	return mutate(async () => {
 		const store = await getStore();
-		const columnName = bookmarkColumnName(name);
-		if (!columnName || columnName.toLocaleLowerCase() === 'all bookmarks') {
-			return {ok: false, error: 'Choose a different column name.'};
+		const problem = columnNameProblem(store.bookmarkColumns, name);
+		if (problem) {
+			return {ok: false, error: problem};
 		}
 
-		if (bookmarkColumnNameExists(store, columnName)) {
-			return {
-				ok: false,
-				error: 'A bookmark column with that name already exists.',
-			};
-		}
+		const columnName = cleanColumnName(name);
 
 		const column = {
 			id: makeId(),
@@ -6300,17 +6267,12 @@ async function updateBookmarkColumn(
 			return {ok: false, error: 'That bookmark column no longer exists.'};
 		}
 
-		const columnName = bookmarkColumnName(name);
-		if (!columnName || columnName.toLocaleLowerCase() === 'all bookmarks') {
-			return {ok: false, error: 'Choose a different column name.'};
+		const problem = columnNameProblem(store.bookmarkColumns, name, columnId);
+		if (problem) {
+			return {ok: false, error: problem};
 		}
 
-		if (bookmarkColumnNameExists(store, columnName, columnId)) {
-			return {
-				ok: false,
-				error: 'A bookmark column with that name already exists.',
-			};
-		}
+		const columnName = cleanColumnName(name);
 
 		column.name = columnName;
 		// `icon` omitted keeps the current icon; "" or an unknown id resets it to the default.
@@ -9136,7 +9098,7 @@ function applyTrashRestore(
 		}
 
 		column.name = uniqueName(column.name, (candidate) =>
-			bookmarkColumnNameExists(store, candidate),
+			columnNameTaken(store.bookmarkColumns, candidate),
 		);
 		column.isDefault = column.id === DEFAULT_BOOKMARK_COLUMN_ID;
 		store.bookmarkColumns.splice(

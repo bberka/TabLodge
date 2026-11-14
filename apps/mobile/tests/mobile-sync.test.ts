@@ -138,7 +138,7 @@ test('a phone starting empty receives the extension library and sends back its o
 	await desktop.client.syncNow();
 	assert.deepEqual(
 		desktop.store.bookmarks.map((bookmark) => bookmark.id),
-		['b2', 'b1'],
+		['b1', 'b2'],
 	);
 
 	phone.store = removeBookmarks(phone.store, new Set(['b1']), NOW + 20);

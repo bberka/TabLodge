@@ -1,9 +1,10 @@
 import {useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
+import {DEFAULT_BOOKMARK_COLUMN_ID} from '../../extension/src/shared/bookmark-rules';
 import {ColorPicker} from './color-picker';
 import {columnGlyph, useChipLook} from './column-icons';
 import {IconPicker} from './icon-picker';
-import {addColumn, columnViews, DEFAULT_COLUMN_ID} from './library';
+import {addColumn, columnViews} from './library';
 import {edit, newId, useLibrary} from './library-store';
 import {getPreferences} from './preferences';
 import {useColors} from './theme';
@@ -31,9 +32,9 @@ export function useColumnChoice(initial = '') {
 		? picked
 		: (columns.find((column) => column.id === getPreferences().lastColumnId)
 				?.id ??
-			columns.find((column) => column.id === DEFAULT_COLUMN_ID)?.id ??
+			columns.find((column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID)?.id ??
 			columns[0]?.id ??
-			DEFAULT_COLUMN_ID);
+			DEFAULT_BOOKMARK_COLUMN_ID);
 
 	return {
 		columns,

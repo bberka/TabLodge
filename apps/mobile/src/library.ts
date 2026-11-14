@@ -10,13 +10,17 @@ import type {
 	Store,
 } from '../../extension/src/shared/types';
 import {isColumnColor} from '../../extension/src/shared/accent-colors';
+import {
+	BOOKMARK_UNFILED_ID,
+	cleanColumnName,
+	columnNameProblem,
+	DEFAULT_BOOKMARK_COLUMN_ID,
+	DEFAULT_BOOKMARK_COLUMN_NAME,
+	landingColumnId,
+} from '../../extension/src/shared/bookmark-rules';
+import {columnForUrl} from '../../extension/src/shared/column-sites';
 import type {DeviceStamp} from '../../extension/src/shared/device';
 import {LAYOUT_VERSION} from '../../extension/src/shared/library-index';
-
-// Ids the extension gives its first column and the bucket for bookmarks whose column is gone.
-export const DEFAULT_COLUMN_ID = 'bookmark-default';
-export const UNFILED_ID = 'bookmark-unfiled';
-export const DEFAULT_COLUMN_NAME = 'Bookmarks';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
 
@@ -93,7 +97,7 @@ export function columnViews(store: Store): ColumnView[] {
 		({id, name, icon, color}) => ({id, name, icon, color}),
 	);
 	if (store.bookmarks.some((bookmark) => !known.has(bookmark.columnId))) {
-		views.push({id: UNFILED_ID, name: 'Unfiled'});
+		views.push({id: BOOKMARK_UNFILED_ID, name: 'Unfiled'});
 	}
 
 	return views;
@@ -102,7 +106,7 @@ export function columnViews(store: Store): ColumnView[] {
 export function bookmarksIn(store: Store, columnId: string): Bookmark[] {
 	const known = new Set(store.bookmarkColumns.map((column) => column.id));
 	return store.bookmarks.filter((bookmark) =>
-		columnId === UNFILED_ID
+		columnId === BOOKMARK_UNFILED_ID
 			? !known.has(bookmark.columnId)
 			: bookmark.columnId === columnId,
 	);
@@ -127,7 +131,7 @@ export function addColumn(
 	icon?: string,
 	color?: string,
 ): Store {
-	const trimmed = name.trim();
+	const trimmed = cleanColumnName(name);
 	if (!trimmed) {
 		return store;
 	}
@@ -152,7 +156,7 @@ export function addColumn(
 type NewBookmark = {url: string; title: string; columnId: string};
 
 /**
-Adds a bookmark at the top of its column. When the library has no column yet, the extension's default one is
+Adds a bookmark at the end of its column, as the extension does. A column that does not exist falls back as it does there (the column that claims the link's site, the default column, the first). When the library has no column yet, the extension's default one is
 created, so a first link can be saved before the first sync.
 */
 export function addBookmark(
@@ -167,24 +171,23 @@ export function addBookmark(
 	}
 
 	let next = store;
-	let {columnId} = input;
-	if (next.bookmarkColumns.every((column) => column.id !== columnId)) {
-		columnId = next.bookmarkColumns[0]?.id ?? DEFAULT_COLUMN_ID;
-		if (next.bookmarkColumns.length === 0) {
-			next = {
-				...next,
-				bookmarkColumns: [
-					{
-						id: DEFAULT_COLUMN_ID,
-						name: DEFAULT_COLUMN_NAME,
-						createdAt: now,
-						isDefault: true,
-					},
-				],
-			};
-		}
+	if (next.bookmarkColumns.length === 0) {
+		next = {
+			...next,
+			bookmarkColumns: [
+				{
+					id: DEFAULT_BOOKMARK_COLUMN_ID,
+					name: DEFAULT_BOOKMARK_COLUMN_NAME,
+					createdAt: now,
+					isDefault: true,
+				},
+			],
+		};
 	}
 
+	const columnId = landingColumnId(next.bookmarkColumns, input.columnId, {
+		claimedId: columnForUrl(next.bookmarkColumns, url)?.id,
+	});
 	const bookmark: Bookmark = {
 		id,
 		title: input.title.trim() || hostOf(url),
@@ -193,12 +196,12 @@ export function addBookmark(
 		createdAt: now,
 		updatedAt: now,
 	};
-	return {...next, bookmarks: [bookmark, ...next.bookmarks], updatedAt: now};
+	return {...next, bookmarks: [...next.bookmarks, bookmark], updatedAt: now};
 }
 
 /**
 Changes a bookmark's link, title, or column. It keeps its place, unless the column changes: then it goes to the
-top of the new column. An unusable link or a missing bookmark or column leaves the store as it was.
+end of the new column, as in the extension. An unusable link or a missing bookmark or column leaves the store as it was.
 */
 export function updateBookmark(
 	store: Store,
@@ -228,7 +231,7 @@ export function updateBookmark(
 			? store.bookmarks.map((bookmark) =>
 					bookmark.id === id ? changed : bookmark,
 				)
-			: [changed, ...store.bookmarks.filter((bookmark) => bookmark.id !== id)];
+			: [...store.bookmarks.filter((bookmark) => bookmark.id !== id), changed];
 	return {...store, bookmarks, updatedAt: now};
 }
 
@@ -252,7 +255,7 @@ export function removeBookmarks(
 }
 
 /**
-Moves several bookmarks to the top of another column, keeping their order.
+Moves several bookmarks to the end of another column, keeping their order.
 */
 export function moveBookmarks(
 	store: Store,
@@ -271,7 +274,7 @@ export function moveBookmarks(
 		.filter((bookmark) => ids.has(bookmark.id))
 		.map((bookmark) => ({...bookmark, columnId, updatedAt: now}));
 	const rest = store.bookmarks.filter((bookmark) => !ids.has(bookmark.id));
-	return {...store, bookmarks: [...moved, ...rest], updatedAt: now};
+	return {...store, bookmarks: [...rest, ...moved], updatedAt: now};
 }
 
 /**
@@ -317,34 +320,6 @@ export function splitShared(text: string): {url?: string; title: string} {
 	return {url, title: rest.replaceAll(/\s+/g, ' ').trim()};
 }
 
-const MAX_COLUMN_NAME = 60;
-
-/**
-Why a column cannot have this name, or undefined when it can. The rules are the extension's: not empty, not "All
-bookmarks", and not the name of another column, ignoring case. `exceptId` is the column being renamed.
-*/
-export function columnNameProblem(
-	store: Store,
-	name: string,
-	exceptId?: string,
-): string | undefined {
-	const trimmed = name.trim();
-	if (!trimmed) {
-		return 'Give the column a name.';
-	}
-
-	if (trimmed.toLocaleLowerCase() === 'all bookmarks') {
-		return 'Choose a different column name.';
-	}
-
-	const taken = store.bookmarkColumns.some(
-		(column) =>
-			column.id !== exceptId &&
-			column.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase(),
-	);
-	return taken ? 'A column with that name already exists.' : undefined;
-}
-
 export type ColumnEdit = {name: string; icon: string; color: string};
 
 /**
@@ -358,7 +333,7 @@ export function updateColumn(
 	now: number,
 ): Store {
 	const current = store.bookmarkColumns.find((column) => column.id === id);
-	if (!current || columnNameProblem(store, edit.name, id)) {
+	if (!current || columnNameProblem(store.bookmarkColumns, edit.name, id)) {
 		return store;
 	}
 
@@ -366,7 +341,7 @@ export function updateColumn(
 	const {icon: _icon, color: _color, ...rest} = current;
 	const changed = {
 		...rest,
-		name: edit.name.trim().slice(0, MAX_COLUMN_NAME),
+		name: cleanColumnName(edit.name),
 		...(edit.icon && {icon: edit.icon}),
 		...(isColumnColor(edit.color) && {color: edit.color}),
 	};
@@ -495,10 +470,10 @@ export function deleteColumn(
 	if (moveTo !== null && own.length > 0) {
 		const target =
 			remaining.length === 0
-				? UNFILED_ID
+				? BOOKMARK_UNFILED_ID
 				: (remaining.find((column) => column.id === moveTo)?.id ??
 					remaining[0]?.id ??
-					UNFILED_ID);
+					BOOKMARK_UNFILED_ID);
 		bookmarks = [
 			...others,
 			...own.map((bookmark) => ({
@@ -634,8 +609,7 @@ export function addBookmarks(
 	now: number,
 ): Store {
 	let next = store;
-	// Added last to first, because a new bookmark goes to the top.
-	for (const [index, url] of [...urls.entries()].toReversed()) {
+	for (const [index, url] of urls.entries()) {
 		next = addBookmark(
 			next,
 			{url, title: '', columnId},

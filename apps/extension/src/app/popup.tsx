@@ -56,6 +56,7 @@ import {
 } from '../shared/browser';
 import {ThemeProvider} from '../shared/theme';
 import type {ActionResult, SaveScope, Session} from '../shared/types';
+import {columnForUrl} from '../shared/column-sites';
 import {PrivateWindowMark} from './private-window-appearance';
 import {
 	LoadingLine,
@@ -77,7 +78,6 @@ import {archivedFolderId} from './session-folders';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
-import {columnForUrl} from './column-sites';
 import {defaultBookmarkColumnId} from './default-column';
 import {webUrl} from './web-url';
 import {offerUndo} from './recovery-core';

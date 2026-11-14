@@ -225,6 +225,7 @@ const xoConfig: XoConfigItem[] = [
 		// Sanitizers strip C0 control characters from untrusted titles and URLs on purpose.
 		files: [
 			'apps/extension/shell/service-worker.ts',
+			'apps/extension/src/shared/bookmark-rules.ts',
 			'apps/extension/src/app/{import-formats,interaction-actions,newtab,page-params}.ts{,x}',
 		],
 		rules: {

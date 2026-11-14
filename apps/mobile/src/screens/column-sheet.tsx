@@ -7,16 +7,12 @@ import {
 	Text,
 	View,
 } from 'react-native';
+import {columnNameProblem} from '../../../extension/src/shared/bookmark-rules';
 import {BottomSheet} from '../bottom-sheet';
 import {ColorPicker} from '../color-picker';
 import {columnGlyph} from '../column-icons';
 import {IconPicker} from '../icon-picker';
-import {
-	addColumn,
-	columnNameProblem,
-	deleteColumn,
-	updateColumn,
-} from '../library';
+import {addColumn, deleteColumn, updateColumn} from '../library';
 import {edit, newId, useRegularLibrary} from '../library-store';
 import {useColors} from '../theme';
 import {Button, Field, IconButton} from '../ui';
@@ -47,10 +43,10 @@ function ColumnForm({
 	const nameProblem =
 		name === '' && !column
 			? undefined
-			: columnNameProblem(store, name, column?.id);
+			: columnNameProblem(store.bookmarkColumns, name, column?.id);
 
 	const save = async () => {
-		if (columnNameProblem(store, name, column?.id)) {
+		if (columnNameProblem(store.bookmarkColumns, name, column?.id)) {
 			return;
 		}
 
@@ -168,7 +164,9 @@ function ColumnForm({
 				<Button
 					label="Save"
 					icon="checkmark"
-					disabled={Boolean(columnNameProblem(store, name, column?.id))}
+					disabled={Boolean(
+						columnNameProblem(store.bookmarkColumns, name, column?.id),
+					)}
 					loading={saving}
 					onPress={() => void save()}
 				/>
