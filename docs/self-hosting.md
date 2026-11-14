@@ -63,7 +63,7 @@ This runs the sync server and [Caddy](https://caddyserver.com) side by side. Cad
 
 ```sh
 mkdir tablodge-sync && cd tablodge-sync
-curl -fsSLO https://raw.githubusercontent.com/bberka/TabLodge/master/server/compose.https.yaml
+curl -fsSLO https://raw.githubusercontent.com/bberka/TabLodge/master/apps/server/compose.https.yaml
 cat > .env <<EOF
 TABLODGE_DOMAIN=sync.example.com
 TABLODGE_SYNC_TOKEN=$(openssl rand -base64 32)
@@ -100,7 +100,7 @@ This runs the server as a Worker with one Durable Object on your own Cloudflare 
 
 ### 1. Deploy with the button
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/master/server/cloudflare-deploy)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/master/apps/server/cloudflare-deploy)
 
 1. [Create a token](#create-a-token) and keep it at hand. The **No server yet?** box in **Settings › Sync** walks through these same steps and has the button too.
 2. Choose the button and log in to Cloudflare, or create a free account.
@@ -138,7 +138,7 @@ In the Cloudflare dashboard, open the `tablodge-sync` Worker and add a custom do
 
 ### Settings on Cloudflare
 
-`MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are under `vars` in `wrangler.jsonc`. If you deployed with the button, edit that file in the repository Cloudflare created and commit; Cloudflare deploys the commit. If you deployed from your computer, edit `server/wrangler.jsonc` and run `pnpm run cf:deploy`. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.dev.vars` and run `pnpm run cf:dev`.
+`MAX_RECORDS`, `RETENTION_DAYS`, and `RATE_LIMIT_PER_MINUTE` are under `vars` in `wrangler.jsonc`. If you deployed with the button, edit that file in the repository Cloudflare created and commit; Cloudflare deploys the commit. If you deployed from your computer, edit `apps/server/wrangler.jsonc` and run `pnpm run cf:deploy`. To try the Worker without an account, put `TABLODGE_SYNC_TOKEN=<token>` in `apps/server/.dev.vars` and run `pnpm run cf:dev`.
 
 ## Option C: Docker on this computer
 
@@ -152,7 +152,7 @@ docker run -d --name tablodge-sync --restart unless-stopped -p 127.0.0.1:8787:87
 
 Connect with `http://localhost:8787`. TabLodge accepts plain HTTP only for `localhost`, `127.0.0.1`, and `[::1]`. Any other address needs HTTPS, because the token and your library travel with every request. Firefox upgrades the live connection to a secure one, which a plain HTTP server cannot answer, so in Firefox this setup syncs when something changes, every five minutes, and on **Sync now**, but not instantly.
 
-To build the image from a copy of this repository instead, put `TABLODGE_SYNC_TOKEN=<token>` in `server/.env` and run `docker compose up -d` in `server/`. Unlike the command above, `server/compose.yaml` publishes port 8787 on every network interface, so other devices on your network can reach it.
+To build the image from a copy of this repository instead, put `TABLODGE_SYNC_TOKEN=<token>` in `apps/server/.env` and run `docker compose up -d` in `apps/server/`. Unlike the command above, `apps/server/compose.yaml` publishes port 8787 on every network interface, so other devices on your network can reach it.
 
 ## Connect your browsers
 
@@ -198,7 +198,7 @@ TabLodge updates itself from the browser store, but your server does not. An old
 
 Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
 
-**Cloudflare, deployed with the button.** Open the repository Cloudflare created for you on GitHub or GitLab and replace `worker.js` with the newest [`server/cloudflare-deploy/worker.js`](https://github.com/bberka/TabLodge/blob/master/server/cloudflare-deploy/worker.js) from TabLodge: open the file, choose **Edit**, paste, and commit. Cloudflare deploys the commit by itself.
+**Cloudflare, deployed with the button.** Open the repository Cloudflare created for you on GitHub or GitLab and replace `worker.js` with the newest [`apps/server/cloudflare-deploy/worker.js`](https://github.com/bberka/TabLodge/blob/master/apps/server/cloudflare-deploy/worker.js) from TabLodge: open the file, choose **Edit**, paste, and commit. Cloudflare deploys the commit by itself.
 
 **Cloudflare, deployed from your computer.** In your copy of the repository:
 
@@ -227,7 +227,7 @@ To check the update, ask for the status. The `features` list shows what the serv
 curl -H "Authorization: Bearer <token>" https://sync.example.com/v1/status
 ```
 
-Do not remove the `migrations` entry in `wrangler.jsonc` (in `server/`, or in the repository the button created) or add a `deleted_classes` migration for `SyncLibrary`: Cloudflare would delete the stored library with it.
+Do not remove the `migrations` entry in `wrangler.jsonc` (in `apps/server/`, or in the repository the button created) or add a `deleted_classes` migration for `SyncLibrary`: Cloudflare would delete the stored library with it.
 
 ### Back up and restore
 
@@ -251,8 +251,8 @@ For any server, Cloudflare included, a copy of the repository and Node.js 24 do 
 
 ```sh
 export TABLODGE_SYNC_TOKEN='<token>'
-node server/scripts/transfer.ts export --url https://sync.example.com > tablodge-sync-backup.jsonl
-node server/scripts/transfer.ts import --url https://sync.example.com < tablodge-sync-backup.jsonl
+node apps/server/scripts/transfer.ts export --url https://sync.example.com > tablodge-sync-backup.jsonl
+node apps/server/scripts/transfer.ts import --url https://sync.example.com < tablodge-sync-backup.jsonl
 ```
 
 The private windows' library is a second library on the same server: back it up with the same commands and `--url https://sync.example.com/private` (in the Docker image, `node node.js export --url http://127.0.0.1:8787/private`). If it is encrypted, the file holds the encrypted items and the wrapped key, so it can be restored but not read without the PIN or password.
@@ -319,12 +319,12 @@ Run these from the root of your copy of the repository. Anything after the comma
 | --- | --- |
 | `pnpm run cf:setup` | Deploys to Cloudflare, creating and printing a token on the first run. `--rotate-token` replaces the token |
 | `pnpm run cf:deploy` | Deploys an update without touching the token |
-| `pnpm run cf:dev` | Runs the Worker on this computer, with the token from `server/.dev.vars` |
+| `pnpm run cf:dev` | Runs the Worker on this computer, with the token from `apps/server/.dev.vars` |
 | `pnpm run cf:delete` | Deletes the Worker and its library from Cloudflare |
-| `pnpm run server:build` | Builds the Node server into `server/dist/node.js` |
+| `pnpm run server:build` | Builds the Node server into `apps/server/dist/node.js` |
 | `pnpm run server:start` | Starts that build, with the token from `TABLODGE_SYNC_TOKEN` |
-| `pnpm run cf:bundle` | Rebuilds `server/cloudflare-deploy/worker.js`, the Worker the button deploys, from `server/src`. `--check` only reports whether the committed file is out of date |
-| `node server/scripts/transfer.ts export\|import` | Backs up or restores a library, with `--url` and optionally `--token`. See [Back up and restore](#back-up-and-restore) |
+| `pnpm run cf:bundle` | Rebuilds `apps/server/cloudflare-deploy/worker.js`, the Worker the button deploys, from `apps/server/src`. `--check` only reports whether the committed file is out of date |
+| `node apps/server/scripts/transfer.ts export\|import` | Backs up or restores a library, with `--url` and optionally `--token`. See [Back up and restore](#back-up-and-restore) |
 
 ### Settings
 

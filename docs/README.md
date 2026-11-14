@@ -71,7 +71,7 @@ pnpm install
 vp run build
 ```
 
-Load `dist/tablodge/` with **Load unpacked**, or `dist/tablodge-firefox/manifest.json` as a temporary add-on in Firefox. `vp run pack` makes the release ZIPs under `release/`. To update, run `git pull`, `pnpm install`, and `vp run build`, then reload TabLodge.
+Load `apps/extension/dist/tablodge/` with **Load unpacked**, or `apps/extension/dist/tablodge-firefox/manifest.json` as a temporary add-on in Firefox. `vp run pack` makes the release ZIPs under `release/`. To update, run `git pull`, `pnpm install`, and `vp run build`, then reload TabLodge.
 
 ## Private windows
 
@@ -93,19 +93,19 @@ Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then us
 | `vp run a11y` | Accessibility and keyboard checks on the built extension |
 | `vp run build` / `vp run pack` | Build and verify both browsers, then package them |
 | `vp run lint:fix` | Fix lint issues and format with XO |
-| `pnpm run mobile:start` | Start Metro for the Android app in `mobile/` (needs a development build; see [Android app](#android-app)) |
-| `pnpm run mobile:apk` | Build a standalone Android APK from this checkout into `dist/tablodge-local.apk`; add `--install` to install it with adb, or `--all-abis` to include 32 bit ARM |
+| `pnpm run mobile:start` | Start Metro for the Android app in `apps/mobile/` (needs a development build; see [Android app](#android-app)) |
+| `pnpm run mobile:apk` | Build a standalone Android APK from this checkout into `apps/extension/dist/tablodge-local.apk`; add `--install` to install it with adb, or `--all-abis` to include 32 bit ARM |
 | `pnpm run mobile:export` | Bundle the Android app's JavaScript to check that it builds |
 | `pnpm run cf:setup` | Deploy the sync server to Cloudflare (see [Self hosting](self-hosting.md)) |
-| `pnpm run cf:bundle` | Rebuild `server/cloudflare-deploy/worker.js` after changing the server or the sync code |
+| `pnpm run cf:bundle` | Rebuild `apps/server/cloudflare-deploy/worker.js` after changing the server or the sync code |
 
-The test browser keeps its own profile in `.dev/`, apart from your regular one. After a rebuild, reload TabLodge on the extensions page. Headless variants (`dev:chrome:headless`, `dev:firefox:headless`) are for automated checks; see [Agent validation](agent-validation.md#browser-access).
+The test browser keeps its own profile in `apps/extension/.dev/`, apart from your regular one. After a rebuild, reload TabLodge on the extensions page. Headless variants (`dev:chrome:headless`, `dev:firefox:headless`) are for automated checks; see [Agent validation](agents/validation.md#browser-access).
 
 Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [Architecture](architecture.md) for storage, messages, and sync. AI agents also follow [AGENTS.md](../AGENTS.md).
 
 ### Android app
 
-`mobile/` holds an Android app, still in development. Each [release](https://github.com/bberka/TabLodge/releases/latest) attaches a signed APK (see [Install](#install)), and pull requests that touch the app build a debug APK as a workflow artifact. It is a small link saver in the style of Raindrop:
+`apps/mobile/` holds an Android app, still in development. Each [release](https://github.com/bberka/TabLodge/releases/latest) attaches a signed APK (see [Install](#install)), and pull requests that touch the app build a debug APK as a workflow artifact. It is a small link saver in the style of Raindrop:
 
 - Bookmarks: browse columns, search, add links, and tap one to open it. Swipe a row right to open it or left to delete it (with Undo), or long press to select several, then open, move, or delete them together. Selecting one row also offers Edit for its link, title, and column. **Open all** opens every link in a column.
 - Share sheet: choose TabLodge from another app's share menu and a drawer slides up with the link and title filled in. When the share started the app, saving returns you to the app you came from.
@@ -122,28 +122,31 @@ Read [Contributing](CONTRIBUTING.md) for conventions, tests, and releases, and [
 - Order: **Manage columns** moves a column up, down, to the top, or to the bottom, and **Put bookmarks in order** does the same for a bookmark inside its column. The order syncs with the extension.
 - Settings search: the box at the top of Settings filters the cards and rows as you type. It matches a setting's name or its hint, so `swipe`, `tracking`, or `private` find what you mean.
 - Behavior: **Settings › Bookmarks** chooses what a tap does (open or edit) and what a swipe right and left do (open, edit, move, delete, or nothing). **Settings › Links and titles** changes the extension settings that sync: clean titles, tracking parameters, how addresses show, and cleaning links when saving. Choices such as swipe actions, how addresses show, and session sorting are one line rows that open a drawer, and bookmark spacing and the session card options (compact cards, tab icons, saved on, expanded by default) are switches. Settings that only make sense in a desktop browser (new tab, side panel, context menus, windows, snapshots) are not shown.
-- Sync: it connects to your [sync server](self-hosting.md) with the same address and token as the extension, using the shared client in `src/shared/sync/`. While the app is in front, a live connection brings changes in within a second or two. When you leave the app, it first sends any change that is still waiting, then closes that connection and its timers, so it does not keep the radio or the battery busy. When you come back it reconnects and catches up. A change made with no connection is kept and goes out by itself once the server is reachable again. There is no background sync, so changes from other devices show up when you open the app.
+- Sync: it connects to your [sync server](self-hosting.md) with the same address and token as the extension, using the shared client in `apps/extension/src/shared/sync/`. While the app is in front, a live connection brings changes in within a second or two. When you leave the app, it first sends any change that is still waiting, then closes that connection and its timers, so it does not keep the radio or the battery busy. When you come back it reconnects and catches up. A change made with no connection is kept and goes out by itself once the server is reachable again. There is no background sync, so changes from other devices show up when you open the app.
 - Look: **Settings › Appearance** chooses a **Theme** (the phone's own, light, or dark), the **Accent color**, an Android (Material) or iOS look, which follows the phone by default, and turns the floating tab bar on or off. The theme syncs with the app's other look settings.
 
 [ADR 3](adr/0003-mobile-app-framework.md) explains the framework choice. The app is not published and is not part of the extension build.
 
-To run it you need JDK 17 or newer and the Android SDK (`ANDROID_HOME` set). `pnpm run mobile:android` builds a development build and installs it on a connected device or emulator, and `pnpm run mobile:start` serves the JavaScript to it. `pnpm run mobile:apk` builds a standalone APK of the current checkout (JavaScript bundled in, arm64 only) at `dist/tablodge-local.apk` for trying on a phone, and `--install` installs it on the connected device. It is signed with a local debug key, so it cannot update the released app: uninstall that first, which removes its local data. `pnpm run mobile:doctor` checks the Expo setup, and `pnpm run mobile:export` bundles the JavaScript without a device. In a development build, the app starts with the same sample sessions and bookmarks as `dev:chrome:seed` (the fixture in `scripts/dev-fixture.ts`), once, when its library is empty and no server is connected. Set `EXPO_PUBLIC_SEED_DATA=0` to start empty instead. **Settings › Development** can load the samples again or clear the library. Sample data never reaches a server: those buttons are off while a server is connected, and connecting removes the samples first. Release builds do not contain the sample data. The sharing logic is tested in `tests/mobile-library.test.ts` and `tests/mobile-sync.test.ts`.
+To run it you need JDK 17 or newer and the Android SDK (`ANDROID_HOME` set). `pnpm run mobile:android` builds a development build and installs it on a connected device or emulator, and `pnpm run mobile:start` serves the JavaScript to it. `pnpm run mobile:apk` builds a standalone APK of the current checkout (JavaScript bundled in, arm64 only) at `apps/extension/dist/tablodge-local.apk` for trying on a phone, and `--install` installs it on the connected device. It is signed with a local debug key, so it cannot update the released app: uninstall that first, which removes its local data. `pnpm run mobile:doctor` checks the Expo setup, and `pnpm run mobile:export` bundles the JavaScript without a device. In a development build, the app starts with the same sample sessions and bookmarks as `dev:chrome:seed` (the fixture in `apps/extension/scripts/dev-fixture.ts`), once, when its library is empty and no server is connected. Set `EXPO_PUBLIC_SEED_DATA=0` to start empty instead. **Settings › Development** can load the samples again or clear the library. Sample data never reaches a server: those buttons are off while a server is connected, and connecting removes the samples first. Release builds do not contain the sample data. The sharing logic is tested in `apps/mobile/tests/mobile-library.test.ts` and `apps/mobile/tests/mobile-sync.test.ts`.
 
 ### Project structure
 
 ```text
-extension/   Manifest, icons, HTML shells, service worker
-styles/      Tailwind stylesheet for the extension pages
-src/app/     Extension pages, data types, and messages
-src/shared/  Shared helpers, library storage, and the sync protocol (src/shared/sync/)
-src/components/ui/  UI primitives (Radix and Tailwind)
-server/      Self hosted sync server for Docker and Cloudflare (cloudflare-deploy/ is what the Deploy to Cloudflare button copies)
-mobile/      Android app (Expo and React Native), in progress
-tests/       Vitest suites with mocked browser APIs
-scripts/     Build, packaging, dev browser, and release tooling
-site/        Website for tablodge.bbay.dev (vp run site:dev)
-docs/        All documentation except AGENTS.md
-.vite-hooks/ Git hooks that run the checks before commits and pushes
+apps/extension/   The browser extension (Chrome, Brave, Firefox)
+  shell/            Manifest, icons, HTML shells, service worker
+  src/app/          Extension pages, data types, and messages
+  src/shared/       Shared helpers, library storage, and the sync protocol (src/shared/sync/), also used by the server and the Android app
+  src/components/ui/  UI primitives (Radix and Tailwind)
+  styles/           Tailwind stylesheet for the extension pages
+  scripts/          Build, packaging, dev browser, and accessibility tooling
+  tests/            Vitest suites with mocked browser APIs
+apps/server/      Self hosted sync server for Docker and Cloudflare (cloudflare-deploy/ is what the Deploy to Cloudflare button copies)
+apps/mobile/      Android app (Expo and React Native), in progress
+apps/site/        Website for tablodge.bbay.dev (vp run site:dev)
+scripts/          Repository wide tooling (release versioning)
+tsconfig/         TypeScript settings shared by every app
+docs/             All documentation except AGENTS.md
+.hooks/           Git hooks that run the checks before commits and pushes
 ```
 
 ## Permissions and privacy
