@@ -2,7 +2,6 @@ import {memo, useCallback, useMemo, useState} from 'react';
 import {
 	FlatList,
 	useColorScheme,
-	Linking,
 	Pressable,
 	ScrollView,
 	Share,
@@ -39,7 +38,7 @@ import {sessionActionLook} from '../row-actions';
 import {SwipeRow} from '../swipe-row';
 import {type SessionAction, usePreferences} from '../preferences';
 import {linkToOpen, rowText} from '../links';
-import {openAll} from '../open-links';
+import {openAll, openLink} from '../open-links';
 import {PrivateSwitch} from '../private-switch';
 import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
@@ -280,7 +279,7 @@ function SessionCardView({
 											: undefined
 									}
 									onPress={() => {
-										void Linking.openURL(linkToOpen(tab.url, links));
+										openLink(linkToOpen(tab.url, links));
 									}}
 								>
 									<SiteIcon host={hostOf(tab.url)} size={compact ? 24 : 32} />

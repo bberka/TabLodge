@@ -14,6 +14,16 @@ export const ROWS = {
 		label: 'Floating bar size',
 		hint: 'Full, small while scrolling, or always small',
 	},
+	openWith: {
+		label: 'Open links in',
+		hint: 'The default browser, an in-app tab, or one browser',
+	},
+	openApp: {label: 'Browser', hint: 'The app that opens your links'},
+	privateOpenWith: {
+		label: 'Private library links',
+		hint: 'Open them somewhere other than your other links',
+	},
+	privateOpenApp: {label: 'Private browser', hint: 'The app for private links'},
 	syncSettings: {
 		label: 'Sync settings',
 		hint: 'Look and gestures follow your other devices',
@@ -174,6 +184,27 @@ export const SECTIONS = {
 			ROWS.markInsecure,
 			ROWS.markLocal,
 			ROWS.cleanOnSave,
+		],
+	},
+	openLinks: {
+		title: 'Open links',
+		aliases: [
+			'browser',
+			'chrome',
+			'firefox',
+			'brave',
+			'custom tab',
+			'in app',
+			'default browser',
+			'incognito',
+			'private mode',
+			'private browser',
+		],
+		rows: [
+			ROWS.openWith,
+			ROWS.openApp,
+			ROWS.privateOpenWith,
+			ROWS.privateOpenApp,
 		],
 	},
 	private: {

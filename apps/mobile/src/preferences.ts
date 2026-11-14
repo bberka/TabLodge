@@ -118,10 +118,24 @@ type Preferences = {
 	*/
 	theme: Theme;
 	/**
-	Show the lock button that opens the private library on Bookmarks and Sessions. Off by default, because a button on the
-	main screens tells anyone holding the phone that a private library exists. Stays on this phone.
+	Show the button that opens the private library on Bookmarks and Sessions, while a server is connected. On by default,
+	though it tells anyone holding the phone that a private library exists. Stays on this phone.
 	*/
 	showPrivateButton: boolean;
+	/**
+	Where a link opens: the default browser, an in-app tab, or the browser in `openApp`. Stays on this phone.
+	*/
+	openWith: OpenWith;
+	/**
+	The package name of the browser for `openWith` `app`.
+	*/
+	openApp: string;
+	/**
+	The same for links from the private library, or `same` to follow the setting above. Chrome ignores a request for a
+	private tab from another app, so a private browser is chosen here as an app instead.
+	*/
+	privateOpenWith: OpenWith | 'same';
+	privateOpenApp: string;
 	/**
 	Session cards without the tab icon strip and the saved-on line, and with tighter tab rows. Syncs with the rest of the
 	app's look.
@@ -156,10 +170,19 @@ const defaults: Preferences = {
 	accent: 'system',
 	theme: 'system',
 	showPrivateButton: true,
+	openWith: 'system',
+	openApp: '',
+	privateOpenWith: 'same',
+	privateOpenApp: '',
 	compactSessions: false,
 	showSavedOn: true,
 	deviceName: '',
 };
+
+const OPEN_WITH = ['system', 'inapp', 'app'] as const;
+export type OpenWith = (typeof OPEN_WITH)[number];
+const isOpenWith = (value: unknown): value is OpenWith =>
+	OPEN_WITH.includes(value as OpenWith);
 
 const BAR_SIZES = ['full', 'scroll', 'compact'] as const;
 export type BarSize = (typeof BAR_SIZES)[number];
@@ -202,6 +225,10 @@ export async function loadPreferences(): Promise<void> {
 		accent,
 		theme,
 		showPrivateButton,
+		openWith,
+		openApp,
+		privateOpenWith,
+		privateOpenApp,
 		compactSessions,
 		showSavedOn,
 	} = saved as Partial<Preferences>;
@@ -234,6 +261,13 @@ export async function loadPreferences(): Promise<void> {
 			typeof showPrivateButton === 'boolean'
 				? showPrivateButton
 				: defaults.showPrivateButton,
+		openWith: isOpenWith(openWith) ? openWith : defaults.openWith,
+		openApp: typeof openApp === 'string' ? openApp : '',
+		privateOpenWith:
+			privateOpenWith === 'same' || isOpenWith(privateOpenWith)
+				? privateOpenWith
+				: defaults.privateOpenWith,
+		privateOpenApp: typeof privateOpenApp === 'string' ? privateOpenApp : '',
 		compactSessions: compactSessions === true,
 		showSavedOn: showSavedOn !== false,
 		deviceName: cleanDeviceName(deviceName),

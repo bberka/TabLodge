@@ -1,5 +1,6 @@
-import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {openLink} from '../open-links';
 import type {Bookmark} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {useChipLook} from '../column-icons';
@@ -49,7 +50,7 @@ export function BookmarkRow({
 	const host = hostOf(bookmark.url);
 	const text = rowText(bookmark, settings);
 	const open = () => {
-		void Linking.openURL(linkToOpen(bookmark.url, settings));
+		openLink(linkToOpen(bookmark.url, settings));
 	};
 
 	const run: Record<RowAction, (() => void) | undefined> = {

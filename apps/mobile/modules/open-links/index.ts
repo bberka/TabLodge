@@ -1,18 +1,32 @@
 import {requireOptionalNativeModule} from 'expo';
 
 type OpenLinksModule = {
-	openAll: (urls: string[]) => boolean;
+	openAll: (urls: string[], how: string, packageName: string | null) => boolean;
+	browsers: () => string[][];
 	systemAccent: () => [string, string] | null;
 };
 
 const native = requireOptionalNativeModule<OpenLinksModule>('OpenLinks');
 
+export type OpenHow = 'system' | 'inapp' | 'app';
+
 /**
-Opens every link in the default browser in one go. Returns false when this build has no native support, or the
-system refused, so the caller can fall back to opening them one at a time.
+Opens every link in one go: in the default browser, in an in-app tab, or in the browser with this package name.
+Returns false when this build has no native support, or the system refused, so the caller can fall back.
 */
-export function openLinksTogether(urls: string[]): boolean {
-	return native?.openAll(urls) ?? false;
+export function openLinksTogether(
+	urls: string[],
+	how: OpenHow = 'system',
+	packageName?: string,
+): boolean {
+	return native?.openAll(urls, how, packageName ?? null) ?? false;
+}
+
+/**
+The browsers installed on this phone, or none on a build without native support.
+*/
+export function installedBrowsers(): Array<{id: string; name: string}> {
+	return (native?.browsers() ?? []).map(([id, name]) => ({id, name}));
 }
 
 /**
