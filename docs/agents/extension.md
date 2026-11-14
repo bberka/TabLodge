@@ -12,6 +12,8 @@ The Chrome, Brave, and Firefox extension (Manifest V3). It also holds the code t
 | `scripts/` | Build, packaging, verification, dev browser, accessibility checks |
 | `tests/` | Vitest suites (the worker runs in a VM with mocked `chrome.*`) |
 
+Logic that needs no browser lives in `src/shared` and `src/app` as plain modules with their own tests, not in the service worker or a page component: `library-normalize.ts` (reading untrusted stored data), `bookmark-rules.ts` (column rules the Android app shares), `context-menu-plan.ts` (the right-click tree), and `bookmark-drag.ts` (board drag and drop). Put new rules of that kind there too.
+
 [Architecture](../architecture.md) explains storage, messages, sync, private windows, and Firefox differences. Read the section for the area you touch.
 
 ## Rules
