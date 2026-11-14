@@ -8,6 +8,18 @@ import {
 } from '../src/app/backup-format';
 import {isAccent} from '../src/shared/accent-colors';
 import {
+	LINK_COLUMN_PREFIX,
+	LINK_SEND_PREFIX,
+	MENU,
+	PAGE_COLUMN_PREFIX,
+	PAGE_SEND_PREFIX,
+	PAGE_SAVE_ITEMS,
+	SAVED_LINKS_SESSION,
+	contextMenuPlan,
+	contextMenuSignature,
+	menuSessions,
+} from '../src/shared/context-menu-plan';
+import {
 	ARCHIVED_FOLDER_NAME,
 	DEFAULT_FOLDER,
 	DEFAULT_FOLDER_ID,
@@ -53,7 +65,6 @@ import {
 	normalizeTab,
 	normalizeUrl,
 	pairSplits,
-	positiveOr,
 	urlHost,
 } from '../src/shared/library-normalize';
 import {isRecord, hashText} from '../src/shared/library-values';
@@ -9679,82 +9690,12 @@ async function openDashboardForTab(tab?: chrome.tabs.Tab) {
 	await openDashboard(windowId, '', settings.dashboardBehavior);
 }
 
-// One parent item per context, named after the extension, keeps the browser menu short. The toolbar
-// icon's menu is already the extension's own, so its items are top level (Chrome shows at most
-// ACTION_MENU_TOP_LEVEL_LIMIT = 6). Tab-strip menus are not available to extensions.
-// Menu ids keep the "tablodge-" prefix (see the note at STORAGE_KEY); column items append the column id.
-type MenuItemProperties = chrome.contextMenus.CreateProperties;
 type MenuOutcome = ActionFailure | {ok: true};
 type MenuClickData = chrome.contextMenus.OnClickData & {linkText?: string};
-const MENU = {
-	linkRoot: 'tablodge-link-root',
-	linkBookmark: 'tablodge-link-bookmark',
-	linkBookmarkNew: 'tablodge-link-bookmark-new',
-	linkSend: 'tablodge-link-send',
-	linkSave: 'tablodge-link-save',
-	pageRoot: 'tablodge-page-root',
-	pageBookmark: 'tablodge-page-bookmark',
-	pageBookmarkNew: 'tablodge-page-bookmark-new',
-	pageSend: 'tablodge-page-send',
-	pageSendNew: 'tablodge-page-send-new',
-	selectionRoot: 'tablodge-selection-root',
-	selectionSearch: 'tablodge-selection-search',
-	actionOpen: 'tablodge-action-open',
-	actionSaveWindow: 'tablodge-action-save-window',
-	actionExclude: 'tablodge-action-exclude',
-	actionSidePanel: 'tablodge-action-side-panel',
-	actionHelp: 'tablodge-action-help',
-	actionSettings: 'tablodge-action-settings',
-} as const;
-/**
-Column items are `${prefix}${columnId}`; the Unfiled pseudo-column uses BOOKMARK_UNFILED_ID.
-*/
-const LINK_COLUMN_PREFIX = 'tablodge-link-bookmark:';
-const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
-/**
-"Send this tab to session" items are `${PAGE_SEND_PREFIX}${sessionId}`.
-*/
-const PAGE_SEND_PREFIX = 'tablodge-page-send:';
-/**
-"Save link to session" items are `${LINK_SEND_PREFIX}${sessionId}`.
-*/
-const LINK_SEND_PREFIX = 'tablodge-link-send:';
-/**
-How many sessions the "Send this tab to session" and "Save link to session" submenus list, most recently changed first.
-*/
-const MENU_SESSION_LIMIT = 10;
-/**
-The page menu's save actions, reusing the SAVE_TABS scopes.
-*/
-const PAGE_SAVE_ITEMS: ReadonlyArray<
-	readonly [id: string, title: string, scope: SaveScope]
-> = [
-	['tablodge-page-save-tab', 'Save this tab', 'this-tab'],
-	['tablodge-page-save-window', 'Save this window', 'window'],
-	['tablodge-page-save-selected', 'Save selected tabs', 'selected'],
-	['tablodge-page-save-left', 'Save tabs to the left', 'left-of-tab'],
-	['tablodge-page-save-right', 'Save tabs to the right', 'right-of-tab'],
-	[
-		'tablodge-page-save-except-tab',
-		'Save all tabs except this one',
-		'except-this-tab',
-	],
-	['tablodge-page-save-group', 'Save this tab group', 'tab-group'],
-	[
-		'tablodge-page-save-all-windows',
-		'Save tabs from all windows',
-		'all-windows',
-	],
-];
 const MENU_SAVE_SCOPES: Record<string, SaveScope> = {
 	...Object.fromEntries(PAGE_SAVE_ITEMS.map(([id, , scope]) => [id, scope])),
 	[MENU.actionSaveWindow]: 'selected-or-window',
 };
-/**
-The "Saved links" entry of "Save link to session" collects links in this session (matched by name, case-insensitively).
-*/
-const SAVED_LINKS_SESSION = 'Saved links';
-const WEB_URL_PATTERNS = ['http://*/*', 'https://*/*'];
 const MENU_REBUILD_DELAY = 150;
 const BADGE_DURATION = 1500;
 
@@ -9765,285 +9706,6 @@ Signature of the menus last built (or queued); storage changes that keep it skip
 let menuSignature = '';
 let menuRebuildTimer: ReturnType<typeof setTimeout> | undefined;
 const badgeTimers = new Map<number, ReturnType<typeof setTimeout>>();
-
-/**
-Everything the menu tree depends on: the switches, the enabled systems, and the column names and order.
-*/
-function contextMenuSignature(
-	settings: Settings,
-	columns: BookmarkColumn[],
-	sessions: MenuSession[],
-) {
-	return JSON.stringify([
-		settings.contextMenusEnabled,
-		settings.contextMenuLinksEnabled,
-		settings.contextMenuPageEnabled,
-		settings.contextMenuSelectionEnabled,
-		settings.contextMenuActionEnabled,
-		columns.map((column) => [column.id, column.name]),
-		settings.contextMenuPageEnabled || settings.contextMenuLinksEnabled
-			? sessions.map((session) => [session.id, session.name])
-			: [],
-	]);
-}
-
-type MenuSession = {id: string; name: string};
-
-/**
-The sessions the page menu offers: the most recently changed ones, leaving out the Archived folder.
-Takes stored data, so every entry is checked.
-*/
-function menuSessions(rawGroups: unknown, rawFolders: unknown): MenuSession[] {
-	const archived = archivedFolderIds(rawFolders);
-	return arrayOf(rawGroups)
-		.filter(
-			(group): group is Raw & {id: string} =>
-				isRecord(group) &&
-				typeof group.id === 'string' &&
-				group.id !== '' &&
-				!archived.has(cleanText(group.folderId, '', 100)),
-		)
-		.toSorted(
-			(a, b) =>
-				positiveOr(b.updatedAt, positiveOr(b.createdAt, 0)) -
-				positiveOr(a.updatedAt, positiveOr(a.createdAt, 0)),
-		)
-		.slice(0, MENU_SESSION_LIMIT)
-		.map((group) => ({
-			id: group.id,
-			name: cleanText(group.name, 'Untitled session', 60),
-		}));
-}
-
-/**
- The full menu tree for these settings and columns, in creation order (parents first).
- `excludeState` sets the toolbar menu's "Exclude this site" checkbox for the active tab.
- */
-function contextMenuPlan(
-	settings: Settings,
-	columns: BookmarkColumn[],
-	sessions: MenuSession[],
-	excludeState: {checked: boolean; enabled: boolean} = {
-		checked: false,
-		enabled: true,
-	},
-): MenuItemProperties[] {
-	if (!settings.contextMenusEnabled) {
-		return [];
-	}
-
-	const items: MenuItemProperties[] = [];
-	const columnSubmenu = (
-		parentId: string,
-		prefix: string,
-		newId: string,
-		contexts: MenuItemProperties['contexts'],
-		extra: {targetUrlPatterns?: string[]; documentUrlPatterns?: string[]},
-	) => {
-		for (const column of columns) {
-			items.push({
-				id: `${prefix}${column.id}`,
-				title: column.name,
-				parentId,
-				contexts,
-				...extra,
-			});
-		}
-
-		// Unfiled is not offered: it only holds bookmarks left over from a deleted column.
-		if (columns.length > 0) {
-			items.push({
-				id: `${parentId}-separator`,
-				type: 'separator',
-				parentId,
-				contexts,
-				...extra,
-			});
-		}
-
-		items.push({
-			id: newId,
-			title: 'New column',
-			parentId,
-			contexts,
-			...extra,
-		});
-	};
-
-	if (settings.contextMenuLinksEnabled) {
-		const link = {
-			contexts: ['link'],
-			targetUrlPatterns: WEB_URL_PATTERNS,
-		} satisfies Partial<MenuItemProperties>;
-		items.push(
-			{id: MENU.linkRoot, title: APP_NAME, ...link},
-			{
-				id: MENU.linkBookmark,
-				title: 'Bookmark link to',
-				parentId: MENU.linkRoot,
-				...link,
-			},
-		);
-		columnSubmenu(
-			MENU.linkBookmark,
-			LINK_COLUMN_PREFIX,
-			MENU.linkBookmarkNew,
-			link.contexts,
-			{targetUrlPatterns: WEB_URL_PATTERNS},
-		);
-
-		items.push({
-			id: MENU.linkSend,
-			title: 'Save link to session',
-			parentId: MENU.linkRoot,
-			...link,
-		});
-		// The Saved links entry below stands in for that session, so it is not listed twice.
-		const savedLinksName = SAVED_LINKS_SESSION.toLocaleLowerCase();
-		for (const session of sessions) {
-			if (session.name.toLocaleLowerCase() !== savedLinksName) {
-				items.push({
-					id: `${LINK_SEND_PREFIX}${session.id}`,
-					title: session.name,
-					parentId: MENU.linkSend,
-					...link,
-				});
-			}
-		}
-
-		if (items.some((item) => item.parentId === MENU.linkSend)) {
-			items.push({
-				id: `${MENU.linkSend}-separator`,
-				type: 'separator',
-				parentId: MENU.linkSend,
-				...link,
-			});
-		}
-
-		items.push({
-			id: MENU.linkSave,
-			title: SAVED_LINKS_SESSION,
-			parentId: MENU.linkSend,
-			...link,
-		});
-	}
-
-	if (settings.contextMenuPageEnabled) {
-		const page = {
-			contexts: ['page', 'frame'],
-			documentUrlPatterns: WEB_URL_PATTERNS,
-		} satisfies Partial<MenuItemProperties>;
-		items.push(
-			{id: MENU.pageRoot, title: APP_NAME, ...page},
-			{
-				id: MENU.pageBookmark,
-				title: 'Bookmark this page to',
-				parentId: MENU.pageRoot,
-				...page,
-			},
-		);
-		columnSubmenu(
-			MENU.pageBookmark,
-			PAGE_COLUMN_PREFIX,
-			MENU.pageBookmarkNew,
-			page.contexts,
-			{documentUrlPatterns: WEB_URL_PATTERNS},
-		);
-
-		items.push({
-			id: MENU.pageSend,
-			title: 'Send this tab to session',
-			parentId: MENU.pageRoot,
-			...page,
-		});
-		for (const session of sessions) {
-			items.push({
-				id: `${PAGE_SEND_PREFIX}${session.id}`,
-				title: session.name,
-				parentId: MENU.pageSend,
-				...page,
-			});
-		}
-
-		if (sessions.length > 0) {
-			items.push({
-				id: `${MENU.pageSend}-separator`,
-				type: 'separator',
-				parentId: MENU.pageSend,
-				...page,
-			});
-		}
-
-		items.push(
-			{
-				id: MENU.pageSendNew,
-				title: 'New session',
-				parentId: MENU.pageSend,
-				...page,
-			},
-			{
-				id: 'tablodge-page-separator',
-				type: 'separator',
-				parentId: MENU.pageRoot,
-				...page,
-			},
-		);
-
-		// The tab-group item stays enabled: Chrome has no contextMenus.onShown to toggle it per tab, and a
-		// click outside a tab group just logs "The active tab is not in a tab group." Browsers with onShown refine it.
-		for (const [id, title] of PAGE_SAVE_ITEMS) {
-			items.push({id, title, parentId: MENU.pageRoot, ...page});
-		}
-	}
-
-	if (settings.contextMenuSelectionEnabled) {
-		const selection = {
-			contexts: ['selection'],
-		} satisfies Partial<MenuItemProperties>;
-		items.push(
-			{id: MENU.selectionRoot, title: APP_NAME, ...selection},
-			// Chrome substitutes %s with the selected text (shortened for long selections).
-			{
-				id: MENU.selectionSearch,
-				title: 'Search saved tabs & bookmarks for “%s”',
-				parentId: MENU.selectionRoot,
-				...selection,
-			},
-		);
-	}
-
-	if (settings.contextMenuActionEnabled) {
-		const action = {contexts: ['action']} satisfies Partial<MenuItemProperties>;
-		items.push({id: MENU.actionOpen, title: 'Open dashboard', ...action});
-		if (HAS_SIDE_PANEL) {
-			items.push({
-				id: MENU.actionSidePanel,
-				title: 'Open side panel',
-				...action,
-			});
-		}
-
-		items.push(
-			{
-				id: MENU.actionSaveWindow,
-				title: 'Save this window',
-				...action,
-			},
-			{
-				id: MENU.actionExclude,
-				title: 'Exclude this site from saves',
-				type: 'checkbox',
-				checked: excludeState.checked,
-				enabled: excludeState.enabled,
-				...action,
-			},
-			{id: MENU.actionHelp, title: 'Help', ...action},
-			{id: MENU.actionSettings, title: 'Settings', ...action},
-		);
-	}
-
-	return items;
-}
 
 const isThenable = (value: unknown): value is PromiseLike<unknown> =>
 	isRecord(value) && typeof value.then === 'function';
@@ -10196,6 +9858,7 @@ function rebuildContextMenus(
 				store.settings,
 				store.bookmarkColumns,
 				sessions,
+				{appName: APP_NAME, hasSidePanel: HAS_SIDE_PANEL},
 				await excludeMenuState(store.settings),
 			);
 			menuGeneration += 1;
