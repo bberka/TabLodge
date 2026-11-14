@@ -444,7 +444,30 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const syncing = action === 'sync' || status.phase === 'syncing';
 	return (
 		<div className="space-y-4">
-			<SyncStatusLine status={status} server={server} />
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div className="min-w-0 space-y-2">
+					<SyncStatusLine status={status} server={server} />
+				</div>
+				<div className="flex shrink-0 flex-wrap gap-2">
+					<SyncNowButton
+						ref={syncNowRef}
+						busy={busy}
+						syncing={syncing}
+						onSync={syncNow}
+					/>
+					<Button
+						type="button"
+						variant="outline"
+						disabled={busy}
+						onClick={() => {
+							setConfirmDisconnect(true);
+						}}
+					>
+						<Link2Off aria-hidden="true" />
+						Disconnect
+					</Button>
+				</div>
+			</div>
 			{status.refused > 0 && (
 				<p className="text-sm text-muted-foreground">
 					The server turned down {status.refused} old{' '}
@@ -458,25 +481,6 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					{error}
 				</p>
 			)}
-			<div className="flex flex-wrap gap-2">
-				<SyncNowButton
-					ref={syncNowRef}
-					busy={busy}
-					syncing={syncing}
-					onSync={syncNow}
-				/>
-				<Button
-					type="button"
-					variant="outline"
-					disabled={busy}
-					onClick={() => {
-						setConfirmDisconnect(true);
-					}}
-				>
-					<Link2Off aria-hidden="true" />
-					Disconnect
-				</Button>
-			</div>
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div className="min-w-0 space-y-1">
 					<Label htmlFor={settingsSwitchId}>Sync settings</Label>
