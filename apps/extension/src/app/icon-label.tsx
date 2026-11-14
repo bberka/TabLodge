@@ -19,7 +19,7 @@ export function IconLabel({
 	icon: LucideIcon;
 	children: ReactNode;
 	/**
-	A column color; the icon takes it instead of the neutral gray.
+	A column color; the icon and the name take it instead of the neutral gray.
 	*/
 	color?: string;
 }) {
@@ -33,7 +33,9 @@ export function IconLabel({
 					vars ? COLUMN_COLOR_TEXT : 'text-muted-foreground',
 				)}
 			/>
-			<span className="min-w-0 truncate">{children}</span>
+			<span className={cn('min-w-0 truncate', vars && COLUMN_COLOR_TEXT)}>
+				{children}
+			</span>
 		</span>
 	);
 }
