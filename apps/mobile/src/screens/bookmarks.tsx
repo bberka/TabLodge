@@ -198,6 +198,82 @@ export function BookmarksScreen({
 		);
 	};
 
+	// What the 3 dot menu offers, from what is on screen: nothing to open, select, or put in order in an empty column.
+	const menuActions: SheetAction[] = [
+		...(!searching && shown.length > 0 && columnName
+			? [
+					{
+						icon: 'albums-outline' as const,
+						label: `Open all ${shown.length} in ${columnName}`,
+						onPress() {
+							openAll(
+								shown.map((bookmark) => linkToOpen(bookmark.url, links)),
+								columnName,
+							);
+						},
+					},
+				]
+			: []),
+		...(shown.length > 0
+			? [
+					{
+						icon: 'checkbox-outline' as const,
+						label: 'Select bookmarks',
+						hint: 'Move, open or delete several at once',
+						onPress() {
+							selection.start();
+						},
+					},
+				]
+			: []),
+		...(!searching && shown.length > 1
+			? [
+					{
+						icon: 'swap-vertical-outline' as const,
+						label: 'Put bookmarks in order',
+						hint: `Move bookmarks up and down in ${columnName}`,
+						onPress() {
+							setReordering(true);
+						},
+					},
+				]
+			: []),
+		...(!searching && editableColumn
+			? [
+					{
+						icon: 'color-palette-outline' as const,
+						label: 'Edit column',
+						hint: 'Rename it, or change its icon and color',
+						onPress() {
+							setSheet({kind: 'column', id: columnId});
+						},
+					},
+				]
+			: []),
+		...(!searching && store.bookmarks.length > 1
+			? [
+					{
+						icon: 'copy-outline' as const,
+						label: 'Remove duplicates',
+						hint: 'Keep the oldest copy of each saved address',
+						onPress: removeDuplicates,
+					},
+				]
+			: []),
+		...(columns.length > 0
+			? [
+					{
+						icon: 'list-outline' as const,
+						label: 'Manage columns',
+						hint: 'Open, put in order, or change any column',
+						onPress() {
+							setColumnsOpen(true);
+						},
+					},
+				]
+			: []),
+	];
+
 	const reorder = (id: string, move: BookmarkMove) => {
 		void edit((current) => moveBookmark(current, id, move, Date.now()));
 	};
@@ -418,7 +494,7 @@ export function BookmarksScreen({
 			{!selection.active && !reordering && !shape.ios && (
 				<AddButton bottom={space} onPress={onAdd} />
 			)}
-			{!selection.active && !reordering && (
+			{!selection.active && !reordering && menuActions.length > 0 && (
 				<MenuButton
 					bottom={space}
 					right={shape.ios ? 16 : 16 + 56 + 12}
@@ -464,73 +540,7 @@ export function BookmarksScreen({
 			<ActionSheet
 				visible={menuOpen}
 				title={columnName ?? 'Bookmarks'}
-				actions={[
-					...(searching
-						? []
-						: [
-								{
-									icon: 'albums-outline' as const,
-									label: `Open all ${shown.length} in ${columnName}`,
-									onPress() {
-										openAll(
-											shown.map((bookmark) => linkToOpen(bookmark.url, links)),
-											columnName ?? 'This column',
-										);
-									},
-								},
-							]),
-
-					{
-						icon: 'checkbox-outline' as const,
-						label: 'Select bookmarks',
-						hint: 'Move, open or delete several at once',
-						onPress() {
-							selection.start();
-						},
-					},
-					...(!searching && shown.length > 1
-						? [
-								{
-									icon: 'swap-vertical-outline' as const,
-									label: 'Put bookmarks in order',
-									hint: `Move bookmarks up and down in ${columnName}`,
-									onPress() {
-										setReordering(true);
-									},
-								},
-							]
-						: []),
-					...(!searching && editableColumn
-						? [
-								{
-									icon: 'color-palette-outline' as const,
-									label: 'Edit column',
-									hint: 'Rename it, or change its icon and color',
-									onPress() {
-										setSheet({kind: 'column', id: columnId});
-									},
-								},
-							]
-						: []),
-					...(!searching && store.bookmarks.length > 1
-						? [
-								{
-									icon: 'copy-outline' as const,
-									label: 'Remove duplicates',
-									hint: 'Keep the oldest copy of each saved address',
-									onPress: removeDuplicates,
-								},
-							]
-						: []),
-					{
-						icon: 'list-outline' as const,
-						label: 'Manage columns',
-						hint: 'Open, put in order, or change any column',
-						onPress() {
-							setColumnsOpen(true);
-						},
-					},
-				]}
+				actions={menuActions}
 				onClose={() => {
 					setMenuOpen(false);
 				}}
