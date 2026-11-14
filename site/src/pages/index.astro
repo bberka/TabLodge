@@ -19,7 +19,10 @@ const features = [
 	{title: 'Bookmark board', text: 'Columns of links on every new tab, ready when you open one.'},
 	{title: 'Search everything', text: 'Find any session, bookmark, or open tab from one search box, on any page.'},
 	{title: 'Import, back up, sync', text: 'Bring data from OneTab, Session Buddy, Toby, or Raindrop.io, and sync through a server you run.'},
-	{title: 'Android app', text: 'Save links from your phone and open your bookmarks and sessions, synced through the same server.'},
+	{title: 'Colors and icons', text: 'Give sessions and columns a color and a searchable icon, in a light or dark theme.'},
+	{title: 'Private windows', text: 'Keep private windows in their own library, with an optional PIN or password lock.'},
+	{title: 'Link previews', text: 'Hover a link for its title and image, fetched through your own server, never a third party.'},
+	{title: 'Android app', text: 'Save, search, order and open bookmarks and sessions from your phone, synced through the same server.'},
 ];
 
 const faq = [
@@ -45,7 +48,7 @@ const faq = [
 	},
 	{
 		q: 'Is there a mobile app?',
-		a: 'Yes, for Android 7 or newer. It saves links you share from other apps, shows and opens your bookmarks and sessions, and syncs through the same server you run. Download the APK from the latest release, since there is no store listing yet. A phone browser cannot give another app its open tabs, so sessions are saved on a computer or from a shared list of links. There is no iPhone app.',
+		a: 'Yes, for Android 7 or newer. It saves links you share from other apps, and shows, searches, and opens your bookmarks and sessions. You can put bookmarks and columns in order, give sessions colors, rename, move, archive, or delete them, choose what a tap or swipe does, and pick a light, dark, or phone-matched theme. It syncs through the same server you run. Download the APK from the latest release, since there is no store listing yet. A phone browser cannot give another app its open tabs, so sessions are saved on a computer or from a shared list of links. There is no iPhone app.',
 	},
 	{
 		q: 'Will TabLodge replace my new tab page?',
@@ -304,7 +307,17 @@ const jsonLd = [
 		padding: 0;
 		display: grid;
 		gap: 1.1rem;
-		grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+		grid-template-columns: 1fr;
+	}
+	@media (min-width: 560px) {
+		.grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+	@media (min-width: 1000px) {
+		.grid {
+			grid-template-columns: repeat(4, 1fr);
+		}
 	}
 	.card {
 		background: var(--card);
