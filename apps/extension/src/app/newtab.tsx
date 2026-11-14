@@ -91,6 +91,8 @@ import type {
 	Settings,
 	BookmarkQuickAction,
 } from '../shared/types';
+import {siteName, webUrl} from '../shared/web-url';
+import type {ExportData} from '../shared/export-formats';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {AccentPalette} from './accent-palette';
@@ -149,7 +151,6 @@ import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {bookmarkGridTemplate} from './bookmark-layout';
-import {siteName, webUrl} from './web-url';
 import {
 	handleInternalDragEnd,
 	handleInternalDragStart,
@@ -162,7 +163,6 @@ import {
 import {useBookmarkSelection} from './bookmark-selection';
 import {InsecureMarkFor} from './insecure-mark';
 import {openLink, openOwnPage} from './link-target';
-import type {ExportData} from './export-formats';
 import {
 	initialSearchQuery,
 	newColumnRequested,
@@ -1925,11 +1925,11 @@ function NewTab() {
 				run: () => h().newColumn(),
 			},
 			{
-				id: 'backup-bookmarks',
-				title: 'Back up bookmarks',
-				keywords: ['export', 'download', 'save'],
-				icon: Download,
-				run: () => h().backupBookmarks(),
+				id: 'new-folder',
+				title: 'New session folder',
+				keywords: ['add', 'sessions'],
+				icon: FolderPlus,
+				run: () => emitFinderEvent({type: 'new-folder'}),
 			},
 			{
 				id: 'import-bookmarks',
@@ -1939,18 +1939,11 @@ function NewTab() {
 				run: () => h().importData(),
 			},
 			{
-				id: 'new-folder',
-				title: 'New session folder',
-				keywords: ['add', 'sessions'],
-				icon: FolderPlus,
-				run: () => emitFinderEvent({type: 'new-folder'}),
-			},
-			{
-				id: 'backup-sessions',
-				title: 'Back up sessions',
+				id: 'backup-bookmarks',
+				title: 'Back up bookmarks',
 				keywords: ['export', 'download', 'save'],
-				icon: HardDriveDownload,
-				run: () => emitFinderEvent({type: 'backup-sessions'}),
+				icon: Download,
+				run: () => h().backupBookmarks(),
 			},
 			{
 				id: 'import-sessions',
@@ -1958,6 +1951,13 @@ function NewTab() {
 				keywords: ['restore', 'load', 'upload'],
 				icon: ArchiveRestore,
 				run: () => emitFinderEvent({type: 'import-sessions'}),
+			},
+			{
+				id: 'backup-sessions',
+				title: 'Back up sessions',
+				keywords: ['export', 'download', 'save'],
+				icon: HardDriveDownload,
+				run: () => emitFinderEvent({type: 'backup-sessions'}),
 			},
 			...(inPrivateWindow()
 				? []
@@ -2355,13 +2355,13 @@ function NewTab() {
 								disabled: bookmarks.length === 0,
 								onSelect: () => shareBookmarks(),
 							},
+							{type: 'separator'},
 							{
 								id: 'duplicates',
 								label: 'Find duplicate bookmarks',
 								icon: Copy,
 								onSelect: () => setDuplicatesOpen(true),
 							},
-							{type: 'separator'},
 							{
 								id: 'trash',
 								label: 'Trash bin',
@@ -3535,20 +3535,6 @@ function columnMenuActions(
 			icon: BookmarkPlus,
 			onSelect: () => actions.add(column),
 		},
-		{
-			id: 'share',
-			label: 'Share',
-			icon: Share2,
-			disabled: siblings.length === 0,
-			onSelect: () => actions.share(column),
-		},
-		{
-			id: 'export',
-			label: 'Export column',
-			icon: Download,
-			disabled: siblings.length === 0,
-			onSelect: () => actions.exportColumn(column),
-		},
 		{type: 'separator'},
 		{
 			id: 'edit',
@@ -3569,6 +3555,21 @@ function columnMenuActions(
 			icon: ArrowRight,
 			disabled: !canMoveLater,
 			onSelect: () => actions.moveColumn(column, 'later'),
+		},
+		{type: 'separator'},
+		{
+			id: 'share',
+			label: 'Share',
+			icon: Share2,
+			disabled: siblings.length === 0,
+			onSelect: () => actions.share(column),
+		},
+		{
+			id: 'export',
+			label: 'Export column',
+			icon: Download,
+			disabled: siblings.length === 0,
+			onSelect: () => actions.exportColumn(column),
 		},
 		{type: 'separator'},
 		{
@@ -3982,18 +3983,19 @@ const BookmarkCard = memo(
 		};
 		// One list feeds both the ⋯ menu and the right-click menu so they always match.
 		const actions = (): MenuAction[] => [
+			open,
+			openNew,
+			{type: 'separator'},
+			copy,
+			archiveCopy,
+			{type: 'separator'},
 			{
 				id: 'select',
 				label: selected ? 'Deselect bookmark' : 'Select bookmark',
 				icon: selected ? Square : SquareCheck,
 				onSelect: act('select'),
 			},
-			open,
-			openNew,
-			{type: 'separator'},
 			edit,
-			copy,
-			archiveCopy,
 			{
 				id: 'move',
 				label: 'Move to',

@@ -2,8 +2,13 @@ import {useEffect, useMemo, useState} from 'react';
 import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../extension/src/shared/types';
-import {ActionSheet} from '../action-sheet';
+import {ActionSheet, type SheetAction} from '../action-sheet';
 import {useBackAction} from '../back-actions';
+import {
+	findDuplicateBookmarks,
+	removalIds,
+} from '../../../extension/src/shared/duplicate-bookmarks';
+import {notify} from '../dialog';
 import {useChipLook} from '../column-icons';
 import {
 	bookmarksIn,
@@ -11,6 +16,7 @@ import {
 	type BookmarkMove,
 	columnViews,
 	moveBookmarks,
+	moveColumn,
 	removeBookmarks,
 	removedBookmarks,
 	restoreBookmarks,
@@ -22,24 +28,26 @@ import {
 	refreshStatus,
 	syncClient,
 	useLibrary,
+	useSyncStatus,
 } from '../library-store';
 import {linkToOpen} from '../links';
 import {openAll} from '../open-links';
 import {useLinkSettings} from '../use-link-settings';
 import {showSnack} from '../snackbar';
+import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
-import {useColors, useShape} from '../theme';
+import {useColors} from '../theme';
 import {PrivateSwitch} from '../private-switch';
 import {syncPrivate} from '../private-library';
 import {useSelection} from '../use-selection';
+import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
-import {Button, Chips, Empty, Field, Header, IconButton} from '../ui';
-import {ColumnSheet} from './column-sheet';
+import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
+import {Button, Chips, Empty, Header, IconButton} from '../ui';
+import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
 import {ReorderRow} from './reorder-row';
 import {
-	AddButton,
-	MenuButton,
 	BookmarkRow,
 	EditSheet,
 	MoveSheet,
@@ -69,16 +77,18 @@ export function BookmarksScreen({
 }) {
 	const colors = useColors();
 	const chipLook = useChipLook();
-	const shape = useShape();
 	const insets = useSafeAreaInsets();
-	const space = useBarSpace();
+	const barSpace = useBarSpace();
+	const space = useRoomBelow(barSpace);
+	const isKeyboardOpen = space !== barSpace;
 	const store = useLibrary();
 	const selection = useSelection();
 	const view = useView();
-	const readOnly = view === 'private';
+	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
-	const [query, setQuery] = useState('');
+	const search = useSearch();
+	const {query} = search;
 	const [refreshing, setRefreshing] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [columnsOpen, setColumnsOpen] = useState(false);
@@ -88,7 +98,7 @@ export function BookmarksScreen({
 	// The bookmark whose edit drawer is open.
 	const [sheet, setSheet] = useState<Sheet>();
 	const editing = sheet?.kind === 'edit' ? sheet.bookmark : undefined;
-	const moving = sheet?.kind === 'move';
+	const isMoving = sheet?.kind === 'move';
 	const editingColumn =
 		sheet?.kind === 'column'
 			? store.bookmarkColumns.find((column) => column.id === sheet.id)
@@ -114,19 +124,23 @@ export function BookmarksScreen({
 	const columnId = columns.some((column) => column.id === picked)
 		? picked
 		: (columns[0]?.id ?? '');
-	const searching = query.trim().length > 0;
+	const isSearching = query.trim().length > 0;
 	const shown = useMemo(
 		() =>
-			searching ? searchBookmarks(store, query) : bookmarksIn(store, columnId),
-		[store, query, columnId, searching],
+			isSearching
+				? searchBookmarks(store, query)
+				: bookmarksIn(store, columnId),
+		[store, query, columnId, isSearching],
 	);
 	const columnName = columns.find((column) => column.id === columnId)?.name;
 	// The Unfiled bucket is not a column of its own and cannot be changed.
-	const editableColumn = store.bookmarkColumns.some(
+	const isEditableColumn = store.bookmarkColumns.some(
 		(column) => column.id === columnId,
 	);
-	const allSelected = shown.length > 0 && selection.ids.size === shown.length;
-
+	const columnIndex = store.bookmarkColumns.findIndex(
+		(column) => column.id === columnId,
+	);
+	const isAllSelected = shown.length > 0 && selection.ids.size === shown.length;
 	const remove = (ids: ReadonlySet<string>) => {
 		const gone = removedBookmarks(store, ids);
 		if (gone.length === 0) {
@@ -155,6 +169,138 @@ export function BookmarksScreen({
 		);
 	};
 
+	const removeDuplicates = () => {
+		const ids = removalIds(findDuplicateBookmarks(store.bookmarks), new Map());
+		if (ids.length === 0) {
+			notify('No duplicates', 'Every saved address appears once.');
+			return;
+		}
+
+		remove(new Set(ids));
+	};
+
+	// What the 3 dot menu offers, from what is on screen: nothing to open, select, or put in order in an empty column.
+	const menuActions: SheetAction[] = [
+		...(!isSearching && shown.length > 0 && columnName
+			? [
+					{
+						icon: 'albums-outline' as const,
+						label: `Open all ${shown.length} in ${columnName}`,
+						onPress() {
+							openAll(
+								shown.map((bookmark) => linkToOpen(bookmark.url, links)),
+								columnName,
+							);
+						},
+					},
+				]
+			: []),
+		...(shown.length > 0
+			? [
+					{
+						icon: 'checkbox-outline' as const,
+						label: 'Select bookmarks',
+						hint: 'Move, open or delete several at once',
+						onPress() {
+							selection.start();
+						},
+					},
+				]
+			: []),
+		...(!isSearching && shown.length > 1
+			? [
+					{
+						icon: 'swap-vertical-outline' as const,
+						label: 'Put bookmarks in order',
+						hint: `Move bookmarks up and down in ${columnName}`,
+						onPress() {
+							setReordering(true);
+						},
+					},
+				]
+			: []),
+		...(!isSearching && isEditableColumn
+			? [
+					{
+						icon: 'color-palette-outline' as const,
+						label: 'Edit column',
+						hint: 'Rename it, or change its icon and color',
+						onPress() {
+							setSheet({kind: 'column', id: columnId});
+						},
+					},
+				]
+			: []),
+		...(!isSearching && columnIndex > 0
+			? [
+					{
+						icon: 'arrow-back-outline' as const,
+						label: 'Move column earlier',
+						onPress() {
+							void edit((current) =>
+								moveColumn(current, columnId, -1, Date.now()),
+							);
+						},
+					},
+				]
+			: []),
+		...(!isSearching &&
+		columnIndex !== -1 &&
+		columnIndex < store.bookmarkColumns.length - 1
+			? [
+					{
+						icon: 'arrow-forward-outline' as const,
+						label: 'Move column later',
+						onPress() {
+							void edit((current) =>
+								moveColumn(current, columnId, 1, Date.now()),
+							);
+						},
+					},
+				]
+			: []),
+		...(!isSearching && isEditableColumn
+			? [
+					{
+						icon: 'trash-outline' as const,
+						label: 'Delete column',
+						destructive: true,
+						onPress() {
+							confirmDeleteColumn(
+								store,
+								{id: columnId, name: columnName ?? ''},
+								() => {
+									setPicked('');
+								},
+							);
+						},
+					},
+				]
+			: []),
+		...(!isSearching && store.bookmarks.length > 1
+			? [
+					{
+						icon: 'copy-outline' as const,
+						label: 'Remove duplicates',
+						hint: 'Keep the oldest copy of each saved address',
+						onPress: removeDuplicates,
+					},
+				]
+			: []),
+		...(columns.length > 0
+			? [
+					{
+						icon: 'list-outline' as const,
+						label: 'Manage columns',
+						hint: 'Open, put in order, or change any column',
+						onPress() {
+							setColumnsOpen(true);
+						},
+					},
+				]
+			: []),
+	];
+
 	const reorder = (id: string, move: BookmarkMove) => {
 		void edit((current) => moveBookmark(current, id, move, Date.now()));
 	};
@@ -174,11 +320,11 @@ export function BookmarksScreen({
 	const headerActions = selection.active ? (
 		<>
 			<IconButton
-				icon={allSelected ? 'remove-circle-outline' : 'checkmark-done'}
-				label={allSelected ? 'Select none' : 'Select all'}
+				icon={isAllSelected ? 'remove-circle-outline' : 'checkmark-done'}
+				label={isAllSelected ? 'Select none' : 'Select all'}
 				onPress={() => {
 					selection.setAll(
-						allSelected ? [] : shown.map((bookmark) => bookmark.id),
+						isAllSelected ? [] : shown.map((bookmark) => bookmark.id),
 					);
 				}}
 			/>
@@ -198,30 +344,25 @@ export function BookmarksScreen({
 			}}
 		/>
 	) : (
-		<>
-			<PrivateSwitch />
-			{shape.ios && !readOnly && (
-				<IconButton
-					icon="add"
-					label="Add link"
-					color={colors.accent}
-					onPress={onAdd}
-				/>
-			)}
-		</>
+		<PrivateSwitch />
 	);
 
 	return (
 		<View style={styles.screen}>
 			<FlatList
 				removeClippedSubviews
+				scrollEventThrottle={16}
 				data={shown}
 				extraData={selection.ids}
 				keyExtractor={(bookmark) => bookmark.id}
 				refreshing={refreshing}
 				contentContainerStyle={[
 					styles.list,
-					{paddingBottom: (selection.active ? 72 + insets.bottom : space) + 72},
+					{
+						paddingBottom: isKeyboardOpen
+							? space + 8
+							: (selection.active ? 72 + insets.bottom : space) + 72,
+					},
 				]}
 				keyboardShouldPersistTaps="handled"
 				// Long columns draw only what is on screen, and a little around it.
@@ -243,41 +384,33 @@ export function BookmarksScreen({
 									? undefined
 									: reordering
 										? 'Move bookmarks up or down, then tap Done'
-										: `${store.bookmarks.length} saved${readOnly ? ', private, read only' : ''}`
+										: `${store.bookmarks.length} saved${view === 'private' ? ', private' : ''}`
 							}
 							right={headerActions}
 						/>
 						<View style={styles.search}>
-							<Field
-								label="Search bookmarks"
-								icon="search"
-								placeholder="Title or address"
-								value={query}
-								autoCapitalize="none"
-								autoCorrect={false}
-								returnKeyType="search"
-								onChangeText={setQuery}
-								onClear={() => {
-									setQuery('');
-								}}
-							/>
-							{!searching && (columns.length > 0 || !readOnly) && (
+							{!isSearching && (
 								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 									<Chips
 										items={[
 											...columns.map((column) => chipLook(column)),
-											...(readOnly
-												? []
-												: [
-														{
-															id: NEW_COLUMN_CHIP,
-															name: 'New column',
-															glyph: 'add' as const,
-															tint: colors.accent,
-														},
-													]),
+											{
+												id: NEW_COLUMN_CHIP,
+												name: 'New column',
+												glyph: 'add' as const,
+												tint: colors.accent,
+											},
 										]}
 										selected={columnId}
+										onLongPress={(id) => {
+											if (id === NEW_COLUMN_CHIP) {
+												return;
+											}
+
+											// The same menu as the three dots, for the held column.
+											setPicked(id);
+											setMenuOpen(true);
+										}}
 										onSelect={(id) => {
 											if (id === NEW_COLUMN_CHIP) {
 												setSheet({kind: 'column'});
@@ -292,7 +425,7 @@ export function BookmarksScreen({
 					</View>
 				}
 				ListEmptyComponent={
-					searching ? (
+					isSearching ? (
 						<Empty icon="search" title="No match">
 							Nothing saved matches that search.
 						</Empty>
@@ -301,21 +434,23 @@ export function BookmarksScreen({
 							icon="bookmark-outline"
 							title="No bookmarks yet"
 							action={
-								readOnly ? undefined : (
-									<View style={styles.emptyActions}>
-										<Button label="Add a link" icon="add" onPress={onAdd} />
+								<View style={styles.emptyActions}>
+									<Button label="Add a link" icon="add" onPress={onAdd} />
+									{!connected && (
 										<Button
 											kind="plain"
 											label="Connect to your server"
 											onPress={onConnect}
 										/>
-									</View>
-								)
+									)}
+								</View>
 							}
 						>
-							{readOnly
-								? 'Nothing is saved in the private library yet.'
-								: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
+							{view === 'private'
+								? 'Nothing is saved in the private library yet. Save a link to start it.'
+								: connected
+									? 'This phone is connected to your server, but the library has no bookmarks yet. Save a link, or share one from your browser or the extension.'
+									: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
 						</Empty>
 					)
 				}
@@ -338,7 +473,6 @@ export function BookmarksScreen({
 					) : (
 						<BookmarkRow
 							bookmark={item}
-							readOnly={readOnly}
 							selecting={selection.active}
 							checked={selection.ids.has(item.id)}
 							onToggle={() => {
@@ -360,20 +494,33 @@ export function BookmarksScreen({
 						/>
 					)
 				}
+				onScroll={trackScroll}
 				onRefresh={() => {
 					void refresh();
 				}}
 			/>
-			{!selection.active && !reordering && !shape.ios && !readOnly && (
-				<AddButton bottom={space} onPress={onAdd} />
-			)}
-			{!selection.active && !reordering && (
-				<MenuButton
+			{!selection.active && !reordering && !search.open && (
+				<FloatingActions
 					bottom={space}
-					right={shape.ios || readOnly ? 16 : 16 + 56 + 12}
-					onPress={() => {
-						setMenuOpen(true);
-					}}
+					onAdd={onAdd}
+					onSearch={search.show}
+					onMenu={
+						menuActions.length > 0
+							? () => {
+									setMenuOpen(true);
+								}
+							: undefined
+					}
+				/>
+			)}
+			{search.open && (
+				<SearchDock
+					label="Search bookmarks"
+					placeholder="Title or address"
+					bottom={space}
+					query={query}
+					onChange={search.setQuery}
+					onClose={search.close}
 				/>
 			)}
 			{selection.active && (
@@ -405,66 +552,7 @@ export function BookmarksScreen({
 			<ActionSheet
 				visible={menuOpen}
 				title={columnName ?? 'Bookmarks'}
-				actions={[
-					...(searching
-						? []
-						: [
-								{
-									icon: 'albums-outline' as const,
-									label: `Open all ${shown.length} in ${columnName}`,
-									onPress() {
-										openAll(
-											shown.map((bookmark) => linkToOpen(bookmark.url, links)),
-											columnName ?? 'This column',
-										);
-									},
-								},
-							]),
-					...(readOnly
-						? []
-						: [
-								{
-									icon: 'list-outline' as const,
-									label: 'Manage columns',
-									hint: 'Open, put in order, or change any column',
-									onPress() {
-										setColumnsOpen(true);
-									},
-								},
-								...(!searching && shown.length > 1
-									? [
-											{
-												icon: 'swap-vertical-outline' as const,
-												label: 'Put bookmarks in order',
-												hint: `Move bookmarks up and down in ${columnName}`,
-												onPress() {
-													setReordering(true);
-												},
-											},
-										]
-									: []),
-								...(!searching && editableColumn
-									? [
-											{
-												icon: 'color-palette-outline' as const,
-												label: 'Edit column',
-												hint: 'Rename it, or change its icon and color',
-												onPress() {
-													setSheet({kind: 'column', id: columnId});
-												},
-											},
-										]
-									: []),
-								{
-									icon: 'checkbox-outline' as const,
-									label: 'Select bookmarks',
-									hint: 'Move, open or delete several at once',
-									onPress() {
-										selection.start();
-									},
-								},
-							]),
-				]}
+				actions={menuActions}
 				onClose={() => {
 					setMenuOpen(false);
 				}}
@@ -507,7 +595,7 @@ export function BookmarksScreen({
 				}}
 			/>
 			<MoveSheet
-				visible={moving}
+				visible={isMoving}
 				count={selection.ids.size}
 				columns={store.bookmarkColumns.map(({id, name, icon, color}) => ({
 					id,

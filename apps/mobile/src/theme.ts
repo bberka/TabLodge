@@ -2,7 +2,7 @@ import {useMemo} from 'react';
 import {useColorScheme} from 'react-native';
 import {systemAccent} from '../modules/open-links';
 import {resolveAccent} from './accent';
-import {usePreferences} from './preferences';
+import {resolveLook, usePreferences} from './preferences';
 
 const light = {
 	background: '#faf9f7',
@@ -29,8 +29,39 @@ const darkMaterial: typeof light = {
 	accent: '#a99fff',
 	accentSoft: '#2f2b52',
 	onAccent: '#16151b',
-	danger: '#f2b8b5',
+	danger: '#e5484d',
 	ok: '#7fd9a0',
+	warn: '#f0c36d',
+};
+
+// Samsung One UI: a light gray page with white cards, a black page in the dark theme, and Samsung's blue.
+const oneUiLight: typeof light = {
+	background: '#f6f6f6',
+	surface: '#ffffff',
+	pressed: '#ececec',
+	text: '#000000',
+	muted: '#6a6a6a',
+	border: '#e4e4e4',
+	accent: '#3e91ff',
+	accentSoft: '#e3eeff',
+	onAccent: '#ffffff',
+	danger: '#d93a3a',
+	ok: '#2e8b57',
+	warn: '#a35f00',
+};
+
+const oneUiDark: typeof light = {
+	background: '#000000',
+	surface: '#1f1f1f',
+	pressed: '#2c2c2c',
+	text: '#ffffff',
+	muted: '#a8a8a8',
+	border: '#333333',
+	accent: '#4d9bff',
+	accentSoft: '#12294a',
+	onAccent: '#000000',
+	danger: '#e5484d',
+	ok: '#6fd49a',
 	warn: '#f0c36d',
 };
 
@@ -70,18 +101,28 @@ const iosDark: Colors = {
 // The phone's accent is read once, when the app starts.
 const system = systemAccent();
 
+function palette(look: ReturnType<typeof resolveLook>, dark: boolean): Colors {
+	switch (look) {
+		case 'ios': {
+			return dark ? iosDark : iosLight;
+		}
+
+		case 'oneui': {
+			return dark ? oneUiDark : oneUiLight;
+		}
+
+		default: {
+			return dark ? darkMaterial : light;
+		}
+	}
+}
+
 export const useColors = (): Colors => {
 	const dark = useColorScheme() === 'dark';
-	const {look, accent} = usePreferences();
+	const {look: choice, accent} = usePreferences();
+	const look = resolveLook(choice);
 	return useMemo(() => {
-		const base =
-			look === 'ios'
-				? dark
-					? iosDark
-					: iosLight
-				: dark
-					? darkMaterial
-					: light;
+		const base = palette(look, dark);
 		const chosen = resolveAccent(
 			accent,
 			dark ? 'dark' : 'light',
@@ -106,6 +147,10 @@ type Shape = {
 	sheetRadius: number;
 	chipRadius: number;
 	titleSize: number;
+	/**
+	The gap around a floating tab bar, at its sides and below it.
+	*/
+	barGap: number;
 };
 
 const materialShape: Shape = {
@@ -117,6 +162,7 @@ const materialShape: Shape = {
 	sheetRadius: 28,
 	chipRadius: 20,
 	titleSize: 28,
+	barGap: 12,
 };
 
 const iosShape: Shape = {
@@ -128,10 +174,25 @@ const iosShape: Shape = {
 	sheetRadius: 14,
 	chipRadius: 9,
 	titleSize: 34,
+	barGap: 12,
 };
 
-export const useShape = (): Shape =>
-	usePreferences().look === 'ios' ? iosShape : materialShape;
+// One UI draws everything rounder: large cards, pill buttons, and a floating bar with a wide gap around it.
+const oneUiShape: Shape = {
+	ios: false,
+	buttonRadius: 28,
+	buttonHeight: 52,
+	fieldRadius: 20,
+	cardRadius: 28,
+	sheetRadius: 32,
+	chipRadius: 22,
+	titleSize: 34,
+	barGap: 20,
+};
+
+const SHAPES = {material: materialShape, oneui: oneUiShape, ios: iosShape};
+
+export const useShape = (): Shape => SHAPES[resolveLook(usePreferences().look)];
 
 // Android asks for touch targets of at least 48dp.
 export const TARGET = 48;
@@ -160,5 +221,25 @@ export function soften(color: string): string {
 		: color.replace(/^hsl\((\d+) (\d+)% (\d+)%\)$/, 'hsla($1, $2%, $3%, 0.18)');
 }
 
+/**
+White or near black text, whichever reads better on a solid `color` (`#rrggbb` or `hsl(h s% l%)`).
+*/
+export function readableOn(color: string): string {
+	const hsl = /^hsl\(\d+ \d+% (\d+)%\)$/.exec(color);
+	const bright = hsl
+		? Number(hsl[1]) > 60
+		: color.startsWith('#') && luminance(color) > 0.4;
+	return bright ? '#1b1b1f' : '#ffffff';
+}
+
+function luminance(hex: string): number {
+	const [r, g, b] = [1, 3, 5].map((at) => {
+		const channel = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+		return channel <= 0.03928
+			? channel / 12.92
+			: ((channel + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 export const BAR_HEIGHT = 64;
-export const BAR_MARGIN = 12;

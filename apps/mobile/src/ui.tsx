@@ -58,7 +58,6 @@ export function Button({
 			accessibilityRole="button"
 			accessibilityState={{disabled: inactive, busy: loading}}
 			disabled={inactive}
-			android_ripple={shape.ios ? undefined : {color: `${ink}33`}}
 			style={({pressed}) => [
 				styles.button,
 				{
@@ -118,9 +117,6 @@ export function IconButton({
 			accessibilityLabel={label}
 			accessibilityState={{disabled}}
 			disabled={disabled}
-			android_ripple={
-				shape.ios ? undefined : {color: colors.pressed, radius: TARGET / 2}
-			}
 			style={({pressed}) => [
 				styles.iconButton,
 				{
@@ -141,12 +137,17 @@ export function Field({
 	icon,
 	error,
 	onClear,
+	hideLabel = false,
 	...props
 }: TextInputProps & {
 	label: string;
 	icon?: IconName;
 	error?: string;
 	onClear?: () => void;
+	/**
+	Keeps the label for screen readers but does not draw it above the input.
+	*/
+	hideLabel?: boolean;
 }) {
 	const colors = useColors();
 	const shape = useShape();
@@ -158,29 +159,42 @@ export function Field({
 			: colors.border;
 	return (
 		<View style={styles.field}>
-			<Text
-				style={[styles.label, {color: error ? colors.danger : colors.muted}]}
-			>
-				{label}
-			</Text>
+			{!hideLabel && (
+				<Text
+					style={[styles.label, {color: error ? colors.danger : colors.muted}]}
+				>
+					{label}
+				</Text>
+			)}
 			<View
 				style={[
 					styles.inputBox,
+					// The border width never changes, so focusing or flagging a field cannot move what is around it.
 					shape.ios
 						? {
 								borderRadius: shape.fieldRadius,
 								borderColor: error ? colors.danger : 'transparent',
-								borderWidth: error ? 1 : 0,
+								borderWidth: 1,
 								backgroundColor: colors.pressed,
 							}
 						: {
 								borderRadius: shape.fieldRadius,
-								borderColor: border,
-								borderWidth: focused || error ? 2 : 1,
+								borderColor: error ? colors.danger : colors.border,
+								borderWidth: 1,
 								backgroundColor: colors.surface,
 							},
 				]}
 			>
+				{!shape.ios && (focused || error) && (
+					// A thicker ring drawn over the border, outside the layout.
+					<View
+						pointerEvents="none"
+						style={[
+							styles.ring,
+							{borderRadius: shape.fieldRadius + 1, borderColor: border},
+						]}
+					/>
+				)}
 				{icon && <Icon name={icon} size={20} color={colors.muted} />}
 				<TextInput
 					accessibilityLabel={label}
@@ -221,6 +235,7 @@ export function Chips({
 	items,
 	selected,
 	onSelect,
+	onLongPress,
 }: {
 	items: Array<{
 		id: string;
@@ -237,6 +252,10 @@ export function Chips({
 	}>;
 	selected: string;
 	onSelect: (id: string) => void;
+	/**
+	Called with a chip's id when it is held down, to open that chip's menu. Screen readers get a More actions action.
+	*/
+	onLongPress?: (id: string) => void;
 }) {
 	const colors = useColors();
 	const shape = useShape();
@@ -252,7 +271,6 @@ export function Chips({
 						accessibilityState={{selected: on}}
 						// The chip is 40dp tall; this brings the touch target to the 48dp Android asks for.
 						hitSlop={{top: 4, bottom: 4}}
-						android_ripple={shape.ios ? undefined : {color: colors.pressed}}
 						style={({pressed}) => [
 							styles.chip,
 							{
@@ -265,6 +283,19 @@ export function Chips({
 								borderColor: on ? tint : colors.border,
 							},
 						]}
+						accessibilityActions={
+							onLongPress ? [{name: 'more', label: 'More actions'}] : undefined
+						}
+						onAccessibilityAction={() => {
+							onLongPress?.(item.id);
+						}}
+						onLongPress={
+							onLongPress
+								? () => {
+										onLongPress(item.id);
+									}
+								: undefined
+						}
 						onPress={() => {
 							onSelect(item.id);
 						}}
@@ -330,12 +361,16 @@ export function Header({
 	right?: ReactNode;
 }) {
 	const colors = useColors();
+	const shape = useShape();
 	return (
 		<View style={styles.header}>
 			<View style={styles.headerText}>
 				<Text
 					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
+					style={[
+						styles.title,
+						{color: colors.text, fontSize: shape.titleSize},
+					]}
 				>
 					{title}
 				</Text>
@@ -561,6 +596,14 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 	},
 	field: {gap: 4},
+	ring: {
+		position: 'absolute',
+		top: -1,
+		left: -1,
+		right: -1,
+		bottom: -1,
+		borderWidth: 2,
+	},
 	label: {fontSize: 13},
 	inputBox: {
 		minHeight: TARGET,

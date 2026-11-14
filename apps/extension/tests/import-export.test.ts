@@ -4,7 +4,7 @@ import {
 	BOOKMARKS_FORMAT_ID,
 	SESSIONS_FORMAT_ID,
 	fileNamePrefix,
-} from '../src/app/backup-format';
+} from '../src/shared/backup-format';
 import {
 	buildExport,
 	csvCell,
@@ -14,7 +14,7 @@ import {
 	sessionExportChoices,
 	type ExportData,
 	type ExportFormat,
-} from '../src/app/export-formats';
+} from '../src/shared/export-formats';
 import {
 	ImportFormatError,
 	MAX_IMPORT_BYTES,
@@ -28,8 +28,8 @@ import {
 	sessionImportPayload,
 	toTimestamp,
 	type ParsedImport,
-} from '../src/app/import-formats';
-import {webUrl} from '../src/app/web-url';
+} from '../src/shared/import-formats';
+import {webUrl} from '../src/shared/web-url';
 import type {
 	Bookmark,
 	BookmarkColumn,

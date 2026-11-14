@@ -533,6 +533,39 @@ export function deleteColumn(
 	return {...store, bookmarkColumns: remaining, bookmarks, updatedAt: now};
 }
 
+/**
+Puts back a column that was deleted, with the bookmarks it held (as they were), for Undo. A bookmark that was moved to
+another column comes back to this one; one that was deleted with it is added again.
+*/
+export function restoreColumn(
+	store: Store,
+	column: Store['bookmarkColumns'][number],
+	bookmarks: ReadonlyArray<Store['bookmarks'][number]>,
+	now: number,
+): Store {
+	if (store.bookmarkColumns.some((entry) => entry.id === column.id)) {
+		return store;
+	}
+
+	const back = new Map(bookmarks.map((bookmark) => [bookmark.id, bookmark]));
+	const kept = store.bookmarks.map((bookmark) => {
+		const original = back.get(bookmark.id);
+		back.delete(bookmark.id);
+		return original
+			? {...bookmark, columnId: column.id, updatedAt: now}
+			: bookmark;
+	});
+	return {
+		...store,
+		bookmarkColumns: [...store.bookmarkColumns, column],
+		bookmarks: [
+			...kept,
+			...[...back.values()].map((bookmark) => ({...bookmark, updatedAt: now})),
+		],
+		updatedAt: now,
+	};
+}
+
 export const ALL_SESSIONS_ID = 'all';
 const ARCHIVED_FOLDER_ID = 'archived-sessions';
 const OTHER_FOLDER_ID = 'other-sessions';
@@ -541,10 +574,208 @@ const isArchived = (folder: {id: string; name: string}) =>
 	folder.id === ARCHIVED_FOLDER_ID ||
 	folder.name.toLocaleLowerCase() === 'archived';
 
+/**
+Whether a session folder can be renamed or deleted: not Unfiled, which holds whatever has no other home, and not
+Archived, as in the extension.
+*/
+export const canChangeFolder = (folder: {
+	id: string;
+	name: string;
+	isDefault: boolean;
+}): boolean => !folder.isDefault && !isArchived(folder);
+
+const cleanFolderName = (name: string): string =>
+	name
+		.replaceAll(/\p{Control}/gu, ' ')
+		.trim()
+		.slice(0, 60);
+
+/**
+Why this name cannot be a folder's, or undefined when it can: empty, the reserved "All sessions", or another folder's.
+*/
+export function folderNameProblem(
+	store: Store,
+	name: string,
+	exceptId?: string,
+): string | undefined {
+	const clean = cleanFolderName(name);
+	if (clean === '' || clean.toLocaleLowerCase() === 'all sessions') {
+		return 'Choose a different folder name.';
+	}
+
+	const taken = store.folders.some(
+		(folder) =>
+			folder.id !== exceptId &&
+			folder.name.toLocaleLowerCase() === clean.toLocaleLowerCase(),
+	);
+	return taken ? 'A folder with that name already exists.' : undefined;
+}
+
+/**
+Renames a session folder. A folder that cannot change, or a name that is not allowed, leaves the library as it was.
+*/
+export function renameFolder(
+	store: Store,
+	id: string,
+	name: string,
+	now: number,
+): Store {
+	const folder = store.folders.find((entry) => entry.id === id);
+	if (
+		!folder ||
+		!canChangeFolder(folder) ||
+		folderNameProblem(store, name, id)
+	) {
+		return store;
+	}
+
+	return {
+		...store,
+		folders: store.folders.map((entry) =>
+			entry.id === id ? {...entry, name: cleanFolderName(name)} : entry,
+		),
+		updatedAt: now,
+	};
+}
+
+export type FolderEdit = {
+	name: string;
+	icon: string;
+	color: string;
+	colorSessions: boolean;
+};
+
+const folderFields = (edit: FolderEdit) => ({
+	name: cleanFolderName(edit.name),
+	...(edit.icon && {icon: edit.icon}),
+	...(isColumnColor(edit.color) && {
+		color: edit.color,
+		...(edit.colorSessions && {colorSessions: true as const}),
+	}),
+});
+
+/**
+Makes a session folder with a name, an icon, and a color. A name that is not allowed leaves the library as it was.
+*/
+export function addFolder(
+	store: Store,
+	edit: FolderEdit,
+	id: string,
+	now: number,
+): Store {
+	if (folderNameProblem(store, edit.name)) {
+		return store;
+	}
+
+	return {
+		...store,
+		folders: [
+			...store.folders,
+			{id, createdAt: now, isDefault: false, ...folderFields(edit)},
+		],
+		updatedAt: now,
+	};
+}
+
+/**
+Changes a session folder's name, icon, color, and whether it colors the sessions moved into it. The icon and color are
+rebuilt, so an empty value drops the field. A folder that cannot change, or a name that is not allowed, leaves the
+library as it was.
+*/
+export function updateFolder(
+	store: Store,
+	id: string,
+	edit: FolderEdit,
+	now: number,
+): Store {
+	const folder = store.folders.find((entry) => entry.id === id);
+	if (
+		!folder ||
+		!canChangeFolder(folder) ||
+		folderNameProblem(store, edit.name, id)
+	) {
+		return store;
+	}
+
+	const {
+		icon: _icon,
+		color: _color,
+		colorSessions: _colorSessions,
+		...rest
+	} = folder;
+	return {
+		...store,
+		folders: store.folders.map((entry) =>
+			entry.id === id ? {...rest, ...folderFields(edit)} : entry,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
+Deletes a session folder and moves its sessions to Unfiled, as the extension does. A folder that cannot change leaves
+the library as it was.
+*/
+export function deleteFolder(store: Store, id: string, now: number): Store {
+	const folder = store.folders.find((entry) => entry.id === id);
+	if (!folder || !canChangeFolder(folder)) {
+		return store;
+	}
+
+	let {folders} = store;
+	let fallback = folders.find((entry) => entry.isDefault)?.id;
+	if (!fallback) {
+		fallback = DEFAULT_SESSION_FOLDER_ID;
+		folders = [
+			...folders,
+			{id: fallback, name: 'Unfiled', createdAt: now, isDefault: true},
+		];
+	}
+
+	const target = fallback;
+	return {
+		...store,
+		folders: folders.filter((entry) => entry.id !== id),
+		groups: store.groups.map((session) =>
+			session.folderId === id
+				? {...session, folderId: target, updatedAt: now}
+				: session,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
+Puts back a folder that was deleted, with the sessions it held, for Undo.
+*/
+export function restoreFolder(
+	store: Store,
+	folder: Store['folders'][number],
+	sessionIds: readonly string[],
+	now: number,
+): Store {
+	if (store.folders.some((entry) => entry.id === folder.id)) {
+		return store;
+	}
+
+	const back = new Set(sessionIds);
+	return {
+		...store,
+		folders: [...store.folders, folder],
+		groups: store.groups.map((session) =>
+			back.has(session.id)
+				? {...session, folderId: folder.id, updatedAt: now}
+				: session,
+		),
+		updatedAt: now,
+	};
+}
+
 export type SessionFolderView = {
 	id: string;
 	name: string;
 	icon?: string;
+	color?: string;
 	count: number;
 };
 
@@ -575,6 +806,7 @@ export function sessionFolders(store: Store): SessionFolderView[] {
 			id: folder.id,
 			name: folder.name,
 			icon: folder.icon,
+			color: folder.color,
 			count: count(folder.id),
 		});
 	}
@@ -674,9 +906,10 @@ const savedTab = (
 	id: string,
 	index: number,
 	now: number,
+	title = '',
 ): SavedTab => ({
 	id,
-	title: hostOf(url),
+	title: title.trim() || hostOf(url),
 	url,
 	notes: '',
 	pinned: false,
@@ -698,6 +931,10 @@ export function addSession(
 		Where it was saved: the device's name and kind.
 		*/
 		device?: DeviceStamp;
+		/**
+		A title for each link, in order; a link without one is named by its site.
+		*/
+		titles?: readonly string[];
 	},
 	id: string,
 	tabIds: readonly string[],
@@ -730,7 +967,13 @@ export function addSession(
 		sourceWindowId: null,
 		...input.device,
 		tabs: input.urls.map((url, index) =>
-			savedTab(url, tabIds[index] ?? `${id}-${index}`, index, now),
+			savedTab(
+				url,
+				tabIds[index] ?? `${id}-${index}`,
+				index,
+				now,
+				input.titles?.[index],
+			),
 		),
 	};
 	return {
@@ -750,6 +993,7 @@ export function addTabsToSession(
 	urls: readonly string[],
 	tabIds: readonly string[],
 	now: number,
+	titles: readonly string[] = [],
 ): Store {
 	const session = store.groups.find((group) => group.id === sessionId);
 	if (!session || urls.length === 0) {
@@ -768,6 +1012,7 @@ export function addTabsToSession(
 					tabIds[index] ?? `${sessionId}-${start + index}`,
 					start + index,
 					now,
+					titles[index],
 				),
 			),
 		],
@@ -817,6 +1062,30 @@ export function renameSession(
 		: store;
 }
 
+// The longest description the extension keeps (`SESSION_TEXT_MAX` in its library-normalize.ts).
+const DESCRIPTION_MAX = 10_502;
+
+/**
+Sets a session's description, which the extension shows under its name and syncs. It is cut to the extension's limit.
+*/
+export function describeSession(
+	store: Store,
+	id: string,
+	description: string,
+	now: number,
+): Store {
+	return changeSession(
+		store,
+		id,
+		(session) => ({
+			...session,
+			description: description.trim().slice(0, DESCRIPTION_MAX),
+			updatedAt: now,
+		}),
+		now,
+	);
+}
+
 /**
 Puts a session in another folder. An unknown folder or session leaves the store as it was.
 */
@@ -826,14 +1095,25 @@ export function moveSession(
 	folderId: string,
 	now: number,
 ): Store {
-	return store.folders.some((folder) => folder.id === folderId)
-		? changeSession(
-				store,
-				id,
-				(session) => ({...session, folderId, updatedAt: now}),
-				now,
-			)
-		: store;
+	const target = store.folders.find((folder) => folder.id === folderId);
+	if (!target) {
+		return store;
+	}
+
+	// A folder that colors its sessions gives a session moved into it the folder's color, as in the extension.
+	return changeSession(
+		store,
+		id,
+		(session) => ({
+			...session,
+			folderId,
+			updatedAt: now,
+			...(session.folderId !== folderId &&
+				target.colorSessions &&
+				target.color && {color: target.color}),
+		}),
+		now,
+	);
 }
 
 /**

@@ -15,6 +15,8 @@ export function setView(view: View): void {
 	}
 }
 
+export const isPrivateView = (): boolean => current === 'private';
+
 export const useView = (): View =>
 	useSyncExternalStore(
 		(listener) => {

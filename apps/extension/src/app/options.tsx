@@ -85,6 +85,7 @@ import {
 	sortByQuery,
 	searchTerms,
 } from '../shared/fuzzy';
+import type {ExportData} from '../shared/export-formats';
 import {AccentPalette} from './accent-palette';
 import {
 	EmptyState,
@@ -110,7 +111,6 @@ import {
 	TrashDialog,
 } from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
-import type {ExportData} from './export-formats';
 import {initialSearchQuery, withSearchParam} from './page-params';
 import {
 	excludedHostError,
@@ -1944,19 +1944,13 @@ function Options() {
 			) : (
 				<div className="grid gap-5 lg:col-start-2 lg:row-start-3">
 					{showAppearance && (
-						<section
+						<SectionCard
 							id={sectionId(APPEARANCE.title)}
-							className={cn(
-								SECTION_SCROLL_CLASS,
-								'flex flex-col gap-4 rounded-lg border border-border bg-card p-5',
-							)}
+							title={hl(APPEARANCE.title)}
+							description={hl(APPEARANCE.help)}
+							icon={Sun}
+							className={SECTION_SCROLL_CLASS}
 						>
-							<div>
-								<h2 className="font-semibold">{hl(APPEARANCE.title)}</h2>
-								<p className="mt-1 text-sm text-muted-foreground">
-									{hl(APPEARANCE.help)}
-								</p>
-							</div>
 							<div className="flex flex-wrap items-center gap-3">
 								<div
 									className="flex flex-wrap gap-2"
@@ -2026,7 +2020,7 @@ function Options() {
 									}}
 								/>
 							</div>
-						</section>
+						</SectionCard>
 					)}
 					{showShortcuts && (
 						<ShortcutsCard
@@ -2705,36 +2699,36 @@ function ShortcutsCard({
 	}, []);
 
 	return (
-		<section
+		<SectionCard
 			id={id}
-			className={cn(
-				SECTION_SCROLL_CLASS,
-				'rounded-lg border border-border bg-card p-5',
-			)}
-		>
-			<div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
-				<div>
-					<h2 className="font-semibold">{title}</h2>
-					<p className="mt-1 text-sm text-muted-foreground">{help}</p>
-				</div>
+			title={title}
+			description={help}
+			icon={Keyboard}
+			className={SECTION_SCROLL_CLASS}
+			action={
 				<Button
 					type="button"
 					variant="outline"
 					size="sm"
-					className="shrink-0"
 					onClick={async () => setFailed(!(await openShortcutsPage()))}
 				>
 					<Keyboard className="h-4 w-4" />
 					Configure shortcuts
 				</Button>
-			</div>
+			}
+		>
 			{failed && (
-				<p role="alert" className="mt-2 text-xs text-muted-foreground">
+				<p role="alert" className="text-xs text-muted-foreground">
 					Your browser did not open it. {SHORTCUTS_HINT}
 				</p>
 			)}
 			{commands.length > 0 && (
-				<dl className="mt-4 grid gap-x-6 gap-y-2 border-t border-border pt-4 text-sm sm:grid-cols-2">
+				<dl
+					className={cn(
+						'grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2',
+						failed && 'mt-4',
+					)}
+				>
 					{commands.map((command) => (
 						<div
 							key={command.name}
@@ -2756,7 +2750,7 @@ function ShortcutsCard({
 					))}
 				</dl>
 			)}
-		</section>
+		</SectionCard>
 	);
 }
 

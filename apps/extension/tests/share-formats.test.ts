@@ -4,7 +4,7 @@ import {
 	shareHtmlPage,
 	sharePreview,
 	type ShareGroup,
-} from '../src/app/share-formats';
+} from '../src/shared/share-formats';
 
 const groups: ShareGroup[] = Array.from({length: 4}, (_group, groupIndex) => ({
 	name: `Group ${groupIndex + 1}`,

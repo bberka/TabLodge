@@ -2,7 +2,7 @@ import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from '../bottom-sheet';
 import {columnGlyph, useChipLook} from '../column-icons';
 import {moveColumn} from '../library';
-import {edit, useRegularLibrary} from '../library-store';
+import {edit, useLibrary} from '../library-store';
 import {soften, TARGET, useColors} from '../theme';
 import {Button, Icon, IconButton} from '../ui';
 
@@ -37,10 +37,15 @@ export function ColumnsSheet({
 }) {
 	const colors = useColors();
 	const chipLook = useChipLook();
-	const store = useRegularLibrary();
+	const store = useLibrary();
 	const real = new Set(store.bookmarkColumns.map((column) => column.id));
 	return (
-		<BottomSheet visible={visible} label="Columns" onClose={onClose}>
+		<BottomSheet
+			scroll={false}
+			visible={visible}
+			label="Columns"
+			onClose={onClose}
+		>
 			<View style={styles.top}>
 				<Text
 					accessibilityRole="header"
@@ -67,8 +72,10 @@ export function ColumnsSheet({
 								accessibilityRole="button"
 								accessibilityLabel={`${column.name}, ${column.count} ${column.count === 1 ? 'bookmark' : 'bookmarks'}${column.id === selected ? ', showing' : ''}`}
 								accessibilityHint="Shows this column"
-								android_ripple={{color: colors.pressed}}
-								style={styles.main}
+								style={({pressed}) => [
+									styles.main,
+									pressed && {backgroundColor: colors.pressed},
+								]}
 								onPress={() => {
 									onPick(column.id);
 									onClose();
@@ -150,7 +157,7 @@ const styles = StyleSheet.create({
 		paddingRight: 8,
 	},
 	title: {fontSize: 20, fontWeight: '700'},
-	list: {flexGrow: 0},
+	list: {flexGrow: 0, flexShrink: 1},
 	content: {paddingHorizontal: 12, paddingVertical: 4},
 	row: {flexDirection: 'row', alignItems: 'center'},
 	main: {

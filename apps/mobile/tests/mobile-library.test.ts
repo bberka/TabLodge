@@ -39,6 +39,14 @@ import {
 	extractUrls,
 	sessionFolders,
 	sessionsIn,
+	canChangeFolder,
+	deleteFolder,
+	describeSession,
+	renameFolder,
+	addFolder,
+	updateFolder,
+	restoreFolder,
+	restoreColumn,
 } from '../src/library';
 import {sampleStore} from '../src/seed';
 
@@ -715,5 +723,221 @@ describe('ordering', () => {
 		assert.equal(inColumn()(bottom).at(-1), before[0]);
 		assert.equal(inColumn()(bottom).length, before.length);
 		assert.equal(moveBookmark(store, 'missing', 'up', NOW), store);
+	});
+});
+
+describe('session folders', () => {
+	const withFolders = () => {
+		let store = emptyStore(NOW);
+		store = {
+			...store,
+			folders: [
+				{id: 'unfiled', name: 'Unfiled', createdAt: NOW, isDefault: true},
+				{id: 'work', name: 'Work', createdAt: NOW, isDefault: false},
+				{
+					id: 'archived-sessions',
+					name: 'Archived',
+					createdAt: NOW,
+					isDefault: false,
+				},
+			],
+		};
+		return addSession(
+			store,
+			{name: 'Plans', urls: ['https://a.example/'], folderId: 'work'},
+			's1',
+			['t1'],
+			NOW,
+		);
+	};
+
+	test('renaming keeps the sessions and refuses a taken or reserved name', () => {
+		const store = withFolders();
+		const renamed = renameFolder(store, 'work', '  Projects ', NOW + 1);
+		assert.equal(
+			renamed.folders.find((f) => f.id === 'work')?.name,
+			'Projects',
+		);
+		assert.equal(renamed.groups[0].folderId, 'work');
+		assert.equal(renameFolder(store, 'work', 'unfiled', NOW), store);
+		assert.equal(renameFolder(store, 'work', 'All sessions', NOW), store);
+		assert.equal(renameFolder(store, 'work', ' '.repeat(3), NOW), store);
+	});
+
+	test('a folder is made and changed with its icon and color, and Undo puts a deleted one back', () => {
+		const store = withFolders();
+		const made = addFolder(
+			store,
+			{name: ' Reading ', icon: 'book', color: '#336699', colorSessions: true},
+			'read',
+			NOW + 1,
+		);
+		const folder = made.folders.find((f) => f.id === 'read');
+		assert.equal(folder?.name, 'Reading');
+		assert.equal(folder?.icon, 'book');
+		assert.equal(folder?.color, '#336699');
+		assert.equal(folder?.colorSessions, true);
+		assert.equal(
+			addFolder(
+				made,
+				{name: 'reading', icon: '', color: '', colorSessions: false},
+				'x',
+				NOW,
+			),
+			made,
+		);
+
+		const plain = updateFolder(
+			made,
+			'read',
+			{name: 'Reading', icon: '', color: '', colorSessions: true},
+			NOW + 2,
+		).folders.find((f) => f.id === 'read');
+		assert.equal(plain?.icon, undefined);
+		assert.equal(plain?.color, undefined);
+		assert.equal(plain?.colorSessions, undefined);
+		assert.equal(
+			updateFolder(
+				made,
+				'unfiled',
+				{name: 'Home', icon: '', color: '', colorSessions: false},
+				NOW,
+			),
+			made,
+		);
+
+		const moved = moveSession(made, 's1', 'read', NOW + 3);
+		assert.equal(moved.groups[0].color, '#336699');
+		const gone = deleteFolder(moved, 'read', NOW + 4);
+		assert.equal(gone.groups[0].folderId, 'unfiled');
+		const back = restoreFolder(gone, folder, ['s1'], NOW + 5);
+		assert.equal(back.groups[0].folderId, 'read');
+		assert.ok(back.folders.some((f) => f.id === 'read'));
+	});
+
+	test('Unfiled and Archived cannot be renamed or deleted', () => {
+		const store = withFolders();
+		assert.equal(renameFolder(store, 'unfiled', 'Home', NOW), store);
+		assert.equal(deleteFolder(store, 'unfiled', NOW), store);
+		assert.equal(deleteFolder(store, 'archived-sessions', NOW), store);
+		assert.equal(canChangeFolder(store.folders[0]), false);
+		assert.equal(canChangeFolder(store.folders[1]), true);
+	});
+
+	test('deleting a folder moves its sessions to Unfiled', () => {
+		const next = deleteFolder(withFolders(), 'work', NOW + 1);
+		assert.equal(
+			next.folders.some((f) => f.id === 'work'),
+			false,
+		);
+		assert.equal(next.groups[0].folderId, 'unfiled');
+	});
+});
+
+describe('restoring a deleted column', () => {
+	test('Undo puts the column and its moved or deleted bookmarks back', () => {
+		let store = emptyStore(NOW);
+		store = addColumn(store, 'Work', 'work', NOW);
+		store = addColumn(store, 'Home', 'home', NOW);
+		store = addBookmark(
+			store,
+			{url: 'https://a.example/', title: 'A', columnId: 'work'},
+			'b1',
+			NOW,
+		);
+		const column = store.bookmarkColumns.find((c) => c.id === 'work')!;
+		const own = bookmarksIn(store, 'work');
+		const moved = deleteColumn(store, 'work', 'home', NOW + 1);
+		const back = restoreColumn(moved, column, own, NOW + 2);
+		assert.equal(bookmarksIn(back, 'work').length, 1);
+		const removed = deleteColumn(store, 'work', null, NOW + 1);
+		assert.equal(bookmarksIn(removed, 'home').length, 0);
+		const restored = restoreColumn(removed, column, own, NOW + 2);
+		assert.equal(bookmarksIn(restored, 'work').length, 1);
+		assert.equal(restoreColumn(restored, column, own, NOW + 3), restored);
+	});
+});
+
+describe('moving a session into a folder', () => {
+	const store = (folder: Record<string, unknown>) => ({
+		...addSession(
+			{
+				...emptyStore(NOW),
+				folders: [
+					{id: 'unfiled', name: 'Unfiled', createdAt: NOW, isDefault: true},
+					{
+						id: 'work',
+						name: 'Work',
+						createdAt: NOW,
+						isDefault: false,
+						...folder,
+					},
+				],
+			},
+			{name: 'Plans', urls: ['https://a.example/'], folderId: 'unfiled'},
+			's1',
+			['t1'],
+			NOW,
+		),
+	});
+
+	test('takes the folder color when the folder colors its sessions', () => {
+		const next = moveSession(
+			store({color: 'red', colorSessions: true}),
+			's1',
+			'work',
+			NOW + 1,
+		);
+		assert.equal(next.groups[0].color, 'red');
+	});
+
+	test('keeps its own color when the folder does not ask for one', () => {
+		const next = moveSession(store({color: 'red'}), 's1', 'work', NOW + 1);
+		assert.equal(next.groups[0].color, undefined);
+	});
+});
+
+describe('describing a session', () => {
+	test('sets and trims the description, cut to the extension limit', () => {
+		const store = addSession(
+			emptyStore(NOW),
+			{name: 'Plans', urls: ['https://a.example/']},
+			's1',
+			['t1'],
+			NOW,
+		);
+		const next = describeSession(store, 's1', '  What it is  ', NOW + 1);
+		assert.equal(next.groups[0].description, 'What it is');
+		const long = describeSession(store, 's1', 'x'.repeat(20_000), NOW + 1);
+		assert.equal(long.groups[0].description.length, 10_502);
+	});
+});
+
+describe('saving a link with its title to a session', () => {
+	test('a new session and an added tab keep the title, and fall back to the site', () => {
+		const made = addSession(
+			emptyStore(NOW),
+			{
+				name: 'Reading',
+				urls: ['https://a.example/x', 'https://b.example/y'],
+				titles: ['The title'],
+			},
+			's1',
+			['t1', 't2'],
+			NOW,
+		);
+		assert.deepEqual(
+			made.groups[0].tabs.map((tab) => tab.title),
+			['The title', 'b.example'],
+		);
+		const more = addTabsToSession(
+			made,
+			's1',
+			['https://c.example/z'],
+			['t3'],
+			NOW + 1,
+			['Third'],
+		);
+		assert.equal(more.groups[0].tabs[2].title, 'Third');
 	});
 });

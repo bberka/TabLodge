@@ -50,6 +50,7 @@ import type {
 	Settings,
 } from '../shared/types';
 import {stripTrackingParameters} from '../shared/tracking-parameters';
+import {siteName, webUrl} from '../shared/web-url';
 import {inPrivateWindow} from './private-config';
 import {
 	Brand,
@@ -79,7 +80,6 @@ import {
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import {PROJECT} from './project';
 import {archivedFolderId} from './session-folders';
-import {siteName, webUrl} from './web-url';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {PrivateLockGate} from './private-lock-ui';
@@ -447,6 +447,7 @@ function SidePanel() {
 				icon: ACTION_ICONS.openNew,
 				onSelect: open('new'),
 			},
+			{type: 'separator'},
 			{
 				id: 'copy',
 				label: 'Copy link',
@@ -463,7 +464,7 @@ function SidePanel() {
 						'Could not open the Internet Archive.',
 					),
 			},
-			...extra,
+			...(extra.length > 0 ? [{type: 'separator' as const}, ...extra] : []),
 		];
 	}
 
@@ -627,6 +628,7 @@ function SidePanel() {
 				icon: ExternalLink,
 				onSelect: () => void activate(tab),
 			},
+			{type: 'separator'},
 			{
 				id: 'save',
 				label: 'Save this tab',

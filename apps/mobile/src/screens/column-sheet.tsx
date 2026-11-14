@@ -1,21 +1,49 @@
 import {useState} from 'react';
-import {
-	Alert,
-	type AlertButton,
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-} from 'react-native';
+import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {columnNameProblem} from '../../../extension/src/shared/bookmark-rules';
+import type {Store} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {ColorPicker} from '../color-picker';
 import {columnGlyph} from '../column-icons';
 import {IconPicker} from '../icon-picker';
-import {addColumn, deleteColumn, updateColumn} from '../library';
-import {edit, newId, useRegularLibrary} from '../library-store';
+import {addColumn, deleteColumn, restoreColumn, updateColumn} from '../library';
+import {showSnack} from '../snackbar';
+import {edit, newId, useLibrary} from '../library-store';
 import {useColors} from '../theme';
 import {Button, Field, IconButton} from '../ui';
+
+/**
+Deletes a column at once and offers Undo. Its bookmarks move to another column; with no other column they stay unfiled.
+`onDeleted` runs right after.
+*/
+export function confirmDeleteColumn(
+	store: Store,
+	column: {id: string; name: string},
+	onDeleted: () => void,
+): void {
+	const whole = store.bookmarkColumns.find((entry) => entry.id === column.id);
+	if (!whole) {
+		return;
+	}
+
+	const own = store.bookmarks.filter(
+		(bookmark) => bookmark.columnId === column.id,
+	);
+	const others = store.bookmarkColumns.filter(
+		(entry) => entry.id !== column.id,
+	);
+	const target = others.find((entry) => entry.isDefault) ?? others[0];
+	void edit((current) =>
+		deleteColumn(current, column.id, target?.id ?? '', Date.now()),
+	);
+	onDeleted();
+	showSnack(`Deleted ${column.name}`, {
+		label: 'Undo',
+		run() {
+			void edit((current) => restoreColumn(current, whole, own, Date.now()));
+		},
+	});
+}
 
 type Editing = {id: string; name: string; icon?: string; color?: string};
 
@@ -33,7 +61,7 @@ function ColumnForm({
 	onDone: (id?: string) => void;
 }) {
 	const colors = useColors();
-	const store = useRegularLibrary();
+	const store = useLibrary();
 	const [name, setName] = useState(column?.name ?? '');
 	const [icon, setIcon] = useState(column?.icon ?? '');
 	const [color, setColor] = useState(column?.color ?? '');
@@ -68,54 +96,9 @@ function ColumnForm({
 	};
 
 	const remove = () => {
-		if (!column) {
-			return;
+		if (column) {
+			confirmDeleteColumn(store, column, onDone);
 		}
-
-		const others = store.bookmarkColumns.filter(
-			(entry) => entry.id !== column.id,
-		);
-		const count = store.bookmarks.filter(
-			(bookmark) => bookmark.columnId === column.id,
-		).length;
-		const target = others.find((entry) => entry.isDefault) ?? others[0];
-		const finish = async (moveTo: string | null) => {
-			await edit((current) =>
-				deleteColumn(current, column.id, moveTo, Date.now()),
-			);
-			onDone();
-		};
-
-		const noun = count === 1 ? 'bookmark' : 'bookmarks';
-		const buttons: AlertButton[] = [{text: 'Cancel', style: 'cancel'}];
-		if (count > 0 && target) {
-			buttons.push({
-				text: `Move ${count} to ${target.name}`,
-				onPress: () => void finish(target.id),
-			});
-		}
-
-		if (count > 0 && !target) {
-			// The only column: its bookmarks have nowhere to go but the Unfiled bucket.
-			buttons.push({
-				text: `Keep ${count} unfiled`,
-				onPress: () => void finish(''),
-			});
-		}
-
-		buttons.push({
-			text: count === 0 ? 'Delete' : `Delete ${count} ${noun}`,
-			style: 'destructive',
-			onPress: () => void finish(null),
-		});
-
-		Alert.alert(
-			`Delete ${column.name}?`,
-			count === 0
-				? 'The column is empty.'
-				: `It holds ${count} ${noun}. Move them to another column, or delete them with it.`,
-			buttons,
-		);
 	};
 
 	return (
@@ -198,6 +181,7 @@ export function ColumnSheet({
 }) {
 	return (
 		<BottomSheet
+			scroll={false}
 			visible={visible}
 			label={column ? 'Edit column' : 'New column'}
 			onClose={() => {

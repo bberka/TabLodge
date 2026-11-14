@@ -12,8 +12,8 @@ import {
 	FULL_BACKUP_FORMAT_ID,
 	FULL_BACKUP_VERSION,
 	fileNamePrefix,
-} from './backup-format';
-import {dateStamp} from './export-formats';
+} from '../shared/backup-format';
+import {dateStamp} from '../shared/export-formats';
 
 /**
 What the worker hands over for a full backup: stored values, as they are in `chrome.storage.local`.

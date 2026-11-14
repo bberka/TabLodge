@@ -2,7 +2,7 @@
 // and maps an entered suggestion back to the item it stands for. Pure, so the service worker only has to
 // gather the data and open the result.
 import {highlightSegments} from '../shared/fuzzy';
-import {escapeHtml} from './escape-html';
+import {escapeHtml} from '../shared/escape-html';
 import {
 	buildFinderIndex,
 	flattenSections,

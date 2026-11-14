@@ -3,7 +3,7 @@ import {test} from 'vite-plus/test';
 import {
 	findDuplicateBookmarks,
 	removalIds,
-} from '../src/app/duplicate-bookmarks';
+} from '../src/shared/duplicate-bookmarks';
 
 const bookmark = (
 	id: string,

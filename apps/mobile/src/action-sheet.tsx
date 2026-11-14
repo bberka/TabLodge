@@ -10,6 +10,10 @@ export type SheetAction = {
 	One line under the label, for an action that needs a word of explanation.
 	*/
 	hint?: string;
+	/**
+	Drawn in the danger color, for an action that removes something.
+	*/
+	destructive?: boolean;
 	onPress: () => void;
 };
 
@@ -42,7 +46,6 @@ export function ActionSheet({
 						key={action.label}
 						accessibilityRole="button"
 						accessibilityLabel={action.label}
-						android_ripple={{color: colors.pressed}}
 						style={({pressed}) => [
 							styles.row,
 							{backgroundColor: pressed ? colors.pressed : 'transparent'},
@@ -52,9 +55,18 @@ export function ActionSheet({
 							action.onPress();
 						}}
 					>
-						<Icon name={action.icon} size={24} color={colors.accent} />
+						<Icon
+							name={action.icon}
+							size={24}
+							color={action.destructive ? colors.danger : colors.accent}
+						/>
 						<View style={styles.texts}>
-							<Text style={{color: colors.text, fontSize: 16}}>
+							<Text
+								style={{
+									color: action.destructive ? colors.danger : colors.text,
+									fontSize: 16,
+								}}
+							>
 								{action.label}
 							</Text>
 							{action.hint && (
@@ -77,6 +89,7 @@ const styles = StyleSheet.create({
 		paddingBottom: 6,
 	},
 	row: {
+		borderRadius: 12,
 		minHeight: TARGET + 8,
 		flexDirection: 'row',
 		alignItems: 'center',

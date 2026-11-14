@@ -104,6 +104,8 @@ import type {
 } from '../shared/types';
 import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {displayUrl as simplifiedUrl} from '../shared/url-display';
+import type {ExportData} from '../shared/export-formats';
+import {hostOf, webUrl} from '../shared/web-url';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -120,7 +122,6 @@ import {
 } from './common';
 import {defaultBookmarkColumnId} from './default-column';
 import {BackupDialog, ImportDialog, useShareDialog} from './lazy-dialogs';
-import type {ExportData} from './export-formats';
 import {
 	activateSessionTitle,
 	applyLinkDrag,
@@ -137,7 +138,6 @@ import {
 } from './session-folders';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
-import {hostOf, webUrl} from './web-url';
 import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
@@ -3051,6 +3051,13 @@ const GroupCard = memo(
 				disabled: !canSwitch,
 				onSelect: () => handlers.switchTo(group),
 			},
+			{type: 'separator'},
+			{
+				id: 'edit',
+				label: 'Edit details',
+				icon: ACTION_ICONS.edit,
+				onSelect: () => handlers.editGroup(group),
+			},
 			{
 				type: 'submenu',
 				id: 'update-from-window',
@@ -3081,39 +3088,6 @@ const GroupCard = memo(
 				onSelect: () => handlers.splitSelected(group),
 			},
 			{type: 'separator'},
-			{
-				id: 'share',
-				label: 'Share',
-				icon: Share2,
-				onSelect: () => handlers.share(group),
-			},
-			{
-				id: 'export-session',
-				label: 'Export session',
-				icon: Download,
-				onSelect: () => handlers.exportSession(group),
-			},
-			{type: 'separator'},
-			{
-				id: 'edit',
-				label: 'Edit details',
-				icon: ACTION_ICONS.edit,
-				onSelect: () => handlers.editGroup(group),
-			},
-			{
-				id: 'move-up',
-				label: 'Move up',
-				icon: ArrowUp,
-				disabled: !handlers.canMoveGroup(group.id, 'earlier'),
-				onSelect: () => handlers.moveGroup(group, 'earlier'),
-			},
-			{
-				id: 'move-down',
-				label: 'Move down',
-				icon: ArrowDown,
-				disabled: !handlers.canMoveGroup(group.id, 'later'),
-				onSelect: () => handlers.moveGroup(group, 'later'),
-			},
 			{
 				type: 'submenu',
 				id: 'move-folder',
@@ -3154,6 +3128,33 @@ const GroupCard = memo(
 							: target.name,
 					onSelect: () => handlers.merge(group, target.id),
 				})),
+			},
+			{
+				id: 'move-up',
+				label: 'Move up',
+				icon: ArrowUp,
+				disabled: !handlers.canMoveGroup(group.id, 'earlier'),
+				onSelect: () => handlers.moveGroup(group, 'earlier'),
+			},
+			{
+				id: 'move-down',
+				label: 'Move down',
+				icon: ArrowDown,
+				disabled: !handlers.canMoveGroup(group.id, 'later'),
+				onSelect: () => handlers.moveGroup(group, 'later'),
+			},
+			{type: 'separator'},
+			{
+				id: 'share',
+				label: 'Share',
+				icon: Share2,
+				onSelect: () => handlers.share(group),
+			},
+			{
+				id: 'export-session',
+				label: 'Export session',
+				icon: Download,
+				onSelect: () => handlers.exportSession(group),
 			},
 			{type: 'separator'},
 			{
@@ -3590,12 +3591,6 @@ const SavedTab = memo(
 			},
 			{type: 'separator'},
 			{
-				id: 'edit',
-				label: 'Edit',
-				icon: ACTION_ICONS.edit,
-				onSelect: () => handlers.editTab(group, tab),
-			},
-			{
 				id: 'copy',
 				label: 'Copy link',
 				icon: ACTION_ICONS.copy,
@@ -3607,11 +3602,12 @@ const SavedTab = memo(
 				icon: ACTION_ICONS.archiveCopy,
 				onSelect: () => void openArchivedCopy(tab.url, settings),
 			},
+			{type: 'separator'},
 			{
-				id: 'bookmark',
-				label: 'Bookmark',
-				icon: BookmarkPlus,
-				onSelect: () => handlers.bookmark(tab),
+				id: 'edit',
+				label: 'Edit',
+				icon: ACTION_ICONS.edit,
+				onSelect: () => handlers.editTab(group, tab),
 			},
 			{
 				id: 'move',
@@ -3626,6 +3622,12 @@ const SavedTab = memo(
 							: target.name,
 					onSelect: () => handlers.moveTab(group, tab, target.id),
 				})),
+			},
+			{
+				id: 'bookmark',
+				label: 'Bookmark',
+				icon: BookmarkPlus,
+				onSelect: () => handlers.bookmark(tab),
 			},
 			{type: 'separator'},
 			{

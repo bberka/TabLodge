@@ -14,8 +14,8 @@ import {
 } from '../../extension/src/shared/sync/client';
 import {emptyStore, isStore} from './library';
 import {createLibraryCore} from './library-core';
-import {usePrivateStore} from './private-library';
-import {useView} from './view';
+import {editPrivate, usePrivateStore, wakePrivate} from './private-library';
+import {isPrivateView, useView} from './view';
 import type * as SeedModuleNamespace from './seed';
 import {getPreferences} from './preferences';
 import {readJson, removeKeys, writeJson} from './storage';
@@ -171,13 +171,18 @@ export async function connectServer(
 		await clearLibrary();
 	}
 
-	return syncClient.connect(url, token);
+	const status = await syncClient.connect(url, token);
+	// A private library on this phone starts syncing through the same connection.
+	void wakePrivate();
+	return status;
 }
 
 /**
-Changes the library and sends the change to the server after a short delay.
+Changes the regular library and sends the change to the server after a short delay.
 */
-export async function edit(change: (current: Store) => Store): Promise<void> {
+export async function editRegular(
+	change: (current: Store) => Store,
+): Promise<void> {
 	await libraryLoaded;
 	await mutate(async () => {
 		const next = change(core.store);
@@ -186,6 +191,25 @@ export async function edit(change: (current: Store) => Store): Promise<void> {
 		}
 	});
 	syncClient.localChanged();
+}
+
+export type LibraryName = 'regular' | 'private';
+
+/**
+Changes the library with this name, whichever view is on.
+*/
+export async function editIn(
+	name: LibraryName,
+	change: (current: Store) => Store,
+): Promise<void> {
+	await (name === 'private' ? editPrivate(change) : editRegular(change));
+}
+
+/**
+Changes the library on screen: the regular one, or the private one while that view is on.
+*/
+export async function edit(change: (current: Store) => Store): Promise<void> {
+	await editIn(isPrivateView() ? 'private' : 'regular', change);
 }
 
 export function newId(): string {
@@ -208,6 +232,15 @@ export const useLibrary = (): Store => {
 	const regular = useSyncExternalStore(core.subscribe, () => core.store);
 	const priv = usePrivateStore();
 	return useView() === 'private' ? priv : regular;
+};
+
+/**
+The library with this name, whichever view is on.
+*/
+export const useLibraryOf = (name: LibraryName): Store => {
+	const regular = useSyncExternalStore(core.subscribe, () => core.store);
+	const priv = usePrivateStore();
+	return name === 'private' ? priv : regular;
 };
 
 /**
@@ -247,7 +280,7 @@ export async function setSyncedSetting<Key extends keyof Settings>(
 	key: Key,
 	value: Settings[Key],
 ): Promise<void> {
-	await edit((current) => ({
+	await editRegular((current) => ({
 		...current,
 		settings: {...current.settings, [key]: value},
 		updatedAt: Date.now(),

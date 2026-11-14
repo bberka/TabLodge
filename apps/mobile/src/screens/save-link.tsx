@@ -1,15 +1,38 @@
-import {useState} from 'react';
-import {ScrollView, StyleSheet, Text, View} from 'react-native';
+import {useEffect, useState} from 'react';
+import {
+	ActivityIndicator,
+	ScrollView,
+	StyleSheet,
+	Text,
+	View,
+} from 'react-native';
 import type {Bookmark} from '../../../extension/src/shared/types';
 import {stripTrackingParameters} from '../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../column-choice';
-import {addBookmark, extractUrl, updateBookmark} from '../library';
-import {edit, newId} from '../library-store';
+import {
+	addBookmark,
+	addSession,
+	addTabsToSession,
+	ALL_SESSIONS_ID,
+	extractUrl,
+	hostOf,
+	sessionsIn,
+	updateBookmark,
+} from '../library';
+import {phoneStamp} from '../device';
+import {editIn, type LibraryName, newId, useLibraryOf} from '../library-store';
+import {LibraryChoice} from '../library-choice';
+import {useView} from '../view';
 import {cleanPageTitle} from '../links';
-import {getPreferences, setPreferences} from '../preferences';
+import {useLinkPreview} from '../link-preview';
+import {getPreferences, setPreferences, usePreferences} from '../preferences';
+import {SiteIcon} from '../site-icon';
 import {useLinkSettings} from '../use-link-settings';
 import {useColors} from '../theme';
-import {Button, Field, IconButton} from '../ui';
+import {Button, Chips, Field, IconButton, Segmented} from '../ui';
+
+// The session selector's first entry; choosing it makes a new session.
+const NEW_SESSION = '__new-session__';
 
 /**
 The body of the save drawer. Opened by Add link, or by the Android share sheet with the shared text filled in.
@@ -33,15 +56,41 @@ export function SaveLinkForm({
 }) {
 	const colors = useColors();
 	const settings = useLinkSettings();
-	const choice = useColumnChoice(editing?.columnId);
+	const view = useView();
+	// Where it is saved: the library on screen to begin with, and a link being edited stays in it.
+	const [library, setLibrary] = useState<LibraryName>(
+		view === 'private' ? 'private' : 'regular',
+	);
+	const choice = useColumnChoice(editing?.columnId, library);
+	const store = useLibraryOf(library);
+	const sessions = sessionsIn(store, ALL_SESSIONS_ID, settings.sessionSort);
+	// Where the link goes, as in the extension's Add bookmark dialog: a bookmark column or a session.
+	const [destination, setDestination] = useState<'bookmark' | 'session'>(
+		'bookmark',
+	);
+	const [sessionPick, setSessionPick] = useState(NEW_SESSION);
+	const [sessionName, setSessionName] = useState('');
+	const toSession = destination === 'session' && !editing;
+	const sessionId = sessions.some((session) => session.id === sessionPick)
+		? sessionPick
+		: NEW_SESSION;
 	const [text, setText] = useState(
 		() => extractUrl(initialText) ?? initialText,
 	);
 	const [title, setTitle] = useState(initialTitle);
+	// Once the person types a title, the page's own never replaces it.
+	const [titleEdited, setTitleEdited] = useState(initialTitle !== '');
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
 
 	const url = extractUrl(text);
+	const {savePreview} = usePreferences();
+	const {loading, preview} = useLinkPreview(url, savePreview && !editing);
+	useEffect(() => {
+		if (preview?.title && !titleEdited) {
+			setTitle(preview.title);
+		}
+	}, [preview?.title, titleEdited]);
 
 	const save = async () => {
 		if (!url) {
@@ -51,13 +100,46 @@ export function SaveLinkForm({
 		setSaving(true);
 		setProblem('');
 		try {
-			const {id: target, name} = await choice.resolve();
 			const saved = {
 				url: getPreferences().cleanOnSave ? stripTrackingParameters(url) : url,
 				title: cleanPageTitle(title, settings.cleanTitles),
 			};
+			if (toSession) {
+				const label =
+					sessionId === NEW_SESSION
+						? sessionName.trim() || saved.title || hostOf(saved.url)
+						: (sessions.find((session) => session.id === sessionId)?.name ??
+							'the session');
+				await editIn(library, (current) =>
+					sessionId === NEW_SESSION
+						? addSession(
+								current,
+								{
+									name: label,
+									urls: [saved.url],
+									titles: [saved.title],
+									device: phoneStamp(),
+								},
+								newId(),
+								[newId()],
+								Date.now(),
+							)
+						: addTabsToSession(
+								current,
+								sessionId,
+								[saved.url],
+								[newId()],
+								Date.now(),
+								[saved.title],
+							),
+				);
+				onDone(label);
+				return;
+			}
 
-			await edit((current) =>
+			const {id: target, name} = await choice.resolve();
+
+			await editIn(library, (current) =>
 				editing
 					? updateBookmark(
 							current,
@@ -104,6 +186,22 @@ export function SaveLinkForm({
 				contentContainerStyle={styles.body}
 				keyboardShouldPersistTaps="handled"
 			>
+				{!editing && <LibraryChoice value={library} onChange={setLibrary} />}
+				{!editing && (
+					<Segmented
+						label="Save to"
+						items={[
+							{
+								id: 'bookmark',
+								name: 'Bookmark column',
+								icon: 'bookmark-outline',
+							},
+							{id: 'session', name: 'Session', icon: 'albums-outline'},
+						]}
+						selected={destination}
+						onSelect={setDestination}
+					/>
+				)}
 				<Field
 					label="Link"
 					icon="link-outline"
@@ -121,8 +219,67 @@ export function SaveLinkForm({
 						setText('');
 					}}
 				/>
-				<Field label="Title (optional)" value={title} onChangeText={setTitle} />
-				<ColumnChoice choice={choice} />
+				{savePreview && !editing && url && (
+					<View style={styles.preview}>
+						<SiteIcon always host={hostOf(url)} size={40} />
+						<View style={styles.previewText}>
+							<Text
+								numberOfLines={2}
+								style={{color: colors.text, fontWeight: '600'}}
+							>
+								{preview?.title ?? hostOf(url)}
+							</Text>
+							{preview?.description && (
+								<Text numberOfLines={2} style={{color: colors.muted}}>
+									{preview.description}
+								</Text>
+							)}
+						</View>
+						{loading && <ActivityIndicator color={colors.muted} />}
+					</View>
+				)}
+				<Field
+					label="Title (optional)"
+					value={title}
+					onChangeText={(next) => {
+						setTitleEdited(true);
+						setTitle(next);
+					}}
+				/>
+				{toSession ? (
+					<View style={styles.sessionChoice}>
+						<Text style={{color: colors.muted}}>Session</Text>
+						<Chips
+							items={[
+								{
+									id: NEW_SESSION,
+									name: 'New session',
+									glyph: 'add' as const,
+									tint: colors.accent,
+								},
+								...sessions.map((session) => ({
+									id: session.id,
+									name: session.name,
+									count: session.tabs.length,
+									glyph: 'albums-outline' as const,
+								})),
+							]}
+							selected={sessionId}
+							onSelect={setSessionPick}
+						/>
+						{sessionId === NEW_SESSION && (
+							<Field
+								label="Session name"
+								icon="albums-outline"
+								placeholder={title || (url ? hostOf(url) : 'Saved links')}
+								value={sessionName}
+								onChangeText={setSessionName}
+							/>
+						)}
+					</View>
+				) : (
+					<ColumnChoice choice={choice} />
+				)}
 				{problem !== '' && (
 					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
 						{problem}
@@ -131,7 +288,7 @@ export function SaveLinkForm({
 				<Button
 					label="Save"
 					icon="checkmark"
-					disabled={!url || choice.incomplete}
+					disabled={!url || (!toSession && choice.incomplete)}
 					loading={saving}
 					onPress={() => void save()}
 				/>
@@ -152,6 +309,9 @@ const styles = StyleSheet.create({
 	},
 	title: {fontSize: 20, fontWeight: '700'},
 	scroll: {flexGrow: 0},
+	sessionChoice: {gap: 8},
+	preview: {flexDirection: 'row', alignItems: 'center', gap: 12},
+	previewText: {flex: 1, gap: 2},
 	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},
 });

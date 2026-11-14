@@ -42,11 +42,14 @@ export function SelectRow<T extends string>({
 			<ValueRow
 				row={row}
 				value={current?.name ?? ''}
+				icon={current?.icon}
+				tint={current?.color}
 				onPress={() => {
 					setOpen(true);
 				}}
 			/>
 			<BottomSheet
+				scroll={false}
 				visible={open}
 				label={row.label}
 				onClose={() => {
@@ -74,10 +77,17 @@ export function ValueRow({
 	row,
 	value,
 	swatch,
+	icon,
+	tint,
 	onPress,
 }: {
 	row: Row;
 	value: string;
+	/**
+	An icon drawn before the value, in `tint` when there is one.
+	*/
+	icon?: IconName;
+	tint?: string;
 	/**
 	A color dot drawn before the value.
 	*/
@@ -95,8 +105,10 @@ export function ValueRow({
 			accessibilityRole="button"
 			accessibilityLabel={`${row.label}, ${value}`}
 			accessibilityHint={row.hint}
-			android_ripple={{color: colors.pressed}}
-			style={styles.row}
+			style={({pressed}) => [
+				styles.row,
+				pressed && {backgroundColor: colors.pressed},
+			]}
 			onPress={onPress}
 		>
 			<Text style={[styles.label, {color: colors.text}]}>{row.label}</Text>
@@ -108,7 +120,11 @@ export function ValueRow({
 					]}
 				/>
 			)}
-			<Text numberOfLines={1} style={[styles.value, {color: colors.muted}]}>
+			{icon && <Icon name={icon} size={18} color={tint ?? colors.muted} />}
+			<Text
+				numberOfLines={1}
+				style={[styles.value, {color: tint ?? colors.muted}]}
+			>
 				{value}
 			</Text>
 			<Icon name="chevron-forward" size={18} color={colors.muted} />
@@ -134,7 +150,7 @@ export function ChoiceList<T extends string>({
 }) {
 	const colors = useColors();
 	return (
-		<View>
+		<View style={styles.fill}>
 			<Text
 				accessibilityRole="header"
 				style={[styles.title, {color: colors.text}]}
@@ -155,8 +171,10 @@ export function ChoiceList<T extends string>({
 							accessibilityState={{checked: on}}
 							accessibilityLabel={choice.name}
 							accessibilityHint={choice.hint}
-							android_ripple={{color: colors.pressed}}
-							style={styles.choice}
+							style={({pressed}) => [
+								styles.choice,
+								pressed && {backgroundColor: colors.pressed},
+							]}
 							onPress={() => {
 								onPick(choice.id);
 							}}
@@ -171,7 +189,7 @@ export function ChoiceList<T extends string>({
 							<View style={styles.choiceText}>
 								<Text
 									style={{
-										color: colors.text,
+										color: choice.color ?? colors.text,
 										fontSize: 16,
 										fontWeight: on ? '700' : '400',
 									}}
@@ -194,6 +212,7 @@ export function ChoiceList<T extends string>({
 
 const styles = StyleSheet.create({
 	row: {
+		borderRadius: 12,
 		minHeight: TARGET,
 		flexDirection: 'row',
 		alignItems: 'center',
@@ -209,8 +228,9 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		paddingBottom: 6,
 	},
-	list: {flexGrow: 0},
+	list: {flexGrow: 0, flexShrink: 1},
 	choice: {
+		borderRadius: 12,
 		minHeight: TARGET + 8,
 		flexDirection: 'row',
 		alignItems: 'center',
@@ -219,4 +239,5 @@ const styles = StyleSheet.create({
 		paddingVertical: 8,
 	},
 	choiceText: {flex: 1},
+	fill: {flexShrink: 1},
 });

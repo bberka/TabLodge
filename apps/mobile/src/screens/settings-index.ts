@@ -10,9 +10,27 @@ export const ROWS = {
 		label: 'Floating tab bar',
 		hint: 'A rounded bar above the content',
 	},
+	barSize: {
+		label: 'Floating bar size',
+		hint: 'Full, small while scrolling, or always small',
+	},
+	openWith: {
+		label: 'Open links in',
+		hint: 'The default browser, an in-app tab, or one browser',
+	},
+	openApp: {label: 'Browser', hint: 'The app that opens your links'},
+	privateOpenWith: {
+		label: 'Private library links',
+		hint: 'Open them somewhere other than your other links',
+	},
+	privateOpenApp: {label: 'Private browser', hint: 'The app for private links'},
 	syncSettings: {
 		label: 'Sync settings',
 		hint: 'Look and gestures follow your other devices',
+	},
+	syncPrivate: {
+		label: 'Sync the private library',
+		hint: 'Off, it stays on this phone and never reaches your server',
 	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
@@ -36,10 +54,11 @@ export const ROWS = {
 		hint: 'Show all tabs without opening a card',
 	},
 	showPrivateButton: {
-		label: 'Lock button on the main screens',
+		label: 'Private library button',
 		hint: 'Off keeps a private library out of sight',
 	},
 	sessionTap: {label: 'Tap a session'},
+	sessionMain: {label: 'Main button on a session'},
 	sessionSwipeRight: {label: 'Swipe a session right'},
 	sessionSwipeLeft: {label: 'Swipe a session left'},
 	tap: {label: 'Tap a bookmark'},
@@ -51,7 +70,11 @@ export const ROWS = {
 	},
 	siteIcons: {
 		label: 'Site icons',
-		hint: 'Through your server, or from the site itself',
+		hint: 'Through your server by default, or from the sites too',
+	},
+	savePreview: {
+		label: 'Preview links when saving',
+		hint: 'Fetches the title and icon of the page you save',
 	},
 	cleanTitles: {
 		label: 'Clean page titles',
@@ -102,7 +125,7 @@ export const SECTIONS = {
 			'light',
 			'night',
 		],
-		rows: [ROWS.style, ROWS.theme, ROWS.accent, ROWS.floatingBar],
+		rows: [ROWS.style, ROWS.theme, ROWS.accent, ROWS.floatingBar, ROWS.barSize],
 	},
 	syncApp: {
 		title: 'Sync settings',
@@ -130,6 +153,7 @@ export const SECTIONS = {
 		rows: [
 			ROWS.sortSessions,
 			ROWS.sessionTap,
+			ROWS.sessionMain,
 			ROWS.sessionSwipeRight,
 			ROWS.sessionSwipeLeft,
 			ROWS.compactSessions,
@@ -158,6 +182,7 @@ export const SECTIONS = {
 			ROWS.showUnder,
 			ROWS.spacing,
 			ROWS.siteIcons,
+			ROWS.savePreview,
 		],
 	},
 	extension: {
@@ -172,6 +197,45 @@ export const SECTIONS = {
 			ROWS.cleanOnSave,
 		],
 	},
+	openLinks: {
+		title: 'Open links',
+		aliases: [
+			'browser',
+			'chrome',
+			'firefox',
+			'brave',
+			'custom tab',
+			'in app',
+			'default browser',
+			'incognito',
+			'private mode',
+			'private browser',
+		],
+		rows: [
+			ROWS.openWith,
+			ROWS.openApp,
+			ROWS.privateOpenWith,
+			ROWS.privateOpenApp,
+		],
+	},
+	data: {
+		title: 'Import and export',
+		aliases: [
+			'import',
+			'export',
+			'backup',
+			'file',
+			'paste',
+			'json',
+			'csv',
+			'html',
+			'markdown',
+			'onetab',
+			'bookmarks file',
+			'restore',
+		],
+		rows: [],
+	},
 	private: {
 		title: 'Private library',
 		aliases: [
@@ -181,6 +245,9 @@ export const SECTIONS = {
 			'password',
 			'forget',
 			'lock',
+			'lock now',
+			'eye',
+			'glasses',
 		],
 		rows: [ROWS.showPrivateButton],
 	},
@@ -194,7 +261,13 @@ export const SECTIONS = {
 			'disconnect',
 			'sync now',
 			'offline',
+			'private',
 		],
+		rows: [ROWS.syncPrivate],
+	},
+	restore: {
+		title: 'Restore defaults',
+		aliases: ['reset', 'default', 'preferences', 'settings'],
 		rows: [],
 	},
 	development: {

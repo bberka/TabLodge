@@ -51,7 +51,8 @@
 					"disableIOS": true,
 					"androidIntentFilters": ["text/*"]
 				}
-			]
+			],
+			"expo-sharing"
 		]
 	}
 }

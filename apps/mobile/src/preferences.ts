@@ -8,7 +8,35 @@ import {isAccent} from '../../extension/src/shared/accent-colors';
 import {cleanDeviceName} from '../../extension/src/shared/device';
 import {readJson, writeJson} from './storage';
 
-export type Look = 'material' | 'ios';
+const LOOKS = ['auto', 'material', 'oneui', 'ios'] as const;
+export type Look = (typeof LOOKS)[number];
+const isLook = (value: unknown): value is Look => LOOKS.includes(value as Look);
+
+/**
+Whether this is a Samsung phone, which has its own One UI look.
+*/
+const samsung = (): boolean =>
+	Platform.OS === 'android' &&
+	(
+		Platform.constants as {Manufacturer?: string}
+	).Manufacturer?.toLowerCase() === 'samsung';
+
+/**
+The look to draw: the one chosen, or for Automatic the phone's own: iOS on an iPhone, One UI on a Samsung phone, and
+Material on any other Android phone.
+*/
+export const resolveLook = (look: Look): 'material' | 'oneui' | 'ios' => {
+	if (look !== 'auto') {
+		return look;
+	}
+
+	if (Platform.OS === 'ios') {
+		return 'ios';
+	}
+
+	return samsung() ? 'oneui' : 'material';
+};
+
 export type Theme = 'system' | 'light' | 'dark';
 
 const THEMES = new Set<unknown>(['system', 'light', 'dark']);
@@ -49,11 +77,11 @@ export type SessionAction =
 export const SESSION_ACTIONS: readonly SessionAction[] = [
 	'none',
 	'open',
-	'color',
 	'rename',
+	'color',
 	'move',
-	'archive',
 	'share',
+	'archive',
 	'delete',
 ];
 
@@ -66,6 +94,11 @@ type Preferences = {
 	A rounded bar that floats above the content, instead of one fixed to the bottom edge.
 	*/
 	floatingBar: boolean;
+	/**
+	With the floating bar: `full` spans the screen with labels, `compact` is a small pill of icons, and `scroll` is full
+	until the list is scrolled down.
+	*/
+	barSize: BarSize;
 	/**
 	The column the last link was saved to, offered first next time.
 	*/
@@ -89,6 +122,10 @@ type Preferences = {
 	*/
 	sessionTap: 'expand' | 'open';
 	/**
+	The button at the foot of an open session card. Open all by default.
+	*/
+	sessionMain: SessionAction;
+	/**
 	Remove tracking parameters (utm_source and the like) from a link when it is saved.
 	*/
 	cleanOnSave: boolean;
@@ -98,11 +135,20 @@ type Preferences = {
 	*/
 	syncSettings: boolean;
 	/**
-	Show each site's own icon instead of a letter tile. Icons come from the sync server when one is connected,
-	otherwise straight from the site. Off by default, because either way the site or the server is asked for each
-	address that is shown. Stays on this phone.
+	Keep the private library in step with the server. Off, it stays on this phone only. This choice stays on this phone.
 	*/
-	siteIcons: boolean;
+	syncPrivate: boolean;
+	/**
+	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
+	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
+	itself when there is no server; `off` shows letter tiles. Stays on this phone.
+	*/
+	siteIcons: SiteIcons;
+	/**
+	Look the page up while saving a link, to show its icon and fill in its title. Through the sync server when one is
+	connected, otherwise from the site itself. On by default, and stays on this phone.
+	*/
+	savePreview: boolean;
 	/**
 	The accent color: `system` (the phone's own, the default), `default` (TabLodge's), a preset id, or `#rrggbb`. Syncs with
 	the rest of the app's look.
@@ -113,10 +159,24 @@ type Preferences = {
 	*/
 	theme: Theme;
 	/**
-	Show the lock button that opens the private library on Bookmarks and Sessions. Off by default, because a button on the
-	main screens tells anyone holding the phone that a private library exists. Stays on this phone.
+	Show the button that opens the private library on Bookmarks and Sessions, while a server is connected. On by default,
+	though it tells anyone holding the phone that a private library exists. Stays on this phone.
 	*/
 	showPrivateButton: boolean;
+	/**
+	Where a link opens: the default browser, an in-app tab, or the browser in `openApp`. Stays on this phone.
+	*/
+	openWith: OpenWith;
+	/**
+	The package name of the browser for `openWith` `app`.
+	*/
+	openApp: string;
+	/**
+	The same for links from the private library, or `same` to follow the setting above. Chrome ignores a request for a
+	private tab from another app, so a private browser is chosen here as an app instead.
+	*/
+	privateOpenWith: OpenWith | 'same';
+	privateOpenApp: string;
 	/**
 	Session cards without the tab icon strip and the saved-on line, and with tighter tab rows. Syncs with the rest of the
 	app's look.
@@ -135,8 +195,9 @@ type Preferences = {
 const KEY = 'tablodge.prefs';
 
 const defaults: Preferences = {
-	look: Platform.OS === 'ios' ? 'ios' : 'material',
-	floatingBar: false,
+	look: 'auto',
+	floatingBar: true,
+	barSize: 'scroll',
 	lastColumnId: '',
 	tapAction: 'open',
 	swipeRight: 'delete',
@@ -144,16 +205,50 @@ const defaults: Preferences = {
 	sessionSwipeRight: 'archive',
 	sessionSwipeLeft: 'delete',
 	sessionTap: 'expand',
+	sessionMain: 'open',
 	cleanOnSave: true,
 	syncSettings: true,
-	siteIcons: false,
+	syncPrivate: true,
+	siteIcons: 'server',
+	savePreview: true,
 	accent: 'system',
 	theme: 'system',
-	showPrivateButton: false,
+	showPrivateButton: true,
+	openWith: 'system',
+	openApp: '',
+	privateOpenWith: 'same',
+	privateOpenApp: '',
 	compactSessions: false,
 	showSavedOn: true,
 	deviceName: '',
 };
+
+const SITE_ICONS = ['off', 'server', 'direct'] as const;
+export type SiteIcons = (typeof SITE_ICONS)[number];
+
+/**
+An earlier version kept this as a switch: on asked the server or the site, off showed none. On keeps its meaning;
+off, the default, becomes the server-only choice.
+*/
+const siteIconsChoice = (value: unknown): SiteIcons => {
+	if (value === true) {
+		return 'direct';
+	}
+
+	return SITE_ICONS.includes(value as SiteIcons)
+		? (value as SiteIcons)
+		: defaults.siteIcons;
+};
+
+const OPEN_WITH = ['system', 'inapp', 'app'] as const;
+export type OpenWith = (typeof OPEN_WITH)[number];
+const isOpenWith = (value: unknown): value is OpenWith =>
+	OPEN_WITH.includes(value as OpenWith);
+
+const BAR_SIZES = ['full', 'scroll', 'compact'] as const;
+export type BarSize = (typeof BAR_SIZES)[number];
+const isBarSize = (value: unknown): value is BarSize =>
+	BAR_SIZES.includes(value as BarSize);
 
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
 	ROW_ACTIONS.find((action) => action === value) ?? fallback;
@@ -176,6 +271,7 @@ export async function loadPreferences(): Promise<void> {
 	const {
 		look,
 		floatingBar,
+		barSize,
 		lastColumnId,
 		tapAction,
 		swipeRight,
@@ -183,20 +279,28 @@ export async function loadPreferences(): Promise<void> {
 		sessionSwipeRight,
 		sessionSwipeLeft,
 		sessionTap,
+		sessionMain,
 		cleanOnSave,
 		syncSettings,
+		syncPrivate,
 		siteIcons,
+		savePreview,
 		deviceName,
 		accent,
 		theme,
 		showPrivateButton,
+		openWith,
+		openApp,
+		privateOpenWith,
+		privateOpenApp,
 		compactSessions,
 		showSavedOn,
 	} = saved as Partial<Preferences>;
 	current = {
-		look: look === 'ios' || look === 'material' ? look : defaults.look,
+		look: isLook(look) ? look : defaults.look,
 		floatingBar:
 			typeof floatingBar === 'boolean' ? floatingBar : defaults.floatingBar,
+		barSize: isBarSize(barSize) ? barSize : defaults.barSize,
 		lastColumnId: typeof lastColumnId === 'string' ? lastColumnId : '',
 		tapAction: tapAction === 'edit' ? 'edit' : 'open',
 		swipeRight: rowAction(swipeRight, defaults.swipeRight),
@@ -210,14 +314,29 @@ export async function loadPreferences(): Promise<void> {
 			defaults.sessionSwipeLeft,
 		),
 		sessionTap: sessionTap === 'open' ? 'open' : 'expand',
+		sessionMain: sessionAction(sessionMain, defaults.sessionMain),
 		cleanOnSave:
 			typeof cleanOnSave === 'boolean' ? cleanOnSave : defaults.cleanOnSave,
 		syncSettings:
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
-		siteIcons: siteIcons === true,
+		syncPrivate:
+			typeof syncPrivate === 'boolean' ? syncPrivate : defaults.syncPrivate,
+		siteIcons: siteIconsChoice(siteIcons),
+		savePreview:
+			typeof savePreview === 'boolean' ? savePreview : defaults.savePreview,
 		accent: isAccent(accent) ? accent : defaults.accent,
 		theme: isTheme(theme) ? theme : defaults.theme,
-		showPrivateButton: showPrivateButton === true,
+		showPrivateButton:
+			typeof showPrivateButton === 'boolean'
+				? showPrivateButton
+				: defaults.showPrivateButton,
+		openWith: isOpenWith(openWith) ? openWith : defaults.openWith,
+		openApp: typeof openApp === 'string' ? openApp : '',
+		privateOpenWith:
+			privateOpenWith === 'same' || isOpenWith(privateOpenWith)
+				? privateOpenWith
+				: defaults.privateOpenWith,
+		privateOpenApp: typeof privateOpenApp === 'string' ? privateOpenApp : '',
 		compactSessions: compactSessions === true,
 		showSavedOn: showSavedOn !== false,
 		deviceName: cleanDeviceName(deviceName),
@@ -261,6 +380,19 @@ export function setPreferences(
 	}
 }
 
+/**
+Puts every preference back to its default. This phone's name, the column last saved to, and whether settings sync stay.
+*/
+export function resetPreferences(): void {
+	setPreferences({
+		...defaults,
+		deviceName: current.deviceName,
+		lastColumnId: current.lastColumnId,
+		syncSettings: current.syncSettings,
+		syncPrivate: current.syncPrivate,
+	});
+}
+
 export const getPreferences = (): Preferences => current;
 
 export const usePreferences = (): Preferences =>
@@ -277,12 +409,14 @@ export const usePreferences = (): Preferences =>
 const SYNCED_KEYS = [
 	'look',
 	'floatingBar',
+	'barSize',
 	'tapAction',
 	'swipeRight',
 	'swipeLeft',
 	'sessionSwipeRight',
 	'sessionSwipeLeft',
 	'sessionTap',
+	'sessionMain',
 	'cleanOnSave',
 	'accent',
 	'theme',
@@ -310,12 +444,16 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 
 	const raw = value as Record<string, unknown>;
 	const found: Partial<Preferences> = {};
-	if (raw.look === 'ios' || raw.look === 'material') {
+	if (isLook(raw.look)) {
 		found.look = raw.look;
 	}
 
 	if (typeof raw.floatingBar === 'boolean') {
 		found.floatingBar = raw.floatingBar;
+	}
+
+	if (isBarSize(raw.barSize)) {
+		found.barSize = raw.barSize;
 	}
 
 	if (raw.tapAction === 'open' || raw.tapAction === 'edit') {

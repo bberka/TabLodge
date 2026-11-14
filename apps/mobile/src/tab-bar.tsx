@@ -1,15 +1,18 @@
 import {useEffect, useRef, useState} from 'react';
 import {
 	Animated,
+	Easing,
 	Keyboard,
 	Pressable,
 	StyleSheet,
 	Text,
-	View,
+	useWindowDimensions,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {usePreferences} from './preferences';
-import {BAR_HEIGHT, BAR_MARGIN, useColors} from './theme';
+import {motion, spring} from './motion';
+import {resolveLook, usePreferences} from './preferences';
+import {resetScroll, useScrolledDown} from './scroll-state';
+import {BAR_HEIGHT, useColors, useShape} from './theme';
 import {Icon, type IconName} from './ui';
 
 export type BarTab<T extends string> = {
@@ -19,23 +22,31 @@ export type BarTab<T extends string> = {
 	active: IconName;
 };
 
-const MATERIAL_HEIGHT = 80;
-const IOS_HEIGHT = 49;
+// The docked bar is the same in both looks: tall enough that the icon and its name sit clear of the bar's edges inside
+// the highlighted pill, which iOS's own 49 point bar was too short for.
+const DOCKED_HEIGHT = 76;
+const PILL_HEIGHT = 56;
+const COMPACT_HEIGHT = 48;
+const COMPACT_TAB_WIDTH = 56;
+const BAR_PADDING = 6;
 
 /**
 How tall the bar is, including the space below it, so a screen can leave that much room at its bottom.
 */
 export function useBarSpace(): number {
 	const insets = useSafeAreaInsets();
-	const {look, floatingBar} = usePreferences();
-	const docked = look === 'ios' ? IOS_HEIGHT : MATERIAL_HEIGHT;
-	return (floatingBar ? BAR_HEIGHT + BAR_MARGIN * 2 : docked) + insets.bottom;
+	const {floatingBar, barSize} = usePreferences();
+	const {barGap} = useShape();
+	// Small while scrolling floats over the content without changing the room the screens leave, so lists do not jump.
+	const floating =
+		(barSize === 'compact' ? COMPACT_HEIGHT : BAR_HEIGHT) + barGap * 2;
+	return (floatingBar ? floating : DOCKED_HEIGHT) + insets.bottom;
 }
 
 /**
 The bottom tab bar, in one of three forms: a Material navigation bar, an iOS tab bar, or a rounded bar that floats
 above the content (either look). The selected tab animates, and the bar slides away while the keyboard is open or
-when `hidden` is set.
+when `hidden` is set. A floating bar grows and shrinks between full width and a small icon pill with one animation.
 */
 export function TabBar<T extends string>({
 	tabs,
@@ -50,36 +61,49 @@ export function TabBar<T extends string>({
 }) {
 	const colors = useColors();
 	const insets = useSafeAreaInsets();
-	const {look, floatingBar} = usePreferences();
+	const {width: screenWidth} = useWindowDimensions();
+	const {look: chosen, floatingBar, barSize} = usePreferences();
+	const look = resolveLook(chosen);
+	const {barGap} = useShape();
+	const scrolledDown = useScrolledDown();
+	const small =
+		floatingBar &&
+		(barSize === 'compact' || (barSize === 'scroll' && scrolledDown));
 	const ios = look === 'ios';
+	const count = tabs.length;
 	const index = Math.max(
 		0,
 		tabs.findIndex((tab) => tab.id === selected),
 	);
-	const [width, setWidth] = useState(0);
 	const [keyboard, setKeyboard] = useState(false);
-	const position = useRef(new Animated.Value(index)).current;
+	// 0 is the full bar, 1 the small one. Width and height are layout, so this one runs on the JS thread.
+	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
+	// The highlight slides on the JS thread too, because its offset depends on the animated tab width.
+	const slide = useRef(new Animated.Value(index)).current;
 	const hide = useRef(new Animated.Value(0)).current;
 	const pops = useRef(
 		tabs.map((_, i) => new Animated.Value(i === index ? 1 : 0)),
 	).current;
 
 	useEffect(() => {
-		Animated.spring(position, {
-			toValue: index,
-			useNativeDriver: true,
-			friction: 9,
-			tension: 90,
+		resetScroll();
+	}, [selected]);
+
+	useEffect(() => {
+		Animated.timing(shrink, {
+			toValue: small ? 1 : 0,
+			duration: motion(260),
+			easing: Easing.out(Easing.cubic),
+			useNativeDriver: false,
 		}).start();
+	}, [small, shrink]);
+
+	useEffect(() => {
+		spring(slide, index, {friction: 9, tension: 90, native: false}).start();
 		for (const [i, pop] of pops.entries()) {
-			Animated.spring(pop, {
-				toValue: i === index ? 1 : 0,
-				useNativeDriver: true,
-				friction: 6,
-				tension: 160,
-			}).start();
+			spring(pop, i === index ? 1 : 0, {friction: 6, tension: 160}).start();
 		}
-	}, [index, position, pops]);
+	}, [index, slide, pops]);
 
 	useEffect(() => {
 		const show = Keyboard.addListener('keyboardDidShow', () => {
@@ -98,24 +122,30 @@ export function TabBar<T extends string>({
 	useEffect(() => {
 		Animated.timing(hide, {
 			toValue: away ? 1 : 0,
-			duration: 180,
+			duration: motion(180),
 			useNativeDriver: true,
 		}).start();
 	}, [away, hide]);
 
-	const barHeight = floatingBar
-		? BAR_HEIGHT
-		: (ios ? IOS_HEIGHT : MATERIAL_HEIGHT) + insets.bottom;
-	const travel = barHeight + (floatingBar ? BAR_MARGIN * 2 + insets.bottom : 0);
-	const inner = Math.max(width - 12, 0);
-	const tabWidth = inner / tabs.length;
+	const dockedHeight = DOCKED_HEIGHT + insets.bottom;
+	const travel = floatingBar
+		? BAR_HEIGHT + barGap * 2 + insets.bottom
+		: dockedHeight;
+	const fullWidth = screenWidth - barGap * 2;
+	const smallWidth = COMPACT_TAB_WIDTH * count + BAR_PADDING * 2;
+	const tabWidth = shrink.interpolate({
+		inputRange: [0, 1],
+		outputRange: [(fullWidth - BAR_PADDING * 2) / count, COMPACT_TAB_WIDTH],
+	});
+	const labelHeight = ios ? 14 : 16;
+	const gone = {inputRange: [0, 1], outputRange: [1, 0]};
 
 	return (
 		<Animated.View
 			pointerEvents={away ? 'none' : 'box-none'}
 			style={[
 				floatingBar ? styles.floating : styles.docked,
-				floatingBar && {bottom: BAR_MARGIN + insets.bottom},
+				floatingBar && {bottom: barGap + insets.bottom},
 				{
 					opacity: hide.interpolate({
 						inputRange: [0, 1],
@@ -132,41 +162,43 @@ export function TabBar<T extends string>({
 				},
 			]}
 		>
-			<View
+			<Animated.View
 				accessibilityRole="tablist"
 				style={[
 					styles.bar,
-					{
-						height: barHeight,
-						backgroundColor: colors.surface,
-						borderColor: colors.border,
-					},
+					{backgroundColor: colors.surface, borderColor: colors.border},
 					floatingBar
-						? styles.floatingBar
+						? [
+								styles.floatingBar,
+								{
+									width: shrink.interpolate({
+										inputRange: [0, 1],
+										outputRange: [fullWidth, smallWidth],
+									}),
+									height: shrink.interpolate({
+										inputRange: [0, 1],
+										outputRange: [BAR_HEIGHT, COMPACT_HEIGHT],
+									}),
+								},
+							]
 						: {
+								height: dockedHeight,
 								borderTopWidth: StyleSheet.hairlineWidth,
 								paddingBottom: insets.bottom,
 							},
 				]}
-				onLayout={(event) => {
-					setWidth(event.nativeEvent.layout.width);
-				}}
 			>
-				{floatingBar && tabWidth > 0 && (
+				{floatingBar && (
 					<Animated.View
 						style={[
 							styles.slider,
 							{
 								width: tabWidth,
 								backgroundColor: colors.accentSoft,
-								transform: [
-									{
-										translateX: position.interpolate({
-											inputRange: tabs.map((_, i) => i),
-											outputRange: tabs.map((_, i) => i * tabWidth),
-										}),
-									},
-								],
+								left: Animated.add(
+									BAR_PADDING,
+									Animated.multiply(slide, tabWidth),
+								),
 							},
 						]}
 					/>
@@ -186,7 +218,7 @@ export function TabBar<T extends string>({
 								onSelect(tab.id);
 							}}
 						>
-							{!floatingBar && !ios && (
+							{!floatingBar && (
 								<Animated.View
 									style={[
 										styles.indicator,
@@ -223,53 +255,72 @@ export function TabBar<T extends string>({
 									size={ios ? 25 : 24}
 								/>
 							</Animated.View>
-							<Text
-								style={{
-									color: ink,
-									fontWeight: on && !ios ? '700' : '500',
-									fontSize: ios ? 10 : 12,
-								}}
+							<Animated.View
+								style={
+									floatingBar
+										? {
+												overflow: 'hidden',
+												opacity: shrink.interpolate(gone),
+												height: shrink.interpolate({
+													inputRange: [0, 1],
+													outputRange: [labelHeight, 0],
+												}),
+												marginTop: shrink.interpolate({
+													inputRange: [0, 1],
+													outputRange: [2, 0],
+												}),
+											}
+										: styles.label
+								}
 							>
-								{tab.label}
-							</Text>
+								<Text
+									numberOfLines={1}
+									style={{
+										color: ink,
+										fontWeight: on && !ios ? '700' : '500',
+										fontSize: ios ? 11 : 12,
+									}}
+								>
+									{tab.label}
+								</Text>
+							</Animated.View>
 						</Pressable>
 					);
 				})}
-			</View>
+			</Animated.View>
 		</Animated.View>
 	);
 }
 
 const styles = StyleSheet.create({
 	docked: {position: 'absolute', left: 0, right: 0, bottom: 0},
-	floating: {position: 'absolute', left: BAR_MARGIN, right: BAR_MARGIN},
+	floating: {position: 'absolute', left: 0, right: 0, alignItems: 'center'},
 	bar: {flexDirection: 'row', alignItems: 'center'},
 	floatingBar: {
 		borderRadius: BAR_HEIGHT / 2,
 		borderWidth: StyleSheet.hairlineWidth,
-		paddingHorizontal: 6,
+		paddingHorizontal: BAR_PADDING,
 		elevation: 8,
 	},
 	slider: {
 		position: 'absolute',
-		left: 6,
-		top: 6,
-		bottom: 6,
-		borderRadius: (BAR_HEIGHT - 12) / 2,
+		top: BAR_PADDING,
+		bottom: BAR_PADDING,
+		borderRadius: BAR_HEIGHT / 2,
 	},
 	tab: {
 		flex: 1,
 		alignSelf: 'stretch',
 		alignItems: 'center',
 		justifyContent: 'center',
-		gap: 2,
 	},
-	// Material 3's indicator sits behind the icon only.
+	label: {marginTop: 3},
+	// A pill behind the icon and its label, centered in the tab with room above and below.
 	indicator: {
 		position: 'absolute',
-		top: 12,
-		width: 64,
-		height: 32,
-		borderRadius: 16,
+		top: (DOCKED_HEIGHT - PILL_HEIGHT) / 2,
+		width: 80,
+		height: PILL_HEIGHT,
+		borderRadius: PILL_HEIGHT / 2,
 	},
 });

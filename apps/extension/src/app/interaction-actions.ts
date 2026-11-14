@@ -1,5 +1,5 @@
-import {escapeHtml} from './escape-html';
-import {webUrl} from './web-url';
+import {escapeHtml} from '../shared/escape-html';
+import {webUrl} from '../shared/web-url';
 
 export const SESSION_DRAG_TYPE = 'application/x-tablodge-session';
 export const COLUMN_DRAG_TYPE = 'application/x-tablodge-column';

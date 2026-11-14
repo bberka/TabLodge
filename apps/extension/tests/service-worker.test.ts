@@ -5969,7 +5969,7 @@ test('browser bookmark import into one column creates no folder columns', async 
 
 test("files from other tools import through the parsers' payloads", async () => {
 	const {parseImportFile, sessionImportPayload, bookmarkImportPayload} =
-		await import('../src/app/import-formats');
+		await import('../src/shared/import-formats');
 	const harness = createWorkerHarness(stateWithSession());
 	const onetab = parseImportFile(
 		'https://a.example/ | A\nhttps://b.example/ | B\n\nhttps://c.example/ | C\n',
@@ -9075,7 +9075,7 @@ test('undo paths: restore-and-remove, move between sessions and close-after-save
 
 test('the worker writes the same backup format id and version as the pages', async () => {
 	const {BACKUP_FORMAT_ID, BACKUP_VERSION} =
-		await import('../src/app/backup-format');
+		await import('../src/shared/backup-format');
 	const harness = createWorkerHarness(bookmarksState());
 	const made = await harness.sendMessage({type: 'BACKUP_NOW'});
 	const stored = backupsOf(harness).auto.find(

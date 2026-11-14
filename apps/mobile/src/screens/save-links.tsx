@@ -9,7 +9,9 @@ import {
 	addTabsToSession,
 	sessionsIn,
 } from '../library';
-import {edit, newId, useRegularLibrary} from '../library-store';
+import {editIn, type LibraryName, newId, useLibraryOf} from '../library-store';
+import {LibraryChoice} from '../library-choice';
+import {useView} from '../view';
 import {getPreferences, setPreferences} from '../preferences';
 import {useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
@@ -32,9 +34,13 @@ export function SaveLinksForm({
 	onDone: (saved?: string) => void;
 }) {
 	const colors = useColors();
-	const store = useRegularLibrary();
+	const view = useView();
+	const [library, setLibrary] = useState<LibraryName>(
+		view === 'private' ? 'private' : 'regular',
+	);
+	const store = useLibraryOf(library);
 	const settings = useLinkSettings(true);
-	const choice = useColumnChoice();
+	const choice = useColumnChoice('', library);
 	const sessions = sessionsIn(store, 'all', settings.sessionSort);
 	const [mode, setMode] = useState<Mode>('bookmarks');
 	const [name, setName] = useState('');
@@ -57,14 +63,14 @@ export function SaveLinksForm({
 		const count = `${links.length} links`;
 		if (mode === 'bookmarks') {
 			const column = await choice.resolve();
-			await edit((current) =>
+			await editIn(library, (current) =>
 				addBookmarks(current, links, column.id, ids(), Date.now()),
 			);
 			setPreferences({lastColumnId: column.id});
 			onDone(`${count} saved to ${column.name}`);
 		} else if (mode === 'session') {
 			const label = name.trim() || 'Shared links';
-			await edit((current) =>
+			await editIn(library, (current) =>
 				addSession(
 					current,
 					{name: label, urls: links, device: phoneStamp()},
@@ -75,7 +81,7 @@ export function SaveLinksForm({
 			);
 			onDone(`${count} saved as the session ${label}`);
 		} else if (sessionId) {
-			await edit((current) =>
+			await editIn(library, (current) =>
 				addTabsToSession(current, sessionId, links, ids(), Date.now()),
 			);
 			onDone(
@@ -119,6 +125,7 @@ export function SaveLinksForm({
 				contentContainerStyle={styles.body}
 				keyboardShouldPersistTaps="handled"
 			>
+				<LibraryChoice value={library} onChange={setLibrary} />
 				<Segmented
 					label="Save as"
 					items={[

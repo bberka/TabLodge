@@ -1,5 +1,6 @@
 import {useEffect, useRef, useSyncExternalStore} from 'react';
 import {Animated, Pressable, StyleSheet, Text} from 'react-native';
+import {motion} from './motion';
 import {useBarSpace} from './tab-bar';
 import {useColors, useShape} from './theme';
 
@@ -71,7 +72,7 @@ export function SnackbarHost() {
 	useEffect(() => {
 		Animated.timing(shown, {
 			toValue: snack ? 1 : 0,
-			duration: 180,
+			duration: motion(180),
 			useNativeDriver: true,
 		}).start();
 	}, [snack, shown]);

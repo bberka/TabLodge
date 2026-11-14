@@ -2,19 +2,25 @@ import {memo, useCallback, useMemo, useState} from 'react';
 import {
 	FlatList,
 	useColorScheme,
-	Linking,
 	Pressable,
 	ScrollView,
-	Share,
 	StyleSheet,
 	Text,
 	View,
 } from 'react-native';
-import type {Session} from '../../../extension/src/shared/types';
+import type {
+	Session,
+	Settings,
+	Store,
+} from '../../../extension/src/shared/types';
 import {columnGlyph, columnTint, useChipLook} from '../column-icons';
 import {
 	ALL_SESSIONS_ID,
 	archiveSession,
+	canChangeFolder,
+	deleteFolder,
+	restoreFolder,
+	describeSession,
 	hostOf,
 	markSessionOpened,
 	moveSession,
@@ -22,27 +28,38 @@ import {
 	removeSessionTab,
 	renameSession,
 	restoreSession,
+	type SessionFolderView,
 	sessionFolders,
-	sessionLinks,
 	sessionsIn,
 } from '../library';
-import {edit, useLibrary} from '../library-store';
+import {
+	edit,
+	refreshStatus,
+	syncClient,
+	useLibrary,
+	useSyncStatus,
+} from '../library-store';
 import {ActionSheet, type SheetAction} from '../action-sheet';
 import {showSnack} from '../snackbar';
+import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
 import {sessionActionLook} from '../row-actions';
 import {SwipeRow} from '../swipe-row';
 import {type SessionAction, usePreferences} from '../preferences';
 import {linkToOpen, rowText} from '../links';
-import {openAll} from '../open-links';
+import {openAll, openLink} from '../open-links';
 import {PrivateSwitch} from '../private-switch';
+import {useRoomBelow} from '../keyboard';
 import {useBarSpace} from '../tab-bar';
 import {soften, TARGET, useColors} from '../theme';
 import {useLinkSettings} from '../use-link-settings';
+import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
-import {Button, Card, Chips, Empty, Field, Header, Icon} from '../ui';
+import {Button, Card, Chips, Empty, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
+import {FolderEditSheet} from './folder-sheet';
 import {FolderSheet, RenameSheet} from './session-sheets';
 import {SessionColorSheet} from './session-color-sheet';
+import {ShareLinksSheet, type ShareTarget} from './transfer-sheets';
 
 const PREVIEW_TABS = 4;
 
@@ -50,11 +67,11 @@ const PREVIEW_TABS = 4;
 const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
 	['expand', 'Show or hide tabs'],
 	['open', 'Open all tabs'],
+	['rename', 'Edit details'],
 	['color', 'Change color'],
-	['rename', 'Rename'],
 	['move', 'Move to folder'],
-	['archive', 'Archive'],
 	['share', 'Share links'],
+	['archive', 'Archive'],
 	['delete', 'Delete'],
 	['more', 'More actions'],
 ];
@@ -133,7 +150,9 @@ function SessionCardView({
 	const tint = columnTint(session.color, scheme) ?? folderTint;
 	const links = useLinkSettings();
 	const prefs = usePreferences();
-	const compact = prefs.compactSessions;
+	const isCompact = prefs.compactSessions;
+	const main = prefs.sessionMain;
+	const mainLook = sessionActionLook(main, colors);
 	const swipe = (action: SessionAction) =>
 		action === 'none'
 			? undefined
@@ -162,8 +181,10 @@ function SessionCardView({
 						accessibilityRole="button"
 						accessibilityState={{expanded}}
 						accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
-						android_ripple={{color: colors.pressed}}
-						style={styles.headMain}
+						style={({pressed}) => [
+							styles.headMain,
+							pressed && {backgroundColor: colors.pressed},
+						]}
 						accessibilityActions={SESSION_MENU.map(([name, label]) => ({
 							name,
 							label,
@@ -202,6 +223,11 @@ function SessionCardView({
 							<Text numberOfLines={1} style={{color: colors.muted}}>
 								{count} · {folderName} · {shortDate(session.updatedAt)}
 							</Text>
+							{session.description !== '' && !prefs.compactSessions && (
+								<Text numberOfLines={2} style={{color: colors.muted}}>
+									{session.description}
+								</Text>
+							)}
 							{session.deviceName &&
 								prefs.showSavedOn &&
 								!prefs.compactSessions && (
@@ -224,8 +250,11 @@ function SessionCardView({
 									? `Hide tabs in ${session.name}`
 									: `Show tabs in ${session.name}`
 							}
-							android_ripple={{color: colors.pressed, radius: 22}}
-							style={[styles.round, styles.roundEnd]}
+							style={({pressed}) => [
+								styles.round,
+								styles.roundEnd,
+								pressed && {backgroundColor: colors.pressed},
+							]}
 							onPress={() => {
 								onToggle(session.id);
 							}}
@@ -247,10 +276,9 @@ function SessionCardView({
 									accessibilityRole="link"
 									accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
 									accessibilityHint="Opens the link"
-									android_ripple={{color: colors.pressed}}
 									style={({pressed}) => [
 										styles.tab,
-										compact && styles.tabCompact,
+										isCompact && styles.tabCompact,
 										{backgroundColor: pressed ? colors.pressed : 'transparent'},
 									]}
 									accessibilityActions={
@@ -269,18 +297,18 @@ function SessionCardView({
 											: undefined
 									}
 									onPress={() => {
-										void Linking.openURL(linkToOpen(tab.url, links));
+										openLink(linkToOpen(tab.url, links));
 									}}
 								>
-									<SiteIcon host={hostOf(tab.url)} size={compact ? 24 : 32} />
+									<SiteIcon host={hostOf(tab.url)} size={isCompact ? 24 : 32} />
 									<View style={styles.texts}>
 										<Text
-											numberOfLines={compact ? 1 : 2}
+											numberOfLines={isCompact ? 1 : 2}
 											style={{color: colors.text}}
 										>
 											{text.main}
 										</Text>
-										{text.sub !== undefined && !compact && (
+										{text.sub !== undefined && !isCompact && (
 											<Text
 												numberOfLines={1}
 												style={{color: colors.muted, fontSize: 13}}
@@ -300,18 +328,24 @@ function SessionCardView({
 							<View style={styles.footerButton}>
 								<Button
 									kind="plain"
-									label={`Open all ${session.tabs.length}`}
-									icon="albums-outline"
+									label={
+										main === 'open'
+											? `Open all ${session.tabs.length}`
+											: mainLook.label
+									}
+									icon={mainLook.icon}
 									onPress={() => {
-										onAct('open', session);
+										onAct(main, session);
 									}}
 								/>
 							</View>
 							<Pressable
 								accessibilityRole="button"
 								accessibilityLabel={`More actions for ${session.name}`}
-								android_ripple={{color: colors.pressed, radius: 22}}
-								style={styles.round}
+								style={({pressed}) => [
+									styles.round,
+									pressed && {backgroundColor: colors.pressed},
+								]}
 								onPress={() => {
 									onMenu(session);
 								}}
@@ -329,23 +363,34 @@ function SessionCardView({
 // Cards re-draw only when their own session, folder, or expanded state changes, not on every keystroke in the search.
 const SessionCard = memo(SessionCardView);
 
+const NEW_FOLDER_CHIP = 'new-folder';
+
 /**
 Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its
 own tabs, so there is no capture here.
 */
-export function SessionsScreen({onConnect}: {onConnect: () => void}) {
+export function SessionsScreen({
+	onConnect,
+	onAdd,
+}: {
+	onConnect: () => void;
+	onAdd: () => void;
+}) {
 	const colors = useColors();
-	const space = useBarSpace();
+	const space = useRoomBelow(useBarSpace());
 	const store = useLibrary();
 	const links = useLinkSettings();
 	const view = useView();
+	const {connected} = useSyncStatus();
+	const [syncing, setSyncing] = useState(false);
 	const chipLook = useChipLook();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
-	const [query, setQuery] = useState('');
+	const search = useSearch();
+	const {query} = search;
 	// The sessions whose state was flipped from the default: opened when the default is collapsed, closed when it is
 	// expanded.
 	const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
-	const expandAll = links.expandSessionsByDefault;
+	const isExpandAll = links.expandSessionsByDefault;
 	const [coloringId, setColoringId] = useState<string>();
 	const coloring = store.groups.find((session) => session.id === coloringId);
 	const [renamingId, setRenamingId] = useState<string>();
@@ -353,11 +398,32 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	const [movingId, setMovingId] = useState<string>();
 	const moving = store.groups.find((session) => session.id === movingId);
 	const [menuId, setMenuId] = useState<string>();
+	const [shareTarget, setShareTarget] = useState<ShareTarget>();
+	// The folder whose menu is open, from holding down its chip, and the one being renamed.
+	const [folderMenuId, setFolderMenuId] = useState<string>();
+	// The folder whose edit drawer is open, or `{}` for a new one.
+	const [editingFolder, setEditingFolder] = useState<{id?: string}>();
 	const menuFor = store.groups.find((session) => session.id === menuId);
-	const readOnly = view === 'private';
 	const colorsNow = useColors();
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
+	const folderBeingEdited = store.folders.find(
+		(folder) => folder.id === editingFolder?.id,
+	);
+	const folderMenu = folderMenuId
+		? folderMenuFor(folderMenuId, store, folders, {
+				sort: links.sessionSort,
+				share: setShareTarget,
+				edit(id) {
+					setEditingFolder({id});
+				},
+				removed(id) {
+					if (picked === id) {
+						setPicked(ALL_SESSIONS_ID);
+					}
+				},
+			})
+		: undefined;
 	const folderId = folders.some((folder) => folder.id === picked)
 		? picked
 		: ALL_SESSIONS_ID;
@@ -399,29 +465,15 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 	);
 	const act = useCallback(
 		(action: SessionAction, session: Session) => {
-			const changes = new Set<SessionAction>([
-				'color',
-				'rename',
-				'move',
-				'archive',
-				'delete',
-			]);
-			if (readOnly && changes.has(action)) {
-				showSnack('The private library cannot be changed here');
-				return;
-			}
-
 			switch (action) {
 				case 'open': {
 					openAll(
 						session.tabs.map((tab) => linkToOpen(tab.url, links)),
 						session.name,
 					);
-					if (!readOnly) {
-						void edit((current) =>
-							markSessionOpened(current, session.id, Date.now()),
-						);
-					}
+					void edit((current) =>
+						markSessionOpened(current, session.id, Date.now()),
+					);
 
 					break;
 				}
@@ -457,7 +509,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				}
 
 				case 'share': {
-					void Share.share({message: sessionLinks(session)});
+					setShareTarget({title: session.name, sessions: [session]});
 					break;
 				}
 
@@ -479,7 +531,7 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 				default:
 			}
 		},
-		[links, readOnly],
+		[links],
 	);
 	const removeTab = useCallback((session: Session, tabId: string) => {
 		if (
@@ -512,22 +564,22 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 		setMenuId(session.id);
 	}, []);
 	const menu: SheetAction[] = menuFor
-		? (readOnly
-				? (['open', 'share'] as const)
-				: ([
-						'open',
-						'color',
-						'rename',
-						'move',
-						'archive',
-						'share',
-						'delete',
-					] as const)
+		? (
+				[
+					'open',
+					'rename',
+					'color',
+					'move',
+					'share',
+					'archive',
+					'delete',
+				] as const
 			).map((action) => {
 				const actionLook = sessionActionLook(action, colorsNow);
 				return {
 					icon: actionLook.icon,
 					label: actionLook.label,
+					destructive: action === 'delete',
 					onPress() {
 						act(action, menuFor);
 					},
@@ -553,28 +605,50 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 					icon="albums-outline"
 					title="No sessions yet"
 					action={
-						<Button
-							label="Connect to your server"
-							icon="sync-outline"
-							onPress={onConnect}
-						/>
+						view === 'private' ? undefined : connected ? (
+							<Button
+								label="Sync now"
+								icon="sync-outline"
+								loading={syncing}
+								onPress={() => {
+									setSyncing(true);
+									void syncClient
+										.syncNow()
+										.catch(() => undefined)
+										.then(refreshStatus)
+										.finally(() => {
+											setSyncing(false);
+										});
+								}}
+							/>
+						) : (
+							<Button
+								label="Connect to your server"
+								icon="sync-outline"
+								onPress={onConnect}
+							/>
+						)
 					}
 				>
-					Sessions saved in the TabLodge extension appear here once this phone
-					is synced with your server. To save one from here, share several links
-					from your browser to TabLodge.
+					{view === 'private'
+						? 'Nothing is saved in the private library yet. Choose Private when you save a link.'
+						: connected
+							? 'This phone is connected to your server, but the library has no sessions yet. Sessions saved in the TabLodge extension appear here after they sync. To save one from here, share several links from your browser to TabLodge.'
+							: 'Sessions saved in the TabLodge extension appear here once this phone is synced with your server. To save one from here, share several links from your browser to TabLodge.'}
 				</Empty>
+				<FloatingActions bottom={space} buttonLabel="Add links" onAdd={onAdd} />
 			</View>
 		);
 	}
 
-	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library, read only' : 'saved'}`;
+	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library' : 'saved'}`;
 	return (
 		<>
 			<FlatList
 				removeClippedSubviews
+				scrollEventThrottle={16}
 				data={shown}
-				extraData={[flipped, expandAll]}
+				extraData={[flipped, isExpandAll]}
 				keyExtractor={(session) => session.id}
 				contentContainerStyle={[styles.list, {paddingBottom: space + 8}]}
 				keyboardShouldPersistTaps="handled"
@@ -590,21 +664,30 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							right={<PrivateSwitch />}
 						/>
 						<View style={styles.pad}>
-							<Field
-								label="Search sessions"
-								icon="search"
-								placeholder="Session name, tab title or address"
-								value={query}
-								onChangeText={setQuery}
-								onClear={() => {
-									setQuery('');
-								}}
-							/>
 							<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 								<Chips
-									items={folders.map((folder) => look(folder))}
+									items={[
+										...folders.map((folder) => look(folder)),
+										{
+											id: NEW_FOLDER_CHIP,
+											name: 'New folder',
+											glyph: 'add' as const,
+											tint: colors.accent,
+										},
+									]}
 									selected={folderId}
-									onSelect={setPicked}
+									onSelect={(id) => {
+										if (id === NEW_FOLDER_CHIP) {
+											setEditingFolder({});
+										} else {
+											setPicked(id);
+										}
+									}}
+									onLongPress={(id) => {
+										if (id !== NEW_FOLDER_CHIP) {
+											setFolderMenuId(id);
+										}
+									}}
 								/>
 							</ScrollView>
 						</View>
@@ -627,14 +710,15 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 							session={item}
 							folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
 							tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
-							expanded={expandAll !== flipped.has(item.id)}
+							expanded={isExpandAll !== flipped.has(item.id)}
 							onToggle={toggle}
 							onAct={act}
 							onMenu={openMenu}
-							onRemoveTab={readOnly ? undefined : removeTab}
+							onRemoveTab={removeTab}
 						/>
 					</View>
 				)}
+				onScroll={trackScroll}
 			/>
 			<ActionSheet
 				visible={menuFor !== undefined}
@@ -646,10 +730,17 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 			/>
 			<RenameSheet
 				session={renaming}
-				onSave={(name) => {
+				title="Edit details"
+				description={renaming?.description ?? ''}
+				onSave={(name, description) => {
 					if (renaming) {
 						void edit((current) =>
-							renameSession(current, renaming.id, name, Date.now()),
+							describeSession(
+								renameSession(current, renaming.id, name, Date.now()),
+								renaming.id,
+								description ?? '',
+								Date.now(),
+							),
 						);
 					}
 
@@ -673,12 +764,54 @@ export function SessionsScreen({onConnect}: {onConnect: () => void}) {
 					setMovingId(undefined);
 				}}
 			/>
+			<ShareLinksSheet
+				target={shareTarget}
+				onClose={() => {
+					setShareTarget(undefined);
+				}}
+			/>
+			<ActionSheet
+				visible={folderMenu !== undefined}
+				title={folderMenu?.title ?? ''}
+				actions={folderMenu?.actions ?? []}
+				onClose={() => {
+					setFolderMenuId(undefined);
+				}}
+			/>
+			<FolderEditSheet
+				visible={editingFolder !== undefined}
+				folder={folderBeingEdited}
+				onClose={(id) => {
+					setEditingFolder(undefined);
+					if (id) {
+						setPicked(id);
+					}
+				}}
+			/>
 			<SessionColorSheet
 				session={coloring}
 				onClose={() => {
 					setColoringId(undefined);
 				}}
 			/>
+			{!search.open && (
+				<FloatingActions
+					bottom={space}
+					buttonLabel="Add links"
+					onAdd={onAdd}
+					onSearch={search.show}
+				/>
+			)}
+			{search.open && (
+				<SearchDock
+					label="Search sessions"
+					placeholder="Session name, tab title or address"
+					bottom={space}
+					query={query}
+					onChange={search.setQuery}
+					onClose={search.close}
+				/>
+			)}
 		</>
 	);
 }
@@ -729,6 +862,7 @@ const styles = StyleSheet.create({
 	roundEnd: {marginRight: 8},
 	tabs: {borderTopWidth: StyleSheet.hairlineWidth},
 	tab: {
+		borderRadius: 12,
 		minHeight: TARGET,
 		flexDirection: 'row',
 		alignItems: 'center',
@@ -737,3 +871,76 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 	},
 });
+
+/**
+The menu for one folder chip: sharing its links, and for a folder that can change, renaming and deleting it. Sessions of
+a deleted folder move to Unfiled.
+*/
+function folderMenuFor(
+	id: string,
+	store: Store,
+	folders: SessionFolderView[],
+	{
+		sort,
+		share,
+		edit: editFolder,
+		removed,
+	}: {
+		sort: Settings['sessionSort'];
+		share: (target: ShareTarget) => void;
+		edit: (id: string) => void;
+		removed: (id: string) => void;
+	},
+): {title: string; actions: SheetAction[]} | undefined {
+	const view = folders.find((folder) => folder.id === id);
+	if (!view) {
+		return undefined;
+	}
+
+	const sessions = sessionsIn(store, id, sort);
+	const folder = store.folders.find((entry) => entry.id === id);
+	const actions: SheetAction[] = [];
+	if (sessions.length > 0) {
+		actions.push({
+			icon: 'share-outline',
+			label: 'Share links',
+			hint: `Every link in ${view.name}`,
+			onPress() {
+				share({title: view.name, sessions});
+			},
+		});
+	}
+
+	if (folder && canChangeFolder(folder)) {
+		actions.push(
+			{
+				icon: 'color-palette-outline',
+				label: 'Edit folder',
+				hint: 'Rename it, or change its icon and color',
+				onPress() {
+					editFolder(id);
+				},
+			},
+			{
+				icon: 'trash-outline',
+				label: 'Delete folder',
+				destructive: true,
+				onPress() {
+					const held = sessions.map((session) => session.id);
+					void edit((current) => deleteFolder(current, id, Date.now()));
+					removed(id);
+					showSnack(`Deleted ${folder.name}`, {
+						label: 'Undo',
+						run() {
+							void edit((current) =>
+								restoreFolder(current, folder, held, Date.now()),
+							);
+						},
+					});
+				},
+			},
+		);
+	}
+
+	return {title: view.name, actions};
+}

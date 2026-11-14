@@ -1,5 +1,6 @@
-import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {openLink} from '../open-links';
 import type {Bookmark} from '../../../extension/src/shared/types';
 import {BottomSheet} from '../bottom-sheet';
 import {useChipLook} from '../column-icons';
@@ -27,13 +28,8 @@ export function BookmarkRow({
 	onEdit,
 	onMove,
 	onDelete,
-	readOnly = false,
 }: {
 	bookmark: Bookmark;
-	/**
-	The private library cannot be changed here: tapping opens, and there is no swipe or selection.
-	*/
-	readOnly?: boolean;
 	selecting: boolean;
 	checked: boolean;
 	onToggle: () => void;
@@ -49,7 +45,7 @@ export function BookmarkRow({
 	const host = hostOf(bookmark.url);
 	const text = rowText(bookmark, settings);
 	const open = () => {
-		void Linking.openURL(linkToOpen(bookmark.url, settings));
+		openLink(linkToOpen(bookmark.url, settings));
 	};
 
 	const run: Record<RowAction, (() => void) | undefined> = {
@@ -66,27 +62,22 @@ export function BookmarkRow({
 
 	return (
 		<SwipeRow
-			disabled={selecting || readOnly}
-			left={readOnly ? undefined : swipe(prefs.swipeRight)}
-			right={readOnly ? undefined : swipe(prefs.swipeLeft)}
+			disabled={selecting}
+			left={swipe(prefs.swipeRight)}
+			right={swipe(prefs.swipeLeft)}
 		>
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
 				accessibilityLabel={`${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
-				accessibilityActions={
-					readOnly
-						? [{name: 'open', label: 'Open in browser'}]
-						: [
-								{name: 'open', label: 'Open in browser'},
-								{name: 'select', label: 'Select'},
-								{name: 'edit', label: 'Edit'},
-								{name: 'move', label: 'Move to column'},
-								{name: 'delete', label: 'Delete'},
-							]
-				}
-				android_ripple={shape.ios ? undefined : {color: colors.pressed}}
+				accessibilityActions={[
+					{name: 'open', label: 'Open in browser'},
+					{name: 'select', label: 'Select'},
+					{name: 'edit', label: 'Edit'},
+					{name: 'move', label: 'Move to column'},
+					{name: 'delete', label: 'Delete'},
+				]}
 				style={({pressed}) => [
 					styles.row,
 					settings.bookmarkDensity === 'compact' && styles.compact,
@@ -132,7 +123,7 @@ export function BookmarkRow({
 				onPress={
 					selecting ? onToggle : prefs.tapAction === 'edit' ? onEdit : open
 				}
-				onLongPress={readOnly ? undefined : selecting ? onToggle : onSelect}
+				onLongPress={selecting ? onToggle : onSelect}
 			>
 				{selecting ? (
 					<Icon
@@ -141,7 +132,10 @@ export function BookmarkRow({
 						color={checked ? colors.accent : colors.muted}
 					/>
 				) : (
-					<SiteIcon host={host} />
+					<SiteIcon
+						host={host}
+						size={settings.bookmarkDensity === 'compact' ? 32 : 40}
+					/>
 				)}
 				<View style={styles.texts}>
 					<Text numberOfLines={2} style={[styles.title, {color: colors.text}]}>
@@ -226,7 +220,7 @@ export function SelectionBar({
 }) {
 	const colors = useColors();
 	const insets = useSafeAreaInsets();
-	const none = count === 0;
+	const isNone = count === 0;
 	return (
 		<View
 			style={[
@@ -241,7 +235,7 @@ export function SelectionBar({
 			<ActionButton
 				icon="albums-outline"
 				label="Open"
-				disabled={none}
+				disabled={isNone}
 				onPress={onOpen}
 			/>
 			<ActionButton
@@ -253,14 +247,14 @@ export function SelectionBar({
 			<ActionButton
 				icon="folder-open-outline"
 				label="Move"
-				disabled={none || !canMove}
+				disabled={isNone || !canMove}
 				onPress={onMove}
 			/>
 			<ActionButton
 				icon="trash-outline"
 				label="Delete"
 				color={colors.danger}
-				disabled={none}
+				disabled={isNone}
 				onPress={onDelete}
 			/>
 		</View>
@@ -306,26 +300,6 @@ export function MoveSheet({
 }
 
 const styles = StyleSheet.create({
-	menuButton: {
-		position: 'absolute',
-		width: 48,
-		height: 48,
-		borderRadius: 24,
-		borderWidth: 1,
-		alignItems: 'center',
-		justifyContent: 'center',
-		elevation: 3,
-	},
-	fab: {
-		position: 'absolute',
-		right: 16,
-		width: 56,
-		height: 56,
-		borderRadius: 28,
-		alignItems: 'center',
-		justifyContent: 'center',
-		elevation: 4,
-	},
 	row: {
 		minHeight: TARGET + 16,
 		flexDirection: 'row',
@@ -360,73 +334,6 @@ const styles = StyleSheet.create({
 });
 
 /**
-The round plus button that opens the Add link drawer, on the Material look.
-*/
-export function AddButton({
-	bottom,
-	onPress,
-}: {
-	bottom: number;
-	onPress: () => void;
-}) {
-	const colors = useColors();
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel="Add link"
-			android_ripple={{color: '#ffffff33'}}
-			style={({pressed}) => [
-				styles.fab,
-				{
-					// Clear of the tab bar below, whose own shadow would otherwise reach the button.
-					bottom: bottom + 16,
-					backgroundColor: colors.accent,
-					opacity: pressed ? 0.85 : 1,
-				},
-			]}
-			onPress={onPress}
-		>
-			<Icon name="add" size={28} color={colors.onAccent} />
-		</Pressable>
-	);
-}
-
-/**
-A small round button for the screen's menu, beside the add button where a thumb rests, instead of in the header at the
-top of the screen. `right` is how far it sits from the screen's right edge.
-*/
-export function MenuButton({
-	bottom,
-	right,
-	onPress,
-}: {
-	bottom: number;
-	right: number;
-	onPress: () => void;
-}) {
-	const colors = useColors();
-	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel="More actions"
-			android_ripple={{color: colors.pressed}}
-			style={({pressed}) => [
-				styles.menuButton,
-				{
-					bottom: bottom + 16 + 4,
-					right,
-					backgroundColor: pressed ? colors.pressed : colors.surface,
-					borderColor: colors.border,
-				},
-			]}
-			onPress={onPress}
-		>
-			<Icon name="ellipsis-horizontal" size={24} color={colors.text} />
-		</Pressable>
-	);
-}
-
-/**
 The drawer for changing a bookmark's link, title, or column. It is open while a bookmark is given.
 */
 export function EditSheet({
@@ -438,6 +345,7 @@ export function EditSheet({
 }) {
 	return (
 		<BottomSheet
+			scroll={false}
 			visible={Boolean(bookmark)}
 			label="Edit link"
 			onClose={onClose}

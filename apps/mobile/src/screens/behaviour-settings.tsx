@@ -21,7 +21,12 @@ function useActionChoices() {
 	const colors = useColors();
 	return ROW_ACTIONS.map((id) => {
 		const look = rowActionLook(id, colors);
-		return {id, name: look.label, glyph: look.icon, tint: look.color};
+		return {
+			id,
+			name: look.label,
+			icon: look.icon,
+			color: look.color,
+		};
 	});
 }
 
@@ -29,20 +34,13 @@ function useSessionActionChoices() {
 	const colors = useColors();
 	return SESSION_ACTIONS.map((id) => {
 		const look = sessionActionLook(id, colors);
-		return {id, name: look.label, glyph: look.icon, tint: look.color};
+		return {
+			id,
+			name: look.label,
+			icon: look.icon,
+			color: look.color,
+		};
 	});
-}
-
-function Heading({children}: {children: string}) {
-	const colors = useColors();
-	return (
-		<Text
-			accessibilityRole="header"
-			style={[styles.heading, {color: colors.text}]}
-		>
-			{children}
-		</Text>
-	);
 }
 
 export function Toggle({
@@ -55,8 +53,8 @@ export function Toggle({
 	onChange: (value: boolean) => void;
 }) {
 	const colors = useColors();
-	const visible = useRowVisible({label, hint});
-	if (!visible) {
+	const isVisible = useRowVisible({label, hint});
+	if (!isVisible) {
 		return null;
 	}
 
@@ -78,8 +76,8 @@ export function Toggle({
 
 export function Group({row, children}: {row: Row; children: React.ReactNode}) {
 	const colors = useColors();
-	const visible = useRowVisible(row);
-	if (!visible) {
+	const isVisible = useRowVisible(row);
+	if (!isVisible) {
 		return null;
 	}
 
@@ -99,8 +97,11 @@ export function BookmarkBehaviourCard() {
 	const settings = useLinkSettings(true);
 	const actions = useActionChoices();
 	return (
-		<SettingsCard section={SECTIONS.bookmarks}>
-			<Heading>Bookmarks</Heading>
+		<SettingsCard
+			section={SECTIONS.bookmarks}
+			icon="bookmark-outline"
+			description="How taps, swipes, and the list behave."
+		>
 			<SelectRow
 				row={ROWS.tap}
 				value={prefs.tapAction}
@@ -155,11 +156,38 @@ export function BookmarkBehaviourCard() {
 					);
 				}}
 			/>
-			<Toggle
+			<SelectRow
 				row={ROWS.siteIcons}
 				value={prefs.siteIcons}
+				choices={[
+					{
+						id: 'server',
+						name: 'Through my server',
+						hint: 'Your server fetches them, so sites never see this phone',
+						icon: 'cloud-outline',
+					},
+					{
+						id: 'direct',
+						name: 'From the sites too',
+						hint: 'Without a server, this phone asks each site',
+						icon: 'globe-outline',
+					},
+					{
+						id: 'off',
+						name: 'Off',
+						hint: 'Letter tiles',
+						icon: 'text-outline',
+					},
+				]}
 				onChange={(siteIcons) => {
 					setPreferences({siteIcons});
+				}}
+			/>
+			<Toggle
+				row={ROWS.savePreview}
+				value={prefs.savePreview}
+				onChange={(savePreview) => {
+					setPreferences({savePreview});
 				}}
 			/>
 		</SettingsCard>
@@ -175,8 +203,11 @@ export function SessionSettingsCard() {
 	const settings = useLinkSettings(true);
 	const sessionActions = useSessionActionChoices();
 	return (
-		<SettingsCard section={SECTIONS.sessions}>
-			<Heading>Sessions</Heading>
+		<SettingsCard
+			section={SECTIONS.sessions}
+			icon="albums-outline"
+			description="How saved sessions look and act."
+		>
 			<SelectRow
 				row={ROWS.sortSessions}
 				value={settings.sessionSort}
@@ -190,6 +221,14 @@ export function SessionSettingsCard() {
 				]}
 				onChange={(value) => {
 					void setSyncedSetting('sessionSort', value);
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sessionMain}
+				value={prefs.sessionMain}
+				choices={sessionActions.filter((choice) => choice.id !== 'none')}
+				onChange={(sessionMain) => {
+					setPreferences({sessionMain});
 				}}
 			/>
 			<SelectRow
@@ -257,8 +296,11 @@ The extension settings that follow you between devices, so changing one here cha
 export function SyncedSettingsCard() {
 	const settings = useLinkSettings(true);
 	return (
-		<SettingsCard section={SECTIONS.extension}>
-			<Heading>Links and titles</Heading>
+		<SettingsCard
+			section={SECTIONS.extension}
+			icon="link-outline"
+			description="Shared with the extension, so a change here reaches your browser."
+		>
 			<Toggle
 				row={ROWS.cleanTitles}
 				value={settings.cleanTitles}
