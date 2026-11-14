@@ -28,6 +28,10 @@ export const ROWS = {
 		label: 'Sync settings',
 		hint: 'Look and gestures follow your other devices',
 	},
+	syncPrivate: {
+		label: 'Sync the private library',
+		hint: 'Off, it stays on this phone and never reaches your server',
+	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
 		label: 'Accent color',
@@ -257,8 +261,9 @@ export const SECTIONS = {
 			'disconnect',
 			'sync now',
 			'offline',
+			'private',
 		],
-		rows: [],
+		rows: [ROWS.syncPrivate],
 	},
 	restore: {
 		title: 'Restore defaults',

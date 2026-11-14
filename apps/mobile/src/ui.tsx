@@ -137,12 +137,17 @@ export function Field({
 	icon,
 	error,
 	onClear,
+	hideLabel = false,
 	...props
 }: TextInputProps & {
 	label: string;
 	icon?: IconName;
 	error?: string;
 	onClear?: () => void;
+	/**
+	Keeps the label for screen readers but does not draw it above the input.
+	*/
+	hideLabel?: boolean;
 }) {
 	const colors = useColors();
 	const shape = useShape();
@@ -154,11 +159,13 @@ export function Field({
 			: colors.border;
 	return (
 		<View style={styles.field}>
-			<Text
-				style={[styles.label, {color: error ? colors.danger : colors.muted}]}
-			>
-				{label}
-			</Text>
+			{!hideLabel && (
+				<Text
+					style={[styles.label, {color: error ? colors.danger : colors.muted}]}
+				>
+					{label}
+				</Text>
+			)}
 			<View
 				style={[
 					styles.inputBox,

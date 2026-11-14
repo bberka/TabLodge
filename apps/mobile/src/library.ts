@@ -638,6 +638,80 @@ export function renameFolder(
 	};
 }
 
+export type FolderEdit = {
+	name: string;
+	icon: string;
+	color: string;
+	colorSessions: boolean;
+};
+
+const folderFields = (edit: FolderEdit) => ({
+	name: cleanFolderName(edit.name),
+	...(edit.icon && {icon: edit.icon}),
+	...(isColumnColor(edit.color) && {
+		color: edit.color,
+		...(edit.colorSessions && {colorSessions: true as const}),
+	}),
+});
+
+/**
+Makes a session folder with a name, an icon, and a color. A name that is not allowed leaves the library as it was.
+*/
+export function addFolder(
+	store: Store,
+	edit: FolderEdit,
+	id: string,
+	now: number,
+): Store {
+	if (folderNameProblem(store, edit.name)) {
+		return store;
+	}
+
+	return {
+		...store,
+		folders: [
+			...store.folders,
+			{id, createdAt: now, isDefault: false, ...folderFields(edit)},
+		],
+		updatedAt: now,
+	};
+}
+
+/**
+Changes a session folder's name, icon, color, and whether it colors the sessions moved into it. The icon and color are
+rebuilt, so an empty value drops the field. A folder that cannot change, or a name that is not allowed, leaves the
+library as it was.
+*/
+export function updateFolder(
+	store: Store,
+	id: string,
+	edit: FolderEdit,
+	now: number,
+): Store {
+	const folder = store.folders.find((entry) => entry.id === id);
+	if (
+		!folder ||
+		!canChangeFolder(folder) ||
+		folderNameProblem(store, edit.name, id)
+	) {
+		return store;
+	}
+
+	const {
+		icon: _icon,
+		color: _color,
+		colorSessions: _colorSessions,
+		...rest
+	} = folder;
+	return {
+		...store,
+		folders: store.folders.map((entry) =>
+			entry.id === id ? {...rest, ...folderFields(edit)} : entry,
+		),
+		updatedAt: now,
+	};
+}
+
 /**
 Deletes a session folder and moves its sessions to Unfiled, as the extension does. A folder that cannot change leaves
 the library as it was.
@@ -701,6 +775,7 @@ export type SessionFolderView = {
 	id: string;
 	name: string;
 	icon?: string;
+	color?: string;
 	count: number;
 };
 
@@ -731,6 +806,7 @@ export function sessionFolders(store: Store): SessionFolderView[] {
 			id: folder.id,
 			name: folder.name,
 			icon: folder.icon,
+			color: folder.color,
 			count: count(folder.id),
 		});
 	}

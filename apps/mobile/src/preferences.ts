@@ -135,6 +135,10 @@ type Preferences = {
 	*/
 	syncSettings: boolean;
 	/**
+	Keep the private library in step with the server. Off, it stays on this phone only. This choice stays on this phone.
+	*/
+	syncPrivate: boolean;
+	/**
 	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
 	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
 	itself when there is no server; `off` shows letter tiles. Stays on this phone.
@@ -204,6 +208,7 @@ const defaults: Preferences = {
 	sessionMain: 'open',
 	cleanOnSave: true,
 	syncSettings: true,
+	syncPrivate: true,
 	siteIcons: 'server',
 	savePreview: true,
 	accent: 'system',
@@ -277,6 +282,7 @@ export async function loadPreferences(): Promise<void> {
 		sessionMain,
 		cleanOnSave,
 		syncSettings,
+		syncPrivate,
 		siteIcons,
 		savePreview,
 		deviceName,
@@ -313,6 +319,8 @@ export async function loadPreferences(): Promise<void> {
 			typeof cleanOnSave === 'boolean' ? cleanOnSave : defaults.cleanOnSave,
 		syncSettings:
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
+		syncPrivate:
+			typeof syncPrivate === 'boolean' ? syncPrivate : defaults.syncPrivate,
 		siteIcons: siteIconsChoice(siteIcons),
 		savePreview:
 			typeof savePreview === 'boolean' ? savePreview : defaults.savePreview,
@@ -381,6 +389,7 @@ export function resetPreferences(): void {
 		deviceName: current.deviceName,
 		lastColumnId: current.lastColumnId,
 		syncSettings: current.syncSettings,
+		syncPrivate: current.syncPrivate,
 	});
 }
 

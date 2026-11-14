@@ -21,6 +21,7 @@ import {
 	setPreferences,
 	usePreferences,
 } from '../preferences';
+import {applyPrivateSyncSetting} from '../private-library';
 import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
 import {Button, Empty, Header, Icon, type IconName} from '../ui';
 import {systemAccent} from '../../modules/open-links';
@@ -266,6 +267,14 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 										value={prefs.syncSettings}
 										onChange={(syncSettings) => {
 											setPreferences({syncSettings});
+										}}
+									/>
+									<Toggle
+										row={ROWS.syncPrivate}
+										value={prefs.syncPrivate}
+										onChange={(syncPrivate) => {
+											setPreferences({syncPrivate});
+											void applyPrivateSyncSetting();
 										}}
 									/>
 									<DeviceNameField />

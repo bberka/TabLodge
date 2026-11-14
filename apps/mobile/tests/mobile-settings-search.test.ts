@@ -22,7 +22,11 @@ describe('settings search', () => {
 	test('finds a card by its name, ignoring case and spaces around the word', () => {
 		assert.deepEqual(visible(' APPEARANCE '), ['Appearance']);
 		// A word that is also in another card's settings finds both.
-		assert.deepEqual(visible(' PRIVATE '), ['Open links', 'Private library']);
+		assert.deepEqual(visible(' PRIVATE '), [
+			'Open links',
+			'Private library',
+			'Sync',
+		]);
 	});
 
 	test('finds a card through one of its settings, by label or by hint', () => {

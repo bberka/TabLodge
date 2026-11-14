@@ -40,6 +40,7 @@ import {
 	unwrapKey,
 	wrapKey,
 } from '../modules/tablodge-crypto';
+import {getPreferences} from './preferences';
 import {emptyStore, isStore} from './library';
 import {createLibraryCore} from './library-core';
 import {PRIVATE_KEY_KEY, readJson, removeKeys, writeJson} from './storage';
@@ -260,7 +261,7 @@ export async function refreshPrivateStatus(): Promise<void> {
 Starts syncing when the library is open and a server is connected; the client does nothing without a connection.
 */
 function runClient(): void {
-	if (client || !exists || state.locked) {
+	if (client || !exists || state.locked || !getPreferences().syncPrivate) {
 		return;
 	}
 
@@ -454,7 +455,7 @@ Brings in the private library the extension keeps on the connected server. A pro
 already has, which syncs with the server's. Without a library on the phone, one is made.
 */
 export async function openFromServer(credential?: string): Promise<OpenResult> {
-	const to = await target();
+	const to = getPreferences().syncPrivate ? await target() : undefined;
 	if (!to) {
 		return {ok: false, reason: 'not-connected'};
 	}
@@ -529,6 +530,18 @@ export async function syncPrivate(): Promise<void> {
 /**
 Closes the private library's live connection while the app is in the background, and opens it again in front.
 */
+/**
+Starts or stops the private library's sync after the setting changes.
+*/
+export async function applyPrivateSyncSetting(): Promise<void> {
+	if (getPreferences().syncPrivate) {
+		await wakePrivate();
+	} else {
+		stopClient();
+		await refreshPrivateStatus();
+	}
+}
+
 export async function pausePrivate(): Promise<void> {
 	await client?.pause().catch(() => undefined);
 }

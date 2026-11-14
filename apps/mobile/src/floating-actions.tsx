@@ -141,6 +141,7 @@ export function SearchDock({
 			<View style={styles.input}>
 				<Field
 					autoFocus
+					hideLabel
 					label={label}
 					icon="search"
 					placeholder={placeholder}

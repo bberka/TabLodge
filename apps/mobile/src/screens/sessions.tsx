@@ -21,13 +21,11 @@ import {
 	deleteFolder,
 	restoreFolder,
 	describeSession,
-	folderNameProblem,
 	hostOf,
 	markSessionOpened,
 	moveSession,
 	removeSession,
 	removeSessionTab,
-	renameFolder,
 	renameSession,
 	restoreSession,
 	type SessionFolderView,
@@ -58,6 +56,7 @@ import {trackScroll} from '../scroll-state';
 import {useView} from '../view';
 import {Button, Card, Chips, Empty, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
+import {FolderEditSheet} from './folder-sheet';
 import {FolderSheet, RenameSheet} from './session-sheets';
 import {SessionColorSheet} from './session-color-sheet';
 import {ShareLinksSheet, type ShareTarget} from './transfer-sheets';
@@ -364,6 +363,8 @@ function SessionCardView({
 // Cards re-draw only when their own session, folder, or expanded state changes, not on every keystroke in the search.
 const SessionCard = memo(SessionCardView);
 
+const NEW_FOLDER_CHIP = 'new-folder';
+
 /**
 Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its
 own tabs, so there is no capture here.
@@ -400,19 +401,22 @@ export function SessionsScreen({
 	const [shareTarget, setShareTarget] = useState<ShareTarget>();
 	// The folder whose menu is open, from holding down its chip, and the one being renamed.
 	const [folderMenuId, setFolderMenuId] = useState<string>();
-	const [renamingFolderId, setRenamingFolderId] = useState<string>();
+	// The folder whose edit drawer is open, or `{}` for a new one.
+	const [editingFolder, setEditingFolder] = useState<{id?: string}>();
 	const menuFor = store.groups.find((session) => session.id === menuId);
 	const colorsNow = useColors();
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
-	const renamingFolder = store.folders.find(
-		(folder) => folder.id === renamingFolderId,
+	const folderBeingEdited = store.folders.find(
+		(folder) => folder.id === editingFolder?.id,
 	);
 	const folderMenu = folderMenuId
 		? folderMenuFor(folderMenuId, store, folders, {
 				sort: links.sessionSort,
 				share: setShareTarget,
-				rename: setRenamingFolderId,
+				edit(id) {
+					setEditingFolder({id});
+				},
 				removed(id) {
 					if (picked === id) {
 						setPicked(ALL_SESSIONS_ID);
@@ -662,10 +666,28 @@ export function SessionsScreen({
 						<View style={styles.pad}>
 							<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 								<Chips
-									items={folders.map((folder) => look(folder))}
+									items={[
+										...folders.map((folder) => look(folder)),
+										{
+											id: NEW_FOLDER_CHIP,
+											name: 'New folder',
+											glyph: 'add' as const,
+											tint: colors.accent,
+										},
+									]}
 									selected={folderId}
-									onSelect={setPicked}
-									onLongPress={setFolderMenuId}
+									onSelect={(id) => {
+										if (id === NEW_FOLDER_CHIP) {
+											setEditingFolder({});
+										} else {
+											setPicked(id);
+										}
+									}}
+									onLongPress={(id) => {
+										if (id !== NEW_FOLDER_CHIP) {
+											setFolderMenuId(id);
+										}
+									}}
 								/>
 							</ScrollView>
 						</View>
@@ -756,22 +778,14 @@ export function SessionsScreen({
 					setFolderMenuId(undefined);
 				}}
 			/>
-			<RenameSheet
-				session={renamingFolder}
-				title="Rename folder"
-				label="Folder name"
-				check={(name) => folderNameProblem(store, name, renamingFolderId)}
-				onSave={(name) => {
-					if (renamingFolder) {
-						void edit((current) =>
-							renameFolder(current, renamingFolder.id, name, Date.now()),
-						);
+			<FolderEditSheet
+				visible={editingFolder !== undefined}
+				folder={folderBeingEdited}
+				onClose={(id) => {
+					setEditingFolder(undefined);
+					if (id) {
+						setPicked(id);
 					}
-
-					setRenamingFolderId(undefined);
-				}}
-				onClose={() => {
-					setRenamingFolderId(undefined);
 				}}
 			/>
 			<SessionColorSheet
@@ -869,12 +883,12 @@ function folderMenuFor(
 	{
 		sort,
 		share,
-		rename,
+		edit: editFolder,
 		removed,
 	}: {
 		sort: Settings['sessionSort'];
 		share: (target: ShareTarget) => void;
-		rename: (id: string) => void;
+		edit: (id: string) => void;
 		removed: (id: string) => void;
 	},
 ): {title: string; actions: SheetAction[]} | undefined {
@@ -900,10 +914,11 @@ function folderMenuFor(
 	if (folder && canChangeFolder(folder)) {
 		actions.push(
 			{
-				icon: 'create-outline',
-				label: 'Rename folder',
+				icon: 'color-palette-outline',
+				label: 'Edit folder',
+				hint: 'Rename it, or change its icon and color',
 				onPress() {
-					rename(id);
+					editFolder(id);
 				},
 			},
 			{

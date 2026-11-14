@@ -132,7 +132,10 @@ export function BookmarkRow({
 						color={checked ? colors.accent : colors.muted}
 					/>
 				) : (
-					<SiteIcon host={host} />
+					<SiteIcon
+						host={host}
+						size={settings.bookmarkDensity === 'compact' ? 32 : 40}
+					/>
 				)}
 				<View style={styles.texts}>
 					<Text numberOfLines={2} style={[styles.title, {color: colors.text}]}>

@@ -43,6 +43,10 @@ import {
 	deleteFolder,
 	describeSession,
 	renameFolder,
+	addFolder,
+	updateFolder,
+	restoreFolder,
+	restoreColumn,
 } from '../src/library';
 import {sampleStore} from '../src/seed';
 
@@ -760,6 +764,57 @@ describe('session folders', () => {
 		assert.equal(renameFolder(store, 'work', ' '.repeat(3), NOW), store);
 	});
 
+	test('a folder is made and changed with its icon and color, and Undo puts a deleted one back', () => {
+		const store = withFolders();
+		const made = addFolder(
+			store,
+			{name: ' Reading ', icon: 'book', color: '#336699', colorSessions: true},
+			'read',
+			NOW + 1,
+		);
+		const folder = made.folders.find((f) => f.id === 'read');
+		assert.equal(folder?.name, 'Reading');
+		assert.equal(folder?.icon, 'book');
+		assert.equal(folder?.color, '#336699');
+		assert.equal(folder?.colorSessions, true);
+		assert.equal(
+			addFolder(
+				made,
+				{name: 'reading', icon: '', color: '', colorSessions: false},
+				'x',
+				NOW,
+			),
+			made,
+		);
+
+		const plain = updateFolder(
+			made,
+			'read',
+			{name: 'Reading', icon: '', color: '', colorSessions: true},
+			NOW + 2,
+		).folders.find((f) => f.id === 'read');
+		assert.equal(plain?.icon, undefined);
+		assert.equal(plain?.color, undefined);
+		assert.equal(plain?.colorSessions, undefined);
+		assert.equal(
+			updateFolder(
+				made,
+				'unfiled',
+				{name: 'Home', icon: '', color: '', colorSessions: false},
+				NOW,
+			),
+			made,
+		);
+
+		const moved = moveSession(made, 's1', 'read', NOW + 3);
+		assert.equal(moved.groups[0].color, '#336699');
+		const gone = deleteFolder(moved, 'read', NOW + 4);
+		assert.equal(gone.groups[0].folderId, 'unfiled');
+		const back = restoreFolder(gone, folder, ['s1'], NOW + 5);
+		assert.equal(back.groups[0].folderId, 'read');
+		assert.ok(back.folders.some((f) => f.id === 'read'));
+	});
+
 	test('Unfiled and Archived cannot be renamed or deleted', () => {
 		const store = withFolders();
 		assert.equal(renameFolder(store, 'unfiled', 'Home', NOW), store);
@@ -776,6 +831,30 @@ describe('session folders', () => {
 			false,
 		);
 		assert.equal(next.groups[0].folderId, 'unfiled');
+	});
+});
+
+describe('restoring a deleted column', () => {
+	test('Undo puts the column and its moved or deleted bookmarks back', () => {
+		let store = emptyStore(NOW);
+		store = addColumn(store, 'Work', 'work', NOW);
+		store = addColumn(store, 'Home', 'home', NOW);
+		store = addBookmark(
+			store,
+			{url: 'https://a.example/', title: 'A', columnId: 'work'},
+			'b1',
+			NOW,
+		);
+		const column = store.bookmarkColumns.find((c) => c.id === 'work')!;
+		const own = bookmarksIn(store, 'work');
+		const moved = deleteColumn(store, 'work', 'home', NOW + 1);
+		const back = restoreColumn(moved, column, own, NOW + 2);
+		assert.equal(bookmarksIn(back, 'work').length, 1);
+		const removed = deleteColumn(store, 'work', null, NOW + 1);
+		assert.equal(bookmarksIn(removed, 'home').length, 0);
+		const restored = restoreColumn(removed, column, own, NOW + 2);
+		assert.equal(bookmarksIn(restored, 'work').length, 1);
+		assert.equal(restoreColumn(restored, column, own, NOW + 3), restored);
 	});
 });
 
