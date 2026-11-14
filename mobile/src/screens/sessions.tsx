@@ -307,16 +307,6 @@ function SessionCardView({
 									}}
 								/>
 							</View>
-							<View style={styles.footerButton}>
-								<Button
-									kind="plain"
-									label="Change color"
-									icon="color-palette-outline"
-									onPress={() => {
-										onAct('color', session);
-									}}
-								/>
-							</View>
 							<Pressable
 								accessibilityRole="button"
 								accessibilityLabel={`More actions for ${session.name}`}
