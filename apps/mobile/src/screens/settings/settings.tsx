@@ -291,6 +291,16 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											void applyPrivateSyncSetting();
 										}}
 									/>
+									{prefs.syncPrivate && (
+										<Toggle
+											row={ROWS.askToSyncPrivate}
+											value={prefs.askToSyncPrivate}
+											onChange={(askToSyncPrivate) => {
+												setPreferences({askToSyncPrivate});
+												void applyPrivateSyncSetting();
+											}}
+										/>
+									)}
 									<DeviceNameField />
 									<Button
 										label="Sync now"
