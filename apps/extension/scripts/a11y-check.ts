@@ -5086,6 +5086,27 @@ async function main() {
 		});
 
 		for (const theme of THEMES) {
+			await check(
+				`a submenu opener in the session menu does not expand or collapse the card (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					await setTheme(page, theme);
+					const toggle = page
+						.locator('#session-dev-session-1 button[aria-expanded]')
+						.first();
+					const before = await toggle.getAttribute('aria-expanded');
+					await page
+						.getByRole('button', {name: 'More actions for Home lab rebuild'})
+						.click();
+					await page.getByRole('menuitem', {name: 'Restore options'}).click();
+					await page
+						.getByRole('menuitem', {name: 'Restore in this window'})
+						.waitFor({timeout: 5000})
+						.catch(() => undefined);
+					assert.equal(await toggle.getAttribute('aria-expanded'), before);
+					await page.close();
+				},
+			);
 			await check(`session action menu order (${theme})`, async () => {
 				const page = await openPage(context, extensionId, 'newtab');
 				await setTheme(page, theme);

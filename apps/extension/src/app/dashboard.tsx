@@ -3193,8 +3193,9 @@ const GroupCard = memo(
 					const {target} = event;
 					if (
 						target instanceof Element &&
+						// A menu is drawn in a portal but its clicks still reach this card through React, so they are ignored.
 						target.closest(
-							'button, a, input, textarea, select, [role="button"]',
+							'button, a, input, textarea, select, [role="button"], [role="menu"], [role="menuitem"]',
 						)
 					) {
 						return;
