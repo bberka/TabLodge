@@ -412,6 +412,8 @@ export function normalizeFolder(raw: unknown): Folder | null {
 		id,
 		name: isArchivedFolderName(name) ? ARCHIVED_FOLDER_NAME : name,
 		...iconField(raw.icon),
+		...colorField(raw.color),
+		...(raw.colorSessions === true && {colorSessions: true as const}),
 		createdAt: Number.isFinite(Number(raw.createdAt))
 			? Number(raw.createdAt)
 			: Date.now(),

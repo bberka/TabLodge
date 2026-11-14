@@ -6811,6 +6811,68 @@ test('session folders store a registry icon, keep it on rename and reset it', as
 	assert.equal('icon' in reset.folder, false);
 });
 
+test('a folder color is stored, validated and applied to sessions moved in only when the switch is on', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const created = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'Work',
+		color: 'blue',
+		colorSessions: true,
+	});
+	assert.equal(created.ok, true, created.error);
+	assert.equal(created.folder.color, 'blue');
+	assert.equal(created.folder.colorSessions, true);
+	const bad = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'Bad',
+		color: 'not-a-color',
+	});
+	assert.equal('color' in bad.folder, false);
+	assert.equal('colorSessions' in bad.folder, false);
+
+	const moved = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {folderId: created.folder.id},
+	});
+	assert.equal(moved.group.color, 'blue');
+
+	// A color named in the same save wins over the folder's.
+	const other = await harness.sendMessage({
+		type: 'CREATE_FOLDER',
+		name: 'Other',
+		color: 'red',
+		colorSessions: true,
+	});
+	const explicit = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {folderId: other.folder.id, color: ''},
+	});
+	assert.equal('color' in explicit.group, false);
+
+	const off = await harness.sendMessage({
+		type: 'UPDATE_FOLDER',
+		folderId: other.folder.id,
+		name: 'Other',
+		colorSessions: false,
+	});
+	assert.equal(off.folder.color, 'red');
+	assert.equal('colorSessions' in off.folder, false);
+	const back = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {folderId: created.folder.id},
+	});
+	assert.equal(back.group.color, 'blue');
+	const unchanged = await harness.sendMessage({
+		type: 'UPDATE_GROUP',
+		groupId: 'session-1',
+		fields: {folderId: other.folder.id},
+	});
+	assert.equal(unchanged.group.color, 'blue');
+});
+
 test('folder icons survive a session import and are validated on load', async () => {
 	const state = stateWithSession();
 	state.folders.push({id: 'f-bad', name: 'Bad', icon: 'nope'});

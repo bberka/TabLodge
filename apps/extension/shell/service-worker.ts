@@ -3644,6 +3644,19 @@ async function updateGroup(
 				return {ok: false, error: 'Choose an existing folder.'};
 			}
 
+			const target = store.folders.find(
+				(folder) => folder.id === fields.folderId,
+			);
+			// A move that names no color of its own takes the folder's color when the folder asks for that.
+			if (
+				fields.color === undefined &&
+				group.folderId !== fields.folderId &&
+				target?.colorSessions &&
+				target.color
+			) {
+				group.color = target.color;
+			}
+
 			group.folderId = fields.folderId;
 		}
 
@@ -3767,6 +3780,8 @@ function folderNameExists(
 async function createFolder(
 	name: string,
 	icon?: unknown,
+	color?: unknown,
+	colorSessions?: unknown,
 ): Promise<ActionResult<'CREATE_FOLDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -3790,9 +3805,14 @@ async function createFolder(
 			id: makeId(),
 			name: folderName,
 			...iconField(icon),
+			...colorField(color),
 			createdAt: Date.now(),
 			isDefault: false,
 		};
+		if (colorSessions === true) {
+			Object.assign(folder, {colorSessions: true});
+		}
+
 		store.folders.push(folder);
 		await writeStore(store);
 		return {ok: true, folder};
@@ -3803,6 +3823,8 @@ async function updateFolder(
 	folderId: string,
 	name: string,
 	icon?: unknown,
+	color?: unknown,
+	colorSessions?: unknown,
 ): Promise<ActionResult<'UPDATE_FOLDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
@@ -3836,6 +3858,24 @@ async function updateFolder(
 				folder.icon = nextIcon;
 			} else {
 				delete folder.icon;
+			}
+		}
+
+		// `color` the same: omitted keeps it, "" or anything that is not a color removes it.
+		if (color !== undefined) {
+			const {color: nextColor} = colorField(color);
+			if (nextColor) {
+				folder.color = nextColor;
+			} else {
+				delete folder.color;
+			}
+		}
+
+		if (colorSessions !== undefined) {
+			if (colorSessions === true) {
+				folder.colorSessions = true;
+			} else {
+				delete folder.colorSessions;
 			}
 		}
 
@@ -8950,11 +8990,22 @@ async function handleMessage(
 		}
 
 		case 'CREATE_FOLDER': {
-			return createFolder(message.name, message.icon);
+			return createFolder(
+				message.name,
+				message.icon,
+				message.color,
+				message.colorSessions,
+			);
 		}
 
 		case 'UPDATE_FOLDER': {
-			return updateFolder(message.folderId, message.name, message.icon);
+			return updateFolder(
+				message.folderId,
+				message.name,
+				message.icon,
+				message.color,
+				message.colorSessions,
+			);
 		}
 
 		case 'DELETE_FOLDER': {

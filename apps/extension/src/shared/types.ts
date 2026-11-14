@@ -411,6 +411,14 @@ export type Folder = {
 	Icon id from the icon registry; missing means the default folder icon.
 	*/
 	icon?: string;
+	/**
+	A preset id or `#rrggbb` from the accent colors (never "default" or "system"); missing means no color.
+	*/
+	color?: string;
+	/**
+	When true and the folder has a color, a session moved into this folder takes the folder's color. Missing means off.
+	*/
+	colorSessions?: true;
 	createdAt: number;
 	isDefault: boolean;
 };
@@ -673,11 +681,23 @@ export type TabLodgeMessages = {
 	the slots those sessions held in the stored order (others stay put). Switches the sort to "custom".
 	*/
 	SET_GROUP_ORDER: {order: string[]};
-	CREATE_FOLDER: {name: string; icon?: string};
+	CREATE_FOLDER: {
+		name: string;
+		icon?: string;
+		color?: string;
+		colorSessions?: boolean;
+	};
 	/**
-	`icon` omitted keeps the current icon; an empty string resets it to the default.
+	`icon` omitted keeps the current icon; an empty string resets it to the default. `color` the same: omitted keeps it, an empty string removes it.
+	`colorSessions` omitted keeps the current choice.
 	*/
-	UPDATE_FOLDER: {folderId: string; name: string; icon?: string};
+	UPDATE_FOLDER: {
+		folderId: string;
+		name: string;
+		icon?: string;
+		color?: string;
+		colorSessions?: boolean;
+	};
 	DELETE_FOLDER: {folderId: string};
 	DELETE_TAB: {groupId: string; tabId: string};
 	/**
