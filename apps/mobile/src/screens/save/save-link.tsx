@@ -15,6 +15,7 @@ import {
 	addTabsToSession,
 	ALL_SESSIONS_ID,
 	extractUrl,
+	extractUrls,
 	hostOf,
 	sessionsIn,
 	updateBookmark,
@@ -52,6 +53,7 @@ export function SaveLinkForm({
 	initialText,
 	initialTitle,
 	editing,
+	onMany,
 	onDone,
 }: {
 	initialText: string;
@@ -60,6 +62,10 @@ export function SaveLinkForm({
 	A bookmark to change instead of saving a new one. The initial text and title are then its own.
 	*/
 	editing?: Bookmark;
+	/**
+	Opens the drawer for several links, with the text so far; given when a new link is being added.
+	*/
+	onMany?: (text: string) => void;
 	/**
 	Called when the drawer should close; `saved` is the column name when a link was saved.
 	*/
@@ -231,11 +237,28 @@ export function SaveLinkForm({
 								? 'This website is in your excluded websites, so it is not saved.'
 								: undefined
 					}
-					onChangeText={setText}
+					onChangeText={(next) => {
+						// Several links pasted at once go to the drawer made for them.
+						if (onMany && extractUrls(next).length > 1) {
+							onMany(next);
+						} else {
+							setText(next);
+						}
+					}}
 					onClear={() => {
 						setText('');
 					}}
 				/>
+				{onMany && !editing && (
+					<Button
+						kind="plain"
+						label="Add several links"
+						icon="list-outline"
+						onPress={() => {
+							onMany(text);
+						}}
+					/>
+				)}
 				{savePreview && !editing && url && (
 					<View style={styles.preview}>
 						<SiteIcon always host={hostOf(url)} size={40} />

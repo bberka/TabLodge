@@ -9,6 +9,7 @@ import {
 	addTabsToSession,
 	sessionsIn,
 	hostOf,
+	extractUrls,
 } from '../../library/library';
 import {
 	editIn,
@@ -32,10 +33,17 @@ The drawer for a share that carries several links, such as a browser's "share ta
 new session, or into a session that exists.
 */
 export function SaveLinksForm({
-	urls,
+	urls: shared,
+	entry = false,
+	initialText = '',
 	onDone,
 }: {
 	urls: string[];
+	/**
+	The person types or pastes the links here, one or several, instead of them coming from a share.
+	*/
+	entry?: boolean;
+	initialText?: string;
 	/**
 	Called when the drawer should close; `saved` says where the links went.
 	*/
@@ -50,6 +58,8 @@ export function SaveLinksForm({
 	const settings = useLinkSettings(true);
 	const choice = useColumnChoice('', library);
 	const sessions = sessionsIn(store, 'all', settings.sessionSort);
+	const [text, setText] = useState(initialText);
+	const urls = entry ? extractUrls(text) : shared;
 	const [mode, setMode] = useState<Mode>('bookmarks');
 	const [name, setName] = useState('');
 	const [target, setTarget] = useState('');
@@ -125,7 +135,7 @@ export function SaveLinksForm({
 					accessibilityRole="header"
 					style={[styles.title, {color: colors.text}]}
 				>
-					{`${urls.length} links shared`}
+					{entry ? 'Add links' : `${urls.length} links shared`}
 				</Text>
 				<IconButton
 					icon="close"
@@ -148,6 +158,25 @@ export function SaveLinksForm({
 				contentContainerStyle={styles.body}
 				keyboardShouldPersistTaps="handled"
 			>
+				{entry && (
+					<Field
+						autoFocus
+						multiline
+						label="Links, one per line"
+						icon="link-outline"
+						placeholder="https://example.com"
+						value={text}
+						autoCapitalize="none"
+						autoCorrect={false}
+						keyboardType="url"
+						error={
+							text.trim() !== '' && urls.length === 0
+								? 'Enter web addresses that start with http:// or https://.'
+								: undefined
+						}
+						onChangeText={setText}
+					/>
+				)}
 				<LibraryChoice value={library} onChange={setLibrary} />
 				<Segmented
 					label="Save as"
