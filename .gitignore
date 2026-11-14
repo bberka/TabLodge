@@ -37,9 +37,9 @@ Thumbs.db
 /.claude/worktrees/
 
 # Sync server local state and secrets
-/server/.wrangler/
-/server/.dev.vars
-/server/.env
+/apps/server/.wrangler/
+/apps/server/.dev.vars
+/apps/server/.env
 
 # Local unslop run output
 /.unslop/

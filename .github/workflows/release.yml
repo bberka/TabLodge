@@ -74,7 +74,7 @@ jobs:
           ZIP: ${{ steps.package.outputs.zip }}
           FIREFOX_ZIP: ${{ steps.package.outputs.firefox_zip }}
         run: |
-          app_name="$(node -p "require('./extension/manifest.json').short_name")"
+          app_name="$(node -p "require('./apps/extension/shell/manifest.json').short_name")"
           zip_file="$(basename "$ZIP")"
           firefox_zip_file="$(basename "$FIREFOX_ZIP")"
           cat > release/notes.md <<EOF
@@ -181,7 +181,7 @@ jobs:
         run: pnpm --filter tablodge-mobile exec expo prebuild --platform android --no-install
       - name: Build the release APK
         if: steps.signing.outputs.enabled == 'true'
-        working-directory: mobile/android
+        working-directory: apps/mobile/android
         run: ./gradlew assembleRelease -x lint -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
       # Gradle signs the release build with a throwaway debug key. This aligns it and signs it again with the real one.
       - name: Sign, check, and upload the APK
@@ -190,7 +190,7 @@ jobs:
           mkdir release
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
-          "$tools/zipalign" -f -p 4 mobile/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/aligned.apk"
+          "$tools/zipalign" -f -p 4 apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/aligned.apk"
           "$tools/apksigner" sign \
             --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
             --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \

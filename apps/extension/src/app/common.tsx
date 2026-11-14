@@ -1,0 +1,989 @@
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+	type ComponentPropsWithoutRef,
+	type ComponentType,
+	type ReactNode,
+} from 'react';
+import {Bookmark, CircleAlert, CircleCheck, X} from 'lucide-react';
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from '../shared/ui';
+import {PrivateWindowMark} from './private-window-appearance';
+import {PrivateLockButton} from './private-lock-ui';
+import {
+	inPrivateWindow,
+	PRIVATE_CONFIG_KEY,
+	PRIVATE_STORAGE_PREFIX,
+	privateConfigNeedsReload,
+	reloadPrivatePage,
+} from './private-config';
+import type {ActionFailure, ActionResult, TabLodgeState} from './types';
+import {send} from './message-client';
+import {PROJECT} from './project';
+import {hostIsExcluded} from './excluded-sites';
+import {webUrl} from './web-url';
+import {plural} from './plural';
+import {cn} from '@/lib/utils';
+
+const STORAGE_KEY = 'tablodge.state';
+
+/**
+The message of a rejection reason. Rejections are usually Errors, but any object with a message counts.
+*/
+export const messageOf = (reason: unknown) =>
+	(reason as {message?: string} | null | undefined)?.message;
+
+/**
+Closes this window when Escape is pressed, for the small prompt windows the service worker opens.
+*/
+export function useCloseOnEscape(
+	close: () => void = () => {
+		window.close();
+	},
+) {
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			// A key some control already used (closing a menu inside the window) does not also close it.
+			if (event.key === 'Escape' && !event.defaultPrevented) {
+				close();
+			}
+		};
+
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
+	}, [close]);
+}
+
+/**
+Ctrl/Shift-click selection in this window's tab strip, matching how the service worker's "selected-or-window"
+save reads it: a selection is more than one tab-strip slot (both halves of a split view are one slot). `count` is
+the selected web tabs that would be saved (pinned ones only when `includePinned`). Updates live.
+*/
+export function useTabSelection(includePinned: boolean) {
+	const [selection, setSelection] = useState({selected: false, count: 0});
+	useEffect(() => {
+		if (!chrome.tabs?.query) {
+			return;
+		}
+
+		let alive = true;
+		const slot = (tab: chrome.tabs.Tab) => {
+			const split = (tab as {splitViewId?: number}).splitViewId ?? -1;
+			return split >= 0 ? `split:${split}` : `tab:${tab.id}`;
+		};
+
+		const read = async () => {
+			try {
+				const tabs = await chrome.tabs.query({
+					currentWindow: true,
+					highlighted: true,
+				});
+				const selected = new Set(tabs.map((tab) => slot(tab))).size > 1;
+				const count = new Set(
+					tabs
+						.filter(
+							(tab) =>
+								/^https?:\/\//i.test(tab.url || '') &&
+								(includePinned || !tab.pinned),
+						)
+						.map((tab) => slot(tab)),
+				).size;
+				if (alive) {
+					setSelection({selected, count});
+				}
+			} catch {
+				// Without a readable selection the button keeps saving the whole window.
+			}
+		};
+
+		void read();
+		const onChange = () => void read();
+		chrome.tabs.onHighlighted.addListener(onChange);
+		chrome.tabs.onRemoved.addListener(onChange);
+		chrome.tabs.onAttached?.addListener(onChange);
+		chrome.tabs.onDetached?.addListener(onChange);
+		return () => {
+			alive = false;
+			chrome.tabs.onHighlighted.removeListener(onChange);
+			chrome.tabs.onRemoved.removeListener(onChange);
+			chrome.tabs.onAttached?.removeListener(onChange);
+			chrome.tabs.onDetached?.removeListener(onChange);
+		};
+	}, [includePinned]);
+	return selection;
+}
+
+/**
+Whether this window has a web tab a workspace switch would save and close: not pinned (unless `includePinned`),
+not on an excluded site, and not a browser or TabLodge page. Updates live; unknown until the tabs are read.
+*/
+export function useHasSavableTabs(
+	includePinned: boolean,
+	excludedOrigins: readonly string[],
+) {
+	const [found, setFound] = useState(false);
+	// A fresh array on every render must not restart the listeners.
+	const excludedKey = excludedOrigins.join('\n');
+	useEffect(() => {
+		if (!chrome.tabs?.query) {
+			return;
+		}
+
+		let alive = true;
+		const excluded = excludedKey ? excludedKey.split('\n') : [];
+		const read = async () => {
+			try {
+				const tabs = await chrome.tabs.query({currentWindow: true});
+				const savable = tabs.some((tab) => {
+					const url = webUrl(tab.url);
+					return (
+						url !== null &&
+						(includePinned || !tab.pinned) &&
+						!hostIsExcluded(new URL(url).hostname, excluded)
+					);
+				});
+				if (alive) {
+					setFound(savable);
+				}
+			} catch {
+				// Without a readable tab strip the switch stays off.
+			}
+		};
+
+		void read();
+		const onChange = () => void read();
+		const events = [
+			chrome.tabs.onCreated,
+			chrome.tabs.onUpdated,
+			chrome.tabs.onRemoved,
+			chrome.tabs.onAttached,
+			chrome.tabs.onDetached,
+		];
+		for (const event of events) {
+			event?.addListener(onChange);
+		}
+
+		return () => {
+			alive = false;
+			for (const event of events) {
+				event?.removeListener(onChange);
+			}
+		};
+	}, [includePinned, excludedKey]);
+	return found;
+}
+
+/**
+"Save this window", or "Save 3 selected tabs" while tabs are selected in the tab strip.
+*/
+export function saveWindowLabel(selection: {selected: boolean; count: number}) {
+	return selection.selected
+		? `Save ${selection.count} selected ${selection.count === 1 ? 'tab' : 'tabs'}`
+		: 'Save this window';
+}
+
+/**
+Why a restored link could not be opened: "<title>: <reason>", or '' without a failure.
+*/
+export function restoreFailureText(failure?: {
+	title?: string;
+	url?: string;
+	error?: string;
+}) {
+	return failure ? `${failure.title || failure.url}: ${failure.error}` : '';
+}
+
+/**
+One-line result of a session restore, with partial failures and their first reason spelled out.
+*/
+export function restoreSummary(result: {
+	count: number;
+	skipped?: number;
+	failed?: number;
+	failures?: Array<{title?: string; url?: string; error?: string}>;
+	splitsSeparated?: number;
+}) {
+	const parts = [
+		`Restored ${result.count} ${result.count === 1 ? 'tab' : 'tabs'}`,
+	];
+	if (result.skipped) {
+		parts.push(
+			`skipped ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'}`,
+		);
+	}
+
+	if (result.failed) {
+		parts.push(`${result.failed} failed`);
+		const reason = restoreFailureText(result.failures?.[0]);
+		if (reason) {
+			parts.push(reason);
+		}
+	}
+
+	if (result.splitsSeparated) {
+		parts.push(splitNote(result.splitsSeparated));
+	}
+
+	return `${parts.join(' · ')}.`;
+}
+
+/**
+One-line result of a workspace switch, for the toast after "Switch to this session".
+*/
+export function switchSummary(
+	result: {
+		saved: number;
+		count: number;
+		failed?: number;
+		savedGroupId?: string | null;
+	},
+	name: string,
+) {
+	const parts = [
+		result.saved > 0
+			? `Saved ${plural(result.saved, 'tab')}`
+			: result.savedGroupId
+				? 'Already saved'
+				: 'Nothing to save',
+		`opened ${plural(result.count, 'tab')} from “${name}”`,
+	];
+	if (result.failed) {
+		parts.push(`${result.failed} failed`);
+	}
+
+	return `${parts.join(', ')}.`;
+}
+
+/**
+Soft restore note for saved split views the browser would not recreate (the tabs still opened).
+*/
+export const splitNote = (count: number) =>
+	`${count} split ${count === 1 ? 'view' : 'views'} opened as separate tabs`;
+
+/**
+Icon components accepted by the layout helpers (lucide icons).
+*/
+export type IconComponent = ComponentType<{
+	className?: string;
+	'aria-hidden'?: boolean | 'true' | 'false';
+}>;
+
+const STORAGE_RELOAD_DELAY_MS = 60;
+
+// Each reload returns brand-new objects. Reusing the previous object for every item that did not change
+// lets memoized cards and rows skip rendering after an unrelated edit.
+const jsonCache = new WeakMap<object, string>();
+const jsonOf = (value: object) => {
+	let json = jsonCache.get(value);
+	if (json === undefined) {
+		json = JSON.stringify(value);
+		jsonCache.set(value, json);
+	}
+
+	return json;
+};
+
+function shareUnchanged<T extends {id: string}>(
+	previous: readonly T[] | undefined,
+	next: T[],
+): T[] {
+	if (!previous || previous.length === 0) {
+		return next;
+	}
+
+	const old = new Map(previous.map((item) => [item.id, item]));
+	let same = previous.length === next.length;
+	const merged = next.map((item, index) => {
+		const before = old.get(item.id);
+		const keep = before && jsonOf(before) === JSON.stringify(item);
+		if (keep) {
+			jsonCache.set(item, jsonOf(before));
+			if (previous[index] !== before) {
+				same = false;
+			}
+
+			return before;
+		}
+
+		same = false;
+		return item;
+	});
+	return same ? (previous as T[]) : merged;
+}
+
+function shareValue<T extends object>(previous: T | undefined, next: T): T {
+	return previous && jsonOf(previous) === JSON.stringify(next)
+		? previous
+		: next;
+}
+
+const RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
+const wait = (ms: number) =>
+	new Promise<void>((resolve) => {
+		setTimeout(resolve, ms);
+	});
+const isTransportError = (reason: unknown) =>
+	/receiving end does not exist|could not establish connection|message port closed|extension context invalidated/i.test(
+		String(messageOf(reason) || reason || ''),
+	);
+
+// The service worker may still be waking up when a page opens. Transport failures are retried
+// quietly so only a definitive failure replaces the loading state with an error.
+export function useTabLodgeState(
+	initialRequest?: Promise<ActionResult<'GET_STATE'> | undefined>,
+) {
+	const [state, setState] = useState<TabLodgeState | null>(null);
+	const [error, setError] = useState('');
+	const [loading, setLoading] = useState(true);
+	const initialRequestRef = useRef(initialRequest);
+	// Each load gets a number; only the newest one may write state, so a slow older response
+	// can never overwrite a newer one.
+	const latestRequestRef = useRef(0);
+	const mountedRef = useRef(true);
+	const load = useCallback(async (): Promise<TabLodgeState | null> => {
+		latestRequestRef.current += 1;
+		const request = latestRequestRef.current;
+		try {
+			let result: ActionResult<'GET_STATE'> | ActionFailure | undefined;
+			for (let attempt = 0; ; attempt += 1) {
+				try {
+					const firstRequest = initialRequestRef.current;
+					initialRequestRef.current = undefined;
+					result = firstRequest ? await firstRequest : await send('GET_STATE');
+				} catch (reason) {
+					if (!isTransportError(reason) || attempt >= RETRY_DELAYS_MS.length) {
+						throw reason;
+					}
+
+					await wait(RETRY_DELAYS_MS[attempt]);
+					continue;
+				}
+
+				if (result || attempt >= RETRY_DELAYS_MS.length) {
+					break;
+				}
+
+				await wait(RETRY_DELAYS_MS[attempt]);
+			}
+
+			if (!result?.ok) {
+				throw new Error(
+					result?.error || `${PROJECT.name} could not load saved data.`,
+				);
+			}
+
+			if (request !== latestRequestRef.current || !mountedRef.current) {
+				return result;
+			}
+
+			const groups = Array.isArray(result.groups) ? result.groups : [];
+			const folders = Array.isArray(result.folders)
+				? result.folders
+				: [{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true}];
+			const bookmarkColumns = Array.isArray(result.bookmarkColumns)
+				? result.bookmarkColumns
+				: [
+						{
+							id: 'bookmark-default',
+							name: 'Bookmarks',
+							createdAt: 0,
+							isDefault: true,
+						},
+					];
+			const bookmarks = Array.isArray(result.bookmarks) ? result.bookmarks : [];
+			setState((old) => ({
+				...result,
+				groups: shareUnchanged(old?.groups, groups),
+				folders: shareUnchanged(old?.folders, folders),
+				bookmarkColumns: shareUnchanged(old?.bookmarkColumns, bookmarkColumns),
+				bookmarks: shareUnchanged(old?.bookmarks, bookmarks),
+				settings:
+					result.settings && old?.settings
+						? shareValue(old.settings, result.settings)
+						: result.settings,
+			}));
+			setError('');
+			return result;
+		} catch (reason) {
+			if (request !== latestRequestRef.current || !mountedRef.current) {
+				return null;
+			}
+
+			setError(
+				isTransportError(reason)
+					? `${PROJECT.name}’s background service is not responding. Reload the page or the extension and try again.`
+					: String(
+							messageOf(reason) || `${PROJECT.name} could not load saved data.`,
+						),
+			);
+			return null;
+		} finally {
+			if (request === latestRequestRef.current && mountedRef.current) {
+				setLoading(false);
+			}
+		}
+	}, []);
+
+	useEffect(() => {
+		mountedRef.current = true;
+		void load();
+		// A burst of storage writes (an import, a bulk move, our own reload after an action) is read once.
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const onChanged = (
+			changes: Record<string, chrome.storage.StorageChange>,
+			area: chrome.storage.AreaName,
+		) => {
+			if (
+				chrome.extension.inIncognitoContext &&
+				area === 'local' &&
+				Object.hasOwn(changes, PRIVATE_CONFIG_KEY)
+			) {
+				const {oldValue, newValue} = changes[PRIVATE_CONFIG_KEY];
+				if (privateConfigNeedsReload(oldValue, newValue)) {
+					reloadPrivatePage();
+				}
+
+				return;
+			}
+
+			if (!(
+				['local', 'session'].includes(area) &&
+				(Object.hasOwn(changes, STORAGE_KEY) ||
+					(chrome.extension.inIncognitoContext &&
+						Object.hasOwn(changes, `${PRIVATE_STORAGE_PREFIX}${STORAGE_KEY}`)))
+			)) {
+				return;
+			}
+
+			clearTimeout(timer);
+			timer = setTimeout(() => void load(), STORAGE_RELOAD_DELAY_MS);
+		};
+
+		chrome.storage.onChanged.addListener(onChanged);
+		return () => {
+			mountedRef.current = false;
+			clearTimeout(timer);
+			chrome.storage.onChanged.removeListener(onChanged);
+		};
+	}, [load]);
+	return {state, error, loading, reload: load};
+}
+
+export function LoadingLine({className = ''}: {className?: string}) {
+	return (
+		<p
+			className={cn('sr-only py-6 text-sm text-muted-foreground', className)}
+			role="status"
+			aria-live="polite"
+		>
+			Loading {PROJECT.name}…
+		</p>
+	);
+}
+
+// Every showStatus call gets a fresh id so a repeated message shows again after it was dismissed.
+export type Status = {
+	message: string;
+	error: boolean;
+	/**
+	Show a success message as a visible toast. Errors are always visible.
+	*/
+	toast?: boolean;
+	/**
+	Set by showStatus; errors without an id (passed in directly) never time out.
+	*/
+	id?: string;
+	/**
+	A button on the toast, such as Undo. The toast stays a little longer while it has one.
+	*/
+	action?: StatusAction;
+};
+export type StatusAction = {
+	label: string;
+	onClick: () => void | Promise<void>;
+};
+export type StatusOptions = {
+	/**
+	Show a success message as a visible toast instead of only announcing it to screen readers.
+	*/
+	toast?: boolean;
+	/**
+	Adds a button to the toast (always shown as a toast), for example `{label: 'Undo', onClick}`.
+	*/
+	action?: StatusAction;
+};
+/**
+ `showStatus(message)` announces a routine success to screen readers only,
+ `showStatus(message, false, { toast: true })` also shows it as a toast, and
+ `showStatus(message, true)` shows an error toast. `showStatus(null)` clears the status.
+ */
+export type ShowStatus = (
+	message?: string | null,
+	error?: unknown,
+	options?: StatusOptions,
+) => void;
+
+/**
+The toast button after a save rejected duplicates: saves those still open tabs anyway.
+*/
+export function forceAddAction(
+	tabIds: number[],
+	showStatus: ShowStatus,
+	afterAdd: () => unknown,
+): StatusAction {
+	return {
+		label: 'Force add',
+		async onClick() {
+			const result = await send('SAVE_TABS', {
+				scope: 'all-windows',
+				tabIds,
+				includePinned: true,
+				allowDuplicates: true,
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not add those tabs.', true);
+				return;
+			}
+
+			showStatus(`Added ${plural(result.count, 'tab')}.`, false, {
+				toast: true,
+			});
+			await afterAdd();
+		},
+	};
+}
+
+/**
+The note for a save that left duplicates out, such as " 2 duplicates not saved." (empty when none).
+*/
+export const duplicatesNote = (skipped: number) =>
+	skipped ? ` ${plural(skipped, 'duplicate')} not saved.` : '';
+
+export function useStatus(): [Status | null, ShowStatus] {
+	const [status, setStatus] = useState<Status | null>(null);
+	const showStatus: ShowStatus = (message, error = false, options = {}) =>
+		setStatus(
+			message
+				? {
+						message,
+						error: Boolean(error),
+						toast: Boolean(options.toast || options.action),
+						id: `${Date.now()}-${Math.random()}`,
+						...(options.action && {action: options.action}),
+					}
+				: null,
+		);
+	return [status, showStatus];
+}
+
+const TOAST_TIMEOUT_MS = {success: 4000, error: 10_000, action: 6000};
+
+// Routine success messages are only announced to screen readers. Errors and success messages
+// marked `toast` appear as a small dismissible toast at the bottom center. Toasts from showStatus
+// fade after 4s (success), 6s (with an action such as Undo) or 10s (error); errors passed in directly (such as a failed initial
+// load) stay until dismissed.
+export function StatusLine({status}: {status: Status | null | undefined}) {
+	const [dismissed, setDismissed] = useState<string | null>(null);
+	// The timeout stops while the pointer or keyboard focus is on the toast, so Undo can always be reached.
+	const [paused, setPaused] = useState(false);
+	const visible =
+		status?.message && (status.error || status.toast) ? status : null;
+	const key = visible ? `${visible.id ?? 'fixed'}:${visible.message}` : null;
+	const shown = Boolean(visible) && dismissed !== key;
+	useEffect(() => {
+		if (!visible?.id || paused) {
+			return undefined;
+		}
+
+		const timer = setTimeout(
+			() => setDismissed(key),
+			visible.error
+				? TOAST_TIMEOUT_MS.error
+				: visible.action
+					? TOAST_TIMEOUT_MS.action
+					: TOAST_TIMEOUT_MS.success,
+		);
+		return () => clearTimeout(timer);
+	}, [key, visible?.id, visible?.error, visible?.action, paused]);
+	useEffect(() => {
+		if (!shown) {
+			setPaused(false);
+		}
+	}, [shown]);
+	const undoAction = shown ? visible?.action : undefined;
+	useEffect(() => {
+		if (!undoAction) {
+			return undefined;
+		}
+
+		// Ctrl/Cmd+Z runs the toast's action (Undo) from anywhere except text fields, which keep their own undo.
+		const onKeyDown = (event: KeyboardEvent) => {
+			const target = event.target as HTMLElement | null;
+			if (
+				event.key.toLowerCase() !== 'z' ||
+				!(event.ctrlKey || event.metaKey) ||
+				event.shiftKey ||
+				event.altKey ||
+				event.defaultPrevented ||
+				target?.closest('input, textarea, select, [contenteditable="true"]') ||
+				document.querySelector('[role="dialog"], [role="alertdialog"]')
+			) {
+				return;
+			}
+
+			event.preventDefault();
+			setDismissed(key);
+			void undoAction.onClick();
+		};
+
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [undoAction, key]);
+	const Icon = visible?.error ? CircleAlert : CircleCheck;
+	return (
+		<>
+			<p className="sr-only" role="status" aria-live="polite">
+				{status && !status.error ? status.message || '' : ''}
+			</p>
+			{visible && shown && (
+				<div
+					key={key}
+					role={visible.error ? 'alert' : undefined}
+					className={cn(
+						'fixed bottom-5 left-1/2 z-100 flex w-max max-w-[min(92vw,28rem)] -translate-x-1/2 animate-[pop-in_160ms_ease-out] motion-reduce:animate-none items-start gap-2.5 rounded-lg border bg-popover py-2.5 pl-3 pr-2 text-sm text-popover-foreground shadow-lg',
+						visible.error ? 'border-destructive/40' : 'border-border',
+					)}
+					onMouseEnter={() => setPaused(true)}
+					onMouseLeave={() => setPaused(false)}
+					onFocus={() => setPaused(true)}
+					onBlur={(event) => {
+						if (!event.currentTarget.contains(event.relatedTarget)) {
+							setPaused(false);
+						}
+					}}
+				>
+					<Icon
+						className={cn(
+							'mt-0.5 h-4 w-4 shrink-0',
+							visible.error ? 'text-destructive' : 'text-primary',
+						)}
+						aria-hidden="true"
+					/>
+					<span className="min-w-0 flex-1 wrap-break-word leading-5">
+						{visible.message}
+					</span>
+					{visible.action && (
+						<button
+							type="button"
+							aria-keyshortcuts="Control+Z Meta+Z"
+							className="shrink-0 rounded-sm px-1.5 text-sm font-semibold leading-5 text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+							onClick={() => {
+								setDismissed(key);
+								void visible.action!.onClick();
+							}}
+						>
+							{visible.action.label}
+						</button>
+					)}
+					<button
+						type="button"
+						aria-label="Dismiss message"
+						className="grid h-5 w-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						onClick={() => setDismissed(key)}
+					>
+						<X className="h-3.5 w-3.5" aria-hidden="true" />
+					</button>
+				</div>
+			)}
+		</>
+	);
+}
+
+// The filled TabLodge logo mark; matches shell/icons/tablodge.svg. Use it wherever TabLodge itself
+// is shown (headers, empty states). The outline lucide Layers2 stays for actions such as saving a window.
+const MARK_PATH =
+	'M12 42 64 14l52 28-52 28ZM12 86l14.9-8L64 98l37.1-20 14.9 8-52 28Z';
+export function TabLodgeMark({
+	className = 'h-6 w-6',
+}: {
+	className?: string;
+	'aria-hidden'?: boolean | 'true' | 'false';
+}) {
+	return (
+		<svg
+			viewBox="0 0 128 128"
+			className={className}
+			aria-hidden="true"
+			focusable="false"
+		>
+			<path
+				d={MARK_PATH}
+				fill="currentColor"
+				stroke="currentColor"
+				strokeWidth="8"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
+export function Brand({
+	compact = false,
+	link = 'newtab.html',
+	label = PROJECT.name,
+	newTab = false,
+	privateBadge = false,
+}: {
+	compact?: boolean;
+	link?: string;
+	label?: string;
+	newTab?: boolean;
+	// Shows the filled private window badge in place of the logo tile inside a private window.
+	privateBadge?: boolean;
+}) {
+	const showPrivate = privateBadge && chrome.extension.inIncognitoContext;
+	return (
+		<a
+			href={link}
+			target={newTab ? '_blank' : undefined}
+			rel={newTab ? 'noopener noreferrer' : undefined}
+			className="inline-flex min-w-0 items-center gap-2.5 rounded-lg text-sm font-extrabold tracking-tight focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+			aria-label={label}
+		>
+			{showPrivate ? (
+				<span
+					role="img"
+					aria-label="Private window"
+					title="Private window"
+					className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"
+				>
+					<PrivateWindowMark className="h-7 w-7" />
+				</span>
+			) : (
+				<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+					<TabLodgeMark className="h-[22px] w-[22px]" />
+				</span>
+			)}
+			{!compact && <span className="truncate">{PROJECT.name}</span>}
+		</a>
+	);
+}
+
+// Where the skip link lands: an empty, focusable marker right after the header, so the next Tab reaches the page's content.
+const MAIN_CONTENT_ID = 'main-content';
+
+export type AppPage = 'dashboard' | 'settings' | 'help';
+const APP_PAGES: ReadonlyArray<{id: AppPage; label: string; href: string}> = [
+	{id: 'dashboard', label: 'Dashboard', href: 'newtab.html'},
+	{id: 'settings', label: 'Settings', href: 'options.html'},
+	{id: 'help', label: 'Help', href: 'help.html'},
+];
+
+/**
+Shared header for the Dashboard, Settings and Help pages: "[logo] TabLodge | Dashboard Settings Help".
+The active page is shown in the foreground color with a primary underline (aria-current="page").
+Page actions go on the right. Navigation stays in the same tab.
+*/
+export function AppHeader({
+	active,
+	children,
+}: {
+	active: AppPage;
+	children?: ReactNode;
+}) {
+	return (
+		<>
+			<a
+				href={`#${MAIN_CONTENT_ID}`}
+				className="sr-only rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+				onClick={(event) => {
+					// A plain hash jump would also fire the pages' own hash handlers (Settings and Help topics).
+					event.preventDefault();
+					const target = document.querySelector<HTMLElement>(
+						`#${MAIN_CONTENT_ID}`,
+					);
+					target?.focus();
+					target?.scrollIntoView({block: 'start'});
+				}}
+			>
+				Skip to main content
+			</a>
+			<header className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 border-b border-border pb-2 sm:mb-8 sm:flex sm:flex-wrap sm:justify-between sm:gap-x-4 sm:pb-4">
+				<h1 className="sr-only">
+					{PROJECT.name} {APP_PAGES.find((page) => page.id === active)?.label}
+				</h1>
+				<div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
+					<Brand />
+					<span
+						className="hidden h-5 w-px shrink-0 bg-border sm:block"
+						aria-hidden="true"
+					/>
+					<nav
+						aria-label={`${PROJECT.name} pages`}
+						className="col-span-2 row-start-2 flex flex-wrap items-center gap-1"
+					>
+						{APP_PAGES.map((page) => {
+							const current = page.id === active;
+							return (
+								<a
+									key={page.id}
+									href={page.href}
+									aria-current={current ? 'page' : undefined}
+									className={cn(
+										'relative inline-flex h-9 items-center rounded-md px-2.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+										current
+											? 'font-medium text-foreground after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary'
+											: 'text-muted-foreground hover:text-foreground',
+									)}
+								>
+									{page.label}
+								</a>
+							);
+						})}
+					</nav>
+				</div>
+				{(Boolean(children) || inPrivateWindow()) && (
+					<div className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center justify-end gap-2">
+						{children}
+						<PrivateLockButton />
+					</div>
+				)}
+			</header>
+			<div id={MAIN_CONTENT_ID} tabIndex={-1} className="outline-hidden" />
+		</>
+	);
+}
+
+// Shown in place of a page when its saved state definitively failed to load.
+export function LoadError({
+	message,
+	className = '',
+}: {
+	message: string;
+	className?: string;
+}) {
+	return (
+		<div
+			role="alert"
+			className={cn(
+				'flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-card p-4 text-sm',
+				className,
+			)}
+		>
+			<CircleAlert
+				className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
+				aria-hidden="true"
+			/>
+			<div className="min-w-0">
+				<p className="font-medium">{message}</p>
+				<button
+					type="button"
+					className="mt-2 rounded-sm text-xs font-semibold text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+					onClick={() => location.reload()}
+				>
+					Reload page
+				</button>
+			</div>
+		</div>
+	);
+}
+
+export function PageShell({
+	children,
+	className = '',
+	...props
+}: ComponentPropsWithoutRef<'main'>) {
+	return (
+		<main
+			className={cn(
+				'mx-auto w-full max-w-6xl px-5 py-6 sm:px-8 sm:py-9',
+				className,
+			)}
+			{...props}
+		>
+			{children}
+		</main>
+	);
+}
+
+export function EmptyState({
+	icon: Icon = Bookmark,
+	title,
+	children,
+	action,
+}: {
+	icon?: IconComponent;
+	title: ReactNode;
+	children?: ReactNode;
+	action?: ReactNode;
+}) {
+	return (
+		<div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card px-6 py-10 text-center">
+			<span className="mb-4 grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
+				<Icon className="h-5 w-5" />
+			</span>
+			<h2 className="text-base font-semibold">{title}</h2>
+			<p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+				{children}
+			</p>
+			{Boolean(action) && <div className="mt-5">{action}</div>}
+		</div>
+	);
+}
+
+// Header is a flex row (space-y reset so the text block is not pushed down) with the icon
+// centered against the title/description block, on a tinted strip separated from the body.
+export function SectionCard({
+	id,
+	title,
+	description,
+	icon: Icon,
+	action,
+	children,
+	className = '',
+}: {
+	title: ReactNode;
+	description?: ReactNode;
+	icon?: IconComponent;
+	action?: ReactNode;
+	children?: ReactNode;
+	className?: string;
+	id?: string;
+}) {
+	return (
+		<Card id={id} className={cn('overflow-hidden', className)}>
+			<CardHeader className="flex-row flex-wrap items-center gap-3 space-y-0 border-b border-border bg-muted/60 px-4 py-3">
+				{Icon && (
+					<span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border bg-card text-primary">
+						<Icon className="h-4 w-4" aria-hidden="true" />
+					</span>
+				)}
+				<div className="min-w-[12rem] flex-1">
+					<CardTitle className="text-[15px] leading-6">{title}</CardTitle>
+					{Boolean(description) && (
+						<CardDescription className="text-xs leading-5">
+							{description}
+						</CardDescription>
+					)}
+				</div>
+				{Boolean(action) && (
+					<div className="max-sm:basis-full max-sm:[&>*]:w-full sm:shrink-0">
+						{action}
+					</div>
+				)}
+			</CardHeader>
+			<CardContent className="pt-4">{children}</CardContent>
+		</Card>
+	);
+}
+
+export {send} from './message-client';
+
+export {plural} from './plural';

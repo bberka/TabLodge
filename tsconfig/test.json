@@ -1,5 +1,5 @@
 {
-	// Vitest suites (run in Node, exercising extension code with mocked chrome APIs).
+	// Vitest suites (run in Node, exercising app code with mocked chrome APIs).
 	"extends": "./base.json",
 	"compilerOptions": {
 		"tsBuildInfoFile": "../node_modules/.tmp/tsconfig.test.tsbuildinfo",
@@ -7,5 +7,5 @@
 		"jsx": "react-jsx",
 		"types": ["node", "chrome"]
 	},
-	"include": ["../tests/**/*.ts"]
+	"include": ["../apps/*/tests/**/*.ts", "../scripts/**/*.test.ts"]
 }

@@ -10,8 +10,9 @@ const xoConfig: XoConfigItem[] = [
 			'dist/**',
 			'release/**',
 			'docs/**',
-			'site/**',
-			'server/cloudflare-deploy/worker.js',
+			'apps/site/**',
+			'apps/server/cloudflare-deploy/worker.js',
+			'**/dist/**',
 			'.agents/**',
 			'.claude/worktrees/**',
 			'skills-lock.json',
@@ -27,13 +28,14 @@ const xoConfig: XoConfigItem[] = [
 			parserOptions: {
 				projectService: false,
 				project: [
-					'./tsconfig/app.json',
-					'./tsconfig/worker.json',
+					'./apps/extension/tsconfig.json',
+					'./apps/extension/tsconfig.worker.json',
+					'./apps/extension/tsconfig.node.json',
+					'./apps/server/tsconfig.json',
+					'./apps/server/tsconfig.worker.json',
+					'./apps/mobile/tsconfig.json',
 					'./tsconfig/test.json',
 					'./tsconfig/node.json',
-					'./server/tsconfig.json',
-					'./server/tsconfig.worker.json',
-					'./mobile/tsconfig.json',
 				],
 				tsconfigRootDir: import.meta.dirname,
 			},
@@ -157,7 +159,7 @@ const xoConfig: XoConfigItem[] = [
 	},
 	{
 		// HTML shells are extension pages, not public web pages; the order of the boot script, styles, and bundle in <head> is deliberate.
-		files: ['extension/*.html'],
+		files: ['apps/extension/shell/*.html'],
 		rules: {
 			'@html-eslint/require-meta-description': 'off',
 			'@html-eslint/require-open-graph-protocol': 'off',
@@ -165,16 +167,18 @@ const xoConfig: XoConfigItem[] = [
 		},
 	},
 	{
-		// `repository` and `bugs` stay objects (`src/app/project.ts` reads `repository.url`), and Tailwind is pinned to its final 3.x release on purpose (the config is v3-only).
+		// `repository` and `bugs` stay objects (`apps/extension/src/app/project.ts` reads `repository.url`).
 		files: ['package.json'],
-		rules: {
-			'package-json/prefer-shorthand': 'off',
-			'package-json/dependency-version-range': 'off',
-		},
+		rules: {'package-json/prefer-shorthand': 'off'},
+	},
+	{
+		// Tailwind is pinned to an exact version on purpose (the config is version specific).
+		files: ['apps/extension/package.json'],
+		rules: {'package-json/dependency-version-range': 'off'},
 	},
 	{
 		// The Docker server's entry point starts the process and exits on bad configuration, like a CLI.
-		files: ['server/src/node.ts'],
+		files: ['apps/server/src/node.ts'],
 		rules: {'unicorn/no-process-exit': 'off'},
 	},
 	{
@@ -182,14 +186,14 @@ const xoConfig: XoConfigItem[] = [
 		files: [
 			'tsconfig.json',
 			'tsconfig/*.json',
-			'server/tsconfig*.json',
-			'server/wrangler.jsonc',
+			'apps/*/tsconfig*.json',
+			'apps/server/wrangler.jsonc',
 		],
 		language: 'json/jsonc',
 	},
 	{
 		// Tailwind's `@theme` and `@source` directives are not standard CSS.
-		files: ['styles/**/*.css'],
+		files: ['apps/extension/styles/**/*.css'],
 		languageOptions: {
 			customSyntax: {
 				atrules: {
@@ -202,8 +206,8 @@ const xoConfig: XoConfigItem[] = [
 	{
 		// Sanitizers strip C0 control characters from untrusted titles and URLs on purpose.
 		files: [
-			'extension/service-worker.ts',
-			'src/app/{import-formats,interaction-actions,newtab,page-params}.ts{,x}',
+			'apps/extension/shell/service-worker.ts',
+			'apps/extension/src/app/{import-formats,interaction-actions,newtab,page-params}.ts{,x}',
 		],
 		rules: {
 			'no-control-regex': 'off',
@@ -212,12 +216,12 @@ const xoConfig: XoConfigItem[] = [
 	},
 	{
 		// The service worker is a classic script that tests type-strip and run in a VM, so it cannot use `import type` statements; `import("...")` types keep it self-contained.
-		files: ['extension/service-worker.ts'],
+		files: ['apps/extension/shell/service-worker.ts'],
 		rules: {'@typescript-eslint/consistent-type-imports': 'off'},
 	},
 	{
 		// Shadcn-style primitives mirror the upstream generator output (forwardRef, Context.Provider, useContext), which is updated by regenerating, not by hand.
-		files: ['src/components/ui/**'],
+		files: ['apps/extension/src/components/ui/**'],
 		rules: {
 			'@eslint-react/no-forward-ref': 'off',
 			'@eslint-react/no-context-provider': 'off',
@@ -230,7 +234,7 @@ const xoConfig: XoConfigItem[] = [
 	},
 	{
 		// Tests mock Chrome and web-platform globals (`getURL`, `WINDOW_ID_NONE`, `URL`), feed `javascript:` URLs to the sanitizers, and name `vm.createContext` results `context`.
-		files: ['tests/**'],
+		files: ['apps/*/tests/**', 'scripts/**/*.test.ts'],
 		rules: {
 			'@typescript-eslint/naming-convention': 'off',
 			'@eslint-react/naming-convention-context-name': 'off',
@@ -239,27 +243,30 @@ const xoConfig: XoConfigItem[] = [
 	},
 	{
 		// `homepage_url`, `sidebar_action` and the other manifest keys are not our naming choice.
-		files: ['scripts/vite-shared.ts', 'scripts/manifest-targets.ts'],
+		files: [
+			'apps/extension/scripts/vite-shared.ts',
+			'apps/extension/scripts/manifest-targets.ts',
+		],
 		rules: {'@typescript-eslint/naming-convention': 'off'},
 	},
 	{
 		// Constructing `vm.Script` is the syntax check; the instance itself is not needed.
-		files: ['scripts/verify-build.ts'],
+		files: ['apps/extension/scripts/verify-build.ts'],
 		rules: {'no-new': 'off'},
 	},
 	{
 		// The settings page reads boolean setting values by dynamic name; presence is not the question there.
-		files: ['src/app/options.tsx'],
+		files: ['apps/extension/src/app/options.tsx'],
 		rules: {'unicorn/no-computed-property-existence-check': 'off'},
 	},
 	{
 		// Lucide-react marks its brand icons deprecated, but it is the only GitHub mark the bundled icon set offers.
-		files: ['src/app/help.tsx'],
+		files: ['apps/extension/src/app/help.tsx'],
 		rules: {'@typescript-eslint/no-deprecated': 'off'},
 	},
 	{
 		// Expo pins exact SDK versions (`expo install --check` enforces them), and Metro expects a CommonJS-style `main` entry.
-		files: ['mobile/package.json'],
+		files: ['apps/mobile/package.json'],
 		rules: {
 			'package-json/dependency-version-range': 'off',
 			'package-json/prefer-type-module': 'off',

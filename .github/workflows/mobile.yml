@@ -8,40 +8,38 @@ on:
   push:
     branches: [master, main]
     paths:
-      - mobile/**
-      - server/**
-      - src/shared/**
-      - src/app/types.ts
-      - src/app/icon-ids.ts
-      - src/app/crypto-envelope.ts
-      - src/app/passcode.ts
-      - src/app/private-lock.ts
-      - src/app/private-sync.ts
-      - src/app/tracking-parameters.ts
-      - src/app/url-display.ts
-      - scripts/dev-fixture.ts
+      - apps/mobile/**
+      - apps/server/**
+      - apps/extension/src/shared/**
+      - apps/extension/src/app/types.ts
+      - apps/extension/src/app/icon-ids.ts
+      - apps/extension/src/app/crypto-envelope.ts
+      - apps/extension/src/app/passcode.ts
+      - apps/extension/src/app/private-lock.ts
+      - apps/extension/src/app/private-sync.ts
+      - apps/extension/src/app/tracking-parameters.ts
+      - apps/extension/src/app/url-display.ts
+      - apps/extension/scripts/dev-fixture.ts
       - scripts/release-version.ts
-      - tests/mobile-*.test.ts
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - .github/workflows/mobile.yml
   pull_request:
     paths:
-      - mobile/**
-      - server/**
-      - src/shared/**
-      - src/app/types.ts
-      - src/app/icon-ids.ts
-      - src/app/crypto-envelope.ts
-      - src/app/passcode.ts
-      - src/app/private-lock.ts
-      - src/app/private-sync.ts
-      - src/app/tracking-parameters.ts
-      - src/app/url-display.ts
-      - scripts/dev-fixture.ts
+      - apps/mobile/**
+      - apps/server/**
+      - apps/extension/src/shared/**
+      - apps/extension/src/app/types.ts
+      - apps/extension/src/app/icon-ids.ts
+      - apps/extension/src/app/crypto-envelope.ts
+      - apps/extension/src/app/passcode.ts
+      - apps/extension/src/app/private-lock.ts
+      - apps/extension/src/app/private-sync.ts
+      - apps/extension/src/app/tracking-parameters.ts
+      - apps/extension/src/app/url-display.ts
+      - apps/extension/scripts/dev-fixture.ts
       - scripts/release-version.ts
-      - tests/mobile-*.test.ts
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
@@ -83,11 +81,11 @@ jobs:
       - name: Generate the Android project
         run: pnpm --filter tablodge-mobile exec expo prebuild --platform android --no-install
       - name: Build the debug APK
-        working-directory: mobile/android
+        working-directory: apps/mobile/android
         run: ./gradlew assembleDebug -x lint -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
       - uses: actions/upload-artifact@v5
         with:
           name: tablodge-debug-apk
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
