@@ -31,7 +31,7 @@ import {
 	useSyncStatus,
 } from '../library-store';
 import {linkToOpen} from '../links';
-import {openAll} from '../open-links';
+import {openAll, openLink} from '../open-links';
 import {useLinkSettings} from '../use-link-settings';
 import {showSnack} from '../snackbar';
 import {useRoomBelow} from '../keyboard';
@@ -46,6 +46,7 @@ import {FloatingActions, SearchDock, useSearch} from '../floating-actions';
 import {Button, Chips, Empty, Header, IconButton} from '../ui';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
+import {openExport} from './transfer-sheets';
 import {ReorderRow} from './reorder-row';
 import {
 	BookmarkRow,
@@ -91,6 +92,8 @@ export function BookmarksScreen({
 	const {query} = search;
 	const [refreshing, setRefreshing] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
+	// The bookmark whose menu is open, from holding down its row.
+	const [rowMenuId, setRowMenuId] = useState<string>();
 	const [columnsOpen, setColumnsOpen] = useState(false);
 	// While true, rows show buttons that move them instead of opening them.
 	const [reordering, setReordering] = useState(false);
@@ -141,6 +144,75 @@ export function BookmarksScreen({
 		(column) => column.id === columnId,
 	);
 	const isAllSelected = shown.length > 0 && selection.ids.size === shown.length;
+	const rowMenuBookmark = store.bookmarks.find(
+		(bookmark) => bookmark.id === rowMenuId,
+	);
+	// What holding a row offers: what the swipes and the menu offer, for that one bookmark.
+	const rowActions: SheetAction[] = rowMenuBookmark
+		? [
+				{
+					icon: 'open-outline',
+					label: 'Open',
+					onPress() {
+						openLink(linkToOpen(rowMenuBookmark.url, links));
+					},
+				},
+				{
+					icon: 'create-outline',
+					label: 'Edit',
+					hint: 'Its link, title, and column',
+					onPress() {
+						setSheet({kind: 'edit', bookmark: rowMenuBookmark});
+					},
+				},
+				...(store.bookmarkColumns.length > 1
+					? [
+							{
+								icon: 'folder-open-outline' as const,
+								label: 'Move to column',
+								onPress() {
+									selection.start(rowMenuBookmark.id);
+									setSheet({kind: 'move'});
+								},
+							},
+						]
+					: []),
+				{
+					icon: 'checkbox-outline',
+					label: 'Select',
+					hint: 'Pick several to open, move or delete',
+					onPress() {
+						selection.start(rowMenuBookmark.id);
+					},
+				},
+				{
+					icon: 'download-outline',
+					label: 'Export',
+					hint: 'JSON, HTML, CSV or Markdown file',
+					onPress() {
+						openExport({
+							title: rowMenuBookmark.title || rowMenuBookmark.url,
+							data: {
+								kind: 'bookmarks',
+								columns: store.bookmarkColumns.filter(
+									(column) => column.id === rowMenuBookmark.columnId,
+								),
+								bookmarks: [rowMenuBookmark],
+							},
+						});
+					},
+				},
+				{
+					icon: 'trash-outline',
+					label: 'Delete',
+					destructive: true,
+					onPress() {
+						remove(new Set([rowMenuBookmark.id]));
+					},
+				},
+			]
+		: [];
+
 	const remove = (ids: ReadonlySet<string>) => {
 		const gone = removedBookmarks(store, ids);
 		if (gone.length === 0) {
@@ -215,6 +287,27 @@ export function BookmarksScreen({
 						hint: `Move bookmarks up and down in ${columnName}`,
 						onPress() {
 							setReordering(true);
+						},
+					},
+				]
+			: []),
+		...(!isSearching && isEditableColumn && shown.length > 0
+			? [
+					{
+						icon: 'download-outline' as const,
+						label: 'Export column',
+						hint: 'JSON, HTML, CSV or Markdown file',
+						onPress() {
+							openExport({
+								title: columnName ?? 'column',
+								data: {
+									kind: 'bookmarks',
+									columns: store.bookmarkColumns.filter(
+										(column) => column.id === columnId,
+									),
+									bookmarks: shown,
+								},
+							});
 						},
 					},
 				]
@@ -479,7 +572,11 @@ export function BookmarksScreen({
 								selection.toggle(item.id);
 							}}
 							onSelect={() => {
-								selection.start(item.id);
+								if (selection.active) {
+									selection.toggle(item.id);
+								} else {
+									setRowMenuId(item.id);
+								}
 							}}
 							onEdit={() => {
 								setSheet({kind: 'edit', bookmark: item});
@@ -535,6 +632,17 @@ export function BookmarksScreen({
 							`${selection.ids.size} selected`,
 						);
 					}}
+					onExport={() => {
+						const chosen = shown.filter((item) => selection.ids.has(item.id));
+						openExport({
+							title: `${chosen.length} bookmarks`,
+							data: {
+								kind: 'bookmarks',
+								columns: store.bookmarkColumns,
+								bookmarks: chosen,
+							},
+						});
+					}}
 					onEdit={() => {
 						const bookmark = shown.find((item) => selection.ids.has(item.id));
 						if (bookmark) {
@@ -549,6 +657,14 @@ export function BookmarksScreen({
 					}}
 				/>
 			)}
+			<ActionSheet
+				visible={rowMenuBookmark !== undefined}
+				title={rowMenuBookmark?.title || rowMenuBookmark?.url || ''}
+				actions={rowActions}
+				onClose={() => {
+					setRowMenuId(undefined);
+				}}
+			/>
 			<ActionSheet
 				visible={menuOpen}
 				title={columnName ?? 'Bookmarks'}

@@ -48,14 +48,6 @@ export function sessionActionLook(
 			return {label: 'Open all', icon: 'albums-outline', color: colors.accent};
 		}
 
-		case 'color': {
-			return {
-				label: 'Change color',
-				icon: 'color-palette-outline',
-				color: colors.accent,
-			};
-		}
-
 		case 'rename': {
 			return {
 				label: 'Edit details',

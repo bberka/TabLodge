@@ -50,3 +50,21 @@ export async function shareTextFile(
 		dialogTitle: filename,
 	});
 }
+
+/**
+Hands a binary file, such as a backup ZIP, to Android's share sheet, the same way as `shareTextFile`.
+*/
+export async function shareBinaryFile(
+	filename: string,
+	mime: string,
+	bytes: Uint8Array,
+): Promise<void> {
+	const file = new File(Paths.cache, filename);
+	if (file.exists) {
+		file.delete();
+	}
+
+	file.create();
+	await file.write(bytes);
+	await Sharing.shareAsync(file.uri, {mimeType: mime, dialogTitle: filename});
+}

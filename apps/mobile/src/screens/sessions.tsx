@@ -20,6 +20,7 @@ import {
 	canChangeFolder,
 	deleteFolder,
 	restoreFolder,
+	setSessionColor,
 	describeSession,
 	hostOf,
 	markSessionOpened,
@@ -57,9 +58,8 @@ import {useView} from '../view';
 import {Button, Card, Chips, Empty, Header, Icon} from '../ui';
 import {SiteIcon} from '../site-icon';
 import {FolderEditSheet} from './folder-sheet';
+import {openExport, ShareLinksSheet, type ShareTarget} from './transfer-sheets';
 import {FolderSheet, RenameSheet} from './session-sheets';
-import {SessionColorSheet} from './session-color-sheet';
-import {ShareLinksSheet, type ShareTarget} from './transfer-sheets';
 
 const PREVIEW_TABS = 4;
 
@@ -68,7 +68,6 @@ const SESSION_MENU: ReadonlyArray<readonly [string, string]> = [
 	['expand', 'Show or hide tabs'],
 	['open', 'Open all tabs'],
 	['rename', 'Edit details'],
-	['color', 'Change color'],
 	['move', 'Move to folder'],
 	['share', 'Share links'],
 	['archive', 'Archive'],
@@ -391,8 +390,6 @@ export function SessionsScreen({
 	// expanded.
 	const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
 	const isExpandAll = links.expandSessionsByDefault;
-	const [coloringId, setColoringId] = useState<string>();
-	const coloring = store.groups.find((session) => session.id === coloringId);
 	const [renamingId, setRenamingId] = useState<string>();
 	const renaming = store.groups.find((session) => session.id === renamingId);
 	const [movingId, setMovingId] = useState<string>();
@@ -478,11 +475,6 @@ export function SessionsScreen({
 					break;
 				}
 
-				case 'color': {
-					setColoringId(session.id);
-					break;
-				}
-
 				case 'rename': {
 					setRenamingId(session.id);
 					break;
@@ -565,18 +557,10 @@ export function SessionsScreen({
 	}, []);
 	const menu: SheetAction[] = menuFor
 		? (
-				[
-					'open',
-					'rename',
-					'color',
-					'move',
-					'share',
-					'archive',
-					'delete',
-				] as const
-			).map((action) => {
+				['open', 'rename', 'move', 'share', 'archive', 'delete'] as const
+			).flatMap((action) => {
 				const actionLook = sessionActionLook(action, colorsNow);
-				return {
+				const item: SheetAction = {
 					icon: actionLook.icon,
 					label: actionLook.label,
 					destructive: action === 'delete',
@@ -584,6 +568,26 @@ export function SessionsScreen({
 						act(action, menuFor);
 					},
 				};
+				return action === 'share'
+					? [
+							item,
+							{
+								icon: 'download-outline' as const,
+								label: 'Export',
+								hint: 'JSON, HTML, CSV or Markdown file',
+								onPress() {
+									openExport({
+										title: menuFor.name,
+										data: {
+											kind: 'sessions',
+											groups: [menuFor],
+											folders: store.folders,
+										},
+									});
+								},
+							},
+						]
+					: [item];
 			})
 		: [];
 	const toggle = useCallback((id: string) => {
@@ -732,13 +736,19 @@ export function SessionsScreen({
 				session={renaming}
 				title="Edit details"
 				description={renaming?.description ?? ''}
-				onSave={(name, description) => {
+				color={renaming?.color ?? ''}
+				onSave={(name, description, color) => {
 					if (renaming) {
 						void edit((current) =>
-							describeSession(
-								renameSession(current, renaming.id, name, Date.now()),
+							setSessionColor(
+								describeSession(
+									renameSession(current, renaming.id, name, Date.now()),
+									renaming.id,
+									description ?? '',
+									Date.now(),
+								),
 								renaming.id,
-								description ?? '',
+								color ?? '',
 								Date.now(),
 							),
 						);
@@ -786,12 +796,6 @@ export function SessionsScreen({
 					if (id) {
 						setPicked(id);
 					}
-				}}
-			/>
-			<SessionColorSheet
-				session={coloring}
-				onClose={() => {
-					setColoringId(undefined);
 				}}
 			/>
 			{!search.open && (
@@ -901,14 +905,27 @@ function folderMenuFor(
 	const folder = store.folders.find((entry) => entry.id === id);
 	const actions: SheetAction[] = [];
 	if (sessions.length > 0) {
-		actions.push({
-			icon: 'share-outline',
-			label: 'Share links',
-			hint: `Every link in ${view.name}`,
-			onPress() {
-				share({title: view.name, sessions});
+		actions.push(
+			{
+				icon: 'share-outline',
+				label: 'Share links',
+				hint: `Every link in ${view.name}`,
+				onPress() {
+					share({title: view.name, sessions});
+				},
 			},
-		});
+			{
+				icon: 'download-outline',
+				label: 'Export folder',
+				hint: 'JSON, HTML, CSV or Markdown file',
+				onPress() {
+					openExport({
+						title: view.name,
+						data: {kind: 'sessions', groups: sessions, folders: store.folders},
+					});
+				},
+			},
+		);
 	}
 
 	if (folder && canChangeFolder(folder)) {
