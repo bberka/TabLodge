@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Hands the downloaded update to Android's installer. It reads only the one file this app saved for that. -->
+  <application>
+    <provider
+      android:name="expo.modules.appupdate.AppUpdateFileProvider"
+      android:authorities="${applicationId}.updates"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/app_update_paths" />
+    </provider>
+  </application>
+</manifest>

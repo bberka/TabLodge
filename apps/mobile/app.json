@@ -16,7 +16,7 @@
 			},
 			"predictiveBackGestureEnabled": true,
 			"allowBackup": false,
-			"permissions": ["INTERNET"],
+			"permissions": ["INTERNET", "REQUEST_INSTALL_PACKAGES"],
 			"blockedPermissions": [
 				"android.permission.SYSTEM_ALERT_WINDOW",
 				"android.permission.READ_EXTERNAL_STORAGE",
