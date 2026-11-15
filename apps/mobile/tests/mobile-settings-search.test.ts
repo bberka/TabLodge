@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
 	headHit,
+	matchCount,
 	normalizeQuery,
 	ROWS,
 	rowHit,
@@ -42,6 +43,12 @@ describe('settings search', () => {
 
 	test('shows nothing for a word no setting uses', () => {
 		assert.deepEqual(visible('zzzz'), []);
+		assert.equal(matchCount('zzzz'), 0);
+	});
+
+	test('counts the rows a search shows, and all rows of a card found by its name', () => {
+		assert.equal(matchCount('utm_source'), 1);
+		assert.equal(matchCount('appearance'), SECTIONS.appearance.rows.length);
 	});
 
 	test('a row is found by its own text, and a card name matches without its rows', () => {

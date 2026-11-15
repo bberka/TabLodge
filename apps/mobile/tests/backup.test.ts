@@ -1,7 +1,7 @@
 /*
 The phone's full backup against the extension's own full-backup code, both ways, with and without a password. The
 password wrap runs the native module's stand-in (tests/support/fake-crypto.ts), so what these tests cannot show is that
-the Kotlin module writes and reads the same bytes; that needs a device.
+the Kotlin module wraps a whole backup file; phone-crypto-vectors.test.ts shows its envelope for a small payload.
 */
 import assert from 'node:assert/strict';
 import {strToU8, zipSync} from 'fflate';

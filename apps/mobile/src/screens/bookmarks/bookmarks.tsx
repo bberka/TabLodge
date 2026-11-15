@@ -49,6 +49,8 @@ import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
+import {resultCount} from '../../library/search-count';
+import {useSettledText} from '../../ui/search-count';
 import {
 	FloatingActions,
 	ROOM_FOR_BUTTONS,
@@ -171,6 +173,7 @@ export function BookmarksScreen({
 					: bookmarksIn(store, columnId),
 		[store, query, columnId, isSearching],
 	);
+	const searchCount = useSettledText(isSearching, resultCount(shown.length));
 	const columnName =
 		columnId === ALL_BOOKMARKS_ID
 			? 'All'
@@ -557,12 +560,14 @@ export function BookmarksScreen({
 											? `Order ${columnName ?? ''}`
 											: 'Bookmarks'
 								}
+								live={searchCount !== undefined && shown.length > 0}
 								subtitle={
 									selection.active
 										? undefined
 										: reordering
 											? 'Move bookmarks up or down, then tap Done'
-											: `${store.bookmarks.length} saved${view === 'private' ? ', private' : ''}`
+											: (searchCount ??
+												`${store.bookmarks.length} saved${view === 'private' ? ', private' : ''}`)
 								}
 								right={headerActions}
 							/>

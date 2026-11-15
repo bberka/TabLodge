@@ -74,6 +74,8 @@ import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
+import {resultCount} from '../../library/search-count';
+import {useSettledText} from '../../ui/search-count';
 import {
 	Button,
 	Card,
@@ -573,6 +575,7 @@ export function SessionsScreen({
 		const inFolder = sessionsIn(store, folderId, links.sessionSort);
 		return needle ? inFolder.filter((s) => matches(s, needle)) : inFolder;
 	}, [store, folderId, links.sessionSort, needle]);
+	const searchCount = useSettledText(needle !== '', resultCount(shown.length));
 	const look = useCallback(
 		(folder: {id: string; name: string; icon?: string; count: number}) => {
 			if (folder.id === ALL_SESSIONS_ID) {
@@ -1014,7 +1017,9 @@ export function SessionsScreen({
 		);
 	};
 
-	const subtitle = `${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library' : 'saved'}`;
+	const subtitle =
+		searchCount ??
+		`${folders[0]?.count ?? 0} ${view === 'private' ? 'in the private library' : 'saved'}`;
 	return (
 		<>
 			<GlassTarget>
@@ -1042,6 +1047,7 @@ export function SessionsScreen({
 						<View>
 							<Header
 								title="Sessions"
+								live={searchCount !== undefined && shown.length > 0}
 								subtitle={
 									selection.active ? `${chosen.length} selected` : subtitle
 								}

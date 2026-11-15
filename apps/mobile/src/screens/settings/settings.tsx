@@ -37,6 +37,8 @@ import {ACCENTS} from '../../../../extension/src/shared/accent-colors';
 import {APP_ACCENT} from '../../ui/accent';
 import {ColorPicker, type LeadingChoice} from '../../ui/color-picker';
 import {BottomSheet} from '../../ui/bottom-sheet';
+import {resultCount} from '../../library/search-count';
+import {useSettledText} from '../../ui/search-count';
 import {DataCard} from './data-settings';
 import {TrashCard} from './trash-settings';
 import {ExcludedCard} from './excluded-settings';
@@ -52,7 +54,13 @@ import {
 	UpdateServerNote,
 } from './behaviour-settings';
 import {SettingsCard, SettingsQuery} from './settings-card';
-import {normalizeQuery, ROWS, SECTIONS, sectionVisible} from './settings-index';
+import {
+	matchCount,
+	normalizeQuery,
+	ROWS,
+	SECTIONS,
+	sectionVisible,
+} from './settings-index';
 import {PrivateCard} from './private-settings';
 
 function describe(
@@ -164,6 +172,10 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 		Object.values(SECTIONS).every(
 			(section) => !sectionVisible(section, needle),
 		);
+	const searchCount = useSettledText(
+		needle !== '',
+		resultCount(matchCount(needle)),
+	);
 	const [busy, setBusy] = useState<'sync' | 'disconnect'>();
 
 	const syncNow = async () => {
@@ -207,7 +219,11 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 					scrollEventThrottle={16}
 					onScroll={trackScroll}
 				>
-					<Header title="Settings" />
+					<Header
+						title="Settings"
+						live={searchCount !== undefined}
+						subtitle={searchCount}
+					/>
 					<SettingsQuery value={needle}>
 						<View style={styles.cards}>
 							<UpdateServerNote
@@ -238,6 +254,10 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 									row={ROWS.accent}
 									value={accentName}
 									swatch={accentSwatch}
+									choices={accentChoices.map(({id, label}) => ({
+										id,
+										name: label,
+									}))}
 									onPress={() => {
 										setPickingAccent(true);
 									}}

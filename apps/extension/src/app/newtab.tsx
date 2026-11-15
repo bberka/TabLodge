@@ -34,6 +34,7 @@ import {
 	History,
 	Inbox,
 	LayoutGrid,
+	EyeOff,
 	Library,
 	MoreHorizontal,
 	PanelLeft,
@@ -477,6 +478,17 @@ function NewTab() {
 		},
 		[bookmarkView, reload, showStatus],
 	);
+	const hideAllBookmarks = useCallback(async () => {
+		const result = await send('UPDATE_SETTINGS', {
+			settings: {showAllBookmarks: false},
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not hide All.', true);
+			return;
+		}
+
+		await reload();
+	}, [reload, showStatus]);
 	const dashboardWidth = settings.dashboardWidth ?? 'default';
 	const dashboardMaxWidthClass =
 		dashboardWidth === 'narrower'
@@ -2203,6 +2215,36 @@ function NewTab() {
 	// The rail lists columns top to bottom from the md breakpoint and left to right below it.
 	const railAxis = () =>
 		globalThis.matchMedia('(min-width: 768px)').matches ? 'y' : 'x';
+	const allMenuActions = (): MenuAction[] => [
+		{
+			id: 'open-all',
+			label: 'Open all in new tabs',
+			icon: ACTION_ICONS.openNew,
+			disabled: everyBookmark.all.length === 0,
+			onSelect: () => void openBookmarks(everyBookmark.all),
+		},
+		{
+			id: 'add',
+			label: 'Add bookmark',
+			icon: BookmarkPlus,
+			onSelect: () => openBookmarkEditor(),
+		},
+		{type: 'separator'},
+		{
+			id: 'share',
+			label: 'Share',
+			icon: Share2,
+			disabled: everyBookmark.all.length === 0,
+			onSelect: () => shareBookmarks(),
+		},
+		{type: 'separator'},
+		{
+			id: 'hide-all',
+			label: 'Hide All from this list',
+			icon: EyeOff,
+			onSelect: () => void hideAllBookmarks(),
+		},
+	];
 	const focusItems: FocusColumnItem[] = [
 		...(settings.showAllBookmarks === false
 			? []
@@ -2623,7 +2665,11 @@ function NewTab() {
 												)}
 											/>
 										)}
-										{isSystem ? (
+										{item.all ? (
+											<ActionContextMenu actions={allMenuActions}>
+												{railButton}
+											</ActionContextMenu>
+										) : isSystem ? (
 											railButton
 										) : (
 											<ActionContextMenu
@@ -2699,6 +2745,8 @@ function NewTab() {
 								quickActions={quickActions}
 								actions={boardActions}
 								simpleHeader={activeFocus.unfiled || activeFocus.all}
+								headerIcon={activeFocus.all ? Library : undefined}
+								headerMenu={activeFocus.all ? allMenuActions : undefined}
 								allowColumnDrag={false}
 								allowColumnDrop={!activeFocus.unfiled && !activeFocus.all}
 								ariaLabel={
@@ -3655,9 +3703,14 @@ type BookmarkColumnProps = {
 	*/
 	compact?: boolean;
 	/**
-	Header without the column icon, menu, or drag handle, used by Unfiled.
+	Header without the column icon, menu, or drag handle, used by Unfiled and All.
 	*/
 	simpleHeader?: boolean;
+	/**
+	Icon and options menu for a simple header (All has both; Unfiled has neither).
+	*/
+	headerIcon?: LucideIcon;
+	headerMenu?: () => MenuAction[];
 	allowColumnDrag?: boolean;
 	allowColumnDrop?: boolean;
 	ariaLabel?: string;
@@ -3693,6 +3746,8 @@ const BookmarkColumn = memo(
 		renderAll = false,
 		compact = false,
 		simpleHeader = false,
+		headerIcon: HeaderIcon,
+		headerMenu,
 		allowColumnDrag = true,
 		allowColumnDrop = true,
 		ariaLabel,
@@ -3737,10 +3792,28 @@ const BookmarkColumn = memo(
 					compact ? 'px-2 py-1' : 'px-3 py-2',
 				)}
 			>
+				{HeaderIcon && (
+					<HeaderIcon className="size-4 shrink-0 text-muted-foreground" />
+				)}
 				<h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
 					{column.name}
 				</h3>
 				<Badge>{siblings.length}</Badge>
+				{headerMenu && (
+					<ActionDropdownMenu
+						trigger={
+							<Button
+								data-move-focus
+								variant="ghost"
+								size="icon"
+								aria-label={`Options for ${column.name}`}
+							>
+								<MoreHorizontal className="h-4 w-4" />
+							</Button>
+						}
+						actions={headerMenu}
+					/>
+				)}
 			</header>
 		) : (
 			<header
@@ -3900,7 +3973,9 @@ const BookmarkColumn = memo(
 					onDragStart={actions.dragStart}
 					onDragEnd={actions.dragEnd}
 				>
-					{simpleHeader ? (
+					{headerMenu ? (
+						<ActionContextMenu actions={headerMenu}>{header}</ActionContextMenu>
+					) : simpleHeader ? (
 						header
 					) : (
 						<ActionContextMenu actions={columnActions}>

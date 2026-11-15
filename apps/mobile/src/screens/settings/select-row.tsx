@@ -57,6 +57,7 @@ export function SelectRow<T extends string>({
 				icon={current?.icon}
 				image={current?.image}
 				tint={current?.color}
+				choices={choices}
 				onPress={() => {
 					setOpen(true);
 				}}
@@ -93,6 +94,7 @@ export function ValueRow({
 	icon,
 	image,
 	tint,
+	choices,
 	onPress,
 }: {
 	row: Row;
@@ -110,11 +112,15 @@ export function ValueRow({
 	A color dot drawn before the value.
 	*/
 	swatch?: string;
+	/**
+	The choices the row picks from, so the reset drawer can name the default.
+	*/
+	choices?: ReadonlyArray<{id: string; name: string}>;
 	onPress: () => void;
 }) {
 	const colors = useColors();
 	const visible = useRowVisible(row);
-	const reset = useRowReset(row);
+	const reset = useRowReset(row, choices);
 	if (!visible) {
 		return null;
 	}
@@ -134,7 +140,7 @@ export function ValueRow({
 				onAccessibilityAction={reset.onAccessibilityAction}
 				onLongPress={reset.onLongPress}
 			>
-				<Text style={[styles.label, {color: colors.text}]}>{row.label}</Text>
+				<RowLabel label={row.label} changed={reset.changed} />
 				{swatch && (
 					<View
 						style={[
@@ -158,6 +164,35 @@ export function ValueRow({
 			</Pressable>
 			{reset.sheet}
 		</>
+	);
+}
+
+/**
+A setting's name. While the setting differs from its default, a small accent dot sits in the gutter left of it, in the
+same place on every row: the cue that holding the row offers to reset it. The dot is not read out; TalkBack users get
+the reset as the row's own action, which names the default.
+*/
+export function RowLabel({
+	label,
+	changed,
+	hint,
+}: {
+	label: string;
+	changed: boolean;
+	hint?: string;
+}) {
+	const colors = useColors();
+	return (
+		<View style={styles.labelBox}>
+			{changed && (
+				<View
+					importantForAccessibility="no-hide-descendants"
+					style={[styles.changed, {backgroundColor: colors.accent}]}
+				/>
+			)}
+			<Text style={[styles.label, {color: colors.text}]}>{label}</Text>
+			{hint && <Text style={{color: colors.muted}}>{hint}</Text>}
+		</View>
 	);
 }
 
@@ -255,7 +290,17 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 12,
 		marginHorizontal: -12,
 	},
-	label: {flex: 1, fontSize: 16},
+	labelBox: {flex: 1},
+	label: {fontSize: 16},
+	// Centered on the label's first line (16 size, about 24 tall), 14 left of the text.
+	changed: {
+		position: 'absolute',
+		left: -14,
+		top: 8,
+		width: 8,
+		height: 8,
+		borderRadius: 4,
+	},
 	value: {maxWidth: '50%', fontSize: 15},
 	dot: {width: 16, height: 16, borderRadius: 8, borderWidth: 1},
 	smallImage: {width: 20, height: 20, borderRadius: 5},

@@ -342,10 +342,12 @@ export function TabBar<T extends string>({
 							>
 								<Text
 									numberOfLines={1}
+									maxFontSizeMultiplier={1}
 									style={{
 										color: ink,
 										fontWeight: on && !ios ? '700' : '500',
 										fontSize: ios ? 11 : 12,
+										lineHeight: labelHeight,
 									}}
 								>
 									{tab.label}
@@ -367,10 +369,12 @@ export function TabBar<T extends string>({
 							<View style={styles.label}>
 								<Text
 									numberOfLines={1}
+									maxFontSizeMultiplier={1}
 									style={{
 										color: colors.muted,
 										fontWeight: '500',
 										fontSize: ios ? 11 : 12,
+										lineHeight: labelHeight,
 									}}
 								>
 									Search

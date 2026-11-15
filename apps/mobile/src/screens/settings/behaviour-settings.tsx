@@ -18,7 +18,7 @@ import {useLinkSettings} from '../../library/use-link-settings';
 import {Switch} from '../../ui/ui';
 import {useRowReset} from './row-reset';
 import {SettingsCard, useRowVisible} from './settings-card';
-import {SelectRow} from './select-row';
+import {RowLabel, SelectRow} from './select-row';
 import {type Row, ROWS, SECTIONS} from './settings-index';
 
 /**
@@ -68,7 +68,6 @@ export function Toggle({
 	onChange: (value: boolean) => void;
 }) {
 	const {label, hint} = row;
-	const colors = useColors();
 	const isVisible = useRowVisible(row);
 	const reset = useRowReset(row);
 	if (!isVisible) {
@@ -82,8 +81,7 @@ export function Toggle({
 				style={styles.switchText}
 				onLongPress={reset.onLongPress}
 			>
-				<Text style={{color: colors.text, fontSize: 16}}>{label}</Text>
-				{hint && <Text style={{color: colors.muted}}>{hint}</Text>}
+				<RowLabel label={label} changed={reset.changed} hint={hint} />
 			</Pressable>
 			{reset.sheet}
 			<Switch

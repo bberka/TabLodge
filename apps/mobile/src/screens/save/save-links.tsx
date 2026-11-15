@@ -27,11 +27,14 @@ import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {Button, Chips, Field, Segmented} from '../../ui/ui';
 
-type Mode = 'bookmarks' | 'session' | 'existing';
+type Mode = 'bookmarks' | 'session';
+
+// The session selector's first entry; choosing it makes a new session.
+const NEW_SESSION = '__new-session__';
 
 /**
 The drawer for a share that carries several links, such as a browser's "share tabs": save them as bookmarks, as a
-new session, or into a session that exists.
+new session, or into a session that exists (the session selector's first entry is a new one).
 */
 export function SaveLinksForm({
 	urls: shared,
@@ -63,13 +66,14 @@ export function SaveLinksForm({
 	const urls = entry ? extractUrls(text) : shared;
 	const [mode, setMode] = useState<Mode>('bookmarks');
 	const [name, setName] = useState('');
-	const [target, setTarget] = useState('');
+	const [target, setTarget] = useState(NEW_SESSION);
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
 
+	const creating = target === NEW_SESSION || sessions.length === 0;
 	const sessionId = sessions.some((session) => session.id === target)
 		? target
-		: sessions[0]?.id;
+		: undefined;
 	const excludedSites = useRegularLibrary().settings.excludedOrigins ?? [];
 	// Links to excluded websites are left out, as in the extension.
 	const allowed = urls.filter(
@@ -83,7 +87,7 @@ export function SaveLinksForm({
 	const blocked =
 		links.length === 0 ||
 		(mode === 'bookmarks' && choice.incomplete) ||
-		(mode === 'existing' && !sessionId);
+		(mode === 'session' && !creating && !sessionId);
 
 	const saveLinks = async () => {
 		const count = `${links.length} links`;
@@ -94,7 +98,7 @@ export function SaveLinksForm({
 			);
 			setPreferences({lastColumnId: column.id});
 			onDone(`${count} saved to ${column.name}`);
-		} else if (mode === 'session') {
+		} else if (creating) {
 			const label = name.trim() || 'Shared links';
 			await editIn(library, (current) =>
 				addSession(
@@ -174,42 +178,44 @@ export function SaveLinksForm({
 					label="Save as"
 					items={[
 						{id: 'bookmarks', name: 'Bookmarks', icon: 'bookmark-outline'},
-						{id: 'session', name: 'New session', icon: 'add-circle-outline'},
-						{id: 'existing', name: 'Add to', icon: 'albums-outline'},
+						{id: 'session', name: 'Session', icon: 'albums-outline'},
 					]}
 					selected={mode}
 					onSelect={setMode}
 				/>
 				{mode === 'bookmarks' && <ColumnChoice choice={choice} />}
 				{mode === 'session' && (
-					<Field
-						label="Session name"
-						icon="albums-outline"
-						placeholder="Shared links"
-						value={name}
-						onChangeText={setName}
-					/>
-				)}
-				{mode === 'existing' &&
-					(sessions.length === 0 ? (
-						<Text style={{color: colors.muted}}>
-							There are no sessions yet. Save these as a new one.
-						</Text>
-					) : (
-						<View style={styles.group}>
-							<Text style={{color: colors.muted}}>Session</Text>
-							<Chips
-								items={sessions.map((session) => ({
+					<View style={styles.group}>
+						<Text style={{color: colors.muted}}>Session</Text>
+						<Chips
+							items={[
+								{
+									id: NEW_SESSION,
+									name: 'New session',
+									glyph: 'add' as const,
+									tint: colors.accent,
+								},
+								...sessions.map((session) => ({
 									id: session.id,
 									name: session.name,
 									count: session.tabs.length,
-									glyph: 'albums-outline',
-								}))}
-								selected={sessionId ?? ''}
-								onSelect={setTarget}
+									glyph: 'albums-outline' as const,
+								})),
+							]}
+							selected={creating ? NEW_SESSION : (sessionId ?? '')}
+							onSelect={setTarget}
+						/>
+						{creating && (
+							<Field
+								label="Session name"
+								icon="albums-outline"
+								placeholder="Shared links"
+								value={name}
+								onChangeText={setName}
 							/>
-						</View>
-					))}
+						)}
+					</View>
+				)}
 				{problem !== '' && (
 					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
 						{problem}
