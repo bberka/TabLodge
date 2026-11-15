@@ -6,6 +6,7 @@ import {columnGlyph} from '../../ui/column-icons';
 import {IconPicker} from '../../ui/icon-picker';
 import {
 	addFolder,
+	folderLimitProblem,
 	folderNameProblem,
 	updateFolder,
 } from '../../library/library';
@@ -37,10 +38,11 @@ function FolderForm({
 		folder?.colorSessions ?? false,
 	);
 	const [saving, setSaving] = useState(false);
-	// A name that is not allowed is only reported once it was typed, so an empty new form does not start in error.
+	// A name that is not allowed is only reported once it was typed, so an empty new form does not start in error. A
+	// library at its folder limit says so at once, because no name would work.
 	const problem =
 		name === '' && !folder
-			? undefined
+			? folderLimitProblem(store)
 			: folderNameProblem(store, name, folder?.id);
 
 	const save = async () => {

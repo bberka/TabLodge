@@ -26,6 +26,12 @@ import {
 import type {DeviceStamp} from '../../../extension/src/shared/device';
 import {LAYOUT_VERSION} from '../../../extension/src/shared/library-index';
 import {normalizeNotes} from '../../../extension/src/shared/library-normalize';
+import {
+	FOLDER_LIMIT_MESSAGE,
+	folderLimitReached,
+	folderNameProblem as sharedFolderNameProblem,
+	normalizeFolderName,
+} from '../../../extension/src/shared/session-folders';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
 
@@ -705,32 +711,22 @@ export const canChangeFolder = (folder: {
 	isDefault: boolean;
 }): boolean => !folder.isDefault && !isArchived(folder);
 
-const cleanFolderName = (name: string): string =>
-	name
-		.replaceAll(/\p{Control}/gu, ' ')
-		.trim()
-		.slice(0, 60);
+/**
+The message to show when the library holds the most folders it can, so a new one cannot be made, or undefined.
+*/
+export const folderLimitProblem = (store: Store): string | undefined =>
+	folderLimitReached(store.folders) ? FOLDER_LIMIT_MESSAGE : undefined;
 
 /**
-Why this name cannot be a folder's, or undefined when it can: empty, the reserved "All sessions", or another folder's.
+Why this name cannot be a folder's, or undefined when it can: empty, the reserved "All sessions", another folder's, or, for
+a new folder (no `exceptId`), the limit of 200 folders. The rules are the extension's.
 */
-export function folderNameProblem(
+export const folderNameProblem = (
 	store: Store,
 	name: string,
 	exceptId?: string,
-): string | undefined {
-	const clean = cleanFolderName(name);
-	if (clean === '' || clean.toLocaleLowerCase() === 'all sessions') {
-		return 'Choose a different folder name.';
-	}
-
-	const taken = store.folders.some(
-		(folder) =>
-			folder.id !== exceptId &&
-			folder.name.toLocaleLowerCase() === clean.toLocaleLowerCase(),
-	);
-	return taken ? 'A folder with that name already exists.' : undefined;
-}
+): string | undefined =>
+	sharedFolderNameProblem(store.folders, name, exceptId ?? null);
 
 /**
 Renames a session folder. A folder that cannot change, or a name that is not allowed, leaves the library as it was.
@@ -753,7 +749,7 @@ export function renameFolder(
 	return {
 		...store,
 		folders: store.folders.map((entry) =>
-			entry.id === id ? {...entry, name: cleanFolderName(name)} : entry,
+			entry.id === id ? {...entry, name: normalizeFolderName(name)} : entry,
 		),
 		updatedAt: now,
 	};
@@ -767,7 +763,7 @@ export type FolderEdit = {
 };
 
 const folderFields = (edit: FolderEdit) => ({
-	name: cleanFolderName(edit.name),
+	name: normalizeFolderName(edit.name),
 	...(edit.icon && {icon: edit.icon}),
 	...(isColumnColor(edit.color) && {
 		color: edit.color,

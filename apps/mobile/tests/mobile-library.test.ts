@@ -45,6 +45,8 @@ import {
 	describeSession,
 	renameFolder,
 	addFolder,
+	folderLimitProblem,
+	folderNameProblem,
 	updateFolder,
 	restoreFolder,
 	restoreColumn,
@@ -843,6 +845,49 @@ describe('session folders', () => {
 		const back = restoreFolder(gone, folder, ['s1'], NOW + 5);
 		assert.equal(back.groups[0].folderId, 'read');
 		assert.ok(back.folders.some((f) => f.id === 'read'));
+	});
+
+	test('a new folder follows the extension rules: limit, duplicates, reserved name, long names', () => {
+		const store = withFolders();
+		const plain = {icon: '', color: '', colorSessions: false};
+		assert.equal(folderNameProblem(store, 'Reading'), undefined);
+		assert.equal(
+			folderNameProblem(store, 'UNFILED'),
+			'A folder with that name already exists.',
+		);
+		assert.equal(
+			folderNameProblem(store, 'all sessions'),
+			'Choose a different folder name.',
+		);
+		const long = addFolder(
+			store,
+			{name: 'n'.repeat(90), ...plain},
+			'long',
+			NOW,
+		);
+		assert.equal(long.folders.find((f) => f.id === 'long')?.name.length, 60);
+
+		const full = {
+			...store,
+			folders: [
+				...store.folders,
+				...Array.from({length: 200}, (_, index) => ({
+					id: `f${index}`,
+					name: `Folder ${index}`,
+					createdAt: NOW,
+					isDefault: false,
+				})),
+			],
+		};
+		assert.ok(folderLimitProblem(full));
+		assert.equal(folderLimitProblem(store), undefined);
+		assert.equal(addFolder(full, {name: 'More', ...plain}, 'more', NOW), full);
+		assert.equal(
+			updateFolder(full, 'f1', {name: 'Renamed', ...plain}, NOW).folders.find(
+				(f) => f.id === 'f1',
+			)?.name,
+			'Renamed',
+		);
 	});
 
 	test('Unfiled and Archived cannot be renamed or deleted', () => {

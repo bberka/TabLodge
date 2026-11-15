@@ -1,6 +1,11 @@
 import {stripTrackingParameters} from '../src/shared/tracking-parameters';
 import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {
+	folderNameExists,
+	folderNameProblem,
+	normalizeFolderName,
+} from '../src/shared/session-folders';
+import {
 	BACKUP_FORMAT_ID,
 	BACKUP_VERSION,
 	FULL_BACKUP_FORMAT_ID,
@@ -3754,28 +3759,6 @@ async function setGroupOrder(
 	});
 }
 
-function normalizeFolderName(value: unknown) {
-	return typeof value === 'string'
-		? value
-				.replaceAll(/[\u0000-\u001F\u007F]/g, ' ')
-				.trim()
-				.slice(0, 60)
-		: '';
-}
-
-function folderNameExists(
-	store: Store,
-	name: string,
-	exceptId: string | null = null,
-) {
-	const normalizedName = name.toLocaleLowerCase();
-	return store.folders.some(
-		(folder) =>
-			folder.id !== exceptId &&
-			folder.name.toLocaleLowerCase() === normalizedName,
-	);
-}
-
 async function createFolder(
 	name: string,
 	icon?: unknown,
@@ -3784,22 +3767,12 @@ async function createFolder(
 ): Promise<ActionResult<'CREATE_FOLDER'>> {
 	return mutate(async () => {
 		const store = await getStore();
+		const problem = folderNameProblem(store.folders, name);
+		if (problem) {
+			return {ok: false, error: problem};
+		}
+
 		const folderName = normalizeFolderName(name);
-		if (!folderName || folderName.toLocaleLowerCase() === 'all sessions') {
-			return {ok: false, error: 'Choose a different folder name.'};
-		}
-
-		if (
-			store.folders.filter((folder) => !isArchivedFolderName(folder.name))
-				.length >= MAX_FOLDERS
-		) {
-			return {ok: false, error: `${APP_NAME} can store up to 200 folders.`};
-		}
-
-		if (folderNameExists(store, folderName)) {
-			return {ok: false, error: 'A folder with that name already exists.'};
-		}
-
 		const folder = {
 			id: makeId(),
 			name: folderName,
@@ -3840,15 +3813,12 @@ async function updateFolder(
 			return {ok: false, error: 'The Archived folder cannot be renamed.'};
 		}
 
+		const problem = folderNameProblem(store.folders, name, folderId);
+		if (problem) {
+			return {ok: false, error: problem};
+		}
+
 		const folderName = normalizeFolderName(name);
-		if (!folderName || folderName.toLocaleLowerCase() === 'all sessions') {
-			return {ok: false, error: 'Choose a different folder name.'};
-		}
-
-		if (folderNameExists(store, folderName, folderId)) {
-			return {ok: false, error: 'A folder with that name already exists.'};
-		}
-
 		folder.name = folderName;
 		// `icon` omitted keeps the current icon; "" or an unknown id resets it to the default.
 		if (icon !== undefined) {
@@ -8024,7 +7994,7 @@ function applyTrashRestore(
 	}
 
 	folder.name = uniqueName(folder.name, (candidate) =>
-		folderNameExists(store, candidate),
+		folderNameExists(store.folders, candidate),
 	);
 	folder.isDefault = false;
 	store.folders.splice(clampIndex(data.index, store.folders.length), 0, folder);

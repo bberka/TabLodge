@@ -232,7 +232,7 @@ function Help() {
 				},
 				{
 					title: 'Folder colors',
-					body: 'Edit a folder (or create one) and choose a Color. The folder’s icon takes that color in the folder selectors. Turn on Update session colors to folder color when moved and a session you move into that folder, from its menu, by dragging it onto the folder, or in Edit details, takes the folder’s color. Colors already set stay as they are, and a color you pick in Edit details in the same save wins. The Android app keeps the color and the switch but does not apply them when you move a session there.',
+					body: 'Edit a folder (or create one) and choose a Color. The folder’s icon takes that color in the folder selectors. Turn on Update session colors to folder color when moved and a session you move into that folder, from its menu, by dragging it onto the folder, or in Edit details, takes the folder’s color. Colors already set stay as they are, and a color you pick in Edit details in the same save wins. The Android app sets the color and the switch in New folder and Edit folder, and applies them when you move a session there.',
 					searchText:
 						'folder color colour switch update session colors move drag edit folder icon tint',
 				},
