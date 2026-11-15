@@ -90,8 +90,17 @@ async function check(name: string, run: () => Promise<void>) {
 		return;
 	}
 
+	let timer: NodeJS.Timeout | undefined;
 	try {
-		await run();
+		// A check that never settles would otherwise hang the whole run until the CI job times out.
+		await Promise.race([
+			run(),
+			new Promise<never>((_resolve, reject) => {
+				timer = setTimeout(() => {
+					reject(new Error('The check did not finish within 3 minutes.'));
+				}, 180_000);
+			}),
+		]);
 		console.log(`ok   ${name}`);
 	} catch (error) {
 		failures.push(name);
@@ -99,6 +108,8 @@ async function check(name: string, run: () => Promise<void>) {
 		console.log(
 			`     ${error instanceof Error ? error.message : String(error)}`,
 		);
+	} finally {
+		clearTimeout(timer);
 	}
 }
 
