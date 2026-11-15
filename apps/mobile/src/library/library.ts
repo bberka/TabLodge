@@ -19,7 +19,10 @@ import {
 	DEFAULT_BOOKMARK_COLUMN_NAME,
 	landingColumnId,
 } from '../../../extension/src/shared/bookmark-rules';
-import {columnForUrl} from '../../../extension/src/shared/column-sites';
+import {
+	columnForUrl,
+	domainsField,
+} from '../../../extension/src/shared/column-sites';
 import type {DeviceStamp} from '../../../extension/src/shared/device';
 import {LAYOUT_VERSION} from '../../../extension/src/shared/library-index';
 
@@ -482,6 +485,32 @@ export function updateColumn(
 		...(edit.icon && {icon: edit.icon}),
 		...(isColumnColor(edit.color) && {color: edit.color}),
 	};
+	return {
+		...store,
+		bookmarkColumns: store.bookmarkColumns.map((column) =>
+			column.id === id ? changed : column,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
+Replaces the sites that file into a column. Each entry is normalized and repeats are dropped; an empty list removes the
+field, as in the extension. An unknown column leaves the store as it was.
+*/
+export function setColumnSites(
+	store: Store,
+	id: string,
+	sites: readonly string[],
+	now: number,
+): Store {
+	const current = store.bookmarkColumns.find((column) => column.id === id);
+	if (!current) {
+		return store;
+	}
+
+	const {domains: _domains, ...rest} = current;
+	const changed = {...rest, ...domainsField(sites)};
 	return {
 		...store,
 		bookmarkColumns: store.bookmarkColumns.map((column) =>
