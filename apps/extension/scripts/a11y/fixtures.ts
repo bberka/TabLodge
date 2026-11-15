@@ -80,6 +80,8 @@ export async function closeServer(server: Server) {
 		server.close(() => {
 			resolve();
 		});
+		// Chromium keeps connections open, and close() waits for them.
+		server.closeAllConnections();
 	});
 }
 

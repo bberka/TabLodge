@@ -1,7 +1,8 @@
 name: Test
 
-# Runs on every push to the main branch and on pull requests. Three independent jobs run in parallel:
-# lint, typecheck and tests; extension build, package and Firefox smoke check; and the Android bundle.
+# Runs on every push to the main branch and on pull requests. Independent jobs run in parallel: lint, typecheck and
+# tests; extension build, package and Firefox smoke check; the accessibility check; the startup, private storage and
+# dev browser checks; the Cloudflare Worker bundle freshness check; and the Android bundle.
 on:
   push:
     branches: [master, main]
@@ -45,6 +46,64 @@ jobs:
       # Installs the Firefox package in the runner's Firefox and runs the core workflows.
       - run: pnpm exec vp run check:firefox
 
+  # The accessibility check is the slowest, so it gets its own job.
+  a11y:
+    name: Accessibility check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm exec vp run browser:install
+      - run: pnpm exec vp run build
+      - run: pnpm exec vp run check:a11y
+
+  browser:
+    name: Startup, private storage, dev browser checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm exec vp run browser:install
+      - run: pnpm exec vp run build
+      - run: pnpm exec vp run check:startup
+      - run: pnpm exec vp run check:private-storage
+      - run: pnpm exec vp run check:dev-browser
+
+  # Fails when the committed Worker for the Deploy to Cloudflare button differs from what cf:bundle builds.
+  cloudflare:
+    name: Cloudflare Worker bundle is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run cf:bundle
+      - run: git diff --exit-code -- apps/server/cloudflare-deploy
+
   mobile:
     name: Bundle Android app
     runs-on: ubuntu-latest
@@ -59,14 +118,17 @@ jobs:
       # Bundles the Android app's JavaScript with Metro; no Android SDK is needed.
       - run: pnpm run mobile:export
 
-  # The branch ruleset requires this check name. It passes only when the three jobs above pass.
+  # The branch ruleset requires this check name. It passes only when every job above passes.
   test:
     name: Lint, typecheck, test, build, package, Firefox smoke check
-    needs: [check, extension, mobile]
+    needs: [check, extension, a11y, browser, cloudflare, mobile]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - run: |
           test "${{ needs.check.result }}" = success
           test "${{ needs.extension.result }}" = success
+          test "${{ needs.a11y.result }}" = success
+          test "${{ needs.browser.result }}" = success
+          test "${{ needs.cloudflare.result }}" = success
           test "${{ needs.mobile.result }}" = success

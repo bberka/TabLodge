@@ -2,6 +2,19 @@
 
 Workflows are in `.github/workflows/`: `test.yml` (checks on every pull request and push), `pages.yml` (website), `mobile.yml` (debug APK), `sync-server.yml` (server image), `release.yml` (release), and `store-publish.yml` (Chrome Web Store and Firefox Add-ons). `test.yml` keeps one required gate job named like the branch ruleset expects; keep that name when you rename or split jobs.
 
+`test.yml` runs these jobs in parallel, and the gate job `test` needs every one of them, so add a new job to its `needs` and result tests:
+
+| Job | Runs |
+| --- | --- |
+| `check` | `vp run check` (lint, typecheck, every test) |
+| `extension` | `vp run build`, `vp run pack`, `vp run check:firefox` |
+| `a11y` | `vp run build`, `vp run check:a11y` (about 7 minutes, so it has its own job) |
+| `browser` | `vp run build`, then `check:startup`, `check:private-storage`, `check:dev-browser` |
+| `cloudflare` | `pnpm run cf:bundle`, then `git diff --exit-code` on `apps/server/cloudflare-deploy` |
+| `mobile` | `pnpm run mobile:export` |
+
+The browser jobs install Playwright Chromium with `vp run browser:install` and cache `~/.cache/ms-playwright`. What CI does not run: the Android Gradle build (only **Mobile** does, behind a path filter), the Docker image build (only **Sync server image**, behind a path filter), and the website build (**Pages** runs on every pull request). Nothing runs the app on an emulator or checks the Store publishing steps.
+
 
 TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
 

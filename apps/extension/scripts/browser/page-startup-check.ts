@@ -43,7 +43,7 @@ try {
 		if (!runtime || typeof runtime.sendMessage !== 'function') return;
 		const sendMessage = runtime.sendMessage.bind(runtime);
 		runtime.sendMessage = async (message, ...args) => {
-			const isStateRequest = message?.type === 'GET_STATE';
+			const isStateRequest = message?.type === 'GET_STATE' || message?.type === 'GET_BOOKMARK_PROMPT';
 			if (isStateRequest) {
 				probe.getStateCalls++;
 				probe.pending++;
@@ -69,7 +69,7 @@ try {
 	await dashboard.goto('chrome://newtab/', {waitUntil: 'domcontentloaded'});
 	await dashboard
 		.locator('html[data-startup-get-state-calls="1"][data-startup-pending="1"]')
-		.waitFor();
+		.waitFor({state: 'attached'});
 	assert.equal(
 		await dashboard
 			.locator('html')
@@ -137,7 +137,7 @@ try {
 					.locator(
 						'html[data-startup-get-state-calls="1"][data-startup-pending="1"]',
 					)
-					.waitFor();
+					.waitFor({state: 'attached'});
 				const loadingStatus = page
 					.locator('[role="status"]')
 					.filter({hasText: /^Loading TabLodge…$/});
@@ -170,7 +170,9 @@ try {
 		}
 
 		if (pageName !== 'help') {
-			await page.locator('html[data-startup-pending="0"]').waitFor();
+			await page
+				.locator('html[data-startup-pending="0"]')
+				.waitFor({state: 'attached'});
 		}
 
 		await page.locator('#root > *').first().waitFor({state: 'visible'});
