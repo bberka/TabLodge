@@ -54,6 +54,8 @@ jobs:
       # The runner image has the SDK. Accepting its licenses lets Gradle fetch the platform and NDK the build asks for.
       - name: Accept the Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+      # Gradle reads the cache from the default branch and, on a pull request, only reads it. --build-cache below reuses
+      # task outputs (compiled Kotlin, resources) that an earlier build on master already made.
       - uses: gradle/actions/setup-gradle@v5
       - run: pnpm install --frozen-lockfile
       - name: Test the app's code
@@ -64,7 +66,7 @@ jobs:
         run: pnpm --filter tablodge-mobile exec expo prebuild --platform android --no-install
       - name: Build the debug APK
         working-directory: apps/mobile/android
-        run: ./gradlew assembleDebug -x lint -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+        run: ./gradlew assembleDebug -x lint --build-cache -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
       - uses: actions/upload-artifact@v5
         with:
           name: tablodge-debug-apk
