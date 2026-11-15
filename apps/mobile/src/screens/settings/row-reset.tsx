@@ -93,14 +93,23 @@ export function resetRows(rows: readonly Row[]): void {
 }
 
 /**
-Holding a setting opens a drawer with one action, putting it back to its default. Spread `onLongPress` on the row and
-render `sheet` beside it.
+Holding a setting opens a drawer with one action, putting it back to its default. Spread `onLongPress` and the
+accessibility props on the row and render `sheet` beside it.
 */
 export function useRowReset(row: Row) {
 	const [open, setOpen] = useState(false);
 	const resettable = canReset(row);
 	return {
 		onLongPress: resettable
+			? () => {
+					setOpen(true);
+				}
+			: undefined,
+		// The same drawer for TalkBack and switch users, who cannot hold a row.
+		accessibilityActions: resettable
+			? [{name: 'reset', label: 'Reset to default'}]
+			: undefined,
+		onAccessibilityAction: resettable
 			? () => {
 					setOpen(true);
 				}
@@ -132,7 +141,7 @@ Asks before putting every setting of a section back to its default.
 export function confirmResetSection(title: string, rows: readonly Row[]): void {
 	confirm(
 		`Reset ${title}?`,
-		'These settings go back to their defaults.',
+		'These settings go back to their defaults. To reset one setting, hold it.',
 		{label: 'Reset', destructive: true},
 		() => {
 			resetRows(rows);

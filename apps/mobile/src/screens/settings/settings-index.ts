@@ -76,8 +76,8 @@ export const ROWS = {
 	linkSwipeRight: {label: 'Swipe a link right', hint: 'In an open session'},
 	linkSwipeLeft: {label: 'Swipe a link left', hint: 'In an open session'},
 	tap: {label: 'Tap a bookmark'},
-	swipeRight: {label: 'Swipe right'},
-	swipeLeft: {label: 'Swipe left'},
+	swipeRight: {label: 'Swipe a bookmark right'},
+	swipeLeft: {label: 'Swipe a bookmark left'},
 	cleanOnSave: {
 		label: 'Clean links when saving',
 		hint: 'Removes utm_source and similar',

@@ -129,7 +129,9 @@ export function ValueRow({
 					styles.row,
 					pressed && {backgroundColor: colors.pressed},
 				]}
+				accessibilityActions={reset.accessibilityActions}
 				onPress={onPress}
+				onAccessibilityAction={reset.onAccessibilityAction}
 				onLongPress={reset.onLongPress}
 			>
 				<Text style={[styles.label, {color: colors.text}]}>{row.label}</Text>

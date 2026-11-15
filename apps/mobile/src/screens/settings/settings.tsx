@@ -116,7 +116,7 @@ function restoreDefaults(syncing: boolean): void {
 
 	showDialog(
 		'Restore default settings?',
-		"This phone's settings go back to their defaults. The settings shared with the extension, such as how addresses show and how sessions sort, can reset too, and then reset on every synced device.",
+		"Phone only resets this phone's settings. Phone and shared also resets the settings shared with the extension, such as how addresses show and how sessions sort, on every synced device.",
 		[
 			{label: 'Cancel', kind: 'cancel'},
 			{label: 'Phone only', run: phone},
@@ -406,7 +406,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 							description="Puts settings back the way they were at install. Your library is not touched. While syncing, you choose whether the settings shared with the extension reset too."
 						>
 							<Button
-								label="Restore default preferences"
+								label="Restore default settings"
 								kind="danger"
 								icon="refresh-outline"
 								onPress={() => {

@@ -90,6 +90,8 @@ export function Toggle({
 				label={label}
 				hint={hint}
 				value={value}
+				accessibilityActions={reset.accessibilityActions}
+				onAccessibilityAction={reset.onAccessibilityAction}
 				onValueChange={onChange}
 			/>
 		</View>
