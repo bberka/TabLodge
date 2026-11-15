@@ -2215,6 +2215,36 @@ function NewTab() {
 	// The rail lists columns top to bottom from the md breakpoint and left to right below it.
 	const railAxis = () =>
 		globalThis.matchMedia('(min-width: 768px)').matches ? 'y' : 'x';
+	const allMenuActions = (): MenuAction[] => [
+		{
+			id: 'open-all',
+			label: 'Open all in new tabs',
+			icon: ACTION_ICONS.openNew,
+			disabled: everyBookmark.all.length === 0,
+			onSelect: () => void openBookmarks(everyBookmark.all),
+		},
+		{
+			id: 'add',
+			label: 'Add bookmark',
+			icon: BookmarkPlus,
+			onSelect: () => openBookmarkEditor(),
+		},
+		{type: 'separator'},
+		{
+			id: 'share',
+			label: 'Share',
+			icon: Share2,
+			disabled: everyBookmark.all.length === 0,
+			onSelect: () => shareBookmarks(),
+		},
+		{type: 'separator'},
+		{
+			id: 'hide-all',
+			label: 'Hide All from this list',
+			icon: EyeOff,
+			onSelect: () => void hideAllBookmarks(),
+		},
+	];
 	const focusItems: FocusColumnItem[] = [
 		...(settings.showAllBookmarks === false
 			? []
@@ -2635,7 +2665,11 @@ function NewTab() {
 												)}
 											/>
 										)}
-										{isSystem ? (
+										{item.all ? (
+											<ActionContextMenu actions={allMenuActions}>
+												{railButton}
+											</ActionContextMenu>
+										) : isSystem ? (
 											railButton
 										) : (
 											<ActionContextMenu
@@ -2712,26 +2746,7 @@ function NewTab() {
 								actions={boardActions}
 								simpleHeader={activeFocus.unfiled || activeFocus.all}
 								headerIcon={activeFocus.all ? Library : undefined}
-								headerMenu={
-									activeFocus.all
-										? () => [
-												{
-													id: 'open-all',
-													label: 'Open all in new tabs',
-													icon: ACTION_ICONS.openNew,
-													disabled: everyBookmark.all.length === 0,
-													onSelect: () => void openBookmarks(everyBookmark.all),
-												},
-												{type: 'separator'},
-												{
-													id: 'hide-all',
-													label: 'Hide All from this list',
-													icon: EyeOff,
-													onSelect: () => void hideAllBookmarks(),
-												},
-											]
-										: undefined
-								}
+								headerMenu={activeFocus.all ? allMenuActions : undefined}
 								allowColumnDrag={false}
 								allowColumnDrop={!activeFocus.unfiled && !activeFocus.all}
 								ariaLabel={
@@ -3958,7 +3973,9 @@ const BookmarkColumn = memo(
 					onDragStart={actions.dragStart}
 					onDragEnd={actions.dragEnd}
 				>
-					{simpleHeader ? (
+					{headerMenu ? (
+						<ActionContextMenu actions={headerMenu}>{header}</ActionContextMenu>
+					) : simpleHeader ? (
 						header
 					) : (
 						<ActionContextMenu actions={columnActions}>
