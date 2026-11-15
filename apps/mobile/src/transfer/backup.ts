@@ -7,18 +7,22 @@ import Constants from 'expo-constants';
 import {looksEncrypted} from '../../../extension/src/shared/crypto-envelope';
 import {
 	buildFullBackup,
+	countFullBackup,
 	FullBackupError,
 	type FullBackupCounts,
 	fullBackupFilename,
 	protectedFullBackupFilename,
 	readFullBackup,
 } from '../../../extension/src/shared/full-backup';
+import {isRecord} from '../../../extension/src/shared/library-values';
+import {normalizeStore} from '../../../extension/src/shared/library-normalize';
 import type {Store} from '../../../extension/src/shared/types';
 import {unwrapKey, wrapKey} from '../../modules/tablodge-crypto';
 import {backupPreferences} from '../settings/preferences';
 import {isStore} from '../library/library';
 
-const CHUNK = 0x80_00;
+// A few thousand arguments at a time: Hermes has a smaller call stack than the browsers this idiom comes from.
+const CHUNK = 0x20_00;
 
 function toBase64(bytes: Uint8Array): string {
 	let binary = '';
@@ -42,18 +46,36 @@ function fromBase64(text: string): Uint8Array {
 	return bytes;
 }
 
+// Cleaning a library can add a default folder or column, so each kind is compared on its own.
+const KEPT_KINDS = [
+	'sessions',
+	'links',
+	'folders',
+	'columns',
+	'bookmarks',
+] as const;
+const lostIn = (file: FullBackupCounts, kept: FullBackupCounts) =>
+	KEPT_KINDS.reduce(
+		(sum, kind) => sum + Math.max(0, file[kind] - kept[kind]),
+		0,
+	);
+
 export type BackupFile = {filename: string; bytes: Uint8Array; mime: string};
 
 /**
-The whole library as a full-backup ZIP, or, with a password, as that ZIP inside the credential envelope (a file that
-ends in `.zip.enc`, as the extension names it). The phone has no browser snapshots or trash, so those parts are empty.
+The library on screen as a full-backup ZIP, or, with a password, as that ZIP inside the credential envelope (a file
+that ends in `.zip.enc`, as the extension names it). The private library's file says so in its name, since it looks
+like any other backup inside. The phone has no browser snapshots, and its trash bin is not part of a backup, so those
+parts are empty.
 */
 export async function buildBackup(
 	store: Store,
 	appName: string,
 	password?: string,
+	library: 'regular' | 'private' = 'regular',
 ): Promise<BackupFile> {
 	const now = new Date();
+	const fileApp = library === 'private' ? `${appName} private` : appName;
 	const {bytes} = buildFullBackup(
 		{
 			state: {
@@ -68,7 +90,7 @@ export async function buildBackup(
 	);
 	if (password === undefined || password === '') {
 		return {
-			filename: fullBackupFilename(appName, now),
+			filename: fullBackupFilename(fileApp, now),
 			bytes,
 			mime: 'application/zip',
 		};
@@ -76,7 +98,7 @@ export async function buildBackup(
 
 	const wrapped = await wrapKey(toBase64(bytes), password);
 	return {
-		filename: protectedFullBackupFilename(appName, now),
+		filename: protectedFullBackupFilename(fileApp, now),
 		bytes: fromBase64(wrapped),
 		mime: 'application/octet-stream',
 	};
@@ -92,6 +114,11 @@ export type BackupRead =
 			phoneSettings: unknown;
 			createdAt: string;
 			counts: FullBackupCounts;
+			/**
+			How many sessions, links, folders, columns, and bookmarks the file held that cannot be kept: damaged ones, and
+			those past the limits the extension has too.
+			*/
+			skipped: number;
 	  }
 	| {ok: false; reason: 'password' | 'wrong' | 'damaged'; message: string};
 
@@ -142,12 +169,24 @@ export async function readBackup(
 			};
 		}
 
+		// The extension cleans a backup the same way before it restores one, so a damaged or hostile file cannot put
+		// anything into the library that the library would not hold itself.
+		const store = normalizeStore(contents.state);
+		const counts = countFullBackup({
+			state: store,
+			preferences: null,
+			snapshots: null,
+			trash: null,
+		});
 		return {
 			ok: true,
-			store: contents.state,
-			phoneSettings: contents.state.settings?.mobileApp,
+			store,
+			phoneSettings: isRecord(contents.state.settings)
+				? contents.state.settings.mobileApp
+				: undefined,
 			createdAt: contents.manifest.createdAt,
-			counts: contents.counts,
+			counts,
+			skipped: lostIn(contents.counts, counts),
 		};
 	} catch (error) {
 		return {

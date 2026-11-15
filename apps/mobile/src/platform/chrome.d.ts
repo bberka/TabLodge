@@ -12,3 +12,10 @@ declare namespace chrome.tabGroups {
 		| 'cyan'
 		| 'orange';
 }
+
+// The shared normalizer asks `globalThis.chrome?.runtime?.getURL` whether it runs in Firefox. The phone has no
+// `chrome`, so that is always false.
+declare namespace chrome {
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	const runtime: {getURL?: (path: string) => string} | undefined;
+}

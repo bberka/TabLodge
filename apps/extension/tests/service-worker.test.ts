@@ -8522,6 +8522,27 @@ test('RESTORE_FULL_BACKUP replaces state, settings, snapshots, trash and the the
 	);
 });
 
+test('RESTORE_FULL_BACKUP restores a phone-made backup, whose preferences, snapshots, and trash are empty', async () => {
+	const harness = createWorkerHarness(bookmarksState(), undefined, {
+		storage: {uiTheme: 'light', uiAccent: 'rose'},
+	});
+	const result = await harness.sendMessage(
+		fullBackupInput({preferences: null, snapshots: null, trash: null}),
+	);
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.bookmarks, 1);
+	assert.equal(result.snapshots, 0);
+	assert.equal(result.trash, 0);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.id),
+		['in-1'],
+	);
+	// A backup without preferences leaves the theme alone.
+	assert.equal(harness.extraStorage.uiTheme, 'light');
+	assert.equal(harness.extraStorage.uiAccent, 'rose');
+	assert.equal(trashOf(harness).length, 0);
+});
+
 test('RESTORE_FULL_BACKUP undo brings back the previous data', async () => {
 	const harness = createWorkerHarness(bookmarksState(), undefined, {
 		storage: {uiTheme: 'light', uiAccent: 'rose'},

@@ -26,6 +26,7 @@ import type {Store} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {notify} from '../../ui/dialog';
 import {buildBackup} from '../../transfer/backup';
+import {useView} from '../../library/view';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
@@ -331,6 +332,7 @@ export function ShareSheet({
 }) {
 	const colors = useColors();
 	const store = useLibrary();
+	const view = useView();
 	const [what, setWhat] = useState<What>('sessions');
 	const [way, setWay] = useState<Way>('links');
 	const [password, setPassword] = useState('');
@@ -353,7 +355,11 @@ export function ShareSheet({
 		setBusy(true);
 		try {
 			if (isBackup) {
-				const file = await buildBackup(store, APP_NAME, password);
+				// Lets the busy state draw before the ZIP is made, which holds the phone's one JavaScript thread for a while.
+				await new Promise((resolve) => {
+					setTimeout(resolve, 50);
+				});
+				const file = await buildBackup(store, APP_NAME, password, view);
 				await shareBinaryFile(file.filename, file.mime, file.bytes);
 			} else {
 				switch (way) {
@@ -424,6 +430,12 @@ export function ShareSheet({
 							error={problem}
 							onChangeText={setPassword}
 						/>
+						{view === 'private' && (
+							<Text style={{color: colors.muted}}>
+								This backs up the private library, not the regular one. Without
+								a password the file is not protected.
+							</Text>
+						)}
 						{password !== '' && (
 							<Text style={{color: colors.muted}}>{LOST_CREDENTIAL_NOTE}</Text>
 						)}
