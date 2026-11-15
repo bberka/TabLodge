@@ -1,7 +1,7 @@
 /*
 The extension's side of a live check against a real phone. Skipped unless TL_STEP is set. It uses the extension's own
 sync client, private codec, and key code, over real HTTP to a server the phone also talks to.
-Steps: read, create, edit. Env: TL_URL, TL_TOKEN, TL_PIN (optional), TL_KIND (pin or password, for create), TL_STATE (file the key is saved to), TL_LINK.
+Steps: read, create, edit, app-read (print the library's `mobileApp` setting), app-set (merge the JSON in TL_APP into it, as a second phone would). Env: TL_URL, TL_TOKEN, TL_PIN (optional), TL_KIND (pin or password, for create), TL_STATE (file the key is saved to), TL_LINK.
 */
 import {writeFileSync} from 'node:fs';
 import process from 'node:process';
@@ -24,7 +24,8 @@ import {emptyStore} from '../../src/library/store-shape';
 import type {Store} from '../../../extension/src/shared/types';
 
 const step = process.env.TL_STEP;
-const url = `${process.env.TL_URL}/private`;
+// The app-* steps work on the regular library, the others on the private one.
+const url = `${process.env.TL_URL}${step?.startsWith('app-') ? '' : '/private'}`;
 const token = process.env.TL_TOKEN ?? '';
 const pin = process.env.TL_PIN;
 const stateFile = process.env.TL_STATE ?? '/tmp/tl-peer-state.json';
@@ -127,7 +128,33 @@ describe.skipIf(!step)('extension peer', () => {
 			);
 		}
 
+		if (step === 'app-set' || step === 'app-read') {
+			await client.syncNow();
+		}
+
+		if (step === 'app-set') {
+			const change = JSON.parse(process.env.TL_APP ?? '{}') as Record<
+				string,
+				string | number | boolean | null
+			>;
+			const app = Object.entries({
+				...store.settings.mobileApp,
+				...change,
+			}).filter(([, value]) => value !== null);
+			store = {
+				...store,
+				settings: {
+					...store.settings,
+					mobileApp: Object.fromEntries(app) as Store['settings']['mobileApp'],
+				},
+			};
+		}
+
 		await client.syncNow();
+		if (step === 'app-set' || step === 'app-read') {
+			console.log('MOBILEAPP', JSON.stringify(store.settings.mobileApp));
+		}
+
 		const raw = await records();
 		console.log(
 			'SERVER RECORDS',

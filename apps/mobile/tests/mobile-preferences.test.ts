@@ -178,6 +178,17 @@ describe('settling with the other phones', () => {
 		assert.equal(kept.theme, 'dark');
 	});
 
+	test('a library that has no mobileApp setting yet takes a change', () => {
+		// A fresh install's empty library has `settings: {}` until the first sync brings the record.
+		const result = settlePreferences(
+			undefined,
+			{...defaults, theme: 'dark'},
+			{theme: 7},
+		);
+		assert.equal(result.next.theme, 'dark');
+		assert.equal(result.next[AT_PREFIX + 'theme'], 7);
+	});
+
 	test('settled phones leave the library alone', () => {
 		const a = phone({theme: 'dark'}, {theme: 100});
 		const library = settleAll([a], {});
