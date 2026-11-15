@@ -127,12 +127,30 @@ export function PrivateCard() {
 				/>
 			)}
 			{state.exists && !state.locked && state.lockedWith && (
-				<Button
-					label="Lock now"
-					icon="lock-closed-outline"
-					kind="plain"
-					onPress={() => void lockNow()}
-				/>
+				<>
+					<Button
+						label="Lock now"
+						icon="lock-closed-outline"
+						kind="plain"
+						onPress={() => void lockNow()}
+					/>
+					<Button
+						label="Change the PIN or password"
+						icon="key-outline"
+						kind="plain"
+						onPress={() => {
+							openPrivateSheet('change');
+						}}
+					/>
+					<Button
+						label="Remove the PIN or password"
+						icon="lock-open-outline"
+						kind="plain"
+						onPress={() => {
+							openPrivateSheet('remove');
+						}}
+					/>
+				</>
 			)}
 			{!state.exists && connected && (
 				<Button

@@ -3,8 +3,17 @@ import {StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {type BackupRead, readBackup} from '../../transfer/backup';
 import {confirm, notify} from '../../ui/dialog';
-import {edit, useLibrary} from '../../library/library-store';
-import {restorePreferences} from '../../settings/preferences';
+import {editIn, useLibrary} from '../../library/library-store';
+import {
+	dropSafetyCopy,
+	keepSafetyCopy,
+	readSafetyCopy,
+	replaceLibrary,
+} from '../../transfer/restore';
+import {
+	backupPreferences,
+	restorePreferences,
+} from '../../settings/preferences';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
 import {Button, Field} from '../../ui/ui';
@@ -13,6 +22,24 @@ import {useView} from '../../library/view';
 export type RestoreSource = {name: string; bytes: Uint8Array};
 
 type Read = Extract<BackupRead, {ok: true}>;
+
+/**
+Puts back what the last restore replaced in this library, and forgets the copy.
+*/
+export async function undoRestore(
+	library: 'regular' | 'private',
+): Promise<void> {
+	const copy = await readSafetyCopy(library);
+	if (!copy) {
+		showSnack('Nothing to undo');
+		return;
+	}
+
+	await editIn(library, () => copy.store);
+	restorePreferences(copy.preferences);
+	await dropSafetyCopy(library);
+	showSnack('Restore undone');
+}
 
 const plural = (count: number, word: string) =>
 	`${count} ${count === 1 ? word : `${word}s`}`;
@@ -75,24 +102,26 @@ function RestoreForm({
 	const restoreAll = (read: Read) => {
 		confirm(
 			`Replace ${target} with this backup?`,
-			`Everything in ${target} on this phone is replaced by the backup's ${plural(read.counts.sessions, 'session')} and ${plural(read.counts.bookmarks, 'bookmark')}, and the phone's settings come back. With a server connected, the replaced items are removed there too.`,
+			`Everything in ${target} on this phone is replaced by the backup's ${plural(read.counts.sessions, 'session')} and ${plural(read.counts.bookmarks, 'bookmark')}, and the phone's settings come back. With a server connected, the replaced items are removed there too. A copy of what is there now is kept, so Undo brings it back.`,
 			{label: 'Replace', destructive: true},
 			() => {
 				void (async () => {
 					try {
-						await edit((current) => ({
-							...current,
-							groups: read.store.groups,
-							folders: read.store.folders,
-							bookmarkColumns: read.store.bookmarkColumns,
-							bookmarks: read.store.bookmarks,
-							updatedAt: Date.now(),
-						}));
+						// A copy first: if it cannot be kept, nothing is replaced.
+						await keepSafetyCopy(view, store, Date.now(), backupPreferences());
+						await editIn(view, (current) =>
+							replaceLibrary(current, read.store, Date.now()),
+						);
 						restorePreferences(read.phoneSettings);
-						showSnack('Backup restored');
+						showSnack('Backup restored', {
+							label: 'Undo',
+							run() {
+								void undoRestore(view);
+							},
+						});
 						onDone();
 					} catch {
-						notify('Could not restore', 'Try again.');
+						notify('Could not restore', 'Nothing was changed. Try again.');
 					}
 				})();
 			},
@@ -166,6 +195,13 @@ function RestoreForm({
 						{plural(store.groups.length, 'session')} and{' '}
 						{plural(store.bookmarks.length, 'bookmark')} now.
 					</Text>
+					{result.skipped > 0 && (
+						<Text style={{color: colors.warn}}>
+							{plural(result.skipped, 'item')} in the file cannot be kept and
+							are left out: damaged ones, and any past the limits the extension
+							has too.
+						</Text>
+					)}
 					<Button
 						label="Restore everything"
 						icon="refresh-outline"

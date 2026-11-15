@@ -5,6 +5,7 @@ import {trackScroll} from '../../ui/scroll-state';
 import type {SyncStatus} from '../../../../extension/src/shared/sync/client';
 import {
 	clearLibrary,
+	disconnectServer,
 	isSampleData,
 	loadSampleData,
 	refreshStatus,
@@ -187,7 +188,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 
 	const disconnect = async () => {
 		setBusy('disconnect');
-		await syncClient.disconnect();
+		await disconnectServer();
 		await refreshStatus();
 		setBusy(undefined);
 	};

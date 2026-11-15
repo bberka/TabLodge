@@ -291,6 +291,8 @@ export const SECTIONS = {
 			'forget',
 			'lock',
 			'lock now',
+			'change pin',
+			'remove pin',
 			'eye',
 			'glasses',
 		],
