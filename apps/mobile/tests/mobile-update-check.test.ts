@@ -3,6 +3,7 @@ import {describe, test} from 'vite-plus/test';
 import {
 	checkForUpdate,
 	COOLDOWN_MS,
+	downloadLabel,
 	isNewer,
 	parseCache,
 	parseRelease,
@@ -178,5 +179,15 @@ describe('parseCache', () => {
 		assert.deepEqual(parseCache(structuredClone(cache)), cache);
 		assert.equal(parseCache({at: 'x', latest: {version: '0.2.5'}}), undefined);
 		assert.equal(parseCache(undefined), undefined);
+	});
+});
+
+describe('downloadLabel', () => {
+	test('shows a percentage when the size is known and megabytes when it is not', () => {
+		assert.equal(downloadLabel(0, 26_000_000), 'Downloading… 0%');
+		assert.equal(downloadLabel(13_000_000, 26_000_000), 'Downloading… 50%');
+		assert.equal(downloadLabel(26_000_001, 26_000_000), 'Downloading… 100%');
+		assert.equal(downloadLabel(11_250_000, -1), 'Downloading… 11.3 MB');
+		assert.equal(downloadLabel(0, -1), 'Downloading…');
 	});
 });

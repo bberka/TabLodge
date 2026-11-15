@@ -12,6 +12,7 @@ import {notify, showDialog} from '../ui/dialog';
 import {
 	APK_NAME,
 	checkForUpdate,
+	downloadLabel,
 	LATEST_RELEASE_URL,
 	parseCache,
 } from './update-check';
@@ -27,7 +28,10 @@ async function fetchLatest(): Promise<unknown> {
 	return response.json();
 }
 
-async function download(url: string): Promise<File> {
+async function download(
+	url: string,
+	busy: (label?: string) => void,
+): Promise<File> {
 	const folder = new Directory(Paths.cache, 'updates');
 	folder.create({idempotent: true, intermediates: true});
 	const target = new File(folder, APK_NAME);
@@ -35,7 +39,11 @@ async function download(url: string): Promise<File> {
 		target.delete();
 	}
 
-	return File.downloadFileAsync(url, target);
+	return File.downloadFileAsync(url, target, {
+		onProgress({bytesWritten, totalBytes}) {
+			busy(downloadLabel(bytesWritten, totalBytes));
+		},
+	});
 }
 
 async function install(
@@ -58,7 +66,7 @@ async function install(
 
 	busy('Downloading…');
 	try {
-		const file = await download(apkUrl);
+		const file = await download(apkUrl, busy);
 		if (!installApk(file.uri.replace(/^file:\/\//, ''))) {
 			notify('Could not start the install', 'Try again in a moment.');
 		}

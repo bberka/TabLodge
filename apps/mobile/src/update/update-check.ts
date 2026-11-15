@@ -143,3 +143,24 @@ export async function checkForUpdate(options: {
 		? {outcome: outcomeFor(latest, installed), cache: {at: now, latest}}
 		: {outcome: {status: 'failed'}};
 }
+
+/**
+The label while the APK downloads: a percentage once the server has said how large the file is, and the megabytes so
+far until then.
+*/
+export function downloadLabel(
+	bytesWritten: number,
+	totalBytes: number,
+): string {
+	if (totalBytes > 0) {
+		const percent = Math.min(
+			100,
+			Math.floor((bytesWritten / totalBytes) * 100),
+		);
+		return `Downloading… ${percent}%`;
+	}
+
+	return bytesWritten > 0
+		? `Downloading… ${(bytesWritten / 1_000_000).toFixed(1)} MB`
+		: 'Downloading…';
+}
