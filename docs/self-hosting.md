@@ -164,7 +164,7 @@ Do this in every browser and browser profile that should share the library.
 
 The first browser sends its library to the server. Each further browser merges with it: items only it has are sent, and for items both sides have, the server's copy wins. Before the first sync writes anything, TabLodge saves a safety backup you can restore from **Settings › Recovery**. If two browsers already hold the same library from an imported backup, connect the one with the newest data first.
 
-While sync is on, a sync icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings. **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
+While sync is on, a sync icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings; its label says both, such as "Sync: up to date. Open Sync settings". **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
 
 Sessions, saved tabs, folders, bookmark columns, bookmarks, and settings (excluded sites among them) sync. Recovery snapshots, automatic backups, browser bookmark monitoring, and the trash bin do not. **Sync settings** in **Settings › Sync** is on by default; turn it off in a browser to keep its settings separate, and turning it back on sends that browser's settings. When two browsers change the same item at the same time, the later change wins.
 

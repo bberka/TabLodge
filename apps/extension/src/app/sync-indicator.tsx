@@ -38,6 +38,11 @@ function useSyncStatus(): SyncStatus | undefined {
 	return status;
 }
 
+/**
+What the button says besides the state, so a screen reader and the tooltip both name where it goes.
+*/
+const SYNC_ACTION = 'Open Sync settings';
+
 function describe(status: SyncStatus) {
 	switch (status.phase) {
 		case 'syncing': {
@@ -102,9 +107,12 @@ export function SyncIndicator() {
 		return null;
 	}
 
-	const {label, Icon, spin} = describe(
-		syncing ? {...status, phase: 'syncing'} : status,
-	);
+	const {
+		label: state,
+		Icon,
+		spin,
+	} = describe(syncing ? {...status, phase: 'syncing'} : status);
+	const label = `${state}. ${SYNC_ACTION}`;
 	const tone =
 		status.phase === 'error' && !syncing
 			? 'text-destructive'
