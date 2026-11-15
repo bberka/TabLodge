@@ -4,7 +4,7 @@ name: Release
 # Version = 0.<VERSION file>.<patch>, where patch continues from the latest v0.<VERSION>.* tag
 # (see scripts/release-version.ts). Publishes a GitHub release with a Chromium zip and a Firefox zip, then the sync
 # server image with the same version (sync-server.yml) and the signed Android APK. The APK needs the signing secrets
-# described in docs/CONTRIBUTING.md; without them that job only prints a warning.
+# described in docs/CONTRIBUTING.md; without them that job fails.
 on:
   workflow_dispatch:
 
