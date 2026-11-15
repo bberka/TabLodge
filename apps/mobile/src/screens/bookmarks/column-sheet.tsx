@@ -14,6 +14,7 @@ import {
 } from '../../library/library';
 import {showSnack} from '../../ui/snackbar';
 import {edit, newId, useLibrary} from '../../library/library-store';
+import {trashDeleted} from '../../library/trash-store';
 import {useColors} from '../../ui/theme';
 import {Button, Field, IconButton} from '../../ui/ui';
 
@@ -41,6 +42,7 @@ export function confirmDeleteColumn(
 	void edit((current) =>
 		deleteColumn(current, column.id, target?.id ?? '', Date.now()),
 	);
+	void trashDeleted([{kind: 'column', column: whole, bookmarks: own}]);
 	onDeleted();
 	showSnack(`Deleted ${column.name}`, {
 		label: 'Undo',

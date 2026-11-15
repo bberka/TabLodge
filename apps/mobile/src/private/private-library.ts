@@ -50,6 +50,7 @@ import {
 	writeJson,
 } from '../platform/storage';
 import {setView} from '../library/view';
+import {PRIVATE_TRASH_KEY} from '../library/trash';
 
 const LIBRARY_KEY = 'tablodge.private.library';
 const ON_KEY = 'tablodge.private.on';
@@ -417,6 +418,7 @@ export async function removePrivate(): Promise<void> {
 		ON_KEY,
 		LOCK_KEY,
 		LIBRARY_KEY,
+		PRIVATE_TRASH_KEY,
 		PRIVATE_KEY_KEY,
 		prefix('tablodge.sync.state'),
 		prefix('tablodge.sync.status'),

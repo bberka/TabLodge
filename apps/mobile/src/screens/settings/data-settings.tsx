@@ -44,7 +44,7 @@ export function DataCard() {
 					: 'bookmarks';
 		confirm(
 			`Erase all ${label}?`,
-			`Every ${what === 'everything' ? 'session and bookmark' : what === 'sessions' ? 'session' : 'bookmark'} in ${target} on this phone is deleted. Settings are kept. With a server connected they are deleted there too. This cannot be undone.`,
+			`Every ${what === 'everything' ? 'session and bookmark' : what === 'sessions' ? 'session' : 'bookmark'} in ${target} on this phone is deleted. Settings are kept. With a server connected they are deleted there too. They do not go to the trash, and what is already in the trash stays there. This cannot be undone.`,
 			{label: 'Erase', destructive: true},
 			() => {
 				void edit((current) => ({
