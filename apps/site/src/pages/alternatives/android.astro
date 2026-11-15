@@ -1,0 +1,181 @@
+---
+import Base from '../../layouts/Base.astro';
+import {SITE} from '../../site';
+
+const title = 'TabLodge for Android Compared: Raindrop.io, Linkwarden, Karakeep, Wallabag, Instapaper';
+const description =
+	'How the TabLodge Android app compares with Raindrop.io, Linkwarden, Karakeep, Wallabag and Instapaper: price, accounts, self-hosting, offline use, import and export, and where TabLodge is weaker.';
+const checked = '15 November 2026';
+
+const rows: [string, string, string, string, string, string, string][] = [
+	['Price', 'Free, MIT license', 'Free plan with unlimited bookmarks; Pro is a paid monthly or yearly plan', 'Cloud: $3 a month per user on the yearly plan, 14-day trial; free to self-host', 'Cloud: free up to 50 bookmarks, Pro $4 a month; free to self-host', 'Hosted from 11 € a year, 14-day trial; free to self-host', 'Free; Premium $5.99 a month or $59.99 a year'],
+	['Account or server needed', 'No. The library lives on the phone; syncing through your own server is optional', 'Yes, log in with a Raindrop.io account', 'Yes, a Linkwarden account (cloud or your own server)', 'Sign in to a Karakeep server (cloud or your own)', 'Sign in to a wallabag server (hosted or your own)', 'Not verified'],
+	['Open source', 'Yes', 'Not verified', 'Yes, AGPL-3.0', 'Yes, AGPL-3.0', 'Yes, MIT', 'Not verified'],
+	['Self-hosting', 'Optional sync server (Docker or Cloudflare)', 'Not verified', 'Yes (Docker Compose, PostgreSQL)', 'Yes (Docker Compose)', 'Yes', 'Not verified'],
+	['Saves a copy of the page', 'No, links and titles only', 'Web archive on Pro', 'Yes: readable text, single HTML file, screenshot, PDF', 'Full page archive, off by default', 'Yes, the readable article text', 'Articles, videos and other pages; permanent archive on Premium'],
+	['Searches the saved page text', 'No', 'Pro', 'Yes (self-hosted needs Meilisearch)', 'Yes (needs Meilisearch; Pro on the cloud plan)', 'Not verified', 'Premium'],
+	['Offline', 'Library is on the phone; opening a link needs a connection', 'No, needs a connection', 'Not verified', 'Offline reading in the mobile apps', 'Offline reading on the hosted service', 'Not verified'],
+	['Trash for deleted items', 'No, Undo right after deleting', 'Deleted collections go to Trash', 'Not verified', 'Not verified', 'Not verified', 'Not verified'],
+	['iPhone app', 'No', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
+	['Import', 'Raindrop.io, Toby, OneTab, Session Buddy, browser bookmark HTML, CSV, Markdown, link lists', 'HTML, CSV, TXT, JSON, ENEX; from Instapaper, Pocket, Toby and others', 'Browser HTML, Pocket CSV, Wallabag JSON, Omnivore, its own backup', 'Browser HTML, Pocket CSV, Omnivore JSON, link lists', 'Pocket, Instapaper, Pinboard, Omnivore and more', 'Not verified'],
+	['Export', 'Links, Markdown, web page, JSON, CSV, bookmarks HTML, full backup ZIP', 'HTML, CSV, TXT (not yet in the Android app)', 'backup.json, metadata only', 'Export offered, format not stated', 'ePUB, PDF, XML, JSON, CSV per article', 'Not verified'],
+];
+
+const sources: [string, string][] = [
+	['Raindrop.io help: mobile app', 'https://help.raindrop.io/mobile-app.md'],
+	['Raindrop.io help: free and Pro plans', 'https://help.raindrop.io/premium-features.md'],
+	['Raindrop.io help: plan limits', 'https://help.raindrop.io/limitations.md'],
+	['Raindrop.io help: import', 'https://help.raindrop.io/import.md'],
+	['Raindrop.io help: export', 'https://help.raindrop.io/export.md'],
+	['Raindrop.io help: collections and Trash', 'https://help.raindrop.io/collections.md'],
+	['Linkwarden pricing', 'https://linkwarden.app/pricing'],
+	['Linkwarden docs: mobile app', 'https://docs.linkwarden.app/getting-started/mobile-app'],
+	['Linkwarden docs: import and export', 'https://docs.linkwarden.app/usage/import-and-export'],
+	['Linkwarden docs: preservation and search', 'https://docs.linkwarden.app/usage/preservation'],
+	['Linkwarden docs: self-hosting setup', 'https://docs.linkwarden.app/self-hosting/setup'],
+	['Linkwarden on GitHub (license)', 'https://github.com/linkwarden/linkwarden'],
+	['Karakeep pricing', 'https://karakeep.com/pricing/'],
+	['Karakeep mobile apps', 'https://karakeep.com/apps/'],
+	['Karakeep docs: Docker install', 'https://docs.karakeep.com/installation/docker'],
+	['Karakeep docs: import', 'https://docs.karakeep.com/using-karakeep/import'],
+	['Karakeep docs: settings (search, archiving)', 'https://docs.karakeep.com/configuration/environment-variables'],
+	['Karakeep on GitHub (license, features)', 'https://github.com/karakeep-app/karakeep'],
+	['wallabag home', 'https://wallabag.org/'],
+	['wallabag.it pricing', 'https://wallabag.it/en/pricing/'],
+	['wallabag docs: exporting articles', 'https://doc.wallabag.org/user/articles/download/'],
+	['wallabag docs: Android app', 'https://doc.wallabag.org/apps/android/'],
+	['wallabag on GitHub (license)', 'https://github.com/wallabag/wallabag'],
+	['Instapaper Premium', 'https://www.instapaper.com/premium'],
+];
+
+const breadcrumbs = [
+	{name: 'Home', path: '/'},
+	{name: 'Alternatives', path: '/alternatives/'},
+	{name: 'Android', path: '/alternatives/android/'},
+];
+---
+
+<Base
+	title={title}
+	description={description}
+	path="/alternatives/android/"
+	breadcrumbs={breadcrumbs}
+	jsonLd={[
+		{
+			'@type': 'WebPage',
+			'@id': 'https://tablodge.bbay.dev/alternatives/android/#webpage',
+			url: 'https://tablodge.bbay.dev/alternatives/android/',
+			name: title,
+			description,
+			about: {'@id': 'https://tablodge.bbay.dev/#software'},
+			isPartOf: {'@id': 'https://tablodge.bbay.dev/#website'},
+		},
+	]}
+>
+	<article class="narrow prose page">
+		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <a href="/alternatives/">Alternatives</a> / <span aria-current="page">Android</span></nav>
+		<h1>TabLodge for Android compared with other link-saving apps</h1>
+		<p class="lead">
+			The TabLodge Android app is a small, free link saver that keeps your library on the phone and can sync with a
+			server you run. These apps do overlapping jobs, and most of them do more. This page says where each one fits
+			and where TabLodge falls short. Comparing browser extensions instead? See the <a href="/alternatives/">OneTab, Session Buddy and Toby comparison</a>.
+		</p>
+		<p><a class="btn primary" href={SITE.androidApk} rel="noopener">Download the Android APK</a></p>
+
+		<h2>At a glance</h2>
+		<div class="table-wrap" role="region" aria-label="Comparison table, scrolls sideways on narrow screens" tabindex="0">
+			<table>
+				<caption class="note">Comparison based on each project's own documentation, pricing pages and repository, checked on {checked}. "Not verified" means the official pages did not say. Details change; check each project for the latest.</caption>
+				<thead>
+					<tr>
+						<th scope="col">&nbsp;</th>
+						<th scope="col">TabLodge Android</th>
+						<th scope="col">Raindrop.io</th>
+						<th scope="col">Linkwarden</th>
+						<th scope="col">Karakeep</th>
+						<th scope="col">wallabag</th>
+						<th scope="col">Instapaper</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map((r) => <tr><th scope="row">{r[0]}</th><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td></tr>)}
+				</tbody>
+			</table>
+		</div>
+
+		<h2>Where TabLodge is weaker</h2>
+		<ul>
+			<li>It keeps links, titles and sessions, not the page. If a page disappears, TabLodge cannot show you what it said. Linkwarden, Karakeep, wallabag and Instapaper keep content.</li>
+			<li>There is no trash on the phone. Deleting asks nothing and offers Undo for a moment, so a later mistake is not recoverable from the app.</li>
+			<li>Android only. There is no iPhone app and no store listing: you install the APK from GitHub and update by installing the next one.</li>
+			<li>The phone cannot read its browser's open tabs, so there is no one-tap capture of a whole window. You share the tabs from the browser instead, or save sessions with the desktop extension.</li>
+			<li>Sync needs a server you host. There is no hosted TabLodge cloud, and no background sync: changes from other devices show up when you open the app.</li>
+			<li>No shared collections or team features.</li>
+			<li>Sessions are deliberately simple lists you can open, archive, color and file into folders. Tabs inside a session cannot be reordered.</li>
+		</ul>
+
+		<h2>Raindrop.io</h2>
+		<p>
+			Raindrop.io is the closest in spirit: collections of bookmarks, with an Android app, an iPhone app and a web app. Its free plan has no time limit and no cap on bookmarks, and collections can be shared with other people for free. Pro adds the web archive, full-text search, automatic backups and larger uploads. It needs an account and an internet connection, and its help pages do not state an open source license or a self-hosted option. TabLodge imports a Raindrop.io export directly. Choose Raindrop.io if you want shared collections, a hosted service, or the same app on an iPhone.
+		</p>
+
+		<h2>Linkwarden and Karakeep</h2>
+		<p>
+			Both are open source tools for people who run their own server, with Android and iPhone apps and a hosted plan for those who would rather not. They save more than TabLodge does: Linkwarden stores readable text, a single HTML file, a screenshot and a PDF of each link, and Karakeep can archive the full page and tag links with a language model you configure. They also ask more of you: Docker Compose and a database, and a Meilisearch service for search over saved text. TabLodge's server is a lighter sync target for one library. Choose Linkwarden or Karakeep if you want searchable copies of pages and are happy to run a bigger stack.
+		</p>
+
+		<h2>wallabag and Instapaper</h2>
+		<p>
+			These two are read-later services built around articles. wallabag extracts the readable text of a page, is MIT licensed, and can be self-hosted or rented from wallabag.it. Its Android app connects to your wallabag server. Instapaper has a free plan with folders and a Premium plan with full-text search and unlimited notes. Its public pages do not describe export, import or offline reading, so those rows say "Not verified". Choose one of these if you mostly read saved articles. TabLodge does not make a reading view.
+		</p>
+
+		<h2>Where TabLodge fits</h2>
+		<ul>
+			<li>You want something with no account, where the library works on the phone with no server at all.</li>
+			<li>You already use the TabLodge extension and want the same bookmarks, columns and sessions on your phone, synced through your own server.</li>
+			<li>You want to pick where links open: your default browser, an in-app tab, or a browser you choose.</li>
+			<li>You want a separate private library on the phone, optionally locked with a PIN or password.</li>
+		</ul>
+
+		<h2>Sources</h2>
+		<p>
+			Every claim about another product comes from the pages below, read on {checked}.  Google Play listings did not load in the tool used for checking, so install counts and update dates are not claimed. TabLodge's own claims come from the <a href={`${SITE.repo}/blob/master/docs/README.md#android-app`} rel="noopener">Android app documentation</a> and the app's code.
+		</p>
+		<ul class="sources">
+			{sources.map(([label, href]) => <li><a href={href} rel="noopener">{label}</a></li>)}
+		</ul>
+
+		<p class="note">
+			TabLodge is an independent project and is not affiliated with, endorsed by or sponsored by Raindrop.io, Linkwarden, Karakeep, wallabag, Instapaper or their makers. Product names are used only to describe comparisons, and belong to their respective owners. Spotted something out of date? <a href={SITE.issues} rel="noopener">Tell us on GitHub</a>.
+		</p>
+	</article>
+</Base>
+
+<style>
+	.page {
+		padding-block: 3rem 5rem;
+	}
+	.narrow.page {
+		width: min(900px, 100% - 2.5rem);
+	}
+	.crumbs {
+		font-size: 0.9rem;
+		color: var(--muted);
+		margin-bottom: 1rem;
+	}
+	caption {
+		text-align: left;
+		padding: 0.7rem 0.9rem;
+		caption-side: bottom;
+	}
+	table {
+		min-width: 1250px;
+	}
+	.page h1 {
+		font-size: clamp(1.8rem, 4.5vw, 3rem);
+	}
+	.sources {
+		font-size: 0.9rem;
+		columns: 2 260px;
+	}
+</style>
