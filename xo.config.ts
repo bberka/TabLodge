@@ -227,6 +227,7 @@ const xoConfig: XoConfigItem[] = [
 			'apps/extension/shell/service-worker.ts',
 			'apps/extension/src/shared/bookmark-rules.ts',
 			'apps/extension/src/shared/library-normalize.ts',
+			'apps/extension/src/shared/session-folders.ts',
 			'apps/extension/src/shared/import-formats.ts',
 			'apps/extension/src/app/bookmark-drag.ts',
 			'apps/extension/src/app/{interaction-actions,newtab,page-params}.ts{,x}',
