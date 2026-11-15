@@ -12,8 +12,8 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {usePreferences} from '../settings/preferences';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
 import {motion} from './motion';
-import {useScrolledDown} from './scroll-state';
-import {setSearchAction} from './search-action';
+import {useBackAction} from './back-actions';
+import {setSearching, setSearchAction} from './search-action';
 import {useBarHeight} from './tab-bar';
 import {useColors, useShape} from './theme';
 import {Icon, IconButton, type IconName} from './ui';
@@ -39,6 +39,16 @@ export function useSearch() {
 	const [query, setQuery] = useState('');
 	// A docked tab bar holds the search button itself, so the screen on show hands it what to do.
 	const {floatingBar} = usePreferences();
+	useBackAction(open, () => {
+		setOpen(false);
+		setQuery('');
+	});
+	useEffect(() => {
+		setSearching(open);
+		return () => {
+			setSearching(false);
+		};
+	}, [open]);
 	useEffect(() => {
 		if (floatingBar) {
 			return;
@@ -215,16 +225,25 @@ export function SearchDock({
 	const colors = useColors();
 	const keyboardOpen = useKeyboardHeight() > 0;
 	const inset = keyboardInset();
+	const insets = useSafeAreaInsets();
+	const {barGap} = useShape();
 	// A floating tab bar gets a floating, rounded search bar; a docked one gets a banner across the screen.
 	const {floatingBar} = usePreferences();
-	// While the page scrolls and the input has no focus, the floating bar shrinks to a small pill, as the tab bar does.
 	const {width: screenWidth} = useWindowDimensions();
-	const scrolledDown = useScrolledDown();
+	// The bar is wide only while the input has focus. Otherwise it is a small pill at the bottom right: the search
+	// icon and the close arrow, and tapping it focuses the input again.
 	const [focused, setFocused] = useState(true);
 	const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
-	// Android keeps an input focused after Back hides the keyboard, so a closed keyboard counts as no focus too.
-	const idle = !focused || !keyboardOpen;
-	const small = floatingBar && scrolledDown && idle && query === '';
+	const wasOpenRef = useRef(false);
+	useEffect(() => {
+		// Android keeps an input focused after Back hides the keyboard, so a keyboard that closes counts as no focus.
+		if (wasOpenRef.current && !keyboardOpen) {
+			setFocused(false);
+		}
+
+		wasOpenRef.current = keyboardOpen;
+	}, [keyboardOpen]);
+	const small = !focused;
 	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
 	useEffect(() => {
 		Animated.timing(shrink, {
@@ -234,25 +253,26 @@ export function SearchDock({
 			useNativeDriver: false,
 		}).start();
 	}, [small, shrink]);
+	// The floating tab bar is gone while searching, so the bar sits at the screen's bottom; a docked bar stays below it.
+	const rest = floatingBar ? barGap + insets.bottom : bottom;
 	return (
 		<Animated.View
 			style={[
 				styles.dock,
-				floatingBar ? styles.floating : styles.banner,
-				floatingBar && {
+				floatingBar || small ? styles.floating : styles.banner,
+				{
 					width: shrink.interpolate({
 						inputRange: [0, 1],
-						outputRange: [screenWidth - 32, SMALL_SEARCH_WIDTH],
+						outputRange: [
+							floatingBar ? screenWidth - 32 : screenWidth,
+							SMALL_SEARCH_WIDTH,
+						],
 					}),
-				},
-				{
-					bottom: floatingBar
-						? keyboardOpen
-							? Animated.add(inset, 8)
-							: bottom + 8
-						: keyboardOpen
-							? inset
-							: bottom,
+					bottom: keyboardOpen
+						? Animated.add(inset, floatingBar ? 8 : 0)
+						: small && !floatingBar
+							? rest + 8
+							: rest,
 					backgroundColor: colors.surface,
 					borderColor: colors.border,
 				},
@@ -290,7 +310,7 @@ export function SearchDock({
 					}}
 				/>
 			</Animated.View>
-			{query !== '' && (
+			{query !== '' && !small && (
 				<IconButton
 					icon="close-circle"
 					label="Clear search"
@@ -362,7 +382,7 @@ const styles = StyleSheet.create({
 	},
 	inputBox: {flex: 1},
 	input: {fontSize: 16, paddingVertical: 0},
-	expand: {position: 'absolute', top: 0, bottom: 0, left: 0, right: 0},
+	expand: {position: 'absolute', top: 0, bottom: 0, left: 0, right: SIZE},
 	close: {
 		width: SIZE,
 		height: SIZE,

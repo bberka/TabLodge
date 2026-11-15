@@ -63,6 +63,18 @@ export const SESSION_ACTIONS: readonly SessionAction[] = [
 	'delete',
 ];
 
+/**
+What a swipe on one link inside an open session card does.
+*/
+export type LinkAction = 'none' | 'open' | 'edit' | 'bookmark' | 'delete';
+export const LINK_ACTIONS: readonly LinkAction[] = [
+	'none',
+	'open',
+	'edit',
+	'bookmark',
+	'delete',
+];
+
 export const PRIVATE_LOCK_MODES = [
 	'manual',
 	'leave',
@@ -71,7 +83,7 @@ export const PRIVATE_LOCK_MODES = [
 ] as const;
 export const PRIVATE_LOCK_MINUTES = [1, 5, 15, 30, 60] as const;
 
-type Preferences = {
+export type Preferences = {
 	/**
 	Which platform's design the app imitates. Defaults to the phone's own.
 	*/
@@ -81,10 +93,15 @@ type Preferences = {
 	*/
 	floatingBar: boolean;
 	/**
-	With the floating bar: `full` spans the screen with labels, `compact` is a small pill of icons, `scroll` is full
-	until the list is scrolled down, and `icons` keeps the bar's size but hides the labels.
+	With the floating bar: `full` spans the screen, `compact` is a small pill of icons, and `scroll` is full until the list
+	is scrolled down.
 	*/
 	barSize: BarSize;
+	/**
+	Which tabs show their name under the icon, on either bar: only the one open (the default), all of them, or none.
+	A small floating bar never has room for names.
+	*/
+	barLabels: BarLabels;
 	/**
 	The column the last link was saved to, offered first next time.
 	*/
@@ -103,6 +120,11 @@ type Preferences = {
 	*/
 	sessionSwipeRight: SessionAction;
 	sessionSwipeLeft: SessionAction;
+	/**
+	What swiping a link in an open session card to the right, and to the left, does. Sync with the rest of the app's look.
+	*/
+	linkSwipeRight: LinkAction;
+	linkSwipeLeft: LinkAction;
 	/**
 	What tapping a session card does: show its tabs, or open them all.
 	*/
@@ -124,12 +146,6 @@ type Preferences = {
 	Keep the private library in step with the server. Off, it stays on this phone only. This choice stays on this phone.
 	*/
 	syncPrivate: boolean;
-	/**
-	Ask before the private library syncs: each time it opens (the app starts with it open, or it is unlocked, or the private
-	view is opened), a dialog asks whether to sync it now. Only matters while syncing the private library is on and a
-	server is connected. This choice stays on this phone.
-	*/
-	askToSyncPrivate: boolean;
 	/**
 	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
 	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
@@ -197,22 +213,24 @@ type Preferences = {
 
 const KEY = 'tablodge.prefs';
 
-const defaults: Preferences = {
+export const defaults: Preferences = {
 	look: 'auto',
 	floatingBar: true,
 	barSize: 'scroll',
+	barLabels: 'active',
 	lastColumnId: '',
 	tapAction: 'open',
 	swipeRight: 'delete',
 	swipeLeft: 'edit',
 	sessionSwipeRight: 'archive',
 	sessionSwipeLeft: 'delete',
+	linkSwipeRight: 'bookmark',
+	linkSwipeLeft: 'delete',
 	sessionTap: 'expand',
 	sessionMain: 'open',
 	cleanOnSave: true,
 	syncSettings: true,
 	syncPrivate: true,
-	askToSyncPrivate: true,
 	siteIcons: 'server',
 	savePreview: true,
 	accent: 'default',
@@ -251,13 +269,39 @@ export type OpenWith = (typeof OPEN_WITH)[number];
 const isOpenWith = (value: unknown): value is OpenWith =>
 	OPEN_WITH.includes(value as OpenWith);
 
-const BAR_SIZES = ['full', 'scroll', 'compact', 'icons'] as const;
+const BAR_SIZES = ['full', 'scroll', 'compact'] as const;
 export type BarSize = (typeof BAR_SIZES)[number];
 const isBarSize = (value: unknown): value is BarSize =>
 	BAR_SIZES.includes(value as BarSize);
 
+const BAR_LABELS = ['active', 'always', 'never'] as const;
+export type BarLabels = (typeof BAR_LABELS)[number];
+const isBarLabels = (value: unknown): value is BarLabels =>
+	BAR_LABELS.includes(value as BarLabels);
+
+/**
+The size and names of the bar from stored or synced values. An earlier size, Icons only, was full width without names.
+*/
+function barChoice(
+	size: unknown,
+	labels: unknown,
+): {barSize: BarSize; barLabels: BarLabels} {
+	const iconsOnly = size === 'icons';
+	return {
+		barSize: isBarSize(size) ? size : iconsOnly ? 'full' : defaults.barSize,
+		barLabels: isBarLabels(labels)
+			? labels
+			: iconsOnly
+				? 'never'
+				: defaults.barLabels,
+	};
+}
+
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
 	ROW_ACTIONS.find((action) => action === value) ?? fallback;
+
+const linkAction = (value: unknown, fallback: LinkAction): LinkAction =>
+	LINK_ACTIONS.find((action) => action === value) ?? fallback;
 
 const sessionAction = (
 	value: unknown,
@@ -276,18 +320,20 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		look,
 		floatingBar,
 		barSize,
+		barLabels,
 		lastColumnId,
 		tapAction,
 		swipeRight,
 		swipeLeft,
 		sessionSwipeRight,
 		sessionSwipeLeft,
+		linkSwipeRight,
+		linkSwipeLeft,
 		sessionTap,
 		sessionMain,
 		cleanOnSave,
 		syncSettings,
 		syncPrivate,
-		askToSyncPrivate,
 		siteIcons,
 		savePreview,
 		deviceName,
@@ -307,7 +353,7 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		look: isLook(look) ? look : defaults.look,
 		floatingBar:
 			typeof floatingBar === 'boolean' ? floatingBar : defaults.floatingBar,
-		barSize: isBarSize(barSize) ? barSize : defaults.barSize,
+		...barChoice(barSize, barLabels),
 		lastColumnId: typeof lastColumnId === 'string' ? lastColumnId : '',
 		tapAction: tapAction === 'edit' ? 'edit' : 'open',
 		swipeRight: rowAction(swipeRight, defaults.swipeRight),
@@ -320,6 +366,8 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 			sessionSwipeLeft,
 			defaults.sessionSwipeLeft,
 		),
+		linkSwipeRight: linkAction(linkSwipeRight, defaults.linkSwipeRight),
+		linkSwipeLeft: linkAction(linkSwipeLeft, defaults.linkSwipeLeft),
 		sessionTap: sessionTap === 'open' ? 'open' : 'expand',
 		sessionMain: sessionAction(sessionMain, defaults.sessionMain),
 		cleanOnSave:
@@ -328,10 +376,6 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
 		syncPrivate:
 			typeof syncPrivate === 'boolean' ? syncPrivate : defaults.syncPrivate,
-		askToSyncPrivate:
-			typeof askToSyncPrivate === 'boolean'
-				? askToSyncPrivate
-				: defaults.askToSyncPrivate,
 		siteIcons: siteIconsChoice(siteIcons),
 		savePreview:
 			typeof savePreview === 'boolean' ? savePreview : defaults.savePreview,
@@ -418,7 +462,6 @@ export function resetPreferences(): void {
 		lastColumnId: current.lastColumnId,
 		syncSettings: current.syncSettings,
 		syncPrivate: current.syncPrivate,
-		askToSyncPrivate: current.askToSyncPrivate,
 	});
 }
 
@@ -466,11 +509,14 @@ const SYNCED_KEYS = [
 	'look',
 	'floatingBar',
 	'barSize',
+	'barLabels',
 	'tapAction',
 	'swipeRight',
 	'swipeLeft',
 	'sessionSwipeRight',
 	'sessionSwipeLeft',
+	'linkSwipeRight',
+	'linkSwipeLeft',
 	'sessionTap',
 	'sessionMain',
 	'cleanOnSave',
@@ -510,8 +556,10 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 		found.floatingBar = raw.floatingBar;
 	}
 
-	if (isBarSize(raw.barSize)) {
-		found.barSize = raw.barSize;
+	if (isBarSize(raw.barSize) || raw.barSize === 'icons') {
+		Object.assign(found, barChoice(raw.barSize, raw.barLabels));
+	} else if (isBarLabels(raw.barLabels)) {
+		found.barLabels = raw.barLabels;
 	}
 
 	if (raw.tapAction === 'open' || raw.tapAction === 'edit') {
@@ -540,6 +588,18 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 	);
 	if (sessionLeft) {
 		found.sessionSwipeLeft = sessionLeft;
+	}
+
+	const linkRight = LINK_ACTIONS.find(
+		(action) => action === raw.linkSwipeRight,
+	);
+	if (linkRight) {
+		found.linkSwipeRight = linkRight;
+	}
+
+	const linkLeft = LINK_ACTIONS.find((action) => action === raw.linkSwipeLeft);
+	if (linkLeft) {
+		found.linkSwipeLeft = linkLeft;
 	}
 
 	if (raw.sessionTap === 'expand' || raw.sessionTap === 'open') {

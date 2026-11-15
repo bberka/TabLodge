@@ -14,6 +14,10 @@ export const ROWS = {
 		label: 'Floating bar size',
 		hint: 'Full, small while scrolling, or always small',
 	},
+	barLabels: {
+		label: 'Tab names',
+		hint: 'Under the open tab, under every tab, or hidden',
+	},
 	openWith: {
 		label: 'Open links in',
 		hint: 'The default browser, an in-app tab, or one browser',
@@ -31,10 +35,6 @@ export const ROWS = {
 	syncPrivate: {
 		label: 'Sync the private library',
 		hint: 'Off, it stays on this phone and never reaches your server',
-	},
-	askToSyncPrivate: {
-		label: 'Ask before syncing the private library',
-		hint: 'Each time it opens, choose whether it syncs now',
 	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
@@ -73,6 +73,8 @@ export const ROWS = {
 	sessionMain: {label: 'Main button on a session'},
 	sessionSwipeRight: {label: 'Swipe a session right'},
 	sessionSwipeLeft: {label: 'Swipe a session left'},
+	linkSwipeRight: {label: 'Swipe a link right', hint: 'In an open session'},
+	linkSwipeLeft: {label: 'Swipe a link left', hint: 'In an open session'},
 	tap: {label: 'Tap a bookmark'},
 	swipeRight: {label: 'Swipe right'},
 	swipeLeft: {label: 'Swipe left'},
@@ -141,7 +143,14 @@ export const SECTIONS = {
 			'light',
 			'night',
 		],
-		rows: [ROWS.style, ROWS.theme, ROWS.accent, ROWS.floatingBar, ROWS.barSize],
+		rows: [
+			ROWS.style,
+			ROWS.theme,
+			ROWS.accent,
+			ROWS.floatingBar,
+			ROWS.barSize,
+			ROWS.barLabels,
+		],
 	},
 	syncApp: {
 		title: 'Sync settings',
@@ -172,6 +181,8 @@ export const SECTIONS = {
 			ROWS.sessionMain,
 			ROWS.sessionSwipeRight,
 			ROWS.sessionSwipeLeft,
+			ROWS.linkSwipeRight,
+			ROWS.linkSwipeLeft,
 			ROWS.compactSessions,
 			ROWS.sessionIcons,
 			ROWS.showSavedOn,
@@ -289,7 +300,7 @@ export const SECTIONS = {
 			'offline',
 			'private',
 		],
-		rows: [ROWS.syncPrivate, ROWS.askToSyncPrivate],
+		rows: [ROWS.syncPrivate],
 	},
 	excluded: {
 		title: 'Excluded websites',

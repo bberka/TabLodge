@@ -5,7 +5,8 @@ matched only through that row's neighbours.
 import {createContext, type ReactNode, use, useMemo} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {useColors} from '../../ui/theme';
-import {Card, Icon, type IconName} from '../../ui/ui';
+import {Card, Icon, type IconName, IconButton} from '../../ui/ui';
+import {canReset, confirmResetSection} from './row-reset';
 import {
 	headHit,
 	type Row,
@@ -84,6 +85,16 @@ export function SettingsCard({
 							</Text>
 						)}
 					</View>
+					{section.rows.some((row) => canReset(row)) && (
+						<IconButton
+							icon="refresh-outline"
+							label={`Reset ${section.title} to default`}
+							color={colors.muted}
+							onPress={() => {
+								confirmResetSection(section.title, section.rows);
+							}}
+						/>
+					)}
 				</View>
 				<View style={styles.body}>{children}</View>
 			</Card>

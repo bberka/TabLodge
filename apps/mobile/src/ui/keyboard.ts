@@ -13,6 +13,9 @@ import {motion} from './motion';
 // How long after a keyboard event the window is asked again, once the keyboard has stopped moving.
 const VERIFY_AFTER_MS = 500;
 
+// How long after the keyboard's height changes the animated copy is set to it outright.
+const SNAP_AFTER_MS = 400;
+
 // While the keyboard is believed open, the window is asked this often whether it still is, since Android sometimes
 // closes it without saying so.
 const POLL_MS = 500;
@@ -41,12 +44,20 @@ function setHeight(next: number): void {
 		poller = undefined;
 	}
 
+	inset.stopAnimation();
 	Animated.timing(inset, {
 		toValue: next,
 		duration: motion(220),
 		easing: Easing.out(Easing.cubic),
 		useNativeDriver: false,
 	}).start();
+	// An animation that never ran to its end left the drawers lifted for a keyboard that was gone, so the value is set
+	// outright once it should have finished.
+	setTimeout(() => {
+		if (height === next) {
+			inset.setValue(next);
+		}
+	}, SNAP_AFTER_MS);
 }
 
 function watch(): void {
@@ -89,12 +100,14 @@ the window how tall the keyboard is and corrects what is believed, in either dir
 falls back to the one thing that is certain: with no input focused there is no keyboard.
 */
 export function settleKeyboard(): void {
+	// Android shows the keyboard only for a focused input, so with none the keyboard is closed, whatever the last event said.
+	if (height > 0 && !TextInput.State.currentlyFocusedInput()) {
+		setHeight(0);
+		return;
+	}
+
 	const actual = nativeKeyboardHeight();
 	if (actual === undefined) {
-		if (height > 0 && !TextInput.State.currentlyFocusedInput()) {
-			setHeight(0);
-		}
-
 		return;
 	}
 

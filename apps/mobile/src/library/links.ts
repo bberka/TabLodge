@@ -26,7 +26,7 @@ export type LinkSettings = Pick<
 >;
 
 // The extension's own defaults, so a phone that has not synced yet behaves the same.
-const DEFAULTS: LinkSettings = {
+export const DEFAULTS: LinkSettings = {
 	cleanTitles: true,
 	removeTrackingParameters: false,
 	simplifyUrls: true,

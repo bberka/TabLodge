@@ -1,16 +1,22 @@
-import {StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useServerFeatures} from '../../library/server-features';
 import {setSyncedSetting} from '../../library/library-store';
 import {
+	LINK_ACTIONS,
 	ROW_ACTIONS,
 	SESSION_ACTIONS,
 	setPreferences,
 	usePreferences,
 } from '../../settings/preferences';
-import {rowActionLook, sessionActionLook} from '../../library/row-actions';
+import {
+	linkActionLook,
+	rowActionLook,
+	sessionActionLook,
+} from '../../library/row-actions';
 import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {Switch} from '../../ui/ui';
+import {useRowReset} from './row-reset';
 import {SettingsCard, useRowVisible} from './settings-card';
 import {SelectRow} from './select-row';
 import {type Row, ROWS, SECTIONS} from './settings-index';
@@ -44,8 +50,16 @@ function useSessionActionChoices() {
 	});
 }
 
+function useLinkActionChoices() {
+	const colors = useColors();
+	return LINK_ACTIONS.map((id) => {
+		const look = linkActionLook(id, colors);
+		return {id, name: look.label, icon: look.icon, color: look.color};
+	});
+}
+
 export function Toggle({
-	row: {label, hint},
+	row,
 	value,
 	onChange,
 }: {
@@ -53,18 +67,25 @@ export function Toggle({
 	value: boolean;
 	onChange: (value: boolean) => void;
 }) {
+	const {label, hint} = row;
 	const colors = useColors();
-	const isVisible = useRowVisible({label, hint});
+	const isVisible = useRowVisible(row);
+	const reset = useRowReset(row);
 	if (!isVisible) {
 		return null;
 	}
 
 	return (
 		<View accessible={false} style={styles.switchRow}>
-			<View style={styles.switchText}>
+			<Pressable
+				accessible={false}
+				style={styles.switchText}
+				onLongPress={reset.onLongPress}
+			>
 				<Text style={{color: colors.text, fontSize: 16}}>{label}</Text>
 				{hint && <Text style={{color: colors.muted}}>{hint}</Text>}
-			</View>
+			</Pressable>
+			{reset.sheet}
 			<Switch
 				label={label}
 				hint={hint}
@@ -97,7 +118,7 @@ What tapping and swiping a bookmark do, and how links are cleaned when saved. Th
 Says so when a setting that works through the sync server is on and the connected server is too old to do it: a server
 that was set up before icons and previews existed needs updating, and until then the setting shows nothing.
 */
-function UpdateServerNote({needed}: {needed: boolean}) {
+export function UpdateServerNote({needed}: {needed: boolean}) {
 	const colors = useColors();
 	const features = useServerFeatures();
 	if (!needed || features === undefined || features.includes('preview')) {
@@ -231,6 +252,7 @@ export function SessionSettingsCard() {
 	const prefs = usePreferences();
 	const settings = useLinkSettings(true);
 	const sessionActions = useSessionActionChoices();
+	const linkChoices = useLinkActionChoices();
 	return (
 		<SettingsCard
 			section={SECTIONS.sessions}
@@ -285,6 +307,22 @@ export function SessionSettingsCard() {
 				choices={sessionActions}
 				onChange={(sessionSwipeLeft) => {
 					setPreferences({sessionSwipeLeft});
+				}}
+			/>
+			<SelectRow
+				row={ROWS.linkSwipeRight}
+				value={prefs.linkSwipeRight}
+				choices={linkChoices}
+				onChange={(linkSwipeRight) => {
+					setPreferences({linkSwipeRight});
+				}}
+			/>
+			<SelectRow
+				row={ROWS.linkSwipeLeft}
+				value={prefs.linkSwipeLeft}
+				choices={linkChoices}
+				onChange={(linkSwipeLeft) => {
+					setPreferences({linkSwipeLeft});
 				}}
 			/>
 			<Toggle

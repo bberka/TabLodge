@@ -1,5 +1,12 @@
 import {type ReactNode, useRef} from 'react';
-import {Animated, PanResponder, StyleSheet, Text, View} from 'react-native';
+import {
+	Animated,
+	type GestureResponderHandlers,
+	PanResponder,
+	StyleSheet,
+	Text,
+	View,
+} from 'react-native';
 import {spring} from './motion';
 import {readableOn, useColors} from './theme';
 import {Icon, type IconName} from './ui';
@@ -25,8 +32,13 @@ export function SwipeRow({
 	right,
 	disabled = false,
 	radius = 0,
+	background,
 }: {
-	children: ReactNode;
+	/**
+	What slides. A function receives the pan handlers instead of the whole row taking them, so only the part that spreads
+	them (a card's header) starts the swipe.
+	*/
+	children: ReactNode | ((handlers: GestureResponderHandlers) => ReactNode);
 	left?: SwipeAction;
 	right?: SwipeAction;
 	disabled?: boolean;
@@ -34,6 +46,10 @@ export function SwipeRow({
 	Rounds the corners of the reveal to match a rounded row.
 	*/
 	radius?: number;
+	/**
+	What shows behind a row with square corners while it slides. The screen's background by default.
+	*/
+	background?: string;
 }) {
 	const colors = useColors();
 	const x = useRef(new Animated.Value(0)).current;
@@ -127,13 +143,14 @@ export function SwipeRow({
 			{reveal(left, 'left')}
 			{reveal(right, 'right')}
 			<Animated.View
-				{...pan.panHandlers}
+				{...(typeof children === 'function' ? {} : pan.panHandlers)}
 				style={{
-					backgroundColor: radius > 0 ? 'transparent' : colors.background,
+					backgroundColor:
+						radius > 0 ? 'transparent' : (background ?? colors.background),
 					transform: [{translateX: x}],
 				}}
 			>
-				{children}
+				{typeof children === 'function' ? children(pan.panHandlers) : children}
 			</Animated.View>
 		</View>
 	);

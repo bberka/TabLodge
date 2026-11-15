@@ -10,6 +10,7 @@ import {
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {TARGET, useColors} from '../../ui/theme';
 import {Icon, type IconName} from '../../ui/ui';
+import {useRowReset} from './row-reset';
 import {useRowVisible} from './settings-card';
 import type {Row} from './settings-index';
 
@@ -113,43 +114,48 @@ export function ValueRow({
 }) {
 	const colors = useColors();
 	const visible = useRowVisible(row);
+	const reset = useRowReset(row);
 	if (!visible) {
 		return null;
 	}
 
 	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel={`${row.label}, ${value}`}
-			accessibilityHint={row.hint}
-			style={({pressed}) => [
-				styles.row,
-				pressed && {backgroundColor: colors.pressed},
-			]}
-			onPress={onPress}
-		>
-			<Text style={[styles.label, {color: colors.text}]}>{row.label}</Text>
-			{swatch && (
-				<View
-					style={[
-						styles.dot,
-						{backgroundColor: swatch, borderColor: colors.border},
-					]}
-				/>
-			)}
-			{image ? (
-				<Image source={{uri: image}} style={styles.smallImage} />
-			) : (
-				icon && <Icon name={icon} size={18} color={tint ?? colors.muted} />
-			)}
-			<Text
-				numberOfLines={1}
-				style={[styles.value, {color: tint ?? colors.muted}]}
+		<>
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel={`${row.label}, ${value}`}
+				accessibilityHint={row.hint}
+				style={({pressed}) => [
+					styles.row,
+					pressed && {backgroundColor: colors.pressed},
+				]}
+				onPress={onPress}
+				onLongPress={reset.onLongPress}
 			>
-				{value}
-			</Text>
-			<Icon name="chevron-forward" size={18} color={colors.muted} />
-		</Pressable>
+				<Text style={[styles.label, {color: colors.text}]}>{row.label}</Text>
+				{swatch && (
+					<View
+						style={[
+							styles.dot,
+							{backgroundColor: swatch, borderColor: colors.border},
+						]}
+					/>
+				)}
+				{image ? (
+					<Image source={{uri: image}} style={styles.smallImage} />
+				) : (
+					icon && <Icon name={icon} size={18} color={tint ?? colors.muted} />
+				)}
+				<Text
+					numberOfLines={1}
+					style={[styles.value, {color: tint ?? colors.muted}]}
+				>
+					{value}
+				</Text>
+				<Icon name="chevron-forward" size={18} color={colors.muted} />
+			</Pressable>
+			{reset.sheet}
+		</>
 	);
 }
 
@@ -243,6 +249,9 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: 8,
 		marginVertical: -4,
+		// The pressed highlight reaches past the text on both sides; the negative margin keeps the text where it was.
+		paddingHorizontal: 12,
+		marginHorizontal: -12,
 	},
 	label: {flex: 1, fontSize: 16},
 	value: {maxWidth: '50%', fontSize: 15},

@@ -1544,6 +1544,39 @@ function Options() {
 			: !Object.is(value, defaultValue);
 	};
 
+	/**
+	Puts every changed setting of a section back to its default, in one save.
+	*/
+	const resetGroup = async (title: string, fields: SettingField[]) => {
+		if (!state || !defaultSettings) {
+			return;
+		}
+
+		const changed = fields.filter((field) => changedFromDefault(field));
+		if (changed.length === 0) {
+			return;
+		}
+
+		const values = Object.fromEntries(
+			changed.map((field) => [field.name, defaultSettings[field.name]]),
+		);
+		setSettings((current) => ({...current, ...values}));
+		savesInFlightRef.current += 1;
+		try {
+			const result = await send('UPDATE_SETTINGS', {settings: values});
+			if (result?.ok) {
+				showStatus(`Restored ${title} to its defaults.`);
+			} else {
+				showStatus(result?.error || 'Could not save those settings.', true);
+			}
+		} finally {
+			savesInFlightRef.current -= 1;
+			if (savesInFlightRef.current === 0) {
+				await reload();
+			}
+		}
+	};
+
 	const focusSettingControl = (field: SettingField) => {
 		const dependency = field.requires ?? field.parent;
 		const name = rowDisabled(field) && dependency ? dependency : field.name;
@@ -2054,6 +2087,26 @@ function Options() {
 							description={group.description}
 							icon={group.icon}
 							className={SECTION_SCROLL_CLASS}
+							action={
+								fields.some((field) => changedFromDefault(field)) && (
+									<span className="flex justify-end">
+										<IconTooltip label={`Reset ${group.title} to default`}>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-8 w-8 shrink-0"
+												aria-label={`Reset ${group.title} to default`}
+												onClick={() => {
+													void resetGroup(group.title, fields);
+												}}
+											>
+												<RotateCcw className="h-4 w-4" aria-hidden="true" />
+											</Button>
+										</IconTooltip>
+									</span>
+								)
+							}
 						>
 							<div className="divide-y divide-border/70">
 								{fields.map((field) => (

@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {ScrollView, useColorScheme, StyleSheet, Text, View} from 'react-native';
-import {confirm} from '../../ui/dialog';
+import {confirm, showDialog} from '../../ui/dialog';
 import {trackScroll} from '../../ui/scroll-state';
 import type {SyncStatus} from '../../../../extension/src/shared/sync/client';
 import {
@@ -11,6 +11,7 @@ import {
 	syncClient,
 	useLibrary,
 	useSyncStatus,
+	resetSyncedSettings,
 } from '../../library/library-store';
 import {useRoomBelow} from '../../ui/keyboard';
 import {useBarSpace} from '../../ui/tab-bar';
@@ -45,6 +46,7 @@ import {
 	SessionSettingsCard,
 	SyncedSettingsCard,
 	Toggle,
+	UpdateServerNote,
 } from './behaviour-settings';
 import {SettingsCard, SettingsQuery} from './settings-card';
 import {normalizeQuery, ROWS, SECTIONS, sectionVisible} from './settings-index';
@@ -87,6 +89,41 @@ const LOOK_NAMES = {
 	material: 'the Android look',
 	ios: 'the iOS look',
 };
+
+/**
+Puts settings back to their defaults. Without sync everything resets; while syncing, the choice is between this
+phone's own settings and also the ones shared with the extension, which reset on every synced device.
+*/
+function restoreDefaults(syncing: boolean): void {
+	const phone = () => {
+		resetPreferences();
+	};
+
+	const everything = () => {
+		resetPreferences();
+		void resetSyncedSettings();
+	};
+
+	if (!syncing) {
+		confirm(
+			'Restore default settings?',
+			'Every setting goes back to its default. Your bookmarks, sessions and server connection stay.',
+			{label: 'Restore', destructive: true},
+			everything,
+		);
+		return;
+	}
+
+	showDialog(
+		'Restore default settings?',
+		"This phone's settings go back to their defaults. The settings shared with the extension, such as how addresses show and how sessions sort, can reset too, and then reset on every synced device.",
+		[
+			{label: 'Cancel', kind: 'cancel'},
+			{label: 'Phone only', run: phone},
+			{label: 'Phone and shared', kind: 'destructive', run: everything},
+		],
+	);
+}
 
 export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const colors = useColors();
@@ -169,6 +206,9 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 				<Header title="Settings" />
 				<SettingsQuery value={needle}>
 					<View style={styles.cards}>
+						<UpdateServerNote
+							needed={prefs.siteIcons === 'server' || prefs.savePreview}
+						/>
 						<SettingsCard
 							section={SECTIONS.appearance}
 							icon="color-palette-outline"
@@ -226,7 +266,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 									row={ROWS.barSize}
 									value={prefs.barSize}
 									choices={[
-										{id: 'full', name: 'Full width', hint: 'Icons and names'},
+										{id: 'full', name: 'Full width'},
 										{
 											id: 'scroll',
 											name: 'Small while scrolling',
@@ -237,17 +277,28 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											name: 'Always small',
 											hint: 'A narrow bar with icons only',
 										},
-										{
-											id: 'icons',
-											name: 'Icons only',
-											hint: 'Keeps the size, hides the names',
-										},
 									]}
 									onChange={(barSize) => {
 										setPreferences({barSize});
 									}}
 								/>
 							)}
+							<SelectRow
+								row={ROWS.barLabels}
+								value={prefs.barLabels}
+								choices={[
+									{
+										id: 'active',
+										name: 'Open tab only',
+										hint: 'Its name shows under its icon',
+									},
+									{id: 'always', name: 'All tabs'},
+									{id: 'never', name: 'None', hint: 'Icons only'},
+								]}
+								onChange={(barLabels) => {
+									setPreferences({barLabels});
+								}}
+							/>
 						</SettingsCard>
 						<SessionSettingsCard />
 						<BookmarkBehaviourCard />
@@ -291,16 +342,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											void applyPrivateSyncSetting();
 										}}
 									/>
-									{prefs.syncPrivate && (
-										<Toggle
-											row={ROWS.askToSyncPrivate}
-											value={prefs.askToSyncPrivate}
-											onChange={(askToSyncPrivate) => {
-												setPreferences({askToSyncPrivate});
-												void applyPrivateSyncSetting();
-											}}
-										/>
-									)}
 									<DeviceNameField />
 									<Button
 										label="Sync now"
@@ -362,19 +403,14 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 						<SettingsCard
 							section={SECTIONS.restore}
 							icon="refresh-outline"
-							description="Puts this app's settings back the way they were at install. Your library is not touched, and the extension's settings stay as they are."
+							description="Puts settings back the way they were at install. Your library is not touched. While syncing, you choose whether the settings shared with the extension reset too."
 						>
 							<Button
 								label="Restore default preferences"
 								kind="danger"
 								icon="refresh-outline"
 								onPress={() => {
-									confirm(
-										'Restore default preferences?',
-										'Every setting in this app goes back to its default. Your bookmarks, sessions and server connection stay. Phones that sync settings get the defaults too.',
-										{label: 'Restore', destructive: true},
-										resetPreferences,
-									);
+									restoreDefaults(status.connected);
 								}}
 							/>
 						</SettingsCard>

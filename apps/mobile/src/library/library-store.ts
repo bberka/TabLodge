@@ -20,6 +20,7 @@ import {
 import {getPreferences} from '../settings/preferences';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
 import {emptyStore, isStore} from './library';
+import {DEFAULTS as LINK_DEFAULTS, type LinkSettings} from './links';
 import {createLibraryCore} from './library-core';
 import {isPrivateView, useView} from './view';
 import type * as SeedModuleNamespace from './seed';
@@ -276,6 +277,25 @@ Runs `listener` whenever the regular library changes, including what sync brings
 export const subscribeLibrary = core.subscribe;
 
 export const getLibrary = (): Store => core.store;
+
+/**
+Puts extension settings that travel with the library back to the extension's defaults, all of them or just `keys`, and
+sends that on the next sync.
+*/
+export async function resetSyncedSettings(
+	keys: ReadonlyArray<keyof LinkSettings> = Object.keys(LINK_DEFAULTS) as Array<
+		keyof LinkSettings
+	>,
+): Promise<void> {
+	await editRegular((current) => ({
+		...current,
+		settings: {
+			...current.settings,
+			...Object.fromEntries(keys.map((key) => [key, LINK_DEFAULTS[key]])),
+		},
+		updatedAt: Date.now(),
+	}));
+}
 
 /**
 Changes one extension setting that travels with the library, and sends it on the next sync.

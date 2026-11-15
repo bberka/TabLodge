@@ -54,9 +54,13 @@ import {
 	SearchDock,
 	useSearch,
 } from '../../ui/floating-actions';
-import {sessionActionLook} from '../../library/row-actions';
+import {linkActionLook, sessionActionLook} from '../../library/row-actions';
 import {SwipeRow} from '../../ui/swipe-row';
-import {type SessionAction, usePreferences} from '../../settings/preferences';
+import {
+	type LinkAction,
+	type SessionAction,
+	usePreferences,
+} from '../../settings/preferences';
 import {linkToOpen, rowText} from '../../library/links';
 import {openAll, openLink} from '../../platform/open-links';
 import {PrivateSwitch} from '../../private/private-switch';
@@ -158,6 +162,7 @@ function SessionCardView({
 	onToggle,
 	onAct,
 	onTabMenu,
+	onTabAct,
 	onMenu,
 }: {
 	session: Session;
@@ -183,6 +188,10 @@ function SessionCardView({
 	Opens the menu of one link in the session: edit, add to bookmarks, delete.
 	*/
 	onTabMenu?: (session: Session, tabId: string) => void;
+	/**
+	Runs what swiping a link does; missing where the library is read only.
+	*/
+	onTabAct?: (action: LinkAction, session: Session, tabId: string) => void;
 	onMenu: (session: Session) => void;
 }) {
 	const colors = useColors();
@@ -202,6 +211,15 @@ function SessionCardView({
 						onAct(action, session);
 					},
 				};
+	const swipeLink = (action: LinkAction, tabId: string) =>
+		action === 'none' || !onTabAct
+			? undefined
+			: {
+					...linkActionLook(action, colors),
+					onTrigger() {
+						onTabAct(action, session, tabId);
+					},
+				};
 	const chevron = (
 		<Icon
 			name={expanded ? 'chevron-up' : 'chevron-down'}
@@ -216,203 +234,224 @@ function SessionCardView({
 			left={swipe(prefs.sessionSwipeRight)}
 			right={swipe(prefs.sessionSwipeLeft)}
 		>
-			<Card flush>
-				<View style={styles.head}>
-					<Pressable
-						accessibilityRole={selecting ? 'checkbox' : 'button'}
-						accessibilityState={selecting ? {checked} : {expanded}}
-						accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
-						style={({pressed}) => [
-							styles.headMain,
-							(checked || pressed) && {
-								backgroundColor: checked ? colors.accentSoft : colors.pressed,
-							},
-						]}
-						accessibilityActions={SESSION_MENU.map(([name, label]) => ({
-							name,
-							label: name === 'archive' && archived ? 'Unarchive' : label,
-						}))}
-						onAccessibilityAction={(event) => {
-							const name = event.nativeEvent.actionName;
-							if (name === 'expand') {
-								onToggle(session.id);
-							} else if (name === 'more') {
-								onMenu(session);
-							} else {
-								onAct(name as SessionAction, session);
-							}
-						}}
-						onLongPress={() => {
-							if (selecting) {
-								onPick(session.id);
-							} else {
-								onMenu(session);
-							}
-						}}
-						onPress={() => {
-							if (selecting) {
-								onPick(session.id);
-							} else if (prefs.sessionTap === 'open') {
-								onAct('open', session);
-							} else {
-								onToggle(session.id);
-							}
-						}}
-					>
-						{selecting ? (
-							<View style={styles.tile}>
-								<Icon
-									name={checked ? 'checkmark-circle' : 'ellipse-outline'}
-									size={28}
-									color={checked ? colors.accent : colors.muted}
-								/>
-							</View>
-						) : (
-							<View style={[styles.tile, {backgroundColor: soften(tint)}]}>
-								<Icon name="albums" size={22} color={tint} />
-							</View>
-						)}
-						<View style={styles.texts}>
-							<Text
-								numberOfLines={2}
-								style={[styles.name, {color: colors.text}]}
-							>
-								{session.name}
-							</Text>
-							<Text numberOfLines={1} style={{color: colors.muted}}>
-								{count} · {folderName} · {shortDate(session.updatedAt)}
-							</Text>
-							{session.description !== '' && !prefs.compactSessions && (
-								<Text numberOfLines={2} style={{color: colors.muted}}>
-									{session.description}
-								</Text>
-							)}
-							{session.deviceName &&
-								prefs.showSavedOn &&
-								!prefs.compactSessions && (
-									<Text numberOfLines={1} style={{color: colors.muted}}>
-										Saved on {session.deviceName}
-									</Text>
-								)}
-							{links.showSessionFaviconPreviews && !prefs.compactSessions && (
-								<TabPreview session={session} />
-							)}
-						</View>
-						{!selecting && prefs.sessionTap !== 'open' && chevron}
-					</Pressable>
-					{!selecting && prefs.sessionTap === 'open' && (
+			{(handlers) => (
+				<Card flush>
+					<View style={styles.head} {...handlers}>
 						<Pressable
-							accessibilityRole="button"
-							accessibilityState={{expanded}}
-							accessibilityLabel={
-								expanded
-									? `Hide tabs in ${session.name}`
-									: `Show tabs in ${session.name}`
-							}
+							accessibilityRole={selecting ? 'checkbox' : 'button'}
+							accessibilityState={selecting ? {checked} : {expanded}}
+							accessibilityLabel={`${session.name}, ${count}, ${folderName}${session.deviceName ? `, saved on ${session.deviceName}` : ''}`}
 							style={({pressed}) => [
-								styles.round,
-								styles.roundEnd,
-								pressed && {backgroundColor: colors.pressed},
+								styles.headMain,
+								(checked || pressed) && {
+									backgroundColor: checked ? colors.accentSoft : colors.pressed,
+								},
 							]}
+							accessibilityActions={SESSION_MENU.map(([name, label]) => ({
+								name,
+								label: name === 'archive' && archived ? 'Unarchive' : label,
+							}))}
+							onAccessibilityAction={(event) => {
+								const name = event.nativeEvent.actionName;
+								if (name === 'expand') {
+									onToggle(session.id);
+								} else if (name === 'more') {
+									onMenu(session);
+								} else {
+									onAct(name as SessionAction, session);
+								}
+							}}
+							onLongPress={() => {
+								if (selecting) {
+									onPick(session.id);
+								} else {
+									onMenu(session);
+								}
+							}}
 							onPress={() => {
-								onToggle(session.id);
+								if (selecting) {
+									onPick(session.id);
+								} else if (prefs.sessionTap === 'open') {
+									onAct('open', session);
+								} else {
+									onToggle(session.id);
+								}
 							}}
 						>
-							{chevron}
-						</Pressable>
-					)}
-				</View>
-				{expanded && !selecting && (
-					<View style={[styles.tabs, {borderColor: colors.border}]}>
-						{session.tabs.map((tab) => {
-							const text = rowText(
-								{title: tab.title || tab.url, url: tab.url},
-								links,
-							);
-							return (
-								<Pressable
-									key={tab.id}
-									accessibilityRole="link"
-									accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
-									accessibilityHint="Opens the link"
-									style={({pressed}) => [
-										styles.tab,
-										isCompact && styles.tabCompact,
-										{backgroundColor: pressed ? colors.pressed : 'transparent'},
-									]}
-									accessibilityActions={
-										onTabMenu ? [{name: 'menu', label: 'Link menu'}] : undefined
-									}
-									onAccessibilityAction={() => {
-										onTabMenu?.(session, tab.id);
-									}}
-									onLongPress={
-										onTabMenu
-											? () => {
-													onTabMenu(session, tab.id);
-												}
-											: undefined
-									}
-									onPress={() => {
-										openLink(linkToOpen(tab.url, links));
-									}}
+							{selecting ? (
+								<View style={styles.tile}>
+									<Icon
+										name={checked ? 'checkmark-circle' : 'ellipse-outline'}
+										size={28}
+										color={checked ? colors.accent : colors.muted}
+									/>
+								</View>
+							) : (
+								<View style={[styles.tile, {backgroundColor: soften(tint)}]}>
+									<Icon name="albums" size={22} color={tint} />
+								</View>
+							)}
+							<View style={styles.texts}>
+								<Text
+									numberOfLines={2}
+									style={[styles.name, {color: colors.text}]}
 								>
-									<SiteIcon host={hostOf(tab.url)} size={isCompact ? 24 : 32} />
-									<View style={styles.texts}>
-										<Text
-											numberOfLines={isCompact ? 1 : 2}
-											style={{color: colors.text}}
-										>
-											{text.main}
+									{session.name}
+								</Text>
+								<Text numberOfLines={1} style={{color: colors.muted}}>
+									{count} · {folderName} · {shortDate(session.updatedAt)}
+								</Text>
+								{session.description !== '' && !prefs.compactSessions && (
+									<Text numberOfLines={2} style={{color: colors.muted}}>
+										{session.description}
+									</Text>
+								)}
+								{session.deviceName &&
+									prefs.showSavedOn &&
+									!prefs.compactSessions && (
+										<Text numberOfLines={1} style={{color: colors.muted}}>
+											Saved on {session.deviceName}
 										</Text>
-										{text.sub !== undefined && !isCompact && (
-											<Text
-												numberOfLines={1}
-												style={{color: colors.muted, fontSize: 13}}
-											>
-												{text.sub}
-											</Text>
-										)}
-									</View>
-									{tab.pinned && (
-										<Icon name="pin" size={15} color={colors.muted} />
 									)}
-									<Icon name="open-outline" size={18} color={colors.muted} />
-								</Pressable>
-							);
-						})}
-						<View style={styles.footer}>
-							<View style={styles.footerButton}>
-								<Button
-									kind="plain"
-									label={
-										main === 'open'
-											? `Open all ${session.tabs.length}`
-											: mainLook.label
-									}
-									icon={mainLook.icon}
-									onPress={() => {
-										onAct(main, session);
-									}}
-								/>
+								{links.showSessionFaviconPreviews && !prefs.compactSessions && (
+									<TabPreview session={session} />
+								)}
 							</View>
+							{!selecting && prefs.sessionTap !== 'open' && chevron}
+						</Pressable>
+						{!selecting && prefs.sessionTap === 'open' && (
 							<Pressable
 								accessibilityRole="button"
-								accessibilityLabel={`More actions for ${session.name}`}
+								accessibilityState={{expanded}}
+								accessibilityLabel={
+									expanded
+										? `Hide tabs in ${session.name}`
+										: `Show tabs in ${session.name}`
+								}
 								style={({pressed}) => [
 									styles.round,
+									styles.roundEnd,
 									pressed && {backgroundColor: colors.pressed},
 								]}
 								onPress={() => {
-									onMenu(session);
+									onToggle(session.id);
 								}}
 							>
-								<Icon name="ellipsis-horizontal" color={colors.muted} />
+								{chevron}
 							</Pressable>
-						</View>
+						)}
 					</View>
-				)}
-			</Card>
+					{expanded && !selecting && (
+						<View style={[styles.tabs, {borderColor: colors.border}]}>
+							{session.tabs.map((tab) => {
+								const text = rowText(
+									{title: tab.title || tab.url, url: tab.url},
+									links,
+								);
+								return (
+									<SwipeRow
+										key={tab.id}
+										background={colors.surface}
+										left={swipeLink(prefs.linkSwipeRight, tab.id)}
+										right={swipeLink(prefs.linkSwipeLeft, tab.id)}
+									>
+										<Pressable
+											accessibilityRole="link"
+											accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
+											accessibilityHint="Opens the link"
+											style={({pressed}) => [
+												styles.tab,
+												isCompact && styles.tabCompact,
+												{
+													backgroundColor: pressed
+														? colors.pressed
+														: 'transparent',
+												},
+											]}
+											accessibilityActions={
+												onTabMenu
+													? [{name: 'menu', label: 'Link menu'}]
+													: undefined
+											}
+											onAccessibilityAction={() => {
+												onTabMenu?.(session, tab.id);
+											}}
+											onLongPress={
+												onTabMenu
+													? () => {
+															onTabMenu(session, tab.id);
+														}
+													: undefined
+											}
+											onPress={() => {
+												openLink(linkToOpen(tab.url, links));
+											}}
+										>
+											<SiteIcon
+												host={hostOf(tab.url)}
+												size={isCompact ? 24 : 32}
+											/>
+											<View style={styles.texts}>
+												<Text
+													numberOfLines={isCompact ? 1 : 2}
+													style={{color: colors.text}}
+												>
+													{text.main}
+												</Text>
+												{text.sub !== undefined && !isCompact && (
+													<Text
+														numberOfLines={1}
+														style={{color: colors.muted, fontSize: 13}}
+													>
+														{text.sub}
+													</Text>
+												)}
+											</View>
+											{tab.pinned && (
+												<Icon name="pin" size={15} color={colors.muted} />
+											)}
+											<Icon
+												name="open-outline"
+												size={18}
+												color={colors.muted}
+											/>
+										</Pressable>
+									</SwipeRow>
+								);
+							})}
+							<View style={styles.footer}>
+								<View style={styles.footerButton}>
+									<Button
+										kind="plain"
+										label={
+											main === 'open'
+												? `Open all ${session.tabs.length}`
+												: mainLook.label
+										}
+										icon={mainLook.icon}
+										onPress={() => {
+											onAct(main, session);
+										}}
+									/>
+								</View>
+								<Pressable
+									accessibilityRole="button"
+									accessibilityLabel={`More actions for ${session.name}`}
+									style={({pressed}) => [
+										styles.round,
+										pressed && {backgroundColor: colors.pressed},
+									]}
+									onPress={() => {
+										onMenu(session);
+									}}
+								>
+									<Icon name="ellipsis-horizontal" color={colors.muted} />
+								</Pressable>
+							</View>
+						</View>
+					)}
+				</Card>
+			)}
 		</SwipeRow>
 	);
 }
@@ -656,6 +695,45 @@ export function SessionsScreen({
 	const openTabMenu = useCallback((session: Session, tabId: string) => {
 		setTabMenu({sessionId: session.id, tabId});
 	}, []);
+	const runTabAction = useCallback(
+		(action: LinkAction, session: Session, tabId: string) => {
+			const tab = session.tabs.find((candidate) => candidate.id === tabId);
+			if (!tab) {
+				return;
+			}
+
+			switch (action) {
+				case 'open': {
+					openLink(linkToOpen(tab.url, links));
+
+					break;
+				}
+
+				case 'edit': {
+					setEditingTab({session, tabId});
+
+					break;
+				}
+
+				case 'bookmark': {
+					setBookmarking({
+						title: tab.title || tab.url,
+						links: [{title: tab.title, url: tab.url}],
+					});
+
+					break;
+				}
+
+				case 'delete': {
+					removeTab(session, tabId);
+
+					break;
+				}
+				// No default
+			}
+		},
+		[links, removeTab],
+	);
 	const menuItem = (action: SessionAction, session: Session): SheetAction => {
 		const actionLook = sessionActionLook(
 			action,
@@ -986,6 +1064,7 @@ export function SessionsScreen({
 							onAct={act}
 							onMenu={openMenu}
 							onTabMenu={openTabMenu}
+							onTabAct={runTabAction}
 						/>
 					</View>
 				)}
