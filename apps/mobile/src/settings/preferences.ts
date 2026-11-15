@@ -81,10 +81,15 @@ type Preferences = {
 	*/
 	floatingBar: boolean;
 	/**
-	With the floating bar: `full` spans the screen with labels, `compact` is a small pill of icons, `scroll` is full
-	until the list is scrolled down, and `icons` keeps the bar's size but hides the labels.
+	With the floating bar: `full` spans the screen, `compact` is a small pill of icons, and `scroll` is full until the list
+	is scrolled down.
 	*/
 	barSize: BarSize;
+	/**
+	Which tabs show their name under the icon, on either bar: only the one open (the default), all of them, or none.
+	A small floating bar never has room for names.
+	*/
+	barLabels: BarLabels;
 	/**
 	The column the last link was saved to, offered first next time.
 	*/
@@ -201,6 +206,7 @@ const defaults: Preferences = {
 	look: 'auto',
 	floatingBar: true,
 	barSize: 'scroll',
+	barLabels: 'active',
 	lastColumnId: '',
 	tapAction: 'open',
 	swipeRight: 'delete',
@@ -251,10 +257,33 @@ export type OpenWith = (typeof OPEN_WITH)[number];
 const isOpenWith = (value: unknown): value is OpenWith =>
 	OPEN_WITH.includes(value as OpenWith);
 
-const BAR_SIZES = ['full', 'scroll', 'compact', 'icons'] as const;
+const BAR_SIZES = ['full', 'scroll', 'compact'] as const;
 export type BarSize = (typeof BAR_SIZES)[number];
 const isBarSize = (value: unknown): value is BarSize =>
 	BAR_SIZES.includes(value as BarSize);
+
+const BAR_LABELS = ['active', 'always', 'never'] as const;
+export type BarLabels = (typeof BAR_LABELS)[number];
+const isBarLabels = (value: unknown): value is BarLabels =>
+	BAR_LABELS.includes(value as BarLabels);
+
+/**
+The size and names of the bar from stored or synced values. An earlier size, Icons only, was full width without names.
+*/
+function barChoice(
+	size: unknown,
+	labels: unknown,
+): {barSize: BarSize; barLabels: BarLabels} {
+	const iconsOnly = size === 'icons';
+	return {
+		barSize: isBarSize(size) ? size : iconsOnly ? 'full' : defaults.barSize,
+		barLabels: isBarLabels(labels)
+			? labels
+			: iconsOnly
+				? 'never'
+				: defaults.barLabels,
+	};
+}
 
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
 	ROW_ACTIONS.find((action) => action === value) ?? fallback;
@@ -276,6 +305,7 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		look,
 		floatingBar,
 		barSize,
+		barLabels,
 		lastColumnId,
 		tapAction,
 		swipeRight,
@@ -307,7 +337,7 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		look: isLook(look) ? look : defaults.look,
 		floatingBar:
 			typeof floatingBar === 'boolean' ? floatingBar : defaults.floatingBar,
-		barSize: isBarSize(barSize) ? barSize : defaults.barSize,
+		...barChoice(barSize, barLabels),
 		lastColumnId: typeof lastColumnId === 'string' ? lastColumnId : '',
 		tapAction: tapAction === 'edit' ? 'edit' : 'open',
 		swipeRight: rowAction(swipeRight, defaults.swipeRight),
@@ -466,6 +496,7 @@ const SYNCED_KEYS = [
 	'look',
 	'floatingBar',
 	'barSize',
+	'barLabels',
 	'tapAction',
 	'swipeRight',
 	'swipeLeft',
@@ -510,8 +541,10 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 		found.floatingBar = raw.floatingBar;
 	}
 
-	if (isBarSize(raw.barSize)) {
-		found.barSize = raw.barSize;
+	if (isBarSize(raw.barSize) || raw.barSize === 'icons') {
+		Object.assign(found, barChoice(raw.barSize, raw.barLabels));
+	} else if (isBarLabels(raw.barLabels)) {
+		found.barLabels = raw.barLabels;
 	}
 
 	if (raw.tapAction === 'open' || raw.tapAction === 'edit') {

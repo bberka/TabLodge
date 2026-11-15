@@ -13,7 +13,7 @@ import {resolveLook, usePreferences} from '../settings/preferences';
 import {useKeyboardHeight} from './keyboard';
 import {motion, spring} from './motion';
 import {resetScroll, useScrolledDown} from './scroll-state';
-import {useSearchAction} from './search-action';
+import {useSearching, useSearchAction} from './search-action';
 import {BAR_HEIGHT, useColors, useShape} from './theme';
 import {Icon, type IconName} from './ui';
 
@@ -88,15 +88,13 @@ export function TabBar<T extends string>({
 	const colors = useColors();
 	const insets = useSafeAreaInsets();
 	const {width: screenWidth} = useWindowDimensions();
-	const {look: chosen, floatingBar, barSize} = usePreferences();
+	const {look: chosen, floatingBar, barSize, barLabels} = usePreferences();
 	const look = resolveLook(chosen);
 	const {barGap} = useShape();
 	const scrolledDown = useScrolledDown();
 	const small =
 		floatingBar &&
 		(barSize === 'compact' || (barSize === 'scroll' && scrolledDown));
-	// The names are hidden whenever the bar is small, and in the Icons only size, which keeps the bar's size.
-	const unlabeled = small || (floatingBar && barSize === 'icons');
 	const ios = look === 'ios';
 	const count = tabs.length;
 	const index = Math.max(
@@ -108,8 +106,13 @@ export function TabBar<T extends string>({
 	const searchAction = useSearchAction();
 	// 0 is the full bar, 1 the small one. Width and height are layout, so this one runs on the JS thread.
 	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
-	// 0 shows the names under the icons, 1 hides them.
-	const unlabel = useRef(new Animated.Value(unlabeled ? 1 : 0)).current;
+	// Per tab, 1 shows its name under the icon and 0 hides it. A small bar has no room for names.
+	const shown = (i: number) =>
+		!small &&
+		(barLabels === 'always' || (barLabels === 'active' && i === index));
+	const labels = useRef(
+		tabs.map((_, i) => new Animated.Value(shown(i) ? 1 : 0)),
+	).current;
 	// The highlight slides on the JS thread too, because its offset depends on the animated tab width.
 	const slide = useRef(new Animated.Value(index)).current;
 	const hide = useRef(new Animated.Value(0)).current;
@@ -131,13 +134,19 @@ export function TabBar<T extends string>({
 	}, [small, shrink]);
 
 	useEffect(() => {
-		Animated.timing(unlabel, {
-			toValue: unlabeled ? 1 : 0,
-			duration: motion(260),
-			easing: Easing.out(Easing.cubic),
-			useNativeDriver: false,
-		}).start();
-	}, [unlabeled, unlabel]);
+		for (const [i, label] of labels.entries()) {
+			Animated.timing(label, {
+				toValue:
+					!small &&
+					(barLabels === 'always' || (barLabels === 'active' && i === index))
+						? 1
+						: 0,
+				duration: motion(220),
+				easing: Easing.out(Easing.cubic),
+				useNativeDriver: false,
+			}).start();
+		}
+	}, [small, barLabels, index, labels]);
 
 	useEffect(() => {
 		spring(slide, index, {friction: 9, tension: 90, native: false}).start();
@@ -146,7 +155,9 @@ export function TabBar<T extends string>({
 		}
 	}, [index, slide, pops]);
 
-	const away = keyboard || forceHidden;
+	// A floating bar steps aside while searching: the search bar takes its place.
+	const searching = useSearching() && floatingBar;
+	const away = keyboard || forceHidden || searching;
 	useEffect(() => {
 		Animated.timing(hide, {
 			toValue: away ? 1 : 0,
@@ -174,7 +185,6 @@ export function TabBar<T extends string>({
 		outputRange: [(fullWidth - BAR_PADDING * 2) / count, COMPACT_TAB_WIDTH],
 	});
 	const labelHeight = ios ? 14 : 16;
-	const gone = {inputRange: [0, 1], outputRange: [1, 0]};
 
 	return (
 		<Animated.View
@@ -309,22 +319,18 @@ export function TabBar<T extends string>({
 								</Animated.View>
 							</Animated.View>
 							<Animated.View
-								style={
-									floatingBar
-										? {
-												overflow: 'hidden',
-												opacity: unlabel.interpolate(gone),
-												height: unlabel.interpolate({
-													inputRange: [0, 1],
-													outputRange: [labelHeight, 0],
-												}),
-												marginTop: unlabel.interpolate({
-													inputRange: [0, 1],
-													outputRange: [2, 0],
-												}),
-											}
-										: styles.label
-								}
+								style={{
+									overflow: 'hidden',
+									opacity: labels[i],
+									height: labels[i].interpolate({
+										inputRange: [0, 1],
+										outputRange: [0, labelHeight],
+									}),
+									marginTop: labels[i].interpolate({
+										inputRange: [0, 1],
+										outputRange: [0, floatingBar ? 2 : 3],
+									}),
+								}}
 							>
 								<Text
 									numberOfLines={1}
@@ -349,18 +355,20 @@ export function TabBar<T extends string>({
 						onPress={searchAction}
 					>
 						<Icon name="search" color={colors.muted} size={ios ? 25 : 24} />
-						<View style={styles.label}>
-							<Text
-								numberOfLines={1}
-								style={{
-									color: colors.muted,
-									fontWeight: '500',
-									fontSize: ios ? 11 : 12,
-								}}
-							>
-								Search
-							</Text>
-						</View>
+						{barLabels === 'always' && (
+							<View style={styles.label}>
+								<Text
+									numberOfLines={1}
+									style={{
+										color: colors.muted,
+										fontWeight: '500',
+										fontSize: ios ? 11 : 12,
+									}}
+								>
+									Search
+								</Text>
+							</View>
+						)}
 					</Pressable>
 				)}
 			</Animated.View>

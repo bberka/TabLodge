@@ -226,7 +226,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 									row={ROWS.barSize}
 									value={prefs.barSize}
 									choices={[
-										{id: 'full', name: 'Full width', hint: 'Icons and names'},
+										{id: 'full', name: 'Full width'},
 										{
 											id: 'scroll',
 											name: 'Small while scrolling',
@@ -237,17 +237,28 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											name: 'Always small',
 											hint: 'A narrow bar with icons only',
 										},
-										{
-											id: 'icons',
-											name: 'Icons only',
-											hint: 'Keeps the size, hides the names',
-										},
 									]}
 									onChange={(barSize) => {
 										setPreferences({barSize});
 									}}
 								/>
 							)}
+							<SelectRow
+								row={ROWS.barLabels}
+								value={prefs.barLabels}
+								choices={[
+									{
+										id: 'active',
+										name: 'Open tab only',
+										hint: 'Its name shows under its icon',
+									},
+									{id: 'always', name: 'All tabs'},
+									{id: 'never', name: 'None', hint: 'Icons only'},
+								]}
+								onChange={(barLabels) => {
+									setPreferences({barLabels});
+								}}
+							/>
 						</SettingsCard>
 						<SessionSettingsCard />
 						<BookmarkBehaviourCard />

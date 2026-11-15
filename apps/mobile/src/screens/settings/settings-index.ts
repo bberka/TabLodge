@@ -14,6 +14,10 @@ export const ROWS = {
 		label: 'Floating bar size',
 		hint: 'Full, small while scrolling, or always small',
 	},
+	barLabels: {
+		label: 'Tab names',
+		hint: 'Under the open tab, under every tab, or hidden',
+	},
 	openWith: {
 		label: 'Open links in',
 		hint: 'The default browser, an in-app tab, or one browser',
@@ -141,7 +145,14 @@ export const SECTIONS = {
 			'light',
 			'night',
 		],
-		rows: [ROWS.style, ROWS.theme, ROWS.accent, ROWS.floatingBar, ROWS.barSize],
+		rows: [
+			ROWS.style,
+			ROWS.theme,
+			ROWS.accent,
+			ROWS.floatingBar,
+			ROWS.barSize,
+			ROWS.barLabels,
+		],
 	},
 	syncApp: {
 		title: 'Sync settings',
