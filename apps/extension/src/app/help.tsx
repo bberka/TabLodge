@@ -679,9 +679,11 @@ function Help() {
 						<>
 							Deleted sessions, saved links, bookmarks, and columns stay in the
 							trash until their retention period ends. Settings controls how
-							long. On the dashboard, open it from the Sessions menu, or turn on
-							Show Trash bin button in the header in Settings › Dashboard. You
-							can also open the bin from the{' '}
+							long. With sync turned on, the trash is shared with your other
+							devices, so you can restore on one what you deleted on another. On
+							the dashboard, open it from the Sessions menu, or turn on Show
+							Trash bin button in the header in Settings › Dashboard. You can
+							also open the bin from the{' '}
 							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
 							the side panel header, or the search palette. Dashboard deletes,
 							imports, actions that open many tabs, and closing duplicate tabs

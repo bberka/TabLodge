@@ -10,7 +10,7 @@ Reserved sync stamp of one record: a hybrid logical clock string, the device tha
 */
 export type RecordSync = {h?: string; d?: string; o?: string};
 export type TombstoneKind =
-	'session' | 'tab' | 'bookmark' | 'column' | 'folder' | 'preference';
+	'session' | 'tab' | 'bookmark' | 'column' | 'folder' | 'preference' | 'trash';
 /**
 A deleted record kept so a stale device cannot bring it back; removed from the index once `purgeAfter` passes.
 */
@@ -33,6 +33,7 @@ export const TOMBSTONE_KINDS: ReadonlySet<string> = new Set([
 	'column',
 	'folder',
 	'preference',
+	'trash',
 ]);
 export const syncText = (value: unknown) =>
 	typeof value === 'string' && value !== '' && value.length <= SYNC_TEXT_MAX

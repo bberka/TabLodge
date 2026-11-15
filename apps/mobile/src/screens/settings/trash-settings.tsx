@@ -4,7 +4,7 @@ import {BottomSheet} from '../../ui/bottom-sheet';
 import {confirm} from '../../ui/dialog';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
-import {Button, Empty} from '../../ui/ui';
+import {Button, Empty, Segmented} from '../../ui/ui';
 import {useRegularLibrary} from '../../library/library-store';
 import {
 	deleteForever,
@@ -17,7 +17,9 @@ import {
 	DEFAULT_RETENTION_DAYS,
 	daysLeft,
 	describeEntry,
+	filterTrash,
 	type TrashEntry,
+	type TrashFilter,
 } from '../../library/trash';
 import {useView} from '../../library/view';
 import {SettingsCard} from './settings-card';
@@ -40,7 +42,7 @@ function TrashRow({
 	onDelete: () => void;
 }) {
 	const colors = useColors();
-	const {title, origin, count} = describeEntry(entry);
+	const {title, origin, links} = describeEntry(entry);
 	const left = daysLeft(entry, daysKept, now);
 	return (
 		<View
@@ -54,9 +56,7 @@ function TrashRow({
 			</Text>
 			<Text style={{color: colors.muted}}>
 				{origin}
-				{['session', 'column', 'folder'].includes(entry.kind)
-					? ` · ${count} ${count === 1 ? 'link' : 'links'}`
-					: ''}
+				{links > 0 ? ` · ${links} ${links === 1 ? 'link' : 'links'}` : ''}
 				{` · ${left} ${left === 1 ? 'day' : 'days'} left`}
 			</Text>
 			<View style={styles.actions}>
@@ -86,12 +86,14 @@ function TrashSheet({
 	const colors = useColors();
 	const name = useView();
 	const items = useTrash(name, visible);
+	const [filter, setFilter] = useState<TrashFilter>('all');
+	const shown = filterTrash(items, filter);
 	const [now] = useState(() => Date.now());
 	const days =
 		useRegularLibrary().settings.trashRetentionDays || DEFAULT_RETENTION_DAYS;
 	const restore = (entry: TrashEntry) => {
-		void restoreFromTrash(name, entry).then((note) => {
-			showSnack(note ? `Restored. ${note}` : 'Restored');
+		void restoreFromTrash(name, entry).then(({note, error}) => {
+			showSnack(error ?? (note ? `Restored. ${note}` : 'Restored'));
 		});
 	};
 
@@ -127,8 +129,9 @@ function TrashSheet({
 					{name === 'private' ? 'Private trash' : 'Trash'}
 				</Text>
 				<Text style={{color: colors.muted}}>
-					Kept on this phone for {days} days, then deleted. It does not sync.
-					Change the time in the TabLodge extension's settings.
+					Kept for {days} days, then deleted. With a sync server connected, the
+					trash is shared with your other devices. Change the time in the
+					TabLodge extension's settings.
 				</Text>
 				{items.length === 0 ? (
 					<Empty icon="trash-outline" title="The trash is empty">
@@ -137,7 +140,36 @@ function TrashSheet({
 					</Empty>
 				) : (
 					<>
-						{items.map((entry) => (
+						<Segmented
+							label="Show"
+							selected={filter}
+							items={[
+								{
+									id: 'all',
+									name: `All ${items.length}`,
+									icon: 'apps-outline',
+								},
+								{
+									id: 'sessions',
+									name: `Sessions ${filterTrash(items, 'sessions').length}`,
+									icon: 'albums-outline',
+								},
+								{
+									id: 'bookmarks',
+									name: `Bookmarks ${filterTrash(items, 'bookmarks').length}`,
+									icon: 'bookmark-outline',
+								},
+							]}
+							onSelect={setFilter}
+						/>
+						{shown.length === 0 && (
+							<Empty icon="trash-outline" title="Nothing here">
+								{filter === 'bookmarks'
+									? 'No deleted bookmarks or columns.'
+									: 'No deleted sessions, links, or folders.'}
+							</Empty>
+						)}
+						{shown.map((entry) => (
 							<TrashRow
 								key={entry.id}
 								entry={entry}

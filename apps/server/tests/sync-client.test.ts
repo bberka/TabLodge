@@ -4,6 +4,7 @@ import {createApi} from '../src/api';
 import {isAuthMessage} from '../src/live';
 import {exportLibrary, importLibrary} from '../src/transfer';
 import type {Settings, Store} from '../../extension/src/shared/types';
+import type {TrashEntry} from '../../extension/src/shared/trash';
 import {ChangeLog} from '../../extension/src/shared/sync/change-log';
 import {
 	createSyncClient,
@@ -32,7 +33,7 @@ const URL_BASE = 'https://sync.example.test';
 /**
 The reference server behind a fake network, with live sockets that hear about every applied push.
 */
-function makeServer() {
+function makeServer({legacy = false} = {}) {
 	const sockets = new Set<FakeSocket>();
 	const createServerApi = () =>
 		createApi({
@@ -64,7 +65,28 @@ function makeServer() {
 				throw new TypeError('Failed to fetch');
 			}
 
-			return app.request(url, init);
+			const response = await app.request(url, init);
+			if (!legacy) {
+				return response;
+			}
+
+			// A server from before the trash: it does not list the feature and refuses a kind it does not know.
+			if (new URL(url).pathname === '/v1/status') {
+				const body = (await response.json()) as {features: string[]};
+				return Response.json({
+					...body,
+					features: body.features.filter((feature) => feature !== 'trash'),
+				});
+			}
+
+			if (
+				init.method === 'POST' &&
+				String(init.body).includes('"kind":"trash"')
+			) {
+				return Response.json({error: 'bad_change'}, {status: 400});
+			}
+
+			return response;
 		},
 		/**
 		A copy of the library as `node node.js export` writes it.
@@ -161,6 +183,10 @@ let deviceCount = 0;
 
 type Device = {
 	store: Store;
+	/**
+	The trash, for a device whose host has one.
+	*/
+	trash: TrashEntry[];
 	storage: Map<string, unknown>;
 	backups: string[];
 	client: ReturnType<typeof createSyncClient>;
@@ -170,12 +196,14 @@ type Device = {
 function makeDevice(
 	server: ReturnType<typeof makeServer>,
 	store = emptyStore(),
+	{withTrash = false} = {},
 ) {
 	const storage = new Map<string, unknown>();
 	let queue = Promise.resolve();
 	const backups: string[] = [];
 	const device: Device = {
 		store,
+		trash: [],
 		storage,
 		backups,
 		client: createSyncClient({
@@ -199,6 +227,21 @@ function makeDevice(
 				return result;
 			},
 			readLibrary: async () => structuredClone(device.store),
+			trash: withTrash
+				? {
+						read: async () => structuredClone(device.trash),
+						async apply(put, remove) {
+							const gone = new Set([
+								...remove,
+								...put.map((entry) => entry.id),
+							]);
+							device.trash = [
+								...structuredClone(put),
+								...device.trash.filter((entry) => !gone.has(entry.id)),
+							];
+						},
+					}
+				: undefined,
 			async writeLibrary(next) {
 				device.store = structuredClone(next);
 			},
@@ -489,4 +532,98 @@ test('settings sync by default and stay put when this device turns it off', asyn
 	await b.client.syncNow();
 	await a.client.syncNow();
 	assert.equal(a.store.settings.sessionSort, 'newest');
+});
+
+const trashEntry = (id: string, extra = ''): TrashEntry => ({
+	id,
+	kind: 'bookmark',
+	deletedAt: Date.now(),
+	label: id,
+	origin: 'Links',
+	count: 1,
+	data: {bookmark: bookmark(id), columnId: 'col', prevId: null, extra},
+});
+
+const trashIds = (device: Device) => device.trash.map((entry) => entry.id);
+
+test('the trash follows the library: a delete reaches the other device, a restore takes it back out', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withTrash: true});
+	const b = makeDevice(server, emptyStore(), {withTrash: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+
+	a.trash = [trashEntry('gone-1'), trashEntry('gone-2')];
+	a.client.localChanged();
+	await until(() => trashIds(b).length === 2);
+	assert.deepEqual(trashIds(b).toSorted(), ['gone-1', 'gone-2']);
+	assert.equal(b.trash[0].label.startsWith('gone'), true);
+	assert.deepEqual(b.trash[0].data.bookmark, bookmark(b.trash[0].id));
+
+	// Restored on b: gone from the trash there, and from a's.
+	b.trash = b.trash.filter((entry) => entry.id !== 'gone-1');
+	b.client.localChanged();
+	await until(() => trashIds(a).length === 1);
+	assert.deepEqual(trashIds(a), ['gone-2']);
+
+	// Emptied on a.
+	a.trash = [];
+	a.client.localChanged();
+	await until(() => b.trash.length === 0);
+});
+
+test('a new device gets the trash along with the library', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withTrash: true});
+	a.trash = [trashEntry('old')];
+	await a.client.connect(URL_BASE, TOKEN);
+	const b = makeDevice(server, emptyStore(), {withTrash: true});
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(trashIds(b), ['old']);
+});
+
+test('an entry too large for the server stays on the device and does not stop sync', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withTrash: true});
+	const b = makeDevice(server, emptyStore(), {withTrash: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+
+	a.trash = [trashEntry('huge', 'x'.repeat(250_000)), trashEntry('small')];
+	a.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => trashIds(b).length === 1 && ids(b.store).length === 1);
+	assert.deepEqual(trashIds(b), ['small']);
+	assert.deepEqual(trashIds(a).toSorted(), ['huge', 'small']);
+	assert.equal((await a.client.status()).error, null);
+});
+
+test('a server without the trash feature keeps syncing the library and leaves the trash alone', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, emptyStore(), {withTrash: true});
+	const b = makeDevice(server, emptyStore(), {withTrash: true});
+	a.trash = [trashEntry('local-only')];
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+
+	a.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => ids(b.store).length === 1);
+	assert.deepEqual(b.trash, []);
+	assert.deepEqual(trashIds(a), ['local-only']);
+	assert.equal((await a.client.status()).error, null);
+	assert.equal((await a.client.status()).pending, 0);
+});
+
+test('a device without a trash keeps the library in step and never deletes the trash others made', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withTrash: true});
+	const plain = makeDevice(server);
+	await a.client.connect(URL_BASE, TOKEN);
+	await plain.client.connect(URL_BASE, TOKEN);
+
+	a.trash = [trashEntry('kept')];
+	a.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => ids(plain.store).length === 1);
+	plain.edit((store) => ({...store, bookmarks: []}));
+	await until(() => a.store.bookmarks.length === 0);
+	assert.deepEqual(trashIds(a), ['kept']);
 });

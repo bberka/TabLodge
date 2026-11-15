@@ -15,7 +15,12 @@ import {
 	startResync,
 	type SyncState,
 } from '../src/shared/sync/engine';
-import {assemble, splitLibrary} from '../src/shared/sync/library-records';
+import {
+	assemble,
+	splitLibrary,
+	trashOf,
+} from '../src/shared/sync/library-records';
+import {TRASH_SYNC_MAX_CHARS, type TrashEntry} from '../src/shared/trash';
 
 const T0 = Date.UTC(2026, 10, 1);
 const DAY = 24 * 60 * 60 * 1000;
@@ -357,4 +362,64 @@ test('a column keeps its sites through a sync round trip', () => {
 		'github.com/bberka',
 		'gitlab.com',
 	]);
+});
+
+const trashed = (id: string, deletedAt: number, data = {}): TrashEntry => ({
+	id,
+	kind: 'bookmark',
+	deletedAt,
+	label: id,
+	origin: 'Links',
+	count: 1,
+	data,
+});
+
+test('trash entries are records of their own that never reach the library', () => {
+	const entries = [trashed('old', 1), trashed('new', 2)];
+	const records = splitLibrary(emptyStore(), entries);
+	assert.deepEqual(
+		[...records.keys()].filter((key) => key.startsWith('trash:')),
+		['trash:old', 'trash:new'],
+	);
+	assert.deepEqual(
+		trashOf(records.values()).map((entry) => entry.id),
+		['new', 'old'],
+	);
+	assert.deepEqual(
+		assemble(records.values(), emptyStore()),
+		assemble(splitLibrary(emptyStore()).values(), emptyStore()),
+	);
+});
+
+test('the size cache stays on the device, and an entry too large for the server is not a record', () => {
+	const small = {...trashed('a', 1), size: 42};
+	const huge = trashed('b', 2, {text: 'x'.repeat(TRASH_SYNC_MAX_CHARS)});
+	const records = splitLibrary(emptyStore(), [small, huge]);
+	assert.equal(records.has('trash:b'), false);
+	assert.equal('size' in (records.get('trash:a')!.value as object), false);
+});
+
+test('a deleted trash entry is sent as a delete', () => {
+	let state = {
+		...capture(
+			newSyncState('dev'),
+			splitLibrary(emptyStore(), [trashed('a', 1)]),
+			T0,
+		),
+		joined: true,
+	};
+	assert.ok(state.outbox.includes('trash:a'));
+	state = settle(
+		state,
+		outgoing(state, splitLibrary(emptyStore(), [trashed('a', 1)]), 10),
+		['applied'],
+	).state;
+	state = capture(state, splitLibrary(emptyStore()), T0 + 1);
+	const sent = outgoing(state, splitLibrary(emptyStore()), 10);
+	assert.deepEqual(
+		sent
+			.filter((change) => change.kind === 'trash')
+			.map((change) => [change.kind, change.id, change.deleted]),
+		[['trash', 'a', true]],
+	);
 });

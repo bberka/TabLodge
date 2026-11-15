@@ -51,6 +51,7 @@ import {
 } from '../platform/storage';
 import {setView} from '../library/view';
 import {PRIVATE_TRASH_KEY} from '../library/trash';
+import {syncedTrash} from '../library/trash-storage';
 import {dropSafetyCopy} from '../transfer/restore';
 
 const LIBRARY_KEY = 'tablodge.private.library';
@@ -303,6 +304,7 @@ function createClient() {
 		openSocket: (url) => new WebSocket(url),
 		mutate: core.mutate,
 		readLibrary: async () => core.store,
+		trash: syncedTrash('private', () => core.store.settings.trashRetentionDays),
 		writeLibrary: core.write,
 		async backup() {},
 		codec,
@@ -669,6 +671,13 @@ export async function editPrivate(
 	});
 	client?.localChanged();
 }
+
+/**
+Sends what changed in the private trash with the next sync.
+*/
+export const nudgePrivate = (): void => {
+	client?.localChanged();
+};
 
 /**
 Pulls the private library now, for pull to refresh. A failure shows in the status.
