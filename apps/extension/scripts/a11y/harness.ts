@@ -28,12 +28,25 @@ export function watchConsole(target: Page | Worker, source: string) {
 // A11Y_ONLY=text runs only the checks whose name contains the text, to repeat one check.
 const onlyChecks = process.env.A11Y_ONLY;
 
+// A11Y_SHARD=index/total (for example 2/4) runs every total-th check, starting at index, so CI can split the run
+// across jobs. Checks run in the same order in every shard, so the split is stable.
+const shard = /^(\d+)\/(\d+)$/.exec(process.env.A11Y_SHARD ?? '');
+const shardIndex = shard ? Number(shard[1]) - 1 : 0;
+const shardTotal = shard ? Number(shard[2]) : 1;
+let checkCount = 0;
+
 export async function check(name: string, run: () => Promise<void>) {
 	if (onlyChecks && !name.includes(onlyChecks)) {
 		return;
 	}
 
+	checkCount += 1;
+	if ((checkCount - 1) % shardTotal !== shardIndex) {
+		return;
+	}
+
 	let timer: NodeJS.Timeout | undefined;
+	const started = Date.now();
 	try {
 		// A check that never settles would otherwise hang the whole run until the CI job times out.
 		await Promise.race([
@@ -44,7 +57,9 @@ export async function check(name: string, run: () => Promise<void>) {
 				}, 180_000);
 			}),
 		]);
-		console.log(`ok   ${name}`);
+		console.log(
+			`ok   ${name} (${((Date.now() - started) / 1000).toFixed(1)}s)`,
+		);
 	} catch (error) {
 		failures.push(name);
 		console.log(`FAIL ${name}`);

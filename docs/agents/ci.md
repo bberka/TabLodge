@@ -6,12 +6,17 @@ Workflows are in `.github/workflows/`: `test.yml` (checks on every pull request 
 
 | Job | Runs |
 | --- | --- |
-| `check` | `vp run check` (lint, typecheck, every test) |
+| `lint` | `xo` on three groups of files, one job each (extension `src`; mobile; everything else) |
+| `typecheck` | `tsc -b` |
+| `unit` | `vp test run` |
 | `extension` | `vp run build`, `vp run pack`, `vp run check:firefox` |
-| `a11y` | `vp run build`, `vp run check:a11y` (about 7 minutes, so it has its own job) |
-| `browser` | `vp run build`, then `check:startup`, `check:private-storage`, `check:dev-browser` |
+| `a11y` | `vp run build`, `vp run check:a11y` in four shards |
+| `browser` | `vp run build`, then `check:startup`, `check:dev-browser` |
+| `private-storage` | `vp run build`, `vp run check:private-storage` (one long scenario, so it is not sharded) |
 | `cloudflare` | `pnpm run cf:bundle`, then `git diff --exit-code` on `apps/server/cloudflare-deploy` |
 | `mobile` | `pnpm run mobile:export` |
+
+The jobs run side by side, so the slowest one sets how long a pull request waits. Split a job before it becomes the longest. Every tracked source file must belong to exactly one `lint` group, so add a new top level folder to the third. `check:a11y` runs every fourth check when `A11Y_SHARD=<index>/4` is set (a check's position in the fixed run order decides its shard), and each shard seeds its own profile, so a check must not rely on state an earlier check left. Locally, `vp run check` still runs lint, typecheck, and tests in one command.
 
 The browser jobs install Playwright Chromium with `vp run browser:install` and cache `~/.cache/ms-playwright`. What CI does not run: the Android Gradle build (only **Mobile** does, behind a path filter), the Docker image build (only **Sync server image**, behind a path filter), and the website build (**Pages** runs on every pull request). Nothing runs the app on an emulator or checks the Store publishing steps.
 

@@ -24,6 +24,6 @@ Run `ls .agents/skills`. When it is missing or empty and `~/.agents/skills` has 
 | Hook | Runs |
 | --- | --- |
 | `pre-commit` | refuses `master` and `main`, lints staged files with XO (`vp staged`, configured in `vite.config.ts`), runs `tsc -b` |
-| `pre-push` | `vp run check`, the command CI runs first |
+| `pre-push` | `vp run check`, the same lint, typecheck, and tests that CI runs as separate jobs |
 
 The hooks check and never edit. Fix findings with `pnpm exec xo --fix <files>` and stage the result. Bypassing is off limits: `--no-verify`, `VP_GIT_HOOKS=0`, `VITE_GIT_HOOKS=0`, `HUSKY=0`, and `vp hooks disable`.
