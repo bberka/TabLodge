@@ -16,7 +16,7 @@ import {SiteIcon} from '../../ui/site-icon';
 import {SaveLinkForm} from '../save/save-link';
 
 /**
-One bookmark: tap to open, swipe right to open or left to delete, long press to select. Screen reader users get
+One bookmark: tap to open, swipe right to delete or left to edit, long press to select. Screen reader users get
 the same actions from the actions menu.
 */
 export function BookmarkRow({
