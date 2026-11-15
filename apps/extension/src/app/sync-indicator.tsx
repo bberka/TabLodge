@@ -67,30 +67,68 @@ function describe(status: SyncStatus) {
 	}
 }
 
+// A sync that finishes faster than this would flash by unseen, so the button keeps showing it this long.
+const MIN_SYNCING_MS = 900;
+
 /**
-A header button that shows how sync is doing and opens its settings. Hidden while sync is off.
+Whether to show the syncing look: while a sync runs, and for a moment after a quick one ends.
+*/
+function useSyncingLook(syncing: boolean): boolean {
+	const [shown, setShown] = useState(syncing);
+	useEffect(() => {
+		if (syncing) {
+			setShown(true);
+			return;
+		}
+
+		const timer = setTimeout(() => {
+			setShown(false);
+		}, MIN_SYNCING_MS);
+		return () => {
+			clearTimeout(timer);
+		};
+	}, [syncing]);
+	return syncing || shown;
+}
+
+/**
+A header button that shows how sync is doing and opens its settings. Hidden while sync is off. While syncing it spins and
+turns the accent color with a soft glow behind it.
 */
 export function SyncIndicator() {
 	const status = useSyncStatus();
+	const syncing = useSyncingLook(status?.phase === 'syncing');
 	if (!status) {
 		return null;
 	}
 
-	const {label, Icon, spin} = describe(status);
+	const {label, Icon, spin} = describe(
+		syncing ? {...status, phase: 'syncing'} : status,
+	);
+	const tone =
+		status.phase === 'error' && !syncing
+			? 'text-destructive'
+			: syncing
+				? 'bg-primary/15 text-primary'
+				: status.phase === 'offline'
+					? 'text-muted-foreground'
+					: '';
 	return (
 		<IconTooltip label={label}>
 			<Button
 				asChild
 				variant="ghost"
 				size="icon"
-				className={
-					status.phase === 'error' ? 'h-8 w-8 text-destructive' : 'h-8 w-8'
-				}
+				className={`h-8 w-8 transition-colors duration-300 ${tone}`}
 			>
 				<a href="options.html#settings-sync" aria-label={label}>
 					<Icon
 						aria-hidden="true"
-						className={spin ? 'motion-safe:animate-spin' : undefined}
+						className={
+							spin
+								? 'motion-safe:animate-spin motion-reduce:animate-pulse'
+								: undefined
+						}
 					/>
 				</a>
 			</Button>
