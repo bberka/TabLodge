@@ -8,6 +8,7 @@ import {
 	BOOKMARK_UNFILED_ID,
 	DEFAULT_BOOKMARK_COLUMN_ID,
 } from './bookmark-rules';
+import {domainsField} from './column-sites';
 import {deviceStamp, isDeviceKind, MAX_DEVICE_NAME} from './device';
 import {ICON_IDS} from './icon-ids';
 import {LAYOUT_VERSION} from './library-state';
@@ -546,48 +547,6 @@ export function normalizeBookmarkColumn(raw: unknown): BookmarkColumn | null {
 			: Date.now(),
 		isDefault: id === DEFAULT_BOOKMARK_COLUMN_ID,
 	};
-}
-
-export const MAX_COLUMN_DOMAINS = 50;
-
-/**
-A column site entry: a bare host ("github.com"), or a host with a path prefix ("github.com/bberka"). Query and fragment
-are dropped and a trailing slash is ignored. Null when the host is not usable.
-*/
-export function normalizeColumnSite(value: unknown): string | null {
-	const host = normalizeExcludedHost(value);
-	if (!host || typeof value !== 'string') {
-		return null;
-	}
-
-	let path = '';
-	try {
-		const text = value.trim().replace(/^([a-z][\d+\-.a-z]*:\/\/)?\*\./i, '$1');
-		path = new URL(
-			/^[a-z][\d+\-.a-z]*:\/\//i.test(text) ? text : `https://${text}`,
-		).pathname.replace(/\/+$/, '');
-	} catch {
-		return null;
-	}
-
-	return `${host}${path}`;
-}
-
-/**
-A column's sites as distinct entries, or `{}` when none remain, so a column without sites stores no field.
-*/
-export function domainsField(value: unknown): {domains?: string[]} {
-	const sites = new Set<string>();
-	for (const entry of Array.isArray(value) ? value : []) {
-		const site = normalizeColumnSite(entry);
-		if (site) {
-			sites.add(site);
-		}
-	}
-
-	return sites.size > 0
-		? {domains: [...sites].slice(0, MAX_COLUMN_DOMAINS)}
-		: {};
 }
 
 export function normalizeBookmarkColumns(

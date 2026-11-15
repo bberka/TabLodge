@@ -21,6 +21,7 @@ import {
 	updateBookmark,
 	addBookmarks,
 	deleteColumn,
+	setColumnSites,
 	updateColumn,
 	addSession,
 	moveBookmark,
@@ -532,6 +533,30 @@ describe('editing columns', () => {
 			NOW + 3,
 		);
 		assert.equal(column(bad, 'c1')?.color, undefined);
+	});
+
+	test("setting a column's sites normalizes them, drops repeats, and an empty list removes the field", () => {
+		const store = build();
+		const changed = setColumnSites(
+			store,
+			'c1',
+			[
+				'https://www.GitHub.com/bberka/',
+				'github.com/bberka',
+				'news.example',
+				'junk',
+			],
+			NOW + 1,
+		);
+		assert.deepEqual(column(changed, 'c1')?.domains, [
+			'github.com/bberka',
+			'news.example',
+		]);
+		assert.equal(column(changed, 'c1')?.name, column(store, 'c1')?.name);
+		assert.equal(changed.updatedAt, NOW + 1);
+		const cleared = setColumnSites(changed, 'c1', [], NOW + 2);
+		assert.equal('domains' in (column(cleared, 'c1') ?? {}), false);
+		assert.equal(setColumnSites(store, 'missing', ['a.example'], NOW), store);
 	});
 
 	test('a name that is empty, reserved, or taken is refused', () => {
