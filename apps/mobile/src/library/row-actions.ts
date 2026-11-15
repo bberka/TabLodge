@@ -1,4 +1,8 @@
-import type {RowAction, SessionAction} from '../settings/preferences';
+import type {
+	LinkAction,
+	RowAction,
+	SessionAction,
+} from '../settings/preferences';
 import type {Colors} from '../ui/theme';
 import type {IconName} from '../ui/ui';
 
@@ -74,6 +78,44 @@ export function sessionActionLook(
 
 		case 'share': {
 			return {label: 'Share', icon: 'share-outline', color: colors.info};
+		}
+
+		case 'delete': {
+			return {label: 'Delete', icon: 'trash-outline', color: colors.danger};
+		}
+
+		default: {
+			return {
+				label: 'Nothing',
+				icon: 'remove-circle-outline',
+				color: colors.muted,
+			};
+		}
+	}
+}
+
+/**
+How each action on a link inside a session card looks in the swipe reveal and the settings.
+*/
+export function linkActionLook(
+	action: LinkAction,
+	colors: Colors,
+): {label: string; icon: IconName; color: string} {
+	switch (action) {
+		case 'open': {
+			return {label: 'Open', icon: 'open-outline', color: colors.accent};
+		}
+
+		case 'edit': {
+			return {label: 'Edit', icon: 'create-outline', color: colors.teal};
+		}
+
+		case 'bookmark': {
+			return {
+				label: 'Add to bookmarks',
+				icon: 'bookmark-outline',
+				color: colors.ok,
+			};
 		}
 
 		case 'delete': {

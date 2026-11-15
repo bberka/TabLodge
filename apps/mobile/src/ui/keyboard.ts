@@ -89,12 +89,14 @@ the window how tall the keyboard is and corrects what is believed, in either dir
 falls back to the one thing that is certain: with no input focused there is no keyboard.
 */
 export function settleKeyboard(): void {
+	// Android shows the keyboard only for a focused input, so with none the keyboard is closed, whatever the last event said.
+	if (height > 0 && !TextInput.State.currentlyFocusedInput()) {
+		setHeight(0);
+		return;
+	}
+
 	const actual = nativeKeyboardHeight();
 	if (actual === undefined) {
-		if (height > 0 && !TextInput.State.currentlyFocusedInput()) {
-			setHeight(0);
-		}
-
 		return;
 	}
 

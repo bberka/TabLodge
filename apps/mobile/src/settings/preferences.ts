@@ -63,6 +63,18 @@ export const SESSION_ACTIONS: readonly SessionAction[] = [
 	'delete',
 ];
 
+/**
+What a swipe on one link inside an open session card does.
+*/
+export type LinkAction = 'none' | 'open' | 'edit' | 'bookmark' | 'delete';
+export const LINK_ACTIONS: readonly LinkAction[] = [
+	'none',
+	'open',
+	'edit',
+	'bookmark',
+	'delete',
+];
+
 export const PRIVATE_LOCK_MODES = [
 	'manual',
 	'leave',
@@ -71,7 +83,7 @@ export const PRIVATE_LOCK_MODES = [
 ] as const;
 export const PRIVATE_LOCK_MINUTES = [1, 5, 15, 30, 60] as const;
 
-type Preferences = {
+export type Preferences = {
 	/**
 	Which platform's design the app imitates. Defaults to the phone's own.
 	*/
@@ -108,6 +120,11 @@ type Preferences = {
 	*/
 	sessionSwipeRight: SessionAction;
 	sessionSwipeLeft: SessionAction;
+	/**
+	What swiping a link in an open session card to the right, and to the left, does. Sync with the rest of the app's look.
+	*/
+	linkSwipeRight: LinkAction;
+	linkSwipeLeft: LinkAction;
 	/**
 	What tapping a session card does: show its tabs, or open them all.
 	*/
@@ -196,7 +213,7 @@ type Preferences = {
 
 const KEY = 'tablodge.prefs';
 
-const defaults: Preferences = {
+export const defaults: Preferences = {
 	look: 'auto',
 	floatingBar: true,
 	barSize: 'scroll',
@@ -207,6 +224,8 @@ const defaults: Preferences = {
 	swipeLeft: 'edit',
 	sessionSwipeRight: 'archive',
 	sessionSwipeLeft: 'delete',
+	linkSwipeRight: 'bookmark',
+	linkSwipeLeft: 'delete',
 	sessionTap: 'expand',
 	sessionMain: 'open',
 	cleanOnSave: true,
@@ -281,6 +300,9 @@ function barChoice(
 const rowAction = (value: unknown, fallback: RowAction): RowAction =>
 	ROW_ACTIONS.find((action) => action === value) ?? fallback;
 
+const linkAction = (value: unknown, fallback: LinkAction): LinkAction =>
+	LINK_ACTIONS.find((action) => action === value) ?? fallback;
+
 const sessionAction = (
 	value: unknown,
 	fallback: SessionAction,
@@ -305,6 +327,8 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		swipeLeft,
 		sessionSwipeRight,
 		sessionSwipeLeft,
+		linkSwipeRight,
+		linkSwipeLeft,
 		sessionTap,
 		sessionMain,
 		cleanOnSave,
@@ -342,6 +366,8 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 			sessionSwipeLeft,
 			defaults.sessionSwipeLeft,
 		),
+		linkSwipeRight: linkAction(linkSwipeRight, defaults.linkSwipeRight),
+		linkSwipeLeft: linkAction(linkSwipeLeft, defaults.linkSwipeLeft),
 		sessionTap: sessionTap === 'open' ? 'open' : 'expand',
 		sessionMain: sessionAction(sessionMain, defaults.sessionMain),
 		cleanOnSave:
@@ -489,6 +515,8 @@ const SYNCED_KEYS = [
 	'swipeLeft',
 	'sessionSwipeRight',
 	'sessionSwipeLeft',
+	'linkSwipeRight',
+	'linkSwipeLeft',
 	'sessionTap',
 	'sessionMain',
 	'cleanOnSave',
@@ -560,6 +588,18 @@ export function readSyncedPreferences(value: unknown): Partial<Preferences> {
 	);
 	if (sessionLeft) {
 		found.sessionSwipeLeft = sessionLeft;
+	}
+
+	const linkRight = LINK_ACTIONS.find(
+		(action) => action === raw.linkSwipeRight,
+	);
+	if (linkRight) {
+		found.linkSwipeRight = linkRight;
+	}
+
+	const linkLeft = LINK_ACTIONS.find((action) => action === raw.linkSwipeLeft);
+	if (linkLeft) {
+		found.linkSwipeLeft = linkLeft;
 	}
 
 	if (raw.sessionTap === 'expand' || raw.sessionTap === 'open') {
