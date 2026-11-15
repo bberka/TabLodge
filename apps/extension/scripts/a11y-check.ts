@@ -1,4 +1,4 @@
-// Accessibility checks against the built extension (run `vp run build` first, then `vp run a11y`).
+// Accessibility checks against the built extension (run `vp run build` first, then `vp run check:a11y`).
 //
 // Loads dist/tablodge in a headless Chromium with the development data fixture, then:
 //   1. runs axe-core (WCAG 2.2 A and AA rules) on each extension page in both themes, and

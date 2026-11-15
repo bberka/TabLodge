@@ -43,7 +43,7 @@ jobs:
       - run: pnpm exec vp run build
       - run: pnpm exec vp run pack
       # Installs the Firefox package in the runner's Firefox and runs the core workflows.
-      - run: pnpm exec vp run browser:firefox
+      - run: pnpm exec vp run check:firefox
 
   mobile:
     name: Bundle Android app

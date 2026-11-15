@@ -4,7 +4,7 @@ import {spawn} from 'node:child_process';
 import {mkdir} from 'node:fs/promises';
 import process from 'node:process';
 import {chromium, type Browser} from 'playwright';
-import {fromRoot} from './vite-shared.ts';
+import {fromRoot} from '../vite-shared.ts';
 
 const child = spawn(
 	process.execPath,

@@ -2,9 +2,9 @@
 // message protocol: every page opens, a window is saved as a session and restored (order, pinned tab, tab group),
 // a bookmark is added, a full backup is exported, and sessions and bookmarks survive a browser restart.
 //
-//   vp run build && vp run browser:firefox
+//   vp run build && vp run check:firefox
 //
-// Needs Firefox; see scripts/firefox-driver.ts for how it is found and how the add-on is installed.
+// Needs Firefox; see scripts/browser/firefox-driver.ts for how it is found and how the add-on is installed.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {mkdtemp, rm} from 'node:fs/promises';

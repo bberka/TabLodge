@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import type {BrowserContext} from 'playwright';
-import {stopWatchersWhenBrowserCloses} from '../scripts/dev-browser-lifecycle.ts';
+import {stopWatchersWhenBrowserCloses} from '../scripts/browser/dev-browser-lifecycle.ts';
 
 test('development watchers stop when the browser context closes', async () => {
 	const eventTarget = new EventTarget();

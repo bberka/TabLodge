@@ -15,8 +15,8 @@ import {relative, resolve} from 'node:path';
 import process from 'node:process';
 import {parseArgs} from 'node:util';
 import {build, type InlineConfig} from 'vite-plus';
-import {openDevBrowser} from './dev-browser.ts';
-import {openDevFirefox} from './dev-firefox.ts';
+import {openDevBrowser} from './browser/dev-browser.ts';
+import {openDevFirefox} from './browser/dev-firefox.ts';
 import {
 	SOURCE_DIR,
 	TARGETS,
