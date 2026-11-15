@@ -175,7 +175,7 @@ export function SaveAsBookmarksSheet({
 }
 
 /**
-The drawer for changing a saved tab's title and address.
+The drawer for changing a saved tab's address, title, and notes.
 */
 export function EditLinkSheet({
 	target,
@@ -187,10 +187,12 @@ export function EditLinkSheet({
 	const tab = target?.session.tabs.find((entry) => entry.id === target.tabId);
 	const [title, setTitle] = useState('');
 	const [url, setUrl] = useState('');
+	const [notes, setNotes] = useState('');
 	useEffect(() => {
 		setTitle(tab?.title ?? '');
 		setUrl(tab?.url ?? '');
-	}, [tab?.id, tab?.title, tab?.url]);
+		setNotes(tab?.notes ?? '');
+	}, [tab?.id, tab?.title, tab?.url, tab?.notes]);
 	const address = extractUrl(url);
 	return (
 		<BottomSheet
@@ -216,6 +218,7 @@ export function EditLinkSheet({
 					onChangeText={setUrl}
 				/>
 				<Field label="Title" value={title} onChangeText={setTitle} />
+				<Field multiline label="Notes" value={notes} onChangeText={setNotes} />
 				<Button
 					label="Save"
 					icon="checkmark"
@@ -227,7 +230,7 @@ export function EditLinkSheet({
 									current,
 									target.session.id,
 									target.tabId,
-									{title, url},
+									{title, url, notes},
 									Date.now(),
 								),
 							);

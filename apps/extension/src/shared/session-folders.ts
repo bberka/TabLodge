@@ -1,5 +1,5 @@
-import type {Folder, Session} from '../shared/types';
-import {ARCHIVED_FOLDER_NAME} from '../shared/library-normalize';
+import type {Folder, Session} from './types';
+import {ARCHIVED_FOLDER_NAME} from './library-normalize';
 
 export function isArchivedFolder(folder: Pick<Folder, 'name'>) {
 	return (
@@ -24,4 +24,4 @@ export function visibleSessionFolders<T extends Pick<Folder, 'id' | 'name'>>(
 		: folders.filter((folder) => folder.id !== archivedId);
 }
 
-export {ARCHIVED_FOLDER_NAME} from '../shared/library-normalize';
+export {ARCHIVED_FOLDER_NAME} from './library-normalize';

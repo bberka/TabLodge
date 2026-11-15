@@ -6,7 +6,7 @@ import {
 	looksLikeUrl,
 	searchFinder,
 	type FinderSources,
-} from '../src/app/global-search';
+} from '../src/shared/global-search';
 import type {
 	Bookmark,
 	BookmarkColumn,

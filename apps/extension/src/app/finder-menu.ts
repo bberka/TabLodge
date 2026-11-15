@@ -1,4 +1,4 @@
-import type {FinderItem} from './global-search';
+import type {FinderItem} from '../shared/global-search';
 
 export type ItemActionId =
 	| 'restore'

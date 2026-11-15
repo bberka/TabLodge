@@ -106,6 +106,12 @@ import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {displayUrl as simplifiedUrl} from '../shared/url-display';
 import type {ExportData} from '../shared/export-formats';
 import {hostOf, webUrl} from '../shared/web-url';
+import {
+	ARCHIVED_FOLDER_NAME,
+	archivedFolderId,
+	isArchivedFolder,
+	visibleSessionFolders,
+} from '../shared/session-folders';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -130,12 +136,6 @@ import {
 	shouldBlockDocumentDrop,
 	writeClipboard,
 } from './interaction-actions';
-import {
-	ARCHIVED_FOLDER_NAME,
-	archivedFolderId,
-	isArchivedFolder,
-	visibleSessionFolders,
-} from './session-folders';
 import {setLinkDragImage, setSessionDragImage} from './drag-preview';
 import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {FolderLabel, IconLabel} from './icon-label';

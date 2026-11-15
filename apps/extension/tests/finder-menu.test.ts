@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {filterItemActions, itemActions} from '../src/app/finder-menu';
-import type {FinderItem} from '../src/app/global-search';
+import type {FinderItem} from '../src/shared/global-search';
 
 const item = (kind: FinderItem['kind']): FinderItem => ({
 	id: kind,

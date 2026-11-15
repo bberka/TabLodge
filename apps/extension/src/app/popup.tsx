@@ -58,6 +58,7 @@ import {ThemeProvider} from '../shared/theme';
 import type {ActionResult, SaveScope, Session} from '../shared/types';
 import {columnForUrl} from '../shared/column-sites';
 import {webUrl} from '../shared/web-url';
+import {archivedFolderId} from '../shared/session-folders';
 import {PrivateWindowMark} from './private-window-appearance';
 import {
 	LoadingLine,
@@ -75,7 +76,6 @@ import {
 	duplicatesNote,
 	plural,
 } from './common';
-import {archivedFolderId} from './session-folders';
 import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';

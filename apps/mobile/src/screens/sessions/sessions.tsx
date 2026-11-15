@@ -1,4 +1,4 @@
-import {memo, useCallback, useEffect, useMemo, useState} from 'react';
+import {memo, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
 	FlatList,
 	useColorScheme,
@@ -70,6 +70,8 @@ import {type Colors, soften, TARGET, useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
+import {takeJump, usePendingJump} from '../../library/jump';
+import {SearchElsewhere} from '../search-elsewhere';
 import {
 	Button,
 	Card,
@@ -357,7 +359,7 @@ function SessionCardView({
 									>
 										<Pressable
 											accessibilityRole="link"
-											accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}`}
+											accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}${tab.notes.trim() ? `, note: ${tab.notes.trim()}` : ''}`}
 											accessibilityHint="Opens the link"
 											style={({pressed}) => [
 												styles.tab,
@@ -404,6 +406,14 @@ function SessionCardView({
 														style={{color: colors.muted, fontSize: 13}}
 													>
 														{text.sub}
+													</Text>
+												)}
+												{tab.notes.trim() !== '' && (
+													<Text
+														numberOfLines={isCompact ? 1 : 2}
+														style={{color: colors.muted, fontSize: 13}}
+													>
+														{tab.notes.trim()}
 													</Text>
 												)}
 											</View>
@@ -503,6 +513,8 @@ export function SessionsScreen({
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	const search = useSearch();
 	const {query} = search;
+	const listRef = useRef<FlatList<Session>>(null);
+	const [revealId, setRevealId] = useState<string>();
 	const selection = useSelection();
 	const [movingSelected, setMovingSelected] = useState(false);
 	useBackAction(selection.active, selection.stop);
@@ -849,6 +861,43 @@ export function SessionsScreen({
 		});
 	}, []);
 
+	// A result of the search on Bookmarks that points at a session: show its folder, open it, and scroll to it.
+	const pending = usePendingJump();
+	useEffect(() => {
+		const jump = takeJump('sessions');
+		if (!jump) {
+			return;
+		}
+
+		search.close();
+		setPicked(ALL_SESSIONS_ID);
+		setFlipped((current) => {
+			const next = new Set(current);
+			if (isExpandAll) {
+				next.delete(jump.sessionId);
+			} else {
+				next.add(jump.sessionId);
+			}
+
+			return next;
+		});
+		setRevealId(jump.sessionId);
+		// `search` is a fresh object each render; only the jump matters.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [pending, isExpandAll]);
+	useEffect(() => {
+		if (revealId === undefined) {
+			return;
+		}
+
+		const index = shown.findIndex((session) => session.id === revealId);
+		if (index !== -1) {
+			listRef.current?.scrollToIndex({index, animated: false});
+		}
+
+		setRevealId(undefined);
+	}, [revealId, shown]);
+
 	if (store.groups.length === 0) {
 		return (
 			<View style={styles.screen}>
@@ -954,6 +1003,7 @@ export function SessionsScreen({
 	return (
 		<>
 			<FlatList
+				ref={listRef}
 				removeClippedSubviews
 				scrollEventThrottle={16}
 				data={shown}
@@ -1048,6 +1098,15 @@ export function SessionsScreen({
 							: 'This folder has no sessions.'}
 					</Empty>
 				}
+				ListFooterComponent={
+					<SearchElsewhere
+						store={store}
+						query={query}
+						here="sessions"
+						localCount={shown.length}
+						onJump={search.close}
+					/>
+				}
 				ItemSeparatorComponent={Gap}
 				renderItem={({item}) => (
 					<View style={styles.cardRow}>
@@ -1068,6 +1127,12 @@ export function SessionsScreen({
 						/>
 					</View>
 				)}
+				onScrollToIndexFailed={({index, averageItemLength}) => {
+					listRef.current?.scrollToOffset({
+						offset: index * averageItemLength,
+						animated: false,
+					});
+				}}
 				onScroll={trackScroll}
 			/>
 			<ActionSheet

@@ -1,4 +1,4 @@
-// Address bar search ("tl <query>"): turns the finder's ranking (global-search.ts) into omnibox suggestions
+// Address bar search ("tl <query>"): turns the finder's ranking (shared/global-search.ts) into omnibox suggestions
 // and maps an entered suggestion back to the item it stands for. Pure, so the service worker only has to
 // gather the data and open the result.
 import {highlightSegments} from '../shared/fuzzy';
@@ -10,7 +10,7 @@ import {
 	type FinderItem,
 	type FinderKind,
 	type FinderSources,
-} from './global-search';
+} from '../shared/global-search';
 
 /**
 The address bar keyword. It is also the `omnibox.keyword` in shell/manifest.json.
