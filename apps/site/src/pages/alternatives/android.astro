@@ -15,7 +15,7 @@ const rows: [string, string, string, string, string, string, string][] = [
 	['Saves a copy of the page', 'No, links and titles only', 'Web archive on Pro', 'Yes: readable text, single HTML file, screenshot, PDF', 'Full page archive, off by default', 'Yes, the readable article text', 'Articles, videos and other pages; permanent archive on Premium'],
 	['Searches the saved page text', 'No', 'Pro', 'Yes (self-hosted needs Meilisearch)', 'Yes (needs Meilisearch; Pro on the cloud plan)', 'Not verified', 'Premium'],
 	['Offline', 'Library is on the phone; opening a link needs a connection', 'No, needs a connection', 'Not verified', 'Offline reading in the mobile apps', 'Offline reading on the hosted service', 'Not verified'],
-	['Trash for deleted items', 'Yes, a trash on the phone for 7, 30 or 90 days', 'Deleted collections go to Trash', 'Not verified', 'Not verified', 'Not verified', 'Not verified'],
+	['Trash for deleted items', 'Yes, a trash for 7, 30 or 90 days that syncs with your other devices', 'Deleted collections go to Trash', 'Not verified', 'Not verified', 'Not verified', 'Not verified'],
 	['iPhone app', 'No', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
 	['Import', 'Raindrop.io, Toby, OneTab, Session Buddy, browser bookmark HTML, CSV, Markdown, link lists', 'HTML, CSV, TXT, JSON, ENEX; from Instapaper, Pocket, Toby and others', 'Browser HTML, Pocket CSV, Wallabag JSON, Omnivore, its own backup', 'Browser HTML, Pocket CSV, Omnivore JSON, link lists', 'Pocket, Instapaper, Pinboard, Omnivore and more', 'Not verified'],
 	['Export', 'Links, Markdown, web page, JSON, CSV, bookmarks HTML, full backup ZIP', 'HTML, CSV, TXT (not yet in the Android app)', 'backup.json, metadata only', 'Export offered, format not stated', 'ePUB, PDF, XML, JSON, CSV per article', 'Not verified'],
@@ -106,7 +106,6 @@ const breadcrumbs = [
 		<h2>Where TabLodge is weaker</h2>
 		<ul>
 			<li>It keeps links, titles and sessions, not the page. If a page disappears, TabLodge cannot show you what it said. Linkwarden, Karakeep, wallabag and Instapaper keep content.</li>
-			<li>The trash is local to the phone and does not sync: a delete that arrives from another device is not kept in it, so recovering that one means going back to the device that made it.</li>
 			<li>Android only. There is no iPhone app and no store listing: you install the APK from GitHub and update by installing the next one.</li>
 			<li>The phone cannot read its browser's open tabs, so there is no one-tap capture of a whole window. You share the tabs from the browser instead, or save sessions with the desktop extension.</li>
 			<li>Sync needs a server you host. There is no hosted TabLodge cloud, and no background sync: changes from other devices show up when you open the app.</li>

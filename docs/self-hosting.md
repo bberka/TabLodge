@@ -166,7 +166,7 @@ The first browser sends its library to the server. Each further browser merges w
 
 While sync is on, a sync icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings; its label says both, such as "Sync: up to date. Open Sync settings". **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
 
-Sessions, saved tabs, folders, bookmark columns, bookmarks, and settings (excluded sites among them) sync. Recovery snapshots, automatic backups, browser bookmark monitoring, and the trash bin do not. **Sync settings** in **Settings › Sync** is on by default; turn it off in a browser to keep its settings separate, and turning it back on sends that browser's settings. When two browsers change the same item at the same time, the later change wins.
+Sessions, saved tabs, folders, bookmark columns, bookmarks, the trash bin, and settings (excluded sites among them) sync, so what you delete on one device can be restored on another. A server older than the trash (its `features` list has no `trash`) leaves each device's trash where it is until the server is updated. An item over about 200 KB, such as a session with hundreds of links, stays on the device that deleted it. Recovery snapshots, automatic backups, and browser bookmark monitoring do not sync. **Sync settings** in **Settings › Sync** is on by default; turn it off in a browser to keep its settings separate, and turning it back on sends that browser's settings. When two browsers change the same item at the same time, the later change wins.
 
 ### Private windows
 
@@ -357,7 +357,7 @@ All paths except `/health` need `Authorization: Bearer <token>`. The server answ
 | Request | Answer |
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
-| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, and `preview`) |
+| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, `preview`, and `trash`) |
 | `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor` (500 unless `limit` says otherwise, at most 1000), the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
 | `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |

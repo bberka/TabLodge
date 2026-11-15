@@ -17,6 +17,7 @@ import type {
 } from '../types';
 import type {TombstoneKind} from '../library-sync';
 import {isRecord} from '../library-values';
+import {parseTrashEntry, syncedTrash, type TrashEntry} from '../trash';
 import {recordKey} from './changes';
 
 /**
@@ -134,16 +135,20 @@ export function orderGroup(
 			return 'bookmarks';
 		}
 
-		case 'preference': {
+		case 'preference':
+		case 'trash': {
 			return undefined;
 		}
 	}
 }
 
 /**
-The library's records in display order, keyed by `recordKey`.
+The library's records in display order, keyed by `recordKey`, and the trash entries small enough to send.
 */
-export function splitLibrary(store: Store): Map<string, LibraryRecord> {
+export function splitLibrary(
+	store: Store,
+	trash: readonly TrashEntry[] = [],
+): Map<string, LibraryRecord> {
 	const records = new Map<string, LibraryRecord>();
 	const add = (record: LibraryRecord) => records.set(recordKey(record), record);
 	for (const folder of store.folders) {
@@ -175,7 +180,30 @@ export function splitLibrary(store: Store): Map<string, LibraryRecord> {
 		}
 	}
 
+	for (const entry of trash) {
+		const value = syncedTrash(entry);
+		if (value) {
+			add({kind: 'trash', id: entry.id, value});
+		}
+	}
+
 	return records;
+}
+
+/**
+The trash entries among `records`, newest first. A record that is not a trash entry is left out.
+*/
+export function trashOf(records: Iterable<LibraryRecord>): TrashEntry[] {
+	const entries: TrashEntry[] = [];
+	for (const record of records) {
+		const entry =
+			record.kind === 'trash' ? parseTrashEntry(record.value) : undefined;
+		if (entry) {
+			entries.push({...entry, id: record.id});
+		}
+	}
+
+	return entries.toSorted((a, b) => b.deletedAt - a.deletedAt);
 }
 
 /**
@@ -198,7 +226,10 @@ export function assemble(
 	const settings: Record<string, unknown> = {...local.settings};
 
 	for (const record of records) {
-		if (!isRecord(record.value) && record.kind !== 'preference') {
+		if (
+			record.kind === 'trash' ||
+			(!isRecord(record.value) && record.kind !== 'preference')
+		) {
 			continue;
 		}
 

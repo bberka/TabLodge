@@ -130,7 +130,7 @@ Record level sync needs a stable id, a revision stamp, a tombstone, and an order
 
 * **Ids.** Present on every record already and checked at migration. Preferences are addressed by their setting key.
 * **Stamp and order key.** `{h, d, o}`: a hybrid logical clock string, the writing device's id, and a fractional index among siblings. Stored in the index (`sessions[i].sync`, `folderSync`, `columnSync`, `preferenceSync`), in a session record's `$sync.tabs` (flagged by `sessions[i].tabSync`), and in the bookmarks record's `$sync.items` (flagged by `bookmarks.sync`). Nothing writes them yet. A missing stamp means never stamped, with the record's `updatedAt` as its implied stamp. A missing order key means its position in the stored array, which stays authoritative until sync assigns keys in one pass, so adding them needs no further migration.
-* **Tombstones.** The index's `tombstones` list holds `{kind, id, parentId?, deletedAt, purgeAfter, sync?}` for sessions, tabs, bookmarks, columns, folders, and preferences, and a commit drops the expired ones. The trash and Undo are unchanged and remain the user facing delete.
+* **Tombstones.** The index's `tombstones` list holds `{kind, id, parentId?, deletedAt, purgeAfter, sync?}` for sessions, tabs, bookmarks, columns, folders, and preferences, and a commit drops the expired ones. The trash and Undo remain the user facing delete. (The trash itself is not in the library index: it syncs as its own record kind, see [Trash sync](#trash-sync).)
 * **Device id.** The index's `device`, assigned when sync is switched on. It lives only in the index, so restoring a backup elsewhere cannot copy it.
 * **Carrying.** A rewritten session or bookmarks record keeps its sidecar minus entries for records that are gone, reading the old record only when the index flags one. Malformed sync data is dropped instead of making the library unreadable.
 
@@ -158,6 +158,15 @@ The worker runs `client.ts` as `syncClient` in `service-worker.ts`, wired to `ch
 * **Deploy to Cloudflare.** The button copies only `apps/server/cloudflare-deploy/`, so that folder holds a prebuilt `worker.js` next to its own `package.json` and `wrangler.jsonc`. `pnpm run cf:bundle` (`apps/server/scripts/cloudflare-deploy.ts`) rebuilds `worker.js` from `apps/server/src`, and `tests/cloudflare-deploy.test.ts` fails when the committed file is out of date.
 * **Live channel.** `live.ts` defines the WebSocket that tells devices to pull. Unauthenticated sockets are closed after 10 seconds (a timer in Node, an alarm in the Durable Object), and the Docker server accepts at most 64.
 * **Transfer.** `transfer.ts` copies a library out of a server and into another through the API: JSON lines, with deletes, stamps, and the wrapped key. The Docker image runs it as `node node.js export` and `import`, and `apps/server/scripts/transfer.ts` runs it against any server.
+
+### Trash sync
+
+Each trash entry is a sync record of kind `trash`, keyed by its id, so it follows the same rules as any record: last writer wins, and removing an entry (restore, delete for good, empty, expiry) is a delete that other devices apply. The records come from the host, not from the library: `SyncHost.trash` has `read()` and `apply(put, remove)`, `splitLibrary(store, trash)` turns the entries into records, and `trashOf` turns pulled records back. `apply` adds, replaces, and removes in one step of the host's own trash queue, so a delete made while a round runs is kept. The extension's `readSyncTrash` and `applySyncTrash` and the app's `syncedTrash` (`trash-storage.ts`) implement it; the app's regular and private libraries each pass their own list.
+
+* **Old servers.** A server that does not list `trash` among the `features` of `/v1/status` refuses a push with an unknown kind, which would stop every round. The client asks once every ten minutes and syncs the trash only when the server lists it. Without it, trash records are left out of capture and out of the outbox, so the local trash is not mistaken for deleted. `PROTOCOL_VERSION` stays 1, and an old client skips the trash records it pulls.
+* **Size.** The server refuses a change over 256 KiB. A trash entry over 200,000 serialized characters (`TRASH_SYNC_MAX_CHARS`) is not a record at all and stays on its device. The cached `size` never leaves the device.
+* **Expiry.** Every device drops an entry at its own `deletedAt` plus the retention, which syncs with the settings, and then sends the delete; those deletes agree, so nothing needs coordinating. The 500 entry and size limits apply after a round too.
+* **Restoring.** Restoring writes the library and removes the entry in the same step, so the other devices receive both together. Two devices restoring the same item at once leave it twice, as the extension does when the item already exists.
 
 ### Undo
 
@@ -239,7 +248,7 @@ Deleting a session, saved link, bookmark, or column writes a `TrashEntry` before
 
 Restore uses the original position and neighboring items where possible. If the parent no longer exists, sessions return to Unfiled and bookmarks to the first column. Restoring a link can recreate its missing session.
 
-Retention is 7, 30, or 90 days. Cleanup runs daily and when adding an entry. Limits are 500 entries and about 8 million serialized characters; oldest entries are removed first, but the newest entry stays.
+Retention is 7, 30, or 90 days. Cleanup runs daily and when adding an entry. Limits are 500 entries and about 8 million serialized characters; oldest entries are removed first, but the newest entry stays. The entry shape (`TrashEntry` in `src/shared/trash.ts`: `id`, `kind`, `deletedAt`, `label`, `origin`, `count`, and `data` that depends on the kind) is shared with the Android app and the sync server, which is why the app restores an entry the extension wrote and the other way round. The app reads `data` defensively and refuses what is not a session, link, bookmark, column, or folder.
 
 Deleting a session folder moves its sessions to Unfiled rather than trashing them. Generic Undo restores the folder. Erasing all data also uses a safety backup and generic Undo, not trash.
 

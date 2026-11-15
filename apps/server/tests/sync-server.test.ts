@@ -83,8 +83,35 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 		cursor: 1,
 		records: 1,
 		limits: {maxRecords: 500_000, retentionDays: 90, requestsPerMinute: 300},
-		features: ['private', 'key', 'preview'],
+		features: ['private', 'key', 'preview', 'trash'],
 	});
+});
+
+test('a trash entry is kept and handed back like any record, and its delete is a tombstone', async () => {
+	const {call, push} = server();
+	const entry = {
+		kind: 'trash',
+		id: 'gone-1',
+		h: tick(startClock(), T0).h,
+		d: 'device-a',
+		value: {id: 'gone-1', kind: 'bookmark', data: {}},
+	} as SyncChange;
+	assert.equal((await push([entry])).status, 200);
+	const pulled = (await call('/v1/changes?cursor=0')).body.changes as Array<{
+		kind: string;
+		id: string;
+	}>;
+	assert.deepEqual(
+		pulled.map((change) => [change.kind, change.id]),
+		[['trash', 'gone-1']],
+	);
+	const {value: _value, ...rest} = entry;
+	const deleted = {...rest, h: tick(startClock(), T0 + 1).h, deleted: true};
+	assert.equal((await push([deleted])).status, 200);
+	const after = (await call('/v1/changes?cursor=0')).body.changes as Array<{
+		deleted?: boolean;
+	}>;
+	assert.equal(after[0].deleted, true);
 });
 
 test('a push with a malformed change is refused whole', async () => {
@@ -291,6 +318,7 @@ test('the server keeps one wrapped key per library and never lets a device overw
 		'private',
 		'key',
 		'preview',
+		'trash',
 	]);
 	assert.deepEqual((await call('/v1/key')).body, {key: null});
 	const set = (key: string, previous: string | null) =>

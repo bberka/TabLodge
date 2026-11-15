@@ -23,6 +23,7 @@ import {readJson, removeKeys, writeJson} from '../platform/storage';
 import {emptyStore, isStore} from './library';
 import {DEFAULTS as LINK_DEFAULTS, type LinkSettings} from './links';
 import {createLibraryCore} from './library-core';
+import {syncedTrash} from './trash-storage';
 import {isPrivateView, useView} from './view';
 import type * as SeedModuleNamespace from './seed';
 
@@ -38,6 +39,7 @@ const SEED_KEY = 'tablodge.dev.seed';
 
 const core = createLibraryCore(LIBRARY_KEY);
 const {mutate, write, notify: notifyStore} = core;
+const regularRetention = () => core.store.settings.trashRetentionDays;
 let loaded = false;
 /*
 A save that arrives before the saved library has been read would be written over it, or would start from an empty
@@ -65,6 +67,7 @@ export const syncClient = createSyncClient({
 	openSocket: (url) => new WebSocket(url),
 	mutate,
 	readLibrary: async () => core.store,
+	trash: syncedTrash('regular', regularRetention),
 	writeLibrary: write,
 	// Every write here is either the user's edit or a merge of the server's records; the extension keeps its own
 	// copy, so the phone has no backup to restore from.
@@ -207,6 +210,13 @@ export async function editRegular(
 	});
 	syncClient.localChanged();
 }
+
+/**
+Sends what changed in the regular trash with the next sync.
+*/
+export const nudgeRegular = (): void => {
+	syncClient.localChanged();
+};
 
 export type LibraryName = 'regular' | 'private';
 

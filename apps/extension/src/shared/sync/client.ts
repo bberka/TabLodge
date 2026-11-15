@@ -8,7 +8,9 @@ read and write happens inside the worker's mutation queue (`host.mutate`); the n
 so a slow server never holds up the app. Rounds never overlap: a request during a round runs one more after it.
 */
 import type {Store} from '../types';
+import type {TombstoneKind} from '../library-sync';
 import {isRecord} from '../library-values';
+import type {TrashEntry} from '../trash';
 import {PROTOCOL_VERSION, type PushResult} from './change-log';
 import {parseChange, recordKey, type SyncChange} from './changes';
 import {
@@ -24,7 +26,7 @@ import {
 	startResync,
 	type SyncState,
 } from './engine';
-import {assemble, splitLibrary} from './library-records';
+import {assemble, splitLibrary, trashOf} from './library-records';
 
 export const SYNC_CONFIG_KEY = 'tablodge.sync.config';
 const SYNC_STATE_KEY = 'tablodge.sync.state';
@@ -44,6 +46,8 @@ Minutes between fallback rounds, which also reopen a closed live socket.
 */
 export const SYNC_ALARM_MINUTES = 5;
 export const MIN_TOKEN_LENGTH = 32;
+// How long a server's answer about the trash is trusted.
+const TRASH_CHECK_MS = 10 * 60 * 1000;
 
 /**
 A new server token: 32 random bytes as 64 hex characters, which paste cleanly into any form.
@@ -128,6 +132,17 @@ export type SyncHost = {
 	openSocket?: (url: string) => SyncSocket;
 	mutate<T>(work: () => Promise<T>): Promise<T>;
 	readLibrary(): Promise<Store>;
+	/**
+	The trash of this library, which syncs with a server that supports it. Without it the trash stays on the device.
+	*/
+	trash?: {
+		read(): Promise<TrashEntry[]>;
+		/**
+		Adds or replaces `put`, removes the entries named in `remove`, and keeps the rest, so a delete made while the
+		round runs is not lost. The host drops what is past its retention.
+		*/
+		apply(put: TrashEntry[], remove: string[]): Promise<void>;
+	};
 	/**
 	Writes a library assembled from synced records; the host normalizes it like any untrusted input.
 	*/
@@ -316,33 +331,39 @@ export async function callServer(
 }
 
 /**
-Stamps local edits to everything but the settings, which keep what was last agreed with the server. Settings that
-are not recorded here would otherwise look deleted.
+Stamps local edits to everything but the `left` kinds, which keep what was last agreed with the server. Records that
+are not looked at here (the settings of a device that does not sync them, the trash of a server that cannot hold it)
+would otherwise look deleted.
 */
-function captureWithoutSettings(
+function captureExcept(
 	state: SyncState,
 	records: Records,
 	now: number,
+	left: ReadonlySet<TombstoneKind>,
 ): SyncState {
-	const isSetting = (key: string) => state.shadow[key]?.kind === 'preference';
-	const settings = Object.fromEntries(
-		Object.entries(state.shadow).filter(([key]) => isSetting(key)),
+	const isLeft = (key: string) => {
+		const kind = state.shadow[key]?.kind;
+		return kind !== undefined && left.has(kind);
+	};
+
+	const kept = Object.fromEntries(
+		Object.entries(state.shadow).filter(([key]) => isLeft(key)),
 	);
-	const queued = state.outbox.filter((key) => isSetting(key));
+	const queued = state.outbox.filter((key) => isLeft(key));
 	const captured = capture(
 		{
 			...state,
 			shadow: Object.fromEntries(
-				Object.entries(state.shadow).filter(([key]) => !isSetting(key)),
+				Object.entries(state.shadow).filter(([key]) => !isLeft(key)),
 			),
-			outbox: state.outbox.filter((key) => !isSetting(key)),
+			outbox: state.outbox.filter((key) => !isLeft(key)),
 		},
-		new Map([...records].filter(([, record]) => record.kind !== 'preference')),
+		new Map([...records].filter(([, record]) => !left.has(record.kind))),
 		now,
 	);
 	return {
 		...captured,
-		shadow: {...captured.shadow, ...settings},
+		shadow: {...captured.shadow, ...kept},
 		outbox: [...captured.outbox, ...queued],
 	};
 }
@@ -367,6 +388,9 @@ export function createSyncClient(host: SyncHost) {
 	*/
 	let seenCursor = 0;
 	let noticeCursor = 0;
+	// Whether this round syncs the trash: the host has one and the server lists the `trash` feature.
+	let trashOn = false;
+	let trashCheck: {key: string; until: number; supported: boolean} | undefined;
 	const ready = load();
 
 	async function load() {
@@ -424,13 +448,94 @@ export function createSyncClient(host: SyncHost) {
 		return (await host.get(SYNC_SETTINGS_KEY)) !== false;
 	}
 
-	async function write(records: Records, state: SyncState, base: Store) {
+	/**
+	Whether the server keeps trash entries. An old server refuses a push with a kind it does not know, which would stop
+	every round, so the trash waits until the server says it can hold it.
+	*/
+	async function serverTakesTrash(target: SyncConfig): Promise<boolean> {
+		const key = `${target.url}\n${target.token}`;
+		if (trashCheck?.key === key && host.now() < trashCheck.until) {
+			return trashCheck.supported;
+		}
+
+		let supported = false;
+		try {
+			const body = await request(target, '/v1/status');
+			supported =
+				isRecord(body) &&
+				Array.isArray(body.features) &&
+				body.features.includes('trash');
+		} catch (error) {
+			if (!(error instanceof SyncError) || error.kind !== 'server') {
+				throw error;
+			}
+		}
+
+		trashCheck = {key, until: host.now() + TRASH_CHECK_MS, supported};
+		return supported;
+	}
+
+	/**
+	The changes to push. The trash stays queued while the server cannot hold it.
+	*/
+	const queued = (state: SyncState, records: Records) =>
+		outgoing(
+			trashOn
+				? state
+				: {
+						...state,
+						outbox: state.outbox.filter(
+							(key) => state.shadow[key]?.kind !== 'trash',
+						),
+					},
+			records,
+			PUSH_LIMIT,
+		);
+
+	const leftAlone = async (): Promise<ReadonlySet<TombstoneKind>> =>
+		new Set<TombstoneKind>([
+			...((await settingsOn()) ? [] : (['preference'] as const)),
+			...(trashOn ? [] : (['trash'] as const)),
+		]);
+
+	async function captureLocal(state: SyncState, records: Records) {
+		const left = await leftAlone();
+		return left.size === 0
+			? capture(state, records, host.now())
+			: captureExcept(state, records, host.now(), left);
+	}
+
+	/**
+	Writes the library from `records` and, when they changed, the trash entries that differ from `before`.
+	*/
+	async function write(
+		records: Records,
+		before: Records,
+		state: SyncState,
+		base: Store,
+	) {
 		const syncSettings = await settingsOn();
 		applying = true;
 		try {
 			await host.writeLibrary(
 				assemble(inOrder(state, records), base, syncSettings),
 			);
+			if (trashOn && host.trash) {
+				const put = trashOf(
+					[...records]
+						.filter(([key, record]) => before.get(key) !== record)
+						.map(([, record]) => record),
+				);
+				const remove = [...before.values()]
+					.filter(
+						(record) =>
+							record.kind === 'trash' && !records.has(recordKey(record)),
+					)
+					.map((record) => record.id);
+				if (put.length > 0 || remove.length > 0) {
+					await host.trash.apply(put, remove);
+				}
+			}
 		} finally {
 			applying = false;
 		}
@@ -448,12 +553,13 @@ export function createSyncClient(host: SyncHost) {
 	) {
 		return host.mutate(async () => {
 			const store = await host.readLibrary();
-			const records = splitLibrary(store);
+			const records = splitLibrary(
+				store,
+				trashOn && host.trash ? await host.trash.read() : [],
+			);
 			let state = await loadState();
 			if (state.joined) {
-				state = (await settingsOn())
-					? capture(state, records, host.now())
-					: captureWithoutSettings(state, records, host.now());
+				state = await captureLocal(state, records);
 			}
 
 			const done = await work(state, records, store);
@@ -466,6 +572,7 @@ export function createSyncClient(host: SyncHost) {
 		await setStatus({phase: 'syncing'});
 		const {codec} = host;
 		await codec?.prepare(async (path, init) => request(target, path, init));
+		trashOn = host.trash !== undefined && (await serverTakesTrash(target));
 		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
 		const reseal = new Set<string>();
 		/*
@@ -509,6 +616,10 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			for (const change of page.changes) {
+				if (change.kind === 'trash' && !trashOn) {
+					continue;
+				}
+
 				if (codec && !change.deleted) {
 					const opened = await codec.open(change);
 					if (opened.reseal) {
@@ -543,7 +654,7 @@ export function createSyncClient(host: SyncHost) {
 					await host.backup(store, 'Before the first sync');
 				}
 
-				await write(finished.records, finished.state, store);
+				await write(finished.records, records, finished.state, store);
 			}
 
 			let next = finished.state;
@@ -560,9 +671,7 @@ export function createSyncClient(host: SyncHost) {
 			const joined = next.joined
 				? next
 				: {
-						...((await settingsOn())
-							? capture(next, finished.records, host.now())
-							: captureWithoutSettings(next, finished.records, host.now())),
+						...(await captureLocal(next, finished.records)),
 						joined: true,
 					};
 			return {state: joined, result: undefined};
@@ -575,7 +684,7 @@ export function createSyncClient(host: SyncHost) {
 			const {sent, pulledCursor} = await step(async (state, records) => ({
 				state,
 				result: {
-					sent: host.readOnly ? [] : outgoing(state, records, PUSH_LIMIT),
+					sent: host.readOnly ? [] : queued(state, records),
 					pulledCursor: state.cursor,
 				},
 			}));

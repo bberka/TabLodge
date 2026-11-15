@@ -1,4 +1,5 @@
 import {stripTrackingParameters} from '../src/shared/tracking-parameters';
+import {isTrashEntry, TRASH_KINDS, type TrashEntry} from '../src/shared/trash';
 import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {
 	folderNameExists,
@@ -1026,12 +1027,19 @@ async function writeStore(store: Store): Promise<Store> {
 	};
 	await library.set({[STORAGE_KEY]: next});
 	invalidateSettings();
+	await nudgeSync();
+	return next;
+}
+
+/**
+Sends what changed on this device with the next sync round. A private window sharing the regular library asks the
+regular worker, which runs sync, through local storage.
+*/
+async function nudgeSync(): Promise<void> {
 	(syncClient ?? privateSync)?.localChanged();
 	if (privateContext && privateConfig.mode === 'shared') {
 		await chrome.storage.local.set({[SYNC_NUDGE_KEY]: Date.now()});
 	}
-
-	return next;
 }
 
 function mutate<T>(operation: () => Promise<T>): Promise<T> {
@@ -1070,6 +1078,7 @@ const syncClient = privateContext
 					: undefined,
 			mutate,
 			readLibrary: getStore,
+			trash: {read: readSyncTrash, apply: applySyncTrash},
 			async writeLibrary(store) {
 				// The records came from other devices: normalized like an import before they are stored.
 				await writeStore(normalizeStore(store));
@@ -1173,6 +1182,7 @@ function createPrivateSyncClient() {
 			});
 		},
 		readLibrary: getStore,
+		trash: {read: readSyncTrash, apply: applySyncTrash},
 		async writeLibrary(store) {
 			await writeStore(normalizeStore(store));
 		},
@@ -6165,7 +6175,6 @@ type SnapshotSummary = import('../src/shared/types').SnapshotSummary;
 type RecoveryInfo = import('../src/shared/types').RecoveryInfo;
 type BackupKind = import('../src/shared/types').BackupKind;
 type BackupSummary = import('../src/shared/types').BackupSummary;
-type TrashKind = import('../src/shared/types').TrashKind;
 type TrashSummary = import('../src/shared/types').TrashSummary;
 type StorageUsage = import('../src/shared/types').StorageUsage;
 
@@ -7352,13 +7361,6 @@ const SNAPSHOT_REASONS = new Set([
 	'exit',
 	'manual',
 ]);
-const TRASH_KINDS = new Set([
-	'session',
-	'tabs',
-	'bookmark',
-	'column',
-	'folder',
-]);
 const MAX_SNAPSHOT_WINDOWS = 50;
 const MAX_SNAPSHOT_TABS = 10_000;
 
@@ -7604,26 +7606,6 @@ function restoreFullBackup(
 	});
 }
 
-type TrashEntry = {
-	id: string;
-	kind: TrashKind;
-	deletedAt: number;
-	label: string;
-	origin: string;
-	count: number;
-	data: Raw;
-	/**
-	Serialized length of `data`, cached so the size cap never re-serializes stored items.
-	*/
-	size?: number;
-};
-
-const isTrashEntry = (value: unknown): value is TrashEntry =>
-	isRecord(value) &&
-	typeof value.id === 'string' &&
-	typeof value.kind === 'string' &&
-	isRecord(value.data);
-
 async function readTrash(): Promise<TrashEntry[]> {
 	const raw = await readKey<Raw>(TRASH_KEY);
 	return Array.isArray(raw?.items) ? raw.items.filter(isTrashEntry) : [];
@@ -7703,6 +7685,30 @@ function trashAddMany(
 			),
 		);
 		return entries.map((entry) => entry.id);
+	});
+}
+
+/**
+The trash as the sync client sees it: `applySyncTrash` adds or replaces entries from other devices and removes the ones
+they restored or deleted in one update, so a delete made on this device meanwhile stays.
+*/
+async function readSyncTrash(): Promise<TrashEntry[]> {
+	return pruneTrash(
+		await readTrash(),
+		(await readSettings()).trashRetentionDays,
+	);
+}
+
+function applySyncTrash(put: TrashEntry[], remove: string[]): Promise<void> {
+	return trashMutate(async () => {
+		const gone = new Set([...remove, ...put.map((entry) => entry.id)]);
+		const items = [
+			...put,
+			...(await readTrash()).filter((entry) => !gone.has(entry.id)),
+		].toSorted((a, b) => Number(b.deletedAt) - Number(a.deletedAt));
+		await writeTrash(
+			pruneTrash(items, (await readSettings()).trashRetentionDays),
+		);
 	});
 }
 
@@ -8042,6 +8048,7 @@ function deleteTrash(id: string): Promise<ActionResult<'DELETE_TRASH'>> {
 			}
 
 			await writeTrash(next);
+			await nudgeSync();
 			return {ok: true};
 		}),
 	);
@@ -8052,6 +8059,7 @@ function emptyTrash(): Promise<ActionResult<'EMPTY_TRASH'>> {
 		withUndo('Empty trash bin', [TRASH_KEY], async () => {
 			const items = await readTrash();
 			await writeTrash([]);
+			await nudgeSync();
 			return {ok: true, count: items.length};
 		}),
 	);

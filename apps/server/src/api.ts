@@ -68,7 +68,7 @@ const MAX_KEY_CHARS = 4096;
 Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
 second library at /private for private windows; `key` is /v1/key.
 */
-const FEATURES = ['private', 'key', 'preview'];
+const FEATURES = ['private', 'key', 'preview', 'trash'];
 const PREVIEWS_PER_MINUTE = 600;
 const PREVIEW_CACHE_SIZE = 500;
 const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000;
