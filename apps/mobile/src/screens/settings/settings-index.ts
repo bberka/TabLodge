@@ -358,3 +358,24 @@ export function sectionVisible(section: Section, query: string): boolean {
 		section.rows.some((row) => rowHit(row, query))
 	);
 }
+
+/**
+How many settings a search finds: the rows that show, and a card with no rows of its own counts as one.
+*/
+export function matchCount(query: string): number {
+	let count = 0;
+	for (const section of Object.values(SECTIONS) as Section[]) {
+		if (!sectionVisible(section, query)) {
+			continue;
+		}
+
+		count +=
+			section.rows.length === 0
+				? 1
+				: headHit(section, query)
+					? section.rows.length
+					: section.rows.filter((row) => rowHit(row, query)).length;
+	}
+
+	return count;
+}

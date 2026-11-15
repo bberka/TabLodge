@@ -3853,6 +3853,61 @@ async function main() {
 			);
 		}
 
+		for (const theme of THEMES) {
+			await check(
+				`sync button names its state and action (${theme})`,
+				async () => {
+					const page = await openPage(context, extensionId, 'newtab');
+					try {
+						await setTheme(page, theme);
+						await page.evaluate(async () => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: {
+									storage: {
+										local: {set(items: Record<string, unknown>): Promise<void>};
+									};
+								};
+							};
+							await chrome.storage.local.set({
+								'tablodge.sync.status': {
+									connected: true,
+									phase: 'idle',
+									pending: 0,
+									live: false,
+								},
+							});
+						});
+						const sync = page.getByRole('link', {
+							name: 'Sync: up to date. Open Sync settings',
+							exact: true,
+						});
+						await sync.waitFor();
+						assert.equal(
+							await sync.getAttribute('href'),
+							'options.html#settings-sync',
+						);
+						await sync.focus();
+						const tip = page.getByRole('tooltip');
+						await tip.waitFor();
+						assert.equal(
+							await tip.first().textContent(),
+							'Sync: up to date. Open Sync settings',
+						);
+					} finally {
+						await page.evaluate(async () => {
+							const {chrome} = globalThis as typeof globalThis & {
+								chrome: {
+									storage: {local: {remove(key: string): Promise<void>}};
+								};
+							};
+							await chrome.storage.local.remove('tablodge.sync.status');
+						});
+						await page.close();
+					}
+				},
+			);
+		}
+
 		for (const name of PAGES) {
 			for (const theme of THEMES) {
 				await check(`axe ${name} (${theme})`, async () => {

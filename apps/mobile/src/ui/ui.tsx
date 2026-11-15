@@ -347,10 +347,15 @@ export function Avatar({host, size = 40}: {host: string; size?: number}) {
 export function Header({
 	title,
 	subtitle,
+	live = false,
 	right,
 }: {
 	title: string;
 	subtitle?: string;
+	/**
+	Reads the subtitle out when it changes, for a count that follows a search.
+	*/
+	live?: boolean;
 	right?: ReactNode;
 }) {
 	const colors = useColors();
@@ -367,7 +372,14 @@ export function Header({
 				>
 					{title}
 				</Text>
-				{subtitle && <Text style={{color: colors.muted}}>{subtitle}</Text>}
+				{subtitle && (
+					<Text
+						accessibilityLiveRegion={live ? 'polite' : 'none'}
+						style={{color: colors.muted}}
+					>
+						{subtitle}
+					</Text>
+				)}
 			</View>
 			{right}
 		</View>
