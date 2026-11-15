@@ -57,8 +57,6 @@ jobs:
       # Gradle reads the cache from the default branch and, on a pull request, only reads it. --build-cache below reuses
       # task outputs (compiled Kotlin, resources) that an earlier build on master already made.
       - uses: gradle/actions/setup-gradle@v5
-        with:
-          cache-read-only: false
       - run: pnpm install --frozen-lockfile
       - name: Test the app's code
         run: pnpm exec vp test run mobile release-version
