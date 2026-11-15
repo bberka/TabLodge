@@ -20,7 +20,7 @@ A fix or feature is not done until the pull request shows it working. Pick the s
 - **Recording or step list** for behavior that a still image cannot show, such as drag and drop, shortcuts, or restore flows. Give the exact steps and the observed result.
 - **Console or test output** for worker, storage, or import and export changes: the failing test before the fix and the passing test after, or the service worker console showing the expected result.
 
-Save screenshots and recordings under `apps/extension/.dev/evidence/`, which git ignores. Name screenshots so their viewport is clear. Attach or upload the screenshots to the pull request, preferably in its description, so reviewers can inspect them there. Do not commit evidence files. If the environment cannot upload attachments, include each exact file path in the pull request and ask the maintainer to attach them. Documentation only and tooling only changes need a sentence explaining why browser proof does not apply.
+Save screenshots and recordings under `apps/extension/.dev/evidence/`, which git ignores. Name screenshots so their viewport is clear. Attach or upload the screenshots to the pull request, preferably in its description, so reviewers can inspect them there. Do not commit evidence files. If the environment cannot upload attachments, include each exact file path in the pull request and ask the maintainer to attach them. Send the screenshots of a UI change to the user in the final reply as well. Documentation only and tooling only changes need a sentence explaining why browser proof does not apply.
 
 ## Unslop the diff
 
@@ -59,7 +59,7 @@ Keep the patch to the smallest set of changes that implements the request and it
 
 ## Pull request evidence
 
-Do not commit, push, or open a pull request for a runtime change until the checks pass, the affected workflow ran in Chrome or Chromium, proof exists, the diff is unslopped, and the scope review is done. When an environment limit blocks a required step, stop before committing and report what is blocked and what access is needed.
+Do not commit, push, or open a pull request for a runtime change until the checks pass, the affected workflow ran in Chrome or Chromium, proof exists, the diff is unslopped, and the scope review is done. When an environment limit blocks a required step, try another route to the same proof first. Stop before committing and ask only when no form of proof is possible, and report what is blocked and what access is needed.
 
 The pull request body lists:
 

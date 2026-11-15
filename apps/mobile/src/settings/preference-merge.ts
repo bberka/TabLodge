@@ -16,6 +16,11 @@ export type ChangedAt = Record<string, number>;
 
 export const AT_PREFIX = 'at.';
 
+/**
+Stands for the library's `mobileApp` before it has one: a fresh install's empty library has no such setting until a sync brings it.
+*/
+export const NO_MOBILE_APP: MobileApp = {};
+
 const timeOf = (app: MobileApp, key: string): number => {
 	const time = app[AT_PREFIX + key];
 	return typeof time === 'number' && time > 0 ? time : 0;
@@ -38,10 +43,11 @@ Compares every synced preference here with the library's. Equal times go to the 
 A preference this phone never changed is never sent, and keys this version does not know stay as they are.
 */
 export function settlePreferences(
-	remote: MobileApp,
+	library: MobileApp | undefined,
 	prefs: Preferences,
 	at: ChangedAt,
 ): Settled {
+	const remote = library ?? NO_MOBILE_APP;
 	const remoteValues = readSyncedPreferences(remote);
 	const adopt: Record<string, unknown> = {};
 	const adoptAt: ChangedAt = {};

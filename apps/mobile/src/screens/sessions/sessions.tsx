@@ -1,60 +1,30 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
+import {FlatList, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import type {
-	Session,
-	Settings,
-	Store,
-} from '../../../../extension/src/shared/types';
-import {columnGlyph, useChipLook} from '../../ui/column-icons';
+import type {Session} from '../../../../extension/src/shared/types';
 import {GlassTarget} from '../../ui/glass';
 import {
 	ALL_SESSIONS_ID,
-	archiveSession,
 	isArchivedSession,
-	unarchiveSession,
-	canChangeFolder,
-	deleteFolder,
-	restoreFolder,
-	describeSession,
-	markSessionOpened,
 	moveSession,
-	removeSession,
-	removeSessionTab,
-	renameSession,
-	restoreSession,
-	type SessionFolderView,
 	sessionFolders,
 	sessionsIn,
 } from '../../library/session-edits';
-import {setSessionColor} from '../../library/board-edits';
-import {
-	edit,
-	refreshStatus,
-	syncClient,
-	useLibrary,
-	useSyncStatus,
-} from '../../library/library-store';
-import {trashDeleted} from '../../library/trash-store';
-import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
+import {edit, useLibrary, useSyncStatus} from '../../library/library-store';
+import {ActionSheet} from '../../ui/action-sheet';
 import {useBackAction} from '../../ui/back-actions';
 import {useSelection} from '../../ui/use-selection';
-import {ActionBar} from '../bookmarks/bookmark-parts';
-import {showSnack} from '../../ui/snackbar';
 import {
 	FloatingActions,
 	ROOM_FOR_BUTTONS,
 	SearchDock,
 	useSearch,
 } from '../../ui/floating-actions';
-import {sessionActionLook} from '../../library/row-actions';
 import {type LinkAction, type SessionAction} from '../../settings/preferences';
-import {linkToOpen} from '../../library/links';
-import {openAll, openLink} from '../../platform/open-links';
 import {PrivateSwitch} from '../../private/private-switch';
 import {useRoomBelow} from '../../ui/keyboard';
 import {useBarSpace} from '../../ui/tab-bar';
-import {type Colors, useColors} from '../../ui/theme';
+import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
@@ -62,33 +32,26 @@ import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
-import {Button, Chips, Empty, Header, IconButton} from '../../ui/widgets';
-import {openShare} from '../transfer/transfer-sheets';
+import {Empty, Header, IconButton} from '../../ui/widgets';
 import {FolderEditSheet} from './folder-sheet';
+import {FolderChips, folderMenuFor, useFolderLook} from './folder-chips';
 import {
 	AddLinksSheet,
 	type BookmarkLinks,
 	EditLinkSheet,
 	SaveAsBookmarksSheet,
 } from './session-link-sheets';
-import {FolderSheet, MoveSessionsSheet, RenameSheet} from './session-sheets';
+import {FolderSheet, RenameSheet} from './session-sheets';
 import {matches, SessionCard} from './session-card';
-
-// Runs one library change per item, in order, on the store it was given.
-function applyAll<T>(
-	store: Store,
-	items: readonly T[],
-	step: (current: Store, item: T) => Store,
-): Store {
-	let next = store;
-	for (const item of items) {
-		next = step(next, item);
-	}
-
-	return next;
-}
-
-const NEW_FOLDER_CHIP = 'new-folder';
+import {
+	runSessionAction,
+	runTabAction,
+	sessionMenuActions,
+	tabMenuActions,
+} from './session-actions';
+import {saveSessionDetails, selectionOf} from './session-changes';
+import {SessionSelectionBar} from './session-selection-bar';
+import {SessionsEmpty} from './sessions-empty';
 
 /**
 Sessions from the browser extension, and ones saved here from a shared list of links. A phone browser cannot list its
@@ -113,15 +76,12 @@ export function SessionsScreen({
 	const links = useLinkSettings();
 	const view = useView();
 	const {connected} = useSyncStatus();
-	const [syncing, setSyncing] = useState(false);
-	const chipLook = useChipLook();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	const search = useSearch();
 	const {query} = search;
 	const listRef = useRef<FlatList<Session>>(null);
 	const [revealId, setRevealId] = useState<string>();
 	const selection = useSelection();
-	const [movingSelected, setMovingSelected] = useState(false);
 	useBackAction(selection.active, selection.stop);
 	useEffect(() => {
 		onSelecting(selection.active);
@@ -148,7 +108,6 @@ export function SessionsScreen({
 	// The folder whose edit drawer is open, or `{}` for a new one.
 	const [editingFolder, setEditingFolder] = useState<{id?: string}>();
 	const menuFor = store.groups.find((session) => session.id === menuId);
-	const colorsNow = useColors();
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
 	const folderBeingEdited = store.folders.find(
@@ -157,7 +116,7 @@ export function SessionsScreen({
 	const folderMenu = folderMenuId
 		? folderMenuFor(folderMenuId, store, folders, {
 				sort: links.sessionSort,
-				colors: colorsNow,
+				colors,
 				edit(id) {
 					setEditingFolder({id});
 				},
@@ -177,22 +136,7 @@ export function SessionsScreen({
 		return needle ? inFolder.filter((s) => matches(s, needle)) : inFolder;
 	}, [store, folderId, links.sessionSort, needle]);
 	const searchCount = useSettledText(needle !== '', resultCount(shown.length));
-	const look = useCallback(
-		(folder: {id: string; name: string; icon?: string; count: number}) => {
-			if (folder.id === ALL_SESSIONS_ID) {
-				return {
-					...folder,
-					glyph: 'albums-outline' as const,
-					tint: colors.accent,
-				};
-			}
-
-			return folder.name.toLocaleLowerCase() === 'archived'
-				? {...folder, glyph: 'archive-outline' as const, tint: colors.muted}
-				: {...chipLook(folder), glyph: columnGlyph(folder.icon)};
-		},
-		[chipLook, colors.accent, colors.muted],
-	);
+	const look = useFolderLook();
 	// The name and color of each session's folder, worked out once per library change, not per card per render.
 	const folderInfo = useMemo(
 		() =>
@@ -210,217 +154,40 @@ export function SessionsScreen({
 	);
 	const act = useCallback(
 		(action: SessionAction, session: Session) => {
-			switch (action) {
-				case 'open': {
-					openAll(
-						session.tabs.map((tab) => linkToOpen(tab.url, links)),
-						session.name,
-					);
-					void edit((current) =>
-						markSessionOpened(current, session.id, Date.now()),
-					);
-
-					break;
-				}
-
-				case 'rename': {
-					setRenamingId(session.id);
-					break;
-				}
-
-				case 'move': {
-					setMovingId(session.id);
-					break;
-				}
-
-				case 'archive': {
-					const was = session.folderId;
-					const archived = isArchivedSession(store.folders, session);
-					void edit((current) =>
-						archived
-							? unarchiveSession(current, session.id, Date.now())
-							: archiveSession(current, session.id, Date.now()),
-					);
-					showSnack(`${archived ? 'Unarchived' : 'Archived'} ${session.name}`, {
-						label: 'Undo',
-						run() {
-							void edit((current) =>
-								moveSession(current, session.id, was, Date.now()),
-							);
-						},
-					});
-					break;
-				}
-
-				case 'share': {
-					openShare({
-						title: session.name,
-						data: {kind: 'sessions', groups: [session], folders: store.folders},
-					});
-					break;
-				}
-
-				case 'delete': {
-					void edit((current) =>
-						removeSession(current, session.id, Date.now()),
-					);
-					void trashDeleted([{kind: 'session', session}]);
-					showSnack(`Deleted ${session.name}`, {
-						label: 'Undo',
-						run() {
-							void edit((current) =>
-								restoreSession(current, session, Date.now()),
-							);
-						},
-					});
-					break;
-				}
-
-				default:
-			}
+			runSessionAction(action, session, {
+				folders: store.folders,
+				links,
+				rename: setRenamingId,
+				move: setMovingId,
+			});
 		},
 		[links, store.folders],
 	);
-	const removeTab = useCallback((session: Session, tabId: string) => {
-		if (
-			session.tabs.every((candidate) => candidate.id !== tabId) ||
-			session.tabs.length < 2
-		) {
-			showSnack('A session keeps at least one tab. Delete the session instead');
-			return;
-		}
-
-		const index = session.tabs.findIndex((candidate) => candidate.id === tabId);
-		void edit((current) =>
-			removeSessionTab(current, session.id, tabId, Date.now()),
-		);
-		void trashDeleted([
-			{
-				kind: 'tab',
-				tab: session.tabs[index],
-				index,
-				sessionId: session.id,
-				sessionName: session.name,
-				folderId: session.folderId,
-			},
-		]);
-		showSnack('Removed from the session', {
-			label: 'Undo',
-			run() {
-				void edit((current) =>
-					restoreSession(
-						current.groups.some((group) => group.id === session.id)
-							? removeSession(current, session.id, Date.now())
-							: current,
-						session,
-						Date.now(),
-					),
-				);
-			},
-		});
-	}, []);
 	const openMenu = useCallback((session: Session) => {
 		setMenuId(session.id);
 	}, []);
 	const openTabMenu = useCallback((session: Session, tabId: string) => {
 		setTabMenu({sessionId: session.id, tabId});
 	}, []);
-	const runTabAction = useCallback(
+	const runTabActionOn = useCallback(
 		(action: LinkAction, session: Session, tabId: string) => {
-			const tab = session.tabs.find((candidate) => candidate.id === tabId);
-			if (!tab) {
-				return;
-			}
-
-			switch (action) {
-				case 'open': {
-					openLink(linkToOpen(tab.url, links));
-
-					break;
-				}
-
-				case 'edit': {
-					setEditingTab({session, tabId});
-
-					break;
-				}
-
-				case 'bookmark': {
-					setBookmarking({
-						title: tab.title || tab.url,
-						links: [{title: tab.title, url: tab.url}],
-					});
-
-					break;
-				}
-
-				case 'delete': {
-					removeTab(session, tabId);
-
-					break;
-				}
-				// No default
-			}
+			runTabAction(action, session, tabId, {
+				links,
+				edit: setEditingTab,
+				bookmark: setBookmarking,
+			});
 		},
-		[links, removeTab],
+		[links],
 	);
-	const menuItem = (action: SessionAction, session: Session): SheetAction => {
-		const actionLook = sessionActionLook(
-			action,
-			colorsNow,
-			isArchivedSession(store.folders, session),
-		);
-		return {
-			icon: actionLook.icon,
-			label: actionLook.label,
-			color: actionLook.color,
-			destructive: action === 'delete',
-			onPress() {
-				act(action, session);
-			},
-		};
-	};
-
-	const menu: SheetAction[] = menuFor
-		? [
-				...(['open', 'rename'] as const).map((action) =>
-					menuItem(action, menuFor),
-				),
-				{
-					icon: 'checkbox-outline' as const,
-					label: 'Select',
-					hint: 'Pick several to open, move, archive or delete',
-					onPress() {
-						selection.start(menuFor.id);
-					},
-				},
-				{
-					icon: 'add-circle-outline' as const,
-					label: 'Add links',
-					color: colorsNow.accent,
-					onPress() {
-						setAddingToId(menuFor.id);
-					},
-				},
-				{
-					icon: 'bookmark-outline' as const,
-					label: 'Save links as bookmarks',
-					color: colorsNow.ok,
-					onPress() {
-						setBookmarking({
-							title: menuFor.name,
-							links: menuFor.tabs.map((tab) => ({
-								title: tab.title,
-								url: tab.url,
-							})),
-						});
-					},
-				},
-				menuItem('share', menuFor),
-				...(['archive', 'delete'] as const).map((action) =>
-					menuItem(action, menuFor),
-				),
-			]
+	const menu = menuFor
+		? sessionMenuActions(menuFor, {
+				colors,
+				folders: store.folders,
+				act,
+				select: selection.start,
+				addLinks: setAddingToId,
+				bookmark: setBookmarking,
+			})
 		: [];
 	const tabMenuSession = store.groups.find(
 		(session) => session.id === tabMenu?.sessionId,
@@ -428,45 +195,14 @@ export function SessionsScreen({
 	const tabMenuTab = tabMenuSession?.tabs.find(
 		(tab) => tab.id === tabMenu?.tabId,
 	);
-	// What holding a link of a session offers: nothing that removes it unless asked for by name.
-	const tabActions: SheetAction[] =
+	const tabActions =
 		tabMenuSession && tabMenuTab
-			? [
-					{
-						icon: 'open-outline',
-						label: 'Open',
-						onPress() {
-							openLink(linkToOpen(tabMenuTab.url, links));
-						},
-					},
-					{
-						icon: 'create-outline',
-						label: 'Edit',
-						color: colorsNow.teal,
-						onPress() {
-							setEditingTab({session: tabMenuSession, tabId: tabMenuTab.id});
-						},
-					},
-					{
-						icon: 'bookmark-outline',
-						label: 'Add to bookmarks',
-						color: colorsNow.ok,
-						onPress() {
-							setBookmarking({
-								title: tabMenuTab.title || tabMenuTab.url,
-								links: [{title: tabMenuTab.title, url: tabMenuTab.url}],
-							});
-						},
-					},
-					{
-						icon: 'trash-outline',
-						label: 'Delete',
-						destructive: true,
-						onPress() {
-							removeTab(tabMenuSession, tabMenuTab.id);
-						},
-					},
-				]
+			? tabMenuActions(tabMenuSession, tabMenuTab, {
+					colors,
+					links,
+					edit: setEditingTab,
+					bookmark: setBookmarking,
+				})
 			: [];
 	const toggle = useCallback((id: string) => {
 		setFlipped((current) => {
@@ -518,105 +254,21 @@ export function SessionsScreen({
 
 	if (store.groups.length === 0) {
 		return (
-			<View style={styles.screen}>
-				<Header title="Sessions" right={<PrivateSwitch />} />
-				<Empty
-					icon="albums-outline"
-					title="No sessions yet"
-					action={
-						view === 'private' ? undefined : connected ? (
-							<Button
-								label="Sync now"
-								icon="sync-outline"
-								loading={syncing}
-								onPress={() => {
-									setSyncing(true);
-									void syncClient
-										.syncNow()
-										.catch(() => undefined)
-										.then(refreshStatus)
-										.finally(() => {
-											setSyncing(false);
-										});
-								}}
-							/>
-						) : (
-							<Button
-								label="Connect to your server"
-								icon="sync-outline"
-								onPress={onConnect}
-							/>
-						)
-					}
-				>
-					{view === 'private'
-						? 'Nothing is saved in the private library yet. Choose Private when you save a link.'
-						: connected
-							? 'This phone is connected to your server, but the library has no sessions yet. Sessions saved in the TabLodge extension appear here after they sync. To save one from here, share several links from your browser to TabLodge.'
-							: 'Sessions saved in the TabLodge extension appear here once this phone is synced with your server. To save one from here, share several links from your browser to TabLodge.'}
-				</Empty>
-				<FloatingActions bottom={space} buttonLabel="Add links" onAdd={onAdd} />
-			</View>
+			<SessionsEmpty
+				connected={connected}
+				isPrivate={view === 'private'}
+				space={space}
+				onConnect={onConnect}
+				onAdd={onAdd}
+			/>
 		);
 	}
 
-	const chosen = shown.filter((session) => selection.ids.has(session.id));
-	const isAllSelected = shown.length > 0 && chosen.length === shown.length;
-	const allArchived = chosen.every((session) =>
-		isArchivedSession(store.folders, session),
+	const {chosen, isAllSelected, allArchived} = selectionOf(
+		shown,
+		selection.ids,
+		store.folders,
 	);
-	const plural = (count: number) =>
-		`${count} ${count === 1 ? 'session' : 'sessions'}`;
-	const deleteChosen = () => {
-		const gone = chosen;
-		if (gone.length === 0) {
-			return;
-		}
-
-		void edit((current) =>
-			applyAll(current, gone, (next, session) =>
-				removeSession(next, session.id, Date.now()),
-			),
-		);
-		void trashDeleted(gone.map((session) => ({kind: 'session', session})));
-		selection.stop();
-		showSnack(`Deleted ${plural(gone.length)}`, {
-			label: 'Undo',
-			run() {
-				void edit((current) =>
-					applyAll(current, gone, (next, session) =>
-						restoreSession(next, session, Date.now()),
-					),
-				);
-			},
-		});
-	};
-
-	// Sessions in the Archived folder come out of it when the whole selection is archived already, and go in otherwise.
-	const archiveChosen = () => {
-		// The button is off while nothing is picked.
-		void edit((current) =>
-			applyAll(current, chosen, (next, session) =>
-				allArchived
-					? unarchiveSession(next, session.id, Date.now())
-					: archiveSession(next, session.id, Date.now()),
-			),
-		);
-		selection.stop();
-		showSnack(
-			`${allArchived ? 'Unarchived' : 'Archived'} ${plural(chosen.length)}`,
-			{
-				label: 'Undo',
-				run() {
-					void edit((current) =>
-						applyAll(current, chosen, (next, session) =>
-							moveSession(next, session.id, session.folderId, Date.now()),
-						),
-					);
-				},
-			},
-		);
-	};
 
 	const subtitle =
 		searchCount ??
@@ -681,34 +333,15 @@ export function SessionsScreen({
 									)
 								}
 							/>
-							<View style={styles.pad}>
-								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-									<Chips
-										items={[
-											...folders.map((folder) => look(folder)),
-											{
-												id: NEW_FOLDER_CHIP,
-												name: 'New folder',
-												glyph: 'add' as const,
-												tint: colors.accent,
-											},
-										]}
-										selected={folderId}
-										onSelect={(id) => {
-											if (id === NEW_FOLDER_CHIP) {
-												setEditingFolder({});
-											} else {
-												setPicked(id);
-											}
-										}}
-										onLongPress={(id) => {
-											if (id !== NEW_FOLDER_CHIP) {
-												setFolderMenuId(id);
-											}
-										}}
-									/>
-								</ScrollView>
-							</View>
+							<FolderChips
+								folders={folders}
+								selected={folderId}
+								onSelect={setPicked}
+								onNewFolder={() => {
+									setEditingFolder({});
+								}}
+								onMenu={setFolderMenuId}
+							/>
 						</View>
 					}
 					ListEmptyComponent={
@@ -746,7 +379,7 @@ export function SessionsScreen({
 								onAct={act}
 								onMenu={openMenu}
 								onTabMenu={openTabMenu}
-								onTabAct={runTabAction}
+								onTabAct={runTabActionOn}
 							/>
 						</View>
 					)}
@@ -776,30 +409,14 @@ export function SessionsScreen({
 				folderId={renaming?.folderId}
 				onSave={(name, description, color, chosenFolderId) => {
 					if (renaming) {
-						void edit((current) => {
-							const renamed = describeSession(
-								renameSession(current, renaming.id, name, Date.now()),
-								renaming.id,
-								description ?? '',
-								Date.now(),
-							);
-							// Moved first, so a color chosen in the same save wins over the folder's.
-							const moved =
-								chosenFolderId && chosenFolderId !== renaming.folderId
-									? moveSession(
-											renamed,
-											renaming.id,
-											chosenFolderId,
-											Date.now(),
-										)
-									: renamed;
-							return setSessionColor(
-								moved,
-								renaming.id,
-								color ?? '',
-								Date.now(),
-							);
-						});
+						void edit((current) =>
+							saveSessionDetails(
+								current,
+								renaming,
+								{name, description, color, folderId: chosenFolderId},
+								Date.now,
+							),
+						);
 					}
 
 					setRenamingId(undefined);
@@ -856,91 +473,13 @@ export function SessionsScreen({
 					setBookmarking(undefined);
 				}}
 			/>
-			{selection.active && (
-				<ActionBar
-					actions={[
-						{
-							icon: 'albums-outline',
-							label: 'Open',
-							disabled: chosen.length === 0,
-							onPress() {
-								openAll(
-									chosen.flatMap((session) =>
-										session.tabs.map((tab) => linkToOpen(tab.url, links)),
-									),
-									plural(chosen.length),
-								);
-							},
-						},
-						{
-							icon: 'share-outline',
-							label: 'Share',
-							disabled: chosen.length === 0,
-							onPress() {
-								openShare({
-									title: plural(chosen.length),
-									data: {
-										kind: 'sessions',
-										groups: chosen,
-										folders: store.folders,
-									},
-								});
-							},
-						},
-						{
-							icon: 'folder-open-outline',
-							label: 'Move',
-							disabled: chosen.length === 0 || store.folders.length < 2,
-							onPress() {
-								setMovingSelected(true);
-							},
-						},
-						{
-							icon: allArchived ? 'arrow-undo-outline' : 'archive-outline',
-							label: allArchived ? 'Unarchive' : 'Archive',
-							color: colors.warn,
-							disabled: chosen.length === 0,
-							onPress: archiveChosen,
-						},
-						{
-							icon: 'trash-outline',
-							label: 'Delete',
-							color: colors.danger,
-							disabled: chosen.length === 0,
-							onPress: deleteChosen,
-						},
-					]}
-				/>
-			)}
-			<MoveSessionsSheet
-				visible={movingSelected}
-				count={chosen.length}
+			<SessionSelectionBar
+				active={selection.active}
+				chosen={chosen}
+				allArchived={allArchived}
 				folders={store.folders}
-				onPick={(target) => {
-					const ids = chosen.map((session) => session.id);
-					const was = new Map(
-						chosen.map((session) => [session.id, session.folderId]),
-					);
-					void edit((current) =>
-						applyAll(current, ids, (next, id) =>
-							moveSession(next, id, target, Date.now()),
-						),
-					);
-					selection.stop();
-					showSnack(`Moved ${plural(ids.length)}`, {
-						label: 'Undo',
-						run() {
-							void edit((current) =>
-								applyAll(current, ids, (next, id) =>
-									moveSession(next, id, was.get(id) ?? target, Date.now()),
-								),
-							);
-						},
-					});
-				}}
-				onClose={() => {
-					setMovingSelected(false);
-				}}
+				links={links}
+				stop={selection.stop}
 			/>
 			<FolderEditSheet
 				visible={editingFolder !== undefined}
@@ -979,84 +518,7 @@ function Gap() {
 }
 
 const styles = StyleSheet.create({
-	screen: {flex: 1},
 	list: {paddingBottom: 24, gap: 8},
-	pad: {paddingHorizontal: 16, gap: 12},
 	cardRow: {paddingHorizontal: 16},
 	gap: {height: 12},
 });
-
-/**
-The menu for one folder chip: sharing its links, and for a folder that can change, renaming and deleting it. Sessions of
-a deleted folder move to Unfiled.
-*/
-function folderMenuFor(
-	id: string,
-	store: Store,
-	folders: SessionFolderView[],
-	{
-		sort,
-		colors,
-		edit: editFolder,
-		removed,
-	}: {
-		sort: Settings['sessionSort'];
-		colors: Colors;
-		edit: (id: string) => void;
-		removed: (id: string) => void;
-	},
-): {title: string; actions: SheetAction[]} | undefined {
-	const view = folders.find((folder) => folder.id === id);
-	if (!view) {
-		return undefined;
-	}
-
-	const sessions = sessionsIn(store, id, sort);
-	const folder = store.folders.find((entry) => entry.id === id);
-	const actions: SheetAction[] = [];
-	actions.push({
-		icon: 'share-outline',
-		label: 'Share',
-		onPress() {
-			openShare({
-				title: view.name,
-				data: {kind: 'sessions', groups: sessions, folders: store.folders},
-			});
-		},
-	});
-
-	if (folder && canChangeFolder(folder)) {
-		actions.push(
-			{
-				icon: 'create-outline',
-				label: 'Edit folder',
-				color: colors.teal,
-				hint: 'Rename it, or change its icon and color',
-				onPress() {
-					editFolder(id);
-				},
-			},
-			{
-				icon: 'trash-outline',
-				label: 'Delete folder',
-				destructive: true,
-				onPress() {
-					const held = sessions.map((session) => session.id);
-					void edit((current) => deleteFolder(current, id, Date.now()));
-					void trashDeleted([{kind: 'folder', folder, sessionIds: held}]);
-					removed(id);
-					showSnack(`Deleted ${folder.name}`, {
-						label: 'Undo',
-						run() {
-							void edit((current) =>
-								restoreFolder(current, folder, held, Date.now()),
-							);
-						},
-					});
-				},
-			},
-		);
-	}
-
-	return {title: view.name, actions};
-}
