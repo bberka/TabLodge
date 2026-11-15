@@ -19,9 +19,13 @@ import {
 	DEFAULT_BOOKMARK_COLUMN_NAME,
 	landingColumnId,
 } from '../../../extension/src/shared/bookmark-rules';
-import {columnForUrl} from '../../../extension/src/shared/column-sites';
+import {
+	columnForUrl,
+	domainsField,
+} from '../../../extension/src/shared/column-sites';
 import type {DeviceStamp} from '../../../extension/src/shared/device';
 import {LAYOUT_VERSION} from '../../../extension/src/shared/library-index';
+import {normalizeNotes} from '../../../extension/src/shared/library-normalize';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
 
@@ -482,6 +486,32 @@ export function updateColumn(
 		...(edit.icon && {icon: edit.icon}),
 		...(isColumnColor(edit.color) && {color: edit.color}),
 	};
+	return {
+		...store,
+		bookmarkColumns: store.bookmarkColumns.map((column) =>
+			column.id === id ? changed : column,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
+Replaces the sites that file into a column. Each entry is normalized and repeats are dropped; an empty list removes the
+field, as in the extension. An unknown column leaves the store as it was.
+*/
+export function setColumnSites(
+	store: Store,
+	id: string,
+	sites: readonly string[],
+	now: number,
+): Store {
+	const current = store.bookmarkColumns.find((column) => column.id === id);
+	if (!current) {
+		return store;
+	}
+
+	const {domains: _domains, ...rest} = current;
+	const changed = {...rest, ...domainsField(sites)};
 	return {
 		...store,
 		bookmarkColumns: store.bookmarkColumns.map((column) =>
@@ -1314,39 +1344,67 @@ export function restoreSession(
 }
 
 /**
-Takes one tab out of a session.
-*/
-/**
-Changes the title and address of one saved tab. An address that is not a web address leaves the library as it was.
+Changes the title, notes, and address of one saved tab. An address that is not a web address leaves the library as it
+was. Like the extension, a new address belongs to this one saved link only, while a changed title or note is also
+written to every other saved copy of the same address.
 */
 export function updateSessionTab(
 	store: Store,
 	id: string,
 	tabId: string,
-	change: {title: string; url: string},
+	change: {title: string; url: string; notes?: string},
 	now: number,
 ): Store {
 	const url = extractUrl(change.url);
-	if (!url) {
+	const current = store.groups
+		.find((session) => session.id === id)
+		?.tabs.find((tab) => tab.id === tabId);
+	if (!url || !current) {
 		return store;
 	}
 
-	return changeSession(
-		store,
-		id,
-		(session) => ({
-			...session,
-			tabs: session.tabs.map((tab) =>
-				tab.id === tabId
-					? {...tab, url, title: change.title.trim().slice(0, 500) || url}
-					: tab,
-			),
-			updatedAt: now,
-		}),
-		now,
-	);
+	const title = change.title.trim().slice(0, 500) || url;
+	const notes =
+		change.notes === undefined ? undefined : normalizeNotes(change.notes);
+	if (url !== current.url) {
+		return changeSession(
+			store,
+			id,
+			(session) => ({
+				...session,
+				tabs: session.tabs.map((tab) =>
+					tab.id === tabId
+						? {...tab, url, title, notes: notes ?? tab.notes}
+						: tab,
+				),
+				updatedAt: now,
+			}),
+			now,
+		);
+	}
+
+	return {
+		...store,
+		groups: store.groups.map((session) =>
+			session.tabs.some((tab) => tab.url === current.url)
+				? {
+						...session,
+						tabs: session.tabs.map((tab) =>
+							tab.url === current.url
+								? {...tab, title, notes: notes ?? tab.notes}
+								: tab,
+						),
+						updatedAt: now,
+					}
+				: session,
+		),
+		updatedAt: now,
+	};
 }
 
+/**
+Takes one tab out of a session.
+*/
 export function removeSessionTab(
 	store: Store,
 	id: string,

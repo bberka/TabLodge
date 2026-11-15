@@ -13,9 +13,10 @@ import {
 	type SyncStatus,
 } from '../../../extension/src/shared/sync/client';
 import {
+	disconnectPrivate,
 	editPrivate,
+	reconnectPrivate,
 	usePrivateStore,
-	wakePrivate,
 } from '../private/private-library';
 import {getPreferences} from '../settings/preferences';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
@@ -178,7 +179,16 @@ export async function connectServer(
 
 	const status = await syncClient.connect(url, token);
 	// A private library on this phone starts syncing through the same connection.
-	void wakePrivate();
+	void reconnectPrivate();
+	return status;
+}
+
+/**
+Disconnects from the server. The private library stops syncing with it too; both libraries stay on the phone.
+*/
+export async function disconnectServer(): Promise<SyncStatus> {
+	const status = await syncClient.disconnect();
+	await disconnectPrivate();
 	return status;
 }
 

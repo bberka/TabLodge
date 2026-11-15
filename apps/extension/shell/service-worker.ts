@@ -1,5 +1,5 @@
 import {stripTrackingParameters} from '../src/shared/tracking-parameters';
-import {columnForUrl} from '../src/shared/column-sites';
+import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {
 	BACKUP_FORMAT_ID,
 	BACKUP_VERSION,
@@ -38,7 +38,6 @@ import {
 	bookmarkTitleIsUrl,
 	cleanText,
 	colorField,
-	domainsField,
 	fallbackBookmarkTitle,
 	findOrAddArchivedFolder,
 	folderEntriesWithArchive,

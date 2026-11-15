@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {
 	FileTooLargeError,
 	pickBinaryFile,
@@ -10,7 +10,12 @@ import {showSnack} from '../../ui/snackbar';
 import {useView} from '../../library/view';
 import {ActionSheet} from '../../ui/action-sheet';
 import {Button} from '../../ui/ui';
-import {RestoreSheet, type RestoreSource} from '../transfer/restore-sheet';
+import {readSafetyCopy} from '../../transfer/restore';
+import {
+	RestoreSheet,
+	type RestoreSource,
+	undoRestore,
+} from '../transfer/restore-sheet';
 import {StatisticsSheet} from '../transfer/statistics-sheet';
 import {
 	ShareSheet,
@@ -34,6 +39,14 @@ export function DataCard() {
 	const [statistics, setStatistics] = useState(false);
 	const store = useLibrary();
 	const view = useView();
+	const [canUndo, setCanUndo] = useState(false);
+	useEffect(() => {
+		if (menu === 'transfer') {
+			void readSafetyCopy(view).then((copy) => {
+				setCanUndo(copy !== undefined);
+			});
+		}
+	}, [menu, view]);
 	const erase = (what: Erasing) => {
 		const target = view === 'private' ? 'the private library' : 'the library';
 		const label =
@@ -44,7 +57,7 @@ export function DataCard() {
 					: 'bookmarks';
 		confirm(
 			`Erase all ${label}?`,
-			`Every ${what === 'everything' ? 'session and bookmark' : what === 'sessions' ? 'session' : 'bookmark'} in ${target} on this phone is deleted. Settings are kept. With a server connected they are deleted there too. This cannot be undone.`,
+			`Every ${what === 'everything' ? 'session and bookmark' : what === 'sessions' ? 'session' : 'bookmark'} in ${target} on this phone is deleted. Settings are kept. With a server connected they are deleted there too. They do not go to the trash, and what is already in the trash stays there. This cannot be undone.`,
 			{label: 'Erase', destructive: true},
 			() => {
 				void edit((current) => ({
@@ -161,6 +174,18 @@ export function DataCard() {
 							void pickBackup();
 						},
 					},
+					...(canUndo
+						? [
+								{
+									icon: 'arrow-undo-outline' as const,
+									label: 'Undo the last restore',
+									hint: 'Puts back what it replaced',
+									onPress() {
+										void undoRestore(view);
+									},
+								},
+							]
+						: []),
 					{
 						icon: 'stats-chart-outline',
 						label: 'Statistics',

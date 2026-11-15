@@ -413,11 +413,15 @@ export function Switch({
 	onValueChange,
 	label,
 	hint,
+	accessibilityActions,
+	onAccessibilityAction,
 }: {
 	value: boolean;
 	onValueChange: (value: boolean) => void;
 	label: string;
 	hint?: string;
+	accessibilityActions?: Array<{name: string; label: string}>;
+	onAccessibilityAction?: () => void;
 }) {
 	const colors = useColors();
 	const shape = useShape();
@@ -428,10 +432,12 @@ export function Switch({
 				accessibilityLabel={label}
 				accessibilityHint={hint}
 				accessibilityState={{checked: value}}
+				accessibilityActions={accessibilityActions}
 				style={[
 					styles.iosTrack,
 					{backgroundColor: value ? '#34c759' : colors.border},
 				]}
+				onAccessibilityAction={onAccessibilityAction}
 				onPress={() => {
 					onValueChange(!value);
 				}}
@@ -450,6 +456,7 @@ export function Switch({
 		<NativeSwitch
 			accessibilityLabel={label}
 			accessibilityHint={hint}
+			accessibilityActions={accessibilityActions}
 			value={value}
 			trackColor={{
 				true: shape.ios ? '#34c759' : colors.accent,
@@ -462,6 +469,7 @@ export function Switch({
 						: colors.muted
 					: undefined
 			}
+			onAccessibilityAction={onAccessibilityAction}
 			onValueChange={onValueChange}
 		/>
 	);

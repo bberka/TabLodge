@@ -50,17 +50,35 @@ import {
 	writeJson,
 } from '../platform/storage';
 import {setView} from '../library/view';
+import {PRIVATE_TRASH_KEY} from '../library/trash';
+import {dropSafetyCopy} from '../transfer/restore';
 
 const LIBRARY_KEY = 'tablodge.private.library';
 const ON_KEY = 'tablodge.private.on';
 const LOCK_KEY = 'tablodge.private.lock';
+// Where the data key waits, in the Android keystore, after the PIN was removed. See `Kept`.
+const KEPT_KEY = 'tablodge.private.keptKey';
 const prefix = (key: string) => `tablodge.private.${key}`;
 
 /**
 What protects the library: the data key, wrapped by a PIN or password. `kind` is missing when the key came from the
 server, whose copy does not say which it is.
 */
-type Lock = {id: string; wrapped: string; kind?: CredentialKind};
+type Lock = {
+	id: string;
+	wrapped: string;
+	kind?: CredentialKind;
+	/**
+	The PIN or password was changed here and the server still holds the old wrapped copy. The next round sends it.
+	*/
+	unsent?: true;
+};
+
+/**
+The data key of a library whose PIN or password was removed, so that it can keep syncing with a server that holds it
+sealed. It sits in the Android keystore, which is where the server token lives too.
+*/
+type Kept = {id: string; wrapped: string; raw: string};
 
 const core = createLibraryCore(LIBRARY_KEY);
 let status: SyncStatus = SYNC_OFF;
@@ -68,6 +86,7 @@ let client: ReturnType<typeof createSyncClient> | undefined;
 // Whether this phone has a private library at all.
 let exists = false;
 let lock: Lock | undefined;
+let kept: Kept | undefined;
 // The data key, base64, while a protected library is unlocked.
 let unlockedKey: string | undefined;
 // The key values are sealed with on the server, for the current round; none while the server's library is not sealed.
@@ -116,6 +135,14 @@ const refreshState = () => {
 	notify();
 };
 
+const parseKept = (value: unknown): Kept | undefined =>
+	isRecord(value) &&
+	typeof value.id === 'string' &&
+	typeof value.wrapped === 'string' &&
+	typeof value.raw === 'string'
+		? {id: value.id, wrapped: value.wrapped, raw: value.raw}
+		: undefined;
+
 const parseLock = (value: unknown): Lock | undefined =>
 	isRecord(value) &&
 	typeof value.id === 'string' &&
@@ -126,6 +153,7 @@ const parseLock = (value: unknown): Lock | undefined =>
 				...((value.kind === 'pin' || value.kind === 'password') && {
 					kind: value.kind,
 				}),
+				...(value.unsent === true && {unsent: true as const}),
 			}
 		: undefined;
 
@@ -146,6 +174,9 @@ async function target(): Promise<{url: string; token: string} | undefined> {
 		: undefined;
 }
 
+const serverKeyText = (held: {id: string; wrapped: string}) =>
+	JSON.stringify({v: 1, id: held.id, wrapped: held.wrapped});
+
 const codec: SyncCodec = {
 	async prepare(call) {
 		const body = await call('/v1/key');
@@ -158,17 +189,19 @@ const codec: SyncCodec = {
 			);
 		}
 
+		const held = lock ?? kept;
 		if (!server) {
 			// The server's library has no key yet. A protected library puts its own there, and from then on the server
 			// holds sealed values only.
-			if (lock && unlockedKey) {
+			if (held && unlockedKey) {
 				await call('/v1/key', {
 					method: 'POST',
-					body: JSON.stringify({
-						key: JSON.stringify({v: 1, id: lock.id, wrapped: lock.wrapped}),
-						previous: null,
-					}),
+					body: JSON.stringify({key: serverKeyText(held), previous: null}),
 				});
+				if (lock?.unsent) {
+					await setLock({...lock, unsent: undefined});
+				}
+
 				syncKey = unlockedKey;
 			} else {
 				syncKey = undefined;
@@ -178,13 +211,34 @@ const codec: SyncCodec = {
 		}
 
 		// The server's library is protected by a key this phone does not hold.
-		if (lock?.id !== server.id || !unlockedKey) {
+		if (held?.id !== server.id || !unlockedKey) {
 			throw new SyncError('key', NEEDS_KEY_MESSAGE);
 		}
 
-		// Another device changed its PIN or password and rewrapped the same key.
-		if (lock.wrapped !== server.wrapped) {
-			await setLock({...lock, wrapped: server.wrapped});
+		if (held.wrapped !== server.wrapped) {
+			if (lock?.unsent) {
+				// The PIN or password was changed here, perhaps while offline. The server's copy is replaced, unless another
+				// device changed it first, and then that device's wins.
+				try {
+					await call('/v1/key', {
+						method: 'POST',
+						body: JSON.stringify({key: serverKeyText(lock), previous: stored}),
+					});
+					await setLock({...lock, unsent: undefined});
+				} catch (error) {
+					if (!(error instanceof SyncError) || error.kind !== 'server') {
+						throw error;
+					}
+
+					await setLock({id: lock.id, wrapped: server.wrapped});
+				}
+			} else if (lock) {
+				// Another device changed its PIN or password and rewrapped the same key.
+				await setLock({...lock, wrapped: server.wrapped});
+			} else if (kept) {
+				kept = {...kept, wrapped: server.wrapped};
+				await writeJson(KEPT_KEY, kept);
+			}
 		}
 
 		syncKey = unlockedKey;
@@ -303,6 +357,8 @@ export async function startPrivate(): Promise<void> {
 		await removeKeys([PRIVATE_KEY_KEY]);
 	}
 
+	kept = lock ? undefined : parseKept(await readJson(KEPT_KEY));
+	unlockedKey = kept?.raw;
 	const saved = await readJson(LIBRARY_KEY);
 	if (isStore(saved)) {
 		core.load(saved);
@@ -342,24 +398,102 @@ export async function setupPrivate(credential?: Credential): Promise<void> {
 }
 
 async function protect(credential: Credential): Promise<void> {
-	const key = generateKey();
+	// A library whose PIN was removed takes the same key back, so the server's copy stays readable.
+	const key = kept?.raw ?? generateKey();
 	await setLock({
-		id: randomUUID(),
+		id: kept?.id ?? randomUUID(),
 		wrapped: await wrapKey(key, credential.value),
 		kind: credential.kind,
+		...(kept && {unsent: true as const}),
 	});
 	unlockedKey = key;
+	if (!kept) {
+		return;
+	}
+
+	kept = undefined;
+	await removeKeys([KEPT_KEY]);
 }
 
 /**
 Puts a PIN or password on a library that has none. The next sync gives the server the same lock.
 */
 export async function protectPrivate(credential: Credential): Promise<void> {
+	const again = kept !== undefined;
 	await protect(credential);
 	stopClient();
 	refreshState();
 	runClient();
+	if (!again) {
+		// What this library already sent the server is plain there. Every record goes again, sealed with the new key.
+		await client?.resendAll().catch(() => undefined);
+	}
+
 	await refreshPrivateStatus();
+}
+
+export type ChangeResult = 'ok' | 'wrong' | 'error';
+
+/**
+Wraps the same data key with a new PIN or password, so nothing is encrypted again. The server's copy follows on the next
+round, and other devices keep working with their own copy of the key.
+*/
+export async function changePrivateLock(
+	current: string,
+	next: Credential,
+): Promise<ChangeResult> {
+	if (!lock || !unlockedKey) {
+		return 'error';
+	}
+
+	try {
+		const key = await unwrapKey(lock.wrapped, current);
+		if (key === null) {
+			return 'wrong';
+		}
+
+		await setLock({
+			id: lock.id,
+			wrapped: await wrapKey(key, next.value),
+			kind: next.kind,
+			unsent: true,
+		});
+	} catch {
+		return 'error';
+	}
+
+	refreshState();
+	await client?.syncNow().catch(() => undefined);
+	await refreshPrivateStatus();
+	return 'ok';
+}
+
+/**
+Takes the PIN or password off the library, which then opens without one. The data key stays in the keystore, so a
+library that syncs sealed with a server keeps doing so.
+*/
+export async function removePrivateLock(
+	current: string,
+): Promise<ChangeResult> {
+	if (!lock || !unlockedKey) {
+		return 'error';
+	}
+
+	try {
+		const key = await unwrapKey(lock.wrapped, current);
+		if (key === null) {
+			return 'wrong';
+		}
+
+		kept = {id: lock.id, wrapped: lock.wrapped, raw: key};
+		await writeJson(KEPT_KEY, kept);
+		await setLock(undefined);
+	} catch {
+		return 'error';
+	}
+
+	refreshState();
+	return 'ok';
 }
 
 export type UnlockResult = 'ok' | 'wrong' | 'error';
@@ -413,15 +547,19 @@ export async function removePrivate(): Promise<void> {
 	exists = false;
 	unlockedKey = undefined;
 	lock = undefined;
+	kept = undefined;
 	await removeKeys([
 		ON_KEY,
 		LOCK_KEY,
+		KEPT_KEY,
 		LIBRARY_KEY,
+		PRIVATE_TRASH_KEY,
 		PRIVATE_KEY_KEY,
 		prefix('tablodge.sync.state'),
 		prefix('tablodge.sync.status'),
 	]);
 	core.load(emptyStore(Date.now()));
+	await dropSafetyCopy('private');
 	refreshState();
 	await refreshPrivateStatus();
 }
@@ -473,7 +611,7 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 
 	try {
 		const server = await serverKey(to);
-		if (server && lock?.id !== server.id) {
+		if (server && (lock ?? kept)?.id !== server.id) {
 			if (credential === undefined) {
 				return {ok: false, reason: 'credential'};
 			}
@@ -491,6 +629,8 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 			}
 
 			await setLock({id: server.id, wrapped: server.wrapped});
+			kept = undefined;
+			await removeKeys([KEPT_KEY]);
 			unlockedKey = key;
 			stopClient();
 		} else if (!exists) {
@@ -553,6 +693,30 @@ export async function applyPrivateSyncSetting(): Promise<void> {
 	}
 }
 
+/**
+Starts the private library's sync over a server that was just connected or changed. The sync client reads the server
+address once, so the one made before the server was there is dropped.
+*/
+export async function reconnectPrivate(): Promise<void> {
+	stopClient();
+	runClient();
+	await client?.wake().catch(() => undefined);
+	await refreshPrivateStatus();
+}
+
+/**
+Ends the private library's sync when the server is disconnected: the sync position goes, so a server connected later
+gets the whole library again. The library on the phone stays.
+*/
+export async function disconnectPrivate(): Promise<void> {
+	stopClient();
+	await removeKeys([
+		prefix('tablodge.sync.state'),
+		prefix('tablodge.sync.status'),
+	]);
+	await refreshPrivateStatus();
+}
+
 export async function pausePrivate(): Promise<void> {
 	await client?.pause().catch(() => undefined);
 }
@@ -562,6 +726,10 @@ export async function wakePrivate(): Promise<void> {
 	await client?.wake().catch(() => undefined);
 	await refreshPrivateStatus();
 }
+
+export const getPrivateStore = (): Store => core.store;
+
+export const getPrivateStatus = (): SyncStatus => status;
 
 export const usePrivateStore = () =>
 	useSyncExternalStore(core.subscribe, () => core.store);

@@ -22,9 +22,10 @@ import {hostIsExcluded} from '../../../../extension/src/shared/excluded-sites';
 import {LibraryChoice} from '../../library/library-choice';
 import {useView} from '../../library/view';
 import {getPreferences, setPreferences} from '../../settings/preferences';
+import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
-import {Button, Chips, Field, IconButton, Segmented} from '../../ui/ui';
+import {Button, Chips, Field, Segmented} from '../../ui/ui';
 
 type Mode = 'bookmarks' | 'session' | 'existing';
 
@@ -130,21 +131,12 @@ export function SaveLinksForm({
 
 	return (
 		<View style={styles.screen}>
-			<View style={styles.top}>
-				<Text
-					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
-				>
-					{entry ? 'Add links' : `${urls.length} links shared`}
-				</Text>
-				<IconButton
-					icon="close"
-					label="Close"
-					onPress={() => {
-						onDone();
-					}}
-				/>
-			</View>
+			<SheetHeader
+				title={entry ? 'Add links' : `${urls.length} links shared`}
+				onClose={() => {
+					onDone();
+				}}
+			/>
 			{skipped > 0 && (
 				<Text
 					accessibilityLiveRegion="polite"
@@ -237,14 +229,6 @@ export function SaveLinksForm({
 
 const styles = StyleSheet.create({
 	screen: {flexShrink: 1},
-	top: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingLeft: 20,
-		paddingRight: 8,
-	},
-	title: {fontSize: 20, fontWeight: '700'},
 	scroll: {flexGrow: 0},
 	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},

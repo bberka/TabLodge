@@ -1000,7 +1000,7 @@ const EXCLUDED = {
 	words: ['exclude', 'ignore', 'site', 'origin', 'host', 'domain', 'Add site'],
 };
 const DEFAULTS = {
-	title: 'Restore default preferences',
+	title: 'Restore default settings',
 	help: 'Saved sessions and bookmarks are not changed.',
 	words: ['Restore defaults', 'reset', 'factory'],
 };
@@ -1560,12 +1560,32 @@ function Options() {
 		const values = Object.fromEntries(
 			changed.map((field) => [field.name, defaultSettings[field.name]]),
 		);
+		const before = Object.fromEntries(
+			changed
+				.filter((field) => settings[field.name] !== undefined)
+				.map((field) => [field.name, settings[field.name]]),
+		);
 		setSettings((current) => ({...current, ...values}));
 		savesInFlightRef.current += 1;
 		try {
 			const result = await send('UPDATE_SETTINGS', {settings: values});
 			if (result?.ok) {
-				showStatus(`Restored ${title} to its defaults.`);
+				showStatus(`Restored ${title} to its defaults.`, false, {
+					action: {
+						label: 'Undo',
+						async onClick() {
+							setSettings((current) => ({...current, ...before}));
+							const undone = await send('UPDATE_SETTINGS', {settings: before});
+							if (undone?.ok) {
+								showStatus(`Undone: restored ${title}.`, false, {toast: true});
+							} else {
+								showStatus(undone?.error || 'Could not undo that.', true);
+							}
+
+							await reload();
+						},
+					},
+				});
 			} else {
 				showStatus(result?.error || 'Could not save those settings.', true);
 			}
@@ -2441,8 +2461,8 @@ function Options() {
 			)}
 			<ConfirmationDialog
 				open={confirmDefaults}
-				title="Restore default preferences?"
-				description="Your preferences go back to their defaults. Sessions and bookmarks are kept, and you can undo this right after."
+				title="Restore default settings?"
+				description="Your settings go back to their defaults. Sessions and bookmarks are kept, and you can undo this right after."
 				confirmLabel="Restore defaults"
 				busy={resetBusy}
 				onOpenChange={setConfirmDefaults}

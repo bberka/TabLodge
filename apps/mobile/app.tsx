@@ -14,6 +14,7 @@ import {BottomSheet} from './src/ui/bottom-sheet';
 import {extractUrls, splitShared} from './src/library/library';
 import {runBackAction} from './src/ui/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library/library-store';
+import {purgeTrash} from './src/library/trash-store';
 import {startPreferencesSync} from './src/settings/preferences-sync';
 import {markActive, startPrivateAutoLock} from './src/private/private-autolock';
 import {ShareHost} from './src/screens/transfer/transfer-sheets';
@@ -23,6 +24,7 @@ import {
 	wakePrivate,
 } from './src/private/private-library';
 import {loadPreferences} from './src/settings/preferences';
+import {usePendingJump} from './src/library/jump';
 import {BookmarksScreen} from './src/screens/bookmarks/bookmarks';
 import {ConnectSheet} from './src/screens/settings/connect-sheet';
 import {SaveLinkForm} from './src/screens/save/save-link';
@@ -87,6 +89,13 @@ function Main() {
 		quick: false,
 	});
 	const [open, setOpen] = useState(false);
+	// A search result that leads to a session or column opens that screen.
+	const jump = usePendingJump();
+	useEffect(() => {
+		if (jump) {
+			setTab(jump.screen);
+		}
+	}, [jump]);
 	// The connect drawer is here so an empty screen and Settings can both open it.
 	const [connecting, setConnecting] = useState(false);
 	const connect = useCallback(() => {
@@ -119,6 +128,7 @@ function Main() {
 		void loadPreferences()
 			.then(startLibrary)
 			.then(startPrivate)
+			.then(purgeTrash)
 			.then(startPreferencesSync);
 		const subscription = AppState.addEventListener('change', (state) => {
 			// Behind other apps, the live connection and its timers stop; in front they resume and catch up.

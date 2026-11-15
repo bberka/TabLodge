@@ -21,6 +21,7 @@ import {
 	updateBookmark,
 	addBookmarks,
 	deleteColumn,
+	setColumnSites,
 	updateColumn,
 	addSession,
 	moveBookmark,
@@ -534,6 +535,30 @@ describe('editing columns', () => {
 		assert.equal(column(bad, 'c1')?.color, undefined);
 	});
 
+	test("setting a column's sites normalizes them, drops repeats, and an empty list removes the field", () => {
+		const store = build();
+		const changed = setColumnSites(
+			store,
+			'c1',
+			[
+				'https://www.GitHub.com/bberka/',
+				'github.com/bberka',
+				'news.example',
+				'junk',
+			],
+			NOW + 1,
+		);
+		assert.deepEqual(column(changed, 'c1')?.domains, [
+			'github.com/bberka',
+			'news.example',
+		]);
+		assert.equal(column(changed, 'c1')?.name, column(store, 'c1')?.name);
+		assert.equal(changed.updatedAt, NOW + 1);
+		const cleared = setColumnSites(changed, 'c1', [], NOW + 2);
+		assert.equal('domains' in (column(cleared, 'c1') ?? {}), false);
+		assert.equal(setColumnSites(store, 'missing', ['a.example'], NOW), store);
+	});
+
 	test('a name that is empty, reserved, or taken is refused', () => {
 		const store = build();
 		assert.match(
@@ -861,6 +886,75 @@ describe('editing a saved tab', () => {
 			updateSessionTab(store, 's1', 't1', {title: 'x', url: 'nope'}, NOW),
 			store,
 		);
+	});
+});
+
+describe('saved tab notes', () => {
+	const withTwoCopies = () => {
+		let store = emptyStore(NOW);
+		store = {
+			...store,
+			groups: ['s1', 's2'].map((id) => ({
+				id,
+				name: id,
+				tabs: [
+					{
+						id: `${id}-t`,
+						url: 'https://a.example/page',
+						title: 'Old',
+						notes: '',
+					},
+				],
+			})) as unknown as typeof store.groups,
+		};
+		return store;
+	};
+
+	test('a changed note and title reach every copy of the same address', () => {
+		const changed = updateSessionTab(
+			withTwoCopies(),
+			's1',
+			's1-t',
+			{title: 'New', url: 'https://a.example/page', notes: 'read later'},
+			NOW + 1,
+		);
+		for (const group of changed.groups) {
+			assert.equal(group.tabs[0].notes, 'read later');
+			assert.equal(group.tabs[0].title, 'New');
+			assert.equal(group.updatedAt, NOW + 1);
+		}
+	});
+
+	test('a new address belongs to this one tab only', () => {
+		const changed = updateSessionTab(
+			withTwoCopies(),
+			's1',
+			's1-t',
+			{title: 'New', url: 'https://b.example/', notes: 'moved'},
+			NOW + 1,
+		);
+		assert.equal(changed.groups[0].tabs[0].url, 'https://b.example/');
+		assert.equal(changed.groups[0].tabs[0].notes, 'moved');
+		assert.equal(changed.groups[1].tabs[0].notes, '');
+		assert.equal(changed.groups[1].tabs[0].title, 'Old');
+	});
+
+	test('leaving the notes out keeps them', () => {
+		const store = updateSessionTab(
+			withTwoCopies(),
+			's1',
+			's1-t',
+			{title: 'Old', url: 'https://a.example/page', notes: 'keep'},
+			NOW,
+		);
+		const kept = updateSessionTab(
+			store,
+			's1',
+			's1-t',
+			{title: 'Other', url: 'https://a.example/page'},
+			NOW + 1,
+		);
+		assert.equal(kept.groups[0].tabs[0].notes, 'keep');
 	});
 });
 

@@ -33,6 +33,7 @@ import {
 	useLibrary,
 	useSyncStatus,
 } from '../../library/library-store';
+import {trashDeleted} from '../../library/trash-store';
 import {linkToOpen} from '../../library/links';
 import {openAll, openLink} from '../../platform/open-links';
 import {useLinkSettings} from '../../library/use-link-settings';
@@ -45,6 +46,8 @@ import {syncPrivate} from '../../private/private-library';
 import {useSelection} from '../../ui/use-selection';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
+import {takeJump, usePendingJump} from '../../library/jump';
+import {SearchElsewhere} from '../search-elsewhere';
 import {
 	FloatingActions,
 	ROOM_FOR_BUTTONS,
@@ -144,6 +147,19 @@ export function BookmarksScreen({
 			: hasPicked
 				? picked
 				: (columns[0]?.id ?? '');
+	// A result of the search on Sessions that points at a column: show that column.
+	const pending = usePendingJump();
+	useEffect(() => {
+		const jump = takeJump('bookmarks');
+		if (!jump) {
+			return;
+		}
+
+		search.close();
+		setPicked(jump.columnId);
+		// `search` is a fresh object each render; only the jump matters.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [pending]);
 	const isSearching = query.trim().length > 0;
 	const shown = useMemo(
 		() =>
@@ -244,6 +260,7 @@ export function BookmarksScreen({
 		}
 
 		void edit((current) => removeBookmarks(current, ids, Date.now()));
+		void trashDeleted(gone.map((entry) => ({kind: 'bookmark', ...entry})));
 		selection.stop();
 		showSnack(
 			gone.length === 1
@@ -593,6 +610,15 @@ export function BookmarksScreen({
 							)}
 						</View>
 					</View>
+				}
+				ListFooterComponent={
+					<SearchElsewhere
+						store={store}
+						query={query}
+						here="bookmarks"
+						localCount={shown.length}
+						onJump={search.close}
+					/>
 				}
 				ListEmptyComponent={
 					isSearching ? (

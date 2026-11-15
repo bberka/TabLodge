@@ -280,6 +280,8 @@ export function SearchDock({
 		>
 			<Icon name="search" size={22} color={colors.muted} />
 			<Animated.View
+				// The small pill is one button, so the hidden input stays out of TalkBack's way.
+				importantForAccessibility={small ? 'no-hide-descendants' : 'auto'}
 				style={[
 					styles.inputBox,
 					{

@@ -21,6 +21,7 @@ Paths below are relative to `apps/site/`.
 | --- | --- |
 | `src/pages/index.astro` | Main page, features, FAQ, and structured data |
 | `src/pages/alternatives.astro` | Comparison with OneTab, Session Buddy, and Toby |
+| `src/pages/alternatives/android.astro` | Android app compared with Raindrop.io, Linkwarden, Karakeep, wallabag, and Instapaper, with a dated source list |
 | `src/pages/privacy.astro` | Website and extension privacy policy |
 | `src/pages/terms.astro` | Terms of use, linked from the footer and the Google OAuth consent screen |
 | `src/pages/404.astro` | Page not found |

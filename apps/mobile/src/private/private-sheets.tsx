@@ -15,17 +15,20 @@ import {useColors} from '../ui/theme';
 import {Button, Field, Segmented} from '../ui/ui';
 import {setView} from '../library/view';
 import {
+	changePrivateLock,
 	openFromServer,
 	protectPrivate,
+	removePrivateLock,
 	setupPrivate,
 	unlockPrivate,
 } from './private-library';
 
 /**
-Which private library drawer is open: make the library, open it with its PIN, bring in the server's, or add a PIN to one
-that has none.
+Which private library drawer is open: make the library, open it with its PIN, bring in the server's, add a PIN to one
+that has none, or change or remove the PIN it has.
 */
-export type PrivateSheet = 'setup' | 'unlock' | 'server' | 'protect';
+export type PrivateSheet =
+	'setup' | 'unlock' | 'server' | 'protect' | 'change' | 'remove';
 
 let current: PrivateSheet | undefined;
 const listeners = new Set<() => void>();
@@ -66,6 +69,8 @@ export function PrivateSheetHost() {
 		>
 			{open === 'setup' && <SetupForm withNone onDone={close} />}
 			{open === 'protect' && <SetupForm onDone={close} />}
+			{open === 'change' && <SetupForm changing onDone={close} />}
+			{open === 'remove' && <RemoveForm onDone={close} />}
 			{open === 'unlock' && <UnlockForm onDone={close} />}
 			{open === 'server' && <ServerForm onDone={close} />}
 		</BottomSheet>
@@ -97,15 +102,19 @@ is asked for twice.
 */
 function SetupForm({
 	withNone = false,
+	changing = false,
 	onDone,
 }: {
 	withNone?: boolean;
+	changing?: boolean;
 	onDone: () => void;
 }) {
 	const colors = useColors();
 	const [lock, setLock] = useState<Lock>(withNone ? 'none' : 'pin');
 	const [value, setValue] = useState('');
 	const [again, setAgain] = useState('');
+	const [currentValue, setCurrentValue] = useState('');
+	const [wrong, setWrong] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const kind = lock === 'none' ? undefined : lock;
 	const problem = kind
@@ -113,12 +122,26 @@ function SetupForm({
 		: undefined;
 	const mismatch = kind !== undefined && again !== '' && again !== value;
 	const ready =
-		kind === undefined || (value !== '' && !problem && again === value);
+		(!changing || currentValue !== '') &&
+		(kind === undefined || (value !== '' && !problem && again === value));
 
 	const run = async () => {
 		setBusy(true);
 		try {
-			if (withNone) {
+			if (changing && kind) {
+				const result = await changePrivateLock(currentValue, {kind, value});
+				if (result === 'wrong') {
+					setWrong(true);
+					return;
+				}
+
+				if (result === 'error') {
+					notify('Could not change it', 'Try again.');
+					return;
+				}
+
+				showSnack('The PIN or password was changed');
+			} else if (withNone) {
 				await setupPrivate(kind ? {kind, value} : undefined);
 				setView('private');
 			} else if (kind) {
@@ -137,13 +160,35 @@ function SetupForm({
 	return (
 		<View style={styles.body}>
 			<Title>
-				{withNone ? 'Set up the private library' : 'Add a PIN or password'}
+				{withNone
+					? 'Set up the private library'
+					: changing
+						? 'Change the PIN or password'
+						: 'Add a PIN or password'}
 			</Title>
 			<Note>
 				{withNone
 					? 'A library of its own on this phone. It works without a server, and syncs with your private windows when you connect one.'
-					: 'It locks the library on this phone, and protects it on your server.'}
+					: changing
+						? 'The library keeps its data and its key. Other devices keep working, and a new one needs the new PIN or password.'
+						: 'It locks the library on this phone, and protects it on your server.'}
 			</Note>
+			{changing && (
+				<Field
+					secureTextEntry
+					autoFocus
+					label="Current PIN or password"
+					icon="lock-closed-outline"
+					value={currentValue}
+					autoCapitalize="none"
+					autoCorrect={false}
+					error={wrong ? 'That PIN or password is wrong.' : undefined}
+					onChangeText={(text) => {
+						setCurrentValue(text);
+						setWrong(false);
+					}}
+				/>
+			)}
 			<Segmented
 				label="Protect it with"
 				items={[
@@ -204,7 +249,13 @@ function SetupForm({
 				</>
 			)}
 			<Button
-				label={withNone ? 'Create the private library' : 'Add the lock'}
+				label={
+					withNone
+						? 'Create the private library'
+						: changing
+							? 'Change it'
+							: 'Add the lock'
+				}
 				icon="checkmark"
 				disabled={!ready}
 				loading={busy}
@@ -257,6 +308,62 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 			<Button
 				label="Unlock"
 				icon="lock-open-outline"
+				disabled={value === ''}
+				loading={busy}
+				onPress={() => void run()}
+			/>
+		</View>
+	);
+}
+
+/**
+Takes the PIN or password off the library, after asking for it once more.
+*/
+function RemoveForm({onDone}: {onDone: () => void}) {
+	const [value, setValue] = useState('');
+	const [problem, setProblem] = useState<string>();
+	const [busy, setBusy] = useState(false);
+	const run = async () => {
+		setBusy(true);
+		const result = await removePrivateLock(value);
+		setBusy(false);
+		if (result === 'ok') {
+			showSnack('The private library opens without a PIN or password now');
+			onDone();
+		} else {
+			setProblem(
+				result === 'wrong'
+					? 'That PIN or password is wrong.'
+					: 'Could not remove it. Try again.',
+			);
+		}
+	};
+
+	return (
+		<View style={styles.body}>
+			<Title>Remove the PIN or password</Title>
+			<Note>
+				Anyone who opens this phone can then open the private library. Your
+				server keeps its copy sealed, and this phone keeps the key for it.
+			</Note>
+			<Field
+				secureTextEntry
+				autoFocus
+				label="Current PIN or password"
+				icon="lock-closed-outline"
+				value={value}
+				autoCapitalize="none"
+				autoCorrect={false}
+				error={problem}
+				onChangeText={(text) => {
+					setValue(text);
+					setProblem(undefined);
+				}}
+			/>
+			<Button
+				label="Remove it"
+				icon="lock-open-outline"
+				kind="danger"
 				disabled={value === ''}
 				loading={busy}
 				onPress={() => void run()}

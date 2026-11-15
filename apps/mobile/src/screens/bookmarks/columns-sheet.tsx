@@ -1,5 +1,5 @@
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
-import {BottomSheet} from '../../ui/bottom-sheet';
+import {BottomSheet, SheetHeader} from '../../ui/bottom-sheet';
 import {columnGlyph, useChipLook} from '../../ui/column-icons';
 import {moveColumn} from '../../library/library';
 import {edit, useLibrary} from '../../library/library-store';
@@ -46,15 +46,7 @@ export function ColumnsSheet({
 			label="Columns"
 			onClose={onClose}
 		>
-			<View style={styles.top}>
-				<Text
-					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
-				>
-					Columns
-				</Text>
-				<IconButton icon="close" label="Close" onPress={onClose} />
-			</View>
+			<SheetHeader title="Columns" onClose={onClose} />
 			<ScrollView
 				style={styles.list}
 				contentContainerStyle={styles.content}
@@ -149,14 +141,6 @@ export function ColumnsSheet({
 }
 
 const styles = StyleSheet.create({
-	top: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingLeft: 20,
-		paddingRight: 8,
-	},
-	title: {fontSize: 20, fontWeight: '700'},
 	list: {flexGrow: 0, flexShrink: 1},
 	content: {paddingHorizontal: 12, paddingVertical: 4},
 	row: {flexDirection: 'row', alignItems: 'center'},

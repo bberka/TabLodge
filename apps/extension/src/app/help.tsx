@@ -648,7 +648,9 @@ function Help() {
 							have and skips links you already saved. Importing a full backup
 							asks whether to add it to the current data (the default; settings,
 							snapshots, and the trash bin stay as they are) or to replace
-							everything, and it offers Undo for a short time.
+							everything, and it offers Undo for a short time. The Android app
+							makes and restores the same ZIP, with the same optional password;
+							restoring there replaces its library and offers Undo.
 						</>
 					),
 					searchText:

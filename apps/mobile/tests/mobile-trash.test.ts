@@ -1,0 +1,309 @@
+import assert from 'node:assert/strict';
+import {describe, test} from 'vite-plus/test';
+import type {
+	Bookmark,
+	SavedTab,
+	Session,
+} from '../../extension/src/shared/types';
+import {emptyStore} from '../src/library/library';
+import {
+	addToTrash,
+	parseTrash,
+	purgeExpired,
+	removeFromTrash,
+	restoreEntry,
+	type NewTrash,
+	type TrashEntry,
+} from '../src/library/trash';
+
+const DAY = 86_400_000;
+const NOW = 100 * DAY;
+
+const tab = (id: string): SavedTab => ({
+	id,
+	title: id,
+	url: `https://example.com/${id}`,
+	notes: '',
+	pinned: false,
+	nativeGroup: null,
+	savedAt: 1,
+	originalIndex: 0,
+});
+
+const session = (id: string, folderId = 'f1', tabs = ['a', 'b']): Session => ({
+	id,
+	name: `Session ${id}`,
+	folderId,
+	description: '',
+	createdAt: 1,
+	updatedAt: 1,
+	sourceWindowName: '',
+	sourceWindowId: null,
+	tabs: tabs.map((entry) => tab(entry)),
+});
+
+const bookmark = (id: string, columnId: string): Bookmark => ({
+	id,
+	title: id,
+	url: `https://example.com/${id}`,
+	columnId,
+	createdAt: 1,
+	updatedAt: 1,
+});
+
+const folder = (id: string) => ({
+	id,
+	name: `Folder ${id}`,
+	createdAt: 1,
+	isDefault: false,
+});
+const column = (id: string) => ({
+	id,
+	name: `Column ${id}`,
+	createdAt: 1,
+	isDefault: false,
+});
+
+const ids = (count: number) => Array.from({length: count}, (_, i) => `t${i}`);
+let counter = 0;
+const nextId = () => `new${++counter}`;
+
+describe('trash list', () => {
+	test('new entries go first and get an id and a time', () => {
+		const first = addToTrash(
+			[],
+			[{kind: 'session', session: session('s1')}],
+			ids(1),
+			NOW,
+		);
+		const both = addToTrash(
+			first,
+			[{kind: 'bookmark', bookmark: bookmark('b1', 'c1'), after: null}],
+			['t9'],
+			NOW + 1,
+		);
+		assert.deepEqual(
+			both.map((entry) => [entry.id, entry.deletedAt]),
+			[
+				['t9', NOW + 1],
+				['t0', NOW],
+			],
+		);
+	});
+
+	test('what outlived the retention is purged, the rest stays', () => {
+		const items = [
+			{id: 'old', deletedAt: NOW - 8 * DAY},
+			{id: 'new', deletedAt: NOW - 6 * DAY},
+		].map((entry) => ({
+			...entry,
+			kind: 'session' as const,
+			session: session(entry.id),
+		}));
+		assert.deepEqual(
+			purgeExpired(items, 7, NOW).map((entry) => entry.id),
+			['new'],
+		);
+		assert.equal(purgeExpired(items, 90, NOW).length, 2);
+	});
+
+	test('a missing retention falls back to 30 days', () => {
+		const items = [
+			{id: 'a', deletedAt: NOW - 29 * DAY},
+			{id: 'b', deletedAt: NOW - 31 * DAY},
+		].map((entry) => ({
+			...entry,
+			kind: 'session' as const,
+			session: session(entry.id),
+		}));
+		assert.deepEqual(
+			purgeExpired(items, NaN, NOW).map((entry) => entry.id),
+			['a'],
+		);
+	});
+
+	test('removing one entry leaves the others', () => {
+		const items = addToTrash(
+			[],
+			[
+				{kind: 'session', session: session('s1')},
+				{kind: 'session', session: session('s2')},
+			],
+			['x', 'y'],
+			NOW,
+		);
+		assert.deepEqual(
+			removeFromTrash(items, 'x').map((entry) => entry.id),
+			['y'],
+		);
+	});
+
+	test('stored junk is dropped when reading', () => {
+		const good = addToTrash(
+			[],
+			[{kind: 'session', session: session('s1')}],
+			['x'],
+			NOW,
+		);
+		assert.deepEqual(parseTrash([...good, {id: 1}, null, 'text']), good);
+		assert.deepEqual(parseTrash('nope'), []);
+	});
+});
+
+const trashed = (details: NewTrash): TrashEntry => ({
+	...details,
+	id: 'e',
+	deletedAt: NOW,
+});
+
+describe('restoring from the trash', () => {
+	test('a session returns to its folder', () => {
+		const store = {...emptyStore(1), folders: [folder('f1')]};
+		const result = restoreEntry(
+			store,
+			trashed({kind: 'session', session: session('s1', 'f1')}),
+			nextId,
+			NOW,
+		);
+		assert.equal(result.store.groups[0].folderId, 'f1');
+		assert.equal(result.note, undefined);
+	});
+
+	test('a session whose folder is gone goes to the first folder and says so', () => {
+		const store = {...emptyStore(1), folders: [folder('f2')]};
+		const result = restoreEntry(
+			store,
+			trashed({kind: 'session', session: session('s1', 'gone')}),
+			nextId,
+			NOW,
+		);
+		assert.equal(result.store.groups[0].folderId, 'f2');
+		assert.match(result.note ?? '', /folder is gone/);
+	});
+
+	test('a link goes back to its old place in its session', () => {
+		const store = {
+			...emptyStore(1),
+			folders: [folder('f1')],
+			groups: [session('s1', 'f1', ['a', 'c'])],
+		};
+		const result = restoreEntry(
+			store,
+			trashed({
+				kind: 'tab',
+				tab: tab('b'),
+				index: 1,
+				sessionId: 's1',
+				sessionName: 'Session s1',
+				folderId: 'f1',
+			}),
+			nextId,
+			NOW,
+		);
+		assert.deepEqual(
+			result.store.groups[0].tabs.map((entry) => entry.id),
+			['a', 'b', 'c'],
+		);
+	});
+
+	test('a link whose session is gone makes a new session', () => {
+		const store = {...emptyStore(1), folders: [folder('f1')]};
+		const result = restoreEntry(
+			store,
+			trashed({
+				kind: 'tab',
+				tab: tab('b'),
+				index: 1,
+				sessionId: 'gone',
+				sessionName: 'Reading list',
+				folderId: 'f1',
+			}),
+			nextId,
+			NOW,
+		);
+		assert.equal(result.store.groups.length, 1);
+		assert.equal(result.store.groups[0].name, 'Reading list');
+		assert.deepEqual(
+			result.store.groups[0].tabs.map((entry) => entry.id),
+			['b'],
+		);
+		assert.match(result.note ?? '', /session is gone/);
+	});
+
+	test('a bookmark returns after the bookmark it followed, with a new id', () => {
+		const store = {
+			...emptyStore(1),
+			bookmarkColumns: [column('c1')],
+			bookmarks: [bookmark('x', 'c1'), bookmark('y', 'c1')],
+		};
+		const result = restoreEntry(
+			store,
+			trashed({kind: 'bookmark', bookmark: bookmark('m', 'c1'), after: 'x'}),
+			() => 'fresh',
+			NOW,
+		);
+		assert.deepEqual(
+			result.store.bookmarks.map((entry) => entry.id),
+			['x', 'fresh', 'y'],
+		);
+		assert.equal(result.note, undefined);
+	});
+
+	test('a bookmark whose column is gone goes to the first column and says so', () => {
+		const store = {...emptyStore(1), bookmarkColumns: [column('c2')]};
+		const result = restoreEntry(
+			store,
+			trashed({kind: 'bookmark', bookmark: bookmark('m', 'gone'), after: null}),
+			() => 'fresh',
+			NOW,
+		);
+		assert.equal(result.store.bookmarks[0].columnId, 'c2');
+		assert.match(result.note ?? '', /column is gone/);
+	});
+
+	test('a column returns with the bookmarks it held', () => {
+		const store = {
+			...emptyStore(1),
+			bookmarkColumns: [column('c2')],
+			bookmarks: [bookmark('m', 'c2')],
+		};
+		const result = restoreEntry(
+			store,
+			trashed({
+				kind: 'column',
+				column: column('c1'),
+				bookmarks: [bookmark('m', 'c1')],
+			}),
+			nextId,
+			NOW,
+		);
+		assert.deepEqual(
+			result.store.bookmarkColumns.map((entry) => entry.id),
+			['c2', 'c1'],
+		);
+		assert.equal(result.store.bookmarks[0].columnId, 'c1');
+	});
+
+	test('a folder returns with the sessions that still exist', () => {
+		const store = {
+			...emptyStore(1),
+			folders: [folder('f2')],
+			groups: [session('s1', 'f2'), session('s2', 'f2')],
+		};
+		const result = restoreEntry(
+			store,
+			trashed({
+				kind: 'folder',
+				folder: folder('f1'),
+				sessionIds: ['s1', 'gone'],
+			}),
+			nextId,
+			NOW,
+		);
+		assert.equal(result.store.folders.length, 2);
+		assert.deepEqual(
+			result.store.groups.map((entry) => entry.folderId),
+			['f1', 'f2'],
+		);
+	});
+});

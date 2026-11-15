@@ -1,8 +1,9 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {columnNameProblem} from '../../../../extension/src/shared/bookmark-rules';
+import {checkColumnSite} from '../../../../extension/src/shared/column-sites';
 import type {Store} from '../../../../extension/src/shared/types';
-import {BottomSheet} from '../../ui/bottom-sheet';
+import {BottomSheet, SheetHeader} from '../../ui/bottom-sheet';
 import {ColorPicker} from '../../ui/color-picker';
 import {columnGlyph} from '../../ui/column-icons';
 import {IconPicker} from '../../ui/icon-picker';
@@ -10,10 +11,12 @@ import {
 	addColumn,
 	deleteColumn,
 	restoreColumn,
+	setColumnSites,
 	updateColumn,
 } from '../../library/library';
 import {showSnack} from '../../ui/snackbar';
 import {edit, newId, useLibrary} from '../../library/library-store';
+import {trashDeleted} from '../../library/trash-store';
 import {useColors} from '../../ui/theme';
 import {Button, Field, IconButton} from '../../ui/ui';
 
@@ -41,6 +44,7 @@ export function confirmDeleteColumn(
 	void edit((current) =>
 		deleteColumn(current, column.id, target?.id ?? '', Date.now()),
 	);
+	void trashDeleted([{kind: 'column', column: whole, bookmarks: own}]);
 	onDeleted();
 	showSnack(`Deleted ${column.name}`, {
 		label: 'Undo',
@@ -50,7 +54,13 @@ export function confirmDeleteColumn(
 	});
 }
 
-type Editing = {id: string; name: string; icon?: string; color?: string};
+type Editing = {
+	id: string;
+	name: string;
+	icon?: string;
+	color?: string;
+	domains?: readonly string[];
+};
 
 function ColumnForm({
 	column,
@@ -70,6 +80,22 @@ function ColumnForm({
 	const [name, setName] = useState(column?.name ?? '');
 	const [icon, setIcon] = useState(column?.icon ?? '');
 	const [color, setColor] = useState(column?.color ?? '');
+	const [sites, setSites] = useState<readonly string[]>(column?.domains ?? []);
+	const [siteText, setSiteText] = useState('');
+	// Nothing is reported until something was typed; a typed site that cannot be added says why under the field.
+	const siteCheck =
+		siteText.trim() === '' ? undefined : checkColumnSite(sites, siteText);
+	const siteError =
+		siteCheck && 'error' in siteCheck ? siteCheck.error : undefined;
+	const addSite = () => {
+		if (!(siteCheck && 'site' in siteCheck)) {
+			return;
+		}
+
+		setSites([...sites, siteCheck.site]);
+		setSiteText('');
+	};
+
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
 	// A name that is not allowed is only reported once it was typed, so an empty new form does not start in error.
@@ -87,11 +113,13 @@ function ColumnForm({
 		setProblem('');
 		try {
 			const id = column?.id ?? newId();
-			await edit((current) =>
-				column
-					? updateColumn(current, id, {name, icon, color}, Date.now())
-					: addColumn(current, name, id, Date.now(), icon, color),
-			);
+			await edit((current) => {
+				const now = Date.now();
+				const saved = column
+					? updateColumn(current, id, {name, icon, color}, now)
+					: addColumn(current, name, id, now, icon, color);
+				return setColumnSites(saved, id, sites, now);
+			});
 			onDone(id);
 		} catch {
 			setProblem('Could not save. Try again.');
@@ -108,21 +136,12 @@ function ColumnForm({
 
 	return (
 		<View style={styles.screen}>
-			<View style={styles.top}>
-				<Text
-					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
-				>
-					{column ? 'Edit column' : 'New column'}
-				</Text>
-				<IconButton
-					icon="close"
-					label="Close"
-					onPress={() => {
-						onDone();
-					}}
-				/>
-			</View>
+			<SheetHeader
+				title={column ? 'Edit column' : 'New column'}
+				onClose={() => {
+					onDone();
+				}}
+			/>
 			<ScrollView
 				style={styles.scroll}
 				contentContainerStyle={styles.body}
@@ -143,6 +162,56 @@ function ColumnForm({
 				<View style={styles.group}>
 					<Text style={{color: colors.muted}}>Color</Text>
 					<ColorPicker selected={color} onSelect={setColor} />
+				</View>
+				<View style={styles.group}>
+					<Text style={{color: colors.muted}}>Sites</Text>
+					<Text style={[styles.hint, {color: colors.muted}]}>
+						Links to these sites, and their subdomains, are saved into this
+						column. Add a path such as github.com/bberka to match only that
+						part. The longest match wins.
+					</Text>
+					<Field
+						label="Add a site"
+						icon="globe-outline"
+						value={siteText}
+						placeholder="github.com/bberka"
+						autoCapitalize="none"
+						autoCorrect={false}
+						keyboardType="url"
+						returnKeyType="done"
+						submitBehavior="submit"
+						error={siteError}
+						onChangeText={setSiteText}
+						onSubmitEditing={addSite}
+					/>
+					<Button
+						label="Add site"
+						icon="add"
+						kind="plain"
+						disabled={!siteCheck || 'error' in siteCheck}
+						onPress={addSite}
+					/>
+					{sites.length === 0 ? (
+						<Text style={{color: colors.muted}}>No sites.</Text>
+					) : (
+						sites.map((site) => (
+							<View key={site} style={styles.siteRow}>
+								<Text
+									numberOfLines={1}
+									style={[styles.site, {color: colors.text}]}
+								>
+									{site}
+								</Text>
+								<IconButton
+									icon="close"
+									label={`Remove ${site}`}
+									onPress={() => {
+										setSites(sites.filter((other) => other !== site));
+									}}
+								/>
+							</View>
+						))
+					)}
 				</View>
 				{problem !== '' && (
 					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
@@ -172,7 +241,7 @@ function ColumnForm({
 }
 
 /**
-The drawer for making a bookmark column, or changing one's name, icon, and color, or deleting it. Pass the column to
+The drawer for making a bookmark column, or changing one's name, icon, color, and sites, or deleting it. Pass the column to
 change, or nothing for a new one.
 */
 export function ColumnSheet({
@@ -206,15 +275,10 @@ export function ColumnSheet({
 
 const styles = StyleSheet.create({
 	screen: {flexShrink: 1},
-	top: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingLeft: 20,
-		paddingRight: 8,
-	},
-	title: {fontSize: 20, fontWeight: '700'},
 	scroll: {flexGrow: 0},
 	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},
+	hint: {fontSize: 13},
+	siteRow: {flexDirection: 'row', alignItems: 'center', gap: 8},
+	site: {flex: 1, fontSize: 16},
 });

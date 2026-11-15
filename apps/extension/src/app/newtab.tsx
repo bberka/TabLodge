@@ -94,6 +94,7 @@ import type {
 } from '../shared/types';
 import {siteName, webUrl} from '../shared/web-url';
 import type {ExportData} from '../shared/export-formats';
+import {archivedFolderId} from '../shared/session-folders';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {AccentPalette} from './accent-palette';
@@ -149,7 +150,6 @@ import {
 	type TrashFilter,
 } from './recovery-core';
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
-import {archivedFolderId} from './session-folders';
 import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
