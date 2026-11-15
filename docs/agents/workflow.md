@@ -12,7 +12,7 @@ Run `ls .agents/skills`. When it is missing or empty and `~/.agents/skills` has 
 2. **Scope.** Read the request and the code first. Run `git status --short` and keep existing user changes.
 3. **Work and gate.** Pass the [validation gate](validation.md).
 4. **Commit** one self contained step at a time, each passing the hooks alone. Messages come from the `unslop-git` skill and name the human author only: no `Co-Authored-By`, no AI attribution.
-5. **Pull request.** Push and open it as soon as the work is done. The **Model** line of the template names the product and exact model ID (for example `Claude Sonnet 5.5 (claude-sonnet-5-5)`), with what each model did when several contributed. The model goes in the pull request, never in a commit. Write the body with the `pr` skill.
+5. **Pull request.** Push and open it as soon as the work is done. The **Model** line of the template names the product and exact model ID (for example `Claude Sonnet 5.5 (claude-sonnet-5-5)`), with what each model did when several contributed. The model goes in the pull request, never in a commit. Open it ready for review, never as a draft (no `gh pr create --draft`), unless the user asks for a draft in that message. Write the body with the `pr` skill.
 6. **CI.** Watch the checks until they finish. A failure caused by the change gets a fix, a push, and another wait, three attempts in total. Stop and tell the user what failed and why after three attempts or at once for a cause outside the change (outage, runner problem, missing secret, flaky test that passes locally). Review findings are handled the same way. The maintainer merges.
 
 ## Git hooks
