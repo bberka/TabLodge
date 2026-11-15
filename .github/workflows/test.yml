@@ -1,8 +1,9 @@
 name: Test
 
-# Runs on every push to the main branch and on pull requests. Independent jobs run in parallel: lint, typecheck and
-# tests; extension build, package and Firefox smoke check; the accessibility check; the startup, private storage and
-# dev browser checks; the Cloudflare Worker bundle freshness check; and the Android bundle.
+# Runs on every push to the main branch and on pull requests. Independent jobs run in parallel: lint (three file
+# shards), typecheck and tests; extension build, package and Firefox smoke check; the accessibility check (four shards);
+# the startup and dev browser checks; the private storage check; the Cloudflare Worker bundle freshness check; and the
+# Android bundle. The slowest job sets the wall clock, so split a job before it becomes the longest one.
 on:
   push:
     branches: [master, main]
@@ -16,9 +17,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Lint, typecheck, test
+  lint:
+    name: Lint (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # XO's cold start is about 8 seconds and the rest scales with files, so three file groups finish in about
+      # 20 seconds each where one run takes about 50. Keep every tracked source file in exactly one group.
+      matrix:
+        include:
+          - name: extension app
+            paths: "apps/extension/src/**"
+          - name: mobile app
+            paths: "apps/mobile/**"
+          - name: scripts, tests, server
+            paths: "apps/extension/scripts/** apps/extension/tests/** apps/extension/shell/** apps/extension/*.ts apps/extension/*.cjs apps/server/**/*.ts scripts/** tsconfig/** *.ts package.json"
     steps:
       - uses: actions/checkout@v7
       # Uses the pnpm version pinned in package.json "packageManager".
@@ -28,7 +41,33 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec vp run check
+      - run: pnpm exec xo ${{ matrix.paths }}
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsgo -b
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vp test run
 
   extension:
     name: Build, package, Firefox smoke check
@@ -46,11 +85,15 @@ jobs:
       # Installs the Firefox package in the runner's Firefox and runs the core workflows.
       - run: pnpm exec vp run check:firefox
 
-  # The accessibility check is the slowest, so it gets its own job.
+  # The accessibility check is the slowest, so its checks are split across four jobs (A11Y_SHARD, see harness.ts).
   a11y:
-    name: Accessibility check
+    name: Accessibility check (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -66,9 +109,11 @@ jobs:
       - run: pnpm exec vp run browser:install
       - run: pnpm exec vp run build
       - run: pnpm exec vp run check:a11y
+        env:
+          A11Y_SHARD: ${{ matrix.shard }}/4
 
   browser:
-    name: Startup, private storage, dev browser checks
+    name: Startup and dev browser checks
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -86,8 +131,29 @@ jobs:
       - run: pnpm exec vp run browser:install
       - run: pnpm exec vp run build
       - run: pnpm exec vp run check:startup
-      - run: pnpm exec vp run check:private-storage
       - run: pnpm exec vp run check:dev-browser
+
+  # One long scenario (enable private access, restart the browser), so it cannot be sharded; its own job keeps it off
+  # the other browser checks' critical path.
+  private-storage:
+    name: Private storage check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm exec vp run browser:install
+      - run: pnpm exec vp run build
+      - run: pnpm exec vp run check:private-storage
 
   # Fails when the committed Worker for the Deploy to Cloudflare button differs from what cf:bundle builds.
   cloudflare:
@@ -121,14 +187,17 @@ jobs:
   # The branch ruleset requires this check name. It passes only when every job above passes.
   test:
     name: Lint, typecheck, test, build, package, Firefox smoke check
-    needs: [check, extension, a11y, browser, cloudflare, mobile]
+    needs: [lint, typecheck, unit, extension, a11y, browser, private-storage, cloudflare, mobile]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - run: |
-          test "${{ needs.check.result }}" = success
+          test "${{ needs.lint.result }}" = success
+          test "${{ needs.typecheck.result }}" = success
+          test "${{ needs.unit.result }}" = success
           test "${{ needs.extension.result }}" = success
           test "${{ needs.a11y.result }}" = success
           test "${{ needs.browser.result }}" = success
+          test "${{ needs.private-storage.result }}" = success
           test "${{ needs.cloudflare.result }}" = success
           test "${{ needs.mobile.result }}" = success

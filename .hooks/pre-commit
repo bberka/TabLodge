@@ -9,4 +9,4 @@ fi
 # XO only checks here and never edits files, so lint-staged's backup stash is not needed; it would also go on
 # the stash list that every worktree shares. --quiet drops the warning about the missing backup, not lint errors.
 vp staged --no-stash --quiet
-pnpm exec tsc -b
+pnpm exec tsgo -b
