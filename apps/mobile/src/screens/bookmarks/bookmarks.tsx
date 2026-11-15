@@ -46,6 +46,8 @@ import {syncPrivate} from '../../private/private-library';
 import {useSelection} from '../../ui/use-selection';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
+import {takeJump, usePendingJump} from '../../library/jump';
+import {SearchElsewhere} from '../search-elsewhere';
 import {
 	FloatingActions,
 	ROOM_FOR_BUTTONS,
@@ -145,6 +147,19 @@ export function BookmarksScreen({
 			: hasPicked
 				? picked
 				: (columns[0]?.id ?? '');
+	// A result of the search on Sessions that points at a column: show that column.
+	const pending = usePendingJump();
+	useEffect(() => {
+		const jump = takeJump('bookmarks');
+		if (!jump) {
+			return;
+		}
+
+		search.close();
+		setPicked(jump.columnId);
+		// `search` is a fresh object each render; only the jump matters.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [pending]);
 	const isSearching = query.trim().length > 0;
 	const shown = useMemo(
 		() =>
@@ -595,6 +610,15 @@ export function BookmarksScreen({
 							)}
 						</View>
 					</View>
+				}
+				ListFooterComponent={
+					<SearchElsewhere
+						store={store}
+						query={query}
+						here="bookmarks"
+						localCount={shown.length}
+						onJump={search.close}
+					/>
 				}
 				ListEmptyComponent={
 					isSearching ? (

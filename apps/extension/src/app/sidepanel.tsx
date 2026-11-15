@@ -51,6 +51,7 @@ import type {
 } from '../shared/types';
 import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {siteName, webUrl} from '../shared/web-url';
+import {archivedFolderId} from '../shared/session-folders';
 import {inPrivateWindow} from './private-config';
 import {
 	Brand,
@@ -79,7 +80,6 @@ import {
 } from './duplicate-tabs-action';
 import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import {PROJECT} from './project';
-import {archivedFolderId} from './session-folders';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {PrivateLockGate} from './private-lock-ui';

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {visibleSessionFolders} from '../src/app/session-folders';
+import {visibleSessionFolders} from '../src/shared/session-folders';
 
 test('hides the Archived folder when it has no sessions', () => {
 	const folders = [

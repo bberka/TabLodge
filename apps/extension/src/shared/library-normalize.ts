@@ -30,9 +30,15 @@ export const ARCHIVED_FOLDER_NAME = 'Archived';
 
 // The same code runs in Chromium (a service worker) and in Firefox (an event page); the address of the extension's
 // own pages tells them apart. False anywhere without extension APIs.
+type ChromeGlobal = {
+	// eslint-disable-next-line @typescript-eslint/naming-convention
+	chrome?: {runtime?: {getURL?: (path: string) => string}};
+};
+
 const isFirefox = () =>
-	globalThis.chrome?.runtime?.getURL?.('')?.startsWith('moz-extension:') ??
-	false;
+	(globalThis as ChromeGlobal).chrome?.runtime
+		?.getURL?.('')
+		?.startsWith('moz-extension:') ?? false;
 
 /**
 Untrusted object (stored state or import file): every field is checked before use.

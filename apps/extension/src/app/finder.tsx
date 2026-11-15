@@ -1,4 +1,4 @@
-// The global finder: the command palette (Ctrl/Cmd+K) with one search box, one ranking (global-search.ts) and one
+// The global finder: the command palette (Ctrl/Cmd+K) with one search box, one ranking (shared/global-search.ts) and one
 // way of opening results.
 import {
 	useCallback,
@@ -32,7 +32,6 @@ import {
 } from '../shared/ui';
 import {scrollBehavior} from '../shared/motion';
 import type {TabLodgeState} from '../shared/types';
-import {send, useCloseOnEscape, type IconComponent} from './common';
 import {
 	buildFinderIndex,
 	flattenSections,
@@ -41,7 +40,8 @@ import {
 	type FinderItem,
 	type FinderKind,
 	type OpenTabInfo,
-} from './global-search';
+} from '../shared/global-search';
+import {send, useCloseOnEscape, type IconComponent} from './common';
 import {faviconUrl} from './favicon';
 import {
 	filterItemActions,

@@ -18,7 +18,7 @@ import {showSnack} from '../../ui/snackbar';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {trashDeleted} from '../../library/trash-store';
 import {useColors} from '../../ui/theme';
-import {Button, Field} from '../../ui/ui';
+import {Button, Field, IconButton} from '../../ui/ui';
 
 /**
 Deletes a column at once and offers Undo. Its bookmarks move to another column; with no other column they stay unfiled.
