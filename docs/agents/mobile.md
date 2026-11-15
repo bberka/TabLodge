@@ -21,6 +21,7 @@ The app imports types and the sync client from `apps/extension/src` by relative 
 
 ## Rules
 
+- Keep session management simple. Tab reordering, splitting and merging sessions, and enforcing the library's size limits are intentionally not planned for the app (listed in the [README](../README.md#android-app)); do not add them without the owner asking.
 - Expo pins exact versions. Add packages with `pnpm --filter tablodge-mobile exec expo install <package>`.
 - Pure logic goes in a plain `.ts` file with a test in `tests/`, not inside a screen.
 - Proof comes from an emulator or a device, not the browser. Start the emulator with a visible window and software GPU: `emulator -avd <name> -no-audio -gpu swiftshader_indirect`, and keep sample data off any real server. Report the Android version, the Material or iOS look, and whether TalkBack, dark theme, or a small screen were not checked. Details: [Proof](validation.md#proof).
