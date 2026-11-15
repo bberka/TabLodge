@@ -49,11 +49,11 @@
 		"version:next": "node scripts/release-version.ts next",
 		"test": "vp test run",
 		"test:watch": "vp test",
-		"typecheck": "tsc -b",
+		"typecheck": "tsgo -b",
 		"lint": "xo",
 		"lint:fix": "xo --fix",
 		"format": "xo --fix",
-		"check": "xo && tsc -b && vp test run",
+		"check": "xo && tsgo -b && vp test run",
 		"check:a11y": "pnpm --filter tablodge-extension run check:a11y",
 		"check:private-storage": "pnpm --filter tablodge-extension run check:private-storage",
 		"clean": "pnpm --filter tablodge-extension run clean && node --eval \"require('node:fs').rmSync('node_modules/.tmp', { recursive: true, force: true })\""
@@ -70,6 +70,7 @@
 	"devDependencies": {
 		"@types/chrome": "^0.3.7",
 		"@types/node": "^24.19.2",
+		"@typescript/native-preview": "^7.0.0-dev.20260707.2",
 		"eslint-config-xo-react": "^0.32.0",
 		"typescript": "^6.0.3",
 		"vite": "catalog:",

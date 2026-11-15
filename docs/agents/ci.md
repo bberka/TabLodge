@@ -7,7 +7,7 @@ Workflows are in `.github/workflows/`: `test.yml` (checks on every pull request 
 | Job | Runs |
 | --- | --- |
 | `lint` | `xo` on three groups of files, one job each (extension `src`; mobile; everything else) |
-| `typecheck` | `tsc -b` |
+| `typecheck` | `tsgo -b` (the native TypeScript compiler, about ten times faster than `tsc -b` with the same errors) |
 | `unit` | `vp test run` |
 | `extension` | `vp run build`, `vp run pack`, `vp run check:firefox` |
 | `a11y` | `vp run build`, `vp run check:a11y` in four shards |
