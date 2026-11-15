@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import process from 'node:process';
 import vm from 'node:vm';
-import {test} from 'vite-plus/test';
+import {test, vi} from 'vite-plus/test';
 import type {
 	ActionFailure,
 	ActionSuccess,
@@ -12465,6 +12465,16 @@ test('a failed sync connect names the field the page should flag', async () => {
 });
 
 test('syncing an unchanged library sends nothing, even when normalizing adds the Archived folder', async () => {
+	// Only Date is faked, so each round below gets a later timestamp without a real sleep.
+	vi.useFakeTimers({toFake: ['Date']});
+	try {
+		await syncUnchangedLibraryRounds();
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+async function syncUnchangedLibraryRounds() {
 	const server = syncServer();
 	const harness = createWorkerHarness(stateWithSession(), undefined, {
 		fetch: server.fetch,
@@ -12484,9 +12494,7 @@ test('syncing an unchanged library sends nothing, even when normalizing adds the
 	const {cursor} = server.log;
 	for (let round = 0; round < 3; round += 1) {
 		// Normalizing at a later time must not make the added folder look new.
-		await new Promise((resolve) => {
-			setTimeout(resolve, 5);
-		});
+		vi.advanceTimersByTime(5);
 		await harness.sendMessage({type: 'SYNC_NOW'});
 	}
 
@@ -12495,7 +12503,7 @@ test('syncing an unchanged library sends nothing, even when normalizing adds the
 		(await harness.sendMessage({type: 'SYNC_STATUS'})).status?.pending,
 		0,
 	);
-});
+}
 
 test('a new PIN or password rewraps the private sync key, so other browsers keep syncing and new ones join with it', async () => {
 	const server = syncServer();
