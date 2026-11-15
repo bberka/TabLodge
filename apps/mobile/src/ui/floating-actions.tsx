@@ -1,4 +1,4 @@
-import {type ComponentRef, useEffect, useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {
 	Animated,
 	Easing,
@@ -23,8 +23,6 @@ import {Icon, IconButton, type IconName} from './widgets';
 Every round button in the row, and the search drawer, share this size, so the add, search and menu buttons read as one set.
 */
 const SIZE = 52;
-// The floating search bar when it has shrunk: the search icon and the close arrow.
-const SMALL_SEARCH_WIDTH = 120;
 
 /**
 The room a list leaves at its end so the round buttons, or the search bar that takes their place, never hide its last
@@ -243,51 +241,20 @@ export function SearchDock({
 	// A floating tab bar gets a floating, rounded search bar; a docked one gets a banner across the screen.
 	const {floatingBar} = usePreferences();
 	const {width: screenWidth} = useWindowDimensions();
-	// The bar is wide only while the input has focus. Otherwise it is a small pill at the bottom right: the search
-	// icon and the close arrow, and tapping it focuses the input again.
-	const [focused, setFocused] = useState(true);
-	const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
-	const wasOpenRef = useRef(false);
-	useEffect(() => {
-		// Android keeps an input focused after Back hides the keyboard, so a keyboard that closes counts as no focus.
-		if (wasOpenRef.current && !keyboardOpen) {
-			setFocused(false);
-		}
-
-		wasOpenRef.current = keyboardOpen;
-	}, [keyboardOpen]);
-	const small = !focused;
-	const shrink = useRef(new Animated.Value(small ? 1 : 0)).current;
-	useEffect(() => {
-		Animated.timing(shrink, {
-			toValue: small ? 1 : 0,
-			duration: motion(260),
-			easing: Easing.out(Easing.cubic),
-			useNativeDriver: false,
-		}).start();
-	}, [small, shrink]);
 	// The floating tab bar is gone while searching, so the bar sits at the screen's bottom; a docked bar stays below it.
 	// The banner of a docked bar is an edge of the screen, so only the floating forms are glass.
-	const glass = glassOn && (floatingBar || small);
+	const glass = glassOn;
 	const rest = floatingBar ? barGap + insets.bottom : bottom;
 	return (
 		<Animated.View
 			style={[
 				styles.dock,
-				floatingBar || small ? styles.floating : styles.banner,
+				floatingBar ? styles.floating : styles.banner,
 				{
-					width: shrink.interpolate({
-						inputRange: [0, 1],
-						outputRange: [
-							floatingBar ? screenWidth - 32 : screenWidth,
-							SMALL_SEARCH_WIDTH,
-						],
-					}),
+					width: floatingBar ? screenWidth - 32 : screenWidth,
 					bottom: keyboardOpen
 						? Animated.add(inset, floatingBar ? 8 : 0)
-						: small && !floatingBar
-							? rest + 8
-							: rest,
+						: rest,
 					backgroundColor: glass ? 'transparent' : colors.surface,
 					borderColor: colors.border,
 				},
@@ -296,21 +263,8 @@ export function SearchDock({
 		>
 			{glass && <GlassBackdrop kind="search" />}
 			<Icon name="search" size={22} color={colors.muted} />
-			<Animated.View
-				// The small pill is one button, so the hidden input stays out of TalkBack's way.
-				importantForAccessibility={small ? 'no-hide-descendants' : 'auto'}
-				style={[
-					styles.inputBox,
-					{
-						opacity: shrink.interpolate({
-							inputRange: [0, 1],
-							outputRange: [1, 0],
-						}),
-					},
-				]}
-			>
+			<View style={styles.inputBox}>
 				<TextInput
-					ref={inputRef}
 					autoFocus
 					accessibilityLabel={label}
 					placeholder={placeholder}
@@ -321,15 +275,9 @@ export function SearchDock({
 					returnKeyType="search"
 					style={[styles.input, {color: colors.text}]}
 					onChangeText={onChange}
-					onFocus={() => {
-						setFocused(true);
-					}}
-					onBlur={() => {
-						setFocused(false);
-					}}
 				/>
-			</Animated.View>
-			{query !== '' && !small && (
+			</View>
+			{query !== '' && (
 				<IconButton
 					icon="close-circle"
 					label="Clear search"
@@ -350,19 +298,6 @@ export function SearchDock({
 			>
 				<Icon name="chevron-down" color={colors.text} />
 			</Pressable>
-			{small && (
-				// The small pill opens the full bar again and puts the cursor back in it.
-				<Pressable
-					accessibilityRole="button"
-					accessibilityLabel={`${label}, expand`}
-					style={styles.expand}
-					onPress={() => {
-						// Blurred first, so an input that kept its focus shows the keyboard again.
-						inputRef.current?.blur();
-						inputRef.current?.focus();
-					}}
-				/>
-			)}
 		</Animated.View>
 	);
 }
@@ -402,7 +337,6 @@ const styles = StyleSheet.create({
 	},
 	inputBox: {flex: 1},
 	input: {fontSize: 16, paddingVertical: 0},
-	expand: {position: 'absolute', top: 0, bottom: 0, left: 0, right: SIZE},
 	close: {
 		width: SIZE,
 		height: SIZE,
