@@ -168,9 +168,9 @@ export function ValueRow({
 }
 
 /**
-A setting's name. While the setting differs from its default, a small accent dot follows it: the cue that holding the
-row offers to reset it. The dot is not read out; TalkBack users get the reset as the row's own action, which names the
-default.
+A setting's name. While the setting differs from its default, a small accent dot sits in the gutter left of it, in the
+same place on every row: the cue that holding the row offers to reset it. The dot is not read out; TalkBack users get
+the reset as the row's own action, which names the default.
 */
 export function RowLabel({
 	label,
@@ -184,15 +184,13 @@ export function RowLabel({
 	const colors = useColors();
 	return (
 		<View style={styles.labelBox}>
-			<View style={styles.labelLine}>
-				<Text style={[styles.label, {color: colors.text}]}>{label}</Text>
-				{changed && (
-					<View
-						importantForAccessibility="no-hide-descendants"
-						style={[styles.changed, {backgroundColor: colors.accent}]}
-					/>
-				)}
-			</View>
+			{changed && (
+				<View
+					importantForAccessibility="no-hide-descendants"
+					style={[styles.changed, {backgroundColor: colors.accent}]}
+				/>
+			)}
+			<Text style={[styles.label, {color: colors.text}]}>{label}</Text>
 			{hint && <Text style={{color: colors.muted}}>{hint}</Text>}
 		</View>
 	);
@@ -293,9 +291,16 @@ const styles = StyleSheet.create({
 		marginHorizontal: -12,
 	},
 	labelBox: {flex: 1},
-	labelLine: {flexDirection: 'row', alignItems: 'center', gap: 8},
-	label: {flexShrink: 1, fontSize: 16},
-	changed: {width: 8, height: 8, borderRadius: 4},
+	label: {fontSize: 16},
+	// Centered on the label's first line (16 size, about 24 tall), 14 left of the text.
+	changed: {
+		position: 'absolute',
+		left: -14,
+		top: 8,
+		width: 8,
+		height: 8,
+		borderRadius: 4,
+	},
 	value: {maxWidth: '50%', fontSize: 15},
 	dot: {width: 16, height: 16, borderRadius: 8, borderWidth: 1},
 	smallImage: {width: 20, height: 20, borderRadius: 5},
