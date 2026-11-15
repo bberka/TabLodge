@@ -18,6 +18,10 @@ export const ROWS = {
 		label: 'Tab names',
 		hint: 'Under the open tab, under every tab, or hidden',
 	},
+	glassEffect: {
+		label: 'Glass effect',
+		hint: 'Frost the floating bar and buttons. Off is lighter on a slow phone',
+	},
 	openWith: {
 		label: 'Open links in',
 		hint: 'The default browser, an in-app tab, or one browser',
@@ -142,6 +146,10 @@ export const SECTIONS = {
 			'dark',
 			'light',
 			'night',
+			'blur',
+			'frosted',
+			'liquid glass',
+			'transparent',
 		],
 		rows: [
 			ROWS.style,
@@ -150,6 +158,7 @@ export const SECTIONS = {
 			ROWS.floatingBar,
 			ROWS.barSize,
 			ROWS.barLabels,
+			ROWS.glassEffect,
 		],
 	},
 	syncApp: {

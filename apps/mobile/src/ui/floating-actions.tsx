@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {usePreferences} from '../settings/preferences';
+import {GlassBackdrop, useGlass} from './glass';
 import {keyboardInset, useKeyboardHeight} from './keyboard';
 import {motion} from './motion';
 import {useBackAction} from './back-actions';
@@ -92,6 +93,7 @@ function RoundButton({
 	onPress: () => void;
 }) {
 	const colors = useColors();
+	const glass = useGlass();
 	// A shell that animates its size, with the pressable filling it, since a pressable's style cannot be animated.
 	return (
 		<Animated.View
@@ -102,12 +104,22 @@ function RoundButton({
 					height: size,
 					borderRadius:
 						typeof size === 'number' ? size / 2 : Animated.divide(size, 2),
-					backgroundColor: primary ? colors.accent : colors.surface,
+					backgroundColor: glass
+						? 'transparent'
+						: primary
+							? colors.accent
+							: colors.surface,
 					borderColor: colors.border,
-					borderWidth: primary ? 0 : 1,
+					borderWidth: primary || glass ? 0 : 1,
 				},
 			]}
 		>
+			{glass && (
+				<GlassBackdrop
+					kind={primary ? 'primary' : 'button'}
+					tint={primary ? colors.accent : undefined}
+				/>
+			)}
 			<Pressable
 				accessibilityRole="button"
 				accessibilityLabel={label}
@@ -223,6 +235,7 @@ export function SearchDock({
 	onClose: () => void;
 }) {
 	const colors = useColors();
+	const glassOn = useGlass();
 	const keyboardOpen = useKeyboardHeight() > 0;
 	const inset = keyboardInset();
 	const insets = useSafeAreaInsets();
@@ -254,6 +267,8 @@ export function SearchDock({
 		}).start();
 	}, [small, shrink]);
 	// The floating tab bar is gone while searching, so the bar sits at the screen's bottom; a docked bar stays below it.
+	// The banner of a docked bar is an edge of the screen, so only the floating forms are glass.
+	const glass = glassOn && (floatingBar || small);
 	const rest = floatingBar ? barGap + insets.bottom : bottom;
 	return (
 		<Animated.View
@@ -273,11 +288,13 @@ export function SearchDock({
 						: small && !floatingBar
 							? rest + 8
 							: rest,
-					backgroundColor: colors.surface,
+					backgroundColor: glass ? 'transparent' : colors.surface,
 					borderColor: colors.border,
 				},
+				glass && styles.noBorder,
 			]}
 		>
+			{glass && <GlassBackdrop kind="search" />}
 			<Icon name="search" size={22} color={colors.muted} />
 			<Animated.View
 				// The small pill is one button, so the hidden input stays out of TalkBack's way.
@@ -376,6 +393,7 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		elevation: 6,
 	},
+	noBorder: {borderWidth: 0},
 	banner: {
 		left: 0,
 		right: 0,
