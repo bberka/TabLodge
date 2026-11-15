@@ -11,8 +11,10 @@ import {
 	PLACE_NAME,
 	searchElsewhere,
 } from '../library/search-elsewhere';
+import {elsewhereIntro} from '../library/search-count';
 import {useLinkSettings} from '../library/use-link-settings';
 import {openLink} from '../platform/open-links';
+import {useSettledText} from '../ui/search-count';
 import {SiteIcon} from '../ui/site-icon';
 import {TARGET, useColors} from '../ui/theme';
 import {Button, Icon} from '../ui/ui';
@@ -51,6 +53,14 @@ export function SearchElsewhere({
 		() => (visible ? searchElsewhere(store, query, here) : []),
 		[visible, store, query, here],
 	);
+	const found = sections.reduce(
+		(sum, section) => sum + section.items.length,
+		0,
+	);
+	// The intro carries the count, and speaks it once typing pauses. It is shown the same way, so what is read is what
+	// is on screen.
+	const introNow = elsewhereIntro(PLACE_NAME[here], localCount, found);
+	const intro = useSettledText(visible, introNow);
 	if (!isSearching) {
 		return null;
 	}
@@ -84,13 +94,10 @@ export function SearchElsewhere({
 		<View style={styles.box}>
 			<Text
 				accessibilityRole="header"
+				accessibilityLiveRegion="polite"
 				style={[styles.intro, {color: colors.muted}]}
 			>
-				{sections.length === 0
-					? `Nothing in ${PLACE_NAME[here]} matches, and nothing else does either.`
-					: localCount === 0
-						? `Nothing in ${PLACE_NAME[here]} matches. Found elsewhere:`
-						: 'Also found elsewhere:'}
+				{intro ?? introNow}
 			</Text>
 			{sections.map((section) => (
 				<View key={section.kind}>
