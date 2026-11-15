@@ -99,3 +99,16 @@ Not recommended: Smart Placement (the object is placed near its first caller and
 - **Mobile app.** Not audited (Hermes bundle size and list virtualization were out of reach without a device build).
 - **Site.** Static, system fonts, no third party scripts, 844 KB of WebP across 12 screenshots with `srcset` and lazy loading (`apps/site/src/components/Screenshot.astro`). Build output is 1.5 MB. Nothing actionable found.
 - **Duplicate dependency versions.** Not checked with `pnpm dedupe --check`.
+
+## 7. Outcome after approval
+
+Measured on a local `wrangler dev` (workerd) run of `apps/server/src/worker.ts`, with a temporary counter on `rowsRead` and `rowsWritten` that was reverted.
+
+| ID | Result |
+| --- | --- |
+| F1 | Shipped. `service-worker.js` went from 414,534 B to 197,949 B (-52%), identical for Chromium and Firefox. `check:startup`, `check:dev-browser`, and `vp run check` pass. The pages were already minified, so the stores already review minified code. |
+| F3 | Measured, no change. A new record costs 3 rows written (table, `key` index, `seq` index). An update of an existing record costs about 2 rows. A 100 record push wrote about 300 rows plus 2 for `meta`. The Free plan's 100,000 rows per day is therefore about 33,000 new records per day, and a larger first upload only has to continue the next day. A `WITHOUT ROWID` table would save one row in three, but needs a migration of every stored library, so it is not worth the risk. |
+| F6 | Not done. A lookup of a missing key reads 0 rows and of an existing key reads 1, so batching the `SELECT`s would save statements, not billed rows. The saving is below what a reviewer could measure. |
+| F9 | Inconclusive. `knip` without a per app entry config lists 192 files as unused, because it does not know the extension's HTML, manifest, and script entries. A useful run needs a config written first. |
+| F10 | Dropped. The 2 s interval is intentional: the browser fires no event for a system accent change (`accents.ts:97-100`), and it already returns while the page is hidden. |
+| F2, F4, F5 | Not done. F2 trades a safety net for about 26,000 requests per month, under 1% of the Free plan. For F4, `finder` (21 kB) and `private-storage` (16 kB) are imported directly by `newtab.tsx:132,193`, which is about 5% of the 781 kB, and the rest is the shared React and Radix chunk. F5 saves little and adds an auth sensitive cache. Each can be reopened with traffic data or a profiler trace showing a real cost. |
