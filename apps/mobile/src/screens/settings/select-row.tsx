@@ -249,6 +249,9 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		gap: 8,
 		marginVertical: -4,
+		// The pressed highlight reaches past the text on both sides; the negative margin keeps the text where it was.
+		paddingHorizontal: 12,
+		marginHorizontal: -12,
 	},
 	label: {flex: 1, fontSize: 16},
 	value: {maxWidth: '50%', fontSize: 15},
