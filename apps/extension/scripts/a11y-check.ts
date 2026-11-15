@@ -4325,15 +4325,19 @@ async function main() {
 					await page.getByRole('dialog').waitFor({state: 'hidden'});
 					const destination = page.locator('section[data-column-id]').last();
 					const columnId = await destination.getAttribute('data-column-id');
-					assert.deepEqual(
-						(
-							await attributes(
-								page,
-								`section[data-column-id="${columnId}"] [data-bookmark-id]`,
-								'data-bookmark-id',
-							)
-						).slice(-2),
-						ids,
+					// The move lands after the dialog closes, so poll instead of reading once.
+					await until(
+						async () =>
+							JSON.stringify(
+								(
+									await attributes(
+										page,
+										`section[data-column-id="${columnId}"] [data-bookmark-id]`,
+										'data-bookmark-id',
+									)
+								).slice(-2),
+							) === JSON.stringify(ids),
+						'the selected bookmarks to land at the end of the last column',
 					);
 					await page
 						.getByRole('group', {name: 'Selected bookmarks'})
