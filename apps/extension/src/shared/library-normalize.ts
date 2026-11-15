@@ -805,7 +805,11 @@ export function normalizeSessionQuickActions(
 	return selected.slice(0, 5);
 }
 
-export const MOBILE_APP_KEYS_MAX = 20;
+/**
+Room for the Android app's preferences to grow: each synced one takes two keys, its value and the time it changed. The
+app tests that its keys stay under this. An extension older than this limit still cuts the setting at 20 keys.
+*/
+export const MOBILE_APP_KEYS_MAX = 80;
 
 export const MOBILE_APP_TEXT_MAX = 40;
 

@@ -1,7 +1,7 @@
 /*
 Keeps the app's own settings in step between phones that share a library. They travel in the library's `mobileApp`
-setting, which the extension keeps untouched, so a second phone picks them up when it first syncs. A phone only
-sends its settings when the user changes one (or turns this on), and only takes what arrives, so nothing loops.
+setting, which the extension keeps untouched, each beside the time it was last changed; `preference-merge.ts` decides
+which side is newer. A phone sends a preference only when it changed here, and takes what is newer there, so nothing loops.
 */
 import {
 	getLibrary,
@@ -9,27 +9,31 @@ import {
 	subscribeLibrary,
 } from '../library/library-store';
 import {
+	adoptPreferences,
+	getChangedAt,
 	getPreferences,
-	readSyncedPreferences,
-	setPreferences,
-	syncedPreferences,
 	watchLocalChanges,
 } from './preferences';
+import {settlePreferences} from './preference-merge';
 
-function adoptFromLibrary(): void {
+function settle(): void {
 	const prefs = getPreferences();
 	if (!prefs.syncSettings) {
 		return;
 	}
 
-	const remote = readSyncedPreferences(getLibrary().settings.mobileApp);
-	const changed = Object.fromEntries(
-		Object.entries(remote).filter(
-			([key, value]) => prefs[key as keyof typeof prefs] !== value,
-		),
+	const remote = getLibrary().settings.mobileApp;
+	const {adopt, adoptAt, next} = settlePreferences(
+		remote,
+		prefs,
+		getChangedAt(),
 	);
-	if (Object.keys(changed).length > 0) {
-		setPreferences(changed, true);
+	if (Object.keys(adopt).length > 0) {
+		adoptPreferences(adopt, adoptAt);
+	}
+
+	if (next !== remote) {
+		void setSyncedSetting('mobileApp', next);
 	}
 }
 
@@ -37,16 +41,7 @@ function adoptFromLibrary(): void {
 Call once at startup, after the preferences and the library have loaded.
 */
 export function startPreferencesSync(): void {
-	watchLocalChanges((change) => {
-		const prefs = getPreferences();
-		const synced = syncedPreferences(prefs);
-		const touched = Object.keys(change).some(
-			(key) => key === 'syncSettings' || Object.hasOwn(synced, key),
-		);
-		if (prefs.syncSettings && touched) {
-			void setSyncedSetting('mobileApp', syncedPreferences(prefs));
-		}
-	});
-	subscribeLibrary(adoptFromLibrary);
-	adoptFromLibrary();
+	watchLocalChanges(settle);
+	subscribeLibrary(settle);
+	settle();
 }

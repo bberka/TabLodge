@@ -7,9 +7,9 @@ Expo and React Native, TypeScript. It syncs with the user's own sync server and 
 | Path | Holds |
 | --- | --- |
 | `src/ui/` | Look and shared components: theme, sheets, dialogs, the tab bar, keyboard and motion helpers |
-| `src/library/` | The library: edits, the store, links, the view, the row actions |
+| `src/library/` | The library: `store-shape.ts` (the empty store, link extraction, statistics), `board-edits.ts` (columns and bookmarks), `session-edits.ts` (sessions and folders), then the store, links, the view, and the row actions |
 | `src/transfer/` | Import, export, backups, and files |
-| `src/settings/` | The app's own preferences and their sync |
+| `src/settings/` | The app's own preferences. `preference-schema.ts` is the one place that says what each is, its default, how a stored value is checked, and whether it syncs; `preferences.ts` keeps the current values; `preferences-sync.ts` shares the synced ones |
 | `src/private/` | The private library: its lock, sheets, switch, and auto-lock |
 | `src/platform/` | Device, storage, open links, and polyfills |
 | `src/screens/` | One folder per area: `bookmarks`, `sessions`, `save`, `settings`, `transfer` |
@@ -29,6 +29,10 @@ The app imports types and the sync client from `apps/extension/src` by relative 
 - Do not edit the PNGs in `assets/` by hand: change `scripts/make-icons.mts` or the extension's mark and rerun `pnpm run mobile:icons`. The mark stays inside the adaptive icon's 66 dp safe zone, and the monochrome layer is the same shape in black, which Android tints for themed icons.
 - Accessibility still applies: labels, roles, touch targets, and TalkBack behave like the extension's [UI rules](ui.md#accessibility) intend.
 - CI builds a debug APK on `apps/mobile/**` changes; releases are signed in `release.yml` ([CI](ci.md#android-app)).
+
+## Adding a preference
+
+Add one entry to `FIELDS` in `src/settings/preference-schema.ts` and its type to `Preferences`. Mark it `synced` to share it between phones, or `device` when it depends on this phone (what it can draw, which browsers it has, its privacy choices). Synced preferences travel in the library's `mobileApp` setting, which the extension keeps but does not read. Each synced value is stored with the time it was last changed (`theme` and `at.theme`), and `preference-merge.ts` settles every key against the library: the later change wins, a phone sends only what it changed, and keys it does not know stay, so a newer app's settings survive an older one. The library still merges `mobileApp` as one record, so when two phones write at once one write can be dropped; that phone sees its change missing and sends it again. The times come from each phone's clock. A value in `mobileApp` takes two keys, and `MOBILE_APP_KEYS_MAX` (80) caps the setting; `tests/mobile-preferences.test.ts` fails when the synced keys outgrow it.
 
 ## Live check on an emulator
 
