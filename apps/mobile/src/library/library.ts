@@ -409,7 +409,7 @@ export function removedBookmarks(
 
 /**
 Puts bookmarks back after an undo, where they were in their column, as the extension's undo does. They get new ids,
-because the server may already have recorded the delete of the old ones and refuses to bring a deleted id back. A
+though the sync server would take the old ones back too, since a newer change beats a delete. A
 bookmark whose column is gone goes to the first column, at its start.
 */
 export function restoreBookmarks(
