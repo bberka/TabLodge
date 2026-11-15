@@ -226,7 +226,7 @@ export function scriptConfig({
 		build: {
 			...sharedBuild(target),
 			outDir,
-			minify: false,
+			minify: true,
 			lib: {
 				entry,
 				formats: ['iife'],
