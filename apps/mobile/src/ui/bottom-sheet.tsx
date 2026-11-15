@@ -7,12 +7,14 @@ import {
 	Pressable,
 	ScrollView,
 	StyleSheet,
+	Text,
 	View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {keyboardInset, settleKeyboard} from './keyboard';
 import {motion, spring} from './motion';
 import {useColors, useShape} from './theme';
+import {IconButton} from './ui';
 
 const CLOSE_DRAG = 80;
 const CLOSE_VELOCITY = 0.8;
@@ -269,6 +271,30 @@ function Sheet({
 	);
 }
 
+/**
+The title row at the top of a sheet's content, with the close button.
+*/
+export function SheetHeader({
+	title,
+	onClose,
+}: {
+	title: string;
+	onClose: () => void;
+}) {
+	const colors = useColors();
+	return (
+		<View style={styles.header}>
+			<Text
+				accessibilityRole="header"
+				style={[styles.title, {color: colors.text}]}
+			>
+				{title}
+			</Text>
+			<IconButton icon="close" label="Close" onPress={onClose} />
+		</View>
+	);
+}
+
 const styles = StyleSheet.create({
 	root: {flex: 1, justifyContent: 'flex-end'},
 	scrim: {
@@ -287,4 +313,12 @@ const styles = StyleSheet.create({
 	fill: {flexShrink: 1},
 	handleArea: {height: 28, alignItems: 'center', justifyContent: 'center'},
 	handle: {width: 36, height: 4, borderRadius: 2},
+	header: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingLeft: 20,
+		paddingRight: 8,
+	},
+	title: {fontSize: 20, fontWeight: '700'},
 });

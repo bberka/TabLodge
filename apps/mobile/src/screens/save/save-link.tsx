@@ -40,8 +40,9 @@ import {
 } from '../../settings/preferences';
 import {SiteIcon} from '../../ui/site-icon';
 import {useLinkSettings} from '../../library/use-link-settings';
+import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
-import {Button, Chips, Field, IconButton, Segmented} from '../../ui/ui';
+import {Button, Chips, Field, Segmented} from '../../ui/ui';
 
 // The session selector's first entry; choosing it makes a new session.
 const NEW_SESSION = '__new-session__';
@@ -187,21 +188,12 @@ export function SaveLinkForm({
 
 	return (
 		<View style={styles.screen}>
-			<View style={styles.top}>
-				<Text
-					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
-				>
-					{editing ? 'Edit link' : 'Save link'}
-				</Text>
-				<IconButton
-					icon="close"
-					label="Close"
-					onPress={() => {
-						onDone();
-					}}
-				/>
-			</View>
+			<SheetHeader
+				title={editing ? 'Edit link' : 'Save link'}
+				onClose={() => {
+					onDone();
+				}}
+			/>
 			<ScrollView
 				style={styles.scroll}
 				contentContainerStyle={styles.body}
@@ -340,14 +332,6 @@ export function SaveLinkForm({
 const styles = StyleSheet.create({
 	// Sized to its content: the sheet only grows as far as its own maximum height, then the body scrolls.
 	screen: {flexShrink: 1},
-	top: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingLeft: 20,
-		paddingRight: 8,
-	},
-	title: {fontSize: 20, fontWeight: '700'},
 	scroll: {flexGrow: 0},
 	sessionChoice: {gap: 8},
 	preview: {flexDirection: 'row', alignItems: 'center', gap: 12},

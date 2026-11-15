@@ -2,7 +2,7 @@ import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {columnNameProblem} from '../../../../extension/src/shared/bookmark-rules';
 import type {Store} from '../../../../extension/src/shared/types';
-import {BottomSheet} from '../../ui/bottom-sheet';
+import {BottomSheet, SheetHeader} from '../../ui/bottom-sheet';
 import {ColorPicker} from '../../ui/color-picker';
 import {columnGlyph} from '../../ui/column-icons';
 import {IconPicker} from '../../ui/icon-picker';
@@ -15,7 +15,7 @@ import {
 import {showSnack} from '../../ui/snackbar';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {useColors} from '../../ui/theme';
-import {Button, Field, IconButton} from '../../ui/ui';
+import {Button, Field} from '../../ui/ui';
 
 /**
 Deletes a column at once and offers Undo. Its bookmarks move to another column; with no other column they stay unfiled.
@@ -108,21 +108,12 @@ function ColumnForm({
 
 	return (
 		<View style={styles.screen}>
-			<View style={styles.top}>
-				<Text
-					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
-				>
-					{column ? 'Edit column' : 'New column'}
-				</Text>
-				<IconButton
-					icon="close"
-					label="Close"
-					onPress={() => {
-						onDone();
-					}}
-				/>
-			</View>
+			<SheetHeader
+				title={column ? 'Edit column' : 'New column'}
+				onClose={() => {
+					onDone();
+				}}
+			/>
 			<ScrollView
 				style={styles.scroll}
 				contentContainerStyle={styles.body}
@@ -206,14 +197,6 @@ export function ColumnSheet({
 
 const styles = StyleSheet.create({
 	screen: {flexShrink: 1},
-	top: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingLeft: 20,
-		paddingRight: 8,
-	},
-	title: {fontSize: 20, fontWeight: '700'},
 	scroll: {flexGrow: 0},
 	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},

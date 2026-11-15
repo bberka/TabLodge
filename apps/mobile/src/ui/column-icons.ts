@@ -4,7 +4,7 @@ import {
 	columnColorShades,
 	rgbToHex,
 } from '../../../extension/src/shared/accent-colors';
-import {ICON_IDS, type IconId} from '../../../extension/src/shared/icon-ids';
+import type {IconId} from '../../../extension/src/shared/icon-ids';
 import {avatarColor} from './theme';
 import type {IconName} from './ui';
 
@@ -282,13 +282,6 @@ export function columnGlyph(icon: string | undefined): IconName {
 		: undefined;
 	return glyph ?? 'folder-outline';
 }
-
-/**
-Every icon a column can use, in the extension's order, with the glyph this app draws for it.
-*/
-export const COLUMN_ICONS: Array<{id: IconId; glyph: IconName}> = ICON_IDS.map(
-	(id) => ({id, glyph: GLYPHS[id]}),
-);
 
 /**
 The color a column was given, as the shade that reads on the current theme, or undefined for a column without one.

@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
-import {BottomSheet} from '../../ui/bottom-sheet';
+import {BottomSheet, SheetHeader} from '../../ui/bottom-sheet';
 import {ColorPicker} from '../../ui/color-picker';
 import {columnGlyph} from '../../ui/column-icons';
 import {IconPicker} from '../../ui/icon-picker';
@@ -11,7 +11,7 @@ import {
 } from '../../library/library';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {useColors} from '../../ui/theme';
-import {Button, Field, IconButton, Switch} from '../../ui/ui';
+import {Button, Field, Switch} from '../../ui/ui';
 
 type Editing = {
 	id: string;
@@ -62,21 +62,12 @@ function FolderForm({
 
 	return (
 		<View style={styles.screen}>
-			<View style={styles.top}>
-				<Text
-					accessibilityRole="header"
-					style={[styles.title, {color: colors.text}]}
-				>
-					{folder ? 'Edit folder' : 'New folder'}
-				</Text>
-				<IconButton
-					icon="close"
-					label="Close"
-					onPress={() => {
-						onDone();
-					}}
-				/>
-			</View>
+			<SheetHeader
+				title={folder ? 'Edit folder' : 'New folder'}
+				onClose={() => {
+					onDone();
+				}}
+			/>
 			<ScrollView
 				style={styles.scroll}
 				contentContainerStyle={styles.body}
@@ -158,14 +149,6 @@ export function FolderEditSheet({
 
 const styles = StyleSheet.create({
 	screen: {flexShrink: 1},
-	top: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingLeft: 20,
-		paddingRight: 8,
-	},
-	title: {fontSize: 20, fontWeight: '700'},
 	scroll: {flexGrow: 0},
 	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},
