@@ -11,7 +11,8 @@
 		"prebuild": "expo prebuild --platform android",
 		"doctor": "expo-doctor",
 		"typecheck": "tsc --noEmit",
-		"apk": "node scripts/build-apk.mts"
+		"apk": "node scripts/build-apk.mts",
+		"icons": "node scripts/make-icons.mts"
 	},
 	"dependencies": {
 		"@expo/vector-icons": "^15.1.1",
