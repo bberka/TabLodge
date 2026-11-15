@@ -43,6 +43,7 @@ import {
 	useLibrary,
 	useSyncStatus,
 } from '../../library/library-store';
+import {trashDeleted} from '../../library/trash-store';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
 import {useBackAction} from '../../ui/back-actions';
 import {useSelection} from '../../ui/use-selection';
@@ -646,6 +647,7 @@ export function SessionsScreen({
 					void edit((current) =>
 						removeSession(current, session.id, Date.now()),
 					);
+					void trashDeleted([{kind: 'session', session}]);
 					showSnack(`Deleted ${session.name}`, {
 						label: 'Undo',
 						run() {
@@ -671,9 +673,20 @@ export function SessionsScreen({
 			return;
 		}
 
+		const index = session.tabs.findIndex((candidate) => candidate.id === tabId);
 		void edit((current) =>
 			removeSessionTab(current, session.id, tabId, Date.now()),
 		);
+		void trashDeleted([
+			{
+				kind: 'tab',
+				tab: session.tabs[index],
+				index,
+				sessionId: session.id,
+				sessionName: session.name,
+				folderId: session.folderId,
+			},
+		]);
 		showSnack('Removed from the session', {
 			label: 'Undo',
 			run() {
@@ -911,6 +924,7 @@ export function SessionsScreen({
 				removeSession(next, session.id, Date.now()),
 			),
 		);
+		void trashDeleted(gone.map((session) => ({kind: 'session', session})));
 		selection.stop();
 		showSnack(`Deleted ${plural(gone.length)}`, {
 			label: 'Undo',
@@ -1398,6 +1412,7 @@ function folderMenuFor(
 				onPress() {
 					const held = sessions.map((session) => session.id);
 					void edit((current) => deleteFolder(current, id, Date.now()));
+					void trashDeleted([{kind: 'folder', folder, sessionIds: held}]);
 					removed(id);
 					showSnack(`Deleted ${folder.name}`, {
 						label: 'Undo',

@@ -36,6 +36,7 @@ import {APP_ACCENT} from '../../ui/accent';
 import {ColorPicker, type LeadingChoice} from '../../ui/color-picker';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {DataCard} from './data-settings';
+import {TrashCard} from './trash-settings';
 import {ExcludedCard} from './excluded-settings';
 import {SettingsFooter} from './settings-footer';
 import {OpenLinksCard} from './open-links-settings';
@@ -305,6 +306,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 						<SyncedSettingsCard />
 						<OpenLinksCard />
 						<DataCard />
+						<TrashCard />
 						<ExcludedCard />
 						<PrivateCard />
 						<SettingsCard

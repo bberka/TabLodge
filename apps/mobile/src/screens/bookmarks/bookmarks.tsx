@@ -33,6 +33,7 @@ import {
 	useLibrary,
 	useSyncStatus,
 } from '../../library/library-store';
+import {trashDeleted} from '../../library/trash-store';
 import {linkToOpen} from '../../library/links';
 import {openAll, openLink} from '../../platform/open-links';
 import {useLinkSettings} from '../../library/use-link-settings';
@@ -244,6 +245,7 @@ export function BookmarksScreen({
 		}
 
 		void edit((current) => removeBookmarks(current, ids, Date.now()));
+		void trashDeleted(gone.map((entry) => ({kind: 'bookmark', ...entry})));
 		selection.stop();
 		showSnack(
 			gone.length === 1

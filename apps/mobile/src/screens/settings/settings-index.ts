@@ -269,6 +269,18 @@ export const SECTIONS = {
 		],
 		rows: [],
 	},
+	trash: {
+		title: 'Trash',
+		aliases: [
+			'deleted',
+			'recover',
+			'restore',
+			'bin',
+			'undelete',
+			'empty trash',
+		],
+		rows: [],
+	},
 	private: {
 		title: 'Private library',
 		aliases: [

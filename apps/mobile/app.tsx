@@ -14,6 +14,7 @@ import {BottomSheet} from './src/ui/bottom-sheet';
 import {extractUrls, splitShared} from './src/library/library';
 import {runBackAction} from './src/ui/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library/library-store';
+import {purgeTrash} from './src/library/trash-store';
 import {startPreferencesSync} from './src/settings/preferences-sync';
 import {markActive, startPrivateAutoLock} from './src/private/private-autolock';
 import {ShareHost} from './src/screens/transfer/transfer-sheets';
@@ -119,6 +120,7 @@ function Main() {
 		void loadPreferences()
 			.then(startLibrary)
 			.then(startPrivate)
+			.then(purgeTrash)
 			.then(startPreferencesSync);
 		const subscription = AppState.addEventListener('change', (state) => {
 			// Behind other apps, the live connection and its timers stop; in front they resume and catch up.
