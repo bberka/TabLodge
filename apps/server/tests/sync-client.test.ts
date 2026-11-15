@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test} from 'vite-plus/test';
+import {test, vi} from 'vite-plus/test';
 import {createApi} from '../src/api';
 import {isAuthMessage} from '../src/live';
 import {exportLibrary, importLibrary} from '../src/transfer';
@@ -349,10 +349,15 @@ test('a value that changes on every read cannot keep sync pushing', async () => 
 		},
 		set() {},
 	});
-	await device.client.connect(URL_BASE, TOKEN);
-	await new Promise((resolve) => {
-		setTimeout(resolve, 300);
-	});
+	// A local change waits 1.5 s for its round, so the fake clock runs a minute of rounds by hand.
+	vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+	try {
+		await device.client.connect(URL_BASE, TOKEN);
+		await vi.advanceTimersByTimeAsync(60_000);
+	} finally {
+		vi.useRealTimers();
+	}
+
 	const status = (await (
 		await server.app.request('/v1/status', {
 			headers: {Authorization: `Bearer ${TOKEN}`},
