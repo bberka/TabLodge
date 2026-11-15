@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {ScrollView, useColorScheme, StyleSheet, Text, View} from 'react-native';
 import {confirm, showDialog} from '../../ui/dialog';
+import {GlassTarget} from '../../ui/glass';
 import {trackScroll} from '../../ui/scroll-state';
 import type {SyncStatus} from '../../../../extension/src/shared/sync/client';
 import {
@@ -196,267 +197,278 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 	const state = describe(status, colors);
 	return (
 		<View style={styles.root}>
-			<ScrollView
-				contentContainerStyle={[
-					styles.screen,
-					{paddingBottom: space + 8 + ROOM_FOR_BUTTONS},
-				]}
-				keyboardShouldPersistTaps="handled"
-				scrollEventThrottle={16}
-				onScroll={trackScroll}
-			>
-				<Header title="Settings" />
-				<SettingsQuery value={needle}>
-					<View style={styles.cards}>
-						<UpdateServerNote
-							needed={prefs.siteIcons === 'server' || prefs.savePreview}
-						/>
-						<SettingsCard
-							section={SECTIONS.appearance}
-							icon="color-palette-outline"
-							description="Theme, accent color, and how the app looks."
-						>
-							<SelectRow
-								row={ROWS.theme}
-								value={prefs.theme}
-								choices={[
-									{
-										id: 'system',
-										name: 'System',
-										icon: 'phone-portrait-outline',
-									},
-									{id: 'light', name: 'Light', icon: 'sunny-outline'},
-									{id: 'dark', name: 'Dark', icon: 'moon-outline'},
-								]}
-								onChange={(theme) => {
-									setPreferences({theme});
-								}}
+			<GlassTarget>
+				<ScrollView
+					contentContainerStyle={[
+						styles.screen,
+						{paddingBottom: space + 8 + ROOM_FOR_BUTTONS},
+					]}
+					keyboardShouldPersistTaps="handled"
+					scrollEventThrottle={16}
+					onScroll={trackScroll}
+				>
+					<Header title="Settings" />
+					<SettingsQuery value={needle}>
+						<View style={styles.cards}>
+							<UpdateServerNote
+								needed={prefs.siteIcons === 'server' || prefs.savePreview}
 							/>
-							<ValueRow
-								row={ROWS.accent}
-								value={accentName}
-								swatch={accentSwatch}
-								onPress={() => {
-									setPickingAccent(true);
-								}}
-							/>
-							<SelectRow
-								row={ROWS.style}
-								value={prefs.look}
-								choices={[
-									{
-										id: 'auto',
-										name: 'Automatic',
-										hint: `Matches your phone: ${LOOK_NAMES[resolveLook('auto')]} here`,
-									},
-									{id: 'material', name: 'Android look'},
-									{id: 'ios', name: 'iOS look'},
-								]}
-								onChange={(look) => {
-									setPreferences({look});
-								}}
-							/>
-							<Toggle
-								row={ROWS.floatingBar}
-								value={prefs.floatingBar}
-								onChange={(floatingBar) => {
-									setPreferences({floatingBar});
-								}}
-							/>
-							{prefs.floatingBar && (
+							<SettingsCard
+								section={SECTIONS.appearance}
+								icon="color-palette-outline"
+								description="Theme, accent color, and how the app looks."
+							>
 								<SelectRow
-									row={ROWS.barSize}
-									value={prefs.barSize}
+									row={ROWS.theme}
+									value={prefs.theme}
 									choices={[
-										{id: 'full', name: 'Full width'},
 										{
-											id: 'scroll',
-											name: 'Small while scrolling',
-											hint: 'Shrinks when you scroll down, grows when you scroll up',
+											id: 'system',
+											name: 'System',
+											icon: 'phone-portrait-outline',
 										},
-										{
-											id: 'compact',
-											name: 'Always small',
-											hint: 'A narrow bar with icons only',
-										},
+										{id: 'light', name: 'Light', icon: 'sunny-outline'},
+										{id: 'dark', name: 'Dark', icon: 'moon-outline'},
 									]}
-									onChange={(barSize) => {
-										setPreferences({barSize});
+									onChange={(theme) => {
+										setPreferences({theme});
 									}}
 								/>
-							)}
-							<SelectRow
-								row={ROWS.barLabels}
-								value={prefs.barLabels}
-								choices={[
-									{
-										id: 'active',
-										name: 'Open tab only',
-										hint: 'Its name shows under its icon',
-									},
-									{id: 'always', name: 'All tabs'},
-									{id: 'never', name: 'None', hint: 'Icons only'},
-								]}
-								onChange={(barLabels) => {
-									setPreferences({barLabels});
-								}}
-							/>
-						</SettingsCard>
-						<SessionSettingsCard />
-						<BookmarkBehaviourCard />
-						<SyncedSettingsCard />
-						<OpenLinksCard />
-						<DataCard />
-						<TrashCard />
-						<ExcludedCard />
-						<PrivateCard />
-						<SettingsCard
-							section={SECTIONS.sync}
-							icon="sync-outline"
-							description="Keep this phone in step with your server."
-						>
-							{status.connected ? (
-								<>
-									<Text style={{color: colors.text}}>
-										Connected to {status.url}
-									</Text>
-									<View
-										accessible
-										accessibilityLiveRegion="polite"
-										style={styles.state}
-									>
-										<Icon name={state.icon} color={state.color} />
-										<Text style={[styles.stateText, {color: colors.text}]}>
-											{state.text}
-										</Text>
-									</View>
-									<Toggle
-										row={ROWS.syncSettings}
-										value={prefs.syncSettings}
-										onChange={(syncSettings) => {
-											setPreferences({syncSettings});
-										}}
-									/>
-									<Toggle
-										row={ROWS.syncPrivate}
-										value={prefs.syncPrivate}
-										onChange={(syncPrivate) => {
-											setPreferences({syncPrivate});
-											void applyPrivateSyncSetting();
-										}}
-									/>
-									<DeviceNameField />
-									<Button
-										label="Sync now"
-										icon="sync"
-										loading={busy === 'sync'}
-										disabled={busy !== undefined}
-										onPress={() => void syncNow()}
-									/>
-									<Button
-										label="Disconnect"
-										kind="danger"
-										icon="log-out-outline"
-										loading={busy === 'disconnect'}
-										disabled={busy !== undefined}
-										onPress={confirmDisconnect}
-									/>
-								</>
-							) : (
-								<>
-									<Text style={{color: colors.muted}}>
-										Keep bookmarks and sessions the same on every device.
-									</Text>
-									<Button
-										label="Connect to a server"
-										icon="link"
-										onPress={onConnect}
-									/>
-								</>
-							)}
-						</SettingsCard>
-						{__DEV__ && (
-							<SettingsCard
-								section={SECTIONS.development}
-								icon="construct-outline"
-								description="Only in development builds."
-							>
-								<Text style={{color: colors.muted}}>
-									{status.connected
-										? 'Sample data is off while a server is connected, so it cannot reach it.'
-										: isSampleData()
-											? 'The library holds sample data.'
-											: 'Load the same sample sessions and bookmarks as the extension dev build.'}
-								</Text>
-								<Button
-									label="Load sample data"
-									icon="flask-outline"
-									disabled={status.connected}
-									onPress={() => void loadSampleData()}
+								<ValueRow
+									row={ROWS.accent}
+									value={accentName}
+									swatch={accentSwatch}
+									onPress={() => {
+										setPickingAccent(true);
+									}}
 								/>
-								<Button
-									label="Clear library"
-									kind="danger"
-									icon="trash-outline"
-									disabled={status.connected}
-									onPress={() => void clearLibrary()}
+								<SelectRow
+									row={ROWS.style}
+									value={prefs.look}
+									choices={[
+										{
+											id: 'auto',
+											name: 'Automatic',
+											hint: `Matches your phone: ${LOOK_NAMES[resolveLook('auto')]} here`,
+										},
+										{id: 'material', name: 'Android look'},
+										{id: 'ios', name: 'iOS look'},
+									]}
+									onChange={(look) => {
+										setPreferences({look});
+									}}
+								/>
+								<Toggle
+									row={ROWS.floatingBar}
+									value={prefs.floatingBar}
+									onChange={(floatingBar) => {
+										setPreferences({floatingBar});
+									}}
+								/>
+								{prefs.floatingBar && (
+									<SelectRow
+										row={ROWS.barSize}
+										value={prefs.barSize}
+										choices={[
+											{id: 'full', name: 'Full width'},
+											{
+												id: 'scroll',
+												name: 'Small while scrolling',
+												hint: 'Shrinks when you scroll down, grows when you scroll up',
+											},
+											{
+												id: 'compact',
+												name: 'Always small',
+												hint: 'A narrow bar with icons only',
+											},
+										]}
+										onChange={(barSize) => {
+											setPreferences({barSize});
+										}}
+									/>
+								)}
+								{resolveLook(prefs.look) === 'ios' && (
+									<Toggle
+										row={ROWS.glassEffect}
+										value={prefs.glassEffect}
+										onChange={(glassEffect) => {
+											setPreferences({glassEffect});
+										}}
+									/>
+								)}
+								<SelectRow
+									row={ROWS.barLabels}
+									value={prefs.barLabels}
+									choices={[
+										{
+											id: 'active',
+											name: 'Open tab only',
+											hint: 'Its name shows under its icon',
+										},
+										{id: 'always', name: 'All tabs'},
+										{id: 'never', name: 'None', hint: 'Icons only'},
+									]}
+									onChange={(barLabels) => {
+										setPreferences({barLabels});
+									}}
 								/>
 							</SettingsCard>
-						)}
-						<SettingsCard
-							section={SECTIONS.restore}
-							icon="refresh-outline"
-							description="Puts settings back the way they were at install. Your library is not touched. While syncing, you choose whether the settings shared with the extension reset too."
-						>
-							<Button
-								label="Restore default settings"
-								kind="danger"
+							<SessionSettingsCard />
+							<BookmarkBehaviourCard />
+							<SyncedSettingsCard />
+							<OpenLinksCard />
+							<DataCard />
+							<TrashCard />
+							<ExcludedCard />
+							<PrivateCard />
+							<SettingsCard
+								section={SECTIONS.sync}
+								icon="sync-outline"
+								description="Keep this phone in step with your server."
+							>
+								{status.connected ? (
+									<>
+										<Text style={{color: colors.text}}>
+											Connected to {status.url}
+										</Text>
+										<View
+											accessible
+											accessibilityLiveRegion="polite"
+											style={styles.state}
+										>
+											<Icon name={state.icon} color={state.color} />
+											<Text style={[styles.stateText, {color: colors.text}]}>
+												{state.text}
+											</Text>
+										</View>
+										<Toggle
+											row={ROWS.syncSettings}
+											value={prefs.syncSettings}
+											onChange={(syncSettings) => {
+												setPreferences({syncSettings});
+											}}
+										/>
+										<Toggle
+											row={ROWS.syncPrivate}
+											value={prefs.syncPrivate}
+											onChange={(syncPrivate) => {
+												setPreferences({syncPrivate});
+												void applyPrivateSyncSetting();
+											}}
+										/>
+										<DeviceNameField />
+										<Button
+											label="Sync now"
+											icon="sync"
+											loading={busy === 'sync'}
+											disabled={busy !== undefined}
+											onPress={() => void syncNow()}
+										/>
+										<Button
+											label="Disconnect"
+											kind="danger"
+											icon="log-out-outline"
+											loading={busy === 'disconnect'}
+											disabled={busy !== undefined}
+											onPress={confirmDisconnect}
+										/>
+									</>
+								) : (
+									<>
+										<Text style={{color: colors.muted}}>
+											Keep bookmarks and sessions the same on every device.
+										</Text>
+										<Button
+											label="Connect to a server"
+											icon="link"
+											onPress={onConnect}
+										/>
+									</>
+								)}
+							</SettingsCard>
+							{__DEV__ && (
+								<SettingsCard
+									section={SECTIONS.development}
+									icon="construct-outline"
+									description="Only in development builds."
+								>
+									<Text style={{color: colors.muted}}>
+										{status.connected
+											? 'Sample data is off while a server is connected, so it cannot reach it.'
+											: isSampleData()
+												? 'The library holds sample data.'
+												: 'Load the same sample sessions and bookmarks as the extension dev build.'}
+									</Text>
+									<Button
+										label="Load sample data"
+										icon="flask-outline"
+										disabled={status.connected}
+										onPress={() => void loadSampleData()}
+									/>
+									<Button
+										label="Clear library"
+										kind="danger"
+										icon="trash-outline"
+										disabled={status.connected}
+										onPress={() => void clearLibrary()}
+									/>
+								</SettingsCard>
+							)}
+							<SettingsCard
+								section={SECTIONS.restore}
 								icon="refresh-outline"
-								onPress={() => {
-									restoreDefaults(status.connected);
+								description="Puts settings back the way they were at install. Your library is not touched. While syncing, you choose whether the settings shared with the extension reset too."
+							>
+								<Button
+									label="Restore default settings"
+									kind="danger"
+									icon="refresh-outline"
+									onPress={() => {
+										restoreDefaults(status.connected);
+									}}
+								/>
+							</SettingsCard>
+							{isNoMatch && (
+								<Empty icon="search" title="No setting matches">
+									Try another word, such as swipe, sync, or private.
+								</Empty>
+							)}
+						</View>
+					</SettingsQuery>
+					{needle === '' && <SettingsFooter />}
+					<BottomSheet
+						visible={pickingAccent}
+						label="Accent color"
+						onClose={() => {
+							setPickingAccent(false);
+						}}
+					>
+						<View style={styles.accentSheet}>
+							<Text
+								accessibilityRole="header"
+								style={[styles.heading, {color: colors.text}]}
+							>
+								Accent color
+							</Text>
+							<ColorPicker
+								keepSelected
+								selected={prefs.accent}
+								leading={accentChoices}
+								onSelect={(accent) => {
+									setPreferences({accent});
 								}}
 							/>
-						</SettingsCard>
-						{isNoMatch && (
-							<Empty icon="search" title="No setting matches">
-								Try another word, such as swipe, sync, or private.
-							</Empty>
-						)}
-					</View>
-				</SettingsQuery>
-				{needle === '' && <SettingsFooter />}
-				<BottomSheet
-					visible={pickingAccent}
-					label="Accent color"
-					onClose={() => {
-						setPickingAccent(false);
-					}}
-				>
-					<View style={styles.accentSheet}>
-						<Text
-							accessibilityRole="header"
-							style={[styles.heading, {color: colors.text}]}
-						>
-							Accent color
-						</Text>
-						<ColorPicker
-							keepSelected
-							selected={prefs.accent}
-							leading={accentChoices}
-							onSelect={(accent) => {
-								setPreferences({accent});
-							}}
-						/>
-						<Button
-							label="Done"
-							icon="checkmark"
-							onPress={() => {
-								setPickingAccent(false);
-							}}
-						/>
-					</View>
-				</BottomSheet>
-			</ScrollView>
+							<Button
+								label="Done"
+								icon="checkmark"
+								onPress={() => {
+									setPickingAccent(false);
+								}}
+							/>
+						</View>
+					</BottomSheet>
+				</ScrollView>
+			</GlassTarget>
 			{!search.open && (
 				<FloatingActions bottom={space} onSearch={search.show} />
 			)}

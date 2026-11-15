@@ -24,6 +24,7 @@ const RESETS = new Map<Row, Reset>([
 	[ROWS.floatingBar, {prefs: ['floatingBar']}],
 	[ROWS.barSize, {prefs: ['barSize']}],
 	[ROWS.barLabels, {prefs: ['barLabels']}],
+	[ROWS.glassEffect, {prefs: ['glassEffect']}],
 	[ROWS.theme, {prefs: ['theme']}],
 	[ROWS.accent, {prefs: ['accent']}],
 	[ROWS.compactSessions, {prefs: ['compactSessions']}],

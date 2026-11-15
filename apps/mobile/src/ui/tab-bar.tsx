@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {resolveLook, usePreferences} from '../settings/preferences';
+import {GlassBackdrop, useGlass} from './glass';
 import {useKeyboardHeight} from './keyboard';
 import {motion, spring} from './motion';
 import {resetScroll, useScrolledDown} from './scroll-state';
@@ -96,6 +97,8 @@ export function TabBar<T extends string>({
 		floatingBar &&
 		(barSize === 'compact' || (barSize === 'scroll' && scrolledDown));
 	const ios = look === 'ios';
+	// Only the floating bar is glass; a docked one is an edge of the screen and stays solid.
+	const glass = useGlass() && floatingBar;
 	const count = tabs.length;
 	const index = Math.max(
 		0,
@@ -212,7 +215,11 @@ export function TabBar<T extends string>({
 				accessibilityRole="tablist"
 				style={[
 					styles.bar,
-					{backgroundColor: colors.surface, borderColor: colors.border},
+					{
+						backgroundColor: glass ? 'transparent' : colors.surface,
+						borderColor: colors.border,
+					},
+					glass && styles.glass,
 					floatingBar
 						? [
 								styles.floatingBar,
@@ -238,6 +245,7 @@ export function TabBar<T extends string>({
 							},
 				]}
 			>
+				{glass && <GlassBackdrop kind="bar" />}
 				{floatingBar && (
 					<Animated.View
 						style={[
@@ -386,6 +394,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: BAR_PADDING,
 		elevation: 8,
 	},
+	glass: {overflow: 'hidden', borderWidth: 0, elevation: 4},
 	slider: {
 		position: 'absolute',
 		top: BAR_PADDING,

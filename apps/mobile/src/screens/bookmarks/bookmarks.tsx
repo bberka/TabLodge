@@ -3,6 +3,7 @@ import {FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Bookmark} from '../../../../extension/src/shared/types';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
+import {GlassTarget} from '../../ui/glass';
 import {useBackAction} from '../../ui/back-actions';
 import {
 	findDuplicateBookmarks,
@@ -521,187 +522,189 @@ export function BookmarksScreen({
 			{...dragSelect.panHandlers}
 			onLayout={dragSelect.onContainerLayout}
 		>
-			<FlatList
-				ref={listRef}
-				removeClippedSubviews
-				CellRendererComponent={dragSelect.CellRenderer}
-				scrollEnabled={dragSelect.scrollEnabled}
-				scrollEventThrottle={16}
-				data={shown}
-				extraData={selection.ids}
-				keyExtractor={(bookmark) => bookmark.id}
-				refreshing={refreshing}
-				contentContainerStyle={[
-					styles.list,
-					{
-						paddingBottom: isKeyboardOpen
-							? space + 8 + (search.open ? ROOM_FOR_BUTTONS : 0)
-							: (selection.active ? 72 + insets.bottom : space) +
-								ROOM_FOR_BUTTONS,
-					},
-				]}
-				keyboardShouldPersistTaps="handled"
-				// Long columns draw only what is on screen, and a little around it.
-				initialNumToRender={14}
-				windowSize={9}
-				maxToRenderPerBatch={10}
-				ListHeaderComponent={
-					<View style={styles.head}>
-						<Header
-							title={
-								selection.active
-									? `${selection.ids.size} selected`
-									: reordering
-										? `Order ${columnName ?? ''}`
-										: 'Bookmarks'
-							}
-							subtitle={
-								selection.active
-									? undefined
-									: reordering
-										? 'Move bookmarks up or down, then tap Done'
-										: `${store.bookmarks.length} saved${view === 'private' ? ', private' : ''}`
-							}
-							right={headerActions}
-						/>
-						<View style={styles.search}>
-							{!isSearching && (
-								<ScrollView horizontal showsHorizontalScrollIndicator={false}>
-									<Chips
-										items={[
-											...(showAll
-												? [
-														{
-															id: ALL_BOOKMARKS_ID,
-															name: 'All',
-															count: store.bookmarks.length,
-															glyph: 'layers-outline' as const,
-															tint: colors.accent,
-														},
-													]
-												: []),
-											...columns.map((column) => chipLook(column)),
-											{
-												id: NEW_COLUMN_CHIP,
-												name: 'New column',
-												glyph: 'add' as const,
-												tint: colors.accent,
-											},
-										]}
-										selected={columnId}
-										onLongPress={(id) => {
-											if (id === NEW_COLUMN_CHIP) {
-												return;
-											}
-
-											// The same menu as the three dots, for the held column.
-											setPicked(id);
-											setMenuOpen(true);
-										}}
-										onSelect={(id) => {
-											if (id === NEW_COLUMN_CHIP) {
-												setSheet({kind: 'column'});
-											} else {
-												setPicked(id);
-											}
-										}}
-									/>
-								</ScrollView>
-							)}
-						</View>
-					</View>
-				}
-				ListFooterComponent={
-					<SearchElsewhere
-						store={store}
-						query={query}
-						here="bookmarks"
-						localCount={shown.length}
-						onJump={search.close}
-					/>
-				}
-				ListEmptyComponent={
-					isSearching ? (
-						<Empty icon="search" title="No match">
-							Nothing saved matches that search.
-						</Empty>
-					) : (
-						<Empty
-							icon="bookmark-outline"
-							title="No bookmarks yet"
-							action={
-								<View style={styles.emptyActions}>
-									<Button label="Add a link" icon="add" onPress={onAdd} />
-									{!connected && (
-										<Button
-											kind="plain"
-											label="Connect to your server"
-											onPress={onConnect}
-										/>
-									)}
-								</View>
-							}
-						>
-							{view === 'private'
-								? 'Nothing is saved in the private library yet. Save a link to start it.'
-								: connected
-									? 'This phone is connected to your server, but the library has no bookmarks yet. Save a link, or share one from your browser or the extension.'
-									: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
-						</Empty>
-					)
-				}
-				renderItem={({item, index}) =>
-					reordering ? (
-						<ReorderRow
-							bookmark={item}
-							first={index === 0}
-							last={index === shown.length - 1}
-							onTop={() => {
-								reorder(item.id, 'top');
-							}}
-							onUp={() => {
-								reorder(item.id, 'up');
-							}}
-							onDown={() => {
-								reorder(item.id, 'down');
-							}}
-						/>
-					) : (
-						<BookmarkRow
-							bookmark={item}
-							selecting={selection.active}
-							checked={selection.ids.has(item.id)}
-							onToggle={() => {
-								selection.toggle(item.id);
-							}}
-							onSelect={() => {
-								if (selection.active) {
-									selection.toggle(item.id);
-								} else {
-									setRowMenuId(item.id);
+			<GlassTarget>
+				<FlatList
+					ref={listRef}
+					removeClippedSubviews
+					CellRendererComponent={dragSelect.CellRenderer}
+					scrollEnabled={dragSelect.scrollEnabled}
+					scrollEventThrottle={16}
+					data={shown}
+					extraData={selection.ids}
+					keyExtractor={(bookmark) => bookmark.id}
+					refreshing={refreshing}
+					contentContainerStyle={[
+						styles.list,
+						{
+							paddingBottom: isKeyboardOpen
+								? space + 8 + (search.open ? ROOM_FOR_BUTTONS : 0)
+								: (selection.active ? 72 + insets.bottom : space) +
+									ROOM_FOR_BUTTONS,
+						},
+					]}
+					keyboardShouldPersistTaps="handled"
+					// Long columns draw only what is on screen, and a little around it.
+					initialNumToRender={14}
+					windowSize={9}
+					maxToRenderPerBatch={10}
+					ListHeaderComponent={
+						<View style={styles.head}>
+							<Header
+								title={
+									selection.active
+										? `${selection.ids.size} selected`
+										: reordering
+											? `Order ${columnName ?? ''}`
+											: 'Bookmarks'
 								}
-							}}
-							onEdit={() => {
-								setSheet({kind: 'edit', bookmark: item});
-							}}
-							onMove={() => {
-								selection.start(item.id);
-								setSheet({kind: 'move'});
-							}}
-							onDelete={() => {
-								remove(new Set([item.id]));
-							}}
+								subtitle={
+									selection.active
+										? undefined
+										: reordering
+											? 'Move bookmarks up or down, then tap Done'
+											: `${store.bookmarks.length} saved${view === 'private' ? ', private' : ''}`
+								}
+								right={headerActions}
+							/>
+							<View style={styles.search}>
+								{!isSearching && (
+									<ScrollView horizontal showsHorizontalScrollIndicator={false}>
+										<Chips
+											items={[
+												...(showAll
+													? [
+															{
+																id: ALL_BOOKMARKS_ID,
+																name: 'All',
+																count: store.bookmarks.length,
+																glyph: 'layers-outline' as const,
+																tint: colors.accent,
+															},
+														]
+													: []),
+												...columns.map((column) => chipLook(column)),
+												{
+													id: NEW_COLUMN_CHIP,
+													name: 'New column',
+													glyph: 'add' as const,
+													tint: colors.accent,
+												},
+											]}
+											selected={columnId}
+											onLongPress={(id) => {
+												if (id === NEW_COLUMN_CHIP) {
+													return;
+												}
+
+												// The same menu as the three dots, for the held column.
+												setPicked(id);
+												setMenuOpen(true);
+											}}
+											onSelect={(id) => {
+												if (id === NEW_COLUMN_CHIP) {
+													setSheet({kind: 'column'});
+												} else {
+													setPicked(id);
+												}
+											}}
+										/>
+									</ScrollView>
+								)}
+							</View>
+						</View>
+					}
+					ListFooterComponent={
+						<SearchElsewhere
+							store={store}
+							query={query}
+							here="bookmarks"
+							localCount={shown.length}
+							onJump={search.close}
 						/>
-					)
-				}
-				onScroll={(event) => {
-					dragSelect.onScroll(event);
-					trackScroll(event);
-				}}
-				onRefresh={() => {
-					void refresh();
-				}}
-			/>
+					}
+					ListEmptyComponent={
+						isSearching ? (
+							<Empty icon="search" title="No match">
+								Nothing saved matches that search.
+							</Empty>
+						) : (
+							<Empty
+								icon="bookmark-outline"
+								title="No bookmarks yet"
+								action={
+									<View style={styles.emptyActions}>
+										<Button label="Add a link" icon="add" onPress={onAdd} />
+										{!connected && (
+											<Button
+												kind="plain"
+												label="Connect to your server"
+												onPress={onConnect}
+											/>
+										)}
+									</View>
+								}
+							>
+								{view === 'private'
+									? 'Nothing is saved in the private library yet. Save a link to start it.'
+									: connected
+										? 'This phone is connected to your server, but the library has no bookmarks yet. Save a link, or share one from your browser or the extension.'
+										: 'Save a link, share one from your browser, or connect your sync server to bring in the ones you already have.'}
+							</Empty>
+						)
+					}
+					renderItem={({item, index}) =>
+						reordering ? (
+							<ReorderRow
+								bookmark={item}
+								first={index === 0}
+								last={index === shown.length - 1}
+								onTop={() => {
+									reorder(item.id, 'top');
+								}}
+								onUp={() => {
+									reorder(item.id, 'up');
+								}}
+								onDown={() => {
+									reorder(item.id, 'down');
+								}}
+							/>
+						) : (
+							<BookmarkRow
+								bookmark={item}
+								selecting={selection.active}
+								checked={selection.ids.has(item.id)}
+								onToggle={() => {
+									selection.toggle(item.id);
+								}}
+								onSelect={() => {
+									if (selection.active) {
+										selection.toggle(item.id);
+									} else {
+										setRowMenuId(item.id);
+									}
+								}}
+								onEdit={() => {
+									setSheet({kind: 'edit', bookmark: item});
+								}}
+								onMove={() => {
+									selection.start(item.id);
+									setSheet({kind: 'move'});
+								}}
+								onDelete={() => {
+									remove(new Set([item.id]));
+								}}
+							/>
+						)
+					}
+					onScroll={(event) => {
+						dragSelect.onScroll(event);
+						trackScroll(event);
+					}}
+					onRefresh={() => {
+						void refresh();
+					}}
+				/>
+			</GlassTarget>
 			{!selection.active && !reordering && !search.open && (
 				<FloatingActions bottom={space} onAdd={onAdd} onSearch={search.show} />
 			)}

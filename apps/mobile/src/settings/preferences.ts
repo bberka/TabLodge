@@ -103,6 +103,11 @@ export type Preferences = {
 	*/
 	barLabels: BarLabels;
 	/**
+	With the iOS look: frost the floating bar and buttons with a blur of what scrolls behind them. Off draws them as solid
+	surfaces, which is lighter on a slow phone. Stays on this phone, because what a phone can draw smoothly is its own.
+	*/
+	glassEffect: boolean;
+	/**
 	The column the last link was saved to, offered first next time.
 	*/
 	lastColumnId: string;
@@ -218,6 +223,7 @@ export const defaults: Preferences = {
 	floatingBar: true,
 	barSize: 'scroll',
 	barLabels: 'active',
+	glassEffect: true,
 	lastColumnId: '',
 	tapAction: 'open',
 	swipeRight: 'delete',
@@ -321,6 +327,7 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		floatingBar,
 		barSize,
 		barLabels,
+		glassEffect,
 		lastColumnId,
 		tapAction,
 		swipeRight,
@@ -354,6 +361,8 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		floatingBar:
 			typeof floatingBar === 'boolean' ? floatingBar : defaults.floatingBar,
 		...barChoice(barSize, barLabels),
+		glassEffect:
+			typeof glassEffect === 'boolean' ? glassEffect : defaults.glassEffect,
 		lastColumnId: typeof lastColumnId === 'string' ? lastColumnId : '',
 		tapAction: tapAction === 'edit' ? 'edit' : 'open',
 		swipeRight: rowAction(swipeRight, defaults.swipeRight),
