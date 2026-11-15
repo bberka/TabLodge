@@ -176,7 +176,7 @@ export type Restored = {
 
 /**
 Puts an entry back in the library. Where its folder or column is gone it goes to the first one, and `note` says so.
-Bookmarks get new ids (the server may have recorded the delete of the old ones); the rest keep theirs.
+Bookmarks get new ids; the rest keep theirs. All of them sync, because a restore is newer than the delete.
 */
 export function restoreEntry(
 	store: Store,
