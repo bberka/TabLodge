@@ -19,7 +19,7 @@
 		"check:firefox": "node scripts/browser/firefox-smoke-check.ts",
 		"watch": "node scripts/build.ts --watch",
 		"check:build": "node scripts/verify-build.ts",
-		"check:a11y": "node scripts/a11y-check.ts",
+		"check:a11y": "node scripts/a11y/run.ts",
 		"check:private-storage": "node scripts/private-storage-check.ts",
 		"clean": "node --eval \"require('node:fs').rmSync('dist', { recursive: true, force: true })\""
 	},
