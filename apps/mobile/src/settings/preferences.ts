@@ -130,12 +130,6 @@ type Preferences = {
 	*/
 	syncPrivate: boolean;
 	/**
-	Ask before the private library syncs: each time it opens (the app starts with it open, or it is unlocked, or the private
-	view is opened), a dialog asks whether to sync it now. Only matters while syncing the private library is on and a
-	server is connected. This choice stays on this phone.
-	*/
-	askToSyncPrivate: boolean;
-	/**
 	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
 	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
 	itself when there is no server; `off` shows letter tiles. Stays on this phone.
@@ -218,7 +212,6 @@ const defaults: Preferences = {
 	cleanOnSave: true,
 	syncSettings: true,
 	syncPrivate: true,
-	askToSyncPrivate: true,
 	siteIcons: 'server',
 	savePreview: true,
 	accent: 'default',
@@ -317,7 +310,6 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 		cleanOnSave,
 		syncSettings,
 		syncPrivate,
-		askToSyncPrivate,
 		siteIcons,
 		savePreview,
 		deviceName,
@@ -358,10 +350,6 @@ function parsePreferences(saved: Partial<Preferences>): Preferences {
 			typeof syncSettings === 'boolean' ? syncSettings : defaults.syncSettings,
 		syncPrivate:
 			typeof syncPrivate === 'boolean' ? syncPrivate : defaults.syncPrivate,
-		askToSyncPrivate:
-			typeof askToSyncPrivate === 'boolean'
-				? askToSyncPrivate
-				: defaults.askToSyncPrivate,
 		siteIcons: siteIconsChoice(siteIcons),
 		savePreview:
 			typeof savePreview === 'boolean' ? savePreview : defaults.savePreview,
@@ -448,7 +436,6 @@ export function resetPreferences(): void {
 		lastColumnId: current.lastColumnId,
 		syncSettings: current.syncSettings,
 		syncPrivate: current.syncPrivate,
-		askToSyncPrivate: current.askToSyncPrivate,
 	});
 }
 

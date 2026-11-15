@@ -36,10 +36,6 @@ export const ROWS = {
 		label: 'Sync the private library',
 		hint: 'Off, it stays on this phone and never reaches your server',
 	},
-	askToSyncPrivate: {
-		label: 'Ask before syncing the private library',
-		hint: 'Each time it opens, choose whether it syncs now',
-	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
 		label: 'Accent color',
@@ -300,7 +296,7 @@ export const SECTIONS = {
 			'offline',
 			'private',
 		],
-		rows: [ROWS.syncPrivate, ROWS.askToSyncPrivate],
+		rows: [ROWS.syncPrivate],
 	},
 	excluded: {
 		title: 'Excluded websites',

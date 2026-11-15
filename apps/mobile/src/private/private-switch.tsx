@@ -4,11 +4,7 @@ import {useColors} from '../ui/theme';
 import {Button, IconButton} from '../ui/ui';
 import {setView, useView} from '../library/view';
 import {openPrivateSheet} from './private-sheets';
-import {
-	askToSyncPrivate,
-	lockPrivate,
-	usePrivateState,
-} from './private-library';
+import {lockPrivate, usePrivateState} from './private-library';
 
 /**
 Locks the private library at once: its key leaves memory and the regular library comes back. The data stays on the
@@ -44,8 +40,6 @@ export function PrivateSwitch({button = false}: {button?: boolean}) {
 			openPrivateSheet('unlock');
 		} else {
 			setView('private');
-			// Opening the private view asks whether to sync it, if that question is on and not answered yet.
-			void askToSyncPrivate();
 		}
 	};
 

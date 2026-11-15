@@ -50,7 +50,6 @@ import {
 	writeJson,
 } from '../platform/storage';
 import {setView} from '../library/view';
-import {showDialog} from '../ui/dialog';
 
 const LIBRARY_KEY = 'tablodge.private.library';
 const ON_KEY = 'tablodge.private.on';
@@ -271,62 +270,8 @@ function runClient(): void {
 		return;
 	}
 
-	// With "ask before syncing" on, nothing syncs until the person says yes for this time the library is open.
-	if (getPreferences().askToSyncPrivate && !syncAnswered) {
-		void askToSyncPrivate();
-		return;
-	}
-
 	client = createClient();
 	void client.wake().then(refreshPrivateStatus, () => undefined);
-}
-
-// Whether the person has answered the question this time the library has been open; a lock or a restart asks again.
-let syncAnswered = false;
-let asking = false;
-
-/**
-Asks whether to sync the private library now, when it is open, a server is connected, and the question is on. Yes starts
-syncing; Not now keeps it on the phone until it locks or the app restarts. Asks at most once at a time. Safe to call
-whenever the library opens: it does nothing when there is nothing to ask.
-*/
-export async function askToSyncPrivate(): Promise<void> {
-	if (
-		asking ||
-		syncAnswered ||
-		client ||
-		!exists ||
-		state.locked ||
-		!getPreferences().syncPrivate ||
-		!getPreferences().askToSyncPrivate ||
-		!(await target())
-	) {
-		return;
-	}
-
-	asking = true;
-	showDialog(
-		'Sync the private library?',
-		'Your private bookmarks and sessions can sync with your server. Choose Not now to keep them on this phone until the library locks or the app restarts.',
-		[
-			{
-				label: 'Not now',
-				kind: 'cancel',
-				run() {
-					asking = false;
-					syncAnswered = true;
-				},
-			},
-			{
-				label: 'Sync',
-				run() {
-					asking = false;
-					syncAnswered = true;
-					runClient();
-				},
-			},
-		],
-	);
 }
 
 function stopClient(): void {
@@ -450,7 +395,6 @@ A library without a PIN or password only goes back to the regular library.
 */
 export async function lockPrivate(): Promise<void> {
 	setView('regular');
-	syncAnswered = false;
 	if (lock) {
 		unlockedKey = undefined;
 		stopClient();
@@ -601,8 +545,6 @@ Closes the private library's live connection while the app is in the background,
 Starts or stops the private library's sync after the setting changes.
 */
 export async function applyPrivateSyncSetting(): Promise<void> {
-	// A changed choice starts over, so turning the question off or on takes effect at once.
-	syncAnswered = false;
 	if (getPreferences().syncPrivate) {
 		await wakePrivate();
 	} else {
