@@ -4,7 +4,7 @@ import type {
 	SessionAction,
 } from '../settings/preferences';
 import type {Colors} from '../ui/theme';
-import type {IconName} from '../ui/ui';
+import type {IconName} from '../ui/widgets';
 
 /**
 How each bookmark action looks wherever it is named: the swipe reveal, the settings, and the menus.

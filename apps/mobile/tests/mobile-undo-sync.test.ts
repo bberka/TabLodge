@@ -7,17 +7,19 @@ import {createSyncClient} from '../../extension/src/shared/sync/client';
 import type {Store} from '../../extension/src/shared/types';
 import {
 	deleteColumn,
-	deleteFolder,
-	emptyStore,
 	removeBookmarks,
 	removedBookmarks,
-	removeSession,
-	removeSessionTab,
 	restoreBookmarks,
 	restoreColumn,
+} from '../src/library/board-edits';
+import {
+	deleteFolder,
+	removeSession,
+	removeSessionTab,
 	restoreFolder,
 	restoreSession,
-} from '../src/library/library';
+} from '../src/library/session-edits';
+import {emptyStore} from '../src/library/store-shape';
 import {addToTrash, restoreEntry, type NewTrash} from '../src/library/trash';
 
 /*

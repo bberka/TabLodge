@@ -17,7 +17,7 @@ import {useBackAction} from './back-actions';
 import {setSearching, setSearchAction} from './search-action';
 import {useBarHeight} from './tab-bar';
 import {useColors, useShape} from './theme';
-import {Icon, IconButton, type IconName} from './ui';
+import {Icon, IconButton, type IconName} from './widgets';
 
 /**
 Every round button in the row, and the search drawer, share this size, so the add, search and menu buttons read as one set.

@@ -23,7 +23,7 @@ import {
 } from '../../../extension/src/shared/private-sync';
 import type {Credential} from '../../../extension/src/shared/passcode';
 import type {Store} from '../../../extension/src/shared/types';
-import {emptyStore} from '../../src/library/library';
+import {emptyStore} from '../../src/library/store-shape';
 
 export const URL_BASE = 'https://sync.test';
 export const TOKEN = 'phone-private-test-token-0123456789-abcdef';

@@ -7,7 +7,7 @@ import {
 import {defaultDeviceName} from '../../platform/device';
 import {setPreferences, usePreferences} from '../../settings/preferences';
 import {useColors} from '../../ui/theme';
-import {Field} from '../../ui/ui';
+import {Field} from '../../ui/widgets';
 
 /**
 The name this phone puts on the sessions it saves, so a session list shared between devices says where each one

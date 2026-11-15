@@ -1,10 +1,10 @@
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet, SheetHeader} from '../../ui/bottom-sheet';
 import {columnGlyph, useChipLook} from '../../ui/column-icons';
-import {moveColumn} from '../../library/library';
+import {moveColumn} from '../../library/board-edits';
 import {edit, useLibrary} from '../../library/library-store';
 import {soften, TARGET, useColors} from '../../ui/theme';
-import {Button, Icon, IconButton} from '../../ui/ui';
+import {Button, Icon, IconButton} from '../../ui/widgets';
 
 export type ColumnRow = {
 	id: string;

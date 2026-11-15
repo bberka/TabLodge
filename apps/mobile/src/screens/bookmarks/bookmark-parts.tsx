@@ -4,14 +4,14 @@ import {openLink} from '../../platform/open-links';
 import type {Bookmark} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {useChipLook} from '../../ui/column-icons';
-import {hostOf} from '../../library/library';
+import {hostOf} from '../../library/store-shape';
 import {linkToOpen, rowText} from '../../library/links';
 import {rowActionLook} from '../../library/row-actions';
 import {type RowAction, usePreferences} from '../../settings/preferences';
 import {type SwipeAction, SwipeRow} from '../../ui/swipe-row';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {TARGET, useColors, useShape} from '../../ui/theme';
-import {Button, Chips, Icon, type IconName} from '../../ui/ui';
+import {Button, Chips, Icon, type IconName} from '../../ui/widgets';
 import {SiteIcon} from '../../ui/site-icon';
 import {SaveLinkForm} from '../save/save-link';
 

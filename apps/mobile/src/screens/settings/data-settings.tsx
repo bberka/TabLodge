@@ -9,7 +9,7 @@ import {edit, useLibrary} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
 import {useView} from '../../library/view';
 import {ActionSheet} from '../../ui/action-sheet';
-import {Button} from '../../ui/ui';
+import {Button} from '../../ui/widgets';
 import {readSafetyCopy} from '../../transfer/restore';
 import {
 	RestoreSheet,

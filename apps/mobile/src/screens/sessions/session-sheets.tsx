@@ -5,7 +5,7 @@ import {BottomSheet} from '../../ui/bottom-sheet';
 import {ColorPicker} from '../../ui/color-picker';
 import {columnGlyph, columnTint} from '../../ui/column-icons';
 import {TARGET, useColors} from '../../ui/theme';
-import {Button, Chips, Field, Icon} from '../../ui/ui';
+import {Button, Chips, Field, Icon} from '../../ui/widgets';
 
 /**
 The drawer for renaming a session, or another named thing such as a folder when `title` and `label` say so. `check`

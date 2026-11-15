@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {parseImportFile} from '../../extension/src/shared/import-formats';
-import {emptyStore} from '../src/library/library';
+import {emptyStore} from '../src/library/store-shape';
 import {
 	importIntoStore,
 	previewFor,

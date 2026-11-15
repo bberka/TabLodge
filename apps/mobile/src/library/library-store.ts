@@ -20,7 +20,7 @@ import {
 } from '../private/private-library';
 import {getPreferences} from '../settings/preferences';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
-import {emptyStore, isStore} from './library';
+import {emptyStore, isStore} from './store-shape';
 import {DEFAULTS as LINK_DEFAULTS, type LinkSettings} from './links';
 import {createLibraryCore} from './library-core';
 import {syncedTrash} from './trash-storage';

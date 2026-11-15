@@ -13,7 +13,7 @@ import {
 } from '../../../extension/src/shared/accent-colors';
 import {hexToHsl, hslToHex} from '../../../extension/src/shared/color-math';
 import {TARGET, useColors} from './theme';
-import {Field, Icon, type IconName} from './ui';
+import {Field, Icon, type IconName} from './widgets';
 
 export type LeadingChoice = {
 	id: string;

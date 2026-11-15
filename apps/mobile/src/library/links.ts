@@ -8,7 +8,7 @@ import {
 	displayUrl,
 	showsInsecureMark,
 } from '../../../extension/src/shared/url-display';
-import {hostOf} from './library';
+import {hostOf} from './store-shape';
 
 export type LinkSettings = Pick<
 	Settings,

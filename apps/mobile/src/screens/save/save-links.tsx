@@ -3,14 +3,13 @@ import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {phoneStamp} from '../../platform/device';
 import {stripTrackingParameters} from '../../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../../library/column-choice';
+import {addBookmarks} from '../../library/board-edits';
 import {
-	addBookmarks,
 	addSession,
 	addTabsToSession,
 	sessionsIn,
-	hostOf,
-	extractUrls,
-} from '../../library/library';
+} from '../../library/session-edits';
+import {hostOf, extractUrls} from '../../library/store-shape';
 import {
 	editIn,
 	type LibraryName,
@@ -25,7 +24,7 @@ import {getPreferences, setPreferences} from '../../settings/preferences';
 import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
-import {Button, Chips, Field, Segmented} from '../../ui/ui';
+import {Button, Chips, Field, Segmented} from '../../ui/widgets';
 
 type Mode = 'bookmarks' | 'session';
 

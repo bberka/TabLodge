@@ -1,6 +1,6 @@
 import type {Store} from '../../../extension/src/shared/types';
 import {writeJson} from '../platform/storage';
-import {emptyStore} from './library';
+import {emptyStore} from './store-shape';
 
 /**
 One library held in memory and saved to SQLite: reads and writes run one after another, the way the extension's

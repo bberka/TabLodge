@@ -31,7 +31,7 @@ import {
 	SearchDock,
 	useSearch,
 } from '../../ui/floating-actions';
-import {Button, Empty, Header, Icon, type IconName} from '../../ui/ui';
+import {Button, Empty, Header, Icon, type IconName} from '../../ui/widgets';
 import {systemAccent} from '../../../modules/open-links';
 import {ACCENTS} from '../../../../extension/src/shared/accent-colors';
 import {APP_ACCENT} from '../../ui/accent';

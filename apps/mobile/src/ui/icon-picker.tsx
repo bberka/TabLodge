@@ -4,7 +4,7 @@ import {searchIconInfos} from '../../../extension/src/shared/icon-meta';
 import {BottomSheet} from './bottom-sheet';
 import {columnGlyph} from './column-icons';
 import {TARGET, useColors} from './theme';
-import {Button, Empty, Field, Icon} from './ui';
+import {Button, Empty, Field, Icon} from './widgets';
 
 const COLUMNS = 4;
 const HEIGHT = 340;

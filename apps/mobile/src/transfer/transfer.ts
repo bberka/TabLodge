@@ -25,7 +25,7 @@ import {
 	previewImport,
 } from '../../../extension/src/shared/import-formats';
 import type {ShareGroup} from '../../../extension/src/shared/share-formats';
-import {hostOf} from '../library/library';
+import {hostOf} from '../library/store-shape';
 
 export type ImportResult = {
 	store: Store;

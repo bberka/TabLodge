@@ -19,7 +19,7 @@ import {normalizeStore} from '../../../extension/src/shared/library-normalize';
 import type {Store} from '../../../extension/src/shared/types';
 import {unwrapKey, wrapKey} from '../../modules/tablodge-crypto';
 import {backupPreferences} from '../settings/preferences';
-import {isStore} from '../library/library';
+import {isStore} from '../library/store-shape';
 
 // A few thousand arguments at a time: Hermes has a smaller call stack than the browsers this idiom comes from.
 const CHUNK = 0x20_00;

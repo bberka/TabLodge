@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {TARGET, useColors} from '../../ui/theme';
-import {Icon, type IconName} from '../../ui/ui';
+import {Icon, type IconName} from '../../ui/widgets';
 import {useRowReset} from './row-reset';
 import {useRowVisible} from './settings-card';
 import type {Row} from './settings-index';

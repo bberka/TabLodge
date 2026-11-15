@@ -24,7 +24,7 @@ import {
 	removedBookmarks,
 	restoreBookmarks,
 	searchBookmarks,
-} from '../../library/library';
+} from '../../library/board-edits';
 import {
 	edit,
 	newId,
@@ -57,7 +57,7 @@ import {
 	SearchDock,
 	useSearch,
 } from '../../ui/floating-actions';
-import {Button, Chips, Empty, Header, IconButton} from '../../ui/ui';
+import {Button, Chips, Empty, Header, IconButton} from '../../ui/widgets';
 import {openShare} from '../transfer/transfer-sheets';
 import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';

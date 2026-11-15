@@ -1,7 +1,7 @@
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from './bottom-sheet';
 import {TARGET, useColors} from './theme';
-import {Icon, type IconName} from './ui';
+import {Icon, type IconName} from './widgets';
 
 export type SheetAction = {
 	icon: IconName;

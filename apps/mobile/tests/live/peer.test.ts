@@ -19,7 +19,8 @@ import {
 	createSyncClient,
 	SYNC_CONFIG_KEY,
 } from '../../../extension/src/shared/sync/client';
-import {addBookmark, emptyStore} from '../../src/library/library';
+import {addBookmark} from '../../src/library/board-edits';
+import {emptyStore} from '../../src/library/store-shape';
 import type {Store} from '../../../extension/src/shared/types';
 
 const step = process.env.TL_STEP;

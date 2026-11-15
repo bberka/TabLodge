@@ -2,8 +2,8 @@ import {useMemo} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
-import {Icon, type IconName} from '../../ui/ui';
-import {libraryStats} from '../../library/library';
+import {Icon, type IconName} from '../../ui/widgets';
+import {libraryStats} from '../../library/store-shape';
 import {useLibrary} from '../../library/library-store';
 import {useView} from '../../library/view';
 

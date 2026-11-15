@@ -5,7 +5,7 @@ backup restore takes a safety backup and offers Undo.
 */
 import type {Store} from '../../../extension/src/shared/types';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
-import {isStore} from '../library/library';
+import {isStore} from '../library/store-shape';
 
 export type LibraryName = 'regular' | 'private';
 

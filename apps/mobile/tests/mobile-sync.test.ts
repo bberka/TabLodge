@@ -4,9 +4,9 @@ import {createApi} from '../../server/src/api';
 import {
 	addBookmark,
 	addColumn,
-	emptyStore,
 	removeBookmarks,
-} from '../src/library/library';
+} from '../src/library/board-edits';
+import {emptyStore} from '../src/library/store-shape';
 import type {Session, Store} from '../../extension/src/shared/types';
 import {ChangeLog} from '../../extension/src/shared/sync/change-log';
 import {

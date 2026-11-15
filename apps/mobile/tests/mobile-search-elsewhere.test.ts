@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {jumpFor, searchElsewhere} from '../src/library/search-elsewhere';
-import {addBookmark, addColumn, emptyStore} from '../src/library/library';
+import {addBookmark, addColumn} from '../src/library/board-edits';
+import {emptyStore} from '../src/library/store-shape';
 import type {Store} from '../../extension/src/shared/types';
 
 const NOW = 1000;

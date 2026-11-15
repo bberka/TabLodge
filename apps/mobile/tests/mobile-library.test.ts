@@ -10,23 +10,31 @@ import {
 	addColumn,
 	bookmarksIn,
 	columnViews,
-	emptyStore,
-	extractUrl,
 	moveBookmarks,
 	removeBookmarks,
 	removedBookmarks,
 	restoreBookmarks,
-	splitShared,
 	searchBookmarks,
 	updateBookmark,
 	addBookmarks,
 	deleteColumn,
 	setColumnSites,
 	updateColumn,
-	addSession,
 	moveBookmark,
 	moveColumn,
 	setSessionColor,
+	restoreColumn,
+	allBookmarks,
+} from '../src/library/board-edits';
+import {
+	emptyStore,
+	extractUrl,
+	splitShared,
+	extractUrls,
+	libraryStats,
+} from '../src/library/store-shape';
+import {
+	addSession,
 	renameSession,
 	moveSession,
 	archiveSession,
@@ -37,7 +45,6 @@ import {
 	sessionLinks,
 	addTabsToSession,
 	ALL_SESSIONS_ID,
-	extractUrls,
 	sessionFolders,
 	sessionsIn,
 	canChangeFolder,
@@ -49,13 +56,10 @@ import {
 	folderNameProblem,
 	updateFolder,
 	restoreFolder,
-	restoreColumn,
-	allBookmarks,
 	updateSessionTab,
-	libraryStats,
 	isArchivedSession,
 	unarchiveSession,
-} from '../src/library/library';
+} from '../src/library/session-edits';
 import {sampleStore} from '../src/library/seed';
 
 const NOW = 1000;

@@ -8,7 +8,7 @@ import {
 	refreshStatus,
 } from '../../library/library-store';
 import {useColors} from '../../ui/theme';
-import {Button, Field} from '../../ui/ui';
+import {Button, Field} from '../../ui/widgets';
 
 /**
 The drawer for entering the server address and token. It is a drawer so the keyboard lifts it: on Android the

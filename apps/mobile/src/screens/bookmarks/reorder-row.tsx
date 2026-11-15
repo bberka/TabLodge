@@ -1,9 +1,9 @@
 import {StyleSheet, Text, View} from 'react-native';
 import type {Bookmark} from '../../../../extension/src/shared/types';
-import {hostOf} from '../../library/library';
+import {hostOf} from '../../library/store-shape';
 import {SiteIcon} from '../../ui/site-icon';
 import {TARGET, useColors} from '../../ui/theme';
-import {IconButton} from '../../ui/ui';
+import {IconButton} from '../../ui/widgets';
 
 /**
 A bookmark while the column is being put in order: its title, and buttons that move it. Moving by buttons works

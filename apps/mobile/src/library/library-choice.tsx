@@ -3,7 +3,7 @@ import {Text, View} from 'react-native';
 import {usePrivateState} from '../private/private-library';
 import {openPrivateSheet} from '../private/private-sheets';
 import {useColors} from '../ui/theme';
-import {Segmented} from '../ui/ui';
+import {Segmented} from '../ui/widgets';
 import {type LibraryName} from './library-store';
 
 /**

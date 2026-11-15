@@ -5,7 +5,7 @@ import {USER_AGENT} from '../library/link-preview';
 import {useSyncStatus} from '../library/library-store';
 import {usePreferences} from '../settings/preferences';
 import {readJson} from '../platform/storage';
-import {Avatar} from './ui';
+import {Avatar} from './widgets';
 
 type Source = {uri: string; headers?: Record<string, string>};
 
