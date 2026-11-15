@@ -17,7 +17,9 @@ Run tasks as `vp run <task>` from the root; scripts in the root `package.json` f
 
 - Never commit on or push to `master` or `main`; work on a `<type>/<short-topic>` branch and open a pull request.
 - Commits name the human author only. The pull request names the model.
-- Every fix or feature carries proof in the pull request.
+- Challenge a new feature with `challenge-feature` before building it, unless told to implement it. Fixes and "implement it" go straight to work.
+- Every fix or feature carries proof in the pull request. Ask the user only when no proof is possible.
+- Finish the task: commit, push, open the pull request, wait for green CI, stop every process you started, then say done.
 - Run the `unslop-*` skills on the diff before every push.
 - Leave the Git hooks on, and finish the gate before pushing.
 - A change is not done while a document still describes the old behavior.
