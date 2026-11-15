@@ -4,7 +4,7 @@ name: Release
 # Version = 0.<VERSION file>.<patch>, where patch continues from the latest v0.<VERSION>.* tag
 # (see scripts/release-version.ts). Publishes a GitHub release with a Chromium zip and a Firefox zip, then the sync
 # server image with the same version (sync-server.yml) and the signed Android APK. The APK needs the signing secrets
-# described in docs/CONTRIBUTING.md; without them that job only prints a warning.
+# described in docs/CONTRIBUTING.md; without them that job fails.
 on:
   workflow_dispatch:
 
@@ -141,51 +141,38 @@ jobs:
       KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Check the signing secrets
-        id: signing
         run: |
           if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::The Android signing secrets are not set, so v$VERSION has no APK. See docs/CONTRIBUTING.md."
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "::error::The Android signing secrets are not set, so v$VERSION has no APK. See docs/CONTRIBUTING.md."
+            exit 1
           fi
       # The tag the release job made, so the APK is built from exactly the released commit.
       - uses: actions/checkout@v7
-        if: steps.signing.outputs.enabled == 'true'
         with:
           ref: v${{ needs.release.outputs.version }}
       - uses: pnpm/action-setup@v6
-        if: steps.signing.outputs.enabled == 'true'
       - uses: actions/setup-node@v7
-        if: steps.signing.outputs.enabled == 'true'
         with:
           node-version: 24
           cache: pnpm
       - uses: actions/setup-java@v5
-        if: steps.signing.outputs.enabled == 'true'
         with:
           distribution: temurin
           java-version: 17
       - name: Accept the Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-        if: steps.signing.outputs.enabled == 'true'
       - uses: gradle/actions/setup-gradle@v5
-        if: steps.signing.outputs.enabled == 'true'
       - name: Install and stamp the version
-        if: steps.signing.outputs.enabled == 'true'
         run: |
           pnpm install --frozen-lockfile
           node scripts/release-version.ts set-android "$VERSION"
       - name: Generate the Android project
-        if: steps.signing.outputs.enabled == 'true'
         run: pnpm --filter tablodge-mobile exec expo prebuild --platform android --no-install
       - name: Build the release APK
-        if: steps.signing.outputs.enabled == 'true'
         working-directory: apps/mobile/android
         run: ./gradlew assembleRelease -x lint -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
       # Gradle signs the release build with a throwaway debug key. This aligns it and signs it again with the real one.
       - name: Sign, check, and upload the APK
-        if: steps.signing.outputs.enabled == 'true'
         run: |
           mkdir release
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
