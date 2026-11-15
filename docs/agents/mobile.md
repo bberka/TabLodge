@@ -9,10 +9,12 @@ Expo and React Native, TypeScript. It syncs with the user's own sync server and 
 | `src/ui/` | Look and shared components: theme, sheets, dialogs, the tab bar, keyboard and motion helpers |
 | `src/library/` | The library: `store-shape.ts` (the empty store, link extraction, statistics), `board-edits.ts` (columns and bookmarks), `session-edits.ts` (sessions and folders), then the store, links, the view, and the row actions |
 | `src/transfer/` | Import, export, backups, and files |
+| `src/update/` | Check for updates: `update-check.ts` (versions, the one hour wait, the saved answer) is pure and tested; `app-update.ts` asks GitHub, downloads the APK, and shows the dialogs |
 | `src/settings/` | The app's own preferences. `preference-schema.ts` is the one place that says what each is, its default, how a stored value is checked, and whether it syncs; `preferences.ts` keeps the current values; `preferences-sync.ts` shares the synced ones |
 | `src/private/` | The private library: its lock, sheets, switch, and auto-lock |
 | `src/platform/` | Device, storage, open links, and polyfills |
 | `src/screens/` | One folder per area: `bookmarks`, `sessions`, `save`, `settings`, `transfer` |
+| `modules/app-update/` | Local native module that asks Android whether installs are allowed and starts the installer on the downloaded APK (a `FileProvider` limited to the cache's `updates` folder) |
 | `modules/tablodge-crypto/` | Local native module (PBKDF2 and AES-GCM for the private library) |
 | `scripts/make-icons.mts` | `pnpm run mobile:icons`: redraws `assets/` (launcher foreground, monochrome layer, legacy icon, light and dark splash) from `apps/extension/shell/icons/tablodge.svg` |
 | `scripts/build-apk.mts` | `pnpm run mobile:apk`: a standalone APK from this checkout |
