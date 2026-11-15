@@ -1,7 +1,7 @@
 import {usePreferences} from '../settings/preferences';
 import {showSnack} from '../ui/snackbar';
 import {useColors} from '../ui/theme';
-import {Button, IconButton} from '../ui/ui';
+import {Button, IconButton} from '../ui/widgets';
 import {setView, useView} from '../library/view';
 import {openPrivateSheet} from './private-sheets';
 import {lockPrivate, usePrivateState} from './private-library';

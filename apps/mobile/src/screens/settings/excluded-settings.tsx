@@ -7,7 +7,7 @@ import {
 import {setSyncedSetting, useRegularLibrary} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
-import {Button, Field, IconButton} from '../../ui/ui';
+import {Button, Field, IconButton} from '../../ui/widgets';
 import {SettingsCard} from './settings-card';
 import {SECTIONS} from './settings-index';
 

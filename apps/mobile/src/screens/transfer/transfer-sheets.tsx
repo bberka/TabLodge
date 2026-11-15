@@ -36,7 +36,7 @@ import {
 	previewFor,
 	shareGroupsOf,
 } from '../../transfer/transfer';
-import {Button, Chips, Field, Switch} from '../../ui/ui';
+import {Button, Chips, Field, Switch} from '../../ui/widgets';
 
 const APP_NAME = 'TabLodge';
 

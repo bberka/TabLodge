@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {FinderItem} from '../../../extension/src/shared/global-search';
 import type {Store} from '../../../extension/src/shared/types';
-import {hostOf} from '../library/library';
+import {hostOf} from '../library/store-shape';
 import {requestJump} from '../library/jump';
 import {linkToOpen} from '../library/links';
 import {
@@ -17,7 +17,7 @@ import {openLink} from '../platform/open-links';
 import {useSettledText} from '../ui/search-count';
 import {SiteIcon} from '../ui/site-icon';
 import {TARGET, useColors} from '../ui/theme';
-import {Button, Icon} from '../ui/ui';
+import {Button, Icon} from '../ui/widgets';
 
 /**
 Under a screen's own search results: the same query run over the other places, listed with a line that says so.

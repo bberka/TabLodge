@@ -16,7 +16,7 @@ import {
 } from '../../settings/preferences';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
-import {Button, Field} from '../../ui/ui';
+import {Button, Field} from '../../ui/widgets';
 import {useView} from '../../library/view';
 
 export type RestoreSource = {name: string; bytes: Uint8Array};

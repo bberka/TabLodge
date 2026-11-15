@@ -41,7 +41,7 @@ import {
 	wrapKey,
 } from '../../modules/tablodge-crypto';
 import {getPreferences} from '../settings/preferences';
-import {emptyStore, isStore} from '../library/library';
+import {emptyStore, isStore} from '../library/store-shape';
 import {createLibraryCore} from '../library/library-core';
 import {
 	PRIVATE_KEY_KEY,

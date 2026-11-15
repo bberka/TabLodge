@@ -5,7 +5,7 @@ import type {
 	SavedTab,
 	Session,
 } from '../../extension/src/shared/types';
-import {emptyStore} from '../src/library/library';
+import {emptyStore} from '../src/library/store-shape';
 import {
 	addToTrash,
 	describeEntry,

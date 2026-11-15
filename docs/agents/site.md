@@ -51,17 +51,17 @@ Only the matched download is a filled button; the others stay outlined. To chang
 
 ## Screenshots
 
-Use synthetic data, never a personal browser profile. Run `vp run dev:chrome:seed` to load the repeatable sample sessions and bookmarks in the isolated `.dev/chrome-profile`. Existing screenshots were captured with Playwright at twice the display resolution in both themes.
+Use synthetic data, never a personal browser profile. Run `vp run dev:chrome --seed-data` to load the repeatable sample sessions and bookmarks in the isolated `.dev/chrome-profile`. Existing screenshots were captured with Playwright at twice the display resolution in both themes.
 
 After changing UI shown in a screenshot:
 
-1. Run `vp run dev:chrome:seed` to build the extension and load the sample data.
+1. Run `vp run dev:chrome --seed-data` to build the extension and load the sample data.
 2. Capture the affected dashboard, search palette, Settings, or side panel in light and dark themes from the opened dev browser.
 3. Save WebP files in `apps/site/src/assets/`, keeping the existing names: for example, `dashboard-light.webp` and `dashboard-dark.webp`.
 
 The Android section shows `android-bookmarks` and `android-sessions` in both themes. Capture them from the app's release build on an emulator that syncs from a server holding the same synthetic fixture (a development build shows the dev menu button over the screen), set the theme with `adb shell cmd uimode night yes` or `no`, and save them as WebP in `apps/site/src/assets/` at the screen's own size. Use the app's defaults, so the floating tab bar shows: clear the app's data first (`adb shell pm clear com.bberka.tablodge`) and leave the settings alone. Without a server, a fresh build with the development seed (`apps/mobile/src/library/seed.ts`, which a release build leaves out unless its `__DEV__` checks are lifted for the capture, and that change is never committed) holds the same fixture. Set the status bar to 9:41 with the system UI demo mode.
 
-The fixture is synthetic and deterministic. Seeding replaces TabLodge data in the isolated dev profile and loads local icons from `~/.cache/tablodge/dev-favicons.json`, a machine wide cache shared by worktrees. The first run fetches missing icons from sample sites. Delete the cache file to fetch them again. This network activity happens only when you run `vp run dev:chrome:seed`. The extension itself does not fetch favicons or gain extra permissions. Capture is manual, and there is no screenshot command. Astro optimizes the images during the site build.
+The fixture is synthetic and deterministic. Seeding replaces TabLodge data in the isolated dev profile and loads local icons from `~/.cache/tablodge/dev-favicons.json`, a machine wide cache shared by worktrees. The first run fetches missing icons from sample sites. Delete the cache file to fetch them again. This network activity happens only when you run `vp run dev:chrome --seed-data`. The extension itself does not fetch favicons or gain extra permissions. Capture is manual, and there is no screenshot command. Astro optimizes the images during the site build.
 
 ## Deploy to GitHub Pages
 

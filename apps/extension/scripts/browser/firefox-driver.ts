@@ -1,5 +1,5 @@
 // Shared Selenium plumbing for the scripts that run the Firefox build in a real Firefox
-// (scripts/firefox-smoke-check.ts and the dev launcher in scripts/dev-firefox.ts).
+// (scripts/browser/firefox-smoke-check.ts and the dev launcher in scripts/browser/dev-firefox.ts).
 //
 // Needs Firefox (FIREFOX_BIN overrides the one Selenium finds) and a matching geckodriver, which Selenium
 // downloads when none is on the PATH. The add-on is installed as a temporary add-on, so Firefox does not
@@ -8,8 +8,8 @@ import assert from 'node:assert/strict';
 import process from 'node:process';
 import firefoxModule from 'selenium-webdriver/firefox.js';
 import type * as Firefox from 'selenium-webdriver/firefox.js';
-import {GECKO_ID} from './manifest-targets.ts';
-import {outDirFor} from './vite-shared.ts';
+import {GECKO_ID} from '../manifest-targets.ts';
+import {outDirFor} from '../vite-shared.ts';
 
 const UUID = '7a1f0c2e-5b7d-4f43-9a41-4f1c2b9d0a11';
 const firefox = firefoxModule as typeof Firefox;

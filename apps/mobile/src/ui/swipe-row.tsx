@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import {spring} from './motion';
 import {readableOn, useColors} from './theme';
-import {Icon, type IconName} from './ui';
+import {Icon, type IconName} from './widgets';
 
 export type SwipeAction = {
 	label: string;

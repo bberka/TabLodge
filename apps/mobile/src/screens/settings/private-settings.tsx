@@ -14,7 +14,7 @@ import {
 import {openPrivateSheet} from '../../private/private-sheets';
 import {useSyncStatus} from '../../library/library-store';
 import {useColors} from '../../ui/theme';
-import {Button} from '../../ui/ui';
+import {Button} from '../../ui/widgets';
 import {SelectRow} from './select-row';
 import {SettingsCard} from './settings-card';
 import {Toggle} from './behaviour-settings';

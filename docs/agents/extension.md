@@ -9,7 +9,7 @@ The Chrome, Brave, and Firefox extension (Manifest V3). It also holds the code t
 | `shell/` | `manifest.json`, icons, HTML shells, `service-worker.ts`, boot scripts |
 | `src/app/` | Pages, data model, messages |
 | `src/components/ui/` | Radix and Tailwind primitives |
-| `scripts/` | Build, packaging, verification, dev browser, accessibility checks |
+| `scripts/` | Build, packaging, verification, and accessibility checks; `scripts/browser/` holds the dev browser launchers and the browser based checks |
 | `tests/` | Vitest suites (the worker runs in a VM with mocked `chrome.*`) |
 
 Logic that needs no browser lives in `src/shared` and `src/app` as plain modules with their own tests, not in the service worker or a page component: `library-normalize.ts` (reading untrusted stored data), `bookmark-rules.ts` (column rules the Android app shares), `context-menu-plan.ts` (the right-click tree), and `bookmark-drag.ts` (board drag and drop). Put new rules of that kind there too.
@@ -28,4 +28,4 @@ Logic that needs no browser lives in `src/shared` and `src/app` as plain modules
 
 ## Commands
 
-Use `vp run <task>` from the repository root: `dev:chrome`, `dev:firefox`, `build`, `pack`, `browser:firefox`, `a11y`. The list is in the [README](../README.md#development) and `apps/extension/package.json`. The dev browser keeps its profile in `apps/extension/.dev/`, and builds land in `apps/extension/dist/`. Load the same build folder every time: another path gives the extension a different ID and separate storage.
+Use `vp run <task>` from the repository root: `dev:chrome`, `dev:firefox`, `build`, `pack`, `check:firefox`, `check:a11y`. The list is in the [README](../README.md#development) and `apps/extension/package.json`. The dev browser keeps its profile in `apps/extension/.dev/`, and builds land in `apps/extension/dist/`. Load the same build folder every time: another path gives the extension a different ID and separate storage.

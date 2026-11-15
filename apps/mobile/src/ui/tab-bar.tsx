@@ -16,7 +16,7 @@ import {motion, spring} from './motion';
 import {resetScroll, useScrolledDown} from './scroll-state';
 import {useSearching, useSearchAction} from './search-action';
 import {BAR_HEIGHT, useColors, useShape} from './theme';
-import {Icon, type IconName} from './ui';
+import {Icon, type IconName} from './widgets';
 
 export type BarTab<T extends string> = {
 	id: T;

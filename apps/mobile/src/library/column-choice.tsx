@@ -6,9 +6,9 @@ import {columnGlyph, useChipLook} from '../ui/column-icons';
 import {IconPicker} from '../ui/icon-picker';
 import {getPreferences} from '../settings/preferences';
 import {useColors} from '../ui/theme';
-import {Chips, Field} from '../ui/ui';
+import {Chips, Field} from '../ui/widgets';
 import {editIn, type LibraryName, newId, useLibraryOf} from './library-store';
-import {addColumn, columnViews} from './library';
+import {addColumn, columnViews} from './board-edits';
 
 // The selector's last entry; choosing it asks for a name and an icon.
 const NEW_COLUMN = '__new-column__';

@@ -12,7 +12,7 @@ import {BottomSheet} from '../ui/bottom-sheet';
 import {notify} from '../ui/dialog';
 import {showSnack} from '../ui/snackbar';
 import {useColors} from '../ui/theme';
-import {Button, Field, Segmented} from '../ui/ui';
+import {Button, Field, Segmented} from '../ui/widgets';
 import {setView} from '../library/view';
 import {
 	changePrivateLock,

@@ -15,7 +15,7 @@ import {
 } from '../../library/row-actions';
 import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
-import {Switch} from '../../ui/ui';
+import {Switch} from '../../ui/widgets';
 import {useRowReset} from './row-reset';
 import {SettingsCard, useRowVisible} from './settings-card';
 import {RowLabel, SelectRow} from './select-row';

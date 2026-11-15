@@ -1,4 +1,4 @@
-// The Firefox counterpart of scripts/dev-browser.ts: opens the Firefox build in a dedicated profile with the
+// The Firefox counterpart of scripts/browser/dev-browser.ts: opens the Firefox build in a dedicated profile with the
 // extension loaded, optionally with the sample data fixture and without a desktop window.
 //
 // Headless mode prints the geckodriver address and session id. A Selenium client can attach to that session to
@@ -6,14 +6,14 @@
 // process, to close Firefox and the build watchers.
 import {mkdir} from 'node:fs/promises';
 import process from 'node:process';
-import {createDevFixture, type DevStore} from '../src/shared/dev-fixture.ts';
+import {createDevFixture, type DevStore} from '../../src/shared/dev-fixture.ts';
+import {fromRoot} from '../vite-shared.ts';
 import {
 	evaluateInPage,
 	launchFirefox,
 	openExtensionPage,
 	type FirefoxSession,
 } from './firefox-driver.ts';
-import {fromRoot} from './vite-shared.ts';
 
 const profileDirectory = (headless: boolean) =>
 	fromRoot(headless ? '.dev/firefox-headless-profile' : '.dev/firefox-profile');

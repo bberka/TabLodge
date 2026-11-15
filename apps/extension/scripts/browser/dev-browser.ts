@@ -5,10 +5,10 @@ import {
 	createDevFixture,
 	devFixtureUrls,
 	type DevStore,
-} from '../src/shared/dev-fixture.ts';
+} from '../../src/shared/dev-fixture.ts';
+import {OUT_DIR, fromRoot} from '../vite-shared.ts';
 import {loadDevFavicons} from './dev-favicon-cache.ts';
 import {stopWatchersWhenBrowserCloses} from './dev-browser-lifecycle.ts';
-import {OUT_DIR, fromRoot} from './vite-shared.ts';
 
 function profileDirectory(headless: boolean): string {
 	return fromRoot(
@@ -153,7 +153,7 @@ export async function openDevBrowser(
 		await context?.close().catch(() => {});
 		console.warn(
 			options.headless
-				? 'Could not launch headless Chromium. Run `vp run browser:install`, then retry `vp run dev:chrome:headless`. The build watcher is still running.'
+				? 'Could not launch headless Chromium. Run `vp run browser:install`, then retry `vp run dev:chrome --headless`. The build watcher is still running.'
 				: 'Could not launch a browser. Run `vp run browser:install` or set CHROME_BIN to your browser executable, then run `vp run dev:chrome` again. The build watcher is still running.',
 		);
 		console.warn(error instanceof Error ? error.message : String(error));

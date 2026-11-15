@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/ui/bottom-sheet';
-import {extractUrls, splitShared} from './src/library/library';
+import {extractUrls, splitShared} from './src/library/store-shape';
 import {runBackAction} from './src/ui/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library/library-store';
 import {purgeTrash} from './src/library/trash-store';

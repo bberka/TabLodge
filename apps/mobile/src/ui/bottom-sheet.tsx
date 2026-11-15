@@ -14,7 +14,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {keyboardInset, settleKeyboard} from './keyboard';
 import {motion, spring} from './motion';
 import {useColors, useShape} from './theme';
-import {IconButton} from './ui';
+import {IconButton} from './widgets';
 
 const CLOSE_DRAG = 80;
 const CLOSE_VELOCITY = 0.8;

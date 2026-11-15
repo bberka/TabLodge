@@ -14,7 +14,9 @@ import {
 	readProtectedFullBackup,
 } from '../../extension/src/shared/full-backup';
 import {normalizeStore} from '../../extension/src/shared/library-normalize';
-import {addBookmark, addSession, emptyStore} from '../src/library/library';
+import {addBookmark} from '../src/library/board-edits';
+import {addSession} from '../src/library/session-edits';
+import {emptyStore} from '../src/library/store-shape';
 import {buildBackup, readBackup} from '../src/transfer/backup';
 import {
 	dropSafetyCopy,

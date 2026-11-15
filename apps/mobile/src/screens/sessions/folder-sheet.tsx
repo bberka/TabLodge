@@ -9,10 +9,10 @@ import {
 	folderLimitProblem,
 	folderNameProblem,
 	updateFolder,
-} from '../../library/library';
+} from '../../library/session-edits';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {useColors} from '../../ui/theme';
-import {Button, Field, Switch} from '../../ui/ui';
+import {Button, Field, Switch} from '../../ui/widgets';
 
 type Editing = {
 	id: string;

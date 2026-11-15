@@ -9,17 +9,14 @@ import {
 import type {Bookmark} from '../../../../extension/src/shared/types';
 import {stripTrackingParameters} from '../../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../../library/column-choice';
+import {addBookmark, updateBookmark} from '../../library/board-edits';
 import {
-	addBookmark,
 	addSession,
 	addTabsToSession,
 	ALL_SESSIONS_ID,
-	extractUrl,
-	extractUrls,
-	hostOf,
 	sessionsIn,
-	updateBookmark,
-} from '../../library/library';
+} from '../../library/session-edits';
+import {extractUrl, extractUrls, hostOf} from '../../library/store-shape';
 import {phoneStamp} from '../../platform/device';
 import {
 	editIn,
@@ -42,7 +39,7 @@ import {SiteIcon} from '../../ui/site-icon';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
-import {Button, Chips, Field, Segmented} from '../../ui/ui';
+import {Button, Chips, Field, Segmented} from '../../ui/widgets';
 
 // The session selector's first entry; choosing it makes a new session.
 const NEW_SESSION = '__new-session__';

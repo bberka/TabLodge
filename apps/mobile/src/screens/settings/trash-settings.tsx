@@ -4,7 +4,7 @@ import {BottomSheet} from '../../ui/bottom-sheet';
 import {confirm} from '../../ui/dialog';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
-import {Button, Empty, Segmented} from '../../ui/ui';
+import {Button, Empty, Segmented} from '../../ui/widgets';
 import {useRegularLibrary} from '../../library/library-store';
 import {
 	deleteForever,

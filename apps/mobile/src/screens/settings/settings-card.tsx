@@ -5,7 +5,7 @@ matched only through that row's neighbours.
 import {createContext, type ReactNode, use, useMemo} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {useColors} from '../../ui/theme';
-import {Card, Icon, type IconName, IconButton} from '../../ui/ui';
+import {Card, Icon, type IconName, IconButton} from '../../ui/widgets';
 import {canReset, confirmResetSection} from './row-reset';
 import {
 	headHit,

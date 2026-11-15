@@ -6,7 +6,7 @@ import {
 } from '../../../extension/src/shared/accent-colors';
 import type {IconId} from '../../../extension/src/shared/icon-ids';
 import {avatarColor} from './theme';
-import type {IconName} from './ui';
+import type {IconName} from './widgets';
 
 /**
 The extension names column icons from a Lucide set; this picks the closest Ionicons glyph for each one.

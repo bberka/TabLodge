@@ -13,7 +13,7 @@ import {
 	addBookmark,
 	removeBookmarks,
 	updateBookmark,
-} from '../src/library/library';
+} from '../src/library/board-edits';
 import {
 	connectGlobals,
 	makeExtension,

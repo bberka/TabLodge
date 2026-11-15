@@ -23,12 +23,8 @@ import type {
 	Session,
 	Store,
 } from '../../../extension/src/shared/types';
-import {
-	restoreBookmarks,
-	restoreColumn,
-	restoreFolder,
-	restoreSession,
-} from './library';
+import {restoreBookmarks, restoreColumn} from './board-edits';
+import {restoreFolder, restoreSession} from './session-edits';
 
 export const TRASH_KEY = 'tablodge.trash';
 export const PRIVATE_TRASH_KEY = 'tablodge.private.trash';

@@ -3,17 +3,13 @@ import {StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {ColumnChoice, useColumnChoice} from '../../library/column-choice';
 import {notify} from '../../ui/dialog';
-import {
-	addBookmark,
-	addTabsToSession,
-	extractUrl,
-	extractUrls,
-	updateSessionTab,
-} from '../../library/library';
+import {addBookmark} from '../../library/board-edits';
+import {addTabsToSession, updateSessionTab} from '../../library/session-edits';
+import {extractUrl, extractUrls} from '../../library/store-shape';
 import {edit, editIn, newId} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
-import {Button, Field} from '../../ui/ui';
+import {Button, Field} from '../../ui/widgets';
 import {useView} from '../../library/view';
 import type {Session} from '../../../../extension/src/shared/types';
 
