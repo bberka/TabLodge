@@ -14,7 +14,7 @@ import {
 	getPreferences,
 	watchLocalChanges,
 } from './preferences';
-import {settlePreferences} from './preference-merge';
+import {NO_MOBILE_APP, settlePreferences} from './preference-merge';
 
 function settle(): void {
 	const prefs = getPreferences();
@@ -22,7 +22,7 @@ function settle(): void {
 		return;
 	}
 
-	const remote = getLibrary().settings.mobileApp;
+	const remote = getLibrary().settings.mobileApp ?? NO_MOBILE_APP;
 	const {adopt, adoptAt, next} = settlePreferences(
 		remote,
 		prefs,
