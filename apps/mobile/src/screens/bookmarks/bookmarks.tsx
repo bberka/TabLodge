@@ -31,9 +31,7 @@ import {
 import {
 	edit,
 	newId,
-	refreshStatus,
 	setSyncedSetting,
-	syncClient,
 	useLibrary,
 	useSyncStatus,
 } from '../../library/library-store';
@@ -46,7 +44,7 @@ import {useRoomBelow} from '../../ui/keyboard';
 import {useBarSpace} from '../../ui/tab-bar';
 import {useColors} from '../../ui/theme';
 import {PrivateSwitch} from '../../private/private-switch';
-import {syncPrivate} from '../../private/private-library';
+import {useRefresh} from '../../library/use-refresh';
 import {useSelection} from '../../ui/use-selection';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
@@ -111,7 +109,7 @@ export function BookmarksScreen({
 	const isListView = usePreferences().bookmarkView === 'list';
 	const search = useSearch();
 	const {query} = search;
-	const [refreshing, setRefreshing] = useState(false);
+	const {refreshing, refresh} = useRefresh();
 	const listRef = useRef<FlatList<Bookmark>>(null);
 	const [menuOpen, setMenuOpen] = useState(false);
 	// The bookmark whose menu is open, from holding down its row.
@@ -473,18 +471,6 @@ export function BookmarksScreen({
 
 	const reorder = (id: string, move: BookmarkMove) => {
 		void edit((current) => moveBookmark(current, id, move, Date.now()));
-	};
-
-	const refresh = async () => {
-		setRefreshing(true);
-		try {
-			await (view === 'private' ? syncPrivate() : syncClient.syncNow());
-		} catch {
-			// The status card in Settings shows why.
-		} finally {
-			await refreshStatus();
-			setRefreshing(false);
-		}
 	};
 
 	const headerActions = selection.active ? (

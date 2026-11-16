@@ -33,6 +33,7 @@ import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
+import {useRefresh} from '../../library/use-refresh';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {FolderBack, FolderList} from '../../ui/folder-list';
 import {SearchElsewhere} from '../search-elsewhere';
@@ -82,6 +83,7 @@ export function SessionsScreen({
 	const links = useLinkSettings();
 	const view = useView();
 	const {connected} = useSyncStatus();
+	const {refreshing, refresh} = useRefresh();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
 	// In the list view, whether a folder is open, as opposed to the list of every folder.
 	const [inside, setInside] = useState(false);
@@ -315,6 +317,7 @@ export function SessionsScreen({
 						ref={listRef}
 						removeClippedSubviews
 						scrollEventThrottle={16}
+						refreshing={refreshing}
 						data={shown}
 						extraData={[flipped, isExpandAll, selection.ids, selection.active]}
 						keyExtractor={(session) => session.id}
@@ -457,6 +460,9 @@ export function SessionsScreen({
 							});
 						}}
 						onScroll={trackScroll}
+						onRefresh={() => {
+							void refresh();
+						}}
 					/>
 				</Animated.View>
 			</GlassTarget>
