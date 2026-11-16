@@ -2011,19 +2011,13 @@ export function SessionManager({
 									<span
 										className={cn(
 											'tabular-nums opacity-90',
-											folderColor
-												? cn(
-														'rounded-md px-1.5 opacity-100',
-														COLUMN_COLOR_SOFT,
-														COLUMN_COLOR_ACTIVE_TEXT,
-													)
-												: folderList &&
-														cn(
-															'lg:rounded-md lg:border lg:px-2 lg:py-0.5 lg:text-xs lg:font-medium lg:opacity-100',
-															isActive
-																? 'lg:border-primary/20 lg:bg-primary/10 lg:text-primary'
-																: 'lg:border-border lg:bg-muted lg:text-muted-foreground',
-														),
+											folderList &&
+												cn(
+													'lg:rounded-md lg:border lg:px-2 lg:py-0.5 lg:text-xs lg:font-medium lg:opacity-100',
+													isActive && !folderColor
+														? 'lg:border-primary/20 lg:bg-primary/10 lg:text-primary'
+														: 'lg:border-border lg:bg-muted lg:text-muted-foreground',
+												),
 											folderList && 'lg:ml-auto',
 										)}
 									>
