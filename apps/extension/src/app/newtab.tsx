@@ -2635,7 +2635,15 @@ function NewTab() {
 										<span className="min-w-0 flex-1 truncate">{item.name}</span>
 										<Badge
 											variant={active && !railColor ? 'accent' : 'secondary'}
-											className="ml-1"
+											className={cn(
+												'ml-1',
+												railColor &&
+													cn(
+														'border-transparent',
+														COLUMN_COLOR_SOFT,
+														COLUMN_COLOR_ACTIVE_TEXT,
+													),
+											)}
 										>
 											{item.count}
 										</Badge>
