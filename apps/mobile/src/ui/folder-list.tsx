@@ -156,7 +156,8 @@ const styles = StyleSheet.create({
 		minHeight: TARGET,
 		paddingHorizontal: 12,
 		paddingVertical: 4,
-		borderWidth: StyleSheet.hairlineWidth,
+		borderWidth: 1,
+		overflow: 'hidden',
 	},
 	tile: {
 		width: 32,
