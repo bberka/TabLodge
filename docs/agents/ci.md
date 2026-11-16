@@ -56,7 +56,7 @@ In GitHub repository **Settings › Secrets and variables › Actions**, add the
 - `CWS_CLIENT_SECRET`
 - `CWS_REFRESH_TOKEN`
 
-The workflow already has TabLodge's extension ID. It runs after each GitHub release. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.1.4`, and choose `chrome`.
+The workflow already has TabLodge's extension ID. It runs after each GitHub release. Google rejects an upload while an earlier version is in review. The job then ends green with a warning, and the scheduled retry (below) submits the release later. To retry by hand, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.1.4`, and choose `chrome`.
 
 ## Firefox Add-ons publishing
 
@@ -68,4 +68,8 @@ Submit the first version of `tablodge@bbay.dev` by hand on addons.mozilla.org, w
 The workflow runs after each GitHub release and submits the Firefox ZIP with `web-ext sign --channel=listed`. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.2.2`, and choose `firefox`. AMO rejects a version number it has already received, so a retry only helps when the earlier run failed before the upload.
 
 `vp run version:next` shows the next version based on your local tags.
+
+## Store publishing retries
+
+**Store publishing** also runs every six hours. It looks at the latest release, skips it when it is older than seven days, and starts a store job only when no earlier run reached that job's "accepted" step (`Chrome accepted the package`, `Firefox accepted the package`) for that version. Job names carry the version, so keep `Submit v<version> to ...` and the step names as they are. A failed Firefox upload also retries this way, though AMO refuses a version it already received.
 
