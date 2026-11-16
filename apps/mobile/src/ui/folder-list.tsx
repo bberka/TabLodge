@@ -1,4 +1,13 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {useEffect, useRef, type ReactNode} from 'react';
+import {
+	Animated,
+	Easing,
+	Pressable,
+	StyleSheet,
+	Text,
+	View,
+} from 'react-native';
+import {motion} from './motion';
 import {soften, TARGET, useColors, useShape} from './theme';
 import {Icon, type IconName} from './widgets';
 
@@ -29,6 +38,33 @@ function useRowStyle() {
 	];
 }
 
+/**
+Slides its content in from the side it is given, so the list arrives from the left (as if coming back) and an opened
+folder's bar from the right.
+*/
+function SlideIn({
+	from,
+	children,
+}: {
+	from: 'left' | 'right';
+	children: ReactNode;
+}) {
+	const shift = useRef(new Animated.Value(from === 'left' ? -28 : 28)).current;
+	useEffect(() => {
+		Animated.timing(shift, {
+			toValue: 0,
+			duration: motion(240),
+			easing: Easing.out(Easing.cubic),
+			useNativeDriver: true,
+		}).start();
+	}, [shift]);
+	return (
+		<Animated.View style={{transform: [{translateX: shift}]}}>
+			{children}
+		</Animated.View>
+	);
+}
+
 const countLabel = (entry: FolderEntry, noun: string) =>
 	`${entry.count} ${entry.count === 1 ? noun : `${noun}s`}`;
 
@@ -57,47 +93,49 @@ export function FolderList({
 	const colors = useColors();
 	const rowStyle = useRowStyle();
 	return (
-		<View style={styles.list}>
-			{entries.map((entry) => (
+		<SlideIn from="left">
+			<View style={styles.list}>
+				{entries.map((entry) => (
+					<Pressable
+						key={entry.id}
+						accessibilityRole="button"
+						accessibilityLabel={`${entry.name}, ${countLabel(entry, noun)}`}
+						accessibilityHint="Opens it"
+						accessibilityActions={[{name: 'more', label: 'More actions'}]}
+						style={({pressed}) => rowStyle(pressed)}
+						onAccessibilityAction={() => {
+							onMenu(entry.id);
+						}}
+						onLongPress={() => {
+							onMenu(entry.id);
+						}}
+						onPress={() => {
+							onOpen(entry.id);
+						}}
+					>
+						<View style={[styles.tile, {backgroundColor: soften(entry.tint)}]}>
+							<Icon name={entry.glyph} size={20} color={entry.tint} />
+						</View>
+						<Text numberOfLines={1} style={[styles.name, {color: colors.text}]}>
+							{entry.name}
+						</Text>
+						<Text style={{color: colors.muted}}>{entry.count}</Text>
+						<Icon name="chevron-forward" size={18} color={colors.muted} />
+					</Pressable>
+				))}
 				<Pressable
-					key={entry.id}
 					accessibilityRole="button"
-					accessibilityLabel={`${entry.name}, ${countLabel(entry, noun)}`}
-					accessibilityHint="Opens it"
-					accessibilityActions={[{name: 'more', label: 'More actions'}]}
+					accessibilityLabel={newLabel}
 					style={({pressed}) => rowStyle(pressed)}
-					onAccessibilityAction={() => {
-						onMenu(entry.id);
-					}}
-					onLongPress={() => {
-						onMenu(entry.id);
-					}}
-					onPress={() => {
-						onOpen(entry.id);
-					}}
+					onPress={onNew}
 				>
-					<View style={[styles.tile, {backgroundColor: soften(entry.tint)}]}>
-						<Icon name={entry.glyph} size={20} color={entry.tint} />
+					<View style={[styles.tile, {backgroundColor: soften(colors.accent)}]}>
+						<Icon name="add" size={20} color={colors.accent} />
 					</View>
-					<Text numberOfLines={1} style={[styles.name, {color: colors.text}]}>
-						{entry.name}
-					</Text>
-					<Text style={{color: colors.muted}}>{entry.count}</Text>
-					<Icon name="chevron-forward" size={18} color={colors.muted} />
+					<Text style={[styles.name, {color: colors.accent}]}>{newLabel}</Text>
 				</Pressable>
-			))}
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel={newLabel}
-				style={({pressed}) => rowStyle(pressed)}
-				onPress={onNew}
-			>
-				<View style={[styles.tile, {backgroundColor: soften(colors.accent)}]}>
-					<Icon name="add" size={20} color={colors.accent} />
-				</View>
-				<Text style={[styles.name, {color: colors.accent}]}>{newLabel}</Text>
-			</Pressable>
-		</View>
+			</View>
+		</SlideIn>
 	);
 }
 
@@ -124,26 +162,28 @@ export function FolderBack({
 	const colors = useColors();
 	const rowStyle = useRowStyle();
 	return (
-		<Pressable
-			accessibilityRole="button"
-			accessibilityLabel={`${label}. Showing ${entry.name}, ${countLabel(entry, noun)}`}
-			accessibilityHint="Goes back to the list"
-			accessibilityActions={[{name: 'more', label: 'More actions'}]}
-			style={({pressed}) => rowStyle(pressed, soften(entry.tint), entry.tint)}
-			onAccessibilityAction={onMenu}
-			onLongPress={onMenu}
-			onPress={onBack}
-		>
-			<Icon name="chevron-back" size={20} color={colors.text} />
-			<Icon name={entry.glyph} size={18} color={entry.tint} />
-			<Text
-				numberOfLines={1}
-				style={[styles.name, {color: entry.tint, fontWeight: '600'}]}
+		<SlideIn from="right">
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel={`${label}. Showing ${entry.name}, ${countLabel(entry, noun)}`}
+				accessibilityHint="Goes back to the list"
+				accessibilityActions={[{name: 'more', label: 'More actions'}]}
+				style={({pressed}) => rowStyle(pressed, soften(entry.tint), entry.tint)}
+				onAccessibilityAction={onMenu}
+				onLongPress={onMenu}
+				onPress={onBack}
 			>
-				{entry.name}
-			</Text>
-			<Text style={{color: colors.muted}}>{entry.count}</Text>
-		</Pressable>
+				<Icon name="chevron-back" size={20} color={colors.text} />
+				<Icon name={entry.glyph} size={18} color={entry.tint} />
+				<Text
+					numberOfLines={1}
+					style={[styles.name, {color: entry.tint, fontWeight: '600'}]}
+				>
+					{entry.name}
+				</Text>
+				<Text style={{color: colors.muted}}>{entry.count}</Text>
+			</Pressable>
+		</SlideIn>
 	);
 }
 

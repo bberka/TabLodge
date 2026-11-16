@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {FlatList, StyleSheet, View} from 'react-native';
+import {Animated, FlatList, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {Session} from '../../../../extension/src/shared/types';
 import {GlassTarget} from '../../ui/glass';
@@ -25,6 +25,7 @@ import {
 	type SessionAction,
 	usePreferences,
 } from '../../settings/preferences';
+import {useCrossfade} from '../../ui/motion';
 import {PrivateSwitch} from '../../private/private-switch';
 import {useRoomBelow} from '../../ui/keyboard';
 import {useBarSpace} from '../../ui/tab-bar';
@@ -144,6 +145,7 @@ export function SessionsScreen({
 	const needle = query.trim().toLocaleLowerCase();
 	// The list view starts on the list of folders; a search looks through every session instead.
 	const atList = isListView && !inside && needle === '';
+	const fade = useCrossfade(atList);
 	const scopeId = isListView && !inside ? ALL_SESSIONS_ID : folderId;
 	useBackAction(isListView && inside && needle === '', () => {
 		setInside(false);
@@ -308,153 +310,155 @@ export function SessionsScreen({
 	return (
 		<>
 			<GlassTarget>
-				<FlatList
-					ref={listRef}
-					removeClippedSubviews
-					scrollEventThrottle={16}
-					data={shown}
-					extraData={[flipped, isExpandAll, selection.ids, selection.active]}
-					keyExtractor={(session) => session.id}
-					contentContainerStyle={[
-						styles.list,
-						{
-							paddingBottom: selection.active
-								? 72 + insets.bottom
-								: space + 8 + ROOM_FOR_BUTTONS,
-						},
-					]}
-					keyboardShouldPersistTaps="handled"
-					// Long libraries draw only what is on screen, and a little around it.
-					initialNumToRender={6}
-					windowSize={7}
-					maxToRenderPerBatch={6}
-					ListHeaderComponent={
-						<View>
-							<Header
-								title="Sessions"
-								live={searchCount !== undefined && shown.length > 0}
-								subtitle={
-									selection.active ? `${chosen.length} selected` : subtitle
-								}
-								right={
-									selection.active ? (
-										<>
-											<IconButton
-												icon={
-													isAllSelected
-														? 'remove-circle-outline'
-														: 'checkmark-done'
-												}
-												label={isAllSelected ? 'Select none' : 'Select all'}
-												onPress={() => {
-													selection.setAll(
+				<Animated.View style={[styles.fill, {opacity: fade}]}>
+					<FlatList
+						ref={listRef}
+						removeClippedSubviews
+						scrollEventThrottle={16}
+						data={shown}
+						extraData={[flipped, isExpandAll, selection.ids, selection.active]}
+						keyExtractor={(session) => session.id}
+						contentContainerStyle={[
+							styles.list,
+							{
+								paddingBottom: selection.active
+									? 72 + insets.bottom
+									: space + 8 + ROOM_FOR_BUTTONS,
+							},
+						]}
+						keyboardShouldPersistTaps="handled"
+						// Long libraries draw only what is on screen, and a little around it.
+						initialNumToRender={6}
+						windowSize={7}
+						maxToRenderPerBatch={6}
+						ListHeaderComponent={
+							<View>
+								<Header
+									title="Sessions"
+									live={searchCount !== undefined && shown.length > 0}
+									subtitle={
+										selection.active ? `${chosen.length} selected` : subtitle
+									}
+									right={
+										selection.active ? (
+											<>
+												<IconButton
+													icon={
 														isAllSelected
-															? []
-															: shown.map((session) => session.id),
-													);
+															? 'remove-circle-outline'
+															: 'checkmark-done'
+													}
+													label={isAllSelected ? 'Select none' : 'Select all'}
+													onPress={() => {
+														selection.setAll(
+															isAllSelected
+																? []
+																: shown.map((session) => session.id),
+														);
+													}}
+												/>
+												<IconButton
+													icon="close"
+													label="Done selecting"
+													onPress={selection.stop}
+												/>
+											</>
+										) : (
+											<PrivateSwitch />
+										)
+									}
+								/>
+								{isListView ? (
+									<View style={styles.folders}>
+										{atList && (
+											<FolderList
+												entries={entries}
+												noun="session"
+												newLabel="New folder"
+												onOpen={openFolder}
+												onNew={() => {
+													setEditingFolder({});
+												}}
+												onMenu={setFolderMenuId}
+											/>
+										)}
+										{inside && needle === '' && openEntry && (
+											<FolderBack
+												entry={openEntry}
+												noun="session"
+												label="All folders"
+												onBack={() => {
+													setInside(false);
+												}}
+												onMenu={() => {
+													setFolderMenuId(openEntry.id);
 												}}
 											/>
-											<IconButton
-												icon="close"
-												label="Done selecting"
-												onPress={selection.stop}
-											/>
-										</>
-									) : (
-										<PrivateSwitch />
-									)
-								}
+										)}
+									</View>
+								) : (
+									<FolderChips
+										folders={folders}
+										selected={folderId}
+										onSelect={setPicked}
+										onNewFolder={() => {
+											setEditingFolder({});
+										}}
+										onMenu={setFolderMenuId}
+									/>
+								)}
+							</View>
+						}
+						ListEmptyComponent={
+							atList ? undefined : (
+								<Empty
+									icon={needle ? 'search' : 'albums-outline'}
+									title={needle ? 'No match' : 'Nothing here'}
+								>
+									{needle
+										? 'No session or tab matches that search.'
+										: 'This folder has no sessions.'}
+								</Empty>
+							)
+						}
+						ListFooterComponent={
+							<SearchElsewhere
+								store={store}
+								query={query}
+								here="sessions"
+								localCount={shown.length}
+								onJump={search.close}
 							/>
-							{isListView ? (
-								<View style={styles.folders}>
-									{atList && (
-										<FolderList
-											entries={entries}
-											noun="session"
-											newLabel="New folder"
-											onOpen={openFolder}
-											onNew={() => {
-												setEditingFolder({});
-											}}
-											onMenu={setFolderMenuId}
-										/>
-									)}
-									{inside && needle === '' && openEntry && (
-										<FolderBack
-											entry={openEntry}
-											noun="session"
-											label="All folders"
-											onBack={() => {
-												setInside(false);
-											}}
-											onMenu={() => {
-												setFolderMenuId(openEntry.id);
-											}}
-										/>
-									)}
-								</View>
-							) : (
-								<FolderChips
-									folders={folders}
-									selected={folderId}
-									onSelect={setPicked}
-									onNewFolder={() => {
-										setEditingFolder({});
-									}}
-									onMenu={setFolderMenuId}
+						}
+						ItemSeparatorComponent={Gap}
+						renderItem={({item}) => (
+							<View style={styles.cardRow}>
+								<SessionCard
+									session={item}
+									folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
+									archived={isArchivedSession(store.folders, item)}
+									tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
+									expanded={isExpandAll !== flipped.has(item.id)}
+									selecting={selection.active}
+									checked={selection.ids.has(item.id)}
+									onPick={selection.toggle}
+									onToggle={toggle}
+									onAct={act}
+									onMenu={openMenu}
+									onTabMenu={openTabMenu}
+									onTabAct={runTabActionOn}
 								/>
-							)}
-						</View>
-					}
-					ListEmptyComponent={
-						atList ? undefined : (
-							<Empty
-								icon={needle ? 'search' : 'albums-outline'}
-								title={needle ? 'No match' : 'Nothing here'}
-							>
-								{needle
-									? 'No session or tab matches that search.'
-									: 'This folder has no sessions.'}
-							</Empty>
-						)
-					}
-					ListFooterComponent={
-						<SearchElsewhere
-							store={store}
-							query={query}
-							here="sessions"
-							localCount={shown.length}
-							onJump={search.close}
-						/>
-					}
-					ItemSeparatorComponent={Gap}
-					renderItem={({item}) => (
-						<View style={styles.cardRow}>
-							<SessionCard
-								session={item}
-								folderName={folderInfo.get(item.folderId)?.name ?? 'Other'}
-								archived={isArchivedSession(store.folders, item)}
-								tint={folderInfo.get(item.folderId)?.tint ?? otherTint}
-								expanded={isExpandAll !== flipped.has(item.id)}
-								selecting={selection.active}
-								checked={selection.ids.has(item.id)}
-								onPick={selection.toggle}
-								onToggle={toggle}
-								onAct={act}
-								onMenu={openMenu}
-								onTabMenu={openTabMenu}
-								onTabAct={runTabActionOn}
-							/>
-						</View>
-					)}
-					onScrollToIndexFailed={({index, averageItemLength}) => {
-						listRef.current?.scrollToOffset({
-							offset: index * averageItemLength,
-							animated: false,
-						});
-					}}
-					onScroll={trackScroll}
-				/>
+							</View>
+						)}
+						onScrollToIndexFailed={({index, averageItemLength}) => {
+							listRef.current?.scrollToOffset({
+								offset: index * averageItemLength,
+								animated: false,
+							});
+						}}
+						onScroll={trackScroll}
+					/>
+				</Animated.View>
 			</GlassTarget>
 			<ActionSheet
 				visible={menuFor !== undefined}
@@ -586,4 +590,5 @@ const styles = StyleSheet.create({
 	cardRow: {paddingHorizontal: 16},
 	gap: {height: 12},
 	folders: {paddingHorizontal: 16},
+	fill: {flex: 1},
 });
