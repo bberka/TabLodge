@@ -2,6 +2,8 @@ name: Store publishing
 
 # The release workflow sends this dispatch after publishing the GitHub release.
 # Manual runs can retry one store, or both, for an existing v0.x.y release.
+# A schedule retries the latest release for any store that has not accepted it yet,
+# for example while Chrome still has an earlier version in review.
 on:
   repository_dispatch:
     types: [tablodge-release-published]
@@ -17,9 +19,12 @@ on:
         default: all
         type: choice
         options: [all, chrome, firefox]
+  schedule:
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   version:
@@ -28,25 +33,67 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.release.outputs.version }}
+      chrome: ${{ steps.release.outputs.chrome }}
+      firefox: ${{ steps.release.outputs.firefox }}
     steps:
       - id: release
         env:
+          GH_TOKEN: ${{ github.token }}
           DISPATCH_VERSION: ${{ github.event.client_payload.version }}
           MANUAL_VERSION: ${{ github.event.inputs.version }}
+          MANUAL_STORE: ${{ github.event.inputs.store }}
+          # A scheduled run stops retrying a release after this many days.
+          RETRY_DAYS: 7
         run: |
           set -euo pipefail
-          version="${DISPATCH_VERSION:-$MANUAL_VERSION}"
-          version="${version#v}"
-          if [[ ! "$version" =~ ^0\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Expected a release version like 0.2.1."
-            exit 1
+          chrome=false
+          firefox=false
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            latest="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 1 \
+              --json tagName,publishedAt --jq '.[0] | "\(.tagName) \(.publishedAt)"')"
+            read -r tag published <<< "$latest"
+            version="${tag#v}"
+            if (( $(date +%s) - $(date -d "$published" +%s) > RETRY_DAYS * 86400 )); then
+              echo "Release $tag is older than $RETRY_DAYS days; nothing to retry."
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              echo "chrome=false" >> "$GITHUB_OUTPUT"
+              echo "firefox=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # A store is done once a run reached its "accepted" step for this version.
+            accepted() {
+              local job="$1" step="$2" id
+              for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/store-publish.yml/runs?created=>=$published&per_page=100" \
+                --jq '.workflow_runs[].id'); do
+                if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" \
+                  --jq ".jobs[] | select(.name == \"$job\") | .steps[] | select(.name == \"$step\" and .conclusion == \"success\")" \
+                  | grep -q .; then
+                  return 0
+                fi
+              done
+              return 1
+            }
+            accepted "Submit v$version to Chrome Web Store" "Chrome accepted the package" || chrome=true
+            accepted "Submit v$version to Firefox Add-ons" "Firefox accepted the package" || firefox=true
+          else
+            version="${DISPATCH_VERSION:-$MANUAL_VERSION}"
+            version="${version#v}"
+            if [[ ! "$version" =~ ^0\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Expected a release version like 0.2.1."
+              exit 1
+            fi
+            store="${MANUAL_STORE:-all}"
+            [[ "$store" != firefox ]] && chrome=true
+            [[ "$store" != chrome ]] && firefox=true
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
+          echo "firefox=$firefox" >> "$GITHUB_OUTPUT"
 
   chrome:
-    name: Submit release to Chrome Web Store
+    name: Submit v${{ needs.version.outputs.version }} to Chrome Web Store
     needs: version
-    if: github.event_name == 'repository_dispatch' || github.event.inputs.store != 'firefox'
+    if: needs.version.outputs.chrome == 'true'
     runs-on: ubuntu-latest
     concurrency:
       group: chrome-web-store-${{ needs.version.outputs.version }}
@@ -70,6 +117,7 @@ jobs:
           (cd release && sha256sum --check "tablodge-$VERSION.zip.sha256")
 
       - name: Upload and submit package to Chrome Web Store
+        id: chrome-upload
         env:
           PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           EXTENSION_ID: ekidoclgpdfhpdlidlkcjccgihbndoib
@@ -80,15 +128,27 @@ jobs:
         run: |
           set -euo pipefail
           zip="release/tablodge-$VERSION.zip"
-          npm exec --yes --package=chrome-webstore-upload-cli@4.0.2 -- \
+          # An earlier version still in review blocks the upload. That is not a failure:
+          # the step below stays skipped, so the next scheduled run tries again.
+          if npm exec --yes --package=chrome-webstore-upload-cli@4.0.2 -- \
             chrome-webstore-upload \
             --source "$zip" \
-            --max-await-in-progress 300
+            --max-await-in-progress 300 2>&1 | tee upload.log; then
+            echo "accepted=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "in review" upload.log; then
+            echo "::warning::Chrome Web Store has a version in review. The scheduled retry will submit v$VERSION later."
+          else
+            exit 1
+          fi
+
+      - name: Chrome accepted the package
+        if: steps.chrome-upload.outputs.accepted == 'true'
+        run: echo "Submitted to the Chrome Web Store."
 
   firefox:
-    name: Submit release to Firefox Add-ons
+    name: Submit v${{ needs.version.outputs.version }} to Firefox Add-ons
     needs: version
-    if: github.event_name == 'repository_dispatch' || github.event.inputs.store != 'chrome'
+    if: needs.version.outputs.firefox == 'true'
     runs-on: ubuntu-latest
     concurrency:
       group: firefox-addons-${{ needs.version.outputs.version }}
@@ -141,3 +201,6 @@ jobs:
             --approval-timeout=0 \
             --api-key "$AMO_JWT_ISSUER" \
             --api-secret "$AMO_JWT_SECRET"
+
+      - name: Firefox accepted the package
+        run: echo "Submitted to Firefox Add-ons."
