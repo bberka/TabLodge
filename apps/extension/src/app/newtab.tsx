@@ -2527,7 +2527,7 @@ function NewTab() {
 			)}
 			{suggestsFocusView(columns.length, bookmarkView) && (
 				<FocusViewHint
-					columnCount={columns.length}
+					count={columns.length}
 					onSwitch={() => void changeBookmarkView('focus')}
 				/>
 			)}

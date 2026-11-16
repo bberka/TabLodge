@@ -5867,6 +5867,33 @@ test('bookmarkBoardView defaults to focus, validates choices, and resets', async
 	assert.equal(reset.settings.bookmarkBoardView, 'focus');
 });
 
+test('sessionFolderView defaults to auto, validates choices, and resets', async () => {
+	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
+	assert.equal(
+		(await defaults.sendMessage({type: 'GET_STATE'})).settings
+			.sessionFolderView,
+		'auto',
+	);
+
+	const invalid = createWorkerHarness(
+		stateWithSession({sessionFolderView: 'grid'}),
+	);
+	assert.equal(
+		(await invalid.sendMessage({type: 'GET_STATE'})).settings.sessionFolderView,
+		'auto',
+	);
+
+	const updated = await invalid.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {sessionFolderView: 'list'},
+	});
+	assert.equal(updated.ok, true, updated.error);
+	assert.equal(invalid.state.settings.sessionFolderView, 'list');
+
+	const reset = await invalid.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.sessionFolderView, 'auto');
+});
+
 test('bookmark board layout settings default to the current layout, validate choices, and reset', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	const {settings} = await defaults.sendMessage({type: 'GET_STATE'});

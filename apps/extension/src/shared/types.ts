@@ -105,6 +105,7 @@ export type BookmarkClickAction = LinkClickAction | 'menu';
 export type AutoBackupSchedule = 'off' | 'daily' | 'weekly';
 export type DashboardWidth = 'default' | 'wider' | 'full' | 'narrower';
 export type BookmarkBoardView = 'board' | 'focus';
+export type SessionFolderView = 'auto' | 'list' | 'chips';
 export type BookmarkColumnWidth = 'narrow' | 'default' | 'wide' | 'extra-wide';
 export type BookmarkDensity = 'comfortable' | 'compact';
 
@@ -230,6 +231,10 @@ export type Settings = {
 	Bookmark board layout: the grid of columns or the Focus column list (default: board).
 	*/
 	bookmarkBoardView: BookmarkBoardView;
+	/**
+	How the Sessions page shows its folders: a row of chips, a vertical list beside the sessions, or (auto) the list once there are more than nine folders (default: auto).
+	*/
+	sessionFolderView: SessionFolderView;
 	/**
 	Whether the bookmark list starts with an All item that lists every bookmark: the Focus view on the dashboard, and the
 	bookmark columns of the Android app. Syncs, so both follow it.

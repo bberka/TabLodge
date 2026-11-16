@@ -52,6 +52,7 @@ const PORTABLE_PREFERENCES = [
 	'showTrashBinButton',
 	'dashboardWidth',
 	'bookmarkBoardView',
+	'sessionFolderView',
 	'showAllBookmarks',
 	'keepLodgePinned',
 	'dashboardBehavior',

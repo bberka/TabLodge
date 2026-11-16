@@ -693,6 +693,17 @@ const settingsGroups: Array<{
 				],
 			},
 			{
+				name: 'sessionFolderView',
+				label: 'Session folder view',
+				help: 'Automatic shows the folders as a vertical list beside the sessions once there are more than nine, on a window at least 1024 pixels wide. List and Chips always use that layout. The view button in the Sessions toolbar changes it too.',
+				type: 'select',
+				options: [
+					['auto', 'Automatic'],
+					['list', 'List'],
+					['chips', 'Chips'],
+				],
+			},
+			{
 				name: 'expandSessionsByDefault',
 				label: 'Keep sessions expanded by default',
 				help: `Show every session’s saved tabs when the ${PROJECT.name} page opens, including sessions saved later. You can still collapse or expand each one.`,

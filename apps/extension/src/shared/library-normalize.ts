@@ -185,6 +185,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	urlDisplayMode: 'full',
 	dashboardWidth: 'default',
 	bookmarkBoardView: 'focus',
+	sessionFolderView: 'auto',
 	showAllBookmarks: true,
 	removeTrackingParameters: false,
 	simplifyUrls: true,
@@ -957,6 +958,9 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		bookmarkBoardView: isOneOf(['board', 'focus'], raw.bookmarkBoardView)
 			? raw.bookmarkBoardView
 			: 'focus',
+		sessionFolderView: isOneOf(['auto', 'list', 'chips'], raw.sessionFolderView)
+			? raw.sessionFolderView
+			: 'auto',
 		showAllBookmarks: raw.showAllBookmarks !== false,
 		keepLodgePinned: raw.keepLodgePinned === true,
 		browserBookmarkAction: isOneOf(

@@ -3,57 +3,71 @@ import {PanelLeft} from 'lucide-react';
 import {Button} from '../shared/ui';
 import {plural} from './plural';
 import {FOCUS_HINT_KEY} from './focus-hint-rule';
+import {cn} from '@/lib/utils';
 
 // Remembered per browser profile, not synced: another device may have a different screen.
-export function readFocusHintDismissed() {
+export function readFocusHintDismissed(key = FOCUS_HINT_KEY) {
 	try {
-		return localStorage.getItem(FOCUS_HINT_KEY) === '1';
+		return localStorage.getItem(key) === '1';
 	} catch {
 		return false;
 	}
 }
 
-function rememberFocusHintDismissed() {
+function rememberFocusHintDismissed(key: string) {
 	try {
-		localStorage.setItem(FOCUS_HINT_KEY, '1');
+		localStorage.setItem(key, '1');
 	} catch {
 		// Without storage the hint can come back on the next visit.
 	}
 }
 
 /**
-"You have N columns. Focus view shows one at a time." shown above a crowded Board.
+"You have N columns. Focus view shows one at a time." shown above a crowded Board. The Sessions page reuses it
+for a crowded row of folder chips, with its own copy and its own dismissal key.
 */
 export function FocusViewHint({
-	columnCount,
+	count,
+	noun = 'column',
+	label = 'Focus view suggestion',
+	text = 'Focus view lists them on the left and shows one at a time, which is easier to move around.',
+	action = 'Switch to Focus view',
+	storageKey = FOCUS_HINT_KEY,
+	className,
 	onSwitch,
 }: {
-	columnCount: number;
+	count: number;
+	noun?: string;
+	label?: string;
+	text?: string;
+	action?: string;
+	storageKey?: string;
+	className?: string;
 	onSwitch: () => void;
 }) {
-	const [dismissed, setDismissed] = useState(readFocusHintDismissed);
+	const [dismissed, setDismissed] = useState(() =>
+		readFocusHintDismissed(storageKey),
+	);
 	if (dismissed) {
 		return null;
 	}
 
 	function dismiss() {
-		rememberFocusHintDismissed();
+		rememberFocusHintDismissed(storageKey);
 		setDismissed(true);
 	}
 
 	return (
 		<section
-			aria-label="Focus view suggestion"
-			className="mb-3 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/6 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+			aria-label={label}
+			className={cn(
+				'mb-3 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/6 px-4 py-3 sm:flex-row sm:items-center sm:justify-between',
+				className,
+			)}
 		>
 			<p className="min-w-0 text-sm">
-				<span className="font-semibold">
-					You have {plural(columnCount, 'column')}.
-				</span>{' '}
-				<span className="text-muted-foreground">
-					Focus view lists them on the left and shows one at a time, which is
-					easier to move around.
-				</span>
+				<span className="font-semibold">You have {plural(count, noun)}.</span>{' '}
+				<span className="text-muted-foreground">{text}</span>
 			</p>
 			<div className="flex shrink-0 flex-wrap gap-2">
 				<Button
@@ -64,7 +78,7 @@ export function FocusViewHint({
 					}}
 				>
 					<PanelLeft className="h-4 w-4" />
-					Switch to Focus view
+					{action}
 				</Button>
 				<Button size="sm" variant="ghost" onClick={dismiss}>
 					Not now
