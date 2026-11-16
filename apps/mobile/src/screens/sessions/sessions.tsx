@@ -11,7 +11,7 @@ import {
 	sessionsIn,
 } from '../../library/session-edits';
 import {edit, useLibrary, useSyncStatus} from '../../library/library-store';
-import {ActionSheet} from '../../ui/action-sheet';
+import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
 import {useBackAction} from '../../ui/back-actions';
 import {useSelection} from '../../ui/use-selection';
 import {
@@ -118,28 +118,31 @@ export function SessionsScreen({
 	const [folderMenuId, setFolderMenuId] = useState<string>();
 	// The folder whose edit drawer is open, or `{}` for a new one.
 	const [editingFolder, setEditingFolder] = useState<{id?: string}>();
+	// The 3 dot menu in the header, for the folder on screen.
+	const [moreOpen, setMoreOpen] = useState(false);
 	const menuFor = store.groups.find((session) => session.id === menuId);
 
 	const folders = useMemo(() => sessionFolders(store), [store]);
 	const folderBeingEdited = store.folders.find(
 		(folder) => folder.id === editingFolder?.id,
 	);
-	const folderMenu = folderMenuId
-		? folderMenuFor(folderMenuId, store, folders, {
-				sort: links.sessionSort,
-				colors,
-				edit(id) {
-					setEditingFolder({id});
-				},
-				removed(id) {
-					if (picked !== id) {
-						return;
-					}
+	const folderMenuOptions = {
+		sort: links.sessionSort,
+		colors,
+		edit(id: string) {
+			setEditingFolder({id});
+		},
+		removed(id: string) {
+			if (picked !== id) {
+				return;
+			}
 
-					setPicked(ALL_SESSIONS_ID);
-					setInside(false);
-				},
-			})
+			setPicked(ALL_SESSIONS_ID);
+			setInside(false);
+		},
+	};
+	const folderMenu = folderMenuId
+		? folderMenuFor(folderMenuId, store, folders, folderMenuOptions)
 		: undefined;
 	const folderId = folders.some((folder) => folder.id === picked)
 		? picked
@@ -160,6 +163,31 @@ export function SessionsScreen({
 		const inFolder = sessionsIn(store, scopeId, links.sessionSort);
 		return needle ? inFolder.filter((s) => matches(s, needle)) : inFolder;
 	}, [store, scopeId, links.sessionSort, needle, atList]);
+	const moreMenu = moreOpen
+		? folderMenuFor(folderId, store, folders, folderMenuOptions)
+		: undefined;
+	const moreActions: SheetAction[] = [
+		...(moreMenu?.actions ?? []),
+		...(shown.length > 0
+			? [
+					{
+						icon: 'checkbox-outline' as const,
+						label: 'Select sessions',
+						hint: 'Move, archive, share or delete several at once',
+						onPress() {
+							selection.start();
+						},
+					},
+				]
+			: []),
+		{
+			icon: 'add' as const,
+			label: 'New folder',
+			onPress() {
+				setEditingFolder({});
+			},
+		},
+	];
 	const searchCount = useSettledText(needle !== '', resultCount(shown.length));
 	const look = useFolderLook();
 	// The name and color of each session's folder, worked out once per library change, not per card per render.
@@ -367,7 +395,18 @@ export function SessionsScreen({
 												/>
 											</>
 										) : (
-											<PrivateSwitch />
+											<>
+												<PrivateSwitch />
+												{!atList && (
+													<IconButton
+														icon="ellipsis-horizontal"
+														label="More actions"
+														onPress={() => {
+															setMoreOpen(true);
+														}}
+													/>
+												)}
+											</>
 										)
 									}
 								/>
@@ -511,6 +550,14 @@ export function SessionsScreen({
 				}}
 				onClose={() => {
 					setMovingId(undefined);
+				}}
+			/>
+			<ActionSheet
+				visible={moreOpen}
+				title={moreMenu?.title ?? ''}
+				actions={moreActions}
+				onClose={() => {
+					setMoreOpen(false);
 				}}
 			/>
 			<ActionSheet
