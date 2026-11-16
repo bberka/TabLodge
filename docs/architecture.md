@@ -292,6 +292,8 @@ UI primitives live in `src/components/ui/`, with composed helpers in `src/shared
 
 ## Saving and restoring sessions
 
+The Sessions page picks a folder from a row of chips. With more than nine folders (`SESSION_FOLDER_LIST_MIN` in `src/app/session-folder-list-rule.ts`, not counting All) and a window at least 1024 pixels wide, the chips become a vertical list beside the sessions, as the bookmark Focus view does. There is no setting and nothing is stored: the layout follows the folder count and the window width. Dropping a session on a folder and the folder menus work in both layouts.
+
 Save scopes include selected tabs, the current window, all windows, a native tab group, the active tab, and tabs to either side. Toolbar actions, context menus, and shortcuts share worker logic. The page menu's **Send this tab to session** submenu lists the ten most recently changed sessions outside the Archived folder, plus **New session**. It adds the tab through the same path as the toolbar's current tab mode, so excluded sites, the duplicate setting, and **Close tabs after saving** apply. The link menu's **Save link to session** submenu lists the same sessions, without the one named Saved links, which has its own entry that creates it when missing. A link is added at the end of the chosen session without opening it, and an address the session already holds is skipped. The menus rebuild when that list of sessions or their names change. The `save-window` shortcut uses `selected-or-window`, so a selection takes precedence over the window.
 
 Only ordinary HTTP and HTTPS URLs are saved. Excluded sites are filtered during capture. Native group metadata is restored where browser APIs allow it.
