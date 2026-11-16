@@ -4626,49 +4626,6 @@ test('install opens a dashboard tab, but extension updates do not', async () => 
 	assert.equal(updated.openedTabs.length, 0);
 });
 
-test('without contextMenus.onShown the tab-group item stays enabled and a click outside a group fails gracefully', async () => {
-	const harness = createWorkerHarness(stateWithSession(), undefined, {
-		withoutContextMenuShown: true,
-	});
-	assert.equal(harness.listeners.contextMenuShown, undefined);
-	await harness.listeners.onInstalled({reason: 'update'});
-	await new Promise((resolve) => {
-		setTimeout(resolve, 0);
-	});
-	const item = harness.menuItems.find(
-		(entry) => entry.id === 'tablodge-page-save-group',
-	);
-	assert.ok(item, 'the tab-group menu item is created');
-	assert.notEqual(
-		item.enabled,
-		false,
-		'the tab-group item must not be permanently disabled',
-	);
-
-	const warnings: unknown[] = [];
-	const originalWarn = console.warn;
-	console.warn = (...args: unknown[]) => {
-		warnings.push(args[0]);
-	};
-
-	try {
-		const click = harness.listeners.contextMenuClicked as (
-			info: {menuItemId: string},
-			tab: Partial<MockTab> & {groupId: number},
-		) => void;
-		click(
-			{menuItemId: 'tablodge-page-save-group'},
-			{id: 1, windowId: 10, groupId: -1},
-		);
-		await settle();
-	} finally {
-		console.warn = originalWarn;
-	}
-
-	assert.deepEqual(warnings, ['The active tab is not in a tab group.']);
-	assert.equal(harness.state.groups.length, 1, 'no session is saved');
-});
-
 // ---- Split View (Chrome 155+): two tabs shown side by side in one tab-strip slot ----
 
 // Window 10: a split pair (1|2), a plain tab (3), and a second split pair (4|5).
@@ -10491,16 +10448,6 @@ test('session names: a tab group title and a typed name win, an untitled group u
 		await savedName({}, {groupName: 'My name', tabIds: [1]}),
 		'My name',
 	);
-});
-
-test('session names: Saved links keeps its name', async () => {
-	const harness = nameHarness();
-	await harness.fire(
-		'contextMenuClicked',
-		{menuItemId: 'tablodge-link-save', linkUrl: 'https://later.example/'},
-		{id: 1, windowId: 10, groupId: -1},
-	);
-	assert.equal(harness.state.groups[0].name, 'Saved links');
 });
 
 test('session names: chunk suffixes follow the generated name', async () => {

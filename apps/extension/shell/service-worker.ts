@@ -20,12 +20,10 @@ import {
 } from '../src/shared/site-icons';
 import {
 	LINK_COLUMN_PREFIX,
-	LINK_SEND_PREFIX,
 	MENU,
 	PAGE_COLUMN_PREFIX,
 	PAGE_SEND_PREFIX,
 	PAGE_SAVE_ITEMS,
-	SAVED_LINKS_SESSION,
 	contextMenuPlan,
 	contextMenuSignature,
 	menuSessions,
@@ -10062,32 +10060,7 @@ function watchContextMenuShown() {
 			]);
 			if (contexts.has('action')) {
 				void syncExcludeMenuItem(tab).then(() => menus.refresh?.());
-				return;
 			}
-
-			if (!contexts.has('page')) {
-				return;
-			}
-
-			void readSettings()
-				.then(async (settings) => {
-					if (
-						!settings.contextMenusEnabled ||
-						!settings.contextMenuPageEnabled
-					) {
-						return;
-					}
-
-					await menus.update('tablodge-page-save-group', {
-						enabled: isInteger(tab?.groupId) && tab.groupId >= 0,
-					});
-					menus.refresh?.();
-				})
-				.catch(() => {
-					/*
-					The item may not exist while menus are rebuilt.
-					*/
-				});
 		});
 	} catch {
 		/*
@@ -10254,89 +10227,6 @@ async function openPrefilledBookmarkDialog(
 }
 
 /**
-Appends a link without opening it, to the session `groupId` or, when none is named, to the "Saved links" session
-(created when missing).
-*/
-async function saveLinkToSession(
-	rawUrl: unknown,
-	title: string,
-	groupId?: string,
-): Promise<Result<{added: boolean; groupId: string | null}>> {
-	await deviceReady;
-	const url = normalizeUrl(rawUrl);
-	if (!url) {
-		return {ok: false, error: 'Only http and https links can be saved.'};
-	}
-
-	return mutate(async () => {
-		const store = await getStore();
-		const name = SAVED_LINKS_SESSION.toLocaleLowerCase();
-		let group = groupId
-			? findGroup(store, groupId)
-			: store.groups.find((entry) => entry.name.toLocaleLowerCase() === name);
-		if (groupId && !group) {
-			return {ok: false, error: 'That saved session no longer exists.'};
-		}
-
-		const copies = store.groups
-			.flatMap((entry) => entry.tabs)
-			.filter((entry) => entry.url === url);
-		// Already in the session, or saved anywhere while duplicates are rejected: nothing to add.
-		if (
-			group?.tabs.some((entry) => entry.url === url) ||
-			(copies.length > 0 && store.settings.saveDuplicateHandling === 'reject')
-		) {
-			return {ok: true, added: false, groupId: group?.id ?? null};
-		}
-
-		if (group && group.tabs.length >= MAX_TABS_PER_SESSION) {
-			return {ok: false, error: sessionFullError()};
-		}
-
-		if (!group && store.groups.length >= MAX_SESSIONS) {
-			return {ok: false, error: sessionLimitError()};
-		}
-
-		const now = Date.now();
-		if (!group) {
-			group = {
-				id: makeId(),
-				name: SAVED_LINKS_SESSION,
-				folderId: DEFAULT_FOLDER_ID,
-				description: '',
-				createdAt: now,
-				updatedAt: now,
-				sourceWindowName: '',
-				sourceWindowId: null,
-				...deviceStamp(thisDevice, 'desktop'),
-				tabs: [],
-			};
-			store.groups.unshift(group);
-		}
-
-		group.tabs.push({
-			id: makeId(),
-			title: cleanText(
-				copies.length > 0 && store.settings.saveDuplicateTitle !== 'latest'
-					? copies[0].title
-					: title,
-				linkHost(url),
-				500,
-			),
-			url,
-			notes: copies[0]?.notes || '',
-			pinned: false,
-			nativeGroup: null,
-			savedAt: now,
-			originalIndex: group.tabs.length,
-		});
-		group.updatedAt = now;
-		await writeStore(store);
-		return {ok: true, added: true, groupId: group.id};
-	});
-}
-
-/**
 The dashboard query for a selection search: `?q=` with the trimmed, single-spaced text.
 */
 function dashboardSearchQuery(text: unknown) {
@@ -10433,12 +10323,7 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 		return;
 	}
 
-	if (
-		id.startsWith(LINK_COLUMN_PREFIX) ||
-		id.startsWith(LINK_SEND_PREFIX) ||
-		id === MENU.linkBookmarkNew ||
-		id === MENU.linkSave
-	) {
+	if (id.startsWith(LINK_COLUMN_PREFIX) || id === MENU.linkBookmarkNew) {
 		const url = normalizeUrl(info.linkUrl);
 		runMenuAction(
 			tab,
@@ -10449,18 +10334,6 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 				}
 
 				const title = await menuLinkTitle(info, url);
-				if (id === MENU.linkSave) {
-					return saveLinkToSession(url, title);
-				}
-
-				if (id.startsWith(LINK_SEND_PREFIX)) {
-					return saveLinkToSession(
-						url,
-						title,
-						id.slice(LINK_SEND_PREFIX.length),
-					);
-				}
-
 				if (id === MENU.linkBookmarkNew) {
 					return openPrefilledBookmarkDialog(url, title, tab);
 				}

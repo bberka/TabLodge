@@ -527,13 +527,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	]);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-link-root')), [
 		'Bookmark link to',
-		'Save link to session',
 	]);
-	assert.deepEqual(
-		titles(harness.childrenOf('tablodge-link-send')),
-		['Saved links'],
-		'with no saved sessions the picker only offers Saved links',
-	);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-link-bookmark')), [
 		'Bookmarks',
 		'Reading',
@@ -564,12 +558,8 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'---',
 		'Save this tab',
 		'Save selected tabs',
-		'Save this tab group',
 		'---',
 		'Save this window',
-		'Save tabs to the left',
-		'Save tabs to the right',
-		'Save all tabs except this one',
 		'---',
 		'Save tabs from all windows',
 	]);
@@ -908,135 +898,6 @@ test('New column opens the dashboard with a prefilled add-bookmark dialog', asyn
 	);
 });
 
-test('Saved links creates the Saved links session, appends to it, and skips duplicates', async () => {
-	const harness = createHarness(
-		baseState(
-			{},
-			{
-				groups: [
-					{
-						id: 'other',
-						name: 'Research',
-						folderId: 'unfiled',
-						createdAt: 1,
-						updatedAt: 1,
-						tabs: [
-							{
-								id: 't1',
-								title: 'Kept title',
-								url: 'https://shared.example/',
-								notes: 'shared note',
-							},
-						],
-					},
-				],
-			},
-		),
-	);
-	await harness.install();
-	await harness.click({
-		menuItemId: 'tablodge-link-save',
-		linkUrl: 'https://one.example/a',
-		linkText: 'First link',
-	});
-	const savedLinks = () =>
-		harness.state.groups.find((group) => group.name === 'Saved links');
-	assert.ok(savedLinks(), 'the session is created');
-	assert.equal(
-		harness.state.groups[0].name,
-		'Saved links',
-		'a new session is listed first',
-	);
-	assert.deepEqual(
-		savedLinks()!.tabs.map((tab) => tab.title),
-		['First link'],
-	);
-
-	await harness.click({
-		menuItemId: 'tablodge-link-save',
-		linkUrl: 'https://two.example/',
-	});
-	await harness.click({
-		menuItemId: 'tablodge-link-save',
-		linkUrl: 'https://one.example/a',
-		linkText: 'Duplicate',
-	});
-	// A URL saved elsewhere is allowed by default, sharing that copy's title and notes.
-	await harness.click({
-		menuItemId: 'tablodge-link-save',
-		linkUrl: 'https://shared.example/',
-		linkText: 'New title',
-	});
-	assert.equal(
-		harness.state.groups.filter((group) => group.name === 'Saved links').length,
-		1,
-		'one Saved links session',
-	);
-	assert.deepEqual(
-		savedLinks()!.tabs.map(({title, url, notes}) => ({title, url, notes})),
-		[
-			{title: 'First link', url: 'https://one.example/a', notes: ''},
-			{title: 'two.example', url: 'https://two.example/', notes: ''},
-			{
-				title: 'Kept title',
-				url: 'https://shared.example/',
-				notes: 'shared note',
-			},
-		],
-	);
-	assert.deepEqual(harness.openedTabs, [], 'the link is never opened');
-	assert.deepEqual(
-		harness.tabs.map((tab) => tab.id),
-		[1],
-		'no tab is closed',
-	);
-	assert.deepEqual(harness.warnings, []);
-});
-
-test('Saved links respects rejected duplicates and appends to an existing Saved links session', async () => {
-	const harness = createHarness(
-		baseState(
-			{saveDuplicateHandling: 'reject'},
-			{
-				groups: [
-					{
-						id: 'saved-links',
-						name: 'Saved links',
-						folderId: 'unfiled',
-						createdAt: 1,
-						updatedAt: 1,
-						tabs: [{id: 't1', title: 'Old', url: 'https://old.example/'}],
-					},
-				],
-			},
-		),
-	);
-	await harness.install();
-	await harness.click({
-		menuItemId: 'tablodge-link-save',
-		linkUrl: 'https://old.example/',
-	});
-	assert.equal(
-		harness.state.groups.length,
-		1,
-		'a URL saved anywhere is rejected',
-	);
-	await harness.click({
-		menuItemId: 'tablodge-link-save',
-		linkUrl: 'https://new.example/',
-		linkText: 'New',
-	});
-	assert.equal(
-		harness.state.groups.length,
-		1,
-		'the existing Saved links session is reused',
-	);
-	assert.deepEqual(
-		harness.state.groups[0].tabs.map((tab) => tab.url),
-		['https://old.example/', 'https://new.example/'],
-	);
-});
-
 function sessionEntry(
 	id: string,
 	name: string,
@@ -1053,104 +914,6 @@ function sessionEntry(
 		...extra,
 	};
 }
-
-test('the link picker lists recent sessions, skips Saved links and Archived, and ends with Saved links', async () => {
-	const harness = createHarness(
-		baseState(
-			{contextMenuPageEnabled: false},
-			{
-				folders: [
-					{id: 'unfiled', name: 'Unfiled', createdAt: 0, isDefault: true},
-					{id: 'archive', name: 'Archived', createdAt: 0},
-				],
-				groups: [
-					sessionEntry('a', 'Alpha', 10),
-					sessionEntry('b', 'Beta', 20),
-					sessionEntry('sl', 'Saved links', 30),
-					sessionEntry('old', 'Archived one', 999, {folderId: 'archive'}),
-				],
-			},
-		),
-	);
-	await harness.install();
-	assert.deepEqual(harness.menuErrors, []);
-	const children = harness.childrenOf('tablodge-link-send');
-	assert.deepEqual(titles(children), ['Beta', 'Alpha', '---', 'Saved links']);
-	assert.equal(children[0].id, 'tablodge-link-send:b');
-	assert.deepEqual(children[0].contexts, ['link']);
-	assert.deepEqual(children[0].targetUrlPatterns, [
-		'http://*/*',
-		'https://*/*',
-	]);
-	assert.equal(harness.item('tablodge-link-send:old'), undefined);
-	assert.equal(harness.item('tablodge-link-send:sl'), undefined);
-});
-
-test('saving a link to a chosen session appends it there, never opens it, and skips repeats', async () => {
-	const harness = createHarness(
-		baseState(
-			{},
-			{groups: [sessionEntry('a', 'Alpha', 10), sessionEntry('b', 'Beta', 20)]},
-		),
-	);
-	await harness.install();
-	await harness.click({
-		menuItemId: 'tablodge-link-send:a',
-		linkUrl: 'https://one.example/a',
-		linkText: 'First link',
-	});
-	await harness.click({
-		menuItemId: 'tablodge-link-send:a',
-		linkUrl: 'https://one.example/a',
-		linkText: 'Again',
-	});
-	const alpha = harness.state.groups.find((group) => group.id === 'a')!;
-	assert.deepEqual(
-		alpha.tabs.map((tab) => [tab.title, tab.url]),
-		[
-			['Old', 'https://a.example/'],
-			['First link', 'https://one.example/a'],
-		],
-	);
-	assert.equal(
-		harness.state.groups.find((group) => group.id === 'b')!.tabs.length,
-		1,
-		'other sessions are untouched',
-	);
-	assert.equal(
-		harness.state.groups.some((group) => group.name === 'Saved links'),
-		false,
-		'no Saved links session is created',
-	);
-	assert.ok((alpha.updatedAt ?? 0) > 10);
-	assert.deepEqual(harness.openedTabs, []);
-	assert.deepEqual(harness.warnings, []);
-});
-
-test('saving a link to a chosen session honors rejected duplicates and reports a vanished session', async () => {
-	const harness = createHarness(
-		baseState(
-			{saveDuplicateHandling: 'reject'},
-			{groups: [sessionEntry('a', 'Alpha', 10), sessionEntry('b', 'Beta', 20)]},
-		),
-	);
-	await harness.install();
-	await harness.click({
-		menuItemId: 'tablodge-link-send:b',
-		linkUrl: 'https://a.example/',
-	});
-	assert.equal(
-		harness.state.groups.find((group) => group.id === 'b')!.tabs.length,
-		1,
-		'an address saved in any session is rejected',
-	);
-
-	await harness.click({
-		menuItemId: 'tablodge-link-send:gone',
-		linkUrl: 'https://new.example/',
-	});
-	assert.deepEqual(harness.warnings, ['That saved session no longer exists.']);
-});
 
 test('the send-to-session picker lists the ten most recent sessions, skips Archived, and ends with a new session', async () => {
 	const many = Array.from({length: 12}, (_, index) =>
@@ -1528,15 +1291,10 @@ test('menu actions never throw when an action fails', async () => {
 	const harness = createHarness(baseState());
 	await harness.install();
 	await harness.click({
-		menuItemId: 'tablodge-link-save',
-		linkUrl: 'javascript:alert(1)',
-	});
-	await harness.click({
 		menuItemId: 'tablodge-link-bookmark:bookmark-default',
 		linkUrl: 'javascript:alert(1)',
 	});
 	assert.deepEqual(harness.warnings, [
-		'Only http and https links can be saved.',
 		'Only http and https links can be saved.',
 	]);
 	assert.equal(harness.state.groups.length, 0);
