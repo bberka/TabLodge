@@ -5,7 +5,12 @@ import {
 	isFolderListShown,
 } from '../src/app/session-folder-list-rule';
 
-test('session folders become a vertical list only past the threshold', () => {
-	assert.equal(isFolderListShown(SESSION_FOLDER_LIST_MIN), false);
-	assert.equal(isFolderListShown(SESSION_FOLDER_LIST_MIN + 1), true);
+test('auto lists session folders only past the threshold', () => {
+	assert.equal(isFolderListShown(SESSION_FOLDER_LIST_MIN, 'auto'), false);
+	assert.equal(isFolderListShown(SESSION_FOLDER_LIST_MIN + 1, 'auto'), true);
+});
+
+test('an explicit choice ignores the folder count', () => {
+	assert.equal(isFolderListShown(1, 'list'), true);
+	assert.equal(isFolderListShown(SESSION_FOLDER_LIST_MIN + 5, 'chips'), false);
 });

@@ -29,6 +29,7 @@ import {
 	ListPlus,
 	MoreHorizontal,
 	MoreVertical,
+	PanelLeft,
 	PanelTop,
 	Pencil,
 	RefreshCw,
@@ -97,6 +98,7 @@ import type {
 	Session,
 	SessionFields,
 	SessionQuickAction,
+	SessionFolderView,
 	SessionSort,
 	SessionWindowMode,
 	Settings,
@@ -354,8 +356,11 @@ export function SessionManager({
 		() => visibleSessionFolders(folders, groups),
 		[folders, groups],
 	);
-	const folderList = isFolderListShown(visibleFolders.length);
 	const settings: Partial<Settings> = state?.settings || NO_SETTINGS;
+	const folderList = isFolderListShown(
+		visibleFolders.length,
+		settings.sessionFolderView,
+	);
 	// Collapsed cards show a row of preview icons only on wide pages.
 	const wide = useWidePage();
 	const canSwitch = useHasSavableTabs(
@@ -1353,6 +1358,18 @@ export function SessionManager({
 		dragDrop: drag.drop,
 	});
 
+	async function changeFolderView(next: SessionFolderView) {
+		const result = await send('UPDATE_SETTINGS', {
+			settings: {sessionFolderView: next},
+		});
+		if (!result?.ok) {
+			showStatus(result?.error || 'Could not save the folder view.', true);
+			return;
+		}
+
+		await reload();
+	}
+
 	async function changeSort(value: string) {
 		setSort(value);
 		const result = await send('UPDATE_SETTINGS', {
@@ -1742,6 +1759,27 @@ export function SessionManager({
 							}
 							onChange={setQuery}
 						/>
+						<IconTooltip
+							label={
+								folderList ? 'Switch to folder chips' : 'Switch to folder list'
+							}
+						>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8 max-lg:hidden"
+								aria-label={
+									folderList
+										? 'Switch to folder chips'
+										: 'Switch to folder list'
+								}
+								onClick={() =>
+									void changeFolderView(folderList ? 'chips' : 'list')
+								}
+							>
+								{folderList ? <LayoutGrid /> : <PanelLeft />}
+							</Button>
+						</IconTooltip>
 						<DropdownMenu>
 							<IconTooltip label="Sort sessions">
 								<DropdownMenuTrigger asChild>
