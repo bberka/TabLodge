@@ -295,7 +295,10 @@ const DialogBody = ({
 	...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
 	<div
-		className={cn('grid min-w-0 gap-4 text-sm wrap-anywhere', className)}
+		className={cn(
+			'grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 text-sm wrap-anywhere',
+			className,
+		)}
 		{...props}
 	/>
 );
