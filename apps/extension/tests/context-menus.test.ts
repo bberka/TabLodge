@@ -557,9 +557,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'Send this tab to session',
 		'---',
 		'Save selected tabs',
-		'---',
 		'Save this window',
-		'---',
 		'Save tabs from all windows',
 	]);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-bookmark')), [

@@ -56,14 +56,6 @@ How many sessions the "Send this tab to session" submenu lists, most recently ch
 export const MENU_SESSION_LIMIT = 10;
 
 /**
-The page menu's save actions end a group at these entries, which get a separator after them: selected tabs, then this window, then every window.
-*/
-const PAGE_SAVE_GROUP_ENDS: ReadonlySet<string> = new Set([
-	'tablodge-page-save-selected',
-	'tablodge-page-save-window',
-]);
-
-/**
 The page menu's save actions, reusing the SAVE_TABS scopes.
 */
 export const PAGE_SAVE_ITEMS: ReadonlyArray<
@@ -274,14 +266,6 @@ export function contextMenuPlan(
 
 		for (const [id, title] of PAGE_SAVE_ITEMS) {
 			items.push({id, title, parentId: MENU.pageRoot, ...page});
-			if (PAGE_SAVE_GROUP_ENDS.has(id)) {
-				items.push({
-					id: `${id}-separator`,
-					type: 'separator',
-					parentId: MENU.pageRoot,
-					...page,
-				});
-			}
 		}
 	}
 
