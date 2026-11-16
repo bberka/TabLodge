@@ -3314,6 +3314,67 @@ test('Firefox restores into a new window that starts blank, then removes that bo
 	assert.equal(harness.removedTabIds.length, 1, 'the bootstrap tab is removed');
 });
 
+const REDDIT_ICON = 'data:image/png;base64,iVBORw0KGgo=';
+const SITE_ICONS = 'tablodge.siteIcons';
+const iconTab = (url: string, extra: Record<string, unknown> = {}) =>
+	({id: 1, windowId: 10, index: 0, active: true, url, ...extra}) as MockTab;
+
+test('Firefox remembers the icon of each site a tab shows, by host', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		firefox: true,
+	});
+	await harness.fire(
+		'tabUpdated',
+		1,
+		{favIconUrl: REDDIT_ICON},
+		iconTab('https://www.reddit.com/r/typescript/', {favIconUrl: REDDIT_ICON}),
+	);
+	await harness.fire(
+		'tabUpdated',
+		1,
+		{status: 'complete'},
+		iconTab('https://www.reddit.com/', {favIconUrl: REDDIT_ICON}),
+	);
+	assert.deepEqual(harness.extraStorage[SITE_ICONS], {
+		'www.reddit.com': REDDIT_ICON,
+	});
+});
+
+test('Firefox skips private tabs and icons that are a web address', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		firefox: true,
+	});
+	await harness.fire(
+		'tabUpdated',
+		1,
+		{favIconUrl: REDDIT_ICON},
+		iconTab('https://private.example/', {
+			favIconUrl: REDDIT_ICON,
+			incognito: true,
+		}),
+	);
+	await harness.fire(
+		'tabUpdated',
+		1,
+		{favIconUrl: 'https://web.example/favicon.ico'},
+		iconTab('https://web.example/', {
+			favIconUrl: 'https://web.example/favicon.ico',
+		}),
+	);
+	assert.equal(harness.extraStorage[SITE_ICONS], undefined);
+});
+
+test('Chromium keeps no icon cache of its own', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	await harness.fire(
+		'tabUpdated',
+		1,
+		{favIconUrl: REDDIT_ICON},
+		iconTab('https://www.reddit.com/', {favIconUrl: REDDIT_ICON}),
+	);
+	assert.equal(harness.extraStorage[SITE_ICONS], undefined);
+});
+
 test('Firefox keeps an emptied window open on the new tab page without naming a browser address', async () => {
 	const harness = createWorkerHarness(
 		stateWithSession({
