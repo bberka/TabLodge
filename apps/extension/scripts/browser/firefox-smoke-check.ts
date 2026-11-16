@@ -6,6 +6,7 @@
 //
 // Needs Firefox; see scripts/browser/firefox-driver.ts for how it is found and how the add-on is installed.
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import {createServer} from 'node:http';
 import {mkdtemp, rm} from 'node:fs/promises';
 import type {AddressInfo} from 'node:net';
@@ -33,10 +34,19 @@ const PAGES = [
 
 type Reply = {ok: boolean; error?: string};
 
+const ICON =
+	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#ff4500"/></svg>';
+const ICON_ADDRESS = `data:image/svg+xml;base64,${Buffer.from(ICON).toString('base64')}`;
 const server = createServer((request, response) => {
+	if (request.url === '/icon.svg') {
+		response.setHeader('content-type', 'image/svg+xml');
+		response.end(ICON);
+		return;
+	}
+
 	response.setHeader('content-type', 'text/html');
 	response.end(
-		`<!doctype html><title>Page ${request.url}</title><h1>${request.url}</h1>`,
+		`<!doctype html><link rel="icon" href="/icon.svg"><title>Page ${request.url}</title><h1>${request.url}</h1>`,
 	);
 });
 await new Promise<void>((resolve) => {
@@ -161,6 +171,28 @@ try {
 	});
 	assert.equal(added.ok, true, added.error);
 	pass('added a bookmark');
+
+	// The tabs above showed this site's icon, so a link to a page of the site that was never opened shows it too.
+	const iconed = await send('ADD_BOOKMARK', {
+		bookmark: {
+			title: 'Never opened',
+			url: `${origin}/never-opened`,
+			columnId: first.id,
+		},
+	});
+	assert.equal(iconed.ok, true, iconed.error);
+	const remembered = await evaluate<Record<string, string>>(
+		"return (await chrome.storage.local.get('tablodge.siteIcons'))['tablodge.siteIcons'];",
+	);
+	assert.deepEqual(remembered, {[new URL(origin).host]: ICON_ADDRESS});
+	await openPage('newtab.html');
+	const bookmarkIcon = await driver!.wait(
+		until.elementLocated(By.css(`img[data-favicon][src="${ICON_ADDRESS}"]`)),
+		10_000,
+		'the never opened link shows the remembered site icon',
+	);
+	assert.ok(await bookmarkIcon.isDisplayed());
+	pass('a link to a never opened page of a visited site shows that site icon');
 
 	const imported = await send('IMPORT_BROWSER_BOOKMARKS');
 	assert.equal(imported.ok, true, imported.error);
