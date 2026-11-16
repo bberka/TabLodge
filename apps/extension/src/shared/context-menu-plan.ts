@@ -23,8 +23,6 @@ export const MENU = {
 	linkRoot: 'tablodge-link-root',
 	linkBookmark: 'tablodge-link-bookmark',
 	linkBookmarkNew: 'tablodge-link-bookmark-new',
-	linkSend: 'tablodge-link-send',
-	linkSave: 'tablodge-link-save',
 	pageRoot: 'tablodge-page-root',
 	pageBookmark: 'tablodge-page-bookmark',
 	pageBookmarkNew: 'tablodge-page-bookmark-new',
@@ -44,10 +42,6 @@ export const MENU = {
 "Send this tab to session" items are `${PAGE_SEND_PREFIX}${sessionId}`.
 */
 export const PAGE_SEND_PREFIX = 'tablodge-page-send:';
-/**
-"Save link to session" items are `${LINK_SEND_PREFIX}${sessionId}`.
-*/
-export const LINK_SEND_PREFIX = 'tablodge-link-send:';
 
 /**
 Column items are `${prefix}${columnId}`; the Unfiled pseudo-column uses BOOKMARK_UNFILED_ID.
@@ -57,7 +51,7 @@ export const LINK_COLUMN_PREFIX = 'tablodge-link-bookmark:';
 export const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
 
 /**
-How many sessions the "Send this tab to session" and "Save link to session" submenus list, most recently changed first.
+How many sessions the "Send this tab to session" submenu lists, most recently changed first.
 */
 export const MENU_SESSION_LIMIT = 10;
 
@@ -67,37 +61,14 @@ The page menu's save actions, reusing the SAVE_TABS scopes.
 export const PAGE_SAVE_ITEMS: ReadonlyArray<
 	readonly [id: string, title: string, scope: SaveScope]
 > = [
-	['tablodge-page-save-tab', 'Save this tab', 'this-tab'],
 	['tablodge-page-save-selected', 'Save selected tabs', 'selected'],
-	['tablodge-page-save-group', 'Save this tab group', 'tab-group'],
 	['tablodge-page-save-window', 'Save this window', 'window'],
-	['tablodge-page-save-left', 'Save tabs to the left', 'left-of-tab'],
-	['tablodge-page-save-right', 'Save tabs to the right', 'right-of-tab'],
-	[
-		'tablodge-page-save-except-tab',
-		'Save all tabs except this one',
-		'except-this-tab',
-	],
 	[
 		'tablodge-page-save-all-windows',
 		'Save tabs from all windows',
 		'all-windows',
 	],
 ];
-
-/**
-The page menu's save actions end a group at these entries, which get a separator after them: this tab and its
-selection, then this window and the tabs around this one, then every window.
-*/
-const PAGE_SAVE_GROUP_ENDS: ReadonlySet<string> = new Set([
-	'tablodge-page-save-group',
-	'tablodge-page-save-except-tab',
-]);
-
-/**
-The "Saved links" entry of "Save link to session" collects links in this session (matched by name, case-insensitively).
-*/
-export const SAVED_LINKS_SESSION = 'Saved links';
 
 export const WEB_URL_PATTERNS = ['http://*/*', 'https://*/*'];
 
@@ -116,7 +87,7 @@ export function contextMenuSignature(
 		settings.contextMenuSelectionEnabled,
 		settings.contextMenuActionEnabled,
 		columns.map((column) => [column.id, column.name]),
-		settings.contextMenuPageEnabled || settings.contextMenuLinksEnabled
+		settings.contextMenuPageEnabled
 			? sessions.map((session) => [session.id, session.name])
 			: [],
 	]);
@@ -230,41 +201,6 @@ export function contextMenuPlan(
 			link.contexts,
 			{targetUrlPatterns: WEB_URL_PATTERNS},
 		);
-
-		items.push({
-			id: MENU.linkSend,
-			title: 'Save link to session',
-			parentId: MENU.linkRoot,
-			...link,
-		});
-		// The Saved links entry below stands in for that session, so it is not listed twice.
-		const savedLinksName = SAVED_LINKS_SESSION.toLocaleLowerCase();
-		for (const session of sessions) {
-			if (session.name.toLocaleLowerCase() !== savedLinksName) {
-				items.push({
-					id: `${LINK_SEND_PREFIX}${session.id}`,
-					title: session.name,
-					parentId: MENU.linkSend,
-					...link,
-				});
-			}
-		}
-
-		if (items.some((item) => item.parentId === MENU.linkSend)) {
-			items.push({
-				id: `${MENU.linkSend}-separator`,
-				type: 'separator',
-				parentId: MENU.linkSend,
-				...link,
-			});
-		}
-
-		items.push({
-			id: MENU.linkSave,
-			title: SAVED_LINKS_SESSION,
-			parentId: MENU.linkSend,
-			...link,
-		});
 	}
 
 	if (settings.contextMenuPageEnabled) {
@@ -328,18 +264,8 @@ export function contextMenuPlan(
 			},
 		);
 
-		// The tab-group item stays enabled: Chrome has no contextMenus.onShown to toggle it per tab, and a
-		// click outside a tab group just logs "The active tab is not in a tab group." Browsers with onShown refine it.
 		for (const [id, title] of PAGE_SAVE_ITEMS) {
 			items.push({id, title, parentId: MENU.pageRoot, ...page});
-			if (PAGE_SAVE_GROUP_ENDS.has(id)) {
-				items.push({
-					id: `${id}-separator`,
-					type: 'separator',
-					parentId: MENU.pageRoot,
-					...page,
-				});
-			}
 		}
 	}
 

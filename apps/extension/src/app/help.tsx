@@ -415,9 +415,8 @@ function Help() {
 				{
 					title: 'On a link',
 					gesture: {label: 'Right-click a link', icon: Link2},
-					body: 'Bookmark the link to a column, or use Save link to session to add it to one of your ten most recent sessions or to the Saved links session without opening it.',
-					searchText:
-						'right-click link bookmark column save link to session saved links without opening',
+					body: 'Bookmark the link to a column or to a new one.',
+					searchText: 'right-click link bookmark column',
 				},
 				{
 					title: 'On a page',

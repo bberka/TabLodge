@@ -551,7 +551,7 @@ const settingsGroups: Array<{
 				name: 'contextMenuLinksEnabled',
 				requires: 'contextMenusEnabled',
 				label: 'Links',
-				help: 'Bookmark a link to a column, or save it to the “Saved links” session without opening it.',
+				help: 'Bookmark a link to a column.',
 				type: 'switch',
 			},
 			{
