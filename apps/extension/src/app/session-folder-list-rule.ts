@@ -15,3 +15,10 @@ export function isFolderListShown(
 		? folderCount > SESSION_FOLDER_LIST_MIN
 		: view === 'list';
 }
+
+export const SESSION_FOLDER_HINT_KEY = 'tablodge.sessionFolderHintDismissed';
+
+// The chips are showing and there are nearly as many folders as the list would take over for.
+export function suggestsFolderList(folderCount: number, isListShown: boolean) {
+	return !isListShown && folderCount >= SESSION_FOLDER_LIST_MIN;
+}

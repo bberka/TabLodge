@@ -144,7 +144,12 @@ import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
-import {isFolderListShown} from './session-folder-list-rule';
+import {FocusViewHint} from './focus-hint';
+import {
+	SESSION_FOLDER_HINT_KEY,
+	isFolderListShown,
+	suggestsFolderList,
+} from './session-folder-list-rule';
 import {IconNameField} from './icon-picker';
 import {Favicon, LinkSummary} from './favicon';
 import {InsecureMarkFor} from './insecure-mark';
@@ -164,7 +169,13 @@ import {
 } from './bookmark-column-picker';
 import {LinkPreview, useLinkPreviewsOn} from './link-preview';
 import {AccentPalette} from './accent-palette';
-import {COLUMN_COLOR_BAR, columnColorVars} from './column-color';
+import {
+	COLUMN_COLOR_ACTIVE_TEXT,
+	COLUMN_COLOR_BAR,
+	COLUMN_COLOR_SOFT,
+	COLUMN_COLOR_TEXT,
+	columnColorVars,
+} from './column-color';
 import {cn} from '@/lib/utils';
 
 /**
@@ -1625,7 +1636,8 @@ export function SessionManager({
 		const result =
 			folderDialog?.mode === 'rename'
 				? await send('UPDATE_FOLDER', {
-						folderId,
+						// The folder the dialog was opened for, not the one selected: Edit folder is also in each folder's right-click menu.
+						folderId: folderDialog.folder?.id ?? folderId,
 						name,
 						icon: folderDialog.icon ?? '',
 						color: folderDialog.color ?? '',
@@ -1875,6 +1887,18 @@ export function SessionManager({
 					</div>
 				</div>
 
+				{suggestsFolderList(visibleFolders.length, folderList) && (
+					<FocusViewHint
+						count={visibleFolders.length}
+						noun="folder"
+						label="Folder list suggestion"
+						text="The folder list shows them one under another beside the sessions, which is easier to scan than a row of chips."
+						action="Switch to folder list"
+						storageKey={SESSION_FOLDER_HINT_KEY}
+						className="max-lg:hidden"
+						onSwitch={() => void changeFolderView('list')}
+					/>
+				)}
 				<div
 					className={folderList ? 'lg:flex lg:items-start lg:gap-4' : undefined}
 				>
@@ -1885,172 +1909,209 @@ export function SessionManager({
 						)}
 						aria-label="Session folders"
 					>
-						{[{id: ALL, name: 'All', icon: undefined}, ...visibleFolders].map(
-							(folder) => {
-								const FolderIcon =
-									folder.id === ALL
-										? LayoutGrid
-										: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component;
-								const chip = (
-									<button
-										key={folder.id}
-										type="button"
-										aria-pressed={folderId === folder.id}
-										data-drop-active={folderDropId === folder.id || undefined}
-										data-session-folder-chip={folder.id}
-										className={cn(
-											'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
-											folderList &&
-												'lg:flex lg:h-auto lg:min-h-8 lg:w-full lg:rounded-md lg:px-2 lg:py-1 lg:text-left lg:text-sm lg:font-normal',
-											folderDropId === folder.id
-												? 'bg-primary/15 text-foreground ring-2 ring-primary'
-												: folderId === folder.id
-													? 'bg-primary text-primary-foreground'
-													: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-										)}
-										onDragOver={(event) => {
-											if (dragItemRef.current?.kind !== 'session') {
-												return;
-											}
+						{[
+							{id: ALL, name: 'All', icon: undefined, color: undefined},
+							...visibleFolders,
+						].map((folder) => {
+							const FolderIcon =
+								folder.id === ALL
+									? LayoutGrid
+									: getIcon(folder.icon, DEFAULT_FOLDER_ICON).component;
+							// A folder with a color is active in that color, as a colored bookmark column is in the Focus view.
+							const folderColor = columnColorVars(folder.color);
+							const isActive = folderId === folder.id;
+							const chip = (
+								<button
+									key={folder.id}
+									type="button"
+									style={folderColor}
+									aria-pressed={folderId === folder.id}
+									data-drop-active={folderDropId === folder.id || undefined}
+									data-session-folder-chip={folder.id}
+									className={cn(
+										'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+										folderList &&
+											'lg:flex lg:h-auto lg:min-h-8 lg:w-full lg:rounded-md lg:px-2 lg:py-1 lg:text-left lg:text-sm lg:font-normal',
+										folderDropId === folder.id
+											? 'bg-primary/15 text-foreground ring-2 ring-primary'
+											: isActive
+												? folderColor
+													? cn(
+															COLUMN_COLOR_ACTIVE_TEXT,
+															COLUMN_COLOR_SOFT,
+															folderList &&
+																'lg:shadow-[inset_3px_0_0_rgb(var(--column-light))] lg:dark:shadow-[inset_3px_0_0_rgb(var(--column-dark))]',
+														)
+													: folderList
+														? 'bg-primary text-primary-foreground lg:bg-primary/10 lg:font-semibold lg:text-primary'
+														: 'bg-primary text-primary-foreground'
+												: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+										isActive && folderColor && 'font-semibold',
+									)}
+									onDragOver={(event) => {
+										if (dragItemRef.current?.kind !== 'session') {
+											return;
+										}
 
-											event.preventDefault();
-											if (folderDropTarget(folder.id)) {
-												event.dataTransfer.dropEffect = 'move';
-												setFolderDropId(folder.id);
-											} else {
-												event.dataTransfer.dropEffect = 'none';
-												setFolderDropId(null);
-											}
-										}}
-										onDragLeave={(event) => {
-											if (
-												!event.currentTarget.contains(
-													event.relatedTarget as Node | null,
-												)
-											) {
-												setFolderDropId((current) =>
-													current === folder.id ? null : current,
-												);
-											}
-										}}
-										onDrop={(event) => {
-											if (!folderDropTarget(folder.id)) {
-												return;
-											}
-
-											event.preventDefault();
-											const item = dragItemRef.current;
-											const dragged = groups.find(
-												(group) =>
-													item?.kind === 'session' && group.id === item.id,
+										event.preventDefault();
+										if (folderDropTarget(folder.id)) {
+											event.dataTransfer.dropEffect = 'move';
+											setFolderDropId(folder.id);
+										} else {
+											event.dataTransfer.dropEffect = 'none';
+											setFolderDropId(null);
+										}
+									}}
+									onDragLeave={(event) => {
+										if (
+											!event.currentTarget.contains(
+												event.relatedTarget as Node | null,
+											)
+										) {
+											setFolderDropId((current) =>
+												current === folder.id ? null : current,
 											);
-											drag.end();
-											if (dragged) {
-												void moveGroupToFolder(dragged, folder.id, folder.name);
-											}
-										}}
-										onClick={() => {
-											setFolderId(folder.id);
-											setAnchor(null);
-										}}
-									>
-										<FolderIcon
-											className="size-3.5 shrink-0"
-											aria-hidden="true"
-										/>
-										<span
-											className={cn(
-												folderList && 'lg:min-w-0 lg:flex-1 lg:truncate',
-											)}
-										>
-											{folder.name}
-										</span>
-										<span
-											className={cn(
-												'tabular-nums opacity-90',
-												folderList && 'lg:ml-auto',
-											)}
-										>
-											{folder.id === ALL
-												? folderCounts.all
-												: (folderCounts.byFolder.get(folder.id) ?? 0)}
-										</span>
-									</button>
-								);
-								const folderGroups =
-									folder.id === ALL
-										? groups
-										: groups.filter((group) => group.folderId === folder.id);
-								const shareFolder = {
-									id: 'share-folder',
-									label: 'Share',
-									icon: Share2,
-									disabled: folderGroups.length === 0,
-									onSelect() {
-										openShare({
-											title: folder.name,
-											groups: folderGroups,
-											data: {kind: 'sessions', groups: folderGroups, folders},
-										});
-									},
-								};
-								if (
-									!('createdAt' in folder) ||
-									folder.isDefault ||
-									isArchivedFolder(folder)
-								) {
-									return (
-										<ActionContextMenu
-											key={folder.id}
-											actions={() => [shareFolder]}
-										>
-											{chip}
-										</ActionContextMenu>
-									);
-								}
+										}
+									}}
+									onDrop={(event) => {
+										if (!folderDropTarget(folder.id)) {
+											return;
+										}
 
+										event.preventDefault();
+										const item = dragItemRef.current;
+										const dragged = groups.find(
+											(group) =>
+												item?.kind === 'session' && group.id === item.id,
+										);
+										drag.end();
+										if (dragged) {
+											void moveGroupToFolder(dragged, folder.id, folder.name);
+										}
+									}}
+									onClick={() => {
+										setFolderId(folder.id);
+										setAnchor(null);
+									}}
+								>
+									<FolderIcon
+										className={cn(
+											'size-3.5 shrink-0',
+											folderColor && COLUMN_COLOR_TEXT,
+										)}
+										aria-hidden="true"
+									/>
+									<span
+										className={cn(
+											folderList && 'lg:min-w-0 lg:flex-1 lg:truncate',
+										)}
+									>
+										{folder.name}
+									</span>
+									<span
+										className={cn(
+											'tabular-nums opacity-90',
+											folderColor
+												? cn(
+														'rounded-md px-1.5 opacity-100',
+														COLUMN_COLOR_SOFT,
+														COLUMN_COLOR_ACTIVE_TEXT,
+													)
+												: folderList &&
+														cn(
+															'lg:rounded-md lg:border lg:px-2 lg:py-0.5 lg:text-xs lg:font-medium lg:opacity-100',
+															isActive
+																? 'lg:border-primary/20 lg:bg-primary/10 lg:text-primary'
+																: 'lg:border-border lg:bg-muted lg:text-muted-foreground',
+														),
+											folderList && 'lg:ml-auto',
+										)}
+									>
+										{folder.id === ALL
+											? folderCounts.all
+											: (folderCounts.byFolder.get(folder.id) ?? 0)}
+									</span>
+								</button>
+							);
+							const folderGroups =
+								folder.id === ALL
+									? groups
+									: groups.filter((group) => group.folderId === folder.id);
+							const shareFolder = {
+								id: 'share-folder',
+								label: 'Share',
+								icon: Share2,
+								disabled: folderGroups.length === 0,
+								onSelect() {
+									openShare({
+										title: folder.name,
+										groups: folderGroups,
+										data: {kind: 'sessions', groups: folderGroups, folders},
+									});
+								},
+							};
+							if (
+								!('createdAt' in folder) ||
+								folder.isDefault ||
+								isArchivedFolder(folder)
+							) {
 								return (
 									<ActionContextMenu
 										key={folder.id}
-										actions={() => [
-											shareFolder,
-											{type: 'separator'},
-											{
-												id: 'edit-folder',
-												label: 'Edit folder',
-												icon: ACTION_ICONS.edit,
-												onSelect() {
-													setDialog({
-														mode: 'rename',
-														folder,
-														icon: folder.icon,
-														color: folder.color,
-														colorSessions: folder.colorSessions,
-													});
-												},
-											},
-											{
-												id: 'delete-folder',
-												label: 'Delete folder',
-												icon: ACTION_ICONS.remove,
-												destructive: true,
-												onSelect() {
-													void deleteFolder(folder);
-												},
-											},
-										]}
+										actions={() => [shareFolder]}
 									>
 										{chip}
 									</ActionContextMenu>
 								);
-							},
-						)}
+							}
+
+							return (
+								<ActionContextMenu
+									key={folder.id}
+									actions={() => [
+										shareFolder,
+										{type: 'separator'},
+										{
+											id: 'edit-folder',
+											label: 'Edit folder',
+											icon: ACTION_ICONS.edit,
+											onSelect() {
+												setDialog({
+													mode: 'rename',
+													folder,
+													icon: folder.icon,
+													color: folder.color,
+													colorSessions: folder.colorSessions,
+												});
+											},
+										},
+										{
+											id: 'delete-folder',
+											label: 'Delete folder',
+											icon: ACTION_ICONS.remove,
+											destructive: true,
+											onSelect() {
+												void deleteFolder(folder);
+											},
+										},
+									]}
+								>
+									{chip}
+								</ActionContextMenu>
+							);
+						})}
 						<div
 							className={
 								folderList ? 'flex items-center gap-1 lg:pt-1' : 'contents'
 							}
 						>
-							<span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+							<span
+								className={cn(
+									'mx-1 h-5 w-px bg-border',
+									folderList && 'lg:hidden',
+								)}
+								aria-hidden="true"
+							/>
 							<IconTooltip label="New folder">
 								<Button
 									variant="ghost"
