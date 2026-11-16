@@ -102,6 +102,15 @@ export function useRowReset(
 }
 
 /**
+Whether any setting in these rows differs from its default, for showing a card's reset button.
+*/
+export function useAnyChanged(rows: readonly Row[]): boolean {
+	const prefs = usePreferences();
+	const synced = useLinkSettings(true);
+	return rows.some((row) => isChanged(row, {prefs, synced}, DEFAULT_VALUES));
+}
+
+/**
 Asks before putting every setting of a section back to its default.
 */
 export function confirmResetSection(title: string, rows: readonly Row[]): void {
