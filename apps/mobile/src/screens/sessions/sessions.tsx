@@ -20,7 +20,11 @@ import {
 	SearchDock,
 	useSearch,
 } from '../../ui/floating-actions';
-import {type LinkAction, type SessionAction} from '../../settings/preferences';
+import {
+	type LinkAction,
+	type SessionAction,
+	usePreferences,
+} from '../../settings/preferences';
 import {PrivateSwitch} from '../../private/private-switch';
 import {useRoomBelow} from '../../ui/keyboard';
 import {useBarSpace} from '../../ui/tab-bar';
@@ -29,6 +33,7 @@ import {useLinkSettings} from '../../library/use-link-settings';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
+import {FolderBack, FolderList} from '../../ui/folder-list';
 import {SearchElsewhere} from '../search-elsewhere';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
@@ -77,6 +82,9 @@ export function SessionsScreen({
 	const view = useView();
 	const {connected} = useSyncStatus();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
+	// In the list view, whether a folder is open, as opposed to the list of every folder.
+	const [inside, setInside] = useState(false);
+	const isListView = usePreferences().sessionView === 'list';
 	const search = useSearch();
 	const {query} = search;
 	const listRef = useRef<FlatList<Session>>(null);
@@ -121,9 +129,12 @@ export function SessionsScreen({
 					setEditingFolder({id});
 				},
 				removed(id) {
-					if (picked === id) {
-						setPicked(ALL_SESSIONS_ID);
+					if (picked !== id) {
+						return;
 					}
+
+					setPicked(ALL_SESSIONS_ID);
+					setInside(false);
 				},
 			})
 		: undefined;
@@ -131,10 +142,20 @@ export function SessionsScreen({
 		? picked
 		: ALL_SESSIONS_ID;
 	const needle = query.trim().toLocaleLowerCase();
+	// The list view starts on the list of folders; a search looks through every session instead.
+	const atList = isListView && !inside && needle === '';
+	const scopeId = isListView && !inside ? ALL_SESSIONS_ID : folderId;
+	useBackAction(isListView && inside && needle === '', () => {
+		setInside(false);
+	});
 	const shown = useMemo(() => {
-		const inFolder = sessionsIn(store, folderId, links.sessionSort);
+		if (atList) {
+			return [];
+		}
+
+		const inFolder = sessionsIn(store, scopeId, links.sessionSort);
 		return needle ? inFolder.filter((s) => matches(s, needle)) : inFolder;
-	}, [store, folderId, links.sessionSort, needle]);
+	}, [store, scopeId, links.sessionSort, needle, atList]);
 	const searchCount = useSettledText(needle !== '', resultCount(shown.length));
 	const look = useFolderLook();
 	// The name and color of each session's folder, worked out once per library change, not per card per render.
@@ -225,6 +246,7 @@ export function SessionsScreen({
 
 		search.close();
 		setPicked(ALL_SESSIONS_ID);
+		setInside(true);
 		setFlipped((current) => {
 			const next = new Set(current);
 			if (isExpandAll) {
@@ -269,6 +291,16 @@ export function SessionsScreen({
 		selection.ids,
 		store.folders,
 	);
+
+	const entries = folders.map((folder) => {
+		const {glyph, tint} = look(folder);
+		return {id: folder.id, name: folder.name, count: folder.count, glyph, tint};
+	});
+	const openEntry = entries.find((entry) => entry.id === folderId);
+	const openFolder = (id: string) => {
+		setPicked(id);
+		setInside(true);
+	};
 
 	const subtitle =
 		searchCount ??
@@ -333,26 +365,58 @@ export function SessionsScreen({
 									)
 								}
 							/>
-							<FolderChips
-								folders={folders}
-								selected={folderId}
-								onSelect={setPicked}
-								onNewFolder={() => {
-									setEditingFolder({});
-								}}
-								onMenu={setFolderMenuId}
-							/>
+							{isListView ? (
+								<View style={styles.folders}>
+									{atList && (
+										<FolderList
+											entries={entries}
+											noun="session"
+											newLabel="New folder"
+											onOpen={openFolder}
+											onNew={() => {
+												setEditingFolder({});
+											}}
+											onMenu={setFolderMenuId}
+										/>
+									)}
+									{inside && needle === '' && openEntry && (
+										<FolderBack
+											entry={openEntry}
+											noun="session"
+											label="All folders"
+											onBack={() => {
+												setInside(false);
+											}}
+											onMenu={() => {
+												setFolderMenuId(openEntry.id);
+											}}
+										/>
+									)}
+								</View>
+							) : (
+								<FolderChips
+									folders={folders}
+									selected={folderId}
+									onSelect={setPicked}
+									onNewFolder={() => {
+										setEditingFolder({});
+									}}
+									onMenu={setFolderMenuId}
+								/>
+							)}
 						</View>
 					}
 					ListEmptyComponent={
-						<Empty
-							icon={needle ? 'search' : 'albums-outline'}
-							title={needle ? 'No match' : 'Nothing here'}
-						>
-							{needle
-								? 'No session or tab matches that search.'
-								: 'This folder has no sessions.'}
-						</Empty>
+						atList ? undefined : (
+							<Empty
+								icon={needle ? 'search' : 'albums-outline'}
+								title={needle ? 'No match' : 'Nothing here'}
+							>
+								{needle
+									? 'No session or tab matches that search.'
+									: 'This folder has no sessions.'}
+							</Empty>
+						)
 					}
 					ListFooterComponent={
 						<SearchElsewhere
@@ -521,4 +585,5 @@ const styles = StyleSheet.create({
 	list: {paddingBottom: 24, gap: 8},
 	cardRow: {paddingHorizontal: 16},
 	gap: {height: 12},
+	folders: {paddingHorizontal: 16},
 });

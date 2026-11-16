@@ -32,6 +32,8 @@ const changed: Preferences = {
 	sessionSwipeLeft: 'rename',
 	linkSwipeRight: 'open',
 	linkSwipeLeft: 'edit',
+	bookmarkView: 'list',
+	sessionView: 'list',
 	sessionTap: 'open',
 	sessionMain: 'archive',
 	cleanOnSave: false,

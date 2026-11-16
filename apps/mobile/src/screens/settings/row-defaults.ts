@@ -30,6 +30,8 @@ export const RESETS = new Map<Row, Reset>([
 	[ROWS.showSavedOn, {prefs: ['showSavedOn']}],
 	[ROWS.expandSessions, {synced: ['expandSessionsByDefault']}],
 	[ROWS.sortSessions, {synced: ['sessionSort']}],
+	[ROWS.sessionView, {prefs: ['sessionView']}],
+	[ROWS.bookmarkView, {prefs: ['bookmarkView']}],
 	[ROWS.sessionTap, {prefs: ['sessionTap']}],
 	[ROWS.sessionMain, {prefs: ['sessionMain']}],
 	[ROWS.sessionSwipeRight, {prefs: ['sessionSwipeRight']}],

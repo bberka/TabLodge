@@ -73,6 +73,14 @@ export const ROWS = {
 		label: 'Private library button',
 		hint: 'Off keeps a private library out of sight',
 	},
+	bookmarkView: {
+		label: 'Show columns as',
+		hint: 'Chips to swipe across, or a list of every column',
+	},
+	sessionView: {
+		label: 'Show folders as',
+		hint: 'Chips to swipe across, or a list of every folder',
+	},
 	sessionTap: {label: 'Tap a session'},
 	sessionMain: {label: 'Main button on a session'},
 	sessionSwipeRight: {label: 'Swipe a session right'},
@@ -186,6 +194,7 @@ export const SECTIONS = {
 		],
 		rows: [
 			ROWS.sortSessions,
+			ROWS.sessionView,
 			ROWS.sessionTap,
 			ROWS.sessionMain,
 			ROWS.sessionSwipeRight,
@@ -212,6 +221,7 @@ export const SECTIONS = {
 			'icon',
 		],
 		rows: [
+			ROWS.bookmarkView,
 			ROWS.tap,
 			ROWS.swipeRight,
 			ROWS.swipeLeft,

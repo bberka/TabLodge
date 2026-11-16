@@ -11,6 +11,8 @@ import {
 } from '../../../../extension/src/shared/duplicate-bookmarks';
 import {notify} from '../../ui/dialog';
 import {useChipLook} from '../../ui/column-icons';
+import {FolderBack, FolderList, type FolderEntry} from '../../ui/folder-list';
+import {usePreferences} from '../../settings/preferences';
 import {
 	ALL_BOOKMARKS_ID,
 	allBookmarks,
@@ -103,6 +105,9 @@ export function BookmarksScreen({
 	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
+	// In the list view, whether a column is open, as opposed to the list of every column.
+	const [inside, setInside] = useState(false);
+	const isListView = usePreferences().bookmarkView === 'list';
 	const search = useSearch();
 	const {query} = search;
 	const [refreshing, setRefreshing] = useState(false);
@@ -160,18 +165,26 @@ export function BookmarksScreen({
 
 		search.close();
 		setPicked(jump.columnId);
+		setInside(true);
 		// `search` is a fresh object each render; only the jump matters.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [pending]);
 	const isSearching = query.trim().length > 0;
+	// The list view starts on the list of columns; a search shows its results instead.
+	const atList = isListView && !inside && !isSearching;
+	useBackAction(isListView && inside && !isSearching, () => {
+		setInside(false);
+	});
 	const shown = useMemo(
 		() =>
 			isSearching
 				? searchBookmarks(store, query)
-				: columnId === ALL_BOOKMARKS_ID
-					? allBookmarks(store)
-					: bookmarksIn(store, columnId),
-		[store, query, columnId, isSearching],
+				: atList
+					? []
+					: columnId === ALL_BOOKMARKS_ID
+						? allBookmarks(store)
+						: bookmarksIn(store, columnId),
+		[store, query, columnId, isSearching, atList],
 	);
 	const searchCount = useSettledText(isSearching, resultCount(shown.length));
 	const columnName =
@@ -179,12 +192,11 @@ export function BookmarksScreen({
 			? 'All'
 			: columns.find((column) => column.id === columnId)?.name;
 	// The Unfiled bucket is not a column of its own and cannot be changed.
-	const isEditableColumn = store.bookmarkColumns.some(
-		(column) => column.id === columnId,
-	);
-	const columnIndex = store.bookmarkColumns.findIndex(
-		(column) => column.id === columnId,
-	);
+	const isEditableColumn =
+		!atList && store.bookmarkColumns.some((column) => column.id === columnId);
+	const columnIndex = atList
+		? -1
+		: store.bookmarkColumns.findIndex((column) => column.id === columnId);
 	const isAllSelected = shown.length > 0 && selection.ids.size === shown.length;
 	const rowMenuBookmark = store.bookmarks.find(
 		(bookmark) => bookmark.id === rowMenuId,
@@ -369,7 +381,7 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
-		...(!isSearching && columnId === ALL_BOOKMARKS_ID
+		...(!isSearching && !atList && columnId === ALL_BOOKMARKS_ID
 			? [
 					{
 						icon: 'eye-off-outline' as const,
@@ -514,6 +526,36 @@ export function BookmarksScreen({
 		</>
 	);
 
+	// Every column the chips and the list view draw: All first when it is on, then the columns.
+	const entries: FolderEntry[] = [
+		...(showAll
+			? [
+					{
+						id: ALL_BOOKMARKS_ID,
+						name: 'All',
+						count: store.bookmarks.length,
+						glyph: 'layers-outline' as const,
+						tint: colors.accent,
+					},
+				]
+			: []),
+		...columns.map((column) => {
+			const look = chipLook(column);
+			return {
+				id: column.id,
+				name: column.name,
+				count: column.count,
+				glyph: look.glyph,
+				tint: look.tint,
+			};
+		}),
+	];
+	const openEntry = entries.find((entry) => entry.id === columnId);
+	const openColumn = (id: string) => {
+		setPicked(id);
+		setInside(true);
+	};
+
 	// Three fingers dragged over the rows select them.
 	const dragSelect = useDragSelect({data: shown, selection, listRef});
 
@@ -572,22 +614,40 @@ export function BookmarksScreen({
 								right={headerActions}
 							/>
 							<View style={styles.search}>
-								{!isSearching && (
+								{!isSearching && isListView && !atList && openEntry && (
+									<FolderBack
+										entry={openEntry}
+										noun="bookmark"
+										label="All columns"
+										onBack={() => {
+											setInside(false);
+										}}
+										onMenu={() => {
+											setMenuOpen(true);
+										}}
+									/>
+								)}
+								{atList && (
+									<FolderList
+										entries={entries}
+										noun="bookmark"
+										newLabel="New column"
+										onOpen={openColumn}
+										onNew={() => {
+											setSheet({kind: 'column'});
+										}}
+										onMenu={(id) => {
+											// The same menu as the three dots, for the held column.
+											openColumn(id);
+											setMenuOpen(true);
+										}}
+									/>
+								)}
+								{!isSearching && !isListView && (
 									<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 										<Chips
 											items={[
-												...(showAll
-													? [
-															{
-																id: ALL_BOOKMARKS_ID,
-																name: 'All',
-																count: store.bookmarks.length,
-																glyph: 'layers-outline' as const,
-																tint: colors.accent,
-															},
-														]
-													: []),
-												...columns.map((column) => chipLook(column)),
+												...entries,
 												{
 													id: NEW_COLUMN_CHIP,
 													name: 'New column',
@@ -628,7 +688,7 @@ export function BookmarksScreen({
 						/>
 					}
 					ListEmptyComponent={
-						isSearching ? (
+						atList ? undefined : isSearching ? (
 							<Empty icon="search" title="No match">
 								Nothing saved matches that search.
 							</Empty>
