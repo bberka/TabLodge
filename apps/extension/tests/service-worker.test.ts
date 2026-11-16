@@ -4211,6 +4211,40 @@ test('link drag data carries uri-list, plain text, and html for tabs and session
 	assert.equal(buildLinkDragData([]), null);
 });
 
+test('a single tab dragged out of a session keeps its title when dropped', async () => {
+	const {buildLinkDragData, parseDraggedLink} =
+		await import('../src/app/interaction-actions');
+	const data = buildLinkDragData([
+		{title: 'My saved title', url: 'https://a.example/page'},
+	])!;
+	// Node has no DOMParser; a stand-in that reads the one anchor buildLinkDragData writes.
+	const globals = globalThis as {DOMParser?: unknown};
+	const original = globals.DOMParser;
+	globals.DOMParser = class {
+		parseFromString(html: string) {
+			const match = /<a href="([^"]*)">([^<]*)<\/a>/.exec(html);
+			return {
+				querySelector: () =>
+					match && {
+						getAttribute: () => match[1],
+						textContent: match[2],
+					},
+			};
+		}
+	};
+	let link;
+	try {
+		link = parseDraggedLink({getData: (type: string) => data[type] ?? ''});
+	} finally {
+		globals.DOMParser = original;
+	}
+
+	assert.deepEqual(link, {
+		url: 'https://a.example/page',
+		title: 'My saved title',
+	});
+});
+
 test('a multi-bookmark drag exposes every selected link to session drop targets', async () => {
 	const {
 		BOOKMARK_DRAG_TYPE,
