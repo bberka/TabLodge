@@ -6,7 +6,7 @@ import {createContext, type ReactNode, use, useMemo} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {useColors} from '../../ui/theme';
 import {Card, Icon, type IconName, IconButton} from '../../ui/widgets';
-import {canReset, confirmResetSection} from './row-reset';
+import {confirmResetSection, useAnyChanged} from './row-reset';
 import {
 	headHit,
 	type Row,
@@ -51,6 +51,7 @@ export function SettingsCard({
 		() => query === '' || headHit(section, query) || section.rows.length === 0,
 		[section, query],
 	);
+	const changed = useAnyChanged(section.rows);
 	if (!sectionVisible(section, query)) {
 		return null;
 	}
@@ -85,7 +86,7 @@ export function SettingsCard({
 							</Text>
 						)}
 					</View>
-					{section.rows.some((row) => canReset(row)) && (
+					{changed && (
 						<IconButton
 							icon="refresh-outline"
 							label={`Reset ${section.title} to default`}
