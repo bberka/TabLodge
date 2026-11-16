@@ -1,7 +1,13 @@
-import {memo, useState} from 'react';
+import {memo, useState, useSyncExternalStore} from 'react';
 import {isFirefox} from '../shared/browser';
 import {displayUrl} from '../shared/url-display';
 import type {Settings} from '../shared/types';
+import {
+	SITE_ICONS_KEY,
+	normalizeSiteIcons,
+	siteIconFor,
+	type SiteIcons,
+} from '../shared/site-icons';
 import {hostOf} from '../shared/web-url';
 import {InsecureMarkFor} from './insecure-mark';
 
@@ -25,6 +31,57 @@ export const faviconUrl = (url: string) =>
 				`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`,
 			);
 
+// Firefox only: the icons the worker remembered from open tabs, loaded once per page and kept current.
+const NO_ICONS: SiteIcons = {};
+let siteIcons = NO_ICONS;
+const iconListeners = new Set<() => void>();
+let iconsWatched = false;
+
+function watchSiteIcons() {
+	iconsWatched = true;
+	const publish = (value: unknown) => {
+		siteIcons = normalizeSiteIcons(value);
+		for (const listener of iconListeners) {
+			listener();
+		}
+	};
+
+	void chrome.storage.local.get([SITE_ICONS_KEY]).then((saved) => {
+		publish(saved[SITE_ICONS_KEY]);
+	});
+	chrome.storage.onChanged.addListener((changes, area) => {
+		if (area !== 'local') {
+			return;
+		}
+
+		const change = changes[SITE_ICONS_KEY] as
+			chrome.storage.StorageChange | undefined;
+		if (change) {
+			publish(change.newValue);
+		}
+	});
+}
+
+function subscribeToSiteIcons(listener: () => void) {
+	if (!isFirefox) {
+		return () => undefined;
+	}
+
+	if (!iconsWatched) {
+		watchSiteIcons();
+	}
+
+	iconListeners.add(listener);
+	return () => {
+		iconListeners.delete(listener);
+	};
+}
+
+const useSiteIcon = (url: string) =>
+	useSyncExternalStore(subscribeToSiteIcons, () =>
+		isFirefox ? siteIconFor(siteIcons, url) : undefined,
+	);
+
 type FaviconProps = {
 	url: string;
 	/**
@@ -36,7 +93,7 @@ type FaviconProps = {
 	*/
 	className?: string;
 	/**
-	Tried when the extension's favicon service has no icon, for example the tab's own `favIconUrl`.
+	Tried when the extension's favicon service has no icon, for example the tab's own `favIconUrl`. On Firefox an icon remembered from an earlier tab of the same site fills in when this is not given.
 	*/
 	fallbackSrc?: string;
 };
@@ -46,7 +103,9 @@ A site icon from the browser's favicon cache. It loads lazily (long lists do not
 decodes off the main thread, and falls back to a letter tile when no icon can be loaded.
 */
 export const Favicon = memo(
-	({url, label, className = '', fallbackSrc}: FaviconProps) => {
+	({url, label, className = '', fallbackSrc: tabIcon}: FaviconProps) => {
+		const rememberedIcon = useSiteIcon(url);
+		const fallbackSrc = tabIcon || rememberedIcon;
 		const devFallbackSrc = devFaviconFor(url);
 		const serviceSrc = faviconUrl(url);
 		const [failed, setFailed] = useState('');

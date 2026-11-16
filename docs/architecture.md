@@ -32,7 +32,7 @@ One codebase serves both. Differences the code can find by looking for an API (`
 | Split view | Restored as a split on Chromium 155 or newer | Reopens as neighboring tabs; the setting is hidden |
 | New tab page | Replaced; can be switched off in Settings | Replaced while enabled; the switch is hidden |
 | Side panel | Chromium Side Panel; can open from the toolbar button | Sidebar (`sidebar_action`); opens from the popup, the toolbar menu, or a shortcut |
-| Site icons | Browser favicon cache | Letter tile; the side panel's open tabs use the tab's own icon |
+| Site icons | Browser favicon cache | The icon remembered from an earlier tab of the same site (Firefox); letter tile; the side panel's open tabs use the tab's own icon |
 | Private windows | Optional, with shared or separate storage | Not available; the manifest sets `incognito` to `not_allowed` |
 | Shortcuts and context menus | Yes | Yes |
 | Downloads copy of backups | Optional `downloads` permission | Optional `downloads` permission |
@@ -46,7 +46,7 @@ Why Firefox differs:
 * **New tab hand off.** Chromium reports `chrome://newtab/` as a new tab's pending address, which lets the worker tell a real new tab from the dashboard opened on purpose and send it elsewhere. Firefox opens every tab as `about:blank` before the add-on's page loads, so the worker cannot tell them apart, and Firefox gives add-ons no way to open its own new tab page. The worker reports **Use TabLodge for new tabs** as on in Firefox.
 * **Sidebar.** `sidebarAction.open()` works only inside a user action, so it runs straight from the click, command, or menu handler. A toolbar button that opens the panel would need the settings read first, which loses the user action, so Firefox keeps the popup for that mode.
 * **Private windows.** Chromium offers a `split` mode with a separate extension context. Firefox has only `spanning`, where private and normal windows would share one context and one storage area, so the Firefox build opts out.
-* **Favicons.** Firefox has no `_favicon/` service. TabLodge does not request icons from sites or a third party, so it uses the tab's own icon where one is known and a letter tile otherwise.
+* **Favicons.** Firefox has no `_favicon/` service. TabLodge does not request icons from sites or a third party, so it uses the tab's own icon where one is known. The worker also remembers the icon address of each site a tab shows in `tablodge.siteIcons` (host to address, newest last, 300 hosts, small base64 image addresses only, never from private tabs, Firefox only), and a saved link to that site uses it when the site is not open. Firefox hands a tab's icon over as a data address, so showing it asks the site for nothing. Chromium has its own cache and stores nothing. A site never opened gets a letter tile.
 
 ## Names, versions, and persistent identifiers
 

@@ -14,6 +14,11 @@ import {
 } from '../src/shared/backup-format';
 import {isAccent} from '../src/shared/accent-colors';
 import {
+	SITE_ICONS_KEY,
+	normalizeSiteIcons,
+	rememberSiteIcon,
+} from '../src/shared/site-icons';
+import {
 	LINK_COLUMN_PREFIX,
 	LINK_SEND_PREFIX,
 	MENU,
@@ -6120,6 +6125,27 @@ chrome.tabs.onCreated?.addListener((tab) => {
 });
 chrome.tabs.onUpdated?.addListener((_tabId, change, tab) => {
 	redirectPrivateNewTab(tab, change.url);
+});
+
+// Firefox has no favicon service, so the icon of each site the user opens is remembered by host for bookmarks of
+// that site that are not open. Chromium keeps its own cache and needs none.
+let siteIconWrites: Promise<unknown> = Promise.resolve();
+chrome.tabs.onUpdated?.addListener((_tabId, change, tab) => {
+	if (!IS_FIREFOX || !change.favIconUrl || tab.incognito || !tab.url) {
+		return;
+	}
+
+	const {url, favIconUrl} = tab;
+	siteIconWrites = siteIconWrites
+		.then(async () => {
+			const saved = await chrome.storage.local.get([SITE_ICONS_KEY]);
+			const icons = normalizeSiteIcons(saved[SITE_ICONS_KEY]);
+			const next = rememberSiteIcon(icons, url, favIconUrl);
+			if (next !== icons) {
+				await chrome.storage.local.set({[SITE_ICONS_KEY]: next});
+			}
+		})
+		.catch(() => undefined);
 });
 chrome.tabs.onRemoved?.addListener((tabId) => {
 	privateNewTabRedirects.delete(tabId);
