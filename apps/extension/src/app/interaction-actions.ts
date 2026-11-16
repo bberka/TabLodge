@@ -151,14 +151,18 @@ export function parseDraggedLink(
 			.getData('text/uri-list')
 			.split(/\r?\n/)
 			.find((line) => line.trim() && !line.trimStart().startsWith('#')) || '';
-	if (!raw) {
+	// A single saved tab carries its title only in the html anchor, beside its url in text/uri-list.
+	if (!raw || !title) {
 		const html = dataTransfer.getData('text/html');
 		if (html) {
 			const anchor = new DOMParser()
 				.parseFromString(html, 'text/html')
 				.querySelector('a[href]');
-			raw = anchor?.getAttribute('href') || '';
-			title ||= anchor?.textContent?.trim() || '';
+			const href = anchor?.getAttribute('href') || '';
+			if (!raw || href === raw.trim()) {
+				raw ||= href;
+				title ||= anchor?.textContent?.trim() || '';
+			}
 		}
 	}
 
