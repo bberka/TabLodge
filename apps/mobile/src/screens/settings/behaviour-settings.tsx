@@ -3,6 +3,7 @@ import {useServerFeatures} from '../../library/server-features';
 import {setSyncedSetting} from '../../library/library-store';
 import {
 	LINK_ACTIONS,
+	type ListView,
 	ROW_ACTIONS,
 	SESSION_ACTIONS,
 	setPreferences,
@@ -15,11 +16,16 @@ import {
 } from '../../library/row-actions';
 import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
-import {Switch} from '../../ui/widgets';
+import {type IconName, Switch} from '../../ui/widgets';
 import {useRowReset} from './row-reset';
 import {SettingsCard, useRowVisible} from './settings-card';
 import {RowLabel, SelectRow} from './select-row';
 import {type Row, ROWS, SECTIONS} from './settings-index';
+
+const VIEW_CHOICES: Array<{id: ListView; name: string; icon: IconName}> = [
+	{id: 'chips', name: 'Chips', icon: 'swap-horizontal-outline'},
+	{id: 'list', name: 'List', icon: 'list-outline'},
+];
 
 /**
 The swipe choices, each with the icon and color it has when it appears under a row.
@@ -143,6 +149,14 @@ export function BookmarkBehaviourCard() {
 			icon="bookmark-outline"
 			description="How taps, swipes, and the list behave."
 		>
+			<SelectRow
+				row={ROWS.bookmarkView}
+				value={prefs.bookmarkView}
+				choices={VIEW_CHOICES}
+				onChange={(bookmarkView) => {
+					setPreferences({bookmarkView});
+				}}
+			/>
 			<SelectRow
 				row={ROWS.tap}
 				value={prefs.tapAction}
@@ -280,6 +294,14 @@ export function SessionSettingsCard() {
 				choices={sessionActions.filter((choice) => choice.id !== 'none')}
 				onChange={(sessionMain) => {
 					setPreferences({sessionMain});
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sessionView}
+				value={prefs.sessionView}
+				choices={VIEW_CHOICES}
+				onChange={(sessionView) => {
+					setPreferences({sessionView});
 				}}
 			/>
 			<SelectRow

@@ -1,3 +1,4 @@
+import {useEffect, useRef} from 'react';
 import {AccessibilityInfo, Animated} from 'react-native';
 
 // Every animation in the app runs at this fraction of its drawn out length, so the app feels quick.
@@ -59,4 +60,27 @@ export function spring(
 		tension: tension * SPRING_TENSION,
 		useNativeDriver: native,
 	});
+}
+
+/**
+Fades a screen's content back in each time `key` changes, but not when it first shows, so going between a list and one
+item of it is not a hard cut.
+*/
+export function useCrossfade(key: unknown): Animated.Value {
+	const opacity = useRef(new Animated.Value(1)).current;
+	const firstRef = useRef(true);
+	useEffect(() => {
+		if (firstRef.current) {
+			firstRef.current = false;
+			return;
+		}
+
+		opacity.setValue(0);
+		Animated.timing(opacity, {
+			toValue: 1,
+			duration: motion(220),
+			useNativeDriver: true,
+		}).start();
+	}, [key, opacity]);
+	return opacity;
 }

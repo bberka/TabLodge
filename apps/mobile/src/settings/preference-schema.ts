@@ -11,6 +11,8 @@ import {cleanDeviceName} from '../../../extension/src/shared/device';
 
 const LOOKS = ['auto', 'material', 'ios'] as const;
 export type Look = (typeof LOOKS)[number];
+const LIST_VIEWS = ['chips', 'list'] as const;
+export type ListView = (typeof LIST_VIEWS)[number];
 
 export type Theme = 'system' | 'light' | 'dark';
 
@@ -120,6 +122,12 @@ export type Preferences = {
 	*/
 	linkSwipeRight: LinkAction;
 	linkSwipeLeft: LinkAction;
+	/**
+	How the Bookmarks and Sessions screens list their columns and folders: a row of chips to swipe across, or a list of
+	all of them that opens one at a time. Sync with the rest of the app's look.
+	*/
+	bookmarkView: ListView;
+	sessionView: ListView;
 	/**
 	What tapping a session card does: show its tabs, or open them all.
 	*/
@@ -246,6 +254,8 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 	sessionSwipeLeft: synced('archive', oneOf(SESSION_ACTIONS)),
 	linkSwipeRight: synced('delete', oneOf(LINK_ACTIONS)),
 	linkSwipeLeft: synced('bookmark', oneOf(LINK_ACTIONS)),
+	bookmarkView: synced('chips', oneOf(LIST_VIEWS)),
+	sessionView: synced('chips', oneOf(LIST_VIEWS)),
 	sessionTap: synced('expand', oneOf(['expand', 'open'])),
 	// The main button has to do something, so `none` is not a value.
 	sessionMain: synced(
