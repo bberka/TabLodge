@@ -556,7 +556,6 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		'Bookmark this page to',
 		'Send this tab to session',
 		'---',
-		'Save this tab',
 		'Save selected tabs',
 		'---',
 		'Save this window',
