@@ -17,6 +17,12 @@ import {
 	folderNameProblem as sharedFolderNameProblem,
 	normalizeFolderName,
 } from '../../../extension/src/shared/session-folders';
+import {
+	hasOperators,
+	parseSearchQuery,
+	passesOperators,
+	sessionFacets,
+} from '../../../extension/src/shared/search-query';
 import {extractUrl, hostOf} from './store-shape';
 
 export const ALL_SESSIONS_ID = 'all';
@@ -742,4 +748,35 @@ export function markSessionOpened(
 		(session) => ({...session, lastOpenedAt: now}),
 		now,
 	);
+}
+
+/**
+The sessions a search matches: the plain words as one piece of a name, note, tab title or address, and the operators
+on top of that.
+*/
+export function searchSessions(
+	sessions: readonly Session[],
+	query: string,
+	folders: readonly Folder[],
+): Session[] {
+	const search = parseSearchQuery(query.trim());
+	const filtering = hasOperators(search);
+	const needle = search.text.toLocaleLowerCase();
+	const folderName = new Map(folders.map((folder) => [folder.id, folder.name]));
+	return sessions.filter((session) => {
+		const texts = [
+			session.name,
+			session.description,
+			...session.tabs.flatMap((tab) => [tab.title, tab.url]),
+		];
+		return (
+			texts.some((text) => text.toLocaleLowerCase().includes(needle)) &&
+			(!filtering ||
+				passesOperators(
+					search,
+					texts,
+					sessionFacets(session, folderName.get(session.folderId)),
+				))
+		);
+	});
 }

@@ -224,6 +224,7 @@ export function SearchDock({
 	query,
 	onChange,
 	onClose,
+	onTips,
 }: {
 	label: string;
 	placeholder: string;
@@ -231,6 +232,10 @@ export function SearchDock({
 	query: string;
 	onChange: (query: string) => void;
 	onClose: () => void;
+	/**
+	Shows a help button at the end of the field that opens the search tips.
+	*/
+	onTips?: () => void;
 }) {
 	const colors = useColors();
 	const glassOn = useGlass();
@@ -285,6 +290,14 @@ export function SearchDock({
 					onPress={() => {
 						onChange('');
 					}}
+				/>
+			)}
+			{onTips && (
+				<IconButton
+					icon="help-circle-outline"
+					label="Search tips"
+					color={colors.muted}
+					onPress={onTips}
 				/>
 			)}
 			<Pressable

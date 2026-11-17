@@ -4,6 +4,13 @@ import {fold, scoreFolded, searchTerms} from './fuzzy';
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
 import {siteName} from './web-url';
 import {archivedFolderId} from './session-folders';
+import {
+	bookmarkFacets,
+	hasOperators,
+	parseSearchQuery,
+	passesOperators,
+	type SearchFacets,
+} from './search-query';
 
 export type FinderKind =
 	| 'url'
@@ -39,6 +46,10 @@ export type FinderItem = {
 	`texts`, folded for matching (filled in by the index builder, once, instead of on every keystroke).
 	*/
 	folded?: readonly string[];
+	/**
+	What the search operators (site:, in:, col:, …) look at; none, for items that are not in the index.
+	*/
+	facets?: SearchFacets;
 	/**
 	What the item refers to: a session, column, folder, command or browser-tab id.
 	*/
@@ -140,6 +151,7 @@ export type FinderSources = {
 };
 
 const UNFILED = 'bookmark-unfiled';
+const NO_FACETS: SearchFacets = {places: [], urls: []};
 
 /**
 Everything the finder can find, in a flat list.
@@ -157,6 +169,7 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 				kind: 'command',
 				title: command.title,
 				texts: [command.title, ...(command.keywords ?? [])],
+				facets: NO_FACETS,
 				ref: command.id,
 			}),
 		);
@@ -171,6 +184,7 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 				detail: siteName(tab.url),
 				url: tab.url,
 				texts: [clip(tab.title), matchableUrl(tab.url)],
+				facets: {places: ['open'], urls: [tab.url]},
 				ref: String(tab.id),
 				windowId: tab.windowId,
 			}),
@@ -187,6 +201,7 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 				kind: 'column',
 				title: column.name,
 				texts: [column.name],
+				facets: {places: [], urls: [], column: column.name},
 				ref: column.id,
 			}),
 		);
@@ -199,14 +214,13 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 				kind: 'folder',
 				title: folder.name,
 				texts: [folder.name],
+				facets: {places: [], urls: [], folder: folder.name},
 				ref: folder.id,
 			}),
 		);
 	}
 
-	items.push(
-		...cachedSessionItems(sources.groups, archivedFolderId(sources.folders)),
-	);
+	items.push(...cachedSessionItems(sources.groups, sources.folders));
 
 	return items;
 }
@@ -246,6 +260,7 @@ function cachedBookmarkItems(
 			detail: column ? `${siteName(bookmark.url)} · ${column}` : undefined,
 			url: bookmark.url,
 			texts: [clip(bookmark.title), matchableUrl(bookmark.url), column],
+			facets: bookmarkFacets(bookmark, column),
 			ref: bookmark.id,
 		});
 	});
@@ -256,26 +271,27 @@ function cachedBookmarkItems(
 let sessionCache:
 	| {
 			groups: readonly Session[];
-			archivedId: string | undefined;
+			folders: readonly Folder[];
 			items: FinderItem[];
 	  }
 	| undefined;
 function cachedSessionItems(
 	groups: readonly Session[],
-	archivedId: string | undefined,
+	folders: readonly Folder[],
 ): FinderItem[] {
-	if (
-		sessionCache?.groups === groups &&
-		sessionCache.archivedId === archivedId
-	) {
+	if (sessionCache?.groups === groups && sessionCache.folders === folders) {
 		return sessionCache.items;
 	}
 
+	const archivedId = archivedFolderId(folders);
+	const folderName = new Map(folders.map((folder) => [folder.id, folder.name]));
 	const items: FinderItem[] = [];
 	for (const group of groups) {
 		if (group.folderId === archivedId) {
 			continue;
 		}
+
+		const folder = folderName.get(group.folderId);
 
 		const count = group.tabs.length;
 		items.push(
@@ -285,6 +301,12 @@ function cachedSessionItems(
 				title: group.name,
 				detail: `${count} ${count === 1 ? 'tab' : 'tabs'}`,
 				texts: [group.name, clip(group.description)],
+				facets: {
+					places: ['sessions'],
+					urls: group.tabs.map((tab) => tab.url),
+					folder,
+					date: group.createdAt,
+				},
 				ref: group.id,
 				recency: group.lastOpenedAt ?? group.updatedAt ?? group.createdAt,
 			}),
@@ -303,13 +325,19 @@ function cachedSessionItems(
 						group.name,
 						clip(group.description),
 					],
+					facets: {
+						places: ['tabs'],
+						urls: [tab.url],
+						folder,
+						date: tab.savedAt,
+					},
 					ref: group.id,
 				}),
 			);
 		}
 	}
 
-	sessionCache = {groups, archivedId, items};
+	sessionCache = {groups, folders, items};
 	return items;
 }
 
@@ -359,7 +387,9 @@ export function searchFinder(
 	index: readonly FinderItem[],
 ): FinderSection[] {
 	const trimmed = query.trim();
-	const terms = searchTerms(trimmed);
+	const parsed = parseSearchQuery(trimmed);
+	const filtering = hasOperators(parsed);
+	const terms = searchTerms(`${parsed.text} ${parsed.phrases.join(' ')}`);
 	const sections: FinderSection[] = [];
 	const section = (kind: FinderKind, items: FinderItem[]) => {
 		if (items.length > 0) {
@@ -367,7 +397,7 @@ export function searchFinder(
 		}
 	};
 
-	if (terms.length === 0) {
+	if (terms.length === 0 && !filtering) {
 		for (const [kind, limit] of EMPTY_LIMIT) {
 			const items = index.filter((item) => item.kind === kind);
 			if (kind === 'session') {
@@ -391,7 +421,16 @@ export function searchFinder(
 	// on very large indexes) in groups whose list is not already full.
 	const misses: Array<{item: FinderItem; position: number}> = [];
 	for (const [position, item] of index.entries()) {
-		const score = scoreFolded(terms, foldedOf(item), false);
+		if (
+			filtering &&
+			!passesOperators(parsed, item.texts, item.facets ?? NO_FACETS)
+		) {
+			continue;
+		}
+
+		// A query of operators only lists everything that passes them, in index order.
+		const score =
+			terms.length === 0 ? 1 : scoreFolded(terms, foldedOf(item), false);
 		if (score <= 0) {
 			misses.push({item, position});
 			continue;
@@ -429,7 +468,7 @@ export function searchFinder(
 	type Hit = {item: FinderItem; score: number; position: number};
 	const better = (a: Hit, b: Hit) =>
 		b.score - a.score ||
-		a.item.title.length - b.item.title.length ||
+		(terms.length > 0 ? a.item.title.length - b.item.title.length : 0) ||
 		a.position - b.position;
 	const ranked = KIND_ORDER.flatMap((kind) => {
 		const hits = scored.get(kind);

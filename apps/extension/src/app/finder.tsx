@@ -41,6 +41,7 @@ import {
 	type FinderKind,
 	type OpenTabInfo,
 } from '../shared/global-search';
+import {highlightWords} from '../shared/search-query';
 import {send, useCloseOnEscape, type IconComponent} from './common';
 import {faviconUrl, LinkKindBadge, useServerIcon} from './favicon';
 import {
@@ -51,6 +52,7 @@ import {
 } from './finder-menu';
 import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
+import {SearchTipsButton} from './search-tips';
 import {isPinnedLodgeTab, openLink} from './link-target';
 import {cn} from '@/lib/utils';
 
@@ -725,7 +727,10 @@ function ResultList({
 												{item.kind === 'web' || item.kind === 'url' ? (
 													item.title
 												) : (
-													<Highlight text={item.title} query={query} />
+													<Highlight
+														text={item.title}
+														query={highlightWords(query)}
+													/>
 												)}
 											</span>
 											{item.detail && (
@@ -733,7 +738,10 @@ function ResultList({
 													{item.kind === 'web' || item.kind === 'url' ? (
 														item.detail
 													) : (
-														<Highlight text={item.detail} query={query} />
+														<Highlight
+															text={item.detail}
+															query={highlightWords(query)}
+														/>
 													)}
 												</span>
 											)}
@@ -1001,6 +1009,7 @@ function PaletteBody(props: {
 					}
 					onKeyDown={finder.onKeyDown}
 				/>
+				{!finder.menu && <SearchTipsButton />}
 			</div>
 			{finder.error && (
 				<p role="alert" className="px-4 py-2 text-xs text-destructive">

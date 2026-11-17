@@ -9,6 +9,7 @@ import {
 	moveSession,
 	sessionFolders,
 	sessionsIn,
+	searchSessions,
 } from '../../library/session-edits';
 import {edit, useLibrary, useSyncStatus} from '../../library/library-store';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
@@ -37,6 +38,7 @@ import {useRefresh} from '../../library/use-refresh';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {FolderBack, FolderList} from '../../ui/folder-list';
 import {SearchElsewhere} from '../search-elsewhere';
+import {SearchTipsSheet} from '../search-tips';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
 import {Empty, Header, IconButton} from '../../ui/widgets';
@@ -49,7 +51,7 @@ import {
 	SaveAsBookmarksSheet,
 } from './session-link-sheets';
 import {FolderSheet, RenameSheet} from './session-sheets';
-import {matches, SessionCard} from './session-card';
+import {SessionCard} from './session-card';
 import {
 	runSessionAction,
 	runTabAction,
@@ -89,6 +91,7 @@ export function SessionsScreen({
 	const [inside, setInside] = useState(false);
 	const isListView = usePreferences().sessionView === 'list';
 	const search = useSearch();
+	const [tipsOpen, setTipsOpen] = useState(false);
 	const {query} = search;
 	const listRef = useRef<FlatList<Session>>(null);
 	const [revealId, setRevealId] = useState<string>();
@@ -161,8 +164,8 @@ export function SessionsScreen({
 		}
 
 		const inFolder = sessionsIn(store, scopeId, links.sessionSort);
-		return needle ? inFolder.filter((s) => matches(s, needle)) : inFolder;
-	}, [store, scopeId, links.sessionSort, needle, atList]);
+		return needle ? searchSessions(inFolder, query, store.folders) : inFolder;
+	}, [store, scopeId, links.sessionSort, needle, query, atList]);
 	const moreMenu = moreOpen
 		? folderMenuFor(folderId, store, folders, folderMenuOptions)
 		: undefined;
@@ -628,8 +631,17 @@ export function SessionsScreen({
 					query={query}
 					onChange={search.setQuery}
 					onClose={search.close}
+					onTips={() => {
+						setTipsOpen(true);
+					}}
 				/>
 			)}
+			<SearchTipsSheet
+				visible={tipsOpen}
+				onClose={() => {
+					setTipsOpen(false);
+				}}
+			/>
 		</>
 	);
 }

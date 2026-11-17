@@ -59,6 +59,7 @@ import {
 	updateSessionTab,
 	isArchivedSession,
 	unarchiveSession,
+	searchSessions,
 } from '../src/library/session-edits';
 import {sampleStore} from '../src/library/seed';
 
@@ -162,6 +163,31 @@ describe('bookmarks', () => {
 		);
 		assert.equal(searchBookmarks(store, 'alpha page').length, 1);
 		assert.equal(searchBookmarks(store, 'missing').length, 0);
+	});
+
+	test('search operators narrow bookmarks by site, column and words left out', () => {
+		let store = addColumn(emptyStore(NOW), 'Read later', 'c1', NOW);
+		store = addColumn(store, 'Work', 'c2', NOW);
+		store = addBookmark(
+			store,
+			{url: 'https://github.com/a', title: 'Repo docs', columnId: 'c1'},
+			'a',
+			NOW,
+		);
+		store = addBookmark(
+			store,
+			{url: 'https://example.com/b', title: 'Old docs', columnId: 'c2'},
+			'b',
+			NOW,
+		);
+		const found = (query: string) =>
+			searchBookmarks(store, query).map((bookmark) => bookmark.id);
+		assert.deepEqual(found('docs'), ['a', 'b']);
+		assert.deepEqual(found('Site:github.com'), ['a']);
+		assert.deepEqual(found('col:"read later"'), ['a']);
+		assert.deepEqual(found('docs -old'), ['a']);
+		assert.deepEqual(found('in:sessions'), []);
+		assert.deepEqual(found('"docs'), ['a', 'b']);
 	});
 
 	test('shows bookmarks of a missing column under Unfiled', () => {
@@ -1210,5 +1236,51 @@ describe('saving a link with its title to a session', () => {
 			['Third'],
 		);
 		assert.equal(more.groups[0].tabs[2].title, 'Third');
+	});
+});
+
+describe('searchSessions', () => {
+	let store = addFolder(
+		emptyStore(NOW),
+		{name: 'Travel', icon: '', color: '', colorSessions: false},
+		'f1',
+		NOW,
+	);
+	store = addSession(
+		store,
+		{
+			name: 'Holiday',
+			urls: ['https://www.skyscanner.net/', 'https://hotels.example/'],
+			folderId: 'f1',
+		},
+		's1',
+		['t1', 't2'],
+		NOW,
+	);
+	store = addSession(
+		store,
+		{name: 'Work tabs', urls: ['https://github.com/x']},
+		's2',
+		['t3'],
+		NOW,
+	);
+	const found = (query: string) =>
+		searchSessions(store.groups, query, store.folders)
+			.map((session) => session.id)
+			.toSorted();
+
+	test('plain words match one piece of a name or address, as before', () => {
+		assert.deepEqual(found('holi'), ['s1']);
+		assert.deepEqual(found('work tabs'), ['s2']);
+		assert.deepEqual(found('tabs work'), []);
+	});
+
+	test('operators narrow sessions by folder, site, phrase and kind', () => {
+		assert.deepEqual(found('folder:travel'), ['s1']);
+		assert.deepEqual(found('site:skyscanner.net'), ['s1']);
+		assert.deepEqual(found('-github'), ['s1']);
+		assert.deepEqual(found('"work tabs"'), ['s2']);
+		assert.deepEqual(found('in:tabs'), ['s1', 's2']);
+		assert.deepEqual(found('in:bookmarks'), []);
 	});
 });

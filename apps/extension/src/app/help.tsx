@@ -103,6 +103,14 @@ function Key({children}: {children: ReactNode}) {
 	);
 }
 
+function Op({children}: {children: ReactNode}) {
+	return (
+		<code className="whitespace-nowrap rounded-sm bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
+			{children}
+		</code>
+	);
+}
+
 function Help() {
 	const [shortcutsFailed, setShortcutsFailed] = useState(false);
 	const [query, setQuery] = useState('');
@@ -505,6 +513,56 @@ function Help() {
 					body: 'Use the search field to find sessions and saved tabs by name or page details.',
 					searchText:
 						'search field dashboard sessions saved tabs name page details title url',
+				},
+				{
+					title: 'Search operators',
+					body: (
+						<>
+							The palette, both dashboard searches, and the Android app
+							understand these operators beside plain words. Combine them
+							freely.
+							<ul className="mt-2 list-disc space-y-1 pl-5">
+								<li>
+									<Op>"exact phrase"</Op> matches the words in that order.
+								</li>
+								<li>
+									<Op>-word</Op> leaves out results that contain the word, and{' '}
+									<Op>-"two words"</Op> a phrase.
+								</li>
+								<li>
+									<Op>site:github.com</Op> keeps links on that site and its
+									subdomains.
+								</li>
+								<li>
+									<Op>in:sessions</Op>, <Op>in:bookmarks</Op>, <Op>in:tabs</Op>{' '}
+									(saved tabs), and <Op>in:open</Op> (open tabs) keep one kind
+									of result.
+								</li>
+								<li>
+									<Op>kind:image</Op>, <Op>kind:pdf</Op>, and{' '}
+									<Op>kind:video</Op> keep links to images, PDFs, or videos, the
+									same kinds the board marks.
+								</li>
+								<li>
+									<Op>col:Work</Op> and <Op>folder:Work</Op> keep bookmarks in a
+									column or sessions in a folder whose name contains the text.
+									Quote a name with spaces: <Op>col:"Read later"</Op>.
+								</li>
+								<li>
+									<Op>after:2026-01-01</Op> keeps what was saved on or after
+									that day, <Op>before:2026-06-01</Op> what was saved before it.
+								</li>
+							</ul>
+							<p className="mt-2">
+								Anything that is not a complete operator, such as a lone - or an
+								unclosed quote, searches as plain words. The help button at the
+								end of the palette's search field, and of the phone's search
+								bar, shows a short version of this list.
+							</p>
+						</>
+					),
+					searchText:
+						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder after before date day filter narrow query syntax tips kind image pdf video',
 				},
 				{
 					title: 'Open the search palette',
@@ -962,9 +1020,9 @@ function Help() {
 													</h3>
 													{entry.gesture && <GestureBadge {...entry.gesture} />}
 												</div>
-												<p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+												<div className="max-w-3xl text-sm leading-6 text-muted-foreground">
 													{entry.body}
-												</p>
+												</div>
 											</div>
 										))}
 									</div>

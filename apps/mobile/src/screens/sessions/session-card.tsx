@@ -36,13 +36,6 @@ const shortDate = (time: number) =>
 		day: 'numeric',
 	});
 
-export const matches = (session: Session, needle: string) =>
-	[
-		session.name,
-		session.description,
-		...session.tabs.flatMap((tab) => [tab.title, tab.url]),
-	].some((text) => text.toLocaleLowerCase().includes(needle));
-
 /**
 A row of small site badges that overlap, as a glance at what a session holds.
 */
