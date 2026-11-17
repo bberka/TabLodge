@@ -72,14 +72,12 @@ export function SaveQuoteForm({
 		savePreview,
 	);
 	// Words in the link field search the bookmarks, so a quote can go on a page saved before.
-	const matches =
-		!url && text.trim()
-			? searchBookmarks(store, text).slice(0, 5)
-			: url
-				? []
-				: store.bookmarks
-						.toSorted((a, b) => b.updatedAt - a.updatedAt)
-						.slice(0, 5);
+	const matches = url
+		? []
+		: (text.trim()
+				? searchBookmarks(store, text)
+				: store.bookmarks.toSorted((a, b) => b.updatedAt - a.updatedAt)
+			).slice(0, 5);
 
 	const save = async () => {
 		if (!url) {
@@ -159,7 +157,7 @@ export function SaveQuoteForm({
 				/>
 				{!url && (
 					<View style={styles.group}>
-						<Text accessibilityRole="header" style={{color: colors.muted}}>
+						<Text style={{color: colors.muted}}>
 							{initialUrl
 								? 'Bookmarks'
 								: 'No page link came with this text. Paste it above, or pick a bookmark.'}
