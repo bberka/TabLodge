@@ -338,7 +338,7 @@ function SidePanel() {
 					(bookmark) =>
 						(bookmark.columnId === column.id ||
 							(column.id === UNFILED && !known.has(bookmark.columnId))) &&
-						matches(bookmark.title, bookmark.url),
+						matches(bookmark.title, bookmark.url, bookmark.notes),
 				),
 			}),
 		);

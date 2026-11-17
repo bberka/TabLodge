@@ -348,7 +348,7 @@ function Help() {
 				},
 				{
 					title: 'Add a note to a bookmark',
-					body: 'Write a note in the Notes field of the Add bookmark or Edit bookmark dialog, for example why you saved the page. It shows under the bookmark’s title (one line in the compact layout), search and the palette find it, and it goes into JSON, CSV, Markdown, and browser bookmark exports and full backups. Clear the field to remove it. With a sync server that supports notes, the Android app shows and edits it too.',
+					body: 'Write a note in the Notes field when you add or edit a bookmark on the dashboard, for example why you saved the page. It shows under the bookmark’s title (one line in the compact layout), search and the palette find it, and it goes into JSON, CSV, Markdown, and browser bookmark exports and full backups. Clear the field to remove it. The Android app has the same field, and a sync server that supports notes carries them between the two.',
 					searchText:
 						'bookmark note notes description comment why saved edit dialog search export',
 				},
