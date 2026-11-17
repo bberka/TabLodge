@@ -691,12 +691,8 @@ const settingsGroups: Array<{
 				options: [
 					['0', 'Never'],
 					['7', '1 week'],
-					['14', '2 weeks'],
-					['21', '3 weeks'],
 					['30', '30 days'],
-					['60', '60 days'],
 					['90', '90 days'],
-					['180', '180 days'],
 					['365', '1 year'],
 				],
 				custom: {min: 1, max: 3650, suffix: 'days'},
