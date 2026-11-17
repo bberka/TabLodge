@@ -46,6 +46,8 @@ import {useColors} from '../../ui/theme';
 import {PrivateSwitch} from '../../private/private-switch';
 import {useRefresh} from '../../library/use-refresh';
 import {useSelection} from '../../ui/use-selection';
+import {BOOKMARK_UNFILED_ID} from '../../../../extension/src/shared/bookmark-rules';
+import {useStableCallback} from '../../ui/stable-callback';
 import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
@@ -136,14 +138,21 @@ export function BookmarksScreen({
 		onSelecting(selection.active);
 	}, [selection.active, onSelecting]);
 
-	const columns = useMemo(
-		() =>
-			columnViews(store).map((column) => ({
-				...column,
-				count: bookmarksIn(store, column.id).length,
-			})),
-		[store],
-	);
+	const columns = useMemo(() => {
+		const known = new Set(store.bookmarkColumns.map((column) => column.id));
+		const counts = new Map<string, number>();
+		for (const bookmark of store.bookmarks) {
+			const id = known.has(bookmark.columnId)
+				? bookmark.columnId
+				: BOOKMARK_UNFILED_ID;
+			counts.set(id, (counts.get(id) ?? 0) + 1);
+		}
+
+		return columnViews(store).map((column) => ({
+			...column,
+			count: counts.get(column.id) ?? 0,
+		}));
+	}, [store]);
 	// The All column is the first and the default unless it is turned off. A column that no longer exists falls back
 	// to it, or to the first column when it is off.
 	const showAll = links.showAllBookmarks;
@@ -546,6 +555,27 @@ export function BookmarksScreen({
 
 	// Three fingers dragged over the rows select them.
 	const dragSelect = useDragSelect({data: shown, selection, listRef});
+	// Stable, so a row redraws only when its own bookmark or selection changes, not on every screen render.
+	const toggleRow = useStableCallback((bookmark: Bookmark) => {
+		selection.toggle(bookmark.id);
+	});
+	const selectRow = useStableCallback((bookmark: Bookmark) => {
+		if (selection.active) {
+			selection.toggle(bookmark.id);
+		} else {
+			setRowMenuId(bookmark.id);
+		}
+	});
+	const editRow = useStableCallback((bookmark: Bookmark) => {
+		setSheet({kind: 'edit', bookmark});
+	});
+	const moveRow = useStableCallback((bookmark: Bookmark) => {
+		selection.start(bookmark.id);
+		setSheet({kind: 'move'});
+	});
+	const deleteRow = useStableCallback((bookmark: Bookmark) => {
+		remove(new Set([bookmark.id]));
+	});
 
 	return (
 		<View
@@ -730,26 +760,11 @@ export function BookmarksScreen({
 									bookmark={item}
 									selecting={selection.active}
 									checked={selection.ids.has(item.id)}
-									onToggle={() => {
-										selection.toggle(item.id);
-									}}
-									onSelect={() => {
-										if (selection.active) {
-											selection.toggle(item.id);
-										} else {
-											setRowMenuId(item.id);
-										}
-									}}
-									onEdit={() => {
-										setSheet({kind: 'edit', bookmark: item});
-									}}
-									onMove={() => {
-										selection.start(item.id);
-										setSheet({kind: 'move'});
-									}}
-									onDelete={() => {
-										remove(new Set([item.id]));
-									}}
+									onToggle={toggleRow}
+									onSelect={selectRow}
+									onEdit={editRow}
+									onMove={moveRow}
+									onDelete={deleteRow}
 								/>
 							)
 						}

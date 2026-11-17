@@ -41,9 +41,10 @@ export function createLibraryCore(libraryKey: string) {
 			return run;
 		},
 		async write(next: Store): Promise<void> {
+			// Screens redraw at once; saving the whole library to SQLite follows and holds the next edit, not the screen.
 			store = next;
-			await writeJson(libraryKey, next);
 			notify();
+			await writeJson(libraryKey, next);
 		},
 	};
 }
