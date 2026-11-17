@@ -635,12 +635,13 @@ function Help() {
 							imported. It also reads the JSON exports of Linkwarden (its
 							collections become columns), Karakeep (its lists become columns),
 							Omnivore (one metadata file from the ZIP at a time), wallabag, and
-							Pinboard. These are read from each tool’s published format, not
-							from real files, so the preview marks them best effort. Their
-							notes, descriptions, and tags are not imported. The bookmarks HTML
-							exports of Karakeep and Pinboard import as browser bookmark files.
-							A session menu can export just that session in any format.
-							Bookmark import and export are in the{' '}
+							Pinboard, and the bookmarks.csv that Mastodon exports (post
+							addresses, without titles). These are read from each tool’s
+							published format, not from real files, so the preview marks them
+							best effort. Their notes, descriptions, and tags are not imported.
+							The bookmarks HTML exports of Karakeep and Pinboard import as
+							browser bookmark files. A session menu can export just that
+							session in any format. Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
 							saves only bookmarks or sessions, or Everything as a full ZIP
 							backup with settings, excluded sites, theme, snapshots, and the
@@ -666,7 +667,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',

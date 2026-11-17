@@ -118,6 +118,7 @@ describe('exports from other bookmark tools', () => {
 		],
 		['wallabag-export.json', 'wallabag export (JSON)', 2, ['Bookmarks']],
 		['pinboard-export.json', 'Pinboard export (JSON)', 2, ['Bookmarks']],
+		['mastodon-bookmarks.csv', 'Mastodon bookmarks (CSV)', 3, ['Bookmarks']],
 	] as const) {
 		test(`a ${label} becomes bookmark columns`, () => {
 			const text = readFileSync(

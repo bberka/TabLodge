@@ -191,3 +191,23 @@ test('a Karakeep import keeps its lists as bookmark columns', () => {
 	// Links in no list go to the first column, as with other formats.
 	assert.equal(column('https://loose.example/'), 'Dev');
 });
+
+test('a Mastodon bookmarks.csv: one post address per row, no header', () => {
+	const parsed = read('mastodon-bookmarks.csv');
+	assert.equal(parsed.format, 'mastodon');
+	assert.equal(parsed.label, 'Mastodon bookmarks (CSV)');
+	assert.equal(parsed.confidence, 'best-effort');
+	assert.deepEqual(
+		allLinks(parsed).map((link) => link.url),
+		[
+			'https://mastodon.example/users/alice/statuses/113000000000000001',
+			'https://other.example/users/bob/statuses/113000000000000002',
+			'https://misskey.example/notes/9xk2abcd',
+		],
+	);
+	// A headerless CSV of other links still needs a header row.
+	assert.throws(
+		() => parseImportFile('https://a.example/\nhttps://b.example/\n', 'x.csv'),
+		/header row/,
+	);
+});

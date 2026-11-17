@@ -47,6 +47,7 @@ export type ImportFormatId =
 	| 'omnivore'
 	| 'wallabag'
 	| 'pinboard'
+	| 'mastodon'
 	| 'json-links';
 /**
 How well a format's structure is known: checked against the tool's source or real files, or a best-effort reading.
@@ -1507,6 +1508,30 @@ function parseUrlList(lines: string[]): ParsedImport {
 	);
 }
 
+// Mastodon: Preferences › Import and export › Data export › Bookmarks writes bookmarks.csv with one
+// status URI per row and no header. A post on a Mastodon server has the URI
+// https://<server>/users/<name>/statuses/<id>; posts from other servers keep their own URI.
+// Source: app/models/export.rb (to_bookmarks_csv) and app/lib/activitypub/tag_manager.rb (uri_for)
+// at mastodon/mastodon@4e9a766.
+const MASTODON_STATUS =
+	/^https?:\/\/[^\s/]+\/(?:ap\/)?users\/[^\s/]+\/statuses\/\w+$/i;
+function parseMastodonBookmarks(lines: string[]): ParsedImport | null {
+	const rows = lines.map((line) => line.trim()).filter(Boolean);
+	if (
+		rows.every((row) => !MASTODON_STATUS.test(row)) ||
+		rows.some((row) => !/^https?:\/\/\S+$/i.test(row))
+	) {
+		return null;
+	}
+
+	return {
+		...parseUrlList(rows),
+		format: 'mastodon',
+		label: 'Mastodon bookmarks (CSV)',
+		confidence: 'best-effort',
+	};
+}
+
 /**
  Detects the format of an import file and parses it. Throws ImportFormatError with a readable
  message when the file is empty, too large, or not a supported format.
@@ -1557,6 +1582,11 @@ export function parseImportFile(source: string, filename = ''): ParsedImport {
 		const csv = parseCsv(content);
 		if (csv) {
 			return withEmptyCheck(csv);
+		}
+
+		const mastodon = parseMastodonBookmarks(lines);
+		if (mastodon) {
+			return withEmptyCheck(mastodon);
 		}
 
 		if (extension === 'csv' || extension === 'tsv') {

@@ -1001,7 +1001,7 @@ type ImportDialogProps = {
 };
 
 const SUPPORTED_FILES =
-	'Full backups (ZIP, including protected ones), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, Toby, Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, and Pinboard.';
+	'Full backups (ZIP, including protected ones), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, Toby, Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, Pinboard, and Mastodon (bookmarks.csv).';
 
 function importSummary(
 	kind: ImportKind,
