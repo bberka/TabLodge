@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- A trimmed www.reddit.com thread: a post and a comment as the site's custom elements, each carrying its
+permalink, with Save in an overflow menu. Hand written to mimic the site's markup; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reddit</title></head>
+<body>
+<shreddit-app>
+	<shreddit-post id="t3_1abcde" permalink="/r/typescript/comments/1abcde/strict_mode_tips/" post-title="Strict mode tips" author="alice">
+		<a slot="title" href="/r/typescript/comments/1abcde/strict_mode_tips/">Strict mode tips</a>
+		<shreddit-post-overflow-menu>
+			<button id="post-overflow" aria-label="Open user actions"></button>
+			<ul role="menu">
+				<li role="menuitem" id="post-save"><span>Save</span></li>
+				<li role="menuitem"><span>Hide</span></li>
+			</ul>
+		</shreddit-post-overflow-menu>
+	</shreddit-post>
+	<shreddit-post id="t3_2saved" permalink="/r/typescript/comments/2saved/already_saved/" post-title="Already saved" author="bob">
+		<shreddit-post-overflow-menu>
+			<ul role="menu">
+				<li role="menuitem" id="post-unsave"><span>Remove from saved</span></li>
+			</ul>
+		</shreddit-post-overflow-menu>
+	</shreddit-post>
+	<shreddit-comment id="t1_xyz789" permalink="/r/typescript/comments/1abcde/strict_mode_tips/xyz789/" author="carol">
+		<p>Turn on noUncheckedIndexedAccess too.</p>
+		<shreddit-comment-action-row>
+			<shreddit-overflow-menu>
+				<button id="comment-overflow" aria-label="More options"></button>
+				<faceplate-menu-item id="comment-save"><span>Save</span></faceplate-menu-item>
+			</shreddit-overflow-menu>
+		</shreddit-comment-action-row>
+		<form><textarea></textarea><button id="comment-editor-save" type="submit">Save</button></form>
+	</shreddit-comment>
+	<shreddit-post id="t3_3noperma" post-title="Changed markup">
+		<shreddit-post-overflow-menu>
+			<li role="menuitem" id="broken-save">Save</li>
+		</shreddit-post-overflow-menu>
+	</shreddit-post>
+	<div id="floating-menu" role="menu">
+		<li role="menuitem" id="floating-save">Save</li>
+	</div>
+</shreddit-app>
+</body>
+</html>

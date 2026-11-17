@@ -78,6 +78,12 @@ Submit the first version of `tablodge@bbay.dev` by hand on addons.mozilla.org, w
 
 The workflow runs after each GitHub release and submits the Firefox ZIP with `web-ext sign --channel=listed`. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.2.2`, and choose `firefox`. AMO rejects a version number it has already received, so a retry only helps when the earlier run failed before the upload.
 
+## Store permission justifications
+
+The workflows upload packages only; the permission texts in the Chrome Web Store dashboard (**Privacy practices**) and the AMO reviewer notes are filled in by hand. A release that adds a permission needs the maintainer to update them before it is submitted, from the [permissions table](../PRIVACY.md#permissions). The current host permission text, for both stores:
+
+> Optional host permissions for www.youtube.com, www.reddit.com, and old.reddit.com, requested only when the user switches that site on in Settings › Sources, and given back when it is switched off. While granted, a registered content script notices the user's own click on the site's save control (Watch later, Save) and bookmarks the same link in the local library. It reads only that item's link and title, makes no network requests, does not intercept the site's requests, and does not change the site's behavior.
+
 `vp run version:next` shows the next version based on your local tags.
 
 ## Store publishing retries
