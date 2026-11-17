@@ -25,7 +25,10 @@ import {
 	previewImport,
 } from '../../../extension/src/shared/import-formats';
 import type {ShareGroup} from '../../../extension/src/shared/share-formats';
-import {trashedUrls} from '../../../extension/src/shared/trash';
+import {
+	trashedUrls,
+	type TrashEntry,
+} from '../../../extension/src/shared/trash';
 import {hostOf} from '../library/store-shape';
 
 export type ImportResult = {
@@ -47,7 +50,7 @@ The addresses already saved for this kind of import, or deleted to the trash, wh
 export function existingUrls(
 	store: Store,
 	kind: ImportKind,
-	trash: readonly unknown[] = [],
+	trash: readonly TrashEntry[] = [],
 ): string[] {
 	return [
 		...(kind === 'sessions'
@@ -64,7 +67,7 @@ export function previewFor(
 	store: Store,
 	parsed: ParsedImport,
 	kind: ImportKind,
-	trash: readonly unknown[] = [],
+	trash: readonly TrashEntry[] = [],
 ): ImportPreview {
 	return previewImport(parsed, kind, {
 		existingUrls: existingUrls(store, kind, trash),
@@ -202,7 +205,7 @@ export function importIntoStore(
 		now: number;
 		newId: () => string;
 		skipDuplicates?: boolean;
-		trash?: readonly unknown[];
+		trash?: readonly TrashEntry[];
 	},
 ): ImportResult {
 	const seen = new Set(existingUrls(store, kind, trash));

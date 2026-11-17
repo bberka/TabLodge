@@ -84,31 +84,26 @@ const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 /**
 The link addresses in the trash that an import of this kind skips, as if they were still saved: deleted sessions
 and tabs for a session import, deleted bookmarks and columns for a bookmark import. Folders hold no links of their
-own. Entries come from storage or sync, so each field is checked.
+own. `data` comes from storage or sync, so each field in it is checked.
 */
 export function trashedUrls(
-	trash: readonly unknown[],
+	trash: readonly TrashEntry[],
 	kind: ImportKind,
 ): string[] {
-	const linkItems = (entry: unknown): unknown[] => {
-		if (!isRecord(entry) || !isRecord(entry.data)) {
-			return [];
-		}
-
-		const {data} = entry;
+	const linkItems = ({kind: entryKind, data}: TrashEntry): unknown[] => {
 		if (kind === 'sessions') {
-			return entry.kind === 'session' && isRecord(data.session)
+			return entryKind === 'session' && isRecord(data.session)
 				? list(data.session.tabs)
-				: entry.kind === 'tabs'
+				: entryKind === 'tabs'
 					? list(data.items).map((item) =>
 							isRecord(item) ? item.tab : undefined,
 						)
 					: [];
 		}
 
-		return entry.kind === 'bookmark'
+		return entryKind === 'bookmark'
 			? [data.bookmark]
-			: entry.kind === 'column'
+			: entryKind === 'column'
 				? list(data.bookmarks)
 				: [];
 	};
