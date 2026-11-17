@@ -211,6 +211,7 @@ import {
 	LinkPreviewProvider,
 	useLinkPreviewsOn,
 } from './link-preview';
+import {NotesField} from './notes-field';
 import {cn} from '@/lib/utils';
 
 const initialStateRequest = takeStateRequest();
@@ -3075,21 +3076,13 @@ function NewTab() {
 								) : (
 									<>
 										{columnFields}
-										<div className="space-y-1.5">
-											<Label htmlFor="bookmark-notes">Notes</Label>
-											<Textarea
-												id="bookmark-notes"
-												maxLength={10_000}
-												rows={3}
-												placeholder="Why you saved it (optional)"
-												value={bookmarkEdit?.notes || ''}
-												onChange={(e) =>
-													setBookmarkEdit(
-														(old) => old && {...old, notes: e.target.value},
-													)
-												}
-											/>
-										</div>
+										<NotesField
+											id="bookmark-notes"
+											value={bookmarkEdit?.notes ?? ''}
+											onChange={(notes) =>
+												setBookmarkEdit((old) => old && {...old, notes})
+											}
+										/>
 									</>
 								)}
 							</DialogBody>

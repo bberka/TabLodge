@@ -13,6 +13,7 @@ import {IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
 import {DEFAULT_COLUMN_ICON} from './icon-registry';
 import {ColumnSelect} from './column-select';
+import {NotesField} from './notes-field';
 
 type PromptRequest = Promise<ActionResult<'GET_BOOKMARK_PROMPT'> | undefined>;
 
@@ -75,6 +76,7 @@ function AddBookmarkPrompt() {
 	const fromBrowser = params.get('source') === 'browser';
 	const {prompt, error: stateError} = useBookmarkPrompt(url);
 	const [title, setTitle] = useState(params.get('title') || url);
+	const [notes, setNotes] = useState('');
 	const [columnId, setColumnId] = useState('');
 	const [newName, setNewName] = useState('');
 	const [newIcon, setNewIcon] = useState<string | undefined>();
@@ -125,7 +127,7 @@ function AddBookmarkPrompt() {
 		}
 
 		const result = await send('ADD_BOOKMARK', {
-			bookmark: {title, url, columnId: target},
+			bookmark: {title, url, notes, columnId: target},
 		});
 		if (!result?.ok) {
 			setBusy(false);
@@ -197,6 +199,7 @@ function AddBookmarkPrompt() {
 						onIconChange={setNewIcon}
 					/>
 				)}
+				<NotesField id="add-bookmark-notes" value={notes} onChange={setNotes} />
 				{error && (
 					<p role="alert" className="text-xs text-destructive">
 						{error}
