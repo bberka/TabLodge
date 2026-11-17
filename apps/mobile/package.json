@@ -6,14 +6,15 @@
 	"license": "MIT",
 	"main": "./index.ts",
 	"scripts": {
-		"start": "expo start",
-		"android": "expo run:android",
+		"start": "node scripts/licences.mts --stub && expo start",
+		"android": "node scripts/licences.mts && expo run:android",
 		"prebuild": "expo prebuild --platform android",
 		"doctor": "expo-doctor",
 		"typecheck": "tsc --noEmit",
 		"apk": "node scripts/build-apk.mts",
 		"emulator": "node scripts/emulator.mts",
-		"icons": "node scripts/make-icons.mts"
+		"icons": "node scripts/make-icons.mts",
+		"licences": "node scripts/licences.mts"
 	},
 	"dependencies": {
 		"@expo/vector-icons": "^15.1.1",

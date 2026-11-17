@@ -10,3 +10,5 @@ expo-env.d.ts
 # Gradle output of the local native modules
 /modules/*/android/build/
 /modules/*/android/.cxx/
+# Written by scripts/licences.mts from the build
+/src/about/licences.generated.json

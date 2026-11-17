@@ -20,7 +20,7 @@ Finding the article in a page is the hard part. Mozilla's Readability (Apache-2.
 
 ## Consequences
 
-* Two new dependencies: `@mozilla/readability` in both apps and `linkedom` in the Android app (a dev dependency of the extension for tests). The extension's `page-copy-capture.js`, the only bundle with Readability in it, carries its Apache-2.0 notice as a banner the build adds. The Android app has no screen of third party notices yet; adding one is a follow-up.
+* Two new dependencies: `@mozilla/readability` in both apps and `linkedom` in the Android app (a dev dependency of the extension for tests). The extension's `page-copy-capture.js`, the only bundle with Readability in it, carries its Apache-2.0 notice as a banner the build adds. Both apps also list it with its full licence among their third party notices: `THIRD_PARTY_NOTICES.txt` in the extension's package and **Settings › About › Open source licences** in the Android app.
 * The extension can copy only the open tab, and the phone cannot copy pages behind a sign-in. Help says so.
 * Copies do not sync and are not on the server, so each device keeps its own. #284 is where that would change.
 * The side panel cannot grant `activeTab`, so its **Keep a copy** item shows only while TabLodge can already read the tab.

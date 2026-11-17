@@ -129,6 +129,10 @@ export const ROWS = {
 		hint: 'The first item, listing every bookmark. Shared with the extension',
 	},
 	sortSessions: {label: 'Sort sessions'},
+	licences: {
+		label: 'Open source licences',
+		hint: 'The third party code this app is built from',
+	},
 } satisfies Record<string, Row>;
 
 /**
@@ -344,6 +348,20 @@ export const SECTIONS = {
 		title: 'Restore defaults',
 		aliases: ['reset', 'default', 'preferences', 'settings'],
 		rows: [],
+	},
+	about: {
+		title: 'About',
+		aliases: [
+			'licenses',
+			'open source',
+			'third party',
+			'notices',
+			'copyright',
+			'credits',
+			'apache',
+			'mit',
+		],
+		rows: [ROWS.licences],
 	},
 	development: {
 		title: 'Development',

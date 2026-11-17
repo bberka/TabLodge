@@ -291,6 +291,17 @@ async function verifyExtension(root: string, target: Target) {
 		errors.push(`${name}: missing newtab.html in the loadable package`);
 	}
 
+	// Help links to it, and the licences of the bundled packages require it.
+	const notices = await readFile(
+		resolve(root, 'THIRD_PARTY_NOTICES.txt'),
+		'utf8',
+	).catch(() => '');
+	for (const bundled of ['@mozilla/readability', 'react', 'tailwindcss']) {
+		if (!notices.includes(`\n${bundled} `)) {
+			errors.push(`${name}: THIRD_PARTY_NOTICES.txt does not list ${bundled}`);
+		}
+	}
+
 	// Package.json is the source of the repository URL.
 	const pkg = readPackageJson();
 

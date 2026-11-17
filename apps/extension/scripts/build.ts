@@ -10,11 +10,14 @@
 // The package is several Vite+ builds writing into one folder: the HTML pages
 // (vite.pages.config.ts, which also writes manifest.json and copies icons) plus self-contained
 // scripts referenced by the manifest or HTML (service worker, boot script).
-import {rm} from 'node:fs/promises';
+//
+// Each package also gets THIRD_PARTY_NOTICES.txt: the licence of every npm package the bundles include, linked from Help.
+import {rm, writeFile} from 'node:fs/promises';
 import {relative, resolve} from 'node:path';
 import process from 'node:process';
 import {parseArgs} from 'node:util';
-import {build, type InlineConfig} from 'vite-plus';
+import {build, type InlineConfig, type Plugin} from 'vite-plus';
+import {noticesText, npmNotices} from '../../../scripts/third-party-notices.ts';
 import {openDevBrowser} from './browser/dev-browser.ts';
 import {openDevFirefox} from './browser/dev-firefox.ts';
 import {
@@ -27,6 +30,24 @@ import {
 	scriptConfig,
 	type Target,
 } from './vite-shared.ts';
+
+/**
+Records every file a build step bundles, so THIRD_PARTY_NOTICES.txt can list the packages they come from.
+*/
+function recordBundledFiles(files: Set<string>): Plugin {
+	return {
+		name: 'record-bundled-files',
+		generateBundle(_options, bundle) {
+			for (const chunk of Object.values(bundle)) {
+				if (chunk.type === 'chunk') {
+					for (const id of chunk.moduleIds) {
+						files.add(id.replace(/^\0/, '').split('?', 1)[0]);
+					}
+				}
+			}
+		},
+	};
+}
 
 type BuildStep = {
 	label: string;
@@ -131,18 +152,22 @@ if (watch && targets.length > 1) {
 
 const initialBuilds: Array<Promise<void>> = [];
 const watchers: Array<{close(): Promise<void>}> = [];
+const bundledFiles = new Map<string, Set<string>>();
 
 for (const target of targets) {
 	const outDir = outDirFor(target);
 	await rm(outDir, {recursive: true, force: true});
 	// Vite.pages.config.ts is loaded by Vite for each build and reads the target from here.
 	process.env.TABLODGE_TARGET = target;
+	const files = new Set<string>();
+	bundledFiles.set(outDir, files);
 
 	for (const step of stepsFor(target)) {
 		const {config} = step;
 		const initialBuild = watch ? Promise.withResolvers<void>() : undefined;
 		const result = await build({
 			...config,
+			plugins: [...(config.plugins ?? []), recordBundledFiles(files)],
 			mode: 'production',
 			build: {...config.build, ...(watch && {watch: {}})},
 		});
@@ -183,8 +208,16 @@ for (const target of targets) {
 	);
 }
 
+// Every package the bundles include, with its licence text. A package without one fails the build.
+await Promise.all(initialBuilds);
+for (const [outDir, files] of bundledFiles) {
+	await writeFile(
+		resolve(outDir, 'THIRD_PARTY_NOTICES.txt'),
+		noticesText('TabLodge', npmNotices(files)),
+	);
+}
+
 if (openBrowser) {
-	await Promise.all(initialBuilds);
 	await (targets[0] === 'firefox' ? openDevFirefox : openDevBrowser)(
 		{seedData, headless},
 		watchers,
