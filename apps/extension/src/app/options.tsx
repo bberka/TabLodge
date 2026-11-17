@@ -378,6 +378,16 @@ const settingsGroups: Array<{
 				type: 'switch',
 			},
 			{
+				name: 'siteIcons',
+				label: 'Site icons',
+				help: 'For links the browser has no icon for, such as imported ones. Through my server asks your sync server, which fetches the icon, so sites never see this browser; without a server nothing is asked. Browser only shows just the icons the browser has. Kept on this browser.',
+				type: 'select',
+				options: [
+					['server', 'Through my server'],
+					['browser', 'Browser only'],
+				],
+			},
+			{
 				name: 'showTrashBinButton',
 				label: 'Show Trash bin button in the header',
 				help: 'Hide this shortcut to keep the header compact. The Trash bin remains in the Sessions menu, Bookmarks menu, side panel, and search palette.',

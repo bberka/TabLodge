@@ -13,6 +13,7 @@ export type ActionMode =
 	| 'current-tab'
 	| 'current-tab-to-group';
 export type PrivateStorageMode = 'shared' | 'saved' | 'temporary';
+export type SiteIconSource = 'server' | 'browser';
 /**
 What the sync server read from a page: a title, a short description, and the share image as a data URL.
 */
@@ -219,6 +220,12 @@ export type Settings = {
 	server, which fetches the page; the setting stays on this browser (default off).
 	*/
 	linkPreviews: boolean;
+	/**
+	Where icons come from for links the browser has none for. `server` asks the connected sync server, which fetches
+	them; without a server it does nothing. `browser` uses only the browser's own icons. Stays on this browser
+	(default `server`, like the Android app).
+	*/
+	siteIcons: SiteIconSource;
 	/**
 	Show the Trash bin shortcut in the dashboard header (default off).
 	*/
@@ -628,6 +635,8 @@ Every message the TabLodge pages send to the service worker, keyed by `type`.
 export type TabLodgeMessages = {
 	GET_PRIVATE_CONFIG: {};
 	GET_LINK_PREVIEW: {url: string};
+	GET_SERVER_ICONS: {};
+	GET_SERVER_ICON: {url: string};
 	SET_PRIVATE_CONFIG: {mode: PrivateStorageMode};
 	SET_PRIVATE_NEW_TAB_REDIRECT: {enabled: boolean};
 	SET_PRIVATE_ACCENT: {accent: string};
@@ -999,6 +1008,8 @@ Success payload of each message (merged with `{ ok: true }`). Fields marked opti
 export type TabLodgeResponses = {
 	GET_PRIVATE_CONFIG: PrivateConfig;
 	GET_LINK_PREVIEW: {preview: LinkPreviewData | null};
+	GET_SERVER_ICONS: {on: boolean};
+	GET_SERVER_ICON: {icon: string | null};
 	SET_PRIVATE_CONFIG: PrivateConfig;
 	SET_PRIVATE_NEW_TAB_REDIRECT: PrivateConfig;
 	SET_PRIVATE_ACCENT: PrivateConfig;

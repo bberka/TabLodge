@@ -42,7 +42,7 @@ import {
 	type OpenTabInfo,
 } from '../shared/global-search';
 import {send, useCloseOnEscape, type IconComponent} from './common';
-import {faviconUrl} from './favicon';
+import {faviconUrl, useServerIcon} from './favicon';
 import {
 	filterItemActions,
 	itemActions,
@@ -101,10 +101,14 @@ function ResultIcon({
 	commandIcon?: IconComponent;
 }) {
 	const [failed, setFailed] = useState(false);
-	if (item.url && !failed && item.kind !== 'url' && faviconUrl(item.url)) {
+	const siteUrl = item.url && item.kind !== 'url' ? item.url : '';
+	const [serverIcon, observe] = useServerIcon(siteUrl, !siteUrl);
+	const src = serverIcon || (siteUrl && faviconUrl(siteUrl));
+	if (src && !failed) {
 		return (
 			<img
-				src={faviconUrl(item.url)}
+				ref={observe}
+				src={src}
 				alt=""
 				loading="lazy"
 				decoding="async"
@@ -118,6 +122,7 @@ function ResultIcon({
 		(item.kind === 'command' && commandIcon) || KIND_ICONS[item.kind] || Globe;
 	return (
 		<Icon
+			ref={observe}
 			className="h-4 w-4 shrink-0 text-muted-foreground"
 			aria-hidden="true"
 		/>

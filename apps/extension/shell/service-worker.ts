@@ -14,8 +14,13 @@ import {
 } from '../src/shared/backup-format';
 import {isAccent} from '../src/shared/accent-colors';
 import {
+	MISSING_ICONS_KEY,
 	SITE_ICONS_KEY,
+	createServerIcons,
+	imageDataAddress,
+	normalizeMissingIcons,
 	normalizeSiteIcons,
+	rememberServerAnswer,
 	rememberSiteIcon,
 } from '../src/shared/site-icons';
 import {
@@ -6126,8 +6131,73 @@ chrome.tabs.onUpdated?.addListener((_tabId, change, tab) => {
 });
 
 // Firefox has no favicon service, so the icon of each site the user opens is remembered by host for bookmarks of
-// that site that are not open. Chromium keeps its own cache and needs none.
+// that site that are not open. Chromium keeps its own cache and needs none. Icons from the sync server go to the same
+// store on both browsers, through the same chain of writes.
 let siteIconWrites: Promise<unknown> = Promise.resolve();
+
+const loadSiteIcons = async () => {
+	const saved = await chrome.storage.local.get([
+		SITE_ICONS_KEY,
+		MISSING_ICONS_KEY,
+	]);
+	return {
+		icons: normalizeSiteIcons(saved[SITE_ICONS_KEY]),
+		missing: normalizeMissingIcons(saved[MISSING_ICONS_KEY]),
+	};
+};
+
+/**
+The server to ask for site icons: only with Site icons on Through my server and a server connected, and in a private
+window only when it uses the regular library, which is the one connected.
+*/
+async function siteIconServer() {
+	if (privateContext && privateConfig.mode !== 'shared') {
+		return undefined;
+	}
+
+	const target = await regularSyncConfig();
+	return target && (await getStore()).settings.siteIcons === 'server'
+		? target
+		: undefined;
+}
+
+// Redraws an icon too big to store at 32 pixels. Chromium cannot draw an SVG in its worker, so those are not kept.
+async function shrinkIcon(image: Blob) {
+	try {
+		const bitmap = await createImageBitmap(image, {
+			resizeWidth: 32,
+			resizeHeight: 32,
+			resizeQuality: 'high',
+		});
+		const canvas = new OffscreenCanvas(32, 32);
+		canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
+		bitmap.close();
+		const png = await canvas.convertToBlob({type: 'image/png'});
+		return imageDataAddress(new Uint8Array(await png.arrayBuffer()), png.type);
+	} catch {
+		return undefined;
+	}
+}
+
+const serverIcons = createServerIcons({
+	fetch: async (...request) => fetch(...request),
+	server: siteIconServer,
+	load: loadSiteIcons,
+	async save(host, icon) {
+		const write = siteIconWrites.then(async () => {
+			const stored = await loadSiteIcons();
+			const next = rememberServerAnswer(stored, host, icon, Date.now());
+			await chrome.storage.local.set({
+				[SITE_ICONS_KEY]: next.icons,
+				[MISSING_ICONS_KEY]: next.missing,
+			});
+		});
+		siteIconWrites = write.catch(() => undefined);
+		await write;
+	},
+	shrink: shrinkIcon,
+	now: Date.now,
+});
 chrome.tabs.onUpdated?.addListener((_tabId, change, tab) => {
 	if (!IS_FIREFOX || !change.favIconUrl || tab.incognito || !tab.url) {
 		return;
@@ -8827,6 +8897,17 @@ async function handleMessage(
 
 		case 'GET_LINK_PREVIEW': {
 			return {ok: true, preview: await linkPreview(message.url)};
+		}
+
+		case 'GET_SERVER_ICONS': {
+			return {ok: true, on: Boolean(await siteIconServer())};
+		}
+
+		case 'GET_SERVER_ICON': {
+			return {
+				ok: true,
+				icon: (await serverIcons.iconFor(String(message.url))) ?? null,
+			};
 		}
 
 		case 'GET_PRIVATE_LOCK': {

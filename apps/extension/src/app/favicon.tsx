@@ -1,4 +1,4 @@
-import {memo, useState, useSyncExternalStore} from 'react';
+import {memo, useEffect, useState, useSyncExternalStore} from 'react';
 import {isFirefox} from '../shared/browser';
 import {displayUrl} from '../shared/url-display';
 import type {Settings} from '../shared/types';
@@ -8,7 +8,10 @@ import {
 	siteIconFor,
 	type SiteIcons,
 } from '../shared/site-icons';
+import {STATE_KEY} from '../shared/library-index';
+import {SYNC_CONFIG_KEY} from '../shared/sync/client';
 import {hostOf} from '../shared/web-url';
+import {send} from './message-client';
 import {InsecureMarkFor} from './insecure-mark';
 
 const devFaviconFor = (url: string) => {
@@ -22,8 +25,9 @@ const devFaviconFor = (url: string) => {
 	}
 };
 
-// Chromium serves cached site icons to extensions at _favicon/. Firefox has no such service, and TabLodge never
-// asks a site or a third party for its icon, so there it shows the tab's own icon where one is known, else a letter tile.
+// Chromium serves cached site icons to extensions at _favicon/. Firefox has no such service, so there the tab's own
+// icon is shown where one is known, else an icon remembered from an earlier tab of the site. With a sync server
+// connected, the server is asked for the icon of a site the browser does not know; the extension never asks a site.
 export const faviconUrl = (url: string) =>
 	isFirefox
 		? ''
@@ -31,24 +35,45 @@ export const faviconUrl = (url: string) =>
 				`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`,
 			);
 
-// Firefox only: the icons the worker remembered from open tabs, loaded once per page and kept current.
+// The icons kept on this device, loaded once per page and kept current: remembered tab icons on Firefox, icons from
+// the sync server on both browsers.
 const NO_ICONS: SiteIcons = {};
 let siteIcons = NO_ICONS;
 const iconListeners = new Set<() => void>();
 let iconsWatched = false;
+// Whether this page may ask the server for icons, asked of the worker again when the setting or the server changes.
+let serverIcons = false;
+const SERVER_ICON_KEYS = [
+	SYNC_CONFIG_KEY,
+	STATE_KEY,
+	'tablodge.private.config',
+];
+
+function publishIcons() {
+	for (const listener of iconListeners) {
+		listener();
+	}
+}
+
+function askServerIcons() {
+	void send('GET_SERVER_ICONS').then((answer) => {
+		const on = answer.ok && answer.on;
+		if (on === serverIcons) {
+			return;
+		}
+
+		serverIcons = on;
+		publishIcons();
+	});
+}
 
 function watchSiteIcons() {
 	iconsWatched = true;
-	const publish = (value: unknown) => {
-		siteIcons = normalizeSiteIcons(value);
-		for (const listener of iconListeners) {
-			listener();
-		}
-	};
-
 	void chrome.storage.local.get([SITE_ICONS_KEY]).then((saved) => {
-		publish(saved[SITE_ICONS_KEY]);
+		siteIcons = normalizeSiteIcons(saved[SITE_ICONS_KEY]);
+		publishIcons();
 	});
+	askServerIcons();
 	chrome.storage.onChanged.addListener((changes, area) => {
 		if (area !== 'local') {
 			return;
@@ -57,16 +82,17 @@ function watchSiteIcons() {
 		const change = changes[SITE_ICONS_KEY] as
 			chrome.storage.StorageChange | undefined;
 		if (change) {
-			publish(change.newValue);
+			siteIcons = normalizeSiteIcons(change.newValue);
+			publishIcons();
+		}
+
+		if (SERVER_ICON_KEYS.some((key) => Object.hasOwn(changes, key))) {
+			askServerIcons();
 		}
 	});
 }
 
 function subscribeToSiteIcons(listener: () => void) {
-	if (!isFirefox) {
-		return () => undefined;
-	}
-
 	if (!iconsWatched) {
 		watchSiteIcons();
 	}
@@ -78,9 +104,101 @@ function subscribeToSiteIcons(listener: () => void) {
 }
 
 const useSiteIcon = (url: string) =>
-	useSyncExternalStore(subscribeToSiteIcons, () =>
-		isFirefox ? siteIconFor(siteIcons, url) : undefined,
-	);
+	useSyncExternalStore(subscribeToSiteIcons, () => siteIconFor(siteIcons, url));
+
+const useServerIcons = () =>
+	useSyncExternalStore(subscribeToSiteIcons, () => serverIcons);
+
+// Chromium's favicon service answers a site it has no icon for with its default globe, never an error. The globe is
+// read once per page from an address no site can have, and an icon equal to it counts as missing.
+let defaultIcon: Promise<string> | undefined;
+const iconBytes = async (src: string) => {
+	const response = await fetch(src);
+	return new Uint8Array(await response.arrayBuffer()).join(',');
+};
+
+async function browserHasNoIcon(url: string) {
+	defaultIcon ??= iconBytes(faviconUrl('https://tablodge.invalid/'));
+	try {
+		return (await iconBytes(faviconUrl(url))) === (await defaultIcon);
+	} catch {
+		return false;
+	}
+}
+
+// Sites asked for from this page, so a list with many links to one site asks once.
+const askedHosts = new Set<string>();
+
+// Watches when an icon scrolls into view, so only the links on screen are asked about.
+const visibleCallbacks = new WeakMap<Element, () => void>();
+let visibility: IntersectionObserver | undefined;
+function onceVisible(element: Element, callback: () => void) {
+	visibility ??= new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			if (!entry.isIntersecting) {
+				continue;
+			}
+
+			visibility?.unobserve(entry.target);
+			visibleCallbacks.get(entry.target)?.();
+		}
+	});
+	visibleCallbacks.set(element, callback);
+	visibility.observe(element);
+	return () => {
+		visibleCallbacks.delete(element);
+		visibility?.unobserve(element);
+	};
+}
+
+/**
+The icon the sync server gave for the site of `url`, for a link the browser has no icon for. With Site icons on Through
+my server and a server connected, the server is asked once the element given to the returned ref is on screen;
+`known` says the browser already has an icon, so nothing is asked. Undefined otherwise, and while the server has none.
+*/
+export function useServerIcon(
+	url: string,
+	known: boolean,
+): [icon: string | undefined, ref: (element: Element | null) => void] {
+	const on = useServerIcons();
+	const stored = useSiteIcon(url);
+	const [element, setElement] = useState<Element | null>(null);
+	const [missing, setMissing] = useState('');
+	useEffect(() => {
+		if (!on || known || !element) {
+			return;
+		}
+
+		let live = true;
+		const stop = onceVisible(element, () => {
+			void (async () => {
+				// Firefox has no browser icon to look at: an unknown site is missing by definition.
+				if (!isFirefox && !(await browserHasNoIcon(url))) {
+					return;
+				}
+
+				if (live) {
+					setMissing(url);
+				}
+
+				const host = hostOf(url);
+				if (siteIconFor(siteIcons, url) || askedHosts.has(host)) {
+					return;
+				}
+
+				askedHosts.add(host);
+				await send('GET_SERVER_ICON', {url});
+			})();
+		});
+		return () => {
+			live = false;
+			stop();
+		};
+	}, [on, known, element, url]);
+	// On Chromium a stored icon replaces the browser's only when the browser has none.
+	const show = on && (isFirefox || missing === url) ? stored : undefined;
+	return [show, setElement];
+}
 
 type FaviconProps = {
 	url: string;
@@ -99,22 +217,32 @@ type FaviconProps = {
 };
 
 /**
-A site icon from the browser's favicon cache. It loads lazily (long lists do not fetch off-screen icons),
-decodes off the main thread, and falls back to a letter tile when no icon can be loaded.
+A site icon from the browser's favicon cache, or from the sync server when the browser has none. It loads lazily
+(long lists do not fetch off-screen icons), decodes off the main thread, and falls back to a letter tile when no icon
+can be loaded.
 */
 export const Favicon = memo(
 	({url, label, className = '', fallbackSrc: tabIcon}: FaviconProps) => {
 		const rememberedIcon = useSiteIcon(url);
-		const fallbackSrc = tabIcon || rememberedIcon;
+		const firefoxIcon = isFirefox ? rememberedIcon : undefined;
 		const devFallbackSrc = devFaviconFor(url);
+		const [serverIcon, observe] = useServerIcon(
+			url,
+			Boolean(devFallbackSrc || tabIcon || firefoxIcon),
+		);
+		const fallbackSrc = tabIcon || firefoxIcon;
 		const serviceSrc = faviconUrl(url);
 		const [failed, setFailed] = useState('');
 		const [triedFallback, setTriedFallback] = useState(false);
 		// Without an icon service the tab's own icon is the first choice.
 		const useFallback = Boolean(fallbackSrc) && (triedFallback || !serviceSrc);
-		if (failed === url || (!devFallbackSrc && !serviceSrc && !fallbackSrc)) {
+		if (
+			failed === url ||
+			(!devFallbackSrc && !serviceSrc && !fallbackSrc && !serverIcon)
+		) {
 			return (
 				<span
+					ref={observe}
 					aria-hidden="true"
 					className={`grid shrink-0 place-items-center overflow-hidden bg-muted text-[10px] font-semibold text-muted-foreground ${className}`}
 				>
@@ -125,8 +253,12 @@ export const Favicon = memo(
 
 		return (
 			<img
+				ref={observe}
 				className={`shrink-0 object-contain ${className}`}
-				src={devFallbackSrc || (useFallback ? fallbackSrc : serviceSrc)}
+				src={
+					devFallbackSrc ||
+					(useFallback ? fallbackSrc : serverIcon || serviceSrc)
+				}
 				alt=""
 				data-favicon=""
 				loading="lazy"
