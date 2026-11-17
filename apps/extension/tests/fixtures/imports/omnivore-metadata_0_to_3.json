@@ -1,0 +1,47 @@
+[
+	{
+		"id": "6f1b0c1e-0000-4000-8000-000000000001",
+		"slug": "an-article-18a1",
+		"title": "An article",
+		"description": "What it is about",
+		"author": "A. Writer",
+		"url": "https://news.example/article",
+		"state": "Active",
+		"readingProgress": 0,
+		"thumbnail": "https://news.example/cover.png",
+		"labels": ["news"],
+		"savedAt": "2024-03-01T09:30:00.000Z",
+		"updatedAt": "2024-03-02T09:30:00.000Z",
+		"publishedAt": "2024-02-28T00:00:00.000Z"
+	},
+	{
+		"id": "6f1b0c1e-0000-4000-8000-000000000002",
+		"slug": "archived-post-18a2",
+		"title": "Archived post",
+		"description": null,
+		"author": null,
+		"url": "https://blog.example/post",
+		"state": "Archived",
+		"readingProgress": 100,
+		"thumbnail": null,
+		"labels": [],
+		"savedAt": "2024-04-10T18:00:00.000Z",
+		"updatedAt": "2024-04-11T18:00:00.000Z",
+		"publishedAt": null
+	},
+	{
+		"id": "6f1b0c1e-0000-4000-8000-000000000003",
+		"slug": "local-file-18a3",
+		"title": "Uploaded PDF",
+		"description": null,
+		"author": null,
+		"url": "file:///uploads/report.pdf",
+		"state": "Active",
+		"readingProgress": 0,
+		"thumbnail": null,
+		"labels": [],
+		"savedAt": "2024-05-01T12:00:00.000Z",
+		"updatedAt": "2024-05-01T12:00:00.000Z",
+		"publishedAt": null
+	}
+]

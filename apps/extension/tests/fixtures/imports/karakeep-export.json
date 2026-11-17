@@ -1,0 +1,69 @@
+{
+	"bookmarks": [
+		{
+			"createdAt": 1735725600,
+			"title": "In a list",
+			"tags": ["dev"],
+			"lists": ["list-dev"],
+			"content": {"type": "link", "url": "https://dev.example/guide"},
+			"note": "My note",
+			"archived": false
+		},
+		{
+			"createdAt": 1735812000,
+			"title": "Two lists",
+			"tags": [],
+			"lists": ["list-read", "list-dev"],
+			"content": {"type": "link", "url": "https://read.example/post"},
+			"note": null,
+			"archived": true
+		},
+		{
+			"createdAt": 1735898400,
+			"title": null,
+			"tags": [],
+			"lists": [],
+			"content": {"type": "link", "url": "https://loose.example/"},
+			"note": null,
+			"archived": false
+		},
+		{
+			"createdAt": 1735984800,
+			"title": "A text note",
+			"tags": [],
+			"lists": [],
+			"content": {"type": "text", "text": "Remember the milk"},
+			"note": null,
+			"archived": false
+		}
+	],
+	"lists": [
+		{
+			"id": "list-dev",
+			"name": "Dev",
+			"description": null,
+			"icon": "💻",
+			"type": "manual",
+			"query": null,
+			"parentId": null
+		},
+		{
+			"id": "list-read",
+			"name": "Reading",
+			"description": "Later",
+			"icon": "📚",
+			"type": "manual",
+			"query": null,
+			"parentId": null
+		},
+		{
+			"id": "list-smart",
+			"name": "Archived",
+			"description": null,
+			"icon": "🗄️",
+			"type": "smart",
+			"query": "is:archived",
+			"parentId": null
+		}
+	]
+}

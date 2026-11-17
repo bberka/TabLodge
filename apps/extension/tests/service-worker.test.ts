@@ -12769,3 +12769,57 @@ test('no icon is asked for without a server, with Browser only, or from a privat
 	);
 	assert.deepEqual(network.asked, []);
 });
+
+test('an import skips addresses that are in the trash, and GET_TRASH lists them for the preview', async () => {
+	const harness = createWorkerHarness(bookmarksState());
+	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: 'bm-0'});
+	await harness.sendMessage({type: 'DELETE_GROUP', groupId: 'session-1'});
+	const trash = await harness.sendMessage({type: 'GET_TRASH'});
+	assert.equal(trash.ok, true, trash.error);
+	assert.equal(
+		JSON.stringify(trash.urls),
+		JSON.stringify({
+			sessions: ['https://saved.example/article'],
+			bookmarks: ['https://bm0.example/'],
+		}),
+	);
+
+	const bookmarks = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: {
+			bookmarks: [
+				{url: 'https://bm0.example/', title: 'Deleted'},
+				{url: 'https://new.example/', title: 'New'},
+			],
+		},
+	});
+	assert.equal(bookmarks.ok, true, bookmarks.error);
+	assert.equal(bookmarks.bookmarks, 1);
+	assert.equal(bookmarks.skipped, 1);
+	assert.equal(
+		harness.state.bookmarks.some(
+			(bookmark) => bookmark.url === 'https://bm0.example/',
+		),
+		false,
+	);
+
+	const sessions = await harness.sendMessage({
+		type: 'IMPORT_GROUPS',
+		data: {
+			groups: [
+				{
+					name: 'Again',
+					tabs: [
+						{url: 'https://saved.example/article'},
+						{url: 'https://fresh.example/'},
+					],
+				},
+			],
+		},
+	});
+	assert.equal(sessions.ok, true, sessions.error);
+	assert.deepEqual(
+		harness.state.groups.flatMap((group) => group.tabs.map((tab) => tab.url)),
+		['https://fresh.example/'],
+	);
+});

@@ -42,6 +42,12 @@ export type ImportFormatId =
 	| 'session-buddy'
 	| 'tab-session-manager'
 	| 'toby'
+	| 'linkwarden'
+	| 'karakeep'
+	| 'omnivore'
+	| 'wallabag'
+	| 'pinboard'
+	| 'mastodon'
 	| 'json-links';
 /**
 How well a format's structure is known: checked against the tool's source or real files, or a best-effort reading.
@@ -695,12 +701,226 @@ function parseJsonLinks(
 	);
 }
 
+// The readers below follow each tool's published exporter or API docs, not real files, so they are
+// best-effort. Notes, descriptions, and tags in these files are not imported.
+
+/**
+Every entry of a non-empty array is an object that has all the given keys.
+*/
+const arrayOfRecords = (data: unknown, keys: string[]): data is Json[] =>
+	Array.isArray(data) &&
+	data.length > 0 &&
+	data.every(
+		(entry) =>
+			isObject(entry) && keys.every((key) => Object.hasOwn(entry, key)),
+	);
+
+// Linkwarden: Settings › Migrate data › Export writes the user record with its collections and their
+// links (`collections: [{id, name, parentId, createdAt, links: [{name, url, createdAt, importDate}]}]`).
+// Source: apps/web/lib/api/controllers/migration/exportData.ts and the Link and Collection models in
+// packages/prisma/schema.prisma at linkwarden/linkwarden@24adcc1.
+function parseLinkwarden(
+	data: unknown,
+	collector: Collector,
+): ParsedImport | null {
+	const collections = isObject(data) ? asArray(data.collections) : [];
+	if (
+		collections.length === 0 ||
+		collections.some(
+			(entry) =>
+				!(isObject(entry) && Array.isArray(entry.links) && 'parentId' in entry),
+		)
+	) {
+		return null;
+	}
+
+	const groups = collections.filter(isObject).map((collection) =>
+		group(
+			text(collection.name) || 'Linkwarden',
+			collector.links(
+				asArray(collection.links).map((link) =>
+					isObject(link)
+						? collector.link(link.url, link.name, {
+								// `importDate` keeps the date from the tool a link was imported from.
+								createdAt: toTimestamp(link.importDate ?? link.createdAt),
+							})
+						: collector.skip(),
+				),
+			),
+			{createdAt: toTimestamp(collection.createdAt)},
+		),
+	);
+	return result(
+		'linkwarden',
+		'Linkwarden backup (JSON)',
+		'best-effort',
+		mergeBookmarkFolders(groups),
+		collector,
+	);
+}
+
+// Karakeep (formerly Hoarder): Settings › Import / Export › Export writes
+// `{bookmarks: [{createdAt (seconds), title, lists: [listId], content: {type: "link", url} | {type: "text"}}],
+// lists: [{id, name, type}]}`. A bookmark joins the column of its first list; text notes are skipped.
+// Source: packages/shared/import-export/exporters.ts at karakeep-app/karakeep@bcc4b90.
+function parseKarakeep(
+	data: unknown,
+	collector: Collector,
+): ParsedImport | null {
+	const bookmarks = isObject(data) ? asArray(data.bookmarks) : [];
+	if (
+		bookmarks.length === 0 ||
+		bookmarks.some(
+			(entry) =>
+				!(
+					isObject(entry) &&
+					'content' in entry &&
+					(entry.content === null || isObject(entry.content))
+				),
+		)
+	) {
+		return null;
+	}
+
+	const lists = new Map(
+		asArray(isObject(data) ? data.lists : undefined)
+			.filter(isObject)
+			.map((list) => [text(list.id), text(list.name)]),
+	);
+	const groups = new Map<string, ImportGroup>([['', group('', [])]]);
+	for (const entry of bookmarks) {
+		const content =
+			isObject(entry) && isObject(entry.content) ? entry.content : {};
+		if (!isObject(entry) || content.type !== 'link') {
+			collector.skip();
+			continue;
+		}
+
+		const link = collector.link(content.url, entry.title, {
+			createdAt: toTimestamp(entry.createdAt),
+		});
+		if (!link) {
+			continue;
+		}
+
+		const listName =
+			asArray(entry.lists)
+				.map((id) => lists.get(text(id)))
+				.find(Boolean) ?? '';
+		let target = groups.get(listName);
+		if (!target) {
+			target = group(listName, []);
+			groups.set(listName, target);
+		}
+
+		target.links.push(link);
+	}
+
+	return result(
+		'karakeep',
+		'Karakeep export (JSON)',
+		'best-effort',
+		[...groups.values()],
+		collector,
+	);
+}
+
+// Omnivore: the export ZIP holds `metadata_<from>_to_<to>.json` files, each an array of
+// `{id, slug, title, url, state, labels, savedAt, ...}`. Import one file at a time.
+// Source: packages/api/src/jobs/export.ts at omnivore-app/omnivore@0475038.
+function parseOmnivore(
+	data: unknown,
+	collector: Collector,
+): ParsedImport | null {
+	if (!arrayOfRecords(data, ['slug', 'url', 'savedAt'])) {
+		return null;
+	}
+
+	const links = collector.links(
+		data.map((item) =>
+			collector.link(item.url, item.title, {
+				createdAt: toTimestamp(item.savedAt),
+			}),
+		),
+	);
+	return result(
+		'omnivore',
+		'Omnivore export (JSON)',
+		'best-effort',
+		[group('', links)],
+		collector,
+	);
+}
+
+// Wallabag: Export › JSON writes an array of entries serialized with the `entries_for_user` group:
+// `{id, title, url, is_archived, is_starred, created_at: "2016-09-08T11:55:58+0200", tags, content, ...}`.
+// Source: src/Entity/Entry.php and src/Helper/EntriesExport.php at wallabag/wallabag@15a90c6.
+function parseWallabag(
+	data: unknown,
+	collector: Collector,
+): ParsedImport | null {
+	if (!arrayOfRecords(data, ['url', 'is_archived', 'created_at'])) {
+		return null;
+	}
+
+	const links = collector.links(
+		data.map((entry) =>
+			collector.link(entry.url, entry.title, {
+				// PHP writes the offset without a colon (+0200), which not every JavaScript engine parses.
+				createdAt: toTimestamp(
+					text(entry.created_at).replace(/([+-]\d{2})(?=\d{2}$)/, '$1:'),
+				),
+			}),
+		),
+	);
+	return result(
+		'wallabag',
+		'wallabag export (JSON)',
+		'best-effort',
+		[group('', links)],
+		collector,
+	);
+}
+
+// Pinboard: the JSON export lists posts with the fields of the API's posts/all: `href`, `description`
+// (the title), `extended` (the description), and `time` ("2010-12-11T19:48:02Z"). The docs show these
+// fields only in XML, so the JSON shape (an array of post objects) is inferred and needs a real sample.
+// Source: https://pinboard.in/api (posts/all, posts/add, data types) and https://pinboard.in/howto/.
+function parsePinboard(
+	data: unknown,
+	collector: Collector,
+): ParsedImport | null {
+	if (!arrayOfRecords(data, ['href', 'description', 'time'])) {
+		return null;
+	}
+
+	const links = collector.links(
+		data.map((post) =>
+			collector.link(post.href, post.description, {
+				createdAt: toTimestamp(post.time),
+			}),
+		),
+	);
+	return result(
+		'pinboard',
+		'Pinboard export (JSON)',
+		'best-effort',
+		[group('', links)],
+		collector,
+	);
+}
+
 function parseJson(data: unknown): ParsedImport {
 	for (const parser of [
 		parseSessionBuddy,
 		parseTabSessionManager,
 		parseToby,
+		parseLinkwarden,
+		parseKarakeep,
 		parseNative,
+		parseOmnivore,
+		parseWallabag,
+		parsePinboard,
 		parseJsonLinks,
 	]) {
 		const collector = new Collector();
@@ -711,7 +931,7 @@ function parseJson(data: unknown): ParsedImport {
 	}
 
 	throw new ImportFormatError(
-		'This JSON file isn’t a format we recognize. Supported: backups from this extension, Session Buddy, Tab Session Manager, and Toby.',
+		'This JSON file isn’t a format we recognize. Supported: backups from this extension, Session Buddy, Tab Session Manager, Toby, Linkwarden, Karakeep, Omnivore, wallabag, and Pinboard.',
 	);
 }
 
@@ -1288,6 +1508,30 @@ function parseUrlList(lines: string[]): ParsedImport {
 	);
 }
 
+// Mastodon: Preferences › Import and export › Data export › Bookmarks writes bookmarks.csv with one
+// status URI per row and no header. A post on a Mastodon server has the URI
+// https://<server>/users/<name>/statuses/<id>; posts from other servers keep their own URI.
+// Source: app/models/export.rb (to_bookmarks_csv) and app/lib/activitypub/tag_manager.rb (uri_for)
+// at mastodon/mastodon@4e9a766.
+const MASTODON_STATUS =
+	/^https?:\/\/[^\s/]+\/(?:ap\/)?users\/[^\s/]+\/statuses\/\w+$/i;
+function parseMastodonBookmarks(lines: string[]): ParsedImport | null {
+	const rows = lines.map((line) => line.trim()).filter(Boolean);
+	if (
+		rows.every((row) => !MASTODON_STATUS.test(row)) ||
+		rows.some((row) => !/^https?:\/\/\S+$/i.test(row))
+	) {
+		return null;
+	}
+
+	return {
+		...parseUrlList(rows),
+		format: 'mastodon',
+		label: 'Mastodon bookmarks (CSV)',
+		confidence: 'best-effort',
+	};
+}
+
 /**
  Detects the format of an import file and parses it. Throws ImportFormatError with a readable
  message when the file is empty, too large, or not a supported format.
@@ -1338,6 +1582,11 @@ export function parseImportFile(source: string, filename = ''): ParsedImport {
 		const csv = parseCsv(content);
 		if (csv) {
 			return withEmptyCheck(csv);
+		}
+
+		const mastodon = parseMastodonBookmarks(lines);
+		if (mastodon) {
+			return withEmptyCheck(mastodon);
 		}
 
 		if (extension === 'csv' || extension === 'tsv') {

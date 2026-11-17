@@ -27,6 +27,7 @@ import {BottomSheet} from '../../ui/bottom-sheet';
 import {notify} from '../../ui/dialog';
 import {buildBackup} from '../../transfer/backup';
 import {useView} from '../../library/view';
+import {useTrash} from '../../library/trash-store';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
@@ -80,7 +81,7 @@ const hasLinks = (groups: ParsedImport['sessions']) =>
 	groups.some((group) => group.links.length > 0);
 
 /**
-What a file or pasted text would add, and the button that adds it. Skips links that are already saved, adds nothing
+What a file or pasted text would add, and the button that adds it. Skips links that are already saved or in the trash, adds nothing
 else, and removes nothing.
 */
 export function ImportSheet({
@@ -92,6 +93,7 @@ export function ImportSheet({
 }) {
 	const colors = useColors();
 	const store = useLibrary();
+	const trash = useTrash(useView());
 	const [pasted, setPasted] = useState('');
 	const [skip, setSkip] = useState(true);
 	const [picked, setPicked] = useState<ImportKind>();
@@ -103,7 +105,7 @@ export function ImportSheet({
 	const sessions = parsed ? hasLinks(parsed.sessions) : false;
 	const bookmarks = parsed ? hasLinks(parsed.bookmarks) : false;
 	const kind: ImportKind = picked ?? (sessions ? 'sessions' : 'bookmarks');
-	const preview = parsed ? previewFor(store, parsed, kind) : undefined;
+	const preview = parsed ? previewFor(store, parsed, kind, trash) : undefined;
 	const addable = preview ? preview.links - (skip ? preview.duplicates : 0) : 0;
 	const run = async () => {
 		if (!parsed) {
@@ -119,6 +121,7 @@ export function ImportSheet({
 					now: Date.now(),
 					newId,
 					skipDuplicates: skip,
+					trash,
 				});
 				added = result.links;
 				return result.store;
@@ -191,7 +194,7 @@ export function ImportSheet({
 									? 'column'
 									: 'columns'}
 							{preview.duplicates > 0
-								? `, ${preview.duplicates} already saved`
+								? `, ${preview.duplicates} already saved or in the trash`
 								: ''}
 							{preview.invalid > 0 ? `, ${preview.invalid} skipped` : ''}
 						</Text>

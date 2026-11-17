@@ -632,8 +632,16 @@ function Help() {
 							from OneTab, Session Buddy, Tab Session Manager, and Toby.
 							Bookmark import also reads a Raindrop.io export (CSV or HTML): its
 							collections become columns, and its tags and highlights are not
-							imported. A session menu can export just that session in any
-							format. Bookmark import and export are in the{' '}
+							imported. It also reads the JSON exports of Linkwarden (its
+							collections become columns), Karakeep (its lists become columns),
+							Omnivore (one metadata file from the ZIP at a time), wallabag, and
+							Pinboard, and the bookmarks.csv that Mastodon exports (post
+							addresses, without titles). These are read from each tool’s
+							published format, not from real files, so the preview marks them
+							best effort. Their notes, descriptions, and tags are not imported.
+							The bookmarks HTML exports of Karakeep and Pinboard import as
+							browser bookmark files. A session menu can export just that
+							session in any format. Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
 							saves only bookmarks or sessions, or Everything as a full ZIP
 							backup with settings, excluded sites, theme, snapshots, and the
@@ -650,16 +658,18 @@ function Help() {
 							with the file can try every PIN. TabLodge cannot recover a lost
 							PIN or password. Importing a protected file asks for it first, and
 							a wrong entry changes nothing. Importing a file adds to what you
-							have and skips links you already saved. Importing a full backup
-							asks whether to add it to the current data (the default; settings,
-							snapshots, and the trash bin stay as they are) or to replace
-							everything, and it offers Undo for a short time. The Android app
-							makes and restores the same ZIP, with the same optional password;
-							restoring there replaces its library and offers Undo.
+							have and skips links you already saved or have in the trash bin,
+							so it does not bring back what you deleted. Importing a full
+							backup asks whether to add it to the current data (the default;
+							settings, snapshots, and the trash bin stay as they are) or to
+							replace everything, and it offers Undo for a short time. The
+							Android app makes and restores the same ZIP, with the same
+							optional password; restoring there replaces its library and offers
+							Undo.
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',

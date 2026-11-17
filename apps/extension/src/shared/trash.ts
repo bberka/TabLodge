@@ -3,6 +3,7 @@ The trash entry every app stores and syncs: what was deleted, where it came from
 The extension, the Android app, and the sync server all read this shape, so a deletion made on one device can be
 restored on another. `data` depends on `kind` (see the restore code of each app); an app ignores fields it does not know.
 */
+import type {ImportKind} from './import-formats';
 import {isRecord, type Raw} from './library-values';
 import type {TrashKind} from './types';
 
@@ -76,4 +77,40 @@ export function syncedTrash(entry: TrashEntry): TrashEntry | undefined {
 	return JSON.stringify(value).length <= TRASH_SYNC_MAX_CHARS
 		? value
 		: undefined;
+}
+
+const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+/**
+The link addresses in the trash that an import of this kind skips, as if they were still saved: deleted sessions
+and tabs for a session import, deleted bookmarks and columns for a bookmark import. Folders hold no links of their
+own. `data` comes from storage or sync, so each field in it is checked.
+*/
+export function trashedUrls(
+	trash: readonly TrashEntry[],
+	kind: ImportKind,
+): string[] {
+	const linkItems = ({kind: entryKind, data}: TrashEntry): unknown[] => {
+		if (kind === 'sessions') {
+			return entryKind === 'session' && isRecord(data.session)
+				? list(data.session.tabs)
+				: entryKind === 'tabs'
+					? list(data.items).map((item) =>
+							isRecord(item) ? item.tab : undefined,
+						)
+					: [];
+		}
+
+		return entryKind === 'bookmark'
+			? [data.bookmark]
+			: entryKind === 'column'
+				? list(data.bookmarks)
+				: [];
+	};
+
+	return trash
+		.flatMap((entry) => linkItems(entry))
+		.flatMap((item) =>
+			isRecord(item) && typeof item.url === 'string' ? [item.url] : [],
+		);
 }

@@ -1001,7 +1001,7 @@ type ImportDialogProps = {
 };
 
 const SUPPORTED_FILES =
-	'Full backups (ZIP, including protected ones), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, Toby, and Raindrop.io.';
+	'Full backups (ZIP, including protected ones), JSON backups, browser bookmark files (HTML), CSV, Markdown, plain URL lists, and exports from OneTab, Session Buddy, Tab Session Manager, Toby, Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, Pinboard, and Mastodon (bookmarks.csv).';
 
 function importSummary(
 	kind: ImportKind,
@@ -1066,6 +1066,26 @@ export function ImportDialog({
 	const credentialRef = useRef<HTMLInputElement>(null);
 	const readGenerationRef = useRef(0);
 	const columns = state?.bookmarkColumns ?? [];
+	// Addresses in the trash, which the import skips like saved links.
+	const [trashed, setTrashed] = useState({
+		sessions: [] as string[],
+		bookmarks: [] as string[],
+	});
+	useEffect(() => {
+		if (!open) {
+			return;
+		}
+
+		let live = true;
+		void send('GET_TRASH').then((result) => {
+			if (live && result?.ok) {
+				setTrashed(result.urls);
+			}
+		});
+		return () => {
+			live = false;
+		};
+	}, [open]);
 
 	// Reset on open (never on close) so the closing animation keeps the last content.
 	useEffect(() => {
@@ -1096,13 +1116,15 @@ export function ImportDialog({
 	}, [open]);
 
 	const existingUrls = useMemo(
-		() =>
-			kind === 'sessions'
+		() => [
+			...(kind === 'sessions'
 				? (state?.groups ?? []).flatMap((group) =>
 						group.tabs.map((tab) => tab.url),
 					)
-				: (state?.bookmarks ?? []).map((bookmark) => bookmark.url),
-		[kind, state],
+				: (state?.bookmarks ?? []).map((bookmark) => bookmark.url)),
+			...trashed[kind],
+		],
+		[kind, state, trashed],
 	);
 	const hasBookmarkFolders = Boolean(
 		parsed?.bookmarks.some((group) => group.name && group.links.length > 0),
@@ -1982,7 +2004,7 @@ export function ImportDialog({
 										label="Links already saved"
 										help={
 											preview.duplicates
-												? `${plural(preview.duplicates, 'link')} in this import ${preview.duplicates === 1 ? 'is' : 'are'} already saved or repeated.`
+												? `${plural(preview.duplicates, 'link')} in this import ${preview.duplicates === 1 ? 'is' : 'are'} already saved, in the trash bin, or repeated.`
 												: 'None found.'
 										}
 									>
@@ -2072,8 +2094,8 @@ export function ImportDialog({
 											className="mt-0.5 h-3.5 w-3.5 shrink-0"
 											aria-hidden="true"
 										/>
-										Everything here is already saved. Choose “Add again” or “Use
-										imported” titles to import anyway.
+										Everything here is already saved or in the trash bin. Choose
+										“Add again” or “Use imported” titles to import anyway.
 									</p>
 								)}
 							</DialogBody>

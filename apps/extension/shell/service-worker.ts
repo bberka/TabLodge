@@ -1,5 +1,10 @@
 import {stripTrackingParameters} from '../src/shared/tracking-parameters';
-import {isTrashEntry, TRASH_KINDS, type TrashEntry} from '../src/shared/trash';
+import {
+	isTrashEntry,
+	TRASH_KINDS,
+	trashedUrls,
+	type TrashEntry,
+} from '../src/shared/trash';
 import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {
 	folderNameExists,
@@ -4723,9 +4728,11 @@ async function importBrowserBookmarks(
 					column,
 				]),
 			);
-			const existingUrls = new Set(
-				store.bookmarks.map((bookmark) => bookmark.url),
-			);
+			// An address in the trash counts as saved, so an import does not bring back what was deleted.
+			const existingUrls = new Set([
+				...store.bookmarks.map((bookmark) => bookmark.url),
+				...(await trashedImportUrls(store.settings, 'bookmarks')),
+			]);
 			const existingBookmarks = new Map(
 				store.bookmarks.map((bookmark) => [bookmark.url, bookmark]),
 			);
@@ -5609,7 +5616,10 @@ async function mergeImportedBookmarks(
 		)?.id ||
 		store.bookmarkColumns[0]?.id ||
 		BOOKMARK_UNFILED_ID;
-	const existingUrls = new Set(store.bookmarks.map((bookmark) => bookmark.url));
+	const existingUrls = new Set([
+		...store.bookmarks.map((bookmark) => bookmark.url),
+		...(await trashedImportUrls(store.settings, 'bookmarks')),
+	]);
 	const existingBookmarks = new Map(
 		store.bookmarks.map((bookmark) => [bookmark.url, bookmark]),
 	);
@@ -5730,7 +5740,9 @@ async function importGroups(
 				candidates.length > 0
 					? mergeImportedFolders(store, input, candidates)
 					: new Map<string, string>();
-			const existingUrls = new Set<string>();
+			const existingUrls = new Set(
+				await trashedImportUrls(store.settings, 'sessions'),
+			);
 			const existingRecords = new Map<
 				string,
 				{group: Session; tab: SavedTab}
@@ -7866,7 +7878,27 @@ function describeTrash(entry: TrashEntry): TrashSummary {
 async function getTrash(): Promise<ActionResult<'GET_TRASH'>> {
 	const settings = await readSettings();
 	const items = pruneTrash(await readTrash(), settings.trashRetentionDays);
-	return {ok: true, items: items.map((entry) => describeTrash(entry))};
+	return {
+		ok: true,
+		items: items.map((entry) => describeTrash(entry)),
+		urls: {
+			sessions: trashedUrls(items, 'sessions'),
+			bookmarks: trashedUrls(items, 'bookmarks'),
+		},
+	};
+}
+
+/**
+Addresses in the trash (expired entries left out), which an import skips like saved links.
+*/
+async function trashedImportUrls(
+	settings: Settings,
+	kind: 'sessions' | 'bookmarks',
+): Promise<string[]> {
+	return trashedUrls(
+		pruneTrash(await readTrash(), settings.trashRetentionDays),
+		kind,
+	);
 }
 
 const clampIndex = (value: unknown, length: number) =>

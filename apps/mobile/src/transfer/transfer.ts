@@ -25,6 +25,10 @@ import {
 	previewImport,
 } from '../../../extension/src/shared/import-formats';
 import type {ShareGroup} from '../../../extension/src/shared/share-formats';
+import {
+	trashedUrls,
+	type TrashEntry,
+} from '../../../extension/src/shared/trash';
 import {hostOf} from '../library/store-shape';
 
 export type ImportResult = {
@@ -41,12 +45,19 @@ const DEFAULT_FOLDER_ID = 'unfiled';
 const DEFAULT_SESSION_NAME = 'Imported tabs';
 
 /**
-The addresses already saved for this kind of import, which an import can skip.
+The addresses already saved for this kind of import, or deleted to the trash, which an import can skip.
 */
-export function existingUrls(store: Store, kind: ImportKind): string[] {
-	return kind === 'sessions'
-		? store.groups.flatMap((group) => group.tabs.map((tab) => tab.url))
-		: store.bookmarks.map((bookmark) => bookmark.url);
+export function existingUrls(
+	store: Store,
+	kind: ImportKind,
+	trash: readonly TrashEntry[] = [],
+): string[] {
+	return [
+		...(kind === 'sessions'
+			? store.groups.flatMap((group) => group.tabs.map((tab) => tab.url))
+			: store.bookmarks.map((bookmark) => bookmark.url)),
+		...trashedUrls(trash, kind),
+	];
 }
 
 /**
@@ -56,8 +67,11 @@ export function previewFor(
 	store: Store,
 	parsed: ParsedImport,
 	kind: ImportKind,
+	trash: readonly TrashEntry[] = [],
 ): ImportPreview {
-	return previewImport(parsed, kind, {existingUrls: existingUrls(store, kind)});
+	return previewImport(parsed, kind, {
+		existingUrls: existingUrls(store, kind, trash),
+	});
 }
 
 const sameName = (a: string, b: string) =>
@@ -174,7 +188,8 @@ function columnFor(
 
 /**
 Adds what a parsed file holds to the library: each session becomes a session in its folder, each bookmark folder a
-column. Links already saved, or repeated in the file, are skipped unless `skipDuplicates` is off. Nothing is removed.
+column. Links already saved or in the `trash`, or repeated in the file, are skipped unless `skipDuplicates` is off.
+Nothing is removed.
 */
 export function importIntoStore(
 	store: Store,
@@ -184,14 +199,16 @@ export function importIntoStore(
 		now,
 		newId,
 		skipDuplicates = true,
+		trash = [],
 	}: {
 		kind: ImportKind;
 		now: number;
 		newId: () => string;
 		skipDuplicates?: boolean;
+		trash?: readonly TrashEntry[];
 	},
 ): ImportResult {
-	const seen = new Set(existingUrls(store, kind));
+	const seen = new Set(existingUrls(store, kind, trash));
 	const keepPinned = Boolean(parsed.native?.sessions);
 	const source: ImportGroup[] =
 		kind === 'sessions' ? parsed.sessions : parsed.bookmarks;
