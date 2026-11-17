@@ -9696,7 +9696,7 @@ async function handleSourceMessage(
 
 			const result = saveFromSource(source, message);
 			const tabId = sender.tab?.id;
-			if (isInteger(tabId)) {
+			if (source.saveLoadsPage && isInteger(tabId)) {
 				const now = Date.now();
 				for (const [id, entry] of pendingSourceSaves) {
 					if (now - entry.at > PENDING_SOURCE_MS) {

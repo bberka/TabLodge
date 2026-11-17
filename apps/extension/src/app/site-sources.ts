@@ -50,6 +50,11 @@ export type SiteSource = {
 	`<name>: <address>`.
 	*/
 	discussion?: {name: string; url: (href: string) => string | null};
+	/**
+	The site's save control loads another page (Hacker News' favorite link), so the result of a save is kept for
+	the next page in the tab to show.
+	*/
+	saveLoadsPage?: true;
 };
 
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/;
@@ -378,6 +383,7 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		scriptId: 'tablodge-source-hackernews',
 		canonicalUrl: storyUrl('https://news.ycombinator.com/', hackerNewsItemUrl),
 		discussion: {name: 'Hacker News discussion', url: hackerNewsItemUrl},
+		saveLoadsPage: true,
 	},
 	{
 		id: 'stackoverflow',

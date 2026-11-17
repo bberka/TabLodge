@@ -17,6 +17,7 @@ import {showSourceToast} from '../src/app/source-toast';
 import type {ActionResult, SiteSourceOutcome} from '../src/shared/types';
 
 const LOADED = 'tablodgeSiteSource';
+const PENDING_TAKE_DELAY_MS = 3000;
 const READERS: Record<SiteSourceId, () => SourceReader> = {
 	youtube: () => createYoutubeReader(document),
 	reddit: () => createRedditReader(),
@@ -117,16 +118,24 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		}
 
 		showSaved(result);
-		// Shown here, so the next page in this tab must not show it again.
-		void takePending();
+		// Shown here, so a later page in this tab must not show it again. Taken a little later, not at once: on a
+		// site whose save control loads another page, this page can get the result just before it goes, and then
+		// the next page shows it; a page that has gone never takes it.
+		if (source.saveLoadsPage) {
+			setTimeout(() => {
+				void takePending();
+			}, PENDING_TAKE_DELAY_MS);
+		}
 	};
 
 	// A save whose click loaded this page (Hacker News' favorite link) shows its result here.
-	void takePending().then((pending) => {
-		if (pending?.ok && pending.saved) {
-			showSaved(pending.saved);
-		}
-	});
+	if (source.saveLoadsPage) {
+		void takePending().then((pending) => {
+			if (pending?.ok && pending.saved) {
+				showSaved(pending.saved);
+			}
+		});
+	}
 
 	// Capture on the window sees the click before the site's own handlers change the control's state.
 	globalThis.addEventListener(

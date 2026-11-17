@@ -13819,6 +13819,32 @@ test('the next page in a tab takes the result of a save that loaded it, once, an
 	assert.deepEqual(structuredClone(await harness.sendMessage(pending, hn(7))), {
 		ok: true,
 	});
+
+	// A site whose save keeps the page shows the result there, so it keeps nothing for the next page.
+	harness.grantOrigins(['https://github.com/*']);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'github',
+		enabled: true,
+	});
+	const github = {
+		tab: {...youtubeTab, id: 9, url: 'https://github.com/trending'},
+		url: 'https://github.com/trending',
+	};
+	const starred = await harness.sendMessage(
+		{type: 'SITE_SOURCE_SAVE', source: 'github', url: '/denoland/deno'},
+		github,
+	);
+	assert.equal(starred.ok && starred.outcome, 'saved');
+	assert.deepEqual(
+		structuredClone(
+			await harness.sendMessage(
+				{type: 'SITE_SOURCE_PENDING', source: 'github'},
+				github,
+			),
+		),
+		{ok: true},
+	);
 });
 
 test('a web page reaches only the source actions, never the rest of the worker', async () => {
