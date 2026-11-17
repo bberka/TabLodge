@@ -17,11 +17,7 @@ import android.widget.RemoteViews
  */
 class BookmarksWidgetProvider : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, widgetIds: IntArray) {
-    val snapshot = WidgetData.read(context)
-    for (widgetId in widgetIds) {
-      draw(context, manager, widgetId, snapshot)
-    }
-    manager.notifyAppWidgetViewDataChanged(widgetIds, R.id.bookmarks_widget_list)
+    redraw(context, manager, widgetIds)
   }
 
   override fun onDeleted(context: Context, widgetIds: IntArray) {
@@ -39,14 +35,22 @@ class BookmarksWidgetProvider : AppWidgetProvider() {
         return
       }
 
-      val snapshot = WidgetData.read(context)
-      for (widgetId in ids) {
-        draw(context, manager, widgetId, snapshot)
-      }
-      manager.notifyAppWidgetViewDataChanged(ids, R.id.bookmarks_widget_list)
+      redraw(context, manager, ids)
     }
 
-    fun draw(context: Context, manager: AppWidgetManager, widgetId: Int, snapshot: WidgetSnapshot?) {
+    /**
+     * Reloads the rows, then draws each widget. In this order, because on recent Android a data refresh re-sends the
+     * views it last had; drawing after it makes the new header and state the last word.
+     */
+    fun redraw(context: Context, manager: AppWidgetManager, widgetIds: IntArray) {
+      manager.notifyAppWidgetViewDataChanged(widgetIds, R.id.bookmarks_widget_list)
+      val snapshot = WidgetData.read(context)
+      for (widgetId in widgetIds) {
+        draw(context, manager, widgetId, snapshot)
+      }
+    }
+
+    private fun draw(context: Context, manager: AppWidgetManager, widgetId: Int, snapshot: WidgetSnapshot?) {
       val views = RemoteViews(context.packageName, R.layout.bookmarks_widget)
       val column = snapshot?.column(WidgetData.columnOf(context, widgetId))
       val openApp = activity(context, widgetId * 4, openAppIntent(context, column?.id))

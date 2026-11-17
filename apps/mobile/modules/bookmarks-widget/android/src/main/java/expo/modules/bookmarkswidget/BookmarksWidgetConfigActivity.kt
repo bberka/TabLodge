@@ -45,9 +45,7 @@ class BookmarksWidgetConfigActivity : Activity() {
     }
     list.setOnItemClickListener { _, _, position, _ ->
       WidgetData.setColumn(this, widgetId, columns[position].id)
-      val manager = AppWidgetManager.getInstance(this)
-      BookmarksWidgetProvider.draw(this, manager, widgetId, WidgetData.read(this))
-      manager.notifyAppWidgetViewDataChanged(intArrayOf(widgetId), R.id.bookmarks_widget_list)
+      BookmarksWidgetProvider.redraw(this, AppWidgetManager.getInstance(this), intArrayOf(widgetId))
       setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
       finish()
     }
