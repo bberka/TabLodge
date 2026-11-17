@@ -12,7 +12,7 @@ import {shareHtmlPage} from '../../extension/src/shared/share-formats';
 import {
 	deleteSharedPage,
 	listSharedPages,
-	serverSharesPages,
+	sharedPagesSupport,
 	uploadSharedPage,
 } from '../../extension/src/shared/sync/shared-pages-client';
 import {startClock, tick} from '../../extension/src/shared/sync/clock';
@@ -246,16 +246,15 @@ test('a device that knows nothing of shared pages syncs as before, and pages nev
 
 test('a server without shared pages says so, and has no page routes', async () => {
 	const {fetch} = nodeServer(undefined, {pages: false});
-	assert.equal(await serverSharesPages(fetch, target), false);
+	assert.equal(await sharedPagesSupport(fetch, target), 'old');
 	assert.equal((await fetch(`${BASE}/v1/pages`, authorized())).status, 404);
 	assert.equal((await fetch(`${BASE}/p/AAAAAAAAAAAAAAAAAAAAAA`)).status, 404);
-	assert.equal(await serverSharesPages(nodeServer().fetch, target), true);
-	// Unreachable counts as not supported.
+	assert.equal(await sharedPagesSupport(nodeServer().fetch, target), 'ready');
 	assert.equal(
-		await serverSharesPages(async () => {
+		await sharedPagesSupport(async () => {
 			throw new TypeError('Failed to fetch');
 		}, target),
-		false,
+		'offline',
 	);
 });
 
@@ -289,7 +288,7 @@ const workerFetch: Fetch = async (url, init) => {
 };
 
 test('on Cloudflare a page is public, strict, deletable, and absent from the private library', async () => {
-	assert.equal(await serverSharesPages(workerFetch, target), true);
+	assert.equal(await sharedPagesSupport(workerFetch, target), 'ready');
 	const page = await uploadSharedPage(workerFetch, target, 'Reading', PAGE);
 	const response = await workerFetch(`${BASE}${pathOf(page.url)}`);
 	assert.equal(response.status, 200);
@@ -302,7 +301,7 @@ test('on Cloudflare a page is public, strict, deletable, and absent from the pri
 	assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
 
 	const privateTarget = {url: `${BASE}/private`, token: TOKEN};
-	assert.equal(await serverSharesPages(workerFetch, privateTarget), false);
+	assert.equal(await sharedPagesSupport(workerFetch, privateTarget), 'old');
 	assert.equal(
 		(await workerFetch(`${BASE}/private/v1/pages`, authorized())).status,
 		404,
