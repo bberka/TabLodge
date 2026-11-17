@@ -44,6 +44,8 @@ run(
 	['exec', 'expo', 'prebuild', '--platform', 'android', '--no-install'],
 	mobileDir,
 );
+// The Open source licences list, from this build's bundle and release classpath.
+run('node', ['scripts/licences.mts', '--native'], mobileDir);
 run(
 	join(androidDir, 'gradlew'),
 	['assembleRelease', '-x', 'lint', `-PreactNativeArchitectures=${abis}`],

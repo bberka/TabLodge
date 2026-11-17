@@ -1,0 +1,74 @@
+// Gradle init script for scripts/licences.mts. It adds a `tablodgeNativeLicences` task to :app that resolves the
+// release runtime classpath and writes, as JSON, every library in it: Maven artifacts with the licences their POM
+// (or a parent POM) declares, and the Gradle projects, which autolinking maps to npm packages.
+//
+//   ./gradlew -q --init-script ../scripts/native-licences.gradle :app:tablodgeNativeLicences -PtablodgeLicencesOut=<file>
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.ResolvedArtifactResult
+import org.gradle.maven.MavenModule
+import org.gradle.maven.MavenPomArtifact
+
+allprojects { project ->
+	if (project.path != ':app') {
+		return
+	}
+
+	project.afterEvaluate {
+		project.tasks.register('tablodgeNativeLicences') {
+			notCompatibleWithConfigurationCache('Resolves POM files while it runs')
+			doLast {
+				def out = project.findProperty('tablodgeLicencesOut')
+				if (!out) {
+					throw new GradleException('Pass -PtablodgeLicencesOut=<file>')
+				}
+
+				def pomFile = { String group, String name, String version ->
+					def result = project.dependencies.createArtifactResolutionQuery()
+						.forModule(group, name, version)
+						.withArtifacts(MavenModule, MavenPomArtifact)
+						.execute()
+					def artifact = result.resolvedComponents.collect { it.getArtifacts(MavenPomArtifact) }.flatten().find {
+						it instanceof ResolvedArtifactResult
+					}
+					artifact?.file
+				}
+
+				// Licences and project page from the POM, walking up parent POMs until one declares licences.
+				def describe
+				describe = { String group, String name, String version, int depth ->
+					def file = pomFile(group, name, version)
+					if (file == null) {
+						return [licences: [], url: '']
+					}
+
+					def pom = new groovy.xml.XmlSlurper(false, false).parse(file)
+					def licences = pom.licenses.license.collect { [name: it.name.text().trim(), url: it.url.text().trim()] }
+					def url = pom.url.text().trim()
+					def parent = pom.parent
+					if (licences.isEmpty() && depth < 5 && parent.artifactId.text()) {
+						def inherited = describe(parent.groupId.text(), parent.artifactId.text(), parent.version.text(), depth + 1)
+						return [licences: inherited.licences, url: url ?: inherited.url]
+					}
+
+					[licences: licences, url: url]
+				}
+
+				def components = project.configurations.getByName('releaseRuntimeClasspath').incoming.resolutionResult.allComponents
+				def artifacts = []
+				def projects = []
+				components.each { component ->
+					def id = component.id
+					if (id instanceof ModuleComponentIdentifier) {
+						artifacts << [group: id.group, name: id.module, version: id.version] + describe(id.group, id.module, id.version, 0)
+					} else if (id instanceof ProjectComponentIdentifier && id.projectPath != ':app') {
+						projects << project.rootProject.project(id.projectPath).projectDir.absolutePath
+					}
+				}
+
+				new File(out.toString()).text = JsonOutput.prettyPrint(JsonOutput.toJson([artifacts: artifacts, projects: projects]))
+			}
+		}
+	}
+}

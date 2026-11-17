@@ -12,6 +12,8 @@ on:
       - apps/server/**
       - apps/extension/src/shared/**
       - scripts/release-version.ts
+      - scripts/third-party-notices.ts
+      - scripts/licence-texts/**
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
@@ -23,6 +25,8 @@ on:
       - apps/server/**
       - apps/extension/src/shared/**
       - scripts/release-version.ts
+      - scripts/third-party-notices.ts
+      - scripts/licence-texts/**
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
@@ -61,11 +65,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
       - run: pnpm install --frozen-lockfile
       - name: Test the app's code
-        run: pnpm exec vp test run mobile release-version
-      - name: Bundle the JavaScript
-        run: pnpm run mobile:export
+        run: pnpm exec vp test run mobile release-version third-party-notices
       - name: Generate the Android project
         run: pnpm --filter tablodge-mobile exec expo prebuild --platform android --no-install
+      # After prebuild, so the licence list also covers the native libraries on the release classpath.
+      - name: List the licences and bundle the JavaScript
+        run: pnpm run mobile:export
       - name: Build the debug APK
         working-directory: apps/mobile/android
         run: ./gradlew assembleDebug -x lint --build-cache -PreactNativeArchitectures=arm64-v8a,armeabi-v7a

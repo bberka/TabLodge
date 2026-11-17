@@ -246,7 +246,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Bundles the Android app's JavaScript with Metro; no Android SDK is needed.
+      # Bundles the Android app's JavaScript with Metro; no Android SDK is needed. It first lists the licences of every
+      # package in the bundle (scripts/licences.mts), and fails when one has no licence id or text.
       - run: pnpm run mobile:export
 
   # The branch ruleset requires this check name. It passes only when every job above passes.

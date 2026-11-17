@@ -63,6 +63,7 @@ import {
 	sectionVisible,
 } from './settings-index';
 import {PrivateCard} from './private-settings';
+import {AboutCard} from './about-settings';
 
 function describe(
 	status: SyncStatus,
@@ -450,6 +451,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 									}}
 								/>
 							</SettingsCard>
+							<AboutCard />
 							{isNoMatch && (
 								<Empty icon="search" title="No setting matches">
 									Try another word, such as swipe, sync, or private.
