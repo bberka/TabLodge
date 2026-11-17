@@ -52,6 +52,7 @@ import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
+import {SearchTips} from '../search-tips';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
 import {takeSearchRequest, useSearchWanted} from '../../ui/search-action';
@@ -646,6 +647,7 @@ export function BookmarksScreen({
 									}
 									right={headerActions}
 								/>
+								{search.open && !isSearching && <SearchTips />}
 								<View style={styles.search}>
 									{!isSearching && isListView && !atList && openEntry && (
 										<FolderBack

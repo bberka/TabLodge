@@ -94,6 +94,12 @@ import type {
 	BookmarkQuickAction,
 } from '../shared/types';
 import {siteName, webUrl} from '../shared/web-url';
+import {
+	bookmarkFacets,
+	hasOperators,
+	parseSearchQuery,
+	passesOperators,
+} from '../shared/search-query';
 import type {ExportData} from '../shared/export-formats';
 import {archivedFolderId} from '../shared/session-folders';
 import {ACTION_ICONS} from './action-icons';
@@ -527,19 +533,35 @@ function NewTab() {
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
 	const sessionsOnTop = settings.sessionsOnTop === true;
 	const filteredBookmarks = useMemo(() => {
-		const needle = bookmarkSearch.trim().toLocaleLowerCase();
-		if (!needle) {
+		const search = parseSearchQuery(bookmarkSearch.trim());
+		const filtering = hasOperators(search);
+		const needle = search.text.toLocaleLowerCase();
+		if (!needle && !filtering) {
 			return bookmarks;
 		}
 
-		return bookmarks.filter((bookmark) =>
-			[bookmark.title, bookmark.url, siteName(bookmark.url)].some((value) =>
-				String(value || '')
-					.toLocaleLowerCase()
-					.includes(needle),
-			),
+		const columnName = new Map(
+			columns.map((column) => [column.id, column.name]),
 		);
-	}, [bookmarks, bookmarkSearch]);
+		columnName.set(UNFILED_COLUMN.id, UNFILED_COLUMN.name);
+		return bookmarks.filter((bookmark) => {
+			const texts = [bookmark.title, bookmark.url, siteName(bookmark.url)];
+			return (
+				(!needle ||
+					texts.some((value) =>
+						String(value || '')
+							.toLocaleLowerCase()
+							.includes(needle),
+					)) &&
+				(!filtering ||
+					passesOperators(
+						search,
+						texts,
+						bookmarkFacets(bookmark, columnName.get(bookmark.columnId)),
+					))
+			);
+		});
+	}, [bookmarks, bookmarkSearch, columns]);
 	// Bookmarks per column, computed once instead of filtering the whole list for every column. A column whose
 	// bookmarks did not change keeps its array, so its memoized card list is not re-rendered.
 	const previousGroupsRef = useRef({

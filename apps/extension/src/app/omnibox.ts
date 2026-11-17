@@ -3,6 +3,7 @@
 // gather the data and open the result.
 import {highlightSegments} from '../shared/fuzzy';
 import {escapeHtml} from '../shared/escape-html';
+import {highlightWords} from '../shared/search-query';
 import {
 	buildFinderIndex,
 	flattenSections,
@@ -77,7 +78,10 @@ export function omniboxSuggestions(
 		}
 
 		perKind.set(item.kind, seen + 1);
-		suggestions.push({content: item.id, description: describe(item, query)});
+		suggestions.push({
+			content: item.id,
+			description: describe(item, highlightWords(query)),
+		});
 		if (suggestions.length === MAX_SUGGESTIONS) {
 			break;
 		}

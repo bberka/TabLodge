@@ -16,6 +16,12 @@ import {
 	columnForUrl,
 	domainsField,
 } from '../../../extension/src/shared/column-sites';
+import {
+	bookmarkFacets,
+	hasOperators,
+	parseSearchQuery,
+	passesOperators,
+} from '../../../extension/src/shared/search-query';
 import {extractUrl, hostOf} from './store-shape';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
@@ -57,10 +63,23 @@ export function allBookmarks(store: Store): Bookmark[] {
 }
 
 export function searchBookmarks(store: Store, query: string): Bookmark[] {
-	const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+	const search = parseSearchQuery(query);
+	const filtering = hasOperators(search);
+	const words = search.text.toLowerCase().split(/\s+/).filter(Boolean);
+	const columnName = new Map(
+		store.bookmarkColumns.map((column) => [column.id, column.name]),
+	);
 	return store.bookmarks.filter((bookmark) => {
 		const text = `${bookmark.title} ${bookmark.url}`.toLowerCase();
-		return words.every((word) => text.includes(word));
+		return (
+			words.every((word) => text.includes(word)) &&
+			(!filtering ||
+				passesOperators(
+					search,
+					[bookmark.title],
+					bookmarkFacets(bookmark, columnName.get(bookmark.columnId)),
+				))
+		);
 	});
 }
 

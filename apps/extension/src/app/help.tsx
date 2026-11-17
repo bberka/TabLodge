@@ -507,6 +507,12 @@ function Help() {
 						'search field dashboard sessions saved tabs name page details title url',
 				},
 				{
+					title: 'Search operators',
+					body: 'The palette, both dashboard searches, and the Android app understand a few operators beside plain words. "exact phrase" matches the words in that order. -word leaves out results that contain the word, and -"two words" leaves out a phrase. site:github.com keeps links on that site and its subdomains. in:sessions, in:bookmarks, in:tabs (saved tabs), and in:open (open tabs) keep one kind of result. col:Work and folder:Work keep bookmarks in a column or sessions in a folder whose name contains the text; quote a name with spaces, as in col:"Read later". after:2026-01-01 keeps what was saved on or after that day, and before:2026-06-01 what was saved before it. Combine them freely. Anything that is not a complete operator, such as a lone - or an unclosed quote, searches as plain words. The palette lists these tips until you type.',
+					searchText:
+						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder after before date day filter narrow query syntax tips',
+				},
+				{
 					title: 'Open the search palette',
 					body: (
 						<>

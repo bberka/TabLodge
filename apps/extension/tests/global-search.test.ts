@@ -266,3 +266,29 @@ test('real matches outrank typo matches, within and across groups', () => {
 		.map((item) => item.id);
 	assert.deepEqual(found, ['bookmark:t3', 'bookmark:t2', 'bookmark:t1']);
 });
+
+test('operators narrow the palette, and a query of operators alone lists what passes', () => {
+	const found = (query: string) => ids(query).filter((id) => id !== 'web');
+	assert.deepEqual(found('site:github.com'), ['bookmark:b1']);
+	assert.deepEqual(found('in:open'), ['tab:7']);
+	assert.deepEqual(found('col:reading'), ['bookmark:b2', 'column:c1']);
+	assert.deepEqual(found('folder:travel in:tabs'), [
+		'saved-tab:s1:t1',
+		'saved-tab:s1:t2',
+	]);
+	assert.deepEqual(found('in:tabs -skyscanner'), ['saved-tab:s1:t2']);
+	assert.deepEqual(found('"hacker news"'), ['bookmark:b2']);
+	assert.deepEqual(found('"news hacker"'), []);
+	assert.deepEqual(found('before:2000-01-01 in:sessions'), ['session:s1']);
+});
+
+test('renaming a folder reaches the cached session items', () => {
+	const renamed = buildFinderIndex({
+		...sources,
+		folders: [{...folder, name: 'Trips'}],
+	});
+	const found = flattenSections(
+		searchFinder('folder:trips in:sessions', renamed),
+	);
+	assert.ok(found.some((item) => item.id === 'session:s1'));
+});

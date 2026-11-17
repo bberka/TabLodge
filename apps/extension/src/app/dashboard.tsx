@@ -109,6 +109,12 @@ import {displayUrl as simplifiedUrl} from '../shared/url-display';
 import type {ExportData} from '../shared/export-formats';
 import {hostOf, webUrl} from '../shared/web-url';
 import {
+	hasOperators,
+	parseSearchQuery,
+	passesOperators,
+	sessionFacets,
+} from '../shared/search-query';
+import {
 	ARCHIVED_FOLDER_NAME,
 	archivedFolderId,
 	isArchivedFolder,
@@ -384,29 +390,47 @@ export function SessionManager({
 		expandAll ? !collapsed.has(id) : expanded.has(id);
 
 	const visibleGroups = useMemo(() => {
-		const needle = query.trim().toLocaleLowerCase();
-		const filtered = groups.filter(
-			(group) =>
-				(folderId === ALL
-					? group.folderId !== archivedId
-					: group.folderId === folderId) &&
+		const search = parseSearchQuery(query.trim());
+		const filtering = hasOperators(search);
+		const needle = search.text.toLocaleLowerCase();
+		const folderName = new Map(
+			folders.map((folder) => [folder.id, folder.name]),
+		);
+		const filtered = groups.filter((group) => {
+			if (
+				folderId === ALL
+					? group.folderId === archivedId
+					: group.folderId !== folderId
+			) {
+				return false;
+			}
+
+			const texts = [
+				group.name,
+				group.description,
+				group.sourceWindowName,
+				group.deviceName,
+				...group.tabs.flatMap((tab) => [
+					tab.title,
+					tab.url,
+					tab.nativeGroup?.title,
+				]),
+			];
+			return (
 				(!needle ||
-					[
-						group.name,
-						group.description,
-						group.sourceWindowName,
-						group.deviceName,
-						...group.tabs.flatMap((tab) => [
-							tab.title,
-							tab.url,
-							tab.nativeGroup?.title,
-						]),
-					].some((value) =>
+					texts.some((value) =>
 						String(value || '')
 							.toLocaleLowerCase()
 							.includes(needle),
-					)),
-		);
+					)) &&
+				(!filtering ||
+					passesOperators(
+						search,
+						texts,
+						sessionFacets(group, folderName.get(group.folderId)),
+					))
+			);
+		});
 		if (sort === 'newest') {
 			filtered.sort((a, b) => b.createdAt - a.createdAt);
 		}
@@ -428,7 +452,7 @@ export function SessionManager({
 		}
 
 		return filtered;
-	}, [groups, archivedId, folderId, query, sort]);
+	}, [groups, folders, archivedId, folderId, query, sort]);
 	// A new filter, search or sort starts again from the first batch.
 	const [visibleLimit, showMore, showUpTo] = usePagedLimit(
 		`${folderId}|${query}|${sort}`,
