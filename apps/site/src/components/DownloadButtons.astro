@@ -1,6 +1,6 @@
 ---
 import ButtonIcon from './ButtonIcon.astro';
-import {SITE} from '../site';
+import {DOWNLOADS} from '../lib/downloads';
 
 interface Props {
 	center?: boolean;
@@ -16,20 +16,34 @@ the menu, and adds a line when the device has no match.
 <div class="downloads" data-downloads>
 	<div class:list={['actions', center && 'center']}>
 		<div class="split" data-split>
-			<a class="btn primary main" data-main data-store="chrome" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="chrome" /><span><span class="lead-in">Install from </span>Chrome Web Store</span></a>
+			{
+				DOWNLOADS.slice(0, 1).map((item) => (
+					<a class="btn primary main" data-main data-store={item.id} href={item.href} rel="noopener">
+						<ButtonIcon kind={item.id} />
+						<span>{item.lead && <span class="lead-in">{item.lead}</span>}{item.label}</span>
+					</a>
+				))
+			}
 			<details class="more" data-more>
 				<summary class="btn primary toggle" aria-label="Other ways to install"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg></summary>
 				<div class="menu" data-menu>
-					<a data-store="firefox" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="firefox" />Get for Firefox</a>
-					<a data-store="android" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="android" />Get for Android</a>
+					{
+						DOWNLOADS.slice(1).map((item) => (
+							<a data-store={item.id} href={item.href} rel="noopener"><ButtonIcon kind={item.id} />{item.label}</a>
+						))
+					}
 				</div>
 			</details>
 		</div>
+		{Astro.slots.has('default') && <slot />}
 	</div>
 	<p class:list={['note', 'download-note', center && 'center']} data-note role="status" hidden></p>
 </div>
 
 <style>
+	.downloads .actions > :global(:not(.split)) {
+		order: 9;
+	}
 	.actions.center {
 		justify-content: center;
 	}
@@ -107,12 +121,19 @@ the menu, and adds a line when the device has no match.
 		width: 1.1em;
 		height: 1.1em;
 		flex: none;
+		fill: currentColor;
 	}
 	@media (max-width: 560px) {
-		.actions,
+		.actions {
+			flex-direction: column;
+			align-items: stretch;
+		}
 		.split {
 			display: flex;
 			width: 100%;
+		}
+		.downloads .actions > :global(.btn) {
+			justify-content: center;
 		}
 		.split .main {
 			flex: 1;

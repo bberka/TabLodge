@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import DownloadLink from '../../components/DownloadLink.astro';
 import AlternativesSwitch from '../../components/AlternativesSwitch.astro';
 import {SITE} from '../../site';
 
@@ -82,7 +83,7 @@ const breadcrumbs = [
 			server you run. These apps do overlapping jobs, and most of them do more. This page says where each one fits
 			and where TabLodge falls short.
 		</p>
-		<p><a class="btn primary" href={SITE.androidApk} rel="noopener">Download the Android APK</a></p>
+		<p><DownloadLink store="android" label="Download the Android APK" /></p>
 
 		<h2>At a glance</h2>
 		<div class="table-wrap" role="region" aria-label="Comparison table, scrolls sideways on narrow screens" tabindex="0">

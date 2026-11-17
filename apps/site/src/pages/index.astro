@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import ButtonIcon from '../components/ButtonIcon.astro';
+import DownloadLink from '../components/DownloadLink.astro';
 import DownloadButtons from '../components/DownloadButtons.astro';
 import Screenshot from '../components/Screenshot.astro';
 import {SITE, abs} from '../site';
@@ -128,11 +129,12 @@ const jsonLd = [
 			<p class="eyebrow">Free &amp; open source</p>
 			<h1>Save your tabs. Find them again.</h1>
 			<p class="lead">TabLodge saves your open tabs as named sessions, keeps a bookmark board on every new tab, and searches all of it. Your library stays in your browser, and it syncs to your phone through a server you run.</p>
-<DownloadButtons />
+<DownloadButtons>
+				<a class="btn ghost" href="/alternatives/">Compare</a>
+			</DownloadButtons>
 			<p class="note">
 				v{SITE.version} &middot; Chrome 116+ &middot; Firefox 140+ &middot; Android 7+ &middot; MIT license
 			</p>
-			<p class="note"><a href="/alternatives/">Compare with OneTab, Session Buddy and Toby</a> &middot; <a href="/alternatives/android/">Compare Android apps</a></p>
 			<div class="hero-shot">
 				<Screenshot
 					name="dashboard"
@@ -210,7 +212,7 @@ const jsonLd = [
 					<li>Needs Android 7 or newer.</li>
 				</ul>
 				<p class="actions">
-					<a class="btn primary" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="android" />Download the APK</a>
+					<DownloadLink store="android" label="Download the APK" />
 				</p>
 			</div>
 			<div class="phones">

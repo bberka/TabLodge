@@ -1,0 +1,18 @@
+---
+import ButtonIcon from './ButtonIcon.astro';
+import {download} from '../lib/downloads';
+import type {Store} from '../lib/platform';
+
+interface Props {
+	store: Store;
+	variant?: 'primary' | 'ghost';
+	/**
+	Replaces the default text, for a spot that needs its own wording.
+	*/
+	label?: string;
+}
+const {store, variant = 'primary', label} = Astro.props;
+const item = download(store);
+---
+
+<a class:list={['btn', variant]} href={item.href} rel="noopener"><ButtonIcon kind={item.id} />{label ?? item.label}</a>

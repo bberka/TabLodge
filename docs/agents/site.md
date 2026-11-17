@@ -27,6 +27,7 @@ Paths below are relative to `apps/site/`.
 | `src/pages/terms.astro` | Terms of use, linked from the footer and the Google OAuth consent screen |
 | `src/pages/404.astro` | Page not found |
 | `src/components/DownloadButtons.astro` | One download button with a menu for the other two (Chrome Web Store, Firefox Add-ons, Android), used on the home and alternatives pages. A small script puts the one that suits the visitor's device on the button and the rest in the menu |
+| `src/lib/downloads.ts`, `src/components/DownloadLink.astro` | The list of downloads (label, link, icon) and the single button component for one of them. Add a platform here, in `ButtonIcon.astro`, and in `platform.ts`; never hand-write a download button |
 | `src/lib/platform.ts` | Works out the visitor's device from the user agent: Chromium and Firefox on a computer, Android, iPhone and iPad, Safari, and anything else. Tested in `apps/site/tests/site-platform.test.ts` |
 | `src/layouts/Base.astro` | Shared layout, header, footer, metadata, and structured data |
 | `src/assets/` | Extension screenshots in light and dark themes |
