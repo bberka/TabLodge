@@ -4,6 +4,8 @@ name: Test
 # shards), typecheck and tests; extension build, package and Firefox smoke check; the accessibility check (four shards);
 # the startup and dev browser checks; the private storage check; the Cloudflare Worker bundle freshness check; and the
 # Android bundle. The slowest job sets the wall clock, so split a job before it becomes the longest one.
+# On pull requests the changes job lists the touched files and skips the jobs they cannot affect; pushes to the main
+# branch always run everything. A skipped job counts as passed in the gate job at the bottom.
 on:
   push:
     branches: [master, main]
@@ -17,7 +19,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides which jobs a pull request needs from the files it touches. A path this job does not know turns every job on,
+  # so a new top level folder is checked in full until it gets a rule here.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      core: ${{ steps.scope.outputs.core }}
+      browser: ${{ steps.scope.outputs.browser }}
+      cloudflare: ${{ steps.scope.outputs.cloudflare }}
+      mobile: ${{ steps.scope.outputs.mobile }}
+    steps:
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          core=false browser=false cloudflare=false mobile=false
+          if [ "$EVENT" != pull_request ]; then
+            core=true browser=true cloudflare=true mobile=true
+          else
+            files="$(gh api --paginate "repos/${{ github.repository }}/pulls/$PR/files" --jq '.[].filename')"
+            echo "$files"
+            while IFS= read -r file; do
+              case "$file" in
+                '') ;;
+                # Nothing in these runs through a job below (the website has its own workflow).
+                docs/*|*.md|LICENSE|apps/site/*|.github/ISSUE_TEMPLATE/*) ;;
+                apps/mobile/*) core=true mobile=true ;;
+                apps/server/*) core=true cloudflare=true ;;
+                apps/extension/src/shared/*) core=true browser=true cloudflare=true mobile=true ;;
+                apps/extension/*) core=true browser=true ;;
+                *) core=true browser=true cloudflare=true mobile=true ;;
+              esac
+            done <<< "$files"
+          fi
+          {
+            echo "core=$core"
+            echo "browser=$browser"
+            echo "cloudflare=$cloudflare"
+            echo "mobile=$mobile"
+          } | tee -a "$GITHUB_OUTPUT"
+
   lint:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
     name: Lint (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
@@ -44,6 +93,8 @@ jobs:
       - run: pnpm exec xo ${{ matrix.paths }}
 
   typecheck:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
@@ -57,6 +108,8 @@ jobs:
       - run: pnpm exec tsgo -b
 
   unit:
+    needs: changes
+    if: ${{ needs.changes.outputs.core == 'true' }}
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
@@ -70,6 +123,8 @@ jobs:
       - run: pnpm exec vp test run
 
   extension:
+    needs: changes
+    if: ${{ needs.changes.outputs.browser == 'true' }}
     name: Build, package, Firefox smoke check
     runs-on: ubuntu-latest
     steps:
@@ -87,6 +142,8 @@ jobs:
 
   # The accessibility check is the slowest, so its checks are split across four jobs (A11Y_SHARD, see harness.ts).
   a11y:
+    needs: changes
+    if: ${{ needs.changes.outputs.browser == 'true' }}
     name: Accessibility check (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -113,6 +170,8 @@ jobs:
           A11Y_SHARD: ${{ matrix.shard }}/4
 
   browser:
+    needs: changes
+    if: ${{ needs.changes.outputs.browser == 'true' }}
     name: Startup and dev browser checks
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -136,6 +195,8 @@ jobs:
   # One long scenario (enable private access, restart the browser), so it cannot be sharded; its own job keeps it off
   # the other browser checks' critical path.
   private-storage:
+    needs: changes
+    if: ${{ needs.changes.outputs.browser == 'true' }}
     name: Private storage check
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -157,6 +218,8 @@ jobs:
 
   # Fails when the committed Worker for the Deploy to Cloudflare button differs from what cf:bundle builds.
   cloudflare:
+    needs: changes
+    if: ${{ needs.changes.outputs.cloudflare == 'true' }}
     name: Cloudflare Worker bundle is current
     runs-on: ubuntu-latest
     steps:
@@ -171,6 +234,8 @@ jobs:
       - run: git diff --exit-code -- apps/server/cloudflare-deploy
 
   mobile:
+    needs: changes
+    if: ${{ needs.changes.outputs.mobile == 'true' }}
     name: Bundle Android app
     runs-on: ubuntu-latest
     steps:
@@ -187,17 +252,15 @@ jobs:
   # The branch ruleset requires this check name. It passes only when every job above passes.
   test:
     name: Lint, typecheck, test, build, package, Firefox smoke check
-    needs: [lint, typecheck, unit, extension, a11y, browser, private-storage, cloudflare, mobile]
+    needs: [changes, lint, typecheck, unit, extension, a11y, browser, private-storage, cloudflare, mobile]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          test "${{ needs.lint.result }}" = success
-          test "${{ needs.typecheck.result }}" = success
-          test "${{ needs.unit.result }}" = success
-          test "${{ needs.extension.result }}" = success
-          test "${{ needs.a11y.result }}" = success
-          test "${{ needs.browser.result }}" = success
-          test "${{ needs.private-storage.result }}" = success
-          test "${{ needs.cloudflare.result }}" = success
-          test "${{ needs.mobile.result }}" = success
+      # A job skipped by the changes job counts as passed; a failed or cancelled one does not.
+      - env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+          CHANGES: ${{ needs.changes.result }}
+        run: |
+          test "$CHANGES" = success
+          echo "$RESULTS"
+          ! echo "$RESULTS" | grep -Eq 'failure|cancelled'

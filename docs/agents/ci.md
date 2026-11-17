@@ -2,7 +2,18 @@
 
 Workflows are in `.github/workflows/`: `test.yml` (checks on every pull request and push), `pages.yml` (website), `mobile.yml` (debug APK), `sync-server.yml` (server image), `release.yml` (release), and `store-publish.yml` (Chrome Web Store and Firefox Add-ons). `test.yml` keeps one required gate job named like the branch ruleset expects; keep that name when you rename or split jobs.
 
-`test.yml` runs these jobs in parallel, and the gate job `test` needs every one of them, so add a new job to its `needs` and result tests:
+`test.yml` runs these jobs in parallel, and the gate job `test` needs every one of them, so add a new job to its `needs`. On a pull request, a first job named `changes` lists the touched files through the GitHub API and turns off the jobs they cannot affect; the gate counts a skipped job as passed and a failed or cancelled one as failed. Pushes to `master` run everything.
+
+| Touched | Jobs that run |
+| --- | --- |
+| Only `docs/`, `*.md`, `LICENSE`, `apps/site/`, issue templates | none (the website has its own workflow) |
+| `apps/mobile/` | `lint`, `typecheck`, `unit`, `mobile` |
+| `apps/server/` | `lint`, `typecheck`, `unit`, `cloudflare` |
+| `apps/extension/src/shared/` | all of them |
+| other `apps/extension/` | `lint`, `typecheck`, `unit`, and the browser jobs (`extension`, `a11y`, `browser`, `private-storage`) |
+| anything else, including `package.json`, the lockfile, and this workflow | all of them |
+
+A path the `changes` job does not know runs everything, so add a rule there when a new top level folder should skip jobs. The jobs:
 
 | Job | Runs |
 | --- | --- |
@@ -18,7 +29,7 @@ Workflows are in `.github/workflows/`: `test.yml` (checks on every pull request 
 
 The jobs run side by side, so the slowest one sets how long a pull request waits. Split a job before it becomes the longest. Every tracked source file must belong to exactly one `lint` group, so add a new top level folder to the third. `check:a11y` runs every fourth check when `A11Y_SHARD=<index>/4` is set (a check's position in the fixed run order decides its shard), and each shard seeds its own profile, so a check must not rely on state an earlier check left. Locally, `vp run check` still runs lint, typecheck, and tests in one command.
 
-The browser jobs install Playwright Chromium with `vp run browser:install` and cache `~/.cache/ms-playwright`. What CI does not run: the Android Gradle build (only **Mobile** does, behind a path filter), the Docker image build (only **Sync server image**, behind a path filter), and the website build (**Pages** runs on every pull request). Nothing runs the app on an emulator or checks the Store publishing steps.
+The browser jobs install Playwright Chromium with `vp run browser:install` and cache `~/.cache/ms-playwright`. What CI does not run: the Android Gradle build (only **Mobile** does, behind a path filter), the Docker image build (only **Sync server image**, behind a path filter), and the website build (**Pages** runs on every pull request, because its check is required). Nothing runs the app on an emulator or checks the Store publishing steps.
 
 
 TabLodge uses [ZeroVer](https://0ver.org): `0.<minor>.<patch>`.
