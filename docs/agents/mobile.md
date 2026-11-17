@@ -31,6 +31,7 @@ The app imports types and the sync client from `apps/extension/src` by relative 
 - Pure logic goes in a plain `.ts` file with a test in `tests/`, not inside a screen.
 - Proof comes from an emulator or a device, not the browser. Run `pnpm run mobile:emulator` (visible window, software GPU, reuses a running one, `--stop` ends it), install with `pnpm run mobile:apk --install`, and take screenshots with `adb exec-out screencap -p > file.png`. Keep sample data off any real server. Do this without asking, for every visible change. Report the Android version, the Material or iOS look, and whether TalkBack, dark theme, or a small screen were not checked. Details: [Proof](validation.md#proof).
 - Do not edit the PNGs in `assets/` by hand: change `scripts/make-icons.mts` or the extension's mark and rerun `pnpm run mobile:icons`. The mark stays inside the adaptive icon's 66 dp safe zone, and the monochrome layer is the same shape in black, which Android tints for themed icons.
+- A new feature or user action checks whether it belongs in the share sheet, an app shortcut, or a Quick Settings tile: [Entry points](cross-app.md#feature-triage).
 - Accessibility still applies: labels, roles, touch targets, and TalkBack behave like the extension's [UI rules](ui.md#accessibility) intend.
 - CI builds a debug APK on `apps/mobile/**` changes; releases are signed in `release.yml` ([CI](ci.md#android-app)).
 

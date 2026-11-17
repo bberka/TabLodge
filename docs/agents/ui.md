@@ -8,6 +8,7 @@ Rules for every change to extension pages (`apps/extension/src`). Read the whole
 - Tailwind 4 keeps real cascade layers, and Chrome adds an unlayered `body` rule to extension pages. A style that must beat it, like the `body` font in `apps/extension/styles/extension-app.css`, goes outside `@layer`. The theme is configured in that file (`@theme`), and there is no `tailwind.config` file. The PostCSS plugin scans only `apps/extension` (see `postcss.config.cjs` there), and `@source not` lines skip its build output and tests.
 - Build controls from the local Radix components in `apps/extension/src/components/ui/`, exposed through `apps/extension/src/shared/ui.tsx`. To add a primitive, run `pnpm dlx shadcn@latest add <component>` and review the generated code.
 - Use icons from `lucide-react`. Controls must work with a keyboard, have visible focus, and have labels. Pair icon buttons with `aria-label` and `IconTooltip`. Announce feedback with an appropriate status or alert role.
+- Tips, hints, and help text sit behind a small help button that opens a popover or sheet, with the full text in Help. The page shows none of them permanently, including on an empty search.
 - External links should use `target="_blank" rel="noopener noreferrer"`.
 - Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker. Both use the manifest's `short_name`. Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
 
