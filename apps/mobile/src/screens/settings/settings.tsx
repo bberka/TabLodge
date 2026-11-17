@@ -46,6 +46,7 @@ import {SettingsFooter} from './settings-footer';
 import {OpenLinksCard} from './open-links-settings';
 import {SelectRow, ValueRow} from './select-row';
 import {DeviceNameField} from './device-name-field';
+import {SharedPagesButton} from './shared-pages-settings';
 import {
 	BookmarkBehaviourCard,
 	SessionSettingsCard,
@@ -377,6 +378,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											}}
 										/>
 										<DeviceNameField />
+										<SharedPagesButton />
 										<Button
 											label="Sync now"
 											icon="sync"
