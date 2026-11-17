@@ -30,6 +30,7 @@ const PAGES = [
 	'name-session.html',
 	'add-bookmark.html',
 	'palette.html',
+	'reader.html',
 ];
 
 type Reply = {ok: boolean; error?: string};

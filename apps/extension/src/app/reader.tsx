@@ -103,9 +103,12 @@ function renderBlocks(blocks: readonly CopyBlock[]) {
 	return out;
 }
 
+// The page shows one copy, named in its own address.
+const url = webUrl(new URLSearchParams(location.search).get('url')) ?? '';
+
 function Reader() {
-	const url = webUrl(new URLSearchParams(location.search).get('url')) ?? '';
 	const [copy, setCopy] = useState<PageCopy | null | undefined>();
+	const [loadError, setLoadError] = useState('');
 	const [confirming, setConfirming] = useState(false);
 	const [status, showStatus] = useStatus();
 
@@ -120,7 +123,7 @@ function Reader() {
 			}
 
 			if (!result.ok) {
-				showStatus(result.error, true);
+				setLoadError(result.error);
 			}
 
 			setCopy(result.ok ? result.copy : null);
@@ -132,7 +135,6 @@ function Reader() {
 		return () => {
 			live = false;
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- the address comes from the page's own URL
 	}, []);
 
 	async function remove() {
@@ -212,7 +214,7 @@ function Reader() {
 				</article>
 			) : (
 				<EmptyState icon={FileText} title="No copy here" action={original}>
-					This device has no copy of this page.
+					{loadError || 'This device has no copy of this page.'}
 				</EmptyState>
 			)}
 			<ConfirmationDialog

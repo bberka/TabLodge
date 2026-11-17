@@ -118,6 +118,7 @@ try {
 		'name-session',
 		'add-bookmark',
 		'palette',
+		'reader',
 	]) {
 		const page = pageName === 'newtab' ? dashboard : await context.newPage();
 		page.setDefaultTimeout(10_000);
@@ -169,7 +170,8 @@ try {
 			}
 		}
 
-		if (pageName !== 'help') {
+		// Help and the copy reader never read the library.
+		if (pageName !== 'help' && pageName !== 'reader') {
 			await page
 				.locator('html[data-startup-pending="0"]')
 				.waitFor({state: 'attached'});
@@ -192,7 +194,7 @@ try {
 	console.log(
 		`New tab dashboard ready ${Math.round(dashboardReadyMs - domContentLoadedMs)} ms after DOMContentLoaded (250 ms delayed state response).`,
 	);
-	console.log('Startup check passed for all eight extension pages.');
+	console.log('Startup check passed for all nine extension pages.');
 } finally {
 	await context?.close();
 	await rm(profile, {recursive: true, force: true});

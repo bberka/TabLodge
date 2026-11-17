@@ -271,6 +271,19 @@ Undo runs through the mutation queue and relevant recovery queues. It resynchron
 
 Opening more than 10 saved links or bookmarks, or restoring a snapshot, also offers Undo. That action closes the newly opened tabs that still exist.
 
+## Page copies
+
+**Keep a copy** stores the readable text of a page on the device ([ADR 7](adr/0007-readable-page-copies.md)). `src/shared/page-extract.ts` runs Mozilla's Readability on a `Document` and walks what it kept into text blocks (heading, paragraph, item, quote, code); `src/shared/page-copy.ts` holds the copy's shape, the caps (1 MB of text per copy, 25 MB per device), the index, and the sweep, behind a three-call storage interface that both apps implement. Both files are shared with the Android app.
+
+* **Extension.** `KEEP_PAGE_COPY` takes a tab id from the popup, the side panel, or the page menu (`tablodge-page-keep-copy` under the page root). The worker refuses private windows and the private worker, injects `page-copy-capture.js` (a classic script built from `shell/page-copy-capture.ts`) with `chrome.scripting` under `activeTab`, which runs the extractor on a clone of the rendered page and leaves the result in the isolated world, then collects it with a second injection (`src/app/page-copy-inject.ts`; injected functions are plain declarations because they travel as source text). The copy is stored under the address of the saved link with the tab's address, or that address without tracking parameters, or else under a new bookmark added after the copy is stored. A menu click answers with a note in the page; the popup and side panel answer with a toast. `GET_PAGE_COPIES`, `GET_PAGE_COPY`, and `DELETE_PAGE_COPY` serve `reader.html` and the **Open copy** row items, which pages keep current from `storage.onChanged` on `tablodge.copies`.
+* **Lifecycle.** A copy belongs to an address, so a bookmark and a saved tab of one page share it and the phone's Undo, which restores links under new ids, keeps it. The regular worker sweeps after any change to the library, the trash, or Undo: it drops copies whose address is in neither the library nor the trash, inside the library and trash queues so an action's Undo record is written first, and not while an Undo is pending, so emptying the trash removes the copies once the two minutes pass and the Undo is purged. It does nothing when the library cannot be read.
+* **Android.** `src/library/page-copies.ts` keeps copies in the key-value store under the same keys, fetches the page through the server's `/v1/page` when the server lists `page` and directly otherwise, parses it with `linkedom`, and sweeps two minutes after the regular library or its trash last changed (a restore over the library can still be undone in that time). The private library never gets copies.
+
+| Key | Contents |
+| --- | --- |
+| `tablodge.copies` | `{v: 1, items}`: address, storage key, title, time kept, and stored size of each copy |
+| `tablodge.copy.<hash>` | One copy: `{v: 1, url, title, byline?, savedAt, blocks}` |
+
 ## Pages and shared UI
 
 The new tab dashboard contains sessions and bookmark columns. Settings and Help have their own pages. The popup is a compact chooser; its **Open TabLodge** action opens the dashboard. The side panel has bookmarks, sessions, and open tabs, with search and actions suited to its narrow layout.
@@ -384,8 +397,11 @@ A session has one description, capped at 10,502 characters. Older separate `note
 | `preferences.json` | Theme and accent color choice |
 | `snapshots.json` | Snapshot history |
 | `trash.json` | Trash entries |
+| `copies.json` | Readable page copies kept on the device (see [Page copies](#page-copies)); a backup made before copies existed has none |
 
 Automatic backup history and Undo records are not included. A backup made while the removed locked area existed may also hold a `locked.json`; import skips that file and restores the rest. Import recognizes the ZIP header and format identifier, shows counts, and sends `RESTORE_FULL_BACKUP`. The worker rejects newer versions, normalizes entries, takes a safety backup, and replaces the affected data inside one undoable action. It then resynchronizes alarms, toolbar behavior, and menus.
+
+**Replace everything** restores the copies after the library and the trash, through the same checks and caps as keeping one. **Add to mine** sends `ADD_PAGE_COPIES` after the merge, which adds a copy only for a saved link that has none on this device.
 
 Files above 45 MB, or expanding beyond 60 MB, are refused. JSON, HTML, CSV, Markdown, and URL list exports are always unencrypted; see [Privacy](PRIVACY.md) before sharing backups.
 
@@ -417,4 +433,4 @@ Automatic backups are JSON records kept in `chrome.storage.local` and optional J
 
 The worker harness runs the source in a fresh Node VM with mocked `chrome.*` APIs. Fixtures start in the records layout; `legacyLayout: true` starts from the old single entry so the worker has to migrate it. `tests/library-state.test.ts` drives the storage module with a backend that loses or tears any call, including a crash at every step of a commit and of a migration, then resumes. A 10,000 tab test in `tests/service-worker.test.ts` prints the bytes written and the time per edit. Pure helpers also have direct unit tests. These tests cover storage and browser logic, not full browser behavior. Use the unpacked build for a manual smoke test, especially for worker restarts, native groups, split view, and side panel gestures.
 
-`tests/manifest-targets.test.ts` covers the Firefox manifest, and the worker harness has a Firefox mode (`firefox: true`) for the differences above. `vp run check:firefox` (`scripts/browser/firefox-smoke-check.ts`) tests the built add-on in a real browser. It installs `apps/extension/dist/tablodge-firefox/` as a temporary add-on in headless Firefox through Selenium and drives the worker with its own messages. It opens all eight pages, saves a window with a pinned tab and a tab group, restores it into a new window, adds a bookmark, imports browser bookmarks, exports a full backup, and checks that data survives a browser restart. It needs Firefox installed. Selenium downloads a matching geckodriver if there is none on the `PATH`, and `FIREFOX_BIN` overrides the browser binary. Safari has no automated check because it is not supported.
+`tests/manifest-targets.test.ts` covers the Firefox manifest, and the worker harness has a Firefox mode (`firefox: true`) for the differences above. `vp run check:firefox` (`scripts/browser/firefox-smoke-check.ts`) tests the built add-on in a real browser. It installs `apps/extension/dist/tablodge-firefox/` as a temporary add-on in headless Firefox through Selenium and drives the worker with its own messages. It opens all nine pages, saves a window with a pinned tab and a tab group, restores it into a new window, adds a bookmark, imports browser bookmarks, exports a full backup, and checks that data survives a browser restart. It needs Firefox installed. Selenium downloads a matching geckodriver if there is none on the `PATH`, and `FIREFOX_BIN` overrides the browser binary. Safari has no automated check because it is not supported.
