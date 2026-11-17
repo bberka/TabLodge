@@ -1,6 +1,7 @@
 // Starts or stops the Android emulator for proof screenshots. `pnpm run mobile:emulator` starts the first AVD
 // (or the one named by --avd) with a visible window and software GPU, waits until Android has booted, and prints
-// the adb serial. `pnpm run mobile:emulator --stop` shuts it down. An emulator that is already running is reused.
+// the adb serial. `--headless` starts it without a window. `pnpm run mobile:emulator --stop` shuts it down. An
+// emulator that is already running is reused.
 import {execFileSync, spawn} from 'node:child_process';
 import {existsSync} from 'node:fs';
 import {homedir} from 'node:os';
@@ -52,10 +53,16 @@ if (args.includes('--stop')) {
 			throw new Error('No AVD found. Create one in Android Studio.');
 		}
 
-		// A visible window: a headless emulator is invisible to the person watching.
 		spawn(
 			emulator,
-			['-avd', avd, '-no-audio', '-gpu', 'swiftshader_indirect'],
+			[
+				'-avd',
+				avd,
+				...(args.includes('--headless') ? ['-no-window'] : []),
+				'-no-audio',
+				'-gpu',
+				'swiftshader_indirect',
+			],
 			{
 				detached: true,
 				stdio: 'ignore',
