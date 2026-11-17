@@ -20,7 +20,11 @@ A fix or feature is not done until the pull request shows it working. Pick the s
 - **Recording or step list** for behavior that a still image cannot show, such as drag and drop, shortcuts, or restore flows. Give the exact steps and the observed result.
 - **Console or test output** for worker, storage, or import and export changes: the failing test before the fix and the passing test after, or the service worker console showing the expected result.
 
-Save screenshots and recordings under `apps/extension/.dev/evidence/`, which git ignores. Name screenshots so their viewport is clear. Attach or upload the screenshots to the pull request, preferably in its description, so reviewers can inspect them there. Do not commit evidence files. If the environment cannot upload attachments, include each exact file path in the pull request and ask the maintainer to attach them. Send the screenshots of a UI change to the user in the final reply as well. Documentation only and tooling only changes need a sentence explaining why browser proof does not apply.
+Save screenshots and recordings under `apps/extension/.dev/evidence/`, which git ignores. Name screenshots so their viewport is clear. Do not commit evidence files.
+
+Upload them with `vp run evidence <pr-number> <file>...`. It attaches the files to the rolling `evidence` prerelease and prints Markdown image links; paste those into the pull request description (`gh pr edit <pr> --body-file`). A path on your disk is not proof, so do not report one in place of the upload. Only when `gh` cannot reach the repository, say so and list the file paths.
+
+**Every change gets its own screenshots.** A request to change something, including one that arrives after the pull request is open, is a new change. When it alters anything the user sees (layout, copy, spacing, a control, a setting, a default), take new screenshots of the result, upload them, and add them to the pull request before you say it is done. Do not reuse the earlier set, and do not say "I didn't open the app" and stop: open it. A change with no visible effect says so in one sentence instead. Send the screenshots of a UI change to the user in the final reply as well. Documentation only and tooling only changes need a sentence explaining why browser proof does not apply.
 
 ## Unslop the diff
 
