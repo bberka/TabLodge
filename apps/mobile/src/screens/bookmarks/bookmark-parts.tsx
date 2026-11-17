@@ -13,7 +13,7 @@ import {type SwipeAction, SwipeRow} from '../../ui/swipe-row';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {TARGET, useColors, useShape} from '../../ui/theme';
 import {Button, Chips, Icon, type IconName} from '../../ui/widgets';
-import {SiteIcon} from '../../ui/site-icon';
+import {BookmarkIcon, spokenKind} from '../../ui/bookmark-icon';
 import {SaveLinkForm} from '../save/save-link';
 
 /**
@@ -86,7 +86,7 @@ function BookmarkRowView({
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
-				accessibilityLabel={`${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}`}
+				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
 				accessibilityActions={[
 					{name: 'open', label: 'Open in browser'},
@@ -147,8 +147,8 @@ function BookmarkRowView({
 						color={checked ? colors.accent : colors.muted}
 					/>
 				) : (
-					<SiteIcon
-						host={host}
+					<BookmarkIcon
+						url={bookmark.url}
 						size={settings.bookmarkDensity === 'compact' ? 32 : 40}
 					/>
 				)}
