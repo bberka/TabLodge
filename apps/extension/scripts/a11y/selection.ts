@@ -753,11 +753,26 @@ export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
 				'the last column option to receive focus',
 			);
 			await page.keyboard.press('Enter');
-			await page
-				.getByRole('button', {name: 'Move bookmarks', exact: true})
-				.focus();
+			// The select hands focus back to its trigger a moment after it closes. Focusing the button before that
+			// lets the trigger take focus back, and Enter then reopens the select instead of submitting.
+			await until(
+				async () =>
+					(await page.locator('[role="listbox"]').count()) === 0 &&
+					(await page.locator('#move-bookmark-column:focus').count()) === 1,
+				'the column select to close and give focus back',
+			);
+			const move = page
+				.getByRole('dialog')
+				.getByRole('button', {name: 'Move bookmarks', exact: true});
+			await move.focus();
+			assert.match(
+				(await page.locator(':focus').textContent()) ?? '',
+				/Move bookmarks/,
+				'Move bookmarks has focus',
+			);
 			await page.keyboard.press('Enter');
-			await page.getByRole('dialog').waitFor({state: 'hidden'});
+			// An open select hides the dialog from the accessibility tree, so wait for the element itself to go.
+			await page.locator('[role="dialog"]').waitFor({state: 'detached'});
 			const destination = page.locator('section[data-column-id]').last();
 			const columnId = await destination.getAttribute('data-column-id');
 			// The move lands after the dialog closes, so poll instead of reading once.
