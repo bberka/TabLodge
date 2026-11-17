@@ -23,6 +23,7 @@ import {
 	SHARED_PAGE_PREFIX,
 	SHARED_PAGES_FEATURE,
 } from '../../extension/src/shared/sync/shared-pages';
+import {version as SERVER_VERSION} from '../package.json';
 import {LIVE_PATH} from './live';
 import {
 	fetchIcon,
@@ -310,6 +311,8 @@ export function createApi(options: ApiOptions) {
 		const log = options.log();
 		return c.json({
 			protocol: PROTOCOL_VERSION,
+			// The release this server was built from: a release image stamps it, other builds report 0.0.0.
+			version: SERVER_VERSION,
 			cursor: log.cursor,
 			records: log.size,
 			limits,

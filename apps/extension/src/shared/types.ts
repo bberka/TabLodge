@@ -773,6 +773,11 @@ export type TabLodgeMessages = {
 	SPLIT_GROUP: {groupId: string; tabIds: string[]; name?: string};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
+	/**
+	Adds `quote` to the note of the page's bookmark, or of its saved tab, with a link to the passage; a page with neither
+	gets a new bookmark titled `title`.
+	*/
+	SAVE_QUOTE: {url: string; quote: string; title?: string};
 	ADD_BOOKMARKS: {
 		bookmarks: LinkEntry[];
 		columnId?: string | null;
@@ -936,6 +941,31 @@ export type TabLodgeMessages = {
 	*/
 	UPLOAD_SHARED_PAGE: {title: string; html: string};
 	DELETE_SHARED_PAGE: {id: string};
+	GET_SITE_SOURCES: {};
+	/**
+	Settings › Sources. Switching a site on needs its optional host permission granted first; the page asks for it.
+	*/
+	SET_SITE_SOURCE: {source: string; enabled: boolean};
+	/**
+	Settings › Sources: the column a site saves to, or null for the site's own column.
+	*/
+	SET_SITE_SOURCE_COLUMN: {source: string; columnId: string | null};
+	/**
+	Sent by the site content script: the user saved this link on the site.
+	*/
+	SITE_SOURCE_SAVE: {source: string; url: string; title?: string};
+	/**
+	Sent by the site content script: the user saved something the adapter could not read.
+	*/
+	SITE_SOURCE_UNREADABLE: {source: string};
+	/**
+	Sent by the site content script: undoes a SITE_SOURCE_SAVE, and nothing else.
+	*/
+	SITE_SOURCE_UNDO: {id: string};
+	/**
+	Sent by the Save quote toast in a web page: undoes the quote that toast reported, and nothing else.
+	*/
+	QUOTE_UNDO: {id: string};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -1037,6 +1067,28 @@ export type BrowserBookmarkImportResult = {
 type Undoable = {undoId?: string};
 
 /**
+`revoked`: the browser took the site's permission away, so the source was switched off. `unreadable`: the user saved
+something, but the page no longer looks the way TabLodge expects, so nothing was saved.
+*/
+export type SiteSourceNotice = 'revoked' | 'unreadable';
+/**
+`columnId`: the column the user chose for this site's saves. Missing, or a column that no longer exists, means the
+site's own column, found by name or created on the first save.
+*/
+export type SiteSourceStatus = {
+	id: string;
+	enabled: boolean;
+	notice?: SiteSourceNotice;
+	columnId?: string;
+};
+/**
+What a source save did: `saved` into the site's column, `exists` (the address is already in the library),
+`trashed` (it is in the trash, so a deleted link does not come back), or `off` (the source is off here, including
+a private window that does not use the regular library).
+*/
+export type SiteSourceOutcome = 'saved' | 'exists' | 'trashed' | 'off';
+
+/**
 Success payload of each message (merged with `{ ok: true }`). Fields marked optional are only sometimes reported.
 */
 export type TabLodgeResponses = {
@@ -1122,6 +1174,10 @@ export type TabLodgeResponses = {
 	UPDATE_TAB: {shared: number};
 	MERGE_GROUPS: {added: number; skipped: number} & Undoable;
 	ADD_BOOKMARK: {bookmark: Bookmark};
+	/**
+	`placed`: the column or session the quote went to.
+	*/
+	SAVE_QUOTE: {placed: string} & Undoable;
 	ADD_BOOKMARKS: {
 		count: number;
 		skipped: number;
@@ -1250,6 +1306,19 @@ export type TabLodgeResponses = {
 	GET_SHARED_PAGES: {server: SharedPagesServer; pages: SharedPage[]};
 	UPLOAD_SHARED_PAGE: {page: SharedPage};
 	DELETE_SHARED_PAGE: {};
+	GET_SITE_SOURCES: {sources: SiteSourceStatus[]};
+	SET_SITE_SOURCE: {sources: SiteSourceStatus[]};
+	SET_SITE_SOURCE_COLUMN: {sources: SiteSourceStatus[]};
+	/**
+	`column`: the name of the column the link went to, when it was saved.
+	*/
+	SITE_SOURCE_SAVE: {outcome: SiteSourceOutcome; column?: string} & Undoable;
+	/**
+	`reported`: the source is on, so Settings now shows that the page could not be read.
+	*/
+	SITE_SOURCE_UNREADABLE: {reported: boolean};
+	SITE_SOURCE_UNDO: {label: string};
+	QUOTE_UNDO: {label: string};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =

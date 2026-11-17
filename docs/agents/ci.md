@@ -53,7 +53,7 @@ Without the secrets the `android` job fails and the release has no APK; the exte
 
 ## Sync server image
 
-The sync server image shares the extension's version. Pull requests that touch `apps/server/` or the shared sync code build it, and every such push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. After the release ZIPs, the **Release** workflow calls the **Sync server image** workflow, which publishes `ghcr.io/bberka/tablodge-sync:<version>` and `:latest`. The package must be public on GitHub for others to pull it. New packages start private, so make it public once in the package's settings. Bump `PROTOCOL_VERSION` in `apps/extension/src/shared/sync/change-log.ts`, which the server and the extension share, only for a change old extensions cannot use, because the extension refuses a server with a different protocol version.
+The sync server image shares the extension's version. Pull requests that touch `apps/server/` or the shared sync code build it, and every such push to `master` publishes `ghcr.io/bberka/tablodge-sync:edge`. After the release ZIPs, the **Release** workflow calls the **Sync server image** workflow, which publishes `ghcr.io/bberka/tablodge-sync:<version>` and `:latest`. The package must be public on GitHub for others to pull it. New packages start private, so make it public once in the package's settings. The image job stamps the release version into `apps/server/package.json` (`node scripts/release-version.ts set-server`), which the server reports at `/v1/status`; the `edge` image and the committed Cloudflare Worker say `0.0.0`, because the release check would find a stamped `worker.js` stale. Bump `PROTOCOL_VERSION` in `apps/extension/src/shared/sync/change-log.ts`, which the server and the apps share, only for a change old clients cannot use, because both apps stop syncing with a server on another protocol. Add its first release to `PROTOCOL_RELEASES` in `compat.ts` beside it.
 
 The **Deploy to Cloudflare** button copies only `apps/server/cloudflare-deploy/`, so that folder holds a prebuilt `worker.js` instead of the source. After changing `apps/server/src` or `apps/extension/src/shared/sync`, run `pnpm run cf:bundle` and commit the new `worker.js`. A test in `apps/server/tests/cloudflare-deploy.test.ts` fails while it is out of date. Keep `name`, `compatibility_date`, the Durable Object binding and class, `migrations`, and `vars` in its `wrangler.jsonc` the same as in `apps/server/wrangler.jsonc`, so a button deploy and `cf:setup` can take over from each other. Another test in the same file checks this.
 
@@ -77,6 +77,12 @@ Submit the first version of `tablodge@bbay.dev` by hand on addons.mozilla.org, w
 - `AMO_JWT_SECRET`
 
 The workflow runs after each GitHub release and submits the Firefox ZIP with `web-ext sign --channel=listed`. If a submission needs to be retried, run **Actions › Store publishing › Run workflow**, enter the published version, such as `0.2.2`, and choose `firefox`. AMO rejects a version number it has already received, so a retry only helps when the earlier run failed before the upload.
+
+## Store permission justifications
+
+The workflows upload packages only; the permission texts in the Chrome Web Store dashboard (**Privacy practices**) and the AMO reviewer notes are filled in by hand. A release that adds a permission needs the maintainer to update them before it is submitted, from the [permissions table](../PRIVACY.md#permissions). The current host permission text, for both stores:
+
+> Optional host permissions for www.youtube.com, www.reddit.com, and old.reddit.com, requested only when the user switches that site on in Settings › Sources, and given back when it is switched off. While granted, a registered content script notices the user's own click on the site's save control (Watch later, Save) and bookmarks the same link in the local library. It reads only that item's link and title, makes no network requests, does not intercept the site's requests, and does not change the site's behavior.
 
 `vp run version:next` shows the next version based on your local tags.
 

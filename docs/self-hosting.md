@@ -194,7 +194,22 @@ Private sync runs only while a private window is open and its library is unlocke
 
 ### Update
 
-TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge, and a feature that needs a newer server says so where you turn it on, for example "This sync server cannot hold private windows yet. Update it". Each TabLodge release also publishes the server with the same version number, so to hear about new versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**).
+TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge. **Settings › Sync**, in the extension and in the Android app, shows the server's version and lists what does not work until you update it. While something does not work, a banner at the top of the extension's dashboard and the app's Bookmarks and Sessions says so. When sync has stopped, the banner stays until the server or the app is updated. When only features are missing, **Dismiss** hides it on that device until the server reports another version or lacks a different set of features. Each TabLodge release also publishes the server with the same version number, so to hear about new versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**).
+
+Each optional part of TabLodge needs a server from the release that added it:
+
+| Feature | Server release | Without it |
+| --- | --- | --- |
+| Private windows' library (`private`) | 0.2.0 | The private library does not sync |
+| Site icons and link previews (`preview`) | 0.2.2 | Icons through the server show as letter tiles, and links get no previews |
+| Trash (`trash`) | 0.2.2 | Each device keeps its own trash |
+| Bookmark notes (`notes`) | 0.4.0 | Notes stay on the device where they were written |
+| Shared pages (`shared-pages`) | 0.4.0 | **Upload to my server** cannot share pages |
+| Page copies through the server (`page-source`) | 0.4.0 | The Android app fetches pages for **Keep a copy** itself, so the site sees the phone |
+
+Sync stops only when the server and the app speak different versions of the sync protocol, which is rare. **Settings › Sync** then says which one to update: "Your sync server is older than this app. Update the server to 0.2.0 or later." or "This app is older than your sync server. Update TabLodge." Everything on the device stays as it is, and sync starts again by itself after the update.
+
+The version reads "an unreleased build" for a server built from `master`: the **Deploy to Cloudflare** button, `cf:deploy`, the `edge` image, and your own builds. Only the release images (`latest` and the version tags) carry their version. A server from before 0.4.0 reports none.
 
 Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
 
@@ -221,7 +236,7 @@ docker compose -f compose.https.yaml up -d
 
 `latest` is the server from the newest TabLodge release, and each release is also tagged with its version, such as `0.1.9`. `edge` is built from `master` whenever the server code changes there, and can change at any time.
 
-To check the update, ask for the status. The `features` list shows what the server supports:
+To check the update, open **Settings › Sync**, or ask for the status. `version` is the server's release, and the `features` list shows what it supports:
 
 ```sh
 curl -H "Authorization: Bearer <token>" https://sync.example.com/v1/status
@@ -306,6 +321,9 @@ One library is light. On a test machine the container used about 20 MB of memory
 
 | What you see | Why | What to do |
 | --- | --- | --- |
+| "Your sync server is older than this app. Update the server to 0.x or later." | The server speaks an older sync protocol | [Update](#update) the server. Sync starts again by itself |
+| "This app is older than your sync server. Update TabLodge." | The server speaks a newer sync protocol | Update the extension or the Android app |
+| **Settings › Sync** lists features under "Until the server is updated" | The server is from before those features | [Update](#update) the server. Sync goes on meanwhile |
 | "The sync server refused the token." | The token in TabLodge differs from the server's | Copy it again; `grep TOKEN .env` on a VPS. After changing it, Disconnect and Connect again |
 | "The sync server cannot be reached." | Wrong address, server down, or no network | Open `https://<address>/health` in the browser. On a VPS, check `docker compose -f compose.https.yaml ps` |
 | `/health` does not answer over HTTPS on a new VPS | Caddy could not get a certificate | Check the DNS record points at the server and ports 80 and 443 are open, then read `docker compose -f compose.https.yaml logs caddy` |
@@ -370,7 +388,7 @@ All paths except `/health` and `/p/<id>` need `Authorization: Bearer <token>`. T
 | Request | Answer |
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
-| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, `preview`, `trash`, `notes`, `shared-pages`, and `page-source`) |
+| `GET /v1/status` | Protocol version, the server's release `version` (`0.0.0` for a build that is not a release), current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, `preview`, `trash`, `notes`, `shared-pages`, and `page-source`) |
 | `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor` (500 unless `limit` says otherwise, at most 1000), the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
 | `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |

@@ -29,6 +29,11 @@
 		"scripting"
 	],
 	"optional_permissions": ["downloads"],
+	"optional_host_permissions": [
+		"https://www.youtube.com/*",
+		"https://www.reddit.com/*",
+		"https://old.reddit.com/*"
+	],
 	"web_accessible_resources": [
 		{
 			"resources": ["palette.html"],

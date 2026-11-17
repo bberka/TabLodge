@@ -251,6 +251,8 @@ async function verifyExtension(root: string, target: Target) {
 		...(manifest.declarative_net_request?.rule_resources || []).map(
 			(entry) => entry.path,
 		),
+		// Registered at runtime by the worker (Settings › Sources), so the manifest does not name it.
+		'site-source.js',
 	].filter((entry): entry is string => Boolean(entry));
 
 	for (const resource of required) {

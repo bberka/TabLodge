@@ -52,6 +52,7 @@ export function SaveLinkForm({
 	initialTitle,
 	editing,
 	onMany,
+	onQuote,
 	onDone,
 }: {
 	initialText: string;
@@ -64,6 +65,10 @@ export function SaveLinkForm({
 	Opens the drawer for several links, with the text so far; given when a new link is being added.
 	*/
 	onMany?: (text: string) => void;
+	/**
+	Opens Save quote with the shared words; given when text came with the share.
+	*/
+	onQuote?: () => void;
 	/**
 	Called when the drawer should close; `saved` is the column name when a link was saved.
 	*/
@@ -247,6 +252,14 @@ export function SaveLinkForm({
 						onPress={() => {
 							onMany(text);
 						}}
+					/>
+				)}
+				{onQuote && !editing && (
+					<Button
+						kind="plain"
+						label="Save as quote"
+						icon="chatbox-ellipses-outline"
+						onPress={onQuote}
 					/>
 				)}
 				{savePreview && !editing && url && (

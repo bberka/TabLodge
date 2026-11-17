@@ -101,6 +101,16 @@ function stepsFor(target: Target): BuildStep[] {
 					'/* Includes @mozilla/readability, Copyright (c) 2010 Arc90 Inc, licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0 */',
 			}),
 		},
+		// The Settings › Sources content script, registered at runtime for a site the user switched on.
+		{
+			label: 'site-source.js',
+			config: scriptConfig({
+				entry: resolve(SOURCE_DIR, 'site-source.ts'),
+				outDir,
+				fileName: 'site-source.js',
+				target,
+			}),
+		},
 		// Starts the add-bookmark window's read while the React page bundle is loading.
 		{
 			label: 'add-bookmark-preload.js',

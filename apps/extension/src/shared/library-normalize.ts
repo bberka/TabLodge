@@ -506,9 +506,14 @@ export function normalizeFolders(rawFolders: unknown): Folder[] {
 	return folders;
 }
 
+/**
+The longest note a saved tab or a bookmark keeps.
+*/
+export const NOTES_MAX = 10_000;
+
 export function normalizeNotes(value: unknown) {
 	return typeof value === 'string'
-		? value.replaceAll('\u0000', '').slice(0, 10_000)
+		? value.replaceAll('\u0000', '').slice(0, NOTES_MAX)
 		: '';
 }
 

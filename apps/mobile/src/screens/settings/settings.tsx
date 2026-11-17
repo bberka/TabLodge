@@ -52,7 +52,6 @@ import {
 	SessionSettingsCard,
 	SyncedSettingsCard,
 	Toggle,
-	UpdateServerNote,
 } from './behaviour-settings';
 import {SettingsCard, SettingsQuery} from './settings-card';
 import {
@@ -64,6 +63,7 @@ import {
 } from './settings-index';
 import {PrivateCard} from './private-settings';
 import {AboutCard} from './about-settings';
+import {ServerReport} from './server-report';
 
 function describe(
 	status: SyncStatus,
@@ -228,9 +228,6 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 					/>
 					<SettingsQuery value={needle}>
 						<View style={styles.cards}>
-							<UpdateServerNote
-								needed={prefs.siteIcons === 'server' || prefs.savePreview}
-							/>
 							<SettingsCard
 								section={SECTIONS.appearance}
 								icon="color-palette-outline"
@@ -363,6 +360,7 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 												{state.text}
 											</Text>
 										</View>
+										<ServerReport status={status} />
 										<Toggle
 											row={ROWS.syncSettings}
 											value={prefs.syncSettings}

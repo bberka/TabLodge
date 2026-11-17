@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
+import serverPackage from '../package.json';
 import {createApi, DEFAULT_LIMITS, type Limits} from '../src/api';
 import {isAuthMessage, sameToken} from '../src/live';
 import {sqlite} from '../src/node-sqlite';
@@ -80,6 +81,7 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 	});
 	assert.deepEqual((await call('/v1/status')).body, {
 		protocol: 1,
+		version: serverPackage.version,
 		cursor: 1,
 		records: 1,
 		limits: DEFAULT_LIMITS,

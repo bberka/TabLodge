@@ -149,6 +149,7 @@ import {SyncIndicator} from './sync-indicator';
 import {FocusViewHint} from './focus-hint';
 import {suggestsFocusView} from './focus-hint-rule';
 import {RecoveryBanner} from './recovery-banner';
+import {SyncProblemBanner} from './sync-problem-banner';
 import {
 	emitRecoveryEvent,
 	offerCloseTabsUndo,
@@ -2956,6 +2957,7 @@ function NewTab() {
 					onReview={() => setSnapshotsOpen(true)}
 					onSessionsChanged={reload}
 				/>
+				<SyncProblemBanner />
 				{sessionsOnTop ? sessionsSection : bookmarksSection}
 				<hr className="my-8 border-border" aria-hidden="true" />
 				{sessionsOnTop ? bookmarksSection : sessionsSection}

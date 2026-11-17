@@ -430,6 +430,34 @@ function Help() {
 					searchText:
 						'dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
 				},
+				{
+					title: 'Save from YouTube and Reddit',
+					body: (
+						<>
+							In Settings › Sources, switch on YouTube Watch later or Reddit
+							saved. The browser asks for access to that site only, and nothing
+							runs there until you allow it. Then, when you add a video to Watch
+							later on youtube.com, or save a post or comment on reddit.com,{' '}
+							{PROJECT.name} bookmarks the same link in a YouTube or Reddit
+							column, created on the first save. Under Save to, under each
+							switched-on site, you can choose another column; if that column is
+							deleted, saves go to the site&apos;s own column again until you
+							choose one. A small notice in the page offers Undo; press Tab to
+							reach it. A link already in your bookmarks or in the trash bin is
+							not saved again. {PROJECT.name} only watches for your own clicks
+							on the site&apos;s save controls, reads the link from the page,
+							and sends nothing anywhere. It recognizes the English labels of
+							those controls. If a site changes its page so {PROJECT.name} can
+							no longer read it, nothing is saved and Settings says so. In a
+							private window, saves are added only when private windows use the
+							regular library. Switching a site off, or removing its access in
+							the browser&apos;s extension settings, stops it, and Settings says
+							when the browser removed access.
+						</>
+					),
+					searchText:
+						'sources settings youtube watch later reddit saved posts comments save automatically site access permission column undo private window trash',
+				},
 			],
 			action: {
 				label: 'Open bookmarks',
@@ -486,9 +514,9 @@ function Help() {
 						label: 'Select text, then right-click',
 						icon: MousePointer2,
 					},
-					body: 'Search your saved tabs and bookmarks for the selected words.',
+					body: "Search your saved tabs and bookmarks for the selected words, or choose Save quote to keep the text in the note of the page's bookmark. A page with no bookmark gets one in the column Add bookmark would pick; a page already saved in a session keeps the quote in that link's notes. Each quote is followed by a link that opens the page scrolled to the passage and highlights it. More quotes from the same page are added below, and a message on the page offers Undo. A note holds up to 10,000 characters, and a quote that does not fit is not saved.",
 					searchText:
-						'select text selection right-click search saved tabs bookmarks words',
+						'select text selection right-click search saved tabs bookmarks words save quote highlight passage note text fragment undo',
 				},
 				{
 					title: `On the ${PROJECT.name} toolbar icon`,
@@ -721,6 +749,12 @@ function Help() {
 					body: `Run the ${PROJECT.name} sync server yourself, with Docker or on your own Cloudflare account (without a server, Settings under Sync walks you through it: Generate token makes and copies a token, and Deploy to Cloudflare sets the server up on your free Cloudflare account without installing anything), and connect each browser in Settings under Sync with the server address and its token. Sessions, saved tabs, folders, bookmark columns, bookmarks, excluded sites, and settings then stay the same on every connected browser, and a change shows up on the others within a moment while they are open. Edits to different items on different devices combine; when two devices change the same item at once, the later edit wins. Snapshots, automatic backups, and the trash bin do not sync. Sync settings in Settings under Sync is on by default; turn it off to keep this browser’s settings separate.${isFirefox ? '' : ' Private windows that use the regular library sync with it. A separate saved private library syncs only if you turn on Sync private windows in Settings from a private window (after you connect, Settings offers to open one); with a PIN or password it is encrypted before it leaves the browser, and other browsers need the same PIN or password to read it. A temporary private library never syncs.'} Changes made offline are sent when the server can be reached again. While sync is on, the sync icon in the dashboard header shows whether it is up to date, waiting to send changes, or unable to reach the server (while a sync runs it spins and turns the accent color). Its label says the state and ends with “Open Sync settings”, which is where it goes when you press it. The server stores your library in plain text, so only use one you trust. Disconnect stops syncing and keeps everything on this device.`,
 					searchText:
 						'sync server self hosted docker cloudflare devices computers token connect disconnect offline merge conflict',
+				},
+				{
+					title: 'When the sync server needs an update',
+					body: `Settings › Sync shows the server’s version. A server from before a feature keeps syncing everything else, and Settings › Sync lists what waits for the update, such as bookmark notes staying on this device. If the server and this browser speak different versions of sync, sync stops and says which one to update: the server, or ${PROJECT.name}. Nothing on this device changes meanwhile, and sync starts again after the update. While either problem lasts, a banner at the top of the dashboard says so. When sync has stopped, it stays until the server or the app is updated. When only features are missing, Dismiss hides it on this browser until the server reports another version or lacks a different set of features. The How to update the server link there opens the steps for Docker and Cloudflare.`,
+					searchText:
+						'sync server update old older version outdated incompatible protocol missing features notes trash icons previews shared pages',
 				},
 				{
 					title: 'Export or import data',

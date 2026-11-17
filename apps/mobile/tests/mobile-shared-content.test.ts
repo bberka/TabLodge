@@ -11,7 +11,55 @@ describe('readShare', () => {
 			text: 'https://cdn.example/cat.jpg',
 			title: 'A cat',
 			urls: ['https://cdn.example/cat.jpg'],
+			quote: 'A cat',
 		});
+	});
+
+	test('a link alone, with the page title beside it, offers no quote', () => {
+		assert.deepEqual(
+			readShare({
+				text: 'https://example.com/post',
+				meta: {title: 'A post'},
+			}),
+			{
+				kind: 'link',
+				text: 'https://example.com/post',
+				title: 'A post',
+				urls: ['https://example.com/post'],
+			},
+		);
+	});
+
+	test('a selection Chrome shared without a link is a quote with no page', () => {
+		// What Chrome on Android 17 sent from a selection: the text in quotation marks, and its preview label as the title.
+		assert.deepEqual(
+			readShare({
+				text: '"Lisbon is a city of hills"',
+				meta: {title: 'Including link:'},
+			}),
+			{kind: 'quote', quote: 'Lisbon is a city of hills'},
+		);
+	});
+
+	test('a selection shared with a link to the passage is a quote on that page', () => {
+		assert.deepEqual(
+			readShare({
+				text: '"Lisbon is a city\nof hills"\nhttps://example.com/post#:~:text=Lisbon%20is,of%20hills',
+			}),
+			{
+				kind: 'quote',
+				quote: 'Lisbon is a city\nof hills',
+				url: 'https://example.com/post',
+			},
+		);
+	});
+
+	test('several links stay a list of links', () => {
+		const outcome = readShare({
+			text: 'https://a.example/ https://b.example/#:~:text=x',
+		});
+		assert.equal(outcome.kind, 'link');
+		assert.equal(outcome.kind === 'link' && outcome.quote, undefined);
 	});
 
 	test('a shared image is refused', () => {
@@ -39,7 +87,13 @@ describe('readShare', () => {
 	});
 
 	test('words without a link still open Save link', () => {
-		assert.equal(readShare({text: 'just some words'}).kind, 'link');
+		const outcome = readShare({text: 'just some words'});
+		assert.equal(outcome.kind, 'link');
+		assert.equal(
+			outcome.kind === 'link' && outcome.quote,
+			'just some words',
+			'and offers them as a quote',
+		);
 	});
 
 	test('an export file opens the import preview', () => {

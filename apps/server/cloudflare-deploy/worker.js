@@ -2550,6 +2550,9 @@ function pushResult(change, current, purgedH, now) {
 }
 __name(pushResult, "pushResult");
 
+// package.json
+var version = "0.0.0";
+
 // src/live.ts
 var LIVE_PATH = "/v1/live";
 var LIVE_PING = "ping";
@@ -3130,6 +3133,8 @@ function createApi(options) {
     const log = options.log();
     return c.json({
       protocol: PROTOCOL_VERSION,
+      // The release this server was built from: a release image stamps it, other builds report 0.0.0.
+      version,
       cursor: log.cursor,
       records: log.size,
       limits,

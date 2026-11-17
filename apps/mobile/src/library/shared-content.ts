@@ -3,6 +3,7 @@ What another app shared with TabLodge, decided without Android: a link to save, 
 to restore, or a file the app cannot use. The share library copies a shared file into the app's cache before handing
 it over; the app reads that copy once and `cacheCopies` lists the copies so they can be deleted.
 */
+import {pageAddress} from '../../../extension/src/shared/quotes';
 import {extractUrls, splitShared} from './store-shape';
 
 export type SharedFile = {
@@ -20,7 +21,17 @@ export type IncomingShare = {
 };
 
 export type ShareOutcome =
-	| {kind: 'link'; text: string; title: string; urls: string[]}
+	| {
+			kind: 'link';
+			text: string;
+			title: string;
+			urls: string[];
+			/**
+			The words shared around the link, which the save drawer offers to save as a quote instead.
+			*/
+			quote?: string;
+	  }
+	| {kind: 'quote'; quote: string; url?: string}
 	| {kind: 'import' | 'backup'; path: string; name: string; size?: number}
 	| {kind: 'unreadable'}
 	| {kind: 'refused'};
@@ -67,6 +78,17 @@ function fileKind(file: SharedFile): 'import' | 'backup' | undefined {
 		: undefined;
 }
 
+const WEB_LINK = /https?:\/\/[^\s"'<>]+/i;
+const QUOTED = /^["'«»“”„]([\s\S]+)["'«»“”„]$/;
+
+/**
+Shared text without the quotation marks Chrome puts around a selection.
+*/
+function unquote(text: string) {
+	const trimmed = text.trim();
+	return (QUOTED.exec(trimmed)?.[1] ?? trimmed).trim();
+}
+
 export function readShare(share: IncomingShare): ShareOutcome {
 	// Browsers share "Page title https://example.com"; the words around the link become the title.
 	const full = share.text ?? share.webUrl ?? '';
@@ -90,11 +112,29 @@ export function readShare(share: IncomingShare): ShareOutcome {
 		return {kind: file.mimeType ? 'refused' : 'unreadable'};
 	}
 
+	// A selection Chrome shares is "the text" in quotation marks, with a link to the passage (`#:~:text=`) when it
+	// could make one. Other words keep opening Save link, which offers to save them as a quote instead.
+	if (!file && !share.webUrl) {
+		const trimmed = full.trim();
+		if (urls.length === 0 && QUOTED.test(trimmed)) {
+			return {kind: 'quote', quote: unquote(trimmed)};
+		}
+
+		if (urls.length === 1 && urls[0].includes(':~:text=')) {
+			const words = unquote(full.replace(WEB_LINK, ''));
+			if (words) {
+				return {kind: 'quote', quote: words, url: pageAddress(urls[0])};
+			}
+		}
+	}
+
+	const words = urls.length <= 1 ? unquote(full.replace(WEB_LINK, '')) : '';
 	return {
 		kind: 'link',
 		text: share.webUrl ?? parts.url ?? full,
 		title: share.meta?.title || parts.title,
 		urls,
+		...(words && {quote: words}),
 	};
 }
 

@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {Animated, FlatList, ScrollView, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {SyncProblemBanner} from '../../ui/sync-problem-banner';
 import type {Bookmark} from '../../../../extension/src/shared/types';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
 import {GlassTarget} from '../../ui/glass';
@@ -92,10 +93,12 @@ type Sheet =
 export function BookmarksScreen({
 	onAdd,
 	onConnect,
+	onOpenSettings,
 	onSelecting,
 }: {
 	onAdd: () => void;
 	onConnect: () => void;
+	onOpenSettings: () => void;
 	onSelecting: (selecting: boolean) => void;
 }) {
 	const colors = useColors();
@@ -656,6 +659,7 @@ export function BookmarksScreen({
 									}
 									right={headerActions}
 								/>
+								<SyncProblemBanner onOpenSettings={onOpenSettings} />
 								<View style={styles.search}>
 									{!isSearching && isListView && !atList && openEntry && (
 										<FolderBack
