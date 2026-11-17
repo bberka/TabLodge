@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {test} from 'vite-plus/test';
 import {
 	androidVersionCode,
@@ -61,6 +62,19 @@ test('stamping a version only touches the top-level version value', () => {
 	assert.throws(
 		() => stampVersion('{\n\t"name": "x"\n}\n', '0.1.0'),
 		/version/,
+	);
+});
+
+test('the sync server package takes the release version it reports at /v1/status', () => {
+	const text = readFileSync(
+		new URL('../apps/server/package.json', import.meta.url),
+		'utf8',
+	);
+	const stamped = stampVersion(text, '0.4.2');
+	assert.equal((JSON.parse(stamped) as {version: string}).version, '0.4.2');
+	assert.equal(
+		stamped,
+		text.replace('"version": "0.0.0"', '"version": "0.4.2"'),
 	);
 });
 
