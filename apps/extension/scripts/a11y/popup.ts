@@ -44,11 +44,20 @@ Types a note into a bookmark form's Notes field, which stays one row tall until 
 */
 async function typeNote(field: Locator, note: string) {
 	assert.equal(await field.getAttribute('rows'), '1', 'Notes starts collapsed');
-	await field.focus();
+	// A column select that just closed hands focus back to its trigger a moment later, which can take focus off
+	// Notes again. Focus it until it keeps focus and has opened.
+	const page = field.page();
 	await until(
-		async () => (await field.getAttribute('rows')) === '3',
-		'Notes to open on focus',
+		async () => (await page.locator('[role="listbox"]').count()) === 0,
+		'the column select to close',
 	);
+	await until(async () => {
+		if ((await field.and(page.locator(':focus')).count()) === 0) {
+			await field.focus();
+		}
+
+		return (await field.getAttribute('rows')) === '3';
+	}, 'Notes to open on focus');
 	await field.pressSequentially(note);
 }
 
