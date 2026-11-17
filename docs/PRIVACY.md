@@ -48,6 +48,14 @@ Access: `https://www.youtube.com/*`. When you add a video to Watch later, by the
 
 Access: `https://www.reddit.com/*` and `https://old.reddit.com/*`. When you click **Save** on a post or comment, TabLodge reads its permalink and the post title or the comment's author from the page and bookmarks `https://www.reddit.com/<permalink>` in a Reddit column. Nothing else on the page is read or kept.
 
+### X bookmarks
+
+Access: `https://x.com/*` and `https://twitter.com/*`. When you click **Bookmark** on a post, in its row of buttons or in its **Share** menu, TabLodge reads the post's address and the start of its text from the page and bookmarks `https://x.com/<user>/status/<id>` in an X column. Nothing else on the page is read or kept.
+
+### Instagram saved
+
+Access: `https://www.instagram.com/*`. When you tap **Save** on a post or reel, TabLodge reads its address and the start of its caption from the page and bookmarks `https://www.instagram.com/p/<id>/` or `https://www.instagram.com/reel/<id>/` in an Instagram column. It only notices your own taps: it never scrolls, opens, or clicks anything on Instagram. Nothing else on the page is read or kept.
+
 ## Sync with your own server
 
 Sync is off until you enter a server address and token in **Settings › Sync**. The server is one you run yourself ([Self hosting](self-hosting.md)); TabLodge runs no server of its own and receives nothing.
@@ -131,6 +139,8 @@ Optional permissions are asked for only when you turn on the feature that needs 
 | `downloads` | Copy backups to your Downloads folder |
 | `https://www.youtube.com/*` | **Settings › Sources › YouTube Watch later** |
 | `https://www.reddit.com/*`, `https://old.reddit.com/*` | **Settings › Sources › Reddit saved** |
+| `https://x.com/*`, `https://twitter.com/*` | **Settings › Sources › X bookmarks** |
+| `https://www.instagram.com/*` | **Settings › Sources › Instagram saved** |
 
 ## Contact
 

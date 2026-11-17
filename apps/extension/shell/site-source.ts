@@ -2,24 +2,29 @@
 // grants the site's optional host permission. It only observes: it reads the page when the user clicks, and when
 // the click was the site's own save, it hands that link to the service worker and shows the result in the page.
 // It never changes the site's behavior, blocks its save, or makes a request of its own.
-import {siteSourceForUrl} from '../src/app/site-sources';
+import {siteSourceForUrl, type SiteSourceId} from '../src/app/site-sources';
 import type {SourceRead, SourceReader} from '../src/app/source-reader';
+import {createInstagramReader} from '../src/app/source-instagram';
 import {createRedditReader} from '../src/app/source-reddit';
+import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
 import {showSourceToast} from '../src/app/source-toast';
 import type {ActionResult, SiteSourceOutcome} from '../src/shared/types';
 
 const LOADED = 'tablodgeSiteSource';
+const READERS: Record<SiteSourceId, () => SourceReader> = {
+	youtube: () => createYoutubeReader(document),
+	reddit: () => createRedditReader(),
+	x: () => createTwitterReader(document),
+	instagram: () => createInstagramReader(document),
+};
 const source = siteSourceForUrl(location.href);
 
 // Settings injects the script into open tabs when a site is switched on, so a second copy must stay quiet.
 if (source && !Object.hasOwn(globalThis, LOADED)) {
 	Object.defineProperty(globalThis, LOADED, {value: true});
 	const appName = chrome.runtime.getManifest().short_name ?? 'TabLodge';
-	const read: SourceReader =
-		source.id === 'youtube'
-			? createYoutubeReader(document)
-			: createRedditReader();
+	const read = READERS[source.id]();
 
 	// A script left behind by an extension update or removal can no longer reach the worker; it then does nothing.
 	const send = async <T>(message: Record<string, unknown>) => {

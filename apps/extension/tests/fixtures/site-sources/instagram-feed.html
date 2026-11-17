@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- A trimmed www.instagram.com home feed: posts and reels as <article>, each with a timestamp that links to it and
+icon buttons whose svg carries the label ("Save", "Remove" once saved). Hand written to mimic the site's markup;
+not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Instagram</title></head>
+<body>
+<div id="mount"><main role="main">
+	<article id="post">
+		<div><a href="/natgeo/"><span dir="auto">natgeo</span></a> • <a href="/p/C1a2B3c4D5e/"><time datetime="2026-11-17T09:00:00.000Z">2h</time></a></div>
+		<div><img alt="Photo by National Geographic" src="data:,"></div>
+		<section>
+			<div role="button" tabindex="0"><svg aria-label="Like" viewBox="0 0 24 24"><title>Like</title><path d="M1"></path></svg></div>
+			<div role="button" tabindex="0" id="save"><div><svg aria-label="Save" id="save-icon" viewBox="0 0 24 24"><title>Save</title><polygon id="save-shape" points="20 21 12 13.44 4 21 4 3 20 3 20 21"></polygon></svg></div></div>
+		</section>
+		<div><span dir="auto">natgeo</span> <span dir="auto">A snow leopard crosses a ridge in the Himalayas at dawn, photographed over three winters of patient waiting in the cold.</span></div>
+		<a href="/p/C1a2B3c4D5e/comments/"><span>View all 120 comments</span></a>
+	</article>
+	<article id="reel">
+		<div><a href="/nasa/"><span dir="auto">nasa</span></a> • <a href="/nasa/reel/C9x8Y7w6V5u/"><time datetime="2026-11-17T08:00:00.000Z">3h</time></a></div>
+		<video src="data:,"></video>
+		<section><button type="button" id="reel-save"><svg aria-label="Save" viewBox="0 0 24 24"><title>Save</title></svg></button></section>
+	</article>
+	<article id="saved">
+		<div><a href="/p/Dsaved12345/"><time datetime="2026-11-17T07:00:00.000Z">4h</time></a></div>
+		<section><div role="button" tabindex="0" id="remove"><svg aria-label="Remove" viewBox="0 0 24 24"><title>Remove</title></svg></div></section>
+	</article>
+	<article id="changed">
+		<div><a href="/someone/"><span dir="auto">someone</span></a> • <span>1h</span></div>
+		<section><div role="button" tabindex="0" id="changed-save"><svg aria-label="Save" viewBox="0 0 24 24"><title>Save</title></svg></div></section>
+	</article>
+	<form><input aria-label="Add a comment"><button type="submit" id="text-save">Save</button></form>
+</main></div>
+</body>
+</html>

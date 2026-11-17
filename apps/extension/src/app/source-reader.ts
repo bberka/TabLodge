@@ -54,3 +54,19 @@ export function rememberLast<T>(now: () => number) {
 		},
 	};
 }
+
+const EXCERPT_LENGTH = 100;
+
+/**
+The start of a post's text as a title: up to a word boundary near 100 characters, with an ellipsis when cut.
+*/
+export function excerpt(text: string | null | undefined) {
+	const whole = squash(text);
+	if (whole.length <= EXCERPT_LENGTH) {
+		return whole;
+	}
+
+	const cut = whole.slice(0, EXCERPT_LENGTH);
+	const space = cut.lastIndexOf(' ');
+	return `${(space > EXCERPT_LENGTH / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}

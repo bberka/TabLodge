@@ -5,7 +5,7 @@
 import {isRecord} from '../shared/library-values';
 import type {SiteSourceStatus} from '../shared/types';
 
-export type SiteSourceId = 'youtube' | 'reddit';
+export type SiteSourceId = 'youtube' | 'reddit' | 'x' | 'instagram';
 
 export type SiteSource = {
 	id: SiteSourceId;
@@ -32,6 +32,11 @@ export type SiteSource = {
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/;
 const REDDIT_PERMALINK =
 	/^\/(?:r|u|user)\/[\w-]+\/comments\/[\da-z]+(?:\/[^#/?]*(?:\/[\da-z]+)?)?\/?$/i;
+// A post, and the pages under it (/photo/1, /analytics, ...), which are the same post.
+const X_POST = /^\/(\w{1,15})\/status\/(\d{1,20})(?:\/|$)/;
+// A post or reel, also under the author's name (/<user>/p/<id>/), as some pages link them.
+const INSTAGRAM_POST =
+	/^(?:\/[\w.]{1,30})?\/(p|reels?|tv)\/([\w-]{5,40})(?:\/|$)/;
 
 function parse(href: string, base: string) {
 	try {
@@ -84,6 +89,37 @@ export function redditPermalinkUrl(href: string): string | null {
 	return `https://www.reddit.com${path}`;
 }
 
+/**
+A post as `https://x.com/<user>/status/<id>`, so twitter.com and x.com saves match.
+*/
+export function xPostUrl(href: string): string | null {
+	const url = parse(href, 'https://x.com/');
+	const match =
+		url?.protocol === 'https:' &&
+		/^(?:www\.|mobile\.)?(?:x|twitter)\.com$/.test(url.hostname)
+			? X_POST.exec(url.pathname)
+			: null;
+	return match ? `https://x.com/${match[1]}/status/${match[2]}` : null;
+}
+
+/**
+A post as `https://www.instagram.com/p/<id>/` and a reel as `https://www.instagram.com/reel/<id>/`.
+*/
+export function instagramPostUrl(href: string): string | null {
+	const url = parse(href, 'https://www.instagram.com/');
+	const match =
+		url?.protocol === 'https:' &&
+		/^(?:www\.)?instagram\.com$/.test(url.hostname)
+			? INSTAGRAM_POST.exec(url.pathname)
+			: null;
+	if (!match) {
+		return null;
+	}
+
+	const kind = match[1] === 'p' || match[1] === 'tv' ? 'p' : 'reel';
+	return `https://www.instagram.com/${kind}/${match[2]}/`;
+}
+
 export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'youtube',
@@ -102,6 +138,24 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		hosts: ['www.reddit.com', 'old.reddit.com'],
 		scriptId: 'tablodge-source-reddit',
 		canonicalUrl: redditPermalinkUrl,
+	},
+	{
+		id: 'x',
+		label: 'X bookmarks',
+		column: 'X',
+		origins: ['https://x.com/*', 'https://twitter.com/*'],
+		hosts: ['x.com', 'twitter.com'],
+		scriptId: 'tablodge-source-x',
+		canonicalUrl: xPostUrl,
+	},
+	{
+		id: 'instagram',
+		label: 'Instagram saved',
+		column: 'Instagram',
+		origins: ['https://www.instagram.com/*'],
+		hosts: ['www.instagram.com'],
+		scriptId: 'tablodge-source-instagram',
+		canonicalUrl: instagramPostUrl,
 	},
 ];
 

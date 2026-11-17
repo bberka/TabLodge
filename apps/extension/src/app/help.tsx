@@ -430,24 +430,29 @@ function Help() {
 						'dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
 				},
 				{
-					title: 'Save from YouTube and Reddit',
+					title: 'Save from YouTube, Reddit, X, and Instagram',
 					body: (
 						<>
-							In Settings › Sources, switch on YouTube Watch later or Reddit
-							saved. The browser asks for access to that site only, and nothing
-							runs there until you allow it. Then, when you add a video to Watch
-							later on youtube.com, or save a post or comment on reddit.com,{' '}
-							{PROJECT.name} bookmarks the same link in a YouTube or Reddit
-							column, created on the first save. Under Save to, under each
-							switched-on site, you can choose another column; if that column is
-							deleted, saves go to the site&apos;s own column again until you
-							choose one. A small notice in the page offers Undo; press Tab to
-							reach it. A link already in your bookmarks or in the trash bin is
-							not saved again. {PROJECT.name} only watches for your own clicks
-							on the site&apos;s save controls, reads the link from the page,
-							and sends nothing anywhere. It recognizes the English labels of
-							those controls. If a site changes its page so {PROJECT.name} can
-							no longer read it, nothing is saved and Settings says so. In a
+							In Settings › Sources, switch on YouTube Watch later, Reddit
+							saved, X bookmarks, or Instagram saved. The browser asks for
+							access to that site only, and nothing runs there until you allow
+							it. Then, when you add a video to Watch later on youtube.com, save
+							a post or comment on reddit.com, bookmark a post on x.com or
+							twitter.com, or save a post or reel on instagram.com,{' '}
+							{PROJECT.name} bookmarks the same link in a YouTube, Reddit, X, or
+							Instagram column, created on the first save. Posts from X and
+							Instagram are titled with the start of their text or caption.
+							Under Save to, under each switched-on site, you can choose another
+							column; if that column is deleted, saves go to the site&apos;s own
+							column again until you choose one. A small notice in the page
+							offers Undo; press Tab to reach it. A link already in your
+							bookmarks or in the trash bin is not saved again. {PROJECT.name}{' '}
+							only watches for your own clicks on the site&apos;s save controls,
+							reads the link from the page, and sends nothing anywhere. It
+							recognizes the English labels of those controls; on X, the
+							Bookmark button works in any language, and its Share menu item in
+							English. If a site changes its page so {PROJECT.name} can no
+							longer read it, nothing is saved and Settings says so. In a
 							private window, saves are added only when private windows use the
 							regular library. Switching a site off, or removing its access in
 							the browser&apos;s extension settings, stops it, and Settings says
@@ -455,7 +460,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sources settings youtube watch later reddit saved posts comments save automatically site access permission column undo private window trash',
+						'sources settings youtube watch later reddit saved posts comments x twitter bookmarks instagram reels save automatically site access permission column undo private window trash',
 				},
 			],
 			action: {

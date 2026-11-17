@@ -20,6 +20,11 @@ export const SOURCES_WORDS = [
 	'Watch later',
 	'Reddit',
 	'saved posts',
+	'X',
+	'Twitter',
+	'bookmarks',
+	'Instagram',
+	'reels',
 	'site access',
 	'permission',
 	'Save to',
@@ -31,6 +36,8 @@ const SITE_COLUMN = 'site-column';
 const HELP: Record<SiteSourceId, string> = {
 	youtube: `When you add a video to Watch later on youtube.com, ${PROJECT.name} bookmarks it too.`,
 	reddit: `When you save a post or comment on reddit.com, ${PROJECT.name} bookmarks it too.`,
+	x: `When you bookmark a post on x.com or twitter.com, ${PROJECT.name} bookmarks it too.`,
+	instagram: `When you save a post or reel on instagram.com, ${PROJECT.name} bookmarks it too.`,
 };
 
 function noticeText(source: SiteSource, notice: SiteSourceStatus['notice']) {
@@ -154,7 +161,7 @@ export function SiteSourcesSettings({
 		setSources(result.sources);
 		const name =
 			columns.find((column) => column.id === columnId)?.name ??
-			`a ${source.column} column`;
+			`the ${source.column} column`;
 		showStatus(`${source.label} now saves to ${name}.`);
 	}
 
