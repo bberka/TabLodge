@@ -214,6 +214,7 @@ import {
 	useLinkPreviewsOn,
 } from './link-preview';
 import {NotesField} from './notes-field';
+import {NoteText} from './note-text';
 import {cn} from '@/lib/utils';
 
 const initialStateRequest = takeStateRequest();
@@ -4248,96 +4249,106 @@ const BookmarkCard = memo(
 								}
 							/>
 						)}
-						<LinkPreview url={bookmark.url}>
-							<a
-								href={
-									urlSettings.removeTrackingParameters
-										? stripTrackingParameters(bookmark.url)
-										: bookmark.url
-								}
-								rel="noopener noreferrer"
-								title={
-									previews ? undefined : urlOnly ? bookmark.url : bookmark.title
-								}
-								aria-label={
-									urlOnly && bookmark.title
-										? `${bookmark.title} (${bookmark.url})`
-										: undefined
-								}
-								className="flex min-w-0 flex-1 items-center gap-2.5"
-								onClick={(event) => {
-									if (event.ctrlKey || event.metaKey) {
-										return;
+						<div className="min-w-0 flex-1">
+							<LinkPreview url={bookmark.url}>
+								<a
+									href={
+										urlSettings.removeTrackingParameters
+											? stripTrackingParameters(bookmark.url)
+											: bookmark.url
 									}
+									rel="noopener noreferrer"
+									title={
+										previews
+											? undefined
+											: urlOnly
+												? bookmark.url
+												: bookmark.title
+									}
+									aria-label={
+										urlOnly && bookmark.title
+											? `${bookmark.title} (${bookmark.url})`
+											: undefined
+									}
+									className="flex min-w-0 items-center gap-2.5"
+									onClick={(event) => {
+										if (event.ctrlKey || event.metaKey) {
+											return;
+										}
 
-									if (event.altKey || selectionMode !== 'off') {
+										if (event.altKey || selectionMode !== 'off') {
+											event.preventDefault();
+											void onAction(
+												event.shiftKey ? 'select-range' : 'select',
+												bookmark,
+											);
+											return;
+										}
+
+										if (event.button !== 0 || event.shiftKey) {
+											return;
+										}
+
 										event.preventDefault();
-										void onAction(
-											event.shiftKey ? 'select-range' : 'select',
-											bookmark,
-										);
-										return;
-									}
+										if (clickOpensMenu) {
+											setMenuOpen(true);
+											return;
+										}
 
-									if (event.button !== 0 || event.shiftKey) {
-										return;
-									}
-
-									event.preventDefault();
-									if (clickOpensMenu) {
-										setMenuOpen(true);
-										return;
-									}
-
-									void onAction('click', bookmark);
-								}}
-							>
-								<BookmarkIcon
-									url={bookmark.url}
-									label={siteName(bookmark.url)}
-									className={cn(
-										showUrl && !compact ? 'h-6 w-6' : 'h-5 w-5',
-										'rounded-sm',
-										selectionMode !== 'off' &&
-											(selectionMode === 'on' || selected
-												? 'invisible'
-												: 'group-hover:invisible group-focus-within:invisible'),
-									)}
-								/>
-								<span className="min-w-0 flex-1">
-									<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
-										{(urlOnly || !showUrl) && (
-											<InsecureMarkFor
-												url={bookmark.url}
-												settings={urlSettings}
-											/>
+										void onAction('click', bookmark);
+									}}
+								>
+									<BookmarkIcon
+										url={bookmark.url}
+										label={siteName(bookmark.url)}
+										className={cn(
+											showUrl && !compact ? 'h-6 w-6' : 'h-5 w-5',
+											'rounded-sm',
+											selectionMode !== 'off' &&
+												(selectionMode === 'on' || selected
+													? 'invisible'
+													: 'group-hover:invisible group-focus-within:invisible'),
 										)}
-										{cardName}
-									</strong>
-									{showUrl && !urlOnly && (
-										<small className="block truncate text-[11px] leading-4 text-muted-foreground">
-											<InsecureMarkFor
-												url={bookmark.url}
-												settings={urlSettings}
-											/>
-											{urlMode === 'domain'
-												? siteName(bookmark.url)
-												: displayUrl(bookmark.url, urlSettings.simplifyUrls)}
-										</small>
-									)}
-									{bookmark.notes && (
-										<small
-											className={cn(
-												'block whitespace-pre-line wrap-anywhere text-[11px] leading-4 text-muted-foreground',
-												compact ? 'line-clamp-1' : 'line-clamp-2',
+									/>
+									<span className="min-w-0 flex-1">
+										<strong className="block truncate text-[13px] font-semibold group-hover:text-primary">
+											{(urlOnly || !showUrl) && (
+												<InsecureMarkFor
+													url={bookmark.url}
+													settings={urlSettings}
+												/>
 											)}
-										>
-											{bookmark.notes}
-										</small>
+											{cardName}
+										</strong>
+										{showUrl && !urlOnly && (
+											<small className="block truncate text-[11px] leading-4 text-muted-foreground">
+												<InsecureMarkFor
+													url={bookmark.url}
+													settings={urlSettings}
+												/>
+												{urlMode === 'domain'
+													? siteName(bookmark.url)
+													: displayUrl(bookmark.url, urlSettings.simplifyUrls)}
+											</small>
+										)}
+									</span>
+								</a>
+							</LinkPreview>
+							{bookmark.notes && (
+								// Outside the card's link, because a passage link cannot sit inside another link.
+								<NoteText
+									notes={bookmark.notes}
+									className={cn(
+										'whitespace-pre-line wrap-anywhere text-[11px] leading-4 text-muted-foreground',
+										showUrl && !compact ? 'pl-[34px]' : 'pl-[30px]',
+										compact ? 'line-clamp-1' : 'line-clamp-2',
 									)}
-								</span>
-							</a>
-						</LinkPreview>
+									onOpen={(url) => {
+										void onAction('click', {...bookmark, url});
+									}}
+								/>
+							)}
+						</div>
 						{quickActions.map((quickAction) => {
 							const {
 								icon: QuickIcon,

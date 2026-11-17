@@ -16,6 +16,11 @@ import {soften, TARGET, useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {Button, Card, Icon} from '../../ui/widgets';
 import {SiteIcon} from '../../ui/site-icon';
+import {NoteText} from '../../ui/note-text';
+import {
+	firstPassage,
+	spokenNote,
+} from '../../../../extension/src/shared/note-links';
 
 const PREVIEW_TABS = 4;
 
@@ -268,6 +273,7 @@ function SessionCardView({
 									{title: tab.title || tab.url, url: tab.url},
 									links,
 								);
+								const passage = firstPassage(tab.notes);
 								return (
 									<SwipeRow
 										key={tab.id}
@@ -277,7 +283,7 @@ function SessionCardView({
 									>
 										<Pressable
 											accessibilityRole="link"
-											accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}${tab.notes.trim() ? `, note: ${tab.notes.trim()}` : ''}`}
+											accessibilityLabel={`${text.main}${text.sub ? `, ${text.sub}` : ''}${tab.notes.trim() ? `, note: ${spokenNote(tab.notes.trim())}` : ''}`}
 											accessibilityHint="Opens the link"
 											style={({pressed}) => [
 												styles.tab,
@@ -288,12 +294,23 @@ function SessionCardView({
 														: 'transparent',
 												},
 											]}
-											accessibilityActions={
-												onTabMenu
+											accessibilityActions={[
+												...(onTabMenu
 													? [{name: 'menu', label: 'Link menu'}]
-													: undefined
-											}
-											onAccessibilityAction={() => {
+													: []),
+												...(passage
+													? [{name: 'passage', label: passage.name}]
+													: []),
+											]}
+											onAccessibilityAction={(event) => {
+												if (event.nativeEvent.actionName === 'passage') {
+													if (passage) {
+														openLink(linkToOpen(passage.url, links));
+													}
+
+													return;
+												}
+
 												onTabMenu?.(session, tab.id);
 											}}
 											onLongPress={
@@ -327,12 +344,14 @@ function SessionCardView({
 													</Text>
 												)}
 												{tab.notes.trim() !== '' && (
-													<Text
+													<NoteText
+														notes={tab.notes.trim()}
 														numberOfLines={isCompact ? 1 : 2}
 														style={{color: colors.muted, fontSize: 13}}
-													>
-														{tab.notes.trim()}
-													</Text>
+														onOpen={(url) => {
+															openLink(linkToOpen(url, links));
+														}}
+													/>
 												)}
 											</View>
 											{tab.pinned && (

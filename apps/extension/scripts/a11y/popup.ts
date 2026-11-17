@@ -136,7 +136,9 @@ export async function popupNewColumnCheck(env: Env, theme: Theme) {
 					.filter({has: board.getByRole('heading', {name, exact: true})});
 				if (save) {
 					await column.waitFor();
-					const card = column.locator(`[data-bookmark-id] a[href="${url}"]`);
+					const card = column
+						.locator('[data-bookmark-id]')
+						.filter({has: board.locator(`a[href="${url}"]`)});
 					assert.equal(await card.count(), 1);
 					assert.match(await card.innerText(), new RegExp(note));
 				} else {
@@ -208,7 +210,9 @@ export async function addBookmarkNewColumnCheck(env: Env, theme: Theme) {
 					.locator('section[data-column-id]')
 					.filter({has: board.getByRole('heading', {name, exact: true})});
 				await column.waitFor();
-				const card = column.locator(`[data-bookmark-id] a[href="${url}"]`);
+				const card = column
+					.locator('[data-bookmark-id]')
+					.filter({has: board.locator(`a[href="${url}"]`)});
 				assert.equal(await card.count(), 1);
 				assert.match(await card.innerText(), new RegExp(note));
 				await board.close();

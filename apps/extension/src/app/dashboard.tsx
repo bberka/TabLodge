@@ -184,6 +184,7 @@ import {
 	columnColorVars,
 } from './column-color';
 import {NotesField} from './notes-field';
+import {NoteText} from './note-text';
 import {cn} from '@/lib/utils';
 
 /**
@@ -3993,9 +3994,13 @@ const SavedTab = memo(
 							</p>
 						)}
 						{tab.notes && (
-							<p className="mt-1 whitespace-pre-wrap wrap-break-word text-xs italic text-muted-foreground wrap-anywhere">
-								{tab.notes}
-							</p>
+							<NoteText
+								notes={tab.notes}
+								className="mt-1 whitespace-pre-wrap wrap-break-word text-xs italic text-muted-foreground wrap-anywhere"
+								onOpen={(url) => {
+									handlers.openTab({...tab, url});
+								}}
+							/>
 						)}
 					</div>
 					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100 [@media(hover:none)]:opacity-100">
