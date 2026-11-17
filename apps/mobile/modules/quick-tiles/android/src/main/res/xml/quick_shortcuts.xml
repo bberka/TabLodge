@@ -1,0 +1,23 @@
+<!-- Launcher shortcuts for the Quick Settings tiles' two actions, through the same tablodge:// addresses. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:icon="@drawable/quick_tile_save"
+    android:shortcutId="save"
+    android:shortcutShortLabel="@string/quick_tile_save">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="tablodge://save"
+      android:targetClass="com.bberka.tablodge.MainActivity"
+      android:targetPackage="com.bberka.tablodge" />
+  </shortcut>
+  <shortcut
+    android:icon="@drawable/quick_tile_search"
+    android:shortcutId="search"
+    android:shortcutShortLabel="@string/quick_tile_search">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="tablodge://search"
+      android:targetClass="com.bberka.tablodge.MainActivity"
+      android:targetPackage="com.bberka.tablodge" />
+  </shortcut>
+</shortcuts>

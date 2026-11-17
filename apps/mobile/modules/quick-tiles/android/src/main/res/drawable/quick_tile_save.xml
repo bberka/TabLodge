@@ -1,10 +1,10 @@
-<!-- Material "bookmark add" icon. Small tiles show only the icon, so each tile has its own; the system tints it. -->
+<!-- Material "bookmark add" icon. Small tiles show only the icon, so each tile has its own. A tile is tinted by the system; a launcher shortcut shows the icon in this purple. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
   android:width="24dp"
   android:height="24dp"
   android:viewportWidth="24"
   android:viewportHeight="24">
   <path
-    android:fillColor="#FFFFFFFF"
+    android:fillColor="#FF6254D7"
     android:pathData="M17,11v6.97l-5,-2.14l-5,2.14V5h6V3H7C5.9,3 5,3.9 5,5v16l7,-3l7,3V11H17zM21,7h-2v2h-2V7h-2V5h2V3h2v2h2V7z" />
 </vector>
