@@ -44,7 +44,7 @@ export function parseServerInfo(body: unknown): ServerInfo | undefined {
 The first server release that speaks each protocol version. Add the new entry when `PROTOCOL_VERSION` moves.
 */
 export const PROTOCOL_RELEASES: Readonly<Record<number, string>> = {
-	1: '0.1.0',
+	1: '0.2.0',
 };
 
 /**

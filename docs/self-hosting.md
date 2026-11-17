@@ -206,7 +206,7 @@ Each optional part of TabLodge needs a server from the release that added it:
 | Bookmark notes (`notes`) | 0.4.0 | Notes stay on the device where they were written |
 | Shared pages (`shared-pages`) | 0.4.0 | **Upload to my server** cannot share pages |
 
-Sync stops only when the server and the app speak different versions of the sync protocol, which is rare. **Settings › Sync** then says which one to update: "Your sync server is older than this app. Update the server to 0.1.0 or later." or "This app is older than your sync server. Update TabLodge." Everything on the device stays as it is, and sync starts again by itself after the update.
+Sync stops only when the server and the app speak different versions of the sync protocol, which is rare. **Settings › Sync** then says which one to update: "Your sync server is older than this app. Update the server to 0.2.0 or later." or "This app is older than your sync server. Update TabLodge." Everything on the device stays as it is, and sync starts again by itself after the update.
 
 The version reads "an unreleased build" for a server built from `master`: the **Deploy to Cloudflare** button, `cf:deploy`, the `edge` image, and your own builds. Only the release images (`latest` and the version tags) carry their version. A server from before 0.4.0 reports none.
 

@@ -792,7 +792,7 @@ test('a server on another protocol is refused at Connect with the side to update
 	server.setStatus((body) => ({...body, protocol: 0}));
 	await assert.rejects(
 		device.client.connect(URL_BASE, TOKEN),
-		/Update the server to 0\.1\.0 or later/,
+		/Update the server to 0\.2\.0 or later/,
 	);
 	assert.equal(device.storage.has(SYNC_CONFIG_KEY), false);
 });
@@ -860,7 +860,7 @@ test('a live reconnect asks the server again, so an update is noticed at once', 
 	await a.client.syncNow();
 	const status = await a.client.status();
 	assert.equal(status.incompatible, 'server');
-	assert.match(status.error ?? '', /Update the server to 0\.1\.0 or later/);
+	assert.match(status.error ?? '', /Update the server to 0\.2\.0 or later/);
 	assert.deepEqual(ids(a.store), ['b1']);
 });
 
