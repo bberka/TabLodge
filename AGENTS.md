@@ -19,7 +19,9 @@ Run tasks as `vp run <task>` from the root; scripts in the root `package.json` f
 - Commits name the human author only. The pull request names the model.
 - Challenge a new feature with `challenge-feature` before building it, unless told to implement it. Fixes and "implement it" go straight to work.
 - Every fix or feature carries proof in the pull request. Ask the user only when no proof is possible.
-- Finish the task: commit, push, open the pull request, wait for green CI, stop every process you started, then say done.
+- Every change that alters what the user sees, including a follow up request on an open pull request, gets fresh screenshots before you reply: the dev browser for the extension and site, the emulator for the app. Upload them with `vp run evidence <pr> <files>` and put them in the pull request. Local file paths are not proof.
+- Never ask whether to run the app, take screenshots, or open the pull request. Do them, then report.
+- Finish the task: commit, push, open the pull request, wait for green CI, stop every process you started, then say done. Load [workflow.md](docs/agents/workflow.md) and [validation.md](docs/agents/validation.md) before the first edit, not after.
 - Run the `unslop-*` skills on the diff before every push.
 - Leave the Git hooks on, and finish the gate before pushing.
 - A change is not done while a document still describes the old behavior.

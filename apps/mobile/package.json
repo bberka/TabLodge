@@ -12,6 +12,7 @@
 		"doctor": "expo-doctor",
 		"typecheck": "tsc --noEmit",
 		"apk": "node scripts/build-apk.mts",
+		"emulator": "node scripts/emulator.mts",
 		"icons": "node scripts/make-icons.mts"
 	},
 	"dependencies": {
