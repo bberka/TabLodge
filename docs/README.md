@@ -36,9 +36,9 @@ The in app Help page explains every feature and setting.
 
 ## Install
 
-- **Chrome, Brave, Edge, and other Chromium browsers:** [Chrome Web Store](https://chromewebstore.google.com/detail/tablodge-%E2%80%93-tab-session-ma/ekidoclgpdfhpdlidlkcjccgihbndoib)
-- **Firefox 140 or newer:** [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tab-lodge/)
-- **Android:** `tablodge.apk` from the [latest release](https://github.com/bberka/TabLodge/releases/latest)
+- Chrome, Brave, Edge, and other Chromium browsers: [Chrome Web Store](https://chromewebstore.google.com/detail/tablodge-%E2%80%93-tab-session-ma/ekidoclgpdfhpdlidlkcjccgihbndoib)
+- Firefox 140 or newer: [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tab-lodge/)
+- Android: `tablodge.apk` from the [latest release](https://github.com/bberka/TabLodge/releases/latest)
 
 Manual installs and building from source are in [Install](install.md).
 
