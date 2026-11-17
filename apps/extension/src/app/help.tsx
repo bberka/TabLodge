@@ -10,6 +10,7 @@ import {
 	CircleHelp,
 	Database,
 	ExternalLink,
+	FileText,
 	Globe,
 	Keyboard,
 	Layers2,
@@ -873,15 +874,19 @@ function Help() {
 				'report a bug',
 				'issue',
 				'license',
+				'licences',
+				'open source',
+				'third party',
+				'notices',
 				'changelog',
 				'release',
 			],
 			entries: [
 				{
 					title: 'Project links',
-					body: 'Visit the project website, read the source, report a problem, check release notes, or view the license.',
+					body: 'Visit the project website, read the source, report a problem, check release notes, or view the license. Open source licences lists the third party code built into this extension, with each licence.',
 					searchText:
-						'website source code github report problem issue bug release notes changelog license',
+						'website source code github report problem issue bug release notes changelog license licences open source third party notices',
 				},
 			],
 		},
@@ -899,6 +904,12 @@ function Help() {
 			icon: Scale,
 			label: `${PROJECT.license} License`,
 			href: PROJECT.licenseUrl,
+		},
+		// Written into the package by scripts/build.ts.
+		{
+			icon: FileText,
+			label: 'Open source licences',
+			href: 'THIRD_PARTY_NOTICES.txt',
 		},
 	];
 	const visibleSections = sections.flatMap((section) => {
