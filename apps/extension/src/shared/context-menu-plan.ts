@@ -15,7 +15,8 @@ import type {BookmarkColumn, SaveScope, Settings} from './types';
 
 // One parent item per context, named after the extension, keeps the browser menu short. The toolbar
 // icon's menu is already the extension's own, so its items are top level (Chrome shows at most
-// ACTION_MENU_TOP_LEVEL_LIMIT = 6). Tab-strip menus are not available to extensions.
+// ACTION_MENU_TOP_LEVEL_LIMIT = 6). In Firefox the page items also appear when you right-click a tab in the tab
+// strip (the `tab` context, see `hasTabContext`). Chrome 150 added that context too, but #309 keeps it Firefox only.
 // Menu ids keep the "tablodge-" prefix (see the note at STORAGE_KEY); column items append the column id.
 export type MenuItemProperties = chrome.contextMenus.CreateProperties;
 
@@ -42,6 +43,14 @@ export const MENU = {
 	actionSidePanel: 'tablodge-action-side-panel',
 	actionHelp: 'tablodge-action-help',
 	actionSettings: 'tablodge-action-settings',
+} as const;
+
+/**
+The "Bookmark this page to" item is shared with the tab strip in Firefox, so the worker retitles it when a menu opens.
+*/
+export const PAGE_BOOKMARK_TITLE = {
+	page: 'Bookmark this page to',
+	tab: 'Bookmark this tab to',
 } as const;
 
 /**
@@ -140,12 +149,13 @@ export function menuSessions(
 /**
  The full menu tree for these settings and columns, in creation order (parents first).
  `excludeState` sets the toolbar menu's "Exclude this site" checkbox for the active tab.
+ `hasTabContext` adds the page items to the tab strip's menu (Firefox).
  */
 export function contextMenuPlan(
 	settings: Settings,
 	columns: BookmarkColumn[],
 	sessions: MenuSession[],
-	env: {appName: string; hasSidePanel: boolean},
+	env: {appName: string; hasSidePanel: boolean; hasTabContext: boolean},
 	excludeState: {checked: boolean; enabled: boolean} = {
 		checked: false,
 		enabled: true,
@@ -262,14 +272,16 @@ export function contextMenuPlan(
 
 	if (settings.contextMenuPageEnabled) {
 		const page = {
-			contexts: ['page', 'frame'],
+			contexts: env.hasTabContext
+				? ['page', 'frame', 'tab']
+				: ['page', 'frame'],
 			documentUrlPatterns: WEB_URL_PATTERNS,
 		} satisfies Partial<MenuItemProperties>;
 		items.push(
 			{id: MENU.pageRoot, title: env.appName, ...page},
 			{
 				id: MENU.pageBookmark,
-				title: 'Bookmark this page to',
+				title: PAGE_BOOKMARK_TITLE.page,
 				parentId: MENU.pageRoot,
 				...page,
 			},
