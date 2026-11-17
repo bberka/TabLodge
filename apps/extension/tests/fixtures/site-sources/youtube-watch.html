@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- A trimmed watch page: the metadata under the player with its Save button, a related video in the sidebar, and
+the "Save video to..." dialog YouTube opens in a popup outside both. Hand written to mimic the site's markup. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Big Buck Bunny - YouTube</title></head>
+<body>
+<ytd-app>
+	<ytd-watch-flexy>
+		<div id="above-the-fold">
+			<ytd-watch-metadata>
+				<h1><yt-formatted-string>Big Buck Bunny</yt-formatted-string></h1>
+				<button id="save-button" aria-label="Save to playlist">Save</button>
+			</ytd-watch-metadata>
+		</div>
+		<div id="secondary">
+			<ytd-compact-video-renderer id="related">
+				<a id="thumbnail" href="/watch?v=jNQXAC9IVRw&amp;list=RDjNQXAC9IVRw&amp;index=2">thumbnail</a>
+				<span id="video-title" title="Me at the zoo">Me at the zoo</span>
+				<ytd-menu-renderer><button id="related-menu" aria-label="Action menu"></button></ytd-menu-renderer>
+			</ytd-compact-video-renderer>
+		</div>
+	</ytd-watch-flexy>
+	<ytd-popup-container>
+		<tp-yt-paper-dialog>
+			<ytd-add-to-playlist-renderer>
+				<ytd-playlist-add-to-option-renderer id="option-watch-later">
+					<tp-yt-paper-checkbox id="checkbox" role="checkbox" aria-checked="false">
+						<div id="checkboxLabel"><yt-formatted-string id="label">Watch later</yt-formatted-string></div>
+					</tp-yt-paper-checkbox>
+				</ytd-playlist-add-to-option-renderer>
+				<ytd-playlist-add-to-option-renderer id="option-other">
+					<tp-yt-paper-checkbox id="checkbox" role="checkbox" aria-checked="false">
+						<div id="checkboxLabel"><yt-formatted-string id="label">Music</yt-formatted-string></div>
+					</tp-yt-paper-checkbox>
+				</ytd-playlist-add-to-option-renderer>
+			</ytd-add-to-playlist-renderer>
+		</tp-yt-paper-dialog>
+	</ytd-popup-container>
+</ytd-app>
+</body>
+</html>

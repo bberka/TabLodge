@@ -18,6 +18,8 @@ const xoConfig: XoConfigItem[] = [
 			'skills-lock.json',
 			// Web pages as sites send them, for the copy extractor's tests; formatting them would change what is tested.
 			'apps/extension/tests/fixtures/page-copy/**',
+			// Copies of third-party site markup (duplicate ids and all), read by the Sources adapter tests.
+			'apps/extension/tests/fixtures/site-sources/**',
 		],
 	},
 	{prettier: true},
