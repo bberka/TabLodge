@@ -13652,6 +13652,12 @@ test('a private window saves only when private windows use the regular library',
 		false,
 	);
 
+	// Before the private setup, the mode defaults to shared but nothing is chosen yet.
+	const unconfigured = sourcesHarness({incognitoContext: true, storage: on});
+	const notSetUp = await unconfigured.sendMessage(watchLater(), fromYoutube);
+	assert.equal(notSetUp.ok && notSetUp.outcome, 'off');
+	assert.equal(unconfigured.state.bookmarks.length, 0);
+
 	const shared = sourcesHarness({
 		incognitoContext: true,
 		storage: {

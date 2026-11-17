@@ -9363,6 +9363,14 @@ async function setSiteSource(
 }
 
 /**
+A private window takes source saves only after its setup chose the regular library; before setup, or with a
+separate private library (locked or not), it saves and undoes nothing and never reads a library.
+*/
+const privateSourcesOff = () =>
+	privateContext &&
+	!(privateConfig.configured && privateConfig.mode === 'shared');
+
+/**
 The source a content script's message speaks for: only the one whose site the sending page is on.
 */
 function senderSource(id: unknown, sender: chrome.runtime.MessageSender) {
@@ -9377,13 +9385,8 @@ async function saveFromSource(
 	href: unknown,
 	title: unknown,
 ): Promise<ActionResult<'SITE_SOURCE_SAVE'>> {
-	// A private window saves only into the regular library, and only when private windows use it; a separate
-	// private library, locked or not, is never touched.
 	const state = await readSourcesState();
-	if (
-		!state[source.id].enabled ||
-		(privateContext && privateConfig.mode !== 'shared')
-	) {
+	if (!state[source.id].enabled || privateSourcesOff()) {
 		return {ok: true, outcome: 'off'};
 	}
 
@@ -9501,7 +9504,9 @@ async function handleSourceMessage(
 		}
 
 		case 'SITE_SOURCE_UNDO': {
-			return undoSourceSave(message.id);
+			return privateSourcesOff()
+				? {ok: false, error: "Can't undo in this window."}
+				: undoSourceSave(message.id);
 		}
 
 		default: {
