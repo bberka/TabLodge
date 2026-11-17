@@ -6,8 +6,8 @@ import {
 	Text,
 	useColorScheme,
 } from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {motion} from './motion';
-import {useBarSpace} from './tab-bar';
 import {useColors, useShape} from './theme';
 
 type Snack = {
@@ -54,12 +54,12 @@ function dismiss() {
 }
 
 /**
-A short message with an optional action such as Undo, shown above the tab bar for a few seconds.
+A short message with an optional action such as Undo, shown at the top of the screen for a few seconds.
 */
 export function SnackbarHost() {
 	const colors = useColors();
 	const shape = useShape();
-	const space = useBarSpace();
+	const insets = useSafeAreaInsets();
 	const snack = useSyncExternalStore(
 		(listener) => {
 			listeners.add(listener);
@@ -98,14 +98,13 @@ export function SnackbarHost() {
 			style={[
 				styles.wrap,
 				{
-					// Above the round buttons that float at the screen's bottom corner.
-					bottom: space + 16 + 52 + 12,
+					top: insets.top + 8,
 					opacity: shown,
 					transform: [
 						{
 							translateY: shown.interpolate({
 								inputRange: [0, 1],
-								outputRange: [24, 0],
+								outputRange: [-24, 0],
 							}),
 						},
 					],
