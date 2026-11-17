@@ -1015,11 +1015,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		autoBackupKeep: oneOfNumbers([7, 30], raw.autoBackupKeep, 7),
 		autoBackupToDownloads: raw.autoBackupToDownloads === true,
 		trashRetentionDays: oneOfNumbers([7, 30, 90], raw.trashRetentionDays, 30),
-		autoArchiveDays: oneOfNumbers(
-			[0, 30, 90, 180, 365],
-			raw.autoArchiveDays,
-			0,
-		),
+		autoArchiveDays: clampInteger(raw.autoArchiveDays, 0, 3650, 0),
 		sessionNameStyle: isOneOf(SESSION_NAME_STYLES, raw.sessionNameStyle)
 			? raw.sessionNameStyle
 			: 'date-title',

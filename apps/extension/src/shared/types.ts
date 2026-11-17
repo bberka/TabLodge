@@ -319,7 +319,7 @@ export type Settings = {
 	*/
 	trashRetentionDays: number;
 	/**
-	Days without opening, saving to or editing a session before it moves to the Archived folder: 0 (off, default), 30, 90, 180 or 365.
+	Days without opening, saving to or editing a session before it moves to the Archived folder: a whole number from 1 to 3650, or 0 (off, default).
 	*/
 	autoArchiveDays: number;
 	/**
