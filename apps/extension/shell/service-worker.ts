@@ -128,6 +128,8 @@ import {
 	omniboxSuggestions,
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
+import {showQuoteToast} from '../src/app/quote-toast';
+import {appendQuote, pageAddress, quoteTarget} from '../src/shared/quotes';
 import {showPageNote, takeCapturedCopy} from '../src/app/page-copy-inject';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
 import {mediaSave} from '../src/shared/save-media';
@@ -4699,6 +4701,101 @@ async function addBookmark(
 		await writeStore(store);
 		return {ok: true, bookmark};
 	});
+}
+
+/**
+Adds a quote to the note of the page's bookmark, else of its saved tab (every saved copy of the page, as an edit
+does), else of a new bookmark in the column the Add bookmark dialog would start on (see quotes.ts for the note).
+A note that has no room is left as it was, with an error that says so. Undo removes the quote again.
+*/
+async function saveQuote(
+	rawUrl: unknown,
+	quote: unknown,
+	title?: unknown,
+): Promise<ActionResult<'SAVE_QUOTE'>> {
+	const url = normalizeUrl(
+		typeof rawUrl === 'string' ? pageAddress(rawUrl) : '',
+	);
+	if (!url) {
+		return {
+			ok: false,
+			error: 'Quotes can be saved from regular http and https pages only.',
+		};
+	}
+
+	return mutate(async () =>
+		withUndo('Save quote', [STORAGE_KEY], async () => {
+			const store = await getStore();
+			const text = typeof quote === 'string' ? quote : '';
+			const target = quoteTarget(store, url);
+			const now = Date.now();
+			if (target.kind === 'tab') {
+				const tab = target.group.tabs.find(
+					(entry) => entry.id === target.tabId,
+				)!;
+				const note = appendQuote(tab.notes, url, text);
+				if (!note.ok) {
+					return note;
+				}
+
+				for (const group of store.groups) {
+					for (const entry of group.tabs) {
+						if (entry.url !== tab.url) {
+							continue;
+						}
+
+						entry.notes = note.notes;
+						group.updatedAt = now;
+					}
+				}
+
+				await writeStore(store);
+				return {ok: true, placed: target.group.name};
+			}
+
+			const existing = target.kind === 'bookmark' ? target.bookmark : undefined;
+			const note = appendQuote(existing?.notes, url, text);
+			if (!note.ok) {
+				return note;
+			}
+
+			let bookmark = existing;
+			if (bookmark) {
+				bookmark.notes = note.notes;
+				bookmark.updatedAt = now;
+			} else {
+				const claimedId = columnForUrl(store.bookmarkColumns, url)?.id;
+				bookmark = {
+					id: makeId(),
+					title: await bestBookmarkTitle(
+						title,
+						url,
+						store.settings.cleanTitles,
+					),
+					url,
+					columnId: landingColumnId(
+						store.bookmarkColumns,
+						claimedId ??
+							defaultBookmarkColumnId(store.bookmarkColumns, store.bookmarks),
+						{claimedId},
+					),
+					notes: note.notes,
+					createdAt: now,
+					updatedAt: now,
+				};
+				store.bookmarks.push(bookmark);
+			}
+
+			await writeStore(store);
+			const {columnId} = bookmark;
+			return {
+				ok: true,
+				placed:
+					store.bookmarkColumns.find((column) => column.id === columnId)
+						?.name ?? 'Unfiled',
+			};
+		}),
+	);
 }
 
 // Adds several links to one column in a single write, used for drops of links or whole sessions.
@@ -9511,8 +9608,14 @@ async function undoSourceSave(id: unknown): Promise<ActionResult<'UNDO'>> {
 }
 
 /**
-Messages from the site content script, the only code in a web page that can reach the worker. They get the three
-source actions and nothing else: no page can read or change the library through them.
+The undo id of each Save quote toast, with the tab that shows it: Undo in a page may only take back the quote that
+page's toast reported (see QUOTE_UNDO).
+*/
+const quoteUndoTabs = new Map<string, number>();
+
+/**
+Messages from code in a web page: the site content script and the Save quote toast. They get the three source actions
+and Undo of the toast's own quote, and nothing else: no page can read or change the library through them.
 */
 async function handleSourceMessage(
 	message: TabLodgeMessage | undefined,
@@ -9539,6 +9642,20 @@ async function handleSourceMessage(
 				}
 			});
 			return {ok: true, reported: state[source.id].enabled};
+		}
+
+		case 'QUOTE_UNDO': {
+			const {id} = message;
+			if (
+				typeof id !== 'string' ||
+				!isInteger(sender.tab?.id) ||
+				quoteUndoTabs.get(id) !== sender.tab.id
+			) {
+				return {ok: false, error: "Can't undo: it was too long ago."};
+			}
+
+			quoteUndoTabs.delete(id);
+			return undoAction(id);
 		}
 
 		case 'SITE_SOURCE_UNDO': {
@@ -9874,6 +9991,10 @@ async function handleMessage(
 
 		case 'ADD_BOOKMARK': {
 			return addBookmark(message.bookmark || {});
+		}
+
+		case 'SAVE_QUOTE': {
+			return saveQuote(message.url, message.quote, message.title);
 		}
 
 		case 'ADD_BOOKMARKS': {
@@ -10950,7 +11071,8 @@ function watchContextMenuShown() {
 watchContextMenuShown();
 
 /**
-Menu actions cannot show page toasts, so the toolbar badge flashes ✓ (or ! on failure) on the clicked tab.
+Most menu actions show no page toast (only Save quote does, see quoteFromMenu), so the toolbar badge flashes ✓ (or ! on
+failure) on the clicked tab.
 */
 function flashBadge(tab: chrome.tabs.Tab | undefined, ok: boolean) {
 	const {action} = chrome;
@@ -11182,6 +11304,61 @@ async function searchDashboard(
 }
 
 /**
+"Save quote": saves the selection on the page (see saveQuote) and confirms it in a toast on the page, with Undo. The
+click grants activeTab, so no site access is needed. Where the page cannot be scripted (the Web Store, the PDF viewer)
+the toolbar badge flashes instead, and the reason for a failure goes to the console.
+*/
+async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
+	const pageUrl = info.pageUrl ?? tab?.url;
+	const title =
+		tab?.url && pageUrl && pageAddress(tab.url) === pageAddress(pageUrl)
+			? tab.title
+			: undefined;
+	let result: ActionResult<'SAVE_QUOTE'>;
+	try {
+		result = await saveQuote(pageUrl, info.selectionText, title);
+	} catch (error) {
+		result = {
+			ok: false,
+			error: errorMessage(error) || `${APP_NAME} could not save this quote.`,
+		};
+	}
+
+	if (!result.ok) {
+		console.warn(result.error);
+	}
+
+	const toast = result.ok
+		? {
+				message: `Quote saved to ${result.placed}.`,
+				failed: false,
+				...(result.undoId && {undoId: result.undoId}),
+			}
+		: {message: result.error, failed: true};
+	let shown = false;
+	if (isInteger(tab?.id)) {
+		if (result.ok && result.undoId) {
+			quoteUndoTabs.set(result.undoId, tab.id);
+		}
+
+		try {
+			const [injected] = await chrome.scripting.executeScript({
+				target: {tabId: tab.id},
+				func: showQuoteToast,
+				args: [{...toast, theme: asTheme(await readKey(UI_THEME_KEY))}],
+			});
+			shown = injected?.result === true;
+		} catch {
+			// Not scriptable, or the tab closed: the badge says it instead.
+		}
+	}
+
+	if (!shown) {
+		flashBadge(tab, result.ok);
+	}
+}
+
+/**
 Toggles the active site in the excluded-sites list, through the same handlers as Settings.
 */
 async function toggleExcludedSite(
@@ -11363,6 +11540,11 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 			() => searchDashboard(info.selectionText, tab),
 			false,
 		);
+		return;
+	}
+
+	if (id === MENU.selectionQuote) {
+		void quoteFromMenu(info, tab);
 		return;
 	}
 

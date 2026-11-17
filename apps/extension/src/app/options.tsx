@@ -586,7 +586,7 @@ const settingsGroups: Array<{
 				name: 'contextMenuSelectionEnabled',
 				requires: 'contextMenusEnabled',
 				label: 'Selection',
-				help: 'Search your saved tabs and bookmarks for the selected text.',
+				help: 'Search your saved tabs and bookmarks for the selected text, or save it as a quote on the page.',
 				type: 'switch',
 			},
 			{
