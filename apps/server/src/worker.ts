@@ -7,6 +7,10 @@ keepalive pings are answered without waking it.
 */
 import {DurableObject} from 'cloudflare:workers';
 import {
+	SHARED_PAGE_ID,
+	SHARED_PAGE_PREFIX,
+} from '../../extension/src/shared/sync/shared-pages';
+import {
 	CORS_HEADERS,
 	createApi,
 	DEFAULT_LIMITS,
@@ -25,7 +29,8 @@ import {
 	readyMessage,
 	sameToken,
 } from './live';
-import {SqlChangeLog} from './sql-change-log';
+import {pageNotFound, SqlPageStore} from './shared-pages';
+import {type Sql, SqlChangeLog} from './sql-change-log';
 
 type Env = {
 	LIBRARY: DurableObjectNamespace<SyncLibrary>;
@@ -42,44 +47,65 @@ const positive = (raw: string | undefined, fallback: number) => {
 
 type Attachment = {authenticated: boolean; openedAt: number};
 
+/**
+Set by the Worker on every request it forwards, so the object knows which library it holds. Only the main library
+has shared pages.
+*/
+const SPACE_HEADER = 'TabLodge-Library';
+
 export class SyncLibrary extends DurableObject<Env> {
 	private readonly log: SqlChangeLog;
-	private readonly api: ReturnType<typeof createApi>;
+	private readonly apis: Record<
+		'default' | 'private',
+		ReturnType<typeof createApi>
+	>;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		const {storage} = ctx;
-		this.log = new SqlChangeLog({
+		const sql: Sql = {
 			all: (query, ...parameters) =>
 				storage.sql.exec(query, ...parameters).toArray() as Array<
 					Record<string, string | number | null>
 				>,
 			transaction: (work) => storage.transactionSync(work),
-		});
-		this.api = createApi({
-			token: env.TABLODGE_SYNC_TOKEN ?? '',
-			log: () => this.log,
-			limits: {
-				maxRecords: positive(env.MAX_RECORDS, DEFAULT_LIMITS.maxRecords),
-				retentionDays: positive(
-					env.RETENTION_DAYS,
-					DEFAULT_LIMITS.retentionDays,
-				),
-				requestsPerMinute: positive(
-					env.RATE_LIMIT_PER_MINUTE,
-					DEFAULT_LIMITS.requestsPerMinute,
-				),
-			},
-			onApplied(cursor) {
-				for (const socket of ctx.getWebSockets()) {
-					if (
-						(socket.deserializeAttachment() as Attachment | null)?.authenticated
-					) {
-						socket.send(cursorMessage(cursor));
+		};
+		this.log = new SqlChangeLog(sql);
+		// Made on first use, so the private library's object never gets the table.
+		let pages: SqlPageStore | undefined;
+		const api = (withPages: boolean) =>
+			createApi({
+				token: env.TABLODGE_SYNC_TOKEN ?? '',
+				log: () => this.log,
+				pages: withPages
+					? () => {
+							pages ??= new SqlPageStore(sql);
+							return pages;
+						}
+					: undefined,
+				limits: {
+					maxRecords: positive(env.MAX_RECORDS, DEFAULT_LIMITS.maxRecords),
+					retentionDays: positive(
+						env.RETENTION_DAYS,
+						DEFAULT_LIMITS.retentionDays,
+					),
+					requestsPerMinute: positive(
+						env.RATE_LIMIT_PER_MINUTE,
+						DEFAULT_LIMITS.requestsPerMinute,
+					),
+				},
+				onApplied(cursor) {
+					for (const socket of ctx.getWebSockets()) {
+						if (
+							(socket.deserializeAttachment() as Attachment | null)
+								?.authenticated
+						) {
+							socket.send(cursorMessage(cursor));
+						}
 					}
-				}
-			},
-		});
+				},
+			});
+		this.apis = {default: api(true), private: api(false)};
 		ctx.setWebSocketAutoResponse(
 			new WebSocketRequestResponsePair(LIVE_PING, LIVE_PONG),
 		);
@@ -87,7 +113,9 @@ export class SyncLibrary extends DurableObject<Env> {
 
 	override async fetch(request: Request): Promise<Response> {
 		if (new URL(request.url).pathname !== LIVE_PATH) {
-			return this.api.fetch(request);
+			return this.apis[
+				request.headers.get(SPACE_HEADER) === 'private' ? 'private' : 'default'
+			].fetch(request);
 		}
 
 		if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
@@ -184,7 +212,19 @@ export default {
 			);
 		}
 
-		if (pathname !== LIVE_PATH) {
+		// A shared page is public: no token, and an id that cannot exist does not wake the object.
+		const sharedPage =
+			space === 'default' &&
+			request.method === 'GET' &&
+			pathname.startsWith(SHARED_PAGE_PREFIX);
+		if (
+			sharedPage &&
+			!SHARED_PAGE_ID.test(pathname.slice(SHARED_PAGE_PREFIX.length))
+		) {
+			return pageNotFound();
+		}
+
+		if (pathname !== LIVE_PATH && !sharedPage) {
 			const given =
 				/^Bearer (.+)$/.exec(request.headers.get('Authorization') ?? '')?.[1] ??
 				'';
@@ -196,8 +236,8 @@ export default {
 			}
 		}
 
-		return env.LIBRARY.get(env.LIBRARY.idFromName(space)).fetch(
-			space === 'default' ? request : new Request(url, request),
-		);
+		const forwarded = new Request(url, request);
+		forwarded.headers.set(SPACE_HEADER, space);
+		return env.LIBRARY.get(env.LIBRARY.idFromName(space)).fetch(forwarded);
 	},
 } satisfies ExportedHandler<Env>;

@@ -96,7 +96,7 @@ For nginx, the location needs `proxy_http_version 1.1`, `proxy_set_header Upgrad
 
 ## Option B: Cloudflare
 
-This runs the server as a Worker with one Durable Object on your own Cloudflare account. SQLite backed Durable Objects are part of the Workers Free plan within its daily limits, which one person's library should stay far under; check Cloudflare's pricing page for the current numbers. Idle live connections cost nothing, and requests with a wrong token are turned away before they reach your data.
+This runs the server as a Worker with one Durable Object on your own Cloudflare account. SQLite backed Durable Objects are part of the Workers Free plan within its daily limits, which one person's library should stay far under; check Cloudflare's pricing page for the current numbers. Idle live connections cost nothing, and requests with a wrong token are turned away before they reach your data. Views of [shared pages](#shared-pages) count against the same daily request limit, so a link that many people open can use it up and stop sync until the limit resets at midnight UTC.
 
 ### 1. Deploy with the button
 
@@ -261,6 +261,16 @@ Importing keeps the newer version of anything the server already has, so it neve
 
 Each browser's own full backup (**Settings › Data › Back up**) also stays a complete copy of the library.
 
+### Shared pages
+
+**Share › HTML page** in the extension and **Share › Web page** in the Android app offer **Upload to my server** when the server is connected and new enough. The page is the same one the Share dialog would save as a file. The server keeps it as it came and serves it to anyone with its link, `https://<address>/p/<id>`, without the token. The id is 22 random characters, so a link cannot be guessed, but anyone who has it can open the page and pass it on. Each upload makes a new link; to change a page, share it again and delete the old one.
+
+**Settings › Sync › Shared pages** in either app lists every page on the server with its link, and **Delete** removes it, after which its link answers 404. Pages belong to the regular library only: the private windows' library and the Android app's private library are never uploaded, and nothing is served under `/private/p/`.
+
+The server sends each page with headers that allow no scripts, forms, or frames (`Content-Security-Policy` with `sandbox`), with `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` so sites opened from the page do not learn its address, `X-Robots-Tag: noindex`, and `Cache-Control: no-store`. Page views have their own allowance of 120 a minute, apart from the library's, so visitors cannot slow down sync. Over it, a visitor gets 429.
+
+On Cloudflare's Workers Free plan, every view, a 429 included, counts against the account's daily request limit, which sync uses too. A link shared widely can use it up and stop sync until midnight UTC. A Docker server has no such limit. Shared pages are not part of the [backup](#back-up-and-restore), so moving to another server leaves them behind.
+
 ### Change the token
 
 Do this if the token may have leaked.
@@ -349,24 +359,31 @@ Run these from the root of your copy of the repository. Anything after the comma
 | One item | 256 KB |
 | Changes per pull | 1000 |
 | Live connections | 64 for both libraries together on Docker, 64 per library on Cloudflare. One that sends no valid token in 10 seconds is closed |
+| One shared page | 1 MB |
+| Shared pages | 50, and 20 MB together |
+| Shared page views | 120 a minute, apart from `RATE_LIMIT_PER_MINUTE` |
 
 ### API
 
-All paths except `/health` need `Authorization: Bearer <token>`. The server answers with CORS headers, so the extension needs no browser permission for its address.
+All paths except `/health` and `/p/<id>` need `Authorization: Bearer <token>`. The server answers with CORS headers, so the extension needs no browser permission for its address.
 
 | Request | Answer |
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
-| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, `preview`, and `trash`) |
+| `GET /v1/status` | Protocol version, current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, `preview`, `trash`, and `shared-pages`) |
 | `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor` (500 unless `limit` says otherwise, at most 1000), the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
 | `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |
 | `POST /v1/key` with `{"key": "...", "previous": ...}` | Stores the key only while the server still holds `previous` (`null` for none); otherwise 409 with the current key |
 | `GET /v1/icon?host=<host>` | The site's icon as an image: the one its home page links, or `/favicon.ico`. 404 when there is none. Used by the **Site icons** setting of the Android app and the extension |
 | `GET /v1/preview?url=<address>` | `{"title", "description", "image"}` read from the page, where `image` is the share image as a `data:` URL (at most 512 KB). 404 when the page cannot be read. Used by the extension's **Preview links on hover** setting and the Android app's **Preview links when saving** |
+| `POST /v1/pages` with `{"title": "...", "html": "..."}` | 201 with `{"id", "title", "size", "createdAt", "path"}`, where `path` is `/p/<id>`. 413 for a page over 1 MB, 507 when the server holds 50 pages or the page would take them over 20 MB |
+| `GET /v1/pages` | `{"pages": [...]}`, every shared page without its content, newest first |
+| `POST /v1/pages/<id>/delete` | `{"deleted":true}`, or 404 when there is no such page |
+| `GET /p/<id>` | The shared page, to anyone, with the headers in [Shared pages](#shared-pages). 404 for an id that is unknown, deleted, or malformed |
 | `GET /v1/live` (WebSocket) | Send `{"type":"auth","token":"..."}` first. The server answers `{"type":"ready","cursor":n}`, then `{"type":"cursor","cursor":n}` after every push that changed something. `ping` gets `pong` |
 
-Every path is also served under `/private`, for the private windows' library, which is kept apart: a second Durable Object on Cloudflare, and `private.db` next to `library.db` on Docker, created the first time a browser uses it.
+Every path except the shared page ones is also served under `/private`, for the private windows' library, which is kept apart: a second Durable Object on Cloudflare, and `private.db` next to `library.db` on Docker, created the first time a browser uses it.
 
 The server fetches the page or icon itself, from its own network address, so the site sees the server and not your device. It refuses anything but public web addresses: other schemes, `localhost`, names ending in `.local` or `.internal`, hosts with no dot, credentials in the address, and any address that resolves to a private, loopback, link local, or shared range, checked again on every redirect (three at most). Pages are read up to their `</head>` (256 KB at most), and each request waits at most six seconds. Answers are kept in memory for a day. These two paths have their own allowance of 600 requests a minute, so a screen of links does not use up the library's. A site whose name resolves to a public address at the check and a private one at the fetch (DNS rebinding) is not caught on Docker; only the token holder can ask, so keep the token private.
 

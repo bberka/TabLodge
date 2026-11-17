@@ -17,6 +17,12 @@ import {
 	parseChange,
 	type SyncChange,
 } from '../../extension/src/shared/sync/changes';
+import {
+	MAX_SHARED_PAGE_TITLE,
+	SHARED_PAGE_ID,
+	SHARED_PAGE_PREFIX,
+	SHARED_PAGES_FEATURE,
+} from '../../extension/src/shared/sync/shared-pages';
 import {LIVE_PATH} from './live';
 import {
 	fetchIcon,
@@ -24,6 +30,7 @@ import {
 	type Preview,
 	type PreviewDeps,
 } from './preview';
+import {PAGE_HEADERS, pageNotFound, type SqlPageStore} from './shared-pages';
 
 /**
 The extension calls the server from its own origin. CORS lets it do that without asking the browser for access to
@@ -51,12 +58,29 @@ export type Limits = {
 	running up the server's cost.
 	*/
 	requestsPerMinute: number;
+	/**
+	Size of one shared page, in UTF-8 bytes.
+	*/
+	maxPageBytes: number;
+	/**
+	Shared pages the server keeps, and their total size.
+	*/
+	maxPages: number;
+	maxPageStorageBytes: number;
+	/**
+	Views of shared pages per minute, counted apart from the library's requests so visitors cannot slow down sync.
+	*/
+	pageViewsPerMinute: number;
 };
 
 export const DEFAULT_LIMITS: Limits = {
 	maxRecords: 500_000,
 	retentionDays: 90,
 	requestsPerMinute: 300,
+	maxPageBytes: 1_000_000,
+	maxPages: 50,
+	maxPageStorageBytes: 20_000_000,
+	pageViewsPerMinute: 120,
 };
 const MINUTE_MS = 60 * 1000;
 
@@ -66,7 +90,8 @@ const MAX_CHANGE_BYTES = 256 * 1024;
 const MAX_KEY_CHARS = 4096;
 /**
 Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
-second library at /private for private windows; `key` is /v1/key.
+second library at /private for private windows; `key` is /v1/key; `shared-pages` is /v1/pages and /p/<id>, on the
+main library only.
 */
 const FEATURES = ['private', 'key', 'preview', 'trash'];
 const PREVIEWS_PER_MINUTE = 600;
@@ -95,7 +120,25 @@ export type ApiOptions = {
 	How the server reaches other sites for /v1/icon and /v1/preview.
 	*/
 	preview?: PreviewDeps;
+	/**
+	Where shared pages are kept. Only the main library has them; without it the API has no page routes.
+	*/
+	pages?: () => SqlPageStore;
 };
+
+const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
+
+const ID_ALPHABET =
+	'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+/**
+22 characters with 6 random bits each.
+*/
+const newPageId = () =>
+	Array.from(
+		crypto.getRandomValues(new Uint8Array(22)),
+		(byte) => ID_ALPHABET[byte % 64],
+	).join('');
 
 const problem = (error: string, detail?: Record<string, unknown>) => ({
 	error,
@@ -252,7 +295,7 @@ export function createApi(options: ApiOptions) {
 			cursor: log.cursor,
 			records: log.size,
 			limits,
-			features: FEATURES,
+			features: options.pages ? [...FEATURES, SHARED_PAGES_FEATURE] : FEATURES,
 		});
 	});
 
@@ -372,6 +415,114 @@ export function createApi(options: ApiOptions) {
 			return c.json({results, cursor});
 		},
 	);
+
+	const {pages} = options;
+	if (pages) {
+		const pageRecord = (page: {
+			id: string;
+			title: string;
+			size: number;
+			createdAt: number;
+		}) => ({...page, path: `${SHARED_PAGE_PREFIX}${page.id}`});
+
+		app.get('/v1/pages', (c) =>
+			c.json({
+				pages: pages()
+					.list()
+					.map((page) => pageRecord(page)),
+			}),
+		);
+
+		app.post(
+			'/v1/pages',
+			// JSON escaping can make the body several times the page's size.
+			bodyLimit({
+				maxSize: limits.maxPageBytes * 6 + 4096,
+				onError: (c) =>
+					c.json(
+						problem('page_too_large', {maxBytes: limits.maxPageBytes}),
+						413,
+					),
+			}),
+			async (c) => {
+				let body: unknown;
+				try {
+					body = await c.req.json();
+				} catch {
+					return c.json(problem('bad_json'), 400);
+				}
+
+				const {title, html} = (body ?? {}) as {title?: unknown; html?: unknown};
+				if (
+					typeof title !== 'string' ||
+					title.length > MAX_SHARED_PAGE_TITLE ||
+					typeof html !== 'string' ||
+					html === ''
+				) {
+					return c.json(problem('bad_page'), 400);
+				}
+
+				const size = utf8Bytes(html);
+				if (size > limits.maxPageBytes) {
+					return c.json(
+						problem('page_too_large', {maxBytes: limits.maxPageBytes}),
+						413,
+					);
+				}
+
+				const page = {id: newPageId(), title, size, createdAt: now()};
+				const added = pages().add(
+					{...page, html},
+					{maxPages: limits.maxPages, maxBytes: limits.maxPageStorageBytes},
+				);
+				return added
+					? c.json(pageRecord(page), 201)
+					: c.json(
+							problem('pages_full', {
+								maxPages: limits.maxPages,
+								maxBytes: limits.maxPageStorageBytes,
+							}),
+							507,
+						);
+			},
+		);
+
+		app.post('/v1/pages/:id/delete', (c) =>
+			pages().remove(c.req.param('id'))
+				? c.json({deleted: true})
+				: c.json(problem('not_found'), 404),
+		);
+
+		// The only route that hands out library data without the token. It has its own allowance, counted before the
+		// lookup, so a crawler gets 429 here while the library's devices keep syncing.
+		let viewWindow = {start: 0, count: 0};
+		app.get(`${SHARED_PAGE_PREFIX}:id`, (c) => {
+			const time = now();
+			if (time - viewWindow.start >= MINUTE_MS) {
+				viewWindow = {start: time, count: 0};
+			}
+
+			viewWindow.count += 1;
+			if (viewWindow.count > limits.pageViewsPerMinute) {
+				return new Response('Too many requests', {
+					status: 429,
+					headers: {
+						...PAGE_HEADERS,
+						'Content-Type': 'text/plain; charset=utf-8',
+						'Retry-After': String(
+							Math.ceil((viewWindow.start + MINUTE_MS - time) / 1000),
+						),
+					},
+				});
+			}
+
+			const id = c.req.param('id');
+			const html = SHARED_PAGE_ID.test(id) ? pages().html(id) : undefined;
+			return html === undefined
+				? pageNotFound()
+				: new Response(html, {headers: PAGE_HEADERS});
+		});
+	}
 
 	return app;
 }

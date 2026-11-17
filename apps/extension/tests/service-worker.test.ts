@@ -19,6 +19,9 @@ import type {
 	TabLodgeMessageType,
 } from '../src/shared/types';
 import {createApi} from '../../server/src/api';
+import {sqlite} from '../../server/src/node-sqlite';
+import {SqlPageStore} from '../../server/src/shared-pages';
+import {SqlChangeLog} from '../../server/src/sql-change-log';
 import {ChangeLog} from '../src/shared/sync/change-log';
 import {
 	logicalState,
@@ -12236,6 +12239,84 @@ function privateValues(log: ChangeLog): unknown[] {
 		? []
 		: page.changes.flatMap((change) => (change.deleted ? [] : [change.value]));
 }
+
+test('a regular window uploads, lists, and deletes shared pages; a private window cannot', async () => {
+	const sql = sqlite(':memory:');
+	const pages = new SqlPageStore(sql);
+	const app = createApi({
+		token: SYNC_TOKEN,
+		log: (() => {
+			const log = new SqlChangeLog(sql);
+			return () => log;
+		})(),
+		pages: () => pages,
+	});
+	const fetch = async (url: string, init: RequestInit) =>
+		app.request(url, init);
+	const regular = createWorkerHarness(stateWithSession(), undefined, {
+		fetch,
+		storage: regularSync,
+	});
+	const ready = await regular.sendMessage({type: 'GET_SHARED_PAGES'});
+	assert.equal(ready.server, 'ready');
+
+	const uploaded = await regular.sendMessage({
+		type: 'UPLOAD_SHARED_PAGE',
+		title: 'Reading',
+		html: '<p>Reading</p>',
+	});
+	assert.equal(uploaded.ok, true, uploaded.error);
+	assert.ok(String(uploaded.page?.url).startsWith(`${SYNC_URL}/p/`));
+	const listed = await regular.sendMessage({
+		type: 'GET_SHARED_PAGES',
+		list: true,
+	});
+	assert.deepEqual(
+		listed.pages?.map((page: {title: string}) => page.title),
+		['Reading'],
+	);
+
+	const inPrivate = createWorkerHarness(stateWithSession(), undefined, {
+		incognitoContext: true,
+		fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'shared', configured: true},
+			...regularSync,
+		},
+	});
+	assert.equal(
+		(await inPrivate.sendMessage({type: 'GET_SHARED_PAGES', list: true}))
+			.server,
+		'none',
+	);
+	assert.equal(
+		(
+			await inPrivate.sendMessage({
+				type: 'UPLOAD_SHARED_PAGE',
+				title: 'Secret',
+				html: '<p>Secret</p>',
+			})
+		).ok,
+		false,
+	);
+
+	assert.equal(
+		(
+			await regular.sendMessage({
+				type: 'DELETE_SHARED_PAGE',
+				id: String(uploaded.page?.id),
+			})
+		).ok,
+		true,
+	);
+	assert.deepEqual(pages.list(), []);
+
+	const noServer = createWorkerHarness(stateWithSession());
+	assert.equal(
+		(await noServer.sendMessage({type: 'GET_SHARED_PAGES'})).server,
+		'none',
+	);
+});
 
 test('a separate private library syncs to its own space on the server, apart from the regular library', async () => {
 	const server = syncServer();

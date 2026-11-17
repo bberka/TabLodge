@@ -18,6 +18,8 @@ import {
 import {
 	ArrowLeft,
 	Bookmark,
+	CloudUpload,
+	ExternalLink,
 	CircleAlert,
 	Archive,
 	Download,
@@ -45,6 +47,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
+	Input,
 	Label,
 	RadioCard,
 	RadioCardGroup,
@@ -102,11 +105,13 @@ import {
 	readProtectedFullBackup,
 	type FullBackupContents,
 } from '../shared/full-backup';
+import type {SharedPage} from '../shared/sync/shared-pages-client';
 import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
 import {writeClipboard} from './interaction-actions';
 import {PROJECT} from './project';
+import {copyPageLink, useSharedPagesServer} from './shared-pages';
 import {
 	EMPTY_PASSCODE_DRAFT,
 	PasscodeEntry,
@@ -823,6 +828,9 @@ export function ShareDialog({
 	);
 	const [sourceId, setSourceId] = useState(all[0].id);
 	const [method, setMethod] = useState<ShareWay>('html');
+	const server = useSharedPagesServer(open);
+	const [uploading, setUploading] = useState(false);
+	const [uploaded, setUploaded] = useState<SharedPage>();
 	useEffect(() => {
 		if (!open) {
 			return;
@@ -830,6 +838,7 @@ export function ShareDialog({
 
 		setSourceId(all[0].id);
 		setMethod('html');
+		setUploaded(undefined);
 		// Reset each time the dialog opens only.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
@@ -892,6 +901,69 @@ export function ShareDialog({
 		}
 	}
 
+	async function upload() {
+		setUploading(true);
+		const result = await send('UPLOAD_SHARED_PAGE', {
+			title: pageTitle,
+			html: shareHtmlPage(pageTitle, source.groups, PROJECT.name),
+		});
+		setUploading(false);
+		if (!result.ok) {
+			showStatus(messageOf(result.error) || 'Could not upload the page.', true);
+			return;
+		}
+
+		setUploaded(result.page);
+		await copyPageLink(result.page.url, showStatus);
+	}
+
+	if (uploaded) {
+		return (
+			<Dialog open={open} onOpenChange={onOpenChange}>
+				<DialogContent size="md">
+					<DialogHeader>
+						<DialogTitle>Page uploaded</DialogTitle>
+						<DialogDescription>
+							Anyone with this link can open the page. To update it, share
+							again. Delete it in Settings › Sync › Shared pages.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogBody>
+						<Label htmlFor="shared-page-link">Link</Label>
+						<Input
+							readOnly
+							id="shared-page-link"
+							className="font-mono text-xs"
+							value={uploaded.url}
+							onFocus={(event) => {
+								event.currentTarget.select();
+							}}
+						/>
+					</DialogBody>
+					<DialogFooter>
+						<Button asChild variant="outline">
+							<a href={uploaded.url} target="_blank" rel="noopener noreferrer">
+								<ExternalLink aria-hidden="true" />
+								Open
+							</a>
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => void copyPageLink(uploaded.url, showStatus)}
+						>
+							<Copy aria-hidden="true" />
+							Copy link
+						</Button>
+						<Button type="button" onClick={() => onOpenChange(false)}>
+							Done
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		);
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -901,8 +973,8 @@ export function ShareDialog({
 				<DialogHeader className="shrink-0">
 					<DialogTitle>Share</DialogTitle>
 					<DialogDescription>
-						Choose what to share and how. Links and pages stay in your browser;
-						files are saved to your downloads.
+						Choose what to share and how. Files are saved to your downloads, and
+						nothing leaves this browser unless you upload it.
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody className="min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto pr-1">
@@ -964,9 +1036,20 @@ export function ShareDialog({
 						<X aria-hidden="true" />
 						Cancel
 					</Button>
+					{chosen.id === 'html' && server === 'ready' && (
+						<Button
+							type="button"
+							variant="outline"
+							disabled={counts.links === 0 || uploading}
+							onClick={() => void upload()}
+						>
+							<CloudUpload aria-hidden="true" />
+							{uploading ? 'Uploading…' : 'Upload to my server'}
+						</Button>
+					)}
 					<Button
 						type="button"
-						disabled={counts.links === 0}
+						disabled={counts.links === 0 || uploading}
 						onClick={() => void run()}
 					>
 						{chosen.action === 'Download' ? <Download /> : <Copy />}

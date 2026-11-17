@@ -2,6 +2,7 @@
 // (shell/service-worker.ts) and the extension pages in src/app.
 // Only types live here so the classic service-worker bundle stays import-free.
 import type {SyncStatus} from './sync/client';
+import type {SharedPage} from './sync/shared-pages-client';
 
 export type ActionMode =
 	| 'popup'
@@ -908,6 +909,15 @@ export type TabLodgeMessages = {
 	Regular windows only: opens Settings in a new private window to turn private sync on there.
 	*/
 	OPEN_PRIVATE_SYNC: {};
+	/**
+	Regular windows only. Whether the sync server takes shared pages, with the pages it holds when `list` is set.
+	*/
+	GET_SHARED_PAGES: {list?: boolean};
+	/**
+	Uploads a page made by `shareHtmlPage` to the sync server and answers with its public link.
+	*/
+	UPLOAD_SHARED_PAGE: {title: string; html: string};
+	DELETE_SHARED_PAGE: {id: string};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -927,6 +937,12 @@ export type ActionFailure = {
 	*/
 	field?: 'url' | 'token' | 'credential';
 };
+
+/**
+`none`: no sync server, or a private window. `old`: the server is too old to take shared pages. `offline`: it cannot
+be reached. `ready`: pages can be uploaded.
+*/
+export type SharedPagesServer = 'none' | 'old' | 'offline' | 'ready';
 
 export type PrivateSyncInfo = {
 	/**
@@ -1200,6 +1216,9 @@ export type TabLodgeResponses = {
 	PRIVATE_SYNC_DISABLE: {privateSync: PrivateSyncInfo};
 	PRIVATE_SYNC_NOW: {privateSync: PrivateSyncInfo};
 	OPEN_PRIVATE_SYNC: {};
+	GET_SHARED_PAGES: {server: SharedPagesServer; pages: SharedPage[]};
+	UPLOAD_SHARED_PAGE: {page: SharedPage};
+	DELETE_SHARED_PAGE: {};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =

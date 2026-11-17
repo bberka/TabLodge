@@ -34,8 +34,9 @@ async function ask(url: string): Promise<readonly string[] | undefined> {
 }
 
 /**
-The optional parts the connected server has (`private`, `key`, `preview`), or undefined while it is not known: not
-connected, not asked yet, or the server could not be reached. Site icons and previews need `preview`.
+The optional parts the connected server has (`private`, `key`, `preview`, `trash`, `shared-pages`), or undefined
+while it is not known: not connected, not asked yet, or the server could not be reached. Site icons and previews
+need `preview`; Share › Web page › Upload to my server needs `shared-pages`.
 */
 export function useServerFeatures(): readonly string[] | undefined {
 	const {connected, url} = useSyncStatus();

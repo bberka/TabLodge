@@ -5,6 +5,12 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // src/worker.ts
 import { DurableObject } from "cloudflare:workers";
 
+// ../extension/src/shared/sync/shared-pages.ts
+var SHARED_PAGES_FEATURE = "shared-pages";
+var SHARED_PAGE_PREFIX = "/p/";
+var MAX_SHARED_PAGE_TITLE = 200;
+var SHARED_PAGE_ID = /^[\w-]{22}$/;
+
 // ../../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/http-exception.js
 var HTTPException = class extends Error {
   static {
@@ -2859,6 +2865,81 @@ async function fetchIcon(host, deps = {}) {
 }
 __name(fetchIcon, "fetchIcon");
 
+// src/shared-pages.ts
+var PAGE_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  // `sandbox` gives the page an opaque origin and no scripts; popups are allowed so its links open in a new tab,
+  // outside the sandbox.
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; sandbox allow-popups allow-popups-to-escape-sandbox",
+  "X-Content-Type-Options": "nosniff",
+  // Otherwise every site a visitor opens from the page learns its address.
+  "Referrer-Policy": "no-referrer",
+  "X-Robots-Tag": "noindex, nofollow",
+  // A deleted page must stop showing at once.
+  "Cache-Control": "no-store"
+};
+var pageNotFound = /* @__PURE__ */ __name(() => new Response("Not found", {
+  status: 404,
+  headers: { ...PAGE_HEADERS, "Content-Type": "text/plain; charset=utf-8" }
+}), "pageNotFound");
+var SqlPageStore = class {
+  constructor(sql) {
+    this.sql = sql;
+    sql.all(`CREATE TABLE IF NOT EXISTS pages (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL,
+			html TEXT NOT NULL,
+			size INTEGER NOT NULL,
+			created INTEGER NOT NULL
+		)`);
+  }
+  sql;
+  static {
+    __name(this, "SqlPageStore");
+  }
+  /**
+  Adds the page unless the server already holds `maxPages` pages or the page would take the total over `maxBytes`.
+  */
+  add(page, budget) {
+    return this.sql.transaction(() => {
+      const used = this.sql.all(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM pages"
+      )[0];
+      if (Number(used?.n) >= budget.maxPages || Number(used?.bytes) + page.size > budget.maxBytes) {
+        return false;
+      }
+      this.sql.all(
+        "INSERT INTO pages (id, title, html, size, created) VALUES (?, ?, ?, ?, ?)",
+        page.id,
+        page.title,
+        page.html,
+        page.size,
+        page.createdAt
+      );
+      return true;
+    });
+  }
+  list() {
+    return this.sql.all("SELECT id, title, size, created FROM pages ORDER BY created DESC").map((row) => ({
+      id: String(row.id),
+      title: String(row.title),
+      size: Number(row.size),
+      createdAt: Number(row.created)
+    }));
+  }
+  html(id) {
+    const row = this.sql.all("SELECT html FROM pages WHERE id = ?", id)[0];
+    return row ? String(row.html) : void 0;
+  }
+  remove(id) {
+    const removed = this.sql.all("DELETE FROM pages WHERE id = ? RETURNING id", id).length > 0;
+    if (removed) {
+      this.sql.compact?.();
+    }
+    return removed;
+  }
+};
+
 // src/api.ts
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -2870,7 +2951,11 @@ var MIN_TOKEN_LENGTH = 32;
 var DEFAULT_LIMITS = {
   maxRecords: 5e5,
   retentionDays: 90,
-  requestsPerMinute: 300
+  requestsPerMinute: 300,
+  maxPageBytes: 1e6,
+  maxPages: 50,
+  maxPageStorageBytes: 2e7,
+  pageViewsPerMinute: 120
 };
 var MINUTE_MS = 60 * 1e3;
 var MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -2886,6 +2971,12 @@ var DEFAULT_PULL = 500;
 var MAX_PULL = 1e3;
 var PURGE_EVERY_MS = 60 * 60 * 1e3;
 var DAY_MS = 24 * 60 * 60 * 1e3;
+var utf8Bytes = /* @__PURE__ */ __name((text) => new TextEncoder().encode(text).length, "utf8Bytes");
+var ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+var newPageId = /* @__PURE__ */ __name(() => Array.from(
+  crypto.getRandomValues(new Uint8Array(22)),
+  (byte) => ID_ALPHABET[byte % 64]
+).join(""), "newPageId");
 var problem = /* @__PURE__ */ __name((error, detail) => ({
   error,
   ...detail
@@ -3008,7 +3099,7 @@ function createApi(options) {
       cursor: log.cursor,
       records: log.size,
       limits,
-      features: FEATURES
+      features: options.pages ? [...FEATURES, SHARED_PAGES_FEATURE] : FEATURES
     });
   });
   app.get("/v1/key", (c) => c.json({ key: options.log().key }));
@@ -3093,6 +3184,85 @@ function createApi(options) {
       return c.json({ results, cursor });
     }
   );
+  const { pages } = options;
+  if (pages) {
+    const pageRecord = /* @__PURE__ */ __name((page) => ({ ...page, path: `${SHARED_PAGE_PREFIX}${page.id}` }), "pageRecord");
+    app.get(
+      "/v1/pages",
+      (c) => c.json({
+        pages: pages().list().map((page) => pageRecord(page))
+      })
+    );
+    app.post(
+      "/v1/pages",
+      // JSON escaping can make the body several times the page's size.
+      bodyLimit({
+        maxSize: limits.maxPageBytes * 6 + 4096,
+        onError: /* @__PURE__ */ __name((c) => c.json(
+          problem("page_too_large", { maxBytes: limits.maxPageBytes }),
+          413
+        ), "onError")
+      }),
+      async (c) => {
+        let body;
+        try {
+          body = await c.req.json();
+        } catch {
+          return c.json(problem("bad_json"), 400);
+        }
+        const { title, html } = body ?? {};
+        if (typeof title !== "string" || title.length > MAX_SHARED_PAGE_TITLE || typeof html !== "string" || html === "") {
+          return c.json(problem("bad_page"), 400);
+        }
+        const size = utf8Bytes(html);
+        if (size > limits.maxPageBytes) {
+          return c.json(
+            problem("page_too_large", { maxBytes: limits.maxPageBytes }),
+            413
+          );
+        }
+        const page = { id: newPageId(), title, size, createdAt: now() };
+        const added = pages().add(
+          { ...page, html },
+          { maxPages: limits.maxPages, maxBytes: limits.maxPageStorageBytes }
+        );
+        return added ? c.json(pageRecord(page), 201) : c.json(
+          problem("pages_full", {
+            maxPages: limits.maxPages,
+            maxBytes: limits.maxPageStorageBytes
+          }),
+          507
+        );
+      }
+    );
+    app.post(
+      "/v1/pages/:id/delete",
+      (c) => pages().remove(c.req.param("id")) ? c.json({ deleted: true }) : c.json(problem("not_found"), 404)
+    );
+    let viewWindow = { start: 0, count: 0 };
+    app.get(`${SHARED_PAGE_PREFIX}:id`, (c) => {
+      const time = now();
+      if (time - viewWindow.start >= MINUTE_MS) {
+        viewWindow = { start: time, count: 0 };
+      }
+      viewWindow.count += 1;
+      if (viewWindow.count > limits.pageViewsPerMinute) {
+        return new Response("Too many requests", {
+          status: 429,
+          headers: {
+            ...PAGE_HEADERS,
+            "Content-Type": "text/plain; charset=utf-8",
+            "Retry-After": String(
+              Math.ceil((viewWindow.start + MINUTE_MS - time) / 1e3)
+            )
+          }
+        });
+      }
+      const id = c.req.param("id");
+      const html = SHARED_PAGE_ID.test(id) ? pages().html(id) : void 0;
+      return html === void 0 ? pageNotFound() : new Response(html, { headers: PAGE_HEADERS });
+    });
+  }
   return app;
 }
 __name(createApi, "createApi");
@@ -3269,22 +3439,29 @@ var positive = /* @__PURE__ */ __name((raw2, fallback) => {
   const value = Number(raw2);
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }, "positive");
+var SPACE_HEADER = "TabLodge-Library";
 var SyncLibrary = class extends DurableObject {
   static {
     __name(this, "SyncLibrary");
   }
   log;
-  api;
+  apis;
   constructor(ctx, env) {
     super(ctx, env);
     const { storage } = ctx;
-    this.log = new SqlChangeLog({
+    const sql = {
       all: /* @__PURE__ */ __name((query, ...parameters) => storage.sql.exec(query, ...parameters).toArray(), "all"),
       transaction: /* @__PURE__ */ __name((work) => storage.transactionSync(work), "transaction")
-    });
-    this.api = createApi({
+    };
+    this.log = new SqlChangeLog(sql);
+    let pages;
+    const api = /* @__PURE__ */ __name((withPages) => createApi({
       token: env.TABLODGE_SYNC_TOKEN ?? "",
       log: /* @__PURE__ */ __name(() => this.log, "log"),
+      pages: withPages ? () => {
+        pages ??= new SqlPageStore(sql);
+        return pages;
+      } : void 0,
       limits: {
         maxRecords: positive(env.MAX_RECORDS, DEFAULT_LIMITS.maxRecords),
         retentionDays: positive(
@@ -3303,14 +3480,15 @@ var SyncLibrary = class extends DurableObject {
           }
         }
       }
-    });
+    }), "api");
+    this.apis = { default: api(true), private: api(false) };
     ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair(LIVE_PING, LIVE_PONG)
     );
   }
   async fetch(request) {
     if (new URL(request.url).pathname !== LIVE_PATH) {
-      return this.api.fetch(request);
+      return this.apis[request.headers.get(SPACE_HEADER) === "private" ? "private" : "default"].fetch(request);
     }
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
@@ -3383,7 +3561,11 @@ var worker_default = {
         { status: 503, headers: CORS_HEADERS }
       );
     }
-    if (pathname !== LIVE_PATH) {
+    const sharedPage = space === "default" && request.method === "GET" && pathname.startsWith(SHARED_PAGE_PREFIX);
+    if (sharedPage && !SHARED_PAGE_ID.test(pathname.slice(SHARED_PAGE_PREFIX.length))) {
+      return pageNotFound();
+    }
+    if (pathname !== LIVE_PATH && !sharedPage) {
       const given = /^Bearer (.+)$/.exec(request.headers.get("Authorization") ?? "")?.[1] ?? "";
       if (!sameToken(given, token)) {
         return Response.json(
@@ -3392,9 +3574,9 @@ var worker_default = {
         );
       }
     }
-    return env.LIBRARY.get(env.LIBRARY.idFromName(space)).fetch(
-      space === "default" ? request : new Request(url, request)
-    );
+    const forwarded = new Request(url, request);
+    forwarded.headers.set(SPACE_HEADER, space);
+    return env.LIBRARY.get(env.LIBRARY.idFromName(space)).fetch(forwarded);
   }
 };
 export {

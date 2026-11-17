@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {createApi, type Limits} from '../src/api';
+import {createApi, DEFAULT_LIMITS, type Limits} from '../src/api';
 import {isAuthMessage, sameToken} from '../src/live';
 import {sqlite} from '../src/node-sqlite';
 import {SqlChangeLog} from '../src/sql-change-log';
@@ -82,7 +82,7 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 		protocol: 1,
 		cursor: 1,
 		records: 1,
-		limits: {maxRecords: 500_000, retentionDays: 90, requestsPerMinute: 300},
+		limits: DEFAULT_LIMITS,
 		features: ['private', 'key', 'preview', 'trash'],
 	});
 });

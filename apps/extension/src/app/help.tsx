@@ -264,6 +264,12 @@ function Help() {
 						'link preview hover card page image description og image sync server thumbnail focus escape',
 				},
 				{
+					title: 'Share a page by link',
+					body: 'With a sync server connected, Share › HTML page also offers Upload to my server. Your server keeps the page and gives it a link with random characters that cannot be guessed; the link is copied. Anyone who has the link can open the page, so send it only to people you mean to. To update the page, share again: each upload makes a new link. Settings › Sync › Shared pages lists every page on the server with its link, and Delete takes it down so the link stops working. Private windows never upload. An older server does not offer it; update the server first. On Cloudflare’s free plan, page views count against the same daily limit as sync.',
+					searchText:
+						'share link upload server publish public web page html page shared pages delete copy link url',
+				},
+				{
 					title: 'Keep or remove restored tabs',
 					body: 'Settings controls whether restored tabs stay in their session or are removed after a successful restore. You can also choose the destination window and what to do when a URL is already open.',
 					searchText:

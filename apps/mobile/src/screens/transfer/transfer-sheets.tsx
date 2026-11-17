@@ -24,13 +24,19 @@ import {
 } from '../../../../extension/src/shared/passcode';
 import type {Store} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
-import {notify} from '../../ui/dialog';
+import {notify, showDialog} from '../../ui/dialog';
 import {buildBackup} from '../../transfer/backup';
 import {useView} from '../../library/view';
 import {useTrash} from '../../library/trash-store';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
+import {
+	copyLink,
+	uploadPage,
+	useSharedPagesServer,
+} from '../../library/shared-pages';
+import {openLink} from '../../platform/open-links';
 import {useColors} from '../../ui/theme';
 import {
 	importIntoStore,
@@ -340,6 +346,9 @@ export function ShareSheet({
 	const [way, setWay] = useState<Way>('links');
 	const [password, setPassword] = useState('');
 	const [busy, setBusy] = useState(false);
+	const [uploading, setUploading] = useState(false);
+	// The private library is never uploaded.
+	const canUpload = useSharedPagesServer() === 'ready' && view === 'regular';
 	const sessions = store.groups.length;
 	const bookmarks = store.bookmarks.length;
 	const isBackup = scope === undefined && what === 'backup';
@@ -401,6 +410,38 @@ export function ShareSheet({
 			notify('Could not share', 'Try again.');
 		} finally {
 			setBusy(false);
+		}
+	};
+
+	const upload = async () => {
+		setUploading(true);
+		try {
+			const page = await uploadPage(
+				title,
+				shareHtmlPage(title, groups, APP_NAME),
+			);
+			onClose();
+			await copyLink(page.url);
+			showDialog(
+				'Page uploaded',
+				`${page.url}\n\nThe link is copied. Anyone with it can open the page. To update it, share again. Delete it in Settings › Sync › Shared pages.`,
+				[
+					{
+						label: 'Open',
+						run() {
+							openLink(page.url);
+						},
+					},
+					{label: 'Done'},
+				],
+			);
+		} catch (error) {
+			notify(
+				'Could not upload',
+				error instanceof Error ? error.message : 'Try again.',
+			);
+		} finally {
+			setUploading(false);
 		}
 	};
 
@@ -467,6 +508,16 @@ export function ShareSheet({
 					loading={busy}
 					onPress={() => void run()}
 				/>
+				{!isBackup && way === 'page' && links > 0 && canUpload && (
+					<Button
+						label="Upload to my server"
+						icon="cloud-upload-outline"
+						kind="plain"
+						disabled={busy}
+						loading={uploading}
+						onPress={() => void upload()}
+					/>
+				)}
 			</View>
 		</BottomSheet>
 	);
