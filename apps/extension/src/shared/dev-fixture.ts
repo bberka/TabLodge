@@ -244,16 +244,11 @@ export const devFixtureUrls = [
 	]),
 ];
 
-// A few bookmarks carry a note, so the note line shows on the board and in the phone's rows.
+// Two bookmarks carry a one-line note, so the note line shows on the board and in the phone's rows. They sit in
+// columns shorter than Dev, so the board keeps the height the accessibility checks' drags rely on.
 const bookmarkNotes = new Map([
-	[
-		'https://developer.mozilla.org/',
-		'Go-to reference for CSS and the DOM APIs.',
-	],
-	[
-		'https://alistapart.com/',
-		'Read the piece on accessible forms before the design review on Friday.',
-	],
+	['https://weather.com/', 'Check before the morning run.'],
+	['https://alistapart.com/', 'Accessible forms piece, for Friday.'],
 ]);
 
 const columnByName = new Map(
