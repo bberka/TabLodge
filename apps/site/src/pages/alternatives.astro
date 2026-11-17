@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import AlternativesSwitch from '../components/AlternativesSwitch.astro';
 import DownloadButtons from '../components/DownloadButtons.astro';
 import {SITE} from '../site';
 
@@ -46,6 +47,7 @@ const breadcrumbs = [
 >
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <span aria-current="page">Alternatives</span></nav>
+		<AlternativesSwitch current="extensions" />
 		<h1>A OneTab, Session Buddy and Toby alternative</h1>
 		<p class="lead">
 			OneTab, Session Buddy and Toby are well-known ways to save tabs. TabLodge takes a different route: free,
@@ -104,7 +106,7 @@ const breadcrumbs = [
 			<li>Export your data from the other tool: OneTab as text, Session Buddy, Tab Session Manager or Toby as JSON. Keep the old extension installed until you are happy with the result.</li>
 			<li>In TabLodge open Settings, then Data, choose the file and review what will be imported. Duplicates can be skipped.</li>
 		</ol>
-		<p>TabLodge also has an <a href={SITE.androidApk} rel="noopener">Android app</a> that saves links you share and opens, searches and orders your bookmarks and sessions through the sync server you run. The others are browser extensions only. See how the <a href="/alternatives/android/">Android app compares with Raindrop.io, Linkwarden, Karakeep, wallabag and Instapaper</a>.</p>
+		<p>TabLodge also has an <a href={SITE.androidApk} rel="noopener">Android app</a>, which the extensions above do not have. See how it <a href="/alternatives/android/">compares with Raindrop.io, Linkwarden, Karakeep, wallabag and Instapaper</a>.</p>
 		<p>TabLodge also imports your browser bookmarks (and can offer to add pages you star in the browser), HTML bookmark files, CSV and plain URL lists.</p>
 
 		<p class="note">

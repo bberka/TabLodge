@@ -1,0 +1,62 @@
+---
+interface Props {
+	current: 'extensions' | 'android';
+}
+
+const {current} = Astro.props;
+const tabs = [
+	{id: 'extensions', href: '/alternatives/', label: 'Browser extensions', hint: 'vs OneTab, Session Buddy, Toby'},
+	{id: 'android', href: '/alternatives/android/', label: 'Android app', hint: 'vs Raindrop.io, Linkwarden, Karakeep'},
+] as const;
+---
+
+<nav class="switch" aria-label="Choose a comparison">
+	{
+		tabs.map((tab) => (
+			<a href={tab.href} aria-current={tab.id === current ? 'page' : undefined}>
+				<strong>{tab.label}</strong>
+				<span>{tab.hint}</span>
+			</a>
+		))
+	}
+</nav>
+
+<style>
+	.switch {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.4rem;
+		padding: 0.3rem;
+		margin-bottom: 1.8rem;
+		background: var(--bg-alt);
+		border: 1px solid var(--line);
+		border-radius: calc(var(--radius) + 4px);
+	}
+	.switch a {
+		display: grid;
+		gap: 0.1rem;
+		padding: 0.7rem 1rem;
+		border-radius: var(--radius);
+		color: var(--text);
+		text-decoration: none;
+	}
+	.switch a:hover {
+		background: var(--card);
+	}
+	.switch a[aria-current='page'] {
+		background: var(--brand);
+		color: #fff;
+	}
+	.switch span {
+		font-size: 0.85rem;
+		color: var(--muted);
+	}
+	.switch a[aria-current='page'] span {
+		color: rgb(255 255 255 / 0.85);
+	}
+	@media (max-width: 560px) {
+		.switch {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

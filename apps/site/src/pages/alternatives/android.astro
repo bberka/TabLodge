@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import AlternativesSwitch from '../../components/AlternativesSwitch.astro';
 import {SITE} from '../../site';
 
 const title = 'TabLodge for Android Compared: Raindrop.io, Linkwarden, Karakeep, Wallabag, Instapaper';
@@ -74,11 +75,12 @@ const breadcrumbs = [
 >
 	<article class="narrow prose page">
 		<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <a href="/alternatives/">Alternatives</a> / <span aria-current="page">Android</span></nav>
+		<AlternativesSwitch current="android" />
 		<h1>TabLodge for Android compared with other link-saving apps</h1>
 		<p class="lead">
 			The TabLodge Android app is a small, free link saver that keeps your library on the phone and can sync with a
 			server you run. These apps do overlapping jobs, and most of them do more. This page says where each one fits
-			and where TabLodge falls short. Comparing browser extensions instead? See the <a href="/alternatives/">OneTab, Session Buddy and Toby comparison</a>.
+			and where TabLodge falls short.
 		</p>
 		<p><a class="btn primary" href={SITE.androidApk} rel="noopener">Download the Android APK</a></p>
 
@@ -135,6 +137,8 @@ const breadcrumbs = [
 			<li>You want to pick where links open: your default browser, an in-app tab, or a browser you choose.</li>
 			<li>You want a separate private library on the phone, optionally locked with a PIN or password.</li>
 		</ul>
+
+		<p>Looking at browser extensions instead? See the <a href="/alternatives/">OneTab, Session Buddy and Toby comparison</a>.</p>
 
 		<h2>Sources</h2>
 		<p>
