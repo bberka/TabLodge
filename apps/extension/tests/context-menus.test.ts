@@ -85,6 +85,7 @@ type ClickInfo = {
 	menuItemId: string;
 	linkUrl?: string;
 	linkText?: string;
+	srcUrl?: string;
 	selectionText?: string;
 	pageUrl?: string;
 	checked?: boolean;
@@ -836,6 +837,98 @@ test('bookmarking a link into a column uses the link text, falls back to the hos
 	]);
 	assert.equal(harness.badges.at(-1)?.text, '!');
 	assert.equal(harness.state.bookmarks.length, 2);
+});
+
+test('Save image bookmarks the image address and skips one already saved or in the trash', async () => {
+	const harness = createHarness(
+		baseState(
+			{},
+			{
+				bookmarks: [
+					{
+						id: 'b0',
+						title: 'Old image',
+						url: 'https://cdn.example/old.png',
+						columnId: 'bookmark-default',
+						createdAt: 1,
+						updatedAt: 1,
+					},
+					{
+						id: 'b1',
+						title: 'Newest',
+						url: 'https://news.example/',
+						columnId: 'column-reading',
+						createdAt: 5,
+						updatedAt: 5,
+					},
+				],
+			},
+		),
+	);
+	await harness.install();
+	const image = harness.item('tablodge-image-save');
+	assert.equal(image?.title, `Save image to ${appName}`);
+	assert.equal(image?.parentId, undefined);
+	assert.deepEqual(image?.contexts, ['image']);
+	assert.deepEqual(image?.targetUrlPatterns, ['http://*/*', 'https://*/*']);
+
+	const save = async (srcUrl: string) =>
+		harness.click({
+			menuItemId: 'tablodge-image-save',
+			srcUrl,
+			pageUrl: 'https://www.photos.example/album/2',
+		});
+	await save('https://cdn.example/full/cat.JPG?w=800');
+	assert.deepEqual(
+		harness.state.bookmarks.map(({title, url, columnId}) => ({
+			title,
+			url,
+			columnId,
+		})),
+		[
+			{
+				title: 'Old image',
+				url: 'https://cdn.example/old.png',
+				columnId: 'bookmark-default',
+			},
+			{
+				title: 'Newest',
+				url: 'https://news.example/',
+				columnId: 'column-reading',
+			},
+			{
+				title: 'Image from photos.example',
+				url: 'https://cdn.example/full/cat.JPG?w=800',
+				columnId: 'column-reading',
+			},
+		],
+		'the image lands in the column that took the newest bookmark',
+	);
+
+	// An image bookmarked in another column counts as saved.
+	await save('https://cdn.example/old.png');
+	assert.equal(harness.state.bookmarks.length, 3);
+
+	const saved = harness.state.bookmarks[2];
+	assert.equal(
+		(await harness.send({type: 'DELETE_BOOKMARK', bookmarkId: saved.id!})).ok,
+		true,
+	);
+	await save('https://cdn.example/full/cat.JPG?w=800');
+	await save('data:image/png;base64,AAAA');
+	assert.equal(
+		harness.state.bookmarks.length,
+		2,
+		'nothing comes back from the trash',
+	);
+	assert.deepEqual(harness.warnings, [
+		'This image is in the trash bin. Restore it from there to keep it.',
+		'Only http and https images can be saved.',
+	]);
+	assert.deepEqual(
+		harness.badges.filter((badge) => badge.text).map((badge) => badge.text),
+		['✓', '✓', '!', '!'],
+	);
 });
 
 test('bookmarking this page uses the tab title and the chosen column', async () => {

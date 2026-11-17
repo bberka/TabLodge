@@ -96,6 +96,7 @@ import {
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
+import {imageSave} from '../src/shared/save-image';
 import {
 	createPrivateLock,
 	type Gate,
@@ -10277,6 +10278,44 @@ async function bookmarkToColumn(
 }
 
 /**
+"Save image": bookmarks the image address in the column that took the newest bookmark. An image already
+bookmarked counts as done; one in the trash is left there, so the save does not bring back what was deleted.
+*/
+async function saveImage(info: MenuClickData): Promise<MenuOutcome> {
+	const store = await getStore();
+	const plan = imageSave(
+		info,
+		new Set(store.bookmarks.map((bookmark) => bookmark.url)),
+		pruneTrash(await readTrash(), store.settings.trashRetentionDays),
+	);
+	if (!plan.ok) {
+		switch (plan.reason) {
+			case 'saved': {
+				return {ok: true};
+			}
+
+			case 'trash': {
+				return {
+					ok: false,
+					error:
+						'This image is in the trash bin. Restore it from there to keep it.',
+				};
+			}
+
+			default: {
+				return {ok: false, error: 'Only http and https images can be saved.'};
+			}
+		}
+	}
+
+	const result = await addBookmarks(
+		[{url: plan.url, title: plan.title}],
+		defaultBookmarkColumnId(store.bookmarkColumns, store.bookmarks),
+	);
+	return result.ok ? {ok: true} : result;
+}
+
+/**
 "New column": opens the dashboard's add-bookmark dialog prefilled with the link or page.
 */
 async function openPrefilledBookmarkDialog(
@@ -10426,6 +10465,13 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 				);
 			},
 			id !== MENU.linkBookmarkNew,
+		);
+		return;
+	}
+
+	if (id === MENU.imageSave) {
+		runMenuAction(tab, `${APP_NAME} could not save this image.`, () =>
+			saveImage(info),
 		);
 		return;
 	}

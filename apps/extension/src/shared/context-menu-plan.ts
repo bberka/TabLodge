@@ -23,6 +23,7 @@ export const MENU = {
 	linkRoot: 'tablodge-link-root',
 	linkBookmark: 'tablodge-link-bookmark',
 	linkBookmarkNew: 'tablodge-link-bookmark-new',
+	imageSave: 'tablodge-image-save',
 	pageRoot: 'tablodge-page-root',
 	pageBookmark: 'tablodge-page-bookmark',
 	pageBookmarkNew: 'tablodge-page-bookmark-new',
@@ -201,6 +202,13 @@ export function contextMenuPlan(
 			link.contexts,
 			{targetUrlPatterns: WEB_URL_PATTERNS},
 		);
+		// The image menu has one action, so it needs no parent item.
+		items.push({
+			id: MENU.imageSave,
+			title: `Save image to ${env.appName}`,
+			contexts: ['image'],
+			targetUrlPatterns: WEB_URL_PATTERNS,
+		});
 	}
 
 	if (settings.contextMenuPageEnabled) {
