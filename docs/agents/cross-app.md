@@ -12,14 +12,16 @@ The apps share one library format and one sync protocol, so a feature in one app
 
 ## Feature triage
 
+Every feature ships complete in both the extension and the Android app. Each app works alone, without a sync server and without the other app. Only a feature that depends on the server by nature, such as site icons or page copies fetched through it, or publishing, may need a connected server, and without one it fails quietly. A feature that only one platform can do, such as Android Quick Settings tiles or reading saved lists from site pages in the browser, answers "not applicable" for the other app and says why. The other apps get its results through ordinary sync.
+
 When a feature touches data, sync, settings, or link handling, answer each question and put the answers in the issue or pull request:
 
-1. **Android app.** Would users expect it there? Does the stored library or a setting that now syncs need a matching change, or at least a safe fallback (`apps/mobile/src`)? Does an old app version still read the data?
+1. **Other app.** What does it need in the other app, or why is it not applicable there? Does the stored library or a setting that now syncs need a matching change, or at least a safe fallback (`apps/mobile/src`)? Does an old app version still read the data?
 2. **Server.** Does the protocol, a limit, or a record type change? Then old clients and servers must keep working, or `PROTOCOL_VERSION` moves.
 3. **Website and docs.** Features, permissions, FAQ, and screenshots: see [Documentation](documentation.md#keep-current).
 4. **Privacy.** New stored data or network behavior goes into [PRIVACY.md](../PRIVACY.md).
 
-A feature that belongs to one app only needs the answer "not applicable" and no more. The 'challenge-feature' skill helps decide whether a feature is worth building.
+The 'challenge-feature' skill helps decide whether a feature is worth building.
 
 ## Issues
 
