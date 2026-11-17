@@ -123,6 +123,17 @@ describe('contextMenuPlan', () => {
 				.filter((item) => item.parentId === id)
 				.map((item) => item.title ?? '---');
 		const plan = contextMenuPlan(on, columns, [], env);
+		assert.deepEqual(titlesUnder(plan, 'tablodge-selection-root'), [
+			'Search saved tabs & bookmarks for “%s”',
+			'Save quote',
+		]);
+		const quote = plan.find((item) => item.id === 'tablodge-selection-quote');
+		assert.deepEqual(quote?.contexts, ['selection']);
+		assert.deepEqual(
+			quote?.documentUrlPatterns,
+			['http://*/*', 'https://*/*'],
+			'a quote needs a web page to save it on',
+		);
 		assert.deepEqual(titlesUnder(plan, 'tablodge-image-root'), [
 			'Bookmark image to',
 		]);
@@ -202,12 +213,15 @@ describe('contextMenuPlan', () => {
 			'Search saved tabs & bookmarks for “%s”',
 		);
 		assert.equal(chromium.get('tablodge-page-bookmark:rd'), 'R&D');
+		assert.equal(chromium.get('tablodge-selection-quote'), 'Save quote');
 
 		const firefox = titles(true);
 		assert.equal(
 			firefox.get('tablodge-selection-search'),
 			'Search saved tabs && bookmarks for “%s”',
 		);
+		assert.equal(firefox.get('tablodge-selection-quote'), 'Save quote');
+		assert.equal(firefox.get('tablodge-selection-root'), 'Tab&&Lodge');
 		for (const id of [
 			'tablodge-link-bookmark:rd',
 			'tablodge-image-bookmark:rd',

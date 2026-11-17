@@ -133,7 +133,16 @@ function createHarness(
 		firefox = false,
 		userAgent = '',
 		listsTabContext = true,
-	}: {firefox?: boolean; userAgent?: string; listsTabContext?: boolean} = {},
+		scriptingFails = false,
+	}: {
+		firefox?: boolean;
+		userAgent?: string;
+		listsTabContext?: boolean;
+		/**
+		Chrome.scripting.executeScript rejects, as on pages an extension cannot script.
+		*/
+		scriptingFails?: boolean;
+	} = {},
 ) {
 	const listeners: Record<string, Listener[]> = {};
 	const on = (name: string) => ({
@@ -179,6 +188,13 @@ function createHarness(
 	const updatedTabs: Array<{id: number; url?: string}> = [];
 	const badges: Array<{text: string; tabId?: number}> = [];
 	const warnings: string[] = [];
+	const toasts: Array<{
+		tabId: number;
+		message: string;
+		failed: boolean;
+		undoId?: string;
+		theme: string;
+	}> = [];
 	const menus = new Map<string, MenuItem>();
 	/**
 	Errors Chrome would report through runtime.lastError (duplicate ids, missing parents).
@@ -380,6 +396,19 @@ function createHarness(
 			async setBadgeBackgroundColor() {},
 			onClicked: on('actionClicked'),
 		},
+		scripting: {
+			async executeScript(injection: {
+				target: {tabId: number};
+				args: [Omit<(typeof toasts)[number], 'tabId'>];
+			}) {
+				if (scriptingFails) {
+					throw new Error('Cannot access contents of the page.');
+				}
+
+				toasts.push({tabId: injection.target.tabId, ...injection.args[0]});
+				return [{result: true}];
+			},
+		},
 		sidePanel: {
 			async open() {},
 			async setOptions() {},
@@ -469,6 +498,7 @@ function createHarness(
 		updatedTabs,
 		badges,
 		warnings,
+		toasts,
 		menuErrors,
 		refreshes: () => refreshes,
 		items,
@@ -603,6 +633,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-selection-root')), [
 		'Search saved tabs & bookmarks for “%s”',
+		'Save quote',
 	]);
 
 	const action = harness.topLevel('action');
@@ -1349,6 +1380,156 @@ test('the selection search quotes text that would read as search operators', asy
 	});
 	const q = new URL(harness.openedTabs[0].url ?? '').searchParams.get('q');
 	assert.equal(q, '"install -g site:npmjs.com"');
+});
+
+const quoted = (url: string, quote: string) => ({
+	menuItemId: 'tablodge-selection-quote',
+	selectionText: quote,
+	pageUrl: url,
+});
+
+test('Save quote bookmarks the page with the quote and a link to it, then appends the next quote', async () => {
+	const harness = createHarness(
+		baseState(
+			{},
+			{
+				bookmarks: [
+					{
+						id: 'older',
+						url: 'https://elsewhere.example/',
+						title: 'Elsewhere',
+						columnId: 'column-reading',
+						createdAt: 5,
+						updatedAt: 5,
+					},
+				],
+			},
+		),
+	);
+	await harness.install();
+	await harness.click(quoted('https://current.example/page', 'First quote'));
+	const page = 'https://current.example/page';
+	const saved = harness.state.bookmarks.find((entry) => entry.url === page);
+	assert.ok(saved, 'the page is bookmarked');
+	assert.equal(saved.title, 'Current page');
+	assert.equal(
+		saved.columnId,
+		'column-reading',
+		"the column the Add bookmark dialog starts on: the newest bookmark's",
+	);
+	assert.equal(saved.notes, `> First quote\n${page}#:~:text=First%20quote`);
+	assert.equal(harness.toasts.length, 1);
+	assert.equal(harness.toasts[0].message, 'Quote saved to Reading.');
+	assert.equal(harness.toasts[0].failed, false);
+	assert.ok(harness.toasts[0].undoId);
+	assert.deepEqual(harness.badges, [], 'the toast replaces the badge');
+
+	// The page opened from the saved link reports the address with the fragment; it is still the same bookmark.
+	await harness.click(
+		quoted(
+			`${page}#:~:text=First%20quote`,
+			'Second, longer quote that runs on past eight words',
+		),
+	);
+	const bookmarks = harness.state.bookmarks.filter(
+		(entry) => entry.url === page,
+	);
+	assert.equal(bookmarks.length, 1);
+	assert.equal(
+		bookmarks[0].notes,
+		`> First quote\n${page}#:~:text=First%20quote\n\n> Second, longer quote that runs on past eight words\n${page}#:~:text=Second%2C%20longer%20quote%20that,on%20past%20eight%20words`,
+	);
+});
+
+test('Save quote goes into a saved tab of the page, and every saved copy of it', async () => {
+	const page = 'https://current.example/page';
+	const harness = createHarness(
+		baseState(
+			{},
+			{
+				groups: [
+					{
+						id: 'g1',
+						name: 'Research',
+						folderId: 'unfiled',
+						createdAt: 1,
+						updatedAt: 1,
+						tabs: [{id: 't1', url: page, title: 'Page', notes: 'Mine'}],
+					},
+					{
+						id: 'g2',
+						name: 'Other',
+						folderId: 'unfiled',
+						createdAt: 1,
+						updatedAt: 1,
+						tabs: [{id: 't2', url: page, title: 'Page', notes: 'Mine'}],
+					},
+				],
+			},
+		),
+	);
+	await harness.install();
+	await harness.click(quoted(page, 'Hi'));
+	assert.equal(harness.state.bookmarks.length, 0, 'no bookmark is made');
+	for (const group of harness.state.groups) {
+		assert.equal(group.tabs[0].notes, `Mine\n\n> Hi\n${page}#:~:text=Hi`);
+	}
+
+	assert.equal(harness.toasts[0].message, 'Quote saved to Research.');
+});
+
+test('Save quote refuses a quote that does not fit the note and leaves it as it was', async () => {
+	const page = 'https://current.example/page';
+	const full = 'x'.repeat(9990);
+	const harness = createHarness(
+		baseState(
+			{},
+			{
+				bookmarks: [
+					{
+						id: 'b1',
+						url: page,
+						title: 'Page',
+						columnId: 'bookmark-default',
+						notes: full,
+						createdAt: 1,
+						updatedAt: 1,
+					},
+				],
+			},
+		),
+	);
+	await harness.install();
+	await harness.click(quoted(page, 'One more quote'));
+	assert.equal(harness.state.bookmarks[0].notes, full);
+	assert.equal(harness.toasts.length, 1);
+	assert.equal(harness.toasts[0].failed, true);
+	assert.match(harness.toasts[0].message, /note for this page is full/);
+	assert.equal(harness.toasts[0].undoId, undefined);
+});
+
+test('Undo from the quote toast removes the quote and the bookmark it made', async () => {
+	const harness = createHarness(baseState());
+	await harness.install();
+	await harness.click(quoted('https://current.example/page', 'Hello'));
+	assert.equal(harness.state.bookmarks.length, 1);
+	const response = await harness.send({
+		type: 'UNDO',
+		id: harness.toasts[0].undoId!,
+	});
+	assert.equal(response.ok, true);
+	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+test('Save quote flashes the badge where the page cannot show a toast', async () => {
+	const harness = createHarness(baseState(), undefined, {scriptingFails: true});
+	await harness.install();
+	await harness.click(quoted('https://current.example/page', 'Hello'));
+	assert.equal(harness.state.bookmarks.length, 1, 'the quote is still saved');
+	assert.deepEqual(
+		harness.badges.map((badge) => badge.text),
+		['✓'],
+	);
 });
 
 test('the toolbar exclude toggle adds and removes the active site and tracks the active tab', async () => {

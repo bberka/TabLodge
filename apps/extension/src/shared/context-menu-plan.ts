@@ -37,6 +37,7 @@ export const MENU = {
 	pageSendNew: 'tablodge-page-send-new',
 	selectionRoot: 'tablodge-selection-root',
 	selectionSearch: 'tablodge-selection-search',
+	selectionQuote: 'tablodge-selection-quote',
 	actionOpen: 'tablodge-action-open',
 	actionSaveWindow: 'tablodge-action-save-window',
 	actionExclude: 'tablodge-action-exclude',
@@ -384,6 +385,14 @@ export function contextMenuPlan(
 				id: MENU.selectionSearch,
 				title: 'Search saved tabs & bookmarks for “%s”',
 				parentId: MENU.selectionRoot,
+				...selection,
+			},
+			// A quote is saved on the page's bookmark, so only web pages offer it.
+			{
+				id: MENU.selectionQuote,
+				title: 'Save quote',
+				parentId: MENU.selectionRoot,
+				documentUrlPatterns: WEB_URL_PATTERNS,
 				...selection,
 			},
 		);

@@ -772,6 +772,11 @@ export type TabLodgeMessages = {
 	SPLIT_GROUP: {groupId: string; tabIds: string[]; name?: string};
 	UPDATE_TAB: {groupId: string; tabId: string; fields: TabFields};
 	ADD_BOOKMARK: {bookmark: BookmarkFields};
+	/**
+	Adds `quote` to the note of the page's bookmark, or of its saved tab, with a link to the passage; a page with neither
+	gets a new bookmark titled `title`.
+	*/
+	SAVE_QUOTE: {url: string; quote: string; title?: string};
 	ADD_BOOKMARKS: {
 		bookmarks: LinkEntry[];
 		columnId?: string | null;
@@ -1108,6 +1113,10 @@ export type TabLodgeResponses = {
 	UPDATE_TAB: {shared: number};
 	MERGE_GROUPS: {added: number; skipped: number} & Undoable;
 	ADD_BOOKMARK: {bookmark: Bookmark};
+	/**
+	`placed`: the column or session the quote went to.
+	*/
+	SAVE_QUOTE: {placed: string} & Undoable;
 	ADD_BOOKMARKS: {
 		count: number;
 		skipped: number;
