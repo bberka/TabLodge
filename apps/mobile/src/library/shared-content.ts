@@ -53,8 +53,7 @@ function fileKind(file: SharedFile): 'import' | 'backup' | undefined {
 		return 'backup';
 	}
 
-	const extension = name.includes('.') ? name.split('.').pop()! : '';
-	if (IMPORT_EXTENSIONS.has(extension)) {
+	if (IMPORT_EXTENSIONS.has(name.split('.').pop() ?? '')) {
 		return 'import';
 	}
 
