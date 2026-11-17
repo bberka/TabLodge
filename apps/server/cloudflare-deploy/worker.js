@@ -2586,6 +2586,7 @@ var MAX_REDIRECTS = 3;
 var MAX_HTML_BYTES = 256 * 1024;
 var MAX_ICON_BYTES = 128 * 1024;
 var MAX_IMAGE_BYTES = 512 * 1024;
+var MAX_PAGE_BYTES = 3e6;
 var IMAGE_TYPES = /* @__PURE__ */ new Set([
   "image/png",
   "image/jpeg",
@@ -2838,6 +2839,25 @@ async function fetchPreview(text, deps = {}) {
   };
 }
 __name(fetchPreview, "fetchPreview");
+async function fetchPage(text, deps = {}) {
+  const start = await allowedUrl(text, deps);
+  if (!start) {
+    return void 0;
+  }
+  const found = await guardedFetch(start, deps, "text/html");
+  if (!found) {
+    return void 0;
+  }
+  const type = found.response.headers.get("content-type") ?? "";
+  const declared = Number(found.response.headers.get("content-length") ?? 0);
+  if (!/html/i.test(type) || declared > MAX_PAGE_BYTES) {
+    await found.response.body?.cancel();
+    return void 0;
+  }
+  const bytes = await readLimited(found.response, MAX_PAGE_BYTES);
+  return bytes ? { url: found.url.href, html: new TextDecoder().decode(bytes) } : void 0;
+}
+__name(fetchPage, "fetchPage");
 async function fetchIcon(host, deps = {}) {
   const home = await allowedUrl(`https://${host}/`, deps);
   if (!home) {
@@ -2963,7 +2983,7 @@ var MAX_BODY_BYTES = 8 * 1024 * 1024;
 var MAX_PUSH_CHANGES = 500;
 var MAX_CHANGE_BYTES = 256 * 1024;
 var MAX_KEY_CHARS = 4096;
-var FEATURES = ["private", "key", "preview", "trash", "notes"];
+var FEATURES = ["private", "key", "preview", "trash", "notes", "page"];
 var PREVIEWS_PER_MINUTE = 600;
 var PREVIEW_CACHE_SIZE = 500;
 var PREVIEW_TTL_MS = 24 * 60 * 60 * 1e3;
@@ -3015,7 +3035,7 @@ function createApi(options) {
   );
   let rateWindow = { start: 0, count: 0 };
   app.use("/v1/*", async (c, next) => {
-    if (c.req.path === "/v1/icon" || c.req.path === "/v1/preview") {
+    if (["/v1/icon", "/v1/preview", "/v1/page"].includes(c.req.path)) {
       return next();
     }
     const time = now();
@@ -3055,6 +3075,7 @@ function createApi(options) {
   }, "previewLimit");
   app.use("/v1/icon", previewLimit);
   app.use("/v1/preview", previewLimit);
+  app.use("/v1/page", previewLimit);
   app.get("/v1/icon", async (c) => {
     const host = (c.req.query("host") ?? "").toLowerCase();
     if (!/^[\d\-.a-z]{3,253}$/.test(host)) {
@@ -3092,6 +3113,18 @@ function createApi(options) {
     }
     c.header("Cache-Control", "private, max-age=86400");
     return c.json(preview);
+  });
+  app.get("/v1/page", async (c) => {
+    const url = c.req.query("url") ?? "";
+    if (url.length === 0 || url.length > 2048) {
+      return c.json(problem("bad_url"), 400);
+    }
+    const page = await fetchPage(url, options.preview);
+    if (!page) {
+      return c.json(problem("no_page"), 404);
+    }
+    c.header("Cache-Control", "no-store");
+    return c.json(page);
   });
   app.get("/v1/status", (c) => {
     const log = options.log();

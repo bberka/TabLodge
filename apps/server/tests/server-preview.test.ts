@@ -4,6 +4,7 @@ import {createApi} from '../src/api';
 import {
 	allowedUrl,
 	fetchIcon,
+	fetchPage,
 	fetchPreview,
 	isPrivateAddress,
 	readPageMeta,
@@ -198,5 +199,60 @@ test('the icon and preview routes need the token and answer from the site', asyn
 			})
 		).status,
 		404,
+	);
+});
+
+test('the page route hands back a whole page, behind the token and the same address rules', async () => {
+	const body = `<html><head><title>Long</title></head><body>${'<p>text</p>'.repeat(30_000)}</body></html>`;
+	const {fake} = site({
+		'https://example.com/old': {
+			type: 'text/html',
+			body: '',
+			status: 301,
+			location: 'https://example.com/article',
+		},
+		'https://example.com/article': {type: 'text/html; charset=utf-8', body},
+		'https://example.com/file.pdf': {type: 'application/pdf', body: 'x'},
+		'https://example.com/huge': {
+			type: 'text/html',
+			body: 'x'.repeat(3_000_001),
+		},
+	});
+	assert.deepEqual(await fetchPage('https://example.com/old', {fetch: fake}), {
+		url: 'https://example.com/article',
+		html: body,
+	});
+	assert.equal(
+		await fetchPage('https://example.com/file.pdf', {fetch: fake}),
+		undefined,
+	);
+	assert.equal(
+		await fetchPage('https://example.com/huge', {fetch: fake}),
+		undefined,
+	);
+	assert.equal(
+		await fetchPage('http://169.254.169.254/latest', {fetch: fake}),
+		undefined,
+	);
+
+	const token = 'test-token-0123456789-abcdefghijklmnop';
+	const app = createApi({
+		token,
+		log: () => new SqlChangeLog(sqlite(':memory:')),
+		preview: {fetch: fake},
+	});
+	const path = '/v1/page?url=https%3A%2F%2Fexample.com%2Fold';
+	assert.equal((await app.request(path)).status, 401);
+	const answer = await app.request(path, {
+		headers: {Authorization: `Bearer ${token}`},
+	});
+	assert.equal(answer.status, 200);
+	assert.equal(answer.headers.get('cache-control'), 'no-store');
+	assert.equal(((await answer.json()) as {html: string}).html, body);
+	const status = await app.request('/v1/status', {
+		headers: {Authorization: `Bearer ${token}`},
+	});
+	assert.ok(
+		((await status.json()) as {features: string[]}).features.includes('page'),
 	);
 });

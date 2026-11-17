@@ -67,6 +67,16 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
+		// Injected into the open tab by "Keep a copy" to read it (chrome.scripting.executeScript).
+		{
+			label: 'page-copy-capture.js',
+			config: scriptConfig({
+				entry: resolve(SOURCE_DIR, 'page-copy-capture.ts'),
+				outDir,
+				fileName: 'page-copy-capture.js',
+				target,
+			}),
+		},
 		// Starts the add-bookmark window's read while the React page bundle is loading.
 		{
 			label: 'add-bookmark-preload.js',

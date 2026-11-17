@@ -149,6 +149,7 @@ import {DEFAULT_FOLDER_ICON, getIcon} from './icon-registry';
 import {FolderLabel, IconLabel} from './icon-label';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
+import {openPageCopy, usePageCopyUrls} from './page-copies';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {FocusViewHint} from './focus-hint';
 import {
@@ -3737,6 +3738,7 @@ const SavedTab = memo(
 		const displayUrl = urlDisplay(tab.url, displayMode, simplify);
 		const compact = displayUrl === null;
 		const action = 'h-7 w-7 text-muted-foreground hover:text-foreground';
+		const copyUrls = usePageCopyUrls();
 		// Built only when the menu opens.
 		const actions = (): MenuAction[] => [
 			{
@@ -3769,6 +3771,13 @@ const SavedTab = memo(
 				label: 'Open in Internet Archive',
 				icon: ACTION_ICONS.archiveCopy,
 				onSelect: () => void openArchivedCopy(tab.url, settings),
+			},
+			{
+				id: 'page-copy',
+				label: 'Open copy',
+				icon: ACTION_ICONS.pageCopy,
+				hidden: !copyUrls.has(tab.url),
+				onSelect: () => void openPageCopy(tab.url),
 			},
 			{type: 'separator'},
 			{

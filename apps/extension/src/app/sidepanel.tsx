@@ -82,6 +82,7 @@ import {SnapshotsDialog, TrashDialog} from './lazy-dialogs';
 import {PROJECT} from './project';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
+import {keptCopyMessage, openPageCopy, usePageCopyUrls} from './page-copies';
 import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
@@ -167,6 +168,43 @@ function useWindowTabs() {
 		};
 	}, [refresh]);
 	return tabs;
+}
+
+/**
+The active tab's id while TabLodge may read it. Opening the panel grants nothing: access comes from the toolbar
+button, the right-click menu, or a shortcut used on that tab, until it navigates away. An empty script tells the two
+apart, so Keep a copy is only offered where it can work. Never in a private window.
+*/
+function useReadableTab(tab: chrome.tabs.Tab | undefined) {
+	const [readable, setReadable] = useState<number>();
+	const id = tab?.id;
+	const url = tab?.url;
+	useEffect(() => {
+		setReadable(undefined);
+		if (
+			id === undefined ||
+			!webUrl(url) ||
+			chrome.extension.inIncognitoContext
+		) {
+			return undefined;
+		}
+
+		let live = true;
+		chrome.scripting
+			.executeScript({target: {tabId: id}, func: () => true})
+			.then(
+				() => {
+					if (live) {
+						setReadable(id);
+					}
+				},
+				() => undefined,
+			);
+		return () => {
+			live = false;
+		};
+	}, [id, url]);
+	return readable;
 }
 
 /**
@@ -293,6 +331,9 @@ function SidePanel() {
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
 	const windowTabs = useWindowTabs();
+	const activeTab = windowTabs.find((tab) => tab.active);
+	const readableTabId = useReadableTab(activeTab);
+	const copyUrls = usePageCopyUrls();
 	const duplicateCount = useDuplicateTabCount();
 	const [sectionLimit, moreSections] = usePagedLimit(
 		`${chosenPanel}|${query.trim()}`,
@@ -370,6 +411,11 @@ function SidePanel() {
 	const selectedIds = [...selected].filter((id) =>
 		windowTabs.some((tab) => tab.id === id),
 	);
+
+	async function keepCopy(tabId: number) {
+		const result = await send('KEEP_PAGE_COPY', {tabId});
+		showStatus(keptCopyMessage(result), !result.ok, {toast: true});
+	}
 
 	async function attempt(action: () => Promise<unknown>, failure: string) {
 		try {
@@ -463,6 +509,29 @@ function SidePanel() {
 						() => openArchivedCopy(url, settings ?? undefined),
 						'Could not open the Internet Archive.',
 					),
+			},
+			{
+				id: 'keep-copy',
+				label: 'Keep a copy',
+				icon: ACTION_ICONS.keepCopy,
+				// Only the open tab, and only while TabLodge may read it (see useReadableTab).
+				hidden:
+					readableTabId === undefined ||
+					readableTabId !== activeTab?.id ||
+					activeTab.url !== url,
+				onSelect() {
+					if (activeTab?.id !== undefined) {
+						void keepCopy(activeTab.id);
+					}
+				},
+			},
+			{
+				id: 'page-copy',
+				label: 'Open copy',
+				icon: ACTION_ICONS.pageCopy,
+				hidden: !copyUrls.has(url),
+				onSelect: () =>
+					void attempt(() => openPageCopy(url), 'Could not open the copy.'),
 			},
 			...(extra.length > 0 ? [{type: 'separator' as const}, ...extra] : []),
 		];

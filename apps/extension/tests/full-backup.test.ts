@@ -31,6 +31,7 @@ const parts: FullBackupParts = {
 	preferences: {uiTheme: 'dark'},
 	snapshots: {version: 1, history: [{id: 's1'}, {id: 's2'}]},
 	trash: {version: 1, items: [{id: 't1'}]},
+	copies: [{v: 1, url: 'https://a.example/', blocks: []}],
 };
 
 test('a full backup round-trips through the ZIP', () => {
@@ -50,6 +51,7 @@ test('a full backup round-trips through the ZIP', () => {
 		bookmarks: 1,
 		snapshots: 2,
 		trash: 1,
+		copies: 1,
 	});
 	const read = readFullBackup(bytes);
 	assert.ok(read);
@@ -58,13 +60,15 @@ test('a full backup round-trips through the ZIP', () => {
 	assert.deepEqual(read.preferences, parts.preferences);
 	assert.deepEqual(read.snapshots, parts.snapshots);
 	assert.deepEqual(read.trash, parts.trash);
+	assert.deepEqual(read.copies, parts.copies);
 	assert.deepEqual(read.counts, countFullBackup(parts));
 });
 
-test('the ZIP holds exactly the five files and the file name is dated', () => {
+test('the ZIP holds exactly the six files and the file name is dated', () => {
 	const {bytes} = buildFullBackup(parts, {appVersion: '1'});
 	const names = Object.keys(unzipSync(bytes)).toSorted();
 	assert.deepEqual(names, [
+		'copies.json',
 		'data.json',
 		'manifest.json',
 		'preferences.json',
@@ -123,6 +127,7 @@ test('optional files may be missing', () => {
 	assert.ok(read);
 	assert.equal(read.preferences, undefined);
 	assert.equal(read.counts.snapshots, 0);
+	assert.deepEqual(read.copies, [], 'a backup from before copies has none');
 });
 
 test('a protected full backup is not a ZIP and reads back with the credential', async () => {

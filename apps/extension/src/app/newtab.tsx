@@ -104,6 +104,7 @@ import type {ExportData} from '../shared/export-formats';
 import {archivedFolderId} from '../shared/session-folders';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
+import {openPageCopy, usePageCopyUrls} from './page-copies';
 import {AccentPalette} from './accent-palette';
 import {
 	COLUMN_COLOR_BAR,
@@ -4089,6 +4090,7 @@ const BookmarkCard = memo(
 		compact = false,
 	}: BookmarkCardProps) => {
 		const [menuOpen, setMenuOpen] = useState(false);
+		const copyUrls = usePageCopyUrls();
 		const act = (action: BookmarkAction) => () => {
 			void onAction(action, bookmark);
 		};
@@ -4123,6 +4125,13 @@ const BookmarkCard = memo(
 			icon: ACTION_ICONS.archiveCopy,
 			onSelect: () => void openArchivedCopy(bookmark.url, urlSettings),
 		};
+		const pageCopy: MenuAction = {
+			id: 'page-copy',
+			label: 'Open copy',
+			icon: ACTION_ICONS.pageCopy,
+			hidden: !copyUrls.has(bookmark.url),
+			onSelect: () => void openPageCopy(bookmark.url),
+		};
 		const remove: MenuAction = {
 			id: 'delete',
 			label: 'Delete',
@@ -4137,6 +4146,7 @@ const BookmarkCard = memo(
 			{type: 'separator'},
 			copy,
 			archiveCopy,
+			pageCopy,
 			{type: 'separator'},
 			{
 				id: 'select',

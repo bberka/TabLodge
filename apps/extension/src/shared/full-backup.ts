@@ -1,4 +1,4 @@
-// The full-backup ZIP: manifest.json, data.json, preferences.json, snapshots.json and trash.json.
+// The full-backup ZIP: manifest.json, data.json, preferences.json, snapshots.json, trash.json and copies.json.
 // Pure (no browser APIs), so the layout is tested without a page. The worker validates the contents;
 // this module only builds the archive and reads it back, with limits against oversized or damaged files.
 import {strFromU8, strToU8, unzipSync, zipSync} from 'fflate';
@@ -19,6 +19,10 @@ export type FullBackupParts = {
 	preferences: unknown;
 	snapshots: unknown;
 	trash: unknown;
+	/**
+	The readable page copies kept on the device (page-copy.ts). Backups made before copies existed have none.
+	*/
+	copies?: unknown;
 };
 
 export type FullBackupCounts = {
@@ -29,6 +33,7 @@ export type FullBackupCounts = {
 	bookmarks: number;
 	snapshots: number;
 	trash: number;
+	copies: number;
 };
 
 export type FullBackupManifest = {
@@ -55,6 +60,7 @@ const FILES = {
 	preferences: 'preferences.json',
 	snapshots: 'snapshots.json',
 	trash: 'trash.json',
+	copies: 'copies.json',
 } as const;
 // Everything is sent to the worker in one message, which Chromium caps near 64 MB.
 const MAX_UNPACKED_BYTES = 60 * 1024 * 1024;
@@ -92,6 +98,7 @@ export function countFullBackup(parts: FullBackupParts): FullBackupCounts {
 			? lengthOf(parts.snapshots.history)
 			: 0,
 		trash: isRecord(parts.trash) ? lengthOf(parts.trash.items) : 0,
+		copies: lengthOf(parts.copies),
 	};
 }
 
@@ -159,6 +166,7 @@ export function buildFullBackup(
 			[FILES.preferences]: json(parts.preferences),
 			[FILES.snapshots]: json(parts.snapshots),
 			[FILES.trash]: json(parts.trash),
+			[FILES.copies]: json(parts.copies ?? []),
 		},
 		{level: 6, mtime: now},
 	);
@@ -241,6 +249,7 @@ export function readFullBackup(bytes: Uint8Array): FullBackupContents | null {
 		preferences: parseEntry(files, FILES.preferences),
 		snapshots: parseEntry(files, FILES.snapshots),
 		trash: parseEntry(files, FILES.trash),
+		copies: parseEntry(files, FILES.copies) ?? [],
 	};
 	const counts = countFullBackup(parts);
 	return {
