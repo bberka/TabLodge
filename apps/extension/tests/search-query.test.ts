@@ -136,3 +136,28 @@ test('literalQuery keeps a selection as plain words, quoting it when it would re
 		'a cut that leaves a valid operator is quoted',
 	);
 });
+
+test('kind: keeps links to images, PDFs, or videos, read from the address', () => {
+	const query = parseSearchQuery('Kind:PDF kind:video');
+	assert.deepEqual(query.kinds, ['pdf', 'video']);
+	assert.equal(query.text, '');
+	const of = (url: string) => passesOperators(query, [], bookmark(url, ''));
+	assert.ok(of('https://example.com/report.PDF?x=1'));
+	assert.ok(of('https://www.youtube.com/watch?v=abc'));
+	assert.ok(!of('https://example.com/photo.png'));
+	assert.ok(!of('https://example.com/article'));
+	assert.ok(
+		passesOperators(parseSearchQuery('kind:image'), [], {
+			places: ['sessions', 'tabs'],
+			urls: ['https://example.com/', 'https://example.com/cat.webp'],
+		}),
+		'a session matches when one of its tabs is that kind',
+	);
+	assert.ok(
+		!passesOperators(parseSearchQuery('kind:page'), [], {places: [], urls: []}),
+		'a result without an address has no kind',
+	);
+	const unknown = parseSearchQuery('kind:doc');
+	assert.equal(hasOperators(unknown), false);
+	assert.equal(unknown.text, 'kind:doc');
+});

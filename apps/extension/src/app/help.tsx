@@ -539,6 +539,11 @@ function Help() {
 									of result.
 								</li>
 								<li>
+									<Op>kind:image</Op>, <Op>kind:pdf</Op>, and{' '}
+									<Op>kind:video</Op> keep links to images, PDFs, or videos, the
+									same kinds the board marks.
+								</li>
+								<li>
 									<Op>col:Work</Op> and <Op>folder:Work</Op> keep bookmarks in a
 									column or sessions in a folder whose name contains the text.
 									Quote a name with spaces: <Op>col:"Read later"</Op>.
@@ -557,7 +562,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder after before date day filter narrow query syntax tips',
+						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder after before date day filter narrow query syntax tips kind image pdf video',
 				},
 				{
 					title: 'Open the search palette',

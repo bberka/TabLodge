@@ -2,6 +2,7 @@
 // -word, site:, in:, col:, folder:, after: and before:. Anything that is not a well formed operator stays a
 // plain word, so a stray quote, a lone "-" or "localhost:3000" searches as before.
 import {fold} from './fuzzy';
+import {type LinkKind, linkKind} from './link-kind';
 import type {Bookmark, Session} from './types';
 
 export type SearchPlace = 'sessions' | 'bookmarks' | 'tabs' | 'open';
@@ -24,6 +25,10 @@ export type SearchQuery = {
 	*/
 	sites: string[];
 	places: SearchPlace[];
+	/**
+	What the result's address points to, read with `linkKind`.
+	*/
+	kinds: LinkKind[];
 	/**
 	Folded column and folder names; a result whose column or folder name contains any of them matches.
 	*/
@@ -65,6 +70,9 @@ export const SEARCH_TIPS: ReadonlyArray<{
 	{example: 'in:bookmarks', meaning: 'Only bookmarks'},
 	{example: 'in:tabs', meaning: 'Only saved tabs'},
 	{example: 'in:open', meaning: 'Only open tabs', browserOnly: true},
+	{example: 'kind:image', meaning: 'Only links to images'},
+	{example: 'kind:pdf', meaning: 'Only links to PDFs'},
+	{example: 'kind:video', meaning: 'Only links to videos'},
 	{example: 'col:Work', meaning: 'Bookmarks in a column'},
 	{example: 'folder:Work', meaning: 'Sessions in a folder'},
 	{example: 'after:2026-01-01', meaning: 'Saved on or after a day'},
@@ -72,6 +80,7 @@ export const SEARCH_TIPS: ReadonlyArray<{
 ];
 
 const PLACES = new Set<string>(['sessions', 'bookmarks', 'tabs', 'open']);
+const KINDS = new Set<string>(['image', 'pdf', 'video', 'page']);
 const QUOTES = new Set(['"', '“', '”', '„']);
 
 /**
@@ -174,6 +183,7 @@ export function parseSearchQuery(input: string): SearchQuery {
 		exclude: [],
 		sites: [],
 		places: [],
+		kinds: [],
 		columns: [],
 		folders: [],
 	};
@@ -245,6 +255,15 @@ function operator(query: SearchQuery, name: string, raw: string): boolean {
 			return host !== undefined;
 		}
 
+		case 'kind': {
+			const kind = value.toLowerCase();
+			if (KINDS.has(kind)) {
+				query.kinds.push(kind as LinkKind);
+			}
+
+			return KINDS.has(kind);
+		}
+
 		case 'in': {
 			const place = value.toLowerCase();
 			if (PLACES.has(place)) {
@@ -284,6 +303,7 @@ export const hasOperators = (query: SearchQuery) =>
 	query.exclude.length > 0 ||
 	query.sites.length > 0 ||
 	query.places.length > 0 ||
+	query.kinds.length > 0 ||
 	query.columns.length > 0 ||
 	query.folders.length > 0 ||
 	query.after !== undefined ||
@@ -318,7 +338,11 @@ export function passesOperators(
 		((query.after !== undefined || query.before !== undefined) &&
 			(facets.date === undefined ||
 				facets.date < (query.after ?? -Infinity) ||
-				facets.date >= (query.before ?? Infinity)))
+				facets.date >= (query.before ?? Infinity))) ||
+		(query.kinds.length > 0 &&
+			facets.urls.every(
+				(url) => url === undefined || !query.kinds.includes(linkKind(url)),
+			))
 	) {
 		return false;
 	}
