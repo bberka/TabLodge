@@ -240,6 +240,7 @@ type BookmarkDraft = {
 	id?: string | null;
 	title: string;
 	url: string;
+	notes?: string;
 	columnId: string;
 	newColumnName?: string;
 	newColumnIcon?: string;
@@ -545,7 +546,12 @@ function NewTab() {
 		);
 		columnName.set(UNFILED_COLUMN.id, UNFILED_COLUMN.name);
 		return bookmarks.filter((bookmark) => {
-			const texts = [bookmark.title, bookmark.url, siteName(bookmark.url)];
+			const texts = [
+				bookmark.title,
+				bookmark.url,
+				siteName(bookmark.url),
+				bookmark.notes,
+			];
 			return (
 				(!needle ||
 					texts.some((value) =>
@@ -911,6 +917,7 @@ function NewTab() {
 			id: bookmark?.id || null,
 			title: bookmark?.title || '',
 			url: bookmark?.url || '',
+			notes: bookmark?.notes ?? '',
 			columnId: own || preferredColumn,
 		});
 		setDialog('bookmark');
@@ -973,6 +980,7 @@ function NewTab() {
 			const fields = {
 				title: bookmarkEdit.title,
 				url: bookmarkEdit.url,
+				notes: bookmarkEdit.notes ?? '',
 				columnId,
 			};
 			const result = bookmarkEdit.id
@@ -3065,7 +3073,24 @@ function NewTab() {
 										onValueChange={setSaveSessionId}
 									/>
 								) : (
-									columnFields
+									<>
+										{columnFields}
+										<div className="space-y-1.5">
+											<Label htmlFor="bookmark-notes">Notes</Label>
+											<Textarea
+												id="bookmark-notes"
+												maxLength={10_000}
+												rows={3}
+												placeholder="Why you saved it (optional)"
+												value={bookmarkEdit?.notes || ''}
+												onChange={(e) =>
+													setBookmarkEdit(
+														(old) => old && {...old, notes: e.target.value},
+													)
+												}
+											/>
+										</div>
+									</>
 								)}
 							</DialogBody>
 							<DialogFooter className="justify-between">
@@ -4293,6 +4318,16 @@ const BookmarkCard = memo(
 											{urlMode === 'domain'
 												? siteName(bookmark.url)
 												: displayUrl(bookmark.url, urlSettings.simplifyUrls)}
+										</small>
+									)}
+									{bookmark.notes && (
+										<small
+											className={cn(
+												'block whitespace-pre-line wrap-anywhere text-[11px] leading-4 text-muted-foreground',
+												compact ? 'line-clamp-1' : 'line-clamp-2',
+											)}
+										>
+											{bookmark.notes}
 										</small>
 									)}
 								</span>

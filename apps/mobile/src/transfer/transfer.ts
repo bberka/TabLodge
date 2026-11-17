@@ -267,6 +267,7 @@ export function importIntoStore(
 					title: link.title || hostOf(link.url),
 					url: link.url,
 					columnId: column.id,
+					...(link.notes && {notes: link.notes}),
 					createdAt: link.createdAt ?? now,
 					updatedAt: now,
 				});

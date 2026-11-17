@@ -3703,6 +3703,45 @@ test('bookmark title falls back to matching open-tab metadata instead of a bare 
 	assert.equal(harness.state.bookmarks[0].title, 'An open page title');
 });
 
+test('a bookmark note is saved, changed, cleared, and imported', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {
+			title: 'Noted',
+			url: 'https://noted.example/',
+			notes: '  Why I saved it  ',
+		},
+	});
+	assert.equal(added.ok, true, added.error);
+	const id = String(harness.state.bookmarks[0].id);
+	assert.equal(harness.state.bookmarks[0].notes, 'Why I saved it');
+
+	const kept = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK',
+		bookmarkId: id,
+		fields: {title: 'Renamed'},
+	});
+	assert.equal(kept.ok, true, kept.error);
+	assert.equal(harness.state.bookmarks[0].notes, 'Why I saved it');
+
+	await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK',
+		bookmarkId: id,
+		fields: {notes: ' '},
+	});
+	assert.equal('notes' in harness.state.bookmarks[0], false);
+
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: {
+			bookmarks: [{url: 'https://imported.example/', notes: 'From a file'}],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	assert.equal(harness.state.bookmarks.at(-1)?.notes, 'From a file');
+});
+
 test('drag kinds are told apart by type, and the document guard only blocks stray link drags', async () => {
 	const {dragPayloadKind, shouldBlockDocumentDrop, SESSION_DRAG_TYPE} =
 		await import('../src/app/interaction-actions');

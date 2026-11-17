@@ -414,7 +414,7 @@ function parseNative(data: unknown, collector: Collector): ParsedImport | null {
 		const link = collector.link(
 			entry.url ?? entry.href,
 			entry.title ?? entry.name,
-			{createdAt: toTimestamp(entry.createdAt)},
+			{notes: text(entry.notes), createdAt: toTimestamp(entry.createdAt)},
 		);
 		if (link) {
 			(byColumn.get(text(entry.columnId)) ?? loose).links.push(link);
@@ -1457,7 +1457,10 @@ function parseMarkdown(lines: string[]): ParsedImport {
 			continue;
 		}
 
-		const notes = match[4].replace(/^\s*[-–—]\s*/, '').trim();
+		const notes = match[4]
+			.replace(/^\s*[-–—]\s*/, '')
+			.replaceAll(/\\(.)/g, '$1')
+			.trim();
 		const link = collector.link(
 			match[2] ?? match[3],
 			match[1].replaceAll(/\\(.)/g, '$1'),
@@ -1843,6 +1846,7 @@ export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 		url: string;
 		title: string;
 		columnId?: string;
+		notes?: string;
 		createdAt?: number;
 	}> = [];
 	for (const entry of parsed.bookmarks) {
@@ -1872,6 +1876,7 @@ export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 				url: link.url,
 				title: link.title,
 				...(columnId && {columnId}),
+				...(link.notes && {notes: link.notes}),
 				...(link.createdAt && {createdAt: link.createdAt}),
 			});
 		}

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {describe, test} from 'vite-plus/test';
+import {buildExport} from '../../extension/src/shared/export-formats';
 import {parseImportFile} from '../../extension/src/shared/import-formats';
 import {emptyStore} from '../src/library/store-shape';
 import type {SavedTab, Session} from '../../extension/src/shared/types';
@@ -86,6 +87,34 @@ describe('importing a file into the library', () => {
 		);
 		assert.equal(second.store.bookmarkColumns.length, columns.length);
 		assert.equal(second.store.bookmarks.length, 2);
+	});
+
+	test('bookmark notes come in from a file, and an export from the phone reads back with them', () => {
+		const csv = 'url,title,note\nhttps://x.org/1,One,Why I saved it\n';
+		const first = importIntoStore(
+			emptyStore(NOW),
+			parseImportFile(csv, 'links.csv'),
+			{kind: 'bookmarks', now: NOW, newId},
+		);
+		assert.equal(first.store.bookmarks[0].notes, 'Why I saved it');
+
+		for (const format of ['json', 'csv', 'markdown', 'html'] as const) {
+			const file = buildExport(
+				{
+					kind: 'bookmarks',
+					columns: first.store.bookmarkColumns,
+					bookmarks: first.store.bookmarks,
+				},
+				format,
+				{appName: 'TabLodge'},
+			);
+			const again = importIntoStore(
+				emptyStore(NOW),
+				parseImportFile(file.content, file.filename),
+				{kind: 'bookmarks', now: NOW, newId},
+			);
+			assert.equal(again.store.bookmarks[0]?.notes, 'Why I saved it', format);
+		}
 	});
 
 	test('the preview counts what an import would add', () => {

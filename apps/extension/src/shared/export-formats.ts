@@ -174,8 +174,11 @@ function toHtml(data: ExportData, appName: string): string {
 	const body: string[] = [];
 	if (data.kind === 'bookmarks') {
 		for (const {column, bookmarks} of bookmarkSections(data)) {
-			const items = bookmarks.map((bookmark) =>
-				link(bookmark.url, bookmark.title, bookmark.createdAt),
+			// A note is the link's <DD> description, which browsers and the importer read back.
+			const items = bookmarks.map(
+				(bookmark) =>
+					link(bookmark.url, bookmark.title, bookmark.createdAt) +
+					(bookmark.notes ? `\n<DD>${escapeHtml(bookmark.notes)}` : ''),
 			);
 			if (column) {
 				body.push(...folder(column.name, column.createdAt, items));
@@ -229,7 +232,7 @@ function toCsv(data: ExportData): string {
 					bookmark.title,
 					bookmark.url,
 					column?.name ?? '',
-					'',
+					bookmark.notes ?? '',
 					isoDate(bookmark.createdAt),
 				]);
 			}
@@ -278,8 +281,9 @@ function toMarkdown(data: ExportData, appName: string): string {
 				`## ${escapeMarkdown(column?.name ?? 'Unfiled')}`,
 				'',
 				...(bookmarks.length > 0
-					? bookmarks.map((bookmark) =>
-							markdownLink(bookmark.title, bookmark.url),
+					? bookmarks.map(
+							(bookmark) =>
+								`${markdownLink(bookmark.title, bookmark.url)}${bookmark.notes ? ` — ${escapeMarkdown(bookmark.notes)}` : ''}`,
 						)
 					: ['_No bookmarks_']),
 				'',

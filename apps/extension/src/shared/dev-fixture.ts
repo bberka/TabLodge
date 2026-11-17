@@ -32,6 +32,7 @@ type DevBookmark = {
 	title: string;
 	url: string;
 	columnId: string;
+	notes?: string;
 	createdAt: number;
 	updatedAt: number;
 };
@@ -243,6 +244,18 @@ export const devFixtureUrls = [
 	]),
 ];
 
+// A few bookmarks carry a note, so the note line shows on the board and in the phone's rows.
+const bookmarkNotes = new Map([
+	[
+		'https://developer.mozilla.org/',
+		'Go-to reference for CSS and the DOM APIs.',
+	],
+	[
+		'https://alistapart.com/',
+		'Read the piece on accessible forms before the design review on Friday.',
+	],
+]);
+
 const columnByName = new Map(
 	bookmarkColumns.map((column) => [column.name, column.id]),
 );
@@ -252,6 +265,7 @@ const bookmarks: DevBookmark[] = bookmarkEntries.map(
 		title,
 		url,
 		columnId: columnByName.get(column)!,
+		...(bookmarkNotes.has(url) && {notes: bookmarkNotes.get(url)}),
 		createdAt: createdAt - index * 3_600_000,
 		updatedAt: createdAt - index * 3_600_000,
 	}),

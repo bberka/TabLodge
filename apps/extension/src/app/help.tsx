@@ -347,6 +347,12 @@ function Help() {
 						'image picture photo pdf document video kind type icon mark badge jpg png youtube vimeo arxiv',
 				},
 				{
+					title: 'Add a note to a bookmark',
+					body: 'Write a note in the Notes field of the Add bookmark or Edit bookmark dialog, for example why you saved the page. It shows under the bookmark’s title (one line in the compact layout), search and the palette find it, and it goes into JSON, CSV, Markdown, and browser bookmark exports and full backups. Clear the field to remove it. With a sync server that supports notes, the Android app shows and edits it too.',
+					searchText:
+						'bookmark note notes description comment why saved edit dialog search export',
+				},
+				{
 					title: 'Bookmark quick actions',
 					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete moves the bookmark to the trash and offers Undo in a toast.',
 					searchText:

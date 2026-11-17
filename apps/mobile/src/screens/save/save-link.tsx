@@ -95,6 +95,7 @@ export function SaveLinkForm({
 	const [title, setTitle] = useState(initialTitle);
 	// Once the person types a title, the page's own never replaces it.
 	const [titleEdited, setTitleEdited] = useState(initialTitle !== '');
+	const [notes, setNotes] = useState(editing?.notes ?? '');
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
 
@@ -163,12 +164,12 @@ export function SaveLinkForm({
 					? updateBookmark(
 							current,
 							editing.id,
-							{...saved, columnId: target},
+							{...saved, notes, columnId: target},
 							Date.now(),
 						)
 					: addBookmark(
 							current,
-							{...saved, columnId: target},
+							{...saved, notes, columnId: target},
 							newId(),
 							Date.now(),
 						),
@@ -307,7 +308,15 @@ export function SaveLinkForm({
 						)}
 					</View>
 				) : (
-					<ColumnChoice choice={choice} />
+					<>
+						<ColumnChoice choice={choice} />
+						<Field
+							multiline
+							label="Notes (optional)"
+							value={notes}
+							onChangeText={setNotes}
+						/>
+					</>
 				)}
 				{problem !== '' && (
 					<Text accessibilityLiveRegion="polite" style={{color: colors.danger}}>
