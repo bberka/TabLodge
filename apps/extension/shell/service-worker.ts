@@ -10035,6 +10035,7 @@ function rebuildContextMenus(
 					appName: APP_NAME,
 					hasSidePanel: HAS_SIDE_PANEL,
 					hasTabContext: HAS_TAB_MENU,
+					hasAmpersandAccessKeys: IS_FIREFOX,
 				},
 				await excludeMenuState(store.settings),
 			);

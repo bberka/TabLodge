@@ -150,12 +150,19 @@ export function menuSessions(
  The full menu tree for these settings and columns, in creation order (parents first).
  `excludeState` sets the toolbar menu's "Exclude this site" checkbox for the active tab.
  `hasTabContext` adds the page items to the tab strip's menu (Firefox).
+ `hasAmpersandAccessKeys` doubles every `&` in the titles: Firefox reads a single `&` as an access key marker and
+ hides it, so "R&D" would show as "RD". Chrome shows `&` as written.
  */
 export function contextMenuPlan(
 	settings: Settings,
 	columns: BookmarkColumn[],
 	sessions: MenuSession[],
-	env: {appName: string; hasSidePanel: boolean; hasTabContext: boolean},
+	env: {
+		appName: string;
+		hasSidePanel: boolean;
+		hasTabContext: boolean;
+		hasAmpersandAccessKeys: boolean;
+	},
 	excludeState: {checked: boolean; enabled: boolean} = {
 		checked: false,
 		enabled: true,
@@ -384,5 +391,9 @@ export function contextMenuPlan(
 		);
 	}
 
-	return items;
+	return env.hasAmpersandAccessKeys
+		? items.map((item) =>
+				item.title ? {...item, title: item.title.replaceAll('&', '&&')} : item,
+			)
+		: items;
 }

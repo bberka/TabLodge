@@ -7,7 +7,12 @@ import {
 } from '../src/shared/context-menu-plan';
 import {DEFAULT_SETTINGS} from '../src/shared/library-normalize';
 
-const env = {appName: 'TabLodge', hasSidePanel: true, hasTabContext: false};
+const env = {
+	appName: 'TabLodge',
+	hasSidePanel: true,
+	hasTabContext: false,
+	hasAmpersandAccessKeys: false,
+};
 const columns = [{id: 'c1', name: 'Read', createdAt: 0, isDefault: false}];
 const on = {
 	...DEFAULT_SETTINGS,
@@ -121,6 +126,43 @@ describe('contextMenuPlan', () => {
 			chromium.map((item) => item.id),
 			'the tab strip reuses the page ids',
 		);
+	});
+
+	test('Firefox shows an ampersand in every title, built in or named by the user', () => {
+		const names = [{id: 'rd', name: 'R&D', createdAt: 0, isDefault: false}];
+		const sessions = [{id: 's1', name: 'Q&A'}];
+		const titles = (hasAmpersandAccessKeys: boolean) =>
+			new Map(
+				contextMenuPlan(on, names, sessions, {
+					...env,
+					appName: 'Tab&Lodge',
+					hasAmpersandAccessKeys,
+				}).map((item) => [item.id, item.title]),
+			);
+
+		const chromium = titles(false);
+		assert.equal(
+			chromium.get('tablodge-selection-search'),
+			'Search saved tabs & bookmarks for “%s”',
+		);
+		assert.equal(chromium.get('tablodge-page-bookmark:rd'), 'R&D');
+
+		const firefox = titles(true);
+		assert.equal(
+			firefox.get('tablodge-selection-search'),
+			'Search saved tabs && bookmarks for “%s”',
+		);
+		for (const id of [
+			'tablodge-link-bookmark:rd',
+			'tablodge-image-bookmark:rd',
+			'tablodge-media-bookmark:rd',
+			'tablodge-page-bookmark:rd',
+		]) {
+			assert.equal(firefox.get(id), 'R&&D', id);
+		}
+
+		assert.equal(firefox.get('tablodge-page-send:s1'), 'Q&&A');
+		assert.equal(firefox.get('tablodge-page-root'), 'Tab&&Lodge');
 	});
 
 	test('builds nothing while the menus are off', () => {
