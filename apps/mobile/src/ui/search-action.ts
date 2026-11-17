@@ -55,3 +55,40 @@ export function useSearching(): boolean {
 		() => searching,
 	);
 }
+
+let searchWanted = false;
+const wantListeners = new Set<() => void>();
+
+/**
+Asks Bookmarks to open its search, for the Quick Settings tile. Bookmarks takes the request once it shows.
+*/
+export function requestSearch(): void {
+	searchWanted = true;
+	for (const listener of wantListeners) {
+		listener();
+	}
+}
+
+/**
+Whether a search was asked for and not yet taken.
+*/
+export function useSearchWanted(): boolean {
+	return useSyncExternalStore(
+		(listener) => {
+			wantListeners.add(listener);
+			return () => {
+				wantListeners.delete(listener);
+			};
+		},
+		() => searchWanted,
+	);
+}
+
+/**
+Takes the waiting search request: true once, then false until the next one.
+*/
+export function takeSearchRequest(): boolean {
+	const wanted = searchWanted;
+	searchWanted = false;
+	return wanted;
+}

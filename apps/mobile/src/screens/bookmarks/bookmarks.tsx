@@ -54,6 +54,7 @@ import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
+import {takeSearchRequest, useSearchWanted} from '../../ui/search-action';
 import {
 	FloatingActions,
 	ROOM_FOR_BUTTONS,
@@ -177,6 +178,19 @@ export function BookmarksScreen({
 		// `search` is a fresh object each render; only the jump matters.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [pending]);
+	// The Search tile in Quick Settings opens the search, out of any selection or reordering.
+	const searchWanted = useSearchWanted();
+	useEffect(() => {
+		if (!takeSearchRequest()) {
+			return;
+		}
+
+		selection.stop();
+		setReordering(false);
+		search.show();
+		// Only a new request matters, as with the jump above.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [searchWanted]);
 	const isSearching = query.trim().length > 0;
 	// The list view starts on the list of columns; a search shows its results instead.
 	const atList = isListView && !inside && !isSearching;
