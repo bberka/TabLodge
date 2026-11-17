@@ -238,14 +238,26 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 				await page.keyboard.press('ArrowDown');
 				assert.equal(await active(), 'Reddit saved');
 				await page.keyboard.press('End');
-				assert.equal(await active(), 'Instagram saved');
+				assert.equal(await active(), 'Lobsters saved');
+				// The list scrolls; the highlighted site is scrolled into view.
+				const last = await page
+					.getByRole('option', {name: /Lobsters saved/})
+					.boundingBox();
+				const list = await page.getByRole('listbox').boundingBox();
+				assert.ok(last, 'the last site has a box');
+				assert.ok(list, 'the list has a box');
+				assert.ok(last.y >= list.y, 'the last site is not above the list');
+				assert.ok(
+					last.y + last.height <= list.y + list.height + 1,
+					'the last site is not below the list',
+				);
 				await search.fill('twitter');
 				assert.deepEqual(await page.getByRole('option').allTextContents(), [
 					'X bookmarksPosts you bookmark on x.com or twitter.com',
 				]);
 				assert.equal(await active(), 'X bookmarks');
 				await search.fill('');
-				assert.equal(await page.getByRole('option').count(), 4);
+				assert.equal(await page.getByRole('option').count(), 9);
 				const violations = await axeViolationLines(page, axeSource);
 				assert.deepEqual(violations, [], violations.join('\n'));
 				await page.keyboard.press('Escape');

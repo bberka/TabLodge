@@ -13410,6 +13410,11 @@ test('sources are off at install and no content script is registered', async () 
 		{id: 'reddit', enabled: false},
 		{id: 'x', enabled: false},
 		{id: 'instagram', enabled: false},
+		{id: 'github', enabled: false},
+		{id: 'hackernews', enabled: false},
+		{id: 'stackoverflow', enabled: false},
+		{id: 'devto', enabled: false},
+		{id: 'lobsters', enabled: false},
 	]);
 	assert.equal(harness.registeredScripts.size, 0);
 });
@@ -13649,6 +13654,196 @@ test('X saves from twitter.com and x.com land once, in a new X column, and Insta
 			['X', 'https://x.com/alice/status/1850000000000000001'],
 			['Instagram', 'https://www.instagram.com/reel/C9x8Y7w6V5u/'],
 		],
+	);
+});
+
+test('Hacker News and Lobsters saves keep the discussion in the note, and only a discussion on that site', async () => {
+	const harness = sourcesHarness();
+	harness.grantOrigins(['https://news.ycombinator.com/*']);
+	harness.grantOrigins(['https://lobste.rs/*']);
+	harness.grantOrigins(['https://github.com/*']);
+	for (const source of ['hackernews', 'lobsters', 'github'] as const) {
+		const on = await harness.sendMessage({
+			type: 'SET_SITE_SOURCE',
+			source,
+			enabled: true,
+		});
+		assert.equal(on.ok, true, on.error);
+	}
+
+	const page = (url: string) => ({tab: {...youtubeTab, url}, url});
+	const hn = page('https://news.ycombinator.com/item?id=41000001');
+	const story = {
+		type: 'SITE_SOURCE_SAVE',
+		source: 'hackernews',
+		url: 'https://example.com/local-first',
+		title: 'Local-first software',
+		discussion: 'https://news.ycombinator.com/item?id=41000001',
+	} as const;
+	const saved = await harness.sendMessage(story, hn);
+	assert.equal(saved.ok && saved.column, 'Hacker News');
+	// A text post links to its own page, which needs no note.
+	await harness.sendMessage(
+		{
+			...story,
+			url: 'item?id=41000002',
+			title: 'Ask HN: What are you working on?',
+			discussion: 'item?id=41000002',
+		},
+		hn,
+	);
+	// A discussion link off the site, or a second save of the same story, adds nothing.
+	await harness.sendMessage(
+		{
+			...story,
+			url: 'https://example.com/other',
+			discussion: 'https://evil.example/item?id=1',
+		},
+		hn,
+	);
+	const again = await harness.sendMessage(
+		{...story, discussion: 'https://news.ycombinator.com/item?id=41000009'},
+		hn,
+	);
+	assert.equal(again.ok && again.outcome, 'exists');
+	await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'lobsters',
+			url: 'https://example.org/rust',
+			title: 'Rust in production',
+			discussion: '/s/abc123/rust_in_production',
+		},
+		page('https://lobste.rs/'),
+	);
+	await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'github',
+			url: '/sindresorhus/ky/tree/main',
+			title: 'sindresorhus/ky: Tiny and elegant HTTP client',
+		},
+		page('https://github.com/trending'),
+	);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => [
+			harness.state.bookmarkColumns.find(
+				(column) => column.id === bookmark.columnId,
+			)?.name,
+			bookmark.title,
+			bookmark.url,
+			bookmark.notes,
+		]),
+		[
+			[
+				'Hacker News',
+				'Local-first software',
+				'https://example.com/local-first',
+				'Hacker News discussion: https://news.ycombinator.com/item?id=41000001',
+			],
+			[
+				'Hacker News',
+				'Ask HN: What are you working on?',
+				'https://news.ycombinator.com/item?id=41000002',
+				undefined,
+			],
+			[
+				'Hacker News',
+				'Local-first software',
+				'https://example.com/other',
+				undefined,
+			],
+			[
+				'Lobsters',
+				'Rust in production',
+				'https://example.org/rust',
+				'Lobsters discussion: https://lobste.rs/s/abc123/rust_in_production',
+			],
+			[
+				'GitHub',
+				'sindresorhus/ky: Tiny and elegant HTTP client',
+				'https://github.com/sindresorhus/ky',
+				undefined,
+			],
+		],
+	);
+});
+
+test('the next page in a tab takes the result of a save that loaded it, once, and only for that site', async () => {
+	const harness = sourcesHarness();
+	harness.grantOrigins(['https://news.ycombinator.com/*']);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'hackernews',
+		enabled: true,
+	});
+	const hn = (id: number) => ({
+		tab: {...youtubeTab, id, url: 'https://news.ycombinator.com/item?id=1'},
+		url: 'https://news.ycombinator.com/item?id=1',
+	});
+	const pending = {type: 'SITE_SOURCE_PENDING', source: 'hackernews'} as const;
+	assert.deepEqual(structuredClone(await harness.sendMessage(pending, hn(7))), {
+		ok: true,
+	});
+	const saved = await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'hackernews',
+			url: 'https://example.com/story',
+			title: 'A story',
+			discussion: 'https://news.ycombinator.com/item?id=1',
+		},
+		hn(7),
+	);
+	assert.ok(saved.ok);
+	assert.ok(saved.undoId);
+	assert.deepEqual(
+		structuredClone(await harness.sendMessage(pending, hn(8))),
+		{ok: true},
+		'another tab',
+	);
+	assert.deepEqual(
+		structuredClone(
+			await harness.sendMessage(
+				{...pending, source: 'youtube'},
+				{tab: {...youtubeTab, id: 7}, url: youtubeTab.url},
+			),
+		),
+		{ok: true},
+		'another site in the same tab',
+	);
+	assert.deepEqual(structuredClone(await harness.sendMessage(pending, hn(7))), {
+		ok: true,
+		saved: {outcome: 'saved', column: 'Hacker News', undoId: saved.undoId},
+	});
+	assert.deepEqual(structuredClone(await harness.sendMessage(pending, hn(7))), {
+		ok: true,
+	});
+
+	// A site whose save keeps the page shows the result there, so it keeps nothing for the next page.
+	harness.grantOrigins(['https://github.com/*']);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'github',
+		enabled: true,
+	});
+	const github = {
+		tab: {...youtubeTab, id: 9, url: 'https://github.com/trending'},
+		url: 'https://github.com/trending',
+	};
+	const starred = await harness.sendMessage(
+		{type: 'SITE_SOURCE_SAVE', source: 'github', url: '/denoland/deno'},
+		github,
+	);
+	assert.equal(starred.ok && starred.outcome, 'saved');
+	assert.deepEqual(
+		structuredClone(
+			await harness.sendMessage(
+				{type: 'SITE_SOURCE_PENDING', source: 'github'},
+				github,
+			),
+		),
+		{ok: true},
 	);
 });
 

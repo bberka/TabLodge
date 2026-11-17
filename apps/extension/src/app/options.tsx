@@ -2760,9 +2760,10 @@ function Options() {
 			<StatusLine status={status} />
 			<footer className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted-foreground lg:col-start-2">
 				<p>
-					{PROJECT.name} reads tab details only to save sessions and check for
-					duplicates. It never reads page contents. Sessions are stored in this
-					browser’s local extension storage.
+					{PROJECT.name} reads tab details to save sessions and check for
+					duplicates. It reads a page only when you choose Keep a copy for it,
+					or when you save on a site you added in Sources. Your library is
+					stored in this browser’s local extension storage.
 				</p>
 				<nav
 					aria-label={`About ${PROJECT.name}`}

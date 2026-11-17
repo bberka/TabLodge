@@ -6,7 +6,16 @@
 import {isRecord} from '../shared/library-values';
 import type {SiteSourceStatus} from '../shared/types';
 
-export type SiteSourceId = 'youtube' | 'reddit' | 'x' | 'instagram';
+export type SiteSourceId =
+	| 'youtube'
+	| 'reddit'
+	| 'x'
+	| 'instagram'
+	| 'github'
+	| 'hackernews'
+	| 'stackoverflow'
+	| 'devto'
+	| 'lobsters';
 
 export type SiteSource = {
 	id: SiteSourceId;
@@ -36,6 +45,16 @@ export type SiteSource = {
 	The address TabLodge stores for a link the adapter read, or null when it is not a link to something saved there.
 	*/
 	canonicalUrl: (href: string) => string | null;
+	/**
+	For a site whose items link elsewhere: the item's own discussion page, kept in the bookmark's note as
+	`<name>: <address>`.
+	*/
+	discussion?: {name: string; url: (href: string) => string | null};
+	/**
+	The site's save control loads another page (Hacker News' favorite link), so the result of a save is kept for
+	the next page in the tab to show.
+	*/
+	saveLoadsPage?: true;
 };
 
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/;
@@ -46,6 +65,72 @@ const X_POST = /^\/(\w{1,15})\/status\/(\d{1,20})(?:\/|$)/;
 // A post or reel, also under the author's name (/<user>/p/<id>/), as some pages link them.
 const INSTAGRAM_POST =
 	/^(?:\/[\w.]{1,30})?\/(p|reels?|tv)\/([\w-]{5,40})(?:\/|$)/;
+
+// First path segments that are GitHub's own pages, not an owner.
+const GITHUB_RESERVED = new Set([
+	'about',
+	'account',
+	'apps',
+	'collections',
+	'customer-stories',
+	'dashboard',
+	'enterprise',
+	'explore',
+	'features',
+	'issues',
+	'login',
+	'logout',
+	'marketplace',
+	'new',
+	'notifications',
+	'orgs',
+	'organizations',
+	'pricing',
+	'pulls',
+	'search',
+	'security',
+	'sessions',
+	'settings',
+	'signup',
+	'site',
+	'sponsors',
+	'stars',
+	'topics',
+	'trending',
+	'users',
+]);
+const GITHUB_REPO = /^\/([\da-z][\d\-a-z]{0,38})\/([\w\-.]{1,100})(?:\/|$)/i;
+const STACK_OVERFLOW_QUESTION =
+	/^\/(?:questions|q)\/(\d{1,12})(?:\/([\w-]{1,200}))?/;
+// First path segments that are dev.to's own pages, not an author.
+const DEVTO_RESERVED = new Set([
+	'about',
+	'api',
+	'code-of-conduct',
+	'dashboard',
+	'enter',
+	'faq',
+	'latest',
+	'listings',
+	'new',
+	'notifications',
+	'p',
+	'pod',
+	'podcasts',
+	'privacy',
+	'readinglist',
+	'search',
+	'settings',
+	'signout_confirm',
+	't',
+	'tags',
+	'terms',
+	'top',
+	'users',
+	'videos',
+]);
+const DEVTO_ARTICLE = /^\/([\w-]{1,60})\/([\w-]{1,200})\/?$/;
+const LOBSTERS_STORY = /^\/s\/([\da-z]{1,12})(?:\/([\w-]{0,200}))?\/?$/i;
 
 function parse(href: string, base: string) {
 	try {
@@ -129,6 +214,108 @@ export function instagramPostUrl(href: string): string | null {
 	return `https://www.instagram.com/${kind}/${match[2]}/`;
 }
 
+/**
+A repository as `https://github.com/<owner>/<repo>`, from any page in it.
+*/
+export function githubRepoUrl(href: string): string | null {
+	const url = parse(href, 'https://github.com/');
+	const match =
+		url?.protocol === 'https:' && /^(?:www\.)?github\.com$/.test(url.hostname)
+			? GITHUB_REPO.exec(url.pathname)
+			: null;
+	if (!match || GITHUB_RESERVED.has(match[1].toLowerCase())) {
+		return null;
+	}
+
+	const repo = match[2].replace(/\.git$/, '');
+	return repo && repo !== '.' && repo !== '..'
+		? `https://github.com/${match[1]}/${repo}`
+		: null;
+}
+
+/**
+A story's own page on Hacker News, `https://news.ycombinator.com/item?id=<id>`.
+*/
+export function hackerNewsItemUrl(href: string): string | null {
+	const url = parse(href, 'https://news.ycombinator.com/');
+	const id =
+		url?.protocol === 'https:' &&
+		url.hostname === 'news.ycombinator.com' &&
+		url.pathname === '/item'
+			? url.searchParams.get('id')
+			: null;
+	return id && /^\d{1,12}$/.test(id)
+		? `https://news.ycombinator.com/item?id=${id}`
+		: null;
+}
+
+/**
+The address a story on Hacker News or Lobsters links to, which can be any web page, or the story's own page for a
+text post. Relative links are the site's own pages.
+*/
+function storyUrl(base: string, ownPage: (href: string) => string | null) {
+	return (href: string) => {
+		const url = parse(href, base);
+		if (!url || !['http:', 'https:'].includes(url.protocol)) {
+			return null;
+		}
+
+		return url.hostname === new URL(base).hostname
+			? ownPage(url.href)
+			: url.href;
+	};
+}
+
+/**
+A question as `https://stackoverflow.com/questions/<id>/<slug>`, also from a `/q/<id>` short link (without a slug).
+*/
+export function stackOverflowQuestionUrl(href: string): string | null {
+	const url = parse(href, 'https://stackoverflow.com/');
+	const match =
+		url?.protocol === 'https:' && url.hostname === 'stackoverflow.com'
+			? STACK_OVERFLOW_QUESTION.exec(url.pathname)
+			: null;
+	if (!match) {
+		return null;
+	}
+
+	return match[2]
+		? `https://stackoverflow.com/questions/${match[1]}/${match[2]}`
+		: `https://stackoverflow.com/questions/${match[1]}`;
+}
+
+/**
+An article as `https://dev.to/<author>/<slug>`.
+*/
+export function devtoArticleUrl(href: string): string | null {
+	const url = parse(href, 'https://dev.to/');
+	const match =
+		url?.protocol === 'https:' && url.hostname === 'dev.to'
+			? DEVTO_ARTICLE.exec(url.pathname)
+			: null;
+	return match && !DEVTO_RESERVED.has(match[1].toLowerCase())
+		? `https://dev.to/${match[1]}/${match[2]}`
+		: null;
+}
+
+/**
+A story's own page on Lobsters, `https://lobste.rs/s/<id>/<slug>`.
+*/
+export function lobstersStoryUrl(href: string): string | null {
+	const url = parse(href, 'https://lobste.rs/');
+	const match =
+		url?.protocol === 'https:' && url.hostname === 'lobste.rs'
+			? LOBSTERS_STORY.exec(url.pathname)
+			: null;
+	if (!match) {
+		return null;
+	}
+
+	return match[2]
+		? `https://lobste.rs/s/${match[1]}/${match[2]}`
+		: `https://lobste.rs/s/${match[1]}`;
+}
+
 export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'youtube',
@@ -173,6 +360,64 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		hosts: ['www.instagram.com'],
 		scriptId: 'tablodge-source-instagram',
 		canonicalUrl: instagramPostUrl,
+	},
+	{
+		id: 'github',
+		label: 'GitHub stars',
+		description: 'Repositories you star on github.com',
+		homepage: 'https://github.com/',
+		column: 'GitHub',
+		origins: ['https://github.com/*'],
+		hosts: ['github.com'],
+		scriptId: 'tablodge-source-github',
+		canonicalUrl: githubRepoUrl,
+	},
+	{
+		id: 'hackernews',
+		label: 'Hacker News favorites',
+		description: 'Stories you favorite on news.ycombinator.com',
+		homepage: 'https://news.ycombinator.com/',
+		column: 'Hacker News',
+		origins: ['https://news.ycombinator.com/*'],
+		hosts: ['news.ycombinator.com'],
+		scriptId: 'tablodge-source-hackernews',
+		canonicalUrl: storyUrl('https://news.ycombinator.com/', hackerNewsItemUrl),
+		discussion: {name: 'Hacker News discussion', url: hackerNewsItemUrl},
+		saveLoadsPage: true,
+	},
+	{
+		id: 'stackoverflow',
+		label: 'Stack Overflow bookmarks',
+		description: 'Questions you bookmark on stackoverflow.com',
+		homepage: 'https://stackoverflow.com/',
+		column: 'Stack Overflow',
+		origins: ['https://stackoverflow.com/*'],
+		hosts: ['stackoverflow.com'],
+		scriptId: 'tablodge-source-stackoverflow',
+		canonicalUrl: stackOverflowQuestionUrl,
+	},
+	{
+		id: 'devto',
+		label: 'dev.to reading list',
+		description: 'Articles you save to your reading list on dev.to',
+		homepage: 'https://dev.to/',
+		column: 'dev.to',
+		origins: ['https://dev.to/*'],
+		hosts: ['dev.to'],
+		scriptId: 'tablodge-source-devto',
+		canonicalUrl: devtoArticleUrl,
+	},
+	{
+		id: 'lobsters',
+		label: 'Lobsters saved',
+		description: 'Stories you save on lobste.rs',
+		homepage: 'https://lobste.rs/',
+		column: 'Lobsters',
+		origins: ['https://lobste.rs/*'],
+		hosts: ['lobste.rs'],
+		scriptId: 'tablodge-source-lobsters',
+		canonicalUrl: storyUrl('https://lobste.rs/', lobstersStoryUrl),
+		discussion: {name: 'Lobsters discussion', url: lobstersStoryUrl},
 	},
 ];
 

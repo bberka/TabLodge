@@ -951,13 +951,24 @@ export type TabLodgeMessages = {
 	*/
 	SET_SITE_SOURCE_COLUMN: {source: string; columnId: string | null};
 	/**
-	Sent by the site content script: the user saved this link on the site.
+	Sent by the site content script: the user saved this link on the site. `discussion` is the item's own page on
+	a site that links elsewhere (Hacker News, Lobsters); the worker checks it and puts it in the note.
 	*/
-	SITE_SOURCE_SAVE: {source: string; url: string; title?: string};
+	SITE_SOURCE_SAVE: {
+		source: string;
+		url: string;
+		title?: string;
+		discussion?: string;
+	};
 	/**
 	Sent by the site content script: the user saved something the adapter could not read.
 	*/
 	SITE_SOURCE_UNREADABLE: {source: string};
+	/**
+	Sent by the site content script when it starts, and after it showed a save's result: takes the result of the
+	last save from this tab, so a site whose save control loads another page (Hacker News) still shows it there.
+	*/
+	SITE_SOURCE_PENDING: {source: string};
 	/**
 	Sent by the site content script: undoes a SITE_SOURCE_SAVE, and nothing else.
 	*/
@@ -1317,6 +1328,12 @@ export type TabLodgeResponses = {
 	`reported`: the source is on, so Settings now shows that the page could not be read.
 	*/
 	SITE_SOURCE_UNREADABLE: {reported: boolean};
+	/**
+	The result of a save from this tab in the last few seconds that the page has not shown yet.
+	*/
+	SITE_SOURCE_PENDING: {
+		saved?: {outcome: SiteSourceOutcome; column?: string} & Undoable;
+	};
 	SITE_SOURCE_UNDO: {label: string};
 	QUOTE_UNDO: {label: string};
 };

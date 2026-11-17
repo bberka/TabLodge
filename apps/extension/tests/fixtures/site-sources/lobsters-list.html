@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- A trimmed lobste.rs front page: stories (li.story with data-shortid), their title link (a.u-url), the save
+form (form.saver posting to /stories/<id>/save, its submit input "save" or "unsave"), and the comments link to
+/s/<id>/<slug>. One link story, one text post whose title links to its own page, one already saved, and one whose
+title link is gone. Hand written to mimic Lobsters' _listdetail.html.erb and _save.html.erb; not a capture of the
+live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lobsters</title></head>
+<body>
+<ol class="stories list">
+	<li id="story_abc123" data-shortid="abc123" class="story">
+		<div class="story_liner h-entry"><div class="details">
+			<span role="heading" aria-level="1" class="link h-cite u-repost-of"><a class="u-url" href="https://example.org/rust" rel="ugc noreferrer">Rust in production</a></span>
+			<a class="domain" href="/domains/example.org">example.org</a>
+			<div class="byline">
+				<form class="hider" action="/stories/abc123/hide" method="post"><input type="submit" value="hide" class="btn-link"></form>
+				<span> | </span>
+				<form class="saver" action="/stories/abc123/save" accept-charset="UTF-8" method="post"><input id="save" type="submit" name="commit" value="save" class="btn-link"></form>
+				<span class="comments_label"><span> | </span><a href="/s/abc123/rust_in_production">14 comments</a></span>
+			</div>
+		</div></div>
+	</li>
+	<li id="story_def456" data-shortid="def456" class="story">
+		<div class="story_liner h-entry"><div class="details">
+			<span class="link h-cite u-repost-of"><a class="u-url" href="/s/def456/what_are_you_doing_this_week">What are you doing this week?</a></span>
+			<div class="byline">
+				<form class="saver" action="/stories/def456/save" method="post"><input id="text-save" type="submit" value="save" class="btn-link"></form>
+				<span class="comments_label"><a href="/s/def456/what_are_you_doing_this_week">31 comments</a></span>
+			</div>
+		</div></div>
+	</li>
+	<li id="story_ghi789" data-shortid="ghi789" class="story saved">
+		<div class="story_liner h-entry"><div class="details">
+			<span class="link h-cite u-repost-of"><a class="u-url" href="https://example.net/sqlite">SQLite tips</a></span>
+			<div class="byline">
+				<form class="saver" action="/stories/ghi789/unsave" method="post"><input id="unsave" type="submit" value="unsave" class="btn-link"></form>
+				<form class="hider" action="/stories/ghi789/hide" method="post"><input id="hide" type="submit" value="hide" class="btn-link"></form>
+			</div>
+		</div></div>
+	</li>
+	<li id="story_jkl012" data-shortid="jkl012" class="story">
+		<div class="story_liner h-entry"><div class="details">
+			<span class="link">A story whose title link moved</span>
+			<div class="byline">
+				<form class="saver" action="/stories/jkl012/save" method="post"><input id="changed-save" type="submit" value="save" class="btn-link"></form>
+			</div>
+		</div></div>
+	</li>
+</ol>
+</body>
+</html>

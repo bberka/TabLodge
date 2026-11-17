@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- A trimmed github.com repository page: the Star and Unstar forms (form.js-social-form posting to
+/<owner>/<repo>/star and /unstar; the page shows one), and the About box with the description. Hand written to
+mimic the site's markup; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>sindresorhus/ky: Tiny and elegant HTTP client</title></head>
+<body>
+<div id="repository-container-header">
+	<strong itemprop="name"><a href="/sindresorhus/ky">ky</a></strong>
+	<ul class="pagehead-actions">
+		<li><div class="js-toggler-container js-social-container starring-container BtnGroup d-flex">
+			<form class="starred js-social-form BtnGroup-parent" action="/sindresorhus/ky/unstar" accept-charset="UTF-8" method="post">
+				<input type="hidden" name="authenticity_token" value="x">
+				<button id="unstar" type="submit" class="btn-sm btn BtnGroup-item js-toggler-target" aria-label="Unstar this repository (13.2k)"><span>Starred</span> <span class="Counter">13.2k</span></button>
+			</form>
+			<form class="unstarred js-social-form BtnGroup-parent" action="/sindresorhus/ky/star" accept-charset="UTF-8" method="post">
+				<input type="hidden" name="authenticity_token" value="x">
+				<button id="star" type="submit" class="btn-sm btn BtnGroup-item js-toggler-target" aria-label="Star this repository (13.2k)"><svg id="star-icon" aria-hidden="true" class="octicon octicon-star" viewBox="0 0 16 16" width="16" height="16"><path id="star-shape" d="M8 .25l2 4.5 5 .5-3.75 3.4 1 4.85L8 11l-4.25 2.5 1-4.85L1 5.25l5-.5z"></path></svg><span id="star-text">Star</span> <span class="Counter">13.2k</span></button>
+			</form>
+		</div></li>
+		<li><form action="/notifications/subscribe" method="post"><button id="watch" type="submit" class="btn-sm btn">Watch</button></form></li>
+	</ul>
+</div>
+<div class="Layout-sidebar"><div class="BorderGrid"><div class="BorderGrid-cell">
+	<h2 class="mb-3 h4">About</h2>
+	<p class="f4 my-3">
+		Tiny and elegant JavaScript HTTP client based on the Fetch API
+	</p>
+</div></div></div>
+<div id="changed-header">
+	<button id="changed-star" type="button" class="btn-sm btn" aria-label="Star this repository (13.2k)">Star</button>
+</div>
+</body>
+</html>

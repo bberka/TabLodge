@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- A trimmed lobste.rs story page with a merged story: one li.story[data-shortid] holding a details block per
+story, each with its own title link (a.u-url) and save form, and a comments anchor in the page (#comments-…).
+Hand written to mimic Lobsters' _singledetail.html.erb; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Rust in production | Lobsters</title></head>
+<body>
+<ol class="stories"><li id="story_abc123" data-shortid="abc123" class="story">
+	<div class="story_liner h-entry">
+		<div class="details" id="rust-in-production">
+			<span class="link h-cite u-repost-of"><a class="u-url" href="https://example.org/rust">Rust in production</a></span>
+			<div class="byline">
+				<form class="saver" action="/stories/abc123/save" method="post"><input id="story-save" type="submit" value="save" class="btn-link"></form>
+				<span class="comments_label"><a href="#comments-abc123">14 comments</a></span>
+			</div>
+		</div>
+		<div class="details merged" id="rust-at-scale">
+			<span class="link h-cite u-repost-of"><a class="u-url" href="https://example.com/rust-at-scale">Rust at scale</a></span>
+			<div class="byline">
+				<form class="saver" action="/stories/mno345/save" method="post"><input id="merged-save" type="submit" value="save" class="btn-link"></form>
+			</div>
+		</div>
+	</div>
+</li></ol>
+<div id="comments-abc123" class="comments"></div>
+</body>
+</html>

@@ -431,39 +431,46 @@ function Help() {
 						'dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
 				},
 				{
-					title: 'Save from YouTube, Reddit, X, and Instagram',
+					title: 'Save from YouTube, Reddit, GitHub, and other sites',
 					body: (
 						<>
-							In Settings › Sources, choose Add a site, search for YouTube Watch
-							later, Reddit saved, X bookmarks, or Instagram saved, and pick it.
-							The browser asks for access to that site only, and nothing runs
-							there until you allow it. Only the sites you added are listed.
-							Then, when you add a video to Watch later on youtube.com, save a
-							post or comment on reddit.com, bookmark a post on x.com or
-							twitter.com, or save a post or reel on instagram.com,{' '}
-							{PROJECT.name} bookmarks the same link in a YouTube, Reddit, X, or
-							Instagram column, created on the first save. Posts from X and
-							Instagram are titled with the start of their text or caption.
-							Under Save to, under each added site, you can choose another
-							column; if that column is deleted, saves go to the site&apos;s own
-							column again until you choose one. A small notice in the page
-							offers Undo; press Tab to reach it. A link already in your
-							bookmarks or in the trash bin is not saved again. {PROJECT.name}{' '}
-							only watches for your own clicks on the site&apos;s save controls,
-							reads the link from the page, and sends nothing anywhere. It
-							recognizes the English labels of those controls; on X, the
-							Bookmark button works in any language, and its Share menu item in
-							English. If a site changes its page so {PROJECT.name} can no
-							longer read it, nothing is saved and Settings says so. In a
-							private window, saves are added only when private windows use the
-							regular library. Remove takes a site out of the list and gives its
-							access back. Removing its access in the browser&apos;s extension
-							settings also stops it; Settings then says so next to the site and
-							offers Allow again.
+							In Settings › Sources, choose Add a site, search for the site, and
+							pick it: YouTube Watch later, Reddit saved, X bookmarks, Instagram
+							saved, GitHub stars, Hacker News favorites, Stack Overflow
+							bookmarks, dev.to reading list, or Lobsters saved. The browser
+							asks for access to that site only, and nothing runs there until
+							you allow it. Only the sites you added are listed. Then, when you
+							save something there, {PROJECT.name} bookmarks the same link in a
+							column named after the site, created on the first save: a video
+							you add to Watch later, a Reddit post or comment, an X post you
+							bookmark, an Instagram post or reel, a GitHub repository you star
+							(titled with its name and description), a Hacker News story you
+							favorite, a Stack Overflow question you bookmark, a dev.to article
+							you save to your reading list, or a Lobsters story you save. Posts
+							from X and Instagram are titled with the start of their text or
+							caption. A Hacker News or Lobsters story is saved at the address
+							it links to, with its discussion page in the note; a text post
+							with no link is saved at its discussion page. Under Save to, under
+							each added site, you can choose another column; if that column is
+							deleted, saves go to the site&apos;s own column again until you
+							choose one. A small notice in the page offers Undo; press Tab to
+							reach it. A link already in your bookmarks or in the trash bin is
+							not saved again. {PROJECT.name} only watches for your own clicks
+							on the site&apos;s save controls, reads the link from the page,
+							and sends nothing anywhere. It recognizes the English labels of
+							those controls. The Bookmark button on X, Star on GitHub, and the
+							save buttons on Stack Overflow and dev.to work in any language;
+							the Share menu item on X works in English. If a site changes its
+							page so {PROJECT.name} can no longer read it, nothing is saved and
+							Settings says so. In a private window, saves are added only when
+							private windows use the regular library. Remove takes a site out
+							of the list and gives its access back. Removing its access in the
+							browser&apos;s extension settings also stops it; Settings then
+							says so next to the site and offers Allow again.
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels save automatically site access permission column undo private window trash',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters save automatically site access permission column undo private window trash',
 				},
 			],
 			action: {
