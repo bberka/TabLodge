@@ -7,7 +7,7 @@ serialized as source, and must not use anything declared outside it (no imports,
 
 It sits in a closed shadow root with every style set on the element, like the palette overlay, so the page's CSS cannot
 reach it. It never takes focus: the message is announced through a status region, and Undo is a normal button that Tab
-reaches. Undo asks the worker to run UNDO with `undoId`. The toast closes on its own, but not while the pointer or focus
+reaches. Undo sends QUOTE_UNDO with `undoId`, which the worker accepts only from the tab it showed this toast in. The toast closes on its own, but not while the pointer or focus
 is on it, and Escape closes it while it has focus.
 */
 export function showQuoteToast(toast: {
@@ -115,7 +115,7 @@ export function showQuoteToast(toast: {
 		undo.addEventListener('click', () => {
 			undo.remove();
 			void chrome.runtime
-				.sendMessage({type: 'UNDO', id: undoId})
+				.sendMessage({type: 'QUOTE_UNDO', id: undoId})
 				.then((result: {ok?: boolean; error?: string} | undefined) => {
 					text.textContent = result?.ok
 						? 'Quote removed.'

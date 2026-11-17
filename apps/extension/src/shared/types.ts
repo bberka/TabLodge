@@ -962,6 +962,10 @@ export type TabLodgeMessages = {
 	Sent by the site content script: undoes a SITE_SOURCE_SAVE, and nothing else.
 	*/
 	SITE_SOURCE_UNDO: {id: string};
+	/**
+	Sent by the Save quote toast in a web page: undoes the quote that toast reported, and nothing else.
+	*/
+	QUOTE_UNDO: {id: string};
 };
 
 export type TabLodgeMessageType = keyof TabLodgeMessages;
@@ -1314,6 +1318,7 @@ export type TabLodgeResponses = {
 	*/
 	SITE_SOURCE_UNREADABLE: {reported: boolean};
 	SITE_SOURCE_UNDO: {label: string};
+	QUOTE_UNDO: {label: string};
 };
 
 export type ActionSuccess<K extends TabLodgeMessageType = TabLodgeMessageType> =

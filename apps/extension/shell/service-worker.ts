@@ -9608,8 +9608,14 @@ async function undoSourceSave(id: unknown): Promise<ActionResult<'UNDO'>> {
 }
 
 /**
-Messages from the site content script, the only code in a web page that can reach the worker. They get the three
-source actions and nothing else: no page can read or change the library through them.
+The undo id of each Save quote toast, with the tab that shows it: Undo in a page may only take back the quote that
+page's toast reported (see QUOTE_UNDO).
+*/
+const quoteUndoTabs = new Map<string, number>();
+
+/**
+Messages from code in a web page: the site content script and the Save quote toast. They get the three source actions
+and Undo of the toast's own quote, and nothing else: no page can read or change the library through them.
 */
 async function handleSourceMessage(
 	message: TabLodgeMessage | undefined,
@@ -9636,6 +9642,20 @@ async function handleSourceMessage(
 				}
 			});
 			return {ok: true, reported: state[source.id].enabled};
+		}
+
+		case 'QUOTE_UNDO': {
+			const {id} = message;
+			if (
+				typeof id !== 'string' ||
+				!isInteger(sender.tab?.id) ||
+				quoteUndoTabs.get(id) !== sender.tab.id
+			) {
+				return {ok: false, error: "Can't undo: it was too long ago."};
+			}
+
+			quoteUndoTabs.delete(id);
+			return undoAction(id);
 		}
 
 		case 'SITE_SOURCE_UNDO': {
@@ -11317,6 +11337,10 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 		: {message: result.error, failed: true};
 	let shown = false;
 	if (isInteger(tab?.id)) {
+		if (result.ok && result.undoId) {
+			quoteUndoTabs.set(result.undoId, tab.id);
+		}
+
 		try {
 			const [injected] = await chrome.scripting.executeScript({
 				target: {tabId: tab.id},

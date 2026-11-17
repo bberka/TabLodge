@@ -542,6 +542,23 @@ function createHarness(
 				}),
 			);
 		},
+		/**
+		A message from code injected into the web page in tab `tabId`, as the Save quote toast sends it.
+		*/
+		sendFromPage(message: TabLodgeMessage, tabId = 1) {
+			return untilSettled(
+				new Promise<Response>((resolve) => {
+					messageListener!(
+						message,
+						{
+							tab: {id: tabId, windowId: 10},
+							url: 'https://current.example/page',
+						},
+						resolve,
+					);
+				}),
+			);
+		},
 	};
 }
 
@@ -1521,12 +1538,24 @@ test('Undo from the quote toast removes the quote and the bookmark it made', asy
 	await harness.install();
 	await harness.click(quoted('https://current.example/page', 'Hello'));
 	assert.equal(harness.state.bookmarks.length, 1);
-	const response = await harness.send({
-		type: 'UNDO',
-		id: harness.toasts[0].undoId!,
-	});
+	const id = harness.toasts[0].undoId!;
+
+	// A page may not run Undo itself, and another tab may not take back this toast's quote.
+	assert.equal((await harness.sendFromPage({type: 'UNDO', id})).ok, false);
+	assert.equal(
+		(await harness.sendFromPage({type: 'QUOTE_UNDO', id}, 2)).ok,
+		false,
+	);
+	assert.equal(harness.state.bookmarks.length, 1);
+
+	const response = await harness.sendFromPage({type: 'QUOTE_UNDO', id});
 	assert.equal(response.ok, true);
 	assert.equal(harness.state.bookmarks.length, 0);
+	assert.equal(
+		(await harness.sendFromPage({type: 'QUOTE_UNDO', id})).ok,
+		false,
+		'an undo id works once',
+	);
 });
 
 test('Save quote flashes the badge where the page cannot show a toast', async () => {
