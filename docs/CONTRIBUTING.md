@@ -25,7 +25,7 @@ Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then us
 | `vp run build` / `vp run pack` | Build and verify both browsers, then package them |
 | `vp run lint:fix` | Fix lint issues and format with XO |
 | `pnpm run mobile:start` | Start Metro for the Android app in `apps/mobile/` (needs a development build; see [Android app](android.md)) |
-| `pnpm run mobile:apk` | Build a standalone Android APK from this checkout into `apps/extension/dist/tablodge-local.apk`; add `--install` to install it with adb, or `--all-abis` to include 32 bit ARM |
+| `pnpm run mobile:apk` | Build a standalone Android APK from this checkout into `apps/mobile/dist/tablodge-local.apk`; add `--install` to install it with adb, or `--all-abis` to include 32 bit ARM |
 | `pnpm run mobile:icons` | Redraw the Android app's launcher and splash images from the extension's mark (needs `rsvg-convert` and ImageMagick) |
 | `pnpm run mobile:export` | Bundle the Android app's JavaScript to check that it builds |
 | `pnpm run cf:setup` | Deploy the sync server to Cloudflare (see [Self hosting](self-hosting.md)) |
