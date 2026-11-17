@@ -52,9 +52,9 @@ if (breadcrumbs) {
 }
 const structured = JSON.stringify({'@context': 'https://schema.org', '@graph': graph});
 const nav = [
-	{href: '/#features', label: 'Features'},
-	{href: '/#install', label: 'Install'},
-	{href: '/alternatives/', label: 'Alternatives'},
+	{href: '/#how', label: 'How it works'},
+	{href: '/#android', label: 'Android'},
+	{href: '/alternatives/', label: 'Compare'},
 	{href: '/#faq', label: 'FAQ'},
 ];
 
@@ -68,6 +68,7 @@ const footerGroups: Array<{title: string; links: FooterLink[]}> = [
 			{href: SITE.androidApk, label: 'Android APK', icon: 'store'},
 			{href: SITE.releases, label: 'Latest release'},
 			{href: '/alternatives/', label: 'Alternatives'},
+			{href: '/alternatives/android/', label: 'Android alternatives'},
 		],
 	},
 	{

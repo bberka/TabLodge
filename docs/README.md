@@ -35,7 +35,7 @@ The in app Help page explains every feature and setting.
 ## Screenshots
 
 <p align="center">
-  <img src="../site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with saved sessions above a board of bookmark columns" width="800">
+  <img src="../site/src/assets/dashboard-light.webp" alt="TabLodge dashboard with a board of bookmark columns above saved sessions" width="800">
 </p>
 <p align="center">
   <img src="../site/src/assets/palette-dark.webp" alt="Search results for sessions, saved tabs, and bookmarks" width="420">
