@@ -31,7 +31,7 @@ describe('linkKind', () => {
 		assert.equal(linkKind('https://photos.png.example.com/'), 'page');
 	});
 
-	test('knows the common video sites by their video paths', () => {
+	test('knows the common video sites, and arXiv PDFs, by their paths', () => {
 		assert.equal(linkKind('https://www.youtube.com/watch?v=abc'), 'video');
 		assert.equal(linkKind('https://m.youtube.com/shorts/abc'), 'video');
 		assert.equal(linkKind('https://youtu.be/abc'), 'video');
@@ -39,6 +39,8 @@ describe('linkKind', () => {
 		assert.equal(linkKind('https://www.youtube.com/'), 'page');
 		assert.equal(linkKind('https://www.youtube.com/@channel'), 'page');
 		assert.equal(linkKind('https://vimeo.com/about'), 'page');
+		assert.equal(linkKind('https://arxiv.org/pdf/1706.03762'), 'pdf');
+		assert.equal(linkKind('https://arxiv.org/abs/1706.03762'), 'page');
 	});
 
 	test('leaves data, blob, and unreadable addresses alone', () => {

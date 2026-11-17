@@ -34,6 +34,13 @@ const VIDEO_PATHS: Readonly<Record<string, RegExp>> = {
 	'twitch.tv': /^\/videos\//,
 };
 
+/**
+Sites that serve PDFs at addresses without a .pdf ending.
+*/
+const PDF_PATHS: Readonly<Record<string, RegExp>> = {
+	'arxiv.org': /^\/pdf\//,
+};
+
 export function linkKind(address: string): LinkKind {
 	let url: URL;
 	try {
@@ -50,6 +57,10 @@ export function linkKind(address: string): LinkKind {
 	const host = url.hostname.toLowerCase().replace(/^(?:www|m)\./, '');
 	if (VIDEO_PATHS[host]?.test(url.pathname)) {
 		return 'video';
+	}
+
+	if (PDF_PATHS[host]?.test(url.pathname)) {
+		return 'pdf';
 	}
 
 	// Only the last path segment counts: a query such as ?file=photo.jpg belongs to a page.
