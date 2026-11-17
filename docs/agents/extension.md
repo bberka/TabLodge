@@ -25,6 +25,7 @@ Logic that needs no browser lives in `src/shared` and `src/app` as plain modules
 - Test on Chrome and Firefox when a change touches what they treat differently ([Browser support](../architecture.md#browser-support)).
 - Add a regression test for a bug fix. Extend the `chrome.*` mock in the worker tests when you use another API.
 - UI work follows [UI rules](ui.md).
+- A new feature or user action checks whether it belongs in the right-click menu: [Entry points](cross-app.md#feature-triage).
 
 ## Commands
 
