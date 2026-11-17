@@ -42,7 +42,7 @@ import {
 	type OpenTabInfo,
 } from '../shared/global-search';
 import {send, useCloseOnEscape, type IconComponent} from './common';
-import {faviconUrl, useServerIcon} from './favicon';
+import {faviconUrl, LinkKindBadge, useServerIcon} from './favicon';
 import {
 	filterItemActions,
 	itemActions,
@@ -104,8 +104,10 @@ function ResultIcon({
 	const siteUrl = item.url && item.kind !== 'url' ? item.url : '';
 	const [serverIcon, observe] = useServerIcon(siteUrl, !siteUrl);
 	const src = serverIcon || (siteUrl && faviconUrl(siteUrl));
-	if (src && !failed) {
-		return (
+	const Icon =
+		(item.kind === 'command' && commandIcon) || KIND_ICONS[item.kind] || Globe;
+	const icon =
+		src && !failed ? (
 			<img
 				ref={observe}
 				src={src}
@@ -115,17 +117,20 @@ function ResultIcon({
 				className="h-5 w-5 shrink-0 object-contain"
 				onError={() => setFailed(true)}
 			/>
+		) : (
+			<Icon
+				ref={observe}
+				className="h-4 w-4 shrink-0 text-muted-foreground"
+				aria-hidden="true"
+			/>
 		);
-	}
-
-	const Icon =
-		(item.kind === 'command' && commandIcon) || KIND_ICONS[item.kind] || Globe;
-	return (
-		<Icon
-			ref={observe}
-			className="h-4 w-4 shrink-0 text-muted-foreground"
-			aria-hidden="true"
-		/>
+	return item.kind === 'bookmark' && item.url ? (
+		<span className="relative shrink-0">
+			{icon}
+			<LinkKindBadge url={item.url} />
+		</span>
+	) : (
+		icon
 	);
 }
 

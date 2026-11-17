@@ -48,7 +48,7 @@
 				"expo-share-intent",
 				{
 					"disableIOS": true,
-					"androidIntentFilters": ["text/*"]
+					"androidIntentFilters": ["text/*", "image/*"]
 				}
 			],
 			"expo-sharing"

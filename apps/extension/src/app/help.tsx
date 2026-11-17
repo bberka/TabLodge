@@ -14,6 +14,7 @@ import {
 	Keyboard,
 	Layers2,
 	LifeBuoy,
+	Image as ImageIcon,
 	Link2,
 	MoreHorizontal,
 	MousePointer2,
@@ -326,6 +327,12 @@ function Help() {
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},
 				{
+					title: 'Images, PDFs, and videos',
+					body: 'A bookmark that links to an image, a PDF, or a video gets a small mark on the corner of its site icon on the board, in the side panel, and in search. It is read from the address (an ending such as .jpg or .pdf, a video page on YouTube or Vimeo, or a PDF on arXiv), so nothing extra is stored or fetched. Screen readers say the kind before the bookmark’s name.',
+					searchText:
+						'image picture photo pdf document video kind type icon mark badge jpg png youtube vimeo arxiv',
+				},
+				{
 					title: 'Bookmark quick actions',
 					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete moves the bookmark to the trash and offers Undo in a toast.',
 					searchText:
@@ -423,6 +430,20 @@ function Help() {
 					gesture: {label: 'Right-click a link', icon: Link2},
 					body: 'Bookmark the link to a column or to a new one.',
 					searchText: 'right-click link bookmark column',
+				},
+				{
+					title: 'On an image or a video',
+					gesture: {label: 'Right-click an image or a video', icon: ImageIcon},
+					body: 'Bookmark image to and Bookmark video to save the address of the image, video, or sound to a column or a new one, titled with the site it was on. Nothing is downloaded. A video that streams (most video sites) has no address of its own, so its page is saved, with the page’s title. An address you already bookmarked, or one in the trash bin, is skipped: restore it from the trash bin instead. On sites such as YouTube the player covers the video, so the page menu appears: Bookmark this page to saves the watch page.',
+					searchText:
+						'right-click image picture photo video audio sound stream youtube bookmark image bookmark video address duplicate trash',
+				},
+				{
+					title: 'On a PDF',
+					gesture: {label: 'Right-click the PDF', icon: MousePointerClick},
+					body: 'The browser’s PDF viewer shows the page menu, so Bookmark this page to saves the PDF. You can also right-click a link to a PDF, or use the toolbar button on the PDF’s tab.',
+					searchText:
+						'right-click pdf document viewer bookmark page link toolbar',
 				},
 				{
 					title: 'On a page',

@@ -15,6 +15,7 @@ import {elsewhereIntro} from '../library/search-count';
 import {useLinkSettings} from '../library/use-link-settings';
 import {openLink} from '../platform/open-links';
 import {useSettledText} from '../ui/search-count';
+import {BookmarkIcon, spokenKind} from '../ui/bookmark-icon';
 import {SiteIcon} from '../ui/site-icon';
 import {TARGET, useColors} from '../ui/theme';
 import {Button, Icon} from '../ui/widgets';
@@ -108,7 +109,7 @@ export function SearchElsewhere({
 						<Pressable
 							key={item.id}
 							accessibilityRole={item.url ? 'link' : 'button'}
-							accessibilityLabel={`${item.title}${item.detail ? `, ${item.detail}` : ''}`}
+							accessibilityLabel={`${item.kind === 'bookmark' && item.url ? spokenKind(item.url) : ''}${item.title}${item.detail ? `, ${item.detail}` : ''}`}
 							accessibilityHint={
 								item.url
 									? 'Opens the link'
@@ -124,7 +125,9 @@ export function SearchElsewhere({
 								open(item);
 							}}
 						>
-							{item.url ? (
+							{item.kind === 'bookmark' && item.url ? (
+								<BookmarkIcon url={item.url} size={28} />
+							) : item.url ? (
 								<SiteIcon host={hostOf(item.url)} size={28} />
 							) : (
 								<Icon

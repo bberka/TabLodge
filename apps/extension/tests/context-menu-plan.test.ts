@@ -36,6 +36,68 @@ describe('contextMenuPlan', () => {
 		assert.ok(plan.length > 0);
 	});
 
+	test('every context has one root, and the link switch also covers images and media', () => {
+		const roots = (plan: ReturnType<typeof contextMenuPlan>) =>
+			plan
+				.filter((item) => !item.parentId)
+				.flatMap((item) => item.contexts ?? [])
+				.toSorted();
+		assert.deepEqual(roots(contextMenuPlan(on, columns, [], env)), [
+			'action',
+			'action',
+			'action',
+			'action',
+			'action',
+			'action',
+			'audio',
+			'frame',
+			'image',
+			'link',
+			'page',
+			'selection',
+			'video',
+		]);
+		const titlesUnder = (
+			plan: ReturnType<typeof contextMenuPlan>,
+			id: string,
+		) =>
+			plan
+				.filter((item) => item.parentId === id)
+				.map((item) => item.title ?? '---');
+		const plan = contextMenuPlan(on, columns, [], env);
+		assert.deepEqual(titlesUnder(plan, 'tablodge-image-root'), [
+			'Bookmark image to',
+		]);
+		assert.deepEqual(titlesUnder(plan, 'tablodge-image-bookmark'), [
+			'Read',
+			'---',
+			'New column',
+		]);
+		assert.deepEqual(titlesUnder(plan, 'tablodge-media-root'), [
+			'Bookmark video to',
+		]);
+		assert.deepEqual(titlesUnder(plan, 'tablodge-media-bookmark'), [
+			'Read',
+			'---',
+			'New column',
+		]);
+
+		const linksOff = roots(
+			contextMenuPlan(
+				{...on, contextMenuLinksEnabled: false},
+				columns,
+				[],
+				env,
+			),
+		);
+		for (const context of ['link', 'image', 'video', 'audio'] as const) {
+			assert.ok(
+				!linksOff.includes(context),
+				`${context} goes with the Links switch`,
+			);
+		}
+	});
+
 	test('builds nothing while the menus are off', () => {
 		const plan = contextMenuPlan(
 			{...on, contextMenusEnabled: false},

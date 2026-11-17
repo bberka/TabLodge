@@ -153,7 +153,7 @@ import {
 import {DEFAULT_COLUMN_ICON, getIcon} from './icon-registry';
 import {ColumnLabel, IconLabel} from './icon-label';
 import {IconNameField} from './icon-picker';
-import {Favicon, LinkSummary} from './favicon';
+import {BookmarkIcon, Favicon, LinkSummary} from './favicon';
 import {bookmarkGridTemplate} from './bookmark-layout';
 import {
 	handleInternalDragEnd,
@@ -4240,7 +4240,7 @@ const BookmarkCard = memo(
 									void onAction('click', bookmark);
 								}}
 							>
-								<Favicon
+								<BookmarkIcon
 									url={bookmark.url}
 									label={siteName(bookmark.url)}
 									className={cn(

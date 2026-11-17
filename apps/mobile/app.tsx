@@ -1,4 +1,5 @@
 import {ShareIntentProvider, useShareIntentContext} from 'expo-share-intent';
+import {File, Paths} from 'expo-file-system';
 import {StatusBar} from 'expo-status-bar';
 import {useCallback, useEffect, useState} from 'react';
 import {
@@ -12,7 +13,12 @@ import {
 } from 'react-native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/ui/bottom-sheet';
-import {extractUrls, splitShared} from './src/library/store-shape';
+import {
+	cacheCopies,
+	FILES_REFUSED,
+	readShare,
+} from './src/library/shared-content';
+import {splitShared} from './src/library/store-shape';
 import {runBackAction} from './src/ui/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library/library-store';
 import {purgeTrash} from './src/library/trash-store';
@@ -152,26 +158,46 @@ function Main() {
 
 	useEffect(() => startPrivateAutoLock(), []);
 
-	// A link shared from another app opens the drawer with it filled in.
+	// A link shared from another app opens the drawer with it filled in. A shared file is refused, and the copy the
+	// share library made of it is deleted.
 	useEffect(() => {
 		if (!hasShareIntent) {
 			return;
 		}
 
-		// Browsers share "Page title https://example.com"; the words around the link become the title.
-		const full = shareIntent.text ?? shareIntent.webUrl ?? '';
-		const parts = splitShared(full);
+		const outcome = readShare(shareIntent);
+		const quick = Date.now() - BOOT < COLD_MS;
+		for (const path of cacheCopies(shareIntent, Paths.cache.uri)) {
+			try {
+				new File(path).delete();
+			} catch {
+				// Already gone; the system clears the cache in any case.
+			}
+		}
+
+		resetShareIntent();
+		if (outcome.kind === 'files') {
+			if (quick) {
+				// The toast stays on screen over the app the file came from.
+				ToastAndroid.show(FILES_REFUSED, ToastAndroid.LONG);
+				BackHandler.exitApp();
+			} else {
+				showSnack(FILES_REFUSED);
+			}
+
+			return;
+		}
+
 		setDraft((current) => ({
 			key: current.key + 1,
-			text: shareIntent.webUrl ?? parts.url ?? full,
-			title: shareIntent.meta?.title || parts.title,
-			urls: extractUrls(full),
+			text: outcome.text,
+			title: outcome.title,
+			urls: outcome.urls,
 			many: false,
-			quick: Date.now() - BOOT < COLD_MS,
+			quick,
 		}));
 		setTab('bookmarks');
 		setOpen(true);
-		resetShareIntent();
 	}, [hasShareIntent, shareIntent, resetShareIntent]);
 
 	// A Quick Settings tile opens the app at tablodge://save or tablodge://search, always on the regular library.

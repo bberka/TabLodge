@@ -85,6 +85,8 @@ type ClickInfo = {
 	menuItemId: string;
 	linkUrl?: string;
 	linkText?: string;
+	srcUrl?: string;
+	mediaType?: string;
 	selectionText?: string;
 	pageUrl?: string;
 	checked?: boolean;
@@ -836,6 +838,214 @@ test('bookmarking a link into a column uses the link text, falls back to the hos
 	]);
 	assert.equal(harness.badges.at(-1)?.text, '!');
 	assert.equal(harness.state.bookmarks.length, 2);
+});
+
+test('image and video menus list the columns under one root each', async () => {
+	const harness = createHarness(baseState());
+	await harness.install();
+	for (const [root, bookmark, title, contexts] of [
+		[
+			'tablodge-image-root',
+			'tablodge-image-bookmark',
+			'Bookmark image to',
+			['image'],
+		],
+		[
+			'tablodge-media-root',
+			'tablodge-media-bookmark',
+			'Bookmark video to',
+			['video', 'audio'],
+		],
+	] as const) {
+		assert.equal(harness.item(root)?.title, appName);
+		assert.equal(harness.item(root)?.parentId, undefined);
+		assert.deepEqual(harness.item(root)?.contexts, contexts);
+		assert.deepEqual(titles(harness.childrenOf(root)), [title]);
+		assert.deepEqual(titles(harness.childrenOf(bookmark)), [
+			'Bookmarks',
+			'Reading',
+			'---',
+			'New column',
+		]);
+	}
+
+	// Only web images have an address to save; a stream needs a web page to fall back to.
+	assert.deepEqual(harness.item('tablodge-image-root')?.targetUrlPatterns, [
+		'http://*/*',
+		'https://*/*',
+	]);
+	assert.equal(
+		harness.item('tablodge-media-root')?.targetUrlPatterns,
+		undefined,
+	);
+	assert.deepEqual(harness.item('tablodge-media-root')?.documentUrlPatterns, [
+		'http://*/*',
+		'https://*/*',
+	]);
+	assert.deepEqual(
+		['image', 'video', 'audio'].map(
+			(context) => harness.topLevel(context).length,
+		),
+		[1, 1, 1],
+		'one root per context',
+	);
+});
+
+test('Bookmark image to saves the image address, and skips one saved in any column or in the trash', async () => {
+	const harness = createHarness(
+		baseState(
+			{},
+			{
+				bookmarks: [
+					{
+						id: 'b0',
+						title: 'Old image',
+						url: 'https://cdn.example/old.png',
+						columnId: 'bookmark-default',
+						createdAt: 1,
+						updatedAt: 1,
+					},
+				],
+			},
+		),
+	);
+	await harness.install();
+	const save = async (srcUrl: string) =>
+		harness.click({
+			menuItemId: 'tablodge-image-bookmark:column-reading',
+			mediaType: 'image',
+			srcUrl,
+			pageUrl: 'https://www.photos.example/album/2',
+		});
+	await save('https://cdn.example/full/cat.JPG?w=800');
+	await save('https://cdn.example/full/cat.JPG?w=800');
+	// Bookmarked in another column, it still counts as saved.
+	await save('https://cdn.example/old.png');
+	assert.deepEqual(
+		harness.state.bookmarks.map(({title, url, columnId}) => ({
+			title,
+			url,
+			columnId,
+		})),
+		[
+			{
+				title: 'Old image',
+				url: 'https://cdn.example/old.png',
+				columnId: 'bookmark-default',
+			},
+			{
+				title: 'Image from photos.example',
+				url: 'https://cdn.example/full/cat.JPG?w=800',
+				columnId: 'column-reading',
+			},
+		],
+	);
+
+	const saved = harness.state.bookmarks[1];
+	assert.equal(
+		(await harness.send({type: 'DELETE_BOOKMARK', bookmarkId: saved.id!})).ok,
+		true,
+	);
+	await save('https://cdn.example/full/cat.JPG?w=800');
+	assert.equal(
+		harness.state.bookmarks.length,
+		1,
+		'nothing comes back from the trash',
+	);
+	assert.deepEqual(harness.warnings, [
+		'This address is in the trash bin. Restore it from there to keep it.',
+	]);
+	assert.deepEqual(
+		harness.badges.filter((badge) => badge.text).map((badge) => badge.text),
+		['✓', '✓', '✓', '!'],
+	);
+});
+
+test('Bookmark video to saves a video file by its address and a stream by its page', async () => {
+	const harness = createHarness(baseState(), [
+		{
+			id: 1,
+			windowId: 10,
+			index: 0,
+			active: true,
+			url: 'https://www.youtube.com/watch?v=abc',
+			title: '(3) A talk - YouTube',
+		},
+	]);
+	await harness.install();
+	const tab = {
+		id: 1,
+		windowId: 10,
+		url: 'https://www.youtube.com/watch?v=abc',
+		title: '(3) A talk - YouTube',
+	};
+	await harness.click(
+		{
+			menuItemId: 'tablodge-media-bookmark:bookmark-default',
+			mediaType: 'video',
+			srcUrl: 'blob:https://www.youtube.com/5f1e',
+			pageUrl: tab.url,
+		},
+		tab,
+	);
+	await harness.click(
+		{
+			menuItemId: 'tablodge-media-bookmark:bookmark-default',
+			mediaType: 'video',
+			srcUrl: 'blob:https://www.youtube.com/other',
+			pageUrl: tab.url,
+		},
+		tab,
+	);
+	await harness.click(
+		{
+			menuItemId: 'tablodge-media-bookmark:column-reading',
+			mediaType: 'video',
+			srcUrl: 'https://media.example/clip.webm',
+			pageUrl: 'https://news.example/story',
+		},
+		{id: 1, windowId: 10, url: 'https://news.example/story', title: 'Story'},
+	);
+	assert.deepEqual(
+		harness.state.bookmarks.map(({title, url, columnId}) => ({
+			title,
+			url,
+			columnId,
+		})),
+		[
+			{
+				title: 'A talk - YouTube',
+				url: 'https://www.youtube.com/watch?v=abc',
+				columnId: 'bookmark-default',
+			},
+			{
+				title: 'Video from news.example',
+				url: 'https://media.example/clip.webm',
+				columnId: 'column-reading',
+			},
+		],
+		'the second click on the same stream is a duplicate',
+	);
+
+	await harness.click(
+		{
+			menuItemId: 'tablodge-media-bookmark-new',
+			mediaType: 'audio',
+			srcUrl: 'https://radio.example/show.mp3',
+			pageUrl: 'https://radio.example/',
+		},
+		{id: 1, windowId: 10, url: 'https://radio.example/', title: 'Radio'},
+	);
+	const opened = new URL(harness.openedTabs[0].url!);
+	assert.equal(
+		opened.searchParams.get('bookmarkUrl'),
+		'https://radio.example/show.mp3',
+	);
+	assert.equal(
+		opened.searchParams.get('bookmarkTitle'),
+		'Audio from radio.example',
+	);
+	assert.equal(opened.searchParams.get('bookmarkColumn'), 'new');
 });
 
 test('bookmarking this page uses the tab title and the chosen column', async () => {

@@ -1,5 +1,7 @@
 import {memo, useEffect, useState, useSyncExternalStore} from 'react';
+import {FileText, Film, Image, type LucideIcon} from 'lucide-react';
 import {isFirefox} from '../shared/browser';
+import {LINK_KIND_LABELS, linkKind, type LinkKind} from '../shared/link-kind';
 import {displayUrl} from '../shared/url-display';
 import type {Settings} from '../shared/types';
 import {
@@ -275,6 +277,64 @@ export const Favicon = memo(
 		);
 	},
 );
+
+const KIND_ICONS: Record<Exclude<LinkKind, 'page'>, LucideIcon> = {
+	image: Image,
+	pdf: FileText,
+	video: Film,
+};
+
+/**
+A small mark on the corner of an icon for a link to an image, a PDF, or a video, and the same word for screen
+readers ahead of the link's name. Place it inside a `relative` box that holds the icon. Nothing for a page.
+*/
+export function LinkKindBadge({url}: {url: string}) {
+	const kind = linkKind(url);
+	if (kind === 'page') {
+		return null;
+	}
+
+	const Icon = KIND_ICONS[kind];
+	return (
+		<>
+			<span
+				aria-hidden="true"
+				title={LINK_KIND_LABELS[kind]}
+				data-link-kind={kind}
+				className="absolute -right-1.5 -bottom-1 grid size-4 place-items-center rounded-full bg-background text-foreground shadow-xs ring-1 ring-border"
+			>
+				<Icon className="size-3" strokeWidth={2.25} />
+			</span>
+			<span className="sr-only">{`${LINK_KIND_LABELS[kind]}: `}</span>
+		</>
+	);
+}
+
+/**
+A bookmark's site icon with its kind mark. `className` sizes and places the icon.
+*/
+export function BookmarkIcon({
+	url,
+	label,
+	className = '',
+}: {
+	url: string;
+	label?: string;
+	className?: string;
+}) {
+	return linkKind(url) === 'page' ? (
+		<Favicon url={url} label={label} className={className} />
+	) : (
+		<span className={`relative shrink-0 ${className}`}>
+			<Favicon
+				url={url}
+				label={label}
+				className="size-full rounded-[inherit]"
+			/>
+			<LinkKindBadge url={url} />
+		</span>
+	);
+}
 
 const NO_SETTINGS: Partial<Settings> = {};
 

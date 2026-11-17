@@ -20,7 +20,7 @@ TabLodge is a browser extension for Chromium browsers and desktop Firefox. Save 
 ## Features
 
 - **Sessions:** save tabs, a tab group, or a window, and restore them with groups and pinned tabs.
-- **Bookmark board:** columns of links on every new tab.
+- **Bookmark board:** columns of links on every new tab, with a mark on links to images, PDFs, and videos.
 - **Search:** one palette for open tabs, bookmarks, saved tabs, and sessions.
 - **Import and export:** OneTab, Session Buddy, Toby, Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, Pinboard, Mastodon bookmarks, browser bookmarks, and backups.
 - **Recovery:** crash snapshots, a trash bin, and Undo.

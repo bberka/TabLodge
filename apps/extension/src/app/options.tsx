@@ -564,8 +564,8 @@ const settingsGroups: Array<{
 			{
 				name: 'contextMenuLinksEnabled',
 				requires: 'contextMenusEnabled',
-				label: 'Links',
-				help: 'Bookmark a link to a column.',
+				label: 'Links, images, and videos',
+				help: 'Bookmark a link, an image, or a video to a column.',
 				type: 'switch',
 			},
 			{
