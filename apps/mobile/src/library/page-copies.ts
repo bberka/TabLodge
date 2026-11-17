@@ -1,7 +1,7 @@
 /*
 Readable page copies on the phone (apps/extension/src/shared/page-copy.ts): kept in the same key-value store as the
 library, never synced, and only for the regular library. Keeping one fetches the page through the connected server's
-/v1/page, so the site sees the server and not this phone, or fetches it directly when no server is connected or the
+/v1/page-source, so the site sees the server and not this phone, or fetches it directly when no server is connected or the
 server is too old to have that route. The text comes out of the shared extractor, run on linkedom's parse of the page.
 */
 import {parseHTML} from 'linkedom';
@@ -22,7 +22,7 @@ import {serverFeatures} from './server-features';
 import {onTrashChange, readTrash} from './trash-storage';
 
 const WAIT_MS = 20_000;
-// The same cap the server uses for /v1/page.
+// The same cap the server uses for /v1/page-source.
 const MAX_PAGE_BYTES = 3_000_000;
 /*
 How long a copy outlives the last link with its address. Deleted links go to the trash and keep their copy there, so
@@ -91,7 +91,7 @@ async function server(): Promise<{url: string; token: string} | undefined> {
 }
 
 /**
-The page's HTML, through the server when it has /v1/page, otherwise from the site. Undefined when it is not an HTML
+The page's HTML, through the server when it has /v1/page-source, otherwise from the site. Undefined when it is not an HTML
 page, is too large, or cannot be reached.
 */
 async function fetchHtml(
@@ -99,9 +99,12 @@ async function fetchHtml(
 	signal: AbortSignal,
 ): Promise<string | undefined> {
 	const connected = await server();
-	if (connected && (await serverFeatures(connected.url))?.includes('page')) {
+	if (
+		connected &&
+		(await serverFeatures(connected.url))?.includes('page-source')
+	) {
 		const response = await fetch(
-			`${connected.url}/v1/page?url=${encodeURIComponent(page)}`,
+			`${connected.url}/v1/page-source?url=${encodeURIComponent(page)}`,
 			{signal, headers: [['Authorization', `Bearer ${connected.token}`]]},
 		);
 		const body: unknown = response.ok ? await response.json() : undefined;

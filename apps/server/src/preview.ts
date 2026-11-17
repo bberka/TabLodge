@@ -11,7 +11,7 @@ const MAX_HTML_BYTES = 256 * 1024;
 export const MAX_ICON_BYTES = 128 * 1024;
 export const MAX_IMAGE_BYTES = 512 * 1024;
 /**
-A whole page for a readable copy (/v1/page). The device extracts the text; the server keeps nothing.
+A whole page for a readable copy (/v1/page-source). The device extracts the text; the server keeps nothing.
 */
 export const MAX_PAGE_BYTES = 3_000_000;
 const IMAGE_TYPES = new Set([

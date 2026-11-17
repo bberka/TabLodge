@@ -2983,7 +2983,7 @@ var MAX_BODY_BYTES = 8 * 1024 * 1024;
 var MAX_PUSH_CHANGES = 500;
 var MAX_CHANGE_BYTES = 256 * 1024;
 var MAX_KEY_CHARS = 4096;
-var FEATURES = ["private", "key", "preview", "trash", "notes", "page"];
+var FEATURES = ["private", "key", "preview", "trash", "notes", "page-source"];
 var PREVIEWS_PER_MINUTE = 600;
 var PREVIEW_CACHE_SIZE = 500;
 var PREVIEW_TTL_MS = 24 * 60 * 60 * 1e3;
@@ -3035,7 +3035,7 @@ function createApi(options) {
   );
   let rateWindow = { start: 0, count: 0 };
   app.use("/v1/*", async (c, next) => {
-    if (["/v1/icon", "/v1/preview", "/v1/page"].includes(c.req.path)) {
+    if (["/v1/icon", "/v1/preview", "/v1/page-source"].includes(c.req.path)) {
       return next();
     }
     const time = now();
@@ -3075,7 +3075,7 @@ function createApi(options) {
   }, "previewLimit");
   app.use("/v1/icon", previewLimit);
   app.use("/v1/preview", previewLimit);
-  app.use("/v1/page", previewLimit);
+  app.use("/v1/page-source", previewLimit);
   app.get("/v1/icon", async (c) => {
     const host = (c.req.query("host") ?? "").toLowerCase();
     if (!/^[\d\-.a-z]{3,253}$/.test(host)) {
@@ -3114,7 +3114,7 @@ function createApi(options) {
     c.header("Cache-Control", "private, max-age=86400");
     return c.json(preview);
   });
-  app.get("/v1/page", async (c) => {
+  app.get("/v1/page-source", async (c) => {
     const url = c.req.query("url") ?? "";
     if (url.length === 0 || url.length > 2048) {
       return c.json(problem("bad_url"), 400);

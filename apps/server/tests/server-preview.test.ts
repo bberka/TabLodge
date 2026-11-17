@@ -241,7 +241,7 @@ test('the page route hands back a whole page, behind the token and the same addr
 		log: () => new SqlChangeLog(sqlite(':memory:')),
 		preview: {fetch: fake},
 	});
-	const path = '/v1/page?url=https%3A%2F%2Fexample.com%2Fold';
+	const path = '/v1/page-source?url=https%3A%2F%2Fexample.com%2Fold';
 	assert.equal((await app.request(path)).status, 401);
 	const answer = await app.request(path, {
 		headers: {Authorization: `Bearer ${token}`},
@@ -253,6 +253,8 @@ test('the page route hands back a whole page, behind the token and the same addr
 		headers: {Authorization: `Bearer ${token}`},
 	});
 	assert.ok(
-		((await status.json()) as {features: string[]}).features.includes('page'),
+		((await status.json()) as {features: string[]}).features.includes(
+			'page-source',
+		),
 	);
 });

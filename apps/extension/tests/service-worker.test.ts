@@ -13207,3 +13207,68 @@ test('a full backup carries the copies and a restore brings them back with their
 		'a copy already here is kept',
 	);
 });
+
+test('a noted bookmark keeps its note and its copy together through delete, backup, and restore', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession(),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://noted.example/',
+				title: 'Noted',
+			},
+		],
+		{scriptResult: capturedPage},
+	);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {
+			title: 'Noted',
+			url: 'https://noted.example/',
+			notes: 'Why I saved it',
+		},
+	});
+	assert.equal(added.ok, true, added.error);
+	const kept = await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	assert.equal(kept.bookmarked, false, 'the copy joins the noted bookmark');
+
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	const fresh = createWorkerHarness(stateWithSession());
+	const restored = await fresh.sendMessage({
+		type: 'RESTORE_FULL_BACKUP',
+		format: 'tablodge-full-backup',
+		version: 1,
+		state: backup.state,
+		trash: backup.trash,
+		copies: backup.copies,
+	});
+	assert.equal(restored.copies, 1);
+	assert.equal(
+		fresh.state.bookmarks.find(
+			(entry) => entry.url === 'https://noted.example/',
+		)?.notes,
+		'Why I saved it',
+	);
+
+	// Deleting the bookmark, note record and all, sends the copy to the trash with it; emptying the trash ends it.
+	const id = harness.state.bookmarks.find(
+		(entry) => entry.url === 'https://noted.example/',
+	)!.id!;
+	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: id});
+	await settle();
+	assert.deepEqual(copyIndexUrls(harness), ['https://noted.example/']);
+	await harness.sendMessage({type: 'EMPTY_TRASH'});
+	const undo = harness.extraStorage['tablodge.undo'] as {
+		records: Array<{createdAt: number}>;
+	};
+	for (const record of undo.records) {
+		record.createdAt -= 10 * 60_000;
+	}
+
+	await harness.fire('alarm', {name: 'tablodge-undo'});
+	await settle();
+	assert.deepEqual(copyIndexUrls(harness), []);
+});
