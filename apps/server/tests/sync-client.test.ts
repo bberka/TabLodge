@@ -33,7 +33,9 @@ const URL_BASE = 'https://sync.example.test';
 /**
 The reference server behind a fake network, with live sockets that hear about every applied push.
 */
-function makeServer({legacy = false} = {}) {
+function makeServer(options: {legacy?: boolean} = {}) {
+	let legacy = options.legacy ?? false;
+	let resyncNext = false;
 	const sockets = new Set<FakeSocket>();
 	const createServerApi = () =>
 		createApi({
@@ -60,9 +62,23 @@ function makeServer({legacy = false} = {}) {
 		setOnline(value: boolean) {
 			online = value;
 		},
+		setLegacy(value: boolean) {
+			legacy = value;
+		},
+		/**
+		Answers the next pull with `resync`, as a server does once it purged tombstones a device has not seen.
+		*/
+		resyncOnce() {
+			resyncNext = true;
+		},
 		async fetch(url: string, init: RequestInit) {
 			if (!online) {
 				throw new TypeError('Failed to fetch');
+			}
+
+			if (resyncNext && new URL(url).pathname === '/v1/changes') {
+				resyncNext = false;
+				return Response.json({resync: true});
 			}
 
 			const response = await app.request(url, init);
@@ -701,4 +717,28 @@ test('a server without the notes feature keeps syncing the library and leaves th
 	assert.deepEqual(notesOf(a.store), ['Stays here']);
 	assert.equal((await a.client.status()).error, null);
 	assert.equal((await a.client.status()).pending, 0);
+});
+
+test('a resync against a server without the notes feature keeps the notes this device already synced', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [withNote('b1', 'Synced before')],
+	});
+	await a.client.connect(URL_BASE, TOKEN);
+	assert.equal((await a.client.status()).pending, 0);
+
+	// The server is rolled back to a version without notes, and asks for a full pull.
+	server.setLegacy(true);
+	// Past the ten minutes the client trusts the server's earlier list of features.
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		server.resyncOnce();
+		await a.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.deepEqual(notesOf(a.store), ['Synced before']);
+	assert.equal((await a.client.status()).error, null);
 });

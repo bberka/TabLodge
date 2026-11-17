@@ -486,6 +486,20 @@ export function createSyncClient(host: SyncHost) {
 		(kind === 'trash' && !trashOn) || (kind === 'note' && !notesOn);
 
 	/**
+	Starts a resync that never counts a record of an unsupported kind as deleted: the pull skips those kinds, so they
+	would all look unseen at the end and be removed from the library.
+	*/
+	const resyncSupported = (state: SyncState): SyncState => {
+		const started = startResync(state);
+		return {
+			...started,
+			unseen: started.unseen?.filter(
+				(key) => !unsupported(state.shadow[key]?.kind),
+			),
+		};
+	};
+
+	/**
 	The changes to push. The trash and notes stay queued while the server cannot hold them.
 	*/
 	const queued = (state: SyncState, records: Records) =>
@@ -653,7 +667,7 @@ export function createSyncClient(host: SyncHost) {
 		await step(async (state, records, store) => {
 			const restarted = serverReset ? restartAfterServerReset(state) : state;
 			const applied = receive(
-				resync ? startResync(restarted) : restarted,
+				resync ? resyncSupported(restarted) : restarted,
 				records,
 				{changes: pulled, ...end},
 				host.now(),
