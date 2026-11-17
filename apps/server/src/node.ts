@@ -41,6 +41,7 @@ import {
 } from './live';
 import {sqlite} from './node-sqlite';
 import {SqlChangeLog} from './sql-change-log';
+import {SqlPageStore} from './shared-pages';
 import {runTransfer} from './transfer';
 
 /**
@@ -87,14 +88,18 @@ function startServer() {
 	const waiting = new Map<WSContext, ReturnType<typeof setTimeout>>();
 	let openSockets = 0;
 
-	const space = (file: string) => {
-		const log = new SqlChangeLog(sqlite(join(dataDirectory, file)));
+	// Shared pages belong to the main library only.
+	const space = (file: string, withPages: boolean) => {
+		const sql = sqlite(join(dataDirectory, file));
+		const log = new SqlChangeLog(sql);
+		const pages = withPages ? new SqlPageStore(sql) : undefined;
 		const sockets = new Set<WSContext>();
 		const api = createApi({
 			token,
 			compress: true,
 			preview: {resolve: resolveAddresses},
 			log: () => log,
+			pages: pages && (() => pages),
 			limits,
 			onApplied(cursor) {
 				for (const socket of sockets) {
@@ -105,11 +110,11 @@ function startServer() {
 		return {log, sockets, api};
 	};
 
-	const main = space('library.db');
+	const main = space('library.db', true);
 	// Opened on first use, so a server whose devices never sync private windows has no second file.
 	let privateSpace: ReturnType<typeof space> | undefined;
 	const privateLibrary = () => {
-		privateSpace ??= space('private.db');
+		privateSpace ??= space('private.db', false);
 		return privateSpace;
 	};
 
