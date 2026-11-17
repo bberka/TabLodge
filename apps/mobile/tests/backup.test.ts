@@ -18,6 +18,7 @@ import {addBookmark} from '../src/library/board-edits';
 import {addSession} from '../src/library/session-edits';
 import {emptyStore} from '../src/library/store-shape';
 import {buildBackup, readBackup} from '../src/transfer/backup';
+import type {PageCopy} from '../../extension/src/shared/page-copy';
 import {
 	dropSafetyCopy,
 	keepSafetyCopy,
@@ -108,6 +109,7 @@ describe('a backup the phone makes, read by the extension', () => {
 			bookmarks: 5,
 			snapshots: 0,
 			trash: 0,
+			copies: 0,
 		});
 		assert.equal(contents.snapshots, null);
 		assert.equal(contents.trash, null);
@@ -171,6 +173,29 @@ describe('a backup the phone makes, read by the extension', () => {
 			'private',
 		);
 		assert.match(file.filename, /^tablodge-private-full-/);
+	});
+
+	test('page copies travel in the ZIP and come back for checking on restore', async () => {
+		const copy: PageCopy = {
+			v: 1,
+			url: 'https://a.example/',
+			title: 'A',
+			savedAt: 1,
+			blocks: [{type: 'paragraph', text: 'Kept'}],
+		};
+		const file = await buildBackup(
+			phoneLibrary(1, 1, 1),
+			'TabLodge',
+			undefined,
+			'regular',
+			[copy],
+		);
+		const contents = readFullBackup(file.bytes)!;
+		assert.deepEqual(contents.copies, [copy]);
+		const restored = await readBackup(file.bytes);
+		assert.ok(restored.ok);
+		assert.deepEqual(restored.copies, [copy]);
+		assert.equal(restored.counts.copies, 1);
 	});
 
 	test('the phone’s own settings travel in the library settings the extension keeps as an unread entry', async () => {
