@@ -18,6 +18,7 @@ import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
 import {Button, Field} from '../../ui/widgets';
 import {useView} from '../../library/view';
+import {restoreCopies} from '../../library/page-copies';
 
 export type RestoreSource = {name: string; bytes: Uint8Array};
 
@@ -113,6 +114,10 @@ function RestoreForm({
 							replaceLibrary(current, read.store, Date.now()),
 						);
 						restorePreferences(read.phoneSettings);
+						if (view === 'regular') {
+							await restoreCopies(read.copies);
+						}
+
 						showSnack('Backup restored', {
 							label: 'Undo',
 							run() {
@@ -194,6 +199,9 @@ function RestoreForm({
 						{plural(result.counts.folders, 'folder')}. This phone holds{' '}
 						{plural(store.groups.length, 'session')} and{' '}
 						{plural(store.bookmarks.length, 'bookmark')} now.
+						{view === 'regular' && result.counts.copies > 0
+							? ` Its page copies (${result.counts.copies}) come back with it.`
+							: ''}
 					</Text>
 					{result.skipped > 0 && (
 						<Text style={{color: colors.warn}}>

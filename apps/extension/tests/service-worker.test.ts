@@ -174,6 +174,10 @@ type HarnessOptions = {
 	Chrome.scripting.executeScript rejects, as it does on pages an extension cannot script or without an activeTab grant.
 	*/
 	scriptingFails?: boolean;
+	/**
+	What chrome.scripting.executeScript reports for an injected function (default true).
+	*/
+	scriptResult?: unknown;
 };
 type MenuItem = {
 	id?: string;
@@ -892,7 +896,14 @@ function createWorkerHarness(
 					throw new Error('Cannot access contents of the page.');
 				}
 
-				return [{result: true}];
+				return [
+					{
+						result:
+							options.scriptResult === undefined
+								? true
+								: structuredClone(options.scriptResult),
+					},
+				];
 			},
 		},
 		...(options.firefox
@@ -12942,4 +12953,322 @@ test('an import skips addresses that are in the trash, and GET_TRASH lists them 
 		harness.state.groups.flatMap((group) => group.tabs.map((tab) => tab.url)),
 		['https://fresh.example/'],
 	);
+});
+
+const capturedPage = {
+	v: 1,
+	title: 'Current page',
+	blocks: [
+		{type: 'heading', text: 'A heading'},
+		{type: 'paragraph', text: 'The text worth keeping.'},
+	],
+};
+
+const copyIndexUrls = (harness: ReturnType<typeof createWorkerHarness>) => {
+	const index = harness.extraStorage['tablodge.copies'] as
+		{items: Array<{url: string}>} | undefined;
+	return (index?.items ?? []).map((item) => item.url);
+};
+
+test('Keep a copy reads the tab, bookmarks an unsaved page, and goes to the trash with its link', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: capturedPage,
+	});
+	const kept = await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	assert.equal(kept.ok, true, kept.error);
+	assert.equal(kept.bookmarked, true);
+	assert.equal(kept.url, 'https://current.example/');
+	assert.deepEqual(
+		harness.executeScriptCalls.map((call) => call.target.tabId),
+		[1, 1],
+	);
+	// Chrome sends an injected function to the tab as text, which a method shorthand does not survive.
+	for (const call of harness.executeScriptCalls as Array<{func?: unknown}>) {
+		if (call.func) {
+			assert.match(String(call.func), /^function \w+\(/);
+		}
+	}
+
+	const bookmark = harness.state.bookmarks.find(
+		(entry) => entry.url === 'https://current.example/',
+	);
+	assert.ok(bookmark, 'the page was bookmarked to hold the copy');
+	const read = await harness.sendMessage({
+		type: 'GET_PAGE_COPY',
+		url: 'https://current.example/',
+	});
+	assert.deepEqual(structuredClone(read.copy?.blocks), capturedPage.blocks);
+	assert.equal(read.copy?.title, 'Current page');
+
+	// Keeping it again replaces the copy and adds no second bookmark.
+	const again = await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	assert.equal(again.bookmarked, false);
+	assert.equal(
+		harness.state.bookmarks.filter(
+			(entry) => entry.url === 'https://current.example/',
+		).length,
+		1,
+	);
+
+	// Deleted, the link is in the trash and the copy stays with it.
+	await harness.sendMessage({
+		type: 'DELETE_BOOKMARK',
+		bookmarkId: bookmark.id!,
+	});
+	await settle();
+	assert.deepEqual(copyIndexUrls(harness), ['https://current.example/']);
+
+	// Emptying the trash leaves the copy while Undo can still bring the link back.
+	const emptied = await harness.sendMessage({type: 'EMPTY_TRASH'});
+	assert.ok(emptied.undoId);
+	await settle();
+	assert.deepEqual(copyIndexUrls(harness), ['https://current.example/']);
+
+	// Once the Undo has expired and is purged, the copy goes too.
+	const undo = harness.extraStorage['tablodge.undo'] as {
+		records: Array<{createdAt: number}>;
+	};
+	for (const record of undo.records) {
+		record.createdAt -= 10 * 60_000;
+	}
+
+	await harness.fire('alarm', {name: 'tablodge-undo'});
+	await settle();
+	assert.deepEqual(copyIndexUrls(harness), []);
+	assert.deepEqual(
+		Object.keys(harness.extraStorage).filter((key) =>
+			key.startsWith('tablodge.copy.'),
+		),
+		[],
+	);
+	const listed = await harness.sendMessage({type: 'GET_PAGE_COPIES'});
+	assert.deepEqual(structuredClone(listed.urls), []);
+});
+
+test('Keep a copy attaches to the saved link and refuses with the budget message when full', async () => {
+	const state = stateWithSession();
+	const savedUrl = state.groups[0].tabs[0].url!;
+	// The copy filling the budget belongs to a saved bookmark, so the startup sweep keeps it.
+	state.bookmarks.push({
+		id: 'bm-elsewhere',
+		title: 'Elsewhere',
+		url: 'https://elsewhere.example/',
+		columnId: 'bookmark-default',
+		createdAt: 1,
+		updatedAt: 1,
+	});
+	const harness = createWorkerHarness(
+		state,
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: savedUrl,
+				title: 'Saved',
+			},
+		],
+		{
+			scriptResult: capturedPage,
+			storage: {
+				'tablodge.copies': {
+					v: 1,
+					items: [
+						{
+							url: 'https://elsewhere.example/',
+							key: 'tablodge.copy.big',
+							title: 'Big',
+							savedAt: 1,
+							size: 25_000_000,
+						},
+					],
+				},
+			},
+		},
+	);
+	const full = await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	assert.equal(full.ok, false);
+	assert.match(full.error!, /Copies are full/);
+
+	await harness.sendMessage({
+		type: 'DELETE_PAGE_COPY',
+		url: 'https://elsewhere.example/',
+	});
+	const kept = await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	assert.equal(kept.ok, true, kept.error);
+	assert.equal(kept.bookmarked, false);
+	assert.equal(kept.url, savedUrl);
+	assert.equal(
+		harness.state.bookmarks.some((entry) => entry.url === savedUrl),
+		false,
+	);
+});
+
+test('Keep a copy is refused in private windows and on pages that cannot be read', async () => {
+	const incognito = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: capturedPage,
+		incognitoWindows: [10],
+	});
+	const tab = incognito.tabs[0];
+	tab.incognito = true;
+	const refused = await incognito.sendMessage({
+		type: 'KEEP_PAGE_COPY',
+		tabId: 1,
+	});
+	assert.equal(refused.ok, false);
+	assert.match(refused.error!, /private windows/);
+	assert.equal(incognito.executeScriptCalls.length, 0);
+
+	const privateWorker = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: capturedPage,
+		incognitoContext: true,
+	});
+	const fromPrivate = await privateWorker.sendMessage({
+		type: 'KEEP_PAGE_COPY',
+		tabId: 1,
+	});
+	assert.equal(fromPrivate.ok, false);
+
+	const blocked = createWorkerHarness(stateWithSession(), undefined, {
+		scriptingFails: true,
+	});
+	const unreadable = await blocked.sendMessage({
+		type: 'KEEP_PAGE_COPY',
+		tabId: 1,
+	});
+	assert.equal(unreadable.ok, false);
+	assert.match(unreadable.error!, /could not read this page/);
+	assert.equal(
+		blocked.state.bookmarks.length,
+		stateWithSession().bookmarks.length,
+	);
+});
+
+test('a full backup carries the copies and a restore brings them back with their links', async () => {
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		scriptResult: capturedPage,
+	});
+	await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(backup.copies.length, 1);
+	assert.equal(backup.copies[0].url, 'https://current.example/');
+
+	const fresh = createWorkerHarness(stateWithSession());
+	const restored = await fresh.sendMessage({
+		type: 'RESTORE_FULL_BACKUP',
+		format: 'tablodge-full-backup',
+		version: 1,
+		state: backup.state,
+		trash: backup.trash,
+		copies: [...backup.copies, {v: 1, url: 'javascript:alert(1)', blocks: []}],
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.equal(restored.copies, 1);
+	const read = await fresh.sendMessage({
+		type: 'GET_PAGE_COPY',
+		url: 'https://current.example/',
+	});
+	assert.deepEqual(structuredClone(read.copy?.blocks), capturedPage.blocks);
+
+	// Merged instead: only saved links without a copy here get one.
+	const merging = createWorkerHarness(stateWithSession());
+	assert.equal(
+		(
+			await merging.sendMessage({
+				type: 'ADD_PAGE_COPIES',
+				copies: backup.copies,
+			})
+		).copies,
+		0,
+		'the page is not saved here, so its copy has no link to belong to',
+	);
+	await merging.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Current', url: 'https://current.example/'},
+	});
+	assert.equal(
+		(
+			await merging.sendMessage({
+				type: 'ADD_PAGE_COPIES',
+				copies: backup.copies,
+			})
+		).copies,
+		1,
+	);
+	assert.equal(
+		(
+			await merging.sendMessage({
+				type: 'ADD_PAGE_COPIES',
+				copies: backup.copies,
+			})
+		).copies,
+		0,
+		'a copy already here is kept',
+	);
+});
+
+test('a noted bookmark keeps its note and its copy together through delete, backup, and restore', async () => {
+	const harness = createWorkerHarness(
+		stateWithSession(),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://noted.example/',
+				title: 'Noted',
+			},
+		],
+		{scriptResult: capturedPage},
+	);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {
+			title: 'Noted',
+			url: 'https://noted.example/',
+			notes: 'Why I saved it',
+		},
+	});
+	assert.equal(added.ok, true, added.error);
+	const kept = await harness.sendMessage({type: 'KEEP_PAGE_COPY', tabId: 1});
+	assert.equal(kept.bookmarked, false, 'the copy joins the noted bookmark');
+
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	const fresh = createWorkerHarness(stateWithSession());
+	const restored = await fresh.sendMessage({
+		type: 'RESTORE_FULL_BACKUP',
+		format: 'tablodge-full-backup',
+		version: 1,
+		state: backup.state,
+		trash: backup.trash,
+		copies: backup.copies,
+	});
+	assert.equal(restored.copies, 1);
+	assert.equal(
+		fresh.state.bookmarks.find(
+			(entry) => entry.url === 'https://noted.example/',
+		)?.notes,
+		'Why I saved it',
+	);
+
+	// Deleting the bookmark, note record and all, sends the copy to the trash with it; emptying the trash ends it.
+	const id = harness.state.bookmarks.find(
+		(entry) => entry.url === 'https://noted.example/',
+	)!.id!;
+	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: id});
+	await settle();
+	assert.deepEqual(copyIndexUrls(harness), ['https://noted.example/']);
+	await harness.sendMessage({type: 'EMPTY_TRASH'});
+	const undo = harness.extraStorage['tablodge.undo'] as {
+		records: Array<{createdAt: number}>;
+	};
+	for (const record of undo.records) {
+		record.createdAt -= 10 * 60_000;
+	}
+
+	await harness.fire('alarm', {name: 'tablodge-undo'});
+	await settle();
+	assert.deepEqual(copyIndexUrls(harness), []);
 });

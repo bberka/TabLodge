@@ -26,6 +26,7 @@ import {
 import {LIVE_PATH} from './live';
 import {
 	fetchIcon,
+	fetchPage,
 	fetchPreview,
 	type Preview,
 	type PreviewDeps,
@@ -91,9 +92,9 @@ const MAX_KEY_CHARS = 4096;
 /**
 Optional parts of the API, listed in /v1/status so a device can tell what this server supports. `private` is the
 second library at /private for private windows; `key` is /v1/key; `shared-pages` is /v1/pages and /p/<id>, on the
-main library only.
+main library only; `page-source` is /v1/page-source, which hands a device a whole page so it can keep a readable copy.
 */
-const FEATURES = ['private', 'key', 'preview', 'trash', 'notes'];
+const FEATURES = ['private', 'key', 'preview', 'trash', 'notes', 'page-source'];
 const PREVIEWS_PER_MINUTE = 600;
 const PREVIEW_CACHE_SIZE = 500;
 const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000;
@@ -185,7 +186,7 @@ export function createApi(options: ApiOptions) {
 	// owner's devices can use it up.
 	let rateWindow = {start: 0, count: 0};
 	app.use('/v1/*', async (c, next) => {
-		if (c.req.path === '/v1/icon' || c.req.path === '/v1/preview') {
+		if (['/v1/icon', '/v1/preview', '/v1/page-source'].includes(c.req.path)) {
 			return next();
 		}
 
@@ -237,6 +238,7 @@ export function createApi(options: ApiOptions) {
 
 	app.use('/v1/icon', previewLimit);
 	app.use('/v1/preview', previewLimit);
+	app.use('/v1/page-source', previewLimit);
 
 	app.get('/v1/icon', async (c) => {
 		const host = (c.req.query('host') ?? '').toLowerCase();
@@ -286,6 +288,22 @@ export function createApi(options: ApiOptions) {
 
 		c.header('Cache-Control', 'private, max-age=86400');
 		return c.json(preview);
+	});
+
+	// Not cached: a copy is kept once, and the page is too large to hold for other requests.
+	app.get('/v1/page-source', async (c) => {
+		const url = c.req.query('url') ?? '';
+		if (url.length === 0 || url.length > 2048) {
+			return c.json(problem('bad_url'), 400);
+		}
+
+		const page = await fetchPage(url, options.preview);
+		if (!page) {
+			return c.json(problem('no_page'), 404);
+		}
+
+		c.header('Cache-Control', 'no-store');
+		return c.json(page);
 	});
 
 	app.get('/v1/status', (c) => {

@@ -353,6 +353,12 @@ function Help() {
 						'bookmark note notes description comment why saved edit dialog search export',
 				},
 				{
+					title: 'Keep a copy of a page',
+					body: `Keep a copy saves the readable text of the open page on this device, so you can still read it after the page changes or disappears. Choose it from the toolbar popup, the page’s right-click menu (under ${PROJECT.name}), or a saved link’s menu in the side panel when that link is the open tab and ${PROJECT.name} may read it, which it can after you use the toolbar button or the right-click menu on that tab. A page that is not saved yet is bookmarked to hold the copy. Open copy in a bookmark’s or saved tab’s menu shows it in a reader with the date it was kept and the original link; Delete copy there removes it and keeps the link. A copy is text only, never shown as the page’s own HTML, and stays on this device: it does not sync. It goes to the trash with its link and is deleted when the trash is emptied. Each copy holds up to 1 MB of text and the device up to 25 MB of copies; when either is full, ${PROJECT.name} says so. Copies are never kept from private windows. Open in Internet Archive is the other choice for a page that is gone: it needs no copy, but only works for pages the Archive captured, and not for pages behind a sign-in. The Android app keeps copies of any saved link the same way, from the link’s menu.`,
+					searchText:
+						'keep a copy page copy save offline read later reader readable text article archive link rot dead link gone deleted open copy delete copy storage full limit 25 MB internet archive wayback',
+				},
+				{
 					title: 'Bookmark quick actions',
 					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete moves the bookmark to the trash and offers Undo in a toast.',
 					searchText:
@@ -469,9 +475,9 @@ function Help() {
 				{
 					title: 'On a page',
 					gesture: {label: 'Right-click the page', icon: MousePointerClick},
-					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, or save this tab, its tab group, the whole window, the selected tabs, all tabs except this one, the tabs to its left or right, or the tabs in all windows.',
+					body: 'Bookmark the current page, send this tab to one of your ten most recent sessions or to a new session, keep a readable copy of the page, or save this tab, its tab group, the whole window, the selected tabs, all tabs except this one, the tabs to its left or right, or the tabs in all windows.',
 					searchText:
-						'right-click page bookmark current tab send tab to session recent new session tab group whole window selected tabs except this one left right all windows save',
+						'right-click page bookmark current tab send tab to session recent new session keep a copy tab group whole window selected tabs except this one left right all windows save',
 				},
 				{
 					title: 'On selected text',

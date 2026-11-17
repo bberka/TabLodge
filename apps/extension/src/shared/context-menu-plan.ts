@@ -35,6 +35,7 @@ export const MENU = {
 	pageBookmarkNew: 'tablodge-page-bookmark-new',
 	pageSend: 'tablodge-page-send',
 	pageSendNew: 'tablodge-page-send-new',
+	pageKeepCopy: 'tablodge-page-keep-copy',
 	selectionRoot: 'tablodge-selection-root',
 	selectionSearch: 'tablodge-selection-search',
 	actionOpen: 'tablodge-action-open',
@@ -358,6 +359,12 @@ export function contextMenuPlan(
 				id: MENU.pageSendNew,
 				title: 'New session',
 				parentId: MENU.pageSend,
+				...page,
+			},
+			{
+				id: MENU.pageKeepCopy,
+				title: 'Keep a copy',
+				parentId: MENU.pageRoot,
 				...page,
 			},
 			{

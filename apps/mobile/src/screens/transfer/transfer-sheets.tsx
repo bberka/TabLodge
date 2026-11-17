@@ -44,6 +44,7 @@ import {
 	shareGroupsOf,
 } from '../../transfer/transfer';
 import {Button, Chips, Field, Switch} from '../../ui/widgets';
+import {allCopies} from '../../library/page-copies';
 
 const APP_NAME = 'TabLodge';
 
@@ -371,7 +372,13 @@ export function ShareSheet({
 				await new Promise((resolve) => {
 					setTimeout(resolve, 50);
 				});
-				const file = await buildBackup(store, APP_NAME, password, view);
+				const file = await buildBackup(
+					store,
+					APP_NAME,
+					password,
+					view,
+					view === 'regular' ? await allCopies() : [],
+				);
 				await shareBinaryFile(file.filename, file.mime, file.bytes);
 			} else {
 				switch (way) {

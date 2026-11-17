@@ -14,9 +14,9 @@ const rows: [string, string, string, string, string, string, string][] = [
 	['Account or server needed', 'No. The library lives on the phone; syncing through your own server is optional', 'Yes, log in with a Raindrop.io account', 'Yes, a Linkwarden account (cloud or your own server)', 'Sign in to a Karakeep server (cloud or your own)', 'Sign in to a wallabag server (hosted or your own)', 'Not verified'],
 	['Open source', 'Yes', 'Not verified', 'Yes, AGPL-3.0', 'Yes, AGPL-3.0', 'Yes, MIT', 'Not verified'],
 	['Self-hosting', 'Optional sync server (Docker or Cloudflare)', 'Not verified', 'Yes (Docker Compose, PostgreSQL)', 'Yes (Docker Compose)', 'Yes', 'Not verified'],
-	['Saves a copy of the page', 'No, links, titles and your own notes', 'Web archive on Pro', 'Yes: readable text, single HTML file, screenshot, PDF', 'Full page archive, off by default', 'Yes, the readable article text', 'Articles, videos and other pages; permanent archive on Premium'],
+	['Saves a copy of the page', 'Yes, the readable text, kept on the phone, plus your own notes', 'Web archive on Pro', 'Yes: readable text, single HTML file, screenshot, PDF', 'Full page archive, off by default', 'Yes, the readable article text', 'Articles, videos and other pages; permanent archive on Premium'],
 	['Searches the saved page text', 'No', 'Pro', 'Yes (self-hosted needs Meilisearch)', 'Yes (needs Meilisearch; Pro on the cloud plan)', 'Not verified', 'Premium'],
-	['Offline', 'Library is on the phone; opening a link needs a connection', 'No, needs a connection', 'Not verified', 'Offline reading in the mobile apps', 'Offline reading on the hosted service', 'Not verified'],
+	['Offline', 'Library and page copies are on the phone; opening a link needs a connection', 'No, needs a connection', 'Not verified', 'Offline reading in the mobile apps', 'Offline reading on the hosted service', 'Not verified'],
 	['Trash for deleted items', 'Yes, a trash for 7, 30 or 90 days that syncs with your other devices', 'Deleted collections go to Trash', 'Not verified', 'Not verified', 'Not verified', 'Not verified'],
 	['iPhone app', 'No', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
 	['Import', 'Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, Pinboard, Mastodon bookmarks, Toby, OneTab, Session Buddy, browser bookmark HTML, CSV, Markdown, link lists', 'HTML, CSV, TXT, JSON, ENEX; from Instapaper, Pocket, Toby and others', 'Browser HTML, Pocket CSV, Wallabag JSON, Omnivore, its own backup', 'Browser HTML, Pocket CSV, Omnivore JSON, link lists', 'Pocket, Instapaper, Pinboard, Omnivore and more', 'Not verified'],
@@ -123,12 +123,12 @@ const breadcrumbs = [
 
 		<h2>Linkwarden and Karakeep</h2>
 		<p>
-			Both are open source tools for people who run their own server, with Android and iPhone apps and a hosted plan for those who would rather not. They save more than TabLodge does: Linkwarden stores readable text, a single HTML file, a screenshot and a PDF of each link, and Karakeep can archive the full page and tag links with a language model you configure. They also ask more of you: Docker Compose and a database, and a Meilisearch service for search over saved text. TabLodge's server is a lighter sync target for one library. Choose Linkwarden or Karakeep if you want searchable copies of pages and are happy to run a bigger stack.
+			Both are open source tools for people who run their own server, with Android and iPhone apps and a hosted plan for those who would rather not. They save more than TabLodge does, which keeps only a page's readable text and only when you ask: Linkwarden stores readable text, a single HTML file, a screenshot and a PDF of each link, and Karakeep can archive the full page and tag links with a language model you configure. They also ask more of you: Docker Compose and a database, and a Meilisearch service for search over saved text. TabLodge's server is a lighter sync target for one library. Choose Linkwarden or Karakeep if you want searchable copies of pages and are happy to run a bigger stack.
 		</p>
 
 		<h2>wallabag and Instapaper</h2>
 		<p>
-			These two are read-later services built around articles. wallabag extracts the readable text of a page, is MIT licensed, and can be self-hosted or rented from wallabag.it. Its Android app connects to your wallabag server. Instapaper has a free plan with folders and a Premium plan with full-text search and unlimited notes. Its public pages do not describe export, import or offline reading, so those rows say "Not verified". Choose one of these if you mostly read saved articles. TabLodge does not make a reading view.
+			These two are read-later services built around articles. wallabag extracts the readable text of a page, is MIT licensed, and can be self-hosted or rented from wallabag.it. Its Android app connects to your wallabag server. Instapaper has a free plan with folders and a Premium plan with full-text search and unlimited notes. Its public pages do not describe export, import or offline reading, so those rows say "Not verified". Choose one of these if you mostly read saved articles. TabLodge keeps a plain readable copy of a page when you ask, but it is not a reading app: no highlights, no reading progress, and no copies on the server.
 		</p>
 
 		<h2>Where TabLodge fits</h2>

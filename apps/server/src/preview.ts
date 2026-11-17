@@ -10,6 +10,10 @@ const MAX_REDIRECTS = 3;
 const MAX_HTML_BYTES = 256 * 1024;
 export const MAX_ICON_BYTES = 128 * 1024;
 export const MAX_IMAGE_BYTES = 512 * 1024;
+/**
+A whole page for a readable copy (/v1/page-source). The device extracts the text; the server keeps nothing.
+*/
+export const MAX_PAGE_BYTES = 3_000_000;
 const IMAGE_TYPES = new Set([
 	'image/png',
 	'image/jpeg',
@@ -403,6 +407,38 @@ export async function fetchPreview(
 		description: meta.description,
 		image: image ? dataUrl(image) : undefined,
 	};
+}
+
+/**
+A whole page, for a device that keeps a readable copy of it: the address it ended at after redirects and its HTML.
+Nothing when the page is not HTML, is larger than MAX_PAGE_BYTES, or cannot be reached under the same rules as a
+preview.
+*/
+export async function fetchPage(
+	text: string,
+	deps: PreviewDeps = {},
+): Promise<{url: string; html: string} | undefined> {
+	const start = await allowedUrl(text, deps);
+	if (!start) {
+		return undefined;
+	}
+
+	const found = await guardedFetch(start, deps, 'text/html');
+	if (!found) {
+		return undefined;
+	}
+
+	const type = found.response.headers.get('content-type') ?? '';
+	const declared = Number(found.response.headers.get('content-length') ?? 0);
+	if (!/html/i.test(type) || declared > MAX_PAGE_BYTES) {
+		await found.response.body?.cancel();
+		return undefined;
+	}
+
+	const bytes = await readLimited(found.response, MAX_PAGE_BYTES);
+	return bytes
+		? {url: found.url.href, html: new TextDecoder().decode(bytes)}
+		: undefined;
 }
 
 /**

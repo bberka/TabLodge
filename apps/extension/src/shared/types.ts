@@ -3,6 +3,7 @@
 // Only types live here so the classic service-worker bundle stays import-free.
 import type {SyncStatus} from './sync/client';
 import type {SharedPage} from './sync/shared-pages-client';
+import type {PageCopy} from './page-copy';
 
 export type ActionMode =
 	| 'popup'
@@ -878,7 +879,20 @@ export type TabLodgeMessages = {
 		preferences?: unknown;
 		snapshots?: unknown;
 		trash?: unknown;
+		copies?: unknown;
 	};
+	/**
+	Reads the tab (the popup's or the clicked one) into a readable copy kept on this device. A page that is not saved
+	yet is bookmarked first. Refused in private windows.
+	*/
+	KEEP_PAGE_COPY: {tabId: number};
+	GET_PAGE_COPIES: {};
+	GET_PAGE_COPY: {url: string};
+	DELETE_PAGE_COPY: {url: string};
+	/**
+	Copies from a backup merged into the library: added for saved links that have none here yet.
+	*/
+	ADD_PAGE_COPIES: {copies: unknown};
 	GET_TRASH: {};
 	RESTORE_TRASH: {id: string};
 	DELETE_TRASH: {id: string};
@@ -1189,13 +1203,26 @@ export type TabLodgeResponses = {
 		preferences: unknown;
 		snapshots: unknown;
 		trash: unknown;
+		copies: PageCopy[];
 	};
 	RESTORE_FULL_BACKUP: {
 		sessions: number;
 		bookmarks: number;
 		snapshots: number;
 		trash: number;
+		copies: number;
 	} & Undoable;
+	/**
+	`bookmarked`: the page was not saved, so it was bookmarked to hold the copy.
+	*/
+	KEEP_PAGE_COPY: {url: string; title: string; bookmarked: boolean};
+	/**
+	The addresses that have a copy, and how much of the device budget the copies use.
+	*/
+	GET_PAGE_COPIES: {urls: string[]; size: number; budget: number};
+	GET_PAGE_COPY: {copy: PageCopy | null};
+	DELETE_PAGE_COPY: {};
+	ADD_PAGE_COPIES: {copies: number};
 	/**
 	`urls`: the link addresses in the trash, which an import skips like saved links.
 	*/
