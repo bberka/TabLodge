@@ -1,3 +1,4 @@
+import {memo} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {openLink} from '../../platform/open-links';
@@ -19,7 +20,7 @@ import {SaveLinkForm} from '../save/save-link';
 One bookmark: tap to open, swipe right to delete or left to edit, long press to select. Screen reader users get
 the same actions from the actions menu.
 */
-export function BookmarkRow({
+function BookmarkRowView({
 	bookmark,
 	selecting,
 	checked,
@@ -32,11 +33,11 @@ export function BookmarkRow({
 	bookmark: Bookmark;
 	selecting: boolean;
 	checked: boolean;
-	onToggle: () => void;
-	onSelect: () => void;
-	onEdit: () => void;
-	onMove: () => void;
-	onDelete: () => void;
+	onToggle: (bookmark: Bookmark) => void;
+	onSelect: (bookmark: Bookmark) => void;
+	onEdit: (bookmark: Bookmark) => void;
+	onMove: (bookmark: Bookmark) => void;
+	onDelete: (bookmark: Bookmark) => void;
 }) {
 	const colors = useColors();
 	const shape = useShape();
@@ -48,12 +49,28 @@ export function BookmarkRow({
 		openLink(linkToOpen(bookmark.url, settings));
 	};
 
+	const toggle = () => {
+		onToggle(bookmark);
+	};
+
+	const select = () => {
+		onSelect(bookmark);
+	};
+
+	const edit = () => {
+		onEdit(bookmark);
+	};
+
 	const run: Record<RowAction, (() => void) | undefined> = {
 		none: undefined,
 		open,
-		edit: onEdit,
-		move: onMove,
-		delete: onDelete,
+		edit,
+		move() {
+			onMove(bookmark);
+		},
+		delete() {
+			onDelete(bookmark);
+		},
 	};
 	const swipe = (action: RowAction): SwipeAction | undefined => {
 		const onTrigger = run[action];
@@ -98,32 +115,30 @@ export function BookmarkRow({
 						}
 
 						case 'select': {
-							onSelect();
+							select();
 							break;
 						}
 
 						case 'edit': {
-							onEdit();
+							edit();
 							break;
 						}
 
 						case 'move': {
-							onMove();
+							run.move?.();
 							break;
 						}
 
 						case 'delete': {
-							onDelete();
+							run.delete?.();
 							break;
 						}
 
 						default:
 					}
 				}}
-				onPress={
-					selecting ? onToggle : prefs.tapAction === 'edit' ? onEdit : open
-				}
-				onLongPress={selecting ? onToggle : onSelect}
+				onPress={selecting ? toggle : prefs.tapAction === 'edit' ? edit : open}
+				onLongPress={selecting ? toggle : select}
 			>
 				{selecting ? (
 					<Icon
@@ -166,6 +181,8 @@ export function BookmarkRow({
 		</SwipeRow>
 	);
 }
+
+export const BookmarkRow = memo(BookmarkRowView);
 
 function ActionButton({
 	icon,
