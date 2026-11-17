@@ -14,6 +14,7 @@ import {
 	Keyboard,
 	Layers2,
 	LifeBuoy,
+	Image as ImageIcon,
 	Link2,
 	MoreHorizontal,
 	MousePointer2,
@@ -326,6 +327,12 @@ function Help() {
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},
 				{
+					title: 'Images, PDFs, and videos',
+					body: 'A bookmark that links to an image, a PDF, or a video gets a small mark on the corner of its site icon on the board, in the side panel, and in search. It is read from the address (an ending such as .jpg or .pdf, or a video page on YouTube or Vimeo), so nothing extra is stored or fetched. Screen readers say the kind before the bookmark’s name.',
+					searchText:
+						'image picture photo pdf document video kind type icon mark badge jpg png youtube vimeo',
+				},
+				{
 					title: 'Bookmark quick actions',
 					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete moves the bookmark to the trash and offers Undo in a toast.',
 					searchText:
@@ -423,6 +430,13 @@ function Help() {
 					gesture: {label: 'Right-click a link', icon: Link2},
 					body: 'Bookmark the link to a column or to a new one.',
 					searchText: 'right-click link bookmark column',
+				},
+				{
+					title: 'On an image',
+					gesture: {label: 'Right-click an image', icon: ImageIcon},
+					body: `Save image to ${PROJECT.name} bookmarks the image’s address in the column that took your newest bookmark, titled with the site it was on. The image itself is not copied. An image you already bookmarked, or one in the trash bin, is skipped: restore it from the trash bin instead.`,
+					searchText:
+						'right-click image picture photo save image bookmark address duplicate trash',
 				},
 				{
 					title: 'On a page',
