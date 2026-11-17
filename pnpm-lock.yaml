@@ -174,6 +174,9 @@ catalogs:
 overrides:
   vite@*: npm:@voidzero-dev/vite-plus-core@1.6.0
 
+patchedDependencies:
+  expo-share-intent@9.0.0: c8cf944c05f9de3798e8a7636067426a5da3ac17bde8bb8d868020f7be32a35e
+
 importers:
 
   .:
@@ -337,7 +340,7 @@ importers:
         version: 58.0.3(expo@58.0.25(@babel/core@7.29.7(supports-color@10.2.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@6.0.3))
       expo-share-intent:
         specifier: ^9.0.0
-        version: 9.0.0(bc8fabf2b3dab6d55fbcc75219dc5ff5)
+        version: 9.0.0(patch_hash=c8cf944c05f9de3798e8a7636067426a5da3ac17bde8bb8d868020f7be32a35e)(bc8fabf2b3dab6d55fbcc75219dc5ff5)
       expo-sharing:
         specifier: ~58.0.23
         version: 58.0.23(expo@58.0.25(@babel/core@7.29.7(supports-color@10.2.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@6.0.3))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@6.0.3)
@@ -11405,7 +11408,7 @@ snapshots:
 
   expo-server@58.1.0: {}
 
-  expo-share-intent@9.0.0(bc8fabf2b3dab6d55fbcc75219dc5ff5):
+  expo-share-intent@9.0.0(patch_hash=c8cf944c05f9de3798e8a7636067426a5da3ac17bde8bb8d868020f7be32a35e)(bc8fabf2b3dab6d55fbcc75219dc5ff5):
     dependencies:
       '@expo/config-plugins': 58.0.13(supports-color@10.2.2)(typescript@6.0.3)
       expo: 58.0.25(@babel/core@7.29.7(supports-color@10.2.2))(react-native@0.88.1(@babel/core@7.29.7(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)(supports-color@10.2.2)(typescript@6.0.3)

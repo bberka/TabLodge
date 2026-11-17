@@ -30,6 +30,38 @@ export async function pickTextFile(): Promise<PickedText | undefined> {
 }
 
 /**
+Opens a file another app shared, which the share library copied into the cache, with the same limits as a picked
+file. `File` reads its size when the share did not say.
+*/
+function sharedFile(
+	path: string,
+	size: number | undefined,
+	limit: number,
+	verb: string,
+): File {
+	const file = new File(path);
+	if ((size ?? file.size) > limit) {
+		throw new FileTooLargeError(`That file is too large to ${verb}.`);
+	}
+
+	return file;
+}
+
+export async function readSharedText(
+	path: string,
+	size?: number,
+): Promise<string> {
+	return sharedFile(path, size, MAX_IMPORT_BYTES, 'import').text();
+}
+
+export async function readSharedBytes(
+	path: string,
+	size?: number,
+): Promise<Uint8Array> {
+	return sharedFile(path, size, MAX_BACKUP_BYTES, 'restore').bytes();
+}
+
+/**
 Hands a file to Android's share sheet, which can save it to Files or Drive or send it to another app. It is written to
 the cache first, which the system clears when it needs room.
 */

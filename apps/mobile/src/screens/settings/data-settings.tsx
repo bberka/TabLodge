@@ -152,7 +152,7 @@ export function DataCard() {
 						onPress() {
 							showDialog(
 								'Bring in tabs and bookmarks',
-								"Android keeps each browser's data private, so no app can read another browser directly. Two ways in:\n\nOpen tabs: in Firefox, open the tabs tray, tap the three-dot menu, then Share all tabs and choose TabLodge. Other browsers share one page at a time through Share. A shared list of links opens in TabLodge ready to save as a session.\n\nBookmarks: export them from the browser on a computer as an HTML file, send it to this phone, and use Import from a file. Or install the TabLodge extension there and sync.",
+								"Android keeps each browser's data private, so no app can read another browser directly. Two ways in:\n\nOpen tabs: in Firefox, open the tabs tray, tap the three-dot menu, then Share all tabs and choose TabLodge. Other browsers share one page at a time through Share. A shared list of links opens in TabLodge ready to save as a session.\n\nBookmarks: export them from the browser on a computer as an HTML file, send it to this phone, and share it to TabLodge or use Import from a file. Or install the TabLodge extension there and sync.",
 								[
 									{label: 'Import from a file', run: () => void pick()},
 									{label: 'Close', kind: 'cancel'},

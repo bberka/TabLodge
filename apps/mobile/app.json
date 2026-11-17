@@ -48,7 +48,14 @@
 				"expo-share-intent",
 				{
 					"disableIOS": true,
-					"androidIntentFilters": ["text/*", "image/*"]
+					"androidIntentFilters": [
+						"text/*",
+						"image/*",
+						"application/json",
+						"application/zip",
+						"application/x-zip-compressed",
+						"application/octet-stream"
+					]
 				}
 			],
 			"expo-sharing"

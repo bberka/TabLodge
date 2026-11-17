@@ -19,5 +19,5 @@ The protocol code (`apps/extension/src/shared/sync/`) is shared with the extensi
 - Keep `cloudflare-deploy/wrangler.jsonc` and `wrangler.jsonc` in step (name, compatibility date, Durable Object binding, migrations, vars). A test checks it.
 - Never remove the `migrations` entry or add a `deleted_classes` migration for `SyncLibrary`: it deletes the stored library.
 - Bump `PROTOCOL_VERSION` only for a change old clients cannot use.
-- The Docker build copies `apps/server`, `apps/extension/src/shared`, and the root workspace files; add to the Dockerfile when the server imports another path.
+- The Docker build copies `apps/server`, `apps/extension/src/shared`, the root workspace files, and `patches/` (pnpm needs every listed patch, even for packages the filter skips); add to the Dockerfile when the server imports another path.
 - Image and release workflows: [CI](ci.md#sync-server-image).

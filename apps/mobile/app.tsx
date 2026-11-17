@@ -15,16 +15,32 @@ import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {BottomSheet} from './src/ui/bottom-sheet';
 import {
 	cacheCopies,
-	FILES_REFUSED,
+	FILE_REFUSED,
+	type IncomingShare,
 	readShare,
+	type ShareOutcome,
 } from './src/library/shared-content';
+import {
+	FileTooLargeError,
+	readSharedBytes,
+	readSharedText,
+} from './src/transfer/files';
+import {notify, DialogHost} from './src/ui/dialog';
+import {
+	RestoreSheet,
+	type RestoreSource,
+} from './src/screens/transfer/restore-sheet';
 import {splitShared} from './src/library/store-shape';
 import {runBackAction} from './src/ui/back-actions';
 import {pauseSync, startLibrary, wakeSync} from './src/library/library-store';
 import {purgeTrash} from './src/library/trash-store';
 import {startPreferencesSync} from './src/settings/preferences-sync';
 import {markActive, startPrivateAutoLock} from './src/private/private-autolock';
-import {ShareHost} from './src/screens/transfer/transfer-sheets';
+import {
+	ImportSheet,
+	type ImportSource,
+	ShareHost,
+} from './src/screens/transfer/transfer-sheets';
 import {
 	pausePrivate,
 	startPrivate,
@@ -38,7 +54,6 @@ import {SaveLinkForm} from './src/screens/save/save-link';
 import {SaveLinksForm} from './src/screens/save/save-links';
 import {SessionsScreen} from './src/screens/sessions/sessions';
 import {SettingsScreen} from './src/screens/settings/settings';
-import {DialogHost} from './src/ui/dialog';
 import {PrivateSheetHost} from './src/private/private-sheets';
 import {SnackbarHost, showSnack} from './src/ui/snackbar';
 import {type BarTab, TabBar} from './src/ui/tab-bar';
@@ -105,6 +120,16 @@ function Main() {
 		quick: false,
 	});
 	const [open, setOpen] = useState(false);
+	// An export file or a backup shared from another app opens the same sheets as Settings › Import and export. Each
+	// share replaces the last one's sheet, and a new `fileKey` starts it fresh.
+	const [sharedFile, setSharedFile] = useState<
+		| {kind: 'import'; source: ImportSource}
+		| {kind: 'backup'; source: RestoreSource}
+	>();
+	const [fileKey, setFileKey] = useState(0);
+	const closeSharedFile = useCallback(() => {
+		setSharedFile(undefined);
+	}, []);
 	// A search result that leads to a session or column opens that screen.
 	const jump = usePendingJump();
 	useEffect(() => {
@@ -164,47 +189,93 @@ function Main() {
 
 	useEffect(() => startPrivateAutoLock(), []);
 
-	// A link shared from another app opens the drawer with it filled in. A shared file is refused, and the copy the
-	// share library made of it is deleted.
+	// A shared link opens the drawer with it filled in, an export file the import preview, and a backup Restore. A
+	// shared file is read once, and the copy the share library made of it is deleted.
+	const openShare = useCallback(
+		async (outcome: ShareOutcome, quick: boolean) => {
+			setSharedFile(undefined);
+			if (outcome.kind === 'refused') {
+				if (quick) {
+					// The toast stays on screen over the app the file came from.
+					ToastAndroid.show(FILE_REFUSED, ToastAndroid.LONG);
+					BackHandler.exitApp();
+				} else {
+					showSnack(FILE_REFUSED);
+				}
+
+				return;
+			}
+
+			if (outcome.kind === 'link') {
+				setDraft((current) => ({
+					key: current.key + 1,
+					text: outcome.text,
+					title: outcome.title,
+					urls: outcome.urls,
+					many: false,
+					quick,
+				}));
+				setTab('bookmarks');
+				setOpen(true);
+				return;
+			}
+
+			setOpen(false);
+			const cannotOpen = (error?: unknown) => {
+				notify(
+					'Could not open the file',
+					error instanceof FileTooLargeError
+						? error.message
+						: 'It could not be read.',
+				);
+			};
+
+			if (outcome.kind === 'unreadable') {
+				cannotOpen();
+				return;
+			}
+
+			try {
+				if (outcome.kind === 'import') {
+					const text = await readSharedText(outcome.path, outcome.size);
+					setFileKey((key) => key + 1);
+					setSharedFile({
+						kind: 'import',
+						source: {mode: 'file', name: outcome.name, text},
+					});
+				} else {
+					const bytes = await readSharedBytes(outcome.path, outcome.size);
+					setFileKey((key) => key + 1);
+					setSharedFile({
+						kind: 'backup',
+						source: {name: outcome.name, bytes},
+					});
+				}
+			} catch (error) {
+				cannotOpen(error);
+			}
+		},
+		[],
+	);
+
 	useEffect(() => {
 		if (!hasShareIntent) {
 			return;
 		}
 
-		const outcome = readShare(shareIntent);
+		const share: IncomingShare = shareIntent;
 		const quick = Date.now() - BOOT < COLD_MS;
-		for (const path of cacheCopies(shareIntent, Paths.cache.uri)) {
-			try {
-				new File(path).delete();
-			} catch {
-				// Already gone; the system clears the cache in any case.
-			}
-		}
-
 		resetShareIntent();
-		if (outcome.kind === 'files') {
-			if (quick) {
-				// The toast stays on screen over the app the file came from.
-				ToastAndroid.show(FILES_REFUSED, ToastAndroid.LONG);
-				BackHandler.exitApp();
-			} else {
-				showSnack(FILES_REFUSED);
+		void openShare(readShare(share), quick).finally(() => {
+			for (const path of cacheCopies(share, Paths.cache.uri)) {
+				try {
+					new File(path).delete();
+				} catch {
+					// Already gone; the system clears the cache in any case.
+				}
 			}
-
-			return;
-		}
-
-		setDraft((current) => ({
-			key: current.key + 1,
-			text: outcome.text,
-			title: outcome.title,
-			urls: outcome.urls,
-			many: false,
-			quick,
-		}));
-		setTab('bookmarks');
-		setOpen(true);
-	}, [hasShareIntent, shareIntent, resetShareIntent]);
+		});
+	}, [hasShareIntent, shareIntent, resetShareIntent, openShare]);
 
 	// A Quick Settings tile opens the app at tablodge://save or tablodge://search, always on the regular library.
 	const openTile = useCallback(async (route: TileRoute) => {
@@ -319,6 +390,16 @@ function Main() {
 			<DialogHost />
 			<PrivateSheetHost />
 			<ShareHost />
+			<ImportSheet
+				key={`import-${fileKey}`}
+				source={sharedFile?.kind === 'import' ? sharedFile.source : undefined}
+				onClose={closeSharedFile}
+			/>
+			<RestoreSheet
+				key={`backup-${fileKey}`}
+				source={sharedFile?.kind === 'backup' ? sharedFile.source : undefined}
+				onClose={closeSharedFile}
+			/>
 			<ConnectSheet
 				visible={connecting}
 				onClose={() => {
