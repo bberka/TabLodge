@@ -42,13 +42,9 @@ The in app Help page explains every feature and setting.
 
 Manual installs and building from source are in [Install](install.md).
 
-## Set up with an AI agent
+## Set up sync with an AI agent
 
-Paste a prompt into a coding agent (Claude Code, Codex, Cursor). It follows the linked doc and asks you for anything only you can give, such as a domain or a login.
-
-```text
-Clone https://github.com/bberka/TabLodge.git and follow docs/install.md to build the extension. Tell me which folder to load unpacked. Change no source files.
-```
+This sets up the optional sync server, not TabLodge itself. Install TabLodge from the links above. To sync, paste this into a coding agent (Claude Code, Codex, Cursor). It follows [Self hosting](self-hosting.md) and asks you for anything only you can give, such as a domain or a login.
 
 ```text
 Set up the TabLodge sync server (https://github.com/bberka/TabLodge) with Option <A, B, or C> in docs/self-hosting.md. Ask me for anything you need, check /health, then show me the address and token once.
