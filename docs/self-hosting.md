@@ -34,7 +34,7 @@ The token is the only thing that protects the server. Every browser sends it wit
 openssl rand -base64 32
 ```
 
-Or, in TabLodge, open **Settings › Sync** and choose **Generate token** in the **No server yet?** box. It makes a random token of 64 hexadecimal characters in the browser, copies it, and fills it in for you.
+Or, in TabLodge, open **Settings › Sync** and choose **Generate token** in the **No server yet?** dialog. It makes a random token of 64 hexadecimal characters in the browser, copies it, and fills it in for you.
 
 Keep the token somewhere safe, such as a password manager. You enter it once in each browser.
 
@@ -102,7 +102,7 @@ This runs the server as a Worker with one Durable Object on your own Cloudflare 
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/master/apps/server/cloudflare-deploy)
 
-1. [Create a token](#create-a-token) and keep it at hand. The **No server yet?** box in **Settings › Sync** walks through these same steps and has the button too.
+1. [Create a token](#create-a-token) and keep it at hand. The **No server yet?** button in **Settings › Sync** opens a dialog that walks through these same steps and has the button too.
 2. Choose the button and log in to Cloudflare, or create a free account.
 3. Connect your GitHub or GitLab account when asked. Cloudflare copies the server into a new repository there and deploys it from that repository.
 4. Paste the token as the value of `TABLODGE_SYNC_TOKEN`, keep the other settings, and deploy.
