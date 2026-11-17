@@ -1,34 +1,42 @@
 import {StyleSheet, Text, View} from 'react-native';
 import {SEARCH_TIPS} from '../../../extension/src/shared/search-query';
+import {BottomSheet, SheetHeader} from '../ui/bottom-sheet';
 import {useColors} from '../ui/theme';
 
 /**
-The search operators, shown at the top of a screen while its search is open and still empty.
+The search operators in a drawer, opened from the search bar's help button. The phone has no open tabs, so `in:open`
+is left out.
 */
-export function SearchTips() {
+export function SearchTipsSheet({
+	visible,
+	onClose,
+}: {
+	visible: boolean;
+	onClose: () => void;
+}) {
 	const colors = useColors();
 	return (
-		<View style={styles.box}>
-			<Text
-				accessibilityRole="header"
-				style={[styles.title, {color: colors.muted}]}
-			>
-				Search tips
-			</Text>
-			{SEARCH_TIPS.map((tip) => (
-				<Text key={tip.example} style={{color: colors.muted}}>
-					<Text style={[styles.example, {color: colors.text}]}>
-						{tip.example}
-					</Text>
-					{`  ${tip.meaning}`}
-				</Text>
-			))}
-		</View>
+		<BottomSheet visible={visible} label="Search tips" onClose={onClose}>
+			<View style={styles.body}>
+				<SheetHeader title="Search tips" onClose={onClose} />
+				{SEARCH_TIPS.filter((tip) => !tip.browserOnly).map((tip) => (
+					<View key={tip.example} accessible style={styles.row}>
+						<Text style={[styles.example, {color: colors.text}]}>
+							{tip.example}
+						</Text>
+						<Text style={[styles.meaning, {color: colors.muted}]}>
+							{tip.meaning}
+						</Text>
+					</View>
+				))}
+			</View>
+		</BottomSheet>
 	);
 }
 
 const styles = StyleSheet.create({
-	box: {paddingHorizontal: 16, paddingVertical: 8, gap: 2},
-	title: {fontSize: 13, fontWeight: '700', paddingBottom: 2},
-	example: {fontFamily: 'monospace'},
+	body: {paddingHorizontal: 16, paddingBottom: 24, gap: 6},
+	row: {flexDirection: 'row', alignItems: 'baseline', gap: 12},
+	example: {fontFamily: 'monospace', fontSize: 14, minWidth: 150},
+	meaning: {fontSize: 14, flexShrink: 1},
 });

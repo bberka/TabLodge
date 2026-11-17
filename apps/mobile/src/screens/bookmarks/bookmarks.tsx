@@ -52,7 +52,7 @@ import {trackScroll} from '../../ui/scroll-state';
 import {useView} from '../../library/view';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {SearchElsewhere} from '../search-elsewhere';
-import {SearchTips} from '../search-tips';
+import {SearchTipsSheet} from '../search-tips';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
 import {takeSearchRequest, useSearchWanted} from '../../ui/search-action';
@@ -112,6 +112,7 @@ export function BookmarksScreen({
 	const [inside, setInside] = useState(false);
 	const isListView = usePreferences().bookmarkView === 'list';
 	const search = useSearch();
+	const [tipsOpen, setTipsOpen] = useState(false);
 	const {query} = search;
 	const {refreshing, refresh} = useRefresh();
 	const listRef = useRef<FlatList<Bookmark>>(null);
@@ -647,7 +648,6 @@ export function BookmarksScreen({
 									}
 									right={headerActions}
 								/>
-								{search.open && !isSearching && <SearchTips />}
 								<View style={styles.search}>
 									{!isSearching && isListView && !atList && openEntry && (
 										<FolderBack
@@ -805,8 +805,17 @@ export function BookmarksScreen({
 					query={query}
 					onChange={search.setQuery}
 					onClose={search.close}
+					onTips={() => {
+						setTipsOpen(true);
+					}}
 				/>
 			)}
+			<SearchTipsSheet
+				visible={tipsOpen}
+				onClose={() => {
+					setTipsOpen(false);
+				}}
+			/>
 			{selection.active && (
 				<SelectionBar
 					count={selection.ids.size}

@@ -550,8 +550,9 @@ function Help() {
 							</ul>
 							<p className="mt-2">
 								Anything that is not a complete operator, such as a lone - or an
-								unclosed quote, searches as plain words. The palette and the
-								phone list these tips until you type.
+								unclosed quote, searches as plain words. The help button at the
+								end of the palette's search field, and of the phone's search
+								bar, shows a short version of this list.
 							</p>
 						</>
 					),

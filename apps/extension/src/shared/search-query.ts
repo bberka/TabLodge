@@ -51,16 +51,24 @@ export type SearchFacets = {
 };
 
 /**
-The operators, for the search tips both apps show.
+The operators, one short line each, for the search tips both apps show. `browserOnly` marks what the phone has no use for.
 */
-export const SEARCH_TIPS: ReadonlyArray<{example: string; meaning: string}> = [
-	{example: '"exact phrase"', meaning: 'the words in that order'},
-	{example: '-word', meaning: 'leaves out results with the word'},
-	{example: 'site:github.com', meaning: 'links on that site'},
-	{example: 'in:sessions', meaning: 'also in:bookmarks, in:tabs, in:open'},
-	{example: 'col:Work', meaning: 'bookmarks in a column'},
-	{example: 'folder:Work', meaning: 'sessions in a folder'},
-	{example: 'after:2026-01-01', meaning: 'saved on or after a day, or before:'},
+export const SEARCH_TIPS: ReadonlyArray<{
+	example: string;
+	meaning: string;
+	browserOnly?: boolean;
+}> = [
+	{example: '"exact phrase"', meaning: 'Words in this order'},
+	{example: '-word', meaning: 'Leave out a word'},
+	{example: 'site:github.com', meaning: 'Links on a site'},
+	{example: 'in:sessions', meaning: 'Only sessions'},
+	{example: 'in:bookmarks', meaning: 'Only bookmarks'},
+	{example: 'in:tabs', meaning: 'Only saved tabs'},
+	{example: 'in:open', meaning: 'Only open tabs', browserOnly: true},
+	{example: 'col:Work', meaning: 'Bookmarks in a column'},
+	{example: 'folder:Work', meaning: 'Sessions in a folder'},
+	{example: 'after:2026-01-01', meaning: 'Saved on or after a day'},
+	{example: 'before:2026-06-01', meaning: 'Saved before a day'},
 ];
 
 const PLACES = new Set<string>(['sessions', 'bookmarks', 'tabs', 'open']);

@@ -38,7 +38,7 @@ import {useRefresh} from '../../library/use-refresh';
 import {takeJump, usePendingJump} from '../../library/jump';
 import {FolderBack, FolderList} from '../../ui/folder-list';
 import {SearchElsewhere} from '../search-elsewhere';
-import {SearchTips} from '../search-tips';
+import {SearchTipsSheet} from '../search-tips';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
 import {Empty, Header, IconButton} from '../../ui/widgets';
@@ -91,6 +91,7 @@ export function SessionsScreen({
 	const [inside, setInside] = useState(false);
 	const isListView = usePreferences().sessionView === 'list';
 	const search = useSearch();
+	const [tipsOpen, setTipsOpen] = useState(false);
 	const {query} = search;
 	const listRef = useRef<FlatList<Session>>(null);
 	const [revealId, setRevealId] = useState<string>();
@@ -412,7 +413,6 @@ export function SessionsScreen({
 										)
 									}
 								/>
-								{search.open && needle === '' && <SearchTips />}
 								{isListView ? (
 									<View style={styles.folders}>
 										{atList && (
@@ -631,8 +631,17 @@ export function SessionsScreen({
 					query={query}
 					onChange={search.setQuery}
 					onClose={search.close}
+					onTips={() => {
+						setTipsOpen(true);
+					}}
 				/>
 			)}
+			<SearchTipsSheet
+				visible={tipsOpen}
+				onClose={() => {
+					setTipsOpen(false);
+				}}
+			/>
 		</>
 	);
 }

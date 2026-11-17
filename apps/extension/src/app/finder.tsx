@@ -41,7 +41,7 @@ import {
 	type FinderKind,
 	type OpenTabInfo,
 } from '../shared/global-search';
-import {highlightWords, SEARCH_TIPS} from '../shared/search-query';
+import {highlightWords} from '../shared/search-query';
 import {send, useCloseOnEscape, type IconComponent} from './common';
 import {faviconUrl, LinkKindBadge, useServerIcon} from './favicon';
 import {
@@ -52,6 +52,7 @@ import {
 } from './finder-menu';
 import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
+import {SearchTipsButton} from './search-tips';
 import {isPinnedLodgeTab, openLink} from './link-target';
 import {cn} from '@/lib/utils';
 
@@ -1008,6 +1009,7 @@ function PaletteBody(props: {
 					}
 					onKeyDown={finder.onKeyDown}
 				/>
+				{!finder.menu && <SearchTipsButton />}
 			</div>
 			{finder.error && (
 				<p role="alert" className="px-4 py-2 text-xs text-destructive">
@@ -1037,19 +1039,6 @@ function PaletteBody(props: {
 					viewportClassName={viewportClassName}
 					standalone={Boolean(props.standalone)}
 				/>
-			)}
-			{!finder.menu && !finder.query.trim() && (
-				<p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-					<span className="font-medium">Search tips</span>
-					{SEARCH_TIPS.map((tip) => (
-						<code
-							key={tip.example}
-							className="rounded-sm bg-muted px-1 py-0.5 font-mono text-foreground"
-						>
-							{tip.example}
-						</code>
-					))}
-				</p>
 			)}
 			<div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
 				<span className="flex items-center gap-1">
