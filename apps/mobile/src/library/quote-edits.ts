@@ -16,7 +16,7 @@ import {extractUrl, hostOf} from './store-shape';
 What a saved quote changed, so Undo can put it back: a bookmark it made, or the notes it replaced.
 */
 export type QuoteUndo =
-	| {kind: 'created'; bookmarkId: string}
+	| {kind: 'created'; bookmarkId: string; after: string}
 	| {kind: 'bookmark'; bookmarkId: string; before?: string; after: string}
 	| {kind: 'tabs'; url: string; before: string; after: string};
 
@@ -99,7 +99,7 @@ export function saveQuote(
 					...(existing.notes !== undefined && {before: existing.notes}),
 					after: note.notes,
 				}
-			: {kind: 'created', bookmarkId},
+			: {kind: 'created', bookmarkId, after: note.notes},
 	};
 }
 
@@ -126,7 +126,12 @@ The library with the quote taken out again. A note edited after the quote was sa
 */
 export function undoQuote(store: Store, undo: QuoteUndo, now: number): Store {
 	if (undo.kind === 'created') {
-		return removeBookmarks(store, new Set([undo.bookmarkId]), now);
+		return store.bookmarks.some(
+			(bookmark) =>
+				bookmark.id === undo.bookmarkId && bookmark.notes === undo.after,
+		)
+			? removeBookmarks(store, new Set([undo.bookmarkId]), now)
+			: store;
 	}
 
 	if (undo.kind === 'tabs') {
@@ -138,10 +143,16 @@ export function undoQuote(store: Store, undo: QuoteUndo, now: number): Store {
 		return unchanged ? setTabNotes(store, undo.url, undo.before, now) : store;
 	}
 
+	const quoted = (bookmark: Store['bookmarks'][number]) =>
+		bookmark.id === undo.bookmarkId && bookmark.notes === undo.after;
+	if (store.bookmarks.every((bookmark) => !quoted(bookmark))) {
+		return store;
+	}
+
 	return {
 		...store,
 		bookmarks: store.bookmarks.map((bookmark) => {
-			if (bookmark.id !== undo.bookmarkId || bookmark.notes !== undo.after) {
+			if (!quoted(bookmark)) {
 				return bookmark;
 			}
 

@@ -27,7 +27,12 @@ describe('saveQuote', () => {
 			bookmark?.notes,
 			`> Hello there\n${page}#:~:text=Hello%20there`,
 		);
-		assert.deepEqual(result.undo, {kind: 'created', bookmarkId: 'b1'});
+		assert.deepEqual(result.undo, {
+			kind: 'created',
+			bookmarkId: 'b1',
+			after: bookmark?.notes,
+		});
+		assert.equal(undoQuote(result.store, result.undo, NOW).bookmarks.length, 0);
 	});
 
 	test('a second quote is appended to the same bookmark', () => {
@@ -101,8 +106,9 @@ describe('saveQuote', () => {
 			})),
 		};
 		assert.equal(
-			undoQuote(edited, second.undo, NOW).bookmarks[0]?.notes,
-			'Rewritten',
+			undoQuote(edited, second.undo, NOW),
+			edited,
+			'the same library comes back, so the app can say nothing was undone',
 		);
 	});
 

@@ -48,13 +48,14 @@ export function pageAddress(url: string) {
 	return kept.endsWith('#') ? kept.slice(0, -1) : kept;
 }
 
-function edges(line: string, from: 'start' | 'end') {
+/**
+The first or last words of a line, at most `count`; a line without spaces is cut by characters instead.
+*/
+function edges(line: string, from: 'start' | 'end', count = QUOTE_EDGE_WORDS) {
 	const words = line.split(' ');
-	if (words.length > QUOTE_EDGE_WORDS) {
+	if (words.length > 1) {
 		return (
-			from === 'start'
-				? words.slice(0, QUOTE_EDGE_WORDS)
-				: words.slice(-QUOTE_EDGE_WORDS)
+			from === 'start' ? words.slice(0, count) : words.slice(-count)
 		).join(' ');
 	}
 
@@ -99,13 +100,13 @@ export function textFragmentLink(url: string, quote: string) {
 	) {
 		directive = encodeFragmentTerm(first);
 	} else {
-		const start = edges(first, 'start');
-		let end = edges(last, 'end');
-		// One line that is long but has few words would give the same start and end; cut it by characters instead.
-		if (lines.length === 1 && start === end) {
-			end = first.slice(-QUOTE_EDGE_CHARS);
-		}
-
+		// On one line the start and the end must not overlap, so each takes at most half its words.
+		const count =
+			lines.length === 1
+				? Math.min(QUOTE_EDGE_WORDS, Math.floor(first.split(' ').length / 2))
+				: QUOTE_EDGE_WORDS;
+		const start = edges(first, 'start', count);
+		const end = edges(last, 'end', count);
 		directive = `${encodeFragmentTerm(start)},${encodeFragmentTerm(end)}`;
 	}
 

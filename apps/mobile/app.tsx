@@ -377,10 +377,17 @@ function Main() {
 				showSnack(message, {
 					label: 'Undo',
 					run() {
-						void editIn(saved.library, (current) =>
-							undoQuote(current, saved.undo, Date.now()),
-						).then(() => {
-							showSnack('Quote removed');
+						let removed = false;
+						void editIn(saved.library, (current) => {
+							const next = undoQuote(current, saved.undo, Date.now());
+							removed = next !== current;
+							return next;
+						}).then(() => {
+							showSnack(
+								removed
+									? 'Quote removed'
+									: 'The note changed since, so the quote stays',
+							);
 						});
 					},
 				});

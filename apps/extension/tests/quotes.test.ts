@@ -51,6 +51,15 @@ describe('textFragmentLink', () => {
 		);
 	});
 
+	test('a long line of few words splits them so start and end do not overlap', () => {
+		const quote =
+			'Supercalifragilisticexpialidocious antidisestablishmentarianism pneumonoultramicroscopic floccinaucinihilipilification words';
+		assert.equal(
+			textFragmentLink(page, quote),
+			`${page}#:~:text=Supercalifragilisticexpialidocious%20antidisestablishmentarianism,floccinaucinihilipilification%20words`,
+		);
+	});
+
 	test('a long line without spaces is cut by characters', () => {
 		const quote = 'あ'.repeat(50) + 'い'.repeat(50);
 		const [, directive] = textFragmentLink(page, quote).split('#:~:text=', 2);
