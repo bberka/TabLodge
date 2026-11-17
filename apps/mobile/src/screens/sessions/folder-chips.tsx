@@ -96,7 +96,7 @@ export function FolderChips({
 }
 
 const styles = StyleSheet.create({
-	pad: {paddingHorizontal: 16, gap: 12},
+	pad: {paddingHorizontal: 16, gap: 12, paddingBottom: 8},
 });
 
 /**
