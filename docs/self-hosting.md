@@ -2,7 +2,7 @@
 
 TabLodge can keep your library the same on several browsers through a sync server that you run yourself. There is no TabLodge cloud. The server belongs to you, holds one library, and is protected by one token.
 
-This guide covers setting the server up, connecting your browsers, and looking after it. For how sync decides between two edits, see [ADR 1](adr/0001-record-level-sync-protocol.md). For what is sent, see [Privacy](PRIVACY.md#sync-with-your-own-server).
+This guide covers setting the server up, connecting your browsers, and looking after it. To have an AI agent do the setup, use the [copy and paste prompts](README.md#set-up-with-an-ai-agent). For how sync decides between two edits, see [ADR 1](adr/0001-record-level-sync-protocol.md). For what is sent, see [Privacy](PRIVACY.md#sync-with-your-own-server).
 
 * [Choose where to run it](#choose-where-to-run-it)
 * [Create a token](#create-a-token)

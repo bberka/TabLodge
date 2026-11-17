@@ -73,6 +73,36 @@ vp run build
 
 Load `apps/extension/dist/tablodge/` with **Load unpacked**, or `apps/extension/dist/tablodge-firefox/manifest.json` as a temporary add-on in Firefox. `vp run pack` makes the release ZIPs under `release/`. To update, run `git pull`, `pnpm install`, and `vp run build`, then reload TabLodge.
 
+## Set up with an AI agent
+
+Paste one of these prompts into a coding agent (Claude Code, Codex, Cursor, or similar) running on the machine you want to set up. Each prompt names the doc the agent follows, so the steps stay current. The agent stops and asks you for anything only you can provide, such as a domain or a login.
+
+**Build the extension from source and load it:**
+
+```text
+Set up TabLodge from source on this computer. Clone https://github.com/bberka/TabLodge.git, follow the "Build from source" section of docs/README.md to install dependencies and run `vp run build`, then tell me the exact folder to choose under "Load unpacked" in my browser (or the Firefox manifest path). Do not change any source files. Report any step that fails with its output.
+```
+
+**Run the sync server in Docker on this computer:**
+
+```text
+Set up the TabLodge sync server with Docker on this computer, following "Option C: Docker on this computer" in docs/self-hosting.md of https://github.com/bberka/TabLodge. Generate the token, start the container, and check that http://localhost:8787/health answers {"ok":true}. Then show me the server address and the token once, and tell me to enter both in TabLodge under Settings > Sync.
+```
+
+**Run the sync server on a VPS with HTTPS:**
+
+```text
+Set up the TabLodge sync server on this VPS with Docker and Caddy, following "Option A: a VPS with Docker and HTTPS" in docs/self-hosting.md of https://github.com/bberka/TabLodge. Ask me for my domain first and check that its DNS record points at this server. Open ports 80 and 443, install Docker if it is missing, generate the token into a .env file with mode 600, start it, and confirm https://<domain>/health answers {"ok":true}. Then show me the address and the token once.
+```
+
+**Deploy the sync server to Cloudflare:**
+
+```text
+Deploy the TabLodge sync server to my Cloudflare account, following "Or deploy from your computer" under "Option B: Cloudflare" in docs/self-hosting.md of https://github.com/bberka/TabLodge. Clone the repository, run `pnpm install` and `pnpm run cf:setup`, and ask me to log in to Cloudflare when the script opens the browser. Confirm /health answers {"ok":true}, then show me the Worker address and the token once, because the token is not shown again.
+```
+
+Every sync prompt ends with the address and token. Enter them in each browser under **Settings › Sync** (see [Connect your browsers](self-hosting.md#connect-your-browsers)). Treat the token like a password: it gives full access to your library.
+
 ## Private windows
 
 In Chromium, turn on **Allow in Incognito** for TabLodge. The first private dashboard asks whether private windows use the regular library, a separate saved one, or a separate temporary one that clears when the browser restarts. Change it later in **Settings › Private windows**.
