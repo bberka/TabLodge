@@ -3,6 +3,7 @@ import {describe, test} from 'vite-plus/test';
 import {
 	contextMenuPlan,
 	contextMenuSignature,
+	hasTabMenu,
 	menuSessions,
 } from '../src/shared/context-menu-plan';
 import {DEFAULT_SETTINGS} from '../src/shared/library-normalize';
@@ -22,6 +23,58 @@ const on = {
 	contextMenuSelectionEnabled: true,
 	contextMenuActionEnabled: true,
 };
+
+const chromeUserAgent = (major: number) =>
+	`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+
+describe('hasTabMenu', () => {
+	test('Chromium 150 or newer has the tab strip menu when it lists the context', () => {
+		for (const major of [150, 158]) {
+			assert.equal(
+				hasTabMenu({
+					listsTabContext: true,
+					isFirefox: false,
+					userAgent: chromeUserAgent(major),
+				}),
+				true,
+				`Chrome ${major}`,
+			);
+		}
+
+		const edge = `${chromeUserAgent(150)} Edg/150.0.0.0`;
+		assert.equal(
+			hasTabMenu({listsTabContext: true, isFirefox: false, userAgent: edge}),
+			true,
+		);
+	});
+
+	test('older Chromium has none, even when it lists the context', () => {
+		for (const [userAgent, listsTabContext] of [
+			[chromeUserAgent(149), true],
+			[chromeUserAgent(116), false],
+			['', true],
+		] as const) {
+			assert.equal(
+				hasTabMenu({listsTabContext, isFirefox: false, userAgent}),
+				false,
+				userAgent,
+			);
+		}
+	});
+
+	test('Firefox follows the API alone', () => {
+		const userAgent =
+			'Mozilla/5.0 (X11; Linux x86_64; rv:160.0) Gecko/20100101 Firefox/160.0';
+		assert.equal(
+			hasTabMenu({listsTabContext: true, isFirefox: true, userAgent}),
+			true,
+		);
+		assert.equal(
+			hasTabMenu({listsTabContext: false, isFirefox: true, userAgent}),
+			false,
+		);
+	});
+});
 
 describe('contextMenuPlan', () => {
 	test('lists a parent before its children and never repeats an id', () => {
@@ -103,29 +156,32 @@ describe('contextMenuPlan', () => {
 		}
 	});
 
-	test('only Firefox puts the page items, and nothing else, on the tab strip', () => {
+	test('the tab context puts the page items, and nothing else, on the tab strip', () => {
 		const sessions = [{id: 's1', name: 'One'}];
-		const chromium = contextMenuPlan(on, columns, sessions, env);
-		assert.ok(chromium.every((item) => !item.contexts?.includes('tab')));
+		const without = contextMenuPlan(on, columns, sessions, env);
+		assert.ok(without.every((item) => !item.contexts?.includes('tab')));
 
-		const firefox = contextMenuPlan(on, columns, sessions, {
-			...env,
-			hasTabContext: true,
-		});
-		const pageIds = chromium
+		const pageIds = without
 			.filter((item) => item.contexts?.includes('page'))
 			.map((item) => item.id);
-		assert.deepEqual(
-			firefox
-				.filter((item) => item.contexts?.includes('tab'))
-				.map((item) => item.id),
-			pageIds,
-		);
-		assert.deepEqual(
-			firefox.map((item) => item.id),
-			chromium.map((item) => item.id),
-			'the tab strip reuses the page ids',
-		);
+		for (const hasAmpersandAccessKeys of [true, false]) {
+			const withTab = contextMenuPlan(on, columns, sessions, {
+				...env,
+				hasTabContext: true,
+				hasAmpersandAccessKeys,
+			});
+			assert.deepEqual(
+				withTab
+					.filter((item) => item.contexts?.includes('tab'))
+					.map((item) => item.id),
+				pageIds,
+			);
+			assert.deepEqual(
+				withTab.map((item) => item.id),
+				without.map((item) => item.id),
+				'the tab strip reuses the page ids',
+			);
+		}
 	});
 
 	test('Firefox shows an ampersand in every title, built in or named by the user', () => {

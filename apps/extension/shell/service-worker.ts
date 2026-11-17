@@ -41,6 +41,7 @@ import {
 	contextMenuPlan,
 	contextMenuSignature,
 	menuSessions,
+	hasTabMenu,
 } from '../src/shared/context-menu-plan';
 import {
 	ARCHIVED_FOLDER_NAME,
@@ -293,9 +294,12 @@ const {sidebarAction} = chrome as typeof chrome & {
 };
 const HAS_SIDE_PANEL =
 	Boolean(chrome.sidePanel) || Boolean(sidebarAction?.open);
-// The tab strip's right-click menu. Chrome 150 and newer have the context as well, but it stays Firefox only (#309).
-const HAS_TAB_MENU =
-	IS_FIREFOX && Boolean(chrome.contextMenus?.ContextType?.TAB);
+// The tab strip's right-click menu: Firefox, and Chromium 150 or newer.
+const HAS_TAB_MENU = hasTabMenu({
+	listsTabContext: Boolean(chrome.contextMenus?.ContextType?.TAB),
+	isFirefox: IS_FIREFOX,
+	userAgent: globalThis.navigator?.userAgent ?? '',
+});
 let privateConfig: PrivateConfig = {
 	mode: 'shared',
 	configured: false,
