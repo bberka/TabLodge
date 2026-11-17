@@ -7,8 +7,8 @@ TabLodge keeps your sessions, bookmarks, and settings in your browser profile. I
 - No analytics, telemetry, crash reporting, or advertising.
 - No TabLodge cloud and no sale of data. There is no TabLodge operated sync service.
 - No network requests of its own unless you turn on sync (see [Sync with your own server](#sync-with-your-own-server)). Code, styles, fonts, and icons are bundled with the extension.
-- No website host permissions and no declared content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages. By default the search palette appears over the current page, so the shortcut injects the palette into that one page when you press it. Choosing **Window** in Settings turns this off. The injected code only draws the palette. It reads nothing from the page, and the page cannot read your library. **Keep a copy** is the one action that reads a page: when you choose it from the toolbar popup, the page's right-click menu, or the side panel, TabLodge reads the text of that one open tab once (see [Page copies](#page-copies)).
-- A web page can detect that TabLodge is installed by requesting `palette.html`, which the manifest exposes so the palette can be framed over pages. Nothing else of the extension is exposed.
+- No website access until you switch on a site in **Settings › Sources**, and no declared content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages. A source reads only the site you switched on (see [Sources](#sources)). By default the search palette appears over the current page, so the shortcut injects the palette into that one page when you press it. Choosing **Window** in Settings turns this off. The injected code only draws the palette. It reads nothing from the page, and the page cannot read your library. Apart from Sources, **Keep a copy** is the one action that reads a page: when you choose it from the toolbar popup, the page's right-click menu, or the side panel, TabLodge reads the text of that one open tab once (see [Page copies](#page-copies)). **Save quote** in the right-click menu on selected text reads nothing from the page: the browser hands TabLodge the selected text and the page address, and the code injected into that one page only shows the confirmation.
+- A web page can detect that TabLodge is installed by requesting `palette.html`, which the manifest exposes so the palette can be framed over pages. Nothing else of the extension is exposed. On a site you switched on in **Settings › Sources**, that site's page can also see the notice TabLodge shows after a save.
 
 Opening a saved link loads that website normally. An optional setting removes common tracking parameters from the destination URL when opening saved links or restoring sessions and snapshots. It is off by default and does not change the URLs stored in your library. Choosing **Search the web** sends your query to the browser's default search engine. Choosing **Open in Internet Archive** on a saved link opens the Internet Archive's page for that address (`web.archive.org/web/<address>`) in a new tab, so the address goes to archive.org when you choose it and TabLodge sends and stores nothing else; with the tracking parameter setting on, those parameters are removed first. In **Settings › Sync**, **Generate token** makes the token in the browser without any request, and **Deploy to Cloudflare** opens Cloudflare's page in a new tab. These are actions you request, not background reporting by TabLodge.
 
@@ -26,12 +26,27 @@ Data stays in local extension storage within your browser profile.
 | `tablodge.trash`                                                           | Deleted sessions, saved links, bookmarks, and columns, which sync when a server is connected                                                                                   |
 | `tablodge.undo`                                                            | Temporary copies used to undo recent actions, kept for up to two minutes                                                                   |
 | `tablodge.copies`, `tablodge.copy.*`                                       | Readable copies of pages you chose **Keep a copy** for: the page's address, title, author when the page names one, the time it was kept, and its text as headings, paragraphs, list items, quotes, and code. `tablodge.copies` lists them; each copy has its own key |
+| `tablodge.sources`                                                         | Which sites in **Settings › Sources** are on in this browser, the column each saves to, and whether one was switched off because the browser removed its access or saved nothing because its page could not be read. It stays on this device and never syncs |
 
 These keys use `chrome.storage.local`. A copy of the theme and accent choices also lives in the extension's `localStorage` under `tablodge.uiTheme` and `tablodge.uiAccent` so pages can apply it before rendering. The same `localStorage` holds `tablodge.focusHintDismissed`, a flag set when you dismiss the suggestion to use Focus view. In `chrome.storage.session`, a temporary flag helps ignore bulk browser bookmark imports, and `newTabClaims` holds the ids of new tabs being sent on to another page while the TabLodge new tab page is off.
 
 Snapshots contain tab titles, URLs, pinned state, tab groups, split view pairs, the active tab, and window layout information. They skip incognito windows, excluded sites, and pages other than ordinary HTTP or HTTPS websites. Snapshots are enabled by default; you can turn them off in **Settings › Recovery & backups**.
 
 TabLodge reads tab metadata to save and restore sessions, detect duplicates, close duplicate open tabs when you ask, show and search open tabs, show the **Settings › Data › Statistics** summary, and capture recovery snapshots. It reads your browser's bookmark tree only when you ask to import it. If you enable **When you bookmark a page in the browser**, it also watches for newly created bookmarks to offer to add that page, or add it automatically. That setting is off by default. The **Bookmark … to** items in the right-click menus of an image, a video, or audio read only the media's address (or, for a stream with no address of its own, the page's address and title) when you choose one, and never download anything. The marks on links to images, PDFs, and videos are read from the saved address, so they fetch nothing. Site icons come from the browser's local favicon cache. Firefox gives extensions no such cache, so there TabLodge shows an open tab's own icon where the browser provides one, and remembers the icon address of each site you open, as a small image, by host, on this device only (up to 300 sites, never from private windows), to show it for saved links to that site. Showing it asks no site for anything. With a sync server connected, icons the browser does not have come from your server (see [Icons and previews](#sync-with-your-own-server)). Any other site gets a letter tile, or on Chromium the browser's default icon.
+
+## Sources
+
+**Settings › Sources** can save a link to TabLodge when you save it on a site. Every site is off until you switch it on. Switching one on asks the browser for access to that site only, as an optional permission; nothing is asked at install, and TabLodge runs nothing on the site before you allow it. Only then does TabLodge register its script for that site. Switching the site off removes the script and gives the permission back. Removing the site's access in the browser's extension settings also switches it off, and Settings says so.
+
+The script only observes. It reads the page when you click, and only acts on a click on the site's own save control. It never sends a request to the site or anywhere else, never reads the site's network traffic, and never stops or changes the site's own save. The link goes into your library like any other bookmark, so it syncs only if you connected your own server. In a private window, a save is added only when private windows use the regular library.
+
+### YouTube Watch later
+
+Access: `https://www.youtube.com/*`. When you add a video to Watch later, by the button on a thumbnail, **Save to Watch later** in a video's menu, or the Watch later box in the **Save** dialog, TabLodge reads that video's address and title from the page and bookmarks `https://www.youtube.com/watch?v=<id>` in a YouTube column. Nothing else on the page is read or kept.
+
+### Reddit saved
+
+Access: `https://www.reddit.com/*` and `https://old.reddit.com/*`. When you click **Save** on a post or comment, TabLodge reads its permalink and the post title or the comment's author from the page and bookmarks `https://www.reddit.com/<permalink>` in a Reddit column. Nothing else on the page is read or kept.
 
 ## Sync with your own server
 
@@ -91,7 +106,7 @@ When you back up everything, you can protect the file with a PIN or a password. 
 
 ## Permissions
 
-TabLodge has no website host permissions and no content scripts, and makes no network requests unless you turn on sync, which talks only to your server.
+TabLodge has no website access until you switch on a site in [Sources](#sources), declares no content scripts, and makes no network requests unless you turn on sync, which talks only to your server.
 
 | Permission | Why |
 | --- | --- |
@@ -105,11 +120,17 @@ TabLodge has no website host permissions and no content scripts, and makes no ne
 | `search` | **Search the web** with your default engine |
 | `alarms` | Snapshots, backups, trash cleanup, archiving, sync, and the private lock |
 | `idle` | Lock the private library when you lock your screen |
-| `activeTab`, `scripting` | Show the search palette over the current page when you press its shortcut, and read the open tab when you choose **Keep a copy** |
+| `activeTab`, `scripting` | Show the search palette over the current page when you press its shortcut, read the open tab when you choose **Keep a copy**, and show the confirmation with Undo after **Save quote** |
 
-This table explains each required permission. TabLodge requests no website access. `activeTab` and `scripting` let the palette shortcut show the palette over the current page, which is the default and can be changed to a window in Settings, and let **Keep a copy** read the one tab you chose it for. Browsers show no install warning for them and no prompt appears when they are used. The Firefox version leaves out `favicon` and `sidePanel`, which only Chromium has, and declares in its manifest that it collects no data.
+This table explains each required permission. None of them gives access to websites. `activeTab` and `scripting` let the palette shortcut show the palette over the current page, which is the default and can be changed to a window in Settings, let **Keep a copy** read the one tab you chose it for, and let **Save quote** show its confirmation on the page you right-clicked. **Save quote** stores only the text you selected and the page's address, in that page's bookmark note (or saved tab notes); it reads nothing else from the page and sends nothing anywhere. Browsers show no install warning for them and no prompt appears when they are used. The Firefox version leaves out `favicon` and `sidePanel`, which only Chromium has, and declares in its manifest that it collects no data.
 
-The only optional permission is `downloads`. The browser asks for it when you turn on backup copies in Downloads. Turning that setting off removes the permission.
+Optional permissions are asked for only when you turn on the feature that needs them, and turning it off removes them:
+
+| Optional permission | Why |
+| --- | --- |
+| `downloads` | Copy backups to your Downloads folder |
+| `https://www.youtube.com/*` | **Settings › Sources › YouTube Watch later** |
+| `https://www.reddit.com/*`, `https://old.reddit.com/*` | **Settings › Sources › Reddit saved** |
 
 ## Contact
 

@@ -33,6 +33,7 @@ import {
 	ArrowDown,
 	ArrowUp,
 	Check,
+	Inbox,
 } from 'lucide-react';
 import {
 	Button,
@@ -128,6 +129,12 @@ import {
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {PrivateSyncSettings} from './private-sync-settings';
 import {SYNC_TITLE, SYNC_WORDS, SyncSettings} from './sync-settings';
+import {
+	SiteSourcesSettings,
+	SOURCES_DESCRIPTION,
+	SOURCES_TITLE,
+	SOURCES_WORDS,
+} from './site-sources-settings';
 import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
 
@@ -579,7 +586,7 @@ const settingsGroups: Array<{
 				name: 'contextMenuSelectionEnabled',
 				requires: 'contextMenusEnabled',
 				label: 'Selection',
-				help: 'Search your saved tabs and bookmarks for the selected text.',
+				help: 'Search your saved tabs and bookmarks for the selected text, or save it as a quote on the page.',
 				type: 'switch',
 			},
 			{
@@ -1054,6 +1061,7 @@ const settingsNavigation = [
 	...settingsGroups.map(({title, icon}) => ({title, icon})),
 	{title: DATA.title, icon: Database},
 	{title: SYNC_TITLE, icon: RefreshCw},
+	{title: SOURCES_TITLE, icon: Inbox},
 	{title: EXCLUDED.title, icon: Globe},
 	{title: DEFAULTS.title, icon: RotateCcw},
 ].map(({title, icon}) => ({
@@ -1843,6 +1851,11 @@ function Options() {
 		...DEFAULTS.words,
 	]);
 	const showSync = matchesQuery(query, [SYNC_TITLE, ...SYNC_WORDS]);
+	const showSources = matchesQuery(query, [
+		SOURCES_TITLE,
+		SOURCES_DESCRIPTION,
+		...SOURCES_WORDS,
+	]);
 	const showPrivate =
 		!isFirefox &&
 		matchesQuery(query, [PRIVATE_STORAGE_TITLE, ...PRIVATE_STORAGE_WORDS]);
@@ -1858,6 +1871,7 @@ function Options() {
 			: 0) +
 		visibleData.length +
 		Number(showSync) +
+		Number(showSources) +
 		Number(showExcluded) +
 		Number(showDefaults);
 	const visibleGroupTitles = new Set(
@@ -1884,6 +1898,10 @@ function Options() {
 
 					case SYNC_TITLE: {
 						return showSync;
+					}
+
+					case SOURCES_TITLE: {
+						return showSources;
 					}
 
 					case EXCLUDED.title: {
@@ -2388,6 +2406,21 @@ function Options() {
 									)}
 								</>
 							)}
+						</SectionCard>
+					)}
+
+					{showSources && (
+						<SectionCard
+							id={sectionId(SOURCES_TITLE)}
+							title={hl(SOURCES_TITLE)}
+							description={SOURCES_DESCRIPTION}
+							icon={Inbox}
+							className={SECTION_SCROLL_CLASS}
+						>
+							<SiteSourcesSettings
+								columns={state?.bookmarkColumns ?? []}
+								showStatus={showStatus}
+							/>
 						</SectionCard>
 					)}
 

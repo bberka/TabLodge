@@ -32,7 +32,13 @@ import {
 } from './src/screens/transfer/restore-sheet';
 import {splitShared} from './src/library/store-shape';
 import {runBackAction} from './src/ui/back-actions';
-import {pauseSync, startLibrary, wakeSync} from './src/library/library-store';
+import {
+	editIn,
+	pauseSync,
+	startLibrary,
+	wakeSync,
+} from './src/library/library-store';
+import {undoQuote} from './src/library/quote-edits';
 import {purgeTrash} from './src/library/trash-store';
 import {startPreferencesSync} from './src/settings/preferences-sync';
 import {markActive, startPrivateAutoLock} from './src/private/private-autolock';
@@ -52,6 +58,7 @@ import {BookmarksScreen} from './src/screens/bookmarks/bookmarks';
 import {ConnectSheet} from './src/screens/settings/connect-sheet';
 import {SaveLinkForm} from './src/screens/save/save-link';
 import {SaveLinksForm} from './src/screens/save/save-links';
+import {type SavedQuote, SaveQuoteForm} from './src/screens/save/save-quote';
 import {SessionsScreen} from './src/screens/sessions/sessions';
 import {SettingsScreen} from './src/screens/settings/settings';
 import {PrivateSheetHost} from './src/private/private-sheets';
@@ -105,6 +112,11 @@ type Draft = {
 	*/
 	many: boolean;
 	quick: boolean;
+	/**
+	Shared words that can be saved as a quote; `asQuote` opens Save quote with them.
+	*/
+	quote?: string;
+	asQuote?: boolean;
 };
 
 function Main() {
@@ -215,15 +227,29 @@ function Main() {
 				return;
 			}
 
-			if (outcome.kind === 'link') {
-				setDraft((current) => ({
-					key: current.key + 1,
-					text: outcome.text,
-					title: outcome.title,
-					urls: outcome.urls,
-					many: false,
-					quick,
-				}));
+			if (outcome.kind === 'link' || outcome.kind === 'quote') {
+				setDraft((current) =>
+					outcome.kind === 'link'
+						? {
+								key: current.key + 1,
+								text: outcome.text,
+								title: outcome.title,
+								urls: outcome.urls,
+								many: false,
+								quick,
+								...(outcome.quote && {quote: outcome.quote}),
+							}
+						: {
+								key: current.key + 1,
+								text: outcome.url ?? '',
+								title: '',
+								urls: [],
+								many: false,
+								quick,
+								quote: outcome.quote,
+								asQuote: true,
+							},
+				);
 				setTab('bookmarks');
 				setOpen(true);
 				return;
@@ -350,6 +376,40 @@ function Main() {
 		setOpen(true);
 	}, []);
 
+	const finishQuote = (saved?: SavedQuote) => {
+		setOpen(false);
+		if (saved) {
+			const message = `Quote saved to ${saved.placed}`;
+			if (Platform.OS === 'android' && draft.quick) {
+				ToastAndroid.show(message, ToastAndroid.SHORT);
+			} else {
+				showSnack(message, {
+					label: 'Undo',
+					run() {
+						let removed = false;
+						void editIn(saved.library, (current) => {
+							const next = undoQuote(current, saved.undo, Date.now());
+							removed = next !== current;
+							return next;
+						}).then(() => {
+							showSnack(
+								removed
+									? 'Quote removed'
+									: 'The note changed since, so the quote stays',
+							);
+						});
+					},
+				});
+			}
+		}
+
+		if (draft.quick) {
+			setTimeout(() => {
+				BackHandler.exitApp();
+			}, 250);
+		}
+	};
+
 	const finish = (saved?: string) => {
 		setOpen(false);
 		if (saved) {
@@ -421,12 +481,33 @@ function Main() {
 			<BottomSheet
 				scroll={false}
 				visible={open}
-				label={draft.urls.length > 1 || draft.many ? 'Save links' : 'Save link'}
+				label={
+					draft.asQuote
+						? 'Save quote'
+						: draft.urls.length > 1 || draft.many
+							? 'Save links'
+							: 'Save link'
+				}
 				onClose={() => {
 					finish();
 				}}
 			>
-				{draft.urls.length > 1 || draft.many ? (
+				{draft.asQuote ? (
+					<SaveQuoteForm
+						key={draft.key}
+						initialQuote={draft.quote ?? ''}
+						initialUrl={draft.text}
+						onLink={() => {
+							setDraft((current) => ({
+								...current,
+								key: current.key + 1,
+								text: current.text || current.quote || '',
+								asQuote: false,
+							}));
+						}}
+						onDone={finishQuote}
+					/>
+				) : draft.urls.length > 1 || draft.many ? (
 					<SaveLinksForm
 						key={draft.key}
 						urls={draft.urls}
@@ -448,6 +529,18 @@ function Main() {
 								many: true,
 							}));
 						}}
+						onQuote={
+							draft.quote
+								? () => {
+										setDraft((current) => ({
+											...current,
+											key: current.key + 1,
+											text: current.urls[0] ?? '',
+											asQuote: true,
+										}));
+									}
+								: undefined
+						}
 						onDone={finish}
 					/>
 				)}

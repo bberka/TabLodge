@@ -429,6 +429,34 @@ function Help() {
 					searchText:
 						'dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
 				},
+				{
+					title: 'Save from YouTube and Reddit',
+					body: (
+						<>
+							In Settings › Sources, switch on YouTube Watch later or Reddit
+							saved. The browser asks for access to that site only, and nothing
+							runs there until you allow it. Then, when you add a video to Watch
+							later on youtube.com, or save a post or comment on reddit.com,{' '}
+							{PROJECT.name} bookmarks the same link in a YouTube or Reddit
+							column, created on the first save. Under Save to, under each
+							switched-on site, you can choose another column; if that column is
+							deleted, saves go to the site&apos;s own column again until you
+							choose one. A small notice in the page offers Undo; press Tab to
+							reach it. A link already in your bookmarks or in the trash bin is
+							not saved again. {PROJECT.name} only watches for your own clicks
+							on the site&apos;s save controls, reads the link from the page,
+							and sends nothing anywhere. It recognizes the English labels of
+							those controls. If a site changes its page so {PROJECT.name} can
+							no longer read it, nothing is saved and Settings says so. In a
+							private window, saves are added only when private windows use the
+							regular library. Switching a site off, or removing its access in
+							the browser&apos;s extension settings, stops it, and Settings says
+							when the browser removed access.
+						</>
+					),
+					searchText:
+						'sources settings youtube watch later reddit saved posts comments save automatically site access permission column undo private window trash',
+				},
 			],
 			action: {
 				label: 'Open bookmarks',
@@ -485,9 +513,9 @@ function Help() {
 						label: 'Select text, then right-click',
 						icon: MousePointer2,
 					},
-					body: 'Search your saved tabs and bookmarks for the selected words.',
+					body: "Search your saved tabs and bookmarks for the selected words, or choose Save quote to keep the text in the note of the page's bookmark. A page with no bookmark gets one in the column Add bookmark would pick; a page already saved in a session keeps the quote in that link's notes. Each quote is followed by a link that opens the page scrolled to the passage and highlights it. More quotes from the same page are added below, and a message on the page offers Undo. A note holds up to 10,000 characters, and a quote that does not fit is not saved.",
 					searchText:
-						'select text selection right-click search saved tabs bookmarks words',
+						'select text selection right-click search saved tabs bookmarks words save quote highlight passage note text fragment undo',
 				},
 				{
 					title: `On the ${PROJECT.name} toolbar icon`,
