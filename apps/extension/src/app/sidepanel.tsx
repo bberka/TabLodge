@@ -70,7 +70,7 @@ import {
 	useHasSavableTabs,
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
-import {Favicon} from './favicon';
+import {BookmarkIcon, Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
 import {InsecureMarkFor} from './insecure-mark';
 import {savedUrlSet} from './saved-urls';
@@ -492,11 +492,19 @@ function SidePanel() {
 						className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 						onClick={(event) => linkClick(event, url, kind, openMenu)}
 					>
-						<Favicon
-							url={url}
-							label={hostname(url)}
-							className="h-6 w-6 rounded-sm"
-						/>
+						{kind === 'bookmark' ? (
+							<BookmarkIcon
+								url={url}
+								label={hostname(url)}
+								className="h-6 w-6 rounded-sm"
+							/>
+						) : (
+							<Favicon
+								url={url}
+								label={hostname(url)}
+								className="h-6 w-6 rounded-sm"
+							/>
+						)}
 						<span className="min-w-0">
 							<strong className="block truncate text-xs font-medium">
 								{title || hostname(url)}
