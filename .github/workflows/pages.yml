@@ -1,18 +1,10 @@
 name: Website
 
 # Builds the Astro site in apps/site/ and deploys it to GitHub Pages (https://tablodge.bbay.dev).
-# The site version comes from the latest GitHub release. Release workflow dispatches a build after publishing.
-# Pull requests only build the site, so a broken site fails the PR. Only master, dispatch, and manual runs deploy.
+# The site version comes from the latest GitHub release. The Release workflow dispatches a deploy after publishing.
+# Pull requests only build the site, so a broken site fails the PR. Only a release dispatch or a manual run deploys.
 # One-time setup: repository Settings > Pages > Source: GitHub Actions (see docs/agents/site.md).
 on:
-  push:
-    branches: [master]
-    paths:
-      - 'apps/site/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/pages.yml'
   # No paths filter here, so the required "Build site" check always reports on pull requests.
   pull_request:
   repository_dispatch:

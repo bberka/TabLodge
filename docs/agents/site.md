@@ -67,7 +67,7 @@ The fixture is synthetic and deterministic. Seeding replaces TabLodge data in th
 
 ## Deploy to GitHub Pages
 
-`.github/workflows/pages.yml` builds and deploys the site when a push to `master` changes `apps/site/`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, or the workflow itself. The release workflow dispatches a website build after publishing each release, so the version shown on the landing page stays current. Other builds read the latest GitHub release version. You can also run **Actions › Website › Run workflow**. Every pull request runs the build job without deploying, so a broken site fails the required `Build site` check.
+`.github/workflows/pages.yml` deploys the site only when a release is published, not when a change reaches `master`. The release workflow dispatches the deployment after publishing each release, which also sets the version shown on the landing page. Other builds read the latest GitHub release version. To publish site changes without a release, run **Actions › Website › Run workflow**. Every pull request runs the build job without deploying, so a broken site fails the required `Build site` check.
 
 For the initial setup:
 
