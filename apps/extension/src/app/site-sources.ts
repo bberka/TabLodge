@@ -1,6 +1,7 @@
 // Sites whose own save TabLodge can follow (Settings › Sources): the user saves a link on the site, and the same
-// link lands in that site's bookmark column. Each site is off until the user switches it on, which asks for an
-// optional host permission for that site only; the content script is registered only while it is granted.
+// link lands in that site's bookmark column. Each site is off until the user adds it in Settings, which asks for an
+// optional host permission for that site only; the content script is registered only while it is granted. A new
+// site is an entry here plus its adapter in shell/site-source.ts; Settings lists it in Add a site by itself.
 // The manifest's optional_host_permissions must list exactly the origins here (tests/site-sources.test.ts).
 import {isRecord} from '../shared/library-values';
 import type {SiteSourceStatus} from '../shared/types';
@@ -13,6 +14,14 @@ export type SiteSource = {
 	What the user saves to, as Settings names it.
 	*/
 	label: string;
+	/**
+	One line on what gets saved, shown in the Add a site list and under the site in Settings.
+	*/
+	description: string;
+	/**
+	The site's home page, for its icon.
+	*/
+	homepage: string;
 	/**
 	The bookmark column the links go to, created on the first save.
 	*/
@@ -124,6 +133,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'youtube',
 		label: 'YouTube Watch later',
+		description: 'Videos you add to Watch later on youtube.com',
+		homepage: 'https://www.youtube.com/',
 		column: 'YouTube',
 		origins: ['https://www.youtube.com/*'],
 		hosts: ['www.youtube.com'],
@@ -133,6 +144,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'reddit',
 		label: 'Reddit saved',
+		description: 'Posts and comments you save on reddit.com',
+		homepage: 'https://www.reddit.com/',
 		column: 'Reddit',
 		origins: ['https://www.reddit.com/*', 'https://old.reddit.com/*'],
 		hosts: ['www.reddit.com', 'old.reddit.com'],
@@ -142,6 +155,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'x',
 		label: 'X bookmarks',
+		description: 'Posts you bookmark on x.com or twitter.com',
+		homepage: 'https://x.com/',
 		column: 'X',
 		origins: ['https://x.com/*', 'https://twitter.com/*'],
 		hosts: ['x.com', 'twitter.com'],
@@ -151,6 +166,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'instagram',
 		label: 'Instagram saved',
+		description: 'Posts and reels you save on instagram.com',
+		homepage: 'https://www.instagram.com/',
 		column: 'Instagram',
 		origins: ['https://www.instagram.com/*'],
 		hosts: ['www.instagram.com'],

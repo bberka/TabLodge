@@ -9441,7 +9441,7 @@ async function setSiteSource(
 	}
 
 	if (privateContext) {
-		return {ok: false, error: 'Switch sources on or off in a regular window.'};
+		return {ok: false, error: 'Add or remove sources in a regular window.'};
 	}
 
 	if (enabled && !(await sourcePermitted(source))) {

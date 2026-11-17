@@ -130,10 +130,12 @@ import {PrivateWindowAppearance} from './private-window-appearance';
 import {PrivateSyncSettings} from './private-sync-settings';
 import {SYNC_TITLE, SYNC_WORDS, SyncSettings} from './sync-settings';
 import {
+	AddSiteSource,
 	SiteSourcesSettings,
 	SOURCES_DESCRIPTION,
 	SOURCES_TITLE,
 	SOURCES_WORDS,
+	useSiteSources,
 } from './site-sources-settings';
 import {PrivateLockGate} from './private-lock-ui';
 import {cn} from '@/lib/utils';
@@ -1086,6 +1088,7 @@ function Options() {
 	// Saves still waiting for the service worker. A reload that lands meanwhile may predate them.
 	const savesInFlightRef = useRef(0);
 	const [status, showStatus] = useStatus();
+	const siteSources = useSiteSources(showStatus);
 	const {theme, setTheme, accent, systemColor, setAccent} = useTheme();
 	const [settings, setSettings] = useState<Partial<Settings>>({});
 	const [defaultSettings, setDefaultSettings] = useState<Settings>();
@@ -2416,10 +2419,11 @@ function Options() {
 							description={SOURCES_DESCRIPTION}
 							icon={Inbox}
 							className={SECTION_SCROLL_CLASS}
+							action={<AddSiteSource controller={siteSources} />}
 						>
 							<SiteSourcesSettings
+								controller={siteSources}
 								columns={state?.bookmarkColumns ?? []}
-								showStatus={showStatus}
 							/>
 						</SectionCard>
 					)}

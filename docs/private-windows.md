@@ -8,4 +8,4 @@ A separate saved library can be locked with a PIN (4 to 8 digits) or a password 
 
 ## Sources in private windows
 
-**Settings › Sources** is switched on and off in a regular window. A save on YouTube, Reddit, X, or Instagram in a private window is added only when private windows use the regular library. With a separate library, private windows save nothing from sources.
+Sites are added to and removed from **Settings › Sources** in a regular window. A save on YouTube, Reddit, X, or Instagram in a private window is added only when private windows use the regular library. With a separate library, private windows save nothing from sources.

@@ -3,7 +3,7 @@ import {fromRoot} from '../vite-shared.ts';
 import {captureEvidence, captureResetEvidence} from './evidence.ts';
 import {type ExtensionApi} from './fixtures.ts';
 import {check, type Env, type Theme, THEMES, until} from './harness.ts';
-import {attributes, openPage, setTheme} from './pages.ts';
+import {attributes, axeViolationLines, openPage, setTheme} from './pages.ts';
 
 export async function settingsSearchCheck(env: Env) {
 	const {context, extensionId} = env;
@@ -202,6 +202,61 @@ export async function settingResetCheck(env: Env, theme: Theme) {
 			assert.equal(currentSettings.closeOnSave, true);
 			assert.equal(currentSettings.restoreTarget, 'new-window-unless-only-tab');
 			await page.close();
+		},
+	);
+}
+
+export async function siteSourcePickerCheck(env: Env, theme: Theme) {
+	const {context, extensionId, axeSource} = env;
+	await check(
+		`Sources: Add a site is a keyboard combobox (${theme})`,
+		async () => {
+			const page = await openPage(context, extensionId, 'options');
+			try {
+				await setTheme(page, theme);
+				const trigger = page.getByRole('button', {name: 'Add a site'});
+				await trigger.waitFor();
+				await page.getByText('No sites added.').waitFor();
+				await trigger.focus();
+				await page.keyboard.press('Enter');
+				const search = page.getByRole('combobox', {
+					name: 'Search supported sites',
+				});
+				await search.waitFor();
+				assert.equal(
+					await page.locator(':focus').getAttribute('aria-label'),
+					'Search supported sites',
+				);
+				const active = async () => {
+					const id = await search.getAttribute('aria-activedescendant');
+					return id
+						? page.locator(`[id="${id}"] .font-medium`).textContent()
+						: undefined;
+				};
+
+				assert.equal(await active(), 'YouTube Watch later');
+				await page.keyboard.press('ArrowDown');
+				assert.equal(await active(), 'Reddit saved');
+				await page.keyboard.press('End');
+				assert.equal(await active(), 'Instagram saved');
+				await search.fill('twitter');
+				assert.deepEqual(await page.getByRole('option').allTextContents(), [
+					'X bookmarksPosts you bookmark on x.com or twitter.com',
+				]);
+				assert.equal(await active(), 'X bookmarks');
+				await search.fill('');
+				assert.equal(await page.getByRole('option').count(), 4);
+				const violations = await axeViolationLines(page, axeSource);
+				assert.deepEqual(violations, [], violations.join('\n'));
+				await page.keyboard.press('Escape');
+				await until(
+					async () =>
+						(await page.locator(':focus').textContent()) === 'Add a site',
+					'focus back on Add a site',
+				);
+			} finally {
+				await page.close();
+			}
 		},
 	);
 }

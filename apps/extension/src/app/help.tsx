@@ -433,16 +433,17 @@ function Help() {
 					title: 'Save from YouTube, Reddit, X, and Instagram',
 					body: (
 						<>
-							In Settings › Sources, switch on YouTube Watch later, Reddit
-							saved, X bookmarks, or Instagram saved. The browser asks for
-							access to that site only, and nothing runs there until you allow
-							it. Then, when you add a video to Watch later on youtube.com, save
-							a post or comment on reddit.com, bookmark a post on x.com or
+							In Settings › Sources, choose Add a site, search for YouTube Watch
+							later, Reddit saved, X bookmarks, or Instagram saved, and pick it.
+							The browser asks for access to that site only, and nothing runs
+							there until you allow it. Only the sites you added are listed.
+							Then, when you add a video to Watch later on youtube.com, save a
+							post or comment on reddit.com, bookmark a post on x.com or
 							twitter.com, or save a post or reel on instagram.com,{' '}
 							{PROJECT.name} bookmarks the same link in a YouTube, Reddit, X, or
 							Instagram column, created on the first save. Posts from X and
 							Instagram are titled with the start of their text or caption.
-							Under Save to, under each switched-on site, you can choose another
+							Under Save to, under each added site, you can choose another
 							column; if that column is deleted, saves go to the site&apos;s own
 							column again until you choose one. A small notice in the page
 							offers Undo; press Tab to reach it. A link already in your
@@ -454,13 +455,14 @@ function Help() {
 							English. If a site changes its page so {PROJECT.name} can no
 							longer read it, nothing is saved and Settings says so. In a
 							private window, saves are added only when private windows use the
-							regular library. Switching a site off, or removing its access in
-							the browser&apos;s extension settings, stops it, and Settings says
-							when the browser removed access.
+							regular library. Remove takes a site out of the list and gives its
+							access back. Removing its access in the browser&apos;s extension
+							settings also stops it; Settings then says so next to the site and
+							offers Allow again.
 						</>
 					),
 					searchText:
-						'sources settings youtube watch later reddit saved posts comments x twitter bookmarks instagram reels save automatically site access permission column undo private window trash',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels save automatically site access permission column undo private window trash',
 				},
 			],
 			action: {
