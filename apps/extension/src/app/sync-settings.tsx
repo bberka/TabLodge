@@ -23,6 +23,12 @@ import {
 	type SyncStatus,
 } from '../shared/sync/client';
 import {
+	readCompat,
+	releaseWithAll,
+	UPDATE_GUIDE_URL,
+	versionText,
+} from '../shared/sync/compat';
+import {
 	Button,
 	ConfirmationDialog,
 	Dialog,
@@ -474,6 +480,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					</Button>
 				</div>
 			</div>
+			<ServerReport status={status} />
 			{status.refused > 0 && (
 				<p className="text-sm text-muted-foreground">
 					The server turned down {status.refused} old{' '}
@@ -771,6 +778,52 @@ export function SyncStatusLine({
 				</p>
 			)}
 		</>
+	);
+}
+
+/**
+The server's version and what does not work with it: the update a stopped sync needs (its message is in the status
+line), or the features this server lacks.
+*/
+function ServerReport({status}: {status: SyncStatus}) {
+	const {server, incompatible, missing} = readCompat(status);
+	if (!server) {
+		return null;
+	}
+
+	const release = releaseWithAll(missing);
+	return (
+		<div className="space-y-2 text-sm">
+			<p className="text-muted-foreground">
+				Server version: {versionText(server.version)}
+			</p>
+			{missing.length > 0 && (
+				<div className="space-y-1">
+					<p className="font-medium">
+						Until the server is updated
+						{release ? ` to ${release} or later` : ''}:
+					</p>
+					<ul className="list-disc space-y-0.5 ps-5 text-muted-foreground">
+						{missing.map((feature) => (
+							<li key={feature.name}>{feature.missing}</li>
+						))}
+					</ul>
+				</div>
+			)}
+			{(missing.length > 0 || incompatible === 'server') && (
+				<p>
+					<a
+						className="inline-flex items-center gap-1 underline underline-offset-2"
+						href={UPDATE_GUIDE_URL}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						How to update the server
+						<ExternalLink aria-hidden="true" className="size-3.5" />
+					</a>
+				</p>
+			)}
+		</div>
 	);
 }
 

@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterAll, beforeAll, test} from 'vite-plus/test';
 import {unstable_dev, type Unstable_DevWorker} from 'wrangler';
+import serverPackage from '../package.json';
 import {createApi, DEFAULT_LIMITS, type Limits} from '../src/api';
 import {sqlite} from '../src/node-sqlite';
 import {SqlChangeLog} from '../src/sql-change-log';
@@ -355,8 +356,11 @@ test('on Cloudflare page views have their own allowance, and sync keeps answerin
 
 	assert.equal(statuses.at(-1), 429);
 	assert.ok(statuses.slice(0, -1).every((status) => status === 200));
+	const status = await workerFetch(`${BASE}/v1/status`, authorized());
+	assert.equal(status.status, 200);
+	// The same version the Docker server reports, from the same package.json.
 	assert.equal(
-		(await workerFetch(`${BASE}/v1/status`, authorized())).status,
-		200,
+		((await status.json()) as {version?: unknown}).version,
+		serverPackage.version,
 	);
 }, 60_000);

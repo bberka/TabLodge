@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Animated, FlatList, StyleSheet, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {SyncProblemBanner} from '../../ui/sync-problem-banner';
 import type {Session} from '../../../../extension/src/shared/types';
 import {GlassTarget} from '../../ui/glass';
 import {
@@ -70,10 +71,12 @@ own tabs, so there is no capture here.
 */
 export function SessionsScreen({
 	onConnect,
+	onOpenSettings,
 	onAdd,
 	onSelecting,
 }: {
 	onConnect: () => void;
+	onOpenSettings: () => void;
 	onAdd: () => void;
 	/**
 	Told when selecting starts or stops, so the tab bar can step aside for the action bar.
@@ -423,6 +426,7 @@ export function SessionsScreen({
 										)
 									}
 								/>
+								<SyncProblemBanner onOpenSettings={onOpenSettings} />
 								{isListView ? (
 									<View style={styles.folders}>
 										{atList && (

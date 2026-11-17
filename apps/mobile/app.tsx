@@ -124,6 +124,9 @@ function Main() {
 	const {hasShareIntent, shareIntent, resetShareIntent} =
 		useShareIntentContext();
 	const [tab, setTab] = useState<Tab>('bookmarks');
+	const openSettings = useCallback(() => {
+		setTab('settings');
+	}, []);
 	const [selecting, setSelecting] = useState(false);
 	const [draft, setDraft] = useState<Draft>({
 		key: 0,
@@ -440,6 +443,7 @@ function Main() {
 						onAdd={openBlank}
 						onConnect={connect}
 						onSelecting={setSelecting}
+						onOpenSettings={openSettings}
 					/>
 				)}
 				{tab === 'sessions' && (
@@ -447,6 +451,7 @@ function Main() {
 						onConnect={connect}
 						onAdd={openBlank}
 						onSelecting={setSelecting}
+						onOpenSettings={openSettings}
 					/>
 				)}
 				{tab === 'settings' && <SettingsScreen onConnect={connect} />}

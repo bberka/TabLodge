@@ -8,6 +8,9 @@
 //   node scripts/release-version.ts next        print the next release version
 //   node scripts/release-version.ts set 0.2.0   write a version into apps/extension/shell/manifest.json
 //   node scripts/release-version.ts set-android 0.2.0   write the version and version code into apps/mobile/app.json
+//   node scripts/release-version.ts set-server 0.2.0   write the version into apps/server/package.json, which the
+//     server reports at /v1/status. Only the image build runs it (.github/workflows/sync-server.yml): the committed
+//     Cloudflare Worker is built from the unstamped file, so the release checks keep finding it current.
 import {execFileSync} from 'node:child_process';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
@@ -123,8 +126,8 @@ export function stampAndroid(text: string, version: string): string {
 	return `${JSON.stringify(config, undefined, '\t')}\n`;
 }
 
-function setVersion(version: string) {
-	const path = resolve(projectRoot, 'apps/extension/shell/manifest.json');
+function setVersion(file: string, version: string) {
+	const path = resolve(projectRoot, file);
 	writeFileSync(path, stampVersion(readFileSync(path, 'utf8'), version));
 }
 
@@ -145,13 +148,15 @@ if (
 			.filter(Boolean);
 		console.log(nextVersion(minor, tags));
 	} else if (command === 'set' && argument) {
-		setVersion(argument);
+		setVersion('apps/extension/shell/manifest.json', argument);
+	} else if (command === 'set-server' && argument) {
+		setVersion('apps/server/package.json', argument);
 	} else if (command === 'set-android' && argument) {
 		const path = resolve(projectRoot, 'apps/mobile/app.json');
 		writeFileSync(path, stampAndroid(readFileSync(path, 'utf8'), argument));
 	} else {
 		console.error(
-			'Usage: node scripts/release-version.ts next | set <0.x.y> | set-android <0.x.y>',
+			'Usage: node scripts/release-version.ts next | set <0.x.y> | set-android <0.x.y> | set-server <0.x.y>',
 		);
 		process.exitCode = 1;
 	}
