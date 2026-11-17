@@ -173,6 +173,10 @@ type SettingField = {
 			Value (as text) and label of each allowed number.
 			*/
 			options: Array<[string, string]>;
+			/**
+			Adds a Custom entry at the bottom of the list that reveals a number input for any whole number in range.
+			*/
+			custom?: {min: number; max: number; suffix: string};
 	  }
 	| {
 			name: SettingKey<BookmarkQuickAction[]>;
@@ -686,11 +690,12 @@ const settingsGroups: Array<{
 				type: 'number-select',
 				options: [
 					['0', 'Never'],
+					['7', '1 week'],
 					['30', '30 days'],
 					['90', '90 days'],
-					['180', '180 days'],
 					['365', '1 year'],
 				],
+				custom: {min: 1, max: 3650, suffix: 'days'},
 			},
 			{
 				name: 'sessionFolderView',
@@ -2283,29 +2288,16 @@ function Options() {
 												}
 											/>
 										) : field.type === 'number-select' ? (
-											<Select
-												value={String(
-													settings[field.name] ?? field.options[0][0],
-												)}
-												disabled={rowDisabled(field)}
-												onValueChange={(value) =>
-													updateSetting(field.name, Number(value))
+											<NumberSelectSetting
+												label={field.label}
+												value={
+													settings[field.name] ?? Number(field.options[0][0])
 												}
-											>
-												<SelectTrigger
-													className="w-full sm:w-64"
-													aria-label={field.label}
-												>
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{field.options.map(([value, label]) => (
-														<SelectItem key={value} value={value}>
-															{label}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
+												options={field.options}
+												custom={field.custom}
+												disabled={rowDisabled(field)}
+												onCommit={(value) => updateSetting(field.name, value)}
+											/>
 										) : (
 											<Select
 												value={settings[field.name] || field.options[0][0]}
@@ -3243,6 +3235,68 @@ function SessionNamePreview({
 }
 
 // A small whole-number input that saves on blur or Enter; the text may be empty or out of range while typing.
+const CUSTOM_OPTION = 'custom';
+
+function NumberSelectSetting({
+	label,
+	value,
+	options,
+	custom,
+	disabled,
+	onCommit,
+}: {
+	label: string;
+	value: number;
+	options: Array<[string, string]>;
+	custom?: {min: number; max: number; suffix: string};
+	disabled: boolean;
+	onCommit: (value: number) => void;
+}) {
+	const [customPicked, setCustomPicked] = useState(false);
+	const isPreset = options.some(([option]) => Number(option) === value);
+	const showCustom = custom !== undefined && (customPicked || !isPreset);
+	return (
+		<div className="flex flex-col gap-2">
+			<Select
+				value={showCustom ? CUSTOM_OPTION : String(value)}
+				disabled={disabled}
+				onValueChange={(next) => {
+					if (next === CUSTOM_OPTION) {
+						setCustomPicked(true);
+						return;
+					}
+
+					setCustomPicked(false);
+					onCommit(Number(next));
+				}}
+			>
+				<SelectTrigger className="w-full sm:w-64" aria-label={label}>
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					{options.map(([option, optionLabel]) => (
+						<SelectItem key={option} value={option}>
+							{optionLabel}
+						</SelectItem>
+					))}
+					{custom && <SelectItem value={CUSTOM_OPTION}>Custom…</SelectItem>}
+				</SelectContent>
+			</Select>
+			{showCustom && custom && (
+				<NumberSetting
+					label={`${label} (custom)`}
+					value={value || custom.min}
+					min={custom.min}
+					max={custom.max}
+					suffix={custom.suffix}
+					disabled={disabled}
+					onCommit={onCommit}
+				/>
+			)}
+		</div>
+	);
+}
+
 function NumberSetting({
 	label,
 	value,

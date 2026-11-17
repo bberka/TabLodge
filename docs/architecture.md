@@ -209,7 +209,7 @@ Worker recovery code lives in `apps/extension/shell/service-worker.ts`; the UI l
 
 The dashboard's **Archive session** action moves one session to the folder named Archived immediately, regardless of its age or the automatic archive setting. It changes `updatedAt` and deletes nothing. Move the session to another folder to take it out of Archived. The folder is available by default and cannot be renamed or deleted.
 
-The `autoArchiveDays` setting is 0 (off, the default), 30, 90, 180, or 365. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into Archived. The automatic move runs in the mutation queue and does not change `updatedAt`. Moving a session back out updates `updatedAt`, so it is not archived automatically again until it has been idle for the full period.
+The `autoArchiveDays` setting is a whole number of days from 1 to 3650, or 0 (off, the default). Settings offers 1 week, 30 days, 90 days, a year, or a custom number. When it is on, a daily alarm and worker startup move every session whose newest of `lastOpenedAt`, `updatedAt`, and `createdAt` is older than that into Archived. The automatic move runs in the mutation queue and does not change `updatedAt`. Moving a session back out updates `updatedAt`, so it is not archived automatically again until it has been idle for the full period.
 
 ### Snapshots
 

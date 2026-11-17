@@ -7392,9 +7392,22 @@ test('auto-archive is off by default, runs at browser start, and its alarm follo
 	await harness.fire('onStartup');
 	assert.equal(harness.state.groups[0].folderId, 'archived-sessions');
 
+	const twentyOne = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoArchiveDays: 21},
+	});
+	assert.equal(twentyOne.settings.autoArchiveDays, 21);
+	assert.equal(harness.alarms.has('tablodge-archive'), true);
+
+	const custom = await harness.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {autoArchiveDays: 99_999},
+	});
+	assert.equal(custom.settings.autoArchiveDays, 3650);
+
 	const invalid = await harness.sendMessage({
 		type: 'UPDATE_SETTINGS',
-		settings: {autoArchiveDays: 7},
+		settings: {autoArchiveDays: NaN},
 	});
 	assert.equal(invalid.settings.autoArchiveDays, 0);
 	assert.equal(harness.alarms.has('tablodge-archive'), false);
