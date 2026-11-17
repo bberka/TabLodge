@@ -3,6 +3,10 @@ How a library splits into sync records and goes back together. Each folder, sess
 bookmark column, bookmark, and portable setting is one record. Order is not part of a record's value: siblings
 share an order group and the sync engine gives each one an order key.
 
+A bookmark's note is a `note` record of its own, keyed by the bookmark id, so a version that predates notes never
+sees one: it skips a kind it does not know, while it would drop an unknown field from the bookmark and send that loss
+back. A server that cannot hold notes leaves them on the device (see the sync client).
+
 Some fields belong to one device and never travel: the browser window a session came from, its window position,
 and when it was last opened here. `assemble` keeps this device's values for them.
 */
@@ -16,6 +20,7 @@ import type {
 	Store,
 } from '../types';
 import type {TombstoneKind} from '../library-sync';
+import {bookmarkNotes} from '../library-normalize';
 import {isRecord} from '../library-values';
 import {parseTrashEntry, syncedTrash, type TrashEntry} from '../trash';
 import {recordKey} from './changes';
@@ -137,7 +142,8 @@ export function orderGroup(
 		}
 
 		case 'preference':
-		case 'trash': {
+		case 'trash':
+		case 'note': {
 			return undefined;
 		}
 	}
@@ -170,8 +176,11 @@ export function splitLibrary(
 		add({kind: 'column', id: column.id, value: column});
 	}
 
-	for (const bookmark of store.bookmarks) {
+	for (const {notes, ...bookmark} of store.bookmarks) {
 		add({kind: 'bookmark', id: bookmark.id, value: bookmark});
+		if (notes) {
+			add({kind: 'note', id: bookmark.id, value: {notes}});
+		}
 	}
 
 	for (const key of PORTABLE_PREFERENCES) {
@@ -224,6 +233,7 @@ export function assemble(
 	const tabs = new Map<string, SavedTab[]>();
 	const bookmarkColumns: BookmarkColumn[] = [];
 	const bookmarks: Bookmark[] = [];
+	const notes = new Map<string, string>();
 	const settings: Record<string, unknown> = {...local.settings};
 
 	for (const record of records) {
@@ -270,6 +280,15 @@ export function assemble(
 				break;
 			}
 
+			case 'note': {
+				const text = bookmarkNotes((record.value as {notes?: unknown}).notes);
+				if (text) {
+					notes.set(record.id, text);
+				}
+
+				break;
+			}
+
 			case 'preference': {
 				if (
 					syncSettings &&
@@ -292,7 +311,10 @@ export function assemble(
 		folders,
 		groups: sessions,
 		bookmarkColumns,
-		bookmarks,
+		bookmarks: bookmarks.map((bookmark) => {
+			const text = notes.get(bookmark.id);
+			return text ? {...bookmark, notes: text} : bookmark;
+		}),
 		settings: settings as Settings,
 	};
 }

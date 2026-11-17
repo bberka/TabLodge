@@ -46,8 +46,8 @@ Minutes between fallback rounds, which also reopen a closed live socket.
 */
 export const SYNC_ALARM_MINUTES = 5;
 export const MIN_TOKEN_LENGTH = 32;
-// How long a server's answer about the trash is trusted.
-const TRASH_CHECK_MS = 10 * 60 * 1000;
+// How long a server's list of features is trusted.
+const FEATURE_CHECK_MS = 10 * 60 * 1000;
 
 /**
 A new server token: 32 random bytes as 64 hex characters, which paste cleanly into any form.
@@ -390,7 +390,10 @@ export function createSyncClient(host: SyncHost) {
 	let noticeCursor = 0;
 	// Whether this round syncs the trash: the host has one and the server lists the `trash` feature.
 	let trashOn = false;
-	let trashCheck: {key: string; until: number; supported: boolean} | undefined;
+	// Whether this round syncs bookmark notes: the server lists the `notes` feature.
+	let notesOn = false;
+	let featureCheck:
+		{key: string; until: number; features: ReadonlySet<string>} | undefined;
 	const ready = load();
 
 	async function load() {
@@ -449,45 +452,50 @@ export function createSyncClient(host: SyncHost) {
 	}
 
 	/**
-	Whether the server keeps trash entries. An old server refuses a push with a kind it does not know, which would stop
-	every round, so the trash waits until the server says it can hold it.
+	The optional record kinds the server lists in its features. An old server refuses a push with a kind it does not
+	know, which would stop every round, so the trash and bookmark notes wait until the server says it can hold them.
 	*/
-	async function serverTakesTrash(target: SyncConfig): Promise<boolean> {
+	async function serverFeatures(
+		target: SyncConfig,
+	): Promise<ReadonlySet<string>> {
 		const key = `${target.url}\n${target.token}`;
-		if (trashCheck?.key === key && host.now() < trashCheck.until) {
-			return trashCheck.supported;
+		if (featureCheck?.key === key && host.now() < featureCheck.until) {
+			return featureCheck.features;
 		}
 
-		let supported = false;
+		let features = new Set<string>();
 		try {
 			const body = await request(target, '/v1/status');
-			supported =
-				isRecord(body) &&
-				Array.isArray(body.features) &&
-				body.features.includes('trash');
+			if (isRecord(body) && Array.isArray(body.features)) {
+				features = new Set(
+					body.features.filter((name) => typeof name === 'string'),
+				);
+			}
 		} catch (error) {
 			if (!(error instanceof SyncError) || error.kind !== 'server') {
 				throw error;
 			}
 		}
 
-		trashCheck = {key, until: host.now() + TRASH_CHECK_MS, supported};
-		return supported;
+		featureCheck = {key, until: host.now() + FEATURE_CHECK_MS, features};
+		return features;
 	}
 
+	// The kinds this round leaves alone because the server cannot hold them: they stay on the device, unsent.
+	const unsupported = (kind: TombstoneKind | undefined) =>
+		(kind === 'trash' && !trashOn) || (kind === 'note' && !notesOn);
+
 	/**
-	The changes to push. The trash stays queued while the server cannot hold it.
+	The changes to push. The trash and notes stay queued while the server cannot hold them.
 	*/
 	const queued = (state: SyncState, records: Records) =>
 		outgoing(
-			trashOn
-				? state
-				: {
-						...state,
-						outbox: state.outbox.filter(
-							(key) => state.shadow[key]?.kind !== 'trash',
-						),
-					},
+			{
+				...state,
+				outbox: state.outbox.filter(
+					(key) => !unsupported(state.shadow[key]?.kind),
+				),
+			},
 			records,
 			PUSH_LIMIT,
 		);
@@ -496,6 +504,7 @@ export function createSyncClient(host: SyncHost) {
 		new Set<TombstoneKind>([
 			...((await settingsOn()) ? [] : (['preference'] as const)),
 			...(trashOn ? [] : (['trash'] as const)),
+			...(notesOn ? [] : (['note'] as const)),
 		]);
 
 	async function captureLocal(state: SyncState, records: Records) {
@@ -572,7 +581,9 @@ export function createSyncClient(host: SyncHost) {
 		await setStatus({phase: 'syncing'});
 		const {codec} = host;
 		await codec?.prepare(async (path, init) => request(target, path, init));
-		trashOn = host.trash !== undefined && (await serverTakesTrash(target));
+		const features = await serverFeatures(target);
+		trashOn = host.trash !== undefined && features.has('trash');
+		notesOn = features.has('notes');
 		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
 		const reseal = new Set<string>();
 		/*
@@ -616,7 +627,7 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			for (const change of page.changes) {
-				if (change.kind === 'trash' && !trashOn) {
+				if (unsupported(change.kind)) {
 					continue;
 				}
 

@@ -423,3 +423,120 @@ test('a deleted trash entry is sent as a delete', () => {
 		[['trash', 'a', true]],
 	);
 });
+
+const noted = (notes?: string) => ({
+	...emptyStore(),
+	bookmarkColumns: [
+		{id: 'reading', name: 'Reading', createdAt: 0, isDefault: false},
+	],
+	bookmarks: [
+		{
+			id: 'link',
+			title: 'Link',
+			url: 'https://example.com/',
+			columnId: 'reading',
+			...(notes !== undefined && {notes}),
+			createdAt: 0,
+			updatedAt: 0,
+		},
+	],
+});
+
+test('a bookmark note is a record of its own, and a bookmark without one is the record it always was', () => {
+	const records = splitLibrary(noted('Why I saved this'));
+	assert.deepEqual(records.get('note:link')?.value, {
+		notes: 'Why I saved this',
+	});
+	assert.equal(
+		'notes' in (records.get('bookmark:link')?.value as object),
+		false,
+	);
+	assert.equal(
+		assemble([...records.values()], emptyStore()).bookmarks[0].notes,
+		'Why I saved this',
+	);
+
+	const plain = splitLibrary(noted());
+	assert.equal(plain.has('note:link'), false);
+	assert.deepEqual(plain.get('bookmark:link')?.value, noted().bookmarks[0]);
+});
+
+test('a note that arrives before its bookmark waits for it', () => {
+	const h = (offset: number) =>
+		(T0 + offset).toString(36).padStart(11, '0') + '00000';
+	const page = (changes: SyncChange[], cursor: number) => ({
+		changes,
+		cursor,
+		purged: 0,
+	});
+	const source = splitLibrary(noted('Read later'));
+	const change = (key: string, offset: number): SyncChange => {
+		const record = source.get(key)!;
+		return {
+			kind: record.kind,
+			id: record.id,
+			h: h(offset),
+			d: 'a',
+			...(record.kind !== 'note' && {o: 'a0'}),
+			value: record.value,
+		};
+	};
+
+	let state: SyncState = {...newSyncState('b'), joined: true};
+	let records = splitLibrary(emptyStore());
+	({state, records} = receive(
+		state,
+		records,
+		page([change('note:link', 3)], 1),
+		T0,
+	));
+	assert.equal(records.has('note:link'), false);
+	assert.equal(state.held?.length, 1);
+	assert.ok(!capture(state, records, T0).outbox.includes('note:link'));
+
+	({state, records} = receive(
+		state,
+		records,
+		page([change('column:reading', 1), change('bookmark:link', 2)], 2),
+		T0,
+	));
+	assert.equal(state.held, undefined);
+	assert.equal(
+		assemble(inOrder(state, records), emptyStore()).bookmarks[0].notes,
+		'Read later',
+	);
+});
+
+test('deleting a bookmark deletes its note on every device', () => {
+	const log = new ChangeLog();
+	const a = device('a', noted('Gone with it'));
+	const b = device('b');
+	sync(a, log, T0);
+	sync(b, log, T0 + 1000);
+	assert.equal(b.store.bookmarks[0].notes, 'Gone with it');
+
+	a.store = {...a.store, bookmarks: []};
+	sync(a, log, T0 + 2000);
+	sync(b, log, T0 + 3000);
+	assert.deepEqual(b.store.bookmarks, []);
+	const pulled = log.pull(0, 100, 0);
+	assert.ok(!pulled.resync);
+	assert.ok(
+		pulled.changes.some((change) => change.kind === 'note' && change.deleted),
+	);
+	assert.equal(splitLibrary(b.store).has('note:link'), false);
+});
+
+test('clearing a note sends a delete for its record and keeps the bookmark', () => {
+	const log = new ChangeLog();
+	const a = device('a', noted('Draft'));
+	const b = device('b');
+	sync(a, log, T0);
+	sync(b, log, T0 + 1000);
+
+	a.store = noted();
+	sync(a, log, T0 + 2000);
+	sync(b, log, T0 + 3000);
+	assert.equal(b.store.bookmarks.length, 1);
+	assert.equal(b.store.bookmarks[0].notes, undefined);
+});
