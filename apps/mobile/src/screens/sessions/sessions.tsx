@@ -363,7 +363,7 @@ export function SessionsScreen({
 						windowSize={7}
 						maxToRenderPerBatch={6}
 						ListHeaderComponent={
-							<View>
+							<View style={styles.head}>
 								<Header
 									title="Sessions"
 									live={searchCount !== undefined && shown.length > 0}
@@ -642,6 +642,8 @@ const styles = StyleSheet.create({
 	list: {paddingBottom: 24, gap: 8},
 	cardRow: {paddingHorizontal: 16},
 	gap: {height: 12},
-	folders: {paddingHorizontal: 16},
+	// Same spacing under the header as the Bookmarks screen, so the chips sit at the same height on both.
+	head: {gap: 8},
+	folders: {paddingHorizontal: 16, paddingBottom: 8},
 	fill: {flex: 1},
 });
