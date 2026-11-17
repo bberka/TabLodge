@@ -100,22 +100,29 @@ test('bookmarks match by title, address and column name', () => {
 	assert.ok(!ids('dev tools').includes('bookmark:b2'));
 });
 
-test('bookmarks match by their notes', () => {
+test('bookmark notes take part in plain words, -word, and "phrase"', () => {
 	const noted = buildFinderIndex({
 		...sources,
 		bookmarks: [
 			{
 				...bookmark('b3', 'Plain title', 'https://plain.example/', 'c1'),
-				notes: 'Recipe for sourdough',
+				notes: 'Recipe for sourdough bread',
+			},
+			{
+				...bookmark('b4', 'Other title', 'https://other.example/', 'c1'),
+				notes: 'Sourdough starter guide',
 			},
 		],
 	});
-	assert.deepEqual(
-		flattenSections(searchFinder('sourdough', noted))
+	const found = (query: string) =>
+		flattenSections(searchFinder(query, noted))
 			.filter((item) => item.kind === 'bookmark')
-			.map((item) => item.id),
-		['bookmark:b3'],
-	);
+			.map((item) => item.id)
+			.toSorted();
+	assert.deepEqual(found('sourdough'), ['bookmark:b3', 'bookmark:b4']);
+	assert.deepEqual(found('sourdough -starter'), ['bookmark:b3']);
+	assert.deepEqual(found('"sourdough bread"'), ['bookmark:b3']);
+	assert.deepEqual(found('"bread recipe"'), []);
 });
 
 test('saved tabs match by session name and notes; sessions by description', () => {

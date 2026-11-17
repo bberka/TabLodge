@@ -1317,6 +1317,28 @@ describe('bookmark notes', () => {
 		assert.equal('notes' in edit(store, '  '), false);
 	});
 
+	test('take part in plain words, -word, and "phrase" in search', () => {
+		const store = addBookmark(
+			withNote(),
+			{
+				url: 'https://other.example',
+				title: 'Other',
+				columnId: 'c1',
+				notes: 'Trip packing list',
+			},
+			'b2',
+			NOW,
+		);
+		const found = (query: string) =>
+			searchBookmarks(store, query)
+				.map((entry) => entry.id)
+				.toSorted();
+		assert.deepEqual(found('trip'), ['b1', 'b2']);
+		assert.deepEqual(found('trip -packing'), ['b1']);
+		assert.deepEqual(found('"packing list"'), ['b2']);
+		assert.deepEqual(found('"list packing"'), []);
+	});
+
 	test('are found by search', () => {
 		assert.deepEqual(
 			searchBookmarks(withNote(), 'trip').map((entry) => entry.id),
