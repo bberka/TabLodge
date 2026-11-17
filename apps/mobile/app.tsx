@@ -4,6 +4,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {
 	AppState,
 	BackHandler,
+	Linking,
 	Platform,
 	StyleSheet,
 	ToastAndroid,
@@ -36,6 +37,10 @@ import {PrivateSheetHost} from './src/private/private-sheets';
 import {SnackbarHost, showSnack} from './src/ui/snackbar';
 import {type BarTab, TabBar} from './src/ui/tab-bar';
 import {useColors} from './src/ui/theme';
+import {setView} from './src/library/view';
+import {requestSearch} from './src/ui/search-action';
+import {parseTileRoute, type TileRoute} from './src/platform/tile-route';
+import {readClipboard} from './modules/quick-tiles';
 
 type Tab = 'bookmarks' | 'sessions' | 'settings';
 const TABS: Array<BarTab<Tab>> = [
@@ -168,6 +173,47 @@ function Main() {
 		setOpen(true);
 		resetShareIntent();
 	}, [hasShareIntent, shareIntent, resetShareIntent]);
+
+	// A Quick Settings tile opens the app at tablodge://save or tablodge://search, always on the regular library.
+	const openTile = useCallback(async (route: TileRoute) => {
+		setView('regular');
+		setTab('bookmarks');
+		if (route === 'search') {
+			setOpen(false);
+			requestSearch();
+			return;
+		}
+
+		// A copied link fills the field, with any words around it as the title; anything else leaves it empty.
+		const quick = Date.now() - BOOT < COLD_MS;
+		const parts = splitShared(await readClipboard());
+		setDraft((current) => ({
+			key: current.key + 1,
+			text: parts.url ?? '',
+			title: parts.title,
+			urls: [],
+			many: false,
+			quick,
+		}));
+		setOpen(true);
+	}, []);
+
+	useEffect(() => {
+		const follow = (url?: string | null) => {
+			const route = parseTileRoute(url);
+			if (route) {
+				void openTile(route);
+			}
+		};
+
+		void Linking.getInitialURL().then(follow);
+		const subscription = Linking.addEventListener('url', ({url}) => {
+			follow(url);
+		});
+		return () => {
+			subscription.remove();
+		};
+	}, [openTile]);
 
 	const openBlank = useCallback(() => {
 		setDraft((current) => ({

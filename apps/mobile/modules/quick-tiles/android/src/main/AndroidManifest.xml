@@ -1,0 +1,25 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Quick Settings tiles. Each opens the app on one screen through a tablodge:// address; they store nothing. -->
+  <application>
+    <service
+      android:name="expo.modules.quicktiles.SaveLinkTileService"
+      android:exported="true"
+      android:icon="@drawable/quick_tile_save"
+      android:label="@string/quick_tile_save"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+    </service>
+    <service
+      android:name="expo.modules.quicktiles.SearchTileService"
+      android:exported="true"
+      android:icon="@drawable/quick_tile_search"
+      android:label="@string/quick_tile_search"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+    </service>
+  </application>
+</manifest>
