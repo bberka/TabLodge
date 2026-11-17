@@ -23,7 +23,12 @@ export const MENU = {
 	linkRoot: 'tablodge-link-root',
 	linkBookmark: 'tablodge-link-bookmark',
 	linkBookmarkNew: 'tablodge-link-bookmark-new',
-	imageSave: 'tablodge-image-save',
+	imageRoot: 'tablodge-image-root',
+	imageBookmark: 'tablodge-image-bookmark',
+	imageBookmarkNew: 'tablodge-image-bookmark-new',
+	mediaRoot: 'tablodge-media-root',
+	mediaBookmark: 'tablodge-media-bookmark',
+	mediaBookmarkNew: 'tablodge-media-bookmark-new',
 	pageRoot: 'tablodge-page-root',
 	pageBookmark: 'tablodge-page-bookmark',
 	pageBookmarkNew: 'tablodge-page-bookmark-new',
@@ -50,6 +55,13 @@ Column items are `${prefix}${columnId}`; the Unfiled pseudo-column uses BOOKMARK
 export const LINK_COLUMN_PREFIX = 'tablodge-link-bookmark:';
 
 export const PAGE_COLUMN_PREFIX = 'tablodge-page-bookmark:';
+
+export const IMAGE_COLUMN_PREFIX = 'tablodge-image-bookmark:';
+
+/**
+Video and audio share one menu: a video player and an audio player are both media elements.
+*/
+export const MEDIA_COLUMN_PREFIX = 'tablodge-media-bookmark:';
 
 /**
 How many sessions the "Send this tab to session" submenu lists, most recently changed first.
@@ -202,13 +214,50 @@ export function contextMenuPlan(
 			link.contexts,
 			{targetUrlPatterns: WEB_URL_PATTERNS},
 		);
-		// The image menu has one action, so it needs no parent item.
-		items.push({
-			id: MENU.imageSave,
-			title: `Save image to ${env.appName}`,
+
+		// An image saves its own address, so only web images get the menu.
+		const image = {
 			contexts: ['image'],
 			targetUrlPatterns: WEB_URL_PATTERNS,
-		});
+		} satisfies Partial<MenuItemProperties>;
+		items.push(
+			{id: MENU.imageRoot, title: env.appName, ...image},
+			{
+				id: MENU.imageBookmark,
+				title: 'Bookmark image to',
+				parentId: MENU.imageRoot,
+				...image,
+			},
+		);
+		columnSubmenu(
+			MENU.imageBookmark,
+			IMAGE_COLUMN_PREFIX,
+			MENU.imageBookmarkNew,
+			image.contexts,
+			{targetUrlPatterns: WEB_URL_PATTERNS},
+		);
+
+		// A streamed video has a blob: source and falls back to the page, so the page must be a web page.
+		const media = {
+			contexts: ['video', 'audio'],
+			documentUrlPatterns: WEB_URL_PATTERNS,
+		} satisfies Partial<MenuItemProperties>;
+		items.push(
+			{id: MENU.mediaRoot, title: env.appName, ...media},
+			{
+				id: MENU.mediaBookmark,
+				title: 'Bookmark video to',
+				parentId: MENU.mediaRoot,
+				...media,
+			},
+		);
+		columnSubmenu(
+			MENU.mediaBookmark,
+			MEDIA_COLUMN_PREFIX,
+			MENU.mediaBookmarkNew,
+			media.contexts,
+			{documentUrlPatterns: WEB_URL_PATTERNS},
+		);
 	}
 
 	if (settings.contextMenuPageEnabled) {

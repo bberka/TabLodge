@@ -24,7 +24,9 @@ import {
 	rememberSiteIcon,
 } from '../src/shared/site-icons';
 import {
+	IMAGE_COLUMN_PREFIX,
 	LINK_COLUMN_PREFIX,
+	MEDIA_COLUMN_PREFIX,
 	MENU,
 	PAGE_COLUMN_PREFIX,
 	PAGE_SEND_PREFIX,
@@ -96,7 +98,7 @@ import {
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
-import {imageSave} from '../src/shared/save-image';
+import {mediaSave} from '../src/shared/save-media';
 import {
 	createPrivateLock,
 	type Gate,
@@ -10278,13 +10280,23 @@ async function bookmarkToColumn(
 }
 
 /**
-"Save image": bookmarks the image address in the column that took the newest bookmark. An image already
-bookmarked counts as done; one in the trash is left there, so the save does not bring back what was deleted.
+"Bookmark image to" and "Bookmark video to": the media's own address, or the page for a stream, into the chosen
+column or a new one. An address already bookmarked in any column counts as done; one in the trash is left there, so
+the save does not bring back what was deleted.
 */
-async function saveImage(info: MenuClickData): Promise<MenuOutcome> {
+async function bookmarkMedia(
+	info: MenuClickData,
+	tab: chrome.tabs.Tab | undefined,
+	columnId: string | 'new',
+): Promise<MenuOutcome> {
 	const store = await getStore();
-	const plan = imageSave(
-		info,
+	const plan = mediaSave(
+		{
+			mediaType: info.mediaType,
+			srcUrl: info.srcUrl,
+			pageUrl: info.pageUrl ?? tab?.url,
+			pageTitle: pageTitle(tab?.title, '', store.settings.cleanTitles),
+		},
 		new Set(store.bookmarks.map((bookmark) => bookmark.url)),
 		pruneTrash(await readTrash(), store.settings.trashRetentionDays),
 	);
@@ -10298,21 +10310,22 @@ async function saveImage(info: MenuClickData): Promise<MenuOutcome> {
 				return {
 					ok: false,
 					error:
-						'This image is in the trash bin. Restore it from there to keep it.',
+						'This address is in the trash bin. Restore it from there to keep it.',
 				};
 			}
 
 			default: {
-				return {ok: false, error: 'Only http and https images can be saved.'};
+				return {
+					ok: false,
+					error: 'Only media on http and https pages can be saved.',
+				};
 			}
 		}
 	}
 
-	const result = await addBookmarks(
-		[{url: plan.url, title: plan.title}],
-		defaultBookmarkColumnId(store.bookmarkColumns, store.bookmarks),
-	);
-	return result.ok ? {ok: true} : result;
+	return columnId === 'new'
+		? openPrefilledBookmarkDialog(plan.url, plan.title, tab)
+		: bookmarkToColumn(plan.url, plan.title, columnId);
 }
 
 /**
@@ -10469,9 +10482,27 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 		return;
 	}
 
-	if (id === MENU.imageSave) {
-		runMenuAction(tab, `${APP_NAME} could not save this image.`, () =>
-			saveImage(info),
+	const mediaPrefix = id.startsWith(IMAGE_COLUMN_PREFIX)
+		? IMAGE_COLUMN_PREFIX
+		: id.startsWith(MEDIA_COLUMN_PREFIX)
+			? MEDIA_COLUMN_PREFIX
+			: undefined;
+	if (
+		mediaPrefix ||
+		id === MENU.imageBookmarkNew ||
+		id === MENU.mediaBookmarkNew
+	) {
+		const isNew = !mediaPrefix;
+		runMenuAction(
+			tab,
+			`${APP_NAME} could not bookmark this.`,
+			() =>
+				bookmarkMedia(
+					info,
+					tab,
+					mediaPrefix ? id.slice(mediaPrefix.length) : 'new',
+				),
+			!isNew,
 		);
 		return;
 	}
