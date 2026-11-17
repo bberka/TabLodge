@@ -1,4 +1,4 @@
-// Hacker News favorites: notices the user clicking "favorite" on a story, on its page or in a list. The link is
+// Hacker News favorites: notices the user clicking "favorite" on a story's page. The link is
 // `fave?id=<id>&auth=…` in the story's subtext row; once favorited it reads "un-favorite" and carries `un=t`.
 // The story is the `tr.athing` row whose id is the item id, with its title link in `.titleline`. A favorite on a
 // comment (a row with comment text) saves nothing.
@@ -10,7 +10,7 @@ import {
 	type SourceReader,
 } from './source-reader';
 
-const FAVE = 'a[href^="fave?"], a[href*="/fave?"]';
+const FAVE = 'a[href^="fave?"]';
 
 export function createHackerNewsReader(document: Document): SourceReader {
 	return (event) => {

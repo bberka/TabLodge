@@ -1,10 +1,10 @@
-// Dev.to reading list: notices the user clicking Save on an article, by either of the site's two controls:
+// Reading list on dev.to: notices the user clicking Save on an article, by either of the site's two controls:
 //   - on the article's page, the reading list button in the reactions bar (`data-category="readinglist"`)
 //   - on a feed card, the Save button (`article-save-button-<id>`, labelled "Save post <title> to reading list")
 // Once the article is saved they carry `aria-pressed="true"` or, on server drawn cards, the class `selected`; a
-// click then un-saves, which saves nothing. Found by their markup, so they
-// work in every interface language. On a card the article is the card's title link; on the article's page it is
-// the page's own address (the canonical link may name another site the article was first published on).
+// click then un-saves, which saves nothing. Both are found by their markup, so they work in every interface
+// language. On a card the article is the card's title link; on the article's page it is the page's own address
+// (the canonical link may name another site the article was first published on).
 import {devtoArticleUrl} from './site-sources';
 import {eventElements, squash, type SourceReader} from './source-reader';
 

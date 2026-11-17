@@ -3,8 +3,9 @@
 //   - a Star button in a form posting to `/<owner>/<repo>/star`; the Unstar form next to it posts to `/unstar`,
 //     and the page shows one or the other. The form names the repository, in every interface language.
 //   - a repository page drawn by React: one `data-testid="star-button"` reading "Star" or "Starred"; the
-//     repository is the page's. The title is `<owner>/<repo>` and the description, when the page
-// shows one: in the About box of the repository's page, or in the list row the button is in.
+//     repository is the page's.
+// The title is `<owner>/<repo>` and the description, when the page shows one: in the About box of the
+// repository's page, or in the list row the button is in.
 import {githubRepoUrl} from './site-sources';
 import {
 	controlLabel,
@@ -16,7 +17,7 @@ import {
 } from './source-reader';
 
 const STAR_FORM = /^\/[^/]+\/[^/]+\/(un)?star$/;
-const LIST_ROW = 'article, li, .Box-row, [data-testid="results-list"] > div';
+const LIST_ROW = 'article, li, .Box-row';
 const ABOUT =
 	'.BorderGrid p.f4, .Layout-sidebar p.f4, [class^="description__"]';
 const STAR_BUTTON = '[data-testid="star-button"]';
