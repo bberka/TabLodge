@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- A trimmed old.reddit.com listing and comment: .thing elements with data-permalink and a "save" link that
+turns to "unsave". Hand written to mimic the site's markup; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>old reddit</title></head>
+<body>
+<div id="siteTable">
+	<div class="thing link" data-fullname="t3_1abcde" data-permalink="/r/typescript/comments/1abcde/strict_mode_tips/" data-author="alice">
+		<p class="title"><a class="title" href="https://example.com/strict">Strict mode tips</a></p>
+		<ul class="flat-list buttons">
+			<li class="link-save-button save-button login-required"><a id="post-save" href="#">save</a></li>
+		</ul>
+	</div>
+	<div class="thing link" data-fullname="t3_2saved" data-permalink="/r/typescript/comments/2saved/already_saved/">
+		<p class="title"><a class="title" href="https://example.com/saved">Already saved</a></p>
+		<ul class="flat-list buttons">
+			<li class="link-save-button save-button login-required"><a id="post-unsave" href="#">unsave</a></li>
+		</ul>
+	</div>
+	<div class="thing comment" data-fullname="t1_xyz789" data-permalink="/r/typescript/comments/1abcde/strict_mode_tips/xyz789/" data-author="carol">
+		<ul class="flat-list buttons">
+			<li class="comment-save-button save-button login-required"><a id="comment-save" href="#">save</a></li>
+		</ul>
+	</div>
+	<div class="thing link" data-fullname="t3_3changed">
+		<ul class="flat-list buttons">
+			<li class="link-save-button save-button"><a id="broken-save" href="#">save</a></li>
+		</ul>
+	</div>
+</div>
+</body>
+</html>

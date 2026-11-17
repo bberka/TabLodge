@@ -501,7 +501,14 @@ function createHarness(
 		send(message: TabLodgeMessage) {
 			return untilSettled(
 				new Promise<Response>((resolve) => {
-					messageListener!(message, {tab: {id: 1, windowId: 10}}, resolve);
+					messageListener!(
+						message,
+						{
+							tab: {id: 1, windowId: 10},
+							url: `${firefox ? 'moz' : 'chrome'}-extension://tablodge/newtab.html`,
+						},
+						resolve,
+					);
 				}),
 			);
 		},

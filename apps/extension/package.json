@@ -54,6 +54,7 @@
 		"@types/selenium-webdriver": "^4.35.7",
 		"@vitejs/plugin-react": "^6.3.0",
 		"axe-core": "^4.14.0",
+		"happy-dom": "^21.0.4",
 		"linkedom": "^0.18.15",
 		"playwright": "^1.65.0",
 		"selenium-webdriver": "^4.52.0",

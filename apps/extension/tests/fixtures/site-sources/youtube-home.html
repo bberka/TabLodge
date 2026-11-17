@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- A trimmed copy of the youtube.com home grid as the adapter sees it: custom elements, hover buttons, a popup
+menu outside the videos. Written by hand to mimic the site's markup; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>YouTube</title></head>
+<body>
+<ytd-app>
+	<ytd-rich-grid-renderer>
+		<ytd-rich-item-renderer id="unsaved">
+			<ytd-rich-grid-media>
+				<ytd-thumbnail>
+					<a id="thumbnail" href="/watch?v=dQw4w9WgXcQ&amp;pp=ygUEcmljaw%3D%3D">thumbnail</a>
+					<div id="hover-overlays">
+						<ytd-thumbnail-overlay-toggle-button-renderer>
+							<button id="watch-later" aria-label="Watch later"><yt-icon></yt-icon></button>
+						</ytd-thumbnail-overlay-toggle-button-renderer>
+						<ytd-thumbnail-overlay-toggle-button-renderer>
+							<button aria-label="Add to queue"><yt-icon></yt-icon></button>
+						</ytd-thumbnail-overlay-toggle-button-renderer>
+					</div>
+				</ytd-thumbnail>
+				<div id="details">
+					<h3><a id="video-title-link" title="Never Gonna Give You Up" href="/watch?v=dQw4w9WgXcQ"><yt-formatted-string id="video-title">Never Gonna Give You Up</yt-formatted-string></a></h3>
+					<ytd-menu-renderer><yt-icon-button><button id="menu-button" aria-label="Action menu"><yt-icon></yt-icon></button></yt-icon-button></ytd-menu-renderer>
+				</div>
+			</ytd-rich-grid-media>
+		</ytd-rich-item-renderer>
+		<ytd-rich-item-renderer id="already-added">
+			<ytd-rich-grid-media>
+				<ytd-thumbnail>
+					<a id="thumbnail" href="/watch?v=9bZkp7q19f0">thumbnail</a>
+					<ytd-thumbnail-overlay-toggle-button-renderer>
+						<button id="added" aria-label="Added"><yt-icon></yt-icon></button>
+					</ytd-thumbnail-overlay-toggle-button-renderer>
+				</ytd-thumbnail>
+				<h3><a id="video-title-link" title="Gangnam Style" href="/watch?v=9bZkp7q19f0">Gangnam Style</a></h3>
+			</ytd-rich-grid-media>
+		</ytd-rich-item-renderer>
+		<yt-lockup-view-model id="lockup">
+			<a href="/shorts/kJQP7kiw5Fk" class="yt-lockup-view-model__content-image">image</a>
+			<button-view-model><button id="lockup-watch-later" aria-label="Watch later"></button></button-view-model>
+			<div class="yt-lockup-metadata-view-model__title">Despacito</div>
+		</yt-lockup-view-model>
+		<ytd-rich-item-renderer id="changed">
+			<ytd-thumbnail>
+				<div data-video="dQw4w9WgXcQ">no link here any more</div>
+				<ytd-thumbnail-overlay-toggle-button-renderer>
+					<button id="changed-watch-later" aria-label="Watch later"></button>
+				</ytd-thumbnail-overlay-toggle-button-renderer>
+			</ytd-thumbnail>
+		</ytd-rich-item-renderer>
+	</ytd-rich-grid-renderer>
+	<ytd-popup-container>
+		<tp-yt-iron-dropdown>
+			<ytd-menu-popup-renderer role="menu">
+				<ytd-menu-service-item-renderer id="menu-queue" role="menuitem"><yt-formatted-string>Add to queue</yt-formatted-string></ytd-menu-service-item-renderer>
+				<ytd-menu-service-item-renderer id="menu-watch-later" role="menuitem">
+					<yt-icon></yt-icon>
+					<yt-formatted-string>Save to Watch later</yt-formatted-string>
+				</ytd-menu-service-item-renderer>
+			</ytd-menu-popup-renderer>
+		</tp-yt-iron-dropdown>
+	</ytd-popup-container>
+</ytd-app>
+</body>
+</html>

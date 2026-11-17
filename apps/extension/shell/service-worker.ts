@@ -1,4 +1,17 @@
 import {stripTrackingParameters} from '../src/shared/tracking-parameters';
+import {
+	parseSiteSourcesState,
+	SITE_SOURCE_SCRIPT,
+	SITE_SOURCES,
+	SITE_SOURCES_KEY,
+	siteSourceById,
+	siteSourceForUrl,
+	siteSourcesValue,
+	siteSourceStatuses,
+	siteSourceUndoLabel,
+	type SiteSource,
+	type SiteSourcesState,
+} from '../src/app/site-sources';
 import {literalQuery} from '../src/shared/search-query';
 import {
 	isTrashEntry,
@@ -9206,6 +9219,318 @@ async function handlePrivateSyncMessage(
 	return {ok: true, privateSync: await privateSyncInfo()};
 }
 
+// Settings › Sources (src/app/site-sources.ts). The on/off state is per browser and lives outside the library. A
+// source's content script is registered only while it is on and the browser grants the site's optional host
+// permission, and only by the regular worker: the permission and the registration belong to the browser.
+const sourcesMutate = serialQueue();
+
+async function readSourcesState(): Promise<SiteSourcesState> {
+	const saved = await chrome.storage.local.get([SITE_SOURCES_KEY]);
+	return parseSiteSourcesState(saved[SITE_SOURCES_KEY]);
+}
+
+function changeSourcesState(change: (state: SiteSourcesState) => void) {
+	return sourcesMutate(async () => {
+		const state = await readSourcesState();
+		change(state);
+		await chrome.storage.local.set({
+			[SITE_SOURCES_KEY]: siteSourcesValue(state),
+		});
+		return state;
+	});
+}
+
+async function sourcePermitted(source: SiteSource) {
+	try {
+		return await chrome.permissions.contains({origins: source.origins});
+	} catch {
+		return false;
+	}
+}
+
+async function sourceRegistered(source: SiteSource) {
+	const scripts = await chrome.scripting.getRegisteredContentScripts({
+		ids: [source.scriptId],
+	});
+	return scripts.length > 0;
+}
+
+async function registerSource(source: SiteSource) {
+	if (await sourceRegistered(source)) {
+		return;
+	}
+
+	await chrome.scripting.registerContentScripts([
+		{
+			id: source.scriptId,
+			matches: source.origins,
+			js: [SITE_SOURCE_SCRIPT],
+			runAt: 'document_idle',
+			persistAcrossSessions: true,
+		},
+	]);
+}
+
+async function unregisterSource(source: SiteSource) {
+	if (await sourceRegistered(source)) {
+		await chrome.scripting.unregisterContentScripts({ids: [source.scriptId]});
+	}
+}
+
+/**
+Pages of the site already open when it is switched on get the script too, so the user need not reload them.
+*/
+async function injectSourceIntoOpenTabs(source: SiteSource) {
+	const tabs = await chrome.tabs.query({url: source.origins});
+	await Promise.all(
+		tabs.map(async (tab) =>
+			isInteger(tab.id)
+				? chrome.scripting
+						.executeScript({
+							target: {tabId: tab.id},
+							files: [SITE_SOURCE_SCRIPT],
+						})
+						.catch(() => undefined)
+				: undefined,
+		),
+	);
+}
+
+/**
+Brings the registrations in line with the state and the permissions: a source that is on but lost its permission
+(revoked while the worker was stopped) goes off and says why. Safe to run any number of times.
+*/
+async function reconcileSources() {
+	if (privateContext) {
+		return;
+	}
+
+	const state = await readSourcesState();
+	const lost: SiteSource[] = [];
+	for (const source of SITE_SOURCES) {
+		if (state[source.id].enabled && (await sourcePermitted(source))) {
+			await registerSource(source);
+			continue;
+		}
+
+		if (state[source.id].enabled) {
+			lost.push(source);
+		}
+
+		await unregisterSource(source);
+	}
+
+	if (lost.length > 0) {
+		await changeSourcesState((next) => {
+			for (const source of lost) {
+				next[source.id] = {enabled: false, notice: 'revoked'};
+			}
+		});
+	}
+}
+
+async function setSiteSource(
+	id: unknown,
+	enabled: boolean,
+): Promise<ActionResult<'SET_SITE_SOURCE'>> {
+	const source = siteSourceById(id);
+	if (!source) {
+		return {ok: false, error: 'Unknown source.'};
+	}
+
+	if (privateContext) {
+		return {ok: false, error: 'Switch sources on or off in a regular window.'};
+	}
+
+	if (enabled && !(await sourcePermitted(source))) {
+		return {
+			ok: false,
+			error: `The browser did not grant access to ${source.hosts.join(' and ')}, so ${source.label} stays off.`,
+		};
+	}
+
+	const state = await changeSourcesState((next) => {
+		next[source.id] = {enabled};
+	});
+	if (enabled) {
+		await registerSource(source);
+		await injectSourceIntoOpenTabs(source);
+	} else {
+		await unregisterSource(source);
+	}
+
+	return {ok: true, sources: siteSourceStatuses(state)};
+}
+
+/**
+The source a content script's message speaks for: only the one whose site the sending page is on.
+*/
+function senderSource(id: unknown, sender: chrome.runtime.MessageSender) {
+	const source = siteSourceById(id);
+	return source && siteSourceForUrl(sender.tab?.url ?? sender.url) === source
+		? source
+		: undefined;
+}
+
+async function saveFromSource(
+	source: SiteSource,
+	href: unknown,
+	title: unknown,
+): Promise<ActionResult<'SITE_SOURCE_SAVE'>> {
+	// A private window saves only into the regular library, and only when private windows use it; a separate
+	// private library, locked or not, is never touched.
+	const state = await readSourcesState();
+	if (
+		!state[source.id].enabled ||
+		(privateContext && privateConfig.mode !== 'shared')
+	) {
+		return {ok: true, outcome: 'off'};
+	}
+
+	const url = normalizeUrl(
+		typeof href === 'string' ? source.canonicalUrl(href) : null,
+	);
+	if (!url) {
+		return {ok: false, error: `${APP_NAME} could not read that link.`};
+	}
+
+	const result = await mutate(async () =>
+		withUndo(
+			siteSourceUndoLabel(source),
+			[STORAGE_KEY],
+			async (): Promise<ActionResult<'SITE_SOURCE_SAVE'>> => {
+				const store = await getStore();
+				// The same rule as an import: an address in the library or in the trash counts as saved.
+				if (store.bookmarks.some((bookmark) => bookmark.url === url)) {
+					return {ok: true, outcome: 'exists'};
+				}
+
+				if (
+					(await trashedImportUrls(store.settings, 'bookmarks')).includes(url)
+				) {
+					return {ok: true, outcome: 'trashed'};
+				}
+
+				const name = source.column.toLocaleLowerCase();
+				const now = Date.now();
+				let column = store.bookmarkColumns.find(
+					(entry) => entry.name.toLocaleLowerCase() === name,
+				);
+				if (!column) {
+					column = {
+						id: makeId(),
+						name: source.column,
+						createdAt: now,
+						isDefault: false,
+					};
+					store.bookmarkColumns.push(column);
+				}
+
+				store.bookmarks.push({
+					id: makeId(),
+					title: await bestBookmarkTitle(
+						typeof title === 'string' ? title : '',
+						url,
+						store.settings.cleanTitles,
+					),
+					url,
+					columnId: column.id,
+					createdAt: now,
+					updatedAt: now,
+				});
+				await writeStore(store);
+				return {ok: true, outcome: 'saved', column: column.name};
+			},
+		),
+	);
+	if (result.ok && result.outcome === 'saved' && state[source.id].notice) {
+		await changeSourcesState((next) => {
+			if (next[source.id].notice === 'unreadable') {
+				next[source.id] = {enabled: next[source.id].enabled};
+			}
+		});
+	}
+
+	return result;
+}
+
+async function undoSourceSave(id: unknown): Promise<ActionResult<'UNDO'>> {
+	const labels = new Set(
+		SITE_SOURCES.map((source) => siteSourceUndoLabel(source)),
+	);
+	const records = await undoMutate(async () => readUndo());
+	if (
+		typeof id !== 'string' ||
+		records.every((record) => !(record.id === id && labels.has(record.label)))
+	) {
+		return {ok: false, error: "Can't undo: it was too long ago."};
+	}
+
+	return undoAction(id);
+}
+
+/**
+Messages from the site content script, the only code in a web page that can reach the worker. They get the three
+source actions and nothing else: no page can read or change the library through them.
+*/
+async function handleSourceMessage(
+	message: TabLodgeMessage | undefined,
+	sender: chrome.runtime.MessageSender,
+): Promise<ActionResult> {
+	await privateConfigReady;
+	switch (message?.type) {
+		case 'SITE_SOURCE_SAVE': {
+			const source = senderSource(message.source, sender);
+			return source
+				? saveFromSource(source, message.url, message.title)
+				: {ok: false, error: 'This page cannot save to that source.'};
+		}
+
+		case 'SITE_SOURCE_UNREADABLE': {
+			const source = senderSource(message.source, sender);
+			if (!source || privateContext) {
+				return {ok: true, reported: false};
+			}
+
+			const state = await changeSourcesState((next) => {
+				if (next[source.id].enabled) {
+					next[source.id] = {enabled: true, notice: 'unreadable'};
+				}
+			});
+			return {ok: true, reported: state[source.id].enabled};
+		}
+
+		case 'SITE_SOURCE_UNDO': {
+			return undoSourceSave(message.id);
+		}
+
+		default: {
+			return {ok: false, error: `Unknown ${APP_NAME} action.`};
+		}
+	}
+}
+
+chrome.permissions?.onRemoved?.addListener?.((removed) => {
+	const origins = new Set(removed.origins);
+	const lost = SITE_SOURCES.filter((source) =>
+		source.origins.some((origin) => origins.has(origin)),
+	);
+	if (privateContext || lost.length === 0) {
+		return;
+	}
+
+	void (async () => {
+		await changeSourcesState((next) => {
+			for (const source of lost) {
+				if (next[source.id].enabled) {
+					next[source.id] = {enabled: false, notice: 'revoked'};
+				}
+			}
+		});
+		await Promise.all(lost.map(async (source) => unregisterSource(source)));
+	})().catch(() => undefined);
+});
+
 async function handleMessage(
 	message: TabLodgeMessage | undefined,
 	sender: chrome.runtime.MessageSender,
@@ -9774,6 +10099,14 @@ async function handleMessage(
 			return handleSharedPagesMessage(message);
 		}
 
+		case 'GET_SITE_SOURCES': {
+			return {ok: true, sources: siteSourceStatuses(await readSourcesState())};
+		}
+
+		case 'SET_SITE_SOURCE': {
+			return setSiteSource(message.source, message.enabled);
+		}
+
 		case 'HANDOFF_NEW_TAB': {
 			const tabId = sender.tab?.id;
 			try {
@@ -9799,10 +10132,19 @@ async function handleMessage(
 	}
 }
 
+const EXTENSION_ORIGIN = chrome.runtime.getURL('');
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-	Promise.resolve(paletteSender(sender))
+	// Anything not sent from an extension page came from the site content script in a web page.
+	const fromPage = sender.url?.startsWith(EXTENSION_ORIGIN) === true;
+	Promise.resolve(fromPage ? paletteSender(sender) : sender)
 		.then(async (effective) =>
-			handleMessage(message as TabLodgeMessage | undefined, effective),
+			fromPage
+				? handleMessage(message as TabLodgeMessage | undefined, effective)
+				: handleSourceMessage(
+						message as TabLodgeMessage | undefined,
+						effective,
+					),
 		)
 		.then(sendResponse)
 		.catch((error: unknown) => {
@@ -11186,6 +11528,7 @@ chrome.bookmarks?.onCreated?.addListener((_id, node) => {
 
 chrome.runtime.onInstalled.addListener((details) => {
 	void initializeExtension();
+	void reconcileSources().catch(() => undefined);
 	if (details.reason === 'install') {
 		void chrome.tabs.create({
 			url: chrome.runtime.getURL('newtab.html'),
@@ -11196,6 +11539,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onStartup.addListener(() => {
 	void initializeExtension(true);
+	void reconcileSources().catch(() => undefined);
 });
 
 // A worker that was stopped and started again by any event reopens the live socket and catches up.

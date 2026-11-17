@@ -178,6 +178,12 @@ type HarnessOptions = {
 	What chrome.scripting.executeScript reports for an injected function (default true).
 	*/
 	scriptResult?: unknown;
+	/**
+	Host permissions the browser has granted at start (Settings › Sources); `permissions.request` grants unless
+	`refusePermissions` is set.
+	*/
+	grantedOrigins?: string[];
+	refusePermissions?: boolean;
 };
 type MenuItem = {
 	id?: string;
@@ -242,8 +248,16 @@ function createWorkerHarness(
 	const openedTabs: MockTab[] = [];
 	const removedTabIds: number[] = [];
 	const sidePanelCalls: SidePanelCall[] = [];
-	const executeScriptCalls: Array<{target: {tabId: number}; args: unknown[]}> =
-		[];
+	const executeScriptCalls: Array<{
+		target: {tabId: number};
+		args?: unknown[];
+		files?: string[];
+	}> = [];
+	const grantedOrigins = new Set(options.grantedOrigins);
+	const registeredScripts = new Map<
+		string,
+		{id: string; matches: string[]; js: string[]}
+	>();
 	const sidePanelOpened: Array<{windowId: number}> = [];
 	let sidebarOpened = 0;
 	const popupCalls: string[] = [];
@@ -685,11 +699,16 @@ function createWorkerHarness(
 					windowId?: number;
 					active?: boolean;
 					lastFocusedWindow?: boolean;
+					url?: string[];
 				} = {},
 			) {
 				return tabs
 					.filter(
 						(tab) =>
+							(query.url === undefined ||
+								query.url.some((pattern) =>
+									(tab.url ?? '').startsWith(pattern.replace(/\*$/, '')),
+								)) &&
 							(query.windowId === undefined ||
 								tab.windowId === query.windowId) &&
 							(query.active === undefined ||
@@ -887,9 +906,31 @@ function createWorkerHarness(
 			onClicked: event('actionClicked'),
 		},
 		scripting: {
+			async registerContentScripts(
+				scripts: Array<{id: string; matches: string[]; js: string[]}>,
+			) {
+				for (const script of scripts) {
+					if (registeredScripts.has(script.id)) {
+						throw new Error(`Duplicate script ID '${script.id}'`);
+					}
+
+					registeredScripts.set(script.id, structuredClone(script));
+				}
+			},
+			async getRegisteredContentScripts(filter: {ids?: string[]} = {}) {
+				return [...registeredScripts.values()].filter(
+					(script) => !filter.ids || filter.ids.includes(script.id),
+				);
+			},
+			async unregisterContentScripts(filter: {ids: string[]}) {
+				for (const id of filter.ids) {
+					registeredScripts.delete(id);
+				}
+			},
 			async executeScript(injection: {
 				target: {tabId: number};
-				args: unknown[];
+				args?: unknown[];
+				files?: string[];
 			}) {
 				executeScriptCalls.push(injection);
 				if (options.scriptingFails) {
@@ -961,9 +1002,12 @@ function createWorkerHarness(
 			},
 		}),
 		permissions: {
-			async contains() {
-				return Boolean(options.downloads);
+			async contains(request: {origins?: string[]} = {}) {
+				return request.origins
+					? request.origins.every((origin) => grantedOrigins.has(origin))
+					: Boolean(options.downloads);
 			},
+			onRemoved: event('permissionsRemoved'),
 		},
 		...(options.downloads && {
 			downloads: {
@@ -1044,6 +1088,31 @@ function createWorkerHarness(
 
 	return {
 		executeScriptCalls,
+		registeredScripts,
+		/**
+		The user granting a site's access in the browser prompt (Settings asks for it before switching a source on).
+		*/
+		grantOrigins(origins: string[]) {
+			if (!options.refusePermissions) {
+				for (const origin of origins) {
+					grantedOrigins.add(origin);
+				}
+			}
+		},
+		/**
+		The user removing site access in the browser's extension settings: the grant goes, and onRemoved fires.
+		*/
+		async revokeOrigins(origins: string[], {fire = true} = {}) {
+			for (const origin of origins) {
+				grantedOrigins.delete(origin);
+			}
+
+			if (fire) {
+				listeners.permissionsRemoved?.({origins, permissions: []});
+			}
+
+			await settle();
+		},
 		openedTabs,
 		removedTabIds,
 		sidePanelCalls,
@@ -1172,9 +1241,14 @@ function createWorkerHarness(
 				},
 			});
 		},
+		/**
+		A message from an extension page by default; pass a web page `url` to send as the site content script does.
+		*/
 		async sendMessage<M extends TabLodgeMessage>(
 			message: M,
-			sender: {tab?: Partial<MockTab>} = {tab: {id: 1, windowId: 10}},
+			sender: {tab?: Partial<MockTab>; url?: string} = {
+				tab: {id: 1, windowId: 10},
+			},
 		) {
 			assert.equal(
 				typeof messageListener,
@@ -1184,7 +1258,11 @@ function createWorkerHarness(
 			return new Promise<TestResponse<M['type']>>((resolve, reject) => {
 				let returnedAsync: unknown;
 				try {
-					returnedAsync = messageListener!(message, sender, resolve);
+					returnedAsync = messageListener!(
+						message,
+						{url: chrome.runtime.getURL('newtab.html'), ...sender},
+						resolve,
+					);
 				} catch (error) {
 					reject(error instanceof Error ? error : new Error(String(error)));
 				}
@@ -11017,7 +11095,7 @@ test('by default the shortcut injects the overlay on demand and opens no window'
 	assert.equal(harness.executeScriptCalls.length, 1);
 	const [call] = harness.executeScriptCalls;
 	assert.equal(call.target.tabId, 1);
-	const url = new URL(String(call.args[0]));
+	const url = new URL(String(call.args?.[0]));
 	assert.equal(url.pathname, '/palette.html');
 	assert.equal(url.searchParams.get('overlay'), '1');
 	assert.equal(url.searchParams.get('window'), '10');
@@ -11098,7 +11176,7 @@ test('messages from the palette window act on the window it was opened over', as
 		{
 			url: 'chrome-extension://tablodge/palette.html?window=10',
 			tab: {id: 2, windowId: 20},
-		} as never,
+		},
 	);
 	assert.equal(response.ok, true, response.error);
 	assert.ok(harness.openedTabs.length > 0);
@@ -13271,4 +13349,317 @@ test('a noted bookmark keeps its note and its copy together through delete, back
 	await harness.fire('alarm', {name: 'tablodge-undo'});
 	await settle();
 	assert.deepEqual(copyIndexUrls(harness), []);
+});
+
+const YOUTUBE_ORIGINS = ['https://www.youtube.com/*'];
+const youtubeTab = {
+	id: 5,
+	windowId: 10,
+	index: 1,
+	active: false,
+	url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+	title: 'Big Buck Bunny - YouTube',
+};
+// What the site content script sends: from a youtube.com tab, with the page's address.
+const fromYoutube = {tab: youtubeTab, url: youtubeTab.url};
+const watchLater = (
+	url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=WL',
+) =>
+	({
+		type: 'SITE_SOURCE_SAVE',
+		source: 'youtube',
+		url,
+		title: 'Never Gonna Give You Up',
+	}) as const;
+
+function sourcesHarness(options: HarnessOptions = {}) {
+	return createWorkerHarness(
+		stateWithSession(),
+		[
+			{
+				id: 1,
+				windowId: 10,
+				index: 0,
+				active: true,
+				url: 'https://current.example/',
+				title: 'Current',
+			},
+			youtubeTab,
+		],
+		options,
+	);
+}
+
+async function switchOnYoutube(harness: ReturnType<typeof sourcesHarness>) {
+	harness.grantOrigins(YOUTUBE_ORIGINS);
+	return harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: true,
+	});
+}
+
+test('sources are off at install and no content script is registered', async () => {
+	const harness = sourcesHarness();
+	harness.listeners.onInstalled({reason: 'install'});
+	await settle();
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(structuredClone(result.sources), [
+		{id: 'youtube', enabled: false},
+		{id: 'reddit', enabled: false},
+	]);
+	assert.equal(harness.registeredScripts.size, 0);
+});
+
+test('a source cannot be switched on without its permission, and registers nothing', async () => {
+	const harness = sourcesHarness({refusePermissions: true});
+	const result = await switchOnYoutube(harness);
+	assert.equal(result.ok, false);
+	assert.match(result.error ?? '', /did not grant access to www\.youtube\.com/);
+	assert.equal(harness.registeredScripts.size, 0);
+	const sources = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.equal(sources.ok && sources.sources[0]?.enabled, false);
+});
+
+test('switching a source on registers its script for that site only and reaches open tabs', async () => {
+	const harness = sourcesHarness();
+	const result = await switchOnYoutube(harness);
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(structuredClone([...harness.registeredScripts.values()]), [
+		{
+			id: 'tablodge-source-youtube',
+			matches: YOUTUBE_ORIGINS,
+			js: ['site-source.js'],
+			runAt: 'document_idle',
+			persistAcrossSessions: true,
+		},
+	]);
+	assert.deepEqual(
+		structuredClone(
+			harness.executeScriptCalls.map((call) => [call.target.tabId, call.files]),
+		),
+		[[5, ['site-source.js']]],
+	);
+
+	const off = await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: false,
+	});
+	assert.equal(off.ok, true, off.error);
+	assert.equal(harness.registeredScripts.size, 0);
+});
+
+test('revoking the permission in the browser turns the source off and says so', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.revokeOrigins(YOUTUBE_ORIGINS);
+	assert.equal(harness.registeredScripts.size, 0);
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
+		id: 'youtube',
+		enabled: false,
+		notice: 'revoked',
+	});
+});
+
+test('a permission revoked while the worker was stopped is caught at startup', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.revokeOrigins(YOUTUBE_ORIGINS, {fire: false});
+	harness.listeners.onStartup();
+	await settle();
+	assert.equal(harness.registeredScripts.size, 0);
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.equal(result.ok && result.sources[0]?.notice, 'revoked');
+});
+
+test('a save on YouTube goes to a new YouTube column, and Undo takes it back', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	const saved = await harness.sendMessage(watchLater(), fromYoutube);
+	assert.equal(saved.ok, true, saved.error);
+	assert.equal(saved.outcome, 'saved');
+	assert.equal(saved.column, 'YouTube');
+	const column = harness.state.bookmarkColumns.find(
+		(entry) => entry.name === 'YouTube',
+	);
+	assert.ok(column);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => [
+			bookmark.url,
+			bookmark.title,
+			bookmark.columnId,
+		]),
+		[
+			[
+				'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+				'Never Gonna Give You Up',
+				column.id,
+			],
+		],
+	);
+
+	// A second save reuses the column.
+	await harness.sendMessage(
+		watchLater('https://www.youtube.com/watch?v=jNQXAC9IVRw'),
+		fromYoutube,
+	);
+	assert.equal(
+		harness.state.bookmarkColumns.filter((entry) => entry.name === 'YouTube')
+			.length,
+		1,
+	);
+	assert.equal(harness.state.bookmarks.length, 2);
+
+	const undone = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNDO', id: String(saved.undoId)},
+		fromYoutube,
+	);
+	assert.equal(undone.ok, false, 'a later save changed the library since');
+	const last = await harness.sendMessage(
+		watchLater('https://www.youtube.com/watch?v=9bZkp7q19f0'),
+		fromYoutube,
+	);
+	const undoLast = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNDO', id: String(last.undoId)},
+		fromYoutube,
+	);
+	assert.equal(undoLast.ok, true, undoLast.error);
+	assert.equal(harness.state.bookmarks.length, 2);
+});
+
+test('a source save skips an address already in the library or in the trash', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'},
+	});
+	assert.equal(added.ok, true, added.error);
+	const exists = await harness.sendMessage(watchLater(), fromYoutube);
+	assert.equal(exists.ok && exists.outcome, 'exists');
+	assert.equal(exists.ok && exists.undoId, undefined);
+
+	if (added.ok) {
+		await harness.sendMessage({
+			type: 'DELETE_BOOKMARK',
+			bookmarkId: added.bookmark.id,
+		});
+	}
+
+	const trashed = await harness.sendMessage(watchLater(), fromYoutube);
+	assert.equal(trashed.ok && trashed.outcome, 'trashed');
+	assert.equal(harness.state.bookmarks.length, 0);
+	assert.equal(
+		harness.state.bookmarkColumns.some((entry) => entry.name === 'YouTube'),
+		false,
+	);
+});
+
+test('a source that is off, or a page on another site, saves nothing', async () => {
+	const harness = sourcesHarness();
+	const off = await harness.sendMessage(watchLater(), fromYoutube);
+	assert.equal(off.ok && off.outcome, 'off');
+
+	await switchOnYoutube(harness);
+	const elsewhere = await harness.sendMessage(watchLater(), {
+		tab: {id: 1, windowId: 10, url: 'https://current.example/'},
+		url: 'https://current.example/',
+	});
+	assert.equal(elsewhere.ok, false);
+	const notAVideo = await harness.sendMessage(
+		watchLater('https://www.youtube.com/playlist?list=WL'),
+		fromYoutube,
+	);
+	assert.equal(notAVideo.ok, false);
+	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+test('a web page reaches only the source actions, never the rest of the worker', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	for (const message of [
+		{type: 'GET_STATE'},
+		{type: 'ERASE_DATA', scope: 'all'},
+		{type: 'GET_FULL_BACKUP'},
+		{type: 'SET_SITE_SOURCE', source: 'reddit', enabled: true},
+	] as const) {
+		const result = await harness.sendMessage(message, fromYoutube);
+		assert.equal(result.ok, false, message.type);
+	}
+
+	// Undo from a page only undoes a source save.
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		bookmarks: [{url: 'https://other.example/'}],
+		undoable: true,
+	});
+	assert.ok(added.ok);
+	assert.ok(added.undoId);
+	const undo = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNDO', id: String(added.ok && added.undoId)},
+		fromYoutube,
+	);
+	assert.equal(undo.ok, false);
+	assert.equal(harness.state.bookmarks.length, 1);
+});
+
+test('an unreadable save is reported to Settings and cleared by the next good save', async () => {
+	const harness = sourcesHarness();
+	const quiet = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNREADABLE', source: 'youtube'},
+		fromYoutube,
+	);
+	assert.equal(quiet.ok && quiet.reported, false, 'off: nothing to report');
+
+	await switchOnYoutube(harness);
+	const reported = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNREADABLE', source: 'youtube'},
+		fromYoutube,
+	);
+	assert.equal(reported.ok && reported.reported, true);
+	let sources = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.equal(sources.ok && sources.sources[0]?.notice, 'unreadable');
+	assert.equal(harness.state.bookmarks.length, 0);
+
+	await harness.sendMessage(watchLater(), fromYoutube);
+	sources = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(sources.ok && structuredClone(sources.sources[0]), {
+		id: 'youtube',
+		enabled: true,
+	});
+});
+
+test('a private window saves only when private windows use the regular library', async () => {
+	const on = {
+		'tablodge.sources': {version: 1, sources: {youtube: {enabled: true}}},
+	};
+	const separate = sourcesHarness({
+		incognitoContext: true,
+		storage: {
+			...on,
+			'tablodge.private.config': {mode: 'saved', configured: true},
+		},
+	});
+	const skipped = await separate.sendMessage(watchLater(), fromYoutube);
+	assert.equal(skipped.ok && skipped.outcome, 'off');
+	assert.equal(
+		Object.keys(separate.extraStorage).some((key) =>
+			key.startsWith('tablodge.private.state'),
+		),
+		false,
+	);
+
+	const shared = sourcesHarness({
+		incognitoContext: true,
+		storage: {
+			...on,
+			'tablodge.private.config': {mode: 'shared', configured: true},
+		},
+	});
+	const saved = await shared.sendMessage(watchLater(), fromYoutube);
+	assert.equal(saved.ok && saved.outcome, 'saved');
+	assert.equal(shared.state.bookmarks.length, 1);
 });
