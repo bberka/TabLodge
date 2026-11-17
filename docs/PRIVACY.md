@@ -91,7 +91,7 @@ TabLodge has no website host permissions and no content scripts, and makes no ne
 | `bookmarks` | Import browser bookmarks and offer to add new ones |
 | `favicon` | Show icons from the browser's own cache (Chromium) |
 | `storage`, `unlimitedStorage` | Keep the library on this device |
-| `contextMenus` | Save and bookmark from right click menus |
+| `contextMenus` | Save and bookmark pages, links, images, and videos from right click menus |
 | `clipboardWrite` | Copy links when you ask |
 | `sidePanel` | The side panel (Chromium; Firefox uses its sidebar) |
 | `search` | **Search the web** with your default engine |
