@@ -85,7 +85,8 @@ function SharedPagesSheet({
 		}
 	}, []);
 	useEffect(() => {
-		if (visible && server === 'ready') {
+		// Asked also while the server's features are unknown, so an unreachable server ends in an error, not a wait.
+		if (visible && server !== 'old') {
 			void load();
 		}
 	}, [visible, server, load]);
