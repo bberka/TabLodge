@@ -5,28 +5,21 @@ import {isRecord} from '../shared/library-values';
 import {Button, IconTooltip} from '../shared/ui';
 
 /**
-The sync status the worker last wrote, kept current as it changes. Undefined while sync is off.
+The value under `key` in extension storage, kept current as it changes in any page or the worker. Undefined until it
+has been read, so a caller can wait instead of showing something the stored value would hide.
 */
-export function useSyncStatus(): SyncStatus | undefined {
-	const [status, setStatus] = useState<SyncStatus>();
+export function useLocalValue(key: string): {value: unknown} | undefined {
+	const [value, setValue] = useState<{value: unknown}>();
 	useEffect(() => {
-		const read = (value: unknown) => {
-			setStatus(
-				isRecord(value) && value.connected === true
-					? (value as SyncStatus)
-					: undefined,
-			);
-		};
-
-		void chrome.storage.local.get([SYNC_STATUS_KEY]).then((values) => {
-			read(values[SYNC_STATUS_KEY]);
+		void chrome.storage.local.get([key]).then((values) => {
+			setValue({value: values[key]});
 		});
 		const onChanged = (
 			changes: Record<string, chrome.storage.StorageChange>,
 			area: string,
 		) => {
-			if (area === 'local' && Object.hasOwn(changes, SYNC_STATUS_KEY)) {
-				read(changes[SYNC_STATUS_KEY].newValue);
+			if (area === 'local' && Object.hasOwn(changes, key)) {
+				setValue({value: changes[key].newValue});
 			}
 		};
 
@@ -34,8 +27,18 @@ export function useSyncStatus(): SyncStatus | undefined {
 		return () => {
 			chrome.storage.onChanged.removeListener(onChanged);
 		};
-	}, []);
-	return status;
+	}, [key]);
+	return value;
+}
+
+/**
+The sync status the worker last wrote, kept current as it changes. Undefined while sync is off.
+*/
+export function useSyncStatus(): SyncStatus | undefined {
+	const value = useLocalValue(SYNC_STATUS_KEY)?.value;
+	return isRecord(value) && value.connected === true
+		? (value as SyncStatus)
+		: undefined;
 }
 
 export const SYNC_SETTINGS_PAGE = 'options.html#settings-sync';

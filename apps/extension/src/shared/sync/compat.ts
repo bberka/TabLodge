@@ -175,10 +175,15 @@ export function readCompat(status: {
 
 /**
 The banner both apps show at the top of their main screens while the server and this app do not match: sync stopped,
-or features missing. It stays until the problem is gone; Settings › Sync has the details. Undefined when there is none.
+or features missing. Settings › Sync has the details. Undefined when there is none.
+
+A stopped sync stays until the problem is gone. Missing features can be dismissed: `dismissed` is what
+`dismissKey` gave when the user did, and the banner stays hidden until the server version or the missing features
+change.
 */
 export function problemBanner(
 	compat: Compat,
+	dismissed?: unknown,
 ): {stopped: boolean; title: string; detail: string} | undefined {
 	if (compat.incompatible) {
 		return {
@@ -188,7 +193,7 @@ export function problemBanner(
 		};
 	}
 
-	if (compat.missing.length === 0) {
+	if (compat.missing.length === 0 || dismissed === dismissKey(compat)) {
 		return undefined;
 	}
 
@@ -198,6 +203,24 @@ export function problemBanner(
 		title: 'Your sync server needs an update',
 		detail: `Until it runs ${release ?? 'a newer release'} or later: ${compat.missing.map(({missing}) => missing).join(' ')}`,
 	};
+}
+
+/**
+Where each app keeps the dismissed missing-features banner, on the device only: it never syncs.
+*/
+export const SYNC_DISMISSED_KEY = 'tablodge.sync.dismissed';
+
+/**
+What dismissing the missing-features banner remembers: the server version and the features it lacks. Undefined while
+there is nothing to dismiss, including a stopped sync, which cannot be dismissed.
+*/
+export function dismissKey(compat: Compat): string | undefined {
+	if (compat.incompatible || compat.missing.length === 0) {
+		return undefined;
+	}
+
+	const names = compat.missing.map(({name}) => name).toSorted();
+	return `${compat.server?.version ?? ''} ${names.join(',')}`;
 }
 
 export const UPDATE_GUIDE_URL =

@@ -1,19 +1,33 @@
 import {CloudAlert, CloudUpload, Settings} from 'lucide-react';
-import {problemBanner, readCompat} from '../shared/sync/compat';
+import {
+	dismissKey,
+	problemBanner,
+	readCompat,
+	SYNC_DISMISSED_KEY,
+} from '../shared/sync/compat';
 import {Button} from '../shared/ui';
-import {SYNC_SETTINGS_PAGE, useSyncStatus} from './sync-indicator';
+import {
+	SYNC_SETTINGS_PAGE,
+	useLocalValue,
+	useSyncStatus,
+} from './sync-indicator';
 import {cn} from '@/lib/utils';
 
 /**
 Shown on the dashboard while the connected sync server and this browser do not match: sync stopped over another
-protocol, or the server lacks features. It has no Dismiss; it goes away once the server or the app is updated.
+protocol, or the server lacks features. A stopped sync has no Dismiss and goes away once the server or the app is
+updated. Missing features can be dismissed on this browser until the server version or the list changes.
 */
 export function SyncProblemBanner() {
 	const status = useSyncStatus();
-	const banner = status && problemBanner(readCompat(status));
+	const dismissed = useLocalValue(SYNC_DISMISSED_KEY);
+	const compat = status && readCompat(status);
+	const banner = compat && dismissed && problemBanner(compat, dismissed.value);
 	if (!banner) {
 		return null;
 	}
+
+	const key = dismissKey(compat);
 
 	const Icon = banner.stopped ? CloudAlert : CloudUpload;
 	return (
@@ -44,12 +58,25 @@ export function SyncProblemBanner() {
 					</p>
 				</div>
 			</div>
-			<Button asChild size="sm" variant="outline" className="shrink-0">
-				<a href={SYNC_SETTINGS_PAGE}>
-					<Settings className="h-4 w-4" aria-hidden="true" />
-					Open Sync settings
-				</a>
-			</Button>
+			<div className="flex shrink-0 flex-wrap gap-2">
+				<Button asChild size="sm" variant="outline">
+					<a href={SYNC_SETTINGS_PAGE}>
+						<Settings className="h-4 w-4" aria-hidden="true" />
+						Open Sync settings
+					</a>
+				</Button>
+				{key === undefined ? null : (
+					<Button
+						size="sm"
+						variant="ghost"
+						onClick={() =>
+							void chrome.storage.local.set({[SYNC_DISMISSED_KEY]: key})
+						}
+					>
+						Dismiss
+					</Button>
+				)}
+			</div>
 		</section>
 	);
 }

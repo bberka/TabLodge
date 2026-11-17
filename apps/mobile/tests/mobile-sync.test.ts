@@ -17,6 +17,7 @@ import {
 	type SyncSocket,
 } from '../../extension/src/shared/sync/client';
 import {
+	dismissKey,
 	problemBanner,
 	readCompat,
 	releaseWithAll,
@@ -391,6 +392,51 @@ describe('a server that does not match the phone', () => {
 			['notes', 'shared-pages', 'page-source'],
 		);
 		assert.equal(releaseWithAll(compat.missing), '0.4.0');
+	});
+
+	test('a dismissed missing-features banner stays dismissed until the server is replaced by another version', async () => {
+		const rewrite: {current?: (body: Record<string, unknown>) => unknown} = {
+			current: (body) => ({
+				...body,
+				version: '0.3.0',
+				features: ['private', 'key', 'preview', 'trash'],
+			}),
+		};
+		const phone = makeDevice(
+			'phone',
+			answering(createApi({token: TOKEN, log: () => new ChangeLog()}), rewrite),
+			emptyStore(NOW),
+		);
+		await phone.client.connect(URL_BASE, TOKEN);
+		const before = readCompat(await phone.client.status());
+		const dismissed = dismissKey(before);
+		assert.equal(problemBanner(before, dismissed), undefined);
+
+		// The next check, past the cache, finds the same server: still dismissed.
+		clockAhead = 11 * 60 * 1000;
+		try {
+			await phone.client.syncNow();
+			assert.equal(
+				problemBanner(readCompat(await phone.client.status()), dismissed),
+				undefined,
+			);
+
+			// Then 0.3.1, still without notes: the banner is back.
+			rewrite.current = (body) => ({
+				...body,
+				version: '0.3.1',
+				features: ['private', 'key', 'preview', 'trash'],
+			});
+			clockAhead = 22 * 60 * 1000;
+			await phone.client.syncNow();
+		} finally {
+			clockAhead = 0;
+		}
+
+		assert.equal(
+			problemBanner(readCompat(await phone.client.status()), dismissed)?.title,
+			'Your sync server needs an update',
+		);
 	});
 
 	test('a phone from before versions reads this server as it always did', async () => {

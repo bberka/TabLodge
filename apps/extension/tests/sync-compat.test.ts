@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {PROTOCOL_VERSION} from '../src/shared/sync/change-log';
 import {
+	dismissKey,
 	PROTOCOL_RELEASES,
 	problemBanner,
 	readCompat,
@@ -69,6 +70,45 @@ test('a stopped sync lists no missing features, only the side to update', () => 
 		detail:
 			'Your sync server is older than this app. Update the server to 0.2.0 or later.',
 	});
+});
+
+test('a dismissed missing-features banner comes back only when the server version or the missing features change', () => {
+	const server = (version: string | undefined, features: string[]) =>
+		readCompat({
+			url: URL,
+			server: {protocol: PROTOCOL_VERSION, version, features},
+		});
+	const old = ['private', 'key', 'preview', 'trash'];
+	const shown = server('0.3.0', old);
+	const dismissed = dismissKey(shown);
+	assert.ok(problemBanner(shown, undefined));
+	assert.equal(problemBanner(shown, dismissed), undefined);
+	// The same server read again, with its features in another order.
+	assert.equal(
+		problemBanner(server('0.3.0', old.toReversed()), dismissed),
+		undefined,
+	);
+
+	assert.ok(problemBanner(server('0.3.1', old), dismissed));
+	assert.ok(problemBanner(server(undefined, old), dismissed));
+	assert.ok(problemBanner(server('0.3.0', [...old, 'notes']), dismissed));
+	assert.ok(problemBanner(server('0.3.0', ['private', 'key']), dismissed));
+});
+
+test('a stopped sync cannot be dismissed', () => {
+	const stopped = readCompat({
+		url: URL,
+		incompatible: 'app',
+		server: {protocol: PROTOCOL_VERSION + 1, version: '0.9.0', features: []},
+	});
+	assert.equal(dismissKey(stopped), undefined);
+	assert.equal(problemBanner(stopped, undefined)?.stopped, true);
+	assert.equal(problemBanner(stopped, dismissKey(stopped))?.stopped, true);
+	const full = readCompat({
+		url: URL,
+		server: {protocol: PROTOCOL_VERSION, version: '0.4.0', features: ALL},
+	});
+	assert.equal(dismissKey(full), undefined);
 });
 
 test('the server version reads as a release, an unreleased build, or not reported', () => {

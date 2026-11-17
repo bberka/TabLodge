@@ -751,7 +751,7 @@ function Help() {
 				},
 				{
 					title: 'When the sync server needs an update',
-					body: `Settings › Sync shows the server’s version. A server from before a feature keeps syncing everything else, and Settings › Sync lists what waits for the update, such as bookmark notes staying on this device. If the server and this browser speak different versions of sync, sync stops and says which one to update: the server, or ${PROJECT.name}. Nothing on this device changes meanwhile, and sync starts again after the update. While either problem lasts, a banner at the top of the dashboard says so; it has no Dismiss and goes away once the server or the app is updated. The How to update the server link there opens the steps for Docker and Cloudflare.`,
+					body: `Settings › Sync shows the server’s version. A server from before a feature keeps syncing everything else, and Settings › Sync lists what waits for the update, such as bookmark notes staying on this device. If the server and this browser speak different versions of sync, sync stops and says which one to update: the server, or ${PROJECT.name}. Nothing on this device changes meanwhile, and sync starts again after the update. While either problem lasts, a banner at the top of the dashboard says so. When sync has stopped, it stays until the server or the app is updated. When only features are missing, Dismiss hides it on this browser until the server reports another version or lacks a different set of features. The How to update the server link there opens the steps for Docker and Cloudflare.`,
 					searchText:
 						'sync server update old older version outdated incompatible protocol missing features notes trash icons previews shared pages',
 				},
