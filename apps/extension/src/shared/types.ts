@@ -41,6 +41,10 @@ Where the optional PIN or password lock of the saved separate private library st
 export type PrivateLockInfo = {
 	available: boolean;
 	manageHere: boolean;
+	/**
+	True while the saved separate library has no PIN or password. Private pages ask for one before they open.
+	*/
+	needsLock: boolean;
 	enabled: boolean;
 	state: 'none' | 'encrypting' | 'encrypted' | 'decrypting' | 'damaged';
 	locked: boolean;
@@ -661,6 +665,7 @@ export type TabLodgeMessages = {
 		credential: string;
 	};
 	REMOVE_PRIVATE_LOCK: {credential: string};
+	RESET_PRIVATE_LIBRARY: {};
 	SET_PRIVATE_LOCK_IDLE: {minutes: number};
 	GET_STATE: {};
 	GET_BOOKMARK_PROMPT: {url: string};
@@ -1106,6 +1111,7 @@ export type TabLodgeResponses = {
 	ENABLE_PRIVATE_LOCK: PrivateLockInfo;
 	CHANGE_PRIVATE_LOCK_CREDENTIAL: PrivateLockInfo;
 	REMOVE_PRIVATE_LOCK: PrivateLockInfo;
+	RESET_PRIVATE_LIBRARY: PrivateLockInfo;
 	SET_PRIVATE_LOCK_IDLE: PrivateLockInfo;
 	GET_STATE: Store;
 	/**
