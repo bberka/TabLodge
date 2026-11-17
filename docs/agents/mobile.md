@@ -15,7 +15,8 @@ Expo and React Native, TypeScript. It syncs with the user's own sync server and 
 | `src/platform/` | Device, storage, open links, and polyfills |
 | `src/screens/` | One folder per area: `bookmarks`, `sessions`, `save`, `settings`, `transfer` |
 | `modules/app-update/` | Local native module that asks Android whether installs are allowed and starts the installer on the downloaded APK (a `FileProvider` limited to the cache's `updates` folder) |
-| `modules/quick-tiles/` | Local native module with the Save link and Search Quick Settings tiles, which open `tablodge://save` and `tablodge://search` (parsed in `src/platform/tile-route.ts`), and the clipboard read that waits for window focus ([ADR 4](../adr/0004-android-quick-settings-tiles.md)) |
+| `modules/quick-tiles/` | Local native module with the Save link and Search Quick Settings tiles and the launcher shortcuts for the same actions, which open `tablodge://save` and `tablodge://search` (parsed in `src/platform/app-route.ts`), and the clipboard read that waits for window focus ([ADR 4](../adr/0004-android-quick-settings-tiles.md)) |
+| `modules/bookmarks-widget/` | Local native module with the Bookmarks home screen widget: provider, row service, column picker, and link opener. It reads `files/widgets/bookmarks.json`, which `src/library/widget-sync.ts` writes from the regular library only ([ADR 6](../adr/0006-android-bookmarks-widget.md)) |
 | `modules/tablodge-crypto/` | Local native module (PBKDF2 and AES-GCM for the private library) |
 | `scripts/make-icons.mts` | `pnpm run mobile:icons`: redraws `assets/` (launcher foreground, monochrome layer, legacy icon, light and dark splash) from `apps/extension/shell/icons/tablodge.svg` |
 | `scripts/emulator.mts` | `pnpm run mobile:emulator`: starts the emulator and waits for boot, `--headless` without a window, `--stop` ends it |

@@ -16,3 +16,24 @@ export function parseTileRoute(
 	const route = match?.[1]?.toLowerCase();
 	return route === 'save' || route === 'search' ? route : undefined;
 }
+
+/**
+Reads the address the Bookmarks widget's header opens, `tablodge://column/<id>` with the id URI-encoded, and gives the
+column id. Any other address gives undefined.
+*/
+export function parseColumnRoute(
+	url: string | null | undefined,
+): string | undefined {
+	const match = /^tablodge:\/\/column\/([^#/?]+)\/?(?:[#?].*)?$/i.exec(
+		url?.trim() ?? '',
+	);
+	if (!match?.[1]) {
+		return undefined;
+	}
+
+	try {
+		return decodeURIComponent(match[1]);
+	} catch {
+		return undefined;
+	}
+}

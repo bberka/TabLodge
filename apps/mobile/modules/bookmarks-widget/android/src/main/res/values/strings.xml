@@ -1,0 +1,12 @@
+<resources>
+  <string name="bookmarks_widget_label">Bookmarks</string>
+  <string name="bookmarks_widget_description">Links from one bookmark column</string>
+  <string name="bookmarks_widget_choose">Choose a column</string>
+  <string name="bookmarks_widget_open_app">Open TabLodge on %1$s</string>
+  <string name="bookmarks_widget_not_loaded">Open TabLodge to show your bookmarks</string>
+  <string name="bookmarks_widget_column_gone">This column is gone. Tap to choose another.</string>
+  <string name="bookmarks_widget_empty">Nothing saved here yet</string>
+  <string name="bookmarks_widget_no_columns">Save a bookmark in TabLodge, then add the widget again.</string>
+  <string name="bookmarks_widget_open_tablodge">Open TabLodge</string>
+  <string name="bookmarks_widget_column_count">%1$s · %2$d</string>
+</resources>
