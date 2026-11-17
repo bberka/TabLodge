@@ -1,0 +1,18 @@
+<!-- 2x2 at least, resizable up to 4x4. The configure activity runs when the widget is placed, and the header's button
+     opens it again on every version; `reconfigurable` lets Android 12 and newer launchers offer their own entry too. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:configure="expo.modules.bookmarkswidget.BookmarksWidgetConfigActivity"
+  android:description="@string/bookmarks_widget_description"
+  android:initialLayout="@layout/bookmarks_widget"
+  android:maxResizeHeight="250dp"
+  android:maxResizeWidth="250dp"
+  android:minHeight="110dp"
+  android:minResizeHeight="110dp"
+  android:minResizeWidth="110dp"
+  android:minWidth="110dp"
+  android:resizeMode="horizontal|vertical"
+  android:targetCellHeight="3"
+  android:targetCellWidth="3"
+  android:updatePeriodMillis="1800000"
+  android:widgetCategory="home_screen"
+  android:widgetFeatures="reconfigurable" />

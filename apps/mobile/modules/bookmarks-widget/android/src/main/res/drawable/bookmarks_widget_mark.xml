@@ -1,0 +1,13 @@
+<!-- The app's mark (apps/extension/shell/icons/tablodge.svg). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="20dp"
+  android:height="20dp"
+  android:viewportWidth="128"
+  android:viewportHeight="128">
+  <path
+    android:fillColor="@color/bookmarks_widget_accent"
+    android:strokeColor="@color/bookmarks_widget_accent"
+    android:strokeWidth="8"
+    android:strokeLineJoin="round"
+    android:pathData="M12,42 L64,14 L116,42 L64,70 Z M12,86 L26.9,78 L64,98 L101.1,78 L116,86 L64,114 Z" />
+</vector>

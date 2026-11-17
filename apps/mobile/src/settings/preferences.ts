@@ -164,13 +164,15 @@ export function restorePreferences(value: unknown): void {
 
 export const getPreferences = (): Preferences => current;
 
+/**
+Calls `listener` after every change to the preferences, from this phone, another one, or a restore.
+*/
+export function subscribePreferences(listener: () => void): () => void {
+	listeners.add(listener);
+	return () => {
+		listeners.delete(listener);
+	};
+}
+
 export const usePreferences = (): Preferences =>
-	useSyncExternalStore(
-		(listener) => {
-			listeners.add(listener);
-			return () => {
-				listeners.delete(listener);
-			};
-		},
-		() => current,
-	);
+	useSyncExternalStore(subscribePreferences, () => current);

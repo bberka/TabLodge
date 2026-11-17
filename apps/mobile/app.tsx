@@ -31,7 +31,7 @@ import {
 	wakePrivate,
 } from './src/private/private-library';
 import {loadPreferences} from './src/settings/preferences';
-import {usePendingJump} from './src/library/jump';
+import {requestJump, usePendingJump} from './src/library/jump';
 import {BookmarksScreen} from './src/screens/bookmarks/bookmarks';
 import {ConnectSheet} from './src/screens/settings/connect-sheet';
 import {SaveLinkForm} from './src/screens/save/save-link';
@@ -45,7 +45,12 @@ import {type BarTab, TabBar} from './src/ui/tab-bar';
 import {useColors} from './src/ui/theme';
 import {setView} from './src/library/view';
 import {requestSearch} from './src/ui/search-action';
-import {parseTileRoute, type TileRoute} from './src/platform/tile-route';
+import {
+	parseColumnRoute,
+	parseTileRoute,
+	type TileRoute,
+} from './src/platform/app-route';
+import {startWidgetSnapshot} from './src/library/widget-sync';
 import {readClipboard} from './modules/quick-tiles';
 
 type Tab = 'bookmarks' | 'sessions' | 'settings';
@@ -138,6 +143,7 @@ function Main() {
 	useEffect(() => {
 		void loadPreferences()
 			.then(startLibrary)
+			.then(startWidgetSnapshot)
 			.then(startPrivate)
 			.then(purgeTrash)
 			.then(startPreferencesSync);
@@ -229,7 +235,18 @@ function Main() {
 			const route = parseTileRoute(url);
 			if (route) {
 				void openTile(route);
+				return;
 			}
+
+			// The Bookmarks widget's header opens its column, which the widget only ever takes from the regular library.
+			const columnId = parseColumnRoute(url);
+			if (columnId === undefined) {
+				return;
+			}
+
+			setView('regular');
+			setOpen(false);
+			requestJump({screen: 'bookmarks', columnId});
 		};
 
 		void Linking.getInitialURL().then(follow);

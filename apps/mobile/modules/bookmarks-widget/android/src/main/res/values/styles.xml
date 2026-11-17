@@ -1,0 +1,3 @@
+<resources>
+  <style name="BookmarksWidgetConfigTheme" parent="@android:style/Theme.Material.Light.Dialog" />
+</resources>

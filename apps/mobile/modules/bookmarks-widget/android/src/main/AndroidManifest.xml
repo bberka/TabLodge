@@ -1,0 +1,38 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- The Bookmarks home screen widget. It reads a copy of the regular library the app writes to its private files. -->
+  <application>
+    <receiver
+      android:name="expo.modules.bookmarkswidget.BookmarksWidgetProvider"
+      android:exported="true"
+      android:label="@string/bookmarks_widget_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/bookmarks_widget_info" />
+    </receiver>
+    <service
+      android:name="expo.modules.bookmarkswidget.BookmarksWidgetService"
+      android:exported="false"
+      android:permission="android.permission.BIND_REMOTEVIEWS" />
+    <activity
+      android:name="expo.modules.bookmarkswidget.BookmarksWidgetConfigActivity"
+      android:exported="true"
+      android:excludeFromRecents="true"
+      android:label="@string/bookmarks_widget_choose"
+      android:taskAffinity=""
+      android:theme="@style/BookmarksWidgetConfigTheme">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
+    <activity
+      android:name="expo.modules.bookmarkswidget.BookmarksWidgetLinkActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+  </application>
+</manifest>

@@ -1,0 +1,7 @@
+<resources>
+  <color name="bookmarks_widget_background">#16151B</color>
+  <color name="bookmarks_widget_text">#ECEAF2</color>
+  <color name="bookmarks_widget_text_secondary">#A9A6B4</color>
+  <color name="bookmarks_widget_accent">#A69CF5</color>
+  <color name="bookmarks_widget_on_accent">#16151B</color>
+</resources>
