@@ -157,6 +157,12 @@ import {
 	type SyncConfig,
 	SyncError,
 } from '../src/shared/sync/client';
+import {
+	deleteSharedPage,
+	listSharedPages,
+	sharedPagesSupport,
+	uploadSharedPage,
+} from '../src/shared/sync/shared-pages-client';
 
 // Types come from the shared model via import() type queries rather than an `import type` statement, which
 // would leave an `export {}` behind. The value imports above are bundled into the classic script by the
@@ -1365,6 +1371,53 @@ async function linkPreview(url: string): Promise<LinkPreviewData | null> {
 
 	previewCache.set(url, found);
 	return found;
+}
+
+/*
+Shared pages: Share › Web page snapshots on the regular sync server, public at their link. Never from a private window,
+whichever library it uses.
+*/
+async function handleSharedPagesMessage(
+	message: Extract<
+		TabLodgeMessage,
+		{type: 'GET_SHARED_PAGES' | 'UPLOAD_SHARED_PAGE' | 'DELETE_SHARED_PAGE'}
+	>,
+): Promise<ActionResult> {
+	const target = privateContext ? undefined : await regularSyncConfig();
+	if (message.type === 'GET_SHARED_PAGES') {
+		const server = target ? await sharedPagesSupport(fetch, target) : 'none';
+		return {
+			ok: true,
+			server,
+			pages:
+				target && server === 'ready' && message.list
+					? await listSharedPages(fetch, target)
+					: [],
+		};
+	}
+
+	if (!target) {
+		return {
+			ok: false,
+			error: privateContext
+				? 'Pages cannot be shared from a private window.'
+				: 'Connect a sync server to share pages by link.',
+		};
+	}
+
+	if (message.type === 'DELETE_SHARED_PAGE') {
+		await deleteSharedPage(fetch, target, String(message.id ?? ''));
+		return {ok: true};
+	}
+
+	if (typeof message.html !== 'string' || typeof message.title !== 'string') {
+		return {ok: false, error: 'Nothing to upload.'};
+	}
+
+	return {
+		ok: true,
+		page: await uploadSharedPage(fetch, target, message.title, message.html),
+	};
 }
 
 /**
@@ -9432,6 +9485,12 @@ async function handleMessage(
 
 		case 'OPEN_PRIVATE_SYNC': {
 			return openPrivateSync();
+		}
+
+		case 'GET_SHARED_PAGES':
+		case 'UPLOAD_SHARED_PAGE':
+		case 'DELETE_SHARED_PAGE': {
+			return handleSharedPagesMessage(message);
 		}
 
 		case 'HANDOFF_NEW_TAB': {

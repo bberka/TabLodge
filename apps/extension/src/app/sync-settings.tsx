@@ -38,6 +38,7 @@ import {DeviceNameField} from './device-name';
 import {messageOf, send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
 import {PROJECT} from './project';
+import {SharedPagesSettings} from './shared-pages';
 import {cn} from '@/lib/utils';
 
 export const SYNC_TITLE = 'Sync';
@@ -53,6 +54,9 @@ export const SYNC_WORDS = [
 	'disconnect',
 	'private windows',
 	'encrypt',
+	'shared pages',
+	'link',
+	'publish',
 ];
 
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;
@@ -507,6 +511,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				/>
 			</div>
 			<DeviceNameField />
+			<SharedPagesSettings showStatus={showStatus} />
 			<ConfirmationDialog
 				open={confirmDisconnect}
 				title="Disconnect from sync?"

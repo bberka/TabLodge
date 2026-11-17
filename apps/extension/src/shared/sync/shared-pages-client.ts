@@ -77,21 +77,22 @@ async function ask(
 }
 
 /**
-Whether the server takes shared pages. False for a server too old to have them, and when it cannot be reached.
+Whether the server takes shared pages: `old` for a server from before them, `offline` when it cannot be reached or
+refused the token.
 */
-export async function serverSharesPages(
+export async function sharedPagesSupport(
 	send: SyncHost['fetch'],
 	target: SyncConfig,
-): Promise<boolean> {
+): Promise<'ready' | 'old' | 'offline'> {
 	try {
 		const body = await ask(send, target, '/v1/status');
-		return (
-			isRecord(body) &&
+		return isRecord(body) &&
 			Array.isArray(body.features) &&
 			body.features.includes(SHARED_PAGES_FEATURE)
-		);
+			? 'ready'
+			: 'old';
 	} catch {
-		return false;
+		return 'offline';
 	}
 }
 
