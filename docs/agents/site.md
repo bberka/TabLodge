@@ -22,10 +22,12 @@ Paths below are relative to `apps/site/`.
 | `src/pages/index.astro` | Main page, features, FAQ, and structured data |
 | `src/pages/alternatives.astro` | Comparison with OneTab, Session Buddy, and Toby |
 | `src/pages/alternatives/android.astro` | Android app compared with Raindrop.io, Linkwarden, Karakeep, wallabag, and Instapaper, with a dated source list |
+| `src/components/AlternativesSwitch.astro` | The two-way switch at the top of both comparison pages (browser extensions, Android app). Add a third comparison here |
 | `src/pages/privacy.astro` | Website and extension privacy policy |
 | `src/pages/terms.astro` | Terms of use, linked from the footer and the Google OAuth consent screen |
 | `src/pages/404.astro` | Page not found |
-| `src/components/DownloadButtons.astro` | The Chrome Web Store, Firefox Add-ons, and Android buttons used on the home and alternatives pages. A small script picks the one that suits the visitor's device and puts it first |
+| `src/components/DownloadButtons.astro` | One download button with a menu for the other two (Chrome Web Store, Firefox Add-ons, Android), used on the home and alternatives pages. A small script puts the one that suits the visitor's device on the button and the rest in the menu |
+| `src/lib/downloads.ts`, `src/components/DownloadLink.astro` | The list of downloads (label, link, icon) and the single button component for one of them. Add a platform here, in `ButtonIcon.astro`, and in `platform.ts`; never hand-write a download button |
 | `src/lib/platform.ts` | Works out the visitor's device from the user agent: Chromium and Firefox on a computer, Android, iPhone and iPad, Safari, and anything else. Tested in `apps/site/tests/site-platform.test.ts` |
 | `src/layouts/Base.astro` | Shared layout, header, footer, metadata, and structured data |
 | `src/assets/` | Extension screenshots in light and dark themes |
@@ -36,9 +38,9 @@ Follow the [documentation style](documentation.md) for website copy. Keep extens
 
 ## Download buttons
 
-The page carries all three downloads in a fixed order, so it works without scripts and search engines see every link. In a browser, `DownloadButtons.astro` runs `detectPlatform` and reorders them:
+The page carries all three downloads, so it works without scripts and search engines see every link. In a browser, `DownloadButtons.astro` runs `detectPlatform` and moves the first choice onto the button and the others into its menu:
 
-| Visitor | Shown first | Under the buttons |
+| Visitor | On the button | Under the button |
 | --- | --- | --- |
 | Chrome, Edge, Brave, Vivaldi, Opera, or ChromeOS | Chrome Web Store | Nothing, or a note to update when older than Chrome 116 |
 | Firefox on a computer | Firefox Add-ons | Nothing, or a note to update when older than Firefox 140 |
@@ -47,7 +49,7 @@ The page carries all three downloads in a fixed order, so it works without scrip
 | Safari on a Mac | Nothing highlighted | Safari is not supported, use Chrome or Firefox |
 | Anything else | Nothing highlighted | We could not tell which browser you use |
 
-Only the matched download is a filled button; the others stay outlined. To change the rules, edit `src/lib/platform.ts` and its test, and keep the table above in step.
+Only a matched download is a filled button; with no match the button is outlined. To change the rules, edit `src/lib/platform.ts` and its test, and keep the table above in step.
 
 ## Screenshots
 

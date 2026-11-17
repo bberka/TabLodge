@@ -24,6 +24,29 @@
 		--link: #a99fff;
 	}
 }
+/* The thin rounded scrollbar the extension uses: a 10px track with a pill thumb that darkens on hover. */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in srgb, var(--muted) 35%, transparent) transparent;
+}
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--muted) 35%, transparent);
+	background-clip: padding-box;
+	border: 2px solid transparent;
+	border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in srgb, var(--muted) 60%, transparent);
+	background-clip: padding-box;
+}
 *,
 *::before,
 *::after {
@@ -167,13 +190,6 @@ section {
 	height: 1.1em;
 	flex: none;
 	fill: currentColor;
-}
-svg.button-icon.icon-outline {
-	fill: none;
-	stroke: currentColor;
-	stroke-width: 1.8;
-	stroke-linecap: round;
-	stroke-linejoin: round;
 }
 .actions {
 	display: flex;

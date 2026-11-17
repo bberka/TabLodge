@@ -1,6 +1,7 @@
 ---
 import ButtonIcon from '../components/ButtonIcon.astro';
 import '../styles/global.css';
+import {DOWNLOADS} from '../lib/downloads';
 import {SITE, abs} from '../site';
 
 interface Crumb {
@@ -52,22 +53,21 @@ if (breadcrumbs) {
 }
 const structured = JSON.stringify({'@context': 'https://schema.org', '@graph': graph});
 const nav = [
-	{href: '/#features', label: 'Features'},
-	{href: '/#install', label: 'Install'},
-	{href: '/alternatives/', label: 'Alternatives'},
+	{href: '/#how', label: 'How it works'},
+	{href: '/#android', label: 'Android'},
+	{href: '/alternatives/', label: 'Compare'},
 	{href: '/#faq', label: 'FAQ'},
 ];
 
-type FooterLink = {href: string; label: string; icon?: 'store' | 'github'};
+type FooterLink = {href: string; label: string; icon?: 'chrome' | 'firefox' | 'android' | 'github'};
 const footerGroups: Array<{title: string; links: FooterLink[]}> = [
 	{
 		title: 'Get TabLodge',
 		links: [
-			{href: SITE.chromeWebStore, label: 'Chrome Web Store', icon: 'store'},
-			{href: SITE.firefoxAddons, label: 'Firefox Add-ons', icon: 'store'},
-			{href: SITE.androidApk, label: 'Android APK', icon: 'store'},
+			...DOWNLOADS.map((item): FooterLink => ({href: item.href, label: item.footer, icon: item.id})),
 			{href: SITE.releases, label: 'Latest release'},
 			{href: '/alternatives/', label: 'Alternatives'},
+			{href: '/alternatives/android/', label: 'Android alternatives'},
 		],
 	},
 	{

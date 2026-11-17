@@ -1,28 +1,31 @@
 ---
 import Base from '../layouts/Base.astro';
 import ButtonIcon from '../components/ButtonIcon.astro';
+import DownloadLink from '../components/DownloadLink.astro';
 import DownloadButtons from '../components/DownloadButtons.astro';
 import Screenshot from '../components/Screenshot.astro';
 import {SITE, abs} from '../site';
-import {screenshotSet} from '../lib/screens';
 
 const title = 'TabLodge: Tab Session Manager and Bookmark Board';
 const description =
 	'Free, open source tab session manager and bookmark board for Chrome, Brave, Edge and Firefox. Save tabs for later, restore tab groups, and keep your library private in your browser.';
 
-const heroDark = await screenshotSet('dashboard', 'dark');
-const heroLight = await screenshotSet('dashboard', 'light');
-const heroSizes = '(min-width: 1160px) 1120px, calc(100vw - 2.5rem)';
+const heroSizes = '(min-width: 920px) 880px, calc(100vw - 2.5rem)';
 
 const features = [
-	{title: 'Save tabs as sessions', text: 'Save one tab, a window, or everything open, name it, and restore it whenever you want.'},
-	{title: 'Bookmark board', text: 'Columns of links on every new tab, ready when you open one.'},
-	{title: 'Search everything', text: 'Find any session, bookmark, or open tab from one search box, on any page.'},
-	{title: 'Import, back up, sync', text: 'Bring data from OneTab, Session Buddy, Toby, or Raindrop.io, and sync through a server you run.'},
-	{title: 'Colors and icons', text: 'Give sessions and columns a color and a searchable icon, in a light or dark theme.'},
-	{title: 'Private windows', text: 'Keep private windows in their own library, with an optional PIN or password lock.'},
-	{title: 'Link previews', text: 'Hover a link for its title and image, fetched through your own server, never a third party.'},
-	{title: 'Android app', text: 'Save, search, order and open bookmarks and sessions from your phone, synced through the same server.'},
+	{title: 'Save tabs as sessions'},
+	{title: 'Bookmark board on the new tab'},
+	{title: 'Search sessions, bookmarks and open tabs'},
+	{title: 'Import from OneTab, Session Buddy and Toby'},
+	{title: 'Private windows with a lock'},
+	{title: 'Sync through your own server'},
+	{title: 'Android app'},
+];
+
+const steps = [
+	{title: 'Save', text: 'Click the toolbar button to save one tab, a window, or everything open. The tabs close and the session stays in your library.'},
+	{title: 'Find', text: 'Every new tab shows your sessions and bookmark board. Press the shortcut on any page to search all of it, open tabs included.'},
+	{title: 'Restore', text: 'Open the whole session, or just the tabs you want. Tab groups come back as they were.'},
 ];
 
 const faq = [
@@ -31,28 +34,28 @@ const faq = [
 		a: 'Yes. It is free and open source under the MIT license, with no paid tier and no account.',
 	},
 	{
-		q: 'Which browsers does TabLodge support?',
-		a: 'Chromium-based browsers on Chrome 116 or newer, such as Chrome, Brave, Edge, Vivaldi, and Opera. Desktop Firefox 140 or newer works too, from Firefox Add-ons. Safari and mobile browsers cannot run the extension, but there is an Android app for your phone.',
-	},
-	{
-		q: 'Is TabLodge an alternative to OneTab, Session Buddy, or Toby?',
-		a: 'Yes. It saves tabs as sessions like they do, adds a bookmark board on the new tab, and imports your existing OneTab, Session Buddy, or Toby data. It is free, open source, and needs no account.',
+		q: 'Which browsers and devices does it support?',
+		a: 'Chrome, Brave, Edge, Vivaldi and Opera (version 116 or newer), and desktop Firefox 140 or newer. There is an Android app for Android 7 or newer. Safari and iPhone are not supported.',
 	},
 	{
 		q: 'Does TabLodge collect any data?',
-		a: 'No. There are no accounts, analytics, or telemetry, and it makes no network requests unless you turn on sync with a server you run. Your library is stored in your browser profile.',
+		a: 'No. There are no accounts, analytics, or telemetry. Your library stays in your browser profile, and TabLodge makes no network requests unless you turn on sync with a server you run.',
 	},
 	{
-		q: 'Does it sync between my computers?',
-		a: 'Yes, through a server you run yourself with Docker or on your Cloudflare account. There is no TabLodge cloud. Without a server, save a backup on one machine and import it on another.',
+		q: 'How does sync work?',
+		a: 'You run a small server with Docker or on your own Cloudflare account, then point the extension and the Android app at it. There is no TabLodge cloud. Without a server, export a backup on one device and import it on another.',
 	},
 	{
-		q: 'Is there a mobile app?',
-		a: 'Yes, for Android 7 or newer. It saves links you share from other apps, and shows, searches, and opens your bookmarks and sessions. You can put bookmarks and columns in order, give sessions colors, rename, move, archive, or delete them, choose what a tap or swipe does, and pick a light, dark, or phone-matched theme. It syncs through the same server you run. Download the APK from the latest release, since there is no store listing yet. A phone browser cannot give another app its open tabs, so sessions are saved on a computer or from a shared list of links. There is no iPhone app.',
+		q: 'Can I move over from OneTab, Session Buddy or Toby?',
+		a: 'Yes. Import their export files, or Raindrop.io data, from Settings. See how TabLodge compares on the alternatives page.',
+	},
+	{
+		q: 'What can the Android app do?',
+		a: 'It saves links you share from other apps, and shows, searches and opens your bookmarks and sessions. You can reorder bookmarks, rename, move, archive or delete sessions, and pick a light, dark or phone-matched theme. A phone browser cannot give another app its open tabs, so save sessions on a computer or share a list of links. The APK is on the latest release page, since there is no store listing yet.',
 	},
 	{
 		q: 'Will TabLodge replace my new tab page?',
-		a: 'Yes, it shows your bookmark board and sessions there. In Chromium browsers you can turn this off in Settings and use the popup, side panel, or shortcuts instead. In Firefox it always replaces the new tab page.',
+		a: 'Yes, it shows your bookmark board and sessions there. In Chromium browsers you can turn this off in Settings and use the popup, side panel or shortcuts instead. In Firefox it always replaces the new tab page.',
 	},
 ];
 
@@ -121,42 +124,21 @@ const jsonLd = [
 ---
 
 <Base title={title} description={description} path="/" jsonLd={jsonLd}>
-	<link
-		slot="head"
-		rel="preload"
-		as="image"
-		type="image/webp"
-		imagesrcset={heroDark.srcset}
-		imagesizes={heroSizes}
-		media="(prefers-color-scheme: dark)"
-		fetchpriority="high"
-	/>
-	<link
-		slot="head"
-		rel="preload"
-		as="image"
-		type="image/webp"
-		imagesrcset={heroLight.srcset}
-		imagesizes={heroSizes}
-		media="(prefers-color-scheme: light)"
-		fetchpriority="high"
-	/>
-
 	<section class="hero">
 		<div class="wrap">
 			<p class="eyebrow">Free &amp; open source</p>
-			<h1>Sessions and bookmarks in one quiet place.</h1>
-			<p class="lead">A free tab session manager and bookmark board. Save tabs for later and restore them with tab groups intact.</p>
-			<DownloadButtons>
-				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
+			<h1>Save your tabs. Find them again.</h1>
+			<p class="lead">TabLodge saves your open tabs as named sessions, keeps a bookmark board on every new tab, and searches all of it. Your library stays in your browser, and it syncs to your phone through a server you run.</p>
+<DownloadButtons>
+				<a class="btn ghost" href="/alternatives/">Compare alternatives</a>
 			</DownloadButtons>
 			<p class="note">
-				TabLodge v{SITE.version} &middot; Chrome 116+ &middot; Firefox 140+ &middot; MIT license
+				v{SITE.version} &middot; Chrome 116+ &middot; Firefox 140+ &middot; Android 7+ &middot; MIT license
 			</p>
 			<div class="hero-shot">
 				<Screenshot
 					name="dashboard"
-					alt="TabLodge dashboard with saved tab sessions above a board of bookmark columns"
+					alt="TabLodge dashboard with a board of bookmark columns above saved tab sessions"
 					sizes={heroSizes}
 					eager
 				/>
@@ -164,72 +146,73 @@ const jsonLd = [
 		</div>
 	</section>
 
-	<section id="features" class="alt">
+	<section id="how" class="alt">
 		<div class="wrap">
-			<p class="eyebrow">Features</p>
-			<h2>What it does</h2>
-			<ul class="grid">
+			<p class="eyebrow">How it works</p>
+			<h2>Save now, find it later</h2>
+			<ol class="steps">
 				{
-					features.map((f) => (
+					steps.map((step, i) => (
 						<li class="card">
-							<h3>{f.title}</h3>
-							<p>{f.text}</p>
+							<h3><span class="num" aria-hidden="true">{i + 1}</span>{step.title}</h3>
+							<p>{step.text}</p>
 						</li>
 					))
 				}
+			</ol>
+		</div>
+	</section>
+
+	<section id="extension">
+		<div class="wrap">
+			<p class="eyebrow">In your browser</p>
+			<h2>Your tabs, organized</h2>
+			<ul class="points">
+				<li><strong>Sessions.</strong> Name them, color them, and sort them into folders. Archive the ones you are done with.</li>
+				<li><strong>Bookmark board.</strong> Columns of links on every new tab, with link previews fetched through your own server.</li>
+				<li><strong>Private windows.</strong> They get their own library, with an optional PIN or password lock.</li>
+				<li><strong>Import and export.</strong> Bring data from OneTab, Session Buddy, Toby or Raindrop.io. Export as JSON, HTML, CSV or Markdown.</li>
 			</ul>
 		</div>
-	</section>
-
-	<section>
-		<div class="wrap split">
+		<div class="wrap two">
 			<div>
-				<p class="eyebrow">Search</p>
-				<h2>Find it all.</h2>
-				<p class="lead">Search sessions, bookmarks, and open tabs in one place.</p>
-			</div>
-			<Screenshot
-				name="palette"
-				alt="TabLodge command palette searching for 'lis' and listing a session, a bookmark and saved tabs"
-				sizes="(min-width: 900px) 540px, calc(100vw - 2.5rem)"
-				widths={[540, 1080, 1520]}
-			/>
-		</div>
-	</section>
-
-	<section class="alt">
-		<div class="wrap split reverse">
-			<div class="sidepanel-shot">
+				<h3>Search everything</h3>
+				<p>One box finds any session, bookmark or open tab, on any page.</p>
 				<Screenshot
-					name="sidepanel"
-					alt="TabLodge side panel listing bookmark columns with a search box and Bookmarks, Sessions and Tabs tabs"
-					sizes="(min-width: 900px) 320px, 60vw"
-					widths={[420, 640, 840]}
+					name="palette"
+					alt="TabLodge command palette searching for 'lis' and listing a session, a bookmark and saved tabs"
+					sizes="(min-width: 900px) 540px, calc(100vw - 2.5rem)"
+					widths={[540, 1080, 1520]}
 				/>
 			</div>
-			<div>
-				<p class="eyebrow">Side panel</p>
-				<h2>Always one click away</h2>
-				<p class="lead">Browse sessions, bookmarks, and open tabs beside your page.</p>
+			<div class="side">
+				<h3>Side panel</h3>
+				<p>Browse sessions, bookmarks and open tabs beside the page you are on.</p>
+				<div class="sidepanel-shot">
+					<Screenshot
+						name="sidepanel"
+						alt="TabLodge side panel listing bookmark columns with a search box and Bookmarks, Sessions and Tabs tabs"
+						sizes="(min-width: 900px) 320px, 60vw"
+						widths={[420, 640, 840]}
+					/>
+				</div>
 			</div>
 		</div>
 	</section>
 
-	<section id="android">
+	<section id="android" class="alt">
 		<div class="wrap split">
 			<div>
-				<p class="eyebrow">Android</p>
-				<h2>Your links on your phone</h2>
-				<p class="lead">Share a link from any app to save it. Open your bookmarks and sessions anywhere, synced through your own server.</p>
+				<p class="eyebrow">On your phone</p>
+				<h2>Your links, on Android</h2>
+				<p class="lead">Share a link from any app to save it, then open your bookmarks and sessions anywhere. It syncs through the same server as the extension.</p>
 				<ul class="points">
-					<li>Swipe a bookmark to edit, move, or delete it, or select several and open them all at once.</li>
 					<li>Share a browser's tabs to TabLodge to save them as bookmarks or a session.</li>
-					<li>Needs Android 7 or newer. Install it from the latest release.</li>
-					<li><a href="/alternatives/android/">How it compares with other link-saving apps</a>.</li>
+					<li>Swipe a bookmark to edit, move or delete it, or select several and open them together.</li>
+					<li>Needs Android 7 or newer.</li>
 				</ul>
 				<p class="actions">
-					<a class="btn primary" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="store" />Download the APK</a>
-					<a class="btn ghost" href={SITE.releases} rel="noopener">All releases</a>
+					<DownloadLink store="android" label="Download the APK" />
 				</p>
 			</div>
 			<div class="phones">
@@ -253,14 +236,28 @@ const jsonLd = [
 		</div>
 	</section>
 
-	<section id="privacy" class="alt">
-		<div class="wrap split">
-			<div>
-				<p class="eyebrow">Privacy</p>
-				<h2>Your tabs stay yours</h2>
-				<p class="lead">Your library stays in your browser. No account, tracking, or website access.</p>
-			</div>
-			<p><a class="btn ghost" href="/privacy/">Read the privacy policy</a></p>
+	<section id="privacy">
+		<div class="wrap">
+			<p class="eyebrow">Private by design</p>
+			<h2>No account, no cloud, no tracking</h2>
+			<p class="lead">Your library stays in your browser. To sync between devices, run your own server with Docker or Cloudflare. TabLodge never sees your data. <a href="/privacy/">Read the privacy policy</a>.</p>
+		</div>
+	</section>
+
+	<section id="compare" class="alt">
+		<div class="wrap">
+			<p class="eyebrow">Compare</p>
+			<h2>How it stacks up</h2>
+			<ul class="compare">
+				<li class="card">
+					<h3><a href="/alternatives/">Browser extensions</a></h3>
+					<p>TabLodge next to OneTab, Session Buddy and Toby, feature by feature.</p>
+				</li>
+				<li class="card">
+					<h3><a href="/alternatives/android/">Android apps</a></h3>
+					<p>The Android app next to Raindrop.io, Linkwarden, Karakeep, wallabag and Instapaper.</p>
+				</li>
+			</ul>
 		</div>
 	</section>
 
@@ -281,28 +278,31 @@ const jsonLd = [
 		</div>
 	</section>
 
-	<section id="install" class="cta">
+	<section id="install" class="cta alt">
 		<div class="wrap center">
 			<h2>Give your tabs a lodge</h2>
-			<DownloadButtons center>
-				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
-			</DownloadButtons>
+<DownloadButtons center />
 		</div>
 	</section>
 </Base>
 
 <style>
 	.hero {
-		padding-top: 3.5rem;
-		padding-bottom: 3rem;
+		padding-top: 4rem;
+		padding-bottom: 3.5rem;
 	}
 	.hero h1 {
 		max-width: 18ch;
 	}
-	.hero-shot {
-		margin-top: 2.2rem;
+	.hero .lead {
+		max-width: 46rem;
 	}
-	.grid {
+	.hero-shot {
+		margin-top: 2rem;
+		max-width: 880px;
+	}
+	.steps,
+	.compare {
 		list-style: none;
 		margin: 2rem 0 0;
 		padding: 0;
@@ -310,14 +310,12 @@ const jsonLd = [
 		gap: 1.1rem;
 		grid-template-columns: 1fr;
 	}
-	@media (min-width: 560px) {
-		.grid {
-			grid-template-columns: repeat(2, 1fr);
+	@media (min-width: 760px) {
+		.steps {
+			grid-template-columns: repeat(3, 1fr);
 		}
-	}
-	@media (min-width: 1000px) {
-		.grid {
-			grid-template-columns: repeat(4, 1fr);
+		.compare {
+			grid-template-columns: repeat(2, 1fr);
 		}
 	}
 	.card {
@@ -330,6 +328,44 @@ const jsonLd = [
 		color: var(--muted);
 		font-size: 0.98rem;
 	}
+	.card h3:has(.num) {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+	}
+	.num {
+		flex: none;
+		display: inline-grid;
+		place-items: center;
+		width: 1.8rem;
+		height: 1.8rem;
+		border-radius: 50%;
+		background: var(--link);
+		color: var(--bg);
+		font-weight: 700;
+		font-size: 0.95rem;
+	}
+	.compare h3 a {
+		text-decoration: none;
+	}
+	.compare h3 a::after {
+		content: ' \2192';
+	}
+	.two {
+		display: grid;
+		gap: 2.5rem;
+		margin-top: 3rem;
+		align-items: start;
+	}
+	.two p {
+		color: var(--muted);
+	}
+	@media (min-width: 900px) {
+		.two {
+			grid-template-columns: 1fr 320px;
+			gap: 4rem;
+		}
+	}
 	.split {
 		display: grid;
 		gap: 2.5rem;
@@ -339,20 +375,18 @@ const jsonLd = [
 		.split {
 			grid-template-columns: 1fr 1fr;
 		}
-		.split.reverse {
-			grid-template-columns: 320px 1fr;
-			gap: 4rem;
-		}
 	}
 	.sidepanel-shot {
 		max-width: 320px;
 		width: 60vw;
-		justify-self: center;
 	}
 	.points {
 		margin: 1rem 0 1.4rem;
 		padding-left: 1.2rem;
 		color: var(--muted);
+	}
+	.points strong {
+		color: var(--text);
 	}
 	.phones {
 		display: flex;
@@ -384,9 +418,6 @@ const jsonLd = [
 	}
 	.center {
 		text-align: center;
-	}
-	.actions.center {
-		justify-content: center;
 	}
 	.cta {
 		padding-block: 5rem;
