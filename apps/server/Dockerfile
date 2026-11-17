@@ -6,6 +6,8 @@ FROM node:24-slim AS build
 WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# pnpm checks every patch the workspace lists, even for packages this filter skips.
+COPY patches patches
 COPY apps/server/package.json apps/server/
 COPY apps/site/package.json apps/site/
 # Only the build tools and the server's dependencies; install scripts fetch browser and workerd binaries the
