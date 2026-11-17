@@ -172,7 +172,7 @@ const FORMAT_CHOICES: ReadonlyArray<{
 		sessions:
 			'Title, URL, session, folder, notes, and date per row. For analysis, not a full restore.',
 		bookmarks:
-			'Title, URL, column, and date per row. For analysis, not a full restore.',
+			'Title, URL, column, notes, and date per row. For analysis, not a full restore.',
 	},
 	{
 		id: 'markdown',
