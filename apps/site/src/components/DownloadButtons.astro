@@ -9,31 +9,113 @@ const {center = false} = Astro.props;
 ---
 
 <!--
-All three downloads are in the page, so it works without scripts, in this order. The script below moves the one that
-suits the visitor's device to the front and highlights it, and adds a line when the device has no match.
+One download button with the other ways in a menu. All three links are in the page, so it works without scripts and
+search engines see every link. The script below puts the one that suits the visitor's device on the button, the rest in
+the menu, and adds a line when the device has no match.
 -->
 <div class="downloads" data-downloads>
 	<div class:list={['actions', center && 'center']}>
-		<a class="btn primary" data-store="chrome" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="store" /><span class="lead-in">Install from </span>Chrome Web Store</a>
-		<a class="btn ghost" data-store="firefox" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="store" />Get for Firefox</a>
-		<a class="btn ghost" data-store="android" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="store" />Get for Android</a>
-		<slot />
+		<div class="split" data-split>
+			<a class="btn primary main" data-main data-store="chrome" href={SITE.chromeWebStore} rel="noopener"><ButtonIcon kind="chrome" /><span><span class="lead-in">Install from </span>Chrome Web Store</span></a>
+			<details class="more" data-more>
+				<summary class="btn primary toggle" aria-label="Other ways to install"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6" /></svg></summary>
+				<div class="menu" data-menu>
+					<a data-store="firefox" href={SITE.firefoxAddons} rel="noopener"><ButtonIcon kind="firefox" />Get for Firefox</a>
+					<a data-store="android" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="android" />Get for Android</a>
+				</div>
+			</details>
+		</div>
 	</div>
 	<p class:list={['note', 'download-note', center && 'center']} data-note role="status" hidden></p>
 </div>
 
 <style>
-	/* Anything slotted in (a link to the source) stays after the downloads. */
-	.downloads .actions > :global(:not([data-store])) {
-		order: 9;
+	.actions.center {
+		justify-content: center;
 	}
-	/* On a phone the buttons stack at full width, each on one line, so none wraps or sits narrower than the rest. */
+	.split {
+		position: relative;
+		display: inline-flex;
+	}
+	.split .main {
+		white-space: nowrap;
+		border-radius: 999px 0 0 999px;
+		border-right-width: 1px;
+	}
+	.split .ghost.main {
+		border-right-width: 1px;
+	}
+	.more {
+		display: flex;
+	}
+	.toggle {
+		list-style: none;
+		cursor: pointer;
+		border-radius: 0 999px 999px 0;
+		border-left: 1px solid rgb(255 255 255 / 0.35);
+		padding-inline: 0.9rem;
+		height: 100%;
+		box-sizing: border-box;
+	}
+	.toggle:focus-visible {
+		outline-offset: 3px;
+	}
+	.toggle::-webkit-details-marker {
+		display: none;
+	}
+	.toggle svg {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2.2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		transition: transform 0.15s;
+	}
+	.more[open] .toggle svg {
+		transform: rotate(180deg);
+	}
+	.menu {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		left: 0;
+		z-index: 5;
+		min-width: 100%;
+		width: max-content;
+		display: grid;
+		padding: 0.4rem;
+		background: var(--card);
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+	}
+	.menu a {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.65rem 0.8rem;
+		border-radius: 0.5rem;
+		color: var(--text);
+		text-decoration: none;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.menu a:hover,
+	.menu a:focus-visible {
+		background: var(--bg-alt);
+	}
+	.menu :global(svg) {
+		width: 1.1em;
+		height: 1.1em;
+		flex: none;
+	}
 	@media (max-width: 560px) {
-		.downloads .actions {
-			flex-direction: column;
-			align-items: stretch;
+		.actions,
+		.split {
+			display: flex;
+			width: 100%;
 		}
-		.downloads .actions > :global(.btn) {
+		.split .main {
+			flex: 1;
 			justify-content: center;
 			white-space: nowrap;
 		}
@@ -56,19 +138,44 @@ suits the visitor's device to the front and highlights it, and adds a line when 
 	const platform = detectPlatform(navigator.userAgent, readHints(navigator));
 	for (const root of document.querySelectorAll<HTMLElement>('[data-downloads]')) {
 		root.dataset.platform = platform.id;
-		for (const [index, store] of platform.order.entries()) {
-			const link = root.querySelector<HTMLElement>(`[data-store="${store}"]`);
-			if (!link) continue;
-			const primary = store === platform.primary;
-			link.style.order = String(index);
-			link.classList.toggle('primary', primary);
-			link.classList.toggle('ghost', !primary);
+		const main = root.querySelector<HTMLAnchorElement>('[data-main]');
+		const menu = root.querySelector<HTMLElement>('[data-menu]');
+		const find = (store: string) => root.querySelector<HTMLAnchorElement>(`[data-store="${store}"]`);
+		const first = find(platform.order[0]);
+		if (main && menu && first && first !== main) {
+			// Swap the first choice onto the button; the one it replaces goes to the menu.
+			const placeholder = document.createComment('');
+			first.replaceWith(placeholder);
+			main.replaceWith(first);
+			placeholder.replaceWith(main);
+			first.classList.add('btn', 'main');
+			first.dataset.main = '';
+			main.classList.remove('btn', 'main', 'primary', 'ghost');
+			delete main.dataset.main;
+			main.querySelector('.lead-in')?.remove();
 		}
+		const current = root.querySelector<HTMLElement>('[data-main]');
+		const primary = platform.primary !== undefined && current?.dataset.store === platform.primary;
+		current?.classList.toggle('primary', primary);
+		current?.classList.toggle('ghost', !primary);
+		root.querySelector('.toggle')?.classList.toggle('primary', primary);
+		root.querySelector('.toggle')?.classList.toggle('ghost', !primary);
 
 		const note = root.querySelector<HTMLElement>('[data-note]');
 		if (note && platform.note) {
 			note.textContent = platform.note;
 			note.hidden = false;
 		}
+
+		const more = root.querySelector<HTMLDetailsElement>('[data-more]');
+		document.addEventListener('click', (event) => {
+			if (more?.open && !more.contains(event.target as Node)) more.open = false;
+		});
+		more?.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') {
+				more.open = false;
+				more.querySelector('summary')?.focus();
+			}
+		});
 	}
 </script>

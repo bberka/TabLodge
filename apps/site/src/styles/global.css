@@ -168,13 +168,6 @@ section {
 	flex: none;
 	fill: currentColor;
 }
-svg.button-icon.icon-outline {
-	fill: none;
-	stroke: currentColor;
-	stroke-width: 1.8;
-	stroke-linecap: round;
-	stroke-linejoin: round;
-}
 .actions {
 	display: flex;
 	flex-wrap: wrap;

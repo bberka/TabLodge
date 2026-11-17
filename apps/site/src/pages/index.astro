@@ -128,9 +128,7 @@ const jsonLd = [
 			<p class="eyebrow">Free &amp; open source</p>
 			<h1>Save your tabs. Find them again.</h1>
 			<p class="lead">TabLodge saves your open tabs as named sessions, keeps a bookmark board on every new tab, and searches all of it. Your library stays in your browser, and it syncs to your phone through a server you run.</p>
-			<DownloadButtons>
-				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
-			</DownloadButtons>
+<DownloadButtons />
 			<p class="note">
 				v{SITE.version} &middot; Chrome 116+ &middot; Firefox 140+ &middot; Android 7+ &middot; MIT license
 			</p>
@@ -154,8 +152,7 @@ const jsonLd = [
 				{
 					steps.map((step, i) => (
 						<li class="card">
-							<span class="num" aria-hidden="true">{i + 1}</span>
-							<h3>{step.title}</h3>
+							<h3><span class="num" aria-hidden="true">{i + 1}</span>{step.title}</h3>
 							<p>{step.text}</p>
 						</li>
 					))
@@ -213,7 +210,7 @@ const jsonLd = [
 					<li>Needs Android 7 or newer.</li>
 				</ul>
 				<p class="actions">
-					<a class="btn primary" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="store" />Download the APK</a>
+					<a class="btn primary" href={SITE.androidApk} rel="noopener"><ButtonIcon kind="android" />Download the APK</a>
 				</p>
 			</div>
 			<div class="phones">
@@ -282,9 +279,7 @@ const jsonLd = [
 	<section id="install" class="cta alt">
 		<div class="wrap center">
 			<h2>Give your tabs a lodge</h2>
-			<DownloadButtons center>
-				<a class="btn ghost" href={SITE.repo} rel="noopener"><ButtonIcon kind="github" />View on GitHub</a>
-			</DownloadButtons>
+<DownloadButtons center />
 		</div>
 	</section>
 </Base>
@@ -331,7 +326,13 @@ const jsonLd = [
 		color: var(--muted);
 		font-size: 0.98rem;
 	}
+	.card h3:has(.num) {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+	}
 	.num {
+		flex: none;
 		display: inline-grid;
 		place-items: center;
 		width: 1.8rem;
