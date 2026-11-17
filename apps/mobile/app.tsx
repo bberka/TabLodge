@@ -120,9 +120,16 @@ function Main() {
 		quick: false,
 	});
 	const [open, setOpen] = useState(false);
-	// An export file or a backup shared from another app opens the same sheets as Settings › Import and export.
-	const [sharedImport, setSharedImport] = useState<ImportSource>();
-	const [sharedBackup, setSharedBackup] = useState<RestoreSource>();
+	// An export file or a backup shared from another app opens the same sheets as Settings › Import and export. Each
+	// share replaces the last one's sheet, and a new `fileKey` starts it fresh.
+	const [sharedFile, setSharedFile] = useState<
+		| {kind: 'import'; source: ImportSource}
+		| {kind: 'backup'; source: RestoreSource}
+	>();
+	const [fileKey, setFileKey] = useState(0);
+	const closeSharedFile = useCallback(() => {
+		setSharedFile(undefined);
+	}, []);
 	// A search result that leads to a session or column opens that screen.
 	const jump = usePendingJump();
 	useEffect(() => {
@@ -186,6 +193,7 @@ function Main() {
 	// shared file is read once, and the copy the share library made of it is deleted.
 	const openShare = useCallback(
 		async (outcome: ShareOutcome, quick: boolean) => {
+			setSharedFile(undefined);
 			if (outcome.kind === 'refused') {
 				if (quick) {
 					// The toast stays on screen over the app the file came from.
@@ -230,10 +238,18 @@ function Main() {
 			try {
 				if (outcome.kind === 'import') {
 					const text = await readSharedText(outcome.path, outcome.size);
-					setSharedImport({mode: 'file', name: outcome.name, text});
+					setFileKey((key) => key + 1);
+					setSharedFile({
+						kind: 'import',
+						source: {mode: 'file', name: outcome.name, text},
+					});
 				} else {
 					const bytes = await readSharedBytes(outcome.path, outcome.size);
-					setSharedBackup({name: outcome.name, bytes});
+					setFileKey((key) => key + 1);
+					setSharedFile({
+						kind: 'backup',
+						source: {name: outcome.name, bytes},
+					});
 				}
 			} catch (error) {
 				cannotOpen(error);
@@ -375,16 +391,14 @@ function Main() {
 			<PrivateSheetHost />
 			<ShareHost />
 			<ImportSheet
-				source={sharedImport}
-				onClose={() => {
-					setSharedImport(undefined);
-				}}
+				key={`import-${fileKey}`}
+				source={sharedFile?.kind === 'import' ? sharedFile.source : undefined}
+				onClose={closeSharedFile}
 			/>
 			<RestoreSheet
-				source={sharedBackup}
-				onClose={() => {
-					setSharedBackup(undefined);
-				}}
+				key={`backup-${fileKey}`}
+				source={sharedFile?.kind === 'backup' ? sharedFile.source : undefined}
+				onClose={closeSharedFile}
 			/>
 			<ConnectSheet
 				visible={connecting}
