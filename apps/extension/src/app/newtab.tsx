@@ -2925,7 +2925,7 @@ function NewTab() {
 							</span>
 						</Button>
 					)}
-					<SyncIndicator />
+					<SyncIndicator showStatus={showStatus} />
 					{settings.showTrashBinButton !== false && (
 						<IconTooltip label="Trash bin">
 							<Button
