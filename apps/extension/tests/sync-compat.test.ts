@@ -45,13 +45,13 @@ test('a server with every feature has no problem, and one without the newest nam
 	});
 	assert.deepEqual(
 		old.missing.map(({name}) => name),
-		['notes', 'shared-pages'],
+		['notes', 'shared-pages', 'page-source'],
 	);
 	assert.equal(old.server?.version, null);
 	assert.equal(releaseWithAll(old.missing), '0.4.0');
 	assert.equal(
 		problemNotice(old),
-		'Your sync server is missing 2 features this app uses. Settings › Sync lists them.',
+		'Your sync server is missing 3 features this app uses. Settings › Sync lists them.',
 	);
 });
 

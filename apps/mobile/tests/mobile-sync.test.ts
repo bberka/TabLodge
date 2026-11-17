@@ -384,7 +384,7 @@ describe('a server that does not match the phone', () => {
 		assert.equal(compat.server?.version, null);
 		assert.deepEqual(
 			compat.missing.map(({name}) => name),
-			['notes', 'shared-pages'],
+			['notes', 'shared-pages', 'page-source'],
 		);
 		assert.equal(releaseWithAll(compat.missing), '0.4.0');
 	});

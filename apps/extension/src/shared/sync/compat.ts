@@ -96,6 +96,12 @@ export const SERVER_FEATURES: ReadonlyArray<{
 		missing: 'Upload to my server cannot share pages.',
 	},
 	{
+		name: 'page-source',
+		since: '0.4.0',
+		missing:
+			'Keep a copy on the phone fetches pages itself, not through the server.',
+	},
+	{
 		name: 'private',
 		since: '0.2.0',
 		missing: 'The private library does not sync.',

@@ -205,6 +205,7 @@ Each optional part of TabLodge needs a server from the release that added it:
 | Trash (`trash`) | 0.2.2 | Each device keeps its own trash |
 | Bookmark notes (`notes`) | 0.4.0 | Notes stay on the device where they were written |
 | Shared pages (`shared-pages`) | 0.4.0 | **Upload to my server** cannot share pages |
+| Page copies through the server (`page-source`) | 0.4.0 | The Android app fetches pages for **Keep a copy** itself, so the site sees the phone |
 
 Sync stops only when the server and the app speak different versions of the sync protocol, which is rare. **Settings › Sync** then says which one to update: "Your sync server is older than this app. Update the server to 0.2.0 or later." or "This app is older than your sync server. Update TabLodge." Everything on the device stays as it is, and sync starts again by itself after the update.
 
