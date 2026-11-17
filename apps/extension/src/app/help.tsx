@@ -521,9 +521,9 @@ function Help() {
 						label: 'Select text, then right-click',
 						icon: MousePointer2,
 					},
-					body: "Search your saved tabs and bookmarks for the selected words, or choose Save quote to keep the text in the note of the page's bookmark. A page with no bookmark gets one in the column Add bookmark would pick; a page already saved in a session keeps the quote in that link's notes. Each quote is followed by a link that opens the page scrolled to the passage and highlights it. More quotes from the same page are added below, and a message on the page offers Undo. A note holds up to 10,000 characters, and a quote that does not fit is not saved.",
+					body: "Search your saved tabs and bookmarks for the selected words, or choose Save quote to keep the text in the note of the page's bookmark. A page with no bookmark gets one in the column Add bookmark would pick; a page already saved in a session keeps the quote in that link's notes. Each quote is followed by a link that opens the page scrolled to the passage and highlights it. Notes show that link as Go to passage; editing, copying, or exporting the note gives the full address. More quotes from the same page are added below, and a message on the page offers Undo. A note holds up to 10,000 characters, and a quote that does not fit is not saved.",
 					searchText:
-						'select text selection right-click search saved tabs bookmarks words save quote highlight passage note text fragment undo',
+						'select text selection right-click search saved tabs bookmarks words save quote highlight passage go to passage note text fragment undo',
 				},
 				{
 					title: `On the ${PROJECT.name} toolbar icon`,

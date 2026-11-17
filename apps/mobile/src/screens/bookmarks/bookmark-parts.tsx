@@ -15,6 +15,11 @@ import {TARGET, useColors, useShape} from '../../ui/theme';
 import {Button, Chips, Icon, type IconName} from '../../ui/widgets';
 import {BookmarkIcon, spokenKind} from '../../ui/bookmark-icon';
 import {SaveLinkForm} from '../save/save-link';
+import {NoteText} from '../../ui/note-text';
+import {
+	firstPassage,
+	spokenNote,
+} from '../../../../extension/src/shared/note-links';
 
 /**
 One bookmark: tap to open, swipe right to delete or left to edit, long press to select. Screen reader users get
@@ -49,6 +54,12 @@ function BookmarkRowView({
 	const open = () => {
 		openLink(linkToOpen(bookmark.url, settings));
 	};
+
+	const openPassage = (url: string) => {
+		openLink(linkToOpen(url, settings));
+	};
+
+	const passage = firstPassage(bookmark.notes ?? '');
 
 	const toggle = () => {
 		onToggle(bookmark);
@@ -87,7 +98,7 @@ function BookmarkRowView({
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
-				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}${bookmark.notes ? `, note: ${bookmark.notes}` : ''}`}
+				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}${bookmark.notes ? `, note: ${spokenNote(bookmark.notes)}` : ''}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
 				accessibilityActions={[
 					{name: 'open', label: 'Open in browser'},
@@ -95,6 +106,7 @@ function BookmarkRowView({
 					{name: 'edit', label: 'Edit'},
 					{name: 'move', label: 'Move to column'},
 					{name: 'delete', label: 'Delete'},
+					...(passage ? [{name: 'passage', label: passage.name}] : []),
 				]}
 				style={({pressed}) => [
 					styles.row,
@@ -135,6 +147,14 @@ function BookmarkRowView({
 							break;
 						}
 
+						case 'passage': {
+							if (passage) {
+								openPassage(passage.url);
+							}
+
+							break;
+						}
+
 						default:
 					}
 				}}
@@ -168,12 +188,12 @@ function BookmarkRowView({
 						</View>
 					)}
 					{bookmark.notes && (
-						<Text
+						<NoteText
+							notes={bookmark.notes}
 							numberOfLines={compact ? 1 : 2}
 							style={[styles.notes, {color: colors.muted}]}
-						>
-							{bookmark.notes}
-						</Text>
+							onOpen={selecting ? undefined : openPassage}
+						/>
 					)}
 				</View>
 				{!selecting && (
