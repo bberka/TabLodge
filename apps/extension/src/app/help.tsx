@@ -105,7 +105,7 @@ function Key({children}: {children: ReactNode}) {
 
 function Op({children}: {children: ReactNode}) {
 	return (
-		<code className="whitespace-nowrap rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em] text-foreground">
+		<code className="whitespace-nowrap rounded-sm bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
 			{children}
 		</code>
 	);

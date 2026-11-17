@@ -388,7 +388,7 @@ export function searchFinder(
 ): FinderSection[] {
 	const trimmed = query.trim();
 	const parsed = parseSearchQuery(trimmed);
-	const filtered = hasOperators(parsed);
+	const filtering = hasOperators(parsed);
 	const terms = searchTerms(`${parsed.text} ${parsed.phrases.join(' ')}`);
 	const sections: FinderSection[] = [];
 	const section = (kind: FinderKind, items: FinderItem[]) => {
@@ -397,7 +397,7 @@ export function searchFinder(
 		}
 	};
 
-	if (terms.length === 0 && !filtered) {
+	if (terms.length === 0 && !filtering) {
 		for (const [kind, limit] of EMPTY_LIMIT) {
 			const items = index.filter((item) => item.kind === kind);
 			if (kind === 'session') {
@@ -422,7 +422,7 @@ export function searchFinder(
 	const misses: Array<{item: FinderItem; position: number}> = [];
 	for (const [position, item] of index.entries()) {
 		if (
-			filtered &&
+			filtering &&
 			!passesOperators(parsed, item.texts, item.facets ?? NO_FACETS)
 		) {
 			continue;
