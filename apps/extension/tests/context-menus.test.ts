@@ -129,7 +129,11 @@ function createHarness(
 			title: 'Current page',
 		},
 	],
-	{firefox = false}: {firefox?: boolean} = {},
+	{
+		firefox = false,
+		userAgent = '',
+		listsTabContext = true,
+	}: {firefox?: boolean; userAgent?: string; listsTabContext?: boolean} = {},
 ) {
 	const listeners: Record<string, Listener[]> = {};
 	const on = (name: string) => ({
@@ -384,8 +388,10 @@ function createHarness(
 		commands: {onCommand: on('onCommand')},
 		contextMenus: {
 			ACTION_MENU_TOP_LEVEL_LIMIT: 6,
-			// Chrome 150 and Firefox both list the tab strip's context.
-			ContextType: {PAGE: 'page', TAB: 'tab'},
+			// Firefox and Chromium 149 or newer list the tab strip's context.
+			ContextType: listsTabContext
+				? {PAGE: 'page', TAB: 'tab'}
+				: {PAGE: 'page'},
 			// Callback-style, as on Chrome 116-122: nothing is returned.
 			removeAll(callback?: () => void) {
 				menus.clear();
@@ -450,6 +456,7 @@ function createHarness(
 		globalThis: null,
 		setTimeout,
 		clearTimeout,
+		navigator: {userAgent},
 	});
 	context.globalThis = context;
 	vm.runInContext(workerSource, context, {filename: workerPath});
@@ -568,7 +575,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	assert.deepEqual(pageRoots[0].contexts, ['page', 'frame']);
 	assert.ok(
 		harness.items().every((item) => !item.contexts?.includes('tab')),
-		'Chromium gets no tab strip items, although Chrome 150 has the context',
+		'a Chromium of unknown version gets no tab strip items, although it lists the context',
 	);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-root')), [
 		'Bookmark this page to',
@@ -1534,7 +1541,10 @@ test('menu actions never throw when an action fails', async () => {
 	assert.equal(harness.state.groups.length, 0);
 });
 
-const firefoxTabs: MockTab[] = [
+const chromeUserAgent = (major: number) =>
+	`Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+
+const stripTabs: MockTab[] = [
 	{
 		id: 1,
 		windowId: 10,
@@ -1565,7 +1575,7 @@ const firefoxTabs: MockTab[] = [
 ];
 
 test('Firefox puts the page items on the tab strip and retitles the bookmark item there', async () => {
-	const harness = createHarness(baseState(), firefoxTabs, {firefox: true});
+	const harness = createHarness(baseState(), stripTabs, {firefox: true});
 	await harness.install();
 	assert.deepEqual(harness.menuErrors, []);
 	assert.deepEqual(
@@ -1580,7 +1590,7 @@ test('Firefox puts the page items on the tab strip and retitles the bookmark ite
 		'only page items join the tab strip',
 	);
 
-	harness.fire('menuShown', {contexts: ['tab']}, firefoxTabs[2]);
+	harness.fire('menuShown', {contexts: ['tab']}, stripTabs[2]);
 	await wait(10);
 	assert.equal(
 		harness.item('tablodge-page-bookmark')?.title,
@@ -1588,7 +1598,7 @@ test('Firefox puts the page items on the tab strip and retitles the bookmark ite
 	);
 	assert.equal(harness.refreshes(), 1);
 
-	harness.fire('menuShown', {contexts: ['page', 'all']}, firefoxTabs[0]);
+	harness.fire('menuShown', {contexts: ['page', 'all']}, stripTabs[0]);
 	await wait(10);
 	assert.equal(
 		harness.item('tablodge-page-bookmark')?.title,
@@ -1596,51 +1606,150 @@ test('Firefox puts the page items on the tab strip and retitles the bookmark ite
 	);
 });
 
-test('tab strip items act on the clicked tab, even when it is not the active one', async () => {
+test('Chromium 150 puts the page items on the tab strip, with & as written and the page title kept', async () => {
+	const state = baseState();
+	state.bookmarkColumns.push({
+		id: 'column-rd',
+		name: 'R&D',
+		createdAt: 3,
+		isDefault: false,
+	});
+	const harness = createHarness(state, stripTabs, {
+		userAgent: chromeUserAgent(150),
+	});
+	await harness.install();
+	assert.deepEqual(harness.menuErrors, []);
+	const idsWith = (context: string) =>
+		harness
+			.items()
+			.filter((item) => item.contexts?.includes(context))
+			.map((item) => item.id);
+	assert.deepEqual(
+		harness.topLevel('tab').map((item) => item.id),
+		['tablodge-page-root'],
+	);
+	assert.deepEqual(
+		idsWith('tab'),
+		idsWith('page'),
+		'exactly the page items join the tab strip',
+	);
+	assert.equal(harness.item('tablodge-page-bookmark:column-rd')?.title, 'R&D');
+	assert.equal(
+		harness.item('tablodge-page-bookmark')?.title,
+		'Bookmark this page to',
+	);
+});
+
+test('Chromium before 150 adds no tab strip items, whether or not it lists the context', async () => {
+	for (const [major, listsTabContext] of [
+		[149, true],
+		[148, false],
+	] as const) {
+		const harness = createHarness(baseState(), stripTabs, {
+			userAgent: chromeUserAgent(major),
+			listsTabContext,
+		});
+		await harness.install();
+		assert.deepEqual(harness.menuErrors, []);
+		assert.ok(harness.item('tablodge-page-root'), `Chrome ${major}`);
+		assert.ok(
+			harness.items().every((item) => !item.contexts?.includes('tab')),
+			`Chrome ${major}`,
+		);
+	}
+});
+
+test('in Chromium the tab strip items refuse a tab that is not a web page', async () => {
+	// Chromium ignores documentUrlPatterns in the tab strip, so the items also show on the dashboard's own tab.
+	const dashboard: MockTab = {
+		id: 4,
+		windowId: 10,
+		index: 3,
+		active: false,
+		highlighted: false,
+		url: 'chrome-extension://tablodge/newtab.html',
+		title: 'New tab',
+	};
 	const harness = createHarness(
-		baseState({closeOnSave: false}, {groups: [sessionEntry('a', 'Alpha', 10)]}),
-		firefoxTabs,
-		{firefox: true},
+		baseState({}, {groups: [sessionEntry('a', 'Alpha', 10)]}),
+		[...stripTabs, dashboard],
+		{userAgent: chromeUserAgent(150)},
 	);
 	await harness.install();
-	const third = firefoxTabs[2];
-	await harness.click(
-		{menuItemId: 'tablodge-page-bookmark:column-reading'},
-		third,
-	);
-	assert.deepEqual(
-		harness.state.bookmarks.map(({url, columnId}) => [url, columnId]),
-		[['https://third.example/', 'column-reading']],
-	);
+	for (const menuItemId of [
+		'tablodge-page-bookmark:column-reading',
+		'tablodge-page-send:a',
+		'tablodge-page-send-new',
+		'tablodge-page-save-selected',
+	]) {
+		await harness.click({menuItemId}, dashboard);
+	}
 
-	await harness.click({menuItemId: 'tablodge-page-send:a'}, third);
+	assert.deepEqual(harness.state.bookmarks, []);
 	assert.deepEqual(
-		harness.state.groups
-			.find((group) => group.id === 'a')!
-			.tabs.map((tab) => tab.url),
-		['https://a.example/', 'https://third.example/'],
+		harness.state.groups.map((group) => group.tabs.length),
+		[1],
 	);
-
-	const newSessionUrls = async (menuItemId: string, tab: MockTab) => {
-		const before = new Set(harness.state.groups.map((group) => group.id));
-		await harness.click({menuItemId}, tab);
-		return harness.state.groups
-			.find((group) => !before.has(group.id))
-			?.tabs.map((saved) => saved.url);
-	};
-
-	assert.deepEqual(await newSessionUrls('tablodge-page-send-new', third), [
-		'https://third.example/',
-	]);
+	assert.equal(harness.warnings.length, 4);
 	assert.deepEqual(
-		await newSessionUrls('tablodge-page-save-selected', third),
-		['https://third.example/'],
-		'a tab outside the selection saves only itself',
+		harness.badges.filter((badge) => badge.text),
+		Array.from({length: 4}, () => ({tabId: 4, text: '!'})),
 	);
-	assert.deepEqual(
-		await newSessionUrls('tablodge-page-save-selected', firefoxTabs[1]),
-		['https://current.example/page', 'https://second.example/'],
-		'a tab inside the selection saves the selection',
-	);
-	assert.deepEqual(harness.warnings, []);
 });
+
+for (const [browser, options] of [
+	['Firefox', {firefox: true}],
+	['Chromium 150', {userAgent: chromeUserAgent(150)}],
+] as const) {
+	test(`${browser}: tab strip items act on the clicked tab, even when it is not the active one`, async () => {
+		const harness = createHarness(
+			baseState(
+				{closeOnSave: false},
+				{groups: [sessionEntry('a', 'Alpha', 10)]},
+			),
+			stripTabs,
+			options,
+		);
+		await harness.install();
+		const third = stripTabs[2];
+		await harness.click(
+			{menuItemId: 'tablodge-page-bookmark:column-reading'},
+			third,
+		);
+		assert.deepEqual(
+			harness.state.bookmarks.map(({url, columnId}) => [url, columnId]),
+			[['https://third.example/', 'column-reading']],
+		);
+
+		await harness.click({menuItemId: 'tablodge-page-send:a'}, third);
+		assert.deepEqual(
+			harness.state.groups
+				.find((group) => group.id === 'a')!
+				.tabs.map((tab) => tab.url),
+			['https://a.example/', 'https://third.example/'],
+		);
+
+		const newSessionUrls = async (menuItemId: string, tab: MockTab) => {
+			const before = new Set(harness.state.groups.map((group) => group.id));
+			await harness.click({menuItemId}, tab);
+			return harness.state.groups
+				.find((group) => !before.has(group.id))
+				?.tabs.map((saved) => saved.url);
+		};
+
+		assert.deepEqual(await newSessionUrls('tablodge-page-send-new', third), [
+			'https://third.example/',
+		]);
+		assert.deepEqual(
+			await newSessionUrls('tablodge-page-save-selected', third),
+			['https://third.example/'],
+			'a tab outside the selection saves only itself',
+		);
+		assert.deepEqual(
+			await newSessionUrls('tablodge-page-save-selected', stripTabs[1]),
+			['https://current.example/page', 'https://second.example/'],
+			'a tab inside the selection saves the selection',
+		);
+		assert.deepEqual(harness.warnings, []);
+	});
+}

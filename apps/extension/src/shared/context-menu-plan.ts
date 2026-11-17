@@ -15,8 +15,8 @@ import type {BookmarkColumn, SaveScope, Settings} from './types';
 
 // One parent item per context, named after the extension, keeps the browser menu short. The toolbar
 // icon's menu is already the extension's own, so its items are top level (Chrome shows at most
-// ACTION_MENU_TOP_LEVEL_LIMIT = 6). In Firefox the page items also appear when you right-click a tab in the tab
-// strip (the `tab` context, see `hasTabContext`). Chrome 150 added that context too, but #309 keeps it Firefox only.
+// ACTION_MENU_TOP_LEVEL_LIMIT = 6). In Firefox and Chromium 150 or newer the page items also appear when you
+// right-click a tab in the tab strip (the `tab` context, see `hasTabMenu`).
 // Menu ids keep the "tablodge-" prefix (see the note at STORAGE_KEY); column items append the column id.
 export type MenuItemProperties = chrome.contextMenus.CreateProperties;
 
@@ -46,7 +46,8 @@ export const MENU = {
 } as const;
 
 /**
-The "Bookmark this page to" item is shared with the tab strip in Firefox, so the worker retitles it when a menu opens.
+The "Bookmark this page to" item is shared with the tab strip, so the worker retitles it when a menu opens. Only
+Firefox reports which menu opened; Chromium keeps the page title in both.
 */
 export const PAGE_BOOKMARK_TITLE = {
 	page: 'Bookmark this page to',
@@ -93,6 +94,33 @@ export const PAGE_SAVE_ITEMS: ReadonlyArray<
 ];
 
 export const WEB_URL_PATTERNS = ['http://*/*', 'https://*/*'];
+
+/**
+The first Chromium whose tab strip menu shows extension items. Chromium 149 already lists the `tab` context and
+accepts items in it, but its tab strip menu shows none of them. The fixes that make them show, and that stop a
+crash once an extension has more than one, landed in 150 (crbug.com/514442561).
+*/
+export const CHROMIUM_TAB_MENU_VERSION = 150;
+
+/**
+Whether the page items can join the tab strip's menu: the API must list the `tab` context, and in Chromium the
+version must be at least CHROMIUM_TAB_MENU_VERSION, read from the `Chrome/<major>` part of the user agent.
+*/
+export function hasTabMenu(browser: {
+	listsTabContext: boolean;
+	isFirefox: boolean;
+	userAgent: string;
+}): boolean {
+	if (!browser.listsTabContext) {
+		return false;
+	}
+
+	return (
+		browser.isFirefox ||
+		Number(/Chrome\/(\d+)/.exec(browser.userAgent)?.[1]) >=
+			CHROMIUM_TAB_MENU_VERSION
+	);
+}
 
 /**
 Everything the menu tree depends on: the switches, the enabled systems, and the column names and order.
@@ -149,7 +177,7 @@ export function menuSessions(
 /**
  The full menu tree for these settings and columns, in creation order (parents first).
  `excludeState` sets the toolbar menu's "Exclude this site" checkbox for the active tab.
- `hasTabContext` adds the page items to the tab strip's menu (Firefox).
+ `hasTabContext` adds the page items to the tab strip's menu (see `hasTabMenu`).
  `hasAmpersandAccessKeys` doubles every `&` in the titles: Firefox reads a single `&` as an access key marker and
  hides it, so "R&D" would show as "RD". Chrome shows `&` as written.
  */

@@ -484,9 +484,9 @@ function Help() {
 				{
 					title: 'On a tab in the tab strip',
 					gesture: {label: 'Right-click a tab', icon: MousePointerClick},
-					body: `In Firefox, the tab strip’s menu has the page actions too, and they act on the tab you right-clicked, even when it is not the active one. Save selected tabs saves your selected tabs when you right-click one of them, and only that tab otherwise. Chrome and other Chromium browsers do not show ${PROJECT.name} in this menu.`,
+					body: `In Firefox and in Chrome 150 or newer, the tab strip’s menu has the page actions too, and they act on the tab you right-clicked, even when it is not the active one. Save selected tabs saves your selected tabs when you right-click one of them, and only that tab otherwise. Older versions of Chrome do not show ${PROJECT.name} in this menu.`,
 					searchText:
-						'tab strip right-click tab firefox bookmark this tab send to session save selected tabs window chrome chromium',
+						'tab strip right-click tab firefox chrome 150 chromium edge brave bookmark this tab send to session save selected tabs window',
 				},
 			],
 			action: {

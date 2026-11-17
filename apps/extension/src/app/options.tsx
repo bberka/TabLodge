@@ -553,7 +553,7 @@ const settingsGroups: Array<{
 	{
 		title: 'Right-click menus',
 		icon: MousePointerClick,
-		description: `Each menu groups its actions under one ${PROJECT.name} item. In Firefox, the Page actions also appear when you right-click a tab.`,
+		description: `Each menu groups its actions under one ${PROJECT.name} item. In Firefox and Chrome 150 or newer, the Page actions also appear when you right-click a tab.`,
 		fields: [
 			{
 				name: 'contextMenusEnabled',
