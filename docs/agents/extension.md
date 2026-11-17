@@ -21,11 +21,11 @@ Logic that needs no browser lives in `src/shared` and `src/app` as plain modules
 - Strict TypeScript, no `any` escapes. Treat stored data, imports, and messages as untrusted and validate them. The service worker is built into one classic script, and it imports shared code from `src/` like the pages do: never copy a list or rule into it.
 - Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
 - Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker (both the manifest's `short_name`).
-- Bundle everything locally: no CDN imports, remote fonts, or network calls. A new permission needs a stated reason in the [README permissions table](../README.md#permissions-and-privacy) and the [privacy policy](../PRIVACY.md).
+- Bundle everything locally: no CDN imports, remote fonts, or network calls. A new permission needs a stated reason in the [permissions table](../PRIVACY.md#permissions) and the [privacy policy](../PRIVACY.md).
 - Test on Chrome and Firefox when a change touches what they treat differently ([Browser support](../architecture.md#browser-support)).
 - Add a regression test for a bug fix. Extend the `chrome.*` mock in the worker tests when you use another API.
 - UI work follows [UI rules](ui.md).
 
 ## Commands
 
-Use `vp run <task>` from the repository root: `dev:chrome`, `dev:firefox`, `build`, `pack`, `check:firefox`, `check:a11y`. The list is in the [README](../README.md#development) and `apps/extension/package.json`. The dev browser keeps its profile in `apps/extension/.dev/`, and builds land in `apps/extension/dist/`. Load the same build folder every time: another path gives the extension a different ID and separate storage.
+Use `vp run <task>` from the repository root: `dev:chrome`, `dev:firefox`, `build`, `pack`, `check:firefox`, `check:a11y`. The list is in the [Contributing](../CONTRIBUTING.md#development) and `apps/extension/package.json`. The dev browser keeps its profile in `apps/extension/.dev/`, and builds land in `apps/extension/dist/`. Load the same build folder every time: another path gives the extension a different ID and separate storage.

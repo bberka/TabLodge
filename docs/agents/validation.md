@@ -1,6 +1,6 @@
 # Validation gate
 
-Install the Vite+ CLI once as described in [README Development](../README.md#development), then use `vp run <task>` from the repository root. The gate applies to every code fix or feature and defines when you may report a change complete or commit, push, or open a pull request. The branch, commit, and CI steps are in [Task workflow](workflow.md).
+Install the Vite+ CLI once as described in [Contributing Development](../CONTRIBUTING.md#development), then use `vp run <task>` from the repository root. The gate applies to every code fix or feature and defines when you may report a change complete or commit, push, or open a pull request. The branch, commit, and CI steps are in [Task workflow](workflow.md).
 
 ## Required workflow
 

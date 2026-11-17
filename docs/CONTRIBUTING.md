@@ -4,13 +4,54 @@ Bug reports, ideas, and pull requests are welcome. Before a larger change, open 
 
 ## Get set up
 
-Follow the [source installation steps](README.md#build-from-source) and load `apps/extension/dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
+Follow the [source installation steps](install.md#build-from-source) and load `apps/extension/dist/tablodge/` in your browser. Keep using the same build folder: loading it from another path can give the extension a different ID and separate storage. Export your data before moving it.
 
-Install the Vite+ CLI once as described in [README Development](README.md#development), then run `vp run dev:chrome` while you work. It loads the Chromium build, rebuilds when files change, and opens Chrome or Chromium with the extension loaded in a profile for this worktree, separate from your regular browser profile. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. `vp run dev:firefox` does the same for the Firefox build in its own Firefox profile. Reload the add-on at `about:debugging#/runtime/this-firefox` after a rebuild. `vp run check:firefox` checks the core workflows in headless Firefox. Test a change on both browsers when it touches anything they treat differently (see [Browser support](architecture.md#browser-support)). Use `vp run <task>` for the other scripts in the [README command list](README.md#development).
+Install the Vite+ CLI once as described in [Development](#development), then run `vp run dev:chrome` while you work. It loads the Chromium build, rebuilds when files change, and opens Chrome or Chromium with the extension loaded in a profile for this worktree, separate from your regular browser profile. After each rebuild, reload the extension at `chrome://extensions` and reopen its pages. `vp run dev:firefox` does the same for the Firefox build in its own Firefox profile. Reload the add-on at `about:debugging#/runtime/this-firefox` after a rebuild. `vp run check:firefox` checks the core workflows in headless Firefox. Test a change on both browsers when it touches anything they treat differently (see [Browser support](architecture.md#browser-support)). Use `vp run <task>` for the other scripts in the [command list](#development).
 
 `pnpm install` also turns on the Git hooks in `.hooks/`. Before each commit they refuse a commit on `master` or `main`, lint the staged files, and type check. Before each push they run `vp run check`. Fix what they report instead of skipping them (see [Git hooks](agents/workflow.md#git-hooks)).
 
-For code locations and how the pieces fit together, see the [project structure](README.md#project-structure) and [architecture notes](architecture.md).
+For code locations and how the pieces fit together, see the [project structure](#project-structure) and [architecture notes](architecture.md).
+
+## Development
+
+Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then use `vp run <task>` from the repository root.
+
+| Command | What it does |
+| --- | --- |
+| `vp run dev:chrome` | Build, watch, and open a test browser with TabLodge loaded. `--seed-data` adds sample data and `--headless` opens no window |
+| `vp run dev:firefox` | The same in Firefox |
+| `vp run check` | Lint, type checks, and tests |
+| `vp run check:a11y` | Accessibility and keyboard checks on the built extension. The other `check:` tasks (`build`, `startup`, `firefox`, `dev-browser`, `private-storage`) each test one part of the built extension |
+| `vp run build` / `vp run pack` | Build and verify both browsers, then package them |
+| `vp run lint:fix` | Fix lint issues and format with XO |
+| `pnpm run mobile:start` | Start Metro for the Android app in `apps/mobile/` (needs a development build; see [Android app](android.md)) |
+| `pnpm run mobile:apk` | Build a standalone Android APK from this checkout into `apps/extension/dist/tablodge-local.apk`; add `--install` to install it with adb, or `--all-abis` to include 32 bit ARM |
+| `pnpm run mobile:icons` | Redraw the Android app's launcher and splash images from the extension's mark (needs `rsvg-convert` and ImageMagick) |
+| `pnpm run mobile:export` | Bundle the Android app's JavaScript to check that it builds |
+| `pnpm run cf:setup` | Deploy the sync server to Cloudflare (see [Self hosting](self-hosting.md)) |
+| `pnpm run cf:bundle` | Rebuild `apps/server/cloudflare-deploy/worker.js` after changing the server or the sync code |
+
+The test browser keeps its own profile in `apps/extension/.dev/`, apart from your regular one. After a rebuild, reload TabLodge on the extensions page. Headless runs (`dev:chrome --headless`, `dev:firefox --headless`) are for automated checks; see [Agent validation](agents/validation.md#browser-access).
+
+## Project structure
+
+```text
+apps/extension/   The browser extension (Chrome, Brave, Firefox)
+  shell/            Manifest, icons, HTML shells, service worker
+  src/app/          Extension pages, data types, and messages
+  src/shared/       Shared helpers, library storage, and the sync protocol (src/shared/sync/), also used by the server and the Android app
+  src/components/ui/  UI primitives (Radix and Tailwind)
+  styles/           Tailwind stylesheet for the extension pages
+  scripts/          Build, packaging, dev browser, and accessibility tooling
+  tests/            Vitest suites with mocked browser APIs
+apps/server/      Self hosted sync server for Docker and Cloudflare (cloudflare-deploy/ is what the Deploy to Cloudflare button copies)
+apps/mobile/      Android app (Expo and React Native), in progress
+apps/site/        Website for tablodge.bbay.dev (vp run site:dev)
+scripts/          Repository wide tooling (release versioning)
+tsconfig/         TypeScript settings shared by every app
+docs/             All documentation except AGENTS.md
+.hooks/           Git hooks that run the checks before commits and pushes
+```
 
 ## Conventions
 
