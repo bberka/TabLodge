@@ -82,7 +82,7 @@ The workflow runs after each GitHub release and submits the Firefox ZIP with `we
 
 The workflows upload packages only; the permission texts in the Chrome Web Store dashboard (**Privacy practices**) and the AMO reviewer notes are filled in by hand. A release that adds a permission needs the maintainer to update them before it is submitted, from the [permissions table](../PRIVACY.md#permissions). The current host permission text, for both stores:
 
-> Optional host permissions for www.youtube.com, www.reddit.com, and old.reddit.com, requested only when the user switches that site on in Settings › Sources, and given back when it is switched off. While granted, a registered content script notices the user's own click on the site's save control (Watch later, Save) and bookmarks the same link in the local library. It reads only that item's link and title, makes no network requests, does not intercept the site's requests, and does not change the site's behavior.
+> Optional host permissions for www.youtube.com, www.reddit.com, old.reddit.com, x.com, twitter.com, and www.instagram.com, requested only when the user adds that site in Settings › Sources, and given back when it is removed. While granted, a registered content script notices the user's own click on the site's save control (Watch later, Save, Bookmark) and bookmarks the same link in the local library. It reads only that item's link and title, makes no network requests, does not intercept the site's requests, and does not change the site's behavior.
 
 `vp run version:next` shows the next version based on your local tags.
 

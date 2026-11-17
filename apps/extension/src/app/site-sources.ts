@@ -1,11 +1,12 @@
 // Sites whose own save TabLodge can follow (Settings › Sources): the user saves a link on the site, and the same
-// link lands in that site's bookmark column. Each site is off until the user switches it on, which asks for an
-// optional host permission for that site only; the content script is registered only while it is granted.
+// link lands in that site's bookmark column. Each site is off until the user adds it in Settings, which asks for an
+// optional host permission for that site only; the content script is registered only while it is granted. A new
+// site is an entry here plus its adapter in shell/site-source.ts; Settings lists it in Add a site by itself.
 // The manifest's optional_host_permissions must list exactly the origins here (tests/site-sources.test.ts).
 import {isRecord} from '../shared/library-values';
 import type {SiteSourceStatus} from '../shared/types';
 
-export type SiteSourceId = 'youtube' | 'reddit';
+export type SiteSourceId = 'youtube' | 'reddit' | 'x' | 'instagram';
 
 export type SiteSource = {
 	id: SiteSourceId;
@@ -13,6 +14,14 @@ export type SiteSource = {
 	What the user saves to, as Settings names it.
 	*/
 	label: string;
+	/**
+	One line on what gets saved, shown in the Add a site list and under the site in Settings.
+	*/
+	description: string;
+	/**
+	The site's home page, for its icon.
+	*/
+	homepage: string;
 	/**
 	The bookmark column the links go to, created on the first save.
 	*/
@@ -32,6 +41,11 @@ export type SiteSource = {
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/;
 const REDDIT_PERMALINK =
 	/^\/(?:r|u|user)\/[\w-]+\/comments\/[\da-z]+(?:\/[^#/?]*(?:\/[\da-z]+)?)?\/?$/i;
+// A post, and the pages under it (/photo/1, /analytics, ...), which are the same post.
+const X_POST = /^\/(\w{1,15})\/status\/(\d{1,20})(?:\/|$)/;
+// A post or reel, also under the author's name (/<user>/p/<id>/), as some pages link them.
+const INSTAGRAM_POST =
+	/^(?:\/[\w.]{1,30})?\/(p|reels?|tv)\/([\w-]{5,40})(?:\/|$)/;
 
 function parse(href: string, base: string) {
 	try {
@@ -84,10 +98,43 @@ export function redditPermalinkUrl(href: string): string | null {
 	return `https://www.reddit.com${path}`;
 }
 
+/**
+A post as `https://x.com/<user>/status/<id>`, so twitter.com and x.com saves match.
+*/
+export function xPostUrl(href: string): string | null {
+	const url = parse(href, 'https://x.com/');
+	const match =
+		url?.protocol === 'https:' &&
+		/^(?:www\.|mobile\.)?(?:x|twitter)\.com$/.test(url.hostname)
+			? X_POST.exec(url.pathname)
+			: null;
+	return match ? `https://x.com/${match[1]}/status/${match[2]}` : null;
+}
+
+/**
+A post as `https://www.instagram.com/p/<id>/` and a reel as `https://www.instagram.com/reel/<id>/`.
+*/
+export function instagramPostUrl(href: string): string | null {
+	const url = parse(href, 'https://www.instagram.com/');
+	const match =
+		url?.protocol === 'https:' &&
+		/^(?:www\.)?instagram\.com$/.test(url.hostname)
+			? INSTAGRAM_POST.exec(url.pathname)
+			: null;
+	if (!match) {
+		return null;
+	}
+
+	const kind = match[1] === 'p' || match[1] === 'tv' ? 'p' : 'reel';
+	return `https://www.instagram.com/${kind}/${match[2]}/`;
+}
+
 export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'youtube',
 		label: 'YouTube Watch later',
+		description: 'Videos you add to Watch later on youtube.com',
+		homepage: 'https://www.youtube.com/',
 		column: 'YouTube',
 		origins: ['https://www.youtube.com/*'],
 		hosts: ['www.youtube.com'],
@@ -97,11 +144,35 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'reddit',
 		label: 'Reddit saved',
+		description: 'Posts and comments you save on reddit.com',
+		homepage: 'https://www.reddit.com/',
 		column: 'Reddit',
 		origins: ['https://www.reddit.com/*', 'https://old.reddit.com/*'],
 		hosts: ['www.reddit.com', 'old.reddit.com'],
 		scriptId: 'tablodge-source-reddit',
 		canonicalUrl: redditPermalinkUrl,
+	},
+	{
+		id: 'x',
+		label: 'X bookmarks',
+		description: 'Posts you bookmark on x.com or twitter.com',
+		homepage: 'https://x.com/',
+		column: 'X',
+		origins: ['https://x.com/*', 'https://twitter.com/*'],
+		hosts: ['x.com', 'twitter.com'],
+		scriptId: 'tablodge-source-x',
+		canonicalUrl: xPostUrl,
+	},
+	{
+		id: 'instagram',
+		label: 'Instagram saved',
+		description: 'Posts and reels you save on instagram.com',
+		homepage: 'https://www.instagram.com/',
+		column: 'Instagram',
+		origins: ['https://www.instagram.com/*'],
+		hosts: ['www.instagram.com'],
+		scriptId: 'tablodge-source-instagram',
+		canonicalUrl: instagramPostUrl,
 	},
 ];
 

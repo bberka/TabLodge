@@ -13408,6 +13408,8 @@ test('sources are off at install and no content script is registered', async () 
 	assert.deepEqual(structuredClone(result.sources), [
 		{id: 'youtube', enabled: false},
 		{id: 'reddit', enabled: false},
+		{id: 'x', enabled: false},
+		{id: 'instagram', enabled: false},
 	]);
 	assert.equal(harness.registeredScripts.size, 0);
 });
@@ -13575,6 +13577,79 @@ test('a source that is off, or a page on another site, saves nothing', async () 
 	);
 	assert.equal(notAVideo.ok, false);
 	assert.equal(harness.state.bookmarks.length, 0);
+});
+
+test('X saves from twitter.com and x.com land once, in a new X column, and Instagram in its own', async () => {
+	const harness = sourcesHarness();
+	harness.grantOrigins(['https://x.com/*', 'https://twitter.com/*']);
+	harness.grantOrigins(['https://www.instagram.com/*']);
+	for (const source of ['x', 'instagram'] as const) {
+		const on = await harness.sendMessage({
+			type: 'SET_SITE_SOURCE',
+			source,
+			enabled: true,
+		});
+		assert.equal(on.ok, true, on.error);
+	}
+
+	assert.deepEqual(
+		[...harness.registeredScripts.values()].map((script) => [
+			script.id,
+			script.matches,
+		]),
+		[
+			['tablodge-source-x', ['https://x.com/*', 'https://twitter.com/*']],
+			['tablodge-source-instagram', ['https://www.instagram.com/*']],
+		],
+	);
+	const page = (url: string) => ({tab: {...youtubeTab, url}, url});
+	const post = {
+		type: 'SITE_SOURCE_SAVE',
+		source: 'x',
+		url: 'https://x.com/alice/status/1850000000000000001',
+		title: 'Local first software',
+	} as const;
+	const first = await harness.sendMessage(
+		post,
+		page('https://twitter.com/home'),
+	);
+	assert.equal(first.ok && first.outcome, 'saved');
+	assert.equal(first.ok && first.column, 'X');
+	const again = await harness.sendMessage(
+		{...post, url: 'https://twitter.com/alice/status/1850000000000000001'},
+		page('https://x.com/home'),
+	);
+	assert.equal(again.ok && again.outcome, 'exists');
+
+	// A page on one site never speaks for another.
+	const wrongSite = await harness.sendMessage(
+		{...post, source: 'instagram'},
+		page('https://x.com/home'),
+	);
+	assert.equal(wrongSite.ok, false);
+
+	const reel = await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'instagram',
+			url: 'https://www.instagram.com/reel/C9x8Y7w6V5u/',
+			title: 'Instagram reel',
+		},
+		page('https://www.instagram.com/'),
+	);
+	assert.equal(reel.ok && reel.column, 'Instagram');
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => [
+			harness.state.bookmarkColumns.find(
+				(column) => column.id === bookmark.columnId,
+			)?.name,
+			bookmark.url,
+		]),
+		[
+			['X', 'https://x.com/alice/status/1850000000000000001'],
+			['Instagram', 'https://www.instagram.com/reel/C9x8Y7w6V5u/'],
+		],
+	);
 });
 
 test('a web page reaches only the source actions, never the rest of the worker', async () => {

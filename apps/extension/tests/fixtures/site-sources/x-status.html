@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- A trimmed x.com post page: the post, a reply under it, and the photo viewer X opens over the page with its own
+action row outside any post. Hand written to mimic the site's markup; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Grace on X</title></head>
+<body>
+<div id="react-root"><main role="main">
+	<article id="focal" data-testid="tweet" role="article" tabindex="-1">
+		<div data-testid="User-Name"><a href="/grace">@grace</a></div>
+		<div data-testid="tweetText" lang="en"><span>Shipping the release today.</span></div>
+		<a href="/grace/status/1850000000000000010" role="link"><time datetime="2026-11-17T10:00:00.000Z">10:00 AM · Nov 17, 2026</time></a>
+		<div role="group"><button id="focal-bookmark" data-testid="bookmark" aria-label="Bookmark"></button></div>
+	</article>
+	<article id="reply" data-testid="tweet" role="article" tabindex="0">
+		<div data-testid="User-Name"><a href="/heidi/status/1850000000000000011"><time datetime="2026-11-17T10:05:00.000Z">5m</time></a></div>
+		<div data-testid="tweetText" lang="en"><span>Congratulations!</span></div>
+		<div role="group"><button id="reply-bookmark" data-testid="bookmark" aria-label="Bookmark"></button></div>
+	</article>
+</main></div>
+<div id="layers">
+	<div role="dialog" aria-modal="true" aria-labelledby="modal-header">
+		<img alt="Image" src="data:,">
+		<div role="group"><button id="viewer-bookmark" data-testid="bookmark" aria-label="Bookmark"></button></div>
+	</div>
+</div>
+</body>
+</html>

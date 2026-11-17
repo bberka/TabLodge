@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- A trimmed x.com home timeline: posts as <article data-testid="tweet">, each with a timestamp that links to the
+post and an action row with Bookmark, and the Share menu X draws in #layers outside the post. Hand written to mimic
+the site's markup; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Home / X</title></head>
+<body>
+<div id="react-root"><main role="main"><section aria-labelledby="timeline">
+	<article id="post-long" data-testid="tweet" role="article" tabindex="0">
+		<div data-testid="User-Name">
+			<a href="/alice" role="link"><span>Alice</span></a>
+			<a href="/alice" role="link" tabindex="-1"><span>@alice</span></a>
+			<a href="/alice/status/1850000000000000001" role="link"><time datetime="2026-11-17T09:00:00.000Z">2h</time></a>
+		</div>
+		<div data-testid="tweetText" lang="en"><span>Local first software keeps working when the network does not, and that matters more than any sync feature you could add on top of it later.</span></div>
+		<div role="group" aria-label="12 replies, 40 reposts, 300 likes">
+			<button data-testid="reply" aria-label="12 Replies. Reply"></button>
+			<button data-testid="like" aria-label="300 Likes. Like"></button>
+			<button id="bookmark" data-testid="bookmark" aria-label="Bookmark"><div><svg viewBox="0 0 24 24" aria-hidden="true"><g><path id="bookmark-icon" d="M4 4.5"></path></g></svg></div></button>
+			<button id="share" aria-label="Share post"></button>
+		</div>
+	</article>
+	<article id="post-bookmarked" data-testid="tweet" role="article" tabindex="0">
+		<div data-testid="User-Name"><a href="/bob/status/1850000000000000002" role="link"><time datetime="2026-11-17T08:00:00.000Z">3h</time></a></div>
+		<div data-testid="tweetText" lang="en"><span>Already bookmarked.</span></div>
+		<div role="group"><button id="remove-bookmark" data-testid="removeBookmark" aria-label="Bookmarked"></button></div>
+	</article>
+	<article id="post-quote" data-testid="tweet" role="article" tabindex="0">
+		<div data-testid="User-Name"><a href="/carol/status/1850000000000000003" role="link"><time datetime="2026-11-17T07:00:00.000Z">4h</time></a></div>
+		<div data-testid="tweetText" lang="en"><span>This, exactly.</span></div>
+		<div role="link" tabindex="0">
+			<div data-testid="User-Name"><span>@dave</span><a href="/dave/status/1840000000000000009"><time datetime="2026-11-10T07:00:00.000Z">Nov 10</time></a></div>
+			<div data-testid="tweetText" lang="en"><span>The quoted post.</span></div>
+		</div>
+		<div role="group"><button id="quote-bookmark" data-testid="bookmark" aria-label="Bookmark"></button></div>
+	</article>
+	<article id="post-image" data-testid="tweet" role="article" tabindex="0">
+		<div data-testid="User-Name"><a href="https://twitter.com/erin/status/1850000000000000004/photo/1" role="link"><time datetime="2026-11-17T06:00:00.000Z">5h</time></a></div>
+		<div data-testid="tweetPhoto"><img alt="Image" src="data:,"></div>
+		<div role="group"><button id="image-bookmark" data-testid="bookmark" aria-label="Bookmark"></button></div>
+	</article>
+	<article id="post-changed" data-testid="tweet" role="article" tabindex="0">
+		<div data-testid="User-Name"><span>@frank</span><span>1h</span></div>
+		<div data-testid="tweetText" lang="en"><span>A post whose timestamp is no longer a link.</span></div>
+		<div role="group"><button id="changed-bookmark" data-testid="bookmark" aria-label="Bookmark"></button></div>
+	</article>
+</section></main></div>
+<div id="layers">
+	<div data-testid="Dropdown" role="menu">
+		<div role="menuitem" id="menu-copy"><span>Copy link</span></div>
+		<div role="menuitem" id="menu-bookmark"><span>Bookmark</span></div>
+		<div role="menuitem" id="menu-remove-bookmark"><span>Remove Bookmark</span></div>
+	</div>
+</div>
+</body>
+</html>

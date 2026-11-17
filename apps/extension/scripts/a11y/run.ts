@@ -90,6 +90,7 @@ import {
 	appearanceCheck,
 	settingResetCheck,
 	settingsSearchCheck,
+	siteSourcePickerCheck,
 	skipLinkCheck,
 } from './settings.ts';
 import {
@@ -138,6 +139,7 @@ async function main() {
 		await seed(seedPage);
 		await seedPage.close();
 		await settingsSearchCheck(env);
+		await eachTheme(env, [siteSourcePickerCheck]);
 		await eachTheme(env, [sessionCardQuickActionsCheck]);
 		await eachTheme(env, [sessionFaviconPreviewsCheck]);
 		await eachTheme(env, [

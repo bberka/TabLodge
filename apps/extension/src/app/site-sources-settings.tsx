@@ -1,9 +1,24 @@
-import {useEffect, useState} from 'react';
-import {CircleAlert} from 'lucide-react';
-import {Label, SelectItem, Switch} from '../shared/ui';
+import {
+	useEffect,
+	useId,
+	useRef,
+	useState,
+	type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
+import {CircleAlert, Plus, RotateCcw, Trash2} from 'lucide-react';
+import {
+	Button,
+	Input,
+	Label,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	SelectItem,
+} from '../shared/ui';
 import type {SiteSourceStatus} from '../shared/types';
 import {ColumnSelect} from './column-select';
 import {send, type ShowStatus} from './common';
+import {Favicon} from './favicon';
 import {PROJECT} from './project';
 import {
 	SITE_SOURCES,
@@ -11,15 +26,16 @@ import {
 	type SiteSource,
 	type SiteSourceId,
 } from './site-sources';
+import {cn} from '@/lib/utils';
 
 export const SOURCES_TITLE = 'Sources';
-export const SOURCES_DESCRIPTION = `Save a link to ${PROJECT.name} when you save it on one of these sites. Each site asks for access to that site only.`;
+export const SOURCES_DESCRIPTION = `Save a link to ${PROJECT.name} when you save it on a site you add here. Each site asks for access to that site only.`;
 export const SOURCES_WORDS = [
 	'sources',
-	'YouTube',
-	'Watch later',
-	'Reddit',
-	'saved posts',
+	'Add a site',
+	'Remove',
+	...SITE_SOURCES.flatMap((source) => [source.label, source.description]),
+	'Twitter',
 	'site access',
 	'permission',
 	'Save to',
@@ -28,14 +44,9 @@ export const SOURCES_WORDS = [
 // The Save to entry for the site's own column; Radix Select needs a non-empty value.
 const SITE_COLUMN = 'site-column';
 
-const HELP: Record<SiteSourceId, string> = {
-	youtube: `When you add a video to Watch later on youtube.com, ${PROJECT.name} bookmarks it too.`,
-	reddit: `When you save a post or comment on reddit.com, ${PROJECT.name} bookmarks it too.`,
-};
-
 function noticeText(source: SiteSource, notice: SiteSourceStatus['notice']) {
 	if (notice === 'revoked') {
-		return `Switched off because the browser removed ${PROJECT.name}'s access to ${source.hosts[0]}.`;
+		return `Off because the browser removed ${PROJECT.name}'s access to ${source.hosts[0]}. Allow it again, or remove the site.`;
 	}
 
 	return notice === 'unreadable'
@@ -43,15 +54,27 @@ function noticeText(source: SiteSource, notice: SiteSourceStatus['notice']) {
 		: undefined;
 }
 
-export function SiteSourcesSettings({
-	columns,
-	showStatus,
-}: {
-	columns: ReadonlyArray<{id: string; name: string; icon?: string}>;
-	showStatus: ShowStatus;
-}) {
+/**
+A site stays in the list while it is on, and after the browser took its access away, so the notice can say so.
+*/
+const isListed = (status: SiteSourceStatus | undefined) =>
+	status?.enabled === true || status?.notice === 'revoked';
+
+function matches(source: SiteSource, query: string) {
+	const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+	const text = [source.label, source.description, ...source.hosts]
+		.join(' ')
+		.toLocaleLowerCase();
+	return words.every((word) => text.includes(word));
+}
+
+/**
+The state behind Settings › Sources, shared by the Add a site button in the section header and the list below it.
+*/
+export function useSiteSources(showStatus: ShowStatus) {
 	const [sources, setSources] = useState<SiteSourceStatus[]>();
 	const [busy, setBusy] = useState<SiteSourceId>();
+	const triggerRef = useRef<HTMLButtonElement>(null);
 	const privateWindow = Boolean(chrome.extension?.inIncognitoContext);
 
 	useEffect(() => {
@@ -84,64 +107,72 @@ export function SiteSourcesSettings({
 		};
 	}, []);
 
-	if (privateWindow) {
-		return (
-			<p className="text-sm text-muted-foreground">
-				Switch sources on or off in a regular window. A save in a private window
-				is added only when private windows use the regular library.
-			</p>
-		);
-	}
+	const status = (source: SiteSource) =>
+		sources?.find((entry) => entry.id === source.id);
 
-	async function toggle(source: SiteSource, enabled: boolean) {
+	async function add(source: SiteSource) {
+		// The permission request comes first, straight from the click or key press: Firefox refuses it after another
+		// await.
+		const request = chrome.permissions
+			.request({origins: source.origins})
+			.catch(() => false);
 		setBusy(source.id);
 		try {
-			// The permission request comes first, straight from the click: Firefox refuses it after another await.
-			if (enabled) {
-				let granted = false;
-				try {
-					granted = await chrome.permissions.request({origins: source.origins});
-				} catch {
-					// A request the browser rejects counts as not granted.
-				}
-
-				if (!granted) {
-					showStatus(
-						`The browser did not grant access to ${source.hosts[0]}, so ${source.label} stays off.`,
-						true,
-					);
-					return;
-				}
+			if (!(await request)) {
+				showStatus(
+					`The browser did not grant access to ${source.hosts[0]}, so ${source.label} was not added.`,
+					true,
+				);
+				return;
 			}
 
 			const result = await send('SET_SITE_SOURCE', {
 				source: source.id,
-				enabled,
+				enabled: true,
 			});
-			if (!enabled) {
-				await chrome.permissions
-					.remove({origins: source.origins})
-					.catch(() => undefined);
-			}
-
 			if (!result.ok) {
 				showStatus(result.error, true);
 				return;
 			}
 
 			setSources(result.sources);
+			showStatus(`Added ${source.label}.`);
+		} finally {
+			setBusy(undefined);
+		}
+	}
+
+	async function remove(source: SiteSource) {
+		setBusy(source.id);
+		try {
+			const result = await send('SET_SITE_SOURCE', {
+				source: source.id,
+				enabled: false,
+			});
+			await chrome.permissions
+				.remove({origins: source.origins})
+				.catch(() => undefined);
+			if (!result.ok) {
+				showStatus(result.error, true);
+				return;
+			}
+
+			setSources(result.sources);
+			// The removed row held focus; the Add a site button is the nearest control that stays.
+			triggerRef.current?.focus();
 			showStatus(
-				enabled
-					? `${source.label} is on.`
-					: `${source.label} is off, and ${PROJECT.name} no longer has access to ${source.hosts[0]}.`,
+				`Removed ${source.label}. ${PROJECT.name} no longer has access to ${source.hosts[0]}.`,
 			);
 		} finally {
 			setBusy(undefined);
 		}
 	}
 
-	async function chooseColumn(source: SiteSource, value: string) {
-		const columnId = value === SITE_COLUMN ? null : value;
+	async function chooseColumn(
+		source: SiteSource,
+		columnId: string | null,
+		columnName: string,
+	) {
 		const result = await send('SET_SITE_SOURCE_COLUMN', {
 			source: source.id,
 			columnId,
@@ -152,17 +183,209 @@ export function SiteSourcesSettings({
 		}
 
 		setSources(result.sources);
-		const name =
-			columns.find((column) => column.id === columnId)?.name ??
-			`a ${source.column} column`;
-		showStatus(`${source.label} now saves to ${name}.`);
+		showStatus(`${source.label} now saves to ${columnName}.`);
+	}
+
+	return {
+		sources,
+		busy,
+		triggerRef,
+		privateWindow,
+		status,
+		add,
+		remove,
+		chooseColumn,
+	};
+}
+
+export type SiteSourcesController = ReturnType<typeof useSiteSources>;
+
+/**
+The Add a site button: a popover with a search field (a combobox) over the list of supported sites not added yet.
+Arrow keys move through the list, Enter adds the highlighted site, and Escape closes it.
+*/
+export function AddSiteSource({
+	controller,
+}: {
+	controller: SiteSourcesController;
+}) {
+	const {sources, triggerRef, privateWindow, status, add} = controller;
+	const [open, setOpen] = useState(false);
+	const [query, setQuery] = useState('');
+	const [active, setActive] = useState(0);
+	const listId = useId();
+	if (privateWindow) {
+		return null;
+	}
+
+	const available = SITE_SOURCES.filter((source) => !isListed(status(source)));
+	const shown = available.filter((source) => matches(source, query));
+	const current = shown[Math.min(active, shown.length - 1)];
+
+	function pick(source: SiteSource) {
+		setOpen(false);
+		setQuery('');
+		void add(source);
+	}
+
+	function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+		const last = shown.length - 1;
+		const next = {
+			ArrowDown: Math.min(active + 1, last),
+			ArrowUp: Math.max(active - 1, 0),
+			Home: 0,
+			End: last,
+		}[event.key];
+		if (next !== undefined) {
+			event.preventDefault();
+			setActive(Math.max(next, 0));
+		} else if (event.key === 'Enter') {
+			event.preventDefault();
+			if (current) {
+				pick(current);
+			}
+		}
 	}
 
 	return (
-		<div className="divide-y divide-border/70">
-			{SITE_SOURCES.map((source) => {
-				const status = sources?.find((entry) => entry.id === source.id);
-				const notice = noticeText(source, status?.notice);
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				setQuery('');
+				setActive(0);
+			}}
+		>
+			<PopoverTrigger asChild>
+				<Button
+					ref={triggerRef}
+					variant="outline"
+					size="sm"
+					disabled={!sources}
+				>
+					<Plus className="h-4 w-4" aria-hidden="true" />
+					Add a site
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent align="end" className="w-80 p-0">
+				<div className="border-b border-border p-2">
+					<Input
+						type="search"
+						role="combobox"
+						aria-label="Search supported sites"
+						aria-expanded="true"
+						aria-controls={listId}
+						aria-autocomplete="list"
+						aria-activedescendant={
+							current ? `${listId}-${current.id}` : undefined
+						}
+						placeholder="Search sites"
+						autoComplete="off"
+						value={query}
+						onChange={(event) => {
+							setQuery(event.target.value);
+							setActive(0);
+						}}
+						onKeyDown={onKeyDown}
+					/>
+				</div>
+				<div
+					id={listId}
+					role="listbox"
+					aria-label="Supported sites"
+					className="max-h-72 overflow-y-auto p-1"
+				>
+					{shown.map((source) => {
+						const selected = source === current;
+						return (
+							<div
+								key={source.id}
+								id={`${listId}-${source.id}`}
+								role="option"
+								aria-selected={selected}
+								className={cn(
+									'flex cursor-pointer items-start gap-3 rounded-sm px-2 py-2',
+									selected && 'bg-accent text-accent-foreground',
+								)}
+								onMouseMove={() => {
+									setActive(shown.indexOf(source));
+								}}
+								onClick={() => {
+									pick(source);
+								}}
+							>
+								<Favicon
+									url={source.homepage}
+									label={source.label}
+									className="mt-0.5 h-5 w-5 rounded-sm"
+								/>
+								<span className="min-w-0">
+									<span className="block text-sm font-medium">
+										{source.label}
+									</span>
+									<span
+										className={cn(
+											'block text-xs leading-5',
+											selected
+												? 'text-accent-foreground/80'
+												: 'text-muted-foreground',
+										)}
+									>
+										{source.description}
+									</span>
+								</span>
+							</div>
+						);
+					})}
+				</div>
+				{shown.length === 0 && (
+					<p className="px-3 pb-4 pt-2 text-center text-sm text-muted-foreground">
+						{available.length === 0
+							? 'Every supported site is added.'
+							: 'No supported site matches.'}
+					</p>
+				)}
+				<p className="sr-only" role="status" aria-live="polite">
+					{`${shown.length} ${shown.length === 1 ? 'site' : 'sites'}`}
+				</p>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+export function SiteSourcesSettings({
+	controller,
+	columns,
+}: {
+	controller: SiteSourcesController;
+	columns: ReadonlyArray<{id: string; name: string; icon?: string}>;
+}) {
+	const {sources, busy, privateWindow, status, add, remove, chooseColumn} =
+		controller;
+
+	if (privateWindow) {
+		return (
+			<p className="text-sm text-muted-foreground">
+				Add or remove sites in a regular window. A save in a private window is
+				added only when private windows use the regular library.
+			</p>
+		);
+	}
+
+	const listed = SITE_SOURCES.filter((source) => isListed(status(source)));
+	if (sources && listed.length === 0) {
+		return (
+			<p className="rounded-md bg-muted px-3 py-3 text-sm text-muted-foreground">
+				No sites added.
+			</p>
+		);
+	}
+
+	return (
+		<div className="space-y-2">
+			{listed.map((source) => {
+				const entry = status(source);
+				const notice = noticeText(source, entry?.notice);
 				const labelId = `site-source-${source.id}`;
 				const columnFieldId = `site-source-column-${source.id}`;
 				// With no choice, or a chosen column that was deleted, saves go to the site's own column: the one with its
@@ -172,47 +395,72 @@ export function SiteSourcesSettings({
 						column.name.toLocaleLowerCase() ===
 						source.column.toLocaleLowerCase(),
 				);
-				const chosen = columns.some((column) => column.id === status?.columnId)
-					? status?.columnId
+				const chosen = columns.some((column) => column.id === entry?.columnId)
+					? entry?.columnId
 					: (siteColumn?.id ?? SITE_COLUMN);
 				return (
 					<div
 						key={source.id}
 						data-site-source={source.id}
-						className="py-4 first:pt-0 last:pb-0"
+						role="group"
+						aria-labelledby={labelId}
+						className="rounded-md border border-border px-3 py-3"
 					>
-						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-							<div className="min-w-0">
-								<p id={labelId} className="text-sm font-medium">
-									{source.label}
-								</p>
-								<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-									{HELP[source.id]}
-								</p>
-								{notice && (
-									<p
-										role="status"
-										className="mt-2 flex max-w-xl items-start gap-1.5 text-xs leading-5 text-destructive"
-									>
-										<CircleAlert
-											className="mt-0.5 h-3.5 w-3.5 shrink-0"
-											aria-hidden="true"
-										/>
-										{notice}
-									</p>
-								)}
-							</div>
-							<div className="shrink-0">
-								<Switch
-									checked={status?.enabled === true}
-									aria-labelledby={labelId}
-									disabled={!sources || busy !== undefined}
-									onCheckedChange={(value) => void toggle(source, value)}
+						<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+							<div className="flex min-w-0 items-start gap-3">
+								<Favicon
+									url={source.homepage}
+									label={source.label}
+									className="mt-0.5 h-5 w-5 rounded-sm"
 								/>
+								<div className="min-w-0">
+									<p id={labelId} className="text-sm font-medium">
+										{source.label}
+									</p>
+									<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+										{source.description}
+									</p>
+									{notice && (
+										<p
+											role="status"
+											className="mt-2 flex max-w-xl items-start gap-1.5 text-xs leading-5 text-destructive"
+										>
+											<CircleAlert
+												className="mt-0.5 h-3.5 w-3.5 shrink-0"
+												aria-hidden="true"
+											/>
+											{notice}
+										</p>
+									)}
+								</div>
+							</div>
+							<div className="flex shrink-0 gap-2 max-sm:justify-end">
+								{!entry?.enabled && (
+									<Button
+										variant="outline"
+										size="sm"
+										disabled={busy !== undefined}
+										aria-label={`Allow access to ${source.hosts[0]} again for ${source.label}`}
+										onClick={() => void add(source)}
+									>
+										<RotateCcw className="h-4 w-4" aria-hidden="true" />
+										Allow again
+									</Button>
+								)}
+								<Button
+									variant="ghost"
+									size="sm"
+									disabled={busy !== undefined}
+									aria-label={`Remove ${source.label}`}
+									onClick={() => void remove(source)}
+								>
+									<Trash2 className="h-4 w-4" aria-hidden="true" />
+									Remove
+								</Button>
 							</div>
 						</div>
-						{status?.enabled && (
-							<div className="mt-3 ml-2 flex flex-col gap-2 border-l-2 border-border pl-4 sm:flex-row sm:items-center sm:justify-between">
+						{entry?.enabled && (
+							<div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
 								<div className="min-w-0">
 									<Label
 										htmlFor={columnFieldId}
@@ -230,7 +478,15 @@ export function SiteSourcesSettings({
 									columns={columns}
 									value={chosen}
 									className="w-full sm:w-64"
-									onValueChange={(value) => void chooseColumn(source, value)}
+									onValueChange={(value) => {
+										const columnId = value === SITE_COLUMN ? null : value;
+										void chooseColumn(
+											source,
+											columnId,
+											columns.find((column) => column.id === columnId)?.name ??
+												`the ${source.column} column`,
+										);
+									}}
 								>
 									{!siteColumn && (
 										<SelectItem value={SITE_COLUMN}>
