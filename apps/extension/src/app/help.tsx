@@ -458,9 +458,10 @@ function Help() {
 							not saved again. {PROJECT.name} only watches for your own clicks
 							on the site&apos;s save controls, reads the link from the page,
 							and sends nothing anywhere. It recognizes the English labels of
-							those controls; on X, the Bookmark button works in any language,
-							and its Share menu item in English. If a site changes its page so{' '}
-							{PROJECT.name} can no longer read it, nothing is saved and
+							those controls. The Bookmark button on X, Star on GitHub, and the
+							save buttons on Stack Overflow and dev.to work in any language;
+							the Share menu item on X works in English. If a site changes its
+							page so {PROJECT.name} can no longer read it, nothing is saved and
 							Settings says so. In a private window, saves are added only when
 							private windows use the regular library. Remove takes a site out
 							of the list and gives its access back. Removing its access in the
