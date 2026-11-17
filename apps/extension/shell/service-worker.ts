@@ -9510,10 +9510,26 @@ function senderSource(id: unknown, sender: chrome.runtime.MessageSender) {
 		: undefined;
 }
 
+/**
+The note of a source save: the item's discussion page, for a site whose items link elsewhere. Only an address the
+site's own discussion rule accepts is kept, so a page cannot write anything else into the library.
+*/
+function sourceNote(source: SiteSource, href: unknown, url: string) {
+	const rule = source.discussion;
+	const discussion =
+		rule && typeof href === 'string' ? normalizeUrl(rule.url(href)) : null;
+	return rule && discussion && discussion !== url
+		? `${rule.name}: ${discussion}`
+		: undefined;
+}
+
 async function saveFromSource(
 	source: SiteSource,
-	href: unknown,
-	title: unknown,
+	{
+		url: href,
+		title,
+		discussion,
+	}: {url: unknown; title?: unknown; discussion?: unknown},
 ): Promise<ActionResult<'SITE_SOURCE_SAVE'>> {
 	const state = await readSourcesState();
 	if (!state[source.id].enabled || privateSourcesOff()) {
@@ -9564,6 +9580,7 @@ async function saveFromSource(
 					store.bookmarkColumns.push(column);
 				}
 
+				const notes = sourceNote(source, discussion, url);
 				store.bookmarks.push({
 					id: makeId(),
 					title: await bestBookmarkTitle(
@@ -9573,6 +9590,7 @@ async function saveFromSource(
 					),
 					url,
 					columnId: column.id,
+					...(notes && {notes}),
 					createdAt: now,
 					updatedAt: now,
 				});
@@ -9590,6 +9608,53 @@ async function saveFromSource(
 	}
 
 	return result;
+}
+
+/**
+How long a source save's result waits for the next page in its tab: a click on Hacker News' favorite loads
+another page before the first one can show the result.
+*/
+const PENDING_SOURCE_MS = 15_000;
+
+/**
+The last source save of each tab whose page has not shown its result yet, by tab id. It is kept from the moment
+the save starts, so a page that loads while the save still runs waits for it.
+*/
+const pendingSourceSaves = new Map<
+	number,
+	{
+		source: SiteSource;
+		at: number;
+		result: Promise<ActionResult<'SITE_SOURCE_SAVE'>>;
+	}
+>();
+
+async function takePendingSourceSave(
+	source: SiteSource,
+	sender: chrome.runtime.MessageSender,
+): Promise<ActionResult<'SITE_SOURCE_PENDING'>> {
+	const tabId = sender.tab?.id;
+	const pending = isInteger(tabId) ? pendingSourceSaves.get(tabId) : undefined;
+	if (
+		!isInteger(tabId) ||
+		!pending ||
+		pending.source !== source ||
+		Date.now() - pending.at > PENDING_SOURCE_MS
+	) {
+		return {ok: true};
+	}
+
+	pendingSourceSaves.delete(tabId);
+	const result = await pending.result.catch(() => undefined);
+	if (!result?.ok || result.outcome === 'off') {
+		return {ok: true};
+	}
+
+	const {outcome, column, undoId} = result;
+	return {
+		ok: true,
+		saved: {outcome, ...(column && {column}), ...(undoId && {undoId})},
+	};
 }
 
 async function undoSourceSave(id: unknown): Promise<ActionResult<'UNDO'>> {
@@ -9625,9 +9690,29 @@ async function handleSourceMessage(
 	switch (message?.type) {
 		case 'SITE_SOURCE_SAVE': {
 			const source = senderSource(message.source, sender);
-			return source
-				? saveFromSource(source, message.url, message.title)
-				: {ok: false, error: 'This page cannot save to that source.'};
+			if (!source) {
+				return {ok: false, error: 'This page cannot save to that source.'};
+			}
+
+			const result = saveFromSource(source, message);
+			const tabId = sender.tab?.id;
+			if (isInteger(tabId)) {
+				const now = Date.now();
+				for (const [id, entry] of pendingSourceSaves) {
+					if (now - entry.at > PENDING_SOURCE_MS) {
+						pendingSourceSaves.delete(id);
+					}
+				}
+
+				pendingSourceSaves.set(tabId, {source, at: now, result});
+			}
+
+			return result;
+		}
+
+		case 'SITE_SOURCE_PENDING': {
+			const source = senderSource(message.source, sender);
+			return source ? takePendingSourceSave(source, sender) : {ok: true};
 		}
 
 		case 'SITE_SOURCE_UNREADABLE': {

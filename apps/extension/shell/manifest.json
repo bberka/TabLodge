@@ -35,7 +35,12 @@
 		"https://old.reddit.com/*",
 		"https://x.com/*",
 		"https://twitter.com/*",
-		"https://www.instagram.com/*"
+		"https://www.instagram.com/*",
+		"https://github.com/*",
+		"https://news.ycombinator.com/*",
+		"https://stackoverflow.com/*",
+		"https://dev.to/*",
+		"https://lobste.rs/*"
 	],
 	"web_accessible_resources": [
 		{

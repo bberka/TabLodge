@@ -24,6 +24,11 @@ const permissions = [
 	['https://www.reddit.com/*, https://old.reddit.com/* (optional)', 'Settings › Sources › Reddit saved: noticing when you save a post or comment, only after you add it.'],
 	['https://x.com/*, https://twitter.com/* (optional)', 'Settings › Sources › X bookmarks: noticing when you bookmark a post, only after you add it.'],
 	['https://www.instagram.com/* (optional)', 'Settings › Sources › Instagram saved: noticing when you save a post or reel, only after you add it.'],
+	['https://github.com/* (optional)', 'Settings › Sources › GitHub stars: noticing when you star a repository, only after you add it.'],
+	['https://news.ycombinator.com/* (optional)', 'Settings › Sources › Hacker News favorites: noticing when you favorite a story, only after you add it.'],
+	['https://stackoverflow.com/* (optional)', 'Settings › Sources › Stack Overflow bookmarks: noticing when you bookmark a question, only after you add it.'],
+	['https://dev.to/* (optional)', 'Settings › Sources › dev.to reading list: noticing when you save an article, only after you add it.'],
+	['https://lobste.rs/* (optional)', 'Settings › Sources › Lobsters saved: noticing when you save a story, only after you add it.'],
 ];
 ---
 
@@ -90,12 +95,12 @@ const permissions = [
 			Opening a saved link loads that website normally. An optional setting, off by default, removes common tracking parameters from the destination when opening saved links or restoring sessions and snapshots. It leaves the URLs in your library unchanged. Choosing <strong>Search the web</strong> sends your query to the browser's default search engine. Choosing <strong>Open in Internet Archive</strong> on a saved link opens the Internet Archive's page for that address in a new tab, so the address goes to archive.org when you choose it. These are actions you request, not background reporting by TabLodge.
 		</p>
 
-		<h2>Sources: YouTube, Reddit, X, and Instagram</h2>
+		<h2>Sources</h2>
 		<p>
-			In <strong>Settings &rsaquo; Sources</strong> you can have TabLodge save a link when you save it on YouTube (Watch later), Reddit (a saved post or comment), X (a bookmarked post), or Instagram (a saved post or reel). No site is on until you add it, and adding one asks the browser for access to that site only. Only then does TabLodge run a small script there, and removing the site, or removing its access in the browser, stops it.
+			In <strong>Settings &rsaquo; Sources</strong> you can have TabLodge save a link when you save it on YouTube (Watch later), Reddit (a saved post or comment), X (a bookmarked post), Instagram (a saved post or reel), GitHub (a starred repository), Hacker News (a favorite story), Stack Overflow (a bookmarked question), dev.to (an article saved to your reading list), or Lobsters (a saved story). No site is on until you add it, and adding one asks the browser for access to that site only. Only then does TabLodge run a small script there, and removing the site, or removing its access in the browser, stops it.
 		</p>
 		<p>
-			The script only notices your own click on the site's save control, then reads that item's address and its title, the start of a post's text, or the start of a caption from the page. It reads nothing else, sends nothing to the site or anywhere else, and never blocks or changes the site's own save. The link is stored in your library like any other bookmark. Which sites are on is kept in <code>tablodge.sources</code> on this device and never syncs. In a private window, a save is added only when private windows use the regular library.
+			The script only notices your own click on the site's save control, then reads that item's address and its title, the start of a post's text, or the start of a caption from the page. On Hacker News and Lobsters it also reads the address of the story's discussion page, which goes in the bookmark's note. It reads nothing else, sends nothing to the site or anywhere else, and never blocks or changes the site's own save. The link is stored in your library like any other bookmark. Which sites are on is kept in <code>tablodge.sources</code> on this device and never syncs. In a private window, a save is added only when private windows use the regular library.
 		</p>
 
 		<h2>Private windows</h2>

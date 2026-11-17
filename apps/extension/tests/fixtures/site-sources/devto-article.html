@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- A trimmed dev.to article page: the header (header#main-title) with the title, and the reactions bar with the
+reading list button (button#reaction-butt-readinglist, data-category "readinglist", aria-pressed) and the like
+button. Hand written to mimic Forem's _reaction_button.html.erb and show.html.erb; not a capture of the live
+page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Building local-first apps with IndexedDB - DEV Community</title>
+<link rel="canonical" href="https://alice.example/blog/local-first"></head>
+<body>
+<aside class="crayons-layout__sidebar-left"><div class="crayons-article-actions">
+	<button id="reaction-butt-like" aria-label="Like" aria-pressed="false" class="crayons-reaction crayons-reaction--like" data-category="like"><span class="crayons-reaction__icon"><svg aria-hidden="true"></svg></span></button>
+	<button id="reaction-butt-readinglist" aria-label="Add to reading list" aria-pressed="false" class="crayons-reaction crayons-reaction--readinglist crayons-tooltip__activator relative" data-category="readinglist">
+		<span class="crayons-reaction__icon crayons-reaction__icon--inactive"><svg id="readinglist-icon" aria-hidden="true"></svg></span>
+		<span class="crayons-reaction__count" id="reaction-number-readinglist">12</span>
+		<span data-testid="tooltip" class="crayons-tooltip__content">Save</span>
+	</button>
+</div></aside>
+<main id="main-content"><article class="crayons-card crayons-article" data-article-id="1001">
+	<header class="crayons-article__header" id="main-title">
+		<div class="crayons-article__header__meta">
+			<h1 class="fs-3xl lh-tight mb-2">
+				Building local-first apps with IndexedDB
+			</h1>
+		</div>
+	</header>
+	<div class="crayons-article__body text-styles" id="article-body"><p>Article text.</p></div>
+</article></main>
+</body>
+</html>

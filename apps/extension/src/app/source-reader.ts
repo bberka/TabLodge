@@ -1,7 +1,10 @@
 // What the site adapters share. An adapter looks at a click on the site's page, before the site handles it, and
 // says whether it was the user saving something there and, if so, which link. It only reads the DOM.
 
-export type SourceLink = {url: string; title: string};
+/**
+`discussion` is the item's own page on a site whose items link elsewhere; it goes in the bookmark's note.
+*/
+export type SourceLink = {url: string; title: string; discussion?: string};
 
 /**
 `save`: the user saved this link on the site. `unreadable`: the user saved something, but the page did not have

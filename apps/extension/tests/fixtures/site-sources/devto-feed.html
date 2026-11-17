@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- A trimmed dev.to home feed: article cards (.crayons-story) with their title link (h2.crayons-story__title a,
+id article-link-<id>) and the Save button (id article-save-button-<id>, aria-label "Save post <title> to reading
+list"; aria-pressed in the Preact feed, the class "selected" on server drawn cards), one card already saved, a
+server drawn card, and one whose title link is gone. Hand written to mimic Forem's SaveButton.jsx and story_card.rs;
+not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DEV Community</title></head>
+<body>
+<main id="main-content"><div class="articles-list">
+	<article class="crayons-story" data-content-user-id="1">
+		<div class="crayons-story__body">
+			<h2 class="crayons-story__title"><a href="/alice/local-first-apps-4k2j" id="article-link-1001">Building local-first apps with IndexedDB</a></h2>
+			<div class="crayons-story__bottom">
+				<button id="article-save-button-1001" class="c-btn c-btn--icon-alone" type="button" title="Save post Building local-first apps with IndexedDB to reading list" aria-label="Save post Building local-first apps with IndexedDB to reading list" aria-pressed="false" data-initial-feed data-reactable-id="1001"><svg id="save-icon" aria-hidden="true" class="crayons-icon c-btn__icon" width="24" height="24"><path id="save-shape" d="M6.75 4.5h10.5a.75.75 0 01.75.75v14.357l-6-4.5-6 4.5V5.25z"></path></svg></button>
+			</div>
+		</div>
+	</article>
+	<article class="crayons-story">
+		<div class="crayons-story__body">
+			<h2 class="crayons-story__title"><a href="/bob/typescript-tips-1a2b" id="article-link-1002">TypeScript tips</a></h2>
+			<button id="saved" class="c-btn c-btn--icon-alone bookmark-button selected" type="button" aria-label="Save post TypeScript tips to reading list" data-reactable-id="1002"><svg aria-hidden="true" class="crayons-icon"></svg></button>
+		</div>
+	</article>
+	<div class="crayons-story" data-feed-content-id="1004">
+		<div class="crayons-story__body">
+			<h2 class="crayons-story__title"><a href="/carol/sqlite-in-the-browser-9z8y?bb=264890" id="article-link-1004">SQLite in the browser</a></h2>
+			<button type="button" id="article-save-button-1004" class="c-btn c-btn--icon-alone bookmark-button" data-reactable-id="1004" aria-label="Save post SQLite in the browser to reading list" title="Save post SQLite in the browser to reading list"><span id="server-save-initial" class="bm-initial">Save</span><span class="bm-success">Saved</span></button>
+		</div>
+	</div>
+	<article class="crayons-story">
+		<div class="crayons-story__body">
+			<h2 class="crayons-story__heading">A card whose title link moved</h2>
+			<button id="article-save-button-1003" class="c-btn c-btn--icon-alone" type="button" aria-label="Save post A card whose title link moved to reading list" aria-pressed="false" data-reactable-id="1003"><svg aria-hidden="true" class="crayons-icon"></svg></button>
+		</div>
+	</article>
+</div></main>
+</body>
+</html>

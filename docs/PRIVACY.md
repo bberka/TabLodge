@@ -7,7 +7,7 @@ TabLodge keeps your sessions, bookmarks, and settings in your browser profile. I
 - No analytics, telemetry, crash reporting, or advertising.
 - No TabLodge cloud and no sale of data. There is no TabLodge operated sync service.
 - No network requests of its own unless you turn on sync (see [Sync with your own server](#sync-with-your-own-server)). Code, styles, fonts, and icons are bundled with the extension.
-- No website access until you add a site in **Settings › Sources**, and no declared content scripts. TabLodge reads tab metadata through browser APIs, not the contents of web pages. A source reads only the site you added (see [Sources](#sources)). By default the search palette appears over the current page, so the shortcut injects the palette into that one page when you press it. Choosing **Window** in Settings turns this off. The injected code only draws the palette. It reads nothing from the page, and the page cannot read your library. Apart from Sources, **Keep a copy** is the one action that reads a page: when you choose it from the toolbar popup, the page's right-click menu, or the side panel, TabLodge reads the text of that one open tab once (see [Page copies](#page-copies)). **Save quote** in the right-click menu on selected text reads nothing from the page: the browser hands TabLodge the selected text and the page address, and the code injected into that one page only shows the confirmation.
+- No website access until you add a site in **Settings › Sources**, and no declared content scripts. To save sessions and bookmarks, TabLodge reads tab metadata through browser APIs, not the contents of web pages. A source reads only the site you added (see [Sources](#sources)). By default the search palette appears over the current page, so the shortcut injects the palette into that one page when you press it. Choosing **Window** in Settings turns this off. The injected code only draws the palette. It reads nothing from the page, and the page cannot read your library. Apart from Sources, **Keep a copy** is the one action that reads a page: when you choose it from the toolbar popup, the page's right-click menu, or the side panel, TabLodge reads the text of that one open tab once (see [Page copies](#page-copies)). **Save quote** in the right-click menu on selected text reads nothing from the page: the browser hands TabLodge the selected text and the page address, and the code injected into that one page only shows the confirmation.
 - A web page can detect that TabLodge is installed by requesting `palette.html`, which the manifest exposes so the palette can be framed over pages. Nothing else of the extension is exposed. On a site you added in **Settings › Sources**, that site's page can also see the notice TabLodge shows after a save.
 
 Opening a saved link loads that website normally. An optional setting removes common tracking parameters from the destination URL when opening saved links or restoring sessions and snapshots. It is off by default and does not change the URLs stored in your library. Choosing **Search the web** sends your query to the browser's default search engine. Choosing **Open in Internet Archive** on a saved link opens the Internet Archive's page for that address (`web.archive.org/web/<address>`) in a new tab, so the address goes to archive.org when you choose it and TabLodge sends and stores nothing else; with the tracking parameter setting on, those parameters are removed first. In **Settings › Sync**, **Generate token** makes the token in the browser without any request, and **Deploy to Cloudflare** opens Cloudflare's page in a new tab. These are actions you request, not background reporting by TabLodge.
@@ -55,6 +55,26 @@ Access: `https://x.com/*` and `https://twitter.com/*`. When you click **Bookmark
 ### Instagram saved
 
 Access: `https://www.instagram.com/*`. When you tap **Save** on a post or reel, TabLodge reads its address and the start of its caption from the page and bookmarks `https://www.instagram.com/p/<id>/` or `https://www.instagram.com/reel/<id>/` in an Instagram column. It only notices your own taps: it never scrolls, opens, or clicks anything on Instagram. Nothing else on the page is read or kept.
+
+### GitHub stars
+
+Access: `https://github.com/*`. When you click **Star** on a repository, on its page or in a list such as search results or Trending, TabLodge reads the repository's name and description from the page and bookmarks `https://github.com/<owner>/<repo>` in a GitHub column, titled with the name and the description. Nothing else on the page is read or kept.
+
+### Hacker News favorites
+
+Access: `https://news.ycombinator.com/*`. When you click **favorite** on a story, TabLodge reads the story's title, the address it links to, and its Hacker News page from the page. It bookmarks the linked address in a Hacker News column, with `https://news.ycombinator.com/item?id=<id>` in the bookmark's note. An Ask HN or other text post has no link of its own, so its Hacker News page is bookmarked. Favorites on comments are not saved. Nothing else on the page is read or kept.
+
+### Stack Overflow bookmarks
+
+Access: `https://stackoverflow.com/*`. When you click the bookmark button on a question, TabLodge reads the question's address and title from the page and bookmarks `https://stackoverflow.com/questions/<id>/<slug>` in a Stack Overflow column. Bookmarks on answers and on other Stack Exchange sites are not saved. Nothing else on the page is read or kept.
+
+### dev.to reading list
+
+Access: `https://dev.to/*`. When you click **Save** on an article, on its page or in a feed, TabLodge reads the article's address and title from the page and bookmarks `https://dev.to/<author>/<slug>` in a dev.to column. Nothing else on the page is read or kept.
+
+### Lobsters saved
+
+Access: `https://lobste.rs/*`. When you click **save** on a story, TabLodge reads the story's title, the address it links to, and its Lobsters page from the page. It bookmarks the linked address in a Lobsters column, with `https://lobste.rs/s/<id>/<slug>` in the bookmark's note; a text post with no link of its own is bookmarked at its Lobsters page. Nothing else on the page is read or kept.
 
 ## Sync with your own server
 
@@ -141,6 +161,11 @@ Optional permissions are asked for only when you turn on the feature that needs 
 | `https://www.reddit.com/*`, `https://old.reddit.com/*` | **Settings › Sources › Reddit saved** |
 | `https://x.com/*`, `https://twitter.com/*` | **Settings › Sources › X bookmarks** |
 | `https://www.instagram.com/*` | **Settings › Sources › Instagram saved** |
+| `https://github.com/*` | **Settings › Sources › GitHub stars** |
+| `https://news.ycombinator.com/*` | **Settings › Sources › Hacker News favorites** |
+| `https://stackoverflow.com/*` | **Settings › Sources › Stack Overflow bookmarks** |
+| `https://dev.to/*` | **Settings › Sources › dev.to reading list** |
+| `https://lobste.rs/*` | **Settings › Sources › Lobsters saved** |
 
 ## Contact
 

@@ -4,8 +4,13 @@
 // It never changes the site's behavior, blocks its save, or makes a request of its own.
 import {siteSourceForUrl, type SiteSourceId} from '../src/app/site-sources';
 import type {SourceRead, SourceReader} from '../src/app/source-reader';
+import {createDevtoReader} from '../src/app/source-devto';
+import {createGithubReader} from '../src/app/source-github';
+import {createHackerNewsReader} from '../src/app/source-hackernews';
 import {createInstagramReader} from '../src/app/source-instagram';
+import {createLobstersReader} from '../src/app/source-lobsters';
 import {createRedditReader} from '../src/app/source-reddit';
+import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
 import {showSourceToast} from '../src/app/source-toast';
@@ -17,6 +22,11 @@ const READERS: Record<SiteSourceId, () => SourceReader> = {
 	reddit: () => createRedditReader(),
 	x: () => createTwitterReader(document),
 	instagram: () => createInstagramReader(document),
+	github: () => createGithubReader(document),
+	hackernews: () => createHackerNewsReader(document),
+	stackoverflow: () => createStackOverflowReader(document),
+	devto: () => createDevtoReader(document),
+	lobsters: () => createLobstersReader(),
 };
 const source = siteSourceForUrl(location.href);
 
@@ -45,6 +55,36 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			: (result?.error ?? `${appName} could not undo that.`);
 	};
 
+	const showSaved = ({
+		outcome,
+		column,
+		undoId,
+	}: {
+		outcome: SiteSourceOutcome;
+		column?: string;
+		undoId?: string;
+	}) => {
+		const messages: Record<SiteSourceOutcome, string | undefined> = {
+			saved: `Saved to ${appName} in ${column}.`,
+			exists: `Already in ${appName}.`,
+			trashed: `In the ${appName} trash bin, so not saved again.`,
+			off: undefined,
+		};
+		const text = messages[outcome];
+		if (text) {
+			showSourceToast(
+				text,
+				undoId ? {label: 'Undo', run: async () => undo(undoId)} : undefined,
+			);
+		}
+	};
+
+	const takePending = async () =>
+		send<ActionResult<'SITE_SOURCE_PENDING'>>({
+			type: 'SITE_SOURCE_PENDING',
+			source: source.id,
+		});
+
 	const handle = async (found: NonNullable<SourceRead>) => {
 		if (found.kind === 'unreadable') {
 			const result = await send<ActionResult<'SITE_SOURCE_UNREADABLE'>>({
@@ -65,6 +105,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			source: source.id,
 			url: found.link.url,
 			title: found.link.title,
+			discussion: found.link.discussion,
 		});
 		if (!result) {
 			return;
@@ -75,23 +116,17 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			return;
 		}
 
-		const messages: Record<SiteSourceOutcome, string | undefined> = {
-			saved: `Saved to ${appName} in ${result.column}.`,
-			exists: `Already in ${appName}.`,
-			trashed: `In the ${appName} trash bin, so not saved again.`,
-			off: undefined,
-		};
-		const text = messages[result.outcome];
-		if (!text) {
-			return;
-		}
-
-		const {undoId} = result;
-		showSourceToast(
-			text,
-			undoId ? {label: 'Undo', run: async () => undo(undoId)} : undefined,
-		);
+		showSaved(result);
+		// Shown here, so the next page in this tab must not show it again.
+		void takePending();
 	};
+
+	// A save whose click loaded this page (Hacker News' favorite link) shows its result here.
+	void takePending().then((pending) => {
+		if (pending?.ok && pending.saved) {
+			showSaved(pending.saved);
+		}
+	});
 
 	// Capture on the window sees the click before the site's own handlers change the control's state.
 	globalThis.addEventListener(

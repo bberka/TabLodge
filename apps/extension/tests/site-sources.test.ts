@@ -5,21 +5,31 @@ import {parseHTML} from 'linkedom';
 import {test} from 'vite-plus/test';
 import {manifestForTarget} from '../scripts/manifest-targets';
 import {
+	devtoArticleUrl,
+	githubRepoUrl,
+	hackerNewsItemUrl,
 	instagramPostUrl,
+	lobstersStoryUrl,
 	parseSiteSourcesState,
 	redditPermalinkUrl,
 	SITE_SOURCES,
 	siteSourceForUrl,
+	stackOverflowQuestionUrl,
 	xPostUrl,
 	youtubeVideoUrl,
 } from '../src/app/site-sources';
+import {createDevtoReader} from '../src/app/source-devto';
+import {createGithubReader} from '../src/app/source-github';
+import {createHackerNewsReader} from '../src/app/source-hackernews';
 import {createInstagramReader} from '../src/app/source-instagram';
+import {createLobstersReader} from '../src/app/source-lobsters';
 import {
 	excerpt,
 	type SourceRead,
 	type SourceReader,
 } from '../src/app/source-reader';
 import {createRedditReader} from '../src/app/source-reddit';
+import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
 
@@ -212,6 +222,11 @@ test('stored source state is read defensively: off unless saved as on', () => {
 		reddit: {enabled: false},
 		x: {enabled: false},
 		instagram: {enabled: false},
+		github: {enabled: false},
+		hackernews: {enabled: false},
+		stackoverflow: {enabled: false},
+		devto: {enabled: false},
+		lobsters: {enabled: false},
 	});
 	assert.deepEqual(
 		parseSiteSourcesState({
@@ -227,6 +242,11 @@ test('stored source state is read defensively: off unless saved as on', () => {
 			reddit: {enabled: false},
 			x: {enabled: false},
 			instagram: {enabled: false},
+			github: {enabled: false},
+			hackernews: {enabled: false},
+			stackoverflow: {enabled: false},
+			devto: {enabled: false},
+			lobsters: {enabled: false},
 		},
 	);
 });
@@ -591,4 +611,344 @@ test('Instagram: a post in a dialog or on its own page saves the post at the add
 		),
 		{kind: 'unreadable'},
 	);
+});
+
+const github = (name: string, url = 'https://github.com/trending') =>
+	page(name, url, (document) => createGithubReader(document));
+const hackerNews = (name: string, url = 'https://news.ycombinator.com/') =>
+	page(name, url, (document) => createHackerNewsReader(document));
+const stackOverflow = (
+	name: string,
+	url = 'https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array',
+) => page(name, url, (document) => createStackOverflowReader(document));
+
+test('GitHub repositories get one address, from any page in them, and GitHub pages are not repositories', () => {
+	for (const href of [
+		'/sindresorhus/ky',
+		'https://github.com/sindresorhus/ky/tree/main/source',
+		'https://www.github.com/sindresorhus/ky.git',
+		'/sindresorhus/ky/star',
+	]) {
+		assert.equal(
+			githubRepoUrl(href),
+			'https://github.com/sindresorhus/ky',
+			href,
+		);
+	}
+
+	for (const href of [
+		'/sindresorhus',
+		'/topics/rust',
+		'/orgs/github/repositories',
+		'https://gist.github.com/a/b',
+		'https://example.com/a/b',
+	]) {
+		assert.equal(githubRepoUrl(href), null, href);
+	}
+});
+
+test('Hacker News, Stack Overflow, dev.to, and Lobsters addresses', () => {
+	assert.equal(
+		hackerNewsItemUrl('item?id=41000001&p=2'),
+		'https://news.ycombinator.com/item?id=41000001',
+	);
+	assert.equal(hackerNewsItemUrl('https://news.ycombinator.com/news'), null);
+	assert.equal(hackerNewsItemUrl('https://example.com/item?id=1'), null);
+	assert.equal(
+		stackOverflowQuestionUrl(
+			'/questions/11227809/why-is-processing?noredirect=1#comment1',
+		),
+		'https://stackoverflow.com/questions/11227809/why-is-processing',
+	);
+	assert.equal(
+		stackOverflowQuestionUrl('https://stackoverflow.com/q/11227809'),
+		'https://stackoverflow.com/questions/11227809',
+	);
+	assert.equal(stackOverflowQuestionUrl('/users/1/alice'), null);
+	assert.equal(
+		stackOverflowQuestionUrl('https://superuser.com/questions/1/a'),
+		null,
+	);
+	assert.equal(
+		devtoArticleUrl('https://dev.to/alice/local-first-apps-4k2j?utm_source=x'),
+		'https://dev.to/alice/local-first-apps-4k2j',
+	);
+	assert.equal(devtoArticleUrl('/t/javascript'), null);
+	assert.equal(devtoArticleUrl('/alice'), null);
+	assert.equal(
+		lobstersStoryUrl('https://lobste.rs/s/abc123/rust_in_production#c_x'),
+		'https://lobste.rs/s/abc123/rust_in_production',
+	);
+	assert.equal(lobstersStoryUrl('/u/alice'), null);
+});
+
+test('GitHub: Star on a repository page saves it, titled with its name and description', () => {
+	const expected = {
+		kind: 'save',
+		link: {
+			url: 'https://github.com/sindresorhus/ky',
+			title:
+				'sindresorhus/ky: Tiny and elegant JavaScript HTTP client based on the Fetch API',
+		},
+	};
+	for (const id of ['star', 'star-icon', 'star-shape', 'star-text']) {
+		assert.deepEqual(
+			github('github-repo.html', 'https://github.com/sindresorhus/ky').click(
+				id,
+			),
+			expected,
+			id,
+		);
+	}
+});
+
+test('GitHub: Unstar and other buttons save nothing', () => {
+	const site = github('github-repo.html', 'https://github.com/sindresorhus/ky');
+	assert.equal(site.click('unstar'), undefined);
+	assert.equal(site.click('watch'), undefined);
+});
+
+test('GitHub: a Star button outside its form on a repository page saves that repository', () => {
+	assert.equal(
+		(
+			github('github-repo.html', 'https://github.com/sindresorhus/ky').click(
+				'changed-star',
+			) as {link: {url: string}}
+		).link.url,
+		'https://github.com/sindresorhus/ky',
+	);
+});
+
+test('GitHub: the React star button saves the repository at the address, and "Starred" saves nothing', () => {
+	const site = github('github-react.html', 'https://github.com/denoland/deno');
+	assert.deepEqual(site.click('react-star-text'), {
+		kind: 'save',
+		link: {
+			url: 'https://github.com/denoland/deno',
+			title: 'denoland/deno: A modern runtime for JavaScript and TypeScript.',
+		},
+	});
+	const template = site.element('starred-variant') as HTMLTemplateElement;
+	site.document.body.append(template.content.cloneNode(true));
+	assert.equal(site.click('react-starred'), undefined);
+});
+
+test('GitHub: Star in a list saves that row, with or without a description', () => {
+	const site = github('github-trending.html');
+	assert.deepEqual(site.click('deno-star'), {
+		kind: 'save',
+		link: {
+			url: 'https://github.com/denoland/deno',
+			title: 'denoland/deno: A modern runtime for JavaScript and TypeScript.',
+		},
+	});
+	assert.deepEqual(site.click('bare-star'), {
+		kind: 'save',
+		link: {
+			url: 'https://github.com/octocat/Spoon-Knife',
+			title: 'octocat/Spoon-Knife',
+		},
+	});
+});
+
+test('GitHub: a topic star saves nothing, and a list Star without its form is unreadable', () => {
+	const site = github('github-trending.html');
+	assert.equal(site.click('topic-star'), undefined);
+	assert.deepEqual(site.click('changed-star'), {kind: 'unreadable'});
+});
+
+test('Hacker News: favorite on a story saves its link, with the discussion', () => {
+	assert.deepEqual(
+		hackerNews(
+			'hackernews-item.html',
+			'https://news.ycombinator.com/item?id=41000001',
+		).click('fave'),
+		{
+			kind: 'save',
+			link: {
+				url: 'https://example.com/local-first',
+				title: 'Local-first software: you own your data',
+				discussion: 'https://news.ycombinator.com/item?id=41000001',
+			},
+		},
+	);
+});
+
+test('Hacker News: an Ask HN post saves its own page', () => {
+	assert.deepEqual(hackerNews('hackernews-list.html').click('ask-fave'), {
+		kind: 'save',
+		link: {
+			url: 'https://news.ycombinator.com/item?id=41000002',
+			title: 'Ask HN: What are you working on?',
+			discussion: 'https://news.ycombinator.com/item?id=41000002',
+		},
+	});
+});
+
+test('Hacker News: un-favorite and a comment favorite save nothing; a story without its link is unreadable', () => {
+	const list = hackerNews('hackernews-list.html');
+	assert.equal(list.click('unfave'), undefined);
+	assert.deepEqual(list.click('changed-fave'), {kind: 'unreadable'});
+	assert.equal(
+		hackerNews(
+			'hackernews-item.html',
+			'https://news.ycombinator.com/item?id=41000001',
+		).click('comment-fave'),
+		undefined,
+	);
+});
+
+test('Stack Overflow: the bookmark button on a question saves it, wherever on the icon the click lands', () => {
+	const expected = {
+		kind: 'save',
+		link: {
+			url: 'https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array',
+			title:
+				'Why is processing a sorted array faster than processing an unsorted array?',
+		},
+	};
+	for (const id of [
+		'question-save',
+		'question-save-icon',
+		'question-save-shape',
+	]) {
+		assert.deepEqual(
+			stackOverflow('stackoverflow-question.html').click(id),
+			expected,
+			id,
+		);
+	}
+});
+
+test('Stack Overflow: saving an answer or un-saving saves nothing; a question heading without its link is unreadable', () => {
+	assert.equal(
+		stackOverflow('stackoverflow-question.html').click('answer-save'),
+		undefined,
+	);
+	const saved = stackOverflow(
+		'stackoverflow-saved.html',
+		'https://stackoverflow.com/questions/927358/how-do-i-undo',
+	);
+	assert.equal(saved.click('saved'), undefined);
+	assert.deepEqual(saved.click('changed-save'), {kind: 'unreadable'});
+});
+
+const devto = (name: string, url = 'https://dev.to/') =>
+	page(name, url, (document) => createDevtoReader(document));
+const lobsters = (name: string, url = 'https://lobste.rs/') =>
+	page(name, url, () => createLobstersReader());
+
+test('dev.to: Save on a feed card saves that article, wherever on the icon the click lands', () => {
+	const expected = {
+		kind: 'save',
+		link: {
+			url: 'https://dev.to/alice/local-first-apps-4k2j',
+			title: 'Building local-first apps with IndexedDB',
+		},
+	};
+	for (const id of ['article-save-button-1001', 'save-icon', 'save-shape']) {
+		assert.deepEqual(devto('devto-feed.html').click(id), expected, id);
+	}
+
+	// A server drawn card, with a tracking parameter on its link.
+	assert.deepEqual(devto('devto-feed.html').click('server-save-initial'), {
+		kind: 'save',
+		link: {
+			url: 'https://dev.to/carol/sqlite-in-the-browser-9z8y',
+			title: 'SQLite in the browser',
+		},
+	});
+});
+
+test('dev.to: the reading list button on an article page saves the page, not its canonical link', () => {
+	const site = devto(
+		'devto-article.html',
+		'https://dev.to/alice/local-first-apps-4k2j?utm_source=feed',
+	);
+	assert.deepEqual(site.click('readinglist-icon'), {
+		kind: 'save',
+		link: {
+			url: 'https://dev.to/alice/local-first-apps-4k2j',
+			title: 'Building local-first apps with IndexedDB',
+		},
+	});
+	assert.equal(site.click('reaction-butt-like'), undefined);
+});
+
+test('dev.to: un-saving saves nothing; a card without its link, or a button off an article page, is unreadable', () => {
+	const site = devto('devto-feed.html');
+	assert.equal(site.click('saved'), undefined);
+	assert.deepEqual(site.click('article-save-button-1003'), {
+		kind: 'unreadable',
+	});
+	assert.deepEqual(
+		devto('devto-article.html', 'https://dev.to/readinglist').click(
+			'reaction-butt-readinglist',
+		),
+		{kind: 'unreadable'},
+	);
+});
+
+test('Lobsters: save on a story saves its link, with the discussion', () => {
+	assert.deepEqual(lobsters('lobsters-list.html').click('save'), {
+		kind: 'save',
+		link: {
+			url: 'https://example.org/rust',
+			title: 'Rust in production',
+			discussion: 'https://lobste.rs/s/abc123/rust_in_production',
+		},
+	});
+});
+
+test('Lobsters: on a story page, each merged story saves its own link, with the page as the discussion', () => {
+	const site = lobsters(
+		'lobsters-story.html',
+		'https://lobste.rs/s/abc123/rust_in_production',
+	);
+	assert.deepEqual(site.click('story-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://example.org/rust',
+			title: 'Rust in production',
+			discussion: 'https://lobste.rs/s/abc123',
+		},
+	});
+	assert.equal(
+		(site.click('merged-save') as {link: {url: string}}).link.url,
+		'https://example.com/rust-at-scale',
+	);
+});
+
+test('Lobsters: a text post saves its own page', () => {
+	assert.deepEqual(lobsters('lobsters-list.html').click('text-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://lobste.rs/s/def456/what_are_you_doing_this_week',
+			title: 'What are you doing this week?',
+			discussion: 'https://lobste.rs/s/def456/what_are_you_doing_this_week',
+		},
+	});
+});
+
+test('Lobsters: unsave and hide save nothing; a story without its link is unreadable', () => {
+	const site = lobsters('lobsters-list.html');
+	assert.equal(site.click('unsave'), undefined);
+	assert.equal(site.click('hide'), undefined);
+	assert.deepEqual(site.click('changed-save'), {kind: 'unreadable'});
+});
+
+test('the new sources are found only on their own hosts', () => {
+	assert.equal(siteSourceForUrl('https://github.com/a/b')?.id, 'github');
+	assert.equal(
+		siteSourceForUrl('https://news.ycombinator.com/item?id=1')?.id,
+		'hackernews',
+	);
+	assert.equal(
+		siteSourceForUrl('https://stackoverflow.com/questions/1')?.id,
+		'stackoverflow',
+	);
+	assert.equal(siteSourceForUrl('https://dev.to/a/b')?.id, 'devto');
+	assert.equal(siteSourceForUrl('https://lobste.rs/')?.id, 'lobsters');
+	assert.equal(siteSourceForUrl('https://gist.github.com/a'), undefined);
+	assert.equal(siteSourceForUrl('https://superuser.com/'), undefined);
 });

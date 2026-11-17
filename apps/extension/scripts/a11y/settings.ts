@@ -238,14 +238,14 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 				await page.keyboard.press('ArrowDown');
 				assert.equal(await active(), 'Reddit saved');
 				await page.keyboard.press('End');
-				assert.equal(await active(), 'Instagram saved');
+				assert.equal(await active(), 'Lobsters saved');
 				await search.fill('twitter');
 				assert.deepEqual(await page.getByRole('option').allTextContents(), [
 					'X bookmarksPosts you bookmark on x.com or twitter.com',
 				]);
 				assert.equal(await active(), 'X bookmarks');
 				await search.fill('');
-				assert.equal(await page.getByRole('option').count(), 4);
+				assert.equal(await page.getByRole('option').count(), 9);
 				const violations = await axeViolationLines(page, axeSource);
 				assert.deepEqual(violations, [], violations.join('\n'));
 				await page.keyboard.press('Escape');

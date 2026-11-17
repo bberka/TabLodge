@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- A trimmed github.com/trending page: rows (article.Box-row) each with a Star form and a description, a row
+with no description, a topic's Star form (/topics/<name>/star, not a repository), and a row whose Star button
+lost its form. Hand written to mimic the site's markup; not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Trending repositories on GitHub today</title></head>
+<body>
+<div class="Box">
+	<article class="Box-row">
+		<div class="float-right d-flex"><div class="js-toggler-container js-social-container starring-container">
+			<form class="unstarred js-social-form" action="/denoland/deno/star" method="post">
+				<button id="deno-star" type="submit" class="btn-sm btn" aria-label="Star denoland/deno"><svg aria-hidden="true" class="octicon octicon-star"></svg>Star</button>
+			</form>
+		</div></div>
+		<h2 class="h3 lh-condensed"><a href="/denoland/deno">denoland / deno</a></h2>
+		<p class="col-9 color-fg-muted my-1 pr-4">
+			A modern runtime for JavaScript and TypeScript.
+		</p>
+	</article>
+	<article class="Box-row">
+		<div class="float-right d-flex">
+			<form class="unstarred js-social-form" action="/octocat/Spoon-Knife/star" method="post">
+				<button id="bare-star" type="submit" class="btn-sm btn" aria-label="Star octocat/Spoon-Knife">Star</button>
+			</form>
+		</div>
+		<h2 class="h3 lh-condensed"><a href="/octocat/Spoon-Knife">octocat / Spoon-Knife</a></h2>
+	</article>
+	<article class="Box-row">
+		<form class="unstarred js-social-form" action="/topics/rust/star" method="post">
+			<button id="topic-star" type="submit" class="btn-sm btn">Star</button>
+		</form>
+		<h2 class="h3"><a href="/topics/rust">rust</a></h2>
+	</article>
+	<article class="Box-row">
+		<button id="changed-star" type="button" class="btn-sm btn" aria-label="Star example/moved">Star</button>
+		<h2 class="h3"><a href="/example/moved">example / moved</a></h2>
+	</article>
+</div>
+</body>
+</html>

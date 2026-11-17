@@ -23,7 +23,7 @@ TabLodge is a browser extension for Chromium browsers and desktop Firefox. Save 
 - **Bookmark board:** columns of links on every new tab, each with an optional note, and a mark on links to images, PDFs, and videos.
 - **Quotes:** select text on a page, right-click, and **Save quote** keeps it in that page's bookmark note with a link back to the passage. The Android app does the same for text shared to it.
 - **Search:** one palette for open tabs, bookmarks (notes included), saved tabs, and sessions. Operators such as `"exact phrase"`, `-word`, `site:`, and `in:` narrow it, the dashboard searches, and the Android app's search; Help lists them all.
-- **Sources:** when you add a video to YouTube Watch later, save a Reddit post, bookmark a post on X, or save an Instagram post, the same link lands in your bookmarks, in a column you pick. Off until you add a site in Settings, and it reads only the sites you added.
+- **Sources:** when you save something on a site you use, such as YouTube Watch later, a Reddit or Instagram save, an X bookmark, a GitHub star, a Hacker News favorite, a Stack Overflow bookmark, the dev.to reading list, or a Lobsters save, the same link lands in your bookmarks, in a column you pick. Off until you add a site in Settings, and it reads only the sites you added.
 - **Import and export:** OneTab, Session Buddy, Toby, Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, Pinboard, Mastodon bookmarks, browser bookmarks, and backups.
 - **Recovery:** crash snapshots, a trash bin, and Undo.
 - **Sync:** keep every browser the same with a server you run yourself ([Self hosting](self-hosting.md)).

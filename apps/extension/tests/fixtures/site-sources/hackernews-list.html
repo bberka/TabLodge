@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- A trimmed news.ycombinator.com front page: an Ask HN text post, whose title links to its own item page, a
+story already favorited ("un-favorite", un=t), and a row whose title link is gone. Hand written to mimic the
+site's markup; not a capture of the live page. -->
+<html lang="en" op="news">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Hacker News</title></head>
+<body>
+<center><table id="hnmain"><tr><td><table>
+	<tr class="athing submission" id="41000002">
+		<td class="title"><span class="rank">1.</span></td>
+		<td class="title"><span class="titleline"><a href="item?id=41000002">Ask HN: What are you working on?</a></span></td>
+	</tr>
+	<tr><td colspan="2"></td><td class="subtext"><span class="subline">
+		<span class="score">58 points</span> |
+		<a id="ask-fave" href="fave?id=41000002&amp;auth=11aa22">favorite</a> |
+		<a href="item?id=41000002">140&nbsp;comments</a>
+	</span></td></tr>
+	<tr class="athing submission" id="41000003">
+		<td class="title"><span class="rank">2.</span></td>
+		<td class="title"><span class="titleline"><a href="https://example.org/sqlite">SQLite as an application file format</a></span></td>
+	</tr>
+	<tr><td colspan="2"></td><td class="subtext"><span class="subline">
+		<a id="unfave" href="fave?id=41000003&amp;un=t&amp;auth=33bb44">un-favorite</a> |
+		<a href="item?id=41000003">12&nbsp;comments</a>
+	</span></td></tr>
+	<tr class="athing submission" id="41000004">
+		<td class="title"><span class="rank">3.</span></td>
+		<td class="title"><span class="headline">A story whose title link moved</span></td>
+	</tr>
+	<tr><td colspan="2"></td><td class="subtext"><span class="subline">
+		<a id="changed-fave" href="fave?id=41000004&amp;auth=55cc66">favorite</a>
+	</span></td></tr>
+</table></td></tr></table></center>
+</body>
+</html>
