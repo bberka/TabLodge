@@ -214,6 +214,7 @@ export function AddSiteSource({
 	const [query, setQuery] = useState('');
 	const [active, setActive] = useState(0);
 	const listId = useId();
+	const listRef = useRef<HTMLDivElement>(null);
 	if (privateWindow) {
 		return null;
 	}
@@ -239,6 +240,10 @@ export function AddSiteSource({
 		if (next !== undefined) {
 			event.preventDefault();
 			setActive(Math.max(next, 0));
+			// The list scrolls once it holds more sites than fit; keep the highlighted one in view.
+			listRef.current?.children[Math.max(next, 0)]?.scrollIntoView({
+				block: 'nearest',
+			});
 		} else if (event.key === 'Enter') {
 			event.preventDefault();
 			if (current) {
@@ -290,6 +295,7 @@ export function AddSiteSource({
 					/>
 				</div>
 				<div
+					ref={listRef}
 					id={listId}
 					role="listbox"
 					aria-label="Supported sites"
