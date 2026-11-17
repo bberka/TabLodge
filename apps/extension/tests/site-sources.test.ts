@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {Window} from 'happy-dom';
+import {parseHTML} from 'linkedom';
 import {test} from 'vite-plus/test';
 import {manifestForTarget} from '../scripts/manifest-targets';
 import {
@@ -22,6 +22,15 @@ const fixture = (name: string) =>
 	);
 
 /**
+A parsed fixture at `url`: linkedom has no address of its own, and the YouTube reader reads the watched video from it.
+*/
+function load(name: string, url: string) {
+	const {window, document} = parseHTML(fixture(name));
+	Object.defineProperty(document, 'location', {value: new URL(url)});
+	return {window, document};
+}
+
+/**
 A fixture page at `url` with a reader listening the way the content script does: on the window, in the capture
 phase. `click(id)` clicks an element and returns what the reader made of it.
 */
@@ -30,25 +39,28 @@ function page(
 	url: string,
 	reader: (document: Document) => SourceReader,
 ) {
-	const window = new Window({url});
-	window.document.write(fixture(name));
-	const document = window.document as unknown as Document;
+	const {window, document} = load(name, url);
 	const read = reader(document);
 	let last: SourceRead;
 	window.addEventListener(
 		'click',
 		(event) => {
-			last = read(event as unknown as Event);
+			last = read(event);
 		},
 		{capture: true},
 	);
+	const element = (id: string) => {
+		const found = document.querySelector<HTMLElement>(`#${id}`);
+		assert.ok(found, `fixture has #${id}`);
+		return found;
+	};
+
 	return {
 		document,
+		element,
 		click(id: string): SourceRead {
-			const element = document.querySelector(`#${id}`);
-			assert.ok(element, `fixture has #${id}`);
 			last = undefined;
-			(element as HTMLElement).click();
+			element(id).click();
 			return last;
 		},
 	};
@@ -191,15 +203,16 @@ test('YouTube: a menu save with no known video, or a changed thumbnail, is unrea
 
 test('YouTube: the menu context expires, so an old click is never matched to a later save', () => {
 	let now = 0;
-	const window = new Window({url: 'https://www.youtube.com/'});
-	window.document.write(fixture('youtube-home.html'));
-	const document = window.document as unknown as Document;
+	const {window, document} = load(
+		'youtube-home.html',
+		'https://www.youtube.com/',
+	);
 	const read = createYoutubeReader(document, () => now);
 	const results: SourceRead[] = [];
 	window.addEventListener(
 		'click',
 		(event) => {
-			results.push(read(event as unknown as Event));
+			results.push(read(event));
 		},
 		{capture: true},
 	);
@@ -245,8 +258,9 @@ test('YouTube: unticking Watch later in the Save dialog saves nothing', () => {
 		'youtube-watch.html',
 		'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
 	);
-	site.document
-		.querySelector(':scope #option-watch-later [role="checkbox"]')!
+	site
+		.element('option-watch-later')
+		.querySelector(':scope [role="checkbox"]')!
 		.setAttribute('aria-checked', 'true');
 	site.click('save-button');
 	assert.equal(site.click('option-watch-later'), undefined);
@@ -296,24 +310,23 @@ test('Reddit: a post without its permalink is unreadable', () => {
 
 test('Reddit: Save inside the overflow menu shadow root is still found', () => {
 	const site = reddit('reddit-new.html');
-	const menu = site.document.querySelector(
-		':scope #t3_1abcde shreddit-post-overflow-menu',
-	)!;
+	const menu = site
+		.element('t3_1abcde')
+		.querySelector(':scope shreddit-post-overflow-menu')!;
 	const root = menu.attachShadow({mode: 'open'});
 	const item = site.document.createElement('li');
 	item.setAttribute('role', 'menuitem');
 	item.textContent = 'Save';
 	root.append(item);
-	let found: SourceRead;
-	const read = createRedditReader();
-	site.document.defaultView!.addEventListener(
-		'click',
-		(event) => {
-			found = read(event);
-		},
-		{capture: true},
-	);
-	item.click();
+	// The browser's composed path for a click inside the shadow root: the item, the root, then the host's ancestors.
+	const path: EventTarget[] = [item, root];
+	for (let node: Element | null = menu; node; node = node.parentElement) {
+		path.push(node);
+	}
+
+	const found = createRedditReader()({
+		composedPath: () => path,
+	} as unknown as Event);
 	assert.equal(
 		(found as {link: {url: string}} | undefined)?.link.url,
 		'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
