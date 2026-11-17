@@ -1,6 +1,6 @@
 # Android app (`apps/mobile`)
 
-Expo and React Native, TypeScript. It syncs with the user's own sync server and reads the same library as the extension. [ADR 3](../adr/0003-mobile-app-framework.md) records why; the [README](../README.md#android-app) lists what it does today.
+Expo and React Native, TypeScript. It syncs with the user's own sync server and reads the same library as the extension. [ADR 3](../adr/0003-mobile-app-framework.md) records why; the [README](../android.md) lists what it does today.
 
 ## Where things are
 
@@ -25,7 +25,7 @@ The app imports types and the sync client from `apps/extension/src` by relative 
 
 ## Rules
 
-- Keep session management simple. Tab reordering, splitting and merging sessions, and enforcing the library's size limits are intentionally not planned for the app (listed in the [README](../README.md#android-app)); do not add them without the owner asking.
+- Keep session management simple. Tab reordering, splitting and merging sessions, and enforcing the library's size limits are intentionally not planned for the app (listed in the [README](../android.md)); do not add them without the owner asking.
 - Expo pins exact versions. Add packages with `pnpm --filter tablodge-mobile exec expo install <package>`.
 - Pure logic goes in a plain `.ts` file with a test in `tests/`, not inside a screen.
 - Proof comes from an emulator or a device, not the browser. Run `pnpm run mobile:emulator` (visible window, software GPU, reuses a running one, `--stop` ends it), install with `pnpm run mobile:apk --install`, and take screenshots with `adb exec-out screencap -p > file.png`. Keep sample data off any real server. Do this without asking, for every visible change. Report the Android version, the Material or iOS look, and whether TalkBack, dark theme, or a small screen were not checked. Details: [Proof](validation.md#proof).

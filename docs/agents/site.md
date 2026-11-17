@@ -4,7 +4,7 @@ The website at <https://tablodge.bbay.dev> is a static [Astro](https://astro.bui
 
 ## Local development
 
-Install the Vite+ CLI once as described in [README Development](../README.md#development), then run these commands from the repository root:
+Install the Vite+ CLI once as described in [Contributing Development](../CONTRIBUTING.md#development), then run these commands from the repository root:
 
 ```sh
 pnpm install

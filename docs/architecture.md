@@ -4,7 +4,7 @@ This guide explains how TabLodge is built, where data lives, and which behavior 
 
 ## Repository layout
 
-The apps are in `apps/` (see the [project structure](README.md#project-structure)), and the server and the Android app import shared code from `apps/extension/src`. Unless a path starts with `apps/` or `docs/`, the paths in this document are relative to `apps/extension/`.
+The apps are in `apps/` (see the [project structure](CONTRIBUTING.md#project-structure)), and the server and the Android app import shared code from `apps/extension/src`. Unless a path starts with `apps/` or `docs/`, the paths in this document are relative to `apps/extension/`.
 
 ## Build and startup
 

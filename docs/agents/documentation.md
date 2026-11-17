@@ -10,7 +10,7 @@ Each topic has one main place; link to it from elsewhere. Remove obsolete notes 
 
 A change is not done while a document describes the old behavior. Check these for feature names, settings, defaults, permissions, commands, and removed behavior, and say in the summary when none needed an update:
 
-- `docs/README.md`: features, install, updates, permissions, commands, project structure.
+- `docs/README.md`: the feature list and install links. `docs/install.md`, `docs/android.md`, `docs/private-windows.md`: install and updates, the Android app, private windows. `docs/PRIVACY.md`: permissions. `docs/CONTRIBUTING.md`: commands and project structure.
 - `apps/extension/src/app/help.tsx`: anything users see (behavior, settings, workflows).
 - `apps/site/src/pages/` (`index`, `alternatives`, `privacy`): features, FAQ, install, comparisons, permissions, stored data. Screenshots: [Site](site.md#screenshots).
 - `docs/architecture.md`, `docs/PRIVACY.md`, `docs/self-hosting.md`: storage, sync, permissions, network behavior, server setup.
