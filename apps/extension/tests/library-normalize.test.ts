@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
 	ARCHIVED_FOLDER_NAME,
+	normalizeBookmark,
 	normalizeStore,
 	SCHEMA_VERSION,
 } from '../src/shared/library-normalize';
@@ -50,4 +51,26 @@ describe('normalizeStore', () => {
 			1,
 		);
 	});
+});
+
+test('a bookmark keeps a cleaned note and drops a blank one', () => {
+	const columns = new Set(['c']);
+	const raw = {url: 'https://example.com/', title: 'Example', columnId: 'c'};
+	assert.equal(
+		normalizeBookmark({...raw, notes: '  Why\u0000 I saved it \n'}, columns)
+			?.notes,
+		'Why I saved it',
+	);
+	assert.equal(
+		normalizeBookmark({...raw, notes: 'x'.repeat(20_000)}, columns)?.notes
+			?.length,
+		10_000,
+	);
+	for (const notes of [' '.repeat(3), '', 42, undefined]) {
+		assert.equal(
+			'notes' in normalizeBookmark({...raw, notes}, columns)!,
+			false,
+			String(notes),
+		);
+	}
 });

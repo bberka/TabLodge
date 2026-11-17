@@ -117,6 +117,32 @@ describe('a backup the phone makes, read by the extension', () => {
 		assert.deepEqual(idsOf(restored), idsOf(store));
 	});
 
+	test('bookmark notes come back from a backup on the phone and in the extension', async () => {
+		const store = addBookmark(
+			phoneLibrary(),
+			{
+				url: 'https://noted.example/',
+				title: 'Noted',
+				columnId: '',
+				notes: 'Kept in the backup',
+			},
+			'noted',
+			1,
+		);
+		const file = await buildBackup(store, 'TabLodge');
+		const onPhone = await readBackup(file.bytes);
+		assert.ok(onPhone.ok);
+		const note = (bookmarks: Array<{id: string; notes?: string}>) =>
+			bookmarks.find((entry) => entry.id === 'noted')?.notes;
+		assert.equal(note(onPhone.store.bookmarks), 'Kept in the backup');
+		const contents = readFullBackup(file.bytes);
+		assert.ok(contents);
+		assert.equal(
+			note(normalizeStore(contents.state as Record<string, unknown>).bookmarks),
+			'Kept in the backup',
+		);
+	});
+
 	test('a password gives a .zip.enc the extension opens with that password, and not with another', async () => {
 		const store = phoneLibrary();
 		const file = await buildBackup(store, 'TabLodge', 'correct horse battery');

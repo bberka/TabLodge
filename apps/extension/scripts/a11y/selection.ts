@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
-import {type BrowserContext, type Locator, type Page} from 'playwright';
+import {
+	type BrowserContext,
+	type Locator,
+	type Page,
+	type Route,
+} from 'playwright';
 import {fromRoot} from '../vite-shared.ts';
 import {captureEvidence, withMobileEmulation} from './evidence.ts';
 import {
@@ -616,88 +621,109 @@ export async function dragSelectedLinksCheck(env: Env, theme: Theme) {
 export async function selectionModeRangesCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
 	await check(`bookmark selection mode and ranges (${theme})`, async () => {
-		const page = await openPage(context, extensionId, 'newtab');
-		await seed(page);
-		await page.reload();
-		await setTheme(page, theme);
-		const mode = page.getByRole('button', {
-			name: 'Select bookmarks',
-			exact: true,
-		});
-		await mode.waitFor({timeout: 2000});
-		await mode.focus();
-		await page.keyboard.press('Enter');
-		assert.equal(await mode.getAttribute('aria-pressed'), 'true');
-		const cards = page.locator('[data-bookmark-id]');
-		await cards.first().getByRole('checkbox').focus();
-		await page.keyboard.press('Space');
-		await cards.nth(3).getByRole('checkbox').focus();
-		await page.keyboard.press('Shift+Space');
-		await cards
-			.nth(6)
+		// Ctrl+click opens the real sites of the sample bookmarks, and Playwright reports the tab only once its first
+		// navigation commits, which took over 2 s against the live site on a busy machine. Serve them locally.
+		const web = /^https?:\/\//;
+		const stub = async (route: Route) =>
+			route.fulfill({
+				contentType: 'text/html',
+				body: '<title>Opened bookmark</title>',
+			});
+		await context.route(web, stub);
+		try {
+			await selectionModeRanges(context, extensionId, theme);
+		} finally {
+			await context.unroute(web, stub);
+		}
+	});
+}
+
+async function selectionModeRanges(
+	context: BrowserContext,
+	extensionId: string,
+	theme: Theme,
+) {
+	const page = await openPage(context, extensionId, 'newtab');
+	await seed(page);
+	await page.reload();
+	await setTheme(page, theme);
+	const mode = page.getByRole('button', {
+		name: 'Select bookmarks',
+		exact: true,
+	});
+	await mode.waitFor({timeout: 2000});
+	await mode.focus();
+	await page.keyboard.press('Enter');
+	assert.equal(await mode.getAttribute('aria-pressed'), 'true');
+	const cards = page.locator('[data-bookmark-id]');
+	await cards.first().getByRole('checkbox').focus();
+	await page.keyboard.press('Space');
+	await cards.nth(3).getByRole('checkbox').focus();
+	await page.keyboard.press('Shift+Space');
+	await cards
+		.nth(6)
+		.locator('a')
+		.click({modifiers: ['Shift']});
+	const checked = await attributes(
+		page,
+		'[data-bookmark-id] [role="checkbox"]',
+		'aria-checked',
+	);
+	assert.deepEqual(
+		checked.slice(0, 7),
+		Array.from({length: 7}, () => 'true'),
+	);
+	assert.ok(checked.slice(7).every((value) => value === 'false'));
+	const [opened] = await Promise.all([
+		context.waitForEvent('page', {timeout: 10_000}),
+		cards
+			.first()
 			.locator('a')
-			.click({modifiers: ['Shift']});
-		const checked = await attributes(
+			.click({modifiers: ['Control']}),
+	]);
+	await opened.close();
+	assert.equal(
+		await cards.first().getByRole('checkbox').getAttribute('aria-checked'),
+		'true',
+	);
+	await page
+		.getByRole('button', {name: 'Clear bookmark selection', exact: true})
+		.click();
+	await cards.nth(6).getByRole('checkbox').click();
+	await cards
+		.nth(2)
+		.getByRole('checkbox')
+		.click({modifiers: ['Shift']});
+	assert.deepEqual(
+		await attributes(
 			page,
 			'[data-bookmark-id] [role="checkbox"]',
 			'aria-checked',
-		);
-		assert.deepEqual(
-			checked.slice(0, 7),
-			Array.from({length: 7}, () => 'true'),
-		);
-		assert.ok(checked.slice(7).every((value) => value === 'false'));
-		const [opened] = await Promise.all([
-			context.waitForEvent('page', {timeout: 2000}),
-			cards
-				.first()
-				.locator('a')
-				.click({modifiers: ['Control']}),
-		]);
-		await opened.close();
-		assert.equal(
-			await cards.first().getByRole('checkbox').getAttribute('aria-checked'),
-			'true',
-		);
-		await page
-			.getByRole('button', {name: 'Clear bookmark selection', exact: true})
-			.click();
-		await cards.nth(6).getByRole('checkbox').click();
-		await cards
-			.nth(2)
-			.getByRole('checkbox')
-			.click({modifiers: ['Shift']});
-		assert.deepEqual(
-			await attributes(
-				page,
-				'[data-bookmark-id] [role="checkbox"]',
-				'aria-checked',
-			),
-			Array.from({length: 16}, (_, index) =>
-				index >= 2 && index <= 6 ? 'true' : 'false',
-			),
-		);
-		await page.keyboard.press('Escape');
-		await until(
-			async () => (await mode.getAttribute('aria-pressed')) === 'false',
-			'selection mode to exit',
-		);
-		assert.equal(await cards.first().getByRole('checkbox').count(), 0);
-		const [normalTab] = await Promise.all([
-			context.waitForEvent('page', {timeout: 2000}),
-			cards
-				.first()
-				.locator('a')
-				.click({modifiers: ['Control']}),
-		]);
-		await normalTab.close();
-		assert.equal(await mode.getAttribute('aria-pressed'), 'false');
-		await mode.click();
-		await cards.first().getByRole('checkbox').click();
-		await mode.click();
-		assert.equal(await cards.first().getByRole('checkbox').count(), 0);
-		await page.close();
-	});
+		),
+		Array.from({length: 16}, (_, index) =>
+			index >= 2 && index <= 6 ? 'true' : 'false',
+		),
+	);
+	await page.keyboard.press('Escape');
+	await until(
+		async () => (await mode.getAttribute('aria-pressed')) === 'false',
+		'selection mode to exit',
+	);
+	assert.equal(await cards.first().getByRole('checkbox').count(), 0);
+	const [normalTab] = await Promise.all([
+		context.waitForEvent('page', {timeout: 10_000}),
+		cards
+			.first()
+			.locator('a')
+			.click({modifiers: ['Control']}),
+	]);
+	await normalTab.close();
+	assert.equal(await mode.getAttribute('aria-pressed'), 'false');
+	await mode.click();
+	await cards.first().getByRole('checkbox').click();
+	await mode.click();
+	assert.equal(await cards.first().getByRole('checkbox').count(), 0);
+	await page.close();
 }
 
 export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
@@ -753,11 +779,26 @@ export async function moveDeleteSelectedCheck(env: Env, theme: Theme) {
 				'the last column option to receive focus',
 			);
 			await page.keyboard.press('Enter');
-			await page
-				.getByRole('button', {name: 'Move bookmarks', exact: true})
-				.focus();
+			// The select hands focus back to its trigger a moment after it closes. Focusing the button before that
+			// lets the trigger take focus back, and Enter then reopens the select instead of submitting.
+			await until(
+				async () =>
+					(await page.locator('[role="listbox"]').count()) === 0 &&
+					(await page.locator('#move-bookmark-column:focus').count()) === 1,
+				'the column select to close and give focus back',
+			);
+			const move = page
+				.getByRole('dialog')
+				.getByRole('button', {name: 'Move bookmarks', exact: true});
+			await move.focus();
+			assert.match(
+				(await page.locator(':focus').textContent()) ?? '',
+				/Move bookmarks/,
+				'Move bookmarks has focus',
+			);
 			await page.keyboard.press('Enter');
-			await page.getByRole('dialog').waitFor({state: 'hidden'});
+			// An open select hides the dialog from the accessibility tree, so wait for the element itself to go.
+			await page.locator('[role="dialog"]').waitFor({state: 'detached'});
 			const destination = page.locator('section[data-column-id]').last();
 			const columnId = await destination.getAttribute('data-column-id');
 			// The move lands after the dialog closes, so poll instead of reading once.

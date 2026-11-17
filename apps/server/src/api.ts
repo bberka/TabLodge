@@ -93,7 +93,7 @@ Optional parts of the API, listed in /v1/status so a device can tell what this s
 second library at /private for private windows; `key` is /v1/key; `shared-pages` is /v1/pages and /p/<id>, on the
 main library only.
 */
-const FEATURES = ['private', 'key', 'preview', 'trash'];
+const FEATURES = ['private', 'key', 'preview', 'trash', 'notes'];
 const PREVIEWS_PER_MINUTE = 600;
 const PREVIEW_CACHE_SIZE = 500;
 const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000;

@@ -45,6 +45,7 @@ function BookmarkRowView({
 	const settings = useLinkSettings();
 	const host = hostOf(bookmark.url);
 	const text = rowText(bookmark, settings);
+	const compact = settings.bookmarkDensity === 'compact';
 	const open = () => {
 		openLink(linkToOpen(bookmark.url, settings));
 	};
@@ -86,7 +87,7 @@ function BookmarkRowView({
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
-				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}`}
+				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}${bookmark.notes ? `, note: ${bookmark.notes}` : ''}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
 				accessibilityActions={[
 					{name: 'open', label: 'Open in browser'},
@@ -97,7 +98,7 @@ function BookmarkRowView({
 				]}
 				style={({pressed}) => [
 					styles.row,
-					settings.bookmarkDensity === 'compact' && styles.compact,
+					compact && styles.compact,
 					{
 						backgroundColor: checked
 							? colors.accentSoft
@@ -147,10 +148,7 @@ function BookmarkRowView({
 						color={checked ? colors.accent : colors.muted}
 					/>
 				) : (
-					<BookmarkIcon
-						url={bookmark.url}
-						size={settings.bookmarkDensity === 'compact' ? 32 : 40}
-					/>
+					<BookmarkIcon url={bookmark.url} size={compact ? 32 : 40} />
 				)}
 				<View style={styles.texts}>
 					<Text numberOfLines={2} style={[styles.title, {color: colors.text}]}>
@@ -168,6 +166,14 @@ function BookmarkRowView({
 								{text.sub}
 							</Text>
 						</View>
+					)}
+					{bookmark.notes && (
+						<Text
+							numberOfLines={compact ? 1 : 2}
+							style={[styles.notes, {color: colors.muted}]}
+						>
+							{bookmark.notes}
+						</Text>
 					)}
 				</View>
 				{!selecting && (
@@ -364,6 +370,7 @@ const styles = StyleSheet.create({
 	texts: {flex: 1, gap: 2},
 	address: {flexDirection: 'row', alignItems: 'center', gap: 4},
 	addressText: {flexShrink: 1},
+	notes: {fontSize: 13},
 	title: {fontSize: 16, fontWeight: '500'},
 	actions: {
 		position: 'absolute',

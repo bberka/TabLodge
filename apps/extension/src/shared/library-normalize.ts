@@ -512,6 +512,13 @@ export function normalizeNotes(value: unknown) {
 		: '';
 }
 
+/**
+A bookmark's note as it is stored: cleaned like a saved tab's notes and trimmed, or undefined when nothing is left.
+*/
+export function bookmarkNotes(value: unknown): string | undefined {
+	return normalizeNotes(value).trim() || undefined;
+}
+
 // Sessions used to have a short description plus separate notes; one field now holds both.
 // Room for the old 500-character description, a blank line, and the old 10,000-character notes.
 export const SESSION_TEXT_MAX = 10_502;
@@ -643,6 +650,7 @@ export function normalizeBookmark(
 	const fallbackColumnId = columnIds.has(DEFAULT_BOOKMARK_COLUMN_ID)
 		? DEFAULT_BOOKMARK_COLUMN_ID
 		: columnIds.values().next().value || BOOKMARK_UNFILED_ID;
+	const notes = bookmarkNotes(raw.notes);
 	return {
 		id: cleanText(raw.id, makeId(), 100),
 		title: cleanBookmarkTitle(raw.title ?? raw.name, url),
@@ -653,6 +661,7 @@ export function normalizeBookmark(
 				: columnIds.has(requestedColumnId)
 					? requestedColumnId
 					: fallbackColumnId,
+		...(notes && {notes}),
 		createdAt,
 		updatedAt: positiveOr(raw.updatedAt, createdAt),
 	};

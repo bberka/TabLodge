@@ -259,7 +259,12 @@ function cachedBookmarkItems(
 			title: bookmark.title || siteName(bookmark.url),
 			detail: column ? `${siteName(bookmark.url)} · ${column}` : undefined,
 			url: bookmark.url,
-			texts: [clip(bookmark.title), matchableUrl(bookmark.url), column],
+			texts: [
+				clip(bookmark.title),
+				matchableUrl(bookmark.url),
+				column,
+				clip(bookmark.notes),
+			],
 			facets: bookmarkFacets(bookmark, column),
 			ref: bookmark.id,
 		});

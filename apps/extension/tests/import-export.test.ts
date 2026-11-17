@@ -1134,3 +1134,36 @@ test('a plain spreadsheet with a folder column is not mistaken for Raindrop.io',
 	]);
 	assert.deepEqual(parsed.warnings, []);
 });
+
+test('bookmark notes survive every export that reads back: JSON, CSV, Markdown, and browser HTML', () => {
+	const noted: ExportData = {
+		kind: 'bookmarks',
+		columns,
+		bookmarks: bookmarks.map((entry) =>
+			entry.id === 'b2' ? {...entry, notes: 'Docs, "quoted" & <b>'} : entry,
+		),
+	};
+	const notesFrom = (parsed: ParsedImport) =>
+		parsed.bookmarks
+			.flatMap((entry) => entry.links)
+			.find((link) => link.url === 'https://developer.mozilla.org/en-US/')
+			?.notes;
+	for (const format of ['json', 'csv', 'markdown', 'html'] as const) {
+		const file = buildExport(noted, format, {appName: 'TabLodge', now});
+		const parsed = parseImportFile(file.content, file.filename);
+		assert.equal(notesFrom(parsed), 'Docs, "quoted" & <b>', format);
+		const payload = bookmarkImportPayload(parsed) as {
+			bookmarks: Array<{url: string; notes?: string}>;
+		};
+		assert.equal(
+			payload.bookmarks.find(
+				(entry) => entry.url === 'https://developer.mozilla.org/en-US/',
+			)?.notes,
+			'Docs, "quoted" & <b>',
+			format,
+		);
+	}
+
+	const html = buildExport(noted, 'html', {appName: 'TabLodge', now}).content;
+	assert.match(html, /<DD>Docs, &quot;quoted&quot; &amp; &lt;b&gt;/);
+});

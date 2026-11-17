@@ -347,6 +347,12 @@ function Help() {
 						'image picture photo pdf document video kind type icon mark badge jpg png youtube vimeo arxiv',
 				},
 				{
+					title: 'Add a note to a bookmark',
+					body: 'Write a note in the Notes field when you add a bookmark (on the dashboard, in the toolbar popup, or in the Bookmark this page window) or edit one, for example why you saved the page. The field stays one line until you click into it. It shows under the bookmark’s title (one line in the compact layout), search and the palette find it, and it goes into JSON, CSV, Markdown, and browser bookmark exports and full backups. Clear the field to remove it. The Android app has the same field, and a sync server that supports notes carries them between the two.',
+					searchText:
+						'bookmark note notes description comment why saved edit dialog search export',
+				},
+				{
 					title: 'Bookmark quick actions',
 					body: 'By default, each bookmark has a quick action button to open it in a new tab. In Settings › Bookmark board, choose up to three actions for buttons beside each bookmark’s menu. Selected actions appear first in the picker, and Move up or Move down changes their order on the bookmark. Remove them all to hide the buttons. Delete moves the bookmark to the trash and offers Undo in a toast.',
 					searchText:
@@ -725,10 +731,11 @@ function Help() {
 							Pinboard, and the bookmarks.csv that Mastodon exports (post
 							addresses, without titles). These are read from each tool’s
 							published format, not from real files, so the preview marks them
-							best effort. Their notes, descriptions, and tags are not imported.
-							The bookmarks HTML exports of Karakeep and Pinboard import as
-							browser bookmark files. A session menu can export just that
-							session in any format. Bookmark import and export are in the{' '}
+							best effort. A link’s note in Linkwarden, Karakeep, or Pinboard
+							becomes its bookmark note; tags are not imported. The bookmarks
+							HTML exports of Karakeep and Pinboard import as browser bookmark
+							files. A session menu can export just that session in any format.
+							Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
 							saves only bookmarks or sessions, or Everything as a full ZIP
 							backup with settings, excluded sites, theme, snapshots, and the

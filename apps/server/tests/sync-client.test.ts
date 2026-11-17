@@ -33,7 +33,9 @@ const URL_BASE = 'https://sync.example.test';
 /**
 The reference server behind a fake network, with live sockets that hear about every applied push.
 */
-function makeServer({legacy = false} = {}) {
+function makeServer(options: {legacy?: boolean} = {}) {
+	let legacy = options.legacy ?? false;
+	let resyncNext = false;
 	const sockets = new Set<FakeSocket>();
 	const createServerApi = () =>
 		createApi({
@@ -60,9 +62,23 @@ function makeServer({legacy = false} = {}) {
 		setOnline(value: boolean) {
 			online = value;
 		},
+		setLegacy(value: boolean) {
+			legacy = value;
+		},
+		/**
+		Answers the next pull with `resync`, as a server does once it purged tombstones a device has not seen.
+		*/
+		resyncOnce() {
+			resyncNext = true;
+		},
 		async fetch(url: string, init: RequestInit) {
 			if (!online) {
 				throw new TypeError('Failed to fetch');
+			}
+
+			if (resyncNext && new URL(url).pathname === '/v1/changes') {
+				resyncNext = false;
+				return Response.json({resync: true});
 			}
 
 			const response = await app.request(url, init);
@@ -70,18 +86,20 @@ function makeServer({legacy = false} = {}) {
 				return response;
 			}
 
-			// A server from before the trash: it does not list the feature and refuses a kind it does not know.
+			// A server from before the trash and notes: it lists neither feature and refuses a kind it does not know.
 			if (new URL(url).pathname === '/v1/status') {
 				const body = (await response.json()) as {features: string[]};
 				return Response.json({
 					...body,
-					features: body.features.filter((feature) => feature !== 'trash'),
+					features: body.features.filter(
+						(feature) => feature !== 'trash' && feature !== 'notes',
+					),
 				});
 			}
 
 			if (
 				init.method === 'POST' &&
-				String(init.body).includes('"kind":"trash"')
+				/"kind":"(?:trash|note)"/.test(String(init.body))
 			) {
 				return Response.json({error: 'bad_change'}, {status: 400});
 			}
@@ -196,7 +214,7 @@ type Device = {
 function makeDevice(
 	server: ReturnType<typeof makeServer>,
 	store = emptyStore(),
-	{withTrash = false} = {},
+	{withTrash = false, beforeNotes = false} = {},
 ) {
 	const storage = new Map<string, unknown>();
 	let queue = Promise.resolve();
@@ -216,7 +234,21 @@ function makeDevice(
 					storage.delete(key);
 				}
 			},
-			fetch: async (url, init) => server.fetch(url, init),
+			async fetch(url, init) {
+				const response = await server.fetch(url, init);
+				if (!beforeNotes || new URL(url).pathname !== '/v1/changes') {
+					return response;
+				}
+
+				// A version from before notes skips a kind it does not know (its `parseChange` refuses it).
+				const body = (await response.json()) as {
+					changes?: Array<{kind: string}>;
+				};
+				return Response.json({
+					...body,
+					changes: body.changes?.filter((change) => change.kind !== 'note'),
+				});
+			},
 			openSocket: () => new FakeSocket(server),
 			mutate<T>(work: () => Promise<T>) {
 				const result = queue.then(work);
@@ -244,6 +276,12 @@ function makeDevice(
 				: undefined,
 			async writeLibrary(next) {
 				device.store = structuredClone(next);
+				if (beforeNotes) {
+					// Its normalizer rebuilds every bookmark from the fields it knows.
+					device.store.bookmarks = device.store.bookmarks.map(
+						({notes: _dropped, ...rest}) => rest,
+					);
+				}
 			},
 			async backup(_store, reason) {
 				backups.push(reason);
@@ -626,4 +664,81 @@ test('a device without a trash keeps the library in step and never deletes the t
 	plain.edit((store) => ({...store, bookmarks: []}));
 	await until(() => a.store.bookmarks.length === 0);
 	assert.deepEqual(trashIds(a), ['kept']);
+});
+
+const withNote = (id: string, notes: string) => ({...bookmark(id), notes});
+const notesOf = (store: Store) =>
+	store.bookmarks.map((entry) => entry.notes ?? '');
+
+test('bookmark notes sync, and a version from before notes never sees or erases them', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [withNote('b1', 'Why I saved this')],
+	});
+	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await old.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(ids(old.store), ['b1']);
+
+	// The old version renames the bookmark: the rename reaches the others, the note stays.
+	old.edit((store) => ({
+		...store,
+		bookmarks: store.bookmarks.map((entry) => ({...entry, title: 'Renamed'})),
+	}));
+	await until(() => a.store.bookmarks[0]?.title === 'Renamed');
+	await old.client.syncNow();
+	await a.client.syncNow();
+	assert.deepEqual(notesOf(a.store), ['Why I saved this']);
+
+	const fresh = makeDevice(server);
+	await fresh.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(notesOf(fresh.store), ['Why I saved this']);
+	assert.equal(fresh.store.bookmarks[0].title, 'Renamed');
+});
+
+test('a server without the notes feature keeps syncing the library and leaves the notes on the device', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [withNote('b1', 'Stays here')],
+	});
+	const b = makeDevice(server);
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(ids(b.store), ['b1']);
+	assert.deepEqual(notesOf(b.store), ['']);
+
+	b.edit((store) => ({
+		...store,
+		bookmarks: store.bookmarks.map((entry) => ({...entry, title: 'Renamed'})),
+	}));
+	await until(() => a.store.bookmarks[0]?.title === 'Renamed');
+	assert.deepEqual(notesOf(a.store), ['Stays here']);
+	assert.equal((await a.client.status()).error, null);
+	assert.equal((await a.client.status()).pending, 0);
+});
+
+test('a resync against a server without the notes feature keeps the notes this device already synced', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [withNote('b1', 'Synced before')],
+	});
+	await a.client.connect(URL_BASE, TOKEN);
+	assert.equal((await a.client.status()).pending, 0);
+
+	// The server is rolled back to a version without notes, and asks for a full pull.
+	server.setLegacy(true);
+	// Past the ten minutes the client trusts the server's earlier list of features.
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		server.resyncOnce();
+		await a.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.deepEqual(notesOf(a.store), ['Synced before']);
+	assert.equal((await a.client.status()).error, null);
 });

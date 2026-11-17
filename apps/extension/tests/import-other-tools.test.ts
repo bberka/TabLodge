@@ -22,7 +22,7 @@ const columns = (parsed: ParsedImport) =>
 const allLinks = (parsed: ParsedImport) =>
 	parsed.bookmarks.flatMap((entry) => entry.links);
 
-test('a Linkwarden backup: collections become columns, links keep their saved or original date', () => {
+test('a Linkwarden backup: collections become columns, links keep their saved or original date and description', () => {
 	const parsed = read('linkwarden-backup.json');
 	assert.equal(parsed.format, 'linkwarden');
 	assert.equal(parsed.label, 'Linkwarden backup (JSON)');
@@ -40,7 +40,8 @@ test('a Linkwarden backup: collections become columns, links keep their saved or
 	const [article, older] = parsed.bookmarks[0].links;
 	assert.equal(article.title, 'An article');
 	assert.equal(article.createdAt, Date.parse('2025-02-01T08:00:00.000Z'));
-	assert.equal(article.notes, undefined);
+	assert.equal(article.notes, 'Read on the train');
+	assert.equal(older.notes, undefined);
 	assert.equal(older.createdAt, Date.parse('2021-06-15T12:00:00.000Z'));
 	assert.deepEqual(
 		parsed.sessions.map((entry) => entry.name),
@@ -48,7 +49,7 @@ test('a Linkwarden backup: collections become columns, links keep their saved or
 	);
 });
 
-test('a Karakeep export: a bookmark joins its first list, text notes are skipped', () => {
+test('a Karakeep export: a bookmark joins its first list and keeps its note, text notes are skipped', () => {
 	const parsed = read('karakeep-export.json');
 	assert.equal(parsed.format, 'karakeep');
 	assert.equal(parsed.label, 'Karakeep export (JSON)');
@@ -64,7 +65,7 @@ test('a Karakeep export: a bookmark joins its first list, text notes are skipped
 	);
 	assert.equal(guide?.title, 'In a list');
 	assert.equal(guide?.createdAt, 1_735_725_600_000);
-	assert.equal(guide?.notes, undefined);
+	assert.equal(guide?.notes, 'My note');
 });
 
 test('an Omnivore metadata file: saved dates are kept, non-web links are skipped', () => {
@@ -112,7 +113,7 @@ test('a wallabag JSON export: titles and creation dates with a colonless offset'
 	);
 });
 
-test('a Pinboard JSON export: the description field is the title', () => {
+test('a Pinboard JSON export: the description field is the title, extended is the note', () => {
 	const parsed = read('pinboard-export.json');
 	assert.equal(parsed.format, 'pinboard');
 	assert.equal(parsed.label, 'Pinboard export (JSON)');
@@ -129,7 +130,7 @@ test('a Pinboard JSON export: the description field is the title', () => {
 				'https://example.org/essay',
 				'An essay worth keeping',
 				Date.parse('2023-05-14T17:20:00Z'),
-				undefined,
+				'Quoted passage from the essay',
 			],
 			[
 				'https://example.net/tool',

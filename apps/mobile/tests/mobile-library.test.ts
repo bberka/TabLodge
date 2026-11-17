@@ -1284,3 +1284,65 @@ describe('searchSessions', () => {
 		assert.deepEqual(found('in:bookmarks'), []);
 	});
 });
+
+describe('bookmark notes', () => {
+	const withNote = () =>
+		addBookmark(
+			addColumn(emptyStore(NOW), 'Read', 'c1', NOW),
+			{
+				url: 'https://example.com',
+				title: 'Example',
+				columnId: 'c1',
+				notes: '  For the trip  ',
+			},
+			'b1',
+			NOW,
+		);
+	const edit = (
+		store: ReturnType<typeof withNote>,
+		notes: string | undefined,
+	) =>
+		updateBookmark(
+			store,
+			'b1',
+			{url: 'https://example.com', title: 'Renamed', columnId: 'c1', notes},
+			NOW + 1,
+		).bookmarks[0];
+
+	test('are saved trimmed, kept when an edit leaves them out, changed, and cleared', () => {
+		const store = withNote();
+		assert.equal(store.bookmarks[0].notes, 'For the trip');
+		assert.equal(edit(store, undefined).notes, 'For the trip');
+		assert.equal(edit(store, 'Booked').notes, 'Booked');
+		assert.equal('notes' in edit(store, '  '), false);
+	});
+
+	test('take part in plain words, -word, and "phrase" in search', () => {
+		const store = addBookmark(
+			withNote(),
+			{
+				url: 'https://other.example',
+				title: 'Other',
+				columnId: 'c1',
+				notes: 'Trip packing list',
+			},
+			'b2',
+			NOW,
+		);
+		const found = (query: string) =>
+			searchBookmarks(store, query)
+				.map((entry) => entry.id)
+				.toSorted();
+		assert.deepEqual(found('trip'), ['b1', 'b2']);
+		assert.deepEqual(found('trip -packing'), ['b1']);
+		assert.deepEqual(found('"packing list"'), ['b2']);
+		assert.deepEqual(found('"list packing"'), []);
+	});
+
+	test('are found by search', () => {
+		assert.deepEqual(
+			searchBookmarks(withNote(), 'trip').map((entry) => entry.id),
+			['b1'],
+		);
+	});
+});

@@ -22,6 +22,7 @@ import {
 	parseSearchQuery,
 	passesOperators,
 } from '../../../extension/src/shared/search-query';
+import {bookmarkNotes} from '../../../extension/src/shared/library-normalize';
 import {extractUrl, hostOf} from './store-shape';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
@@ -70,13 +71,14 @@ export function searchBookmarks(store: Store, query: string): Bookmark[] {
 		store.bookmarkColumns.map((column) => [column.id, column.name]),
 	);
 	return store.bookmarks.filter((bookmark) => {
-		const text = `${bookmark.title} ${bookmark.url}`.toLowerCase();
+		const text =
+			`${bookmark.title} ${bookmark.url} ${bookmark.notes ?? ''}`.toLowerCase();
 		return (
 			words.every((word) => text.includes(word)) &&
 			(!filtering ||
 				passesOperators(
 					search,
-					[bookmark.title],
+					[bookmark.title, bookmark.notes],
 					bookmarkFacets(bookmark, columnName.get(bookmark.columnId)),
 				))
 		);
@@ -116,7 +118,28 @@ export function addColumn(
 	};
 }
 
-type NewBookmark = {url: string; title: string; columnId: string};
+type NewBookmark = {
+	url: string;
+	title: string;
+	columnId: string;
+	/**
+	The note. Blank removes it; leaving it out keeps the one a bookmark being changed has.
+	*/
+	notes?: string;
+};
+
+/**
+The bookmark with `notes` as its note, cleaned as the extension stores it. Undefined keeps the note it has.
+*/
+function withNotes(bookmark: Bookmark, notes: string | undefined): Bookmark {
+	if (notes === undefined) {
+		return bookmark;
+	}
+
+	const {notes: _previous, ...rest} = bookmark;
+	const text = bookmarkNotes(notes);
+	return text ? {...rest, notes: text} : rest;
+}
 
 /**
 Adds a bookmark at the end of its column, as the extension does. A column that does not exist falls back as it does there (the column that claims the link's site, the default column, the first). When the library has no column yet, the extension's default one is
@@ -151,19 +174,22 @@ export function addBookmark(
 	const columnId = landingColumnId(next.bookmarkColumns, input.columnId, {
 		claimedId: columnForUrl(next.bookmarkColumns, url)?.id,
 	});
-	const bookmark: Bookmark = {
-		id,
-		title: input.title.trim() || hostOf(url),
-		url,
-		columnId,
-		createdAt: now,
-		updatedAt: now,
-	};
+	const bookmark = withNotes(
+		{
+			id,
+			title: input.title.trim() || hostOf(url),
+			url,
+			columnId,
+			createdAt: now,
+			updatedAt: now,
+		},
+		input.notes,
+	);
 	return {...next, bookmarks: [...next.bookmarks, bookmark], updatedAt: now};
 }
 
 /**
-Changes a bookmark's link, title, or column. It keeps its place, unless the column changes: then it goes to the
+Changes a bookmark's link, title, note, or column. It keeps its place, unless the column changes: then it goes to the
 end of the new column, as in the extension. An unusable link or a missing bookmark or column leaves the store as it was.
 */
 export function updateBookmark(
@@ -182,13 +208,16 @@ export function updateBookmark(
 		return store;
 	}
 
-	const changed: Bookmark = {
-		...current,
-		url,
-		title: input.title.trim() || hostOf(url),
-		columnId: input.columnId,
-		updatedAt: now,
-	};
+	const changed = withNotes(
+		{
+			...current,
+			url,
+			title: input.title.trim() || hostOf(url),
+			columnId: input.columnId,
+			updatedAt: now,
+		},
+		input.notes,
+	);
 	const bookmarks =
 		current.columnId === input.columnId
 			? store.bookmarks.map((bookmark) =>

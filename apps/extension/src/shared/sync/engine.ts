@@ -420,6 +420,10 @@ function parentOf(change: SyncChange): string | undefined {
 		return `session:${change.parentId ?? ''}`;
 	}
 
+	if (change.kind === 'note') {
+		return `bookmark:${change.id}`;
+	}
+
 	const value = isRecord(change.value) ? change.value : {};
 	if (change.kind === 'bookmark' && typeof value.columnId === 'string') {
 		return `column:${value.columnId}`;

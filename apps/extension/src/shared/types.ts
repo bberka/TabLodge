@@ -465,6 +465,10 @@ export type Bookmark = {
 	title: string;
 	url: string;
 	columnId: string;
+	/**
+	The person's note on the link, absent when there is none. It syncs as a `note` record of its own (see library-records.ts).
+	*/
+	notes?: string;
 	createdAt: number;
 	updatedAt: number;
 };
@@ -606,7 +610,7 @@ export type SessionFields = Partial<
 >;
 export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'url'>>;
 export type BookmarkFields = Partial<
-	Pick<Bookmark, 'title' | 'url' | 'columnId'>
+	Pick<Bookmark, 'title' | 'url' | 'columnId' | 'notes'>
 >;
 export type LinkEntry = {
 	url: string;

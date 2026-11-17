@@ -87,6 +87,7 @@ import {
 } from './duplicate-tabs-action';
 import type {BookmarkColumnDraft} from './bookmark-column-picker';
 import {PrivateLockGate} from './private-lock-ui';
+import {NotesField} from './notes-field';
 import {cn} from '@/lib/utils';
 
 // Keep the icon registry out of the popup's first paint; it is loaded right after, before anyone can click Bookmark.
@@ -113,6 +114,7 @@ function Popup() {
 	const [bookmarkTab, setBookmarkTab] = useState<{
 		title: string;
 		url: string;
+		notes: string;
 	} | null>(null);
 	const [columnId, setColumnId] = useState('');
 	const [picker, setPicker] = useState<Awaited<
@@ -394,7 +396,7 @@ function Popup() {
 			}
 
 			const {NEW_BOOKMARK_COLUMN: newColumnValue} = await loadColumnPicker();
-			setBookmarkTab({title: tab.title || url, url});
+			setBookmarkTab({title: tab.title || url, url, notes: ''});
 			setColumnId(
 				(ready && 'defaultColumnId' in ready
 					? ready.defaultColumnId
@@ -1103,6 +1105,15 @@ function Popup() {
 									</p>
 								)}
 							</div>
+							{bookmarkTab && (
+								<NotesField
+									id="bookmark-notes"
+									value={bookmarkTab.notes}
+									onChange={(notes) =>
+										setBookmarkTab((old) => old && {...old, notes})
+									}
+								/>
+							)}
 						</DialogBody>
 						<DialogFooter>
 							<Button

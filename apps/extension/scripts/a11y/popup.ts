@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
-import {type BrowserContext} from 'playwright';
+import {type BrowserContext, type Locator} from 'playwright';
 import {type ExtensionApi} from './fixtures.ts';
-import {check, type Env, type Theme, THEMES, watchConsole} from './harness.ts';
+import {
+	check,
+	type Env,
+	type Theme,
+	THEMES,
+	until,
+	watchConsole,
+} from './harness.ts';
 import {openPage, setTheme} from './pages.ts';
 
 // The popup is opened as a tab here, so its own tab would be the active one. The first read of the active tab
@@ -30,6 +37,28 @@ async function openPopupOver(
 	await page.goto(`chrome-extension://${extensionId}/popup.html`);
 	await page.waitForLoadState('networkidle');
 	return page;
+}
+
+/**
+Types a note into a bookmark form's Notes field, which stays one row tall until it is focused or holds text.
+*/
+async function typeNote(field: Locator, note: string) {
+	assert.equal(await field.getAttribute('rows'), '1', 'Notes starts collapsed');
+	// A column select that just closed hands focus back to its trigger a moment later, which can take focus off
+	// Notes again. Focus it until it keeps focus and has opened.
+	const page = field.page();
+	await until(
+		async () => (await page.locator('[role="listbox"]').count()) === 0,
+		'the column select to close',
+	);
+	await until(async () => {
+		if ((await field.and(page.locator(':focus')).count()) === 0) {
+			await field.focus();
+		}
+
+		return (await field.getAttribute('rows')) === '3';
+	}, 'Notes to open on focus');
+	await field.pressSequentially(note);
 }
 
 export async function popupUnsavablePageCheck(env: Env) {
@@ -89,6 +118,8 @@ export async function popupNewColumnCheck(env: Env, theme: Theme) {
 					.getByRole('option', {name: 'New column', exact: true})
 					.press('Enter', {timeout: 2000});
 				await dialog.getByRole('textbox', {name: 'New column name'}).fill(name);
+				const note = `Popup note ${theme}`;
+				await typeNote(dialog.getByRole('textbox', {name: 'Notes'}), note);
 				await popup.screenshot({
 					path: `.dev/evidence/popup-new-column-${theme}.png`,
 				});
@@ -105,10 +136,9 @@ export async function popupNewColumnCheck(env: Env, theme: Theme) {
 					.filter({has: board.getByRole('heading', {name, exact: true})});
 				if (save) {
 					await column.waitFor();
-					assert.equal(
-						await column.locator(`[data-bookmark-id] a[href="${url}"]`).count(),
-						1,
-					);
+					const card = column.locator(`[data-bookmark-id] a[href="${url}"]`);
+					assert.equal(await card.count(), 1);
+					assert.match(await card.innerText(), new RegExp(note));
 				} else {
 					assert.equal(await column.count(), 0, 'Cancel creates no column');
 				}
@@ -162,6 +192,8 @@ export async function addBookmarkNewColumnCheck(env: Env, theme: Theme) {
 					.press('Enter');
 				const name = `${entry} ${theme}`;
 				await page.getByRole('textbox', {name: 'New column name'}).fill(name);
+				const note = `${entry} note ${theme}`;
+				await typeNote(page.getByRole('textbox', {name: 'Notes'}), note);
 				await page.screenshot({
 					path: `.dev/evidence/${entry}-new-column-${theme}.png`,
 				});
@@ -176,10 +208,9 @@ export async function addBookmarkNewColumnCheck(env: Env, theme: Theme) {
 					.locator('section[data-column-id]')
 					.filter({has: board.getByRole('heading', {name, exact: true})});
 				await column.waitFor();
-				assert.equal(
-					await column.locator(`[data-bookmark-id] a[href="${url}"]`).count(),
-					1,
-				);
+				const card = column.locator(`[data-bookmark-id] a[href="${url}"]`);
+				assert.equal(await card.count(), 1);
+				assert.match(await card.innerText(), new RegExp(note));
 				await board.close();
 				if (!page.isClosed()) {
 					await page.close();

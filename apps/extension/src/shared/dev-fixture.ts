@@ -32,6 +32,7 @@ type DevBookmark = {
 	title: string;
 	url: string;
 	columnId: string;
+	notes?: string;
 	createdAt: number;
 	updatedAt: number;
 };
@@ -243,6 +244,13 @@ export const devFixtureUrls = [
 	]),
 ];
 
+// Two bookmarks carry a one-line note, so the note line shows on the board and in the phone's rows. They sit in
+// columns shorter than Dev, so the board keeps the height the accessibility checks' drags rely on.
+const bookmarkNotes = new Map([
+	['https://weather.com/', 'Check before the morning run.'],
+	['https://alistapart.com/', 'Accessible forms piece, for Friday.'],
+]);
+
 const columnByName = new Map(
 	bookmarkColumns.map((column) => [column.name, column.id]),
 );
@@ -252,6 +260,7 @@ const bookmarks: DevBookmark[] = bookmarkEntries.map(
 		title,
 		url,
 		columnId: columnByName.get(column)!,
+		...(bookmarkNotes.has(url) && {notes: bookmarkNotes.get(url)}),
 		createdAt: createdAt - index * 3_600_000,
 		updatedAt: createdAt - index * 3_600_000,
 	}),

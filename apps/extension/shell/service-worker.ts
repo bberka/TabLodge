@@ -59,6 +59,7 @@ import {
 	SESSION_TEXT_MAX,
 	archivedFolderIds,
 	arrayOf,
+	bookmarkNotes,
 	bookmarkTitleIsUrl,
 	cleanText,
 	colorField,
@@ -4653,7 +4654,8 @@ async function addBookmark(
 			claimedId: columnForUrl(store.bookmarkColumns, url)?.id,
 		});
 		const now = Date.now();
-		const bookmark = {
+		const notes = bookmarkNotes(fields.notes);
+		const bookmark: Bookmark = {
 			id: makeId(),
 			title: await bestBookmarkTitle(
 				fields.title,
@@ -4662,6 +4664,7 @@ async function addBookmark(
 			),
 			url,
 			columnId,
+			...(notes && {notes}),
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -5029,6 +5032,15 @@ async function updateBookmark(
 			}
 
 			bookmark.columnId = fields.columnId;
+		}
+
+		if (typeof fields.notes === 'string') {
+			const notes = bookmarkNotes(fields.notes);
+			if (notes) {
+				bookmark.notes = notes;
+			} else {
+				delete bookmark.notes;
+			}
 		}
 
 		bookmark.updatedAt = Date.now();

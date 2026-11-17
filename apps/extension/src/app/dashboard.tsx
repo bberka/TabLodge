@@ -182,6 +182,7 @@ import {
 	COLUMN_COLOR_TEXT,
 	columnColorVars,
 } from './column-color';
+import {NotesField} from './notes-field';
 import {cn} from '@/lib/utils';
 
 /**
@@ -1432,6 +1433,7 @@ export function SessionManager({
 				bookmark: {
 					title: bookmarkTab.title,
 					url: bookmarkTab.url,
+					notes: bookmarkTab.notes ?? '',
 					columnId,
 				},
 			});
@@ -2519,6 +2521,11 @@ export function SessionManager({
 									}
 								/>
 							</div>
+							<NotesField
+								id="bookmark-tab-notes"
+								value={bookmarkTab?.notes ?? ''}
+								onChange={(notes) => setBookmarkTab((old) => ({...old, notes}))}
+							/>
 						</DialogBody>
 						<DialogFooter>
 							<Button
