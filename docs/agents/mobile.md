@@ -19,6 +19,7 @@ Expo and React Native, TypeScript. It syncs with the user's own sync server and 
 | `modules/bookmarks-widget/` | Local native module with the Bookmarks home screen widget: provider, row service, column picker, and link opener. It reads `files/widgets/bookmarks.json`, which `src/library/widget-sync.ts` writes from the regular library only ([ADR 6](../adr/0006-android-bookmarks-widget.md)) |
 | `modules/tablodge-crypto/` | Local native module (PBKDF2 and AES-GCM for the private library) |
 | `scripts/make-icons.mts` | `pnpm run mobile:icons`: redraws `assets/` (launcher foreground, monochrome layer, legacy icon, light and dark splash) from `apps/extension/shell/icons/tablodge.svg` |
+| `scripts/licences.mts` | `pnpm run mobile:licences`: writes `src/about/licences.generated.json` (ignored by git) from the Metro bundle's source map and the Gradle release classpath (`scripts/native-licences.gradle`), with `scripts/third-party-notices.ts` at the root. Every path that bundles the app runs it first; a new one must too, or Metro cannot find the file |
 | `scripts/emulator.mts` | `pnpm run mobile:emulator`: starts the emulator and waits for boot, `--headless` without a window, `--stop` ends it |
 | `scripts/build-apk.mts` | `pnpm run mobile:apk`: a standalone APK from this checkout |
 | `tests/` | Vitest suites for the logic that does not need a device. `phone-crypto-vectors.test.ts` opens output the Kotlin module wrote on a device; `live/peer.test.ts` is the extension's side of a live run (see [Live check](#live-check-on-an-emulator)) |
