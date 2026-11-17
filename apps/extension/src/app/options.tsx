@@ -8,7 +8,6 @@ import {
 } from 'react';
 import {createRoot} from 'react-dom/client';
 import {
-	CircleHelp,
 	LayoutDashboard,
 	Moon,
 	RotateCcw,
@@ -2381,32 +2380,11 @@ function Options() {
 								<>
 									<SyncSettings showStatus={showStatus} />
 									{!isFirefox && (
-										<Popover>
-											<IconTooltip label="Sync and private windows">
-												<PopoverTrigger asChild>
-													<Button
-														variant="ghost"
-														size="icon"
-														className="mt-3 h-8 w-8 text-muted-foreground"
-														aria-label="Sync and private windows"
-													>
-														<CircleHelp
-															className="h-4 w-4"
-															aria-hidden="true"
-														/>
-													</Button>
-												</PopoverTrigger>
-											</IconTooltip>
-											<PopoverContent
-												align="start"
-												aria-label="Sync and private windows"
-												className="w-72 p-3 text-xs leading-5 text-muted-foreground"
-											>
-												Private windows with their own saved storage sync
-												separately. To include them, open Settings in a private
-												window.
-											</PopoverContent>
-										</Popover>
+										<p className="mt-4 text-xs leading-5 text-muted-foreground">
+											Private windows with their own saved storage sync
+											separately. To include them, open Settings in a private
+											window.
+										</p>
 									)}
 								</>
 							)}
