@@ -7,7 +7,7 @@ import {
 } from '../src/shared/context-menu-plan';
 import {DEFAULT_SETTINGS} from '../src/shared/library-normalize';
 
-const env = {appName: 'TabLodge', hasSidePanel: true};
+const env = {appName: 'TabLodge', hasSidePanel: true, hasTabContext: false};
 const columns = [{id: 'c1', name: 'Read', createdAt: 0, isDefault: false}];
 const on = {
 	...DEFAULT_SETTINGS,
@@ -96,6 +96,31 @@ describe('contextMenuPlan', () => {
 				`${context} goes with the Links switch`,
 			);
 		}
+	});
+
+	test('only Firefox puts the page items, and nothing else, on the tab strip', () => {
+		const sessions = [{id: 's1', name: 'One'}];
+		const chromium = contextMenuPlan(on, columns, sessions, env);
+		assert.ok(chromium.every((item) => !item.contexts?.includes('tab')));
+
+		const firefox = contextMenuPlan(on, columns, sessions, {
+			...env,
+			hasTabContext: true,
+		});
+		const pageIds = chromium
+			.filter((item) => item.contexts?.includes('page'))
+			.map((item) => item.id);
+		assert.deepEqual(
+			firefox
+				.filter((item) => item.contexts?.includes('tab'))
+				.map((item) => item.id),
+			pageIds,
+		);
+		assert.deepEqual(
+			firefox.map((item) => item.id),
+			chromium.map((item) => item.id),
+			'the tab strip reuses the page ids',
+		);
 	});
 
 	test('builds nothing while the menus are off', () => {

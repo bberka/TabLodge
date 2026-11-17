@@ -129,6 +129,7 @@ function createHarness(
 			title: 'Current page',
 		},
 	],
+	{firefox = false}: {firefox?: boolean} = {},
 ) {
 	const listeners: Record<string, Listener[]> = {};
 	const on = (name: string) => ({
@@ -182,6 +183,7 @@ function createHarness(
 	let lastError: {message: string} | undefined;
 	let nextTabId = 200;
 	let lastFocusedWindowId = 10;
+	let refreshes = 0;
 	const withError = (message: string, callback?: () => void) => {
 		lastError = {message};
 		try {
@@ -196,7 +198,8 @@ function createHarness(
 			get lastError() {
 				return lastError;
 			},
-			getURL: (file: string) => `chrome-extension://tablodge/${file}`,
+			getURL: (file: string) =>
+				`${firefox ? 'moz' : 'chrome'}-extension://tablodge/${file}`,
 			getManifest: () => ({...manifest}),
 			onMessage: {
 				addListener(callback: typeof messageListener) {
@@ -381,6 +384,8 @@ function createHarness(
 		commands: {onCommand: on('onCommand')},
 		contextMenus: {
 			ACTION_MENU_TOP_LEVEL_LIMIT: 6,
+			// Chrome 150 and Firefox both list the tab strip's context.
+			ContextType: {PAGE: 'page', TAB: 'tab'},
 			// Callback-style, as on Chrome 116-122: nothing is returned.
 			removeAll(callback?: () => void) {
 				menus.clear();
@@ -420,6 +425,12 @@ function createHarness(
 				}
 			},
 			onClicked: on('menuClicked'),
+			...(firefox && {
+				onShown: on('menuShown'),
+				refresh() {
+					refreshes++;
+				},
+			}),
 		},
 	};
 
@@ -452,6 +463,7 @@ function createHarness(
 		badges,
 		warnings,
 		menuErrors,
+		refreshes: () => refreshes,
 		items,
 		ids: () => items().map((item) => item.id),
 		item: (id: string) => menus.get(id),
@@ -554,6 +566,10 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 		['tablodge-page-root'],
 	);
 	assert.deepEqual(pageRoots[0].contexts, ['page', 'frame']);
+	assert.ok(
+		harness.items().every((item) => !item.contexts?.includes('tab')),
+		'Chromium gets no tab strip items, although Chrome 150 has the context',
+	);
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-root')), [
 		'Bookmark this page to',
 		'Send this tab to session',
@@ -1516,4 +1532,115 @@ test('menu actions never throw when an action fails', async () => {
 		'Only http and https links can be saved.',
 	]);
 	assert.equal(harness.state.groups.length, 0);
+});
+
+const firefoxTabs: MockTab[] = [
+	{
+		id: 1,
+		windowId: 10,
+		index: 0,
+		active: true,
+		highlighted: true,
+		url: 'https://current.example/page',
+		title: 'Current page',
+	},
+	{
+		id: 2,
+		windowId: 10,
+		index: 1,
+		active: false,
+		highlighted: true,
+		url: 'https://second.example/',
+		title: 'Second',
+	},
+	{
+		id: 3,
+		windowId: 10,
+		index: 2,
+		active: false,
+		highlighted: false,
+		url: 'https://third.example/',
+		title: 'Third',
+	},
+];
+
+test('Firefox puts the page items on the tab strip and retitles the bookmark item there', async () => {
+	const harness = createHarness(baseState(), firefoxTabs, {firefox: true});
+	await harness.install();
+	assert.deepEqual(harness.menuErrors, []);
+	assert.deepEqual(
+		harness.topLevel('tab').map((item) => item.id),
+		['tablodge-page-root'],
+	);
+	assert.ok(
+		harness
+			.items()
+			.filter((item) => item.contexts?.includes('tab'))
+			.every((item) => item.contexts?.includes('page')),
+		'only page items join the tab strip',
+	);
+
+	harness.fire('menuShown', {contexts: ['tab']}, firefoxTabs[2]);
+	await wait(10);
+	assert.equal(
+		harness.item('tablodge-page-bookmark')?.title,
+		'Bookmark this tab to',
+	);
+	assert.equal(harness.refreshes(), 1);
+
+	harness.fire('menuShown', {contexts: ['page', 'all']}, firefoxTabs[0]);
+	await wait(10);
+	assert.equal(
+		harness.item('tablodge-page-bookmark')?.title,
+		'Bookmark this page to',
+	);
+});
+
+test('tab strip items act on the clicked tab, even when it is not the active one', async () => {
+	const harness = createHarness(
+		baseState({closeOnSave: false}, {groups: [sessionEntry('a', 'Alpha', 10)]}),
+		firefoxTabs,
+		{firefox: true},
+	);
+	await harness.install();
+	const third = firefoxTabs[2];
+	await harness.click(
+		{menuItemId: 'tablodge-page-bookmark:column-reading'},
+		third,
+	);
+	assert.deepEqual(
+		harness.state.bookmarks.map(({url, columnId}) => [url, columnId]),
+		[['https://third.example/', 'column-reading']],
+	);
+
+	await harness.click({menuItemId: 'tablodge-page-send:a'}, third);
+	assert.deepEqual(
+		harness.state.groups
+			.find((group) => group.id === 'a')!
+			.tabs.map((tab) => tab.url),
+		['https://a.example/', 'https://third.example/'],
+	);
+
+	const newSessionUrls = async (menuItemId: string, tab: MockTab) => {
+		const before = new Set(harness.state.groups.map((group) => group.id));
+		await harness.click({menuItemId}, tab);
+		return harness.state.groups
+			.find((group) => !before.has(group.id))
+			?.tabs.map((saved) => saved.url);
+	};
+
+	assert.deepEqual(await newSessionUrls('tablodge-page-send-new', third), [
+		'https://third.example/',
+	]);
+	assert.deepEqual(
+		await newSessionUrls('tablodge-page-save-selected', third),
+		['https://third.example/'],
+		'a tab outside the selection saves only itself',
+	);
+	assert.deepEqual(
+		await newSessionUrls('tablodge-page-save-selected', firefoxTabs[1]),
+		['https://current.example/page', 'https://second.example/'],
+		'a tab inside the selection saves the selection',
+	);
+	assert.deepEqual(harness.warnings, []);
 });

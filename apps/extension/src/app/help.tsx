@@ -431,6 +431,7 @@ function Help() {
 				'page menu',
 				'selection menu',
 				'toolbar menu',
+				'tab menu',
 			],
 			entries: [
 				{
@@ -481,10 +482,11 @@ function Help() {
 						'right-click toolbar icon dashboard save window exclude website site help settings checkmark done',
 				},
 				{
-					title: 'In the browser tab strip',
-					body: 'Browsers do not let extensions add actions to the tab strip’s own right-click menu.',
+					title: 'On a tab in the tab strip',
+					gesture: {label: 'Right-click a tab', icon: MousePointerClick},
+					body: `In Firefox, the tab strip’s menu has the page actions too, and they act on the tab you right-clicked, even when it is not the active one. Save selected tabs saves your selected tabs when you right-click one of them, and only that tab otherwise. Chrome and other Chromium browsers do not show ${PROJECT.name} in this menu.`,
 					searchText:
-						'tab strip browser tab context menu cannot add extension actions unavailable',
+						'tab strip right-click tab firefox bookmark this tab send to session save selected tabs window chrome chromium',
 				},
 			],
 			action: {

@@ -553,7 +553,7 @@ const settingsGroups: Array<{
 	{
 		title: 'Right-click menus',
 		icon: MousePointerClick,
-		description: `Each menu groups its actions under one ${PROJECT.name} item. Browsers don’t let extensions add to the tab strip’s menu.`,
+		description: `Each menu groups its actions under one ${PROJECT.name} item. In Firefox, the Page actions also appear when you right-click a tab.`,
 		fields: [
 			{
 				name: 'contextMenusEnabled',

@@ -36,6 +36,7 @@ import {
 	MENU,
 	PAGE_COLUMN_PREFIX,
 	PAGE_SEND_PREFIX,
+	PAGE_BOOKMARK_TITLE,
 	PAGE_SAVE_ITEMS,
 	contextMenuPlan,
 	contextMenuSignature,
@@ -292,6 +293,9 @@ const {sidebarAction} = chrome as typeof chrome & {
 };
 const HAS_SIDE_PANEL =
 	Boolean(chrome.sidePanel) || Boolean(sidebarAction?.open);
+// The tab strip's right-click menu. Chrome 150 and newer have the context as well, but it stays Firefox only (#309).
+const HAS_TAB_MENU =
+	IS_FIREFOX && Boolean(chrome.contextMenus?.ContextType?.TAB);
 let privateConfig: PrivateConfig = {
 	mode: 'shared',
 	configured: false,
@@ -10027,11 +10031,16 @@ function rebuildContextMenus(
 				store.settings,
 				store.bookmarkColumns,
 				sessions,
-				{appName: APP_NAME, hasSidePanel: HAS_SIDE_PANEL},
+				{
+					appName: APP_NAME,
+					hasSidePanel: HAS_SIDE_PANEL,
+					hasTabContext: HAS_TAB_MENU,
+				},
 				await excludeMenuState(store.settings),
 			);
 			menuGeneration += 1;
 			syncedMenuState = '';
+			pageBookmarkTitle = PAGE_BOOKMARK_TITLE.page;
 			await removeAllMenus();
 			for (const item of plan) {
 				chrome.contextMenus.create(
@@ -10073,6 +10082,10 @@ What the two dynamic toolbar items were last set to; cleared whenever the menus 
 */
 let syncedMenuState = '';
 let menuGeneration = 0;
+/**
+The current title of the shared bookmark item: "Bookmark this tab to" while the tab strip's menu shows it.
+*/
+let pageBookmarkTitle: string = PAGE_BOOKMARK_TITLE.page;
 
 /**
 Keeps the toolbar menu's "Exclude this site" checkbox in step with the active tab.
@@ -10178,6 +10191,16 @@ function watchContextMenuShown() {
 			if (contexts.has('action')) {
 				void syncExcludeMenuItem(tab).then(() => menus.refresh?.());
 			}
+
+			const title = contexts.has('tab')
+				? PAGE_BOOKMARK_TITLE.tab
+				: PAGE_BOOKMARK_TITLE.page;
+			if (!HAS_TAB_MENU || title === pageBookmarkTitle) {
+				return;
+			}
+
+			pageBookmarkTitle = title;
+			void updateMenu(MENU.pageBookmark, {title}).then(() => menus.refresh?.());
 		});
 	} catch {
 		/*
@@ -10484,7 +10507,12 @@ async function openExtensionPage(
 
 function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 	const id = String(info.menuItemId);
-	const scope = MENU_SAVE_SCOPES[id];
+	let scope = MENU_SAVE_SCOPES[id];
+	// In the tab strip the clicked tab can sit outside the selection; then "Save selected tabs" saves that tab.
+	if (scope === 'selected' && tab?.highlighted === false) {
+		scope = 'this-tab';
+	}
+
 	if (scope) {
 		runMenuAction(tab, `${APP_NAME} could not save these tabs.`, () =>
 			saveTabs(scope, tab, DEFAULT_FOLDER_ID, {promptName: true}),
