@@ -1317,6 +1317,17 @@ test('the selection search opens the dashboard with ?q=', async () => {
 	assert.deepEqual(harness.badges, [], 'opening a page needs no badge');
 });
 
+test('the selection search quotes text that would read as search operators', async () => {
+	const harness = createHarness(baseState());
+	await harness.install();
+	await harness.click({
+		menuItemId: 'tablodge-selection-search',
+		selectionText: 'install -g site:npmjs.com',
+	});
+	const q = new URL(harness.openedTabs[0].url ?? '').searchParams.get('q');
+	assert.equal(q, '"install -g site:npmjs.com"');
+});
+
 test('the toolbar exclude toggle adds and removes the active site and tracks the active tab', async () => {
 	const harness = createHarness(
 		baseState({excludedOrigins: ['https://other.example']}),

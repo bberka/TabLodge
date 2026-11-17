@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
 	hasOperators,
+	literalQuery,
 	parseSearchQuery,
 	passesOperators,
 	type SearchFacets,
@@ -112,4 +113,26 @@ test('malformed operators fall back to plain words', () => {
 		assert.equal(query.text, text, input);
 		assert.equal(hasOperators(query), false, input);
 	}
+});
+
+test('literalQuery keeps a selection as plain words, quoting it when it would read as operators', () => {
+	assert.equal(literalQuery('react  hooks '), 'react hooks');
+	assert.equal(literalQuery('localhost:3000 docs'), 'localhost:3000 docs');
+	const quoted = literalQuery('pre-release -beta site:example.com');
+	assert.equal(quoted, '"pre-release -beta site:example.com"');
+	const parsed = parseSearchQuery(quoted);
+	assert.deepEqual(parsed.phrases, ['pre release  beta site:example.com']);
+	assert.deepEqual(parsed.exclude, []);
+	assert.deepEqual(parsed.sites, []);
+	assert.equal(literalQuery('say “hi” -now'), '"say hi -now"');
+	assert.equal(literalQuery('"a"'), 'a');
+	const long = literalQuery(`-x ${'a'.repeat(300)}`);
+	assert.equal(long.length, 200);
+	assert.ok(long.startsWith('"-x '));
+	assert.ok(long.endsWith('"'));
+	assert.equal(
+		literalQuery(`${'a '.repeat(92)}after:2026-01-011`, 200).includes('"'),
+		true,
+		'a cut that leaves a valid operator is quoted',
+	);
 });

@@ -374,3 +374,20 @@ export function highlightWords(input: string): string {
 	const query = parseSearchQuery(input);
 	return [query.text, ...query.phrases].join(' ');
 }
+
+/**
+Text to search for as written, such as a selection from a page. It is wrapped in quotes when it would otherwise read
+as operators (`-word`, `site:`), so it matches as one phrase. Quote marks inside it are dropped, since a phrase cannot
+hold them. The result is at most `max` characters, closing quote included.
+*/
+export function literalQuery(text: string, max = 200): string {
+	const plain = text
+		.replaceAll(/["“”„]/g, ' ')
+		.replaceAll(/\s+/g, ' ')
+		.trim()
+		.slice(0, max)
+		.trim();
+	return hasOperators(parseSearchQuery(plain))
+		? `"${plain.slice(0, max - 2).trim()}"`
+		: plain;
+}

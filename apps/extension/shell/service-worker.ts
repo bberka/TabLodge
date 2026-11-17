@@ -1,4 +1,5 @@
 import {stripTrackingParameters} from '../src/shared/tracking-parameters';
+import {literalQuery} from '../src/shared/search-query';
 import {
 	isTrashEntry,
 	TRASH_KINDS,
@@ -10395,10 +10396,13 @@ async function openPrefilledBookmarkDialog(
 The dashboard query for a selection search: `?q=` with the trimmed, single-spaced text.
 */
 function dashboardSearchQuery(text: unknown) {
-	const q = cleanText(
-		typeof text === 'string' ? text.replaceAll(/\s+/g, ' ') : '',
-		'',
-		200,
+	// The selection is searched as written: text that looks like an operator (-word, site:) becomes a quoted phrase.
+	const q = literalQuery(
+		cleanText(
+			typeof text === 'string' ? text.replaceAll(/\s+/g, ' ') : '',
+			'',
+			500,
+		),
 	);
 	return q ? `?${new URLSearchParams({q})}` : '';
 }
