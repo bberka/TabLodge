@@ -56,6 +56,7 @@ import {SessionsScreen} from './src/screens/sessions/sessions';
 import {SettingsScreen} from './src/screens/settings/settings';
 import {PrivateSheetHost} from './src/private/private-sheets';
 import {SnackbarHost, showSnack} from './src/ui/snackbar';
+import {useSyncProblemNotice} from './src/library/sync-notice';
 import {type BarTab, TabBar} from './src/ui/tab-bar';
 import {useColors} from './src/ui/theme';
 import {setView} from './src/library/view';
@@ -112,6 +113,9 @@ function Main() {
 	const {hasShareIntent, shareIntent, resetShareIntent} =
 		useShareIntentContext();
 	const [tab, setTab] = useState<Tab>('bookmarks');
+	useSyncProblemNotice(() => {
+		setTab('settings');
+	});
 	const [selecting, setSelecting] = useState(false);
 	const [draft, setDraft] = useState<Draft>({
 		key: 0,
