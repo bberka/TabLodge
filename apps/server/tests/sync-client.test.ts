@@ -16,6 +16,7 @@ import {
 	SyncError,
 	type SyncSocket,
 } from '../../extension/src/shared/sync/client';
+import {problemKey, readCompat} from '../../extension/src/shared/sync/compat';
 import {spreadKeys} from '../../extension/src/shared/sync/order-key';
 
 const TOKEN = 'client-test-token-0123456789-abcdefghij';
@@ -36,6 +37,9 @@ The reference server behind a fake network, with live sockets that hear about ev
 function makeServer(options: {legacy?: boolean} = {}) {
 	let legacy = options.legacy ?? false;
 	let resyncNext = false;
+	let rewriteStatus: ((body: Record<string, unknown>) => unknown) | undefined;
+	// Requests by path, so a test can tell whether a device pulled or pushed.
+	const requests: string[] = [];
 	const sockets = new Set<FakeSocket>();
 	const createServerApi = () =>
 		createApi({
@@ -59,6 +63,13 @@ function makeServer(options: {legacy?: boolean} = {}) {
 			return app;
 		},
 		sockets,
+		requests,
+		/**
+		Changes what /v1/status answers, as another server version would; undefined goes back to the real answer.
+		*/
+		setStatus(rewrite: typeof rewriteStatus) {
+			rewriteStatus = rewrite;
+		},
 		setOnline(value: boolean) {
 			online = value;
 		},
@@ -74,6 +85,14 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		async fetch(url: string, init: RequestInit) {
 			if (!online) {
 				throw new TypeError('Failed to fetch');
+			}
+
+			requests.push(new URL(url).pathname);
+			if (rewriteStatus && new URL(url).pathname === '/v1/status') {
+				const response = await app.request(url, init);
+				return Response.json(
+					rewriteStatus((await response.json()) as Record<string, unknown>),
+				);
 			}
 
 			if (resyncNext && new URL(url).pathname === '/v1/changes') {
@@ -741,4 +760,129 @@ test('a resync against a server without the notes feature keeps the notes this d
 
 	assert.deepEqual(notesOf(a.store), ['Synced before']);
 	assert.equal((await a.client.status()).error, null);
+});
+
+test('a server from before versions connects and syncs, and shows no version', async () => {
+	const server = makeServer();
+	server.setStatus(({version: _dropped, ...body}) => body);
+	const a = makeDevice(server, {...emptyStore(), bookmarks: [bookmark('b1')]});
+	const b = makeDevice(server);
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(ids(b.store), ['b1']);
+	const status = await b.client.status();
+	assert.equal(status.error, null);
+	assert.equal(status.server?.version, null);
+	assert.equal(readCompat(status).incompatible, undefined);
+});
+
+test('a server on another protocol is refused at Connect with the side to update', async () => {
+	const server = makeServer();
+	const device = makeDevice(server);
+	server.setStatus((body) => ({...body, protocol: 2}));
+	await assert.rejects(device.client.connect(URL_BASE, TOKEN), (error) => {
+		assert.ok(error instanceof SyncError);
+		assert.equal(error.kind, 'incompatible');
+		assert.match(
+			error.message,
+			/older than your sync server\. Update TabLodge/,
+		);
+		return true;
+	});
+	server.setStatus((body) => ({...body, protocol: 0}));
+	await assert.rejects(
+		device.client.connect(URL_BASE, TOKEN),
+		/Update the server to 0\.1\.0 or later/,
+	);
+	assert.equal(device.storage.has(SYNC_CONFIG_KEY), false);
+});
+
+test('a connected device notices a new protocol on a later sync, stops, and keeps its library', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {...emptyStore(), bookmarks: [bookmark('b1')]});
+	await a.client.connect(URL_BASE, TOKEN);
+	await until(() => server.sockets.size === 1);
+
+	server.setStatus((body) => ({...body, protocol: 2}));
+	a.edit((store) => ({
+		...store,
+		bookmarks: [...store.bookmarks, bookmark('b2')],
+	}));
+	server.requests.length = 0;
+	// Past the ten minutes the client trusts the server's last answer.
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		await a.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	const stopped = await a.client.status();
+	assert.equal(stopped.phase, 'error');
+	assert.equal(stopped.incompatible, 'app');
+	assert.match(stopped.error ?? '', /Update TabLodge/);
+	assert.deepEqual(ids(a.store), ['b1', 'b2']);
+	assert.deepEqual(server.requests, ['/v1/status']);
+	assert.match(problemKey(readCompat(stopped)) ?? '', /incompatible:app/);
+
+	// The answer that stopped sync is not kept: once the server is back on this protocol, the next round goes ahead.
+	server.setStatus(undefined);
+	await a.client.syncNow();
+	const resumed = await a.client.status();
+	assert.equal(resumed.phase, 'idle');
+	assert.equal(resumed.incompatible, undefined);
+	const b = makeDevice(server);
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(ids(b.store), ['b1', 'b2']);
+});
+
+test('a live reconnect asks the server again, so an update is noticed at once', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {...emptyStore(), bookmarks: [bookmark('b1')]});
+	vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+	try {
+		await a.client.connect(URL_BASE, TOKEN);
+		await vi.advanceTimersByTimeAsync(100);
+		assert.equal((await a.client.status()).live, true);
+
+		// The server restarts on another protocol: the socket drops and comes back within the ten minutes.
+		server.setStatus((body) => ({...body, protocol: 0}));
+		for (const socket of server.sockets) {
+			socket.close();
+		}
+
+		await vi.advanceTimersByTimeAsync(6000);
+	} finally {
+		vi.useRealTimers();
+	}
+
+	await until(() => server.sockets.size === 1);
+	await a.client.syncNow();
+	const status = await a.client.status();
+	assert.equal(status.incompatible, 'server');
+	assert.match(status.error ?? '', /Update the server to 0\.1\.0 or later/);
+	assert.deepEqual(ids(a.store), ['b1']);
+});
+
+test('a server without some features keeps syncing and lists what stays on the device', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, {...emptyStore(), bookmarks: [bookmark('b1')]});
+	await a.client.connect(URL_BASE, TOKEN);
+	const status = await a.client.status();
+	assert.equal(status.phase, 'idle');
+	assert.equal(status.error, null);
+	const compat = readCompat(status);
+	// This test server keeps no shared pages either.
+	assert.deepEqual(
+		compat.missing.map(({name}) => name),
+		['notes', 'trash', 'shared-pages'],
+	);
+	assert.equal(
+		problemKey(compat),
+		`${URL_BASE}\nmissing:notes,trash,shared-pages`,
+	);
+
+	// Disconnecting forgets what the server said.
+	const off = await a.client.disconnect();
+	assert.equal(off.server, undefined);
 });

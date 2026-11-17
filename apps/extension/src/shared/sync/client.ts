@@ -11,8 +11,14 @@ import type {Store} from '../types';
 import type {TombstoneKind} from '../library-sync';
 import {isRecord} from '../library-values';
 import type {TrashEntry} from '../trash';
-import {PROTOCOL_VERSION, type PushResult} from './change-log';
+import type {PushResult} from './change-log';
 import {parseChange, recordKey, type SyncChange} from './changes';
+import {
+	incompatibleMessage,
+	parseServerInfo,
+	type ServerInfo,
+	updateSide,
+} from './compat';
 import {
 	capture,
 	finishResync,
@@ -46,7 +52,7 @@ Minutes between fallback rounds, which also reopen a closed live socket.
 */
 export const SYNC_ALARM_MINUTES = 5;
 export const MIN_TOKEN_LENGTH = 32;
-// How long a server's list of features is trusted.
+// How long a server's account of itself (protocol, version, features) is trusted.
 const FEATURE_CHECK_MS = 10 * 60 * 1000;
 
 /**
@@ -90,6 +96,14 @@ export type SyncStatus = {
 	The library on the server is encrypted and this device needs the PIN or password to read it.
 	*/
 	needsKey?: boolean;
+	/**
+	What the server last said about itself at /v1/status. Missing until a round has asked, or when it did not answer.
+	*/
+	server?: ServerInfo;
+	/**
+	Sync stopped because the server speaks another protocol, and this side needs updating to fix it.
+	*/
+	incompatible?: 'server' | 'app';
 };
 
 export type SyncSocket = {
@@ -161,9 +175,11 @@ export type SyncHost = {
 export class SyncError extends Error {
 	constructor(
 		/**
-		`key`: the library is encrypted and this device does not have its key.
+		`key`: the library is encrypted and this device does not have its key. `incompatible`: the server speaks
+		another protocol.
 		*/
-		readonly kind: 'config' | 'offline' | 'auth' | 'server' | 'key',
+		readonly kind:
+			'config' | 'offline' | 'auth' | 'server' | 'key' | 'incompatible',
 		message: string,
 	) {
 		super(message);
@@ -394,6 +410,8 @@ export function createSyncClient(host: SyncHost) {
 	let notesOn = false;
 	let featureCheck:
 		{key: string; until: number; features: ReadonlySet<string>} | undefined;
+	// What the last /v1/status answer said, for the status the round ends with.
+	let serverInfo: ServerInfo | undefined;
 	const ready = load();
 
 	async function load() {
@@ -452,8 +470,10 @@ export function createSyncClient(host: SyncHost) {
 	}
 
 	/**
-	The optional record kinds the server lists in its features. An old server refuses a push with a kind it does not
-	know, which would stop every round, so the trash and bookmark notes wait until the server says it can hold them.
+	Asks the server about itself, at most every few minutes, and returns the optional record kinds it lists. An old
+	server refuses a push with a kind it does not know, which would stop every round, so the trash and bookmark notes
+	wait until the server says it can hold them. A server that speaks another protocol stops the round; that answer
+	is not kept, so the round after the server's update goes ahead.
 	*/
 	async function serverFeatures(
 		target: SyncConfig,
@@ -463,20 +483,24 @@ export function createSyncClient(host: SyncHost) {
 			return featureCheck.features;
 		}
 
-		let features = new Set<string>();
+		let info: ServerInfo | undefined;
 		try {
-			const body = await request(target, '/v1/status');
-			if (isRecord(body) && Array.isArray(body.features)) {
-				features = new Set(
-					body.features.filter((name) => typeof name === 'string'),
-				);
-			}
+			info = parseServerInfo(await request(target, '/v1/status'));
 		} catch (error) {
 			if (!(error instanceof SyncError) || error.kind !== 'server') {
 				throw error;
 			}
 		}
 
+		const side = info && updateSide(info.protocol);
+		if (side) {
+			featureCheck = undefined;
+			await setStatus({server: info});
+			throw new SyncError('incompatible', incompatibleMessage(side));
+		}
+
+		serverInfo = info ?? serverInfo;
+		const features = new Set(info?.features);
 		featureCheck = {key, until: host.now() + FEATURE_CHECK_MS, features};
 		return features;
 	}
@@ -593,9 +617,10 @@ export function createSyncClient(host: SyncHost) {
 
 	async function round(target: SyncConfig) {
 		await setStatus({phase: 'syncing'});
+		// Before anything else, so a server that speaks another protocol gets no key, pull, or push request.
+		const features = await serverFeatures(target);
 		const {codec} = host;
 		await codec?.prepare(async (path, init) => request(target, path, init));
-		const features = await serverFeatures(target);
 		trashOn = host.trash !== undefined && features.has('trash');
 		notesOn = features.has('notes');
 		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
@@ -778,6 +803,8 @@ export function createSyncClient(host: SyncHost) {
 			refused: status.refused + refused,
 			error: null,
 			needsKey: false,
+			server: serverInfo ?? status.server,
+			incompatible: undefined,
 		});
 	}
 
@@ -833,6 +860,13 @@ export function createSyncClient(host: SyncHost) {
 						phase: failure.kind === 'offline' ? 'offline' : 'error',
 						error: failure.message,
 						needsKey: failure.kind === 'key',
+						// Offline says nothing new about the server, so what was known stays.
+						incompatible:
+							failure.kind === 'offline'
+								? status.incompatible
+								: failure.kind === 'incompatible' && status.server
+									? updateSide(status.server.protocol)
+									: undefined,
 					});
 				}
 			} finally {
@@ -880,6 +914,8 @@ export function createSyncClient(host: SyncHost) {
 
 			if (message.type === 'ready') {
 				reconnectDelay = RECONNECT_MIN_MS;
+				// The server may have been updated while the socket was closed, so the round asks it again.
+				featureCheck = undefined;
 				void setStatus({live: true});
 				void syncNow();
 			} else if (
@@ -928,16 +964,22 @@ export function createSyncClient(host: SyncHost) {
 			}
 
 			const target = {url, token};
-			const server = await request(target, '/v1/status');
-			if (!isRecord(server) || server.protocol !== PROTOCOL_VERSION) {
+			const server = parseServerInfo(await request(target, '/v1/status'));
+			if (!server) {
 				throw new SyncError(
 					'server',
-					'This server runs a sync version this TabLodge does not support.',
+					'This address does not answer like a TabLodge sync server.',
 				);
+			}
+
+			const side = updateSide(server.protocol);
+			if (side) {
+				throw new SyncError('incompatible', incompatibleMessage(side));
 			}
 
 			closeSocket();
 			config = target;
+			serverInfo = server;
 			await host.remove([SYNC_STATE_KEY]);
 			await host.set(SYNC_CONFIG_KEY, target);
 			status = {
@@ -949,6 +991,7 @@ export function createSyncClient(host: SyncHost) {
 				pending: 0,
 				refused: 0,
 				error: null,
+				server,
 			};
 			await host.set(SYNC_STATUS_KEY, status);
 			openLive();
@@ -1000,7 +1043,10 @@ export function createSyncClient(host: SyncHost) {
 				live: false,
 				error: null,
 				refused: 0,
+				server: undefined,
+				incompatible: undefined,
 			};
+			serverInfo = undefined;
 			return status;
 		},
 
