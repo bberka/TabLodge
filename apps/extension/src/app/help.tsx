@@ -243,6 +243,12 @@ function Help() {
 						'device name which device saved session computer phone mobile desktop sync settings rename where saved from',
 				},
 				{
+					title: 'Site icons',
+					body: 'With a sync server connected, a bookmark or saved tab whose site the browser has no icon for, such as an imported link, gets its icon from your server. The server fetches it, so the site never sees this browser, and the icon is kept on this device. Settings › Site icons is Through my server by default, like the Android app; choose Browser only to show just the browser’s own icons. Without a server nothing is asked.',
+					searchText:
+						'site icons favicon missing imported links letter tile globe sync server through my server browser only',
+				},
+				{
 					title: 'Preview links on hover',
 					body: 'With a sync server connected, turn on Settings › Preview links on hover. Rest the pointer on a bookmark or saved tab, or move keyboard focus to it, and a card shows the page image, title, and description. Escape closes it. The server fetches the page, so the server and the site see its address, and nothing goes to any other service. It is off by default and stays on this browser.',
 					searchText:

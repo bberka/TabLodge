@@ -362,7 +362,7 @@ All paths except `/health` need `Authorization: Bearer <token>`. The server answ
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
 | `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |
 | `POST /v1/key` with `{"key": "...", "previous": ...}` | Stores the key only while the server still holds `previous` (`null` for none); otherwise 409 with the current key |
-| `GET /v1/icon?host=<host>` | The site's icon as an image: the one its home page links, or `/favicon.ico`. 404 when there is none. Used by the Android app's **Site icons** setting |
+| `GET /v1/icon?host=<host>` | The site's icon as an image: the one its home page links, or `/favicon.ico`. 404 when there is none. Used by the **Site icons** setting of the Android app and the extension |
 | `GET /v1/preview?url=<address>` | `{"title", "description", "image"}` read from the page, where `image` is the share image as a `data:` URL (at most 512 KB). 404 when the page cannot be read. Used by the extension's **Preview links on hover** setting and the Android app's **Preview links when saving** |
 | `GET /v1/live` (WebSocket) | Send `{"type":"auth","token":"..."}` first. The server answers `{"type":"ready","cursor":n}`, then `{"type":"cursor","cursor":n}` after every push that changed something. `ping` gets `pong` |
 

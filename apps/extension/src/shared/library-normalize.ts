@@ -176,6 +176,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionsOnTop: false,
 	showSaveWindowButton: true,
 	linkPreviews: false,
+	siteIcons: 'server',
 	showTrashBinButton: false,
 	keepLodgePinned: false,
 	browserBookmarkAction: 'off',
@@ -948,6 +949,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		sessionsOnTop: raw.sessionsOnTop === true,
 		showSaveWindowButton: raw.showSaveWindowButton !== false,
 		linkPreviews: raw.linkPreviews === true,
+		siteIcons: raw.siteIcons === 'browser' ? 'browser' : 'server',
 		showTrashBinButton: raw.showTrashBinButton === true,
 		dashboardWidth: isOneOf(
 			['default', 'wider', 'full', 'narrower'],

@@ -5549,6 +5549,21 @@ for (const [key, fallback] of [
 	});
 }
 
+test('Site icons is Through my server by default, keeps only Browser only, and resets', async () => {
+	const read = async (stored: unknown) =>
+		(
+			await createWorkerHarness(
+				stateWithSession({siteIcons: stored}),
+			).sendMessage({type: 'GET_STATE'})
+		).settings.siteIcons;
+	assert.equal(await read(undefined), 'server');
+	assert.equal(await read('direct'), 'server');
+	assert.equal(await read('browser'), 'browser');
+	const harness = createWorkerHarness(stateWithSession({siteIcons: 'browser'}));
+	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
+	assert.equal(reset.settings.siteIcons, 'server');
+});
+
 test('bookmark column batch size defaults to sixteen, is clamped, and resets', async () => {
 	const defaults = createWorkerHarness({...stateWithSession(), settings: {}});
 	assert.equal(
@@ -12672,4 +12687,85 @@ test('a session takes a color like a column does: a preset or a hex, kept when o
 		type: 'GET_STATE',
 	});
 	assert.equal(groups[0].color, undefined);
+});
+
+/**
+A network where the sync server answers every icon request with a small PNG, logging the hosts asked for.
+*/
+function iconNetwork() {
+	const asked: string[] = [];
+	return {
+		asked,
+		async fetch(url: string) {
+			const {pathname, searchParams} = new URL(url);
+			assert.equal(pathname, '/v1/icon', `unexpected request to ${url}`);
+			asked.push(searchParams.get('host')!);
+			return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+				headers: {'Content-Type': 'image/png'},
+			});
+		},
+	};
+}
+
+test('with a server connected, a site with no browser icon gets one from the server, asked once', async () => {
+	const network = iconNetwork();
+	const harness = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: network.fetch,
+		storage: regularSync,
+	});
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_SERVER_ICONS'})).on,
+		true,
+	);
+	const first = await harness.sendMessage({
+		type: 'GET_SERVER_ICON',
+		url: 'https://imported.example/page',
+	});
+	assert.equal(first.icon, 'data:image/png;base64,iVBORw==');
+	await harness.sendMessage({
+		type: 'GET_SERVER_ICON',
+		url: 'https://imported.example/other',
+	});
+	assert.deepEqual(network.asked, ['imported.example']);
+	assert.deepEqual(harness.extraStorage[SITE_ICONS], {
+		'imported.example': first.icon,
+	});
+});
+
+test('no icon is asked for without a server, with Browser only, or from a private window with its own library', async () => {
+	const network = iconNetwork();
+	const ask = async (harness: ReturnType<typeof createWorkerHarness>) => {
+		assert.equal(
+			(await harness.sendMessage({type: 'GET_SERVER_ICONS'})).on,
+			false,
+		);
+		const answer = await harness.sendMessage({
+			type: 'GET_SERVER_ICON',
+			url: 'https://imported.example/',
+		});
+		assert.equal(answer.ok, true, answer.error);
+		assert.equal(answer.icon, null);
+		assert.equal(harness.extraStorage[SITE_ICONS], undefined);
+	};
+
+	await ask(
+		createWorkerHarness(stateWithSession(), undefined, {fetch: network.fetch}),
+	);
+	await ask(
+		createWorkerHarness(stateWithSession({siteIcons: 'browser'}), undefined, {
+			fetch: network.fetch,
+			storage: regularSync,
+		}),
+	);
+	await ask(
+		createWorkerHarness({}, undefined, {
+			incognitoContext: true,
+			fetch: network.fetch,
+			storage: {
+				'tablodge.private.config': {mode: 'saved', configured: true},
+				...regularSync,
+			},
+		}),
+	);
+	assert.deepEqual(network.asked, []);
 });
