@@ -130,7 +130,7 @@ Record level sync needs a stable id, a revision stamp, a tombstone, and an order
 
 * **Ids.** Present on every record already and checked at migration. Preferences are addressed by their setting key.
 * **Stamp and order key.** `{h, d, o}`: a hybrid logical clock string, the writing device's id, and a fractional index among siblings. Stored in the index (`sessions[i].sync`, `folderSync`, `columnSync`, `preferenceSync`), in a session record's `$sync.tabs` (flagged by `sessions[i].tabSync`), and in the bookmarks record's `$sync.items` (flagged by `bookmarks.sync`). Nothing writes them yet. A missing stamp means never stamped, with the record's `updatedAt` as its implied stamp. A missing order key means its position in the stored array, which stays authoritative until sync assigns keys in one pass, so adding them needs no further migration.
-* **Tombstones.** The index's `tombstones` list holds `{kind, id, parentId?, deletedAt, purgeAfter, sync?}` for sessions, tabs, bookmarks, columns, folders, and preferences, and a commit drops the expired ones. The trash and Undo remain the user facing delete. (The trash itself is not in the library index: it syncs as its own record kind, see [Trash sync](#trash-sync).)
+* **Tombstones.** The index's `tombstones` list holds `{kind, id, parentId?, deletedAt, purgeAfter, sync?}` for sessions, tabs, bookmarks, columns, folders, and preferences, and a commit drops the expired ones. (A bookmark's note syncs as a record kind of its own, see [Bookmark notes sync](#bookmark-notes-sync).) The trash and Undo remain the user facing delete. (The trash itself is not in the library index: it syncs as its own record kind, see [Trash sync](#trash-sync).)
 * **Device id.** The index's `device`, assigned when sync is switched on. It lives only in the index, so restoring a backup elsewhere cannot copy it.
 * **Carrying.** A rewritten session or bookmarks record keeps its sidecar minus entries for records that are gone, reading the old record only when the index flags one. Malformed sync data is dropped instead of making the library unreadable.
 
@@ -167,6 +167,13 @@ Each trash entry is a sync record of kind `trash`, keyed by its id, so it follow
 * **Size.** The server refuses a change over 256 KiB. A trash entry over 200,000 serialized characters (`TRASH_SYNC_MAX_CHARS`) is not a record at all and stays on its device. The cached `size` never leaves the device.
 * **Expiry.** Every device drops an entry at its own `deletedAt` plus the retention, which syncs with the settings, and then sends the delete; those deletes agree, so nothing needs coordinating. The 500 entry and size limits apply after a round too.
 * **Restoring.** Restoring writes the library and removes the entry in the same step, so the other devices receive both together. Two devices restoring the same item at once leave it twice, as the extension does when the item already exists.
+
+### Bookmark notes sync
+
+A bookmark's note is a sync record of kind `note`, keyed by the bookmark id, with the value `{notes}`. `splitLibrary` takes `notes` off the bookmark record, which keeps the shape it always had, and `assemble` puts it back. Extensions from before notes rebuild every pulled bookmark from the fields they know, so a note inside the bookmark record would be dropped and that loss sent back to every device. They skip a kind they do not know, so a separate record keeps notes safe from them. [ADR 4](adr/0004-bookmark-notes-sync.md) explains the choice.
+
+* **Old servers.** Clients sync `note` records only when the server lists `notes` among its `features`, which is checked together with `trash`. Without it, notes stay on the device: they are left out of capture and out of the outbox, and nothing else changes. `PROTOCOL_VERSION` stays 1.
+* **Order.** A note that arrives before its bookmark waits in `held`. Deleting a bookmark, or clearing its note, sends a delete for the `note` record.
 
 ### Undo
 
