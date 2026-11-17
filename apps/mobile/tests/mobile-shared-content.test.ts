@@ -14,24 +14,97 @@ describe('readShare', () => {
 		});
 	});
 
-	test('a shared image file is refused', () => {
+	test('a shared image is refused', () => {
+		const image = {
+			path: `${cache}IMG_1.jpg`,
+			fileName: 'IMG_1.jpg',
+			mimeType: 'image/jpeg',
+		};
+		assert.deepEqual(readShare({text: null, files: [image]}), {
+			kind: 'refused',
+		});
 		assert.deepEqual(
-			readShare({text: null, files: [{path: `${cache}IMG_1.jpg`}]}),
-			{kind: 'files'},
-		);
-		assert.deepEqual(
-			readShare({text: 'Look at this', files: [{path: `${cache}IMG_1.jpg`}]}),
-			{kind: 'files'},
+			readShare({text: 'Look at this', files: [image]}),
+			{kind: 'refused'},
 			'words without a link do not make a link',
 		);
 	});
 
-	test('a link that comes with a file is still saved', () => {
+	test('a link that comes with an image is still saved', () => {
 		const outcome = readShare({
 			text: 'https://photos.example/p/1',
-			files: [{path: `${cache}IMG_1.jpg`}],
+			files: [{path: `${cache}IMG_1.jpg`, mimeType: 'image/jpeg'}],
 		});
 		assert.equal(outcome.kind, 'link');
+	});
+
+	test('words without a link still open Save link', () => {
+		assert.equal(readShare({text: 'just some words'}).kind, 'link');
+	});
+
+	test('an export file opens the import preview', () => {
+		for (const [fileName, mimeType] of [
+			['tablodge-sessions.json', 'application/json'],
+			['bookmarks.csv', 'text/comma-separated-values'],
+			['bookmarks.html', 'text/html'],
+			['links.md', 'text/markdown'],
+			['links.txt', 'text/plain'],
+		]) {
+			assert.deepEqual(
+				readShare({
+					files: [{path: `${cache}${fileName}`, fileName, mimeType, size: 120}],
+				}),
+				{
+					kind: 'import',
+					path: `${cache}${fileName}`,
+					name: fileName,
+					size: 120,
+				},
+				fileName,
+			);
+		}
+	});
+
+	test('a backup opens Restore, by name or by type', () => {
+		const backup = (fileName: string, mimeType: string) =>
+			readShare({files: [{path: `${cache}${fileName}`, fileName, mimeType}]})
+				.kind;
+		assert.equal(backup('tablodge-backup.zip', 'application/zip'), 'backup');
+		assert.equal(
+			backup('tablodge-backup.zip.enc', 'application/octet-stream'),
+			'backup',
+		);
+		assert.equal(backup('FILE_1', 'application/x-zip-compressed'), 'backup');
+	});
+
+	test('the name wins over a wrong type, and an unknown file is refused', () => {
+		const kind = (fileName: string, mimeType: string) =>
+			readShare({files: [{path: `${cache}${fileName}`, fileName, mimeType}]})
+				.kind;
+		assert.equal(kind('export.json', 'application/octet-stream'), 'import');
+		assert.equal(kind('notes', 'text/plain'), 'import');
+		assert.equal(kind('report.pdf', 'application/pdf'), 'refused');
+		assert.equal(kind('blob.bin', 'application/octet-stream'), 'refused');
+	});
+
+	test('a file the share library could not copy is unreadable', () => {
+		assert.deepEqual(
+			readShare({
+				files: [
+					{
+						path: 'content://downloads/1',
+						fileName: 'links.json',
+						mimeType: 'application/json',
+					},
+				],
+			}),
+			{kind: 'unreadable'},
+		);
+		assert.deepEqual(
+			readShare({files: [{path: 'content://gone/1', mimeType: ''}]}),
+			{kind: 'unreadable'},
+			'no type means Android could not describe it',
+		);
 	});
 });
 

@@ -1,0 +1,45 @@
+diff --git a/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt b/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+index ff5b1001e7bb3443482727cec48c22579465c73b..5a044b14892ceddfc12fb908726df7311644e589 100644
+--- a/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
++++ b/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+@@ -55,8 +55,17 @@ class ExpoShareIntentModule : Module() {
+             instance!!.sendEvent("onError", mapOf("value" to message))
+         }
+ 
++        // A file the sending app cannot open (gone, no permission, no metadata) reaches JavaScript as its address
++        // alone, so the app can say it could not be read instead of crashing here.
++        private fun getFileInfo(uri: Uri): Map<String, String?> =
++            try {
++                readFileInfo(uri)
++            } catch (e: Exception) {
++                mapOf("contentUri" to uri.toString(), "mimeType" to "")
++            }
++
+         @SuppressLint("Range")
+-        private fun getFileInfo(uri: Uri): Map<String, String?> {
++        private fun readFileInfo(uri: Uri): Map<String, String?> {
+             val resolver: ContentResolver? = instance?.currentActivity?.contentResolver
+                     ?: instance?.context?.contentResolver
+             if (resolver == null) {
+@@ -122,7 +131,11 @@ class ExpoShareIntentModule : Module() {
+                 return
+             }
+             if (intent.type == null) return
+-            if (intent.type!!.startsWith("text/plain")) {
++            // A text file shared from a file manager or a mail app comes as a stream with no text; read it as a file.
++            val streamOnly = intent.action == Intent.ACTION_SEND &&
++                intent.getStringExtra(Intent.EXTRA_TEXT).isNullOrBlank() &&
++                intent.parcelable<Uri>(Intent.EXTRA_STREAM) != null
++            if (intent.type!!.startsWith("text/plain") && !streamOnly) {
+                 // text / urls
+                 if (intent.action == Intent.ACTION_SEND) {
+                     notifyShareIntent(mapOf(
+@@ -142,7 +155,7 @@ class ExpoShareIntentModule : Module() {
+                 if (intent.action == Intent.ACTION_SEND) {
+                     val uri = intent.parcelable<Uri>(Intent.EXTRA_STREAM);
+                     if (uri != null) {
+-                        notifyShareIntent(mapOf( "files" to arrayOf(getFileInfo(uri), "type" to "file")))
++                        notifyShareIntent(mapOf( "files" to arrayOf(getFileInfo(uri)), "type" to "file"))
+                     } else {
+                         notifyError("empty uri for file sharing: " + intent.action)
+                     }
