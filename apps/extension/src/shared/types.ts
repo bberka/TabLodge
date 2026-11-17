@@ -1176,7 +1176,13 @@ export type TabLodgeResponses = {
 		snapshots: number;
 		trash: number;
 	} & Undoable;
-	GET_TRASH: {items: TrashSummary[]};
+	/**
+	`urls`: the link addresses in the trash, which an import skips like saved links.
+	*/
+	GET_TRASH: {
+		items: TrashSummary[];
+		urls: {sessions: string[]; bookmarks: string[]};
+	};
 	/**
 	`placed`: where it went, such as the session name or "Unfiled".
 	*/

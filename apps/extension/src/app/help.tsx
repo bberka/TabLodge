@@ -658,12 +658,14 @@ function Help() {
 							with the file can try every PIN. TabLodge cannot recover a lost
 							PIN or password. Importing a protected file asks for it first, and
 							a wrong entry changes nothing. Importing a file adds to what you
-							have and skips links you already saved. Importing a full backup
-							asks whether to add it to the current data (the default; settings,
-							snapshots, and the trash bin stay as they are) or to replace
-							everything, and it offers Undo for a short time. The Android app
-							makes and restores the same ZIP, with the same optional password;
-							restoring there replaces its library and offers Undo.
+							have and skips links you already saved or have in the trash bin,
+							so it does not bring back what you deleted. Importing a full
+							backup asks whether to add it to the current data (the default;
+							settings, snapshots, and the trash bin stay as they are) or to
+							replace everything, and it offers Undo for a short time. The
+							Android app makes and restores the same ZIP, with the same
+							optional password; restoring there replaces its library and offers
+							Undo.
 						</>
 					),
 					searchText:

@@ -1066,6 +1066,26 @@ export function ImportDialog({
 	const credentialRef = useRef<HTMLInputElement>(null);
 	const readGenerationRef = useRef(0);
 	const columns = state?.bookmarkColumns ?? [];
+	// Addresses in the trash, which the import skips like saved links.
+	const [trashed, setTrashed] = useState({
+		sessions: [] as string[],
+		bookmarks: [] as string[],
+	});
+	useEffect(() => {
+		if (!open) {
+			return;
+		}
+
+		let live = true;
+		void send('GET_TRASH').then((result) => {
+			if (live && result?.ok) {
+				setTrashed(result.urls);
+			}
+		});
+		return () => {
+			live = false;
+		};
+	}, [open]);
 
 	// Reset on open (never on close) so the closing animation keeps the last content.
 	useEffect(() => {
@@ -1096,13 +1116,15 @@ export function ImportDialog({
 	}, [open]);
 
 	const existingUrls = useMemo(
-		() =>
-			kind === 'sessions'
+		() => [
+			...(kind === 'sessions'
 				? (state?.groups ?? []).flatMap((group) =>
 						group.tabs.map((tab) => tab.url),
 					)
-				: (state?.bookmarks ?? []).map((bookmark) => bookmark.url),
-		[kind, state],
+				: (state?.bookmarks ?? []).map((bookmark) => bookmark.url)),
+			...trashed[kind],
+		],
+		[kind, state, trashed],
 	);
 	const hasBookmarkFolders = Boolean(
 		parsed?.bookmarks.some((group) => group.name && group.links.length > 0),
