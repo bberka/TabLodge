@@ -731,10 +731,11 @@ function Help() {
 							Pinboard, and the bookmarks.csv that Mastodon exports (post
 							addresses, without titles). These are read from each tool’s
 							published format, not from real files, so the preview marks them
-							best effort. Their notes, descriptions, and tags are not imported.
-							The bookmarks HTML exports of Karakeep and Pinboard import as
-							browser bookmark files. A session menu can export just that
-							session in any format. Bookmark import and export are in the{' '}
+							best effort. A link’s note in Linkwarden, Karakeep, or Pinboard
+							becomes its bookmark note; tags are not imported. The bookmarks
+							HTML exports of Karakeep and Pinboard import as browser bookmark
+							files. A session menu can export just that session in any format.
+							Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
 							saves only bookmarks or sessions, or Everything as a full ZIP
 							backup with settings, excluded sites, theme, snapshots, and the

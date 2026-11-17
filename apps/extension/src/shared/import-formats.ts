@@ -702,7 +702,7 @@ function parseJsonLinks(
 }
 
 // The readers below follow each tool's published exporter or API docs, not real files, so they are
-// best-effort. Notes, descriptions, and tags in these files are not imported.
+// best-effort. A link's own note or description becomes its note; tags are not imported.
 
 /**
 Every entry of a non-empty array is an object that has all the given keys.
@@ -716,7 +716,7 @@ const arrayOfRecords = (data: unknown, keys: string[]): data is Json[] =>
 	);
 
 // Linkwarden: Settings › Migrate data › Export writes the user record with its collections and their
-// links (`collections: [{id, name, parentId, createdAt, links: [{name, url, createdAt, importDate}]}]`).
+// links (`collections: [{id, name, parentId, createdAt, links: [{name, url, description, createdAt, importDate}]}]`).
 // Source: apps/web/lib/api/controllers/migration/exportData.ts and the Link and Collection models in
 // packages/prisma/schema.prisma at linkwarden/linkwarden@24adcc1.
 function parseLinkwarden(
@@ -741,6 +741,7 @@ function parseLinkwarden(
 				asArray(collection.links).map((link) =>
 					isObject(link)
 						? collector.link(link.url, link.name, {
+								notes: text(link.description),
 								// `importDate` keeps the date from the tool a link was imported from.
 								createdAt: toTimestamp(link.importDate ?? link.createdAt),
 							})
@@ -760,7 +761,7 @@ function parseLinkwarden(
 }
 
 // Karakeep (formerly Hoarder): Settings › Import / Export › Export writes
-// `{bookmarks: [{createdAt (seconds), title, lists: [listId], content: {type: "link", url} | {type: "text"}}],
+// `{bookmarks: [{createdAt (seconds), title, note, lists: [listId], content: {type: "link", url} | {type: "text"}}],
 // lists: [{id, name, type}]}`. A bookmark joins the column of its first list; text notes are skipped.
 // Source: packages/shared/import-export/exporters.ts at karakeep-app/karakeep@bcc4b90.
 function parseKarakeep(
@@ -797,6 +798,7 @@ function parseKarakeep(
 		}
 
 		const link = collector.link(content.url, entry.title, {
+			notes: text(entry.note),
 			createdAt: toTimestamp(entry.createdAt),
 		});
 		if (!link) {
@@ -897,6 +899,7 @@ function parsePinboard(
 	const links = collector.links(
 		data.map((post) =>
 			collector.link(post.href, post.description, {
+				notes: text(post.extended),
 				createdAt: toTimestamp(post.time),
 			}),
 		),
