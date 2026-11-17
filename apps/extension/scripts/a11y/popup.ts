@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import {type BrowserContext, type Locator} from 'playwright';
 import {type ExtensionApi} from './fixtures.ts';
-import {check, type Env, type Theme, THEMES, watchConsole} from './harness.ts';
+import {
+	check,
+	type Env,
+	type Theme,
+	THEMES,
+	until,
+	watchConsole,
+} from './harness.ts';
 import {openPage, setTheme} from './pages.ts';
 
 // The popup is opened as a tab here, so its own tab would be the active one. The first read of the active tab
@@ -38,7 +45,10 @@ Types a note into a bookmark form's Notes field, which stays one row tall until 
 async function typeNote(field: Locator, note: string) {
 	assert.equal(await field.getAttribute('rows'), '1', 'Notes starts collapsed');
 	await field.focus();
-	assert.equal(await field.getAttribute('rows'), '3', 'Notes opens on focus');
+	await until(
+		async () => (await field.getAttribute('rows')) === '3',
+		'Notes to open on focus',
+	);
 	await field.pressSequentially(note);
 }
 
