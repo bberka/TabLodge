@@ -194,7 +194,7 @@ export function ImportSheet({
 									? 'column'
 									: 'columns'}
 							{preview.duplicates > 0
-								? `, ${preview.duplicates} already saved`
+								? `, ${preview.duplicates} already saved or in the trash`
 								: ''}
 							{preview.invalid > 0 ? `, ${preview.invalid} skipped` : ''}
 						</Text>

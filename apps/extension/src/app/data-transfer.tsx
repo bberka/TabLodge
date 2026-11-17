@@ -2004,7 +2004,7 @@ export function ImportDialog({
 										label="Links already saved"
 										help={
 											preview.duplicates
-												? `${plural(preview.duplicates, 'link')} in this import ${preview.duplicates === 1 ? 'is' : 'are'} already saved or repeated.`
+												? `${plural(preview.duplicates, 'link')} in this import ${preview.duplicates === 1 ? 'is' : 'are'} already saved, in the trash bin, or repeated.`
 												: 'None found.'
 										}
 									>
@@ -2094,8 +2094,8 @@ export function ImportDialog({
 											className="mt-0.5 h-3.5 w-3.5 shrink-0"
 											aria-hidden="true"
 										/>
-										Everything here is already saved. Choose “Add again” or “Use
-										imported” titles to import anyway.
+										Everything here is already saved or in the trash bin. Choose
+										“Add again” or “Use imported” titles to import anyway.
 									</p>
 								)}
 							</DialogBody>
