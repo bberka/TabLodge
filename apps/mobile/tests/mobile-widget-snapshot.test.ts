@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import type {Store} from '../../extension/src/shared/types';
 import {BOOKMARK_UNFILED_ID} from '../../extension/src/shared/bookmark-rules';
-import {addBookmark, addColumn, deleteColumn} from '../src/library/board-edits';
+import {
+	ALL_BOOKMARKS_ID,
+	addBookmark,
+	addColumn,
+	deleteColumn,
+} from '../src/library/board-edits';
 import {emptyStore} from '../src/library/store-shape';
 import {
 	buildWidgetSnapshot,
@@ -35,7 +40,7 @@ describe('the Bookmarks widget snapshot', () => {
 		assert.equal(buildWidgetSnapshot(withColumns('Reading'), OPEN), undefined);
 	});
 
-	test('keeps the column order and each column’s own link order', () => {
+	test('puts All first, then the columns, each in its own link order', () => {
 		let store = withColumns('Reading', 'Tools');
 		store = save(store, 'tools', 'https://b.example/1', 'Tool one');
 		store = save(store, 'reading', 'https://a.example/1', 'First');
@@ -47,22 +52,26 @@ describe('the Bookmarks widget snapshot', () => {
 				column.links.map((link) => link.title),
 			]),
 			[
+				[ALL_BOOKMARKS_ID, ['First', 'Second', 'Tool one']],
 				['reading', ['First', 'Second']],
 				['tools', ['Tool one']],
 			],
 		);
 	});
 
-	test('caps the links per column but counts them all', () => {
+	test('caps the links per column, All included, but counts them all', () => {
 		let store = withColumns('Reading');
 		for (let index = 0; index < WIDGET_LINKS_PER_COLUMN + 10; index += 1) {
 			store = save(store, 'reading', `https://a.example/${index}`);
 		}
 
-		const [column] = buildWidgetSnapshot(store, OPEN)?.columns ?? [];
-		assert.equal(column?.links.length, WIDGET_LINKS_PER_COLUMN);
-		assert.equal(column?.count, WIDGET_LINKS_PER_COLUMN + 10);
-		assert.equal(column?.links[0]?.url, 'https://a.example/0');
+		const columns = buildWidgetSnapshot(store, OPEN)?.columns ?? [];
+		for (const columnId of [ALL_BOOKMARKS_ID, 'reading']) {
+			const column = columns.find((each) => each.id === columnId);
+			assert.equal(column?.links.length, WIDGET_LINKS_PER_COLUMN, columnId);
+			assert.equal(column?.count, WIDGET_LINKS_PER_COLUMN + 10, columnId);
+			assert.equal(column?.links[0]?.url, 'https://a.example/0', columnId);
+		}
 	});
 
 	test('caps the number of columns', () => {
@@ -74,7 +83,8 @@ describe('the Bookmarks widget snapshot', () => {
 		store = save(store, 'c0', 'https://a.example/');
 		assert.equal(
 			buildWidgetSnapshot(store, OPEN)?.columns.length,
-			WIDGET_COLUMNS_MAX,
+			WIDGET_COLUMNS_MAX + 1,
+			'the capped columns, and All',
 		);
 	});
 
@@ -93,13 +103,16 @@ describe('the Bookmarks widget snapshot', () => {
 			app: 'org.mozilla.firefox',
 		});
 		assert.deepEqual(snapshot?.open, {how: 'app', app: 'org.mozilla.firefox'});
-		assert.deepEqual(snapshot?.columns[0]?.links, [
-			{
-				title: 'example.org',
-				url: 'https://www.example.org/page',
-				host: 'example.org',
-			},
-		]);
+		assert.deepEqual(
+			snapshot?.columns.find((column) => column.id === 'reading')?.links,
+			[
+				{
+					title: 'example.org',
+					url: 'https://www.example.org/page',
+					host: 'example.org',
+				},
+			],
+		);
 	});
 
 	test('drops a deleted column, so a widget showing it finds it gone', () => {
@@ -110,7 +123,7 @@ describe('the Bookmarks widget snapshot', () => {
 		const snapshot = buildWidgetSnapshot(store, OPEN);
 		assert.deepEqual(
 			snapshot?.columns.map((column) => column.id),
-			['reading'],
+			[ALL_BOOKMARKS_ID, 'reading'],
 		);
 		assert.ok(
 			!JSON.stringify(snapshot).includes('b.example'),
@@ -136,7 +149,7 @@ describe('the Bookmarks widget snapshot', () => {
 		const columns = buildWidgetSnapshot(store, OPEN)?.columns ?? [];
 		assert.deepEqual(
 			columns.map((column) => column.id),
-			['reading', BOOKMARK_UNFILED_ID],
+			[ALL_BOOKMARKS_ID, 'reading', BOOKMARK_UNFILED_ID],
 		);
 	});
 });
