@@ -2417,7 +2417,10 @@ function Options() {
 							icon={Inbox}
 							className={SECTION_SCROLL_CLASS}
 						>
-							<SiteSourcesSettings showStatus={showStatus} />
+							<SiteSourcesSettings
+								columns={state?.bookmarkColumns ?? []}
+								showStatus={showStatus}
+							/>
 						</SectionCard>
 					)}
 

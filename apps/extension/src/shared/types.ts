@@ -942,6 +942,10 @@ export type TabLodgeMessages = {
 	*/
 	SET_SITE_SOURCE: {source: string; enabled: boolean};
 	/**
+	Settings › Sources: the column a site saves to, or null for the site's own column.
+	*/
+	SET_SITE_SOURCE_COLUMN: {source: string; columnId: string | null};
+	/**
 	Sent by the site content script: the user saved this link on the site.
 	*/
 	SITE_SOURCE_SAVE: {source: string; url: string; title?: string};
@@ -1058,10 +1062,15 @@ type Undoable = {undoId?: string};
 something, but the page no longer looks the way TabLodge expects, so nothing was saved.
 */
 export type SiteSourceNotice = 'revoked' | 'unreadable';
+/**
+`columnId`: the column the user chose for this site's saves. Missing, or a column that no longer exists, means the
+site's own column, found by name or created on the first save.
+*/
 export type SiteSourceStatus = {
 	id: string;
 	enabled: boolean;
 	notice?: SiteSourceNotice;
+	columnId?: string;
 };
 /**
 What a source save did: `saved` into the site's column, `exists` (the address is already in the library),
@@ -1286,6 +1295,7 @@ export type TabLodgeResponses = {
 	DELETE_SHARED_PAGE: {};
 	GET_SITE_SOURCES: {sources: SiteSourceStatus[]};
 	SET_SITE_SOURCE: {sources: SiteSourceStatus[]};
+	SET_SITE_SOURCE_COLUMN: {sources: SiteSourceStatus[]};
 	/**
 	`column`: the name of the column the link went to, when it was saved.
 	*/

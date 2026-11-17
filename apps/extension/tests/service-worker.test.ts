@@ -13669,3 +13669,61 @@ test('a private window saves only when private windows use the regular library',
 	assert.equal(saved.ok && saved.outcome, 'saved');
 	assert.equal(shared.state.bookmarks.length, 1);
 });
+
+test('a source saves to the column chosen in Settings, and to its own column once that one is deleted', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	const created = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Later',
+	});
+	assert.ok(created.ok);
+	const laterId = created.ok ? created.column.id : '';
+	const missing = await harness.sendMessage({
+		type: 'SET_SITE_SOURCE_COLUMN',
+		source: 'youtube',
+		columnId: 'no-such-column',
+	});
+	assert.equal(missing.ok, false);
+	const chosen = await harness.sendMessage({
+		type: 'SET_SITE_SOURCE_COLUMN',
+		source: 'youtube',
+		columnId: laterId,
+	});
+	assert.equal(chosen.ok && chosen.sources[0]?.columnId, laterId);
+
+	const saved = await harness.sendMessage(watchLater(), fromYoutube);
+	assert.equal(saved.ok && saved.column, 'Later');
+	assert.equal(harness.state.bookmarks[0]?.columnId, laterId);
+
+	// Switching off and on keeps the choice.
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: false,
+	});
+	await switchOnYoutube(harness);
+	const sources = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.equal(sources.ok && sources.sources[0]?.columnId, laterId);
+
+	await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: laterId,
+		discardBookmarks: true,
+	});
+	const fallback = await harness.sendMessage(
+		watchLater('https://www.youtube.com/watch?v=jNQXAC9IVRw'),
+		fromYoutube,
+	);
+	assert.equal(fallback.ok && fallback.column, 'YouTube');
+
+	const cleared = await harness.sendMessage({
+		type: 'SET_SITE_SOURCE_COLUMN',
+		source: 'youtube',
+		columnId: null,
+	});
+	assert.deepEqual(cleared.ok && structuredClone(cleared.sources[0]), {
+		id: 'youtube',
+		enabled: true,
+	});
+});

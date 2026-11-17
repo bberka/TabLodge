@@ -438,18 +438,20 @@ function Help() {
 							runs there until you allow it. Then, when you add a video to Watch
 							later on youtube.com, or save a post or comment on reddit.com,{' '}
 							{PROJECT.name} bookmarks the same link in a YouTube or Reddit
-							column, created on the first save. A small notice in the page
-							offers Undo; press Tab to reach it. A link already in your
-							bookmarks or in the trash bin is not saved again. {PROJECT.name}{' '}
-							only watches for your own clicks on the site&apos;s save controls,
-							reads the link from the page, and sends nothing anywhere. It
-							recognizes the English labels of those controls. If a site changes
-							its page so {PROJECT.name} can no longer read it, nothing is saved
-							and Settings says so. In a private window, saves are added only
-							when private windows use the regular library. Switching a site
-							off, or removing its access in the browser&apos;s extension
-							settings, stops it, and Settings says when the browser removed
-							access.
+							column, created on the first save. Under Save to, under each
+							switched-on site, you can choose another column; if that column is
+							deleted, saves go to the site&apos;s own column again until you
+							choose one. A small notice in the page offers Undo; press Tab to
+							reach it. A link already in your bookmarks or in the trash bin is
+							not saved again. {PROJECT.name} only watches for your own clicks
+							on the site&apos;s save controls, reads the link from the page,
+							and sends nothing anywhere. It recognizes the English labels of
+							those controls. If a site changes its page so {PROJECT.name} can
+							no longer read it, nothing is saved and Settings says so. In a
+							private window, saves are added only when private windows use the
+							regular library. Switching a site off, or removing its access in
+							the browser&apos;s extension settings, stops it, and Settings says
+							when the browser removed access.
 						</>
 					),
 					searchText:

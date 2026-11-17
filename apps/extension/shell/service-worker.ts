@@ -9,6 +9,7 @@ import {
 	siteSourcesValue,
 	siteSourceStatuses,
 	siteSourceUndoLabel,
+	withoutNotice,
 	type SiteSource,
 	type SiteSourcesState,
 } from '../src/app/site-sources';
@@ -9323,7 +9324,11 @@ async function reconcileSources() {
 	if (lost.length > 0) {
 		await changeSourcesState((next) => {
 			for (const source of lost) {
-				next[source.id] = {enabled: false, notice: 'revoked'};
+				next[source.id] = {
+					...next[source.id],
+					enabled: false,
+					notice: 'revoked',
+				};
 			}
 		});
 	}
@@ -9350,7 +9355,7 @@ async function setSiteSource(
 	}
 
 	const state = await changeSourcesState((next) => {
-		next[source.id] = {enabled};
+		next[source.id] = {...withoutNotice(next[source.id]), enabled};
 	});
 	if (enabled) {
 		await registerSource(source);
@@ -9359,6 +9364,34 @@ async function setSiteSource(
 		await unregisterSource(source);
 	}
 
+	return {ok: true, sources: siteSourceStatuses(state)};
+}
+
+async function setSiteSourceColumn(
+	id: unknown,
+	columnId: unknown,
+): Promise<ActionResult<'SET_SITE_SOURCE_COLUMN'>> {
+	const source = siteSourceById(id);
+	if (!source) {
+		return {ok: false, error: 'Unknown source.'};
+	}
+
+	if (privateContext) {
+		return {ok: false, error: 'Choose source columns in a regular window.'};
+	}
+
+	if (
+		columnId !== null &&
+		(await getStore()).bookmarkColumns.every((column) => column.id !== columnId)
+	) {
+		return {ok: false, error: 'That column no longer exists.'};
+	}
+
+	const state = await changeSourcesState((next) => {
+		const {columnId: _previous, ...entry} = next[source.id];
+		next[source.id] =
+			typeof columnId === 'string' ? {...entry, columnId} : entry;
+	});
 	return {ok: true, sources: siteSourceStatuses(state)};
 }
 
@@ -9414,11 +9447,16 @@ async function saveFromSource(
 					return {ok: true, outcome: 'trashed'};
 				}
 
+				// The chosen column while it exists; otherwise the site's own column, by name.
 				const name = source.column.toLocaleLowerCase();
 				const now = Date.now();
-				let column = store.bookmarkColumns.find(
-					(entry) => entry.name.toLocaleLowerCase() === name,
-				);
+				let column =
+					store.bookmarkColumns.find(
+						(entry) => entry.id === state[source.id].columnId,
+					) ??
+					store.bookmarkColumns.find(
+						(entry) => entry.name.toLocaleLowerCase() === name,
+					);
 				if (!column) {
 					column = {
 						id: makeId(),
@@ -9449,7 +9487,7 @@ async function saveFromSource(
 	if (result.ok && result.outcome === 'saved' && state[source.id].notice) {
 		await changeSourcesState((next) => {
 			if (next[source.id].notice === 'unreadable') {
-				next[source.id] = {enabled: next[source.id].enabled};
+				next[source.id] = withoutNotice(next[source.id]);
 			}
 		});
 	}
@@ -9497,7 +9535,7 @@ async function handleSourceMessage(
 
 			const state = await changeSourcesState((next) => {
 				if (next[source.id].enabled) {
-					next[source.id] = {enabled: true, notice: 'unreadable'};
+					next[source.id] = {...next[source.id], notice: 'unreadable'};
 				}
 			});
 			return {ok: true, reported: state[source.id].enabled};
@@ -9528,7 +9566,11 @@ chrome.permissions?.onRemoved?.addListener?.((removed) => {
 		await changeSourcesState((next) => {
 			for (const source of lost) {
 				if (next[source.id].enabled) {
-					next[source.id] = {enabled: false, notice: 'revoked'};
+					next[source.id] = {
+						...next[source.id],
+						enabled: false,
+						notice: 'revoked',
+					};
 				}
 			}
 		});
@@ -10110,6 +10152,10 @@ async function handleMessage(
 
 		case 'SET_SITE_SOURCE': {
 			return setSiteSource(message.source, message.enabled);
+		}
+
+		case 'SET_SITE_SOURCE_COLUMN': {
+			return setSiteSourceColumn(message.source, message.columnId);
 		}
 
 		case 'HANDOFF_NEW_TAB': {

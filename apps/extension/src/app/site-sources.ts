@@ -3,7 +3,7 @@
 // optional host permission for that site only; the content script is registered only while it is granted.
 // The manifest's optional_host_permissions must list exactly the origins here (tests/site-sources.test.ts).
 import {isRecord} from '../shared/library-values';
-import type {SiteSourceNotice, SiteSourceStatus} from '../shared/types';
+import type {SiteSourceStatus} from '../shared/types';
 
 export type SiteSourceId = 'youtube' | 'reddit';
 
@@ -132,10 +132,16 @@ library, and it never syncs.
 */
 export const SITE_SOURCES_KEY = 'tablodge.sources';
 
-export type SiteSourcesState = Record<
-	SiteSourceId,
-	{enabled: boolean; notice?: SiteSourceNotice}
->;
+type SiteSourceEntry = Omit<SiteSourceStatus, 'id'>;
+export type SiteSourcesState = Record<SiteSourceId, SiteSourceEntry>;
+
+/**
+The entry without its notice; whether it is on and its column choice stay.
+*/
+export const withoutNotice = ({
+	notice: _notice,
+	...entry
+}: SiteSourceEntry): SiteSourceEntry => entry;
 
 export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 	const saved = isRecord(raw) && isRecord(raw.sources) ? raw.sources : {};
@@ -146,9 +152,17 @@ export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 			entry.notice === 'revoked' || entry.notice === 'unreadable'
 				? entry.notice
 				: undefined;
+		const columnId =
+			typeof entry.columnId === 'string' && entry.columnId.length <= 200
+				? entry.columnId
+				: undefined;
 		return [
 			source.id,
-			{enabled: entry.enabled === true, ...(notice && {notice})},
+			{
+				enabled: entry.enabled === true,
+				...(notice && {notice}),
+				...(columnId && {columnId}),
+			},
 		] as const;
 	});
 	return Object.fromEntries(entries) as SiteSourcesState;
