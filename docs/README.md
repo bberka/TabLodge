@@ -52,6 +52,11 @@ Set up the TabLodge sync server (https://github.com/bberka/TabLodge) with Option
 
 ## More
 
-[Privacy and permissions](PRIVACY.md), [Architecture](architecture.md), [Contributing](CONTRIBUTING.md), and [AGENTS.md](../AGENTS.md) for agents. Bug reports and pull requests are welcome; open an issue before larger changes.
+- [Install](install.md): manual installs and building from source
+- [Self hosting](self-hosting.md): the sync server
+- [Privacy and permissions](PRIVACY.md)
+- [Architecture](architecture.md)
+- [Contributing](CONTRIBUTING.md): bug reports and pull requests are welcome, so open an issue before larger changes
+- [AGENTS.md](../AGENTS.md): rules for AI agents
 
 [MIT](../LICENSE) © 2026 Berkay
