@@ -1,0 +1,141 @@
+{
+	"name": "Sample User",
+	"username": "sample",
+	"email": null,
+	"emailVerified": null,
+	"image": "",
+	"isPrivate": false,
+	"createdAt": "2025-01-02T10:00:00.000Z",
+	"updatedAt": "2025-03-01T10:00:00.000Z",
+	"collections": [
+		{
+			"id": 1,
+			"name": "Reading",
+			"description": "Articles to read",
+			"icon": null,
+			"iconWeight": null,
+			"color": "#0ea5e9",
+			"parentId": null,
+			"isPublic": false,
+			"ownerId": 1,
+			"createdById": 1,
+			"createdAt": "2025-01-02T10:05:00.000Z",
+			"updatedAt": "2025-01-02T10:05:00.000Z",
+			"rssSubscriptions": [],
+			"links": [
+				{
+					"id": 11,
+					"name": "An article",
+					"type": "url",
+					"description": "Read on the train",
+					"createdById": 1,
+					"collectionId": 1,
+					"collectionOrder": 1,
+					"icon": null,
+					"iconWeight": null,
+					"color": null,
+					"url": "https://reading.example/article",
+					"clientSide": false,
+					"aiTagged": false,
+					"metaDescription": null,
+					"indexVersion": null,
+					"lastPreserved": null,
+					"importDate": null,
+					"createdAt": "2025-02-01T08:00:00.000Z",
+					"updatedAt": "2025-02-01T08:00:00.000Z",
+					"tags": [
+						{
+							"id": 1,
+							"name": "longread",
+							"ownerId": 1,
+							"createdAt": "2025-02-01T08:00:00.000Z",
+							"updatedAt": "2025-02-01T08:00:00.000Z"
+						}
+					]
+				},
+				{
+					"id": 12,
+					"name": "Imported earlier",
+					"type": "url",
+					"description": "",
+					"createdById": 1,
+					"collectionId": 1,
+					"collectionOrder": 2,
+					"url": "https://reading.example/older",
+					"importDate": "2021-06-15T12:00:00.000Z",
+					"createdAt": "2025-02-02T08:00:00.000Z",
+					"updatedAt": "2025-02-02T08:00:00.000Z",
+					"tags": []
+				}
+			]
+		},
+		{
+			"id": 2,
+			"name": "Tools",
+			"description": "",
+			"color": "#0ea5e9",
+			"parentId": null,
+			"isPublic": false,
+			"ownerId": 1,
+			"createdAt": "2025-01-03T10:00:00.000Z",
+			"updatedAt": "2025-01-03T10:00:00.000Z",
+			"rssSubscriptions": [],
+			"links": [
+				{
+					"id": 21,
+					"name": "A tool",
+					"type": "url",
+					"description": "",
+					"collectionId": 2,
+					"collectionOrder": 1,
+					"url": "https://tools.example/",
+					"importDate": null,
+					"createdAt": "2025-02-03T08:00:00.000Z",
+					"updatedAt": "2025-02-03T08:00:00.000Z",
+					"tags": []
+				},
+				{
+					"id": 22,
+					"name": "Uploaded file",
+					"type": "pdf",
+					"description": "",
+					"collectionId": 2,
+					"collectionOrder": 2,
+					"url": null,
+					"importDate": null,
+					"createdAt": "2025-02-04T08:00:00.000Z",
+					"updatedAt": "2025-02-04T08:00:00.000Z",
+					"tags": []
+				}
+			]
+		},
+		{
+			"id": 3,
+			"name": "Rust",
+			"description": "",
+			"color": "#0ea5e9",
+			"parentId": 2,
+			"isPublic": false,
+			"ownerId": 1,
+			"createdAt": "2025-01-04T10:00:00.000Z",
+			"updatedAt": "2025-01-04T10:00:00.000Z",
+			"rssSubscriptions": [],
+			"links": [
+				{
+					"id": 31,
+					"name": "The book",
+					"type": "url",
+					"description": "",
+					"collectionId": 3,
+					"collectionOrder": 1,
+					"url": "https://rust.example/book",
+					"importDate": null,
+					"createdAt": "2025-02-05T08:00:00.000Z",
+					"updatedAt": "2025-02-05T08:00:00.000Z",
+					"tags": []
+				}
+			]
+		}
+	],
+	"pinnedLinks": []
+}

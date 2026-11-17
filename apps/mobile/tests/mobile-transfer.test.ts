@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {describe, test} from 'vite-plus/test';
 import {parseImportFile} from '../../extension/src/shared/import-formats';
 import {emptyStore} from '../src/library/store-shape';
@@ -91,6 +92,61 @@ describe('importing a file into the library', () => {
 		assert.equal(preview.links, 3);
 		assert.equal(preview.groups, 2);
 	});
+});
+
+// The phone reads exports from other bookmark tools with the extension's reader.
+describe('exports from other bookmark tools', () => {
+	for (const [file, label, links, columns] of [
+		[
+			'linkwarden-backup.json',
+			'Linkwarden backup (JSON)',
+			4,
+			['Reading', 'Tools', 'Rust'],
+		],
+		// Bookmarks in no list go to the phone's default column.
+		[
+			'karakeep-export.json',
+			'Karakeep export (JSON)',
+			3,
+			['Bookmarks', 'Dev', 'Reading'],
+		],
+		[
+			'omnivore-metadata_0_to_3.json',
+			'Omnivore export (JSON)',
+			2,
+			['Bookmarks'],
+		],
+		['wallabag-export.json', 'wallabag export (JSON)', 2, ['Bookmarks']],
+		['pinboard-export.json', 'Pinboard export (JSON)', 2, ['Bookmarks']],
+	] as const) {
+		test(`a ${label} becomes bookmark columns`, () => {
+			const text = readFileSync(
+				new URL(
+					`../../extension/tests/fixtures/imports/${file}`,
+					import.meta.url,
+				),
+				'utf8',
+			);
+			const parsed = parseImportFile(text, file);
+			assert.equal(parsed.label, label);
+			const result = importIntoStore(emptyStore(NOW), parsed, {
+				kind: 'bookmarks',
+				now: NOW,
+				newId,
+			});
+			assert.equal(result.links, links);
+			assert.deepEqual(
+				result.store.bookmarkColumns
+					.filter((column) =>
+						result.store.bookmarks.some(
+							(bookmark) => bookmark.columnId === column.id,
+						),
+					)
+					.map((column) => column.name),
+				columns,
+			);
+		});
+	}
 });
 
 describe('sessions as share groups', () => {
