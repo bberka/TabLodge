@@ -19,7 +19,7 @@ Every feature ships complete in both the extension and the Android app. Each app
 When a feature touches data, sync, settings, or link handling, answer each question and put the answers in the issue or pull request:
 
 1. **Other app.** What does it need in the other app, or why is it not applicable there? Does the stored library or a setting that now syncs need a matching change, or at least a safe fallback (`apps/mobile/src`)? Does an old app version still read the data?
-2. **Server.** Does the protocol, a limit, or a record type change? Then old clients and servers must keep working, or `PROTOCOL_VERSION` moves. A new field on a synced record does not survive old extensions: their normalizer drops unknown fields and pushes the loss back. Send it as a record kind of its own behind a `features` flag, as bookmark notes do ([ADR 4](../adr/0004-bookmark-notes-sync.md)).
+2. **Server.** Does the protocol, a limit, or a record type change? Then old clients and servers must keep working, or `PROTOCOL_VERSION` moves. A new field on a synced record does not survive old extensions: their normalizer drops unknown fields and pushes the loss back. Send it as a record kind of its own behind a `features` flag, as bookmark notes do ([ADR 5](../adr/0005-bookmark-notes-sync.md)).
 3. **Website and docs.** Features, permissions, FAQ, and screenshots: see [Documentation](documentation.md#keep-current).
 4. **Privacy.** New stored data or network behavior goes into [PRIVACY.md](../PRIVACY.md).
 

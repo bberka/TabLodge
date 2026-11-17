@@ -170,7 +170,7 @@ Each trash entry is a sync record of kind `trash`, keyed by its id, so it follow
 
 ### Bookmark notes sync
 
-A bookmark's note is a sync record of kind `note`, keyed by the bookmark id, with the value `{notes}`. `splitLibrary` takes `notes` off the bookmark record, which keeps the shape it always had, and `assemble` puts it back. Extensions from before notes rebuild every pulled bookmark from the fields they know, so a note inside the bookmark record would be dropped and that loss sent back to every device. They skip a kind they do not know, so a separate record keeps notes safe from them. [ADR 4](adr/0004-bookmark-notes-sync.md) explains the choice.
+A bookmark's note is a sync record of kind `note`, keyed by the bookmark id, with the value `{notes}`. `splitLibrary` takes `notes` off the bookmark record, which keeps the shape it always had, and `assemble` puts it back. Extensions from before notes rebuild every pulled bookmark from the fields they know, so a note inside the bookmark record would be dropped and that loss sent back to every device. They skip a kind they do not know, so a separate record keeps notes safe from them. [ADR 5](adr/0005-bookmark-notes-sync.md) explains the choice.
 
 * **Old servers.** Clients sync `note` records only when the server lists `notes` among its `features`, which is checked together with `trash`. Without it, notes stay on the device: they are left out of capture and out of the outbox, a resync does not count them as deleted (the same holds for the trash), and nothing else changes. `PROTOCOL_VERSION` stays 1.
 * **Order.** A note that arrives before its bookmark waits in `held`. Deleting a bookmark, or clearing its note, sends a delete for the `note` record.

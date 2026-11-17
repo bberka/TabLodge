@@ -1,4 +1,4 @@
-# 4. Bookmark notes sync as their own record kind
+# 5. Bookmark notes sync as their own record kind
 
 Status: accepted, 2026-11-17. Issue #276.
 
