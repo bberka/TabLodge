@@ -17,7 +17,7 @@ import {
 	type SyncSocket,
 } from '../../extension/src/shared/sync/client';
 import {
-	problemKey,
+	problemBanner,
 	readCompat,
 	releaseWithAll,
 } from '../../extension/src/shared/sync/compat';
@@ -356,7 +356,11 @@ describe('a server that does not match the phone', () => {
 		assert.match(status.error ?? '', /Update TabLodge/);
 		assert.deepEqual(bookmarkIds(phone), ['kept']);
 		assert.equal(log.size, 0);
-		assert.match(problemKey(readCompat(status)) ?? '', /incompatible:app/);
+		assert.deepEqual(problemBanner(readCompat(status)), {
+			stopped: true,
+			title: 'Sync stopped',
+			detail: 'This app is older than your sync server. Update TabLodge.',
+		});
 	});
 
 	test('a server from before versions and notes keeps syncing, and Settings lists what it lacks', async () => {

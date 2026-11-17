@@ -174,35 +174,31 @@ export function readCompat(status: {
 }
 
 /**
-Names the current problem with a server, so each app shows its one-time notice once per problem and again only after
-it went away and came back. Undefined when there is none.
+The banner both apps show at the top of their main screens while the server and this app do not match: sync stopped,
+or features missing. It stays until the problem is gone; Settings › Sync has the details. Undefined when there is none.
 */
-export function problemKey(compat: Compat): string | undefined {
+export function problemBanner(
+	compat: Compat,
+): {stopped: boolean; title: string; detail: string} | undefined {
 	if (compat.incompatible) {
-		return `${compat.url}\nincompatible:${compat.incompatible}`;
+		return {
+			stopped: true,
+			title: 'Sync stopped',
+			detail: incompatibleMessage(compat.incompatible),
+		};
 	}
 
-	return compat.missing.length > 0
-		? `${compat.url}\nmissing:${compat.missing.map(({name}) => name).join(',')}`
-		: undefined;
-}
-
-/**
-The one-time notice for the problem `problemKey` named.
-*/
-export function problemNotice(compat: Compat): string {
-	if (compat.incompatible) {
-		return `Sync stopped. ${incompatibleMessage(compat.incompatible)}`;
+	if (compat.missing.length === 0) {
+		return undefined;
 	}
 
-	const count = compat.missing.length;
-	return `Your sync server is missing ${count === 1 ? 'a feature' : `${count} features`} this app uses. Settings › Sync lists them.`;
+	const release = releaseWithAll(compat.missing);
+	return {
+		stopped: false,
+		title: 'Your sync server needs an update',
+		detail: `Until it runs ${release ?? 'a newer release'} or later: ${compat.missing.map(({missing}) => missing).join(' ')}`,
+	};
 }
-
-/**
-The problem a one-time notice was last shown for (`problemKey`), kept by each app on the device.
-*/
-export const SYNC_NOTICED_KEY = 'tablodge.sync.noticed';
 
 export const UPDATE_GUIDE_URL =
 	'https://github.com/bberka/TabLodge/blob/master/docs/self-hosting.md#update';

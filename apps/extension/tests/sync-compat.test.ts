@@ -3,8 +3,7 @@ import {test} from 'vite-plus/test';
 import {PROTOCOL_VERSION} from '../src/shared/sync/change-log';
 import {
 	PROTOCOL_RELEASES,
-	problemKey,
-	problemNotice,
+	problemBanner,
 	readCompat,
 	releaseWithAll,
 	SERVER_FEATURES,
@@ -25,7 +24,7 @@ test('a stored status that is not what this version wrote reads as no problem', 
 	]) {
 		const compat = readCompat({url: URL, ...junk});
 		assert.equal(compat.incompatible, undefined);
-		assert.equal(problemKey(compat), undefined, JSON.stringify(junk));
+		assert.equal(problemBanner(compat), undefined, JSON.stringify(junk));
 	}
 });
 
@@ -34,7 +33,7 @@ test('a server with every feature has no problem, and one without the newest nam
 		url: URL,
 		server: {protocol: PROTOCOL_VERSION, version: '0.4.0', features: ALL},
 	});
-	assert.equal(problemKey(full), undefined);
+	assert.equal(problemBanner(full), undefined);
 
 	const old = readCompat({
 		url: URL,
@@ -49,10 +48,12 @@ test('a server with every feature has no problem, and one without the newest nam
 	);
 	assert.equal(old.server?.version, null);
 	assert.equal(releaseWithAll(old.missing), '0.4.0');
-	assert.equal(
-		problemNotice(old),
-		'Your sync server is missing 3 features this app uses. Settings › Sync lists them.',
-	);
+	assert.deepEqual(problemBanner(old), {
+		stopped: false,
+		title: 'Your sync server needs an update',
+		detail:
+			'Until it runs 0.4.0 or later: Bookmark notes stay on this device. Upload to my server cannot share pages. Keep a copy on the phone fetches pages itself, not through the server.',
+	});
 });
 
 test('a stopped sync lists no missing features, only the side to update', () => {
@@ -62,8 +63,12 @@ test('a stopped sync lists no missing features, only the side to update', () => 
 		server: {protocol: 0, features: []},
 	});
 	assert.deepEqual(compat.missing, []);
-	assert.equal(problemKey(compat), `${URL}\nincompatible:server`);
-	assert.match(problemNotice(compat), /^Sync stopped\. .*Update the server/);
+	assert.deepEqual(problemBanner(compat), {
+		stopped: true,
+		title: 'Sync stopped',
+		detail:
+			'Your sync server is older than this app. Update the server to 0.2.0 or later.',
+	});
 });
 
 test('the server version reads as a release, an unreleased build, or not reported', () => {

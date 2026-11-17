@@ -16,7 +16,10 @@ import {
 	SyncError,
 	type SyncSocket,
 } from '../../extension/src/shared/sync/client';
-import {problemKey, readCompat} from '../../extension/src/shared/sync/compat';
+import {
+	problemBanner,
+	readCompat,
+} from '../../extension/src/shared/sync/compat';
 import {spreadKeys} from '../../extension/src/shared/sync/order-key';
 
 const TOKEN = 'client-test-token-0123456789-abcdefghij';
@@ -823,7 +826,7 @@ test('a connected device notices a new protocol on a later sync, stops, and keep
 	assert.match(stopped.error ?? '', /Update TabLodge/);
 	assert.deepEqual(ids(a.store), ['b1', 'b2']);
 	assert.deepEqual(server.requests, ['/v1/status']);
-	assert.match(problemKey(readCompat(stopped)) ?? '', /incompatible:app/);
+	assert.equal(problemBanner(readCompat(stopped))?.stopped, true);
 
 	// The answer that stopped sync is not kept: once the server is back on this protocol, the next round goes ahead.
 	server.setStatus(undefined);
@@ -877,10 +880,7 @@ test('a server without some features keeps syncing and lists what stays on the d
 		compat.missing.map(({name}) => name),
 		['notes', 'trash', 'shared-pages'],
 	);
-	assert.equal(
-		problemKey(compat),
-		`${URL_BASE}\nmissing:notes,trash,shared-pages`,
-	);
+	assert.equal(problemBanner(compat)?.stopped, false);
 
 	// Disconnecting forgets what the server said.
 	const off = await a.client.disconnect();

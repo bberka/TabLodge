@@ -1,20 +1,13 @@
-import {useEffect, useEffectEvent, useState} from 'react';
+import {useEffect, useState} from 'react';
 import {CloudAlert, CloudOff, RefreshCw} from 'lucide-react';
 import {SYNC_STATUS_KEY, type SyncStatus} from '../shared/sync/client';
-import {
-	problemKey,
-	problemNotice,
-	readCompat,
-	SYNC_NOTICED_KEY,
-} from '../shared/sync/compat';
 import {isRecord} from '../shared/library-values';
 import {Button, IconTooltip} from '../shared/ui';
-import type {ShowStatus} from './common';
 
 /**
 The sync status the worker last wrote, kept current as it changes. Undefined while sync is off.
 */
-function useSyncStatus(): SyncStatus | undefined {
+export function useSyncStatus(): SyncStatus | undefined {
 	const [status, setStatus] = useState<SyncStatus>();
 	useEffect(() => {
 		const read = (value: unknown) => {
@@ -45,46 +38,7 @@ function useSyncStatus(): SyncStatus | undefined {
 	return status;
 }
 
-const SETTINGS_PAGE = 'options.html#settings-sync';
-
-/**
-Shows a toast the first time the connected server stops sync or lacks a feature, and again only after that problem
-went away and came back. Settings › Sync keeps the details.
-*/
-function useProblemNotice(
-	status: SyncStatus | undefined,
-	showStatus: ShowStatus,
-) {
-	const compat = status && readCompat(status);
-	const key = compat && problemKey(compat);
-	const check = useEffectEvent(async () => {
-		if (!compat || key === undefined) {
-			await chrome.storage.local.remove(SYNC_NOTICED_KEY);
-			return;
-		}
-
-		const stored = await chrome.storage.local.get(SYNC_NOTICED_KEY);
-		if (stored[SYNC_NOTICED_KEY] === key) {
-			return;
-		}
-
-		await chrome.storage.local.set({[SYNC_NOTICED_KEY]: key});
-		showStatus(problemNotice(compat), compat.incompatible !== undefined, {
-			action: {
-				label: 'Open Sync settings',
-				onClick() {
-					location.assign(SETTINGS_PAGE);
-				},
-			},
-		});
-	});
-	const known = status !== undefined;
-	useEffect(() => {
-		if (known) {
-			void check();
-		}
-	}, [known, key]);
-}
+export const SYNC_SETTINGS_PAGE = 'options.html#settings-sync';
 
 /**
 What the button says besides the state, so a screen reader and the tooltip both name where it goes.
@@ -148,10 +102,9 @@ function useSyncingLook(syncing: boolean): boolean {
 A header button that shows how sync is doing and opens its settings. Hidden while sync is off. While syncing it spins and
 turns the accent color with a soft glow behind it.
 */
-export function SyncIndicator({showStatus}: {showStatus: ShowStatus}) {
+export function SyncIndicator() {
 	const status = useSyncStatus();
 	const syncing = useSyncingLook(status?.phase === 'syncing');
-	useProblemNotice(status, showStatus);
 	if (!status) {
 		return null;
 	}
@@ -179,7 +132,7 @@ export function SyncIndicator({showStatus}: {showStatus: ShowStatus}) {
 				size="icon"
 				className={`h-8 w-8 transition-colors duration-300 ${tone}`}
 			>
-				<a href={SETTINGS_PAGE} aria-label={label}>
+				<a href={SYNC_SETTINGS_PAGE} aria-label={label}>
 					<Icon
 						aria-hidden="true"
 						className={

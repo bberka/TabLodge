@@ -194,7 +194,7 @@ Private sync runs only while a private window is open and its library is unlocke
 
 ### Update
 
-TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge. **Settings › Sync**, in the extension and in the Android app, shows the server's version and lists what does not work until you update it. A notice appears once when a problem first shows up. Each TabLodge release also publishes the server with the same version number, so to hear about new versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**).
+TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge. **Settings › Sync**, in the extension and in the Android app, shows the server's version and lists what does not work until you update it. While something does not work, a banner at the top of the extension's dashboard and the app's Bookmarks and Sessions says so. It cannot be dismissed and goes away once the server is updated. Each TabLodge release also publishes the server with the same version number, so to hear about new versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**).
 
 Each optional part of TabLodge needs a server from the release that added it:
 
