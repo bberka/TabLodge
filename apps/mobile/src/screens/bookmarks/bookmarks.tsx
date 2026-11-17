@@ -64,6 +64,8 @@ import {
 } from '../../ui/floating-actions';
 import {Button, Chips, Empty, Header, IconButton} from '../../ui/widgets';
 import {openShare} from '../transfer/transfer-sheets';
+import {copyActions} from '../copy/copy-actions';
+import {useCopyUrls} from '../../library/page-copies';
 import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
@@ -105,6 +107,7 @@ export function BookmarksScreen({
 	const store = useLibrary();
 	const selection = useSelection();
 	const view = useView();
+	const copyUrls = useCopyUrls();
 	const {connected} = useSyncStatus();
 	const links = useLinkSettings();
 	const [picked, setPicked] = useState('');
@@ -283,6 +286,11 @@ export function BookmarksScreen({
 						});
 					},
 				},
+				...copyActions(rowMenuBookmark.url, {
+					colors,
+					hasCopy: copyUrls.has(rowMenuBookmark.url),
+					isPrivate: view === 'private',
+				}),
 				{
 					icon: 'trash-outline',
 					label: 'Delete',

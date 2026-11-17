@@ -16,6 +16,8 @@ const xoConfig: XoConfigItem[] = [
 			'.agents/**',
 			'.claude/worktrees/**',
 			'skills-lock.json',
+			// Web pages as sites send them, for the copy extractor's tests; formatting them would change what is tested.
+			'apps/extension/tests/fixtures/page-copy/**',
 		],
 	},
 	{prettier: true},

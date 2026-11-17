@@ -17,6 +17,7 @@ import {
 import {isRecord} from '../../../extension/src/shared/library-values';
 import {normalizeStore} from '../../../extension/src/shared/library-normalize';
 import type {Store} from '../../../extension/src/shared/types';
+import type {PageCopy} from '../../../extension/src/shared/page-copy';
 import {unwrapKey, wrapKey} from '../../modules/tablodge-crypto';
 import {backupPreferences} from '../settings/preferences';
 import {isStore} from '../library/store-shape';
@@ -63,8 +64,8 @@ const lostIn = (file: FullBackupCounts, kept: FullBackupCounts) =>
 export type BackupFile = {filename: string; bytes: Uint8Array; mime: string};
 
 /**
-The library on screen as a full-backup ZIP, or, with a password, as that ZIP inside the credential envelope (a file
-that ends in `.zip.enc`, as the extension names it). The private library's file says so in its name, since it looks
+The library on screen as a full-backup ZIP, with `copies` (the regular library's page copies on this phone), or, with
+a password, as that ZIP inside the credential envelope (a file that ends in `.zip.enc`, as the extension names it). The private library's file says so in its name, since it looks
 like any other backup inside. The phone has no browser snapshots, and its trash bin is not part of a backup, so those
 parts are empty.
 */
@@ -73,6 +74,7 @@ export async function buildBackup(
 	appName: string,
 	password?: string,
 	library: 'regular' | 'private' = 'regular',
+	copies: readonly PageCopy[] = [],
 ): Promise<BackupFile> {
 	const now = new Date();
 	const fileApp = library === 'private' ? `${appName} private` : appName;
@@ -85,6 +87,7 @@ export async function buildBackup(
 			preferences: null,
 			snapshots: null,
 			trash: null,
+			copies,
 		},
 		{appVersion: Constants.expoConfig?.version ?? '', now},
 	);
@@ -114,6 +117,10 @@ export type BackupRead =
 			phoneSettings: unknown;
 			createdAt: string;
 			counts: FullBackupCounts;
+			/**
+			The readable page copies in the file, unchecked: restoring them checks each one.
+			*/
+			copies: unknown[];
 			/**
 			How many sessions, links, folders, columns, and bookmarks the file held that cannot be kept: damaged ones, and
 			those past the limits the extension has too.
@@ -185,7 +192,8 @@ export async function readBackup(
 				? contents.state.settings.mobileApp
 				: undefined,
 			createdAt: contents.manifest.createdAt,
-			counts,
+			counts: {...counts, copies: contents.counts.copies},
+			copies: Array.isArray(contents.copies) ? contents.copies : [],
 			skipped: lostIn(contents.counts, counts),
 		};
 	} catch (error) {

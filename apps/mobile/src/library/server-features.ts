@@ -34,6 +34,26 @@ async function ask(url: string): Promise<readonly string[] | undefined> {
 }
 
 /**
+What the server at `url` can do, asked once per address; undefined when it could not be asked.
+*/
+export async function serverFeatures(
+	url: string,
+): Promise<readonly string[] | undefined> {
+	let found = known.get(url);
+	if (!found) {
+		found = ask(url);
+		known.set(url, found);
+	}
+
+	const result = await found;
+	if (result === undefined) {
+		known.delete(url);
+	}
+
+	return result;
+}
+
+/**
 The optional parts the connected server has (`private`, `key`, `preview`, `trash`, `shared-pages`), or undefined
 while it is not known: not connected, not asked yet, or the server could not be reached. Site icons and previews
 need `preview`; Share › Web page › Upload to my server needs `shared-pages`.

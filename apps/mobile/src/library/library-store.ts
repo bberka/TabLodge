@@ -129,6 +129,11 @@ async function loadSaved(): Promise<void> {
 	}
 }
 
+/**
+Resolves once the saved library has been read (startLibrary).
+*/
+export const whenLibraryLoaded = async (): Promise<void> => libraryLoaded;
+
 export const isSampleData = (): boolean => __DEV__ && sampleOn;
 
 /**

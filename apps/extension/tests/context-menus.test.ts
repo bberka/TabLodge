@@ -610,6 +610,7 @@ test('default settings build one parent per context, plus the toolbar menu', asy
 	assert.deepEqual(titles(harness.childrenOf('tablodge-page-root')), [
 		'Bookmark this page to',
 		'Send this tab to session',
+		'Keep a copy',
 		'---',
 		'Save selected tabs',
 		'Save this window',

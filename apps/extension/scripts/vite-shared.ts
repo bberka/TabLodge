@@ -202,6 +202,10 @@ type ScriptBuildOptions = {
 	*/
 	fileName: string;
 	target: Target;
+	/**
+	A comment put at the top of the bundle after minifying, such as a license notice the bundle must carry.
+	*/
+	banner?: string;
 };
 
 /**
@@ -214,6 +218,7 @@ export function scriptConfig({
 	outDir,
 	fileName,
 	target,
+	banner,
 }: ScriptBuildOptions): InlineConfig {
 	return {
 		configFile: false,
@@ -233,6 +238,7 @@ export function scriptConfig({
 				name: 'ExtensionScript',
 				fileName: () => fileName,
 			},
+			...(banner && {rollupOptions: {output: {postBanner: banner}}}),
 		},
 	};
 }

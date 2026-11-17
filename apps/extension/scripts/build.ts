@@ -67,6 +67,19 @@ function stepsFor(target: Target): BuildStep[] {
 				target,
 			}),
 		},
+		// Injected into the open tab by "Keep a copy" to read it (chrome.scripting.executeScript).
+		{
+			label: 'page-copy-capture.js',
+			config: scriptConfig({
+				entry: resolve(SOURCE_DIR, 'page-copy-capture.ts'),
+				outDir,
+				fileName: 'page-copy-capture.js',
+				target,
+				// Readability is Apache-2.0, whose notice has to travel with it; the minifier drops source comments.
+				banner:
+					'/* Includes @mozilla/readability, Copyright (c) 2010 Arc90 Inc, licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0 */',
+			}),
+		},
 		// Starts the add-bookmark window's read while the React page bundle is loading.
 		{
 			label: 'add-bookmark-preload.js',

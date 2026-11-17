@@ -1446,6 +1446,8 @@ export function ImportDialog({
 					throw new Error(merged?.error || 'Could not add this backup.');
 				}
 
+				await send('ADD_PAGE_COPIES', {copies: full.copies});
+
 				onOpenChange(false);
 				await onImported?.();
 				offerUndo(mergeSummary(merged), merged.undoId, showStatus, async () =>
@@ -1461,6 +1463,7 @@ export function ImportDialog({
 				preferences: full.preferences,
 				snapshots: full.snapshots,
 				trash: full.trash,
+				copies: full.copies,
 			});
 			if (!result?.ok) {
 				throw new Error(result?.error || 'Could not import this backup.');
@@ -1850,6 +1853,7 @@ export function ImportDialog({
 								<Stat label="Folders" value={full.counts.folders} />
 								<Stat label="Snapshots" value={full.counts.snapshots} />
 								<Stat label="Trash bin items" value={full.counts.trash} />
+								<Stat label="Page copies" value={full.counts.copies} />
 							</dl>
 							<div className="rounded-lg bg-muted/40 p-3">
 								<OptionRow

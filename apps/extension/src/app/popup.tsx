@@ -24,6 +24,7 @@ import {
 	ListPlus,
 	AppWindow,
 	CopyMinus,
+	FileDown,
 	X,
 } from 'lucide-react';
 import {
@@ -88,6 +89,7 @@ import {
 import type {BookmarkColumnDraft} from './bookmark-column-picker';
 import {PrivateLockGate} from './private-lock-ui';
 import {NotesField} from './notes-field';
+import {keptCopyMessage, openPageCopy} from './page-copies';
 import {cn} from '@/lib/utils';
 
 // Keep the icon registry out of the popup's first paint; it is loaded right after, before anyone can click Bookmark.
@@ -338,6 +340,36 @@ function Popup() {
 			active = false;
 		};
 	}, []);
+
+	async function keepCopy() {
+		setBusy('copy-current');
+		try {
+			const [tab] = await chrome.tabs.query({
+				active: true,
+				lastFocusedWindow: true,
+			});
+			if (tab?.id === undefined || !webUrl(tab.url)) {
+				showStatus('Open a regular web page to keep a copy of it.', true);
+				return;
+			}
+
+			const result = await send('KEEP_PAGE_COPY', {tabId: tab.id});
+			showStatus(keptCopyMessage(result), !result.ok, {
+				toast: true,
+				...(result.ok && {
+					action: {
+						label: 'Open copy',
+						async onClick() {
+							await openPageCopy(result.url);
+							window.close();
+						},
+					},
+				}),
+			});
+		} finally {
+			setBusy('');
+		}
+	}
 
 	async function startBookmark() {
 		setBusy('bookmark-current');
@@ -782,6 +814,24 @@ function Popup() {
 						)}{' '}
 						Add this page to a session
 					</Button>
+					{!privateWindow && (
+						<Button
+							size="sm"
+							className="w-full justify-start gap-3 px-3"
+							variant="outline"
+							disabled={busy !== '' || !pageSavable}
+							title={pageSavable ? undefined : 'This page cannot be saved'}
+							aria-describedby={pageSavable ? undefined : 'page-unsavable'}
+							onClick={() => void keepCopy()}
+						>
+							{busy === 'copy-current' ? (
+								<LoaderCircle className="h-4 w-4 animate-spin" />
+							) : (
+								<FileDown className="h-4 w-4" />
+							)}{' '}
+							Keep a copy
+						</Button>
+					)}
 					<Button
 						className="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left"
 						variant="default"

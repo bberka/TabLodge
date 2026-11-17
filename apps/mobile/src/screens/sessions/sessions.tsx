@@ -42,6 +42,8 @@ import {SearchTipsSheet} from '../search-tips';
 import {resultCount} from '../../library/search-count';
 import {useSettledText} from '../../ui/search-count';
 import {Empty, Header, IconButton} from '../../ui/widgets';
+import {copyActions, withCopyActions} from '../copy/copy-actions';
+import {useCopyUrls} from '../../library/page-copies';
 import {FolderEditSheet} from './folder-sheet';
 import {FolderChips, folderMenuFor, useFolderLook} from './folder-chips';
 import {
@@ -84,6 +86,7 @@ export function SessionsScreen({
 	const store = useLibrary();
 	const links = useLinkSettings();
 	const view = useView();
+	const copyUrls = useCopyUrls();
 	const {connected} = useSyncStatus();
 	const {refreshing, refresh} = useRefresh();
 	const [picked, setPicked] = useState(ALL_SESSIONS_ID);
@@ -253,12 +256,19 @@ export function SessionsScreen({
 	);
 	const tabActions =
 		tabMenuSession && tabMenuTab
-			? tabMenuActions(tabMenuSession, tabMenuTab, {
-					colors,
-					links,
-					edit: setEditingTab,
-					bookmark: setBookmarking,
-				})
+			? withCopyActions(
+					tabMenuActions(tabMenuSession, tabMenuTab, {
+						colors,
+						links,
+						edit: setEditingTab,
+						bookmark: setBookmarking,
+					}),
+					copyActions(tabMenuTab.url, {
+						colors,
+						hasCopy: copyUrls.has(tabMenuTab.url),
+						isPrivate: view === 'private',
+					}),
+				)
 			: [];
 	const toggle = useCallback((id: string) => {
 		setFlipped((current) => {

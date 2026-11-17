@@ -93,6 +93,14 @@ import {
 } from '../src/shared/library-normalize';
 import {isRecord, hashText} from '../src/shared/library-values';
 import {
+	CAPTURE_GLOBAL,
+	COPY_BUDGET,
+	COPY_ERRORS,
+	copyLinkUrls,
+	createCopyStore,
+	parsePageCopy,
+} from '../src/shared/page-copy';
+import {
 	BOOKMARK_UNFILED_ID,
 	cleanColumnName,
 	columnNameTaken,
@@ -108,6 +116,7 @@ import {
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
 import {showQuoteToast} from '../src/app/quote-toast';
 import {appendQuote, pageAddress, quoteTarget} from '../src/shared/quotes';
+import {showPageNote, takeCapturedCopy} from '../src/app/page-copy-inject';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
 import {mediaSave} from '../src/shared/save-media';
 import {
@@ -142,6 +151,10 @@ import {
 	STATE_KEY,
 	type UndoDelta,
 } from '../src/shared/library-state';
+import {
+	BOOKMARKS_KEY_PREFIX,
+	SESSION_KEY_PREFIX,
+} from '../src/shared/library-index';
 import {
 	cleanDeviceName,
 	defaultBrowserDeviceName,
@@ -7630,6 +7643,224 @@ async function getBackupData(
 		: {ok: false, error: 'That backup no longer exists.'};
 }
 
+// Readable page copies (src/shared/page-copy.ts): kept on this device by the regular worker only, never synced.
+const pageCopies = createCopyStore({
+	get: async (keys) => chrome.storage.local.get(keys),
+	set: async (items) => chrome.storage.local.set(items),
+	remove: async (keys) => chrome.storage.local.remove(keys),
+});
+const PRIVATE_COPY_ERROR = 'Copies are never kept from private windows.';
+let copySweep: Promise<void> | undefined;
+let sweepAgain = false;
+
+/**
+Runs the extractor in the tab and collects what it left there (see shell/page-copy-capture.ts).
+*/
+async function capturePage(tabId: number): Promise<unknown> {
+	await chrome.scripting.executeScript({
+		target: {tabId},
+		files: ['page-copy-capture.js'],
+	});
+	const [injected] = await chrome.scripting.executeScript({
+		target: {tabId},
+		func: takeCapturedCopy,
+		args: [CAPTURE_GLOBAL],
+	});
+	return injected?.result;
+}
+
+/**
+Keeps a copy of the tab under the address of the link that holds it: a saved link with the tab's address (or that
+address without tracking parameters), or else a new bookmark, which is added only once the copy is stored.
+*/
+async function keepPageCopy(
+	tab: chrome.tabs.Tab | undefined,
+): Promise<ActionResult<'KEEP_PAGE_COPY'>> {
+	if (privateContext || tab?.incognito) {
+		return {ok: false, error: PRIVATE_COPY_ERROR};
+	}
+
+	const pageUrl = normalizeUrl(tab?.url);
+	if (!isInteger(tab?.id) || !pageUrl) {
+		return {ok: false, error: 'Open a regular web page to keep a copy of it.'};
+	}
+
+	let captured: unknown;
+	try {
+		captured = await capturePage(tab.id);
+	} catch {
+		return {
+			ok: false,
+			error: `${APP_NAME} could not read this page. Open it and choose Keep a copy from the ${APP_NAME} toolbar button or the page's right-click menu.`,
+		};
+	}
+
+	const store = await getStore();
+	const saved = copyLinkUrls(store, []);
+	const url =
+		[pageUrl, stripTrackingParameters(pageUrl)].find((candidate) =>
+			saved.has(candidate),
+		) ?? pageUrl;
+	const copy = parsePageCopy(
+		isRecord(captured) ? {...captured, url, savedAt: Date.now()} : undefined,
+	);
+	if (!copy) {
+		return {ok: false, error: COPY_ERRORS.empty};
+	}
+
+	const kept = await pageCopies.keep(copy);
+	if (!kept.ok) {
+		return {ok: false, error: kept.error};
+	}
+
+	if (saved.has(url)) {
+		return {ok: true, url, title: copy.title, bookmarked: false};
+	}
+
+	const added = await addBookmark({
+		url,
+		title: pageTitle(tab?.title, linkHost(url), store.settings.cleanTitles),
+	});
+	if (!added.ok) {
+		await pageCopies.remove(url);
+		return added;
+	}
+
+	return {ok: true, url, title: copy.title, bookmarked: true};
+}
+
+/**
+Drops the copies no link holds any more. It reads the whole library and trash first, and waits while an Undo could
+still bring links back; a library it cannot read leaves every copy alone.
+*/
+async function sweepPageCopies() {
+	// While an Undo could still bring links back, wait: purging it changes UNDO_KEY, which schedules the next sweep.
+	if (
+		privateContext ||
+		(await pageCopies.list()).length === 0 ||
+		(await readUndo()).length > 0
+	) {
+		return;
+	}
+
+	const saved = await library.get<Raw>([STORAGE_KEY]);
+	if (!isRecord(saved[STORAGE_KEY])) {
+		return;
+	}
+
+	const store = await getStore();
+	await pageCopies.sweep(copyLinkUrls(store, await readTrash()));
+}
+
+/**
+Shows a note in the tab (see showPageNote). False when the tab cannot be written to.
+*/
+async function notePage(tabId: number, text: string, failed: boolean) {
+	try {
+		await chrome.scripting.executeScript({
+			target: {tabId},
+			func: showPageNote,
+			args: [text, failed],
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function keepPageCopyFromMenu(tab: chrome.tabs.Tab | undefined) {
+	const result = await keepPageCopy(tab).catch(
+		(error: unknown): ActionFailure => ({
+			ok: false,
+			error: errorMessage(error) || 'Could not keep a copy of this page.',
+		}),
+	);
+	const text = result.ok
+		? result.bookmarked
+			? `Copy kept. The page was not saved, so ${APP_NAME} bookmarked it.`
+			: 'Copy kept.'
+		: result.error;
+	if (isInteger(tab?.id) && (await notePage(tab.id, text, !result.ok))) {
+		return;
+	}
+
+	if (!result.ok) {
+		console.warn(result.error);
+	}
+
+	flashBadge(tab, result.ok);
+}
+
+/**
+One sweep at a time; changes that land while one runs get one more after it.
+*/
+function scheduleCopySweep() {
+	if (copySweep) {
+		sweepAgain = true;
+		return;
+	}
+
+	copySweep = (async () => {
+		do {
+			sweepAgain = false;
+			// Inside the queues every library and trash change holds, so an action's Undo is stored before this reads it.
+			await mutate(() => trashMutate(sweepPageCopies)).catch(() => undefined);
+		} while (sweepAgain);
+	})().finally(() => {
+		copySweep = undefined;
+	});
+}
+
+if (!privateContext) {
+	onLibraryChanged((changes) => {
+		if (
+			Object.keys(changes).some(
+				(key) =>
+					key === STORAGE_KEY ||
+					key === TRASH_KEY ||
+					key === UNDO_KEY ||
+					key.startsWith(SESSION_KEY_PREFIX) ||
+					key.startsWith(BOOKMARKS_KEY_PREFIX),
+			)
+		) {
+			scheduleCopySweep();
+		}
+	});
+	scheduleCopySweep();
+}
+
+async function addPageCopies(values: unknown): Promise<number> {
+	if (privateContext || !Array.isArray(values)) {
+		return 0;
+	}
+
+	const saved = copyLinkUrls(await getStore(), []);
+	const have = new Set((await pageCopies.list()).map((item) => item.url));
+	return pageCopies.restore(
+		values.filter(
+			(value: unknown) =>
+				isRecord(value) &&
+				typeof value.url === 'string' &&
+				saved.has(value.url) &&
+				!have.has(value.url),
+		),
+	);
+}
+
+async function getPageCopies(): Promise<ActionResult<'GET_PAGE_COPIES'>> {
+	if (privateContext) {
+		return {ok: true, urls: [], size: 0, budget: COPY_BUDGET};
+	}
+
+	const items = await pageCopies.list();
+	return {
+		ok: true,
+		urls: items.map((item) => item.url),
+		size: items.reduce((sum, item) => sum + item.size, 0),
+		budget: COPY_BUDGET,
+	};
+}
+
 // Full backup (ZIP): the page builds and reads the archive; the worker supplies and replaces the stored values.
 // The page theme and accent color, kept in storage by the pages (src/shared/theme.tsx); the only preferences outside the state.
 const UI_THEME_KEY = 'uiTheme';
@@ -7661,6 +7892,7 @@ async function getFullBackup(): Promise<ActionResult<'GET_FULL_BACKUP'>> {
 		},
 		snapshots: {version: 1, history: await readSnapshotHistory()},
 		trash: {version: 1, items: await readTrash()},
+		copies: privateContext ? [] : await pageCopies.all(),
 	};
 }
 
@@ -7843,6 +8075,11 @@ async function applyFullBackup(
 	await writeStore(restored);
 	await writeSnapshotHistory(history);
 	await writeTrash(items);
+	// After the library and the trash, so the copies land with the links that hold them.
+	const copies =
+		!privateContext && Array.isArray(input.copies)
+			? await pageCopies.restore(input.copies)
+			: 0;
 	if (isRecord(input.preferences)) {
 		await library.set({
 			[UI_THEME_KEY]: asTheme(input.preferences[UI_THEME_KEY]),
@@ -7856,6 +8093,7 @@ async function applyFullBackup(
 		bookmarks: restored.bookmarks.length,
 		snapshots: history.length,
 		trash: items.length,
+		copies,
 	};
 }
 
@@ -9558,6 +9796,37 @@ async function handleMessage(
 			return restoreFullBackup(message);
 		}
 
+		case 'KEEP_PAGE_COPY': {
+			return keepPageCopy(
+				await chrome.tabs.get(message.tabId).catch(() => undefined),
+			);
+		}
+
+		case 'GET_PAGE_COPIES': {
+			return getPageCopies();
+		}
+
+		case 'GET_PAGE_COPY': {
+			return {
+				ok: true,
+				copy: privateContext
+					? null
+					: ((await pageCopies.read(String(message.url))) ?? null),
+			};
+		}
+
+		case 'DELETE_PAGE_COPY': {
+			if (!privateContext) {
+				await pageCopies.remove(String(message.url));
+			}
+
+			return {ok: true};
+		}
+
+		case 'ADD_PAGE_COPIES': {
+			return {ok: true, copies: await addPageCopies(message.copies)};
+		}
+
 		case 'GET_TRASH': {
 			return getTrash();
 		}
@@ -10827,6 +11096,11 @@ function handleContextMenuClick(info: MenuClickData, tab?: chrome.tabs.Tab) {
 			},
 			id !== MENU.pageBookmarkNew,
 		);
+		return;
+	}
+
+	if (id === MENU.pageKeepCopy) {
+		void keepPageCopyFromMenu(tab);
 		return;
 	}
 
