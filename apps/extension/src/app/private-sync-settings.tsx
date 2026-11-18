@@ -40,10 +40,10 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	const [info, setInfo] = useState<PrivateSyncInfo>();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState('');
-	// The question the worker asked for a PIN or password, while the dialog is open.
+	// The question the worker asked for a password, while the dialog is open.
 	const [ask, setAsk] = useState<string>();
 	const [credentialError, setCredentialError] = useState('');
-	// A library kept on this device can have a PIN or password of its own: the server's is then asked for as well.
+	// A library kept on this device can have a password of its own: the server's is then asked for as well.
 	const [serverAsk, setServerAsk] = useState<string>();
 	const [serverError, setServerError] = useState('');
 	const localCredentialRef = useRef('');
@@ -109,7 +109,7 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	};
 
 	// A regular window opened this page to turn private sync on (see PrivateSyncPrompt). Starts it as if the
-	// switch were turned on, so a PIN or password is asked for here.
+	// switch were turned on, so a password is asked for here.
 	const askedRef = useRef(false);
 	useEffect(() => {
 		if (!info || askedRef.current) {
@@ -157,10 +157,10 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 
 	const {status} = info;
 	const encryption = info.lock
-		? 'Encrypted with this private library’s PIN or password before it leaves this browser. Other browsers need the same one to read it.'
+		? 'Encrypted with this private library’s password before it leaves this browser. Other browsers need the same one to read it.'
 		: info.encrypted
-			? 'Encrypted with a PIN or password before it leaves this browser.'
-			: 'Set a PIN or password under Private windows first. It encrypts what syncs.';
+			? 'Encrypted with a password before it leaves this browser.'
+			: 'Set a password under Private windows first. It encrypts what syncs.';
 	const Icon = info.encrypted || info.lock ? Lock : LockOpen;
 	const server = info.server?.replace(/^https?:\/\//, '') ?? '';
 	return (
@@ -201,7 +201,7 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 								}}
 							>
 								<Lock aria-hidden="true" />
-								Enter PIN or password
+								Enter password
 							</Button>
 						) : (
 							<SyncNowButton
@@ -245,7 +245,7 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 			/>
 			<CredentialDialog
 				key={`server:${serverAsk ?? 'closed'}`}
-				title="Use the server’s PIN or password"
+				title="Use the server’s password"
 				submitLabel="Use it and turn on"
 				question={serverAsk}
 				busy={busy}
@@ -268,7 +268,7 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 }
 
 /**
-Asks for the PIN or password the worker needs to turn private sync on. Open while `question` is set.
+Asks for the password the worker needs to turn private sync on. Open while `question` is set.
 */
 function CredentialDialog({
 	title = 'Encrypt private sync',
@@ -296,7 +296,7 @@ function CredentialDialog({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const inputId = useId();
 	const errorId = useId();
-	const message = empty ? 'Enter the PIN or password.' : error;
+	const message = empty ? 'Enter the password.' : error;
 
 	// A wrong entry comes back after the check; focus goes back to the field for the next try.
 	useEffect(() => {
@@ -343,7 +343,7 @@ function CredentialDialog({
 					</DialogHeader>
 					<DialogBody>
 						<div className="grid gap-2">
-							<Label htmlFor={inputId}>PIN or password</Label>
+							<Label htmlFor={inputId}>Password</Label>
 							<Input
 								ref={inputRef}
 								id={inputId}

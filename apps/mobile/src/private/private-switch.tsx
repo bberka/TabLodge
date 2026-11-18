@@ -8,7 +8,7 @@ import {lockPrivate, usePrivateState} from './private-library';
 
 /**
 Locks the private library at once: its key leaves memory and the regular library comes back. The data stays on the
-phone, and opening it again asks for the PIN or password.
+phone, and opening it again asks for the password.
 */
 export async function lockNow(): Promise<void> {
 	await lockPrivate();
@@ -16,8 +16,7 @@ export async function lockNow(): Promise<void> {
 }
 
 /**
-Flips between the regular library and the private one. The private library is made the first time, with a PIN or
-password that it asks for every time it is locked. As a header icon (the default) it appears when the person turned the button on in Settings,
+Flips between the regular library and the private one. The private library is made the first time, with a password that it asks for every time it is locked. As a header icon (the default) it appears when the person turned the button on in Settings,
 and while the private library is open, with a lock beside it when it has a lock, so there is always a way back; with
 `button` it is a labeled button that is always there, for Settings.
 */
@@ -36,7 +35,7 @@ export function PrivateSwitch({button = false}: {button?: boolean}) {
 			setView('regular');
 		} else if (!state.exists) {
 			openPrivateSheet('setup');
-		} else if (state.needsPin) {
+		} else if (state.needsPassword) {
 			openPrivateSheet('protect');
 		} else if (state.locked) {
 			openPrivateSheet('unlock');
@@ -63,7 +62,7 @@ export function PrivateSwitch({button = false}: {button?: boolean}) {
 
 	return (
 		<>
-			{priv && state.lockedWith && (
+			{priv && state.hasLock && (
 				<IconButton
 					icon="lock-closed-outline"
 					label="Lock now"

@@ -25,12 +25,12 @@ export function PrivateCard() {
 	const {connected} = useSyncStatus();
 	const prefs = usePreferences();
 	const description = state.exists
-		? state.needsPin
-			? 'Needs a PIN or password before it opens.'
+		? state.needsPassword
+			? 'Needs a password before it opens.'
 			: state.locked
-				? 'Locked. Open it with its PIN or password.'
-				: 'Open and protected by a PIN or password.'
-		: 'A library of its own on this phone that works without a server, opened with a PIN or password.';
+				? 'Locked. Open it with its password.'
+				: 'Open and protected by a password.'
+		: 'A library of its own on this phone that works without a server, opened with a password.';
 	return (
 		<SettingsCard
 			section={SECTIONS.private}
@@ -44,7 +44,7 @@ export function PrivateCard() {
 					setPreferences({showPrivateButton});
 				}}
 			/>
-			{state.lockedWith && (
+			{state.hasLock && (
 				<SelectRow
 					row={ROWS.privateLockMode}
 					value={prefs.privateLockMode}
@@ -79,7 +79,7 @@ export function PrivateCard() {
 					}}
 				/>
 			)}
-			{state.lockedWith && prefs.privateLockMode === 'timeout' && (
+			{state.hasLock && prefs.privateLockMode === 'timeout' && (
 				<SelectRow
 					row={ROWS.privateLockMinutes}
 					value={String(prefs.privateLockMinutes)}
@@ -98,11 +98,11 @@ export function PrivateCard() {
 			{state.exists && !state.locked && status.needsKey && (
 				<>
 					<Text style={{color: colors.warn}}>
-						Your server's private library has a PIN or password this phone does
-						not have yet. Enter it to sync.
+						Your server's private library has a password this phone does not
+						have yet. Enter it to sync.
 					</Text>
 					<Button
-						label="Enter the server's PIN or password"
+						label="Enter the server's password"
 						icon="key-outline"
 						kind="plain"
 						onPress={() => {
@@ -111,9 +111,9 @@ export function PrivateCard() {
 					/>
 				</>
 			)}
-			{state.needsPin && (
+			{state.needsPassword && (
 				<Button
-					label="Set a PIN or password"
+					label="Set a password"
 					icon="lock-closed-outline"
 					kind="plain"
 					onPress={() => {
@@ -121,7 +121,7 @@ export function PrivateCard() {
 					}}
 				/>
 			)}
-			{state.exists && !state.locked && !state.needsPin && (
+			{state.exists && !state.locked && !state.needsPassword && (
 				<>
 					<Button
 						label="Lock now"
@@ -130,7 +130,7 @@ export function PrivateCard() {
 						onPress={() => void lockNow()}
 					/>
 					<Button
-						label="Change the PIN or password"
+						label="Change the password"
 						icon="key-outline"
 						kind="plain"
 						onPress={() => {

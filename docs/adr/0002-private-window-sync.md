@@ -26,3 +26,5 @@ Private windows can use the regular library, a separate saved library, or a sepa
 The lock is now required for a separate saved library, and it is the only secret: private sync refuses a library without a lock, creates and joins the sync key only with the lock's PIN or password, and rewraps the server's key before a PIN change is accepted. The "becoming encrypted" path stays only for libraries that synced before this.
 
 A library kept on the device with a PIN or password of its own can still turn sync on later: it asks for the server's PIN or password once, changes its lock to it, and merges with the server's library, so there is again one secret.
+
+Amendment, 2026-11-18, single password: the secret has one kind. The lock and the private sync key are wrapped with a password of 4 to 128 characters of any kind, and older "PIN" records (4 to 8 digits) are the same thing and keep opening and joining. New lock records say `kind: 'password'`; `pin` is still read. The key format and the sync protocol did not change.

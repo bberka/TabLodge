@@ -270,7 +270,6 @@ describe('a backup the extension makes, read by the phone', () => {
 		const parts = extensionParts();
 		const {bytes} = buildFullBackup(parts, {appVersion: '1.2.3'});
 		const locked = await protectFullBackup(bytes, {
-			kind: 'password',
 			value: 'correct horse battery',
 		});
 		assert.equal((await readBackup(locked)).ok, false);
@@ -285,10 +284,9 @@ describe('a backup the extension makes, read by the phone', () => {
 		assert.deepEqual(idsOf(result.store), idsOf(parts.state));
 	});
 
-	test('a PIN-protected ZIP opens with the PIN', async () => {
+	test('a ZIP protected with a short number, as an older version allowed, opens with it', async () => {
 		const {bytes} = buildFullBackup(extensionParts(), {appVersion: '1'});
 		const locked = await protectFullBackup(bytes, {
-			kind: 'pin',
 			value: '482913',
 		});
 		const result = await readBackup(locked, '482913');
@@ -348,7 +346,6 @@ describe('a backup the extension makes, read by the phone', () => {
 		assert.ok(!cut.ok);
 		assert.strictEqual(cut.reason, 'damaged');
 		const locked = await protectFullBackup(bytes, {
-			kind: 'password',
 			value: 'correct horse battery',
 		});
 		const hurt = locked.slice();

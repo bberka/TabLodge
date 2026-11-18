@@ -21,6 +21,7 @@ import {
 import {
 	LOST_CREDENTIAL_NOTE,
 	validateCredential,
+	weakPasswordHint,
 } from '../../../../extension/src/shared/passcode';
 import type {Store} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
@@ -362,7 +363,12 @@ export function ShareSheet({
 		scope?.title ?? (what === 'bookmarks' ? 'Bookmarks' : 'Sessions');
 	const problem =
 		isBackup && password !== ''
-			? (validateCredential('password', password) ?? undefined)
+			? (validateCredential(password) ?? undefined)
+			: undefined;
+	// A note while the password is short or only digits: it never blocks.
+	const weak =
+		isBackup && password !== '' && !problem
+			? weakPasswordHint(password)
 			: undefined;
 	const run = async () => {
 		setBusy(true);
@@ -481,6 +487,7 @@ export function ShareSheet({
 							error={problem}
 							onChangeText={setPassword}
 						/>
+						{weak && <Text style={{color: colors.muted}}>{weak}</Text>}
 						{view === 'private' && (
 							<Text style={{color: colors.muted}}>
 								This backs up the private library, not the regular one. Without

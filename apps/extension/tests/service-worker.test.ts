@@ -1597,7 +1597,6 @@ function restartPrivate(
 const enableLock = (harness: ReturnType<typeof createWorkerHarness>) =>
 	harness.sendMessage({
 		type: 'ENABLE_PRIVATE_LOCK',
-		kind: 'password',
 		credential: lockPassword,
 	});
 
@@ -1978,11 +1977,10 @@ test('the lock needs the saved separate library, and regular windows cannot mana
 	);
 });
 
-test('a weak credential is refused and nothing is encrypted', async () => {
+test('a password under 4 characters is refused and nothing is encrypted', async () => {
 	const harness = await plainPrivateLibrary();
 	const refused = await harness.sendMessage({
 		type: 'ENABLE_PRIVATE_LOCK',
-		kind: 'pin',
 		credential: '12',
 	});
 	assert.equal(refused.ok, false);
@@ -2085,18 +2083,15 @@ test('the credential can change, and only the new one unlocks', async () => {
 	const refused = await harness.sendMessage({
 		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
 		current: 'wrong wrong wrong',
-		kind: 'pin',
 		credential: '2468',
 	});
 	assert.equal(refused.ok, false);
 	const changed = await harness.sendMessage({
 		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
 		current: lockPassword,
-		kind: 'pin',
 		credential: '2468',
 	});
 	assert.equal(changed.ok, true, changed.error);
-	assert.equal(changed.kind, 'pin');
 	await harness.sendMessage({type: 'LOCK_PRIVATE'});
 	const old = await harness.sendMessage({
 		type: 'UNLOCK_PRIVATE',
@@ -12554,7 +12549,7 @@ test('private sync waits for a regular sync server and separate saved storage', 
 	assert.equal(server.privateLog.cursor, 0);
 });
 
-test('a private library with a PIN or password syncs encrypted, and another browser needs the same one to read it', async () => {
+test('a private library with a password syncs encrypted, and another browser needs the same one to read it', async () => {
 	const server = syncServer();
 	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	assert.equal((await enableLock(first)).ok, true);
@@ -12641,7 +12636,7 @@ test('a private library with a PIN or password syncs encrypted, and another brow
 	);
 });
 
-test('private sync is refused until the library has a PIN or password, and the lock cannot come off while it syncs', async () => {
+test('private sync is refused until the library has a password, and the lock cannot come off while it syncs', async () => {
 	const server = syncServer();
 	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	const refused = await harness.sendMessage({
@@ -12649,7 +12644,7 @@ test('private sync is refused until the library has a PIN or password, and the l
 		credential: lockPassword,
 	});
 	assert.equal(refused.ok, false);
-	assert.match(refused.error ?? '', /Set a PIN or password/);
+	assert.match(refused.error ?? '', /Set a password/);
 	assert.equal(server.privateLog.cursor, 0);
 	assert.equal(server.privateLog.key, null);
 
@@ -12682,7 +12677,7 @@ test('private sync is refused until the library has a PIN or password, and the l
 	);
 });
 
-test('a library kept on the device with its own PIN adopts the server’s when it turns sync on, and the data merges', async () => {
+test('a library kept on the device with its own password adopts the server’s when it turns sync on, and the data merges', async () => {
 	const server = syncServer();
 	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	await enableLock(first);
@@ -12705,7 +12700,6 @@ test('a library kept on the device with its own PIN adopts the server’s when i
 	});
 	await other.sendMessage({
 		type: 'ENABLE_PRIVATE_LOCK',
-		kind: 'password',
 		credential: 'another password',
 	});
 	const asked = await other.sendMessage({
@@ -12739,7 +12733,7 @@ test('a library kept on the device with its own PIN adopts the server’s when i
 		urls.includes('https://secret-bookmark.example/'),
 		'the server’s data merged in',
 	);
-	// The library now has one PIN or password: the server's.
+	// The library now has one password: the server's.
 	await other.sendMessage({type: 'LOCK_PRIVATE'});
 	assert.equal(
 		(
@@ -12761,12 +12755,11 @@ test('a library kept on the device with its own PIN adopts the server’s when i
 	);
 });
 
-test('a first PIN set with the sync choice also turns private sync on and sends the library encrypted', async () => {
+test('a first password set with the sync choice also turns private sync on and sends the library encrypted', async () => {
 	const server = syncServer();
 	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	const set = await harness.sendMessage({
 		type: 'ENABLE_PRIVATE_LOCK',
-		kind: 'password',
 		credential: lockPassword,
 		sync: true,
 	});
@@ -12818,7 +12811,7 @@ test('erasing the private library removes its data, its lock, and its sync key, 
 	);
 });
 
-test('a new browser joins the sync server’s private library with its PIN or password, which becomes its lock', async () => {
+test('a new browser joins the sync server’s private library with its password, which becomes its lock', async () => {
 	const server = syncServer();
 	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	const empty = await first.sendMessage({type: 'GET_PRIVATE_SERVER'});
@@ -12905,7 +12898,54 @@ test('a browser with no sync server has nothing to join', async () => {
 	);
 });
 
-test('the saved private library reports that it needs a PIN or password until one is set', async () => {
+test('a lock an older version made with a 4 digit PIN still unlocks, and its key still joins on the server', async () => {
+	const server = syncServer();
+	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	const sent = await first.sendMessage({
+		type: 'ENABLE_PRIVATE_LOCK',
+		credential: '2468',
+		sync: true,
+	});
+	assert.equal(sent.ok, true, sent.error);
+	// What an older version wrote for this lock: the same record, saying it is a PIN.
+	const record = first.extraStorage[LOCK_RECORD] as Record<string, unknown>;
+	assert.equal(record.kind, 'password', 'a new lock is written as a password');
+	first.extraStorage[LOCK_RECORD] = {...record, kind: 'pin'};
+
+	await first.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.equal(
+		(await first.sendMessage({type: 'UNLOCK_PRIVATE', credential: '1357'})).ok,
+		false,
+	);
+	const opened = await first.sendMessage({
+		type: 'UNLOCK_PRIVATE',
+		credential: '2468',
+	});
+	assert.equal(opened.ok, true, opened.error);
+
+	// A browser with no lock joins the server's key with the same short number.
+	const second = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: server.fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	const joined = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: '2468',
+	});
+	assert.equal(joined.ok, true, joined.error);
+	const library = await second.sendMessage({type: 'GET_STATE'});
+	assert.ok(
+		library.bookmarks?.some(
+			(bookmark) => bookmark.url === 'https://secret-bookmark.example/',
+		),
+	);
+});
+
+test('the saved private library reports that it needs a password until one is set', async () => {
 	const harness = await plainPrivateLibrary();
 	assert.equal(
 		(await harness.sendMessage({type: 'GET_PRIVATE_LOCK'})).needsLock,
@@ -13073,7 +13113,7 @@ async function syncUnchangedLibraryRounds() {
 	);
 }
 
-test('a new PIN or password rewraps the private sync key before it is reported changed, so other browsers keep syncing and new ones join with it', async () => {
+test('a new password rewraps the private sync key before it is reported changed, so other browsers keep syncing and new ones join with it', async () => {
 	const server = syncServer();
 	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	await enableLock(first);
@@ -13084,7 +13124,6 @@ test('a new PIN or password rewraps the private sync key before it is reported c
 	const before = server.privateLog.key;
 	const changed = await first.sendMessage({
 		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
-		kind: 'password',
 		current: lockPassword,
 		credential: 'a brand new password',
 	});
@@ -13101,7 +13140,6 @@ test('a new PIN or password rewraps the private sync key before it is reported c
 	});
 	await late.sendMessage({
 		type: 'ENABLE_PRIVATE_LOCK',
-		kind: 'password',
 		credential: 'a brand new password',
 	});
 	assert.equal(
@@ -13158,7 +13196,7 @@ test('removing the sync server ends private sync, so the lock can come off and n
 	assert.equal(removed.ok, true, removed.error);
 });
 
-test('moving to another sync server ends private sync, and a new PIN or password is then accepted', async () => {
+test('moving to another sync server ends private sync, and a new password is then accepted', async () => {
 	const server = syncServer();
 	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	await enableLock(harness);
@@ -13183,7 +13221,6 @@ test('moving to another sync server ends private sync, and a new PIN or password
 
 	const changed = await harness.sendMessage({
 		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
-		kind: 'password',
 		current: lockPassword,
 		credential: 'a brand new password',
 	});
@@ -13214,7 +13251,7 @@ test('turning private sync off deletes its key even when no client is running', 
 	);
 });
 
-test('a PIN or password change the sync server cannot take is undone, so the library and the server keep one', async () => {
+test('a password change the sync server cannot take is undone, so the library and the server keep one', async () => {
 	const server = syncServer();
 	let reject = false;
 	const fetchServer = async (url: string, init: RequestInit) =>
@@ -13232,7 +13269,6 @@ test('a PIN or password change the sync server cannot take is undone, so the lib
 	reject = true;
 	const changed = await first.sendMessage({
 		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
-		kind: 'password',
 		current: lockPassword,
 		credential: 'a brand new password',
 	});
@@ -13250,7 +13286,7 @@ test('a PIN or password change the sync server cannot take is undone, so the lib
 			})
 		).ok,
 		true,
-		'the old PIN or password still opens the library',
+		'the old password still opens the library',
 	);
 });
 

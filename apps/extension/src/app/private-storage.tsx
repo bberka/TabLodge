@@ -63,7 +63,7 @@ const choices: Array<{
 		value: 'saved',
 		title: 'Use a separate saved library',
 		description:
-			'Starts empty and stays on this device after the browser restarts. It is encrypted, and you set a PIN or password before it opens.',
+			'Starts empty and stays on this device after the browser restarts. It is encrypted, and you set a password before it opens.',
 	},
 	{
 		value: 'temporary',

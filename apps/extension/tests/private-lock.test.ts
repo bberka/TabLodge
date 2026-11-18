@@ -24,7 +24,7 @@ import {
 
 const PREFIX = 'tablodge.private.';
 const CONFIG_KEY = `${PREFIX}config`;
-const password = {kind: 'password', value: 'correct horse battery'} as const;
+const password = {value: 'correct horse battery'} as const;
 
 /**
 Two in-memory storage areas and a clock, shaped like chrome.storage.local and chrome.storage.session.
@@ -160,6 +160,33 @@ test('the data key is wrapped in the credential envelope and opens with the cred
 	assert.equal((await failure(unwrapDataKey('!!!', 'x'))).code, 'damaged');
 });
 
+test('an older lock record that says pin still opens with its short number, and a new one is written as a password', async () => {
+	const {env, local} = createEnv(library);
+	const lock = createPrivateLock(env);
+	await lock.enable({value: '2468'});
+	// What an older version stored: the same record, with the kind it used to write.
+	const record = parseLockRecord(local.get(LOCK_RECORD_KEY));
+	assert.equal(record?.kind, 'password');
+	local.set(LOCK_RECORD_KEY, {...record, kind: 'pin'});
+	await lock.lock();
+	assert.equal(parseLockRecord(local.get(LOCK_RECORD_KEY))?.kind, 'pin');
+	assert.equal((await failure(lock.unlock('1357'))).code, 'wrong-credential');
+	await lock.unlock('2468');
+	assert.ok((await lock.gate())?.key);
+	// Changing it writes the one kind, whatever the record said before.
+	await lock.changeCredential('2468', {value: 'a much longer password'});
+	assert.equal(parseLockRecord(local.get(LOCK_RECORD_KEY))?.kind, 'password');
+});
+
+test('an older 4 digit number still opens what it wrapped, because opening never checks the length', async () => {
+	const wrapped = await wrapDataKey(generateDataKey(), {value: '2468'});
+	assert.ok(await unwrapDataKey(wrapped, '2468'));
+	assert.equal(
+		(await failure(unwrapDataKey(wrapped, '1357'))).code,
+		'wrong-credential',
+	);
+});
+
 test('lock records are checked before use', () => {
 	const good: LockRecord = {
 		version: 1,
@@ -280,13 +307,11 @@ test('status reports when the idle timeout will lock', async () => {
 		enabled: false,
 		state: 'none',
 		locked: false,
-		kind: null,
 		idleMinutes: 5,
 		expiresAt: null,
 	});
-	await lock.enable({kind: 'pin', value: '2468'}, 15);
+	await lock.enable({value: '2468'}, 15);
 	const status = await lock.status();
-	assert.equal(status.kind, 'pin');
 	assert.equal(status.locked, false);
 	assert.equal(status.expiresAt, clock.now + 15 * 60_000);
 });
@@ -478,30 +503,20 @@ test('changing the credential keeps the data readable and invalidates the old cr
 	await lock.enable(password);
 	const sealedBefore = JSON.stringify(local.get(`${PREFIX}tablodge.state`));
 	assert.equal(
-		(
-			await failure(
-				lock.changeCredential('wrong wrong wrong', {
-					kind: 'pin',
-					value: '2468',
-				}),
-			)
-		).code,
+		(await failure(lock.changeCredential('wrong wrong wrong', {value: '2468'})))
+			.code,
 		'wrong-credential',
 	);
 	assert.equal(
-		(
-			await failure(
-				lock.changeCredential(password.value, {kind: 'pin', value: '12'}),
-			)
-		).code,
+		(await failure(lock.changeCredential(password.value, {value: '12'}))).code,
 		'invalid',
 	);
-	await lock.changeCredential(password.value, {kind: 'pin', value: '2468'});
+	await lock.changeCredential(password.value, {value: '2468'});
 	assert.equal(
 		JSON.stringify(local.get(`${PREFIX}tablodge.state`)),
 		sealedBefore,
 	);
-	assert.equal(parseLockRecord(local.get(LOCK_RECORD_KEY))?.kind, 'pin');
+	assert.equal(parseLockRecord(local.get(LOCK_RECORD_KEY))?.kind, 'password');
 	await lock.lock();
 	assert.equal(
 		(await failure(lock.unlock(password.value))).code,
@@ -527,11 +542,8 @@ test('the credential cannot change while a pass is unfinished', async () => {
 	await lock.enable(password).catch(() => undefined);
 	control.failSetAfter = Infinity;
 	assert.equal(
-		(
-			await failure(
-				lock.changeCredential(password.value, {kind: 'pin', value: '2468'}),
-			)
-		).code,
+		(await failure(lock.changeCredential(password.value, {value: '2468'})))
+			.code,
 		'state',
 	);
 });
@@ -539,10 +551,7 @@ test('the credential cannot change while a pass is unfinished', async () => {
 test('enable refuses a second lock and a credential outside the limits', async () => {
 	const {env} = createEnv(library);
 	const lock = createPrivateLock(env);
-	assert.equal(
-		(await failure(lock.enable({kind: 'pin', value: '12'}))).code,
-		'invalid',
-	);
+	assert.equal((await failure(lock.enable({value: '12'}))).code, 'invalid');
 	assert.equal((await failure(lock.enable(password, 3))).code, 'invalid');
 	await lock.enable(password);
 	assert.equal((await failure(lock.enable(password))).code, 'state');

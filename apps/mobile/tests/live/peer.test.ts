@@ -1,7 +1,7 @@
 /*
 The extension's side of a live check against a real phone. Skipped unless TL_STEP is set. It uses the extension's own
 sync client, private codec, and key code, over real HTTP to a server the phone also talks to.
-Steps: read, create, edit, app-read (print the library's `mobileApp` setting), app-set (merge the JSON in TL_APP into it, as a second phone would). Env: TL_URL, TL_TOKEN, TL_PIN (optional), TL_KIND (pin or password, for create), TL_STATE (file the key is saved to), TL_LINK.
+Steps: read, create, edit, app-read (print the library's `mobileApp` setting), app-set (merge the JSON in TL_APP into it, as a second phone would). Env: TL_URL, TL_TOKEN, TL_PIN (the password, optional), TL_STATE (file the key is saved to), TL_LINK.
 */
 import {writeFileSync} from 'node:fs';
 import process from 'node:process';
@@ -63,10 +63,7 @@ describe.skipIf(!step)('extension peer', () => {
 			server ? `id=${server.id} wrapped.len=${server.wrapped.length}` : 'none',
 		);
 		if (step === 'create' && pin && !server) {
-			key = await createSyncKey({
-				kind: (process.env.TL_KIND as 'pin' | 'password') ?? 'pin',
-				value: pin,
-			});
+			key = await createSyncKey({value: pin});
 			const r = await fetch(`${url}/v1/key`, {
 				method: 'POST',
 				headers: {...auth, 'Content-Type': 'application/json'},

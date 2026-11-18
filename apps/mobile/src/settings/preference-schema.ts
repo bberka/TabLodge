@@ -176,8 +176,7 @@ export type Preferences = {
 	showPrivateButton: boolean;
 	/**
 	When the private library locks by itself: `manual` only by hand, `leave` when the app goes behind another one,
-	`screen` (the default) when the screen turns off, `timeout` after a while without use. Only a library with a PIN or
-	password locks.
+	`screen` (the default) when the screen turns off, `timeout` after a while without use. Only a library with a password locks.
 	This stays on this phone.
 	*/
 	privateLockMode: 'manual' | 'leave' | 'screen' | 'timeout';

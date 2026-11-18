@@ -11,7 +11,7 @@ import {
 const plain = new TextEncoder().encode(
 	'{"secret":"https://example.com/private"}',
 );
-const password = {kind: 'password', value: 'correct horse battery'} as const;
+const password = {value: 'correct horse battery'} as const;
 
 async function failure(run: Promise<unknown>) {
 	let caught: unknown;
@@ -28,9 +28,8 @@ test('encrypting then decrypting returns the same bytes', async () => {
 	assert.deepEqual(await decryptBytes(envelope, password.value), plain);
 });
 
-test('a PIN round-trips and empty data is allowed', async () => {
+test('a short number-only password round-trips and empty data is allowed', async () => {
 	const envelope = await encryptBytes(new Uint8Array(), {
-		kind: 'pin',
 		value: '2468',
 	});
 	assert.deepEqual(await decryptBytes(envelope, '2468'), new Uint8Array());
@@ -140,19 +139,18 @@ test('a hostile work factor is refused rather than run', async () => {
 });
 
 test('encrypting refuses a credential outside the limits', async () => {
-	await failure(encryptBytes(plain, {kind: 'pin', value: '12'}));
-	await failure(encryptBytes(plain, {kind: 'pin', value: 'abcd'}));
-	await failure(encryptBytes(plain, {kind: 'password', value: 'short'}));
-	await failure(
-		encryptBytes(plain, {kind: 'password', value: 'x'.repeat(129)}),
-	);
+	await failure(encryptBytes(plain, {value: ''}));
+	await failure(encryptBytes(plain, {value: '123'}));
+	await failure(encryptBytes(plain, {value: 'x'.repeat(129)}));
+	// The one rule is 4 to 128 characters of any kind, so a short word or a number-only password is accepted.
+	await encryptBytes(plain, {value: 'abcd'});
+	await encryptBytes(plain, {value: '12345678'});
 });
 
 test('the same password typed in composed or decomposed form decrypts', async () => {
 	const composed = 'café-passwort';
 	const decomposed = 'café-passwort';
 	const envelope = await encryptBytes(plain, {
-		kind: 'password',
 		value: composed,
 	});
 	assert.deepEqual(await decryptBytes(envelope, decomposed), plain);

@@ -1,13 +1,13 @@
 /*
 Encryption for syncing the private windows' library (the separate, saved private storage).
 
-When a device that has a private PIN or password turns private sync on, it makes a random sync key, wraps it in the
+When a device that has a private password turns private sync on, it makes a random sync key, wraps it in the
 same credential envelope as the private lock, and stores the wrapped copy on the server with POST /v1/key. Every
 record value it sends is then sealed with that key, with the record's key as authenticated data, so the server sees
-which records exist and when they change but not what they hold. Another device joins by entering the same PIN or
+which records exist and when they change but not what they hold. Another device joins by entering the same
 password once; it keeps the unwrapped key in its own private storage, which the local lock seals in turn.
 
-Changing the PIN or password rewraps the same key, so nothing has to be encrypted again and the other devices keep
+Changing the password rewraps the same key, so nothing has to be encrypted again and the other devices keep
 syncing. A library synced before any device had a lock holds plain values; a device with the key sends each one
 again sealed as it pulls it (`reseal`).
 */
@@ -40,7 +40,7 @@ export const PRIVATE_SYNC_ASK = 'privateSync=ask';
 type ServerKey = {v: 1; id: string; wrapped: string};
 
 export const NEEDS_KEY_MESSAGE =
-	'Private data on the sync server is protected with a PIN or password. Enter it in Settings under Sync to sync private windows on this browser.';
+	'Private data on the sync server is protected with a password. Enter it in Settings under Sync to sync private windows on this browser.';
 const LOST_KEY_MESSAGE =
 	'The key that protects private data is gone from the sync server. Turn private sync off and on again.';
 const UNREADABLE_MESSAGE =
@@ -154,7 +154,7 @@ export function createPrivateCodec(store: {
 				throw new SyncError('key', NEEDS_KEY_MESSAGE);
 			}
 
-			// Another device changed its PIN or password and rewrapped the same key.
+			// Another device changed its password and rewrapped the same key.
 			if (local.wrapped !== server.wrapped) {
 				await store.save({...local, wrapped: server.wrapped});
 			}

@@ -1,28 +1,24 @@
-// Form pieces for choosing and entering a PIN or password, built on the rules in passcode.ts.
-// PasscodeSetup is the "choose one" form (type, value, confirmation, weakness and loss warnings, acknowledgement);
-// PasscodeEntry is the single field for unlocking. Both keep the value in the caller's state, never in storage.
+// Form pieces for choosing and entering a password, built on the rules in passcode.ts.
+// PasscodeSetup is the "choose one" form (value, confirmation, a hint while a weak one is typed, the loss warning,
+// acknowledgement); PasscodeEntry is the single field for unlocking. Both keep the value in the caller's state, never in storage.
 import {useId, useState} from 'react';
-import {CircleAlert, Eye, EyeOff, TriangleAlert} from 'lucide-react';
-import {Checkbox, Input, Label, SegmentedControl} from '../shared/ui';
+import {CircleAlert, Eye, EyeOff} from 'lucide-react';
+import {Checkbox, Input, Label} from '../shared/ui';
 import {
-	CREDENTIAL_LABELS,
 	clampCredentialInput,
 	LOST_CREDENTIAL_NOTE,
-	PIN_WEAKNESS_NOTE,
-	credentialRule,
+	PASSWORD_LABEL,
 	validateCredential,
-	type CredentialKind,
+	weakPasswordHint,
 } from '../shared/passcode';
 
 export type PasscodeDraft = {
-	kind: CredentialKind;
 	value: string;
 	confirm: string;
 	acknowledged: boolean;
 };
 
 export const EMPTY_PASSCODE_DRAFT: PasscodeDraft = {
-	kind: 'password',
 	value: '',
 	confirm: '',
 	acknowledged: false,
@@ -33,7 +29,7 @@ Why the draft cannot be used yet, or null when it can. The first problem wins, i
 */
 export function passcodeDraftProblem(draft: PasscodeDraft): string | null {
 	return (
-		validateCredential(draft.kind, draft.value) ??
+		validateCredential(draft.value) ??
 		(draft.confirm === draft.value ? null : 'The two entries do not match.') ??
 		(draft.acknowledged ? null : 'Confirm that you understand.')
 	);
@@ -69,9 +65,9 @@ function ShowHideField({
 	onChange,
 	shown,
 	onToggleShown,
-	kind,
 	problem,
 	describedBy,
+	hint,
 	autoComplete,
 	disabled,
 }: {
@@ -81,8 +77,11 @@ function ShowHideField({
 	onChange: (value: string) => void;
 	shown?: boolean;
 	onToggleShown?: () => void;
-	kind: CredentialKind;
 	problem?: string | null;
+	/**
+	A note under the field while the value is acceptable but weak; it never blocks.
+	*/
+	hint?: string | null;
 	describedBy?: string;
 	autoComplete: string;
 	disabled?: boolean;
@@ -94,7 +93,7 @@ function ShowHideField({
 				<Input
 					id={id}
 					type={shown ? 'text' : 'password'}
-					inputMode={kind === 'pin' ? 'numeric' : 'text'}
+					inputMode="text"
 					autoComplete={autoComplete}
 					autoCapitalize="off"
 					spellCheck={false}
@@ -103,28 +102,39 @@ function ShowHideField({
 					aria-invalid={problem ? true : undefined}
 					aria-describedby={describedBy}
 					onChange={(event) =>
-						onChange(clampCredentialInput(kind, event.target.value))
+						onChange(clampCredentialInput(event.target.value))
 					}
 				/>
 				{onToggleShown && (
 					<ShowHideButton
 						shown={Boolean(shown)}
-						label={CREDENTIAL_LABELS[kind]}
+						label={label.toLowerCase()}
 						onToggle={onToggleShown}
 					/>
 				)}
 			</div>
-			{problem && (
+			{problem ? (
 				<p id={describedBy} className="text-xs text-destructive">
 					{problem}
 				</p>
+			) : (
+				hint && (
+					<p
+						id={describedBy}
+						role="status"
+						className="text-xs text-muted-foreground"
+					>
+						{hint}
+					</p>
+				)
 			)}
 		</div>
 	);
 }
 
 /**
-Choose a PIN or password: type, value with show/hide, confirmation, live limit checks, and the two warnings.
+Choose a password: the value with show/hide, a confirmation, live checks, a hint while a weak one is typed, and the
+warning that a lost one cannot be recovered.
 */
 export function PasscodeSetup({
 	draft,
@@ -137,49 +147,32 @@ export function PasscodeSetup({
 }) {
 	const id = useId();
 	const [shown, setShown] = useState(false);
-	const label = CREDENTIAL_LABELS[draft.kind];
 	// Stay quiet until something is typed, then check as the person types.
 	const valueProblem =
-		draft.value.length > 0 ? validateCredential(draft.kind, draft.value) : null;
+		draft.value.length > 0 ? validateCredential(draft.value) : null;
 	const confirmProblem =
 		draft.confirm.length > 0 && draft.confirm !== draft.value
 			? 'The two entries do not match.'
 			: null;
 	return (
 		<div className="grid gap-3">
-			<SegmentedControl
-				fullWidth
-				label="Protect with"
-				value={draft.kind}
-				options={[
-					{value: 'password', label: 'Password'},
-					{value: 'pin', label: 'PIN'},
-				]}
-				onValueChange={(kind) => onChange({...EMPTY_PASSCODE_DRAFT, kind})}
-			/>
 			<ShowHideField
 				id={`${id}-value`}
-				label={label}
+				label={PASSWORD_LABEL}
 				value={draft.value}
-				kind={draft.kind}
 				shown={shown}
 				problem={valueProblem}
+				hint={weakPasswordHint(draft.value)}
 				describedBy={`${id}-value-help`}
 				autoComplete="new-password"
 				disabled={disabled}
 				onToggleShown={() => setShown(!shown)}
 				onChange={(value) => onChange({...draft, value})}
 			/>
-			{!valueProblem && (
-				<p className="-mt-2 text-xs text-muted-foreground">
-					{credentialRule(draft.kind)}
-				</p>
-			)}
 			<ShowHideField
 				id={`${id}-confirm`}
-				label={`Confirm ${label}`}
+				label={`Confirm ${PASSWORD_LABEL.toLowerCase()}`}
 				value={draft.confirm}
-				kind={draft.kind}
 				shown={shown}
 				problem={confirmProblem}
 				describedBy={`${id}-confirm-help`}
@@ -187,15 +180,6 @@ export function PasscodeSetup({
 				disabled={disabled}
 				onChange={(confirm) => onChange({...draft, confirm})}
 			/>
-			{draft.kind === 'pin' && (
-				<p className="flex items-start gap-2 rounded-md border border-border bg-muted/70 px-3 py-2 text-xs leading-5">
-					<TriangleAlert
-						className="mt-0.5 h-3.5 w-3.5 shrink-0"
-						aria-hidden="true"
-					/>
-					<span className="min-w-0">{PIN_WEAKNESS_NOTE}</span>
-				</p>
-			)}
 			<p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/6 px-3 py-2 text-xs leading-5">
 				<CircleAlert
 					className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
@@ -213,8 +197,7 @@ export function PasscodeSetup({
 					}
 				/>
 				<Label htmlFor={`${id}-ack`} className="text-sm leading-5">
-					I understand that a lost {draft.kind === 'pin' ? 'PIN' : 'password'}{' '}
-					cannot be recovered.
+					I understand that a lost password cannot be recovered.
 				</Label>
 			</div>
 		</div>
@@ -222,7 +205,7 @@ export function PasscodeSetup({
 }
 
 /**
-One field to enter an existing PIN or password, with show/hide. The kind is not stored in the file, so it is not asked.
+One field to enter an existing password, with show/hide. Its length is not checked: a short one from an older version opens.
 */
 export function PasscodeEntry({
 	value,
@@ -241,7 +224,7 @@ export function PasscodeEntry({
 	const [shown, setShown] = useState(false);
 	return (
 		<div className="grid gap-1.5">
-			<Label htmlFor={`${id}-entry`}>PIN or password</Label>
+			<Label htmlFor={`${id}-entry`}>{PASSWORD_LABEL}</Label>
 			<div className="flex items-center gap-2">
 				<Input
 					ref={inputRef}
@@ -256,12 +239,12 @@ export function PasscodeEntry({
 					aria-invalid={error ? true : undefined}
 					aria-describedby={error ? `${id}-entry-error` : undefined}
 					onChange={(event) =>
-						onChange(clampCredentialInput(undefined, event.target.value))
+						onChange(clampCredentialInput(event.target.value))
 					}
 				/>
 				<ShowHideButton
 					shown={shown}
-					label="PIN or password"
+					label="password"
 					onToggle={() => setShown(!shown)}
 				/>
 			</div>

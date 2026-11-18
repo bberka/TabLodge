@@ -64,7 +64,7 @@ const FIXED_HEADER_BYTES = 12;
 // Longer than any credential this app accepts; anything beyond cannot be the right one.
 const MAX_DECRYPT_CREDENTIAL_LENGTH = 1024;
 
-const WRONG = 'The PIN or password is wrong, or the file has been changed.';
+const WRONG = 'The password is wrong, or the file has been changed.';
 
 /**
 True when the bytes start with the envelope magic.
@@ -96,13 +96,13 @@ async function deriveKey(
 }
 
 /**
-Encrypts `data` with the credential. Throws EnvelopeError('invalid-credential') when the credential breaks the PIN or password limits.
+Encrypts `data` with the credential. Throws EnvelopeError('invalid-credential') when the credential breaks the password limits.
 */
 export async function encryptBytes(
 	data: Uint8Array,
 	credential: Credential,
 ): Promise<Uint8Array> {
-	const problem = validateCredential(credential.kind, credential.value);
+	const problem = validateCredential(credential.value);
 	if (problem) {
 		throw new EnvelopeError('invalid-credential', problem);
 	}
