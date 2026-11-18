@@ -527,9 +527,13 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 
 				const expand = page.getByRole('button', {
 					name: 'Show tabs in Home lab rebuild',
+					// Not the split session, "Home lab rebuild (split)", which another step may have made.
+					exact: true,
 				});
 				const collapse = page.getByRole('button', {
 					name: 'Hide tabs in Home lab rebuild',
+					// Not the split session, "Home lab rebuild (split)", which another step may have made.
+					exact: true,
 				});
 				const ensureExpanded = async () => {
 					await expand.or(collapse).waitFor();
