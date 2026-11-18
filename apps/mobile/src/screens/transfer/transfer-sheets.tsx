@@ -18,15 +18,12 @@ import {
 	shareLinks,
 	shareMarkdown,
 } from '../../../../extension/src/shared/share-formats';
-import {
-	LOST_CREDENTIAL_NOTE,
-	validateCredential,
-	weakPasswordHint,
-} from '../../../../extension/src/shared/passcode';
+import {LOST_CREDENTIAL_NOTE} from '../../../../extension/src/shared/passcode';
 import type {Store} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {notify, showDialog} from '../../ui/dialog';
 import {buildBackup} from '../../transfer/backup';
+import {backupPasswordNote} from '../../transfer/backup-password';
 import {useView} from '../../library/view';
 import {useTrash} from '../../library/trash-store';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
@@ -361,15 +358,7 @@ export function ShareSheet({
 	const {links} = shareCounts(groups);
 	const title =
 		scope?.title ?? (what === 'bookmarks' ? 'Bookmarks' : 'Sessions');
-	const problem =
-		isBackup && password !== ''
-			? (validateCredential(password) ?? undefined)
-			: undefined;
-	// A note while the password is short or only digits: it never blocks.
-	const weak =
-		isBackup && password !== '' && !problem
-			? weakPasswordHint(password)
-			: undefined;
+	const {problem, hint: weak} = backupPasswordNote(isBackup, password);
 	const run = async () => {
 		setBusy(true);
 		try {

@@ -2,6 +2,7 @@ import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {
 	LOST_CREDENTIAL_NOTE,
+	sameCredential,
 	validateCredential,
 	weakPasswordHint,
 } from '../../../extension/src/shared/passcode';
@@ -128,12 +129,12 @@ function SetupForm({
 	const problem = validateCredential(value) ?? undefined;
 	// A note while the password is short or only digits: it never blocks.
 	const weak = value === '' || problem ? undefined : weakPasswordHint(value);
-	const mismatch = again !== '' && again !== value;
+	const mismatch = again !== '' && !sameCredential(again, value);
 	const ready =
 		(!changing || currentValue !== '') &&
 		value !== '' &&
 		!problem &&
-		again === value;
+		sameCredential(again, value);
 
 	const run = async () => {
 		setBusy(true);

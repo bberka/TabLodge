@@ -12871,11 +12871,11 @@ test('a new browser joins the sync server’s private library with its password,
 		(
 			await second.sendMessage({
 				type: 'JOIN_PRIVATE_SERVER',
-				credential: lockPassword,
+				credential: 'a different password',
 			})
 		).ok,
 		false,
-		'a library that has a lock cannot join again',
+		'a library that has a lock cannot join with another password',
 	);
 });
 
@@ -13335,6 +13335,27 @@ test('two password changes started together run one after another, so the server
 		credential: 'plum plum plum',
 	});
 	assert.equal(joined.ok, true, joined.error);
+
+	// The browser that made the changes ends on the same password as the server.
+	await first.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.equal(
+		(
+			await first.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: 'blue blue blue',
+			})
+		).ok,
+		false,
+	);
+	assert.equal(
+		(
+			await first.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: 'plum plum plum',
+			})
+		).ok,
+		true,
+	);
 });
 
 test('a password change whose reply was lost, but that the server applied, is kept', async () => {
@@ -13379,6 +13400,125 @@ test('a password change whose reply was lost, but that the server applied, is ke
 				credential: 'blue blue blue',
 			})
 		).ok,
+		true,
+	);
+});
+
+test('a password change that the server may have taken, and that cannot be confirmed, is not undone', async () => {
+	const server = syncServer();
+	let blind = false;
+	let posted = false;
+	const lossy = async (url: string, init: RequestInit) => {
+		if (posted && url.endsWith('/private/v1/key')) {
+			throw new TypeError('offline');
+		}
+
+		const response = await server.fetch(url, init);
+		if (blind && init.method === 'POST' && url.endsWith('/private/v1/key')) {
+			posted = true;
+			return new Response('{}', {status: 500});
+		}
+
+		return response;
+	};
+
+	const first = await plainPrivateLibrary({fetch: lossy}, regularSync);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	// The server stores the new wrapper, but neither the reply nor the check afterwards gets through.
+	const {key} = server.privateLog;
+	blind = true;
+	const changed = await first.sendMessage({
+		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+		current: lockPassword,
+		credential: 'blue blue blue',
+	});
+	blind = false;
+	posted = false;
+	assert.notEqual(server.privateLog.key, key, 'the server took the change');
+	assert.equal(changed.ok, false);
+	assert.match(changed.error ?? '', /did not confirm/);
+
+	// The library keeps the new password, which is the one the server now needs, so the two agree.
+	await first.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.equal(
+		(
+			await first.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+	);
+	assert.equal(
+		(
+			await first.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: 'blue blue blue',
+			})
+		).ok,
+		true,
+	);
+});
+
+test('a join that saved the lock but could not reach the server carries on when it is tried again with the same password', async () => {
+	const server = syncServer();
+	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+
+	// The server answers the key lookup, then goes away when sync is being turned on, after the lock is saved.
+	let statusCalls = 0;
+	const flaky = async (url: string, init: RequestInit) => {
+		if (url.endsWith('/v1/status')) {
+			statusCalls += 1;
+			if (statusCalls === 1) {
+				throw new TypeError('offline');
+			}
+		}
+
+		return server.fetch(url, init);
+	};
+
+	const second = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: flaky,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	const attempt = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: lockPassword,
+	});
+	assert.equal(attempt.ok, false);
+	assert.equal(
+		(await second.sendMessage({type: 'GET_PRIVATE_LOCK'})).needsLock,
+		false,
+		'the lock was saved',
+	);
+
+	// Another password is refused, and the same one carries on.
+	const wrong = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: 'another password',
+	});
+	assert.equal(wrong.ok, false);
+	const again = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: lockPassword,
+	});
+	assert.equal(again.ok, true, again.error);
+	assert.equal(
+		(await second.sendMessage({type: 'PRIVATE_SYNC_STATUS'})).privateSync
+			?.status.connected,
 		true,
 	);
 });

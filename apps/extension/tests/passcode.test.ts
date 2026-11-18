@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
 	PASSWORD_MAX_LENGTH,
+	sameCredential,
 	PASSWORD_MIN_LENGTH,
 	STRONG_PASSWORD_LENGTH,
 	validateCredential,
@@ -69,4 +70,11 @@ test('a short or number-only password gets a hint while it is typed, and a longe
 	// Digits of any script are digits.
 	assert.match(weakPasswordHint('١٢٣٤٥٦٧٨') ?? '', /easy to guess/);
 	assert.match(weakPasswordHint('１２３４５６７８９０') ?? '', /easy to guess/);
+});
+
+test('two entries are the same password when they are the same text after the normalization the key uses', () => {
+	assert.equal(sameCredential('１２３４', '1234'), true);
+	assert.equal(sameCredential('é', 'e\u0301'), true);
+	assert.equal(sameCredential('1234', '1235'), false);
+	assert.equal(sameCredential('abc', 'ABC'), false);
 });

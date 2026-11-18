@@ -23,6 +23,13 @@ Under this many characters, or digits only, a password is easy to guess, and the
 */
 export const STRONG_PASSWORD_LENGTH = 8;
 
+/**
+Whether two entries are the same password: compared the way the key is derived, so full width or composed and
+decomposed forms of the same text match.
+*/
+export const sameCredential = (a: string, b: string) =>
+	a.normalize('NFKC') === b.normalize('NFKC');
+
 export const PASSWORD_LABEL = 'Password';
 
 /**

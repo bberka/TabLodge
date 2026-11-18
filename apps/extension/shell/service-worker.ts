@@ -1497,10 +1497,30 @@ const DIFFERENT_SERVER_PIN_MESSAGE =
 	'This library’s password is not the one protecting your sync server’s private library. Enter the server’s: it becomes this library’s too, and the server’s data merges in.';
 const WRONG_SERVER_PIN_MESSAGE =
 	'That is not the password protecting private data on the sync server.';
+const REWRAP_UNCONFIRMED_MESSAGE =
+	'The new password is set here, but the sync server did not confirm it. Change the password again once the server is reachable, so the two match.';
+/**
+The server may or may not have taken the new wrapper, and could not be asked. The library keeps the new password, and
+a second change settles it.
+*/
+class RewrapUnconfirmedError extends Error {}
 const REWRAP_FAILED_MESSAGE =
 	'The sync server could not take the new password, so it was not changed. Check the connection and try again.';
 
+/**
+Turns private sync on. It runs in the same queue as password changes, so its read of the lock and its adoption of the
+server's password cannot fall between a change's local write and its server update.
+*/
 async function enablePrivateSync(
+	credential: string | undefined,
+	serverCredential?: string,
+): Promise<ActionResult<'PRIVATE_SYNC_ENABLE'>> {
+	return rotatePassword(async () =>
+		enablePrivateSyncNow(credential, serverCredential),
+	);
+}
+
+async function enablePrivateSyncNow(
 	credential: string | undefined,
 	serverCredential?: string,
 ): Promise<ActionResult<'PRIVATE_SYNC_ENABLE'>> {
@@ -1668,12 +1688,22 @@ async function joinPrivateServer(
 		};
 	}
 
-	if (
-		privateConfig.mode !== 'saved' ||
-		!privateConfig.configured ||
-		(await privateLock.readRecord()) !== undefined
-	) {
+	if (privateConfig.mode !== 'saved' || !privateConfig.configured) {
 		return {ok: false, error: 'This private library already has a lock.'};
+	}
+
+	// A lock saved by an earlier try of this join, whose password this is, lets the join carry on.
+	const existing = parseLockRecord(
+		(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
+	);
+	if (existing) {
+		const resumes = await unwrapDataKey(existing.wrapped, credential).then(
+			() => true,
+			() => false,
+		);
+		if (!resumes) {
+			return {ok: false, error: 'This private library already has a lock.'};
+		}
 	}
 
 	const regular = await regularSyncConfig();
@@ -1707,10 +1737,13 @@ async function joinPrivateServer(
 		throw error;
 	}
 
-	await mutate(async () => {
-		await privateLock.enable({value: credential, verified: true});
-	});
-	invalidateSettings();
+	if (!existing) {
+		await mutate(async () => {
+			await privateLock.enable({value: credential, verified: true});
+		});
+		invalidateSettings();
+	}
+
 	const enabled = await enablePrivateSync(credential);
 	return enabled.ok ? {ok: true, ...(await privateLockInfo())} : enabled;
 }
@@ -1768,10 +1801,13 @@ async function rewrapPrivateSyncKey(credential: Credential) {
 	).catch(async () => false);
 	if (!committed) {
 		// A reply that was lost may still have been applied: what the server holds now decides.
-		const now = await serverField(target, '/v1/key', 'key').then(
-			parseServerKey,
-			() => undefined,
-		);
+		let now: ReturnType<typeof parseServerKey>;
+		try {
+			now = parseServerKey(await serverField(target, '/v1/key', 'key'));
+		} catch {
+			throw new RewrapUnconfirmedError(REWRAP_UNCONFIRMED_MESSAGE);
+		}
+
 		if (now?.id !== next.id || now.wrapped !== next.wrapped) {
 			throw new Error(REWRAP_FAILED_MESSAGE);
 		}
@@ -9361,7 +9397,11 @@ async function handlePrivateLockMessage(
 					});
 					try {
 						await rewrapPrivateSyncKey({value: credential, verified: true});
-					} catch {
+					} catch (error) {
+						if (error instanceof RewrapUnconfirmedError) {
+							return {ok: false as const, error: REWRAP_UNCONFIRMED_MESSAGE};
+						}
+
 						// The server keeps the old password, so the library goes back to it.
 						if (before) {
 							await mutate(async () => {

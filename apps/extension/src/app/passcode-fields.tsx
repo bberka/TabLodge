@@ -7,6 +7,7 @@ import {Checkbox, Input, Label} from '../shared/ui';
 import {
 	LOST_CREDENTIAL_NOTE,
 	PASSWORD_LABEL,
+	sameCredential,
 	validateCredential,
 	weakPasswordHint,
 } from '../shared/passcode';
@@ -30,7 +31,9 @@ Why the draft cannot be used yet, or null when it can. The first problem wins, i
 export function passcodeDraftProblem(draft: PasscodeDraft): string | null {
 	return (
 		validateCredential(draft.value) ??
-		(draft.confirm === draft.value ? null : 'The two entries do not match.') ??
+		(sameCredential(draft.confirm, draft.value)
+			? null
+			: 'The two entries do not match.') ??
 		(draft.acknowledged ? null : 'Confirm that you understand.')
 	);
 }
@@ -147,7 +150,7 @@ export function PasscodeSetup({
 	const valueProblem =
 		draft.value.length > 0 ? validateCredential(draft.value) : null;
 	const confirmProblem =
-		draft.confirm.length > 0 && draft.confirm !== draft.value
+		draft.confirm.length > 0 && !sameCredential(draft.confirm, draft.value)
 			? 'The two entries do not match.'
 			: null;
 	return (
