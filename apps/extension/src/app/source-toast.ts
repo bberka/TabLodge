@@ -322,8 +322,18 @@ function render(
 	let held = false;
 	let previous: HTMLElement | undefined;
 	let undone = false;
+	let closed = false;
+	// Runs once. A closed notice whose Undo finishes later must not arm a timer or unregister the notice now shown.
 	const close = () => {
-		closeShown = undefined;
+		if (closed) {
+			return;
+		}
+
+		closed = true;
+		if (closeShown === close) {
+			closeShown = undefined;
+		}
+
 		clearTimeout(timer);
 		const hadFocus = root.activeElement !== null;
 		host.remove();
@@ -335,7 +345,7 @@ function render(
 	closeShown = close;
 	const schedule = () => {
 		clearTimeout(timer);
-		if (!held) {
+		if (!held && !closed) {
 			timer = setTimeout(close, VISIBLE_MS);
 		}
 	};
