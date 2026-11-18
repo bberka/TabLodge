@@ -441,27 +441,31 @@ function Help() {
 							asks for access to that site only, and nothing runs there until
 							you allow it. Only the sites you added are listed. Then, when you
 							save something there, {PROJECT.name} bookmarks the same link in a
-							column named after the site, created on the first save: a video
-							you add to Watch later, a Reddit post or comment, an X post you
-							bookmark, an Instagram post or reel, a GitHub repository you star
-							(titled with its name and description), a Hacker News story you
-							favorite, a Stack Overflow question you bookmark, a dev.to article
-							you save to your reading list, or a Lobsters story you save. Posts
-							from X and Instagram are titled with the start of their text or
-							caption. A Hacker News or Lobsters story is saved at the address
-							it links to, with its discussion page in the note; a text post
-							with no link is saved at its discussion page. Under Save to, under
-							each added site, you can choose another column; if that column is
-							deleted, saves go to the site&apos;s own column again until you
-							choose one. A small notice in the page offers Undo; press Tab to
-							reach it. A link already in your bookmarks or in the trash bin is
-							not saved again. {PROJECT.name} only watches for your own clicks
-							on the site&apos;s save controls, reads the link from the page,
-							and sends nothing anywhere. It recognizes the English labels of
-							those controls. The Bookmark button on X, Star on GitHub, and the
-							save buttons on Stack Overflow and dev.to work in any language;
-							the Share menu item on X works in English. If a site changes its
-							page so {PROJECT.name} can no longer read it, nothing is saved and
+							column named after the site. When you have no column of that name
+							and chose no other, the first save creates it with an icon and a
+							color for that site, which you can change like any column&apos;s;
+							saves keep going there. It saves a video you add to Watch later, a
+							Reddit post or comment, an X post you bookmark, an Instagram post
+							or reel, a GitHub repository you star (titled with its name and
+							description), a Hacker News story you favorite, a Stack Overflow
+							question you bookmark, a dev.to article you save to your reading
+							list, or a Lobsters story you save. Posts from X and Instagram are
+							titled with the start of their text or caption. A Hacker News or
+							Lobsters story is saved at the address it links to, with its
+							discussion page in the note; a text post with no link is saved at
+							its discussion page. Under Save to, under each added site, you can
+							choose another column; if that column is deleted, saves go to the
+							site&apos;s own column again until you choose one. A small notice
+							in the page, in your {PROJECT.name}
+							theme and accent color, offers Undo; press Tab to reach it. A link
+							already in your bookmarks or in the trash bin is not saved again.{' '}
+							{PROJECT.name} only watches for your own clicks on the site&apos;s
+							save controls, reads the link from the page, and sends nothing
+							anywhere. It recognizes the English labels of those controls. The
+							Bookmark button on X, Star on GitHub, and the save buttons on
+							Stack Overflow and dev.to work in any language; the Share menu
+							item on X works in English. If a site changes its page so{' '}
+							{PROJECT.name} can no longer read it, nothing is saved and
 							Settings says so. In a private window, saves are added only when
 							private windows use the regular library. Remove takes a site out
 							of the list and gives its access back. Removing its access in the
@@ -470,7 +474,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters save automatically site access permission column undo private window trash',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters save automatically site access permission column icon color undo private window trash',
 				},
 			],
 			action: {

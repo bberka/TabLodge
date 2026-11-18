@@ -4,6 +4,8 @@ import {join} from 'node:path';
 import {parseHTML} from 'linkedom';
 import {test} from 'vite-plus/test';
 import {manifestForTarget} from '../scripts/manifest-targets';
+import {isColumnColor} from '../src/shared/accent-colors';
+import {ICON_IDS} from '../src/shared/icon-ids';
 import {
 	devtoArticleUrl,
 	githubRepoUrl,
@@ -32,6 +34,11 @@ import {createRedditReader} from '../src/app/source-reddit';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
+import {
+	TOAST_TOKENS,
+	toastAppearance,
+	toastColors,
+} from '../src/app/source-toast';
 
 const fixture = (name: string) =>
 	readFileSync(
@@ -108,6 +115,122 @@ test('the manifest asks for exactly the sources origins, optionally, with no con
 		assert.equal(built.host_permissions, undefined, target);
 		assert.equal(built.content_scripts, undefined, target);
 	}
+});
+
+test('each source column gets an icon and a color a column can hold', () => {
+	for (const source of SITE_SOURCES) {
+		assert.ok(ICON_IDS.includes(source.columnIcon), source.id);
+		assert.ok(isColumnColor(source.columnColor), source.id);
+	}
+});
+
+test('the in-page toast uses the same tokens as the extension stylesheet', () => {
+	const css = readFileSync(
+		join(import.meta.dirname, '..', 'styles', 'extension-app.css'),
+		'utf8',
+	);
+	const block = (selector: string) => {
+		const start = css.indexOf(`${selector} {`);
+		assert.notEqual(start, -1, selector);
+		return css.slice(start, css.indexOf('}', start));
+	};
+
+	const value = (text: string, name: string) =>
+		new RegExp(String.raw`--${name}:\s*([^;]+);`).exec(text)?.[1]?.trim();
+	const light = block('\t:root');
+	const dark = block(":root[data-theme='dark']");
+	const names = {
+		popover: 'popover',
+		popoverForeground: 'popover-foreground',
+		border: 'border',
+		destructive: 'destructive',
+	} as const;
+	for (const [key, name] of Object.entries(names) as Array<
+		[keyof typeof names, string]
+	>) {
+		assert.equal(TOAST_TOKENS.light[key], value(light, name), name);
+		assert.equal(TOAST_TOKENS.dark[key], value(dark, name), name);
+	}
+
+	assert.equal(TOAST_TOKENS.light.primary, value(light, 'brand-primary-light'));
+	assert.equal(TOAST_TOKENS.dark.primary, value(light, 'brand-primary-dark'));
+	const radius = value(light, 'radius') ?? '';
+	assert.match(radius, /^\d+(?:\.\d+)?rem$/);
+	assert.equal(TOAST_TOKENS.radius, `${Number.parseFloat(radius) * 16}px`);
+});
+
+// WCAG contrast between two `rgb(r g b)` colors.
+function contrast(...colors: string[]) {
+	const [high, low] = colors
+		.map((color) => {
+			const channels = (/\d+ \d+ \d+/.exec(color)?.[0] ?? '')
+				.split(' ')
+				.map((value) => {
+					const channel = Number(value) / 255;
+					return channel <= 0.03928
+						? channel / 12.92
+						: ((channel + 0.055) / 1.055) ** 2.4;
+				});
+			return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+		})
+		.toSorted((a, b) => b - a);
+	return (high + 0.05) / (low + 0.05);
+}
+
+test('the in-page toast follows the theme and accent chosen in Settings', () => {
+	const os = {systemDark: true, incognito: false};
+	const incognito = {...os, incognito: true};
+	assert.deepEqual(toastAppearance({}, os), {theme: 'dark', accent: 'default'});
+	assert.deepEqual(toastAppearance({uiTheme: 'light', uiAccent: 'green'}, os), {
+		theme: 'light',
+		accent: 'green',
+	});
+	assert.deepEqual(
+		toastAppearance(
+			{uiTheme: 'sepia', uiAccent: 'url(x)'},
+			{...os, systemDark: false},
+		),
+		{theme: 'light', accent: 'default'},
+	);
+	// A private window shows its own accent, or the regular one when it is set to the same.
+	const config = (accent: string) => ({'tablodge.private.config': {accent}});
+	assert.equal(
+		toastAppearance({uiAccent: 'green', ...config('rose')}, incognito).accent,
+		'rose',
+	);
+	assert.equal(
+		toastAppearance({uiAccent: 'green', ...config('same')}, incognito).accent,
+		'green',
+	);
+	assert.equal(
+		toastAppearance({uiAccent: 'green', ...config('rose')}, os).accent,
+		'green',
+	);
+	assert.equal(toastAppearance({uiAccent: 'green'}, incognito).accent, 'teal');
+
+	assert.deepEqual(toastColors('light', undefined), {
+		background: 'rgb(255 255 255)',
+		text: 'rgb(24 24 27)',
+		border: 'rgb(228 228 231)',
+		errorBorder: 'rgb(220 38 38 / 0.4)',
+		destructive: 'rgb(220 38 38)',
+		primary: 'rgb(98 84 215)',
+	});
+	assert.equal(toastColors('dark', [21, 128, 61]).background, 'rgb(17 17 20)');
+	// These grays read on the dark page but not on the toast's lighter background, so they are lifted to 4.5:1.
+	for (const gray of [121, 122]) {
+		const colors = toastColors('dark', [gray, gray, gray]);
+		assert.ok(
+			contrast(colors.primary, colors.background) >= 4.5,
+			colors.primary,
+		);
+	}
+
+	// Amber is too light to read on the light page, so it darkens there, as the pages' accent does.
+	assert.notEqual(
+		toastColors('light', [217, 119, 6]).primary,
+		'rgb(217 119 6)',
+	);
 });
 
 test('a source is found only on its own https hosts', () => {

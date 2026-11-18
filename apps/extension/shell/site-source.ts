@@ -73,10 +73,11 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		};
 		const text = messages[outcome];
 		if (text) {
-			showSourceToast(
-				text,
-				undoId ? {label: 'Undo', run: async () => undo(undoId)} : undefined,
-			);
+			showSourceToast(text, {
+				action: undoId
+					? {label: 'Undo', run: async () => undo(undoId)}
+					: undefined,
+			});
 		}
 	};
 
@@ -95,6 +96,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			if (result?.ok && result.reported) {
 				showSourceToast(
 					`${appName} can't read this page anymore, so it saved nothing.`,
+					{error: true},
 				);
 			}
 
@@ -113,7 +115,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		}
 
 		if (!result.ok) {
-			showSourceToast(result.error);
+			showSourceToast(result.error, {error: true});
 			return;
 		}
 

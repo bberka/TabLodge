@@ -19,6 +19,7 @@ import type {SiteSourceStatus} from '../shared/types';
 import {ColumnSelect} from './column-select';
 import {send, type ShowStatus} from './common';
 import {Favicon} from './favicon';
+import {ColumnLabel} from './icon-label';
 import {PROJECT} from './project';
 import {
 	SITE_SOURCES,
@@ -364,7 +365,12 @@ export function SiteSourcesSettings({
 	columns,
 }: {
 	controller: SiteSourcesController;
-	columns: ReadonlyArray<{id: string; name: string; icon?: string}>;
+	columns: ReadonlyArray<{
+		id: string;
+		name: string;
+		icon?: string;
+		color?: string;
+	}>;
 }) {
 	const {sources, busy, privateWindow, status, add, remove, chooseColumn} =
 		controller;
@@ -467,18 +473,9 @@ export function SiteSourcesSettings({
 						</div>
 						{entry?.enabled && (
 							<div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-								<div className="min-w-0">
-									<Label
-										htmlFor={columnFieldId}
-										className="text-sm font-medium"
-									>
-										Save to
-									</Label>
-									<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-										The {source.column} column is made on the first save. If a
-										column you choose is deleted, saves go there again.
-									</p>
-								</div>
+								<Label htmlFor={columnFieldId} className="text-sm font-medium">
+									Save to
+								</Label>
 								<ColumnSelect
 									id={columnFieldId}
 									columns={columns}
@@ -496,7 +493,13 @@ export function SiteSourcesSettings({
 								>
 									{!siteColumn && (
 										<SelectItem value={SITE_COLUMN}>
-											{source.column} (new)
+											<ColumnLabel
+												column={{
+													name: `${source.column} (new)`,
+													icon: source.columnIcon,
+													color: source.columnColor,
+												}}
+											/>
 										</SelectItem>
 									)}
 								</ColumnSelect>

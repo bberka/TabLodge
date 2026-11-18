@@ -13891,6 +13891,7 @@ test('a save on YouTube goes to a new YouTube column, and Undo takes it back', a
 		(entry) => entry.name === 'YouTube',
 	);
 	assert.ok(column);
+	assert.deepEqual([column.icon, column.color], ['video', '#ff0000']);
 	assert.deepEqual(
 		harness.state.bookmarks.map((bookmark) => [
 			bookmark.url,
@@ -14336,6 +14337,58 @@ test('a private window saves only when private windows use the regular library',
 	const saved = await shared.sendMessage(watchLater(), fromYoutube);
 	assert.equal(saved.ok && saved.outcome, 'saved');
 	assert.equal(shared.state.bookmarks.length, 1);
+});
+
+test('a source column keeps the icon and color the user gives it, and saves keep going there', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const column = harness.state.bookmarkColumns.find(
+		(entry) => entry.name === 'YouTube',
+	);
+	assert.ok(column);
+	const edited = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: String(column.id),
+		name: 'YouTube',
+		icon: 'film',
+		color: 'violet',
+	});
+	assert.equal(edited.ok, true, edited.error);
+
+	const next = await harness.sendMessage(
+		watchLater('https://www.youtube.com/watch?v=jNQXAC9IVRw'),
+		fromYoutube,
+	);
+	assert.equal(next.ok && next.column, 'YouTube');
+	assert.deepEqual(
+		harness.state.bookmarkColumns
+			.filter((entry) => entry.name === 'YouTube')
+			.map((entry) => [entry.id, entry.icon, entry.color]),
+		[[column.id, 'film', 'violet']],
+	);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.columnId),
+		[column.id, column.id],
+	);
+});
+
+test('a source save into a column the user already named after the site leaves its look alone', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	const created = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'youtube',
+	});
+	assert.ok(created.ok);
+	const columnId = created.ok ? created.column.id : '';
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const column = harness.state.bookmarkColumns.find(
+		(entry) => entry.id === columnId,
+	);
+	assert.ok(column);
+	assert.deepEqual([column.icon, column.color], [undefined, undefined]);
+	assert.equal(harness.state.bookmarks[0]?.columnId, columnId);
 });
 
 test('a source saves to the column chosen in Settings, and to its own column once that one is deleted', async () => {
