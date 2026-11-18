@@ -1,0 +1,85 @@
+name: Claude review
+
+# Runs on the maintainer's Claude subscription (CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`), so it only runs
+# when asked: add the `claude-review` label to a pull request, or mention @claude in a comment. Pull requests from
+# forks get no secrets, so they cannot spend the subscription.
+on:
+  pull_request:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+concurrency:
+  group: claude-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: github.event_name == 'pull_request' && github.event.label.name == 'claude-review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request. The branch is checked out in the working directory.
+
+            Read AGENTS.md first, then the files under docs/agents/ that match what the diff touches
+            (extension.md, mobile.md, server.md, site.md, cross-app.md, ui.md, ci.md), and docs/PRIVACY.md
+            when the change touches permissions, stored data, or network behavior.
+
+            Report only real problems: bugs, data loss, security or privacy issues, broken sync compatibility,
+            and breaks of the repository's own rules. Check in particular:
+            - A feature ships in both the extension and the Android app, and each works without the sync server
+              or the other app. Only server-backed features (site icons, shared pages) may need sync.
+            - Entry points were considered: browser right-click menus for the extension, the share sheet and
+              app shortcuts for Android.
+            - No help text or tips shown permanently in the UI; they belong behind a help button or in Help.
+            - Docs, Help, and site copy that still describe the old behavior.
+            - The pull request carries proof (uploaded screenshots for UI changes).
+
+            Skip style nits the linter already covers. Say nothing about what is fine.
+
+            Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) for a problem on a
+            specific line, and one `gh pr comment` with the summary. If you find nothing, the summary says so in
+            one line.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob,Grep"
+
+  mention:
+    # Only people with write access can start it, so a stranger's comment cannot spend the subscription.
+    if: >-
+      (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
+      contains(github.event.comment.body, '@claude') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

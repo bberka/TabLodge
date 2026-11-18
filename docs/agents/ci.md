@@ -1,6 +1,6 @@
 # CI and releases
 
-Workflows are in `.github/workflows/`: `test.yml` (checks on every pull request and push), `pages.yml` (website), `mobile.yml` (debug APK), `sync-server.yml` (server image), `release.yml` (release), and `store-publish.yml` (Chrome Web Store and Firefox Add-ons). `test.yml` keeps one required gate job named like the branch ruleset expects; keep that name when you rename or split jobs.
+Workflows are in `.github/workflows/`: `test.yml` (checks on every pull request and push), `pages.yml` (website), `mobile.yml` (debug APK), `sync-server.yml` (server image), `release.yml` (release), `store-publish.yml` (Chrome Web Store and Firefox Add-ons), and `claude-review.yml` (Claude code review, see [Claude review](#claude-review)). `test.yml` keeps one required gate job named like the branch ruleset expects; keep that name when you rename or split jobs.
 
 `test.yml` runs these jobs in parallel, and the gate job `test` needs every one of them, so add a new job to its `needs`. On a pull request, a first job named `changes` lists the touched files through the GitHub API and turns off the jobs they cannot affect; the gate counts a skipped job as passed and a failed or cancelled one as failed. Pushes to `master` run everything.
 
@@ -90,3 +90,13 @@ The workflows upload packages only; the permission texts in the Chrome Web Store
 
 **Store publishing** also runs every six hours. It looks at the latest release, skips it when it is older than seven days, and starts a store job only when no earlier run reached that job's "accepted" step (`Chrome accepted the package`, `Firefox accepted the package`) for that version. Job names carry the version, so keep `Submit v<version> to ...` and the step names as they are. A failed Firefox upload also retries this way, though AMO refuses a version it already received.
 
+## Claude review
+
+`claude-review.yml` runs Claude Code on the maintainer's Claude subscription, not a paid API key. It reads the `CLAUDE_CODE_OAUTH_TOKEN` repository secret, which comes from `claude setup-token`. Without the secret both jobs fail, and no other check depends on them.
+
+It never runs on its own, so it uses the plan's limits only when asked:
+
+- Add the `claude-review` label to a pull request to review it against `AGENTS.md` and `docs/agents/`. Claude leaves inline comments and one summary comment. To review again after new commits, remove the label and add it back.
+- Mention `@claude` in a pull request or issue comment to ask a question or request a change. Only the owner, members, and collaborators can start it.
+
+Pull requests from forks get no secrets, so they cannot use the subscription.
