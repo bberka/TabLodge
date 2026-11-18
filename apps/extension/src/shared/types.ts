@@ -38,6 +38,10 @@ Where the optional PIN or password lock of the saved separate private library st
 `available`: this worker's private library can be locked (separate saved storage, set up). `manageHere`: false in regular windows, which only show the status.
 `expiresAt`: when the idle timeout locks the library, or null.
 */
+/**
+What the regular sync server holds for the private library: `connected` is a regular sync server, `hasKey` that it already has a private library protected by a PIN or password.
+*/
+export type PrivateServerInfo = {connected: boolean; hasKey: boolean};
 export type PrivateLockInfo = {
 	available: boolean;
 	manageHere: boolean;
@@ -666,6 +670,8 @@ export type TabLodgeMessages = {
 	};
 	REMOVE_PRIVATE_LOCK: {credential: string};
 	RESET_PRIVATE_LIBRARY: {};
+	GET_PRIVATE_SERVER: {};
+	JOIN_PRIVATE_SERVER: {credential: string};
 	SET_PRIVATE_LOCK_IDLE: {minutes: number};
 	GET_STATE: {};
 	GET_BOOKMARK_PROMPT: {url: string};
@@ -1112,6 +1118,8 @@ export type TabLodgeResponses = {
 	CHANGE_PRIVATE_LOCK_CREDENTIAL: PrivateLockInfo;
 	REMOVE_PRIVATE_LOCK: PrivateLockInfo;
 	RESET_PRIVATE_LIBRARY: PrivateLockInfo;
+	GET_PRIVATE_SERVER: {privateServer: PrivateServerInfo};
+	JOIN_PRIVATE_SERVER: PrivateLockInfo;
 	SET_PRIVATE_LOCK_IDLE: PrivateLockInfo;
 	GET_STATE: Store;
 	/**

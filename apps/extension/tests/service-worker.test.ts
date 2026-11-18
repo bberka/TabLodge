@@ -12750,6 +12750,93 @@ test('erasing the private library removes its data, its lock, and its sync key, 
 	);
 });
 
+test('a new browser joins the sync server’s private library with its PIN or password, which becomes its lock', async () => {
+	const server = syncServer();
+	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	const empty = await first.sendMessage({type: 'GET_PRIVATE_SERVER'});
+	assert.equal(
+		JSON.stringify(empty.privateServer),
+		'{"connected":true,"hasKey":false}',
+	);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+
+	const second = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: server.fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	assert.equal(
+		JSON.stringify(
+			(await second.sendMessage({type: 'GET_PRIVATE_SERVER'})).privateServer,
+		),
+		'{"connected":true,"hasKey":true}',
+	);
+	const wrong = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: 'not the password',
+	});
+	assert.equal(wrong.ok, false);
+	assert.equal(wrong.field, 'credential');
+	assert.equal(
+		(await second.sendMessage({type: 'GET_PRIVATE_LOCK'})).needsLock,
+		true,
+		'a wrong entry locks nothing',
+	);
+
+	const joined = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: lockPassword,
+	});
+	assert.equal(joined.ok, true, joined.error);
+	assert.equal(joined.enabled, true);
+	assert.equal(joined.needsLock, false);
+	const status = await second.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
+	assert.equal(status.privateSync?.status.connected, true);
+	const library = await second.sendMessage({type: 'GET_STATE'});
+	assert.ok(
+		library.bookmarks?.some(
+			(bookmark) => bookmark.url === 'https://secret-bookmark.example/',
+		),
+		'the server’s data joined this library',
+	);
+	assert.equal(
+		(
+			await second.sendMessage({
+				type: 'JOIN_PRIVATE_SERVER',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+		'a library that has a lock cannot join again',
+	);
+});
+
+test('a browser with no sync server has nothing to join', async () => {
+	const harness = await plainPrivateLibrary();
+	assert.equal(
+		JSON.stringify(
+			(await harness.sendMessage({type: 'GET_PRIVATE_SERVER'})).privateServer,
+		),
+		'{"connected":false,"hasKey":false}',
+	);
+	assert.equal(
+		(
+			await harness.sendMessage({
+				type: 'JOIN_PRIVATE_SERVER',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+	);
+});
+
 test('the saved private library reports that it needs a PIN or password until one is set', async () => {
 	const harness = await plainPrivateLibrary();
 	assert.equal(

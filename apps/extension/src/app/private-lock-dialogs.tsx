@@ -574,5 +574,60 @@ export function SetLockForm({
 }
 
 /**
+Takes the PIN or password the sync server's private library uses as this library's lock.
+*/
+export function JoinServerForm({
+	onDone,
+}: {
+	onDone: (info: PrivateLockInfo) => void;
+}) {
+	const [credential, setCredential] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState('');
+	const submit = async () => {
+		if (busy || credential.length === 0) {
+			return;
+		}
+
+		setBusy(true);
+		setError('');
+		const result = await send('JOIN_PRIVATE_SERVER', {credential});
+		setBusy(false);
+		if (result.ok) {
+			setCredential('');
+			onDone(result);
+			return;
+		}
+
+		setError(result.error);
+		setCredential('');
+	};
+
+	return (
+		<form
+			className="grid gap-4"
+			onSubmit={(event) => {
+				event.preventDefault();
+				void submit();
+			}}
+		>
+			<PasscodeEntry
+				value={credential}
+				error={error}
+				disabled={busy}
+				onChange={(value) => {
+					setCredential(value);
+					setError('');
+				}}
+			/>
+			<Button type="submit" disabled={busy || credential.length === 0}>
+				<Lock aria-hidden="true" />
+				{busy ? 'Joining…' : 'Use it and open'}
+			</Button>
+		</form>
+	);
+}
+
+/**
 Settings panel for the lock. Regular windows show the status and point to a private window, because the key lives with the private worker.
 */

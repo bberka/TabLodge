@@ -16,13 +16,14 @@ import {
 	LOCK_RECORD_KEY,
 	LOCK_SESSION_KEY,
 } from '../shared/private-lock';
-import type {PrivateLockInfo} from '../shared/types';
+import type {PrivateLockInfo, PrivateServerInfo} from '../shared/types';
 import {send} from './message-client';
 import {
 	ChangeDialog,
 	EnableDialog,
 	IdleSelect,
 	RemoveDialog,
+	JoinServerForm,
 	ResetDialog,
 	SetLockForm,
 } from './private-lock-dialogs';
@@ -235,12 +236,30 @@ function LockScreen({
 }
 
 /**
-Asks for a first PIN or password before the saved separate library opens. The only way past it is to set one, or to
-stop using a separate saved library.
+Asks for a first PIN or password before the saved separate library opens. When the sync server already holds a private
+library, the first choice is its PIN or password, so every browser ends up with one. The only other ways past are to
+keep the library on this device with its own PIN or password, or to stop using a separate saved library.
 */
 function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 	const headingId = useId();
 	const [error, setError] = useState('');
+	const [server, setServer] = useState<PrivateServerInfo>();
+	const [deviceOnly, setDeviceOnly] = useState(false);
+	useEffect(() => {
+		void send('GET_PRIVATE_SERVER').then((result) => {
+			setServer(
+				result.ok ? result.privateServer : {connected: false, hasKey: false},
+			);
+		});
+	}, []);
+	if (!server) {
+		return (
+			<p className="sr-only" role="status">
+				Loading private {PROJECT.name}…
+			</p>
+		);
+	}
+
 	const switchToRegular = async () => {
 		const result = await send('SET_PRIVATE_CONFIG', {mode: 'shared'});
 		if (result.ok) {
@@ -253,6 +272,7 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 		}
 	};
 
+	const fromServer = server.hasKey && !deviceOnly;
 	return (
 		<main
 			className="grid min-h-screen place-items-center p-4"
@@ -262,15 +282,39 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 				<div className="grid gap-2">
 					<Lock className="h-6 w-6 text-primary" aria-hidden="true" />
 					<h1 id={headingId} className="text-lg font-semibold">
-						Set a PIN or password
+						{fromServer
+							? 'Use your sync server’s PIN'
+							: 'Set a PIN or password'}
 					</h1>
 					<p className="text-sm text-muted-foreground">
-						The separate private library is encrypted on this device and opens
-						only with a PIN or password. Nothing can recover a lost one. It also
-						protects what private sync sends.
+						{fromServer
+							? 'Your sync server already holds a private library. Enter its PIN or password once: it becomes this library’s lock, and the server’s data joins what is here.'
+							: 'The separate private library is encrypted on this device and opens only with a PIN or password. Nothing can recover a lost one. It also protects what private sync sends.'}
 					</p>
+					{server.hasKey && deviceOnly && (
+						<p className="text-sm text-muted-foreground">
+							Kept only on this device, this library does not match the one on
+							your server. Syncing it later needs the server’s PIN or password.
+						</p>
+					)}
 				</div>
-				<SetLockForm onDone={onDone} />
+				{fromServer ? (
+					<JoinServerForm onDone={onDone} />
+				) : (
+					<SetLockForm onDone={onDone} />
+				)}
+				{server.hasKey && (
+					<Button
+						type="button"
+						variant="link"
+						className="justify-self-start px-0"
+						onClick={() => setDeviceOnly(!deviceOnly)}
+					>
+						{deviceOnly
+							? 'Use the PIN from your sync server'
+							: 'Keep only on this device instead'}
+					</Button>
+				)}
 				{error && (
 					<p role="alert" className="text-sm text-destructive">
 						{error}

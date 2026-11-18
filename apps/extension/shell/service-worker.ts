@@ -210,6 +210,7 @@ type BookmarkFields = import('../src/shared/types').BookmarkFields;
 type DuplicateMode = import('../src/shared/types').DuplicateMode;
 type EraseScope = import('../src/shared/types').EraseScope;
 type PrivateSyncInfo = import('../src/shared/types').PrivateSyncInfo;
+type PrivateServerInfo = import('../src/shared/types').PrivateServerInfo;
 type Credential = import('../src/shared/passcode').Credential;
 type SyncStatus = import('../src/shared/sync/client').SyncStatus;
 type ImportOptions = import('../src/shared/types').ImportOptions;
@@ -1594,6 +1595,96 @@ async function enablePrivateSync(
 	await privateSync.connect(target.url, target.token);
 	await wakeSync();
 	return {ok: true, privateSync: await privateSyncInfo()};
+}
+
+/**
+What the regular sync server holds for this private library, for the set-a-PIN screen: whether there is a server at all
+and whether it already has a private library (a key) that this browser can join. Errors count as nothing found.
+*/
+async function privateServerInfo(): Promise<PrivateServerInfo> {
+	const regular = await regularSyncConfig();
+	if (!regular) {
+		return {connected: false, hasKey: false};
+	}
+
+	try {
+		const features = await serverField(regular, '/v1/status', 'features');
+		if (!Array.isArray(features) || !features.includes('private')) {
+			return {connected: true, hasKey: false};
+		}
+
+		const key = parseServerKey(
+			await serverField(privateSyncTarget(regular), '/v1/key', 'key'),
+		);
+		return {connected: true, hasKey: key !== undefined};
+	} catch {
+		return {connected: true, hasKey: false};
+	}
+}
+
+/**
+For a saved library with no lock: takes the PIN or password the server's private library is protected with as this
+library's lock, then turns private sync on, so the server's data merges into what is here. Nothing is locked unless the
+credential opens the server's key.
+*/
+async function joinPrivateServer(
+	credential: string,
+): Promise<ActionResult<'JOIN_PRIVATE_SERVER'>> {
+	await privateConfigReady;
+	if (!privateContext) {
+		return {
+			ok: false,
+			error: 'Open Settings in a private window to set the lock.',
+		};
+	}
+
+	if (
+		privateConfig.mode !== 'saved' ||
+		!privateConfig.configured ||
+		(await privateLock.readRecord()) !== undefined
+	) {
+		return {ok: false, error: 'This private library already has a lock.'};
+	}
+
+	const regular = await regularSyncConfig();
+	const serverKey = regular
+		? parseServerKey(
+				await serverField(privateSyncTarget(regular), '/v1/key', 'key'),
+			)
+		: undefined;
+	if (!serverKey) {
+		return {
+			ok: false,
+			error: 'The sync server has no private library to join.',
+		};
+	}
+
+	try {
+		await joinSyncKey(serverKey, credential);
+	} catch (error) {
+		if (
+			error instanceof PrivateLockError &&
+			error.code === 'wrong-credential'
+		) {
+			return {
+				ok: false,
+				field: 'credential',
+				error:
+					'That is not the PIN or password protecting private data on the sync server.',
+			};
+		}
+
+		throw error;
+	}
+
+	// A PIN is 4 to 8 digits; the server's key does not say which kind it was made with.
+	const kind = /^\d{4,8}$/.test(credential) ? 'pin' : 'password';
+	await mutate(async () => {
+		await privateLock.enable({kind, value: credential});
+	});
+	invalidateSettings();
+	const enabled = await enablePrivateSync(credential);
+	return enabled.ok ? {ok: true, ...(await privateLockInfo())} : enabled;
 }
 
 /**
@@ -9125,6 +9216,8 @@ const PRIVATE_LOCK_OPEN_MESSAGES = new Set<string>([
 	'LOCK_PRIVATE',
 	'TOUCH_PRIVATE_LOCK',
 	'RESET_PRIVATE_LIBRARY',
+	'GET_PRIVATE_SERVER',
+	'JOIN_PRIVATE_SERVER',
 	'HANDOFF_NEW_TAB',
 	'PRIVATE_SYNC_STATUS',
 ]);
@@ -9867,6 +9960,16 @@ async function handleMessage(
 		case 'SET_PRIVATE_LOCK_IDLE':
 		case 'RESET_PRIVATE_LIBRARY': {
 			return handlePrivateLockMessage(message);
+		}
+
+		case 'GET_PRIVATE_SERVER': {
+			return {ok: true, privateServer: await privateServerInfo()};
+		}
+
+		case 'JOIN_PRIVATE_SERVER': {
+			return typeof message.credential === 'string' && message.credential !== ''
+				? joinPrivateServer(message.credential)
+				: {ok: false, error: 'Enter the PIN or password.'};
 		}
 
 		case 'SET_PRIVATE_CONFIG': {
