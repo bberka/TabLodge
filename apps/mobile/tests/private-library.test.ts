@@ -60,7 +60,8 @@ vi.mock(
 
 type Phone = typeof PhoneModule;
 
-const {memory, failRemoval} = await import('./support/memory-storage');
+const {memory, failRemoval, failWrite} =
+	await import('./support/memory-storage');
 const {prefs} = await import('./support/fake-preferences');
 
 let phones: Phone[] = [];
@@ -119,6 +120,7 @@ async function serverRecords(): Promise<Array<{kind: string; value: unknown}>> {
 beforeEach(() => {
 	memory.clear();
 	failRemoval.clear();
+	failWrite.clear();
 	phones = [];
 	server = makeServer();
 	connectGlobals(server);
@@ -280,6 +282,21 @@ describe('without a server', () => {
 		);
 	});
 
+	test('an erase that cannot even start changes nothing and says so', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://a.example/');
+		failWrite.add('tablodge.private.erasing');
+		await assert.rejects(
+			async () => phone.removePrivate(),
+			phone.EraseNotStartedError,
+		);
+		assert.equal(phone.privateExists(), true);
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
+		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+	});
+
 	test('an erase that fails on the safety copy is finished the same way', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
@@ -338,16 +355,26 @@ const sealedCount = async () =>
 	(await serverRecords()).filter((record) => isSealed(record.value)).length;
 
 describe('with the extension on the same server', () => {
-	test('a phone library without a PIN syncs plain, and the extension reads it', async () => {
+	test('a library with no PIN does not sync, so nothing leaves it unsealed, until it has one', async () => {
 		const phone = await startPhone();
 		await phone.setupPrivate();
 		await addLink(phone, 'https://a.example/');
 		await connectPhone(phone);
 		await phone.syncPrivate();
+		assert.equal((await serverRecords()).length, 0, 'nothing was sent');
 		const extension = makeExtension(server);
 		await extension.sync();
+		assert.deepEqual(urlsOf(extension.store), []);
+
+		await phone.protectPrivate(PIN);
+		await phone.syncPrivate();
+		assert.ok((await serverRecords()).length > 0);
+		assert.ok(
+			(await serverRecords()).every((record) => isSealed(record.value)),
+		);
+		await extension.enterCredential(PIN.value);
+		await extension.sync();
 		assert.deepEqual(urlsOf(extension.store), ['https://a.example/']);
-		assert.equal(await sealedCount(), 0);
 	});
 
 	test('a phone library with a PIN sends only sealed values, and the extension reads them after joining with the PIN', async () => {
@@ -692,6 +719,78 @@ describe('with the extension on the same server', () => {
 		);
 	});
 
+	test('setting up while an erase is still running waits for it and keeps the new library', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://old.example/');
+		const erasing = phone.removePrivate();
+		await Promise.all([erasing, phone.setupPrivate(PASSWORD)]);
+		assert.equal(phone.privateExists(), true);
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'ok');
+		assert.deepEqual(phone.getPrivateStore().bookmarks, []);
+	});
+
+	test('a join does not install the server’s lock after private sync was turned off while it waited', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const phone = await startPhone();
+		await connectPhone(phone);
+		await phone.setupPrivate(PIN);
+
+		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const {promise: reached, resolve: markReached} =
+			Promise.withResolvers<void>();
+		const real = globalThis.fetch;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			if (String(url).endsWith('/private/v1/key') && !init?.method) {
+				markReached();
+				await gate;
+			}
+
+			return real(url, init);
+		});
+		const joining = phone.openFromServer(PASSWORD.value);
+		await reached;
+		prefs.syncPrivate = false;
+		release();
+		assert.equal((await joining).ok, false);
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
+		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'wrong');
+	});
+
+	test('a phone-only PIN on a library that kept the server’s key does not become the server’s credential', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const held = extension.key;
+		assert.ok(held);
+		const keyBefore = server.privateLog.key;
+		memory.set('tablodge.private.on', 'true');
+		memory.set(
+			'tablodge.private.keptKey',
+			JSON.stringify({id: held.id, wrapped: held.wrapped, raw: held.raw}),
+		);
+		const phone = await startPhone();
+		await connectPhone(phone);
+		await phone.protectPrivate(PIN);
+		await phone.syncPrivate();
+		assert.equal(
+			server.privateLog.key,
+			keyBefore,
+			'the server’s key is untouched',
+		);
+		assert.equal(phone.getPrivateStatus().needsKey, true);
+		// The server's credential still opens the server's library, and the phone's own does not.
+		assert.deepEqual(await phone.openFromServer(PIN.value), {
+			ok: false,
+			reason: 'wrong',
+		});
+		assert.deepEqual(await phone.openFromServer(PASSWORD.value), {ok: true});
+	});
+
 	test('a key the phone cannot read is a failed lookup, not an empty server', async () => {
 		const phone = await startPhone();
 		await connectPhone(phone);
@@ -954,17 +1053,31 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
-	test('a PIN added after the library has synced seals what is already on the server, and the extension can still read it', async () => {
-		const phone = await startPhone();
-		await phone.setupPrivate();
-		await addLink(phone, 'https://a.example/');
-		await addLink(phone, 'https://b.example/');
-		await connectPhone(phone);
-		await phone.syncPrivate();
+	test('a PIN added to a library from an earlier version seals what is already plain on the server, and the extension can still read it', async () => {
+		// An earlier version synced this library plain: the server holds plain records.
+		const older = makeExtension(server);
+		older.edit((store) =>
+			addBookmark(
+				addBookmark(
+					store,
+					{url: 'https://a.example/', title: 'A', columnId: ''},
+					'a',
+					1,
+				),
+				{url: 'https://b.example/', title: 'B', columnId: ''},
+				'b',
+				2,
+			),
+		);
+		await older.sync();
 		assert.equal(await sealedCount(), 0);
 		const before = (await serverRecords()).length;
 
+		const phone = await startPhone();
+		await phone.setupPrivate();
+		await connectPhone(phone);
 		await phone.protectPrivate(PIN);
+		await phone.syncPrivate();
 		const records = await serverRecords();
 		assert.equal(records.length, before);
 		assert.ok(
@@ -1011,33 +1124,6 @@ describe('with the extension on the same server', () => {
 		await extension.enterCredential(PIN.value);
 		await extension.sync();
 		assert.deepEqual(urlsOf(extension.store), ['https://a.example/']);
-	});
-
-	test('the extension protects a library the phone synced plain: the phone asks for the PIN, then carries on', async () => {
-		const phone = await startPhone();
-		await phone.setupPrivate();
-		await addLink(phone, 'https://phone.example/');
-		await connectPhone(phone);
-		await phone.syncPrivate();
-
-		const extension = makeExtension(server);
-		await extension.sync();
-		await extension.protect(PIN);
-		await extension.client.resendAll();
-		assert.ok(
-			(await serverRecords()).every((record) => isSealed(record.value)),
-		);
-
-		await phone.syncPrivate();
-		assert.equal(phone.getPrivateStatus().needsKey, true);
-		assert.deepEqual(await phone.openFromServer(PIN.value), {ok: true});
-		await addLink(phone, 'https://more.example/');
-		await phone.syncPrivate();
-		await extension.sync();
-		assert.deepEqual(urlsOf(extension.store), [
-			'https://more.example/',
-			'https://phone.example/',
-		]);
 	});
 
 	test('changing the PIN on the phone keeps the extension working, and a new join needs the new PIN', async () => {

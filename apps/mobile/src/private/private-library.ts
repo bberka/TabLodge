@@ -358,7 +358,14 @@ export async function refreshPrivateStatus(): Promise<void> {
 Starts syncing when the library is open and a server is connected; the client does nothing without a connection.
 */
 function runClient(): void {
-	if (client || !exists || state.locked || !getPreferences().syncPrivate) {
+	// A library that has no PIN or password yet does not sync: what it sends would not be sealed.
+	if (
+		client ||
+		!exists ||
+		state.locked ||
+		state.needsPin ||
+		!getPreferences().syncPrivate
+	) {
 		return;
 	}
 
@@ -456,37 +463,34 @@ export async function setupPrivate(credential?: Credential): Promise<void> {
 }
 
 async function protect(credential: Credential): Promise<void> {
-	// A library whose PIN was removed takes the same key back, so the server's copy stays readable.
-	const key = kept?.raw ?? generateKey();
-	await setLock({
-		id: kept?.id ?? randomUUID(),
-		wrapped: await wrapKey(key, credential.value),
+	// Always a key and a lock of its own. A key a library kept from the server is tied to the server's credential, which a
+	// PIN chosen here must not replace: joining the server's library is what takes that credential, after checking it.
+	const key = generateKey();
+	const wrapped = await wrapKey(key, credential.value);
+	const hadKept = kept !== undefined;
+	const installing = setLock({
+		id: randomUUID(),
+		wrapped,
 		kind: credential.kind,
-		...(kept && {unsent: true as const}),
 	});
 	unlockedKey = key;
-	if (!kept) {
-		return;
-	}
-
 	kept = undefined;
-	await removeKeys([KEPT_KEY]);
+	await installing;
+	if (hadKept) {
+		await removeKeys([KEPT_KEY]);
+	}
 }
 
 /**
 Puts a PIN or password on a library that has none. The next sync gives the server the same lock.
 */
 export async function protectPrivate(credential: Credential): Promise<void> {
-	const again = kept !== undefined;
 	await protect(credential);
 	stopClient();
 	refreshState();
 	runClient();
-	if (!again) {
-		// What this library already sent the server is plain there. Every record goes again, sealed with the new key.
-		await client?.resendAll().catch(() => undefined);
-	}
-
+	// What this library already sent the server is plain there. Every record goes again, sealed with the new key.
+	await client?.resendAll().catch(() => undefined);
 	await refreshPrivateStatus();
 }
 
@@ -583,9 +587,9 @@ async function eraseNow(): Promise<void> {
 	try {
 		// Before anything is deleted: if this fails, nothing has changed.
 		await writeJson(ERASING_KEY, true);
-	} catch (error) {
+	} catch {
 		runClient();
-		throw error;
+		throw new EraseNotStartedError('The erase did not start.');
 	}
 
 	erasing = true;
@@ -642,6 +646,11 @@ export type OpenResult =
 			reason: 'not-connected' | 'sync-off' | 'credential' | 'wrong' | 'error';
 			message?: string;
 	  };
+
+/**
+The erase did not start: nothing was deleted and the library is as it was, so it can simply be tried again.
+*/
+export class EraseNotStartedError extends Error {}
 
 const SERVER_CHECK_MS = 8000;
 
@@ -757,6 +766,16 @@ export async function openFromServer(
 			// above wins over this join.
 			const committed = await serial(async () => {
 				if (epoch !== started || isCancelled()) {
+					return false;
+				}
+
+				// Still the same server, with private sync still on: a change made while the PIN was checked stands.
+				const now = await target();
+				if (
+					!getPreferences().syncPrivate ||
+					now?.url !== to.url ||
+					now.token !== to.token
+				) {
 					return false;
 				}
 
