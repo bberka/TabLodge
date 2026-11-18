@@ -846,7 +846,9 @@ export function createPrivateLock(env: LockEnv) {
 				);
 			}
 
-			const problem = validateCredential(credential.value);
+			const problem = credential.verified
+				? null
+				: validateCredential(credential.value);
 			if (problem) {
 				throw new PrivateLockError('invalid', problem);
 			}
@@ -900,7 +902,7 @@ export function createPrivateLock(env: LockEnv) {
 				);
 			}
 
-			const problem = validateCredential(next.value);
+			const problem = next.verified ? null : validateCredential(next.value);
 			if (problem) {
 				throw new PrivateLockError('invalid', problem);
 			}

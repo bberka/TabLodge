@@ -102,7 +102,9 @@ export async function encryptBytes(
 	data: Uint8Array,
 	credential: Credential,
 ): Promise<Uint8Array> {
-	const problem = validateCredential(credential.value);
+	const problem = credential.verified
+		? null
+		: validateCredential(credential.value);
 	if (problem) {
 		throw new EnvelopeError('invalid-credential', problem);
 	}

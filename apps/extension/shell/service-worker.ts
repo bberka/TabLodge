@@ -1591,11 +1591,12 @@ async function enablePrivateSync(
 				await mutate(async () => {
 					await privateLock.changeCredential(credential, {
 						value: serverCredential,
+						verified: true,
 					});
 				});
 			}
 		} else {
-			key = await createSyncKey({value: credential});
+			key = await createSyncKey({value: credential, verified: true});
 			if (!(await storeServerKey(target, key, null))) {
 				return {
 					ok: false,
@@ -1707,9 +1708,7 @@ async function joinPrivateServer(
 	}
 
 	await mutate(async () => {
-		await privateLock.enable({
-			value: credential,
-		});
+		await privateLock.enable({value: credential, verified: true});
 	});
 	invalidateSettings();
 	const enabled = await enablePrivateSync(credential);
@@ -1762,17 +1761,38 @@ async function rewrapPrivateSyncKey(credential: Credential) {
 
 	const next = await rewrapSyncKey(key, credential);
 	// Another browser may have rewrapped the same key already, so the server's copy is what the swap checks.
-	if (
-		!(await storeServerKey(
-			target,
-			next,
-			serverKeyText({...key, wrapped: server.wrapped}),
-		))
-	) {
-		throw new Error(REWRAP_FAILED_MESSAGE);
+	const committed = await storeServerKey(
+		target,
+		next,
+		serverKeyText({...key, wrapped: server.wrapped}),
+	).catch(async () => false);
+	if (!committed) {
+		// A reply that was lost may still have been applied: what the server holds now decides.
+		const now = await serverField(target, '/v1/key', 'key').then(
+			parseServerKey,
+			() => undefined,
+		);
+		if (now?.id !== next.id || now.wrapped !== next.wrapped) {
+			throw new Error(REWRAP_FAILED_MESSAGE);
+		}
 	}
 
-	await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: next}));
+	// The server has the new wrapper. A cache that cannot be written now (the library locked meanwhile) is brought up
+	// to date from the server on the next round, so it is not a reason to undo the change.
+	await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: next})).catch(
+		() => undefined,
+	);
+}
+
+/**
+Password changes run one after another, from the local write through the server's update and any undo, so two pages
+changing it at once cannot each win on one side.
+*/
+let rotating: Promise<unknown> = Promise.resolve();
+async function rotatePassword<T>(work: () => Promise<T>): Promise<T> {
+	const run = rotating.then(work, work);
+	rotating = run.catch(() => undefined);
+	return run;
 }
 
 /**
@@ -9330,23 +9350,35 @@ async function handlePrivateLockMessage(
 				}
 
 				const {credential, current} = message;
-				const before = parseLockRecord(
-					(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
-				);
-				await mutate(async () => {
-					await privateLock.changeCredential(current, {value: credential});
-				});
-				try {
-					await rewrapPrivateSyncKey({value: credential});
-				} catch {
-					// The server keeps the old password, so the library goes back to it.
-					if (before) {
-						await mutate(async () => {
-							await privateLock.changeCredential(credential, {value: current});
-						});
+				const failed = await rotatePassword(async () => {
+					const before = parseLockRecord(
+						(await chrome.storage.local.get([LOCK_RECORD_KEY]))[
+							LOCK_RECORD_KEY
+						],
+					);
+					await mutate(async () => {
+						await privateLock.changeCredential(current, {value: credential});
+					});
+					try {
+						await rewrapPrivateSyncKey({value: credential, verified: true});
+					} catch {
+						// The server keeps the old password, so the library goes back to it.
+						if (before) {
+							await mutate(async () => {
+								await privateLock.changeCredential(credential, {
+									value: current,
+									verified: true,
+								});
+							});
+						}
+
+						return {ok: false as const, error: REWRAP_FAILED_MESSAGE};
 					}
 
-					return {ok: false, error: REWRAP_FAILED_MESSAGE};
+					return undefined;
+				});
+				if (failed) {
+					return failed;
 				}
 
 				break;

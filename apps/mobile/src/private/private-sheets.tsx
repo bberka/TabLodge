@@ -1,7 +1,6 @@
 import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {
-	clampCredentialInput,
 	LOST_CREDENTIAL_NOTE,
 	validateCredential,
 	weakPasswordHint,
@@ -232,10 +231,16 @@ function SetupForm({
 					autoCorrect={false}
 					error={value === '' ? undefined : problem}
 					onChangeText={(text) => {
-						setValue(clampCredentialInput(text));
+						setValue(text);
 					}}
 				/>
-				{weak && <Text style={{color: colors.muted}}>{weak}</Text>}
+				{/* Always mounted, so TalkBack announces the hint when its text arrives. */}
+				<Text
+					accessibilityLiveRegion="polite"
+					style={{color: colors.muted, marginTop: weak ? 0 : -14}}
+				>
+					{weak ?? ''}
+				</Text>
 				<Field
 					secureTextEntry
 					label="Type it again"
@@ -245,7 +250,7 @@ function SetupForm({
 					autoCorrect={false}
 					error={mismatch ? 'These do not match.' : undefined}
 					onChangeText={(text) => {
-						setAgain(clampCredentialInput(text));
+						setAgain(text);
 					}}
 				/>
 				<Note>{LOST_CREDENTIAL_NOTE}</Note>
@@ -586,7 +591,7 @@ function ServerForm({
 				<Field
 					secureTextEntry
 					autoFocus
-					label="Password from the extension"
+					label="Password for the server's private library"
 					icon="lock-closed-outline"
 					value={value}
 					autoCapitalize="none"

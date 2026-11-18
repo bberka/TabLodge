@@ -8,6 +8,12 @@
 
 export type Credential = {
 	value: string;
+	/**
+	The value already opened something that is protected (a lock, or the server's key), so it is passed on as it is and
+	the new-password rule is not applied again. A password that opens in one Unicode form must not be refused in an
+	equivalent one, or by a rule an older version did not have.
+	*/
+	verified?: true;
 };
 
 export const PASSWORD_MIN_LENGTH = 4;
@@ -16,13 +22,6 @@ export const PASSWORD_MAX_LENGTH = 128;
 Under this many characters, or digits only, a password is easy to guess, and the field says so while it is typed.
 */
 export const STRONG_PASSWORD_LENGTH = 8;
-
-/**
-What a field keeps of typed or pasted text, so a form stops the input instead of reporting it afterwards. It stops at
-the maximum, counted in characters, like `validateCredential`.
-*/
-export const clampCredentialInput = (value: string) =>
-	[...value].slice(0, PASSWORD_MAX_LENGTH).join('');
 
 export const PASSWORD_LABEL = 'Password';
 
@@ -46,7 +45,10 @@ export function weakPasswordHint(value: string): string | null {
 		return null;
 	}
 
-	return [...value].length < STRONG_PASSWORD_LENGTH || /^\d+$/.test(value)
+	// The way the key is derived: compatibility forms count as one, so the same text is judged the same.
+	const text = value.normalize('NFKC');
+	return [...text].length < STRONG_PASSWORD_LENGTH ||
+		/^\p{Decimal_Number}+$/u.test(text)
 		? 'Short or number-only passwords are easy to guess.'
 		: null;
 }
@@ -61,8 +63,9 @@ export function validateCredential(value: string): string | null {
 		return 'Enter a password.';
 	}
 
-	// Count characters, not UTF-16 units, so an emoji is one.
-	const {length} = [...value];
+	// Count characters, not UTF-16 units, so an emoji is one, and after the normalization the key is derived with, so
+	// the same text is accepted or refused whichever way it was typed.
+	const {length} = [...value.normalize('NFKC')];
 	if (length < PASSWORD_MIN_LENGTH) {
 		return `A password needs at least ${PASSWORD_MIN_LENGTH} characters.`;
 	}

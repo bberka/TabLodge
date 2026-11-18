@@ -13251,6 +13251,138 @@ test('turning private sync off deletes its key even when no client is running', 
 	);
 });
 
+test('a server password made in one Unicode form joins when typed in an equivalent one that the new rule would call too short', async () => {
+	const server = syncServer();
+	const {createSyncKey, serverKeyText} =
+		await import('../src/shared/private-sync');
+	// A key an older version wrapped with four code points that normalize to two characters.
+	const key = await createSyncKey({value: 'e\u0301e\u0301', verified: true});
+	const posted = await server.fetch(
+		'https://sync.example.test/private/v1/key',
+		{
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${SYNC_TOKEN}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({key: serverKeyText(key), previous: null}),
+		},
+	);
+	assert.equal(posted.status, 200);
+
+	const browser = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: server.fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	const joined = await browser.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: 'éé',
+	});
+	assert.equal(joined.ok, true, joined.error);
+	assert.equal(
+		(await browser.sendMessage({type: 'GET_PRIVATE_LOCK'})).needsLock,
+		false,
+	);
+});
+
+test('two password changes started together run one after another, so the server and the browser end on the same one', async () => {
+	const server = syncServer();
+	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	const [one, two] = await Promise.all([
+		first.sendMessage({
+			type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+			current: lockPassword,
+			credential: 'blue blue blue',
+		}),
+		first.sendMessage({
+			type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+			current: 'blue blue blue',
+			credential: 'plum plum plum',
+		}),
+	]);
+	assert.equal(one.ok, true, one.error);
+	assert.equal(two.ok, true, two.error);
+
+	const other = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: server.fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	assert.equal(
+		(
+			await other.sendMessage({
+				type: 'JOIN_PRIVATE_SERVER',
+				credential: 'blue blue blue',
+			})
+		).ok,
+		false,
+		'the first password no longer opens the server key',
+	);
+	const joined = await other.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: 'plum plum plum',
+	});
+	assert.equal(joined.ok, true, joined.error);
+});
+
+test('a password change whose reply was lost, but that the server applied, is kept', async () => {
+	const server = syncServer();
+	let drop = false;
+	const lossy = async (url: string, init: RequestInit) => {
+		const response = await server.fetch(url, init);
+		return drop && init.method === 'POST' && url.endsWith('/private/v1/key')
+			? new Response('{}', {status: 500})
+			: response;
+	};
+
+	const first = await plainPrivateLibrary({fetch: lossy}, regularSync);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	drop = true;
+	const changed = await first.sendMessage({
+		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+		current: lockPassword,
+		credential: 'blue blue blue',
+	});
+	assert.equal(changed.ok, true, changed.error);
+	drop = false;
+	await first.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.equal(
+		(
+			await first.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+		'the library did not go back to the old password',
+	);
+	assert.equal(
+		(
+			await first.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: 'blue blue blue',
+			})
+		).ok,
+		true,
+	);
+});
+
 test('a password change the sync server cannot take is undone, so the library and the server keep one', async () => {
 	const server = syncServer();
 	let reject = false;

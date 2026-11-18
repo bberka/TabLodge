@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
-	clampCredentialInput,
 	PASSWORD_MAX_LENGTH,
 	PASSWORD_MIN_LENGTH,
 	STRONG_PASSWORD_LENGTH,
@@ -40,16 +39,19 @@ test('length counts characters, not UTF-16 units', () => {
 	assert.match(validateCredential('🔑'.repeat(129)) ?? '', /at most 128/);
 });
 
-test('a field stops input at the limit and keeps everything else', () => {
-	assert.equal(clampCredentialInput('12 34-ab5'), '12 34-ab5');
-	assert.equal(clampCredentialInput('a'.repeat(200)).length, 128);
-	assert.equal(clampCredentialInput('abc'), 'abc');
+test('length is judged after the normalization the key is derived with, so the same text is judged the same', () => {
+	// Four code points that normalize to two characters are too short, however they were typed.
+	assert.match(validateCredential('e\u0301e\u0301') ?? '', /at least 4/);
+	assert.match(validateCredential('éé') ?? '', /at least 4/);
+	assert.equal(validateCredential('e\u0301e\u0301e\u0301e\u0301'), null);
+	assert.equal(validateCredential('éééé'), null);
+	// A compatibility form (full width letters) counts as the plain letters it becomes.
+	assert.match(validateCredential('ａｂｃ') ?? '', /at least 4/);
 });
 
-test('an emoji password is capped by characters, not UTF-16 units', () => {
-	const clamped = clampCredentialInput('😀'.repeat(200));
-	assert.equal([...clamped].length, 128);
-	assert.equal(validateCredential(clamped), null);
+test('a password past the limit is refused, not cut, so what is typed is what is kept', () => {
+	assert.match(validateCredential('x'.repeat(129)) ?? '', /at most 128/);
+	assert.equal(validateCredential('x'.repeat(128)), null);
 });
 
 test('a short or number-only password gets a hint while it is typed, and a longer mixed one does not', () => {
@@ -64,4 +66,7 @@ test('a short or number-only password gets a hint while it is typed, and a longe
 	// Characters, not UTF-16 units.
 	assert.match(weakPasswordHint('🔑'.repeat(7)) ?? '', /easy to guess/);
 	assert.equal(weakPasswordHint('🔑'.repeat(8)), null);
+	// Digits of any script are digits.
+	assert.match(weakPasswordHint('١٢٣٤٥٦٧٨') ?? '', /easy to guess/);
+	assert.match(weakPasswordHint('１２３４５６７８９０') ?? '', /easy to guess/);
 });

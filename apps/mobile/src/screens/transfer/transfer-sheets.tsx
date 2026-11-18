@@ -487,7 +487,12 @@ export function ShareSheet({
 							error={problem}
 							onChangeText={setPassword}
 						/>
-						{weak && <Text style={{color: colors.muted}}>{weak}</Text>}
+						<Text
+							accessibilityLiveRegion="polite"
+							style={{color: colors.muted, marginTop: weak ? 0 : -14}}
+						>
+							{weak ?? ''}
+						</Text>
 						{view === 'private' && (
 							<Text style={{color: colors.muted}}>
 								This backs up the private library, not the regular one. Without

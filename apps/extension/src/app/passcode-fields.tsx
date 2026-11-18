@@ -5,12 +5,12 @@ import {useId, useState} from 'react';
 import {CircleAlert, Eye, EyeOff} from 'lucide-react';
 import {Checkbox, Input, Label} from '../shared/ui';
 import {
-	clampCredentialInput,
 	LOST_CREDENTIAL_NOTE,
 	PASSWORD_LABEL,
 	validateCredential,
 	weakPasswordHint,
 } from '../shared/passcode';
+import {cn} from '@/lib/utils';
 
 export type PasscodeDraft = {
 	value: string;
@@ -91,6 +91,7 @@ function ShowHideField({
 			<Label htmlFor={id}>{label}</Label>
 			<div className="flex items-center gap-2">
 				<Input
+					required
 					id={id}
 					type={shown ? 'text' : 'password'}
 					inputMode="text"
@@ -99,11 +100,10 @@ function ShowHideField({
 					spellCheck={false}
 					value={value}
 					disabled={disabled}
+					aria-required="true"
 					aria-invalid={problem ? true : undefined}
 					aria-describedby={describedBy}
-					onChange={(event) =>
-						onChange(clampCredentialInput(event.target.value))
-					}
+					onChange={(event) => onChange(event.target.value)}
 				/>
 				{onToggleShown && (
 					<ShowHideButton
@@ -113,21 +113,17 @@ function ShowHideField({
 					/>
 				)}
 			</div>
-			{problem ? (
-				<p id={describedBy} className="text-xs text-destructive">
-					{problem}
-				</p>
-			) : (
-				hint && (
-					<p
-						id={describedBy}
-						role="status"
-						className="text-xs text-muted-foreground"
-					>
-						{hint}
-					</p>
-				)
-			)}
+			{/* Always in the page, so a screen reader announces what it later says (a problem or the weak password hint). */}
+			<p
+				id={describedBy}
+				role="status"
+				className={cn(
+					'text-xs empty:-mt-1.5',
+					problem ? 'text-destructive' : 'text-muted-foreground',
+				)}
+			>
+				{problem ?? hint}
+			</p>
 		</div>
 	);
 }
@@ -238,9 +234,7 @@ export function PasscodeEntry({
 					data-autofocus=""
 					aria-invalid={error ? true : undefined}
 					aria-describedby={error ? `${id}-entry-error` : undefined}
-					onChange={(event) =>
-						onChange(clampCredentialInput(event.target.value))
-					}
+					onChange={(event) => onChange(event.target.value)}
 				/>
 				<ShowHideButton
 					shown={shown}

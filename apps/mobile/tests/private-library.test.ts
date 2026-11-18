@@ -572,7 +572,7 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
-	test('a library with no key on the server is not made from the server: a password or password comes first', async () => {
+	test('a library with no key on the server is not made from the server: a password comes first', async () => {
 		const extension = makeExtension(server);
 		extension.edit((store) =>
 			addBookmark(
