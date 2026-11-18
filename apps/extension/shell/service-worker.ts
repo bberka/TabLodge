@@ -1171,7 +1171,23 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 	privateSync?.stop();
 	privateSync = undefined;
-	void wakeSync().catch(() => undefined);
+	// A different server or token, or none, ends private sync here: its key belongs to the old server, and the library
+	// must not start syncing to a new one without it. Turning it on again asks for the PIN or password once.
+	const before = parseConfig(changes[SYNC_CONFIG_KEY].oldValue);
+	const after = parseConfig(changes[SYNC_CONFIG_KEY].newValue);
+	const ended =
+		before !== undefined &&
+		(before.url !== after?.url || before.token !== after?.token);
+	void (
+		ended
+			? chrome.storage.local.remove([
+					PRIVATE_PREFIX + PRIVATE_SYNC_KEY_KEY,
+					PRIVATE_PREFIX + PRIVATE_SYNC_ON_KEY,
+				])
+			: Promise.resolve()
+	)
+		.then(wakeSync)
+		.catch(() => undefined);
 });
 
 /*
@@ -1614,7 +1630,7 @@ not take it, so the caller can undo the change and the library never has one PIN
 async function rewrapPrivateSyncKey(credential: Credential) {
 	const regular = await regularSyncConfig();
 	const key = parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY));
-	if (!regular || !key) {
+	if (!regular || !key || (await privateRead(PRIVATE_SYNC_ON_KEY)) !== true) {
 		return;
 	}
 
@@ -9232,10 +9248,11 @@ async function handlePrivateLockMessage(
 					return {ok: false, error: 'Enter your PIN or password.'};
 				}
 
-				const syncKey = await privateRead(PRIVATE_SYNC_KEY_KEY).catch(
-					() => undefined,
-				);
-				if (parsePrivateSyncKey(syncKey)) {
+				// Only while private sync is on: it needs the PIN or password. A key left from a server that is gone does not count.
+				const syncOn =
+					(await privateRead(PRIVATE_SYNC_ON_KEY).catch(() => undefined)) ===
+						true && (await regularSyncConfig()) !== undefined;
+				if (syncOn) {
 					return {
 						ok: false,
 						error:
@@ -9378,12 +9395,11 @@ async function handlePrivateSyncMessage(
 			}
 
 			case 'PRIVATE_SYNC_DISABLE': {
-				if (privateSync) {
-					await privateSync.disconnect();
-					await mutate(async () => {
-						await rawLibrary.remove([PRIVATE_SYNC_KEY_KEY]);
-					});
-				}
+				await privateSync?.disconnect();
+				// Without a live client (no server any more, say) the key and the switch still go.
+				await mutate(async () => {
+					await rawLibrary.remove([PRIVATE_SYNC_KEY_KEY, PRIVATE_SYNC_ON_KEY]);
+				});
 
 				await wakeSync();
 				break;

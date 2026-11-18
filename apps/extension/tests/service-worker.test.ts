@@ -1242,6 +1242,24 @@ function createWorkerHarness(
 			});
 		},
 		/**
+		Another extension context writing local storage (the regular window changing the sync server, say): `undefined` removes a key.
+		*/
+		externalStorage(values: Record<string, unknown>) {
+			const changes: Record<string, unknown> = {};
+			for (const [key, value] of Object.entries(values)) {
+				const oldValue = structuredClone(extraStorage[key]);
+				if (value === undefined) {
+					Reflect.deleteProperty(extraStorage, key);
+					changes[key] = {oldValue};
+				} else {
+					extraStorage[key] = structuredClone(value);
+					changes[key] = {oldValue, newValue: structuredClone(value)};
+				}
+			}
+
+			notifyChanged(changes);
+		},
+		/**
 		A message from an extension page by default; pass a web page `url` to send as the site content script does.
 		*/
 		async sendMessage<M extends TabLodgeMessage>(
@@ -12947,6 +12965,98 @@ test('a new PIN or password rewraps the private sync key before it is reported c
 	assert.equal(joined.ok, true, joined.error);
 	const synced = await first.sendMessage({type: 'PRIVATE_SYNC_NOW'});
 	assert.equal(synced.privateSync?.status.error, null);
+});
+
+test('removing the sync server ends private sync, so the lock can come off and nothing stale is left', async () => {
+	const server = syncServer();
+	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(harness);
+	await harness.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	assert.equal(
+		(
+			await harness.sendMessage({
+				type: 'REMOVE_PRIVATE_LOCK',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+		'still blocked while sync runs',
+	);
+
+	harness.externalStorage({'tablodge.sync.config': undefined});
+	await settle();
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.key'],
+		undefined,
+	);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.on'],
+		undefined,
+	);
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	assert.equal(removed.ok, true, removed.error);
+});
+
+test('moving to another sync server ends private sync, and a new PIN or password is then accepted', async () => {
+	const server = syncServer();
+	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(harness);
+	await harness.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+
+	harness.externalStorage({
+		'tablodge.sync.config': {
+			url: 'https://other-sync.example.test',
+			token: SYNC_TOKEN,
+		},
+	});
+	await settle();
+	const status = await harness.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
+	assert.equal(status.privateSync?.status.connected, false);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.key'],
+		undefined,
+	);
+
+	const changed = await harness.sendMessage({
+		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+		kind: 'password',
+		current: lockPassword,
+		credential: 'a brand new password',
+	});
+	assert.equal(changed.ok, true, changed.error);
+});
+
+test('turning private sync off deletes its key even when no client is running', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	// No sync server and so no client, with a key and switch left behind, as an older version could leave them.
+	harness.externalStorage({
+		'tablodge.private.sync.private.key': {id: 'x', raw: 'x', wrapped: 'x'},
+		'tablodge.private.sync.private.on': true,
+	});
+	await settle();
+	const status = await harness.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
+	assert.equal(status.privateSync?.status.connected, false);
+
+	const off = await harness.sendMessage({type: 'PRIVATE_SYNC_DISABLE'});
+	assert.equal(off.ok, true, off.error);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.key'],
+		undefined,
+	);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.on'],
+		undefined,
+	);
 });
 
 test('a PIN or password change the sync server cannot take is undone, so the library and the server keep one', async () => {
