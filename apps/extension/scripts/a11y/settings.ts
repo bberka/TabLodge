@@ -272,3 +272,51 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 		},
 	);
 }
+
+export async function backupsDialogCheck(env: Env, theme: Theme) {
+	const {context, extensionId, axeSource} = env;
+	await check(
+		`Recovery: Backups opens a labelled dialog from the keyboard (${theme})`,
+		async () => {
+			const page = await openPage(context, extensionId, 'options');
+			try {
+				await setTheme(page, theme);
+				const backUp = page.getByRole('button', {name: 'Back up now'});
+				await backUp.click();
+				await until(async () => backUp.isEnabled(), 'Back up now finished');
+				const trigger = page.getByRole('button', {
+					name: 'Backups',
+					exact: true,
+				});
+				await trigger.focus();
+				await page.keyboard.press('Enter');
+				const dialog = page.getByRole('dialog', {name: 'Backups'});
+				await dialog.waitFor();
+				await dialog.getByRole('list', {name: 'Backups'}).waitFor();
+				const help = dialog.getByRole('button', {name: 'About backups'});
+				await help.focus();
+				await page.keyboard.press('Enter');
+				await page.getByRole('dialog', {name: 'About backups'}).waitFor();
+				const violations = await axeViolationLines(page, axeSource);
+				assert.deepEqual(violations, [], violations.join('\n'));
+				// Escape closes the help first and leaves the Backups dialog open.
+				await page.keyboard.press('Escape');
+				await page
+					.getByRole('dialog', {name: 'About backups'})
+					.waitFor({state: 'hidden'});
+				await dialog.waitFor();
+				// Leave the help button, whose tooltip would take the next Escape.
+				await dialog.getByRole('button', {name: 'Done'}).focus();
+				await page.keyboard.press('Escape');
+				await dialog.waitFor({state: 'hidden'});
+				await until(
+					async () =>
+						(await page.locator(':focus').textContent()) === 'Backups',
+					'focus back on Backups',
+				);
+			} finally {
+				await page.close();
+			}
+		},
+	);
+}

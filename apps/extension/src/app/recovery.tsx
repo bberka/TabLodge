@@ -4,10 +4,12 @@
 import {useCallback, useEffect, useState} from 'react';
 import {
 	AppWindow,
+	Archive,
 	Bookmark,
 	Check,
 	ChevronDown,
 	ChevronRight,
+	CircleHelp,
 	Download,
 	History,
 	LayoutGrid,
@@ -29,6 +31,10 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
+	IconTooltip,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
 	ScrollArea,
 	SegmentedControl,
 } from '../shared/ui';
@@ -741,13 +747,61 @@ function BackupRow({
 type UsageText = {snapshots: string; backups: string; trash: string};
 
 /**
-Settings › Recovery & backups: storage use, the quick buttons, and the internal backup list (automatic, manual and safety).
+Explains Add versus Restore behind a help button, so the dialog shows no standing paragraph.
+*/
+function BackupsHelpButton() {
+	return (
+		<Popover>
+			<IconTooltip label="About backups">
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-8 w-8 shrink-0 text-muted-foreground"
+						aria-label="About backups"
+					>
+						<CircleHelp className="h-4 w-4" aria-hidden="true" />
+					</Button>
+				</PopoverTrigger>
+			</IconTooltip>
+			<PopoverContent
+				align="start"
+				aria-label="About backups"
+				className="w-80 space-y-2 p-3 text-xs leading-5"
+				// Escape closes the help only, not the dialog around it.
+				onEscapeKeyDown={(event) => {
+					event.stopPropagation();
+				}}
+			>
+				<p>
+					Each backup is a regular JSON export of your sessions, bookmarks and
+					settings that Import can read.
+				</p>
+				<p>
+					<span className="font-semibold">Add</span> keeps what you have and
+					adds only what is new. <span className="font-semibold">Restore</span>{' '}
+					replaces sessions and bookmarks, keeps your current settings, and
+					first saves a safety backup.
+				</p>
+				<p className="text-muted-foreground">
+					Safety backups are also taken before erasing data, large imports, and
+					deleting many bookmarks.
+				</p>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+/**
+Settings › Recovery & backups below the settings rows: storage use on one line, Back up now, and the ways into the
+backup list, recent snapshots and the trash bin.
 */
 export function RecoveryTools({
 	showStatus,
 	onDataChanged,
 	onOpenSnapshots,
 	onOpenTrash,
+	dialogOpen,
 }: {
 	showStatus: ShowStatus;
 	/**
@@ -756,16 +810,19 @@ export function RecoveryTools({
 	onDataChanged: () => unknown;
 	onOpenSnapshots: () => void;
 	onOpenTrash: () => void;
+	/**
+	True while the trash bin or snapshots dialog is open; storage use is read again when it closes.
+	*/
+	dialogOpen: boolean;
 }) {
 	const [usage, setUsage] = useState<UsageText | null>(null);
 	const [backups, setBackups] = useState<ActionSuccess<'GET_BACKUPS'> | null>(
 		null,
 	);
+	const [listOpen, setListOpen] = useState(false);
 	const [busy, setBusy] = useState('');
 	const [pending, setPending] = useState<
-		| {kind: 'snapshots' | 'trash'}
-		| {kind: 'restore'; backup: BackupSummary}
-		| null
+		{kind: 'snapshots'} | {kind: 'restore'; backup: BackupSummary} | null
 	>(null);
 	const refresh = useCallback(async () => {
 		const [usageResult, backupResult] = await Promise.all([
@@ -785,8 +842,10 @@ export function RecoveryTools({
 		}
 	}, []);
 	useEffect(() => {
-		void refresh().catch(() => undefined);
-	}, [refresh]);
+		if (!dialogOpen) {
+			void refresh().catch(() => undefined);
+		}
+	}, [dialogOpen, refresh]);
 
 	async function run(name: string, action: () => Promise<void>) {
 		setBusy(name);
@@ -900,173 +959,127 @@ export function RecoveryTools({
 			}
 		});
 
-	const emptyTrash = () =>
-		run('trash', async () => {
-			const result = await send('EMPTY_TRASH');
-			if (result?.ok) {
-				offerUndo(
-					`Emptied the trash bin (${plural(result.count, 'item')}).`,
-					result.undoId,
-					showStatus,
-					refresh,
-				);
-			} else {
-				showStatus(result?.error || 'Could not empty the trash bin.', true);
-			}
-		});
-
 	const all = [...(backups?.auto ?? []), ...(backups?.safety ?? [])].toSorted(
 		(a, b) => b.at - a.at,
 	);
 	return (
-		<div className="space-y-5 pt-1">
-			<div className="space-y-3 rounded-md bg-muted/60 px-4 py-3">
-				<p className="text-sm font-medium">Storage used</p>
-				<dl className="grid grid-cols-3 gap-3 text-xs">
-					{(
-						[
-							['Snapshots', usage?.snapshots],
-							['Backups', usage?.backups],
-							['Trash bin', usage?.trash],
-						] as const
-					).map(([label, value]) => (
-						<div key={label}>
-							<dt className="text-muted-foreground">{label}</dt>
-							<dd className="mt-0.5 text-sm font-semibold tabular-nums">
-								{value ?? '…'}
-							</dd>
-						</div>
-					))}
-				</dl>
-				<div className="flex flex-wrap gap-2">
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== ''}
-						onClick={() => void backupNow()}
-					>
-						<Save className="h-4 w-4" />
-						{busy === 'backup' ? 'Backing up' : 'Back up now'}
-					</Button>
-					{!inPrivateWindow() && (
-						<Button size="sm" variant="outline" onClick={onOpenSnapshots}>
-							<History className="h-4 w-4" />
-							Recent snapshots
-						</Button>
-					)}
-					<Button size="sm" variant="outline" onClick={onOpenTrash}>
-						<Trash2 className="h-4 w-4" />
-						Trash bin
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== ''}
-						onClick={() => setPending({kind: 'snapshots'})}
-					>
-						Clear snapshots
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== ''}
-						onClick={() => setPending({kind: 'trash'})}
-					>
-						Empty trash bin
-					</Button>
-				</div>
-			</div>
-			<div>
-				<p className="text-sm font-medium">Backups</p>
-				<p className="mt-1 text-xs leading-5 text-muted-foreground">
-					Each backup holds your sessions, bookmarks and settings as a regular
-					JSON export that Import can read. Add keeps what you have and adds
-					only what is new. Restore replaces sessions and bookmarks, keeps your
-					current settings, and first saves a safety backup of what you have
-					now. Safety backups are taken automatically before erasing data, large
-					imports, and deleting many bookmarks.
+		<div className="space-y-3 border-t border-border/70 pt-4">
+			<p className="text-xs text-muted-foreground tabular-nums">
+				Backups {usage?.backups ?? '…'} · Trash {usage?.trash ?? '…'} ·
+				Snapshots {usage?.snapshots ?? '…'}
+			</p>
+			{backups?.downloadError && (
+				<p role="status" className="text-xs font-medium text-destructive">
+					The last Downloads copy was not written: {backups.downloadError}
 				</p>
-				{backups?.downloadError && (
-					<p
-						role="status"
-						className="mt-2 text-xs font-medium text-destructive"
-					>
-						The last Downloads copy was not written: {backups.downloadError}
-					</p>
+			)}
+			<div className="flex flex-wrap gap-2">
+				<Button
+					size="sm"
+					variant="outline"
+					disabled={busy !== ''}
+					onClick={() => void backupNow()}
+				>
+					<Save className="h-4 w-4" />
+					{busy === 'backup' ? 'Backing up' : 'Back up now'}
+				</Button>
+				<Button size="sm" variant="outline" onClick={() => setListOpen(true)}>
+					<Archive className="h-4 w-4" />
+					Backups
+				</Button>
+				{!inPrivateWindow() && (
+					<Button size="sm" variant="outline" onClick={onOpenSnapshots}>
+						<History className="h-4 w-4" />
+						Recent snapshots
+					</Button>
 				)}
-				{all.length === 0 ? (
-					<p className="mt-3 rounded-md border border-dashed border-border px-4 py-5 text-center text-xs text-muted-foreground">
-						No backups yet.
-					</p>
-				) : (
-					<ul className="mt-3 space-y-2" aria-label="Backups">
-						{all.map((backup) => (
-							<BackupRow
-								key={backup.id}
-								backup={backup}
-								busy={busy !== ''}
-								onRestore={() => setPending({kind: 'restore', backup})}
-								onMerge={() => void mergeBackup(backup)}
-								onDownload={() => void download(backup)}
-								// A single backup is deleted at once; Undo brings it back.
-								onDelete={() => void removeBackup(backup)}
-							/>
-						))}
-					</ul>
-				)}
+				<Button size="sm" variant="outline" onClick={onOpenTrash}>
+					<Trash2 className="h-4 w-4" />
+					Trash bin
+				</Button>
 			</div>
-			<ConfirmationDialog
-				open={pending !== null}
-				title={
-					pending?.kind === 'snapshots'
-						? 'Clear all snapshots?'
-						: pending?.kind === 'trash'
-							? 'Empty the trash bin?'
+			<Dialog open={listOpen} onOpenChange={setListOpen}>
+				<DialogContent size="lg">
+					<DialogHeader className={SCROLL_HEADER}>
+						<div className="flex items-center gap-1">
+							<DialogTitle>Backups</DialogTitle>
+							<BackupsHelpButton />
+						</div>
+						<DialogDescription>
+							Copies of your sessions, bookmarks and settings, kept on this
+							computer.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogBody>
+						{all.length === 0 ? (
+							<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+								No backups yet. Back up now makes one.
+							</p>
+						) : (
+							<ScrollArea
+								type="auto"
+								className="-mx-2"
+								viewportClassName="max-h-[min(32rem,calc(100dvh-23rem))] px-2"
+							>
+								<ul className="space-y-2 py-0.5" aria-label="Backups">
+									{all.map((backup) => (
+										<BackupRow
+											key={backup.id}
+											backup={backup}
+											busy={busy !== ''}
+											onRestore={() => setPending({kind: 'restore', backup})}
+											onMerge={() => void mergeBackup(backup)}
+											onDownload={() => void download(backup)}
+											// A single backup is deleted at once; Undo brings it back.
+											onDelete={() => void removeBackup(backup)}
+										/>
+									))}
+								</ul>
+							</ScrollArea>
+						)}
+					</DialogBody>
+					<DialogFooter className={SCROLL_FOOTER}>
+						<Button
+							variant="outline"
+							disabled={busy !== ''}
+							onClick={() => setPending({kind: 'snapshots'})}
+						>
+							<Trash2 className="h-4 w-4" />
+							Clear snapshots
+						</Button>
+						<Button onClick={() => setListOpen(false)}>
+							<Check aria-hidden="true" />
+							Done
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+				<ConfirmationDialog
+					open={pending !== null}
+					title={
+						pending?.kind === 'snapshots'
+							? 'Clear all snapshots?'
 							: 'Restore this backup?'
-				}
-				description={
-					pending?.kind === 'snapshots'
-						? 'Every recent snapshot is removed. You can undo this right after.'
-						: pending?.kind === 'trash'
-							? 'Everything in the trash bin is deleted for good. You can undo this right after.'
-							: 'Your sessions and bookmarks are replaced by this backup. To keep what you have and add only what is new, use Add instead. A safety backup of what you have now is kept, and you can undo this right after.'
-				}
-				confirmLabel={
-					pending?.kind === 'snapshots'
-						? 'Clear snapshots'
-						: pending?.kind === 'trash'
-							? 'Empty trash bin'
-							: 'Restore'
-				}
-				onOpenChange={(open) => !open && setPending(null)}
-				onConfirm={() => {
-					const current = pending;
-					setPending(null);
-					switch (current?.kind) {
-						case 'snapshots': {
-							void clearSnapshots();
-
-							break;
-						}
-
-						case 'trash': {
-							void emptyTrash();
-
-							break;
-						}
-
-						case 'restore': {
-							void restoreBackup(current.backup);
-
-							break;
-						}
-
-						default: {
-							break;
-						}
 					}
-				}}
-			/>
+					description={
+						pending?.kind === 'snapshots'
+							? 'Every recent snapshot is removed. You can undo this right after.'
+							: 'Your sessions and bookmarks are replaced by this backup. To keep what you have and add only what is new, use Add instead. A safety backup of what you have now is kept, and you can undo this right after.'
+					}
+					confirmLabel={
+						pending?.kind === 'snapshots' ? 'Clear snapshots' : 'Restore'
+					}
+					onOpenChange={(open) => !open && setPending(null)}
+					onConfirm={() => {
+						const current = pending;
+						setPending(null);
+						if (current?.kind === 'snapshots') {
+							void clearSnapshots();
+						} else if (current?.kind === 'restore') {
+							void restoreBackup(current.backup);
+						}
+					}}
+				/>
+			</Dialog>
 		</div>
 	);
 }
