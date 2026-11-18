@@ -342,7 +342,6 @@ export function BackupDialog({
 			});
 			const protectedBytes = protect
 				? await protectFullBackup(bytes, {
-						kind: passcode.kind,
 						value: passcode.value,
 					})
 				: undefined;
@@ -404,7 +403,7 @@ export function BackupDialog({
 					<DialogDescription>
 						{full
 							? protect
-								? 'One encrypted file you can restore with Import and the PIN or password you choose. It is saved to your downloads.'
+								? 'One encrypted file you can restore with Import and the password you choose. It is saved to your downloads.'
 								: 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted unless you protect it below.'
 							: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
 					</DialogDescription>
@@ -454,7 +453,7 @@ export function BackupDialog({
 											className="flex items-center gap-1.5 text-sm font-medium"
 										>
 											<Lock className="h-3.5 w-3.5" aria-hidden="true" />
-											Protect with a PIN or password
+											Protect with a password
 										</Label>
 										<p className="mt-1 text-xs leading-5 text-muted-foreground">
 											Optional. Encrypts the whole backup file on this device.
@@ -1127,7 +1126,7 @@ export function ImportDialog({
 	const [full, setFull] = useState<FullBackupContents | null>(null);
 	// A full backup is added to the library by default; Replace swaps everything, settings included.
 	const [fullMode, setFullMode] = useState<'merge' | 'replace'>('merge');
-	// An encrypted backup waiting for its PIN or password; nothing is read from it until it opens.
+	// An encrypted backup waiting for its password; nothing is read from it until it opens.
 	const [locked, setLocked] = useState<{
 		name: string;
 		bytes: Uint8Array;
@@ -1587,7 +1586,7 @@ export function ImportDialog({
 						? 'Import sessions'
 						: 'Import bookmarks';
 	const description = locked
-		? `“${locked.name}” is protected. Enter the PIN or password you chose when you made it. Nothing in your library changes until you confirm the import.`
+		? `“${locked.name}” is protected. Enter the password you chose when you made it. Nothing in your library changes until you confirm the import.`
 		: full
 			? fullMode === 'merge'
 				? 'This adds the backup’s sessions and bookmarks to yours and skips links you already have. Your settings, snapshots, and trash bin stay as they are. You can undo it right after.'

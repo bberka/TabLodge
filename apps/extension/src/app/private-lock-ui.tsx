@@ -1,4 +1,4 @@
-// The PIN or password lock of private windows, on the page side: the lock screen that replaces a private page
+// The password lock of private windows, on the page side: the lock screen that replaces a private page
 // until it is unlocked, the Lock button, and the Settings panel to turn it on, change it, or remove it.
 // All state lives in the worker (see src/shared/private-lock.ts); the credential only passes through form state.
 import {
@@ -38,9 +38,6 @@ import {
 import type {ShowStatus} from './common';
 import {PasscodeEntry} from './passcode-fields';
 import {PROJECT} from './project';
-
-const kindWord = (kind: PrivateLockInfo['kind']) =>
-	kind === 'pin' ? 'PIN' : kind === 'password' ? 'password' : 'PIN or password';
 
 const privateWindow = () =>
 	Boolean(globalThis.chrome?.extension?.inIncognitoContext);
@@ -190,7 +187,7 @@ function LockScreen({
 					<p className="text-sm text-muted-foreground">
 						{damaged
 							? 'The lock on the private library cannot be read, so it stays closed to protect your data.'
-							: `Enter the ${kindWord(info.kind)} you chose to open your private sessions and bookmarks.`}
+							: 'Enter the password you chose to open your private sessions and bookmarks.'}
 					</p>
 					{!damaged && info.state !== 'encrypted' && (
 						<p className="text-sm text-muted-foreground">
@@ -245,9 +242,9 @@ function LockScreen({
 }
 
 /**
-Asks for a first PIN or password before the saved separate library opens. When the sync server already holds a private
-library, the first choice is its PIN or password, so every browser ends up with one. The only other ways past are to
-keep the library on this device with its own PIN or password, or to stop using a separate saved library.
+Asks for a first password before the saved separate library opens. When the sync server already holds a private
+library, the first choice is its password, so every browser ends up with one. The only other ways past are to
+keep the library on this device with its own password, or to stop using a separate saved library.
 */
 function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 	const headingId = useId();
@@ -293,19 +290,17 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 				<div className="grid gap-2">
 					<Lock className="h-6 w-6 text-primary" aria-hidden="true" />
 					<h1 id={headingId} className="text-lg font-semibold">
-						{fromServer
-							? 'Use your sync server’s PIN'
-							: 'Set a PIN or password'}
+						{fromServer ? 'Use your sync server’s password' : 'Set a password'}
 					</h1>
 					<p className="text-sm text-muted-foreground">
 						{fromServer
-							? 'Your sync server already holds a private library. Enter its PIN or password once: it becomes this library’s lock, and the server’s data joins what is here.'
-							: 'The separate private library is encrypted on this device and opens only with a PIN or password. Nothing can recover a lost one. It also protects what private sync sends.'}
+							? 'Your sync server already holds a private library. Enter its password once: it becomes this library’s lock, and the server’s data joins what is here.'
+							: 'The separate private library is encrypted on this device and opens only with a password. Nothing can recover a lost one. It also protects what private sync sends.'}
 					</p>
 					{server.hasKey && deviceOnly && (
 						<p className="text-sm text-muted-foreground">
 							Kept only on this device, this library does not match the one on
-							your server. Syncing it later needs the server’s PIN or password.
+							your server. Syncing it later needs the server’s password.
 						</p>
 					)}
 				</div>
@@ -319,7 +314,7 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 									<Label htmlFor={syncId}>Sync private windows</Label>
 									<p className="text-xs leading-5 text-muted-foreground">
 										{syncNew
-											? 'This library goes to your sync server, encrypted, and your other browsers and phone can join it with this PIN or password.'
+											? 'This library goes to your sync server, encrypted, and your other browsers and phone can join it with this password.'
 											: 'Kept only on this device. It will not match your other devices until you turn on Sync private windows in Settings.'}
 									</p>
 								</div>
@@ -345,7 +340,7 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 						{deviceOnly ? (
 							<>
 								<Cloud aria-hidden="true" />
-								Use the PIN from your sync server
+								Use the password from your sync server
 							</>
 						) : (
 							<>
@@ -380,7 +375,7 @@ Regular windows pass straight through. The children unmount on lock, so nothing 
 export function PrivateLockGate({children}: {children: ReactNode}) {
 	const inPrivate = privateWindow();
 	const {info, error, refresh, setInfo} = usePrivateLockInfo();
-	// The set-a-PIN screen replaces the page like the lock screen, so focus returns the same way when it goes.
+	// The set-a-password screen replaces the page like the lock screen, so focus returns the same way when it goes.
 	const locked = Boolean((info?.enabled && info.locked) || info?.needsLock);
 	const wasLockedRef = useRef(false);
 	useActivityTouch(inPrivate && info?.enabled === true && !locked);
@@ -529,13 +524,13 @@ export function PrivateLockSettings({
 		}
 	};
 
-	const label = kindWord(info.kind);
+	const label = 'password';
 	return (
 		<div data-private-lock-settings className="space-y-3 py-5">
 			<div className="space-y-1">
 				<h3 className="flex items-center gap-2 text-sm font-medium">
 					<Lock className="h-4 w-4" aria-hidden="true" />
-					Lock with a PIN or password
+					Lock with a password
 				</h3>
 				<p className="text-xs leading-5 text-muted-foreground">
 					Encrypts the separate saved library on this device and shows a lock
@@ -573,8 +568,8 @@ export function PrivateLockSettings({
 			{info.manageHere && !info.enabled && (
 				<>
 					<p className="text-sm text-muted-foreground">
-						Nothing can recover a lost PIN or password. Short PINs give little
-						protection if someone copies your browser profile.
+						Nothing can recover a lost password. A short or number-only password
+						gives little protection if someone copies your browser profile.
 					</p>
 					<Button onClick={() => setDialog('enable')}>
 						<Lock aria-hidden="true" />
@@ -642,7 +637,7 @@ export function PrivateLockSettings({
 					<ChangeDialog
 						open={dialog === 'change'}
 						onOpenChange={(open) => setDialog(open ? 'change' : undefined)}
-						onDone={finished('PIN or password changed.')}
+						onDone={finished('Password changed.')}
 					/>
 					<ResetDialog
 						open={dialog === 'reset'}

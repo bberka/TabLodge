@@ -1,4 +1,4 @@
-// PIN or password lock for the saved separate private library (issue #142).
+// Password lock for the saved separate private library (issue #142).
 //
 // How it works. A random 256-bit data key encrypts every value of the private library with AES-GCM, so a save
 // costs no key stretching. The data key itself is wrapped in the credential envelope from crypto-envelope.ts
@@ -17,11 +17,7 @@
 //
 // This module has no browser globals other than Web Crypto: the worker hands it the storage areas.
 import {decryptBytes, encryptBytes, EnvelopeError} from './crypto-envelope';
-import {
-	type Credential,
-	type CredentialKind,
-	validateCredential,
-} from './passcode';
+import {type Credential, validateCredential} from './passcode';
 
 export const LOCK_RECORD_KEY = 'tablodge.private.lock';
 export const LOCK_SESSION_KEY = 'tablodge.privatelock.key';
@@ -54,7 +50,10 @@ export type LockState = 'encrypting' | 'encrypted' | 'decrypting';
 export type LockRecord = {
 	version: 1;
 	state: LockState;
-	kind: CredentialKind;
+	/**
+	Written as 'password'. Records from older versions say 'pin' or 'password'; both are read, and neither changes anything.
+	*/
+	kind: 'pin' | 'password';
 	/**
 	The data key in a credential envelope, base64.
 	*/
@@ -69,7 +68,6 @@ export type LockStatus = {
 	enabled: boolean;
 	state: LockState | 'none' | 'damaged';
 	locked: boolean;
-	kind: CredentialKind | null;
 	idleMinutes: number;
 	/**
 	When the idle timeout locks the library, as a timestamp; null when locked or the timeout is off.
@@ -107,8 +105,8 @@ export class PrivateLockError extends Error {
 }
 
 export const LOCKED_MESSAGE =
-	'Private windows are locked. Enter your PIN or password to unlock them.';
-const WRONG_MESSAGE = 'That PIN or password is not correct.';
+	'Private windows are locked. Enter your password to unlock them.';
+const WRONG_MESSAGE = 'That password is not correct.';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -471,7 +469,7 @@ export function createPrivateLock(env: LockEnv) {
 		if (record === undefined) {
 			throw new PrivateLockError(
 				'state',
-				'Private windows are not locked with a PIN or password.',
+				'Private windows are not locked with a password.',
 			);
 		}
 
@@ -780,7 +778,6 @@ export function createPrivateLock(env: LockEnv) {
 					enabled: false,
 					state: 'none',
 					locked: false,
-					kind: null,
 					idleMinutes: DEFAULT_IDLE_MINUTES,
 					expiresAt: null,
 				};
@@ -791,7 +788,6 @@ export function createPrivateLock(env: LockEnv) {
 					enabled: true,
 					state: 'damaged',
 					locked: true,
-					kind: null,
 					idleMinutes: DEFAULT_IDLE_MINUTES,
 					expiresAt: null,
 				};
@@ -803,7 +799,6 @@ export function createPrivateLock(env: LockEnv) {
 				enabled: true,
 				state: record.state,
 				locked: !key,
-				kind: record.kind,
 				idleMinutes: record.idleMinutes,
 				expiresAt:
 					payload && record.idleMinutes > 0
@@ -851,7 +846,9 @@ export function createPrivateLock(env: LockEnv) {
 				);
 			}
 
-			const problem = validateCredential(credential.kind, credential.value);
+			const problem = credential.verified
+				? null
+				: validateCredential(credential.value);
 			if (problem) {
 				throw new PrivateLockError('invalid', problem);
 			}
@@ -869,7 +866,7 @@ export function createPrivateLock(env: LockEnv) {
 				[LOCK_RECORD_KEY]: {
 					version: 1,
 					state: 'encrypting',
-					kind: credential.kind,
+					kind: 'password',
 					wrapped,
 					idleMinutes,
 				} satisfies LockRecord,
@@ -905,7 +902,7 @@ export function createPrivateLock(env: LockEnv) {
 				);
 			}
 
-			const problem = validateCredential(next.kind, next.value);
+			const problem = next.verified ? null : validateCredential(next.value);
 			if (problem) {
 				throw new PrivateLockError('invalid', problem);
 			}
@@ -913,7 +910,7 @@ export function createPrivateLock(env: LockEnv) {
 			const dataKey = await verify(record, current);
 			const wrapped = await wrapDataKey(dataKey, next);
 			await env.local.set({
-				[LOCK_RECORD_KEY]: {...record, kind: next.kind, wrapped},
+				[LOCK_RECORD_KEY]: {...record, kind: 'password', wrapped},
 			});
 		},
 

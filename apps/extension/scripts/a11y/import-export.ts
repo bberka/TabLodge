@@ -89,7 +89,7 @@ export async function protectedBackupCheck(env: Env, theme: Theme) {
 			await page.getByRole('button', {name: 'Back up', exact: true}).click();
 			const dialog = page.getByRole('dialog');
 			const protect = dialog.getByRole('checkbox', {
-				name: 'Protect with a PIN or password',
+				name: 'Protect with a password',
 			});
 			await protect.focus();
 			await page.keyboard.press('Space');
@@ -106,10 +106,16 @@ export async function protectedBackupCheck(env: Env, theme: Theme) {
 				name: 'Confirm Password',
 			});
 			await password.focus();
-			await page.keyboard.type('short');
+			await page.keyboard.type('sho');
 			assert.match(
 				(await dialog.textContent()) ?? '',
-				/needs at least 8 characters/,
+				/needs at least 4 characters/,
+			);
+			await page.keyboard.type('rt');
+			assert.match(
+				(await dialog.textContent()) ?? '',
+				/easy to guess/,
+				'a short password that is long enough shows the hint',
 			);
 			await page.keyboard.type('er horse battery');
 			await confirm.focus();
@@ -143,25 +149,26 @@ export async function protectedBackupCheck(env: Env, theme: Theme) {
 				[],
 				'the protect form should pass axe',
 			);
-			const pinChoice = dialog.getByRole('radio', {name: 'PIN'});
-			await pinChoice.focus();
-			await page.keyboard.press('Space');
+			// A short or number-only password is allowed, and the field says it is easy to guess while it is typed.
+			await password.fill('1234');
+			await confirm.fill('1234');
 			assert.match(
 				(await dialog.textContent()) ?? '',
-				/A PIN is weak/,
-				'a PIN shows the offline cracking warning',
+				/Short or number-only passwords are easy to guess/,
+				'a short password shows the hint',
 			);
 			assert.equal(
-				await download.isDisabled(),
+				await download.isEnabled(),
 				true,
-				'switching type clears the entry',
+				'a short password is allowed, so the hint does not block',
 			);
-			await dialog.getByRole('radio', {name: 'Password'}).focus();
-			await page.keyboard.press('Space');
 			await password.fill('shorter horse battery');
 			await confirm.fill('shorter horse battery');
-			await acknowledge.focus();
-			await page.keyboard.press('Space');
+			assert.doesNotMatch(
+				(await dialog.textContent()) ?? '',
+				/easy to guess/,
+				'a longer password with letters shows no hint',
+			);
 			const downloadPromise = page.waitForEvent('download');
 			await download.focus();
 			await page.keyboard.press('Enter');
@@ -221,7 +228,7 @@ export async function protectedBackupCheck(env: Env, theme: Theme) {
 				'focus to stay in the credential field after an error',
 			);
 			await importDialog
-				.getByRole('textbox', {name: 'PIN or password'})
+				.getByRole('textbox', {name: 'password'})
 				.fill('shorter horse battery');
 			await page.keyboard.press('Enter');
 			await importDialog

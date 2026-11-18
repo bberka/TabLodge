@@ -352,12 +352,12 @@ const lockedHeading = (page: Page) =>
 	page.getByRole('heading', {name: /Private TabLodge is locked/});
 
 async function unlockWith(page: Page, value: string) {
-	await page.getByLabel('PIN or password', {exact: true}).fill(value);
+	await page.getByLabel('Password', {exact: true}).fill(value);
 	await page.keyboard.press('Enter');
 }
 
 /**
-A stand-in sync server that already holds a private library: it answers the status and key calls the set-a-PIN screen
+A stand-in sync server that already holds a private library: it answers the status and key calls the set-a-password screen
 makes, with the CORS headers the extension's fetch needs.
 */
 async function startStubSyncServer(hasKey = true) {
@@ -393,10 +393,10 @@ async function startStubSyncServer(hasKey = true) {
 }
 
 /**
-Sets the first PIN or password on the screen that replaces a saved private library until it has one.
+Sets the first password on the screen that replaces a saved private library until it has one.
 */
 async function setFirstLock(page: Page) {
-	await page.getByRole('heading', {name: 'Set a PIN or password'}).waitFor();
+	await page.getByRole('heading', {name: 'Set a password'}).waitFor();
 	await page
 		.getByRole('textbox', {name: 'Password', exact: true})
 		.fill(LOCK_PASSWORD);
@@ -408,7 +408,7 @@ async function setFirstLock(page: Page) {
 }
 
 /**
-The PIN or password lock of the saved separate private library, in a real browser (issue #142).
+The password lock of the saved separate private library, in a real browser (issue #142).
 */
 async function runLockChecks(
 	context: BrowserContext,
@@ -484,9 +484,9 @@ async function runLockChecks(
 	privatePage.on('pageerror', (error) => {
 		errors.push(error.message);
 	});
-	// The saved library does not open until a PIN or password is set.
+	// The saved library does not open until a password is set.
 	const lockHeading = privatePage.getByRole('heading', {
-		name: 'Set a PIN or password',
+		name: 'Set a password',
 	});
 	await lockHeading.waitFor();
 	// A regular window shows the status but cannot change the lock.
@@ -504,7 +504,7 @@ async function runLockChecks(
 		0,
 	);
 
-	// Set the first PIN or password on the screen that replaces the library, in both themes, at every viewport.
+	// Set the first password on the screen that replaces the library, in both themes, at every viewport.
 	for (const theme of ['light', 'dark'] as const) {
 		await setPrivatePageTheme(normal, privatePage, theme);
 		await captureEvidence(
@@ -517,16 +517,23 @@ async function runLockChecks(
 
 	const submit = privatePage.getByRole('button', {name: 'Set and open'});
 	assert.equal(await submit.isDisabled(), true);
-	await privatePage.getByText('PIN', {exact: true}).click();
+	// A short or number-only password is allowed; the field says it is easy to guess while it is typed.
+	await privatePage
+		.getByRole('textbox', {name: 'Password', exact: true})
+		.fill('1234');
 	assert.ok(
 		await privatePage
-			.getByText('Short PINs are weak against copied profile files', {
+			.getByText('Short or number-only passwords are easy to guess', {
 				exact: false,
 			})
 			.first()
 			.isVisible(),
 	);
-	await privatePage.getByText('Password', {exact: true}).first().click();
+	await captureEvidence(
+		privatePage,
+		privatePage.locator('main'),
+		'lock-set-screen-weak-hint',
+	);
 	await privatePage
 		.getByRole('textbox', {name: 'Password', exact: true})
 		.fill(LOCK_PASSWORD);
@@ -658,7 +665,7 @@ async function runLockChecks(
 		privatePage.locator('body'),
 		'lock-screen-wrong-credential',
 	);
-	// A forgotten PIN or password has a way out: erase the private library and start again. Cancelling keeps everything.
+	// A forgotten password has a way out: erase the private library and start again. Cancelling keeps everything.
 	await privatePage
 		.getByRole('button', {name: 'Forgot it? Erase private data…'})
 		.click();
@@ -723,7 +730,7 @@ async function runLockChecks(
 	await change.focus();
 	await privatePage.keyboard.press('Enter');
 	const changeDialog = privatePage.getByRole('dialog', {
-		name: 'Change PIN or password',
+		name: 'Change password',
 	});
 	await changeDialog.waitFor();
 	await captureEvidence(privatePage, changeDialog, 'lock-change-dialog');
@@ -1146,7 +1153,7 @@ try {
 	);
 	await privatePage.keyboard.press('Enter');
 	await privatePage.getByRole('dialog').waitFor({state: 'hidden'});
-	// With a sync server that already holds a private library, the screen offers its PIN or password first.
+	// With a sync server that already holds a private library, the screen offers its password first.
 	const stub = await startStubSyncServer();
 	await normal.evaluate(async (url) => {
 		await (
@@ -1163,7 +1170,7 @@ try {
 	}, stub.url);
 	await privatePage.reload();
 	const joinHeading = privatePage.getByRole('heading', {
-		name: 'Use your sync server’s PIN',
+		name: 'Use your sync server’s password',
 	});
 	await joinHeading.waitFor();
 	for (const theme of ['light', 'dark'] as const) {
@@ -1179,9 +1186,7 @@ try {
 	await privatePage
 		.getByRole('button', {name: 'Keep only on this device instead'})
 		.click();
-	await privatePage
-		.getByRole('heading', {name: 'Set a PIN or password'})
-		.waitFor();
+	await privatePage.getByRole('heading', {name: 'Set a password'}).waitFor();
 	await privatePage
 		.getByText('does not match the one on your server', {exact: false})
 		.waitFor();
@@ -1291,7 +1296,7 @@ try {
 			.textContent()) ?? '',
 		/You’re in a private window[\s\S]*Separate library saved on this device/,
 	);
-	// The set-a-PIN screen came and went in between, so focus must not be lost to the page body.
+	// The set-a-password screen came and went in between, so focus must not be lost to the page body.
 	for (
 		let attempt = 0;
 		attempt < 50 && (await focused(privatePage)).tag === 'BODY';

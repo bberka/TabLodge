@@ -93,7 +93,7 @@ export type SyncStatus = {
 	refused: number;
 	error: string | null;
 	/**
-	The library on the server is encrypted and this device needs the PIN or password to read it.
+	The library on the server is encrypted and this device needs the password to read it.
 	*/
 	needsKey?: boolean;
 	/**

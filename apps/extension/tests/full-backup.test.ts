@@ -133,7 +133,6 @@ test('optional files may be missing', () => {
 test('a protected full backup is not a ZIP and reads back with the credential', async () => {
 	const {bytes} = buildFullBackup(parts, {appVersion: '1.2.3'});
 	const protectedBytes = await protectFullBackup(bytes, {
-		kind: 'password',
 		value: 'correct horse battery',
 	});
 	assert.equal(looksLikeZip(protectedBytes), false);
@@ -155,7 +154,6 @@ test('a protected full backup is not a ZIP and reads back with the credential', 
 test('a wrong credential reads nothing from a protected backup', async () => {
 	const {bytes} = buildFullBackup(parts, {appVersion: '1.2.3'});
 	const protectedBytes = await protectFullBackup(bytes, {
-		kind: 'pin',
 		value: '2468',
 	});
 	await assert.rejects(
@@ -166,7 +164,6 @@ test('a wrong credential reads nothing from a protected backup', async () => {
 
 test('a protected file that holds something else is not a full backup', async () => {
 	const other = await protectFullBackup(strToU8('just text'), {
-		kind: 'pin',
 		value: '2468',
 	});
 	assert.equal(await readProtectedFullBackup(other, '2468'), null);

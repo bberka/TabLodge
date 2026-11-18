@@ -17,7 +17,7 @@ const native = requireNativeModule<TablodgeCrypto>('TablodgeCrypto');
 
 /**
 Opens the envelope that wraps a private library's sync key (PBKDF2-SHA-256 into AES-GCM). Returns the key as base64,
-or null for a wrong PIN or password.
+or null for a wrong password.
 */
 export const unwrapKey = async (envelope: string, credential: string) =>
 	native.unwrapKey(envelope, credential);

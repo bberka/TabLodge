@@ -117,7 +117,7 @@ export function protectedFullBackupFilename(
 }
 
 /**
-Encrypts a full-backup ZIP with a PIN or password (see crypto-envelope.ts). Only this ZIP is ever protected.
+Encrypts a full-backup ZIP with a password (see crypto-envelope.ts). Only this ZIP is ever protected.
 */
 export function protectFullBackup(
 	zip: Uint8Array,

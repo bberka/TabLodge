@@ -540,7 +540,7 @@ export function SyncSettings({showStatus}: {showStatus: ShowStatus}) {
 
 /**
 Asks, right after connecting, whether the separate private library should sync too. That can only be turned on in a
-private window, which can read the library and ask for its PIN or password, so Yes opens Settings there.
+private window, which can read the library and ask for its password, so Yes opens Settings there.
 */
 function PrivateSyncPrompt({
 	open,
@@ -569,8 +569,8 @@ function PrivateSyncPrompt({
 					<DialogTitle>Sync private windows too?</DialogTitle>
 					<DialogDescription>
 						Private windows in this browser keep a separate library. It can sync
-						to the same server, encrypted if it has a PIN or password. You turn
-						this on in a private window, which opens next.
+						to the same server, encrypted with its password. You turn this on in
+						a private window, which opens next.
 					</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>

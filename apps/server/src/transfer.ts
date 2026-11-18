@@ -2,7 +2,7 @@
 Copies a library out of a sync server and into another one, through the sync API, so it works the same for the
 Docker server and for Cloudflare. Used for backups and for moving between servers. The file is JSON lines: a header,
 then one change per line, deletes included, with the stamps the server holds, so importing it anywhere gives the
-same library. An encrypted library (private windows with a PIN or password) also carries its wrapped key in the
+same library. An encrypted library (private windows with a password) also carries its wrapped key in the
 header, which the import stores; the values stay encrypted throughout.
 
 The Docker image runs it as `node node.js export` and `node node.js import` against its own server, and

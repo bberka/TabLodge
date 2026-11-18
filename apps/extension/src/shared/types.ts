@@ -33,26 +33,25 @@ export type PrivateConfig = {
 	accent: string;
 };
 /**
-Where the optional PIN or password lock of the saved separate private library stands (see src/shared/private-lock.ts).
+Where the optional password lock of the saved separate private library stands (see src/shared/private-lock.ts).
 `state` is `encrypting` or `decrypting` while a pass is unfinished; it finishes after the next unlock.
 `available`: this worker's private library can be locked (separate saved storage, set up). `manageHere`: false in regular windows, which only show the status.
 `expiresAt`: when the idle timeout locks the library, or null.
 */
 /**
-What the regular sync server holds for the private library: `connected` is a regular sync server, `hasKey` that it already has a private library protected by a PIN or password.
+What the regular sync server holds for the private library: `connected` is a regular sync server, `hasKey` that it already has a private library protected by a password.
 */
 export type PrivateServerInfo = {connected: boolean; hasKey: boolean};
 export type PrivateLockInfo = {
 	available: boolean;
 	manageHere: boolean;
 	/**
-	True while the saved separate library has no PIN or password. Private pages ask for one before they open.
+	True while the saved separate library has no password. Private pages ask for one before they open.
 	*/
 	needsLock: boolean;
 	enabled: boolean;
 	state: 'none' | 'encrypting' | 'encrypted' | 'decrypting' | 'damaged';
 	locked: boolean;
-	kind: 'pin' | 'password' | null;
 	idleMinutes: number;
 	expiresAt: number | null;
 };
@@ -659,17 +658,15 @@ export type TabLodgeMessages = {
 	LOCK_PRIVATE: {};
 	TOUCH_PRIVATE_LOCK: {};
 	ENABLE_PRIVATE_LOCK: {
-		kind: 'pin' | 'password';
 		credential: string;
 		idleMinutes?: number;
 		/**
-		From the set-a-PIN screen: also turn private sync on, so the library goes to the sync server with this PIN or password.
+		From the set-a-password screen: also turn private sync on, so the library goes to the sync server with this password.
 		*/
 		sync?: boolean;
 	};
 	CHANGE_PRIVATE_LOCK_CREDENTIAL: {
 		current: string;
-		kind: 'pin' | 'password';
 		credential: string;
 	};
 	REMOVE_PRIVATE_LOCK: {credential: string};
@@ -937,7 +934,7 @@ export type TabLodgeMessages = {
 	*/
 	PRIVATE_SYNC_STATUS: {};
 	/**
-	Starts syncing the separate private library. `credential` is needed when it has a PIN or password, or when the
+	Starts syncing the separate private library. `credential` is needed when it has a password, or when the
 	private data on the server is protected by one.
 	*/
 	PRIVATE_SYNC_ENABLE: {credential?: string; serverCredential?: string};
@@ -1030,7 +1027,7 @@ export type PrivateSyncInfo = {
 	*/
 	server: string | null;
 	/**
-	The private library has a PIN or password.
+	The private library has a password.
 	*/
 	lock: boolean;
 	/**

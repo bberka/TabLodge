@@ -1,4 +1,4 @@
-// The dialogs of the private library lock settings: turn the lock on, change its PIN or password, remove it.
+// The dialogs of the private library lock settings: turn the lock on, change its password, remove it.
 import {useState, type ReactNode} from 'react';
 import {Lock} from 'lucide-react';
 import {
@@ -102,7 +102,6 @@ export function EnableDialog({
 		setBusy(true);
 		setError('');
 		const result = await send('ENABLE_PRIVATE_LOCK', {
-			kind: draft.kind,
 			credential: draft.value,
 			idleMinutes: idle,
 		});
@@ -137,7 +136,7 @@ export function EnableDialog({
 					<DialogTitle>Lock private windows</DialogTitle>
 					<DialogDescription>
 						Encrypt the separate saved library on this device. Its sessions,
-						bookmarks, trash, and settings open only after you enter a PIN or
+						bookmarks, trash, and settings open only after you enter your
 						password.
 					</DialogDescription>
 				</DialogHeader>
@@ -149,13 +148,6 @@ export function EnableDialog({
 				>
 					<DialogBody className="grid gap-4">
 						<PasscodeSetup draft={draft} disabled={busy} onChange={setDraft} />
-						{draft.kind === 'pin' && (
-							<p className="text-xs leading-5 text-muted-foreground">
-								Short PINs are weak against copied profile files. Anyone who
-								copies your browser profile folder can try every PIN offline.
-								Choose a password for anything sensitive.
-							</p>
-						)}
 						<ul className="grid list-disc gap-1 pl-5 text-xs leading-5 text-muted-foreground">
 							<li>
 								The lock protects files at rest. Exports and backups you make
@@ -240,7 +232,6 @@ export function ChangeDialog({
 		setError('');
 		const result = await send('CHANGE_PRIVATE_LOCK_CREDENTIAL', {
 			current,
-			kind: draft.kind,
 			credential: draft.value,
 		});
 		setBusy(false);
@@ -269,10 +260,10 @@ export function ChangeDialog({
 		>
 			<DialogContent size="md">
 				<DialogHeader>
-					<DialogTitle>Change PIN or password</DialogTitle>
+					<DialogTitle>Change password</DialogTitle>
 					<DialogDescription>
 						Your private library stays as it is. Only the way you open it
-						changes, and the old PIN or password stops working.
+						changes, and the old password stops working.
 					</DialogDescription>
 				</DialogHeader>
 				<form
@@ -282,7 +273,7 @@ export function ChangeDialog({
 					}}
 				>
 					<DialogBody className="grid gap-5">
-						<Fieldset legend="Current PIN or password">
+						<Fieldset legend="Current password">
 							<PasscodeEntry
 								value={current}
 								disabled={busy}
@@ -292,7 +283,7 @@ export function ChangeDialog({
 								}}
 							/>
 						</Fieldset>
-						<Fieldset legend="New PIN or password">
+						<Fieldset legend="New password">
 							<PasscodeSetup
 								draft={draft}
 								disabled={busy}
@@ -380,8 +371,8 @@ export function RemoveDialog({
 					<DialogDescription>
 						This decrypts the private library on this device. Anyone with access
 						to your browser profile can read it again. Your sessions and
-						bookmarks stay. Private windows then ask for a new PIN or password,
-						or you can switch to another library.
+						bookmarks stay. Private windows then ask for a new password, or you
+						can switch to another library.
 					</DialogDescription>
 				</DialogHeader>
 				<form
@@ -475,10 +466,10 @@ export function ResetDialog({
 				<DialogHeader>
 					<DialogTitle>Erase private data</DialogTitle>
 					<DialogDescription>
-						This deletes every session, bookmark, setting, and the PIN or
-						password of the separate private library on this device, then asks
-						you to set a new PIN or password. Nothing can bring it back. Regular
-						windows and the sync server are not touched.
+						This deletes every session, bookmark, setting, and the password of
+						the separate private library on this device, then asks you to set a
+						new password. Nothing can bring it back. Regular windows and the
+						sync server are not touched.
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody>
@@ -512,7 +503,7 @@ export function ResetDialog({
 }
 
 /**
-Shown in place of a private page while the saved library has no PIN or password: the library does not open until one is set.
+Shown in place of a private page while the saved library has no password: the library does not open until one is set.
 */
 export function SetLockForm({
 	onDone,
@@ -520,7 +511,7 @@ export function SetLockForm({
 }: {
 	onDone: (info: PrivateLockInfo) => void;
 	/**
-	Also turn private sync on with this PIN or password.
+	Also turn private sync on with this password.
 	*/
 	sync?: boolean;
 }) {
@@ -536,7 +527,6 @@ export function SetLockForm({
 		setBusy(true);
 		setError('');
 		const result = await send('ENABLE_PRIVATE_LOCK', {
-			kind: draft.kind,
 			credential: draft.value,
 			idleMinutes: DEFAULT_IDLE_MINUTES,
 			sync,
@@ -560,12 +550,6 @@ export function SetLockForm({
 			}}
 		>
 			<PasscodeSetup draft={draft} disabled={busy} onChange={setDraft} />
-			{draft.kind === 'pin' && (
-				<p className="text-xs leading-5 text-muted-foreground">
-					Short PINs are weak against copied profile files. Choose a password
-					for anything sensitive.
-				</p>
-			)}
 			{error && (
 				<p role="alert" className="text-sm text-destructive">
 					{error}
@@ -580,7 +564,7 @@ export function SetLockForm({
 }
 
 /**
-Takes the PIN or password the sync server's private library uses as this library's lock.
+Takes the password the sync server's private library uses as this library's lock.
 */
 export function JoinServerForm({
 	onDone,

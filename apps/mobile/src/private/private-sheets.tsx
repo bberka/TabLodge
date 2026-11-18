@@ -1,19 +1,17 @@
 import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {
-	clampCredentialInput,
-	type CredentialKind,
-	credentialRule,
 	LOST_CREDENTIAL_NOTE,
-	PIN_WEAKNESS_NOTE,
+	sameCredential,
 	validateCredential,
+	weakPasswordHint,
 } from '../../../extension/src/shared/passcode';
 import {BottomSheet} from '../ui/bottom-sheet';
 import {confirm, notify} from '../ui/dialog';
 import {setPreferences} from '../settings/preferences';
 import {showSnack} from '../ui/snackbar';
 import {useColors} from '../ui/theme';
-import {Button, Field, Segmented} from '../ui/widgets';
+import {Button, Field} from '../ui/widgets';
 import {setView} from '../library/view';
 import {
 	changePrivateLock,
@@ -28,8 +26,8 @@ import {
 } from './private-library';
 
 /**
-Which private library drawer is open: make the library, open it with its PIN, bring in the server's, set the PIN of one
-that has none, or change the PIN it has.
+Which private library drawer is open: make the library, open it with its password, bring in the server's, set the password of one
+that has none, or change the password it has.
 */
 export type PrivateSheet = 'setup' | 'unlock' | 'server' | 'protect' | 'change';
 
@@ -97,7 +95,7 @@ function Note({children}: {children: string}) {
 }
 
 /**
-Choosing a PIN or password, then making the library with it (or, for a library that has none, giving it one, or changing
+Choosing a password, then making the library with it (or, for a library that has none, giving it one, or changing
 the one it has). It is asked for twice.
 */
 function SetupForm({
@@ -120,7 +118,6 @@ function SetupForm({
 	onDone: () => void;
 }) {
 	const colors = useColors();
-	const [kind, setKind] = useState<CredentialKind>('pin');
 	const [value, setValue] = useState('');
 	const [again, setAgain] = useState('');
 	const [currentValue, setCurrentValue] = useState('');
@@ -129,19 +126,21 @@ function SetupForm({
 	useEffect(() => {
 		onBusy?.(busy);
 	}, [busy, onBusy]);
-	const problem = validateCredential(kind, value) ?? undefined;
-	const mismatch = again !== '' && again !== value;
+	const problem = validateCredential(value) ?? undefined;
+	// A note while the password is short or only digits: it never blocks.
+	const weak = value === '' || problem ? undefined : weakPasswordHint(value);
+	const mismatch = again !== '' && !sameCredential(again, value);
 	const ready =
 		(!changing || currentValue !== '') &&
 		value !== '' &&
 		!problem &&
-		again === value;
+		sameCredential(again, value);
 
 	const run = async () => {
 		setBusy(true);
 		try {
 			if (changing) {
-				const result = await changePrivateLock(currentValue, {kind, value});
+				const result = await changePrivateLock(currentValue, {value});
 				if (result === 'wrong') {
 					setWrong(true);
 					return;
@@ -152,14 +151,14 @@ function SetupForm({
 					return;
 				}
 
-				showSnack('The PIN or password was changed');
+				showSnack('The password was changed');
 			} else if (creating) {
 				if (deviceOnly) {
 					// Set first, so the new library does not try the server's key.
 					setPreferences({syncPrivate: false});
 				}
 
-				await setupPrivate({kind, value});
+				await setupPrivate({value});
 				if (isPrivateOpen()) {
 					setView('private');
 				}
@@ -168,12 +167,12 @@ function SetupForm({
 					setPreferences({syncPrivate: false});
 				}
 
-				await protectPrivate({kind, value});
+				await protectPrivate({value});
 				if (isPrivateOpen()) {
 					setView('private');
 				}
 
-				showSnack('The private library is locked with its new PIN or password');
+				showSnack('The private library is locked with its new password');
 			}
 
 			onDone();
@@ -188,87 +187,73 @@ function SetupForm({
 		<View style={styles.body}>
 			<Title>
 				{creating
-					? 'Set a PIN or password'
+					? 'Set a password'
 					: changing
-						? 'Change the PIN or password'
-						: 'Set a PIN or password to open it'}
+						? 'Change the password'
+						: 'Set a password to open it'}
 			</Title>
 			<Note>
 				{creating
-					? 'The private library is a library of its own on this phone, and it opens only with a PIN or password. It works without a server, and syncs with your private windows when you connect one.'
+					? 'The private library is a library of its own on this phone, and it opens only with a password. It works without a server, and syncs with your private windows when you connect one.'
 					: changing
-						? 'The library keeps its data and its key. Other devices keep working, and a new one needs the new PIN or password.'
-						: 'The private library opens only with a PIN or password. It locks the library on this phone, and protects it on your server.'}
+						? 'The library keeps its data and its key. Other devices keep working, and a new one needs the new password.'
+						: 'The private library opens only with a password. It locks the library on this phone, and protects it on your server.'}
 			</Note>
 			{changing && (
 				<Field
 					secureTextEntry
 					autoFocus
-					label="Current PIN or password"
+					label="Current password"
 					icon="lock-closed-outline"
 					value={currentValue}
 					autoCapitalize="none"
 					autoCorrect={false}
-					error={wrong ? 'That PIN or password is wrong.' : undefined}
+					error={wrong ? 'That password is wrong.' : undefined}
 					onChangeText={(text) => {
 						setCurrentValue(text);
 						setWrong(false);
 					}}
 				/>
 			)}
-			<Segmented
-				label="Protect it with"
-				items={[
-					{id: 'pin' as const, name: 'PIN', icon: 'keypad-outline' as const},
-					{
-						id: 'password' as const,
-						name: 'Password',
-						icon: 'key-outline' as const,
-					},
-				]}
-				selected={kind}
-				onSelect={(next) => {
-					setKind(next);
-					setValue('');
-					setAgain('');
-				}}
-			/>
 			{deviceOnly && (
 				<Note>
 					Kept only on this phone, this library is not synced with your server.
 					To sync it later, turn on Sync the private library in Settings and
-					enter the server's PIN or password, if it has one.
+					enter the server's password, if it has one.
 				</Note>
 			)}
 			<>
 				<Field
 					secureTextEntry
-					label={kind === 'pin' ? 'PIN' : 'Password'}
+					label="Password"
 					icon="lock-closed-outline"
 					value={value}
-					keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
 					autoCapitalize="none"
 					autoCorrect={false}
 					error={value === '' ? undefined : problem}
 					onChangeText={(text) => {
-						setValue(clampCredentialInput(kind, text));
+						setValue(text);
 					}}
 				/>
+				{/* Always mounted, so TalkBack announces the hint when its text arrives. */}
+				<Text
+					accessibilityLiveRegion="polite"
+					style={{color: colors.muted, marginTop: weak ? 0 : -14}}
+				>
+					{weak ?? ''}
+				</Text>
 				<Field
 					secureTextEntry
 					label="Type it again"
 					icon="lock-closed-outline"
 					value={again}
-					keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
 					autoCapitalize="none"
 					autoCorrect={false}
 					error={mismatch ? 'These do not match.' : undefined}
 					onChangeText={(text) => {
-						setAgain(clampCredentialInput(kind, text));
+						setAgain(text);
 					}}
 				/>
-				<Text style={{color: colors.muted}}>{credentialRule(kind)}</Text>
-				{kind === 'pin' && <Note>{PIN_WEAKNESS_NOTE}</Note>}
 				<Note>{LOST_CREDENTIAL_NOTE}</Note>
 			</>
 			<Button
@@ -289,14 +274,14 @@ function SetupForm({
 }
 
 /**
-Opens a locked library with its PIN or password.
+Opens a locked library with its password.
 */
 function UnlockForm({onDone}: {onDone: () => void}) {
 	const colors = useColors();
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
-	// The drawer was dismissed while the PIN was checked: the result must not change the screen.
+	// The drawer was dismissed while the password was checked: the result must not change the screen.
 	const dismissedRef = useRef(false);
 	useEffect(() => {
 		dismissedRef.current = false;
@@ -320,7 +305,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 		}
 
 		if (result === 'ok') {
-			// Not if it was erased or locked again while the PIN was being checked.
+			// Not if it was erased or locked again while the password was being checked.
 			if (isPrivateOpen()) {
 				setView('private');
 			}
@@ -329,7 +314,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 		} else {
 			setProblem(
 				result === 'wrong'
-					? 'That PIN or password is wrong.'
+					? 'That password is wrong.'
 					: 'Could not open it. Try again.',
 			);
 		}
@@ -341,7 +326,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 			<Field
 				secureTextEntry
 				autoFocus
-				label="PIN or password"
+				label="Password"
 				icon="lock-closed-outline"
 				value={value}
 				autoCapitalize="none"
@@ -369,15 +354,15 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 				}}
 			/>
 			<Text style={{color: colors.muted}}>
-				Erasing deletes the private library from this phone, with its PIN or
-				password, and asks for a new one. Your server keeps its copy.
+				Erasing deletes the private library from this phone, with its password,
+				and asks for a new one. Your server keeps its copy.
 			</Text>
 		</View>
 	);
 }
 
 /**
-Asks before the private library is erased from this phone, erases it, and opens the set-a-PIN drawer once it is gone. A
+Asks before the private library is erased from this phone, erases it, and opens the set-a-password drawer once it is gone. A
 failure is reported and leaves the library as it was, so the erase can be tried again. Both entry points use it.
 */
 export function confirmErase(
@@ -386,7 +371,7 @@ export function confirmErase(
 ) {
 	confirm(
 		'Erase the private library from this phone?',
-		'Its bookmarks and sessions and its PIN or password are deleted from this phone, and you start again with a new PIN or password. Your server keeps its copy, if it has one, and you can bring it back from there with its PIN or password.',
+		'Its bookmarks and sessions and its password are deleted from this phone, and you start again with a new password. Your server keeps its copy, if it has one, and you can bring it back from there with its password.',
 		{label: 'Erase', destructive: true},
 		() => {
 			onWorking?.(true);
@@ -407,11 +392,11 @@ export function confirmErase(
 }
 
 /**
-The first PIN or password of the private library, for a new one or for one that has none. When the connected server
-already holds a private library, its PIN or password comes first: it becomes this library's lock, and the server's data
-joins what is here. Keeping the library on this phone only, with a PIN or password of its own, stays available. When the
+The first password of the private library, for a new one or for one that has none. When the connected server
+already holds a private library, its password comes first: it becomes this library's lock, and the server's data
+joins what is here. Keeping the library on this phone only, with a password of its own, stays available. When the
 server cannot be asked, the drawer says so, offers a retry, and sets the library up on the phone only: it is not synced
-until the server's PIN or password is entered from Settings.
+until the server's password is entered from Settings.
 */
 function FirstPin({
 	creating = false,
@@ -449,8 +434,8 @@ function FirstPin({
 				<View style={styles.body}>
 					<Text style={{color: colors.warn}}>
 						Could not reach your sync server to check for a private library, so
-						this one is kept on this phone only. Try again, or set a PIN or
-						password now and enter the server's from Settings later.
+						this one is kept on this phone only. Try again, or set a password
+						now and enter the server's from Settings later.
 					</Text>
 					<Button
 						label="Try again"
@@ -478,7 +463,7 @@ function FirstPin({
 					<Button
 						label={
 							deviceOnly
-								? 'Use the PIN from my sync server'
+								? 'Use the password from my sync server'
 								: 'Keep only on this phone instead'
 						}
 						kind="plain"
@@ -497,7 +482,7 @@ function FirstPin({
 }
 
 /**
-Brings in the private library the extension keeps on the server. A protected one asks for the PIN or password set in
+Brings in the private library the extension keeps on the server. A protected one asks for the password set in
 the extension, once; the phone's library takes that lock and syncs with the server's.
 */
 function ServerForm({
@@ -506,7 +491,7 @@ function ServerForm({
 	onDone,
 }: {
 	/**
-	The server is known to hold a protected library, so its PIN or password is asked for at once.
+	The server is known to hold a protected library, so its password is asked for at once.
 	*/
 	known?: boolean;
 	/**
@@ -544,7 +529,7 @@ function ServerForm({
 		}
 
 		if (result.ok) {
-			// Only while it is open: a library that has no PIN, or that locked while the join waited, does not show.
+			// Only while it is open: a library that has no password, or that locked while the join waited, does not show.
 			if (isPrivateOpen()) {
 				setView('private');
 			}
@@ -560,7 +545,7 @@ function ServerForm({
 			}
 
 			case 'wrong': {
-				setProblem('That PIN or password is wrong.');
+				setProblem('That password is wrong.');
 				break;
 			}
 
@@ -590,7 +575,7 @@ function ServerForm({
 		<View style={styles.body}>
 			<Title>
 				{known
-					? "Use your sync server's PIN"
+					? "Use your sync server's password"
 					: "Use your server's private library"}
 			</Title>
 			<Note>
@@ -600,14 +585,14 @@ function ServerForm({
 			{known && (
 				<Note>
 					If you no longer have it, keep the library only on this phone instead
-					and set a new PIN or password.
+					and set a new password.
 				</Note>
 			)}
 			{asking && (
 				<Field
 					secureTextEntry
 					autoFocus
-					label="PIN or password from the extension"
+					label="Password for the server's private library"
 					icon="lock-closed-outline"
 					value={value}
 					autoCapitalize="none"

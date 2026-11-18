@@ -72,8 +72,9 @@ const newId = () => {
 	return `id-${counter}`;
 };
 
-const PIN = {kind: 'pin' as const, value: '4821'};
-const PASSWORD = {kind: 'password' as const, value: 'correct horse battery'};
+// A short, number-only password, the kind an older version called a PIN, and a long one.
+const PIN = {value: '4821'};
+const PASSWORD = {value: 'correct horse battery'};
 
 /**
 Loads the phone's modules afresh and starts them from what is saved, as an app start does.
@@ -145,7 +146,7 @@ afterEach(async () => {
 });
 
 describe('without a server', () => {
-	test('a library is made with a PIN, edited, and kept across a restart', async () => {
+	test('a library is made with a password, edited, and kept across a restart', async () => {
 		let phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
 		await phone.setupPrivate(PIN);
@@ -194,14 +195,15 @@ describe('without a server', () => {
 		assert.ok(!status.needsKey);
 	});
 
-	test('a library with a PIN locks, refuses a wrong PIN, and opens with the right one', async () => {
+	test('a library with a password locks, refuses a wrong password, and opens with the right one', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		assert.equal(phone.canLockPrivate(), true);
 		await addLink(phone, 'https://secret.example/');
+		// No kind is written: there is one kind of password.
 		assert.equal(
-			(JSON.parse(memory.get('tablodge.private.lock')!) as {kind: string}).kind,
-			'pin',
+			'kind' in (JSON.parse(memory.get('tablodge.private.lock')!) as object),
+			false,
 		);
 		assert.ok(!memory.get('tablodge.private.lock')!.includes(PIN.value));
 
@@ -220,23 +222,54 @@ describe('without a server', () => {
 		]);
 	});
 
-	test('a password works like a PIN', async () => {
-		const phone = await startPhone();
-		await phone.setupPrivate(PASSWORD);
+	test('a lock an older version made with a 4 digit PIN, stored with kind pin, still unlocks and still joins the server’s key', async () => {
+		let phone = await startPhone();
+		await phone.setupPrivate({value: '2468'});
+		await addLink(phone, 'https://a.example/');
 		await phone.lockPrivate();
-		assert.equal(await phone.unlockPrivate('correct horse'), 'wrong');
-		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'ok');
+		// What an older version stored: the same record, saying it is a PIN.
+		const stored = JSON.parse(memory.get('tablodge.private.lock')!) as object;
+		memory.set(
+			'tablodge.private.lock',
+			JSON.stringify({...stored, kind: 'pin'}),
+		);
+
+		phone = await startPhone();
+		assert.equal(phone.getPrivateState().hasLock, true);
+		assert.equal(await phone.unlockPrivate('1357'), 'wrong');
+		assert.equal(await phone.unlockPrivate('2468'), 'ok');
+		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+
+		// The same short number is the password of the extension's library on the server, and the phone joins with it.
+		const extension = makeExtension(server);
+		await extension.protect({value: '2468'});
+		extension.edit((store) =>
+			addBookmark(
+				store,
+				{url: 'https://ext.example/', title: 'E', columnId: ''},
+				'ext-1',
+				1,
+			),
+		);
+		await extension.sync();
+		// A second phone, with nothing of its own.
+		memory.clear();
+		const other = await startPhone();
+		await connectPhone(other);
+		assert.deepEqual(await other.openFromServer('2468'), {ok: true});
+		assert.equal(other.getPrivateState().hasLock, true);
+		assert.deepEqual(urlsOf(other.getPrivateStore()), ['https://ext.example/']);
 	});
 
-	test('a PIN is added to a library that had none, and asked for after a restart', async () => {
+	test('a password is added to a library that had none, and asked for after a restart', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate();
 		await addLink(phone, 'https://a.example/');
 		// A library from an earlier version has no PIN, and does not open until it gets one.
-		assert.equal(phone.getPrivateState().needsPin, true);
+		assert.equal(phone.getPrivateState().needsPassword, true);
 		assert.equal(phone.isPrivateOpen(), false);
 		await phone.protectPrivate(PIN);
-		assert.equal(phone.getPrivateState().needsPin, false);
+		assert.equal(phone.getPrivateState().needsPassword, false);
 		assert.equal(phone.isPrivateOpen(), true);
 		assert.equal(phone.canLockPrivate(), true);
 		phone = await startPhone();
@@ -245,7 +278,7 @@ describe('without a server', () => {
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
 	});
 
-	test('changing the PIN needs the old one, and only the new one opens it afterwards', async () => {
+	test('changing the password needs the old one, and only the new one opens it afterwards', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://a.example/');
@@ -267,7 +300,7 @@ describe('without a server', () => {
 		// Closed at once: nothing opens it and nothing syncs it while the erase is unfinished.
 		assert.equal(phone.privateExists(), false);
 		assert.equal(phone.isPrivateOpen(), false);
-		assert.equal(phone.getPrivateState().needsPin, false);
+		assert.equal(phone.getPrivateState().needsPassword, false);
 
 		// A restart while storage still fails keeps it closed.
 		phone = await startPhone();
@@ -366,7 +399,7 @@ const sealedCount = async () =>
 	(await serverRecords()).filter((record) => isSealed(record.value)).length;
 
 describe('with the extension on the same server', () => {
-	test('a library with no PIN does not sync, so nothing leaves it unsealed, until it has one', async () => {
+	test('a library with no password does not sync, so nothing leaves it unsealed, until it has one', async () => {
 		const phone = await startPhone();
 		await phone.setupPrivate();
 		await addLink(phone, 'https://a.example/');
@@ -388,7 +421,7 @@ describe('with the extension on the same server', () => {
 		assert.deepEqual(urlsOf(extension.store), ['https://a.example/']);
 	});
 
-	test('a phone library with a PIN sends only sealed values, and the extension reads them after joining with the PIN', async () => {
+	test('a phone library with a password sends only sealed values, and the extension reads them after joining with the password', async () => {
 		const phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://a.example/');
@@ -426,7 +459,7 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
-	test('joining a library the extension made asks for its PIN once: a wrong PIN changes nothing, the right one brings the data', async () => {
+	test('joining a library the extension made asks for its password once: a wrong password changes nothing, the right one brings the data', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PIN);
 		extension.edit((store) =>
@@ -477,7 +510,7 @@ describe('with the extension on the same server', () => {
 		);
 	});
 
-	test('the set-a-PIN screen learns what the server holds, and joining from an empty phone makes the server’s PIN its lock', async () => {
+	test('the set-a-password screen learns what the server holds, and joining from an empty phone makes the server’s password its lock', async () => {
 		const phone = await startPhone();
 		assert.deepEqual(await phone.privateServerInfo(), {
 			connected: false,
@@ -501,13 +534,13 @@ describe('with the extension on the same server', () => {
 		});
 
 		assert.deepEqual(await phone.openFromServer(PIN.value), {ok: true});
-		assert.equal(phone.getPrivateState().lockedWith, 'pin');
-		assert.equal(phone.getPrivateState().needsPin, false);
+		assert.equal(phone.getPrivateState().hasLock, true);
+		assert.equal(phone.getPrivateState().needsPassword, false);
 		await phone.lockPrivate();
 		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
 	});
 
-	test('keeping the library on the phone with its own PIN does not touch the server, and syncing later takes the server’s PIN and merges', async () => {
+	test('keeping the library on the phone with its own password does not touch the server, and syncing later takes the server’s password and merges', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PIN);
 		extension.edit((store) =>
@@ -539,7 +572,7 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
-	test('a library with no key on the server is not made from the server: a PIN or password comes first', async () => {
+	test('a library with no key on the server is not made from the server: a password comes first', async () => {
 		const extension = makeExtension(server);
 		extension.edit((store) =>
 			addBookmark(
@@ -570,15 +603,15 @@ describe('with the extension on the same server', () => {
 		);
 		const phone = await startPhone();
 		await connectPhone(phone);
-		assert.equal(phone.getPrivateState().needsPin, true);
+		assert.equal(phone.getPrivateState().needsPassword, true);
 		assert.deepEqual(await phone.openFromServer('0000'), {
 			ok: false,
 			reason: 'wrong',
 		});
-		assert.equal(phone.getPrivateState().needsPin, true);
+		assert.equal(phone.getPrivateState().needsPassword, true);
 		assert.deepEqual(await phone.openFromServer(PIN.value), {ok: true});
-		assert.equal(phone.getPrivateState().needsPin, false);
-		assert.equal(phone.getPrivateState().lockedWith, 'pin');
+		assert.equal(phone.getPrivateState().needsPassword, false);
+		assert.equal(phone.getPrivateState().hasLock, true);
 	});
 
 	test('with private sync off, joining says so instead of asking to connect', async () => {
@@ -653,7 +686,7 @@ describe('with the extension on the same server', () => {
 		assert.equal(server.privateLog.key, keyBefore);
 	});
 
-	test('a join waits for a PIN change that is already running, so the server’s lock is the last word', async () => {
+	test('a join waits for a password change that is already running, so the server’s lock is the last word', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PASSWORD);
 		await extension.sync();
@@ -669,7 +702,6 @@ describe('with the extension on the same server', () => {
 		const order: string[] = [];
 		const changing = phone
 			.changePrivateLock(PIN.value, {
-				kind: 'password',
 				value: 'a brand new password',
 			})
 			.then((result) => {
@@ -736,7 +768,7 @@ describe('with the extension on the same server', () => {
 		release();
 		await Promise.all([joining, phone.setupPrivate(PIN)]);
 
-		assert.equal(phone.getPrivateState().needsPin, false);
+		assert.equal(phone.getPrivateState().needsPassword, false);
 		assert.equal(server.privateLog.key, keyBefore);
 		await phone.lockPrivate();
 		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
@@ -829,7 +861,7 @@ describe('with the extension on the same server', () => {
 		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'wrong');
 	});
 
-	test('a phone-only PIN on a library that kept the server’s key does not become the server’s credential', async () => {
+	test('a phone-only password on a library that kept the server’s key does not become the server’s credential', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PASSWORD);
 		await extension.sync();
@@ -939,7 +971,7 @@ describe('with the extension on the same server', () => {
 		);
 	});
 
-	test('a PIN change and a join that overlap leave one lock that opens the library and the server’s data', async () => {
+	test('a password change and a join that overlap leave one lock that opens the library and the server’s data', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PASSWORD);
 		await extension.sync();
@@ -949,7 +981,6 @@ describe('with the extension on the same server', () => {
 		await addLink(phone, 'https://phone.example/');
 
 		const changing = phone.changePrivateLock(PIN.value, {
-			kind: 'password',
 			value: 'a brand new password',
 		});
 		const joining = phone.openFromServer(PASSWORD.value);
@@ -1084,7 +1115,7 @@ describe('with the extension on the same server', () => {
 		}
 	});
 
-	test('a join that finishes after the library got a PIN of its own does not replace it', async () => {
+	test('a join that finishes after the library got a password of its own does not replace it', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PASSWORD);
 		await extension.sync();
@@ -1116,7 +1147,7 @@ describe('with the extension on the same server', () => {
 			message:
 				'The private library changed while the server was checked. Try again.',
 		});
-		assert.equal(phone.getPrivateState().lockedWith, 'pin');
+		assert.equal(phone.getPrivateState().hasLock, true);
 		await phone.lockPrivate();
 		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'wrong');
 		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
@@ -1210,7 +1241,7 @@ describe('with the extension on the same server', () => {
 		assert.equal(titleOn(phone.getPrivateStore()), titleOn(extension.store));
 	});
 
-	test('a phone with its own PIN joins the extension’s library and takes its lock; its own data stays', async () => {
+	test('a phone with its own password joins the extension’s library and takes its lock; its own data stays', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PASSWORD);
 		extension.edit((store) =>
@@ -1295,7 +1326,7 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
-	test('a PIN added to a library from an earlier version seals what is already plain on the server, and the extension can still read it', async () => {
+	test('a password added to a library from an earlier version seals what is already plain on the server, and the extension can still read it', async () => {
 		// An earlier version synced this library plain: the server holds plain records.
 		const older = makeExtension(server);
 		older.edit((store) =>
@@ -1349,7 +1380,7 @@ describe('with the extension on the same server', () => {
 		);
 	});
 
-	test('a PIN added while the server is out of reach is sent sealed once it is back', async () => {
+	test('a password added while the server is out of reach is sent sealed once it is back', async () => {
 		const phone = await startPhone();
 		await phone.setupPrivate();
 		await addLink(phone, 'https://a.example/');
@@ -1368,7 +1399,7 @@ describe('with the extension on the same server', () => {
 		assert.deepEqual(urlsOf(extension.store), ['https://a.example/']);
 	});
 
-	test('changing the PIN on the phone keeps the extension working, and a new join needs the new PIN', async () => {
+	test('changing the password on the phone keeps the extension working, and a new join needs the new password', async () => {
 		const phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://a.example/');
@@ -1394,7 +1425,7 @@ describe('with the extension on the same server', () => {
 		assert.equal(second.store.bookmarks.length, 2);
 	});
 
-	test('a PIN changed while offline is not undone by the next sync', async () => {
+	test('a password changed while offline is not undone by the next sync', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await connectPhone(phone);
@@ -1411,7 +1442,7 @@ describe('with the extension on the same server', () => {
 		await extension.enterCredential(PASSWORD.value);
 	});
 
-	test('the extension changing its PIN carries over to the phone', async () => {
+	test('the extension changing its password carries over to the phone', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PIN);
 		extension.edit((store) =>
@@ -1486,7 +1517,7 @@ describe('disconnecting and locking by itself', () => {
 		]);
 	});
 
-	test('a library with a PIN locks when the app leaves the screen, when the screen turns off, and after a while idle', async () => {
+	test('a library with a password locks when the app leaves the screen, when the screen turns off, and after a while idle', async () => {
 		let phone = await startPhone();
 		const autolock = await import('../src/private/private-autolock');
 		const stop = autolock.startPrivateAutoLock();

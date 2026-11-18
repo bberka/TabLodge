@@ -2,75 +2,79 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
 	PASSWORD_MAX_LENGTH,
+	sameCredential,
 	PASSWORD_MIN_LENGTH,
-	PIN_MAX_LENGTH,
-	PIN_MIN_LENGTH,
+	STRONG_PASSWORD_LENGTH,
 	validateCredential,
-	clampCredentialInput,
+	weakPasswordHint,
 } from '../src/shared/passcode';
 
 test('the limits are the documented ones', () => {
-	assert.equal(PIN_MIN_LENGTH, 4);
-	assert.equal(PIN_MAX_LENGTH, 8);
-	assert.equal(PASSWORD_MIN_LENGTH, 8);
+	assert.equal(PASSWORD_MIN_LENGTH, 4);
 	assert.equal(PASSWORD_MAX_LENGTH, 128);
+	assert.equal(STRONG_PASSWORD_LENGTH, 8);
 });
 
-test('a PIN is 4 to 8 ASCII digits', () => {
-	assert.equal(validateCredential('pin', '1234'), null);
-	assert.equal(validateCredential('pin', '12345678'), null);
-	assert.match(validateCredential('pin', '123') ?? '', /at least 4/);
-	assert.match(validateCredential('pin', '123456789') ?? '', /at most 8/);
-	assert.match(validateCredential('pin', '12a4') ?? '', /digits/);
-	assert.match(validateCredential('pin', '12 34') ?? '', /digits/);
-	// Arabic-Indic digits are digits to \d-style checks in some engines; a PIN allows 0 to 9 only.
-	assert.match(validateCredential('pin', '١٢٣٤') ?? '', /digits/);
-	assert.match(validateCredential('pin', '') ?? '', /Enter/);
+test('a password is 4 to 128 characters of any kind', () => {
+	assert.equal(validateCredential('abcd'), null);
+	assert.equal(validateCredential('1234'), null);
+	assert.equal(validateCredential('12345678'), null);
+	assert.equal(validateCredential(`${'x'.repeat(4)} ${'y'.repeat(3)}!`), null);
+	assert.equal(validateCredential('x'.repeat(128)), null);
+	assert.match(validateCredential('abc') ?? '', /at least 4/);
+	assert.match(validateCredential('x'.repeat(129)) ?? '', /at most 128/);
+	assert.match(validateCredential('') ?? '', /Enter a password/);
 });
 
-test('a password is 8 to 128 characters of any kind', () => {
-	assert.equal(validateCredential('password', 'a'.repeat(8)), null);
-	assert.equal(
-		validateCredential('password', `${'x'.repeat(4)} ${'y'.repeat(3)}!`),
-		null,
-	);
-	assert.equal(validateCredential('password', 'x'.repeat(128)), null);
-	assert.match(
-		validateCredential('password', 'a'.repeat(7)) ?? '',
-		/at least 8/,
-	);
-	assert.match(
-		validateCredential('password', 'x'.repeat(129)) ?? '',
-		/at most 128/,
-	);
-	assert.match(validateCredential('password', '') ?? '', /Enter/);
+test('digits, letters, spaces and symbols are all fine, and nothing is trimmed', () => {
+	assert.equal(validateCredential(' '.repeat(4)), null);
+	assert.equal(validateCredential('12 34-ab5'), null);
+	assert.equal(validateCredential('١٢٣٤'), null);
 });
 
 test('length counts characters, not UTF-16 units', () => {
-	// Eight emoji are 16 UTF-16 units but 8 characters.
-	assert.equal(validateCredential('password', '🔑'.repeat(8)), null);
-	assert.match(
-		validateCredential('password', '🔑'.repeat(7)) ?? '',
-		/at least 8/,
-	);
-	assert.equal(validateCredential('password', '🔑'.repeat(128)), null);
-	assert.match(
-		validateCredential('password', '🔑'.repeat(129)) ?? '',
-		/at most 128/,
-	);
+	// Four emoji are 8 UTF-16 units but 4 characters.
+	assert.equal(validateCredential('🔑'.repeat(4)), null);
+	assert.match(validateCredential('🔑'.repeat(3)) ?? '', /at least 4/);
+	assert.equal(validateCredential('🔑'.repeat(128)), null);
+	assert.match(validateCredential('🔑'.repeat(129)) ?? '', /at most 128/);
 });
 
-test('fields stop input at the limit and a PIN keeps only digits', () => {
-	assert.equal(clampCredentialInput('pin', '12 34-ab5'), '12345');
-	assert.equal(clampCredentialInput('pin', '1234 5678 9012'), '12345678');
-	assert.equal(clampCredentialInput('password', '12 34-ab5'), '12 34-ab5');
-	assert.equal(clampCredentialInput('password', 'a'.repeat(200)).length, 128);
-	assert.equal(clampCredentialInput(undefined, 'ab1 '.repeat(50)).length, 128);
-	assert.equal(clampCredentialInput(undefined, 'abc'), 'abc');
+test('length is judged after the normalization the key is derived with, so the same text is judged the same', () => {
+	// Four code points that normalize to two characters are too short, however they were typed.
+	assert.match(validateCredential('e\u0301e\u0301') ?? '', /at least 4/);
+	assert.match(validateCredential('éé') ?? '', /at least 4/);
+	assert.equal(validateCredential('e\u0301e\u0301e\u0301e\u0301'), null);
+	assert.equal(validateCredential('éééé'), null);
+	// A compatibility form (full width letters) counts as the plain letters it becomes.
+	assert.match(validateCredential('ａｂｃ') ?? '', /at least 4/);
 });
 
-test('an emoji password is capped by characters, not UTF-16 units', () => {
-	const clamped = clampCredentialInput('password', '😀'.repeat(200));
-	assert.equal([...clamped].length, 128);
-	assert.equal(validateCredential('password', clamped), null);
+test('a password past the limit is refused, not cut, so what is typed is what is kept', () => {
+	assert.match(validateCredential('x'.repeat(129)) ?? '', /at most 128/);
+	assert.equal(validateCredential('x'.repeat(128)), null);
+});
+
+test('a short or number-only password gets a hint while it is typed, and a longer mixed one does not', () => {
+	assert.equal(weakPasswordHint(''), null, 'nothing is said before typing');
+	assert.match(weakPasswordHint('q'.repeat(4)) ?? '', /easy to guess/);
+	assert.match(weakPasswordHint('q'.repeat(7)) ?? '', /easy to guess/);
+	assert.match(weakPasswordHint('1234') ?? '', /easy to guess/);
+	assert.match(weakPasswordHint('12345678901234') ?? '', /easy to guess/);
+	assert.equal(weakPasswordHint('q'.repeat(8)), null);
+	assert.equal(weakPasswordHint('correct horse battery'), null);
+	assert.equal(weakPasswordHint('1234567a'), null);
+	// Characters, not UTF-16 units.
+	assert.match(weakPasswordHint('🔑'.repeat(7)) ?? '', /easy to guess/);
+	assert.equal(weakPasswordHint('🔑'.repeat(8)), null);
+	// Digits of any script are digits.
+	assert.match(weakPasswordHint('١٢٣٤٥٦٧٨') ?? '', /easy to guess/);
+	assert.match(weakPasswordHint('１２３４５６７８９０') ?? '', /easy to guess/);
+});
+
+test('two entries are the same password when they are the same text after the normalization the key uses', () => {
+	assert.equal(sameCredential('１２３４', '1234'), true);
+	assert.equal(sameCredential('é', 'e\u0301'), true);
+	assert.equal(sameCredential('1234', '1235'), false);
+	assert.equal(sameCredential('abc', 'ABC'), false);
 });

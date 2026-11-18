@@ -1,6 +1,6 @@
 /*
 Locks the private library by itself, as the person chose in Settings: when the app goes behind another one, when the
-screen turns off, or after a while without a touch. Only a library with a PIN or password locks.
+screen turns off, or after a while without a touch. Only a library with a password locks.
 */
 import {AppState} from 'react-native';
 import {onScreenOff} from '../../modules/open-links';

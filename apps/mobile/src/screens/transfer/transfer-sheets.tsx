@@ -18,14 +18,12 @@ import {
 	shareLinks,
 	shareMarkdown,
 } from '../../../../extension/src/shared/share-formats';
-import {
-	LOST_CREDENTIAL_NOTE,
-	validateCredential,
-} from '../../../../extension/src/shared/passcode';
+import {LOST_CREDENTIAL_NOTE} from '../../../../extension/src/shared/passcode';
 import type {Store} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {notify, showDialog} from '../../ui/dialog';
 import {buildBackup} from '../../transfer/backup';
+import {backupPasswordNote} from '../../transfer/backup-password';
 import {useView} from '../../library/view';
 import {useTrash} from '../../library/trash-store';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
@@ -360,10 +358,7 @@ export function ShareSheet({
 	const {links} = shareCounts(groups);
 	const title =
 		scope?.title ?? (what === 'bookmarks' ? 'Bookmarks' : 'Sessions');
-	const problem =
-		isBackup && password !== ''
-			? (validateCredential('password', password) ?? undefined)
-			: undefined;
+	const {problem, hint: weak} = backupPasswordNote(isBackup, password);
 	const run = async () => {
 		setBusy(true);
 		try {
@@ -481,6 +476,12 @@ export function ShareSheet({
 							error={problem}
 							onChangeText={setPassword}
 						/>
+						<Text
+							accessibilityLiveRegion="polite"
+							style={{color: colors.muted, marginTop: weak ? 0 : -14}}
+						>
+							{weak ?? ''}
+						</Text>
 						{view === 'private' && (
 							<Text style={{color: colors.muted}}>
 								This backs up the private library, not the regular one. Without
