@@ -443,26 +443,27 @@ function Help() {
 							Substack saved. The browser asks for access to that site only, and
 							nothing runs there until you allow it. Only the sites you added
 							are listed. Then, when you save something there, {PROJECT.name}{' '}
-							bookmarks the same link in a column named after the site. When you
-							have no column of that name and chose no other, the first save
-							creates it with an icon and a color for that site, which you can
-							change like any column&apos;s; saves keep going there. It saves a
-							video you add to Watch later, a Reddit post or comment, an X post
-							you bookmark, an Instagram post or reel, a GitHub repository you
-							star (titled with its name and description), a Hacker News story
-							you favorite, a Stack Overflow question you bookmark, a dev.to
-							article you save to your reading list, a Lobsters story you save,
-							a Bluesky post you save, a track or playlist you like on
-							SoundCloud, a song, album, playlist, or episode you save to your
-							Spotify library in the web player, a film you add to your
-							Letterboxd or IMDb watchlist, a book you mark Want to Read on
-							Goodreads, a Medium story you bookmark, or a Substack post you
-							save. Medium and Substack publications on their own domains are
-							not covered. Posts from X, Instagram, and Bluesky are titled with
-							the start of their text or caption. A Hacker News or Lobsters
-							story is saved at the address it links to, with its discussion
-							page in the note; a text post with no link is saved at its
-							discussion page. Under Save to, under each added site, you can
+							bookmarks the same link in a column named after the site, or in
+							the one you choose under Save to. A column you already have with
+							that name is used as it is. If neither exists, the first save
+							creates the site&apos;s column with an icon and a color for that
+							site, which you can change like any column&apos;s; saves keep
+							going there. It saves a video you add to Watch later, a Reddit
+							post or comment, an X post you bookmark, an Instagram post or
+							reel, a GitHub repository you star (titled with its name and
+							description), a Hacker News story you favorite, a Stack Overflow
+							question you bookmark, a dev.to article you save to your reading
+							list, a Lobsters story you save, a Bluesky post you save, a track
+							or playlist you like on SoundCloud, a song, album, playlist, or
+							episode you save to your Spotify library in the web player, a film
+							you add to your Letterboxd or IMDb watchlist, a book you mark Want
+							to Read on Goodreads, a Medium story you bookmark, or a Substack
+							post you save. Medium and Substack publications on their own
+							domains are not covered. Posts from X, Instagram, and Bluesky are
+							titled with the start of their text or caption. A Hacker News or
+							Lobsters story is saved at the address it links to, with its
+							discussion page in the note; a text post with no link is saved at
+							its discussion page. Under Save to, under each added site, you can
 							choose another column; if that column is deleted, saves go to the
 							site&apos;s own column again until you choose one. A small notice
 							in the page, in your {PROJECT.name}
