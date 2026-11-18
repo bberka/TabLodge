@@ -1302,6 +1302,21 @@ test('Spotify: saving the album, a song row, or the playing song; a saved one sa
 	});
 });
 
+test('Spotify: the save button of an album of one song saves the album, not the song', () => {
+	const site = page(
+		'spotify-single.html',
+		'https://open.spotify.com/album/1aBcDeFgHiJkLmNoPqRsTu',
+		(document) => createSpotifyReader(document),
+	);
+	assert.deepEqual(site.click('album-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://open.spotify.com/album/1aBcDeFgHiJkLmNoPqRsTu',
+			title: 'One Song Album',
+		},
+	});
+});
+
 test('Letterboxd: the film page and a poster menu add to the watchlist; removing saves nothing', () => {
 	const site = page(
 		'letterboxd-film.html',

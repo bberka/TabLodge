@@ -23,16 +23,22 @@ const CARD_KIND = /\/(?:track|episode)\//;
 /**
 The song or episode a card around the button names: the closest ancestor linking to exactly one. An ancestor
 linking to several is a list or the page itself, so the search stops there. Other links near a page's own button,
-such as its artist, are not items a card is about.
+such as its artist, are not items a card is about, and neither is anything in a container that also holds the
+page's heading: that is the page's own header, even on an album of one song.
 */
 function cardItem(button: Element, page: string | null) {
 	let container = button.parentElement;
 	for (let depth = 0; container && depth < CARD_DEPTH; depth++) {
-		const items = new Map<string, Element>();
+		if (container.querySelector(PAGE_TITLE)) {
+			return undefined;
+		}
+
+		// An artwork link may come first with no text; the title link names the item.
+		const items = new Map<string, string>();
 		for (const link of container.querySelectorAll('a[href]')) {
 			const url = spotifyItemUrl(link.getAttribute('href') ?? '');
-			if (url && CARD_KIND.test(url) && url !== page && !items.has(url)) {
-				items.set(url, link);
+			if (url && CARD_KIND.test(url) && url !== page && !items.get(url)) {
+				items.set(url, squash(link.textContent));
 			}
 		}
 
@@ -42,7 +48,7 @@ function cardItem(button: Element, page: string | null) {
 
 		const [found] = items;
 		if (found) {
-			return {url: found[0], title: squash(found[1].textContent)};
+			return {url: found[0], title: found[1]};
 		}
 
 		container = container.parentElement;

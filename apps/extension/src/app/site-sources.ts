@@ -466,10 +466,14 @@ export function mediumPostUrl(href: string): string | null {
 }
 
 /**
-A post on substack.com or a publication's substack.com subdomain, without its query.
+A post on substack.com or a publication's substack.com subdomain, without its query. A relative link is read
+against `base`, the page it is on.
 */
-export function substackPostUrl(href: string): string | null {
-	const url = parse(href, 'https://substack.com/');
+export function substackPostUrl(
+	href: string,
+	base = 'https://substack.com/',
+): string | null {
+	const url = parse(href, base);
 	return onHost(url, 'substack.com', '*.substack.com') &&
 		SUBSTACK_POST.test(url.pathname)
 		? `https://${url.hostname}${url.pathname.replace(/\/$/, '')}`

@@ -59,11 +59,13 @@ export function createSubstackReader(document: Document): SourceReader {
 		const found = card(button, document);
 		if (found) {
 			const url = [...found.container.querySelectorAll('a[href]')]
-				// Resolved against the page, so a relative link keeps the publication's host.
+				// Read against the page, so a relative link keeps the publication's host. A link to a place on this page
+				// (#comments) would read as this page's own post, so it is skipped.
+				.filter((link) => !(link.getAttribute('href') ?? '').startsWith('#'))
 				.map((link) =>
 					substackPostUrl(
-						new URL(link.getAttribute('href') ?? '', document.location.href)
-							.href,
+						link.getAttribute('href') ?? '',
+						document.location.href,
 					),
 				)
 				.find(Boolean);
