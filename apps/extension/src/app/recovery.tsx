@@ -1,7 +1,7 @@
 // Recovery UI shared by the dashboard, side panel and Settings: the "restore your last session" banner, the
 // recent-snapshots dialog, the trash bin dialog, and the backup list. Every action is a message to the service
 // worker, which keeps all of this data in local extension storage.
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
 	AppWindow,
 	Archive,
@@ -48,7 +48,13 @@ import type {
 	TrashSummary,
 } from '../shared/types';
 import {inPrivateWindow} from './private-config';
-import {messageOf, plural, send, type ShowStatus} from './common';
+import {
+	messageOf,
+	plural,
+	send,
+	type ShowStatus,
+	type StatusAction,
+} from './common';
 import {mergeSummary} from './merge-summary';
 import {
 	reportSnapshotRestore,
@@ -59,6 +65,7 @@ import {
 	offerUndo,
 	type TrashFilter,
 } from './recovery-core';
+import {cn} from '@/lib/utils';
 
 // Short badge text, with the full explanation shown on hover.
 const REASON_LABELS: Record<
@@ -746,6 +753,9 @@ function BackupRow({
 
 type UsageText = {snapshots: string; backups: string; trash: string};
 
+// Storage keys whose changes alter the usage line or the backup list (regular and private libraries).
+const RECOVERY_KEY = /\.(?:trash|backups|snapshots)$/;
+
 /**
 Explains Add versus Restore behind a help button, so the dialog shows no standing paragraph.
 */
@@ -801,7 +811,6 @@ export function RecoveryTools({
 	onDataChanged,
 	onOpenSnapshots,
 	onOpenTrash,
-	dialogOpen,
 }: {
 	showStatus: ShowStatus;
 	/**
@@ -810,16 +819,55 @@ export function RecoveryTools({
 	onDataChanged: () => unknown;
 	onOpenSnapshots: () => void;
 	onOpenTrash: () => void;
-	/**
-	True while the trash bin or snapshots dialog is open; storage use is read again when it closes.
-	*/
-	dialogOpen: boolean;
 }) {
 	const [usage, setUsage] = useState<UsageText | null>(null);
 	const [backups, setBackups] = useState<ActionSuccess<'GET_BACKUPS'> | null>(
 		null,
 	);
+	const [backupsError, setBackupsError] = useState('');
 	const [listOpen, setListOpen] = useState(false);
+	// While Backups is open its feedback and Undo show inside it: the page toast sits behind the modal.
+	const listOpenRef = useRef(false);
+	const [notice, setNotice] = useState<{
+		message: string;
+		error: boolean;
+		action?: StatusAction;
+	} | null>(null);
+	const undoRef = useRef<HTMLButtonElement | null>(null);
+	const noticeRef = useRef<HTMLParagraphElement | null>(null);
+	const status: ShowStatus = (message, error, options) => {
+		if (!listOpenRef.current) {
+			showStatus(message, error, options);
+		} else if (message) {
+			setNotice({message, error: Boolean(error), action: options?.action});
+		}
+	};
+
+	const openList = (open: boolean) => {
+		listOpenRef.current = open;
+		setListOpen(open);
+		if (open) {
+			refreshQuietly();
+		} else {
+			// Closing keeps an Undo that is still offered, as a page toast.
+			if (notice?.action) {
+				showStatus(notice.message, false, {action: notice.action});
+			}
+
+			setNotice(null);
+		}
+	};
+
+	// A deleted row takes focus with it; Undo is the nearest useful place for it.
+	const focusUndoRef = useRef(false);
+	useEffect(() => {
+		if (!(notice?.action && focusUndoRef.current)) {
+			return;
+		}
+
+		focusUndoRef.current = false;
+		undoRef.current?.focus();
+	}, [notice]);
 	const [busy, setBusy] = useState('');
 	const [pending, setPending] = useState<
 		{kind: 'snapshots'} | {kind: 'restore'; backup: BackupSummary} | null
@@ -839,37 +887,59 @@ export function RecoveryTools({
 
 		if (backupResult?.ok) {
 			setBackups(backupResult);
+			setBackupsError('');
+		} else {
+			setBackupsError(backupResult?.error || 'Could not read the backups.');
 		}
 	}, []);
+	const refreshQuietly = useCallback(() => {
+		refresh().catch((reason: unknown) => {
+			setBackupsError(messageOf(reason) || 'Could not read the backups.');
+		});
+	}, [refresh]);
+	// The trash bin and snapshot dialogs (and their Undo) change these lists too, so watch storage instead of each action.
 	useEffect(() => {
-		if (!dialogOpen) {
-			void refresh().catch(() => undefined);
-		}
-	}, [dialogOpen, refresh]);
+		refreshQuietly();
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const onChanged = (changes: Record<string, unknown>) => {
+			if (Object.keys(changes).every((key) => !RECOVERY_KEY.test(key))) {
+				return;
+			}
+
+			clearTimeout(timer);
+			timer = setTimeout(refreshQuietly, 300);
+		};
+
+		chrome.storage.onChanged.addListener(onChanged);
+		return () => {
+			clearTimeout(timer);
+			chrome.storage.onChanged.removeListener(onChanged);
+		};
+	}, [refreshQuietly]);
 
 	async function run(name: string, action: () => Promise<void>) {
 		setBusy(name);
 		try {
 			await action();
 		} catch (reason) {
-			showStatus(messageOf(reason) || 'That did not work.', true);
+			status(messageOf(reason) || 'That did not work.', true);
 		}
 
 		setBusy('');
-		await refresh().catch(() => undefined);
+		refreshQuietly();
 	}
 
 	const backupNow = () =>
 		run('backup', async () => {
 			const result = await send('BACKUP_NOW');
 			if (result?.ok) {
-				showStatus(
+				status(
 					`Backed up ${plural(result.backup.sessions, 'session')} and ${plural(result.backup.bookmarks, 'bookmark')}.`,
 					false,
 					{toast: true},
 				);
 			} else {
-				showStatus(result?.error || 'Could not back up.', true);
+				status(result?.error || 'Could not back up.', true);
 			}
 		});
 
@@ -879,7 +949,7 @@ export function RecoveryTools({
 			if (result?.ok) {
 				downloadFile(result.json, 'application/json', result.filename);
 			} else {
-				showStatus(result?.error || 'Could not read that backup.', true);
+				status(result?.error || 'Could not read that backup.', true);
 			}
 		});
 
@@ -888,7 +958,7 @@ export function RecoveryTools({
 		run(`merge:${backup.id}`, async () => {
 			const data = await send('GET_BACKUP_DATA', {id: backup.id});
 			if (!data?.ok) {
-				showStatus(data?.error || 'Could not read that backup.', true);
+				status(data?.error || 'Could not read that backup.', true);
 				return;
 			}
 
@@ -896,7 +966,7 @@ export function RecoveryTools({
 			try {
 				parsed = JSON.parse(data.json);
 			} catch {
-				showStatus('That backup could not be read.', true);
+				status('That backup could not be read.', true);
 				return;
 			}
 
@@ -905,13 +975,13 @@ export function RecoveryTools({
 				importOptions: {duplicateMode: 'skip', titlePolicy: 'existing'},
 			});
 			if (result?.ok) {
-				offerUndo(mergeSummary(result), result.undoId, showStatus, async () => {
+				offerUndo(mergeSummary(result), result.undoId, status, async () => {
 					await refresh();
 					await onDataChanged();
 				});
 				await onDataChanged();
 			} else {
-				showStatus(result?.error || 'Could not add that backup.', true);
+				status(result?.error || 'Could not add that backup.', true);
 			}
 		});
 
@@ -922,7 +992,7 @@ export function RecoveryTools({
 				offerUndo(
 					`Restored ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}.`,
 					result.undoId,
-					showStatus,
+					status,
 					async () => {
 						await refresh();
 						await onDataChanged();
@@ -930,7 +1000,7 @@ export function RecoveryTools({
 				);
 				await onDataChanged();
 			} else {
-				showStatus(result?.error || 'Could not restore that backup.', true);
+				status(result?.error || 'Could not restore that backup.', true);
 			}
 		});
 
@@ -938,9 +1008,10 @@ export function RecoveryTools({
 		run(`delete:${backup.id}`, async () => {
 			const result = await send('DELETE_BACKUP', {id: backup.id});
 			if (result?.ok) {
-				offerUndo('Backup deleted.', result.undoId, showStatus, refresh);
+				focusUndoRef.current = true;
+				offerUndo('Backup deleted.', result.undoId, status, refresh);
 			} else {
-				showStatus(result?.error || 'Could not delete that backup.', true);
+				status(result?.error || 'Could not delete that backup.', true);
 			}
 		});
 
@@ -951,11 +1022,11 @@ export function RecoveryTools({
 				offerUndo(
 					`Cleared ${plural(result.count, 'snapshot')}.`,
 					result.undoId,
-					showStatus,
+					status,
 					refresh,
 				);
 			} else {
-				showStatus(result?.error || 'Could not clear the snapshots.', true);
+				status(result?.error || 'Could not clear the snapshots.', true);
 			}
 		});
 
@@ -983,7 +1054,7 @@ export function RecoveryTools({
 					<Save className="h-4 w-4" />
 					{busy === 'backup' ? 'Backing up' : 'Back up now'}
 				</Button>
-				<Button size="sm" variant="outline" onClick={() => setListOpen(true)}>
+				<Button size="sm" variant="outline" onClick={() => openList(true)}>
 					<Archive className="h-4 w-4" />
 					Backups
 				</Button>
@@ -998,7 +1069,7 @@ export function RecoveryTools({
 					Trash bin
 				</Button>
 			</div>
-			<Dialog open={listOpen} onOpenChange={setListOpen}>
+			<Dialog open={listOpen} onOpenChange={openList}>
 				<DialogContent size="lg">
 					<DialogHeader className={SCROLL_HEADER}>
 						<div className="flex items-center gap-1">
@@ -1011,7 +1082,58 @@ export function RecoveryTools({
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody>
-						{all.length === 0 ? (
+						{/* No box of its own, so an empty region adds no gap above the list. */}
+						<div role="status" aria-live="polite" className="contents">
+							{notice && (
+								<div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+									<p
+										ref={noticeRef}
+										tabIndex={-1}
+										className={cn(
+											'min-w-0 flex-1 leading-5 focus-visible:outline-hidden',
+											notice.error && 'font-medium text-destructive',
+										)}
+									>
+										{notice.message}
+									</p>
+									{notice.action && (
+										<Button
+											ref={undoRef}
+											size="sm"
+											variant="outline"
+											className="h-7 shrink-0"
+											onClick={() => {
+												const {action} = notice;
+												setNotice({message: notice.message, error: false});
+												noticeRef.current?.focus();
+												void action?.onClick();
+											}}
+										>
+											<Undo2 className="h-4 w-4" />
+											{notice.action.label}
+										</Button>
+									)}
+								</div>
+							)}
+						</div>
+						{backupsError ? (
+							<div className="flex flex-wrap items-center justify-between gap-2">
+								<p
+									role="alert"
+									className="text-sm font-medium text-destructive"
+								>
+									{backupsError}
+								</p>
+								<Button size="sm" variant="outline" onClick={refreshQuietly}>
+									<RotateCcw className="h-4 w-4" />
+									Try again
+								</Button>
+							</div>
+						) : backups === null ? (
+							<p className="px-4 py-8 text-center text-sm text-muted-foreground">
+								Reading backups…
+							</p>
+						) : all.length === 0 ? (
 							<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
 								No backups yet. Back up now makes one.
 							</p>
@@ -1019,7 +1141,8 @@ export function RecoveryTools({
 							<ScrollArea
 								type="auto"
 								className="-mx-2"
-								viewportClassName="max-h-[min(32rem,calc(100dvh-23rem))] px-2"
+								// The floor keeps a row in view on very short windows, where the dialog itself scrolls.
+								viewportClassName="max-h-[max(9rem,min(32rem,calc(100dvh-23rem)))] px-2"
 							>
 								<ul className="space-y-2 py-0.5" aria-label="Backups">
 									{all.map((backup) => (
@@ -1047,7 +1170,7 @@ export function RecoveryTools({
 							<Trash2 className="h-4 w-4" />
 							Clear snapshots
 						</Button>
-						<Button onClick={() => setListOpen(false)}>
+						<Button onClick={() => openList(false)}>
 							<Check aria-hidden="true" />
 							Done
 						</Button>

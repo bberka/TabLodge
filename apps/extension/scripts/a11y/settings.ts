@@ -280,6 +280,7 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 		async () => {
 			const page = await openPage(context, extensionId, 'options');
 			try {
+				await page.bringToFront();
 				await setTheme(page, theme);
 				const backUp = page.getByRole('button', {name: 'Back up now'});
 				await backUp.click();
@@ -292,7 +293,45 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 				await page.keyboard.press('Enter');
 				const dialog = page.getByRole('dialog', {name: 'Backups'});
 				await dialog.waitFor();
-				await dialog.getByRole('list', {name: 'Backups'}).waitFor();
+				const rows = dialog
+					.getByRole('list', {name: 'Backups'})
+					.getByRole('listitem');
+				await rows.first().waitFor();
+				// Deleting a backup offers Undo inside the dialog and moves focus to it.
+				const before = await rows.count();
+				await dialog
+					.getByRole('button', {name: /^Delete the backup from/})
+					.first()
+					.focus();
+				await page.keyboard.press('Enter');
+				const undo = dialog.getByRole('button', {name: 'Undo'});
+				await undo.waitFor();
+				await until(
+					async () => (await page.locator(':focus').textContent()) === 'Undo',
+					'focus on Undo in the dialog',
+				);
+				assert.equal(await rows.count(), before - 1);
+				await page.keyboard.press('Enter');
+				await dialog.getByText(/^Undone:/).waitFor();
+				await until(
+					async () => (await rows.count()) === before,
+					'the backup is back',
+				);
+				// A confirmation opened inside the dialog hands focus back inside it, not to the page behind.
+				await dialog.getByRole('button', {name: 'Clear snapshots'}).focus();
+				await page.keyboard.press('Enter');
+				const confirm = page.getByRole('alertdialog', {
+					name: 'Clear all snapshots?',
+				});
+				await confirm.waitFor();
+				await confirm.getByRole('button', {name: 'Cancel'}).focus();
+				await page.keyboard.press('Enter');
+				await confirm.waitFor({state: 'hidden'});
+				await until(
+					async () =>
+						(await page.locator(':focus').textContent()) === 'Clear snapshots',
+					'focus back on Clear snapshots',
+				);
 				const help = dialog.getByRole('button', {name: 'About backups'});
 				await help.focus();
 				await page.keyboard.press('Enter');
@@ -305,7 +344,6 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 					.getByRole('dialog', {name: 'About backups'})
 					.waitFor({state: 'hidden'});
 				await dialog.waitFor();
-				// Leave the help button, whose tooltip would take the next Escape.
 				await dialog.getByRole('button', {name: 'Done'}).focus();
 				await page.keyboard.press('Escape');
 				await dialog.waitFor({state: 'hidden'});

@@ -2360,7 +2360,6 @@ function Options() {
 							</div>
 							{group.title === RECOVERY_TITLE && recoveryTools && (
 								<RecoveryTools
-									dialogOpen={trashOpen || snapshotsOpen}
 									showStatus={showStatus}
 									onDataChanged={reload}
 									onOpenSnapshots={() => setSnapshotsOpen(true)}
