@@ -27,13 +27,14 @@ such as its artist, are not items a card is about, and neither is anything in a 
 page's heading: that is the page's own header, even on an album of one song.
 */
 function cardItem(button: Element, page: string | null) {
+	// The card's item once found; its title may sit further out than its artwork link, so the search goes on for it.
+	let found: {url: string; title: string} | undefined;
 	let container = button.parentElement;
 	for (let depth = 0; container && depth < CARD_DEPTH; depth++) {
 		if (container.querySelector(PAGE_TITLE)) {
-			return undefined;
+			return found;
 		}
 
-		// An artwork link may come first with no text; the title link names the item.
 		const items = new Map<string, string>();
 		for (const link of container.querySelectorAll('a[href]')) {
 			const url = spotifyItemUrl(link.getAttribute('href') ?? '');
@@ -43,18 +44,21 @@ function cardItem(button: Element, page: string | null) {
 		}
 
 		if (items.size > 1) {
-			return undefined;
+			return found;
 		}
 
-		const [found] = items;
-		if (found) {
-			return {url: found[0], title: found[1]};
+		const [item] = items;
+		if (item) {
+			found = {url: item[0], title: item[1]};
+			if (found.title) {
+				return found;
+			}
 		}
 
 		container = container.parentElement;
 	}
 
-	return undefined;
+	return found;
 }
 
 export function createSpotifyReader(document: Document): SourceReader {
