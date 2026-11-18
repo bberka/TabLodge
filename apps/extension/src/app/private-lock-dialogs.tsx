@@ -516,8 +516,13 @@ Shown in place of a private page while the saved library has no PIN or password:
 */
 export function SetLockForm({
 	onDone,
+	sync = false,
 }: {
 	onDone: (info: PrivateLockInfo) => void;
+	/**
+	Also turn private sync on with this PIN or password.
+	*/
+	sync?: boolean;
 }) {
 	const [draft, setDraft] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
 	const [busy, setBusy] = useState(false);
@@ -534,6 +539,7 @@ export function SetLockForm({
 			kind: draft.kind,
 			credential: draft.value,
 			idleMinutes: DEFAULT_IDLE_MINUTES,
+			sync,
 		});
 		setBusy(false);
 		if (result.ok) {

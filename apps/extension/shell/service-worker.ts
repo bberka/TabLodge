@@ -1491,15 +1491,22 @@ const storeServerKey = async (
 		})
 	).status === 200;
 
+// A PIN is 4 to 8 digits; the server's key does not say which kind it was made with.
+const credentialKindOf = (value: string) =>
+	/^\d{4,8}$/.test(value) ? 'pin' : 'password';
+
 const NEEDS_LOCK_MESSAGE =
 	'Set a PIN or password under Private windows first. Private sync encrypts with it before anything leaves this browser.';
 const DIFFERENT_SERVER_PIN_MESSAGE =
-	'That is not the PIN or password protecting private data on the sync server. This private library must use the same one: change its PIN or password under Private windows to match, then turn private sync on.';
+	'This library’s PIN or password is not the one protecting your sync server’s private library. Enter the server’s: it becomes this library’s too, and the server’s data merges in.';
+const WRONG_SERVER_PIN_MESSAGE =
+	'That is not the PIN or password protecting private data on the sync server.';
 const REWRAP_FAILED_MESSAGE =
 	'The sync server could not take the new PIN or password, so it was not changed. Check the connection and try again.';
 
 async function enablePrivateSync(
 	credential: string | undefined,
+	serverCredential?: string,
 ): Promise<ActionResult<'PRIVATE_SYNC_ENABLE'>> {
 	const availability = await privateSyncAvailability();
 	const regular = await regularSyncConfig();
@@ -1553,17 +1560,44 @@ async function enablePrivateSync(
 				key = await joinSyncKey(serverKey, credential);
 			} catch (error) {
 				if (
-					error instanceof PrivateLockError &&
-					error.code === 'wrong-credential'
+					!(error instanceof PrivateLockError) ||
+					error.code !== 'wrong-credential'
 				) {
+					throw error;
+				}
+
+				// A library kept on this device has a PIN or password of its own. The server's replaces it, so there is one.
+				if (!serverCredential) {
 					return {
 						ok: false,
-						field: 'credential',
+						field: 'serverCredential',
 						error: DIFFERENT_SERVER_PIN_MESSAGE,
 					};
 				}
 
-				throw error;
+				try {
+					key = await joinSyncKey(serverKey, serverCredential);
+				} catch (serverError) {
+					if (
+						serverError instanceof PrivateLockError &&
+						serverError.code === 'wrong-credential'
+					) {
+						return {
+							ok: false,
+							field: 'serverCredential',
+							error: WRONG_SERVER_PIN_MESSAGE,
+						};
+					}
+
+					throw serverError;
+				}
+
+				await mutate(async () => {
+					await privateLock.changeCredential(credential, {
+						kind: credentialKindOf(serverCredential),
+						value: serverCredential,
+					});
+				});
 			}
 		} else {
 			key = await createSyncKey({kind: lock.kind, value: credential});
@@ -1677,10 +1711,11 @@ async function joinPrivateServer(
 		throw error;
 	}
 
-	// A PIN is 4 to 8 digits; the server's key does not say which kind it was made with.
-	const kind = /^\d{4,8}$/.test(credential) ? 'pin' : 'password';
 	await mutate(async () => {
-		await privateLock.enable({kind, value: credential});
+		await privateLock.enable({
+			kind: credentialKindOf(credential),
+			value: credential,
+		});
 	});
 	invalidateSettings();
 	const enabled = await enablePrivateSync(credential);
@@ -9295,6 +9330,11 @@ async function handlePrivateLockMessage(
 				void protectPrivateSync({kind, value: credential}).catch(
 					() => undefined,
 				);
+				// The set-a-PIN screen's choice to sync: its outcome shows in Settings › Sync, and the lock stands either way.
+				if (message.sync === true) {
+					await enablePrivateSync(credential).catch(() => undefined);
+				}
+
 				break;
 			}
 
@@ -9483,6 +9523,10 @@ async function handlePrivateSyncMessage(
 				return await enablePrivateSync(
 					typeof message.credential === 'string' && message.credential !== ''
 						? message.credential
+						: undefined,
+					typeof message.serverCredential === 'string' &&
+						message.serverCredential !== ''
+						? message.serverCredential
 						: undefined,
 				);
 			}

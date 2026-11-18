@@ -662,6 +662,10 @@ export type TabLodgeMessages = {
 		kind: 'pin' | 'password';
 		credential: string;
 		idleMinutes?: number;
+		/**
+		From the set-a-PIN screen: also turn private sync on, so the library goes to the sync server with this PIN or password.
+		*/
+		sync?: boolean;
 	};
 	CHANGE_PRIVATE_LOCK_CREDENTIAL: {
 		current: string;
@@ -936,7 +940,7 @@ export type TabLodgeMessages = {
 	Starts syncing the separate private library. `credential` is needed when it has a PIN or password, or when the
 	private data on the server is protected by one.
 	*/
-	PRIVATE_SYNC_ENABLE: {credential?: string};
+	PRIVATE_SYNC_ENABLE: {credential?: string; serverCredential?: string};
 	PRIVATE_SYNC_DISABLE: {};
 	PRIVATE_SYNC_NOW: {};
 	/**
@@ -994,7 +998,7 @@ export type ActionFailure = {
 	/**
 	Set when connecting to a sync server failed because of one form field, so the page can show the error there.
 	*/
-	field?: 'url' | 'token' | 'credential';
+	field?: 'url' | 'token' | 'credential' | 'serverCredential';
 };
 
 /**
