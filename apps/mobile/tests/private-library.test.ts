@@ -295,6 +295,15 @@ describe('without a server', () => {
 		await phone.lockPrivate();
 		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+
+		// When writes work again, the same erase goes through.
+		failWrite.clear();
+		await phone.removePrivate();
+		assert.equal(phone.privateExists(), false);
+		assert.deepEqual(
+			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
+			[],
+		);
 	});
 
 	test('an erase that fails on the safety copy is finished the same way', async () => {
@@ -834,6 +843,76 @@ describe('with the extension on the same server', () => {
 			[],
 			'and wrote nothing back',
 		);
+	});
+
+	test('a key update held through an erase leaves no lock behind', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await connectPhone(phone);
+		await addLink(phone, 'https://a.example/');
+		await phone.syncPrivate();
+		// A new PIN changed while the server was away is still to be sent.
+		server.setOnline(false);
+		assert.equal(await phone.changePrivateLock(PIN.value, PASSWORD), 'ok');
+		server.setOnline(true);
+
+		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const {promise: reached, resolve: markReached} =
+			Promise.withResolvers<void>();
+		const real = globalThis.fetch;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			if (String(url).endsWith('/private/v1/key') && init?.method === 'POST') {
+				markReached();
+				await gate;
+			}
+
+			return real(url, init);
+		});
+		const round = phone.syncPrivate();
+		await reached;
+		await phone.removePrivate();
+		release();
+		await round;
+		assert.deepEqual(
+			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
+			[],
+			'the stopped round wrote no lock back',
+		);
+	});
+
+	test('a PIN change and a join that overlap leave one lock that opens the library and the server’s data', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const phone = await startPhone();
+		await connectPhone(phone);
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://phone.example/');
+
+		const changing = phone.changePrivateLock(PIN.value, {
+			kind: 'password',
+			value: 'a brand new password',
+		});
+		const joining = phone.openFromServer(PASSWORD.value);
+		await Promise.all([changing, joining]);
+
+		// Whichever went first, the lock is the one the server's key opens, and the phone's data reaches the extension.
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'ok');
+		await phone.syncPrivate();
+		await extension.sync();
+		assert.deepEqual(urlsOf(extension.store), ['https://phone.example/']);
+	});
+
+	test('an unlock that is still running when the library is erased leaves nothing open', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await phone.lockPrivate();
+		const unlocking = phone.unlockPrivate(PIN.value);
+		await phone.removePrivate();
+		await unlocking;
+		assert.equal(phone.privateExists(), false);
+		assert.equal(phone.isPrivateOpen(), false);
 	});
 
 	test('a key the phone cannot read is a failed lookup, not an empty server', async () => {

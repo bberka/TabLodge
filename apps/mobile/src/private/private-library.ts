@@ -216,9 +216,18 @@ let clientCount = 0;
 
 const STOPPED = 'Private sync stopped.';
 
-const baseCodec: SyncCodec = {
-	async prepare(call) {
+const baseCodec: Omit<SyncCodec, 'prepare'> & {
+	/**
+	`live` throws once this round's client was stopped; it is called after every awaited request, before the lock is touched.
+	*/
+	prepare(
+		call: (path: string, init?: RequestInit) => Promise<unknown>,
+		live: () => void,
+	): Promise<void>;
+} = {
+	async prepare(call, live) {
 		const body = await call('/v1/key');
+		live();
 		const stored = isRecord(body) ? body.key : undefined;
 		const server = parseServerKey(stored);
 		if (stored !== null && stored !== undefined && !server) {
@@ -237,6 +246,7 @@ const baseCodec: SyncCodec = {
 					method: 'POST',
 					body: JSON.stringify({key: serverKeyText(held), previous: null}),
 				});
+				live();
 				if (lock?.unsent) {
 					await setLock({...lock, unsent: undefined});
 				}
@@ -263,12 +273,15 @@ const baseCodec: SyncCodec = {
 						method: 'POST',
 						body: JSON.stringify({key: serverKeyText(lock), previous: stored}),
 					});
+					live();
 					await setLock({...lock, unsent: undefined});
 				} catch (error) {
 					if (!(error instanceof SyncError) || error.kind !== 'server') {
 						throw error;
 					}
 
+					// A stopped round throws here and leaves the lock alone.
+					live();
 					await setLock({id: lock.id, wrapped: server.wrapped});
 				}
 			} else if (lock) {
@@ -337,7 +350,7 @@ function createClient() {
 	const codec: SyncCodec = {
 		async prepare(call) {
 			live();
-			return baseCodec.prepare(call);
+			return baseCodec.prepare(call, live);
 		},
 		async seal(change) {
 			live();
@@ -377,7 +390,23 @@ function createClient() {
 				return work();
 			}),
 		readLibrary: async () => core.store,
-		trash: syncedTrash('private', () => core.store.settings.trashRetentionDays),
+		trash: (() => {
+			const trash = syncedTrash(
+				'private',
+				() => core.store.settings.trashRetentionDays,
+			);
+			return {
+				async read() {
+					live();
+					return trash.read();
+				},
+				async apply(...args: Parameters<typeof trash.apply>) {
+					// After the library write before it, which an erase may have overtaken.
+					live();
+					return trash.apply(...args);
+				},
+			};
+		})(),
 		async writeLibrary(store) {
 			live();
 			return core.write(store);
@@ -549,22 +578,36 @@ export async function changePrivateLock(
 		return 'error';
 	}
 
+	const outcome: {value: ChangeResult} = {value: 'error'};
 	try {
-		const key = await unwrapKey(lock.wrapped, current);
-		if (key === null) {
-			return 'wrong';
-		}
-
-		const wrapped = await wrapKey(key, next.value);
+		// All of it in the queue, checking the lock again inside: a join, an erase or a setup that ran first leaves a
+		// different lock, and the new wrapper must not carry the key of the old one.
 		await serial(async () => {
-			if (!lock) {
-				throw new Error('The lock is gone.');
+			const held = lock;
+			if (!held || !unlockedKey) {
+				return;
 			}
 
-			await setLock({id: lock.id, wrapped, kind: next.kind, unsent: true});
+			const key = await unwrapKey(held.wrapped, current);
+			if (key === null) {
+				outcome.value = 'wrong';
+				return;
+			}
+
+			const wrapped = await wrapKey(key, next.value);
+			if (lock?.id !== held.id || lock.wrapped !== held.wrapped) {
+				return;
+			}
+
+			await setLock({id: held.id, wrapped, kind: next.kind, unsent: true});
+			outcome.value = 'ok';
 		});
 	} catch {
 		return 'error';
+	}
+
+	if (outcome.value !== 'ok') {
+		return outcome.value;
 	}
 
 	refreshState();
