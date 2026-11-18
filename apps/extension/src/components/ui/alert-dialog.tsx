@@ -5,7 +5,9 @@ import {
 	DialogOpenContext,
 	dialogOverlayClass,
 	dialogPanelClass,
+	captureOpener,
 	initialFocusTarget,
+	type Opener,
 	returnFocus,
 	useRetainedValue,
 	type DialogSize,
@@ -67,8 +69,7 @@ const AlertDialogContent = React.forwardRef<
 		const open = React.useContext(DialogOpenContext);
 		const shownChildren = useRetainedValue(children, open !== false);
 		const contentRef = React.useRef<HTMLDivElement | null>(null);
-		// What had focus when the dialog opened, for handing focus back inside a dialog underneath.
-		const openerRef = React.useRef<Element | null>(null);
+		const openerRef = React.useRef<Opener>({element: null, dialog: null});
 		const setRefs = React.useCallback(
 			(node: HTMLDivElement | null) => {
 				contentRef.current = node;
@@ -88,7 +89,7 @@ const AlertDialogContent = React.forwardRef<
 					tabIndex={-1}
 					className={cn(dialogPanelClass(size), className)}
 					onOpenAutoFocus={(event) => {
-						openerRef.current = document.activeElement;
+						openerRef.current = captureOpener();
 						onOpenAutoFocus?.(event);
 						if (event.defaultPrevented || !contentRef.current) {
 							return;

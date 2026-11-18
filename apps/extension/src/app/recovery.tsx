@@ -826,6 +826,7 @@ export function RecoveryTools({
 	);
 	const [backupsError, setBackupsError] = useState('');
 	const [listOpen, setListOpen] = useState(false);
+	const [busy, setBusy] = useState('');
 	// While Backups is open its feedback and Undo show inside it: the page toast sits behind the modal.
 	const listOpenRef = useRef(false);
 	const [notice, setNotice] = useState<{
@@ -861,7 +862,8 @@ export function RecoveryTools({
 
 	const undoNotice = () => {
 		const action = notice?.action;
-		if (!action) {
+		// A newer action still running would have its own notice replaced.
+		if (!action || busy !== '') {
 			return;
 		}
 
@@ -872,15 +874,15 @@ export function RecoveryTools({
 
 	// A deleted row takes focus with it; Undo is the nearest useful place for it.
 	const focusUndoRef = useRef(false);
+	// Waits for the delete to finish, while Undo is still disabled.
 	useEffect(() => {
-		if (!(notice?.action && focusUndoRef.current)) {
+		if (!(notice?.action && focusUndoRef.current && busy === '')) {
 			return;
 		}
 
 		focusUndoRef.current = false;
 		undoRef.current?.focus();
-	}, [notice]);
-	const [busy, setBusy] = useState('');
+	}, [notice, busy]);
 	const [pending, setPending] = useState<
 		{kind: 'snapshots'} | {kind: 'restore'; backup: BackupSummary} | null
 	>(null);
@@ -1129,7 +1131,7 @@ export function RecoveryTools({
 										ref={noticeRef}
 										tabIndex={-1}
 										className={cn(
-											'min-w-0 flex-1 leading-5 focus-visible:outline-hidden',
+											'min-w-0 flex-1 rounded-sm leading-5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
 											notice.error && 'font-medium text-destructive',
 										)}
 									>
@@ -1142,6 +1144,7 @@ export function RecoveryTools({
 											variant="outline"
 											className="h-7 shrink-0"
 											aria-keyshortcuts="Control+Z Meta+Z"
+											disabled={busy !== ''}
 											onClick={undoNotice}
 										>
 											<Undo2 className="h-4 w-4" />
