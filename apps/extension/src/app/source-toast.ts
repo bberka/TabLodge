@@ -3,21 +3,213 @@
 // and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its Undo button at the end of the page.
 // It stays while the pointer or focus is on it, and Escape closes it from there. Closing it while it has focus
 // returns focus to where it came from, never to the page body.
+// It looks like the toast on TabLodge's own pages (StatusRegion in common.tsx): the theme and accent chosen in
+// Settings, with the stylesheet's tokens, which a shadow root on another site cannot read, copied into TOAST_TOKENS.
+import {
+	DARK_PAGE,
+	DEFAULT_ACCENT,
+	isAccent,
+	legibleOn,
+	LIGHT_PAGE,
+	presetColor,
+	type Rgb,
+	SYSTEM_ACCENT,
+} from '../shared/accent-colors';
+import {resolvePrivateAccent, systemAccentColor} from '../shared/accents';
+import {isRecord} from '../shared/library-values';
 
 const HOST_ID = 'tablodge-source-toast';
 const VISIBLE_MS = 8000;
+const SVG = 'http://www.w3.org/2000/svg';
 
+type Theme = 'light' | 'dark';
 type ToastAction = {label: string; run: () => Promise<string>};
 
-function set(element: HTMLElement, rules: Record<string, string>) {
+/**
+The values of styles/extension-app.css this toast uses, as `r g b` like the stylesheet writes them
+(tests/site-sources.test.ts keeps them equal). `primary` is the default indigo accent.
+*/
+export const TOAST_TOKENS = {
+	light: {
+		popover: '255 255 255',
+		popoverForeground: '24 24 27',
+		border: '228 228 231',
+		destructive: '220 38 38',
+		primary: '98 84 215',
+	},
+	dark: {
+		popover: '17 17 20',
+		popoverForeground: '250 250 250',
+		border: '39 39 42',
+		destructive: '248 113 113',
+		primary: '165 155 255',
+	},
+	radius: '0.5rem',
+} as const;
+
+// Lucide's circle-check and circle-alert, the icons the extension's own toast shows.
+const ICONS: Record<
+	'done' | 'error',
+	Array<[string, Record<string, string>]>
+> = {
+	done: [
+		['circle', {cx: '12', cy: '12', r: '10'}],
+		['path', {d: 'm16 9-5.5 5.5L8 12'}],
+	],
+	error: [
+		['circle', {cx: '12', cy: '12', r: '10'}],
+		[
+			'line',
+			{
+				x1: '12',
+				x2: '12',
+				y1: '8',
+				y2: '12',
+			},
+		],
+		[
+			'line',
+			{
+				x1: '12',
+				x2: '12.01',
+				y1: '16',
+				y2: '16',
+			},
+		],
+	],
+};
+
+const PRIVATE_CONFIG_KEY = 'tablodge.private.config';
+
+/**
+The theme and accent the extension's pages show, from what they keep in storage. Anything unexpected counts as the
+default, as on those pages. A private window uses its own accent, as its pages do.
+*/
+export function toastAppearance(
+	stored: Record<string, unknown>,
+	{systemDark, incognito}: {systemDark: boolean; incognito: boolean},
+): {theme: Theme; accent: string} {
+	const theme =
+		stored.uiTheme === 'light' || stored.uiTheme === 'dark'
+			? stored.uiTheme
+			: systemDark
+				? 'dark'
+				: 'light';
+	const accent = isAccent(stored.uiAccent) ? stored.uiAccent : DEFAULT_ACCENT;
+	const config = stored[PRIVATE_CONFIG_KEY];
+	const privateAccent =
+		incognito && isRecord(config)
+			? resolvePrivateAccent(config.accent)
+			: undefined;
+	return {theme, accent: privateAccent ?? accent};
+}
+
+const rgb = (channels: string, alpha = 1) =>
+	`rgb(${channels}${alpha < 1 ? ` / ${alpha}` : ''})`;
+
+/**
+The colors of the toast for a theme and an accent color (undefined: the default indigo), as the pages compute them:
+the accent is darkened or lightened until it reads on the page, like `applyAccent`.
+*/
+export function toastColors(theme: Theme, accent: Rgb | undefined) {
+	const tokens = TOAST_TOKENS[theme];
+	const primary = accent
+		? legibleOn(accent, theme === 'dark' ? DARK_PAGE : LIGHT_PAGE).join(' ')
+		: tokens.primary;
+	return {
+		background: rgb(tokens.popover),
+		text: rgb(tokens.popoverForeground),
+		border: rgb(tokens.border),
+		errorBorder: rgb(tokens.destructive, 0.4),
+		destructive: rgb(tokens.destructive),
+		primary: rgb(primary),
+	};
+}
+
+async function readAppearance() {
+	const os = {
+		systemDark:
+			globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false,
+		incognito: chrome.extension?.inIncognitoContext,
+	};
+	// A script left behind by an extension update or removal can no longer read storage; it then uses the defaults.
+	try {
+		const stored = await chrome.storage.local.get([
+			'uiTheme',
+			'uiAccent',
+			PRIVATE_CONFIG_KEY,
+		]);
+		return toastAppearance(stored, os);
+	} catch {
+		return toastAppearance({}, os);
+	}
+}
+
+function set(element: HTMLElement | SVGElement, rules: Record<string, string>) {
 	for (const [name, value] of Object.entries(rules)) {
 		element.style.setProperty(name, value, 'important');
 	}
 }
 
-export function showSourceToast(text: string, action?: ToastAction) {
+function icon(kind: 'done' | 'error', color: string) {
+	const svg = document.createElementNS(SVG, 'svg');
+	for (const [name, value] of Object.entries({
+		viewBox: '0 0 24 24',
+		fill: 'none',
+		stroke: color,
+		'stroke-width': '2',
+		'stroke-linecap': 'round',
+		'stroke-linejoin': 'round',
+		'aria-hidden': 'true',
+	})) {
+		svg.setAttribute(name, value);
+	}
+
+	set(svg, {
+		flex: '0 0 auto',
+		width: '16px',
+		height: '16px',
+		'margin-top': '2px',
+	});
+	for (const [tag, attributes] of ICONS[kind]) {
+		const shape = document.createElementNS(SVG, tag);
+		for (const [name, value] of Object.entries(attributes)) {
+			shape.setAttribute(name, value);
+		}
+
+		svg.append(shape);
+	}
+
+	return svg;
+}
+
+/**
+Shows the notice. `error` marks a save that failed, in the destructive color, as the extension's error toasts are.
+*/
+export function showSourceToast(
+	text: string,
+	{action, error = false}: {action?: ToastAction; error?: boolean} = {},
+) {
+	void readAppearance().then(({theme, accent}) => {
+		render(text, {
+			action,
+			error,
+			theme,
+			accent,
+		});
+	});
+}
+
+function render(
+	text: string,
+	{
+		action,
+		error,
+		theme,
+		accent,
+	}: {action?: ToastAction; error: boolean; theme: Theme; accent: string},
+) {
 	document.querySelector(`#${HOST_ID}`)?.remove();
-	const dark = globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches;
 	const host = document.createElement('div');
 	host.id = HOST_ID;
 	set(host, {
@@ -27,26 +219,44 @@ export function showSourceToast(text: string, action?: ToastAction) {
 		bottom: '16px',
 		'z-index': '2147483647',
 		display: 'block',
-		'max-width': 'min(360px, calc(100vw - 32px))',
+		'max-width': 'min(28rem, calc(100vw - 32px))',
+		'color-scheme': theme,
 	});
 	const root = host.attachShadow({mode: 'closed'});
+	document.documentElement.append(host);
+	const colors = toastColors(
+		theme,
+		accent === SYSTEM_ACCENT ? systemAccentColor(root) : presetColor(accent),
+	);
+
 	const box = document.createElement('div');
 	set(box, {
 		display: 'flex',
-		'align-items': 'center',
-		gap: '12px',
-		padding: '10px 12px 10px 14px',
-		'border-radius': '10px',
-		border: `1px solid ${dark ? '#3f3f46' : '#d4d4d8'}`,
-		background: dark ? '#18181b' : '#ffffff',
-		color: dark ? '#fafafa' : '#18181b',
-		'box-shadow': '0 8px 24px rgba(0, 0, 0, 0.25)',
-		font: '14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif',
+		'align-items': 'flex-start',
+		gap: '10px',
+		padding: '10px 8px 10px 12px',
+		'border-radius': TOAST_TOKENS.radius,
+		border: `1px solid ${error ? colors.errorBorder : colors.border}`,
+		background: colors.background,
+		color: colors.text,
+		'box-shadow':
+			'0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+		font: '400 14px/20px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+		'-webkit-font-smoothing': 'antialiased',
+		'text-align': 'left',
+		'letter-spacing': 'normal',
 	});
+	box.append(
+		icon(error ? 'error' : 'done', error ? colors.destructive : colors.primary),
+	);
 	// The region exists before its text, so screen readers announce the text when it arrives.
 	const message = document.createElement('span');
 	message.setAttribute('role', 'status');
-	set(message, {flex: '1 1 auto'});
+	set(message, {
+		flex: '1 1 auto',
+		'min-width': '0',
+		'overflow-wrap': 'anywhere',
+	});
 	box.append(message);
 
 	let button: HTMLButtonElement | undefined;
@@ -54,30 +264,42 @@ export function showSourceToast(text: string, action?: ToastAction) {
 		button = document.createElement('button');
 		button.type = 'button';
 		button.textContent = action.label;
-		const accent = dark ? '#5eead4' : '#0f766e';
 		set(button, {
 			flex: '0 0 auto',
-			'min-height': '28px',
-			padding: '4px 10px',
-			border: `1px solid ${accent}`,
-			'border-radius': '6px',
+			'min-height': '24px',
+			margin: '-2px 0',
+			padding: '0 6px',
+			border: '0',
+			'border-radius': '0.25rem',
 			background: 'transparent',
-			color: accent,
+			color: colors.primary,
 			font: 'inherit',
 			'font-weight': '600',
+			'text-decoration': 'none',
+			'text-underline-offset': '4px',
+			outline: 'none',
 			cursor: 'pointer',
 		});
-		button.addEventListener('focus', () => {
-			set(button!, {outline: `2px solid ${accent}`, 'outline-offset': '2px'});
+		const target = button;
+		// The ring shows for keyboard focus only, as on the extension's pages.
+		target.addEventListener('focus', () => {
+			if (target.matches(':focus-visible')) {
+				set(target, {'box-shadow': `0 0 0 2px ${colors.primary}`});
+			}
 		});
-		button.addEventListener('blur', () => {
-			button!.style.removeProperty('outline');
+		target.addEventListener('blur', () => {
+			target.style.removeProperty('box-shadow');
 		});
-		box.append(button);
+		target.addEventListener('pointerenter', () => {
+			set(target, {'text-decoration': 'underline'});
+		});
+		target.addEventListener('pointerleave', () => {
+			set(target, {'text-decoration': 'none'});
+		});
+		box.append(target);
 	}
 
 	root.append(box);
-	document.documentElement.append(host);
 	requestAnimationFrame(() => {
 		message.textContent = text;
 	});

@@ -37,15 +37,18 @@ export {
 // a GTK accent, for one). It is not a real choice, so it counts as no accent.
 const NO_SYSTEM_ACCENT = '0,117,255';
 
-// The system accent color, or undefined where the browser or platform has none.
-export function systemAccentColor(): Rgb | undefined {
+// The system accent color, or undefined where the browser or platform has none. The probe goes in `parent`, so a
+// script on a web page can measure inside its own shadow root and leave the page's tree alone.
+export function systemAccentColor(
+	parent: ParentNode = document.documentElement,
+): Rgb | undefined {
 	if (!globalThis.CSS?.supports('color', 'AccentColor')) {
 		return undefined;
 	}
 
 	const probe = document.createElement('span');
 	probe.style.color = 'AccentColor';
-	document.documentElement.append(probe);
+	parent.append(probe);
 	const resolved = getComputedStyle(probe).color;
 	probe.remove();
 	const channels = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(resolved);
