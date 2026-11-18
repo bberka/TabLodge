@@ -13813,6 +13813,14 @@ test('sources are off at install and no content script is registered', async () 
 		{id: 'stackoverflow', enabled: false},
 		{id: 'devto', enabled: false},
 		{id: 'lobsters', enabled: false},
+		{id: 'bluesky', enabled: false},
+		{id: 'soundcloud', enabled: false},
+		{id: 'spotify', enabled: false},
+		{id: 'letterboxd', enabled: false},
+		{id: 'imdb', enabled: false},
+		{id: 'goodreads', enabled: false},
+		{id: 'medium', enabled: false},
+		{id: 'substack', enabled: false},
 	]);
 	assert.equal(harness.registeredScripts.size, 0);
 });

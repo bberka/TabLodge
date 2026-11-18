@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- A trimmed bsky.app feed and thread: feed items are links to their post, thread items carry their author in the
+test id, and the "..." menu opens outside the post. Test ids from bluesky-social/social-app; hand written, not a
+capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>Bluesky</title></head>
+<body>
+	<a data-testid="feedItem-by-alice.bsky.social" id="feed-item" href="/profile/alice.bsky.social/post/3kabc123xyz">
+		<div data-testid="postText">Local first apps keep working when the network does not, and that matters more than any sync feature you could ship this year.</div>
+		<div>
+			<button data-testid="postBookmarkBtn" id="feed-save" aria-label="Add to saved posts"><svg id="feed-save-icon"></svg></button>
+			<button data-testid="postDropdownBtn" id="feed-menu" aria-label="Open post options menu"></button>
+		</div>
+	</a>
+	<a data-testid="feedItem-by-bob.bsky.social" href="/profile/bob.bsky.social/post/3kdef456uvw">
+		<div data-testid="postText">Already saved.</div>
+		<button data-testid="postBookmarkBtn" id="feed-unsave" aria-label="Remove from saved posts"></button>
+		<button data-testid="postBookmarkBtn" id="feed-unsave-fr" aria-label="Retirer des posts conservés"></button>
+	</a>
+	<div data-testid="postThreadItem-by-carol.bsky.social" id="thread-main">
+		<div data-testid="postText">The main post of this thread.</div>
+		<a href="/profile/dave.bsky.social/post/3kquoted999">A quoted post</a>
+		<a href="/profile/carol.bsky.social/post/3kolder000">An older post by the same author, quoted</a>
+		<button data-testid="postBookmarkBtn" id="main-save" aria-label="Add to saved posts"></button>
+	</div>
+	<div data-testid="postThreadItem-by-erin.bsky.social" id="thread-reply">
+		<a href="/profile/erin.bsky.social/post/3kreply777">2h</a>
+		<div data-testid="postText">A reply.</div>
+		<button data-testid="postBookmarkBtn" id="reply-save" aria-label="Add to saved posts"></button>
+	</div>
+	<div role="menu">
+		<div role="menuitem" data-testid="postDropdownBookmarkBtn" id="menu-save" aria-label="Add to saved posts">Add to saved posts</div>
+	</div>
+</body>
+</html>

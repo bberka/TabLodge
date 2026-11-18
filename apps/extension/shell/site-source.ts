@@ -4,13 +4,21 @@
 // It never changes the site's behavior, blocks its save, or makes a request of its own.
 import {siteSourceForUrl, type SiteSourceId} from '../src/app/site-sources';
 import type {SourceRead, SourceReader} from '../src/app/source-reader';
+import {createBlueskyReader} from '../src/app/source-bluesky';
 import {createDevtoReader} from '../src/app/source-devto';
 import {createGithubReader} from '../src/app/source-github';
+import {createGoodreadsReader} from '../src/app/source-goodreads';
 import {createHackerNewsReader} from '../src/app/source-hackernews';
+import {createImdbReader} from '../src/app/source-imdb';
 import {createInstagramReader} from '../src/app/source-instagram';
+import {createLetterboxdReader} from '../src/app/source-letterboxd';
 import {createLobstersReader} from '../src/app/source-lobsters';
+import {createMediumReader} from '../src/app/source-medium';
 import {createRedditReader} from '../src/app/source-reddit';
+import {createSoundcloudReader} from '../src/app/source-soundcloud';
+import {createSpotifyReader} from '../src/app/source-spotify';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
+import {createSubstackReader} from '../src/app/source-substack';
 import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
 import {showSourceToast} from '../src/app/source-toast';
@@ -28,6 +36,14 @@ const READERS: Record<SiteSourceId, () => SourceReader> = {
 	stackoverflow: () => createStackOverflowReader(document),
 	devto: () => createDevtoReader(document),
 	lobsters: () => createLobstersReader(),
+	bluesky: () => createBlueskyReader(document),
+	soundcloud: () => createSoundcloudReader(document),
+	spotify: () => createSpotifyReader(document),
+	letterboxd: () => createLetterboxdReader(document),
+	imdb: () => createImdbReader(document),
+	goodreads: () => createGoodreadsReader(document),
+	medium: () => createMediumReader(document),
+	substack: () => createSubstackReader(document),
 };
 const source = siteSourceForUrl(location.href);
 

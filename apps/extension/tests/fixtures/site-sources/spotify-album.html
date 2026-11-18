@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- A trimmed open.spotify.com album page: the save button is `data-testid="add-button"` with `aria-checked`, in the
+action bar, in each track row, and in the now playing bar. Test ids from the web player bundle; hand written, not a
+capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>Spotify</title></head>
+<body>
+	<main>
+		<h1>Kid A</h1>
+		<div data-testid="action-bar-row">
+			<button data-testid="add-button" id="album-save" aria-checked="false" aria-label="Save to Your Library"></button>
+		</div>
+		<div data-testid="tracklist-row">
+			<a data-testid="internal-track-link" href="/track/6LgJvl0Xdtc73RJ1mmpotq"><div>Everything In Its Right Place</div></a>
+			<button data-testid="add-button" id="row-save" aria-checked="false" aria-label="Save to Your Library"></button>
+		</div>
+		<div data-testid="tracklist-row">
+			<a data-testid="internal-track-link" href="/track/2kRFrWaLWiKq48YYVdGcm8"><div>Kid A</div></a>
+			<button data-testid="add-button" id="row-saved" aria-checked="true" aria-label="Add to playlist"></button>
+		</div>
+		<div class="episode-card">
+			<a href="/episode/5Xt5DXGzch68nYYamXrNxZ">Episode one</a>
+			<div><a href="/episode/5Xt5DXGzch68nYYamXrNxZ"><img alt=""></a><button data-testid="add-button" id="episode-save" aria-checked="false"></button></div>
+		</div>
+	</main>
+	<footer>
+		<a href="/intl-de/track/1h2xVEoJORqrg71HocgqXd?si=abc">Idioteque</a>
+		<button data-testid="add-button" id="player-save" aria-checked="false"></button>
+	</footer>
+</body>
+</html>

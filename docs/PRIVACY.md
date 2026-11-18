@@ -76,6 +76,38 @@ Access: `https://dev.to/*`. When you click **Save** on an article, on its page o
 
 Access: `https://lobste.rs/*`. When you click **save** on a story, TabLodge reads the story's title, the address it links to, and its Lobsters page from the page. It bookmarks the linked address in a Lobsters column, with `https://lobste.rs/s/<id>/<slug>` in the bookmark's note; a text post with no link of its own is bookmarked at its Lobsters page. Nothing else on the page is read or kept.
 
+### Bluesky saved posts
+
+Access: `https://bsky.app/*`. When you save a post, with its bookmark button or the item in its **...** menu, TabLodge reads the post's address and the start of its text from the page and bookmarks `https://bsky.app/profile/<handle>/post/<id>` in a Bluesky column. Nothing else on the page is read or kept.
+
+### SoundCloud likes
+
+Access: `https://soundcloud.com/*` and `https://m.soundcloud.com/*`. When you click **Like** on a track or playlist, TabLodge reads its address and title from the page and bookmarks `https://soundcloud.com/<artist>/<track>` (or `.../sets/<name>`) in a SoundCloud column. Nothing else on the page is read or kept.
+
+### Spotify library
+
+Access: `https://open.spotify.com/*`. When you save a song, album, playlist, show, or episode to Your Library in the web player, TabLodge reads its address and name from the page and bookmarks `https://open.spotify.com/<kind>/<id>` in a Spotify column. Nothing else on the page is read or kept.
+
+### Letterboxd watchlist
+
+Access: `https://letterboxd.com/*`. When you add a film to your watchlist, on its page or from a poster's menu, TabLodge reads the film's address and title from the page and bookmarks `https://letterboxd.com/film/<slug>/` in a Letterboxd column. Nothing else on the page is read or kept.
+
+### IMDb watchlist
+
+Access: `https://www.imdb.com/*` and `https://m.imdb.com/*`. When you add a film or show to your watchlist, on its page or from a poster, TabLodge reads its address and title from the page and bookmarks `https://www.imdb.com/title/<id>/` in an IMDb column. Nothing else on the page is read or kept.
+
+### Goodreads Want to Read
+
+Access: `https://www.goodreads.com/*`. When you mark a book **Want to Read**, TabLodge reads the book's address and title from the page and bookmarks `https://www.goodreads.com/book/show/<id>` in a Goodreads column. Other shelves are not saved. Nothing else on the page is read or kept.
+
+### Medium reading list
+
+Access: `https://medium.com/*` and `https://*.medium.com/*`, which covers publications at medium.com addresses. Publications on their own domains are not covered. When you click the bookmark on a story, TabLodge reads the story's address and title from the page and bookmarks `https://medium.com/p/<id>` in a Medium column. Nothing else on the page is read or kept.
+
+### Substack saved
+
+Access: `https://substack.com/*` and `https://*.substack.com/*`, which covers publications at substack.com addresses. Publications on their own domains are not covered. When you click **Save** on a post, TabLodge reads the post's address and title from the page and bookmarks it in a Substack column. Nothing else on the page is read or kept.
+
 ## Sync with your own server
 
 Sync is off until you enter a server address and token in **Settings › Sync**. The server is one you run yourself ([Self hosting](self-hosting.md)); TabLodge runs no server of its own and receives nothing.
@@ -166,6 +198,14 @@ Optional permissions are asked for only when you turn on the feature that needs 
 | `https://stackoverflow.com/*` | **Settings › Sources › Stack Overflow bookmarks** |
 | `https://dev.to/*` | **Settings › Sources › dev.to reading list** |
 | `https://lobste.rs/*` | **Settings › Sources › Lobsters saved** |
+| `https://bsky.app/*` | **Settings › Sources › Bluesky saved posts** |
+| `https://soundcloud.com/*`, `https://m.soundcloud.com/*` | **Settings › Sources › SoundCloud likes** |
+| `https://open.spotify.com/*` | **Settings › Sources › Spotify library** |
+| `https://letterboxd.com/*` | **Settings › Sources › Letterboxd watchlist** |
+| `https://www.imdb.com/*`, `https://m.imdb.com/*` | **Settings › Sources › IMDb watchlist** |
+| `https://www.goodreads.com/*` | **Settings › Sources › Goodreads Want to Read** |
+| `https://medium.com/*`, `https://*.medium.com/*` | **Settings › Sources › Medium reading list** |
+| `https://substack.com/*`, `https://*.substack.com/*` | **Settings › Sources › Substack saved** |
 
 ## Contact
 

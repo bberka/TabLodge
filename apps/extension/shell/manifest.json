@@ -40,7 +40,19 @@
 		"https://news.ycombinator.com/*",
 		"https://stackoverflow.com/*",
 		"https://dev.to/*",
-		"https://lobste.rs/*"
+		"https://lobste.rs/*",
+		"https://bsky.app/*",
+		"https://soundcloud.com/*",
+		"https://m.soundcloud.com/*",
+		"https://open.spotify.com/*",
+		"https://letterboxd.com/*",
+		"https://www.imdb.com/*",
+		"https://m.imdb.com/*",
+		"https://www.goodreads.com/*",
+		"https://medium.com/*",
+		"https://*.medium.com/*",
+		"https://substack.com/*",
+		"https://*.substack.com/*"
 	],
 	"web_accessible_resources": [
 		{

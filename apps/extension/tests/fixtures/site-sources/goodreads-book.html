@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- A trimmed www.goodreads.com book page and an older list page row: the book page's Want to Read button is
+button.Button--wtr, beside an arrow that chooses a shelf; the list row posts to /shelf/add_to_shelf with
+name=to-read. Hand written from the logged-out pages, not a capture. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>Goodreads</title></head>
+<body>
+	<h1 data-testid="bookTitle">The Left Hand of Darkness</h1>
+	<div class="ButtonGroup">
+		<button class="Button Button--wtr Button--buttonGroup" id="page-wtr" aria-label="Tap to shelve book as want to read"><span>Want to read</span></button>
+		<button class="Button Button--wtr Button--buttonGroup" id="page-choose" aria-label="Tap to choose a shelf for this book"></button>
+	</div>
+	<table>
+		<tr itemtype="http://schema.org/Book">
+			<td><a class="bookTitle" href="/book/show/13642.A_Wizard_of_Earthsea"><span>A Wizard of Earthsea</span></a></td>
+			<td>
+				<form action="/shelf/add_to_shelf" method="post">
+					<input type="hidden" name="book_id" value="13642">
+					<input type="hidden" name="name" value="to-read">
+					<button class="wtrToRead" type="submit" id="row-wtr">Want to Read</button>
+				</form>
+			</td>
+		</tr>
+		<tr itemtype="http://schema.org/Book">
+			<td><a class="bookTitle" href="/book/show/13651.The_Dispossessed"><span>The Dispossessed</span></a></td>
+			<td>
+				<form action="/shelf/add_to_shelf" method="post">
+					<input type="hidden" name="book_id" value="13651">
+					<input type="hidden" name="name" value="currently-reading">
+					<button type="submit" id="row-reading">Currently Reading</button>
+				</form>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>

@@ -445,6 +445,7 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 				assert.ok(original.length > 2);
 				const trigger = page.getByRole('button', {
 					name: 'More actions for Home lab rebuild',
+					exact: true,
 				});
 				const undoButton = page.getByRole('button', {name: 'Undo'});
 				const sessionMenuItem = async (name: string) => {
@@ -527,9 +528,13 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 
 				const expand = page.getByRole('button', {
 					name: 'Show tabs in Home lab rebuild',
+					// Not the split session, "Home lab rebuild (split)", which another step may have made.
+					exact: true,
 				});
 				const collapse = page.getByRole('button', {
 					name: 'Hide tabs in Home lab rebuild',
+					// Not the split session, "Home lab rebuild (split)", which another step may have made.
+					exact: true,
 				});
 				const ensureExpanded = async () => {
 					await expand.or(collapse).waitFor();
