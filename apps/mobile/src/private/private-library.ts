@@ -51,7 +51,7 @@ import {
 } from '../platform/storage';
 import {setView} from '../library/view';
 import {PRIVATE_TRASH_KEY} from '../library/trash';
-import {syncedTrash} from '../library/trash-storage';
+import {settleTrash, syncedTrash} from '../library/trash-storage';
 import {dropSafetyCopy} from '../transfer/restore';
 
 const LIBRARY_KEY = 'tablodge.private.library';
@@ -226,6 +226,13 @@ const baseCodec: Omit<SyncCodec, 'prepare'> & {
 	): Promise<void>;
 } = {
 	async prepare(call, live) {
+		// A lock write from here waits its turn in the queue and checks again there, so one that comes after an erase or an
+		// adoption writes nothing, and one started before them finishes before they run.
+		const writeLock = async (next: Lock) =>
+			serial(async () => {
+				live();
+				await setLock(next);
+			});
 		const body = await call('/v1/key');
 		live();
 		const stored = isRecord(body) ? body.key : undefined;
@@ -248,7 +255,7 @@ const baseCodec: Omit<SyncCodec, 'prepare'> & {
 				});
 				live();
 				if (lock?.unsent) {
-					await setLock({...lock, unsent: undefined});
+					await writeLock({...lock, unsent: undefined});
 				}
 
 				syncKey = unlockedKey;
@@ -274,7 +281,7 @@ const baseCodec: Omit<SyncCodec, 'prepare'> & {
 						body: JSON.stringify({key: serverKeyText(lock), previous: stored}),
 					});
 					live();
-					await setLock({...lock, unsent: undefined});
+					await writeLock({...lock, unsent: undefined});
 				} catch (error) {
 					if (!(error instanceof SyncError) || error.kind !== 'server') {
 						throw error;
@@ -282,11 +289,11 @@ const baseCodec: Omit<SyncCodec, 'prepare'> & {
 
 					// A stopped round throws here and leaves the lock alone.
 					live();
-					await setLock({id: lock.id, wrapped: server.wrapped});
+					await writeLock({id: lock.id, wrapped: server.wrapped});
 				}
 			} else if (lock) {
 				// Another device changed its PIN or password and rewrapped the same key.
-				await setLock({...lock, wrapped: server.wrapped});
+				await writeLock({...lock, wrapped: server.wrapped});
 			} else if (kept) {
 				kept = {...kept, wrapped: server.wrapped};
 				await writeJson(KEPT_KEY, kept);
@@ -684,6 +691,8 @@ async function eraseNow(): Promise<void> {
 		throw new EraseNotStartedError('The erase did not start.');
 	}
 
+	// Trash changes already queued finish first (a stopped client queues no more), so none lands after the deletions.
+	await settleTrash().catch(() => undefined);
 	erasing = true;
 	adopting = false;
 	exists = false;

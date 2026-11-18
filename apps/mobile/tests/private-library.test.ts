@@ -60,7 +60,7 @@ vi.mock(
 
 type Phone = typeof PhoneModule;
 
-const {memory, failRemoval, failWrite} =
+const {memory, failRemoval, failWrite, holds} =
 	await import('./support/memory-storage');
 const {prefs} = await import('./support/fake-preferences');
 
@@ -121,6 +121,8 @@ beforeEach(() => {
 	memory.clear();
 	failRemoval.clear();
 	failWrite.clear();
+	holds.read.clear();
+	holds.write.clear();
 	phones = [];
 	server = makeServer();
 	connectGlobals(server);
@@ -970,6 +972,65 @@ describe('with the extension on the same server', () => {
 		await unlocking;
 		assert.equal(phone.privateExists(), false);
 		assert.equal(phone.isPrivateOpen(), false);
+	});
+
+	test('a trash change queued before an erase finishes first, so no trash is left behind', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		const {changeTrash} = await import('../src/library/trash-storage');
+		const {promise: hold, resolve: release} = Promise.withResolvers<void>();
+		holds.read.set('tablodge.private.trash', hold);
+		const changing = changeTrash('private', 30, () => [
+			{
+				id: 't1',
+				kind: 'bookmark',
+				deletedAt: 1,
+				label: 'Deleted',
+				origin: 'test',
+				count: 1,
+				data: {},
+			},
+		]);
+		const erasing = phone.removePrivate();
+		await new Promise((resolve) => {
+			setTimeout(resolve, 100);
+		});
+		release();
+		await Promise.all([changing, erasing]);
+		assert.deepEqual(
+			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
+			[],
+		);
+	});
+
+	test('a lock write started by a round before an erase finishes before the erase runs', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await connectPhone(phone);
+		await addLink(phone, 'https://a.example/');
+		await phone.syncPrivate();
+		// A new PIN changed while the server was away is still to be recorded as sent.
+		server.setOnline(false);
+		assert.equal(await phone.changePrivateLock(PIN.value, PASSWORD), 'ok');
+		server.setOnline(true);
+
+		const {promise: hold, resolve: release} = Promise.withResolvers<void>();
+		holds.write.set('tablodge.private.lock', hold);
+		const round = phone.syncPrivate();
+		await new Promise((resolve) => {
+			setTimeout(resolve, 150);
+		});
+		const erasing = phone.removePrivate();
+		await new Promise((resolve) => {
+			setTimeout(resolve, 150);
+		});
+		release();
+		await Promise.all([round, erasing]);
+		assert.deepEqual(
+			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
+			[],
+			'the held lock write did not outlive the erase',
+		);
 	});
 
 	test('a key the phone cannot read is a failed lookup, not an empty server', async () => {
