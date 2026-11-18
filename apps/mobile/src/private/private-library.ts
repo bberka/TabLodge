@@ -167,7 +167,11 @@ const parseLock = (value: unknown): Lock | undefined =>
 			}
 		: undefined;
 
+// Counts changes to the lock and the library's existence, so a slow join can tell the library changed under it.
+let epoch = 0;
+
 const setLock = async (next: Lock | undefined) => {
+	epoch += 1;
 	lock = next;
 	await (next ? writeJson(LOCK_KEY, next) : removeKeys([LOCK_KEY]));
 };
@@ -529,19 +533,23 @@ Deletes the private library from this phone: its data, its lock, and its sync po
 export async function removePrivate(): Promise<void> {
 	setView('regular');
 	stopClient();
-	// The storage goes first: if a removal fails, the library is still here in memory and the erase can be tried again.
+	epoch += 1;
 	try {
+		// Step by step, with the marker that the library exists removed last: a failure part way leaves the library
+		// existing on the next start, so the erase can be run again and finishes the job.
 		await removeKeys([
-			ON_KEY,
-			LOCK_KEY,
-			KEPT_KEY,
-			LIBRARY_KEY,
-			PRIVATE_TRASH_KEY,
-			PRIVATE_KEY_KEY,
 			prefix('tablodge.sync.state'),
 			prefix('tablodge.sync.status'),
+			PRIVATE_TRASH_KEY,
+			PRIVATE_KEY_KEY,
+			KEPT_KEY,
 		]);
+		await dropSafetyCopy('private');
+		await removeKeys([LIBRARY_KEY]);
+		await removeKeys([LOCK_KEY]);
+		await removeKeys([ON_KEY]);
 	} catch (error) {
+		refreshState();
 		runClient();
 		throw error;
 	}
@@ -551,7 +559,6 @@ export async function removePrivate(): Promise<void> {
 	lock = undefined;
 	kept = undefined;
 	core.load(emptyStore(Date.now()));
-	await dropSafetyCopy('private');
 	refreshState();
 	await refreshPrivateStatus();
 }
@@ -568,29 +575,57 @@ export type OpenResult =
 			message?: string;
 	  };
 
+const SERVER_CHECK_MS = 8000;
+
+/**
+The server's key for the private library, or nothing when it has none. A key this version cannot read, or an answer
+that is not one, is an error, not "no key". The request is cancelled after a few seconds.
+*/
 async function serverKey(to: {
 	url: string;
 	token: string;
 }): Promise<{id: string; wrapped: string} | undefined> {
-	const response = await fetch(`${to.url}/v1/key`, {
-		headers: [['Authorization', `Bearer ${to.token}`]],
-	});
-	if (response.status === 404) {
-		return undefined;
-	}
+	const controller = new AbortController();
+	const timer = setTimeout(() => {
+		controller.abort();
+	}, SERVER_CHECK_MS);
+	try {
+		const response = await fetch(`${to.url}/v1/key`, {
+			headers: [['Authorization', `Bearer ${to.token}`]],
+			signal: controller.signal,
+		});
+		if (response.status === 404) {
+			return undefined;
+		}
 
-	if (!response.ok) {
-		throw new Error(
-			`The sync server answered with an error (${response.status}).`,
-		);
-	}
+		if (!response.ok) {
+			throw new Error(
+				`The sync server answered with an error (${response.status}).`,
+			);
+		}
 
-	const body: unknown = await response.json();
-	const parsed = parseServerKey(isRecord(body) ? body.key : undefined);
-	return parsed ? {id: parsed.id, wrapped: parsed.wrapped} : undefined;
+		const body: unknown = await response.json();
+		const raw = isRecord(body) ? body.key : undefined;
+		if (raw === null) {
+			return undefined;
+		}
+
+		const parsed = parseServerKey(raw);
+		if (!parsed) {
+			throw new Error(
+				'The sync server sent a key this version does not understand.',
+			);
+		}
+
+		return {id: parsed.id, wrapped: parsed.wrapped};
+	} catch (error) {
+		throw controller.signal.aborted
+			? new Error('The sync server did not answer.')
+			: error;
+	} finally {
+		clearTimeout(timer);
+	}
 }
-
-const SERVER_CHECK_MS = 8000;
 
 /**
 What the connected server holds for the private library, for the set-a-PIN screen: whether there is a server (and the
@@ -609,14 +644,7 @@ export async function privateServerInfo(): Promise<{
 			return {connected: false, hasKey: false, failed: false};
 		}
 
-		const key = await Promise.race([
-			serverKey(to),
-			new Promise<never>((_resolve, reject) => {
-				setTimeout(() => {
-					reject(new Error('The sync server did not answer.'));
-				}, SERVER_CHECK_MS);
-			}),
-		]);
+		const key = await serverKey(to);
 		return {connected: true, hasKey: key !== undefined, failed: false};
 	} catch {
 		return {connected: true, hasKey: false, failed: true};
@@ -626,17 +654,20 @@ export async function privateServerInfo(): Promise<{
 /**
 Brings in the private library the extension keeps on the connected server. A protected one asks for its PIN or password
 (pass `credential` after a `credential` result); the phone's library then takes that lock, and keeps everything it
-already has, which syncs with the server's. Without a library on the phone, one is made.
+already has, which syncs with the server's. Without a library on the phone, one is made from the server's.
 */
 export async function openFromServer(credential?: string): Promise<OpenResult> {
-	const to = getPreferences().syncPrivate ? await target() : undefined;
-	if (!to) {
-		return {ok: false, reason: 'not-connected'};
-	}
-
 	try {
+		const to = getPreferences().syncPrivate ? await target() : undefined;
+		if (!to) {
+			return {ok: false, reason: 'not-connected'};
+		}
+
+		const started = epoch;
 		const server = await serverKey(to);
-		if (server && (lock ?? kept)?.id !== server.id) {
+		// A library with no lock of its own, even one that kept the server's key, takes the lock only from a credential
+		// that opens the server's key.
+		if (server && lock?.id !== server.id) {
 			if (credential === undefined) {
 				return {ok: false, reason: 'credential'};
 			}
@@ -644,6 +675,16 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 			const key = await unwrapKey(server.wrapped, credential);
 			if (key === null) {
 				return {ok: false, reason: 'wrong'};
+			}
+
+			if (epoch !== started) {
+				// The library was set up, changed, or erased while the PIN was checked: that choice stands.
+				return {
+					ok: false,
+					reason: 'error',
+					message:
+						'The private library changed while the server was checked. Try again.',
+				};
 			}
 
 			if (!exists) {
@@ -663,7 +704,13 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 			unlockedKey = key;
 			stopClient();
 		} else if (!exists) {
-			await setupPrivate();
+			// Nothing here and nothing on the server: a library is made by setting up a PIN or password, not from here.
+			return {
+				ok: false,
+				reason: 'error',
+				message:
+					'Your server has no private library yet. Set up the private library on this phone, and it syncs once it has a PIN or password.',
+			};
 		}
 
 		refreshState();

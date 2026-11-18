@@ -254,20 +254,30 @@ describe('without a server', () => {
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
 	});
 
-	test('an erase that fails part way leaves the library as it was, and can be tried again', async () => {
-		const phone = await startPhone();
+	test('an erase that fails part way can be run again, including after a restart, and then finishes', async () => {
+		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://a.example/');
 		failRemoval.add('tablodge.private.lock');
 		await assert.rejects(async () => phone.removePrivate(), /storage failed/);
+		// Still here in memory, so it can be retried at once.
 		assert.equal(phone.privateExists(), true);
-		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+
+		// And still marked as existing on disk, so a restart finds it and the erase can be run again.
+		phone = await startPhone();
+		assert.equal(phone.privateExists(), true);
 		assert.equal(phone.getPrivateState().lockedWith, 'pin');
 
 		failRemoval.clear();
 		await phone.removePrivate();
 		assert.equal(phone.privateExists(), false);
 		assert.equal(phone.getPrivateState().needsPin, false);
+		phone = await startPhone();
+		assert.equal(phone.privateExists(), false);
+		assert.deepEqual(
+			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
+			[],
+		);
 	});
 
 	test('erasing removes the library, its lock, and its sync position, and starts over empty', async () => {
@@ -459,7 +469,7 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
-	test('joining a library the extension made with no PIN just brings the data', async () => {
+	test('a library with no key on the server is not made from the server: a PIN or password comes first', async () => {
 		const extension = makeExtension(server);
 		extension.edit((store) =>
 			addBookmark(
@@ -472,9 +482,112 @@ describe('with the extension on the same server', () => {
 		await extension.sync();
 		const phone = await startPhone();
 		await connectPhone(phone);
-		assert.deepEqual(await phone.openFromServer(), {ok: true});
-		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://ext.example/']);
-		assert.equal(phone.canLockPrivate(), false);
+		const result = await phone.openFromServer();
+		assert.equal(result.ok, false);
+		assert.equal(phone.privateExists(), false);
+	});
+
+	test('a library that kept the server’s key without a lock takes the lock only from a credential that opens the server’s key', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PIN);
+		await extension.sync();
+		const held = extension.key;
+		assert.ok(held);
+		memory.set('tablodge.private.on', 'true');
+		memory.set(
+			'tablodge.private.keptKey',
+			JSON.stringify({id: held.id, wrapped: held.wrapped, raw: held.raw}),
+		);
+		const phone = await startPhone();
+		await connectPhone(phone);
+		assert.equal(phone.getPrivateState().needsPin, true);
+		assert.deepEqual(await phone.openFromServer('0000'), {
+			ok: false,
+			reason: 'wrong',
+		});
+		assert.equal(phone.getPrivateState().needsPin, true);
+		assert.deepEqual(await phone.openFromServer(PIN.value), {ok: true});
+		assert.equal(phone.getPrivateState().needsPin, false);
+		assert.equal(phone.getPrivateState().lockedWith, 'pin');
+	});
+
+	test('a key the phone cannot read is a failed lookup, not an empty server', async () => {
+		const phone = await startPhone();
+		await connectPhone(phone);
+		await server.fetch(`${URL_BASE}/private/v1/key`, {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${TOKEN}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({key: 'a newer format', previous: null}),
+		});
+		assert.deepEqual(await phone.privateServerInfo(), {
+			connected: true,
+			hasKey: false,
+			failed: true,
+		});
+	});
+
+	test('a server that never answers is given up on after a few seconds, for the drawer and for a join', async () => {
+		const phone = await startPhone();
+		await connectPhone(phone);
+		vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+		try {
+			vi.stubGlobal(
+				'fetch',
+				async (_url: string, init?: RequestInit) =>
+					new Promise((_resolve, reject) => {
+						init?.signal?.addEventListener('abort', () => {
+							reject(new DOMException('aborted', 'AbortError'));
+						});
+					}),
+			);
+			const info = phone.privateServerInfo();
+			await vi.advanceTimersByTimeAsync(9000);
+			assert.deepEqual(await info, {
+				connected: true,
+				hasKey: false,
+				failed: true,
+			});
+			const join = phone.openFromServer(PIN.value);
+			await vi.advanceTimersByTimeAsync(9000);
+			assert.deepEqual(await join, {
+				ok: false,
+				reason: 'error',
+				message: 'The sync server did not answer.',
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	test('a join that finishes after the library got a PIN of its own does not replace it', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const phone = await startPhone();
+		await connectPhone(phone);
+
+		// Hold the join's key request, as a slow server would, while a phone-only library is set up.
+		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const real = globalThis.fetch;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			if (String(url).endsWith('/private/v1/key') && !init?.method) {
+				await gate;
+			}
+
+			return real(url, init);
+		});
+		const joining = phone.openFromServer(PASSWORD.value);
+		await phone.setupPrivate(PIN);
+		release();
+		const result = await joining;
+		assert.equal(result.ok, false);
+		assert.equal(phone.getPrivateState().lockedWith, 'pin');
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'wrong');
+		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
 	});
 
 	test('both sides already have data: the union arrives on both, each record once, and edits of one record resolve to one', async () => {

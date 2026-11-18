@@ -17,6 +17,7 @@ import {Button, Field, Segmented} from '../ui/widgets';
 import {setView} from '../library/view';
 import {
 	changePrivateLock,
+	getPrivateState,
 	openFromServer,
 	privateServerInfo,
 	protectPrivate,
@@ -289,12 +290,18 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
+	// An erase is running: unlocking waits, so it cannot open a library that is being deleted.
+	const [erasing, setErasing] = useState(false);
 	const run = async () => {
 		setBusy(true);
 		const result = await unlockPrivate(value);
 		setBusy(false);
 		if (result === 'ok') {
-			setView('private');
+			const state = getPrivateState();
+			if (state.exists && !state.needsPin) {
+				setView('private');
+			}
+
 			onDone();
 		} else {
 			setProblem(
@@ -325,7 +332,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 			<Button
 				label="Unlock"
 				icon="lock-open-outline"
-				disabled={value === ''}
+				disabled={value === '' || erasing}
 				loading={busy}
 				onPress={() => void run()}
 			/>
@@ -333,8 +340,9 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 				label="Forgot it? Erase private data"
 				icon="trash-outline"
 				kind="danger"
+				disabled={busy || erasing}
 				onPress={() => {
-					confirmErase(onDone);
+					confirmErase(onDone, setErasing);
 				}}
 			/>
 			<Text style={{color: colors.muted}}>
@@ -349,21 +357,27 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 Asks before the private library is erased from this phone, erases it, and opens the set-a-PIN drawer once it is gone. A
 failure is reported and leaves the library as it was, so the erase can be tried again. Both entry points use it.
 */
-export function confirmErase(afterErase?: () => void) {
+export function confirmErase(
+	afterErase?: () => void,
+	onWorking?: (working: boolean) => void,
+) {
 	confirm(
 		'Erase the private library from this phone?',
 		'Its bookmarks and sessions and its PIN or password are deleted from this phone, and you start again with a new PIN or password. Your server keeps its copy, if it has one, and you can bring it back from there with its PIN or password.',
 		{label: 'Erase', destructive: true},
 		() => {
+			onWorking?.(true);
 			removePrivate().then(
 				() => {
+					onWorking?.(false);
 					afterErase?.();
 					openPrivateSheet('setup');
 				},
 				() => {
+					onWorking?.(false);
 					notify(
-						'Could not erase it',
-						'Nothing was deleted for good. Try again.',
+						'Could not finish erasing',
+						'Some of it may already be gone. Try again to finish.',
 					);
 				},
 			);
@@ -489,10 +503,19 @@ function ServerForm({
 	}, [busy, onBusy]);
 	const run = async (credential?: string) => {
 		setBusy(true);
-		const result = await openFromServer(credential);
-		setBusy(false);
+		let result: Awaited<ReturnType<typeof openFromServer>>;
+		try {
+			result = await openFromServer(credential);
+		} finally {
+			setBusy(false);
+		}
+
 		if (result.ok) {
-			setView('private');
+			// A library that still has no PIN does not open.
+			if (!getPrivateState().needsPin) {
+				setView('private');
+			}
+
 			onDone();
 			return;
 		}
