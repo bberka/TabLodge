@@ -4,6 +4,8 @@ import {join} from 'node:path';
 import {parseHTML} from 'linkedom';
 import {test} from 'vite-plus/test';
 import {manifestForTarget} from '../scripts/manifest-targets';
+import {isColumnColor} from '../src/shared/accent-colors';
+import {ICON_IDS} from '../src/shared/icon-ids';
 import {
 	devtoArticleUrl,
 	githubRepoUrl,
@@ -113,6 +115,16 @@ test('the manifest asks for exactly the sources origins, optionally, with no con
 		assert.equal(built.host_permissions, undefined, target);
 		assert.equal(built.content_scripts, undefined, target);
 	}
+});
+
+test('each source column gets its own icon and a color a column can hold', () => {
+	for (const source of SITE_SOURCES) {
+		assert.ok(ICON_IDS.includes(source.columnIcon), source.id);
+		assert.ok(isColumnColor(source.columnColor), source.id);
+	}
+
+	const icons = new Set(SITE_SOURCES.map((source) => source.columnIcon));
+	assert.equal(icons.size, SITE_SOURCES.length);
 });
 
 test('the in-page toast uses the same tokens as the extension stylesheet', () => {

@@ -9574,6 +9574,8 @@ async function saveFromSource(
 					column = {
 						id: makeId(),
 						name: source.column,
+						icon: source.columnIcon,
+						color: source.columnColor,
 						createdAt: now,
 						isDefault: false,
 					};

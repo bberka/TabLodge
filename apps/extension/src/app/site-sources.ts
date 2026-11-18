@@ -3,6 +3,7 @@
 // optional host permission for that site only; the content script is registered only while it is granted. A new
 // site is an entry here plus its adapter in shell/site-source.ts; Settings lists it in Add a site by itself.
 // The manifest's optional_host_permissions must list exactly the origins here (tests/site-sources.test.ts).
+import type {IconId} from '../shared/icon-ids';
 import {isRecord} from '../shared/library-values';
 import type {SiteSourceStatus} from '../shared/types';
 
@@ -35,6 +36,15 @@ export type SiteSource = {
 	The bookmark column the links go to, created on the first save.
 	*/
 	column: string;
+	/**
+	The icon and color that column gets when a save creates it, so it stands out as the site's. The user can change
+	both later like any column's; a column that already has the name keeps its own.
+	*/
+	columnIcon: IconId;
+	/**
+	A preset accent id or a lowercase `#rrggbb`, as a column color takes.
+	*/
+	columnColor: string;
 	/**
 	Match patterns for the optional host permission and the registered content script.
 	*/
@@ -323,6 +333,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Videos you add to Watch later on youtube.com',
 		homepage: 'https://www.youtube.com/',
 		column: 'YouTube',
+		columnIcon: 'video',
+		columnColor: '#ff0000',
 		origins: ['https://www.youtube.com/*'],
 		hosts: ['www.youtube.com'],
 		scriptId: 'tablodge-source-youtube',
@@ -334,6 +346,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Posts and comments you save on reddit.com',
 		homepage: 'https://www.reddit.com/',
 		column: 'Reddit',
+		columnIcon: 'message-circle',
+		columnColor: '#ff4500',
 		origins: ['https://www.reddit.com/*', 'https://old.reddit.com/*'],
 		hosts: ['www.reddit.com', 'old.reddit.com'],
 		scriptId: 'tablodge-source-reddit',
@@ -345,6 +359,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Posts you bookmark on x.com or twitter.com',
 		homepage: 'https://x.com/',
 		column: 'X',
+		columnIcon: 'message-square',
+		columnColor: 'slate',
 		origins: ['https://x.com/*', 'https://twitter.com/*'],
 		hosts: ['x.com', 'twitter.com'],
 		scriptId: 'tablodge-source-x',
@@ -356,6 +372,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Posts and reels you save on instagram.com',
 		homepage: 'https://www.instagram.com/',
 		column: 'Instagram',
+		columnIcon: 'camera',
+		columnColor: '#e1306c',
 		origins: ['https://www.instagram.com/*'],
 		hosts: ['www.instagram.com'],
 		scriptId: 'tablodge-source-instagram',
@@ -367,6 +385,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Repositories you star on github.com',
 		homepage: 'https://github.com/',
 		column: 'GitHub',
+		columnIcon: 'git-branch',
+		columnColor: '#24292f',
 		origins: ['https://github.com/*'],
 		hosts: ['github.com'],
 		scriptId: 'tablodge-source-github',
@@ -378,6 +398,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Stories you favorite on news.ycombinator.com',
 		homepage: 'https://news.ycombinator.com/',
 		column: 'Hacker News',
+		columnIcon: 'newspaper',
+		columnColor: '#ff6600',
 		origins: ['https://news.ycombinator.com/*'],
 		hosts: ['news.ycombinator.com'],
 		scriptId: 'tablodge-source-hackernews',
@@ -391,6 +413,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Questions you bookmark on stackoverflow.com',
 		homepage: 'https://stackoverflow.com/',
 		column: 'Stack Overflow',
+		columnIcon: 'layers',
+		columnColor: '#f48024',
 		origins: ['https://stackoverflow.com/*'],
 		hosts: ['stackoverflow.com'],
 		scriptId: 'tablodge-source-stackoverflow',
@@ -402,6 +426,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Articles you save to your reading list on dev.to',
 		homepage: 'https://dev.to/',
 		column: 'dev.to',
+		columnIcon: 'code',
+		columnColor: '#3b49df',
 		origins: ['https://dev.to/*'],
 		hosts: ['dev.to'],
 		scriptId: 'tablodge-source-devto',
@@ -413,6 +439,8 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		description: 'Stories you save on lobste.rs',
 		homepage: 'https://lobste.rs/',
 		column: 'Lobsters',
+		columnIcon: 'rss',
+		columnColor: '#ac130d',
 		origins: ['https://lobste.rs/*'],
 		hosts: ['lobste.rs'],
 		scriptId: 'tablodge-source-lobsters',
