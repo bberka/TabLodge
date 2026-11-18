@@ -360,7 +360,7 @@ async function unlockWith(page: Page, value: string) {
 A stand-in sync server that already holds a private library: it answers the status and key calls the set-a-PIN screen
 makes, with the CORS headers the extension's fetch needs.
 */
-async function startStubSyncServer() {
+async function startStubSyncServer(hasKey = true) {
 	const wrapped = Buffer.from('not a real envelope').toString('base64');
 	const server = createServer((request, response) => {
 		response.setHeader('Access-Control-Allow-Origin', '*');
@@ -374,7 +374,7 @@ async function startStubSyncServer() {
 		const body = request.url?.endsWith('/v1/status')
 			? {features: ['private']}
 			: request.url?.endsWith('/v1/key')
-				? {key: JSON.stringify({v: 1, id: 'stub', wrapped})}
+				? {key: hasKey ? JSON.stringify({v: 1, id: 'stub', wrapped}) : null}
 				: {};
 		response.writeHead(200).end(JSON.stringify(body));
 	});
@@ -1198,9 +1198,77 @@ try {
 		).chrome.storage.local.remove('tablodge.sync.config');
 	});
 	await stub.close();
+	// A server with no private library yet: the screen asks whether to sync, on by default.
+	const emptyStub = await startStubSyncServer(false);
+	const setSyncConfig = async (url: string | undefined) =>
+		normal.evaluate(async (target) => {
+			const area = (
+				globalThis as typeof globalThis & {
+					chrome: {
+						storage: {
+							local: {
+								set(items: Record<string, unknown>): Promise<void>;
+								remove(key: string): Promise<void>;
+							};
+						};
+					};
+				}
+			).chrome.storage.local;
+			await (target
+				? area.set({'tablodge.sync.config': {url: target, token: 'stub-token'}})
+				: area.remove('tablodge.sync.config'));
+		}, url);
+	await setSyncConfig(emptyStub.url);
+	await privatePage.reload();
+	await privatePage.getByLabel('Sync private windows').waitFor();
+	assert.equal(
+		await privatePage.getByLabel('Sync private windows').isChecked(),
+		true,
+	);
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		await captureEvidence(
+			privatePage,
+			privatePage.locator('main'),
+			`lock-set-screen-sync-${theme}`,
+		);
+		assert.deepEqual(await axeViolations(privatePage, axeSource), []);
+	}
+
+	await privatePage.getByLabel('Sync private windows').click();
+	await privatePage
+		.getByText('Kept only on this device. It will not match', {exact: false})
+		.waitFor();
+	await captureEvidence(
+		privatePage,
+		privatePage.locator('main'),
+		'lock-set-screen-sync-off',
+	);
+	await setSyncConfig(undefined);
+	await emptyStub.close();
 	await privatePage.reload();
 	await setFirstLock(privatePage);
 	await privatePage.getByRole('main').waitFor();
+	// Settings › Sync says plainly whether private windows sync: here they stay on this device.
+	const settingsStub = await startStubSyncServer(false);
+	await setSyncConfig(settingsStub.url);
+	const syncPage = await openPrivatePage(
+		normal,
+		`chrome-extension://${id}/options.html#settings-sync`,
+	);
+	const offNote = syncPage.getByText(
+		'Off: this private library stays on this device only',
+		{exact: false},
+	);
+	await offNote.waitFor();
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, syncPage, theme);
+		await captureEvidence(syncPage, offNote, `private-sync-off-${theme}`);
+	}
+
+	await setSyncConfig(undefined);
+	await settingsStub.close();
+	await syncPage.close();
 	const privateBanner = privatePage.locator(
 		'aside[aria-label="Private window"]',
 	);
@@ -1213,7 +1281,9 @@ try {
 		.getByRole('link', {name: 'Private window settings'})
 		.waitFor();
 	assert.match(
-		(await privatePage.getByLabel('Private window').textContent()) ?? '',
+		(await privatePage
+			.getByLabel('Private window', {exact: true})
+			.textContent()) ?? '',
 		/You’re in a private window[\s\S]*Separate library saved on this device/,
 	);
 	// The set-a-PIN screen came and went in between, so focus must not be lost to the page body.

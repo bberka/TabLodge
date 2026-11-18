@@ -12682,7 +12682,7 @@ test('private sync is refused until the library has a PIN or password, and the l
 	);
 });
 
-test('a sync server with a different PIN or password than this library is refused, so there is never a second one', async () => {
+test('a library kept on the device with its own PIN adopts the server’s when it turns sync on, and the data merges', async () => {
 	const server = syncServer();
 	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	await enableLock(first);
@@ -12700,21 +12700,89 @@ test('a sync server with a different PIN or password than this library is refuse
 		},
 	});
 	await other.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Local only', url: 'https://local-only.example/'},
+	});
+	await other.sendMessage({
 		type: 'ENABLE_PRIVATE_LOCK',
 		kind: 'password',
 		credential: 'another password',
 	});
-	const mismatch = await other.sendMessage({
+	const asked = await other.sendMessage({
 		type: 'PRIVATE_SYNC_ENABLE',
 		credential: 'another password',
 	});
-	assert.equal(mismatch.ok, false);
-	assert.equal(mismatch.field, 'credential');
-	assert.match(mismatch.error ?? '', /same one/);
+	assert.equal(asked.ok, false);
+	assert.equal(asked.field, 'serverCredential');
 	assert.equal(
 		(await other.sendMessage({type: 'PRIVATE_SYNC_STATUS'})).privateSync?.status
 			.connected,
 		false,
+	);
+	const wrong = await other.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: 'another password',
+		serverCredential: 'not the server password',
+	});
+	assert.equal(wrong.field, 'serverCredential');
+
+	const joined = await other.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: 'another password',
+		serverCredential: lockPassword,
+	});
+	assert.equal(joined.ok, true, joined.error);
+	const library = await other.sendMessage({type: 'GET_STATE'});
+	const urls = library.bookmarks?.map((bookmark) => bookmark.url) ?? [];
+	assert.ok(urls.includes('https://local-only.example/'), 'local data stays');
+	assert.ok(
+		urls.includes('https://secret-bookmark.example/'),
+		'the server’s data merged in',
+	);
+	// The library now has one PIN or password: the server's.
+	await other.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.equal(
+		(
+			await other.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: 'another password',
+			})
+		).ok,
+		false,
+	);
+	assert.equal(
+		(
+			await other.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: lockPassword,
+			})
+		).ok,
+		true,
+	);
+});
+
+test('a first PIN set with the sync choice also turns private sync on and sends the library encrypted', async () => {
+	const server = syncServer();
+	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	const set = await harness.sendMessage({
+		type: 'ENABLE_PRIVATE_LOCK',
+		kind: 'password',
+		credential: lockPassword,
+		sync: true,
+	});
+	assert.equal(set.ok, true, set.error);
+	const status = await harness.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
+	assert.equal(status.privateSync?.status.connected, true);
+	assert.equal(status.privateSync?.encrypted, true);
+	assert.notEqual(server.privateLog.key, null);
+
+	const kept = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	assert.equal((await enableLock(kept)).ok, true);
+	assert.equal(
+		(await kept.sendMessage({type: 'PRIVATE_SYNC_STATUS'})).privateSync?.status
+			.connected,
+		false,
+		'without the choice the library stays on the device',
 	);
 });
 

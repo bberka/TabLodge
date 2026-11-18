@@ -24,7 +24,7 @@ const UNAVAILABLE: Record<
 	string
 > = {
 	'no-server':
-		'Connect this browser to a sync server first, in Settings in a regular window. Private windows can then sync too.',
+		'Without a sync server, private windows stay on this device. Connect this browser to one in Settings in a regular window, and private windows can sync too.',
 	shared:
 		'Private windows use the regular library, so they sync with it whenever this browser syncs.',
 	temporary:
@@ -43,6 +43,10 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	// The question the worker asked for a PIN or password, while the dialog is open.
 	const [ask, setAsk] = useState<string>();
 	const [credentialError, setCredentialError] = useState('');
+	// A library kept on this device can have a PIN or password of its own: the server's is then asked for as well.
+	const [serverAsk, setServerAsk] = useState<string>();
+	const [serverError, setServerError] = useState('');
+	const localCredentialRef = useRef('');
 	const switchRef = useRef<HTMLButtonElement>(null);
 	const switchId = useId();
 	const helpId = useId();
@@ -70,15 +74,26 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 		};
 	}, []);
 
-	const enable = async (credential?: string) => {
+	const enable = async (credential?: string, serverCredential?: string) => {
 		setBusy(true);
 		setError('');
 		try {
-			const result = await send('PRIVATE_SYNC_ENABLE', {credential});
+			const result = await send('PRIVATE_SYNC_ENABLE', {
+				credential,
+				serverCredential,
+			});
 			if (result.ok) {
 				setInfo(result.privateSync);
 				setAsk(undefined);
+				setServerAsk(undefined);
 				showStatus('Private windows sync now.');
+			} else if (result.field === 'serverCredential') {
+				setAsk(undefined);
+				if (serverAsk === undefined) {
+					setServerAsk(result.error);
+				} else {
+					setServerError(result.error);
+				}
 			} else if (result.field !== 'credential') {
 				setError(result.error);
 			} else if (ask === undefined) {
@@ -154,8 +169,9 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				<div className="min-w-0 space-y-1">
 					<Label htmlFor={switchId}>Sync private windows</Label>
 					<p id={helpId} className="text-xs leading-5 text-muted-foreground">
-						Keeps this private library the same in your other browsers, as a
-						separate library on {server}.
+						{status.connected
+							? `On: this private library syncs with your other browsers and phone, as a separate library on ${server}.`
+							: `Off: this private library stays on this device only. Turn it on to merge it with the library on ${server} and keep your devices the same.`}
 					</p>
 					<p className="flex gap-1.5 text-xs leading-5 text-muted-foreground">
 						<Icon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
@@ -216,6 +232,7 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 				error={credentialError}
 				returnFocus={switchRef}
 				onSubmit={(credential) => {
+					localCredentialRef.current = credential;
 					void enable(credential);
 				}}
 				onClose={() => {
@@ -226,6 +243,26 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					setCredentialError('');
 				}}
 			/>
+			<CredentialDialog
+				key={`server:${serverAsk ?? 'closed'}`}
+				title="Use the server’s PIN or password"
+				submitLabel="Use it and turn on"
+				question={serverAsk}
+				busy={busy}
+				error={serverError}
+				returnFocus={switchRef}
+				onSubmit={(credential) => {
+					void enable(localCredentialRef.current, credential);
+				}}
+				onClose={() => {
+					setServerAsk(undefined);
+					setServerError('');
+					localCredentialRef.current = '';
+				}}
+				onEdit={() => {
+					setServerError('');
+				}}
+			/>
 		</div>
 	);
 }
@@ -234,6 +271,8 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 Asks for the PIN or password the worker needs to turn private sync on. Open while `question` is set.
 */
 function CredentialDialog({
+	title = 'Encrypt private sync',
+	submitLabel = 'Turn on',
 	question,
 	busy,
 	error,
@@ -242,6 +281,8 @@ function CredentialDialog({
 	onClose,
 	onEdit,
 }: {
+	title?: string;
+	submitLabel?: string;
 	question: string | undefined;
 	busy: boolean;
 	error: string;
@@ -297,7 +338,7 @@ function CredentialDialog({
 					}}
 				>
 					<DialogHeader>
-						<DialogTitle>Encrypt private sync</DialogTitle>
+						<DialogTitle>{title}</DialogTitle>
 						<DialogDescription>{question}</DialogDescription>
 					</DialogHeader>
 					<DialogBody>
@@ -330,7 +371,7 @@ function CredentialDialog({
 						</Button>
 						<Button type="submit" disabled={busy}>
 							<Lock aria-hidden="true" />
-							{busy ? 'Checking…' : 'Turn on'}
+							{busy ? 'Checking…' : submitLabel}
 						</Button>
 					</DialogFooter>
 				</form>

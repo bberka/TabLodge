@@ -10,7 +10,7 @@ import {
 	type ReactNode,
 } from 'react';
 import {Lock, LockOpen, ShieldAlert, Trash2} from 'lucide-react';
-import {Button, IconTooltip} from '../shared/ui';
+import {Button, IconTooltip, Label, Switch} from '../shared/ui';
 import {
 	LOCK_ACTIVITY_KEY,
 	LOCK_RECORD_KEY,
@@ -242,9 +242,11 @@ keep the library on this device with its own PIN or password, or to stop using a
 */
 function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 	const headingId = useId();
+	const syncId = useId();
 	const [error, setError] = useState('');
 	const [server, setServer] = useState<PrivateServerInfo>();
 	const [deviceOnly, setDeviceOnly] = useState(false);
+	const [syncNew, setSyncNew] = useState(true);
 	useEffect(() => {
 		void send('GET_PRIVATE_SERVER').then((result) => {
 			setServer(
@@ -301,7 +303,29 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 				{fromServer ? (
 					<JoinServerForm onDone={onDone} />
 				) : (
-					<SetLockForm onDone={onDone} />
+					<>
+						{server.connected && !server.hasKey && (
+							<div className="flex items-start justify-between gap-3">
+								<div className="grid gap-1">
+									<Label htmlFor={syncId}>Sync private windows</Label>
+									<p className="text-xs leading-5 text-muted-foreground">
+										{syncNew
+											? 'This library goes to your sync server, encrypted, and your other browsers and phone can join it with this PIN or password.'
+											: 'Kept only on this device. It will not match your other devices until you turn on Sync private windows in Settings.'}
+									</p>
+								</div>
+								<Switch
+									id={syncId}
+									checked={syncNew}
+									onCheckedChange={setSyncNew}
+								/>
+							</div>
+						)}
+						<SetLockForm
+							sync={server.connected && !server.hasKey && syncNew}
+							onDone={onDone}
+						/>
+					</>
 				)}
 				{server.hasKey && (
 					<Button
