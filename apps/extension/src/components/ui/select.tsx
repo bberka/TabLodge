@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 import {Check, ChevronDown} from 'lucide-react';
-import {ScrollBar} from './scroll-area';
+import {ScrollBar, reserveScrollbar} from './scroll-area';
 import {cn} from '@/lib/utils';
 
 const Select = SelectPrimitive.Root;
@@ -59,6 +59,7 @@ const SelectContent = React.forwardRef<
 							className={cn(
 								'min-h-0 w-full p-1 [&>div]:block!',
 								'scrollbar-none [&::-webkit-scrollbar]:hidden',
+								reserveScrollbar,
 								position === 'popper' && 'min-w-(--radix-select-trigger-width)',
 							)}
 						>

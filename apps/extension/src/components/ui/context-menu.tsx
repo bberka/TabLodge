@@ -24,7 +24,11 @@ const ContextMenuContent = React.forwardRef<
 			)}
 			{...props}
 		>
-			<ScrollArea className={menuScrollClass} viewportClassName="min-h-0">
+			<ScrollArea
+				type="auto"
+				className={menuScrollClass}
+				viewportClassName="min-h-0"
+			>
 				{children}
 			</ScrollArea>
 		</ContextMenuPrimitive.Content>
