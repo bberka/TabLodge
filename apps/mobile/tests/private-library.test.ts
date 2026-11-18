@@ -280,6 +280,24 @@ describe('without a server', () => {
 		);
 	});
 
+	test('an erase that fails on the safety copy keeps the library, its data and its lock, and can be run again', async () => {
+		let phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://a.example/');
+		failRemoval.add('tablodge.safety.private');
+		await assert.rejects(async () => phone.removePrivate(), /storage failed/);
+		// The data and the lock come after the safety copy, so they are still there.
+		assert.equal(phone.privateExists(), true);
+		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+		phone = await startPhone();
+		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
+		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+
+		failRemoval.clear();
+		await phone.removePrivate();
+		assert.equal(phone.privateExists(), false);
+	});
+
 	test('erasing removes the library, its lock, and its sync position, and starts over empty', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
