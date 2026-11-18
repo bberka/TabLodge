@@ -16,7 +16,15 @@ export type SiteSourceId =
 	| 'hackernews'
 	| 'stackoverflow'
 	| 'devto'
-	| 'lobsters';
+	| 'lobsters'
+	| 'bluesky'
+	| 'soundcloud'
+	| 'spotify'
+	| 'letterboxd'
+	| 'imdb'
+	| 'goodreads'
+	| 'medium'
+	| 'substack';
 
 export type SiteSource = {
 	id: SiteSourceId;
@@ -49,6 +57,9 @@ export type SiteSource = {
 	Match patterns for the optional host permission and the registered content script.
 	*/
 	origins: string[];
+	/**
+	Host names the content script reads on; `*.example.com` stands for any subdomain of example.com.
+	*/
 	hosts: string[];
 	scriptId: string;
 	/**
@@ -141,6 +152,35 @@ const DEVTO_RESERVED = new Set([
 ]);
 const DEVTO_ARTICLE = /^\/([\w-]{1,60})\/([\w-]{1,200})\/?$/;
 const LOBSTERS_STORY = /^\/s\/([\da-z]{1,12})(?:\/([\w-]{0,200}))?\/?$/i;
+const BLUESKY_POST =
+	/^\/profile\/([\w\-.:]{1,253})\/post\/([\da-z]{1,32})\/?$/i;
+// First path segments that are SoundCloud's own pages, not an artist.
+const SOUNDCLOUD_RESERVED = new Set([
+	'charts',
+	'discover',
+	'feed',
+	'messages',
+	'notifications',
+	'pages',
+	'people',
+	'search',
+	'settings',
+	'stations',
+	'stream',
+	'upload',
+	'you',
+]);
+const SOUNDCLOUD_ITEM =
+	/^\/([\w-]{1,100})\/(?:sets\/([\w-]{1,200})|([\w-]{1,200}))\/?$/;
+const SPOTIFY_ITEM =
+	/^(?:\/intl-[-a-z]{2,10})?\/(track|album|playlist|episode|show|artist)\/([\dA-Za-z]{22})\/?$/;
+const LETTERBOXD_FILM = /^(?:\/[\w-]{1,40})?\/film\/([\w-]{1,200})\/?/;
+const IMDB_TITLE =
+	/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/title\/(tt\d{5,12})(?:\/|$)/;
+const GOODREADS_BOOK = /^\/book\/show\/(\d{1,12})(?:[-.][^/]*)?\/?$/;
+// A Medium post ends in its 12 hex character id: /<slug>-<id>, /@user/<slug>-<id>, /p/<id>.
+const MEDIUM_POST = /(?:^\/p\/|-)([\da-f]{12})\/?$/;
+const SUBSTACK_POST = /^\/(?:p\/[\w-]{1,200}|home\/post\/p-\d{1,15})\/?$/;
 
 function parse(href: string, base: string) {
 	try {
@@ -326,6 +366,116 @@ export function lobstersStoryUrl(href: string): string | null {
 		: `https://lobste.rs/s/${match[1]}`;
 }
 
+/**
+Whether an https address is on one of the hosts, where `*.example.com` also takes example.com's subdomains.
+*/
+function onHost(url: URL | null, ...hosts: string[]): url is URL {
+	return (
+		url?.protocol === 'https:' &&
+		hosts.some((host) =>
+			host.startsWith('*.')
+				? url.hostname === host.slice(2) || url.hostname.endsWith(host.slice(1))
+				: url.hostname === host,
+		)
+	);
+}
+
+/**
+A post as `https://bsky.app/profile/<handle>/post/<id>`.
+*/
+export function blueskyPostUrl(href: string): string | null {
+	const url = parse(href, 'https://bsky.app/');
+	const match = onHost(url, 'bsky.app')
+		? BLUESKY_POST.exec(url.pathname)
+		: null;
+	return match ? `https://bsky.app/profile/${match[1]}/post/${match[2]}` : null;
+}
+
+/**
+A track as `https://soundcloud.com/<artist>/<track>`, or a playlist as `https://soundcloud.com/<artist>/sets/<name>`.
+*/
+export function soundcloudItemUrl(href: string): string | null {
+	const url = parse(href, 'https://soundcloud.com/');
+	const match = onHost(url, 'soundcloud.com', 'm.soundcloud.com')
+		? SOUNDCLOUD_ITEM.exec(url.pathname)
+		: null;
+	if (!match || SOUNDCLOUD_RESERVED.has(match[1].toLowerCase())) {
+		return null;
+	}
+
+	return match[2]
+		? `https://soundcloud.com/${match[1]}/sets/${match[2]}`
+		: `https://soundcloud.com/${match[1]}/${match[3]}`;
+}
+
+/**
+A track, album, playlist, episode, show, or artist as `https://open.spotify.com/<kind>/<id>`, without the
+language prefix or share parameters.
+*/
+export function spotifyItemUrl(href: string): string | null {
+	const url = parse(href, 'https://open.spotify.com/');
+	const match = onHost(url, 'open.spotify.com')
+		? SPOTIFY_ITEM.exec(url.pathname)
+		: null;
+	return match ? `https://open.spotify.com/${match[1]}/${match[2]}` : null;
+}
+
+/**
+A film as `https://letterboxd.com/film/<slug>/`, also from a member's page for it.
+*/
+export function letterboxdFilmUrl(href: string): string | null {
+	const url = parse(href, 'https://letterboxd.com/');
+	const match = onHost(url, 'letterboxd.com')
+		? LETTERBOXD_FILM.exec(url.pathname)
+		: null;
+	return match ? `https://letterboxd.com/film/${match[1]}/` : null;
+}
+
+/**
+A film or show as `https://www.imdb.com/title/<id>/`.
+*/
+export function imdbTitleUrl(href: string): string | null {
+	const url = parse(href, 'https://www.imdb.com/');
+	const match = onHost(url, 'www.imdb.com', 'm.imdb.com')
+		? IMDB_TITLE.exec(url.pathname)
+		: null;
+	return match ? `https://www.imdb.com/title/${match[1]}/` : null;
+}
+
+/**
+A book as `https://www.goodreads.com/book/show/<id>`; the slug after the id varies, so it is dropped.
+*/
+export function goodreadsBookUrl(href: string): string | null {
+	const url = parse(href, 'https://www.goodreads.com/');
+	const match = onHost(url, 'www.goodreads.com')
+		? GOODREADS_BOOK.exec(url.pathname)
+		: null;
+	return match ? `https://www.goodreads.com/book/show/${match[1]}` : null;
+}
+
+/**
+A post as `https://medium.com/p/<id>`, which Medium redirects to the post wherever it is published, so one post
+read on medium.com and on a publication's subdomain is the same address.
+*/
+export function mediumPostUrl(href: string): string | null {
+	const url = parse(href, 'https://medium.com/');
+	const match = onHost(url, 'medium.com', '*.medium.com')
+		? MEDIUM_POST.exec(url.pathname)
+		: null;
+	return match ? `https://medium.com/p/${match[1]}` : null;
+}
+
+/**
+A post on substack.com or a publication's substack.com subdomain, without its query.
+*/
+export function substackPostUrl(href: string): string | null {
+	const url = parse(href, 'https://substack.com/');
+	return onHost(url, 'substack.com', '*.substack.com') &&
+		SUBSTACK_POST.test(url.pathname)
+		? `https://${url.hostname}${url.pathname.replace(/\/$/, '')}`
+		: null;
+}
+
 export const SITE_SOURCES: readonly SiteSource[] = [
 	{
 		id: 'youtube',
@@ -447,6 +597,113 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		canonicalUrl: storyUrl('https://lobste.rs/', lobstersStoryUrl),
 		discussion: {name: 'Lobsters discussion', url: lobstersStoryUrl},
 	},
+	{
+		id: 'bluesky',
+		label: 'Bluesky saved posts',
+		description: 'Posts you save on bsky.app',
+		homepage: 'https://bsky.app/',
+		column: 'Bluesky',
+		columnIcon: 'cloud',
+		columnColor: '#1185fe',
+		origins: ['https://bsky.app/*'],
+		hosts: ['bsky.app'],
+		scriptId: 'tablodge-source-bluesky',
+		canonicalUrl: blueskyPostUrl,
+	},
+	{
+		id: 'soundcloud',
+		label: 'SoundCloud likes',
+		description: 'Tracks and playlists you like on soundcloud.com',
+		homepage: 'https://soundcloud.com/',
+		column: 'SoundCloud',
+		columnIcon: 'headphones',
+		columnColor: '#ff5500',
+		origins: ['https://soundcloud.com/*', 'https://m.soundcloud.com/*'],
+		hosts: ['soundcloud.com', 'm.soundcloud.com'],
+		scriptId: 'tablodge-source-soundcloud',
+		canonicalUrl: soundcloudItemUrl,
+	},
+	{
+		id: 'spotify',
+		label: 'Spotify library',
+		description:
+			'Songs, albums, playlists, and episodes you save on open.spotify.com',
+		homepage: 'https://open.spotify.com/',
+		column: 'Spotify',
+		columnIcon: 'music',
+		columnColor: '#1db954',
+		origins: ['https://open.spotify.com/*'],
+		hosts: ['open.spotify.com'],
+		scriptId: 'tablodge-source-spotify',
+		canonicalUrl: spotifyItemUrl,
+	},
+	{
+		id: 'letterboxd',
+		label: 'Letterboxd watchlist',
+		description: 'Films you add to your watchlist on letterboxd.com',
+		homepage: 'https://letterboxd.com/',
+		column: 'Letterboxd',
+		columnIcon: 'film',
+		columnColor: '#00c030',
+		origins: ['https://letterboxd.com/*'],
+		hosts: ['letterboxd.com'],
+		scriptId: 'tablodge-source-letterboxd',
+		canonicalUrl: letterboxdFilmUrl,
+	},
+	{
+		id: 'imdb',
+		label: 'IMDb watchlist',
+		description: 'Films and shows you add to your watchlist on imdb.com',
+		homepage: 'https://www.imdb.com/',
+		column: 'IMDb',
+		columnIcon: 'clapperboard',
+		columnColor: '#f5c518',
+		origins: ['https://www.imdb.com/*', 'https://m.imdb.com/*'],
+		hosts: ['www.imdb.com', 'm.imdb.com'],
+		scriptId: 'tablodge-source-imdb',
+		canonicalUrl: imdbTitleUrl,
+	},
+	{
+		id: 'goodreads',
+		label: 'Goodreads Want to Read',
+		description: 'Books you mark Want to Read on goodreads.com',
+		homepage: 'https://www.goodreads.com/',
+		column: 'Goodreads',
+		columnIcon: 'library',
+		columnColor: '#8b5a2b',
+		origins: ['https://www.goodreads.com/*'],
+		hosts: ['www.goodreads.com'],
+		scriptId: 'tablodge-source-goodreads',
+		canonicalUrl: goodreadsBookUrl,
+	},
+	{
+		id: 'medium',
+		label: 'Medium reading list',
+		description:
+			'Stories you bookmark on medium.com and its publication subdomains',
+		homepage: 'https://medium.com/',
+		column: 'Medium',
+		columnIcon: 'file-text',
+		columnColor: '#000000',
+		origins: ['https://medium.com/*', 'https://*.medium.com/*'],
+		hosts: ['medium.com', '*.medium.com'],
+		scriptId: 'tablodge-source-medium',
+		canonicalUrl: mediumPostUrl,
+	},
+	{
+		id: 'substack',
+		label: 'Substack saved',
+		description:
+			'Posts you save on substack.com and publications at substack.com addresses',
+		homepage: 'https://substack.com/',
+		column: 'Substack',
+		columnIcon: 'mail',
+		columnColor: '#ff6719',
+		origins: ['https://substack.com/*', 'https://*.substack.com/*'],
+		hosts: ['substack.com', '*.substack.com'],
+		scriptId: 'tablodge-source-substack',
+		canonicalUrl: substackPostUrl,
+	},
 ];
 
 /**
@@ -464,9 +721,7 @@ export function siteSourceForUrl(href: unknown): SiteSource | undefined {
 	}
 
 	const url = parse(href, 'about:blank');
-	return url?.protocol === 'https:'
-		? SITE_SOURCES.find((source) => source.hosts.includes(url.hostname))
-		: undefined;
+	return SITE_SOURCES.find((source) => onHost(url, ...source.hosts));
 }
 
 /**

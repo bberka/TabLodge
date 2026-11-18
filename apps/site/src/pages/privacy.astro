@@ -29,6 +29,14 @@ const permissions = [
 	['https://stackoverflow.com/* (optional)', 'Settings › Sources › Stack Overflow bookmarks: noticing when you bookmark a question, only after you add it.'],
 	['https://dev.to/* (optional)', 'Settings › Sources › dev.to reading list: noticing when you save an article, only after you add it.'],
 	['https://lobste.rs/* (optional)', 'Settings › Sources › Lobsters saved: noticing when you save a story, only after you add it.'],
+	['https://bsky.app/* (optional)', 'Settings › Sources › Bluesky saved posts: noticing when you save a post, only after you add it.'],
+	['https://soundcloud.com/*, https://m.soundcloud.com/* (optional)', 'Settings › Sources › SoundCloud likes: noticing when you like a track or playlist, only after you add it.'],
+	['https://open.spotify.com/* (optional)', 'Settings › Sources › Spotify library: noticing when you save something to Your Library, only after you add it.'],
+	['https://letterboxd.com/* (optional)', 'Settings › Sources › Letterboxd watchlist: noticing when you add a film to your watchlist, only after you add it.'],
+	['https://www.imdb.com/*, https://m.imdb.com/* (optional)', 'Settings › Sources › IMDb watchlist: noticing when you add a title to your watchlist, only after you add it.'],
+	['https://www.goodreads.com/* (optional)', 'Settings › Sources › Goodreads Want to Read: noticing when you mark a book Want to Read, only after you add it.'],
+	['https://medium.com/*, https://*.medium.com/* (optional)', 'Settings › Sources › Medium reading list: noticing when you bookmark a story, only after you add it.'],
+	['https://substack.com/*, https://*.substack.com/* (optional)', 'Settings › Sources › Substack saved: noticing when you save a post, only after you add it.'],
 ];
 ---
 
@@ -97,7 +105,7 @@ const permissions = [
 
 		<h2>Sources</h2>
 		<p>
-			In <strong>Settings &rsaquo; Sources</strong> you can have TabLodge save a link when you save it on YouTube (Watch later), Reddit (a saved post or comment), X (a bookmarked post), Instagram (a saved post or reel), GitHub (a starred repository), Hacker News (a favorite story), Stack Overflow (a bookmarked question), dev.to (an article saved to your reading list), or Lobsters (a saved story). No site is on until you add it, and adding one asks the browser for access to that site only. Only then does TabLodge run a small script there, and removing the site, or removing its access in the browser, stops it.
+			In <strong>Settings &rsaquo; Sources</strong> you can have TabLodge save a link when you save it on YouTube (Watch later), Reddit (a saved post or comment), X (a bookmarked post), Instagram (a saved post or reel), GitHub (a starred repository), Hacker News (a favorite story), Stack Overflow (a bookmarked question), dev.to (an article saved to your reading list), Lobsters (a saved story), Bluesky (a saved post), SoundCloud (a liked track or playlist), Spotify (something saved to Your Library), Letterboxd or IMDb (a film added to your watchlist), Goodreads (a book marked Want to Read), Medium (a bookmarked story), or Substack (a saved post). No site is on until you add it, and adding one asks the browser for access to that site only. Only then does TabLodge run a small script there, and removing the site, or removing its access in the browser, stops it.
 		</p>
 		<p>
 			The script only notices your own click on the site's save control, then reads that item's address and its title, the start of a post's text, or the start of a caption from the page. On Hacker News and Lobsters it also reads the address of the story's discussion page, which goes in the bookmark's note. It reads nothing else, sends nothing to the site or anywhere else, and never blocks or changes the site's own save. The link is stored in your library like any other bookmark. Which sites are on is kept in <code>tablodge.sources</code> on this device and never syncs. In a private window, a save is added only when private windows use the regular library.

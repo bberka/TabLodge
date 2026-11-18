@@ -7,7 +7,15 @@ import {manifestForTarget} from '../scripts/manifest-targets';
 import {isColumnColor} from '../src/shared/accent-colors';
 import {ICON_IDS} from '../src/shared/icon-ids';
 import {
+	blueskyPostUrl,
 	devtoArticleUrl,
+	goodreadsBookUrl,
+	imdbTitleUrl,
+	letterboxdFilmUrl,
+	mediumPostUrl,
+	soundcloudItemUrl,
+	spotifyItemUrl,
+	substackPostUrl,
 	githubRepoUrl,
 	hackerNewsItemUrl,
 	instagramPostUrl,
@@ -20,7 +28,15 @@ import {
 	xPostUrl,
 	youtubeVideoUrl,
 } from '../src/app/site-sources';
+import {createBlueskyReader} from '../src/app/source-bluesky';
 import {createDevtoReader} from '../src/app/source-devto';
+import {createGoodreadsReader} from '../src/app/source-goodreads';
+import {createImdbReader} from '../src/app/source-imdb';
+import {createLetterboxdReader} from '../src/app/source-letterboxd';
+import {createMediumReader} from '../src/app/source-medium';
+import {createSoundcloudReader} from '../src/app/source-soundcloud';
+import {createSpotifyReader} from '../src/app/source-spotify';
+import {createSubstackReader} from '../src/app/source-substack';
 import {createGithubReader} from '../src/app/source-github';
 import {createHackerNewsReader} from '../src/app/source-hackernews';
 import {createInstagramReader} from '../src/app/source-instagram';
@@ -350,6 +366,14 @@ test('stored source state is read defensively: off unless saved as on', () => {
 		stackoverflow: {enabled: false},
 		devto: {enabled: false},
 		lobsters: {enabled: false},
+		bluesky: {enabled: false},
+		soundcloud: {enabled: false},
+		spotify: {enabled: false},
+		letterboxd: {enabled: false},
+		imdb: {enabled: false},
+		goodreads: {enabled: false},
+		medium: {enabled: false},
+		substack: {enabled: false},
 	});
 	assert.deepEqual(
 		parseSiteSourcesState({
@@ -370,6 +394,14 @@ test('stored source state is read defensively: off unless saved as on', () => {
 			stackoverflow: {enabled: false},
 			devto: {enabled: false},
 			lobsters: {enabled: false},
+			bluesky: {enabled: false},
+			soundcloud: {enabled: false},
+			spotify: {enabled: false},
+			letterboxd: {enabled: false},
+			imdb: {enabled: false},
+			goodreads: {enabled: false},
+			medium: {enabled: false},
+			substack: {enabled: false},
 		},
 	);
 });
@@ -1074,4 +1106,297 @@ test('the new sources are found only on their own hosts', () => {
 	assert.equal(siteSourceForUrl('https://lobste.rs/')?.id, 'lobsters');
 	assert.equal(siteSourceForUrl('https://gist.github.com/a'), undefined);
 	assert.equal(siteSourceForUrl('https://superuser.com/'), undefined);
+});
+
+test('reading and listening sources are found on their own hosts, subdomains only where listed', () => {
+	assert.equal(siteSourceForUrl('https://bsky.app/')?.id, 'bluesky');
+	assert.equal(
+		siteSourceForUrl('https://m.soundcloud.com/a')?.id,
+		'soundcloud',
+	);
+	assert.equal(siteSourceForUrl('https://open.spotify.com/')?.id, 'spotify');
+	assert.equal(siteSourceForUrl('https://letterboxd.com/')?.id, 'letterboxd');
+	assert.equal(siteSourceForUrl('https://m.imdb.com/')?.id, 'imdb');
+	assert.equal(siteSourceForUrl('https://www.goodreads.com/')?.id, 'goodreads');
+	assert.equal(siteSourceForUrl('https://medium.com/')?.id, 'medium');
+	assert.equal(siteSourceForUrl('https://karpathy.medium.com/')?.id, 'medium');
+	assert.equal(
+		siteSourceForUrl('https://example.substack.com/')?.id,
+		'substack',
+	);
+	assert.equal(siteSourceForUrl('https://notmedium.com/'), undefined);
+	assert.equal(siteSourceForUrl('https://medium.com.example/'), undefined);
+	assert.equal(siteSourceForUrl('https://spotify.com/'), undefined);
+});
+
+test('posts, tracks, films, and books each get one address', () => {
+	assert.equal(
+		blueskyPostUrl('/profile/alice.bsky.social/post/3kabc123xyz?x=1'),
+		'https://bsky.app/profile/alice.bsky.social/post/3kabc123xyz',
+	);
+	assert.equal(blueskyPostUrl('/profile/alice.bsky.social'), null);
+	assert.equal(
+		soundcloudItemUrl('https://m.soundcloud.com/nils-frahm/says?in=x'),
+		'https://soundcloud.com/nils-frahm/says',
+	);
+	assert.equal(
+		soundcloudItemUrl('/nils-frahm/sets/spaces/'),
+		'https://soundcloud.com/nils-frahm/sets/spaces',
+	);
+	assert.equal(soundcloudItemUrl('/discover/sets/new'), null);
+	assert.equal(soundcloudItemUrl('/you/likes'), null);
+	assert.equal(
+		spotifyItemUrl('/intl-de/track/1h2xVEoJORqrg71HocgqXd?si=abc'),
+		'https://open.spotify.com/track/1h2xVEoJORqrg71HocgqXd',
+	);
+	assert.equal(spotifyItemUrl('/genre/pop'), null);
+	assert.equal(
+		letterboxdFilmUrl('/someone/film/parasite-2019/activity/'),
+		'https://letterboxd.com/film/parasite-2019/',
+	);
+	assert.equal(
+		imdbTitleUrl('https://m.imdb.com/title/tt6751668/?ref_=nv'),
+		'https://www.imdb.com/title/tt6751668/',
+	);
+	assert.equal(imdbTitleUrl('/name/nm0094435/'), null);
+	assert.equal(
+		goodreadsBookUrl('/book/show/18423.The_Left_Hand_of_Darkness'),
+		'https://www.goodreads.com/book/show/18423',
+	);
+	assert.equal(
+		goodreadsBookUrl('/book/show/18423-the-left-hand'),
+		'https://www.goodreads.com/book/show/18423',
+	);
+	assert.equal(
+		mediumPostUrl(
+			'https://karpathy.medium.com/software-2-0-a64152b37c35?source=x',
+		),
+		'https://medium.com/p/a64152b37c35',
+	);
+	assert.equal(
+		mediumPostUrl('/@karpathy/a-recipe-c6aaa0d0d6b1'),
+		'https://medium.com/p/c6aaa0d0d6b1',
+	);
+	assert.equal(mediumPostUrl('/@karpathy'), null);
+	assert.equal(
+		substackPostUrl('https://example.substack.com/p/local-first-notes/?utm=x'),
+		'https://example.substack.com/p/local-first-notes',
+	);
+	assert.equal(
+		substackPostUrl('https://substack.com/home/post/p-123456789'),
+		'https://substack.com/home/post/p-123456789',
+	);
+	assert.equal(substackPostUrl('https://example.substack.com/archive'), null);
+});
+
+const bluesky = (url = 'https://bsky.app/') =>
+	page('bluesky-feed.html', url, (document) => createBlueskyReader(document));
+
+test('Bluesky: the save button and the menu item save the post; removing saves nothing', () => {
+	const site = bluesky(
+		'https://bsky.app/profile/carol.bsky.social/post/3kmain111',
+	);
+	const text =
+		'Local first apps keep working when the network does not, and that matters more than any sync…';
+	assert.deepEqual(site.click('feed-save-icon'), {
+		kind: 'save',
+		link: {
+			url: 'https://bsky.app/profile/alice.bsky.social/post/3kabc123xyz',
+			title: text,
+		},
+	});
+	assert.equal(site.click('feed-unsave'), undefined);
+	// The thread's main post is the page; a quoted post's link inside it is not.
+	assert.deepEqual(site.click('main-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://bsky.app/profile/carol.bsky.social/post/3kmain111',
+			title: 'The main post of this thread.',
+		},
+	});
+	assert.deepEqual(site.click('reply-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://bsky.app/profile/erin.bsky.social/post/3kreply777',
+			title: 'A reply.',
+		},
+	});
+	// The menu opens outside the post, so it saves the post clicked last.
+	site.click('feed-menu');
+	assert.deepEqual(site.click('menu-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://bsky.app/profile/alice.bsky.social/post/3kabc123xyz',
+			title: text,
+		},
+	});
+});
+
+test('Bluesky: the menu item with no post clicked first is unreadable', () => {
+	assert.deepEqual(bluesky().click('menu-save'), {kind: 'unreadable'});
+});
+
+test('SoundCloud: Like saves the row, the player, or the page; Liked saves nothing', () => {
+	const site = page(
+		'soundcloud-stream.html',
+		'https://soundcloud.com/nils-frahm/says',
+		(document) => createSoundcloudReader(document),
+	);
+	assert.deepEqual(site.click('row-like'), {
+		kind: 'save',
+		link: {url: 'https://soundcloud.com/nils-frahm/says', title: 'Says'},
+	});
+	assert.equal(site.click('row-unlike'), undefined);
+	assert.deepEqual(site.click('player-like'), {
+		kind: 'save',
+		link: {url: 'https://soundcloud.com/olafur-arnalds/saman', title: 'saman'},
+	});
+	assert.deepEqual(site.click('page-like'), {
+		kind: 'save',
+		link: {url: 'https://soundcloud.com/nils-frahm/says', title: 'Says'},
+	});
+});
+
+test('Spotify: saving the album, a song row, or the playing song; a saved one saves nothing', () => {
+	const site = page(
+		'spotify-album.html',
+		'https://open.spotify.com/album/6GjwtEZcfenmOf6l18N7T7',
+		(document) => createSpotifyReader(document),
+	);
+	assert.deepEqual(site.click('album-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://open.spotify.com/album/6GjwtEZcfenmOf6l18N7T7',
+			title: 'Kid A',
+		},
+	});
+	assert.deepEqual(site.click('row-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://open.spotify.com/track/6LgJvl0Xdtc73RJ1mmpotq',
+			title: 'Everything In Its Right Place',
+		},
+	});
+	assert.equal(site.click('row-saved'), undefined);
+	// The playing song, not the album page it is played from.
+	assert.deepEqual(site.click('player-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://open.spotify.com/track/1h2xVEoJORqrg71HocgqXd',
+			title: 'Idioteque',
+		},
+	});
+});
+
+test('Letterboxd: the film page and a poster menu add to the watchlist; removing saves nothing', () => {
+	const site = page(
+		'letterboxd-film.html',
+		'https://letterboxd.com/film/parasite-2019/',
+		(document) => createLetterboxdReader(document),
+	);
+	assert.deepEqual(site.click('page-add'), {
+		kind: 'save',
+		link: {
+			url: 'https://letterboxd.com/film/parasite-2019/',
+			title: 'Parasite',
+		},
+	});
+	assert.equal(site.click('page-remove'), undefined);
+	assert.deepEqual(site.click('menu-add'), {kind: 'unreadable'});
+	site.click('poster-image');
+	assert.deepEqual(site.click('menu-add'), {
+		kind: 'save',
+		link: {
+			url: 'https://letterboxd.com/film/memories-of-murder/',
+			title: 'Memories of Murder (2003)',
+		},
+	});
+	assert.equal(site.click('menu-remove'), undefined);
+});
+
+test('IMDb: the title button and a poster ribbon add to the watchlist; a pressed one saves nothing', () => {
+	const site = page(
+		'imdb-title.html',
+		'https://www.imdb.com/title/tt6751668/?ref_=x',
+		(document) => createImdbReader(document),
+	);
+	assert.deepEqual(site.click('page-add'), {
+		kind: 'save',
+		link: {url: 'https://www.imdb.com/title/tt6751668/', title: 'Parasite'},
+	});
+	assert.equal(site.click('page-remove'), undefined);
+	assert.deepEqual(site.click('ribbon-icon'), {
+		kind: 'save',
+		link: {
+			url: 'https://www.imdb.com/title/tt0353969/',
+			title: 'Memories of Murder',
+		},
+	});
+	assert.equal(site.click('ribbon-remove'), undefined);
+});
+
+test('Goodreads: Want to Read on the book page and on a list row; other shelves save nothing', () => {
+	const site = page(
+		'goodreads-book.html',
+		'https://www.goodreads.com/book/show/18423.The_Left_Hand_of_Darkness',
+		(document) => createGoodreadsReader(document),
+	);
+	const book = {
+		url: 'https://www.goodreads.com/book/show/18423',
+		title: 'The Left Hand of Darkness',
+	};
+	assert.deepEqual(site.click('page-wtr'), {kind: 'save', link: book});
+	assert.equal(site.click('page-choose'), undefined);
+	assert.deepEqual(site.click('row-wtr'), {kind: 'save', link: book});
+	assert.equal(site.click('row-reading'), undefined);
+});
+
+test('Medium: the story bookmark saves the story, not a story it links to; a card saves its story', () => {
+	const site = page(
+		'medium-story.html',
+		'https://karpathy.medium.com/software-2-0-a64152b37c35',
+		(document) => createMediumReader(document),
+	);
+	assert.deepEqual(site.click('page-save-icon'), {
+		kind: 'save',
+		link: {url: 'https://medium.com/p/a64152b37c35', title: 'Software 2.0'},
+	});
+	assert.deepEqual(site.click('card-save-icon'), {
+		kind: 'save',
+		link: {
+			url: 'https://medium.com/p/c6aaa0d0d6b1',
+			title: 'A Recipe for Training Neural Networks',
+		},
+	});
+	// A click on the button around the icon, not on the icon.
+	assert.deepEqual(site.click('card-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://medium.com/p/c6aaa0d0d6b1',
+			title: 'A Recipe for Training Neural Networks',
+		},
+	});
+});
+
+test('Substack: Save on a card or a post page; Unsave saves nothing', () => {
+	const site = page(
+		'substack-feed.html',
+		'https://example.substack.com/p/the-gentle-art-of-saving',
+		(document) => createSubstackReader(document),
+	);
+	assert.deepEqual(site.click('card-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://example.substack.com/p/local-first-notes',
+			title: 'Local first notes',
+		},
+	});
+	assert.equal(site.click('card-unsave'), undefined);
+	assert.deepEqual(site.click('page-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://example.substack.com/p/the-gentle-art-of-saving',
+			title: 'The Gentle Art of Saving',
+		},
+	});
 });

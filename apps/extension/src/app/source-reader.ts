@@ -16,6 +16,15 @@ export type SourceRead =
 export type SourceReader = (event: Event) => SourceRead;
 
 /**
+A save of the link when the page gave both its address and its title, else `unreadable`.
+*/
+export const savedOrUnreadable = (
+	url: string | null | undefined,
+	title: string,
+): SourceRead =>
+	url && title ? {kind: 'save', link: {url, title}} : {kind: 'unreadable'};
+
+/**
 A menu or dialog the site opens away from the item it belongs to is matched to the item clicked last, but only
 this soon after; an older click is too unsure to save.
 */

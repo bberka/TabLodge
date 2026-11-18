@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- A trimmed www.imdb.com title page with a "More like this" row: the title's watchlist button is
+data-testid="tm-box-wl-button", a poster's ribbon is data-testid="poster-watchlist-ribbon-add"; both carry
+aria-pressed. Test ids from an archived copy of the page; hand written, not a capture. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>IMDb</title></head>
+<body>
+	<h1><span data-testid="hero__primary-text">Parasite</span></h1>
+	<button data-testid="tm-box-wl-button" id="page-add" aria-pressed="false"><span>Add to Watchlist</span></button>
+	<button data-testid="tm-box-wl-button" id="page-remove" aria-pressed="true"><span>In Watchlist</span></button>
+	<div class="ipc-poster-card">
+		<div data-testid="poster-watchlist-ribbon-add" role="button" id="ribbon-add" aria-label="Add to Watchlist" aria-pressed="false"><svg id="ribbon-icon"></svg></div>
+		<a class="ipc-poster-card__title" href="/title/tt0353969/?ref_=tt_sims_tt_t_1"><span data-testid="title">Memories of Murder</span></a>
+	</div>
+	<div class="ipc-poster-card">
+		<div data-testid="poster-watchlist-ribbon-remove" role="button" id="ribbon-remove" aria-pressed="true"></div>
+		<a class="ipc-poster-card__title" href="/title/tt1216496/"><span data-testid="title">Mother</span></a>
+	</div>
+</body>
+</html>

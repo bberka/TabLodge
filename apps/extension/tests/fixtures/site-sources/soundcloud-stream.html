@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- A trimmed soundcloud.com stream and player bar: Like is `.sc-button-like`, `.sc-button-selected` once liked.
+Class names from the site's bundles; hand written, not a capture of the live page. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>SoundCloud</title></head>
+<body>
+	<ul>
+		<li class="soundList__item">
+			<div class="sound__body">
+				<a class="soundTitle__title" href="/nils-frahm/says"><span>Says</span></a>
+				<button class="sc-button-like sc-button" id="row-like" title="Like">Like</button>
+			</div>
+		</li>
+		<li class="soundList__item">
+			<div class="sound__body">
+				<a class="soundTitle__title" href="/nils-frahm/sets/spaces"><span>Spaces</span></a>
+				<button class="sc-button-like sc-button sc-button-selected" id="row-unlike" title="Liked">Liked</button>
+			</div>
+		</li>
+	</ul>
+	<div class="playbackSoundBadge">
+		<a class="playbackSoundBadge__titleLink" href="/olafur-arnalds/saman?in=x"><span>saman</span></a>
+		<button class="sc-button-like" id="player-like">Like</button>
+	</div>
+	<div class="listenEngagement">
+		<button class="sc-button-like" id="page-like">Like</button>
+	</div>
+	<h1><span class="soundTitle__title">Says</span></h1>
+</body>
+</html>

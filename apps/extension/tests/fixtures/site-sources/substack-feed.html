@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- A trimmed substack.com reader feed and a post page header: Save is a button labelled "Save" with aria-pressed
+("Unsave" and aria-pressed="true" once saved), and a card's title is data-testid="post-preview-title". From the
+site's bundles; hand written, not a capture. Where Save sits on a post page is not known; the header here is a
+guess used to test that other posts on the page are never taken for it. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>Substack</title></head>
+<body>
+	<header><h1 class="post-title">The Gentle Art of Saving</h1>
+		<div><div><button aria-label="Save" aria-pressed="false" id="page-save"></button></div></div>
+	</header>
+	<main>
+		<div class="reader-feed">
+			<div class="post-preview">
+				<a href="https://example.substack.com/p/local-first-notes?utm_source=feed"><div data-testid="post-preview-title">Local first notes</div></a>
+				<div class="actions"><button aria-label="Save" aria-pressed="false" id="card-save"><svg></svg></button></div>
+			</div>
+			<div class="post-preview">
+				<a href="https://substack.com/home/post/p-123456789"><div data-testid="post-preview-title">Already saved</div></a>
+				<div class="actions"><button aria-label="Unsave" aria-pressed="true" id="card-unsave"></button></div>
+			</div>
+		</div>
+	</main>
+</body>
+</html>

@@ -238,10 +238,10 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 				await page.keyboard.press('ArrowDown');
 				assert.equal(await active(), 'Reddit saved');
 				await page.keyboard.press('End');
-				assert.equal(await active(), 'Lobsters saved');
+				assert.equal(await active(), 'Substack saved');
 				// The list scrolls; the highlighted site is scrolled into view.
 				const last = await page
-					.getByRole('option', {name: /Lobsters saved/})
+					.getByRole('option', {name: /Substack saved/})
 					.boundingBox();
 				const list = await page.getByRole('listbox').boundingBox();
 				assert.ok(last, 'the last site has a box');
@@ -257,7 +257,7 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 				]);
 				assert.equal(await active(), 'X bookmarks');
 				await search.fill('');
-				assert.equal(await page.getByRole('option').count(), 9);
+				assert.equal(await page.getByRole('option').count(), 17);
 				const violations = await axeViolationLines(page, axeSource);
 				assert.deepEqual(violations, [], violations.join('\n'));
 				await page.keyboard.press('Escape');
