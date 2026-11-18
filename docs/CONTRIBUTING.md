@@ -32,7 +32,7 @@ Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then us
 | `pnpm run cf:setup` | Deploy the sync server to Cloudflare (see [Self hosting](self-hosting.md)) |
 | `pnpm run cf:bundle` | Rebuild `apps/server/cloudflare-deploy/worker.js` after changing the server or the sync code |
 
-The test browser keeps its own profile in `apps/extension/.dev/`, apart from your regular one. After a rebuild, reload TabLodge on the extensions page. Headless runs (`dev:chrome --headless`, `dev:firefox --headless`) are for automated checks; see [Agent validation](agents/extension.md#browser-access).
+The test browser keeps its own profile in `apps/extension/.dev/`, apart from your regular one. After a rebuild, reload TabLodge on the extensions page. Headless runs (`dev:chrome --headless`, `dev:firefox --headless`) are for automated checks; see [Browser access](agents/extension.md#browser-access).
 
 ## Project structure
 
