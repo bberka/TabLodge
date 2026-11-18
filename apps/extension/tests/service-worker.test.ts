@@ -1242,6 +1242,24 @@ function createWorkerHarness(
 			});
 		},
 		/**
+		Another extension context writing local storage (the regular window changing the sync server, say): `undefined` removes a key.
+		*/
+		externalStorage(values: Record<string, unknown>) {
+			const changes: Record<string, unknown> = {};
+			for (const [key, value] of Object.entries(values)) {
+				const oldValue = structuredClone(extraStorage[key]);
+				if (value === undefined) {
+					Reflect.deleteProperty(extraStorage, key);
+					changes[key] = {oldValue};
+				} else {
+					extraStorage[key] = structuredClone(value);
+					changes[key] = {oldValue, newValue: structuredClone(value)};
+				}
+			}
+
+			notifyChanged(changes);
+		},
+		/**
 		A message from an extension page by default; pass a web page `url` to send as the site content script does.
 		*/
 		async sendMessage<M extends TabLodgeMessage>(
@@ -12340,22 +12358,6 @@ function syncServer() {
 	};
 }
 
-/**
-Waits for work the worker finishes after it has answered a message.
-*/
-async function until(check: () => boolean, ms = 3000) {
-	const end = Date.now() + ms;
-	while (!check()) {
-		if (Date.now() > end) {
-			throw new Error('timed out');
-		}
-
-		await new Promise((resolve) => {
-			setTimeout(resolve, 20);
-		});
-	}
-}
-
 const SYNC_URL = 'https://sync.example.test';
 const regularSync = {
 	'tablodge.sync.config': {url: SYNC_URL, token: SYNC_TOKEN},
@@ -12452,16 +12454,17 @@ test('a separate private library syncs to its own space on the server, apart fro
 	const status = await first.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
 	assert.equal(status.privateSync?.availability, 'ready');
 	assert.equal(status.privateSync?.status.connected, false);
+	assert.equal((await enableLock(first)).ok, true);
 
-	const enabled = await first.sendMessage({type: 'PRIVATE_SYNC_ENABLE'});
+	const enabled = await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
 	assert.equal(enabled.ok, true, enabled.error);
 	assert.equal(enabled.privateSync?.status.connected, true);
-	assert.equal(enabled.privateSync?.encrypted, false);
+	assert.equal(enabled.privateSync?.encrypted, true);
 	assert.equal(server.log.cursor, 0, 'nothing went to the regular library');
-	assert.match(
-		JSON.stringify(privateValues(server.privateLog)),
-		/secret-bookmark/,
-	);
+	assert.ok(server.privateLog.cursor > 0);
 
 	const second = createWorkerHarness({}, undefined, {
 		incognitoContext: true,
@@ -12471,8 +12474,14 @@ test('a separate private library syncs to its own space on the server, apart fro
 			...regularSync,
 		},
 	});
+	assert.equal((await enableLock(second)).ok, true);
 	assert.equal(
-		(await second.sendMessage({type: 'PRIVATE_SYNC_ENABLE'})).ok,
+		(
+			await second.sendMessage({
+				type: 'PRIVATE_SYNC_ENABLE',
+				credential: lockPassword,
+			})
+		).ok,
 		true,
 	);
 	const library = await second.sendMessage({type: 'GET_STATE'});
@@ -12584,6 +12593,14 @@ test('a private library with a PIN or password syncs encrypted, and another brow
 			...regularSync,
 		},
 	});
+	const unlocked = await second.sendMessage({type: 'PRIVATE_SYNC_ENABLE'});
+	assert.equal(unlocked.ok, false);
+	assert.equal(
+		unlocked.field,
+		undefined,
+		'a library without a lock is refused',
+	);
+	assert.equal((await enableLock(second)).ok, true);
 	const needs = await second.sendMessage({type: 'PRIVATE_SYNC_ENABLE'});
 	assert.equal(needs.field, 'credential');
 	assert.match(needs.error ?? '', /protects private data on the sync server/);
@@ -12624,32 +12641,209 @@ test('a private library with a PIN or password syncs encrypted, and another brow
 	);
 });
 
-test('setting a PIN or password later encrypts what private sync already sent', async () => {
+test('private sync is refused until the library has a PIN or password, and the lock cannot come off while it syncs', async () => {
 	const server = syncServer();
 	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	const refused = await harness.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	assert.equal(refused.ok, false);
+	assert.match(refused.error ?? '', /Set a PIN or password/);
+	assert.equal(server.privateLog.cursor, 0);
+	assert.equal(server.privateLog.key, null);
+
+	assert.equal((await enableLock(harness)).ok, true);
 	assert.equal(
-		(await harness.sendMessage({type: 'PRIVATE_SYNC_ENABLE'})).ok,
+		(
+			await harness.sendMessage({
+				type: 'PRIVATE_SYNC_ENABLE',
+				credential: lockPassword,
+			})
+		).ok,
 		true,
 	);
-	assert.match(
-		JSON.stringify(privateValues(server.privateLog)),
-		/secret-bookmark/,
-	);
-	assert.equal((await enableLock(harness)).ok, true);
-	// The worker protects the server's copy after it answers the lock message.
-	await until(() => server.privateLog.key !== null);
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	assert.equal(removed.ok, false);
+	assert.match(removed.error ?? '', /Turn off private sync/);
 
-	await harness.sendMessage({type: 'PRIVATE_SYNC_NOW'});
-	assert.notEqual(server.privateLog.key, null);
+	await harness.sendMessage({type: 'PRIVATE_SYNC_DISABLE'});
 	assert.equal(
-		JSON.stringify(privateValues(server.privateLog)).includes(
-			'secret-bookmark',
-		),
+		(
+			await harness.sendMessage({
+				type: 'REMOVE_PRIVATE_LOCK',
+				credential: lockPassword,
+			})
+		).ok,
+		true,
+	);
+});
+
+test('a sync server with a different PIN or password than this library is refused, so there is never a second one', async () => {
+	const server = syncServer();
+	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+
+	const other = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: server.fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	await other.sendMessage({
+		type: 'ENABLE_PRIVATE_LOCK',
+		kind: 'password',
+		credential: 'another password',
+	});
+	const mismatch = await other.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: 'another password',
+	});
+	assert.equal(mismatch.ok, false);
+	assert.equal(mismatch.field, 'credential');
+	assert.match(mismatch.error ?? '', /same one/);
+	assert.equal(
+		(await other.sendMessage({type: 'PRIVATE_SYNC_STATUS'})).privateSync?.status
+			.connected,
 		false,
 	);
-	const status = await harness.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
-	assert.equal(status.privateSync?.encrypted, true);
-	assert.equal(status.privateSync?.status.error, null);
+});
+
+test('erasing the private library removes its data, its lock, and its sync key, and keeps the regular library and the storage choice', async () => {
+	const server = syncServer();
+	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(harness);
+	await harness.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+
+	const erased = await harness.sendMessage({type: 'RESET_PRIVATE_LIBRARY'});
+	assert.equal(erased.ok, true, erased.error);
+	assert.equal(erased.enabled, false);
+	assert.equal(erased.needsLock, true);
+	assert.deepEqual(privateDataKeys(harness.extraStorage), []);
+	assert.equal(harness.extraStorage[LOCK_RECORD], undefined);
+	assert.deepEqual(harness.extraStorage['tablodge.private.config'], {
+		mode: 'saved',
+		configured: true,
+	});
+	assert.equal(
+		(await harness.sendMessage({type: 'PRIVATE_SYNC_STATUS'})).privateSync
+			?.status.connected,
+		false,
+	);
+
+	const regular = createWorkerHarness(stateWithSession());
+	assert.equal(
+		(await regular.sendMessage({type: 'RESET_PRIVATE_LIBRARY'})).ok,
+		false,
+	);
+});
+
+test('a new browser joins the sync server’s private library with its PIN or password, which becomes its lock', async () => {
+	const server = syncServer();
+	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	const empty = await first.sendMessage({type: 'GET_PRIVATE_SERVER'});
+	assert.equal(
+		JSON.stringify(empty.privateServer),
+		'{"connected":true,"hasKey":false}',
+	);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+
+	const second = createWorkerHarness({}, undefined, {
+		incognitoContext: true,
+		fetch: server.fetch,
+		storage: {
+			'tablodge.private.config': {mode: 'saved', configured: true},
+			...regularSync,
+		},
+	});
+	assert.equal(
+		JSON.stringify(
+			(await second.sendMessage({type: 'GET_PRIVATE_SERVER'})).privateServer,
+		),
+		'{"connected":true,"hasKey":true}',
+	);
+	const wrong = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: 'not the password',
+	});
+	assert.equal(wrong.ok, false);
+	assert.equal(wrong.field, 'credential');
+	assert.equal(
+		(await second.sendMessage({type: 'GET_PRIVATE_LOCK'})).needsLock,
+		true,
+		'a wrong entry locks nothing',
+	);
+
+	const joined = await second.sendMessage({
+		type: 'JOIN_PRIVATE_SERVER',
+		credential: lockPassword,
+	});
+	assert.equal(joined.ok, true, joined.error);
+	assert.equal(joined.enabled, true);
+	assert.equal(joined.needsLock, false);
+	const status = await second.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
+	assert.equal(status.privateSync?.status.connected, true);
+	const library = await second.sendMessage({type: 'GET_STATE'});
+	assert.ok(
+		library.bookmarks?.some(
+			(bookmark) => bookmark.url === 'https://secret-bookmark.example/',
+		),
+		'the server’s data joined this library',
+	);
+	assert.equal(
+		(
+			await second.sendMessage({
+				type: 'JOIN_PRIVATE_SERVER',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+		'a library that has a lock cannot join again',
+	);
+});
+
+test('a browser with no sync server has nothing to join', async () => {
+	const harness = await plainPrivateLibrary();
+	assert.equal(
+		JSON.stringify(
+			(await harness.sendMessage({type: 'GET_PRIVATE_SERVER'})).privateServer,
+		),
+		'{"connected":false,"hasKey":false}',
+	);
+	assert.equal(
+		(
+			await harness.sendMessage({
+				type: 'JOIN_PRIVATE_SERVER',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+	);
+});
+
+test('the saved private library reports that it needs a PIN or password until one is set', async () => {
+	const harness = await plainPrivateLibrary();
+	assert.equal(
+		(await harness.sendMessage({type: 'GET_PRIVATE_LOCK'})).needsLock,
+		true,
+	);
+	assert.equal((await enableLock(harness)).needsLock, false);
 });
 
 test('two workers connected to one server share sessions and bookmarks', async () => {
@@ -12811,7 +13005,7 @@ async function syncUnchangedLibraryRounds() {
 	);
 }
 
-test('a new PIN or password rewraps the private sync key, so other browsers keep syncing and new ones join with it', async () => {
+test('a new PIN or password rewraps the private sync key before it is reported changed, so other browsers keep syncing and new ones join with it', async () => {
 	const server = syncServer();
 	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
 	await enableLock(first);
@@ -12827,9 +13021,8 @@ test('a new PIN or password rewraps the private sync key, so other browsers keep
 		credential: 'a brand new password',
 	});
 	assert.equal(changed.ok, true, changed.error);
-	await until(() => server.privateLog.key !== before);
-
 	assert.notEqual(server.privateLog.key, before);
+
 	const late = createWorkerHarness({}, undefined, {
 		incognitoContext: true,
 		fetch: server.fetch,
@@ -12837,6 +13030,11 @@ test('a new PIN or password rewraps the private sync key, so other browsers keep
 			'tablodge.private.config': {mode: 'saved', configured: true},
 			...regularSync,
 		},
+	});
+	await late.sendMessage({
+		type: 'ENABLE_PRIVATE_LOCK',
+		kind: 'password',
+		credential: 'a brand new password',
 	});
 	assert.equal(
 		(
@@ -12854,6 +13052,138 @@ test('a new PIN or password rewraps the private sync key, so other browsers keep
 	assert.equal(joined.ok, true, joined.error);
 	const synced = await first.sendMessage({type: 'PRIVATE_SYNC_NOW'});
 	assert.equal(synced.privateSync?.status.error, null);
+});
+
+test('removing the sync server ends private sync, so the lock can come off and nothing stale is left', async () => {
+	const server = syncServer();
+	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(harness);
+	await harness.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	assert.equal(
+		(
+			await harness.sendMessage({
+				type: 'REMOVE_PRIVATE_LOCK',
+				credential: lockPassword,
+			})
+		).ok,
+		false,
+		'still blocked while sync runs',
+	);
+
+	harness.externalStorage({'tablodge.sync.config': undefined});
+	await settle();
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.key'],
+		undefined,
+	);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.on'],
+		undefined,
+	);
+	const removed = await harness.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: lockPassword,
+	});
+	assert.equal(removed.ok, true, removed.error);
+});
+
+test('moving to another sync server ends private sync, and a new PIN or password is then accepted', async () => {
+	const server = syncServer();
+	const harness = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
+	await enableLock(harness);
+	await harness.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+
+	harness.externalStorage({
+		'tablodge.sync.config': {
+			url: 'https://other-sync.example.test',
+			token: SYNC_TOKEN,
+		},
+	});
+	await settle();
+	const status = await harness.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
+	assert.equal(status.privateSync?.status.connected, false);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.key'],
+		undefined,
+	);
+
+	const changed = await harness.sendMessage({
+		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+		kind: 'password',
+		current: lockPassword,
+		credential: 'a brand new password',
+	});
+	assert.equal(changed.ok, true, changed.error);
+});
+
+test('turning private sync off deletes its key even when no client is running', async () => {
+	const harness = await plainPrivateLibrary();
+	await enableLock(harness);
+	// No sync server and so no client, with a key and switch left behind, as an older version could leave them.
+	harness.externalStorage({
+		'tablodge.private.sync.private.key': {id: 'x', raw: 'x', wrapped: 'x'},
+		'tablodge.private.sync.private.on': true,
+	});
+	await settle();
+	const status = await harness.sendMessage({type: 'PRIVATE_SYNC_STATUS'});
+	assert.equal(status.privateSync?.status.connected, false);
+
+	const off = await harness.sendMessage({type: 'PRIVATE_SYNC_DISABLE'});
+	assert.equal(off.ok, true, off.error);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.key'],
+		undefined,
+	);
+	assert.equal(
+		harness.extraStorage['tablodge.private.sync.private.on'],
+		undefined,
+	);
+});
+
+test('a PIN or password change the sync server cannot take is undone, so the library and the server keep one', async () => {
+	const server = syncServer();
+	let reject = false;
+	const fetchServer = async (url: string, init: RequestInit) =>
+		reject && init.method === 'POST' && url.endsWith('/private/v1/key')
+			? new Response('{}', {status: 409})
+			: server.fetch(url, init);
+	const first = await plainPrivateLibrary({fetch: fetchServer}, regularSync);
+	await enableLock(first);
+	await first.sendMessage({
+		type: 'PRIVATE_SYNC_ENABLE',
+		credential: lockPassword,
+	});
+	const before = server.privateLog.key;
+
+	reject = true;
+	const changed = await first.sendMessage({
+		type: 'CHANGE_PRIVATE_LOCK_CREDENTIAL',
+		kind: 'password',
+		current: lockPassword,
+		credential: 'a brand new password',
+	});
+	assert.equal(changed.ok, false);
+	assert.match(changed.error ?? '', /sync server could not take/);
+	assert.equal(server.privateLog.key, before);
+
+	reject = false;
+	await first.sendMessage({type: 'LOCK_PRIVATE'});
+	assert.equal(
+		(
+			await first.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: lockPassword,
+			})
+		).ok,
+		true,
+		'the old PIN or password still opens the library',
+	);
 });
 
 test('a session keeps the device that saved it, and a bad device kind is read as a computer', async () => {

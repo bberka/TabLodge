@@ -210,6 +210,7 @@ type BookmarkFields = import('../src/shared/types').BookmarkFields;
 type DuplicateMode = import('../src/shared/types').DuplicateMode;
 type EraseScope = import('../src/shared/types').EraseScope;
 type PrivateSyncInfo = import('../src/shared/types').PrivateSyncInfo;
+type PrivateServerInfo = import('../src/shared/types').PrivateServerInfo;
 type Credential = import('../src/shared/passcode').Credential;
 type SyncStatus = import('../src/shared/sync/client').SyncStatus;
 type ImportOptions = import('../src/shared/types').ImportOptions;
@@ -767,6 +768,10 @@ async function privateLockInfo(): Promise<PrivateLockInfo> {
 		...status,
 		available: privateConfig.mode === 'saved' && privateConfig.configured,
 		manageHere: privateContext,
+		needsLock:
+			privateConfig.mode === 'saved' &&
+			privateConfig.configured &&
+			!status.enabled,
 	};
 }
 
@@ -1167,7 +1172,23 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 	privateSync?.stop();
 	privateSync = undefined;
-	void wakeSync().catch(() => undefined);
+	// A different server or token, or none, ends private sync here: its key belongs to the old server, and the library
+	// must not start syncing to a new one without it. Turning it on again asks for the PIN or password once.
+	const before = parseConfig(changes[SYNC_CONFIG_KEY].oldValue);
+	const after = parseConfig(changes[SYNC_CONFIG_KEY].newValue);
+	const ended =
+		before !== undefined &&
+		(before.url !== after?.url || before.token !== after?.token);
+	void (
+		ended
+			? chrome.storage.local.remove([
+					PRIVATE_PREFIX + PRIVATE_SYNC_KEY_KEY,
+					PRIVATE_PREFIX + PRIVATE_SYNC_ON_KEY,
+				])
+			: Promise.resolve()
+	)
+		.then(wakeSync)
+		.catch(() => undefined);
 });
 
 /*
@@ -1470,6 +1491,13 @@ const storeServerKey = async (
 		})
 	).status === 200;
 
+const NEEDS_LOCK_MESSAGE =
+	'Set a PIN or password under Private windows first. Private sync encrypts with it before anything leaves this browser.';
+const DIFFERENT_SERVER_PIN_MESSAGE =
+	'That is not the PIN or password protecting private data on the sync server. This private library must use the same one: change its PIN or password under Private windows to match, then turn private sync on.';
+const REWRAP_FAILED_MESSAGE =
+	'The sync server could not take the new PIN or password, so it was not changed. Check the connection and try again.';
+
 async function enablePrivateSync(
 	credential: string | undefined,
 ): Promise<ActionResult<'PRIVATE_SYNC_ENABLE'>> {
@@ -1499,60 +1527,164 @@ async function enablePrivateSync(
 	const lock = parseLockRecord(
 		(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
 	);
-	let key: PrivateSyncKey | undefined;
-	if (serverKey || lock) {
-		if (!credential) {
+	if (!lock) {
+		return {
+			ok: false,
+			error: NEEDS_LOCK_MESSAGE,
+		};
+	}
+
+	if (!credential) {
+		return {
+			ok: false,
+			field: 'credential',
+			error: serverKey
+				? 'Enter the PIN or password that protects private data on the sync server. It must be this private library’s PIN or password too.'
+				: 'Enter this private library’s PIN or password, so what it syncs is encrypted.',
+		};
+	}
+
+	let key: PrivateSyncKey;
+	try {
+		// The library's own lock is the one secret: it must match, so the server and the lock never use two.
+		await unwrapDataKey(lock.wrapped, credential);
+		if (serverKey) {
+			try {
+				key = await joinSyncKey(serverKey, credential);
+			} catch (error) {
+				if (
+					error instanceof PrivateLockError &&
+					error.code === 'wrong-credential'
+				) {
+					return {
+						ok: false,
+						field: 'credential',
+						error: DIFFERENT_SERVER_PIN_MESSAGE,
+					};
+				}
+
+				throw error;
+			}
+		} else {
+			key = await createSyncKey({kind: lock.kind, value: credential});
+			if (!(await storeServerKey(target, key, null))) {
+				return {
+					ok: false,
+					error:
+						'Another browser protected private sync at the same moment. Try again.',
+				};
+			}
+		}
+	} catch (error) {
+		if (
+			error instanceof PrivateLockError &&
+			error.code === 'wrong-credential'
+		) {
 			return {
 				ok: false,
 				field: 'credential',
-				error: serverKey
-					? 'Enter the PIN or password that protects private data on the sync server.'
-					: 'Enter this private library’s PIN or password, so what it syncs is encrypted.',
+				error: 'That is not this private library’s PIN or password.',
 			};
 		}
 
-		try {
-			if (serverKey) {
-				key = await joinSyncKey(serverKey, credential);
-			} else if (lock) {
-				// Checked against this library's own lock, so a typo cannot protect the server's copy with an unknown PIN.
-				await unwrapDataKey(lock.wrapped, credential);
-				key = await createSyncKey({kind: lock.kind, value: credential});
-				if (!(await storeServerKey(target, key, null))) {
-					return {
-						ok: false,
-						error:
-							'Another browser protected private sync at the same moment. Try again.',
-					};
-				}
-			}
-		} catch (error) {
-			if (
-				error instanceof PrivateLockError &&
-				error.code === 'wrong-credential'
-			) {
-				return {
-					ok: false,
-					field: 'credential',
-					error: serverKey
-						? 'That is not the PIN or password protecting private data on the sync server.'
-						: 'That is not this private library’s PIN or password.',
-				};
-			}
-
-			throw error;
-		}
+		throw error;
 	}
 
-	await mutate(async () => {
-		await (key
-			? privateWrite({[PRIVATE_SYNC_KEY_KEY]: key})
-			: rawLibrary.remove([PRIVATE_SYNC_KEY_KEY]));
-	});
+	await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: key}));
 	privateSync ??= createPrivateSyncClient();
 	await privateSync.connect(target.url, target.token);
 	await wakeSync();
 	return {ok: true, privateSync: await privateSyncInfo()};
+}
+
+/**
+What the regular sync server holds for this private library, for the set-a-PIN screen: whether there is a server at all
+and whether it already has a private library (a key) that this browser can join. Errors count as nothing found.
+*/
+async function privateServerInfo(): Promise<PrivateServerInfo> {
+	const regular = await regularSyncConfig();
+	if (!regular) {
+		return {connected: false, hasKey: false};
+	}
+
+	try {
+		const features = await serverField(regular, '/v1/status', 'features');
+		if (!Array.isArray(features) || !features.includes('private')) {
+			return {connected: true, hasKey: false};
+		}
+
+		const key = parseServerKey(
+			await serverField(privateSyncTarget(regular), '/v1/key', 'key'),
+		);
+		return {connected: true, hasKey: key !== undefined};
+	} catch {
+		return {connected: true, hasKey: false};
+	}
+}
+
+/**
+For a saved library with no lock: takes the PIN or password the server's private library is protected with as this
+library's lock, then turns private sync on, so the server's data merges into what is here. Nothing is locked unless the
+credential opens the server's key.
+*/
+async function joinPrivateServer(
+	credential: string,
+): Promise<ActionResult<'JOIN_PRIVATE_SERVER'>> {
+	await privateConfigReady;
+	if (!privateContext) {
+		return {
+			ok: false,
+			error: 'Open Settings in a private window to set the lock.',
+		};
+	}
+
+	if (
+		privateConfig.mode !== 'saved' ||
+		!privateConfig.configured ||
+		(await privateLock.readRecord()) !== undefined
+	) {
+		return {ok: false, error: 'This private library already has a lock.'};
+	}
+
+	const regular = await regularSyncConfig();
+	const serverKey = regular
+		? parseServerKey(
+				await serverField(privateSyncTarget(regular), '/v1/key', 'key'),
+			)
+		: undefined;
+	if (!serverKey) {
+		return {
+			ok: false,
+			error: 'The sync server has no private library to join.',
+		};
+	}
+
+	try {
+		await joinSyncKey(serverKey, credential);
+	} catch (error) {
+		if (
+			error instanceof PrivateLockError &&
+			error.code === 'wrong-credential'
+		) {
+			return {
+				ok: false,
+				field: 'credential',
+				error:
+					'That is not the PIN or password protecting private data on the sync server.',
+			};
+		}
+
+		throw error;
+	}
+
+	// A PIN is 4 to 8 digits; the server's key does not say which kind it was made with.
+	const kind = /^\d{4,8}$/.test(credential) ? 'pin' : 'password';
+	await mutate(async () => {
+		await privateLock.enable({kind, value: credential});
+	});
+	invalidateSettings();
+	const enabled = await enablePrivateSync(credential);
+	return enabled.ok ? {ok: true, ...(await privateLockInfo())} : enabled;
 }
 
 /**
@@ -1583,21 +1715,35 @@ async function protectPrivateSync(credential: Credential) {
 }
 
 /**
-After a new PIN or password: the server's copy of the sync key is wrapped with it instead. Best effort.
+After a new PIN or password: the server's copy of the sync key is wrapped with it instead. Throws when the server could
+not take it, so the caller can undo the change and the library never has one PIN and the server another.
 */
 async function rewrapPrivateSyncKey(credential: Credential) {
 	const regular = await regularSyncConfig();
 	const key = parsePrivateSyncKey(await privateRead(PRIVATE_SYNC_KEY_KEY));
-	if (!privateSync?.enabled || !regular || !key) {
+	if (!regular || !key || (await privateRead(PRIVATE_SYNC_ON_KEY)) !== true) {
 		return;
 	}
 
-	const next = await rewrapSyncKey(key, credential);
-	if (
-		await storeServerKey(privateSyncTarget(regular), next, serverKeyText(key))
-	) {
-		await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: next}));
+	const target = privateSyncTarget(regular);
+	const server = parseServerKey(await serverField(target, '/v1/key', 'key'));
+	if (server?.id !== key.id) {
+		throw new Error(REWRAP_FAILED_MESSAGE);
 	}
+
+	const next = await rewrapSyncKey(key, credential);
+	// Another browser may have rewrapped the same key already, so the server's copy is what the swap checks.
+	if (
+		!(await storeServerKey(
+			target,
+			next,
+			serverKeyText({...key, wrapped: server.wrapped}),
+		))
+	) {
+		throw new Error(REWRAP_FAILED_MESSAGE);
+	}
+
+	await mutate(async () => privateWrite({[PRIVATE_SYNC_KEY_KEY]: next}));
 }
 
 /**
@@ -9069,6 +9215,9 @@ const PRIVATE_LOCK_OPEN_MESSAGES = new Set<string>([
 	'UNLOCK_PRIVATE',
 	'LOCK_PRIVATE',
 	'TOUCH_PRIVATE_LOCK',
+	'RESET_PRIVATE_LIBRARY',
+	'GET_PRIVATE_SERVER',
+	'JOIN_PRIVATE_SERVER',
 	'HANDOFF_NEW_TAB',
 	'PRIVATE_SYNC_STATUS',
 ]);
@@ -9159,15 +9308,31 @@ async function handlePrivateLockMessage(
 				}
 
 				const {kind, credential, current} = message;
+				const before = parseLockRecord(
+					(await chrome.storage.local.get([LOCK_RECORD_KEY]))[LOCK_RECORD_KEY],
+				);
 				await mutate(async () => {
 					await privateLock.changeCredential(current, {
 						kind,
 						value: credential,
 					});
 				});
-				void rewrapPrivateSyncKey({kind, value: credential}).catch(
-					() => undefined,
-				);
+				try {
+					await rewrapPrivateSyncKey({kind, value: credential});
+				} catch {
+					// The server keeps the old PIN or password, so the library goes back to it.
+					if (before) {
+						await mutate(async () => {
+							await privateLock.changeCredential(credential, {
+								kind: before.kind,
+								value: current,
+							});
+						});
+					}
+
+					return {ok: false, error: REWRAP_FAILED_MESSAGE};
+				}
+
 				break;
 			}
 
@@ -9176,9 +9341,46 @@ async function handlePrivateLockMessage(
 					return {ok: false, error: 'Enter your PIN or password.'};
 				}
 
+				// Only while private sync is on: it needs the PIN or password. A key left from a server that is gone does not count.
+				const syncOn =
+					(await privateRead(PRIVATE_SYNC_ON_KEY).catch(() => undefined)) ===
+						true && (await regularSyncConfig()) !== undefined;
+				if (syncOn) {
+					return {
+						ok: false,
+						error:
+							'Turn off private sync under Sync first. It needs this PIN or password to encrypt what it sends.',
+					};
+				}
+
 				const {credential} = message;
 				await mutate(async () => {
 					await privateLock.disable(credential);
+				});
+				invalidateSettings();
+				break;
+			}
+
+			case 'RESET_PRIVATE_LIBRARY': {
+				if (privateConfig.mode !== 'saved') {
+					return {
+						ok: false,
+						error: 'Only a separate saved private library can be erased.',
+					};
+				}
+
+				// Stops private sync first, so nothing is written back while the library is emptied. The server's copy stays.
+				privateSync?.stop();
+				privateSync = undefined;
+				await privateLock.lock();
+				await mutate(async () => {
+					const stored = await chrome.storage.local.get(null);
+					await chrome.storage.local.remove(
+						Object.keys(stored).filter(
+							(key) =>
+								key.startsWith(PRIVATE_PREFIX) && key !== PRIVATE_CONFIG_KEY,
+						),
+					);
 				});
 				invalidateSettings();
 				break;
@@ -9286,12 +9488,11 @@ async function handlePrivateSyncMessage(
 			}
 
 			case 'PRIVATE_SYNC_DISABLE': {
-				if (privateSync) {
-					await privateSync.disconnect();
-					await mutate(async () => {
-						await rawLibrary.remove([PRIVATE_SYNC_KEY_KEY]);
-					});
-				}
+				await privateSync?.disconnect();
+				// Without a live client (no server any more, say) the key and the switch still go.
+				await mutate(async () => {
+					await rawLibrary.remove([PRIVATE_SYNC_KEY_KEY, PRIVATE_SYNC_ON_KEY]);
+				});
 
 				await wakeSync();
 				break;
@@ -9841,8 +10042,19 @@ async function handleMessage(
 		case 'ENABLE_PRIVATE_LOCK':
 		case 'CHANGE_PRIVATE_LOCK_CREDENTIAL':
 		case 'REMOVE_PRIVATE_LOCK':
-		case 'SET_PRIVATE_LOCK_IDLE': {
+		case 'SET_PRIVATE_LOCK_IDLE':
+		case 'RESET_PRIVATE_LIBRARY': {
 			return handlePrivateLockMessage(message);
+		}
+
+		case 'GET_PRIVATE_SERVER': {
+			return {ok: true, privateServer: await privateServerInfo()};
+		}
+
+		case 'JOIN_PRIVATE_SERVER': {
+			return typeof message.credential === 'string' && message.credential !== ''
+				? joinPrivateServer(message.credential)
+				: {ok: false, error: 'Enter the PIN or password.'};
 		}
 
 		case 'SET_PRIVATE_CONFIG': {

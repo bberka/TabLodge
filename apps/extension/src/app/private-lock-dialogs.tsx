@@ -380,7 +380,8 @@ export function RemoveDialog({
 					<DialogDescription>
 						This decrypts the private library on this device. Anyone with access
 						to your browser profile can read it again. Your sessions and
-						bookmarks stay.
+						bookmarks stay. Private windows then ask for a new PIN or password,
+						or you can switch to another library.
 					</DialogDescription>
 				</DialogHeader>
 				<form
@@ -425,6 +426,205 @@ export function RemoveDialog({
 				</form>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+export function ResetDialog({
+	open,
+	onOpenChange,
+	onDone,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	onDone: (info: PrivateLockInfo) => void;
+}) {
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState('');
+	const submit = async () => {
+		if (busy) {
+			return;
+		}
+
+		setBusy(true);
+		setError('');
+		const result = await send('RESET_PRIVATE_LIBRARY');
+		setBusy(false);
+		if (result.ok) {
+			onDone(result);
+			return;
+		}
+
+		setError(result.error);
+	};
+
+	return (
+		<Dialog
+			open={open}
+			onOpenChange={(next) => {
+				if (busy) {
+					return;
+				}
+
+				onOpenChange(next);
+				if (!next) {
+					setError('');
+				}
+			}}
+		>
+			<DialogContent size="md">
+				<DialogHeader>
+					<DialogTitle>Erase private data</DialogTitle>
+					<DialogDescription>
+						This deletes every session, bookmark, setting, and the PIN or
+						password of the separate private library on this device, then asks
+						you to set a new PIN or password. Nothing can bring it back. Regular
+						windows and the sync server are not touched.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogBody>
+					{error && (
+						<p role="alert" className="text-sm text-destructive">
+							{error}
+						</p>
+					)}
+				</DialogBody>
+				<DialogFooter>
+					<Button
+						type="button"
+						variant="outline"
+						disabled={busy}
+						onClick={() => onOpenChange(false)}
+					>
+						Cancel
+					</Button>
+					<Button
+						type="button"
+						variant="destructive"
+						disabled={busy}
+						onClick={() => void submit()}
+					>
+						{busy ? 'Erasing…' : 'Erase private data'}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+/**
+Shown in place of a private page while the saved library has no PIN or password: the library does not open until one is set.
+*/
+export function SetLockForm({
+	onDone,
+}: {
+	onDone: (info: PrivateLockInfo) => void;
+}) {
+	const [draft, setDraft] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState('');
+	const problem = passcodeDraftProblem(draft);
+	const submit = async () => {
+		if (busy || problem !== null) {
+			return;
+		}
+
+		setBusy(true);
+		setError('');
+		const result = await send('ENABLE_PRIVATE_LOCK', {
+			kind: draft.kind,
+			credential: draft.value,
+			idleMinutes: DEFAULT_IDLE_MINUTES,
+		});
+		setBusy(false);
+		if (result.ok) {
+			setDraft(EMPTY_PASSCODE_DRAFT);
+			onDone(result);
+			return;
+		}
+
+		setError(result.error);
+	};
+
+	return (
+		<form
+			className="grid gap-4"
+			onSubmit={(event) => {
+				event.preventDefault();
+				void submit();
+			}}
+		>
+			<PasscodeSetup draft={draft} disabled={busy} onChange={setDraft} />
+			{draft.kind === 'pin' && (
+				<p className="text-xs leading-5 text-muted-foreground">
+					Short PINs are weak against copied profile files. Choose a password
+					for anything sensitive.
+				</p>
+			)}
+			{error && (
+				<p role="alert" className="text-sm text-destructive">
+					{error}
+				</p>
+			)}
+			<Button type="submit" disabled={busy || problem !== null}>
+				<Lock aria-hidden="true" />
+				{busy ? 'Encrypting…' : 'Set and open'}
+			</Button>
+		</form>
+	);
+}
+
+/**
+Takes the PIN or password the sync server's private library uses as this library's lock.
+*/
+export function JoinServerForm({
+	onDone,
+}: {
+	onDone: (info: PrivateLockInfo) => void;
+}) {
+	const [credential, setCredential] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState('');
+	const submit = async () => {
+		if (busy || credential.length === 0) {
+			return;
+		}
+
+		setBusy(true);
+		setError('');
+		const result = await send('JOIN_PRIVATE_SERVER', {credential});
+		setBusy(false);
+		if (result.ok) {
+			setCredential('');
+			onDone(result);
+			return;
+		}
+
+		setError(result.error);
+		setCredential('');
+	};
+
+	return (
+		<form
+			className="grid gap-4"
+			onSubmit={(event) => {
+				event.preventDefault();
+				void submit();
+			}}
+		>
+			<PasscodeEntry
+				value={credential}
+				error={error}
+				disabled={busy}
+				onChange={(value) => {
+					setCredential(value);
+					setError('');
+				}}
+			/>
+			<Button type="submit" disabled={busy || credential.length === 0}>
+				<Lock aria-hidden="true" />
+				{busy ? 'Joining…' : 'Use it and open'}
+			</Button>
+		</form>
 	);
 }
 

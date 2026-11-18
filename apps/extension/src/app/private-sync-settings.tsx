@@ -141,11 +141,11 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 	};
 
 	const {status} = info;
-	const encryption = info.encrypted
-		? 'Encrypted with a PIN or password before it leaves this browser. Other browsers need the same one to read it.'
-		: info.lock
-			? 'Encrypted with this private library’s PIN or password before it leaves this browser.'
-			: 'Not encrypted. Set a PIN or password under Private windows to encrypt it before it leaves this browser.';
+	const encryption = info.lock
+		? 'Encrypted with this private library’s PIN or password before it leaves this browser. Other browsers need the same one to read it.'
+		: info.encrypted
+			? 'Encrypted with a PIN or password before it leaves this browser.'
+			: 'Set a PIN or password under Private windows first. It encrypts what syncs.';
 	const Icon = info.encrypted || info.lock ? Lock : LockOpen;
 	const server = info.server?.replace(/^https?:\/\//, '') ?? '';
 	return (
@@ -167,7 +167,7 @@ export function PrivateSyncSettings({showStatus}: {showStatus: ShowStatus}) {
 					id={switchId}
 					aria-describedby={helpId}
 					checked={status.connected}
-					disabled={busy}
+					disabled={busy || (!info.lock && !status.connected)}
 					onCheckedChange={(checked) => {
 						void (checked ? enable() : disable());
 					}}

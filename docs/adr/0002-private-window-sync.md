@@ -20,3 +20,7 @@ Private windows can use the regular library, a separate saved library, or a sepa
 * A PIN is a weak secret against whoever holds the server's data, who can try every PIN offline against the wrapped key. The guide and privacy notes say so and suggest a password.
 * Forgetting the PIN or password on every browser loses access to the server's copy. Each browser's own private library is unaffected.
 * Private changes reach another browser only while a private window is open there.
+
+## Amendment, 2026-11-18
+
+The lock is now required for a separate saved library, and it is the only secret: private sync refuses a library without a lock, creates and joins the sync key only with the lock's PIN or password, and rewraps the server's key before a PIN change is accepted. The "becoming encrypted" path stays only for libraries that synced before this.

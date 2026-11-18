@@ -9,20 +9,23 @@ import {
 	useState,
 	type ReactNode,
 } from 'react';
-import {Lock, LockOpen, ShieldAlert} from 'lucide-react';
+import {Lock, LockOpen, ShieldAlert, Trash2} from 'lucide-react';
 import {Button, IconTooltip} from '../shared/ui';
 import {
 	LOCK_ACTIVITY_KEY,
 	LOCK_RECORD_KEY,
 	LOCK_SESSION_KEY,
 } from '../shared/private-lock';
-import type {PrivateLockInfo} from '../shared/types';
+import type {PrivateLockInfo, PrivateServerInfo} from '../shared/types';
 import {send} from './message-client';
 import {
 	ChangeDialog,
 	EnableDialog,
 	IdleSelect,
 	RemoveDialog,
+	JoinServerForm,
+	ResetDialog,
+	SetLockForm,
 } from './private-lock-dialogs';
 import type {ShowStatus} from './common';
 import {PasscodeEntry} from './passcode-fields';
@@ -138,6 +141,7 @@ function LockScreen({
 	const [credential, setCredential] = useState('');
 	const [error, setError] = useState('');
 	const [busy, setBusy] = useState(false);
+	const [erasing, setErasing] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const headingId = useId();
 	const damaged = info.state === 'damaged';
@@ -210,6 +214,120 @@ function LockScreen({
 						</Button>
 					</form>
 				)}
+				<Button
+					type="button"
+					variant="link"
+					className="justify-self-start px-0"
+					onClick={() => setErasing(true)}
+				>
+					Forgot it? Erase private data…
+				</Button>
+				<ResetDialog
+					open={erasing}
+					onOpenChange={setErasing}
+					onDone={(next) => {
+						setErasing(false);
+						onUnlocked(next);
+					}}
+				/>
+			</section>
+		</main>
+	);
+}
+
+/**
+Asks for a first PIN or password before the saved separate library opens. When the sync server already holds a private
+library, the first choice is its PIN or password, so every browser ends up with one. The only other ways past are to
+keep the library on this device with its own PIN or password, or to stop using a separate saved library.
+*/
+function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
+	const headingId = useId();
+	const [error, setError] = useState('');
+	const [server, setServer] = useState<PrivateServerInfo>();
+	const [deviceOnly, setDeviceOnly] = useState(false);
+	useEffect(() => {
+		void send('GET_PRIVATE_SERVER').then((result) => {
+			setServer(
+				result.ok ? result.privateServer : {connected: false, hasKey: false},
+			);
+		});
+	}, []);
+	if (!server) {
+		return (
+			<p className="sr-only" role="status">
+				Loading private {PROJECT.name}…
+			</p>
+		);
+	}
+
+	const switchToRegular = async () => {
+		const result = await send('SET_PRIVATE_CONFIG', {mode: 'shared'});
+		if (result.ok) {
+			const lock = await send('GET_PRIVATE_LOCK');
+			if (lock.ok) {
+				onDone(lock);
+			}
+		} else {
+			setError(result.error);
+		}
+	};
+
+	const fromServer = server.hasKey && !deviceOnly;
+	return (
+		<main
+			className="grid min-h-screen place-items-center p-4"
+			aria-labelledby={headingId}
+		>
+			<section className="grid w-full max-w-sm gap-4 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-xs">
+				<div className="grid gap-2">
+					<Lock className="h-6 w-6 text-primary" aria-hidden="true" />
+					<h1 id={headingId} className="text-lg font-semibold">
+						{fromServer
+							? 'Use your sync server’s PIN'
+							: 'Set a PIN or password'}
+					</h1>
+					<p className="text-sm text-muted-foreground">
+						{fromServer
+							? 'Your sync server already holds a private library. Enter its PIN or password once: it becomes this library’s lock, and the server’s data joins what is here.'
+							: 'The separate private library is encrypted on this device and opens only with a PIN or password. Nothing can recover a lost one. It also protects what private sync sends.'}
+					</p>
+					{server.hasKey && deviceOnly && (
+						<p className="text-sm text-muted-foreground">
+							Kept only on this device, this library does not match the one on
+							your server. Syncing it later needs the server’s PIN or password.
+						</p>
+					)}
+				</div>
+				{fromServer ? (
+					<JoinServerForm onDone={onDone} />
+				) : (
+					<SetLockForm onDone={onDone} />
+				)}
+				{server.hasKey && (
+					<Button
+						type="button"
+						variant="link"
+						className="justify-self-start px-0"
+						onClick={() => setDeviceOnly(!deviceOnly)}
+					>
+						{deviceOnly
+							? 'Use the PIN from your sync server'
+							: 'Keep only on this device instead'}
+					</Button>
+				)}
+				{error && (
+					<p role="alert" className="text-sm text-destructive">
+						{error}
+					</p>
+				)}
+				<Button
+					type="button"
+					variant="link"
+					className="justify-self-start px-0"
+					onClick={() => void switchToRegular()}
+				>
+					Use the regular library instead
+				</Button>
 			</section>
 		</main>
 	);
@@ -222,7 +340,8 @@ Regular windows pass straight through. The children unmount on lock, so nothing 
 export function PrivateLockGate({children}: {children: ReactNode}) {
 	const inPrivate = privateWindow();
 	const {info, error, refresh, setInfo} = usePrivateLockInfo();
-	const locked = Boolean(info?.enabled && info.locked);
+	// The set-a-PIN screen replaces the page like the lock screen, so focus returns the same way when it goes.
+	const locked = Boolean((info?.enabled && info.locked) || info?.needsLock);
 	const wasLockedRef = useRef(false);
 	useActivityTouch(inPrivate && info?.enabled === true && !locked);
 	useEffect(() => {
@@ -287,6 +406,10 @@ export function PrivateLockGate({children}: {children: ReactNode}) {
 		);
 	}
 
+	if (info.needsLock) {
+		return <SetLockScreen onDone={setInfo} />;
+	}
+
 	return info.enabled && info.locked ? (
 		<LockScreen info={info} onUnlocked={setInfo} />
 	) : (
@@ -317,7 +440,7 @@ export function PrivateLockButton() {
 	);
 }
 
-type DialogName = 'enable' | 'change' | 'remove';
+type DialogName = 'enable' | 'change' | 'remove' | 'reset';
 
 export function PrivateLockSettings({
 	showStatus,
@@ -461,6 +584,10 @@ export function PrivateLockSettings({
 								<LockOpen aria-hidden="true" />
 								Remove lock…
 							</Button>
+							<Button variant="outline" onClick={() => setDialog('reset')}>
+								<Trash2 aria-hidden="true" />
+								Erase private data…
+							</Button>
 						</div>
 					</div>
 				</div>
@@ -476,6 +603,11 @@ export function PrivateLockSettings({
 						open={dialog === 'change'}
 						onOpenChange={(open) => setDialog(open ? 'change' : undefined)}
 						onDone={finished('PIN or password changed.')}
+					/>
+					<ResetDialog
+						open={dialog === 'reset'}
+						onOpenChange={(open) => setDialog(open ? 'reset' : undefined)}
+						onDone={finished('Private data erased.')}
 					/>
 					<RemoveDialog
 						open={dialog === 'remove'}
