@@ -1185,11 +1185,16 @@ try {
 	await privatePage
 		.getByText('does not match the one on your server', {exact: false})
 		.waitFor();
-	await captureEvidence(
-		privatePage,
-		privatePage.locator('main'),
-		'lock-device-only',
-	);
+	for (const theme of ['light', 'dark'] as const) {
+		await setPrivatePageTheme(normal, privatePage, theme);
+		await captureEvidence(
+			privatePage,
+			privatePage.locator('main'),
+			`lock-device-only-${theme}`,
+		);
+		assert.deepEqual(await axeViolations(privatePage, axeSource), []);
+	}
+
 	await normal.evaluate(async () => {
 		await (
 			globalThis as typeof globalThis & {
