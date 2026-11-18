@@ -50,6 +50,13 @@ export async function changeTrash(
 	}
 }
 
+/**
+Waits for the trash changes already queued, so a caller that is about to delete the trash is not overtaken by one.
+*/
+export async function settleTrash(): Promise<void> {
+	await queue;
+}
+
 export async function readTrash(
 	name: TrashName,
 	retentionDays: number,

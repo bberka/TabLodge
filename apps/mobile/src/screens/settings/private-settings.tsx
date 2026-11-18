@@ -1,17 +1,12 @@
 import {Text} from 'react-native';
-import {confirm} from '../../ui/dialog';
 import {lockNow, PrivateSwitch} from '../../private/private-switch';
 import {
 	PRIVATE_LOCK_MINUTES,
 	setPreferences,
 	usePreferences,
 } from '../../settings/preferences';
-import {
-	removePrivate,
-	usePrivateState,
-	usePrivateStatus,
-} from '../../private/private-library';
-import {openPrivateSheet} from '../../private/private-sheets';
+import {usePrivateState, usePrivateStatus} from '../../private/private-library';
+import {confirmErase, openPrivateSheet} from '../../private/private-sheets';
 import {useSyncStatus} from '../../library/library-store';
 import {useColors} from '../../ui/theme';
 import {Button} from '../../ui/widgets';
@@ -30,12 +25,12 @@ export function PrivateCard() {
 	const {connected} = useSyncStatus();
 	const prefs = usePreferences();
 	const description = state.exists
-		? state.locked
-			? 'Locked. Open it with its PIN or password.'
-			: state.lockedWith
-				? 'Open and protected by a PIN or password.'
-				: 'Open, with no PIN or password.'
-		: 'A library of its own on this phone that works without a server.';
+		? state.needsPin
+			? 'Needs a PIN or password before it opens.'
+			: state.locked
+				? 'Locked. Open it with its PIN or password.'
+				: 'Open and protected by a PIN or password.'
+		: 'A library of its own on this phone that works without a server, opened with a PIN or password.';
 	return (
 		<SettingsCard
 			section={SECTIONS.private}
@@ -116,9 +111,9 @@ export function PrivateCard() {
 					/>
 				</>
 			)}
-			{state.exists && !state.locked && !state.lockedWith && (
+			{state.needsPin && (
 				<Button
-					label="Add a PIN or password"
+					label="Set a PIN or password"
 					icon="lock-closed-outline"
 					kind="plain"
 					onPress={() => {
@@ -126,7 +121,7 @@ export function PrivateCard() {
 					}}
 				/>
 			)}
-			{state.exists && !state.locked && state.lockedWith && (
+			{state.exists && !state.locked && !state.needsPin && (
 				<>
 					<Button
 						label="Lock now"
@@ -140,14 +135,6 @@ export function PrivateCard() {
 						kind="plain"
 						onPress={() => {
 							openPrivateSheet('change');
-						}}
-					/>
-					<Button
-						label="Remove the PIN or password"
-						icon="lock-open-outline"
-						kind="plain"
-						onPress={() => {
-							openPrivateSheet('remove');
 						}}
 					/>
 				</>
@@ -164,16 +151,11 @@ export function PrivateCard() {
 			)}
 			{state.exists && (
 				<Button
-					label="Delete from this phone"
+					label="Erase private data"
 					icon="trash-outline"
 					kind="danger"
 					onPress={() => {
-						confirm(
-							'Delete the private library from this phone?',
-							'Its bookmarks and sessions and its lock are removed from this phone. Your server keeps its copy, if it has one, and you can bring it back from there.',
-							{label: 'Delete', destructive: true},
-							() => void removePrivate(),
-						);
+						confirmErase();
 					}}
 				/>
 			)}

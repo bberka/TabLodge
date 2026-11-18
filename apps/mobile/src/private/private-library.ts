@@ -1,6 +1,6 @@
 /*
 The private windows' library on this phone: a library of its own that is edited like the regular one, with or without
-a server. It can have a PIN or password. The data key is random; only a copy of it wrapped by the PIN is kept (the same
+a server. It has a PIN or password (one from an earlier version may have none, and does not open until it gets one). The data key is random; only a copy of it wrapped by the PIN is kept (the same
 envelope the extension uses), and the unwrapped key lives in memory while the library is unlocked. When a server is
 connected the library syncs with the server's `/private` library, sealing every value with that key, as the extension
 does (docs/adr/0002-private-window-sync.md). The library itself is stored on the phone unsealed, inside the app's
@@ -51,7 +51,7 @@ import {
 } from '../platform/storage';
 import {setView} from '../library/view';
 import {PRIVATE_TRASH_KEY} from '../library/trash';
-import {syncedTrash} from '../library/trash-storage';
+import {settleTrash, syncedTrash} from '../library/trash-storage';
 import {dropSafetyCopy} from '../transfer/restore';
 
 const LIBRARY_KEY = 'tablodge.private.library';
@@ -59,7 +59,12 @@ const ON_KEY = 'tablodge.private.on';
 const LOCK_KEY = 'tablodge.private.lock';
 // Where the data key waits, in the Android keystore, after the PIN was removed. See `Kept`.
 const KEPT_KEY = 'tablodge.private.keptKey';
+// Written before an erase deletes anything and removed when it is done, so an erase that stops part way is finished later.
+const ERASING_KEY = 'tablodge.private.erasing';
 const prefix = (key: string) => `tablodge.private.${key}`;
+// A PIN is 4 to 8 digits; the server's key does not say which kind it was made with.
+const credentialKindOf = (value: string): CredentialKind =>
+	/^\d{4,8}$/.test(value) ? 'pin' : 'password';
 
 /**
 What protects the library: the data key, wrapped by a PIN or password. `kind` is missing when the key came from the
@@ -88,6 +93,10 @@ let client: ReturnType<typeof createSyncClient> | undefined;
 let exists = false;
 let lock: Lock | undefined;
 let kept: Kept | undefined;
+// A join installed the server's lock but did not finish writing it, so the next one checks the credential again.
+let adopting = false;
+// An erase was started and has not finished: the library is out of reach and nothing syncs until it does.
+let erasing = false;
 // The data key, base64, while a protected library is unlocked.
 let unlockedKey: string | undefined;
 // The key values are sealed with on the server, for the current round; none while the server's library is not sealed.
@@ -113,12 +122,17 @@ export type PrivateState = {
 	The kind of lock, or null for none. A lock that came from the server does not say, and reads as a password.
 	*/
 	lockedWith: CredentialKind | null;
+	/**
+	The library exists with no PIN or password, as one from an earlier version can. It does not open until one is set.
+	*/
+	needsPin: boolean;
 };
 
 const stateOf = (): PrivateState => ({
 	exists,
 	locked: exists && lock !== undefined && unlockedKey === undefined,
 	lockedWith: lock ? (lock.kind ?? 'password') : null,
+	needsPin: exists && lock === undefined,
 });
 
 let state: PrivateState = stateOf();
@@ -128,7 +142,8 @@ const refreshState = () => {
 	if (
 		next.exists !== state.exists ||
 		next.locked !== state.locked ||
-		next.lockedWith !== state.lockedWith
+		next.lockedWith !== state.lockedWith ||
+		next.needsPin !== state.needsPin
 	) {
 		state = next;
 	}
@@ -158,7 +173,23 @@ const parseLock = (value: unknown): Lock | undefined =>
 			}
 		: undefined;
 
+// The steps that change what the library is (set up, join, erase) run one at a time, so none can start between the
+// checks and the writes of another.
+let queue: Promise<unknown> = Promise.resolve();
+const serial = async <T>(step: () => Promise<T>): Promise<T> => {
+	const run = queue.then(step, step);
+	queue = run.then(
+		() => undefined,
+		() => undefined,
+	);
+	return run;
+};
+
+// Counts changes to the lock and the library's existence, so a slow join can tell the library changed under it.
+let epoch = 0;
+
 const setLock = async (next: Lock | undefined) => {
+	epoch += 1;
 	lock = next;
 	await (next ? writeJson(LOCK_KEY, next) : removeKeys([LOCK_KEY]));
 };
@@ -178,9 +209,32 @@ async function target(): Promise<{url: string; token: string} | undefined> {
 const serverKeyText = (held: {id: string; wrapped: string}) =>
 	JSON.stringify({v: 1, id: held.id, wrapped: held.wrapped});
 
-const codec: SyncCodec = {
-	async prepare(call) {
+// The sync client that is running now, by number. A round of a client that was stopped (the library locked, was erased,
+// or took another lock) must neither send, read, nor write anything more, whatever state the key is in.
+let activeClient = 0;
+let clientCount = 0;
+
+const STOPPED = 'Private sync stopped.';
+
+const baseCodec: Omit<SyncCodec, 'prepare'> & {
+	/**
+	`live` throws once this round's client was stopped; it is called after every awaited request, before the lock is touched.
+	*/
+	prepare(
+		call: (path: string, init?: RequestInit) => Promise<unknown>,
+		live: () => void,
+	): Promise<void>;
+} = {
+	async prepare(call, live) {
+		// A lock write from here waits its turn in the queue and checks again there, so one that comes after an erase or an
+		// adoption writes nothing, and one started before them finishes before they run.
+		const writeLock = async (next: Lock) =>
+			serial(async () => {
+				live();
+				await setLock(next);
+			});
 		const body = await call('/v1/key');
+		live();
 		const stored = isRecord(body) ? body.key : undefined;
 		const server = parseServerKey(stored);
 		if (stored !== null && stored !== undefined && !server) {
@@ -199,8 +253,9 @@ const codec: SyncCodec = {
 					method: 'POST',
 					body: JSON.stringify({key: serverKeyText(held), previous: null}),
 				});
+				live();
 				if (lock?.unsent) {
-					await setLock({...lock, unsent: undefined});
+					await writeLock({...lock, unsent: undefined});
 				}
 
 				syncKey = unlockedKey;
@@ -225,17 +280,20 @@ const codec: SyncCodec = {
 						method: 'POST',
 						body: JSON.stringify({key: serverKeyText(lock), previous: stored}),
 					});
-					await setLock({...lock, unsent: undefined});
+					live();
+					await writeLock({...lock, unsent: undefined});
 				} catch (error) {
 					if (!(error instanceof SyncError) || error.kind !== 'server') {
 						throw error;
 					}
 
-					await setLock({id: lock.id, wrapped: server.wrapped});
+					// A stopped round throws here and leaves the lock alone.
+					live();
+					await writeLock({id: lock.id, wrapped: server.wrapped});
 				}
 			} else if (lock) {
 				// Another device changed its PIN or password and rewrapped the same key.
-				await setLock({...lock, wrapped: server.wrapped});
+				await writeLock({...lock, wrapped: server.wrapped});
 			} else if (kept) {
 				kept = {...kept, wrapped: server.wrapped};
 				await writeJson(KEPT_KEY, kept);
@@ -245,6 +303,11 @@ const codec: SyncCodec = {
 		syncKey = unlockedKey;
 	},
 	async seal(change) {
+		if (!syncKey && (lock || kept)) {
+			// A round that outlived the key (the library locked, or took another lock) must not send plain records.
+			throw new SyncError('key', NEEDS_KEY_MESSAGE);
+		}
+
 		if (!syncKey || change.deleted) {
 			return change;
 		}
@@ -281,6 +344,30 @@ const codec: SyncCodec = {
 };
 
 function createClient() {
+	clientCount += 1;
+	const mine = clientCount;
+	activeClient = mine;
+	// Throws once this client was stopped, so a round that outlived it stops instead of sending or writing.
+	const live = () => {
+		if (activeClient !== mine) {
+			throw new SyncError('key', STOPPED);
+		}
+	};
+
+	const codec: SyncCodec = {
+		async prepare(call) {
+			live();
+			return baseCodec.prepare(call, live);
+		},
+		async seal(change) {
+			live();
+			return baseCodec.seal(change);
+		},
+		async open(change) {
+			live();
+			return baseCodec.open(change);
+		},
+	};
 	return createSyncClient({
 		async get(key) {
 			return key === SYNC_CONFIG_KEY ? target() : readJson(prefix(key));
@@ -290,22 +377,47 @@ function createClient() {
 				return;
 			}
 
+			live();
 			await writeJson(prefix(key), value);
 			if (key === SYNC_STATUS_KEY) {
 				void refreshPrivateStatus();
 			}
 		},
 		async remove(keys) {
+			live();
 			await removeKeys(
 				keys.filter((key) => key !== SYNC_CONFIG_KEY).map((key) => prefix(key)),
 			);
 		},
 		fetch: async (url, init) => fetch(url, init),
 		openSocket: (url) => new WebSocket(url),
-		mutate: core.mutate,
+		mutate: async (work) =>
+			core.mutate(async () => {
+				live();
+				return work();
+			}),
 		readLibrary: async () => core.store,
-		trash: syncedTrash('private', () => core.store.settings.trashRetentionDays),
-		writeLibrary: core.write,
+		trash: (() => {
+			const trash = syncedTrash(
+				'private',
+				() => core.store.settings.trashRetentionDays,
+			);
+			return {
+				async read() {
+					live();
+					return trash.read();
+				},
+				async apply(...args: Parameters<typeof trash.apply>) {
+					// After the library write before it, which an erase may have overtaken.
+					live();
+					return trash.apply(...args);
+				},
+			};
+		})(),
+		async writeLibrary(store) {
+			live();
+			return core.write(store);
+		},
 		async backup() {},
 		codec,
 		randomId: () => randomUUID(),
@@ -322,7 +434,14 @@ export async function refreshPrivateStatus(): Promise<void> {
 Starts syncing when the library is open and a server is connected; the client does nothing without a connection.
 */
 function runClient(): void {
-	if (client || !exists || state.locked || !getPreferences().syncPrivate) {
+	// A library that has no PIN or password yet does not sync: what it sends would not be sealed.
+	if (
+		client ||
+		!exists ||
+		state.locked ||
+		state.needsPin ||
+		!getPreferences().syncPrivate
+	) {
 		return;
 	}
 
@@ -331,6 +450,7 @@ function runClient(): void {
 }
 
 function stopClient(): void {
+	activeClient = 0;
 	client?.stop();
 	client = undefined;
 	syncKey = undefined;
@@ -340,7 +460,22 @@ function stopClient(): void {
 Loads the library and its lock and, when it is open, resumes syncing. Call at startup.
 */
 export async function startPrivate(): Promise<void> {
-	exists = (await readJson(ON_KEY)) === true;
+	erasing = (await readJson(ERASING_KEY)) === true;
+	if (erasing) {
+		// An erase the person confirmed stopped part way: it is finished now, or the library stays out of reach.
+		await eraseSteps().catch(() => undefined);
+	}
+
+	exists = !erasing && (await readJson(ON_KEY)) === true;
+	if (erasing) {
+		exists = false;
+		lock = undefined;
+		kept = undefined;
+		refreshState();
+		await refreshPrivateStatus();
+		return;
+	}
+
 	lock = parseLock(await readJson(LOCK_KEY));
 	if (!lock) {
 		// An earlier version kept the server's key here, unwrapped, after the PIN was asked once. Keep its wrapped copy as
@@ -374,7 +509,8 @@ export async function startPrivate(): Promise<void> {
 /**
 Whether the private library can be shown now: it exists and is not locked.
 */
-export const isPrivateOpen = (): boolean => exists && !state.locked;
+export const isPrivateOpen = (): boolean =>
+	exists && !state.locked && !state.needsPin;
 
 /**
 Whether the private library is open and has a PIN or password to lock it with, so locking it does something.
@@ -385,52 +521,53 @@ export const canLockPrivate = (): boolean =>
 export const privateExists = (): boolean => exists;
 
 /**
-Makes the private library on this phone, empty, with a PIN or password when one is given. It works without a server and
-syncs once one is connected.
+Makes the private library on this phone, empty, with its PIN or password. It works without a server and syncs once one
+is connected. Every screen passes a credential; none is accepted only so a library from an earlier version can be built
+in tests.
 */
 export async function setupPrivate(credential?: Credential): Promise<void> {
-	core.load(emptyStore(Date.now()));
-	await core.write(core.store);
-	exists = true;
-	await writeJson(ON_KEY, true);
-	await (credential ? protect(credential) : setLock(undefined));
+	await serial(async () => {
+		await settleErase();
+		core.load(emptyStore(Date.now()));
+		await core.write(core.store);
+		exists = true;
+		await writeJson(ON_KEY, true);
+		await (credential ? protect(credential) : setLock(undefined));
+	});
 	refreshState();
 	runClient();
 	await refreshPrivateStatus();
 }
 
 async function protect(credential: Credential): Promise<void> {
-	// A library whose PIN was removed takes the same key back, so the server's copy stays readable.
-	const key = kept?.raw ?? generateKey();
-	await setLock({
-		id: kept?.id ?? randomUUID(),
-		wrapped: await wrapKey(key, credential.value),
+	// Always a key and a lock of its own. A key a library kept from the server is tied to the server's credential, which a
+	// PIN chosen here must not replace: joining the server's library is what takes that credential, after checking it.
+	const key = generateKey();
+	const wrapped = await wrapKey(key, credential.value);
+	const hadKept = kept !== undefined;
+	const installing = setLock({
+		id: randomUUID(),
+		wrapped,
 		kind: credential.kind,
-		...(kept && {unsent: true as const}),
 	});
 	unlockedKey = key;
-	if (!kept) {
-		return;
-	}
-
 	kept = undefined;
-	await removeKeys([KEPT_KEY]);
+	await installing;
+	if (hadKept) {
+		await removeKeys([KEPT_KEY]);
+	}
 }
 
 /**
 Puts a PIN or password on a library that has none. The next sync gives the server the same lock.
 */
 export async function protectPrivate(credential: Credential): Promise<void> {
-	const again = kept !== undefined;
-	await protect(credential);
+	await serial(async () => protect(credential));
 	stopClient();
 	refreshState();
 	runClient();
-	if (!again) {
-		// What this library already sent the server is plain there. Every record goes again, sealed with the new key.
-		await client?.resendAll().catch(() => undefined);
-	}
-
+	// What this library already sent the server is plain there. Every record goes again, sealed with the new key.
+	await client?.resendAll().catch(() => undefined);
 	await refreshPrivateStatus();
 }
 
@@ -448,53 +585,41 @@ export async function changePrivateLock(
 		return 'error';
 	}
 
+	const outcome: {value: ChangeResult} = {value: 'error'};
 	try {
-		const key = await unwrapKey(lock.wrapped, current);
-		if (key === null) {
-			return 'wrong';
-		}
+		// All of it in the queue, checking the lock again inside: a join, an erase or a setup that ran first leaves a
+		// different lock, and the new wrapper must not carry the key of the old one.
+		await serial(async () => {
+			const held = lock;
+			if (!held || !unlockedKey) {
+				return;
+			}
 
-		await setLock({
-			id: lock.id,
-			wrapped: await wrapKey(key, next.value),
-			kind: next.kind,
-			unsent: true,
+			const key = await unwrapKey(held.wrapped, current);
+			if (key === null) {
+				outcome.value = 'wrong';
+				return;
+			}
+
+			const wrapped = await wrapKey(key, next.value);
+			if (lock?.id !== held.id || lock.wrapped !== held.wrapped) {
+				return;
+			}
+
+			await setLock({id: held.id, wrapped, kind: next.kind, unsent: true});
+			outcome.value = 'ok';
 		});
 	} catch {
 		return 'error';
 	}
 
+	if (outcome.value !== 'ok') {
+		return outcome.value;
+	}
+
 	refreshState();
 	await client?.syncNow().catch(() => undefined);
 	await refreshPrivateStatus();
-	return 'ok';
-}
-
-/**
-Takes the PIN or password off the library, which then opens without one. The data key stays in the keystore, so a
-library that syncs sealed with a server keeps doing so.
-*/
-export async function removePrivateLock(
-	current: string,
-): Promise<ChangeResult> {
-	if (!lock || !unlockedKey) {
-		return 'error';
-	}
-
-	try {
-		const key = await unwrapKey(lock.wrapped, current);
-		if (key === null) {
-			return 'wrong';
-		}
-
-		kept = {id: lock.id, wrapped: lock.wrapped, raw: key};
-		await writeJson(KEPT_KEY, kept);
-		await setLock(undefined);
-	} catch {
-		return 'error';
-	}
-
-	refreshState();
 	return 'ok';
 }
 
@@ -508,10 +633,16 @@ export async function unlockPrivate(credential: string): Promise<UnlockResult> {
 		return 'ok';
 	}
 
+	const started = epoch;
 	try {
 		const key = await unwrapKey(lock.wrapped, credential);
 		if (key === null) {
 			return 'wrong';
+		}
+
+		if (epoch !== started) {
+			// Erased, set up again, or given another lock while the PIN was checked.
+			return 'error';
 		}
 
 		unlockedKey = key;
@@ -521,7 +652,8 @@ export async function unlockPrivate(credential: string): Promise<UnlockResult> {
 
 	refreshState();
 	runClient();
-	await refreshPrivateStatus();
+	// The key is in: a failed status read does not undo the unlock.
+	await refreshPrivateStatus().catch(() => undefined);
 	return 'ok';
 }
 
@@ -544,26 +676,64 @@ export async function lockPrivate(): Promise<void> {
 Deletes the private library from this phone: its data, its lock, and its sync position. The server keeps its copy.
 */
 export async function removePrivate(): Promise<void> {
+	await serial(eraseNow);
+}
+
+async function eraseNow(): Promise<void> {
 	setView('regular');
 	stopClient();
+	epoch += 1;
+	try {
+		// Before anything is deleted: if this fails, nothing has changed.
+		await writeJson(ERASING_KEY, true);
+	} catch {
+		runClient();
+		throw new EraseNotStartedError('The erase did not start.');
+	}
+
+	// Trash changes already queued finish first (a stopped client queues no more), so none lands after the deletions.
+	await settleTrash().catch(() => undefined);
+	erasing = true;
+	adopting = false;
 	exists = false;
 	unlockedKey = undefined;
 	lock = undefined;
 	kept = undefined;
+	core.load(emptyStore(Date.now()));
+	refreshState();
+	// A failure from here on leaves the library out of reach and the marker in place: the erase finishes the next time
+	// the app starts or a library is set up.
+	await eraseSteps();
+	await refreshPrivateStatus();
+}
+
+/**
+The deletions of an erase, one after another, with the marker that the library exists removed near the end and the
+erase marker last.
+*/
+async function eraseSteps(): Promise<void> {
 	await removeKeys([
-		ON_KEY,
-		LOCK_KEY,
-		KEPT_KEY,
-		LIBRARY_KEY,
-		PRIVATE_TRASH_KEY,
-		PRIVATE_KEY_KEY,
 		prefix('tablodge.sync.state'),
 		prefix('tablodge.sync.status'),
+		PRIVATE_TRASH_KEY,
+		PRIVATE_KEY_KEY,
+		KEPT_KEY,
 	]);
-	core.load(emptyStore(Date.now()));
 	await dropSafetyCopy('private');
-	refreshState();
-	await refreshPrivateStatus();
+	await removeKeys([LIBRARY_KEY]);
+	await removeKeys([LOCK_KEY]);
+	await removeKeys([ON_KEY]);
+	await removeKeys([ERASING_KEY]);
+	erasing = false;
+}
+
+/**
+Finishes an erase that stopped part way, before a library is made over what is left of the old one.
+*/
+async function settleErase(): Promise<void> {
+	if (erasing) {
+		await eraseSteps();
+	}
 }
 
 export type OpenResult =
@@ -574,46 +744,133 @@ export type OpenResult =
 			`not-connected`: no server. `credential`: the server's library is protected and needs its PIN or password.
 			`wrong`: that one did not open it. `error`: anything else.
 			*/
-			reason: 'not-connected' | 'credential' | 'wrong' | 'error';
+			reason: 'not-connected' | 'sync-off' | 'credential' | 'wrong' | 'error';
 			message?: string;
 	  };
 
+/**
+The erase did not start: nothing was deleted and the library is as it was, so it can simply be tried again.
+*/
+export class EraseNotStartedError extends Error {}
+
+/**
+What the dialog says when an erase fails: an erase that did not start changed nothing, one that stopped part way is
+finished later.
+*/
+export function eraseFailureNotice(error: unknown): {
+	title: string;
+	message: string;
+} {
+	return error instanceof EraseNotStartedError
+		? {title: 'Could not erase it', message: 'Nothing was changed. Try again.'}
+		: {
+				title: 'Could not finish erasing',
+				message:
+					'The private library is closed and nothing of it syncs. The erase finishes the next time the app starts or you set up the private library.',
+			};
+}
+
+const SERVER_CHECK_MS = 8000;
+
+/**
+The server's key for the private library, or nothing when it has none. A key this version cannot read, or an answer
+that is not one, is an error, not "no key". The request is cancelled after a few seconds.
+*/
 async function serverKey(to: {
 	url: string;
 	token: string;
 }): Promise<{id: string; wrapped: string} | undefined> {
-	const response = await fetch(`${to.url}/v1/key`, {
-		headers: [['Authorization', `Bearer ${to.token}`]],
-	});
-	if (response.status === 404) {
-		return undefined;
-	}
+	const controller = new AbortController();
+	const timer = setTimeout(() => {
+		controller.abort();
+	}, SERVER_CHECK_MS);
+	try {
+		const response = await fetch(`${to.url}/v1/key`, {
+			headers: [['Authorization', `Bearer ${to.token}`]],
+			signal: controller.signal,
+		});
+		if (response.status === 404) {
+			return undefined;
+		}
 
-	if (!response.ok) {
-		throw new Error(
-			`The sync server answered with an error (${response.status}).`,
-		);
-	}
+		if (!response.ok) {
+			throw new Error(
+				`The sync server answered with an error (${response.status}).`,
+			);
+		}
 
-	const body: unknown = await response.json();
-	const parsed = parseServerKey(isRecord(body) ? body.key : undefined);
-	return parsed ? {id: parsed.id, wrapped: parsed.wrapped} : undefined;
+		const body: unknown = await response.json();
+		const raw = isRecord(body) ? body.key : undefined;
+		if (raw === null) {
+			return undefined;
+		}
+
+		const parsed = parseServerKey(raw);
+		if (!parsed) {
+			throw new Error(
+				'The sync server sent a key this version does not understand.',
+			);
+		}
+
+		return {id: parsed.id, wrapped: parsed.wrapped};
+	} catch (error) {
+		throw controller.signal.aborted
+			? new Error('The sync server did not answer.')
+			: error;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/**
+What the connected server holds for the private library, for the set-a-PIN screen: whether there is a server (and the
+phone syncs private data) and whether it already has a private library, protected by a PIN or password. `failed` is
+true when the server could not be asked (no answer in a few seconds, or an error), which is not the same as the server
+saying it has no key: the screen then offers a retry and a phone-only library instead of a synced one.
+*/
+export async function privateServerInfo(): Promise<{
+	connected: boolean;
+	hasKey: boolean;
+	failed: boolean;
+}> {
+	try {
+		const to = getPreferences().syncPrivate ? await target() : undefined;
+		if (!to) {
+			return {connected: false, hasKey: false, failed: false};
+		}
+
+		const key = await serverKey(to);
+		return {connected: true, hasKey: key !== undefined, failed: false};
+	} catch {
+		return {connected: true, hasKey: false, failed: true};
+	}
 }
 
 /**
 Brings in the private library the extension keeps on the connected server. A protected one asks for its PIN or password
 (pass `credential` after a `credential` result); the phone's library then takes that lock, and keeps everything it
-already has, which syncs with the server's. Without a library on the phone, one is made.
+already has, which syncs with the server's. Without a library on the phone, one is made from the server's.
 */
-export async function openFromServer(credential?: string): Promise<OpenResult> {
-	const to = getPreferences().syncPrivate ? await target() : undefined;
-	if (!to) {
-		return {ok: false, reason: 'not-connected'};
-	}
-
+export async function openFromServer(
+	credential?: string,
+	isCancelled: () => boolean = () => false,
+): Promise<OpenResult> {
 	try {
+		const to = await target();
+		if (!to) {
+			return {ok: false, reason: 'not-connected'};
+		}
+
+		if (!getPreferences().syncPrivate) {
+			return {ok: false, reason: 'sync-off'};
+		}
+
+		await serial(settleErase);
+		const started = epoch;
 		const server = await serverKey(to);
-		if (server && (lock ?? kept)?.id !== server.id) {
+		// A library with no lock of its own, even one that kept the server's key, takes the lock only from a credential
+		// that opens the server's key.
+		if (server && (lock?.id !== server.id || adopting)) {
 			if (credential === undefined) {
 				return {ok: false, reason: 'credential'};
 			}
@@ -623,20 +880,70 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 				return {ok: false, reason: 'wrong'};
 			}
 
-			if (!exists) {
-				core.load(emptyStore(Date.now()));
-				await core.write(core.store);
-				exists = true;
-				await writeJson(ON_KEY, true);
-			}
+			// The commit runs alone and re-checks, so a set up, an erase, or a dismissed drawer that came during the waits
+			// above wins over this join.
+			const committed = await serial(async () => {
+				if (epoch !== started || isCancelled()) {
+					return false;
+				}
 
-			await setLock({id: server.id, wrapped: server.wrapped});
-			kept = undefined;
-			await removeKeys([KEPT_KEY]);
-			unlockedKey = key;
-			stopClient();
+				// Last check, with nothing awaited between it and the change in memory: still the same server, private sync
+				// still on, and no change or dismissal meanwhile. After this the join goes through, and a drawer dismissed
+				// during the writes below does not undo it halfway.
+				const now = await target();
+				if (
+					epoch !== started ||
+					isCancelled() ||
+					!getPreferences().syncPrivate ||
+					now?.url !== to.url ||
+					now.token !== to.token
+				) {
+					return false;
+				}
+
+				const created = !exists;
+				if (created) {
+					core.load(emptyStore(Date.now()));
+					exists = true;
+				}
+
+				// The lock and the key it opens change together, in memory, before anything is awaited, so no sync round can
+				// pair the server's lock with the phone's old key.
+				stopClient();
+				adopting = true;
+				const installing = setLock({
+					id: server.id,
+					wrapped: server.wrapped,
+					kind: credentialKindOf(credential),
+				});
+				unlockedKey = key;
+				kept = undefined;
+				if (created) {
+					await core.write(core.store);
+					await writeJson(ON_KEY, true);
+				}
+
+				await installing;
+				await removeKeys([KEPT_KEY]);
+				adopting = false;
+				return true;
+			});
+			if (!committed) {
+				return {
+					ok: false,
+					reason: 'error',
+					message:
+						'The private library changed while the server was checked. Try again.',
+				};
+			}
 		} else if (!exists) {
-			await setupPrivate();
+			// Nothing here and nothing on the server: a library is made by setting up a PIN or password, not from here.
+			return {
+				ok: false,
+				reason: 'error',
+				message:
+					'Your server has no private library yet. Set up the private library on this phone, and it syncs once it has a PIN or password.',
+			};
 		}
 
 		refreshState();
@@ -752,6 +1059,8 @@ const subscribe = (listener: () => void) => {
 
 export const usePrivateStatus = (): SyncStatus =>
 	useSyncExternalStore(subscribe, () => status);
+
+export const getPrivateState = (): PrivateState => state;
 
 export const usePrivateState = (): PrivateState =>
 	useSyncExternalStore(subscribe, () => state);

@@ -21,13 +21,13 @@ export function LibraryChoice({
 	const state = usePrivateState();
 	const [waiting, setWaiting] = useState(false);
 	useEffect(() => {
-		if (!(waiting && state.exists) || state.locked) {
+		if (!(waiting && state.exists) || state.locked || state.needsPin) {
 			return;
 		}
 
 		setWaiting(false);
 		onChange('private');
-	}, [waiting, state.exists, state.locked, onChange]);
+	}, [waiting, state.exists, state.locked, state.needsPin, onChange]);
 	if (!state.exists) {
 		return null;
 	}
@@ -40,15 +40,19 @@ export function LibraryChoice({
 					{id: 'regular', name: 'Regular', icon: 'bookmark-outline'},
 					{
 						id: 'private',
-						name: state.locked ? 'Private (locked)' : 'Private',
-						icon: state.locked ? 'lock-closed-outline' : 'glasses-outline',
+						name:
+							state.locked || state.needsPin ? 'Private (locked)' : 'Private',
+						icon:
+							state.locked || state.needsPin
+								? 'lock-closed-outline'
+								: 'glasses-outline',
 					},
 				]}
 				selected={value}
 				onSelect={(next) => {
-					if (next === 'private' && state.locked) {
+					if (next === 'private' && (state.locked || state.needsPin)) {
 						setWaiting(true);
-						openPrivateSheet('unlock');
+						openPrivateSheet(state.needsPin ? 'protect' : 'unlock');
 					} else {
 						setWaiting(false);
 						onChange(next);
