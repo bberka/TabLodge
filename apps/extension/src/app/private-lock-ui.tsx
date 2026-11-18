@@ -11,11 +11,13 @@ import {
 } from 'react';
 import {
 	ArrowRightLeft,
+	Check,
 	Cloud,
 	KeyRound,
 	Laptop,
 	Lock,
 	LockOpen,
+	RefreshCw,
 	ShieldAlert,
 	Trash2,
 } from 'lucide-react';
@@ -222,8 +224,7 @@ function LockScreen({
 				)}
 				<Button
 					type="button"
-					variant="outline"
-					className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+					variant="destructive"
 					onClick={() => setErasing(true)}
 				>
 					<Trash2 aria-hidden="true" />
@@ -427,6 +428,7 @@ export function PrivateLockGate({children}: {children: ReactNode}) {
 						{error}
 					</p>
 					<Button variant="outline" onClick={() => void refresh()}>
+						<RefreshCw aria-hidden="true" />
 						Retry
 					</Button>
 				</div>
@@ -591,6 +593,7 @@ export function PrivateLockSettings({
 									: 'Removing the lock was interrupted.'}
 							</span>
 							<Button variant="outline" size="sm" onClick={() => void retry()}>
+								<Check aria-hidden="true" />
 								Finish
 							</Button>
 						</div>
@@ -621,7 +624,7 @@ export function PrivateLockSettings({
 								<LockOpen aria-hidden="true" />
 								Remove lock
 							</Button>
-							<Button variant="outline" onClick={() => setDialog('reset')}>
+							<Button variant="destructive" onClick={() => setDialog('reset')}>
 								<Trash2 aria-hidden="true" />
 								Erase private data
 							</Button>
