@@ -1,4 +1,4 @@
-import {useEffect, useState, useSyncExternalStore} from 'react';
+import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {
 	clampCredentialInput,
@@ -508,6 +508,14 @@ function ServerForm({
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
+	// The drawer was dismissed: a join that is still waiting must not install anything or touch the screen.
+	const dismissedRef = useRef(false);
+	useEffect(() => {
+		dismissedRef.current = false;
+		return () => {
+			dismissedRef.current = true;
+		};
+	}, []);
 	useEffect(() => {
 		onBusy?.(busy);
 	}, [busy, onBusy]);
@@ -515,9 +523,13 @@ function ServerForm({
 		setBusy(true);
 		let result: Awaited<ReturnType<typeof openFromServer>>;
 		try {
-			result = await openFromServer(credential);
+			result = await openFromServer(credential, () => dismissedRef.current);
 		} finally {
 			setBusy(false);
+		}
+
+		if (dismissedRef.current) {
+			return;
 		}
 
 		if (result.ok) {

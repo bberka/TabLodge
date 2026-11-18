@@ -584,6 +584,114 @@ describe('with the extension on the same server', () => {
 		assert.deepEqual(urlsOf(extension.store), ['https://phone.example/']);
 	});
 
+	test('a join whose drawer was dismissed while it waited installs nothing', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const keyBefore = server.privateLog.key;
+		const phone = await startPhone();
+		await connectPhone(phone);
+
+		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const {promise: reached, resolve: markReached} =
+			Promise.withResolvers<void>();
+		const real = globalThis.fetch;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			if (String(url).endsWith('/private/v1/key') && !init?.method) {
+				markReached();
+				await gate;
+			}
+
+			return real(url, init);
+		});
+		let dismissed = false;
+		const joining = phone.openFromServer(PASSWORD.value, () => dismissed);
+		await reached;
+		dismissed = true;
+		release();
+		const result = await joining;
+		assert.equal(result.ok, false);
+		assert.equal(phone.privateExists(), false);
+		assert.equal(server.privateLog.key, keyBefore);
+	});
+
+	test('a join and a phone-only setup that overlap leave one consistent library, whichever commits first', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const keyBefore = server.privateLog.key;
+		const phone = await startPhone();
+		await connectPhone(phone);
+
+		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const {promise: reached, resolve: markReached} =
+			Promise.withResolvers<void>();
+		const real = globalThis.fetch;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			if (String(url).endsWith('/private/v1/key') && !init?.method) {
+				markReached();
+				await gate;
+			}
+
+			return real(url, init);
+		});
+		const joining = phone.openFromServer(PASSWORD.value);
+		await reached;
+		// Both run at once: the join's writes and the setup's are queued, not interleaved.
+		release();
+		await Promise.all([joining, phone.setupPrivate(PIN)]);
+
+		assert.equal(phone.getPrivateState().needsPin, false);
+		assert.equal(server.privateLog.key, keyBefore);
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
+	});
+
+	test('a sync round that outlives the key, because the library locked, sends nothing unsealed', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await connectPhone(phone);
+		await addLink(phone, 'https://one.example/');
+		// Two rounds, so the next pull is empty and the round goes on to send.
+		await phone.syncPrivate();
+		await phone.syncPrivate();
+		assert.ok(
+			(await serverRecords()).every((record) => isSealed(record.value)),
+			'what is sent before the lock is sealed',
+		);
+
+		// Hold the next round after it has read the server's key, then lock the library under it.
+		await addLink(phone, 'https://two.example/');
+		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const {promise: reached, resolve: markReached} =
+			Promise.withResolvers<void>();
+		const real = globalThis.fetch;
+		let held = false;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			if (
+				!held &&
+				String(url).includes('/private/v1/changes') &&
+				!init?.method
+			) {
+				held = true;
+				markReached();
+				await gate;
+			}
+
+			return real(url, init);
+		});
+		const round = phone.syncPrivate();
+		await reached;
+		await phone.lockPrivate();
+		release();
+		await round;
+		const records = await serverRecords();
+		assert.ok(
+			records.every((record) => isSealed(record.value)),
+			'nothing plain reached the server',
+		);
+	});
+
 	test('a key the phone cannot read is a failed lookup, not an empty server', async () => {
 		const phone = await startPhone();
 		await connectPhone(phone);
