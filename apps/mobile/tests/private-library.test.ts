@@ -651,6 +651,63 @@ describe('with the extension on the same server', () => {
 		assert.equal(server.privateLog.key, keyBefore);
 	});
 
+	test('a join waits for a PIN change that is already running, so the server’s lock is the last word', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const phone = await startPhone();
+		await connectPhone(phone);
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://phone.example/');
+
+		// Pause the PIN change inside its turn of the queue, while the join is started and finishes its own checks.
+		const {unwrapHold} = await import('./support/fake-crypto');
+		const {promise: hold, resolve: release} = Promise.withResolvers<void>();
+		unwrapHold.next = hold;
+		const order: string[] = [];
+		const changing = phone
+			.changePrivateLock(PIN.value, {
+				kind: 'password',
+				value: 'a brand new password',
+			})
+			.then((result) => {
+				order.push(`change:${result}`);
+			});
+		const joining = phone.openFromServer(PASSWORD.value).then((result) => {
+			order.push(`join:${result.ok}`);
+		});
+		await new Promise((resolve) => {
+			setTimeout(resolve, 200);
+		});
+		assert.deepEqual(
+			order,
+			[],
+			'the join has not committed ahead of the change',
+		);
+		release();
+		await Promise.all([changing, joining]);
+		assert.deepEqual(order, ['change:ok', 'join:true']);
+
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'ok');
+		await phone.syncPrivate();
+		await extension.sync();
+		assert.deepEqual(urlsOf(extension.store), ['https://phone.example/']);
+	});
+
+	test('the dialog text for a failed erase tells a start that changed nothing from one that stopped part way', async () => {
+		const {EraseNotStartedError, eraseFailureNotice} =
+			await import('../src/private/private-library');
+		assert.deepEqual(eraseFailureNotice(new EraseNotStartedError('x')), {
+			title: 'Could not erase it',
+			message: 'Nothing was changed. Try again.',
+		});
+		assert.match(
+			eraseFailureNotice(new Error('storage failed')).message,
+			/finishes the next time the app starts/,
+		);
+	});
+
 	test('a join and a phone-only setup that overlap leave one consistent library, whichever commits first', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PASSWORD);

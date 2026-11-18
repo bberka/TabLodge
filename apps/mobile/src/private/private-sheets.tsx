@@ -17,7 +17,7 @@ import {Button, Field, Segmented} from '../ui/widgets';
 import {setView} from '../library/view';
 import {
 	changePrivateLock,
-	EraseNotStartedError,
+	eraseFailureNotice,
 	isPrivateOpen,
 	openFromServer,
 	privateServerInfo,
@@ -398,15 +398,8 @@ export function confirmErase(
 				},
 				(error: unknown) => {
 					onWorking?.(false);
-					if (error instanceof EraseNotStartedError) {
-						notify('Could not erase it', 'Nothing was changed. Try again.');
-						return;
-					}
-
-					notify(
-						'Could not finish erasing',
-						'The private library is closed and nothing of it syncs. The erase finishes the next time the app starts or you set up the private library.',
-					);
+					const {title, message} = eraseFailureNotice(error);
+					notify(title, message);
 				},
 			);
 		},

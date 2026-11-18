@@ -744,6 +744,23 @@ The erase did not start: nothing was deleted and the library is as it was, so it
 */
 export class EraseNotStartedError extends Error {}
 
+/**
+What the dialog says when an erase fails: an erase that did not start changed nothing, one that stopped part way is
+finished later.
+*/
+export function eraseFailureNotice(error: unknown): {
+	title: string;
+	message: string;
+} {
+	return error instanceof EraseNotStartedError
+		? {title: 'Could not erase it', message: 'Nothing was changed. Try again.'}
+		: {
+				title: 'Could not finish erasing',
+				message:
+					'The private library is closed and nothing of it syncs. The erase finishes the next time the app starts or you set up the private library.',
+			};
+}
+
 const SERVER_CHECK_MS = 8000;
 
 /**

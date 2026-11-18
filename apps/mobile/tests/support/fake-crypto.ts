@@ -63,10 +63,22 @@ export async function wrapKey(
 	return b64(new Uint8Array([...header, ...sealed]));
 }
 
+/**
+Holds the next unwrap until the promise settles, for a test that needs to pause one step of the phone.
+*/
+const holds = globalThis as {
+	__phoneUnwrapHold?: {next: Promise<void> | undefined};
+};
+holds.__phoneUnwrapHold ??= {next: undefined};
+export const unwrapHold = holds.__phoneUnwrapHold;
+
 export async function unwrapKey(
 	envelope: string,
 	credential: string,
 ): Promise<string | null> {
+	const hold = unwrapHold.next;
+	unwrapHold.next = undefined;
+	await hold;
 	const bytes = unb64(envelope);
 	if (bytes.length < FIXED_HEADER || bytes[0] !== 0x54) {
 		throw new Error('damaged');
