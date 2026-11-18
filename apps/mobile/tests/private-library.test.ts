@@ -140,12 +140,12 @@ afterEach(async () => {
 });
 
 describe('without a server', () => {
-	test('a library without a PIN is made, edited, and kept across a restart', async () => {
+	test('a library is made with a PIN, edited, and kept across a restart', async () => {
 		let phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
-		await phone.setupPrivate();
+		await phone.setupPrivate(PIN);
 		assert.equal(phone.isPrivateOpen(), true);
-		assert.equal(phone.canLockPrivate(), false);
+		assert.equal(phone.canLockPrivate(), true);
 		await addLink(phone, 'https://a.example/', 'A');
 		await addLink(phone, 'https://b.example/', 'B');
 		const [first] = phone.getPrivateStore().bookmarks;
@@ -167,7 +167,8 @@ describe('without a server', () => {
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a2.example/']);
 
 		phone = await startPhone();
-		assert.equal(phone.isPrivateOpen(), true);
+		assert.equal(phone.isPrivateOpen(), false, 'a restart locks it');
+		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a2.example/']);
 	});
 
@@ -226,7 +227,12 @@ describe('without a server', () => {
 		let phone = await startPhone();
 		await phone.setupPrivate();
 		await addLink(phone, 'https://a.example/');
+		// A library from an earlier version has no PIN, and does not open until it gets one.
+		assert.equal(phone.getPrivateState().needsPin, true);
+		assert.equal(phone.isPrivateOpen(), false);
 		await phone.protectPrivate(PIN);
+		assert.equal(phone.getPrivateState().needsPin, false);
+		assert.equal(phone.isPrivateOpen(), true);
 		assert.equal(phone.canLockPrivate(), true);
 		phone = await startPhone();
 		assert.equal(phone.isPrivateOpen(), false);
@@ -247,37 +253,25 @@ describe('without a server', () => {
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
 	});
 
-	test('removing the PIN needs it, and the library opens without one afterwards', async () => {
-		let phone = await startPhone();
-		await phone.setupPrivate(PIN);
-		await addLink(phone, 'https://a.example/');
-		assert.equal(await phone.removePrivateLock('0000'), 'wrong');
-		assert.equal(phone.canLockPrivate(), true);
-		assert.equal(await phone.removePrivateLock(PIN.value), 'ok');
-		assert.equal(phone.canLockPrivate(), false);
-		phone = await startPhone();
-		assert.equal(phone.isPrivateOpen(), true);
-		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
-		// And a PIN can be added again.
-		await phone.protectPrivate(PASSWORD);
-		await phone.lockPrivate();
-		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'ok');
-	});
-
 	test('erasing removes the library, its lock, and its sync position, and starts over empty', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://a.example/');
 		await phone.removePrivate();
 		assert.equal(phone.privateExists(), false);
+		assert.equal(phone.getPrivateStore().bookmarks.length, 0);
 		assert.deepEqual(
 			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
 			[],
 		);
 		phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
-		await phone.setupPrivate();
+		// Starting over asks for a new PIN, and the old one no longer opens anything.
+		await phone.setupPrivate(PASSWORD);
 		assert.deepEqual(phone.getPrivateStore().bookmarks, []);
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PIN.value), 'wrong');
+		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'ok');
 	});
 });
 
@@ -384,6 +378,65 @@ describe('with the extension on the same server', () => {
 		assert.ok(
 			(await serverRecords()).every((record) => isSealed(record.value)),
 		);
+	});
+
+	test('the set-a-PIN screen learns what the server holds, and joining from an empty phone makes the server’s PIN its lock', async () => {
+		const phone = await startPhone();
+		assert.deepEqual(await phone.privateServerInfo(), {
+			connected: false,
+			hasKey: false,
+		});
+		await connectPhone(phone);
+		assert.deepEqual(await phone.privateServerInfo(), {
+			connected: true,
+			hasKey: false,
+		});
+
+		const extension = makeExtension(server);
+		await extension.protect(PIN);
+		await extension.sync();
+		assert.deepEqual(await phone.privateServerInfo(), {
+			connected: true,
+			hasKey: true,
+		});
+
+		assert.deepEqual(await phone.openFromServer(PIN.value), {ok: true});
+		assert.equal(phone.getPrivateState().lockedWith, 'pin');
+		assert.equal(phone.getPrivateState().needsPin, false);
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
+	});
+
+	test('keeping the library on the phone with its own PIN does not touch the server, and syncing later takes the server’s PIN and merges', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PIN);
+		extension.edit((store) =>
+			addBookmark(
+				store,
+				{url: 'https://ext.example/', title: 'E', columnId: ''},
+				'ext-1',
+				Date.now(),
+			),
+		);
+		await extension.sync();
+
+		// The device-only choice turns the private sync off before the library is made.
+		const before = (await serverRecords()).length;
+		prefs.syncPrivate = false;
+		const phone = await startPhone();
+		await connectPhone(phone);
+		await phone.setupPrivate(PASSWORD);
+		await addLink(phone, 'https://local.example/');
+		assert.equal((await phone.privateServerInfo()).connected, false);
+		assert.ok(!phone.getPrivateStatus().needsKey);
+		assert.equal((await serverRecords()).length, before);
+
+		prefs.syncPrivate = true;
+		assert.deepEqual(await phone.openFromServer(PIN.value), {ok: true});
+		assert.deepEqual(urlsOf(phone.getPrivateStore()), [
+			'https://ext.example/',
+			'https://local.example/',
+		]);
 	});
 
 	test('joining a library the extension made with no PIN just brings the data', async () => {
@@ -681,38 +734,6 @@ describe('with the extension on the same server', () => {
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://ext.example/']);
 	});
 
-	test('with the PIN removed the phone keeps syncing the sealed library', async () => {
-		let phone = await startPhone();
-		await phone.setupPrivate(PIN);
-		await addLink(phone, 'https://a.example/');
-		await connectPhone(phone);
-		await phone.syncPrivate();
-		assert.equal(await phone.removePrivateLock(PIN.value), 'ok');
-		phone = await startPhone();
-		assert.equal(phone.isPrivateOpen(), true);
-		await addLink(phone, 'https://b.example/');
-		await phone.syncPrivate();
-		assert.ok(!phone.getPrivateStatus().needsKey);
-		assert.ok(
-			(await serverRecords()).every((record) => isSealed(record.value)),
-		);
-		const extension = makeExtension(server);
-		await extension.enterCredential(PIN.value);
-		await extension.sync();
-		assert.deepEqual(urlsOf(extension.store), [
-			'https://a.example/',
-			'https://b.example/',
-		]);
-
-		// A new PIN takes the same key back, and the server's copy follows.
-		await phone.protectPrivate(PASSWORD);
-		await phone.syncPrivate();
-		const joiner = makeExtension(server);
-		await joiner.enterCredential(PASSWORD.value);
-		await joiner.sync();
-		assert.equal(joiner.store.bookmarks.length, 2);
-	});
-
 	test('edits made while the server is away are kept and sent when it returns', async () => {
 		const phone = await startPhone();
 		await phone.setupPrivate(PIN);
@@ -808,18 +829,5 @@ describe('disconnecting and locking by itself', () => {
 		stop();
 		prefs.privateLockMode = 'manual';
 		phone = await startPhone();
-	});
-
-	test('a library without a PIN is not locked by the auto lock', async () => {
-		const phone = await startPhone();
-		const autolock = await import('../src/private/private-autolock');
-		const stop = autolock.startPrivateAutoLock();
-		await phone.setupPrivate();
-		prefs.privateLockMode = 'leave';
-		hooks.appState!('background');
-		await vi.waitFor(() => undefined);
-		assert.ok(phone.isPrivateOpen());
-		stop();
-		prefs.privateLockMode = 'manual';
 	});
 });

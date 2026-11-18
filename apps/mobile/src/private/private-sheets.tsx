@@ -1,4 +1,4 @@
-import {useState, useSyncExternalStore} from 'react';
+import {useEffect, useState, useSyncExternalStore} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {
 	clampCredentialInput,
@@ -9,7 +9,8 @@ import {
 	validateCredential,
 } from '../../../extension/src/shared/passcode';
 import {BottomSheet} from '../ui/bottom-sheet';
-import {notify} from '../ui/dialog';
+import {confirm, notify} from '../ui/dialog';
+import {setPreferences} from '../settings/preferences';
 import {showSnack} from '../ui/snackbar';
 import {useColors} from '../ui/theme';
 import {Button, Field, Segmented} from '../ui/widgets';
@@ -17,18 +18,18 @@ import {setView} from '../library/view';
 import {
 	changePrivateLock,
 	openFromServer,
+	privateServerInfo,
 	protectPrivate,
-	removePrivateLock,
+	removePrivate,
 	setupPrivate,
 	unlockPrivate,
 } from './private-library';
 
 /**
-Which private library drawer is open: make the library, open it with its PIN, bring in the server's, add a PIN to one
-that has none, or change or remove the PIN it has.
+Which private library drawer is open: make the library, open it with its PIN, bring in the server's, set the PIN of one
+that has none, or change the PIN it has.
 */
-export type PrivateSheet =
-	'setup' | 'unlock' | 'server' | 'protect' | 'change' | 'remove';
+export type PrivateSheet = 'setup' | 'unlock' | 'server' | 'protect' | 'change';
 
 let current: PrivateSheet | undefined;
 const listeners = new Set<() => void>();
@@ -67,10 +68,9 @@ export function PrivateSheetHost() {
 			label="Private library"
 			onClose={close}
 		>
-			{open === 'setup' && <SetupForm withNone onDone={close} />}
-			{open === 'protect' && <SetupForm onDone={close} />}
+			{open === 'setup' && <FirstPin creating onDone={close} />}
+			{open === 'protect' && <FirstPin onDone={close} />}
 			{open === 'change' && <SetupForm changing onDone={close} />}
-			{open === 'remove' && <RemoveForm onDone={close} />}
 			{open === 'unlock' && <UnlockForm onDone={close} />}
 			{open === 'server' && <ServerForm onDone={close} />}
 		</BottomSheet>
@@ -94,41 +94,43 @@ function Note({children}: {children: string}) {
 	return <Text style={{color: colors.muted}}>{children}</Text>;
 }
 
-type Lock = CredentialKind | 'none';
-
 /**
-Choosing how the library is protected, then making it (or, for a library without a lock, adding one). A PIN or password
-is asked for twice.
+Choosing a PIN or password, then making the library with it (or, for a library that has none, giving it one, or changing
+the one it has). It is asked for twice.
 */
 function SetupForm({
-	withNone = false,
+	creating = false,
 	changing = false,
+	deviceOnly = false,
 	onDone,
 }: {
-	withNone?: boolean;
+	creating?: boolean;
 	changing?: boolean;
+	/**
+	The library is kept on this phone only, so it does not sync with the server it would otherwise try.
+	*/
+	deviceOnly?: boolean;
 	onDone: () => void;
 }) {
 	const colors = useColors();
-	const [lock, setLock] = useState<Lock>(withNone ? 'none' : 'pin');
+	const [kind, setKind] = useState<CredentialKind>('pin');
 	const [value, setValue] = useState('');
 	const [again, setAgain] = useState('');
 	const [currentValue, setCurrentValue] = useState('');
 	const [wrong, setWrong] = useState(false);
 	const [busy, setBusy] = useState(false);
-	const kind = lock === 'none' ? undefined : lock;
-	const problem = kind
-		? (validateCredential(kind, value) ?? undefined)
-		: undefined;
-	const mismatch = kind !== undefined && again !== '' && again !== value;
+	const problem = validateCredential(kind, value) ?? undefined;
+	const mismatch = again !== '' && again !== value;
 	const ready =
 		(!changing || currentValue !== '') &&
-		(kind === undefined || (value !== '' && !problem && again === value));
+		value !== '' &&
+		!problem &&
+		again === value;
 
 	const run = async () => {
 		setBusy(true);
 		try {
-			if (changing && kind) {
+			if (changing) {
 				const result = await changePrivateLock(currentValue, {kind, value});
 				if (result === 'wrong') {
 					setWrong(true);
@@ -141,11 +143,21 @@ function SetupForm({
 				}
 
 				showSnack('The PIN or password was changed');
-			} else if (withNone) {
-				await setupPrivate(kind ? {kind, value} : undefined);
+			} else if (creating) {
+				if (deviceOnly) {
+					// Set first, so the new library does not try the server's key.
+					setPreferences({syncPrivate: false});
+				}
+
+				await setupPrivate({kind, value});
 				setView('private');
-			} else if (kind) {
+			} else {
+				if (deviceOnly) {
+					setPreferences({syncPrivate: false});
+				}
+
 				await protectPrivate({kind, value});
+				setView('private');
 				showSnack('The private library is locked with its new PIN or password');
 			}
 
@@ -160,18 +172,18 @@ function SetupForm({
 	return (
 		<View style={styles.body}>
 			<Title>
-				{withNone
-					? 'Set up the private library'
+				{creating
+					? 'Set a PIN or password'
 					: changing
 						? 'Change the PIN or password'
-						: 'Add a PIN or password'}
+						: 'Set a PIN or password to open it'}
 			</Title>
 			<Note>
-				{withNone
-					? 'A library of its own on this phone. It works without a server, and syncs with your private windows when you connect one.'
+				{creating
+					? 'The private library is a library of its own on this phone, and it opens only with a PIN or password. It works without a server, and syncs with your private windows when you connect one.'
 					: changing
 						? 'The library keeps its data and its key. Other devices keep working, and a new one needs the new PIN or password.'
-						: 'It locks the library on this phone, and protects it on your server.'}
+						: 'The private library opens only with a PIN or password. It locks the library on this phone, and protects it on your server.'}
 			</Note>
 			{changing && (
 				<Field
@@ -192,15 +204,6 @@ function SetupForm({
 			<Segmented
 				label="Protect it with"
 				items={[
-					...(withNone
-						? [
-								{
-									id: 'none' as const,
-									name: 'Nothing',
-									icon: 'lock-open-outline' as const,
-								},
-							]
-						: []),
 					{id: 'pin' as const, name: 'PIN', icon: 'keypad-outline' as const},
 					{
 						id: 'password' as const,
@@ -208,53 +211,57 @@ function SetupForm({
 						icon: 'key-outline' as const,
 					},
 				]}
-				selected={lock}
+				selected={kind}
 				onSelect={(next) => {
-					setLock(next);
+					setKind(next);
 					setValue('');
 					setAgain('');
 				}}
 			/>
-			{kind && (
-				<>
-					<Field
-						secureTextEntry
-						label={kind === 'pin' ? 'PIN' : 'Password'}
-						icon="lock-closed-outline"
-						value={value}
-						keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
-						autoCapitalize="none"
-						autoCorrect={false}
-						error={value === '' ? undefined : problem}
-						onChangeText={(text) => {
-							setValue(clampCredentialInput(kind, text));
-						}}
-					/>
-					<Field
-						secureTextEntry
-						label="Type it again"
-						icon="lock-closed-outline"
-						value={again}
-						keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
-						autoCapitalize="none"
-						autoCorrect={false}
-						error={mismatch ? 'These do not match.' : undefined}
-						onChangeText={(text) => {
-							setAgain(clampCredentialInput(kind, text));
-						}}
-					/>
-					<Text style={{color: colors.muted}}>{credentialRule(kind)}</Text>
-					{kind === 'pin' && <Note>{PIN_WEAKNESS_NOTE}</Note>}
-					<Note>{LOST_CREDENTIAL_NOTE}</Note>
-				</>
+			{deviceOnly && (
+				<Note>
+					Kept only on this phone, this library does not match the one on your
+					server. Syncing it later needs the server's PIN or password.
+				</Note>
 			)}
+			<>
+				<Field
+					secureTextEntry
+					label={kind === 'pin' ? 'PIN' : 'Password'}
+					icon="lock-closed-outline"
+					value={value}
+					keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
+					autoCapitalize="none"
+					autoCorrect={false}
+					error={value === '' ? undefined : problem}
+					onChangeText={(text) => {
+						setValue(clampCredentialInput(kind, text));
+					}}
+				/>
+				<Field
+					secureTextEntry
+					label="Type it again"
+					icon="lock-closed-outline"
+					value={again}
+					keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
+					autoCapitalize="none"
+					autoCorrect={false}
+					error={mismatch ? 'These do not match.' : undefined}
+					onChangeText={(text) => {
+						setAgain(clampCredentialInput(kind, text));
+					}}
+				/>
+				<Text style={{color: colors.muted}}>{credentialRule(kind)}</Text>
+				{kind === 'pin' && <Note>{PIN_WEAKNESS_NOTE}</Note>}
+				<Note>{LOST_CREDENTIAL_NOTE}</Note>
+			</>
 			<Button
 				label={
-					withNone
+					creating
 						? 'Create the private library'
 						: changing
 							? 'Change it'
-							: 'Add the lock'
+							: 'Set it and open'
 				}
 				icon="checkmark"
 				disabled={!ready}
@@ -269,6 +276,7 @@ function SetupForm({
 Opens a locked library with its PIN or password.
 */
 function UnlockForm({onDone}: {onDone: () => void}) {
+	const colors = useColors();
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
@@ -312,62 +320,90 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 				loading={busy}
 				onPress={() => void run()}
 			/>
+			<Button
+				label="Forgot it? Erase private data"
+				icon="trash-outline"
+				kind="danger"
+				onPress={() => {
+					confirmErase(() => {
+						void removePrivate().then(() => {
+							onDone();
+							openPrivateSheet('setup');
+						});
+					});
+				}}
+			/>
+			<Text style={{color: colors.muted}}>
+				Erasing deletes the private library from this phone, with its PIN or
+				password, and asks for a new one. Your server keeps its copy.
+			</Text>
 		</View>
 	);
 }
 
 /**
-Takes the PIN or password off the library, after asking for it once more.
+Asks before the private library is erased from this phone: its data and its PIN or password go, the server's copy stays.
 */
-function RemoveForm({onDone}: {onDone: () => void}) {
-	const [value, setValue] = useState('');
-	const [problem, setProblem] = useState<string>();
-	const [busy, setBusy] = useState(false);
-	const run = async () => {
-		setBusy(true);
-		const result = await removePrivateLock(value);
-		setBusy(false);
-		if (result === 'ok') {
-			showSnack('The private library opens without a PIN or password now');
-			onDone();
-		} else {
-			setProblem(
-				result === 'wrong'
-					? 'That PIN or password is wrong.'
-					: 'Could not remove it. Try again.',
-			);
-		}
-	};
+export function confirmErase(onConfirm: () => void) {
+	confirm(
+		'Erase the private library from this phone?',
+		'Its bookmarks and sessions and its PIN or password are deleted from this phone, and you start again with a new PIN or password. Your server keeps its copy, if it has one, and you can bring it back from there with its PIN or password.',
+		{label: 'Erase', destructive: true},
+		onConfirm,
+	);
+}
 
+/**
+The first PIN or password of the private library, for a new one or for one that has none. When the connected server
+already holds a private library, its PIN or password comes first: it becomes this library's lock, and the server's data
+joins what is here. Keeping the library on this phone only, with a PIN or password of its own, stays available.
+*/
+function FirstPin({
+	creating = false,
+	onDone,
+}: {
+	creating?: boolean;
+	onDone: () => void;
+}) {
+	const [server, setServer] = useState<{connected: boolean; hasKey: boolean}>();
+	const [deviceOnly, setDeviceOnly] = useState(false);
+	useEffect(() => {
+		void privateServerInfo().then(setServer);
+	}, []);
+	if (!server) {
+		return null;
+	}
+
+	const fromServer = server.hasKey && !deviceOnly;
 	return (
-		<View style={styles.body}>
-			<Title>Remove the PIN or password</Title>
-			<Note>
-				Anyone who opens this phone can then open the private library. Your
-				server keeps its copy sealed, and this phone keeps the key for it.
-			</Note>
-			<Field
-				secureTextEntry
-				autoFocus
-				label="Current PIN or password"
-				icon="lock-closed-outline"
-				value={value}
-				autoCapitalize="none"
-				autoCorrect={false}
-				error={problem}
-				onChangeText={(text) => {
-					setValue(text);
-					setProblem(undefined);
-				}}
-			/>
-			<Button
-				label="Remove it"
-				icon="lock-open-outline"
-				kind="danger"
-				disabled={value === ''}
-				loading={busy}
-				onPress={() => void run()}
-			/>
+		<View style={{gap: 14}}>
+			{fromServer ? (
+				<ServerForm known onDone={onDone} />
+			) : (
+				<SetupForm
+					creating={creating}
+					deviceOnly={server.hasKey && deviceOnly}
+					onDone={onDone}
+				/>
+			)}
+			{server.hasKey && (
+				<View style={styles.body}>
+					<Button
+						label={
+							deviceOnly
+								? 'Use the PIN from my sync server'
+								: 'Keep only on this phone instead'
+						}
+						kind="plain"
+						icon={
+							deviceOnly ? 'cloud-download-outline' : 'phone-portrait-outline'
+						}
+						onPress={() => {
+							setDeviceOnly(!deviceOnly);
+						}}
+					/>
+				</View>
+			)}
 		</View>
 	);
 }
@@ -376,8 +412,17 @@ function RemoveForm({onDone}: {onDone: () => void}) {
 Brings in the private library the extension keeps on the server. A protected one asks for the PIN or password set in
 the extension, once; the phone's library takes that lock and syncs with the server's.
 */
-function ServerForm({onDone}: {onDone: () => void}) {
-	const [asking, setAsking] = useState(false);
+function ServerForm({
+	known = false,
+	onDone,
+}: {
+	/**
+	The server is known to hold a protected library, so its PIN or password is asked for at once.
+	*/
+	known?: boolean;
+	onDone: () => void;
+}) {
+	const [asking, setAsking] = useState(known);
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
@@ -418,7 +463,11 @@ function ServerForm({onDone}: {onDone: () => void}) {
 
 	return (
 		<View style={styles.body}>
-			<Title>Use your server's private library</Title>
+			<Title>
+				{known
+					? "Use your sync server's PIN"
+					: "Use your server's private library"}
+			</Title>
 			<Note>
 				The private windows' library on your server comes to this phone and
 				syncs both ways. What is already on this phone stays.
