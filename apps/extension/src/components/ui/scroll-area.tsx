@@ -15,6 +15,10 @@ type ScrollAreaProps = React.ComponentPropsWithoutRef<
 	horizontal?: boolean;
 };
 
+// The scrollbar overlays the viewport. Once it mounts (type auto or always), the viewport gains
+// right padding for it, so row content such as a selected checkmark never sits under the thumb.
+const reserveScrollbar = '[&:has(~[data-orientation=vertical])]:pr-3';
+
 const ScrollArea = React.forwardRef<
 	React.ComponentRef<typeof ScrollAreaPrimitive.Root>,
 	ScrollAreaProps
@@ -43,6 +47,7 @@ const ScrollArea = React.forwardRef<
 					'h-full w-full rounded-[inherit] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
 					'scrollbar-none [&::-webkit-scrollbar]:hidden',
 					!horizontal && '[&>div]:block!',
+					type !== 'hover' && reserveScrollbar,
 					viewportClassName,
 				)}
 			>
@@ -76,4 +81,4 @@ const ScrollBar = React.forwardRef<
 ));
 ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName;
 
-export {ScrollArea, ScrollBar};
+export {ScrollArea, ScrollBar, reserveScrollbar};
