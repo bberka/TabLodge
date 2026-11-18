@@ -209,7 +209,14 @@ async function target(): Promise<{url: string; token: string} | undefined> {
 const serverKeyText = (held: {id: string; wrapped: string}) =>
 	JSON.stringify({v: 1, id: held.id, wrapped: held.wrapped});
 
-const codec: SyncCodec = {
+// The sync client that is running now, by number. A round of a client that was stopped (the library locked, was erased,
+// or took another lock) must neither send, read, nor write anything more, whatever state the key is in.
+let activeClient = 0;
+let clientCount = 0;
+
+const STOPPED = 'Private sync stopped.';
+
+const baseCodec: SyncCodec = {
 	async prepare(call) {
 		const body = await call('/v1/key');
 		const stored = isRecord(body) ? body.key : undefined;
@@ -317,6 +324,30 @@ const codec: SyncCodec = {
 };
 
 function createClient() {
+	clientCount += 1;
+	const mine = clientCount;
+	activeClient = mine;
+	// Throws once this client was stopped, so a round that outlived it stops instead of sending or writing.
+	const live = () => {
+		if (activeClient !== mine) {
+			throw new SyncError('key', STOPPED);
+		}
+	};
+
+	const codec: SyncCodec = {
+		async prepare(call) {
+			live();
+			return baseCodec.prepare(call);
+		},
+		async seal(change) {
+			live();
+			return baseCodec.seal(change);
+		},
+		async open(change) {
+			live();
+			return baseCodec.open(change);
+		},
+	};
 	return createSyncClient({
 		async get(key) {
 			return key === SYNC_CONFIG_KEY ? target() : readJson(prefix(key));
@@ -326,22 +357,31 @@ function createClient() {
 				return;
 			}
 
+			live();
 			await writeJson(prefix(key), value);
 			if (key === SYNC_STATUS_KEY) {
 				void refreshPrivateStatus();
 			}
 		},
 		async remove(keys) {
+			live();
 			await removeKeys(
 				keys.filter((key) => key !== SYNC_CONFIG_KEY).map((key) => prefix(key)),
 			);
 		},
 		fetch: async (url, init) => fetch(url, init),
 		openSocket: (url) => new WebSocket(url),
-		mutate: core.mutate,
+		mutate: async (work) =>
+			core.mutate(async () => {
+				live();
+				return work();
+			}),
 		readLibrary: async () => core.store,
 		trash: syncedTrash('private', () => core.store.settings.trashRetentionDays),
-		writeLibrary: core.write,
+		async writeLibrary(store) {
+			live();
+			return core.write(store);
+		},
 		async backup() {},
 		codec,
 		randomId: () => randomUUID(),
@@ -374,6 +414,7 @@ function runClient(): void {
 }
 
 function stopClient(): void {
+	activeClient = 0;
 	client?.stop();
 	client = undefined;
 	syncKey = undefined;
@@ -485,7 +526,7 @@ async function protect(credential: Credential): Promise<void> {
 Puts a PIN or password on a library that has none. The next sync gives the server the same lock.
 */
 export async function protectPrivate(credential: Credential): Promise<void> {
-	await protect(credential);
+	await serial(async () => protect(credential));
 	stopClient();
 	refreshState();
 	runClient();
@@ -514,11 +555,13 @@ export async function changePrivateLock(
 			return 'wrong';
 		}
 
-		await setLock({
-			id: lock.id,
-			wrapped: await wrapKey(key, next.value),
-			kind: next.kind,
-			unsent: true,
+		const wrapped = await wrapKey(key, next.value);
+		await serial(async () => {
+			if (!lock) {
+				throw new Error('The lock is gone.');
+			}
+
+			await setLock({id: lock.id, wrapped, kind: next.kind, unsent: true});
 		});
 	} catch {
 		return 'error';
@@ -540,10 +583,16 @@ export async function unlockPrivate(credential: string): Promise<UnlockResult> {
 		return 'ok';
 	}
 
+	const started = epoch;
 	try {
 		const key = await unwrapKey(lock.wrapped, credential);
 		if (key === null) {
 			return 'wrong';
+		}
+
+		if (epoch !== started) {
+			// Erased, set up again, or given another lock while the PIN was checked.
+			return 'error';
 		}
 
 		unlockedKey = key;
@@ -769,9 +818,13 @@ export async function openFromServer(
 					return false;
 				}
 
-				// Still the same server, with private sync still on: a change made while the PIN was checked stands.
+				// Last check, with nothing awaited between it and the change in memory: still the same server, private sync
+				// still on, and no change or dismissal meanwhile. After this the join goes through, and a drawer dismissed
+				// during the writes below does not undo it halfway.
 				const now = await target();
 				if (
+					epoch !== started ||
+					isCancelled() ||
 					!getPreferences().syncPrivate ||
 					now?.url !== to.url ||
 					now.token !== to.token
@@ -779,11 +832,10 @@ export async function openFromServer(
 					return false;
 				}
 
-				if (!exists) {
+				const created = !exists;
+				if (created) {
 					core.load(emptyStore(Date.now()));
-					await core.write(core.store);
 					exists = true;
-					await writeJson(ON_KEY, true);
 				}
 
 				// The lock and the key it opens change together, in memory, before anything is awaited, so no sync round can
@@ -797,6 +849,11 @@ export async function openFromServer(
 				});
 				unlockedKey = key;
 				kept = undefined;
+				if (created) {
+					await core.write(core.store);
+					await writeJson(ON_KEY, true);
+				}
+
 				await installing;
 				await removeKeys([KEPT_KEY]);
 				adopting = false;

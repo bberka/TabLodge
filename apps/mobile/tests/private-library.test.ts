@@ -791,6 +791,51 @@ describe('with the extension on the same server', () => {
 		assert.deepEqual(await phone.openFromServer(PASSWORD.value), {ok: true});
 	});
 
+	test('a sync round that outlives an erase sends nothing and writes nothing back', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await connectPhone(phone);
+		await addLink(phone, 'https://one.example/');
+		await phone.syncPrivate();
+		await phone.syncPrivate();
+		await addLink(phone, 'https://two.example/');
+
+		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const {promise: reached, resolve: markReached} =
+			Promise.withResolvers<void>();
+		const real = globalThis.fetch;
+		let held = false;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			if (
+				!held &&
+				String(url).includes('/private/v1/changes') &&
+				!init?.method
+			) {
+				held = true;
+				markReached();
+				await gate;
+			}
+
+			return real(url, init);
+		});
+		const round = phone.syncPrivate();
+		await reached;
+		await phone.removePrivate();
+		const recordsAtErase = (await serverRecords()).length;
+		release();
+		await round;
+		assert.equal(
+			(await serverRecords()).length,
+			recordsAtErase,
+			'the round sent nothing after the erase',
+		);
+		assert.deepEqual(
+			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
+			[],
+			'and wrote nothing back',
+		);
+	});
+
 	test('a key the phone cannot read is a failed lookup, not an empty server', async () => {
 		const phone = await startPhone();
 		await connectPhone(phone);

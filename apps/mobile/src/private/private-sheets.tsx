@@ -296,6 +296,14 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
+	// The drawer was dismissed while the PIN was checked: the result must not change the screen.
+	const dismissedRef = useRef(false);
+	useEffect(() => {
+		dismissedRef.current = false;
+		return () => {
+			dismissedRef.current = true;
+		};
+	}, []);
 	// An erase is running: unlocking waits, so it cannot open a library that is being deleted.
 	const [erasing, setErasing] = useState(false);
 	const run = async () => {
@@ -305,6 +313,10 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 			result = await unlockPrivate(value);
 		} finally {
 			setBusy(false);
+		}
+
+		if (dismissedRef.current) {
+			return;
 		}
 
 		if (result === 'ok') {
