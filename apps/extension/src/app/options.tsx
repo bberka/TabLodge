@@ -220,9 +220,12 @@ const RECOVERY_TOOLS_TEXT = [
 	'Restore a backup',
 	'Download a backup',
 	'Safety backups',
+	'Add a backup',
 	'undo',
 	'deleted items',
 	'crash',
+	'password',
+	'Downloads permission',
 ];
 
 const footerLinks = [
@@ -908,19 +911,19 @@ const settingsGroups: Array<{
 	{
 		title: RECOVERY_TITLE,
 		icon: LifeBuoy,
-		description: `Everything here stays on this computer. ${PROJECT.name} never uploads snapshots, backups or deleted items.`,
+		description: 'Snapshots and backups never leave this computer.',
 		fields: [
 			{
 				name: 'snapshotsEnabled',
 				label: 'Keep crash-recovery snapshots',
-				help: 'Saves a copy of your open windows (web pages only) every few minutes and after changes. If the browser closes unexpectedly, the dashboard offers to restore them.',
+				help: 'Brings back your open windows after a crash.',
 				type: 'switch',
 			},
 			{
 				name: 'snapshotIntervalMinutes',
 				requires: 'snapshotsEnabled',
 				label: 'Add to the history every',
-				help: 'How often a snapshot joins the list under Recent snapshots. The latest state is also saved a few seconds after each tab change.',
+				help: 'How often one joins Recent snapshots.',
 				type: 'number-select',
 				options: [
 					['5', '5 minutes'],
@@ -943,7 +946,7 @@ const settingsGroups: Array<{
 			{
 				name: 'autoBackup',
 				label: 'Automatic backups',
-				help: 'Keeps dated copies of your sessions, bookmarks and settings inside the extension’s storage. They can be restored or downloaded below. Automatic backups are plain text and are never password protected; only a full backup ZIP you export yourself can be.',
+				help: 'Dated copies of your sessions, bookmarks and settings.',
 				type: 'select',
 				options: [
 					['off', 'Off'],
@@ -956,7 +959,7 @@ const settingsGroups: Array<{
 				enabled: (current) => current.autoBackup !== 'off',
 				parent: 'autoBackup',
 				label: 'Backups to keep',
-				help: 'The oldest are dropped first. Backups are skipped when nothing changed.',
+				help: 'Skipped when nothing changed.',
 				type: 'number-select',
 				options: [
 					['7', 'Last 7'],
@@ -968,13 +971,13 @@ const settingsGroups: Array<{
 				enabled: (current) => current.autoBackup !== 'off',
 				parent: 'autoBackup',
 				label: 'Also save a copy to Downloads',
-				help: `Writes each backup as a dated JSON file to Downloads/${PROJECT.name}. Asks the browser for the optional “Downloads” permission when you turn it on. Very large backups are too big for this; use Download in the list below.`,
+				help: `Saves each one to Downloads/${PROJECT.name}.`,
 				type: 'switch',
 			},
 			{
 				name: 'trashRetentionDays',
 				label: 'Keep items in the trash bin for',
-				help: 'Deleted sessions, saved links, bookmarks and columns wait in the trash bin this long, then are removed for good automatically.',
+				help: 'Then deleted items are removed for good.',
 				type: 'number-select',
 				options: [
 					['7', '7 days'],
@@ -1654,7 +1657,7 @@ function Options() {
 			scoreQuery(query, [title]),
 			...fields.map((field) => scoreQuery(query, fieldSearchText(field))),
 		);
-	// The tools below the Recovery & backups rows (storage, backup list, quick buttons) are searchable as a unit.
+	// The tools below the Recovery & backups rows (storage line, Backups dialog, buttons) are searchable as a unit.
 	const recoveryTools =
 		!searching ||
 		titleHit(RECOVERY_TITLE) ||

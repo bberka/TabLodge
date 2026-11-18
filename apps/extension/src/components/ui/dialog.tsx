@@ -37,15 +37,40 @@ function Dialog({
 
 const DialogClose = DialogPrimitive.Close;
 
+/**
+What had focus when a dialog opened, and the open dialog it was in, if any (a confirmation opened from a dialog).
+*/
+type Opener = {element: Element | null; dialog: HTMLElement | null};
+
+function captureOpener(): Opener {
+	const element = document.activeElement;
+	return {element, dialog: element?.closest<HTMLElement>(OPEN_DIALOG) ?? null};
+}
+
 // Hands focus back to the control that opened the dialog. A caller's own onCloseAutoFocus that calls
-// preventDefault keeps full control.
-function returnFocus(event: Event, onCloseAutoFocus?: (event: Event) => void) {
+// preventDefault keeps full control. A dialog opened from inside another dialog that is still open returns
+// focus there: to its opener, or, when the opener is gone or disabled, to that dialog's own first choice.
+// Otherwise focus goes to the last control used outside any dialog.
+function returnFocus(
+	event: Event,
+	onCloseAutoFocus: ((event: Event) => void) | undefined,
+	opener: Opener,
+) {
 	onCloseAutoFocus?.(event);
 	if (event.defaultPrevented) {
 		return;
 	}
 
-	const target = focusReturnTarget();
+	const {element, dialog} = opener;
+	const below =
+		dialog?.isConnected && dialog.matches(OPEN_DIALOG) ? dialog : null;
+	const target = below
+		? element instanceof HTMLElement &&
+			below.contains(element) &&
+			!element.matches(':disabled')
+			? element
+			: initialFocusTarget(below)
+		: focusReturnTarget();
 	if (!target) {
 		return;
 	}
@@ -53,6 +78,9 @@ function returnFocus(event: Event, onCloseAutoFocus?: (event: Event) => void) {
 	event.preventDefault();
 	target.focus();
 }
+
+const OPEN_DIALOG =
+	'[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
 /**
 Width presets shared by every dialog and alert dialog: confirmations (sm), forms (md), and richer flows (lg).
@@ -229,6 +257,7 @@ const DialogContent = React.forwardRef<
 		// Uncontrolled dialogs (open === undefined) never freeze.
 		const shownChildren = useRetainedValue(children, open !== false);
 		const contentRef = React.useRef<HTMLDivElement | null>(null);
+		const openerRef = React.useRef<Opener>({element: null, dialog: null});
 		const setRefs = React.useCallback(
 			(node: HTMLDivElement | null) => {
 				contentRef.current = node;
@@ -249,6 +278,7 @@ const DialogContent = React.forwardRef<
 					className={cn(dialogPanelClass(size), className)}
 					// A caller's own onOpenAutoFocus that calls preventDefault keeps full control.
 					onOpenAutoFocus={(event) => {
+						openerRef.current = captureOpener();
 						onOpenAutoFocus?.(event);
 						if (event.defaultPrevented || !contentRef.current) {
 							return;
@@ -258,7 +288,9 @@ const DialogContent = React.forwardRef<
 						// The container is focusable (tabIndex -1) and has no visible focus ring.
 						initialFocusTarget(contentRef.current).focus();
 					}}
-					onCloseAutoFocus={(event) => returnFocus(event, onCloseAutoFocus)}
+					onCloseAutoFocus={(event) => {
+						returnFocus(event, onCloseAutoFocus, openerRef.current);
+					}}
 					{...props}
 				>
 					{shownChildren}
@@ -362,6 +394,8 @@ export {
 	dialogOverlayClass,
 	dialogPanelClass,
 	initialFocusTarget,
+	captureOpener,
+	type Opener,
 	returnFocus,
 	useRetainedValue,
 	type DialogSize,

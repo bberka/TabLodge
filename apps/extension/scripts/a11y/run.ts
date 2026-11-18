@@ -88,6 +88,7 @@ import {
 } from './session-menus.ts';
 import {
 	appearanceCheck,
+	backupsDialogCheck,
 	settingResetCheck,
 	settingsSearchCheck,
 	siteSourcePickerCheck,
@@ -140,6 +141,7 @@ async function main() {
 		await seedPage.close();
 		await settingsSearchCheck(env);
 		await eachTheme(env, [siteSourcePickerCheck]);
+		await eachTheme(env, [backupsDialogCheck]);
 		await eachTheme(env, [sessionCardQuickActionsCheck]);
 		await eachTheme(env, [sessionFaviconPreviewsCheck]);
 		await eachTheme(env, [

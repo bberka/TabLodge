@@ -1,13 +1,15 @@
 // Recovery UI shared by the dashboard, side panel and Settings: the "restore your last session" banner, the
 // recent-snapshots dialog, the trash bin dialog, and the backup list. Every action is a message to the service
 // worker, which keeps all of this data in local extension storage.
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
 	AppWindow,
+	Archive,
 	Bookmark,
 	Check,
 	ChevronDown,
 	ChevronRight,
+	CircleHelp,
 	Download,
 	History,
 	LayoutGrid,
@@ -29,6 +31,10 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
+	IconTooltip,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
 	ScrollArea,
 	SegmentedControl,
 } from '../shared/ui';
@@ -42,7 +48,13 @@ import type {
 	TrashSummary,
 } from '../shared/types';
 import {inPrivateWindow} from './private-config';
-import {messageOf, plural, send, type ShowStatus} from './common';
+import {
+	messageOf,
+	plural,
+	send,
+	type ShowStatus,
+	type StatusAction,
+} from './common';
 import {mergeSummary} from './merge-summary';
 import {
 	reportSnapshotRestore,
@@ -53,6 +65,7 @@ import {
 	offerUndo,
 	type TrashFilter,
 } from './recovery-core';
+import {cn} from '@/lib/utils';
 
 // Short badge text, with the full explanation shown on hover.
 const REASON_LABELS: Record<
@@ -740,8 +753,58 @@ function BackupRow({
 
 type UsageText = {snapshots: string; backups: string; trash: string};
 
+// Storage keys whose changes alter the usage line or the backup list (regular and private libraries).
+const RECOVERY_KEY = /\.(?:trash|backups|snapshots)$/;
+
 /**
-Settings › Recovery & backups: storage use, the quick buttons, and the internal backup list (automatic, manual and safety).
+Explains Add versus Restore behind a help button, so the dialog shows no standing paragraph.
+*/
+function BackupsHelpButton() {
+	return (
+		<Popover>
+			<IconTooltip label="About backups">
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-8 w-8 shrink-0 text-muted-foreground"
+						aria-label="About backups"
+					>
+						<CircleHelp className="h-4 w-4" aria-hidden="true" />
+					</Button>
+				</PopoverTrigger>
+			</IconTooltip>
+			<PopoverContent
+				align="start"
+				aria-label="About backups"
+				className="w-80 space-y-2 p-3 text-xs leading-5"
+				// Escape closes the help only, not the dialog around it.
+				onEscapeKeyDown={(event) => {
+					event.stopPropagation();
+				}}
+			>
+				<p>
+					Each backup is a regular JSON export of your sessions, bookmarks and
+					settings that Import can read.
+				</p>
+				<p>
+					<span className="font-semibold">Add</span> keeps what you have and
+					adds only what is new. <span className="font-semibold">Restore</span>{' '}
+					replaces sessions and bookmarks, keeps your current settings, and
+					first saves a safety backup.
+				</p>
+				<p className="text-muted-foreground">
+					Safety backups are also taken before erasing data, large imports, and
+					deleting many bookmarks.
+				</p>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+/**
+Settings › Recovery & backups below the settings rows: storage use on one line, Back up now, and the ways into the
+backup list, recent snapshots and the trash bin.
 */
 export function RecoveryTools({
 	showStatus,
@@ -761,17 +824,80 @@ export function RecoveryTools({
 	const [backups, setBackups] = useState<ActionSuccess<'GET_BACKUPS'> | null>(
 		null,
 	);
+	const [backupsError, setBackupsError] = useState('');
+	const [listOpen, setListOpen] = useState(false);
 	const [busy, setBusy] = useState('');
+	// While Backups is open its feedback and Undo show inside it: the page toast sits behind the modal.
+	const listOpenRef = useRef(false);
+	const [notice, setNotice] = useState<{
+		message: string;
+		error: boolean;
+		action?: StatusAction;
+	} | null>(null);
+	const undoRef = useRef<HTMLButtonElement | null>(null);
+	const noticeRef = useRef<HTMLParagraphElement | null>(null);
+	const status: ShowStatus = (message, error, options) => {
+		if (!listOpenRef.current) {
+			showStatus(message, error, options);
+		} else if (message) {
+			setNotice({message, error: Boolean(error), action: options?.action});
+		}
+	};
+
+	const openList = (open: boolean) => {
+		listOpenRef.current = open;
+		setListOpen(open);
+		if (open) {
+			refreshQuietly();
+		} else {
+			// Closing keeps an Undo that is still offered, as a page toast.
+			if (notice?.action) {
+				showStatus(notice.message, false, {action: notice.action});
+			}
+
+			setNotice(null);
+			focusUndoRef.current = false;
+		}
+	};
+
+	const undoNotice = () => {
+		const action = notice?.action;
+		// A newer action still running would have its own notice replaced.
+		if (!action || busy !== '') {
+			return;
+		}
+
+		setNotice({message: notice.message, error: false});
+		noticeRef.current?.focus();
+		void action.onClick();
+	};
+
+	// A deleted row takes focus with it; Undo is the nearest useful place for it.
+	const focusUndoRef = useRef(false);
+	// Waits for the delete to finish, while Undo is still disabled.
+	useEffect(() => {
+		if (!(notice?.action && focusUndoRef.current && busy === '')) {
+			return;
+		}
+
+		focusUndoRef.current = false;
+		undoRef.current?.focus();
+	}, [notice, busy]);
 	const [pending, setPending] = useState<
-		| {kind: 'snapshots' | 'trash'}
-		| {kind: 'restore'; backup: BackupSummary}
-		| null
+		{kind: 'snapshots'} | {kind: 'restore'; backup: BackupSummary} | null
 	>(null);
+	const latestReadRef = useRef(0);
 	const refresh = useCallback(async () => {
+		const read = ++latestReadRef.current;
 		const [usageResult, backupResult] = await Promise.all([
 			send('GET_STORAGE_USAGE'),
 			send('GET_BACKUPS'),
 		]);
+		// Reads overlap (after an action, on storage changes); an older one must not undo a newer one.
+		if (read !== latestReadRef.current) {
+			return;
+		}
+
 		if (usageResult?.ok) {
 			setUsage({
 				snapshots: bytesText(usageResult.usage.snapshots),
@@ -782,35 +908,59 @@ export function RecoveryTools({
 
 		if (backupResult?.ok) {
 			setBackups(backupResult);
+			setBackupsError('');
+		} else {
+			setBackupsError(backupResult?.error || 'Could not read the backups.');
 		}
 	}, []);
-	useEffect(() => {
-		void refresh().catch(() => undefined);
+	const refreshQuietly = useCallback(() => {
+		refresh().catch((reason: unknown) => {
+			setBackupsError(messageOf(reason) || 'Could not read the backups.');
+		});
 	}, [refresh]);
+	// The trash bin and snapshot dialogs (and their Undo) change these lists too, so watch storage instead of each action.
+	useEffect(() => {
+		refreshQuietly();
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const onChanged = (changes: Record<string, unknown>) => {
+			if (Object.keys(changes).every((key) => !RECOVERY_KEY.test(key))) {
+				return;
+			}
+
+			clearTimeout(timer);
+			timer = setTimeout(refreshQuietly, 300);
+		};
+
+		chrome.storage.onChanged.addListener(onChanged);
+		return () => {
+			clearTimeout(timer);
+			chrome.storage.onChanged.removeListener(onChanged);
+		};
+	}, [refreshQuietly]);
 
 	async function run(name: string, action: () => Promise<void>) {
 		setBusy(name);
 		try {
 			await action();
 		} catch (reason) {
-			showStatus(messageOf(reason) || 'That did not work.', true);
+			status(messageOf(reason) || 'That did not work.', true);
 		}
 
 		setBusy('');
-		await refresh().catch(() => undefined);
+		refreshQuietly();
 	}
 
 	const backupNow = () =>
 		run('backup', async () => {
 			const result = await send('BACKUP_NOW');
 			if (result?.ok) {
-				showStatus(
+				status(
 					`Backed up ${plural(result.backup.sessions, 'session')} and ${plural(result.backup.bookmarks, 'bookmark')}.`,
 					false,
 					{toast: true},
 				);
 			} else {
-				showStatus(result?.error || 'Could not back up.', true);
+				status(result?.error || 'Could not back up.', true);
 			}
 		});
 
@@ -820,7 +970,7 @@ export function RecoveryTools({
 			if (result?.ok) {
 				downloadFile(result.json, 'application/json', result.filename);
 			} else {
-				showStatus(result?.error || 'Could not read that backup.', true);
+				status(result?.error || 'Could not read that backup.', true);
 			}
 		});
 
@@ -829,7 +979,7 @@ export function RecoveryTools({
 		run(`merge:${backup.id}`, async () => {
 			const data = await send('GET_BACKUP_DATA', {id: backup.id});
 			if (!data?.ok) {
-				showStatus(data?.error || 'Could not read that backup.', true);
+				status(data?.error || 'Could not read that backup.', true);
 				return;
 			}
 
@@ -837,7 +987,7 @@ export function RecoveryTools({
 			try {
 				parsed = JSON.parse(data.json);
 			} catch {
-				showStatus('That backup could not be read.', true);
+				status('That backup could not be read.', true);
 				return;
 			}
 
@@ -846,13 +996,13 @@ export function RecoveryTools({
 				importOptions: {duplicateMode: 'skip', titlePolicy: 'existing'},
 			});
 			if (result?.ok) {
-				offerUndo(mergeSummary(result), result.undoId, showStatus, async () => {
+				offerUndo(mergeSummary(result), result.undoId, status, async () => {
 					await refresh();
 					await onDataChanged();
 				});
 				await onDataChanged();
 			} else {
-				showStatus(result?.error || 'Could not add that backup.', true);
+				status(result?.error || 'Could not add that backup.', true);
 			}
 		});
 
@@ -863,7 +1013,7 @@ export function RecoveryTools({
 				offerUndo(
 					`Restored ${plural(result.sessions, 'session')} and ${plural(result.bookmarks, 'bookmark')}.`,
 					result.undoId,
-					showStatus,
+					status,
 					async () => {
 						await refresh();
 						await onDataChanged();
@@ -871,7 +1021,7 @@ export function RecoveryTools({
 				);
 				await onDataChanged();
 			} else {
-				showStatus(result?.error || 'Could not restore that backup.', true);
+				status(result?.error || 'Could not restore that backup.', true);
 			}
 		});
 
@@ -879,9 +1029,10 @@ export function RecoveryTools({
 		run(`delete:${backup.id}`, async () => {
 			const result = await send('DELETE_BACKUP', {id: backup.id});
 			if (result?.ok) {
-				offerUndo('Backup deleted.', result.undoId, showStatus, refresh);
+				focusUndoRef.current = listOpenRef.current;
+				offerUndo('Backup deleted.', result.undoId, status, refresh);
 			} else {
-				showStatus(result?.error || 'Could not delete that backup.', true);
+				status(result?.error || 'Could not delete that backup.', true);
 			}
 		});
 
@@ -892,26 +1043,11 @@ export function RecoveryTools({
 				offerUndo(
 					`Cleared ${plural(result.count, 'snapshot')}.`,
 					result.undoId,
-					showStatus,
+					status,
 					refresh,
 				);
 			} else {
-				showStatus(result?.error || 'Could not clear the snapshots.', true);
-			}
-		});
-
-	const emptyTrash = () =>
-		run('trash', async () => {
-			const result = await send('EMPTY_TRASH');
-			if (result?.ok) {
-				offerUndo(
-					`Emptied the trash bin (${plural(result.count, 'item')}).`,
-					result.undoId,
-					showStatus,
-					refresh,
-				);
-			} else {
-				showStatus(result?.error || 'Could not empty the trash bin.', true);
+				status(result?.error || 'Could not clear the snapshots.', true);
 			}
 		});
 
@@ -919,154 +1055,192 @@ export function RecoveryTools({
 		(a, b) => b.at - a.at,
 	);
 	return (
-		<div className="space-y-5 pt-1">
-			<div className="space-y-3 rounded-md bg-muted/60 px-4 py-3">
-				<p className="text-sm font-medium">Storage used</p>
-				<dl className="grid grid-cols-3 gap-3 text-xs">
-					{(
-						[
-							['Snapshots', usage?.snapshots],
-							['Backups', usage?.backups],
-							['Trash bin', usage?.trash],
-						] as const
-					).map(([label, value]) => (
-						<div key={label}>
-							<dt className="text-muted-foreground">{label}</dt>
-							<dd className="mt-0.5 text-sm font-semibold tabular-nums">
-								{value ?? '…'}
-							</dd>
-						</div>
-					))}
-				</dl>
-				<div className="flex flex-wrap gap-2">
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== ''}
-						onClick={() => void backupNow()}
-					>
-						<Save className="h-4 w-4" />
-						{busy === 'backup' ? 'Backing up' : 'Back up now'}
-					</Button>
-					{!inPrivateWindow() && (
-						<Button size="sm" variant="outline" onClick={onOpenSnapshots}>
-							<History className="h-4 w-4" />
-							Recent snapshots
-						</Button>
-					)}
-					<Button size="sm" variant="outline" onClick={onOpenTrash}>
-						<Trash2 className="h-4 w-4" />
-						Trash bin
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== ''}
-						onClick={() => setPending({kind: 'snapshots'})}
-					>
-						Clear snapshots
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={busy !== ''}
-						onClick={() => setPending({kind: 'trash'})}
-					>
-						Empty trash bin
-					</Button>
-				</div>
-			</div>
-			<div>
-				<p className="text-sm font-medium">Backups</p>
-				<p className="mt-1 text-xs leading-5 text-muted-foreground">
-					Each backup holds your sessions, bookmarks and settings as a regular
-					JSON export that Import can read. Add keeps what you have and adds
-					only what is new. Restore replaces sessions and bookmarks, keeps your
-					current settings, and first saves a safety backup of what you have
-					now. Safety backups are taken automatically before erasing data, large
-					imports, and deleting many bookmarks.
+		<div className="space-y-3 border-t border-border/70 pt-4">
+			<p className="text-xs text-muted-foreground tabular-nums">
+				Backups {usage?.backups ?? '…'} · Trash {usage?.trash ?? '…'} ·
+				Snapshots {usage?.snapshots ?? '…'}
+			</p>
+			{backups?.downloadError && (
+				<p role="status" className="text-xs font-medium text-destructive">
+					The last Downloads copy was not written: {backups.downloadError}
 				</p>
-				{backups?.downloadError && (
-					<p
-						role="status"
-						className="mt-2 text-xs font-medium text-destructive"
-					>
-						The last Downloads copy was not written: {backups.downloadError}
-					</p>
+			)}
+			<div className="flex flex-wrap gap-2">
+				<Button
+					size="sm"
+					variant="outline"
+					disabled={busy !== ''}
+					onClick={() => void backupNow()}
+				>
+					<Save className="h-4 w-4" />
+					{busy === 'backup' ? 'Backing up' : 'Back up now'}
+				</Button>
+				<Button size="sm" variant="outline" onClick={() => openList(true)}>
+					<Archive className="h-4 w-4" />
+					Backups
+				</Button>
+				{!inPrivateWindow() && (
+					<Button size="sm" variant="outline" onClick={onOpenSnapshots}>
+						<History className="h-4 w-4" />
+						Recent snapshots
+					</Button>
 				)}
-				{all.length === 0 ? (
-					<p className="mt-3 rounded-md border border-dashed border-border px-4 py-5 text-center text-xs text-muted-foreground">
-						No backups yet.
-					</p>
-				) : (
-					<ul className="mt-3 space-y-2" aria-label="Backups">
-						{all.map((backup) => (
-							<BackupRow
-								key={backup.id}
-								backup={backup}
-								busy={busy !== ''}
-								onRestore={() => setPending({kind: 'restore', backup})}
-								onMerge={() => void mergeBackup(backup)}
-								onDownload={() => void download(backup)}
-								// A single backup is deleted at once; Undo brings it back.
-								onDelete={() => void removeBackup(backup)}
-							/>
-						))}
-					</ul>
-				)}
+				<Button size="sm" variant="outline" onClick={onOpenTrash}>
+					<Trash2 className="h-4 w-4" />
+					Trash bin
+				</Button>
 			</div>
-			<ConfirmationDialog
-				open={pending !== null}
-				title={
-					pending?.kind === 'snapshots'
-						? 'Clear all snapshots?'
-						: pending?.kind === 'trash'
-							? 'Empty the trash bin?'
+			<Dialog open={listOpen} onOpenChange={openList}>
+				<DialogContent
+					size="lg"
+					// Ctrl/Cmd+Z runs the notice's Undo, as it does for the page toast, unless a confirmation is on top.
+					onKeyDown={(event) => {
+						if (
+							!(
+								notice?.action &&
+								event.key.toLowerCase() === 'z' &&
+								(event.ctrlKey || event.metaKey)
+							) ||
+							event.shiftKey ||
+							event.altKey ||
+							document.querySelector('[role="alertdialog"]')
+						) {
+							return;
+						}
+
+						event.preventDefault();
+						undoNotice();
+					}}
+				>
+					<DialogHeader className={SCROLL_HEADER}>
+						<div className="flex items-center gap-1">
+							<DialogTitle>Backups</DialogTitle>
+							<BackupsHelpButton />
+						</div>
+						<DialogDescription>
+							Copies of your sessions, bookmarks and settings, kept on this
+							computer.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogBody>
+						{/* No box of its own, so an empty region adds no gap above the list. */}
+						<div role="status" aria-live="polite" className="contents">
+							{notice && (
+								<div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+									<p
+										ref={noticeRef}
+										tabIndex={-1}
+										className={cn(
+											'min-w-0 flex-1 rounded-sm leading-5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+											notice.error && 'font-medium text-destructive',
+										)}
+									>
+										{notice.message}
+									</p>
+									{notice.action && (
+										<Button
+											ref={undoRef}
+											size="sm"
+											variant="outline"
+											className="h-7 shrink-0"
+											aria-keyshortcuts="Control+Z Meta+Z"
+											disabled={busy !== ''}
+											onClick={undoNotice}
+										>
+											<Undo2 className="h-4 w-4" />
+											{notice.action.label}
+										</Button>
+									)}
+								</div>
+							)}
+						</div>
+						{backupsError ? (
+							<div className="flex flex-wrap items-center justify-between gap-2">
+								<p
+									role="alert"
+									className="text-sm font-medium text-destructive"
+								>
+									{backupsError}
+								</p>
+								<Button size="sm" variant="outline" onClick={refreshQuietly}>
+									<RotateCcw className="h-4 w-4" />
+									Try again
+								</Button>
+							</div>
+						) : backups === null ? (
+							<p className="px-4 py-8 text-center text-sm text-muted-foreground">
+								Reading backups…
+							</p>
+						) : all.length === 0 ? (
+							<p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+								No backups yet. Back up now makes one.
+							</p>
+						) : (
+							<ScrollArea
+								type="auto"
+								className="-mx-2"
+								// The floor keeps a row in view on very short windows, where the dialog itself scrolls.
+								viewportClassName="max-h-[max(9rem,min(32rem,calc(100dvh-23rem)))] px-2"
+							>
+								<ul className="space-y-2 py-0.5" aria-label="Backups">
+									{all.map((backup) => (
+										<BackupRow
+											key={backup.id}
+											backup={backup}
+											busy={busy !== ''}
+											onRestore={() => setPending({kind: 'restore', backup})}
+											onMerge={() => void mergeBackup(backup)}
+											onDownload={() => void download(backup)}
+											// A single backup is deleted at once; Undo brings it back.
+											onDelete={() => void removeBackup(backup)}
+										/>
+									))}
+								</ul>
+							</ScrollArea>
+						)}
+					</DialogBody>
+					<DialogFooter className={SCROLL_FOOTER}>
+						<Button
+							variant="outline"
+							disabled={busy !== ''}
+							onClick={() => setPending({kind: 'snapshots'})}
+						>
+							<Trash2 className="h-4 w-4" />
+							Clear snapshots
+						</Button>
+						<Button onClick={() => openList(false)}>
+							<Check aria-hidden="true" />
+							Done
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+				<ConfirmationDialog
+					open={pending !== null}
+					title={
+						pending?.kind === 'snapshots'
+							? 'Clear all snapshots?'
 							: 'Restore this backup?'
-				}
-				description={
-					pending?.kind === 'snapshots'
-						? 'Every recent snapshot is removed. You can undo this right after.'
-						: pending?.kind === 'trash'
-							? 'Everything in the trash bin is deleted for good. You can undo this right after.'
-							: 'Your sessions and bookmarks are replaced by this backup. To keep what you have and add only what is new, use Add instead. A safety backup of what you have now is kept, and you can undo this right after.'
-				}
-				confirmLabel={
-					pending?.kind === 'snapshots'
-						? 'Clear snapshots'
-						: pending?.kind === 'trash'
-							? 'Empty trash bin'
-							: 'Restore'
-				}
-				onOpenChange={(open) => !open && setPending(null)}
-				onConfirm={() => {
-					const current = pending;
-					setPending(null);
-					switch (current?.kind) {
-						case 'snapshots': {
-							void clearSnapshots();
-
-							break;
-						}
-
-						case 'trash': {
-							void emptyTrash();
-
-							break;
-						}
-
-						case 'restore': {
-							void restoreBackup(current.backup);
-
-							break;
-						}
-
-						default: {
-							break;
-						}
 					}
-				}}
-			/>
+					description={
+						pending?.kind === 'snapshots'
+							? 'Every recent snapshot is removed. You can undo this right after.'
+							: 'Your sessions and bookmarks are replaced by this backup. To keep what you have and add only what is new, use Add instead. A safety backup of what you have now is kept, and you can undo this right after.'
+					}
+					confirmLabel={
+						pending?.kind === 'snapshots' ? 'Clear snapshots' : 'Restore'
+					}
+					onOpenChange={(open) => !open && setPending(null)}
+					onConfirm={() => {
+						const current = pending;
+						setPending(null);
+						if (current?.kind === 'snapshots') {
+							void clearSnapshots();
+						} else if (current?.kind === 'restore') {
+							void restoreBackup(current.backup);
+						}
+					}}
+				/>
+			</Dialog>
 		</div>
 	);
 }

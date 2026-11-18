@@ -831,7 +831,10 @@ function Help() {
 							the dashboard search palette. Private windows never take
 							snapshots, so these entry points are hidden there; save a session
 							by hand instead. Crash detection is a best guess because browsers
-							do not tell extensions when they shut down.
+							do not tell extensions when they shut down. Snapshots hold web
+							pages only. Settings › Recovery &amp; backups turns them on or
+							off, sets how often one joins the list (the latest state is also
+							saved a few seconds after each tab change), and how many to keep.
 						</>
 					),
 					searchText:
@@ -851,17 +854,19 @@ function Help() {
 							<MenuLocation label="Bookmarks toolbar" />, the Trash bin icon in
 							the side panel header, or the search palette. Dashboard deletes,
 							imports, actions that open many tabs, and closing duplicate tabs
-							also offer Undo for a few seconds.
+							also offer Undo for a few seconds. Settings › Recovery &amp;
+							backups has a Trash bin button too, and Empty trash bin at the
+							bottom of the bin deletes everything in it for good.
 						</>
 					),
 					searchText:
-						'undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs',
+						'undo deleted sessions saved links bookmarks columns trash bin retention dashboard header settings sessions menu bookmarks toolbar side panel search palette imports many tabs empty trash bin',
 				},
 				{
 					title: 'Automatic backups',
-					body: 'Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings. Safety backups are also made before some large or destructive changes. Restore replaces your sessions and bookmarks with a backup; Add keeps what you have and adds only what is new. Choose backup frequency, retention, and an optional Downloads copy in Settings. Automatic and safety backups are not encrypted. Only a full backup ZIP that you export yourself can be protected with a PIN or password.',
+					body: `Optional automatic backups are off by default. They keep dated copies of sessions, bookmarks, and settings in the extension’s storage, and skip a day or week when nothing changed. Safety backups are also made before erasing data, large imports, and deleting many bookmarks. Back up now in Settings › Recovery & backups makes one at any time, and the Backups button there lists them all, each as a regular JSON export that Import can read. In that list, Restore replaces your sessions and bookmarks with a backup, keeps your current settings, and first saves a safety backup of what you have now; Add keeps what you have and adds only what is new. Each backup can also be downloaded or deleted, and Clear snapshots at the bottom removes every recent snapshot. Choose backup frequency, retention, and an optional Downloads copy in Settings. The Downloads copy is a dated JSON file in Downloads/${PROJECT.name}, asks for the browser’s optional Downloads permission when you turn it on, and is skipped for very large backups; download those from the list instead. Automatic and safety backups are not encrypted. Only a full backup ZIP that you export yourself can be protected with a PIN or password.`,
 					searchText:
-						'automatic backups off default dated copies sessions bookmarks settings safety backup before erase import delete frequency retention downloads permission',
+						'automatic backups off default dated copies sessions bookmarks settings safety backup before erase import delete frequency retention downloads permission back up now backups list add restore download clear snapshots storage used',
 				},
 			],
 			action: {

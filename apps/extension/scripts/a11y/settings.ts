@@ -272,3 +272,93 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 		},
 	);
 }
+
+export async function backupsDialogCheck(env: Env, theme: Theme) {
+	const {context, extensionId, axeSource} = env;
+	await check(
+		`Recovery: Backups opens a labelled dialog from the keyboard (${theme})`,
+		async () => {
+			const page = await openPage(context, extensionId, 'options');
+			try {
+				await page.bringToFront();
+				await setTheme(page, theme);
+				const backUp = page.getByRole('button', {name: 'Back up now'});
+				await backUp.click();
+				await until(async () => backUp.isEnabled(), 'Back up now finished');
+				const trigger = page.getByRole('button', {
+					name: 'Backups',
+					exact: true,
+				});
+				await trigger.focus();
+				await page.keyboard.press('Enter');
+				const dialog = page.getByRole('dialog', {name: 'Backups'});
+				await dialog.waitFor();
+				const rows = dialog
+					.getByRole('list', {name: 'Backups'})
+					.getByRole('listitem');
+				await rows.first().waitFor();
+				// Deleting a backup offers Undo inside the dialog and moves focus to it.
+				const before = await rows.count();
+				await dialog
+					.getByRole('button', {name: /^Delete the backup from/})
+					.first()
+					.focus();
+				await page.keyboard.press('Enter');
+				const undo = dialog.getByRole('button', {name: 'Undo'});
+				await undo.waitFor();
+				await until(
+					async () => (await page.locator(':focus').textContent()) === 'Undo',
+					'focus on Undo in the dialog',
+				);
+				await until(
+					async () => (await rows.count()) === before - 1,
+					'the backup is gone',
+				);
+				// Ctrl+Z runs it too, as it does for the page toast.
+				await page.keyboard.press('Control+z');
+				await dialog.getByText(/^Undone:/).waitFor();
+				await until(
+					async () => (await rows.count()) === before,
+					'the backup is back',
+				);
+				// A confirmation opened inside the dialog hands focus back inside it, not to the page behind.
+				await dialog.getByRole('button', {name: 'Clear snapshots'}).focus();
+				await page.keyboard.press('Enter');
+				const confirm = page.getByRole('alertdialog', {
+					name: 'Clear all snapshots?',
+				});
+				await confirm.waitFor();
+				await confirm.getByRole('button', {name: 'Cancel'}).focus();
+				await page.keyboard.press('Enter');
+				await confirm.waitFor({state: 'hidden'});
+				await until(
+					async () =>
+						(await page.locator(':focus').textContent()) === 'Clear snapshots',
+					'focus back on Clear snapshots',
+				);
+				const help = dialog.getByRole('button', {name: 'About backups'});
+				await help.focus();
+				await page.keyboard.press('Enter');
+				await page.getByRole('dialog', {name: 'About backups'}).waitFor();
+				const violations = await axeViolationLines(page, axeSource);
+				assert.deepEqual(violations, [], violations.join('\n'));
+				// Escape closes the help first and leaves the Backups dialog open.
+				await page.keyboard.press('Escape');
+				await page
+					.getByRole('dialog', {name: 'About backups'})
+					.waitFor({state: 'hidden'});
+				await dialog.waitFor();
+				await dialog.getByRole('button', {name: 'Done'}).focus();
+				await page.keyboard.press('Escape');
+				await dialog.waitFor({state: 'hidden'});
+				await until(
+					async () =>
+						(await page.locator(':focus').textContent()) === 'Backups',
+					'focus back on Backups',
+				);
+			} finally {
+				await page.close();
+			}
+		},
+	);
+}
