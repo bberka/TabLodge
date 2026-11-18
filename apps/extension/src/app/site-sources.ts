@@ -174,7 +174,7 @@ const SOUNDCLOUD_ITEM =
 	/^\/([\w-]{1,100})\/(?:sets\/([\w-]{1,200})|([\w-]{1,200}))\/?$/;
 const SPOTIFY_ITEM =
 	/^(?:\/intl-[-a-z]{2,10})?\/(track|album|playlist|episode|show|artist)\/([\dA-Za-z]{22})\/?$/;
-const LETTERBOXD_FILM = /^(?:\/[\w-]{1,40})?\/film\/([\w-]{1,200})\/?/;
+const LETTERBOXD_FILM = /^(?:\/[\w-]{1,40})?\/film\/([\w-]{1,200})(?:\/|$)/;
 const IMDB_TITLE =
 	/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/title\/(tt\d{5,12})(?:\/|$)/;
 const GOODREADS_BOOK = /^\/book\/show\/(\d{1,12})(?:[-.][^/]*)?\/?$/;
@@ -627,7 +627,7 @@ export const SITE_SOURCES: readonly SiteSource[] = [
 		id: 'spotify',
 		label: 'Spotify library',
 		description:
-			'Songs, albums, playlists, and episodes you save on open.spotify.com',
+			'Songs, albums, playlists, shows, and episodes you save on open.spotify.com',
 		homepage: 'https://open.spotify.com/',
 		column: 'Spotify',
 		columnIcon: 'music',

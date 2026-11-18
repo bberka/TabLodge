@@ -1159,6 +1159,7 @@ test('posts, tracks, films, and books each get one address', () => {
 		'https://www.imdb.com/title/tt6751668/',
 	);
 	assert.equal(imdbTitleUrl('/name/nm0094435/'), null);
+	assert.equal(letterboxdFilmUrl('/film/parasite%20other/'), null);
 	assert.equal(
 		goodreadsBookUrl('/book/show/18423.The_Left_Hand_of_Darkness'),
 		'https://www.goodreads.com/book/show/18423',
@@ -1206,7 +1207,9 @@ test('Bluesky: the save button and the menu item save the post; removing saves n
 		},
 	});
 	assert.equal(site.click('feed-unsave'), undefined);
-	// The thread's main post is the page; a quoted post's link inside it is not.
+	// Another language's label is not taken for a save, so removing a post there saves nothing.
+	assert.equal(site.click('feed-unsave-fr'), undefined);
+	// The thread's main post is the page; quoted posts after its text are not, even one by the same author.
 	assert.deepEqual(site.click('main-save'), {
 		kind: 'save',
 		link: {
@@ -1244,7 +1247,10 @@ test('SoundCloud: Like saves the row, the player, or the page; Liked saves nothi
 	);
 	assert.deepEqual(site.click('row-like'), {
 		kind: 'save',
-		link: {url: 'https://soundcloud.com/nils-frahm/says', title: 'Says'},
+		link: {
+			url: 'https://soundcloud.com/nils-frahm/familiar',
+			title: 'Familiar',
+		},
 	});
 	assert.equal(site.click('row-unlike'), undefined);
 	assert.deepEqual(site.click('player-like'), {
@@ -1278,6 +1284,14 @@ test('Spotify: saving the album, a song row, or the playing song; a saved one sa
 		},
 	});
 	assert.equal(site.click('row-saved'), undefined);
+	// An episode card on the page saves the episode, not the page.
+	assert.deepEqual(site.click('episode-save'), {
+		kind: 'save',
+		link: {
+			url: 'https://open.spotify.com/episode/5Xt5DXGzch68nYYamXrNxZ',
+			title: 'Episode one',
+		},
+	});
 	// The playing song, not the album page it is played from.
 	assert.deepEqual(site.click('player-save'), {
 		kind: 'save',
@@ -1347,7 +1361,14 @@ test('Goodreads: Want to Read on the book page and on a list row; other shelves 
 	};
 	assert.deepEqual(site.click('page-wtr'), {kind: 'save', link: book});
 	assert.equal(site.click('page-choose'), undefined);
-	assert.deepEqual(site.click('row-wtr'), {kind: 'save', link: book});
+	// The row's own book, not the page's.
+	assert.deepEqual(site.click('row-wtr'), {
+		kind: 'save',
+		link: {
+			url: 'https://www.goodreads.com/book/show/13642',
+			title: 'A Wizard of Earthsea',
+		},
+	});
 	assert.equal(site.click('row-reading'), undefined);
 });
 
@@ -1392,6 +1413,14 @@ test('Substack: Save on a card or a post page; Unsave saves nothing', () => {
 		},
 	});
 	assert.equal(site.click('card-unsave'), undefined);
+	// A relative link keeps the publication's host.
+	assert.deepEqual(site.click('card-relative'), {
+		kind: 'save',
+		link: {
+			url: 'https://example.substack.com/p/relative-post',
+			title: 'A relative link',
+		},
+	});
 	assert.deepEqual(site.click('page-save'), {
 		kind: 'save',
 		link: {

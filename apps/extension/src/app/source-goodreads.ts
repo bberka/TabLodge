@@ -2,9 +2,8 @@
 //   - on a book's page, the Want to Read button (`button.Button--wtr`). Once the book is on a shelf it is replaced by
 //     a button that edits the shelf, so a `Button--wtr` click is always an add. The arrow beside it
 //     ("…choose a shelf…") only opens the shelf list and saves nothing.
-//   - on older list pages, the Want to Read button of a form posting to `/shelf/add_to_shelf` with `name=to-read`;
-//     the form names the book by its id.
-// On a book's page the book is the page; in a list it is the row's title link, or else the form's book id.
+//   - on older list pages, the Want to Read button of a form posting to `/shelf/add_to_shelf` with `name=to-read`.
+// On a book's page the book is the page; in a list it is the row's title link.
 import {goodreadsBookUrl} from './site-sources';
 import {
 	controlLabel,
@@ -51,12 +50,7 @@ export function createGoodreadsReader(document: Document): SourceReader {
 		}
 
 		const titleLink = form.closest(ROW)?.querySelector(ROW_TITLE);
-		const bookId = form
-			.querySelector('input[name="book_id"]')
-			?.getAttribute('value');
-		const url = goodreadsBookUrl(
-			titleLink?.getAttribute('href') ?? `/book/show/${bookId ?? ''}`,
-		);
+		const url = goodreadsBookUrl(titleLink?.getAttribute('href') ?? '');
 		const title = squash(titleLink?.textContent);
 		return savedOrUnreadable(url, title);
 	};

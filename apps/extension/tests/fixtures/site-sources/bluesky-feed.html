@@ -15,15 +15,17 @@ capture of the live page. -->
 	<a data-testid="feedItem-by-bob.bsky.social" href="/profile/bob.bsky.social/post/3kdef456uvw">
 		<div data-testid="postText">Already saved.</div>
 		<button data-testid="postBookmarkBtn" id="feed-unsave" aria-label="Remove from saved posts"></button>
+		<button data-testid="postBookmarkBtn" id="feed-unsave-fr" aria-label="Retirer des posts conservés"></button>
 	</a>
 	<div data-testid="postThreadItem-by-carol.bsky.social" id="thread-main">
 		<div data-testid="postText">The main post of this thread.</div>
 		<a href="/profile/dave.bsky.social/post/3kquoted999">A quoted post</a>
+		<a href="/profile/carol.bsky.social/post/3kolder000">An older post by the same author, quoted</a>
 		<button data-testid="postBookmarkBtn" id="main-save" aria-label="Add to saved posts"></button>
 	</div>
 	<div data-testid="postThreadItem-by-erin.bsky.social" id="thread-reply">
-		<div data-testid="postText">A reply.</div>
 		<a href="/profile/erin.bsky.social/post/3kreply777">2h</a>
+		<div data-testid="postText">A reply.</div>
 		<button data-testid="postBookmarkBtn" id="reply-save" aria-label="Add to saved posts"></button>
 	</div>
 	<div role="menu">

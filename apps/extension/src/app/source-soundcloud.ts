@@ -19,7 +19,8 @@ const ITEMS = [
 		'a.soundTitle__title, a.soundBadge__title',
 	],
 ] as const;
-const PAGE_TITLE = '.soundTitle__title, h1';
+// The page's own header; list rows above it have titles of their own.
+const PAGE_TITLE = 'h1';
 
 export function createSoundcloudReader(document: Document): SourceReader {
 	return (event) => {

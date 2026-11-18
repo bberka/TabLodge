@@ -445,6 +445,7 @@ export async function sessionReplaceAppendSplitCheck(env: Env, theme: Theme) {
 				assert.ok(original.length > 2);
 				const trigger = page.getByRole('button', {
 					name: 'More actions for Home lab rebuild',
+					exact: true,
 				});
 				const undoButton = page.getByRole('button', {name: 'Undo'});
 				const sessionMenuItem = async (name: string) => {

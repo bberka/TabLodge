@@ -454,14 +454,14 @@ function Help() {
 							description), a Hacker News story you favorite, a Stack Overflow
 							question you bookmark, a dev.to article you save to your reading
 							list, a Lobsters story you save, a Bluesky post you save, a track
-							or playlist you like on SoundCloud, a song, album, playlist, or
-							episode you save to your Spotify library in the web player, a film
-							you add to your Letterboxd or IMDb watchlist, a book you mark Want
-							to Read on Goodreads, a Medium story you bookmark, or a Substack
-							post you save. Medium and Substack publications on their own
-							domains are not covered. Posts from X, Instagram, and Bluesky are
-							titled with the start of their text or caption. A Hacker News or
-							Lobsters story is saved at the address it links to, with its
+							or playlist you like on SoundCloud, a song, album, playlist, show,
+							or episode you save to your Spotify library in the web player, a
+							film you add to your Letterboxd or IMDb watchlist, a book you mark
+							Want to Read on Goodreads, a Medium story you bookmark, or a
+							Substack post you save. Medium and Substack publications on their
+							own domains are not covered. Posts from X, Instagram, and Bluesky
+							are titled with the start of their text or caption. A Hacker News
+							or Lobsters story is saved at the address it links to, with its
 							discussion page in the note; a text post with no link is saved at
 							its discussion page. Under Save to, under each added site, you can
 							choose another column; if that column is deleted, saves go to the
@@ -470,20 +470,20 @@ function Help() {
 							Undo; press Tab to reach it. A link already in your bookmarks or
 							in the trash bin is not saved again. {PROJECT.name} only watches
 							for your own clicks on the site&apos;s save controls, reads the
-							link from the page, and sends nothing anywhere. It recognizes the
-							English labels of those controls. The Bookmark button on X, Star
-							on GitHub, and the save buttons on Stack Overflow and dev.to work
-							in any language, and so do Like on SoundCloud, the save buttons on
-							Spotify and IMDb, Want to Read on Goodreads, and the bookmark on
-							Medium; the Share menu item on X works in English. On Bluesky in
-							another language, removing a saved post counts as saving it. If a
-							site changes its page so {PROJECT.name} can no longer read it,
-							nothing is saved and Settings says so. In a private window, saves
-							are added only when private windows use the regular library.
-							Remove takes a site out of the list and gives its access back.
-							Removing its access in the browser&apos;s extension settings also
-							stops it; Settings then says so next to the site and offers Allow
-							again.
+							link from the page, and makes no network requests of its own; the
+							bookmark syncs only if you connected your own server. It
+							recognizes the English labels of those controls. The Bookmark
+							button on X, Star on GitHub, and the save buttons on Stack
+							Overflow and dev.to work in any language, and so do Like on
+							SoundCloud, the save buttons on Spotify and IMDb, Want to Read on
+							Goodreads, and the bookmark on Medium; the Share menu item on X
+							and the save button on Bluesky work in English. If a site changes
+							its page so {PROJECT.name} can no longer read it, nothing is saved
+							and Settings says so. In a private window, saves are added only
+							when private windows use the regular library. Remove takes a site
+							out of the list and gives its access back. Removing its access in
+							the browser&apos;s extension settings also stops it; Settings then
+							says so next to the site and offers Allow again.
 						</>
 					),
 					searchText:

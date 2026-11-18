@@ -59,7 +59,13 @@ export function createSubstackReader(document: Document): SourceReader {
 		const found = card(button, document);
 		if (found) {
 			const url = [...found.container.querySelectorAll('a[href]')]
-				.map((link) => substackPostUrl(link.getAttribute('href') ?? ''))
+				// Resolved against the page, so a relative link keeps the publication's host.
+				.map((link) =>
+					substackPostUrl(
+						new URL(link.getAttribute('href') ?? '', document.location.href)
+							.href,
+					),
+				)
 				.find(Boolean);
 			const title = squash(found.title.textContent);
 			return savedOrUnreadable(url, title);
