@@ -17,7 +17,7 @@ import {Button, Field, Segmented} from '../ui/widgets';
 import {setView} from '../library/view';
 import {
 	changePrivateLock,
-	getPrivateState,
+	isPrivateOpen,
 	openFromServer,
 	privateServerInfo,
 	protectPrivate,
@@ -159,14 +159,19 @@ function SetupForm({
 				}
 
 				await setupPrivate({kind, value});
-				setView('private');
+				if (isPrivateOpen()) {
+					setView('private');
+				}
 			} else {
 				if (deviceOnly) {
 					setPreferences({syncPrivate: false});
 				}
 
 				await protectPrivate({kind, value});
-				setView('private');
+				if (isPrivateOpen()) {
+					setView('private');
+				}
+
 				showSnack('The private library is locked with its new PIN or password');
 			}
 
@@ -294,11 +299,16 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 	const [erasing, setErasing] = useState(false);
 	const run = async () => {
 		setBusy(true);
-		const result = await unlockPrivate(value);
-		setBusy(false);
+		let result: Awaited<ReturnType<typeof unlockPrivate>>;
+		try {
+			result = await unlockPrivate(value);
+		} finally {
+			setBusy(false);
+		}
+
 		if (result === 'ok') {
-			const state = getPrivateState();
-			if (state.exists && !state.needsPin) {
+			// Not if it was erased or locked again while the PIN was being checked.
+			if (isPrivateOpen()) {
 				setView('private');
 			}
 
@@ -511,8 +521,8 @@ function ServerForm({
 		}
 
 		if (result.ok) {
-			// A library that still has no PIN does not open.
-			if (!getPrivateState().needsPin) {
+			// Only while it is open: a library that has no PIN, or that locked while the join waited, does not show.
+			if (isPrivateOpen()) {
 				setView('private');
 			}
 
@@ -528,6 +538,14 @@ function ServerForm({
 
 			case 'wrong': {
 				setProblem('That PIN or password is wrong.');
+				break;
+			}
+
+			case 'sync-off': {
+				notify(
+					'Private sync is off',
+					'Turn on Sync the private library in Settings, then try again. The private library syncs through the same server.',
+				);
 				break;
 			}
 

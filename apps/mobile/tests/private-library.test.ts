@@ -543,6 +543,47 @@ describe('with the extension on the same server', () => {
 		assert.equal(phone.getPrivateState().lockedWith, 'pin');
 	});
 
+	test('with private sync off, joining says so instead of asking to connect', async () => {
+		const phone = await startPhone();
+		await connectPhone(phone);
+		prefs.syncPrivate = false;
+		assert.deepEqual(await phone.openFromServer(), {
+			ok: false,
+			reason: 'sync-off',
+		});
+		memory.delete(SYNC_CONFIG_KEY);
+		assert.deepEqual(await phone.openFromServer(), {
+			ok: false,
+			reason: 'not-connected',
+		});
+	});
+
+	test('a join that fails while installing the lock leaves the server’s lock and its key together, and what the phone sends stays readable', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		await extension.sync();
+		const phone = await startPhone();
+		await connectPhone(phone);
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://phone.example/');
+		failRemoval.add('tablodge.private.keptKey');
+		const result = await phone.openFromServer(PASSWORD.value);
+		assert.equal(result.ok, false);
+		failRemoval.clear();
+
+		// The retry checks the credential again, even though the lock already carries the server's id.
+		assert.deepEqual(await phone.openFromServer('0000'), {
+			ok: false,
+			reason: 'wrong',
+		});
+		assert.deepEqual(await phone.openFromServer(PASSWORD.value), {ok: true});
+
+		// A sync round now seals with the server's key, which the extension holds.
+		await phone.syncPrivate();
+		await extension.sync();
+		assert.deepEqual(urlsOf(extension.store), ['https://phone.example/']);
+	});
+
 	test('a key the phone cannot read is a failed lookup, not an empty server', async () => {
 		const phone = await startPhone();
 		await connectPhone(phone);
@@ -603,19 +644,29 @@ describe('with the extension on the same server', () => {
 
 		// Hold the join's key request, as a slow server would, while a phone-only library is set up.
 		const {promise: gate, resolve: release} = Promise.withResolvers<void>();
+		const {promise: reached, resolve: markReached} =
+			Promise.withResolvers<void>();
 		const real = globalThis.fetch;
 		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
 			if (String(url).endsWith('/private/v1/key') && !init?.method) {
+				markReached();
 				await gate;
 			}
 
 			return real(url, init);
 		});
 		const joining = phone.openFromServer(PASSWORD.value);
+		// The join is now waiting on the server, past the point where it notes the library's state.
+		await reached;
 		await phone.setupPrivate(PIN);
 		release();
 		const result = await joining;
-		assert.equal(result.ok, false);
+		assert.deepEqual(result, {
+			ok: false,
+			reason: 'error',
+			message:
+				'The private library changed while the server was checked. Try again.',
+		});
 		assert.equal(phone.getPrivateState().lockedWith, 'pin');
 		await phone.lockPrivate();
 		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'wrong');

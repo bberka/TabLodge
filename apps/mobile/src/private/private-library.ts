@@ -93,6 +93,8 @@ let client: ReturnType<typeof createSyncClient> | undefined;
 let exists = false;
 let lock: Lock | undefined;
 let kept: Kept | undefined;
+// A join installed the server's lock but did not finish writing it, so the next one checks the credential again.
+let adopting = false;
 // An erase was started and has not finished: the library is out of reach and nothing syncs until it does.
 let erasing = false;
 // The data key, base64, while a protected library is unlocked.
@@ -528,7 +530,8 @@ export async function unlockPrivate(credential: string): Promise<UnlockResult> {
 
 	refreshState();
 	runClient();
-	await refreshPrivateStatus();
+	// The key is in: a failed status read does not undo the unlock.
+	await refreshPrivateStatus().catch(() => undefined);
 	return 'ok';
 }
 
@@ -563,6 +566,7 @@ export async function removePrivate(): Promise<void> {
 	}
 
 	erasing = true;
+	adopting = false;
 	exists = false;
 	unlockedKey = undefined;
 	lock = undefined;
@@ -612,7 +616,7 @@ export type OpenResult =
 			`not-connected`: no server. `credential`: the server's library is protected and needs its PIN or password.
 			`wrong`: that one did not open it. `error`: anything else.
 			*/
-			reason: 'not-connected' | 'credential' | 'wrong' | 'error';
+			reason: 'not-connected' | 'sync-off' | 'credential' | 'wrong' | 'error';
 			message?: string;
 	  };
 
@@ -699,9 +703,13 @@ already has, which syncs with the server's. Without a library on the phone, one 
 */
 export async function openFromServer(credential?: string): Promise<OpenResult> {
 	try {
-		const to = getPreferences().syncPrivate ? await target() : undefined;
+		const to = await target();
 		if (!to) {
 			return {ok: false, reason: 'not-connected'};
+		}
+
+		if (!getPreferences().syncPrivate) {
+			return {ok: false, reason: 'sync-off'};
 		}
 
 		await settleErase();
@@ -709,7 +717,7 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 		const server = await serverKey(to);
 		// A library with no lock of its own, even one that kept the server's key, takes the lock only from a credential
 		// that opens the server's key.
-		if (server && lock?.id !== server.id) {
+		if (server && (lock?.id !== server.id || adopting)) {
 			if (credential === undefined) {
 				return {ok: false, reason: 'credential'};
 			}
@@ -736,15 +744,20 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 				await writeJson(ON_KEY, true);
 			}
 
-			await setLock({
+			// The lock and the key it opens change together, in memory, before anything is awaited, so no sync round can
+			// pair the server's lock with the phone's old key.
+			stopClient();
+			adopting = true;
+			const installing = setLock({
 				id: server.id,
 				wrapped: server.wrapped,
 				kind: credentialKindOf(credential),
 			});
-			kept = undefined;
-			await removeKeys([KEPT_KEY]);
 			unlockedKey = key;
-			stopClient();
+			kept = undefined;
+			await installing;
+			await removeKeys([KEPT_KEY]);
+			adopting = false;
 		} else if (!exists) {
 			// Nothing here and nothing on the server: a library is made by setting up a PIN or password, not from here.
 			return {
