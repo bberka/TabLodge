@@ -183,16 +183,19 @@ function icon(kind: 'done' | 'error', color: string) {
 	return svg;
 }
 
+let latestToast = 0;
+let closeShown: (() => void) | undefined;
+
 /**
 Shows the notice. `error` marks a save that failed, in the destructive color, as the extension's error toasts are.
 */
-let latestToast = 0;
-
 export function showSourceToast(
 	text: string,
 	{action, error = false}: {action?: ToastAction; error?: boolean} = {},
 ) {
-	// The appearance read is async, so a later notice could otherwise be replaced by an earlier one.
+	// The one on screen goes now, so its Undo can't act while the new one reads the theme. That read is async, so a
+	// later notice could also be replaced by an earlier one; only the newest renders.
+	closeShown?.();
 	const request = ++latestToast;
 	void readAppearance().then(({theme, accent}) => {
 		if (request !== latestToast) {
@@ -217,6 +220,7 @@ function render(
 		accent,
 	}: {action?: ToastAction; error: boolean; theme: Theme; accent: string},
 ) {
+	// One left by an earlier copy of this script, after an extension update, is not in closeShown.
 	document.querySelector(`#${HOST_ID}`)?.remove();
 	const host = document.createElement('div');
 	host.id = HOST_ID;
@@ -319,6 +323,7 @@ function render(
 	let previous: HTMLElement | undefined;
 	let undone = false;
 	const close = () => {
+		closeShown = undefined;
 		clearTimeout(timer);
 		const hadFocus = root.activeElement !== null;
 		host.remove();
@@ -327,6 +332,7 @@ function render(
 		}
 	};
 
+	closeShown = close;
 	const schedule = () => {
 		clearTimeout(timer);
 		if (!held) {

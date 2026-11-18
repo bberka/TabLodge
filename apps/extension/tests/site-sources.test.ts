@@ -155,9 +155,27 @@ test('the in-page toast uses the same tokens as the extension stylesheet', () =>
 	assert.equal(TOAST_TOKENS.light.primary, value(light, 'brand-primary-light'));
 	assert.equal(TOAST_TOKENS.dark.primary, value(light, 'brand-primary-dark'));
 	const radius = value(light, 'radius') ?? '';
-	assert.match(radius, /^[\d.]+rem$/);
+	assert.match(radius, /^\d+(?:\.\d+)?rem$/);
 	assert.equal(TOAST_TOKENS.radius, `${Number.parseFloat(radius) * 16}px`);
 });
+
+// WCAG contrast between two `rgb(r g b)` colors.
+function contrast(...colors: string[]) {
+	const [high, low] = colors
+		.map((color) => {
+			const channels = (/\d+ \d+ \d+/.exec(color)?.[0] ?? '')
+				.split(' ')
+				.map((value) => {
+					const channel = Number(value) / 255;
+					return channel <= 0.03928
+						? channel / 12.92
+						: ((channel + 0.055) / 1.055) ** 2.4;
+				});
+			return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+		})
+		.toSorted((a, b) => b - a);
+	return (high + 0.05) / (low + 0.05);
+}
 
 test('the in-page toast follows the theme and accent chosen in Settings', () => {
 	const os = {systemDark: true, incognito: false};
@@ -199,11 +217,15 @@ test('the in-page toast follows the theme and accent chosen in Settings', () => 
 		primary: 'rgb(98 84 215)',
 	});
 	assert.equal(toastColors('dark', [21, 128, 61]).background, 'rgb(17 17 20)');
-	// #797979 reads on the dark page (4.57:1) but not on the toast's lighter background (4.33:1), so it lifts.
-	assert.notEqual(
-		toastColors('dark', [121, 121, 121]).primary,
-		'rgb(121 121 121)',
-	);
+	// These grays read on the dark page but not on the toast's lighter background, so they are lifted to 4.5:1.
+	for (const gray of [121, 122]) {
+		const colors = toastColors('dark', [gray, gray, gray]);
+		assert.ok(
+			contrast(colors.primary, colors.background) >= 4.5,
+			colors.primary,
+		);
+	}
+
 	// Amber is too light to read on the light page, so it darkens there, as the pages' accent does.
 	assert.notEqual(
 		toastColors('light', [217, 119, 6]).primary,
