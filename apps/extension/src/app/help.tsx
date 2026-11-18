@@ -466,24 +466,24 @@ function Help() {
 							its discussion page. Under Save to, under each added site, you can
 							choose another column; if that column is deleted, saves go to the
 							site&apos;s own column again until you choose one. A small notice
-							in the page, in your {PROJECT.name}
-							theme and accent color, offers Undo; press Tab to reach it. A link
-							already in your bookmarks or in the trash bin is not saved again.{' '}
-							{PROJECT.name} only watches for your own clicks on the site&apos;s
-							save controls, reads the link from the page, and sends nothing
-							anywhere. It recognizes the English labels of those controls. The
-							Bookmark button on X, Star on GitHub, and the save buttons on
-							Stack Overflow and dev.to work in any language, and so do Like on
-							SoundCloud, the save buttons on Spotify and IMDb, Want to Read on
-							Goodreads, and the bookmark on Medium; the Share menu item on X
-							works in English. On Bluesky in another language, removing a saved
-							post counts as saving it. If a site changes its page so{' '}
-							{PROJECT.name} can no longer read it, nothing is saved and
-							Settings says so. In a private window, saves are added only when
-							private windows use the regular library. Remove takes a site out
-							of the list and gives its access back. Removing its access in the
-							browser&apos;s extension settings also stops it; Settings then
-							says so next to the site and offers Allow again.
+							in the page, in your {PROJECT.name} theme and accent color, offers
+							Undo; press Tab to reach it. A link already in your bookmarks or
+							in the trash bin is not saved again. {PROJECT.name} only watches
+							for your own clicks on the site&apos;s save controls, reads the
+							link from the page, and sends nothing anywhere. It recognizes the
+							English labels of those controls. The Bookmark button on X, Star
+							on GitHub, and the save buttons on Stack Overflow and dev.to work
+							in any language, and so do Like on SoundCloud, the save buttons on
+							Spotify and IMDb, Want to Read on Goodreads, and the bookmark on
+							Medium; the Share menu item on X works in English. On Bluesky in
+							another language, removing a saved post counts as saving it. If a
+							site changes its page so {PROJECT.name} can no longer read it,
+							nothing is saved and Settings says so. In a private window, saves
+							are added only when private windows use the regular library.
+							Remove takes a site out of the list and gives its access back.
+							Removing its access in the browser&apos;s extension settings also
+							stops it; Settings then says so next to the site and offers Allow
+							again.
 						</>
 					),
 					searchText:
