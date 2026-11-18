@@ -855,7 +855,19 @@ export function RecoveryTools({
 			}
 
 			setNotice(null);
+			focusUndoRef.current = false;
 		}
+	};
+
+	const undoNotice = () => {
+		const action = notice?.action;
+		if (!action) {
+			return;
+		}
+
+		setNotice({message: notice.message, error: false});
+		noticeRef.current?.focus();
+		void action.onClick();
 	};
 
 	// A deleted row takes focus with it; Undo is the nearest useful place for it.
@@ -872,11 +884,18 @@ export function RecoveryTools({
 	const [pending, setPending] = useState<
 		{kind: 'snapshots'} | {kind: 'restore'; backup: BackupSummary} | null
 	>(null);
+	const latestReadRef = useRef(0);
 	const refresh = useCallback(async () => {
+		const read = ++latestReadRef.current;
 		const [usageResult, backupResult] = await Promise.all([
 			send('GET_STORAGE_USAGE'),
 			send('GET_BACKUPS'),
 		]);
+		// Reads overlap (after an action, on storage changes); an older one must not undo a newer one.
+		if (read !== latestReadRef.current) {
+			return;
+		}
+
 		if (usageResult?.ok) {
 			setUsage({
 				snapshots: bytesText(usageResult.usage.snapshots),
@@ -1008,7 +1027,7 @@ export function RecoveryTools({
 		run(`delete:${backup.id}`, async () => {
 			const result = await send('DELETE_BACKUP', {id: backup.id});
 			if (result?.ok) {
-				focusUndoRef.current = true;
+				focusUndoRef.current = listOpenRef.current;
 				offerUndo('Backup deleted.', result.undoId, status, refresh);
 			} else {
 				status(result?.error || 'Could not delete that backup.', true);
@@ -1070,7 +1089,27 @@ export function RecoveryTools({
 				</Button>
 			</div>
 			<Dialog open={listOpen} onOpenChange={openList}>
-				<DialogContent size="lg">
+				<DialogContent
+					size="lg"
+					// Ctrl/Cmd+Z runs the notice's Undo, as it does for the page toast, unless a confirmation is on top.
+					onKeyDown={(event) => {
+						if (
+							!(
+								notice?.action &&
+								event.key.toLowerCase() === 'z' &&
+								(event.ctrlKey || event.metaKey)
+							) ||
+							event.shiftKey ||
+							event.altKey ||
+							document.querySelector('[role="alertdialog"]')
+						) {
+							return;
+						}
+
+						event.preventDefault();
+						undoNotice();
+					}}
+				>
 					<DialogHeader className={SCROLL_HEADER}>
 						<div className="flex items-center gap-1">
 							<DialogTitle>Backups</DialogTitle>
@@ -1102,12 +1141,8 @@ export function RecoveryTools({
 											size="sm"
 											variant="outline"
 											className="h-7 shrink-0"
-											onClick={() => {
-												const {action} = notice;
-												setNotice({message: notice.message, error: false});
-												noticeRef.current?.focus();
-												void action?.onClick();
-											}}
+											aria-keyshortcuts="Control+Z Meta+Z"
+											onClick={undoNotice}
 										>
 											<Undo2 className="h-4 w-4" />
 											{notice.action.label}

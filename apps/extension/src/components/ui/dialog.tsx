@@ -50,12 +50,16 @@ function returnFocus(
 		return;
 	}
 
-	const target =
-		opener instanceof HTMLElement &&
-		opener.isConnected &&
-		opener.closest(OPEN_DIALOG)
+	const below =
+		opener instanceof HTMLElement && opener.isConnected
+			? opener.closest<HTMLElement>(OPEN_DIALOG)
+			: null;
+	// An opener the confirmed action disabled cannot take focus; the dialog's own first choice can.
+	const target = below
+		? opener instanceof HTMLElement && !opener.matches(':disabled')
 			? opener
-			: focusReturnTarget();
+			: initialFocusTarget(below)
+		: focusReturnTarget();
 	if (!target) {
 		return;
 	}

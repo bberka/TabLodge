@@ -310,8 +310,12 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 					async () => (await page.locator(':focus').textContent()) === 'Undo',
 					'focus on Undo in the dialog',
 				);
-				assert.equal(await rows.count(), before - 1);
-				await page.keyboard.press('Enter');
+				await until(
+					async () => (await rows.count()) === before - 1,
+					'the backup is gone',
+				);
+				// Ctrl+Z runs it too, as it does for the page toast.
+				await page.keyboard.press('Control+z');
 				await dialog.getByText(/^Undone:/).waitFor();
 				await until(
 					async () => (await rows.count()) === before,
