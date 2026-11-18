@@ -500,7 +500,7 @@ async function runLockChecks(
 		)
 		.waitFor();
 	assert.equal(
-		await normal.getByRole('button', {name: 'Turn on lock…'}).count(),
+		await normal.getByRole('button', {name: 'Turn on lock'}).count(),
 		0,
 	);
 
@@ -667,7 +667,7 @@ async function runLockChecks(
 	);
 	// A forgotten password has a way out: erase the private library and start again. Cancelling keeps everything.
 	await privatePage
-		.getByRole('button', {name: 'Forgot it? Erase private data…'})
+		.getByRole('button', {name: 'Forgot it? Erase private data'})
 		.click();
 	const eraseDialog = privatePage.getByRole('dialog', {
 		name: 'Erase private data',
@@ -727,6 +727,11 @@ async function runLockChecks(
 		`chrome-extension://${id}/options.html#settings-private-windows`,
 	);
 	const change = privatePage.getByRole('button', {name: /^Change password/});
+	await captureEvidence(
+		privatePage,
+		change.locator('xpath=../../..'),
+		'lock-settings-buttons',
+	);
 	await change.focus();
 	await privatePage.keyboard.press('Enter');
 	const changeDialog = privatePage.getByRole('dialog', {
