@@ -102,6 +102,7 @@ function SetupForm({
 	creating = false,
 	changing = false,
 	deviceOnly = false,
+	onBusy,
 	onDone,
 }: {
 	creating?: boolean;
@@ -110,6 +111,10 @@ function SetupForm({
 	The library is kept on this phone only, so it does not sync with the server it would otherwise try.
 	*/
 	deviceOnly?: boolean;
+	/**
+	Told when the form starts and stops saving.
+	*/
+	onBusy?: (busy: boolean) => void;
 	onDone: () => void;
 }) {
 	const colors = useColors();
@@ -119,6 +124,9 @@ function SetupForm({
 	const [currentValue, setCurrentValue] = useState('');
 	const [wrong, setWrong] = useState(false);
 	const [busy, setBusy] = useState(false);
+	useEffect(() => {
+		onBusy?.(busy);
+	}, [busy, onBusy]);
 	const problem = validateCredential(kind, value) ?? undefined;
 	const mismatch = again !== '' && again !== value;
 	const ready =
@@ -220,8 +228,9 @@ function SetupForm({
 			/>
 			{deviceOnly && (
 				<Note>
-					Kept only on this phone, this library does not match the one on your
-					server. Syncing it later needs the server's PIN or password.
+					Kept only on this phone, this library is not synced with your server.
+					To sync it later, turn on Sync the private library in Settings and
+					enter the server's PIN or password, if it has one.
 				</Note>
 			)}
 			<>
@@ -325,12 +334,7 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 				icon="trash-outline"
 				kind="danger"
 				onPress={() => {
-					confirmErase(() => {
-						void removePrivate().then(() => {
-							onDone();
-							openPrivateSheet('setup');
-						});
-					});
+					confirmErase(onDone);
 				}}
 			/>
 			<Text style={{color: colors.muted}}>
@@ -342,21 +346,37 @@ function UnlockForm({onDone}: {onDone: () => void}) {
 }
 
 /**
-Asks before the private library is erased from this phone: its data and its PIN or password go, the server's copy stays.
+Asks before the private library is erased from this phone, erases it, and opens the set-a-PIN drawer once it is gone. A
+failure is reported and leaves the library as it was, so the erase can be tried again. Both entry points use it.
 */
-export function confirmErase(onConfirm: () => void) {
+export function confirmErase(afterErase?: () => void) {
 	confirm(
 		'Erase the private library from this phone?',
 		'Its bookmarks and sessions and its PIN or password are deleted from this phone, and you start again with a new PIN or password. Your server keeps its copy, if it has one, and you can bring it back from there with its PIN or password.',
 		{label: 'Erase', destructive: true},
-		onConfirm,
+		() => {
+			removePrivate().then(
+				() => {
+					afterErase?.();
+					openPrivateSheet('setup');
+				},
+				() => {
+					notify(
+						'Could not erase it',
+						'Nothing was deleted for good. Try again.',
+					);
+				},
+			);
+		},
 	);
 }
 
 /**
 The first PIN or password of the private library, for a new one or for one that has none. When the connected server
 already holds a private library, its PIN or password comes first: it becomes this library's lock, and the server's data
-joins what is here. Keeping the library on this phone only, with a PIN or password of its own, stays available.
+joins what is here. Keeping the library on this phone only, with a PIN or password of its own, stays available. When the
+server cannot be asked, the drawer says so, offers a retry, and sets the library up on the phone only: it is not synced
+until the server's PIN or password is entered from Settings.
 */
 function FirstPin({
 	creating = false,
@@ -365,24 +385,56 @@ function FirstPin({
 	creating?: boolean;
 	onDone: () => void;
 }) {
-	const [server, setServer] = useState<{connected: boolean; hasKey: boolean}>();
+	const colors = useColors();
+	const [server, setServer] = useState<{
+		connected: boolean;
+		hasKey: boolean;
+		failed: boolean;
+	}>();
 	const [deviceOnly, setDeviceOnly] = useState(false);
+	// A form is checking or saving: the choice between them waits, so a pending join cannot land after a local save.
+	const [working, setWorking] = useState(false);
+	const [attempt, setAttempt] = useState(0);
 	useEffect(() => {
+		setServer(undefined);
 		void privateServerInfo().then(setServer);
-	}, []);
+	}, [attempt]);
 	if (!server) {
-		return null;
+		return (
+			<View style={styles.body}>
+				<Note>Checking your sync server…</Note>
+			</View>
+		);
 	}
 
 	const fromServer = server.hasKey && !deviceOnly;
 	return (
 		<View style={{gap: 14}}>
+			{server.failed && (
+				<View style={styles.body}>
+					<Text style={{color: colors.warn}}>
+						Could not reach your sync server to check for a private library, so
+						this one is kept on this phone only. Try again, or set a PIN or
+						password now and enter the server's from Settings later.
+					</Text>
+					<Button
+						label="Try again"
+						icon="refresh-outline"
+						kind="plain"
+						disabled={working}
+						onPress={() => {
+							setAttempt(attempt + 1);
+						}}
+					/>
+				</View>
+			)}
 			{fromServer ? (
-				<ServerForm known onDone={onDone} />
+				<ServerForm known onBusy={setWorking} onDone={onDone} />
 			) : (
 				<SetupForm
 					creating={creating}
-					deviceOnly={server.hasKey && deviceOnly}
+					deviceOnly={(server.hasKey && deviceOnly) || server.failed}
+					onBusy={setWorking}
 					onDone={onDone}
 				/>
 			)}
@@ -395,6 +447,7 @@ function FirstPin({
 								: 'Keep only on this phone instead'
 						}
 						kind="plain"
+						disabled={working}
 						icon={
 							deviceOnly ? 'cloud-download-outline' : 'phone-portrait-outline'
 						}
@@ -414,18 +467,26 @@ the extension, once; the phone's library takes that lock and syncs with the serv
 */
 function ServerForm({
 	known = false,
+	onBusy,
 	onDone,
 }: {
 	/**
 	The server is known to hold a protected library, so its PIN or password is asked for at once.
 	*/
 	known?: boolean;
+	/**
+	Told when the form starts and stops checking.
+	*/
+	onBusy?: (busy: boolean) => void;
 	onDone: () => void;
 }) {
 	const [asking, setAsking] = useState(known);
 	const [value, setValue] = useState('');
 	const [problem, setProblem] = useState<string>();
 	const [busy, setBusy] = useState(false);
+	useEffect(() => {
+		onBusy?.(busy);
+	}, [busy, onBusy]);
 	const run = async (credential?: string) => {
 		setBusy(true);
 		const result = await openFromServer(credential);
@@ -472,6 +533,12 @@ function ServerForm({
 				The private windows' library on your server comes to this phone and
 				syncs both ways. What is already on this phone stays.
 			</Note>
+			{known && (
+				<Note>
+					If you no longer have it, keep the library only on this phone instead
+					and set a new PIN or password.
+				</Note>
+			)}
 			{asking && (
 				<Field
 					secureTextEntry

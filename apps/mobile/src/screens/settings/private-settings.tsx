@@ -5,11 +5,7 @@ import {
 	setPreferences,
 	usePreferences,
 } from '../../settings/preferences';
-import {
-	removePrivate,
-	usePrivateState,
-	usePrivateStatus,
-} from '../../private/private-library';
+import {usePrivateState, usePrivateStatus} from '../../private/private-library';
 import {confirmErase, openPrivateSheet} from '../../private/private-sheets';
 import {useSyncStatus} from '../../library/library-store';
 import {useColors} from '../../ui/theme';
@@ -159,11 +155,7 @@ export function PrivateCard() {
 					icon="trash-outline"
 					kind="danger"
 					onPress={() => {
-						confirmErase(() => {
-							void removePrivate().then(() => {
-								openPrivateSheet('setup');
-							});
-						});
+						confirmErase();
 					}}
 				/>
 			)}

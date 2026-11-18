@@ -529,20 +529,27 @@ Deletes the private library from this phone: its data, its lock, and its sync po
 export async function removePrivate(): Promise<void> {
 	setView('regular');
 	stopClient();
+	// The storage goes first: if a removal fails, the library is still here in memory and the erase can be tried again.
+	try {
+		await removeKeys([
+			ON_KEY,
+			LOCK_KEY,
+			KEPT_KEY,
+			LIBRARY_KEY,
+			PRIVATE_TRASH_KEY,
+			PRIVATE_KEY_KEY,
+			prefix('tablodge.sync.state'),
+			prefix('tablodge.sync.status'),
+		]);
+	} catch (error) {
+		runClient();
+		throw error;
+	}
+
 	exists = false;
 	unlockedKey = undefined;
 	lock = undefined;
 	kept = undefined;
-	await removeKeys([
-		ON_KEY,
-		LOCK_KEY,
-		KEPT_KEY,
-		LIBRARY_KEY,
-		PRIVATE_TRASH_KEY,
-		PRIVATE_KEY_KEY,
-		prefix('tablodge.sync.state'),
-		prefix('tablodge.sync.status'),
-	]);
 	core.load(emptyStore(Date.now()));
 	await dropSafetyCopy('private');
 	refreshState();
@@ -583,24 +590,36 @@ async function serverKey(to: {
 	return parsed ? {id: parsed.id, wrapped: parsed.wrapped} : undefined;
 }
 
+const SERVER_CHECK_MS = 8000;
+
 /**
 What the connected server holds for the private library, for the set-a-PIN screen: whether there is a server (and the
-phone syncs private data) and whether it already has a private library, protected by a PIN or password. A failure counts
-as nothing found.
+phone syncs private data) and whether it already has a private library, protected by a PIN or password. `failed` is
+true when the server could not be asked (no answer in a few seconds, or an error), which is not the same as the server
+saying it has no key: the screen then offers a retry and a phone-only library instead of a synced one.
 */
 export async function privateServerInfo(): Promise<{
 	connected: boolean;
 	hasKey: boolean;
+	failed: boolean;
 }> {
-	const to = getPreferences().syncPrivate ? await target() : undefined;
-	if (!to) {
-		return {connected: false, hasKey: false};
-	}
-
 	try {
-		return {connected: true, hasKey: (await serverKey(to)) !== undefined};
+		const to = getPreferences().syncPrivate ? await target() : undefined;
+		if (!to) {
+			return {connected: false, hasKey: false, failed: false};
+		}
+
+		const key = await Promise.race([
+			serverKey(to),
+			new Promise<never>((_resolve, reject) => {
+				setTimeout(() => {
+					reject(new Error('The sync server did not answer.'));
+				}, SERVER_CHECK_MS);
+			}),
+		]);
+		return {connected: true, hasKey: key !== undefined, failed: false};
 	} catch {
-		return {connected: true, hasKey: false};
+		return {connected: true, hasKey: false, failed: true};
 	}
 }
 

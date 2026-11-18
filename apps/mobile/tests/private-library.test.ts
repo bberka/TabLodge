@@ -60,7 +60,7 @@ vi.mock(
 
 type Phone = typeof PhoneModule;
 
-const {memory} = await import('./support/memory-storage');
+const {memory, failRemoval} = await import('./support/memory-storage');
 const {prefs} = await import('./support/fake-preferences');
 
 let phones: Phone[] = [];
@@ -118,6 +118,7 @@ async function serverRecords(): Promise<Array<{kind: string; value: unknown}>> {
 
 beforeEach(() => {
 	memory.clear();
+	failRemoval.clear();
 	phones = [];
 	server = makeServer();
 	connectGlobals(server);
@@ -253,6 +254,22 @@ describe('without a server', () => {
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
 	});
 
+	test('an erase that fails part way leaves the library as it was, and can be tried again', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://a.example/');
+		failRemoval.add('tablodge.private.lock');
+		await assert.rejects(async () => phone.removePrivate(), /storage failed/);
+		assert.equal(phone.privateExists(), true);
+		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+		assert.equal(phone.getPrivateState().lockedWith, 'pin');
+
+		failRemoval.clear();
+		await phone.removePrivate();
+		assert.equal(phone.privateExists(), false);
+		assert.equal(phone.getPrivateState().needsPin, false);
+	});
+
 	test('erasing removes the library, its lock, and its sync position, and starts over empty', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
@@ -385,11 +402,13 @@ describe('with the extension on the same server', () => {
 		assert.deepEqual(await phone.privateServerInfo(), {
 			connected: false,
 			hasKey: false,
+			failed: false,
 		});
 		await connectPhone(phone);
 		assert.deepEqual(await phone.privateServerInfo(), {
 			connected: true,
 			hasKey: false,
+			failed: false,
 		});
 
 		const extension = makeExtension(server);
@@ -398,6 +417,7 @@ describe('with the extension on the same server', () => {
 		assert.deepEqual(await phone.privateServerInfo(), {
 			connected: true,
 			hasKey: true,
+			failed: false,
 		});
 
 		assert.deepEqual(await phone.openFromServer(PIN.value), {ok: true});
@@ -581,7 +601,7 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
-	test('a network blip on the set-a-PIN drawer cannot replace or fork the server’s key, and joining stays possible later', async () => {
+	test('a phone set up while the server could not be read keeps the server’s key as it was, and joining from Settings merges later', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PASSWORD);
 		extension.edit((store) =>
@@ -598,11 +618,12 @@ describe('with the extension on the same server', () => {
 
 		const phone = await startPhone();
 		await connectPhone(phone);
-		// The drawer asked while the network was out, so it reads as "nothing on the server" and offers its own PIN.
+		// The drawer asked while the network was out: it reports a failed lookup, not "no key on the server".
 		server.setOnline(false);
 		assert.deepEqual(await phone.privateServerInfo(), {
 			connected: true,
 			hasKey: false,
+			failed: true,
 		});
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://phone.example/');
