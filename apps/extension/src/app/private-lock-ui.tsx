@@ -9,7 +9,15 @@ import {
 	useState,
 	type ReactNode,
 } from 'react';
-import {Lock, LockOpen, ShieldAlert, Trash2} from 'lucide-react';
+import {
+	ArrowRightLeft,
+	Cloud,
+	Laptop,
+	Lock,
+	LockOpen,
+	ShieldAlert,
+	Trash2,
+} from 'lucide-react';
 import {Button, IconTooltip, Label, Switch} from '../shared/ui';
 import {
 	LOCK_ACTIVITY_KEY,
@@ -216,10 +224,11 @@ function LockScreen({
 				)}
 				<Button
 					type="button"
-					variant="link"
-					className="justify-self-start px-0"
+					variant="outline"
+					className="text-destructive hover:bg-destructive/10 hover:text-destructive"
 					onClick={() => setErasing(true)}
 				>
+					<Trash2 aria-hidden="true" />
 					Forgot it? Erase private data…
 				</Button>
 				<ResetDialog
@@ -330,13 +339,20 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 				{server.hasKey && (
 					<Button
 						type="button"
-						variant="link"
-						className="justify-self-start px-0"
+						variant="outline"
 						onClick={() => setDeviceOnly(!deviceOnly)}
 					>
-						{deviceOnly
-							? 'Use the PIN from your sync server'
-							: 'Keep only on this device instead'}
+						{deviceOnly ? (
+							<>
+								<Cloud aria-hidden="true" />
+								Use the PIN from your sync server
+							</>
+						) : (
+							<>
+								<Laptop aria-hidden="true" />
+								Keep only on this device instead
+							</>
+						)}
 					</Button>
 				)}
 				{error && (
@@ -346,10 +362,10 @@ function SetLockScreen({onDone}: {onDone: (info: PrivateLockInfo) => void}) {
 				)}
 				<Button
 					type="button"
-					variant="link"
-					className="justify-self-start px-0"
+					variant="outline"
 					onClick={() => void switchToRegular()}
 				>
+					<ArrowRightLeft aria-hidden="true" />
 					Use the regular library instead
 				</Button>
 			</section>
