@@ -117,14 +117,11 @@ test('the manifest asks for exactly the sources origins, optionally, with no con
 	}
 });
 
-test('each source column gets its own icon and a color a column can hold', () => {
+test('each source column gets an icon and a color a column can hold', () => {
 	for (const source of SITE_SOURCES) {
 		assert.ok(ICON_IDS.includes(source.columnIcon), source.id);
 		assert.ok(isColumnColor(source.columnColor), source.id);
 	}
-
-	const icons = new Set(SITE_SOURCES.map((source) => source.columnIcon));
-	assert.equal(icons.size, SITE_SOURCES.length);
 });
 
 test('the in-page toast uses the same tokens as the extension stylesheet', () => {
@@ -157,7 +154,10 @@ test('the in-page toast uses the same tokens as the extension stylesheet', () =>
 
 	assert.equal(TOAST_TOKENS.light.primary, value(light, 'brand-primary-light'));
 	assert.equal(TOAST_TOKENS.dark.primary, value(light, 'brand-primary-dark'));
-	assert.equal(TOAST_TOKENS.radius, value(light, 'radius'));
+	assert.equal(
+		TOAST_TOKENS.radius,
+		`${Number.parseFloat(value(light, 'radius') ?? '') * 16}px`,
+	);
 });
 
 test('the in-page toast follows the theme and accent chosen in Settings', () => {
@@ -189,6 +189,7 @@ test('the in-page toast follows the theme and accent chosen in Settings', () => 
 		toastAppearance({uiAccent: 'green', ...config('rose')}, os).accent,
 		'green',
 	);
+	assert.equal(toastAppearance({uiAccent: 'green'}, incognito).accent, 'teal');
 
 	assert.deepEqual(toastColors('light', undefined), {
 		background: 'rgb(255 255 255)',

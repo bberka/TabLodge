@@ -44,7 +44,8 @@ export const TOAST_TOKENS = {
 		destructive: '248 113 113',
 		primary: '165 155 255',
 	},
-	radius: '0.5rem',
+	// In px: rem would follow the site's root font size, not the extension's 16px.
+	radius: '8px',
 } as const;
 
 // Lucide's circle-check and circle-alert, the icons the extension's own toast shows.
@@ -97,10 +98,10 @@ export function toastAppearance(
 				: 'light';
 	const accent = isAccent(stored.uiAccent) ? stored.uiAccent : DEFAULT_ACCENT;
 	const config = stored[PRIVATE_CONFIG_KEY];
-	const privateAccent =
-		incognito && isRecord(config)
-			? resolvePrivateAccent(config.accent)
-			: undefined;
+	// With no private accent stored, a private window shows the private default, as its pages do.
+	const privateAccent = incognito
+		? resolvePrivateAccent(isRecord(config) ? config.accent : undefined)
+		: undefined;
 	return {theme, accent: privateAccent ?? accent};
 }
 
@@ -219,7 +220,7 @@ function render(
 		bottom: '16px',
 		'z-index': '2147483647',
 		display: 'block',
-		'max-width': 'min(28rem, calc(100vw - 32px))',
+		'max-width': 'min(448px, calc(100vw - 32px))',
 		'color-scheme': theme,
 	});
 	const root = host.attachShadow({mode: 'closed'});
@@ -270,7 +271,7 @@ function render(
 			margin: '-2px 0',
 			padding: '0 6px',
 			border: '0',
-			'border-radius': '0.25rem',
+			'border-radius': '4px',
 			background: 'transparent',
 			color: colors.primary,
 			font: 'inherit',
