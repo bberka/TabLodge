@@ -441,21 +441,22 @@ function Help() {
 							asks for access to that site only, and nothing runs there until
 							you allow it. Only the sites you added are listed. Then, when you
 							save something there, {PROJECT.name} bookmarks the same link in a
-							column named after the site. The first save creates it with an
-							icon and a color for that site, which you can change like any
-							column&apos;s; saves keep going there. It saves a video you add to
-							Watch later, a Reddit post or comment, an X post you bookmark, an
-							Instagram post or reel, a GitHub repository you star (titled with
-							its name and description), a Hacker News story you favorite, a
-							Stack Overflow question you bookmark, a dev.to article you save to
-							your reading list, or a Lobsters story you save. Posts from X and
-							Instagram are titled with the start of their text or caption. A
-							Hacker News or Lobsters story is saved at the address it links to,
-							with its discussion page in the note; a text post with no link is
-							saved at its discussion page. Under Save to, under each added
-							site, you can choose another column; if that column is deleted,
-							saves go to the site&apos;s own column again until you choose one.
-							A small notice in the page, in your {PROJECT.name}
+							column named after the site. When you have no column of that name
+							and chose no other, the first save creates it with an icon and a
+							color for that site, which you can change like any column&apos;s;
+							saves keep going there. It saves a video you add to Watch later, a
+							Reddit post or comment, an X post you bookmark, an Instagram post
+							or reel, a GitHub repository you star (titled with its name and
+							description), a Hacker News story you favorite, a Stack Overflow
+							question you bookmark, a dev.to article you save to your reading
+							list, or a Lobsters story you save. Posts from X and Instagram are
+							titled with the start of their text or caption. A Hacker News or
+							Lobsters story is saved at the address it links to, with its
+							discussion page in the note; a text post with no link is saved at
+							its discussion page. Under Save to, under each added site, you can
+							choose another column; if that column is deleted, saves go to the
+							site&apos;s own column again until you choose one. A small notice
+							in the page, in your {PROJECT.name}
 							theme and accent color, offers Undo; press Tab to reach it. A link
 							already in your bookmarks or in the trash bin is not saved again.{' '}
 							{PROJECT.name} only watches for your own clicks on the site&apos;s

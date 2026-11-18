@@ -154,10 +154,9 @@ test('the in-page toast uses the same tokens as the extension stylesheet', () =>
 
 	assert.equal(TOAST_TOKENS.light.primary, value(light, 'brand-primary-light'));
 	assert.equal(TOAST_TOKENS.dark.primary, value(light, 'brand-primary-dark'));
-	assert.equal(
-		TOAST_TOKENS.radius,
-		`${Number.parseFloat(value(light, 'radius') ?? '') * 16}px`,
-	);
+	const radius = value(light, 'radius') ?? '';
+	assert.match(radius, /^[\d.]+rem$/);
+	assert.equal(TOAST_TOKENS.radius, `${Number.parseFloat(radius) * 16}px`);
 });
 
 test('the in-page toast follows the theme and accent chosen in Settings', () => {
@@ -200,6 +199,11 @@ test('the in-page toast follows the theme and accent chosen in Settings', () => 
 		primary: 'rgb(98 84 215)',
 	});
 	assert.equal(toastColors('dark', [21, 128, 61]).background, 'rgb(17 17 20)');
+	// #797979 reads on the dark page (4.57:1) but not on the toast's lighter background (4.33:1), so it lifts.
+	assert.notEqual(
+		toastColors('dark', [121, 121, 121]).primary,
+		'rgb(121 121 121)',
+	);
 	// Amber is too light to read on the light page, so it darkens there, as the pages' accent does.
 	assert.notEqual(
 		toastColors('light', [217, 119, 6]).primary,

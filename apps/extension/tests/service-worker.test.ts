@@ -13988,7 +13988,8 @@ test('a source save into a column the user already named after the site leaves i
 	const column = harness.state.bookmarkColumns.find(
 		(entry) => entry.id === columnId,
 	);
-	assert.deepEqual([column?.icon, column?.color], [undefined, undefined]);
+	assert.ok(column);
+	assert.deepEqual([column.icon, column.color], [undefined, undefined]);
 	assert.equal(harness.state.bookmarks[0]?.columnId, columnId);
 });
 

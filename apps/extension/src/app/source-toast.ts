@@ -6,11 +6,9 @@
 // It looks like the toast on TabLodge's own pages (StatusRegion in common.tsx): the theme and accent chosen in
 // Settings, with the stylesheet's tokens, which a shadow root on another site cannot read, copied into TOAST_TOKENS.
 import {
-	DARK_PAGE,
 	DEFAULT_ACCENT,
 	isAccent,
 	legibleOn,
-	LIGHT_PAGE,
 	presetColor,
 	type Rgb,
 	SYSTEM_ACCENT,
@@ -109,13 +107,14 @@ const rgb = (channels: string, alpha = 1) =>
 	`rgb(${channels}${alpha < 1 ? ` / ${alpha}` : ''})`;
 
 /**
-The colors of the toast for a theme and an accent color (undefined: the default indigo), as the pages compute them:
-the accent is darkened or lightened until it reads on the page, like `applyAccent`.
+The colors of the toast for a theme and an accent color (undefined: the default indigo). The accent is darkened or
+lightened until it reads, like `applyAccent` does, but against the toast's own background, where Undo sits.
 */
 export function toastColors(theme: Theme, accent: Rgb | undefined) {
 	const tokens = TOAST_TOKENS[theme];
+	const background = tokens.popover.split(' ').map(Number) as Rgb;
 	const primary = accent
-		? legibleOn(accent, theme === 'dark' ? DARK_PAGE : LIGHT_PAGE).join(' ')
+		? legibleOn(accent, background).join(' ')
 		: tokens.primary;
 	return {
 		background: rgb(tokens.popover),
@@ -187,11 +186,19 @@ function icon(kind: 'done' | 'error', color: string) {
 /**
 Shows the notice. `error` marks a save that failed, in the destructive color, as the extension's error toasts are.
 */
+let latestToast = 0;
+
 export function showSourceToast(
 	text: string,
 	{action, error = false}: {action?: ToastAction; error?: boolean} = {},
 ) {
+	// The appearance read is async, so a later notice could otherwise be replaced by an earlier one.
+	const request = ++latestToast;
 	void readAppearance().then(({theme, accent}) => {
+		if (request !== latestToast) {
+			return;
+		}
+
 		render(text, {
 			action,
 			error,
@@ -278,18 +285,20 @@ function render(
 			'font-weight': '600',
 			'text-decoration': 'none',
 			'text-underline-offset': '4px',
-			outline: 'none',
+			outline: '2px solid transparent',
+			'outline-offset': '0',
 			cursor: 'pointer',
 		});
 		const target = button;
 		// The ring shows for keyboard focus only, as on the extension's pages.
 		target.addEventListener('focus', () => {
 			if (target.matches(':focus-visible')) {
-				set(target, {'box-shadow': `0 0 0 2px ${colors.primary}`});
+				// An outline, not a shadow, so forced-colors mode still shows it.
+				set(target, {'outline-color': colors.primary});
 			}
 		});
 		target.addEventListener('blur', () => {
-			target.style.removeProperty('box-shadow');
+			set(target, {'outline-color': 'transparent'});
 		});
 		target.addEventListener('pointerenter', () => {
 			set(target, {'text-decoration': 'underline'});
