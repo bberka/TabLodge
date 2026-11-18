@@ -377,7 +377,7 @@ export function confirmErase(
 					onWorking?.(false);
 					notify(
 						'Could not finish erasing',
-						'Some of it may already be gone. Try again to finish.',
+						'The private library is closed and nothing of it syncs. The erase finishes the next time the app starts or you set up the private library.',
 					);
 				},
 			);

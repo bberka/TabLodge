@@ -254,24 +254,24 @@ describe('without a server', () => {
 		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
 	});
 
-	test('an erase that fails part way can be run again, including after a restart, and then finishes', async () => {
+	test('an erase that fails part way leaves the library out of reach, and finishes at the next start', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://a.example/');
 		failRemoval.add('tablodge.private.lock');
 		await assert.rejects(async () => phone.removePrivate(), /storage failed/);
-		// Still here in memory, so it can be retried at once.
-		assert.equal(phone.privateExists(), true);
-
-		// And still marked as existing on disk, so a restart finds it and the erase can be run again.
-		phone = await startPhone();
-		assert.equal(phone.privateExists(), true);
-		assert.equal(phone.getPrivateState().lockedWith, 'pin');
-
-		failRemoval.clear();
-		await phone.removePrivate();
+		// Closed at once: nothing opens it and nothing syncs it while the erase is unfinished.
 		assert.equal(phone.privateExists(), false);
+		assert.equal(phone.isPrivateOpen(), false);
 		assert.equal(phone.getPrivateState().needsPin, false);
+
+		// A restart while storage still fails keeps it closed.
+		phone = await startPhone();
+		assert.equal(phone.privateExists(), false);
+		assert.equal(phone.isPrivateOpen(), false);
+
+		// Once storage works, the next start finishes the erase.
+		failRemoval.clear();
 		phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
 		assert.deepEqual(
@@ -280,22 +280,36 @@ describe('without a server', () => {
 		);
 	});
 
-	test('an erase that fails on the safety copy keeps the library, its data and its lock, and can be run again', async () => {
+	test('an erase that fails on the safety copy is finished the same way', async () => {
 		let phone = await startPhone();
 		await phone.setupPrivate(PIN);
 		await addLink(phone, 'https://a.example/');
 		failRemoval.add('tablodge.safety.private');
 		await assert.rejects(async () => phone.removePrivate(), /storage failed/);
-		// The data and the lock come after the safety copy, so they are still there.
-		assert.equal(phone.privateExists(), true);
-		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
-		phone = await startPhone();
-		assert.equal(await phone.unlockPrivate(PIN.value), 'ok');
-		assert.deepEqual(urlsOf(phone.getPrivateStore()), ['https://a.example/']);
+		assert.equal(phone.privateExists(), false);
 
 		failRemoval.clear();
-		await phone.removePrivate();
+		phone = await startPhone();
 		assert.equal(phone.privateExists(), false);
+		assert.deepEqual(
+			[...memory.keys()].filter((key) => key.startsWith('tablodge.private.')),
+			[],
+		);
+	});
+
+	test('setting up after a failed erase finishes it first, so nothing of the old library comes back', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://a.example/');
+		failRemoval.add('tablodge.private.lock');
+		await assert.rejects(async () => phone.removePrivate(), /storage failed/);
+		failRemoval.clear();
+
+		await phone.setupPrivate(PASSWORD);
+		assert.deepEqual(phone.getPrivateStore().bookmarks, []);
+		await phone.lockPrivate();
+		assert.equal(await phone.unlockPrivate(PIN.value), 'wrong');
+		assert.equal(await phone.unlockPrivate(PASSWORD.value), 'ok');
 	});
 
 	test('erasing removes the library, its lock, and its sync position, and starts over empty', async () => {

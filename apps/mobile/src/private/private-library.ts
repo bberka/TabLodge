@@ -59,6 +59,8 @@ const ON_KEY = 'tablodge.private.on';
 const LOCK_KEY = 'tablodge.private.lock';
 // Where the data key waits, in the Android keystore, after the PIN was removed. See `Kept`.
 const KEPT_KEY = 'tablodge.private.keptKey';
+// Written before an erase deletes anything and removed when it is done, so an erase that stops part way is finished later.
+const ERASING_KEY = 'tablodge.private.erasing';
 const prefix = (key: string) => `tablodge.private.${key}`;
 // A PIN is 4 to 8 digits; the server's key does not say which kind it was made with.
 const credentialKindOf = (value: string): CredentialKind =>
@@ -91,6 +93,8 @@ let client: ReturnType<typeof createSyncClient> | undefined;
 let exists = false;
 let lock: Lock | undefined;
 let kept: Kept | undefined;
+// An erase was started and has not finished: the library is out of reach and nothing syncs until it does.
+let erasing = false;
 // The data key, base64, while a protected library is unlocked.
 let unlockedKey: string | undefined;
 // The key values are sealed with on the server, for the current round; none while the server's library is not sealed.
@@ -353,7 +357,22 @@ function stopClient(): void {
 Loads the library and its lock and, when it is open, resumes syncing. Call at startup.
 */
 export async function startPrivate(): Promise<void> {
-	exists = (await readJson(ON_KEY)) === true;
+	erasing = (await readJson(ERASING_KEY)) === true;
+	if (erasing) {
+		// An erase the person confirmed stopped part way: it is finished now, or the library stays out of reach.
+		await eraseSteps().catch(() => undefined);
+	}
+
+	exists = !erasing && (await readJson(ON_KEY)) === true;
+	if (erasing) {
+		exists = false;
+		lock = undefined;
+		kept = undefined;
+		refreshState();
+		await refreshPrivateStatus();
+		return;
+	}
+
 	lock = parseLock(await readJson(LOCK_KEY));
 	if (!lock) {
 		// An earlier version kept the server's key here, unwrapped, after the PIN was asked once. Keep its wrapped copy as
@@ -404,6 +423,7 @@ is connected. Every screen passes a credential; none is accepted only so a libra
 in tests.
 */
 export async function setupPrivate(credential?: Credential): Promise<void> {
+	await settleErase();
 	core.load(emptyStore(Date.now()));
 	await core.write(core.store);
 	exists = true;
@@ -535,32 +555,53 @@ export async function removePrivate(): Promise<void> {
 	stopClient();
 	epoch += 1;
 	try {
-		// Step by step, with the marker that the library exists removed last: a failure part way leaves the library
-		// existing on the next start, so the erase can be run again and finishes the job.
-		await removeKeys([
-			prefix('tablodge.sync.state'),
-			prefix('tablodge.sync.status'),
-			PRIVATE_TRASH_KEY,
-			PRIVATE_KEY_KEY,
-			KEPT_KEY,
-		]);
-		await dropSafetyCopy('private');
-		await removeKeys([LIBRARY_KEY]);
-		await removeKeys([LOCK_KEY]);
-		await removeKeys([ON_KEY]);
+		// Before anything is deleted: if this fails, nothing has changed.
+		await writeJson(ERASING_KEY, true);
 	} catch (error) {
-		refreshState();
 		runClient();
 		throw error;
 	}
 
+	erasing = true;
 	exists = false;
 	unlockedKey = undefined;
 	lock = undefined;
 	kept = undefined;
 	core.load(emptyStore(Date.now()));
 	refreshState();
+	// A failure from here on leaves the library out of reach and the marker in place: the erase finishes the next time
+	// the app starts or a library is set up.
+	await eraseSteps();
 	await refreshPrivateStatus();
+}
+
+/**
+The deletions of an erase, one after another, with the marker that the library exists removed near the end and the
+erase marker last.
+*/
+async function eraseSteps(): Promise<void> {
+	await removeKeys([
+		prefix('tablodge.sync.state'),
+		prefix('tablodge.sync.status'),
+		PRIVATE_TRASH_KEY,
+		PRIVATE_KEY_KEY,
+		KEPT_KEY,
+	]);
+	await dropSafetyCopy('private');
+	await removeKeys([LIBRARY_KEY]);
+	await removeKeys([LOCK_KEY]);
+	await removeKeys([ON_KEY]);
+	await removeKeys([ERASING_KEY]);
+	erasing = false;
+}
+
+/**
+Finishes an erase that stopped part way, before a library is made over what is left of the old one.
+*/
+async function settleErase(): Promise<void> {
+	if (erasing) {
+		await eraseSteps();
+	}
 }
 
 export type OpenResult =
@@ -663,6 +704,7 @@ export async function openFromServer(credential?: string): Promise<OpenResult> {
 			return {ok: false, reason: 'not-connected'};
 		}
 
+		await settleErase();
 		const started = epoch;
 		const server = await serverKey(to);
 		// A library with no lock of its own, even one that kept the server's key, takes the lock only from a credential
