@@ -581,6 +581,54 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
+	test('a network blip on the set-a-PIN drawer cannot replace or fork the server’s key, and joining stays possible later', async () => {
+		const extension = makeExtension(server);
+		await extension.protect(PASSWORD);
+		extension.edit((store) =>
+			addBookmark(
+				store,
+				{url: 'https://ext.example/', title: 'E', columnId: ''},
+				'ext-1',
+				1000,
+			),
+		);
+		await extension.sync();
+		const keyBefore = server.privateLog.key;
+		const recordsBefore = (await serverRecords()).length;
+
+		const phone = await startPhone();
+		await connectPhone(phone);
+		// The drawer asked while the network was out, so it reads as "nothing on the server" and offers its own PIN.
+		server.setOnline(false);
+		assert.deepEqual(await phone.privateServerInfo(), {
+			connected: true,
+			hasKey: false,
+		});
+		await phone.setupPrivate(PIN);
+		await addLink(phone, 'https://phone.example/');
+		server.setOnline(true);
+
+		// Back online, the round finds the server's key. The phone's own key is not stored over it (the server only
+		// takes a key when it has none), and nothing the phone holds is sent.
+		await phone.syncPrivate();
+		assert.equal(server.privateLog.key, keyBefore);
+		assert.equal((await serverRecords()).length, recordsBefore);
+		assert.equal(phone.getPrivateStatus().needsKey, true);
+
+		// The way back is the same as for a device-only library: the server's PIN, entered from Settings.
+		assert.deepEqual(await phone.openFromServer(PASSWORD.value), {ok: true});
+		assert.equal(server.privateLog.key, keyBefore);
+		assert.deepEqual(urlsOf(phone.getPrivateStore()), [
+			'https://ext.example/',
+			'https://phone.example/',
+		]);
+		await extension.sync();
+		assert.deepEqual(urlsOf(extension.store), [
+			'https://ext.example/',
+			'https://phone.example/',
+		]);
+	});
+
 	test('a PIN added after the library has synced seals what is already on the server, and the extension can still read it', async () => {
 		const phone = await startPhone();
 		await phone.setupPrivate();
