@@ -1822,8 +1822,8 @@ function Options() {
 			words: ['delete', 'remove', 'clear', 'wipe', 'reset data', 'everything'],
 			action: (
 				<Button
-					variant="outline"
-					className="w-full border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-32"
+					variant="destructive"
+					className="w-full sm:w-32"
 					disabled={
 						eraseBusy ||
 						(sessionParts.length === 0 && bookmarkParts.length === 0)
@@ -2042,6 +2042,7 @@ function Options() {
 									searchRef.current?.focus();
 								}}
 							>
+								<X aria-hidden="true" />
 								Clear search
 							</Button>
 						}
@@ -2957,6 +2958,7 @@ function QuickActionsSetting<
 								onChange([]);
 							}}
 						>
+							<X aria-hidden="true" />
 							Clear all
 						</Button>
 					)}

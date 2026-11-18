@@ -18,6 +18,7 @@ import {
 import {
 	ArrowLeft,
 	Bookmark,
+	Check,
 	CloudUpload,
 	ExternalLink,
 	CircleAlert,
@@ -955,6 +956,7 @@ export function ShareDialog({
 							Copy link
 						</Button>
 						<Button type="button" onClick={() => onOpenChange(false)}>
+							<Check aria-hidden="true" />
 							Done
 						</Button>
 					</DialogFooter>
@@ -1800,6 +1802,7 @@ export function ImportDialog({
 										className="shrink-0"
 										onClick={() => void readBrowserBookmarks()}
 									>
+										<Bookmark aria-hidden="true" />
 										Read bookmarks
 									</Button>
 								</section>

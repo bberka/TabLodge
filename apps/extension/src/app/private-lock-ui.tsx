@@ -11,10 +11,13 @@ import {
 } from 'react';
 import {
 	ArrowRightLeft,
+	Check,
 	Cloud,
+	KeyRound,
 	Laptop,
 	Lock,
 	LockOpen,
+	RefreshCw,
 	ShieldAlert,
 	Trash2,
 } from 'lucide-react';
@@ -221,12 +224,11 @@ function LockScreen({
 				)}
 				<Button
 					type="button"
-					variant="outline"
-					className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+					variant="destructive"
 					onClick={() => setErasing(true)}
 				>
 					<Trash2 aria-hidden="true" />
-					Forgot it? Erase private data…
+					Forgot it? Erase private data
 				</Button>
 				<ResetDialog
 					open={erasing}
@@ -426,6 +428,7 @@ export function PrivateLockGate({children}: {children: ReactNode}) {
 						{error}
 					</p>
 					<Button variant="outline" onClick={() => void refresh()}>
+						<RefreshCw aria-hidden="true" />
 						Retry
 					</Button>
 				</div>
@@ -573,7 +576,7 @@ export function PrivateLockSettings({
 					</p>
 					<Button onClick={() => setDialog('enable')}>
 						<Lock aria-hidden="true" />
-						Turn on lock…
+						Turn on lock
 					</Button>
 				</>
 			)}
@@ -590,6 +593,7 @@ export function PrivateLockSettings({
 									: 'Removing the lock was interrupted.'}
 							</span>
 							<Button variant="outline" size="sm" onClick={() => void retry()}>
+								<Check aria-hidden="true" />
 								Finish
 							</Button>
 						</div>
@@ -613,15 +617,16 @@ export function PrivateLockSettings({
 								Lock now
 							</Button>
 							<Button variant="outline" onClick={() => setDialog('change')}>
-								Change {label}…
+								<KeyRound aria-hidden="true" />
+								Change {label}
 							</Button>
 							<Button variant="outline" onClick={() => setDialog('remove')}>
 								<LockOpen aria-hidden="true" />
-								Remove lock…
+								Remove lock
 							</Button>
-							<Button variant="outline" onClick={() => setDialog('reset')}>
+							<Button variant="destructive" onClick={() => setDialog('reset')}>
 								<Trash2 aria-hidden="true" />
-								Erase private data…
+								Erase private data
 							</Button>
 						</div>
 					</div>
