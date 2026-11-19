@@ -8738,19 +8738,29 @@ function applyTrashRestore(
 			return {ok: false, error: 'That column could not be restored.'};
 		}
 
-		if (store.bookmarkColumns.some((item) => item.id === column.id)) {
-			column.id = makeId();
+		// A source column that a save on its site made again takes its bookmarks back, since its id is its marker.
+		const existing = isSourceColumnId(column.id)
+			? store.bookmarkColumns.find((item) => item.id === column.id)
+			: undefined;
+		if (existing) {
+			column.id = existing.id;
+			column.name = existing.name;
+		} else {
+			if (store.bookmarkColumns.some((item) => item.id === column.id)) {
+				column.id = makeId();
+			}
+
+			column.name = uniqueName(column.name, (candidate) =>
+				columnNameTaken(store.bookmarkColumns, candidate),
+			);
+			column.isDefault = column.id === DEFAULT_BOOKMARK_COLUMN_ID;
+			store.bookmarkColumns.splice(
+				clampIndex(data.index, store.bookmarkColumns.length),
+				0,
+				column,
+			);
 		}
 
-		column.name = uniqueName(column.name, (candidate) =>
-			columnNameTaken(store.bookmarkColumns, candidate),
-		);
-		column.isDefault = column.id === DEFAULT_BOOKMARK_COLUMN_ID;
-		store.bookmarkColumns.splice(
-			clampIndex(data.index, store.bookmarkColumns.length),
-			0,
-			column,
-		);
 		const columnIds = new Set([
 			...store.bookmarkColumns.map((item) => item.id),
 			BOOKMARK_UNFILED_ID,

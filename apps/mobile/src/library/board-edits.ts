@@ -3,6 +3,7 @@ Pure edits of the synced library's bookmark board: columns and bookmarks. The ph
 extension does, so the sync client in apps/extension/src/shared/sync can merge it with the server.
 */
 import type {Bookmark, Store} from '../../../extension/src/shared/types';
+import {isSourceColumnId} from '../../../extension/src/shared/source-columns';
 import {isColumnColor} from '../../../extension/src/shared/accent-colors';
 import {
 	BOOKMARK_UNFILED_ID,
@@ -544,7 +545,9 @@ export function restoreColumn(
 	bookmarks: ReadonlyArray<Store['bookmarks'][number]>,
 	now: number,
 ): Store {
-	if (store.bookmarkColumns.some((entry) => entry.id === column.id)) {
+	// A source column can be back already (the browser saved on its site again): its bookmarks rejoin it.
+	const there = store.bookmarkColumns.some((entry) => entry.id === column.id);
+	if (there && !isSourceColumnId(column.id)) {
 		return store;
 	}
 
@@ -558,7 +561,9 @@ export function restoreColumn(
 	});
 	return {
 		...store,
-		bookmarkColumns: [...store.bookmarkColumns, column],
+		bookmarkColumns: there
+			? store.bookmarkColumns
+			: [...store.bookmarkColumns, column],
 		bookmarks: [
 			...kept,
 			...[...back.values()].map((bookmark) => ({...bookmark, updatedAt: now})),

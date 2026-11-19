@@ -102,6 +102,26 @@ describe('importing a file into the library', () => {
 			['source-reddit', 'source-mastodon'],
 		);
 
+		// The phone's own JSON export carries the ids too, so a round trip keeps them.
+		const exported = buildExport(
+			{
+				kind: 'bookmarks',
+				columns: first.store.bookmarkColumns,
+				bookmarks: first.store.bookmarks,
+			},
+			'json',
+			{appName: 'TabLodge'},
+		);
+		const roundTrip = importIntoStore(
+			emptyStore(NOW),
+			parseImportFile(exported.content, exported.filename),
+			{kind: 'bookmarks', now: NOW, newId},
+		);
+		assert.deepEqual(
+			roundTrip.store.bookmarks.map((bookmark) => bookmark.columnId),
+			['source-reddit', 'source-mastodon'],
+		);
+
 		const more = parseImportFile(
 			backup.replace('https://r.example/1', 'https://r.example/2'),
 			'tablodge-bookmarks.json',

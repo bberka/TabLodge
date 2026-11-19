@@ -3433,8 +3433,10 @@ function NewTab() {
 									Delete column “{columnDelete?.column.name}”?
 								</DialogTitle>
 								<DialogDescription>
-									It has {plural(columnDelete?.count ?? 0, 'bookmark')}. You can
-									undo this right after.
+									{columnDelete?.count
+										? `It has ${plural(columnDelete.count, 'bookmark')}.`
+										: 'It has no bookmarks.'}{' '}
+									You can undo this right after.
 								</DialogDescription>
 							</DialogHeader>
 							<DialogBody>

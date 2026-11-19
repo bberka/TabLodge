@@ -14211,6 +14211,34 @@ test('a source column keeps the icon and color the user gives it, and saves keep
 	);
 });
 
+test('a full backup and its restore keep the source column id', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(backup.ok, true, backup.error);
+
+	const fresh = createWorkerHarness(stateWithSession());
+	const restored = await fresh.sendMessage({
+		type: 'RESTORE_FULL_BACKUP',
+		format: 'tablodge-full-backup',
+		version: 1,
+		state: backup.state,
+		trash: backup.trash,
+		copies: [],
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.deepEqual(
+		fresh.state.bookmarks.map((bookmark) => bookmark.columnId),
+		['source-youtube'],
+	);
+	assert.ok(
+		fresh.state.bookmarkColumns.some(
+			(column) => column.id === 'source-youtube',
+		),
+	);
+});
+
 test('a column the user named after the site is not its source column', async () => {
 	const harness = sourcesHarness();
 	await switchOnYoutube(harness);
@@ -14253,6 +14281,23 @@ test('a deleted source column comes back with the same id on the next save', asy
 	assert.deepEqual(
 		harness.state.bookmarks.map((bookmark) => bookmark.columnId),
 		['source-youtube'],
+	);
+
+	// Restoring the deleted column from the trash joins the one that came back, rather than making a second.
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: String(deleted.ok && deleted.trashId),
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.deepEqual(
+		harness.state.bookmarkColumns
+			.map((column) => String(column.id))
+			.filter((id) => id.startsWith('source-')),
+		['source-youtube'],
+	);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.columnId),
+		['source-youtube', 'source-youtube'],
 	);
 });
 
