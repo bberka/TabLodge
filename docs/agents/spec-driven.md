@@ -47,7 +47,7 @@ Link a decision that outlives the feature, such as a protocol choice, as an [ADR
 6. **Check against the spec.** Read the diff once against the Acceptance list and Out of scope: a criterion with no proof, or behavior in the diff that no criterion asks for, is a finding. Fix it before the pull request.
 7. **Report by criterion.** The pull request copies the Acceptance list and puts the proof beside each line, as in [Pull request evidence](validation.md#pull-request-evidence).
 
-A follow up request on an open pull request amends the spec first: add or change the criterion on the issue, then code it and prove it like the others.
+A follow up request on an open pull request amends the spec first: add or change the criterion on the issue (or in the pull request's **Spec** section when there is no issue), then code it and prove it like the others.
 
 ## Splitting work
 
