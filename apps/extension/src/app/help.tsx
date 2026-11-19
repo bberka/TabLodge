@@ -651,15 +651,15 @@ function Help() {
 					body: (
 						<>
 							On the dashboard, press <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
-							<Key>K</Key>, or press <Key>/</Key> when you are not typing in a
-							field. Search bookmarks, sessions, open tabs, commands, or the
-							web. Your recent sessions are listed before you type. Choose one
-							to restore it, or press <Key>Shift</Key> + <Key>Enter</Key> to
-							reveal it on the dashboard instead.
+							<Key>K</Key> or <Key>F</Key>, or press <Key>/</Key> when you are
+							not typing in a field. Search bookmarks, sessions, open tabs,
+							commands, or the web. Your recent sessions are listed before you
+							type. Choose one to restore it, or press <Key>Shift</Key> +{' '}
+							<Key>Enter</Key> to reveal it on the dashboard instead.
 						</>
 					),
 					searchText:
-						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter',
+						'dashboard ctrl command cmd meta k f find slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter',
 				},
 				{
 					title: 'Open the palette from any page',

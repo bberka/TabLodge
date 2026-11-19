@@ -2060,7 +2060,7 @@ function NewTab() {
 		];
 	}, [tabSelection]);
 
-	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder .
+	// Ctrl/Cmd+K or Ctrl/Cmd+F, or "/" outside text fields, opens the finder.
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
@@ -2068,7 +2068,9 @@ function NewTab() {
 				target?.closest('input, textarea, select, [contenteditable="true"]') !==
 				null;
 			const shortcut =
-				(event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)) ||
+				(['k', 'f'].includes(event.key.toLowerCase()) &&
+					(event.ctrlKey || event.metaKey) &&
+					!event.altKey) ||
 				(event.key === '/' &&
 					!typing &&
 					!event.ctrlKey &&
