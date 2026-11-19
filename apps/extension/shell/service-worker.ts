@@ -5005,11 +5005,13 @@ async function saveQuote(
 						store.settings.cleanTitles,
 					),
 					url,
+					// With only source columns, the default is none, and the quote goes to Unfiled rather than a site's column.
 					columnId: landingColumnId(
 						store.bookmarkColumns,
 						claimedId ??
-							defaultBookmarkColumnId(store.bookmarkColumns, store.bookmarks),
-						{claimedId},
+							defaultBookmarkColumnId(store.bookmarkColumns, store.bookmarks) ??
+							BOOKMARK_UNFILED_ID,
+						{claimedId, allowUnfiled: true},
 					),
 					notes: note.notes,
 					createdAt: now,

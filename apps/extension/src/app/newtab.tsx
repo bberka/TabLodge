@@ -1121,6 +1121,15 @@ function NewTab() {
 			return;
 		}
 
+		// A save on the site can fill an empty source column while the dialog is open: ask where those bookmarks go.
+		const count = bookmarks.filter(
+			(bookmark) => bookmark.columnId === columnDelete.column.id,
+		).length;
+		if (count > 0 && columnDelete.count === 0) {
+			setColumnDelete({...columnDelete, count});
+			return;
+		}
+
 		setDialog(null);
 		await deleteColumn(
 			columnDelete.column,

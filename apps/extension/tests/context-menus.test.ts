@@ -12,6 +12,7 @@ import type {
 	Settings,
 	TabLodgeMessage,
 } from '../src/shared/types';
+import {BOOKMARK_UNFILED_ID} from '../src/shared/bookmark-rules';
 import {logicalState, sortKeysDeep, storeLibrary} from './library-fixtures';
 import {buildWorkerSource} from './worker-source';
 
@@ -1441,6 +1442,35 @@ test('Save quote bookmarks the page with the quote and a link to it, then append
 		bookmarks[0].notes,
 		`> First quote\n${page}#:~:text=First%20quote\n\n> Second, longer quote that runs on past eight words\n${page}#:~:text=Second%2C%20longer%20quote%20that,on%20past%20eight%20words`,
 	);
+});
+
+test('Save quote never lands in a source column, even when it is the only column', async () => {
+	const harness = createHarness(
+		baseState(
+			{},
+			{
+				bookmarkColumns: [
+					{id: 'source-reddit', name: 'Reddit', createdAt: 0, isDefault: false},
+				],
+				bookmarks: [
+					{
+						id: 'post',
+						url: 'https://www.reddit.com/r/a/comments/1/',
+						title: 'Post',
+						columnId: 'source-reddit',
+						createdAt: 5,
+						updatedAt: 5,
+					},
+				],
+			},
+		),
+	);
+	await harness.install();
+	await harness.click(quoted('https://current.example/page', 'A quote'));
+	const saved = harness.state.bookmarks.find(
+		(entry) => entry.url === 'https://current.example/page',
+	);
+	assert.equal(saved?.columnId, BOOKMARK_UNFILED_ID);
 });
 
 test('Save quote goes into a saved tab of the page, and every saved copy of it', async () => {
