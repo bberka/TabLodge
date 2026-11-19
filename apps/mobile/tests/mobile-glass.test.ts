@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
 	contrast,
-	GLASS,
 	glassFill,
 	glassOver,
 	hexRgb,
@@ -78,7 +77,7 @@ describe('the glass colors', () => {
 		);
 		assert.equal(
 			glassFill('#ffffff', 'bar', false),
-			`rgba(255, 255, 255, ${GLASS.unblurred})`,
+			'rgba(255, 255, 255, 0.92)',
 		);
 	});
 });

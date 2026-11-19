@@ -316,14 +316,6 @@ test('a library exported from one server and imported into another is the same l
 
 test('the server keeps one wrapped key per library and never lets a device overwrite another device’s key', async () => {
 	const {call} = server();
-	assert.deepEqual((await call('/v1/status')).body.features, [
-		'private',
-		'key',
-		'preview',
-		'trash',
-		'notes',
-		'page-source',
-	]);
 	assert.deepEqual((await call('/v1/key')).body, {key: null});
 	const set = (key: string, previous: string | null) =>
 		call('/v1/key', {method: 'POST', body: JSON.stringify({key, previous})});

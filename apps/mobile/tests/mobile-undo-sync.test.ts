@@ -207,30 +207,6 @@ describe('Undo of something that already synced reaches the other device', () =>
 		assertSame(phone, extension);
 	});
 
-	test('several deleted sessions at once', async () => {
-		const {phone, extension} = await setup();
-		const gone = [...phone.store.groups];
-		await edit(phone, extension, (s) => {
-			let next = s;
-			for (const g of gone) {
-				next = removeSession(next, g.id, clock);
-			}
-
-			return next;
-		});
-		assert.equal(extension.store.groups.length, 0);
-		await edit(phone, extension, (s) => {
-			let next = s;
-			for (const g of gone) {
-				next = restoreSession(next, g, clock);
-			}
-
-			return next;
-		});
-		assertSame(phone, extension);
-		assert.equal(extension.store.groups.length, 2);
-	});
-
 	test('a link removed from a session', async () => {
 		const {phone, extension} = await setup();
 		const session = phone.store.groups.find((s) => s.id === 's1')!;

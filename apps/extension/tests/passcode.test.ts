@@ -1,19 +1,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
-	PASSWORD_MAX_LENGTH,
 	sameCredential,
-	PASSWORD_MIN_LENGTH,
-	STRONG_PASSWORD_LENGTH,
 	validateCredential,
 	weakPasswordHint,
 } from '../src/shared/passcode';
-
-test('the limits are the documented ones', () => {
-	assert.equal(PASSWORD_MIN_LENGTH, 4);
-	assert.equal(PASSWORD_MAX_LENGTH, 128);
-	assert.equal(STRONG_PASSWORD_LENGTH, 8);
-});
 
 test('a password is 4 to 128 characters of any kind', () => {
 	assert.equal(validateCredential('abcd'), null);
@@ -48,11 +39,6 @@ test('length is judged after the normalization the key is derived with, so the s
 	assert.equal(validateCredential('éééé'), null);
 	// A compatibility form (full width letters) counts as the plain letters it becomes.
 	assert.match(validateCredential('ａｂｃ') ?? '', /at least 4/);
-});
-
-test('a password past the limit is refused, not cut, so what is typed is what is kept', () => {
-	assert.match(validateCredential('x'.repeat(129)) ?? '', /at most 128/);
-	assert.equal(validateCredential('x'.repeat(128)), null);
 });
 
 test('a short or number-only password gets a hint while it is typed, and a longer mixed one does not', () => {

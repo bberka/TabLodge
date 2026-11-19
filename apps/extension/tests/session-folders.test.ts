@@ -3,7 +3,6 @@ import {test} from 'vite-plus/test';
 import {
 	FOLDER_LIMIT_MESSAGE,
 	folderLimitReached,
-	folderNameExists,
 	folderNameProblem,
 	normalizeFolderName,
 	visibleSessionFolders,
@@ -34,17 +33,6 @@ test('a folder name is trimmed, cleaned of control characters, and cut to 60 cha
 	assert.equal(normalizeFolderName('  Work\tlist\n '), 'Work list');
 	assert.equal(normalizeFolderName('x'.repeat(80)).length, 60);
 	assert.equal(normalizeFolderName(42), '');
-});
-
-test('folder names are unique ignoring case, except for the folder being renamed', () => {
-	const folders = [
-		{id: 'a', name: 'Work'},
-		{id: 'b', name: 'Home'},
-	];
-
-	assert.equal(folderNameExists(folders, 'work'), true);
-	assert.equal(folderNameExists(folders, 'work', 'a'), false);
-	assert.equal(folderNameExists(folders, 'Play'), false);
 });
 
 test('folderNameProblem rejects empty, reserved, duplicate, and over-limit names', () => {

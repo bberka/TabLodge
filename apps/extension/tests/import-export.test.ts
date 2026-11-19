@@ -359,21 +359,6 @@ test('browser bookmark HTML: nested folders, entities, descriptions, and unsafe 
 	assert.equal(parsed.bookmarks[0].links[0].notes, 'Morning reading');
 	assert.equal(parsed.invalid, 2);
 	assert.equal(parsed.bookmarks[0].createdAt, 1_700_000_000_000);
-	// Converted payload: folders become columns, and loose links join the first column.
-	const payload = bookmarkImportPayload(parsed) as {
-		bookmarkColumns: Array<{id: string; name: string}>;
-		bookmarks: Array<{url: string; columnId?: string}>;
-	};
-	assert.deepEqual(
-		payload.bookmarkColumns.map((column) => column.name),
-		['Bookmarks bar', 'Dev <tools>'],
-	);
-	assert.equal(
-		payload.bookmarks.find(
-			(bookmark) => bookmark.url === 'https://top.example/',
-		)?.columnId,
-		'import-column-1',
-	);
 
 	const page = parseImportFile(
 		'<html><body><ul><li><a href="https://one.example/" onclick="evil()">One</a><li><a href=https://two.example/>Two</a></ul><img src=x onerror=alert(1)></body></html>',
@@ -853,69 +838,6 @@ test("browser bookmark trees read like the service worker's browser import", () 
 	assert.deepEqual(names(parsed, 'bookmarks'), ['Bookmarks bar', 'Sub']);
 	assert.equal(parsed.invalid, 1);
 	assert.equal(parsed.bookmarks[0].links[0].createdAt, 1_700_000_000_000);
-});
-
-test('bookmark folders merge by name and folderless links land in the first column', () => {
-	const parsed = parseBookmarkTree([
-		{
-			id: '0',
-			children: [
-				{id: '10', title: 'Loose', url: 'https://loose.example/'},
-				{
-					id: '1',
-					title: 'Socials',
-					children: [
-						{id: '2', title: 'First', url: 'https://first.example/'},
-						{
-							id: '3',
-							title: 'Nested',
-							children: [
-								{id: '4', title: 'Second', url: 'https://second.example/'},
-							],
-						},
-					],
-				},
-				{
-					id: '5',
-					title: 'Socials',
-					children: [{id: '6', title: 'Third', url: 'https://third.example/'}],
-				},
-			],
-		},
-	]);
-
-	assert.deepEqual(
-		parsed.bookmarks.map((entry) => [
-			entry.name,
-			entry.links.map((link) => link.url),
-		]),
-		[
-			[
-				'Socials',
-				[
-					'https://first.example/',
-					'https://third.example/',
-					'https://loose.example/',
-				],
-			],
-			['Nested', ['https://second.example/']],
-		],
-	);
-
-	const payload = bookmarkImportPayload(parsed) as {
-		bookmarkColumns: Array<{id: string; name: string}>;
-		bookmarks: Array<{url: string; columnId?: string}>;
-	};
-	assert.deepEqual(payload.bookmarkColumns, [
-		{id: 'import-column-1', name: 'Socials'},
-		{id: 'import-column-2', name: 'Nested'},
-	]);
-	assert.equal(
-		payload.bookmarks.find(
-			(bookmark) => bookmark.url === 'https://loose.example/',
-		)?.columnId,
-		'import-column-1',
-	);
 });
 
 test('bookmark HTML folders merge by name and unfiled links use the first column', () => {

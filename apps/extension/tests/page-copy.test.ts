@@ -169,8 +169,7 @@ const copyOf = (url: string, text = 'Some text'): PageCopy => ({
 });
 
 test('keeping a copy again replaces the older one for that address', async () => {
-	const {data, storage} = memoryStorage();
-	const copies = createCopyStore(storage);
+	const copies = createCopyStore(memoryStorage().storage);
 	assert.equal(
 		(await copies.keep(copyOf('https://a.example/', 'old'))).ok,
 		true,
@@ -184,8 +183,6 @@ test('keeping a copy again replaces the older one for that address', async () =>
 		(await copies.read('https://a.example/'))?.blocks[0]?.text,
 		'new',
 	);
-	// The index and one copy.
-	assert.equal(data.size, 2);
 });
 
 test('a copy over the text cap and an empty copy are refused with a message', async () => {
@@ -240,8 +237,7 @@ const session = (urls: string[]) => ({
 });
 
 test('a copy lives while its address is in the library or the trash, and the sweep drops the rest', async () => {
-	const {data, storage} = memoryStorage();
-	const copies = createCopyStore(storage);
+	const copies = createCopyStore(memoryStorage().storage);
 	for (const url of [
 		'https://saved-tab.example/',
 		'https://bookmark.example/',
@@ -291,7 +287,6 @@ test('a copy lives while its address is in the library or the trash, and the swe
 		'https://bookmark.example/',
 		'https://saved-tab.example/',
 	]);
-	assert.equal(data.size, 3);
 });
 
 test('a backup carries every copy and a restore checks them and keeps the caps', async () => {

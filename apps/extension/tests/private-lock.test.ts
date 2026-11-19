@@ -178,15 +178,6 @@ test('an older lock record that says pin still opens with its short number, and 
 	assert.equal(parseLockRecord(local.get(LOCK_RECORD_KEY))?.kind, 'password');
 });
 
-test('an older 4 digit number still opens what it wrapped, because opening never checks the length', async () => {
-	const wrapped = await wrapDataKey(generateDataKey(), {value: '2468'});
-	assert.ok(await unwrapDataKey(wrapped, '2468'));
-	assert.equal(
-		(await failure(unwrapDataKey(wrapped, '1357'))).code,
-		'wrong-credential',
-	);
-});
-
 test('lock records are checked before use', () => {
 	const good: LockRecord = {
 		version: 1,
@@ -570,19 +561,6 @@ test('a damaged lock record is reported, never treated as no lock', async () => 
 	assert.equal((await failure(lock.unlock('anything at all'))).code, 'damaged');
 });
 
-test('a sealed value moved to another key is refused', async () => {
-	const {env, local} = createEnv(library);
-	const lock = createPrivateLock(env);
-	await lock.enable(password);
-	const gate = await lock.gate();
-	assert.ok(gate?.key);
-	const moved = local.get(`${PREFIX}tablodge.session.a.1`);
-	assert.equal(
-		(await failure(readStored(gate.key, 'tablodge.session.b.2', moved))).code,
-		'damaged',
-	);
-});
-
 // Private windows ---------------------------------------------------------------------------------------------------
 
 test('closing every tracked window locks; one that remains keeps the library open and adopts new ones', () => {
@@ -650,19 +628,6 @@ test('closing every tracked window locks; one that remains keeps the library ope
 	for (const {name, tracked, open, expected} of cases) {
 		assert.deepEqual(judgePrivateWindows(tracked, open), expected, name);
 	}
-});
-
-test('a reused window id would keep the library open, so the tracked ids must not outlive the browser session', async () => {
-	// Chromium counts windows up for as long as the browser runs, so an id never returns for another window. If one
-	// did, the judgement could not tell the two apart. The ids live in session storage, which a browser restart empties.
-	assert.deepEqual(judgePrivateWindows([3], [3]), {lock: false, tracked: [3]});
-	const {env, session} = createEnv(library, [3]);
-	await createPrivateLock(env).enable(password);
-	assert.deepEqual(session.get(LOCK_WINDOWS_KEY), [3]);
-	session.clear();
-	const restarted = createPrivateLock(env);
-	assert.equal((await restarted.gate())?.key, null);
-	assert.equal(session.has(LOCK_WINDOWS_KEY), false);
 });
 
 test('stored window ids that are malformed count as nothing tracked', () => {

@@ -9,11 +9,7 @@ import {
 	deleteColumn,
 } from '../src/library/board-edits';
 import {emptyStore} from '../src/library/store-shape';
-import {
-	buildWidgetSnapshot,
-	WIDGET_COLUMNS_MAX,
-	WIDGET_LINKS_PER_COLUMN,
-} from '../src/library/widget-snapshot';
+import {buildWidgetSnapshot} from '../src/library/widget-snapshot';
 
 const OPEN = {how: 'system' as const, app: ''};
 let counter = 0;
@@ -61,29 +57,29 @@ describe('the Bookmarks widget snapshot', () => {
 
 	test('caps the links per column, All included, but counts them all', () => {
 		let store = withColumns('Reading');
-		for (let index = 0; index < WIDGET_LINKS_PER_COLUMN + 10; index += 1) {
+		for (let index = 0; index < 60; index += 1) {
 			store = save(store, 'reading', `https://a.example/${index}`);
 		}
 
 		const columns = buildWidgetSnapshot(store, OPEN)?.columns ?? [];
 		for (const columnId of [ALL_BOOKMARKS_ID, 'reading']) {
 			const column = columns.find((each) => each.id === columnId);
-			assert.equal(column?.links.length, WIDGET_LINKS_PER_COLUMN, columnId);
-			assert.equal(column?.count, WIDGET_LINKS_PER_COLUMN + 10, columnId);
+			assert.equal(column?.links.length, 50, columnId);
+			assert.equal(column?.count, 60, columnId);
 			assert.equal(column?.links[0]?.url, 'https://a.example/0', columnId);
 		}
 	});
 
 	test('caps the number of columns', () => {
 		let store = emptyStore(1);
-		for (let index = 0; index < WIDGET_COLUMNS_MAX + 5; index += 1) {
+		for (let index = 0; index < 55; index += 1) {
 			store = addColumn(store, `Column ${index}`, `c${index}`, 1);
 		}
 
 		store = save(store, 'c0', 'https://a.example/');
 		assert.equal(
 			buildWidgetSnapshot(store, OPEN)?.columns.length,
-			WIDGET_COLUMNS_MAX + 1,
+			51,
 			'the capped columns, and All',
 		);
 	});

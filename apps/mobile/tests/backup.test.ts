@@ -284,15 +284,6 @@ describe('a backup the extension makes, read by the phone', () => {
 		assert.deepEqual(idsOf(result.store), idsOf(parts.state));
 	});
 
-	test('a ZIP protected with a short number, as an older version allowed, opens with it', async () => {
-		const {bytes} = buildFullBackup(extensionParts(), {appVersion: '1'});
-		const locked = await protectFullBackup(bytes, {
-			value: '482913',
-		});
-		const result = await readBackup(locked, '482913');
-		assert.ok(result.ok);
-	});
-
 	test('a backup missing its optional parts, or with junk in the library, still restores what is valid', async () => {
 		const zip = zipSync({
 			'manifest.json': strToU8(

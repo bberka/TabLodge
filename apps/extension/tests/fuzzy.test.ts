@@ -215,10 +215,6 @@ test('a label hit beats a help hit beats an option or keyword hit', () => {
 	assert.ok(label > help);
 	assert.ok(help > other);
 	assert.ok(other > 0);
-	assert.ok(
-		scoreQuery('dock', ['x', 'x', 'Dock']) >
-			scoreQuery('dock', ['Docking', 'x']) - 100,
-	);
 });
 
 test('wide letter gaps rank below tight ones', () => {

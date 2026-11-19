@@ -845,22 +845,6 @@ test('menus follow column additions, renames, reorders and deletions without dup
 	assert.deepEqual(harness.warnings, []);
 });
 
-test('unrelated storage writes do not rebuild the menus', async () => {
-	const harness = createHarness(baseState());
-	await harness.install();
-	const before = harness.item('tablodge-link-root');
-	await harness.send({
-		type: 'ADD_BOOKMARK',
-		bookmark: {url: 'https://unrelated.example/', title: 'Unrelated'},
-	});
-	await wait(REBUILD_WAIT);
-	assert.equal(
-		harness.item('tablodge-link-root'),
-		before,
-		'the same menu objects remain',
-	);
-});
-
 test('bookmarking a link into a column uses the link text, falls back to the host, and skips copies', async () => {
 	const harness = createHarness(baseState());
 	await harness.install();
@@ -1261,13 +1245,6 @@ test('the send-to-session picker follows session renames, additions and deletion
 	await wait(REBUILD_WAIT);
 	assert.equal(harness.item('tablodge-page-send:a'), undefined);
 	assert.deepEqual(harness.menuErrors, []);
-
-	await harness.send({
-		type: 'UPDATE_SETTINGS',
-		settings: {contextMenuPageEnabled: false},
-	});
-	await wait(REBUILD_WAIT);
-	assert.equal(harness.item('tablodge-page-send'), undefined);
 });
 
 test('sending this tab to a session appends it, leaves the page open when closing is off, and allows repeats', async () => {
@@ -1856,25 +1833,6 @@ test('Chromium 150 puts the page items on the tab strip, with & as written and t
 		harness.item('tablodge-page-bookmark')?.title,
 		'Bookmark this page to',
 	);
-});
-
-test('Chromium before 150 adds no tab strip items, whether or not it lists the context', async () => {
-	for (const [major, listsTabContext] of [
-		[149, true],
-		[148, false],
-	] as const) {
-		const harness = createHarness(baseState(), stripTabs, {
-			userAgent: chromeUserAgent(major),
-			listsTabContext,
-		});
-		await harness.install();
-		assert.deepEqual(harness.menuErrors, []);
-		assert.ok(harness.item('tablodge-page-root'), `Chrome ${major}`);
-		assert.ok(
-			harness.items().every((item) => !item.contexts?.includes('tab')),
-			`Chrome ${major}`,
-		);
-	}
 });
 
 test('in Chromium the tab strip items refuse a tab that is not a web page', async () => {

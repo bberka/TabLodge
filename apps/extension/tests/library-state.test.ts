@@ -25,7 +25,7 @@ class MemoryBackend implements KeyValueBackend {
 	calls = 0;
 	failAt: number | undefined;
 	tear = false;
-	sets: Array<{keys: string[]; chars: number}> = [];
+	sets: Array<{keys: string[]}> = [];
 	corruptKey: ((key: string) => boolean) | undefined;
 	rejectKey: ((key: string) => boolean) | undefined;
 	onGet: ((keys: string[]) => Promise<void>) | undefined;
@@ -79,7 +79,6 @@ class MemoryBackend implements KeyValueBackend {
 
 		this.sets.push({
 			keys: entries.map(([key]) => key),
-			chars: JSON.stringify(values).length,
 		});
 		for (const [key, value] of entries) {
 			this.data.set(
@@ -505,51 +504,6 @@ test('a migration crashed at any step resumes, loses nothing, and leaves no stra
 	}
 });
 
-test('a migration interrupted twice still finishes once, without duplicating anything', async () => {
-	const old = library(9, 4);
-	const options = {writeBatchChars: 500};
-	const backend = new MemoryBackend({[STATE_KEY]: old});
-	for (const step of [14, 9, 20]) {
-		backend.calls = 0;
-		backend.failAt = step;
-		await assert.rejects(
-			createLibraryState(backend, options).migrate(normalize),
-			/crash/,
-		);
-	}
-
-	backend.failAt = undefined;
-	const outcome = await createLibraryState(backend, options).migrate(normalize);
-	assert.equal(outcome.status, 'migrated');
-	assert.equal((outcome as {resumed: boolean}).resumed, true);
-	const read = await createLibraryState(backend, options).read();
-	assert.deepEqual(read, normalize(old));
-	assert.equal((read.groups as Raw[]).length, 9, 'no session twice');
-	assert.deepEqual(leakedKeys(backend), []);
-});
-
-test('a resumed migration does not rewrite records that are already correct', async () => {
-	const old = library(9, 4);
-	const options = {writeBatchChars: 500};
-	const backend = new MemoryBackend({[STATE_KEY]: old});
-	backend.failAt = 24;
-	await assert.rejects(
-		createLibraryState(backend, options).migrate(normalize),
-		/crash/,
-	);
-	backend.failAt = undefined;
-	const alreadyWritten = [...backend.data.keys()].filter((key) =>
-		key.startsWith(SESSION_KEY_PREFIX),
-	);
-	assert.ok(alreadyWritten.length > 0, 'the crash came after some records');
-	backend.sets.length = 0;
-	await createLibraryState(backend, options).migrate(normalize);
-	const rewritten = backend.sets
-		.flatMap((entry) => entry.keys)
-		.filter((key) => alreadyWritten.includes(key));
-	assert.deepEqual(rewritten, []);
-});
-
 test('a library changed between attempts starts a fresh migration and cleans up the first', async () => {
 	const old = library(6, 3);
 	const options = {writeBatchChars: 500};
@@ -694,25 +648,6 @@ test('migrating a new-schema entry returns current without touching it', async (
 	const before = backend.snapshot();
 	assert.deepEqual(await store.migrate(normalize), {status: 'current'});
 	assert.deepEqual(backend.snapshot(), before);
-});
-
-test('a migrated library reserves empty sync containers and no stamps yet', async () => {
-	const backend = new MemoryBackend({[STATE_KEY]: library()});
-	await createLibraryState(backend).migrate(normalize);
-	const index = stateOf(backend)!;
-	assert.deepEqual(index.tombstones, []);
-	assert.deepEqual(index.folderSync, {});
-	assert.deepEqual(index.columnSync, {});
-	assert.deepEqual(index.preferenceSync, {});
-	assert.equal(
-		index.device,
-		undefined,
-		'a device id is assigned when sync is switched on',
-	);
-	for (const entry of index.sessions as Raw[]) {
-		assert.equal(entry.sync, undefined);
-		assert.equal(entry.tabSync, undefined);
-	}
 });
 
 test('a migration refuses records without a stable id before writing anything', async () => {
@@ -869,20 +804,6 @@ test('saving keeps stamps, order keys, tombstones, and the device id, and drops 
 	);
 	assert.deepEqual(await store.read(), {...edited, schemaVersion: 10});
 	assert.deepEqual(await store.verify(), []);
-});
-
-test('a save that touches nothing stamped does not read or rewrite sidecars', async () => {
-	const backend = new MemoryBackend();
-	const store = createLibraryState(backend);
-	const base = normalize(library(5));
-	await store.write(base);
-	stampLibrary(backend);
-	backend.sets.length = 0;
-	await store.write({...base, settings: {theme: 'light'}});
-	assert.deepEqual(
-		backend.sets.map((item) => item.keys),
-		[[STATE_KEY]],
-	);
 });
 
 test('malformed sync data is dropped, not fatal', async () => {

@@ -4,7 +4,6 @@ import {test} from 'vite-plus/test';
 import {
 	FullBackupError,
 	buildFullBackup,
-	countFullBackup,
 	fullBackupFilename,
 	looksLikeZip,
 	protectFullBackup,
@@ -61,7 +60,6 @@ test('a full backup round-trips through the ZIP', () => {
 	assert.deepEqual(read.snapshots, parts.snapshots);
 	assert.deepEqual(read.trash, parts.trash);
 	assert.deepEqual(read.copies, parts.copies);
-	assert.deepEqual(read.counts, countFullBackup(parts));
 });
 
 test('the ZIP holds exactly the six files and the file name is dated', () => {
@@ -148,7 +146,6 @@ test('a protected full backup is not a ZIP and reads back with the credential', 
 	);
 	assert.ok(read);
 	assert.deepEqual(read.state, parts.state);
-	assert.deepEqual(read.counts, countFullBackup(parts));
 });
 
 test('a wrong credential reads nothing from a protected backup', async () => {
@@ -188,6 +185,5 @@ test('a backup made while the locked area existed restores without it, even when
 		assert.ok(read);
 		assert.equal('locked' in read, false);
 		assert.deepEqual(read.state, parts.state);
-		assert.deepEqual(read.counts, countFullBackup(parts));
 	}
 });

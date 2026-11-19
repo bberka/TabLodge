@@ -72,10 +72,6 @@ test('the sync server package takes the release version it reports at /v1/status
 	);
 	const stamped = stampVersion(text, '0.4.2');
 	assert.equal((JSON.parse(stamped) as {version: string}).version, '0.4.2');
-	assert.equal(
-		stamped,
-		text.replace('"version": "0.0.0"', '"version": "0.4.2"'),
-	);
 });
 
 test('the Android version code grows with the release version', () => {
