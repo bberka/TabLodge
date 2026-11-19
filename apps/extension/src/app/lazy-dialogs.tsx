@@ -111,7 +111,6 @@ export function useShareDialog(showStatus: ShowStatus) {
 					sources={shown?.sources}
 					data={shown?.data}
 					backup={shown?.backup}
-					initialSource={shown?.initialSource}
 					showStatus={showStatus}
 					onOpenChange={setOpen}
 				/>

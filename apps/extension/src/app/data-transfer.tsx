@@ -78,6 +78,7 @@ import {
 import {
 	buildExport,
 	dateStamp,
+	exportCounts,
 	type ExportData,
 	type ExportFormat,
 } from '../shared/export-formats';
@@ -170,6 +171,10 @@ type ShareSource = {
 	*/
 	data?: ExportData;
 	/**
+	Title of the shared page when this source holds several groups; defaults to the title of the whole share.
+	*/
+	pageTitle?: string;
+	/**
 	The full backup ZIP of everything: no links to list or preview, only the backup options.
 	*/
 	backup?: boolean;
@@ -183,10 +188,6 @@ export type SharePayload = {
 	Adds "Everything", the full backup ZIP, to what can be shared.
 	*/
 	backup?: boolean;
-	/**
-	Opens on this source (`everything` for the backup) instead of the first one.
-	*/
-	initialSource?: string;
 };
 
 const EVERYTHING_SOURCE: ShareSource = {
@@ -268,7 +269,6 @@ type ShareDialogProps = {
 	sources?: ShareSource[];
 	data?: ExportData;
 	backup?: boolean;
-	initialSource?: string;
 	showStatus: ShowStatus;
 };
 
@@ -568,7 +568,6 @@ export function ShareDialog({
 	sources,
 	data,
 	backup,
-	initialSource,
 	showStatus,
 }: ShareDialogProps) {
 	const all: ShareSource[] = useMemo(() => {
@@ -584,23 +583,26 @@ export function ShareDialog({
 	}, [sources, groups, title, data, backup]);
 	const [sourceId, setSourceId] = useState(all[0].id);
 	const [method, setMethod] = useState<ShareWay>('html');
-	const server = useSharedPagesServer(open);
+	// A backup-only dialog has nothing to upload, so it never asks the sync server about shared pages.
+	const backupOnly = all.length === 1 && all[0].backup === true;
+	const server = useSharedPagesServer(open && !backupOnly);
 	const [uploading, setUploading] = useState(false);
 	const [uploaded, setUploaded] = useState<SharedPage>();
 	// Optional password protection of the full backup ZIP; the secret lives only in this state.
 	const [protect, setProtect] = useState(false);
 	const [passcode, setPasscode] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
 	const [saving, setSaving] = useState(false);
+	// Changes whenever the dialog opens or closes, so a backup that outlives its dialog can tell and stays quiet.
+	const dialogRunRef = useRef(0);
 	useEffect(() => {
+		dialogRunRef.current++;
 		if (!open) {
 			// Drop the typed secret as soon as the dialog closes.
 			setPasscode((current) => ({...current, value: '', confirm: ''}));
 			return;
 		}
 
-		setSourceId(
-			all.find((entry) => entry.id === initialSource)?.id ?? all[0].id,
-		);
+		setSourceId(all[0].id);
 		setMethod('html');
 		setUploaded(undefined);
 		setProtect(false);
@@ -611,7 +613,6 @@ export function ShareDialog({
 	}, [open]);
 	const source = all.find((entry) => entry.id === sourceId) ?? all[0];
 	const isBackup = source.backup === true;
-	const backupOnly = isBackup && all.length === 1;
 	const counts = shareCounts(source.groups);
 	const choices = SHARE_METHODS.filter(
 		(entry) => !entry.file || source.data !== undefined,
@@ -622,14 +623,26 @@ export function ShareDialog({
 		source.groups,
 		isFile ? 'links' : (chosen.id as ShareMethod),
 	);
-	const pageTitle = source.groups.length === 1 ? source.groups[0].name : title;
+	const pageTitle =
+		source.groups.length === 1
+			? source.groups[0].name
+			: (source.pageTitle ?? title);
+	const fileHasData =
+		source.data !== undefined &&
+		(exportCounts(source.data).groups > 0 ||
+			exportCounts(source.data).items > 0);
 	const protectProblem =
 		isBackup && protect ? passcodeDraftProblem(passcode) : null;
 
 	async function downloadFull() {
+		const mine = dialogRunRef.current;
 		setSaving(true);
 		try {
 			const result = await send('GET_FULL_BACKUP', {});
+			if (mine !== dialogRunRef.current) {
+				return;
+			}
+
 			if (!result?.ok) {
 				throw new Error(result?.error || 'Could not read your data.');
 			}
@@ -640,6 +653,10 @@ export function ShareDialog({
 			const protectedBytes = protect
 				? await protectFullBackup(bytes, {value: passcode.value})
 				: undefined;
+			if (mine !== dialogRunRef.current) {
+				return;
+			}
+
 			const filename = protectedBytes
 				? protectedFullBackupFilename(PROJECT.name)
 				: fullBackupFilename(PROJECT.name);
@@ -656,12 +673,16 @@ export function ShareDialog({
 				{toast: true},
 			);
 		} catch (reason) {
-			showStatus(
-				String(messageOf(reason) || 'Could not create the file.'),
-				true,
-			);
+			if (mine === dialogRunRef.current) {
+				showStatus(
+					String(messageOf(reason) || 'Could not create the file.'),
+					true,
+				);
+			}
 		} finally {
-			setSaving(false);
+			if (mine === dialogRunRef.current) {
+				setSaving(false);
+			}
 		}
 	}
 
@@ -815,7 +836,11 @@ export function ShareDialog({
 					{all.length > 1 && (
 						<div className="grid gap-1.5">
 							<Label htmlFor="share-what">What to share</Label>
-							<Select value={source.id} onValueChange={setSourceId}>
+							<Select
+								value={source.id}
+								disabled={uploading || saving}
+								onValueChange={setSourceId}
+							>
 								<SelectTrigger id="share-what" className="h-auto min-h-11 py-2">
 									<SelectValue>
 										<ChoiceText
@@ -851,6 +876,7 @@ export function ShareDialog({
 								<Label htmlFor="share-how">Format</Label>
 								<Select
 									value={chosen.id}
+									disabled={uploading}
 									onValueChange={(value) => setMethod(value as ShareWay)}
 								>
 									<SelectTrigger
@@ -908,7 +934,7 @@ export function ShareDialog({
 						<Button
 							type="button"
 							variant="outline"
-							disabled={counts.links === 0 || uploading}
+							disabled={counts.links === 0 || uploading || saving}
 							onClick={() => void upload()}
 						>
 							<CloudUpload aria-hidden="true" />
@@ -930,8 +956,8 @@ export function ShareDialog({
 						type="button"
 						disabled={
 							isBackup
-								? saving || protectProblem !== null
-								: counts.links === 0 || uploading
+								? saving || uploading || protectProblem !== null
+								: uploading || !(isFile ? fileHasData : counts.links > 0)
 						}
 						onClick={() => void run('download')}
 					>

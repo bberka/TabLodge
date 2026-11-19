@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
 	shareHtmlPage,
+	shareMarkdown,
 	sharePreview,
 	type ShareGroup,
 } from '../src/shared/share-formats';
@@ -116,4 +117,18 @@ test('single-group share HTML does not repeat the page title as a group heading'
 	assert.doesNotMatch(html, /<h2>Research<\/h2>/);
 	assert.doesNotMatch(html, /<article><header>/);
 	assert.match(html, /<a href="https:\/\/example\.com\/"[^>]*>Research<\/a>/);
+});
+
+test('markdown links keep addresses with parentheses intact', () => {
+	const markdown = shareMarkdown([
+		{
+			name: 'Films',
+			tabs: [{title: 'Thing', url: 'https://example.com/wiki/Thing_(film)'}],
+		},
+	]);
+
+	assert.equal(
+		markdown,
+		'# Films\n\n- [Thing](https://example.com/wiki/Thing_%28film%29)',
+	);
 });

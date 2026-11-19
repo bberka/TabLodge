@@ -772,7 +772,6 @@ export function SessionManager({
 			title: 'Shared sessions',
 			sources: [allSessionsSource()],
 			backup: true,
-			initialSource: 'everything',
 		});
 	}
 
@@ -780,6 +779,7 @@ export function SessionManager({
 		return {
 			id: 'all',
 			label: 'All sessions',
+			pageTitle: 'Shared sessions',
 			groups,
 			data: {kind: 'sessions' as const, groups, folders},
 		};

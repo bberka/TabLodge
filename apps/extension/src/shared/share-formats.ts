@@ -88,7 +88,7 @@ export function shareMarkdown(groups: readonly ShareGroup[]): string {
 	return groups
 		.map(
 			(group) =>
-				`# ${group.name}\n\n${group.tabs.map((tab) => `- [${label(tab).replaceAll(/[[\\\]]/g, String.raw`\$&`)}](${tab.url})`).join('\n')}`,
+				`# ${group.name}\n\n${group.tabs.map((tab) => `- [${label(tab).replaceAll(/[[\\\]]/g, String.raw`\$&`)}](${tab.url.replaceAll('(', '%28').replaceAll(')', '%29')})`).join('\n')}`,
 		)
 		.join('\n\n');
 }

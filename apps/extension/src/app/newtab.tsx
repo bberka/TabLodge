@@ -1894,10 +1894,10 @@ function NewTab() {
 			return;
 		}
 
-		shareBookmarks(undefined, 'everything');
+		shareBookmarks();
 	}
 
-	function shareBookmarks(column?: BookmarkColumnData, initialSource?: string) {
+	function shareBookmarks(column?: BookmarkColumnData) {
 		const groupFor = (entry: BookmarkColumnData | ColumnRef) => ({
 			name: entry.name,
 			tabs: bookmarks.filter((bookmark) => bookmark.columnId === entry.id),
@@ -1929,12 +1929,12 @@ function NewTab() {
 				{
 					id: 'all',
 					label: 'All bookmarks',
+					pageTitle: 'Shared bookmarks',
 					groups: everything,
 					data: {kind: 'bookmarks', columns, bookmarks},
 				},
 			],
 			backup: true,
-			initialSource,
 		});
 	}
 

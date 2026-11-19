@@ -430,7 +430,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
+						'share and export dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
 				},
 				{
 					title: 'Save from YouTube, Reddit, Spotify, and other sites',
@@ -839,7 +839,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'share and export sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',
