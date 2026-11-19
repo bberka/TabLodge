@@ -19,7 +19,8 @@ async function pick(
 ) {
 	await dialog.getByRole('combobox', {name: label}).focus();
 	await page.keyboard.press('Enter');
-	await page.getByRole('option', {name: option}).click();
+	await page.getByRole('option', {name: option}).focus();
+	await page.keyboard.press('Enter');
 }
 
 export async function sessionShareCheck(env: Env, theme: Theme) {
