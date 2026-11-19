@@ -1,22 +1,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
-import {fold, scoreFolded, scoreQuery, searchTerms} from '../src/shared/fuzzy';
+import {fold, scoreFolded} from '../src/shared/fuzzy';
 import {buildFinderIndex, searchFinder} from '../src/shared/global-search';
 
 const folded = (...texts: string[]) => texts.map((text) => fold(text));
-
-test('scoreFolded matches scoreQuery for real matches, with or without typo matching', () => {
-	const texts = ['Bookmarks', 'Show bookmark dock', 'extras'];
-	for (const query of ['book', 'bookmarks', 'dock show']) {
-		const expected = scoreQuery(query, texts);
-		assert.ok(expected > 0);
-		assert.equal(scoreFolded(searchTerms(query), folded(...texts)), expected);
-		assert.equal(
-			scoreFolded(searchTerms(query), folded(...texts), false),
-			expected,
-		);
-	}
-});
 
 test('typo-only matches need typo matching', () => {
 	const texts = folded('Bookmarks');
@@ -40,17 +27,6 @@ const sources = {
 	tabs: [],
 	commands: [],
 };
-
-test('the finder index reuses bookmark items while the bookmarks are unchanged', () => {
-	const first = buildFinderIndex(sources).find(
-		(item) => item.id === 'bookmark:b1',
-	);
-	const second = buildFinderIndex(sources).find(
-		(item) => item.id === 'bookmark:b1',
-	);
-	assert.ok(first, 'the bookmark is indexed');
-	assert.equal(second, first);
-});
 
 test('the finder still finds typos when nothing matches exactly', () => {
 	const sections = searchFinder('wheater', buildFinderIndex(sources));

@@ -28,7 +28,7 @@ export const MAX_SPEED = 1000;
 /**
 How fast the speed grows toward the edge: 1 is linear, 2 starts gently and accelerates.
 */
-export const ACCELERATION = 2;
+const ACCELERATION = 2;
 /**
 Share of the normal speed used when the user prefers reduced motion. The view still scrolls.
 */

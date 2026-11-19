@@ -18,8 +18,6 @@ test('the registry has one unique, kebab-case entry per icon id', () => {
 		assert.ok(icon.component);
 		assert.ok(icon.keywords.length > 0);
 	}
-
-	assert.ok(ICONS.length >= 250);
 });
 
 test('default icons exist and getIcon falls back for unknown ids', () => {

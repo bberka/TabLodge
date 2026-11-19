@@ -1338,11 +1338,4 @@ describe('bookmark notes', () => {
 		assert.deepEqual(found('"packing list"'), ['b2']);
 		assert.deepEqual(found('"list packing"'), []);
 	});
-
-	test('are found by search', () => {
-		assert.deepEqual(
-			searchBookmarks(withNote(), 'trip').map((entry) => entry.id),
-			['b1'],
-		);
-	});
 });

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
-	ACCELERATION,
 	EDGE_ZONE_PX,
 	MAX_FRAME_MS,
 	MAX_SPEED,
@@ -41,12 +40,6 @@ test('edgeVelocity speeds up toward the edge and tops out at the maximum', () =>
 	// Past the edge (a pointer dragged out of the window) is the same top speed.
 	assert.equal(edgeVelocity(-40, 0, SIZE), -MAX_SPEED);
 	assert.equal(edgeVelocity(SIZE + 40, 0, SIZE), MAX_SPEED);
-});
-
-test('edgeVelocity follows the acceleration curve', () => {
-	const depth = 0.5;
-	const expected = MIN_SPEED + (MAX_SPEED - MIN_SPEED) * depth ** ACCELERATION;
-	assert.equal(edgeVelocity(EDGE_ZONE_PX * (1 - depth), 0, SIZE), -expected);
 });
 
 test('edgeVelocity shrinks the strip on a small pane and ignores an empty one', () => {

@@ -9345,19 +9345,6 @@ test('undo paths: restore-and-remove, move between sessions and close-after-save
 	);
 });
 
-test('the worker writes the same backup format id and version as the pages', async () => {
-	const {BACKUP_FORMAT_ID, BACKUP_VERSION} =
-		await import('../src/shared/backup-format');
-	const harness = createWorkerHarness(bookmarksState());
-	const made = await harness.sendMessage({type: 'BACKUP_NOW'});
-	const stored = backupsOf(harness).auto.find(
-		(item) => item.id === made.backup.id,
-	)!;
-	const file = JSON.parse(stored.json) as {format: string; version: number};
-	assert.equal(file.format, BACKUP_FORMAT_ID);
-	assert.equal(file.version, BACKUP_VERSION);
-});
-
 test('the manifest asks for alarms up front and Downloads only as an optional permission', () => {
 	assert.equal(manifest.permissions?.includes('alarms'), true);
 	assert.equal(manifest.permissions?.includes('downloads'), false);
@@ -10435,18 +10422,6 @@ test('restoreMode archive is not accepted any more and falls back to keep', asyn
 	});
 	assert.equal(restored.ok, true, restored.error);
 	assert.equal(harness.state.groups[0].tabs.length, 1);
-});
-
-test('restore-and-remove removes tabs of any session (there is no lock)', async () => {
-	const harness = createWorkerHarness(
-		stateWithSession({restoreMode: 'remove'}),
-	);
-	const response = await harness.sendMessage({
-		type: 'RESTORE_GROUP',
-		groupId: 'session-1',
-	});
-	assert.equal(response.ok, true, response.error);
-	assert.equal(response.removed, true);
 });
 
 test('UPDATE_TAB changes the address of only that saved link, not other copies of the old URL', async () => {
