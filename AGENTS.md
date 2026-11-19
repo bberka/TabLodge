@@ -1,6 +1,6 @@
 # TabLodge
 
-A local first tab session and bookmark manager. A pnpm workspace of four apps that share one library format and sync protocol. Humans start at [docs/README.md](docs/README.md); everything agents need is in [docs/agents/](docs/agents/), loaded on demand below.
+A local first tab session and bookmark manager: four apps in a pnpm workspace sharing one library format and sync protocol. Humans start at [docs/README.md](docs/README.md); agents load [docs/agents/](docs/agents/) on demand below.
 
 ## Layout
 
@@ -8,8 +8,8 @@ A local first tab session and bookmark manager. A pnpm workspace of four apps th
 - `apps/server`: Self hosted sync server (Docker or Cloudflare)
 - `apps/mobile`: Android app (Expo, React Native)
 - `apps/site`: Website, tablodge.bbay.dev (Astro)
-- `scripts/`, `tsconfig/`: Repository wide tooling and shared TypeScript settings
-- `docs/`: All Markdown except this file. `docs/agents/` is for you
+- `scripts/`, `tsconfig/`: Repository tooling and shared TypeScript settings
+- `docs/`: All Markdown except the `AGENTS.md` files. `docs/agents/` is for you; each app also has a short `AGENTS.md` that loads when you work in it
 
 Run tasks as `vp run <task>` from the root; scripts in the root `package.json` forward to the right app.
 
@@ -17,13 +17,15 @@ Run tasks as `vp run <task>` from the root; scripts in the root `package.json` f
 
 - Never commit on or push to `master` or `main`; work on a `<type>/<short-topic>` branch and open a pull request.
 - Commits name the human author only. The pull request names the model.
-- Work from a spec: a feature has an issue with acceptance criteria before the first edit, a fix has its bug report, and every criterion gets proof in the pull request. Challenge a new feature with `challenge-feature` before building it, unless told to implement it.
+- Check and claim before coding: read the issue's comments, search pull requests for its number, then comment that you are taking it. Release the claim if you stop.
+- Work from a spec: a feature has an issue with acceptance criteria before the first edit, a fix has its bug report. Challenge a new feature with `challenge-feature` first, unless told to implement it.
 - Every fix or feature carries proof in the pull request, one piece per acceptance criterion. Ask the user only when no proof is possible.
-- Every change that alters what the user sees, including a follow up request on an open pull request, gets fresh screenshots before you reply: the dev browser for the extension and site, the emulator for the app. Upload them with `vp run evidence <pr> <files>` and put them in the pull request. Local file paths are not proof.
+- Report only what you ran. Say what you could not run or check; never infer a result.
+- A change the user can see, including a follow up request, gets fresh screenshots (dev browser for the extension and site, emulator for the app) uploaded with `vp run evidence <pr> <files>` into the pull request. Local file paths are not proof.
+- A guard (hook, lint rule, check, skipped test, `eslint-disable`) says what it prevents. Read that before changing it, and write it when you add one.
 - Never ask whether to run the app, take screenshots, or open the pull request. Do them, then report.
-- Finish the task: commit, push, open the pull request, wait for green CI, stop every process you started, then say done. Load [workflow.md](docs/agents/workflow.md) and [validation.md](docs/agents/validation.md) before the first edit, not after.
-- Run the `unslop-*` skills on the diff before every push.
-- Leave the Git hooks on, and finish the gate before pushing.
+- Finish the task: commit, push, open the pull request, wait for green CI, stop every process you started, then say done. Load [workflow.md](docs/agents/workflow.md) and [validation.md](docs/agents/validation.md) before the first edit.
+- Before every push, run the `unslop-*` skills on the diff and finish the gate. Leave the Git hooks on.
 - A change is not done while a document still describes the old behavior.
 
 ## Load on demand

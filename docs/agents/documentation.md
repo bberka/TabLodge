@@ -25,6 +25,8 @@ Research notes are GitHub comments, not files: the mobile app memo is on issue #
 - **Add a rule** to the doc whose pointer matches the situation. Put it next to related rules, and delete a rule that the code, config, or a script already enforces.
 - **Add a doc** when a topic applies to some tasks only, and give it one row in the `AGENTS.md` table. Word the trigger as the situation ("Editing UI"), leading with the distinctive word, one trigger per branch.
 - **Keep `AGENTS.md` under about 60 lines.** A rule that every task needs stays; anything else moves to a doc.
+- **Per-folder `AGENTS.md`.** `apps/*/AGENTS.md` holds the few rules that break something when missed, each with its reason, and points to the doc here for the rest. Keep it under 15 lines; the harness loads it when an agent works in that folder.
+- **The size budget.** `scripts/agent-context-budget.json` records the bytes of `AGENTS.md`, `apps/*/AGENTS.md`, and `docs/agents/`. After editing any of them run `node scripts/agent-context.ts --write` and commit the file. CI fails a pull request whose budget is above master's, unless it has the `agent-context-increase` label. Cut text before asking for the label.
 - State the target behavior positively. Use a prohibition only for a hard guardrail, with the positive alternative beside it.
 - Cache only what a lookup cannot reveal (a reason, a gotcha, an unwritten convention). Leave paths, commands, and options to the files and `package.json`.
 - Write or edit these files with the `writing-for-agents` skill loaded.

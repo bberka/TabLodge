@@ -57,6 +57,8 @@
 		"lint:fix": "xo --fix",
 		"format": "xo --fix",
 		"check": "xo && tsgo -b && vp test run",
+		"check:changed": "node scripts/check-changed.ts",
+		"check:agent-context": "node scripts/agent-context.ts",
 		"check:a11y": "pnpm --filter tablodge-extension run check:a11y",
 		"check:private-storage": "pnpm --filter tablodge-extension run check:private-storage",
 		"clean": "pnpm --filter tablodge-extension run clean && node --eval \"require('node:fs').rmSync('node_modules/.tmp', { recursive: true, force: true })\""
