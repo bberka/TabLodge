@@ -150,6 +150,11 @@ export type Preferences = {
 	*/
 	syncPrivate: boolean;
 	/**
+	While a server is connected, sync the regular library about every 15 minutes with the app closed, and redraw the
+	Bookmarks widgets with what came in. On by default. Stays on this phone, whose battery it uses.
+	*/
+	backgroundSync: boolean;
+	/**
 	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
 	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
 	itself when there is no server; `off` shows letter tiles. Stays on this phone.
@@ -264,6 +269,7 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 	cleanOnSave: synced(true, bool),
 	syncSettings: device(true, bool),
 	syncPrivate: device(true, bool),
+	backgroundSync: device(true, bool),
 	// An earlier version stored a switch: on asked the server or the site, off showed none.
 	siteIcons: synced('server', (raw) =>
 		raw === true ? 'direct' : oneOf(SITE_ICONS)(raw),
