@@ -1,6 +1,6 @@
 # Issues and triage
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues and specs for this repo live as GitHub issues; the spec format is in [Spec driven development](spec-driven.md). Use the `gh` CLI for all operations.
 
 ## Conventions
 
@@ -24,8 +24,8 @@ File issues only into `bberka/TabLodge`. In a fork, `gh` can default to the upst
 | --- | --- |
 | `needs-triage` | The maintainer has to evaluate it |
 | `needs-info` | Waiting on the reporter |
-| `ready-for-agent` | Fully specified, ready for an agent |
+| `ready-for-agent` | A finished [spec](spec-driven.md): problem, behavior, acceptance criteria, feature triage |
 | `ready-for-human` | Needs a human to implement |
 | `wontfix` | Will not be actioned |
 
-A feature issue also gets the [feature triage](cross-app.md#feature-triage) questions. External pull requests are not treated as feature requests.
+A feature issue also gets the [feature triage](cross-app.md#feature-triage) questions, and its Acceptance list is what the pull request is checked against. External pull requests are not treated as feature requests.
