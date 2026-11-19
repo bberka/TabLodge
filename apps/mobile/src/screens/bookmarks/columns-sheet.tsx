@@ -106,9 +106,7 @@ export function ColumnsSheet({
 										numberOfLines={1}
 										style={{color: colors.muted, fontSize: 13}}
 									>
-										{site
-											? `${count} · Saved from ${SOURCE_COLUMNS[site].name}`
-											: count}
+										{detail}
 									</Text>
 								</View>
 							</Pressable>
