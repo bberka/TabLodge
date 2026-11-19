@@ -652,14 +652,19 @@ function Help() {
 						<>
 							On the dashboard, press <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
 							<Key>K</Key>, or press <Key>/</Key> when you are not typing in a
-							field. Search bookmarks, sessions, open tabs, commands, or the
-							web. Your recent sessions are listed before you type. Choose one
-							to restore it, or press <Key>Shift</Key> + <Key>Enter</Key> to
-							reveal it on the dashboard instead.
+							field. Search bookmarks, sessions, open tabs, commands, Settings,
+							or the web. Your recent sessions are listed before you type.
+							Choose one to restore it, or press <Key>Shift</Key> +{' '}
+							<Key>Enter</Key> to reveal it on the dashboard instead. Type the
+							name of a Settings section, such as Sync or Recovery &amp;
+							backups, to open Settings there. Commands include Sync now, Back
+							up now, Share bookmarks, Trash bin, and Keep a copy of this page
+							(from the palette over a page). The palette lists the same
+							commands everywhere; one that needs the dashboard opens it.
 						</>
 					),
 					searchText:
-						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter',
+						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter settings section sync now back up backup share trash keep a copy',
 				},
 				{
 					title: 'Open the palette from any page',
@@ -690,11 +695,13 @@ function Help() {
 							<Key>↑</Key> and <Key>↓</Key> move through results. Press{' '}
 							<Key>Enter</Key> to open one, or <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
 							<Key>Enter</Key> to open it in a new tab. Press <Key>Esc</Key> to
-							close the palette.
+							close the palette. The bar under the results shows the keys for
+							the highlighted result; the <Key>?</Key> button in the search
+							field lists them all.
 						</>
 					),
 					searchText:
-						'up down arrows navigate results enter open ctrl command cmd meta new tab escape esc close palette',
+						'up down arrows navigate results enter open ctrl command cmd meta new tab escape esc close palette keys help question mark',
 				},
 				{
 					title: 'More actions for a result',
@@ -703,13 +710,15 @@ function Help() {
 							Press <Key>→</Key> on a session, bookmark, saved tab, or open tab
 							(or right-click it) to see its other actions: restore a session
 							here or in a new window, reveal it on the dashboard, open a link
-							in a new tab or window, copy a link, switch to a tab, or close it.
-							Type to filter the actions. Press <Key>Esc</Key> or{' '}
-							<Key>Backspace</Key> to go back to the results.
+							in a new tab or window, copy a link, open its page copy, switch to
+							a tab, keep a copy of it, or close it. Type to filter the actions.
+							Press <Key>←</Key> (at the start of the filter), <Key>Esc</Key>,
+							or <Key>Backspace</Key> (with the filter empty) to go back to the
+							results.
 						</>
 					),
 					searchText:
-						'more actions sub menu submenu right arrow context menu restore here new window reveal open copy link switch close tab filter back escape backspace breadcrumb palette',
+						'more actions sub menu submenu right arrow left arrow context menu restore here new window reveal open copy link page copy keep a copy switch close tab filter back escape backspace breadcrumb palette',
 				},
 				{
 					title: 'Search from the address bar',
