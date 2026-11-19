@@ -38,20 +38,25 @@ class OpenLinksModule : Module() {
   }
 
   // Android's chooser for a web link lists only the default browser and apps with verified links, and opens a lone
-  // entry at once, so it would skip the chooser for most links. Every app that can open the link is listed instead,
-  // found the same way as the browsers, the first as the target and the rest beside it.
+  // entry at once. It shows only the first two entries added to it, so those go to apps that can open the link but
+  // that it leaves out, apps before browsers; the Open in drawer names every browser anyway.
   private fun chooser(context: Context, view: Intent): Intent {
-    @Suppress("DEPRECATION")
-    val targets = context.packageManager.queryIntentActivities(view, PackageManager.MATCH_ALL)
+    val manager = context.packageManager
+    fun handlers(intent: Intent, flags: Int) = manager.queryIntentActivities(intent, flags)
       .map { it.activityInfo }
       .filter { it.packageName != context.packageName }
-      .distinctBy { it.packageName to it.name }
+    val listed = handlers(view, PackageManager.MATCH_DEFAULT_ONLY).map { it.packageName }.toSet()
+    val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE)
+    @Suppress("DEPRECATION")
+    val browsers = handlers(probe, PackageManager.MATCH_ALL).map { it.packageName }.toSet()
+    @Suppress("DEPRECATION")
+    val added = handlers(view, PackageManager.MATCH_ALL)
+      .filter { it.packageName !in listed }
+      .distinctBy { it.packageName }
+      .sortedBy { it.packageName in browsers }
+      .take(2)
       .map { Intent(view).setClassName(it.packageName, it.name) }
-    if (targets.size < 2) {
-      return Intent.createChooser(view, null)
-    }
-    return Intent.createChooser(targets.first(), null)
-      .putExtra(Intent.EXTRA_INITIAL_INTENTS, targets.drop(1).toTypedArray())
+    return Intent.createChooser(view, null).putExtra(Intent.EXTRA_INITIAL_INTENTS, added.toTypedArray())
   }
 
   override fun definition() = ModuleDefinition {
