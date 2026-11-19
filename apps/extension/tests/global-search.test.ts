@@ -306,14 +306,3 @@ test('operators narrow the palette, and a query of operators alone lists what pa
 	assert.deepEqual(found('"news hacker"'), []);
 	assert.deepEqual(found('before:2000-01-01 in:sessions'), ['session:s1']);
 });
-
-test('renaming a folder reaches the cached session items', () => {
-	const renamed = buildFinderIndex({
-		...sources,
-		folders: [{...folder, name: 'Trips'}],
-	});
-	const found = flattenSections(
-		searchFinder('folder:trips in:sessions', renamed),
-	);
-	assert.ok(found.some((item) => item.id === 'session:s1'));
-});

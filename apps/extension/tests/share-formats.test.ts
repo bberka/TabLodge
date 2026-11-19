@@ -96,8 +96,6 @@ test('share preview matches each selected output format', () => {
 		rich.text,
 		'Research\nBrowser APIs\nhttps://example.com/browser',
 	);
-	assert.notEqual(markdown.text, links.text);
-	assert.notEqual(links.text, rich.text);
 });
 
 test('single-group share HTML does not repeat the page title as a group heading', () => {

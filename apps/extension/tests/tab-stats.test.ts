@@ -48,7 +48,7 @@ test('skips tabs with no access time and the active tab', () => {
 test('estimates memory from loaded tabs only', () => {
 	assert.equal(estimateTabMemoryMb(0, 0), 0);
 	assert.equal(estimateTabMemoryMb(10, 0), 1000);
-	assert.equal(estimateTabMemoryMb(10, 4), 600 + 4 * 5);
+	assert.equal(estimateTabMemoryMb(10, 4), 620);
 });
 
 test('words the estimate as a rough figure', () => {

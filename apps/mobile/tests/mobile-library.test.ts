@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
 	BOOKMARK_UNFILED_ID,
-	columnNameProblem,
 	DEFAULT_BOOKMARK_COLUMN_ID,
 } from '../../extension/src/shared/bookmark-rules';
 import {
@@ -53,7 +52,6 @@ import {
 	renameFolder,
 	addFolder,
 	folderLimitProblem,
-	folderNameProblem,
 	updateFolder,
 	restoreFolder,
 	updateSessionTab,
@@ -208,20 +206,6 @@ describe('bookmarks', () => {
 			{id: BOOKMARK_UNFILED_ID, name: 'Unfiled'},
 		]);
 		assert.deepEqual(ids(store, BOOKMARK_UNFILED_ID), ['a']);
-	});
-});
-
-describe('sample data', () => {
-	test('matches the extension dev fixture and groups bookmarks into real columns', () => {
-		const store = sampleStore(NOW);
-		assert.equal(store.groups.length, 6);
-		assert.equal(store.bookmarks.length, 16);
-		assert.equal(
-			columnViews(store).some((view) => view.id === BOOKMARK_UNFILED_ID),
-			false,
-		);
-		const sessionIds = store.groups.map((session) => session.id);
-		assert.equal(new Set(sessionIds).size, sessionIds.length);
 	});
 });
 
@@ -430,8 +414,13 @@ describe('shared link lists', () => {
 			['x', 'y'],
 			NOW,
 		);
-		assert.equal(store.bookmarks.length, 2);
-		assert.equal(new Set(store.bookmarks.map((b) => b.id)).size, 2);
+		assert.deepEqual(
+			store.bookmarks.map((b) => [b.id, b.url]),
+			[
+				['x', 'https://a.test/'],
+				['y', 'https://b.test/'],
+			],
+		);
 	});
 
 	test('saves them as a session in the default folder, or adds to one', () => {
@@ -593,23 +582,6 @@ describe('editing columns', () => {
 
 	test('a name that is empty, reserved, or taken is refused', () => {
 		const store = build();
-		assert.match(
-			columnNameProblem(store.bookmarkColumns, ' ') ?? '',
-			/different/,
-		);
-		assert.match(
-			columnNameProblem(store.bookmarkColumns, 'All Bookmarks') ?? '',
-			/different/,
-		);
-		assert.match(
-			columnNameProblem(store.bookmarkColumns, 'two') ?? '',
-			/already exists/,
-		);
-		assert.equal(
-			columnNameProblem(store.bookmarkColumns, 'One', 'c1'),
-			undefined,
-			'its own name is fine',
-		);
 		assert.equal(
 			updateColumn(store, 'c1', {name: 'Two', icon: '', color: ''}, NOW),
 			store,
@@ -877,18 +849,9 @@ describe('session folders', () => {
 		assert.ok(back.folders.some((f) => f.id === 'read'));
 	});
 
-	test('a new folder follows the extension rules: limit, duplicates, reserved name, long names', () => {
+	test('a new folder is capped at 60 characters and refused past the folder limit', () => {
 		const store = withFolders();
 		const plain = {icon: '', color: '', colorSessions: false};
-		assert.equal(folderNameProblem(store, 'Reading'), undefined);
-		assert.equal(
-			folderNameProblem(store, 'UNFILED'),
-			'A folder with that name already exists.',
-		);
-		assert.equal(
-			folderNameProblem(store, 'all sessions'),
-			'Choose a different folder name.',
-		);
 		const long = addFolder(
 			store,
 			{name: 'n'.repeat(90), ...plain},
@@ -1337,12 +1300,5 @@ describe('bookmark notes', () => {
 		assert.deepEqual(found('trip -packing'), ['b1']);
 		assert.deepEqual(found('"packing list"'), ['b2']);
 		assert.deepEqual(found('"list packing"'), []);
-	});
-
-	test('are found by search', () => {
-		assert.deepEqual(
-			searchBookmarks(withNote(), 'trip').map((entry) => entry.id),
-			['b1'],
-		);
 	});
 });

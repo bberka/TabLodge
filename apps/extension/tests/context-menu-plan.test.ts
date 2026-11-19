@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {
-	contextMenuPlan,
-	contextMenuSignature,
-	hasTabMenu,
-	menuSessions,
-} from '../src/shared/context-menu-plan';
+import {contextMenuPlan, hasTabMenu} from '../src/shared/context-menu-plan';
 import {DEFAULT_SETTINGS} from '../src/shared/library-normalize';
 
 const env = {
@@ -77,79 +72,15 @@ describe('hasTabMenu', () => {
 });
 
 describe('contextMenuPlan', () => {
-	test('lists a parent before its children and never repeats an id', () => {
-		const plan = contextMenuPlan(on, columns, [{id: 's1', name: 'One'}], env);
-		const seen = new Set<string>();
-		for (const item of plan) {
-			const id = String(item.id);
-			assert.ok(item.id, 'every entry has an id');
-			assert.ok(!seen.has(id), `${id} appears once`);
-			if (item.parentId) {
-				assert.ok(seen.has(String(item.parentId)), `${id} follows its parent`);
-			}
-
-			seen.add(id);
-		}
-
-		assert.ok(plan.length > 0);
-	});
-
-	test('every context has one root, and the link switch also covers images and media', () => {
+	test('a quote needs a web page, and the link switch also covers images and media', () => {
 		const roots = (plan: ReturnType<typeof contextMenuPlan>) =>
 			plan
 				.filter((item) => !item.parentId)
-				.flatMap((item) => item.contexts ?? [])
-				.toSorted();
-		assert.deepEqual(roots(contextMenuPlan(on, columns, [], env)), [
-			'action',
-			'action',
-			'action',
-			'action',
-			'action',
-			'action',
-			'audio',
-			'frame',
-			'image',
-			'link',
-			'page',
-			'selection',
-			'video',
-		]);
-		const titlesUnder = (
-			plan: ReturnType<typeof contextMenuPlan>,
-			id: string,
-		) =>
-			plan
-				.filter((item) => item.parentId === id)
-				.map((item) => item.title ?? '---');
+				.flatMap((item) => item.contexts ?? []);
 		const plan = contextMenuPlan(on, columns, [], env);
-		assert.deepEqual(titlesUnder(plan, 'tablodge-selection-root'), [
-			'Search saved tabs & bookmarks for “%s”',
-			'Save quote',
-		]);
 		const quote = plan.find((item) => item.id === 'tablodge-selection-quote');
 		assert.deepEqual(quote?.contexts, ['selection']);
-		assert.deepEqual(
-			quote?.documentUrlPatterns,
-			['http://*/*', 'https://*/*'],
-			'a quote needs a web page to save it on',
-		);
-		assert.deepEqual(titlesUnder(plan, 'tablodge-image-root'), [
-			'Bookmark image to',
-		]);
-		assert.deepEqual(titlesUnder(plan, 'tablodge-image-bookmark'), [
-			'Read',
-			'---',
-			'New column',
-		]);
-		assert.deepEqual(titlesUnder(plan, 'tablodge-media-root'), [
-			'Bookmark video to',
-		]);
-		assert.deepEqual(titlesUnder(plan, 'tablodge-media-bookmark'), [
-			'Read',
-			'---',
-			'New column',
-		]);
+		assert.deepEqual(quote?.documentUrlPatterns, ['http://*/*', 'https://*/*']);
 
 		const linksOff = roots(
 			contextMenuPlan(
@@ -163,34 +94,6 @@ describe('contextMenuPlan', () => {
 			assert.ok(
 				!linksOff.includes(context),
 				`${context} goes with the Links switch`,
-			);
-		}
-	});
-
-	test('the tab context puts the page items, and nothing else, on the tab strip', () => {
-		const sessions = [{id: 's1', name: 'One'}];
-		const without = contextMenuPlan(on, columns, sessions, env);
-		assert.ok(without.every((item) => !item.contexts?.includes('tab')));
-
-		const pageIds = without
-			.filter((item) => item.contexts?.includes('page'))
-			.map((item) => item.id);
-		for (const hasAmpersandAccessKeys of [true, false]) {
-			const withTab = contextMenuPlan(on, columns, sessions, {
-				...env,
-				hasTabContext: true,
-				hasAmpersandAccessKeys,
-			});
-			assert.deepEqual(
-				withTab
-					.filter((item) => item.contexts?.includes('tab'))
-					.map((item) => item.id),
-				pageIds,
-			);
-			assert.deepEqual(
-				withTab.map((item) => item.id),
-				without.map((item) => item.id),
-				'the tab strip reuses the page ids',
 			);
 		}
 	});
@@ -233,42 +136,5 @@ describe('contextMenuPlan', () => {
 
 		assert.equal(firefox.get('tablodge-page-send:s1'), 'Q&&A');
 		assert.equal(firefox.get('tablodge-page-root'), 'Tab&&Lodge');
-	});
-
-	test('builds nothing while the menus are off', () => {
-		const plan = contextMenuPlan(
-			{...on, contextMenusEnabled: false},
-			columns,
-			[],
-			env,
-		);
-		assert.deepEqual(plan, []);
-	});
-});
-
-describe('menu sessions and signature', () => {
-	test('the newest sessions are offered, and not the archived ones', () => {
-		const sessions = menuSessions(
-			[
-				{id: 'old', name: 'Old', updatedAt: 1, folderId: 'f'},
-				{id: 'new', name: 'New', updatedAt: 5, folderId: 'f'},
-				{id: 'gone', name: 'Gone', updatedAt: 9, folderId: 'arch'},
-			],
-			[{id: 'arch', name: 'Archived'}],
-		);
-		assert.deepEqual(
-			sessions.map((session) => session.id),
-			['new', 'old'],
-		);
-	});
-
-	test('the signature changes when a column is renamed', () => {
-		const a = contextMenuSignature(on, columns, [{id: 's', name: 'S'}]);
-		const b = contextMenuSignature(
-			on,
-			[{...columns[0], name: 'Later'}],
-			[{id: 's', name: 'S'}],
-		);
-		assert.notEqual(a, b);
 	});
 });

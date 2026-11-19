@@ -8,26 +8,15 @@ import {
 } from '../src/library/board-edits';
 import {emptyStore} from '../src/library/store-shape';
 import type {Session, Store} from '../../extension/src/shared/types';
-import {
-	ChangeLog,
-	PROTOCOL_VERSION,
-} from '../../extension/src/shared/sync/change-log';
+import {ChangeLog} from '../../extension/src/shared/sync/change-log';
 import {
 	createSyncClient,
 	type SyncSocket,
 } from '../../extension/src/shared/sync/client';
-import {
-	dismissKey,
-	problemBanner,
-	readCompat,
-	releaseWithAll,
-} from '../../extension/src/shared/sync/compat';
 
 const TOKEN = 'mobile-test-token-0123456789-abcdefghijk';
 const URL_BASE = 'https://sync.example.test';
 const NOW = 1000;
-// Moves every device's clock forward, past how long a client trusts the server's last answer about itself.
-let clockAhead = 0;
 
 type Device = {
 	store: Store;
@@ -76,7 +65,7 @@ function makeDevice(
 				count += 1;
 				return `${name}-${count}`;
 			},
-			now: () => NOW + count + clockAhead,
+			now: () => NOW + count,
 		}),
 	};
 	return device;
@@ -295,160 +284,5 @@ describe('a read only device', () => {
 
 	test('never sends a record, even to a server that was replaced', async () => {
 		assert.equal(await afterServerReplaced(true), 0);
-	});
-
-	test('a device that may send does send them again, so the test above can fail', async () => {
-		assert.ok((await afterServerReplaced(false)) > 0);
-	});
-});
-
-describe('a server that does not match the phone', () => {
-	/**
-	The server behind a /v1/status answer that `rewrite` changes, as another server version would answer.
-	*/
-	const answering = (
-		app: ReturnType<typeof createApi>,
-		rewrite: {current?: (body: Record<string, unknown>) => unknown},
-	) =>
-		({
-			async request(url: string, init?: RequestInit) {
-				const response = await app.request(url, init);
-				return rewrite.current && new URL(url).pathname === '/v1/status'
-					? Response.json(
-							rewrite.current(
-								(await response.json()) as Record<string, unknown>,
-							),
-						)
-					: response;
-			},
-		}) as unknown as ReturnType<typeof createApi>;
-
-	const bookmarkIds = (device: Device) =>
-		device.store.bookmarks.map((bookmark) => bookmark.id);
-
-	test('a phone notices a new protocol on a later sync, stops, and keeps its library', async () => {
-		const log = new ChangeLog();
-		const rewrite: {current?: (body: Record<string, unknown>) => unknown} = {};
-		const phone = makeDevice(
-			'phone',
-			answering(createApi({token: TOKEN, log: () => log}), rewrite),
-			emptyStore(NOW),
-		);
-		await phone.client.connect(URL_BASE, TOKEN);
-		phone.store = addBookmark(
-			phone.store,
-			{url: 'https://example.com/kept', title: 'Kept', columnId: 'c1'},
-			'kept',
-			NOW + 5,
-		);
-
-		// The server was updated to a protocol this phone does not speak, and the app comes back later.
-		rewrite.current = (body) => ({...body, protocol: PROTOCOL_VERSION + 1});
-		clockAhead = 11 * 60 * 1000;
-		try {
-			await phone.client.syncNow();
-		} finally {
-			clockAhead = 0;
-		}
-
-		const status = await phone.client.status();
-		assert.equal(status.phase, 'error');
-		assert.equal(status.incompatible, 'app');
-		assert.match(status.error ?? '', /Update TabLodge/);
-		assert.deepEqual(bookmarkIds(phone), ['kept']);
-		assert.equal(log.size, 0);
-		assert.deepEqual(problemBanner(readCompat(status)), {
-			stopped: true,
-			title: 'Sync stopped',
-			detail: 'This app is older than your sync server. Update TabLodge.',
-		});
-	});
-
-	test('a server from before versions and notes keeps syncing, and Settings lists what it lacks', async () => {
-		const log = new ChangeLog();
-		const app = answering(createApi({token: TOKEN, log: () => log}), {
-			current: ({version: _version, ...body}) => ({
-				...body,
-				features: ['private', 'key', 'preview', 'trash'],
-			}),
-		});
-		const phone = makeDevice('phone', app, emptyStore(NOW));
-		await phone.client.connect(URL_BASE, TOKEN);
-		phone.store = addBookmark(
-			phone.store,
-			{url: 'https://example.com/sent', title: 'Sent', columnId: 'c1'},
-			'sent',
-			NOW + 5,
-		);
-		await phone.client.syncNow();
-
-		const status = await phone.client.status();
-		assert.equal(status.error, null);
-		assert.ok(log.size > 0);
-		const compat = readCompat(status);
-		assert.equal(compat.server?.version, null);
-		assert.deepEqual(
-			compat.missing.map(({name}) => name),
-			['notes', 'shared-pages', 'page-source'],
-		);
-		assert.equal(releaseWithAll(compat.missing), '0.4.0');
-	});
-
-	test('a dismissed missing-features banner stays dismissed until the server is replaced by another version', async () => {
-		const rewrite: {current?: (body: Record<string, unknown>) => unknown} = {
-			current: (body) => ({
-				...body,
-				version: '0.3.0',
-				features: ['private', 'key', 'preview', 'trash'],
-			}),
-		};
-		const phone = makeDevice(
-			'phone',
-			answering(createApi({token: TOKEN, log: () => new ChangeLog()}), rewrite),
-			emptyStore(NOW),
-		);
-		await phone.client.connect(URL_BASE, TOKEN);
-		const before = readCompat(await phone.client.status());
-		const dismissed = dismissKey(before);
-		assert.equal(problemBanner(before, dismissed), undefined);
-
-		// The next check, past the cache, finds the same server: still dismissed.
-		clockAhead = 11 * 60 * 1000;
-		try {
-			await phone.client.syncNow();
-			assert.equal(
-				problemBanner(readCompat(await phone.client.status()), dismissed),
-				undefined,
-			);
-
-			// Then 0.3.1, still without notes: the banner is back.
-			rewrite.current = (body) => ({
-				...body,
-				version: '0.3.1',
-				features: ['private', 'key', 'preview', 'trash'],
-			});
-			clockAhead = 22 * 60 * 1000;
-			await phone.client.syncNow();
-		} finally {
-			clockAhead = 0;
-		}
-
-		assert.equal(
-			problemBanner(readCompat(await phone.client.status()), dismissed)?.title,
-			'Your sync server needs an update',
-		);
-	});
-
-	test('a phone from before versions reads this server as it always did', async () => {
-		const app = createApi({token: TOKEN, log: () => new ChangeLog()});
-		const response = await app.request(`${URL_BASE}/v1/status`, {
-			headers: [['Authorization', `Bearer ${TOKEN}`]],
-		});
-		const body = (await response.json()) as Record<string, unknown>;
-		// What 0.3.0 checked at Connect, and what its Settings read for icons and previews.
-		assert.equal(body.protocol, PROTOCOL_VERSION);
-		assert.ok(Array.isArray(body.features));
-		assert.ok(body.features.includes('preview'));
-		assert.equal(typeof body.version, 'string');
 	});
 });

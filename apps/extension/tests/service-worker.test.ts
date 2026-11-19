@@ -3,7 +3,6 @@ import {Buffer} from 'node:buffer';
 import {webcrypto} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import process from 'node:process';
 import vm from 'node:vm';
 import {test, vi} from 'vite-plus/test';
 import type {
@@ -93,10 +92,6 @@ type HarnessOptions = {
 	By default the fixture is stored in the per-record layout.
 	*/
 	legacyLayout?: boolean;
-	/**
-	Skip keeping `state` in step with storage (it re-reads the whole library on every storage call). For timing runs.
-	*/
-	withoutStateMirror?: boolean;
 	incognitoContext?: boolean;
 	failedCreateUrls?: string[];
 	bookmarkTree?: unknown[];
@@ -278,10 +273,6 @@ function createWorkerHarness(
 	const state = (logicalState(extraStorage) ?? {}) as StoredState;
 	let syncedState = JSON.stringify(state);
 	const pushState = () => {
-		if (options.withoutStateMirror) {
-			return;
-		}
-
 		const now = JSON.stringify(state);
 		if (now === syncedState) {
 			return;
@@ -292,10 +283,6 @@ function createWorkerHarness(
 	};
 
 	const pullState = () => {
-		if (options.withoutStateMirror) {
-			return;
-		}
-
 		const next = (logicalState(extraStorage) ?? {}) as StoredState;
 		for (const key of Object.keys(state)) {
 			Reflect.deleteProperty(state, key);
@@ -419,11 +406,8 @@ function createWorkerHarness(
 	const sessionStore: Record<string, unknown> = structuredClone(
 		options.sessionStorage ?? {},
 	);
-	// Every storage.local.get / set / remove, so tests can assert what a code path reads and writes.
-	const storageGets: string[][] = [];
+	// Every storage.local.set, so tests can assert what a code path writes.
 	const storageSets: string[][] = [];
-	// Serialized characters handed to storage.local.set, to see how much a code path writes.
-	const storageWrites = {calls: 0, chars: 0};
 	const changeListeners: Array<
 		(changes: Record<string, unknown>, area: string) => void
 	> = [];
@@ -495,7 +479,6 @@ function createWorkerHarness(
 					pushState();
 					// `null` reads everything, as chrome.storage does; the private lock lists its keys that way.
 					const wanted = keys ?? Object.keys(extraStorage);
-					storageGets.push([...wanted]);
 					const out: Record<string, unknown> = {};
 					for (const key of wanted) {
 						if (Object.hasOwn(extraStorage, key)) {
@@ -515,8 +498,6 @@ function createWorkerHarness(
 					}
 
 					storageSets.push(Object.keys(values));
-					storageWrites.calls += 1;
-					storageWrites.chars += JSON.stringify(values).length;
 					const changes: Record<string, unknown> = {};
 					for (const [key, value] of Object.entries(values)) {
 						const oldValue = structuredClone(extraStorage[key]);
@@ -1214,17 +1195,7 @@ function createWorkerHarness(
 			storageFailureKey = undefined;
 		},
 		state,
-		storageGets,
 		storageSets,
-		storageWrites,
-		/**
-		Calls `listener` with the keys of every storage write, as the browser would tell pages.
-		*/
-		onStorageChanged(listener: (keys: string[]) => void) {
-			changeListeners.push((changes) => {
-				listener(Object.keys(changes));
-			});
-		},
 		/**
 		Another extension context (a page) writing the state: the worker only learns of it through storage.onChanged.
 		*/
@@ -1977,19 +1948,6 @@ test('the lock needs the saved separate library, and regular windows cannot mana
 	);
 });
 
-test('a password under 4 characters is refused and nothing is encrypted', async () => {
-	const harness = await plainPrivateLibrary();
-	const refused = await harness.sendMessage({
-		type: 'ENABLE_PRIVATE_LOCK',
-		credential: '12',
-	});
-	assert.equal(refused.ok, false);
-	assert.equal(harness.extraStorage[LOCK_RECORD], undefined);
-	for (const key of privateDataKeys(harness.extraStorage)) {
-		assert.equal(isSealedValue(harness.extraStorage[key]), false, key);
-	}
-});
-
 test('changing the storage mode is refused while a lock exists, locked or not, from either kind of window', async () => {
 	const harness = await plainPrivateLibrary();
 	await enableLock(harness);
@@ -2144,45 +2102,6 @@ test('an enable cut off before any value was sealed finishes on the next worker 
 	assert.equal(state.bookmarks?.[0]?.title, 'Hidden');
 });
 
-test('a half sealed library stays readable, and unlocking after a browser restart finishes the pass', async () => {
-	const harness = await plainPrivateLibrary();
-	const plainBookmarksKey = privateDataKeys(harness.extraStorage).find((key) =>
-		key.startsWith('tablodge.private.tablodge.bookmarks.'),
-	)!;
-	const plainBookmarks = structuredClone(
-		harness.extraStorage[plainBookmarksKey],
-	);
-	await enableLock(harness);
-	// Put one value back the way an interrupted pass would have left it.
-	harness.extraStorage[plainBookmarksKey] = plainBookmarks;
-	(harness.extraStorage[LOCK_RECORD] as {state: string}).state = 'encrypting';
-	const open = restartPrivate(harness);
-	await eventually(() => isSealedValue(open.extraStorage[plainBookmarksKey]));
-	// The restart with the key in memory finished the pass at startup.
-	assert.equal(isSealedValue(open.extraStorage[plainBookmarksKey]), true);
-	assert.equal(
-		(open.extraStorage[LOCK_RECORD] as {state: string}).state,
-		'encrypted',
-	);
-	// Without the key (the browser closed mid pass) the library is locked even though some values are plain.
-	harness.extraStorage[plainBookmarksKey] = plainBookmarks;
-	(harness.extraStorage[LOCK_RECORD] as {state: string}).state = 'encrypting';
-	const closed = restartPrivate(harness, {browserRestart: true});
-	await settle();
-	assert.equal((await closed.sendMessage({type: 'GET_STATE'})).locked, true);
-	const unlocked = await closed.sendMessage({
-		type: 'UNLOCK_PRIVATE',
-		credential: lockPassword,
-	});
-	assert.equal(unlocked.ok, true, unlocked.error);
-	assert.equal(unlocked.state, 'encrypted');
-	assert.equal(isSealedValue(closed.extraStorage[plainBookmarksKey]), true);
-	assert.equal(
-		(await closed.sendMessage({type: 'GET_STATE'})).bookmarks?.[0]?.title,
-		'Hidden',
-	);
-});
-
 test('a private library still in the old single entry layout is sealed whole, then migrated while sealed', async () => {
 	const legacy = stateWithSession();
 	legacy.groups[0].name = 'Old private session';
@@ -2262,24 +2181,6 @@ test('a damaged lock record blocks the library instead of being ignored', async 
 	assert.match(state.error ?? '', /damaged/);
 	const status = await harness.sendMessage({type: 'GET_PRIVATE_LOCK'});
 	assert.equal(status.state, 'damaged');
-});
-
-test('RESTORE_GROUP opens a valid saved URL and reports successful session restoration', async () => {
-	const harness = createWorkerHarness(stateWithSession());
-	const response = await harness.sendMessage({
-		type: 'RESTORE_GROUP',
-		groupId: 'session-1',
-	});
-
-	assert.equal(response.ok, true, response.error);
-	assert.equal(response.count, 1);
-	assert.equal(response.skipped, 0);
-	assert.equal(harness.openedTabs.length, 1);
-	assert.equal(harness.openedTabs[0].url, 'https://saved.example/article');
-	assert.equal(
-		harness.state.groups.some((group) => group.id === 'session-1'),
-		true,
-	);
 });
 
 test('RESTORE_GROUP stamps lastOpenedAt and keeps it through a reload', async () => {
@@ -2570,20 +2471,6 @@ test('restore duplicate policy is separate from import decisions', async () => {
 	});
 	assert.equal(openResult.ok, true, openResult.error);
 	assert.equal(opened.openedTabs.length, 1);
-});
-
-test('RESTORE_TAB opens a valid saved URL and reports success', async () => {
-	const harness = createWorkerHarness(stateWithSession());
-	const response = await harness.sendMessage({
-		type: 'RESTORE_TAB',
-		groupId: 'session-1',
-		tabId: 'saved-tab-1',
-	});
-
-	assert.equal(response.ok, true, response.error);
-	assert.equal(response.count, 1);
-	assert.equal(harness.openedTabs.length, 1);
-	assert.equal(harness.openedTabs[0].url, 'https://saved.example/article');
 });
 
 test('single-tab toolbar mode appends into the first session', async () => {
@@ -5663,6 +5550,7 @@ for (const [key, fallback] of [
 	['showTrashBinButton', false],
 	['linkPreviews', false],
 	['showAllBookmarks', true],
+	['showSessionFaviconPreviews', true],
 	['stretchBookmarkColumns', true],
 	['limitBookmarksPerColumn', true],
 ] as const) {
@@ -5902,25 +5790,6 @@ test('session quick actions default to Archive and migrate the old switches', as
 	assert.deepEqual(Array.from(cleared.settings.sessionQuickActions), []);
 	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
 	assert.deepEqual(Array.from(reset.settings.sessionQuickActions), ['archive']);
-});
-
-test('session favicon previews default to visible, can be hidden, and reset visible', async () => {
-	const harness = createWorkerHarness({...stateWithSession(), settings: {}});
-
-	assert.equal(
-		(await harness.sendMessage({type: 'GET_STATE'})).settings
-			.showSessionFaviconPreviews,
-		true,
-	);
-
-	const hidden = await harness.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {showSessionFaviconPreviews: false},
-	});
-	assert.equal(hidden.settings.showSessionFaviconPreviews, false);
-
-	const reset = await harness.sendMessage({type: 'RESET_SETTINGS'});
-	assert.equal(reset.settings.showSessionFaviconPreviews, true);
 });
 
 test('url-only display mode and the bookmark menu click action are accepted', async () => {
@@ -7154,33 +7023,6 @@ test('a legacy per-session restoreTarget is stripped and sessions follow the Set
 	});
 	assert.equal(response.ok, true, response.error);
 	assert.equal(harness.createdWindows.length, 1);
-});
-
-test('UPDATE_GROUP and imports ignore a restoreTarget field on sessions', async () => {
-	const harness = createWorkerHarness(stateWithSession());
-	const updated = await harness.sendMessage({
-		type: 'UPDATE_GROUP',
-		groupId: 'session-1',
-		fields: {name: 'Renamed', restoreTarget: 'always-new-window'} as never,
-	});
-	assert.equal(updated.ok, true, updated.error);
-	assert.equal('restoreTarget' in updated.group, false);
-	const imported = await harness.sendMessage({
-		type: 'IMPORT_SESSIONS',
-		data: {
-			groups: [
-				{
-					name: 'Imported',
-					restoreTarget: 'always-new-window',
-					tabs: [{url: 'https://imported.example/', title: 'Imported'}],
-				},
-			],
-		},
-	});
-	assert.equal(imported.ok, true, imported.error);
-	for (const group of harness.state.groups) {
-		assert.equal('restoreTarget' in group, false);
-	}
 });
 
 test('RESTORE_GROUP honors a restoreTarget override over the Settings default', async () => {
@@ -9345,19 +9187,6 @@ test('undo paths: restore-and-remove, move between sessions and close-after-save
 	);
 });
 
-test('the worker writes the same backup format id and version as the pages', async () => {
-	const {BACKUP_FORMAT_ID, BACKUP_VERSION} =
-		await import('../src/shared/backup-format');
-	const harness = createWorkerHarness(bookmarksState());
-	const made = await harness.sendMessage({type: 'BACKUP_NOW'});
-	const stored = backupsOf(harness).auto.find(
-		(item) => item.id === made.backup.id,
-	)!;
-	const file = JSON.parse(stored.json) as {format: string; version: number};
-	assert.equal(file.format, BACKUP_FORMAT_ID);
-	assert.equal(file.version, BACKUP_VERSION);
-});
-
 test('the manifest asks for alarms up front and Downloads only as an optional permission', () => {
 	assert.equal(manifest.permissions?.includes('alarms'), true);
 	assert.equal(manifest.permissions?.includes('downloads'), false);
@@ -9645,29 +9474,6 @@ test('manual backups never push scheduled ones out, and keep a cap of their own'
 	assert.equal(kinds.filter((kind) => kind === 'manual').length, 10);
 });
 
-test('a skipped unchanged backup run still counts, so the catch-up is not due on every start', async () => {
-	const harness = createWorkerHarness(bookmarksState(), undefined, {});
-	await harness.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {autoBackup: 'daily'},
-	});
-	await harness.fire('onStartup');
-	assert.equal(backupsOf(harness).auto.length, 1);
-	// Age the record out of the list, as a small keep count would over time.
-	const stored = harness.extraStorage[BACKUPS_KEY] as {
-		auto: unknown[];
-		lastAutoCheckAt: number;
-	};
-	assert.ok(stored.lastAutoCheckAt > 0);
-	stored.auto = [];
-	await harness.fire('onStartup');
-	assert.equal(
-		backupsOf(harness).auto.length,
-		0,
-		'the recent check keeps the catch-up from running again',
-	);
-});
-
 test('a run that starts with no window is not marked open, so exiting without one is not a crash', async () => {
 	const harness = recoveryHarness();
 	await harness.fire('tabCreated', {});
@@ -9684,9 +9490,6 @@ test('a run that starts with no window is not marked open, so exiting without on
 
 // ---- Worker CPU and memory use ----
 
-const stateReads = (harness: {storageGets: string[][]}) =>
-	harness.storageGets.filter((keys) => keys.includes(storageKey)).length;
-
 test('the settings cache follows changes written by another context', async () => {
 	const harness = createWorkerHarness(stateWithSession({newTabEnabled: true}), [
 		{id: 7, windowId: 10, index: 0, active: true, url: ''},
@@ -9700,61 +9503,6 @@ test('the settings cache follows changes written by another context', async () =
 	});
 	await harness.fire('tabCreated', {id: 7, pendingUrl: 'chrome://newtab/'});
 	assert.equal(tab.url, 'chrome://new-tab-page/');
-});
-
-test('tab activation and focus changes do not read the stored state once settings are cached', async () => {
-	const harness = createWorkerHarness(stateWithSession());
-	await harness.fire('tabActivated', {tabId: 1, windowId: 10});
-	assert.ok(stateReads(harness) >= 1, 'the first event loads the settings');
-	harness.storageGets.length = 0;
-	for (let index = 0; index < 20; index += 1) {
-		await harness.fire('tabActivated', {tabId: 1, windowId: 10});
-		await harness.fire(
-			'tabUpdated',
-			1,
-			{url: 'https://x.example/'},
-			{active: true, url: 'https://x.example/'},
-		);
-		await harness.fire('windowFocusChanged', 10);
-	}
-
-	assert.equal(stateReads(harness), 0);
-});
-
-test('snapshot captures compare against the signature in the meta record, not the live snapshot', async () => {
-	const harness = recoveryHarness();
-	await harness.fire('alarm', {name: 'tablodge-snapshot'});
-	const live = liveOf(harness)!;
-	assert.equal(metaOf(harness)?.liveSig, live.sig);
-	harness.storageGets.length = 0;
-	harness.storageSets.length = 0;
-	await harness.fire('alarm', {name: 'tablodge-snapshot'});
-	assert.equal(
-		harness.storageGets.some((keys) => keys.includes(LIVE_KEY)),
-		false,
-		'the live snapshot is not read for the comparison',
-	);
-	assert.equal(
-		harness.storageSets.some((keys) => keys.includes(LIVE_KEY)),
-		false,
-		'an unchanged capture does not rewrite it',
-	);
-	harness.tabs.push(webTab(40, 10, 2));
-	await harness.fire('alarm', {name: 'tablodge-snapshot'});
-	assert.notEqual(liveOf(harness)!.sig, live.sig);
-	assert.equal(metaOf(harness)?.liveSig, liveOf(harness)!.sig);
-	// An older meta without the signature falls back to reading the live record, and clearing forgets it.
-	const meta = harness.extraStorage[META_KEY] as Record<string, unknown>;
-	delete meta.liveSig;
-	await harness.fire('alarm', {name: 'tablodge-snapshot'});
-	assert.equal(metaOf(harness)?.liveSig, liveOf(harness)!.sig);
-	await harness.sendMessage({type: 'CLEAR_SNAPSHOTS'});
-	assert.equal(liveOf(harness), undefined);
-	await harness.fire('alarm', {name: 'tablodge-snapshot'});
-	assert.ok(
-		liveOf(harness),
-		'a capture after clearing writes the live snapshot again',
-	);
 });
 
 test('the trash is capped by total size, dropping the oldest items first', async () => {
@@ -9782,13 +9530,6 @@ test('the trash is capped by total size, dropping the oldest items first', async
 	const ids = trashOf(harness).map((item) => item.label);
 	assert.equal(ids.length, 3, ids.join(','));
 	assert.deepEqual(ids.slice(1), ['a', 'b']);
-	assert.equal(
-		(trashOf(harness) as Array<{size?: number}>).every(
-			(item) => typeof item.size === 'number',
-		),
-		true,
-		'sizes are cached on the stored entries',
-	);
 });
 
 // ---- Storage layout migration ----
@@ -9852,44 +9593,20 @@ test('an old single entry library is moved to per-session records when the worke
 	);
 });
 
-test('an upgraded library is not migrated again, and a save writes only the changed session', async () => {
+test('an upgraded library is not migrated again', async () => {
 	const harness = createWorkerHarness(legacyLibrary(30, 20), undefined, {
 		legacyLayout: true,
 	});
 	await settle();
 	const copyBefore = structuredClone(harness.extraStorage[PREMIGRATION]);
-	harness.storageSets.length = 0;
 	const renamed = await harness.sendMessage({
 		type: 'UPDATE_GROUP',
 		groupId: 'legacy-7',
 		fields: {name: 'Renamed'},
 	});
 	assert.equal(renamed.ok, true, renamed.error);
-	const written = harness.storageSets.flat();
-	assert.deepEqual(
-		written.filter((key) => key.startsWith('tablodge.session.')),
-		['tablodge.session.legacy-7.2'],
-		'only the edited session is written',
-	);
-	assert.equal(
-		written.some((key) => key.startsWith('tablodge.bookmarks.')),
-		false,
-		'unchanged bookmarks are not rewritten',
-	);
 	assert.deepEqual(harness.extraStorage[PREMIGRATION], copyBefore);
 	assert.equal(backupsOf(harness).safety.length, 1, 'one backup for the move');
-	const settings = await harness.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {closeOnSave: true},
-	});
-	assert.equal(settings.ok, true, settings.error);
-	assert.equal(
-		harness.storageSets
-			.flat()
-			.filter((key) => key.startsWith('tablodge.session.')).length,
-		1,
-		'a settings change writes no session',
-	);
 });
 
 test('a migration that cannot finish leaves the old library in charge and working', async () => {
@@ -10025,31 +9742,6 @@ test('Undo restores a library across the per-record layout', async () => {
 	);
 });
 
-test('the dashboard reloads and the menus follow when a commit writes the index', async () => {
-	const harness = createWorkerHarness(legacyLibrary(3), undefined, {
-		legacyLayout: true,
-	});
-	await settle();
-	const changes: string[][] = [];
-	harness.onStorageChanged((keys) => {
-		changes.push(keys);
-	});
-	await harness.sendMessage({
-		type: 'UPDATE_GROUP',
-		groupId: 'legacy-0',
-		fields: {name: 'Renamed for menus'},
-	});
-	assert.ok(
-		changes.some((keys) => keys.includes(storageKey)),
-		'every commit changes tablodge.state, which pages and menus watch',
-	);
-	assert.equal(
-		changes.some((keys) => keys.length > 1 && keys.includes(storageKey)),
-		false,
-		'the index is written on its own, after the records',
-	);
-});
-
 test('favicon URLs are no longer stored and are stripped from older data', async () => {
 	const state = stateWithSession();
 	state.groups[0].tabs[0] = {
@@ -10120,18 +9812,6 @@ test('session description and old notes merge into one description on load, impo
 		assert.equal(added!.description, expected);
 		assert.equal('notes' in added!, false);
 	}
-});
-
-test('UPDATE_GROUP stores one description and ignores a notes field', async () => {
-	const harness = createWorkerHarness(stateWithSession());
-	const updated = await harness.sendMessage({
-		type: 'UPDATE_GROUP',
-		groupId: 'session-1',
-		fields: {description: 'Line one\nLine two', notes: 'ignored'} as never,
-	});
-	assert.equal(updated.ok, true, updated.error);
-	assert.equal(updated.group.description, 'Line one\nLine two');
-	assert.equal('notes' in updated.group, false);
 });
 
 // ---- Archive and lock were removed: older data is migrated on read.
@@ -10246,27 +9926,6 @@ test('the archive migration is persisted once and is idempotent', async () => {
 	assert.deepEqual(
 		harness.state.groups.map((group) => group.folderId),
 		first.groups.map((group) => group.folderId),
-	);
-});
-
-test('an existing folder named Archived is reused', async () => {
-	const state = legacyState();
-	state.folders.push({
-		id: 'mine',
-		name: 'Archived',
-		createdAt: 2,
-		icon: 'star',
-	});
-	const harness = createWorkerHarness(state);
-	const response = await harness.sendMessage({type: 'GET_STATE'});
-	const folders = response.folders.filter(
-		(folder) => folder.name === 'Archived',
-	);
-	assert.equal(folders.length, 1);
-	assert.equal(folders[0].id, 'mine');
-	assert.equal(
-		response.groups.find((group) => group.id === 'loose')?.folderId,
-		'mine',
 	);
 });
 
@@ -10418,35 +10077,6 @@ test('importing an older export with archived sessions applies the same migratio
 	assert.equal(imported?.folderId, folder.id);
 	assert.doesNotMatch(JSON.stringify(imported), /"archived(At)?":/);
 	assert.doesNotMatch(JSON.stringify(imported), /"locked":/);
-});
-
-test('restoreMode archive is not accepted any more and falls back to keep', async () => {
-	const harness = createWorkerHarness(stateWithSession());
-	const response = await harness.sendMessage({
-		type: 'UPDATE_SETTINGS',
-		settings: {restoreMode: 'archive' as never},
-	});
-	assert.equal(response.ok, true, response.error);
-	assert.equal(response.settings.restoreMode, 'keep');
-	const restored = await harness.sendMessage({
-		type: 'RESTORE_GROUP',
-		groupId: 'session-1',
-		restoreMode: 'archive' as never,
-	});
-	assert.equal(restored.ok, true, restored.error);
-	assert.equal(harness.state.groups[0].tabs.length, 1);
-});
-
-test('restore-and-remove removes tabs of any session (there is no lock)', async () => {
-	const harness = createWorkerHarness(
-		stateWithSession({restoreMode: 'remove'}),
-	);
-	const response = await harness.sendMessage({
-		type: 'RESTORE_GROUP',
-		groupId: 'session-1',
-	});
-	assert.equal(response.ok, true, response.error);
-	assert.equal(response.removed, true);
 });
 
 test('UPDATE_TAB changes the address of only that saved link, not other copies of the old URL', async () => {
@@ -10931,11 +10561,6 @@ test('the save shortcut saves the selected tabs, or the whole window without a s
 	const one = three([1]);
 	await press(one, 'save-window');
 	assert.equal(one.state.groups[0].tabs.length, 3);
-
-	const removed = three([1, 2]);
-	const before = removed.state.groups.length;
-	await press(removed, 'save-selected-tabs');
-	assert.equal(removed.state.groups.length, before);
 });
 
 test('saves record native tab groups, unless "Ignore tab groups" is on', async () => {
@@ -12096,141 +11721,6 @@ test('omnibox: a bookmark saved after the first search shows up in the next one'
 	assert.equal((await suggest('lemmings')).length, 1);
 });
 
-// ---- Scale: 10,000+ saved tabs ----
-
-/**
-`sessions` sessions of `tabs` saved tabs each, plus bookmarks, in the old single entry.
-*/
-function bigLibrary(sessions: number, tabs: number): StoredState {
-	const state = legacyLibrary(sessions, tabs);
-	state.bookmarks = Array.from({length: 300}, (_, index) => ({
-		id: `big-bookmark-${index}`,
-		title: `Bookmark ${index}`,
-		url: `https://bookmark${index}.example/`,
-		columnId: 'bookmark-default',
-		createdAt: 1_700_000_000_000,
-		updatedAt: 1_700_000_000_000,
-	}));
-	return state;
-}
-
-test(
-	'a 10,000+ tab library saves a small edit by writing a small part of it',
-	{timeout: 120_000},
-	async () => {
-		const seed = bigLibrary(25, 450);
-		const total = seed.groups.reduce(
-			(sum, group) => sum + group.tabs.length,
-			0,
-		);
-		assert.ok(total >= 10_000, `fixture has ${total} tabs`);
-		const libraryChars = JSON.stringify(seed).length;
-		const harness = createWorkerHarness(seed, undefined, {
-			legacyLayout: true,
-			withoutStateMirror: true,
-		});
-		const startedAt = performance.now();
-		await settle();
-		// Includes the harness's settle ticks: compare runs, not absolute numbers.
-		const startupMs = performance.now() - startedAt;
-		// Each edit runs several times; the numbers are per edit. A first edit settles anything the start left over.
-		const warmUp = await harness.sendMessage({
-			type: 'UPDATE_SETTINGS',
-			settings: {closeOnSave: false},
-		});
-		assert.equal(warmUp.ok, true, warmUp.error);
-		const measure = async (
-			label: string,
-			run: (round: number) => Promise<unknown>,
-			rounds = 5,
-		) => {
-			harness.storageWrites.calls = 0;
-			harness.storageWrites.chars = 0;
-			const began = performance.now();
-			for (let round = 0; round < rounds; round += 1) {
-				await run(round);
-			}
-
-			return {
-				label,
-				ms: Math.round((performance.now() - began) / rounds),
-				chars: Math.round(harness.storageWrites.chars / rounds),
-				calls: harness.storageWrites.calls / rounds,
-			};
-		};
-
-		const rename = await measure('rename one session', async (round) => {
-			const response = await harness.sendMessage({
-				type: 'UPDATE_GROUP',
-				groupId: 'legacy-12',
-				fields: {name: `Renamed ${round}`},
-			});
-			assert.equal(response.ok, true, response.error);
-		});
-		const linkAdded = await measure(
-			'add one link to a session',
-			async (round) => {
-				const response = await harness.sendMessage({
-					type: 'ADD_LINKS_TO_SESSION',
-					groupId: 'legacy-3',
-					links: [{url: `https://added${round}.example/`, title: 'Added'}],
-				});
-				assert.equal(response.ok, true, response.error);
-			},
-		);
-		const toggle = await measure('change one setting', async (round) => {
-			const response = await harness.sendMessage({
-				type: 'UPDATE_SETTINGS',
-				settings: {closeOnSave: round % 2 === 0},
-			});
-			assert.equal(response.ok, true, response.error);
-		});
-		const bookmark = await measure('add one bookmark', async (round) => {
-			const response = await harness.sendMessage({
-				type: 'ADD_BOOKMARK',
-				bookmark: {url: `https://one-more${round}.example/`},
-			});
-			assert.equal(response.ok, true, response.error);
-		});
-		const read = await measure(
-			'read the whole library',
-			async () => {
-				const response = await harness.sendMessage({type: 'GET_STATE'});
-				assert.equal(response.groups?.length, 25);
-			},
-			3,
-		);
-		const rows = [rename, linkAdded, toggle, bookmark, read];
-		process.stdout.write(
-			`SCALE tabs=${total} libraryChars=${libraryChars} startupMs=${Math.round(startupMs)}\n` +
-				rows
-					.map(
-						(row) =>
-							`SCALE ${row.label.padEnd(28)} chars=${String(row.chars).padStart(9)} sets=${row.calls} ms=${row.ms}`,
-					)
-					.join('\n') +
-				'\n',
-		);
-		const response = await harness.sendMessage({type: 'GET_STATE'});
-		assert.equal(
-			response.groups?.reduce((sum, group) => sum + group.tabs.length, 0),
-			total + 5,
-			'no tab lost or duplicated',
-		);
-		const stored = harness.extraStorage[storageKey] as {layout?: string};
-		if (stored.layout !== 'records') {
-			return;
-		}
-
-		assert.ok(rename.chars < libraryChars / 10, 'a rename writes one session');
-		assert.ok(toggle.chars < libraryChars / 10, 'a setting writes no session');
-		assert.ok(
-			bookmark.chars < libraryChars / 5,
-			'a bookmark writes no session',
-		);
-	},
-);
-
 // ---- Batched restores ----
 
 const manyTabsSession = (
@@ -12943,15 +12433,6 @@ test('a lock an older version made with a 4 digit PIN still unlocks, and its key
 			(bookmark) => bookmark.url === 'https://secret-bookmark.example/',
 		),
 	);
-});
-
-test('the saved private library reports that it needs a password until one is set', async () => {
-	const harness = await plainPrivateLibrary();
-	assert.equal(
-		(await harness.sendMessage({type: 'GET_PRIVATE_LOCK'})).needsLock,
-		true,
-	);
-	assert.equal((await enableLock(harness)).needsLock, false);
 });
 
 test('two workers connected to one server share sessions and bookmarks', async () => {

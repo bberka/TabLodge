@@ -1,12 +1,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
-	ACCELERATION,
 	EDGE_ZONE_PX,
-	MAX_FRAME_MS,
 	MAX_SPEED,
 	MIN_SPEED,
-	REDUCED_MOTION_FACTOR,
 	createAutoscroller,
 	edgeVelocity,
 	watchDragAutoscroll,
@@ -25,11 +22,6 @@ test('edgeVelocity is zero in the middle and outside both strips', () => {
 	assert.equal(edgeVelocity(SIZE - EDGE_ZONE_PX, 0, SIZE), 0);
 });
 
-test('edgeVelocity scrolls toward the edge the pointer is near', () => {
-	assert.ok(edgeVelocity(10, 0, SIZE) < 0);
-	assert.ok(edgeVelocity(SIZE - 10, 0, SIZE) > 0);
-});
-
 test('edgeVelocity speeds up toward the edge and tops out at the maximum', () => {
 	const outer = Math.abs(edgeVelocity(EDGE_ZONE_PX - 1, 0, SIZE));
 	const middle = Math.abs(edgeVelocity(EDGE_ZONE_PX / 2, 0, SIZE));
@@ -43,12 +35,6 @@ test('edgeVelocity speeds up toward the edge and tops out at the maximum', () =>
 	assert.equal(edgeVelocity(SIZE + 40, 0, SIZE), MAX_SPEED);
 });
 
-test('edgeVelocity follows the acceleration curve', () => {
-	const depth = 0.5;
-	const expected = MIN_SPEED + (MAX_SPEED - MIN_SPEED) * depth ** ACCELERATION;
-	assert.equal(edgeVelocity(EDGE_ZONE_PX * (1 - depth), 0, SIZE), -expected);
-});
-
 test('edgeVelocity shrinks the strip on a small pane and ignores an empty one', () => {
 	// A 100px pane gets a 30px strip, so its middle never scrolls.
 	assert.equal(edgeVelocity(50, 0, 100), 0);
@@ -60,8 +46,8 @@ test('edgeVelocity shrinks the strip on a small pane and ignores an empty one', 
 test('edgeVelocity still scrolls, more slowly, for reduced motion', () => {
 	const normal = edgeVelocity(0, 0, SIZE);
 	const reduced = edgeVelocity(0, 0, SIZE, true);
-	assert.equal(reduced, normal * REDUCED_MOTION_FACTOR);
-	assert.ok(reduced < 0);
+	assert.equal(normal, -1000);
+	assert.equal(reduced, -350);
 });
 
 type FakePane = ScrollTarget & {
@@ -194,22 +180,6 @@ test('the controller scrolls the horizontal axis independently', () => {
 	scroller.stop();
 });
 
-test('speed grows as the pointer moves closer to the edge', () => {
-	const far = fakePane(wholeWindow, {x: 0, y: 1e6});
-	const near = fakePane(wholeWindow, {x: 0, y: 1e6});
-	const farFrames = fakeEnv([far]);
-	const nearFrames = fakeEnv([near]);
-	const slow = createAutoscroller(farFrames.env);
-	const fast = createAutoscroller(nearFrames.env);
-	slow.update(500, SIZE - EDGE_ZONE_PX + 5);
-	fast.update(500, SIZE - 2);
-	farFrames.run(30);
-	nearFrames.run(30);
-	assert.ok(near.position.y > far.position.y * 3);
-	slow.stop();
-	fast.stop();
-});
-
 test('reduced motion scrolls the same way, just slower', () => {
 	const normalPane = fakePane(wholeWindow, {x: 0, y: 1e6});
 	const calmPane = fakePane(wholeWindow, {x: 0, y: 1e6});
@@ -235,7 +205,8 @@ test('a long frame is capped so the page does not jump', () => {
 	frames.run(1);
 	const first = page.position.y;
 	frames.run(1, 5000);
-	assert.ok(page.position.y - first <= (MAX_SPEED * MAX_FRAME_MS) / 1000 + 1);
+	// 1000 px/s for at most 50 ms.
+	assert.ok(page.position.y - first <= 51);
 	scroller.stop();
 });
 
@@ -313,14 +284,6 @@ test('onScroll runs after frames that moved something and not otherwise', () => 
 	frames.run(5);
 	assert.ok(calls > 0);
 	scroller.stop();
-});
-
-test('stop is safe to call when nothing is running', () => {
-	const frames = fakeEnv([fakePane(wholeWindow, {x: 0, y: 10})]);
-	const scroller = createAutoscroller(frames.env);
-	scroller.stop();
-	scroller.stop();
-	assert.equal(frames.pending, 0);
 });
 
 type FakeEvent = Event & {

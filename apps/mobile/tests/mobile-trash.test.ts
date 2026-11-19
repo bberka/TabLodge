@@ -14,7 +14,6 @@ import {
 	purgeExpired,
 	removeFromTrash,
 	restoreEntry,
-	TRASH_MAX_ITEMS,
 	type NewTrash,
 	type TrashEntry,
 } from '../src/library/trash';
@@ -253,10 +252,10 @@ describe('trash in the shape every device shares', () => {
 	});
 
 	test('the list never holds more than the extension keeps', () => {
-		const items = Array.from({length: TRASH_MAX_ITEMS + 20}, (_, index) =>
+		const items = Array.from({length: 520}, (_, index) =>
 			stored(`s${index}`, NOW - index),
 		);
-		assert.equal(purgeExpired(items, 30, NOW).length, TRASH_MAX_ITEMS);
+		assert.equal(purgeExpired(items, 30, NOW).length, 500);
 	});
 
 	test('the filter separates sessions from bookmarks', () => {
