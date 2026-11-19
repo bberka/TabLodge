@@ -8,18 +8,32 @@ export type ItemActionId =
 	| 'open-new-tab'
 	| 'open-new-window'
 	| 'copy-link'
+	| 'open-copy'
 	| 'switch'
+	| 'keep-copy'
 	| 'close-tab';
 
 export type ItemAction = {id: ItemActionId; label: string};
 
+export type ItemActionContext = {
+	/**
+	The palette window, which has no dashboard to reveal a session on.
+	*/
+	standalone: boolean;
+	/**
+	Addresses with a page copy on this device. Empty in a private window, which also cannot keep one.
+	*/
+	copies?: ReadonlySet<string>;
+	keepCopies?: boolean;
+};
+
 /**
 The second level of the palette: what can be done with a result besides its default action. Results with one
-obvious action return nothing. `standalone` is the palette window, which has no dashboard to reveal a session on.
+obvious action return nothing.
 */
 export function itemActions(
 	item: FinderItem,
-	standalone: boolean,
+	{standalone, copies, keepCopies = false}: ItemActionContext,
 ): ItemAction[] {
 	switch (item.kind) {
 		case 'session': {
@@ -39,12 +53,18 @@ export function itemActions(
 				{id: 'open-new-tab', label: 'Open in a new tab'},
 				{id: 'open-new-window', label: 'Open in a new window'},
 				{id: 'copy-link', label: 'Copy link'},
+				...(item.url && copies?.has(item.url)
+					? [{id: 'open-copy' as const, label: 'Open copy'}]
+					: []),
 			];
 		}
 
 		case 'tab': {
 			return [
 				{id: 'switch', label: 'Switch to tab'},
+				...(keepCopies
+					? [{id: 'keep-copy' as const, label: 'Keep a copy'}]
+					: []),
 				{id: 'close-tab', label: 'Close tab'},
 			];
 		}
@@ -63,4 +83,34 @@ export function filterItemActions(
 	return needle
 		? actions.filter((action) => action.label.toLowerCase().includes(needle))
 		: [...actions];
+}
+
+/**
+Whether a key in the actions filter goes back to the results. ← only does so with the caret at the start and nothing
+selected, so it still moves the caret through typed text; Backspace only on an empty filter.
+*/
+export function leavesActionMenu(
+	event: Pick<
+		KeyboardEvent,
+		'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'
+	>,
+	field: Pick<HTMLInputElement, 'value' | 'selectionStart' | 'selectionEnd'>,
+): boolean {
+	if (event.key === 'Escape') {
+		return true;
+	}
+
+	if (event.key === 'Backspace') {
+		return field.value === '';
+	}
+
+	return (
+		event.key === 'ArrowLeft' &&
+		!event.altKey &&
+		!event.ctrlKey &&
+		!event.metaKey &&
+		!event.shiftKey &&
+		field.selectionStart === 0 &&
+		field.selectionEnd === 0
+	);
 }
