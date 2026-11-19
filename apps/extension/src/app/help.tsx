@@ -406,7 +406,9 @@ function Help() {
 							another. Remove extra copies moves the rest to the trash bin, and
 							Undo restores them. Nothing is removed until you choose it.
 							Sessions are not checked, because the same address in two sessions
-							is normal.
+							is normal. Back up, Share, and Find duplicate bookmarks are greyed
+							out while there are no bookmarks, and Back up and Share are greyed
+							out on the dashboard while there are no sessions.
 						</>
 					),
 					searchText:
