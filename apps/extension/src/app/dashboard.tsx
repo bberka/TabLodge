@@ -1885,11 +1885,15 @@ export function SessionManager({
 									<Upload className="h-4 w-4" />
 									Import sessions
 								</DropdownMenuItem>
-								<DropdownMenuItem onSelect={() => openBackup()}>
+								<DropdownMenuItem
+									disabled={groups.length === 0}
+									onSelect={() => openBackup()}
+								>
 									<Download className="h-4 w-4" />
 									Back up sessions
 								</DropdownMenuItem>
 								<DropdownMenuItem
+									disabled={groups.length === 0}
 									onSelect={() =>
 										openShare({
 											title: 'Shared sessions',

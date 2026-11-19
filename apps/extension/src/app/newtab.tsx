@@ -2441,6 +2441,7 @@ function NewTab() {
 								id: 'backup',
 								label: 'Back up bookmarks',
 								icon: Download,
+								disabled: bookmarks.length === 0,
 								onSelect: openBookmarkBackup,
 							},
 							{
@@ -2455,6 +2456,7 @@ function NewTab() {
 								id: 'duplicates',
 								label: 'Find duplicate bookmarks',
 								icon: Copy,
+								disabled: bookmarks.length === 0,
 								onSelect: () => setDuplicatesOpen(true),
 							},
 							{
