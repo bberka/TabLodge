@@ -3440,7 +3440,8 @@ const GroupCard = memo(
 								draggable
 								type="button"
 								className={cn(
-									'min-w-0 flex-1 cursor-grab py-1 text-left active:cursor-grabbing',
+									'min-w-0 flex-1 cursor-grab rounded-md px-1 py-1 text-left active:cursor-grabbing',
+									'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
 									'max-sm:min-w-32',
 								)}
 								aria-expanded={
