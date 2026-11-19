@@ -491,7 +491,8 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 				}
 
 				case 'open-copy': {
-					await openPageCopy(item.url!);
+					// The palette window is not where the reader belongs: open it in the window the palette was opened over.
+					await openPageCopy(item.url!, standalone?.windowId);
 					onDone?.();
 					return;
 				}
