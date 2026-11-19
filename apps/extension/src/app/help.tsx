@@ -406,9 +406,9 @@ function Help() {
 							another. Remove extra copies moves the rest to the trash bin, and
 							Undo restores them. Nothing is removed until you choose it.
 							Sessions are not checked, because the same address in two sessions
-							is normal. Back up, Share, and Find duplicate bookmarks are greyed
-							out while there are no bookmarks, and Back up and Share are greyed
-							out on the dashboard while there are no sessions.
+							is normal. Share and export and Find duplicate bookmarks are
+							greyed out while there are no bookmarks, and Share and export is
+							greyed out on the dashboard while there are no sessions.
 						</>
 					),
 					searchText:
@@ -420,7 +420,7 @@ function Help() {
 						<>
 							On the dashboard, use the{' '}
 							<MenuLocation label="Bookmarks toolbar" /> to import a file or
-							your browser bookmarks, or to back up or share bookmarks. Import
+							your browser bookmarks, or to share and export bookmarks. Import
 							reads JSON, browser bookmark HTML, CSV, Markdown, and plain URL
 							lists, and lets you skip or add duplicates again. With Columns
 							from folders, bookmark folders become columns; folders with the
@@ -430,7 +430,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
+						'share and export dashboard bookmarks toolbar menu import export back up share JSON HTML CSV markdown url list browser bookmarks duplicates skip add again columns from folders one column',
 				},
 				{
 					title: 'Save from YouTube, Reddit, Spotify, and other sites',
@@ -810,10 +810,14 @@ function Help() {
 							HTML exports of Karakeep and Pinboard import as browser bookmark
 							files. A session menu can export just that session in any format.
 							Bookmark import and export are in the{' '}
-							<MenuLocation label="Bookmarks toolbar" />. In Settings, Back up
-							saves only bookmarks or sessions, or Everything as a full ZIP
-							backup with settings, excluded sites, theme, snapshots, and the
-							trash bin. Open{' '}
+							<MenuLocation label="Bookmarks toolbar" />. Both menus have Share
+							and export, where one dropdown picks what to share and another
+							picks the format, with Download and, for pages, Markdown, and
+							plain links, Copy. Its Everything choice makes a full ZIP backup
+							with settings, excluded sites, theme, snapshots, and the trash
+							bin, and so does Export in Settings, which opens the same dialog
+							on Everything. Import recognizes a full backup by itself; for
+							other files, choose Bookmarks or Sessions. Open{' '}
 							<a
 								href="options.html?q=Data"
 								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
@@ -837,7 +841,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
+						'share and export sessions menu share all sessions archived individual session export onetab session buddy tab session manager toby bookmark toolbar menu import export raindrop linkwarden karakeep hoarder omnivore wallabag pinboard mastodon merge add replace back up everything full backup ZIP settings excluded sites theme snapshots trash bin replace undo encrypt encrypted password protect PIN lost forgotten unlock',
 				},
 				{
 					title: 'Recover after a browser crash',

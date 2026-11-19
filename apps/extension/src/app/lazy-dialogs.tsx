@@ -38,10 +38,6 @@ function lazyDialog<Props extends {open: boolean}>(
 	};
 }
 
-export const BackupDialog = lazyDialog<
-	ComponentProps<typeof DataTransfer.BackupDialog>
->(async () => (await import('./data-transfer')).BackupDialog);
-
 export const ImportDialog = lazyDialog<
 	ComponentProps<typeof DataTransfer.ImportDialog>
 >(async () => (await import('./data-transfer')).ImportDialog);
@@ -114,6 +110,8 @@ export function useShareDialog(showStatus: ShowStatus) {
 					groups={shown?.groups}
 					sources={shown?.sources}
 					data={shown?.data}
+					backup={shown?.backup}
+					initialSource={shown?.initialSource}
 					showStatus={showStatus}
 					onOpenChange={setOpen}
 				/>

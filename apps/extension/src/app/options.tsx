@@ -86,12 +86,12 @@ import {
 	sortByQuery,
 	searchTerms,
 } from '../shared/fuzzy';
-import type {ExportData} from '../shared/export-formats';
 import {
 	excludedHostError,
 	normalizeExcludedHost,
 	parseExcludedLines,
 } from '../shared/excluded-sites';
+import {bookmarkShareGroups} from '../shared/export-formats';
 import {AccentPalette} from './accent-palette';
 import {
 	EmptyState,
@@ -109,12 +109,12 @@ import {
 	type IconComponent,
 } from './common';
 import {
-	BackupDialog,
 	ImportDialog,
 	RecoveryTools,
 	SnapshotsDialog,
 	TabStatsDialog,
 	TrashDialog,
+	useShareDialog,
 } from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
 import {initialSearchQuery, withSearchParam} from './page-params';
@@ -1111,7 +1111,7 @@ function Options() {
 	const [eraseSessions, setEraseSessions] = useState(false);
 	const [eraseBookmarks, setEraseBookmarks] = useState(false);
 	const [confirmDefaults, setConfirmDefaults] = useState(false);
-	const [backupData, setBackupData] = useState<ExportData | null>(null);
+	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const [importOpen, setImportOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
@@ -1718,12 +1718,54 @@ function Options() {
 				: a.index - b.index,
 		);
 
+	function openDataShare() {
+		const sessionData = {
+			kind: 'sessions' as const,
+			groups: state?.groups ?? [],
+			folders: state?.folders ?? [],
+		};
+		const bookmarks = {
+			kind: 'bookmarks' as const,
+			columns: state?.bookmarkColumns ?? [],
+			bookmarks: state?.bookmarks ?? [],
+		};
+		openShare({
+			title: 'Share and export',
+			sources: [
+				...(sessionData.groups.length > 0
+					? [
+							{
+								id: 'sessions',
+								label: 'All sessions',
+								pageTitle: 'Shared sessions',
+								groups: sessionData.groups,
+								data: sessionData,
+							},
+						]
+					: []),
+				...(bookmarks.bookmarks.length > 0
+					? [
+							{
+								id: 'bookmarks',
+								label: 'All bookmarks',
+								pageTitle: 'Shared bookmarks',
+								groups: bookmarkShareGroups(bookmarks),
+								data: bookmarks,
+							},
+						]
+					: []),
+			],
+			backup: true,
+			initialSource: 'everything',
+		});
+	}
+
 	const dataRows: DataRowDef[] = [
 		{
 			key: 'backup',
 			icon: Download,
-			label: 'Back up',
-			help: 'Save everything, or only bookmarks or sessions, to a file.',
+			label: 'Share and export',
+			help: 'Share or save sessions and bookmarks, or back up everything to one file you can restore with Import.',
 			words: [
 				'backup',
 				'export',
@@ -1738,25 +1780,11 @@ function Options() {
 					variant="outline"
 					className="w-full sm:w-32"
 					disabled={!state}
-					// Opens on Everything, which also holds settings, so it is never empty.
-					onClick={() =>
-						setBackupData(
-							bookmarkCount > 0
-								? {
-										kind: 'bookmarks',
-										columns: state?.bookmarkColumns ?? [],
-										bookmarks: state?.bookmarks ?? [],
-									}
-								: {
-										kind: 'sessions',
-										groups: state?.groups ?? [],
-										folders: state?.folders ?? [],
-									},
-						)
-					}
+					// Everything also holds settings, so it is never empty.
+					onClick={openDataShare}
 				>
 					<Download className="h-4 w-4" />
-					Back up
+					Export
 				</Button>
 			),
 		},
@@ -2577,14 +2605,7 @@ function Options() {
 					</Label>
 				</div>
 			</ConfirmationDialog>
-			<BackupDialog
-				initialScope="everything"
-				state={state}
-				data={backupData}
-				open={Boolean(backupData)}
-				showStatus={showStatus}
-				onOpenChange={(open) => !open && setBackupData(null)}
-			/>
+			{shareDialog}
 			<SnapshotsDialog
 				confirmDestructive
 				open={snapshotsOpen}

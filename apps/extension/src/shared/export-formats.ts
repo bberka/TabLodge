@@ -115,6 +115,20 @@ function bookmarkSections(
 	return sections;
 }
 
+/**
+Bookmarks as share groups, one per non-empty column in board order, Unfiled last.
+*/
+export function bookmarkShareGroups(
+	data: ExportData,
+): Array<{name: string; tabs: Bookmark[]}> {
+	return bookmarkSections(data)
+		.filter((section) => section.bookmarks.length > 0)
+		.map((section) => ({
+			name: section.column?.name ?? 'Unfiled',
+			tabs: section.bookmarks,
+		}));
+}
+
 const seconds = (ms: number | undefined) =>
 	ms && Number.isFinite(ms) && ms > 0 ? String(Math.floor(ms / 1000)) : '';
 const addDate = (ms: number | undefined) => {

@@ -1,11 +1,27 @@
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {type Locator, type Page} from 'playwright';
 import {fromRoot} from '../vite-shared.ts';
 import {EVIDENCE_VIEWPORTS, withMobileEmulation} from './evidence.ts';
 import {readDevStore, seed} from './fixtures.ts';
 import {check, type Env, type Theme} from './harness.ts';
 import {openMenuItemByKeyboard, openPage, setTheme} from './pages.ts';
+
+/**
+Opens a dropdown of the Share and export dialog with the keyboard and picks one option.
+*/
+async function pick(
+	page: Page,
+	dialog: Locator,
+	label: string,
+	option: RegExp,
+) {
+	await dialog.getByRole('combobox', {name: label}).focus();
+	await page.keyboard.press('Enter');
+	await page.getByRole('option', {name: option}).focus();
+	await page.keyboard.press('Enter');
+}
 
 export async function sessionShareCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
@@ -46,22 +62,14 @@ export async function sessionShareCheck(env: Env, theme: Theme) {
 			await openMenuItemByKeyboard(page, trigger, 'Share');
 			const exportDialog = page.getByRole('dialog');
 			await exportDialog.waitFor();
-			const exportScope = exportDialog.getByRole('radiogroup', {
+			const exportScope = exportDialog.getByRole('combobox', {
 				name: 'What to share',
 			});
 			assert.equal(await exportScope.count(), 1);
-			const allSessions = exportScope.getByRole('radio', {
-				name: /^All sessions/,
-			});
-			await exportScope
-				.getByRole('radio', {name: new RegExp(`^${name}`)})
-				.focus();
-			await page.keyboard.press('ArrowRight');
-			assert.equal(await allSessions.isChecked(), true);
-			const jsonWay = exportDialog.getByRole('radio', {name: /^JSON file/});
-			await jsonWay.focus();
-			await page.keyboard.press('Space');
-			assert.equal(await jsonWay.isChecked(), true);
+			assert.match((await exportScope.textContent()) ?? '', new RegExp(name));
+			await pick(page, exportDialog, 'What to share', /^All sessions/);
+			assert.match((await exportScope.textContent()) ?? '', /All sessions/);
+			await pick(page, exportDialog, 'Format', /^JSON file/);
 			const allSessionsDownloadPromise = page.waitForEvent('download');
 			await exportDialog
 				.getByRole('button', {name: 'Download', exact: true})
@@ -81,12 +89,12 @@ export async function sessionShareCheck(env: Env, theme: Theme) {
 			const currentExportDialog = page.getByRole('dialog');
 			await currentExportDialog.waitFor();
 
-			const htmlFormat = currentExportDialog.getByRole('radio', {
-				name: /Browser bookmarks \(HTML\)/,
-			});
-			await htmlFormat.focus();
-			await page.keyboard.press('Space');
-			assert.equal(await htmlFormat.isChecked(), true);
+			await pick(
+				page,
+				currentExportDialog,
+				'Format',
+				/Browser bookmarks \(HTML\)/,
+			);
 			await mkdir(fromRoot('.dev/evidence'), {recursive: true});
 			await currentExportDialog.screenshot({
 				path: fromRoot(`.dev/evidence/session-export-${theme}.png`),
@@ -163,23 +171,14 @@ export async function columnShareFileCheck(env: Env, theme: Theme) {
 			await openMenuItemByKeyboard(page, trigger, 'Share');
 			const dialog = page.getByRole('dialog');
 			await dialog.waitFor();
-			const choices = dialog.getByRole('radiogroup', {
-				name: 'What to share',
-			});
+			const choices = dialog.getByRole('combobox', {name: 'What to share'});
 			assert.equal(await choices.count(), 1);
-			const current = choices.getByRole('radio', {name: /^Daily/});
-			const allBookmarks = choices.getByRole('radio', {
-				name: /^All bookmarks/,
-			});
-			await current.focus();
-			await page.keyboard.press('ArrowRight');
-			assert.equal(await allBookmarks.isChecked(), true);
-			await page.keyboard.press('ArrowLeft');
-			assert.equal(await current.isChecked(), true);
-			const jsonWay = dialog.getByRole('radio', {name: /^JSON file/});
-			await jsonWay.focus();
-			await page.keyboard.press('Space');
-			assert.equal(await jsonWay.isChecked(), true);
+			assert.match((await choices.textContent()) ?? '', /Daily/);
+			await pick(page, dialog, 'What to share', /^All bookmarks/);
+			assert.match((await choices.textContent()) ?? '', /All bookmarks/);
+			await pick(page, dialog, 'What to share', /^Selected column/);
+			assert.match((await choices.textContent()) ?? '', /Daily/);
+			await pick(page, dialog, 'Format', /^JSON file/);
 			await mkdir(fromRoot('.dev/evidence'), {recursive: true});
 			await dialog.screenshot({
 				path: fromRoot(`.dev/evidence/bookmark-export-${theme}.png`),
@@ -220,7 +219,7 @@ export async function sharePreviewCheck(env: Env) {
 			.click();
 		await page.getByRole('menuitem', {name: 'Share', exact: true}).click();
 		const dialog = page.getByRole('dialog');
-		await dialog.locator('label', {hasText: 'Markdown'}).first().click();
+		await pick(page, dialog, 'Format', /^Markdown/);
 		const preview = dialog.locator('pre').first();
 		// One address with no break points, as a long tracking link has, used to stretch the whole dialog.
 		await preview.evaluate((element) => {
@@ -265,7 +264,7 @@ export async function shareAllSessionsCheck(env: Env, theme: Theme) {
 			const trigger = page.getByRole('button', {
 				name: 'Import and back up sessions',
 			});
-			await openMenuItemByKeyboard(page, trigger, 'Share all sessions');
+			await openMenuItemByKeyboard(page, trigger, 'Share and export sessions');
 			const dialog = page.getByRole('dialog');
 			await dialog.waitFor();
 			await dialog

@@ -62,7 +62,7 @@ function PageRow({page, onDelete}: {page: SharedPage; onDelete: () => void}) {
 }
 
 /**
-Every page uploaded from Share › Web page, read from the server each time the sheet opens. Delete takes the page off
+Every page uploaded from Share › HTML page, read from the server each time the sheet opens. Delete takes the page off
 the server, so its link stops working.
 */
 function SharedPagesSheet({

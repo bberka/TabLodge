@@ -278,7 +278,7 @@ Each browser's own full backup (**Settings › Data › Back up**) also stays a 
 
 ### Shared pages
 
-**Share › HTML page** in the extension and **Share › Web page** in the Android app offer **Upload to my server** when the server is connected and new enough. The page is the same one the Share dialog would save as a file. The server keeps it as it came and serves it to anyone with its link, `https://<address>/p/<id>`, without the token. The id is 22 random characters, so a link cannot be guessed, but anyone who has it can open the page and pass it on. Each upload makes a new link; to change a page, share it again and delete the old one.
+**Share › HTML page** in the extension and **Share › HTML page** in the Android app offer **Upload to my server** when the server is connected and new enough. The page is the same one the Share dialog would save as a file. The server keeps it as it came and serves it to anyone with its link, `https://<address>/p/<id>`, without the token. The id is 22 random characters, so a link cannot be guessed, but anyone who has it can open the page and pass it on. Each upload makes a new link; to change a page, share it again and delete the old one.
 
 **Settings › Sync › Shared pages** in either app lists every page on the server with its link, and **Delete** removes it, after which its link answers 404. Pages belong to the regular library only: the private windows' library and the Android app's private library are never uploaded, and nothing is served under `/private/p/`.
 
