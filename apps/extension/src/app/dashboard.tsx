@@ -3855,7 +3855,7 @@ const SavedTab = memo(
 					className={cn(
 						'group/tab flex min-w-0',
 						compact ? 'items-center' : 'items-start',
-						'gap-2.5 relative rounded-lg px-2',
+						'cursor-pointer gap-2.5 relative rounded-lg px-2',
 						compact ? 'py-1.5' : 'py-2',
 						'transition-colors hover:bg-muted/60',
 						selected && 'bg-primary/[.07]',
