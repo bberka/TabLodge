@@ -2,6 +2,10 @@
 
 <!-- What does this change, and which issue does it address? -->
 
+## Spec
+
+<!-- Link the issue. Copy its Acceptance list and put the proof beside each criterion. For a refactor, docs, or tooling change, one sentence on what must stay true. -->
+
 ## Model
 
 <!-- Product name and exact model ID that did the work, for example Claude Sonnet 5.5 (claude-sonnet-5-5). List each model and what it did if several contributed. Write "Human only" if no model was used. -->
@@ -11,7 +15,7 @@
 - [ ] `vp run check` and `vp run build` pass, or I have explained which checks I couldn't run
 - [ ] Tests cover the change, or I have explained why they aren't needed
 - [ ] For runtime changes, I tested the affected workflow in the dev browser and recorded the steps and result below
-- [ ] A fix or feature has proof below (screenshot, recording, or output, with a before and after for a fix)
+- [ ] Every acceptance criterion has proof below (screenshot, recording, or output, with a before and after for a fix), and nothing beyond the spec was added
 - [ ] UI changes work with the keyboard alone and in both themes, anything done by dragging or hovering has a keyboard alternative, and `vp run check:a11y` passes
 - [ ] For UI changes, I listed the keyboard and accessibility checks or tools used, workflows tested, and limitations below
 - [ ] I ran the `unslop-*` skills on the changed files only and fixed what they found

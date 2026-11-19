@@ -77,7 +77,7 @@ In the pull request, explain what changed, why, and how you tested it. Mention c
 
 ## Working with AI agents
 
-Agents follow [AGENTS.md](../AGENTS.md): a worktree and branch per task, commits that name only the human author, a pull request that names the model, proof for every fix or feature, and no direct pushes to `master`. Install the pinned skills with `vp run skills:install`.
+Agents follow [AGENTS.md](../AGENTS.md): a worktree and branch per task, commits that name only the human author, a pull request that names the model, proof for every fix or feature, and no direct pushes to `master`. Features start from a spec on the issue and pull requests report proof for each of its acceptance criteria ([Spec driven development](agents/spec-driven.md)). Install the pinned skills with `vp run skills:install`.
 
 ## Releases
 
