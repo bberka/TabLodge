@@ -1239,11 +1239,28 @@ export function FinderPaletteWindow({
 			return;
 		}
 
-		// The search box is the only stop, so Tab has nowhere to go inside the frame and must not reach the page.
+		// Tab cycles through the frame's controls (the search box, the Search tips button and its popover) and never
+		// reaches the page.
 		const trap = (event: KeyboardEvent) => {
-			if (event.key === 'Tab') {
-				event.preventDefault();
+			if (event.key !== 'Tab') {
+				return;
 			}
+
+			const stops = [
+				...document.querySelectorAll<HTMLElement>(
+					'input, button, [href], [tabindex]:not([tabindex="-1"])',
+				),
+			].filter(
+				(element) => !element.hasAttribute('disabled') && element.tabIndex >= 0,
+			);
+			const at = stops.indexOf(document.activeElement as HTMLElement);
+			const leaving = event.shiftKey ? at <= 0 : at === stops.length - 1;
+			if (!leaving) {
+				return;
+			}
+
+			event.preventDefault();
+			stops.at(event.shiftKey ? -1 : 0)?.focus();
 		};
 
 		document.addEventListener('keydown', trap);

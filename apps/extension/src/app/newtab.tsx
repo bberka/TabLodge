@@ -1969,7 +1969,9 @@ function NewTab() {
 		'lock-private': inPrivateWindow()
 			? async () => {
 					const result = await send('LOCK_PRIVATE');
-					if (result.ok && !result.enabled) {
+					if (!result.ok) {
+						showStatus(result.error, true);
+					} else if (!result.enabled) {
 						showStatus(
 							'The private library has no password to lock it with.',
 							true,
@@ -2007,7 +2009,8 @@ function NewTab() {
 	const hasState = Boolean(state);
 	useEffect(() => {
 		const requestedCommand = requestedCommandRef.current;
-		if (!hasState || !requestedCommand) {
+		// While a new tab is being handed to the browser, the dashboard (and the listeners some commands need) is not up.
+		if (!hasState || holding || !requestedCommand) {
 			return;
 		}
 
@@ -2020,7 +2023,7 @@ function NewTab() {
 				?.run();
 		}, 0);
 		return () => clearTimeout(timer);
-	}, [hasState, finderCommands]);
+	}, [hasState, holding, finderCommands]);
 
 	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder .
 	useEffect(() => {
