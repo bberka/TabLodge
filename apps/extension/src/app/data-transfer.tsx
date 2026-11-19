@@ -194,6 +194,7 @@ export type SharePayload = {
 How much of a file the preview shows.
 */
 const FILE_PREVIEW_CHARS = 4000;
+const FILE_PREVIEW_CUT = '\n…';
 
 const EVERYTHING_SOURCE: ShareSource = {
 	id: 'everything',
@@ -473,14 +474,16 @@ function SharePreviewPanel({
 	formatLabel,
 	fileText,
 }: SharePreviewPanelProps) {
+	// A file preview shows the file itself, so link and group counts of the link preview do not apply to it.
 	const notShown = [
-		...(preview.omittedLinks > 0
+		...(fileText === undefined && preview.omittedLinks > 0
 			? [plural(preview.omittedLinks, 'more link')]
 			: []),
-		...(preview.moreGroups > 0
+		...(fileText === undefined && preview.moreGroups > 0
 			? [plural(preview.moreGroups, 'more group')]
 			: []),
 	];
+	const fileCut = fileText?.endsWith(FILE_PREVIEW_CUT) === true;
 
 	return (
 		<section
@@ -503,6 +506,12 @@ function SharePreviewPanel({
 						<>
 							<span aria-hidden="true"> · </span>
 							{notShown.join(' and ')} hidden
+						</>
+					)}
+					{fileCut && (
+						<>
+							<span aria-hidden="true"> · </span>
+							Showing the start of the file
 						</>
 					)}
 				</p>
@@ -711,7 +720,7 @@ export function ShareDialog({
 		);
 		fileText =
 			content.length > FILE_PREVIEW_CHARS
-				? `${content.slice(0, FILE_PREVIEW_CHARS)}\n…`
+				? `${content.slice(0, FILE_PREVIEW_CHARS)}${FILE_PREVIEW_CUT}`
 				: content;
 	}
 
