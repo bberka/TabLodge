@@ -1998,24 +1998,26 @@ function NewTab() {
 	}, [tabSelection]);
 
 	// `?command=` from the palette window, which runs the commands that need this page here.
-	const [requestedCommand] = useState(() =>
+	const requestedCommandRef = useRef(
 		new URLSearchParams(location.search).get('command'),
 	);
+	const hasState = Boolean(state);
 	useEffect(() => {
-		if (!state || !requestedCommand) {
+		const requestedCommand = requestedCommandRef.current;
+		if (!hasState || !requestedCommand) {
 			return;
 		}
 
 		history.replaceState(null, '', stripSearchParams(location, ['command']));
 		// After this render, so the sessions area is listening for the events some commands send.
 		const timer = setTimeout(() => {
+			requestedCommandRef.current = null;
 			void finderCommands
 				.find((action) => action.id === requestedCommand)
 				?.run();
 		}, 0);
 		return () => clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, when the library has loaded
-	}, [Boolean(state)]);
+	}, [hasState, finderCommands]);
 
 	// Ctrl/Cmd+K, or "/" outside text fields, opens the finder .
 	useEffect(() => {

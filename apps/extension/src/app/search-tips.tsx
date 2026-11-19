@@ -8,6 +8,14 @@ import {
 	PopoverTrigger,
 } from '../shared/ui';
 
+export function Kbd({children}: {children: string}) {
+	return (
+		<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
+			{children}
+		</kbd>
+	);
+}
+
 /**
 A key or key combination, and what it does.
 */
@@ -64,12 +72,7 @@ export function SearchTipsButton({keys = NO_KEYS}: {keys?: readonly KeyTip[]}) {
 								<div key={tip.meaning} className="contents">
 									<dt className="flex gap-1">
 										{tip.keys.map((key) => (
-											<kbd
-												key={key}
-												className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground"
-											>
-												{key}
-											</kbd>
+											<Kbd key={key}>{key}</Kbd>
 										))}
 									</dt>
 									<dd className="text-muted-foreground">{tip.meaning}</dd>

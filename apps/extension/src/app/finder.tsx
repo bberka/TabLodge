@@ -60,7 +60,7 @@ import {PROJECT} from './project';
 import {settingsSections} from './settings-sections';
 import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
-import {SearchTipsButton, type KeyTip} from './search-tips';
+import {Kbd, SearchTipsButton, type KeyTip} from './search-tips';
 import {isPinnedLodgeTab, openLink, openOwnPage} from './link-target';
 import {cn} from '@/lib/utils';
 
@@ -982,14 +982,6 @@ function keyTips(modifier: string, dashboard: boolean): KeyTip[] {
 		{keys: ['←'], meaning: 'Back from the actions'},
 		{keys: ['Esc'], meaning: 'Back, or close the search'},
 	];
-}
-
-function Kbd({children}: {children: string}) {
-	return (
-		<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
-			{children}
-		</kbd>
-	);
 }
 
 /**
