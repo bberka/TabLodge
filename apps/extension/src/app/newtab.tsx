@@ -1127,6 +1127,9 @@ function NewTab() {
 		).length;
 		if (count > 0 && columnDelete.count === 0) {
 			setColumnDelete({...columnDelete, count});
+			showStatus(
+				`“${columnDelete.column.name}” got ${plural(count, 'bookmark')} meanwhile. Choose where they go, then delete it.`,
+			);
 			return;
 		}
 
