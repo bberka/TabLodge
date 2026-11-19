@@ -103,7 +103,7 @@ export function ColumnsSheet({
 										{column.name}
 									</Text>
 									<Text
-										numberOfLines={1}
+										numberOfLines={2}
 										style={{color: colors.muted, fontSize: 13}}
 									>
 										{detail}
