@@ -1,10 +1,18 @@
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet} from './bottom-sheet';
 import {TARGET, useColors} from './theme';
 import {Icon, type IconName} from './widgets';
 
 export type SheetAction = {
+	/**
+	Tells rows apart when two can share a label, such as two browsers with one name. Defaults to the label.
+	*/
+	key?: string;
 	icon: IconName;
+	/**
+	A picture drawn in place of the icon, such as an app's own icon as a `data:` address.
+	*/
+	image?: string;
 	label: string;
 	/**
 	One line under the label, for an action that needs a word of explanation.
@@ -47,7 +55,7 @@ export function ActionSheet({
 				</Text>
 				{actions.map((action) => (
 					<Pressable
-						key={action.label}
+						key={action.key ?? action.label}
 						accessibilityRole="button"
 						accessibilityLabel={action.label}
 						accessibilityHint={action.hint}
@@ -60,15 +68,19 @@ export function ActionSheet({
 							action.onPress();
 						}}
 					>
-						<Icon
-							name={action.icon}
-							size={24}
-							color={
-								action.destructive
-									? colors.danger
-									: (action.color ?? colors.accent)
-							}
-						/>
+						{action.image ? (
+							<Image source={{uri: action.image}} style={styles.image} />
+						) : (
+							<Icon
+								name={action.icon}
+								size={24}
+								color={
+									action.destructive
+										? colors.danger
+										: (action.color ?? colors.accent)
+								}
+							/>
+						)}
 						<View style={styles.texts}>
 							<Text
 								style={{
@@ -104,4 +116,5 @@ const styles = StyleSheet.create({
 		paddingVertical: 8,
 	},
 	texts: {flex: 1, gap: 2},
+	image: {width: 24, height: 24, borderRadius: 6},
 });

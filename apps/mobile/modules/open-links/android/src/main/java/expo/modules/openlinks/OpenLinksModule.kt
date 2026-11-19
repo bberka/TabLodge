@@ -37,6 +37,23 @@ class OpenLinksModule : Module() {
     return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
   }
 
+  // Android's chooser for a web link lists only the default browser and apps with verified links, and opens a lone
+  // entry at once, so it would skip the chooser for most links. Every app that can open the link is listed instead,
+  // found the same way as the browsers, the first as the target and the rest beside it.
+  private fun chooser(context: Context, view: Intent): Intent {
+    @Suppress("DEPRECATION")
+    val targets = context.packageManager.queryIntentActivities(view, PackageManager.MATCH_ALL)
+      .map { it.activityInfo }
+      .filter { it.packageName != context.packageName }
+      .distinctBy { it.packageName to it.name }
+      .map { Intent(view).setClassName(it.packageName, it.name) }
+    if (targets.size < 2) {
+      return Intent.createChooser(view, null)
+    }
+    return Intent.createChooser(targets.first(), null)
+      .putExtra(Intent.EXTRA_INITIAL_INTENTS, targets.drop(1).toTypedArray())
+  }
+
   override fun definition() = ModuleDefinition {
     Name("OpenLinks")
 
@@ -113,8 +130,9 @@ class OpenLinksModule : Module() {
       }
     }
 
-    // Opens the links with `how`: "system" (the default browser), "inapp" (a Custom Tab over this app), or "app" (the
-    // browser named by `packageName`). Returns false when nothing could start them, so the caller can fall back.
+    // Opens the links with `how`: "system" (the default browser), "inapp" (a Custom Tab over this app), "app" (the
+    // browser named by `packageName`), or "chooser" (Android's app chooser, so an app such as YouTube can take the
+    // link). Returns false when nothing could start them, so the caller can fall back.
     Function("openAll") { urls: List<String>, how: String, packageName: String? ->
       val context = appContext.currentActivity ?: appContext.reactContext
       val intents = urls
@@ -129,7 +147,8 @@ class OpenLinksModule : Module() {
           if (how == "app" && !packageName.isNullOrEmpty()) {
             intent.setPackage(packageName)
           }
-          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          val started = if (how == "chooser" && context != null) chooser(context, intent) else intent
+          started.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         .toTypedArray()
       if (context == null || intents.isEmpty()) {

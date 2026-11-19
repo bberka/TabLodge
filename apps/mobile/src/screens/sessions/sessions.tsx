@@ -245,6 +245,7 @@ export function SessionsScreen({
 		? sessionMenuActions(menuFor, {
 				colors,
 				folders: store.folders,
+				links,
 				act,
 				select: selection.start,
 				addLinks: setAddingToId,

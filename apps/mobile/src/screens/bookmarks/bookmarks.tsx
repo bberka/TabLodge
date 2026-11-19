@@ -66,6 +66,7 @@ import {
 import {Button, Chips, Empty, Header, IconButton} from '../../ui/widgets';
 import {openShare} from '../transfer/transfer-sheets';
 import {copyActions} from '../copy/copy-actions';
+import {linkOpenActions, openIn} from '../open-in';
 import {useCopyUrls} from '../../library/page-copies';
 import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
@@ -242,6 +243,7 @@ export function BookmarksScreen({
 						openLink(linkToOpen(rowMenuBookmark.url, links));
 					},
 				},
+				...linkOpenActions(linkToOpen(rowMenuBookmark.url, links), colors),
 				{
 					icon: 'create-outline',
 					label: 'Edit',
@@ -356,6 +358,17 @@ export function BookmarksScreen({
 								shown.map((bookmark) => linkToOpen(bookmark.url, links)),
 								columnName,
 							);
+						},
+					},
+					{
+						icon: 'navigate-outline' as const,
+						label: 'Open all in…',
+						hint: 'Another browser, this once',
+						onPress() {
+							openIn({
+								urls: shown.map((bookmark) => linkToOpen(bookmark.url, links)),
+								from: columnName,
+							});
 						},
 					},
 				]

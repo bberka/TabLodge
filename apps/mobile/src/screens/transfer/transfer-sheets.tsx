@@ -29,11 +29,8 @@ import {useTrash} from '../../library/trash-store';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
 import {edit, newId, useLibrary} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
-import {
-	copyLink,
-	uploadPage,
-	useSharedPagesServer,
-} from '../../library/shared-pages';
+import {uploadPage, useSharedPagesServer} from '../../library/shared-pages';
+import {copyLink} from '../../platform/copy-link';
 import {openLink} from '../../platform/open-links';
 import {useColors} from '../../ui/theme';
 import {

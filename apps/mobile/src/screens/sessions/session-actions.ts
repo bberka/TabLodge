@@ -19,6 +19,7 @@ import {type SheetAction} from '../../ui/action-sheet';
 import {showSnack} from '../../ui/snackbar';
 import {type Colors} from '../../ui/theme';
 import {openShare} from '../transfer/transfer-sheets';
+import {linkOpenActions, openIn} from '../open-in';
 import {type BookmarkLinks} from './session-link-sheets';
 
 /**
@@ -209,6 +210,7 @@ export function sessionMenuActions(
 	{
 		colors,
 		folders,
+		links,
 		act,
 		select,
 		addLinks,
@@ -216,6 +218,7 @@ export function sessionMenuActions(
 	}: {
 		colors: Colors;
 		folders: Store['folders'];
+		links: LinkSettings;
 		act: (action: SessionAction, session: Session) => void;
 		select: (id: string) => void;
 		addLinks: (id: string) => void;
@@ -240,7 +243,24 @@ export function sessionMenuActions(
 	};
 
 	return [
-		...(['open', 'rename'] as const).map((action) => menuItem(action)),
+		menuItem('open'),
+		{
+			icon: 'navigate-outline' as const,
+			label: 'Open all in…',
+			hint: 'Another browser, this once',
+			onPress() {
+				openIn({
+					urls: session.tabs.map((tab) => linkToOpen(tab.url, links)),
+					from: session.name,
+					onOpen() {
+						void edit((current) =>
+							markSessionOpened(current, session.id, Date.now()),
+						);
+					},
+				});
+			},
+		},
+		menuItem('rename'),
 		{
 			icon: 'checkbox-outline' as const,
 			label: 'Select',
@@ -302,6 +322,7 @@ export function tabMenuActions(
 				openLink(linkToOpen(tab.url, links));
 			},
 		},
+		...linkOpenActions(linkToOpen(tab.url, links), colors),
 		{
 			icon: 'create-outline',
 			label: 'Edit',
