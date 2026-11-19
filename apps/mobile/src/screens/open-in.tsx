@@ -1,5 +1,6 @@
-import {useMemo, useSyncExternalStore} from 'react';
+import {useEffect, useMemo, useSyncExternalStore} from 'react';
 import {installedBrowsers} from '../../modules/open-links';
+import {isPrivateView, useView, type View} from '../library/view';
 import {openChoices} from '../platform/open-choices';
 import {copyLink} from '../platform/copy-link';
 import {openAll, openLink} from '../platform/open-links';
@@ -9,30 +10,38 @@ import type {Colors} from '../ui/theme';
 type Request = {
 	urls: string[];
 	/**
+	Open all: no chooser, and the question asked before opening many, even for a column or session of one link.
+	*/
+	several: boolean;
+	/**
 	What the links are, for the question asked before opening many.
 	*/
 	from: string;
 	/**
-	Runs once the links were sent off, such as marking a session opened.
+	Runs once the links were sent off, after the question when there is one, such as marking a session opened.
 	*/
 	onOpen?: () => void;
 };
 
-let request: Request | undefined;
+/**
+The request and the library it came from: locking the private library returns to the regular one, which drops a
+request made in the private one, so its links cannot be opened after the lock.
+*/
+let request: (Request & {view: View}) | undefined;
 const listeners = new Set<() => void>();
 
 /**
 Opens the **Open in** drawer for some links. `OpenInHost`, mounted once near the root, draws it.
 */
 export function openIn(next: Request | undefined): void {
-	request = next;
+	request = next && {...next, view: isPrivateView() ? 'private' : 'regular'};
 	for (const listener of listeners) {
 		listener();
 	}
 }
 
 export function OpenInHost() {
-	const current = useSyncExternalStore(
+	const pending = useSyncExternalStore(
 		(listener) => {
 			listeners.add(listener);
 			return () => {
@@ -41,12 +50,19 @@ export function OpenInHost() {
 		},
 		() => request,
 	);
+	const view = useView();
+	const current = pending?.view === view ? pending : undefined;
+	useEffect(() => {
+		if (pending && !current) {
+			openIn(undefined);
+		}
+	}, [pending, current]);
 	// Read when the drawer opens, so a browser installed meanwhile shows up.
 	const browsers = useMemo(
 		() => (current ? installedBrowsers() : []),
 		[current],
 	);
-	const several = (current?.urls.length ?? 0) > 1;
+	const several = current?.several ?? false;
 	const actions: SheetAction[] = current
 		? openChoices(browsers, {several}).map((choice) => ({
 				key: choice.key,
@@ -60,12 +76,10 @@ export function OpenInHost() {
 							: 'globe-outline',
 				onPress() {
 					if (several) {
-						openAll(current.urls, current.from, choice.opener);
+						openAll(current.urls, current.from, choice.opener, current.onOpen);
 					} else {
 						openLink(current.urls[0], choice.opener);
 					}
-
-					current.onOpen?.();
 				},
 			}))
 		: [];
@@ -91,7 +105,7 @@ export function linkOpenActions(url: string, colors: Colors): SheetAction[] {
 			label: 'Open in…',
 			hint: 'Another browser or app, this once',
 			onPress() {
-				openIn({urls: [url], from: url});
+				openIn({urls: [url], several: false, from: url});
 			},
 		},
 		{

@@ -51,15 +51,21 @@ export function openLink(url: string, opener?: Opener): void {
 
 /**
 Opens several links, asking first when there are more than a few, since each one leaves this app. `opener` overrides
-the settings for this once.
+the settings for this once, and `onOpen` runs once they were sent off, never after Cancel.
 */
-export function openAll(urls: string[], from: string, opener?: Opener): void {
+export function openAll(
+	urls: string[],
+	from: string,
+	opener?: Opener,
+	onOpen?: () => void,
+): void {
 	if (urls.length === 0) {
 		return;
 	}
 
 	if (urls.length <= ASK_ABOVE) {
 		void openLinks(urls, opener);
+		onOpen?.();
 		return;
 	}
 
@@ -69,6 +75,7 @@ export function openAll(urls: string[], from: string, opener?: Opener): void {
 		{label: 'Open all'},
 		() => {
 			void openLinks(urls, opener);
+			onOpen?.();
 		},
 	);
 }

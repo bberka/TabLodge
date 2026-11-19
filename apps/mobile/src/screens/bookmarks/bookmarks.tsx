@@ -367,6 +367,7 @@ export function BookmarksScreen({
 						onPress() {
 							openIn({
 								urls: shown.map((bookmark) => linkToOpen(bookmark.url, links)),
+								several: true,
 								from: columnName,
 							});
 						},

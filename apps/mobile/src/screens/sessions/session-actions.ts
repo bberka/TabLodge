@@ -251,6 +251,7 @@ export function sessionMenuActions(
 			onPress() {
 				openIn({
 					urls: session.tabs.map((tab) => linkToOpen(tab.url, links)),
+					several: true,
 					from: session.name,
 					onOpen() {
 						void edit((current) =>
