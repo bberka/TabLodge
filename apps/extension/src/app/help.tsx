@@ -651,20 +651,20 @@ function Help() {
 					body: (
 						<>
 							On the dashboard, press <Key>Ctrl</Key> or <Key>⌘</Key> +{' '}
-							<Key>K</Key>, or press <Key>/</Key> when you are not typing in a
-							field. Search bookmarks, sessions, open tabs, commands, Settings,
-							or the web. Your recent sessions are listed before you type.
-							Choose one to restore it, or press <Key>Shift</Key> +{' '}
-							<Key>Enter</Key> to reveal it on the dashboard instead. Type the
-							name of a Settings section, such as Sync or Recovery &amp;
-							backups, to open Settings there. Commands include Sync now, Back
-							up now, Share bookmarks, Trash bin, and Keep a copy of this page
-							(from the palette over a page). The palette lists the same
-							commands everywhere; one that needs the dashboard opens it.
+							<Key>K</Key> or <Key>F</Key>, or press <Key>/</Key> when you are
+							not typing in a field. Search bookmarks, sessions, open tabs,
+							commands, Settings, or the web. Your recent sessions are listed
+							before you type. Choose one to restore it, or press{' '}
+							<Key>Shift</Key> + <Key>Enter</Key> to reveal it on the dashboard
+							instead. Type the name of a Settings section, such as Sync or
+							Recovery &amp; backups, to open Settings there. Commands include
+							Sync now, Back up now, Share bookmarks, Trash bin, and Keep a copy
+							of this page (from the palette over a page). The palette lists the
+							same commands everywhere; one that needs the dashboard opens it.
 						</>
 					),
 					searchText:
-						'dashboard ctrl command cmd meta k slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter settings section sync now back up backup share trash keep a copy',
+						'dashboard ctrl command cmd meta k f find slash / search bookmarks sessions open tabs commands web palette recent sessions restore reveal shift enter settings section sync now back up backup share trash keep a copy',
 				},
 				{
 					title: 'Open the palette from any page',
