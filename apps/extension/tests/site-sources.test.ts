@@ -24,6 +24,7 @@ import {
 	redditPermalinkUrl,
 	SITE_SOURCES,
 	siteSourceForUrl,
+	sourceSavingInto,
 	stackOverflowQuestionUrl,
 	xPostUrl,
 	youtubeVideoUrl,
@@ -135,8 +136,8 @@ test('the manifest asks for exactly the sources origins, optionally, with no con
 
 test('each source column gets an icon and a color a column can hold', () => {
 	for (const source of SITE_SOURCES) {
-		assert.ok(ICON_IDS.includes(source.columnIcon), source.id);
-		assert.ok(isColumnColor(source.columnColor), source.id);
+		assert.ok(ICON_IDS.includes(source.column.icon), source.id);
+		assert.ok(isColumnColor(source.column.color), source.id);
 	}
 });
 
@@ -1443,4 +1444,33 @@ test('Substack: Save on a card or a post page; Unsave saves nothing', () => {
 			title: 'The Gentle Art of Saving',
 		},
 	});
+});
+
+test('deleting a column asks to stop the site that saves into it here, and only that one', () => {
+	const columns = [{id: 'source-reddit'}, {id: 'mine'}];
+	const on = {id: 'reddit', enabled: true};
+	assert.equal(sourceSavingInto('source-reddit', columns, [on])?.id, 'reddit');
+	// The site is off here, or Settings sends its saves to another column that still exists.
+	assert.equal(
+		sourceSavingInto('source-reddit', columns, [{...on, enabled: false}]),
+		undefined,
+	);
+	assert.equal(
+		sourceSavingInto('source-reddit', columns, [{...on, columnId: 'mine'}]),
+		undefined,
+	);
+	// A picked column that was deleted sends saves back to the source column.
+	assert.equal(
+		sourceSavingInto('source-reddit', columns, [{...on, columnId: 'gone'}])?.id,
+		'reddit',
+	);
+	// Plain columns, and source ids this version does not know, never ask.
+	assert.equal(sourceSavingInto('mine', columns, [on]), undefined);
+	assert.equal(sourceSavingInto('source-mastodon', columns, [on]), undefined);
+});
+
+test('each site saves to its own source column id', () => {
+	for (const source of SITE_SOURCES) {
+		assert.equal(source.column.id, `source-${source.id}`);
+	}
 });

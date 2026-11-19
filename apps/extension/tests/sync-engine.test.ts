@@ -21,6 +21,8 @@ import {
 	trashOf,
 } from '../src/shared/sync/library-records';
 import {TRASH_SYNC_MAX_CHARS, type TrashEntry} from '../src/shared/trash';
+import {normalizeBookmarkColumn} from '../src/shared/library-normalize';
+import {sourceColumnSite} from '../src/shared/source-columns';
 
 const T0 = Date.UTC(2026, 10, 1);
 const DAY = 24 * 60 * 60 * 1000;
@@ -362,6 +364,106 @@ test('a column keeps its sites through a sync round trip', () => {
 		'github.com/bberka',
 		'gitlab.com',
 	]);
+});
+
+const redditColumn = (createdAt: number) => ({
+	id: 'source-reddit',
+	name: 'Reddit',
+	icon: 'message-circle',
+	color: '#ff4500',
+	createdAt,
+	isDefault: false,
+});
+const saved = (id: string, columnId: string, createdAt: number) => ({
+	id,
+	title: id,
+	url: `https://www.reddit.com/r/a/comments/${id}/`,
+	columnId,
+	createdAt,
+	updatedAt: createdAt,
+});
+const columnIds = (store: Store) =>
+	store.bookmarkColumns.map((column) => column.id);
+
+test('two devices that create the same source column end with one', () => {
+	const log = new ChangeLog();
+	const a = device('a');
+	const b = device('b');
+	sync(a, log, T0);
+	sync(b, log, T0);
+
+	// Both save on Reddit before either has synced the other's column.
+	a.store = {
+		...a.store,
+		bookmarkColumns: [redditColumn(T0 + 1)],
+		bookmarks: [saved('p1', 'source-reddit', T0 + 1)],
+	};
+	b.store = {
+		...b.store,
+		bookmarkColumns: [redditColumn(T0 + 2)],
+		bookmarks: [saved('p2', 'source-reddit', T0 + 2)],
+	};
+	sync(a, log, T0 + 1000);
+	sync(b, log, T0 + 2000);
+	sync(a, log, T0 + 3000);
+	for (const store of [a.store, b.store]) {
+		assert.deepEqual(columnIds(store), ['source-reddit']);
+		assert.deepEqual(
+			store.bookmarks.map((bookmark) => bookmark.columnId).toSorted(),
+			['source-reddit', 'source-reddit'],
+		);
+	}
+});
+
+test('a source column deleted on one device comes back on it when another saves there again', () => {
+	const log = new ChangeLog();
+	const a = device('a');
+	const b = device('b');
+	a.store = {...a.store, bookmarkColumns: [redditColumn(T0)]};
+	sync(a, log, T0);
+	sync(b, log, T0 + 1000);
+	b.store = {...b.store, bookmarkColumns: []};
+	sync(b, log, T0 + 2000);
+	sync(a, log, T0 + 3000);
+	assert.deepEqual(columnIds(a.store), []);
+
+	// The next save on a makes the column again under the same id, over the tombstone.
+	a.store = {
+		...a.store,
+		bookmarkColumns: [redditColumn(T0 + 4000)],
+		bookmarks: [saved('p3', 'source-reddit', T0 + 4000)],
+	};
+	sync(a, log, T0 + 4000);
+	sync(b, log, T0 + 5000);
+	assert.deepEqual(columnIds(b.store), ['source-reddit']);
+	assert.deepEqual(
+		b.store.bookmarks.map((bookmark) => bookmark.columnId),
+		['source-reddit'],
+	);
+});
+
+test('a source column record has only the fields older versions know, so they keep it as it is', () => {
+	const store = emptyStore();
+	store.bookmarkColumns = [redditColumn(0)];
+	const record = [...splitLibrary(store).values()].find(
+		(entry) => entry.kind === 'column',
+	);
+	assert.ok(record);
+	assert.deepEqual(Object.keys(record.value as object).toSorted(), [
+		'color',
+		'createdAt',
+		'icon',
+		'id',
+		'isDefault',
+		'name',
+	]);
+	// An older version that renames it writes the same id back, so the column stays the source column.
+	const renamed = normalizeBookmarkColumn({
+		...(record.value as object),
+		name: 'Saved on Reddit',
+	});
+	assert.equal(renamed?.id, 'source-reddit');
+	assert.equal(sourceColumnSite(String(renamed?.id)), 'reddit');
 });
 
 const trashed = (id: string, deletedAt: number, data = {}): TrashEntry => ({

@@ -26,6 +26,10 @@ import {
 } from '../../../extension/src/shared/import-formats';
 import type {ShareGroup} from '../../../extension/src/shared/share-formats';
 import {
+	SOURCE_COLUMNS,
+	sourceColumnSite,
+} from '../../../extension/src/shared/source-columns';
+import {
 	trashedUrls,
 	type TrashEntry,
 } from '../../../extension/src/shared/trash';
@@ -145,10 +149,28 @@ function sessionFolder(
 
 function columnFor(
 	columns: BookmarkColumn[],
-	name: string,
+	{name, sourceColumnId}: ImportGroup,
 	now: number,
 	newId: () => string,
 ): {columns: BookmarkColumn[]; id: string} {
+	// A source column is marked by its id, so it joins the column with that id or keeps the id.
+	if (sourceColumnId) {
+		if (columns.some((column) => column.id === sourceColumnId)) {
+			return {columns, id: sourceColumnId};
+		}
+
+		const site = sourceColumnSite(sourceColumnId);
+		const look = site ? SOURCE_COLUMNS[site] : undefined;
+		const column: BookmarkColumn = {
+			...look,
+			id: sourceColumnId,
+			name: cleanColumnName(name) || look?.name || 'Imported',
+			createdAt: now,
+			isDefault: false,
+		};
+		return {columns: [...columns, column], id: sourceColumnId};
+	}
+
 	if (name) {
 		const found = columns.find((column) => sameName(column.name, name));
 		if (found) {
@@ -259,7 +281,7 @@ export function importIntoStore(
 				})),
 			});
 		} else {
-			const column = columnFor(bookmarkColumns, entry.name, now, newId);
+			const column = columnFor(bookmarkColumns, entry, now, newId);
 			bookmarkColumns = column.columns;
 			for (const link of kept) {
 				bookmarks.push({

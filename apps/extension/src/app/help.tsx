@@ -445,27 +445,34 @@ function Help() {
 							Substack saved. The browser asks for access to that site only, and
 							nothing runs there until you allow it. Only the sites you added
 							are listed. Then, when you save something there, {PROJECT.name}{' '}
-							bookmarks the same link in a column named after the site, or in
-							the one you choose under Save to. A column you already have with
-							that name is used as it is. If neither exists, the first save
-							creates the site&apos;s column with an icon and a color for that
-							site, which you can change like any column&apos;s; saves keep
-							going there. It saves a video you add to Watch later, a Reddit
-							post or comment, an X post you bookmark, an Instagram post or
-							reel, a GitHub repository you star (titled with its name and
-							description), a Hacker News story you favorite, a Stack Overflow
-							question you bookmark, a dev.to article you save to your reading
-							list, a Lobsters story you save, a Bluesky post you save, a track
-							or playlist you like on SoundCloud, a song, album, playlist, show,
-							or episode you save to your Spotify library in the web player, a
-							film you add to your Letterboxd or IMDb watchlist, a book you mark
-							Want to Read on Goodreads, a Medium story you bookmark, or a
-							Substack post you save. Medium and Substack publications on their
-							own domains are not covered. Posts from X, Instagram, and Bluesky
-							are titled with the start of their text or caption. A Hacker News
-							or Lobsters story is saved at the address it links to, with its
-							discussion page in the note; a text post with no link is saved at
-							its discussion page. Under Save to, under each added site, you can
+							bookmarks the same link in the site&apos;s own column, or in the
+							one you choose under Save to. The first save creates the
+							site&apos;s column with an icon and a color for that site, which
+							you can rename and change like any column; saves keep going there.
+							Each site has one such column on all your devices, even when two
+							of them save at the same time. Add bookmark never starts on a
+							site&apos;s column, so saves on a site do not change where your
+							own bookmarks go. When you delete a site&apos;s column,{' '}
+							{PROJECT.name} also offers to stop saving from that site on this
+							device, which removes the site as Remove does; without that, the
+							next save there creates the column again. On the Android app, the
+							column list says which site a column is saved from. It saves a
+							video you add to Watch later, a Reddit post or comment, an X post
+							you bookmark, an Instagram post or reel, a GitHub repository you
+							star (titled with its name and description), a Hacker News story
+							you favorite, a Stack Overflow question you bookmark, a dev.to
+							article you save to your reading list, a Lobsters story you save,
+							a Bluesky post you save, a track or playlist you like on
+							SoundCloud, a song, album, playlist, show, or episode you save to
+							your Spotify library in the web player, a film you add to your
+							Letterboxd or IMDb watchlist, a book you mark Want to Read on
+							Goodreads, a Medium story you bookmark, or a Substack post you
+							save. Medium and Substack publications on their own domains are
+							not covered. Posts from X, Instagram, and Bluesky are titled with
+							the start of their text or caption. A Hacker News or Lobsters
+							story is saved at the address it links to, with its discussion
+							page in the note; a text post with no link is saved at its
+							discussion page. Under Save to, under each added site, you can
 							choose another column; if that column is deleted, saves go to the
 							site&apos;s own column again until you choose one. A small notice
 							in the page, in your {PROJECT.name} theme and accent color, offers
@@ -489,7 +496,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack save automatically site access permission column icon color undo private window trash',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default',
 				},
 			],
 			action: {

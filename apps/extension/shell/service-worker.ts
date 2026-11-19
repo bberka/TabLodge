@@ -132,6 +132,7 @@ import {showQuoteToast} from '../src/app/quote-toast';
 import {appendQuote, pageAddress, quoteTarget} from '../src/shared/quotes';
 import {showPageNote, takeCapturedCopy} from '../src/app/page-copy-inject';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
+import {isSourceColumnId} from '../src/shared/source-columns';
 import {mediaSave} from '../src/shared/save-media';
 import {
 	createPrivateLock,
@@ -5996,16 +5997,20 @@ async function mergeImportedBookmarks(
 			continue;
 		}
 
+		// A source column joins the one with its id, or keeps that id, since the id is what marks it.
+		const sourceColumn = isSourceColumnId(source.id);
 		let target =
 			source.id === DEFAULT_BOOKMARK_COLUMN_ID || source.isDefault
 				? store.bookmarkColumns.find(
 						(column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID,
 					)
-				: columnsByName.get(source.name.toLocaleLowerCase());
+				: sourceColumn
+					? store.bookmarkColumns.find((column) => column.id === source.id)
+					: columnsByName.get(source.name.toLocaleLowerCase());
 		if (!target) {
 			target = {
 				...source,
-				id: makeId(),
+				id: sourceColumn ? source.id : makeId(),
 				createdAt: Date.now(),
 				isDefault: false,
 			};
@@ -9853,22 +9858,18 @@ async function saveFromSource(
 					return {ok: true, outcome: 'trashed'};
 				}
 
-				// The chosen column while it exists; otherwise the site's own column, by name.
-				const name = source.column.toLocaleLowerCase();
+				// The chosen column while it exists; otherwise the site's source column, whose fixed id makes two devices
+				// that create it at once write the same record.
+				const {id: sourceId, ...look} = source.column;
 				const now = Date.now();
 				let column =
 					store.bookmarkColumns.find(
 						(entry) => entry.id === state[source.id].columnId,
-					) ??
-					store.bookmarkColumns.find(
-						(entry) => entry.name.toLocaleLowerCase() === name,
-					);
+					) ?? store.bookmarkColumns.find((entry) => entry.id === sourceId);
 				if (!column) {
 					column = {
-						id: makeId(),
-						name: source.column,
-						icon: source.columnIcon,
-						color: source.columnColor,
+						id: sourceId,
+						...look,
 						createdAt: now,
 						isDefault: false,
 					};
