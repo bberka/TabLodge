@@ -1942,10 +1942,13 @@ function NewTab() {
 		'new-bookmark': () => openBookmarkEditor(),
 		'new-column': () => openColumnEditor(),
 		'new-folder': () => emitFinderEvent({type: 'new-folder'}),
-		async 'sync-now'() {
-			const {message, failed} = syncNowOutcome(await send('SYNC_NOW'));
-			showStatus(message, failed, {toast: true});
-		},
+		// A private window's separate library syncs from its own Settings.
+		'sync-now': inPrivateWindow()
+			? undefined
+			: async () => {
+					const {message, failed} = syncNowOutcome(await send('SYNC_NOW'));
+					showStatus(message, failed, {toast: true});
+				},
 		async 'back-up-now'() {
 			const result = await send('BACKUP_NOW');
 			showStatus(result.ok ? 'Backed up.' : result.error, !result.ok, {

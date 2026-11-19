@@ -54,8 +54,7 @@ import {
 	type ItemActionContext,
 	type ItemActionId,
 } from './finder-menu';
-import {keptCopyMessage, openPageCopy, usePageCopyUrls} from './page-copies';
-import {inPrivateWindow} from './private-config';
+import {openPageCopy, usePageCopyUrls} from './page-copies';
 import {PROJECT} from './project';
 import {settingsSections} from './settings-sections';
 import {writeClipboard} from './interaction-actions';
@@ -235,7 +234,6 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		() => ({
 			standalone: Boolean(standalone),
 			copies,
-			keepCopies: !inPrivateWindow(),
 		}),
 		[standalone, copies],
 	);
@@ -495,20 +493,6 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 				case 'open-copy': {
 					await openPageCopy(item.url!);
 					onDone?.();
-					return;
-				}
-
-				case 'keep-copy': {
-					const result = await send('KEEP_PAGE_COPY', {
-						tabId: Number(item.ref),
-					});
-					if (!result.ok) {
-						setError(keptCopyMessage(result));
-						return;
-					}
-
-					setMenu(undefined);
-					setMessage(keptCopyMessage(result));
 					return;
 				}
 

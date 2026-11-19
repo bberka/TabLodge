@@ -43,13 +43,7 @@ test('an open tab can be switched to or closed', () => {
 	assert.deepEqual(ids('tab', true), ['switch', 'close-tab']);
 });
 
-test('page copies: an open tab can be kept, a link with a copy opened', () => {
-	assert.deepEqual(
-		itemActions(item('tab'), {standalone: true, keepCopies: true}).map(
-			(action) => action.id,
-		),
-		['switch', 'keep-copy', 'close-tab'],
-	);
+test('a link with a page copy on this device can open the copy', () => {
 	const link = {...item('bookmark'), url: 'https://example.com/'};
 	const copies = new Set(['https://example.com/']);
 	assert.ok(

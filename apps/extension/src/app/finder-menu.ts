@@ -10,7 +10,6 @@ export type ItemActionId =
 	| 'copy-link'
 	| 'open-copy'
 	| 'switch'
-	| 'keep-copy'
 	| 'close-tab';
 
 export type ItemAction = {id: ItemActionId; label: string};
@@ -21,10 +20,9 @@ export type ItemActionContext = {
 	*/
 	standalone: boolean;
 	/**
-	Addresses with a page copy on this device. Empty in a private window, which also cannot keep one.
+	Addresses with a page copy on this device. Empty in a private window.
 	*/
 	copies?: ReadonlySet<string>;
-	keepCopies?: boolean;
 };
 
 /**
@@ -33,7 +31,7 @@ obvious action return nothing.
 */
 export function itemActions(
 	item: FinderItem,
-	{standalone, copies, keepCopies = false}: ItemActionContext,
+	{standalone, copies}: ItemActionContext,
 ): ItemAction[] {
 	switch (item.kind) {
 		case 'session': {
@@ -62,9 +60,6 @@ export function itemActions(
 		case 'tab': {
 			return [
 				{id: 'switch', label: 'Switch to tab'},
-				...(keepCopies
-					? [{id: 'keep-copy' as const, label: 'Keep a copy'}]
-					: []),
 				{id: 'close-tab', label: 'Close tab'},
 			];
 		}

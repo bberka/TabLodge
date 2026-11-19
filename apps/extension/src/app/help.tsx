@@ -711,14 +711,14 @@ function Help() {
 							(or right-click it) to see its other actions: restore a session
 							here or in a new window, reveal it on the dashboard, open a link
 							in a new tab or window, copy a link, open its page copy, switch to
-							a tab, keep a copy of it, or close it. Type to filter the actions.
-							Press <Key>←</Key> (at the start of the filter), <Key>Esc</Key>,
-							or <Key>Backspace</Key> (with the filter empty) to go back to the
+							a tab, or close it. Type to filter the actions. Press <Key>←</Key>{' '}
+							(at the start of the filter), <Key>Esc</Key>, or{' '}
+							<Key>Backspace</Key> (with the filter empty) to go back to the
 							results.
 						</>
 					),
 					searchText:
-						'more actions sub menu submenu right arrow left arrow context menu restore here new window reveal open copy link page copy keep a copy switch close tab filter back escape backspace breadcrumb palette',
+						'more actions sub menu submenu right arrow left arrow context menu restore here new window reveal open copy link page copy switch close tab filter back escape backspace breadcrumb palette',
 				},
 				{
 					title: 'Search from the address bar',

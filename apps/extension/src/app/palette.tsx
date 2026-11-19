@@ -63,12 +63,15 @@ function PalettePage() {
 			'new-bookmark': onDashboard('new-bookmark'),
 			'new-column': onDashboard('new-column'),
 			'new-folder': onDashboard('new-folder'),
-			async 'sync-now'() {
-				const {message, failed} = syncNowOutcome(await send('SYNC_NOW'));
-				if (failed) {
-					throw new Error(message);
-				}
-			},
+			// A private window's separate library syncs from its own Settings.
+			'sync-now': inPrivateWindow()
+				? undefined
+				: async () => {
+						const {message, failed} = syncNowOutcome(await send('SYNC_NOW'));
+						if (failed) {
+							throw new Error(message);
+						}
+					},
 			async 'back-up-now'() {
 				const result = await send('BACKUP_NOW');
 				if (!result.ok) {
