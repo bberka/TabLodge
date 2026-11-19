@@ -131,18 +131,8 @@ import {cn} from '@/lib/utils';
 const plural = (count: number, noun: string, many = `${noun}s`) =>
 	`${count.toLocaleString()} ${count === 1 ? noun : many}`;
 
-function KindLabel({kind}: {kind: 'sessions' | 'bookmarks'}) {
-	const Icon = kind === 'bookmarks' ? Bookmark : PanelsTopLeft;
-	return (
-		<span className="inline-flex items-center justify-center gap-1.5">
-			<Icon className="h-3.5 w-3.5" aria-hidden="true" />
-			{kind === 'bookmarks' ? 'Bookmarks' : 'Sessions'}
-		</span>
-	);
-}
-
 /**
-What a full backup ZIP holds, listed on the "Everything" choice instead of a format list (it has only one format).
+What a full backup ZIP holds, listed on the Everything choice instead of a format list (it has only one format).
 */
 const FULL_BACKUP_CONTENTS = [
 	'Sessions and folders',
@@ -152,14 +142,20 @@ const FULL_BACKUP_CONTENTS = [
 	'Crash snapshots and the trash bin',
 ];
 
-function EverythingLabel() {
-	return (
-		<span className="inline-flex items-center justify-center gap-1.5">
-			<Archive className="h-3.5 w-3.5" aria-hidden="true" />
-			Everything
-		</span>
-	);
-}
+const IMPORT_KINDS: readonly ChoiceOption[] = [
+	{
+		value: 'bookmarks',
+		title: 'Bookmarks',
+		description: 'Links for the board. Folders become columns.',
+		icon: Bookmark,
+	},
+	{
+		value: 'sessions',
+		title: 'Sessions',
+		description: 'Groups of tabs. Each group becomes a session.',
+		icon: PanelsTopLeft,
+	},
+];
 
 type ShareSource = {
 	id: string;
@@ -188,7 +184,16 @@ export type SharePayload = {
 	Adds "Everything", the full backup ZIP, to what can be shared.
 	*/
 	backup?: boolean;
+	/**
+	Opens on this source (`everything` for the backup) instead of the first one.
+	*/
+	initialSource?: string;
 };
+
+/**
+How much of a file the preview shows.
+*/
+const FILE_PREVIEW_CHARS = 4000;
 
 const EVERYTHING_SOURCE: ShareSource = {
 	id: 'everything',
@@ -269,6 +274,7 @@ type ShareDialogProps = {
 	sources?: ShareSource[];
 	data?: ExportData;
 	backup?: boolean;
+	initialSource?: string;
 	showStatus: ShowStatus;
 };
 
@@ -283,7 +289,7 @@ function sourceDescription(source: ShareSource) {
 }
 
 /**
-One option of a share dropdown: a name with its one line explanation under it.
+One option of a dropdown: a name with its one line explanation under it.
 */
 function ChoiceText({
 	icon: Icon,
@@ -311,6 +317,65 @@ function ChoiceText({
 				)}
 			</span>
 		</span>
+	);
+}
+
+type ChoiceOption = {
+	value: string;
+	title: string;
+	description?: string;
+	icon?: typeof FileJson;
+};
+
+/**
+A labelled dropdown whose options have a name and a one line explanation, the same in the share, export and import dialogs.
+*/
+function ChoiceSelect({
+	id,
+	label,
+	value,
+	options,
+	disabled,
+	onValueChange,
+}: {
+	id: string;
+	label: string;
+	value: string;
+	options: readonly ChoiceOption[];
+	disabled?: boolean;
+	onValueChange: (value: string) => void;
+}) {
+	const chosen = options.find((option) => option.value === value) ?? options[0];
+	return (
+		<div className="grid gap-1.5">
+			<Label htmlFor={id}>{label}</Label>
+			<Select
+				value={chosen.value}
+				disabled={disabled}
+				onValueChange={onValueChange}
+			>
+				<SelectTrigger id={id} className="h-auto min-h-11 py-2">
+					<SelectValue>
+						<ChoiceText
+							icon={chosen.icon}
+							title={chosen.title}
+							description={chosen.description}
+						/>
+					</SelectValue>
+				</SelectTrigger>
+				<SelectContent className="w-(--radix-select-trigger-width) max-w-none">
+					{options.map((option) => (
+						<SelectItem key={option.value} value={option.value}>
+							<ChoiceText
+								icon={option.icon}
+								title={option.title}
+								description={option.description}
+							/>
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+		</div>
 	);
 }
 
@@ -395,6 +460,10 @@ type SharePreviewPanelProps = {
 	pageTitle: string;
 	counts: ReturnType<typeof shareCounts>;
 	formatLabel: string;
+	/**
+	The start of the file for formats that are saved as a file, shown as is.
+	*/
+	fileText?: string;
 };
 
 function SharePreviewPanel({
@@ -402,6 +471,7 @@ function SharePreviewPanel({
 	pageTitle,
 	counts,
 	formatLabel,
+	fileText,
 }: SharePreviewPanelProps) {
 	const notShown = [
 		...(preview.omittedLinks > 0
@@ -526,9 +596,11 @@ function SharePreviewPanel({
 						</div>
 					</div>
 				</div>
-			) : preview.format === 'markdown' || preview.format === 'links' ? (
+			) : fileText !== undefined ||
+			  preview.format === 'markdown' ||
+			  preview.format === 'links' ? (
 				<pre className="mt-3 max-h-[min(24rem,50dvh)] min-w-0 max-w-full overflow-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed">
-					{preview.text}
+					{fileText ?? preview.text}
 				</pre>
 			) : (
 				<div className="mt-3 max-h-[min(24rem,50dvh)] space-y-3 overflow-y-auto rounded-md border border-border bg-background p-3">
@@ -568,6 +640,7 @@ export function ShareDialog({
 	sources,
 	data,
 	backup,
+	initialSource,
 	showStatus,
 }: ShareDialogProps) {
 	const all: ShareSource[] = useMemo(() => {
@@ -602,7 +675,9 @@ export function ShareDialog({
 			return;
 		}
 
-		setSourceId(all[0].id);
+		setSourceId(
+			all.find((entry) => entry.id === initialSource)?.id ?? all[0].id,
+		);
 		setMethod('html');
 		setUploaded(undefined);
 		setProtect(false);
@@ -627,6 +702,19 @@ export function ShareDialog({
 		source.groups.length === 1
 			? source.groups[0].name
 			: (source.pageTitle ?? title);
+	let fileText: string | undefined;
+	if (isFile && source.data) {
+		const {content} = buildExport(
+			source.data,
+			chosen.id.slice(5) as ExportFormat,
+			{appName: PROJECT.name},
+		);
+		fileText =
+			content.length > FILE_PREVIEW_CHARS
+				? `${content.slice(0, FILE_PREVIEW_CHARS)}\n…`
+				: content;
+	}
+
 	const fileHasData =
 		source.data !== undefined &&
 		(exportCounts(source.data).groups > 0 ||
@@ -834,33 +922,18 @@ export function ShareDialog({
 				</DialogHeader>
 				<DialogBody className="min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto pr-1">
 					{all.length > 1 && (
-						<div className="grid gap-1.5">
-							<Label htmlFor="share-what">What to share</Label>
-							<Select
-								value={source.id}
-								disabled={uploading || saving}
-								onValueChange={setSourceId}
-							>
-								<SelectTrigger id="share-what" className="h-auto min-h-11 py-2">
-									<SelectValue>
-										<ChoiceText
-											title={source.label}
-											description={sourceDescription(source)}
-										/>
-									</SelectValue>
-								</SelectTrigger>
-								<SelectContent>
-									{all.map((entry) => (
-										<SelectItem key={entry.id} value={entry.id}>
-											<ChoiceText
-												title={entry.label}
-												description={sourceDescription(entry)}
-											/>
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
+						<ChoiceSelect
+							id="share-what"
+							label="What to share"
+							value={source.id}
+							disabled={uploading || saving}
+							options={all.map((entry) => ({
+								value: entry.id,
+								title: entry.label,
+								description: sourceDescription(entry),
+							}))}
+							onValueChange={setSourceId}
+						/>
 					)}
 					{isBackup ? (
 						<FullBackupOptions
@@ -872,52 +945,26 @@ export function ShareDialog({
 						/>
 					) : (
 						<>
-							<div className="grid gap-1.5">
-								<Label htmlFor="share-how">Format</Label>
-								<Select
-									value={chosen.id}
-									disabled={uploading}
-									onValueChange={(value) => setMethod(value as ShareWay)}
-								>
-									<SelectTrigger
-										id="share-how"
-										className="h-auto min-h-11 py-2"
-									>
-										<SelectValue>
-											<ChoiceText
-												icon={chosen.icon}
-												title={chosen.title}
-												description={chosen.description}
-											/>
-										</SelectValue>
-									</SelectTrigger>
-									<SelectContent>
-										{choices.map((entry) => (
-											<SelectItem key={entry.id} value={entry.id}>
-												<ChoiceText
-													icon={entry.icon}
-													title={entry.title}
-													description={entry.description}
-												/>
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-							{isFile ? (
-								<p className="text-xs text-muted-foreground">
-									{plural(counts.links, 'link')} in{' '}
-									{plural(counts.groups, 'group')}. The file is plain text, not
-									encrypted.
-								</p>
-							) : (
-								<SharePreviewPanel
-									preview={preview}
-									pageTitle={pageTitle}
-									counts={counts}
-									formatLabel={chosen.title}
-								/>
-							)}
+							<ChoiceSelect
+								id="share-how"
+								label="Format"
+								value={chosen.id}
+								disabled={uploading}
+								options={choices.map((entry) => ({
+									value: entry.id,
+									title: entry.title,
+									description: entry.description,
+									icon: entry.icon,
+								}))}
+								onValueChange={(value) => setMethod(value as ShareWay)}
+							/>
+							<SharePreviewPanel
+								preview={preview}
+								pageTitle={pageTitle}
+								counts={counts}
+								formatLabel={chosen.title}
+								fileText={fileText}
+							/>
 						</>
 					)}
 				</DialogBody>
@@ -980,10 +1027,6 @@ type ImportDialogProps = {
 	The kind selected when the dialog opens; the user can switch to the other kind.
 	*/
 	initialKind: ImportKind;
-	/**
-	Open on Everything (restore a full backup ZIP) instead of Bookmarks or Sessions; Settings does this.
-	*/
-	initialScope?: 'everything';
 	state: TabLodgeState | null;
 	showStatus: ShowStatus;
 	/**
@@ -1023,14 +1066,11 @@ export function ImportDialog({
 	open,
 	onOpenChange,
 	initialKind,
-	initialScope,
 	state,
 	showStatus,
 	onImported,
 }: ImportDialogProps) {
 	const [kind, setKind] = useState<ImportKind>(initialKind);
-	// "Everything" only takes a full backup ZIP, which replaces all data and settings.
-	const [everything, setEverything] = useState(initialScope === 'everything');
 	const [source, setSource] = useState<ImportSource | null>(null);
 	const [parsed, setParsed] = useState<ParsedImport | null>(null);
 	const [full, setFull] = useState<FullBackupContents | null>(null);
@@ -1087,7 +1127,6 @@ export function ImportDialog({
 		}
 
 		setKind(initialKind);
-		setEverything(initialScope === 'everything');
 		setSource(null);
 		setParsed(null);
 		setFull(null);
@@ -1212,13 +1251,6 @@ export function ImportDialog({
 
 				setFull(contents);
 				setSource({type: 'file', name: file.name});
-				return;
-			}
-
-			if (everything) {
-				setError(
-					`“${file.name}” is not a ${PROJECT.name} full backup (.zip). Choose Bookmarks or Sessions to import other files.`,
-				);
 				return;
 			}
 
@@ -1488,38 +1520,26 @@ export function ImportDialog({
 		? 'Unlock encrypted backup'
 		: full
 			? 'Review full backup'
-			: everything
-				? 'Import everything'
-				: step === 'preview'
-					? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
-					: kind === 'sessions'
-						? 'Import sessions'
-						: 'Import bookmarks';
+			: step === 'preview'
+				? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
+				: 'Import';
 	const description = locked
 		? `“${locked.name}” is protected. Enter the password you chose when you made it. Nothing in your library changes until you confirm the import.`
 		: full
 			? fullMode === 'merge'
 				? 'This adds the backup’s sessions and bookmarks to yours and skips links you already have. Your settings, snapshots, and trash bin stay as they are. You can undo it right after.'
 				: 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
-			: everything
-				? `Bring in a ${PROJECT.name} full backup. You choose whether to add it to what you have or replace everything, and you can undo it right after.`
-				: step === 'preview'
-					? 'Nothing is saved until you choose Import.'
-					: kind === 'sessions'
-						? `Restore a backup or bring in tabs saved by another tab manager. Each group of tabs becomes a ${PROJECT.name} session.`
-						: 'Restore a backup, or bring in bookmarks from a browser or another tool. Folders become columns.';
+			: step === 'preview'
+				? 'Nothing is saved until you choose Import.'
+				: `Pick a file. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
 	const kindSwitch =
 		// A full backup restores everything, so choosing Bookmarks or Sessions would only mislead.
 		!full && source?.type !== 'browser' ? (
-			<SegmentedControl
-				fullWidth
+			<ChoiceSelect
+				id="import-what"
 				label="What to import"
-				value={everything ? 'everything' : kind}
-				options={[
-					{value: 'everything', label: <EverythingLabel />},
-					{value: 'bookmarks', label: <KindLabel kind="bookmarks" />},
-					{value: 'sessions', label: <KindLabel kind="sessions" />},
-				]}
+				value={kind}
+				options={IMPORT_KINDS}
 				onValueChange={(value) => {
 					if (reading) {
 						readGenerationRef.current += 1;
@@ -1527,10 +1547,7 @@ export function ImportDialog({
 					}
 
 					setError('');
-					setEverything(value === 'everything');
-					if (value !== 'everything') {
-						setKind(value);
-					}
+					setKind(value as ImportKind);
 				}}
 			/>
 		) : null;
@@ -1651,9 +1668,7 @@ export function ImportDialog({
 										{dragging ? 'Drop the file to read it' : 'Drop a file here'}
 									</h3>
 									<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-										{everything
-											? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Settings › Data › Back up, or Share › Everything.`
-											: SUPPORTED_FILES}
+										{SUPPORTED_FILES}
 									</p>
 								</div>
 								<Button
@@ -1674,15 +1689,11 @@ export function ImportDialog({
 									className="hidden"
 									tabIndex={-1}
 									aria-hidden="true"
-									accept={
-										everything
-											? '.zip,.enc,application/zip'
-											: '.zip,.enc,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown'
-									}
+									accept=".zip,.enc,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown"
 									onChange={(event) => void readFile(event.target.files?.[0])}
 								/>
 							</section>
-							{kind === 'bookmarks' && !everything && (
+							{kind === 'bookmarks' && (
 								<section
 									className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center"
 									aria-labelledby="import-browser-heading"

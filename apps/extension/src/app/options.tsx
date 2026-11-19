@@ -91,6 +91,7 @@ import {
 	normalizeExcludedHost,
 	parseExcludedLines,
 } from '../shared/excluded-sites';
+import {bookmarkShareGroups} from '../shared/export-formats';
 import {AccentPalette} from './accent-palette';
 import {
 	EmptyState,
@@ -1717,12 +1718,54 @@ function Options() {
 				: a.index - b.index,
 		);
 
+	function openDataShare() {
+		const sessionData = {
+			kind: 'sessions' as const,
+			groups: state?.groups ?? [],
+			folders: state?.folders ?? [],
+		};
+		const bookmarks = {
+			kind: 'bookmarks' as const,
+			columns: state?.bookmarkColumns ?? [],
+			bookmarks: state?.bookmarks ?? [],
+		};
+		openShare({
+			title: 'Share and export',
+			sources: [
+				...(sessionData.groups.length > 0
+					? [
+							{
+								id: 'sessions',
+								label: 'All sessions',
+								pageTitle: 'Shared sessions',
+								groups: sessionData.groups,
+								data: sessionData,
+							},
+						]
+					: []),
+				...(bookmarks.bookmarks.length > 0
+					? [
+							{
+								id: 'bookmarks',
+								label: 'All bookmarks',
+								pageTitle: 'Shared bookmarks',
+								groups: bookmarkShareGroups(bookmarks),
+								data: bookmarks,
+							},
+						]
+					: []),
+			],
+			backup: true,
+			initialSource: 'everything',
+		});
+	}
+
 	const dataRows: DataRowDef[] = [
 		{
 			key: 'backup',
 			icon: Download,
-			label: 'Back up',
-			help: 'Save everything to one file you can restore with Import.',
+			label: 'Share and export',
+			help: 'Share or save sessions and bookmarks, or back up everything to one file you can restore with Import.',
 			words: [
 				'backup',
 				'export',
@@ -1738,10 +1781,10 @@ function Options() {
 					className="w-full sm:w-32"
 					disabled={!state}
 					// Everything also holds settings, so it is never empty.
-					onClick={() => openShare({title: 'Back up everything', backup: true})}
+					onClick={openDataShare}
 				>
 					<Download className="h-4 w-4" />
-					Back up
+					Export
 				</Button>
 			),
 		},
@@ -2583,7 +2626,6 @@ function Options() {
 				onChanged={reload}
 			/>
 			<ImportDialog
-				initialScope="everything"
 				open={importOpen}
 				initialKind="bookmarks"
 				state={state}

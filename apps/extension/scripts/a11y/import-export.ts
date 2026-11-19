@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {Buffer} from 'node:buffer';
 import {readFile} from 'node:fs/promises';
+import {type Page} from 'playwright';
 import {assertInline, captureEvidence} from './evidence.ts';
 import {seed} from './fixtures.ts';
 import {check, type Env, type Theme, until} from './harness.ts';
@@ -11,16 +12,23 @@ import {
 	setTheme,
 } from './pages.ts';
 
+async function pickImportKind(page: Page, name: string) {
+	await page.locator('#import-what').focus();
+	await page.keyboard.press('Enter');
+	await page.getByRole('option', {name: new RegExp(`^${name}`)}).focus();
+	await page.keyboard.press('Enter');
+}
+
 export async function importScopeCheck(env: Env, theme: Theme) {
 	const {context, extensionId} = env;
 	await check(
-		`changing import scope cancels a pending read (${theme})`,
+		`changing what to import cancels a pending read (${theme})`,
 		async () => {
 			const page = await openPage(context, extensionId, 'options');
 			await setTheme(page, theme);
 			await page.getByRole('button', {name: 'Import', exact: true}).click();
 			const dialog = page.getByRole('dialog');
-			await dialog.getByRole('radio', {name: 'Sessions'}).check({force: true});
+			await pickImportKind(page, 'Sessions');
 			await page.evaluate(() => {
 				const file = new File(['https://example.com'], 'pending.txt');
 				Object.defineProperty(file, 'slice', {
@@ -53,9 +61,7 @@ export async function importScopeCheck(env: Env, theme: Theme) {
 				input.files = transfer.files;
 				input.dispatchEvent(new Event('change', {bubbles: true}));
 			});
-			const everything = dialog.getByRole('radio', {name: 'Everything'});
-			await everything.focus();
-			await page.keyboard.press('Space');
+			await pickImportKind(page, 'Bookmarks');
 			await page.evaluate(async () => {
 				(
 					globalThis as typeof globalThis & {finishImportRead(): void}
@@ -86,7 +92,7 @@ export async function protectedBackupCheck(env: Env, theme: Theme) {
 		async () => {
 			const page = await openPage(context, extensionId, 'options');
 			await setTheme(page, theme);
-			await page.getByRole('button', {name: 'Back up', exact: true}).click();
+			await page.getByRole('button', {name: 'Export', exact: true}).click();
 			const dialog = page.getByRole('dialog');
 			const protect = dialog.getByRole('checkbox', {
 				name: 'Protect with a password',
@@ -188,9 +194,6 @@ export async function protectedBackupCheck(env: Env, theme: Theme) {
 
 			await page.getByRole('button', {name: 'Import', exact: true}).click();
 			const importDialog = page.getByRole('dialog');
-			await importDialog
-				.getByRole('radio', {name: 'Everything'})
-				.check({force: true});
 			await importDialog.locator('input[type="file"]').setInputFiles({
 				name: 'protected.zip.enc',
 				mimeType: 'application/octet-stream',

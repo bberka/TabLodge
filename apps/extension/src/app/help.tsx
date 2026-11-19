@@ -815,7 +815,9 @@ function Help() {
 							picks the format, with Download and, for pages, Markdown, and
 							plain links, Copy. Its Everything choice makes a full ZIP backup
 							with settings, excluded sites, theme, snapshots, and the trash
-							bin, and so does Back up in Settings. Open{' '}
+							bin, and so does Export in Settings, which opens the same dialog
+							on Everything. Import recognizes a full backup by itself; for
+							other files, choose Bookmarks or Sessions. Open{' '}
 							<a
 								href="options.html?q=Data"
 								className="font-medium text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary focus-visible:rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
