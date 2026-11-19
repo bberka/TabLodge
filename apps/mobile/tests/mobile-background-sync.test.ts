@@ -19,6 +19,9 @@ const recorded = vi.hoisted(() => ({
 	written: [] as Array<string | null>,
 	tasks: new Map<string, () => Promise<unknown>>(),
 	registered: new Set<string>(),
+	registrations: 0,
+	checks: 0,
+	hold: undefined as Promise<void> | undefined,
 	requests: [] as string[],
 	sockets: 0,
 }));
@@ -31,11 +34,17 @@ vi.mock('expo-task-manager', () => ({
 	defineTask(name: string, run: () => Promise<unknown>) {
 		recorded.tasks.set(name, run);
 	},
-	isTaskRegisteredAsync: async (name: string) => recorded.registered.has(name),
+	async isTaskRegisteredAsync(name: string) {
+		recorded.checks += 1;
+		// A test can hold the answer, so a change arrives while the check is still out.
+		await recorded.hold;
+		return recorded.registered.has(name);
+	},
 }));
 vi.mock('expo-background-task', () => ({
 	BackgroundTaskResult: {Success: 1, Failed: 2},
 	async registerTaskAsync(name: string) {
+		recorded.registrations += 1;
 		recorded.registered.add(name);
 	},
 	async unregisterTaskAsync(name: string) {
@@ -139,6 +148,9 @@ beforeEach(() => {
 	memory.clear();
 	recorded.written.length = 0;
 	recorded.registered.clear();
+	recorded.registrations = 0;
+	recorded.checks = 0;
+	recorded.hold = undefined;
 	recorded.requests.length = 0;
 	recorded.sockets = 0;
 	setPreferences({backgroundSync: true});
@@ -204,25 +216,56 @@ describe('background sync', () => {
 		const {library, background} = await freshProcess();
 		await library.startLibrary();
 		const stop = background.startBackgroundSync();
-		// Scheduling runs after the change that asked for it, so each check lets it finish first.
-		const scheduled = async () => {
-			await new Promise((resolve) => {
-				setTimeout(resolve, 0);
+		// Scheduling finishes after the change that asked for it.
+		const settlesAt = async (expected: boolean) =>
+			vi.waitFor(() => {
+				assert.equal(
+					recorded.registered.has('tablodge-background-sync'),
+					expected,
+				);
 			});
-			return recorded.registered.has('tablodge-background-sync');
-		};
 
-		assert.equal(await scheduled(), false);
+		await settlesAt(false);
 		await library.connectServer(URL_BASE, TOKEN);
 		await library.refreshStatus();
-		assert.equal(await scheduled(), true);
+		await settlesAt(true);
 		setPreferences({backgroundSync: false});
-		assert.equal(await scheduled(), false);
+		await settlesAt(false);
 		setPreferences({backgroundSync: true});
-		assert.equal(await scheduled(), true);
+		await settlesAt(true);
 		await library.disconnectServer();
 		await library.refreshStatus();
-		assert.equal(await scheduled(), false);
+		await settlesAt(false);
+		stop();
+		library.syncClient.stop();
+	});
+
+	test('switched off and on again before scheduling finishes, the task stays scheduled', async () => {
+		const {library, background} = await freshProcess();
+		await library.startLibrary();
+		await library.connectServer(URL_BASE, TOKEN);
+		const stop = background.startBackgroundSync();
+		await vi.waitFor(() => {
+			assert.ok(recorded.registered.has('tablodge-background-sync'));
+		});
+
+		const {promise, resolve} = Promise.withResolvers<void>();
+		recorded.hold = promise;
+		const {checks} = recorded;
+		setPreferences({backgroundSync: false});
+		await vi.waitFor(() => {
+			assert.ok(recorded.checks > checks, 'switching off checked nothing');
+		});
+		setPreferences({backgroundSync: true});
+		resolve();
+		// Off cancels the task and on registers it again.
+		await vi.waitFor(() => {
+			assert.equal(recorded.registrations, 2);
+		});
+		assert.ok(
+			recorded.registered.has('tablodge-background-sync'),
+			'the task was left cancelled',
+		);
 		stop();
 		library.syncClient.stop();
 	});

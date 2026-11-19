@@ -70,19 +70,30 @@ export function defineBackgroundSync(): void {
 }
 
 let scheduled: boolean | undefined;
+let queue: Promise<void> = Promise.resolve();
 
-async function schedule(): Promise<void> {
+/**
+Registers or cancels the task to match the current state. Runs one at a time and reads the state when it starts, so a
+quick off and on cannot end with the task cancelled.
+*/
+async function reconcile(): Promise<void> {
 	const wanted = getSyncStatus().connected && getPreferences().backgroundSync;
 	if (wanted === scheduled) {
 		return;
 	}
 
-	scheduled = wanted;
-	const registered = await TaskManager.isTaskRegisteredAsync(TASK);
-	if (wanted && !registered) {
-		await BackgroundTask.registerTaskAsync(TASK, {minimumInterval: MINUTES});
-	} else if (!wanted && registered) {
-		await BackgroundTask.unregisterTaskAsync(TASK);
+	try {
+		const registered = await TaskManager.isTaskRegisteredAsync(TASK);
+		if (wanted && !registered) {
+			await BackgroundTask.registerTaskAsync(TASK, {minimumInterval: MINUTES});
+		} else if (!wanted && registered) {
+			await BackgroundTask.unregisterTaskAsync(TASK);
+		}
+
+		scheduled = wanted;
+	} catch {
+		// Tried again on the next change.
+		scheduled = undefined;
 	}
 }
 
@@ -92,9 +103,7 @@ stops. Call once after `startLibrary`, which reads whether a server is connected
 */
 export function startBackgroundSync(): () => void {
 	const update = () => {
-		void schedule().catch(() => {
-			scheduled = undefined;
-		});
+		queue = queue.then(reconcile);
 	};
 
 	update();
