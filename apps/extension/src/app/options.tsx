@@ -2626,6 +2626,7 @@ function Options() {
 				onChanged={reload}
 			/>
 			<ImportDialog
+				initialScope="everything"
 				open={importOpen}
 				initialKind="bookmarks"
 				state={state}

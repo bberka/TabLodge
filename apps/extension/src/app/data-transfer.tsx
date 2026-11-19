@@ -144,6 +144,12 @@ const FULL_BACKUP_CONTENTS = [
 
 const IMPORT_KINDS: readonly ChoiceOption[] = [
 	{
+		value: 'everything',
+		title: 'Everything',
+		description: 'A full backup (ZIP) with settings. Add it or replace.',
+		icon: Archive,
+	},
+	{
 		value: 'bookmarks',
 		title: 'Bookmarks',
 		description: 'Links for the board. Folders become columns.',
@@ -929,7 +935,7 @@ export function ShareDialog({
 							: 'Choose what to share and the format. Downloads go to your downloads folder, and nothing leaves this browser unless you upload it.'}
 					</DialogDescription>
 				</DialogHeader>
-				<DialogBody className="min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto pr-1">
+				<DialogBody className="-m-1 min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto p-1">
 					{all.length > 1 && (
 						<ChoiceSelect
 							id="share-what"
@@ -1036,6 +1042,10 @@ type ImportDialogProps = {
 	The kind selected when the dialog opens; the user can switch to the other kind.
 	*/
 	initialKind: ImportKind;
+	/**
+	Open on Everything (restore a full backup ZIP) instead of Bookmarks or Sessions; Settings does this.
+	*/
+	initialScope?: 'everything';
 	state: TabLodgeState | null;
 	showStatus: ShowStatus;
 	/**
@@ -1075,11 +1085,14 @@ export function ImportDialog({
 	open,
 	onOpenChange,
 	initialKind,
+	initialScope,
 	state,
 	showStatus,
 	onImported,
 }: ImportDialogProps) {
 	const [kind, setKind] = useState<ImportKind>(initialKind);
+	// "Everything" only takes a full backup ZIP, which replaces or adds to all data and settings.
+	const [everything, setEverything] = useState(initialScope === 'everything');
 	const [source, setSource] = useState<ImportSource | null>(null);
 	const [parsed, setParsed] = useState<ParsedImport | null>(null);
 	const [full, setFull] = useState<FullBackupContents | null>(null);
@@ -1136,6 +1149,7 @@ export function ImportDialog({
 		}
 
 		setKind(initialKind);
+		setEverything(initialScope === 'everything');
 		setSource(null);
 		setParsed(null);
 		setFull(null);
@@ -1260,6 +1274,13 @@ export function ImportDialog({
 
 				setFull(contents);
 				setSource({type: 'file', name: file.name});
+				return;
+			}
+
+			if (everything) {
+				setError(
+					`“${file.name}” is not a ${PROJECT.name} full backup (.zip). Choose Bookmarks or Sessions to import other files.`,
+				);
 				return;
 			}
 
@@ -1529,25 +1550,29 @@ export function ImportDialog({
 		? 'Unlock encrypted backup'
 		: full
 			? 'Review full backup'
-			: step === 'preview'
-				? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
-				: 'Import';
+			: everything
+				? 'Import everything'
+				: step === 'preview'
+					? `Review ${kind === 'sessions' ? 'session' : 'bookmark'} import`
+					: 'Import';
 	const description = locked
 		? `“${locked.name}” is protected. Enter the password you chose when you made it. Nothing in your library changes until you confirm the import.`
 		: full
 			? fullMode === 'merge'
 				? 'This adds the backup’s sessions and bookmarks to yours and skips links you already have. Your settings, snapshots, and trash bin stay as they are. You can undo it right after.'
 				: 'This replaces everything here: sessions, bookmarks, settings, snapshots, and trash bin. You can undo it right after.'
-			: step === 'preview'
-				? 'Nothing is saved until you choose Import.'
-				: `Pick a file. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
+			: everything
+				? `Bring in a ${PROJECT.name} full backup. You choose whether to add it to what you have or replace everything, and you can undo it right after.`
+				: step === 'preview'
+					? 'Nothing is saved until you choose Import.'
+					: `Pick a file. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
 	const kindSwitch =
 		// A full backup restores everything, so choosing Bookmarks or Sessions would only mislead.
 		!full && source?.type !== 'browser' ? (
 			<ChoiceSelect
 				id="import-what"
 				label="What to import"
-				value={kind}
+				value={everything ? 'everything' : kind}
 				options={IMPORT_KINDS}
 				onValueChange={(value) => {
 					if (reading) {
@@ -1556,7 +1581,10 @@ export function ImportDialog({
 					}
 
 					setError('');
-					setKind(value as ImportKind);
+					setEverything(value === 'everything');
+					if (value !== 'everything') {
+						setKind(value as ImportKind);
+					}
 				}}
 			/>
 		) : null;
@@ -1677,7 +1705,9 @@ export function ImportDialog({
 										{dragging ? 'Drop the file to read it' : 'Drop a file here'}
 									</h3>
 									<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-										{SUPPORTED_FILES}
+										{everything
+											? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Settings › Data › Export, or Share and export › Everything.`
+											: SUPPORTED_FILES}
 									</p>
 								</div>
 								<Button
@@ -1698,11 +1728,15 @@ export function ImportDialog({
 									className="hidden"
 									tabIndex={-1}
 									aria-hidden="true"
-									accept=".zip,.enc,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown"
+									accept={
+										everything
+											? '.zip,.enc,application/zip'
+											: '.zip,.enc,application/zip,.json,.html,.htm,.csv,.tsv,.txt,.md,.markdown,application/json,text/html,text/csv,text/plain,text/markdown'
+									}
 									onChange={(event) => void readFile(event.target.files?.[0])}
 								/>
 							</section>
-							{kind === 'bookmarks' && (
+							{kind === 'bookmarks' && !everything && (
 								<section
 									className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center"
 									aria-labelledby="import-browser-heading"
@@ -1869,7 +1903,7 @@ export function ImportDialog({
 					preview &&
 					source && (
 						<>
-							<DialogBody className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*:not([data-import-preview])]:shrink-0">
+							<DialogBody className="-m-1 flex min-h-0 flex-1 flex-col overflow-y-auto p-1 [&>*:not([data-import-preview])]:shrink-0">
 								{kindSwitch && <div>{kindSwitch}</div>}
 								<div className="flex min-w-0 items-start gap-3 rounded-lg border border-border px-3.5 py-3">
 									<span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">

@@ -290,12 +290,12 @@ export function ShareHost() {
 type Way = 'links' | 'markdown' | 'page' | 'json' | 'csv' | 'html';
 
 const WAYS: Array<{id: Way; name: string}> = [
-	{id: 'links', name: 'Links'},
+	{id: 'page', name: 'HTML page'},
 	{id: 'markdown', name: 'Markdown'},
-	{id: 'page', name: 'Web page'},
-	{id: 'json', name: 'JSON'},
-	{id: 'csv', name: 'CSV'},
-	{id: 'html', name: 'Bookmarks file'},
+	{id: 'links', name: 'Plain links'},
+	{id: 'json', name: 'JSON file'},
+	{id: 'csv', name: 'CSV file'},
+	{id: 'html', name: 'Browser bookmarks (HTML)'},
 ];
 
 /**
@@ -342,7 +342,7 @@ export function ShareSheet({
 	const store = useLibrary();
 	const view = useView();
 	const [what, setWhat] = useState<What>('sessions');
-	const [way, setWay] = useState<Way>('links');
+	const [way, setWay] = useState<Way>('page');
 	const [password, setPassword] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [uploading, setUploading] = useState(false);
@@ -450,7 +450,7 @@ export function ShareSheet({
 	return (
 		<BottomSheet visible={visible} label="Share" onClose={onClose}>
 			<View style={styles.body}>
-				<Title>{scope ? `Share ${scope.title}` : 'Share or back up'}</Title>
+				<Title>{scope ? `Share ${scope.title}` : 'Share and export'}</Title>
 				{scope === undefined && (
 					<Chips
 						items={[

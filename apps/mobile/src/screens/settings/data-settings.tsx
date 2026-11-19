@@ -111,7 +111,7 @@ export function DataCard() {
 			description="Bring links in, save them out, or erase them."
 		>
 			<Button
-				label="Import, export and backup"
+				label="Import and export"
 				icon="swap-vertical-outline"
 				kind="plain"
 				onPress={() => {
@@ -129,7 +129,7 @@ export function DataCard() {
 			/>
 			<ActionSheet
 				visible={menu === 'transfer'}
-				title="Import, export and backup"
+				title="Import and export"
 				actions={[
 					{
 						icon: 'document-outline',
@@ -162,7 +162,7 @@ export function DataCard() {
 					},
 					{
 						icon: 'share-outline',
-						label: 'Share or back up',
+						label: 'Share and export',
 						onPress() {
 							setExporting(true);
 						},
