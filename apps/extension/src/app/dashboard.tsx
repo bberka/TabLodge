@@ -20,7 +20,6 @@ import {
 	ChevronDown,
 	ChevronRight,
 	Columns2,
-	Download,
 	ExternalLink,
 	FolderPlus,
 	Merge,
@@ -106,7 +105,6 @@ import type {
 } from '../shared/types';
 import {stripTrackingParameters} from '../shared/tracking-parameters';
 import {displayUrl as simplifiedUrl} from '../shared/url-display';
-import type {ExportData} from '../shared/export-formats';
 import {hostOf, webUrl} from '../shared/web-url';
 import {
 	hasOperators,
@@ -135,7 +133,7 @@ import {
 	plural,
 } from './common';
 import {defaultBookmarkColumnId} from './default-column';
-import {BackupDialog, ImportDialog, useShareDialog} from './lazy-dialogs';
+import {ImportDialog, useShareDialog} from './lazy-dialogs';
 import {
 	activateSessionTitle,
 	applyLinkDrag,
@@ -360,7 +358,6 @@ export function SessionManager({
 	// Written while a restore runs; the value itself is never read, the update just re-renders the page.
 	// eslint-disable-next-line @eslint-react/use-state -- write-only on purpose
 	const [, setBusy] = useState('');
-	const [backupData, setBackupData] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const dragItemRef = useRef<DragItem | null>(null);
@@ -617,7 +614,7 @@ export function SessionManager({
 			}
 
 			case 'backup-sessions': {
-				openBackup();
+				openSessionBackup();
 
 				break;
 			}
@@ -765,13 +762,27 @@ export function SessionManager({
 		setAnchor(keys.at(-1) ?? null);
 	}
 
-	function openBackup() {
+	function openSessionBackup() {
 		if (groups.length === 0) {
 			showStatus('There are no sessions to back up.', true);
 			return;
 		}
 
-		setBackupData({kind: 'sessions', groups, folders});
+		openShare({
+			title: 'Shared sessions',
+			sources: [allSessionsSource()],
+			backup: true,
+			initialSource: 'everything',
+		});
+	}
+
+	function allSessionsSource() {
+		return {
+			id: 'all',
+			label: 'All sessions',
+			groups,
+			data: {kind: 'sessions' as const, groups, folders},
+		};
 	}
 
 	function selectedGroups() {
@@ -1345,17 +1356,14 @@ export function SessionManager({
 				sources: [
 					{
 						id: 'current',
-						label: group.name,
+						label: 'Selected session',
+						description: group.name,
 						groups: [group],
 						data: {kind: 'sessions', groups: [group], folders},
 					},
-					{
-						id: 'all',
-						label: 'All sessions',
-						groups,
-						data: {kind: 'sessions', groups, folders},
-					},
+					allSessionsSource(),
 				],
+				backup: true,
 			}),
 		openTab,
 		copyTab: copyTabLink,
@@ -1887,23 +1895,16 @@ export function SessionManager({
 								</DropdownMenuItem>
 								<DropdownMenuItem
 									disabled={groups.length === 0}
-									onSelect={() => openBackup()}
-								>
-									<Download className="h-4 w-4" />
-									Back up sessions
-								</DropdownMenuItem>
-								<DropdownMenuItem
-									disabled={groups.length === 0}
 									onSelect={() =>
 										openShare({
 											title: 'Shared sessions',
-											groups,
-											data: {kind: 'sessions', groups, folders},
+											sources: [allSessionsSource()],
+											backup: true,
 										})
 									}
 								>
 									<Share2 className="h-4 w-4" />
-									Share all sessions
+									Share and export sessions
 								</DropdownMenuItem>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem
@@ -2071,8 +2072,21 @@ export function SessionManager({
 								onSelect() {
 									openShare({
 										title: folder.name,
-										groups: folderGroups,
-										data: {kind: 'sessions', groups: folderGroups, folders},
+										sources: [
+											{
+												id: 'folder',
+												label: 'Selected folder',
+												description: folder.name,
+												groups: folderGroups,
+												data: {
+													kind: 'sessions',
+													groups: folderGroups,
+													folders,
+												},
+											},
+											allSessionsSource(),
+										],
+										backup: true,
 									});
 								},
 							};
@@ -2375,19 +2389,6 @@ export function SessionManager({
 			<StatusLine status={status} />
 
 			{shareDialog}
-			<BackupDialog
-				data={backupData}
-				open={Boolean(backupData)}
-				state={state}
-				showStatus={showStatus}
-				onOpenChange={(open) => {
-					if (open) {
-						return;
-					}
-
-					setBackupData(null);
-				}}
-			/>
 			<ImportDialog
 				open={importOpen}
 				initialKind="sessions"

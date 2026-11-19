@@ -100,7 +100,6 @@ import {
 	parseSearchQuery,
 	passesOperators,
 } from '../shared/search-query';
-import type {ExportData} from '../shared/export-formats';
 import {archivedFolderId} from '../shared/session-folders';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
@@ -138,7 +137,6 @@ import {
 	type FinderAction,
 } from './finder';
 import {
-	BackupDialog,
 	DuplicateBookmarksDialog,
 	ImportDialog,
 	SnapshotsDialog,
@@ -342,7 +340,6 @@ function NewTab() {
 	const [initialQuery] = useState(() => initialSearchQuery(location.search));
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
-	const [backupRequest, setBackupRequest] = useState<ExportData | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
@@ -1897,10 +1894,10 @@ function NewTab() {
 			return;
 		}
 
-		setBackupRequest({kind: 'bookmarks', columns, bookmarks});
+		shareBookmarks(undefined, 'everything');
 	}
 
-	function shareBookmarks(column?: BookmarkColumnData) {
+	function shareBookmarks(column?: BookmarkColumnData, initialSource?: string) {
 		const groupFor = (entry: BookmarkColumnData | ColumnRef) => ({
 			name: entry.name,
 			tabs: bookmarks.filter((bookmark) => bookmark.columnId === entry.id),
@@ -1916,8 +1913,8 @@ function NewTab() {
 					? [
 							{
 								id: 'column',
-								label: column.name,
-								description: plural(groupFor(column).tabs.length, 'bookmark'),
+								label: 'Selected column',
+								description: column.name,
 								groups: [groupFor(column)],
 								data: {
 									kind: 'bookmarks' as const,
@@ -1932,11 +1929,12 @@ function NewTab() {
 				{
 					id: 'all',
 					label: 'All bookmarks',
-					description: plural(bookmarks.length, 'bookmark'),
 					groups: everything,
 					data: {kind: 'bookmarks', columns, bookmarks},
 				},
 			],
+			backup: true,
+			initialSource,
 		});
 	}
 
@@ -2438,15 +2436,8 @@ function NewTab() {
 								onSelect: () => setImportOpen(true),
 							},
 							{
-								id: 'backup',
-								label: 'Back up bookmarks',
-								icon: Download,
-								disabled: bookmarks.length === 0,
-								onSelect: openBookmarkBackup,
-							},
-							{
 								id: 'share',
-								label: 'Share bookmarks',
+								label: 'Share and export bookmarks',
 								icon: Share2,
 								disabled: bookmarks.length === 0,
 								onSelect: () => shareBookmarks(),
@@ -2980,13 +2971,6 @@ function NewTab() {
 					showStatus={showStatus}
 					onOpenChange={setTrashOpen}
 					onChanged={reload}
-				/>
-				<BackupDialog
-					state={state}
-					data={backupRequest}
-					open={Boolean(backupRequest)}
-					showStatus={showStatus}
-					onOpenChange={(open) => !open && setBackupRequest(null)}
 				/>
 				<DuplicateBookmarksDialog
 					open={duplicatesOpen}

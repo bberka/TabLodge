@@ -26,7 +26,6 @@ import {
 	Download,
 	Lock,
 	FileJson,
-	FileSpreadsheet,
 	FileText,
 	FileUp,
 	Globe,
@@ -50,11 +49,13 @@ import {
 	DialogTitle,
 	Input,
 	Label,
-	RadioCard,
-	RadioCardGroup,
 	ScrollArea,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
 	SegmentedControl,
-	useRetainedValue,
 } from '../shared/ui';
 import {downloadFile} from '../shared/download';
 import type {
@@ -77,11 +78,8 @@ import {
 import {
 	buildExport,
 	dateStamp,
-	exportCounts,
-	exportFilename,
 	type ExportData,
 	type ExportFormat,
-	type ExportKind,
 } from '../shared/export-formats';
 import {
 	ImportFormatError,
@@ -142,57 +140,6 @@ function KindLabel({kind}: {kind: 'sessions' | 'bookmarks'}) {
 	);
 }
 
-const FORMAT_CHOICES: ReadonlyArray<{
-	id: ExportFormat;
-	title: string;
-	icon: typeof FileJson;
-	sessions: string;
-	bookmarks: string;
-}> = [
-	{
-		id: 'json',
-		title: 'JSON backup',
-		icon: FileJson,
-		sessions:
-			'Full backup you can restore here. Keeps folders, notes, split views, tab groups, and order.',
-		bookmarks:
-			'Full backup you can restore here. Keeps columns, order, and dates.',
-	},
-	{
-		id: 'html',
-		title: 'Browser bookmarks (HTML)',
-		icon: Globe,
-		sessions:
-			'Imports into any browser. Each session becomes a folder; notes and split views are lost.',
-		bookmarks: 'Imports into any browser. Each column becomes a folder.',
-	},
-	{
-		id: 'csv',
-		title: 'Spreadsheet (CSV)',
-		icon: FileSpreadsheet,
-		sessions:
-			'Title, URL, session, folder, notes, and date per row. For analysis, not a full restore.',
-		bookmarks:
-			'Title, URL, column, notes, and date per row. For analysis, not a full restore.',
-	},
-	{
-		id: 'markdown',
-		title: 'Markdown',
-		icon: FileText,
-		sessions: 'A readable list of links under each session’s name.',
-		bookmarks: 'A readable list of links under each column’s name.',
-	},
-	{
-		id: 'txt',
-		title: 'Plain URL list',
-		icon: Link2,
-		sessions:
-			'One web address per line. Titles and everything else are dropped.',
-		bookmarks:
-			'One web address per line. Titles and everything else are dropped.',
-	},
-];
-
 /**
 What a full backup ZIP holds, listed on the "Everything" choice instead of a format list (it has only one format).
 */
@@ -204,342 +151,12 @@ const FULL_BACKUP_CONTENTS = [
 	'Crash snapshots and the trash bin',
 ];
 
-const BACKUP_TITLES: Record<ExportKind, (count: number) => string> = {
-	sessions: () => 'Back up sessions',
-	bookmarks: () => 'Back up bookmarks',
-	selected: (count) => `Export ${plural(count, 'selected tab')}`,
-};
-
-type BackupScope = 'everything' | 'sessions' | 'bookmarks';
-
 function EverythingLabel() {
 	return (
 		<span className="inline-flex items-center justify-center gap-1.5">
 			<Archive className="h-3.5 w-3.5" aria-hidden="true" />
 			Everything
 		</span>
-	);
-}
-
-type BackupDialogProps = {
-	/**
-	What to export; the dialog keeps showing the last request while it closes.
-	*/
-	data: ExportData | null;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	showStatus: ShowStatus;
-	/**
-	When given, a Bookmarks/Sessions switch lets the user change what is backed up.
-	*/
-	state?: TabLodgeState | null;
-	/**
-	Opens on this choice instead of the requested kind; Settings opens on Everything.
-	*/
-	initialScope?: BackupScope;
-};
-
-/**
-"Back up sessions" / "Back up bookmarks" / "Back up everything": pick a format, then download. One session, one column, or
-some selected tabs are shared and saved from the Share dialog instead.
-*/
-export function BackupDialog({
-	data,
-	open,
-	onOpenChange,
-	showStatus,
-	state,
-	initialScope,
-}: BackupDialogProps) {
-	const requested = useRetainedValue(data, open && data != null);
-	const [format, setFormat] = useState<ExportFormat>('json');
-	const [saving, setSaving] = useState(false);
-	// Optional password protection of the full backup ZIP; the secret lives only in this state.
-	const [protect, setProtect] = useState(false);
-	const [passcode, setPasscode] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
-	const [switched, setSwitched] = useState<BackupScope | null>(null);
-	useEffect(() => {
-		if (!open) {
-			// Drop the typed secret as soon as the dialog closes.
-			setPasscode((current) => ({...current, value: '', confirm: ''}));
-			return;
-		}
-
-		setFormat('json');
-		setSaving(false);
-		setProtect(false);
-		setPasscode(EMPTY_PASSCODE_DRAFT);
-		setSwitched(initialScope ?? null);
-	}, [open, initialScope]);
-	const canSwitch = Boolean(
-		state && requested && requested.kind !== 'selected',
-	);
-	let shown = requested;
-	if (
-		state &&
-		canSwitch &&
-		switched &&
-		switched !== 'everything' &&
-		switched !== requested?.kind
-	) {
-		shown =
-			switched === 'bookmarks'
-				? {
-						kind: 'bookmarks',
-						columns: state.bookmarkColumns,
-						bookmarks: state.bookmarks,
-					}
-				: {kind: 'sessions', groups: state.groups, folders: state.folders};
-	}
-
-	const kind = shown?.kind ?? 'sessions';
-	const counts = shown ? exportCounts(shown) : {groups: 0, items: 0};
-	// "Everything" is the full backup ZIP; Bookmarks or Sessions pick a file format. Selected tabs never offer it.
-	const full = switched === 'everything' && kind !== 'selected';
-	const scopeOptions =
-		kind === 'selected'
-			? []
-			: [
-					{value: 'everything' as const, label: <EverythingLabel />},
-					...(canSwitch || kind === 'bookmarks'
-						? [
-								{
-									value: 'bookmarks' as const,
-									label: <KindLabel kind="bookmarks" />,
-								},
-							]
-						: []),
-					...(canSwitch || kind === 'sessions'
-						? [
-								{
-									value: 'sessions' as const,
-									label: <KindLabel kind="sessions" />,
-								},
-							]
-						: []),
-				];
-	const protectProblem =
-		full && protect ? passcodeDraftProblem(passcode) : null;
-	const filename = full
-		? protect
-			? protectedFullBackupFilename(PROJECT.name)
-			: fullBackupFilename(PROJECT.name)
-		: exportFilename(PROJECT.name, kind, format, new Date());
-	const summary = full
-		? 'All data and settings'
-		: kind === 'bookmarks'
-			? `${plural(counts.groups, 'column')} · ${plural(counts.items, 'bookmark')}`
-			: `${plural(counts.groups, 'session')} · ${plural(counts.items, 'tab')}`;
-	async function downloadFull() {
-		setSaving(true);
-		try {
-			const result = await send('GET_FULL_BACKUP', {});
-			if (!result?.ok) {
-				throw new Error(result?.error || 'Could not read your data.');
-			}
-
-			const {bytes, manifest} = buildFullBackup(result, {
-				appVersion: PROJECT.version,
-			});
-			const protectedBytes = protect
-				? await protectFullBackup(bytes, {
-						value: passcode.value,
-					})
-				: undefined;
-			downloadFile(
-				new Uint8Array(protectedBytes ?? bytes),
-				protectedBytes ? 'application/octet-stream' : 'application/zip',
-				filename,
-			);
-			setPasscode(EMPTY_PASSCODE_DRAFT);
-			onOpenChange(false);
-			showStatus(
-				`Saved ${protectedBytes ? 'an encrypted' : 'a'} full backup (${plural(manifest.counts.sessions, 'session')}, ${plural(manifest.counts.bookmarks, 'bookmark')}, and settings) to ${filename}.`,
-				false,
-				{toast: true},
-			);
-		} catch (reason) {
-			showStatus(
-				String(messageOf(reason) || 'Could not create the file.'),
-				true,
-			);
-		} finally {
-			setSaving(false);
-		}
-	}
-
-	function download() {
-		if (full) {
-			void downloadFull();
-			return;
-		}
-
-		if (!shown) {
-			return;
-		}
-
-		try {
-			const file = buildExport(shown, format, {appName: PROJECT.name});
-			downloadFile(file.content, file.mime, file.filename);
-			onOpenChange(false);
-			showStatus(`Saved ${summary} to ${file.filename}.`, false, {toast: true});
-		} catch (reason) {
-			showStatus(
-				String(messageOf(reason) || 'Could not create the file.'),
-				true,
-			);
-		}
-	}
-
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent
-				size="lg"
-				className="h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden sm:h-auto"
-			>
-				<DialogHeader>
-					<DialogTitle>
-						{full ? 'Back up everything' : BACKUP_TITLES[kind](counts.items)}
-					</DialogTitle>
-					<DialogDescription>
-						{full
-							? protect
-								? 'One encrypted file you can restore with Import and the password you choose. It is saved to your downloads.'
-								: 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted unless you protect it below.'
-							: 'Choose a file format. The file is saved to your downloads; it is plain text, not encrypted.'}
-					</DialogDescription>
-				</DialogHeader>
-				<DialogBody>
-					{scopeOptions.length > 1 && (
-						<SegmentedControl
-							fullWidth
-							label="What to back up"
-							value={full ? 'everything' : (kind as 'sessions' | 'bookmarks')}
-							options={scopeOptions}
-							onValueChange={setSwitched}
-						/>
-					)}
-					{full ? (
-						<>
-							<div className="rounded-lg border border-border p-4">
-								<p className="flex items-center gap-2 text-sm font-medium">
-									<Archive
-										className="h-4 w-4 text-muted-foreground"
-										aria-hidden="true"
-									/>
-									Full backup (ZIP)
-								</p>
-								<ul className="mt-2 grid gap-1 pl-6 text-sm text-muted-foreground sm:grid-cols-2">
-									{FULL_BACKUP_CONTENTS.map((item) => (
-										<li key={item} className="list-disc">
-											{item}
-										</li>
-									))}
-								</ul>
-							</div>
-							<div className="rounded-lg border border-border p-4">
-								<div className="flex items-start gap-2">
-									<Checkbox
-										id="backup-protect"
-										checked={protect}
-										disabled={saving}
-										onCheckedChange={(checked) => {
-											setProtect(checked === true);
-											setPasscode(EMPTY_PASSCODE_DRAFT);
-										}}
-									/>
-									<div className="min-w-0">
-										<Label
-											htmlFor="backup-protect"
-											className="flex items-center gap-1.5 text-sm font-medium"
-										>
-											<Lock className="h-3.5 w-3.5" aria-hidden="true" />
-											Protect with a password
-										</Label>
-										<p className="mt-1 text-xs leading-5 text-muted-foreground">
-											Optional. Encrypts the whole backup file on this device.
-											Only full backups can be protected; other exports and
-											automatic backups stay plain text.
-										</p>
-									</div>
-								</div>
-								{protect && (
-									<div className="mt-4">
-										<PasscodeSetup
-											draft={passcode}
-											disabled={saving}
-											onChange={setPasscode}
-										/>
-									</div>
-								)}
-							</div>
-						</>
-					) : (
-						<RadioCardGroup
-							label="File format"
-							value={format}
-							className="sm:grid-cols-2"
-							onValueChange={(value) => setFormat(value as ExportFormat)}
-						>
-							{FORMAT_CHOICES.map((choice) => (
-								<RadioCard
-									key={choice.id}
-									value={choice.id}
-									icon={choice.icon}
-									title={choice.title}
-									badge={
-										choice.id === 'json' ? (
-											<Badge
-												variant="accent"
-												className="px-1.5 py-0 text-[10px]"
-											>
-												Recommended
-											</Badge>
-										) : undefined
-									}
-									description={
-										kind === 'bookmarks' ? choice.bookmarks : choice.sessions
-									}
-									className={choice.id === 'json' ? 'sm:col-span-2' : undefined}
-								/>
-							))}
-						</RadioCardGroup>
-					)}
-					<p
-						className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-muted/70 px-3 py-2 text-xs text-muted-foreground"
-						aria-live="polite"
-					>
-						<span>{summary}</span>
-						<span aria-hidden="true">→</span>
-						<span className="min-w-0 font-mono text-foreground wrap-anywhere">
-							{filename}
-						</span>
-					</p>
-				</DialogBody>
-				<DialogFooter className="mt-3 shrink-0 sm:mt-6">
-					<Button
-						type="button"
-						variant="outline"
-						onClick={() => onOpenChange(false)}
-					>
-						<X aria-hidden="true" />
-						Cancel
-					</Button>
-					<Button
-						type="button"
-						disabled={
-							saving ||
-							(!full && !counts.items && !counts.groups) ||
-							protectProblem !== null
-						}
-						onClick={download}
-					>
-						<Download />
-						Download
-					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
 	);
 }
 
@@ -552,23 +169,46 @@ type ShareSource = {
 	The same thing as data, which also lets it be saved as a file (JSON, CSV, a bookmarks file) from the same dialog.
 	*/
 	data?: ExportData;
+	/**
+	The full backup ZIP of everything: no links to list or preview, only the backup options.
+	*/
+	backup?: boolean;
 };
 export type SharePayload = {
 	title: string;
 	groups?: readonly ShareGroup[];
 	sources?: ShareSource[];
 	data?: ExportData;
+	/**
+	Adds "Everything", the full backup ZIP, to what can be shared.
+	*/
+	backup?: boolean;
+	/**
+	Opens on this source (`everything` for the backup) instead of the first one.
+	*/
+	initialSource?: string;
+};
+
+const EVERYTHING_SOURCE: ShareSource = {
+	id: 'everything',
+	label: 'Everything',
+	description: 'A full backup of all data and settings',
+	groups: [],
+	backup: true,
 };
 
 type FileWay = `file-${'json' | 'csv' | 'html'}`;
-type ShareWay = ShareMethod | FileWay;
+type ShareWay = Exclude<ShareMethod, 'rich'> | FileWay;
 
 type ShareChoice = {
 	id: ShareWay;
 	title: string;
 	icon: typeof FileJson;
 	description: string;
-	action: 'Download' | 'Copy';
+	/**
+	Can also be copied to the clipboard (a page copies as rich text, the others as plain text).
+	*/
+	copy?: boolean;
 	/**
 	Saved as a file with the export formats, so it needs the data, not just the links.
 	*/
@@ -581,35 +221,27 @@ const SHARE_METHODS: readonly ShareChoice[] = [
 		title: 'HTML page',
 		icon: Globe,
 		description: 'A standalone page you can send or open anywhere.',
-		action: 'Download',
+		copy: true,
 	},
 	{
 		id: 'markdown',
 		title: 'Markdown',
 		icon: FileText,
 		description: 'A titled list of links, ready for notes or chat.',
-		action: 'Copy',
+		copy: true,
 	},
 	{
 		id: 'links',
 		title: 'Plain links',
 		icon: Link2,
 		description: 'One web address per line.',
-		action: 'Copy',
-	},
-	{
-		id: 'rich',
-		title: 'Rich text',
-		icon: Copy,
-		description: 'Clickable links that paste into documents and email.',
-		action: 'Copy',
+		copy: true,
 	},
 	{
 		id: 'file-json',
 		title: 'JSON file',
 		icon: FileJson,
 		description: 'Everything saved, to import again.',
-		action: 'Download',
 		file: true,
 	},
 	{
@@ -617,7 +249,6 @@ const SHARE_METHODS: readonly ShareChoice[] = [
 		title: 'CSV file',
 		icon: FileText,
 		description: 'A table for a spreadsheet.',
-		action: 'Download',
 		file: true,
 	},
 	{
@@ -625,7 +256,6 @@ const SHARE_METHODS: readonly ShareChoice[] = [
 		title: 'Browser bookmarks (HTML)',
 		icon: Globe,
 		description: 'A bookmarks file other browsers import.',
-		action: 'Download',
 		file: true,
 	},
 ];
@@ -637,8 +267,128 @@ type ShareDialogProps = {
 	groups?: readonly ShareGroup[];
 	sources?: ShareSource[];
 	data?: ExportData;
+	backup?: boolean;
+	initialSource?: string;
 	showStatus: ShowStatus;
 };
+
+function sourceDescription(source: ShareSource) {
+	if (source.backup) {
+		return source.description;
+	}
+
+	return [source.description, plural(shareCounts(source.groups).links, 'link')]
+		.filter(Boolean)
+		.join(' · ');
+}
+
+/**
+One option of a share dropdown: a name with its one line explanation under it.
+*/
+function ChoiceText({
+	icon: Icon,
+	title,
+	description,
+}: {
+	icon?: typeof FileJson;
+	title: string;
+	description?: string;
+}) {
+	return (
+		<span className="flex min-w-0 items-center gap-2.5 text-left">
+			{Icon && (
+				<Icon
+					className="h-4 w-4 shrink-0 text-muted-foreground"
+					aria-hidden="true"
+				/>
+			)}
+			<span className="min-w-0">
+				<span className="block truncate text-sm font-medium">{title}</span>
+				{description && (
+					<span className="block truncate text-xs font-normal text-muted-foreground">
+						{description}
+					</span>
+				)}
+			</span>
+		</span>
+	);
+}
+
+type FullBackupOptionsProps = {
+	protect: boolean;
+	passcode: PasscodeDraft;
+	saving: boolean;
+	onProtectChange: (protect: boolean) => void;
+	onPasscodeChange: (draft: PasscodeDraft) => void;
+};
+
+function FullBackupOptions({
+	protect,
+	passcode,
+	saving,
+	onProtectChange,
+	onPasscodeChange,
+}: FullBackupOptionsProps) {
+	return (
+		<>
+			<div className="rounded-lg border border-border p-4">
+				<p className="flex items-center gap-2 text-sm font-medium">
+					<Archive
+						className="h-4 w-4 text-muted-foreground"
+						aria-hidden="true"
+					/>
+					Full backup (ZIP)
+				</p>
+				<p className="mt-1 text-xs text-muted-foreground">
+					One file you can restore with Import. It is saved to your downloads.
+				</p>
+				<ul className="mt-2 grid gap-1 pl-6 text-sm text-muted-foreground sm:grid-cols-2">
+					{FULL_BACKUP_CONTENTS.map((item) => (
+						<li key={item} className="list-disc">
+							{item}
+						</li>
+					))}
+				</ul>
+			</div>
+			<div className="rounded-lg border border-border p-4">
+				<div className="flex items-start gap-2">
+					<Checkbox
+						id="backup-protect"
+						checked={protect}
+						disabled={saving}
+						onCheckedChange={(checked) => {
+							onProtectChange(checked === true);
+							onPasscodeChange(EMPTY_PASSCODE_DRAFT);
+						}}
+					/>
+					<div className="min-w-0">
+						<Label
+							htmlFor="backup-protect"
+							className="flex items-center gap-1.5 text-sm font-medium"
+						>
+							<Lock className="h-3.5 w-3.5" aria-hidden="true" />
+							Protect with a password
+						</Label>
+						<p className="mt-1 text-xs leading-5 text-muted-foreground">
+							Optional. Encrypts the whole backup file on this device. Only full
+							backups can be protected; other exports and automatic backups stay
+							plain text.
+						</p>
+					</div>
+				</div>
+				{protect && (
+					<div className="mt-4">
+						<PasscodeSetup
+							draft={passcode}
+							disabled={saving}
+							onChange={onPasscodeChange}
+						/>
+					</div>
+				)}
+			</div>
+		</>
+	);
+}
 
 type SharePreviewPanelProps = {
 	preview: ReturnType<typeof sharePreview>;
@@ -817,32 +567,51 @@ export function ShareDialog({
 	groups,
 	sources,
 	data,
+	backup,
+	initialSource,
 	showStatus,
 }: ShareDialogProps) {
-	const all: ShareSource[] = useMemo(
-		() =>
+	const all: ShareSource[] = useMemo(() => {
+		const listed: ShareSource[] =
 			sources && sources.length > 0
 				? sources
-				: [{id: 'all', label: title, groups: [...(groups ?? [])], data}],
-		[sources, groups, title, data],
-	);
+				: groups || data
+					? [{id: 'all', label: title, groups: [...(groups ?? [])], data}]
+					: [];
+		return backup || listed.length === 0
+			? [...listed, EVERYTHING_SOURCE]
+			: listed;
+	}, [sources, groups, title, data, backup]);
 	const [sourceId, setSourceId] = useState(all[0].id);
 	const [method, setMethod] = useState<ShareWay>('html');
 	const server = useSharedPagesServer(open);
 	const [uploading, setUploading] = useState(false);
 	const [uploaded, setUploaded] = useState<SharedPage>();
+	// Optional password protection of the full backup ZIP; the secret lives only in this state.
+	const [protect, setProtect] = useState(false);
+	const [passcode, setPasscode] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
+	const [saving, setSaving] = useState(false);
 	useEffect(() => {
 		if (!open) {
+			// Drop the typed secret as soon as the dialog closes.
+			setPasscode((current) => ({...current, value: '', confirm: ''}));
 			return;
 		}
 
-		setSourceId(all[0].id);
+		setSourceId(
+			all.find((entry) => entry.id === initialSource)?.id ?? all[0].id,
+		);
 		setMethod('html');
 		setUploaded(undefined);
+		setProtect(false);
+		setSaving(false);
+		setPasscode(EMPTY_PASSCODE_DRAFT);
 		// Reset each time the dialog opens only.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
 	const source = all.find((entry) => entry.id === sourceId) ?? all[0];
+	const isBackup = source.backup === true;
+	const backupOnly = isBackup && all.length === 1;
 	const counts = shareCounts(source.groups);
 	const choices = SHARE_METHODS.filter(
 		(entry) => !entry.file || source.data !== undefined,
@@ -854,10 +623,68 @@ export function ShareDialog({
 		isFile ? 'links' : (chosen.id as ShareMethod),
 	);
 	const pageTitle = source.groups.length === 1 ? source.groups[0].name : title;
+	const protectProblem =
+		isBackup && protect ? passcodeDraftProblem(passcode) : null;
 
-	async function run() {
+	async function downloadFull() {
+		setSaving(true);
 		try {
-			if (isFile && source.data) {
+			const result = await send('GET_FULL_BACKUP', {});
+			if (!result?.ok) {
+				throw new Error(result?.error || 'Could not read your data.');
+			}
+
+			const {bytes, manifest} = buildFullBackup(result, {
+				appVersion: PROJECT.version,
+			});
+			const protectedBytes = protect
+				? await protectFullBackup(bytes, {value: passcode.value})
+				: undefined;
+			const filename = protectedBytes
+				? protectedFullBackupFilename(PROJECT.name)
+				: fullBackupFilename(PROJECT.name);
+			downloadFile(
+				new Uint8Array(protectedBytes ?? bytes),
+				protectedBytes ? 'application/octet-stream' : 'application/zip',
+				filename,
+			);
+			setPasscode(EMPTY_PASSCODE_DRAFT);
+			onOpenChange(false);
+			showStatus(
+				`Saved ${protectedBytes ? 'an encrypted' : 'a'} full backup (${plural(manifest.counts.sessions, 'session')}, ${plural(manifest.counts.bookmarks, 'bookmark')}, and settings) to ${filename}.`,
+				false,
+				{toast: true},
+			);
+		} catch (reason) {
+			showStatus(
+				String(messageOf(reason) || 'Could not create the file.'),
+				true,
+			);
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	async function run(mode: 'download' | 'copy') {
+		if (isBackup) {
+			await downloadFull();
+			return;
+		}
+
+		try {
+			const stamp = `${fileNamePrefix(PROJECT.name)}-shared-${dateStamp(new Date())}`;
+			if (mode === 'copy') {
+				await writeClipboard(
+					method === 'markdown'
+						? {text: shareMarkdown(source.groups), html: null}
+						: method === 'links'
+							? {text: shareLinks(source.groups), html: null}
+							: shareRich(source.groups),
+				);
+				showStatus(`Copied ${plural(counts.links, 'link')}.`, false, {
+					toast: true,
+				});
+			} else if (isFile && source.data) {
 				const file = buildExport(
 					source.data,
 					chosen.id.slice(5) as ExportFormat,
@@ -869,24 +696,27 @@ export function ShareDialog({
 				);
 				downloadFile(file.content, file.mime, file.filename);
 				showStatus(`Saved ${file.filename}.`, false, {toast: true});
-			} else if (method === 'html') {
+			} else if (method === 'markdown') {
+				downloadFile(
+					shareMarkdown(source.groups),
+					'text/markdown;charset=utf-8',
+					`${stamp}.md`,
+				);
+				showStatus('Saved the Markdown file.', false, {toast: true});
+			} else if (method === 'links') {
+				downloadFile(
+					shareLinks(source.groups),
+					'text/plain;charset=utf-8',
+					`${stamp}.txt`,
+				);
+				showStatus('Saved the list of links.', false, {toast: true});
+			} else {
 				downloadFile(
 					shareHtmlPage(pageTitle, source.groups, PROJECT.name),
 					'text/html;charset=utf-8',
-					`${fileNamePrefix(PROJECT.name)}-shared-${dateStamp(new Date())}.html`,
+					`${stamp}.html`,
 				);
 				showStatus('Saved the shared page.', false, {toast: true});
-			} else {
-				await writeClipboard(
-					method === 'markdown'
-						? {text: shareMarkdown(source.groups), html: null}
-						: method === 'links'
-							? {text: shareLinks(source.groups), html: null}
-							: shareRich(source.groups),
-				);
-				showStatus(`Copied ${plural(counts.links, 'link')}.`, false, {
-					toast: true,
-				});
 			}
 
 			onOpenChange(false);
@@ -972,60 +802,97 @@ export function ShareDialog({
 				className="max-h-[calc(100dvh-1rem)] overflow-hidden"
 			>
 				<DialogHeader className="shrink-0">
-					<DialogTitle>Share</DialogTitle>
+					<DialogTitle>
+						{backupOnly ? 'Back up everything' : 'Share and export'}
+					</DialogTitle>
 					<DialogDescription>
-						Choose what to share and how. Files are saved to your downloads, and
-						nothing leaves this browser unless you upload it.
+						{backupOnly
+							? 'One ZIP file you can restore with Import. It is saved to your downloads and is not encrypted unless you protect it below.'
+							: 'Choose what to share and the format. Downloads go to your downloads folder, and nothing leaves this browser unless you upload it.'}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody className="min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto pr-1">
 					{all.length > 1 && (
-						<RadioCardGroup
-							label="What to share"
-							value={source.id}
-							onValueChange={setSourceId}
-						>
-							{all.map((entry) => (
-								<RadioCard
-									key={entry.id}
-									value={entry.id}
-									title={entry.label}
-									description={
-										entry.description ??
-										plural(shareCounts(entry.groups).links, 'link')
-									}
-								/>
-							))}
-						</RadioCardGroup>
+						<div className="grid gap-1.5">
+							<Label htmlFor="share-what">What to share</Label>
+							<Select value={source.id} onValueChange={setSourceId}>
+								<SelectTrigger id="share-what" className="h-auto min-h-11 py-2">
+									<SelectValue>
+										<ChoiceText
+											title={source.label}
+											description={sourceDescription(source)}
+										/>
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent>
+									{all.map((entry) => (
+										<SelectItem key={entry.id} value={entry.id}>
+											<ChoiceText
+												title={entry.label}
+												description={sourceDescription(entry)}
+											/>
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 					)}
-					<RadioCardGroup
-						label="How to share"
-						value={method}
-						className="sm:grid-cols-2"
-						onValueChange={(value) => setMethod(value as ShareWay)}
-					>
-						{choices.map((entry) => (
-							<RadioCard
-								key={entry.id}
-								value={entry.id}
-								icon={entry.icon}
-								title={entry.title}
-								description={entry.description}
-							/>
-						))}
-					</RadioCardGroup>
-					{isFile ? (
-						<p className="text-xs text-muted-foreground">
-							{plural(counts.links, 'link')} in {plural(counts.groups, 'group')}
-							. The file is plain text, not encrypted.
-						</p>
-					) : (
-						<SharePreviewPanel
-							preview={preview}
-							pageTitle={pageTitle}
-							counts={counts}
-							formatLabel={chosen.title}
+					{isBackup ? (
+						<FullBackupOptions
+							protect={protect}
+							passcode={passcode}
+							saving={saving}
+							onProtectChange={setProtect}
+							onPasscodeChange={setPasscode}
 						/>
+					) : (
+						<>
+							<div className="grid gap-1.5">
+								<Label htmlFor="share-how">Format</Label>
+								<Select
+									value={chosen.id}
+									onValueChange={(value) => setMethod(value as ShareWay)}
+								>
+									<SelectTrigger
+										id="share-how"
+										className="h-auto min-h-11 py-2"
+									>
+										<SelectValue>
+											<ChoiceText
+												icon={chosen.icon}
+												title={chosen.title}
+												description={chosen.description}
+											/>
+										</SelectValue>
+									</SelectTrigger>
+									<SelectContent>
+										{choices.map((entry) => (
+											<SelectItem key={entry.id} value={entry.id}>
+												<ChoiceText
+													icon={entry.icon}
+													title={entry.title}
+													description={entry.description}
+												/>
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+							{isFile ? (
+								<p className="text-xs text-muted-foreground">
+									{plural(counts.links, 'link')} in{' '}
+									{plural(counts.groups, 'group')}. The file is plain text, not
+									encrypted.
+								</p>
+							) : (
+								<SharePreviewPanel
+									preview={preview}
+									pageTitle={pageTitle}
+									counts={counts}
+									formatLabel={chosen.title}
+								/>
+							)}
+						</>
 					)}
 				</DialogBody>
 				<DialogFooter className="shrink-0">
@@ -1037,7 +904,7 @@ export function ShareDialog({
 						<X aria-hidden="true" />
 						Cancel
 					</Button>
-					{chosen.id === 'html' && server === 'ready' && (
+					{!isBackup && chosen.id === 'html' && server === 'ready' && (
 						<Button
 							type="button"
 							variant="outline"
@@ -1048,13 +915,28 @@ export function ShareDialog({
 							{uploading ? 'Uploading…' : 'Upload to my server'}
 						</Button>
 					)}
+					{!isBackup && chosen.copy && (
+						<Button
+							type="button"
+							variant="outline"
+							disabled={counts.links === 0 || uploading}
+							onClick={() => void run('copy')}
+						>
+							<Copy aria-hidden="true" />
+							Copy
+						</Button>
+					)}
 					<Button
 						type="button"
-						disabled={counts.links === 0 || uploading}
-						onClick={() => void run()}
+						disabled={
+							isBackup
+								? saving || protectProblem !== null
+								: counts.links === 0 || uploading
+						}
+						onClick={() => void run('download')}
 					>
-						{chosen.action === 'Download' ? <Download /> : <Copy />}
-						{chosen.action}
+						<Download aria-hidden="true" />
+						Download
 					</Button>
 				</DialogFooter>
 			</DialogContent>
@@ -1744,7 +1626,7 @@ export function ImportDialog({
 									</h3>
 									<p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
 										{everything
-											? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Back up › Everything.`
+											? `A ${PROJECT.name} full backup (.zip, or .zip.enc if it is protected), made with Settings › Data › Back up, or Share › Everything.`
 											: SUPPORTED_FILES}
 									</p>
 								</div>

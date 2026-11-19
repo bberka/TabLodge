@@ -265,7 +265,7 @@ export async function shareAllSessionsCheck(env: Env, theme: Theme) {
 			const trigger = page.getByRole('button', {
 				name: 'Import and back up sessions',
 			});
-			await openMenuItemByKeyboard(page, trigger, 'Share all sessions');
+			await openMenuItemByKeyboard(page, trigger, 'Share and export sessions');
 			const dialog = page.getByRole('dialog');
 			await dialog.waitFor();
 			await dialog

@@ -86,7 +86,6 @@ import {
 	sortByQuery,
 	searchTerms,
 } from '../shared/fuzzy';
-import type {ExportData} from '../shared/export-formats';
 import {
 	excludedHostError,
 	normalizeExcludedHost,
@@ -109,12 +108,12 @@ import {
 	type IconComponent,
 } from './common';
 import {
-	BackupDialog,
 	ImportDialog,
 	RecoveryTools,
 	SnapshotsDialog,
 	TabStatsDialog,
 	TrashDialog,
+	useShareDialog,
 } from './lazy-dialogs';
 import {offerUndo} from './recovery-core';
 import {initialSearchQuery, withSearchParam} from './page-params';
@@ -1111,7 +1110,7 @@ function Options() {
 	const [eraseSessions, setEraseSessions] = useState(false);
 	const [eraseBookmarks, setEraseBookmarks] = useState(false);
 	const [confirmDefaults, setConfirmDefaults] = useState(false);
-	const [backupData, setBackupData] = useState<ExportData | null>(null);
+	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const [importOpen, setImportOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 	const [trashOpen, setTrashOpen] = useState(false);
@@ -1723,7 +1722,7 @@ function Options() {
 			key: 'backup',
 			icon: Download,
 			label: 'Back up',
-			help: 'Save everything, or only bookmarks or sessions, to a file.',
+			help: 'Save everything to one file you can restore with Import.',
 			words: [
 				'backup',
 				'export',
@@ -1738,22 +1737,8 @@ function Options() {
 					variant="outline"
 					className="w-full sm:w-32"
 					disabled={!state}
-					// Opens on Everything, which also holds settings, so it is never empty.
-					onClick={() =>
-						setBackupData(
-							bookmarkCount > 0
-								? {
-										kind: 'bookmarks',
-										columns: state?.bookmarkColumns ?? [],
-										bookmarks: state?.bookmarks ?? [],
-									}
-								: {
-										kind: 'sessions',
-										groups: state?.groups ?? [],
-										folders: state?.folders ?? [],
-									},
-						)
-					}
+					// Everything also holds settings, so it is never empty.
+					onClick={() => openShare({title: 'Back up everything', backup: true})}
 				>
 					<Download className="h-4 w-4" />
 					Back up
@@ -2577,14 +2562,7 @@ function Options() {
 					</Label>
 				</div>
 			</ConfirmationDialog>
-			<BackupDialog
-				initialScope="everything"
-				state={state}
-				data={backupData}
-				open={Boolean(backupData)}
-				showStatus={showStatus}
-				onOpenChange={(open) => !open && setBackupData(null)}
-			/>
+			{shareDialog}
 			<SnapshotsDialog
 				confirmDestructive
 				open={snapshotsOpen}
