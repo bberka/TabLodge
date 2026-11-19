@@ -391,6 +391,10 @@ function NewTab() {
 		targetColumnId: string;
 		source?: SiteSource;
 		stopSource: boolean;
+		/**
+		A site save filled the column while the dialog was open; the dialog says so from inside, where a screen reader hears it.
+		*/
+		grew?: boolean;
 	} | null>(null);
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
@@ -1126,10 +1130,7 @@ function NewTab() {
 			(bookmark) => bookmark.columnId === columnDelete.column.id,
 		).length;
 		if (count > 0 && columnDelete.count === 0) {
-			setColumnDelete({...columnDelete, count});
-			showStatus(
-				`“${columnDelete.column.name}” got ${plural(count, 'bookmark')} meanwhile. Choose where they go, then delete it.`,
-			);
+			setColumnDelete({...columnDelete, count, grew: true});
 			return;
 		}
 
@@ -3440,6 +3441,11 @@ function NewTab() {
 								</DialogDescription>
 							</DialogHeader>
 							<DialogBody>
+								<p role="status" className="text-sm empty:hidden">
+									{columnDelete?.grew
+										? `“${columnDelete.column.name}” got ${plural(columnDelete.count, 'bookmark')} meanwhile. Choose where they go, then delete it.`
+										: ''}
+								</p>
 								{columnDelete &&
 								columnDelete.count > 0 &&
 								columns.some((item) => item.id !== columnDelete.column.id) ? (
