@@ -3441,7 +3441,10 @@ function NewTab() {
 								</DialogDescription>
 							</DialogHeader>
 							<DialogBody>
-								<p role="status" className="text-sm empty:hidden">
+								<p
+									role="status"
+									className={columnDelete?.grew ? 'text-sm' : 'sr-only'}
+								>
 									{columnDelete?.grew
 										? `“${columnDelete.column.name}” got ${plural(columnDelete.count, 'bookmark')} meanwhile. Choose where they go, then delete it.`
 										: ''}
