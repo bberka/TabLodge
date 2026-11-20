@@ -24,6 +24,7 @@ import {
 	parseSiteSourcesState,
 	redditPermalinkUrl,
 	SITE_SOURCES,
+	type SiteSourceId,
 	siteSourceForUrl,
 	sourceSavingInto,
 	stackOverflowQuestionUrl,
@@ -39,9 +40,15 @@ import {createMediumReader} from '../src/app/source-medium';
 import {createSoundcloudReader} from '../src/app/source-soundcloud';
 import {createSpotifyReader} from '../src/app/source-spotify';
 import {createSubstackReader} from '../src/app/source-substack';
-import {createGithubReader} from '../src/app/source-github';
+import {
+	createGithubReader,
+	readGithubSavedPage,
+} from '../src/app/source-github';
 import {createHackerNewsReader} from '../src/app/source-hackernews';
-import {createInstagramReader} from '../src/app/source-instagram';
+import {
+	createInstagramReader,
+	readInstagramSavedPage,
+} from '../src/app/source-instagram';
 import {createLobstersReader} from '../src/app/source-lobsters';
 import {
 	excerpt,
@@ -53,6 +60,8 @@ import {
 	readRedditSavedPage,
 } from '../src/app/source-reddit';
 import {
+	type SavedPageReader,
+	CATCH_UP_MAX_LINKS,
 	catchUpAsks,
 	catchUpCountText,
 	dismissMissing,
@@ -64,8 +73,11 @@ import {
 	settleKeptSave,
 } from '../src/app/source-keep-off';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
-import {createTwitterReader} from '../src/app/source-x';
-import {createYoutubeReader} from '../src/app/source-youtube';
+import {createTwitterReader, readTwitterSavedPage} from '../src/app/source-x';
+import {
+	createYoutubeReader,
+	readYoutubeSavedPage,
+} from '../src/app/source-youtube';
 import {
 	TOAST_TOKENS,
 	toastAppearance,
@@ -375,7 +387,7 @@ test('Instagram posts and reels get one address each, also when linked under the
 	]) {
 		assert.equal(
 			instagramPostUrl(href),
-			'https://www.instagram.com/reel/C9x8Y7w6V5u/',
+			'https://www.instagram.com/p/C9x8Y7w6V5u/',
 			href,
 		);
 	}
@@ -764,7 +776,7 @@ test('Instagram: Save on a reel saves the reel, titled as one when it has no cap
 	assert.deepEqual(instagram('instagram-feed.html').click('reel-save'), {
 		kind: 'save',
 		link: {
-			url: 'https://www.instagram.com/reel/C9x8Y7w6V5u/',
+			url: 'https://www.instagram.com/p/C9x8Y7w6V5u/',
 			title: 'Instagram reel',
 		},
 	});
@@ -1609,6 +1621,122 @@ test('Not now answers ask again only for an item not answered yet, and the store
 });
 
 /**
+What a saved page reader lists on a fixture at `url`, as [address, title] pairs, after checking that each address
+is already the one a click-save stores for it (the site's canonical address).
+*/
+function savedPage(
+	read: SavedPageReader,
+	id: SiteSourceId,
+	name: string,
+	url: string,
+) {
+	const links = read(load(name, url).document);
+	const source = SITE_SOURCES.find((entry) => entry.id === id);
+	for (const link of links ?? []) {
+		assert.equal(source?.canonicalUrl(link.url), link.url);
+	}
+
+	return links?.map((link) => [link.url, link.title]);
+}
+
+test("the GitHub stars reader lists the signed-in user's own stars only, without one unstarred on the page", () => {
+	const stars = [
+		[
+			'https://github.com/nodejs/node',
+			'nodejs/node: Node.js JavaScript runtime',
+		],
+		['https://github.com/torvalds/linux', 'torvalds/linux'],
+	];
+	const read = (name: string, url: string) =>
+		savedPage(readGithubSavedPage, 'github', name, url);
+	assert.deepEqual(
+		read('github-stars.html', 'https://github.com/octo-me?tab=stars'),
+		stars,
+	);
+	assert.deepEqual(
+		read('github-stars.html', 'https://github.com/Octo-Me?tab=stars&page=2'),
+		stars,
+	);
+	for (const url of [
+		'https://github.com/stars',
+		'https://github.com/stars/octo-me',
+		'https://github.com/stars/octo-me/repositories?filter=all',
+	]) {
+		assert.deepEqual(read('github-stars-list.html', url), [stars[0]], url);
+	}
+
+	// Someone else's stars are public, but not the user's saves; the profile's other tabs are not stars.
+	for (const url of [
+		'https://github.com/someone-else?tab=stars',
+		'https://github.com/stars/someone-else',
+		'https://github.com/octo-me',
+		'https://github.com/octo-me?tab=repositories',
+	]) {
+		assert.equal(read('github-stars.html', url), undefined, url);
+	}
+
+	// Signed out, nothing is the user's own.
+	const {document} = load(
+		'github-stars.html',
+		'https://github.com/octo-me?tab=stars',
+	);
+	document.querySelector('meta[name="user-login"]')?.remove();
+	assert.equal(readGithubSavedPage(document), undefined);
+});
+
+test('the YouTube reader lists the shown Watch later playlist only', () => {
+	const read = (url: string) =>
+		savedPage(readYoutubeSavedPage, 'youtube', 'youtube-watch-later.html', url);
+	assert.deepEqual(read('https://www.youtube.com/playlist?list=WL'), [
+		['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Never Gonna Give You Up'],
+		['https://www.youtube.com/watch?v=jNQXAC9IVRw', 'Me at the zoo'],
+	]);
+	assert.equal(read('https://www.youtube.com/playlist?list=LL'), undefined);
+	assert.equal(
+		read('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=WL'),
+		undefined,
+	);
+});
+
+test('the X reader lists the bookmarked posts, not a post one of them quotes', () => {
+	const read = (url: string) =>
+		savedPage(readTwitterSavedPage, 'x', 'x-bookmarks.html', url);
+	const posts = [
+		[
+			'https://x.com/alice/status/1900000000000000001',
+			'Quoting this, worth a read',
+		],
+		['https://x.com/carol/status/1900000000000000003', 'Post by @carol'],
+	];
+	assert.deepEqual(read('https://x.com/i/history'), posts);
+	assert.deepEqual(read('https://x.com/i/bookmarks'), posts);
+	assert.equal(read('https://x.com/i/history/likes'), undefined);
+	assert.equal(read('https://x.com/home'), undefined);
+});
+
+test('the Instagram reader lists the saved posts and reels of a saved page', () => {
+	const read = (url: string) =>
+		savedPage(readInstagramSavedPage, 'instagram', 'instagram-saved.html', url);
+	// The worker drops the repeat; the reader keeps the page as it is.
+	assert.deepEqual(read('https://www.instagram.com/someone/saved/all-posts/'), [
+		[
+			'https://www.instagram.com/p/DfAAAAAAAAA/',
+			'Sunrise over the bay, shot on film',
+		],
+		['https://www.instagram.com/p/DfBBBBBBBBB/', 'Instagram reel'],
+		['https://www.instagram.com/p/DfAAAAAAAAA/', 'The same post again'],
+	]);
+	assert.equal(
+		read('https://www.instagram.com/someone/saved/trips/17900000000000000/')
+			?.length,
+		3,
+	);
+	// The collections overview and the profile are not a list of saves.
+	assert.equal(read('https://www.instagram.com/someone/saved/'), undefined);
+	assert.equal(read('https://www.instagram.com/someone/'), undefined);
+});
+
+/**
 A fixture page with the content script's listener and a site that saves on a click, as a site's own handlers do. `click(id)` sends a trusted click (Shift held when asked) and says who acted on it.
 */
 function keepOffPage(
@@ -1836,4 +1964,20 @@ test('a stopped save that fails, or finds the source off, goes on to the site; a
 		},
 	);
 	assert.equal(saved.replays.length, 0, 'a saved item stays off the site');
+});
+
+test('Not now on the longest page the content script sends keeps every item of it', () => {
+	const links = Array.from({length: CATCH_UP_MAX_LINKS}, (_, index) => ({
+		url: `https://github.com/someone/repo-${index}`,
+		title: '',
+	}));
+	const dismissed = dismissMissing(['https://github.com/older/one'], links);
+	assert.equal(catchUpAsks(links, dismissed), false);
+	assert.equal(
+		catchUpAsks(
+			links,
+			parseCatchUpState({dismissed: {github: dismissed}}).github,
+		),
+		false,
+	);
 });
