@@ -1,0 +1,8 @@
+Android 13 emulator (tablodge_api33, x86_64), release build of this branch, Material look, connected to a local server built from this branch.
+1. Phone Theme set Dark -> Light in Settings › Appearance; Sync now.
+   app-read (peer.test.ts, the extension's sync client): MOBILEAPP {"theme":"dark","at.theme":1795189034283}
+   -> the phone's Light never reached the library (the "dark" entry was left by the older build installed before).
+2. "Another phone" (app-set) writes a newer sessionSwipeRight=share and a newer theme=dark:
+   MOBILEAPP {"theme":"dark","at.theme":1795202986123,"sessionSwipeRight":"share","at.sessionSwipeRight":1795202986123}
+   Phone after Sync now: "Swipe a session right, Share" (synced preference arrived), "Theme, Light" (kept its own).
+Not checked: TalkBack, the iOS look.
