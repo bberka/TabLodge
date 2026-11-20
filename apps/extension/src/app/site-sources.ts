@@ -3,7 +3,7 @@
 // optional host permission for that site only; the content script is registered only while it is granted. A new
 // site is an entry here plus its adapter in shell/site-source.ts; Settings lists it in Add a site by itself.
 // The manifest's optional_host_permissions must list exactly the origins here (tests/site-sources.test.ts).
-import {isRecord} from '../shared/library-values';
+import {canonicalJson, isRecord} from '../shared/library-values';
 import {
 	SOURCE_COLUMNS,
 	type SiteSourceId,
@@ -767,6 +767,55 @@ export function putChoice(
 	value: Record<string, unknown>,
 ) {
 	state.choices = {...state.choices, [id]: value};
+}
+
+/**
+Applies choices from other devices: `put` adds or replaces, `remove` deletes. A site whose stored value no longer
+equals `was` (what the sync round read) changed here meanwhile, so it keeps this browser's edit, which the round's
+push then sends, and is listed in `kept`. `removed` lists the known sites that went off.
+*/
+export function applySyncedChoices(
+	state: SiteSourcesState,
+	put: ReadonlyArray<{id: string; value: Record<string, unknown>}>,
+	remove: readonly string[],
+	was: ReadonlyMap<string, unknown>,
+): {removed: SiteSource[]; kept: string[]} {
+	const kept: string[] = [];
+	const unchanged = (id: string) => {
+		const same =
+			canonicalJson(
+				Object.hasOwn(state.choices, id) ? state.choices[id] : null,
+			) === canonicalJson(was.get(id) ?? null);
+		if (!same) {
+			kept.push(id);
+		}
+
+		return same;
+	};
+
+	for (const {id, value} of put) {
+		if (unchanged(id)) {
+			putChoice(state, id, value);
+		}
+	}
+
+	const removed: SiteSource[] = [];
+	for (const id of remove) {
+		if (!unchanged(id)) {
+			continue;
+		}
+
+		withoutChoice(state, id);
+		const source = siteSourceById(id);
+		if (!source) {
+			continue;
+		}
+
+		removed.push(source);
+		state.sites[source.id] = {enabled: false};
+	}
+
+	return {removed, kept};
 }
 
 /**

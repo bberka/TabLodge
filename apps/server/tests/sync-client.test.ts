@@ -254,6 +254,10 @@ type Device = {
 	The Sources choices, for a device whose host has them (the extension's regular library).
 	*/
 	sources: SyncedSource[];
+	/**
+	Runs as sync applies Sources choices; true stands for an edit made here meanwhile, which the host keeps instead.
+	*/
+	editedDuringApply?: () => boolean;
 	storage: Map<string, unknown>;
 	backups: string[];
 	client: ReturnType<typeof createSyncClient>;
@@ -334,6 +338,10 @@ function makeDevice(
 				? {
 						read: async () => structuredClone(device.sources),
 						async apply(put, remove) {
+							if (device.editedDuringApply?.()) {
+								return;
+							}
+
 							const gone = new Set([...remove, ...put.map(({id}) => id)]);
 							device.sources = [
 								...device.sources.filter(({id}) => !gone.has(id)),
@@ -1184,4 +1192,30 @@ test('a stored sync state with a malformed list of pulled kinds still syncs', as
 	await b.client.syncNow();
 	assert.equal((await b.client.status()).error, null);
 	assert.deepEqual(sourceIds(b), ['github']);
+});
+
+test('a Settings edit made while sync applies choices is kept and sent in the same round', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withSources: true});
+	const b = makeDevice(server, emptyStore(), {withSources: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	a.sources = [{id: 'reddit', value: {}}];
+	a.client.localChanged();
+	await until(() => sourceIds(b).includes('reddit'));
+
+	// A changes Reddit's column while B removes Reddit just as that change is applied.
+	b.editedDuringApply = () => {
+		b.editedDuringApply = undefined;
+		b.sources = [];
+		return true;
+	};
+
+	a.sources = [{id: 'reddit', value: {columnId: 'col'}}];
+	await a.client.syncNow();
+	await b.client.syncNow();
+	assert.deepEqual(b.sources, []);
+	assert.equal((await b.client.status()).pending, 0);
+	await a.client.syncNow();
+	assert.deepEqual(a.sources, [], 'the removal went out and won');
 });

@@ -173,10 +173,16 @@ export type SyncHost = {
 	sources?: {
 		read(): Promise<SyncedSource[]>;
 		/**
-		Adds or replaces `put` and removes the sites named in `remove`, keeping the rest, so a change made in Settings
-		while the round runs is not lost. Values are stored as they came, so they go back unchanged.
+		Adds or replaces `put` and removes the sites named in `remove`, keeping the rest. `was` holds each of those sites'
+		values as `read` gave them this round (undefined for none): a site whose value changed since was edited in
+		Settings meanwhile, so the host keeps that edit, and this round's push sends it. Values are stored as they came,
+		so they go back unchanged.
 		*/
-		apply(put: SyncedSource[], remove: string[]): Promise<void>;
+		apply(
+			put: SyncedSource[],
+			remove: string[],
+			was: ReadonlyMap<string, unknown>,
+		): Promise<void>;
 	};
 	/**
 	Writes a library assembled from synced records; the host normalizes it like any untrusted input.
@@ -633,7 +639,13 @@ export function createSyncClient(host: SyncHost) {
 					)
 					.map((record) => record.id);
 				if (put.length > 0 || remove.length > 0) {
-					await host.sources.apply(put, remove);
+					const was = new Map(
+						[...put.map(({id}) => id), ...remove].map((id) => [
+							id,
+							before.get(recordKey({kind: 'source', id}))?.value,
+						]),
+					);
+					await host.sources.apply(put, remove, was);
 				}
 			}
 		} finally {

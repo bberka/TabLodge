@@ -10,7 +10,7 @@ import {
 	siteSourceStatuses,
 	siteSourceUndoLabel,
 	sourceChoice,
-	putChoice,
+	applySyncedChoices,
 	withChoice,
 	withoutChoice,
 	withoutNotice,
@@ -9850,26 +9850,17 @@ async function readSyncSources(): Promise<SyncedSource[]> {
 Choices from other devices. A site removed there goes off here too; one turned on there runs here once this browser
 grants its access.
 */
-async function applySyncSources(put: SyncedSource[], remove: string[]) {
-	const stopped: SiteSource[] = [];
+async function applySyncSources(
+	put: SyncedSource[],
+	remove: string[],
+	was: ReadonlyMap<string, unknown>,
+) {
+	let applied: ReturnType<typeof applySyncedChoices> = {removed: [], kept: []};
 	await changeSourcesState((next) => {
-		for (const {id, value} of put) {
-			putChoice(next, id, value);
-		}
-
-		for (const id of remove) {
-			withoutChoice(next, id);
-			const source = siteSourceById(id);
-			if (!source) {
-				continue;
-			}
-
-			// Also a site off here (its access revoked): its Not now answers go with it.
-			stopped.push(source);
-			next.sites[source.id] = {enabled: false};
-		}
+		applied = applySyncedChoices(next, put, remove, was);
 	});
-	await Promise.all(stopped.map(async (source) => stopSource(source)));
+	// Also a site off here (its access revoked): its Not now answers go with it.
+	await Promise.all(applied.removed.map(async (source) => stopSource(source)));
 	await reconcileSources();
 }
 

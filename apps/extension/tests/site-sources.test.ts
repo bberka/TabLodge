@@ -21,6 +21,7 @@ import {
 	hackerNewsItemUrl,
 	instagramPostUrl,
 	lobstersStoryUrl,
+	applySyncedChoices,
 	parseSiteSourcesState,
 	putChoice,
 	redditPermalinkUrl,
@@ -436,6 +437,42 @@ test('stored source state is read defensively: off unless saved as on', () => {
 		youtube: {},
 		mastodon: {columnId: 'c', later: 1},
 	});
+});
+
+test('choices from another device are applied unless this browser changed the site since the round read it', () => {
+	const state = parseSiteSourcesState({
+		version: 1,
+		sources: {youtube: {enabled: true}, x: {enabled: true}},
+		choices: {youtube: {}, github: {columnId: 'c'}},
+	});
+	// The round read YouTube, X, and GitHub on; X was removed here before the apply.
+	const was = new Map<string, unknown>([
+		['youtube', {}],
+		['x', {}],
+		['github', {columnId: 'c'}],
+		['reddit', undefined],
+	]);
+	const {removed, kept} = applySyncedChoices(
+		state,
+		[
+			{id: 'youtube', value: {columnId: 'remote'}},
+			{id: 'x', value: {keepOffSite: true}},
+			{id: 'reddit', value: {}},
+		],
+		['github'],
+		was,
+	);
+	assert.deepEqual(kept, ['x']);
+	assert.deepEqual(
+		removed.map(({id}) => id),
+		['github'],
+	);
+	assert.deepEqual(state.choices, {
+		youtube: {columnId: 'remote'},
+		reddit: {},
+	});
+	assert.deepEqual(state.sites.github, {enabled: false});
+	assert.deepEqual(state.sites.youtube, {enabled: true});
 });
 
 test('a site id such as __proto__ from the server stays an ordinary choice', () => {
