@@ -14634,3 +14634,98 @@ test('the saved pages of YouTube, X, Instagram, and GitHub add their missing ite
 		assert.equal(elsewhere.ok, false, page.id);
 	}
 });
+
+test('Save to TabLodge only is a choice per site that supports it, reported to its page, and reset by Remove', async () => {
+	const harness = sourcesHarness();
+	const xTab = {id: 3, windowId: 10, url: 'https://x.com/home'};
+	const fromX = {tab: xTab, url: xTab.url};
+	const mode = async (sender = fromX) => {
+		const result = await harness.sendMessage(
+			{type: 'SITE_SOURCE_MODE', source: 'x'},
+			sender,
+		);
+		assert.ok(result.ok);
+		return result.keepOffSite;
+	};
+
+	const keepOff = (source: string, keepOffSite: boolean) =>
+		harness.sendMessage({
+			type: 'SET_SITE_SOURCE_KEEP_OFF',
+			source,
+			keepOffSite,
+		});
+	const status = async () => {
+		const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+		return result.ok
+			? structuredClone(result.sources.find((entry) => entry.id === 'x'))
+			: undefined;
+	};
+
+	// Off until the site is added, and only for a site whose adapter supports it.
+	assert.equal((await keepOff('x', true)).ok, true);
+	assert.deepEqual(await status(), {id: 'x', enabled: false});
+	await switchOnYoutube(harness);
+	assert.equal((await keepOff('youtube', true)).ok, false);
+
+	harness.grantOrigins(['https://x.com/*', 'https://twitter.com/*']);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'x',
+		enabled: true,
+	});
+	assert.equal(await mode(), false, 'the default saves on the site too');
+	assert.equal((await keepOff('x', true)).ok, true);
+	assert.deepEqual(await status(), {id: 'x', enabled: true, keepOffSite: true});
+	assert.equal(await mode(), true);
+	// Another site's page is not told X's choice, and a web page cannot change it.
+	assert.equal(await mode(fromYoutube), false);
+	const fromPage = await harness.sendMessage(
+		{type: 'SET_SITE_SOURCE_KEEP_OFF', source: 'x', keepOffSite: false},
+		fromX,
+	);
+	assert.equal(fromPage.ok, false);
+	assert.equal(await mode(), true);
+
+	assert.equal((await keepOff('x', false)).ok, true);
+	assert.equal(await mode(), false);
+	await keepOff('x', true);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'x',
+		enabled: false,
+	});
+	assert.equal(await mode(), false);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'x',
+		enabled: true,
+	});
+	assert.deepEqual(await status(), {id: 'x', enabled: true});
+});
+
+test('a private window keeps saves off the site only when its saves are added', async () => {
+	const on = {
+		'tablodge.sources': {
+			version: 1,
+			sources: {x: {enabled: true, keepOffSite: true}},
+		},
+	};
+	const fromX = {
+		tab: {id: 3, windowId: 10, url: 'https://x.com/home'},
+		url: 'https://x.com/home',
+	};
+	for (const [mode, expected] of [
+		['saved', false],
+		['shared', true],
+	] as const) {
+		const harness = sourcesHarness({
+			incognitoContext: true,
+			storage: {...on, 'tablodge.private.config': {mode, configured: true}},
+		});
+		const result = await harness.sendMessage(
+			{type: 'SITE_SOURCE_MODE', source: 'x'},
+			fromX,
+		);
+		assert.equal(result.ok && result.keepOffSite, expected, mode);
+	}
+});

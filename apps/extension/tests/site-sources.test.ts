@@ -66,6 +66,11 @@ import {
 	dismissMissing,
 	parseCatchUpState,
 } from '../src/app/source-catch-up';
+import {
+	type KeptSave,
+	listenForSaves,
+	settleKeptSave,
+} from '../src/app/source-keep-off';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createTwitterReader, readTwitterSavedPage} from '../src/app/source-x';
 import {
@@ -1728,4 +1733,234 @@ test('the Instagram reader lists the saved posts and reels of a saved page', () 
 	// The collections overview and the profile are not a list of saves.
 	assert.equal(read('https://www.instagram.com/someone/saved/'), undefined);
 	assert.equal(read('https://www.instagram.com/someone/'), undefined);
+});
+
+/**
+A fixture page with the content script's listener and a site that saves on a click, as a site's own handlers do. `click(id)` sends a trusted click (Shift held when asked) and says who acted on it.
+*/
+function keepOffPage(
+	name: string,
+	url: string,
+	reader: (document: Document) => SourceReader,
+	keepOff = true,
+) {
+	const {window, document} = load(name, url);
+	const handled: string[] = [];
+	const reads: Array<{found: SourceRead; kept?: KeptSave}> = [];
+	let choice = keepOff;
+	listenForSaves(window, {
+		read: reader(document),
+		keepOff: () => choice,
+		onRead(found, kept) {
+			reads.push({found, kept});
+		},
+	});
+	// Linkedom calls window listeners last and in the order added, whatever the phase, so the site's handler goes on
+	// the window after the content script's; in a browser the capture listener runs before any site handler.
+	window.addEventListener('click', (event) => {
+		handled.push((event.target as Element).closest('[id]')?.id ?? '');
+	});
+	const click = (id: string, {shiftKey = false, trusted = true} = {}) => {
+		const element = document.querySelector(`#${id}`);
+		assert.ok(element, `fixture has #${id}`);
+		const event = new window.Event('click', {bubbles: true, cancelable: true});
+		// Linkedom marks no event trusted; the browser marks the user's own clicks.
+		Object.defineProperties(event, {
+			isTrusted: {value: trusted},
+			shiftKey: {value: shiftKey},
+		});
+		element.dispatchEvent(event);
+		return {stopped: event.defaultPrevented, last: reads.at(-1)};
+	};
+
+	return {
+		document,
+		handled,
+		reads,
+		click,
+		setKeepOff(value: boolean) {
+			choice = value;
+		},
+	};
+}
+
+const keepOffX = (keepOff?: boolean) =>
+	keepOffPage(
+		'x-home.html',
+		'https://x.com/home',
+		(document) => createTwitterReader(document),
+		keepOff,
+	);
+const keepOffReddit = (name: string, url: string, keepOff?: boolean) =>
+	keepOffPage(name, url, () => createRedditReader(), keepOff);
+
+test('Save to TabLodge only: X Bookmark, button or Share menu, never reaches the site', () => {
+	const site = keepOffX();
+	const button = site.click('bookmark-icon');
+	assert.equal(button.stopped, true);
+	assert.equal(
+		button.last?.kept?.link.url,
+		'https://x.com/alice/status/1850000000000000001',
+	);
+	site.click('share');
+	const menu = site.click('menu-bookmark');
+	assert.equal(menu.stopped, true);
+	assert.equal(
+		menu.last?.kept?.link.url,
+		'https://x.com/alice/status/1850000000000000001',
+	);
+	// Share opened the menu on the site; neither save reached it.
+	assert.deepEqual(site.handled, ['share']);
+});
+
+test('Save to TabLodge only: new and old Reddit Save never reach the site', () => {
+	for (const [name, url] of [
+		['reddit-new.html', 'https://www.reddit.com/'],
+		['reddit-old.html', 'https://old.reddit.com/r/typescript/'],
+	] as const) {
+		const site = keepOffReddit(name, url);
+		const {stopped, last} = site.click('post-save');
+		assert.equal(stopped, true, name);
+		assert.equal(
+			last?.kept?.link.url,
+			'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
+			name,
+		);
+		assert.deepEqual(site.handled, [], name);
+	}
+});
+
+test('saving on the site and in TabLodge, the default, lets every save reach the site', () => {
+	const site = keepOffX(false);
+	const {stopped, last} = site.click('bookmark-icon');
+	assert.equal(stopped, false);
+	assert.equal(last?.found?.kind, 'save');
+	assert.equal(last?.kept, undefined);
+	assert.deepEqual(site.handled, ['bookmark-icon']);
+});
+
+test('Save to TabLodge only fails open: an unreadable save, a choice not loaded, and untrusted clicks reach the site', () => {
+	const site = keepOffX();
+	assert.equal(site.click('changed-bookmark').stopped, false);
+	assert.deepEqual(site.reads.at(-1), {
+		found: {kind: 'unreadable'},
+		kept: undefined,
+	});
+	const oldReddit = keepOffReddit('reddit-new.html', 'https://www.reddit.com/');
+	assert.equal(oldReddit.click('broken-save').stopped, false);
+	assert.deepEqual(oldReddit.handled, ['broken-save']);
+
+	site.setKeepOff(false);
+	assert.equal(site.click('bookmark-icon').stopped, false);
+	site.setKeepOff(true);
+	assert.equal(site.click('bookmark-icon', {trusted: false}).stopped, false);
+	assert.deepEqual(site.handled, [
+		'changed-bookmark',
+		'bookmark-icon',
+		'bookmark-icon',
+	]);
+});
+
+test('Save to TabLodge only: Shift passes one click through to the site, and TabLodge still saves it', () => {
+	const site = keepOffX();
+	const shifted = site.click('bookmark-icon', {shiftKey: true});
+	assert.equal(shifted.stopped, false);
+	assert.equal(shifted.last?.found?.kind, 'save');
+	assert.equal(shifted.last?.kept, undefined);
+	assert.equal(site.click('bookmark-icon').stopped, true);
+	assert.deepEqual(site.handled, ['bookmark-icon']);
+});
+
+test('Also save on the site replays the click to the site only, unless the control is gone', () => {
+	const site = keepOffX();
+	const kept = site.click('bookmark-icon').last?.kept;
+	assert.ok(kept);
+	const reads = site.reads.length;
+	assert.equal(kept.replay(), true);
+	// The icon has no click method, so the element around it is clicked, inside the same button.
+	assert.deepEqual(site.handled, ['bookmark']);
+	assert.equal(site.reads.length, reads, 'the replay is not read again');
+
+	site.click('share');
+	const menu = site.click('menu-bookmark').last?.kept;
+	assert.ok(menu);
+	site.document.querySelector('#menu-bookmark')?.remove();
+	assert.equal(menu.replay(), false);
+});
+
+test('Save to TabLodge only is stored only as true, and only for X and Reddit', () => {
+	assert.deepEqual(
+		SITE_SOURCES.filter((source) => source.keepOffSite).map(({id}) => id),
+		['reddit', 'x'],
+	);
+	const state = parseSiteSourcesState({
+		version: 1,
+		sources: {
+			x: {enabled: true, keepOffSite: true},
+			reddit: {enabled: true, keepOffSite: 'yes'},
+			youtube: {enabled: true, keepOffSite: true},
+		},
+	});
+	assert.deepEqual(state.x, {enabled: true, keepOffSite: true});
+	assert.deepEqual(state.reddit, {enabled: true});
+	assert.deepEqual(state.youtube, {enabled: true});
+});
+
+test('a stopped save that fails, or finds the source off, goes on to the site; a saved one offers Undo and Also save', () => {
+	const names = {app: 'TabLodge', site: 'X'};
+	const kept = (attached: boolean) => {
+		const replays: number[] = [];
+		const save: KeptSave = {
+			link: {url: 'https://x.com/alice/status/1', title: 'Post'},
+			replay() {
+				replays.push(1);
+				return attached;
+			},
+		};
+		return {save, replays};
+	};
+
+	for (const result of [
+		undefined,
+		{ok: false, error: 'Locked.'},
+		{ok: true, outcome: 'off'},
+	] as const) {
+		const {save, replays} = kept(true);
+		assert.deepEqual(settleKeptSave(result, save, names), {
+			text: 'TabLodge could not save this, so X saved it.',
+			error: true,
+			alsoSave: false,
+		});
+		assert.equal(replays.length, 1, 'the click went on to the site');
+	}
+
+	const gone = kept(false);
+	assert.equal(
+		settleKeptSave(undefined, gone.save, names).text,
+		'TabLodge could not save this, and X did not either. Save it again.',
+	);
+
+	const saved = kept(true);
+	assert.deepEqual(
+		settleKeptSave(
+			{ok: true, outcome: 'saved', column: 'X', undoId: 'u1'},
+			saved.save,
+			names,
+		),
+		{
+			text: "Saved to TabLodge only, in X. X won't show it as saved.",
+			error: false,
+			alsoSave: true,
+			undoId: 'u1',
+		},
+	);
+	assert.deepEqual(
+		settleKeptSave({ok: true, outcome: 'exists'}, saved.save, names),
+		{
+			text: 'Already in TabLodge, so X did not save it.',
+			error: false,
+			alsoSave: true,
+		},
+	);
+	assert.equal(saved.replays.length, 0, 'a saved item stays off the site');
 });

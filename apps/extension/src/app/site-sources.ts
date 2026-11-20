@@ -60,6 +60,11 @@ export type SiteSource = {
 	the next page in the tab to show.
 	*/
 	saveLoadsPage?: true;
+	/**
+	The adapter can tell a save before the site handles it, so Settings offers Save to TabLodge only for this site:
+	the content script stops the click on the site's save control and saves the link to TabLodge alone (#296).
+	*/
+	keepOffSite?: true;
 };
 
 const YOUTUBE_VIDEO_ID = /^[\w-]{11}$/;
@@ -486,6 +491,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['reddit.com'],
 		scriptId: 'tablodge-source-reddit',
 		canonicalUrl: redditPermalinkUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'x',
@@ -497,6 +503,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['x.com', 'twitter.com'],
 		scriptId: 'tablodge-source-x',
 		canonicalUrl: xPostUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'instagram',
@@ -684,7 +691,8 @@ export function siteSourceForUrl(href: unknown): SiteSource | undefined {
 }
 
 /**
-Per device, outside the library: whether each source is on, and why it went off or stopped saving. It is kept in
+Per device, outside the library: whether each source is on, whether it keeps saves off the site, and why it went
+off or stopped saving. It is kept in
 chrome.storage.local unprefixed, because the permission and the registered script belong to the browser, not to a
 library, and it never syncs.
 */
@@ -720,6 +728,8 @@ export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 				enabled: entry.enabled === true,
 				...(notice && {notice}),
 				...(columnId && {columnId}),
+				...(entry.keepOffSite === true &&
+					source.keepOffSite && {keepOffSite: true}),
 			},
 		] as const;
 	});
