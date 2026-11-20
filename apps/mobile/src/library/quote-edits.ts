@@ -4,6 +4,7 @@ apps/extension/src/shared/quotes.ts): into the note of the page's bookmark, else
 of it, else of a new bookmark. Undo puts back what the quote changed, unless the note was edited since.
 */
 import type {Store} from '../../../extension/src/shared/types';
+import type {DeviceStamp} from '../../../extension/src/shared/device';
 import {
 	appendQuote,
 	pageAddress,
@@ -26,7 +27,13 @@ export type QuoteSave =
 
 export function saveQuote(
 	store: Store,
-	input: {url: string; quote: string; title: string; columnId: string},
+	input: {
+		url: string;
+		quote: string;
+		title: string;
+		columnId: string;
+		device?: DeviceStamp;
+	},
 	id: string,
 	now: number,
 ): QuoteSave {
@@ -78,6 +85,7 @@ export function saveQuote(
 					title: input.title.trim() || hostOf(url),
 					columnId: input.columnId,
 					notes: note.notes,
+					device: input.device,
 				},
 				id,
 				now,

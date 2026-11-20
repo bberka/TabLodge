@@ -325,7 +325,7 @@ function cachedSessionItems(
 		}
 
 		const folder = folderName.get(group.folderId);
-
+		const device = {name: group.deviceName, kind: group.deviceKind};
 		const count = group.tabs.length;
 		items.push(
 			prepared({
@@ -339,6 +339,7 @@ function cachedSessionItems(
 					urls: group.tabs.map((tab) => tab.url),
 					folder,
 					date: group.createdAt,
+					device,
 				},
 				ref: group.id,
 				recency: group.lastOpenedAt ?? group.updatedAt ?? group.createdAt,
@@ -363,6 +364,7 @@ function cachedSessionItems(
 						urls: [tab.url],
 						folder,
 						date: tab.savedAt,
+						device,
 					},
 					ref: group.id,
 				}),

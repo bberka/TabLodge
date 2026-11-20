@@ -47,6 +47,45 @@ describe('importing a file into the library', () => {
 		assert.equal(second.tabs[0].url, 'https://other.org/');
 	});
 
+	test('a TabLodge bookmarks file keeps the device each bookmark was saved on through export and import', () => {
+		const file = JSON.stringify({
+			format: BOOKMARKS_FORMAT_ID,
+			version: BACKUP_VERSION,
+			bookmarks: [
+				{
+					url: 'https://a.example/',
+					title: 'A',
+					deviceName: 'Pixel 9',
+					deviceKind: 'mobile',
+				},
+				{url: 'https://b.example/', title: 'B'},
+			],
+		});
+		const first = importIntoStore(
+			emptyStore(NOW),
+			parseImportFile(file, 'tablodge-bookmarks.json'),
+			{kind: 'bookmarks', now: NOW, newId},
+		);
+		const exported = buildExport(
+			{
+				kind: 'bookmarks',
+				columns: first.store.bookmarkColumns,
+				bookmarks: first.store.bookmarks,
+			},
+			'json',
+			{appName: 'TabLodge'},
+		);
+		const again = importIntoStore(
+			emptyStore(NOW),
+			parseImportFile(exported.content, exported.filename),
+			{kind: 'bookmarks', now: NOW, newId},
+		);
+		const [phone, old] = again.store.bookmarks;
+		assert.equal(phone.deviceName, 'Pixel 9');
+		assert.equal(phone.deviceKind, 'mobile');
+		assert.equal('deviceName' in old, false);
+	});
+
 	test('links already saved are skipped, and so are repeats in the file', () => {
 		const parsed = parseImportFile(
 			'https://a.com\nhttps://a.com\nhttps://b.com',

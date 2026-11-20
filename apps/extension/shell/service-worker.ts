@@ -1352,8 +1352,8 @@ async function privateSyncInfo(): Promise<PrivateSyncInfo> {
 }
 
 /**
-The name this browser gives the sessions it saves: the one set in Settings, else the browser and system. Read once at
-start and again whenever the setting changes; functions that save a session wait for the first read.
+The name this browser gives the sessions and bookmarks it saves: the one set in Settings, else the browser and system.
+Read once at start and again whenever the setting changes; functions that save wait for the first read.
 */
 let thisDevice = '';
 async function readDeviceName() {
@@ -1379,6 +1379,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
 		void readDeviceName();
 	}
 });
+
+/**
+The fields that mark a new bookmark as saved in this browser.
+*/
+async function savedHere() {
+	// A failed first read leaves the default name, rather than every later save failing with it.
+	await deviceReady.catch(() => undefined);
+	return deviceStamp(thisDevice, 'desktop');
+}
 
 const PREVIEW_CACHE_SIZE = 200;
 const previewCache = new Map<string, LinkPreviewData | null>();
@@ -4934,6 +4943,7 @@ async function addBookmark(
 			url,
 			columnId,
 			...(notes && {notes}),
+			...(await savedHere()),
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -5022,6 +5032,7 @@ async function saveQuote(
 						{claimedId, allowUnfiled: true},
 					),
 					notes: note.notes,
+					...(await savedHere()),
 					createdAt: now,
 					updatedAt: now,
 				};
@@ -5055,6 +5066,7 @@ async function addBookmarks(
 			allowUnfiled: true,
 		});
 		const now = Date.now();
+		const device = await savedHere();
 		const added: Bookmark[] = [];
 		const known = new Set(
 			store.bookmarks
@@ -5084,6 +5096,7 @@ async function addBookmarks(
 				),
 				url,
 				columnId: targetColumnId,
+				...device,
 				createdAt: now,
 				updatedAt: now,
 			});
@@ -9961,6 +9974,7 @@ async function saveFromSource(
 					url,
 					columnId: column.id,
 					...(notes && {notes}),
+					...(await savedHere()),
 					createdAt: now,
 					updatedAt: now,
 				});
@@ -10040,6 +10054,7 @@ async function addSourceCatchUp(
 
 				const now = Date.now();
 				const column = sourceSaveColumn(store, source, state, now);
+				const device = await savedHere();
 				// In the page's order, one after another, as the site lists them.
 				for (const link of missing) {
 					const notes = sourceNote(source, link.discussion, link.url);
@@ -10053,6 +10068,7 @@ async function addSourceCatchUp(
 						url: link.url,
 						columnId: column.id,
 						...(notes && {notes}),
+						...device,
 						createdAt: now,
 						updatedAt: now,
 					});
