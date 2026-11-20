@@ -348,6 +348,12 @@ function Help() {
 						'image picture photo pdf document video kind type icon mark badge jpg png youtube vimeo arxiv',
 				},
 				{
+					title: 'Tags',
+					body: 'Each bookmark shows its tags as small labels under its name. One tag comes from the address: movie (IMDb, Letterboxd), show, video (YouTube, Vimeo), music (Spotify, SoundCloud, Bandcamp), image, pdf, repo (GitHub, GitLab, Codeberg), read (Medium, Substack, dev.to), docs, discussion (Reddit, Hacker News, Stack Overflow, X, Bluesky), shop, or recipe. It is worked out on this device from the address alone, so nothing is fetched and older bookmarks get it too. Add your own in the Tags field when you add or edit a bookmark, or choose Edit tags… in a bookmark’s menu: type a tag and press Enter or a comma. Remove the automatic tag there with its × to keep it off that bookmark; Show automatic tag puts it back. Saving an edit that removes a tag shows Undo. The tag button next to the bookmark search lists every tag with how many bookmarks have it, and picking tags filters the board. Your own tags go into JSON, CSV, and browser bookmark exports (TAGS=) and full backups, come in from Raindrop, Pinboard, Linkwarden, Karakeep, wallabag, and browser files, and sync with the Android app through a sync server that supports tags.',
+					searchText:
+						'tag tags label labels kind type automatic movie film show video music repo article read docs discussion shop recipe filter edit tags remove undo',
+				},
+				{
 					title: 'Add a note to a bookmark',
 					body: 'Write a note in the Notes field when you add a bookmark (on the dashboard, in the toolbar popup, or in the Bookmark this page window) or edit one, for example why you saved the page. The field stays one line until you click into it. It shows under the bookmark’s title (one line in the compact layout), search and the palette find it, and it goes into JSON, CSV, Markdown, and browser bookmark exports and full backups. Clear the field to remove it. The Android app has the same field, and a sync server that supports notes carries them between the two.',
 					searchText:
@@ -661,9 +667,15 @@ function Help() {
 									of result.
 								</li>
 								<li>
-									<Op>kind:image</Op>, <Op>kind:pdf</Op>, and{' '}
-									<Op>kind:video</Op> keep links to images, PDFs, or videos, the
-									same kinds the board marks.
+									<Op>kind:image</Op>, <Op>kind:pdf</Op>, <Op>kind:repo</Op>,
+									and the other automatic tags keep links of that kind, read
+									from the address, even on a bookmark whose automatic tag you
+									removed.
+								</li>
+								<li>
+									<Op>tag:movie</Op> keeps bookmarks that show that tag,
+									automatic or your own. Several <Op>tag:</Op> operators must
+									all match; quote a tag with spaces: <Op>tag:"to read"</Op>.
 								</li>
 								<li>
 									<Op>col:Work</Op> and <Op>folder:Work</Op> keep bookmarks in a
