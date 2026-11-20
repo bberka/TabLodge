@@ -702,21 +702,24 @@ export function createSyncClient(host: SyncHost) {
 		/*
 		The optional kinds this round pulls. A kind skipped by earlier pulls (the server lacked it, or this device ran a
 		version without it, such as 0.3.0 before Sources) was left behind the cursor, so a round that takes it for the
-		first time pulls from the start. Stamps decide record by record, so nothing newer here is lost.
+		first time pulls from the start. Stamps decide record by record, so nothing newer here is lost. It runs as a
+		resync: the server checks for purged deletes only against a cursor past 0, so a record deleted elsewhere whose
+		delete was purged since would otherwise stay. A record not seen again is removed, unless it waits to be sent.
 		*/
 		const kinds = OPTIONAL_KINDS.filter((kind) => !unsupported(kind));
 		const start = await step(async (state) => ({
 			state,
 			result: {
-				cursor: kinds.every((kind) => state.pulled?.includes(kind))
-					? state.cursor
-					: 0,
+				replay:
+					state.cursor > 0 &&
+					kinds.some((kind) => !state.pulled?.includes(kind)),
+				cursor: state.cursor,
 				purged: state.purged,
 				known: Math.max(state.known ?? 0, state.cursor),
 			},
 		}));
-		let end = {cursor: start.cursor, purged: start.purged};
-		let resync = false;
+		let end = {cursor: start.replay ? 0 : start.cursor, purged: start.purged};
+		let resync = start.replay;
 		let serverReset = false;
 		const pulled: SyncChange[] = [];
 		for (;;) {

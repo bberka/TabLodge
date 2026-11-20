@@ -916,8 +916,8 @@ export const siteSourceUndoLabel = (source: SiteSource) =>
 	`Save from ${source.column.name}`;
 
 /**
-The site whose saves on this device go into a column, so deleting that column asks whether to stop them too: its
-source column, while the site is on and Settings picks no other column that still exists.
+The site whose saves go into a column, in this browser or another synced one, so deleting that column asks whether to
+stop them too: its source column, while the site is on anywhere and Settings picks no other column that still exists.
 */
 export function sourceSavingInto(
 	columnId: string,
@@ -928,7 +928,7 @@ export function sourceSavingInto(
 	const entry = statuses.find((status) => status.id === source?.id);
 	const chosen = entry?.columnId;
 	return source &&
-		entry?.enabled &&
+		(entry?.wanted || entry?.enabled) &&
 		(!chosen ||
 			chosen === columnId ||
 			columns.every((column) => column.id !== chosen))

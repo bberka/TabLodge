@@ -47,11 +47,13 @@ function makeServer(options: {legacy?: boolean} = {}) {
 	// Pushes by how many changes each carried.
 	const pushes: number[] = [];
 	const sockets = new Set<FakeSocket>();
+	let currentLog = new ChangeLog();
 	const createServerApi = () =>
 		createApi({
 			token: TOKEN,
 			log: (() => {
-				const log = new ChangeLog();
+				currentLog = new ChangeLog();
+				const log = currentLog;
 				return () => log;
 			})(),
 			onApplied(cursor) {
@@ -95,6 +97,12 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		*/
 		resyncOnce() {
 			resyncNext = true;
+		},
+		/**
+		Forgets every delete older than `before`, as the server does after its retention.
+		*/
+		purge(before: number) {
+			currentLog.purge(before);
 		},
 		async fetch(url: string, init: RequestInit) {
 			if (!online) {
@@ -1218,4 +1226,38 @@ test('a Settings edit made while sync applies choices is kept and sent in the sa
 	assert.equal((await b.client.status()).pending, 0);
 	await a.client.syncNow();
 	assert.deepEqual(a.sources, [], 'the removal went out and won');
+});
+
+test('a browser that updates from 0.3.0 still drops a record deleted elsewhere whose delete was purged meanwhile', async () => {
+	const server = makeServer();
+	const a = makeDevice(
+		server,
+		{...emptyStore(), bookmarks: [bookmark('b1')]},
+		{
+			withSources: true,
+		},
+	);
+	await a.client.connect(URL_BASE, TOKEN);
+	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
+	await old.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(ids(old.store), ['b1']);
+	old.client.stop();
+
+	a.edit((store) => ({...store, bookmarks: [bookmark('b2')]}));
+	await a.client.syncNow();
+	server.purge(Date.now() + 1000);
+
+	// Its waiting edit, made on 0.3.0 before the update, is kept and sent.
+	const local = {
+		...old.store,
+		bookmarks: [...old.store.bookmarks, bookmark('mine')],
+	};
+	const updated = makeDevice(server, local, {
+		withSources: true,
+		storage: old.storage,
+	});
+	await updated.client.wake();
+	assert.deepEqual(ids(updated.store).toSorted(), ['b2', 'mine']);
+	await a.client.syncNow();
+	assert.deepEqual(ids(a.store).toSorted(), ['b2', 'mine']);
 });

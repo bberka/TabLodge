@@ -1582,13 +1582,20 @@ test('Substack: Save on a card or a post page; Unsave saves nothing', () => {
 	});
 });
 
-test('deleting a column asks to stop the site that saves into it here, and only that one', () => {
+test('deleting a column asks to stop the site that saves into it, here or in another browser, and only that one', () => {
 	const columns = [{id: 'source-reddit'}, {id: 'mine'}];
 	const on = {id: 'reddit', enabled: true, wanted: true};
 	assert.equal(sourceSavingInto('source-reddit', columns, [on])?.id, 'reddit');
-	// The site is off here, or Settings sends its saves to another column that still exists.
+	// On in another browser only: its saves there would make the column again.
 	assert.equal(
-		sourceSavingInto('source-reddit', columns, [{...on, enabled: false}]),
+		sourceSavingInto('source-reddit', columns, [{...on, enabled: false}])?.id,
+		'reddit',
+	);
+	// The site is off everywhere, or Settings sends its saves to another column that still exists.
+	assert.equal(
+		sourceSavingInto('source-reddit', columns, [
+			{...on, enabled: false, wanted: false},
+		]),
 		undefined,
 	);
 	assert.equal(
