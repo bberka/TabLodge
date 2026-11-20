@@ -1116,6 +1116,11 @@ function Options() {
 		description: string;
 		confirmLabel: string;
 		run: () => unknown;
+		/**
+		The section whose first control takes focus afterwards: the action removes the control that held it, and
+		Chrome fires no focusout for a removed element, so the focus rescue never sees it.
+		*/
+		section: string;
 	}>();
 	const [questionOpen, setQuestionOpen] = useState(false);
 	const ask = (next: NonNullable<typeof question>) => {
@@ -2214,6 +2219,7 @@ function Options() {
 														description: `Every changed setting in ${group.title} goes back to its default. You can undo this right after.`,
 														confirmLabel: 'Reset',
 														run: async () => resetGroup(group.title, fields),
+														section: group.title,
 													});
 												}}
 											>
@@ -2522,6 +2528,7 @@ function Options() {
 														description: `Sessions you save from now on include pages on ${origin} and its subdomains again.`,
 														confirmLabel: 'Remove',
 														run: async () => removeExcludedOrigin(origin),
+														section: EXCLUDED.title,
 													});
 												}}
 											>
@@ -2573,7 +2580,18 @@ function Options() {
 				onOpenChange={setQuestionOpen}
 				onConfirm={() => {
 					setQuestionOpen(false);
-					void question?.run();
+					if (!question) {
+						return;
+					}
+
+					void (async () => {
+						await question.run();
+						document
+							.querySelector<HTMLElement>(
+								`#${sectionId(question.section)} :is(button, input):not(:disabled)`,
+							)
+							?.focus();
+					})();
 				}}
 			/>
 			<ConfirmationDialog
