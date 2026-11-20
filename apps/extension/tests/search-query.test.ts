@@ -84,6 +84,33 @@ test('col: and folder: match part of the name, quoted for spaces', () => {
 	);
 });
 
+test('from: matches a phone, a computer, or part of the device name, and leaves out results without one', () => {
+	const saved = (name?: string, kind?: 'desktop' | 'mobile'): SearchFacets => ({
+		...bookmark('', ''),
+		device: {name, kind},
+	});
+	const on = (input: string, facets: SearchFacets) =>
+		passesOperators(parseSearchQuery(input), [], facets);
+	const pixel = saved('Pixel 9', 'mobile');
+	const laptop = saved('Work laptop', 'desktop');
+	assert.ok(on('from:phone', pixel));
+	assert.ok(!on('from:phone', laptop));
+	assert.ok(on('from:Computer', laptop));
+	assert.ok(!on('from:computer', pixel));
+	assert.ok(on('from:"work lap"', laptop));
+	assert.ok(!on('from:"work lap"', pixel));
+	assert.ok(!on('from:phone', saved()), 'an older bookmark has no device');
+	assert.ok(
+		!on('from:phone', saved('Phone testing laptop', 'desktop')),
+		'phone and computer name the kind, not a part of the name',
+	);
+	assert.ok(!on('from:phone', bookmark('', '')));
+	const query = parseSearchQuery('docs from:pixel');
+	assert.deepEqual(query.devices, ['pixel']);
+	assert.equal(query.text, 'docs');
+	assert.equal(hasOperators(parseSearchQuery('from:phone')), true);
+});
+
 test('after: includes its day and before: leaves its day out', () => {
 	const query = parseSearchQuery('after:2026-01-01 before:2026-06-01');
 	assert.equal(query.after, day(2026, 1, 1));

@@ -67,7 +67,6 @@ import {
 	TabLodgeMark,
 	saveWindowLabel,
 	send,
-	restoreSummary,
 	switchSummary,
 	useHasSavableTabs,
 	useStatus,
@@ -81,7 +80,7 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {defaultBookmarkColumnId} from './default-column';
-import {offerUndo} from './recovery-core';
+import {offerUndo, reportSessionRestore} from './recovery-core';
 import {
 	closeDuplicateTabs,
 	useDuplicateTabCount,
@@ -573,9 +572,8 @@ function Popup() {
 		});
 		setBusy('');
 		if (result?.ok) {
-			showStatus(restoreSummary(result), Boolean(result.failed), {
-				toast: true,
-			});
+			reportSessionRestore(result, group.name, showStatus, reload);
+
 			await reload();
 		} else {
 			showStatus(result?.error || `Could not restore “${group.name}”.`, true);

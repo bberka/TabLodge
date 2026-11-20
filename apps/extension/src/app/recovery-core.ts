@@ -1,8 +1,14 @@
 // Small recovery helpers shared by the pages: formatting, the open-dialog event, and the Undo toasts. The heavy
 // dialogs live in recovery.tsx and are loaded only when opened.
 import {useCallback, useEffect, useState} from 'react';
-import type {ActionSuccess} from '../shared/types';
-import {messageOf, plural, send, type ShowStatus} from './common';
+import type {ActionSuccess, RestoreResult} from '../shared/types';
+import {
+	messageOf,
+	plural,
+	restoreSummary,
+	send,
+	type ShowStatus,
+} from './common';
 
 /**
 A date and time in the user's locale, such as "Oct 25, 2026, 2:32 PM".
@@ -87,6 +93,35 @@ export async function undoFromTrash(
 /**
 A success toast with an Undo button that restores `trashId` from the trash.
 */
+/**
+The toast after restoring a session from the popup or side panel. With Remove restored tabs on, what was removed went
+to the trash and Undo brings it back, failures and skipped tabs included.
+*/
+export function reportSessionRestore(
+	result: RestoreResult,
+	name: string,
+	showStatus: ShowStatus,
+	reload: () => unknown,
+) {
+	const summary =
+		result.failed || result.skipped || result.splitsSeparated
+			? restoreSummary(result)
+			: `Restored “${name}”.`;
+	const {trashId} = result;
+	showStatus(
+		result.removed ? `${summary} Removed it from your sessions.` : summary,
+		Boolean(result.failed),
+		trashId
+			? {
+					action: {
+						label: 'Undo',
+						onClick: async () => undoFromTrash(trashId, showStatus, reload),
+					},
+				}
+			: {toast: true},
+	);
+}
+
 export function offerTrashUndo(
 	message: string,
 	trashId: string | undefined,

@@ -479,6 +479,12 @@ export type Bookmark = {
 	*/
 	notes?: string;
 	/**
+	The device that saved it, as for a session. Missing on imported bookmarks and on those saved before bookmarks
+	recorded it.
+	*/
+	deviceName?: string;
+	deviceKind?: 'desktop' | 'mobile';
+	/**
 	Tags the person typed, normalized by `bookmarkTags` (bookmark-tags.ts), absent when there are none.
 	*/
 	tags?: string[];

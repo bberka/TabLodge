@@ -1814,23 +1814,6 @@ test('Save to TabLodge only: X Bookmark, button or Share menu, never reaches the
 	assert.deepEqual(site.handled, ['share']);
 });
 
-test('Save to TabLodge only: new and old Reddit Save never reach the site', () => {
-	for (const [name, url] of [
-		['reddit-new.html', 'https://www.reddit.com/'],
-		['reddit-old.html', 'https://old.reddit.com/r/typescript/'],
-	] as const) {
-		const site = keepOffReddit(name, url);
-		const {stopped, last} = site.click('post-save');
-		assert.equal(stopped, true, name);
-		assert.equal(
-			last?.kept?.link.url,
-			'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
-			name,
-		);
-		assert.deepEqual(site.handled, [], name);
-	}
-});
-
 test('saving on the site and in TabLodge, the default, lets every save reach the site', () => {
 	const site = keepOffX(false);
 	const {stopped, last} = site.click('bookmark-icon');
@@ -1889,22 +1872,226 @@ test('Also save on the site replays the click to the site only, unless the contr
 	assert.equal(menu.replay(), false);
 });
 
-test('Save to TabLodge only is stored only as true, and only for X and Reddit', () => {
+/**
+Every site with Save to TabLodge only, on its fixture: `before` are the clicks that open the menu or dialog holding
+the save, which the site gets as usual, and `save` is the save control.
+*/
+const KEEP_OFF_SITES: Array<{
+	id: SiteSourceId;
+	page: string;
+	url: string;
+	reader: (document: Document) => SourceReader;
+	before?: string[];
+	save: string;
+	saved: string;
+}> = [
+	{
+		id: 'youtube',
+		page: 'youtube-home.html',
+		url: 'https://www.youtube.com/',
+		reader: (document) => createYoutubeReader(document),
+		save: 'watch-later',
+		saved: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+	},
+	{
+		id: 'youtube',
+		page: 'youtube-watch.html',
+		url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+		reader: (document) => createYoutubeReader(document),
+		before: ['save-button'],
+		save: 'option-watch-later',
+		saved: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+	},
+	{
+		id: 'reddit',
+		page: 'reddit-new.html',
+		url: 'https://www.reddit.com/',
+		reader: () => createRedditReader(),
+		save: 'post-save',
+		saved:
+			'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
+	},
+	{
+		id: 'reddit',
+		page: 'reddit-old.html',
+		url: 'https://old.reddit.com/r/typescript/',
+		reader: () => createRedditReader(),
+		save: 'post-save',
+		saved:
+			'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
+	},
+	{
+		id: 'x',
+		page: 'x-home.html',
+		url: 'https://x.com/home',
+		reader: (document) => createTwitterReader(document),
+		before: ['share'],
+		save: 'menu-bookmark',
+		saved: 'https://x.com/alice/status/1850000000000000001',
+	},
+	{
+		id: 'instagram',
+		page: 'instagram-feed.html',
+		url: 'https://www.instagram.com/',
+		reader: (document) => createInstagramReader(document),
+		save: 'save-icon',
+		saved: 'https://www.instagram.com/p/C1a2B3c4D5e/',
+	},
+	{
+		id: 'github',
+		page: 'github-repo.html',
+		url: 'https://github.com/sindresorhus/ky',
+		reader: (document) => createGithubReader(document),
+		save: 'star',
+		saved: 'https://github.com/sindresorhus/ky',
+	},
+	{
+		id: 'hackernews',
+		page: 'hackernews-item.html',
+		url: 'https://news.ycombinator.com/item?id=41000001',
+		reader: (document) => createHackerNewsReader(document),
+		save: 'fave',
+		saved: 'https://example.com/local-first',
+	},
+	{
+		id: 'stackoverflow',
+		page: 'stackoverflow-question.html',
+		url: 'https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array',
+		reader: (document) => createStackOverflowReader(document),
+		save: 'question-save-icon',
+		saved:
+			'https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array',
+	},
+	{
+		id: 'devto',
+		page: 'devto-feed.html',
+		url: 'https://dev.to/',
+		reader: (document) => createDevtoReader(document),
+		save: 'article-save-button-1001',
+		saved: 'https://dev.to/alice/local-first-apps-4k2j',
+	},
+	{
+		id: 'lobsters',
+		page: 'lobsters-list.html',
+		url: 'https://lobste.rs/',
+		reader: () => createLobstersReader(),
+		save: 'save',
+		saved: 'https://example.org/rust',
+	},
+	{
+		id: 'bluesky',
+		page: 'bluesky-feed.html',
+		url: 'https://bsky.app/',
+		reader: (document) => createBlueskyReader(document),
+		save: 'feed-save-icon',
+		saved: 'https://bsky.app/profile/alice.bsky.social/post/3kabc123xyz',
+	},
+	{
+		id: 'soundcloud',
+		page: 'soundcloud-stream.html',
+		url: 'https://soundcloud.com/nils-frahm/says',
+		reader: (document) => createSoundcloudReader(document),
+		save: 'row-like',
+		saved: 'https://soundcloud.com/nils-frahm/familiar',
+	},
+	{
+		id: 'spotify',
+		page: 'spotify-album.html',
+		url: 'https://open.spotify.com/album/6GjwtEZcfenmOf6l18N7T7',
+		reader: (document) => createSpotifyReader(document),
+		save: 'album-save',
+		saved: 'https://open.spotify.com/album/6GjwtEZcfenmOf6l18N7T7',
+	},
+	{
+		id: 'letterboxd',
+		page: 'letterboxd-film.html',
+		url: 'https://letterboxd.com/film/parasite-2019/',
+		reader: (document) => createLetterboxdReader(document),
+		before: ['poster-image'],
+		save: 'menu-add',
+		saved: 'https://letterboxd.com/film/memories-of-murder/',
+	},
+	{
+		id: 'imdb',
+		page: 'imdb-title.html',
+		url: 'https://www.imdb.com/title/tt6751668/',
+		reader: (document) => createImdbReader(document),
+		save: 'ribbon-icon',
+		saved: 'https://www.imdb.com/title/tt0353969/',
+	},
+	{
+		id: 'goodreads',
+		page: 'goodreads-book.html',
+		url: 'https://www.goodreads.com/book/show/18423.The_Left_Hand_of_Darkness',
+		reader: (document) => createGoodreadsReader(document),
+		save: 'page-wtr',
+		saved: 'https://www.goodreads.com/book/show/18423',
+	},
+	{
+		id: 'substack',
+		page: 'substack-feed.html',
+		url: 'https://example.substack.com/p/the-gentle-art-of-saving',
+		reader: (document) => createSubstackReader(document),
+		save: 'card-save',
+		saved: 'https://example.substack.com/p/local-first-notes',
+	},
+];
+
+test('Save to TabLodge only: on every site that offers it, the save never reaches the site; the default lets it through', () => {
+	for (const {
+		page: name,
+		url,
+		reader,
+		before = [],
+		save,
+		saved,
+	} of KEEP_OFF_SITES) {
+		const kept = keepOffPage(name, url, reader);
+		for (const id of before) {
+			assert.equal(kept.click(id).stopped, false, `${name} #${id}`);
+		}
+
+		const {stopped, last} = kept.click(save);
+		assert.equal(stopped, true, `${name} #${save}`);
+		assert.equal(last?.kept?.link.url, saved, name);
+		assert.deepEqual(kept.handled, before, name);
+
+		const both = keepOffPage(name, url, reader, false);
+		for (const id of before) {
+			both.click(id);
+		}
+
+		const through = both.click(save);
+		assert.equal(through.stopped, false, name);
+		assert.equal(through.last?.found?.kind, 'save', name);
+		assert.equal(through.last?.kept, undefined, name);
+		assert.deepEqual(both.handled, [...before, save], name);
+	}
+});
+
+test('Save to TabLodge only is stored only as true, and only for the sites that offer it: every one but Medium', () => {
 	assert.deepEqual(
-		SITE_SOURCES.filter((source) => source.keepOffSite).map(({id}) => id),
-		['reddit', 'x'],
+		SITE_SOURCES.filter((source) => !source.keepOffSite).map(({id}) => id),
+		['medium'],
+	);
+	assert.deepEqual(
+		new Set(KEEP_OFF_SITES.map(({id}) => id)),
+		new Set(
+			SITE_SOURCES.filter((source) => source.keepOffSite).map(({id}) => id),
+		),
+		'every site that offers it is tested above',
 	);
 	const state = parseSiteSourcesState({
 		version: 1,
 		sources: {
 			x: {enabled: true, keepOffSite: true},
 			reddit: {enabled: true, keepOffSite: 'yes'},
-			youtube: {enabled: true, keepOffSite: true},
+			medium: {enabled: true, keepOffSite: true},
 		},
 	});
 	assert.deepEqual(state.x, {enabled: true, keepOffSite: true});
 	assert.deepEqual(state.reddit, {enabled: true});
-	assert.deepEqual(state.youtube, {enabled: true});
+	assert.deepEqual(state.medium, {enabled: true});
 });
 
 test('a stopped save that fails, or finds the source off, goes on to the site; a saved one offers Undo and Also save', () => {

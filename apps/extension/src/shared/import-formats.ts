@@ -11,6 +11,12 @@ import {
 	SESSIONS_FORMAT_ID,
 } from './backup-format';
 import {tagFields} from './bookmark-tags';
+import {
+	cleanDeviceName,
+	type DeviceStamp,
+	deviceStamp,
+	isDeviceKind,
+} from './device';
 import {isSourceColumnId} from './source-columns';
 import {webUrl} from './web-url';
 import type {Bookmark} from './types';
@@ -57,7 +63,7 @@ How well a format's structure is known: checked against the tool's source or rea
 */
 export type FormatConfidence = 'verified' | 'best-effort';
 
-export type ImportLink = {
+export type ImportLink = DeviceStamp & {
 	url: string;
 	title: string;
 	notes?: string;
@@ -242,6 +248,13 @@ class Collector {
 			link.pinned = true;
 		}
 
+		Object.assign(
+			link,
+			deviceStamp(
+				cleanDeviceName(extra.deviceName),
+				extra.deviceKind ?? 'desktop',
+			),
+		);
 		return link;
 	}
 
@@ -461,6 +474,10 @@ function parseNative(data: unknown, collector: Collector): ParsedImport | null {
 				tags: entry.tags,
 				hiddenKinds: entry.hiddenKinds,
 				createdAt: toTimestamp(entry.createdAt),
+				deviceName: text(entry.deviceName),
+				deviceKind: isDeviceKind(entry.deviceKind)
+					? entry.deviceKind
+					: undefined,
 			},
 		);
 		if (link) {
@@ -1933,6 +1950,7 @@ export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 				...(columnId && {columnId}),
 				...(link.notes && {notes: link.notes}),
 				...(link.tags && {tags: link.tags}),
+				...deviceStamp(link.deviceName ?? '', link.deviceKind ?? 'desktop'),
 				...(link.createdAt && {createdAt: link.createdAt}),
 			});
 		}

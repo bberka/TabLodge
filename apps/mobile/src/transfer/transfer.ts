@@ -16,6 +16,7 @@ import {
 	DEFAULT_BOOKMARK_COLUMN_ID,
 	DEFAULT_BOOKMARK_COLUMN_NAME,
 } from '../../../extension/src/shared/bookmark-rules';
+import {deviceStamp} from '../../../extension/src/shared/device';
 import {
 	type ImportGroup,
 	type ImportKind,
@@ -292,6 +293,7 @@ export function importIntoStore(
 					columnId: column.id,
 					...(link.notes && {notes: link.notes}),
 					...tagFields(link),
+					...deviceStamp(link.deviceName ?? '', link.deviceKind ?? 'desktop'),
 					createdAt: link.createdAt ?? now,
 					updatedAt: now,
 				});
