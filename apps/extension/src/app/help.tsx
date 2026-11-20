@@ -493,10 +493,11 @@ function Help() {
 							and the save button on Bluesky work in English. If a site changes
 							its page so {PROJECT.name} can no longer read it, nothing is saved
 							and Settings says so. In a private window, saves are added only
-							when private windows use the regular library. Remove takes a site
-							out of the list and gives its access back. Removing its access in
-							the browser&apos;s extension settings also stops it; Settings then
-							says so next to the site and offers Allow again.
+							when private windows use the regular library. Remove asks first,
+							then takes a site out of the list and gives its access back.
+							Removing its access in the browser&apos;s extension settings also
+							stops it; Settings then says so next to the site and offers Allow
+							again.
 						</>
 					),
 					searchText:
