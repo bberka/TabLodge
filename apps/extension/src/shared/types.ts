@@ -89,6 +89,7 @@ export type PaletteLocation = 'window' | 'page';
 export type BookmarkQuickAction =
 	| 'open-current'
 	| 'open-new'
+	| 'open-private'
 	| 'copy'
 	| 'edit'
 	| 'delete'

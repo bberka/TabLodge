@@ -7,6 +7,7 @@ export type ItemActionId =
 	| 'open'
 	| 'open-new-tab'
 	| 'open-new-window'
+	| 'open-private-window'
 	| 'copy-link'
 	| 'open-copy'
 	| 'switch'
@@ -23,6 +24,10 @@ export type ItemActionContext = {
 	Addresses with a page copy on this device. Empty in a private window.
 	*/
 	copies?: ReadonlySet<string>;
+	/**
+	Whether this browser can open a private window (not Firefox).
+	*/
+	privateWindow?: boolean;
 };
 
 /**
@@ -31,7 +36,7 @@ obvious action return nothing.
 */
 export function itemActions(
 	item: FinderItem,
-	{standalone, copies}: ItemActionContext,
+	{standalone, copies, privateWindow}: ItemActionContext,
 ): ItemAction[] {
 	switch (item.kind) {
 		case 'session': {
@@ -50,6 +55,14 @@ export function itemActions(
 				{id: 'open', label: 'Open'},
 				{id: 'open-new-tab', label: 'Open in a new tab'},
 				{id: 'open-new-window', label: 'Open in a new window'},
+				...(privateWindow
+					? [
+							{
+								id: 'open-private-window' as const,
+								label: 'Open in a private window',
+							},
+						]
+					: []),
 				{id: 'copy-link', label: 'Copy link'},
 				...(item.url && copies?.has(item.url)
 					? [{id: 'open-copy' as const, label: 'Open copy'}]

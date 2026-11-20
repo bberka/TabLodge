@@ -762,6 +762,7 @@ export type BookmarkQuickAction = Settings['bookmarkQuickActions'][number];
 export const BOOKMARK_QUICK_ACTIONS = [
 	'open-current',
 	'open-new',
+	'open-private',
 	'copy',
 	'edit',
 	'delete',

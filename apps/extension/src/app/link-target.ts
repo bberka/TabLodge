@@ -1,3 +1,5 @@
+import {isFirefox} from '../shared/browser';
+import {webUrl} from '../shared/web-url';
 import type {BookmarkClickAction, Settings} from '../shared/types';
 import {stripTrackingParameters} from '../shared/tracking-parameters';
 
@@ -27,6 +29,43 @@ export function resolveLinkTarget(
 	return action === 'current' && settings.keepLodgePinned && opts.pinnedLodge
 		? 'new'
 		: action;
+}
+
+/**
+Whether the browser can open a private window for a link. Firefox builds set `incognito: 'not_allowed'`, so
+there it is never offered.
+*/
+export const canOpenPrivateWindow = !isFirefox;
+
+/**
+Opens `url` in a new private window. The browser can refuse (private windows turned off by policy); that
+rejection reaches the caller so it can tell the user.
+*/
+export async function openInPrivateWindow(
+	url: string,
+	settings: Pick<Settings, 'removeTrackingParameters'>,
+): Promise<void> {
+	const safe = webUrl(url);
+	if (!safe) {
+		throw new Error('This item does not contain a valid web address.');
+	}
+
+	await chrome.windows.create({
+		url: settings.removeTrackingParameters
+			? stripTrackingParameters(safe)
+			: safe,
+		incognito: true,
+		focused: true,
+	});
+}
+
+/**
+The message for a refused private window.
+*/
+export function privateWindowFailure(reason: unknown): string {
+	return reason instanceof Error && reason.message
+		? `Could not open a private window: ${reason.message}`
+		: 'Could not open a private window.';
 }
 
 /**

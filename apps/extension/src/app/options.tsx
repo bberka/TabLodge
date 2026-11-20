@@ -116,6 +116,7 @@ import {
 	TrashDialog,
 	useShareDialog,
 } from './lazy-dialogs';
+import {canOpenPrivateWindow} from './link-target';
 import {offerUndo} from './recovery-core';
 import {initialSearchQuery, withSearchParam} from './page-params';
 import {Highlight} from './highlight';
@@ -815,6 +816,14 @@ const settingsGroups: Array<{
 				options: [
 					['open-current', 'Open in this tab'],
 					['open-new', 'Open in new tab'],
+					...(canOpenPrivateWindow
+						? [
+								['open-private', 'Open in a private window'] as [
+									BookmarkQuickAction,
+									string,
+								],
+							]
+						: []),
 					['copy', 'Copy link'],
 					['edit', 'Edit'],
 					['delete', 'Delete'],

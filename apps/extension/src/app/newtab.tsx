@@ -173,7 +173,13 @@ import {
 } from './bookmark-drag';
 import {useBookmarkSelection} from './bookmark-selection';
 import {InsecureMarkFor} from './insecure-mark';
-import {openLink, openOwnPage} from './link-target';
+import {
+	canOpenPrivateWindow,
+	openInPrivateWindow,
+	openLink,
+	openOwnPage,
+	privateWindowFailure,
+} from './link-target';
 import {
 	initialSearchQuery,
 	newColumnRequested,
@@ -224,6 +230,7 @@ type BookmarkAction =
 	| 'click'
 	| 'open'
 	| 'open-new'
+	| 'open-private'
 	| 'edit'
 	| 'edit-tags'
 	| 'move'
@@ -331,6 +338,11 @@ const QUICK_ACTIONS: Record<
 		label: 'Open in new tab',
 		icon: ACTION_ICONS.openNew,
 		action: 'open-new',
+	},
+	'open-private': {
+		label: 'Open in a private window',
+		icon: ACTION_ICONS.openPrivate,
+		action: 'open-private',
 	},
 	copy: {label: 'Copy link', icon: ACTION_ICONS.copy, action: 'copy'},
 	edit: {label: 'Edit', icon: ACTION_ICONS.edit, action: 'edit'},
@@ -550,7 +562,9 @@ function NewTab() {
 		],
 	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
-	const quickActions = settings.bookmarkQuickActions ?? ['open-new'];
+	const quickActions = (settings.bookmarkQuickActions ?? ['open-new']).filter(
+		(action) => canOpenPrivateWindow || action !== 'open-private',
+	);
 	const autoOpenFinder =
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
 	const sessionsOnTop = settings.sessionsOnTop === true;
@@ -1711,6 +1725,16 @@ function NewTab() {
 				);
 			} catch {
 				showStatus('That link could not be opened.', true);
+			}
+
+			return;
+		}
+
+		if (action === 'open-private') {
+			try {
+				await openInPrivateWindow(bookmark.url, state!.settings);
+			} catch (reason) {
+				showStatus(privateWindowFailure(reason), true);
 			}
 
 			return;
@@ -4251,6 +4275,13 @@ const BookmarkCard = memo(
 			icon: ACTION_ICONS.openNew,
 			onSelect: act('open-new'),
 		};
+		const openPrivate: MenuAction = {
+			id: 'open-private',
+			label: 'Open in a private window',
+			icon: ACTION_ICONS.openPrivate,
+			hidden: !canOpenPrivateWindow,
+			onSelect: act('open-private'),
+		};
 		const edit: MenuAction = {
 			id: 'edit',
 			label: 'Edit',
@@ -4287,6 +4318,7 @@ const BookmarkCard = memo(
 		const actions = (): MenuAction[] => [
 			open,
 			openNew,
+			openPrivate,
 			{type: 'separator'},
 			copy,
 			archiveCopy,

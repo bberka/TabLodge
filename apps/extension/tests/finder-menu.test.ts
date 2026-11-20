@@ -39,6 +39,21 @@ test('links offer tab, window and copy', () => {
 	}
 });
 
+test('links offer a private window only where the browser can', () => {
+	assert.equal(
+		itemActions(item('bookmark'), {standalone: false}).some(
+			(action) => action.id === 'open-private-window',
+		),
+		false,
+	);
+	assert.deepEqual(
+		itemActions(item('saved-tab'), {standalone: false, privateWindow: true})
+			.map((action) => action.id)
+			.slice(2, 4),
+		['open-new-window', 'open-private-window'],
+	);
+});
+
 test('an open tab can be switched to or closed', () => {
 	assert.deepEqual(ids('tab', true), ['switch', 'close-tab']);
 });
