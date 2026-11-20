@@ -5,7 +5,14 @@ import {
 	useState,
 	type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import {CircleAlert, CircleHelp, Plus, RotateCcw, Trash2} from 'lucide-react';
+import {
+	CircleAlert,
+	CircleHelp,
+	Plus,
+	Power,
+	RotateCcw,
+	Trash2,
+} from 'lucide-react';
 import {
 	Button,
 	IconTooltip,
@@ -24,7 +31,7 @@ import {send, type ShowStatus} from './common';
 import {Favicon} from './favicon';
 import {ColumnLabel} from './icon-label';
 import {PROJECT} from './project';
-import {removeSiteSource} from './site-source-access';
+import {removeSiteSource, turnOnSiteSources} from './site-source-access';
 import {
 	SITE_SOURCES,
 	SITE_SOURCES_KEY,
@@ -47,13 +54,16 @@ export const SOURCES_WORDS = [
 	'column',
 	`Save to ${PROJECT.name} only`,
 	'keep saves off the site',
+	'On in another browser',
+	'Turn on',
+	'sync',
 ];
 // The Save to entry for the site's own column; Radix Select needs a non-empty value.
 const SITE_COLUMN = 'site-column';
 
 function noticeText(source: SiteSource, notice: SiteSourceStatus['notice']) {
 	if (notice === 'revoked') {
-		return `Off because the browser removed ${PROJECT.name}'s access to ${source.hosts[0]}. Allow it again, or remove the site.`;
+		return `Off in this browser because it removed ${PROJECT.name}'s access to ${source.hosts[0]}. Allow it again, or remove the site.`;
 	}
 
 	return notice === 'unreadable'
@@ -62,10 +72,13 @@ function noticeText(source: SiteSource, notice: SiteSourceStatus['notice']) {
 }
 
 /**
-A site stays in the list while it is on, and after the browser took its access away, so the notice can say so.
+A site stays in the list while it is on here or in another browser, and after this browser took its access away, so
+the notice can say so.
 */
 const isListed = (status: SiteSourceStatus | undefined) =>
-	status?.enabled === true || status?.notice === 'revoked';
+	status?.wanted === true ||
+	status?.enabled === true ||
+	status?.notice === 'revoked';
 
 function matches(source: SiteSource, query: string) {
 	const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
@@ -159,32 +172,23 @@ export function useSiteSources(showStatus: ShowStatus) {
 		sources?.find((entry) => entry.id === source.id);
 
 	async function add(source: SiteSource) {
-		// The permission request comes first, straight from the click or key press: Firefox refuses it after another
-		// await.
-		const request = chrome.permissions
-			.request({origins: source.origins})
-			.catch(() => false);
+		// Before any await: the permission request must come straight from the click or key press.
+		const request = turnOnSiteSources([source]);
+		const wasOn = status(source)?.wanted === true;
 		setBusy(source.id);
 		try {
-			if (!(await request)) {
-				showStatus(
-					`The browser did not grant access to ${source.hosts[0]}, so ${source.label} was not added.`,
-					true,
-				);
-				return;
-			}
-
-			const result = await send('SET_SITE_SOURCE', {
-				source: source.id,
-				enabled: true,
-			});
+			const result = await request;
 			if (!result.ok) {
 				showStatus(result.error, true);
 				return;
 			}
 
 			setSources(result.sources);
-			showStatus(`Added ${source.label}.`);
+			showStatus(
+				wasOn
+					? `Turned on ${source.label} in this browser.`
+					: `Added ${source.label}.`,
+			);
 		} finally {
 			setBusy(undefined);
 		}
@@ -500,6 +504,12 @@ export function SiteSourcesSettings({
 									<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
 										{source.description}
 									</p>
+									{!entry?.enabled && !notice && (
+										<p className="mt-2 max-w-xl text-xs leading-5 text-muted-foreground">
+											On in another browser. Turn it on to save here too; the
+											browser asks for access to {source.hosts[0]}.
+										</p>
+									)}
 									{notice && (
 										<p
 											role="status"
@@ -515,7 +525,7 @@ export function SiteSourcesSettings({
 								</div>
 							</div>
 							<div className="flex shrink-0 gap-2 max-sm:justify-end">
-								{!entry?.enabled && (
+								{!entry?.enabled && notice === 'revoked' && (
 									<Button
 										variant="outline"
 										size="sm"
@@ -525,6 +535,18 @@ export function SiteSourcesSettings({
 									>
 										<RotateCcw className="h-4 w-4" aria-hidden="true" />
 										Allow again
+									</Button>
+								)}
+								{!entry?.enabled && notice !== 'revoked' && (
+									<Button
+										variant="outline"
+										size="sm"
+										disabled={busy !== undefined}
+										aria-label={`Turn on ${source.label} in this browser`}
+										onClick={() => void add(source)}
+									>
+										<Power className="h-4 w-4" aria-hidden="true" />
+										Turn on
 									</Button>
 								)}
 								<Button

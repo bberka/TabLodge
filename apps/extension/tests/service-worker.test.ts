@@ -988,6 +988,20 @@ function createWorkerHarness(
 					? request.origins.every((origin) => grantedOrigins.has(origin))
 					: Boolean(options.downloads);
 			},
+			async remove(request: {origins?: string[]} = {}) {
+				const origins = (request.origins ?? []).filter((origin) =>
+					grantedOrigins.has(origin),
+				);
+				for (const origin of origins) {
+					grantedOrigins.delete(origin);
+				}
+
+				if (origins.length > 0) {
+					listeners.permissionsRemoved?.({origins, permissions: []});
+				}
+
+				return true;
+			},
 			onRemoved: event('permissionsRemoved'),
 		},
 		...(options.downloads && {
@@ -13663,23 +13677,23 @@ test('sources are off at install and no content script is registered', async () 
 	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
 	assert.equal(result.ok, true, result.error);
 	assert.deepEqual(structuredClone(result.sources), [
-		{id: 'youtube', enabled: false},
-		{id: 'reddit', enabled: false},
-		{id: 'x', enabled: false},
-		{id: 'instagram', enabled: false},
-		{id: 'github', enabled: false},
-		{id: 'hackernews', enabled: false},
-		{id: 'stackoverflow', enabled: false},
-		{id: 'devto', enabled: false},
-		{id: 'lobsters', enabled: false},
-		{id: 'bluesky', enabled: false},
-		{id: 'soundcloud', enabled: false},
-		{id: 'spotify', enabled: false},
-		{id: 'letterboxd', enabled: false},
-		{id: 'imdb', enabled: false},
-		{id: 'goodreads', enabled: false},
-		{id: 'medium', enabled: false},
-		{id: 'substack', enabled: false},
+		{id: 'youtube', enabled: false, wanted: false},
+		{id: 'reddit', enabled: false, wanted: false},
+		{id: 'x', enabled: false, wanted: false},
+		{id: 'instagram', enabled: false, wanted: false},
+		{id: 'github', enabled: false, wanted: false},
+		{id: 'hackernews', enabled: false, wanted: false},
+		{id: 'stackoverflow', enabled: false, wanted: false},
+		{id: 'devto', enabled: false, wanted: false},
+		{id: 'lobsters', enabled: false, wanted: false},
+		{id: 'bluesky', enabled: false, wanted: false},
+		{id: 'soundcloud', enabled: false, wanted: false},
+		{id: 'spotify', enabled: false, wanted: false},
+		{id: 'letterboxd', enabled: false, wanted: false},
+		{id: 'imdb', enabled: false, wanted: false},
+		{id: 'goodreads', enabled: false, wanted: false},
+		{id: 'medium', enabled: false, wanted: false},
+		{id: 'substack', enabled: false, wanted: false},
 	]);
 	assert.equal(harness.registeredScripts.size, 0);
 });
@@ -13729,11 +13743,103 @@ test('revoking the permission in the browser turns the source off and says so', 
 	await harness.revokeOrigins(YOUTUBE_ORIGINS);
 	assert.equal(harness.registeredScripts.size, 0);
 	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	// Access is this browser's: the site stays on, so other browsers keep it.
 	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
 		id: 'youtube',
 		enabled: false,
+		wanted: true,
 		notice: 'revoked',
 	});
+});
+
+test('a site on in another browser shows as on but not here, and runs once this browser grants its access', async () => {
+	const harness = sourcesHarness({
+		storage: {
+			'tablodge.sources': {version: 1, sources: {}, choices: {youtube: {}}},
+		},
+	});
+	harness.listeners.onStartup();
+	await settle();
+	const before = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(before.ok && structuredClone(before.sources[0]), {
+		id: 'youtube',
+		enabled: false,
+		wanted: true,
+	});
+	assert.equal(harness.registeredScripts.size, 0);
+
+	// The dashboard said so once; an unknown id is ignored.
+	await harness.sendMessage({
+		type: 'SITE_SOURCES_POINTED',
+		sources: ['youtube', 'nope'],
+	});
+	const pointed = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.equal(pointed.ok && pointed.sources[0]?.pointed, true);
+
+	// Turn on: the page asks for access, then switches it on here.
+	const on = await switchOnYoutube(harness);
+	assert.deepEqual(on.ok && structuredClone(on.sources[0]), {
+		id: 'youtube',
+		enabled: true,
+		wanted: true,
+	});
+	assert.equal(harness.registeredScripts.size, 1);
+});
+
+test('a site chosen in another browser runs at startup without a click when this browser already grants its access', async () => {
+	const harness = sourcesHarness({
+		grantedOrigins: YOUTUBE_ORIGINS,
+		storage: {
+			'tablodge.sources': {
+				version: 1,
+				sources: {},
+				choices: {youtube: {columnId: 'kept'}},
+			},
+		},
+	});
+	harness.listeners.onStartup();
+	await settle();
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
+		id: 'youtube',
+		enabled: true,
+		wanted: true,
+		columnId: 'kept',
+	});
+	assert.equal(harness.registeredScripts.size, 1);
+});
+
+test("Remove drops the site's choices, gives back its access, and keeps the choices of sites this version does not know", async () => {
+	const harness = sourcesHarness({
+		storage: {
+			'tablodge.sources': {
+				version: 1,
+				sources: {},
+				choices: {youtube: {columnId: 'c', later: 1}, mastodon: {x: 1}},
+			},
+		},
+	});
+	await switchOnYoutube(harness);
+	const stored = () =>
+		(harness.extraStorage['tablodge.sources'] as {choices: unknown}).choices;
+	assert.deepEqual(structuredClone(stored()), {
+		youtube: {columnId: 'c', later: 1},
+		mastodon: {x: 1},
+	});
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: false,
+	});
+	assert.deepEqual(structuredClone(stored()), {mastodon: {x: 1}});
+	assert.equal(harness.registeredScripts.size, 0);
+	// The access went back: turning it on again needs a new grant.
+	const again = await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: true,
+	});
+	assert.equal(again.ok, false);
 });
 
 test('a permission revoked while the worker was stopped is caught at startup', async () => {
@@ -14168,6 +14274,7 @@ test('an unreadable save is reported to Settings and cleared by the next good sa
 	assert.deepEqual(sources.ok && structuredClone(sources.sources[0]), {
 		id: 'youtube',
 		enabled: true,
+		wanted: true,
 	});
 });
 
@@ -14359,12 +14466,7 @@ test('a source saves to the column chosen in Settings, and to its own column onc
 	assert.equal(saved.ok && saved.column, 'Later');
 	assert.equal(harness.state.bookmarks[0]?.columnId, laterId);
 
-	// Switching off and on keeps the choice.
-	await harness.sendMessage({
-		type: 'SET_SITE_SOURCE',
-		source: 'youtube',
-		enabled: false,
-	});
+	// Turning it on in another way keeps the choice; only Remove drops it.
 	await switchOnYoutube(harness);
 	const sources = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
 	assert.equal(sources.ok && sources.sources[0]?.columnId, laterId);
@@ -14388,6 +14490,7 @@ test('a source saves to the column chosen in Settings, and to its own column onc
 	assert.deepEqual(cleared.ok && structuredClone(cleared.sources[0]), {
 		id: 'youtube',
 		enabled: true,
+		wanted: true,
 	});
 });
 
@@ -14603,7 +14706,7 @@ test('Save to TabLodge only is a choice per site that supports it, reported to i
 
 	// Off until the site is added, and only for a site whose adapter supports it.
 	assert.equal((await keepOff('x', true)).ok, true);
-	assert.deepEqual(await status(), {id: 'x', enabled: false});
+	assert.deepEqual(await status(), {id: 'x', enabled: false, wanted: false});
 	await switchOnYoutube(harness);
 	assert.equal((await keepOff('youtube', true)).ok, false);
 
@@ -14615,7 +14718,12 @@ test('Save to TabLodge only is a choice per site that supports it, reported to i
 	});
 	assert.equal(await mode(), false, 'the default saves on the site too');
 	assert.equal((await keepOff('x', true)).ok, true);
-	assert.deepEqual(await status(), {id: 'x', enabled: true, keepOffSite: true});
+	assert.deepEqual(await status(), {
+		id: 'x',
+		enabled: true,
+		wanted: true,
+		keepOffSite: true,
+	});
 	assert.equal(await mode(), true);
 	// Another site's page is not told X's choice, and a web page cannot change it.
 	assert.equal(await mode(fromYoutube), false);
@@ -14635,12 +14743,14 @@ test('Save to TabLodge only is a choice per site that supports it, reported to i
 		enabled: false,
 	});
 	assert.equal(await mode(), false);
+	// Remove gave the access back, so adding the site again asks for it again.
+	harness.grantOrigins(['https://x.com/*', 'https://twitter.com/*']);
 	await harness.sendMessage({
 		type: 'SET_SITE_SOURCE',
 		source: 'x',
 		enabled: true,
 	});
-	assert.deepEqual(await status(), {id: 'x', enabled: true});
+	assert.deepEqual(await status(), {id: 'x', enabled: true, wanted: true});
 });
 
 test('a private window keeps saves off the site only when its saves are added', async () => {

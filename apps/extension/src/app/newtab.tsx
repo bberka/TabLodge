@@ -108,6 +108,7 @@ import {
 } from './column-color';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {removeSiteSource} from './site-source-access';
+import {useSourcesElsewherePointer} from './site-source-pointer';
 import {type SiteSource, sourceSavingInto} from './site-sources';
 import {
 	AppHeader,
@@ -339,6 +340,7 @@ function NewTab() {
 	const [importOpen, setImportOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
+	useSourcesElsewherePointer(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
 		useState<DropIndicator | null>(null);
