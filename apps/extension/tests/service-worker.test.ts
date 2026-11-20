@@ -14391,6 +14391,190 @@ test('a source saves to the column chosen in Settings, and to its own column onc
 	});
 });
 
+const redditSaved = {
+	tab: {...youtubeTab, url: 'https://www.reddit.com/user/someone/saved/'},
+	url: 'https://www.reddit.com/user/someone/saved/',
+};
+const savedPost = (id: string, title = `Post ${id}`) => ({
+	url: `/r/typescript/comments/${id}/post_${id}/`,
+	title,
+});
+
+// Answers come from the worker's VM realm; deepEqual needs them as this realm's plain objects.
+const counted = async (
+	answer: Promise<Record<string, unknown>>,
+): Promise<Record<string, unknown>> => ({...(await answer)});
+
+async function switchOnReddit(harness: ReturnType<typeof sourcesHarness>) {
+	harness.grantOrigins([
+		'https://www.reddit.com/*',
+		'https://old.reddit.com/*',
+	]);
+	return harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'reddit',
+		enabled: true,
+	});
+}
+
+test('a saved page counts what the library lacks and adds exactly that, in its order, as one Undo step', async () => {
+	const harness = sourcesHarness();
+	await switchOnReddit(harness);
+	// One post is already saved by a click, one is in the trash bin, and the page lists one post twice.
+	await harness.sendMessage(
+		{type: 'SITE_SOURCE_SAVE', source: 'reddit', ...savedPost('aaa111')},
+		redditSaved,
+	);
+	await harness.sendMessage(
+		{type: 'SITE_SOURCE_SAVE', source: 'reddit', ...savedPost('ttt000')},
+		redditSaved,
+	);
+	const trashed = harness.state.bookmarks.find((bookmark) =>
+		bookmark.url?.includes('ttt000'),
+	)!;
+	await harness.sendMessage({type: 'DELETE_BOOKMARK', bookmarkId: trashed.id!});
+	const links = [
+		savedPost('ccc333'),
+		savedPost('aaa111'),
+		savedPost('ttt000'),
+		savedPost('bbb222'),
+		savedPost('ccc333'),
+		{url: 'https://evil.example/r/a/comments/x/y/', title: 'Not Reddit'},
+		{title: 'No address'},
+	];
+
+	assert.deepEqual(
+		await counted(
+			harness.sendMessage(
+				{type: 'SITE_SOURCE_CATCH_UP', source: 'reddit', links},
+				redditSaved,
+			),
+		),
+		{ok: true, missing: 2, ask: true},
+	);
+
+	const added = await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_ADD', source: 'reddit', links},
+		redditSaved,
+	);
+	assert.equal(added.ok && added.added, 2);
+	assert.equal(added.ok && added.column, 'Reddit');
+	const inColumn = () =>
+		harness.state.bookmarks
+			.filter((bookmark) => bookmark.columnId === 'source-reddit')
+			.map((bookmark) => [bookmark.url, bookmark.title]);
+	assert.deepEqual(inColumn(), [
+		[
+			'https://www.reddit.com/r/typescript/comments/aaa111/post_aaa111/',
+			'Post aaa111',
+		],
+		[
+			'https://www.reddit.com/r/typescript/comments/ccc333/post_ccc333/',
+			'Post ccc333',
+		],
+		[
+			'https://www.reddit.com/r/typescript/comments/bbb222/post_bbb222/',
+			'Post bbb222',
+		],
+	]);
+
+	// A second visit finds nothing missing, and adding again adds nothing.
+	assert.deepEqual(
+		await counted(
+			harness.sendMessage(
+				{type: 'SITE_SOURCE_CATCH_UP', source: 'reddit', links},
+				redditSaved,
+			),
+		),
+		{ok: true, missing: 0, ask: false},
+	);
+	const again = await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_ADD', source: 'reddit', links},
+		redditSaved,
+	);
+	assert.equal(again.ok && again.added, 0);
+
+	// The content script's Undo takes the whole batch back.
+	const undone = await harness.sendMessage(
+		{type: 'SITE_SOURCE_UNDO', id: (added.ok && added.undoId) || ''},
+		redditSaved,
+	);
+	assert.equal(undone.ok, true, undone.ok ? '' : undone.error);
+	assert.equal(inColumn().length, 1);
+});
+
+test('Not now keeps the saved page quiet until a new missing item appears', async () => {
+	const harness = sourcesHarness();
+	await switchOnReddit(harness);
+	const ask = async (links: unknown[]) =>
+		counted(
+			harness.sendMessage(
+				{type: 'SITE_SOURCE_CATCH_UP', source: 'reddit', links},
+				redditSaved,
+			),
+		);
+	const first = [savedPost('aaa111'), savedPost('bbb222')];
+	await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_DISMISS', source: 'reddit', links: first},
+		redditSaved,
+	);
+	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: false});
+	assert.deepEqual(await ask([savedPost('new999'), ...first]), {
+		ok: true,
+		missing: 3,
+		ask: true,
+	});
+	assert.equal(harness.state.bookmarks.length, 0, 'nothing was added');
+
+	// Removing the site forgets the answers.
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'reddit',
+		enabled: false,
+	});
+	await switchOnReddit(harness);
+	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: true});
+
+	// A Not now that arrives after the site went off stores nothing.
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'reddit',
+		enabled: false,
+	});
+	await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_DISMISS', source: 'reddit', links: first},
+		redditSaved,
+	);
+	await switchOnReddit(harness);
+	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: true});
+});
+
+test('a saved page of a site that is off, or another site, gets no count and adds nothing', async () => {
+	const harness = sourcesHarness();
+	const links = [savedPost('aaa111')];
+	assert.deepEqual(
+		await counted(
+			harness.sendMessage(
+				{type: 'SITE_SOURCE_CATCH_UP', source: 'reddit', links},
+				redditSaved,
+			),
+		),
+		{ok: true, missing: 0, ask: false},
+	);
+	const off = await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_ADD', source: 'reddit', links},
+		redditSaved,
+	);
+	assert.equal(off.ok, false);
+	await switchOnReddit(harness);
+	const elsewhere = await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_ADD', source: 'reddit', links},
+		fromYoutube,
+	);
+	assert.equal(elsewhere.ok, false);
+	assert.equal(harness.state.bookmarks.length, 0);
+});
+
 test('Save to TabLodge only is a choice per site that supports it, reported to its page, and reset by Remove', async () => {
 	const harness = sourcesHarness();
 	const xTab = {id: 3, windowId: 10, url: 'https://x.com/home'};
