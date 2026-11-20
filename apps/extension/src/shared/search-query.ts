@@ -1,8 +1,9 @@
 // The small operator syntax every search box understands, on top of its own word matching: "exact phrase",
-// -word, site:, in:, col:, folder:, after: and before:. Anything that is not a well formed operator stays a
+// -word, site:, in:, kind:, tag:, col:, folder:, after: and before:. Anything that is not a well formed operator stays a
 // plain word, so a stray quote, a lone "-" or "localhost:3000" searches as before.
 import {fold} from './fuzzy';
-import {type LinkKind, linkKind} from './link-kind';
+import {normalizeTag, shownTags} from './bookmark-tags';
+import {LINK_KINDS, type LinkKind, linkKind} from './link-kind';
 import type {Bookmark, Session} from './types';
 
 export type SearchPlace = 'sessions' | 'bookmarks' | 'tabs' | 'open';
@@ -30,6 +31,10 @@ export type SearchQuery = {
 	*/
 	kinds: LinkKind[];
 	/**
+	Tags, stored the way bookmark tags are; a result must show every one of them (bookmark-tags.ts).
+	*/
+	tags: string[];
+	/**
 	Folded column and folder names; a result whose column or folder name contains any of them matches.
 	*/
 	columns: string[];
@@ -50,6 +55,10 @@ export type SearchFacets = {
 	*/
 	places: readonly SearchPlace[];
 	urls: ReadonlyArray<string | undefined>;
+	/**
+	The tags a bookmark shows; absent for results that cannot have tags, which `tag:` leaves out.
+	*/
+	tags?: readonly string[];
 	column?: string;
 	folder?: string;
 	date?: number;
@@ -73,6 +82,8 @@ export const SEARCH_TIPS: ReadonlyArray<{
 	{example: 'kind:image', meaning: 'Only links to images'},
 	{example: 'kind:pdf', meaning: 'Only links to PDFs'},
 	{example: 'kind:video', meaning: 'Only links to videos'},
+	{example: 'kind:repo', meaning: 'Only code repositories'},
+	{example: 'tag:movie', meaning: 'Bookmarks with a tag'},
 	{example: 'col:Work', meaning: 'Bookmarks in a column'},
 	{example: 'folder:Work', meaning: 'Sessions in a folder'},
 	{example: 'after:2026-01-01', meaning: 'Saved on or after a day'},
@@ -80,7 +91,7 @@ export const SEARCH_TIPS: ReadonlyArray<{
 ];
 
 const PLACES = new Set<string>(['sessions', 'bookmarks', 'tabs', 'open']);
-const KINDS = new Set<string>(['image', 'pdf', 'video', 'page']);
+const KINDS = new Set<string>([...LINK_KINDS, 'page']);
 const QUOTES = new Set(['"', '“', '”', '„']);
 
 /**
@@ -184,6 +195,7 @@ export function parseSearchQuery(input: string): SearchQuery {
 		sites: [],
 		places: [],
 		kinds: [],
+		tags: [],
 		columns: [],
 		folders: [],
 	};
@@ -264,6 +276,15 @@ function operator(query: SearchQuery, name: string, raw: string): boolean {
 			return KINDS.has(kind);
 		}
 
+		case 'tag': {
+			const tag = normalizeTag(value);
+			if (tag) {
+				query.tags.push(tag);
+			}
+
+			return tag !== undefined;
+		}
+
 		case 'in': {
 			const place = value.toLowerCase();
 			if (PLACES.has(place)) {
@@ -304,6 +325,7 @@ export const hasOperators = (query: SearchQuery) =>
 	query.sites.length > 0 ||
 	query.places.length > 0 ||
 	query.kinds.length > 0 ||
+	query.tags.length > 0 ||
 	query.columns.length > 0 ||
 	query.folders.length > 0 ||
 	query.after !== undefined ||
@@ -335,6 +357,7 @@ export function passesOperators(
 			query.folders.every(
 				(name) => !fold(facets.folder ?? '\0').includes(name),
 			)) ||
+		query.tags.some((tag) => !facets.tags?.includes(tag)) ||
 		((query.after !== undefined || query.before !== undefined) &&
 			(facets.date === undefined ||
 				facets.date < (query.after ?? -Infinity) ||
@@ -387,6 +410,7 @@ export const bookmarkFacets = (
 ): SearchFacets => ({
 	places: ['bookmarks'],
 	urls: [bookmark.url],
+	tags: shownTags(bookmark),
 	column,
 	date: bookmark.createdAt,
 });

@@ -5,7 +5,8 @@ share an order group and the sync engine gives each one an order key.
 
 A bookmark's note is a `note` record of its own, keyed by the bookmark id, so a version that predates notes never
 sees one: it skips a kind it does not know, while it would drop an unknown field from the bookmark and send that loss
-back. A server that cannot hold notes leaves them on the device (see the sync client).
+back. A server that cannot hold notes leaves them on the device (see the sync client). Tags and removed kinds travel
+the same way as a `tag` record ({tags, hiddenKinds}), for the same reason (ADR 8).
 
 Some fields belong to one device and never travel: the browser window a session came from, its window position,
 and when it was last opened here. `assemble` keeps this device's values for them.
@@ -20,6 +21,7 @@ import type {
 	Store,
 } from '../types';
 import type {TombstoneKind} from '../library-sync';
+import {tagFields} from '../bookmark-tags';
 import {bookmarkNotes} from '../library-normalize';
 import {isRecord} from '../library-values';
 import {parseTrashEntry, syncedTrash, type TrashEntry} from '../trash';
@@ -143,7 +145,8 @@ export function orderGroup(
 
 		case 'preference':
 		case 'trash':
-		case 'note': {
+		case 'note':
+		case 'tag': {
 			return undefined;
 		}
 	}
@@ -176,10 +179,15 @@ export function splitLibrary(
 		add({kind: 'column', id: column.id, value: column});
 	}
 
-	for (const {notes, ...bookmark} of store.bookmarks) {
+	for (const {notes, tags, hiddenKinds, ...bookmark} of store.bookmarks) {
 		add({kind: 'bookmark', id: bookmark.id, value: bookmark});
 		if (notes) {
 			add({kind: 'note', id: bookmark.id, value: {notes}});
+		}
+
+		const tagged = tagFields({tags, hiddenKinds});
+		if (tagged.tags || tagged.hiddenKinds) {
+			add({kind: 'tag', id: bookmark.id, value: tagged});
 		}
 	}
 
@@ -234,6 +242,7 @@ export function assemble(
 	const bookmarkColumns: BookmarkColumn[] = [];
 	const bookmarks: Bookmark[] = [];
 	const notes = new Map<string, string>();
+	const tags = new Map<string, Pick<Bookmark, 'tags' | 'hiddenKinds'>>();
 	const settings: Record<string, unknown> = {...local.settings};
 
 	for (const record of records) {
@@ -289,6 +298,15 @@ export function assemble(
 				break;
 			}
 
+			case 'tag': {
+				const tagged = tagFields(record.value as Record<string, unknown>);
+				if (tagged.tags || tagged.hiddenKinds) {
+					tags.set(record.id, tagged);
+				}
+
+				break;
+			}
+
 			case 'preference': {
 				if (
 					syncSettings &&
@@ -313,7 +331,11 @@ export function assemble(
 		bookmarkColumns,
 		bookmarks: bookmarks.map((bookmark) => {
 			const text = notes.get(bookmark.id);
-			return text ? {...bookmark, notes: text} : bookmark;
+			return {
+				...bookmark,
+				...(text && {notes: text}),
+				...tags.get(bookmark.id),
+			};
 		}),
 		settings: settings as Settings,
 	};

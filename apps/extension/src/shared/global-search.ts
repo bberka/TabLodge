@@ -3,6 +3,7 @@
 import {fold, scoreFolded, searchTerms} from './fuzzy';
 import type {Bookmark, BookmarkColumn, Folder, Session} from './types';
 import {siteName} from './web-url';
+import {shownTags} from './bookmark-tags';
 import {archivedFolderId} from './session-folders';
 import {
 	bookmarkFacets,
@@ -292,6 +293,7 @@ function cachedBookmarkItems(
 				matchableUrl(bookmark.url),
 				column,
 				clip(bookmark.notes),
+				shownTags(bookmark).join(' '),
 			],
 			facets: bookmarkFacets(bookmark, column),
 			ref: bookmark.id,

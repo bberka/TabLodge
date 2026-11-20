@@ -437,6 +437,39 @@ describe('with the extension on the same server', () => {
 		]);
 	});
 
+	test('tags in the private library travel sealed, and come through to the extension', async () => {
+		const phone = await startPhone();
+		await phone.setupPrivate(PIN);
+		await phone.editPrivate((store) =>
+			addBookmark(
+				store,
+				{
+					url: 'https://github.com/a/secret-repo',
+					title: 'Secret',
+					columnId: '',
+					tags: ['Hidden Project'],
+					hiddenKinds: ['repo'],
+				},
+				'tagged',
+				Date.now(),
+			),
+		);
+		await connectPhone(phone);
+		await phone.syncPrivate();
+		const records = await serverRecords();
+		assert.ok(records.some((record) => record.kind === 'tag'));
+		assert.ok(records.every((record) => isSealed(record.value)));
+		assert.ok(!JSON.stringify(records).includes('hidden project'));
+
+		const extension = makeExtension(server);
+		await extension.sync();
+		await extension.enterCredential(PIN.value);
+		await extension.sync();
+		const [bookmark] = extension.store.bookmarks;
+		assert.deepEqual(bookmark.tags, ['hidden project']);
+		assert.deepEqual(bookmark.hiddenKinds, ['repo']);
+	});
+
 	test('joining a library the extension made asks for its password once: a wrong password changes nothing, the right one brings the data', async () => {
 		const extension = makeExtension(server);
 		await extension.protect(PIN);

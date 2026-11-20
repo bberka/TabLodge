@@ -94,6 +94,7 @@ import {
 } from '../shared/search-query';
 import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
+import {shownTags} from '../shared/bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
@@ -555,6 +556,7 @@ function NewTab() {
 				bookmark.url,
 				siteName(bookmark.url),
 				bookmark.notes,
+				shownTags(bookmark).join(' '),
 			];
 			return (
 				(!needle ||

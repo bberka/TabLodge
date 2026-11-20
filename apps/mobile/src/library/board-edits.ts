@@ -24,6 +24,10 @@ import {
 	passesOperators,
 } from '../../../extension/src/shared/search-query';
 import {bookmarkNotes} from '../../../extension/src/shared/library-normalize';
+import {
+	shownTags,
+	withTagEdits,
+} from '../../../extension/src/shared/bookmark-tags';
 import {extractUrl, hostOf} from './store-shape';
 
 type ColumnView = {id: string; name: string; icon?: string; color?: string};
@@ -72,14 +76,15 @@ export function searchBookmarks(store: Store, query: string): Bookmark[] {
 		store.bookmarkColumns.map((column) => [column.id, column.name]),
 	);
 	return store.bookmarks.filter((bookmark) => {
+		const tags = shownTags(bookmark).join(' ');
 		const text =
-			`${bookmark.title} ${bookmark.url} ${bookmark.notes ?? ''}`.toLowerCase();
+			`${bookmark.title} ${bookmark.url} ${bookmark.notes ?? ''} ${tags}`.toLowerCase();
 		return (
 			words.every((word) => text.includes(word)) &&
 			(!filtering ||
 				passesOperators(
 					search,
-					[bookmark.title, bookmark.notes],
+					[bookmark.title, bookmark.notes, tags],
 					bookmarkFacets(bookmark, columnName.get(bookmark.columnId)),
 				))
 		);
@@ -127,6 +132,12 @@ type NewBookmark = {
 	The note. Blank removes it; leaving it out keeps the one a bookmark being changed has.
 	*/
 	notes?: string;
+	/**
+	The tags the person typed and the automatic kinds they removed. Each list, when given, replaces the one the bookmark
+	has; leaving it out keeps it.
+	*/
+	tags?: readonly string[];
+	hiddenKinds?: Bookmark['hiddenKinds'];
 };
 
 /**
@@ -175,16 +186,19 @@ export function addBookmark(
 	const columnId = landingColumnId(next.bookmarkColumns, input.columnId, {
 		claimedId: columnForUrl(next.bookmarkColumns, url)?.id,
 	});
-	const bookmark = withNotes(
-		{
-			id,
-			title: input.title.trim() || hostOf(url),
-			url,
-			columnId,
-			createdAt: now,
-			updatedAt: now,
-		},
-		input.notes,
+	const bookmark = withTagEdits(
+		withNotes(
+			{
+				id,
+				title: input.title.trim() || hostOf(url),
+				url,
+				columnId,
+				createdAt: now,
+				updatedAt: now,
+			},
+			input.notes,
+		),
+		input,
 	);
 	return {...next, bookmarks: [...next.bookmarks, bookmark], updatedAt: now};
 }
@@ -209,15 +223,18 @@ export function updateBookmark(
 		return store;
 	}
 
-	const changed = withNotes(
-		{
-			...current,
-			url,
-			title: input.title.trim() || hostOf(url),
-			columnId: input.columnId,
-			updatedAt: now,
-		},
-		input.notes,
+	const changed = withTagEdits(
+		withNotes(
+			{
+				...current,
+				url,
+				title: input.title.trim() || hostOf(url),
+				columnId: input.columnId,
+				updatedAt: now,
+			},
+			input.notes,
+		),
+		input,
 	);
 	const bookmarks =
 		current.columnId === input.columnId

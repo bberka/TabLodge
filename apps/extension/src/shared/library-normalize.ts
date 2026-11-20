@@ -8,6 +8,7 @@ import {
 	BOOKMARK_UNFILED_ID,
 	DEFAULT_BOOKMARK_COLUMN_ID,
 } from './bookmark-rules';
+import {tagFields} from './bookmark-tags';
 import {domainsField} from './column-sites';
 import {deviceStamp, isDeviceKind, MAX_DEVICE_NAME} from './device';
 import {ICON_IDS} from './icon-ids';
@@ -667,6 +668,7 @@ export function normalizeBookmark(
 					? requestedColumnId
 					: fallbackColumnId,
 		...(notes && {notes}),
+		...tagFields(raw),
 		createdAt,
 		updatedAt: positiveOr(raw.updatedAt, createdAt),
 	};

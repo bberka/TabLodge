@@ -173,8 +173,14 @@ function toJson(data: ExportData, now: Date): string {
 
 // Netscape bookmark file, the format every browser imports. Sessions and columns become folders.
 function toHtml(data: ExportData, appName: string): string {
-	const link = (url: string, title: string, created?: number) =>
-		`<DT><A HREF="${escapeHtml(url)}"${addDate(created)}>${escapeHtml(title || url)}</A>`;
+	// A bookmark's own tags go in TAGS=, as Pinboard, Raindrop, and Firefox write and read them.
+	const link = (
+		url: string,
+		title: string,
+		created?: number,
+		tags?: readonly string[],
+	) =>
+		`<DT><A HREF="${escapeHtml(url)}"${addDate(created)}${tags?.length ? ` TAGS="${escapeHtml(tags.join(','))}"` : ''}>${escapeHtml(title || url)}</A>`;
 	const folder = (
 		name: string,
 		created: number | undefined,
@@ -191,8 +197,12 @@ function toHtml(data: ExportData, appName: string): string {
 			// A note is the link's <DD> description, which browsers and the importer read back.
 			const items = bookmarks.map(
 				(bookmark) =>
-					link(bookmark.url, bookmark.title, bookmark.createdAt) +
-					(bookmark.notes ? `\n<DD>${escapeHtml(bookmark.notes)}` : ''),
+					link(
+						bookmark.url,
+						bookmark.title,
+						bookmark.createdAt,
+						bookmark.tags,
+					) + (bookmark.notes ? `\n<DD>${escapeHtml(bookmark.notes)}` : ''),
 			);
 			if (column) {
 				body.push(...folder(column.name, column.createdAt, items));
@@ -239,7 +249,7 @@ export function csvCell(value: unknown): string {
 function toCsv(data: ExportData): string {
 	const rows: unknown[][] = [];
 	if (data.kind === 'bookmarks') {
-		rows.push(['title', 'url', 'column', 'notes', 'created']);
+		rows.push(['title', 'url', 'column', 'notes', 'tags', 'created']);
 		for (const {column, bookmarks} of bookmarkSections(data)) {
 			for (const bookmark of bookmarks) {
 				rows.push([
@@ -247,6 +257,7 @@ function toCsv(data: ExportData): string {
 					bookmark.url,
 					column?.name ?? '',
 					bookmark.notes ?? '',
+					(bookmark.tags ?? []).join(', '),
 					isoDate(bookmark.createdAt),
 				]);
 			}

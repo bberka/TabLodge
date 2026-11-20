@@ -10,8 +10,10 @@ import {
 	BOOKMARKS_FORMAT_ID,
 	SESSIONS_FORMAT_ID,
 } from './backup-format';
+import {tagFields} from './bookmark-tags';
 import {isSourceColumnId} from './source-columns';
 import {webUrl} from './web-url';
+import type {Bookmark} from './types';
 
 // Safety: only http/https URLs survive, titles are stripped of control characters and capped, the
 // input size is limited, and HTML is tokenized as text (never parsed into a live document).
@@ -59,6 +61,14 @@ export type ImportLink = {
 	url: string;
 	title: string;
 	notes?: string;
+	/**
+	A bookmark's tags, normalized as bookmark-tags.ts stores them; a saved tab has none.
+	*/
+	tags?: string[];
+	/**
+	Automatic kinds removed from the bookmark; only a TabLodge export carries them.
+	*/
+	hiddenKinds?: Bookmark['hiddenKinds'];
 	createdAt?: number;
 	pinned?: boolean;
 };
@@ -138,6 +148,20 @@ export function cleanTitle(value: unknown, max = MAX_TITLE): string {
 		.slice(0, max);
 }
 
+/**
+Tags from another tool: a list of names, or of objects with a `name` or `label` (Linkwarden, wallabag), or one text
+that `separator` splits (commas and bars by default, as in Netscape `TAGS=`, Raindrop, and Pocket files).
+*/
+function tagList(value: unknown, separator = /[,|]/): string[] {
+	if (typeof value === 'string') {
+		return value.split(separator);
+	}
+
+	return asArray(value).map((entry) =>
+		text(isObject(entry) ? (entry.name ?? entry.label) : entry),
+	);
+}
+
 const cleanNotes = (value: unknown) =>
 	text(value)
 		.replaceAll('\u0000', '')
@@ -182,7 +206,11 @@ class Collector {
 	link(
 		rawUrl: unknown,
 		rawTitle?: unknown,
-		extra: Omit<ImportLink, 'url' | 'title'> = {},
+		// Tags are read from any tool's shape here, so they come in unchecked.
+		extra: Omit<ImportLink, 'url' | 'title' | 'tags' | 'hiddenKinds'> & {
+			tags?: unknown;
+			hiddenKinds?: unknown;
+		} = {},
 	): ImportLink | null {
 		const url = webUrl(rawUrl);
 		if (!url) {
@@ -203,6 +231,8 @@ class Collector {
 				link.notes = notes;
 			}
 		}
+
+		Object.assign(link, tagFields(extra));
 
 		if (extra.createdAt) {
 			link.createdAt = extra.createdAt;
@@ -426,7 +456,12 @@ function parseNative(data: unknown, collector: Collector): ParsedImport | null {
 		const link = collector.link(
 			entry.url ?? entry.href,
 			entry.title ?? entry.name,
-			{notes: text(entry.notes), createdAt: toTimestamp(entry.createdAt)},
+			{
+				notes: text(entry.notes),
+				tags: entry.tags,
+				hiddenKinds: entry.hiddenKinds,
+				createdAt: toTimestamp(entry.createdAt),
+			},
 		);
 		if (link) {
 			(byColumn.get(text(entry.columnId)) ?? loose).links.push(link);
@@ -754,6 +789,7 @@ function parseLinkwarden(
 					isObject(link)
 						? collector.link(link.url, link.name, {
 								notes: text(link.description),
+								tags: tagList(link.tags),
 								// `importDate` keeps the date from the tool a link was imported from.
 								createdAt: toTimestamp(link.importDate ?? link.createdAt),
 							})
@@ -811,6 +847,7 @@ function parseKarakeep(
 
 		const link = collector.link(content.url, entry.title, {
 			notes: text(entry.note),
+			tags: tagList(entry.tags),
 			createdAt: toTimestamp(entry.createdAt),
 		});
 		if (!link) {
@@ -880,6 +917,7 @@ function parseWallabag(
 	const links = collector.links(
 		data.map((entry) =>
 			collector.link(entry.url, entry.title, {
+				tags: tagList(entry.tags),
 				// PHP writes the offset without a colon (+0200), which not every JavaScript engine parses.
 				createdAt: toTimestamp(
 					text(entry.created_at).replace(/([+-]\d{2})(?=\d{2}$)/, '$1:'),
@@ -912,6 +950,8 @@ function parsePinboard(
 		data.map((post) =>
 			collector.link(post.href, post.description, {
 				notes: text(post.extended),
+				// Pinboard separates tags with spaces.
+				tags: tagList(post.tags, /\s+/),
 				createdAt: toTimestamp(post.time),
 			}),
 		),
@@ -1009,8 +1049,8 @@ function parseHtml(source: string): ParsedImport {
 		);
 	const isNetscape = /<!doctype\s+netscape-bookmark-file/i.test(html);
 	const groups = new Map<string, ImportGroup>();
-	// Links that carry Raindrop tags or highlights, which are not imported.
-	const raindropTagged = new Set<ImportLink>();
+	// Links that carry Raindrop highlights, which are not imported.
+	const raindropHighlighted = new Set<ImportLink>();
 	const path: string[] = [];
 	let pendingFolder: {name: string; createdAt?: number} | null = null;
 	let capture: {
@@ -1043,14 +1083,11 @@ function parseHtml(source: string): ParsedImport {
 			};
 		} else if (capture.kind === 'a') {
 			const link = collector.link(capture.attrs.href, content, {
+				tags: tagList(capture.attrs.tags ?? ''),
 				createdAt: toTimestamp(capture.attrs.add_date),
 			});
 			lastLink = link;
 			if (link) {
-				if (capture.attrs.tags) {
-					raindropTagged.add(link);
-				}
-
 				const entry = groupFor(path);
 				if (
 					path.some(Boolean) &&
@@ -1086,7 +1123,7 @@ function parseHtml(source: string): ParsedImport {
 		// Raindrop writes a link's highlights as a quote under it.
 		const quoted = lastLink as ImportLink | null;
 		if (!closing && tag === 'blockquote' && quoted) {
-			raindropTagged.add(quoted);
+			raindropHighlighted.add(quoted);
 		}
 
 		if (capture?.kind === 'dd' && !closing && tag !== 'br') {
@@ -1168,16 +1205,16 @@ function parseHtml(source: string): ParsedImport {
 	// Raindrop.io writes its own name as the title of the Netscape file it exports.
 	const raindrop = isNetscape && /<title>\s*raindrop\.io\b/i.test(html);
 	if (raindrop) {
-		const withTags = list
+		const highlighted = list
 			.flatMap((entry) => entry.links)
-			.filter((link) => raindropTagged.has(link)).length;
+			.filter((link) => raindropHighlighted.has(link)).length;
 		return result(
 			'netscape-html',
 			'Raindrop.io export (HTML)',
 			'verified',
 			unsortedToDefault(list),
 			collector,
-			{warnings: raindropWarnings(withTags)},
+			{warnings: raindropWarnings(highlighted)},
 		);
 	}
 
@@ -1250,7 +1287,8 @@ const CSV_COLUMNS = {
 		'category',
 		'window',
 	],
-	folder: ['folder', 'path', 'tags'],
+	folder: ['folder', 'path'],
+	tags: ['tags', 'tag', 'labels'],
 	notes: ['notes', 'note', 'description', 'comment', 'comments'],
 	created: [
 		'created',
@@ -1279,6 +1317,7 @@ function csvHeader(cells: string[]) {
 		group: find(CSV_COLUMNS.group),
 		folder: find(CSV_COLUMNS.folder),
 		notes: find(CSV_COLUMNS.notes),
+		tags: find(CSV_COLUMNS.tags),
 		created: find(CSV_COLUMNS.created),
 	};
 }
@@ -1331,16 +1370,14 @@ function parseCsv(source: string): ParsedImport | null {
 
 	const names = (rows[0] ?? []).map((cell) => cell.trim().toLowerCase());
 	const raindrop = RAINDROP_CSV_MARKERS.every((name) => names.includes(name));
-	// Raindrop's tags and highlights have no place in a bookmark here, so the preview says how many are left out.
-	const keptOut = raindrop
-		? ['tags', 'highlights'].map((name) => names.indexOf(name))
-		: [];
-	let withTagsOrHighlights = 0;
+	// Raindrop's highlights have no place in a bookmark here, so the preview says how many are left out.
+	const highlights = raindrop ? names.indexOf('highlights') : -1;
+	let highlighted = 0;
 
 	const collector = new Collector();
 	const groups = new Map<string, ImportGroup>();
 	// With both a session/column and a folder column, the folder is the session's folder; otherwise
-	// the folder (or path/tags) column names the group.
+	// the folder (or path) column names the group.
 	const groupIndex = header.group >= 0 ? header.group : header.folder;
 	const folderIndex = header.group >= 0 ? header.folder : -1;
 	for (const cells of rows.slice(1)) {
@@ -1348,14 +1385,15 @@ function parseCsv(source: string): ParsedImport | null {
 			index >= 0 ? unguard(cells[index] ?? '').trim() : '';
 		const link = collector.link(cell(header.url), cell(header.title), {
 			notes: cell(header.notes),
+			tags: tagList(cell(header.tags)),
 			createdAt: toTimestamp(cell(header.created)),
 		});
 		if (!link) {
 			continue;
 		}
 
-		if (keptOut.some((index) => cell(index) !== '')) {
-			withTagsOrHighlights += 1;
+		if (cell(highlights) !== '') {
+			highlighted += 1;
 		}
 
 		const name = cleanTitle(cell(groupIndex), MAX_GROUP_NAME);
@@ -1384,7 +1422,7 @@ function parseCsv(source: string): ParsedImport | null {
 			'verified',
 			unsortedToDefault([...groups.values()]),
 			collector,
-			{warnings: raindropWarnings(withTagsOrHighlights)},
+			{warnings: raindropWarnings(highlighted)},
 		);
 	}
 
@@ -1400,7 +1438,7 @@ function parseCsv(source: string): ParsedImport | null {
 function raindropWarnings(count: number): string[] {
 	return count > 0
 		? [
-				`${count} ${count === 1 ? 'bookmark has' : 'bookmarks have'} tags or highlights from Raindrop.io. They are not imported.`,
+				`${count} ${count === 1 ? 'bookmark has' : 'bookmarks have'} highlights from Raindrop.io. They are not imported.`,
 			]
 		: [];
 }
@@ -1862,6 +1900,7 @@ export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 		title: string;
 		columnId?: string;
 		notes?: string;
+		tags?: string[];
 		createdAt?: number;
 	}> = [];
 	for (const entry of parsed.bookmarks) {
@@ -1892,6 +1931,7 @@ export function bookmarkImportPayload(parsed: ParsedImport): unknown {
 				title: link.title,
 				...(columnId && {columnId}),
 				...(link.notes && {notes: link.notes}),
+				...(link.tags && {tags: link.tags}),
 				...(link.createdAt && {createdAt: link.createdAt}),
 			});
 		}

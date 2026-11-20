@@ -74,3 +74,44 @@ test('a bookmark keeps a cleaned note and drops a blank one', () => {
 		);
 	}
 });
+
+test('a bookmark keeps cleaned tags and removed kinds, drops malformed ones, and an old bookmark gains no field', () => {
+	const columns = new Set(['c']);
+	const raw = {url: 'https://github.com/a/b', title: 'A repo', columnId: 'c'};
+	const tagged = normalizeBookmark(
+		{
+			...raw,
+			tags: [' Rust ', '#rust', 7, 'Web'],
+			hiddenKinds: ['repo', 'nonsense'],
+		},
+		columns,
+	)!;
+	assert.deepEqual(tagged.tags, ['rust', 'web']);
+	assert.deepEqual(tagged.hiddenKinds, ['repo']);
+	assert.deepEqual(
+		normalizeBookmark(tagged, columns),
+		tagged,
+		'normalizing again changes nothing',
+	);
+
+	for (const value of [undefined, 'rust', {}, [], [null, '']]) {
+		const bookmark = normalizeBookmark(
+			{...raw, tags: value, hiddenKinds: value},
+			columns,
+		)!;
+		assert.equal(
+			'tags' in bookmark || 'hiddenKinds' in bookmark,
+			false,
+			String(value),
+		);
+	}
+
+	assert.deepEqual(Object.keys(normalizeBookmark(raw, columns)!).toSorted(), [
+		'columnId',
+		'createdAt',
+		'id',
+		'title',
+		'updatedAt',
+		'url',
+	]);
+});

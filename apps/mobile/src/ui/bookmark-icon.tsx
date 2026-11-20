@@ -1,26 +1,28 @@
 import {StyleSheet, View} from 'react-native';
 import {
+	isMediaKind,
 	LINK_KIND_LABELS,
 	linkKind,
-	type LinkKind,
+	type MediaKind,
 } from '../../../extension/src/shared/link-kind';
 import {hostOf} from '../library/store-shape';
 import {SiteIcon} from './site-icon';
 import {useColors} from './theme';
 import {Icon, type IconName} from './widgets';
 
-const KIND_ICONS: Record<Exclude<LinkKind, 'page'>, IconName> = {
+const KIND_ICONS: Record<MediaKind, IconName> = {
 	image: 'image',
 	pdf: 'document-text',
 	video: 'film',
 };
 
 /**
-The kind in words at the start of a row's accessibility label ("Image, "), or nothing for a page.
+The media kind in words at the start of a row's accessibility label ("Image, "), or nothing for other links, whose
+kind a bookmark row says with its tags.
 */
 export function spokenKind(url: string) {
-	const label = LINK_KIND_LABELS[linkKind(url)];
-	return label ? `${label}, ` : '';
+	const kind = linkKind(url);
+	return isMediaKind(kind) ? `${LINK_KIND_LABELS[kind]}, ` : '';
 }
 
 /**
@@ -31,7 +33,7 @@ export function BookmarkIcon({url, size}: {url: string; size: number}) {
 	const colors = useColors();
 	const kind = linkKind(url);
 	const icon = <SiteIcon host={hostOf(url)} size={size} />;
-	if (kind === 'page') {
+	if (!isMediaKind(kind)) {
 		return icon;
 	}
 

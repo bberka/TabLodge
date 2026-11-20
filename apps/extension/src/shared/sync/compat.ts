@@ -81,6 +81,11 @@ export const SERVER_FEATURES: ReadonlyArray<{
 		missing: 'Bookmark notes stay on this device.',
 	},
 	{
+		name: 'tags',
+		since: '0.4.0',
+		missing: 'Bookmark tags stay on this device.',
+	},
+	{
 		name: 'trash',
 		since: '0.2.2',
 		missing: 'The trash stays on this device.',

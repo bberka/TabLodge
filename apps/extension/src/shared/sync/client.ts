@@ -408,6 +408,8 @@ export function createSyncClient(host: SyncHost) {
 	let trashOn = false;
 	// Whether this round syncs bookmark notes: the server lists the `notes` feature.
 	let notesOn = false;
+	// Whether this round syncs bookmark tags: the server lists the `tags` feature.
+	let tagsOn = false;
 	let featureCheck:
 		{key: string; until: number; features: ReadonlySet<string>} | undefined;
 	// What the last /v1/status answer said, for the status the round ends with.
@@ -471,8 +473,8 @@ export function createSyncClient(host: SyncHost) {
 
 	/**
 	Asks the server about itself, at most every few minutes, and returns the optional record kinds it lists. An old
-	server refuses a push with a kind it does not know, which would stop every round, so the trash and bookmark notes
-	wait until the server says it can hold them. A server that speaks another protocol stops the round; that answer
+	server refuses a push with a kind it does not know, which would stop every round, so the trash, bookmark notes, and
+	bookmark tags wait until the server says it can hold them. A server that speaks another protocol stops the round; that answer
 	is not kept, so the round after the server's update goes ahead.
 	*/
 	async function serverFeatures(
@@ -507,7 +509,9 @@ export function createSyncClient(host: SyncHost) {
 
 	// The kinds this round leaves alone because the server cannot hold them: they stay on the device, unsent.
 	const unsupported = (kind: TombstoneKind | undefined) =>
-		(kind === 'trash' && !trashOn) || (kind === 'note' && !notesOn);
+		(kind === 'trash' && !trashOn) ||
+		(kind === 'note' && !notesOn) ||
+		(kind === 'tag' && !tagsOn);
 
 	/**
 	Starts a resync that never counts a record of an unsupported kind as deleted: the pull skips those kinds, so they
@@ -524,7 +528,7 @@ export function createSyncClient(host: SyncHost) {
 	};
 
 	/**
-	The changes to push. The trash and notes stay queued while the server cannot hold them.
+	The changes to push. The trash, notes, and tags stay queued while the server cannot hold them.
 	*/
 	const queued = (state: SyncState, records: Records) =>
 		outgoing(
@@ -543,6 +547,7 @@ export function createSyncClient(host: SyncHost) {
 			...((await settingsOn()) ? [] : (['preference'] as const)),
 			...(trashOn ? [] : (['trash'] as const)),
 			...(notesOn ? [] : (['note'] as const)),
+			...(tagsOn ? [] : (['tag'] as const)),
 		]);
 
 	async function captureLocal(state: SyncState, records: Records) {
@@ -623,6 +628,7 @@ export function createSyncClient(host: SyncHost) {
 		await codec?.prepare(async (path, init) => request(target, path, init));
 		trashOn = host.trash !== undefined && features.has('trash');
 		notesOn = features.has('notes');
+		tagsOn = features.has('tags');
 		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
 		const reseal = new Set<string>();
 		/*
