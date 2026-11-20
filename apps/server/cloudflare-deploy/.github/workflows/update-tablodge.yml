@@ -1,9 +1,10 @@
-# For a sync server deployed with the Deploy to Cloudflare button: add this file to the repository the button created,
-# as .github/workflows/update-tablodge.yml. Once a day it downloads the newest TabLodge release's worker.js and commits
-# it when it changed, and Cloudflare deploys the commit. Actions › Update TabLodge › Run workflow updates at once.
+# The Deploy to Cloudflare button copies this file into your repository. The scheduled run stays off until you set the
+# repository variable TABLODGE_AUTO_UPDATE to true (Settings › Secrets and variables › Actions › Variables). Once a day
+# it then downloads the newest TabLodge release's worker.js and commits it when it changed, and Cloudflare deploys the
+# commit. Actions › Update TabLodge › Run workflow updates at once, with or without the variable.
 # The repository variable TABLODGE_VERSION, such as `0.4`, keeps it on that release line. See
 # https://github.com/bberka/TabLodge/blob/master/docs/self-hosting.md#update-automatically
-# TabLodge itself never runs this file.
+# GitHub runs workflows only from the root .github folder, so TabLodge itself never runs this file.
 name: Update TabLodge
 
 on:
@@ -24,6 +25,8 @@ concurrency:
 
 jobs:
   update:
+    # A copied file is not opt-in, so a schedule does nothing until TABLODGE_AUTO_UPDATE is true. A manual run always works.
+    if: github.event_name != 'schedule' || vars.TABLODGE_AUTO_UPDATE == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

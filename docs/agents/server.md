@@ -8,9 +8,8 @@ A Hono server for self hosters, as a Docker image (Node, SQLite) or a Cloudflare
 | --- | --- |
 | `src/` | API (`api.ts`), SQLite change log, Node entry (`node.ts`), Worker entry (`worker.ts`) |
 | `scripts/` | `cloudflare-deploy.ts` (bundles the button's Worker), `setup-cloudflare.ts`, `transfer.ts` |
-| `cloudflare-deploy/` | What the Deploy to Cloudflare button copies; `worker.js` is generated |
+| `cloudflare-deploy/` | What the button copies, including the update workflow (off until `TABLODGE_AUTO_UPDATE` is `true`); `worker.js` is generated |
 | `Dockerfile`, `compose*.yaml`, `wrangler.jsonc` | Docker and Cloudflare deployment |
-| `update-tablodge.yml` | Users copy it into their button repository |
 
 The protocol code (`apps/extension/src/shared/sync/`) is shared with the extension and the Android app, and the server imports it from there.
 

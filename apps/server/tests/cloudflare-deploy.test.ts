@@ -24,7 +24,7 @@ test('the Deploy to Cloudflare Worker is built from the current server source', 
 	assert.equal(result.status, 0, result.stderr);
 }, 60_000);
 
-// The update workflow (apps/server/update-tablodge.yml) reads this line to stop before a release with another protocol.
+// The update workflow (apps/server/cloudflare-deploy/.github/workflows/update-tablodge.yml) reads this line to stop before a release with another protocol.
 test('the Deploy to Cloudflare Worker states its sync protocol where the update workflow reads it', () => {
 	const worker = readFileSync(
 		join(serverDirectory, 'cloudflare-deploy', 'worker.js'),
