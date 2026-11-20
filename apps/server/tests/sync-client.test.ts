@@ -1455,8 +1455,18 @@ test('a browser that updates from 0.3.0 still drops a record deleted elsewhere w
 		withSources: true,
 		storage: old.storage,
 	});
-	await updated.client.wake();
-	assert.deepEqual(ids(updated.store).toSorted(), ['b2', 'mine']);
-	await a.client.syncNow();
+	/*
+	A second on: the server refuses a record it never had whose stamp is not past the newest purged delete, and a stamp
+	from the same millisecond as that delete would be refused as stale.
+	*/
+	vi.useFakeTimers({now: Date.now() + 1000, toFake: ['Date']});
+	try {
+		await updated.client.wake();
+		assert.deepEqual(ids(updated.store).toSorted(), ['b2', 'mine']);
+		await a.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
 	assert.deepEqual(ids(a.store).toSorted(), ['b2', 'mine']);
 });
