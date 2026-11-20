@@ -389,6 +389,13 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 												void applyPrivateSyncSetting();
 											}}
 										/>
+										<Toggle
+											row={ROWS.backgroundSync}
+											value={prefs.backgroundSync}
+											onChange={(backgroundSync) => {
+												setPreferences({backgroundSync});
+											}}
+										/>
 										<DeviceNameField />
 										<SharedPagesButton />
 										<Button
