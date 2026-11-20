@@ -20,6 +20,7 @@ import {
 	firstPassage,
 	spokenNote,
 } from '../../../../extension/src/shared/note-links';
+import {RowTags, spokenTags} from './tags';
 
 /**
 One bookmark: tap to open, swipe right to delete or left to edit, long press to select. Screen reader users get
@@ -98,7 +99,7 @@ function BookmarkRowView({
 			<Pressable
 				accessibilityRole={selecting ? 'checkbox' : 'link'}
 				accessibilityState={selecting ? {checked} : undefined}
-				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}${bookmark.notes ? `, note: ${spokenNote(bookmark.notes)}` : ''}`}
+				accessibilityLabel={`${spokenKind(bookmark.url)}${text.main}, ${text.sub ?? host}${text.insecure ? ', not secure' : ''}${bookmark.notes ? `, note: ${spokenNote(bookmark.notes)}` : ''}${spokenTags(bookmark)}`}
 				accessibilityHint={selecting ? undefined : 'Opens the link'}
 				accessibilityActions={[
 					{name: 'open', label: 'Open in browser'},
@@ -195,6 +196,7 @@ function BookmarkRowView({
 							onOpen={selecting ? undefined : openPassage}
 						/>
 					)}
+					<RowTags bookmark={bookmark} />
 				</View>
 				{!selecting && (
 					<Icon
@@ -416,9 +418,11 @@ The drawer for changing a bookmark's link, title, or column. It is open while a 
 */
 export function EditSheet({
 	bookmark,
+	focusTags,
 	onClose,
 }: {
 	bookmark?: Bookmark;
+	focusTags?: boolean;
 	onClose: () => void;
 }) {
 	return (
@@ -432,6 +436,7 @@ export function EditSheet({
 				<SaveLinkForm
 					key={bookmark.id}
 					editing={bookmark}
+					focusTags={focusTags}
 					initialText={bookmark.url}
 					initialTitle={bookmark.title}
 					onDone={onClose}

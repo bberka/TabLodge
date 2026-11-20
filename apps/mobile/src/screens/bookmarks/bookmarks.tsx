@@ -68,6 +68,7 @@ import {openShare} from '../transfer/transfer-sheets';
 import {copyActions} from '../copy/copy-actions';
 import {linkOpenActions, openIn} from '../open-in';
 import {useCopyUrls} from '../../library/page-copies';
+import {TagFilterSheet} from './tags';
 import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
 import {ColumnsSheet} from './columns-sheet';
@@ -87,7 +88,8 @@ The drawer that is open over the list, if any: one bookmark's edit form, the cho
 for making or changing a column.
 */
 type Sheet =
-	| {kind: 'edit'; bookmark: Bookmark}
+	| {kind: 'edit'; bookmark: Bookmark; focusTags?: boolean}
+	| {kind: 'tags'}
 	| {kind: 'move'}
 	| {kind: 'column'; id?: string};
 
@@ -251,6 +253,18 @@ export function BookmarksScreen({
 					hint: 'Its link, title, and column',
 					onPress() {
 						setSheet({kind: 'edit', bookmark: rowMenuBookmark});
+					},
+				},
+				{
+					icon: 'pricetag-outline',
+					label: 'Edit tags',
+					hint: 'Add your own, or remove the automatic one',
+					onPress() {
+						setSheet({
+							kind: 'edit',
+							bookmark: rowMenuBookmark,
+							focusTags: true,
+						});
 					},
 				},
 				...(store.bookmarkColumns.length > 1
@@ -502,6 +516,18 @@ export function BookmarksScreen({
 						label: 'Remove duplicates',
 						hint: 'Keep the oldest copy of each saved address',
 						onPress: removeDuplicates,
+					},
+				]
+			: []),
+		...(store.bookmarks.length > 0
+			? [
+					{
+						icon: 'pricetags-outline' as const,
+						label: 'Filter by tag',
+						hint: 'Show only links with a tag',
+						onPress() {
+							setSheet({kind: 'tags'});
+						},
 					},
 				]
 			: []),
@@ -914,8 +940,21 @@ export function BookmarksScreen({
 					setSheet({kind: 'column'});
 				}}
 			/>
+			<TagFilterSheet
+				visible={sheet?.kind === 'tags'}
+				bookmarks={store.bookmarks}
+				query={query}
+				onQuery={(next) => {
+					search.show();
+					search.setQuery(next);
+				}}
+				onClose={() => {
+					setSheet(undefined);
+				}}
+			/>
 			<EditSheet
 				bookmark={editing}
+				focusTags={sheet?.kind === 'edit' && sheet.focusTags}
 				onClose={() => {
 					setSheet(undefined);
 					selection.stop();

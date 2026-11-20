@@ -24,6 +24,7 @@ import {
 	setSessionColor,
 	restoreColumn,
 	allBookmarks,
+	setBookmarkTags,
 } from '../src/library/board-edits';
 import {
 	emptyStore,
@@ -239,6 +240,60 @@ describe('several bookmarks', () => {
 		assert.deepEqual(ids(moved, 'c2'), ['a', 'b']);
 		assert.deepEqual(ids(moved, 'c1'), ['c']);
 		assert.equal(moveBookmarks(store, new Set(['a']), 'missing', NOW), store);
+	});
+
+	test('tags are saved cleaned, kept when an edit leaves them out, cleared by an empty list, and put back for Undo', () => {
+		const store = build();
+		const tagged = updateBookmark(
+			store,
+			'b',
+			{
+				url: 'https://github.com/a/b',
+				title: 'Repo',
+				columnId: 'c1',
+				tags: [' Rust', 'rust', '#CLI'],
+				hiddenKinds: ['repo'],
+			},
+			NOW + 1,
+		);
+		const find = (from: typeof store) =>
+			from.bookmarks.find((bookmark) => bookmark.id === 'b')!;
+		assert.deepEqual(find(tagged).tags, ['rust', 'cli']);
+		assert.deepEqual(find(tagged).hiddenKinds, ['repo']);
+		assert.equal(searchBookmarks(tagged, 'tag:rust').length, 1);
+		assert.equal(searchBookmarks(tagged, 'tag:repo').length, 0);
+		assert.equal(searchBookmarks(tagged, 'kind:repo').length, 1);
+
+		const renamed = updateBookmark(
+			tagged,
+			'b',
+			{url: 'https://github.com/a/b', title: 'New', columnId: 'c1'},
+			NOW + 2,
+		);
+		assert.deepEqual(find(renamed).tags, ['rust', 'cli']);
+
+		const cleared = updateBookmark(
+			tagged,
+			'b',
+			{
+				url: 'https://github.com/a/b',
+				title: 'Repo',
+				columnId: 'c1',
+				tags: [],
+				hiddenKinds: [],
+			},
+			NOW + 3,
+		);
+		assert.equal(
+			'tags' in find(cleared) || 'hiddenKinds' in find(cleared),
+			false,
+		);
+		const undone = setBookmarkTags(cleared, 'b', find(tagged), NOW + 4);
+		assert.deepEqual(
+			[find(undone).tags, find(undone).hiddenKinds],
+			[['rust', 'cli'], ['repo']],
+		);
+		assert.equal(setBookmarkTags(cleared, 'gone', {}, NOW), cleared);
 	});
 
 	test('edits a bookmark in place and moves it only when the column changes', () => {

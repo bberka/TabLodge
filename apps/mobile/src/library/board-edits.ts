@@ -246,6 +246,37 @@ export function updateBookmark(
 }
 
 /**
+Puts a bookmark's tags and removed kinds back as they were, for Undo after an edit took some away. A bookmark that is
+gone leaves the store as it was.
+*/
+export function setBookmarkTags(
+	store: Store,
+	id: string,
+	tagged: Pick<Bookmark, 'tags' | 'hiddenKinds'>,
+	now: number,
+): Store {
+	if (store.bookmarks.every((bookmark) => bookmark.id !== id)) {
+		return store;
+	}
+
+	return {
+		...store,
+		bookmarks: store.bookmarks.map((bookmark) =>
+			bookmark.id === id
+				? {
+						...withTagEdits(bookmark, {
+							tags: tagged.tags ?? [],
+							hiddenKinds: tagged.hiddenKinds ?? [],
+						}),
+						updatedAt: now,
+					}
+				: bookmark,
+		),
+		updatedAt: now,
+	};
+}
+
+/**
 Removes several bookmarks at once.
 */
 export function removeBookmarks(
