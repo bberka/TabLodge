@@ -113,6 +113,7 @@ import {
 } from './column-color';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
 import {removeSiteSource} from './site-source-access';
+import {useSourcesElsewherePointer} from './site-source-pointer';
 import {type SiteSource, sourceSavingInto} from './site-sources';
 import {
 	AppHeader,
@@ -645,6 +646,8 @@ function NewTab() {
 	// (the service worker decides whether this tab was one); any other visit shows the dashboard as usual.
 	const [handoff, setHandoff] = useState<'idle' | 'stay'>('idle');
 	const holding = Boolean(state) && !newTabOn && handoff === 'idle';
+	// Only once the dashboard stays: a tab handed on to the browser's page would drop the toast unseen.
+	useSourcesElsewherePointer(showStatus, Boolean(state) && !holding);
 	useEffect(() => {
 		if (!holding) {
 			return;
@@ -1162,7 +1165,7 @@ function NewTab() {
 					: `Column “${column.name}” and ${plural(count, 'bookmark')} deleted.`;
 		offerTrashUndo(
 			stopped
-				? `${deleted} ${stop.label} is off on this device.`
+				? `${deleted} ${stop.label} is removed from Sources.`
 				: stop
 					? `${deleted} Could not switch ${stop.label} off; remove it in Settings › Sources.`
 					: deleted,
@@ -3601,14 +3604,14 @@ function NewTab() {
 										/>
 										<div className="space-y-1">
 											<Label htmlFor="delete-column-stop-source">
-												Stop saving from {columnDelete.source.column.name} on
-												this device too
+												Stop saving from {columnDelete.source.column.name} too
 											</Label>
 											<p
 												id="delete-column-stop-source-note"
 												className="text-xs leading-5 text-muted-foreground"
 											>
-												Otherwise your next save on{' '}
+												This removes the site from Sources, also in your other
+												synced browsers. Otherwise your next save on{' '}
 												{columnDelete.source.hosts[0]} makes this column again.
 											</p>
 										</div>

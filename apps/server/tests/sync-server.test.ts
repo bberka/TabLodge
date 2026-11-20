@@ -93,6 +93,7 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 			'notes',
 			'tags',
 			'page-source',
+			'sources',
 		],
 	});
 });

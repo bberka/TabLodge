@@ -60,6 +60,11 @@ export type SyncState = {
 	Applied without it, the library would drop or move them and the next capture would send that loss back.
 	*/
 	held?: SyncChange[];
+	/**
+	The optional record kinds (trash, notes, tags, Sources) the last pull took. One it skipped is pulled from the start
+	once it is taken.
+	*/
+	pulled?: Array<'trash' | 'note' | 'tag' | 'source'>;
 };
 
 export type Records = Map<string, LibraryRecord>;

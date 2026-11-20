@@ -3,7 +3,7 @@
 // optional host permission for that site only; the content script is registered only while it is granted. A new
 // site is an entry here plus its adapter in shell/site-source.ts; Settings lists it in Add a site by itself.
 // The manifest's optional_host_permissions must list exactly the origins here (tests/site-sources.test.ts).
-import {isRecord} from '../shared/library-values';
+import {canonicalJson, isRecord} from '../shared/library-values';
 import {
 	SOURCE_COLUMNS,
 	type SiteSourceId,
@@ -11,7 +11,11 @@ import {
 	sourceColumnSite,
 	type SourceColumnLook,
 } from '../shared/source-columns';
-import type {BookmarkColumn, SiteSourceStatus} from '../shared/types';
+import type {
+	BookmarkColumn,
+	SiteSourceNotice,
+	SiteSourceStatus,
+} from '../shared/types';
 
 export type {SiteSourceId} from '../shared/source-columns';
 
@@ -703,23 +707,135 @@ export function siteSourceForUrl(href: unknown): SiteSource | undefined {
 }
 
 /**
-Per device, outside the library: whether each source is on, whether it keeps saves off the site, and why it went
-off or stopped saving. It is kept in
-chrome.storage.local unprefixed, because the permission and the registered script belong to the browser, not to a
-library, and it never syncs.
+Outside the library, in chrome.storage.local unprefixed: the permission and the registered script belong to the
+browser, not to a library. Two parts:
+
+	sources  per browser, never synced: whether the site runs here, why it went off or stopped saving, and whether
+	         the dashboard already pointed to a site that is on in another browser
+	choices  the user's choices, synced as `source` records (docs/adr/0009-sources-settings-sync.md): one entry per
+	         site that is on, holding its column and save mode. Kept as they arrived, so a site or a field this
+	         version does not know goes back to the server unchanged.
+
+A site runs here only while it has a choice and this browser grants its permission.
 */
 export const SITE_SOURCES_KEY = 'tablodge.sources';
 
-type SiteSourceEntry = Omit<SiteSourceStatus, 'id'>;
-export type SiteSourcesState = Record<SiteSourceId, SiteSourceEntry>;
+type SiteSourceLocal = {
+	enabled: boolean;
+	notice?: SiteSourceNotice;
+	/**
+	The dashboard showed that the site is on in another browser.
+	*/
+	pointed?: true;
+};
+export type SiteSourcesState = {
+	sites: Record<SiteSourceId, SiteSourceLocal>;
+	choices: Record<string, Record<string, unknown>>;
+};
 
 /**
-The entry without its notice; whether it is on and its column choice stay.
+A site's synced choices as this version reads them. `wanted`: the site is on, in this browser or another.
 */
-export const withoutNotice = ({
-	notice: _notice,
-	...entry
-}: SiteSourceEntry): SiteSourceEntry => entry;
+export function sourceChoice(
+	state: SiteSourcesState,
+	source: SiteSource,
+): {wanted: boolean; columnId?: string; keepOffSite?: true} {
+	const choice = state.choices[source.id];
+	if (!isRecord(choice)) {
+		return {wanted: false};
+	}
+
+	const {columnId, keepOffSite} = choice;
+	return {
+		wanted: true,
+		...(typeof columnId === 'string' &&
+			columnId !== '' &&
+			columnId.length <= 200 && {columnId}),
+		...(keepOffSite === true && source.keepOffSite && {keepOffSite: true}),
+	};
+}
+
+/**
+The choice with `field` set to `value`, or removed when `value` is undefined; the other fields stay as they are.
+*/
+/**
+Stores a site's choices as they came. A computed key, so an id such as `__proto__` stays an ordinary key.
+*/
+export function putChoice(
+	state: SiteSourcesState,
+	id: string,
+	value: Record<string, unknown>,
+) {
+	state.choices = {...state.choices, [id]: value};
+}
+
+/**
+Applies choices from other devices: `put` adds or replaces, `remove` deletes. A site whose stored value no longer
+equals `was` (what the sync round read) changed here meanwhile, so it keeps this browser's edit, which the round's
+push then sends, and is listed in `kept`. `removed` lists the known sites that went off.
+*/
+export function applySyncedChoices(
+	state: SiteSourcesState,
+	put: ReadonlyArray<{id: string; value: Record<string, unknown>}>,
+	remove: readonly string[],
+	was: ReadonlyMap<string, unknown>,
+): {removed: SiteSource[]; kept: string[]} {
+	const kept: string[] = [];
+	const unchanged = (id: string) => {
+		const same =
+			canonicalJson(
+				Object.hasOwn(state.choices, id) ? state.choices[id] : null,
+			) === canonicalJson(was.get(id) ?? null);
+		if (!same) {
+			kept.push(id);
+		}
+
+		return same;
+	};
+
+	for (const {id, value} of put) {
+		if (unchanged(id)) {
+			putChoice(state, id, value);
+		}
+	}
+
+	const removed: SiteSource[] = [];
+	for (const id of remove) {
+		if (!unchanged(id)) {
+			continue;
+		}
+
+		withoutChoice(state, id);
+		const source = siteSourceById(id);
+		if (!source) {
+			continue;
+		}
+
+		removed.push(source);
+		state.sites[source.id] = {enabled: false};
+	}
+
+	return {removed, kept};
+}
+
+/**
+Removes a site's choices: the site is off in every browser.
+*/
+export function withoutChoice(state: SiteSourcesState, id: string) {
+	const {[id]: _removed, ...rest} = state.choices;
+	state.choices = rest;
+}
+
+export function withChoice(
+	state: SiteSourcesState,
+	source: SiteSource,
+	field: 'columnId' | 'keepOffSite',
+	value: string | true | undefined,
+) {
+	const {[field]: _previous, ...rest} = state.choices[source.id] ?? {};
+	state.choices[source.id] =
+		value === undefined ? rest : {...rest, [field]: value};
+}
 
 export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 	const saved = isRecord(raw) && isRecord(raw.sources) ? raw.sources : {};
@@ -730,32 +846,67 @@ export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 			entry.notice === 'revoked' || entry.notice === 'unreadable'
 				? entry.notice
 				: undefined;
-		const columnId =
-			typeof entry.columnId === 'string' && entry.columnId.length <= 200
-				? entry.columnId
-				: undefined;
 		return [
 			source.id,
 			{
 				enabled: entry.enabled === true,
 				...(notice && {notice}),
-				...(columnId && {columnId}),
-				...(entry.keepOffSite === true &&
-					source.keepOffSite && {keepOffSite: true}),
+				...(entry.pointed === true && {pointed: true}),
 			},
 		] as const;
 	});
-	return Object.fromEntries(entries) as SiteSourcesState;
+	let choices: SiteSourcesState['choices'] = {};
+	if (isRecord(raw) && isRecord(raw.choices)) {
+		// Built with fromEntries, so an id such as `__proto__` stays an ordinary key.
+		choices = Object.fromEntries(
+			Object.entries(raw.choices).filter(
+				(entry): entry is [string, Record<string, unknown>] =>
+					isRecord(entry[1]),
+			),
+		);
+	} else {
+		// Stored before choices synced: a site that was on, or went off when its access was revoked, keeps them.
+		for (const source of SITE_SOURCES) {
+			const value = saved[source.id];
+			const entry = isRecord(value) ? value : {};
+			if (entry.enabled !== true && entry.notice !== 'revoked') {
+				continue;
+			}
+
+			const {columnId, keepOffSite} = entry;
+			choices[source.id] = {
+				...(typeof columnId === 'string' && {columnId}),
+				...(keepOffSite === true && {keepOffSite}),
+			};
+		}
+	}
+
+	return {
+		sites: Object.fromEntries(entries) as SiteSourcesState['sites'],
+		choices,
+	};
 }
 
 export function siteSourcesValue(state: SiteSourcesState) {
-	return {version: 1, sources: state};
+	return {version: 1, sources: state.sites, choices: state.choices};
 }
+
+/**
+The local part of a site's entry without its notice.
+*/
+export const withoutNotice = ({
+	notice: _notice,
+	...entry
+}: SiteSourceLocal): SiteSourceLocal => entry;
 
 export function siteSourceStatuses(
 	state: SiteSourcesState,
 ): SiteSourceStatus[] {
-	return SITE_SOURCES.map((source) => ({id: source.id, ...state[source.id]}));
+	return SITE_SOURCES.map((source) => ({
+		id: source.id,
+		...state.sites[source.id],
+		...sourceChoice(state, source),
+	}));
 }
 
 /**
@@ -765,8 +916,8 @@ export const siteSourceUndoLabel = (source: SiteSource) =>
 	`Save from ${source.column.name}`;
 
 /**
-The site whose saves on this device go into a column, so deleting that column asks whether to stop them too: its
-source column, while the site is on and Settings picks no other column that still exists.
+The site whose saves go into a column, in this browser or another synced one, so deleting that column asks whether to
+stop them too: its source column, while the site is on anywhere and Settings picks no other column that still exists.
 */
 export function sourceSavingInto(
 	columnId: string,
@@ -777,7 +928,7 @@ export function sourceSavingInto(
 	const entry = statuses.find((status) => status.id === source?.id);
 	const chosen = entry?.columnId;
 	return source &&
-		entry?.enabled &&
+		(entry?.wanted || entry?.enabled) &&
 		(!chosen ||
 			chosen === columnId ||
 			columns.every((column) => column.id !== chosen))

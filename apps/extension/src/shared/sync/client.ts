@@ -32,7 +32,13 @@ import {
 	startResync,
 	type SyncState,
 } from './engine';
-import {assemble, splitLibrary, trashOf} from './library-records';
+import {
+	assemble,
+	sourcesOf,
+	splitLibrary,
+	type SyncedSource,
+	trashOf,
+} from './library-records';
 
 export const SYNC_CONFIG_KEY = 'tablodge.sync.config';
 const SYNC_STATE_KEY = 'tablodge.sync.state';
@@ -65,6 +71,9 @@ export function createSyncToken(): string {
 }
 
 const PULL_LIMIT = 500;
+// Record kinds that sync only when the server and the host support them.
+const OPTIONAL_KINDS = ['trash', 'note', 'tag', 'source'] as const;
+type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 1500;
 // Chrome keeps an extension service worker alive while its WebSocket exchanges messages within 30 seconds.
@@ -158,6 +167,24 @@ export type SyncHost = {
 		apply(put: TrashEntry[], remove: string[]): Promise<void>;
 	};
 	/**
+	The extension's Sources choices, one per site that is on, which sync with a server that supports them. They live
+	outside the library and belong to the regular library's sync only. Without it they stay on the device.
+	*/
+	sources?: {
+		read(): Promise<SyncedSource[]>;
+		/**
+		Adds or replaces `put` and removes the sites named in `remove`, keeping the rest. `was` holds each of those sites'
+		values as `read` gave them this round (undefined for none): a site whose value changed since was edited in
+		Settings meanwhile, so the host keeps that edit, and this round's push sends it. Values are stored as they came,
+		so they go back unchanged.
+		*/
+		apply(
+			put: SyncedSource[],
+			remove: string[],
+			was: ReadonlyMap<string, unknown>,
+		): Promise<void>;
+	};
+	/**
 	Writes a library assembled from synced records; the host normalizes it like any untrusted input.
 	*/
 	writeLibrary(store: Store): Promise<void>;
@@ -239,7 +266,16 @@ function parseState(value: unknown): SyncState | undefined {
 		typeof value.cursor === 'number' &&
 		isRecord(value.shadow) &&
 		Array.isArray(value.outbox)
-		? ({purged: 0, ...value} as SyncState)
+		? ({
+				purged: 0,
+				...value,
+				// Anything but a list of kinds counts as none pulled yet, which only costs one pull from the start.
+				pulled: Array.isArray(value.pulled)
+					? value.pulled.filter((kind): kind is OptionalKind =>
+							(OPTIONAL_KINDS as readonly unknown[]).includes(kind),
+						)
+					: undefined,
+			} as SyncState)
 		: undefined;
 }
 
@@ -410,6 +446,8 @@ export function createSyncClient(host: SyncHost) {
 	let notesOn = false;
 	// Whether this round syncs bookmark tags: the server lists the `tags` feature.
 	let tagsOn = false;
+	// Whether this round syncs Sources choices: the host has them and the server lists the `sources` feature.
+	let sourcesOn = false;
 	let featureCheck:
 		{key: string; until: number; features: ReadonlySet<string>} | undefined;
 	// What the last /v1/status answer said, for the status the round ends with.
@@ -473,9 +511,9 @@ export function createSyncClient(host: SyncHost) {
 
 	/**
 	Asks the server about itself, at most every few minutes, and returns the optional record kinds it lists. An old
-	server refuses a push with a kind it does not know, which would stop every round, so the trash, bookmark notes, and
-	bookmark tags wait until the server says it can hold them. A server that speaks another protocol stops the round; that answer
-	is not kept, so the round after the server's update goes ahead.
+	server refuses a push with a kind it does not know, which would stop every round, so the trash, bookmark notes and
+	tags, and Sources choices wait until the server says it can hold them. A server that speaks another protocol stops
+	the round; that answer is not kept, so the round after the server's update goes ahead.
 	*/
 	async function serverFeatures(
 		target: SyncConfig,
@@ -507,7 +545,8 @@ export function createSyncClient(host: SyncHost) {
 	const unsupported = (kind: TombstoneKind | undefined) =>
 		(kind === 'trash' && !trashOn) ||
 		(kind === 'note' && !notesOn) ||
-		(kind === 'tag' && !tagsOn);
+		(kind === 'tag' && !tagsOn) ||
+		(kind === 'source' && !sourcesOn);
 
 	/**
 	Starts a resync that never counts a record of an unsupported kind as deleted: the pull skips those kinds, so they
@@ -524,7 +563,7 @@ export function createSyncClient(host: SyncHost) {
 	};
 
 	/**
-	The changes to push. The trash, notes, and tags stay queued while the server cannot hold them.
+	The changes to push. The trash, notes, tags, and Sources choices stay queued while the server cannot hold them.
 	*/
 	const queued = (state: SyncState, records: Records) =>
 		outgoing(
@@ -544,6 +583,7 @@ export function createSyncClient(host: SyncHost) {
 			...(trashOn ? [] : (['trash'] as const)),
 			...(notesOn ? [] : (['note'] as const)),
 			...(tagsOn ? [] : (['tag'] as const)),
+			...(sourcesOn ? [] : (['source'] as const)),
 		]);
 
 	async function captureLocal(state: SyncState, records: Records) {
@@ -554,7 +594,8 @@ export function createSyncClient(host: SyncHost) {
 	}
 
 	/**
-	Writes the library from `records` and, when they changed, the trash entries that differ from `before`.
+	Writes the library from `records` and, when they changed, the trash entries and Sources choices that differ from
+	`before`.
 	*/
 	async function write(
 		records: Records,
@@ -584,6 +625,29 @@ export function createSyncClient(host: SyncHost) {
 					await host.trash.apply(put, remove);
 				}
 			}
+
+			if (sourcesOn && host.sources) {
+				const put = sourcesOf(
+					[...records]
+						.filter(([key, record]) => before.get(key) !== record)
+						.map(([, record]) => record),
+				);
+				const remove = [...before.values()]
+					.filter(
+						(record) =>
+							record.kind === 'source' && !records.has(recordKey(record)),
+					)
+					.map((record) => record.id);
+				if (put.length > 0 || remove.length > 0) {
+					const was = new Map(
+						[...put.map(({id}) => id), ...remove].map((id) => [
+							id,
+							before.get(recordKey({kind: 'source', id}))?.value,
+						]),
+					);
+					await host.sources.apply(put, remove, was);
+				}
+			}
 		} finally {
 			applying = false;
 		}
@@ -604,6 +668,7 @@ export function createSyncClient(host: SyncHost) {
 			const records = splitLibrary(
 				store,
 				trashOn && host.trash ? await host.trash.read() : [],
+				sourcesOn && host.sources ? await host.sources.read() : [],
 			);
 			let state = await loadState();
 			if (state.joined) {
@@ -625,6 +690,7 @@ export function createSyncClient(host: SyncHost) {
 		trashOn = host.trash !== undefined && features.has('trash');
 		notesOn = features.has('notes');
 		tagsOn = features.has('tags');
+		sourcesOn = host.sources !== undefined && features.has('sources');
 		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
 		const reseal = new Set<string>();
 		/*
@@ -633,16 +699,27 @@ export function createSyncClient(host: SyncHost) {
 		library would drop such a tab or move such a bookmark, and the next capture would send that loss to every
 		device.
 		*/
+		/*
+		The optional kinds this round pulls. A kind skipped by earlier pulls (the server lacked it, or this device ran a
+		version without it, such as 0.3.0 before Sources) was left behind the cursor, so a round that takes it for the
+		first time pulls from the start. Stamps decide record by record, so nothing newer here is lost. It runs as a
+		resync: the server checks for purged deletes only against a cursor past 0, so a record deleted elsewhere whose
+		delete was purged since would otherwise stay. A record not seen again is removed, unless it waits to be sent.
+		*/
+		const kinds = OPTIONAL_KINDS.filter((kind) => !unsupported(kind));
 		const start = await step(async (state) => ({
 			state,
 			result: {
+				replay:
+					state.cursor > 0 &&
+					kinds.some((kind) => !state.pulled?.includes(kind)),
 				cursor: state.cursor,
 				purged: state.purged,
 				known: Math.max(state.known ?? 0, state.cursor),
 			},
 		}));
-		let end = {cursor: start.cursor, purged: start.purged};
-		let resync = false;
+		let end = {cursor: start.replay ? 0 : start.cursor, purged: start.purged};
+		let resync = start.replay;
 		let serverReset = false;
 		const pulled: SyncChange[] = [];
 		for (;;) {
@@ -659,8 +736,13 @@ export function createSyncClient(host: SyncHost) {
 				continue;
 			}
 
-			// The server is behind this device: it was restored from an older backup or replaced. Start over.
-			if (!serverReset && page.cursor < Math.max(end.cursor, start.known)) {
+			// The server is behind this device: it was restored from an older backup or replaced. Start over. Only the
+			// last page says where the server is; an earlier one of a pull from the start ends wherever its page does.
+			if (
+				!serverReset &&
+				!page.more &&
+				page.cursor < Math.max(end.cursor, start.known)
+			) {
 				serverReset = true;
 				pulled.length = 0;
 				end = {cursor: 0, purged: 0};
@@ -726,7 +808,7 @@ export function createSyncClient(host: SyncHost) {
 						...(await captureLocal(next, finished.records)),
 						joined: true,
 					};
-			return {state: joined, result: undefined};
+			return {state: {...joined, pulled: kinds}, result: undefined};
 		});
 
 		let refused = 0;

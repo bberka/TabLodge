@@ -9,6 +9,10 @@ import {
 	siteSourcesValue,
 	siteSourceStatuses,
 	siteSourceUndoLabel,
+	sourceChoice,
+	applySyncedChoices,
+	withChoice,
+	withoutChoice,
 	withoutNotice,
 	type SiteSource,
 	type SiteSourcesState,
@@ -197,6 +201,7 @@ import {
 	type SyncConfig,
 	SyncError,
 } from '../src/shared/sync/client';
+import type {SyncedSource} from '../src/shared/sync/library-records';
 import {
 	deleteSharedPage,
 	listSharedPages,
@@ -1155,6 +1160,8 @@ const syncClient = privateContext
 			mutate,
 			readLibrary: getStore,
 			trash: {read: readSyncTrash, apply: applySyncTrash},
+			// Sources belong to the browser, so only this client carries them, never private sync.
+			sources: {read: readSyncSources, apply: applySyncSources},
 			async writeLibrary(store) {
 				// The records came from other devices: normalized like an import before they are stored.
 				await writeStore(normalizeStore(store));
@@ -9652,9 +9659,10 @@ async function handlePrivateSyncMessage(
 	return {ok: true, privateSync: await privateSyncInfo()};
 }
 
-// Settings › Sources (src/app/site-sources.ts). The on/off state is per browser and lives outside the library. A
-// source's content script is registered only while it is on and the browser grants the site's optional host
-// permission, and only by the regular worker: the permission and the registration belong to the browser.
+// Settings › Sources (src/app/site-sources.ts). The choices sync with the regular library's server; whether a site
+// runs here stays in this browser. A source's content script is registered only while the site is on and the
+// browser grants its optional host permission, and only by the regular worker: the permission and the registration
+// belong to the browser.
 const sourcesMutate = serialQueue();
 
 async function readSourcesState(): Promise<SiteSourcesState> {
@@ -9669,6 +9677,8 @@ function changeSourcesState(change: (state: SiteSourcesState) => void) {
 		await chrome.storage.local.set({
 			[SITE_SOURCES_KEY]: siteSourcesValue(state),
 		});
+		// The choices sync; a write made by sync itself is ignored there.
+		syncClient?.localChanged();
 		return state;
 	});
 }
@@ -9730,8 +9740,10 @@ async function injectSourceIntoOpenTabs(source: SiteSource) {
 }
 
 /**
-Brings the registrations in line with the state and the permissions: a source that is on but lost its permission
-(revoked while the worker was stopped) goes off and says why. Safe to run any number of times.
+Brings the registrations in line with the choices and the permissions, and safe to run any number of times. A site
+that is on and has its permission here runs here, which turns on a site chosen in another browser when this one
+already grants its access. One that ran here and lost its permission (revoked while the worker was stopped) goes off
+here and says why; the choice stays, so it stays on in other browsers.
 */
 async function reconcileSources() {
 	if (privateContext) {
@@ -9739,31 +9751,120 @@ async function reconcileSources() {
 	}
 
 	const state = await readSourcesState();
+	const started: SiteSource[] = [];
 	const lost: SiteSource[] = [];
 	for (const source of SITE_SOURCES) {
-		if (state[source.id].enabled && (await sourcePermitted(source))) {
+		const {enabled} = state.sites[source.id];
+		if (sourceChoice(state, source).wanted && (await sourcePermitted(source))) {
 			await registerSource(source);
+			if (!enabled) {
+				started.push(source);
+			}
+
 			continue;
 		}
 
-		if (state[source.id].enabled) {
+		if (enabled) {
 			lost.push(source);
 		}
 
 		await unregisterSource(source);
 	}
 
-	if (lost.length > 0) {
+	if (!(started.length > 0 || lost.length > 0)) {
+		return;
+	}
+
+	const dropped: SiteSource[] = [];
+	await changeSourcesState((next) => {
+		for (const source of started) {
+			// A Remove that ran while the permissions were checked wins.
+			if (sourceChoice(next, source).wanted) {
+				next.sites[source.id] = {enabled: true};
+			} else {
+				dropped.push(source);
+			}
+		}
+
+		for (const source of lost) {
+			next.sites[source.id] = sourceChoice(next, source).wanted
+				? {enabled: false, notice: 'revoked'}
+				: {enabled: false};
+		}
+	});
+	/*
+	Access revoked while the other sites were checked: the onRemoved handler saw the site still off and left it. Checked
+	again now that it is written as on, so either this check or that handler turns it off.
+	*/
+	const revoked: SiteSource[] = [];
+	for (const source of started) {
+		if (!dropped.includes(source) && !(await sourcePermitted(source))) {
+			revoked.push(source);
+		}
+	}
+
+	if (revoked.length > 0) {
 		await changeSourcesState((next) => {
-			for (const source of lost) {
-				next[source.id] = {
-					...next[source.id],
-					enabled: false,
-					notice: 'revoked',
-				};
+			// Its access went after it ran here, as with a revocation at any other time: Settings offers Allow again.
+			for (const source of revoked) {
+				next.sites[source.id] = sourceChoice(next, source).wanted
+					? {enabled: false, notice: 'revoked'}
+					: {enabled: false};
 			}
 		});
 	}
+
+	dropped.push(...revoked);
+	await Promise.all(dropped.map(async (source) => unregisterSource(source)));
+	// Not awaited: after a sync round this runs inside the library's queue, which open tabs must not hold up.
+	void Promise.all(
+		started
+			.filter((source) => !dropped.includes(source))
+			.map(async (source) => injectSourceIntoOpenTabs(source)),
+	).catch(() => undefined);
+}
+
+/**
+A site goes off here: its script, its permission, and its Not now answers go with it, so adding it again asks
+afresh.
+*/
+async function stopSource(source: SiteSource) {
+	await unregisterSource(source);
+	await chrome.permissions
+		.remove({origins: source.origins})
+		.catch(() => undefined);
+	await sourcesMutate(async () => {
+		const answers = await readCatchUpState();
+		await chrome.storage.local.set({
+			[SOURCE_CATCH_UP_KEY]: catchUpValue({...answers, [source.id]: []}),
+		});
+	});
+}
+
+/**
+The choices as the sync client sees them: one per site that is on, as stored.
+*/
+async function readSyncSources(): Promise<SyncedSource[]> {
+	const {choices} = await readSourcesState();
+	return Object.entries(choices).map(([id, value]) => ({id, value}));
+}
+
+/**
+Choices from other devices. A site removed there goes off here too; one turned on there runs here once this browser
+grants its access.
+*/
+async function applySyncSources(
+	put: SyncedSource[],
+	remove: string[],
+	was: ReadonlyMap<string, unknown>,
+) {
+	let applied: ReturnType<typeof applySyncedChoices> = {removed: [], kept: []};
+	await changeSourcesState((next) => {
+		applied = applySyncedChoices(next, put, remove, was);
+	});
+	// Also a site off here (its access revoked): its Not now answers go with it.
+	await Promise.all(applied.removed.map(async (source) => stopSource(source)));
+	await reconcileSources();
 }
 
 async function setSiteSource(
@@ -9786,27 +9887,21 @@ async function setSiteSource(
 		};
 	}
 
-	// Removing a site also drops Save to TabLodge only, so adding it again starts with the site's own save on.
+	// Removing a site drops its choices in every browser, so adding it again starts with the site's own column and
+	// save. Turning it on keeps the choices another browser made.
 	const state = await changeSourcesState((next) => {
-		const {keepOffSite, ...entry} = withoutNotice(next[source.id]);
-		next[source.id] = {
-			...entry,
-			enabled,
-			...(enabled && keepOffSite && {keepOffSite}),
-		};
+		next.sites[source.id] = {enabled};
+		if (enabled) {
+			next.choices[source.id] ??= {};
+		} else {
+			withoutChoice(next, source.id);
+		}
 	});
 	if (enabled) {
 		await registerSource(source);
 		await injectSourceIntoOpenTabs(source);
 	} else {
-		await unregisterSource(source);
-		// The Not now answers go with the site, so adding it again asks afresh.
-		await sourcesMutate(async () => {
-			const answers = await readCatchUpState();
-			await chrome.storage.local.set({
-				[SOURCE_CATCH_UP_KEY]: catchUpValue({...answers, [source.id]: []}),
-			});
-		});
+		await stopSource(source);
 	}
 
 	return {ok: true, sources: siteSourceStatuses(state)};
@@ -9833,9 +9928,14 @@ async function setSiteSourceColumn(
 	}
 
 	const state = await changeSourcesState((next) => {
-		const {columnId: _previous, ...entry} = next[source.id];
-		next[source.id] =
-			typeof columnId === 'string' ? {...entry, columnId} : entry;
+		if (sourceChoice(next, source).wanted) {
+			withChoice(
+				next,
+				source,
+				'columnId',
+				typeof columnId === 'string' ? columnId : undefined,
+			);
+		}
 	});
 	return {ok: true, sources: siteSourceStatuses(state)};
 }
@@ -9854,13 +9954,34 @@ async function setSiteSourceKeepOff(
 	}
 
 	const state = await changeSourcesState((next) => {
-		const {keepOffSite: _previous, ...entry} = next[source.id];
-		next[source.id] =
-			keepOffSite === true && entry.enabled
-				? {...entry, keepOffSite: true}
-				: entry;
+		if (sourceChoice(next, source).wanted) {
+			withChoice(
+				next,
+				source,
+				'keepOffSite',
+				keepOffSite === true ? true : undefined,
+			);
+		}
 	});
 	return {ok: true, sources: siteSourceStatuses(state)};
+}
+
+async function markSourcesPointed(
+	ids: unknown,
+): Promise<ActionResult<'SITE_SOURCES_POINTED'>> {
+	const sources = Array.isArray(ids)
+		? SITE_SOURCES.filter((source) => ids.includes(source.id))
+		: [];
+	if (privateContext || sources.length === 0) {
+		return {ok: true};
+	}
+
+	await changeSourcesState((next) => {
+		for (const source of sources) {
+			next.sites[source.id] = {...next.sites[source.id], pointed: true};
+		}
+	});
+	return {ok: true};
 }
 
 /**
@@ -9907,7 +10028,7 @@ function sourceSaveColumn(
 	const {id: sourceId, ...look} = source.column;
 	const existing =
 		store.bookmarkColumns.find(
-			(entry) => entry.id === state[source.id].columnId,
+			(entry) => entry.id === sourceChoice(state, source).columnId,
 		) ?? store.bookmarkColumns.find((entry) => entry.id === sourceId);
 	if (existing) {
 		return existing;
@@ -9937,7 +10058,7 @@ async function saveFromSource(
 	}: {url: unknown; title?: unknown; discussion?: unknown},
 ): Promise<ActionResult<'SITE_SOURCE_SAVE'>> {
 	const state = await readSourcesState();
-	if (!state[source.id].enabled || privateSourcesOff()) {
+	if (!state.sites[source.id].enabled || privateSourcesOff()) {
 		return {ok: true, outcome: 'off'};
 	}
 
@@ -9987,10 +10108,14 @@ async function saveFromSource(
 			},
 		),
 	);
-	if (result.ok && result.outcome === 'saved' && state[source.id].notice) {
+	if (
+		result.ok &&
+		result.outcome === 'saved' &&
+		state.sites[source.id].notice
+	) {
 		await changeSourcesState((next) => {
-			if (next[source.id].notice === 'unreadable') {
-				next[source.id] = withoutNotice(next[source.id]);
+			if (next.sites[source.id].notice === 'unreadable') {
+				next.sites[source.id] = withoutNotice(next.sites[source.id]);
 			}
 		});
 	}
@@ -10023,7 +10148,10 @@ async function countSourceCatchUp(
 	source: SiteSource,
 	links: unknown,
 ): Promise<ActionResult<'SITE_SOURCE_CATCH_UP'>> {
-	if (!(await readSourcesState())[source.id].enabled || privateSourcesOff()) {
+	if (
+		!(await readSourcesState()).sites[source.id].enabled ||
+		privateSourcesOff()
+	) {
 		return {ok: true, missing: 0, ask: false};
 	}
 
@@ -10041,7 +10169,7 @@ async function addSourceCatchUp(
 	links: unknown,
 ): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> {
 	const state = await readSourcesState();
-	if (!state[source.id].enabled || privateSourcesOff()) {
+	if (!state.sites[source.id].enabled || privateSourcesOff()) {
 		return {ok: false, error: `${source.label} is off in ${APP_NAME}.`};
 	}
 
@@ -10095,7 +10223,7 @@ async function dismissSourceCatchUp(
 
 	// In the sources queue as a whole, so a Remove that clears the answers can't be undone by this one finishing later.
 	await sourcesMutate(async () => {
-		if (!(await readSourcesState())[source.id].enabled) {
+		if (!(await readSourcesState()).sites[source.id].enabled) {
 			return;
 		}
 
@@ -10212,11 +10340,14 @@ async function handleSourceMessage(
 
 		case 'SITE_SOURCE_MODE': {
 			const source = senderSource(message.source, sender);
-			const entry = source && (await readSourcesState())[source.id];
+			const state = source && (await readSourcesState());
 			return {
 				ok: true,
 				keepOffSite: Boolean(
-					entry?.enabled && entry.keepOffSite && !privateSourcesOff(),
+					source &&
+					state?.sites[source.id].enabled &&
+					sourceChoice(state, source).keepOffSite &&
+					!privateSourcesOff(),
 				),
 			};
 		}
@@ -10254,11 +10385,14 @@ async function handleSourceMessage(
 			}
 
 			const state = await changeSourcesState((next) => {
-				if (next[source.id].enabled) {
-					next[source.id] = {...next[source.id], notice: 'unreadable'};
+				if (next.sites[source.id].enabled) {
+					next.sites[source.id] = {
+						...next.sites[source.id],
+						notice: 'unreadable',
+					};
 				}
 			});
-			return {ok: true, reported: state[source.id].enabled};
+			return {ok: true, reported: state.sites[source.id].enabled};
 		}
 
 		case 'QUOTE_UNDO': {
@@ -10298,13 +10432,10 @@ chrome.permissions?.onRemoved?.addListener?.((removed) => {
 
 	void (async () => {
 		await changeSourcesState((next) => {
+			// The choice stays: access is this browser's, so the site stays on in the others.
 			for (const source of lost) {
-				if (next[source.id].enabled) {
-					next[source.id] = {
-						...next[source.id],
-						enabled: false,
-						notice: 'revoked',
-					};
+				if (next.sites[source.id].enabled) {
+					next.sites[source.id] = {enabled: false, notice: 'revoked'};
 				}
 			}
 		});
@@ -10909,6 +11040,10 @@ async function handleMessage(
 
 		case 'SET_SITE_SOURCE_KEEP_OFF': {
 			return setSiteSourceKeepOff(message.source, message.keepOffSite);
+		}
+
+		case 'SITE_SOURCES_POINTED': {
+			return markSourcesPointed(message.sources);
 		}
 
 		case 'HANDOFF_NEW_TAB': {

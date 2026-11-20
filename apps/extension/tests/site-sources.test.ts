@@ -21,12 +21,19 @@ import {
 	hackerNewsItemUrl,
 	instagramPostUrl,
 	lobstersStoryUrl,
+	applySyncedChoices,
 	parseSiteSourcesState,
+	putChoice,
 	redditPermalinkUrl,
 	SITE_SOURCES,
+	siteSourceById,
 	type SiteSourceId,
 	siteSourceForUrl,
+	siteSourcesValue,
+	siteSourceStatuses,
+	sourceChoice,
 	sourceSavingInto,
+	withChoice,
 	stackOverflowQuestionUrl,
 	xPostUrl,
 	youtubeVideoUrl,
@@ -405,54 +412,135 @@ test('a long post text is cut at a word near 100 characters', () => {
 });
 
 test('stored source state is read defensively: off unless saved as on', () => {
-	assert.deepEqual(parseSiteSourcesState(undefined), {
-		youtube: {enabled: false},
-		reddit: {enabled: false},
-		x: {enabled: false},
-		instagram: {enabled: false},
-		github: {enabled: false},
-		hackernews: {enabled: false},
-		stackoverflow: {enabled: false},
-		devto: {enabled: false},
-		lobsters: {enabled: false},
-		bluesky: {enabled: false},
-		soundcloud: {enabled: false},
-		spotify: {enabled: false},
-		letterboxd: {enabled: false},
-		imdb: {enabled: false},
-		goodreads: {enabled: false},
-		medium: {enabled: false},
-		substack: {enabled: false},
+	const off = parseSiteSourcesState(undefined);
+	assert.deepEqual(off.choices, {});
+	assert.equal(Object.keys(off.sites).length, SITE_SOURCES.length);
+	assert.ok(Object.values(off.sites).every((entry) => !entry.enabled));
+	const state = parseSiteSourcesState({
+		version: 1,
+		sources: {
+			youtube: {enabled: true, notice: 'unreadable', pointed: true},
+			reddit: {enabled: 'yes', notice: 'other'},
+			extra: {enabled: true},
+		},
+		choices: {youtube: {}, mastodon: {columnId: 'c', later: 1}, bad: 'x'},
 	});
+	assert.deepEqual(state.sites.youtube, {
+		enabled: true,
+		notice: 'unreadable',
+		pointed: true,
+	});
+	assert.deepEqual(state.sites.reddit, {enabled: false});
+	assert.equal('extra' in state.sites, false);
+	// Choices are kept as they came, sites this version does not know included, so they sync back unchanged.
+	assert.deepEqual(state.choices, {
+		youtube: {},
+		mastodon: {columnId: 'c', later: 1},
+	});
+});
+
+test('choices from another device are applied unless this browser changed the site since the round read it', () => {
+	const state = parseSiteSourcesState({
+		version: 1,
+		sources: {youtube: {enabled: true}, x: {enabled: true}},
+		choices: {youtube: {}, github: {columnId: 'c'}},
+	});
+	// The round read YouTube, X, and GitHub on; X was removed here before the apply.
+	const was = new Map<string, unknown>([
+		['youtube', {}],
+		['x', {}],
+		['github', {columnId: 'c'}],
+		['reddit', undefined],
+	]);
+	const {removed, kept} = applySyncedChoices(
+		state,
+		[
+			{id: 'youtube', value: {columnId: 'remote'}},
+			{id: 'x', value: {keepOffSite: true}},
+			{id: 'reddit', value: {}},
+		],
+		['github'],
+		was,
+	);
+	assert.deepEqual(kept, ['x']);
 	assert.deepEqual(
-		parseSiteSourcesState({
-			version: 1,
-			sources: {
-				youtube: {enabled: true, notice: 'unreadable'},
-				reddit: {enabled: 'yes', notice: 'other'},
-				extra: {enabled: true},
-			},
-		}),
+		removed.map(({id}) => id),
+		['github'],
+	);
+	assert.deepEqual(state.choices, {
+		youtube: {columnId: 'remote'},
+		reddit: {},
+	});
+	assert.deepEqual(state.sites.github, {enabled: false});
+	assert.deepEqual(state.sites.youtube, {enabled: true});
+});
+
+test('a site id such as __proto__ from the server stays an ordinary choice', () => {
+	const state = parseSiteSourcesState(
+		JSON.parse('{"version":1,"choices":{"__proto__":{"x":1}}}'),
+	);
+	assert.deepEqual(Object.keys(state.choices), ['__proto__']);
+	assert.equal(Object.getPrototypeOf(state.choices), Object.prototype);
+	putChoice(state, '__proto__', {y: 2});
+	assert.deepEqual(Object.keys(state.choices), ['__proto__']);
+	assert.equal(Object.getPrototypeOf(state.choices), Object.prototype);
+});
+
+test('state stored before choices synced is read once into choices', () => {
+	const state = parseSiteSourcesState({
+		version: 1,
+		sources: {
+			youtube: {enabled: true, columnId: 'mine'},
+			x: {enabled: false, notice: 'revoked', keepOffSite: true},
+			github: {enabled: false, columnId: 'kept-while-off'},
+		},
+	});
+	assert.deepEqual(state.choices, {
+		youtube: {columnId: 'mine'},
+		x: {keepOffSite: true},
+	});
+	assert.deepEqual(siteSourcesValue(state).choices, state.choices);
+});
+
+test('a site is on while it has a choice, and runs here only while enabled here', () => {
+	const state = parseSiteSourcesState({
+		version: 1,
+		sources: {reddit: {enabled: true}},
+		choices: {
+			reddit: {columnId: 'mine', keepOffSite: true},
+			medium: {keepOffSite: true, columnId: 'x'.repeat(201)},
+		},
+	});
+	const statuses = siteSourceStatuses(state);
+	assert.deepEqual(
+		statuses.find(({id}) => id === 'reddit'),
 		{
-			youtube: {enabled: true, notice: 'unreadable'},
-			reddit: {enabled: false},
-			x: {enabled: false},
-			instagram: {enabled: false},
-			github: {enabled: false},
-			hackernews: {enabled: false},
-			stackoverflow: {enabled: false},
-			devto: {enabled: false},
-			lobsters: {enabled: false},
-			bluesky: {enabled: false},
-			soundcloud: {enabled: false},
-			spotify: {enabled: false},
-			letterboxd: {enabled: false},
-			imdb: {enabled: false},
-			goodreads: {enabled: false},
-			medium: {enabled: false},
-			substack: {enabled: false},
+			id: 'reddit',
+			enabled: true,
+			wanted: true,
+			columnId: 'mine',
+			keepOffSite: true,
 		},
 	);
+	// On in another browser: wanted, not enabled here. A save mode the site does not have is not read.
+	assert.deepEqual(
+		statuses.find(({id}) => id === 'medium'),
+		{id: 'medium', enabled: false, wanted: true},
+	);
+	assert.deepEqual(
+		statuses.find(({id}) => id === 'x'),
+		{id: 'x', enabled: false, wanted: false},
+	);
+	// Changing one field keeps the others as stored.
+	const mediumSource = siteSourceById('medium')!;
+	withChoice(state, mediumSource, 'columnId', 'picked');
+	assert.deepEqual(state.choices.medium, {
+		keepOffSite: true,
+		columnId: 'picked',
+	});
+	withChoice(state, mediumSource, 'columnId', undefined);
+	assert.deepEqual(state.choices.medium, {keepOffSite: true});
+	assert.deepEqual(sourceChoice(state, mediumSource), {wanted: true});
 });
 
 test('YouTube: the Watch later button on a thumbnail saves that video', () => {
@@ -1494,13 +1582,20 @@ test('Substack: Save on a card or a post page; Unsave saves nothing', () => {
 	});
 });
 
-test('deleting a column asks to stop the site that saves into it here, and only that one', () => {
+test('deleting a column asks to stop the site that saves into it, here or in another browser, and only that one', () => {
 	const columns = [{id: 'source-reddit'}, {id: 'mine'}];
-	const on = {id: 'reddit', enabled: true};
+	const on = {id: 'reddit', enabled: true, wanted: true};
 	assert.equal(sourceSavingInto('source-reddit', columns, [on])?.id, 'reddit');
-	// The site is off here, or Settings sends its saves to another column that still exists.
+	// On in another browser only: its saves there would make the column again.
 	assert.equal(
-		sourceSavingInto('source-reddit', columns, [{...on, enabled: false}]),
+		sourceSavingInto('source-reddit', columns, [{...on, enabled: false}])?.id,
+		'reddit',
+	);
+	// The site is off everywhere, or Settings sends its saves to another column that still exists.
+	assert.equal(
+		sourceSavingInto('source-reddit', columns, [
+			{...on, enabled: false, wanted: false},
+		]),
 		undefined,
 	);
 	assert.equal(
@@ -2083,15 +2178,16 @@ test('Save to TabLodge only is stored only as true, and only for the sites that 
 	);
 	const state = parseSiteSourcesState({
 		version: 1,
-		sources: {
-			x: {enabled: true, keepOffSite: true},
-			reddit: {enabled: true, keepOffSite: 'yes'},
-			medium: {enabled: true, keepOffSite: true},
+		choices: {
+			x: {keepOffSite: true},
+			reddit: {keepOffSite: 'yes'},
+			medium: {keepOffSite: true},
 		},
 	});
-	assert.deepEqual(state.x, {enabled: true, keepOffSite: true});
-	assert.deepEqual(state.reddit, {enabled: true});
-	assert.deepEqual(state.medium, {enabled: true});
+	const choice = (id: string) => sourceChoice(state, siteSourceById(id)!);
+	assert.deepEqual(choice('x'), {wanted: true, keepOffSite: true});
+	assert.deepEqual(choice('reddit'), {wanted: true});
+	assert.deepEqual(choice('medium'), {wanted: true});
 });
 
 test('a stopped save that fails, or finds the source off, goes on to the site; a saved one offers Undo and Also save', () => {

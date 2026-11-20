@@ -986,6 +986,10 @@ export type TabLodgeMessages = {
 	*/
 	SET_SITE_SOURCE_KEEP_OFF: {source: string; keepOffSite: boolean};
 	/**
+	The dashboard said once that these sites are on in another browser.
+	*/
+	SITE_SOURCES_POINTED: {sources: string[]};
+	/**
 	Sent by the site content script when it starts and when the Sources state changes: whether to stop the click on
 	the site's save control here.
 	*/
@@ -1131,7 +1135,7 @@ export type BrowserBookmarkImportResult = {
 type Undoable = {undoId?: string};
 
 /**
-`revoked`: the browser took the site's permission away, so the source was switched off. `unreadable`: the user saved
+`revoked`: the browser took the site's permission away, so the source went off in this browser. `unreadable`: the user saved
 something, but the page no longer looks the way TabLodge expects, so nothing was saved.
 */
 export type SiteSourceNotice = 'revoked' | 'unreadable';
@@ -1141,8 +1145,19 @@ site's own column, found by name or created on the first save.
 */
 export type SiteSourceStatus = {
 	id: string;
+	/**
+	The site runs in this browser: it is on and this browser grants its permission.
+	*/
 	enabled: boolean;
+	/**
+	The site is on, in this browser or another one. Synced; `enabled` is not.
+	*/
+	wanted: boolean;
 	notice?: SiteSourceNotice;
+	/**
+	The dashboard already said that the site is on in another browser.
+	*/
+	pointed?: true;
 	columnId?: string;
 	/**
 	Save to TabLodge only: the site's own save is stopped and the link goes to TabLodge alone.
@@ -1381,6 +1396,7 @@ export type TabLodgeResponses = {
 	SET_SITE_SOURCE: {sources: SiteSourceStatus[]};
 	SET_SITE_SOURCE_COLUMN: {sources: SiteSourceStatus[]};
 	SET_SITE_SOURCE_KEEP_OFF: {sources: SiteSourceStatus[]};
+	SITE_SOURCES_POINTED: {};
 	/**
 	`keepOffSite`: the source is on and set to Save to TabLodge only, and saves from this window are added.
 	*/

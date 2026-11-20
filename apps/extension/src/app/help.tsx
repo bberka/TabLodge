@@ -464,23 +464,23 @@ function Help() {
 							the same time. Add bookmark never starts on a site&apos;s column,
 							so saves on a site do not change where your own bookmarks go. When
 							you delete a site&apos;s column, {PROJECT.name} also offers to
-							stop saving from that site on this device, which removes the site
-							as Remove does; without that, the next save there creates the
-							column again. On the Android app, the column list says which site
-							a column is saved from. It saves a video you add to Watch later, a
-							Reddit post or comment, an X post you bookmark, an Instagram post
-							or reel, a GitHub repository you star (titled with its name and
-							description), a Hacker News story you favorite, a Stack Overflow
-							question you bookmark, a dev.to article you save to your reading
-							list, a Lobsters story you save, a Bluesky post you save, a track
-							or playlist you like on SoundCloud, a song, album, playlist, show,
-							or episode you save to your Spotify library in the web player, a
-							film you add to your Letterboxd or IMDb watchlist, a book you mark
-							Want to Read on Goodreads, a Medium story you bookmark, or a
-							Substack post you save. Medium and Substack publications on their
-							own domains are not covered. Posts from X, Instagram, and Bluesky
-							are titled with the start of their text or caption. A Hacker News
-							or Lobsters story is saved at the address it links to, with its
+							stop saving from that site, which removes the site as Remove does;
+							without that, the next save there creates the column again. On the
+							Android app, the column list says which site a column is saved
+							from. It saves a video you add to Watch later, a Reddit post or
+							comment, an X post you bookmark, an Instagram post or reel, a
+							GitHub repository you star (titled with its name and description),
+							a Hacker News story you favorite, a Stack Overflow question you
+							bookmark, a dev.to article you save to your reading list, a
+							Lobsters story you save, a Bluesky post you save, a track or
+							playlist you like on SoundCloud, a song, album, playlist, show, or
+							episode you save to your Spotify library in the web player, a film
+							you add to your Letterboxd or IMDb watchlist, a book you mark Want
+							to Read on Goodreads, a Medium story you bookmark, or a Substack
+							post you save. Medium and Substack publications on their own
+							domains are not covered. Posts from X, Instagram, and Bluesky are
+							titled with the start of their text or caption. A Hacker News or
+							Lobsters story is saved at the address it links to, with its
 							discussion page in the note; a text post with no link is saved at
 							its discussion page. Under Save to, under each added site, you can
 							choose another column; if that column is deleted, saves go to the
@@ -501,14 +501,19 @@ function Help() {
 							and the save button on Bluesky work in English. If a site changes
 							its page so {PROJECT.name} can no longer read it, nothing is saved
 							and Settings says so. In a private window, saves are added only
-							when private windows use the regular library. Remove asks first,
-							then takes a site out of the list and gives its access back.
-							Removing its access in the browser&apos;s extension settings also
-							stops it; Settings then says so next to the site and offers Allow
-							again. To catch up on saves you made on your phone or before you
-							added the site, open the site&apos;s saved page: your saved page
-							on Reddit (new or old Reddit), Watch later on YouTube, your
-							bookmarks on X, All posts or a collection under Saved on
+							when private windows use the regular library. With your own sync
+							server connected, the sites you added, their Save to column, and
+							Save to {PROJECT.name} only reach your other browsers. Each
+							browser still asks for its own access: a site added elsewhere
+							shows On in another browser under Sources, with Turn on, and the
+							bookmarks page says so once. Remove asks first, then takes a site
+							out of the list in every connected browser and gives its access
+							back. Removing its access in one browser&apos;s extension settings
+							stops it only there; Settings then says so next to the site and
+							offers Allow again. To catch up on saves you made on your phone or
+							before you added the site, open the site&apos;s saved page: your
+							saved page on Reddit (new or old Reddit), Watch later on YouTube,
+							your bookmarks on X, All posts or a collection under Saved on
 							Instagram, or your own stars on GitHub. When some of the saved
 							items it shows are not in {PROJECT.name}, a notice says how many
 							and offers Add them, which adds them to the site&apos;s column in
@@ -527,7 +532,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default sync other browser on in another browser turn on',
 				},
 				{
 					title: 'Keep saves off the site',
