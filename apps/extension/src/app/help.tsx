@@ -878,17 +878,18 @@ function Help() {
 							including archived sessions. Session import also reads exports
 							from OneTab, Session Buddy, Tab Session Manager, and Toby.
 							Bookmark import also reads a Raindrop.io export (CSV or HTML): its
-							collections become columns, and its tags and highlights are not
-							imported. It also reads the JSON exports of Linkwarden (its
-							collections become columns), Karakeep (its lists become columns),
-							Omnivore (one metadata file from the ZIP at a time), wallabag, and
-							Pinboard, and the bookmarks.csv that Mastodon exports (post
-							addresses, without titles). These are read from each tool’s
-							published format, not from real files, so the preview marks them
-							best effort. A link’s note in Linkwarden, Karakeep, or Pinboard
-							becomes its bookmark note; tags are not imported. The bookmarks
-							HTML exports of Karakeep and Pinboard import as browser bookmark
-							files. A session menu can export just that session in any format.
+							collections become columns, its tags come along, and its
+							highlights are not imported. It also reads the JSON exports of
+							Linkwarden (its collections become columns), Karakeep (its lists
+							become columns), Omnivore (one metadata file from the ZIP at a
+							time), wallabag, and Pinboard, and the bookmarks.csv that Mastodon
+							exports (post addresses, without titles). These are read from each
+							tool’s published format, not from real files, so the preview marks
+							them best effort. A link’s note in Linkwarden, Karakeep, or
+							Pinboard becomes its bookmark note, and tags from Linkwarden,
+							Karakeep, wallabag, and Pinboard come along. The bookmarks HTML
+							exports of Karakeep and Pinboard import as browser bookmark files.
+							A session menu can export just that session in any format.
 							Bookmark import and export are in the{' '}
 							<MenuLocation label="Bookmarks toolbar" />. Both menus have Share
 							and export, where one dropdown picks what to share and another

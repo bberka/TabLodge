@@ -18,6 +18,16 @@ const FILM = 'https://letterboxd.com/film/arrival-2016/';
 test('a tag is stored in lower case, tidied, without a leading # or commas', () => {
 	assert.equal(normalizeTag('  #To   Read '), 'to read');
 	assert.equal(normalizeTag('a,b'), 'a b');
+	assert.equal(
+		normalizeTag('read|later'),
+		'read later',
+		'a bar would split it on import',
+	);
+	assert.equal(
+		normalizeTag('say "hi"'),
+		'say hi',
+		'a quote would end a tag:"…" search',
+	);
 	assert.equal(normalizeTag('İSTANBUL'), 'i̇stanbul');
 	assert.equal(
 		normalizeTag('IRAK'),

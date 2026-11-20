@@ -235,3 +235,14 @@ test('a tag filter switches on and off without touching the rest of the search',
 	);
 	assert.equal(toggleTagFilter('tag:movie tag:scifi', 'movie'), 'tag:scifi');
 });
+
+test('switching a tag filter off leaves the same words inside a quoted phrase alone', () => {
+	assert.equal(
+		toggleTagFilter('"watch tag:movie later" tag:movie', 'movie'),
+		'"watch tag:movie later"',
+	);
+	assert.equal(
+		toggleTagFilter('col:"tag:movie" tag:movie', 'movie'),
+		'col:"tag:movie"',
+	);
+});

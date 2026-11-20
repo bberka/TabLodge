@@ -1083,7 +1083,8 @@ function parseHtml(source: string): ParsedImport {
 			};
 		} else if (capture.kind === 'a') {
 			const link = collector.link(capture.attrs.href, content, {
-				tags: tagList(capture.attrs.tags ?? ''),
+				// Netscape files separate tags with commas only.
+				tags: tagList(capture.attrs.tags ?? '', /,/),
 				createdAt: toTimestamp(capture.attrs.add_date),
 			});
 			lastLink = link;

@@ -1,6 +1,5 @@
 // What the phone shows of bookmark tags (#344): the chips on a row, the tag filter, and the Tags field of the edit
 // sheet. The rules are the extension's, in apps/extension/src/shared/bookmark-tags.ts.
-import {useState} from 'react';
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {
 	MAX_TAGS,
@@ -128,21 +127,25 @@ export function TagFilterSheet({
 
 /**
 The Tags field of the edit sheet. The automatic kind shows with a remove button, which keeps it removed for this
-link; a removed kind can be put back. Typed tags are added with the keyboard's enter key or a comma.
+link; a removed kind can be put back. Typed tags are added with the keyboard's enter key or a comma. The text not yet
+added belongs to the parent (`draft`), so a tap on Save, which may not blur the field first, still saves it.
 */
 export function TagsField({
 	url,
 	value,
 	onChange,
+	draft,
+	onDraftChange: setDraft,
 	autoFocus = false,
 }: {
 	url: string;
 	value: TagEdit;
 	onChange: (value: TagEdit) => void;
+	draft: string;
+	onDraftChange: (draft: string) => void;
 	autoFocus?: boolean;
 }) {
 	const colors = useColors();
-	const [draft, setDraft] = useState('');
 	const own = value.tags ?? [];
 	const hidden = value.hiddenKinds ?? [];
 	const kind = linkKind(url);

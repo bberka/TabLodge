@@ -15,7 +15,8 @@ export const MAX_TAG_LENGTH = 40;
 
 /**
 One tag as it is stored: lower case (the same on every device, whatever its language), spaces tidied, a leading `#`
-dropped, no commas, at most `MAX_TAG_LENGTH` characters. Undefined when nothing is left.
+dropped, at most `MAX_TAG_LENGTH` characters. Commas and bars separate tags in exported files, and quotes would end a
+`tag:"…"` search, so they become spaces. Undefined when nothing is left.
 */
 export function normalizeTag(value: unknown): string | undefined {
 	if (typeof value !== 'string') {
@@ -26,7 +27,7 @@ export function normalizeTag(value: unknown): string | undefined {
 		.normalize('NFC')
 		// `toLowerCase` ignores the device's language, so "I" is "i" on a Turkish phone too.
 		.toLowerCase()
-		.replaceAll(/[\p{Control},]/gu, ' ')
+		.replaceAll(/[\p{Control}",|“”„]/gu, ' ')
 		.replace(/^[\s#]+/, '')
 		.replaceAll(/\s+/g, ' ')
 		.trim();

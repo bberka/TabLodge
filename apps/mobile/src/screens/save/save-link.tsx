@@ -14,7 +14,10 @@ import {
 	setBookmarkTags,
 	updateBookmark,
 } from '../../library/board-edits';
-import {removedByEdit} from '../../../../extension/src/shared/bookmark-tags';
+import {
+	parseTagInput,
+	removedByEdit,
+} from '../../../../extension/src/shared/bookmark-tags';
 import {showSnack} from '../../ui/snackbar';
 import {type TagEdit, TagsField} from '../bookmarks/tags';
 import {
@@ -117,6 +120,9 @@ export function SaveLinkForm({
 		tags: editing?.tags,
 		hiddenKinds: editing?.hiddenKinds,
 	});
+	// Only a change made here is saved, so tags that sync brought in while the sheet was open are kept.
+	const [tagsTouched, setTagsTouched] = useState(false);
+	const [tagDraft, setTagDraft] = useState('');
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
 
@@ -179,30 +185,32 @@ export function SaveLinkForm({
 			}
 
 			const {id: target, name} = await choice.resolve();
-			// Empty lists clear what the link had.
+			// Empty lists clear what the link had. Text typed but not yet added as a tag is added now.
 			const tags = {
-				tags: tagged.tags ?? [],
+				tags: [...(tagged.tags ?? []), ...parseTagInput(tagDraft)],
 				hiddenKinds: tagged.hiddenKinds ?? [],
 			};
+			const tagEdit =
+				!editing || tagsTouched || tagDraft.trim() !== '' ? tags : {};
 
 			await editIn(library, (current) =>
 				editing
 					? updateBookmark(
 							current,
 							editing.id,
-							{...saved, notes, ...tags, columnId: target},
+							{...saved, notes, ...tagEdit, columnId: target},
 							Date.now(),
 						)
 					: addBookmark(
 							current,
-							{...saved, notes, ...tags, columnId: target},
+							{...saved, notes, ...tagEdit, columnId: target},
 							newId(),
 							Date.now(),
 						),
 			);
 			setPreferences({lastColumnId: target});
 			onDone(name);
-			const removed = editing && removedByEdit(editing, tags);
+			const removed = editing && tagsTouched && removedByEdit(editing, tags);
 			if (editing && removed) {
 				// Taking a tag away is done at once, with Undo, as every removal in the library is.
 				showSnack(
@@ -370,8 +378,13 @@ export function SaveLinkForm({
 						<TagsField
 							url={url ?? ''}
 							value={tagged}
+							draft={tagDraft}
 							autoFocus={focusTags}
-							onChange={setTagged}
+							onDraftChange={setTagDraft}
+							onChange={(next) => {
+								setTagged(next);
+								setTagsTouched(true);
+							}}
 						/>
 					</>
 				)}

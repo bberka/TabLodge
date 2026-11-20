@@ -455,9 +455,12 @@ export function toggleTagFilter(input: string, tag: string): string {
 		return [input.trim(), tagOperator(tag)].filter(Boolean).join(' ');
 	}
 
+	// A quoted phrase is matched first and kept whole, so a `tag:` written inside one is text, not a filter.
 	return input
-		.replaceAll(/(?:^|\s)tag:(?:"[^"]*"|\S+)/gi, (match) =>
-			parseSearchQuery(match).tags.includes(tag) ? '' : match,
+		.replaceAll(
+			/(?:^|\s)(tag:(?:["“„][^"“”„]*["“”]|[^\s"“”„]+))|["“„][^"“”„]*["“”]?/gi,
+			(match, filter?: string) =>
+				filter && parseSearchQuery(filter).tags.includes(tag) ? '' : match,
 		)
 		.replaceAll(/\s+/g, ' ')
 		.trim();

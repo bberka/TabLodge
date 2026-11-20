@@ -249,6 +249,11 @@ type BookmarkDraft = {
 	The editor was opened from Edit tags…, so it starts in the Tags field.
 	*/
 	focusTags?: boolean;
+	/**
+	The person changed the tags. Only then does a save send them, so tags that sync brought in while the editor was
+	open are not overwritten with the ones it opened with.
+	*/
+	tagsTouched?: boolean;
 	columnId: string;
 	newColumnName?: string;
 	newColumnIcon?: string;
@@ -997,12 +1002,15 @@ function NewTab() {
 			}
 
 			// Empty lists clear the tags and removed kinds the bookmark had.
+			const tagged = {
+				tags: bookmarkEdit.tags ?? [],
+				hiddenKinds: bookmarkEdit.hiddenKinds ?? [],
+			};
 			const fields = {
 				title: bookmarkEdit.title,
 				url: bookmarkEdit.url,
 				notes: bookmarkEdit.notes ?? '',
-				tags: bookmarkEdit.tags ?? [],
-				hiddenKinds: bookmarkEdit.hiddenKinds ?? [],
+				...(bookmarkEdit.tagsTouched && tagged),
 				columnId,
 			};
 			const before = bookmarks.find((entry) => entry.id === bookmarkEdit.id);
@@ -1018,7 +1026,8 @@ function NewTab() {
 			setDialog(null);
 			setBookmarkEdit(null);
 			await reload();
-			const removed = before && removedByEdit(before, fields);
+			const removed =
+				bookmarkEdit.tagsTouched && before && removedByEdit(before, tagged);
 			if (before && removed) {
 				// Taking a tag away is done at once, with Undo, as every removal on the board is.
 				showStatus(
@@ -3061,7 +3070,8 @@ function NewTab() {
 							const tags = bookmarkEdit?.focusTags
 								? document.querySelector<HTMLInputElement>('#bookmark-tags')
 								: null;
-							if (!tags) {
+							// A field full of tags is disabled; then the dialog's own first field takes the focus.
+							if (!tags || tags.disabled) {
 								return;
 							}
 
@@ -3157,7 +3167,10 @@ function NewTab() {
 												hiddenKinds: bookmarkEdit?.hiddenKinds,
 											}}
 											onChange={(tagged) =>
-												setBookmarkEdit((old) => old && {...old, ...tagged})
+												setBookmarkEdit(
+													(old) =>
+														old && {...old, ...tagged, tagsTouched: true},
+												)
 											}
 										/>
 									</>

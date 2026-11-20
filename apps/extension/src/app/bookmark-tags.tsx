@@ -141,6 +141,7 @@ export function TagsField({
 }) {
 	const [draft, setDraft] = useState('');
 	const inputRef = useRef<HTMLInputElement>(null);
+	const boxRef = useRef<HTMLDivElement>(null);
 	const own = value.tags ?? [];
 	const hidden = value.hiddenKinds ?? [];
 	const kind = linkKind(url);
@@ -174,7 +175,10 @@ export function TagsField({
 	return (
 		<div className="space-y-1.5">
 			<Label htmlFor={id}>Tags</Label>
-			<div className="flex flex-wrap items-center gap-1 rounded-md border border-input bg-background px-1.5 py-1 focus-within:ring-2 focus-within:ring-ring">
+			<div
+				ref={boxRef}
+				className="flex flex-wrap items-center gap-1 rounded-md border border-input bg-background px-1.5 py-1 focus-within:ring-2 focus-within:ring-ring"
+			>
 				{automatic && !kindHidden && (
 					<TagToken
 						label={automatic}
@@ -235,6 +239,13 @@ export function TagsField({
 					className="h-7 px-2 text-xs"
 					onClick={() => {
 						setKindHidden(false);
+						// This button goes away: focus the input, or the kind's own remove button when the input is full.
+						requestAnimationFrame(() => {
+							const target = inputRef.current?.disabled
+								? boxRef.current?.querySelector<HTMLButtonElement>('button')
+								: inputRef.current;
+							target?.focus();
+						});
 					}}
 				>
 					<Plus className="h-3.5 w-3.5" />
