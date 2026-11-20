@@ -815,11 +815,15 @@ export function createSyncClient(host: SyncHost) {
 
 			let next = finished.state;
 			if (reseal.size > 0) {
-				// Without a shadow entry the next capture stamps the record again, so it goes out encrypted.
+				// A shadow entry that matches nothing makes the next capture stamp the record again, so it goes out
+				// encrypted. The entry stays, so a setting back at its default still counts as synced.
 				const shadow = Object.fromEntries(
-					Object.entries(next.shadow).filter(
-						([key]) => !(reseal.has(key) && finished.records.has(key)),
-					),
+					Object.entries(next.shadow).map(([key, entry]) => [
+						key,
+						reseal.has(key) && finished.records.has(key)
+							? {...entry, hash: ''}
+							: entry,
+					]),
 				);
 				next = {...next, shadow};
 			}
@@ -1116,7 +1120,15 @@ export function createSyncClient(host: SyncHost) {
 
 			await host.mutate(async () => {
 				const state = await loadState();
-				await host.set(SYNC_STATE_KEY, {...state, shadow: {}});
+				// Every entry matches nothing, so the next capture stamps every record again. Entries stay, so a setting
+				// back at its default still counts as synced and is sent too.
+				const shadow = Object.fromEntries(
+					Object.entries(state.shadow).map(([key, entry]) => [
+						key,
+						entry.deleted ? entry : {...entry, hash: ''},
+					]),
+				);
+				await host.set(SYNC_STATE_KEY, {...state, shadow});
 			});
 			await syncNow();
 		},

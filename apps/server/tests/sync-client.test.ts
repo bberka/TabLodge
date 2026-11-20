@@ -13,6 +13,7 @@ import {
 	parseServerUrl,
 	SYNC_CONFIG_KEY,
 	SYNC_SETTINGS_KEY,
+	type SyncCodec,
 	SyncError,
 	type SyncSocket,
 } from '../../extension/src/shared/sync/client';
@@ -282,6 +283,7 @@ function makeDevice(
 		withSources = false,
 		beforeNotes = false,
 		storage = new Map<string, unknown>(),
+		codec = undefined as SyncCodec | undefined,
 	} = {},
 ) {
 	let queue = Promise.resolve();
@@ -385,6 +387,7 @@ function makeDevice(
 			async backup(_store, reason) {
 				backups.push(reason);
 			},
+			codec,
 			randomId() {
 				deviceCount += 1;
 				return `device-${deviceCount}`;
@@ -802,6 +805,64 @@ test('a device at the defaults that syncs first sends none of them, so the value
 	await phone.client.syncNow();
 	await a.client.syncNow();
 	assert.equal(a.store.settings.autoBackup, 'off');
+});
+
+/**
+Wraps every value as `{sealed}`, the way the private library seals it; a value that arrived plain is resealed.
+*/
+const wrapCodec: SyncCodec = {
+	async prepare() {
+		// Nothing to fetch.
+	},
+	async seal(change) {
+		return change.deleted ? change : {...change, value: {sealed: change.value}};
+	},
+	async open(change) {
+		const value = change.value as {sealed?: unknown} | undefined;
+		return value && typeof value === 'object' && 'sealed' in value
+			? {change: {...change, value: value.sealed}, reseal: false}
+			: {change, reseal: true};
+	},
+};
+
+const settingLine = async (server: ReturnType<typeof makeServer>, id: string) =>
+	(await server.export()).find(
+		(line) =>
+			line.includes('"kind":"setting"') && line.includes(`"id":"${id}"`),
+	);
+
+test('a setting that synced and went back to its default is still resent, and resealed', async () => {
+	// Plain, then a device that seals: the default that arrived plain goes back sealed.
+	const server = makeServer();
+	const plain = makeDevice(server, withSettings({snapshotKeep: 50}));
+	await plain.client.connect(URL_BASE, TOKEN);
+	plain.edit((store) => ({
+		...store,
+		settings: {...store.settings, snapshotKeep: 25},
+	}));
+	await plain.client.syncNow();
+	const sealer = makeDevice(server, withSettings({snapshotKeep: 25}), {
+		codec: wrapCodec,
+	});
+	await sealer.client.connect(URL_BASE, TOKEN);
+	await sealer.client.syncNow();
+	assert.match(
+		(await settingLine(server, 'snapshotKeep')) ?? '',
+		/"sealed":25/,
+	);
+
+	// A server that lost everything gets the default back from resendAll.
+	const lost = makeServer();
+	const a = makeDevice(lost, withSettings({snapshotKeep: 50}));
+	await a.client.connect(URL_BASE, TOKEN);
+	a.edit((store) => ({
+		...store,
+		settings: {...store.settings, snapshotKeep: 25},
+	}));
+	await a.client.syncNow();
+	await lost.restore(await makeServer().export());
+	await a.client.resendAll();
+	assert.match((await settingLine(lost, 'snapshotKeep')) ?? '', /"value":25/);
 });
 
 test('a setting from a newer version is held and goes back unchanged', async () => {
