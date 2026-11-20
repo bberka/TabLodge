@@ -13,6 +13,8 @@ import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
+	RadioCard,
+	RadioCardGroup,
 	SelectItem,
 } from '../shared/ui';
 import type {SiteSourceStatus} from '../shared/types';
@@ -42,6 +44,8 @@ export const SOURCES_WORDS = [
 	'permission',
 	'Save to',
 	'column',
+	'Save to TabLodge only',
+	'keep saves off the site',
 ];
 // The Save to entry for the site's own column; Radix Select needs a non-empty value.
 const SITE_COLUMN = 'site-column';
@@ -182,6 +186,24 @@ export function useSiteSources(showStatus: ShowStatus) {
 		showStatus(`${source.label} now saves to ${columnName}.`);
 	}
 
+	async function chooseKeepOff(source: SiteSource, keepOffSite: boolean) {
+		const result = await send('SET_SITE_SOURCE_KEEP_OFF', {
+			source: source.id,
+			keepOffSite,
+		});
+		if (!result.ok) {
+			showStatus(result.error, true);
+			return;
+		}
+
+		setSources(result.sources);
+		showStatus(
+			keepOffSite
+				? `Saves on ${source.column.name} now go to ${PROJECT.name} only.`
+				: `Saves on ${source.column.name} now stay on ${source.column.name} and go to ${PROJECT.name}.`,
+		);
+	}
+
 	return {
 		sources,
 		busy,
@@ -191,6 +213,7 @@ export function useSiteSources(showStatus: ShowStatus) {
 		add,
 		remove,
 		chooseColumn,
+		chooseKeepOff,
 	};
 }
 
@@ -367,8 +390,16 @@ export function SiteSourcesSettings({
 		color?: string;
 	}>;
 }) {
-	const {sources, busy, privateWindow, status, add, remove, chooseColumn} =
-		controller;
+	const {
+		sources,
+		busy,
+		privateWindow,
+		status,
+		add,
+		remove,
+		chooseColumn,
+		chooseKeepOff,
+	} = controller;
 
 	if (privateWindow) {
 		return (
@@ -395,6 +426,8 @@ export function SiteSourcesSettings({
 				const notice = noticeText(source, entry?.notice);
 				const labelId = `site-source-${source.id}`;
 				const columnFieldId = `site-source-column-${source.id}`;
+				const keepOffLabelId = `site-source-keep-off-${source.id}`;
+				const site = source.column.name;
 				// With no choice, or a chosen column that was deleted, saves go to the site's source column, made on the
 				// first save.
 				const siteColumn = columns.find(
@@ -495,6 +528,32 @@ export function SiteSourcesSettings({
 										</SelectItem>
 									)}
 								</ColumnSelect>
+							</div>
+						)}
+						{entry?.enabled && source.keepOffSite && (
+							<div className="mt-3 border-t border-border pt-3">
+								<p id={keepOffLabelId} className="text-sm font-medium">
+									When you save on {site}
+								</p>
+								<RadioCardGroup
+									aria-labelledby={keepOffLabelId}
+									className="mt-2 sm:grid-cols-2"
+									value={entry.keepOffSite ? 'tablodge' : 'both'}
+									onValueChange={(value) => {
+										void chooseKeepOff(source, value === 'tablodge');
+									}}
+								>
+									<RadioCard
+										value="both"
+										title={`Save on ${site} and in ${PROJECT.name}`}
+										description={`${site} saves it as usual, and ${PROJECT.name} saves the same link.`}
+									/>
+									<RadioCard
+										value="tablodge"
+										title={`Save to ${PROJECT.name} only`}
+										description={`${site} doesn't save it or show it as saved. Hold Shift as you click to save on ${site} too.`}
+									/>
+								</RadioCardGroup>
 							</div>
 						)}
 					</div>

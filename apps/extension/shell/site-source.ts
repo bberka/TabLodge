@@ -1,8 +1,15 @@
 // The content script of Settings › Sources, registered for a site only while the user has it on and the browser
-// grants the site's optional host permission. It only observes: it reads the page when the user clicks, and when
-// the click was the site's own save, it hands that link to the service worker and shows the result in the page.
-// It never changes the site's behavior, blocks its save, or makes a request of its own.
-import {siteSourceForUrl, type SiteSourceId} from '../src/app/site-sources';
+// grants the site's optional host permission. It reads the page when the user clicks, and when the click was the
+// site's own save, it hands that link to the service worker and shows the result in the page. It changes nothing on
+// the site, except on a site the user set to Save to TabLodge only: there it stops that one click so the site does
+// not save it (src/app/source-keep-off.ts). It never makes a request of its own.
+import {
+	SITE_SOURCES_KEY,
+	siteSourceForUrl,
+	type SiteSourceId,
+} from '../src/app/site-sources';
+import {PRIVATE_CONFIG_KEY} from '../src/app/private-config';
+import {listenForSaves, type KeptSave} from '../src/app/source-keep-off';
 import type {SourceRead, SourceReader} from '../src/app/source-reader';
 import {createBlueskyReader} from '../src/app/source-bluesky';
 import {createDevtoReader} from '../src/app/source-devto';
@@ -51,7 +58,10 @@ const source = siteSourceForUrl(location.href);
 if (source && !Object.hasOwn(globalThis, LOADED)) {
 	Object.defineProperty(globalThis, LOADED, {value: true});
 	const appName = chrome.runtime.getManifest().short_name ?? 'TabLodge';
+	const siteName = source.column.name;
 	const read = READERS[source.id]();
+	// Off until the worker says otherwise, so a click before its answer reaches the site.
+	let keepOffSite = false;
 
 	// A script left behind by an extension update or removal can no longer reach the worker; it then does nothing.
 	const send = async <T>(message: Record<string, unknown>) => {
@@ -90,11 +100,59 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		const text = messages[outcome];
 		if (text) {
 			showSourceToast(text, {
-				action: undoId
-					? {label: 'Undo', run: async () => undo(undoId)}
-					: undefined,
+				actions: undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : [],
 			});
 		}
+	};
+
+	const alsoSave = (kept: KeptSave) => ({
+		label: `Also save on ${siteName}`,
+		run: async () =>
+			kept.replay()
+				? `Saved on ${siteName} too.`
+				: `${siteName} closed that control, so it did not save this. Shift-click its save to save it there.`,
+	});
+
+	// Save to TabLodge only: the site never saw the click. When the link cannot be saved here, the click goes on to
+	// the site after all, so the user's save is never lost.
+	const handleKept = async (kept: KeptSave) => {
+		const result = await send<ActionResult<'SITE_SOURCE_SAVE'>>({
+			type: 'SITE_SOURCE_SAVE',
+			source: source.id,
+			url: kept.link.url,
+			title: kept.link.title,
+			discussion: kept.link.discussion,
+		});
+		if (!result?.ok || result.outcome === 'off') {
+			showSourceToast(
+				kept.replay()
+					? `${appName} could not save this, so ${siteName} saved it.`
+					: `${appName} could not save this, and ${siteName} did not either. Save it again.`,
+				{error: true},
+			);
+			return;
+		}
+
+		const texts: Record<Exclude<SiteSourceOutcome, 'off'>, string> = {
+			saved: `Saved to ${appName} only, in ${result.column}. ${siteName} won't show it as saved.`,
+			exists: `Already in ${appName}, so ${siteName} did not save it.`,
+			trashed: `In the ${appName} trash bin, so not saved again. ${siteName} did not save it.`,
+		};
+		const {undoId} = result;
+		showSourceToast(texts[result.outcome], {
+			actions: [
+				...(undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : []),
+				alsoSave(kept),
+			],
+		});
+	};
+
+	const readMode = async () => {
+		const result = await send<ActionResult<'SITE_SOURCE_MODE'>>({
+			type: 'SITE_SOURCE_MODE',
+			source: source.id,
+		});
+		keepOffSite = result?.ok === true && result.keepOffSite;
 	};
 
 	const takePending = async () =>
@@ -155,19 +213,25 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		});
 	}
 
-	// Capture on the window sees the click before the site's own handlers change the control's state.
-	globalThis.addEventListener(
-		'click',
-		(event) => {
-			if (!event.isTrusted) {
-				return;
-			}
+	void readMode();
+	// The choice in Settings, and a private window's library choice, can change while the page is open.
+	chrome.storage.onChanged.addListener((changes, area) => {
+		if (
+			area === 'local' &&
+			(Object.hasOwn(changes, SITE_SOURCES_KEY) ||
+				Object.hasOwn(changes, PRIVATE_CONFIG_KEY))
+		) {
+			void readMode();
+		}
+	});
 
-			const found = read(event);
-			if (found) {
-				void handle(found);
-			}
+	listenForSaves(globalThis, {
+		read,
+		// A script left behind by an extension update or removal has no runtime id and can't save, so it never stops a
+		// click.
+		keepOff: () => keepOffSite && Boolean(chrome.runtime?.id),
+		onRead(found, kept) {
+			void (kept ? handleKept(kept) : handle(found));
 		},
-		{capture: true},
-	);
+	});
 }
