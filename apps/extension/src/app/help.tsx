@@ -482,7 +482,8 @@ function Help() {
 							in the page, in your {PROJECT.name} theme and accent color, offers
 							Undo; press Tab to reach it. A link already in your bookmarks or
 							in the trash bin is not saved again. {PROJECT.name} only watches
-							for your own clicks on the site&apos;s save controls, reads the
+							for your own clicks on the site&apos;s save controls (and, on your
+							Reddit saved page, reads the saved list shown there), reads the
 							link from the page, and makes no network requests of its own; the
 							bookmark syncs only if you connected your own server. It
 							recognizes the English labels of those controls. The Bookmark

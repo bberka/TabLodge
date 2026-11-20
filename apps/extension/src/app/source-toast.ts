@@ -431,6 +431,11 @@ function render(
 				continue;
 			}
 
+			// Tab may have moved to this button while the action ran; focus stays in the toast.
+			if (root.activeElement === other) {
+				target.focus();
+			}
+
 			other.remove();
 			buttons.delete(other);
 		}

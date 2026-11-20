@@ -7,9 +7,11 @@ import {SITE_SOURCES, type SiteSource, type SiteSourceId} from './site-sources';
 import type {SourceLink} from './source-reader';
 
 /**
-The most items one saved page may send; Reddit lists 25 to 100 at a time.
+The most items one saved page may send. Old Reddit lists 25 to 100 a page; new Reddit keeps adding as the user
+scrolls, so the limit is far above a long scroll. The page sends no more than this, and the toast says when it
+cut the list.
 */
-export const CATCH_UP_MAX_LINKS = 500;
+export const CATCH_UP_MAX_LINKS = 5000;
 const TITLE_MAX = 500;
 
 /**

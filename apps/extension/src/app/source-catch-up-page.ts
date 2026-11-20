@@ -3,13 +3,19 @@
 // watches the page, because sites load their saved page in place and add items as the user scrolls, but it only
 // reads: it clicks nothing, changes nothing on the site, and sends no request.
 import type {ActionResult} from '../shared/types';
-import {catchUpCountText, type SavedPageReader} from './source-catch-up';
+import {
+	CATCH_UP_MAX_LINKS,
+	catchUpCountText,
+	type SavedPageReader,
+} from './source-catch-up';
 import type {SiteSource} from './site-sources';
 import type {SourceLink} from './source-reader';
 import {showSourceToast} from './source-toast';
 
 // The page is read at most this often while it changes; Reddit's pages change all the time.
 const READ_EVERY_MS = 1000;
+// A count the worker could not answer (an update restarting it) is asked again, this many times in a row.
+const RETRIES = 3;
 
 type Send = <T>(message: Record<string, unknown>) => Promise<T | undefined>;
 
@@ -28,6 +34,9 @@ export function watchSavedPage({
 }) {
 	// The addresses last asked about, so the toast's own insertion and unrelated page changes don't ask again.
 	let lastAsked = '';
+	// Answers can come back out of order; only the newest request's answer is shown.
+	let latestRequest = 0;
+	let failures = 0;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
 	const add = async (links: SourceLink[]) => {
@@ -55,23 +64,43 @@ export function watchSavedPage({
 	};
 
 	const check = async () => {
-		const links = read(document);
+		const loaded = read(document);
+		const links = loaded?.slice(0, CATCH_UP_MAX_LINKS);
 		const key = JSON.stringify(links?.map((link) => link.url) ?? []);
 		if (!links?.length || key === lastAsked) {
 			return;
 		}
 
 		lastAsked = key;
+		const request = ++latestRequest;
 		const result = await send<ActionResult<'SITE_SOURCE_CATCH_UP'>>({
 			type: 'SITE_SOURCE_CATCH_UP',
 			source: source.id,
 			links,
 		});
-		if (!result?.ok || !result.ask) {
+		if (request !== latestRequest) {
 			return;
 		}
 
-		showSourceToast(catchUpCountText(result.missing, appName), {
+		if (!result?.ok) {
+			if (++failures <= RETRIES) {
+				lastAsked = '';
+				settle();
+			}
+
+			return;
+		}
+
+		failures = 0;
+		if (!result.ask) {
+			return;
+		}
+
+		const cut =
+			loaded && loaded.length > links.length
+				? ` Only the first ${links.length} were checked.`
+				: '';
+		showSourceToast(catchUpCountText(result.missing, appName) + cut, {
 			actions: [
 				{label: 'Add them', run: async () => add(links)},
 				{
