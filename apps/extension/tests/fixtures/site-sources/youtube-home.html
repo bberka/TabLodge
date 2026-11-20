@@ -61,6 +61,17 @@ menu outside the videos. Written by hand to mimic the site's markup; not a captu
 			</ytd-menu-popup-renderer>
 		</tp-yt-iron-dropdown>
 	</ytd-popup-container>
+	<!-- The player over a hovered thumbnail, as the live page draws it (2026-11): outside every card, its link announces the length after the title. -->
+	<ytd-video-preview-loader>
+		<ytd-video-preview>
+			<a href="/watch?v=dQw4w9WgXcQ" aria-label="Never Gonna Give You Up 3 minutes, 33 seconds">
+				<ytd-player><div id="inline-preview-player"><div class="ytp-overflow-panel-action-buttons"><button id="preview-watch-later" class="ytp-watch-later-button ytp-button" aria-label="Watch later"><div class="ytp-watch-later-icon"></div></button></div></div></ytd-player>
+			</a>
+		</ytd-video-preview>
+		<ytd-video-preview id="stray-preview">
+			<a href="/watch?v=zzzzzzzzzzz" aria-label="Not in the grid 1 minute"><button id="stray-watch-later" aria-label="Watch later"></button></a>
+		</ytd-video-preview>
+	</ytd-video-preview-loader>
 </ytd-app>
 </body>
 </html>
