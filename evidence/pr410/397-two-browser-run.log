@@ -23,4 +23,5 @@ changed in A -> value in B:
   siteIcons: A="browser" B="browser"
   autoBackupToDownloads: A=true B=false
 synced keys that differ between A and B: []
+B alarms after sync (no snapshot alarm, daily backup): [ 'tablodge-backup:1440', 'tablodge-sync:5', 'tablodge-trash:1440' ]
 theme A=dark/#e11d48, B= {}
