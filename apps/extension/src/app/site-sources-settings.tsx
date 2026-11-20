@@ -6,6 +6,7 @@ import {
 	type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import {
+	ChevronDown,
 	CircleAlert,
 	CircleHelp,
 	Plus,
@@ -14,6 +15,7 @@ import {
 	Trash2,
 } from 'lucide-react';
 import {
+	Badge,
 	Button,
 	ConfirmationDialog,
 	IconTooltip,
@@ -137,14 +139,14 @@ export function useSiteSources(showStatus: ShowStatus) {
 	const [sources, setSources] = useState<SiteSourceStatus[]>();
 	const [busy, setBusy] = useState<SiteSourceId>();
 	const triggerRef = useRef<HTMLButtonElement>(null);
-	const privateWindow = Boolean(chrome.extension?.inIncognitoContext);
+	const isPrivateWindow = chrome.extension?.inIncognitoContext;
 
 	useEffect(() => {
-		let alive = true;
+		let isAlive = true;
 		const read = () => {
 			void send('GET_SITE_SOURCES')
 				.then((result) => {
-					if (alive && result.ok) {
+					if (isAlive && result.ok) {
 						setSources(result.sources);
 					}
 				})
@@ -164,7 +166,7 @@ export function useSiteSources(showStatus: ShowStatus) {
 		read();
 		chrome.storage.onChanged.addListener(onChanged);
 		return () => {
-			alive = false;
+			isAlive = false;
 			chrome.storage.onChanged.removeListener(onChanged);
 		};
 	}, []);
@@ -255,7 +257,7 @@ export function useSiteSources(showStatus: ShowStatus) {
 		sources,
 		busy,
 		triggerRef,
-		privateWindow,
+		privateWindow: isPrivateWindow,
 		status,
 		add,
 		remove,
@@ -368,16 +370,16 @@ export function AddSiteSource({
 					className="max-h-72 overflow-y-auto p-1"
 				>
 					{shown.map((source) => {
-						const selected = source === current;
+						const isSelected = source === current;
 						return (
 							<div
 								key={source.id}
 								id={`${listId}-${source.id}`}
 								role="option"
-								aria-selected={selected}
+								aria-selected={isSelected}
 								className={cn(
 									'flex cursor-pointer items-start gap-3 rounded-sm px-2 py-2',
-									selected && 'bg-accent text-accent-foreground',
+									isSelected && 'bg-accent text-accent-foreground',
 								)}
 								onMouseMove={() => {
 									setActive(shown.indexOf(source));
@@ -398,7 +400,7 @@ export function AddSiteSource({
 									<span
 										className={cn(
 											'block text-xs leading-5',
-											selected
+											isSelected
 												? 'text-accent-foreground/80'
 												: 'text-muted-foreground',
 										)}
@@ -425,31 +427,240 @@ export function AddSiteSource({
 	);
 }
 
+type ColumnOption = {
+	id: string;
+	name: string;
+	icon?: string;
+	color?: string;
+};
+
+type SiteState = {
+	badge: string;
+	variant: 'accent' | 'secondary' | 'outline';
+	problem?: string;
+};
+
+/**
+What a row says at a glance: whether the site is on, and whether this browser has its access.
+*/
+function siteState(entry: SiteSourceStatus | undefined): SiteState {
+	if (entry?.enabled) {
+		return entry.notice === 'unreadable'
+			? {badge: 'On', variant: 'accent', problem: "Can't read the page"}
+			: {badge: 'On', variant: 'accent'};
+	}
+
+	return entry?.notice === 'revoked'
+		? {
+				badge: 'Access removed',
+				variant: 'outline',
+				problem: 'Off in this browser',
+			}
+		: {badge: 'On in another browser', variant: 'secondary'};
+}
+
+function SiteSummary({
+	source,
+	entry,
+}: {
+	source: SiteSource;
+	entry: SiteSourceStatus | undefined;
+}) {
+	const state = siteState(entry);
+	return (
+		<>
+			<Favicon
+				url={source.homepage}
+				label={source.label}
+				className="h-5 w-5 shrink-0 rounded-sm"
+			/>
+			<span className="min-w-0 flex-1">
+				<span className="block truncate text-sm font-medium">
+					{source.label}
+				</span>
+				<span className="block truncate text-xs text-muted-foreground">
+					{source.hosts[0]}
+				</span>
+				{state.problem && (
+					<span className="flex items-center gap-1 text-xs text-destructive">
+						<CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+						{state.problem}
+					</span>
+				)}
+			</span>
+			<Badge variant={state.variant} className="shrink-0 text-center">
+				{state.badge}
+			</Badge>
+		</>
+	);
+}
+
+/**
+Every option of one site, shown inline in the open row or in the site's dialog.
+*/
+function SiteOptions({
+	source,
+	entry,
+	columns,
+	controller,
+	onRemove,
+}: {
+	source: SiteSource;
+	entry: SiteSourceStatus | undefined;
+	columns: readonly ColumnOption[];
+	controller: SiteSourcesController;
+	onRemove: () => void;
+}) {
+	const {busy, add, chooseColumn, chooseKeepOff} = controller;
+	const notice = noticeText(source, entry?.notice);
+	const columnFieldId = `site-source-column-${source.id}`;
+	const keepOffLabelId = `site-source-keep-off-${source.id}`;
+	const site = source.column.name;
+	// With no choice, or a chosen column that was deleted, saves go to the site's source column, made on the
+	// first save.
+	const siteColumn = columns.find((column) => column.id === source.column.id);
+	const chosen = columns.some((column) => column.id === entry?.columnId)
+		? entry?.columnId
+		: (siteColumn?.id ?? SITE_COLUMN);
+	return (
+		<div className="space-y-3">
+			<p className="max-w-xl text-xs leading-5 text-muted-foreground">
+				{source.description}
+			</p>
+			{!entry?.enabled && !entry?.notice && (
+				<p className="max-w-xl text-xs leading-5 text-muted-foreground">
+					On in another browser. Turn it on to save here too; the browser asks
+					for access to {source.hosts[0]}.
+				</p>
+			)}
+			{notice && (
+				<p
+					role="status"
+					className="flex max-w-xl items-start gap-1.5 text-xs leading-5 text-destructive"
+				>
+					<CircleAlert
+						className="mt-0.5 h-3.5 w-3.5 shrink-0"
+						aria-hidden="true"
+					/>
+					{notice}
+				</p>
+			)}
+			{entry?.enabled && (
+				<div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+					<Label htmlFor={columnFieldId} className="text-sm font-medium">
+						Save to
+					</Label>
+					<ColumnSelect
+						id={columnFieldId}
+						columns={columns}
+						value={chosen}
+						className="w-full sm:w-64"
+						onValueChange={(value) => {
+							const columnId = value === SITE_COLUMN ? null : value;
+							void chooseColumn(
+								source,
+								columnId,
+								columns.find((column) => column.id === columnId)?.name ??
+									`the ${source.column.name} column`,
+							);
+						}}
+					>
+						{!siteColumn && (
+							<SelectItem value={SITE_COLUMN}>
+								<ColumnLabel
+									column={{
+										...source.column,
+										name: `${source.column.name} (new)`,
+									}}
+								/>
+							</SelectItem>
+						)}
+					</ColumnSelect>
+				</div>
+			)}
+			{entry?.enabled && source.keepOffSite && (
+				<div className="border-t border-border pt-3">
+					<div className="flex items-center gap-1">
+						<p id={keepOffLabelId} className="text-sm font-medium">
+							When you save on {site}
+						</p>
+						<KeepOffHelpButton site={site} />
+					</div>
+					<RadioCardGroup
+						aria-labelledby={keepOffLabelId}
+						className="mt-2 sm:grid-cols-2"
+						value={entry.keepOffSite ? 'tablodge' : 'both'}
+						onValueChange={(value) => {
+							void chooseKeepOff(source, value === 'tablodge');
+						}}
+					>
+						<RadioCard
+							value="both"
+							title={`Save on ${site} and in ${PROJECT.name}`}
+							description={`${site} saves it as usual, and ${PROJECT.name} saves the same link.`}
+						/>
+						<RadioCard
+							value="tablodge"
+							title={`Save to ${PROJECT.name} only`}
+							description={`${site} doesn't save it or show it as saved.`}
+						/>
+					</RadioCardGroup>
+				</div>
+			)}
+			<div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+				{!entry?.enabled && entry?.notice === 'revoked' && (
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={busy !== undefined}
+						aria-label={`Allow access to ${source.hosts[0]} again for ${source.label}`}
+						onClick={() => void add(source)}
+					>
+						<RotateCcw className="h-4 w-4" aria-hidden="true" />
+						Allow again
+					</Button>
+				)}
+				{!entry?.enabled && entry?.notice !== 'revoked' && (
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={busy !== undefined}
+						aria-label={`Turn on ${source.label} in this browser`}
+						onClick={() => void add(source)}
+					>
+						<Power className="h-4 w-4" aria-hidden="true" />
+						Turn on
+					</Button>
+				)}
+				<Button
+					variant="ghost"
+					size="sm"
+					disabled={busy !== undefined}
+					aria-label={`Remove ${source.label}`}
+					onClick={onRemove}
+				>
+					<Trash2 className="h-4 w-4" aria-hidden="true" />
+					Remove
+				</Button>
+			</div>
+		</div>
+	);
+}
+
 export function SiteSourcesSettings({
 	controller,
 	columns,
 }: {
 	controller: SiteSourcesController;
-	columns: ReadonlyArray<{
-		id: string;
-		name: string;
-		icon?: string;
-		color?: string;
-	}>;
+	columns: readonly ColumnOption[];
 }) {
-	const {
-		sources,
-		busy,
-		privateWindow,
-		status,
-		add,
-		remove,
-		chooseColumn,
-		chooseKeepOff,
-	} = controller;
+	const {sources, privateWindow, status, remove} = controller;
 	// The site stays set while the dialog fades out, so its text does not change on Cancel.
 	const [removing, setRemoving] = useState<SiteSource>();
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	// One row is open at a time, so the list stays short however many sites are added.
+	const [openId, setOpenId] = useState<SiteSourceId>();
+	const panelBaseId = useId();
 
 	if (privateWindow) {
 		return (
@@ -470,169 +681,55 @@ export function SiteSourcesSettings({
 	}
 
 	return (
-		<div className="space-y-2">
-			{listed.map((source) => {
-				const entry = status(source);
-				const notice = noticeText(source, entry?.notice);
-				const labelId = `site-source-${source.id}`;
-				const columnFieldId = `site-source-column-${source.id}`;
-				const keepOffLabelId = `site-source-keep-off-${source.id}`;
-				const site = source.column.name;
-				// With no choice, or a chosen column that was deleted, saves go to the site's source column, made on the
-				// first save.
-				const siteColumn = columns.find(
-					(column) => column.id === source.column.id,
-				);
-				const chosen = columns.some((column) => column.id === entry?.columnId)
-					? entry?.columnId
-					: (siteColumn?.id ?? SITE_COLUMN);
-				return (
-					<div
-						key={source.id}
-						data-site-source={source.id}
-						role="group"
-						aria-labelledby={labelId}
-						className="rounded-md border border-border px-3 py-3"
-					>
-						<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-							<div className="flex min-w-0 items-start gap-3">
-								<Favicon
-									url={source.homepage}
-									label={source.label}
-									className="mt-0.5 h-5 w-5 rounded-sm"
+		<div>
+			<ul className="divide-y divide-border rounded-md border border-border">
+				{listed.map((source) => {
+					const entry = status(source);
+					const isOpen = openId === source.id;
+					const panelId = `${panelBaseId}-${source.id}`;
+					return (
+						<li key={source.id} data-site-source={source.id}>
+							<button
+								type="button"
+								className="flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+								aria-expanded={isOpen}
+								aria-controls={isOpen ? panelId : undefined}
+								onClick={() => {
+									setOpenId(isOpen ? undefined : source.id);
+								}}
+							>
+								<SiteSummary source={source} entry={entry} />
+								<ChevronDown
+									className={cn(
+										'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+										isOpen && 'rotate-180',
+									)}
+									aria-hidden="true"
 								/>
-								<div className="min-w-0">
-									<p id={labelId} className="text-sm font-medium">
-										{source.label}
-									</p>
-									<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-										{source.description}
-									</p>
-									{!entry?.enabled && !entry?.notice && (
-										<p className="mt-2 max-w-xl text-xs leading-5 text-muted-foreground">
-											On in another browser. Turn it on to save here too; the
-											browser asks for access to {source.hosts[0]}.
-										</p>
-									)}
-									{notice && (
-										<p
-											role="status"
-											className="mt-2 flex max-w-xl items-start gap-1.5 text-xs leading-5 text-destructive"
-										>
-											<CircleAlert
-												className="mt-0.5 h-3.5 w-3.5 shrink-0"
-												aria-hidden="true"
-											/>
-											{notice}
-										</p>
-									)}
-								</div>
-							</div>
-							<div className="flex shrink-0 gap-2 max-sm:justify-end">
-								{!entry?.enabled && entry?.notice === 'revoked' && (
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={busy !== undefined}
-										aria-label={`Allow access to ${source.hosts[0]} again for ${source.label}`}
-										onClick={() => void add(source)}
-									>
-										<RotateCcw className="h-4 w-4" aria-hidden="true" />
-										Allow again
-									</Button>
-								)}
-								{!entry?.enabled && entry?.notice !== 'revoked' && (
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={busy !== undefined}
-										aria-label={`Turn on ${source.label} in this browser`}
-										onClick={() => void add(source)}
-									>
-										<Power className="h-4 w-4" aria-hidden="true" />
-										Turn on
-									</Button>
-								)}
-								<Button
-									variant="ghost"
-									size="sm"
-									disabled={busy !== undefined}
-									aria-label={`Remove ${source.label}`}
-									onClick={() => {
-										setRemoving(source);
-										setConfirmOpen(true);
-									}}
+							</button>
+							{isOpen && (
+								<div
+									id={panelId}
+									role="region"
+									aria-label={`${source.label} options`}
+									className="border-t border-border px-3 py-3"
 								>
-									<Trash2 className="h-4 w-4" aria-hidden="true" />
-									Remove
-								</Button>
-							</div>
-						</div>
-						{entry?.enabled && (
-							<div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-								<Label htmlFor={columnFieldId} className="text-sm font-medium">
-									Save to
-								</Label>
-								<ColumnSelect
-									id={columnFieldId}
-									columns={columns}
-									value={chosen}
-									className="w-full sm:w-64"
-									onValueChange={(value) => {
-										const columnId = value === SITE_COLUMN ? null : value;
-										void chooseColumn(
-											source,
-											columnId,
-											columns.find((column) => column.id === columnId)?.name ??
-												`the ${source.column.name} column`,
-										);
-									}}
-								>
-									{!siteColumn && (
-										<SelectItem value={SITE_COLUMN}>
-											<ColumnLabel
-												column={{
-													...source.column,
-													name: `${source.column.name} (new)`,
-												}}
-											/>
-										</SelectItem>
-									)}
-								</ColumnSelect>
-							</div>
-						)}
-						{entry?.enabled && source.keepOffSite && (
-							<div className="mt-3 border-t border-border pt-3">
-								<div className="flex items-center gap-1">
-									<p id={keepOffLabelId} className="text-sm font-medium">
-										When you save on {site}
-									</p>
-									<KeepOffHelpButton site={site} />
-								</div>
-								<RadioCardGroup
-									aria-labelledby={keepOffLabelId}
-									className="mt-2 sm:grid-cols-2"
-									value={entry.keepOffSite ? 'tablodge' : 'both'}
-									onValueChange={(value) => {
-										void chooseKeepOff(source, value === 'tablodge');
-									}}
-								>
-									<RadioCard
-										value="both"
-										title={`Save on ${site} and in ${PROJECT.name}`}
-										description={`${site} saves it as usual, and ${PROJECT.name} saves the same link.`}
+									<SiteOptions
+										source={source}
+										entry={entry}
+										columns={columns}
+										controller={controller}
+										onRemove={() => {
+											setRemoving(source);
+											setConfirmOpen(true);
+										}}
 									/>
-									<RadioCard
-										value="tablodge"
-										title={`Save to ${PROJECT.name} only`}
-										description={`${site} doesn't save it or show it as saved.`}
-									/>
-								</RadioCardGroup>
-							</div>
-						)}
-					</div>
-				);
-			})}
+								</div>
+							)}
+						</li>
+					);
+				})}
+			</ul>
 			<ConfirmationDialog
 				open={confirmOpen}
 				title={`Remove ${removing?.label ?? 'this site'}?`}
@@ -644,6 +741,7 @@ export function SiteSourcesSettings({
 				onOpenChange={setConfirmOpen}
 				onConfirm={() => {
 					setConfirmOpen(false);
+					setOpenId(undefined);
 					if (removing) {
 						void remove(removing);
 					}

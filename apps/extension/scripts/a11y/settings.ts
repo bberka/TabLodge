@@ -308,8 +308,24 @@ export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
 			try {
 				await setTheme(page, theme);
 				// A site the browser took access from stays listed with Remove, without a permission prompt to answer.
-				await writeSources(page, {github: {enabled: false, notice: 'revoked'}});
+				await writeSources(page, {
+					github: {enabled: false, notice: 'revoked'},
+					reddit: {enabled: false, notice: 'revoked'},
+				});
 				const row = page.locator('[data-site-source="github"]');
+				// Each site is one collapsed row; Enter on it opens its options, and only one row is open at a time.
+				const toggle = row.getByRole('button', {name: /^GitHub stars/});
+				const other = page
+					.locator('[data-site-source="reddit"]')
+					.getByRole('button', {name: /^Reddit saved/});
+				assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+				await other.focus();
+				await page.keyboard.press('Enter');
+				assert.equal(await other.getAttribute('aria-expanded'), 'true');
+				await toggle.focus();
+				await page.keyboard.press('Enter');
+				assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+				assert.equal(await other.getAttribute('aria-expanded'), 'false');
 				const remove = row.getByRole('button', {name: 'Remove GitHub stars'});
 				await remove.focus();
 				await page.keyboard.press('Enter');
@@ -337,7 +353,11 @@ export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
 				await confirm.getByRole('button', {name: 'Remove'}).focus();
 				await page.keyboard.press('Enter');
 				await row.waitFor({state: 'detached'});
-				await page.getByText('No sites added.').waitFor();
+				assert.equal(
+					await page.locator('[data-site-source="reddit"]').count(),
+					1,
+					'only the removed site goes',
+				);
 				// The removed row held focus, so it lands on Add a site, not the page body.
 				await until(
 					async () =>
