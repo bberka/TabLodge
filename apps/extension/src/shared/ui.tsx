@@ -203,6 +203,7 @@ export function ConfirmationDialog({
 	confirmDisabled = false,
 	busy = false,
 	onConfirm,
+	onCloseAutoFocus,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -216,10 +217,14 @@ export function ConfirmationDialog({
 	confirmDisabled?: boolean;
 	busy?: boolean;
 	onConfirm: () => void;
+	/**
+	Runs once the dialog has closed, just before focus goes back to what opened it.
+	*/
+	onCloseAutoFocus?: () => void;
 }) {
 	return (
 		<AlertDialog open={open} onOpenChange={onOpenChange}>
-			<AlertDialogContent size="sm">
+			<AlertDialogContent size="sm" onCloseAutoFocus={onCloseAutoFocus}>
 				<AlertDialogHeader>
 					<AlertDialogTitle>{title}</AlertDialogTitle>
 					{Boolean(description) && (
@@ -238,9 +243,9 @@ export function ConfirmationDialog({
 						onClick={onConfirm}
 					>
 						{typeof confirmLabel === 'string' &&
-							(/delete|clear|empty|erase/i.test(confirmLabel) ? (
+							(/delete|clear|empty|erase|remove/i.test(confirmLabel) ? (
 								<Trash2 aria-hidden="true" />
-							) : /restore/i.test(confirmLabel) ? (
+							) : /restore|reset/i.test(confirmLabel) ? (
 								<RotateCcw aria-hidden="true" />
 							) : null)}
 						{confirmLabel}

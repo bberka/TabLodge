@@ -444,14 +444,28 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 										label="Load sample data"
 										icon="flask-outline"
 										disabled={status.connected}
-										onPress={() => void loadSampleData()}
+										onPress={() => {
+											confirm(
+												'Load sample data?',
+												'The sample sessions and bookmarks replace everything in the library.',
+												{label: 'Load', destructive: true},
+												() => void loadSampleData(),
+											);
+										}}
 									/>
 									<Button
 										label="Clear library"
 										kind="danger"
 										icon="trash-outline"
 										disabled={status.connected}
-										onPress={() => void clearLibrary()}
+										onPress={() => {
+											confirm(
+												'Clear the library?',
+												'Every session and bookmark on this phone is deleted.',
+												{label: 'Clear', destructive: true},
+												() => void clearLibrary(),
+											);
+										}}
 									/>
 								</SettingsCard>
 							)}

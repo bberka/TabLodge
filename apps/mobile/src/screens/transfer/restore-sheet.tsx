@@ -223,7 +223,14 @@ function RestoreForm({
 						icon="phone-portrait-outline"
 						disabled={result.phoneSettings === undefined}
 						onPress={() => {
-							restoreSettings(result);
+							confirm(
+								'Restore phone settings?',
+								"This phone's settings are replaced with the ones in the backup. Sessions and bookmarks stay.",
+								{label: 'Restore', destructive: true},
+								() => {
+									restoreSettings(result);
+								},
+							);
 						}}
 					/>
 					{result.phoneSettings === undefined && (

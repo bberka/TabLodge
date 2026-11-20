@@ -495,28 +495,29 @@ function Help() {
 							and the save button on Bluesky work in English. If a site changes
 							its page so {PROJECT.name} can no longer read it, nothing is saved
 							and Settings says so. In a private window, saves are added only
-							when private windows use the regular library. Remove takes a site
-							out of the list and gives its access back. Removing its access in
-							the browser&apos;s extension settings also stops it; Settings then
-							says so next to the site and offers Allow again. To catch up on
-							saves you made on your phone or before you added the site, open
-							the site&apos;s saved page: your saved page on Reddit (new or old
-							Reddit), Watch later on YouTube, your bookmarks on X, All posts or
-							a collection under Saved on Instagram, or your own stars on
-							GitHub. When some of the saved items it shows are not in{' '}
-							{PROJECT.name}, a notice says how many and offers Add them, which
-							adds them to the site&apos;s column in the order the site lists
-							them, and Not now, which keeps it quiet until something new
-							appears there. It counts only what the page has loaded, so scroll
-							down, or go to the next page, for more; X keeps only the posts
-							near the screen, so it counts those. Saved comments are included
-							on old Reddit only. Someone else&apos;s GitHub stars are never
-							offered. The other sites don&apos;t offer this yet. Hacker News,
-							Letterboxd, Goodreads, and IMDb lists can be public, and telling
-							your own list from someone else&apos;s has not been checked on a
-							signed-in page. The saved pages of Stack Overflow, Lobsters,
-							dev.to, Bluesky, SoundCloud, Spotify, Medium, and Substack have
-							not been checked on a signed-in account with saves.
+							when private windows use the regular library. Remove asks first,
+							then takes a site out of the list and gives its access back.
+							Removing its access in the browser&apos;s extension settings also
+							stops it; Settings then says so next to the site and offers Allow
+							again. To catch up on saves you made on your phone or before you
+							added the site, open the site&apos;s saved page: your saved page
+							on Reddit (new or old Reddit), Watch later on YouTube, your
+							bookmarks on X, All posts or a collection under Saved on
+							Instagram, or your own stars on GitHub. When some of the saved
+							items it shows are not in {PROJECT.name}, a notice says how many
+							and offers Add them, which adds them to the site&apos;s column in
+							the order the site lists them, and Not now, which keeps it quiet
+							until something new appears there. It counts only what the page
+							has loaded, so scroll down, or go to the next page, for more; X
+							keeps only the posts near the screen, so it counts those. Saved
+							comments are included on old Reddit only. Someone else&apos;s
+							GitHub stars are never offered. The other sites don&apos;t offer
+							this yet. Hacker News, Letterboxd, Goodreads, and IMDb lists can
+							be public, and telling your own list from someone else&apos;s has
+							not been checked on a signed-in page. The saved pages of Stack
+							Overflow, Lobsters, dev.to, Bluesky, SoundCloud, Spotify, Medium,
+							and Substack have not been checked on a signed-in account with
+							saves.
 						</>
 					),
 					searchText:
