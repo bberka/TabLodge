@@ -100,7 +100,7 @@ This runs the server as a Worker with one Durable Object on your own Cloudflare 
 
 ### 1. Deploy with the button
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/master/apps/server/cloudflare-deploy)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bberka/TabLodge/tree/release/apps/server/cloudflare-deploy)
 
 1. [Create a token](#create-a-token) and keep it at hand. The **No server yet?** button in **Settings › Sync** opens a dialog that walks through these same steps and has the button too.
 2. Choose the button and log in to Cloudflare, or create a free account.
@@ -211,11 +211,11 @@ Each optional part of TabLodge needs a server from the release that added it:
 
 Sync stops only when the server and the app speak different versions of the sync protocol, which is rare. **Settings › Sync** then says which one to update: "Your sync server is older than this app. Update the server to 0.2.0 or later." or "This app is older than your sync server. Update TabLodge." Everything on the device stays as it is, and sync starts again by itself after the update.
 
-The version reads "an unreleased build" for a server built from `master`: the **Deploy to Cloudflare** button, `cf:deploy`, the `edge` image, and your own builds. Only the release images (`latest` and the version tags) and, from 0.4.0 on, a Cloudflare server updated by the [Update TabLodge workflow](#update-automatically) carry their version. A server from before 0.4.0 reports none.
+The version reads "an unreleased build" for a server built from `master`: `cf:deploy`, the `edge` image, and your own builds. The release images (`latest`, the version tags, and the `0.<minor>` tags), a Cloudflare server deployed with the button, and one updated by the [Update TabLodge workflow](#update-automatically) carry their version, because the button copies the newest release, not `master`. A server from before 0.4.0 reports none.
 
 Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
 
-**Cloudflare, deployed with the button.** Open the repository Cloudflare created for you on GitHub or GitLab and replace `worker.js` with the newest [`apps/server/cloudflare-deploy/worker.js`](https://github.com/bberka/TabLodge/blob/master/apps/server/cloudflare-deploy/worker.js) from TabLodge: open the file, choose **Edit**, paste, and commit. Cloudflare deploys the commit by itself.
+**Cloudflare, deployed with the button.** Open the repository Cloudflare created for you on GitHub or GitLab and replace `worker.js` with the newest [`apps/server/cloudflare-deploy/worker.js`](https://github.com/bberka/TabLodge/blob/release/apps/server/cloudflare-deploy/worker.js) from TabLodge's `release` branch: open the file, choose **Edit**, paste, and commit. Cloudflare deploys the commit by itself.
 
 **Cloudflare, deployed from your computer.** In your copy of the repository:
 
@@ -236,7 +236,7 @@ docker compose -f compose.https.yaml up -d
 
 **Single container:** run `docker pull ghcr.io/bberka/tablodge-sync:latest`, then `docker rm -f tablodge-sync`, then start it again with the same command and token. The library is in the `tablodge-sync` volume and stays.
 
-`latest` is the server from the newest TabLodge release, and each release is also tagged with its version, such as `0.1.9`. `edge` is built from `master` whenever the server code changes there, and can change at any time.
+`latest` is the server from the newest TabLodge release, and each release is also tagged with its version, such as `0.1.9`, and with its release line, such as `0.1`, which moves to the newest `0.1.x`. `edge` is built from `master` whenever the server code changes there, and can change at any time.
 
 To check the update, open **Settings › Sync**, or ask for the status. `version` is the server's release, and the `features` list shows what it supports:
 
@@ -259,7 +259,7 @@ docker compose -f compose.https.yaml up -d
 
 Use the line in `.env`, not `--profile autoupdate`: the sync container gets the label the service looks for only from `COMPOSE_PROFILES`.
 
-This starts `autoupdate`, a [Watchtower](https://github.com/nicholas-fedor/watchtower) container that looks for a new image at 04:00 UTC every day. When there is one, it restarts only the sync container with it and deletes the old image; Caddy and every other container are left alone. If you already run a Watchtower of your own, it leaves the sync container to this one while the profile is on. To turn it off, delete the line from `.env`, run `docker compose -f compose.https.yaml rm -sf autoupdate`, then `docker compose -f compose.https.yaml up -d`, which starts the sync container again without the label. To stay on one release, set `TABLODGE_IMAGE` to its version tag, such as `ghcr.io/bberka/tablodge-sync:0.4.0`; Watchtower then has nothing to update.
+This starts `autoupdate`, a [Watchtower](https://github.com/nicholas-fedor/watchtower) container that looks for a new image at 04:00 UTC every day. When there is one, it restarts only the sync container with it and deletes the old image; Caddy and every other container are left alone. If you already run a Watchtower of your own, it leaves the sync container to this one while the profile is on. To turn it off, delete the line from `.env`, run `docker compose -f compose.https.yaml rm -sf autoupdate`, then `docker compose -f compose.https.yaml up -d`, which starts the sync container again without the label. To stay on one release, set `TABLODGE_IMAGE` to its version tag, such as `ghcr.io/bberka/tablodge-sync:0.4.0`; Watchtower then has nothing to update. To take fixes but not the next minor version, which can change the sync protocol, set `TABLODGE_IMAGE=ghcr.io/bberka/tablodge-sync:0.<minor>`, such as `0.4`: Watchtower keeps updating to the newest `0.4.x` and stays on that release line until you change the tag.
 
 Watchtower controls Docker through its socket, which gives it the same power over the machine as root. It is a community project kept up by one person. The original `containrrr/watchtower` is no longer maintained and does not start on Docker 29. If you would rather not run it, a daily cron job does the same with Docker alone (`crontab -e`, with your folder):
 
@@ -276,9 +276,9 @@ docker run -d --name tablodge-sync-autoupdate --restart unless-stopped -l com.ce
 
 Without the scope, this Watchtower would remove any other Watchtower on the machine when it starts. Each update keeps the container's name, port, volume, and token. `docker rm -f tablodge-sync-autoupdate` turns it off.
 
-**Cloudflare, deployed with the button.** The repository Cloudflare created already holds the **Update TabLodge** workflow, switched off. Turn it on under **Settings › Secrets and variables › Actions › Variables** by adding the variable `TABLODGE_AUTO_UPDATE` with the value `true`. Every day the workflow then downloads `worker.js` from the newest TabLodge release and commits it when it changed, and Cloudflare deploys that commit. **Actions › Update TabLodge › Run workflow** updates at once, with or without the variable. A server deployed before the workflow shipped has no such file: choose **Add file › Create new file**, name it `.github/workflows/update-tablodge.yml`, paste the content of [`update-tablodge.yml`](https://github.com/bberka/TabLodge/blob/master/apps/server/cloudflare-deploy/.github/workflows/update-tablodge.yml), commit, and add the variable. A GitLab repository has no GitHub Actions, so update it by hand.
+**Cloudflare, deployed with the button.** The repository Cloudflare created already holds the **Update TabLodge** workflow, switched off. Turn it on under **Settings › Secrets and variables › Actions › Variables** by adding the variable `TABLODGE_AUTO_UPDATE` with the value `true`. Every day the workflow then downloads `worker.js` from the newest TabLodge release and commits it when it changed, and Cloudflare deploys that commit. **Actions › Update TabLodge › Run workflow** updates at once, with or without the variable. A server deployed before the workflow shipped has no such file: choose **Add file › Create new file**, name it `.github/workflows/update-tablodge.yml`, paste the content of [`update-tablodge.yml`](https://github.com/bberka/TabLodge/blob/release/apps/server/cloudflare-deploy/.github/workflows/update-tablodge.yml), commit, and add the variable. A GitLab repository has no GitHub Actions, so update it by hand.
 
-* The button deploys `master`, which is often ahead of the newest release, so the workflow replaces `worker.js` only with a release published after it last changed. The first update comes with the next release.
+* The button deploys the newest release from TabLodge's `release` branch. The workflow replaces `worker.js` only with a release published after it last changed, so a server never goes back to an older release: the one `TABLODGE_VERSION` names, or a server first deployed from `master` before the branch existed. The first update comes with the next release.
 * It changes only `worker.js`. When a release needs a different `wrangler.jsonc` (outside `vars`, which stay yours), the run fails and its message links the file to copy by hand.
 * For a release with a new sync protocol, the run fails. Update TabLodge on every device, then run the workflow by hand with **Also take a release with a new sync protocol** ticked.
 * The repository variable `TABLODGE_VERSION` (**Settings › Secrets and variables › Actions › Variables**), such as `0.4`, keeps it on that release line.

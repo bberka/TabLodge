@@ -3,7 +3,8 @@ name: Release
 # Manual only: Actions → Release → Run workflow (on the default branch).
 # Version = 0.<VERSION file>.<patch>, where patch continues from the latest v0.<VERSION>.* tag
 # (see scripts/release-version.ts). Publishes a GitHub release with a Chromium zip and a Firefox zip, then the sync
-# server image with the same version (sync-server.yml) and the signed Android APK. The APK needs the signing secrets
+# server image with the same version (sync-server.yml), the `release` branch the Deploy to Cloudflare button copies, and
+# the signed Android APK. The APK needs the signing secrets
 # described in docs/CONTRIBUTING.md; without them that job fails.
 on:
   workflow_dispatch:
@@ -128,6 +129,20 @@ jobs:
           grep -q "var version = \"$VERSION\";" apps/server/cloudflare-deploy/worker.js
           cp apps/server/cloudflare-deploy/worker.js release/tablodge-sync-worker.js
           gh release upload "v$VERSION" release/tablodge-sync-worker.js
+
+      # The Deploy to Cloudflare button points at this branch, so a button deploy runs the release and reports its
+      # version. One commit with no history, replaced on every release, so the force push is the point. The only
+      # ruleset targets the default branch, so `release` is not blocked. Uses the stamped worker.js of the step above,
+      # and like it, may fail without holding up the release.
+      - name: Update the release branch for the Cloudflare button
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          dir="$(mktemp -d)"
+          scripts/release-branch.sh "$VERSION" "$dir"
+          git -C "$dir" push --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" release
 
   image:
     name: Publish the sync server image

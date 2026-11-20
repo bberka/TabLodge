@@ -10,7 +10,8 @@
 //   node scripts/release-version.ts set-android 0.2.0   write the version and version code into apps/mobile/app.json
 //   node scripts/release-version.ts set-server 0.2.0   write the version into apps/server/package.json, which the
 //     server reports at /v1/status. Only the image build runs it (.github/workflows/sync-server.yml): the committed
-//     Cloudflare Worker is built from the unstamped file, so the release checks keep finding it current.
+//     Cloudflare Worker is built from the unstamped file, so the release checks keep finding it current. The release
+//     workflow also runs it for the worker.js on the `release` branch (scripts/release-branch.sh).
 import {execFileSync} from 'node:child_process';
 import {readFileSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';

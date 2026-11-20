@@ -64,8 +64,9 @@ jobs:
             echo "Already on TabLodge $tag." && exit 0
           fi
 
-          # The Deploy button copies TabLodge's master, which can be ahead of the newest release. Only a release
-          # published after worker.js last changed here replaces it, so the server never goes back.
+          # Only a release published after worker.js last changed here replaces it, so the server never goes back: not to
+          # the older line TABLODGE_VERSION names, and not from a deploy made from TabLodge's master before the
+          # button used the release branch.
           published="$(gh api "repos/$SOURCE/releases/tags/$tag" --jq .published_at)"
           changed="$(git log -1 --format=%cI -- worker.js)"
           if [ "$(date -d "$published" +%s)" -le "$(date -d "$changed" +%s)" ]; then
