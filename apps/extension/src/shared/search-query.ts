@@ -36,8 +36,8 @@ export type SearchQuery = {
 	columns: string[];
 	folders: string[];
 	/**
-	Folded `from:` values: `phone` and `computer` match the kind of device that saved a result, anything else a part of
-	its name.
+	Folded `from:` values: `phone` and `computer` match only the kind of device that saved a result, anything else a part
+	of its name.
 	*/
 	devices: string[];
 	/**
@@ -341,11 +341,9 @@ const hostOf = (url: string | undefined) => {
 Whether a result's saving device matches a folded `from:` value.
 */
 function savedOn(value: string, device: SearchFacets['device']): boolean {
-	return (
-		(value === 'phone' && device?.kind === 'mobile') ||
-		(value === 'computer' && device?.kind === 'desktop') ||
-		(device?.name !== undefined && fold(device.name).includes(value))
-	);
+	return value === 'phone' || value === 'computer'
+		? device?.kind === (value === 'phone' ? 'mobile' : 'desktop')
+		: device?.name !== undefined && fold(device.name).includes(value);
 }
 
 /**

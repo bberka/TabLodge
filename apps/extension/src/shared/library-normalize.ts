@@ -637,7 +637,11 @@ The saving device of a stored session or bookmark, kept only when it has a name.
 */
 const storedDevice = (raw: Record<string, unknown>) =>
 	deviceStamp(
-		cleanText(raw.deviceName, '', MAX_DEVICE_NAME),
+		cleanText(
+			typeof raw.deviceName === 'string' ? raw.deviceName : '',
+			'',
+			MAX_DEVICE_NAME,
+		),
 		isDeviceKind(raw.deviceKind) ? raw.deviceKind : 'desktop',
 	);
 

@@ -13189,6 +13189,16 @@ test('a stored bookmark keeps its device, and a bad device kind is read as a com
 			createdAt: 1,
 			updatedAt: 1,
 		},
+		{
+			id: 'b3',
+			title: 'C',
+			url: 'https://c.example/',
+			columnId: 'bookmark-default',
+			deviceName: {name: 'not text'},
+			deviceKind: 'mobile',
+			createdAt: 1,
+			updatedAt: 1,
+		},
 	] as never;
 	const {bookmarks} = await createWorkerHarness(state).sendMessage({
 		type: 'GET_STATE',
@@ -13197,6 +13207,11 @@ test('a stored bookmark keeps its device, and a bad device kind is read as a com
 	assert.equal(bookmarks[0].deviceKind, 'desktop');
 	assert.equal('deviceName' in bookmarks[1], false);
 	assert.equal('deviceKind' in bookmarks[1], false);
+	assert.equal(
+		'deviceName' in bookmarks[2],
+		false,
+		'a name that is not text is dropped',
+	);
 });
 
 test('a session takes a color like a column does: a preset or a hex, kept when omitted, removed with an empty one', async () => {

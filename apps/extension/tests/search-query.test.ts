@@ -98,6 +98,10 @@ test('from: matches a phone, a computer, or part of the device name, and leaves 
 	assert.ok(on('from:"work lap"', laptop));
 	assert.ok(!on('from:"work lap"', pixel));
 	assert.ok(!on('from:phone', saved()), 'an older bookmark has no device');
+	assert.ok(
+		!on('from:phone', saved('Phone testing laptop', 'desktop')),
+		'phone and computer name the kind, not a part of the name',
+	);
 	assert.ok(!on('from:phone', bookmark('', '')));
 	const query = parseSearchQuery('docs from:pixel');
 	assert.deepEqual(query.devices, ['pixel']);

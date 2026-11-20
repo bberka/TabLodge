@@ -1384,7 +1384,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 The fields that mark a new bookmark as saved in this browser.
 */
 async function savedHere() {
-	await deviceReady;
+	// A failed first read leaves the default name, rather than every later save failing with it.
+	await deviceReady.catch(() => undefined);
 	return deviceStamp(thisDevice, 'desktop');
 }
 
