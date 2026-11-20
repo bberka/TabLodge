@@ -1,0 +1,9 @@
+a connect true server null [ 'private', 'key', 'preview', 'trash' ]
+b connect true server null [ 'private', 'key', 'preview', 'trash' ]
+B got the library column from A: true
+B Sources (expected none): {}
+A Sources (kept): {
+  youtube: { enabled: true, wanted: true },
+  x: { enabled: true, wanted: true, keepOffSite: true }
+}
+A sync status: {"connected":true,"url":"http://127.0.0.1:18384","phase":"idle","live":true,"lastSyncAt":1795186524525,"pending":0,"refused":0,"error":null,"server":{"protocol":1,"version":null,"features":["private","key","preview","trash"]},"needsKey":false}
