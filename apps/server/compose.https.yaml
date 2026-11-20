@@ -12,8 +12,9 @@ services:
     environment:
       TABLODGE_SYNC_TOKEN: ${TABLODGE_SYNC_TOKEN:?Set TABLODGE_SYNC_TOKEN in .env}
     labels:
-      # The autoupdate service only touches containers with this scope.
-      com.centurylinklabs.watchtower.scope: tablodge
+      # With the autoupdate profile on, this scope keeps that service to this container. Otherwise it is empty, so a
+      # Watchtower of your own still updates the container.
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROFILES:+tablodge}
     volumes:
       - tablodge-sync:/data
     # Not published on the host: only Caddy reaches it.
@@ -53,6 +54,9 @@ services:
     image: nickfedor/watchtower:1.24.1
     profiles: [autoupdate]
     restart: unless-stopped
+    labels:
+      # Keeps a Watchtower of your own from treating this one as its own older copy.
+      com.centurylinklabs.watchtower.scope: tablodge
     command: --scope tablodge --cleanup --schedule "0 0 4 * * *"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

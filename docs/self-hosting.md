@@ -255,7 +255,7 @@ echo COMPOSE_PROFILES=autoupdate >> .env
 docker compose -f compose.https.yaml up -d
 ```
 
-This starts `autoupdate`, a [Watchtower](https://github.com/nicholas-fedor/watchtower) container that looks for a new image at 04:00 UTC every day. When there is one, it restarts only the sync container with it and deletes the old image; Caddy and every other container are left alone. To turn it off, delete the line from `.env` and run `docker compose -f compose.https.yaml rm -sf autoupdate`. To stay on one release, set `TABLODGE_IMAGE` to its version tag, such as `ghcr.io/bberka/tablodge-sync:0.4.0`; Watchtower then has nothing to update.
+This starts `autoupdate`, a [Watchtower](https://github.com/nicholas-fedor/watchtower) container that looks for a new image at 04:00 UTC every day. When there is one, it restarts only the sync container with it and deletes the old image; Caddy and every other container are left alone. If you already run a Watchtower of your own, it leaves the sync container to this one while the profile is on. To turn it off, delete the line from `.env` and run `docker compose -f compose.https.yaml rm -sf autoupdate`. To stay on one release, set `TABLODGE_IMAGE` to its version tag, such as `ghcr.io/bberka/tablodge-sync:0.4.0`; Watchtower then has nothing to update.
 
 Watchtower controls Docker through its socket, which gives it the same power over the machine as root. It is a community project kept up by one person. The original `containrrr/watchtower` is no longer maintained and does not start on Docker 29. If you would rather not run it, a daily cron job does the same with Docker alone (`crontab -e`, with your folder):
 
