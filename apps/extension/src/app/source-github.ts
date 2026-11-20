@@ -6,6 +6,9 @@
 //     repository is the page's.
 // The title is `<owner>/<repo>` and the description, when the page shows one: in the About box of the
 // repository's page, or in the list row the button is in.
+// The user's own stars (/stars, /stars/<login>, /<login>?tab=stars) are read for catch-up (#383); another person's
+// stars are public but are not the user's saves, so a page whose user is not the signed-in login reads as nothing.
+import type {SavedPageReader} from './source-catch-up';
 import {githubRepoUrl} from './site-sources';
 import {
 	controlLabel,
@@ -55,6 +58,55 @@ function starWithoutForm(button: Element, document: Document): SourceRead {
 		? {kind: 'save', link: repoLink(url, button, document)}
 		: {kind: 'unreadable'};
 }
+
+const STARS_PAGE =
+	/^\/stars(?:\/([\da-z][\d\-a-z]{0,38})(?:\/repositories)?)?\/?$/i;
+const PROFILE_PAGE = /^\/([\da-z][\d\-a-z]{0,38})\/?$/i;
+const STARRED_ROW = '#user-starred-repos div.col-12.d-block, ul.repo-list > li';
+
+/**
+The login whose stars the page lists, or undefined when it lists none.
+*/
+function starsOwner(document: Document, login: string) {
+	const {pathname, search} = document.location;
+	const stars = STARS_PAGE.exec(pathname);
+	if (stars) {
+		return stars[1] ?? login;
+	}
+
+	const profile = PROFILE_PAGE.exec(pathname);
+	return profile && new URLSearchParams(search).get('tab') === 'stars'
+		? profile[1]
+		: undefined;
+}
+
+export const readGithubSavedPage: SavedPageReader = (document) => {
+	const login = document
+		.querySelector('meta[name="user-login"]')
+		?.getAttribute('content');
+	const owner = login ? starsOwner(document, login) : undefined;
+	if (!login || owner?.toLowerCase() !== login.toLowerCase()) {
+		return undefined;
+	}
+
+	const links: SourceLink[] = [];
+	for (const row of document.querySelectorAll(STARRED_ROW)) {
+		// A repository unstarred on this page stays listed, with its star control turned off.
+		const control = row.querySelector(':scope .starring-container');
+		const url = githubRepoUrl(
+			row.querySelector(':scope h3 a[href]')?.getAttribute('href') ?? '',
+		);
+		if (!url || (control && !control.classList.contains('on'))) {
+			continue;
+		}
+
+		const name = new URL(url).pathname.slice(1);
+		const about = excerpt(row.querySelector(':scope p.col-9')?.textContent);
+		links.push({url, title: about ? `${name}: ${about}` : name});
+	}
+
+	return links;
+};
 
 export function createGithubReader(document: Document): SourceReader {
 	return (event) => {

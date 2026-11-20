@@ -3,6 +3,8 @@
 //   - "Save to Watch later" in a video's menu, which YouTube opens in a popup outside the video
 //   - the Watch later checkbox in the "Save video to..." dialog, which also opens outside the video
 // The controls are found by their English labels, so another interface language finds none and saves nothing.
+// The Watch later playlist (/playlist?list=WL), which only its owner can open, is read for catch-up (#383).
+import type {SavedPageReader} from './source-catch-up';
 import {youtubeVideoUrl} from './site-sources';
 import {
 	controlLabel,
@@ -58,6 +60,24 @@ function itemLink(item: Element): SourceLink | undefined {
 
 	return undefined;
 }
+
+// YouTube keeps the pages it navigated away from, hidden; only the shown playlist page is read.
+const WATCH_LATER_ROW =
+	'ytd-browse[page-subtype="playlist"]:not([hidden]) ytd-playlist-video-renderer';
+
+export const readYoutubeSavedPage: SavedPageReader = (document) => {
+	const {pathname, search} = document.location;
+	if (
+		pathname !== '/playlist' ||
+		new URLSearchParams(search).get('list') !== 'WL'
+	) {
+		return undefined;
+	}
+
+	return [...document.querySelectorAll(WATCH_LATER_ROW)]
+		.map((row) => itemLink(row))
+		.filter((link) => link !== undefined);
+};
 
 function watchedVideo(document: Document): SourceLink | undefined {
 	const url = youtubeVideoUrl(document.location.href);
