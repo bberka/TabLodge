@@ -101,6 +101,7 @@ export function watchSavedPage({
 				? ` Only the first ${links.length} were checked.`
 				: '';
 		showSourceToast(catchUpCountText(result.missing, appName) + cut, {
+			asking: true,
 			actions: [
 				{label: 'Add them', run: async () => add(links)},
 				{

@@ -9769,8 +9769,14 @@ async function setSiteSource(
 		};
 	}
 
+	// Removing a site also drops Save to TabLodge only, so adding it again starts with the site's own save on.
 	const state = await changeSourcesState((next) => {
-		next[source.id] = {...withoutNotice(next[source.id]), enabled};
+		const {keepOffSite, ...entry} = withoutNotice(next[source.id]);
+		next[source.id] = {
+			...entry,
+			enabled,
+			...(enabled && keepOffSite && {keepOffSite}),
+		};
 	});
 	if (enabled) {
 		await registerSource(source);
@@ -9813,6 +9819,29 @@ async function setSiteSourceColumn(
 		const {columnId: _previous, ...entry} = next[source.id];
 		next[source.id] =
 			typeof columnId === 'string' ? {...entry, columnId} : entry;
+	});
+	return {ok: true, sources: siteSourceStatuses(state)};
+}
+
+async function setSiteSourceKeepOff(
+	id: unknown,
+	keepOffSite: unknown,
+): Promise<ActionResult<'SET_SITE_SOURCE_KEEP_OFF'>> {
+	const source = siteSourceById(id);
+	if (!source?.keepOffSite) {
+		return {ok: false, error: 'That site cannot keep saves off the site.'};
+	}
+
+	if (privateContext) {
+		return {ok: false, error: 'Change sources in a regular window.'};
+	}
+
+	const state = await changeSourcesState((next) => {
+		const {keepOffSite: _previous, ...entry} = next[source.id];
+		next[source.id] =
+			keepOffSite === true && entry.enabled
+				? {...entry, keepOffSite: true}
+				: entry;
 	});
 	return {ok: true, sources: siteSourceStatuses(state)};
 }
@@ -10154,6 +10183,17 @@ async function handleSourceMessage(
 			}
 
 			return result;
+		}
+
+		case 'SITE_SOURCE_MODE': {
+			const source = senderSource(message.source, sender);
+			const entry = source && (await readSourcesState())[source.id];
+			return {
+				ok: true,
+				keepOffSite: Boolean(
+					entry?.enabled && entry.keepOffSite && !privateSourcesOff(),
+				),
+			};
 		}
 
 		case 'SITE_SOURCE_PENDING': {
@@ -10840,6 +10880,10 @@ async function handleMessage(
 
 		case 'SET_SITE_SOURCE_COLUMN': {
 			return setSiteSourceColumn(message.source, message.columnId);
+		}
+
+		case 'SET_SITE_SOURCE_KEEP_OFF': {
+			return setSiteSourceKeepOff(message.source, message.keepOffSite);
 		}
 
 		case 'HANDOFF_NEW_TAB': {
