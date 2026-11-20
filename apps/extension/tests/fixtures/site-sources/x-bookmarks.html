@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- x.com/i/history (where /i/bookmarks now goes), reduced by hand from a real signed-in page (2026-11): the Bookmarks tab,
+then the timeline's cells, each an article whose timestamp links to the post. The first post quotes another,
+whose card holds its own time but no link to it. Posts and names swapped. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>History / X</title></head>
+<body>
+<main role="main"><div data-testid="primaryColumn"><div aria-label="Home timeline">
+	<nav role="navigation"><div role="tablist">
+		<a href="/i/history" role="tab" aria-selected="true">Bookmarks</a>
+		<a href="/i/history/likes" role="tab" aria-selected="false">Likes</a>
+	</div></nav>
+	<section><div aria-label="Timeline: Bookmarks">
+		<div data-testid="cellInnerDiv"><div><div>
+			<article data-testid="tweet" role="article">
+				<div data-testid="User-Name"><a href="/alice" role="link"><span>Alice</span></a><a href="/alice" role="link"><span>@alice</span></a>
+					<a href="/alice/status/1900000000000000001" role="link" aria-label="18 hours ago"><time datetime="2026-11-19T16:25:31.000Z">18h</time></a></div>
+				<div data-testid="tweetText"><span>Quoting this, worth a read</span></div>
+				<div><span>Quote</span><div role="link">
+					<div data-testid="User-Name"><span>Bob</span><span>@bob</span><div aria-label="Nov 18"><time datetime="2026-11-18T19:03:41.000Z">Nov 18</time></div></div>
+					<div data-testid="tweetText"><span>The quoted post</span></div>
+					<a href="/bob/status/1900000000000000002/photo/1" role="link"><div data-testid="tweetPhoto" aria-label="Image"><img alt="Image"></div></a>
+				</div></div>
+				<a href="/alice/status/1900000000000000001/analytics" role="link">Views</a>
+				<button data-testid="removeBookmark" aria-label="Bookmarked"></button>
+			</article>
+		</div></div></div>
+		<div data-testid="cellInnerDiv"><div><div>
+			<article data-testid="tweet" role="article">
+				<div data-testid="User-Name"><a href="/carol" role="link"><span>@carol</span></a>
+					<a href="/carol/status/1900000000000000003" role="link" aria-label="13 hours ago"><time datetime="2026-11-20T00:10:00.000Z">13h</time></a></div>
+				<a href="/carol/status/1900000000000000003/photo/1" role="link"><div data-testid="tweetPhoto"><img alt="Image"></div></a>
+				<button data-testid="removeBookmark" aria-label="Bookmarked"></button>
+			</article>
+		</div></div></div>
+	</div></section>
+</div></div></main>
+</body>
+</html>

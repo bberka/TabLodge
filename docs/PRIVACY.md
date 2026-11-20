@@ -43,7 +43,7 @@ The script reads the page when you click, and only acts on a click on the site's
 
 ### YouTube Watch later
 
-Access: `https://www.youtube.com/*`. When you add a video to Watch later, by the button on a thumbnail, **Save to Watch later** in a video's menu, or the Watch later box in the **Save** dialog, TabLodge reads that video's address and title from the page and bookmarks `https://www.youtube.com/watch?v=<id>` in a YouTube column. Nothing else on the page is read or kept.
+Access: `https://www.youtube.com/*`. When you add a video to Watch later, by the button on a thumbnail, **Save to Watch later** in a video's menu, or the Watch later box in the **Save** dialog, TabLodge reads that video's address and title from the page and bookmarks `https://www.youtube.com/watch?v=<id>` in a YouTube column. On your Watch later playlist (`/playlist?list=WL`), TabLodge reads the address and title of each video the page has loaded, to count those not in TabLodge and add them when you choose **Add them**. Nothing else on the page is read or kept.
 
 ### Reddit saved
 
@@ -51,15 +51,15 @@ Access: `https://www.reddit.com/*` and `https://old.reddit.com/*`. When you clic
 
 ### X bookmarks
 
-Access: `https://x.com/*` and `https://twitter.com/*`. When you click **Bookmark** on a post, in its row of buttons or in its **Share** menu, TabLodge reads the post's address and the start of its text from the page and bookmarks `https://x.com/<user>/status/<id>` in an X column. Nothing else on the page is read or kept.
+Access: `https://x.com/*` and `https://twitter.com/*`. When you click **Bookmark** on a post, in its row of buttons or in its **Share** menu, TabLodge reads the post's address and the start of its text from the page and bookmarks `https://x.com/<user>/status/<id>` in an X column. On your bookmarks page (`/i/bookmarks`, which X shows at `/i/history`), TabLodge reads the address and the start of the text of each bookmarked post the page holds, to count those not in TabLodge and add them when you choose **Add them**. Nothing else on the page is read or kept.
 
 ### Instagram saved
 
-Access: `https://www.instagram.com/*`. When you tap **Save** on a post or reel, TabLodge reads its address and the start of its caption from the page and bookmarks `https://www.instagram.com/p/<id>/` or `https://www.instagram.com/reel/<id>/` in an Instagram column. It only notices your own taps: it never scrolls, opens, or clicks anything on Instagram. Nothing else on the page is read or kept.
+Access: `https://www.instagram.com/*`. When you tap **Save** on a post or reel, TabLodge reads its address and the start of its caption from the page and bookmarks `https://www.instagram.com/p/<id>/` (a reel too, since Instagram opens it at that address) in an Instagram column. On your saved page (**All posts** or a collection under `/<user>/saved/`), TabLodge reads the address and the start of the caption of each saved post the page has loaded, to count those not in TabLodge and add them when you choose **Add them**. It only notices your own taps: it never scrolls, opens, or clicks anything on Instagram. Nothing else on the page is read or kept.
 
 ### GitHub stars
 
-Access: `https://github.com/*`. When you click **Star** on a repository, on its page or in a list such as search results or Trending, TabLodge reads the repository's name and description from the page and bookmarks `https://github.com/<owner>/<repo>` in a GitHub column, titled with the name and the description. Nothing else on the page is read or kept.
+Access: `https://github.com/*`. When you click **Star** on a repository, on its page or in a list such as search results or Trending, TabLodge reads the repository's name and description from the page and bookmarks `https://github.com/<owner>/<repo>` in a GitHub column, titled with the name and the description. On your own stars (`/stars`, `/stars/<you>`, or your profile's Stars tab), TabLodge reads the name and description of each starred repository the page lists, and the signed-in user's name to tell your stars from someone else's, to count those not in TabLodge and add them when you choose **Add them**. Nothing else on the page is read or kept.
 
 ### Hacker News favorites
 
