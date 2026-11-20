@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {ScrollView, useColorScheme, StyleSheet, Text, View} from 'react-native';
 import {confirm, showDialog} from '../../ui/dialog';
 import {GlassTarget} from '../../ui/glass';
@@ -38,6 +38,7 @@ import {APP_ACCENT} from '../../ui/accent';
 import {ColorPicker, type LeadingChoice} from '../../ui/color-picker';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {resultCount} from '../../library/search-count';
+import {takeJump, usePendingJump} from '../../library/jump';
 import {useSettledText} from '../../ui/search-count';
 import {DataCard} from './data-settings';
 import {TrashCard} from './trash-settings';
@@ -168,6 +169,18 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 		prefs.accent;
 	useLibrary();
 	const search = useSearch();
+	// A Settings result of the search on Sessions or Bookmarks: show its section through this screen's search.
+	const pending = usePendingJump();
+	useEffect(() => {
+		const jump = takeJump('settings');
+		if (!jump) {
+			return;
+		}
+
+		search.show();
+		search.setQuery(jump.query);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- `search` is new on every render; only a jump matters
+	}, [pending]);
 	const needle = normalizeQuery(search.query);
 	const isNoMatch =
 		needle !== '' &&
@@ -374,6 +387,13 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											onChange={(syncPrivate) => {
 												setPreferences({syncPrivate});
 												void applyPrivateSyncSetting();
+											}}
+										/>
+										<Toggle
+											row={ROWS.backgroundSync}
+											value={prefs.backgroundSync}
+											onChange={(backgroundSync) => {
+												setPreferences({backgroundSync});
 											}}
 										/>
 										<DeviceNameField />

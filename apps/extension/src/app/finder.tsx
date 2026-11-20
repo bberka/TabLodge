@@ -20,6 +20,7 @@ import {
 	Layers,
 	Link2,
 	Search,
+	Settings2,
 	Zap,
 } from 'lucide-react';
 import {
@@ -42,18 +43,24 @@ import {
 	type OpenTabInfo,
 } from '../shared/global-search';
 import {highlightWords} from '../shared/search-query';
+import {isFirefox} from '../shared/browser';
 import {send, useCloseOnEscape, type IconComponent} from './common';
 import {faviconUrl, LinkKindBadge, useServerIcon} from './favicon';
 import {
 	filterItemActions,
 	itemActions,
+	leavesActionMenu,
 	type ItemAction,
+	type ItemActionContext,
 	type ItemActionId,
 } from './finder-menu';
+import {openPageCopy, usePageCopyUrls} from './page-copies';
+import {PROJECT} from './project';
+import {settingsSections} from './settings-sections';
 import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
-import {SearchTipsButton} from './search-tips';
-import {isPinnedLodgeTab, openLink} from './link-target';
+import {Kbd, SearchTipsButton, type KeyTip} from './search-tips';
+import {isPinnedLodgeTab, openLink, openOwnPage} from './link-target';
 import {cn} from '@/lib/utils';
 
 /**
@@ -83,6 +90,8 @@ export function emitFinderEvent(detail: FinderEventDetail) {
 const isMac = /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '');
 const SHORTCUT_NAME = isMac ? '⌘K' : 'Ctrl+K';
 
+const SETTINGS = settingsSections(PROJECT.name, isFirefox);
+
 const KIND_ICONS: Partial<Record<FinderKind, IconComponent>> = {
 	url: Globe,
 	tab: AppWindow,
@@ -92,6 +101,7 @@ const KIND_ICONS: Partial<Record<FinderKind, IconComponent>> = {
 	column: Columns3,
 	folder: Folder,
 	command: Zap,
+	setting: Settings2,
 	web: Search,
 };
 
@@ -219,15 +229,20 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		() => openTabs.filter((tab) => !closedTabs.includes(tab.id)),
 		[openTabs, closedTabs],
 	);
+	const copies = usePageCopyUrls();
+	const actionContext = useMemo<ItemActionContext>(
+		() => ({
+			standalone: Boolean(standalone),
+			copies,
+		}),
+		[standalone, copies],
+	);
 	const menuActions = useMemo(
 		() =>
 			menu
-				? filterItemActions(
-						itemActions(menu.item, Boolean(standalone)),
-						menuFilter,
-					)
+				? filterItemActions(itemActions(menu.item, actionContext), menuFilter)
 				: [],
-		[menu, menuFilter, standalone],
+		[menu, menuFilter, actionContext],
 	);
 	const menuSelected =
 		menuActions.length > 0 ? Math.min(menuIndex, menuActions.length - 1) : -1;
@@ -241,6 +256,7 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 				columns: state.bookmarkColumns,
 				tabs,
 				commands: actions,
+				settings: SETTINGS,
 			}),
 		[
 			state.groups,
@@ -364,6 +380,23 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 					return;
 				}
 
+				case 'setting': {
+					const path = `options.html#${item.ref!}`;
+					closeFirst();
+					if (standalone) {
+						await chrome.tabs.create({
+							windowId: standalone.windowId,
+							url: chrome.runtime.getURL(path),
+						});
+						await focusWindow(standalone.windowId, false);
+					} else {
+						await openOwnPage(path, settings);
+					}
+
+					closeLast();
+					return;
+				}
+
 				case 'web': {
 					closeFirst();
 					if (standalone) {
@@ -396,7 +429,7 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 			return;
 		}
 
-		const available = itemActions(item, Boolean(standalone));
+		const available = itemActions(item, actionContext);
 		if (available.length === 0) {
 			return;
 		}
@@ -457,6 +490,13 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 					return;
 				}
 
+				case 'open-copy': {
+					// The palette window is not where the reader belongs: open it in the window the palette was opened over.
+					await openPageCopy(item.url!, standalone?.windowId);
+					onDone?.();
+					return;
+				}
+
 				case 'close-tab': {
 					await chrome.tabs.remove(Number(item.ref));
 					setClosedTabs((closed) => [...closed, Number(item.ref)]);
@@ -489,10 +529,7 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		} else if (event.key === 'Enter' && menuSelected >= 0) {
 			event.preventDefault();
 			void runAction(menu.item, menuActions[menuSelected].id);
-		} else if (
-			event.key === 'Escape' ||
-			(event.key === 'Backspace' && menuFilter === '')
-		) {
+		} else if (leavesActionMenu(event, event.currentTarget)) {
 			// Escape goes up one level before it closes the palette; the window and dialog handlers skip a handled key.
 			event.preventDefault();
 			closeMenu();
@@ -518,7 +555,7 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 			atEnd &&
 			!event.shiftKey &&
 			selected >= 0 &&
-			itemActions(flat[selected], Boolean(standalone)).length > 0
+			itemActions(flat[selected], actionContext).length > 0
 		) {
 			event.preventDefault();
 			openMenu(flat[selected]);
@@ -539,6 +576,7 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		[actions],
 	);
 	return {
+		actionContext,
 		commandIcons,
 		query,
 		resultQuery,
@@ -642,13 +680,11 @@ function ResultList({
 	listId,
 	areaClassName,
 	viewportClassName,
-	standalone,
 }: {
 	finder: ReturnType<typeof useFinder>;
 	listId: string;
 	areaClassName?: string;
 	viewportClassName?: string;
-	standalone: boolean;
 }) {
 	const {
 		resultQuery: query,
@@ -657,6 +693,7 @@ function ResultList({
 		setIndex,
 		run,
 		commandIcons,
+		actionContext,
 	} = finder;
 	let position = -1;
 	const count = sections.reduce(
@@ -746,13 +783,12 @@ function ResultList({
 												</span>
 											)}
 										</span>
-										{active &&
-											itemActions(item, Boolean(standalone)).length > 0 && (
-												<ChevronRight
-													className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-													aria-hidden="true"
-												/>
-											)}
+										{active && itemActions(item, actionContext).length > 0 && (
+											<ChevronRight
+												className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+												aria-hidden="true"
+											/>
+										)}
 										{active && (
 											<CornerDownLeft
 												className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -874,12 +910,63 @@ function useScrollActiveIntoView(listId: string, selected: number) {
 	}, [listId, selected]);
 }
 
-function Kbd({children}: {children: string}) {
-	return (
-		<kbd className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-sans text-[10px] text-muted-foreground">
-			{children}
-		</kbd>
-	);
+function enterVerb(item: FinderItem) {
+	switch (item.kind) {
+		case 'session': {
+			return 'Restore';
+		}
+
+		case 'tab': {
+			return 'Switch';
+		}
+
+		case 'command': {
+			return 'Run';
+		}
+
+		case 'web': {
+			return 'Search';
+		}
+
+		default: {
+			return 'Open';
+		}
+	}
+}
+
+/**
+What Ctrl/Cmd+Enter does differently from Enter, for the results where it does.
+*/
+function secondVerb(item: FinderItem) {
+	if (item.kind === 'session') {
+		return 'New window';
+	}
+
+	return ['bookmark', 'saved-tab', 'url', 'web'].includes(item.kind)
+		? 'New tab'
+		: undefined;
+}
+
+function keyTips(modifier: string, dashboard: boolean): KeyTip[] {
+	return [
+		{keys: ['↑', '↓'], meaning: 'Move through the results'},
+		{keys: ['Enter'], meaning: 'Open, run, or restore a session'},
+		{
+			keys: [modifier, 'Enter'],
+			meaning: 'Open in a new tab, or restore in a new window',
+		},
+		...(dashboard
+			? [
+					{
+						keys: ['Shift', 'Enter'],
+						meaning: 'Show a session on the dashboard',
+					},
+				]
+			: []),
+		{keys: ['→'], meaning: 'More actions for the result'},
+		{keys: ['←'], meaning: 'Back from the actions'},
+		{keys: ['Esc'], meaning: 'Back, or close the search'},
+	];
 }
 
 /**
@@ -955,10 +1042,9 @@ function PaletteBody(props: {
 		}
 	}, [props.standalone]);
 	const current = finder.flat[finder.selected];
-	const onSession = current?.kind === 'session';
 	const hasActions =
 		current !== undefined &&
-		itemActions(current, Boolean(props.standalone)).length > 0;
+		itemActions(current, finder.actionContext).length > 0;
 	// The dialog caps the list height. The palette window fills its height instead: the list takes the spare room
 	// (and scrolls when it overflows) so the shortcut bar stays at the bottom edge.
 	let viewportClassName: string | undefined = finder.menu
@@ -1009,7 +1095,9 @@ function PaletteBody(props: {
 					}
 					onKeyDown={finder.onKeyDown}
 				/>
-				{!finder.menu && <SearchTipsButton />}
+				{!finder.menu && (
+					<SearchTipsButton keys={keyTips(modifier, !props.standalone)} />
+				)}
 			</div>
 			{finder.error && (
 				<p role="alert" className="px-4 py-2 text-xs text-destructive">
@@ -1037,49 +1125,45 @@ function PaletteBody(props: {
 					listId={listId}
 					areaClassName={areaClassName}
 					viewportClassName={viewportClassName}
-					standalone={Boolean(props.standalone)}
 				/>
 			)}
-			<div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
-				<span className="flex items-center gap-1">
-					<Kbd>↑</Kbd>
-					<Kbd>↓</Kbd> Navigate
-				</span>
-				{finder.menu ? (
-					<>
-						<span className="flex items-center gap-1">
-							<Kbd>Enter</Kbd> Run
-						</span>
-						<span className="flex items-center gap-1">
-							<Kbd>Esc</Kbd>
-							<Kbd>Backspace</Kbd> Back
-						</span>
-					</>
-				) : (
-					<>
-						<span className="flex items-center gap-1">
-							<Kbd>Enter</Kbd> {onSession ? 'Restore' : 'Open'}
-						</span>
-						<span className="flex items-center gap-1">
-							<Kbd>{modifier}</Kbd>
-							<Kbd>Enter</Kbd> {onSession ? 'New window' : 'New tab'}
-						</span>
-						{onSession && !props.standalone && (
+			{/* One row at any width: only the keys for the highlighted row, the least needed hidden first; `?` lists them all. */}
+			<div className="@container shrink-0 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
+				<div className="flex flex-nowrap items-center gap-x-3 whitespace-nowrap">
+					<span className="hidden items-center gap-1 @[20rem]:flex">
+						<Kbd>↑</Kbd>
+						<Kbd>↓</Kbd> Navigate
+					</span>
+					{finder.menu ? (
+						<>
 							<span className="flex items-center gap-1">
-								<Kbd>Shift</Kbd>
-								<Kbd>Enter</Kbd> Reveal
+								<Kbd>Enter</Kbd> Run
 							</span>
-						)}
-						{hasActions && (
 							<span className="flex items-center gap-1">
-								<Kbd>→</Kbd> Actions
+								<Kbd>←</Kbd> Back
 							</span>
-						)}
-						<span className="flex items-center gap-1">
-							<Kbd>Esc</Kbd> Close
-						</span>
-					</>
-				)}
+						</>
+					) : (
+						current && (
+							<>
+								<span className="flex items-center gap-1">
+									<Kbd>Enter</Kbd> {enterVerb(current)}
+								</span>
+								{secondVerb(current) && (
+									<span className="hidden items-center gap-1 @[28rem]:flex">
+										<Kbd>{modifier}</Kbd>
+										<Kbd>Enter</Kbd> {secondVerb(current)}
+									</span>
+								)}
+								{hasActions && (
+									<span className="flex items-center gap-1">
+										<Kbd>→</Kbd> Actions
+									</span>
+								)}
+							</>
+						)
+					)}
+				</div>
 			</div>
 		</div>
 	);
@@ -1156,11 +1240,28 @@ export function FinderPaletteWindow({
 			return;
 		}
 
-		// The search box is the only stop, so Tab has nowhere to go inside the frame and must not reach the page.
+		// Tab cycles through the frame's controls (the search box, the Search tips button and its popover) and never
+		// reaches the page.
 		const trap = (event: KeyboardEvent) => {
-			if (event.key === 'Tab') {
-				event.preventDefault();
+			if (event.key !== 'Tab') {
+				return;
 			}
+
+			const stops = [
+				...document.querySelectorAll<HTMLElement>(
+					'input, button, [href], [tabindex]:not([tabindex="-1"])',
+				),
+			].filter(
+				(element) => !element.hasAttribute('disabled') && element.tabIndex >= 0,
+			);
+			const at = stops.indexOf(document.activeElement as HTMLElement);
+			const leaving = event.shiftKey ? at <= 0 : at === stops.length - 1;
+			if (!leaving) {
+				return;
+			}
+
+			event.preventDefault();
+			stops.at(event.shiftKey ? -1 : 0)?.focus();
 		};
 
 		document.addEventListener('keydown', trap);

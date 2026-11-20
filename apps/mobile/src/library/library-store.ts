@@ -87,8 +87,18 @@ export async function refreshStatus(): Promise<void> {
 Loads the saved library and starts syncing when a server is connected. Call once at startup.
 */
 export async function startLibrary(): Promise<void> {
+	await loadLibrary();
+	await syncClient.wake().catch(() => undefined);
+	await refreshStatus();
+}
+
+/**
+Reads the saved library once, without opening the live connection. Background sync starts here, since the app may not
+be running.
+*/
+export async function loadLibrary(): Promise<void> {
 	if (loaded) {
-		return;
+		return libraryLoaded;
 	}
 
 	loaded = true;
@@ -97,9 +107,6 @@ export async function startLibrary(): Promise<void> {
 	} finally {
 		finishLoading();
 	}
-
-	await syncClient.wake().catch(() => undefined);
-	await refreshStatus();
 }
 
 async function loadSaved(): Promise<void> {
@@ -281,6 +288,13 @@ export const useRegularLibrary = (): Store =>
 
 export const useSyncStatus = (): SyncStatus =>
 	useSyncExternalStore(subscribeTo(statusListeners), () => syncStatus);
+
+/**
+Runs `listener` whenever the sync status changes, such as on connect and disconnect.
+*/
+export const subscribeSyncStatus = subscribeTo(statusListeners);
+
+export const getSyncStatus = (): SyncStatus => syncStatus;
 
 /**
 For the app going to the background: sends what is waiting and closes the live connection, so nothing keeps the

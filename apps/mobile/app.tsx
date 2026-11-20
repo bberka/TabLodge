@@ -74,6 +74,7 @@ import {
 	type TileRoute,
 } from './src/platform/app-route';
 import {startWidgetSnapshot} from './src/library/widget-sync';
+import {startBackgroundSync} from './src/library/background-sync';
 import {startPageCopies} from './src/library/page-copies';
 import {ReaderHost} from './src/screens/copy/reader';
 import {readClipboard} from './modules/quick-tiles';
@@ -187,6 +188,7 @@ function Main() {
 		void loadPreferences()
 			.then(startLibrary)
 			.then(startWidgetSnapshot)
+			.then(startBackgroundSync)
 			.then(startPrivate)
 			.then(purgeTrash)
 			.then(startPreferencesSync);
