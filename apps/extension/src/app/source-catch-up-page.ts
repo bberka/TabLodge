@@ -1,0 +1,104 @@
+// The content script's half of the saved page catch-up (#377). On the site's saved page it reads the items listed
+// there and asks the worker how many TabLodge lacks; when the worker says to ask, a toast offers to add them. It
+// watches the page, because sites load their saved page in place and add items as the user scrolls, but it only
+// reads: it clicks nothing, changes nothing on the site, and sends no request.
+import type {ActionResult} from '../shared/types';
+import {catchUpCountText, type SavedPageReader} from './source-catch-up';
+import type {SiteSource} from './site-sources';
+import type {SourceLink} from './source-reader';
+import {showSourceToast} from './source-toast';
+
+// The page is read at most this often while it changes; Reddit's pages change all the time.
+const READ_EVERY_MS = 1000;
+
+type Send = <T>(message: Record<string, unknown>) => Promise<T | undefined>;
+
+export function watchSavedPage({
+	source,
+	read,
+	send,
+	appName,
+	undo,
+}: {
+	source: SiteSource;
+	read: SavedPageReader;
+	send: Send;
+	appName: string;
+	undo: (id: string) => Promise<string>;
+}) {
+	// The addresses last asked about, so the toast's own insertion and unrelated page changes don't ask again.
+	let lastAsked = '';
+	let timer: ReturnType<typeof setTimeout> | undefined;
+
+	const add = async (links: SourceLink[]) => {
+		const result = await send<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>>({
+			type: 'SITE_SOURCE_CATCH_UP_ADD',
+			source: source.id,
+			links,
+		});
+		if (!result) {
+			return `${appName} could not add them.`;
+		}
+
+		if (!result.ok) {
+			return result.error;
+		}
+
+		const {added, column, undoId} = result;
+		const text =
+			added === 0
+				? `Nothing to add: they're in ${appName} already.`
+				: `Added ${added} to ${appName} in ${column}.`;
+		return undoId
+			? {text, action: {label: 'Undo', run: async () => undo(undoId)}}
+			: text;
+	};
+
+	const check = async () => {
+		const links = read(document);
+		const key = JSON.stringify(links?.map((link) => link.url) ?? []);
+		if (!links?.length || key === lastAsked) {
+			return;
+		}
+
+		lastAsked = key;
+		const result = await send<ActionResult<'SITE_SOURCE_CATCH_UP'>>({
+			type: 'SITE_SOURCE_CATCH_UP',
+			source: source.id,
+			links,
+		});
+		if (!result?.ok || !result.ask) {
+			return;
+		}
+
+		showSourceToast(catchUpCountText(result.missing, appName), {
+			actions: [
+				{label: 'Add them', run: async () => add(links)},
+				{
+					label: 'Not now',
+					async run() {
+						await send({
+							type: 'SITE_SOURCE_CATCH_UP_DISMISS',
+							source: source.id,
+							links,
+						});
+						return undefined;
+					},
+				},
+			],
+		});
+	};
+
+	const settle = () => {
+		timer ??= setTimeout(() => {
+			timer = undefined;
+			void check();
+		}, READ_EVERY_MS);
+	};
+
+	new MutationObserver(settle).observe(document.documentElement, {
+		childList: true,
+		subtree: true,
+	});
+	settle();
+}

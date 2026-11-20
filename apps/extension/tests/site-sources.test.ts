@@ -48,7 +48,16 @@ import {
 	type SourceRead,
 	type SourceReader,
 } from '../src/app/source-reader';
-import {createRedditReader} from '../src/app/source-reddit';
+import {
+	createRedditReader,
+	readRedditSavedPage,
+} from '../src/app/source-reddit';
+import {
+	catchUpAsks,
+	catchUpCountText,
+	dismissMissing,
+	parseCatchUpState,
+} from '../src/app/source-catch-up';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
@@ -1495,4 +1504,101 @@ test('each site saves to its own source column id', () => {
 	for (const source of SITE_SOURCES) {
 		assert.equal(source.column.id, `source-${source.id}`);
 	}
+});
+
+test('the Reddit saved page reader lists the saved posts in the page order, on new and old Reddit', () => {
+	const urls = (name: string, url: string) =>
+		readRedditSavedPage(load(name, url).document)?.map((link) => [
+			link.url,
+			link.title,
+		]);
+	// The feed only: a post in the sidebar is not a save, and a card without a permalink is skipped.
+	assert.deepEqual(
+		urls('reddit-saved-new.html', 'https://www.reddit.com/user/someone/saved/'),
+		[
+			[
+				'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
+				'Strict mode tips',
+			],
+			[
+				'https://www.reddit.com/r/aptalSoruYok/comments/2kacti/ka%C3%A7_tane_vpn/',
+				'Kaç tane VPN',
+			],
+			[
+				'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
+				'Strict mode tips',
+			],
+		],
+	);
+	// Saved comments are read on old Reddit; a promoted row is not a save.
+	assert.deepEqual(
+		urls('reddit-saved-old.html', 'https://old.reddit.com/user/someone/saved/'),
+		[
+			[
+				'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/',
+				'Strict mode tips',
+			],
+			[
+				'https://www.reddit.com/r/typescript/comments/1abcde/strict_mode_tips/xyz789/',
+				'Comment by u/carol',
+			],
+			['https://www.reddit.com/r/pics/comments/4nsfw0/a_picture/', 'A picture'],
+		],
+	);
+	// The same markup anywhere else on Reddit is not the saved list.
+	assert.equal(
+		urls('reddit-saved-new.html', 'https://www.reddit.com/user/someone/'),
+		undefined,
+	);
+	assert.equal(
+		urls('reddit-saved-old.html', 'https://old.reddit.com/r/typescript/'),
+		undefined,
+	);
+});
+
+test('a click-save and the saved page catch-up store the same address for one post', () => {
+	const site = reddit(
+		'reddit-old.html',
+		'https://old.reddit.com/r/typescript/',
+	);
+	const saved = readRedditSavedPage(
+		load('reddit-saved-old.html', 'https://old.reddit.com/user/someone/saved/')
+			.document,
+	);
+	const click = site.click('post-save');
+	assert.equal(click?.kind, 'save');
+	assert.equal(saved?.[0]?.url, click?.kind === 'save' ? click.link.url : '');
+});
+
+test('Not now answers ask again only for an item not answered yet, and the stored answers are checked', () => {
+	const link = (url: string) => ({url, title: ''});
+	const dismissed = dismissMissing(
+		['https://a.example/'],
+		[link('https://b.example/'), link('https://a.example/')],
+	);
+	assert.deepEqual(dismissed, ['https://b.example/', 'https://a.example/']);
+	assert.equal(catchUpAsks([link('https://a.example/')], dismissed), false);
+	assert.equal(
+		catchUpAsks(
+			[link('https://a.example/'), link('https://c.example/')],
+			dismissed,
+		),
+		true,
+	);
+	assert.equal(catchUpAsks([], undefined), false);
+	assert.deepEqual(
+		parseCatchUpState({
+			dismissed: {reddit: ['https://a.example/', 4], unknown: ['x'], x: 'y'},
+		}),
+		{reddit: ['https://a.example/']},
+	);
+	assert.deepEqual(parseCatchUpState('junk'), {});
+	assert.equal(
+		catchUpCountText(1, 'TabLodge'),
+		"1 saved item on this page isn't in TabLodge.",
+	);
+	assert.equal(
+		catchUpCountText(3, 'TabLodge'),
+		"3 saved items on this page aren't in TabLodge.",
+	);
 });

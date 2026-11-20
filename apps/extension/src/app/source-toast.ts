@@ -1,6 +1,7 @@
-// The small notice a source save shows in the site's page. It sits in a closed shadow root and sets every style
-// through the element style object (as palette-overlay.ts does), so the page's CSS and its Content Security Policy
-// and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its Undo button at the end of the page.
+// The small notice a source save or a saved page catch-up shows in the site's page. It sits in a closed shadow root
+// and sets every style through the element style object (as palette-overlay.ts does), so the page's CSS and its
+// Content Security Policy and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its buttons at
+// the end of the page.
 // It stays while the pointer or focus is on it, and Escape closes it from there. Closing it while it has focus
 // returns focus to where it came from, never to the page body.
 // It looks like the toast on TabLodge's own pages (StatusRegion in common.tsx): the theme and accent chosen in
@@ -18,10 +19,20 @@ import {isRecord} from '../shared/library-values';
 
 const HOST_ID = 'tablodge-source-toast';
 const VISIBLE_MS = 8000;
+// A toast that asks something stays longer, so there is time to read it and decide.
+const ASKING_VISIBLE_MS = 20_000;
 const SVG = 'http://www.w3.org/2000/svg';
 
 type Theme = 'light' | 'dark';
-type ToastAction = {label: string; run: () => Promise<string>};
+/**
+What a button does. It answers with the toast's next text (the button then reads Close), with a next step whose
+own button replaces the toast's buttons (Add them, then Undo), or with nothing, which closes the toast.
+*/
+export type ToastAction = {
+	label: string;
+	run: () => Promise<string | ToastStep | undefined>;
+};
+type ToastStep = {text: string; action?: ToastAction};
 
 /**
 The values of styles/extension-app.css this toast uses, as `r g b` like the stylesheet writes them
@@ -188,13 +199,17 @@ let closeShown: (() => void) | undefined;
 
 /**
 Shows the notice. `error` marks a save that failed, in the destructive color, as the extension's error toasts are.
+`actions` are its buttons; with two or more the toast asks something and stays longer.
 */
 export function showSourceToast(
 	text: string,
-	{action, error = false}: {action?: ToastAction; error?: boolean} = {},
+	{
+		actions = [],
+		error = false,
+	}: {actions?: readonly ToastAction[]; error?: boolean} = {},
 ) {
-	// The one on screen goes now, so its Undo can't act while the new one reads the theme. That read is async, so a
-	// later notice could also be replaced by an earlier one; only the newest renders.
+	// The one on screen goes now, so its buttons can't act while the new one reads the theme. That read is async, so
+	// a later notice could also be replaced by an earlier one; only the newest renders.
 	closeShown?.();
 	const request = ++latestToast;
 	void readAppearance().then(({theme, accent}) => {
@@ -203,7 +218,7 @@ export function showSourceToast(
 		}
 
 		render(text, {
-			action,
+			actions,
 			error,
 			theme,
 			accent,
@@ -214,11 +229,16 @@ export function showSourceToast(
 function render(
 	text: string,
 	{
-		action,
+		actions,
 		error,
 		theme,
 		accent,
-	}: {action?: ToastAction; error: boolean; theme: Theme; accent: string},
+	}: {
+		actions: readonly ToastAction[];
+		error: boolean;
+		theme: Theme;
+		accent: string;
+	},
 ) {
 	// One left by an earlier copy of this script, after an extension update, is not in closeShown.
 	document.querySelector(`#${HOST_ID}`)?.remove();
@@ -271,12 +291,12 @@ function render(
 	});
 	box.append(message);
 
-	let button: HTMLButtonElement | undefined;
-	if (action) {
-		button = document.createElement('button');
-		button.type = 'button';
-		button.textContent = action.label;
-		set(button, {
+	const visibleMs = actions.length > 1 ? ASKING_VISIBLE_MS : VISIBLE_MS;
+	const makeButton = (label: string) => {
+		const target = document.createElement('button');
+		target.type = 'button';
+		target.textContent = label;
+		set(target, {
 			flex: '0 0 auto',
 			'min-height': '24px',
 			margin: '-2px 0',
@@ -293,7 +313,6 @@ function render(
 			'outline-offset': '0',
 			cursor: 'pointer',
 		});
-		const target = button;
 		// The ring shows for keyboard focus only, as on the extension's pages.
 		target.addEventListener('focus', () => {
 			if (target.matches(':focus-visible')) {
@@ -311,6 +330,13 @@ function render(
 			set(target, {'text-decoration': 'none'});
 		});
 		box.append(target);
+		return target;
+	};
+
+	// Each button and what it does now; undefined once it reads Close.
+	const buttons = new Map<HTMLButtonElement, ToastAction | undefined>();
+	for (const action of actions) {
+		buttons.set(makeButton(action.label), action);
 	}
 
 	root.append(box);
@@ -321,7 +347,6 @@ function render(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let held = false;
 	let previous: HTMLElement | undefined;
-	let undone = false;
 	let closed = false;
 	// Runs once. A closed notice whose Undo finishes later must not arm a timer or unregister the notice now shown.
 	const close = () => {
@@ -346,7 +371,7 @@ function render(
 	const schedule = () => {
 		clearTimeout(timer);
 		if (!held && !closed) {
-			timer = setTimeout(close, VISIBLE_MS);
+			timer = setTimeout(close, visibleMs);
 		}
 	};
 
@@ -373,23 +398,52 @@ function render(
 			close();
 		}
 	});
-	// After the action the button becomes Close, so focus stays on it rather than falling to the page body.
-	button?.addEventListener('click', async () => {
-		if (!action || !button || button.getAttribute('aria-disabled') === 'true') {
+	// After an action the clicked button stays, as Close or as the next step's button, so focus stays on it rather
+	// than falling to the page body.
+	let busy = false;
+	const press = async (target: HTMLButtonElement) => {
+		if (busy) {
 			return;
 		}
 
-		if (undone) {
+		const action = buttons.get(target);
+		if (!action) {
 			close();
 			return;
 		}
 
-		undone = true;
-		button.setAttribute('aria-disabled', 'true');
-		message.textContent = await action.run();
-		button.textContent = 'Close';
-		button.removeAttribute('aria-disabled');
+		busy = true;
+		for (const other of buttons.keys()) {
+			other.setAttribute('aria-disabled', 'true');
+		}
+
+		const next = await action.run();
+		busy = false;
+		if (next === undefined) {
+			close();
+			return;
+		}
+
+		const step = typeof next === 'string' ? {text: next} : next;
+		message.textContent = step.text;
+		for (const other of buttons.keys()) {
+			if (other === target) {
+				continue;
+			}
+
+			other.remove();
+			buttons.delete(other);
+		}
+
+		target.textContent = step.action?.label ?? 'Close';
+		target.removeAttribute('aria-disabled');
+		buttons.set(target, step.action);
 		schedule();
-	});
+	};
+
+	for (const target of buttons.keys()) {
+		target.addEventListener('click', async () => press(target));
+	}
+
 	schedule();
 }

@@ -1,6 +1,7 @@
 // The content script of Settings › Sources, registered for a site only while the user has it on and the browser
 // grants the site's optional host permission. It only observes: it reads the page when the user clicks, and when
 // the click was the site's own save, it hands that link to the service worker and shows the result in the page.
+// On the site's own saved page it also reads the list there and offers to add what TabLodge lacks (#377).
 // It never changes the site's behavior, blocks its save, or makes a request of its own.
 import {siteSourceForUrl, type SiteSourceId} from '../src/app/site-sources';
 import type {SourceRead, SourceReader} from '../src/app/source-reader';
@@ -14,13 +15,18 @@ import {createInstagramReader} from '../src/app/source-instagram';
 import {createLetterboxdReader} from '../src/app/source-letterboxd';
 import {createLobstersReader} from '../src/app/source-lobsters';
 import {createMediumReader} from '../src/app/source-medium';
-import {createRedditReader} from '../src/app/source-reddit';
 import {createSoundcloudReader} from '../src/app/source-soundcloud';
 import {createSpotifyReader} from '../src/app/source-spotify';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createSubstackReader} from '../src/app/source-substack';
 import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
+import type {SavedPageReader} from '../src/app/source-catch-up';
+import {watchSavedPage} from '../src/app/source-catch-up-page';
+import {
+	createRedditReader,
+	readRedditSavedPage,
+} from '../src/app/source-reddit';
 import {showSourceToast} from '../src/app/source-toast';
 import type {ActionResult, SiteSourceOutcome} from '../src/shared/types';
 
@@ -44,6 +50,10 @@ const READERS: Record<SiteSourceId, () => SourceReader> = {
 	goodreads: () => createGoodreadsReader(document),
 	medium: () => createMediumReader(document),
 	substack: () => createSubstackReader(document),
+};
+// Sites whose saved page lists the user's saves in a form that can be read reliably (#377).
+const SAVED_PAGES: Partial<Record<SiteSourceId, SavedPageReader>> = {
+	reddit: readRedditSavedPage,
 };
 const source = siteSourceForUrl(location.href);
 
@@ -90,9 +100,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		const text = messages[outcome];
 		if (text) {
 			showSourceToast(text, {
-				action: undoId
-					? {label: 'Undo', run: async () => undo(undoId)}
-					: undefined,
+				actions: undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : [],
 			});
 		}
 	};
@@ -153,6 +161,11 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 				showSaved(pending.saved);
 			}
 		});
+	}
+
+	const readSaved = SAVED_PAGES[source.id];
+	if (readSaved) {
+		watchSavedPage({source, read: readSaved, send, appName, undo});
 	}
 
 	// Capture on the window sees the click before the site's own handlers change the control's state.
