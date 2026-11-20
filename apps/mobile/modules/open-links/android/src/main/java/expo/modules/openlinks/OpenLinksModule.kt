@@ -37,6 +37,28 @@ class OpenLinksModule : Module() {
     return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
   }
 
+  // Android's chooser for a web link lists only the default browser and apps with verified links, and opens a lone
+  // entry at once. It shows only the first two entries added to it, so those go to apps that can open the link but
+  // that it leaves out, apps before browsers; the Open in drawer names every browser anyway.
+  private fun chooser(context: Context, view: Intent): Intent {
+    val manager = context.packageManager
+    fun handlers(intent: Intent, flags: Int) = manager.queryIntentActivities(intent, flags)
+      .map { it.activityInfo }
+      .filter { it.packageName != context.packageName }
+    val listed = handlers(view, PackageManager.MATCH_DEFAULT_ONLY).map { it.packageName }.toSet()
+    val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE)
+    @Suppress("DEPRECATION")
+    val browsers = handlers(probe, PackageManager.MATCH_ALL).map { it.packageName }.toSet()
+    @Suppress("DEPRECATION")
+    val added = handlers(view, PackageManager.MATCH_ALL)
+      .filter { it.packageName !in listed }
+      .distinctBy { it.packageName }
+      .sortedBy { it.packageName in browsers }
+      .take(2)
+      .map { Intent(view).setClassName(it.packageName, it.name) }
+    return Intent.createChooser(view, null).putExtra(Intent.EXTRA_INITIAL_INTENTS, added.toTypedArray())
+  }
+
   override fun definition() = ModuleDefinition {
     Name("OpenLinks")
 
@@ -113,8 +135,9 @@ class OpenLinksModule : Module() {
       }
     }
 
-    // Opens the links with `how`: "system" (the default browser), "inapp" (a Custom Tab over this app), or "app" (the
-    // browser named by `packageName`). Returns false when nothing could start them, so the caller can fall back.
+    // Opens the links with `how`: "system" (the default browser), "inapp" (a Custom Tab over this app), "app" (the
+    // browser named by `packageName`), or "chooser" (Android's app chooser, so an app such as YouTube can take the
+    // link). Returns false when nothing could start them, so the caller can fall back.
     Function("openAll") { urls: List<String>, how: String, packageName: String? ->
       val context = appContext.currentActivity ?: appContext.reactContext
       val intents = urls
@@ -129,7 +152,8 @@ class OpenLinksModule : Module() {
           if (how == "app" && !packageName.isNullOrEmpty()) {
             intent.setPackage(packageName)
           }
-          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          val started = if (how == "chooser" && context != null) chooser(context, intent) else intent
+          started.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         .toTypedArray()
       if (context == null || intents.isEmpty()) {

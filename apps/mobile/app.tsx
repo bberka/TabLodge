@@ -47,6 +47,7 @@ import {
 	type ImportSource,
 	ShareHost,
 } from './src/screens/transfer/transfer-sheets';
+import {OpenInHost} from './src/screens/open-in';
 import {
 	pausePrivate,
 	startPrivate,
@@ -463,6 +464,7 @@ function Main() {
 			<DialogHost />
 			<PrivateSheetHost />
 			<ShareHost />
+			<OpenInHost />
 			<ReaderHost />
 			<ImportSheet
 				key={`import-${fileKey}`}
