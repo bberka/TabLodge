@@ -14814,7 +14814,14 @@ test('Save to TabLodge only is a choice per site that supports it, reported to i
 	assert.equal((await keepOff('x', true)).ok, true);
 	assert.deepEqual(await status(), {id: 'x', enabled: false});
 	await switchOnYoutube(harness);
-	assert.equal((await keepOff('youtube', true)).ok, false);
+	assert.equal((await keepOff('youtube', true)).ok, true);
+	harness.grantOrigins(['https://medium.com/*', 'https://*.medium.com/*']);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'medium',
+		enabled: true,
+	});
+	assert.equal((await keepOff('medium', true)).ok, false);
 
 	harness.grantOrigins(['https://x.com/*', 'https://twitter.com/*']);
 	await harness.sendMessage({
