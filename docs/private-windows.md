@@ -8,4 +8,4 @@ A separate saved library always has a password, 4 to 128 characters of any kind.
 
 ## Sources in private windows
 
-Sites are added to and removed from **Settings › Sources** in a regular window. A save on a site you added in Sources, made in a private window, is added only when private windows use the regular library. With a separate library, private windows save nothing from sources.
+Sites are added to and removed from **Settings › Sources** in a regular window. A save on a site you added in Sources, made in a private window, is added only when private windows use the regular library. With a separate library, private windows save nothing from sources, and a site set to **Save to TabLodge only** saves on the site as usual there.

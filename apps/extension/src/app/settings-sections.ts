@@ -90,6 +90,7 @@ const sections = (appName: string, firefox: boolean): Section[] => [
 			'youtube',
 			'github',
 			'hacker news',
+			'keep saves off the site',
 		],
 	},
 	{
