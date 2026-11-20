@@ -1065,3 +1065,17 @@ test('a browser that skipped Sources choices on 0.3.0 gets them once it updates,
 	);
 	assert.equal((await updated.client.status()).pending, 0);
 });
+
+test('a stored sync state with a malformed list of pulled kinds still syncs', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withSources: true});
+	a.sources = [{id: 'github', value: {}}];
+	await a.client.connect(URL_BASE, TOKEN);
+	const b = makeDevice(server, emptyStore(), {withSources: true});
+	await b.client.connect(URL_BASE, TOKEN);
+	const key = 'tablodge.sync.state';
+	b.storage.set(key, {...(b.storage.get(key) as object), pulled: {}});
+	await b.client.syncNow();
+	assert.equal((await b.client.status()).error, null);
+	assert.deepEqual(sourceIds(b), ['github']);
+});

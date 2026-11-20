@@ -73,6 +73,7 @@ export function createSyncToken(): string {
 const PULL_LIMIT = 500;
 // Record kinds that sync only when the server and the host support them.
 const OPTIONAL_KINDS = ['trash', 'note', 'source'] as const;
+type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 1500;
 // Chrome keeps an extension service worker alive while its WebSocket exchanges messages within 30 seconds.
@@ -259,7 +260,16 @@ function parseState(value: unknown): SyncState | undefined {
 		typeof value.cursor === 'number' &&
 		isRecord(value.shadow) &&
 		Array.isArray(value.outbox)
-		? ({purged: 0, ...value} as SyncState)
+		? ({
+				purged: 0,
+				...value,
+				// Anything but a list of kinds counts as none pulled yet, which only costs one pull from the start.
+				pulled: Array.isArray(value.pulled)
+					? value.pulled.filter((kind): kind is OptionalKind =>
+							(OPTIONAL_KINDS as readonly unknown[]).includes(kind),
+						)
+					: undefined,
+			} as SyncState)
 		: undefined;
 }
 
