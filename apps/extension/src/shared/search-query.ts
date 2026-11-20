@@ -439,3 +439,26 @@ export function literalQuery(text: string, max = 200): string {
 		? `"${plain.slice(0, max - 2).trim()}"`
 		: plain;
 }
+
+/**
+The `tag:` operator for one tag, quoted when the tag has a space.
+*/
+export const tagOperator = (tag: string) =>
+	/\s/.test(tag) ? `tag:"${tag}"` : `tag:${tag}`;
+
+/**
+The search text with a `tag:` filter for `tag` added, or taken out when the text already filters by it, so a tag
+filter menu can switch each tag on and off without touching the rest of what was typed.
+*/
+export function toggleTagFilter(input: string, tag: string): string {
+	if (!parseSearchQuery(input).tags.includes(tag)) {
+		return [input.trim(), tagOperator(tag)].filter(Boolean).join(' ');
+	}
+
+	return input
+		.replaceAll(/(?:^|\s)tag:(?:"[^"]*"|\S+)/gi, (match) =>
+			parseSearchQuery(match).tags.includes(tag) ? '' : match,
+		)
+		.replaceAll(/\s+/g, ' ')
+		.trim();
+}

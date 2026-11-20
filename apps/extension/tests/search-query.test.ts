@@ -7,6 +7,7 @@ import {
 	parseSearchQuery,
 	passesOperators,
 	type SearchFacets,
+	toggleTagFilter,
 } from '../src/shared/search-query';
 
 const day = (year: number, month: number, date: number) =>
@@ -223,4 +224,14 @@ test('a removed kind leaves tag: but not kind:', () => {
 		'recipe',
 		'discussion',
 	]);
+});
+
+test('a tag filter switches on and off without touching the rest of the search', () => {
+	assert.equal(toggleTagFilter('', 'movie'), 'tag:movie');
+	assert.equal(toggleTagFilter('rust', 'to read'), 'rust tag:"to read"');
+	assert.equal(
+		toggleTagFilter('rust tag:"To Read" site:x.com', 'to read'),
+		'rust site:x.com',
+	);
+	assert.equal(toggleTagFilter('tag:movie tag:scifi', 'movie'), 'tag:scifi');
 });

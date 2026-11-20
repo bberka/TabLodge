@@ -89,6 +89,7 @@ import {
 import type {BookmarkColumnDraft} from './bookmark-column-picker';
 import {PrivateLockGate} from './private-lock-ui';
 import {NotesField} from './notes-field';
+import {type TagEdit, TagsField} from './bookmark-tags';
 import {keptCopyMessage, openPageCopy} from './page-copies';
 import {cn} from '@/lib/utils';
 
@@ -113,11 +114,14 @@ function Popup() {
 	const [status, showStatus] = useStatus();
 	const [busy, setBusy] = useState('');
 	const [bookmarkOpen, setBookmarkOpen] = useState(false);
-	const [bookmarkTab, setBookmarkTab] = useState<{
-		title: string;
-		url: string;
-		notes: string;
-	} | null>(null);
+	const [bookmarkTab, setBookmarkTab] = useState<
+		| ({
+				title: string;
+				url: string;
+				notes: string;
+		  } & TagEdit)
+		| null
+	>(null);
 	const [columnId, setColumnId] = useState('');
 	const [picker, setPicker] = useState<Awaited<
 		ReturnType<typeof loadColumnPicker>
@@ -1161,6 +1165,16 @@ function Popup() {
 									value={bookmarkTab.notes}
 									onChange={(notes) =>
 										setBookmarkTab((old) => old && {...old, notes})
+									}
+								/>
+							)}
+							{bookmarkTab && (
+								<TagsField
+									id="bookmark-tags"
+									url={bookmarkTab.url}
+									value={bookmarkTab}
+									onChange={(tagged) =>
+										setBookmarkTab((old) => old && {...old, ...tagged})
 									}
 								/>
 							)}
