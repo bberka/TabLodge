@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
 import {
 	ARCHIVED_FOLDER_NAME,
+	HELD_SETTINGS_MAX,
 	normalizeBookmark,
+	normalizeSettings,
 	normalizeStore,
 	SCHEMA_VERSION,
 } from '../src/shared/library-normalize';
@@ -114,4 +116,51 @@ test('a bookmark keeps cleaned tags and removed kinds, drops malformed ones, and
 		'updatedAt',
 		'url',
 	]);
+});
+
+describe('settings from a newer version', () => {
+	test('one this version does not know is kept as it came, through a save and an export', () => {
+		const settings = normalizeSettings({
+			heldSettings: {fromNewer: {mode: 'x', list: [1, 2]}},
+		});
+		assert.deepEqual(settings.heldSettings, {
+			fromNewer: {mode: 'x', list: [1, 2]},
+		});
+		assert.deepEqual(
+			normalizeSettings(structuredClone(settings)).heldSettings,
+			settings.heldSettings,
+		);
+	});
+
+	test('once this version knows it, the held value stands in for the missing setting and leaves the holder', () => {
+		const settings = normalizeSettings({heldSettings: {snapshotKeep: 50}});
+		assert.equal(settings.snapshotKeep, 50);
+		assert.deepEqual(settings.heldSettings, {});
+		// A value already saved here wins over a held one.
+		assert.equal(
+			normalizeSettings({snapshotKeep: 10, heldSettings: {snapshotKeep: 50}})
+				.snapshotKeep,
+			10,
+		);
+	});
+
+	test('the holder takes plain values up to its caps', () => {
+		const many = Object.fromEntries(
+			Array.from({length: HELD_SETTINGS_MAX + 5}, (_, index) => [
+				`k${index}`,
+				index,
+			]),
+		);
+		assert.equal(
+			Object.keys(normalizeSettings({heldSettings: many}).heldSettings).length,
+			HELD_SETTINGS_MAX,
+		);
+		assert.deepEqual(
+			normalizeSettings({
+				heldSettings: {huge: 'x'.repeat(30_000), bad: undefined, ok: true},
+			}).heldSettings,
+			{ok: true},
+		);
+		assert.deepEqual(normalizeSettings({heldSettings: 'x'}).heldSettings, {});
+	});
 });

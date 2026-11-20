@@ -2475,6 +2475,7 @@ var TOMBSTONE_KINDS = /* @__PURE__ */ new Set([
   "column",
   "folder",
   "preference",
+  "setting",
   "trash",
   "note",
   "tag",
@@ -2996,7 +2997,8 @@ var FEATURES = [
   "notes",
   "tags",
   "page-source",
-  "sources"
+  "sources",
+  "settings"
 ];
 var PREVIEWS_PER_MINUTE = 600;
 var PREVIEW_CACHE_SIZE = 500;

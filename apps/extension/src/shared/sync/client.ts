@@ -72,7 +72,7 @@ export function createSyncToken(): string {
 
 const PULL_LIMIT = 500;
 // Record kinds that sync only when the server and the host support them.
-const OPTIONAL_KINDS = ['trash', 'note', 'tag', 'source'] as const;
+const OPTIONAL_KINDS = ['trash', 'note', 'tag', 'source', 'setting'] as const;
 type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 1500;
@@ -448,6 +448,8 @@ export function createSyncClient(host: SyncHost) {
 	let tagsOn = false;
 	// Whether this round syncs Sources choices: the host has them and the server lists the `sources` feature.
 	let sourcesOn = false;
+	// Whether this round syncs the settings added since 0.3.0: the server lists the `settings` feature.
+	let settingKindOn = false;
 	let featureCheck:
 		{key: string; until: number; features: ReadonlySet<string>} | undefined;
 	// What the last /v1/status answer said, for the status the round ends with.
@@ -512,7 +514,7 @@ export function createSyncClient(host: SyncHost) {
 	/**
 	Asks the server about itself, at most every few minutes, and returns the optional record kinds it lists. An old
 	server refuses a push with a kind it does not know, which would stop every round, so the trash, bookmark notes and
-	tags, and Sources choices wait until the server says it can hold them. A server that speaks another protocol stops
+	tags, Sources choices, and newer settings wait until the server says it can hold them. A server that speaks another protocol stops
 	the round; that answer is not kept, so the round after the server's update goes ahead.
 	*/
 	async function serverFeatures(
@@ -546,7 +548,8 @@ export function createSyncClient(host: SyncHost) {
 		(kind === 'trash' && !trashOn) ||
 		(kind === 'note' && !notesOn) ||
 		(kind === 'tag' && !tagsOn) ||
-		(kind === 'source' && !sourcesOn);
+		(kind === 'source' && !sourcesOn) ||
+		(kind === 'setting' && !settingKindOn);
 
 	/**
 	Starts a resync that never counts a record of an unsupported kind as deleted: the pull skips those kinds, so they
@@ -563,7 +566,8 @@ export function createSyncClient(host: SyncHost) {
 	};
 
 	/**
-	The changes to push. The trash, notes, tags, and Sources choices stay queued while the server cannot hold them.
+	The changes to push. The trash, notes, tags, Sources choices, and newer settings stay queued while the server cannot
+	hold them.
 	*/
 	const queued = (state: SyncState, records: Records) =>
 		outgoing(
@@ -577,17 +581,28 @@ export function createSyncClient(host: SyncHost) {
 			PUSH_LIMIT,
 		);
 
-	const leftAlone = async (): Promise<ReadonlySet<TombstoneKind>> =>
+	/*
+	`setting` records are left alone until a pull has taken them once. Most of these settings existed in 0.3.0 without
+	syncing, so every browser already holds its own values, and the phone holds every default. Captured first, each
+	would carry a stamp from now and overwrite what the server has; this way the server's value wins over one that
+	never synced, and only the settings the server lacks go out after the pull.
+	*/
+	const leftAlone = async (
+		state: SyncState,
+	): Promise<ReadonlySet<TombstoneKind>> =>
 		new Set<TombstoneKind>([
-			...((await settingsOn()) ? [] : (['preference'] as const)),
+			...((await settingsOn()) ? [] : (['preference', 'setting'] as const)),
 			...(trashOn ? [] : (['trash'] as const)),
 			...(notesOn ? [] : (['note'] as const)),
 			...(tagsOn ? [] : (['tag'] as const)),
 			...(sourcesOn ? [] : (['source'] as const)),
+			...(settingKindOn && state.pulled?.includes('setting')
+				? []
+				: (['setting'] as const)),
 		]);
 
 	async function captureLocal(state: SyncState, records: Records) {
-		const left = await leftAlone();
+		const left = await leftAlone(state);
 		return left.size === 0
 			? capture(state, records, host.now())
 			: captureExcept(state, records, host.now(), left);
@@ -691,6 +706,7 @@ export function createSyncClient(host: SyncHost) {
 		notesOn = features.has('notes');
 		tagsOn = features.has('tags');
 		sourcesOn = host.sources !== undefined && features.has('sources');
+		settingKindOn = features.has('settings');
 		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
 		const reseal = new Set<string>();
 		/*

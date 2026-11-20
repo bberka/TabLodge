@@ -4,6 +4,7 @@ import {
 	MOBILE_APP_KEYS_MAX,
 	normalizeMobileApp,
 } from '../../extension/src/shared/library-normalize';
+import {ANDROID_LOCAL_PREFERENCES} from '../../extension/src/shared/local-settings';
 import {
 	AT_PREFIX,
 	settlePreferences,
@@ -46,6 +47,26 @@ const changed: Preferences = {
 };
 
 describe('preference schema', () => {
+	// The guard that keeps every preference syncing (#397): one stays on the phone only when the shared
+	// local-settings.ts lists it with a reason, which docs/PRIVACY.md repeats (extension/tests/local-settings.test.ts).
+	test('every preference syncs between phones, unless it is listed as local with a reason', () => {
+		for (const key of Object.keys(defaults) as Array<keyof Preferences>) {
+			const local = Object.hasOwn(ANDROID_LOCAL_PREFERENCES, key);
+			assert.notEqual(
+				SYNCED_KEYS.includes(key),
+				local,
+				`The preference "${key}" must either sync or be listed in ANDROID_LOCAL_PREFERENCES in local-settings.ts with the reason it stays on the phone.`,
+			);
+		}
+
+		for (const key of Object.keys(ANDROID_LOCAL_PREFERENCES)) {
+			assert.ok(
+				Object.hasOwn(defaults, key),
+				`"${key}" is listed as a local preference but the app has no such preference.`,
+			);
+		}
+	});
+
 	test("a synced key is never lost to the extension's limit", () => {
 		// Each synced key is sent with the time it changed.
 		assert.ok(SYNCED_KEYS.length * 2 <= MOBILE_APP_KEYS_MAX);
@@ -71,33 +92,38 @@ describe('preference schema', () => {
 
 	test('a value that is not valid is left out of a sync and falls back when loaded', () => {
 		const bad = {
-			look: 'retro',
-			theme: 'dark',
+			tapAction: 'retro',
+			swipeRight: 'move',
 			swipeLeft: 7,
 			sessionMain: 'none',
 		};
-		assert.deepEqual(readSyncedPreferences(bad), {theme: 'dark'});
+		assert.deepEqual(readSyncedPreferences(bad), {swipeRight: 'move'});
 		const loaded = parsePreferences(bad);
-		assert.equal(loaded.look, defaults.look);
+		assert.equal(loaded.tapAction, defaults.tapAction);
 		assert.equal(loaded.swipeLeft, defaults.swipeLeft);
 		assert.equal(loaded.sessionMain, defaults.sessionMain);
-		assert.equal(loaded.theme, 'dark');
+		assert.equal(loaded.swipeRight, 'move');
 	});
 
 	test('sync carries only what is synced, and loading takes the rest from storage', () => {
-		const raw = {theme: 'light', glassEffect: false, openApp: 'org.example'};
-		assert.deepEqual(readSyncedPreferences(raw), {theme: 'light'});
+		const raw = {
+			swipeRight: 'open',
+			theme: 'light',
+			glassEffect: false,
+			openApp: 'org.example',
+		};
+		assert.deepEqual(readSyncedPreferences(raw), {swipeRight: 'open'});
 		const loaded = parsePreferences(raw);
+		assert.equal(loaded.theme, 'light');
 		assert.equal(loaded.glassEffect, false);
 		assert.equal(loaded.openApp, 'org.example');
 		assert.equal('glassEffect' in syncedPreferences(loaded), false);
 	});
 
 	test('the Icons only bar and the old site icon switch still read', () => {
-		assert.deepEqual(readSyncedPreferences({barSize: 'icons'}), {
-			barSize: 'full',
-			barLabels: 'never',
-		});
+		const bar = parsePreferences({barSize: 'icons'});
+		assert.equal(bar.barSize, 'full');
+		assert.equal(bar.barLabels, 'never');
 		assert.equal(parsePreferences({siteIcons: true}).siteIcons, 'direct');
 		assert.equal(parsePreferences({siteIcons: false}).siteIcons, 'server');
 	});
@@ -132,67 +158,67 @@ describe('settling with the other phones', () => {
 	};
 
 	test('two phones that change different settings offline keep both', () => {
-		const a = phone({theme: 'dark'}, {theme: 100});
+		const a = phone({swipeRight: 'move'}, {swipeRight: 100});
 		const b = phone({swipeLeft: 'move'}, {swipeLeft: 200});
 		const library = settleAll([a, b], {});
-		assert.equal(a.prefs.theme, 'dark');
+		assert.equal(a.prefs.swipeRight, 'move');
 		assert.equal(a.prefs.swipeLeft, 'move');
-		assert.equal(b.prefs.theme, 'dark');
+		assert.equal(b.prefs.swipeRight, 'move');
 		assert.equal(b.prefs.swipeLeft, 'move');
-		assert.equal(library.theme, 'dark');
+		assert.equal(library.swipeRight, 'move');
 		assert.equal(library.swipeLeft, 'move');
 	});
 
 	test('when both change one setting, the later change wins on both phones', () => {
-		const a = phone({theme: 'dark'}, {theme: 100});
-		const b = phone({theme: 'light'}, {theme: 200});
+		const a = phone({swipeRight: 'move'}, {swipeRight: 100});
+		const b = phone({swipeRight: 'open'}, {swipeRight: 200});
 		settleAll([a, b], {});
-		assert.equal(a.prefs.theme, 'light');
-		assert.equal(b.prefs.theme, 'light');
+		assert.equal(a.prefs.swipeRight, 'open');
+		assert.equal(b.prefs.swipeRight, 'open');
 		// Whichever phone reaches the library first gives the same answer.
-		const c = phone({theme: 'dark'}, {theme: 100});
-		const d = phone({theme: 'light'}, {theme: 200});
+		const c = phone({swipeRight: 'move'}, {swipeRight: 100});
+		const d = phone({swipeRight: 'open'}, {swipeRight: 200});
 		settleAll([d, c], {});
-		assert.equal(c.prefs.theme, 'light');
+		assert.equal(c.prefs.swipeRight, 'open');
 	});
 
 	test("a phone that never changed a setting takes the library's", () => {
 		const fresh = phone({}, {});
-		settleAll([fresh], {theme: 'dark', [`${AT_PREFIX}theme`]: 50});
-		assert.equal(fresh.prefs.theme, 'dark');
-		assert.equal(fresh.at.theme, 50);
+		settleAll([fresh], {swipeRight: 'move', [`${AT_PREFIX}swipeRight`]: 50});
+		assert.equal(fresh.prefs.swipeRight, 'move');
+		assert.equal(fresh.at.swipeRight, 50);
 	});
 
 	test('a library from before the times were kept still reaches a phone', () => {
 		const fresh = phone({}, {});
-		settleAll([fresh], {look: 'ios', swipeLeft: 'delete'});
-		assert.equal(fresh.prefs.look, 'ios');
+		settleAll([fresh], {tapAction: 'edit', swipeLeft: 'delete'});
+		assert.equal(fresh.prefs.tapAction, 'edit');
 		assert.equal(fresh.prefs.swipeLeft, 'delete');
 	});
 
 	test('defaults that were never changed are not sent, and unknown keys stay', () => {
 		const result = settlePreferences({fromNewerApp: 'x'}, defaults, {});
 		assert.deepEqual(result.next, {fromNewerApp: 'x'});
-		const kept = settleAll([phone({theme: 'dark'}, {theme: 5})], {
+		const kept = settleAll([phone({swipeRight: 'move'}, {swipeRight: 5})], {
 			fromNewerApp: 'x',
 		});
 		assert.equal(kept.fromNewerApp, 'x');
-		assert.equal(kept.theme, 'dark');
+		assert.equal(kept.swipeRight, 'move');
 	});
 
 	test('a library that has no mobileApp setting yet takes a change', () => {
 		// A fresh install's empty library has `settings: {}` until the first sync brings the record.
 		const result = settlePreferences(
 			undefined,
-			{...defaults, theme: 'dark'},
-			{theme: 7},
+			{...defaults, swipeRight: 'move'},
+			{swipeRight: 7},
 		);
-		assert.equal(result.next.theme, 'dark');
-		assert.equal(result.next[AT_PREFIX + 'theme'], 7);
+		assert.equal(result.next.swipeRight, 'move');
+		assert.equal(result.next[AT_PREFIX + 'swipeRight'], 7);
 	});
 
 	test('settled phones leave the library alone', () => {
-		const a = phone({theme: 'dark'}, {theme: 100});
+		const a = phone({swipeRight: 'move'}, {swipeRight: 100});
 		const library = settleAll([a], {});
 		const again = settlePreferences(library, a.prefs, a.at);
 		assert.equal(again.next, library);

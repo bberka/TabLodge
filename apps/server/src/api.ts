@@ -104,6 +104,7 @@ const FEATURES = [
 	'tags',
 	'page-source',
 	'sources',
+	'settings',
 ];
 const PREVIEWS_PER_MINUTE = 600;
 const PREVIEW_CACHE_SIZE = 500;
