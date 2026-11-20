@@ -23,6 +23,8 @@ When a feature touches data, sync, settings, or link handling, answer each quest
 3. **Website and docs.** Features, permissions, FAQ, and screenshots: see [Documentation](documentation.md#keep-current).
 4. **Privacy.** New stored data or network behavior goes into [PRIVACY.md](../PRIVACY.md).
 
+**Every setting syncs** in both apps. One bound to its device (appearance, device name, permissions, hints) is listed with its reason in `src/shared/local-settings.ts` and [PRIVACY.md](../PRIVACY.md#what-stays-on-each-device); a test enforces it ([ADR 10](../adr/0010-settings-sync.md)).
+
 The 'challenge-feature' skill helps decide whether a feature is worth building.
 
 ## Issues

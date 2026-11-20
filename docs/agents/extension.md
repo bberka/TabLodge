@@ -20,6 +20,7 @@ Logic that needs no browser lives in `src/shared` and `src/app` as plain modules
 
 - Strict TypeScript, no `any` escapes. Treat stored data, imports, and messages as untrusted and validate them. The service worker is built into one classic script, and it imports shared code from `src/` like the pages do: never copy a list or rule into it.
 - Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
+- A new setting is a `Settings` field with a default in `DEFAULT_SETTINGS`, never a storage key of its own, so it syncs ([Cross app work](cross-app.md#feature-triage)).
 - Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker (both the manifest's `short_name`).
 - Bundle everything locally: no CDN imports, remote fonts, or network calls. A new permission needs a stated reason in the [permissions table](../PRIVACY.md#permissions) and the [privacy policy](../PRIVACY.md).
 - Test on Chrome and Firefox when a change touches what they treat differently ([Browser support](../architecture.md#browser-support)).
