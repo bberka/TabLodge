@@ -24,5 +24,5 @@ The extension has no equivalent, because a home screen widget is an Android syst
 ## Consequences
 
 * The snapshot is a second copy of up to 2,500 regular links on the phone, in private storage that is not backed up (`allowBackup` is off). [Privacy](../PRIVACY.md) lists it.
-* A widget shows what the app last wrote. A change made on another device reaches it the next time the app runs and syncs; the widget never contacts the server. Its half-hourly update only redraws from the same file.
+* A widget shows what the app last wrote. A change made on another device reaches it the next time the app syncs, which since #361 includes the background sync about every 15 minutes; the widget never contacts the server. Its half-hourly update only redraws from the same file.
 * Letter tiles stand in for site icons, since the widget cannot fetch them.

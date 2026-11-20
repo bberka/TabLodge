@@ -129,6 +129,7 @@ import {
 import {PrivateWindowAppearance} from './private-window-appearance';
 import {PrivateSyncSettings} from './private-sync-settings';
 import {SYNC_TITLE, SYNC_WORDS, SyncSettings} from './sync-settings';
+import {sectionId} from './settings-sections';
 import {
 	AddSiteSource,
 	SiteSourcesSettings,
@@ -1042,8 +1043,6 @@ const DEFAULTS = {
 	help: 'Saved sessions and bookmarks are not changed.',
 	words: ['Restore defaults', 'reset', 'factory'],
 };
-const sectionId = (title: string) =>
-	`settings-${title.toLowerCase().replaceAll(/[^0-9a-z]+/g, '-')}`;
 const SECTION_SCROLL_CLASS = 'scroll-mt-6';
 const ACTIVE_SECTION_OFFSET = 120;
 const settingsNavigationLabels: Record<string, string> = {

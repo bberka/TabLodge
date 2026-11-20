@@ -14,10 +14,11 @@ type OpenLinksModule = {
 
 const native = requireOptionalNativeModule<OpenLinksModule>('OpenLinks');
 
-export type OpenHow = 'system' | 'inapp' | 'app';
+export type OpenHow = 'system' | 'inapp' | 'app' | 'chooser';
 
 /**
-Opens every link in one go: in the default browser, in an in-app tab, or in the browser with this package name.
+Opens every link in one go: in the default browser, in an in-app tab, in the browser with this package name, or
+through Android's chooser, which asks which app takes each link.
 Returns false when this build has no native support, or the system refused, so the caller can fall back.
 */
 export function openLinksTogether(

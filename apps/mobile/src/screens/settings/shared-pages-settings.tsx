@@ -2,11 +2,11 @@ import {useCallback, useEffect, useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {SharedPage} from '../../../../extension/src/shared/sync/shared-pages-client';
 import {
-	copyLink,
 	deletePage,
 	sharedPages,
 	useSharedPagesServer,
 } from '../../library/shared-pages';
+import {copyLink} from '../../platform/copy-link';
 import {openLink} from '../../platform/open-links';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {confirm} from '../../ui/dialog';

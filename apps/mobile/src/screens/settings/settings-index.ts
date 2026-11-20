@@ -40,6 +40,10 @@ export const ROWS = {
 		label: 'Sync the private library',
 		hint: 'Off, it stays on this phone and never reaches your server',
 	},
+	backgroundSync: {
+		label: 'Sync in the background',
+		hint: 'About every 15 minutes with the app closed, and updates the widgets',
+	},
 	theme: {label: 'Theme', hint: "Light, dark, or your phone's setting"},
 	accent: {
 		label: 'Accent color',
@@ -335,8 +339,11 @@ export const SECTIONS = {
 			'sync now',
 			'offline',
 			'private',
+			'background',
+			'widget',
+			'battery',
 		],
-		rows: [ROWS.syncPrivate],
+		rows: [ROWS.syncPrivate, ROWS.backgroundSync],
 	},
 	excluded: {
 		title: 'Excluded websites',

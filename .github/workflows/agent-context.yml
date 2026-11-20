@@ -1,0 +1,26 @@
+name: Agent context
+
+# Fails a pull request that makes the agent instructions (AGENTS.md, apps/*/AGENTS.md, docs/agents/) larger than
+# master's budget, unless it carries the agent-context-increase label. Its own workflow, not a job in test.yml, so adding
+# or removing the label reruns only this check and not the whole test suite. It runs on docs only pull requests too.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  budget:
+    name: Agent instructions size
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ALLOW_INCREASE: ${{ contains(github.event.pull_request.labels.*.name, 'agent-context-increase') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: git fetch --quiet --depth=1 origin master
+      - run: node scripts/agent-context.ts --base FETCH_HEAD

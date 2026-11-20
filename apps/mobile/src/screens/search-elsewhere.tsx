@@ -10,6 +10,7 @@ import {
 	type Place,
 	PLACE_NAME,
 	searchElsewhere,
+	settingsForSearch,
 } from '../library/search-elsewhere';
 import {elsewhereIntro} from '../library/search-count';
 import {useLinkSettings} from '../library/use-link-settings';
@@ -19,6 +20,11 @@ import {BookmarkIcon, spokenKind} from '../ui/bookmark-icon';
 import {SiteIcon} from '../ui/site-icon';
 import {TARGET, useColors} from '../ui/theme';
 import {Button, Icon} from '../ui/widgets';
+import {SECTIONS} from './settings/settings-index';
+
+// The Development section only shows in development builds.
+const {development, ...SHOWN_SECTIONS} = SECTIONS;
+const SETTINGS_RESULTS = settingsForSearch(__DEV__ ? SECTIONS : SHOWN_SECTIONS);
 
 /**
 Under a screen's own search results: the same query run over the other places, listed with a line that says so.
@@ -51,7 +57,8 @@ export function SearchElsewhere({
 	}, [isSearching]);
 	const visible = isSearching && (localCount === 0 || asked);
 	const sections = useMemo(
-		() => (visible ? searchElsewhere(store, query, here) : []),
+		() =>
+			visible ? searchElsewhere(store, query, here, SETTINGS_RESULTS) : [],
 		[visible, store, query, here],
 	);
 	const found = sections.reduce(
@@ -115,7 +122,9 @@ export function SearchElsewhere({
 									? 'Opens the link'
 									: item.kind === 'session'
 										? 'Shows the session'
-										: 'Shows the column'
+										: item.kind === 'setting'
+											? 'Opens Settings'
+											: 'Shows the column'
 							}
 							style={({pressed}) => [
 								styles.row,
@@ -132,7 +141,11 @@ export function SearchElsewhere({
 							) : (
 								<Icon
 									name={
-										item.kind === 'session' ? 'albums-outline' : 'list-outline'
+										item.kind === 'session'
+											? 'albums-outline'
+											: item.kind === 'setting'
+												? 'settings-outline'
+												: 'list-outline'
 									}
 									size={22}
 									color={colors.accent}

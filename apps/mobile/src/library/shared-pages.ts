@@ -1,4 +1,3 @@
-import * as Clipboard from 'expo-clipboard';
 import {
 	parseConfig,
 	SYNC_CONFIG_KEY,
@@ -12,7 +11,6 @@ import {
 } from '../../../extension/src/shared/sync/shared-pages-client';
 import {SHARED_PAGES_FEATURE} from '../../../extension/src/shared/sync/shared-pages';
 import {readJson} from '../platform/storage';
-import {showSnack} from '../ui/snackbar';
 import {useServerFeatures} from './server-features';
 import {useSyncStatus} from './library-store';
 
@@ -56,9 +54,4 @@ export async function sharedPages(): Promise<SharedPage[]> {
 
 export async function deletePage(id: string): Promise<void> {
 	await deleteSharedPage(fetch, await target(), id);
-}
-
-export async function copyLink(url: string): Promise<void> {
-	await Clipboard.setStringAsync(url);
-	showSnack('Link copied');
 }

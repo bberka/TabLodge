@@ -52,6 +52,7 @@ import {
 import {
 	openSettingsLayoutCheck,
 	paletteActionsMenuCheck,
+	paletteFooterCheck,
 	paletteOverlayCheck,
 	paletteWindowCheck,
 } from './palette.ts';
@@ -90,6 +91,7 @@ import {
 	appearanceCheck,
 	backupsDialogCheck,
 	settingResetCheck,
+	settingsFinderCheck,
 	settingsSearchCheck,
 	siteSourcePickerCheck,
 	skipLinkCheck,
@@ -140,6 +142,7 @@ async function main() {
 		await seed(seedPage);
 		await seedPage.close();
 		await settingsSearchCheck(env);
+		await settingsFinderCheck(env);
 		await eachTheme(env, [siteSourcePickerCheck]);
 		await eachTheme(env, [backupsDialogCheck]);
 		await eachTheme(env, [sessionCardQuickActionsCheck]);
@@ -185,6 +188,7 @@ async function main() {
 		await eachTheme(env, [paletteOverlayCheck]);
 		await eachTheme(env, [openSettingsLayoutCheck]);
 		await eachTheme(env, [paletteActionsMenuCheck]);
+		await eachTheme(env, [paletteFooterCheck]);
 		await eachTheme(env, [
 			selectionModeRangesCheck,
 			moveDeleteSelectedCheck,
