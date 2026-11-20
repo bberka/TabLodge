@@ -41,11 +41,6 @@ export const LINK_KINDS: ReadonlyArray<Exclude<LinkKind, 'page'>> = [
 	'recipe',
 ];
 
-export const isLinkKind = (
-	value: unknown,
-): value is Exclude<LinkKind, 'page'> =>
-	(LINK_KINDS as readonly unknown[]).includes(value);
-
 /**
 The kinds whose links get a mark on their icon, because the link opens a file or a player rather than a page.
 */
@@ -255,20 +250,10 @@ export function linkKind(address: string): LinkKind {
 }
 
 /**
-The word a screen reader says for a kind, or nothing for a page.
+The word a screen reader says for a media kind, ahead of the link's name.
 */
-export const LINK_KIND_LABELS: Readonly<Record<LinkKind, string>> = {
-	movie: 'Movie',
-	show: 'Show',
-	video: 'Video',
-	music: 'Music',
+export const LINK_KIND_LABELS: Readonly<Record<MediaKind, string>> = {
 	image: 'Image',
 	pdf: 'PDF',
-	repo: 'Repository',
-	read: 'Article',
-	docs: 'Documentation',
-	discussion: 'Discussion',
-	shop: 'Product',
-	recipe: 'Recipe',
-	page: '',
+	video: 'Video',
 };

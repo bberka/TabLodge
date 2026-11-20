@@ -103,7 +103,7 @@ export function parseTagInput(text: string): string[] {
 /**
 The automatic kind a bookmark shows, or undefined for a plain page or a kind the person removed.
 */
-export function shownKind(
+function shownKind(
 	bookmark: Pick<Bookmark, 'url' | 'hiddenKinds'>,
 ): Exclude<LinkKind, 'page'> | undefined {
 	const kind = linkKind(bookmark.url);
@@ -139,17 +139,6 @@ export function tagCounts(
 	return [...counts]
 		.map(([tag, count]) => ({tag, count}))
 		.toSorted((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-}
-
-/**
-Whether a bookmark shows a tag, read the way a typed tag is stored, so `tag:Movie` and `tag:#movie` match `movie`.
-*/
-export function hasTag(
-	bookmark: Pick<Bookmark, 'url' | 'tags' | 'hiddenKinds'>,
-	tag: string,
-): boolean {
-	const wanted = normalizeTag(tag);
-	return wanted !== undefined && shownTags(bookmark).includes(wanted);
 }
 
 /**

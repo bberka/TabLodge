@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
 	bookmarkTags,
-	hasTag,
 	hiddenKinds,
 	MAX_TAG_LENGTH,
 	MAX_TAGS,
@@ -76,8 +75,6 @@ test('a bookmark shows its kind first and each tag once, and a removed kind stay
 		[],
 		'a plain page has none',
 	);
-	assert.ok(hasTag({url: FILM}, 'Movie'));
-	assert.ok(!hasTag({url: FILM, hiddenKinds: ['movie']}, 'movie'));
 });
 
 test('tag counts list the most used first', () => {
