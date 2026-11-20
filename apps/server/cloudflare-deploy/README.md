@@ -8,4 +8,4 @@ This folder is what the **Deploy to Cloudflare** button copies into a new reposi
 
 Copy the newest [`worker.js`](https://github.com/bberka/TabLodge/blob/master/apps/server/cloudflare-deploy/worker.js) from TabLodge over the one in your repository (on GitHub: open the file, choose **Edit**, paste, and commit). Cloudflare deploys the commit, and your library and token stay as they are.
 
-To update on each release by itself, add the [Update TabLodge workflow](https://github.com/bberka/TabLodge/blob/master/docs/self-hosting.md#update-automatically) to this repository.
+The repository also holds the **Update TabLodge** workflow (`.github/workflows/update-tablodge.yml`), switched off. To update on each release by itself, add the repository variable `TABLODGE_AUTO_UPDATE` with the value `true` under **Settings › Secrets and variables › Actions › Variables**. [Update automatically](https://github.com/bberka/TabLodge/blob/master/docs/self-hosting.md#update-automatically) has the details, including how to add the file to a server deployed before it shipped.
