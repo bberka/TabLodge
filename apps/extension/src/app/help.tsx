@@ -529,32 +529,36 @@ function Help() {
 						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default sync other browser on in another browser turn on',
 				},
 				{
-					title: 'Keep saves off X and Reddit',
+					title: 'Keep saves off the site',
 					body: (
 						<>
-							Under each added X or Reddit site in Settings › Sources, When you
-							save on the site offers two choices. Save on the site and in{' '}
-							{PROJECT.name}, the default, lets the site save as usual and
-							bookmarks the same link. Save to {PROJECT.name} only stops your
-							click on the site&apos;s save control before the site sees it, so
-							the item goes only into the site&apos;s column in {PROJECT.name}
-							(or the one under Save to). The site&apos;s saved list won&apos;t
-							include it, the button doesn&apos;t turn to saved, and the site
-							can&apos;t use the save for its recommendations. To save only on
-							the site, remove the site from Sources. The notice in the page
-							offers Undo and Also save on the site, which passes the same click
-							on to the site; press Tab to reach them. Hold Shift as you click
-							to save on the site and in {PROJECT.name} once. If {PROJECT.name}{' '}
-							can&apos;t read which item you saved, or can&apos;t save it, the
-							click goes on to the site, so a save is never lost. The
-							site&apos;s own keyboard shortcuts still save there.
-							{PROJECT.name} blocks no network requests, hides nothing on the
-							site, and doesn&apos;t stop the site learning from anything else
-							you do there. Items you saved on the site before stay saved there.
+							Under each added site in Settings › Sources, When you save on the
+							site offers two choices. Save on the site and in {PROJECT.name},
+							the default, lets the site save as usual and bookmarks the same
+							link. Save to {PROJECT.name} only stops your click on the
+							site&apos;s save control before the site sees it, so the item goes
+							only into the site&apos;s column in {PROJECT.name} (or the one
+							under Save to). The site&apos;s saved list won&apos;t include it,
+							the button doesn&apos;t turn to saved, and the site can&apos;t use
+							the save for its recommendations. To save only on the site, remove
+							the site from Sources. The notice in the page offers Undo and Also
+							save on the site, which passes the same click on to the site;
+							press Tab to reach them. Hold Shift as you click to save on the
+							site and in {PROJECT.name} once. If {PROJECT.name} can&apos;t read
+							which item you saved, or can&apos;t save it, the click goes on to
+							the site, so a save is never lost. The site&apos;s own keyboard
+							shortcuts still save there. {PROJECT.name} blocks no network
+							requests, hides nothing on the site, and doesn&apos;t stop the
+							site learning from anything else you do there. Items you saved on
+							the site before stay saved there. Medium doesn&apos;t offer the
+							choice: its bookmark button opens Medium&apos;s Save to list
+							panel, and the page doesn&apos;t say whether the story is already
+							in a list, so stopping the click would also stop you moving or
+							removing it.
 						</>
 					),
 					searchText:
-						'keep saves off the site save to tablodge only x twitter reddit bookmark save stop click shift also save on this site undo recommendations privacy sources',
+						'keep saves off the site save to tablodge only youtube watch later x twitter reddit instagram github star hacker news favorite stack overflow dev.to reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read substack medium bookmark save stop click shift also save on this site undo recommendations privacy sources',
 				},
 			],
 			action: {

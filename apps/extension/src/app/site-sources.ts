@@ -66,7 +66,9 @@ export type SiteSource = {
 	saveLoadsPage?: true;
 	/**
 	The adapter can tell a save before the site handles it, so Settings offers Save to TabLodge only for this site:
-	the content script stops the click on the site's save control and saves the link to TabLodge alone (#296).
+	the content script stops the click on the site's save control and saves the link to TabLodge alone (#296, #391).
+	Medium has none: its bookmark opens Medium's Save to list panel and the page doesn't say whether the story is in
+	a list, so every click reads as a save, and stopping it would also stop the user managing or removing the story.
 	*/
 	keepOffSite?: true;
 };
@@ -480,6 +482,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['youtube.com', 'youtu.be'],
 		scriptId: 'tablodge-source-youtube',
 		canonicalUrl: youtubeVideoUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'reddit',
@@ -515,6 +518,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['instagram.com'],
 		scriptId: 'tablodge-source-instagram',
 		canonicalUrl: instagramPostUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'github',
@@ -526,6 +530,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['github.com'],
 		scriptId: 'tablodge-source-github',
 		canonicalUrl: githubRepoUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'hackernews',
@@ -539,6 +544,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		canonicalUrl: storyUrl('https://news.ycombinator.com/', hackerNewsItemUrl),
 		discussion: {name: 'Hacker News discussion', url: hackerNewsItemUrl},
 		saveLoadsPage: true,
+		keepOffSite: true,
 	},
 	{
 		id: 'stackoverflow',
@@ -550,6 +556,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['stackoverflow.com'],
 		scriptId: 'tablodge-source-stackoverflow',
 		canonicalUrl: stackOverflowQuestionUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'devto',
@@ -561,6 +568,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['dev.to'],
 		scriptId: 'tablodge-source-devto',
 		canonicalUrl: devtoArticleUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'lobsters',
@@ -573,6 +581,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		scriptId: 'tablodge-source-lobsters',
 		canonicalUrl: storyUrl('https://lobste.rs/', lobstersStoryUrl),
 		discussion: {name: 'Lobsters discussion', url: lobstersStoryUrl},
+		keepOffSite: true,
 	},
 	{
 		id: 'bluesky',
@@ -584,6 +593,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['bsky.app'],
 		scriptId: 'tablodge-source-bluesky',
 		canonicalUrl: blueskyPostUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'soundcloud',
@@ -595,6 +605,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['soundcloud.com'],
 		scriptId: 'tablodge-source-soundcloud',
 		canonicalUrl: soundcloudItemUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'spotify',
@@ -607,6 +618,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['open.spotify.com'],
 		scriptId: 'tablodge-source-spotify',
 		canonicalUrl: spotifyItemUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'letterboxd',
@@ -618,6 +630,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['letterboxd.com'],
 		scriptId: 'tablodge-source-letterboxd',
 		canonicalUrl: letterboxdFilmUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'imdb',
@@ -629,6 +642,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['imdb.com'],
 		scriptId: 'tablodge-source-imdb',
 		canonicalUrl: imdbTitleUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'goodreads',
@@ -640,6 +654,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['goodreads.com'],
 		scriptId: 'tablodge-source-goodreads',
 		canonicalUrl: goodreadsBookUrl,
+		keepOffSite: true,
 	},
 	{
 		id: 'medium',
@@ -664,6 +679,7 @@ const SITES: ReadonlyArray<Omit<SiteSource, 'column'>> = [
 		columnSites: ['substack.com'],
 		scriptId: 'tablodge-source-substack',
 		canonicalUrl: substackPostUrl,
+		keepOffSite: true,
 	},
 ];
 
