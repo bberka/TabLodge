@@ -14531,7 +14531,9 @@ async function switchOnReddit(harness: ReturnType<typeof sourcesHarness>) {
 }
 
 test('a saved page counts what the library lacks and adds exactly that, in its order, as one Undo step', async () => {
-	const harness = sourcesHarness();
+	const harness = sourcesHarness({
+		storage: {'tablodge.device': {name: 'Desk'}},
+	});
 	await switchOnReddit(harness);
 	// One post is already saved by a click, one is in the trash bin, and the page lists one post twice.
 	await harness.sendMessage(
@@ -14572,6 +14574,12 @@ test('a saved page counts what the library lacks and adds exactly that, in its o
 	);
 	assert.equal(added.ok && added.added, 2);
 	assert.equal(added.ok && added.column, 'Reddit');
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.url?.includes('bbb222'))
+			?.deviceName,
+		'Desk',
+		'a catch-up add carries this device',
+	);
 	const inColumn = () =>
 		harness.state.bookmarks
 			.filter((bookmark) => bookmark.columnId === 'source-reddit')

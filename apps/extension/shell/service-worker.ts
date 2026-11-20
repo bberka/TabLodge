@@ -10053,6 +10053,7 @@ async function addSourceCatchUp(
 
 				const now = Date.now();
 				const column = sourceSaveColumn(store, source, state, now);
+				const device = await savedHere();
 				// In the page's order, one after another, as the site lists them.
 				for (const link of missing) {
 					const notes = sourceNote(source, link.discussion, link.url);
@@ -10066,6 +10067,7 @@ async function addSourceCatchUp(
 						url: link.url,
 						columnId: column.id,
 						...(notes && {notes}),
+						...device,
 						createdAt: now,
 						updatedAt: now,
 					});
