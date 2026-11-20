@@ -227,20 +227,23 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 	}
 
 	const readSaved = SAVED_PAGES[source.id];
-	if (readSaved) {
-		watchSavedPage({source, read: readSaved, send, appName, undo});
-	}
+	const savedPage = readSaved
+		? watchSavedPage({source, read: readSaved, send, appName, undo})
+		: undefined;
 
 	void readMode();
 	// The choice in Settings, and a private window's library choice, can change while the page is open.
 	chrome.storage.onChanged.addListener((changes, area) => {
-		if (
+		if (!(
 			area === 'local' &&
 			(Object.hasOwn(changes, SITE_SOURCES_KEY) ||
 				Object.hasOwn(changes, PRIVATE_CONFIG_KEY))
-		) {
-			void readMode();
+		)) {
+			return;
 		}
+
+		void readMode();
+		savedPage?.refresh();
 	});
 
 	listenForSaves(globalThis, {

@@ -14534,6 +14534,19 @@ test('Not now keeps the saved page quiet until a new missing item appears', asyn
 	});
 	await switchOnReddit(harness);
 	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: true});
+
+	// A Not now that arrives after the site went off stores nothing.
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'reddit',
+		enabled: false,
+	});
+	await harness.sendMessage(
+		{type: 'SITE_SOURCE_CATCH_UP_DISMISS', source: 'reddit', links: first},
+		redditSaved,
+	);
+	await switchOnReddit(harness);
+	assert.deepEqual(await ask(first), {ok: true, missing: 2, ask: true});
 });
 
 test('a saved page of a site that is off, or another site, gets no count and adds nothing', async () => {
