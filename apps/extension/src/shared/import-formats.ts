@@ -222,7 +222,7 @@ class Collector {
 			link,
 			deviceStamp(
 				cleanDeviceName(extra.deviceName),
-				isDeviceKind(extra.deviceKind) ? extra.deviceKind : 'desktop',
+				extra.deviceKind ?? 'desktop',
 			),
 		);
 		return link;
