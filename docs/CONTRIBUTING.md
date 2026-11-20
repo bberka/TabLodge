@@ -21,6 +21,8 @@ Install the [Vite+ CLI](https://viteplus.dev/) once, run `pnpm install`, then us
 | `vp run dev:chrome` | Build, watch, and open a test browser with TabLodge loaded. `--seed-data` adds sample data and `--headless` opens no window |
 | `vp run dev:firefox` | The same in Firefox |
 | `vp run check` | Lint, type checks, and tests |
+| `vp run check:changed` | The quick loop: lint, type check, and test only what differs from `origin/master`. Not the gate |
+| `vp run check:agent-context` | Fails when the agent instructions in `AGENTS.md` and `docs/agents/` differ from `scripts/agent-context-budget.json` |
 | `vp run check:a11y` | Accessibility and keyboard checks on the built extension. The other `check:` tasks (`build`, `startup`, `firefox`, `dev-browser`, `private-storage`) each test one part of the built extension |
 | `vp run build` / `vp run pack` | Build and verify both browsers, then package them |
 | `vp run lint:fix` | Fix lint issues and format with XO |

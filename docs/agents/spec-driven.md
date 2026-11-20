@@ -39,7 +39,7 @@ Link a decision that outlives the feature, such as a protocol choice, as an [ADR
 
 ## The loop
 
-1. **Find the spec.** Read the issue, then the code it touches. Write the spec when it is missing.
+1. **Find the spec and claim it.** Read the issue and its comments, then the code it touches. Search pull requests for the issue number and its keywords (`gh pr list --search "#<n>" --state all`) and check recent commits on `master`: someone may already have built it. When nobody has, comment on the issue that you are taking it. Release the claim with a comment if you stop. Write the spec when it is missing.
 2. **Challenge.** A feature gets `challenge-feature` against the spec, as in [Task workflow](workflow.md).
 3. **Test first.** Turn the acceptance criteria into tests at the most direct existing boundary with the `tdd` skill. A criterion that only a browser or an emulator can show becomes a step list for the proof instead.
 4. **Build** the smallest change that makes every criterion hold.
