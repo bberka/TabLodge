@@ -13098,6 +13098,107 @@ test('a session keeps the device that saved it, and a bad device kind is read as
 	assert.equal(plain.groups[0].deviceName, undefined);
 });
 
+test('a bookmark saved here carries this device, and a stored or imported one keeps its own', async () => {
+	const harness = createWorkerHarness(stateWithSession(), [], {
+		storage: {'tablodge.device': {name: 'Work laptop'}},
+	});
+	const here = {deviceName: 'Work laptop', deviceKind: 'desktop'};
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'One', url: 'https://one.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.deepEqual(
+		{
+			deviceName: added.bookmark.deviceName,
+			deviceKind: added.bookmark.deviceKind,
+		},
+		here,
+	);
+	const several = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		bookmarks: [{title: 'Two', url: 'https://two.example/'}],
+	});
+	assert.equal(several.ok, true, several.error);
+	const quoted = await harness.sendMessage({
+		type: 'SAVE_QUOTE',
+		url: 'https://three.example/',
+		quote: 'A line',
+	});
+	assert.equal(quoted.ok, true, quoted.error);
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: {
+			format: 'tablodge',
+			version: 1,
+			bookmarks: [
+				{
+					title: 'Phone',
+					url: 'https://phone.example/',
+					deviceName: 'Pixel 9',
+					deviceKind: 'mobile',
+				},
+				{title: 'Old', url: 'https://old.example/'},
+			],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	const device = (url: string) => {
+		const bookmark = harness.state.bookmarks.find((entry) => entry.url === url);
+		return bookmark && [bookmark.deviceName, bookmark.deviceKind];
+	};
+
+	assert.deepEqual(device('https://two.example/'), ['Work laptop', 'desktop']);
+	assert.deepEqual(device('https://three.example/'), [
+		'Work laptop',
+		'desktop',
+	]);
+	assert.deepEqual(device('https://phone.example/'), ['Pixel 9', 'mobile']);
+	const old = harness.state.bookmarks.find(
+		(entry) => entry.url === 'https://old.example/',
+	);
+	assert.equal(old && 'deviceName' in old, false, 'an import has no device');
+	assert.equal(old && 'deviceKind' in old, false);
+
+	const edited = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK',
+		bookmarkId: added.bookmark.id,
+		fields: {title: 'Renamed'},
+	});
+	assert.equal(edited.bookmark.deviceName, 'Work laptop', 'an edit keeps it');
+});
+
+test('a stored bookmark keeps its device, and a bad device kind is read as a computer', async () => {
+	const state = stateWithSession();
+	state.bookmarks = [
+		{
+			id: 'b1',
+			title: 'A',
+			url: 'https://a.example/',
+			columnId: 'bookmark-default',
+			deviceName: ' Pixel  9 ',
+			deviceKind: 'toaster',
+			createdAt: 1,
+			updatedAt: 1,
+		},
+		{
+			id: 'b2',
+			title: 'B',
+			url: 'https://b.example/',
+			columnId: 'bookmark-default',
+			createdAt: 1,
+			updatedAt: 1,
+		},
+	] as never;
+	const {bookmarks} = await createWorkerHarness(state).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(bookmarks[0].deviceName, 'Pixel 9');
+	assert.equal(bookmarks[0].deviceKind, 'desktop');
+	assert.equal('deviceName' in bookmarks[1], false);
+	assert.equal('deviceKind' in bookmarks[1], false);
+});
+
 test('a session takes a color like a column does: a preset or a hex, kept when omitted, removed with an empty one', async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	const update = async (fields: Record<string, unknown>) =>
@@ -13654,6 +13755,18 @@ test('a source column leaves out a site another column already claims', async ()
 		harness.state.bookmarkColumns.find((column) => column.id === id)?.domains;
 	assert.deepEqual(domains('source-youtube'), ['youtu.be']);
 	assert.deepEqual(domains(mine.column.id), ['youtube.com']);
+});
+
+test('a save on a site carries this device', async () => {
+	const harness = sourcesHarness({
+		storage: {'tablodge.device': {name: 'Desk'}},
+	});
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const saved = harness.state.bookmarks.find(
+		(bookmark) => bookmark.title === 'Never Gonna Give You Up',
+	);
+	assert.deepEqual([saved?.deviceName, saved?.deviceKind], ['Desk', 'desktop']);
 });
 
 test('sources are off at install and no content script is registered', async () => {

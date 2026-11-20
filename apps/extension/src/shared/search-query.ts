@@ -1,6 +1,7 @@
 // The small operator syntax every search box understands, on top of its own word matching: "exact phrase",
-// -word, site:, in:, col:, folder:, after: and before:. Anything that is not a well formed operator stays a
+// -word, site:, in:, kind:, col:, folder:, from:, after: and before:. Anything that is not a well formed operator stays a
 // plain word, so a stray quote, a lone "-" or "localhost:3000" searches as before.
+import type {DeviceKind} from './device';
 import {fold} from './fuzzy';
 import {type LinkKind, linkKind} from './link-kind';
 import type {Bookmark, Session} from './types';
@@ -35,6 +36,11 @@ export type SearchQuery = {
 	columns: string[];
 	folders: string[];
 	/**
+	Folded `from:` values: `phone` and `computer` match the kind of device that saved a result, anything else a part of
+	its name.
+	*/
+	devices: string[];
+	/**
 	Local midnight of the `after:` day (included) and of the `before:` day (left out).
 	*/
 	after?: number;
@@ -53,6 +59,10 @@ export type SearchFacets = {
 	column?: string;
 	folder?: string;
 	date?: number;
+	/**
+	The device that saved it, when it says.
+	*/
+	device?: {name?: string; kind?: DeviceKind};
 };
 
 /**
@@ -75,6 +85,9 @@ export const SEARCH_TIPS: ReadonlyArray<{
 	{example: 'kind:video', meaning: 'Only links to videos'},
 	{example: 'col:Work', meaning: 'Bookmarks in a column'},
 	{example: 'folder:Work', meaning: 'Sessions in a folder'},
+	{example: 'from:phone', meaning: 'Saved on a phone'},
+	{example: 'from:computer', meaning: 'Saved on a computer'},
+	{example: 'from:"Work laptop"', meaning: 'Saved on a device by name'},
 	{example: 'after:2026-01-01', meaning: 'Saved on or after a day'},
 	{example: 'before:2026-06-01', meaning: 'Saved before a day'},
 ];
@@ -186,6 +199,7 @@ export function parseSearchQuery(input: string): SearchQuery {
 		kinds: [],
 		columns: [],
 		folders: [],
+		devices: [],
 	};
 	const words: string[] = [];
 	let changed = false;
@@ -274,8 +288,14 @@ function operator(query: SearchQuery, name: string, raw: string): boolean {
 		}
 
 		case 'col':
-		case 'folder': {
-			(key === 'col' ? query.columns : query.folders).push(fold(value));
+		case 'folder':
+		case 'from': {
+			const list = {
+				col: query.columns,
+				folder: query.folders,
+				from: query.devices,
+			};
+			list[key].push(fold(value));
 			return true;
 		}
 
@@ -306,6 +326,7 @@ export const hasOperators = (query: SearchQuery) =>
 	query.kinds.length > 0 ||
 	query.columns.length > 0 ||
 	query.folders.length > 0 ||
+	query.devices.length > 0 ||
 	query.after !== undefined ||
 	query.before !== undefined;
 
@@ -315,6 +336,17 @@ const hostOf = (url: string | undefined) => {
 	);
 	return match?.[1].toLowerCase().replace(/^www\./, '');
 };
+
+/**
+Whether a result's saving device matches a folded `from:` value.
+*/
+function savedOn(value: string, device: SearchFacets['device']): boolean {
+	return (
+		(value === 'phone' && device?.kind === 'mobile') ||
+		(value === 'computer' && device?.kind === 'desktop') ||
+		(device?.name !== undefined && fold(device.name).includes(value))
+	);
+}
 
 /**
 Whether a result passes every operator in the query; plain words are left to the caller.
@@ -335,6 +367,8 @@ export function passesOperators(
 			query.folders.every(
 				(name) => !fold(facets.folder ?? '\0').includes(name),
 			)) ||
+		(query.devices.length > 0 &&
+			query.devices.every((value) => !savedOn(value, facets.device))) ||
 		((query.after !== undefined || query.before !== undefined) &&
 			(facets.date === undefined ||
 				facets.date < (query.after ?? -Infinity) ||
@@ -379,6 +413,7 @@ export const sessionFacets = (
 	urls: session.tabs.map((tab) => tab.url),
 	folder,
 	date: session.createdAt,
+	device: {name: session.deviceName, kind: session.deviceKind},
 });
 
 export const bookmarkFacets = (
@@ -389,6 +424,7 @@ export const bookmarkFacets = (
 	urls: [bookmark.url],
 	column,
 	date: bookmark.createdAt,
+	device: {name: bookmark.deviceName, kind: bookmark.deviceKind},
 });
 
 /**

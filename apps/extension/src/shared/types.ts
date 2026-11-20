@@ -477,6 +477,12 @@ export type Bookmark = {
 	The person's note on the link, absent when there is none. It syncs as a `note` record of its own (see library-records.ts).
 	*/
 	notes?: string;
+	/**
+	The device that saved it, as for a session. Missing on imported bookmarks and on those saved before bookmarks
+	recorded it.
+	*/
+	deviceName?: string;
+	deviceKind?: 'desktop' | 'mobile';
 	createdAt: number;
 	updatedAt: number;
 };

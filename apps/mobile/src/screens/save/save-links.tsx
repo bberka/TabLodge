@@ -93,7 +93,14 @@ export function SaveLinksForm({
 		if (mode === 'bookmarks') {
 			const column = await choice.resolve();
 			await editIn(library, (current) =>
-				addBookmarks(current, links, column.id, ids(), Date.now()),
+				addBookmarks(
+					current,
+					links,
+					column.id,
+					ids(),
+					Date.now(),
+					phoneStamp(),
+				),
 			);
 			setPreferences({lastColumnId: column.id});
 			onDone(`${count} saved to ${column.name}`);

@@ -247,10 +247,10 @@ function Help() {
 						'folder color colour switch update session colors move drag edit folder icon tint',
 				},
 				{
-					title: 'Device names on sessions',
-					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
+					title: 'Device names on sessions and bookmarks',
+					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session and bookmark you save records that name, including saves from Sources and from the phone. Session cards show where each one was saved, with a computer or phone icon, and a bookmark shows Saved on and the device when you edit it. Imported bookmarks and bookmarks saved before this have none. The name belongs to this browser only. Renaming it does not change what was already saved. Searching sessions also matches the device name, and from:phone, from:computer, or from:"a device name" keeps what was saved there.',
 					searchText:
-						'device name which device saved session computer phone mobile desktop sync settings rename where saved from',
+						'device name which device saved session bookmark computer phone mobile desktop sync settings rename where saved from saved on',
 				},
 				{
 					title: 'Site icons',
@@ -671,6 +671,13 @@ function Help() {
 									Quote a name with spaces: <Op>col:"Read later"</Op>.
 								</li>
 								<li>
+									<Op>from:phone</Op> and <Op>from:computer</Op> keep what was
+									saved on a phone or a computer, and{' '}
+									<Op>from:"Work laptop"</Op> what was saved on a device whose
+									name contains the text. Imported and older bookmarks have no
+									device, so they are left out.
+								</li>
+								<li>
 									<Op>after:2026-01-01</Op> keeps what was saved on or after
 									that day, <Op>before:2026-06-01</Op> what was saved before it.
 								</li>
@@ -684,7 +691,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder after before date day filter narrow query syntax tips kind image pdf video',
+						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder from device phone computer after before date day filter narrow query syntax tips kind image pdf video',
 				},
 				{
 					title: 'Open the search palette',

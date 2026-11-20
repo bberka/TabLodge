@@ -39,7 +39,7 @@ import {SiteIcon} from '../../ui/site-icon';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
-import {Button, Chips, Field, Segmented} from '../../ui/widgets';
+import {Button, Chips, Field, Icon, Segmented} from '../../ui/widgets';
 
 // The session selector's first entry; choosing it makes a new session.
 const NEW_SESSION = '__new-session__';
@@ -174,7 +174,7 @@ export function SaveLinkForm({
 						)
 					: addBookmark(
 							current,
-							{...saved, notes, columnId: target},
+							{...saved, notes, columnId: target, device: phoneStamp()},
 							newId(),
 							Date.now(),
 						),
@@ -217,6 +217,22 @@ export function SaveLinkForm({
 						selected={destination}
 						onSelect={setDestination}
 					/>
+				)}
+				{editing?.deviceName && (
+					<View style={styles.savedOn}>
+						<Icon
+							name={
+								editing.deviceKind === 'mobile'
+									? 'phone-portrait-outline'
+									: 'desktop-outline'
+							}
+							size={16}
+							color={colors.muted}
+						/>
+						<Text style={{color: colors.muted}}>
+							Saved on {editing.deviceName}
+						</Text>
+					</View>
 				)}
 				<Field
 					label="Link"
@@ -355,6 +371,7 @@ const styles = StyleSheet.create({
 	sessionChoice: {gap: 8},
 	preview: {flexDirection: 'row', alignItems: 'center', gap: 12},
 	previewText: {flex: 1, gap: 2},
+	savedOn: {flexDirection: 'row', alignItems: 'center', gap: 6},
 	body: {paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, gap: 14},
 	group: {gap: 8},
 });
