@@ -38,6 +38,7 @@ Thumbs.db
 
 # Sync server local state and secrets
 /apps/server/.wrangler/
+/apps/server/data/
 /apps/server/.dev.vars
 /apps/server/.env
 
