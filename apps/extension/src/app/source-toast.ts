@@ -1,10 +1,10 @@
-// The small notice a source save shows in the site's page. It sits in a closed shadow root and sets every style
-// through the element style object (as palette-overlay.ts does), so the page's CSS and its Content Security Policy
-// and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its buttons at the end of the page.
+// The small notice a source save or a saved page catch-up shows in the site's page. It sits in a closed shadow root
+// and sets every style through the element style object (as palette-overlay.ts does), so the page's CSS and its
+// Content Security Policy and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its buttons at the end of the page.
 // It stays while the pointer or focus is on it, and Escape closes it from there. Closing it while it has focus
 // returns focus to where it came from, never to the page body.
-// Its actions (Undo, Also save on the site) are buttons after the text; once one has run, the others go and it
-// becomes Close, so focus stays on it.
+// Its actions (Undo, Also save on the site, Add them, Not now) are buttons after the text; once one runs, the others
+// go and it becomes Close, or the next step's button (Add them, then Undo), so focus stays on it.
 // It looks like the toast on TabLodge's own pages (StatusRegion in common.tsx): the theme and accent chosen in
 // Settings, with the stylesheet's tokens, which a shadow root on another site cannot read, copied into TOAST_TOKENS.
 import {
@@ -20,10 +20,20 @@ import {isRecord} from '../shared/library-values';
 
 const HOST_ID = 'tablodge-source-toast';
 const VISIBLE_MS = 8000;
+// A notice that asks something stays longer, so there is time to read it and decide.
+const ASKING_VISIBLE_MS = 20_000;
 const SVG = 'http://www.w3.org/2000/svg';
 
 type Theme = 'light' | 'dark';
-type ToastAction = {label: string; run: () => Promise<string>};
+/**
+What a button does. It answers with the notice's next text (the button then reads Close), with a next step whose own
+button it becomes, or with nothing, which closes the notice.
+*/
+export type ToastAction = {
+	label: string;
+	run: () => Promise<string | ToastStep | undefined>;
+};
+type ToastStep = {text: string; action?: ToastAction};
 
 /**
 The values of styles/extension-app.css this toast uses, as `r g b` like the stylesheet writes them
@@ -190,13 +200,15 @@ let closeShown: (() => void) | undefined;
 
 /**
 Shows the notice. `error` marks a save that failed, in the destructive color, as the extension's error toasts are.
+`asking` marks a question (the saved page catch-up), which stays longer.
 */
 export function showSourceToast(
 	text: string,
 	{
 		actions = [],
 		error = false,
-	}: {actions?: ToastAction[]; error?: boolean} = {},
+		asking = false,
+	}: {actions?: ToastAction[]; error?: boolean; asking?: boolean} = {},
 ) {
 	// The one on screen goes now, so its Undo can't act while the new one reads the theme. That read is async, so a
 	// later notice could also be replaced by an earlier one; only the newest renders.
@@ -210,6 +222,7 @@ export function showSourceToast(
 		render(text, {
 			actions,
 			error,
+			asking,
 			theme,
 			accent,
 		});
@@ -221,9 +234,16 @@ function render(
 	{
 		actions,
 		error,
+		asking,
 		theme,
 		accent,
-	}: {actions: ToastAction[]; error: boolean; theme: Theme; accent: string},
+	}: {
+		actions: ToastAction[];
+		error: boolean;
+		asking: boolean;
+		theme: Theme;
+		accent: string;
+	},
 ) {
 	// One left by an earlier copy of this script, after an extension update, is not in closeShown.
 	document.querySelector(`#${HOST_ID}`)?.remove();
@@ -284,7 +304,9 @@ function render(
 	});
 	box.append(message);
 
-	const buttons = actions.map((action) => {
+	// Each button with the action it runs now: none once it reads Close.
+	type ToastButton = {action?: ToastAction; button: HTMLButtonElement};
+	const buttons = actions.map((action): ToastButton => {
 		const button = document.createElement('button');
 		button.type = 'button';
 		button.textContent = action.label;
@@ -344,7 +366,6 @@ function render(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let held = false;
 	let previous: HTMLElement | undefined;
-	let acted = false;
 	let closed = false;
 	// Runs once. A closed notice whose Undo finishes later must not arm a timer or unregister the notice now shown.
 	const close = () => {
@@ -369,7 +390,7 @@ function render(
 	const schedule = () => {
 		clearTimeout(timer);
 		if (!held && !closed) {
-			timer = setTimeout(close, VISIBLE_MS);
+			timer = setTimeout(close, asking ? ASKING_VISIBLE_MS : VISIBLE_MS);
 		}
 	};
 
@@ -398,19 +419,19 @@ function render(
 			close();
 		}
 	});
-	// After an action its button becomes Close and the others go, so focus stays on it rather than falling to the
-	// page body.
-	const run = async ({action, button}: (typeof buttons)[number]) => {
+	// After an action its button becomes Close or the next step's button and the others go, so focus stays on it
+	// rather than falling to the page body.
+	const run = async (entry: ToastButton) => {
+		const {action, button} = entry;
 		if (button.getAttribute('aria-disabled') === 'true') {
 			return;
 		}
 
-		if (acted) {
+		if (!action) {
 			close();
 			return;
 		}
 
-		acted = true;
 		for (const other of buttons) {
 			if (other.button !== button) {
 				other.button.remove();
@@ -418,8 +439,16 @@ function render(
 		}
 
 		button.setAttribute('aria-disabled', 'true');
-		message.textContent = await action.run();
-		button.textContent = 'Close';
+		const next = await action.run();
+		if (next === undefined) {
+			close();
+			return;
+		}
+
+		const step = typeof next === 'string' ? {text: next} : next;
+		message.textContent = step.text;
+		entry.action = step.action;
+		button.textContent = step.action?.label ?? 'Close';
 		button.removeAttribute('aria-disabled');
 		schedule();
 	};

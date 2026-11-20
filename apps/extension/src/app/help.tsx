@@ -482,7 +482,8 @@ function Help() {
 							in the page, in your {PROJECT.name} theme and accent color, offers
 							Undo; press Tab to reach it. A link already in your bookmarks or
 							in the trash bin is not saved again. {PROJECT.name} only watches
-							for your own clicks on the site&apos;s save controls, reads the
+							for your own clicks on the site&apos;s save controls (and, on your
+							Reddit saved page, reads the saved list shown there), reads the
 							link from the page (and, on a site set to Save to {PROJECT.name}{' '}
 							only, stops that click), and makes no network requests of its own;
 							the bookmark syncs only if you connected your own server. It
@@ -497,11 +498,19 @@ function Help() {
 							when private windows use the regular library. Remove takes a site
 							out of the list and gives its access back. Removing its access in
 							the browser&apos;s extension settings also stops it; Settings then
-							says so next to the site and offers Allow again.
+							says so next to the site and offers Allow again. To catch up on
+							Reddit posts you saved on your phone or before you added the site,
+							open your saved page on Reddit (new or old Reddit). When some of
+							the saved items it shows are not in {PROJECT.name}, a notice says
+							how many and offers Add them, which adds them to the Reddit column
+							in the order Reddit lists them, and Not now, which keeps it quiet
+							until something new appears there. It counts only what the page
+							has loaded, so scroll down, or on old Reddit go to the next page,
+							for more. Saved comments are included on old Reddit only.
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default',
 				},
 				{
 					title: 'Keep saves off X and Reddit',

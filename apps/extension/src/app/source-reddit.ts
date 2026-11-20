@@ -3,6 +3,10 @@
 //     <shreddit-comment> elements carrying their permalink. A saved item's menu says "Remove from saved" instead.
 //   - old.reddit.com: the "save" link of a .thing, which turns to "unsave" once saved.
 // The new interface is found by the English "Save" label; the old one by its markup.
+// The saved page (/user/<name>/saved/) is read for catch-up (#377): new Reddit's loaded <shreddit-post> cards, and
+// old Reddit's .thing rows, posts and comments. New Reddit's saved comments are not read: their card was not
+// available on a real page to check that it gives the address a click-save stores.
+import type {SavedPageReader} from './source-catch-up';
 import {redditPermalinkUrl} from './site-sources';
 import {
 	controlLabel,
@@ -52,6 +56,27 @@ function oldThingLink(thing: Element): SourceLink | undefined {
 		: squash(thing.querySelector('a.title')?.textContent);
 	return {url, title};
 }
+
+const SAVED_PAGE = /^\/(?:user|u)\/[\w-]+\/saved(?:\/|$)/i;
+
+export const readRedditSavedPage: SavedPageReader = (document) => {
+	const {hostname, pathname} = document.location;
+	if (!SAVED_PAGE.test(pathname)) {
+		return undefined;
+	}
+
+	const links =
+		hostname === 'old.reddit.com'
+			? [
+					...document.querySelectorAll(
+						'#siteTable > .thing[data-permalink]:not(.promoted)',
+					),
+				].map((thing) => oldThingLink(thing))
+			: [...document.querySelectorAll('shreddit-feed shreddit-post')].map(
+					(post) => newItemLink(post),
+				);
+	return links.filter((link) => link !== undefined);
+};
 
 export function createRedditReader(now = () => Date.now()): SourceReader {
 	// The post or comment whose overflow menu is open, for a menu Reddit draws outside the item.
