@@ -215,7 +215,7 @@ export async function paletteActionsMenuCheck(env: Env, theme: Theme) {
 		await page.screenshot({
 			path: `.dev/evidence/palette-actions-${theme}.png`,
 		});
-		await page.keyboard.type('window');
+		await page.keyboard.type('new window');
 		assert.equal(
 			await menu.getByRole('option').count(),
 			1,
@@ -228,7 +228,7 @@ export async function paletteActionsMenuCheck(env: Env, theme: Theme) {
 		);
 		await page.keyboard.press('ArrowRight');
 		await page.keyboard.press('Backspace');
-		for (let at = 0; at < 'window'.length - 1; at++) {
+		for (let at = 0; at < 'new window'.length - 1; at++) {
 			await page.keyboard.press('Backspace');
 		}
 

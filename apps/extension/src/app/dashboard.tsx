@@ -165,7 +165,13 @@ import {
 	offerTrashUndo,
 	offerUndo,
 } from './recovery-core';
-import {openLink, resolveLinkTarget} from './link-target';
+import {
+	canOpenPrivateWindow,
+	openInPrivateWindow,
+	openLink,
+	privateWindowFailure,
+	resolveLinkTarget,
+} from './link-target';
 import {
 	BookmarkColumnPicker,
 	NEW_BOOKMARK_COLUMN,
@@ -1087,6 +1093,14 @@ export function SessionManager({
 		}
 	}
 
+	async function openTabPrivately(tab: SavedTabRecord) {
+		try {
+			await openInPrivateWindow(tab.url, settings as Settings);
+		} catch (reason) {
+			showStatus(privateWindowFailure(reason), true);
+		}
+	}
+
 	async function copyTabLink(tab: SavedTabRecord) {
 		try {
 			await writeClipboard({
@@ -1366,6 +1380,7 @@ export function SessionManager({
 				backup: true,
 			}),
 		openTab,
+		openTabPrivately,
 		copyTab: copyTabLink,
 		moveTab: (group, tab, toGroupId) => moveTab(group.id, tab.id, toGroupId),
 		deleteGroup: (group) => deleteGroup(group),
@@ -2925,6 +2940,7 @@ type CardActions = {
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
+	openTabPrivately: (tab: SavedTabRecord) => void;
 	copyTab: (tab: SavedTabRecord) => void;
 	moveTab: (group: Session, tab: SavedTabRecord, toGroupId: string) => void;
 	deleteGroup: (group: Session) => void;
@@ -3759,6 +3775,13 @@ const SavedTab = memo(
 				label: 'Open in new tab',
 				icon: ACTION_ICONS.openNew,
 				onSelect: () => onOpen('new'),
+			},
+			{
+				id: 'open-private',
+				label: 'Open in a private window',
+				icon: ACTION_ICONS.openPrivate,
+				hidden: !canOpenPrivateWindow,
+				onSelect: () => handlers.openTabPrivately(tab),
 			},
 			{
 				id: 'restore',

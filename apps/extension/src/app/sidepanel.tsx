@@ -71,7 +71,11 @@ import {
 import {reportSessionRestore} from './recovery-core';
 import {useSessionNameAsk} from './name-session-dialog';
 import {BookmarkIcon, Favicon} from './favicon';
-import {resolveLinkTarget} from './link-target';
+import {
+	canOpenPrivateWindow,
+	openInPrivateWindow,
+	resolveLinkTarget,
+} from './link-target';
 import {InsecureMarkFor} from './insecure-mark';
 import {savedUrlSet} from './saved-urls';
 import {
@@ -492,6 +496,21 @@ function SidePanel() {
 				label: 'Open in new tab',
 				icon: ACTION_ICONS.openNew,
 				onSelect: open('new'),
+			},
+			{
+				id: 'private',
+				label: 'Open in a private window',
+				icon: ACTION_ICONS.openPrivate,
+				hidden: !canOpenPrivateWindow,
+				onSelect: () =>
+					void attempt(
+						() =>
+							openInPrivateWindow(
+								url,
+								settings ?? {removeTrackingParameters: false},
+							),
+						'Could not open a private window.',
+					),
 			},
 			{type: 'separator'},
 			{

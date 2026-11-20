@@ -60,7 +60,13 @@ import {settingsSections} from './settings-sections';
 import {writeClipboard} from './interaction-actions';
 import {Highlight} from './highlight';
 import {Kbd, SearchTipsButton, type KeyTip} from './search-tips';
-import {isPinnedLodgeTab, openLink, openOwnPage} from './link-target';
+import {
+	canOpenPrivateWindow,
+	isPinnedLodgeTab,
+	openInPrivateWindow,
+	openLink,
+	openOwnPage,
+} from './link-target';
 import {cn} from '@/lib/utils';
 
 /**
@@ -234,6 +240,7 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 		() => ({
 			standalone: Boolean(standalone),
 			copies,
+			privateWindow: canOpenPrivateWindow,
 		}),
 		[standalone, copies],
 	);
@@ -479,6 +486,12 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 
 				case 'open-new-window': {
 					await chrome.windows.create({url: item.url});
+					onDone?.();
+					return;
+				}
+
+				case 'open-private-window': {
+					await openInPrivateWindow(item.url!, settings);
 					onDone?.();
 					return;
 				}
