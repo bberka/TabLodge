@@ -3634,6 +3634,44 @@ test('session and bookmark import paths mutate only their own data types', async
 	);
 });
 
+test('an imported source column keeps its id and joins the one already here', async () => {
+	const harness = createWorkerHarness(stateWithSession());
+	const file = (url: string) => ({
+		format: 'tablodge',
+		version: 1,
+		bookmarkColumns: [
+			{id: 'source-reddit', name: 'Reddit', icon: 'message-circle'},
+			{id: 'source-mastodon', name: 'Mastodon'},
+		],
+		bookmarks: [
+			{title: 'Post', url, columnId: 'source-reddit'},
+			{title: 'Toot', url: `${url}toot`, columnId: 'source-mastodon'},
+		],
+	});
+	const first = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: file('https://www.reddit.com/r/a/comments/1/'),
+	});
+	assert.equal(first.ok, true, first.error);
+	const second = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: file('https://www.reddit.com/r/a/comments/2/'),
+	});
+	assert.equal(second.ok, true, second.error);
+	assert.deepEqual(
+		harness.state.bookmarkColumns
+			.map((column) => String(column.id))
+			.filter((id) => id.startsWith('source-')),
+		['source-reddit', 'source-mastodon'],
+	);
+	assert.deepEqual(
+		harness.state.bookmarks
+			.filter((bookmark) => bookmark.title === 'Post')
+			.map((bookmark) => bookmark.columnId),
+		['source-reddit', 'source-reddit'],
+	);
+});
+
 test('imported duplicate Archived folders keep their sessions archived', async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	const response = await harness.sendMessage({
@@ -13586,6 +13624,38 @@ async function switchOnYoutube(harness: ReturnType<typeof sourcesHarness>) {
 	});
 }
 
+test('a YouTube page bookmarked by hand goes to the YouTube column a save on the site made', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+		'bookmark-page',
+		youtubeTab,
+	);
+	await settle();
+	assert.equal(harness.windowCreateCalls.length, 0);
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.url === youtubeTab.url)
+			?.columnId,
+		'source-youtube',
+	);
+});
+
+test('a source column leaves out a site another column already claims', async () => {
+	const harness = sourcesHarness();
+	const mine = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Videos',
+		domains: ['youtube.com'],
+	});
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const domains = (id: string) =>
+		harness.state.bookmarkColumns.find((column) => column.id === id)?.domains;
+	assert.deepEqual(domains('source-youtube'), ['youtu.be']);
+	assert.deepEqual(domains(mine.column.id), ['youtube.com']);
+});
+
 test('sources are off at install and no content script is registered', async () => {
 	const harness = sourcesHarness();
 	harness.listeners.onInstalled({reason: 'install'});
@@ -13688,7 +13758,10 @@ test('a save on YouTube goes to a new YouTube column, and Undo takes it back', a
 		(entry) => entry.name === 'YouTube',
 	);
 	assert.ok(column);
-	assert.deepEqual([column.icon, column.color], ['video', '#ff0000']);
+	assert.deepEqual(
+		[column.id, column.icon, column.color, column.domains],
+		['source-youtube', 'video', '#ff0000', ['youtube.com', 'youtu.be']],
+	);
 	assert.deepEqual(
 		harness.state.bookmarks.map((bookmark) => [
 			bookmark.url,
@@ -14170,22 +14243,94 @@ test('a source column keeps the icon and color the user gives it, and saves keep
 	);
 });
 
-test('a source save into a column the user already named after the site leaves its look alone', async () => {
+test('a full backup and its restore keep the source column id', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const backup = await harness.sendMessage({type: 'GET_FULL_BACKUP'});
+	assert.equal(backup.ok, true, backup.error);
+
+	const fresh = createWorkerHarness(stateWithSession());
+	const restored = await fresh.sendMessage({
+		type: 'RESTORE_FULL_BACKUP',
+		format: 'tablodge-full-backup',
+		version: 1,
+		state: backup.state,
+		trash: backup.trash,
+		copies: [],
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.deepEqual(
+		fresh.state.bookmarks.map((bookmark) => bookmark.columnId),
+		['source-youtube'],
+	);
+	assert.ok(
+		fresh.state.bookmarkColumns.some(
+			(column) => column.id === 'source-youtube',
+		),
+	);
+});
+
+test('a column the user named after the site is not its source column', async () => {
 	const harness = sourcesHarness();
 	await switchOnYoutube(harness);
 	const created = await harness.sendMessage({
 		type: 'CREATE_BOOKMARK_COLUMN',
-		name: 'youtube',
+		name: 'YouTube',
 	});
 	assert.ok(created.ok);
-	const columnId = created.ok ? created.column.id : '';
 	await harness.sendMessage(watchLater(), fromYoutube);
-	const column = harness.state.bookmarkColumns.find(
-		(entry) => entry.id === columnId,
+	assert.deepEqual(
+		harness.state.bookmarkColumns
+			.filter((entry) => entry.name === 'YouTube')
+			.map((entry) => entry.id),
+		[created.ok && created.column.id, 'source-youtube'],
 	);
-	assert.ok(column);
-	assert.deepEqual([column.icon, column.color], [undefined, undefined]);
-	assert.equal(harness.state.bookmarks[0]?.columnId, columnId);
+	assert.equal(harness.state.bookmarks[0]?.columnId, 'source-youtube');
+});
+
+test('a deleted source column comes back with the same id on the next save', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const deleted = await harness.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'source-youtube',
+		discardBookmarks: true,
+	});
+	assert.equal(deleted.ok, true, deleted.error);
+	assert.ok(
+		harness.state.bookmarkColumns.every(
+			(entry) => entry.id !== 'source-youtube',
+		),
+	);
+
+	const again = await harness.sendMessage(
+		watchLater('https://www.youtube.com/watch?v=jNQXAC9IVRw'),
+		fromYoutube,
+	);
+	assert.equal(again.ok && again.outcome, 'saved');
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.columnId),
+		['source-youtube'],
+	);
+
+	// Restoring the deleted column from the trash joins the one that came back, rather than making a second.
+	const restored = await harness.sendMessage({
+		type: 'RESTORE_TRASH',
+		id: String(deleted.ok && deleted.trashId),
+	});
+	assert.equal(restored.ok, true, restored.error);
+	assert.deepEqual(
+		harness.state.bookmarkColumns
+			.map((column) => String(column.id))
+			.filter((id) => id.startsWith('source-')),
+		['source-youtube'],
+	);
+	assert.deepEqual(
+		harness.state.bookmarks.map((bookmark) => bookmark.columnId),
+		['source-youtube', 'source-youtube'],
+	);
 });
 
 test('a source saves to the column chosen in Settings, and to its own column once that one is deleted', async () => {

@@ -1,6 +1,10 @@
 import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {BottomSheet, SheetHeader} from '../../ui/bottom-sheet';
 import {columnGlyph, useChipLook} from '../../ui/column-icons';
+import {
+	SOURCE_COLUMNS,
+	sourceColumnSite,
+} from '../../../../extension/src/shared/source-columns';
 import {moveColumn} from '../../library/board-edits';
 import {edit, useLibrary} from '../../library/library-store';
 import {soften, TARGET, useColors} from '../../ui/theme';
@@ -58,11 +62,17 @@ export function ColumnsSheet({
 					const position = store.bookmarkColumns.findIndex(
 						(entry) => entry.id === column.id,
 					);
+					// A source column is filled by Sources in the browser; the phone only says where from.
+					const site = sourceColumnSite(column.id);
+					const count = `${column.count} ${column.count === 1 ? 'bookmark' : 'bookmarks'}`;
+					const detail = site
+						? `${count}, saved from ${SOURCE_COLUMNS[site].name}`
+						: count;
 					return (
 						<View key={column.id} style={styles.row}>
 							<Pressable
 								accessibilityRole="button"
-								accessibilityLabel={`${column.name}, ${column.count} ${column.count === 1 ? 'bookmark' : 'bookmarks'}${column.id === selected ? ', showing' : ''}`}
+								accessibilityLabel={`${column.name}, ${detail}${column.id === selected ? ', showing' : ''}`}
 								accessibilityHint="Shows this column"
 								style={({pressed}) => [
 									styles.main,
@@ -92,9 +102,11 @@ export function ColumnsSheet({
 									>
 										{column.name}
 									</Text>
-									<Text style={{color: colors.muted, fontSize: 13}}>
-										{column.count}{' '}
-										{column.count === 1 ? 'bookmark' : 'bookmarks'}
+									<Text
+										numberOfLines={2}
+										style={{color: colors.muted, fontSize: 13}}
+									>
+										{detail}
 									</Text>
 								</View>
 							</Pressable>

@@ -605,6 +605,48 @@ describe('editing columns', () => {
 		assert.equal(gone.bookmarks[0]?.id, 'c');
 	});
 
+	test('undoing a deleted source column that came back puts its bookmarks back in it', () => {
+		const reddit = {
+			id: 'source-reddit',
+			name: 'Reddit',
+			createdAt: NOW,
+			isDefault: false,
+		};
+		const post = (id: string) => ({
+			id,
+			title: id,
+			url: `https://www.reddit.com/r/a/comments/${id}/`,
+			columnId: 'source-reddit',
+			createdAt: NOW,
+			updatedAt: NOW,
+		});
+		const store = {
+			...emptyStore(NOW),
+			bookmarkColumns: [reddit],
+			bookmarks: [post('p1')],
+		};
+		const own = store.bookmarks;
+		const deleted = deleteColumn(store, 'source-reddit', null, NOW + 1);
+		// The browser saved on Reddit again and synced the column back before Undo.
+		const back = {
+			...deleted,
+			bookmarkColumns: [reddit],
+			bookmarks: [...deleted.bookmarks, post('p2')],
+		};
+		const restored = restoreColumn(back, reddit, own, NOW + 2);
+		assert.deepEqual(
+			restored.bookmarkColumns.map((entry) => entry.id),
+			['source-reddit'],
+		);
+		assert.deepEqual(
+			restored.bookmarks.map((bookmark) => [bookmark.id, bookmark.columnId]),
+			[
+				['p2', 'source-reddit'],
+				['p1', 'source-reddit'],
+			],
+		);
+	});
+
 	test('the last column sends its bookmarks to Unfiled, and a missing column changes nothing', () => {
 		const single = deleteColumn(
 			deleteColumn(build(), 'c2', 'c1', NOW),

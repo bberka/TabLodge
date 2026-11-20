@@ -93,6 +93,7 @@ import {
 	passesOperators,
 } from '../shared/search-query';
 import {archivedFolderId} from '../shared/session-folders';
+import {sourceColumnSite} from '../shared/source-columns';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
@@ -106,6 +107,8 @@ import {
 	columnColorVars,
 } from './column-color';
 import {focusAfterMove, neighborId, type MoveDirection} from './reorder';
+import {removeSiteSource} from './site-source-access';
+import {type SiteSource, sourceSavingInto} from './site-sources';
 import {
 	AppHeader,
 	EmptyState,
@@ -372,12 +375,19 @@ function NewTab() {
 	const [pastedNewColumn, setPastedNewColumn] = useState<BookmarkColumnDraft>({
 		name: '',
 	});
-	// Deleting a column with bookmarks: move them to another column, or delete them too.
+	// Deleting a column with bookmarks: move them to another column, or delete them too. Deleting the column a site
+	// saves into on this device also asks whether to stop those saves (`source`, answered by `stopSource`).
 	const [columnDelete, setColumnDelete] = useState<{
 		column: BookmarkColumnData;
 		count: number;
 		mode: 'move' | 'delete';
 		targetColumnId: string;
+		source?: SiteSource;
+		stopSource: boolean;
+		/**
+		A site save filled the column while the dialog was open; the dialog says so from inside, where a screen reader hears it.
+		*/
+		grew?: boolean;
 	} | null>(null);
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
 	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
@@ -1027,13 +1037,21 @@ function NewTab() {
 
 	/**
 	An empty column is deleted right away. One with bookmarks asks where they go: another column, or deleted with it
-	(the only choice when it is the last column). Either way Undo restores the column and puts them back.
+	(the only choice when it is the last column). Either way Undo restores the column and puts them back. A column a
+	site saves into here always asks, since the next save would make it again.
 	*/
-	function requestDeleteColumn(column: BookmarkColumnData) {
+	async function requestDeleteColumn(column: BookmarkColumnData) {
 		const count = bookmarks.filter(
 			(bookmark) => bookmark.columnId === column.id,
 		).length;
-		if (count === 0) {
+		const sources =
+			sourceColumnSite(column.id) && !chrome.extension?.inIncognitoContext
+				? await send('GET_SITE_SOURCES').catch(() => undefined)
+				: undefined;
+		const source = sources?.ok
+			? sourceSavingInto(column.id, columns, sources.sources)
+			: undefined;
+		if (count === 0 && !source) {
 			void deleteColumn(column, null);
 			return;
 		}
@@ -1046,6 +1064,8 @@ function NewTab() {
 			count,
 			mode: neighbour ? 'move' : 'delete',
 			targetColumnId: neighbour?.id ?? '',
+			source,
+			stopSource: true,
 		});
 		setDialog('delete-column');
 	}
@@ -1056,6 +1076,7 @@ function NewTab() {
 	async function deleteColumn(
 		column: BookmarkColumnData,
 		targetColumnId: string | null,
+		stop?: SiteSource,
 	) {
 		const count = bookmarks.filter(
 			(bookmark) => bookmark.columnId === column.id,
@@ -1070,14 +1091,21 @@ function NewTab() {
 			return;
 		}
 
+		const stopped = stop && (await removeSiteSource(stop)).ok;
 		await reload();
 		const target = columns.find((item) => item.id === targetColumnId);
-		offerTrashUndo(
+		const deleted =
 			count === 0
 				? `Column “${column.name}” deleted.`
 				: target
 					? `Column “${column.name}” deleted. ${plural(count, 'bookmark')} moved to “${target.name}”.`
-					: `Column “${column.name}” and ${plural(count, 'bookmark')} deleted.`,
+					: `Column “${column.name}” and ${plural(count, 'bookmark')} deleted.`;
+		offerTrashUndo(
+			stopped
+				? `${deleted} ${stop.label} is off on this device.`
+				: stop
+					? `${deleted} Could not switch ${stop.label} off; remove it in Settings › Sources.`
+					: deleted,
 			result.trashId,
 			showStatus,
 			reload,
@@ -1090,10 +1118,22 @@ function NewTab() {
 			return;
 		}
 
+		// A save on the site can fill an empty source column while the dialog is open: ask where those bookmarks go.
+		const count = bookmarks.filter(
+			(bookmark) => bookmark.columnId === columnDelete.column.id,
+		).length;
+		if (count > 0 && columnDelete.count === 0) {
+			setColumnDelete({...columnDelete, count, grew: true});
+			return;
+		}
+
 		setDialog(null);
 		await deleteColumn(
 			columnDelete.column,
-			columnDelete.mode === 'move' ? columnDelete.targetColumnId : null,
+			columnDelete.count > 0 && columnDelete.mode === 'move'
+				? columnDelete.targetColumnId
+				: null,
+			columnDelete.stopSource ? columnDelete.source : undefined,
 		);
 	}
 
@@ -2158,7 +2198,9 @@ function NewTab() {
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
 		sessionTargets,
-		remove: requestDeleteColumn,
+		remove(column) {
+			void requestDeleteColumn(column);
+		},
 		pointerDown: beginColumnPointerDrag,
 		dropOver: markDrop,
 		drop: (event, column, axis) => dropOnColumn(event, column, axis),
@@ -3359,12 +3401,24 @@ function NewTab() {
 									Delete column “{columnDelete?.column.name}”?
 								</DialogTitle>
 								<DialogDescription>
-									It has {plural(columnDelete?.count ?? 0, 'bookmark')}. You can
-									undo this right after.
+									{columnDelete?.count
+										? `It has ${plural(columnDelete.count, 'bookmark')}.`
+										: 'It has no bookmarks.'}{' '}
+									You can undo this right after.
 								</DialogDescription>
 							</DialogHeader>
 							<DialogBody>
-								{columns.some((item) => item.id !== columnDelete?.column.id) ? (
+								<p
+									role="status"
+									className={columnDelete?.grew ? 'text-sm' : 'sr-only'}
+								>
+									{columnDelete?.grew
+										? `“${columnDelete.column.name}” got ${plural(columnDelete.count, 'bookmark')} meanwhile. Choose where they go, then delete it.`
+										: ''}
+								</p>
+								{columnDelete &&
+								columnDelete.count > 0 &&
+								columns.some((item) => item.id !== columnDelete.column.id) ? (
 									<RadioCardGroup
 										label="Its bookmarks"
 										value={columnDelete?.mode ?? 'move'}
@@ -3389,7 +3443,9 @@ function NewTab() {
 										/>
 									</RadioCardGroup>
 								) : null}
-								{columnDelete?.mode === 'move' &&
+								{columnDelete &&
+								columnDelete.count > 0 &&
+								columnDelete.mode === 'move' &&
 								columns.some((item) => item.id !== columnDelete.column.id) ? (
 									<div className="space-y-1.5">
 										<Label htmlFor="delete-column-target">
@@ -3418,13 +3474,42 @@ function NewTab() {
 										</Select>
 									</div>
 								) : null}
-								{columns.every(
-									(item) => item.id === columnDelete?.column.id,
-								) ? (
+								{columnDelete &&
+								columnDelete.count > 0 &&
+								columns.every((item) => item.id === columnDelete.column.id) ? (
 									<p className="text-sm text-muted-foreground">
 										This is your last column, so its bookmarks are deleted with
 										it and go to the trash bin.
 									</p>
+								) : null}
+								{columnDelete?.source ? (
+									<div className="flex items-start gap-3 rounded-md border border-border p-3">
+										<Checkbox
+											id="delete-column-stop-source"
+											checked={columnDelete.stopSource}
+											aria-describedby="delete-column-stop-source-note"
+											className="mt-0.5"
+											onCheckedChange={(checked) =>
+												setColumnDelete(
+													(old) =>
+														old && {...old, stopSource: checked === true},
+												)
+											}
+										/>
+										<div className="space-y-1">
+											<Label htmlFor="delete-column-stop-source">
+												Stop saving from {columnDelete.source.column.name} on
+												this device too
+											</Label>
+											<p
+												id="delete-column-stop-source-note"
+												className="text-xs leading-5 text-muted-foreground"
+											>
+												Otherwise your next save on{' '}
+												{columnDelete.source.hosts[0]} makes this column again.
+											</p>
+										</div>
+									</div>
 								) : null}
 							</DialogBody>
 							<DialogFooter>

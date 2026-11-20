@@ -21,6 +21,7 @@ import {send, type ShowStatus} from './common';
 import {Favicon} from './favicon';
 import {ColumnLabel} from './icon-label';
 import {PROJECT} from './project';
+import {removeSiteSource} from './site-source-access';
 import {
 	SITE_SOURCES,
 	SITE_SOURCES_KEY,
@@ -146,13 +147,7 @@ export function useSiteSources(showStatus: ShowStatus) {
 	async function remove(source: SiteSource) {
 		setBusy(source.id);
 		try {
-			const result = await send('SET_SITE_SOURCE', {
-				source: source.id,
-				enabled: false,
-			});
-			await chrome.permissions
-				.remove({origins: source.origins})
-				.catch(() => undefined);
+			const result = await removeSiteSource(source);
 			if (!result.ok) {
 				showStatus(result.error, true);
 				return;
@@ -400,12 +395,10 @@ export function SiteSourcesSettings({
 				const notice = noticeText(source, entry?.notice);
 				const labelId = `site-source-${source.id}`;
 				const columnFieldId = `site-source-column-${source.id}`;
-				// With no choice, or a chosen column that was deleted, saves go to the site's own column: the one with its
-				// name, or a new one.
+				// With no choice, or a chosen column that was deleted, saves go to the site's source column, made on the
+				// first save.
 				const siteColumn = columns.find(
-					(column) =>
-						column.name.toLocaleLowerCase() ===
-						source.column.toLocaleLowerCase(),
+					(column) => column.id === source.column.id,
 				);
 				const chosen = columns.some((column) => column.id === entry?.columnId)
 					? entry?.columnId
@@ -487,7 +480,7 @@ export function SiteSourcesSettings({
 											source,
 											columnId,
 											columns.find((column) => column.id === columnId)?.name ??
-												`the ${source.column} column`,
+												`the ${source.column.name} column`,
 										);
 									}}
 								>
@@ -495,9 +488,8 @@ export function SiteSourcesSettings({
 										<SelectItem value={SITE_COLUMN}>
 											<ColumnLabel
 												column={{
-													name: `${source.column} (new)`,
-													icon: source.columnIcon,
-													color: source.columnColor,
+													...source.column,
+													name: `${source.column.name} (new)`,
 												}}
 											/>
 										</SelectItem>

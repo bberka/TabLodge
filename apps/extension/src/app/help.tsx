@@ -337,7 +337,7 @@ function Help() {
 			entries: [
 				{
 					title: 'Add a page or link',
-					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, the column selector starts on the column that took your newest bookmark, or the first column if none has. Choose New column in it to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically. Under Advanced in the Edit column dialog, list websites (or a site and path such as github.com/bberka) for the column, and pages on those sites (and their subdomains) saved with the toolbar popup, the Bookmark this page shortcut, or the browser star go into that column without asking. The longest match wins when several columns match. In the same dialog, give a column an icon and a color from the accent palette (or any #rrggbb): its icon takes the color and its header gets a line in it, and the color syncs with the Android app. None, or Clear, removes it.',
+					body: 'Bookmark the current page from the popup or a right-click menu, or use the Bookmark this page shortcut. When adding, pasting, or importing bookmarks, the column selector starts on the column that took your newest bookmark, or the first column if none has. Columns that Sources fills never count, so saves on a site do not move it. Choose New column in it to name a destination. It is created when you save or import. In Settings, the browser bookmark star can prompt you to add the page here or add it automatically. Under Advanced in the Edit column dialog, list websites (or a site and path such as github.com/bberka) for the column, and pages on those sites (and their subdomains) saved with the toolbar popup, the Bookmark this page shortcut, or the browser star go into that column without asking. The longest match wins when several columns match. In the same dialog, give a column an icon and a color from the accent palette (or any #rrggbb): its icon takes the color and its header gets a line in it, and the color syncs with the Android app. None, or Clear, removes it.',
 					searchText:
 						'add bookmark current page popup right-click shortcut browser star ctrl cmd d automatic prompt',
 				},
@@ -445,14 +445,25 @@ function Help() {
 							Substack saved. The browser asks for access to that site only, and
 							nothing runs there until you allow it. Only the sites you added
 							are listed. Then, when you save something there, {PROJECT.name}{' '}
-							bookmarks the same link in a column named after the site, or in
-							the one you choose under Save to. A column you already have with
-							that name is used as it is. If neither exists, the first save
-							creates the site&apos;s column with an icon and a color for that
-							site, which you can change like any column&apos;s; saves keep
-							going there. It saves a video you add to Watch later, a Reddit
-							post or comment, an X post you bookmark, an Instagram post or
-							reel, a GitHub repository you star (titled with its name and
+							bookmarks the same link in the site&apos;s own column, or in the
+							one you choose under Save to. The first save creates the
+							site&apos;s column with an icon and a color for that site, which
+							you can rename and change like any column; saves keep going there.
+							It also starts with the site&apos;s address in its websites (under
+							Advanced in the Edit column dialog), so a page on that site you
+							bookmark with the toolbar popup, the Bookmark this page shortcut,
+							or the browser star goes there too, unless another column already
+							lists that site. Remove the address to stop that. Each site has
+							one such column on all your devices, even when two of them save at
+							the same time. Add bookmark never starts on a site&apos;s column,
+							so saves on a site do not change where your own bookmarks go. When
+							you delete a site&apos;s column, {PROJECT.name} also offers to
+							stop saving from that site on this device, which removes the site
+							as Remove does; without that, the next save there creates the
+							column again. On the Android app, the column list says which site
+							a column is saved from. It saves a video you add to Watch later, a
+							Reddit post or comment, an X post you bookmark, an Instagram post
+							or reel, a GitHub repository you star (titled with its name and
 							description), a Hacker News story you favorite, a Stack Overflow
 							question you bookmark, a dev.to article you save to your reading
 							list, a Lobsters story you save, a Bluesky post you save, a track
@@ -489,7 +500,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack save automatically site access permission column icon color undo private window trash',
+						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default',
 				},
 			],
 			action: {

@@ -10,6 +10,7 @@ import {
 	BOOKMARKS_FORMAT_ID,
 	SESSIONS_FORMAT_ID,
 } from './backup-format';
+import {isSourceColumnId} from './source-columns';
 import {webUrl} from './web-url';
 
 // Safety: only http/https URLs survive, titles are stripped of control characters and capped, the
@@ -73,6 +74,10 @@ export type ImportGroup = {
 	*/
 	notes?: string;
 	createdAt?: number;
+	/**
+	A TabLodge backup's source column id (`source-<site>`), which an import keeps because the id marks the column.
+	*/
+	sourceColumnId?: string;
 	links: ImportLink[];
 };
 
@@ -249,6 +254,10 @@ function group(
 		created.createdAt = extra.createdAt;
 	}
 
+	if (extra.sourceColumnId && isSourceColumnId(extra.sourceColumnId)) {
+		created.sourceColumnId = extra.sourceColumnId.slice(0, 100);
+	}
+
 	return created;
 }
 
@@ -400,7 +409,10 @@ function parseNative(data: unknown, collector: Collector): ParsedImport | null {
 					? column.name || 'Bookmarks'
 					: column.name,
 				[],
-				{createdAt: toTimestamp(column.createdAt)},
+				{
+					createdAt: toTimestamp(column.createdAt),
+					sourceColumnId: text(column.id),
+				},
 			),
 		]),
 	);

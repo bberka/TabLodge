@@ -132,6 +132,7 @@ import {showQuoteToast} from '../src/app/quote-toast';
 import {appendQuote, pageAddress, quoteTarget} from '../src/shared/quotes';
 import {showPageNote, takeCapturedCopy} from '../src/app/page-copy-inject';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
+import {isSourceColumnId} from '../src/shared/source-columns';
 import {mediaSave} from '../src/shared/save-media';
 import {
 	createPrivateLock,
@@ -5004,11 +5005,13 @@ async function saveQuote(
 						store.settings.cleanTitles,
 					),
 					url,
+					// With only source columns, the default is none, and the quote goes to Unfiled rather than a site's column.
 					columnId: landingColumnId(
 						store.bookmarkColumns,
 						claimedId ??
-							defaultBookmarkColumnId(store.bookmarkColumns, store.bookmarks),
-						{claimedId},
+							defaultBookmarkColumnId(store.bookmarkColumns, store.bookmarks) ??
+							BOOKMARK_UNFILED_ID,
+						{claimedId, allowUnfiled: true},
 					),
 					notes: note.notes,
 					createdAt: now,
@@ -5996,16 +5999,20 @@ async function mergeImportedBookmarks(
 			continue;
 		}
 
+		// A source column joins the one with its id, or keeps that id, since the id is what marks it.
+		const sourceColumn = isSourceColumnId(source.id);
 		let target =
 			source.id === DEFAULT_BOOKMARK_COLUMN_ID || source.isDefault
 				? store.bookmarkColumns.find(
 						(column) => column.id === DEFAULT_BOOKMARK_COLUMN_ID,
 					)
-				: columnsByName.get(source.name.toLocaleLowerCase());
+				: sourceColumn
+					? store.bookmarkColumns.find((column) => column.id === source.id)
+					: columnsByName.get(source.name.toLocaleLowerCase());
 		if (!target) {
 			target = {
 				...source,
-				id: makeId(),
+				id: sourceColumn ? source.id : makeId(),
 				createdAt: Date.now(),
 				isDefault: false,
 			};
@@ -8731,19 +8738,29 @@ function applyTrashRestore(
 			return {ok: false, error: 'That column could not be restored.'};
 		}
 
-		if (store.bookmarkColumns.some((item) => item.id === column.id)) {
-			column.id = makeId();
+		// A source column that a save on its site made again takes its bookmarks back, since its id is its marker.
+		const existing = isSourceColumnId(column.id)
+			? store.bookmarkColumns.find((item) => item.id === column.id)
+			: undefined;
+		if (existing) {
+			column.id = existing.id;
+			column.name = existing.name;
+		} else {
+			if (store.bookmarkColumns.some((item) => item.id === column.id)) {
+				column.id = makeId();
+			}
+
+			column.name = uniqueName(column.name, (candidate) =>
+				columnNameTaken(store.bookmarkColumns, candidate),
+			);
+			column.isDefault = column.id === DEFAULT_BOOKMARK_COLUMN_ID;
+			store.bookmarkColumns.splice(
+				clampIndex(data.index, store.bookmarkColumns.length),
+				0,
+				column,
+			);
 		}
 
-		column.name = uniqueName(column.name, (candidate) =>
-			columnNameTaken(store.bookmarkColumns, candidate),
-		);
-		column.isDefault = column.id === DEFAULT_BOOKMARK_COLUMN_ID;
-		store.bookmarkColumns.splice(
-			clampIndex(data.index, store.bookmarkColumns.length),
-			0,
-			column,
-		);
 		const columnIds = new Set([
 			...store.bookmarkColumns.map((item) => item.id),
 			BOOKMARK_UNFILED_ID,
@@ -9853,22 +9870,23 @@ async function saveFromSource(
 					return {ok: true, outcome: 'trashed'};
 				}
 
-				// The chosen column while it exists; otherwise the site's own column, by name.
-				const name = source.column.toLocaleLowerCase();
+				// The chosen column while it exists; otherwise the site's source column, whose fixed id makes two devices
+				// that create it at once write the same record.
+				const {id: sourceId, ...look} = source.column;
 				const now = Date.now();
 				let column =
 					store.bookmarkColumns.find(
 						(entry) => entry.id === state[source.id].columnId,
-					) ??
-					store.bookmarkColumns.find(
-						(entry) => entry.name.toLocaleLowerCase() === name,
-					);
+					) ?? store.bookmarkColumns.find((entry) => entry.id === sourceId);
 				if (!column) {
+					// The site's own pages saved by hand go here too, except an address another column already claims.
+					const claimable = source.columnSites.filter(
+						(site) => !columnForUrl(store.bookmarkColumns, `https://${site}/`),
+					);
 					column = {
-						id: makeId(),
-						name: source.column,
-						icon: source.columnIcon,
-						color: source.columnColor,
+						id: sourceId,
+						...look,
+						...domainsField(claimable),
 						createdAt: now,
 						isDefault: false,
 					};

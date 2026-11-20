@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {describe, test} from 'vite-plus/test';
+import {
+	BACKUP_VERSION,
+	BOOKMARKS_FORMAT_ID,
+} from '../../extension/src/shared/backup-format';
 import {buildExport} from '../../extension/src/shared/export-formats';
 import {parseImportFile} from '../../extension/src/shared/import-formats';
 import {emptyStore} from '../src/library/store-shape';
@@ -62,6 +66,78 @@ describe('importing a file into the library', () => {
 		});
 		assert.equal(again.links, 0);
 		assert.equal(again.store, once.store);
+	});
+
+	test('a source column keeps its id, known site or not, and joins the one already here', () => {
+		const backup = JSON.stringify({
+			format: BOOKMARKS_FORMAT_ID,
+			version: BACKUP_VERSION,
+			bookmarkColumns: [
+				{id: 'source-reddit', name: 'My Reddit', createdAt: 1},
+				{id: 'source-mastodon', name: 'Mastodon', createdAt: 2},
+			],
+			bookmarks: [
+				{url: 'https://r.example/1', title: 'One', columnId: 'source-reddit'},
+				{url: 'https://m.example/1', title: 'Two', columnId: 'source-mastodon'},
+			],
+		});
+		const parsed = parseImportFile(backup, 'tablodge-bookmarks.json');
+		const first = importIntoStore(emptyStore(NOW), parsed, {
+			kind: 'bookmarks',
+			now: NOW,
+			newId,
+		});
+		const sources = first.store.bookmarkColumns.filter((column) =>
+			column.id.startsWith('source-'),
+		);
+		assert.deepEqual(
+			sources.map((column) => [column.id, column.name, column.icon]),
+			[
+				['source-reddit', 'My Reddit', 'message-circle'],
+				['source-mastodon', 'Mastodon', undefined],
+			],
+		);
+		assert.deepEqual(
+			first.store.bookmarks.map((bookmark) => bookmark.columnId),
+			['source-reddit', 'source-mastodon'],
+		);
+
+		// The phone's own JSON export carries the ids too, so a round trip keeps them.
+		const exported = buildExport(
+			{
+				kind: 'bookmarks',
+				columns: first.store.bookmarkColumns,
+				bookmarks: first.store.bookmarks,
+			},
+			'json',
+			{appName: 'TabLodge'},
+		);
+		const roundTrip = importIntoStore(
+			emptyStore(NOW),
+			parseImportFile(exported.content, exported.filename),
+			{kind: 'bookmarks', now: NOW, newId},
+		);
+		assert.deepEqual(
+			roundTrip.store.bookmarks.map((bookmark) => bookmark.columnId),
+			['source-reddit', 'source-mastodon'],
+		);
+
+		const more = parseImportFile(
+			backup.replace('https://r.example/1', 'https://r.example/2'),
+			'tablodge-bookmarks.json',
+		);
+		const second = importIntoStore(first.store, more, {
+			kind: 'bookmarks',
+			now: NOW,
+			newId,
+		});
+		assert.equal(
+			second.store.bookmarkColumns.filter(
+				(column) => column.id === 'source-reddit',
+			).length,
+			1,
+		);
+		assert.equal(second.store.bookmarks.at(-1)?.columnId, 'source-reddit');
 	});
 
 	test('a bookmark folder reuses a column of the same name', () => {
