@@ -1,0 +1,12 @@
+diff --git a/apps/extension/src/shared/sync/library-records.ts b/apps/extension/src/shared/sync/library-records.ts
+index c6dc1383..d91479e0 100644
+--- a/apps/extension/src/shared/sync/library-records.ts
++++ b/apps/extension/src/shared/sync/library-records.ts
+@@ -120,6 +120,7 @@ export const SETTING_KEYS: ReadonlyArray<keyof Settings> = (
+ ).filter(
+ 	(key) =>
+ 		key !== 'heldSettings' &&
++		key !== 'snapshotKeep' &&
+ 		!(PORTABLE_PREFERENCES as readonly string[]).includes(key) &&
+ 		!Object.hasOwn(EXTENSION_LOCAL_SETTINGS, key),
+ );
