@@ -66,7 +66,8 @@ Per device, outside the library and never synced: for each site, the missing add
 Not now** to. The toast comes back only for an address that is not in that list.
 */
 export const SOURCE_CATCH_UP_KEY = 'tablodge.sourceCatchUp';
-const DISMISSED_MAX = 2000;
+// At least a whole page, so Not now on the longest page the content script sends keeps all of it.
+const DISMISSED_MAX = CATCH_UP_MAX_LINKS;
 
 export type CatchUpState = Partial<Record<SiteSourceId, string[]>>;
 

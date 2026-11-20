@@ -61,6 +61,7 @@ import {
 } from '../src/app/source-reddit';
 import {
 	type SavedPageReader,
+	CATCH_UP_MAX_LINKS,
 	catchUpAsks,
 	catchUpCountText,
 	dismissMissing,
@@ -1963,4 +1964,20 @@ test('a stopped save that fails, or finds the source off, goes on to the site; a
 		},
 	);
 	assert.equal(saved.replays.length, 0, 'a saved item stays off the site');
+});
+
+test('Not now on the longest page the content script sends keeps every item of it', () => {
+	const links = Array.from({length: CATCH_UP_MAX_LINKS}, (_, index) => ({
+		url: `https://github.com/someone/repo-${index}`,
+		title: '',
+	}));
+	const dismissed = dismissMissing(['https://github.com/older/one'], links);
+	assert.equal(catchUpAsks(links, dismissed), false);
+	assert.equal(
+		catchUpAsks(
+			links,
+			parseCatchUpState({dismissed: {github: dismissed}}).github,
+		),
+		false,
+	);
 });
