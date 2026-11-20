@@ -94,6 +94,7 @@ import {
 	settingsFinderCheck,
 	settingsSearchCheck,
 	siteSourcePickerCheck,
+	siteSourceRemoveCheck,
 	skipLinkCheck,
 } from './settings.ts';
 import {
@@ -143,7 +144,7 @@ async function main() {
 		await seedPage.close();
 		await settingsSearchCheck(env);
 		await settingsFinderCheck(env);
-		await eachTheme(env, [siteSourcePickerCheck]);
+		await eachTheme(env, [siteSourcePickerCheck, siteSourceRemoveCheck]);
 		await eachTheme(env, [backupsDialogCheck]);
 		await eachTheme(env, [sessionCardQuickActionsCheck]);
 		await eachTheme(env, [sessionFaviconPreviewsCheck]);

@@ -59,7 +59,6 @@ import {
 	LoadingLine,
 	LoadError,
 	StatusLine,
-	restoreSummary,
 	send,
 	useStatus,
 	useTabLodgeState,
@@ -69,6 +68,7 @@ import {
 	switchSummary,
 	useHasSavableTabs,
 } from './common';
+import {reportSessionRestore} from './recovery-core';
 import {useSessionNameAsk} from './name-session-dialog';
 import {BookmarkIcon, Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
@@ -596,13 +596,7 @@ function SidePanel() {
 				throw new Error(result?.error || 'Could not restore this session.');
 			}
 
-			showStatus(
-				result.failed || result.splitsSeparated
-					? restoreSummary(result)
-					: `Restored “${session.name}”.`,
-				Boolean(result.failed),
-				{toast: true},
-			);
+			reportSessionRestore(result, session.name, showStatus, reload);
 		}, 'Could not restore this session.');
 	}
 
