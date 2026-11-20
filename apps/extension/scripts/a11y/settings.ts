@@ -282,7 +282,10 @@ async function animationsDone(page: Page) {
 			document: {getAnimations(): Array<{finished: Promise<unknown>}>};
 		};
 		await Promise.all(
-			document.getAnimations().map(async (animation) => animation.finished),
+			// A cancelled animation rejects; it is done either way.
+			document
+				.getAnimations()
+				.map(async (animation) => animation.finished.catch(() => undefined)),
 		);
 	});
 }
