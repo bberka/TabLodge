@@ -7,6 +7,10 @@ A bookmark's note is a `note` record of its own, keyed by the bookmark id, so a 
 sees one: it skips a kind it does not know, while it would drop an unknown field from the bookmark and send that loss
 back. A server that cannot hold notes leaves them on the device (see the sync client).
 
+Sources settings (which sites are on, each one's column and save mode) are `source` records keyed by the site id, for
+the same reason. They live outside the library, so the host hands them in and takes them back as they are: a site or
+a field this version does not know still goes back unchanged.
+
 Some fields belong to one device and never travel: the browser window a session came from, its window position,
 and when it was last opened here. `assemble` keeps this device's values for them.
 */
@@ -143,18 +147,26 @@ export function orderGroup(
 
 		case 'preference':
 		case 'trash':
-		case 'note': {
+		case 'note':
+		case 'source': {
 			return undefined;
 		}
 	}
 }
 
 /**
-The library's records in display order, keyed by `recordKey`, and the trash entries small enough to send.
+One site's Sources choices as they sync: present while the site is on, with a value the host reads itself.
+*/
+export type SyncedSource = {id: string; value: Record<string, unknown>};
+
+/**
+The library's records in display order, keyed by `recordKey`, the trash entries small enough to send, and the
+Sources choices.
 */
 export function splitLibrary(
 	store: Store,
 	trash: readonly TrashEntry[] = [],
+	sources: readonly SyncedSource[] = [],
 ): Map<string, LibraryRecord> {
 	const records = new Map<string, LibraryRecord>();
 	const add = (record: LibraryRecord) => records.set(recordKey(record), record);
@@ -197,7 +209,25 @@ export function splitLibrary(
 		}
 	}
 
+	for (const {id, value} of sources) {
+		add({kind: 'source', id, value});
+	}
+
 	return records;
+}
+
+/**
+The Sources choices among `records`. A value that is not an object is left out.
+*/
+export function sourcesOf(records: Iterable<LibraryRecord>): SyncedSource[] {
+	const sources: SyncedSource[] = [];
+	for (const record of records) {
+		if (record.kind === 'source' && isRecord(record.value)) {
+			sources.push({id: record.id, value: record.value});
+		}
+	}
+
+	return sources;
 }
 
 /**
@@ -239,6 +269,7 @@ export function assemble(
 	for (const record of records) {
 		if (
 			record.kind === 'trash' ||
+			record.kind === 'source' ||
 			(!isRecord(record.value) && record.kind !== 'preference')
 		) {
 			continue;

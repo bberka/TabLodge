@@ -17,7 +17,8 @@ export type TombstoneKind =
 	| 'folder'
 	| 'preference'
 	| 'trash'
-	| 'note';
+	| 'note'
+	| 'source';
 /**
 A deleted record kept so a stale device cannot bring it back; removed from the index once `purgeAfter` passes.
 */
@@ -42,6 +43,7 @@ export const TOMBSTONE_KINDS: ReadonlySet<string> = new Set([
 	'preference',
 	'trash',
 	'note',
+	'source',
 ]);
 export const syncText = (value: unknown) =>
 	typeof value === 'string' && value !== '' && value.length <= SYNC_TEXT_MAX

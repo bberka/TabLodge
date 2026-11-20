@@ -20,6 +20,7 @@ import {
 	problemBanner,
 	readCompat,
 } from '../../extension/src/shared/sync/compat';
+import type {SyncedSource} from '../../extension/src/shared/sync/library-records';
 import {spreadKeys} from '../../extension/src/shared/sync/order-key';
 
 const TOKEN = 'client-test-token-0123456789-abcdefghij';
@@ -108,20 +109,20 @@ function makeServer(options: {legacy?: boolean} = {}) {
 				return response;
 			}
 
-			// A server from before the trash and notes: it lists neither feature and refuses a kind it does not know.
+			// A server from before the trash, notes, and Sources: it lists none of them and refuses a kind it does not know.
 			if (new URL(url).pathname === '/v1/status') {
 				const body = (await response.json()) as {features: string[]};
 				return Response.json({
 					...body,
 					features: body.features.filter(
-						(feature) => feature !== 'trash' && feature !== 'notes',
+						(feature) => !['trash', 'notes', 'sources'].includes(feature),
 					),
 				});
 			}
 
 			if (
 				init.method === 'POST' &&
-				/"kind":"(?:trash|note)"/.test(String(init.body))
+				/"kind":"(?:trash|note|source)"/.test(String(init.body))
 			) {
 				return Response.json({error: 'bad_change'}, {status: 400});
 			}
@@ -227,6 +228,10 @@ type Device = {
 	The trash, for a device whose host has one.
 	*/
 	trash: TrashEntry[];
+	/**
+	The Sources choices, for a device whose host has them (the extension's regular library).
+	*/
+	sources: SyncedSource[];
 	storage: Map<string, unknown>;
 	backups: string[];
 	client: ReturnType<typeof createSyncClient>;
@@ -236,7 +241,7 @@ type Device = {
 function makeDevice(
 	server: ReturnType<typeof makeServer>,
 	store = emptyStore(),
-	{withTrash = false, beforeNotes = false} = {},
+	{withTrash = false, withSources = false, beforeNotes = false} = {},
 ) {
 	const storage = new Map<string, unknown>();
 	let queue = Promise.resolve();
@@ -244,6 +249,7 @@ function makeDevice(
 	const device: Device = {
 		store,
 		trash: [],
+		sources: [],
 		storage,
 		backups,
 		client: createSyncClient({
@@ -262,13 +268,15 @@ function makeDevice(
 					return response;
 				}
 
-				// A version from before notes skips a kind it does not know (its `parseChange` refuses it).
+				// A version from before notes and Sources (0.3.0) skips a kind it does not know (its `parseChange` refuses it).
 				const body = (await response.json()) as {
 					changes?: Array<{kind: string}>;
 				};
 				return Response.json({
 					...body,
-					changes: body.changes?.filter((change) => change.kind !== 'note'),
+					changes: body.changes?.filter(
+						(change) => change.kind !== 'note' && change.kind !== 'source',
+					),
 				});
 			},
 			openSocket: () => new FakeSocket(server),
@@ -292,6 +300,18 @@ function makeDevice(
 							device.trash = [
 								...structuredClone(put),
 								...device.trash.filter((entry) => !gone.has(entry.id)),
+							];
+						},
+					}
+				: undefined,
+			sources: withSources
+				? {
+						read: async () => structuredClone(device.sources),
+						async apply(put, remove) {
+							const gone = new Set([...remove, ...put.map(({id}) => id)]);
+							device.sources = [
+								...device.sources.filter(({id}) => !gone.has(id)),
+								...structuredClone(put),
 							];
 						},
 					}
@@ -878,11 +898,109 @@ test('a server without some features keeps syncing and lists what stays on the d
 	// This test server keeps no shared pages either.
 	assert.deepEqual(
 		compat.missing.map(({name}) => name),
-		['notes', 'trash', 'shared-pages'],
+		['notes', 'sources', 'trash', 'shared-pages'],
 	);
 	assert.equal(problemBanner(compat)?.stopped, false);
 
 	// Disconnecting forgets what the server said.
 	const off = await a.client.disconnect();
 	assert.equal(off.server, undefined);
+});
+
+const sourceIds = (device: Device) =>
+	device.sources.map(({id}) => id).toSorted();
+const sourceOf = (device: Device, id: string) =>
+	device.sources.find((source) => source.id === id)?.value;
+
+test('Sources choices sync between browsers: on, a changed column and save mode, and a removal', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withSources: true});
+	const b = makeDevice(server, emptyStore(), {withSources: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+
+	a.sources = [{id: 'reddit', value: {}}];
+	a.client.localChanged();
+	await until(() => sourceIds(b).includes('reddit'));
+
+	a.sources = [{id: 'reddit', value: {columnId: 'col', keepOffSite: true}}];
+	a.client.localChanged();
+	await until(() => sourceOf(b, 'reddit')?.keepOffSite === true);
+	assert.deepEqual(sourceOf(b, 'reddit'), {columnId: 'col', keepOffSite: true});
+
+	a.sources = [];
+	a.client.localChanged();
+	await until(() => b.sources.length === 0);
+	assert.equal((await b.client.status()).pending, 0);
+});
+
+test('a site or field this version does not know goes back to the server unchanged', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withSources: true});
+	a.sources = [{id: 'mastodon', value: {columnId: 'col', later: {x: 1}}}];
+	await a.client.connect(URL_BASE, TOKEN);
+	const b = makeDevice(server, emptyStore(), {withSources: true});
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(sourceOf(b, 'mastodon'), {columnId: 'col', later: {x: 1}});
+	// Device b edits the library; nothing it sends touches the choice.
+	b.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => ids(a.store).length === 1);
+	await a.client.syncNow();
+	assert.deepEqual(sourceOf(a, 'mastodon'), {columnId: 'col', later: {x: 1}});
+});
+
+test('a version from 0.3.0 and the Android app sync with Sources choices present and never remove them', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withSources: true});
+	a.sources = [{id: 'youtube', value: {columnId: 'col'}}];
+	await a.client.connect(URL_BASE, TOKEN);
+	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
+	// The Android app's host has no Sources.
+	const phone = makeDevice(server, emptyStore(), {withTrash: true});
+	await old.client.connect(URL_BASE, TOKEN);
+	await phone.client.connect(URL_BASE, TOKEN);
+
+	old.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => ids(phone.store).length === 1);
+	phone.edit((store) => ({
+		...store,
+		bookmarks: store.bookmarks.map((entry) => ({...entry, title: 'Renamed'})),
+	}));
+	await until(() => a.store.bookmarks[0]?.title === 'Renamed');
+	await old.client.syncNow();
+	await phone.client.syncNow();
+	await a.client.syncNow();
+	assert.equal((await old.client.status()).error, null);
+	assert.equal((await phone.client.status()).error, null);
+
+	const fresh = makeDevice(server, emptyStore(), {withSources: true});
+	await fresh.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(fresh.sources, [{id: 'youtube', value: {columnId: 'col'}}]);
+	assert.equal(fresh.store.bookmarks[0].title, 'Renamed');
+});
+
+test('a server without the sources feature keeps syncing the library and leaves Sources in each browser', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, emptyStore(), {withSources: true});
+	a.sources = [{id: 'github', value: {}}];
+	const b = makeDevice(server, emptyStore(), {withSources: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	b.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => ids(a.store).length === 1);
+	assert.deepEqual(b.sources, []);
+	assert.deepEqual(sourceIds(a), ['github']);
+	assert.equal((await a.client.status()).pending, 0);
+
+	// Once the server is updated, the choices go out.
+	server.setLegacy(false);
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		await a.client.syncNow();
+		await b.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.deepEqual(sourceIds(b), ['github']);
 });

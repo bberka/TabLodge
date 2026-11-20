@@ -2476,7 +2476,8 @@ var TOMBSTONE_KINDS = /* @__PURE__ */ new Set([
   "folder",
   "preference",
   "trash",
-  "note"
+  "note",
+  "source"
 ]);
 
 // ../extension/src/shared/sync/order-key.ts
@@ -2986,7 +2987,15 @@ var MAX_BODY_BYTES = 8 * 1024 * 1024;
 var MAX_PUSH_CHANGES = 500;
 var MAX_CHANGE_BYTES = 256 * 1024;
 var MAX_KEY_CHARS = 4096;
-var FEATURES = ["private", "key", "preview", "trash", "notes", "page-source"];
+var FEATURES = [
+  "private",
+  "key",
+  "preview",
+  "trash",
+  "notes",
+  "page-source",
+  "sources"
+];
 var PREVIEWS_PER_MINUTE = 600;
 var PREVIEW_CACHE_SIZE = 500;
 var PREVIEW_TTL_MS = 24 * 60 * 60 * 1e3;
