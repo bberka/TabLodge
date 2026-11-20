@@ -35,6 +35,13 @@ the "Save video to..." dialog YouTube opens in a popup outside both. Hand writte
 				</ytd-playlist-add-to-option-renderer>
 			</ytd-add-to-playlist-renderer>
 		</tp-yt-paper-dialog>
+		<!-- The dialog as the live page draws it (2026-11): list rows, the aria-label on an inner button, the privacy under the name. -->
+		<yt-contextual-sheet-layout>
+			<yt-list-view-model>
+				<toggleable-list-item-view-model id="sheet-watch-later"><yt-list-item-view-model role="presentation"><div><div><button id="sheet-watch-later-button" aria-label="Watch later, Private, Not selected" aria-pressed="false" role="menuitem"><div><div><span class="ytListItemViewModelTitle" role="text">Watch later</span></div><div><span class="ytListItemViewModelSubtitle" role="text">Private</span></div></div></button></div></div></yt-list-item-view-model></toggleable-list-item-view-model>
+				<toggleable-list-item-view-model id="sheet-other"><yt-list-item-view-model role="presentation"><div><div><button id="sheet-other-button" aria-label="Watch later ideas, Public, Not selected" aria-pressed="false" role="menuitem"><div><div><span class="ytListItemViewModelTitle" role="text">Watch later ideas</span></div><div><span class="ytListItemViewModelSubtitle" role="text">Public</span></div></div></button></div></div></yt-list-item-view-model></toggleable-list-item-view-model>
+			</yt-list-view-model>
+		</yt-contextual-sheet-layout>
 	</ytd-popup-container>
 </ytd-app>
 </body>
