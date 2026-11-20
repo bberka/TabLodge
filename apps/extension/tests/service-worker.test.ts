@@ -13624,6 +13624,38 @@ async function switchOnYoutube(harness: ReturnType<typeof sourcesHarness>) {
 	});
 }
 
+test('a YouTube page bookmarked by hand goes to the YouTube column a save on the site made', async () => {
+	const harness = sourcesHarness();
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	(harness.listeners.onCommand as (c: string, t: unknown) => void)(
+		'bookmark-page',
+		youtubeTab,
+	);
+	await settle();
+	assert.equal(harness.windowCreateCalls.length, 0);
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.url === youtubeTab.url)
+			?.columnId,
+		'source-youtube',
+	);
+});
+
+test('a source column leaves out a site another column already claims', async () => {
+	const harness = sourcesHarness();
+	const mine = await harness.sendMessage({
+		type: 'CREATE_BOOKMARK_COLUMN',
+		name: 'Videos',
+		domains: ['youtube.com'],
+	});
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const domains = (id: string) =>
+		harness.state.bookmarkColumns.find((column) => column.id === id)?.domains;
+	assert.deepEqual(domains('source-youtube'), ['youtu.be']);
+	assert.deepEqual(domains(mine.column.id), ['youtube.com']);
+});
+
 test('sources are off at install and no content script is registered', async () => {
 	const harness = sourcesHarness();
 	harness.listeners.onInstalled({reason: 'install'});
@@ -13727,8 +13759,8 @@ test('a save on YouTube goes to a new YouTube column, and Undo takes it back', a
 	);
 	assert.ok(column);
 	assert.deepEqual(
-		[column.id, column.icon, column.color],
-		['source-youtube', 'video', '#ff0000'],
+		[column.id, column.icon, column.color, column.domains],
+		['source-youtube', 'video', '#ff0000', ['youtube.com', 'youtu.be']],
 	);
 	assert.deepEqual(
 		harness.state.bookmarks.map((bookmark) => [

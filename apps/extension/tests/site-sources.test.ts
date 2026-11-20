@@ -5,6 +5,7 @@ import {parseHTML} from 'linkedom';
 import {test} from 'vite-plus/test';
 import {manifestForTarget} from '../scripts/manifest-targets';
 import {isColumnColor} from '../src/shared/accent-colors';
+import {columnForUrl, domainsField} from '../src/shared/column-sites';
 import {ICON_IDS} from '../src/shared/icon-ids';
 import {
 	blueskyPostUrl,
@@ -138,6 +139,27 @@ test('each source column gets an icon and a color a column can hold', () => {
 	for (const source of SITE_SOURCES) {
 		assert.ok(ICON_IDS.includes(source.column.icon), source.id);
 		assert.ok(isColumnColor(source.column.color), source.id);
+	}
+});
+
+test("each source column's sites are valid and claim every host its source reads on", () => {
+	for (const source of SITE_SOURCES) {
+		assert.deepEqual(
+			domainsField(source.columnSites).domains,
+			source.columnSites,
+			source.id,
+		);
+		const column = {
+			id: source.column.id,
+			name: source.column.name,
+			domains: source.columnSites,
+			createdAt: 0,
+			isDefault: false,
+		};
+		for (const host of source.hosts) {
+			const address = `https://${host.replace('*.', 'someone.')}/page`;
+			assert.equal(columnForUrl([column], address)?.id, column.id, address);
+		}
 	}
 });
 

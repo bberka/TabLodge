@@ -9879,9 +9879,14 @@ async function saveFromSource(
 						(entry) => entry.id === state[source.id].columnId,
 					) ?? store.bookmarkColumns.find((entry) => entry.id === sourceId);
 				if (!column) {
+					// The site's own pages saved by hand go here too, except an address another column already claims.
+					const claimable = source.columnSites.filter(
+						(site) => !columnForUrl(store.bookmarkColumns, `https://${site}/`),
+					);
 					column = {
 						id: sourceId,
 						...look,
+						...domainsField(claimable),
 						createdAt: now,
 						isDefault: false,
 					};
