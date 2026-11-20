@@ -207,7 +207,7 @@ export function useSiteSources(showStatus: ShowStatus) {
 			// The removed row held focus; the Add a site button is the nearest control that stays.
 			triggerRef.current?.focus();
 			showStatus(
-				`Removed ${source.label}. ${PROJECT.name} no longer has access to ${source.hosts[0]}.`,
+				`Removed ${source.label}, also from your other synced browsers. ${PROJECT.name} no longer has access to ${source.hosts[0]} here.`,
 			);
 		} finally {
 			setBusy(undefined);

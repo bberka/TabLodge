@@ -458,23 +458,23 @@ function Help() {
 							the same time. Add bookmark never starts on a site&apos;s column,
 							so saves on a site do not change where your own bookmarks go. When
 							you delete a site&apos;s column, {PROJECT.name} also offers to
-							stop saving from that site on this device, which removes the site
-							as Remove does; without that, the next save there creates the
-							column again. On the Android app, the column list says which site
-							a column is saved from. It saves a video you add to Watch later, a
-							Reddit post or comment, an X post you bookmark, an Instagram post
-							or reel, a GitHub repository you star (titled with its name and
-							description), a Hacker News story you favorite, a Stack Overflow
-							question you bookmark, a dev.to article you save to your reading
-							list, a Lobsters story you save, a Bluesky post you save, a track
-							or playlist you like on SoundCloud, a song, album, playlist, show,
-							or episode you save to your Spotify library in the web player, a
-							film you add to your Letterboxd or IMDb watchlist, a book you mark
-							Want to Read on Goodreads, a Medium story you bookmark, or a
-							Substack post you save. Medium and Substack publications on their
-							own domains are not covered. Posts from X, Instagram, and Bluesky
-							are titled with the start of their text or caption. A Hacker News
-							or Lobsters story is saved at the address it links to, with its
+							stop saving from that site, which removes the site as Remove does;
+							without that, the next save there creates the column again. On the
+							Android app, the column list says which site a column is saved
+							from. It saves a video you add to Watch later, a Reddit post or
+							comment, an X post you bookmark, an Instagram post or reel, a
+							GitHub repository you star (titled with its name and description),
+							a Hacker News story you favorite, a Stack Overflow question you
+							bookmark, a dev.to article you save to your reading list, a
+							Lobsters story you save, a Bluesky post you save, a track or
+							playlist you like on SoundCloud, a song, album, playlist, show, or
+							episode you save to your Spotify library in the web player, a film
+							you add to your Letterboxd or IMDb watchlist, a book you mark Want
+							to Read on Goodreads, a Medium story you bookmark, or a Substack
+							post you save. Medium and Substack publications on their own
+							domains are not covered. Posts from X, Instagram, and Bluesky are
+							titled with the start of their text or caption. A Hacker News or
+							Lobsters story is saved at the address it links to, with its
 							discussion page in the note; a text post with no link is saved at
 							its discussion page. Under Save to, under each added site, you can
 							choose another column; if that column is deleted, saves go to the

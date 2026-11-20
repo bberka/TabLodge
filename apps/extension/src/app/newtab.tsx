@@ -1104,7 +1104,7 @@ function NewTab() {
 					: `Column “${column.name}” and ${plural(count, 'bookmark')} deleted.`;
 		offerTrashUndo(
 			stopped
-				? `${deleted} ${stop.label} is off on this device.`
+				? `${deleted} ${stop.label} is removed from Sources.`
 				: stop
 					? `${deleted} Could not switch ${stop.label} off; remove it in Settings › Sources.`
 					: deleted,
@@ -3500,14 +3500,14 @@ function NewTab() {
 										/>
 										<div className="space-y-1">
 											<Label htmlFor="delete-column-stop-source">
-												Stop saving from {columnDelete.source.column.name} on
-												this device too
+												Stop saving from {columnDelete.source.column.name} too
 											</Label>
 											<p
 												id="delete-column-stop-source-note"
 												className="text-xs leading-5 text-muted-foreground"
 											>
-												Otherwise your next save on{' '}
+												This removes the site from Sources, also in your other
+												synced browsers. Otherwise your next save on{' '}
 												{columnDelete.source.hosts[0]} makes this column again.
 											</p>
 										</div>

@@ -22,6 +22,7 @@ import {
 	instagramPostUrl,
 	lobstersStoryUrl,
 	parseSiteSourcesState,
+	putChoice,
 	redditPermalinkUrl,
 	SITE_SOURCES,
 	siteSourceById,
@@ -423,6 +424,17 @@ test('stored source state is read defensively: off unless saved as on', () => {
 		youtube: {},
 		mastodon: {columnId: 'c', later: 1},
 	});
+});
+
+test('a site id such as __proto__ from the server stays an ordinary choice', () => {
+	const state = parseSiteSourcesState(
+		JSON.parse('{"version":1,"choices":{"__proto__":{"x":1}}}'),
+	);
+	assert.deepEqual(Object.keys(state.choices), ['__proto__']);
+	assert.equal(Object.getPrototypeOf(state.choices), Object.prototype);
+	putChoice(state, '__proto__', {y: 2});
+	assert.deepEqual(Object.keys(state.choices), ['__proto__']);
+	assert.equal(Object.getPrototypeOf(state.choices), Object.prototype);
 });
 
 test('state stored before choices synced is read once into choices', () => {

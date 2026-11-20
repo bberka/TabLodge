@@ -10,6 +10,7 @@ import {
 	siteSourceStatuses,
 	siteSourceUndoLabel,
 	sourceChoice,
+	putChoice,
 	withChoice,
 	withoutChoice,
 	withoutNotice,
@@ -9768,9 +9769,10 @@ async function reconcileSources() {
 				: {enabled: false};
 		}
 	});
-	await Promise.all(
+	// Not awaited: after a sync round this runs inside the library's queue, which open tabs must not hold up.
+	void Promise.all(
 		started.map(async (source) => injectSourceIntoOpenTabs(source)),
-	);
+	).catch(() => undefined);
 }
 
 /**
@@ -9806,7 +9808,7 @@ async function applySyncSources(put: SyncedSource[], remove: string[]) {
 	const stopped: SiteSource[] = [];
 	await changeSourcesState((next) => {
 		for (const {id, value} of put) {
-			next.choices[id] = value;
+			putChoice(next, id, value);
 		}
 
 		for (const id of remove) {

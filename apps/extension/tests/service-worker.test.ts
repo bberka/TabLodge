@@ -22,6 +22,7 @@ import {sqlite} from '../../server/src/node-sqlite';
 import {SqlPageStore} from '../../server/src/shared-pages';
 import {SqlChangeLog} from '../../server/src/sql-change-log';
 import {ChangeLog} from '../src/shared/sync/change-log';
+import {stampAt} from '../src/shared/sync/clock';
 import {
 	logicalState,
 	recordsLayout,
@@ -11982,6 +11983,83 @@ test('a regular window uploads, lists, and deletes shared pages; a private windo
 	assert.equal(
 		(await noServer.sendMessage({type: 'GET_SHARED_PAGES'})).server,
 		'none',
+	);
+});
+
+// A change another browser pushed, stamped well after this test's own.
+const remoteSource = (id: string, value?: Record<string, unknown>) => ({
+	kind: 'source' as const,
+	id,
+	h: stampAt(Date.now() + 60_000),
+	d: 'other-browser',
+	...(value ? {value} : {deleted: true as const}),
+});
+
+test('Sources choices pulled from another browser show as on there, not here', async () => {
+	const server = syncServer();
+	assert.deepEqual(
+		server.log.push([remoteSource('youtube', {columnId: 'c'})], Date.now()),
+		['applied'],
+	);
+	const harness = sourcesHarness({fetch: server.fetch, storage: regularSync});
+	await harness.sendMessage({type: 'SYNC_NOW'});
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
+		id: 'youtube',
+		enabled: false,
+		wanted: true,
+		columnId: 'c',
+	});
+	assert.equal(harness.registeredScripts.size, 0);
+});
+
+test('a site removed in another browser goes off here: script, access, and Not now answers', async () => {
+	const server = syncServer();
+	const harness = sourcesHarness({
+		fetch: server.fetch,
+		storage: {
+			...regularSync,
+			'tablodge.sourceCatchUp': {
+				version: 1,
+				dismissed: {youtube: ['https://www.youtube.com/watch?v=jNQXAC9IVRw']},
+			},
+		},
+	});
+	await switchOnYoutube(harness);
+	await harness.sendMessage({type: 'SYNC_NOW'});
+	const pushed = server.log.pull(0, 100);
+	assert.equal(pushed.resync, false);
+	assert.deepEqual(
+		pushed.resync
+			? []
+			: pushed.changes
+					.filter((change) => change.kind === 'source')
+					.map(({id, value}) => [id, structuredClone(value)]),
+		[['youtube', {}]],
+		'the choice went to the server',
+	);
+
+	server.log.push([remoteSource('youtube')], Date.now());
+	await harness.sendMessage({type: 'SYNC_NOW'});
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
+		id: 'youtube',
+		enabled: false,
+		wanted: false,
+	});
+	assert.equal(harness.registeredScripts.size, 0);
+	const again = await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: true,
+	});
+	assert.equal(again.ok, false, 'the access was given back');
+	assert.deepEqual(
+		structuredClone(
+			(harness.extraStorage['tablodge.sourceCatchUp'] as {dismissed: unknown})
+				.dismissed,
+		),
+		{youtube: []},
 	);
 });
 

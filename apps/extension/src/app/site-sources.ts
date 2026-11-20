@@ -747,6 +747,17 @@ export function sourceChoice(
 The choice with `field` set to `value`, or removed when `value` is undefined; the other fields stay as they are.
 */
 /**
+Stores a site's choices as they came. A computed key, so an id such as `__proto__` stays an ordinary key.
+*/
+export function putChoice(
+	state: SiteSourcesState,
+	id: string,
+	value: Record<string, unknown>,
+) {
+	state.choices = {...state.choices, [id]: value};
+}
+
+/**
 Removes a site's choices: the site is off in every browser.
 */
 export function withoutChoice(state: SiteSourcesState, id: string) {
@@ -783,13 +794,15 @@ export function parseSiteSourcesState(raw: unknown): SiteSourcesState {
 			},
 		] as const;
 	});
-	const choices: SiteSourcesState['choices'] = {};
+	let choices: SiteSourcesState['choices'] = {};
 	if (isRecord(raw) && isRecord(raw.choices)) {
-		for (const [id, choice] of Object.entries(raw.choices)) {
-			if (isRecord(choice)) {
-				choices[id] = choice;
-			}
-		}
+		// Built with fromEntries, so an id such as `__proto__` stays an ordinary key.
+		choices = Object.fromEntries(
+			Object.entries(raw.choices).filter(
+				(entry): entry is [string, Record<string, unknown>] =>
+					isRecord(entry[1]),
+			),
+		);
 	} else {
 		// Stored before choices synced: a site that was on, or went off when its access was revoked, keeps them.
 		for (const source of SITE_SOURCES) {
