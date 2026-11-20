@@ -114,6 +114,21 @@ jobs:
             -f event_type=tablodge-release-published \
             -F "client_payload[version]=$VERSION"
 
+      # The Update TabLodge workflow in Cloudflare button repositories downloads this worker.js, which reports the
+      # release version; the committed one reports 0.0.0. Last, and allowed to fail, so it never holds up the release
+      # or the image and APK jobs; without the asset, that workflow takes the tag's worker.js.
+      - name: Attach the Cloudflare Worker
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node scripts/release-version.ts set-server "$VERSION"
+          pnpm run cf:bundle
+          grep -q "var version = \"$VERSION\";" apps/server/cloudflare-deploy/worker.js
+          cp apps/server/cloudflare-deploy/worker.js release/tablodge-sync-worker.js
+          gh release upload "v$VERSION" release/tablodge-sync-worker.js
+
   image:
     name: Publish the sync server image
     needs: release

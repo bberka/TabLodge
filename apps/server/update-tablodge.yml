@@ -1,0 +1,105 @@
+# For a sync server deployed with the Deploy to Cloudflare button: add this file to the repository the button created,
+# as .github/workflows/update-tablodge.yml. Once a day it downloads the newest TabLodge release's worker.js and commits
+# it when it changed, and Cloudflare deploys the commit. Actions › Update TabLodge › Run workflow updates at once.
+# The repository variable TABLODGE_VERSION, such as `0.4`, keeps it on that release line. See
+# https://github.com/bberka/TabLodge/blob/master/docs/self-hosting.md#update-automatically
+# TabLodge itself never runs this file.
+name: Update TabLodge
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+    inputs:
+      protocol:
+        description: Also take a release with a new sync protocol (update TabLodge on every device first)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-tablodge
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The date of the last worker.js commit decides whether a release is newer.
+          fetch-depth: 0
+
+      - name: Update worker.js
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: bberka/TabLodge
+          TRACK: ${{ vars.TABLODGE_VERSION }}
+          ALLOW_PROTOCOL: ${{ inputs.protocol || false }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TRACK" ]; then
+            tag="$(gh api "repos/$SOURCE/releases?per_page=100" --jq "[.[] | select(.draft or .prerelease | not)
+              | select(.tag_name == \"v$TRACK\" or (.tag_name | startswith(\"v$TRACK.\")))][0].tag_name // empty")"
+          else
+            tag="$(gh api "repos/$SOURCE/releases/latest" --jq .tag_name)"
+          fi
+          if [ -z "$tag" ]; then
+            echo "::error::No TabLodge release matches TABLODGE_VERSION=$TRACK." && exit 1
+          fi
+
+          new="$(mktemp -d)"
+          at_tag() { gh api -H 'Accept: application/vnd.github.raw' "repos/$SOURCE/contents/apps/server/cloudflare-deploy/$1?ref=$tag" > "$new/$1"; }
+          # Releases from 0.4 on attach a worker.js that reports its version; older tags hold one that reports none.
+          if ! gh release download "$tag" -R "$SOURCE" -p tablodge-sync-worker.js -O "$new/worker.js" 2>/dev/null; then
+            at_tag worker.js
+          fi
+          at_tag wrangler.jsonc
+
+          if cmp -s worker.js "$new/worker.js"; then
+            echo "Already on TabLodge $tag." && exit 0
+          fi
+
+          # The Deploy button copies TabLodge's master, which can be ahead of the newest release. Only a release
+          # published after worker.js last changed here replaces it, so the server never goes back.
+          published="$(gh api "repos/$SOURCE/releases/tags/$tag" --jq .published_at)"
+          changed="$(git log -1 --format=%cI -- worker.js)"
+          if [ "$(date -d "$published" +%s)" -le "$(date -d "$changed" +%s)" ]; then
+            echo "worker.js changed here on $changed, after $tag was published on $published, so it stays. The next release replaces it."
+            exit 0
+          fi
+
+          protocol() { grep -oP '^var PROTOCOL_VERSION = \K\d+' "$1" || true; }
+          old_protocol="$(protocol worker.js)"
+          new_protocol="$(protocol "$new/worker.js")"
+          if [ -z "$old_protocol" ] || [ -z "$new_protocol" ]; then
+            echo "::error::Could not read the sync protocol of worker.js here or in TabLodge $tag, so the update stops. Update by hand: https://github.com/$SOURCE/blob/master/docs/self-hosting.md#update"
+            exit 1
+          fi
+          if [ "$old_protocol" != "$new_protocol" ] && [ "$ALLOW_PROTOCOL" != true ]; then
+            echo "::error::TabLodge $tag speaks another sync protocol, so devices on an older TabLodge stop syncing until they update. Update TabLodge everywhere, then run this workflow by hand with the protocol box ticked."
+            exit 1
+          fi
+
+          # A release can need a new compatibility date or migration. Your vars are yours, so this file is never
+          # rewritten here: a difference outside vars stops the update.
+          node -e '
+            const fs = require("node:fs");
+            const read = (path) => {
+              const config = JSON.parse(fs.readFileSync(path, "utf8").replace(/^\s*\/\/.*$/gm, "").replace(/,(?=\s*[\]}])/g, ""));
+              delete config.vars;
+              return config;
+            };
+            if (!require("node:util").isDeepStrictEqual(read("wrangler.jsonc"), read(process.argv[1]))) {
+              console.log(`::error::wrangler.jsonc in TabLodge ${process.argv[2]} differs from yours outside vars. Copy it from https://github.com/${process.env.SOURCE}/blob/${process.argv[2]}/apps/server/cloudflare-deploy/wrangler.jsonc, keep your vars, commit, and run this workflow again.`);
+              process.exit(1);
+            }
+          ' "$new/wrangler.jsonc" "$tag"
+
+          cp "$new/worker.js" worker.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Update the TabLodge sync server to $tag" -- worker.js
+          git push
+          echo "Updated to TabLodge $tag. Cloudflare deploys the commit."
