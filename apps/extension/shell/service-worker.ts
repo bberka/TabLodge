@@ -9805,8 +9805,11 @@ async function reconcileSources() {
 
 	if (revoked.length > 0) {
 		await changeSourcesState((next) => {
+			// Its access went after it ran here, as with a revocation at any other time: Settings offers Allow again.
 			for (const source of revoked) {
-				next.sites[source.id] = {enabled: false};
+				next.sites[source.id] = sourceChoice(next, source).wanted
+					? {enabled: false, notice: 'revoked'}
+					: {enabled: false};
 			}
 		});
 	}

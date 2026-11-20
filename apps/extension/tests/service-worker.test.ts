@@ -14107,6 +14107,7 @@ test('access revoked while startup checks the other sites keeps the site off', a
 		id: 'youtube',
 		enabled: false,
 		wanted: true,
+		notice: 'revoked',
 	});
 	assert.equal(status('reddit')?.enabled, true);
 	assert.deepEqual(
