@@ -255,6 +255,8 @@ echo COMPOSE_PROFILES=autoupdate >> .env
 docker compose -f compose.https.yaml up -d
 ```
 
+Use the line in `.env`, not `--profile autoupdate`: the sync container gets the label the service looks for only from `COMPOSE_PROFILES`.
+
 This starts `autoupdate`, a [Watchtower](https://github.com/nicholas-fedor/watchtower) container that looks for a new image at 04:00 UTC every day. When there is one, it restarts only the sync container with it and deletes the old image; Caddy and every other container are left alone. If you already run a Watchtower of your own, it leaves the sync container to this one while the profile is on. To turn it off, delete the line from `.env` and run `docker compose -f compose.https.yaml rm -sf autoupdate`. To stay on one release, set `TABLODGE_IMAGE` to its version tag, such as `ghcr.io/bberka/tablodge-sync:0.4.0`; Watchtower then has nothing to update.
 
 Watchtower controls Docker through its socket, which gives it the same power over the machine as root. It is a community project kept up by one person. The original `containrrr/watchtower` is no longer maintained and does not start on Docker 29. If you would rather not run it, a daily cron job does the same with Docker alone (`crontab -e`, with your folder):
@@ -263,14 +265,14 @@ Watchtower controls Docker through its socket, which gives it the same power ove
 0 4 * * * cd /home/me/tablodge-sync && docker compose -f compose.https.yaml pull sync && docker compose -f compose.https.yaml up -d sync
 ```
 
-**Single container.** Start Watchtower for the `tablodge-sync` container only, by naming it:
+**Single container.** A Watchtower you already run for every container updates `tablodge-sync` too, and you need nothing more. Otherwise, start the container again as in [Update](#update), with `-l com.centurylinklabs.watchtower.scope=tablodge` added before the image name, then start a Watchtower limited to that label:
 
 ```sh
-docker run -d --name tablodge-sync-autoupdate --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock \
-	nickfedor/watchtower:1.24.1 --cleanup --schedule "0 0 4 * * *" tablodge-sync
+docker run -d --name tablodge-sync-autoupdate --restart unless-stopped -l com.centurylinklabs.watchtower.scope=tablodge \
+	-v /var/run/docker.sock:/var/run/docker.sock nickfedor/watchtower:1.24.1 --scope tablodge --cleanup --schedule "0 0 4 * * *"
 ```
 
-The new container keeps the old one's name, port, volume, and token. `docker rm -f tablodge-sync-autoupdate` turns it off.
+Without the scope, this Watchtower would remove any other Watchtower on the machine when it starts. Each update keeps the container's name, port, volume, and token. `docker rm -f tablodge-sync-autoupdate` turns it off.
 
 **Cloudflare, deployed with the button.** Add the **Update TabLodge** workflow to the repository Cloudflare created: on GitHub, choose **Add file › Create new file**, name it `.github/workflows/update-tablodge.yml`, paste the content of [`apps/server/update-tablodge.yml`](https://github.com/bberka/TabLodge/blob/master/apps/server/update-tablodge.yml), and commit. Every day it downloads `worker.js` from the newest TabLodge release and commits it when it changed, and Cloudflare deploys that commit. **Actions › Update TabLodge › Run workflow** updates at once. A GitLab repository has no GitHub Actions, so update it by hand.
 

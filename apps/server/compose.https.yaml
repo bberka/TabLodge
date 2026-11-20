@@ -3,7 +3,8 @@
 # this one, then run `docker compose -f compose.https.yaml up -d`:
 #   TABLODGE_DOMAIN=sync.example.com
 #   TABLODGE_SYNC_TOKEN=<output of: openssl rand -base64 32>
-# Add COMPOSE_PROFILES=autoupdate to also start the autoupdate service below.
+# Add COMPOSE_PROFILES=autoupdate to also start the autoupdate service below. Set it here, not with --profile,
+# because the sync container's scope label reads it.
 # See docs/self-hosting.md.
 services:
   sync:
