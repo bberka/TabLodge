@@ -180,6 +180,10 @@ type HarnessOptions = {
 	*/
 	grantedOrigins?: string[];
 	refusePermissions?: boolean;
+	/**
+	Waits before answering `permissions.contains` for these origins, so a test can change the grants in between.
+	*/
+	holdPermissionCheck?: {origins: string[]; until: Promise<void>};
 };
 type MenuItem = {
 	id?: string;
@@ -985,6 +989,14 @@ function createWorkerHarness(
 		}),
 		permissions: {
 			async contains(request: {origins?: string[]} = {}) {
+				const hold = options.holdPermissionCheck;
+				if (
+					hold &&
+					request.origins?.some((origin) => hold.origins.includes(origin))
+				) {
+					await hold.until;
+				}
+
 				return request.origins
 					? request.origins.every((origin) => grantedOrigins.has(origin))
 					: Boolean(options.downloads);
@@ -14022,6 +14034,85 @@ test('a site on in another browser shows as on but not here, and runs once this 
 		wanted: true,
 	});
 	assert.equal(harness.registeredScripts.size, 1);
+});
+
+test('a Remove while startup checks the other sites keeps the site removed', async () => {
+	const {promise: until, resolve: release} = Promise.withResolvers<void>();
+	const redditOrigins = [
+		'https://www.reddit.com/*',
+		'https://old.reddit.com/*',
+	];
+	const harness = sourcesHarness({
+		grantedOrigins: [...YOUTUBE_ORIGINS, ...redditOrigins],
+		holdPermissionCheck: {origins: redditOrigins, until},
+		storage: {
+			'tablodge.sources': {
+				version: 1,
+				sources: {},
+				choices: {youtube: {}, reddit: {}},
+			},
+		},
+	});
+	harness.listeners.onStartup();
+	await settle();
+	const removed = await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'youtube',
+		enabled: false,
+	});
+	assert.equal(removed.ok, true, removed.error);
+	release();
+	await settle();
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
+		id: 'youtube',
+		enabled: false,
+		wanted: false,
+	});
+	assert.deepEqual(
+		[...harness.registeredScripts.keys()],
+		['tablodge-source-reddit'],
+	);
+});
+
+test('access revoked while startup checks the other sites keeps the site off', async () => {
+	const {promise: until, resolve: release} = Promise.withResolvers<void>();
+	const redditOrigins = [
+		'https://www.reddit.com/*',
+		'https://old.reddit.com/*',
+	];
+	const harness = sourcesHarness({
+		grantedOrigins: [...YOUTUBE_ORIGINS, ...redditOrigins],
+		holdPermissionCheck: {origins: redditOrigins, until},
+		storage: {
+			'tablodge.sources': {
+				version: 1,
+				sources: {},
+				choices: {youtube: {}, reddit: {}},
+			},
+		},
+	});
+	// YouTube is checked and found allowed, then the check waits on Reddit while YouTube's access goes.
+	harness.listeners.onStartup();
+	await settle();
+	await harness.revokeOrigins(YOUTUBE_ORIGINS);
+	release();
+	await settle();
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	const status = (id: string) =>
+		result.ok
+			? structuredClone(result.sources.find((entry) => entry.id === id))
+			: undefined;
+	assert.deepEqual(status('youtube'), {
+		id: 'youtube',
+		enabled: false,
+		wanted: true,
+	});
+	assert.equal(status('reddit')?.enabled, true);
+	assert.deepEqual(
+		[...harness.registeredScripts.keys()],
+		['tablodge-source-reddit'],
+	);
 });
 
 test('a site chosen in another browser runs at startup without a click when this browser already grants its access', async () => {

@@ -9788,6 +9788,26 @@ async function reconcileSources() {
 				: {enabled: false};
 		}
 	});
+	/*
+	Access revoked while the other sites were checked: the onRemoved handler saw the site still off and left it. Checked
+	again now that it is written as on, so either this check or that handler turns it off.
+	*/
+	const revoked: SiteSource[] = [];
+	for (const source of started) {
+		if (!dropped.includes(source) && !(await sourcePermitted(source))) {
+			revoked.push(source);
+		}
+	}
+
+	if (revoked.length > 0) {
+		await changeSourcesState((next) => {
+			for (const source of revoked) {
+				next.sites[source.id] = {enabled: false};
+			}
+		});
+	}
+
+	dropped.push(...revoked);
 	await Promise.all(dropped.map(async (source) => unregisterSource(source)));
 	// Not awaited: after a sync round this runs inside the library's queue, which open tabs must not hold up.
 	void Promise.all(
