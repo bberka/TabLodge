@@ -276,6 +276,17 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 	);
 }
 
+async function animationsDone(page: Page) {
+	await page.evaluate(async () => {
+		const {document} = globalThis as typeof globalThis & {
+			document: {getAnimations(): Array<{finished: Promise<unknown>}>};
+		};
+		await Promise.all(
+			document.getAnimations().map(async (animation) => animation.finished),
+		);
+	});
+}
+
 async function writeSources(page: Page, sources: Record<string, unknown>) {
 	await page.evaluate(async (value) => {
 		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
@@ -306,16 +317,7 @@ export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
 					.getByText(/gives back its access to github\.com/)
 					.waitFor();
 				// The dialog fades in; mid fade its button fails contrast.
-				await page.evaluate(async () => {
-					const {document} = globalThis as typeof globalThis & {
-						document: {getAnimations(): Array<{finished: Promise<unknown>}>};
-					};
-					await Promise.all(
-						document
-							.getAnimations()
-							.map(async (animation) => animation.finished),
-					);
-				});
+				await animationsDone(page);
 				const violations = await axeViolationLines(page, axeSource);
 				assert.deepEqual(violations, [], violations.join('\n'));
 				await confirm.getByRole('button', {name: 'Cancel'}).focus();
@@ -371,13 +373,19 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 					.getByRole('list', {name: 'Backups'})
 					.getByRole('listitem');
 				await rows.first().waitFor();
-				// Deleting a backup offers Undo inside the dialog and moves focus to it.
+				// Deleting a backup asks first, then offers Undo inside the dialog and moves focus to it.
 				const before = await rows.count();
 				await dialog
 					.getByRole('button', {name: /^Delete the backup from/})
 					.first()
 					.focus();
 				await page.keyboard.press('Enter');
+				const ask = page.getByRole('alertdialog', {
+					name: 'Delete this backup?',
+				});
+				await ask.getByRole('button', {name: 'Delete'}).focus();
+				await page.keyboard.press('Enter');
+				await ask.waitFor({state: 'hidden'});
 				const undo = dialog.getByRole('button', {name: 'Undo'});
 				await undo.waitFor();
 				await until(
@@ -414,6 +422,7 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 				await help.focus();
 				await page.keyboard.press('Enter');
 				await page.getByRole('dialog', {name: 'About backups'}).waitFor();
+				await animationsDone(page);
 				const violations = await axeViolationLines(page, axeSource);
 				assert.deepEqual(violations, [], violations.join('\n'));
 				// Escape closes the help first and leaves the Backups dialog open.
