@@ -4,6 +4,9 @@
 //     bookmarked)
 // The button is found by its data-testid, which is the same in every interface language; the Share menu item by
 // its English label. Posts are <article> elements whose timestamp links to the post.
+// The bookmarks page is read for catch-up (#383): /i/bookmarks, which X now sends to /i/history (its Bookmarks tab;
+// Likes is /i/history/likes). X keeps only the posts near the screen in the page, so it reads what is there.
+import type {SavedPageReader} from './source-catch-up';
 import {xPostUrl} from './site-sources';
 import {
 	eventElements,
@@ -49,6 +52,20 @@ function postLink(post: Element): SourceLink | undefined {
 
 	return undefined;
 }
+
+const BOOKMARKS_PAGE = /^\/i\/(?:bookmarks|history)\/?$/;
+
+export const readTwitterSavedPage: SavedPageReader = (document) => {
+	if (!BOOKMARKS_PAGE.test(document.location.pathname)) {
+		return undefined;
+	}
+
+	// A post quoted inside another is part of that post, not a bookmark of its own.
+	return [...document.querySelectorAll(`main ${POST}`)]
+		.filter((post) => !post.parentElement?.closest(POST))
+		.map((post) => postLink(post))
+		.filter((link) => link !== undefined);
+};
 
 function mediaViewLink(document: Document): SourceLink | undefined {
 	const url = MEDIA_VIEW.test(document.location.pathname)

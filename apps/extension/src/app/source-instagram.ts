@@ -2,6 +2,9 @@
 // labeled "Save", and "Remove" once the post is saved. It is found by that English label. A post in the feed is an
 // <article> whose timestamp links to the post; a post or reel opened on its own page, or in a dialog over a grid or
 // a profile, is at the page's address.
+// The saved page (/<user>/saved/all-posts/ or a collection under /<user>/saved/), which only its owner can open, is
+// read for catch-up (#383): a grid of links to the saved posts and reels, each with its caption as the image's alt.
+import type {SavedPageReader} from './source-catch-up';
 import {instagramPostUrl} from './site-sources';
 import {
 	eventElements,
@@ -67,6 +70,33 @@ function articleLink(article: Element): SourceLink | undefined {
 
 	return undefined;
 }
+
+const SAVED_PAGE = /^\/[\w.]{1,30}\/saved\/[^/]+\//;
+
+export const readInstagramSavedPage: SavedPageReader = (document) => {
+	if (!SAVED_PAGE.test(document.location.pathname)) {
+		return undefined;
+	}
+
+	const links: SourceLink[] = [];
+	for (const anchor of document.querySelectorAll('main a[href]')) {
+		const url = instagramPostUrl(anchor.getAttribute('href') ?? '');
+		if (!url) {
+			continue;
+		}
+
+		const fallback = url.includes('/reel/')
+			? 'Instagram reel'
+			: 'Instagram post';
+		links.push({
+			url,
+			title:
+				excerpt(anchor.querySelector('img')?.getAttribute('alt')) || fallback,
+		});
+	}
+
+	return links;
+};
 
 export function createInstagramReader(document: Document): SourceReader {
 	return (event) => {

@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- github.com/<login>?tab=stars, trimmed from a real signed-in page (2026-11): the signed-in login in a meta tag,
+the starred rows in turbo-frame#user-starred-repos, each with a star form pair and the Lists dialog (whose empty
+<p> comes before the description). Repositories and logins swapped for public ones. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="user-login" content="octo-me"><title>Stars</title></head>
+<body>
+<main>
+	<turbo-frame id="user-starred-repos" data-turbo-skip-scroll="true">
+		<div class="col-lg-12">
+			<div class="col-12 d-block width-full tmp-py-4 border-bottom color-border-muted">
+				<div class="d-inline-block mb-1"><h3><a href="/nodejs/node"><span class="text-normal">nodejs / </span>node</a></h3></div>
+				<div class="float-right d-flex">
+					<div class="js-toggler-container js-social-container starring-container starring-container--with-list-menu on d-inline-block">
+						<div class="starred BtnGroup flex-1 ml-0 tmp-ml-0"><form class="js-social-form" action="/nodejs/node/unstar" method="post"><button aria-label="Starred, click to unstar this repository" type="submit" class="btn-sm btn BtnGroup-item"><span class="d-inline"> Starred </span></button></form></div>
+						<div class="unstarred BtnGroup ml-0 tmp-ml-0 flex-1"><form class="js-social-form" action="/nodejs/node/star" method="post"><button aria-label="Star this repository" type="submit" class="btn-sm btn BtnGroup-item"><span class="d-inline"> Star </span></button></form></div>
+						<dialog><p class="blankslate-description"> </p><p class="color-fg-muted my-2 mb-2 ws-normal">There was an error while loading.</p></dialog>
+					</div>
+				</div>
+				<div class="py-1"><p class="d-inline-block col-9 color-fg-muted tmp-pr-4" itemprop="description"> Node.js JavaScript runtime </p></div>
+			</div>
+			<div class="col-12 d-block width-full tmp-py-4 border-bottom color-border-muted">
+				<div class="d-inline-block mb-1"><h3><a href="/microsoft/TypeScript"><span class="text-normal">microsoft / </span>TypeScript</a></h3></div>
+				<div class="float-right d-flex">
+					<div class="js-toggler-container js-social-container starring-container starring-container--with-list-menu d-inline-block">
+						<div class="starred BtnGroup flex-1 ml-0 tmp-ml-0"><form class="js-social-form" action="/microsoft/TypeScript/unstar" method="post"><button type="submit" class="btn-sm btn BtnGroup-item"> Starred </button></form></div>
+						<div class="unstarred BtnGroup ml-0 tmp-ml-0 flex-1"><form class="js-social-form" action="/microsoft/TypeScript/star" method="post"><button type="submit" class="btn-sm btn BtnGroup-item"> Star </button></form></div>
+					</div>
+				</div>
+				<div class="py-1"><p class="d-inline-block col-9 color-fg-muted tmp-pr-4" itemprop="description"> Unstarred on this page, so no longer a star </p></div>
+			</div>
+			<div class="col-12 d-block width-full tmp-py-4 border-bottom color-border-muted">
+				<div class="d-inline-block mb-1"><h3><a href="/torvalds/linux"><span class="text-normal">torvalds / </span>linux</a></h3></div>
+				<div class="float-right d-flex">
+					<div class="js-toggler-container js-social-container starring-container starring-container--with-list-menu on d-inline-block">
+						<div class="starred BtnGroup flex-1 ml-0 tmp-ml-0"><form class="js-social-form" action="/torvalds/linux/unstar" method="post"><button type="submit" class="btn-sm btn BtnGroup-item"> Starred </button></form></div>
+						<dialog><p class="blankslate-description"> </p></dialog>
+					</div>
+				</div>
+			</div>
+			<div class="paginate-container"><div class="BtnGroup"><button class="btn BtnGroup-item" disabled>Previous</button><a class="btn BtnGroup-item" href="/octo-me?after=abc&amp;tab=stars">Next</a></div></div>
+		</div>
+	</turbo-frame>
+</main>
+</body>
+</html>

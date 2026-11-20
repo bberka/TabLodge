@@ -14561,3 +14561,76 @@ test('a saved page of a site that is off, or another site, gets no count and add
 	assert.equal(elsewhere.ok, false);
 	assert.equal(harness.state.bookmarks.length, 0);
 });
+
+test('the saved pages of YouTube, X, Instagram, and GitHub add their missing items to their own columns', async () => {
+	const pages = [
+		{
+			id: 'youtube',
+			origins: ['https://www.youtube.com/*'],
+			url: 'https://www.youtube.com/playlist?list=WL',
+			link: '/watch?v=dQw4w9WgXcQ&list=WL&index=1&pp=iAQB',
+			stored: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+		},
+		{
+			id: 'x',
+			origins: ['https://x.com/*', 'https://twitter.com/*'],
+			url: 'https://x.com/i/history',
+			link: '/alice/status/1900000000000000001',
+			stored: 'https://x.com/alice/status/1900000000000000001',
+		},
+		{
+			id: 'instagram',
+			origins: ['https://www.instagram.com/*'],
+			url: 'https://www.instagram.com/someone/saved/all-posts/',
+			link: '/p/DfAAAAAAAAA/',
+			stored: 'https://www.instagram.com/p/DfAAAAAAAAA/',
+		},
+		{
+			id: 'github',
+			origins: ['https://github.com/*'],
+			url: 'https://github.com/octo-me?tab=stars',
+			link: '/nodejs/node',
+			stored: 'https://github.com/nodejs/node',
+		},
+	];
+	for (const page of pages) {
+		const harness = sourcesHarness();
+		harness.grantOrigins(page.origins);
+		await harness.sendMessage({
+			type: 'SET_SITE_SOURCE',
+			source: page.id,
+			enabled: true,
+		});
+		const from = {tab: {...youtubeTab, url: page.url}, url: page.url};
+		const links = [{url: page.link, title: 'Saved'}];
+		assert.deepEqual(
+			await counted(
+				harness.sendMessage(
+					{type: 'SITE_SOURCE_CATCH_UP', source: page.id, links},
+					from,
+				),
+			),
+			{ok: true, missing: 1, ask: true},
+			page.id,
+		);
+		const added = await harness.sendMessage(
+			{type: 'SITE_SOURCE_CATCH_UP_ADD', source: page.id, links},
+			from,
+		);
+		assert.equal(added.ok && added.added, 1, page.id);
+		assert.deepEqual(
+			harness.state.bookmarks.map((bookmark) => [
+				bookmark.url,
+				bookmark.columnId,
+			]),
+			[[page.stored, `source-${page.id}`]],
+		);
+
+		// Another site's page cannot add to this one.
+		const elsewhere = await harness.sendMessage(
+			{type: 'SITE_SOURCE_CATCH_UP_ADD', source: page.id, links},
+			page.id === 'github' ? fromYoutube : redditSaved,
+		);
+		assert.equal(elsewhere.ok, false, page.id);
+	}
+});
