@@ -71,6 +71,8 @@ export function createSyncToken(): string {
 }
 
 const PULL_LIMIT = 500;
+// Record kinds that sync only when the server and the host support them.
+const OPTIONAL_KINDS = ['trash', 'note', 'source'] as const;
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 1500;
 // Chrome keeps an extension service worker alive while its WebSocket exchanges messages within 30 seconds.
@@ -674,10 +676,18 @@ export function createSyncClient(host: SyncHost) {
 		library would drop such a tab or move such a bookmark, and the next capture would send that loss to every
 		device.
 		*/
+		/*
+		The optional kinds this round pulls. A kind skipped by earlier pulls (the server lacked it, or this device ran a
+		version without it, such as 0.3.0 before Sources) was left behind the cursor, so a round that takes it for the
+		first time pulls from the start. Stamps decide record by record, so nothing newer here is lost.
+		*/
+		const kinds = OPTIONAL_KINDS.filter((kind) => !unsupported(kind));
 		const start = await step(async (state) => ({
 			state,
 			result: {
-				cursor: state.cursor,
+				cursor: kinds.every((kind) => state.pulled?.includes(kind))
+					? state.cursor
+					: 0,
 				purged: state.purged,
 				known: Math.max(state.known ?? 0, state.cursor),
 			},
@@ -700,8 +710,13 @@ export function createSyncClient(host: SyncHost) {
 				continue;
 			}
 
-			// The server is behind this device: it was restored from an older backup or replaced. Start over.
-			if (!serverReset && page.cursor < Math.max(end.cursor, start.known)) {
+			// The server is behind this device: it was restored from an older backup or replaced. Start over. Only the
+			// last page says where the server is; an earlier one of a pull from the start ends wherever its page does.
+			if (
+				!serverReset &&
+				!page.more &&
+				page.cursor < Math.max(end.cursor, start.known)
+			) {
 				serverReset = true;
 				pulled.length = 0;
 				end = {cursor: 0, purged: 0};
@@ -767,7 +782,7 @@ export function createSyncClient(host: SyncHost) {
 						...(await captureLocal(next, finished.records)),
 						joined: true,
 					};
-			return {state: joined, result: undefined};
+			return {state: {...joined, pulled: kinds}, result: undefined};
 		});
 
 		let refused = 0;

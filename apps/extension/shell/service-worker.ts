@@ -9771,9 +9771,15 @@ async function reconcileSources() {
 		return;
 	}
 
+	const dropped: SiteSource[] = [];
 	await changeSourcesState((next) => {
 		for (const source of started) {
-			next.sites[source.id] = {enabled: true};
+			// A Remove that ran while the permissions were checked wins.
+			if (sourceChoice(next, source).wanted) {
+				next.sites[source.id] = {enabled: true};
+			} else {
+				dropped.push(source);
+			}
 		}
 
 		for (const source of lost) {
@@ -9782,9 +9788,12 @@ async function reconcileSources() {
 				: {enabled: false};
 		}
 	});
+	await Promise.all(dropped.map(async (source) => unregisterSource(source)));
 	// Not awaited: after a sync round this runs inside the library's queue, which open tabs must not hold up.
 	void Promise.all(
-		started.map(async (source) => injectSourceIntoOpenTabs(source)),
+		started
+			.filter((source) => !dropped.includes(source))
+			.map(async (source) => injectSourceIntoOpenTabs(source)),
 	).catch(() => undefined);
 }
 
@@ -9831,10 +9840,8 @@ async function applySyncSources(put: SyncedSource[], remove: string[]) {
 				continue;
 			}
 
-			if (next.sites[source.id].enabled) {
-				stopped.push(source);
-			}
-
+			// Also a site off here (its access revoked): its Not now answers go with it.
+			stopped.push(source);
 			next.sites[source.id] = {enabled: false};
 		}
 	});

@@ -342,7 +342,6 @@ function NewTab() {
 	const [importOpen, setImportOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
-	useSourcesElsewherePointer(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
 	const [columnDropIndicator, setColumnDropIndicator] =
 		useState<DropIndicator | null>(null);
@@ -631,6 +630,8 @@ function NewTab() {
 	// (the service worker decides whether this tab was one); any other visit shows the dashboard as usual.
 	const [handoff, setHandoff] = useState<'idle' | 'stay'>('idle');
 	const holding = Boolean(state) && !newTabOn && handoff === 'idle';
+	// Only once the dashboard stays: a tab handed on to the browser's page would drop the toast unseen.
+	useSourcesElsewherePointer(showStatus, Boolean(state) && !holding);
 	useEffect(() => {
 		if (!holding) {
 			return;

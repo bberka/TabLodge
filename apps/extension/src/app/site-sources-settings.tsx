@@ -508,7 +508,7 @@ export function SiteSourcesSettings({
 									<p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
 										{source.description}
 									</p>
-									{!entry?.enabled && !notice && (
+									{!entry?.enabled && !entry?.notice && (
 										<p className="mt-2 max-w-xl text-xs leading-5 text-muted-foreground">
 											On in another browser. Turn it on to save here too; the
 											browser asks for access to {source.hosts[0]}.
@@ -529,7 +529,7 @@ export function SiteSourcesSettings({
 								</div>
 							</div>
 							<div className="flex shrink-0 gap-2 max-sm:justify-end">
-								{!entry?.enabled && notice === 'revoked' && (
+								{!entry?.enabled && entry?.notice === 'revoked' && (
 									<Button
 										variant="outline"
 										size="sm"
@@ -541,7 +541,7 @@ export function SiteSourcesSettings({
 										Allow again
 									</Button>
 								)}
-								{!entry?.enabled && notice !== 'revoked' && (
+								{!entry?.enabled && entry?.notice !== 'revoked' && (
 									<Button
 										variant="outline"
 										size="sm"

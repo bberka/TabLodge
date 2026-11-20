@@ -44,6 +44,8 @@ function makeServer(options: {legacy?: boolean} = {}) {
 	let rewriteStatus: ((body: Record<string, unknown>) => unknown) | undefined;
 	// Requests by path, so a test can tell whether a device pulled or pushed.
 	const requests: string[] = [];
+	// Pushes by how many changes each carried.
+	const pushes: number[] = [];
 	const sockets = new Set<FakeSocket>();
 	const createServerApi = () =>
 		createApi({
@@ -68,6 +70,7 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		},
 		sockets,
 		requests,
+		pushes,
 		/**
 		Changes what /v1/status answers, as another server version would; undefined goes back to the real answer.
 		*/
@@ -92,6 +95,13 @@ function makeServer(options: {legacy?: boolean} = {}) {
 			}
 
 			requests.push(new URL(url).pathname);
+			if (init.method === 'POST' && new URL(url).pathname === '/v1/changes') {
+				pushes.push(
+					(JSON.parse(String(init.body)) as {changes: unknown[]}).changes
+						.length,
+				);
+			}
+
 			if (rewriteStatus && new URL(url).pathname === '/v1/status') {
 				const response = await app.request(url, init);
 				return Response.json(
@@ -241,9 +251,13 @@ type Device = {
 function makeDevice(
 	server: ReturnType<typeof makeServer>,
 	store = emptyStore(),
-	{withTrash = false, withSources = false, beforeNotes = false} = {},
+	{
+		withTrash = false,
+		withSources = false,
+		beforeNotes = false,
+		storage = new Map<string, unknown>(),
+	} = {},
 ) {
-	const storage = new Map<string, unknown>();
 	let queue = Promise.resolve();
 	const backups: string[] = [];
 	const device: Device = {
@@ -1003,4 +1017,51 @@ test('a server without the sources feature keeps syncing the library and leaves 
 	}
 
 	assert.deepEqual(sourceIds(b), ['github']);
+});
+
+test('a browser that skipped Sources choices on 0.3.0 gets them once it updates, and keeps its own edits', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, emptyStore(), {withSources: true});
+	a.sources = [{id: 'youtube', value: {columnId: 'col'}}];
+	await a.client.connect(URL_BASE, TOKEN);
+	// Pages past one push, so the pull from the start runs over several of them.
+	a.edit((store) => ({
+		...store,
+		bookmarks: Array.from({length: 600}, (_, index) => bookmark(`b${index}`)),
+	}));
+	await a.client.syncNow();
+
+	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
+	await old.client.connect(URL_BASE, TOKEN);
+	assert.equal(ids(old.store).length, 600);
+	// An edit made on 0.3.0 that is still waiting when the browser updates.
+	server.setOnline(false);
+	old.edit((store) => ({
+		...store,
+		bookmarks: store.bookmarks.map((entry) =>
+			entry.id === 'b0' ? {...entry, title: 'Edited on 0.3.0'} : entry,
+		),
+	}));
+	await old.client.syncNow();
+	old.client.stop();
+	server.setOnline(true);
+
+	// The same browser on this version: same storage, now with Sources.
+	const updated = makeDevice(server, old.store, {
+		withSources: true,
+		storage: old.storage,
+	});
+	const before = server.pushes.length;
+	await updated.client.wake();
+	assert.deepEqual(updated.sources, [
+		{id: 'youtube', value: {columnId: 'col'}},
+	]);
+	// One push with the waiting edit, not a restart that sends every record again as after a server reset.
+	assert.deepEqual(server.pushes.slice(before), [1]);
+	await a.client.syncNow();
+	assert.equal(
+		a.store.bookmarks.find((entry) => entry.id === 'b0')?.title,
+		'Edited on 0.3.0',
+	);
+	assert.equal((await updated.client.status()).pending, 0);
 });

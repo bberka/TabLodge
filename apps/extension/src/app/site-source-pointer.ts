@@ -20,12 +20,15 @@ Says once on the dashboard when sites are on in another browser but not here, wi
 access in a single prompt. Each site is pointed to once per browser; Settings › Sources keeps showing it until it is
 turned on or removed.
 */
-export function useSourcesElsewherePointer(showStatus: ShowStatus) {
+export function useSourcesElsewherePointer(
+	showStatus: ShowStatus,
+	shown: boolean,
+) {
 	// A new function every render; the latest one shows the toast.
 	const showRef = useRef(showStatus);
 	showRef.current = showStatus;
 	useEffect(() => {
-		if (chrome.extension?.inIncognitoContext) {
+		if (!shown || chrome.extension?.inIncognitoContext) {
 			return;
 		}
 
@@ -88,5 +91,5 @@ export function useSourcesElsewherePointer(showStatus: ShowStatus) {
 			alive = false;
 			chrome.storage.onChanged.removeListener(onChanged);
 		};
-	}, []);
+	}, [shown]);
 }

@@ -12063,6 +12063,38 @@ test('a site removed in another browser goes off here: script, access, and Not n
 	);
 });
 
+test('a site removed in another browser after this one lost its access clears its Not now answers here too', async () => {
+	const server = syncServer();
+	const harness = sourcesHarness({
+		fetch: server.fetch,
+		storage: {
+			...regularSync,
+			'tablodge.sourceCatchUp': {
+				version: 1,
+				dismissed: {youtube: ['https://www.youtube.com/watch?v=jNQXAC9IVRw']},
+			},
+		},
+	});
+	await switchOnYoutube(harness);
+	await harness.sendMessage({type: 'SYNC_NOW'});
+	await harness.revokeOrigins(YOUTUBE_ORIGINS);
+	server.log.push([remoteSource('youtube')], Date.now());
+	await harness.sendMessage({type: 'SYNC_NOW'});
+	const result = await harness.sendMessage({type: 'GET_SITE_SOURCES'});
+	assert.deepEqual(result.ok && structuredClone(result.sources[0]), {
+		id: 'youtube',
+		enabled: false,
+		wanted: false,
+	});
+	assert.deepEqual(
+		structuredClone(
+			(harness.extraStorage['tablodge.sourceCatchUp'] as {dismissed: unknown})
+				.dismissed,
+		),
+		{youtube: []},
+	);
+});
+
 test('a separate private library syncs to its own space on the server, apart from the regular library', async () => {
 	const server = syncServer();
 	const first = await plainPrivateLibrary({fetch: server.fetch}, regularSync);
