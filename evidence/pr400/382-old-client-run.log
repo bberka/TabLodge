@@ -1,0 +1,13 @@
+a connect true
+old connect true
+old created column true
+A sees the 0.3.0 edits: true true
+A Sources after the 0.3.0 rounds: {
+  youtube: { enabled: true, wanted: true },
+  x: { enabled: true, wanted: true, keepOffSite: true }
+}
+0.3.0 sync status: {"connected":true,"url":"http://127.0.0.1:18382","phase":"idle","live":true,"lastSyncAt":1795183402657,"pending":0,"refused":0,"error":null,"needsKey":false}
+A new browser joining afterwards gets the choices: {
+  youtube: { enabled: false, wanted: true },
+  x: { enabled: false, wanted: true, keepOffSite: true }
+}
