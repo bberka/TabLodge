@@ -3,6 +3,7 @@ Pure edits of the synced library's bookmark board: columns and bookmarks. The ph
 extension does, so the sync client in apps/extension/src/shared/sync can merge it with the server.
 */
 import type {Bookmark, Store} from '../../../extension/src/shared/types';
+import type {DeviceStamp} from '../../../extension/src/shared/device';
 import {isSourceColumnId} from '../../../extension/src/shared/source-columns';
 import {isColumnColor} from '../../../extension/src/shared/accent-colors';
 import {
@@ -127,6 +128,10 @@ type NewBookmark = {
 	The note. Blank removes it; leaving it out keeps the one a bookmark being changed has.
 	*/
 	notes?: string;
+	/**
+	The phone that saves a new bookmark. A bookmark being changed keeps the device it was saved on.
+	*/
+	device?: DeviceStamp;
 };
 
 /**
@@ -181,6 +186,7 @@ export function addBookmark(
 			title: input.title.trim() || hostOf(url),
 			url,
 			columnId,
+			...input.device,
 			createdAt: now,
 			updatedAt: now,
 		},
@@ -581,12 +587,13 @@ export function addBookmarks(
 	columnId: string,
 	ids: readonly string[],
 	now: number,
+	device?: DeviceStamp,
 ): Store {
 	let next = store;
 	for (const [index, url] of urls.entries()) {
 		next = addBookmark(
 			next,
-			{url, title: '', columnId},
+			{url, title: '', columnId, device},
 			ids[index] ?? `${now}-${index}`,
 			now,
 		);

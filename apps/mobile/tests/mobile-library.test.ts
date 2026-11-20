@@ -94,6 +94,51 @@ describe('bookmarks', () => {
 		assert.equal(store.bookmarks[0].columnId, DEFAULT_BOOKMARK_COLUMN_ID);
 	});
 
+	test('a new bookmark carries the phone that saved it, and an edit keeps it', () => {
+		const phone = {deviceName: 'Pixel 9', deviceKind: 'mobile'} as const;
+		let store = addBookmark(
+			emptyStore(NOW),
+			{url: 'https://a.test', title: 'A', columnId: '', device: phone},
+			'a',
+			NOW,
+		);
+		store = addBookmarks(
+			store,
+			['https://b.test'],
+			DEFAULT_BOOKMARK_COLUMN_ID,
+			['b'],
+			NOW,
+			phone,
+		);
+		store = addBookmark(
+			store,
+			{url: 'https://c.test', title: 'C', columnId: ''},
+			'c',
+			NOW,
+		);
+		store = updateBookmark(
+			store,
+			'a',
+			{
+				url: 'https://a.test',
+				title: 'Renamed',
+				columnId: DEFAULT_BOOKMARK_COLUMN_ID,
+			},
+			NOW + 1,
+		);
+		const device = (id: string) => {
+			const bookmark = store.bookmarks.find((entry) => entry.id === id)!;
+			return [bookmark.deviceName, bookmark.deviceKind];
+		};
+
+		assert.deepEqual(device('a'), ['Pixel 9', 'mobile']);
+		assert.deepEqual(device('b'), ['Pixel 9', 'mobile']);
+		assert.equal(
+			'deviceName' in store.bookmarks.find((entry) => entry.id === 'c')!,
+			false,
+		);
+	});
+
 	test('puts a new bookmark last in the chosen column, as the extension does', () => {
 		let store = addColumn(emptyStore(NOW), 'Read', 'c1', NOW);
 		store = addBookmark(

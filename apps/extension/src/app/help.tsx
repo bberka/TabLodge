@@ -247,10 +247,10 @@ function Help() {
 						'folder color colour switch update session colors move drag edit folder icon tint',
 				},
 				{
-					title: 'Device names on sessions',
-					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
+					title: 'Device names on sessions and bookmarks',
+					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session and bookmark you save records that name, including saves from Sources and from the phone. Session cards show where each one was saved, with a computer or phone icon, and a bookmark shows Saved on and the device when you edit it. Imported bookmarks and bookmarks saved before this have none. The name belongs to this browser only. Renaming it does not change what was already saved. Searching sessions also matches the device name, and from:phone, from:computer, or from:"a device name" keeps what was saved there.',
 					searchText:
-						'device name which device saved session computer phone mobile desktop sync settings rename where saved from',
+						'device name which device saved session bookmark computer phone mobile desktop sync settings rename where saved from saved on',
 				},
 				{
 					title: 'Site icons',
@@ -524,32 +524,36 @@ function Help() {
 						'sources settings add a site remove youtube watch later reddit saved posts comments x twitter bookmarks instagram reels github stars star repository hacker news hn favorite stack overflow bookmark question dev.to devto reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read medium substack saved page catch up existing saves phone add them not now save automatically site access permission column icon color undo private window trash delete column stop saving add bookmark default',
 				},
 				{
-					title: 'Keep saves off X and Reddit',
+					title: 'Keep saves off the site',
 					body: (
 						<>
-							Under each added X or Reddit site in Settings › Sources, When you
-							save on the site offers two choices. Save on the site and in{' '}
-							{PROJECT.name}, the default, lets the site save as usual and
-							bookmarks the same link. Save to {PROJECT.name} only stops your
-							click on the site&apos;s save control before the site sees it, so
-							the item goes only into the site&apos;s column in {PROJECT.name}
-							(or the one under Save to). The site&apos;s saved list won&apos;t
-							include it, the button doesn&apos;t turn to saved, and the site
-							can&apos;t use the save for its recommendations. To save only on
-							the site, remove the site from Sources. The notice in the page
-							offers Undo and Also save on the site, which passes the same click
-							on to the site; press Tab to reach them. Hold Shift as you click
-							to save on the site and in {PROJECT.name} once. If {PROJECT.name}{' '}
-							can&apos;t read which item you saved, or can&apos;t save it, the
-							click goes on to the site, so a save is never lost. The
-							site&apos;s own keyboard shortcuts still save there.
-							{PROJECT.name} blocks no network requests, hides nothing on the
-							site, and doesn&apos;t stop the site learning from anything else
-							you do there. Items you saved on the site before stay saved there.
+							Under each added site in Settings › Sources, When you save on the
+							site offers two choices. Save on the site and in {PROJECT.name},
+							the default, lets the site save as usual and bookmarks the same
+							link. Save to {PROJECT.name} only stops your click on the
+							site&apos;s save control before the site sees it, so the item goes
+							only into the site&apos;s column in {PROJECT.name} (or the one
+							under Save to). The site&apos;s saved list won&apos;t include it,
+							the button doesn&apos;t turn to saved, and the site can&apos;t use
+							the save for its recommendations. To save only on the site, remove
+							the site from Sources. The notice in the page offers Undo and Also
+							save on the site, which passes the same click on to the site;
+							press Tab to reach them. Hold Shift as you click to save on the
+							site and in {PROJECT.name} once. If {PROJECT.name} can&apos;t read
+							which item you saved, or can&apos;t save it, the click goes on to
+							the site, so a save is never lost. The site&apos;s own keyboard
+							shortcuts still save there. {PROJECT.name} blocks no network
+							requests, hides nothing on the site, and doesn&apos;t stop the
+							site learning from anything else you do there. Items you saved on
+							the site before stay saved there. Medium doesn&apos;t offer the
+							choice: its bookmark button opens Medium&apos;s Save to list
+							panel, and the page doesn&apos;t say whether the story is already
+							in a list, so stopping the click would also stop you moving or
+							removing it.
 						</>
 					),
 					searchText:
-						'keep saves off the site save to tablodge only x twitter reddit bookmark save stop click shift also save on this site undo recommendations privacy sources',
+						'keep saves off the site save to tablodge only youtube watch later x twitter reddit instagram github star hacker news favorite stack overflow dev.to reading list lobsters bluesky soundcloud like spotify library letterboxd imdb watchlist goodreads want to read substack medium bookmark save stop click shift also save on this site undo recommendations privacy sources',
 				},
 			],
 			action: {
@@ -691,6 +695,13 @@ function Help() {
 									Quote a name with spaces: <Op>col:"Read later"</Op>.
 								</li>
 								<li>
+									<Op>from:phone</Op> and <Op>from:computer</Op> keep what was
+									saved on a phone or a computer, and{' '}
+									<Op>from:"Work laptop"</Op> what was saved on a device whose
+									name contains the text. Imported and older bookmarks have no
+									device, so they are left out.
+								</li>
+								<li>
 									<Op>after:2026-01-01</Op> keeps what was saved on or after
 									that day, <Op>before:2026-06-01</Op> what was saved before it.
 								</li>
@@ -704,7 +715,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder after before date day filter narrow query syntax tips kind image pdf video',
+						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder from device phone computer after before date day filter narrow query syntax tips kind image pdf video',
 				},
 				{
 					title: 'Open the search palette',

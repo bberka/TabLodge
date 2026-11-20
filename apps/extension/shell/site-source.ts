@@ -150,6 +150,12 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			title: kept.link.title,
 			discussion: kept.link.discussion,
 		});
+		// The worker keeps the result for the next page of a site whose save loads one, but a stopped save loaded
+		// none: this page shows it, so a later page in the tab must not show it again.
+		if (source.saveLoadsPage) {
+			void takePending();
+		}
+
 		const {text, error, alsoSave, undoId} = settleKeptSave(result, kept, {
 			app: appName,
 			site: siteName,

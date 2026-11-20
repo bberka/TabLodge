@@ -14,6 +14,7 @@ import {
 	useLibraryOf,
 } from '../../library/library-store';
 import {useLinkPreview} from '../../library/link-preview';
+import {phoneStamp} from '../../platform/device';
 import {type QuoteUndo, saveQuote} from '../../library/quote-edits';
 import {extractUrl, hostOf} from '../../library/store-shape';
 import {useView} from '../../library/view';
@@ -99,6 +100,7 @@ export function SaveQuoteForm({
 						quote,
 						title: cleanPageTitle(preview?.title ?? '', cleanTitles),
 						columnId,
+						device: phoneStamp(),
 					},
 					newId(),
 					Date.now(),

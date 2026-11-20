@@ -321,6 +321,9 @@ function render(
 			color: colors.primary,
 			font: 'inherit',
 			'font-weight': '600',
+			// One line, so the row never gets narrower than its widest label: a label wider than the row runs over the
+			// text ("Also save on Stack Overflow").
+			'white-space': 'nowrap',
 			'text-decoration': 'none',
 			'text-underline-offset': '4px',
 			outline: '2px solid transparent',

@@ -366,6 +366,35 @@ test('a column keeps its sites through a sync round trip', () => {
 	]);
 });
 
+test('a bookmark keeps the device that saved it through a sync round trip, and one without a device gets none', () => {
+	const store = emptyStore();
+	const bookmark = (id: string) => ({
+		id,
+		title: id,
+		url: `https://example.com/${id}`,
+		columnId: 'bookmark-unfiled',
+		createdAt: 0,
+		updatedAt: 0,
+	});
+	store.bookmarks = [
+		{...bookmark('phone'), deviceName: 'Pixel 9', deviceKind: 'mobile'},
+		bookmark('old'),
+	];
+	const records = splitLibrary(store);
+	assert.deepEqual(Object.keys(records.get('bookmark:old')!.value as object), [
+		'id',
+		'title',
+		'url',
+		'columnId',
+		'createdAt',
+		'updatedAt',
+	]);
+	const [phone, old] = assemble(records.values(), emptyStore()).bookmarks;
+	assert.equal(phone.deviceName, 'Pixel 9');
+	assert.equal(phone.deviceKind, 'mobile');
+	assert.equal('deviceName' in old, false);
+});
+
 const redditColumn = (createdAt: number) => ({
 	id: 'source-reddit',
 	name: 'Reddit',
