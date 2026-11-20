@@ -963,6 +963,15 @@ export type TabLodgeMessages = {
 	*/
 	SET_SITE_SOURCE_COLUMN: {source: string; columnId: string | null};
 	/**
+	Settings › Sources: whether a site whose adapter supports it keeps saves off the site (Save to TabLodge only).
+	*/
+	SET_SITE_SOURCE_KEEP_OFF: {source: string; keepOffSite: boolean};
+	/**
+	Sent by the site content script when it starts and when the Sources state changes: whether to stop the click on
+	the site's save control here.
+	*/
+	SITE_SOURCE_MODE: {source: string};
+	/**
 	Sent by the site content script: the user saved this link on the site. `discussion` is the item's own page on
 	a site that links elsewhere (Hacker News, Lobsters); the worker checks it and puts it in the note.
 	*/
@@ -1103,6 +1112,10 @@ export type SiteSourceStatus = {
 	enabled: boolean;
 	notice?: SiteSourceNotice;
 	columnId?: string;
+	/**
+	Save to TabLodge only: the site's own save is stopped and the link goes to TabLodge alone.
+	*/
+	keepOffSite?: true;
 };
 /**
 What a source save did: `saved` into the site's column, `exists` (the address is already in the library),
@@ -1335,6 +1348,11 @@ export type TabLodgeResponses = {
 	GET_SITE_SOURCES: {sources: SiteSourceStatus[]};
 	SET_SITE_SOURCE: {sources: SiteSourceStatus[]};
 	SET_SITE_SOURCE_COLUMN: {sources: SiteSourceStatus[]};
+	SET_SITE_SOURCE_KEEP_OFF: {sources: SiteSourceStatus[]};
+	/**
+	`keepOffSite`: the source is on and set to Save to TabLodge only, and saves from this window are added.
+	*/
+	SITE_SOURCE_MODE: {keepOffSite: boolean};
 	/**
 	`column`: the name of the column the link went to, when it was saved.
 	*/

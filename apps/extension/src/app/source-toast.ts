@@ -1,8 +1,10 @@
 // The small notice a source save shows in the site's page. It sits in a closed shadow root and sets every style
 // through the element style object (as palette-overlay.ts does), so the page's CSS and its Content Security Policy
-// and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its Undo button at the end of the page.
+// and Trusted Types rules cannot reach in. It never takes focus: Tab reaches its buttons at the end of the page.
 // It stays while the pointer or focus is on it, and Escape closes it from there. Closing it while it has focus
 // returns focus to where it came from, never to the page body.
+// Its actions (Undo, Also save on the site) are buttons after the text; once one has run, the others go and it
+// becomes Close, so focus stays on it.
 // It looks like the toast on TabLodge's own pages (StatusRegion in common.tsx): the theme and accent chosen in
 // Settings, with the stylesheet's tokens, which a shadow root on another site cannot read, copied into TOAST_TOKENS.
 import {
@@ -191,7 +193,10 @@ Shows the notice. `error` marks a save that failed, in the destructive color, as
 */
 export function showSourceToast(
 	text: string,
-	{action, error = false}: {action?: ToastAction; error?: boolean} = {},
+	{
+		actions = [],
+		error = false,
+	}: {actions?: ToastAction[]; error?: boolean} = {},
 ) {
 	// The one on screen goes now, so its Undo can't act while the new one reads the theme. That read is async, so a
 	// later notice could also be replaced by an earlier one; only the newest renders.
@@ -203,7 +208,7 @@ export function showSourceToast(
 		}
 
 		render(text, {
-			action,
+			actions,
 			error,
 			theme,
 			accent,
@@ -214,11 +219,11 @@ export function showSourceToast(
 function render(
 	text: string,
 	{
-		action,
+		actions,
 		error,
 		theme,
 		accent,
-	}: {action?: ToastAction; error: boolean; theme: Theme; accent: string},
+	}: {actions: ToastAction[]; error: boolean; theme: Theme; accent: string},
 ) {
 	// One left by an earlier copy of this script, after an extension update, is not in closeShown.
 	document.querySelector(`#${HOST_ID}`)?.remove();
@@ -234,6 +239,14 @@ function render(
 		'max-width': 'min(448px, calc(100vw - 32px))',
 		'color-scheme': theme,
 	});
+	// A press on the notice is not a press on the page, so the site's bubbling listeners (one that closes a menu on an
+	// outside press, say) don't act on it.
+	for (const type of ['pointerdown', 'mousedown', 'click']) {
+		host.addEventListener(type, (event) => {
+			event.stopPropagation();
+		});
+	}
+
 	const root = host.attachShadow({mode: 'closed'});
 	document.documentElement.append(host);
 	const colors = toastColors(
@@ -271,9 +284,8 @@ function render(
 	});
 	box.append(message);
 
-	let button: HTMLButtonElement | undefined;
-	if (action) {
-		button = document.createElement('button');
+	const buttons = actions.map((action) => {
+		const button = document.createElement('button');
 		button.type = 'button';
 		button.textContent = action.label;
 		set(button, {
@@ -293,24 +305,35 @@ function render(
 			'outline-offset': '0',
 			cursor: 'pointer',
 		});
-		const target = button;
 		// The ring shows for keyboard focus only, as on the extension's pages.
-		target.addEventListener('focus', () => {
-			if (target.matches(':focus-visible')) {
+		button.addEventListener('focus', () => {
+			if (button.matches(':focus-visible')) {
 				// An outline, not a shadow, so forced-colors mode still shows it.
-				set(target, {'outline-color': colors.primary});
+				set(button, {'outline-color': colors.primary});
 			}
 		});
-		target.addEventListener('blur', () => {
-			set(target, {'outline-color': 'transparent'});
+		button.addEventListener('blur', () => {
+			set(button, {'outline-color': 'transparent'});
 		});
-		target.addEventListener('pointerenter', () => {
-			set(target, {'text-decoration': 'underline'});
+		button.addEventListener('pointerenter', () => {
+			set(button, {'text-decoration': 'underline'});
 		});
-		target.addEventListener('pointerleave', () => {
-			set(target, {'text-decoration': 'none'});
+		button.addEventListener('pointerleave', () => {
+			set(button, {'text-decoration': 'none'});
 		});
-		box.append(target);
+		return {action, button};
+	});
+	if (buttons.length > 0) {
+		const row = document.createElement('div');
+		set(row, {
+			display: 'flex',
+			'flex-wrap': 'wrap',
+			'justify-content': 'flex-end',
+			gap: '4px',
+			flex: '0 1 auto',
+		});
+		row.append(...buttons.map(({button}) => button));
+		box.append(row);
 	}
 
 	root.append(box);
@@ -321,7 +344,7 @@ function render(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let held = false;
 	let previous: HTMLElement | undefined;
-	let undone = false;
+	let acted = false;
 	let closed = false;
 	// Runs once. A closed notice whose Undo finishes later must not arm a timer or unregister the notice now shown.
 	const close = () => {
@@ -358,9 +381,11 @@ function render(
 	box.addEventListener('pointerenter', () => hold(true));
 	box.addEventListener('pointerleave', () => hold(false));
 	box.addEventListener('focusin', (event) => {
+		// Only focus arriving from the page counts; moving between the notice's own buttons keeps the page target.
 		if (
 			event.relatedTarget instanceof HTMLElement &&
-			event.relatedTarget !== host
+			event.relatedTarget !== host &&
+			!root.contains(event.relatedTarget)
 		) {
 			previous = event.relatedTarget;
 		}
@@ -373,23 +398,35 @@ function render(
 			close();
 		}
 	});
-	// After the action the button becomes Close, so focus stays on it rather than falling to the page body.
-	button?.addEventListener('click', async () => {
-		if (!action || !button || button.getAttribute('aria-disabled') === 'true') {
+	// After an action its button becomes Close and the others go, so focus stays on it rather than falling to the
+	// page body.
+	const run = async ({action, button}: (typeof buttons)[number]) => {
+		if (button.getAttribute('aria-disabled') === 'true') {
 			return;
 		}
 
-		if (undone) {
+		if (acted) {
 			close();
 			return;
 		}
 
-		undone = true;
+		acted = true;
+		for (const other of buttons) {
+			if (other.button !== button) {
+				other.button.remove();
+			}
+		}
+
 		button.setAttribute('aria-disabled', 'true');
 		message.textContent = await action.run();
 		button.textContent = 'Close';
 		button.removeAttribute('aria-disabled');
 		schedule();
-	});
+	};
+
+	for (const entry of buttons) {
+		entry.button.addEventListener('click', () => void run(entry));
+	}
+
 	schedule();
 }
