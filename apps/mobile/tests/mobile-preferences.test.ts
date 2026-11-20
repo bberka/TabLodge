@@ -50,12 +50,15 @@ describe('preference schema', () => {
 	// The guard that keeps every preference syncing (#397): one stays on the phone only when the shared
 	// local-settings.ts lists it with a reason, which docs/PRIVACY.md repeats (extension/tests/local-settings.test.ts).
 	test('every preference syncs between phones, unless it is listed as local with a reason', () => {
+		// Through the library as the extension keeps it, which drops a value it cannot hold.
+		const arrived = readSyncedPreferences(
+			normalizeMobileApp(syncedPreferences(defaults)),
+		);
 		for (const key of Object.keys(defaults) as Array<keyof Preferences>) {
-			const local = Object.hasOwn(ANDROID_LOCAL_PREFERENCES, key);
-			assert.notEqual(
-				SYNCED_KEYS.includes(key),
-				local,
-				`The preference "${key}" must either sync or be listed in ANDROID_LOCAL_PREFERENCES in local-settings.ts with the reason it stays on the phone.`,
+			assert.ok(
+				Object.hasOwn(arrived, key) ||
+					Object.hasOwn(ANDROID_LOCAL_PREFERENCES, key),
+				`The preference "${key}" does not reach the other phones and is not listed in ANDROID_LOCAL_PREFERENCES in local-settings.ts. Every preference syncs unless that list gives the reason it stays on the phone.`,
 			);
 		}
 
