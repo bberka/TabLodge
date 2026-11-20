@@ -194,7 +194,7 @@ Private sync runs only while a private window is open and its library is unlocke
 
 ### Update
 
-TabLodge updates itself from the browser store, but your server does not. An older server keeps working with a newer TabLodge. **Settings › Sync**, in the extension and in the Android app, shows the server's version and lists what does not work until you update it. While something does not work, a banner at the top of the extension's dashboard and the app's Bookmarks and Sessions says so. When sync has stopped, the banner stays until the server or the app is updated. When only features are missing, **Dismiss** hides it on that device until the server reports another version or lacks a different set of features. Each TabLodge release also publishes the server with the same version number, so to hear about new versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**).
+TabLodge updates itself from the browser store, but your server updates only when you update it, or once a day if you [turn that on](#update-automatically). An older server keeps working with a newer TabLodge. **Settings › Sync**, in the extension and in the Android app, shows the server's version and lists what does not work until you update it. While something does not work, a banner at the top of the extension's dashboard and the app's Bookmarks and Sessions says so. When sync has stopped, the banner stays until the server or the app is updated. When only features are missing, **Dismiss** hides it on that device until the server reports another version or lacks a different set of features. Each TabLodge release also publishes the server with the same version number, so to hear about new versions, watch the repository's releases on GitHub (**Watch › Custom › Releases**).
 
 Each optional part of TabLodge needs a server from the release that added it:
 
@@ -210,7 +210,7 @@ Each optional part of TabLodge needs a server from the release that added it:
 
 Sync stops only when the server and the app speak different versions of the sync protocol, which is rare. **Settings › Sync** then says which one to update: "Your sync server is older than this app. Update the server to 0.2.0 or later." or "This app is older than your sync server. Update TabLodge." Everything on the device stays as it is, and sync starts again by itself after the update.
 
-The version reads "an unreleased build" for a server built from `master`: the **Deploy to Cloudflare** button, `cf:deploy`, the `edge` image, and your own builds. Only the release images (`latest` and the version tags) carry their version. A server from before 0.4.0 reports none.
+The version reads "an unreleased build" for a server built from `master`: the **Deploy to Cloudflare** button, `cf:deploy`, the `edge` image, and your own builds. Only the release images (`latest` and the version tags) and, from 0.4.0 on, a Cloudflare server updated by the [Update TabLodge workflow](#update-automatically) carry their version. A server from before 0.4.0 reports none.
 
 Updating keeps the library and the token. Connected browsers lose their live connection for a moment and reconnect by themselves.
 
@@ -244,6 +244,44 @@ curl -H "Authorization: Bearer <token>" https://sync.example.com/v1/status
 ```
 
 Do not remove the `migrations` entry in `wrangler.jsonc` (in `apps/server/`, or in the repository the button created) or add a `deleted_classes` migration for `SyncLibrary`: Cloudflare would delete the stored library with it.
+
+### Update automatically
+
+A VPS, a single container, and a Cloudflare server deployed with the button can each take every new release by themselves, once a day. It is off until you set it up. Updates come from GitHub and its image registry, where the server came from, and Watchtower's own image from Docker Hub; nothing else is contacted. An update restarts the server, so connected devices reconnect, and it brings a release you may not have read about yet. A release that changes the sync protocol, which is rare, stops devices on an older TabLodge from syncing until they update; the Cloudflare workflow stops before such a release and says so. A server deployed from your computer with `cf:setup` is updated by hand.
+
+**VPS.** Download the newest `compose.https.yaml` (the `curl` line in [step 2](#2-start-it)), then:
+
+```sh
+echo COMPOSE_PROFILES=autoupdate >> .env
+docker compose -f compose.https.yaml up -d
+```
+
+Use the line in `.env`, not `--profile autoupdate`: the sync container gets the label the service looks for only from `COMPOSE_PROFILES`.
+
+This starts `autoupdate`, a [Watchtower](https://github.com/nicholas-fedor/watchtower) container that looks for a new image at 04:00 UTC every day. When there is one, it restarts only the sync container with it and deletes the old image; Caddy and every other container are left alone. If you already run a Watchtower of your own, it leaves the sync container to this one while the profile is on. To turn it off, delete the line from `.env`, run `docker compose -f compose.https.yaml rm -sf autoupdate`, then `docker compose -f compose.https.yaml up -d`, which starts the sync container again without the label. To stay on one release, set `TABLODGE_IMAGE` to its version tag, such as `ghcr.io/bberka/tablodge-sync:0.4.0`; Watchtower then has nothing to update.
+
+Watchtower controls Docker through its socket, which gives it the same power over the machine as root. It is a community project kept up by one person. The original `containrrr/watchtower` is no longer maintained and does not start on Docker 29. If you would rather not run it, a daily cron job does the same with Docker alone (`crontab -e`, with your folder):
+
+```sh
+0 4 * * * cd /home/me/tablodge-sync && docker compose -f compose.https.yaml pull sync && docker compose -f compose.https.yaml up -d sync
+```
+
+**Single container.** A Watchtower you already run for every container updates `tablodge-sync` too, and you need nothing more. Otherwise, start the container again as in [Update](#update), with `-l com.centurylinklabs.watchtower.scope=tablodge` added before the image name, then start a Watchtower limited to that label:
+
+```sh
+docker run -d --name tablodge-sync-autoupdate --restart unless-stopped -l com.centurylinklabs.watchtower.scope=tablodge \
+	-v /var/run/docker.sock:/var/run/docker.sock nickfedor/watchtower:1.24.1 --scope tablodge --cleanup --schedule "0 0 4 * * *"
+```
+
+Without the scope, this Watchtower would remove any other Watchtower on the machine when it starts. Each update keeps the container's name, port, volume, and token. `docker rm -f tablodge-sync-autoupdate` turns it off.
+
+**Cloudflare, deployed with the button.** Add the **Update TabLodge** workflow to the repository Cloudflare created: on GitHub, choose **Add file › Create new file**, name it `.github/workflows/update-tablodge.yml`, paste the content of [`apps/server/update-tablodge.yml`](https://github.com/bberka/TabLodge/blob/master/apps/server/update-tablodge.yml), and commit. Every day it downloads `worker.js` from the newest TabLodge release and commits it when it changed, and Cloudflare deploys that commit. **Actions › Update TabLodge › Run workflow** updates at once. A GitLab repository has no GitHub Actions, so update it by hand.
+
+* The button deploys `master`, which is often ahead of the newest release, so the workflow replaces `worker.js` only with a release published after it last changed. The first update comes with the next release.
+* It changes only `worker.js`. When a release needs a different `wrangler.jsonc` (outside `vars`, which stay yours), the run fails and its message links the file to copy by hand.
+* For a release with a new sync protocol, the run fails. Update TabLodge on every device, then run the workflow by hand with **Also take a release with a new sync protocol** ticked.
+* The repository variable `TABLODGE_VERSION` (**Settings › Secrets and variables › Actions › Variables**), such as `0.4`, keeps it on that release line.
+* GitHub emails you when a run fails. In a public repository, GitHub turns scheduled workflows off after 60 days without a commit; **Enable workflow** on the Actions tab turns it on again.
 
 ### Back up and restore
 
@@ -363,6 +401,7 @@ Run these from the root of your copy of the repository. Anything after the comma
 | `TABLODGE_DOMAIN` | none | Your domain, for `compose.https.yaml` |
 | `TABLODGE_IMAGE` | `ghcr.io/bberka/tablodge-sync:latest` | The image `compose.https.yaml` runs, for example to pin a version |
 | `TABLODGE_HTTP_PORT`, `TABLODGE_HTTPS_PORT` | `80`, `443` | Host ports Caddy listens on in `compose.https.yaml` |
+| `COMPOSE_PROFILES` | none | `autoupdate` starts the [daily update](#update-automatically) in `compose.https.yaml` |
 | `PORT` | `8787` | Port the sync server listens on |
 | `DATA_DIR` | `/data` in the image, `./data` otherwise | Folder for `library.db` and `private.db` |
 | `MAX_RECORDS` | `500000` | Items the library may hold, deletes included |

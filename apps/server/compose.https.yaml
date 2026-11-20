@@ -3,6 +3,8 @@
 # this one, then run `docker compose -f compose.https.yaml up -d`:
 #   TABLODGE_DOMAIN=sync.example.com
 #   TABLODGE_SYNC_TOKEN=<output of: openssl rand -base64 32>
+# Add COMPOSE_PROFILES=autoupdate to also start the autoupdate service below. Set it here, not with --profile,
+# because the sync container's scope label reads it.
 # See docs/self-hosting.md.
 services:
   sync:
@@ -10,6 +12,10 @@ services:
     restart: unless-stopped
     environment:
       TABLODGE_SYNC_TOKEN: ${TABLODGE_SYNC_TOKEN:?Set TABLODGE_SYNC_TOKEN in .env}
+    labels:
+      # With the autoupdate profile on, this scope keeps that service to this container. Otherwise it is empty, so a
+      # Watchtower of your own still updates the container.
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROFILES:+tablodge}
     volumes:
       - tablodge-sync:/data
     # Not published on the host: only Caddy reaches it.
@@ -36,6 +42,26 @@ services:
     depends_on:
       - sync
     mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+        max-file: "2"
+
+  # Optional, off unless COMPOSE_PROFILES=autoupdate is in .env: once a day, pulls the sync image and restarts the
+  # sync container when it changed. The maintained Watchtower fork; the original (containrrr) fails on Docker 29.
+  # It needs the Docker socket, which gives it full control of Docker on this machine.
+  autoupdate:
+    image: nickfedor/watchtower:1.24.1
+    profiles: [autoupdate]
+    restart: unless-stopped
+    labels:
+      # Keeps a Watchtower of your own from treating this one as its own older copy.
+      com.centurylinklabs.watchtower.scope: tablodge
+    command: --scope tablodge --cleanup --schedule "0 0 4 * * *"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 64m
     logging:
       driver: json-file
       options:
