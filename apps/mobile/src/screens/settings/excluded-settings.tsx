@@ -5,6 +5,7 @@ import {
 	normalizeExcludedHost,
 } from '../../../../extension/src/shared/excluded-sites';
 import {setSyncedSetting, useRegularLibrary} from '../../library/library-store';
+import {confirm} from '../../ui/dialog';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
 import {Button, Field, IconButton} from '../../ui/widgets';
@@ -75,16 +76,23 @@ export function ExcludedCard() {
 							icon="close"
 							label={`Stop excluding ${entry}`}
 							onPress={() => {
-								void setSyncedSetting(
-									'excludedOrigins',
-									entries.filter((other) => other !== entry),
-								);
-								showSnack(`${entry} is no longer excluded`, {
-									label: 'Undo',
-									run() {
-										void setSyncedSetting('excludedOrigins', entries);
+								confirm(
+									`Stop excluding ${entry}?`,
+									`Pages on ${entry} and its subdomains are saved from this phone and the browser again.`,
+									{label: 'Stop excluding', destructive: true},
+									() => {
+										void setSyncedSetting(
+											'excludedOrigins',
+											entries.filter((other) => other !== entry),
+										);
+										showSnack(`${entry} is no longer excluded`, {
+											label: 'Undo',
+											run() {
+												void setSyncedSetting('excludedOrigins', entries);
+											},
+										});
 									},
-								});
+								);
 							}}
 						/>
 					</View>
