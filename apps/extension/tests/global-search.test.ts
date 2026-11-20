@@ -74,6 +74,15 @@ const sources: FinderSources = {
 		{id: 'open-settings', title: 'Open Settings', keywords: ['preferences']},
 		{id: 'new-column', title: 'New column'},
 	],
+	settings: [
+		{id: 'settings-sync', title: 'Sync', keywords: ['server']},
+		{
+			id: 'settings-shared-pages',
+			target: 'settings-sync',
+			title: 'Shared pages',
+			detail: 'Sync',
+		},
+	],
 };
 const index = buildFinderIndex(sources);
 const kinds = (query: string) =>
@@ -200,6 +209,17 @@ test('the group holding the best match comes first, and a better title ranks fir
 		(item) => item.kind === 'bookmark',
 	);
 	assert.equal(hit?.id, 'bookmark:x2');
+});
+
+test('a Settings section is found by name and opens its section', () => {
+	const [hit] = flattenSections(searchFinder('shared pages', index));
+	assert.equal(hit.kind, 'setting');
+	assert.equal(hit.ref, 'settings-sync', 'a sub-page opens its section');
+	assert.equal(hit.detail, 'Sync');
+	assert.equal(
+		flattenSections(searchFinder('server', index))[0].id,
+		'setting:settings-sync',
+	);
 });
 
 test('a blank query lists recent sessions, then open tabs and commands', () => {

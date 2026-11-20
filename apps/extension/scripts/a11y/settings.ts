@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {settingsSections} from '../../src/app/settings-sections.ts';
 import {fromRoot} from '../vite-shared.ts';
 import {captureEvidence, captureResetEvidence} from './evidence.ts';
 import {type ExtensionApi} from './fixtures.ts';
@@ -361,4 +363,55 @@ export async function backupsDialogCheck(env: Env, theme: Theme) {
 			}
 		},
 	);
+}
+
+/**
+Every section the Settings page shows has a finder entry, every entry leads to a section that is there, and choosing
+one from the palette opens Settings at it. Fails when a new Settings section is not added to settings-sections.ts.
+*/
+export async function settingsFinderCheck(env: Env) {
+	const {context, extensionId} = env;
+	await check('every Settings section is in the finder', async () => {
+		const page = await openPage(context, extensionId, 'options');
+		const manifest = JSON.parse(
+			await readFile(fromRoot('shell/manifest.json'), 'utf8'),
+		) as {short_name: string};
+		const sections = page.locator('main [id^="settings-"]');
+		await sections.first().waitFor();
+		const rendered = await Promise.all(
+			(await sections.all()).map(
+				async (section) => (await section.getAttribute('id')) ?? '',
+			),
+		);
+		await page.close();
+		const entries = settingsSections(manifest.short_name, false);
+		const targets = new Set(entries.map((entry) => entry.target ?? entry.id));
+		assert.deepEqual(
+			rendered.filter((id) => !targets.has(id)),
+			[],
+			'Settings sections with no finder entry (add them to src/app/settings-sections.ts)',
+		);
+		assert.deepEqual(
+			[...targets].filter((id) => !rendered.includes(id)),
+			[],
+			'Finder entries that lead to no Settings section',
+		);
+
+		const palette = await openPage(context, extensionId, 'palette');
+		await palette.keyboard.type('shared pages');
+		const option = palette
+			.getByRole('group', {name: 'Settings'})
+			.getByRole('option', {name: /Shared pages/});
+		await option.waitFor({timeout: 2000});
+		await palette.screenshot({
+			path: fromRoot('.dev/evidence/finder-settings-result.png'),
+		});
+		const opened = context.waitForEvent('page');
+		await option.click();
+		const settings = await opened;
+		await settings.waitForLoadState();
+		assert.match(settings.url(), /options\.html#settings-sync$/);
+		await settings.close();
+		await palette.close().catch(() => {});
+	});
 }

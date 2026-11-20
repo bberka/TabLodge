@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type {Page} from 'playwright';
 import {seed} from './fixtures.ts';
 import {check, type Env, type Theme} from './harness.ts';
 import {openPage, setTheme} from './pages.ts';
@@ -220,6 +221,12 @@ export async function paletteActionsMenuCheck(env: Env, theme: Theme) {
 			1,
 			'Typing filters the actions',
 		);
+		await page.keyboard.press('ArrowLeft');
+		assert.ok(
+			await menu.isVisible(),
+			'← moves the caret through typed text and stays in the menu',
+		);
+		await page.keyboard.press('ArrowRight');
 		await page.keyboard.press('Backspace');
 		for (let at = 0; at < 'window'.length - 1; at++) {
 			await page.keyboard.press('Backspace');
@@ -233,6 +240,19 @@ export async function paletteActionsMenuCheck(env: Env, theme: Theme) {
 			'Focus stays in the search box going back',
 		);
 		assert.equal(await input.inputValue(), 'Lisbon trip');
+		const highlighted = await input.getAttribute('aria-activedescendant');
+		await page.keyboard.press('ArrowRight');
+		await menu.waitFor({timeout: 1000});
+		await page.screenshot({
+			path: `.dev/evidence/palette-actions-back-hint-${theme}.png`,
+		});
+		await page.keyboard.press('ArrowLeft');
+		await menu.waitFor({state: 'hidden', timeout: 1000});
+		assert.equal(
+			await input.getAttribute('aria-activedescendant'),
+			highlighted,
+			'← goes back to the same result',
+		);
 		await page.keyboard.press('ArrowRight');
 		await menu.waitFor({timeout: 1000});
 		// Escape goes up one level first, so the window is still there afterwards.
@@ -241,5 +261,69 @@ export async function paletteActionsMenuCheck(env: Env, theme: Theme) {
 		const closed = page.waitForEvent('close', {timeout: 3000});
 		await page.keyboard.press('Escape').catch(() => {});
 		await closed;
+	});
+}
+
+/**
+The keys bar under the results: every hint it shows sits on one line.
+*/
+async function footerLines(page: Page) {
+	return page.evaluate(() => {
+		const {document} = globalThis as typeof globalThis & {
+			document: {
+				querySelectorAll(selector: string): Iterable<{
+					textContent: string | null;
+					querySelectorAll(selector: string): Iterable<{
+						getBoundingClientRect(): {top: number; width: number};
+					}>;
+				}>;
+			};
+		};
+		const bar = [...document.querySelectorAll('div.border-t')].find((element) =>
+			element.textContent?.includes('Enter'),
+		);
+		const hints = [...(bar?.querySelectorAll(':scope > div > span') ?? [])]
+			.map((hint) => hint.getBoundingClientRect())
+			.filter((box) => box.width > 0);
+		return new Set(hints.map((box) => Math.round(box.top))).size;
+	});
+}
+
+export async function paletteFooterCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(`palette keys bar stays on one line (${theme})`, async () => {
+		const dashboard = await openPage(context, extensionId, 'newtab');
+		await setTheme(dashboard, theme);
+		await dashboard.keyboard.press('Control+k');
+		await dashboard.locator('[data-finder] [role="option"]').first().waitFor();
+		assert.equal(await footerLines(dashboard), 1, 'dashboard palette');
+		await dashboard.close();
+		for (const [width, fontSize] of [
+			[640, 16],
+			[360, 16],
+			[320, 16],
+			[640, 20],
+		] as const) {
+			const page = await openPage(context, extensionId, 'palette');
+			await setTheme(page, theme);
+			await page.setViewportSize({width, height: 520});
+			await page.addStyleTag({content: `html{font-size:${fontSize}px}`});
+			await page.getByRole('option').first().waitFor();
+			assert.equal(
+				await footerLines(page),
+				1,
+				`palette window ${width}px wide, ${fontSize}px font`,
+			);
+			await page.keyboard.press('ArrowRight');
+			await page
+				.getByRole('listbox', {name: /^Actions for/})
+				.waitFor({timeout: 2000});
+			assert.equal(
+				await footerLines(page),
+				1,
+				`actions menu ${width}px wide, ${fontSize}px font`,
+			);
+			await page.close();
+		}
 	});
 }

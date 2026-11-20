@@ -12,8 +12,14 @@ export function readerUrl(url: string) {
 	);
 }
 
-export async function openPageCopy(url: string) {
-	await chrome.tabs.create({url: readerUrl(url)});
+/**
+Opens the reader in a new tab of `windowId`, or of the current window.
+*/
+export async function openPageCopy(url: string, windowId?: number) {
+	await chrome.tabs.create({
+		url: readerUrl(url),
+		...(windowId !== undefined && {windowId}),
+	});
 }
 
 let copyUrls: ReadonlySet<string> = new Set();

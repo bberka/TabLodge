@@ -12,7 +12,6 @@ import {
 import {createRoot} from 'react-dom/client';
 import {
 	type LucideIcon,
-	ArchiveRestore,
 	ArrowDown,
 	ArrowLeft,
 	ArrowRight,
@@ -23,15 +22,8 @@ import {
 	Save,
 	Square,
 	SquareCheck,
-	SquarePlus,
 	Copy,
-	Download,
 	FolderPlus,
-	HelpCircle,
-	Settings as SettingsIcon,
-	SunMoon,
-	HardDriveDownload,
-	History,
 	Inbox,
 	LayoutGrid,
 	EyeOff,
@@ -130,12 +122,13 @@ import {
 import {useSessionNameAsk} from './name-session-dialog';
 import {SessionManager} from './dashboard';
 import {createPageAutoscroller, watchDragAutoscroll} from './drag-autoscroll';
+import {FinderPalette, FinderTrigger, emitFinderEvent} from './finder';
 import {
-	FinderPalette,
-	FinderTrigger,
-	emitFinderEvent,
-	type FinderAction,
-} from './finder';
+	finderActions,
+	type CommandHandlers,
+	type PageCommandId,
+} from './finder-commands';
+import {syncNowOutcome} from './sync-now';
 import {
 	DuplicateBookmarksDialog,
 	ImportDialog,
@@ -1939,126 +1932,98 @@ function NewTab() {
 	}
 
 	// The latest handlers, so the finder's command list can stay stable between renders.
-	const commandHandlersRef = useRef({} as Record<string, () => void>);
+	const settingsRef = useRef(settings);
+	settingsRef.current = settings;
+	const commandHandlersRef = useRef<CommandHandlers>(undefined!);
 	commandHandlersRef.current = {
-		saveWindow: () => void saveWindow(),
-		newBookmark: () => openBookmarkEditor(),
-		newColumn: () => openColumnEditor(),
-		backupBookmarks: openBookmarkBackup,
-		importData: () => setImportOpen(true),
-		toggleTheme() {
+		'save-window': () => void saveWindow(),
+		// This page's own tab is no web page. Its other open tabs offer Keep a copy in their actions (→).
+		'keep-copy': undefined,
+		'new-bookmark': () => openBookmarkEditor(),
+		'new-column': () => openColumnEditor(),
+		'new-folder': () => emitFinderEvent({type: 'new-folder'}),
+		// A private window's separate library syncs from its own Settings.
+		'sync-now': inPrivateWindow()
+			? undefined
+			: async () => {
+					const {message, failed} = syncNowOutcome(await send('SYNC_NOW'));
+					showStatus(message, failed, {toast: true});
+				},
+		async 'back-up-now'() {
+			const result = await send('BACKUP_NOW');
+			showStatus(result.ok ? 'Backed up.' : result.error, !result.ok, {
+				toast: true,
+			});
+		},
+		'open-trash': () => emitRecoveryEvent({type: 'trash'}),
+		'share-bookmarks': () => shareBookmarks(),
+		'import-bookmarks': () => setImportOpen(true),
+		'backup-bookmarks': openBookmarkBackup,
+		'import-sessions': () => emitFinderEvent({type: 'import-sessions'}),
+		'backup-sessions': () => emitFinderEvent({type: 'backup-sessions'}),
+		// Private windows keep no snapshots.
+		'recent-snapshots': inPrivateWindow()
+			? undefined
+			: () => emitRecoveryEvent({type: 'snapshots'}),
+		// Only a private window has a private library to lock.
+		'lock-private': inPrivateWindow()
+			? async () => {
+					const result = await send('LOCK_PRIVATE');
+					if (!result.ok) {
+						showStatus(result.error, true);
+					} else if (!result.enabled) {
+						showStatus(
+							'The private library has no password to lock it with.',
+							true,
+						);
+					}
+				}
+			: undefined,
+		'toggle-theme'() {
 			const dark = document.documentElement.style.colorScheme === 'dark';
 			void setTheme(dark ? 'light' : 'dark');
 		},
-		openSettings: () => void openOwnPage('options.html', settings),
-		openHelp: () => void openOwnPage('help.html', settings),
+		// This page is the dashboard.
+		'open-dashboard': undefined,
 	};
-	const finderActions = useMemo<FinderAction[]>(() => {
-		const h = () => commandHandlersRef.current;
-		return [
-			{
-				id: 'save-window',
-				title: saveWindowLabel(tabSelection),
-				keywords: ['session', 'tabs', 'store'],
-				icon: Save,
-				run: () => h().saveWindow(),
-			},
-			{
-				id: 'new-bookmark',
-				title: 'New bookmark',
-				keywords: ['add', 'link'],
-				icon: BookmarkPlus,
-				run: () => h().newBookmark(),
-			},
-			{
-				id: 'new-column',
-				title: 'New column',
-				keywords: ['bookmark', 'add'],
-				icon: SquarePlus,
-				run: () => h().newColumn(),
-			},
-			{
-				id: 'new-folder',
-				title: 'New session folder',
-				keywords: ['add', 'sessions'],
-				icon: FolderPlus,
-				run: () => emitFinderEvent({type: 'new-folder'}),
-			},
-			{
-				id: 'import-bookmarks',
-				title: 'Import bookmarks',
-				keywords: ['restore', 'load', 'upload'],
-				icon: Upload,
-				run: () => h().importData(),
-			},
-			{
-				id: 'backup-bookmarks',
-				title: 'Back up bookmarks',
-				keywords: ['export', 'download', 'save'],
-				icon: Download,
-				run: () => h().backupBookmarks(),
-			},
-			{
-				id: 'import-sessions',
-				title: 'Import sessions',
-				keywords: ['restore', 'load', 'upload'],
-				icon: ArchiveRestore,
-				run: () => emitFinderEvent({type: 'import-sessions'}),
-			},
-			{
-				id: 'backup-sessions',
-				title: 'Back up sessions',
-				keywords: ['export', 'download', 'save'],
-				icon: HardDriveDownload,
-				run: () => emitFinderEvent({type: 'backup-sessions'}),
-			},
-			...(inPrivateWindow()
-				? []
-				: [
-						{
-							id: 'recent-snapshots',
-							title: 'Recent snapshots',
-							keywords: [
-								'crash',
-								'recover',
-								'restore session',
-								'history',
-								'windows',
-							],
-							icon: History,
-							run: () => emitRecoveryEvent({type: 'snapshots'}),
-						},
-					]),
-			{
-				id: 'open-trash',
-				title: 'Trash bin',
-				keywords: ['deleted', 'undo', 'restore', 'bin', 'recover'],
-				icon: Trash2,
-				run: () => emitRecoveryEvent({type: 'trash'}),
-			},
-			{
-				id: 'toggle-theme',
-				title: 'Toggle light/dark theme',
-				keywords: ['appearance', 'dark mode', 'light mode'],
-				icon: SunMoon,
-				run: () => h().toggleTheme(),
-			},
-			{
-				id: 'open-settings',
-				title: 'Open Settings',
-				keywords: ['options', 'preferences'],
-				icon: SettingsIcon,
-				run: () => h().openSettings(),
-			},
-			{
-				id: 'open-help',
-				title: 'Open Help',
-				keywords: ['shortcuts', 'about', 'guide'],
-				icon: HelpCircle,
-				run: () => h().openHelp(),
-			},
-		];
+	const finderCommands = useMemo(() => {
+		const handlers = Object.fromEntries(
+			Object.entries(commandHandlersRef.current).map(([id, run]) => [
+				id,
+				run && (() => commandHandlersRef.current[id as PageCommandId]?.()),
+			]),
+		) as CommandHandlers;
+		return finderActions(handlers, async (path) =>
+			openOwnPage(path, settingsRef.current),
+		).map((action) =>
+			action.id === 'save-window'
+				? {...action, title: saveWindowLabel(tabSelection)}
+				: action,
+		);
 	}, [tabSelection]);
+
+	// `?command=` from the palette window, which runs the commands that need this page here.
+	const requestedCommandRef = useRef(
+		new URLSearchParams(location.search).get('command'),
+	);
+	const hasState = Boolean(state);
+	useEffect(() => {
+		const requestedCommand = requestedCommandRef.current;
+		// While a new tab is being handed to the browser, the dashboard (and the listeners some commands need) is not up.
+		if (!hasState || holding || !requestedCommand) {
+			return;
+		}
+
+		history.replaceState(null, '', stripSearchParams(location, ['command']));
+		// After this render, so the sessions area is listening for the events some commands send.
+		const timer = setTimeout(() => {
+			requestedCommandRef.current = null;
+			void finderCommands
+				.find((action) => action.id === requestedCommand)
+				?.run();
+		}, 0);
+		return () => clearTimeout(timer);
+	}, [hasState, holding, finderCommands]);
 
 	// Ctrl/Cmd+K or Ctrl/Cmd+F, or "/" outside text fields, opens the finder.
 	useEffect(() => {
@@ -2944,7 +2909,7 @@ function NewTab() {
 				<FinderPalette
 					open={finderOpen}
 					state={state}
-					actions={finderActions}
+					actions={finderCommands}
 					onOpenChange={setFinderOpen}
 				/>
 

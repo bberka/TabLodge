@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {jumpFor, searchElsewhere} from '../src/library/search-elsewhere';
+import {
+	jumpFor,
+	searchElsewhere,
+	settingsForSearch,
+} from '../src/library/search-elsewhere';
+import {SECTIONS} from '../src/screens/settings/settings-index';
 import {addBookmark, addColumn} from '../src/library/board-edits';
 import {emptyStore} from '../src/library/store-shape';
 import type {Store} from '../../extension/src/shared/types';
@@ -100,5 +105,30 @@ describe('search elsewhere', () => {
 		});
 		const link = searchElsewhere(library(), 'tram', 'bookmarks')[0].items[0];
 		assert.equal(jumpFor(link), undefined);
+	});
+
+	test('a Settings section is found from both screens and opens Settings showing it', () => {
+		const settings = settingsForSearch(SECTIONS);
+		for (const here of ['sessions', 'bookmarks'] as const) {
+			const found = searchElsewhere(library(), 'trash', here, settings).find(
+				(section) => section.kind === 'setting',
+			);
+			assert.equal(found?.items[0].title, 'Trash');
+			assert.deepEqual(jumpFor(found.items[0]), {
+				screen: 'settings',
+				query: 'Trash',
+			});
+		}
+
+		// A setting's own name finds the section that holds it.
+		const byRow = searchElsewhere(
+			library(),
+			'accent color',
+			'sessions',
+			settings,
+		)
+			.flatMap((section) => section.items)
+			.find((item) => item.kind === 'setting');
+		assert.equal(byRow?.title, 'Appearance');
 	});
 });

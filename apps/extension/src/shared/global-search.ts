@@ -21,6 +21,7 @@ export type FinderKind =
 	| 'column'
 	| 'folder'
 	| 'command'
+	| 'setting'
 	| 'web';
 
 export type FinderItem = {
@@ -51,7 +52,7 @@ export type FinderItem = {
 	*/
 	facets?: SearchFacets;
 	/**
-	What the item refers to: a session, column, folder, command or browser-tab id.
+	What the item refers to: a session, column, folder, command, settings section or browser-tab id.
 	*/
 	ref?: string;
 	windowId?: number;
@@ -77,8 +78,14 @@ export type OpenTabInfo = {
 export type FinderCommand = {
 	id: string;
 	title: string;
-	keywords?: string[];
+	keywords?: readonly string[];
 };
+
+/**
+A place in Settings. `target` is where it leads when that differs from `id` (a sub-page opens the section it sits
+in), and `detail` names that section.
+*/
+export type FinderSetting = FinderCommand & {detail?: string; target?: string};
 
 const SECTION_LABELS: Record<FinderKind, string> = {
 	url: 'Go to address',
@@ -89,6 +96,7 @@ const SECTION_LABELS: Record<FinderKind, string> = {
 	column: 'Bookmark columns',
 	folder: 'Session folders',
 	command: 'Commands',
+	setting: 'Settings',
 	web: 'Web search',
 };
 
@@ -104,6 +112,7 @@ const KIND_ORDER: FinderKind[] = [
 	'column',
 	'folder',
 	'command',
+	'setting',
 	'web',
 ];
 
@@ -115,6 +124,7 @@ const SECTION_LIMIT: Partial<Record<FinderKind, number>> = {
 	column: 4,
 	folder: 4,
 	command: 6,
+	setting: 5,
 };
 
 /**
@@ -148,6 +158,10 @@ export type FinderSources = {
 	columns: readonly BookmarkColumn[];
 	tabs: readonly OpenTabInfo[];
 	commands: readonly FinderCommand[];
+	/**
+	Settings sections, found by name but not listed before anything is typed.
+	*/
+	settings?: readonly FinderSetting[];
 };
 
 const UNFILED = 'bookmark-unfiled';
@@ -171,6 +185,20 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 				texts: [command.title, ...(command.keywords ?? [])],
 				facets: NO_FACETS,
 				ref: command.id,
+			}),
+		);
+	}
+
+	for (const setting of sources.settings ?? []) {
+		items.push(
+			prepared({
+				id: `setting:${setting.id}`,
+				kind: 'setting',
+				title: setting.title,
+				detail: setting.detail,
+				texts: [setting.title, setting.detail, ...(setting.keywords ?? [])],
+				facets: NO_FACETS,
+				ref: setting.target ?? setting.id,
 			}),
 		);
 	}
