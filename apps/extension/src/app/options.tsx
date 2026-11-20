@@ -2594,11 +2594,14 @@ function Options() {
 
 					void (async () => {
 						await question.run();
-						document
-							.querySelector<HTMLElement>(
-								`#${sectionId(question.section)} :is(button, input):not(:disabled)`,
-							)
-							?.focus();
+						// After React commits; a search can hide the whole section once its last match is gone.
+						requestAnimationFrame(() => {
+							(
+								document.querySelector<HTMLElement>(
+									`#${sectionId(question.section)} :is(button, input):not(:disabled)`,
+								) ?? searchRef.current
+							)?.focus();
+						});
 					})();
 				}}
 			/>
