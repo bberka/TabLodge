@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import type {Page} from 'playwright';
 import {settingsSections} from '../../src/app/settings-sections.ts';
 import {fromRoot} from '../vite-shared.ts';
 import {captureEvidence, captureResetEvidence} from './evidence.ts';
@@ -269,6 +270,77 @@ export async function siteSourcePickerCheck(env: Env, theme: Theme) {
 					'focus back on Add a site',
 				);
 			} finally {
+				await page.close();
+			}
+		},
+	);
+}
+
+async function writeSources(page: Page, sources: Record<string, unknown>) {
+	await page.evaluate(async (value) => {
+		const {chrome} = globalThis as typeof globalThis & {chrome: ExtensionApi};
+		await chrome.storage.local.set({
+			'tablodge.sources': {version: 1, sources: value},
+		});
+	}, sources);
+}
+
+export async function siteSourceRemoveCheck(env: Env, theme: Theme) {
+	const {context, extensionId, axeSource} = env;
+	await check(
+		`Sources: Remove asks first, and Cancel keeps the site (${theme})`,
+		async () => {
+			const page = await openPage(context, extensionId, 'options');
+			try {
+				await setTheme(page, theme);
+				// A site the browser took access from stays listed with Remove, without a permission prompt to answer.
+				await writeSources(page, {github: {enabled: false, notice: 'revoked'}});
+				const row = page.locator('[data-site-source="github"]');
+				const remove = row.getByRole('button', {name: 'Remove GitHub stars'});
+				await remove.focus();
+				await page.keyboard.press('Enter');
+				const confirm = page.getByRole('alertdialog', {
+					name: 'Remove GitHub stars?',
+				});
+				await confirm
+					.getByText(/gives back its access to github\.com/)
+					.waitFor();
+				// The dialog fades in; mid fade its button fails contrast.
+				await page.evaluate(async () => {
+					const {document} = globalThis as typeof globalThis & {
+						document: {getAnimations(): Array<{finished: Promise<unknown>}>};
+					};
+					await Promise.all(
+						document
+							.getAnimations()
+							.map(async (animation) => animation.finished),
+					);
+				});
+				const violations = await axeViolationLines(page, axeSource);
+				assert.deepEqual(violations, [], violations.join('\n'));
+				await confirm.getByRole('button', {name: 'Cancel'}).focus();
+				await page.keyboard.press('Enter');
+				await confirm.waitFor({state: 'hidden'});
+				await until(
+					async () =>
+						(await page.locator(':focus').getAttribute('aria-label')) ===
+						'Remove GitHub stars',
+					'focus back on Remove',
+				);
+				assert.equal(await row.count(), 1, 'Cancel keeps the site');
+				await page.keyboard.press('Enter');
+				await confirm.getByRole('button', {name: 'Remove'}).focus();
+				await page.keyboard.press('Enter');
+				await row.waitFor({state: 'detached'});
+				await page.getByText('No sites added.').waitFor();
+				// The removed row held focus, so it lands on Add a site, not the page body.
+				await until(
+					async () =>
+						(await page.locator(':focus').textContent()) === 'Add a site',
+					'focus on Add a site',
+				);
+			} finally {
+				await writeSources(page, {});
 				await page.close();
 			}
 		},

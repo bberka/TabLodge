@@ -238,7 +238,7 @@ export function ConfirmationDialog({
 						onClick={onConfirm}
 					>
 						{typeof confirmLabel === 'string' &&
-							(/delete|clear|empty|erase/i.test(confirmLabel) ? (
+							(/delete|clear|empty|erase|remove/i.test(confirmLabel) ? (
 								<Trash2 aria-hidden="true" />
 							) : /restore/i.test(confirmLabel) ? (
 								<RotateCcw aria-hidden="true" />
