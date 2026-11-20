@@ -181,7 +181,12 @@ export function DataCard() {
 									label: 'Undo the last restore',
 									hint: 'Puts back what it replaced',
 									onPress() {
-										void undoRestore(view);
+										confirm(
+											'Undo the last restore?',
+											'The library goes back to what it was before the restore. Changes made since then are lost.',
+											{label: 'Undo restore', destructive: true},
+											() => void undoRestore(view),
+										);
 									},
 								},
 							]

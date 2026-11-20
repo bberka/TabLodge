@@ -1087,6 +1087,10 @@ type DataRowDef = {
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const loadedSettingsRef = useRef(false);
+	// Set to the latest resetGroup on each render, below.
+	const resetGroupRef = useRef(
+		async (_title: string, _fields: SettingField[]) => undefined as unknown,
+	);
 	// Saves still waiting for the service worker. A reload that lands meanwhile may predate them.
 	const savesInFlightRef = useRef(0);
 	const [status, showStatus] = useStatus();
@@ -1110,6 +1114,24 @@ function Options() {
 	const [eraseSessions, setEraseSessions] = useState(false);
 	const [eraseBookmarks, setEraseBookmarks] = useState(false);
 	const [confirmDefaults, setConfirmDefaults] = useState(false);
+	// A confirmation for one row or section; it stays set while the dialog fades out, so its text does not change.
+	const [question, setQuestion] = useState<{
+		title: string;
+		description: string;
+		confirmLabel: string;
+		run: () => unknown;
+		/**
+		The section whose first control takes focus afterwards: the action removes the control that held it, and
+		Chrome fires no focusout for a removed element, so the focus rescue never sees it.
+		*/
+		section: string;
+	}>();
+	const [questionOpen, setQuestionOpen] = useState(false);
+	const ask = (next: NonNullable<typeof question>) => {
+		setQuestion(next);
+		setQuestionOpen(true);
+	};
+
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const [importOpen, setImportOpen] = useState(false);
 	const [snapshotsOpen, setSnapshotsOpen] = useState(false);
@@ -1635,6 +1657,8 @@ function Options() {
 			}
 		}
 	};
+
+	resetGroupRef.current = resetGroup;
 
 	const focusSettingControl = (field: SettingField) => {
 		const dependency = field.requires ?? field.parent;
@@ -2196,7 +2220,15 @@ function Options() {
 												className="h-8 w-8 shrink-0"
 												aria-label={`Reset ${group.title} to default`}
 												onClick={() => {
-													void resetGroup(group.title, fields);
+													ask({
+														title: `Reset ${group.title} to default?`,
+														description: `Every changed setting in ${group.title} goes back to its default. You can undo this right after.`,
+														confirmLabel: 'Reset',
+														// The latest resetGroup, so it reads the settings as they are when the user confirms.
+														run: async () =>
+															resetGroupRef.current(group.title, fields),
+														section: group.title,
+													});
 												}}
 											>
 												<RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -2498,7 +2530,15 @@ function Options() {
 												size="sm"
 												disabled={!state}
 												aria-label={`Remove ${origin} from exclusions`}
-												onClick={() => removeExcludedOrigin(origin)}
+												onClick={() => {
+													ask({
+														title: `Stop excluding ${origin}?`,
+														description: `Sessions you save from now on include pages on ${origin} and its subdomains again.`,
+														confirmLabel: 'Remove',
+														run: async () => removeExcludedOrigin(origin),
+														section: EXCLUDED.title,
+													});
+												}}
 											>
 												<Trash2 className="h-4 w-4" />
 												Remove
@@ -2540,6 +2580,31 @@ function Options() {
 					)}
 				</div>
 			)}
+			<ConfirmationDialog
+				open={questionOpen}
+				title={question?.title}
+				description={question?.description}
+				confirmLabel={question?.confirmLabel}
+				onOpenChange={setQuestionOpen}
+				onConfirm={() => {
+					setQuestionOpen(false);
+					if (!question) {
+						return;
+					}
+
+					void (async () => {
+						await question.run();
+						// After React commits; a search can hide the whole section once its last match is gone.
+						requestAnimationFrame(() => {
+							(
+								document.querySelector<HTMLElement>(
+									`#${sectionId(question.section)} :is(button, input):not(:disabled)`,
+								) ?? searchRef.current
+							)?.focus();
+						});
+					})();
+				}}
+			/>
 			<ConfirmationDialog
 				open={confirmDefaults}
 				title="Restore default settings?"

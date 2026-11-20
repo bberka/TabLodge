@@ -37,6 +37,7 @@ The app imports types and the sync client from `apps/extension/src` by relative 
 - A new feature or user action checks whether it belongs in the share sheet, an app shortcut, or a Quick Settings tile: [Entry points](cross-app.md#feature-triage).
 - A new setting or Settings section goes into `SECTIONS` in `src/screens/settings/settings-index.ts`, which both the Settings search and Search elsewhere on the Sessions and Bookmarks screens read. Decide in the same pull request whether a new feature needs to be reachable from search too, and say why not when it does not.
 - Accessibility still applies: labels, roles, touch targets, and TalkBack behave like the extension's [UI rules](ui.md#accessibility) intend.
+- Destructive actions follow the [UI rule](ui.md#destructive-actions): Settings and its sheets ask first with `confirm` (`src/ui/dialog.tsx`); the Sessions and Bookmarks screens act at once and `showSnack` offers **Undo**.
 - CI builds a debug APK on `apps/mobile/**` changes; releases are signed in `release.yml` ([CI](ci.md#android-app)).
 
 ## Adding a preference

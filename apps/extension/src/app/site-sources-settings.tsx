@@ -8,6 +8,7 @@ import {
 import {CircleAlert, CircleHelp, Plus, RotateCcw, Trash2} from 'lucide-react';
 import {
 	Button,
+	ConfirmationDialog,
 	IconTooltip,
 	Input,
 	Label,
@@ -442,6 +443,9 @@ export function SiteSourcesSettings({
 		chooseColumn,
 		chooseKeepOff,
 	} = controller;
+	// The site stays set while the dialog fades out, so its text does not change on Cancel.
+	const [removing, setRemoving] = useState<SiteSource>();
+	const [confirmOpen, setConfirmOpen] = useState(false);
 
 	if (privateWindow) {
 		return (
@@ -532,7 +536,10 @@ export function SiteSourcesSettings({
 									size="sm"
 									disabled={busy !== undefined}
 									aria-label={`Remove ${source.label}`}
-									onClick={() => void remove(source)}
+									onClick={() => {
+										setRemoving(source);
+										setConfirmOpen(true);
+									}}
 								>
 									<Trash2 className="h-4 w-4" aria-hidden="true" />
 									Remove
@@ -604,6 +611,22 @@ export function SiteSourcesSettings({
 					</div>
 				);
 			})}
+			<ConfirmationDialog
+				open={confirmOpen}
+				title={`Remove ${removing?.label ?? 'this site'}?`}
+				description={
+					removing &&
+					`${PROJECT.name} gives back its access to ${removing.hosts[0]} and stops adding what you save there. Bookmarks it already added stay.`
+				}
+				confirmLabel="Remove"
+				onOpenChange={setConfirmOpen}
+				onConfirm={() => {
+					setConfirmOpen(false);
+					if (removing) {
+						void remove(removing);
+					}
+				}}
+			/>
 		</div>
 	);
 }
