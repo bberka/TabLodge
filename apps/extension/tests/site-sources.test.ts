@@ -654,6 +654,39 @@ test('YouTube: unticking Watch later in the Save dialog saves nothing', () => {
 	assert.equal(site.click('option-watch-later'), undefined);
 });
 
+test('YouTube: the Save dialog of 2026 (list rows, name above the privacy) saves the watched video when Watch later is ticked (#406)', () => {
+	const site = youtube(
+		'youtube-watch.html',
+		'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+	);
+	site.click('save-button');
+	for (const id of ['sheet-watch-later', 'sheet-watch-later-button']) {
+		assert.deepEqual(site.click(id), {
+			kind: 'save',
+			link: {
+				url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+				title: 'Big Buck Bunny',
+			},
+		});
+	}
+
+	assert.equal(site.click('sheet-other'), undefined);
+	site.element('sheet-watch-later-button').setAttribute('aria-pressed', 'true');
+	assert.equal(site.click('sheet-watch-later-button'), undefined);
+});
+
+test('YouTube: the Watch later clock in the player over a hovered thumbnail saves that video with its card title (#406)', () => {
+	const site = youtube('youtube-home.html');
+	assert.deepEqual(site.click('preview-watch-later'), {
+		kind: 'save',
+		link: {
+			url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+			title: 'Never Gonna Give You Up',
+		},
+	});
+	assert.deepEqual(site.click('stray-watch-later'), {kind: 'unreadable'});
+});
+
 test('Reddit: Save in a post or comment menu saves its permalink', () => {
 	const site = reddit('reddit-new.html');
 	assert.deepEqual(site.click('post-save'), {
