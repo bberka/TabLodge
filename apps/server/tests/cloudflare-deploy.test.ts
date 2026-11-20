@@ -3,6 +3,7 @@ import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {test} from 'vite-plus/test';
+import {PROTOCOL_VERSION} from '../../extension/src/shared/sync/change-log';
 
 const serverDirectory = join(import.meta.dirname, '..');
 
@@ -22,6 +23,18 @@ test('the Deploy to Cloudflare Worker is built from the current server source', 
 	);
 	assert.equal(result.status, 0, result.stderr);
 }, 60_000);
+
+// The update workflow (apps/server/update-tablodge.yml) reads this line to stop before a release with another protocol.
+test('the Deploy to Cloudflare Worker states its sync protocol where the update workflow reads it', () => {
+	const worker = readFileSync(
+		join(serverDirectory, 'cloudflare-deploy', 'worker.js'),
+		'utf8',
+	);
+	assert.match(
+		worker,
+		new RegExp(`^var PROTOCOL_VERSION = ${PROTOCOL_VERSION};$`, 'm'),
+	);
+});
 
 test('the Deploy to Cloudflare config keeps the same Durable Object and limits as cf:setup', () => {
 	const button = readJsonc(

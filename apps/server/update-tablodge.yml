@@ -70,8 +70,14 @@ jobs:
             exit 0
           fi
 
-          protocol() { grep -oP 'var PROTOCOL_VERSION = \K\d+' "$1"; }
-          if [ "$(protocol worker.js)" != "$(protocol "$new/worker.js")" ] && [ "$ALLOW_PROTOCOL" != true ]; then
+          protocol() { grep -oP '^var PROTOCOL_VERSION = \K\d+' "$1" || true; }
+          old_protocol="$(protocol worker.js)"
+          new_protocol="$(protocol "$new/worker.js")"
+          if [ -z "$old_protocol" ] || [ -z "$new_protocol" ]; then
+            echo "::error::Could not read the sync protocol of worker.js here or in TabLodge $tag, so the update stops. Update by hand: https://github.com/$SOURCE/blob/master/docs/self-hosting.md#update"
+            exit 1
+          fi
+          if [ "$old_protocol" != "$new_protocol" ] && [ "$ALLOW_PROTOCOL" != true ]; then
             echo "::error::TabLodge $tag speaks another sync protocol, so devices on an older TabLodge stop syncing until they update. Update TabLodge everywhere, then run this workflow by hand with the protocol box ticked."
             exit 1
           fi
