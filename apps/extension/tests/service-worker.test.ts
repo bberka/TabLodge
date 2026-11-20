@@ -12658,6 +12658,39 @@ test('two workers connected to one server share sessions and bookmarks', async (
 	assert.equal(first.state.groups[0]?.name, 'Research');
 });
 
+test('settings that arrive through sync take effect here: the snapshot and backup alarms follow them', async () => {
+	const server = syncServer();
+	const first = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+	});
+	const second = createWorkerHarness(stateWithSession(), undefined, {
+		fetch: server.fetch,
+	});
+	const connect = {
+		type: 'SYNC_CONNECT',
+		url: 'https://sync.example.test',
+		token: SYNC_TOKEN,
+	} as const;
+	assert.equal((await first.sendMessage(connect)).ok, true);
+	assert.equal((await second.sendMessage(connect)).ok, true);
+	await second.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {snapshotsEnabled: true, autoBackup: 'off'},
+	});
+	assert.ok(second.alarms.get('tablodge-snapshot'));
+	assert.equal(second.alarms.get('tablodge-backup'), undefined);
+
+	await first.sendMessage({
+		type: 'UPDATE_SETTINGS',
+		settings: {snapshotsEnabled: false, autoBackup: 'daily'},
+	});
+	await first.sendMessage({type: 'SYNC_NOW'});
+	await second.sendMessage({type: 'SYNC_NOW'});
+	assert.equal(second.state.settings.autoBackup, 'daily');
+	assert.equal(second.alarms.get('tablodge-snapshot'), undefined);
+	assert.equal(second.alarms.get('tablodge-backup')?.periodInMinutes, 1440);
+});
+
 test('sync refuses a plain http server and is off in private windows', async () => {
 	const server = syncServer();
 	const harness = createWorkerHarness(stateWithSession(), undefined, {

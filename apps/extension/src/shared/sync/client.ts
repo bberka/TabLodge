@@ -34,6 +34,7 @@ import {
 } from './engine';
 import {
 	assemble,
+	isUntouchedDefault,
 	sourcesOf,
 	splitLibrary,
 	type SyncedSource,
@@ -601,8 +602,13 @@ export function createSyncClient(host: SyncHost) {
 				: (['setting'] as const)),
 		]);
 
-	async function captureLocal(state: SyncState, records: Records) {
+	async function captureLocal(state: SyncState, all: Records) {
 		const left = await leftAlone(state);
+		const records = new Map(
+			[...all].filter(
+				([key, record]) => state.shadow[key] || !isUntouchedDefault(record),
+			),
+		);
 		return left.size === 0
 			? capture(state, records, host.now())
 			: captureExcept(state, records, host.now(), left);

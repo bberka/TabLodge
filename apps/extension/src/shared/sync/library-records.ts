@@ -32,7 +32,7 @@ import type {TombstoneKind} from '../library-sync';
 import {tagFields} from '../bookmark-tags';
 import {bookmarkNotes, DEFAULT_SETTINGS} from '../library-normalize';
 import {EXTENSION_LOCAL_SETTINGS} from '../local-settings';
-import {isRecord} from '../library-values';
+import {canonicalJson, isRecord} from '../library-values';
 import {parseTrashEntry, syncedTrash, type TrashEntry} from '../trash';
 import {recordKey} from './changes';
 
@@ -136,6 +136,16 @@ export type LibraryRecord = {
 	parentId?: string;
 	value: unknown;
 };
+
+/**
+A `setting` record that still holds its default. Never synced, it is not sent: a phone or a new browser holds every
+default without anyone choosing it, and sent first it would overwrite the values another browser chose.
+*/
+export const isUntouchedDefault = (record: LibraryRecord) =>
+	record.kind === 'setting' &&
+	Object.hasOwn(DEFAULT_SETTINGS, record.id) &&
+	canonicalJson(record.value) ===
+		canonicalJson(DEFAULT_SETTINGS[record.id as keyof Settings]);
 
 /**
 The order group of a record kind; tabs are ordered within their session.

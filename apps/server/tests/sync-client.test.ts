@@ -766,6 +766,44 @@ test("a new install that never changed a setting takes the server's values inste
 	assert.equal(a.store.settings.browserBookmarkAction, 'ask');
 });
 
+test('a device at the defaults that syncs first sends none of them, so the values another browser chose win', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, withSettings({autoBackup: 'daily'}));
+	// A phone, or a browser nobody changed these settings in.
+	const phone = makeDevice(
+		server,
+		withSettings({autoBackup: 'off', snapshotKeep: 25}),
+	);
+	await a.client.connect(URL_BASE, TOKEN);
+	await phone.client.connect(URL_BASE, TOKEN);
+
+	server.setLegacy(false);
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		await phone.client.syncNow();
+		assert.ok(
+			(await server.export()).every((line) => !line.includes('"setting"')),
+			'no defaults went out',
+		);
+		await a.client.syncNow();
+		await phone.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.equal(a.store.settings.autoBackup, 'daily');
+	assert.equal(phone.store.settings.autoBackup, 'daily');
+
+	// Once synced, going back to the default is an edit like any other.
+	phone.edit((store) => ({
+		...store,
+		settings: {...store.settings, autoBackup: 'off'},
+	}));
+	await phone.client.syncNow();
+	await a.client.syncNow();
+	assert.equal(a.store.settings.autoBackup, 'off');
+});
+
 test('a setting from a newer version is held and goes back unchanged', async () => {
 	const server = makeServer();
 	// A newer version sends a setting this one does not know, the way this version keeps one it holds.
