@@ -69,6 +69,7 @@ import {
 	switchSummary,
 	useHasSavableTabs,
 } from './common';
+import {offerTrashUndo} from './recovery-core';
 import {useSessionNameAsk} from './name-session-dialog';
 import {BookmarkIcon, Favicon} from './favicon';
 import {resolveLinkTarget} from './link-target';
@@ -594,6 +595,17 @@ function SidePanel() {
 			const result = await send('RESTORE_GROUP', {groupId: session.id});
 			if (!result?.ok) {
 				throw new Error(result?.error || 'Could not restore this session.');
+			}
+
+			// With Remove restored tabs on, the session went to the trash; Undo brings it back.
+			if (result.trashId && !result.failed && !result.splitsSeparated) {
+				offerTrashUndo(
+					`Restored “${session.name}” and removed it from your sessions.`,
+					result.trashId,
+					showStatus,
+					reload,
+				);
+				return;
 			}
 
 			showStatus(

@@ -81,7 +81,7 @@ import {LinkSummary} from './favicon';
 import {useSessionNameAsk} from './name-session-dialog';
 import {PROJECT} from './project';
 import {defaultBookmarkColumnId} from './default-column';
-import {offerUndo} from './recovery-core';
+import {offerTrashUndo, offerUndo} from './recovery-core';
 import {
 	closeDuplicateTabs,
 	useDuplicateTabCount,
@@ -569,9 +569,20 @@ function Popup() {
 		});
 		setBusy('');
 		if (result?.ok) {
-			showStatus(restoreSummary(result), Boolean(result.failed), {
-				toast: true,
-			});
+			// With Remove restored tabs on, the session went to the trash; Undo brings it back.
+			if (result.trashId && !result.failed) {
+				offerTrashUndo(
+					`Restored “${group.name}” and removed it from your sessions.`,
+					result.trashId,
+					showStatus,
+					reload,
+				);
+			} else {
+				showStatus(restoreSummary(result), Boolean(result.failed), {
+					toast: true,
+				});
+			}
+
 			await reload();
 		} else {
 			showStatus(result?.error || `Could not restore “${group.name}”.`, true);
