@@ -59,6 +59,7 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		});
 	let app = createServerApi();
 	let online = true;
+	let statusFails = false;
 	const fetchFromApp = async (url: string, init: RequestInit) =>
 		app.request(url, init);
 	return {
@@ -76,6 +77,12 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		setOnline(value: boolean) {
 			online = value;
 		},
+		/**
+		Makes /v1/status answer with a server error, as a proxy in front of the server might for a moment.
+		*/
+		setStatusFails(value: boolean) {
+			statusFails = value;
+		},
 		setLegacy(value: boolean) {
 			legacy = value;
 		},
@@ -91,6 +98,10 @@ function makeServer(options: {legacy?: boolean} = {}) {
 			}
 
 			requests.push(new URL(url).pathname);
+			if (statusFails && new URL(url).pathname === '/v1/status') {
+				return Response.json({error: 'unavailable'}, {status: 503});
+			}
+
 			if (rewriteStatus && new URL(url).pathname === '/v1/status') {
 				const response = await app.request(url, init);
 				return Response.json(
@@ -953,4 +964,32 @@ test('a server without the tags feature keeps syncing and leaves the tags on the
 
 	assert.deepEqual(tagsOf(a.store), [[['stays'], ['repo']]]);
 	assert.equal((await a.client.status()).error, null);
+});
+
+test('a status request that fails ends the round, so the tags in that pull are not skipped for good', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {...emptyStore(), bookmarks: [bookmark('b1')]});
+	const b = makeDevice(server);
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	// No live notice: b only pulls when asked to.
+	for (const socket of server.sockets) {
+		socket.close();
+	}
+
+	a.edit((store) => ({...store, bookmarks: [withTags('b1', ['later'])]}));
+	await a.client.syncNow();
+	server.setStatusFails(true);
+	// Past the ten minutes the client trusts the server's earlier list of features.
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		await b.client.syncNow();
+		assert.match((await b.client.status()).error ?? '', /error/);
+		server.setStatusFails(false);
+		await b.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.deepEqual(tagsOf(b.store), [[['later'], ['repo']]]);
 });

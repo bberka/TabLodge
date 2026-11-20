@@ -485,15 +485,11 @@ export function createSyncClient(host: SyncHost) {
 			return featureCheck.features;
 		}
 
-		let info: ServerInfo | undefined;
-		try {
-			info = parseServerInfo(await request(target, '/v1/status'));
-		} catch (error) {
-			if (!(error instanceof SyncError) || error.kind !== 'server') {
-				throw error;
-			}
-		}
-
+		/*
+		A status request that fails ends the round, like any other request. Taken as "no features", it would make the pull
+		skip the trash, notes, and tags while the cursor moves past them, so this device would never get them.
+		*/
+		const info = parseServerInfo(await request(target, '/v1/status'));
 		const side = info && updateSide(info.protocol);
 		if (side) {
 			featureCheck = undefined;
