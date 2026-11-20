@@ -216,13 +216,15 @@ export function SnapshotsDialog({
 	showStatus: ShowStatus;
 	onSessionsChanged?: () => unknown;
 	/**
-	Ask before clearing everything (the Settings page does; other pages use Undo alone).
+	Ask before deleting a snapshot or clearing them all (the Settings page does; other pages use Undo alone).
 	*/
 	confirmDestructive?: boolean;
 }) {
 	const {data, error, reload} = useSnapshots(open);
 	const [busy, setBusy] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [deleting, setDeleting] = useState<string>();
+	const [askDeleteOpen, setAskDeleteOpen] = useState(false);
 
 	async function run(action: () => Promise<void>) {
 		setBusy(true);
@@ -325,7 +327,14 @@ export function SnapshotsDialog({
 										onSave={(windowIndex) =>
 											void saveAsSession(snapshot.id, windowIndex)
 										}
-										onDelete={() => void remove(snapshot.id)}
+										onDelete={() => {
+											if (confirmDestructive) {
+												setDeleting(snapshot.id);
+												setAskDeleteOpen(true);
+											} else {
+												void remove(snapshot.id);
+											}
+										}}
 									/>
 								))}
 							</ul>
@@ -358,6 +367,18 @@ export function SnapshotsDialog({
 				onConfirm={() => {
 					setConfirmOpen(false);
 					void clearAll();
+				}}
+			/>
+			<ConfirmationDialog
+				open={askDeleteOpen}
+				title="Delete this snapshot?"
+				description="The snapshot is removed. You can undo this right after."
+				onOpenChange={setAskDeleteOpen}
+				onConfirm={() => {
+					setAskDeleteOpen(false);
+					if (deleting) {
+						void remove(deleting);
+					}
 				}}
 			/>
 		</Dialog>
@@ -420,11 +441,14 @@ export function TrashDialog({
 	*/
 	initialFilter?: TrashFilter;
 	/**
-	Ask before emptying the trash bin (the Settings page does; other pages use Undo alone).
+	Ask before deleting an item for good or emptying the trash bin (the Settings page does; other pages use Undo alone).
 	*/
 	confirmDestructive?: boolean;
 }) {
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	// The item stays set while the dialog fades out, so its text does not change on Cancel.
+	const [deleting, setDeleting] = useState<TrashSummary>();
+	const [askDeleteOpen, setAskDeleteOpen] = useState(false);
 	const [items, setItems] = useState<TrashSummary[] | null>(null);
 	const [error, setError] = useState('');
 	const [busy, setBusy] = useState(false);
@@ -628,7 +652,14 @@ export function TrashDialog({
 												className="h-8 w-8 text-muted-foreground hover:text-destructive"
 												aria-label={`Delete “${item.label}” permanently`}
 												disabled={busy}
-												onClick={() => void remove(item)}
+												onClick={() => {
+													if (confirmDestructive) {
+														setDeleting(item);
+														setAskDeleteOpen(true);
+													} else {
+														void remove(item);
+													}
+												}}
 											>
 												<Trash2 className="h-4 w-4" />
 											</Button>
@@ -670,9 +701,41 @@ export function TrashDialog({
 					void empty();
 				}}
 			/>
+			<ConfirmationDialog
+				open={askDeleteOpen}
+				title={`Delete “${deleting?.label ?? ''}” for good?`}
+				description="It leaves the trash bin and cannot be restored later. You can undo this right after."
+				onOpenChange={setAskDeleteOpen}
+				onConfirm={() => {
+					setAskDeleteOpen(false);
+					if (deleting) {
+						void remove(deleting);
+					}
+				}}
+			/>
 		</Dialog>
 	);
 }
+
+const BACKUP_QUESTIONS = {
+	snapshots: {
+		title: 'Clear all snapshots?',
+		description:
+			'Every recent snapshot is removed. You can undo this right after.',
+		confirmLabel: 'Clear snapshots',
+	},
+	restore: {
+		title: 'Restore this backup?',
+		description:
+			'Your sessions and bookmarks are replaced by this backup. To keep what you have and add only what is new, use Add instead. A safety backup of what you have now is kept, and you can undo this right after.',
+		confirmLabel: 'Restore',
+	},
+	delete: {
+		title: 'Delete this backup?',
+		description: 'The backup is removed. You can undo this right after.',
+		confirmLabel: 'Delete',
+	},
+} as const;
 
 const BACKUP_KIND_LABELS = {
 	auto: 'Automatic',
@@ -883,9 +946,20 @@ export function RecoveryTools({
 		focusUndoRef.current = false;
 		undoRef.current?.focus();
 	}, [notice, busy]);
+	// What the confirmation asks about; it stays set while the dialog fades out, so its text does not change.
 	const [pending, setPending] = useState<
-		{kind: 'snapshots'} | {kind: 'restore'; backup: BackupSummary} | null
-	>(null);
+		| {kind: 'snapshots'}
+		| {kind: 'restore'; backup: BackupSummary}
+		| {kind: 'delete'; backup: BackupSummary}
+	>({kind: 'snapshots'});
+	const [pendingOpen, setPendingOpen] = useState(false);
+	// A confirmed delete waits for the confirmation to hand focus back, so it cannot take focus from Undo afterwards.
+	const pendingDeleteRef = useRef<BackupSummary>(undefined);
+	const ask = (next: typeof pending) => {
+		setPending(next);
+		setPendingOpen(true);
+	};
+
 	const latestReadRef = useRef(0);
 	const refresh = useCallback(async () => {
 		const read = ++latestReadRef.current;
@@ -1188,11 +1262,14 @@ export function RecoveryTools({
 											key={backup.id}
 											backup={backup}
 											busy={busy !== ''}
-											onRestore={() => setPending({kind: 'restore', backup})}
+											onRestore={() => {
+												ask({kind: 'restore', backup});
+											}}
 											onMerge={() => void mergeBackup(backup)}
 											onDownload={() => void download(backup)}
-											// A single backup is deleted at once; Undo brings it back.
-											onDelete={() => void removeBackup(backup)}
+											onDelete={() => {
+												ask({kind: 'delete', backup});
+											}}
 										/>
 									))}
 								</ul>
@@ -1203,7 +1280,9 @@ export function RecoveryTools({
 						<Button
 							variant="outline"
 							disabled={busy !== ''}
-							onClick={() => setPending({kind: 'snapshots'})}
+							onClick={() => {
+								ask({kind: 'snapshots'});
+							}}
 						>
 							<Trash2 className="h-4 w-4" />
 							Clear snapshots
@@ -1215,28 +1294,24 @@ export function RecoveryTools({
 					</DialogFooter>
 				</DialogContent>
 				<ConfirmationDialog
-					open={pending !== null}
-					title={
-						pending?.kind === 'snapshots'
-							? 'Clear all snapshots?'
-							: 'Restore this backup?'
-					}
-					description={
-						pending?.kind === 'snapshots'
-							? 'Every recent snapshot is removed. You can undo this right after.'
-							: 'Your sessions and bookmarks are replaced by this backup. To keep what you have and add only what is new, use Add instead. A safety backup of what you have now is kept, and you can undo this right after.'
-					}
-					confirmLabel={
-						pending?.kind === 'snapshots' ? 'Clear snapshots' : 'Restore'
-					}
-					onOpenChange={(open) => !open && setPending(null)}
+					open={pendingOpen}
+					{...BACKUP_QUESTIONS[pending.kind]}
+					onOpenChange={setPendingOpen}
 					onConfirm={() => {
-						const current = pending;
-						setPending(null);
-						if (current?.kind === 'snapshots') {
+						setPendingOpen(false);
+						if (pending.kind === 'snapshots') {
 							void clearSnapshots();
-						} else if (current?.kind === 'restore') {
-							void restoreBackup(current.backup);
+						} else if (pending.kind === 'restore') {
+							void restoreBackup(pending.backup);
+						} else {
+							pendingDeleteRef.current = pending.backup;
+						}
+					}}
+					onCloseAutoFocus={() => {
+						const backup = pendingDeleteRef.current;
+						pendingDeleteRef.current = undefined;
+						if (backup) {
+							void removeBackup(backup);
 						}
 					}}
 				/>

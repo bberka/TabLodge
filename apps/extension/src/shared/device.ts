@@ -1,7 +1,8 @@
 /*
-Which device saved a session. The name is the person's own ("Berkay's MacBook") and belongs to one device, not to a
-platform: it is kept on the device, defaults to something read from the system, and is stamped onto each session it
-saves. Renaming a device does not rewrite sessions already saved, which keep the name they were saved under.
+Which device saved a session or a bookmark. The name is the person's own ("Berkay's MacBook") and belongs to one
+device, not to a platform: it is kept on the device, defaults to something read from the system, and is stamped onto
+each session and bookmark it saves. Renaming a device does not rewrite what was already saved, which keeps the name it
+was saved under.
 */
 
 /**
@@ -27,7 +28,7 @@ export const isDeviceKind = (value: unknown): value is DeviceKind =>
 	value === 'desktop' || value === 'mobile';
 
 /**
-The fields that say where a session was saved, or nothing when the device has no name.
+The fields that say where a session or bookmark was saved, or nothing when the device has no name.
 */
 export function deviceStamp(name: string, kind: DeviceKind): DeviceStamp {
 	const clean = cleanDeviceName(name);

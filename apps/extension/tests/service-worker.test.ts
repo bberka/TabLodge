@@ -13190,6 +13190,122 @@ test('a session keeps the device that saved it, and a bad device kind is read as
 	assert.equal(plain.groups[0].deviceName, undefined);
 });
 
+test('a bookmark saved here carries this device, and a stored or imported one keeps its own', async () => {
+	const harness = createWorkerHarness(stateWithSession(), [], {
+		storage: {'tablodge.device': {name: 'Work laptop'}},
+	});
+	const here = {deviceName: 'Work laptop', deviceKind: 'desktop'};
+	const added = await harness.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'One', url: 'https://one.example/'},
+	});
+	assert.equal(added.ok, true, added.error);
+	assert.deepEqual(
+		{
+			deviceName: added.bookmark.deviceName,
+			deviceKind: added.bookmark.deviceKind,
+		},
+		here,
+	);
+	const several = await harness.sendMessage({
+		type: 'ADD_BOOKMARKS',
+		bookmarks: [{title: 'Two', url: 'https://two.example/'}],
+	});
+	assert.equal(several.ok, true, several.error);
+	const quoted = await harness.sendMessage({
+		type: 'SAVE_QUOTE',
+		url: 'https://three.example/',
+		quote: 'A line',
+	});
+	assert.equal(quoted.ok, true, quoted.error);
+	const imported = await harness.sendMessage({
+		type: 'IMPORT_BOOKMARKS_FILE',
+		data: {
+			format: 'tablodge',
+			version: 1,
+			bookmarks: [
+				{
+					title: 'Phone',
+					url: 'https://phone.example/',
+					deviceName: 'Pixel 9',
+					deviceKind: 'mobile',
+				},
+				{title: 'Old', url: 'https://old.example/'},
+			],
+		},
+	});
+	assert.equal(imported.ok, true, imported.error);
+	const device = (url: string) => {
+		const bookmark = harness.state.bookmarks.find((entry) => entry.url === url);
+		return bookmark && [bookmark.deviceName, bookmark.deviceKind];
+	};
+
+	assert.deepEqual(device('https://two.example/'), ['Work laptop', 'desktop']);
+	assert.deepEqual(device('https://three.example/'), [
+		'Work laptop',
+		'desktop',
+	]);
+	assert.deepEqual(device('https://phone.example/'), ['Pixel 9', 'mobile']);
+	const old = harness.state.bookmarks.find(
+		(entry) => entry.url === 'https://old.example/',
+	);
+	assert.equal(old && 'deviceName' in old, false, 'an import has no device');
+	assert.equal(old && 'deviceKind' in old, false);
+
+	const edited = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK',
+		bookmarkId: added.bookmark.id,
+		fields: {title: 'Renamed'},
+	});
+	assert.equal(edited.bookmark.deviceName, 'Work laptop', 'an edit keeps it');
+});
+
+test('a stored bookmark keeps its device, and a bad device kind is read as a computer', async () => {
+	const state = stateWithSession();
+	state.bookmarks = [
+		{
+			id: 'b1',
+			title: 'A',
+			url: 'https://a.example/',
+			columnId: 'bookmark-default',
+			deviceName: ' Pixel  9 ',
+			deviceKind: 'toaster',
+			createdAt: 1,
+			updatedAt: 1,
+		},
+		{
+			id: 'b2',
+			title: 'B',
+			url: 'https://b.example/',
+			columnId: 'bookmark-default',
+			createdAt: 1,
+			updatedAt: 1,
+		},
+		{
+			id: 'b3',
+			title: 'C',
+			url: 'https://c.example/',
+			columnId: 'bookmark-default',
+			deviceName: {name: 'not text'},
+			deviceKind: 'mobile',
+			createdAt: 1,
+			updatedAt: 1,
+		},
+	] as never;
+	const {bookmarks} = await createWorkerHarness(state).sendMessage({
+		type: 'GET_STATE',
+	});
+	assert.equal(bookmarks[0].deviceName, 'Pixel 9');
+	assert.equal(bookmarks[0].deviceKind, 'desktop');
+	assert.equal('deviceName' in bookmarks[1], false);
+	assert.equal('deviceKind' in bookmarks[1], false);
+	assert.equal(
+		'deviceName' in bookmarks[2],
+		false,
+		'a name that is not text is dropped',
+	);
+});
+
 test('a session takes a color like a column does: a preset or a hex, kept when omitted, removed with an empty one', async () => {
 	const harness = createWorkerHarness(stateWithSession());
 	const update = async (fields: Record<string, unknown>) =>
@@ -13748,6 +13864,18 @@ test('a source column leaves out a site another column already claims', async ()
 	assert.deepEqual(domains(mine.column.id), ['youtube.com']);
 });
 
+test('a save on a site carries this device', async () => {
+	const harness = sourcesHarness({
+		storage: {'tablodge.device': {name: 'Desk'}},
+	});
+	await switchOnYoutube(harness);
+	await harness.sendMessage(watchLater(), fromYoutube);
+	const saved = harness.state.bookmarks.find(
+		(bookmark) => bookmark.title === 'Never Gonna Give You Up',
+	);
+	assert.deepEqual([saved?.deviceName, saved?.deviceKind], ['Desk', 'desktop']);
+});
+
 test('sources are off at install and no content script is registered', async () => {
 	const harness = sourcesHarness();
 	harness.listeners.onInstalled({reason: 'install'});
@@ -14090,7 +14218,7 @@ test('X saves from twitter.com and x.com land once, in a new X column, and Insta
 		{
 			type: 'SITE_SOURCE_SAVE',
 			source: 'instagram',
-			url: 'https://www.instagram.com/reel/C9x8Y7w6V5u/',
+			url: 'https://www.instagram.com/p/C9x8Y7w6V5u/',
 			title: 'Instagram reel',
 		},
 		page('https://www.instagram.com/'),
@@ -14105,7 +14233,7 @@ test('X saves from twitter.com and x.com land once, in a new X column, and Insta
 		]),
 		[
 			['X', 'https://x.com/alice/status/1850000000000000001'],
-			['Instagram', 'https://www.instagram.com/reel/C9x8Y7w6V5u/'],
+			['Instagram', 'https://www.instagram.com/p/C9x8Y7w6V5u/'],
 		],
 	);
 });
@@ -14599,7 +14727,9 @@ async function switchOnReddit(harness: ReturnType<typeof sourcesHarness>) {
 }
 
 test('a saved page counts what the library lacks and adds exactly that, in its order, as one Undo step', async () => {
-	const harness = sourcesHarness();
+	const harness = sourcesHarness({
+		storage: {'tablodge.device': {name: 'Desk'}},
+	});
 	await switchOnReddit(harness);
 	// One post is already saved by a click, one is in the trash bin, and the page lists one post twice.
 	await harness.sendMessage(
@@ -14640,6 +14770,12 @@ test('a saved page counts what the library lacks and adds exactly that, in its o
 	);
 	assert.equal(added.ok && added.added, 2);
 	assert.equal(added.ok && added.column, 'Reddit');
+	assert.equal(
+		harness.state.bookmarks.find((bookmark) => bookmark.url?.includes('bbb222'))
+			?.deviceName,
+		'Desk',
+		'a catch-up add carries this device',
+	);
 	const inColumn = () =>
 		harness.state.bookmarks
 			.filter((bookmark) => bookmark.columnId === 'source-reddit')
@@ -14756,6 +14892,79 @@ test('a saved page of a site that is off, or another site, gets no count and add
 	assert.equal(harness.state.bookmarks.length, 0);
 });
 
+test('the saved pages of YouTube, X, Instagram, and GitHub add their missing items to their own columns', async () => {
+	const pages = [
+		{
+			id: 'youtube',
+			origins: ['https://www.youtube.com/*'],
+			url: 'https://www.youtube.com/playlist?list=WL',
+			link: '/watch?v=dQw4w9WgXcQ&list=WL&index=1&pp=iAQB',
+			stored: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+		},
+		{
+			id: 'x',
+			origins: ['https://x.com/*', 'https://twitter.com/*'],
+			url: 'https://x.com/i/history',
+			link: '/alice/status/1900000000000000001',
+			stored: 'https://x.com/alice/status/1900000000000000001',
+		},
+		{
+			id: 'instagram',
+			origins: ['https://www.instagram.com/*'],
+			url: 'https://www.instagram.com/someone/saved/all-posts/',
+			link: '/p/DfAAAAAAAAA/',
+			stored: 'https://www.instagram.com/p/DfAAAAAAAAA/',
+		},
+		{
+			id: 'github',
+			origins: ['https://github.com/*'],
+			url: 'https://github.com/octo-me?tab=stars',
+			link: '/nodejs/node',
+			stored: 'https://github.com/nodejs/node',
+		},
+	];
+	for (const page of pages) {
+		const harness = sourcesHarness();
+		harness.grantOrigins(page.origins);
+		await harness.sendMessage({
+			type: 'SET_SITE_SOURCE',
+			source: page.id,
+			enabled: true,
+		});
+		const from = {tab: {...youtubeTab, url: page.url}, url: page.url};
+		const links = [{url: page.link, title: 'Saved'}];
+		assert.deepEqual(
+			await counted(
+				harness.sendMessage(
+					{type: 'SITE_SOURCE_CATCH_UP', source: page.id, links},
+					from,
+				),
+			),
+			{ok: true, missing: 1, ask: true},
+			page.id,
+		);
+		const added = await harness.sendMessage(
+			{type: 'SITE_SOURCE_CATCH_UP_ADD', source: page.id, links},
+			from,
+		);
+		assert.equal(added.ok && added.added, 1, page.id);
+		assert.deepEqual(
+			harness.state.bookmarks.map((bookmark) => [
+				bookmark.url,
+				bookmark.columnId,
+			]),
+			[[page.stored, `source-${page.id}`]],
+		);
+
+		// Another site's page cannot add to this one.
+		const elsewhere = await harness.sendMessage(
+			{type: 'SITE_SOURCE_CATCH_UP_ADD', source: page.id, links},
+			page.id === 'github' ? fromYoutube : redditSaved,
+		);
+		assert.equal(elsewhere.ok, false, page.id);
+	}
+});
+
 test('Save to TabLodge only is a choice per site that supports it, reported to its page, and reset by Remove', async () => {
 	const harness = sourcesHarness();
 	const xTab = {id: 3, windowId: 10, url: 'https://x.com/home'};
@@ -14856,4 +15065,38 @@ test('a private window keeps saves off the site only when its saves are added', 
 		);
 		assert.equal(result.ok && result.keepOffSite, expected, mode);
 	}
+});
+
+test('a reel saved from its own page is not missing from the Instagram saved page, which lists it at /p/', async () => {
+	const harness = sourcesHarness();
+	harness.grantOrigins(['https://www.instagram.com/*']);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'instagram',
+		enabled: true,
+	});
+	const reelPage = 'https://www.instagram.com/reel/DfAAAAAAAAA/';
+	await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'instagram',
+			url: reelPage,
+			title: 'A reel',
+		},
+		{tab: {...youtubeTab, url: reelPage}, url: reelPage},
+	);
+	const saved = 'https://www.instagram.com/someone/saved/all-posts/';
+	assert.deepEqual(
+		await counted(
+			harness.sendMessage(
+				{
+					type: 'SITE_SOURCE_CATCH_UP',
+					source: 'instagram',
+					links: [{url: '/p/DfAAAAAAAAA/', title: 'A reel'}],
+				},
+				{tab: {...youtubeTab, url: saved}, url: saved},
+			),
+		),
+		{ok: true, missing: 0, ask: false},
+	);
 });

@@ -632,6 +632,19 @@ export function cleanBookmarkTitle(value: unknown, url: string) {
 				.trim();
 }
 
+/**
+The saving device of a stored session or bookmark, kept only when it has a name.
+*/
+const storedDevice = (raw: Record<string, unknown>) =>
+	deviceStamp(
+		cleanText(
+			typeof raw.deviceName === 'string' ? raw.deviceName : '',
+			'',
+			MAX_DEVICE_NAME,
+		),
+		isDeviceKind(raw.deviceKind) ? raw.deviceKind : 'desktop',
+	);
+
 export function normalizeBookmark(
 	raw: unknown,
 	columnIds: Set<string>,
@@ -667,6 +680,7 @@ export function normalizeBookmark(
 					? requestedColumnId
 					: fallbackColumnId,
 		...(notes && {notes}),
+		...storedDevice(raw),
 		createdAt,
 		updatedAt: positiveOr(raw.updatedAt, createdAt),
 	};
@@ -720,10 +734,7 @@ export function normalizeGroup(
 		...colorField(raw.color),
 		sourceWindowName: cleanText(raw.sourceWindowName, '', 180),
 		sourceWindowId: isInteger(raw.sourceWindowId) ? raw.sourceWindowId : null,
-		...deviceStamp(
-			cleanText(raw.deviceName, '', MAX_DEVICE_NAME),
-			isDeviceKind(raw.deviceKind) ? raw.deviceKind : 'desktop',
-		),
+		...storedDevice(raw),
 		...(isRecord(raw.windowBounds) &&
 			[
 				raw.windowBounds.left,

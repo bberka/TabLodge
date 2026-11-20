@@ -83,8 +83,16 @@ export function watchSavedPage({
 	const check = async () => {
 		const loaded = read(document);
 		const links = loaded?.slice(0, CATCH_UP_MAX_LINKS);
-		const key = JSON.stringify(links?.map((link) => link.url) ?? []);
-		if (!links?.length || key === lastAsked) {
+		if (!links?.length) {
+			// Off the saved page (YouTube and X change pages in place): an answer still on its way is for a list
+			// that is gone, and coming back asks again.
+			latestRequest++;
+			lastAsked = '';
+			return;
+		}
+
+		const key = JSON.stringify(links.map((link) => link.url));
+		if (key === lastAsked) {
 			return;
 		}
 

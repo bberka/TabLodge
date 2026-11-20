@@ -6,6 +6,7 @@ import {notify} from '../../ui/dialog';
 import {addBookmark} from '../../library/board-edits';
 import {addTabsToSession, updateSessionTab} from '../../library/session-edits';
 import {extractUrl, extractUrls} from '../../library/store-shape';
+import {phoneStamp} from '../../platform/device';
 import {edit, editIn, newId} from '../../library/library-store';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
@@ -143,6 +144,7 @@ export function SaveAsBookmarksSheet({
 												url: link.url,
 												title: link.title,
 												columnId: column.id,
+												device: phoneStamp(),
 											},
 											newId(),
 											now,

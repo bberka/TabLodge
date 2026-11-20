@@ -14,6 +14,14 @@ Rules for every change to extension pages (`apps/extension/src`). Read the whole
 - External links should use `target="_blank" rel="noopener noreferrer"`.
 - Read the display name from `PROJECT.name` in pages or `APP_NAME` in the worker. Both use the manifest's `short_name`. Changes to storage keys, export format identifiers, drag MIME types, or context menu IDs need a migration.
 
+## Destructive actions
+
+An action that deletes, removes, resets, disconnects, or replaces something:
+
+- **Settings asks first**, including the dialogs it opens: a `ConfirmationDialog` that names what is lost, where Cancel changes nothing. Keep any Undo toast after it.
+- **Library views act at once** (dashboard, board, new tab, side panel, popup, palette) and offer **Undo** (`offerTrashUndo`, `offerUndo`, or a `showStatus` action). No confirmation; the shared Snapshots and Trash dialogs ask only with `confirmDestructive`, which Settings sets.
+- **Exempt:** resetting one setting, editing a list picker, a switch that turns back on the same way, a password form, and a dialog whose review step already names the mode (Import).
+
 ## Accessibility
 
 TabLodge is used by keyboard and with screen readers, so every UI change meets [WCAG 2.2 AA](https://www.w3.org/TR/WCAG22/) for what it touches. Check these before you write the UI, not after:

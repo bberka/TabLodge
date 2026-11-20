@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- www.youtube.com/playlist?list=WL, reduced by hand from a real signed-in page (2026-11): the shown ytd-browse
+playlist page with ytd-playlist-video-renderer rows (a thumbnail link, then #video-title), and the home page YouTube
+keeps hidden after navigating away (seen as ytd-browse page-subtype="home" hidden). Videos swapped for public ones.
+Added, not seen: a playlist row inside the hidden page. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>Watch later - YouTube</title></head>
+<body>
+<ytd-app><div id="content"><ytd-page-manager id="page-manager">
+	<ytd-browse page-subtype="home" hidden>
+		<ytd-rich-item-renderer><a id="thumbnail" href="/watch?v=aaaaaaaaaaa"></a><a id="video-title-link" title="On the home page">On the home page</a></ytd-rich-item-renderer>
+		<ytd-playlist-video-renderer><a id="thumbnail" href="/watch?v=bbbbbbbbbbb&amp;list=WL&amp;index=9"></a><a id="video-title" title="Left behind by an earlier visit">Left behind</a></ytd-playlist-video-renderer>
+	</ytd-browse>
+	<ytd-browse page-subtype="playlist">
+		<ytd-two-column-browse-results-renderer page-subtype="playlist"><div id="primary"><ytd-section-list-renderer page-subtype="playlist"><div id="contents"><ytd-item-section-renderer page-subtype="playlist"><div id="contents"><ytd-playlist-video-list-renderer><div id="contents">
+			<ytd-playlist-video-renderer class="style-scope ytd-playlist-video-list-renderer">
+				<div id="index-container"><yt-formatted-string id="index">1</yt-formatted-string></div>
+				<div id="content"><div id="container">
+					<ytd-thumbnail id="thumbnail"><a id="thumbnail" class="yt-simple-endpoint inline-block" href="/watch?v=dQw4w9WgXcQ&amp;list=WL&amp;index=1&amp;pp=iAQB"><yt-image><img alt=""></yt-image><div id="overlays"><badge-shape role="img" aria-label="3 minutes, 33 seconds"><div class="ytBadgeShapeText">3:33</div></badge-shape></div></a></ytd-thumbnail>
+					<div id="meta"><h3 aria-label="Never Gonna Give You Up 3 minutes, 33 seconds"><a id="video-title" class="yt-simple-endpoint" href="/watch?v=dQw4w9WgXcQ&amp;list=WL&amp;index=1&amp;pp=iAQB" title="Never Gonna Give You Up"> Never Gonna Give You Up </a></h3>
+						<ytd-video-meta-block class="playlist"><div id="metadata"><div id="byline-container"><ytd-channel-name id="channel-name"><a href="/@RickAstleyYT">Rick Astley</a></ytd-channel-name></div></div></ytd-video-meta-block>
+					</div>
+				</div></div>
+				<div id="menu"><ytd-menu-renderer><yt-icon-button id="button"><button id="button" aria-label="Action menu"></button></yt-icon-button></ytd-menu-renderer></div>
+			</ytd-playlist-video-renderer>
+			<ytd-playlist-video-renderer class="style-scope ytd-playlist-video-list-renderer">
+				<div id="index-container"><yt-formatted-string id="index">2</yt-formatted-string></div>
+				<div id="content"><div id="container">
+					<ytd-thumbnail id="thumbnail"><a id="thumbnail" href="/watch?v=jNQXAC9IVRw&amp;list=WL&amp;index=2&amp;t=4s"></a></ytd-thumbnail>
+					<div id="meta"><h3><a id="video-title" href="/watch?v=jNQXAC9IVRw&amp;list=WL&amp;index=2&amp;t=4s" title="Me at the zoo"> Me at the zoo </a></h3></div>
+				</div></div>
+			</ytd-playlist-video-renderer>
+			<ytd-continuation-item-renderer></ytd-continuation-item-renderer>
+		</div></ytd-playlist-video-list-renderer></div></ytd-item-section-renderer></div></ytd-section-list-renderer></div></ytd-two-column-browse-results-renderer>
+	</ytd-browse>
+</ytd-page-manager></div></ytd-app>
+</body>
+</html>

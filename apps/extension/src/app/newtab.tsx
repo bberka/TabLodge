@@ -28,12 +28,14 @@ import {
 	LayoutGrid,
 	EyeOff,
 	Library,
+	Monitor,
 	MoreHorizontal,
 	PanelLeft,
 	Pencil,
 	Plus,
 	Search,
 	Share2,
+	Smartphone,
 	Trash2,
 	X,
 	PanelsTopLeft,
@@ -3037,6 +3039,16 @@ function NewTab() {
 										title={editedBookmark.title}
 										url={editedBookmark.url}
 									/>
+								)}
+								{editedBookmark?.deviceName && (
+									<p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+										{editedBookmark.deviceKind === 'mobile' ? (
+											<Smartphone className="size-3.5" aria-hidden="true" />
+										) : (
+											<Monitor className="size-3.5" aria-hidden="true" />
+										)}
+										Saved on {editedBookmark.deviceName}
+									</p>
 								)}
 								<div className="space-y-1.5">
 									<Label htmlFor="bookmark-edit-title">Title</Label>

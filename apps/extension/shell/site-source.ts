@@ -18,11 +18,17 @@ import {
 import type {SourceRead, SourceReader} from '../src/app/source-reader';
 import {createBlueskyReader} from '../src/app/source-bluesky';
 import {createDevtoReader} from '../src/app/source-devto';
-import {createGithubReader} from '../src/app/source-github';
+import {
+	createGithubReader,
+	readGithubSavedPage,
+} from '../src/app/source-github';
 import {createGoodreadsReader} from '../src/app/source-goodreads';
 import {createHackerNewsReader} from '../src/app/source-hackernews';
 import {createImdbReader} from '../src/app/source-imdb';
-import {createInstagramReader} from '../src/app/source-instagram';
+import {
+	createInstagramReader,
+	readInstagramSavedPage,
+} from '../src/app/source-instagram';
 import {createLetterboxdReader} from '../src/app/source-letterboxd';
 import {createLobstersReader} from '../src/app/source-lobsters';
 import {createMediumReader} from '../src/app/source-medium';
@@ -30,8 +36,11 @@ import {createSoundcloudReader} from '../src/app/source-soundcloud';
 import {createSpotifyReader} from '../src/app/source-spotify';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createSubstackReader} from '../src/app/source-substack';
-import {createTwitterReader} from '../src/app/source-x';
-import {createYoutubeReader} from '../src/app/source-youtube';
+import {createTwitterReader, readTwitterSavedPage} from '../src/app/source-x';
+import {
+	createYoutubeReader,
+	readYoutubeSavedPage,
+} from '../src/app/source-youtube';
 import type {SavedPageReader} from '../src/app/source-catch-up';
 import {watchSavedPage} from '../src/app/source-catch-up-page';
 import {
@@ -62,9 +71,13 @@ const READERS: Record<SiteSourceId, () => SourceReader> = {
 	medium: () => createMediumReader(document),
 	substack: () => createSubstackReader(document),
 };
-// Sites whose saved page lists the user's saves in a form that can be read reliably (#377).
+// Sites whose saved page lists the user's saves in a form that can be read reliably (#377, #383).
 const SAVED_PAGES: Partial<Record<SiteSourceId, SavedPageReader>> = {
+	youtube: readYoutubeSavedPage,
 	reddit: readRedditSavedPage,
+	x: readTwitterSavedPage,
+	instagram: readInstagramSavedPage,
+	github: readGithubSavedPage,
 };
 const source = siteSourceForUrl(location.href);
 

@@ -247,10 +247,10 @@ function Help() {
 						'folder color colour switch update session colors move drag edit folder icon tint',
 				},
 				{
-					title: 'Device names on sessions',
-					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session you save records that name, and session cards show where each one was saved, with a computer or phone icon. The name belongs to this browser only. Renaming it does not change sessions already saved, and searching sessions also matches the device name.',
+					title: 'Device names on sessions and bookmarks',
+					body: 'With sync connected, Settings › Sync has a Device name. It starts as the browser and system, such as Chrome on macOS, and you can change it to something like Berkay’s MacBook. Each session and bookmark you save records that name, including saves from Sources and from the phone. Session cards show where each one was saved, with a computer or phone icon, and a bookmark shows Saved on and the device when you edit it. Imported bookmarks and bookmarks saved before this have none. The name belongs to this browser only. Renaming it does not change what was already saved. Searching sessions also matches the device name, and from:phone, from:computer, or from:"a device name" keeps what was saved there.',
 					searchText:
-						'device name which device saved session computer phone mobile desktop sync settings rename where saved from',
+						'device name which device saved session bookmark computer phone mobile desktop sync settings rename where saved from saved on',
 				},
 				{
 					title: 'Site icons',
@@ -482,14 +482,14 @@ function Help() {
 							in the page, in your {PROJECT.name} theme and accent color, offers
 							Undo; press Tab to reach it. A link already in your bookmarks or
 							in the trash bin is not saved again. {PROJECT.name} only watches
-							for your own clicks on the site&apos;s save controls (and, on your
-							Reddit saved page, reads the saved list shown there), reads the
-							link from the page (and, on a site set to Save to {PROJECT.name}{' '}
-							only, stops that click), and makes no network requests of its own;
-							the bookmark syncs only if you connected your own server. It
-							recognizes the English labels of those controls. The Bookmark
-							button on X, Star on GitHub, and the save buttons on Stack
-							Overflow and dev.to work in any language, and so do Like on
+							for your own clicks on the site&apos;s save controls (and, on the
+							saved pages listed below, reads the saved list shown there), reads
+							the link from the page (and, on a site set to Save to{' '}
+							{PROJECT.name} only, stops that click), and makes no network
+							requests of its own; the bookmark syncs only if you connected your
+							own server. It recognizes the English labels of those controls.
+							The Bookmark button on X, Star on GitHub, and the save buttons on
+							Stack Overflow and dev.to work in any language, and so do Like on
 							SoundCloud, the save buttons on Spotify and IMDb, Want to Read on
 							Goodreads, and the bookmark on Medium; the Share menu item on X
 							and the save button on Bluesky work in English. If a site changes
@@ -500,19 +500,29 @@ function Help() {
 							Save to {PROJECT.name} only reach your other browsers. Each
 							browser still asks for its own access: a site added elsewhere
 							shows On in another browser under Sources, with Turn on, and the
-							bookmarks page says so once. Remove takes a site out of the list
-							in every connected browser and gives its access back. Removing its
-							access in one browser&apos;s extension settings stops it only
-							there; Settings then says so next to the site and offers Allow
-							again. To catch up on Reddit posts you saved on your phone or
-							before you added the site, open your saved page on Reddit (new or
-							old Reddit). When some of the saved items it shows are not in{' '}
-							{PROJECT.name}, a notice says how many and offers Add them, which
-							adds them to the Reddit column in the order Reddit lists them, and
-							Not now, which keeps it quiet until something new appears there.
-							It counts only what the page has loaded, so scroll down, or on old
-							Reddit go to the next page, for more. Saved comments are included
-							on old Reddit only.
+							bookmarks page says so once. Remove asks first, then takes a site
+							out of the list in every connected browser and gives its access
+							back. Removing its access in one browser&apos;s extension settings
+							stops it only there; Settings then says so next to the site and
+							offers Allow again. To catch up on saves you made on your phone or
+							before you added the site, open the site&apos;s saved page: your
+							saved page on Reddit (new or old Reddit), Watch later on YouTube,
+							your bookmarks on X, All posts or a collection under Saved on
+							Instagram, or your own stars on GitHub. When some of the saved
+							items it shows are not in {PROJECT.name}, a notice says how many
+							and offers Add them, which adds them to the site&apos;s column in
+							the order the site lists them, and Not now, which keeps it quiet
+							until something new appears there. It counts only what the page
+							has loaded, so scroll down, or go to the next page, for more; X
+							keeps only the posts near the screen, so it counts those. Saved
+							comments are included on old Reddit only. Someone else&apos;s
+							GitHub stars are never offered. The other sites don&apos;t offer
+							this yet. Hacker News, Letterboxd, Goodreads, and IMDb lists can
+							be public, and telling your own list from someone else&apos;s has
+							not been checked on a signed-in page. The saved pages of Stack
+							Overflow, Lobsters, dev.to, Bluesky, SoundCloud, Spotify, Medium,
+							and Substack have not been checked on a signed-in account with
+							saves.
 						</>
 					),
 					searchText:
@@ -686,6 +696,13 @@ function Help() {
 									Quote a name with spaces: <Op>col:"Read later"</Op>.
 								</li>
 								<li>
+									<Op>from:phone</Op> and <Op>from:computer</Op> keep what was
+									saved on a phone or a computer, and{' '}
+									<Op>from:"Work laptop"</Op> what was saved on a device whose
+									name contains the text. Imported and older bookmarks have no
+									device, so they are left out.
+								</li>
+								<li>
 									<Op>after:2026-01-01</Op> keeps what was saved on or after
 									that day, <Op>before:2026-06-01</Op> what was saved before it.
 								</li>
@@ -699,7 +716,7 @@ function Help() {
 						</>
 					),
 					searchText:
-						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder after before date day filter narrow query syntax tips kind image pdf video',
+						'operators advanced search exact phrase quotes exclude minus leave out site domain host in kind sessions bookmarks tabs open column col folder from device phone computer after before date day filter narrow query syntax tips kind image pdf video',
 				},
 				{
 					title: 'Open the search palette',
