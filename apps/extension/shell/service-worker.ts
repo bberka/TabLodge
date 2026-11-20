@@ -13,6 +13,14 @@ import {
 	type SiteSource,
 	type SiteSourcesState,
 } from '../src/app/site-sources';
+import {
+	catchUpAsks,
+	catchUpValue,
+	dismissMissing,
+	missingSourceLinks,
+	parseCatchUpState,
+	SOURCE_CATCH_UP_KEY,
+} from '../src/app/source-catch-up';
 import {literalQuery} from '../src/shared/search-query';
 import {
 	isTrashEntry,
@@ -9787,6 +9795,13 @@ async function setSiteSource(
 		await injectSourceIntoOpenTabs(source);
 	} else {
 		await unregisterSource(source);
+		// The Not now answers go with the site, so adding it again asks afresh.
+		await sourcesMutate(async () => {
+			const answers = await readCatchUpState();
+			await chrome.storage.local.set({
+				[SOURCE_CATCH_UP_KEY]: catchUpValue({...answers, [source.id]: []}),
+			});
+		});
 	}
 
 	return {ok: true, sources: siteSourceStatuses(state)};
@@ -9874,6 +9889,40 @@ function sourceNote(source: SiteSource, href: unknown, url: string) {
 		: undefined;
 }
 
+/**
+The column a source saves into: the one chosen in Settings while it exists, otherwise the site's source column,
+added to the store when missing. Its fixed id makes two devices that create it at once write the same record.
+*/
+function sourceSaveColumn(
+	store: Store,
+	source: SiteSource,
+	state: SiteSourcesState,
+	now: number,
+) {
+	const {id: sourceId, ...look} = source.column;
+	const existing =
+		store.bookmarkColumns.find(
+			(entry) => entry.id === state[source.id].columnId,
+		) ?? store.bookmarkColumns.find((entry) => entry.id === sourceId);
+	if (existing) {
+		return existing;
+	}
+
+	// The site's own pages saved by hand go here too, except an address another column already claims.
+	const claimable = source.columnSites.filter(
+		(site) => !columnForUrl(store.bookmarkColumns, `https://${site}/`),
+	);
+	const column = {
+		id: sourceId,
+		...look,
+		...domainsField(claimable),
+		createdAt: now,
+		isDefault: false,
+	};
+	store.bookmarkColumns.push(column);
+	return column;
+}
+
 async function saveFromSource(
 	source: SiteSource,
 	{
@@ -9911,29 +9960,8 @@ async function saveFromSource(
 					return {ok: true, outcome: 'trashed'};
 				}
 
-				// The chosen column while it exists; otherwise the site's source column, whose fixed id makes two devices
-				// that create it at once write the same record.
-				const {id: sourceId, ...look} = source.column;
 				const now = Date.now();
-				let column =
-					store.bookmarkColumns.find(
-						(entry) => entry.id === state[source.id].columnId,
-					) ?? store.bookmarkColumns.find((entry) => entry.id === sourceId);
-				if (!column) {
-					// The site's own pages saved by hand go here too, except an address another column already claims.
-					const claimable = source.columnSites.filter(
-						(site) => !columnForUrl(store.bookmarkColumns, `https://${site}/`),
-					);
-					column = {
-						id: sourceId,
-						...look,
-						...domainsField(claimable),
-						createdAt: now,
-						isDefault: false,
-					};
-					store.bookmarkColumns.push(column);
-				}
-
+				const column = sourceSaveColumn(store, source, state, now);
 				const notes = sourceNote(source, discussion, url);
 				store.bookmarks.push({
 					id: makeId(),
@@ -9963,6 +9991,115 @@ async function saveFromSource(
 	}
 
 	return result;
+}
+
+/**
+The items of a saved page that the library lacks: not in any column and not in the trash bin, as a click-save
+counts them.
+*/
+async function missingFromSource(
+	store: Store,
+	source: SiteSource,
+	links: unknown,
+) {
+	const known = new Set([
+		...store.bookmarks.map((bookmark) => bookmark.url),
+		...(await trashedImportUrls(store.settings, 'bookmarks')),
+	]);
+	return missingSourceLinks(source, links, (url) => known.has(url));
+}
+
+async function readCatchUpState() {
+	const saved = await chrome.storage.local.get([SOURCE_CATCH_UP_KEY]);
+	return parseCatchUpState(saved[SOURCE_CATCH_UP_KEY]);
+}
+
+async function countSourceCatchUp(
+	source: SiteSource,
+	links: unknown,
+): Promise<ActionResult<'SITE_SOURCE_CATCH_UP'>> {
+	if (!(await readSourcesState())[source.id].enabled || privateSourcesOff()) {
+		return {ok: true, missing: 0, ask: false};
+	}
+
+	const missing = await missingFromSource(await getStore(), source, links);
+	const dismissed = (await readCatchUpState())[source.id];
+	return {
+		ok: true,
+		missing: missing.length,
+		ask: catchUpAsks(missing, dismissed),
+	};
+}
+
+async function addSourceCatchUp(
+	source: SiteSource,
+	links: unknown,
+): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> {
+	const state = await readSourcesState();
+	if (!state[source.id].enabled || privateSourcesOff()) {
+		return {ok: false, error: `${source.label} is off in ${APP_NAME}.`};
+	}
+
+	return mutate(async () =>
+		withUndo(
+			siteSourceUndoLabel(source),
+			[STORAGE_KEY],
+			async (): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_ADD'>> => {
+				const store = await getStore();
+				const missing = await missingFromSource(store, source, links);
+				if (missing.length === 0) {
+					return {ok: true, added: 0};
+				}
+
+				const now = Date.now();
+				const column = sourceSaveColumn(store, source, state, now);
+				// In the page's order, one after another, as the site lists them.
+				for (const link of missing) {
+					const notes = sourceNote(source, link.discussion, link.url);
+					store.bookmarks.push({
+						id: makeId(),
+						title: await bestBookmarkTitle(
+							link.title,
+							link.url,
+							store.settings.cleanTitles,
+						),
+						url: link.url,
+						columnId: column.id,
+						...(notes && {notes}),
+						createdAt: now,
+						updatedAt: now,
+					});
+				}
+
+				await writeStore(store);
+				return {ok: true, added: missing.length, column: column.name};
+			},
+		),
+	);
+}
+
+async function dismissSourceCatchUp(
+	source: SiteSource,
+	links: unknown,
+): Promise<ActionResult<'SITE_SOURCE_CATCH_UP_DISMISS'>> {
+	if (privateSourcesOff()) {
+		return {ok: true};
+	}
+
+	// In the sources queue as a whole, so a Remove that clears the answers can't be undone by this one finishing later.
+	await sourcesMutate(async () => {
+		if (!(await readSourcesState())[source.id].enabled) {
+			return;
+		}
+
+		const missing = await missingFromSource(await getStore(), source, links);
+		const state = await readCatchUpState();
+		state[source.id] = dismissMissing(state[source.id], missing);
+		await chrome.storage.local.set({
+			[SOURCE_CATCH_UP_KEY]: catchUpValue(state),
+		});
+	});
+	return {ok: true};
 }
 
 /**
@@ -10034,8 +10171,9 @@ page's toast reported (see QUOTE_UNDO).
 const quoteUndoTabs = new Map<string, number>();
 
 /**
-Messages from code in a web page: the site content script and the Save quote toast. They get the three source actions
-and Undo of the toast's own quote, and nothing else: no page can read or change the library through them.
+Messages from code in a web page: the site content script and the Save quote toast. They get the source actions (a
+save, the saved page catch-up, and their Undo) and Undo of the toast's own quote, and nothing else: no page can
+read or change the library through them, and the catch-up answers only how many of its site's links are missing.
 */
 async function handleSourceMessage(
 	message: TabLodgeMessage | undefined,
@@ -10079,6 +10217,27 @@ async function handleSourceMessage(
 		case 'SITE_SOURCE_PENDING': {
 			const source = senderSource(message.source, sender);
 			return source ? takePendingSourceSave(source, sender) : {ok: true};
+		}
+
+		case 'SITE_SOURCE_CATCH_UP': {
+			const source = senderSource(message.source, sender);
+			return source
+				? countSourceCatchUp(source, message.links)
+				: {ok: false, error: 'This page cannot save to that source.'};
+		}
+
+		case 'SITE_SOURCE_CATCH_UP_ADD': {
+			const source = senderSource(message.source, sender);
+			return source
+				? addSourceCatchUp(source, message.links)
+				: {ok: false, error: 'This page cannot save to that source.'};
+		}
+
+		case 'SITE_SOURCE_CATCH_UP_DISMISS': {
+			const source = senderSource(message.source, sender);
+			return source
+				? dismissSourceCatchUp(source, message.links)
+				: {ok: false, error: 'This page cannot save to that source.'};
 		}
 
 		case 'SITE_SOURCE_UNREADABLE': {

@@ -997,7 +997,20 @@ export type TabLodgeMessages = {
 	*/
 	SITE_SOURCE_PENDING: {source: string};
 	/**
-	Sent by the site content script: undoes a SITE_SOURCE_SAVE, and nothing else.
+	Sent by the site content script on the site's saved page: the items listed there. The worker answers how many
+	TabLodge lacks and whether to ask about them; it never says which.
+	*/
+	SITE_SOURCE_CATCH_UP: {source: string; links: unknown[]};
+	/**
+	Sent by the site content script when the user answers Add them: adds the listed items TabLodge lacks.
+	*/
+	SITE_SOURCE_CATCH_UP_ADD: {source: string; links: unknown[]};
+	/**
+	Sent by the site content script when the user answers Not now: don't ask again about the items missing now.
+	*/
+	SITE_SOURCE_CATCH_UP_DISMISS: {source: string; links: unknown[]};
+	/**
+	Sent by the site content script: undoes a SITE_SOURCE_SAVE or SITE_SOURCE_CATCH_UP_ADD, and nothing else.
 	*/
 	SITE_SOURCE_UNDO: {id: string};
 	/**
@@ -1373,6 +1386,12 @@ export type TabLodgeResponses = {
 	SITE_SOURCE_PENDING: {
 		saved?: {outcome: SiteSourceOutcome; column?: string} & Undoable;
 	};
+	/**
+	`missing`: how many listed items TabLodge lacks. `ask`: some of them were never answered Not now.
+	*/
+	SITE_SOURCE_CATCH_UP: {missing: number; ask: boolean};
+	SITE_SOURCE_CATCH_UP_ADD: {added: number; column?: string} & Undoable;
+	SITE_SOURCE_CATCH_UP_DISMISS: {};
 	SITE_SOURCE_UNDO: {label: string};
 	QUOTE_UNDO: {label: string};
 };
