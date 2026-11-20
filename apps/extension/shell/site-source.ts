@@ -9,7 +9,11 @@ import {
 	type SiteSourceId,
 } from '../src/app/site-sources';
 import {PRIVATE_CONFIG_KEY} from '../src/app/private-config';
-import {listenForSaves, type KeptSave} from '../src/app/source-keep-off';
+import {
+	listenForSaves,
+	settleKeptSave,
+	type KeptSave,
+} from '../src/app/source-keep-off';
 import type {SourceRead, SourceReader} from '../src/app/source-reader';
 import {createBlueskyReader} from '../src/app/source-bluesky';
 import {createDevtoReader} from '../src/app/source-devto';
@@ -105,7 +109,7 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		}
 	};
 
-	const alsoSave = (kept: KeptSave) => ({
+	const alsoSaveAction = (kept: KeptSave) => ({
 		label: `Also save on ${siteName}`,
 		run: async () =>
 			kept.replay()
@@ -123,26 +127,15 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 			title: kept.link.title,
 			discussion: kept.link.discussion,
 		});
-		if (!result?.ok || result.outcome === 'off') {
-			showSourceToast(
-				kept.replay()
-					? `${appName} could not save this, so ${siteName} saved it.`
-					: `${appName} could not save this, and ${siteName} did not either. Save it again.`,
-				{error: true},
-			);
-			return;
-		}
-
-		const texts: Record<Exclude<SiteSourceOutcome, 'off'>, string> = {
-			saved: `Saved to ${appName} only, in ${result.column}. ${siteName} won't show it as saved.`,
-			exists: `Already in ${appName}, so ${siteName} did not save it.`,
-			trashed: `In the ${appName} trash bin, so not saved again. ${siteName} did not save it.`,
-		};
-		const {undoId} = result;
-		showSourceToast(texts[result.outcome], {
+		const {text, error, alsoSave, undoId} = settleKeptSave(result, kept, {
+			app: appName,
+			site: siteName,
+		});
+		showSourceToast(text, {
+			error,
 			actions: [
 				...(undoId ? [{label: 'Undo', run: async () => undo(undoId)}] : []),
-				alsoSave(kept),
+				...(alsoSave ? [alsoSaveAction(kept)] : []),
 			],
 		});
 	};
@@ -168,8 +161,11 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 				source: source.id,
 			});
 			if (result?.ok && result.reported) {
+				// Under Save to TabLodge only the click was let through, so the site saved it.
 				showSourceToast(
-					`${appName} can't read this page anymore, so it saved nothing.`,
+					keepOffSite
+						? `${appName} can't read this page anymore, so ${siteName} saved it and ${appName} did not.`
+						: `${appName} can't read this page anymore, so it saved nothing.`,
 					{error: true},
 				);
 			}

@@ -5,9 +5,10 @@ import {
 	useState,
 	type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import {CircleAlert, Plus, RotateCcw, Trash2} from 'lucide-react';
+import {CircleAlert, CircleHelp, Plus, RotateCcw, Trash2} from 'lucide-react';
 import {
 	Button,
+	IconTooltip,
 	Input,
 	Label,
 	Popover,
@@ -44,7 +45,7 @@ export const SOURCES_WORDS = [
 	'permission',
 	'Save to',
 	'column',
-	'Save to TabLodge only',
+	`Save to ${PROJECT.name} only`,
 	'keep saves off the site',
 ];
 // The Save to entry for the site's own column; Radix Select needs a non-empty value.
@@ -72,6 +73,47 @@ function matches(source: SiteSource, query: string) {
 		.join(' ')
 		.toLocaleLowerCase();
 	return words.every((word) => text.includes(word));
+}
+
+/**
+What Save to TabLodge only does and doesn't do, behind a help button so the row shows no standing tip.
+*/
+function KeepOffHelpButton({site}: {site: string}) {
+	const label = `About saving on ${site}`;
+	return (
+		<Popover>
+			<IconTooltip label={label}>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 shrink-0 text-muted-foreground"
+						aria-label={label}
+					>
+						<CircleHelp className="h-4 w-4" aria-hidden="true" />
+					</Button>
+				</PopoverTrigger>
+			</IconTooltip>
+			<PopoverContent
+				align="start"
+				aria-label={label}
+				className="w-80 space-y-2 p-3 text-xs leading-5"
+			>
+				<p>
+					With Save to {PROJECT.name} only, hold Shift as you click to save on{' '}
+					{site} too. The notice in the page also offers Also save on {site}.
+				</p>
+				<p>
+					If {PROJECT.name} can&apos;t read or save the item, the click goes on
+					to {site}, so a save is never lost. {site}&apos;s keyboard shortcuts
+					still save there.
+				</p>
+				<p className="text-muted-foreground">
+					To save only on {site}, remove it from Sources.
+				</p>
+			</PopoverContent>
+		</Popover>
+	);
 }
 
 /**
@@ -532,9 +574,12 @@ export function SiteSourcesSettings({
 						)}
 						{entry?.enabled && source.keepOffSite && (
 							<div className="mt-3 border-t border-border pt-3">
-								<p id={keepOffLabelId} className="text-sm font-medium">
-									When you save on {site}
-								</p>
+								<div className="flex items-center gap-1">
+									<p id={keepOffLabelId} className="text-sm font-medium">
+										When you save on {site}
+									</p>
+									<KeepOffHelpButton site={site} />
+								</div>
 								<RadioCardGroup
 									aria-labelledby={keepOffLabelId}
 									className="mt-2 sm:grid-cols-2"
@@ -551,7 +596,7 @@ export function SiteSourcesSettings({
 									<RadioCard
 										value="tablodge"
 										title={`Save to ${PROJECT.name} only`}
-										description={`${site} doesn't save it or show it as saved. Hold Shift as you click to save on ${site} too.`}
+										description={`${site} doesn't save it or show it as saved.`}
 									/>
 								</RadioCardGroup>
 							</div>

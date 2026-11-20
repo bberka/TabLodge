@@ -49,7 +49,11 @@ import {
 	type SourceReader,
 } from '../src/app/source-reader';
 import {createRedditReader} from '../src/app/source-reddit';
-import {type KeptSave, listenForSaves} from '../src/app/source-keep-off';
+import {
+	type KeptSave,
+	listenForSaves,
+	settleKeptSave,
+} from '../src/app/source-keep-off';
 import {createStackOverflowReader} from '../src/app/source-stackoverflow';
 import {createTwitterReader} from '../src/app/source-x';
 import {createYoutubeReader} from '../src/app/source-youtube';
@@ -1667,4 +1671,63 @@ test('Save to TabLodge only is stored only as true, and only for X and Reddit', 
 	assert.deepEqual(state.x, {enabled: true, keepOffSite: true});
 	assert.deepEqual(state.reddit, {enabled: true});
 	assert.deepEqual(state.youtube, {enabled: true});
+});
+
+test('a stopped save that fails, or finds the source off, goes on to the site; a saved one offers Undo and Also save', () => {
+	const names = {app: 'TabLodge', site: 'X'};
+	const kept = (attached: boolean) => {
+		const replays: number[] = [];
+		const save: KeptSave = {
+			link: {url: 'https://x.com/alice/status/1', title: 'Post'},
+			replay() {
+				replays.push(1);
+				return attached;
+			},
+		};
+		return {save, replays};
+	};
+
+	for (const result of [
+		undefined,
+		{ok: false, error: 'Locked.'},
+		{ok: true, outcome: 'off'},
+	] as const) {
+		const {save, replays} = kept(true);
+		assert.deepEqual(settleKeptSave(result, save, names), {
+			text: 'TabLodge could not save this, so X saved it.',
+			error: true,
+			alsoSave: false,
+		});
+		assert.equal(replays.length, 1, 'the click went on to the site');
+	}
+
+	const gone = kept(false);
+	assert.equal(
+		settleKeptSave(undefined, gone.save, names).text,
+		'TabLodge could not save this, and X did not either. Save it again.',
+	);
+
+	const saved = kept(true);
+	assert.deepEqual(
+		settleKeptSave(
+			{ok: true, outcome: 'saved', column: 'X', undoId: 'u1'},
+			saved.save,
+			names,
+		),
+		{
+			text: "Saved to TabLodge only, in X. X won't show it as saved.",
+			error: false,
+			alsoSave: true,
+			undoId: 'u1',
+		},
+	);
+	assert.deepEqual(
+		settleKeptSave({ok: true, outcome: 'exists'}, saved.save, names),
+		{
+			text: 'Already in TabLodge, so X did not save it.',
+			error: false,
+			alsoSave: true,
+		},
+	);
+	assert.equal(saved.replays.length, 0, 'a saved item stays off the site');
 });
