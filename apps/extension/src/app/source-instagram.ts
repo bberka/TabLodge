@@ -49,9 +49,18 @@ function caption(scope: ParentNode) {
 	return excerpt(longest);
 }
 
-function titled(url: string, scope: ParentNode): SourceLink {
-	const fallback = url.includes('/reel/') ? 'Instagram reel' : 'Instagram post';
-	return {url, title: caption(scope) || fallback};
+const REEL = /\/reels?\//;
+const fallbackTitle = (reel: boolean) =>
+	reel ? 'Instagram reel' : 'Instagram post';
+
+/**
+The post at `href`, titled by its caption in `scope`, or as a reel or a post when there is none.
+*/
+function titled(href: string, scope: ParentNode): SourceLink | undefined {
+	const url = instagramPostUrl(href);
+	return url
+		? {url, title: caption(scope) || fallbackTitle(REEL.test(href))}
+		: undefined;
 }
 
 function articleLink(article: Element): SourceLink | undefined {
@@ -62,9 +71,9 @@ function articleLink(article: Element): SourceLink | undefined {
 		...anchors,
 		...article.querySelectorAll(':scope a[href]'),
 	]) {
-		const url = instagramPostUrl(anchor?.getAttribute('href') ?? '');
-		if (url) {
-			return titled(url, article);
+		const link = titled(anchor?.getAttribute('href') ?? '', article);
+		if (link) {
+			return link;
 		}
 	}
 
@@ -85,13 +94,13 @@ export const readInstagramSavedPage: SavedPageReader = (document) => {
 			continue;
 		}
 
-		const fallback = url.includes('/reel/')
-			? 'Instagram reel'
-			: 'Instagram post';
+		// The grid links a reel at /p/ and marks it with a Clip icon.
+		const reel = Boolean(anchor.querySelector('svg[aria-label="Clip"]'));
 		links.push({
 			url,
 			title:
-				excerpt(anchor.querySelector('img')?.getAttribute('alt')) || fallback,
+				excerpt(anchor.querySelector('img')?.getAttribute('alt')) ||
+				fallbackTitle(reel),
 		});
 	}
 
@@ -107,7 +116,6 @@ export function createInstagramReader(document: Document): SourceReader {
 
 		// A post page or a post dialog holds one post, the one at the page's address.
 		const article = path.find((element) => element.matches('article'));
-		const page = instagramPostUrl(document.location.href);
 		const scope =
 			article ??
 			path.find((element) => element.matches('[role="dialog"]')) ??
@@ -115,7 +123,7 @@ export function createInstagramReader(document: Document): SourceReader {
 			document;
 		const link =
 			(article && articleLink(article)) ??
-			(page ? titled(page, scope) : undefined);
+			titled(document.location.href, scope);
 		return link ? {kind: 'save', link} : {kind: 'unreadable'};
 	};
 }

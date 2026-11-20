@@ -55,7 +55,7 @@ Access: `https://x.com/*` and `https://twitter.com/*`. When you click **Bookmark
 
 ### Instagram saved
 
-Access: `https://www.instagram.com/*`. When you tap **Save** on a post or reel, TabLodge reads its address and the start of its caption from the page and bookmarks `https://www.instagram.com/p/<id>/` or `https://www.instagram.com/reel/<id>/` in an Instagram column. On your saved page (**All posts** or a collection under `/<user>/saved/`), TabLodge reads the address and the start of the caption of each saved post the page has loaded, to count those not in TabLodge and add them when you choose **Add them**. It only notices your own taps: it never scrolls, opens, or clicks anything on Instagram. Nothing else on the page is read or kept.
+Access: `https://www.instagram.com/*`. When you tap **Save** on a post or reel, TabLodge reads its address and the start of its caption from the page and bookmarks `https://www.instagram.com/p/<id>/` (a reel too, since Instagram opens it at that address) in an Instagram column. On your saved page (**All posts** or a collection under `/<user>/saved/`), TabLodge reads the address and the start of the caption of each saved post the page has loaded, to count those not in TabLodge and add them when you choose **Add them**. It only notices your own taps: it never scrolls, opens, or clicks anything on Instagram. Nothing else on the page is read or kept.
 
 ### GitHub stars
 

@@ -13906,7 +13906,7 @@ test('X saves from twitter.com and x.com land once, in a new X column, and Insta
 		{
 			type: 'SITE_SOURCE_SAVE',
 			source: 'instagram',
-			url: 'https://www.instagram.com/reel/C9x8Y7w6V5u/',
+			url: 'https://www.instagram.com/p/C9x8Y7w6V5u/',
 			title: 'Instagram reel',
 		},
 		page('https://www.instagram.com/'),
@@ -13921,7 +13921,7 @@ test('X saves from twitter.com and x.com land once, in a new X column, and Insta
 		]),
 		[
 			['X', 'https://x.com/alice/status/1850000000000000001'],
-			['Instagram', 'https://www.instagram.com/reel/C9x8Y7w6V5u/'],
+			['Instagram', 'https://www.instagram.com/p/C9x8Y7w6V5u/'],
 		],
 	);
 });
@@ -14728,4 +14728,38 @@ test('a private window keeps saves off the site only when its saves are added', 
 		);
 		assert.equal(result.ok && result.keepOffSite, expected, mode);
 	}
+});
+
+test('a reel saved from its own page is not missing from the Instagram saved page, which lists it at /p/', async () => {
+	const harness = sourcesHarness();
+	harness.grantOrigins(['https://www.instagram.com/*']);
+	await harness.sendMessage({
+		type: 'SET_SITE_SOURCE',
+		source: 'instagram',
+		enabled: true,
+	});
+	const reelPage = 'https://www.instagram.com/reel/DfAAAAAAAAA/';
+	await harness.sendMessage(
+		{
+			type: 'SITE_SOURCE_SAVE',
+			source: 'instagram',
+			url: reelPage,
+			title: 'A reel',
+		},
+		{tab: {...youtubeTab, url: reelPage}, url: reelPage},
+	);
+	const saved = 'https://www.instagram.com/someone/saved/all-posts/';
+	assert.deepEqual(
+		await counted(
+			harness.sendMessage(
+				{
+					type: 'SITE_SOURCE_CATCH_UP',
+					source: 'instagram',
+					links: [{url: '/p/DfAAAAAAAAA/', title: 'A reel'}],
+				},
+				{tab: {...youtubeTab, url: saved}, url: saved},
+			),
+		),
+		{ok: true, missing: 0, ask: false},
+	);
 });

@@ -236,7 +236,8 @@ export function xPostUrl(href: string): string | null {
 }
 
 /**
-A post as `https://www.instagram.com/p/<id>/` and a reel as `https://www.instagram.com/reel/<id>/`.
+A post or a reel as `https://www.instagram.com/p/<id>/`. Instagram opens a reel at either address, and the saved
+page lists reels at `/p/`, so one form keeps a reel saved from its page and from the saved page the same (#383).
 */
 export function instagramPostUrl(href: string): string | null {
 	const url = parse(href, 'https://www.instagram.com/');
@@ -245,12 +246,7 @@ export function instagramPostUrl(href: string): string | null {
 		/^(?:www\.)?instagram\.com$/.test(url.hostname)
 			? INSTAGRAM_POST.exec(url.pathname)
 			: null;
-	if (!match) {
-		return null;
-	}
-
-	const kind = match[1] === 'p' || match[1] === 'tv' ? 'p' : 'reel';
-	return `https://www.instagram.com/${kind}/${match[2]}/`;
+	return match ? `https://www.instagram.com/p/${match[2]}/` : null;
 }
 
 /**

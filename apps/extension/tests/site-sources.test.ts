@@ -386,7 +386,7 @@ test('Instagram posts and reels get one address each, also when linked under the
 	]) {
 		assert.equal(
 			instagramPostUrl(href),
-			'https://www.instagram.com/reel/C9x8Y7w6V5u/',
+			'https://www.instagram.com/p/C9x8Y7w6V5u/',
 			href,
 		);
 	}
@@ -775,7 +775,7 @@ test('Instagram: Save on a reel saves the reel, titled as one when it has no cap
 	assert.deepEqual(instagram('instagram-feed.html').click('reel-save'), {
 		kind: 'save',
 		link: {
-			url: 'https://www.instagram.com/reel/C9x8Y7w6V5u/',
+			url: 'https://www.instagram.com/p/C9x8Y7w6V5u/',
 			title: 'Instagram reel',
 		},
 	});
@@ -1722,7 +1722,7 @@ test('the Instagram reader lists the saved posts and reels of a saved page', () 
 			'https://www.instagram.com/p/DfAAAAAAAAA/',
 			'Sunrise over the bay, shot on film',
 		],
-		['https://www.instagram.com/p/DfBBBBBBBBB/', 'Instagram post'],
+		['https://www.instagram.com/p/DfBBBBBBBBB/', 'Instagram reel'],
 		['https://www.instagram.com/p/DfAAAAAAAAA/', 'The same post again'],
 	]);
 	assert.equal(
