@@ -4,13 +4,28 @@ import {
 	excludedHostError,
 	normalizeExcludedHost,
 } from '../../../../extension/src/shared/excluded-sites';
-import {setSyncedSetting, useRegularLibrary} from '../../library/library-store';
+import {
+	editRegular,
+	setSyncedSetting,
+	useRegularLibrary,
+} from '../../library/library-store';
 import {confirm} from '../../ui/dialog';
 import {showSnack} from '../../ui/snackbar';
 import {useColors} from '../../ui/theme';
 import {Button, Field, IconButton} from '../../ui/widgets';
 import {SettingsCard} from './settings-card';
 import {SECTIONS} from './settings-index';
+
+async function editExcluded(change: (list: string[]) => string[]) {
+	await editRegular((current) => ({
+		...current,
+		settings: {
+			...current.settings,
+			excludedOrigins: change(current.settings.excludedOrigins ?? []),
+		},
+		updatedAt: Date.now(),
+	}));
+}
 
 /**
 The websites that are not saved from this phone. The list is the extension's own setting, so a site added here is
@@ -81,14 +96,16 @@ export function ExcludedCard() {
 									`Pages on ${entry} and its subdomains are saved from this phone and the browser again.`,
 									{label: 'Stop excluding', destructive: true},
 									() => {
-										void setSyncedSetting(
-											'excludedOrigins',
-											entries.filter((other) => other !== entry),
+										// Edits the list as it is now, so a site added meanwhile (by sync) stays.
+										void editExcluded((list) =>
+											list.filter((other) => other !== entry),
 										);
 										showSnack(`${entry} is no longer excluded`, {
 											label: 'Undo',
 											run() {
-												void setSyncedSetting('excludedOrigins', entries);
+												void editExcluded((list) =>
+													list.includes(entry) ? list : [...list, entry],
+												);
 											},
 										});
 									},

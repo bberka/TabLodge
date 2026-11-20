@@ -1087,6 +1087,10 @@ type DataRowDef = {
 function Options() {
 	const {state, error, reload} = useTabLodgeState();
 	const loadedSettingsRef = useRef(false);
+	// Set to the latest resetGroup on each render, below.
+	const resetGroupRef = useRef(
+		async (_title: string, _fields: SettingField[]) => undefined as unknown,
+	);
 	// Saves still waiting for the service worker. A reload that lands meanwhile may predate them.
 	const savesInFlightRef = useRef(0);
 	const [status, showStatus] = useStatus();
@@ -1654,6 +1658,8 @@ function Options() {
 		}
 	};
 
+	resetGroupRef.current = resetGroup;
+
 	const focusSettingControl = (field: SettingField) => {
 		const dependency = field.requires ?? field.parent;
 		const name = rowDisabled(field) && dependency ? dependency : field.name;
@@ -2218,7 +2224,9 @@ function Options() {
 														title: `Reset ${group.title} to default?`,
 														description: `Every changed setting in ${group.title} goes back to its default. You can undo this right after.`,
 														confirmLabel: 'Reset',
-														run: async () => resetGroup(group.title, fields),
+														// The latest resetGroup, so it reads the settings as they are when the user confirms.
+														run: async () =>
+															resetGroupRef.current(group.title, fields),
 														section: group.title,
 													});
 												}}
