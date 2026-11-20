@@ -1,7 +1,12 @@
 import {memo, useEffect, useState, useSyncExternalStore} from 'react';
 import {FileText, Film, Image, type LucideIcon} from 'lucide-react';
 import {isFirefox} from '../shared/browser';
-import {LINK_KIND_LABELS, linkKind, type LinkKind} from '../shared/link-kind';
+import {
+	isMediaKind,
+	LINK_KIND_LABELS,
+	linkKind,
+	type MediaKind,
+} from '../shared/link-kind';
 import {displayUrl} from '../shared/url-display';
 import type {Settings} from '../shared/types';
 import {
@@ -278,7 +283,7 @@ export const Favicon = memo(
 	},
 );
 
-const KIND_ICONS: Record<Exclude<LinkKind, 'page'>, LucideIcon> = {
+const KIND_ICONS: Record<MediaKind, LucideIcon> = {
 	image: Image,
 	pdf: FileText,
 	video: Film,
@@ -290,7 +295,7 @@ readers ahead of the link's name. Place it inside a `relative` box that holds th
 */
 export function LinkKindBadge({url}: {url: string}) {
 	const kind = linkKind(url);
-	if (kind === 'page') {
+	if (!isMediaKind(kind)) {
 		return null;
 	}
 
@@ -322,9 +327,7 @@ export function BookmarkIcon({
 	label?: string;
 	className?: string;
 }) {
-	return linkKind(url) === 'page' ? (
-		<Favicon url={url} label={label} className={className} />
-	) : (
+	return isMediaKind(linkKind(url)) ? (
 		<span className={`relative shrink-0 ${className}`}>
 			<Favicon
 				url={url}
@@ -333,6 +336,8 @@ export function BookmarkIcon({
 			/>
 			<LinkKindBadge url={url} />
 		</span>
+	) : (
+		<Favicon url={url} label={label} className={className} />
 	);
 }
 

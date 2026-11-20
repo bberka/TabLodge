@@ -35,6 +35,7 @@ import {
 	type TrashEntry,
 } from '../../../extension/src/shared/trash';
 import {hostOf} from '../library/store-shape';
+import {tagFields} from '../../../extension/src/shared/bookmark-tags';
 
 export type ImportResult = {
 	store: Store;
@@ -291,6 +292,7 @@ export function importIntoStore(
 					url: link.url,
 					columnId: column.id,
 					...(link.notes && {notes: link.notes}),
+					...tagFields(link),
 					...deviceStamp(link.deviceName ?? '', link.deviceKind ?? 'desktop'),
 					createdAt: link.createdAt ?? now,
 					updatedAt: now,

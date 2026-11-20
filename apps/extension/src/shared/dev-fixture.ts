@@ -33,6 +33,7 @@ type DevBookmark = {
 	url: string;
 	columnId: string;
 	notes?: string;
+	tags?: string[];
 	createdAt: number;
 	updatedAt: number;
 };
@@ -251,6 +252,13 @@ const bookmarkNotes = new Map([
 	['https://alistapart.com/', 'Accessible forms piece, for Friday.'],
 ]);
 
+// A few typed tags, so the chips and the tag filter have something to show; also in the shorter columns.
+const bookmarkTags = new Map<string, string[]>([
+	['https://weather.com/', ['morning']],
+	['https://www.theatlantic.com/', ['longread']],
+	['https://www.smashingmagazine.com/', ['design', 'longread']],
+]);
+
 const columnByName = new Map(
 	bookmarkColumns.map((column) => [column.name, column.id]),
 );
@@ -261,6 +269,7 @@ const bookmarks: DevBookmark[] = bookmarkEntries.map(
 		url,
 		columnId: columnByName.get(column)!,
 		...(bookmarkNotes.has(url) && {notes: bookmarkNotes.get(url)}),
+		...(bookmarkTags.has(url) && {tags: bookmarkTags.get(url)}),
 		createdAt: createdAt - index * 3_600_000,
 		updatedAt: createdAt - index * 3_600_000,
 	}),

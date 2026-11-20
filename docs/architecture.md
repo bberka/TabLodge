@@ -131,7 +131,7 @@ Record level sync needs a stable id, a revision stamp, a tombstone, and an order
 
 * **Ids.** Present on every record already and checked at migration. Preferences are addressed by their setting key.
 * **Stamp and order key.** `{h, d, o}`: a hybrid logical clock string, the writing device's id, and a fractional index among siblings. Stored in the index (`sessions[i].sync`, `folderSync`, `columnSync`, `preferenceSync`), in a session record's `$sync.tabs` (flagged by `sessions[i].tabSync`), and in the bookmarks record's `$sync.items` (flagged by `bookmarks.sync`). Nothing writes them yet. A missing stamp means never stamped, with the record's `updatedAt` as its implied stamp. A missing order key means its position in the stored array, which stays authoritative until sync assigns keys in one pass, so adding them needs no further migration.
-* **Tombstones.** The index's `tombstones` list holds `{kind, id, parentId?, deletedAt, purgeAfter, sync?}` for sessions, tabs, bookmarks, columns, folders, and preferences, and a commit drops the expired ones. (A bookmark's note syncs as a record kind of its own, see [Bookmark notes sync](#bookmark-notes-sync).) The trash and Undo remain the user facing delete. (The trash itself is not in the library index: it syncs as its own record kind, see [Trash sync](#trash-sync).)
+* **Tombstones.** The index's `tombstones` list holds `{kind, id, parentId?, deletedAt, purgeAfter, sync?}` for sessions, tabs, bookmarks, columns, folders, and preferences, and a commit drops the expired ones. (A bookmark's note and its tags sync as record kinds of their own, see [Bookmark notes sync](#bookmark-notes-sync) and [Bookmark tags](#bookmark-tags).) The trash and Undo remain the user facing delete. (The trash itself is not in the library index: it syncs as its own record kind, see [Trash sync](#trash-sync).)
 * **Device id.** The index's `device`, assigned when sync is switched on. It lives only in the index, so restoring a backup elsewhere cannot copy it.
 * **Carrying.** A rewritten session or bookmarks record keeps its sidecar minus entries for records that are gone, reading the old record only when the index flags one. Malformed sync data is dropped instead of making the library unreadable.
 
@@ -176,6 +176,12 @@ A bookmark's note is a sync record of kind `note`, keyed by the bookmark id, wit
 
 * **Old servers.** Clients sync `note` records only when the server lists `notes` among its `features`, which is checked together with `trash`. Without it, notes stay on the device: they are left out of capture and out of the outbox, a resync does not count them as deleted (the same holds for the trash), and nothing else changes. `PROTOCOL_VERSION` stays 1.
 * **Order.** A note that arrives before its bookmark waits in `held`. Deleting a bookmark, or clearing its note, sends a delete for the `note` record.
+
+### Bookmark tags
+
+A bookmark's tags are its kind plus the tags the person typed (#344). The kind (`movie`, `video`, `repo`, `read`, and the others in `src/shared/link-kind.ts`) is read from host and path rules each time a row is drawn and never stored; the rules cover every Sources site, which `tests/link-kind.test.ts` checks. Only the typed tags (`bookmark.tags`) and the kinds removed from that bookmark (`bookmark.hiddenKinds`) are stored, normalized by `src/shared/bookmark-tags.ts` the same way on every device.
+
+They sync as one record of kind `tag`, keyed by the bookmark id, with the value `{tags?, hiddenKinds?}`, for the same reason and with the same rules as notes: only to a server that lists `tags` among its `features`, held until its bookmark arrives, deleted with it. [ADR 8](adr/0008-bookmark-tags-sync.md) explains the choice. Search reads `tag:` (every tag asked for must be shown) and `kind:` (the address only, so a removed kind still matches) through `bookmarkFacets` in `src/shared/search-query.ts`, which the board, the global finder, and the Android app share.
 
 ### Undo
 

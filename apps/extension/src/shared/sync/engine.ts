@@ -420,7 +420,7 @@ function parentOf(change: SyncChange): string | undefined {
 		return `session:${change.parentId ?? ''}`;
 	}
 
-	if (change.kind === 'note') {
+	if (change.kind === 'note' || change.kind === 'tag') {
 		return `bookmark:${change.id}`;
 	}
 

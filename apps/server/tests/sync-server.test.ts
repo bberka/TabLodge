@@ -85,7 +85,15 @@ test('a pushed change comes back from a pull, and only real changes notify devic
 		cursor: 1,
 		records: 1,
 		limits: DEFAULT_LIMITS,
-		features: ['private', 'key', 'preview', 'trash', 'notes', 'page-source'],
+		features: [
+			'private',
+			'key',
+			'preview',
+			'trash',
+			'notes',
+			'tags',
+			'page-source',
+		],
 	});
 });
 

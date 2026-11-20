@@ -1,9 +1,10 @@
 // The small operator syntax every search box understands, on top of its own word matching: "exact phrase",
-// -word, site:, in:, kind:, col:, folder:, from:, after: and before:. Anything that is not a well formed operator stays a
+// -word, site:, in:, kind:, tag:, col:, folder:, from:, after: and before:. Anything that is not a well formed operator stays a
 // plain word, so a stray quote, a lone "-" or "localhost:3000" searches as before.
 import type {DeviceKind} from './device';
 import {fold} from './fuzzy';
-import {type LinkKind, linkKind} from './link-kind';
+import {normalizeTag, shownTags} from './bookmark-tags';
+import {LINK_KINDS, type LinkKind, linkKind} from './link-kind';
 import type {Bookmark, Session} from './types';
 
 export type SearchPlace = 'sessions' | 'bookmarks' | 'tabs' | 'open';
@@ -31,6 +32,10 @@ export type SearchQuery = {
 	*/
 	kinds: LinkKind[];
 	/**
+	Tags, stored the way bookmark tags are; a result must show every one of them (bookmark-tags.ts).
+	*/
+	tags: string[];
+	/**
 	Folded column and folder names; a result whose column or folder name contains any of them matches.
 	*/
 	columns: string[];
@@ -56,6 +61,10 @@ export type SearchFacets = {
 	*/
 	places: readonly SearchPlace[];
 	urls: ReadonlyArray<string | undefined>;
+	/**
+	The tags a bookmark shows; absent for results that cannot have tags, which `tag:` leaves out.
+	*/
+	tags?: readonly string[];
 	column?: string;
 	folder?: string;
 	date?: number;
@@ -83,6 +92,8 @@ export const SEARCH_TIPS: ReadonlyArray<{
 	{example: 'kind:image', meaning: 'Only links to images'},
 	{example: 'kind:pdf', meaning: 'Only links to PDFs'},
 	{example: 'kind:video', meaning: 'Only links to videos'},
+	{example: 'kind:repo', meaning: 'Only code repositories'},
+	{example: 'tag:movie', meaning: 'Bookmarks with a tag'},
 	{example: 'col:Work', meaning: 'Bookmarks in a column'},
 	{example: 'folder:Work', meaning: 'Sessions in a folder'},
 	{example: 'from:phone', meaning: 'Saved on a phone'},
@@ -93,7 +104,7 @@ export const SEARCH_TIPS: ReadonlyArray<{
 ];
 
 const PLACES = new Set<string>(['sessions', 'bookmarks', 'tabs', 'open']);
-const KINDS = new Set<string>(['image', 'pdf', 'video', 'page']);
+const KINDS = new Set<string>([...LINK_KINDS, 'page']);
 const QUOTES = new Set(['"', '“', '”', '„']);
 
 /**
@@ -197,6 +208,7 @@ export function parseSearchQuery(input: string): SearchQuery {
 		sites: [],
 		places: [],
 		kinds: [],
+		tags: [],
 		columns: [],
 		folders: [],
 		devices: [],
@@ -278,6 +290,15 @@ function operator(query: SearchQuery, name: string, raw: string): boolean {
 			return KINDS.has(kind);
 		}
 
+		case 'tag': {
+			const tag = normalizeTag(value);
+			if (tag) {
+				query.tags.push(tag);
+			}
+
+			return tag !== undefined;
+		}
+
 		case 'in': {
 			const place = value.toLowerCase();
 			if (PLACES.has(place)) {
@@ -324,6 +345,7 @@ export const hasOperators = (query: SearchQuery) =>
 	query.sites.length > 0 ||
 	query.places.length > 0 ||
 	query.kinds.length > 0 ||
+	query.tags.length > 0 ||
 	query.columns.length > 0 ||
 	query.folders.length > 0 ||
 	query.devices.length > 0 ||
@@ -365,6 +387,7 @@ export function passesOperators(
 			query.folders.every(
 				(name) => !fold(facets.folder ?? '\0').includes(name),
 			)) ||
+		query.tags.some((tag) => !facets.tags?.includes(tag)) ||
 		(query.devices.length > 0 &&
 			query.devices.every((value) => !savedOn(value, facets.device))) ||
 		((query.after !== undefined || query.before !== undefined) &&
@@ -420,6 +443,7 @@ export const bookmarkFacets = (
 ): SearchFacets => ({
 	places: ['bookmarks'],
 	urls: [bookmark.url],
+	tags: shownTags(bookmark),
 	column,
 	date: bookmark.createdAt,
 	device: {name: bookmark.deviceName, kind: bookmark.deviceKind},
@@ -448,4 +472,30 @@ export function literalQuery(text: string, max = 200): string {
 	return hasOperators(parseSearchQuery(plain))
 		? `"${plain.slice(0, max - 2).trim()}"`
 		: plain;
+}
+
+/**
+The `tag:` operator for one tag, quoted when the tag has a space.
+*/
+export const tagOperator = (tag: string) =>
+	/\s/.test(tag) ? `tag:"${tag}"` : `tag:${tag}`;
+
+/**
+The search text with a `tag:` filter for `tag` added, or taken out when the text already filters by it, so a tag
+filter menu can switch each tag on and off without touching the rest of what was typed.
+*/
+export function toggleTagFilter(input: string, tag: string): string {
+	if (!parseSearchQuery(input).tags.includes(tag)) {
+		return [input.trim(), tagOperator(tag)].filter(Boolean).join(' ');
+	}
+
+	// A quoted phrase is matched first and kept whole, so a `tag:` written inside one is text, not a filter.
+	return input
+		.replaceAll(
+			/(?:^|\s)(tag:(?:["“„][^"“”„]*["“”]|[^\s"“”„]+))|["“„][^"“”„]*["“”]?/gi,
+			(match, filter?: string) =>
+				filter && parseSearchQuery(filter).tags.includes(tag) ? '' : match,
+		)
+		.replaceAll(/\s+/g, ' ')
+		.trim();
 }

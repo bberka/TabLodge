@@ -212,3 +212,32 @@ test('a Mastodon bookmarks.csv: one post address per row, no header', () => {
 		/header row/,
 	);
 });
+
+test('tags come along from Linkwarden, Karakeep, wallabag, and Pinboard', () => {
+	const tagsOf = (name: string) =>
+		Object.fromEntries(
+			allLinks(read(name))
+				.filter((link) => link.tags)
+				.map((link) => [link.url, link.tags]),
+		);
+	assert.deepEqual(Object.values(tagsOf('linkwarden-backup.json')), [
+		['longread'],
+	]);
+	assert.deepEqual(tagsOf('karakeep-export.json'), {
+		'https://dev.example/guide': ['dev'],
+	});
+	assert.deepEqual(Object.values(tagsOf('wallabag-export.json')), [
+		['news', 'press'],
+	]);
+	assert.deepEqual(tagsOf('pinboard-export.json'), {
+		'https://example.org/essay': ['essays', 'reading'],
+	});
+	const payload = bookmarkImportPayload(read('pinboard-export.json')) as {
+		bookmarks: Array<{url: string; tags?: string[]}>;
+	};
+	assert.deepEqual(
+		payload.bookmarks.find((entry) => entry.url === 'https://example.org/essay')
+			?.tags,
+		['essays', 'reading'],
+	);
+});

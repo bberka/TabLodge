@@ -59,6 +59,7 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		});
 	let app = createServerApi();
 	let online = true;
+	let statusFails = false;
 	const fetchFromApp = async (url: string, init: RequestInit) =>
 		app.request(url, init);
 	return {
@@ -76,6 +77,12 @@ function makeServer(options: {legacy?: boolean} = {}) {
 		setOnline(value: boolean) {
 			online = value;
 		},
+		/**
+		Makes /v1/status answer with a server error, as a proxy in front of the server might for a moment.
+		*/
+		setStatusFails(value: boolean) {
+			statusFails = value;
+		},
 		setLegacy(value: boolean) {
 			legacy = value;
 		},
@@ -91,6 +98,10 @@ function makeServer(options: {legacy?: boolean} = {}) {
 			}
 
 			requests.push(new URL(url).pathname);
+			if (statusFails && new URL(url).pathname === '/v1/status') {
+				return Response.json({error: 'unavailable'}, {status: 503});
+			}
+
 			if (rewriteStatus && new URL(url).pathname === '/v1/status') {
 				const response = await app.request(url, init);
 				return Response.json(
@@ -108,20 +119,20 @@ function makeServer(options: {legacy?: boolean} = {}) {
 				return response;
 			}
 
-			// A server from before the trash and notes: it lists neither feature and refuses a kind it does not know.
+			// A server from before the trash, notes, and tags: it lists none of them and refuses a kind it does not know.
 			if (new URL(url).pathname === '/v1/status') {
 				const body = (await response.json()) as {features: string[]};
 				return Response.json({
 					...body,
 					features: body.features.filter(
-						(feature) => feature !== 'trash' && feature !== 'notes',
+						(feature) => !['trash', 'notes', 'tags'].includes(feature),
 					),
 				});
 			}
 
 			if (
 				init.method === 'POST' &&
-				/"kind":"(?:trash|note)"/.test(String(init.body))
+				/"kind":"(?:trash|note|tag)"/.test(String(init.body))
 			) {
 				return Response.json({error: 'bad_change'}, {status: 400});
 			}
@@ -262,13 +273,15 @@ function makeDevice(
 					return response;
 				}
 
-				// A version from before notes skips a kind it does not know (its `parseChange` refuses it).
+				// A version from before notes and tags skips a kind it does not know (its `parseChange` refuses it).
 				const body = (await response.json()) as {
 					changes?: Array<{kind: string}>;
 				};
 				return Response.json({
 					...body,
-					changes: body.changes?.filter((change) => change.kind !== 'note'),
+					changes: body.changes?.filter(
+						(change) => change.kind !== 'note' && change.kind !== 'tag',
+					),
 				});
 			},
 			openSocket: () => new FakeSocket(server),
@@ -301,7 +314,8 @@ function makeDevice(
 				if (beforeNotes) {
 					// Its normalizer rebuilds every bookmark from the fields it knows.
 					device.store.bookmarks = device.store.bookmarks.map(
-						({notes: _dropped, ...rest}) => rest,
+						({notes: _notes, tags: _tags, hiddenKinds: _hidden, ...rest}) =>
+							rest,
 					);
 				}
 			},
@@ -878,11 +892,104 @@ test('a server without some features keeps syncing and lists what stays on the d
 	// This test server keeps no shared pages either.
 	assert.deepEqual(
 		compat.missing.map(({name}) => name),
-		['notes', 'trash', 'shared-pages'],
+		['notes', 'tags', 'trash', 'shared-pages'],
 	);
 	assert.equal(problemBanner(compat)?.stopped, false);
 
 	// Disconnecting forgets what the server said.
 	const off = await a.client.disconnect();
 	assert.equal(off.server, undefined);
+});
+
+const withTags = (id: string, tags: string[]) => ({
+	...bookmark(id),
+	tags,
+	hiddenKinds: ['repo' as const],
+});
+const tagsOf = (store: Store) =>
+	store.bookmarks.map((entry) => [entry.tags ?? [], entry.hiddenKinds ?? []]);
+
+test('bookmark tags sync, and a version from before tags never sees or erases them', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [withTags('b1', ['rust'])],
+	});
+	const old = makeDevice(server, emptyStore(), {beforeNotes: true});
+	await a.client.connect(URL_BASE, TOKEN);
+	await old.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(ids(old.store), ['b1']);
+
+	old.edit((store) => ({
+		...store,
+		bookmarks: store.bookmarks.map((entry) => ({...entry, title: 'Renamed'})),
+	}));
+	await until(() => a.store.bookmarks[0]?.title === 'Renamed');
+	await old.client.syncNow();
+	await a.client.syncNow();
+	assert.deepEqual(tagsOf(a.store), [[['rust'], ['repo']]]);
+
+	const fresh = makeDevice(server);
+	await fresh.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(tagsOf(fresh.store), [[['rust'], ['repo']]]);
+	assert.equal(fresh.store.bookmarks[0].title, 'Renamed');
+});
+
+test('a server without the tags feature keeps syncing and leaves the tags on the device, through a resync too', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, {
+		...emptyStore(),
+		bookmarks: [withTags('b1', ['stays'])],
+	});
+	const b = makeDevice(server);
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(tagsOf(b.store), [[[], []]]);
+
+	b.edit((store) => ({
+		...store,
+		bookmarks: store.bookmarks.map((entry) => ({...entry, title: 'Renamed'})),
+	}));
+	await until(() => a.store.bookmarks[0]?.title === 'Renamed');
+	assert.deepEqual(tagsOf(a.store), [[['stays'], ['repo']]]);
+	assert.equal((await a.client.status()).pending, 0);
+
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		server.resyncOnce();
+		await a.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.deepEqual(tagsOf(a.store), [[['stays'], ['repo']]]);
+	assert.equal((await a.client.status()).error, null);
+});
+
+test('a status request that fails ends the round, so the tags in that pull are not skipped for good', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, {...emptyStore(), bookmarks: [bookmark('b1')]});
+	const b = makeDevice(server);
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	// No live notice: b only pulls when asked to.
+	for (const socket of server.sockets) {
+		socket.close();
+	}
+
+	a.edit((store) => ({...store, bookmarks: [withTags('b1', ['later'])]}));
+	await a.client.syncNow();
+	server.setStatusFails(true);
+	// Past the ten minutes the client trusts the server's earlier list of features.
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		await b.client.syncNow();
+		assert.match((await b.client.status()).error ?? '', /error/);
+		server.setStatusFails(false);
+		await b.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.deepEqual(tagsOf(b.store), [[['later'], ['repo']]]);
 });

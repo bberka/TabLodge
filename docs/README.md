@@ -20,9 +20,9 @@ TabLodge is a browser extension for Chromium browsers and desktop Firefox. Save 
 ## Features
 
 - **Sessions:** save tabs, a tab group, or a window, and restore them with groups and pinned tabs.
-- **Bookmark board:** columns of links on every new tab, each with an optional note, and a mark on links to images, PDFs, and videos.
+- **Bookmark board:** columns of links on every new tab, each with an optional note and tags: the kind of link (movie, video, repo, article, and others) read from its address, plus your own. A tag filter and `tag:` search find them, and links to images, PDFs, and videos get a mark on their icon.
 - **Quotes:** select text on a page, right-click, and **Save quote** keeps it in that page's bookmark note with a link back to the passage. The Android app does the same for text shared to it.
-- **Search:** one palette for open tabs, bookmarks (notes included), saved tabs, sessions, commands, and Settings sections. Operators such as `"exact phrase"`, `-word`, `site:`, and `in:` narrow it, the dashboard searches, and the Android app's search; Help lists them all.
+- **Search:** one palette for open tabs, bookmarks (notes included), saved tabs, sessions, commands, and Settings sections. Operators such as `"exact phrase"`, `-word`, `site:`, `in:`, and `tag:` narrow it, the dashboard searches, and the Android app's search; Help lists them all.
 - **Sources:** when you save something on a site you use, such as YouTube Watch later, a Reddit or Instagram save, an X bookmark, a GitHub star, a Hacker News favorite, a Stack Overflow bookmark, the dev.to reading list, a Lobsters save, a Bluesky save, a SoundCloud like, your Spotify library, a Letterboxd or IMDb watchlist, Goodreads Want to Read, a Medium bookmark, or a Substack save, the same link lands in your bookmarks, in a column you pick. The saved pages of Reddit, YouTube Watch later, X bookmarks, Instagram, and GitHub stars also offer to add saves made elsewhere. Off until you add a site in Settings, and it reads only the sites you added. On every site but Medium you can choose Save to TabLodge only, which keeps the save off the site.
 - **Import and export:** OneTab, Session Buddy, Toby, Raindrop.io, Linkwarden, Karakeep, Omnivore, wallabag, Pinboard, Mastodon bookmarks, browser bookmarks, and backups.
 - **Recovery:** crash snapshots, a trash bin, and Undo.

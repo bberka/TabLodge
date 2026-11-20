@@ -113,6 +113,7 @@ import {
 	pairSplits,
 	urlHost,
 } from '../src/shared/library-normalize';
+import {tagFields, withTagEdits} from '../src/shared/bookmark-tags';
 import {isRecord, hashText} from '../src/shared/library-values';
 import {
 	CAPTURE_GLOBAL,
@@ -4943,6 +4944,7 @@ async function addBookmark(
 			url,
 			columnId,
 			...(notes && {notes}),
+			...tagFields(fields),
 			...(await savedHere()),
 			createdAt: now,
 			updatedAt: now,
@@ -5422,9 +5424,11 @@ async function updateBookmark(
 			}
 		}
 
-		bookmark.updatedAt = Date.now();
+		// Each list is replaced whole when it is sent; an empty one clears the field.
+		const saved = {...withTagEdits(bookmark, fields), updatedAt: Date.now()};
+		store.bookmarks[store.bookmarks.indexOf(bookmark)] = saved;
 		await writeStore(store);
-		return {ok: true, bookmark};
+		return {ok: true, bookmark: saved};
 	});
 }
 

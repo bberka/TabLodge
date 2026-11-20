@@ -9,7 +9,17 @@ import {
 import type {Bookmark} from '../../../../extension/src/shared/types';
 import {stripTrackingParameters} from '../../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../../library/column-choice';
-import {addBookmark, updateBookmark} from '../../library/board-edits';
+import {
+	addBookmark,
+	setBookmarkTags,
+	updateBookmark,
+} from '../../library/board-edits';
+import {
+	parseTagInput,
+	removedByEdit,
+} from '../../../../extension/src/shared/bookmark-tags';
+import {showSnack} from '../../ui/snackbar';
+import {type TagEdit, TagsField} from '../bookmarks/tags';
 import {
 	addSession,
 	addTabsToSession,
@@ -51,12 +61,17 @@ export function SaveLinkForm({
 	initialText,
 	initialTitle,
 	editing,
+	focusTags = false,
 	onMany,
 	onQuote,
 	onDone,
 }: {
 	initialText: string;
 	initialTitle: string;
+	/**
+	Opened from Edit tags: the Tags field takes the focus.
+	*/
+	focusTags?: boolean;
 	/**
 	A bookmark to change instead of saving a new one. The initial text and title are then its own.
 	*/
@@ -101,6 +116,13 @@ export function SaveLinkForm({
 	// Once the person types a title, the page's own never replaces it.
 	const [titleEdited, setTitleEdited] = useState(initialTitle !== '');
 	const [notes, setNotes] = useState(editing?.notes ?? '');
+	const [tagged, setTagged] = useState<TagEdit>({
+		tags: editing?.tags,
+		hiddenKinds: editing?.hiddenKinds,
+	});
+	// Only a change made here is saved, so tags that sync brought in while the sheet was open are kept.
+	const [tagsTouched, setTagsTouched] = useState(false);
+	const [tagDraft, setTagDraft] = useState('');
 	const [saving, setSaving] = useState(false);
 	const [problem, setProblem] = useState('');
 
@@ -163,24 +185,54 @@ export function SaveLinkForm({
 			}
 
 			const {id: target, name} = await choice.resolve();
+			// Empty lists clear what the link had. Text typed but not yet added as a tag is added now.
+			const tags = {
+				tags: [...(tagged.tags ?? []), ...parseTagInput(tagDraft)],
+				hiddenKinds: tagged.hiddenKinds ?? [],
+			};
+			const tagEdit =
+				!editing || tagsTouched || tagDraft.trim() !== '' ? tags : {};
 
 			await editIn(library, (current) =>
 				editing
 					? updateBookmark(
 							current,
 							editing.id,
-							{...saved, notes, columnId: target},
+							{...saved, notes, ...tagEdit, columnId: target},
 							Date.now(),
 						)
 					: addBookmark(
 							current,
-							{...saved, notes, columnId: target, device: phoneStamp()},
+							{
+								...saved,
+								notes,
+								...tagEdit,
+								columnId: target,
+								device: phoneStamp(),
+							},
 							newId(),
 							Date.now(),
 						),
 			);
 			setPreferences({lastColumnId: target});
 			onDone(name);
+			const removed = editing && tagsTouched && removedByEdit(editing, tags);
+			if (editing && removed) {
+				// Taking a tag away is done at once, with Undo, as every removal in the library is.
+				showSnack(
+					removed.length === 1
+						? `Removed tag ${removed[0]}`
+						: `Removed ${removed.length} tags`,
+					{
+						label: 'Undo',
+						run() {
+							void editIn(library, (current) =>
+								setBookmarkTags(current, editing.id, editing, Date.now()),
+							);
+						},
+					},
+				);
+			}
 		} catch {
 			// A full disk or a storage fault: say so, and let the person try again instead of a button that spins.
 			setProblem('Could not save. Try again.');
@@ -344,6 +396,17 @@ export function SaveLinkForm({
 							label="Notes (optional)"
 							value={notes}
 							onChangeText={setNotes}
+						/>
+						<TagsField
+							url={url ?? ''}
+							value={tagged}
+							draft={tagDraft}
+							autoFocus={focusTags}
+							onDraftChange={setTagDraft}
+							onChange={(next) => {
+								setTagged(next);
+								setTagsTouched(true);
+							}}
 						/>
 					</>
 				)}
