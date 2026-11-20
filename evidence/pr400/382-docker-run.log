@@ -1,0 +1,66 @@
+a connect true [
+  'private',
+  'key',
+  'preview',
+  'trash',
+  'notes',
+  'page-source',
+  'sources',
+  'shared-pages'
+]
+b connect true [
+  'private',
+  'key',
+  'preview',
+  'trash',
+  'notes',
+  'page-source',
+  'sources',
+  'shared-pages'
+]
+A after Add a site {
+  youtube: { enabled: true, wanted: true },
+  x: { enabled: true, wanted: true }
+} {
+  scripts: [ 'tablodge-source-youtube', 'tablodge-source-x' ],
+  origins: [
+    'https://twitter.com/*',
+    'https://www.youtube.com/*',
+    'https://x.com/*'
+  ]
+}
+B after sync (no access yet) {
+  youtube: { enabled: false, wanted: true },
+  x: { enabled: false, wanted: true }
+} { scripts: [], origins: [] }
+B dashboard toast: YouTube Watch later and X bookmarks are on in another browser.
+B dashboard reopened, toasts now: 0
+B after Turn on {
+  youtube: { enabled: true, wanted: true },
+  x: { enabled: true, wanted: true }
+} {
+  scripts: [ 'tablodge-source-youtube', 'tablodge-source-x' ],
+  origins: [
+    'https://twitter.com/*',
+    'https://www.youtube.com/*',
+    'https://x.com/*'
+  ]
+}
+B after A changed column and save mode {
+  youtube: {
+    enabled: true,
+    wanted: true,
+    columnId: '7bb3d3e3-186b-440d-a846-7897f6666c48'
+  },
+  x: { enabled: true, wanted: true, keepOffSite: true }
+}
+B after A removed X {
+  youtube: {
+    enabled: true,
+    wanted: true,
+    columnId: '7bb3d3e3-186b-440d-a846-7897f6666c48'
+  }
+} {
+  scripts: [ 'tablodge-source-youtube' ],
+  origins: [ 'https://www.youtube.com/*' ]
+}
