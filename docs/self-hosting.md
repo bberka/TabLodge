@@ -166,7 +166,7 @@ The first browser sends its library to the server. Each further browser merges w
 
 While sync is on, a sync icon in the dashboard header shows whether everything is up to date, changes are waiting, or the server cannot be reached, and opens the Sync settings; its label says both, such as "Sync: up to date. Open Sync settings". **Sync now** syncs at once. Changes made offline are sent when the server can be reached again.
 
-Sessions, saved tabs, folders, bookmark columns, bookmarks and their notes, the trash bin, and settings (excluded sites among them) sync, so what you delete on one device can be restored on another. A server older than the trash (its `features` list has no `trash`) leaves each device's trash where it is until the server is updated, one without `notes` leaves bookmark notes on the device that wrote them, and one without `sources` leaves the extension's **Settings › Sources** choices in each browser. An item over about 200 KB, such as a session with hundreds of links, stays on the device that deleted it. Recovery snapshots, automatic backups, and browser bookmark monitoring do not sync. **Sync settings** in **Settings › Sync** is on by default; turn it off in a browser to keep its settings separate, and turning it back on sends that browser's settings. When two browsers change the same item at the same time, the later change wins.
+Sessions, saved tabs, folders, bookmark columns, bookmarks with their notes and tags, the trash bin, and settings (excluded sites among them) sync, so what you delete on one device can be restored on another. A server older than the trash (its `features` list has no `trash`) leaves each device's trash where it is until the server is updated, one without `notes` or `tags` leaves bookmark notes or tags on the device that wrote them, and one without `sources` leaves the extension's **Settings › Sources** choices in each browser. An item over about 200 KB, such as a session with hundreds of links, stays on the device that deleted it. Recovery snapshots, automatic backups, and browser bookmark monitoring do not sync. **Sync settings** in **Settings › Sync** is on by default; turn it off in a browser to keep its settings separate, and turning it back on sends that browser's settings. When two browsers change the same item at the same time, the later change wins.
 
 ### Private windows
 
@@ -204,6 +204,7 @@ Each optional part of TabLodge needs a server from the release that added it:
 | Site icons and link previews (`preview`) | 0.2.2 | Icons through the server show as letter tiles, and links get no previews |
 | Trash (`trash`) | 0.2.2 | Each device keeps its own trash |
 | Bookmark notes (`notes`) | 0.4.0 | Notes stay on the device where they were written |
+| Bookmark tags (`tags`) | 0.4.0 | Tags you add, and automatic tags you remove, stay on the device where you changed them |
 | Sources settings (`sources`) | 0.4.0 | The sites in **Settings › Sources**, their columns, and save modes stay in each browser |
 | Shared pages (`shared-pages`) | 0.4.0 | **Upload to my server** cannot share pages |
 | Page copies through the server (`page-source`) | 0.4.0 | The Android app fetches pages for **Keep a copy** itself, so the site sees the phone |
@@ -428,7 +429,7 @@ All paths except `/health` and `/p/<id>` need `Authorization: Bearer <token>`. T
 | Request | Answer |
 | --- | --- |
 | `GET /health` | `{"ok":true}` |
-| `GET /v1/status` | Protocol version, the server's release `version` (`0.0.0` for a build that is not a release), current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, `preview`, `trash`, `notes`, `sources`, `shared-pages`, and `page-source`) |
+| `GET /v1/status` | Protocol version, the server's release `version` (`0.0.0` for a build that is not a release), current cursor, record count, limits, and `features`, the optional parts this server has (`private`, `key`, `preview`, `trash`, `notes`, `tags`, `sources`, `shared-pages`, and `page-source`) |
 | `GET /v1/changes?cursor=<n>&purged=<n>&limit=<n>` | The changes after `cursor` (500 unless `limit` says otherwise, at most 1000), the new cursor, whether more are waiting, and `purged`, the server's purge marker, which the browser sends back with its next pull. Or `{"resync":true}` when deletes the browser has not seen were purged, so it must start again from cursor 0 |
 | `POST /v1/changes` with `{"changes":[...]}` | One result per change (`applied`, `superseded`, `stale`, or `clock`) and the new cursor |
 | `GET /v1/key` | `{"key": ...}`, the library's wrapped encryption key, or `null` when it is not encrypted |

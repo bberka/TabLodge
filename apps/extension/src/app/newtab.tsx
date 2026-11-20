@@ -22,6 +22,7 @@ import {
 	Save,
 	Square,
 	SquareCheck,
+	Tags,
 	Copy,
 	FolderPlus,
 	Inbox,
@@ -96,6 +97,8 @@ import {
 } from '../shared/search-query';
 import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
+import {removedByEdit, shownTags} from '../shared/bookmark-tags';
+import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
 import {openPageCopy, usePageCopyUrls} from './page-copies';
@@ -223,6 +226,7 @@ type BookmarkAction =
 	| 'open'
 	| 'open-new'
 	| 'edit'
+	| 'edit-tags'
 	| 'move'
 	| 'move-up'
 	| 'move-down'
@@ -242,6 +246,17 @@ type BookmarkDraft = {
 	title: string;
 	url: string;
 	notes?: string;
+	tags?: string[];
+	hiddenKinds?: Bookmark['hiddenKinds'];
+	/**
+	The editor was opened from Edit tags…, so it starts in the Tags field.
+	*/
+	focusTags?: boolean;
+	/**
+	The person changed the tags. Only then does a save send them, so tags that sync brought in while the editor was
+	open are not overwritten with the ones it opened with.
+	*/
+	tagsTouched?: boolean;
 	columnId: string;
 	newColumnName?: string;
 	newColumnIcon?: string;
@@ -558,6 +573,7 @@ function NewTab() {
 				bookmark.url,
 				siteName(bookmark.url),
 				bookmark.notes,
+				shownTags(bookmark).join(' '),
 			];
 			return (
 				(!needle ||
@@ -917,6 +933,7 @@ function NewTab() {
 	function openBookmarkEditor(
 		bookmark: Bookmark | null = null,
 		preferredColumn = defaultColumnId || NEW_COLUMN,
+		focusTags = false,
 	) {
 		// A bookmark left in the board's Unfiled area has no column to show, so it starts on the preferred one.
 		const own = columns.some((column) => column.id === bookmark?.columnId)
@@ -927,6 +944,9 @@ function NewTab() {
 			title: bookmark?.title || '',
 			url: bookmark?.url || '',
 			notes: bookmark?.notes ?? '',
+			tags: bookmark?.tags,
+			hiddenKinds: bookmark?.hiddenKinds,
+			focusTags,
 			columnId: own || preferredColumn,
 		});
 		setDialog('bookmark');
@@ -986,12 +1006,19 @@ function NewTab() {
 				setBookmarkEdit((old) => old && {...old, columnId});
 			}
 
+			// Empty lists clear the tags and removed kinds the bookmark had.
+			const tagged = {
+				tags: bookmarkEdit.tags ?? [],
+				hiddenKinds: bookmarkEdit.hiddenKinds ?? [],
+			};
 			const fields = {
 				title: bookmarkEdit.title,
 				url: bookmarkEdit.url,
 				notes: bookmarkEdit.notes ?? '',
+				...(bookmarkEdit.tagsTouched && tagged),
 				columnId,
 			};
+			const before = bookmarks.find((entry) => entry.id === bookmarkEdit.id);
 			const result = bookmarkEdit.id
 				? await send('UPDATE_BOOKMARK', {bookmarkId: bookmarkEdit.id, fields})
 				: await send('ADD_BOOKMARK', {bookmark: fields});
@@ -1004,6 +1031,37 @@ function NewTab() {
 			setDialog(null);
 			setBookmarkEdit(null);
 			await reload();
+			const removed =
+				bookmarkEdit.tagsTouched && before && removedByEdit(before, tagged);
+			if (before && removed) {
+				// Taking a tag away is done at once, with Undo, as every removal on the board is.
+				showStatus(
+					`Removed ${removed.length === 1 ? `tag ${removed[0]}` : plural(removed.length, 'tag')}.`,
+					false,
+					{
+						action: {
+							label: 'Undo',
+							async onClick() {
+								const undone = await send('UPDATE_BOOKMARK', {
+									bookmarkId: before.id,
+									fields: {
+										tags: before.tags ?? [],
+										hiddenKinds: before.hiddenKinds ?? [],
+									},
+								});
+								if (!undone?.ok) {
+									showStatus(
+										undone?.error || 'Could not undo that edit.',
+										true,
+									);
+								}
+
+								await reload();
+							},
+						},
+					},
+				);
+			}
 		} finally {
 			setBusy('');
 		}
@@ -1661,8 +1719,8 @@ function NewTab() {
 			return;
 		}
 
-		if (action === 'edit') {
-			openBookmarkEditor(bookmark);
+		if (action === 'edit' || action === 'edit-tags') {
+			openBookmarkEditor(bookmark, undefined, action === 'edit-tags');
 			return;
 		}
 
@@ -2359,6 +2417,11 @@ function NewTab() {
 						}
 						onChange={setBookmarkSearch}
 					/>
+					<TagFilterMenu
+						bookmarks={bookmarks}
+						search={bookmarkSearch}
+						onSearch={setBookmarkSearch}
+					/>
 					<IconTooltip
 						label={
 							bookmarkView === 'board'
@@ -3006,7 +3069,21 @@ function NewTab() {
 					open={dialog === 'bookmark'}
 					onOpenChange={(open) => !open && setDialog(null)}
 				>
-					<DialogContent>
+					<DialogContent
+						onOpenAutoFocus={(event) => {
+							// Edit tags… starts in the Tags field instead of the first one.
+							const tags = bookmarkEdit?.focusTags
+								? document.querySelector<HTMLInputElement>('#bookmark-tags')
+								: null;
+							// A field full of tags is disabled; then the dialog's own first field takes the focus.
+							if (!tags || tags.disabled) {
+								return;
+							}
+
+							event.preventDefault();
+							tags.focus();
+						}}
+					>
 						<form onSubmit={saveBookmark}>
 							<DialogHeader>
 								<DialogTitle>
@@ -3095,6 +3172,20 @@ function NewTab() {
 											value={bookmarkEdit?.notes ?? ''}
 											onChange={(notes) =>
 												setBookmarkEdit((old) => old && {...old, notes})
+											}
+										/>
+										<TagsField
+											id="bookmark-tags"
+											url={bookmarkEdit?.url ?? ''}
+											value={{
+												tags: bookmarkEdit?.tags,
+												hiddenKinds: bookmarkEdit?.hiddenKinds,
+											}}
+											onChange={(tagged) =>
+												setBookmarkEdit(
+													(old) =>
+														old && {...old, ...tagged, tagsTouched: true},
+												)
 											}
 										/>
 									</>
@@ -4212,6 +4303,12 @@ const BookmarkCard = memo(
 			},
 			edit,
 			{
+				id: 'edit-tags',
+				label: 'Edit tags…',
+				icon: Tags,
+				onSelect: act('edit-tags'),
+			},
+			{
 				id: 'move',
 				label: 'Move to',
 				icon: ACTION_ICONS.move,
@@ -4401,6 +4498,13 @@ const BookmarkCard = memo(
 									}}
 								/>
 							)}
+							<TagChips
+								bookmark={bookmark}
+								className={cn(
+									'mt-0.5',
+									showUrl && !compact ? 'pl-[34px]' : 'pl-[30px]',
+								)}
+							/>
 						</div>
 						{quickActions.map((quickAction) => {
 							const {

@@ -72,7 +72,7 @@ export function createSyncToken(): string {
 
 const PULL_LIMIT = 500;
 // Record kinds that sync only when the server and the host support them.
-const OPTIONAL_KINDS = ['trash', 'note', 'source'] as const;
+const OPTIONAL_KINDS = ['trash', 'note', 'tag', 'source'] as const;
 type OptionalKind = (typeof OPTIONAL_KINDS)[number];
 const PUSH_LIMIT = 500;
 const LOCAL_CHANGE_DELAY_MS = 1500;
@@ -438,6 +438,8 @@ export function createSyncClient(host: SyncHost) {
 	let trashOn = false;
 	// Whether this round syncs bookmark notes: the server lists the `notes` feature.
 	let notesOn = false;
+	// Whether this round syncs bookmark tags: the server lists the `tags` feature.
+	let tagsOn = false;
 	// Whether this round syncs Sources choices: the host has them and the server lists the `sources` feature.
 	let sourcesOn = false;
 	let featureCheck:
@@ -503,9 +505,9 @@ export function createSyncClient(host: SyncHost) {
 
 	/**
 	Asks the server about itself, at most every few minutes, and returns the optional record kinds it lists. An old
-	server refuses a push with a kind it does not know, which would stop every round, so the trash, bookmark notes, and
-	Sources choices wait until the server says it can hold them. A server that speaks another protocol stops the round; that answer
-	is not kept, so the round after the server's update goes ahead.
+	server refuses a push with a kind it does not know, which would stop every round, so the trash, bookmark notes and
+	tags, and Sources choices wait until the server says it can hold them. A server that speaks another protocol stops
+	the round; that answer is not kept, so the round after the server's update goes ahead.
 	*/
 	async function serverFeatures(
 		target: SyncConfig,
@@ -515,15 +517,11 @@ export function createSyncClient(host: SyncHost) {
 			return featureCheck.features;
 		}
 
-		let info: ServerInfo | undefined;
-		try {
-			info = parseServerInfo(await request(target, '/v1/status'));
-		} catch (error) {
-			if (!(error instanceof SyncError) || error.kind !== 'server') {
-				throw error;
-			}
-		}
-
+		/*
+		A status request that fails ends the round, like any other request. Taken as "no features", it would make the pull
+		skip the trash, notes, and tags while the cursor moves past them, so this device would never get them.
+		*/
+		const info = parseServerInfo(await request(target, '/v1/status'));
 		const side = info && updateSide(info.protocol);
 		if (side) {
 			featureCheck = undefined;
@@ -541,6 +539,7 @@ export function createSyncClient(host: SyncHost) {
 	const unsupported = (kind: TombstoneKind | undefined) =>
 		(kind === 'trash' && !trashOn) ||
 		(kind === 'note' && !notesOn) ||
+		(kind === 'tag' && !tagsOn) ||
 		(kind === 'source' && !sourcesOn);
 
 	/**
@@ -558,7 +557,7 @@ export function createSyncClient(host: SyncHost) {
 	};
 
 	/**
-	The changes to push. The trash, notes, and Sources choices stay queued while the server cannot hold them.
+	The changes to push. The trash, notes, tags, and Sources choices stay queued while the server cannot hold them.
 	*/
 	const queued = (state: SyncState, records: Records) =>
 		outgoing(
@@ -577,6 +576,7 @@ export function createSyncClient(host: SyncHost) {
 			...((await settingsOn()) ? [] : (['preference'] as const)),
 			...(trashOn ? [] : (['trash'] as const)),
 			...(notesOn ? [] : (['note'] as const)),
+			...(tagsOn ? [] : (['tag'] as const)),
 			...(sourcesOn ? [] : (['source'] as const)),
 		]);
 
@@ -677,6 +677,7 @@ export function createSyncClient(host: SyncHost) {
 		await codec?.prepare(async (path, init) => request(target, path, init));
 		trashOn = host.trash !== undefined && features.has('trash');
 		notesOn = features.has('notes');
+		tagsOn = features.has('tags');
 		sourcesOn = host.sources !== undefined && features.has('sources');
 		// Records that arrived unencrypted in an encrypted library; they are sent again encrypted.
 		const reseal = new Set<string>();

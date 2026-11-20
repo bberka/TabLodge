@@ -145,6 +145,38 @@ describe('a backup the phone makes, read by the extension', () => {
 		);
 	});
 
+	test('bookmark tags and removed kinds come back from a backup on the phone and in the extension', async () => {
+		const store = addBookmark(
+			phoneLibrary(),
+			{
+				url: 'https://www.imdb.com/title/tt0111161/',
+				title: 'Tagged',
+				columnId: '',
+				tags: ['classic'],
+				hiddenKinds: ['movie'],
+			},
+			'tagged',
+			1,
+		);
+		const file = await buildBackup(store, 'TabLodge');
+		const onPhone = await readBackup(file.bytes);
+		assert.ok(onPhone.ok);
+		const tags = (
+			bookmarks: Array<{id: string; tags?: string[]; hiddenKinds?: string[]}>,
+		) => {
+			const entry = bookmarks.find((bookmark) => bookmark.id === 'tagged');
+			return [entry?.tags, entry?.hiddenKinds];
+		};
+
+		assert.deepEqual(tags(onPhone.store.bookmarks), [['classic'], ['movie']]);
+		const contents = readFullBackup(file.bytes);
+		assert.ok(contents);
+		assert.deepEqual(
+			tags(normalizeStore(contents.state as Record<string, unknown>).bookmarks),
+			[['classic'], ['movie']],
+		);
+	});
+
 	test('a password gives a .zip.enc the extension opens with that password, and not with another', async () => {
 		const store = phoneLibrary();
 		const file = await buildBackup(store, 'TabLodge', 'correct horse battery');

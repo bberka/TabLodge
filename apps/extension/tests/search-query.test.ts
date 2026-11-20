@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {
+	bookmarkFacets,
 	hasOperators,
 	literalQuery,
 	parseSearchQuery,
 	passesOperators,
 	type SearchFacets,
+	toggleTagFilter,
 } from '../src/shared/search-query';
 
 const day = (year: number, month: number, date: number) =>
@@ -187,4 +189,87 @@ test('kind: keeps links to images, PDFs, or videos, read from the address', () =
 	const unknown = parseSearchQuery('kind:doc');
 	assert.equal(hasOperators(unknown), false);
 	assert.equal(unknown.text, 'kind:doc');
+});
+
+const tagged = (
+	url: string,
+	fields: {tags?: string[]; hiddenKinds?: Array<'movie' | 'repo'>} = {},
+) =>
+	bookmarkFacets(
+		{
+			id: 'b',
+			title: '',
+			url,
+			columnId: 'c',
+			createdAt: 0,
+			updatedAt: 0,
+			...fields,
+		},
+		'Column',
+	);
+
+test('tag: keeps bookmarks that show every tag asked for, automatic or typed', () => {
+	const query = parseSearchQuery('tag:Movie tag:"to watch"');
+	assert.deepEqual(query.tags, ['movie', 'to watch']);
+	assert.equal(query.text, '');
+	const film = 'https://www.imdb.com/title/tt0111161/';
+	assert.ok(passesOperators(query, [], tagged(film, {tags: ['to watch']})));
+	assert.ok(
+		!passesOperators(query, [], tagged(film)),
+		'every tag must be shown',
+	);
+	assert.ok(
+		passesOperators(
+			parseSearchQuery('tag:#rust'),
+			[],
+			tagged('https://x.example/', {tags: ['rust']}),
+		),
+	);
+	assert.ok(
+		!passesOperators(parseSearchQuery('tag:movie'), [], {
+			places: ['sessions'],
+			urls: [film],
+		}),
+		'a session has no tags',
+	);
+});
+
+test('a removed kind leaves tag: but not kind:', () => {
+	const repo = tagged('https://github.com/bberka/TabLodge', {
+		hiddenKinds: ['repo'],
+	});
+	assert.ok(!passesOperators(parseSearchQuery('tag:repo'), [], repo));
+	assert.ok(passesOperators(parseSearchQuery('kind:repo'), [], repo));
+	assert.ok(
+		passesOperators(
+			parseSearchQuery('kind:repo'),
+			[],
+			tagged('https://gitlab.com/a/b'),
+		),
+	);
+	assert.deepEqual(parseSearchQuery('kind:recipe kind:discussion').kinds, [
+		'recipe',
+		'discussion',
+	]);
+});
+
+test('a tag filter switches on and off without touching the rest of the search', () => {
+	assert.equal(toggleTagFilter('', 'movie'), 'tag:movie');
+	assert.equal(toggleTagFilter('rust', 'to read'), 'rust tag:"to read"');
+	assert.equal(
+		toggleTagFilter('rust tag:"To Read" site:x.com', 'to read'),
+		'rust site:x.com',
+	);
+	assert.equal(toggleTagFilter('tag:movie tag:scifi', 'movie'), 'tag:scifi');
+});
+
+test('switching a tag filter off leaves the same words inside a quoted phrase alone', () => {
+	assert.equal(
+		toggleTagFilter('"watch tag:movie later" tag:movie', 'movie'),
+		'"watch tag:movie later"',
+	);
+	assert.equal(
+		toggleTagFilter('col:"tag:movie" tag:movie', 'movie'),
+		'col:"tag:movie"',
+	);
 });

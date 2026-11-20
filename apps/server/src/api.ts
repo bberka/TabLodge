@@ -101,6 +101,7 @@ const FEATURES = [
 	'preview',
 	'trash',
 	'notes',
+	'tags',
 	'page-source',
 	'sources',
 ];

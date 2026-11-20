@@ -1,4 +1,4 @@
-# 8. Sources settings sync as their own record kind
+# 9. Sources settings sync as their own record kind
 
 Status: accepted, 2026-11-20. Issue #382.
 
@@ -18,7 +18,7 @@ Two things make this harder than a new setting:
 * The choices are stored in `tablodge.sources` as they arrived and handed back unchanged. A site or field this version does not know survives, and so does a save mode on a site where this version does not offer it.
 * Whether a site runs in a browser stays local: it runs only while it has a choice and that browser grants its permission. A browser without the permission shows **On in another browser** with **Turn on**, and the dashboard points to it once. A browser that already grants it turns the site on by itself. Revoking access in one browser turns the site off there only.
 * The per device **Sync settings** switch does not cover Sources. A choice is "on" by being present, so a browser that held its choices back would push deletes for every site it never applied once the switch came back on.
-* A client remembers which optional kinds its last pull took. When one becomes available (the browser updated from 0.3.0, or the server was updated), the next round pulls from the start, so records it skipped before are not lost behind the cursor. The same holds for bookmark notes and the trash.
+* A client remembers which optional kinds its last pull took. When one becomes available (the browser updated from 0.3.0, or the server was updated), the next round pulls from the start, so records it skipped before are not lost behind the cursor. The same holds for bookmark notes, tags, and the trash.
 * `PROTOCOL_VERSION` stays 1.
 
 ## Consequences

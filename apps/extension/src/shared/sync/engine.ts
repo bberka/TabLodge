@@ -61,10 +61,10 @@ export type SyncState = {
 	*/
 	held?: SyncChange[];
 	/**
-	The optional record kinds (trash, notes, Sources) the last pull took. One it skipped is pulled from the start once
-	it is taken.
+	The optional record kinds (trash, notes, tags, Sources) the last pull took. One it skipped is pulled from the start
+	once it is taken.
 	*/
-	pulled?: Array<'trash' | 'note' | 'source'>;
+	pulled?: Array<'trash' | 'note' | 'tag' | 'source'>;
 };
 
 export type Records = Map<string, LibraryRecord>;
@@ -425,7 +425,7 @@ function parentOf(change: SyncChange): string | undefined {
 		return `session:${change.parentId ?? ''}`;
 	}
 
-	if (change.kind === 'note') {
+	if (change.kind === 'note' || change.kind === 'tag') {
 		return `bookmark:${change.id}`;
 	}
 

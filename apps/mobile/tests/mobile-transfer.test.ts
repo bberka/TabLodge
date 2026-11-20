@@ -232,6 +232,35 @@ describe('importing a file into the library', () => {
 		}
 	});
 
+	test('bookmark tags come in from a file, and an export from the phone reads back with them', () => {
+		const html =
+			'<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<DL><p><DT><A HREF="https://x.org/1" TAGS="rust,web">One</A></DL>';
+		const first = importIntoStore(
+			emptyStore(NOW),
+			parseImportFile(html, 'bookmarks.html'),
+			{kind: 'bookmarks', now: NOW, newId},
+		);
+		assert.deepEqual(first.store.bookmarks[0].tags, ['rust', 'web']);
+
+		for (const format of ['json', 'csv', 'html'] as const) {
+			const file = buildExport(
+				{
+					kind: 'bookmarks',
+					columns: first.store.bookmarkColumns,
+					bookmarks: first.store.bookmarks,
+				},
+				format,
+				{appName: 'TabLodge'},
+			);
+			const again = importIntoStore(
+				emptyStore(NOW),
+				parseImportFile(file.content, file.filename),
+				{kind: 'bookmarks', now: NOW, newId},
+			);
+			assert.deepEqual(again.store.bookmarks[0]?.tags, ['rust', 'web'], format);
+		}
+	});
+
 	test('the preview counts what an import would add', () => {
 		const parsed = parseImportFile(ONETAB, 'onetab.txt');
 		const preview = previewFor(emptyStore(NOW), parsed, 'sessions');

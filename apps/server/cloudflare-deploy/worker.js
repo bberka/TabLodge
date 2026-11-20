@@ -2477,6 +2477,7 @@ var TOMBSTONE_KINDS = /* @__PURE__ */ new Set([
   "preference",
   "trash",
   "note",
+  "tag",
   "source"
 ]);
 
@@ -2993,6 +2994,7 @@ var FEATURES = [
   "preview",
   "trash",
   "notes",
+  "tags",
   "page-source",
   "sources"
 ];

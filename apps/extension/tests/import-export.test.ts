@@ -1026,11 +1026,20 @@ for (const [name, source, filename, label] of [
 		assert.equal(typeof dev?.links[0]?.createdAt, 'number');
 	});
 
-	test(`a Raindrop.io ${name} export says that its tags and highlights are not imported`, () => {
+	test(`a Raindrop.io ${name} export keeps its tags and says its highlights are not imported`, () => {
 		const parsed = parseImportFile(source, filename);
-		assert.equal(parsed.warnings.length, 1);
-		assert.match(parsed.warnings[0] ?? '', /1 bookmark has tags/);
-		assert.match(parsed.warnings[0] ?? '', /not imported/);
+		assert.deepEqual(parsed.warnings, [
+			'1 bookmark has highlights from Raindrop.io. They are not imported.',
+		]);
+		const links = parsed.bookmarks.flatMap((entry) => entry.links);
+		assert.deepEqual(
+			links.find((link) => link.url === 'https://dev.example/guide')?.tags,
+			['rust', 'tools'],
+		);
+		assert.equal(
+			links.find((link) => link.url === 'https://dev.example/docs')?.tags,
+			undefined,
+		);
 	});
 }
 
@@ -1088,4 +1097,47 @@ test('bookmark notes survive every export that reads back: JSON, CSV, Markdown, 
 
 	const html = buildExport(noted, 'html', {appName: 'TabLodge', now}).content;
 	assert.match(html, /<DD>Docs, &quot;quoted&quot; &amp; &lt;b&gt;/);
+});
+
+test('bookmark tags survive the exports that read back: JSON, CSV, and browser HTML', () => {
+	const tagged: ExportData = {
+		kind: 'bookmarks',
+		columns,
+		bookmarks: bookmarks.map((entry) =>
+			entry.id === 'b2' ? {...entry, tags: ['web docs', 'r&d']} : entry,
+		),
+	};
+	const url = 'https://developer.mozilla.org/en-US/';
+	for (const format of ['json', 'csv', 'html'] as const) {
+		const file = buildExport(tagged, format, {appName: 'TabLodge', now});
+		const parsed = parseImportFile(file.content, file.filename);
+		const payload = bookmarkImportPayload(parsed) as {
+			bookmarks: Array<{url: string; tags?: string[]}>;
+		};
+		assert.deepEqual(
+			payload.bookmarks.find((entry) => entry.url === url)?.tags,
+			['web docs', 'r&d'],
+			format,
+		);
+		assert.equal(
+			payload.bookmarks.find((entry) => entry.url !== url)?.tags,
+			undefined,
+			`${format}: an untagged bookmark gets no tags`,
+		);
+	}
+
+	const html = buildExport(tagged, 'html', {appName: 'TabLodge', now}).content;
+	assert.match(html, /TAGS="web docs,r&amp;d"/);
+});
+
+test('a CSV tags column holds tags, not the column name', () => {
+	const parsed = parseImportFile(
+		'title,url,time_added,tags,status\nA,https://a.example/,1700000000,read|later,unread\n',
+		'pocket.csv',
+	);
+	assert.deepEqual(
+		parsed.bookmarks.map((entry) => entry.name),
+		[''],
+	);
+	assert.deepEqual(parsed.bookmarks[0]?.links[0]?.tags, ['read', 'later']);
 });

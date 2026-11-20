@@ -4,6 +4,7 @@
 import type {SyncStatus} from './sync/client';
 import type {SharedPage} from './sync/shared-pages-client';
 import type {PageCopy} from './page-copy';
+import type {LinkKind} from './link-kind';
 
 export type ActionMode =
 	| 'popup'
@@ -483,6 +484,15 @@ export type Bookmark = {
 	*/
 	deviceName?: string;
 	deviceKind?: 'desktop' | 'mobile';
+	/**
+	Tags the person typed, normalized by `bookmarkTags` (bookmark-tags.ts), absent when there are none.
+	*/
+	tags?: string[];
+	/**
+	Automatic kinds (link-kind.ts) the person removed from this bookmark, so they stay removed. Tags and removed kinds
+	sync as a `tag` record of their own (see library-records.ts).
+	*/
+	hiddenKinds?: Array<Exclude<LinkKind, 'page'>>;
 	createdAt: number;
 	updatedAt: number;
 };
@@ -624,7 +634,10 @@ export type SessionFields = Partial<
 >;
 export type TabFields = Partial<Pick<SavedTab, 'title' | 'notes' | 'url'>>;
 export type BookmarkFields = Partial<
-	Pick<Bookmark, 'title' | 'url' | 'columnId' | 'notes'>
+	Pick<
+		Bookmark,
+		'title' | 'url' | 'columnId' | 'notes' | 'tags' | 'hiddenKinds'
+	>
 >;
 export type LinkEntry = {
 	url: string;

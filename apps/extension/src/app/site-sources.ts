@@ -712,7 +712,7 @@ browser, not to a library. Two parts:
 
 	sources  per browser, never synced: whether the site runs here, why it went off or stopped saving, and whether
 	         the dashboard already pointed to a site that is on in another browser
-	choices  the user's choices, synced as `source` records (docs/adr/0008-sources-settings-sync.md): one entry per
+	choices  the user's choices, synced as `source` records (docs/adr/0009-sources-settings-sync.md): one entry per
 	         site that is on, holding its column and save mode. Kept as they arrived, so a site or a field this
 	         version does not know goes back to the server unchanged.
 

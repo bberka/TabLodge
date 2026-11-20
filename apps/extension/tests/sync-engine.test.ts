@@ -671,3 +671,137 @@ test('clearing a note sends a delete for its record and keeps the bookmark', () 
 	assert.equal(b.store.bookmarks.length, 1);
 	assert.equal(b.store.bookmarks[0].notes, undefined);
 });
+
+const taggedStore = (
+	fields: {tags?: string[]; hiddenKinds?: Array<'repo'>} = {},
+) => ({
+	...emptyStore(),
+	bookmarkColumns: [
+		{id: 'reading', name: 'Reading', createdAt: 0, isDefault: false},
+	],
+	bookmarks: [
+		{
+			id: 'link',
+			title: 'Link',
+			url: 'https://github.com/bberka/TabLodge',
+			columnId: 'reading',
+			...fields,
+			createdAt: 0,
+			updatedAt: 0,
+		},
+	],
+});
+
+test('tags and removed kinds are a record of their own, and an untagged bookmark is the record it always was', () => {
+	const records = splitLibrary(
+		taggedStore({tags: ['rust'], hiddenKinds: ['repo']}),
+	);
+	assert.deepEqual(records.get('tag:link')?.value, {
+		tags: ['rust'],
+		hiddenKinds: ['repo'],
+	});
+	const value = records.get('bookmark:link')?.value as object;
+	assert.equal('tags' in value || 'hiddenKinds' in value, false);
+	const back = assemble([...records.values()], emptyStore()).bookmarks[0];
+	assert.deepEqual([back.tags, back.hiddenKinds], [['rust'], ['repo']]);
+
+	const plain = splitLibrary(taggedStore());
+	assert.equal(plain.has('tag:link'), false);
+	assert.deepEqual(
+		plain.get('bookmark:link')?.value,
+		taggedStore().bookmarks[0],
+	);
+});
+
+test('a pulled tag record is not sent back, and a malformed one is dropped', () => {
+	const log = new ChangeLog();
+	const a = device('a', taggedStore({tags: ['rust', 'web']}));
+	const b = device('b');
+	sync(a, log, T0);
+	sync(b, log, T0 + 1000);
+	assert.deepEqual(b.store.bookmarks[0].tags, ['rust', 'web']);
+	// The pulled library, read back as this device's own, holds no edit to send.
+	const again = splitLibrary(structuredClone(b.store));
+	assert.deepEqual(capture(b.state, again, T0 + 2000).outbox, []);
+
+	const odd = assemble(
+		[
+			...splitLibrary(taggedStore()).values(),
+			{kind: 'tag', id: 'link', value: {tags: 'rust', hiddenKinds: [7]}},
+		],
+		emptyStore(),
+	).bookmarks[0];
+	assert.equal(odd.tags, undefined);
+	assert.equal(odd.hiddenKinds, undefined);
+});
+
+test('a tag record that arrives before its bookmark waits for it', () => {
+	const h = (offset: number) =>
+		(T0 + offset).toString(36).padStart(11, '0') + '00000';
+	const source = splitLibrary(taggedStore({tags: ['later']}));
+	const change = (key: string, offset: number): SyncChange => {
+		const record = source.get(key)!;
+		return {
+			kind: record.kind,
+			id: record.id,
+			h: h(offset),
+			d: 'a',
+			...(record.kind !== 'tag' && {o: 'a0'}),
+			value: record.value,
+		};
+	};
+
+	let state: SyncState = {...newSyncState('b'), joined: true};
+	let records = splitLibrary(emptyStore());
+	({state, records} = receive(
+		state,
+		records,
+		{changes: [change('tag:link', 3)], cursor: 1, purged: 0},
+		T0,
+	));
+	assert.equal(records.has('tag:link'), false);
+	assert.equal(state.held?.length, 1);
+	({state, records} = receive(
+		state,
+		records,
+		{
+			changes: [change('column:reading', 1), change('bookmark:link', 2)],
+			cursor: 2,
+			purged: 0,
+		},
+		T0,
+	));
+	assert.equal(state.held, undefined);
+	assert.deepEqual(
+		assemble(inOrder(state, records), emptyStore()).bookmarks[0].tags,
+		['later'],
+	);
+});
+
+test('deleting a bookmark deletes its tags, and clearing them keeps the bookmark', () => {
+	const log = new ChangeLog();
+	const a = device('a', taggedStore({tags: ['gone'], hiddenKinds: ['repo']}));
+	const b = device('b');
+	sync(a, log, T0);
+	sync(b, log, T0 + 1000);
+	assert.deepEqual(b.store.bookmarks[0].hiddenKinds, ['repo']);
+
+	a.store = taggedStore();
+	sync(a, log, T0 + 2000);
+	sync(b, log, T0 + 3000);
+	assert.equal(b.store.bookmarks.length, 1);
+	assert.equal(b.store.bookmarks[0].tags, undefined);
+	assert.equal(b.store.bookmarks[0].hiddenKinds, undefined);
+
+	a.store = taggedStore({tags: ['back']});
+	sync(a, log, T0 + 4000);
+	a.store = {...a.store, bookmarks: []};
+	sync(a, log, T0 + 5000);
+	sync(b, log, T0 + 6000);
+	assert.deepEqual(b.store.bookmarks, []);
+	const pulled = log.pull(0, 100, 0);
+	assert.ok(!pulled.resync);
+	assert.ok(
+		pulled.changes.some((entry) => entry.kind === 'tag' && entry.deleted),
+	);
+});
