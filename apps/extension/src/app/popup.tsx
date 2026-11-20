@@ -570,7 +570,12 @@ function Popup() {
 		setBusy('');
 		if (result?.ok) {
 			// With Remove restored tabs on, the session went to the trash; Undo brings it back.
-			if (result.trashId && !result.failed) {
+			if (
+				result.trashId &&
+				!result.failed &&
+				!result.skipped &&
+				!result.splitsSeparated
+			) {
 				offerTrashUndo(
 					`Restored “${group.name}” and removed it from your sessions.`,
 					result.trashId,
