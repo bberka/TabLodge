@@ -10,7 +10,7 @@ import {
 } from './source-catch-up';
 import type {SiteSource} from './site-sources';
 import type {SourceLink} from './source-reader';
-import {showSourceToast} from './source-toast';
+import {showSourceToast, type ToastAction} from './source-toast';
 
 // The page is read at most this often while it changes; Reddit's pages change all the time.
 const READ_EVERY_MS = 1000;
@@ -63,6 +63,23 @@ export function watchSavedPage({
 			: text;
 	};
 
+	// Not now: closes the notice once the answer is stored, and otherwise says so and offers it again.
+	const dismiss = async (
+		links: SourceLink[],
+	): Promise<{text: string; action: ToastAction} | undefined> => {
+		const result = await send<ActionResult<'SITE_SOURCE_CATCH_UP_DISMISS'>>({
+			type: 'SITE_SOURCE_CATCH_UP_DISMISS',
+			source: source.id,
+			links,
+		});
+		return result?.ok
+			? undefined
+			: {
+					text: `${appName} could not save that answer.`,
+					action: {label: 'Try again', run: async () => dismiss(links)},
+				};
+	};
+
 	const check = async () => {
 		const loaded = read(document);
 		const links = loaded?.slice(0, CATCH_UP_MAX_LINKS);
@@ -106,14 +123,7 @@ export function watchSavedPage({
 				{label: 'Add them', run: async () => add(links)},
 				{
 					label: 'Not now',
-					async run() {
-						await send({
-							type: 'SITE_SOURCE_CATCH_UP_DISMISS',
-							source: source.id,
-							links,
-						});
-						return undefined;
-					},
+					run: async () => dismiss(links),
 				},
 			],
 		});
@@ -131,4 +141,12 @@ export function watchSavedPage({
 		subtree: true,
 	});
 	settle();
+	// Settings changed (a site removed and added again forgets its Not now answers): count the page again.
+	return {
+		refresh() {
+			lastAsked = '';
+			latestRequest++;
+			settle();
+		},
+	};
 }

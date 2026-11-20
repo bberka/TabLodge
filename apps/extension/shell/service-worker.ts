@@ -10073,8 +10073,13 @@ async function dismissSourceCatchUp(
 		return {ok: true};
 	}
 
-	const missing = await missingFromSource(await getStore(), source, links);
+	// In the sources queue as a whole, so a Remove that clears the answers can't be undone by this one finishing later.
 	await sourcesMutate(async () => {
+		if (!(await readSourcesState())[source.id].enabled) {
+			return;
+		}
+
+		const missing = await missingFromSource(await getStore(), source, links);
 		const state = await readCatchUpState();
 		state[source.id] = dismissMissing(state[source.id], missing);
 		await chrome.storage.local.set({
