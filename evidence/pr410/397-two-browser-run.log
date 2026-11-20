@@ -1,0 +1,26 @@
+TabLodge sync server listening on port 8799
+server features [
+  'private',     'key',
+  'preview',     'trash',
+  'notes',       'tags',
+  'page-source', 'sources',
+  'settings',    'shared-pages'
+]
+A connect true
+B connect true
+changed in A -> value in B:
+  sessionSort: A="name" B="name"
+  dashboardWidth: A="wider" B="wider"
+  bookmarkDensity: A="compact" B="compact"
+  snapshotsEnabled: A=false B=false
+  snapshotIntervalMinutes: A=30 B=30
+  snapshotKeep: A=50 B=50
+  autoBackup: A="daily" B="daily"
+  autoBackupKeep: A=30 B=30
+  browserBookmarkAction: A="ask" B="ask"
+  browserBookmarkColumn: A="bookmark-default" B="bookmark-default"
+  linkPreviews: A=true B=true
+  siteIcons: A="browser" B="browser"
+  autoBackupToDownloads: A=true B=false
+synced keys that differ between A and B: []
+theme A=dark/#e11d48, B= {}
