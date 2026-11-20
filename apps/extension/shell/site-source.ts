@@ -140,12 +140,19 @@ if (source && !Object.hasOwn(globalThis, LOADED)) {
 		});
 	};
 
+	// Clicks pass through while a refresh is out, and only the newest answer counts, so an older one that arrives
+	// late cannot switch it back on.
+	let modeRequest = 0;
 	const readMode = async () => {
+		const request = ++modeRequest;
+		keepOffSite = false;
 		const result = await send<ActionResult<'SITE_SOURCE_MODE'>>({
 			type: 'SITE_SOURCE_MODE',
 			source: source.id,
 		});
-		keepOffSite = result?.ok === true && result.keepOffSite;
+		if (request === modeRequest) {
+			keepOffSite = result?.ok === true && result.keepOffSite;
+		}
 	};
 
 	const takePending = async () =>

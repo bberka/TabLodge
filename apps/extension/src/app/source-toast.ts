@@ -381,9 +381,11 @@ function render(
 	box.addEventListener('pointerenter', () => hold(true));
 	box.addEventListener('pointerleave', () => hold(false));
 	box.addEventListener('focusin', (event) => {
+		// Only focus arriving from the page counts; moving between the notice's own buttons keeps the page target.
 		if (
 			event.relatedTarget instanceof HTMLElement &&
-			event.relatedTarget !== host
+			event.relatedTarget !== host &&
+			!root.contains(event.relatedTarget)
 		) {
 			previous = event.relatedTarget;
 		}
