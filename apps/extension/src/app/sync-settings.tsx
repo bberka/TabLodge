@@ -68,7 +68,7 @@ export const SYNC_WORDS = [
 ];
 
 const GUIDE_URL = `${PROJECT.repoUrl}/blob/master/docs/self-hosting.md`;
-const CLOUDFLARE_DEPLOY_URL = `https://deploy.workers.cloudflare.com/?url=${PROJECT.repoUrl}/tree/master/apps/server/cloudflare-deploy`;
+const CLOUDFLARE_DEPLOY_URL = `https://deploy.workers.cloudflare.com/?url=${PROJECT.repoUrl}/tree/release/apps/server/cloudflare-deploy`;
 
 /**
 When the last sync happened: the time alone for today, the date and time before that.

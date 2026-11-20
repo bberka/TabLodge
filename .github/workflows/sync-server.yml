@@ -2,7 +2,7 @@ name: Sync server image
 
 # Builds the self hosted sync server image (apps/server/Dockerfile) for amd64 and arm64.
 # Pull requests only build it. A push to master publishes ghcr.io/<owner>/tablodge-sync:edge. Each TabLodge release
-# (release.yml) calls this workflow with its version, which publishes :<version> and :latest. See
+# (release.yml) calls this workflow with its version, which publishes :<version>, :0.<minor> and :latest. See
 # docs/self-hosting.md.
 on:
   push:
@@ -64,12 +64,16 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/tablodge-sync
+          # :latest comes from the explicit tag below; the semver tag would add it a second time.
+          flavor: latest=false
           # Pull requests only build, under a pr-<number> tag that is never pushed.
           tags: |
             type=ref,event=pr
             type=edge,branch=master,enable=${{ !inputs.version }}
             type=raw,value=${{ inputs.version }},enable=${{ !!inputs.version }}
             type=raw,value=latest,enable=${{ !!inputs.version }}
+            # 0.<minor>: the release line, for an image that should take fixes but not the next minor.
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},enable=${{ !!inputs.version }}
           labels: |
             org.opencontainers.image.title=TabLodge sync server
             org.opencontainers.image.description=Self hosted sync server for the TabLodge browser extension
