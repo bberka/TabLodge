@@ -1,0 +1,34 @@
+note: You are running `vp test` as a Vite+ built-in command. If you meant to run the test npm script, use `vpr test` instead.
+
+ RUN  v5.1.0 /home/berg/.t3/worktrees/TabLodge/feat-sync-all-settings-10bd3947a648b216
+
+ ❯ apps/extension/tests/local-settings.test.ts (3 tests | 1 failed) 10ms
+   × every setting in the library reaches another device, unless it is listed as local with a reason 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/extension/tests/local-settings.test.ts > every setting in the library reaches another device, unless it is listed as local with a reason
+AssertionError: The setting "snapshotKeep" does not sync and is not listed as local. Every setting syncs unless src/shared/local-settings.ts lists it with the reason it stays on the device, and docs/PRIVACY.md lists it under "What stays on each device".
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ apps/extension/tests/local-settings.test.ts:51:10
+     49|   const local = Object.hasOwn(EXTENSION_LOCAL_SETTINGS, key);
+     50|   const synced = JSON.stringify(arrived[key]) === JSON.stringify(probe…
+     51|   assert.ok(
+       |          ^
+     52|    synced || local,
+     53|    `The setting "${key}" does not sync and is not listed as local. ${R…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  22:24:25
+   Duration  152ms (transform 55%, import 26%, tests 13%, worker 6%)
+
