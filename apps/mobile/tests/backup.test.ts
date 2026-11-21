@@ -247,7 +247,10 @@ describe('a backup the extension makes, read by the phone', () => {
 	const extensionParts = () => ({
 		state: {
 			...phoneLibrary(2, 3, 4),
-			settings: {copyFormat: 'url', excludedOrigins: ['skip.example']} as never,
+			settings: {
+				sessionSort: 'oldest',
+				excludedOrigins: ['skip.example'],
+			} as never,
 		},
 		preferences: {uiTheme: 'dark', uiAccent: 'rose'},
 		snapshots: {
@@ -404,7 +407,7 @@ describe('large libraries', () => {
 		// Making 20,000 bookmarks one by one (each save checks for a duplicate) takes a few seconds before the timed part, so the default 5 s test limit would fail it; `built` and `read` hold the real bounds.
 	}, 30_000);
 
-	test('more sessions than the extension holds are reported as left out, not silently dropped', async () => {
+	test('a backup with more sessions than the extension once held keeps every one of them', async () => {
 		const {bytes} = buildFullBackup(
 			{
 				state: phoneLibrary(1001, 1, 0),
@@ -416,8 +419,8 @@ describe('large libraries', () => {
 		);
 		const result = await readBackup(bytes);
 		assert.ok(result.ok);
-		assert.equal(result.counts.sessions, 1000);
-		assert.equal(result.skipped, 2);
+		assert.equal(result.counts.sessions, 1001);
+		assert.equal(result.skipped, 0);
 	});
 
 	test('a backup that would unpack to more than the limit is refused, not read', async () => {
@@ -435,7 +438,7 @@ describe('restoring replaces the library, with a safety copy first', () => {
 	test('the backup’s items replace the library’s, its settings stay, and the safety copy brings it all back', async () => {
 		const current = {
 			...phoneLibrary(2, 2, 2),
-			settings: {copyFormat: 'url'} as never,
+			settings: {sessionSort: 'oldest'} as never,
 		};
 		const backup = phoneLibrary(1, 1, 1);
 		await keepSafetyCopy('regular', current, NOW, {look: 'ios'});

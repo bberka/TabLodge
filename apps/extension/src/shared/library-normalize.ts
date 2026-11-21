@@ -113,10 +113,14 @@ export const MAX_FOLDERS = 200;
 export const isArchivedFolderName = (name: string) =>
 	name.toLocaleLowerCase() === ARCHIVED_FOLDER_NAME.toLocaleLowerCase();
 
-// Loading keeps at most this many sessions and links per session, so every write path has to stay inside the same limits.
-export const MAX_SESSIONS = 1000;
+/*
+Limits the write paths enforce: a save, merge or import that would go past one is refused with a message. Loading never
+drops anything above them (a library can arrive larger through sync or a backup), because dropping on load deleted
+the rest on the next write.
+*/
+export const MAX_SESSIONS = 20_000;
 
-export const MAX_TABS_PER_SESSION = 1000;
+export const MAX_TABS_PER_SESSION = 20_000;
 
 export const MAX_EXCLUDED_ORIGINS = 500;
 
@@ -185,7 +189,6 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	keepLodgePinned: false,
 	browserBookmarkAction: 'off',
 	browserBookmarkColumn: '',
-	copyFormat: 'markdown',
 	dashboardBehavior: 'switch',
 	urlDisplayMode: 'full',
 	dashboardWidth: 'default',
@@ -470,8 +473,7 @@ export function folderEntriesWithArchive(rawFolders: unknown): unknown[] {
 	const regular = entries.filter(
 		(entry, index) => index !== archivedIndex && !isArchivedFolderEntry(entry),
 	);
-	const limited = regular.slice(0, MAX_FOLDERS);
-	return archivedIndex === -1 ? limited : [...limited, entries[archivedIndex]];
+	return archivedIndex === -1 ? regular : [...regular, entries[archivedIndex]];
 }
 
 export function normalizeFolders(rawFolders: unknown): Folder[] {
@@ -708,7 +710,6 @@ export function normalizeGroup(
 	);
 	const seenTabIds = new Set<string>();
 	const tabs = tabsRaw
-		.slice(0, MAX_TABS_PER_SESSION)
 		.map((tab: unknown, index: number) => {
 			const normalized = normalizeTab(tab, createdAt, index);
 			if (!normalized || (normalized.pinned && !includePinnedTabs)) {
@@ -1055,16 +1056,6 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 			? raw.browserBookmarkAction
 			: 'off',
 		browserBookmarkColumn: cleanText(raw.browserBookmarkColumn, '', 120),
-		copyFormat: isOneOf(
-			['rich', 'title-url', 'url-title', 'url', 'markdown'],
-			raw.copyFormat,
-		)
-			? raw.copyFormat
-			: raw.copyFormat === 'html'
-				? 'rich'
-				: raw.copyFormat === 'plain'
-					? 'title-url'
-					: 'markdown',
 		dashboardBehavior: raw.dashboardBehavior === 'move' ? 'move' : 'switch',
 		removeTrackingParameters: raw.removeTrackingParameters === true,
 		simplifyUrls: raw.simplifyUrls !== false,
@@ -1254,7 +1245,6 @@ export function normalizeStore(raw: Raw | null | undefined): Store {
 	// Sessions archived by older builds (the Archived view is gone): they become normal sessions.
 	const wasArchived = new WeakSet<Session>();
 	const groups = sourceGroups
-		.slice(0, MAX_SESSIONS)
 		.map((entry: unknown) => {
 			const group = normalizeGroup(entry, Date.now(), true);
 			if (group && isRecord(entry) && entry.archived === true) {

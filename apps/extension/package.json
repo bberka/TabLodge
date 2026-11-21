@@ -21,6 +21,7 @@
 		"check:build": "node scripts/verify-build.ts",
 		"check:a11y": "node scripts/a11y/run.ts",
 		"check:private-storage": "node scripts/private-storage-check.ts",
+		"proof:sheet": "node scripts/proof-sheet.ts",
 		"clean": "node --eval \"require('node:fs').rmSync('dist', { recursive: true, force: true })\""
 	},
 	"dependencies": {
@@ -37,6 +38,7 @@
 		"@radix-ui/react-slot": "^1.5.0",
 		"@radix-ui/react-switch": "^1.4.1",
 		"@radix-ui/react-tooltip": "^1.4.1",
+		"@tanstack/react-virtual": "^3.14.26",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"fflate": "^0.8.3",

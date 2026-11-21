@@ -430,7 +430,9 @@ function makeDevice(
 	return device;
 }
 
-async function until(check: () => boolean, ms = 3000) {
+vi.setConfig({testTimeout: 15_000});
+
+async function until(check: () => boolean, ms = 8000) {
 	const end = Date.now() + ms;
 	while (!check()) {
 		if (Date.now() > end) {
@@ -557,7 +559,6 @@ test('a value that changes on every read cannot keep sync pushing', async () => 
 		},
 		set() {},
 	});
-	// A local change waits 1.5 s for its round, so the fake clock runs a minute of rounds by hand.
 	vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
 	try {
 		await device.client.connect(URL_BASE, TOKEN);
@@ -1646,4 +1647,58 @@ test('a browser that updates from 0.3.0 still drops a record deleted elsewhere w
 	}
 
 	assert.deepEqual(ids(a.store).toSorted(), ['b2', 'mine']);
+});
+
+test('a local change waits 2.5 s after the last write, and a steady stream still syncs within 10 s', async () => {
+	const server = makeServer();
+	const device = makeDevice(server);
+	await device.client.connect(URL_BASE, TOKEN);
+	const sent = () => server.pushes.length;
+	const letRoundFinish = async (pushes: number) => {
+		for (let turn = 0; turn < 5000 && sent() < pushes; turn += 1) {
+			await new Promise((resolve) => {
+				setImmediate(resolve);
+			});
+		}
+	};
+
+	const before = sent();
+	const edit = (id: string) => {
+		device.edit((store) => ({
+			...store,
+			bookmarks: [...store.bookmarks, bookmark(id)],
+		}));
+	};
+
+	vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+	try {
+		edit('first');
+		await vi.advanceTimersByTimeAsync(2400);
+		assert.equal(sent(), before, 'still waiting at 2.4 s');
+		edit('second');
+		await vi.advanceTimersByTimeAsync(2400);
+		assert.equal(sent(), before, 'restarted by the second write');
+		await vi.advanceTimersByTimeAsync(1000);
+		await letRoundFinish(before + 1);
+		assert.equal(sent(), before + 1, 'sent 2.5 s after the last write');
+
+		await vi.advanceTimersByTimeAsync(500);
+		await letRoundFinish(Infinity);
+		const settled = sent();
+
+		edit('steady-0');
+		for (let index = 1; index < 5; index += 1) {
+			await vi.advanceTimersByTimeAsync(2000);
+			edit(`steady-${index}`);
+		}
+
+		assert.equal(sent(), settled, 'held at 8 s');
+		await vi.advanceTimersByTimeAsync(1900);
+		assert.equal(sent(), settled, 'held until 10 s');
+		await vi.advanceTimersByTimeAsync(200);
+		await letRoundFinish(settled + 1);
+		assert.equal(sent(), settled + 1, 'sent at 10 s');
+	} finally {
+		vi.useRealTimers();
+	}
 });

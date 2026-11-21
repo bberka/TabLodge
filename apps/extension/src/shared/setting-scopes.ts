@@ -118,7 +118,6 @@ export const LIBRARY_SETTINGS = {
 	keepLodgePinned: ['platform', TABS],
 	browserBookmarkAction: ['platform', "The browser's own bookmarks."],
 	browserBookmarkColumn: ['platform', "The browser's own bookmarks."],
-	copyFormat: ['platform', 'No longer shown; kept for older browsers.'],
 	dashboardBehavior: ['platform', TABS],
 	removeTrackingParameters: ['all', BOTH],
 	simplifyUrls: ['all', BOTH],

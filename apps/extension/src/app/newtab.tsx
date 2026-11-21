@@ -100,6 +100,7 @@ import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
 import {removedByEdit, shownTags} from '../shared/bookmark-tags';
 import {duplicatesNote, saveMessage} from '../shared/save-feedback';
+import {useNearViewport, VirtualRows} from './virtual-rows';
 import {SortMenu} from './sort-menu';
 import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
@@ -585,8 +586,12 @@ function NewTab() {
 		],
 	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
-	const quickActions = (settings.bookmarkQuickActions ?? ['open-new']).filter(
-		(action) => canOpenPrivateWindow || action !== 'open-private',
+	const quickActions = useMemo(
+		() =>
+			(settings.bookmarkQuickActions ?? ['open-new']).filter(
+				(action) => canOpenPrivateWindow || action !== 'open-private',
+			),
+		[settings.bookmarkQuickActions],
 	);
 	const autoOpenFinder =
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;
@@ -3142,6 +3147,7 @@ function NewTab() {
 					bookmarks={bookmarks}
 					columns={columns}
 					showStatus={showStatus}
+					simplifyUrls={settings.simplifyUrls !== false}
 					onOpenChange={setDuplicatesOpen}
 					onChanged={reload}
 				/>
@@ -3964,6 +3970,8 @@ const BookmarkColumn = memo(
 			: bookmarks.length > limit
 				? bookmarks.slice(0, limit)
 				: bookmarks;
+		const [bodyElement, setBodyElement] = useState<HTMLDivElement | null>(null);
+		const [sectionRef, nearViewport] = useNearViewport();
 		const lastSibling = siblings.at(-1)?.id;
 		const firstSibling = siblings[0]?.id;
 		const onDropOver = actions.dropOver;
@@ -4064,8 +4072,33 @@ const BookmarkColumn = memo(
 				/>
 			</header>
 		);
+		const renderCard = (bookmark: Bookmark) => {
+			const targeted = bookmarkDrop?.targetBookmarkId === bookmark.id;
+			return (
+				<BookmarkCard
+					key={bookmark.id}
+					bookmark={bookmark}
+					selected={selected.has(bookmark.id)}
+					selectionMode={selectionMode}
+					dropBefore={targeted && bookmarkDrop.position === 'before'}
+					dropAfter={targeted && bookmarkDrop.position === 'after'}
+					dropActive={targeted}
+					canMoveEarlier={manualOrder && bookmark.id !== firstSibling}
+					canMoveLater={manualOrder && bookmark.id !== lastSibling}
+					urlMode={urlMode}
+					clickOpensMenu={clickOpensMenu}
+					urlSettings={urlSettings}
+					quickActions={quickActions}
+					compact={compact}
+					sessions={actions}
+					onAction={actions.bookmark}
+				/>
+			);
+		};
+
 		const body = (
 			<div
+				ref={setBodyElement}
 				role={scrollBody ? 'region' : undefined}
 				// Focusable so keyboard users can scroll this region on its own.
 				// eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
@@ -4085,41 +4118,32 @@ const BookmarkColumn = memo(
 				)}
 			>
 				{shown.length > 0 ? (
-					<div className={compact ? undefined : 'space-y-1'}>
-						{shown.map((bookmark) => {
-							const targeted = bookmarkDrop?.targetBookmarkId === bookmark.id;
-							return (
-								<BookmarkCard
-									key={bookmark.id}
-									bookmark={bookmark}
-									selected={selected.has(bookmark.id)}
-									selectionMode={selectionMode}
-									dropBefore={targeted && bookmarkDrop.position === 'before'}
-									dropAfter={targeted && bookmarkDrop.position === 'after'}
-									dropActive={targeted}
-									canMoveEarlier={manualOrder && bookmark.id !== firstSibling}
-									canMoveLater={manualOrder && bookmark.id !== lastSibling}
-									urlMode={urlMode}
-									clickOpensMenu={clickOpensMenu}
-									urlSettings={urlSettings}
-									quickActions={quickActions}
-									compact={compact}
-									sessions={actions}
-									onAction={actions.bookmark}
+					renderAll ? (
+						<VirtualRows
+							count={shown.length}
+							scrollElement={bodyElement}
+							estimate={compact ? 44 : 64}
+							gap={compact ? 0 : 4}
+							active={nearViewport}
+							itemKey={(index) => shown[index].id}
+						>
+							{(index) => renderCard(shown[index])}
+						</VirtualRows>
+					) : (
+						<div className={compact ? undefined : 'space-y-1'}>
+							{shown.map((bookmark) => renderCard(bookmark))}
+							{bookmarks.length > shown.length && (
+								<LoadMore
+									compact
+									remaining={bookmarks.length - shown.length}
+									step={pageSize}
+									noun="bookmarks"
+									autoLoad={autoLoadMore}
+									onMore={loadMore}
 								/>
-							);
-						})}
-						{!renderAll && bookmarks.length > shown.length && (
-							<LoadMore
-								compact
-								remaining={bookmarks.length - shown.length}
-								step={pageSize}
-								noun="bookmarks"
-								autoLoad={autoLoadMore}
-								onMore={loadMore}
-							/>
-						)}
-					</div>
+							)}
+						</div>
+					)
 				) : (
 					<p className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-3 py-6 text-center text-xs leading-5 text-muted-foreground">
 						{emptyMessage && siblings.length === 0
@@ -4150,6 +4174,7 @@ const BookmarkColumn = memo(
 					/>
 				)}
 				<section
+					ref={sectionRef}
 					data-column-id={column.id}
 					// The color line is on the card itself, so it follows the rounded corners like a session card's.
 					style={colorVars}
