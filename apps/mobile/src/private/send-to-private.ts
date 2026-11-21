@@ -5,12 +5,13 @@ import {
 import type {Store} from '../../../extension/src/shared/types';
 import {removedBookmarks, restoreBookmarks} from '../library/board-edits';
 import {editRegular, getLibrary, newId} from '../library/library-store';
-import {removeSession, restoreSession} from '../library/session-edits';
+import {restoreSession} from '../library/session-edits';
 import {showSnack} from '../ui/snackbar';
 import {
 	canReceiveSent,
 	queueSentLinks,
 	releaseSent,
+	takeInSent,
 	withdrawSent,
 } from './private-library';
 
@@ -44,18 +45,35 @@ function putBack(
 			target.kind === 'tab' ? [target.sessionId] : [],
 		),
 	);
+	const tabIds = new Set(
+		targets.flatMap((target) => (target.kind === 'tab' ? [target.tabId] : [])),
+	);
 	for (const session of before.groups) {
 		if (!sessionIds.has(session.id)) {
 			continue;
 		}
 
-		next = restoreSession(
-			next.groups.some((group) => group.id === session.id)
-				? removeSession(next, session.id, now)
-				: next,
-			session,
-			now,
-		);
+		const live = next.groups.find((group) => group.id === session.id);
+		if (!live) {
+			next = restoreSession(next, session, now);
+			continue;
+		}
+
+		const present = new Set(live.tabs.map((tab) => tab.id));
+		const tabs = [...live.tabs];
+		for (const [index, tab] of session.tabs.entries()) {
+			if (tabIds.has(tab.id) && !present.has(tab.id)) {
+				tabs.splice(Math.min(index, tabs.length), 0, tab);
+			}
+		}
+
+		next = {
+			...next,
+			groups: next.groups.map((group) =>
+				group.id === session.id ? {...group, tabs, updatedAt: now} : group,
+			),
+			updatedAt: now,
+		};
 	}
 
 	return next;
@@ -100,9 +118,17 @@ export async function sendToPrivate(targets: SendTarget[]): Promise<boolean> {
 					return;
 				}
 
-				await editRegular((current) =>
-					putBack(current, before, targets, Date.now()),
-				);
+				try {
+					await editRegular((current) =>
+						putBack(current, before, targets, Date.now()),
+					);
+				} catch {
+					await queueSentLinks(taken.links, {held: false});
+					await takeInSent();
+					showSnack(
+						'Could not bring it back. It stays on its way to the private library',
+					);
+				}
 			},
 			closed() {
 				if (!undone) {

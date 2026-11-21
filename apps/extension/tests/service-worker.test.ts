@@ -15467,11 +15467,12 @@ test('an unlocked private library waits for the Undo toast before taking a sent 
 			[entry]: regular.extraStorage[entry],
 		},
 	});
-	await eventually(() =>
+	const wakes = () =>
 		live.alarmCalls.some((call) =>
 			call.startsWith('create:tablodge-send-to-private'),
-		),
-	);
+		);
+	await eventually(wakes);
+	assert.ok(wakes(), 'a held entry schedules a wake for when its hold ends');
 	assert.equal(
 		inboxEntries(live.extraStorage).length,
 		1,
@@ -15489,6 +15490,26 @@ test('an unlocked private library waits for the Undo toast before taking a sent 
 	assert.ok(library.bookmarks?.some((bookmark) => bookmark.url === SENT_URL));
 });
 
+test('the wake takes a held entry in once its hold has passed, without the toast closing', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	assert.equal((await sendSavedTab(regular)).ok, true);
+	const [entry] = inboxEntries(regular.extraStorage);
+	const expired = {
+		...(regular.extraStorage[entry] as Record<string, unknown>),
+		holdUntil: Date.now() - 1,
+	};
+	const live = restartPrivate({
+		...privateWorker,
+		extraStorage: {...privateWorker.extraStorage, [entry]: expired},
+	});
+	await live.fire('alarm', {name: 'tablodge-send-to-private'});
+	await eventually(() => inboxEntries(live.extraStorage).length === 0);
+	assert.equal(inboxEntries(live.extraStorage).length, 0);
+	const library = await live.sendMessage({type: 'GET_STATE'});
+	assert.ok(library.bookmarks?.some((bookmark) => bookmark.url === SENT_URL));
+});
+
 test('a sent link reaches the regular server only as a delete and the private server only sealed', async () => {
 	const server = syncServer();
 	const privateWorker = await lockedPrivateLibrary({
@@ -15501,16 +15522,33 @@ test('a sent link reaches the regular server only as a delete and the private se
 	});
 	assert.equal(privateOn.ok, true, privateOn.error);
 
+	let recording = false;
+	const uploads: string[] = [];
 	const regular = regularBeside(privateWorker, {
-		fetch: server.fetch,
+		async fetch(url, init) {
+			if (recording && init.method === 'POST') {
+				uploads.push(String(init.body));
+			}
+
+			return server.fetch(url, init);
+		},
 		storage: regularSync,
 	});
 	assert.equal((await regular.sendMessage({type: 'SYNC_NOW'})).ok, true);
 	const pushedBefore = server.log.cursor;
+	recording = true;
 	const sent = await sendSavedTab(regular);
 	assert.equal(sent.ok, true, sent.error);
 	await regular.sendMessage({type: 'DROP_UNDO', id: String(sent.undoId)});
 	assert.equal((await regular.sendMessage({type: 'SYNC_NOW'})).ok, true);
+	recording = false;
+	assert.ok(uploads.length > 0, 'the send went to the regular server');
+	assert.ok(uploads.some((body) => body.includes('"deleted":true')));
+	assert.equal(
+		uploads.some((body) => body.includes('saved.example')),
+		false,
+		'no upload after the send carries the link',
+	);
 	const page = server.log.pull(pushedBefore, 1000);
 	const after = page.resync ? [] : page.changes;
 	assert.ok(after.some((change) => change.deleted));
@@ -15884,4 +15922,19 @@ test('two edits in a row are undone newest first, and the older one is refused u
 		true,
 	);
 	assert.deepEqual(harness.state, original);
+});
+
+test('cleanup still runs when another action rewrote the Undo list before the alarm', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	assert.equal((await sendSavedTab(regular)).ok, true);
+	Reflect.deleteProperty(regular.extraStorage, 'tablodge.undo');
+	assert.ok(regular.extraStorage['tablodge.sendprivate.cleanup']);
+	await regular.fire('alarm', {name: 'tablodge-undo'});
+	await settle();
+	assert.equal(regular.extraStorage['tablodge.sendprivate.cleanup'], undefined);
+	assert.equal(
+		JSON.stringify(regular.extraStorage).includes('saved.example'),
+		false,
+	);
 });

@@ -186,3 +186,28 @@ test('the public key alone cannot open an entry', async () => {
 	const publicOnly = {...pair, privateKey: pair.publicKey};
 	assert.equal(await openInboxEntry(publicOnly, 'e1', entry), undefined);
 });
+
+test('a send of more than 500 links is refused before anything leaves the library', () => {
+	const result = takeOutForPrivate(
+		regular(),
+		Array.from({length: 501}, () => ({
+			kind: 'bookmark' as const,
+			bookmarkId: 'b1',
+		})),
+	);
+	assert.equal(result.ok, false);
+});
+
+test('the same address with a different note is still added; an identical replay is not', () => {
+	const first = addSentLinks(normalizeStore(null), [
+		{title: 'Secret', url: 'https://secret.example/', notes: 'A', createdAt: 1},
+	]);
+	const replay = addSentLinks(first.store, [
+		{title: 'Secret', url: 'https://secret.example/', notes: 'A', createdAt: 1},
+	]);
+	assert.equal(replay.added, 0);
+	const other = addSentLinks(first.store, [
+		{title: 'Secret', url: 'https://secret.example/', notes: 'B', createdAt: 2},
+	]);
+	assert.equal(other.added, 1);
+});

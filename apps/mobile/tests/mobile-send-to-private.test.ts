@@ -3,7 +3,7 @@ import {afterEach, beforeEach, describe, test, vi} from 'vite-plus/test';
 import {SENT_COLUMN_ID} from '../../extension/src/shared/send-to-private';
 import {SYNC_CONFIG_KEY} from '../../extension/src/shared/sync/client';
 import {addBookmark, deleteColumn} from '../src/library/board-edits';
-import {addSession} from '../src/library/session-edits';
+import {addSession, renameSession} from '../src/library/session-edits';
 import type * as RegularModule from '../src/library/library-store';
 import type * as PrivateModule from '../src/private/private-library';
 import type * as SendModule from '../src/private/send-to-private';
@@ -59,7 +59,7 @@ vi.mock(
 	async () => import('./support/fake-preferences'),
 );
 
-const {memory} = await import('./support/memory-storage');
+const {memory, holds} = await import('./support/memory-storage');
 const {prefs} = await import('./support/fake-preferences');
 
 const PASSWORD = {value: 'correct horse battery'};
@@ -277,6 +277,63 @@ describe('Send to private storage on the phone', () => {
 				?.tabs.some((tab) => tab.url === 'https://tab-one.example/'),
 			false,
 			'no copy comes back once the private library has it',
+		);
+	});
+
+	test('Undo puts the sent link back into a session renamed meanwhile, and keeps the name', async () => {
+		const app = await startApp();
+		await app.privateLibrary.setupPrivate(PASSWORD);
+		const regular = await withRegularLinks(app);
+		const session = regular.groups[0];
+		assert.equal(
+			await app.send.sendToPrivate([
+				{kind: 'tab', sessionId: session.id, tabId: session.tabs[0].id},
+			]),
+			true,
+		);
+		await app.regular.editRegular((store) =>
+			renameSession(store, session.id, 'Renamed', Date.now()),
+		);
+		await lastSnack()?.action?.run();
+		const back = app.regular
+			.getLibrary()
+			.groups.find((entry) => entry.id === session.id);
+		assert.equal(back?.name, 'Renamed');
+		assert.deepEqual(
+			back?.tabs.map((tab) => tab.url),
+			['https://tab-one.example/', 'https://tab-two.example/'],
+		);
+	});
+
+	test('a link released while another is being taken in is not dropped', async () => {
+		const app = await startApp();
+		await app.privateLibrary.setupPrivate(PASSWORD);
+		const first = await app.privateLibrary.queueSentLinks([
+			{title: 'First', url: 'https://first.example/', createdAt: 1},
+		]);
+		const second = await app.privateLibrary.queueSentLinks([
+			{title: 'Second', url: 'https://second.example/', createdAt: 2},
+		]);
+		const paused = Promise.withResolvers<void>();
+		holds.write.set(PRIVATE_LIBRARY_KEY, paused.promise);
+		const intake = app.privateLibrary.releaseSent(first);
+		while (holds.write.has(PRIVATE_LIBRARY_KEY)) {
+			await new Promise((resolve) => {
+				setImmediate(resolve);
+			});
+		}
+
+		const late = app.privateLibrary.releaseSent(second);
+		paused.resolve();
+		await intake;
+		await late;
+		assert.equal(pending(), undefined);
+		assert.deepEqual(
+			app.privateLibrary
+				.getPrivateStore()
+				.bookmarks.map((entry) => entry.url)
+				.toSorted(),
+			['https://first.example/', 'https://second.example/'],
 		);
 	});
 

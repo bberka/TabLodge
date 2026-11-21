@@ -8979,6 +8979,8 @@ async function withUndo<K extends TabLodgeMessageType>(
 }
 
 const ALARM_SEND_TO_PRIVATE = 'tablodge-send-to-private';
+const SEND_CLEANUP_KEY = 'tablodge.sendprivate.cleanup';
+const SEND_HOLD_MS = UNDO_WINDOW_MS + 60_000;
 const SEND_NEEDS_PRIVATE_WINDOW =
 	'Open a private window and unlock it once, then send links to it from here.';
 
@@ -9017,29 +9019,57 @@ async function sendToPrivate(
 		};
 	}
 
-	const publicKey = await inboxPublicKey();
-	if (!publicKey) {
-		return {ok: false, error: SEND_NEEDS_PRIVATE_WINDOW};
-	}
-
 	const id = makeId();
 	const key = inboxEntryKey(id);
 	return mutate(() =>
 		withUndo('Send to private storage', [STORAGE_KEY, key], async () => {
-			const store = await getStore();
-			const taken = takeOutForPrivate(store, targets);
+			const publicKey = await inboxPublicKey();
+			if (!publicKey) {
+				return {ok: false, error: SEND_NEEDS_PRIVATE_WINDOW};
+			}
+
+			const taken = takeOutForPrivate(await getStore(), targets);
 			if (!taken.ok) {
 				return taken;
 			}
 
 			const entry = await sealForInbox(publicKey, id, taken.links);
 			await library.set({
-				[key]: {...entry, holdUntil: Date.now() + UNDO_WINDOW_MS},
+				[key]: {...entry, holdUntil: Date.now() + SEND_HOLD_MS},
 			});
-			await writeStore(taken.store);
+			if ((await inboxPublicKey()) !== publicKey) {
+				await library.remove([key]);
+				return {
+					ok: false,
+					error: 'The private library changed meanwhile. Nothing was sent.',
+				};
+			}
+
+			try {
+				await writeStore(taken.store);
+			} catch (error) {
+				await library.remove([key]).catch(() => undefined);
+				throw error;
+			}
+
+			await library.set({[SEND_CLEANUP_KEY]: true});
 			return {ok: true, count: taken.links.length};
 		}),
 	);
+}
+
+async function finishSendCleanup(records: UndoRecord[]): Promise<void> {
+	const sendLive = records.some((record) =>
+		record.keys.some((key) => isInboxEntryKey(key)),
+	);
+	if (sendLive || !(await readKey(SEND_CLEANUP_KEY))) {
+		return;
+	}
+
+	await mutate(async () => {
+		await libraryState.dropGarbage();
+		await library.remove([SEND_CLEANUP_KEY]);
+	});
 }
 
 async function dropUndo(id: string): Promise<ActionResult<'DROP_UNDO'>> {
@@ -9062,7 +9092,6 @@ async function dropUndo(id: string): Promise<ActionResult<'DROP_UNDO'>> {
 	});
 	if (released.length > 0) {
 		await mutate(async () => {
-			await libraryState.dropGarbage();
 			const stored = await library.get<Raw>(released);
 			const unheld = Object.fromEntries(
 				Object.entries(stored).flatMap(([key, value]) =>
@@ -9071,6 +9100,7 @@ async function dropUndo(id: string): Promise<ActionResult<'DROP_UNDO'>> {
 			);
 			await library.set(unheld);
 		});
+		await finishSendCleanup(await undoMutate(async () => readUndo()));
 	}
 
 	return {ok: true};
@@ -9104,6 +9134,14 @@ async function receiveSentLinks(): Promise<void> {
 		return;
 	}
 
+	try {
+		await takeInSentLinks();
+	} catch {
+		await chrome.alarms?.create?.(ALARM_SEND_TO_PRIVATE, {delayInMinutes: 1});
+	}
+}
+
+async function takeInSentLinks(): Promise<void> {
 	await mutate(async () => {
 		const gate = await lockGate();
 		if (!gate?.key || gate.state !== 'encrypted') {
@@ -9165,29 +9203,19 @@ function mutateWithUndo<K extends UndoableEdit>(
 }
 
 async function purgeUndo(): Promise<void> {
-	const sendExpired = await undoMutate(async () => {
-		const records = await readUndo();
+	const records = await undoMutate(async () => {
+		const live = await readUndo();
 		const stored = await readKey<Raw>(UNDO_KEY);
 		if (
-			!stored ||
-			(Array.isArray(stored.records) &&
-				stored.records.length === records.length)
+			stored &&
+			(!Array.isArray(stored.records) || stored.records.length !== live.length)
 		) {
-			return false;
+			await writeUndo(live);
 		}
 
-		await writeUndo(records);
-		const kept = new Set(records.map((record) => record.id));
-		return (Array.isArray(stored.records) ? stored.records : []).some(
-			(record) =>
-				isUndoRecord(record) &&
-				!kept.has(record.id) &&
-				record.keys.some((key) => isInboxEntryKey(key)),
-		);
+		return live;
 	});
-	if (sendExpired) {
-		await mutate(async () => libraryState.dropGarbage());
-	}
+	await finishSendCleanup(records);
 }
 
 function undoAction(id: string): Promise<ActionResult<'UNDO'>> {

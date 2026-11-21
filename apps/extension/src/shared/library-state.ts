@@ -869,8 +869,10 @@ export function createLibraryState(
 			return;
 		}
 
-		const {garbage} = parseIndex(current);
-		if (garbage.length === 0) {
+		const index = parseIndex(current);
+		const referenced = new Set(referencedKeys(index));
+		const garbage = index.garbage.filter((key) => !referenced.has(key));
+		if (index.garbage.length === 0) {
 			return;
 		}
 

@@ -1069,10 +1069,16 @@ const writePending = async (pending: PendingSend[]) =>
 
 export const canReceiveSent = (): boolean => exists && lock !== undefined;
 
-export async function queueSentLinks(links: SentLink[]): Promise<string> {
+export async function queueSentLinks(
+	links: SentLink[],
+	{held = true}: {held?: boolean} = {},
+): Promise<string> {
 	return serialSend(async () => {
 		const id = randomUUID();
-		heldSends.add(id);
+		if (held) {
+			heldSends.add(id);
+		}
+
 		await writePending([...(await readPending()), {id, links}]);
 		return id;
 	});
@@ -1115,7 +1121,8 @@ export async function takeInSent(): Promise<void> {
 					ready.flatMap((entry) => entry.links),
 				).store,
 		);
-		await writePending(pending.filter((entry) => heldSends.has(entry.id)));
+		const imported = new Set(ready.map((entry) => entry.id));
+		await writePending(pending.filter((entry) => !imported.has(entry.id)));
 	});
 }
 

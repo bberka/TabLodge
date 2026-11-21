@@ -70,6 +70,13 @@ export function takeOutForPrivate(
 	store: Store,
 	targets: SendTarget[],
 ): {ok: true; store: Store; links: SentLink[]} | {ok: false; error: string} {
+	if (targets.length > MAX_SENT_LINKS) {
+		return {
+			ok: false,
+			error: `Send at most ${MAX_SENT_LINKS} links at a time.`,
+		};
+	}
+
 	const bookmarks = new Map(store.bookmarks.map((entry) => [entry.id, entry]));
 	const links: SentLink[] = [];
 	const bookmarkIds = new Set<string>();
@@ -160,6 +167,14 @@ const sentColumn = (now: number): BookmarkColumn => ({
 	isDefault: false,
 });
 
+const sameLinkKey = (link: Omit<SentLink, 'createdAt'>) =>
+	JSON.stringify([
+		normalizeUrl(link.url) ?? link.url,
+		link.title,
+		link.notes ?? '',
+		link.tags ?? [],
+	]);
+
 export function addSentLinks(
 	store: Store,
 	links: SentLink[],
@@ -169,11 +184,11 @@ export function addSentLinks(
 	const seen = new Set(
 		store.bookmarks
 			.filter((bookmark) => bookmark.columnId === SENT_COLUMN_ID)
-			.map((bookmark) => normalizeUrl(bookmark.url) ?? bookmark.url),
+			.map((bookmark) => sameLinkKey(bookmark)),
 	);
 	const added: Bookmark[] = [];
 	for (const link of links) {
-		const key = normalizeUrl(link.url) ?? link.url;
+		const key = sameLinkKey(link);
 		if (seen.has(key)) {
 			continue;
 		}
