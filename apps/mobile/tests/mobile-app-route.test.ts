@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {parseColumnRoute, parseTileRoute} from '../src/platform/app-route';
+import {
+	parseColumnRoute,
+	parseImportRoute,
+	parseTileRoute,
+} from '../src/platform/app-route';
 
 describe('Quick Settings tile addresses', () => {
 	test('reads the two tiles', () => {
@@ -60,5 +64,36 @@ describe('the Bookmarks widget header address', () => {
 	test('is not taken for a tile address, and a tile address is not taken for it', () => {
 		assert.equal(parseTileRoute('tablodge://column/reading'), undefined);
 		assert.equal(parseColumnRoute('tablodge://search'), undefined);
+	});
+});
+
+describe('the shared page import link', () => {
+	const page = 'https://sync.example.test/p/AAAAAAAAAAAAAAAAAAAAAA';
+
+	test("gives the page a shared page's Open in the TabLodge app button names", () => {
+		assert.equal(
+			parseImportRoute(`tablodge://import?url=${encodeURIComponent(page)}`),
+			page,
+		);
+		assert.equal(
+			parseImportRoute(
+				`tablodge://import/?x=1&url=${encodeURIComponent(page)}#Intent`,
+			),
+			page,
+		);
+	});
+
+	test('ignores other addresses and pages that are not web addresses', () => {
+		for (const url of [
+			undefined,
+			'tablodge://import',
+			'tablodge://import?url=',
+			`tablodge://import?url=${encodeURIComponent('javascript:alert(1)')}`,
+			'tablodge://import?url=%E0%A4%A',
+			`tablodge://save?url=${encodeURIComponent(page)}`,
+			`https://import?url=${encodeURIComponent(page)}`,
+		]) {
+			assert.equal(parseImportRoute(url), undefined, String(url));
+		}
 	});
 });

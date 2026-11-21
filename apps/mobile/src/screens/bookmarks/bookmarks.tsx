@@ -68,6 +68,8 @@ import {openShare} from '../transfer/transfer-sheets';
 import {copyActions} from '../copy/copy-actions';
 import {linkOpenActions, openIn} from '../open-in';
 import {useCopyUrls} from '../../library/page-copies';
+import {sharedPageSource} from '../../../../extension/src/shared/sync/shared-pages-client';
+import {useSharedPagesAction} from '../settings/shared-pages-settings';
 import {TagFilterSheet} from './tags';
 import {useDragSelect} from './use-drag-select';
 import {confirmDeleteColumn, ColumnSheet} from './column-sheet';
@@ -221,6 +223,7 @@ export function BookmarksScreen({
 		[store, query, columnId, isSearching, atList],
 	);
 	const searchCount = useSettledText(isSearching, resultCount(shown.length));
+	const sharedPagesAction = useSharedPagesAction();
 	const columnName =
 		columnId === ALL_BOOKMARKS_ID
 			? 'All'
@@ -408,6 +411,9 @@ export function BookmarksScreen({
 						onPress() {
 							openShare({
 								title: columnName ?? 'column',
+								...(store.bookmarkColumns.some(
+									(column) => column.id === columnId,
+								) && {source: sharedPageSource('column', columnId)}),
 								data: {
 									kind: 'bookmarks',
 									columns: store.bookmarkColumns.filter(
@@ -531,6 +537,7 @@ export function BookmarksScreen({
 					},
 				]
 			: []),
+		...sharedPagesAction,
 	];
 
 	const reorder = (id: string, move: BookmarkMove) => {

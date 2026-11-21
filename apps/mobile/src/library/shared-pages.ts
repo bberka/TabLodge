@@ -1,3 +1,4 @@
+import {getRandomBytes} from 'expo-crypto';
 import {
 	parseConfig,
 	SYNC_CONFIG_KEY,
@@ -7,11 +8,16 @@ import {
 	deleteSharedPage,
 	listSharedPages,
 	type SharedPage,
+	sharedPageUrl,
 	uploadSharedPage,
 } from '../../../extension/src/shared/sync/shared-pages-client';
-import {SHARED_PAGES_FEATURE} from '../../../extension/src/shared/sync/shared-pages';
+import {
+	newSharedPageId,
+	SHARED_PAGE_IMPORT_FEATURE,
+	SHARED_PAGES_FEATURE,
+} from '../../../extension/src/shared/sync/shared-pages';
 import {readJson} from '../platform/storage';
-import {useServerFeatures} from './server-features';
+import {serverFeatures, useServerFeatures} from './server-features';
 import {useSyncStatus} from './library-store';
 
 async function target(): Promise<SyncConfig> {
@@ -41,11 +47,27 @@ export function useSharedPagesServer(): 'none' | 'unknown' | 'old' | 'ready' {
 	return features.includes(SHARED_PAGES_FEATURE) ? 'ready' : 'old';
 }
 
+/**
+Uploads the page `build` makes. On a server that keeps the id a device picks, the page gets its own link (`url`)
+and `source`, the column or session it came from (`sharedPageSource`).
+*/
 export async function uploadPage(
 	title: string,
-	html: string,
+	build: (url?: string) => string,
+	source?: string,
 ): Promise<SharedPage> {
-	return uploadSharedPage(fetch, await target(), title, html);
+	const config = await target();
+	const keepsIds = (await serverFeatures(config.url))?.includes(
+		SHARED_PAGE_IMPORT_FEATURE,
+	);
+	const id = keepsIds ? newSharedPageId(getRandomBytes) : undefined;
+	return uploadSharedPage(
+		fetch,
+		config,
+		title,
+		build(id && sharedPageUrl(config.url, id)),
+		{id, source: id && source},
+	);
 }
 
 export async function sharedPages(): Promise<SharedPage[]> {

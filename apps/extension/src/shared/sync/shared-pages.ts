@@ -25,13 +25,13 @@ const ID_ALPHABET =
 	'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 /**
-A new page id: 22 characters with 6 random bits each.
+A new page id: 22 characters with 6 random bits each. The Android app passes its own `randomBytes`, because Hermes
+has no global `crypto`.
 */
-export const newSharedPageId = () =>
-	Array.from(
-		crypto.getRandomValues(new Uint8Array(22)),
-		(byte) => ID_ALPHABET[byte % 64],
-	).join('');
+export const newSharedPageId = (
+	randomBytes: (count: number) => Uint8Array = (count) =>
+		crypto.getRandomValues(new Uint8Array(count)),
+) => Array.from(randomBytes(22), (byte) => ID_ALPHABET[byte % 64]).join('');
 
 /**
 Whether an address looks like a shared page's link, `<server>/p/<id>`. Any server can serve one, so only the path

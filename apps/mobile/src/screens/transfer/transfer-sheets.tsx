@@ -1,4 +1,4 @@
-import {useMemo, useState, useSyncExternalStore} from 'react';
+import {useEffect, useMemo, useState, useSyncExternalStore} from 'react';
 import {Share, StyleSheet, Text, View} from 'react-native';
 import {
 	ImportFormatError,
@@ -6,6 +6,7 @@ import {
 	parseImportFile,
 	type ParsedImport,
 } from '../../../../extension/src/shared/import-formats';
+import {importFromLink} from '../../../../extension/src/shared/import-link';
 import {
 	buildExport,
 	type ExportData,
@@ -40,6 +41,10 @@ import {
 } from '../../transfer/transfer';
 import {Button, Chips, Field, Switch} from '../../ui/widgets';
 import {allCopies} from '../../library/page-copies';
+import {
+	SharedPageRows,
+	useSharedPageList,
+} from '../settings/shared-pages-settings';
 
 const APP_NAME = 'TabLodge';
 
@@ -56,7 +61,12 @@ function Title({children}: {children: string}) {
 }
 
 export type ImportSource =
-	{mode: 'file'; name: string; text: string} | {mode: 'paste'};
+	| {mode: 'file'; name: string; text: string}
+	| {mode: 'paste'}
+	/**
+	A shared page's address, typed in or handed over by the `tablodge://import?url=` link, read as soon as it is given.
+	*/
+	| {mode: 'link'; url?: string};
 
 type Reading =
 	{ok: true; parsed: ParsedImport} | {ok: false; message: string} | undefined;
@@ -100,13 +110,45 @@ export function ImportSheet({
 	const [skip, setSkip] = useState(true);
 	const [picked, setPicked] = useState<ImportKind>();
 	const [busy, setBusy] = useState(false);
+	const [link, setLink] = useState('');
+	const [linked, setLinked] = useState<Reading>();
+	const [fetching, setFetching] = useState(false);
 	const text = source?.mode === 'file' ? source.text : pasted;
 	const name = source?.mode === 'file' ? source.name : '';
-	const reading = useMemo(() => read(text, name), [text, name]);
+	const typed = useMemo(() => read(text, name), [text, name]);
+	const reading = source?.mode === 'link' ? linked : typed;
 	const parsed = reading?.ok ? reading.parsed : undefined;
 	const sessions = parsed ? hasLinks(parsed.sessions) : false;
 	const bookmarks = parsed ? hasLinks(parsed.bookmarks) : false;
-	const kind: ImportKind = picked ?? (sessions ? 'sessions' : 'bookmarks');
+	const kind: ImportKind =
+		picked ?? parsed?.kind ?? (sessions ? 'sessions' : 'bookmarks');
+	const readLink = async (address: string) => {
+		setFetching(true);
+		setLinked(undefined);
+		try {
+			setLinked({ok: true, parsed: await importFromLink(fetch, address)});
+		} catch (error) {
+			setLinked({
+				ok: false,
+				message:
+					error instanceof ImportFormatError
+						? error.message
+						: 'Could not read that link.',
+			});
+		} finally {
+			setFetching(false);
+		}
+	};
+
+	const linkUrl = source?.mode === 'link' ? source.url : undefined;
+	useEffect(() => {
+		setLink(linkUrl ?? '');
+		setLinked(undefined);
+		setPicked(undefined);
+		if (linkUrl) {
+			void readLink(linkUrl);
+		}
+	}, [source, linkUrl]);
 	const preview = parsed ? previewFor(store, parsed, kind, trash) : undefined;
 	const addable = preview ? preview.links - (skip ? preview.duplicates : 0) : 0;
 	const run = async () => {
@@ -149,8 +191,37 @@ export function ImportSheet({
 		>
 			<View style={styles.body}>
 				<Title>
-					{source?.mode === 'file' ? 'Import a file' : 'Import links'}
+					{source?.mode === 'file'
+						? 'Import a file'
+						: source?.mode === 'link'
+							? 'Import from a link'
+							: 'Import links'}
 				</Title>
+				{source?.mode === 'link' && (
+					<>
+						<Field
+							autoFocus={!linkUrl}
+							label="Shared page link"
+							value={link}
+							placeholder="https://your-server/p/…"
+							keyboardType="url"
+							autoCapitalize="none"
+							autoCorrect={false}
+							onChangeText={setLink}
+							onSubmitEditing={() => void readLink(link)}
+						/>
+						{!parsed && (
+							<Button
+								label="Read link"
+								icon="link-outline"
+								kind="plain"
+								disabled={link.trim() === ''}
+								loading={fetching}
+								onPress={() => void readLink(link)}
+							/>
+						)}
+					</>
+				)}
 				{source?.mode === 'paste' && (
 					<Field
 						multiline
@@ -205,13 +276,13 @@ export function ImportSheet({
 								{warning}
 							</Text>
 						))}
-						{preview.sample.slice(0, 4).map((link) => (
+						{preview.sample.slice(0, 4).map((sample) => (
 							<Text
-								key={`${link.group}-${link.url}`}
+								key={`${sample.group}-${sample.url}`}
 								numberOfLines={1}
 								style={{color: colors.muted}}
 							>
-								{link.title}
+								{sample.title}
 							</Text>
 						))}
 					</View>
@@ -239,6 +310,40 @@ export function ImportSheet({
 	);
 }
 
+let openSource: ImportSource | undefined;
+const importListeners = new Set<() => void>();
+
+/**
+Opens the import sheet from anywhere, as the `tablodge://import?url=` link does. `ImportHost`, mounted once near the
+root, draws it.
+*/
+export function openImport(source: ImportSource | undefined): void {
+	openSource = source;
+	for (const listener of importListeners) {
+		listener();
+	}
+}
+
+export function ImportHost() {
+	const source = useSyncExternalStore(
+		(listener) => {
+			importListeners.add(listener);
+			return () => {
+				importListeners.delete(listener);
+			};
+		},
+		() => openSource,
+	);
+	return (
+		<ImportSheet
+			source={source}
+			onClose={() => {
+				openImport(undefined);
+			}}
+		/>
+	);
+}
+
 function exportData(store: Store, kind: ExportKind): ExportData {
 	return kind === 'sessions'
 		? {kind, groups: store.groups, folders: store.folders}
@@ -248,7 +353,14 @@ function exportData(store: Store, kind: ExportKind): ExportData {
 /**
 One thing to share instead of the whole library: a session, a folder, a column, or some bookmarks.
 */
-export type ShareScope = {title: string; data: ExportData};
+export type ShareScope = {
+	title: string;
+	data: ExportData;
+	/**
+	The one column or session shared (`sharedPageSource`), so the sheet lists the links made from it.
+	*/
+	source?: string;
+};
 
 let openScope: ShareScope | undefined;
 const scopeListeners = new Set<() => void>();
@@ -355,6 +467,15 @@ export function ShareSheet({
 	const {links} = shareCounts(groups);
 	const title =
 		scope?.title ?? (what === 'bookmarks' ? 'Bookmarks' : 'Sessions');
+	const kind = data.kind === 'bookmarks' ? 'bookmarks' : 'sessions';
+	const pageHtml = (url?: string) =>
+		shareHtmlPage(title, groups, APP_NAME, {kind, sharedAt: Date.now(), url});
+	const listed = useSharedPageList(
+		visible && canUpload && scope?.source !== undefined,
+	);
+	const sourcePages = scope?.source
+		? (listed.pages ?? []).filter((page) => page.source === scope.source)
+		: [];
 	const {problem, hint: weak} = backupPasswordNote(isBackup, password);
 	const run = async () => {
 		setBusy(true);
@@ -390,7 +511,7 @@ export function ShareSheet({
 						await shareTextFile(
 							`${title.replaceAll(/[^\w-]+/g, '-').slice(0, 40) || 'links'}.html`,
 							'text/html',
-							shareHtmlPage(title, groups, APP_NAME),
+							pageHtml(),
 						);
 
 						break;
@@ -415,15 +536,12 @@ export function ShareSheet({
 	const upload = async () => {
 		setUploading(true);
 		try {
-			const page = await uploadPage(
-				title,
-				shareHtmlPage(title, groups, APP_NAME),
-			);
+			const page = await uploadPage(title, pageHtml, scope?.source);
 			onClose();
 			await copyLink(page.url);
 			showDialog(
-				'Page uploaded',
-				`${page.url}\n\nThe link is copied. Anyone with it can open the page. To update it, share again. Delete it in Settings › Sync › Shared pages.`,
+				'Link ready',
+				`${page.url}\n\nThe link is copied. Anyone with it can open the page. Sharing again makes a new link. Delete old ones from Share or Shared pages.`,
 				[
 					{
 						label: 'Open',
@@ -515,13 +633,24 @@ export function ShareSheet({
 				/>
 				{!isBackup && way === 'page' && links > 0 && canUpload && (
 					<Button
-						label="Upload to my server"
+						label="Get a link"
 						icon="cloud-upload-outline"
 						kind="plain"
 						disabled={busy}
 						loading={uploading}
 						onPress={() => void upload()}
 					/>
+				)}
+				{sourcePages.length > 0 && (
+					<>
+						<Text
+							accessibilityRole="header"
+							style={[styles.subtitle, {color: colors.text}]}
+						>
+							Links to this {kind === 'bookmarks' ? 'column' : 'session'}
+						</Text>
+						<SharedPageRows pages={sourcePages} onDelete={listed.remove} />
+					</>
 				)}
 			</View>
 		</BottomSheet>
@@ -531,5 +660,6 @@ export function ShareSheet({
 const styles = StyleSheet.create({
 	body: {paddingHorizontal: 20, paddingBottom: 8, gap: 14},
 	title: {fontSize: 20, fontWeight: '700'},
+	subtitle: {fontSize: 16, fontWeight: '600'},
 	summary: {gap: 4},
 });

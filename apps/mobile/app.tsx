@@ -45,9 +45,12 @@ import {markActive, startPrivateAutoLock} from './src/private/private-autolock';
 import {
 	ImportSheet,
 	type ImportSource,
+	ImportHost,
+	openImport,
 	ShareHost,
 } from './src/screens/transfer/transfer-sheets';
 import {OpenInHost} from './src/screens/open-in';
+import {SharedPagesHost} from './src/screens/settings/shared-pages-settings';
 import {
 	pausePrivate,
 	startPrivate,
@@ -70,6 +73,7 @@ import {setView} from './src/library/view';
 import {requestSearch} from './src/ui/search-action';
 import {
 	parseColumnRoute,
+	parseImportRoute,
 	parseTileRoute,
 	type TileRoute,
 } from './src/platform/app-route';
@@ -347,6 +351,14 @@ function Main() {
 				return;
 			}
 
+			// A shared page's Open in the TabLodge app button.
+			const page = parseImportRoute(url);
+			if (page) {
+				setOpen(false);
+				openImport({mode: 'link', url: page});
+				return;
+			}
+
 			// The Bookmarks widget's header opens its column, which the widget only ever takes from the regular library.
 			const columnId = parseColumnRoute(url);
 			if (columnId === undefined) {
@@ -464,6 +476,8 @@ function Main() {
 			<DialogHost />
 			<PrivateSheetHost />
 			<ShareHost />
+			<ImportHost />
+			<SharedPagesHost />
 			<OpenInHost />
 			<ReaderHost />
 			<ImportSheet

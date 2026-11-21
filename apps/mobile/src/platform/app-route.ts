@@ -37,3 +37,25 @@ export function parseColumnRoute(
 		return undefined;
 	}
 }
+
+/**
+Reads the address a shared page's Open in the TabLodge app button opens, `tablodge://import?url=<page>`, and gives
+the page's web address. Any other address, or one without a web `url`, gives undefined.
+*/
+export function parseImportRoute(
+	url: string | null | undefined,
+): string | undefined {
+	const match = /^tablodge:\/\/import\/?\?(?:[^#]*&)?url=([^#&]*)/i.exec(
+		url?.trim() ?? '',
+	);
+	if (!match) {
+		return undefined;
+	}
+
+	try {
+		const page = decodeURIComponent(match[1].replaceAll('+', ' '));
+		return /^https?:\/\/\S+$/i.test(page) ? page : undefined;
+	} catch {
+		return undefined;
+	}
+}

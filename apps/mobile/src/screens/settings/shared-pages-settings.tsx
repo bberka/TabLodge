@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useState, useSyncExternalStore} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import type {SharedPage} from '../../../../extension/src/shared/sync/shared-pages-client';
 import {
@@ -8,6 +8,7 @@ import {
 } from '../../library/shared-pages';
 import {copyLink} from '../../platform/copy-link';
 import {openLink} from '../../platform/open-links';
+import type {SheetAction} from '../../ui/action-sheet';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {confirm} from '../../ui/dialog';
 import {showSnack} from '../../ui/snackbar';
@@ -62,17 +63,10 @@ function PageRow({page, onDelete}: {page: SharedPage; onDelete: () => void}) {
 }
 
 /**
-Every page uploaded from Share › HTML page, read from the server each time the sheet opens. Delete takes the page off
-the server, so its link stops working.
+The pages on the server, read when `visible` turns true, with Delete, which asks first because the server cannot
+bring a page back.
 */
-function SharedPagesSheet({
-	visible,
-	onClose,
-}: {
-	visible: boolean;
-	onClose: () => void;
-}) {
-	const colors = useColors();
+export function useSharedPageList(visible: boolean) {
 	const server = useSharedPagesServer();
 	const [pages, setPages] = useState<SharedPage[]>();
 	const [failed, setFailed] = useState(false);
@@ -86,7 +80,7 @@ function SharedPagesSheet({
 	}, []);
 	useEffect(() => {
 		// Asked also while the server's features are unknown, so an unreachable server ends in an error, not a wait.
-		if (visible && server !== 'old') {
+		if (visible && server !== 'old' && server !== 'none') {
 			void load();
 		}
 	}, [visible, server, load]);
@@ -109,6 +103,44 @@ function SharedPagesSheet({
 		);
 	};
 
+	return {server, pages, failed, load, remove};
+}
+
+/**
+Rows for `pages`, each with Copy link, Open, and Delete.
+*/
+export function SharedPageRows({
+	pages,
+	onDelete,
+}: {
+	pages: readonly SharedPage[];
+	onDelete: (page: SharedPage) => void;
+}) {
+	return pages.map((page) => (
+		<PageRow
+			key={page.id}
+			page={page}
+			onDelete={() => {
+				onDelete(page);
+			}}
+		/>
+	));
+}
+
+/**
+Every page uploaded with Share › Get a link, read from the server each time the sheet opens. Delete takes the page
+off the server, so its link stops working.
+*/
+function SharedPagesSheet({
+	visible,
+	onClose,
+}: {
+	visible: boolean;
+	onClose: () => void;
+}) {
+	const colors = useColors();
+	const {server, pages, failed, remove} = useSharedPageList(visible);
+
 	return (
 		<BottomSheet
 			scroll={false}
@@ -127,7 +159,11 @@ function SharedPagesSheet({
 				>
 					Shared pages
 				</Text>
-				{server === 'old' ? (
+				{server === 'none' ? (
+					<Empty icon="cloud-offline-outline" title="No server connected">
+						Connect your sync server in Settings › Sync to share pages by link.
+					</Empty>
+				) : server === 'old' ? (
 					<Empty icon="cloud-offline-outline" title="Update your server">
 						This sync server is too old to keep shared pages.
 					</Empty>
@@ -139,47 +175,80 @@ function SharedPagesSheet({
 					<Text style={{color: colors.muted}}>Checking the server…</Text>
 				) : pages.length === 0 ? (
 					<Empty icon="globe-outline" title="No pages shared yet">
-						Share a column or session as a web page and choose Upload to my
-						server.
+						Share a column or session as an HTML page and choose Get a link.
 					</Empty>
 				) : (
-					pages.map((page) => (
-						<PageRow
-							key={page.id}
-							page={page}
-							onDelete={() => {
-								remove(page);
-							}}
-						/>
-					))
+					<SharedPageRows pages={pages} onDelete={remove} />
 				)}
 			</ScrollView>
 		</BottomSheet>
 	);
 }
 
+let sheetOpen = false;
+const sheetListeners = new Set<() => void>();
+
+/**
+Opens the Shared pages sheet from anywhere. `SharedPagesHost`, mounted once near the root, draws it.
+*/
+export function openSharedPages(open = true): void {
+	sheetOpen = open;
+	for (const listener of sheetListeners) {
+		listener();
+	}
+}
+
+export function SharedPagesHost() {
+	const visible = useSyncExternalStore(
+		(listener) => {
+			sheetListeners.add(listener);
+			return () => {
+				sheetListeners.delete(listener);
+			};
+		},
+		() => sheetOpen,
+	);
+	return (
+		<SharedPagesSheet
+			visible={visible}
+			onClose={() => {
+				openSharedPages(false);
+			}}
+		/>
+	);
+}
+
+/**
+The Shared pages row for the Bookmarks and Sessions menus, there while a server is connected.
+*/
+export function useSharedPagesAction(): SheetAction[] {
+	return useSharedPagesServer() === 'none'
+		? []
+		: [
+				{
+					icon: 'globe-outline',
+					label: 'Shared pages',
+					hint: 'Links to pages you shared, to copy, open, or delete',
+					onPress() {
+						openSharedPages();
+					},
+				},
+			];
+}
+
 /**
 The way into Shared pages, in Settings › Sync while a server is connected.
 */
 export function SharedPagesButton() {
-	const [open, setOpen] = useState(false);
 	return (
-		<>
-			<Button
-				label="Shared pages"
-				icon="globe-outline"
-				kind="plain"
-				onPress={() => {
-					setOpen(true);
-				}}
-			/>
-			<SharedPagesSheet
-				visible={open}
-				onClose={() => {
-					setOpen(false);
-				}}
-			/>
-		</>
+		<Button
+			label="Shared pages"
+			icon="globe-outline"
+			kind="plain"
+			onPress={() => {
+				openSharedPages();
+			}}
+		/>
 	);
 }
 

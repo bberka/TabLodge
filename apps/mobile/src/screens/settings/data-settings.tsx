@@ -146,6 +146,14 @@ export function DataCard() {
 						},
 					},
 					{
+						icon: 'link-outline',
+						label: 'Import from a link',
+						hint: 'A TabLodge shared page',
+						onPress() {
+							setSource({mode: 'link'});
+						},
+					},
+					{
 						icon: 'globe-outline',
 						label: 'From another browser',
 						hint: 'Open tabs and bookmarks',
