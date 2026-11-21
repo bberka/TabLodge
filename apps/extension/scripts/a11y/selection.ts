@@ -455,18 +455,25 @@ export async function moveSelectedToNewColumnCheck(env: Env, theme: Theme) {
 			await options.filter({hasText: `New column “${columnName}”`}).waitFor();
 			await page.keyboard.press('Enter');
 			await dialog.waitFor({state: 'hidden'});
-			const store = await readDevStore(page);
-			const column = store.bookmarkColumns.find(
-				(entry) => entry.name === columnName,
-			);
-			assert.ok(column, 'the selected destination column should be created');
-			assert.deepEqual(
-				store.bookmarks
+			// The dialog closes first; the column is created and the bookmarks move after.
+			const moved = async () => {
+				const store = await readDevStore(page);
+				const column = store.bookmarkColumns.find(
+					(entry) => entry.name === columnName,
+				);
+				const columnIds = store.bookmarks
 					.filter((bookmark) =>
 						['dev-bookmark-1', 'dev-bookmark-2'].includes(bookmark.id),
 					)
-					.map((bookmark) => bookmark.columnId),
-				[column.id, column.id],
+					.map((bookmark) => bookmark.columnId);
+				return column && columnIds.every((id) => id === column.id)
+					? column.id
+					: undefined;
+			};
+
+			await until(
+				async () => (await moved()) !== undefined,
+				'the selected bookmarks to land in the new column',
 			);
 			await page.close();
 		},

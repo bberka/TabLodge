@@ -211,6 +211,10 @@ type FolderDialog = {
 	*/
 	moveGroupId?: string;
 	/**
+	Create mode only: a name typed in the folder picker, used as the form's first value.
+	*/
+	name?: string;
+	/**
 	The icon chosen so far in the open dialog.
 	*/
 	icon?: string;
@@ -1366,7 +1370,8 @@ export function SessionManager({
 		moveGroup,
 		canMoveGroup,
 		merge: mergeGroup,
-		newFolderFor: (group) => setDialog({mode: 'create', moveGroupId: group.id}),
+		newFolderFor: (group, name) =>
+			setDialog({mode: 'create', moveGroupId: group.id, name}),
 		folderTargets: () => folders,
 		pickTarget: setTargetPicker,
 		bookmark: openBookmarkPicker,
@@ -1589,10 +1594,12 @@ export function SessionManager({
 	}
 
 	async function moveGroupToFolder(
-		group: Session,
+		opened: Session,
 		targetId: string,
 		targetName?: string,
 	) {
+		// The menu may have opened on an older copy of the session; Undo must return it to where it is now.
+		const group = groups.find((entry) => entry.id === opened.id) ?? opened;
 		if (group.folderId === targetId) {
 			return;
 		}
@@ -2753,7 +2760,8 @@ export function SessionManager({
 									autoFocus: true,
 									name: 'name',
 									maxLength: 60,
-									defaultValue: folderDialog?.folder?.name || '',
+									defaultValue:
+										folderDialog?.folder?.name || folderDialog?.name || '',
 								}}
 								onIconChange={(icon) =>
 									setDialog((old) =>
@@ -2925,7 +2933,7 @@ type CardActions = {
 	/**
 	Opens the new-folder dialog; saving it creates the folder and moves the session in.
 	*/
-	newFolderFor: (group: Session) => void;
+	newFolderFor: (group: Session, name?: string) => void;
 	/**
 	Folders a session can move to (read when a menu opens, never while rendering).
 	*/
@@ -3268,7 +3276,7 @@ const GroupCard = memo(
 						onPick: (folder) => handlers.moveToFolder(group, folder.id),
 						create: {
 							label: 'New folder',
-							run: () => handlers.newFolderFor(group),
+							run: (typed) => handlers.newFolderFor(group, typed),
 						},
 					}),
 			},
