@@ -15275,3 +15275,181 @@ test('a reel saved from its own page is not missing from the Instagram saved pag
 		{ok: true, missing: 0, ask: false},
 	);
 });
+
+function stateForEdits(): StoredState {
+	const state = bookmarksState(4);
+	state.bookmarkColumns.push({
+		id: 'col-third',
+		name: 'Third',
+		createdAt: 2,
+		isDefault: false,
+	});
+	state.groups.push({
+		id: 'session-b',
+		name: 'Second',
+		folderId: 'unfiled',
+		createdAt: 5,
+		tabs: [
+			{id: 'tb1', title: 'B1', url: 'https://b1.example/'},
+			{id: 'tb2', title: 'B2', url: 'https://b2.example/'},
+		],
+	});
+	return state;
+}
+
+const editsToUndo: Array<{message: TabLodgeMessage; name: string}> = [
+	{
+		name: 'moving a column',
+		message: {
+			type: 'REORDER_BOOKMARK_COLUMN',
+			columnId: 'col-third',
+			targetColumnId: 'bookmark-default',
+			position: 'before',
+		},
+	},
+	{
+		name: 'moving a bookmark inside a column',
+		message: {
+			type: 'REORDER_BOOKMARK',
+			bookmarkId: 'bm-0',
+			targetColumnId: 'bookmark-default',
+			targetBookmarkId: 'bm-1',
+			position: 'after',
+		},
+	},
+	{
+		name: 'moving a bookmark to another column',
+		message: {
+			type: 'REORDER_BOOKMARK',
+			bookmarkId: 'bm-0',
+			targetColumnId: 'col-news',
+			targetBookmarkId: 'bm-2',
+			position: 'before',
+		},
+	},
+	{
+		name: 'moving several bookmarks at once',
+		message: {
+			type: 'REORDER_BOOKMARK',
+			bookmarkId: 'bm-0',
+			bookmarkIds: ['bm-0', 'bm-1', 'bm-2'],
+			targetColumnId: 'col-third',
+		},
+	},
+	{
+		name: 'creating a column',
+		message: {type: 'CREATE_BOOKMARK_COLUMN', name: 'Fresh'},
+	},
+	{
+		name: 'renaming a column',
+		message: {
+			type: 'UPDATE_BOOKMARK_COLUMN',
+			columnId: 'col-news',
+			name: 'Renamed',
+			color: '#ff0000',
+		},
+	},
+	{
+		name: 'adding a bookmark',
+		message: {
+			type: 'ADD_BOOKMARK',
+			bookmark: {title: 'New', url: 'https://new.example/'},
+		},
+	},
+	{
+		name: 'editing a bookmark',
+		message: {
+			type: 'UPDATE_BOOKMARK',
+			bookmarkId: 'bm-1',
+			fields: {title: 'Changed', columnId: 'col-news', tags: ['a']},
+		},
+	},
+	{
+		name: 'reordering sessions',
+		message: {type: 'SET_GROUP_ORDER', order: ['session-b', 'session-1']},
+	},
+	{
+		name: 'editing a session',
+		message: {
+			type: 'UPDATE_GROUP',
+			groupId: 'session-b',
+			fields: {name: 'Renamed', description: 'Notes'},
+		},
+	},
+	{
+		name: 'archiving a session',
+		message: {type: 'ARCHIVE_GROUP', groupId: 'session-b'},
+	},
+	{
+		name: 'creating a folder',
+		message: {type: 'CREATE_FOLDER', name: 'Projects'},
+	},
+	{
+		name: 'moving a link to another session',
+		message: {
+			type: 'MOVE_TAB',
+			fromGroupId: 'session-b',
+			tabId: 'tb1',
+			toGroupId: 'session-1',
+		},
+	},
+	{
+		name: 'editing a link',
+		message: {
+			type: 'UPDATE_TAB',
+			groupId: 'session-b',
+			tabId: 'tb2',
+			fields: {title: 'Changed', notes: 'n'},
+		},
+	},
+];
+
+for (const {name, message} of editsToUndo) {
+	test(`Undo restores the exact library after ${name}`, async () => {
+		const harness = createWorkerHarness(stateForEdits());
+		const before = structuredClone(harness.state);
+		const result = (await harness.sendMessage(message)) as {
+			ok: boolean;
+			error?: string;
+			undoId?: string;
+		};
+		assert.equal(result.ok, true, result.error);
+		assert.ok(result.undoId, `${message.type} offers an undoId`);
+		assert.notDeepEqual(harness.state, before);
+		const undone = await harness.sendMessage({
+			type: 'UNDO',
+			id: result.undoId,
+		});
+		assert.equal(undone.ok, true, undone.error);
+		assert.deepEqual(harness.state, before);
+	});
+}
+
+test('two edits in a row are undone newest first, and the older one is refused until then', async () => {
+	const harness = createWorkerHarness(stateForEdits());
+	const original = structuredClone(harness.state);
+	const first = await harness.sendMessage({
+		type: 'REORDER_BOOKMARK_COLUMN',
+		columnId: 'col-third',
+		targetColumnId: 'bookmark-default',
+		position: 'before',
+	});
+	const afterFirst = structuredClone(harness.state);
+	const second = await harness.sendMessage({
+		type: 'UPDATE_BOOKMARK_COLUMN',
+		columnId: 'col-news',
+		name: 'Renamed',
+	});
+	const early = await harness.sendMessage({type: 'UNDO', id: first.undoId!});
+	assert.equal(early.ok, false);
+	assert.equal(
+		(await harness.sendMessage({type: 'UNDO', id: second.undoId!})).ok,
+		true,
+	);
+	assert.deepEqual(harness.state, afterFirst);
+	assert.equal(
+		(await harness.sendMessage({type: 'UNDO', id: first.undoId!})).ok,
+		true,
+	);
+	assert.deepEqual(harness.state, original);
+});

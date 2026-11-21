@@ -36,6 +36,7 @@ import {
 	useLibrary,
 	useSyncStatus,
 } from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {trashDeleted} from '../../library/trash-store';
 import {linkToOpen} from '../../library/links';
 import {openAll, openLink} from '../../platform/open-links';
@@ -490,8 +491,9 @@ export function BookmarksScreen({
 						icon: 'arrow-back-outline' as const,
 						label: 'Move column earlier',
 						onPress() {
-							void edit((current) =>
-								moveColumn(current, columnId, -1, Date.now()),
+							void editWithUndo(
+								editDone('REORDER_BOOKMARK_COLUMN'),
+								(current) => moveColumn(current, columnId, -1, Date.now()),
 							);
 						},
 					},
@@ -505,8 +507,9 @@ export function BookmarksScreen({
 						icon: 'arrow-forward-outline' as const,
 						label: 'Move column later',
 						onPress() {
-							void edit((current) =>
-								moveColumn(current, columnId, 1, Date.now()),
+							void editWithUndo(
+								editDone('REORDER_BOOKMARK_COLUMN'),
+								(current) => moveColumn(current, columnId, 1, Date.now()),
 							);
 						},
 					},
@@ -567,7 +570,9 @@ export function BookmarksScreen({
 	];
 
 	const reorder = (id: string, move: BookmarkMove) => {
-		void edit((current) => moveBookmark(current, id, move, Date.now()));
+		void editWithUndo(editDone('REORDER_BOOKMARK'), (current) =>
+			moveBookmark(current, id, move, Date.now()),
+		);
 	};
 
 	const headerActions = selection.active ? (
@@ -1022,8 +1027,9 @@ export function BookmarksScreen({
 					setSheet(undefined);
 				}}
 				onPick={(id) => {
-					void edit((current) =>
-						moveBookmarks(current, selection.ids, id, Date.now()),
+					void editWithUndo(
+						`Moved ${selection.ids.size === 1 ? '1 bookmark' : `${selection.ids.size} bookmarks`}.`,
+						(current) => moveBookmarks(current, selection.ids, id, Date.now()),
 					);
 					setSheet(undefined);
 					selection.stop();
