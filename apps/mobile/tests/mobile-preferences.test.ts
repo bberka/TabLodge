@@ -37,7 +37,6 @@ const changed: Preferences = {
 	sessionView: 'list',
 	sessionTap: 'open',
 	sessionMain: 'archive',
-	cleanOnSave: false,
 	siteIcons: 'direct',
 	savePreview: false,
 	accent: '#336699',

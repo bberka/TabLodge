@@ -1,4 +1,6 @@
+import {useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {SESSION_NAME_TEMPLATE_MAX} from '../../../../extension/src/shared/library-normalize';
 import {setSyncedSetting} from '../../library/library-store';
 import {
 	LINK_ACTIONS,
@@ -15,7 +17,7 @@ import {
 } from '../../library/row-actions';
 import {useColors} from '../../ui/theme';
 import {useLinkSettings} from '../../library/use-link-settings';
-import {type IconName, Switch} from '../../ui/widgets';
+import {Field, type IconName, Switch} from '../../ui/widgets';
 import {useRowReset} from './row-reset';
 import {SettingsCard, useRowVisible} from './settings-card';
 import {RowLabel, SelectRow} from './select-row';
@@ -236,6 +238,65 @@ export function BookmarkBehaviourCard() {
 	);
 }
 
+const NAME_CHOICES: Array<{
+	id: 'title' | 'datetime' | 'date-title' | 'custom';
+	name: string;
+}> = [
+	{id: 'title', name: 'First link title'},
+	{id: 'datetime', name: 'Date and time'},
+	{id: 'date-title', name: 'Date and first link'},
+	{id: 'custom', name: 'Custom'},
+];
+
+const ARCHIVE_CHOICES = [
+	{id: '0', name: 'Never'},
+	{id: '7', name: '1 week'},
+	{id: '30', name: '30 days'},
+	{id: '90', name: '90 days'},
+	{id: '365', name: '1 year'},
+];
+
+/**
+The archive choices, with the browser's own number of days when it set one the list lacks.
+*/
+const archiveChoices = (days: number) =>
+	ARCHIVE_CHOICES.some((choice) => choice.id === String(days))
+		? ARCHIVE_CHOICES
+		: [...ARCHIVE_CHOICES, {id: String(days), name: `${days} days`}];
+
+/**
+The custom session name, saved when the field loses focus so sync does not send every keystroke.
+*/
+function NameTemplateField({template}: {template: string}) {
+	const [draft, setDraft] = useState(template);
+	const visible = useRowVisible(ROWS.sessionNameTemplate);
+	if (!visible) {
+		return null;
+	}
+
+	const commit = () => {
+		const next = draft.trim().slice(0, SESSION_NAME_TEMPLATE_MAX);
+		setDraft(next);
+		if (next !== '' && next !== template) {
+			void setSyncedSetting('sessionNameTemplate', next);
+		}
+	};
+
+	return (
+		<Field
+			label={ROWS.sessionNameTemplate.label}
+			icon="text-outline"
+			value={draft}
+			placeholder="{date} · {title}"
+			maxLength={SESSION_NAME_TEMPLATE_MAX}
+			returnKeyType="done"
+			onChangeText={setDraft}
+			onBlur={commit}
+			onSubmitEditing={commit}
+		/>
+	);
+}
+
 /**
 How session cards look. The tab icons and expanded-by-default switches are the extension's own settings, so they
 change there too; the other two are this app's and sync with its look.
@@ -264,6 +325,37 @@ export function SessionSettingsCard() {
 				]}
 				onChange={(value) => {
 					void setSyncedSetting('sessionSort', value);
+				}}
+			/>
+			<SelectRow
+				row={ROWS.sessionName}
+				value={settings.sessionNameStyle}
+				choices={[...NAME_CHOICES, {id: 'ask', name: 'Ask each time'}]}
+				onChange={(value) => {
+					void setSyncedSetting('sessionNameStyle', value);
+				}}
+			/>
+			{settings.sessionNameStyle === 'ask' && (
+				<SelectRow
+					row={ROWS.sessionNameFallback}
+					value={settings.sessionNameFallback}
+					choices={NAME_CHOICES}
+					onChange={(value) => {
+						void setSyncedSetting('sessionNameFallback', value);
+					}}
+				/>
+			)}
+			{(settings.sessionNameStyle === 'custom' ||
+				(settings.sessionNameStyle === 'ask' &&
+					settings.sessionNameFallback === 'custom')) && (
+				<NameTemplateField template={settings.sessionNameTemplate} />
+			)}
+			<SelectRow
+				row={ROWS.archiveSessions}
+				value={String(settings.autoArchiveDays)}
+				choices={archiveChoices(settings.autoArchiveDays)}
+				onChange={(value) => {
+					void setSyncedSetting('autoArchiveDays', Number(value));
 				}}
 			/>
 			<SelectRow
@@ -401,13 +493,6 @@ export function SyncedSettingsCard() {
 				value={settings.markLocalLinks}
 				onChange={(value) => {
 					void setSyncedSetting('markLocalLinks', value);
-				}}
-			/>
-			<Toggle
-				row={ROWS.cleanOnSave}
-				value={usePreferences().cleanOnSave}
-				onChange={(cleanOnSave) => {
-					setPreferences({cleanOnSave});
 				}}
 			/>
 		</SettingsCard>

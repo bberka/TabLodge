@@ -24,6 +24,7 @@ import {emptyStore, isStore} from './store-shape';
 import {DEFAULTS as LINK_DEFAULTS, type LinkSettings} from './links';
 import {createLibraryCore} from './library-core';
 import {syncedTrash} from './trash-storage';
+import {archiveStale} from './session-edits';
 import {isPrivateView, useView} from './view';
 import type * as SeedModuleNamespace from './seed';
 
@@ -90,6 +91,18 @@ export async function startLibrary(): Promise<void> {
 	await loadLibrary();
 	await syncClient.wake().catch(() => undefined);
 	await refreshStatus();
+	await archiveIdleSessions();
+}
+
+/**
+Archives the sessions that sat unused for the Archive setting's days. Run when the app starts, as the extension does at
+browser start. Nothing is written when nothing moved.
+*/
+export async function archiveIdleSessions(): Promise<void> {
+	const now = Date.now();
+	if (archiveStale(core.store, now) !== core.store) {
+		await editRegular((current) => archiveStale(current, now));
+	}
 }
 
 /**

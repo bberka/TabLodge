@@ -1,7 +1,6 @@
 import {useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {phoneStamp} from '../../platform/device';
-import {stripTrackingParameters} from '../../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../../library/column-choice';
 import {addBookmarks} from '../../library/board-edits';
 import {
@@ -25,9 +24,10 @@ import {
 import {hostIsExcluded} from '../../../../extension/src/shared/excluded-sites';
 import {LibraryChoice} from '../../library/library-choice';
 import {useView} from '../../library/view';
-import {getPreferences, setPreferences} from '../../settings/preferences';
+import {setPreferences} from '../../settings/preferences';
 import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
+import {defaultSessionName} from '../../library/session-name';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {Button, Chips, Field, Segmented} from '../../ui/widgets';
 
@@ -84,10 +84,12 @@ export function SaveLinksForm({
 		(url) => !hostIsExcluded(hostOf(url), excludedSites),
 	);
 	const skipped = urls.length - allowed.length;
-	const links = getPreferences().cleanOnSave
-		? allowed.map((url) => stripTrackingParameters(url))
-		: allowed;
+	const links = allowed;
 	const ids = () => links.map(() => newId());
+	const placeholder = defaultSessionName(
+		settings,
+		links.map((url) => ({url})),
+	);
 	const blocked =
 		links.length === 0 ||
 		(mode === 'bookmarks' && choice.incomplete) ||
@@ -119,7 +121,12 @@ export function SaveLinksForm({
 			setPreferences({lastColumnId: column.id});
 			finish(run.outcome(links.length, 'link', column.name));
 		} else if (creating) {
-			const label = name.trim() || 'Shared links';
+			const label =
+				name.trim() ||
+				defaultSessionName(
+					settings,
+					links.map((url) => ({url})),
+				);
 			const run = counted(tabCount, (current) =>
 				addSession(
 					current,
@@ -235,7 +242,7 @@ export function SaveLinksForm({
 							<Field
 								label="Session name"
 								icon="albums-outline"
-								placeholder="Shared links"
+								placeholder={placeholder}
 								value={name}
 								onChangeText={setName}
 							/>

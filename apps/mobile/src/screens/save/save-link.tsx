@@ -7,7 +7,6 @@ import {
 	View,
 } from 'react-native';
 import type {Bookmark} from '../../../../extension/src/shared/types';
-import {stripTrackingParameters} from '../../../../extension/src/shared/tracking-parameters';
 import {ColumnChoice, useColumnChoice} from '../../library/column-choice';
 import {
 	addBookmark,
@@ -45,12 +44,9 @@ import {LibraryChoice} from '../../library/library-choice';
 import {useView} from '../../library/view';
 import {cleanPageTitle} from '../../library/links';
 import {useLinkPreview} from '../../library/link-preview';
-import {
-	getPreferences,
-	setPreferences,
-	usePreferences,
-} from '../../settings/preferences';
+import {setPreferences, usePreferences} from '../../settings/preferences';
 import {SiteIcon} from '../../ui/site-icon';
+import {defaultSessionName} from '../../library/session-name';
 import {useLinkSettings} from '../../library/use-link-settings';
 import {SheetHeader} from '../../ui/bottom-sheet';
 import {useColors} from '../../ui/theme';
@@ -164,13 +160,13 @@ export function SaveLinkForm({
 		setNotice('');
 		try {
 			const saved = {
-				url: getPreferences().cleanOnSave ? stripTrackingParameters(url) : url,
+				url,
 				title: cleanPageTitle(title, settings.cleanTitles),
 			};
 			if (toSession) {
 				const label =
 					sessionId === NEW_SESSION
-						? sessionName.trim() || saved.title || hostOf(saved.url)
+						? sessionName.trim() || defaultSessionName(settings, [saved])
 						: (sessions.find((session) => session.id === sessionId)?.name ??
 							'the session');
 				const run = counted(tabCount, (current) =>
@@ -405,7 +401,11 @@ export function SaveLinkForm({
 							<Field
 								label="Session name"
 								icon="albums-outline"
-								placeholder={title || (url ? hostOf(url) : 'Saved links')}
+								placeholder={
+									url
+										? defaultSessionName(settings, [{url, title}])
+										: 'Saved links'
+								}
 								value={sessionName}
 								onChangeText={setSessionName}
 							/>
