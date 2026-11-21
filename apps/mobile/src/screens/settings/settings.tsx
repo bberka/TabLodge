@@ -427,6 +427,17 @@ export function SettingsScreen({onConnect}: {onConnect: () => void}) {
 											}}
 										/>
 										<DeviceNameField />
+										<SelectRow
+											row={ROWS.defaultShareMode}
+											value={links.defaultShareMode}
+											choices={[
+												{id: 'snapshot', name: 'Snapshot'},
+												{id: 'live', name: 'Live link'},
+											]}
+											onChange={(value) => {
+												void setSyncedSetting('defaultShareMode', value);
+											}}
+										/>
 										<SharedPagesButton />
 										<Button
 											label="Sync now"

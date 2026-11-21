@@ -227,6 +227,11 @@ import {
 	uploadSharedPage,
 } from '../src/shared/sync/shared-pages-client';
 import {
+	isSharedPageMode,
+	SHARED_PAGE_LIVE_PASSWORD_FEATURE,
+} from '../src/shared/sync/shared-pages';
+import {refreshLiveSharedPages} from '../src/shared/live-shared-pages';
+import {
 	createInboxKeyPair,
 	INBOX_ENTRY_PREFIX,
 	INBOX_PRIVATE_KEY_NAME,
@@ -1139,6 +1144,17 @@ const syncClient = privateContext
 			async backup(store, reason) {
 				await safetyBackup(store, reason);
 			},
+			async onSynced(target, server) {
+				if (server?.features.includes(SHARED_PAGE_LIVE_PASSWORD_FEATURE)) {
+					await refreshLiveSharedPages(
+						fetch,
+						target,
+						await getStore(),
+						APP_NAME,
+						livePageFingerprints,
+					);
+				}
+			},
 			randomId: makeId,
 			now: Date.now,
 		});
@@ -1428,6 +1444,8 @@ async function linkPreview(url: string): Promise<LinkPreviewData | null> {
 Shared pages: Share › Web page snapshots on the regular sync server, public at their link. Never from a private window,
 whichever library it uses.
 */
+const livePageFingerprints = new Map<string, string>();
+
 async function handleSharedPagesMessage(
 	message: Extract<
 		TabLodgeMessage,
@@ -1438,12 +1456,19 @@ async function handleSharedPagesMessage(
 	if (message.type === 'GET_SHARED_PAGES') {
 		const support = target
 			? await sharedPagesSupport(fetch, target)
-			: {server: 'none' as const, keepsIds: false};
+			: {
+					server: 'none' as const,
+					keepsIds: false,
+					supportsLivePassword: false,
+				};
+		const {defaultShareMode} = (await getStore()).settings;
 		return {
 			ok: true,
 			server: support.server,
 			linkBase:
 				target && support.keepsIds ? sharedPageUrl(target.url, '') : null,
+			supportsLivePassword: support.supportsLivePassword,
+			defaultShareMode,
 			pages:
 				target && support.server === 'ready' && message.list
 					? await listSharedPages(fetch, target)
@@ -1461,7 +1486,9 @@ async function handleSharedPagesMessage(
 	}
 
 	if (message.type === 'DELETE_SHARED_PAGE') {
-		await deleteSharedPage(fetch, target, String(message.id ?? ''));
+		const id = String(message.id ?? '');
+		await deleteSharedPage(fetch, target, id);
+		livePageFingerprints.delete(id);
 		return {ok: true};
 	}
 
@@ -1476,12 +1503,23 @@ async function handleSharedPagesMessage(
 		};
 	}
 
-	return {
-		ok: true,
-		page: await uploadSharedPage(fetch, target, message.title, message.html, {
+	const page = await uploadSharedPage(
+		fetch,
+		target,
+		message.title,
+		message.html,
+		{
 			id: typeof message.id === 'string' ? message.id : undefined,
 			source: typeof message.source === 'string' ? message.source : undefined,
-		}),
+			mode: isSharedPageMode(message.mode) ? message.mode : undefined,
+			password:
+				typeof message.password === 'string' ? message.password : undefined,
+		},
+	);
+
+	return {
+		ok: true,
+		page,
 	};
 }
 

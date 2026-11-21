@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'vite-plus/test';
-import {importFromLink} from '../../extension/src/shared/import-link';
+import {
+	importFromLink,
+	ImportPasswordRequiredError,
+} from '../../extension/src/shared/import-link';
+import {SHARED_PAGE_PASSWORD_HEADER} from '../../extension/src/shared/sync/shared-pages';
 import {cappedFetch, type ReadRequest} from '../src/transfer/capped-fetch';
 
 type Listener = (event: {loaded: number}) => void;
@@ -15,15 +19,29 @@ class FakeRequest implements ReadRequest {
 	responseText = '';
 	withCredentials = true;
 	aborted = false;
+	method = '';
 	url = '';
+	body: string | undefined;
+	requestHeaders = new Map<string, string>();
+	responseHeaders = new Map<string, string>();
 
 	constructor(private readonly script: (request: FakeRequest) => void) {}
 
-	open(_method: string, url: string) {
+	open(method: string, url: string) {
+		this.method = method;
 		this.url = url;
 	}
 
-	send() {
+	setRequestHeader(name: string, value: string) {
+		this.requestHeaders.set(name.toLowerCase(), value);
+	}
+
+	getResponseHeader(name: string) {
+		return this.responseHeaders.get(name.toLowerCase()) ?? null;
+	}
+
+	send(body?: string | null) {
+		this.body = body ?? undefined;
 		this.script(this);
 	}
 
@@ -117,5 +135,38 @@ describe('the phone reads a link with a size cap', () => {
 			),
 			/Could not read that link/,
 		);
+	});
+
+	test('password-protected links report password required and unlock via POST', async () => {
+		const seen: FakeRequest[] = [];
+		const send = cappedFetch(() => {
+			const request = new FakeRequest((current) => {
+				if (current.method === 'GET') {
+					current.status = 401;
+					current.responseHeaders.set(
+						SHARED_PAGE_PASSWORD_HEADER.toLowerCase(),
+						'1',
+					);
+					current.emit('load');
+					return;
+				}
+
+				current.status = 200;
+				current.responseText = 'https://unlocked.example/';
+				current.emit('load');
+			});
+			seen.push(request);
+			return request;
+		});
+
+		await assert.rejects(
+			importFromLink(send, PAGE),
+			(error) =>
+				error instanceof ImportPasswordRequiredError && !error.wrongPassword,
+		);
+		const parsed = await importFromLink(send, PAGE, {password: 'secret123'});
+		assert.equal(seen[1].method, 'POST');
+		assert.equal(seen[1].body, 'password=secret123');
+		assert.equal(parsed.bookmarks.flatMap((group) => group.links).length, 1);
 	});
 });

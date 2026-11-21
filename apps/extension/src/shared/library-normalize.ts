@@ -14,6 +14,7 @@ import {deviceStamp, isDeviceKind, MAX_DEVICE_NAME} from './device';
 import {ICON_IDS} from './icon-ids';
 import {LAYOUT_VERSION} from './library-state';
 import {isRecord} from './library-values';
+import {isSharedPageMode} from './sync/shared-pages';
 import {TOAST_DURATIONS, TOAST_POSITIONS} from './toast-prefs';
 import type {
 	Bookmark,
@@ -216,6 +217,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionNameStyle: 'date-title',
 	sessionNameTemplate: '{date} · {title}',
 	sessionNameFallback: 'date-title',
+	defaultShareMode: 'snapshot',
 	mobileApp: {},
 	heldSettings: {},
 });
@@ -1106,6 +1108,9 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 			DEFAULT_SETTINGS.sessionNameTemplate,
 			SESSION_NAME_TEMPLATE_MAX,
 		),
+		defaultShareMode: isSharedPageMode(raw.defaultShareMode)
+			? raw.defaultShareMode
+			: 'snapshot',
 		mobileApp: normalizeMobileApp(raw.mobileApp),
 		heldSettings: normalizeHeldSettings(raw.heldSettings),
 	};

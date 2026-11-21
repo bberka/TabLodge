@@ -1326,6 +1326,7 @@ test('a server without some features keeps syncing and lists what stays on the d
 			'trash',
 			'shared-pages',
 			'shared-page-import',
+			'shared-page-live-password',
 		],
 	);
 	assert.equal(problemBanner(compat)?.stopped, false);

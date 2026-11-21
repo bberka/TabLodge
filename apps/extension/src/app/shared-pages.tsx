@@ -1,8 +1,10 @@
 import {useCallback, useEffect, useId, useRef, useState} from 'react';
-import {Copy, ExternalLink, Trash2, X} from 'lucide-react';
+import {Copy, ExternalLink, Lock, Trash2, X} from 'lucide-react';
+import type {SharedPageMode} from '../shared/sync/shared-pages';
 import type {SharedPage} from '../shared/sync/shared-pages-client';
 import type {SharedPagesServer} from '../shared/types';
 import {
+	Badge,
 	Button,
 	ConfirmationDialog,
 	Dialog,
@@ -24,6 +26,8 @@ export type SharedPagesState = {
 	server: SharedPagesServer | undefined;
 	pages: SharedPage[];
 	linkBase: string | null;
+	supportsLivePassword: boolean;
+	defaultShareMode: SharedPageMode;
 	reload: () => Promise<void>;
 };
 
@@ -35,6 +39,9 @@ export function useSharedPages(open: boolean, list = false): SharedPagesState {
 	const [server, setServer] = useState<SharedPagesServer>();
 	const [pages, setPages] = useState<SharedPage[]>([]);
 	const [linkBase, setLinkBase] = useState<string | null>(null);
+	const [supportsLivePassword, setSupportsLivePassword] = useState(false);
+	const [defaultShareMode, setDefaultShareMode] =
+		useState<SharedPageMode>('snapshot');
 	const latestRef = useRef(0);
 	const reload = useCallback(async () => {
 		if (privateWindow()) {
@@ -52,6 +59,8 @@ export function useSharedPages(open: boolean, list = false): SharedPagesState {
 			setServer(result.server);
 			setPages(result.pages);
 			setLinkBase(result.linkBase);
+			setSupportsLivePassword(result.supportsLivePassword);
+			setDefaultShareMode(result.defaultShareMode);
 		} else {
 			setServer('offline');
 		}
@@ -61,7 +70,14 @@ export function useSharedPages(open: boolean, list = false): SharedPagesState {
 			void reload();
 		}
 	}, [open, reload]);
-	return {server, pages, linkBase, reload};
+	return {
+		server,
+		pages,
+		linkBase,
+		supportsLivePassword,
+		defaultShareMode,
+		reload,
+	};
 }
 
 export async function copyPageLink(url: string, showStatus: ShowStatus) {
@@ -121,14 +137,27 @@ export function SharedPagesList({
 							className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
 						>
 							<div className="min-w-0">
-								<a
-									className="block truncate text-sm font-medium text-primary underline-offset-2 hover:underline"
-									href={page.url}
-									target="_blank"
-									rel="noopener noreferrer"
-								>
-									{page.title || 'Untitled page'}
-								</a>
+								<div className="flex flex-wrap items-center gap-1.5">
+									<a
+										className="truncate text-sm font-medium text-primary underline-offset-2 hover:underline"
+										href={page.url}
+										target="_blank"
+										rel="noopener noreferrer"
+									>
+										{page.title || 'Untitled page'}
+									</a>
+									<Badge
+										variant={page.mode === 'live' ? 'default' : 'secondary'}
+									>
+										{page.mode === 'live' ? 'Live' : 'Snapshot'}
+									</Badge>
+									{page.hasPassword && (
+										<Badge variant="outline" className="gap-1">
+											<Lock className="h-3 w-3" aria-hidden="true" />
+											Password
+										</Badge>
+									)}
+								</div>
 								<p className="text-xs text-muted-foreground wrap-anywhere">
 									{new Date(page.createdAt).toLocaleString([], {
 										dateStyle: 'medium',

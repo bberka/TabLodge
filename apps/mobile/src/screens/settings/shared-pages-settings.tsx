@@ -31,6 +31,8 @@ function PageRow({page, onDelete}: {page: SharedPage; onDelete: () => void}) {
 				{page.title || 'Untitled page'}
 			</Text>
 			<Text style={{color: colors.muted}}>
+				{page.mode === 'live' ? 'Live' : 'Snapshot'}
+				{page.hasPassword ? ' · Password' : ''} ·{' '}
 				{new Date(page.createdAt).toLocaleString()} · {sizeLabel(page.size)}
 			</Text>
 			<Text selectable style={{color: colors.muted}}>

@@ -215,7 +215,7 @@ export default {
 		// A shared page is public: no token, and an id that cannot exist does not wake the object.
 		const sharedPage =
 			space === 'default' &&
-			request.method === 'GET' &&
+			(request.method === 'GET' || request.method === 'POST') &&
 			pathname.startsWith(SHARED_PAGE_PREFIX);
 		if (
 			sharedPage &&

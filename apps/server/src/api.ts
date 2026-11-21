@@ -9,6 +9,7 @@ import {bodyLimit} from 'hono/body-limit';
 import {except} from 'hono/combine';
 import {compress} from 'hono/compress';
 import {cors} from 'hono/cors';
+import {validateCredential} from '../../extension/src/shared/passcode';
 import {
 	PROTOCOL_VERSION,
 	type SyncLog,
@@ -18,11 +19,14 @@ import {
 	type SyncChange,
 } from '../../extension/src/shared/sync/changes';
 import {
+	isSharedPageMode,
 	MAX_SHARED_PAGE_SOURCE,
 	MAX_SHARED_PAGE_TITLE,
 	newSharedPageId,
 	SHARED_PAGE_ID,
 	SHARED_PAGE_IMPORT_FEATURE,
+	SHARED_PAGE_LIVE_PASSWORD_FEATURE,
+	SHARED_PAGE_PASSWORD_HEADER,
 	SHARED_PAGE_PREFIX,
 	SHARED_PAGES_FEATURE,
 } from '../../extension/src/shared/sync/shared-pages';
@@ -35,7 +39,16 @@ import {
 	type Preview,
 	type PreviewDeps,
 } from './preview';
-import {PAGE_HEADERS, pageNotFound, type SqlPageStore} from './shared-pages';
+import {
+	hashPagePassword,
+	PAGE_HEADERS,
+	pageNotFound,
+	PASSWORD_PROMPT_HEADERS,
+	passwordPromptHtml,
+	type SqlPageStore,
+	type StoredPage,
+	verifyPagePassword,
+} from './shared-pages';
 
 /**
 The extension calls the server from its own origin. CORS lets it do that without asking the browser for access to
@@ -45,6 +58,7 @@ export const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
 	'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 	'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+	'Access-Control-Expose-Headers': SHARED_PAGE_PASSWORD_HEADER,
 	'Access-Control-Max-Age': '86400',
 };
 export const MIN_TOKEN_LENGTH = 32;
@@ -165,6 +179,7 @@ export function createApi(options: ApiOptions) {
 			origin: '*',
 			allowMethods: ['GET', 'POST', 'OPTIONS'],
 			allowHeaders: ['Authorization', 'Content-Type'],
+			exposeHeaders: [SHARED_PAGE_PASSWORD_HEADER],
 			maxAge: 86_400,
 		}),
 	);
@@ -318,7 +333,12 @@ export function createApi(options: ApiOptions) {
 			records: log.size,
 			limits,
 			features: options.pages
-				? [...FEATURES, SHARED_PAGES_FEATURE, SHARED_PAGE_IMPORT_FEATURE]
+				? [
+						...FEATURES,
+						SHARED_PAGES_FEATURE,
+						SHARED_PAGE_IMPORT_FEATURE,
+						SHARED_PAGE_LIVE_PASSWORD_FEATURE,
+					]
 				: FEATURES,
 		});
 	});
@@ -442,13 +462,10 @@ export function createApi(options: ApiOptions) {
 
 	const {pages} = options;
 	if (pages) {
-		const pageRecord = (page: {
-			id: string;
-			title: string;
-			size: number;
-			createdAt: number;
-			source: string;
-		}) => ({...page, path: `${SHARED_PAGE_PREFIX}${page.id}`});
+		const pageRecord = (page: StoredPage) => ({
+			...page,
+			path: `${SHARED_PAGE_PREFIX}${page.id}`,
+		});
 
 		app.get('/v1/pages', (c) =>
 			c.json({
@@ -477,11 +494,13 @@ export function createApi(options: ApiOptions) {
 					return c.json(problem('bad_json'), 400);
 				}
 
-				const {title, html, id, source} = (body ?? {}) as {
+				const {title, html, id, source, mode, password} = (body ?? {}) as {
 					title?: unknown;
 					html?: unknown;
 					id?: unknown;
 					source?: unknown;
+					mode?: unknown;
+					password?: unknown;
 				};
 				if (
 					typeof title !== 'string' ||
@@ -492,9 +511,19 @@ export function createApi(options: ApiOptions) {
 						(typeof id !== 'string' || !SHARED_PAGE_ID.test(id))) ||
 					(source !== undefined &&
 						(typeof source !== 'string' ||
-							source.length > MAX_SHARED_PAGE_SOURCE))
+							source.length > MAX_SHARED_PAGE_SOURCE)) ||
+					(mode !== undefined && !isSharedPageMode(mode)) ||
+					(password !== undefined && typeof password !== 'string')
 				) {
 					return c.json(problem('bad_page'), 400);
+				}
+
+				if (
+					password !== undefined &&
+					password !== '' &&
+					(validateCredential(password) !== null || /[\n\r]/.test(password))
+				) {
+					return c.json(problem('bad_password'), 400);
 				}
 
 				const size = utf8Bytes(html);
@@ -505,15 +534,23 @@ export function createApi(options: ApiOptions) {
 					);
 				}
 
-				const page = {
+				const passwordHash =
+					password !== undefined && password !== ''
+						? await hashPagePassword(password)
+						: '';
+				const createdAt = now();
+				const page: StoredPage = {
 					id: typeof id === 'string' ? id : newSharedPageId(),
 					title,
 					size,
-					createdAt: now(),
+					createdAt,
+					updatedAt: createdAt,
 					source: typeof source === 'string' ? source : '',
+					mode: isSharedPageMode(mode) ? mode : 'snapshot',
+					hasPassword: passwordHash !== '',
 				};
 				const added = pages().add(
-					{...page, html},
+					{...page, html, passwordHash},
 					{maxPages: limits.maxPages, maxBytes: limits.maxPageStorageBytes},
 				);
 				if (added === 'taken') {
@@ -532,6 +569,77 @@ export function createApi(options: ApiOptions) {
 			},
 		);
 
+		app.post(
+			'/v1/pages/:id/update',
+			bodyLimit({
+				maxSize: limits.maxPageBytes * 6 + 4096,
+				onError: (c) =>
+					c.json(
+						problem('page_too_large', {maxBytes: limits.maxPageBytes}),
+						413,
+					),
+			}),
+			async (c) => {
+				const id = c.req.param('id');
+				if (!SHARED_PAGE_ID.test(id)) {
+					return c.json(problem('not_found'), 404);
+				}
+
+				let body: unknown;
+				try {
+					body = await c.req.json();
+				} catch {
+					return c.json(problem('bad_json'), 400);
+				}
+
+				const {title, html} = (body ?? {}) as {
+					title?: unknown;
+					html?: unknown;
+				};
+				if (
+					typeof title !== 'string' ||
+					title.length > MAX_SHARED_PAGE_TITLE ||
+					typeof html !== 'string' ||
+					html === ''
+				) {
+					return c.json(problem('bad_page'), 400);
+				}
+
+				const size = utf8Bytes(html);
+				if (size > limits.maxPageBytes) {
+					return c.json(
+						problem('page_too_large', {maxBytes: limits.maxPageBytes}),
+						413,
+					);
+				}
+
+				const result = pages().update(
+					id,
+					{title, html, size, updatedAt: now()},
+					{maxBytes: limits.maxPageStorageBytes},
+				);
+				if (result.status === 'updated') {
+					return c.json(pageRecord(result.page), 200);
+				}
+
+				if (result.status === 'not_found') {
+					return c.json(problem('not_found'), 404);
+				}
+
+				if (result.status === 'not_live') {
+					return c.json(problem('not_live'), 400);
+				}
+
+				return c.json(
+					problem('pages_full', {
+						maxPages: limits.maxPages,
+						maxBytes: limits.maxPageStorageBytes,
+					}),
+					507,
+				);
+			},
+		);
+
 		app.post('/v1/pages/:id/delete', (c) =>
 			pages().remove(c.req.param('id'))
 				? c.json({deleted: true})
@@ -541,7 +649,9 @@ export function createApi(options: ApiOptions) {
 		// The only route that hands out library data without the token. It has its own allowance, counted before the
 		// lookup, so a crawler gets 429 here while the library's devices keep syncing.
 		let viewWindow = {start: 0, count: 0};
-		app.get(`${SHARED_PAGE_PREFIX}:id`, (c) => {
+		const passwordAttempts = new Map<string, {start: number; count: number}>();
+		const passwordAttemptsPerMinute = 10;
+		const checkViewLimit = () => {
 			const time = now();
 			if (time - viewWindow.start >= MINUTE_MS) {
 				viewWindow = {start: time, count: 0};
@@ -561,12 +671,111 @@ export function createApi(options: ApiOptions) {
 				});
 			}
 
+			return undefined;
+		};
+
+		app.get(`${SHARED_PAGE_PREFIX}:id`, (c) => {
+			const limited = checkViewLimit();
+			if (limited) {
+				return limited;
+			}
+
 			const id = c.req.param('id');
-			const html = SHARED_PAGE_ID.test(id) ? pages().html(id) : undefined;
-			return html === undefined
-				? pageNotFound()
-				: new Response(html, {headers: PAGE_HEADERS});
+			const record = SHARED_PAGE_ID.test(id) ? pages().view(id) : undefined;
+			if (!record) {
+				return pageNotFound();
+			}
+
+			if (record.passwordHash !== '') {
+				return new Response(passwordPromptHtml(id, false), {
+					status: 401,
+					headers: PASSWORD_PROMPT_HEADERS,
+				});
+			}
+
+			return new Response(record.html, {headers: PAGE_HEADERS});
 		});
+
+		app.post(
+			`${SHARED_PAGE_PREFIX}:id`,
+			bodyLimit({
+				maxSize: 4096,
+				onError: () =>
+					new Response('Request too large', {
+						status: 413,
+						headers: {
+							...PAGE_HEADERS,
+							'Content-Type': 'text/plain; charset=utf-8',
+						},
+					}),
+			}),
+			async (c) => {
+				const limited = checkViewLimit();
+				if (limited) {
+					return limited;
+				}
+
+				const id = c.req.param('id');
+				if (!SHARED_PAGE_ID.test(id)) {
+					return pageNotFound();
+				}
+
+				const record = pages().view(id);
+				if (!record) {
+					return pageNotFound();
+				}
+
+				if (record.passwordHash === '') {
+					return new Response(record.html, {headers: PAGE_HEADERS});
+				}
+
+				const time = now();
+				for (const [key, entry] of passwordAttempts) {
+					if (time - entry.start >= MINUTE_MS) {
+						passwordAttempts.delete(key);
+					}
+				}
+
+				const bucket = passwordAttempts.get(id);
+				const current = bucket
+					? {start: bucket.start, count: bucket.count + 1}
+					: {start: time, count: 1};
+				passwordAttempts.set(id, current);
+
+				if (current.count > passwordAttemptsPerMinute) {
+					return new Response('Too many requests', {
+						status: 429,
+						headers: {
+							...PAGE_HEADERS,
+							'Content-Type': 'text/plain; charset=utf-8',
+							'Retry-After': String(
+								Math.ceil((current.start + MINUTE_MS - time) / 1000),
+							),
+						},
+					});
+				}
+
+				let password = '';
+				try {
+					const raw = await c.req.text();
+					password = new URLSearchParams(raw).get('password') ?? '';
+				} catch {
+					password = '';
+				}
+
+				const matched =
+					password !== '' &&
+					(await verifyPagePassword(password, record.passwordHash));
+				if (!matched) {
+					return new Response(passwordPromptHtml(id, true), {
+						status: 401,
+						headers: PASSWORD_PROMPT_HEADERS,
+					});
+				}
+
+				return new Response(record.html, {headers: PAGE_HEADERS});
+			},
+		);
 	}
 
 	return app;

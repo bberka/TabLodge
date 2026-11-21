@@ -12,7 +12,10 @@ import {
 	parseImportFile,
 	type ParsedImport,
 } from '../../../../extension/src/shared/import-formats';
-import {importFromLink} from '../../../../extension/src/shared/import-link';
+import {
+	importFromLink,
+	ImportPasswordRequiredError,
+} from '../../../../extension/src/shared/import-link';
 import {isSharedPageUrl} from '../../../../extension/src/shared/sync/shared-pages';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {notify} from '../../ui/dialog';
@@ -70,6 +73,8 @@ export function ImportSheet({
 	const [picked, setPicked] = useState<ImportKind>();
 	const [busy, setBusy] = useState(false);
 	const [link, setLink] = useState('');
+	const [linkNeedsPassword, setLinkNeedsPassword] = useState(false);
+	const [linkPassword, setLinkPassword] = useState('');
 	const [linked, setLinked] = useState<Reading>();
 	const [fetching, setFetching] = useState(false);
 	const text = source?.mode === 'file' ? source.text : pasted;
@@ -90,7 +95,7 @@ export function ImportSheet({
 		setFetching(false);
 	};
 
-	const readLink = async (address: string) => {
+	const readLink = async (address: string, password?: string) => {
 		cancelRead();
 		const attempt = readRef.current;
 		const controller = new AbortController();
@@ -98,25 +103,39 @@ export function ImportSheet({
 		setFetching(true);
 		setLinked(undefined);
 		let result: Reading;
+		let needsPassword = false;
 		try {
 			result = {
 				ok: true,
 				parsed: await importFromLink(cappedFetch(), address, {
 					signal: controller.signal,
+					password,
 				}),
 			};
 		} catch (error) {
-			result = {
-				ok: false,
-				message:
-					error instanceof ImportFormatError
-						? error.message
-						: 'Could not read that link.',
-			};
+			if (error instanceof ImportPasswordRequiredError) {
+				needsPassword = true;
+				result = error.wrongPassword
+					? {ok: false, message: error.message}
+					: undefined;
+			} else {
+				result = {
+					ok: false,
+					message:
+						error instanceof ImportFormatError
+							? error.message
+							: 'Could not read that link.',
+				};
+			}
 		}
 
 		if (attempt !== readRef.current) {
 			return;
+		}
+
+		setLinkNeedsPassword(needsPassword);
+		if (!needsPassword) {
+			setLinkPassword('');
 		}
 
 		setLinked(result);
@@ -127,6 +146,8 @@ export function ImportSheet({
 	useEffect(() => {
 		cancelRead();
 		setLink(linkUrl ?? '');
+		setLinkNeedsPassword(false);
+		setLinkPassword('');
 		setPasted('');
 		setLinked(undefined);
 		setPicked(undefined);
@@ -199,19 +220,48 @@ export function ImportSheet({
 							onChangeText={(address) => {
 								cancelRead();
 								setLink(address);
+								setLinkNeedsPassword(false);
+								setLinkPassword('');
 								setLinked(undefined);
 								setPicked(undefined);
 							}}
-							onSubmitEditing={() => void readLink(link)}
+							onSubmitEditing={() =>
+								void readLink(
+									link,
+									linkNeedsPassword ? linkPassword : undefined,
+								)
+							}
 						/>
+						{!parsed && linkNeedsPassword && (
+							<Field
+								secureTextEntry
+								autoFocus
+								label="Page password"
+								icon="lock-closed-outline"
+								value={linkPassword}
+								placeholder="Enter the password for this shared page"
+								autoCapitalize="none"
+								autoCorrect={false}
+								onChangeText={setLinkPassword}
+								onSubmitEditing={() => void readLink(link, linkPassword)}
+							/>
+						)}
 						{!parsed && (
 							<Button
-								label="Read link"
-								icon="link-outline"
+								label={linkNeedsPassword ? 'Unlock' : 'Read link'}
+								icon={linkNeedsPassword ? 'lock-open-outline' : 'link-outline'}
 								kind="plain"
-								disabled={link.trim() === ''}
+								disabled={
+									link.trim() === '' ||
+									(linkNeedsPassword && linkPassword === '')
+								}
 								loading={fetching}
-								onPress={() => void readLink(link)}
+								onPress={() =>
+									void readLink(
+										link,
+										linkNeedsPassword ? linkPassword : undefined,
+									)
+								}
 							/>
 						)}
 					</>

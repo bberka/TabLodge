@@ -839,6 +839,16 @@ export const settingsFieldGroups = ({
 					['90', '90 days'],
 				],
 			},
+			{
+				name: 'defaultShareMode',
+				label: 'Default shared link type',
+				help: 'Whether Get a link starts as a Snapshot (frozen copy) or a Live link (updates when the column or session syncs). The Android app follows this too.',
+				type: 'select',
+				options: [
+					['snapshot', 'Snapshot'],
+					['live', 'Live link'],
+				],
+			},
 		],
 	},
 ];
@@ -960,4 +970,13 @@ export const SETTING_WORDS: Partial<Record<keyof Settings, string[]>> = {
 	autoBackupKeep: ['backup count', 'keep backups', 'how many backups'],
 	autoBackupToDownloads: ['downloads', 'download folder', 'backup file'],
 	trashRetentionDays: ['trash', 'bin', 'retention', 'deleted items', 'days'],
+	defaultShareMode: [
+		'share',
+		'sharing',
+		'shared page',
+		'live link',
+		'snapshot',
+		'default share',
+		'password',
+	],
 };
