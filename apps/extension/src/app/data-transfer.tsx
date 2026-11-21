@@ -12,6 +12,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	type ComponentProps,
 	type DragEvent,
 	type ReactNode,
 } from 'react';
@@ -106,12 +107,15 @@ import {
 	type FullBackupContents,
 } from '../shared/full-backup';
 import type {SharedPage} from '../shared/sync/shared-pages-client';
+import {newSharedPageId} from '../shared/sync/shared-pages';
+import {importFromLink} from '../shared/import-link';
+import {siteName} from '../shared/web-url';
 import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
 import {mergeSummary} from './merge-summary';
 import {writeClipboard} from './interaction-actions';
 import {PROJECT} from './project';
-import {copyPageLink, useSharedPagesServer} from './shared-pages';
+import {copyPageLink, SharedPagesList, useSharedPages} from './shared-pages';
 import {
 	EMPTY_PASSCODE_DRAFT,
 	PasscodeEntry,
@@ -177,6 +181,10 @@ type ShareSource = {
 	*/
 	pageTitle?: string;
 	/**
+	The one column or session this source is (`sharedPageSource`), so the dialog lists the links made from it.
+	*/
+	pageSource?: string;
+	/**
 	The full backup ZIP of everything: no links to list or preview, only the backup options.
 	*/
 	backup?: boolean;
@@ -233,7 +241,8 @@ const SHARE_METHODS: readonly ShareChoice[] = [
 		id: 'html',
 		title: 'HTML page',
 		icon: Globe,
-		description: 'A standalone page you can send or open anywhere.',
+		description:
+			'A page to download, or to share by link from your sync server.',
 		copy: true,
 	},
 	{
@@ -511,7 +520,7 @@ function SharePreviewPanel({
 					{notShown.length > 0 && (
 						<>
 							<span aria-hidden="true"> · </span>
-							{notShown.join(' and ')} hidden
+							{notShown.join(' and ')} not in the preview
 						</>
 					)}
 					{fileCut && (
@@ -533,7 +542,9 @@ function SharePreviewPanel({
 							{pageTitle}
 						</h4>
 						<p className="mt-1 text-[11px] text-muted-foreground">
-							Shared from {PROJECT.name} · {plural(counts.links, 'link')}
+							Shared on{' '}
+							{new Date().toLocaleDateString(undefined, {dateStyle: 'medium'})}{' '}
+							· {plural(counts.links, 'link')}
 						</p>
 						<div className="mt-3 space-y-2">
 							{preview.groups.map((group, groupIndex) => {
@@ -580,17 +591,17 @@ function SharePreviewPanel({
 											</p>
 										)}
 										{group.tabs.length > 0 && (
-											<ol className="mx-3 my-2 list-decimal pl-5">
+											<ul className="mx-3 my-1">
 												{group.tabs.map((tab, tabIndex) => (
 													<li
 														key={`${tab.url}-${tabIndex}`}
-														className="border-t border-border py-1.5 pl-1"
+														className="border-t border-border py-1.5 first:border-t-0"
 													>
 														<span className="block text-xs font-semibold text-primary wrap-anywhere">
 															{tab.title || tab.url}
 														</span>
 														<span className="mt-0.5 block text-[10px] text-muted-foreground wrap-anywhere">
-															{tab.url}
+															{siteName(tab.url)}
 															{tab.pinned ? ' · Pinned' : ''}
 															{tab.nativeGroup?.title
 																? ` · ${tab.nativeGroup.title}`
@@ -598,7 +609,7 @@ function SharePreviewPanel({
 														</span>
 													</li>
 												))}
-											</ol>
+											</ul>
 										)}
 									</article>
 								);
@@ -645,6 +656,38 @@ function SharePreviewPanel({
 }
 
 /**
+The HTML page, stamped with the time it is made; `url` is its own link when the server keeps the id it was given.
+*/
+const sharedPageHtml = (
+	title: string,
+	groups: readonly ShareGroup[],
+	kind: 'bookmarks' | 'sessions',
+	url?: string,
+) =>
+	shareHtmlPage(title, groups, PROJECT.name, {
+		kind,
+		sharedAt: Date.now(),
+		url,
+	});
+
+/**
+The links already made from the column or session being shared.
+*/
+function SourcePages({
+	noun,
+	...list
+}: {noun: string} & ComponentProps<typeof SharedPagesList>) {
+	return (
+		<section aria-labelledby="source-pages-heading" className="space-y-2">
+			<h3 id="source-pages-heading" className="text-sm font-medium">
+				Links to this {noun}
+			</h3>
+			<SharedPagesList {...list} />
+		</section>
+	);
+}
+
+/**
 Unified share dialog: choose what to share (when several sources are offered) and how.
 */
 export function ShareDialog({
@@ -673,7 +716,8 @@ export function ShareDialog({
 	const [method, setMethod] = useState<ShareWay>('html');
 	// A backup-only dialog has nothing to upload, so it never asks the sync server about shared pages.
 	const backupOnly = all.length === 1 && all[0].backup === true;
-	const server = useSharedPagesServer(open && !backupOnly);
+	const shared = useSharedPages(open && !backupOnly, true);
+	const server = shared.server ?? 'none';
 	const [uploading, setUploading] = useState(false);
 	const [uploaded, setUploaded] = useState<SharedPage>();
 	// Optional password protection of the full backup ZIP; the secret lives only in this state.
@@ -717,6 +761,11 @@ export function ShareDialog({
 		source.groups.length === 1
 			? source.groups[0].name
 			: (source.pageTitle ?? title);
+	const pageKind = source.data?.kind === 'bookmarks' ? 'bookmarks' : 'sessions';
+	const sourcePages = source.pageSource
+		? shared.pages.filter((page) => page.source === source.pageSource)
+		: [];
+	const sourceNoun = pageKind === 'bookmarks' ? 'column' : 'session';
 	let fileText: string | undefined;
 	if (isFile && source.data) {
 		const {content} = buildExport(
@@ -836,7 +885,7 @@ export function ShareDialog({
 				showStatus('Saved the list of links.', false, {toast: true});
 			} else {
 				downloadFile(
-					shareHtmlPage(pageTitle, source.groups, PROJECT.name),
+					sharedPageHtml(pageTitle, source.groups, pageKind),
 					'text/html;charset=utf-8',
 					`${stamp}.html`,
 				);
@@ -857,9 +906,18 @@ export function ShareDialog({
 
 	async function upload() {
 		setUploading(true);
+		// A server that keeps the id a device picks lets the page carry its own link, for its Add to TabLodge panel.
+		const id = shared.linkBase ? newSharedPageId() : undefined;
 		const result = await send('UPLOAD_SHARED_PAGE', {
 			title: pageTitle,
-			html: shareHtmlPage(pageTitle, source.groups, PROJECT.name),
+			html: sharedPageHtml(
+				pageTitle,
+				source.groups,
+				pageKind,
+				id && `${shared.linkBase}${id}`,
+			),
+			id,
+			source: id && source.pageSource,
 		});
 		setUploading(false);
 		if (!result.ok) {
@@ -869,6 +927,7 @@ export function ShareDialog({
 
 		setUploaded(result.page);
 		await copyPageLink(result.page.url, showStatus);
+		await shared.reload();
 	}
 
 	if (uploaded) {
@@ -876,23 +935,34 @@ export function ShareDialog({
 			<Dialog open={open} onOpenChange={onOpenChange}>
 				<DialogContent size="md">
 					<DialogHeader>
-						<DialogTitle>Page uploaded</DialogTitle>
+						<DialogTitle>Link ready</DialogTitle>
 						<DialogDescription>
-							Anyone with this link can open the page. To update it, share
-							again. Delete it in Settings › Sync › Shared pages.
+							The link is copied. Anyone with it can open the page. Sharing
+							again makes a new link; delete the ones you no longer want below
+							or in Shared pages.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody>
-						<Label htmlFor="shared-page-link">Link</Label>
-						<Input
-							readOnly
-							id="shared-page-link"
-							className="font-mono text-xs"
-							value={uploaded.url}
-							onFocus={(event) => {
-								event.currentTarget.select();
-							}}
-						/>
+						<div className="space-y-2">
+							<Label htmlFor="shared-page-link">Link</Label>
+							<Input
+								readOnly
+								id="shared-page-link"
+								className="font-mono text-xs"
+								value={uploaded.url}
+								onFocus={(event) => {
+									event.currentTarget.select();
+								}}
+							/>
+						</div>
+						{sourcePages.length > 1 && (
+							<SourcePages
+								noun={sourceNoun}
+								pages={sourcePages}
+								showStatus={showStatus}
+								onDeleted={shared.reload}
+							/>
+						)}
 					</DialogBody>
 					<DialogFooter>
 						<Button asChild variant="outline">
@@ -980,6 +1050,14 @@ export function ShareDialog({
 								formatLabel={chosen.title}
 								fileText={fileText}
 							/>
+							{server === 'ready' && sourcePages.length > 0 && (
+								<SourcePages
+									noun={sourceNoun}
+									pages={sourcePages}
+									showStatus={showStatus}
+									onDeleted={shared.reload}
+								/>
+							)}
 						</>
 					)}
 				</DialogBody>
@@ -1000,7 +1078,7 @@ export function ShareDialog({
 							onClick={() => void upload()}
 						>
 							<CloudUpload aria-hidden="true" />
-							{uploading ? 'Uploading…' : 'Upload to my server'}
+							{uploading ? 'Uploading…' : 'Get a link'}
 						</Button>
 					)}
 					{!isBackup && chosen.copy && (
@@ -1032,7 +1110,7 @@ export function ShareDialog({
 	);
 }
 
-type ImportSource = {type: 'file'; name: string} | {type: 'browser'};
+type ImportSource = {type: 'file' | 'link'; name: string} | {type: 'browser'};
 type BookmarkTarget = 'folders' | 'column';
 
 type ImportDialogProps = {
@@ -1052,6 +1130,10 @@ type ImportDialogProps = {
 	Called after a successful import (the pages also reload on storage changes).
 	*/
 	onImported?: () => void | Promise<void>;
+	/**
+	A link to read as soon as the dialog opens, as the toolbar popup's Add this shared page asks.
+	*/
+	initialLink?: string;
 };
 
 const SUPPORTED_FILES =
@@ -1089,6 +1171,7 @@ export function ImportDialog({
 	state,
 	showStatus,
 	onImported,
+	initialLink,
 }: ImportDialogProps) {
 	const [kind, setKind] = useState<ImportKind>(initialKind);
 	// "Everything" only takes a full backup ZIP, which replaces or adds to all data and settings.
@@ -1109,6 +1192,7 @@ export function ImportDialog({
 	const [reading, setReading] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [dragging, setDragging] = useState(false);
+	const [link, setLink] = useState('');
 	const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('skip');
 	const [titlePolicy, setTitlePolicy] = useState<TitlePolicy>('existing');
 	const [target, setTarget] = useState<BookmarkTarget>('folders');
@@ -1165,6 +1249,11 @@ export function ImportDialog({
 		setTarget('folders');
 		setColumnId(columns[0]?.id ?? NEW_BOOKMARK_COLUMN);
 		setNewColumn({name: ''});
+		setLink(initialLink ?? '');
+		if (initialLink) {
+			void readLink(initialLink);
+		}
+
 		// Resets the form each time the dialog opens; later changes to the state or props must not wipe it.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
@@ -1348,6 +1437,37 @@ export function ImportDialog({
 		} finally {
 			if (generation === readGenerationRef.current) {
 				setUnlocking(false);
+			}
+		}
+	}
+
+	async function readLink(address: string) {
+		const generation = ++readGenerationRef.current;
+		setError('');
+		setReading(true);
+		try {
+			const result = await importFromLink(fetch, address);
+			if (generation !== readGenerationRef.current) {
+				return;
+			}
+
+			setParsed(result);
+			setSource({type: 'link', name: address.trim()});
+			setEverything(false);
+			if (result.kind) {
+				setKind(result.kind);
+			}
+		} catch (reason) {
+			if (generation === readGenerationRef.current) {
+				setError(
+					reason instanceof ImportFormatError
+						? reason.message
+						: 'Could not read that link.',
+				);
+			}
+		} finally {
+			if (generation === readGenerationRef.current) {
+				setReading(false);
 			}
 		}
 	}
@@ -1565,7 +1685,7 @@ export function ImportDialog({
 				? `Bring in a ${PROJECT.name} full backup. You choose whether to add it to what you have or replace everything, and you can undo it right after.`
 				: step === 'preview'
 					? 'Nothing is saved until you choose Import.'
-					: `Pick a file. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
+					: `Pick a file or paste a shared page link. A ${PROJECT.name} full backup is recognized on its own; any other file is read as the kind you choose below.`;
 	const kindSwitch =
 		// A full backup restores everything, so choosing Bookmarks or Sessions would only mislead.
 		!full && source?.type !== 'browser' ? (
@@ -1600,11 +1720,14 @@ export function ImportDialog({
 		>
 			<DialogContent
 				size="lg"
-				// The review step uses most of the viewport so the sample list gets the space left over.
+				// The review step uses most of the viewport so the sample list gets the space left over; the source step
+				// scrolls inside the viewport once From a link makes it taller than a short window.
 				className={
 					step === 'preview' && !full
 						? 'h-[calc(100dvh-2rem)] overflow-hidden'
-						: undefined
+						: step === 'source' && !locked
+							? 'max-h-[calc(100dvh-1rem)] overflow-hidden'
+							: undefined
 				}
 			>
 				<DialogHeader>
@@ -1664,7 +1787,7 @@ export function ImportDialog({
 					</form>
 				) : step === 'source' ? (
 					<>
-						<DialogBody>
+						<DialogBody className="-m-1 min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto p-1">
 							{kindSwitch && <div>{kindSwitch}</div>}
 							<section
 								aria-labelledby="import-file-heading"
@@ -1767,6 +1890,54 @@ export function ImportDialog({
 										<Bookmark aria-hidden="true" />
 										Read bookmarks
 									</Button>
+								</section>
+							)}
+							{!everything && (
+								<section
+									className="rounded-lg border border-border px-4 py-3"
+									aria-labelledby="import-link-heading"
+								>
+									<h3 id="import-link-heading" className="text-sm font-medium">
+										From a link
+									</h3>
+									<p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+										Paste the address of a {PROJECT.name} shared page. Its
+										columns or sessions come in as they were shared.
+									</p>
+									<form
+										className="mt-2 flex flex-col gap-2 sm:flex-row"
+										onSubmit={(event) => {
+											event.preventDefault();
+											void readLink(link);
+										}}
+									>
+										<Label htmlFor="import-link" className="sr-only">
+											Shared page link
+										</Label>
+										<Input
+											id="import-link"
+											type="url"
+											inputMode="url"
+											autoComplete="off"
+											spellCheck={false}
+											placeholder="https://your-server/p/…"
+											value={link}
+											className="min-w-0 flex-1"
+											onChange={(event) => {
+												setLink(event.target.value);
+											}}
+										/>
+										<Button
+											type="submit"
+											variant="secondary"
+											size="sm"
+											className="shrink-0 self-start sm:self-auto"
+											disabled={reading || link.trim() === ''}
+										>
+											<Link2 aria-hidden="true" />
+											{reading && link ? 'Reading' : 'Read link'}
+										</Button>
+									</form>
 								</section>
 							)}
 							{error && (
@@ -1909,6 +2080,8 @@ export function ImportDialog({
 									<span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
 										{source.type === 'browser' ? (
 											<Globe className="h-4 w-4" aria-hidden="true" />
+										) : source.type === 'link' ? (
+											<Link2 className="h-4 w-4" aria-hidden="true" />
 										) : (
 											<FileText className="h-4 w-4" aria-hidden="true" />
 										)}

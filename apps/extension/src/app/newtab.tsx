@@ -41,6 +41,7 @@ import {
 	PanelsTopLeft,
 	Upload,
 	ChevronRight,
+	Link2,
 } from 'lucide-react';
 import {
 	ActionContextMenu,
@@ -97,6 +98,7 @@ import {
 import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
 import {removedByEdit, shownTags} from '../shared/bookmark-tags';
+import {sharedPageSource} from '../shared/sync/shared-pages-client';
 import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
@@ -140,6 +142,7 @@ import {syncNowOutcome} from './sync-now';
 import {
 	DuplicateBookmarksDialog,
 	ImportDialog,
+	SharedPagesDialog,
 	SnapshotsDialog,
 	TrashDialog,
 	useShareDialog,
@@ -361,6 +364,9 @@ function NewTab() {
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	// `?importLink=` from the toolbar popup's Add this shared page: Import opens with that link read.
+	const [importLink, setImportLink] = useState<string>();
+	const [sharedPagesOpen, setSharedPagesOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
 	const pointerColumnDragRef = useRef<PointerColumnDrag | null>(null);
@@ -685,6 +691,17 @@ function NewTab() {
 			history.replaceState(null, '', stripSearchParams(location, ['q']));
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on purpose
+	}, []);
+
+	useEffect(() => {
+		const link = webUrl(new URLSearchParams(location.search).get('importLink'));
+		if (!link) {
+			return;
+		}
+
+		history.replaceState(null, '', stripSearchParams(location, ['importLink']));
+		setImportLink(link);
+		setImportOpen(true);
 	}, []);
 
 	useEffect(() => {
@@ -2027,6 +2044,7 @@ function NewTab() {
 								id: 'column',
 								label: 'Selected column',
 								description: column.name,
+								pageSource: sharedPageSource('column', column.id),
 								groups: [groupFor(column)],
 								data: {
 									kind: 'bookmarks' as const,
@@ -2534,6 +2552,12 @@ function NewTab() {
 								icon: Share2,
 								disabled: bookmarks.length === 0,
 								onSelect: () => shareBookmarks(),
+							},
+							{
+								id: 'shared-pages',
+								label: 'Shared pages',
+								icon: Link2,
+								onSelect: () => setSharedPagesOpen(true),
 							},
 							{type: 'separator'},
 							{
@@ -3076,10 +3100,21 @@ function NewTab() {
 				<ImportDialog
 					open={importOpen}
 					initialKind="bookmarks"
+					initialLink={importLink}
 					state={state}
 					showStatus={showStatus}
-					onOpenChange={setImportOpen}
+					onOpenChange={(open) => {
+						setImportOpen(open);
+						if (!open) {
+							setImportLink(undefined);
+						}
+					}}
 					onImported={() => void reload()}
+				/>
+				<SharedPagesDialog
+					open={sharedPagesOpen}
+					showStatus={showStatus}
+					onOpenChange={setSharedPagesOpen}
 				/>
 				<Dialog
 					open={dialog === 'bookmark'}

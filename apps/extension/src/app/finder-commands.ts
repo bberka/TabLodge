@@ -98,7 +98,15 @@ const COMMANDS = [
 	{
 		id: 'import-bookmarks',
 		title: 'Import',
-		keywords: ['import bookmarks', 'restore', 'load', 'upload', 'file'],
+		keywords: [
+			'import bookmarks',
+			'restore',
+			'load',
+			'upload',
+			'file',
+			'from a link',
+			'shared page',
+		],
 		icon: Upload,
 	},
 	{

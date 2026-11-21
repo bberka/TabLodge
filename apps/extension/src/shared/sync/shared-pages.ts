@@ -32,3 +32,19 @@ export const newSharedPageId = () =>
 		crypto.getRandomValues(new Uint8Array(22)),
 		(byte) => ID_ALPHABET[byte % 64],
 	).join('');
+
+/**
+Whether an address looks like a shared page's link, `<server>/p/<id>`. Any server can serve one, so only the path
+says so; reading the page tells for sure.
+*/
+export function isSharedPageUrl(address: string | undefined): boolean {
+	try {
+		const {protocol, pathname} = new URL(address ?? '');
+		return (
+			(protocol === 'https:' || protocol === 'http:') &&
+			/\/p\/[\w-]{22}$/.test(pathname)
+		);
+	} catch {
+		return false;
+	}
+}

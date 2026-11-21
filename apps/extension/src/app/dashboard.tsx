@@ -45,6 +45,7 @@ import {
 	Upload,
 	X,
 	type LucideIcon,
+	Link2,
 } from 'lucide-react';
 import {
 	Badge,
@@ -118,6 +119,7 @@ import {
 	isArchivedFolder,
 	visibleSessionFolders,
 } from '../shared/session-folders';
+import {sharedPageSource} from '../shared/sync/shared-pages-client';
 import {inPrivateWindow} from './private-config';
 import {
 	EmptyState,
@@ -133,7 +135,7 @@ import {
 	plural,
 } from './common';
 import {defaultBookmarkColumnId} from './default-column';
-import {ImportDialog, useShareDialog} from './lazy-dialogs';
+import {ImportDialog, SharedPagesDialog, useShareDialog} from './lazy-dialogs';
 import {
 	activateSessionTitle,
 	applyLinkDrag,
@@ -366,6 +368,7 @@ export function SessionManager({
 	const [, setBusy] = useState('');
 	const [importOpen, setImportOpen] = useState(false);
 	const {openShare, shareDialog} = useShareDialog(showStatus);
+	const [sharedPagesOpen, setSharedPagesOpen] = useState(false);
 	const dragItemRef = useRef<DragItem | null>(null);
 	// Drag state lives outside React state: only the cards a drag touches re-render, not the whole list.
 	const [dragStore] = useState(() => new DragStore());
@@ -1339,6 +1342,7 @@ export function SessionManager({
 						id: 'current',
 						label: 'Selected session',
 						description: group.name,
+						pageSource: sharedPageSource('session', group.id),
 						groups: [group],
 						data: {kind: 'sessions', groups: [group], folders},
 					},
@@ -1888,6 +1892,10 @@ export function SessionManager({
 									<Share2 className="h-4 w-4" />
 									Share and export sessions
 								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={() => setSharedPagesOpen(true)}>
+									<Link2 className="h-4 w-4" />
+									Shared pages
+								</DropdownMenuItem>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem
 									onSelect={() =>
@@ -2371,6 +2379,11 @@ export function SessionManager({
 			<StatusLine status={status} />
 
 			{shareDialog}
+			<SharedPagesDialog
+				open={sharedPagesOpen}
+				showStatus={showStatus}
+				onOpenChange={setSharedPagesOpen}
+			/>
 			<ImportDialog
 				open={importOpen}
 				initialKind="sessions"
