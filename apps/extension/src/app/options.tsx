@@ -484,7 +484,7 @@ const settingsGroups: Array<{
 			{
 				name: 'saveDuplicateHandling',
 				label: 'When a saved URL is saved again',
-				help: 'Applies to saving tabs. Rejected duplicates are not stored twice and their tabs stay open. The save shows a toast with a Force add button to store them anyway.',
+				help: 'Applies to saving tabs and bookmarks. A session or column never holds the same address twice. This setting decides whether an address saved somewhere else is saved again. Rejected tabs stay open, and the save shows a toast with a Force add button to store them anyway.',
 				type: 'select',
 				options: [
 					['allow', 'Allow duplicates'],
@@ -825,7 +825,7 @@ const settingsGroups: Array<{
 					['copy', 'Copy link'],
 					['edit', 'Edit'],
 					['delete', 'Delete'],
-					['move', 'Move to'],
+					['move', 'Move to column…'],
 					['move-up', 'Move up'],
 					['move-down', 'Move down'],
 				],
@@ -2216,32 +2216,30 @@ function Options() {
 							description={group.description}
 							icon={group.icon}
 							className={SECTION_SCROLL_CLASS}
-							action={
+							reset={
 								fields.some((field) => changedFromDefault(field)) && (
-									<span className="flex justify-end">
-										<IconTooltip label={`Reset ${group.title} to default`}>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												className="h-8 w-8 shrink-0"
-												aria-label={`Reset ${group.title} to default`}
-												onClick={() => {
-													ask({
-														title: `Reset ${group.title} to default?`,
-														description: `Every changed setting in ${group.title} goes back to its default. You can undo this right after.`,
-														confirmLabel: 'Reset',
-														// The latest resetGroup, so it reads the settings as they are when the user confirms.
-														run: async () =>
-															resetGroupRef.current(group.title, fields),
-														section: group.title,
-													});
-												}}
-											>
-												<RotateCcw className="h-4 w-4" aria-hidden="true" />
-											</Button>
-										</IconTooltip>
-									</span>
+									<IconTooltip label={`Reset ${group.title} to default`}>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className="h-8 w-8 shrink-0"
+											aria-label={`Reset ${group.title} to default`}
+											onClick={() => {
+												ask({
+													title: `Reset ${group.title} to default?`,
+													description: `Every changed setting in ${group.title} goes back to its default. You can undo this right after.`,
+													confirmLabel: 'Reset',
+													// The latest resetGroup, so it reads the settings as they are when the user confirms.
+													run: async () =>
+														resetGroupRef.current(group.title, fields),
+													section: group.title,
+												});
+											}}
+										>
+											<RotateCcw className="h-4 w-4" aria-hidden="true" />
+										</Button>
+									</IconTooltip>
 								)
 							}
 						>
@@ -2250,7 +2248,6 @@ function Options() {
 									<SettingRow
 										key={field.name}
 										settingName={field.name}
-										hasReset={changedFromDefault(field)}
 										label={hl(field.label)}
 										help={
 											field.name === 'sessionNameStyle' ? (
@@ -2284,28 +2281,30 @@ function Options() {
 											field.requires || field.enabled || field.parent,
 										)}
 										highlight={query}
+										reset={
+											changedFromDefault(field) && defaultSettings ? (
+												<IconTooltip label={`Reset ${field.label} to default`}>
+													<Button
+														type="button"
+														variant="ghost"
+														size="icon"
+														className="h-8 w-8 shrink-0"
+														aria-label={`Reset ${field.label} to default`}
+														onClick={() => {
+															focusSettingControl(field);
+															void updateSetting(
+																field.name,
+																defaultSettings[field.name],
+																`Restored ${field.label} to its default.`,
+															);
+														}}
+													>
+														<RotateCcw className="h-4 w-4" aria-hidden="true" />
+													</Button>
+												</IconTooltip>
+											) : undefined
+										}
 									>
-										{changedFromDefault(field) && defaultSettings && (
-											<IconTooltip label={`Reset ${field.label} to default`}>
-												<Button
-													type="button"
-													variant="ghost"
-													size="icon"
-													className="h-8 w-8 shrink-0"
-													aria-label={`Reset ${field.label} to default`}
-													onClick={() => {
-														focusSettingControl(field);
-														void updateSetting(
-															field.name,
-															defaultSettings[field.name],
-															`Restored ${field.label} to its default.`,
-														);
-													}}
-												>
-													<RotateCcw className="h-4 w-4" aria-hidden="true" />
-												</Button>
-											</IconTooltip>
-										)}
 										{field.type === 'switch' ? (
 											<Switch
 												checked={
@@ -3185,7 +3184,7 @@ function SettingRow({
 	highlight = '',
 	inset,
 	settingName,
-	hasReset = false,
+	reset,
 	children,
 }: {
 	label: ReactNode;
@@ -3194,7 +3193,10 @@ function SettingRow({
 	highlight?: string;
 	inset?: boolean;
 	settingName: string;
-	hasReset?: boolean;
+	/**
+	The reset button; it stays on the control's line and lines up with its first row.
+	*/
+	reset?: ReactNode;
 	children?: ReactNode;
 }) {
 	return (
@@ -3225,13 +3227,14 @@ function SettingRow({
 					</p>
 				)}
 			</div>
-			<div
-				className={cn(
-					'shrink-0',
-					hasReset && 'flex flex-wrap items-center justify-end gap-2',
+			{/* The control keeps one place in the tree whether or not the reset button shows: remounting it would close an open popover when a change makes the reset appear. */}
+			<div className="flex min-w-0 items-start gap-2 sm:shrink-0 sm:justify-end">
+				{Boolean(reset) && (
+					<span className="flex h-9 shrink-0 items-center">{reset}</span>
 				)}
-			>
-				{children}
+				<div className="flex min-h-9 min-w-0 flex-1 flex-col justify-center sm:flex-none">
+					{children}
+				</div>
 			</div>
 		</div>
 	);
@@ -3400,8 +3403,9 @@ function NumberSelectSetting({
 	const [customPicked, setCustomPicked] = useState(false);
 	const isPreset = options.some(([option]) => Number(option) === value);
 	const showCustom = custom !== undefined && (customPicked || !isPreset);
+	// The select and the days field share one line on a phone and stack from `sm`, where the row is already crowded.
 	return (
-		<div className="flex flex-col gap-2">
+		<div className="flex items-center gap-2 sm:flex-col sm:items-end">
 			<Select
 				value={showCustom ? CUSTOM_OPTION : String(value)}
 				disabled={disabled}
@@ -3415,7 +3419,10 @@ function NumberSelectSetting({
 					onCommit(Number(next));
 				}}
 			>
-				<SelectTrigger className="w-full sm:w-64" aria-label={label}>
+				<SelectTrigger
+					className="min-w-0 flex-1 sm:w-64 sm:flex-none"
+					aria-label={label}
+				>
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>
@@ -3473,7 +3480,7 @@ function NumberSetting({
 	}
 
 	return (
-		<div className="flex items-center gap-2 text-sm">
+		<div className="flex shrink-0 items-center gap-2 text-sm">
 			<Input
 				type="number"
 				inputMode="numeric"

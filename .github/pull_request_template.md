@@ -4,7 +4,7 @@
 
 ## Spec
 
-<!-- Link the issue. Copy its Acceptance list and put the proof beside each criterion. For a refactor, docs, or tooling change, one sentence on what must stay true. -->
+<!-- Link the issue. Copy its Acceptance list and put the proof beside each criterion. For a refactor, docs, or tooling change, one sentence on what must stay true. A feature carries the `Entry points:` and `Settings:` lines from docs/agents/cross-app.md. -->
 
 ## Model
 

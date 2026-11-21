@@ -3,7 +3,7 @@ import {describe, test} from 'vite-plus/test';
 import {mediaSave} from '../src/shared/save-media';
 
 const src = 'https://cdn.example/a/cat.png';
-const none = new Set<string>();
+const none = () => false;
 
 describe('mediaSave', () => {
 	test('saves an image or a media file by its own address, named after the page', () => {
@@ -110,10 +110,13 @@ describe('mediaSave', () => {
 	});
 
 	test('skips an address already bookmarked or held in the trash', () => {
-		assert.deepEqual(mediaSave({srcUrl: src}, new Set([src]), []), {
-			ok: false,
-			reason: 'saved',
-		});
+		assert.deepEqual(
+			mediaSave({srcUrl: src}, (url) => url === src, []),
+			{
+				ok: false,
+				reason: 'saved',
+			},
+		);
 		const deletedColumn = {
 			kind: 'column',
 			data: {bookmarks: [{url: 'https://other.example/'}, {url: src}]},

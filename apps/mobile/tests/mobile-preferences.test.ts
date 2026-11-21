@@ -4,7 +4,7 @@ import {
 	MOBILE_APP_KEYS_MAX,
 	normalizeMobileApp,
 } from '../../extension/src/shared/library-normalize';
-import {ANDROID_LOCAL_PREFERENCES} from '../../extension/src/shared/local-settings';
+import {ANDROID_PREFERENCES} from '../../extension/src/shared/setting-scopes';
 import {
 	AT_PREFIX,
 	settlePreferences,
@@ -47,25 +47,23 @@ const changed: Preferences = {
 };
 
 describe('preference schema', () => {
-	// The guard that keeps every preference syncing (#397): one stays on the phone only when the shared
-	// local-settings.ts lists it with a reason, which docs/PRIVACY.md repeats (extension/tests/local-settings.test.ts).
-	test('every preference syncs between phones, unless it is listed as local with a reason', () => {
+	// The guard that keeps every preference syncing (#397, #418): one stays on the phone only when the shared
+	// setting-scopes.ts scopes it to the device with a reason, which docs/PRIVACY.md repeats
+	// (extension/tests/setting-scopes.test.ts).
+	test('a preference reaches another phone unless it is scoped to this device', () => {
+		const chosen = {...defaults, ...changed};
 		// Through the library as the extension keeps it, which drops a value it cannot hold.
 		const arrived = readSyncedPreferences(
-			normalizeMobileApp(syncedPreferences(defaults)),
+			normalizeMobileApp(syncedPreferences(chosen)),
 		);
 		for (const key of Object.keys(defaults) as Array<keyof Preferences>) {
-			assert.ok(
-				Object.hasOwn(arrived, key) ||
-					Object.hasOwn(ANDROID_LOCAL_PREFERENCES, key),
-				`The preference "${key}" does not reach the other phones and is not listed in ANDROID_LOCAL_PREFERENCES in local-settings.ts. Every preference syncs unless that list gives the reason it stays on the phone.`,
-			);
-		}
-
-		for (const key of Object.keys(ANDROID_LOCAL_PREFERENCES)) {
-			assert.ok(
-				Object.hasOwn(defaults, key),
-				`"${key}" is listed as a local preference but the app has no such preference.`,
+			const device = ANDROID_PREFERENCES[key][0] === 'device';
+			assert.equal(
+				Object.hasOwn(arrived, key),
+				!device,
+				device
+					? `The preference "${key}" is scoped to this device but reaches another phone.`
+					: `The preference "${key}" does not reach the other phones. Every preference syncs unless setting-scopes.ts scopes it to the device with a reason.`,
 			);
 		}
 	});
@@ -115,12 +113,15 @@ describe('preference schema', () => {
 			glassEffect: false,
 			openApp: 'org.example',
 		};
-		assert.deepEqual(readSyncedPreferences(raw), {swipeRight: 'open'});
+		// The theme and the bar are the same on every phone (#418); the browser a phone opens links in is its own.
+		assert.deepEqual(readSyncedPreferences(raw), {
+			swipeRight: 'open',
+			theme: 'light',
+			glassEffect: false,
+		});
 		const loaded = parsePreferences(raw);
-		assert.equal(loaded.theme, 'light');
-		assert.equal(loaded.glassEffect, false);
 		assert.equal(loaded.openApp, 'org.example');
-		assert.equal('glassEffect' in syncedPreferences(loaded), false);
+		assert.equal('openApp' in syncedPreferences(loaded), false);
 	});
 
 	test('the Icons only bar and the old site icon switch still read', () => {

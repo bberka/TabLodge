@@ -7,7 +7,7 @@ import {
 	type ComponentType,
 	type ReactNode,
 } from 'react';
-import {Bookmark, CircleAlert, CircleCheck, X} from 'lucide-react';
+import {Bookmark, CircleAlert, CircleCheck, Info, X} from 'lucide-react';
 import {
 	Card,
 	CardContent,
@@ -15,7 +15,19 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../shared/ui';
-import type {ActionFailure, ActionResult, TabLodgeState} from '../shared/types';
+import type {
+	ActionFailure,
+	ActionResult,
+	SaveResult,
+	TabLodgeState,
+} from '../shared/types';
+import {
+	REOPEN_FAILED,
+	reopenedMessage,
+	saveMessage,
+	saveOutcomeOf,
+	UNDO_LABEL,
+} from '../shared/save-feedback';
 import {webUrl} from '../shared/web-url';
 import {hostIsExcluded} from '../shared/excluded-sites';
 import {PrivateWindowMark} from './private-window-appearance';
@@ -501,6 +513,10 @@ export type Status = {
 	*/
 	id?: string;
 	/**
+	A notice, not a success or an error: a save that stored nothing because it was a duplicate. It is shown as a toast with an info icon, never the success check.
+	*/
+	notice?: boolean;
+	/**
 	A button on the toast, such as Undo. The toast stays a little longer while it has one.
 	*/
 	action?: StatusAction;
@@ -514,6 +530,10 @@ export type StatusOptions = {
 	Show a success message as a visible toast instead of only announcing it to screen readers.
 	*/
 	toast?: boolean;
+	/**
+	Marks the toast as a notice (see `Status.notice`).
+	*/
+	notice?: boolean;
 	/**
 	Adds a button to the toast (always shown as a toast), for example `{label: 'Undo', onClick}`.
 	*/
@@ -561,10 +581,89 @@ export function forceAddAction(
 }
 
 /**
-The note for a save that left duplicates out, such as " 2 duplicates not saved." (empty when none).
+Reports a finished SAVE_TABS the same way on every page (save-feedback.ts has the wording): success, a skipped
+duplicate, or the tabs left open for Force add. A save that closed its tabs offers **Undo**, which reopens them from the
+new session; a save with rejected duplicates offers Force add instead, because a toast holds one button.
 */
-export const duplicatesNote = (skipped: number) =>
-	skipped ? ` ${plural(skipped, 'duplicate')} not saved.` : '';
+export function reportSessionSave(
+	result: Pick<
+		SaveResult,
+		'count' | 'groups' | 'skipped' | 'rejectedTabIds' | 'groupId'
+	>,
+	options: {
+		closeOnSave: boolean;
+		showStatus: ShowStatus;
+		reload: () => unknown;
+	},
+) {
+	const {showStatus, reload} = options;
+	const {groupId} = result;
+	const forceable = result.rejectedTabIds.length > 0;
+	const closed =
+		options.closeOnSave &&
+		!forceable &&
+		groupId !== null &&
+		result.groups === 1 &&
+		result.count > 0;
+	const outcome = saveOutcomeOf(
+		{ok: true, count: result.count, skipped: result.skipped},
+		'tab',
+		{closed},
+	);
+	const message = saveMessage(outcome);
+	if (forceable) {
+		showStatus(message, false, {
+			notice: outcome.kind === 'duplicate',
+			action: forceAddAction(result.rejectedTabIds, showStatus, reload),
+		});
+		return;
+	}
+
+	if (closed && groupId) {
+		showStatus(message, false, {
+			action: {
+				label: UNDO_LABEL,
+				async onClick() {
+					const reopened = await send('RESTORE_GROUP', {
+						groupId,
+						restoreTarget: 'current-window',
+						restoreMode: 'keep',
+						activate: false,
+					});
+					showStatus(
+						reopened?.ok
+							? reopenedMessage(reopened.count)
+							: reopened?.error || REOPEN_FAILED,
+						!reopened?.ok,
+						{toast: true},
+					);
+				},
+			},
+		});
+		return;
+	}
+
+	showStatus(message, outcome.kind === 'failed', {
+		toast: true,
+		notice: outcome.kind === 'duplicate',
+	});
+}
+
+/**
+Reports a save that stored nothing. A skipped duplicate is a plain notice (it never reads as success, and it is not an
+error either); anything else is the error toast.
+*/
+export function showSaveFailure(
+	showStatus: ShowStatus,
+	result: {error?: string; duplicate?: true} | undefined,
+	fallback: string,
+) {
+	showStatus(
+		result?.error || fallback,
+		!result?.duplicate,
+		result?.duplicate ? {toast: true, notice: true} : undefined,
+	);
+}
 
 export function useStatus(): [Status | null, ShowStatus] {
 	const [status, setStatus] = useState<Status | null>(null);
@@ -575,6 +674,7 @@ export function useStatus(): [Status | null, ShowStatus] {
 						message,
 						error: Boolean(error),
 						toast: Boolean(options.toast || options.action),
+						...(options.notice && {notice: true}),
 						id: `${Date.now()}-${Math.random()}`,
 						...(options.action && {action: options.action}),
 					}
@@ -646,7 +746,11 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 		document.addEventListener('keydown', onKeyDown);
 		return () => document.removeEventListener('keydown', onKeyDown);
 	}, [undoAction, key]);
-	const Icon = visible?.error ? CircleAlert : CircleCheck;
+	const Icon = visible?.error
+		? CircleAlert
+		: visible?.notice
+			? Info
+			: CircleCheck;
 	return (
 		<>
 			<p className="sr-only" role="status" aria-live="polite">
@@ -672,7 +776,11 @@ export function StatusLine({status}: {status: Status | null | undefined}) {
 					<Icon
 						className={cn(
 							'mt-0.5 h-4 w-4 shrink-0',
-							visible.error ? 'text-destructive' : 'text-primary',
+							visible.error
+								? 'text-destructive'
+								: visible.notice
+									? 'text-muted-foreground'
+									: 'text-primary',
 						)}
 						aria-hidden="true"
 					/>
@@ -940,11 +1048,14 @@ export function EmptyState({
 
 // Header is a flex row (space-y reset so the text block is not pushed down) with the icon
 // centered against the title/description block, on a tinted strip separated from the body.
+// `reset` is a small icon button that stays beside the title at every width; `action` is a
+// text button that drops onto its own full width line on a phone.
 export function SectionCard({
 	id,
 	title,
 	description,
 	icon: Icon,
+	reset,
 	action,
 	children,
 	className = '',
@@ -952,6 +1063,7 @@ export function SectionCard({
 	title: ReactNode;
 	description?: ReactNode;
 	icon?: IconComponent;
+	reset?: ReactNode;
 	action?: ReactNode;
 	children?: ReactNode;
 	className?: string;
@@ -965,7 +1077,7 @@ export function SectionCard({
 						<Icon className="h-4 w-4" aria-hidden="true" />
 					</span>
 				)}
-				<div className="min-w-[12rem] flex-1">
+				<div className="min-w-0 flex-1 sm:min-w-[12rem]">
 					<CardTitle className="text-[15px] leading-6">{title}</CardTitle>
 					{Boolean(description) && (
 						<CardDescription className="text-xs leading-5">
@@ -973,6 +1085,7 @@ export function SectionCard({
 						</CardDescription>
 					)}
 				</div>
+				{Boolean(reset) && <div className="shrink-0">{reset}</div>}
 				{Boolean(action) && (
 					<div className="max-sm:basis-full max-sm:[&>*]:w-full sm:shrink-0">
 						{action}
