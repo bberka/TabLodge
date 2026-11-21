@@ -65,9 +65,6 @@ export const PRIVATE_LOCK_MODES = [
 ] as const;
 export const PRIVATE_LOCK_MINUTES = [1, 5, 15, 30, 60] as const;
 
-const SITE_ICONS = ['off', 'server', 'direct'] as const;
-export type SiteIcons = (typeof SITE_ICONS)[number];
-
 const OPEN_WITH = ['system', 'inapp', 'app'] as const;
 export type OpenWith = (typeof OPEN_WITH)[number];
 
@@ -156,14 +153,9 @@ export type Preferences = {
 	*/
 	backgroundSync: boolean;
 	/**
-	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
-	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
-	itself when there is no server; `off` shows letter tiles.
-	*/
-	siteIcons: SiteIcons;
-	/**
-	Look the page up while saving a link, to show its icon and fill in its title. Through the sync server when one is
-	connected, otherwise from the site itself. On by default.
+	Look the page up while saving a link, to show its icon and fill in its title: a phone only lookup, which also fills in
+	the title of a bare shared address. Through the sync server when one is connected, otherwise from the site itself.
+	On by default. The extension's hover card, `linkPreviews`, is a different setting.
 	*/
 	savePreview: boolean;
 	/**
@@ -266,10 +258,6 @@ const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
 	syncSettings: field(true, bool),
 	syncPrivate: field(true, bool),
 	backgroundSync: field(true, bool),
-	// An earlier version stored a switch: on asked the server or the site, off showed none.
-	siteIcons: field('server', (raw) =>
-		raw === true ? 'direct' : oneOf(SITE_ICONS)(raw),
-	),
 	savePreview: field(true, bool),
 	accent: field('default', (raw) => (isAccent(raw) ? raw : undefined)),
 	theme: field('system', oneOf(['system', 'light', 'dark'])),
@@ -343,6 +331,12 @@ function readKeys(
 	}
 
 	return found;
+}
+
+export function legacySiteIconsOf(stored: unknown): 'browser' | undefined {
+	return stored === true || ['off', 'direct'].includes(stored as string)
+		? 'browser'
+		: undefined;
 }
 
 /**

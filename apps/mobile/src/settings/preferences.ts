@@ -8,6 +8,7 @@ import {useSyncExternalStore} from 'react';
 import {readJson, writeJson} from '../platform/storage';
 import {
 	defaults,
+	legacySiteIconsOf,
 	parsePreferences,
 	SYNCED_KEYS,
 	type Look,
@@ -41,6 +42,7 @@ const KEY = 'tablodge.prefs';
 const CHANGED_AT_KEY = 'tablodge.prefs.changed-at';
 
 let current = defaults;
+let legacySiteIcons: 'browser' | undefined;
 // When this phone last changed each synced preference, or took it from another phone. Settings sync compares these.
 let changedAt: ChangedAt = {};
 const listeners = new Set<() => void>();
@@ -62,12 +64,29 @@ export async function loadPreferences(): Promise<void> {
 		return;
 	}
 
+	legacySiteIcons = legacySiteIconsOf(
+		(saved as Record<string, unknown>).siteIcons,
+	);
 	current = parsePreferences(saved);
 	applyTheme(current.theme);
 	for (const listener of listeners) {
 		listener();
 	}
 }
+
+export const getLegacySiteIcons = (): 'browser' | undefined => legacySiteIcons;
+
+export function clearLegacySiteIcons(): void {
+	if (!legacySiteIcons) {
+		return;
+	}
+
+	legacySiteIcons = undefined;
+	void writeJson(KEY, current);
+}
+
+const withLegacySiteIcons = (prefs: Preferences) =>
+	legacySiteIcons ? {...prefs, siteIcons: 'off'} : prefs;
 
 let onLocalChange: ((change: Partial<Preferences>) => void) | undefined;
 
@@ -90,7 +109,7 @@ function apply(change: Partial<Preferences>): void {
 		listener();
 	}
 
-	void writeJson(KEY, current);
+	void writeJson(KEY, withLegacySiteIcons(current));
 	void writeJson(CHANGED_AT_KEY, changedAt);
 }
 
