@@ -650,16 +650,6 @@ const settingsGroups: Array<{
 				],
 			},
 			{
-				name: 'singleTabBehavior',
-				label: 'When restoring one tab',
-				help: 'Choose whether a restored single tab becomes active or opens in the background.',
-				type: 'select',
-				options: [
-					['stay', 'Stay on this page'],
-					['switch', 'Switch to the restored tab'],
-				],
-			},
-			{
 				name: 'restoreSplitTabs',
 				label: 'Tabs saved from a split view',
 				help: 'Reopen both tabs side by side in one tab slot (Chromium 155 or newer). If the browser can’t split them, they open as neighboring tabs. Restoring one tab of a pair opens just that tab.',

@@ -928,38 +928,6 @@ export function SessionManager({
 		);
 	}
 
-	async function restoreTab(
-		group: Session,
-		tab: SavedTabRecord,
-		event?: ClickModifiers,
-	) {
-		const result = await send('RESTORE_TAB', {
-			groupId: group.id,
-			tabId: tab.id,
-			restoreMode: event?.ctrlKey || event?.metaKey ? 'keep' : undefined,
-			restoreTarget: event?.shiftKey ? 'always-new-window' : undefined,
-			activate: event?.ctrlKey || event?.metaKey ? false : undefined,
-		});
-		if (!result?.ok) {
-			showStatus(result?.error || 'Could not restore this tab.', true);
-		} else if (result.failed) {
-			showStatus(
-				restoreFailureText(result.failures?.[0]) ||
-					'This tab could not be restored.',
-				true,
-			);
-		} else if (result.trashId) {
-			offerTrashUndo(
-				'Restored the tab and removed it from the session.',
-				result.trashId,
-				showStatus,
-				reload,
-			);
-		}
-
-		await reload();
-	}
-
 	async function saveTabDetails(event: SyntheticEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!editingTab) {
@@ -1368,7 +1336,6 @@ export function SessionManager({
 		replaceFromWindow: (group) => updateFromWindow(group, 'replace'),
 		appendWindow: (group) => updateFromWindow(group, 'append'),
 		splitSelected,
-		restoreTab,
 		updateGroup,
 		archive: archiveGroup,
 		share: (group) =>
@@ -2936,11 +2903,6 @@ type CardActions = {
 	Moves the group's selected links into a new session.
 	*/
 	splitSelected: (group: Session) => void;
-	restoreTab: (
-		group: Session,
-		tab: SavedTabRecord,
-		event?: ClickModifiers,
-	) => void;
 	updateGroup: (group: Session, fields: SessionFields) => void;
 	share: (group: Session) => void;
 	openTab: (tab: SavedTabRecord, requested?: 'current' | 'new') => void;
@@ -3744,8 +3706,6 @@ const SavedTab = memo(
 		);
 		const onSelect = (checked: boolean, event: ClickModifiers) =>
 			handlers.select(tabKey(group.id, tab.id), checked, event);
-		const onRestore = (event: ClickModifiers) =>
-			handlers.restoreTab(group, tab, event);
 		const onOpen = (requested?: 'current' | 'new') =>
 			handlers.openTab(tab, requested);
 		const onDelete = () => handlers.deleteTab(group, tab);
@@ -3779,12 +3739,6 @@ const SavedTab = memo(
 				icon: ACTION_ICONS.openPrivate,
 				hidden: !canOpenPrivateWindow,
 				onSelect: () => handlers.openTabPrivately(tab),
-			},
-			{
-				id: 'restore',
-				label: 'Restore',
-				icon: RotateCcw,
-				onSelect: () => onRestore({}),
 			},
 			{type: 'separator'},
 			{
@@ -4029,17 +3983,6 @@ const SavedTab = memo(
 						)}
 					</div>
 					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/tab:opacity-100 [@media(hover:none)]:opacity-100">
-						<IconTooltip label="Restore tab">
-							<Button
-								variant="ghost"
-								size="icon"
-								className={action}
-								aria-label={`Restore ${label}`}
-								onClick={(event) => onRestore(event)}
-							>
-								<RotateCcw />
-							</Button>
-						</IconTooltip>
 						<IconTooltip label="Remove from session">
 							<Button
 								variant="ghost"

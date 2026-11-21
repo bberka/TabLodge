@@ -219,7 +219,7 @@ function Help() {
 			title: 'Restoring sessions',
 			icon: RotateCcw,
 			intro:
-				'Restore a whole session or open one saved tab. You can keep the original session and choose where tabs open.',
+				'Restore a whole session. You can keep the original session and choose where tabs open.',
 			keywords: [
 				'restore tabs',
 				'duplicate tabs',
@@ -306,10 +306,10 @@ function Help() {
 						'ctrl control command cmd meta click keep original session shift click new window',
 				},
 				{
-					title: 'Restore one tab or a split view',
-					body: 'For one tab, Settings chooses whether it becomes active or opens in the background. Tabs saved side by side reopen as a split view in Chromium 155 or newer. Settings can instead open them as separate tabs, and the browser may do the same if it cannot recreate the split. Firefox has no split view, so the pair opens as neighboring tabs.',
+					title: 'Split view',
+					body: 'Tabs saved side by side reopen as a split view in Chromium 155 or newer. Settings can instead open them as separate tabs, and the browser may do the same if it cannot recreate the split. Firefox has no split view, so the pair opens as neighboring tabs.',
 					searchText:
-						'single tab active background split view side by side chromium 155 separate neighboring tabs',
+						'split view side by side chromium 155 separate neighboring tabs',
 				},
 			],
 			action: {
