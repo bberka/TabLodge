@@ -64,6 +64,7 @@ import {
 	canOpenPrivateWindow,
 	isPinnedLodgeTab,
 	openInPrivateWindow,
+	linkDestination,
 	openLink,
 	openOwnPage,
 } from './link-target';
@@ -330,14 +331,28 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 
 				case 'bookmark': {
 					closeFirst();
-					await openLink(item.url!, 'bookmark', settings, requested, where);
+					await openLink(
+						item.url!,
+						'bookmark',
+						settings,
+						requested,
+						where,
+						false,
+					);
 					closeLast();
 					return;
 				}
 
 				case 'saved-tab': {
 					closeFirst();
-					await openLink(item.url!, 'session', settings, requested, where);
+					await openLink(
+						item.url!,
+						'session',
+						settings,
+						requested,
+						where,
+						false,
+					);
 					closeLast();
 					return;
 				}
@@ -350,6 +365,7 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 						settings,
 						requested ?? 'current',
 						where,
+						false,
 					);
 					closeLast();
 					return;
@@ -502,7 +518,10 @@ function useFinder({state, actions, onDone, active, standalone}: FinderProps) {
 				}
 
 				case 'copy-link': {
-					await writeClipboard({text: item.url ?? '', html: ''});
+					await writeClipboard({
+						text: linkDestination(item.url ?? '', settings),
+						html: '',
+					});
 					setMenu(undefined);
 					setMessage('Link copied.');
 					return;

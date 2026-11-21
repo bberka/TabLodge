@@ -21,7 +21,7 @@ Data stays in local extension storage within your browser profile.
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `tablodge.state`, `tablodge.session.*`, `tablodge.bookmarks.*`             | Saved sessions, titles, URLs, notes, pinned state, tab groups, split view pairs, saved window size and position, folders, bookmarks with their notes and tags, columns, settings, and excluded sites. `tablodge.state` is a small index; each session has its own key and the bookmarks share one |
 | `tablodge.state.premigration`, `tablodge.migration`                        | For one week after an update that moves the library to this layout, an exact copy of the library as it was; a short progress note while that move is unfinished |
-| `uiTheme`, `uiAccent`                                                      | Your system, light, or dark theme choice and your accent color (a preset name, `browser`, or a hex color)                                                                             |
+| `uiTheme`, `uiAccent`                                                      | Your system, light, or dark theme choice and your accent color (a preset name, `browser`, or a hex color), which sync with your other browsers but not your phones                    |
 | `tablodge.snapshots`, `tablodge.snapshots.live`, `tablodge.snapshots.meta` | Snapshots of open windows and flags used to detect a possible browser crash                                                                |
 | `tablodge.backups`                                                         | Automatic, manual, and safety backups of sessions, bookmarks, and settings                                                                 |
 | `tablodge.trash`                                                           | Deleted sessions, saved links, bookmarks, and columns, which sync when a server is connected                                                                                   |
@@ -116,7 +116,7 @@ Access: `https://substack.com/*` and `https://*.substack.com/*`, which covers pu
 
 Sync is off until you enter a server address and token in **Settings › Sync**. The server is one you run yourself ([Self hosting](self-hosting.md)); TabLodge runs no server of its own and receives nothing.
 
-- **What is sent.** Sessions (name, folder, description, dates, and the name of the window they were saved from), saved tabs (title, URL, notes, pinned state, tab group, split view pair), folders, bookmark columns, bookmarks with their notes and tags (notes only to a server that lists `notes` among its features, tags only to one that lists `tags`; an older one never receives them), the trash bin (each deleted item with the data needed to put it back, so what you delete on one device can be restored on another; an item larger than about 200 KB stays where it was deleted, and a server that is not up to date does not receive the trash), the sites you added in **Settings › Sources** with their column and save mode (only to a server that lists `sources` among its features), and your settings (all but recovery snapshots, automatic backups, and browser bookmark monitoring, unless you turn **Sync settings** off, and including, as one entry the extension never reads, the Android app's look and gesture settings, each with the time it was last changed), each with a time stamp and a random id for this browser. Deletes are sent so other devices remove the item too.
+- **What is sent.** Sessions (name, folder, description, dates, and the name of the window they were saved from), saved tabs (title, URL, notes, pinned state, tab group, split view pair), folders, bookmark columns, bookmarks with their notes and tags (notes only to a server that lists `notes` among its features, tags only to one that lists `tags`; an older one never receives them), the trash bin (each deleted item with the data needed to put it back, so what you delete on one device can be restored on another; an item larger than about 200 KB stays where it was deleted, and a server that is not up to date does not receive the trash), the sites you added in **Settings › Sources** with their column and save mode (only to a server that lists `sources` among its features), and your settings (all but recovery snapshots, automatic backups, and browser bookmark monitoring, unless you turn **Sync settings** off, with the theme, accent, and private window accent, which other browsers apply and phones keep without using, and including, as one entry the extension never reads, the Android app's look and gesture settings, each with the time it was last changed), each with a time stamp and a random id for this browser. Deletes are sent so other devices remove the item too.
 - **Device names.** Each session and each bookmark records the name of the device that saved it (the name set in **Settings › Sync**, or by default the browser and system, or the phone's make and model) and whether that is a computer or a phone. It travels with the session or bookmark like the rest of its data, including exports and backups, but not into a shared page. The name you set for a device stays on that device. Renaming it does not change what was already saved.
 - **What stays here.** Page copies, recovery snapshots, automatic and safety backups, the id of the window a session was saved from, that window's size and position, when the session was last opened, the settings in [What stays on each device](#what-stays-on-each-device), and a separate private library unless you turn on its sync (below). Every other setting is sent while **Settings › Sync › Sync settings** is on; the ones added since 0.3.0 only to a server that lists `settings` among its features.
 - **How it travels.** HTTPS to the address you enter (plain HTTP only to `localhost`, `127.0.0.1`, or `[::1]`), with the token in each request. The server stores the library in plain text, not encrypted end to end, so whoever runs it can read your URLs, titles, and notes.
@@ -140,18 +140,20 @@ A copy is text only: no images, scripts, styles, or links from the page, and it 
 
 ## What stays on each device
 
-Every setting syncs while **Settings › Sync › Sync settings** is on, in the extension and in the Android app, except the ones below. Each one stays on its device for the reason given. The list lives in the code in `apps/extension/src/shared/local-settings.ts`, and a test fails when a setting stays local without being listed here. A setting added later syncs unless it joins this list with its reason.
+Every setting has one of three sync scopes, which the code keeps in `apps/extension/src/shared/setting-scopes.ts` with a reason for each. While **Settings › Sync › Sync settings** is on:
+
+- **All devices.** Settings both apps use and that mean the same in each, such as removing tracking parameters, how links are shown, excluded sites, and how long the trash keeps items, sync to every browser and phone.
+- **Platform.** Settings only one app uses sync to every device of that kind: the extension's theme, accents, dashboard layout, and browser behavior go to your other browsers, and the Android app's look, theme, accent, bar, gestures, and background sync go to your other phones. A browser's theme never changes a phone, and the other way round.
+- **This device.** The settings below never sync, not even to a second browser or phone of your own, because they cannot mean anything on another device. A test fails when a setting stays on the device without being listed here. A setting added later syncs unless it gets this scope with its reason.
 
 The extension:
 
 | Setting | Stored in | Why it stays |
 | --- | --- | --- |
-| Theme and accent | `uiTheme`, `uiAccent`, with copies in `tablodge.uiTheme` and `tablodge.uiAccent` | Theme and appearance: each device keeps its own |
-| Private window accent | `tablodge.privateAccent`, `tablodge.private.config` | Theme and appearance |
 | Device name | `tablodge.device` | It names this device on the sessions it saves |
 | Sync server address and token, and the **Sync settings** switch | `tablodge.sync.config`, `tablodge.sync.settings` | They connect this device and decide what it takes |
-| Private storage mode, its setup, and its new tab redirect | `tablodge.private.config` | They follow this browser's private library |
-| Private library password lock and its wait before locking | `tablodge.private.lock` | It protects this browser's private library |
+| Private storage mode, its setup, and its new tab redirect | `tablodge.private.config` | They follow this browser's private library. The private window accent stored beside them syncs |
+| Private library password lock and its wait before locking | `tablodge.private.lock` | It protects this browser's private library, which a change on another device must not weaken |
 | **Copy backups to Downloads** | `autoBackupToDownloads` in the library's settings | It needs the optional `downloads` permission, which only a click in that browser can grant |
 | Whether a **Settings › Sources** site runs here | `tablodge.sources` | It follows the site access this browser granted; the site choices themselves sync |
 | **Not now** answers about a Sources saved page | `tablodge.sourceCatchUp` | A dismissal on this device |
@@ -163,11 +165,11 @@ The Android app (its own preferences, separate from the extension's):
 
 | Setting | Key | Why it stays |
 | --- | --- | --- |
-| Look, theme, accent, floating bar, bar size, bar labels, glass effect | `look`, `theme`, `accent`, `floatingBar`, `barSize`, `barLabels`, `glassEffect` | Theme and appearance: each device keeps its own, and the glass effect depends on what the phone can draw |
 | Device name | `deviceName` | It names this phone on the sessions it saves |
 | **Sync settings** | `syncSettings` | It decides what this phone takes |
-| Private library sync, its button, and when it locks | `syncPrivate`, `showPrivateButton`, `privateLockMode`, `privateLockMinutes` | They follow this phone's private library |
-| **Sync in the background** | `backgroundSync` | It uses this phone's battery |
+| Private library sync | `syncPrivate` | Whether this phone's private data goes to the server is this phone's choice |
+| The private library button | `showPrivateButton` | Whether this phone shows that it has a private library is its own privacy choice |
+| When the private library locks | `privateLockMode`, `privateLockMinutes` | They protect this phone's private library, which a change on another phone must not weaken |
 | Where links open | `openWith`, `openApp`, `privateOpenWith`, `privateOpenApp` | They name browsers installed on this phone |
 | The column offered first when saving | `lastColumnId` | What this phone saved to last, not a choice |
 | Which column each home screen widget shows | The widget's Android preferences | Each placed widget is on this phone |
