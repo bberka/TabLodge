@@ -130,7 +130,6 @@ describe('preference schema', () => {
 		assert.equal(bar.barLabels, 'never');
 	});
 
-	// #429: the phone's site icons moved to the library setting, and a choice made before must carry over.
 	test('an old site icon choice that asked nobody carries over as the shared Letter tiles only', () => {
 		assert.equal(legacySiteIconsOf('off'), 'browser');
 		assert.equal(legacySiteIconsOf('direct'), 'browser');

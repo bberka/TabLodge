@@ -42,8 +42,6 @@ function settle(): void {
 Call once at startup, after the preferences and the library have loaded.
 */
 export function startPreferencesSync(): void {
-	// A choice made here before site icons became one library setting stays, unless the library already holds one.
-	// The first sync follows ADR 10: a value the server holds wins, otherwise this one goes out.
 	const legacy = takeLegacySiteIcons();
 	if (legacy && getLibrary().settings.siteIcons !== legacy) {
 		void setSyncedSetting('siteIcons', legacy);

@@ -335,11 +335,6 @@ function readKeys(
 	return found;
 }
 
-/**
-`siteIcons` was a phone preference with `off`, `server`, and `direct`, or earlier a switch; it is now the library's
-setting, which has only `server` and `browser`. Each old choice that asked nobody, or the site itself, stands for
-`browser`; the rest changes nothing, since `server` is the default.
-*/
 export function legacySiteIconsOf(stored: unknown): 'browser' | undefined {
 	return stored === true || ['off', 'direct'].includes(stored as string)
 		? 'browser'
