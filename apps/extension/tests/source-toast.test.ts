@@ -167,3 +167,12 @@ test('Messages stay: Longer doubles the 8 seconds, Until dismissed never closes'
 	await vi.advanceTimersByTimeAsync(10 * 60_000);
 	assert.deepEqual(texts(), ['Saved B.']);
 });
+
+test('Until dismissed gives a notice with no button of its own a Close button that closes it', async () => {
+	askForPrefs('default', 'dismiss');
+	showSourceToast('Saved A.');
+	await vi.advanceTimersByTimeAsync(0);
+	assert.deepEqual(texts(), ['Saved A.']);
+	await click('Close');
+	assert.deepEqual(texts(), []);
+});

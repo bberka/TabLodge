@@ -105,12 +105,11 @@ export function showQuoteToast(toast: {
 		}
 	};
 
-	if (toast.undoId) {
-		const {undoId} = toast;
-		const undo = document.createElement('button');
-		undo.type = 'button';
-		undo.textContent = 'Undo';
-		set(undo, {
+	const button = (label: string) => {
+		const element = document.createElement('button');
+		element.type = 'button';
+		element.textContent = label;
+		set(element, {
 			all: 'initial',
 			cursor: 'pointer',
 			padding: '4px 10px',
@@ -118,16 +117,22 @@ export function showQuoteToast(toast: {
 			color: colors.accent,
 			font: '600 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif',
 		});
-		undo.addEventListener('focus', () => {
-			undo.style.setProperty(
+		element.addEventListener('focus', () => {
+			element.style.setProperty(
 				'outline',
 				`2px solid ${colors.accent}`,
 				'important',
 			);
 		});
-		undo.addEventListener('blur', () => {
-			undo.style.removeProperty('outline');
+		element.addEventListener('blur', () => {
+			element.style.removeProperty('outline');
 		});
+		return element;
+	};
+
+	if (toast.undoId) {
+		const {undoId} = toast;
+		const undo = button('Undo');
 		undo.addEventListener('click', () => {
 			undo.remove();
 			void chrome.runtime
@@ -143,6 +148,13 @@ export function showQuoteToast(toast: {
 				.finally(later);
 		});
 		box.append(undo);
+	}
+
+	// Under Messages stay: Until dismissed nothing closes it by itself, so it has a button that does.
+	if (toast.closeMs === null) {
+		const closeButton = button('Close');
+		closeButton.addEventListener('click', close);
+		box.append(closeButton);
 	}
 
 	box.addEventListener('keydown', (event) => {

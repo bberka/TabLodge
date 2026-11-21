@@ -322,7 +322,7 @@ export function showSourceToast(
 function render(
 	text: string,
 	{
-		actions,
+		actions: given,
 		error,
 		asking,
 		theme,
@@ -348,6 +348,13 @@ function render(
 	}
 
 	const {host, root, list} = current;
+	// Until dismissed closes nothing by itself, so a notice with no button of its own gets one (a button that answers
+	// with nothing closes the notice).
+	const actions: ToastAction[] =
+		prefs.duration === 'dismiss' && given.length === 0
+			? [{label: 'Close', run: async () => undefined}]
+			: given;
+
 	set(host, {'color-scheme': theme});
 	place(current, prefs.position);
 	const colors = toastColors(

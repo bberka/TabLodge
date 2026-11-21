@@ -73,7 +73,8 @@ seconds, twice as long under Messages stay: Longer, and until dismissed under Un
 export function SnackbarHost() {
 	const colors = useColors();
 	const {messagePosition} = usePreferences();
-	const links = useLinkSettings();
+	// The regular library's setting, as Settings changes it, also while the private library is open.
+	const links = useLinkSettings(true);
 	useEffect(() => {
 		duration = links.toastDuration;
 	}, [links.toastDuration]);
