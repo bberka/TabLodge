@@ -563,8 +563,13 @@ function NewTab() {
 		],
 	);
 	const clickOpensMenu = settings.bookmarkClickAction === 'menu';
-	const quickActions = (settings.bookmarkQuickActions ?? ['open-new']).filter(
-		(action) => canOpenPrivateWindow || action !== 'open-private',
+	// Memoized: a new array on every render would re-render every bookmark card.
+	const quickActions = useMemo(
+		() =>
+			(settings.bookmarkQuickActions ?? ['open-new']).filter(
+				(action) => canOpenPrivateWindow || action !== 'open-private',
+			),
+		[settings.bookmarkQuickActions],
 	);
 	const autoOpenFinder =
 		newTabOn && settings.autoFocusSearchOnNewTab === true && !initialQuery;

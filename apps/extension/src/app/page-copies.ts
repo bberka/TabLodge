@@ -32,7 +32,16 @@ async function loadCopyUrls() {
 		return;
 	}
 
-	copyUrls = new Set(result.urls);
+	const next = new Set(result.urls);
+	// Every bookmark row reads this set; handing out an equal one would re-render all of them.
+	if (
+		next.size === copyUrls.size &&
+		[...next].every((url) => copyUrls.has(url))
+	) {
+		return;
+	}
+
+	copyUrls = next;
 	for (const listener of copyListeners) {
 		listener();
 	}
