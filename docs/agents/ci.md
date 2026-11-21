@@ -20,6 +20,7 @@ A path the `changes` job does not know runs everything, so add a rule there when
 | Job | Runs |
 | --- | --- |
 | `lint` | `xo` on three groups of files, one job each (extension `src`; mobile; everything else) |
+| `comments` | `node scripts/comment-ratchet.ts` on the touched files; runs for every change ([Code comments](comments.md)) |
 | `typecheck` | `tsgo -b` (the native TypeScript compiler, about ten times faster than `tsc -b` with the same errors) |
 | `unit` | `vp test run` |
 | `extension` | `vp run build`, `vp run pack`, `vp run check:firefox` |
