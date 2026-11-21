@@ -148,7 +148,6 @@ function Popup() {
 	const [windowId, setWindowId] = useState<number | undefined>();
 	// False on pages that cannot be saved (new tab, browser pages); stays true until the active tab is read.
 	const [pageSavable, setPageSavable] = useState(true);
-	// The active tab's address when it looks like a shared page, which the popup offers to import.
 	const [sharedPageUrl, setSharedPageUrl] = useState<string>();
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(
 		state?.settings,

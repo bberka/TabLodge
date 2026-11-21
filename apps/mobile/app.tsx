@@ -351,7 +351,6 @@ function Main() {
 				return;
 			}
 
-			// A shared page's Open in the TabLodge app button.
 			const page = parseImportRoute(url);
 			if (page) {
 				setOpen(false);

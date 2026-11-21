@@ -59,9 +59,6 @@ One thing to share instead of the whole library: a session, a folder, a column, 
 export type ShareScope = {
 	title: string;
 	data: ExportData;
-	/**
-	The one column or session shared (`sharedPageSource`), so the sheet lists the links made from it.
-	*/
 	source?: string;
 };
 

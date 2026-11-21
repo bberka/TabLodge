@@ -1,7 +1,3 @@
-/*
-Import › From a link, for both apps: fetches a page the user named, once, with no credentials, and parses it like an
-imported file. A TabLodge shared page comes back as its columns or sessions (import-formats.ts reads its data block).
-*/
 import {
 	ImportFormatError,
 	MAX_IMPORT_BYTES,
@@ -14,10 +10,6 @@ const TIMEOUT_MS = 20_000;
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
-/**
-Reads the page at `address` for import. Throws ImportFormatError with a message to show when the address is not a
-web address, the page cannot be fetched, or it holds no links.
-*/
 export async function importFromLink(
 	send: Fetch,
 	address: string,
@@ -65,17 +57,12 @@ export async function importFromLink(
 
 		return parseImportFile(await readCapped(response));
 	} finally {
-		// Held until the body is read, so a server that sends headers and then stalls still times out.
 		clearTimeout(timer);
 	}
 }
 
 const TOO_LARGE = 'That page is larger than 45 MB.';
 
-/**
-The body as text, stopped at MAX_IMPORT_BYTES even when the server sent no Content-Length. React Native's fetch has
-no body stream, so there the whole text is read and then measured.
-*/
 async function readCapped(response: Response): Promise<string> {
 	try {
 		const reader = response.body?.getReader();

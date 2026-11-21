@@ -33,9 +33,6 @@ export type StoredPage = {
 	title: string;
 	size: number;
 	createdAt: number;
-	/**
-	The column or session the page was made from, as the device named it; empty for a page sent without one.
-	*/
 	source: string;
 };
 
@@ -48,7 +45,6 @@ export class SqlPageStore {
 			size INTEGER NOT NULL,
 			created INTEGER NOT NULL
 		)`);
-		// A table made before pages kept their source gets the column; reading it is how both SQLite runtimes can tell.
 		try {
 			sql.all('SELECT source FROM pages LIMIT 0');
 		} catch {

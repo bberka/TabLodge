@@ -265,7 +265,6 @@ test('a page keeps the id and source its device sent, so it can carry its own li
 		headers: {Origin: 'chrome-extension://x'},
 	});
 	assert.equal(served.status, 200);
-	// Import from a link reads the page from the extension's own origin.
 	assert.equal(served.headers.get('access-control-allow-origin'), '*');
 
 	await assert.rejects(
@@ -283,7 +282,6 @@ test('a page keeps the id and source its device sent, so it can carry its own li
 		(await post({title: 'x', html: PAGE, source: 's'.repeat(101)})).status,
 		400,
 	);
-	// A page sent without them, as an older device does, gets a server id and no source.
 	const plain = await uploadSharedPage(fetch, target, 'Plain', PAGE);
 	assert.notEqual(plain.id, id);
 	assert.equal(plain.source, '');
@@ -317,7 +315,6 @@ test('a pages table from before sources upgrades on start and keeps its pages', 
 		},
 	]);
 	assert.equal(store.html('AAAAAAAAAAAAAAAAAAAAAA'), '<p>old</p>');
-	// Opening it again finds the column already there.
 	assert.equal(new SqlPageStore(sql).list().length, 1);
 });
 

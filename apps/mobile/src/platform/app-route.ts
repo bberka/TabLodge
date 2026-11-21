@@ -38,10 +38,6 @@ export function parseColumnRoute(
 	}
 }
 
-/**
-Reads the address a shared page's Open in the TabLodge app button opens, `tablodge://import?url=<page>`, and gives
-the page's web address. Any other address, or one without a web `url`, gives undefined.
-*/
 export function parseImportRoute(
 	url: string | null | undefined,
 ): string | undefined {

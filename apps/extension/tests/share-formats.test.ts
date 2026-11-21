@@ -166,7 +166,6 @@ test('a shared page has a dated header, a jump to each column, and a row per lin
 		html,
 		/<span class="tile t\d" aria-hidden="true">E<\/span><a href="https:\/\/www\.example\.com\/a\?b=1"[^>]*>Example<\/a><small>example\.com<\/small>/,
 	);
-	// A link with no title shows its address.
 	assert.match(
 		html,
 		/>https:\/\/news\.example\.org\/<\/a><small>news\.example\.org<\/small>/,
@@ -174,7 +173,6 @@ test('a shared page has a dated header, a jump to each column, and a row per lin
 	assert.match(html, /<a class="top" href="#top">Back to top<\/a>/);
 	assert.match(html, /prefers-color-scheme:dark/);
 	assert.match(html, /Made with <a href="https:\/\/tablodge\.bbay\.dev\/"/);
-	// A page that does not know its own link offers nothing to add.
 	assert.doesNotMatch(html, /Add to TabLodge|id="add"/);
 });
 

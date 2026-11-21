@@ -1,4 +1,3 @@
-// The import sheet: a file, pasted text, or a shared page's link, read into a preview that adds only what is new.
 import {
 	useEffect,
 	useMemo,
@@ -29,9 +28,6 @@ import {Title} from './transfer-sheets';
 export type ImportSource =
 	| {mode: 'file'; name: string; text: string}
 	| {mode: 'paste'}
-	/**
-	A shared page's address, typed in or handed over by the `tablodge://import?url=` link, read as soon as it is given.
-	*/
 	| {mode: 'link'; url?: string};
 
 type Reading =
@@ -58,10 +54,6 @@ function read(text: string, name: string): Reading {
 const hasLinks = (groups: ParsedImport['sessions']) =>
 	groups.some((group) => group.links.length > 0);
 
-/**
-What a file or pasted text would add, and the button that adds it. Skips links that are already saved or in the trash, adds nothing
-else, and removes nothing.
-*/
 export function ImportSheet({
 	source,
 	onClose,
@@ -88,7 +80,6 @@ export function ImportSheet({
 	const bookmarks = parsed ? hasLinks(parsed.bookmarks) : false;
 	const kind: ImportKind =
 		picked ?? parsed?.kind ?? (sessions ? 'sessions' : 'bookmarks');
-	// Bumped for every read, and when the address or the sheet changes, so a slower earlier read cannot fill the preview.
 	const readRef = useRef(0);
 	const readLink = async (address: string) => {
 		const attempt = ++readRef.current;
@@ -122,7 +113,6 @@ export function ImportSheet({
 		setLink(linkUrl ?? '');
 		setLinked(undefined);
 		setPicked(undefined);
-		// Any app can send this link, so only an address shaped like a shared page is fetched without a tap.
 		if (linkUrl && isSharedPageUrl(linkUrl)) {
 			void readLink(linkUrl);
 		}
@@ -186,7 +176,6 @@ export function ImportSheet({
 							autoCapitalize="none"
 							autoCorrect={false}
 							onChangeText={(address) => {
-								// A new address needs its own read before Import.
 								readRef.current += 1;
 								setFetching(false);
 								setLink(address);
@@ -298,10 +287,6 @@ export function ImportSheet({
 let openSource: ImportSource | undefined;
 const importListeners = new Set<() => void>();
 
-/**
-Opens the import sheet from anywhere, as the `tablodge://import?url=` link does. `ImportHost`, mounted once near the
-root, draws it.
-*/
 export function openImport(source: ImportSource | undefined): void {
 	openSource = source;
 	for (const listener of importListeners) {

@@ -997,9 +997,6 @@ export type TabLodgeMessages = {
 		title: string;
 		html: string;
 		id?: string;
-		/**
-		The `linkBase` the page's own link was built from; the upload is refused when the sync server changed since.
-		*/
 		linkBase?: string;
 		source?: string;
 	};
@@ -1429,10 +1426,6 @@ export type TabLodgeResponses = {
 	PRIVATE_SYNC_DISABLE: {privateSync: PrivateSyncInfo};
 	PRIVATE_SYNC_NOW: {privateSync: PrivateSyncInfo};
 	OPEN_PRIVATE_SYNC: {};
-	/**
-	`linkBase` is a page link without its id, when the server keeps the id a device picks; a page made for that
-	server can then carry its own link. Null otherwise.
-	*/
 	GET_SHARED_PAGES: {
 		server: SharedPagesServer;
 		pages: SharedPage[];

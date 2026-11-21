@@ -106,9 +106,6 @@ export function useSharedPageList(visible: boolean) {
 	return {server, pages, failed, load, remove};
 }
 
-/**
-Rows for `pages`, each with Copy link, Open, and Delete.
-*/
 export function SharedPageRows({
 	pages,
 	onDelete,
@@ -127,10 +124,6 @@ export function SharedPageRows({
 	));
 }
 
-/**
-Every page uploaded with Share › Get a link, read from the server each time the sheet opens. Delete takes the page
-off the server, so its link stops working.
-*/
 function SharedPagesSheet({
 	visible,
 	onClose,
@@ -188,9 +181,6 @@ function SharedPagesSheet({
 let sheetOpen = false;
 const sheetListeners = new Set<() => void>();
 
-/**
-Opens the Shared pages sheet from anywhere. `SharedPagesHost`, mounted once near the root, draws it.
-*/
 export function openSharedPages(open = true): void {
 	sheetOpen = open;
 	for (const listener of sheetListeners) {
@@ -218,9 +208,6 @@ export function SharedPagesHost() {
 	);
 }
 
-/**
-The Shared pages row for the Bookmarks and Sessions menus, there while a server is connected.
-*/
 export function useSharedPagesAction(): SheetAction[] {
 	return useSharedPagesServer() === 'none'
 		? []

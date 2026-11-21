@@ -21,14 +21,8 @@ import {writeClipboard} from './interaction-actions';
 const privateWindow = () => Boolean(chrome.extension?.inIncognitoContext);
 
 export type SharedPagesState = {
-	/**
-	Undefined until the server answered.
-	*/
 	server: SharedPagesServer | undefined;
 	pages: SharedPage[];
-	/**
-	A page link without its id when the server keeps the id a device picks, so a page can carry its own link.
-	*/
 	linkBase: string | null;
 	reload: () => Promise<void>;
 };
@@ -41,7 +35,6 @@ export function useSharedPages(open: boolean, list = false): SharedPagesState {
 	const [server, setServer] = useState<SharedPagesServer>();
 	const [pages, setPages] = useState<SharedPage[]>([]);
 	const [linkBase, setLinkBase] = useState<string | null>(null);
-	// Only the latest request's answer is applied, so one started before a delete cannot bring the page back.
 	const latestRef = useRef(0);
 	const reload = useCallback(async () => {
 		if (privateWindow()) {
@@ -237,9 +230,6 @@ function SharedPagesBody({
 	);
 }
 
-/**
-Settings › Sync › Shared pages: every page on the server, with its link, and Delete, which takes the link down.
-*/
 export function SharedPagesSettings({showStatus}: {showStatus: ShowStatus}) {
 	const headingId = useId();
 	const state = useSharedPages(true, true);
@@ -257,9 +247,6 @@ export function SharedPagesSettings({showStatus}: {showStatus: ShowStatus}) {
 	);
 }
 
-/**
-Every shared page, from the dashboard's Bookmarks and Sessions menus.
-*/
 export function SharedPagesDialog({
 	open,
 	onOpenChange,

@@ -655,9 +655,6 @@ function SharePreviewPanel({
 	);
 }
 
-/**
-The HTML page, stamped with the time it is made; `url` is its own link when the server keeps the id it was given.
-*/
 const sharedPageHtml = (
 	title: string,
 	groups: readonly ShareGroup[],
@@ -670,9 +667,6 @@ const sharedPageHtml = (
 		url,
 	});
 
-/**
-The links already made from the column or session being shared.
-*/
 function SourcePages({
 	noun,
 	...list
@@ -906,7 +900,6 @@ export function ShareDialog({
 
 	async function upload() {
 		setUploading(true);
-		// A server that keeps the id a device picks lets the page carry its own link, for its Add to TabLodge panel.
 		const id = shared.linkBase ? newSharedPageId() : undefined;
 		const result = await send('UPLOAD_SHARED_PAGE', {
 			title: pageTitle,
@@ -959,7 +952,6 @@ export function ShareDialog({
 						{sourcePages.some((page) => page.id !== uploaded.id) && (
 							<SourcePages
 								noun={sourceNoun}
-								// The link this view shows is left out, so it cannot be deleted from under it.
 								pages={sourcePages.filter((page) => page.id !== uploaded.id)}
 								showStatus={showStatus}
 								onDeleted={shared.reload}
@@ -1132,9 +1124,6 @@ type ImportDialogProps = {
 	Called after a successful import (the pages also reload on storage changes).
 	*/
 	onImported?: () => void | Promise<void>;
-	/**
-	A link to read as soon as the dialog opens, as the toolbar popup's Add this shared page asks.
-	*/
 	initialLink?: string;
 };
 
@@ -1722,8 +1711,6 @@ export function ImportDialog({
 		>
 			<DialogContent
 				size="lg"
-				// The review step uses most of the viewport so the sample list gets the space left over; the source step
-				// scrolls inside the viewport once From a link makes it taller than a short window.
 				className={
 					step === 'preview' && !full
 						? 'h-[calc(100dvh-2rem)] overflow-hidden'

@@ -47,10 +47,6 @@ export function useSharedPagesServer(): 'none' | 'unknown' | 'old' | 'ready' {
 	return features.includes(SHARED_PAGES_FEATURE) ? 'ready' : 'old';
 }
 
-/**
-Uploads the page `build` makes. On a server that keeps the id a device picks, the page gets its own link (`url`)
-and `source`, the column or session it came from (`sharedPageSource`).
-*/
 export async function uploadPage(
 	title: string,
 	build: (url?: string) => string,

@@ -24,22 +24,12 @@ export type SharedPage = {
 	The public link: the server address the device connected with, plus /p/<id>.
 	*/
 	url: string;
-	/**
-	The column or session the page was made from (`sharedPageSource`); empty when the device sent none.
-	*/
 	source: string;
 };
 
-/**
-What a page was made from, as its device names it to the server, so the Share dialog can list a column's or a
-session's links.
-*/
 export const sharedPageSource = (kind: 'column' | 'session', id: string) =>
 	`${kind}:${id}`.slice(0, MAX_SHARED_PAGE_SOURCE);
 
-/**
-A page's public link on a server.
-*/
 export const sharedPageUrl = (server: string, id: string) =>
 	`${server}${SHARED_PAGE_PREFIX}${id}`;
 

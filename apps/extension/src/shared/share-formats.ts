@@ -124,25 +124,13 @@ export function shareRich(groups: readonly ShareGroup[]): {
 	};
 }
 
-/**
-Where a visitor without TabLodge goes, and the Android app's id for the page's Open in app link.
-*/
 const WEBSITE = 'https://tablodge.bbay.dev';
 const ANDROID_PACKAGE = 'com.bberka.tablodge';
 const TILE_HUES = 8;
 
 export type SharePageOptions = {
-	/**
-	What the groups are: bookmark columns or sessions. An import of the page opens as this kind.
-	*/
 	kind?: SharedPageKind;
-	/**
-	When the page was made; shown in its header.
-	*/
 	sharedAt?: number;
-	/**
-	The page's own public address. Only a page that knows it gets the Add to TabLodge panel, which links to it.
-	*/
 	url?: string;
 	formatDate?: (value: number) => string;
 };

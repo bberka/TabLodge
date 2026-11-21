@@ -1531,7 +1531,6 @@ async function handleSharedPagesMessage(
 		return {ok: false, error: 'Nothing to upload.'};
 	}
 
-	// A page that carries its own link must go to the server that link names.
 	if (message.id && message.linkBase !== sharedPageUrl(target.url, '')) {
 		return {
 			ok: false,

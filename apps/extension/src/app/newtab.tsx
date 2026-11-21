@@ -371,7 +371,6 @@ function NewTab() {
 	const [bookmarkSearch, setBookmarkSearch] = useState(initialQuery);
 	const [dialog, setDialog] = useState<DialogKind | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
-	// `?importLink=` from the toolbar popup's Add this shared page: Import opens with that link read.
 	const [importLink, setImportLink] = useState<string>();
 	const [sharedPagesOpen, setSharedPagesOpen] = useState(false);
 	const [duplicatesOpen, setDuplicatesOpen] = useState(false);
