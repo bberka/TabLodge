@@ -31,6 +31,7 @@ export type LinkSettings = Pick<
 	| 'autoArchiveDays'
 	| 'trashRetentionDays'
 	| 'toastDuration'
+	| 'siteIcons'
 >;
 
 // The extension's own defaults, so a phone that has not synced yet behaves the same.
@@ -53,6 +54,7 @@ export const DEFAULTS: LinkSettings = {
 	autoArchiveDays: DEFAULT_SETTINGS.autoArchiveDays,
 	trashRetentionDays: DEFAULT_SETTINGS.trashRetentionDays,
 	toastDuration: 'default',
+	siteIcons: 'server',
 };
 
 /**
