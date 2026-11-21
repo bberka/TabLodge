@@ -184,13 +184,9 @@ export async function sessionArchiveCheck(env: Env) {
 					0,
 					'already archived sessions should not offer Archive session',
 				);
-				await page.getByRole('menuitem', {name: 'Move to folder'}).focus();
-				await page.keyboard.press('ArrowRight');
-				const workFolder = page.getByRole('menuitem', {
-					name: 'Work',
-					exact: true,
-				});
-				await workFolder.focus();
+				await page.getByRole('menuitem', {name: 'Move to folder…'}).focus();
+				await page.keyboard.press('Enter');
+				await page.keyboard.type('Work');
 				await page.keyboard.press('Enter');
 				await until(
 					async () => (await groupFolderId(page, sessionId)) === 'folder-work',
@@ -233,9 +229,9 @@ export async function sessionFolderMoveFocusCheck(env: Env, theme: Theme) {
 			await nextCard.waitFor();
 			const trigger = movedCard.locator('[data-move-focus]');
 			await openMenuByKeyboard(page, trigger);
-			await page.getByRole('menuitem', {name: 'Move to folder'}).focus();
-			await page.keyboard.press('ArrowRight');
-			await page.getByRole('menuitem', {name: 'Trips', exact: true}).focus();
+			await page.getByRole('menuitem', {name: 'Move to folder…'}).focus();
+			await page.keyboard.press('Enter');
+			await page.keyboard.type('Trips');
 			await page.keyboard.press('Enter');
 
 			await until(
