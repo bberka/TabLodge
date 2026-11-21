@@ -32,7 +32,15 @@ async function loadCopyUrls() {
 		return;
 	}
 
-	copyUrls = new Set(result.urls);
+	const next = new Set(result.urls);
+	if (
+		next.size === copyUrls.size &&
+		[...next].every((url) => copyUrls.has(url))
+	) {
+		return;
+	}
+
+	copyUrls = next;
 	for (const listener of copyListeners) {
 		listener();
 	}

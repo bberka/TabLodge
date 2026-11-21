@@ -9,5 +9,9 @@
 		"lib": ["ES2024"],
 		"types": ["node"]
 	},
-	"include": ["vite.*.config.ts", "scripts/**/*.ts"]
+	"include": ["vite.*.config.ts", "scripts/**/*.ts"],
+	"exclude": [
+		"scripts/browser/perf-profile.ts",
+		"scripts/browser/perf-matrix.ts"
+	]
 }

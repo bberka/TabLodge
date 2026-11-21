@@ -27,7 +27,7 @@ Logic that needs no browser lives in `src/shared` and `src/app` as plain modules
 - Add a regression test for a bug fix. Extend the `chrome.*` mock in the worker tests when you use another API.
 - UI work follows [UI rules](ui.md).
 - A new feature or user action checks whether it belongs in the right-click menu: [Entry points](cross-app.md#feature-triage).
-- A new feature, setting, or Settings section checks whether it belongs in the global finder, in the same pull request: a command in `src/app/finder-commands.ts`, which makes every page that opens the finder say how it runs it, or a section in `src/app/settings-sections.ts`. `vp run check:a11y` fails when a Settings section has no finder entry. When it does not belong, say why in the pull request.
+- A new feature, setting, or Settings section checks whether it belongs in the global finder, in the same pull request: a command in `src/app/finder-commands.ts`, which makes every page that opens the finder say how it runs it, or a section in `src/app/settings-sections.ts`. A field is a row of `settingsFieldGroups` (`settings-fields.ts`), listed by itself, synonyms in `SETTING_WORDS`; tests and `vp run check:a11y` fail for a missing row or section. When it does not belong, say why in the pull request.
 
 ## Browser access
 

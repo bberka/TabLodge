@@ -40,12 +40,14 @@ export const send = async <K extends TabLodgeMessageType>(
 	...[fields]: OptionalFields<K>
 ): Promise<ActionResult<K>> => {
 	try {
-		const result: ActionResult<K> = await chrome.runtime.sendMessage({
-			type,
-			...fields,
-		});
+		const answer: ActionResult<K> | undefined =
+			await chrome.runtime.sendMessage({type, ...fields});
+		const result: ActionResult<K> = answer ?? {
+			ok: false,
+			error: `${PROJECT.name} did not answer. Try again.`,
+		};
 		const edit = undoableEdit(type);
-		if (edit && result?.ok && 'undoId' in result && result.undoId) {
+		if (edit && result.ok && 'undoId' in result && result.undoId) {
 			offerEditUndo?.(edit.done, result.undoId);
 		}
 
