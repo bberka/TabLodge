@@ -220,9 +220,14 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 		);
 	}
 
-	items.push(
-		...cachedBookmarkItems(sources.bookmarks, sources.columns, columnName),
-	);
+	for (const item of cachedBookmarkItems(
+		sources.bookmarks,
+		sources.columns,
+		columnName,
+	)) {
+		items.push(item);
+	}
+
 	for (const column of sources.columns) {
 		items.push(
 			prepared({
@@ -249,7 +254,9 @@ export function buildFinderIndex(sources: FinderSources): FinderItem[] {
 		);
 	}
 
-	items.push(...cachedSessionItems(sources.groups, sources.folders));
+	for (const item of cachedSessionItems(sources.groups, sources.folders)) {
+		items.push(item);
+	}
 
 	return items;
 }

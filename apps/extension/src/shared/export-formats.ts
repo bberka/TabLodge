@@ -204,10 +204,10 @@ function toHtml(data: ExportData, appName: string): string {
 						bookmark.tags,
 					) + (bookmark.notes ? `\n<DD>${escapeHtml(bookmark.notes)}` : ''),
 			);
-			if (column) {
-				body.push(...folder(column.name, column.createdAt, items));
-			} else {
-				body.push(...items);
+			for (const line of column
+				? folder(column.name, column.createdAt, items)
+				: items) {
+				body.push(line);
 			}
 		}
 	} else {

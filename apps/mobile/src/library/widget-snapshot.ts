@@ -3,7 +3,7 @@ import type {OpenWith} from '../settings/preference-schema';
 import {
 	ALL_BOOKMARKS_ID,
 	allBookmarks,
-	bookmarksIn,
+	bookmarksByColumn,
 	columnViews,
 } from './board-edits';
 import {hostOf} from './store-shape';
@@ -66,11 +66,12 @@ export function buildWidgetSnapshot(
 		};
 	};
 
+	const groups = bookmarksByColumn(regular);
 	const columns = [
 		column(ALL_BOOKMARKS_ID, 'All', allBookmarks(regular)),
 		...columnViews(regular)
 			.slice(0, WIDGET_COLUMNS_MAX)
-			.map((view) => column(view.id, view.name, bookmarksIn(regular, view.id))),
+			.map((view) => column(view.id, view.name, groups.get(view.id) ?? [])),
 	];
 	return {v: WIDGET_SNAPSHOT_VERSION, open, columns};
 }
