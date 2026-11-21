@@ -916,3 +916,65 @@ export async function rowWindowCheck(env: Env, theme: Theme) {
 		},
 	);
 }
+
+export async function sessionLinksWindowCheck(env: Env, theme: Theme) {
+	const {context, extensionId} = env;
+	await check(
+		`an expanded session of 1,000 links mounts a bounded number of rows (${theme})`,
+		async () => {
+			const seedPage = await openPage(context, extensionId, 'newtab');
+			const fixture = createDevFixture(await readDevStore(seedPage));
+			fixture.groups = [
+				{
+					...fixture.groups[0],
+					id: 'long-session',
+					name: 'Long session',
+					tabs: Array.from({length: 1000}, (_, index) => ({
+						...fixture.groups[0].tabs[0],
+						id: `long-tab-${index}`,
+						title: `Long session link ${index}`,
+						url: `https://example.com/long-${index}`,
+						originalIndex: index,
+					})),
+				},
+			];
+			await writeDevStore(seedPage, fixture);
+			await seedPage.close();
+
+			const page = await openPage(context, extensionId, 'newtab');
+			await setTheme(page, theme);
+			const card = page.locator('#session-long-session');
+			await card.waitFor();
+			await card.getByRole('button', {expanded: false}).first().click();
+			const region = card.getByRole('region', {name: 'Links in Long session'});
+			await region.waitFor();
+			await page.locator('[data-tab-id]').first().waitFor();
+			const rows = page.locator('[data-tab-id]');
+			assert.ok(
+				(await rows.count()) <= MOUNTED_ROWS_LIMIT,
+				'an expanded session mounts only the links near its viewport',
+			);
+			const box = await region.boundingBox();
+			assert.ok(box, 'the link list has a box');
+			assert.ok(
+				box.height <= 44 * 16 + 1,
+				'the link list stops at its maximum height and scrolls inside the card',
+			);
+			await until(async () => {
+				await region.evaluate((element) => {
+					(element as {scrollTop: number}).scrollTop = 1e9;
+				});
+				return (await page.locator('[data-tab-id="long-tab-999"]').count()) > 0;
+			}, 'the last link to appear as the session scrolls to its end');
+			assert.ok(
+				(await rows.count()) <= MOUNTED_ROWS_LIMIT,
+				'links leave the page again as the session scrolls',
+			);
+			await page.close();
+
+			const resetPage = await openPage(context, extensionId, 'newtab');
+			await seed(resetPage);
+			await resetPage.close();
+		},
+	);
+}
