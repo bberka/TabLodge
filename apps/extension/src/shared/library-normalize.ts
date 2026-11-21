@@ -153,7 +153,6 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	restoreTarget: 'new-window-unless-only-tab',
 	restoreWindowBounds: false,
 	restoreMode: 'keep',
-	singleTabBehavior: 'stay',
 	unloadRestoredTabs: false,
 	unloadRestoredTabsThreshold: 5,
 	restoreSplitTabs: 'split',
@@ -962,7 +961,6 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 		restoreMode: isOneOf(['keep', 'remove'], raw.restoreMode)
 			? raw.restoreMode
 			: 'keep',
-		singleTabBehavior: raw.singleTabBehavior === 'switch' ? 'switch' : 'stay',
 		unloadRestoredTabs: Boolean(raw.unloadRestoredTabs),
 		unloadRestoredTabsThreshold: clampInteger(
 			raw.unloadRestoredTabsThreshold,

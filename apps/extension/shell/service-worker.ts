@@ -3718,71 +3718,6 @@ function restoreFailureMessage(
 		: fallback;
 }
 
-async function restoreTab(
-	groupId: string,
-	tabId: string,
-	senderTab: chrome.tabs.Tab | undefined,
-	options: RestoreOptions = {},
-): Promise<ActionResult<'RESTORE_TAB'>> {
-	return mutate(async () => {
-		const store = await getStore();
-		const group = findGroup(store, groupId);
-		const tab = group?.tabs.find((entry) => entry.id === tabId);
-		if (!group || !tab) {
-			return {ok: false, error: 'That saved tab no longer exists.'};
-		}
-
-		const result = await restoreRecords([tab], store.settings, senderTab, {
-			restoreTarget: options.restoreTarget || store.settings.restoreTarget,
-			activate:
-				typeof options.activate === 'boolean'
-					? options.activate
-					: store.settings.singleTabBehavior === 'switch',
-		});
-		if (result.opened.length === 0) {
-			return {
-				ok: false,
-				error: result.skipped
-					? 'That URL is already open.'
-					: restoreFailureMessage(result, 'The saved tab could not be opened.'),
-			};
-		}
-
-		const mode = isOneOf(['keep', 'remove'], options.restoreMode)
-			? options.restoreMode
-			: store.settings.restoreMode;
-		let removed = false;
-		let trashId: string | undefined;
-		if (mode === 'remove') {
-			const groupIndex = store.groups.indexOf(group);
-			const tabIndex = group.tabs.findIndex((entry) => entry.id === tabId);
-			group.tabs = group.tabs.filter((entry) => entry.id !== tabId);
-			if (group.tabs.length === 0) {
-				store.groups = store.groups.filter((entry) => entry.id !== groupId);
-				removed = true;
-			}
-
-			trashId = await trashAdd(
-				store.settings,
-				trashTabsEntry(group, [{tab, index: tabIndex}], removed, groupIndex),
-			);
-			await writeStore(store);
-		}
-
-		return {
-			ok: true,
-			count: 1,
-			skipped: result.skipped,
-			failed: result.failures.length,
-			failures: result.failures,
-			removed,
-			splits: 0,
-			splitsSeparated: 0,
-			...(trashId && {trashId}),
-		};
-	});
-}
-
 async function restoreGroup(
 	groupId: string,
 	senderTab: chrome.tabs.Tab | undefined,
@@ -10618,20 +10553,6 @@ async function handleMessage(
 
 		case 'SAVE_CURRENT_TAB_TO_GROUP': {
 			return saveCurrentTabToGroup(sender.tab);
-		}
-
-		case 'RESTORE_TAB': {
-			const result = await restoreTab(
-				message.groupId,
-				message.tabId,
-				sender.tab,
-				{
-					restoreMode: message.restoreMode,
-					restoreTarget: message.restoreTarget,
-					activate: message.activate,
-				},
-			);
-			return result;
 		}
 
 		case 'RESTORE_GROUP': {
