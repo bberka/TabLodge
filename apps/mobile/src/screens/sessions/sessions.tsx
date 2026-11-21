@@ -12,7 +12,8 @@ import {
 	sessionsIn,
 	searchSessions,
 } from '../../library/session-edits';
-import {edit, useLibrary, useSyncStatus} from '../../library/library-store';
+import {useLibrary, useSyncStatus} from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {ActionSheet, type SheetAction} from '../../ui/action-sheet';
 import {useBackAction} from '../../ui/back-actions';
 import {useSelection} from '../../ui/use-selection';
@@ -545,7 +546,7 @@ export function SessionsScreen({
 				folderId={renaming?.folderId}
 				onSave={(name, description, color, chosenFolderId) => {
 					if (renaming) {
-						void edit((current) =>
+						void editWithUndo(editDone('UPDATE_GROUP'), (current) =>
 							saveSessionDetails(
 								current,
 								renaming,
@@ -566,8 +567,9 @@ export function SessionsScreen({
 				folders={store.folders}
 				onPick={(target) => {
 					if (moving) {
-						void edit((current) =>
-							moveSession(current, moving.id, target, Date.now()),
+						void editWithUndo(
+							`Moved to ${store.folders.find((folder) => folder.id === target)?.name ?? 'the folder'}.`,
+							(current) => moveSession(current, moving.id, target, Date.now()),
 						);
 					}
 				}}
