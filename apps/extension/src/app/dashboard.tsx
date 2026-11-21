@@ -2970,13 +2970,18 @@ function resolveDropMark(
 		};
 	}
 
+	// Links keep the order they were saved in: dragging one inside its own session offers no drop (Ctrl copies it).
+	if (
+		item?.kind === 'tab' &&
+		item.groupId === group.id &&
+		!(event.ctrlKey || event.metaKey)
+	) {
+		return null;
+	}
+
 	const row = (event.target as Element).closest<HTMLElement>('[data-tab-id]');
 	if (!row?.dataset.tabId) {
-		return item?.kind === 'tab' &&
-			item.groupId === group.id &&
-			!(event.ctrlKey || event.metaKey)
-			? null
-			: {kind: 'into', groupId: group.id};
+		return {kind: 'into', groupId: group.id};
 	}
 
 	const rect = row.getBoundingClientRect();
