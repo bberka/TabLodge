@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, unicorn/isolated-functions, unicorn/no-global-object-property-assignment, no-promise-executor-return, unicorn/no-array-sort, @typescript-eslint/ban-ts-comment -- Measurement script: its page and worker snippets are untyped here. Never bundled. */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, unicorn/isolated-functions, unicorn/no-global-object-property-assignment, no-promise-executor-return, unicorn/no-array-sort, @typescript-eslint/ban-ts-comment, @typescript-eslint/restrict-plus-operands -- Measurement script: its page and worker snippets are untyped here. Never bundled. */
 // @ts-nocheck -- Most of this file is code that runs inside the page or the worker, where the DOM and chrome types are not available to this project.
 import process from 'node:process';
 import {chromium, type Page, type Worker} from 'playwright';
@@ -202,6 +202,65 @@ for (let i = 0; i < runs; i++) {
 }
 
 results.afterEditLongTaskMs = round(median(rerender));
+
+// Dragging a bookmark over other cards: time from each dragover to the next painted frame.
+const drag = await page.evaluate(async () => {
+	const cards = [...document.querySelectorAll('[data-bookmark-id]')];
+	const transfer = new DataTransfer();
+	cards[0].dispatchEvent(
+		new DragEvent('dragstart', {bubbles: true, dataTransfer: transfer}),
+	);
+	const times = [];
+	for (const card of cards.slice(1, 25)) {
+		const start = performance.now();
+		const box = card.getBoundingClientRect();
+		card.dispatchEvent(
+			new DragEvent('dragover', {
+				bubbles: true,
+				cancelable: true,
+				dataTransfer: transfer,
+				clientX: box.left + 5,
+				clientY: box.top + 5,
+			}),
+		);
+		await new Promise((resolve) => {
+			requestAnimationFrame(() => setTimeout(resolve, 0));
+		});
+		times.push(performance.now() - start);
+	}
+
+	cards[0].dispatchEvent(
+		new DragEvent('dragend', {bubbles: true, dataTransfer: transfer}),
+	);
+	return times;
+});
+results.dragOverMedianMs = round(median(drag));
+results.dragOverMaxMs = round(Math.max(...drag));
+
+// Opening a bookmark's menu (right click): time to the next painted frame.
+const menu = await page.evaluate(async () => {
+	const times = [];
+	const cards = [...document.querySelectorAll('[data-bookmark-id]')];
+	for (const card of cards.slice(2, 7)) {
+		const start = performance.now();
+		card.dispatchEvent(
+			new MouseEvent('contextmenu', {bubbles: true, cancelable: true}),
+		);
+		await new Promise((resolve) => {
+			requestAnimationFrame(() => setTimeout(resolve, 0));
+		});
+		times.push(performance.now() - start);
+		document.dispatchEvent(
+			new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}),
+		);
+		await new Promise((resolve) => {
+			setTimeout(resolve, 100);
+		});
+	}
+
+	return times;
+});
+results.contextMenuMedianMs = round(median(menu));
 
 // Search typing: time from each input event to the next painted frame.
 const typing = await page.evaluate(async () => {
