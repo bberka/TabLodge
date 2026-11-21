@@ -15,7 +15,7 @@ import {
 	IconTooltip,
 	ScrollArea,
 } from '../shared/ui';
-import {messageOf, send, type ShowStatus} from './common';
+import {send, type ShowStatus} from './common';
 import {writeClipboard} from './interaction-actions';
 
 const privateWindow = () => Boolean(chrome.extension?.inIncognitoContext);
@@ -105,7 +105,7 @@ export function SharedPagesList({
 			});
 			await onDeleted();
 		} else {
-			showStatus(messageOf(result.error) || 'Could not delete the page.', true);
+			showStatus(result.error || 'Could not delete the page.', true);
 		}
 	};
 

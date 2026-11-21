@@ -915,7 +915,7 @@ export function ShareDialog({
 		});
 		setUploading(false);
 		if (!result.ok) {
-			showStatus(messageOf(result.error) || 'Could not upload the page.', true);
+			showStatus(result.error || 'Could not upload the page.', true);
 			return;
 		}
 

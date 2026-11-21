@@ -1,7 +1,7 @@
 import {ShareIntentProvider, useShareIntentContext} from 'expo-share-intent';
 import {File, Paths} from 'expo-file-system';
 import {StatusBar} from 'expo-status-bar';
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
 	AppState,
 	BackHandler,
@@ -219,8 +219,10 @@ function Main() {
 
 	// A shared link opens the drawer with it filled in, an export file the import preview, and a backup Restore. A
 	// shared file is read once, and the copy the share library made of it is deleted.
+	const openingRef = useRef(0);
 	const openShare = useCallback(
 		async (outcome: ShareOutcome, quick: boolean) => {
+			const opening = ++openingRef.current;
 			setSharedFile(undefined);
 			openImport(undefined);
 			if (outcome.kind === 'refused') {
@@ -281,6 +283,10 @@ function Main() {
 			try {
 				if (outcome.kind === 'import') {
 					const text = await readSharedText(outcome.path, outcome.size);
+					if (opening !== openingRef.current) {
+						return;
+					}
+
 					setFileKey((key) => key + 1);
 					setSharedFile({
 						kind: 'import',
@@ -288,6 +294,10 @@ function Main() {
 					});
 				} else {
 					const bytes = await readSharedBytes(outcome.path, outcome.size);
+					if (opening !== openingRef.current) {
+						return;
+					}
+
 					setFileKey((key) => key + 1);
 					setSharedFile({
 						kind: 'backup',
@@ -354,6 +364,7 @@ function Main() {
 
 			const page = parseImportRoute(url);
 			if (page) {
+				openingRef.current += 1;
 				setOpen(false);
 				setSharedFile(undefined);
 				openImport({mode: 'link', url: page});
