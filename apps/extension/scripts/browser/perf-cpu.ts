@@ -1,12 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, no-promise-executor-return, unicorn/no-array-sort -- This is a measurement script. Most of it is code run inside the page or the worker (no extension or DOM types here) and untyped DevTools protocol replies; typing them adds nothing. It is never part of the bundle. */
 import process from 'node:process';
 
-/*
-CPU profile of one action in the headless dev browser, printed as the top self-time functions.
-  node scripts/browser/perf-cpu.ts <cdp-endpoint> <worker|page> <getstate|edit|load|search>
-Run perf-profile.ts first so the dev profile holds the large library.
-*/
-
 const [endpoint, targetKind, action] = process.argv.slice(2);
 const version = (await (await fetch(`${endpoint}/json/version`)).json()) as {
 	webSocketDebuggerUrl: string;
@@ -102,7 +96,6 @@ switch (action) {
 
 		break;
 	}
-	// No default
 }
 
 const {result} = await call('Profiler.stop', {}, session);

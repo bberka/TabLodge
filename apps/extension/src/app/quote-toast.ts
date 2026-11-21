@@ -15,6 +15,18 @@ export function showQuoteToast(toast: {
 	failed: boolean;
 	undoId?: string;
 	theme: 'system' | 'light' | 'dark';
+	/**
+	The edges to sit at (from `toastEdges`, as the worker cannot pass this function an import) and how long to stay,
+	null for never.
+	*/
+	edges: {
+		top?: string;
+		bottom?: string;
+		left?: string;
+		right?: string;
+		transform?: string;
+	};
+	closeMs: number | null;
 }): boolean {
 	const hostId = 'tablodge-quote-toast';
 	document.querySelector(`#${hostId}`)?.remove();
@@ -49,9 +61,11 @@ export function showQuoteToast(toast: {
 	set(host, {
 		all: 'initial',
 		position: 'fixed',
-		left: '50%',
-		bottom: '24px',
-		transform: 'translateX(-50%)',
+		top: toast.edges.top ?? 'auto',
+		bottom: toast.edges.bottom ?? 'auto',
+		left: toast.edges.left ?? 'auto',
+		right: toast.edges.right ?? 'auto',
+		transform: toast.edges.transform ?? 'none',
 		'z-index': '2147483647',
 		'max-width': 'calc(100vw - 32px)',
 	});
@@ -86,15 +100,16 @@ export function showQuoteToast(toast: {
 
 	const later = () => {
 		clearTimeout(timer);
-		timer = setTimeout(close, 6000);
+		if (toast.closeMs !== null) {
+			timer = setTimeout(close, toast.closeMs);
+		}
 	};
 
-	if (toast.undoId) {
-		const {undoId} = toast;
-		const undo = document.createElement('button');
-		undo.type = 'button';
-		undo.textContent = 'Undo';
-		set(undo, {
+	const button = (label: string) => {
+		const element = document.createElement('button');
+		element.type = 'button';
+		element.textContent = label;
+		set(element, {
 			all: 'initial',
 			cursor: 'pointer',
 			padding: '4px 10px',
@@ -102,16 +117,22 @@ export function showQuoteToast(toast: {
 			color: colors.accent,
 			font: '600 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif',
 		});
-		undo.addEventListener('focus', () => {
-			undo.style.setProperty(
+		element.addEventListener('focus', () => {
+			element.style.setProperty(
 				'outline',
 				`2px solid ${colors.accent}`,
 				'important',
 			);
 		});
-		undo.addEventListener('blur', () => {
-			undo.style.removeProperty('outline');
+		element.addEventListener('blur', () => {
+			element.style.removeProperty('outline');
 		});
+		return element;
+	};
+
+	if (toast.undoId) {
+		const {undoId} = toast;
+		const undo = button('Undo');
 		undo.addEventListener('click', () => {
 			undo.remove();
 			void chrome.runtime
@@ -127,6 +148,13 @@ export function showQuoteToast(toast: {
 				.finally(later);
 		});
 		box.append(undo);
+	}
+
+	// Under Messages stay: Until dismissed nothing closes it by itself, so it has a button that does.
+	if (toast.closeMs === null) {
+		const closeButton = button('Close');
+		closeButton.addEventListener('click', close);
+		box.append(closeButton);
 	}
 
 	box.addEventListener('keydown', (event) => {

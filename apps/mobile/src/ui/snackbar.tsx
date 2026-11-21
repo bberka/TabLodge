@@ -7,7 +7,14 @@ import {
 	useColorScheme,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useLinkSettings} from '../library/use-link-settings';
+import {usePreferences} from '../settings/preferences';
+import {
+	toastMs,
+	type ToastDuration,
+} from '../../../extension/src/shared/toast-prefs';
 import {motion} from './motion';
+import {useBarHeight} from './tab-bar';
 import {useColors, useShape} from './theme';
 
 type Snack = {
@@ -20,6 +27,8 @@ type Snack = {
 let current: Snack | undefined;
 let counter = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
+// Settings › Messages stay, kept here because showSnack is called from outside React; SnackbarHost updates it.
+let duration: ToastDuration = 'default';
 const listeners = new Set<() => void>();
 
 const emit = () => {
@@ -40,10 +49,14 @@ export function showSnack(
 		onAction: action?.run,
 	};
 	clearTimeout(timer);
-	timer = setTimeout(() => {
-		current = undefined;
-		emit();
-	}, 5000);
+	const ms = toastMs(5000, duration);
+	if (ms !== undefined) {
+		timer = setTimeout(() => {
+			current = undefined;
+			emit();
+		}, ms);
+	}
+
 	emit();
 }
 
@@ -54,10 +67,18 @@ function dismiss() {
 }
 
 /**
-A short message with an optional action such as Undo, shown at the top of the screen for a few seconds.
+A short message with an optional action such as Undo, shown at the top of the screen (or above the tab bar) for a few
+seconds, twice as long under Messages stay: Longer, and until dismissed under Until dismissed.
 */
 export function SnackbarHost() {
 	const colors = useColors();
+	const {messagePosition} = usePreferences();
+	// The regular library's setting, as Settings changes it, also while the private library is open.
+	const links = useLinkSettings(true);
+	useEffect(() => {
+		duration = links.toastDuration;
+	}, [links.toastDuration]);
+	const barHeight = useBarHeight();
 	const shape = useShape();
 	const insets = useSafeAreaInsets();
 	const snack = useSyncExternalStore(
@@ -98,13 +119,15 @@ export function SnackbarHost() {
 			style={[
 				styles.wrap,
 				{
-					top: insets.top + 8,
+					...(messagePosition === 'bottom'
+						? {bottom: insets.bottom + barHeight + 28}
+						: {top: insets.top + 8}),
 					opacity: shown,
 					transform: [
 						{
 							translateY: shown.interpolate({
 								inputRange: [0, 1],
-								outputRange: [-24, 0],
+								outputRange: [messagePosition === 'bottom' ? 24 : -24, 0],
 							}),
 						},
 					],
@@ -120,7 +143,14 @@ export function SnackbarHost() {
 					},
 				]}
 			>
-				<Text style={styles.message}>{view.message}</Text>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityHint="Dismisses the message"
+					style={styles.messageArea}
+					onPress={dismiss}
+				>
+					<Text style={styles.message}>{view.message}</Text>
+				</Pressable>
 				{view.actionLabel && (
 					<Pressable
 						accessibilityRole="button"
@@ -149,7 +179,8 @@ const styles = StyleSheet.create({
 		paddingLeft: 16,
 		elevation: 6,
 	},
-	message: {flex: 1, color: '#ffffff', fontSize: 14, paddingVertical: 12},
+	messageArea: {flex: 1},
+	message: {color: '#ffffff', fontSize: 14, paddingVertical: 12},
 	action: {
 		minHeight: 48,
 		minWidth: 64,

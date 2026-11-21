@@ -274,7 +274,7 @@ export async function bookmarkMenuQuickActionsCheck(env: Env, theme: Theme) {
 			await selectQuickActions(
 				options,
 				menu,
-				['Move to', 'Move down'],
+				['Move to column…', 'Move down'],
 				'bookmark',
 			);
 
@@ -307,7 +307,7 @@ export async function bookmarkMenuQuickActionsCheck(env: Env, theme: Theme) {
 			const calendar = board.locator('[data-bookmark-title="Calendar"]');
 			await assertBookmarkQuickActions(
 				board,
-				['Open in new tab', 'Move down', 'Move to'],
+				['Open in new tab', 'Move down', 'Move to column…'],
 				'Gmail',
 				480,
 			);
@@ -339,12 +339,12 @@ export async function bookmarkMenuQuickActionsCheck(env: Env, theme: Theme) {
 			);
 
 			const moveTo = board.getByRole('button', {
-				name: 'Move to: Gmail',
+				name: 'Move to column…: Gmail',
 				exact: true,
 			});
 			assert.equal(await moveTo.isEnabled(), true);
 			await moveTo.focus();
-			assert.equal(await focusedLabel(board), 'Move to: Gmail');
+			assert.equal(await focusedLabel(board), 'Move to column…: Gmail');
 			await board.keyboard.press('Enter');
 			const moveDialog = board.getByRole('dialog');
 			await moveDialog.waitFor();
@@ -827,13 +827,19 @@ export async function bookmarkAddToSessionCheck(env: Env) {
 			.first();
 		await trigger.focus();
 		await page.keyboard.press('Enter');
-		await page.getByRole('menuitem', {name: 'Add to session'}).focus();
-		await page.keyboard.press('ArrowRight');
+		await page.getByRole('menuitem', {name: 'Add to session…'}).focus();
+		await page.keyboard.press('Enter');
+		const dialog = page.getByRole('dialog', {name: 'Add to session'});
+		await dialog.waitFor();
+		await page.keyboard.type('Archived example');
+		await dialog.getByText('No session matches.').first().waitFor();
 		assert.equal(
-			await page.getByRole('menuitem', {name: 'Archived example'}).count(),
+			await dialog.getByRole('option').count(),
 			0,
 			'archived sessions should not be targets for adding bookmarks',
 		);
+		await page.keyboard.press('Control+a');
+		await page.keyboard.type('Home lab');
 		await page.keyboard.press('Enter');
 		await until(
 			async () =>

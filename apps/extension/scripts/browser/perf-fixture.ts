@@ -1,10 +1,5 @@
 import type {DevStore} from '../../src/shared/dev-fixture.ts';
 
-/*
-A synthetic library of any size for performance work (see perf-profile.ts). It lives under scripts/, so it never
-reaches the shipped bundle. Deterministic: the same count always gives the same library.
-*/
-
 const hosts = [
 	'github.com',
 	'developer.mozilla.org',

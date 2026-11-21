@@ -189,6 +189,27 @@ export type SyncHost = {
 		): Promise<void>;
 	};
 	/**
+	Settings this host keeps outside the library, such as the extension's theme and accents, which sync as `setting`
+	records with a server that supports them and while Sync settings is on. Only the regular library's sync carries
+	them. A host without it holds such records in the library like any setting it does not know.
+	*/
+	outsideSettings?: {
+		/**
+		Each setting's value before anyone chose one, which is not sent until a pull has taken the setting once.
+		*/
+		defaults: Readonly<Record<string, unknown>>;
+		read(): Promise<Record<string, unknown>>;
+		/**
+		Stores `put`, values from other devices the host checks itself. `was` holds each one's value as `read` gave it
+		this round: a setting whose value changed since was edited meanwhile, so the host keeps that edit, and this
+		round's push sends it.
+		*/
+		apply(
+			put: Record<string, unknown>,
+			was: Readonly<Record<string, unknown>>,
+		): Promise<void>;
+	};
+	/**
 	Writes a library assembled from synced records; the host normalizes it like any untrusted input.
 	*/
 	writeLibrary(store: Store): Promise<void>;
@@ -611,7 +632,9 @@ export function createSyncClient(host: SyncHost) {
 		const left = await leftAlone(state);
 		const records = new Map(
 			[...all].filter(
-				([key, record]) => state.shadow[key] || !isUntouchedDefault(record),
+				([key, record]) =>
+					state.shadow[key] ||
+					!isUntouchedDefault(record, host.outsideSettings?.defaults),
 			),
 		);
 		return left.size === 0
@@ -620,8 +643,8 @@ export function createSyncClient(host: SyncHost) {
 	}
 
 	/**
-	Writes the library from `records` and, when they changed, the trash entries and Sources choices that differ from
-	`before`.
+	Writes the library from `records` and, when they changed, the trash entries, Sources choices, and outside settings
+	that differ from `before`.
 	*/
 	async function write(
 		records: Records,
@@ -630,11 +653,36 @@ export function createSyncClient(host: SyncHost) {
 		base: Store,
 	) {
 		const syncSettings = await settingsOn();
+		const outside = host.outsideSettings;
 		applying = true;
 		try {
 			await host.writeLibrary(
-				assemble(inOrder(state, records), base, syncSettings),
+				assemble(
+					inOrder(state, records),
+					base,
+					syncSettings,
+					new Set(Object.keys(outside?.defaults ?? {})),
+				),
 			);
+			if (outside && syncSettings && settingKindOn) {
+				const put: Record<string, unknown> = {};
+				const was: Record<string, unknown> = {};
+				for (const id of Object.keys(outside.defaults)) {
+					const key = recordKey({kind: 'setting', id});
+					const record = records.get(key);
+					if (!record || record === before.get(key)) {
+						continue;
+					}
+
+					put[id] = record.value;
+					was[id] = before.get(key)?.value;
+				}
+
+				if (Object.keys(put).length > 0) {
+					await outside.apply(put, was);
+				}
+			}
+
 			if (trashOn && host.trash) {
 				const put = trashOf(
 					[...records]
@@ -695,6 +743,9 @@ export function createSyncClient(host: SyncHost) {
 				store,
 				trashOn && host.trash ? await host.trash.read() : [],
 				sourcesOn && host.sources ? await host.sources.read() : [],
+				settingKindOn && host.outsideSettings
+					? await host.outsideSettings.read()
+					: {},
 			);
 			let state = await loadState();
 			if (state.joined) {

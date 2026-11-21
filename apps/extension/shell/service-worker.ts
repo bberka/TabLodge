@@ -142,11 +142,23 @@ import {
 } from '../src/app/omnibox';
 import {togglePaletteOverlay} from '../src/app/palette-overlay';
 import {showQuoteToast} from '../src/app/quote-toast';
+import {toastEdges, toastMs, toastPlace} from '../src/shared/toast-prefs';
 import {appendQuote, pageAddress, quoteTarget} from '../src/shared/quotes';
 import {showPageNote, takeCapturedCopy} from '../src/app/page-copy-inject';
 import {defaultBookmarkColumnId} from '../src/app/default-column';
 import {isSourceColumnId} from '../src/shared/source-columns';
 import {mediaSave} from '../src/shared/save-media';
+import {
+	bookmarkDuplicates,
+	defaultTargetSession,
+	duplicateError,
+	sessionDuplicates,
+} from '../src/shared/save-rules';
+import {
+	type SaveKind,
+	SAVE_BADGES,
+	saveOutcomeOf,
+} from '../src/shared/save-feedback';
 import {
 	createPrivateLock,
 	type Gate,
@@ -1143,6 +1155,17 @@ function mutate<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 /*
+The theme and accents sync between browsers (`platform` in src/shared/setting-scopes.ts) as settings kept outside the
+library: pages store the theme and accent themselves (src/shared/theme.tsx), and the private window accent sits in the
+private config, whose other fields stay on this device.
+*/
+const OUTSIDE_SETTING_DEFAULTS = {
+	uiTheme: 'system',
+	uiAccent: 'default',
+	privateAccent: 'teal',
+} as const;
+
+/*
 Sync with a self hosted server (src/shared/sync/client.ts). Private workers never sync: their library is separate
 and may be temporary. The client runs its own library reads and writes inside the mutation queue.
 */
@@ -1162,6 +1185,11 @@ const syncClient = privateContext
 			trash: {read: readSyncTrash, apply: applySyncTrash},
 			// Sources belong to the browser, so only this client carries them, never private sync.
 			sources: {read: readSyncSources, apply: applySyncSources},
+			outsideSettings: {
+				defaults: OUTSIDE_SETTING_DEFAULTS,
+				read: readOutsideSettings,
+				apply: applyOutsideSettings,
+			},
 			async writeLibrary(store) {
 				// The records came from other devices: normalized like an import before they are stored.
 				const before = (await getStore()).settings;
@@ -1181,7 +1209,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
 		return;
 	}
 
-	if (Object.hasOwn(changes, SYNC_NUDGE_KEY)) {
+	if (
+		[SYNC_NUDGE_KEY, UI_THEME_KEY, UI_ACCENT_KEY, PRIVATE_CONFIG_KEY].some(
+			(key) => Object.hasOwn(changes, key),
+		)
+	) {
 		syncClient?.localChanged();
 	}
 
@@ -2112,6 +2144,12 @@ async function captureTabs(
 	let titlesUpdated = false;
 	let newEntries = captureEntries;
 	const known = new Map<string, SavedTab>();
+	// A new session: only the duplicate setting decides (save-rules.ts).
+	const duplicates = sessionDuplicates(
+		store.groups,
+		undefined,
+		settings.saveDuplicateHandling,
+	);
 	for (const existingGroup of store.groups) {
 		for (const existingTab of existingGroup.tabs) {
 			if (!known.has(existingTab.url)) {
@@ -2142,7 +2180,7 @@ async function captureTabs(
 			continue;
 		}
 
-		if (settings.saveDuplicateHandling === 'reject') {
+		if (duplicates.isDuplicate(entry.saved.url)) {
 			skipped += 1;
 			if (isInteger(entry.sourceTabId)) {
 				rejectedTabIds.push(entry.sourceTabId);
@@ -2733,17 +2771,8 @@ async function openBookmarkPrompt(
 	const store = await getStore();
 	const claimed = columnForUrl(store.bookmarkColumns, url);
 	if (claimed) {
-		if (
-			store.bookmarks.some(
-				(bookmark) => bookmark.url === url && bookmark.columnId === claimed.id,
-			)
-		) {
-			return {ok: true};
-		}
-
 		const result = await addBookmark({title, url, columnId: claimed.id});
-		flashBadge(tab, result.ok);
-		return result.ok ? {ok: true} : {ok: false, error: result.error};
+		return result.ok ? {ok: true} : result;
 	}
 
 	const options: chrome.windows.CreateData = {
@@ -4321,7 +4350,11 @@ async function addLinksToSession(
 				return {ok: false, error: 'That saved session no longer exists.'};
 			}
 
-			const known = new Set(group.tabs.map((tab) => tab.url));
+			const duplicates = sessionDuplicates(
+				store.groups,
+				group.id,
+				store.settings.saveDuplicateHandling,
+			);
 			const now = Date.now();
 			const added: SavedTab[] = [];
 			let skipped = 0;
@@ -4334,12 +4367,12 @@ async function addLinksToSession(
 					continue;
 				}
 
-				if (known.has(url)) {
+				if (duplicates.isDuplicate(url)) {
 					skipped += 1;
 					continue;
 				}
 
-				known.add(url);
+				duplicates.saved(url);
 				added.push({
 					id: makeId(),
 					title: await bestBookmarkTitle(
@@ -4357,11 +4390,16 @@ async function addLinksToSession(
 			}
 
 			if (added.length === 0) {
-				const error =
-					skipped > 0
-						? 'Those links are already in this session.'
-						: 'Only regular http and https pages can be saved.';
-				return {ok: false, error};
+				return skipped > 0
+					? {
+							ok: false,
+							error: duplicateError('session'),
+							duplicate: true,
+						}
+					: {
+							ok: false,
+							error: 'Only regular http and https pages can be saved.',
+						};
 			}
 
 			if (group.tabs.length + added.length > MAX_TABS_PER_SESSION) {
@@ -4424,36 +4462,37 @@ async function updateGroupFromWindow(
 				const entries = await captureEntriesOf(win.tabs, win, settings, now);
 				const own = new Map(group.tabs.map((tab) => [tab.url, tab]));
 				const known = new Map(own);
-				const elsewhere = new Set<string>();
 				for (const other of store.groups) {
 					if (other === group) {
 						continue;
 					}
 
 					for (const tab of other.tabs) {
-						elsewhere.add(tab.url);
 						if (!known.has(tab.url)) {
 							known.set(tab.url, tab);
 						}
 					}
 				}
 
-				const reject = settings.saveDuplicateHandling === 'reject';
+				// Appending goes into the session, so what it holds is a duplicate; a replaced session's own links never count.
+				const duplicates = sessionDuplicates(
+					mode === 'append'
+						? store.groups
+						: store.groups.filter((other) => other !== group),
+					mode === 'append' ? group.id : undefined,
+					settings.saveDuplicateHandling,
+				);
 				const kept: CaptureEntry[] = [];
-				const seen = new Set<string>();
 				let skipped = 0;
 				for (const entry of entries) {
 					const {url} = entry.saved;
 					const existing = known.get(url);
-					if (
-						(mode === 'append' && own.has(url)) ||
-						(reject && (elsewhere.has(url) || seen.has(url)))
-					) {
+					if (duplicates.isDuplicate(url)) {
 						skipped += 1;
 						continue;
 					}
 
-					seen.add(url);
+					duplicates.saved(url);
 					if (existing) {
 						entry.saved.notes = existing.notes || '';
 						if (settings.saveDuplicateTitle !== 'latest') {
@@ -4877,6 +4916,20 @@ async function addBookmark(
 		const columnId = landingColumnId(store.bookmarkColumns, fields.columnId, {
 			claimedId: columnForUrl(store.bookmarkColumns, url)?.id,
 		});
+		if (
+			bookmarkDuplicates(
+				store.bookmarks,
+				columnId,
+				store.settings.saveDuplicateHandling,
+			).isDuplicate(url)
+		) {
+			return {
+				ok: false,
+				error: duplicateError('bookmark'),
+				duplicate: true,
+			};
+		}
+
 		const now = Date.now();
 		const notes = bookmarkNotes(fields.notes);
 		const bookmark: Bookmark = {
@@ -5015,10 +5068,10 @@ async function addBookmarks(
 		const now = Date.now();
 		const device = await savedHere();
 		const added: Bookmark[] = [];
-		const known = new Set(
-			store.bookmarks
-				.filter((bookmark) => bookmark.columnId === targetColumnId)
-				.map((bookmark) => bookmark.url),
+		const duplicates = bookmarkDuplicates(
+			store.bookmarks,
+			targetColumnId,
+			store.settings.saveDuplicateHandling,
 		);
 		let skipped = 0;
 		for (const entry of (Array.isArray(entries) ? entries : []).slice(0, 500)) {
@@ -5027,12 +5080,12 @@ async function addBookmarks(
 				continue;
 			}
 
-			if (known.has(url)) {
+			if (duplicates.isDuplicate(url)) {
 				skipped += 1;
 				continue;
 			}
 
-			known.add(url);
+			duplicates.saved(url);
 
 			added.push({
 				id: makeId(),
@@ -5050,11 +5103,12 @@ async function addBookmarks(
 		}
 
 		if (added.length === 0) {
-			const error =
-				skipped > 0
-					? 'Already bookmarked in this column.'
-					: 'Only regular http and https pages can be bookmarked.';
-			return {ok: false, error};
+			return skipped > 0
+				? {ok: false, error: duplicateError('bookmark'), duplicate: true}
+				: {
+						ok: false,
+						error: 'Only regular http and https pages can be bookmarked.',
+					};
 		}
 
 		const target = targetBookmarkId
@@ -9778,6 +9832,56 @@ async function stopSource(source: SiteSource) {
 	});
 }
 
+async function readOutsideSettings(): Promise<Record<string, unknown>> {
+	const stored = await chrome.storage.local.get([
+		UI_THEME_KEY,
+		UI_ACCENT_KEY,
+		PRIVATE_CONFIG_KEY,
+	]);
+	return {
+		uiTheme: asTheme(stored[UI_THEME_KEY]),
+		uiAccent: asAccent(stored[UI_ACCENT_KEY]),
+		privateAccent: normalizePrivateConfig(stored[PRIVATE_CONFIG_KEY]).accent,
+	};
+}
+
+/**
+Values from other browsers. One that is not valid here is left out, and one changed in this browser during the round
+stays as it is.
+*/
+async function applyOutsideSettings(
+	put: Record<string, unknown>,
+	was: Readonly<Record<string, unknown>>,
+) {
+	const now = await readOutsideSettings();
+	const takes = (id: string) =>
+		Object.hasOwn(put, id) && (was[id] === undefined || was[id] === now[id]);
+	const writes: Record<string, unknown> = {};
+	if (takes('uiTheme') && asTheme(put.uiTheme) === put.uiTheme) {
+		writes[UI_THEME_KEY] = put.uiTheme;
+	}
+
+	if (takes('uiAccent') && isAccent(put.uiAccent)) {
+		writes[UI_ACCENT_KEY] = put.uiAccent;
+	}
+
+	if (takes('privateAccent') && isPrivateAccent(put.privateAccent)) {
+		const config = (await chrome.storage.local.get([PRIVATE_CONFIG_KEY]))[
+			PRIVATE_CONFIG_KEY
+		];
+		// Like SET_PRIVATE_ACCENT: the whole config, with the fields this browser has.
+		writes[PRIVATE_CONFIG_KEY] = {
+			...normalizePrivateConfig(config),
+			...(isRecord(config) && config),
+			accent: put.privateAccent,
+		};
+	}
+
+	if (Object.keys(writes).length > 0) {
+		await chrome.storage.local.set(writes);
+	}
+}
+
 /**
 The choices as the sync client sees them: one per site that is on, as stored.
 */
@@ -10244,8 +10348,8 @@ const quoteUndoTabs = new Map<string, number>();
 
 /**
 Messages from code in a web page: the site content script and the Save quote toast. They get the source actions (a
-save, the saved page catch-up, and their Undo) and Undo of the toast's own quote, and nothing else: no page can
-read or change the library through them, and the catch-up answers only how many of its site's links are missing.
+save, the saved page catch-up, and their Undo), Undo of the toast's own quote, and where toasts appear, and nothing
+else: no page can read or change the library through them, and the catch-up answers only how many of its site's links are missing.
 */
 async function handleSourceMessage(
 	message: TabLodgeMessage | undefined,
@@ -10287,6 +10391,10 @@ async function handleSourceMessage(
 					!privateSourcesOff(),
 				),
 			};
+		}
+
+		case 'TOAST_PREFS': {
+			return toastPrefs();
 		}
 
 		case 'SITE_SOURCE_PENDING': {
@@ -10507,6 +10615,10 @@ async function handleMessage(
 			await chrome.storage.local.set({[PRIVATE_CONFIG_KEY]: config});
 			await mutationQueue;
 			return {ok: true, ...config};
+		}
+
+		case 'TOAST_PREFS': {
+			return toastPrefs();
 		}
 
 		case 'GET_STATE': {
@@ -10994,6 +11106,26 @@ async function handleMessage(
 	}
 }
 
+/**
+Where the Save quote toast sits and how long it stays, as the page script needs them (it cannot import `toast-prefs`).
+*/
+async function quoteToastPlacement() {
+	const {toastPosition, toastDuration} = await readSettings();
+	const {top, bottom, left, right, transform} = toastEdges(
+		toastPlace(toastPosition, 'bottom'),
+		24,
+	);
+	return {
+		edges: {top, bottom, left, right, transform},
+		closeMs: toastMs(6000, toastDuration) ?? null,
+	};
+}
+
+async function toastPrefs(): Promise<ActionResult<'TOAST_PREFS'>> {
+	const {toastPosition, toastDuration} = await readSettings();
+	return {ok: true, position: toastPosition, duration: toastDuration};
+}
+
 const EXTENSION_ORIGIN = chrome.runtime.getURL('');
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -11030,6 +11162,8 @@ chrome.commands.onCommand.addListener((command, tab) => {
 	if (command === 'save-window') {
 		void saveTabs('selected-or-window', tab, DEFAULT_FOLDER_ID, {
 			promptName: true,
+		}).then((result) => {
+			reportBadgeSave(tab, result, `${APP_NAME} could not save this window.`);
 		});
 	}
 
@@ -11262,7 +11396,10 @@ async function saveCurrentTabToGroup(
 			return {ok: false, error: 'There is no eligible web tab to save.'};
 		}
 
-		const group = groupId ? findGroup(store, groupId) : store.groups[0];
+		// With no session chosen: the most recently updated one that is not archived (save-rules.ts).
+		const group = groupId
+			? findGroup(store, groupId)
+			: defaultTargetSession(store.groups, store.folders);
 		if (!group) {
 			return {
 				ok: false,
@@ -11284,8 +11421,11 @@ async function saveCurrentTabToGroup(
 		const copies = store.groups
 			.flatMap((entry) => entry.tabs)
 			.filter((entry) => entry.url === tabUrl);
-		const duplicate =
-			store.settings.saveDuplicateHandling === 'reject' ? copies[0] : null;
+		const duplicate = sessionDuplicates(
+			store.groups,
+			group.id,
+			store.settings.saveDuplicateHandling,
+		).isDuplicate(tabUrl);
 		if (
 			copies.length > 0 &&
 			store.settings.saveDuplicateTitle === 'latest' &&
@@ -11325,6 +11465,15 @@ async function saveCurrentTabToGroup(
 			await writeStore(store);
 		}
 
+		// A skipped duplicate leaves its tab open, as the setting says.
+		if (duplicate) {
+			return {
+				ok: false,
+				error: duplicateError('session'),
+				duplicate: true,
+			};
+		}
+
 		if (store.settings.closeOnSave) {
 			const remaining = await chrome.tabs.query({windowId});
 			const candidate = remaining.find((entry) => entry.id === tab.id);
@@ -11359,26 +11508,18 @@ async function saveCurrentTabToGroup(
 			}
 		}
 
-		return {
-			ok: true,
-			count: duplicate ? 0 : 1,
-			skipped: duplicate ? 1 : 0,
-			groupId: group.id,
-		};
+		return {ok: true, count: 1, skipped: 0, groupId: group.id};
 	});
 }
 
 async function handleToolbarAction(tab?: chrome.tabs.Tab) {
 	const settings = await readSettings();
 	if (settings.actionMode === 'current-tab-to-group') {
-		const result = await saveCurrentTabToGroup(tab);
-		if (!result?.ok) {
-			console.warn(
-				result?.error ||
-					`${APP_NAME} could not add the current tab to a session.`,
-			);
-		}
-
+		reportBadgeSave(
+			tab,
+			await saveCurrentTabToGroup(tab),
+			`${APP_NAME} could not add the current tab to a session.`,
+		);
 		return;
 	}
 
@@ -11394,15 +11535,11 @@ async function handleToolbarAction(tab?: chrome.tabs.Tab) {
 		return;
 	}
 
-	const result = await saveTabs(scope, tab, DEFAULT_FOLDER_ID, {
-		promptName: true,
-	});
-	if (!result?.ok) {
-		console.warn(
-			result?.error ||
-				`${APP_NAME} could not save tabs from the toolbar action.`,
-		);
-	}
+	reportBadgeSave(
+		tab,
+		await saveTabs(scope, tab, DEFAULT_FOLDER_ID, {promptName: true}),
+		`${APP_NAME} could not save tabs from the toolbar action.`,
+	);
 }
 
 async function openDashboardForTab(tab?: chrome.tabs.Tab) {
@@ -11411,6 +11548,9 @@ async function openDashboardForTab(tab?: chrome.tabs.Tab) {
 	await openDashboard(windowId, '', settings.dashboardBehavior);
 }
 
+/**
+A menu action's result; a failure with `duplicate` is a skipped duplicate, which flashes its own badge and is never a success.
+*/
 type MenuOutcome = ActionFailure | {ok: true};
 type MenuClickData = chrome.contextMenus.OnClickData & {linkText?: string};
 const MENU_SAVE_SCOPES: Record<string, SaveScope> = {
@@ -11761,10 +11901,17 @@ function watchContextMenuShown() {
 watchContextMenuShown();
 
 /**
-Most menu actions show no page toast (only Save quote does, see quoteFromMenu), so the toolbar badge flashes ✓ (or ! on
-failure) on the clicked tab.
+Most menu actions show no page toast (only Save quote does, see quoteFromMenu), so the toolbar badge flashes ✓ (= for a
+skipped duplicate, ! on failure) on the clicked tab. Every save reports through the same three marks (save-feedback.ts).
 */
-function flashBadge(tab: chrome.tabs.Tab | undefined, ok: boolean) {
+function flashBadge(
+	tab: chrome.tabs.Tab | undefined,
+	result: boolean | SaveKind,
+) {
+	const badge =
+		SAVE_BADGES[
+			typeof result === 'boolean' ? (result ? 'saved' : 'failed') : result
+		];
 	const {action} = chrome;
 	if (!action?.setBadgeText) {
 		return;
@@ -11781,9 +11928,9 @@ function flashBadge(tab: chrome.tabs.Tab | undefined, ok: boolean) {
 		try {
 			await action.setBadgeBackgroundColor?.({
 				...target,
-				color: ok ? '#15803d' : '#b91c1c',
+				color: badge.color,
 			});
-			await action.setBadgeText({...target, text: ok ? '✓' : '!'});
+			await action.setBadgeText({...target, text: badge.text});
 		} catch {
 			return; /* The tab may have closed. */
 		}
@@ -11801,6 +11948,40 @@ function flashBadge(tab: chrome.tabs.Tab | undefined, ok: boolean) {
 }
 
 /**
+The badge for a save or menu result: a failure, a skipped duplicate (nothing stored, something skipped), or success.
+*/
+function saveKindOf(
+	result: MenuOutcome | void | {ok: true; count?: number; skipped?: number},
+): SaveKind {
+	if (!result) {
+		return 'saved';
+	}
+
+	if (result.ok) {
+		const {count, skipped} = result as {count?: number; skipped?: number};
+		return saveOutcomeOf({ok: true, count: count ?? 1, skipped}, 'tab').kind;
+	}
+
+	return result.duplicate ? 'duplicate' : 'failed';
+}
+
+/**
+Reports a toolbar or shortcut save on the badge; a failure also goes to the console (a skipped duplicate is not one).
+*/
+function reportBadgeSave(
+	tab: chrome.tabs.Tab | undefined,
+	result: Parameters<typeof saveKindOf>[0] | undefined,
+	fallback: string,
+) {
+	const kind = result ? saveKindOf(result) : 'failed';
+	if (kind === 'failed') {
+		console.warn((result && !result.ok && result.error) || fallback);
+	}
+
+	flashBadge(tab, kind);
+}
+
+/**
 Runs a menu action: failures are logged with console.warn (never thrown) and every outcome flashes the badge.
 */
 function runMenuAction(
@@ -11811,12 +11992,12 @@ function runMenuAction(
 ) {
 	void action()
 		.then((result) => {
-			if (result && !result.ok) {
+			if (result && !result.ok && !result.duplicate) {
 				console.warn(result.error || fallback);
 			}
 
 			if (badge) {
-				flashBadge(tab, !result || result.ok);
+				flashBadge(tab, saveKindOf(result));
 			}
 		})
 		.catch((error: unknown) => {
@@ -11851,7 +12032,7 @@ async function menuLinkTitle(info: MenuClickData, url: string) {
 }
 
 /**
-Adds a link to a bookmark column (or Unfiled); a link already in that column counts as done.
+Adds a link to a bookmark column (or Unfiled). A duplicate (see save-rules.ts) is skipped and reported as one.
 */
 async function bookmarkToColumn(
 	rawUrl: unknown,
@@ -11874,20 +12055,12 @@ async function bookmarkToColumn(
 		return {ok: false, error: 'That bookmark column no longer exists.'};
 	}
 
-	if (
-		store.bookmarks.some(
-			(bookmark) => bookmark.url === url && bookmark.columnId === columnId,
-		)
-	) {
-		return {ok: true};
-	}
-
 	return addBookmarks([{url, title}], columnId);
 }
 
 /**
 "Bookmark image to" and "Bookmark video to": the media's own address, or the page for a stream, into the chosen
-column or a new one. An address already bookmarked in any column counts as done; one in the trash is left there, so
+column or a new one. A duplicate (save-rules.ts) is skipped and reported as one; an address in the trash is left there, so
 the save does not bring back what was deleted.
 */
 async function bookmarkMedia(
@@ -11903,13 +12076,17 @@ async function bookmarkMedia(
 			pageUrl: info.pageUrl ?? tab?.url,
 			pageTitle: pageTitle(tab?.title, '', store.settings.cleanTitles),
 		},
-		new Set(store.bookmarks.map((bookmark) => bookmark.url)),
+		bookmarkDuplicates(
+			store.bookmarks,
+			columnId === 'new' ? undefined : columnId,
+			store.settings.saveDuplicateHandling,
+		).isDuplicate,
 		pruneTrash(await readTrash(), store.settings.trashRetentionDays),
 	);
 	if (!plan.ok) {
 		switch (plan.reason) {
 			case 'saved': {
-				return {ok: true};
+				return {ok: false, error: duplicateError('bookmark'), duplicate: true};
 			}
 
 			case 'trash': {
@@ -12035,7 +12212,13 @@ async function quoteFromMenu(info: MenuClickData, tab?: chrome.tabs.Tab) {
 			const [injected] = await chrome.scripting.executeScript({
 				target: {tabId: tab.id},
 				func: showQuoteToast,
-				args: [{...toast, theme: asTheme(await readKey(UI_THEME_KEY))}],
+				args: [
+					{
+						...toast,
+						theme: asTheme(await readKey(UI_THEME_KEY)),
+						...(await quoteToastPlacement()),
+					},
+				],
 			});
 			shown = injected?.result === true;
 		} catch {
@@ -12409,7 +12592,10 @@ async function handleBrowserBookmark(node: chrome.bookmarks.BookmarkTreeNode) {
 			? settings.browserBookmarkColumn
 			: store.bookmarkColumns[0]?.id);
 	const result = await addBookmark({title: node.title, url, columnId});
-	flashBadge(active, result.ok);
+	flashBadge(
+		active,
+		result.ok ? 'saved' : result.duplicate ? 'duplicate' : 'failed',
+	);
 }
 
 function flushBrowserBookmarks() {

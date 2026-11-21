@@ -1,16 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, unicorn/isolated-functions, unicorn/no-global-object-property-assignment, no-promise-executor-return, unicorn/no-array-sort, @typescript-eslint/ban-ts-comment, @typescript-eslint/restrict-plus-operands -- Measurement script: its page and worker snippets are untyped here. Never bundled. */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, unicorn/isolated-functions, unicorn/no-global-object-property-assignment, no-promise-executor-return, unicorn/no-array-sort, @typescript-eslint/ban-ts-comment, local/no-comments, @typescript-eslint/restrict-plus-operands -- Measurement script: its page and worker snippets are untyped here. Never bundled. */
 // @ts-nocheck -- Most of this file is code that runs inside the page or the worker, where the DOM and chrome types are not available to this project.
 import process from 'node:process';
 import {chromium, type Page, type Worker} from 'playwright';
 import type {DevStore} from '../../src/shared/dev-fixture.ts';
 import {createLargeLibrary} from './perf-fixture.ts';
-
-/*
-Measures the extension against a large synthetic library in the headless dev browser.
-  1. vp run dev:chrome --headless          (prints the CDP endpoint)
-  2. node scripts/browser/perf-profile.ts <cdp-endpoint> <bookmark-count> [runs]
-It replaces the library in the dev profile. Only the dev profile is touched, never a real browser's data.
-*/
 
 const [endpoint, countArgument, runsArgument] = process.argv.slice(2);
 const count = Number(countArgument ?? 600);
@@ -25,10 +18,6 @@ const findWorker = () =>
 let worker = findWorker()!;
 const origin = `chrome-extension://${new URL(worker.url()).hostname}`;
 
-/*
-The worker checks the storage layout once per run and caches the answer, so a library written behind its back is
-only migrated to per-record keys after a restart, as it would be for a real user's library.
-*/
 async function restartWorker() {
 	const cdp = await browser.newBrowserCDPSession();
 	const {targetInfos} = await cdp.send('Target.getTargets');
@@ -69,7 +58,6 @@ async function seed(page: Page) {
 	);
 	await restartWorker();
 	await page.reload();
-	// The first mutation migrates the layout to per-record keys, as real use does.
 	await send(page, {
 		type: 'UPDATE_BOOKMARK',
 		bookmarkId: 'perf-bookmark-0',
@@ -105,7 +93,6 @@ async function loadMetrics(page: Page, path: string) {
 
 const page = await context.newPage();
 await page.addInitScript(() => {
-	// Long tasks only get recorded once an observer exists; buffered picks up earlier ones.
 	const tasks: number[] = [];
 	(globalThis as unknown as {__longTasks: number[]}).__longTasks = tasks;
 	new PerformanceObserver((list) => {
@@ -145,7 +132,6 @@ results.longestTaskMs = round(median(loads.map((l) => l.longestTaskMs)));
 results.domNodes = loads[0].domNodes;
 results.bookmarkNodes = loads[0].bookmarkNodes;
 
-// Storage traffic of one edit, counted inside the worker.
 await worker.evaluate(() => {
 	const area = chrome.storage.local as unknown as Record<string, unknown>;
 	const g = globalThis as unknown as {__perf: {sets: number; chars: number}};
@@ -175,7 +161,6 @@ for (let i = 0; i < runs; i++) {
 }
 
 const traffic = await worker.evaluate(() => {
-	// Put the real `set` back, so a later run in the same worker is not counted twice.
 	(globalThis as unknown as {__perfRestore: () => void}).__perfRestore();
 	return (globalThis as unknown as {__perf: unknown}).__perf;
 });
@@ -185,7 +170,6 @@ results.editStorageKBPerEdit = Math.round(
 	(traffic as {chars: number}).chars / runs / 1024,
 );
 
-// Main thread time the open page spends re-rendering after another context edits one bookmark.
 const rerender = [];
 for (let i = 0; i < runs; i++) {
 	await page.evaluate(() => {
@@ -209,7 +193,6 @@ for (let i = 0; i < runs; i++) {
 
 results.afterEditLongTaskMs = round(median(rerender));
 
-// Dragging a bookmark over other cards: time from each dragover to the next painted frame.
 const drag = await page.evaluate(async () => {
 	const cards = [...document.querySelectorAll('[data-bookmark-id]')];
 	const transfer = new DataTransfer();
@@ -243,7 +226,6 @@ const drag = await page.evaluate(async () => {
 results.dragOverMedianMs = round(median(drag));
 results.dragOverMaxMs = round(Math.max(...drag));
 
-// Opening a bookmark's menu (right click): time to the next painted frame.
 const menu = await page.evaluate(async () => {
 	const times = [];
 	const cards = [...document.querySelectorAll('[data-bookmark-id]')];
@@ -268,7 +250,6 @@ const menu = await page.evaluate(async () => {
 });
 results.contextMenuMedianMs = round(median(menu));
 
-// Search typing: time from each input event to the next painted frame.
 const typing = await page.evaluate(async () => {
 	const button = document.querySelector<HTMLElement>(
 		'[aria-label="Search bookmarks"]',

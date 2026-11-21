@@ -72,6 +72,7 @@ import {
 	type MenuAction,
 } from '../shared/ui';
 import {DropIndicator as InsertionLine} from '../components/ui/drop-indicator';
+import {BOOKMARK_SORT_OPTIONS, sortBookmarks} from '../shared/bookmark-rules';
 import '../../styles/extension-app.css';
 import {ThemeProvider, useTheme} from '../shared/theme';
 import {LoadMore, usePagedLimit} from '../shared/load-more';
@@ -81,6 +82,7 @@ import {stripTrackingParameters} from '../shared/tracking-parameters';
 import type {
 	Bookmark,
 	BookmarkBoardView,
+	BookmarkSort,
 	BookmarkColumn as BookmarkColumnData,
 	InsertPosition,
 	LinkEntry,
@@ -97,6 +99,8 @@ import {
 import {archivedFolderId} from '../shared/session-folders';
 import {sourceColumnSite} from '../shared/source-columns';
 import {removedByEdit, shownTags} from '../shared/bookmark-tags';
+import {duplicatesNote, saveMessage} from '../shared/save-feedback';
+import {SortMenu} from './sort-menu';
 import {TagChips, TagFilterMenu, TagsField} from './bookmark-tags';
 import {ACTION_ICONS} from './action-icons';
 import {openArchivedCopy} from './archive-link';
@@ -124,8 +128,8 @@ import {
 	plural,
 	useTabLodgeState,
 	useTabSelection,
-	forceAddAction,
-	duplicatesNote,
+	reportSessionSave,
+	showSaveFailure,
 } from './common';
 import {useSessionNameAsk} from './name-session-dialog';
 import {SessionManager} from './dashboard';
@@ -166,6 +170,7 @@ import {
 	handleInternalDragEnd,
 	handleInternalDragStart,
 	acceptsDrop,
+	ALL_BOOKMARKS_ID,
 	parseDraggedBookmark,
 	parsePastedLinks,
 	previewBookmarkDrop,
@@ -194,6 +199,10 @@ import {
 	shouldBlockDocumentDrop,
 } from './interaction-actions';
 import {ColumnSelect} from './column-select';
+import {
+	TargetPickerDialog,
+	type TargetPickerRequest,
+} from './target-picker-dialog';
 import {defaultBookmarkColumnId} from './default-column';
 import {
 	NEW_SESSION,
@@ -224,8 +233,7 @@ import {cn} from '@/lib/utils';
 
 const initialStateRequest = takeStateRequest();
 
-type DialogKind =
-	'bookmark' | 'column' | 'move' | 'paste-links' | 'delete-column';
+type DialogKind = 'bookmark' | 'column' | 'paste-links' | 'delete-column';
 type BookmarkAction =
 	| 'click'
 	| 'open'
@@ -269,7 +277,6 @@ type ColumnDraft = {
 	color?: string;
 	domains: string;
 };
-type MoveDraft = {bookmarkIds: string[]; targetColumnId: string};
 type BookmarkSelectionMode = 'off' | 'hover' | 'on';
 type PointerColumnDrag = {
 	pointerId: number;
@@ -311,7 +318,7 @@ const UNFILED_COLUMN: BookmarkColumnData = {
 The system column of the Focus view that lists every bookmark of every column. It is not stored.
 */
 const ALL_COLUMN: BookmarkColumnData = {
-	id: 'bookmark-all',
+	id: ALL_BOOKMARKS_ID,
 	name: 'All',
 	createdAt: 0,
 	isDefault: false,
@@ -342,7 +349,7 @@ const QUICK_ACTIONS: Record<
 	copy: {label: 'Copy link', icon: ACTION_ICONS.copy, action: 'copy'},
 	edit: {label: 'Edit', icon: ACTION_ICONS.edit, action: 'edit'},
 	delete: {label: 'Delete', icon: ACTION_ICONS.remove, action: 'delete'},
-	move: {label: 'Move to', icon: ACTION_ICONS.move, action: 'move'},
+	move: {label: 'Move to column…', icon: ACTION_ICONS.move, action: 'move'},
 	'move-up': {label: 'Move up', icon: ArrowUp, action: 'move-up'},
 	'move-down': {label: 'Move down', icon: ArrowDown, action: 'move-down'},
 };
@@ -414,9 +421,9 @@ function NewTab() {
 		grew?: boolean;
 	} | null>(null);
 	const [columnEdit, setColumnEdit] = useState<ColumnDraft | null>(null);
-	const [moveBookmark, setMoveBookmark] = useState<MoveDraft | null>(null);
-	const [moveBookmarkColumnDraft, setMoveBookmarkColumnDraft] =
-		useState<BookmarkColumnDraft>({name: ''});
+	const [targetPicker, setTargetPicker] = useState<TargetPickerRequest | null>(
+		null,
+	);
 	const draggedBookmarksRef = useRef<string[]>([]);
 	const bookmarkBatchRunningRef = useRef(false);
 	const [externalPromptHandled, setExternalPromptHandled] = useState(false);
@@ -451,21 +458,11 @@ function NewTab() {
 		toggle: toggleBookmark,
 		clear: clearBookmarkSelection,
 	} = useBookmarkSelection(bookmarks);
-	const selectedBookmarkIds = bookmarks
-		.filter((bookmark) => selectedBookmarks.has(bookmark.id))
-		.map((bookmark) => bookmark.id);
 	const bookmarkSelectionMode: BookmarkSelectionMode = bookmarkSelectionEnabled
 		? 'on'
 		: selectionModifier
 			? 'hover'
 			: 'off';
-	const movingBookmark =
-		moveBookmark?.bookmarkIds.length === 1
-			? bookmarks.find(
-					(bookmark) => bookmark.id === moveBookmark.bookmarkIds[0],
-				)
-			: undefined;
-
 	const settings: Partial<Settings> = state?.settings || {};
 	const {ask: askSessionName, dialog: nameDialog} = useSessionNameAsk(settings);
 	const newTabOn = settings.newTabEnabled !== false;
@@ -476,6 +473,14 @@ function NewTab() {
 	// Columns in a grid row share the tallest one's height (grid's default stretch); off keeps their natural height.
 	const stretchColumns = settings.stretchBookmarkColumns !== false;
 	const bookmarkView = settings.bookmarkBoardView ?? 'focus';
+	const bookmarkSort = settings.bookmarkSort ?? 'manual';
+	// Only the stored order can be rearranged; any other sort is a view of it.
+	const manualOrder = bookmarkSort === 'manual';
+	// In the order shown, so a batch moved under a sort arrives in that order.
+	const selectedBookmarkIds = sortBookmarks(
+		bookmarks.filter((bookmark) => selectedBookmarks.has(bookmark.id)),
+		bookmarkSort,
+	).map((bookmark) => bookmark.id);
 	const compactBoard = settings.bookmarkDensity === 'compact';
 	const bookmarkGridTemplateColumns = bookmarkGridTemplate(
 		settings.bookmarkColumnWidth ?? 'default',
@@ -512,6 +517,21 @@ function NewTab() {
 			await reload();
 		},
 		[bookmarkView, reload, showStatus],
+	);
+	const changeBookmarkSort = useCallback(
+		async (value: string) => {
+			const result = await send('UPDATE_SETTINGS', {
+				settings: {bookmarkSort: value as BookmarkSort},
+			});
+			if (!result?.ok) {
+				showStatus(result?.error || 'Could not save the sort.', true);
+				return;
+			}
+
+			await reload();
+			showStatus(`Bookmarks sorted: ${sortLabel(value as BookmarkSort)}.`);
+		},
+		[reload, showStatus],
 	);
 	const hideAllBookmarks = useCallback(async () => {
 		const result = await send('UPDATE_SETTINGS', {
@@ -623,7 +643,9 @@ function NewTab() {
 				}
 			}
 
-			for (const [id, list] of grouped) {
+			for (const [id, stored] of grouped) {
+				const list = sortBookmarks(stored, bookmarkSort) as Bookmark[];
+				grouped.set(id, list);
 				const old = before.get(id);
 				if (
 					old?.length === list.length &&
@@ -643,7 +665,7 @@ function NewTab() {
 				: group(filteredBookmarks, previous.shown);
 		previousGroupsRef.current = {all, shown};
 		return {all, shown};
-	}, [bookmarks, filteredBookmarks]);
+	}, [bookmarks, filteredBookmarks, bookmarkSort]);
 	// What the Focus view's All item lists: every column's bookmarks in the columns' order, the Unfiled ones last.
 	const everyBookmark = useMemo(() => {
 		const ids = [...columns.map((column) => column.id), UNFILED_COLUMN.id];
@@ -840,7 +862,7 @@ function NewTab() {
 				await reload();
 				setDialog(null);
 				offerUndo(
-					`Created a session with ${plural(result.count, 'link')}.${skippedNote(result.skipped)}`,
+					`Created a session with ${plural(result.count, 'link')}.${duplicatesNote(result.skipped)}`,
 					result.undoId,
 					showStatus,
 					reload,
@@ -872,7 +894,13 @@ function NewTab() {
 				pastedNewColumn.name ||
 				UNFILED_COLUMN.name;
 			offerUndo(
-				`Added ${plural(result.count, 'bookmark')} to “${name}”.${skippedNote(result.skipped)}`,
+				saveMessage({
+					kind: 'saved',
+					count: result.count,
+					skipped: result.skipped,
+					noun: 'bookmark',
+					into: `“${name}”`,
+				}),
 				result.undoId,
 				showStatus,
 				reload,
@@ -902,44 +930,10 @@ function NewTab() {
 		}
 
 		await reload();
-		if (result.rejectedTabIds.length > 0) {
-			showStatus(
-				`${result.count > 0 ? `Saved ${plural(result.count, 'tab')}.` : 'Nothing saved.'}${duplicatesNote(result.skipped)}`,
-				false,
-				{action: forceAddAction(result.rejectedTabIds, showStatus, reload)},
-			);
-			return;
-		}
-
-		// With "Close tabs after saving" the window just lost its tabs: Undo reopens them from the new session.
-		if (
-			settings.closeOnSave === false ||
-			!result.groupId ||
-			result.count === 0
-		) {
-			return;
-		}
-
-		const {groupId} = result;
-		showStatus(`Saved ${plural(result.count, 'tab')} and closed them.`, false, {
-			action: {
-				label: 'Undo',
-				async onClick() {
-					const reopened = await send('RESTORE_GROUP', {
-						groupId,
-						restoreTarget: 'current-window',
-						restoreMode: 'keep',
-						activate: false,
-					});
-					showStatus(
-						reopened?.ok
-							? `Reopened ${plural(reopened.count, 'tab')}.`
-							: reopened?.error || 'Could not reopen the tabs.',
-						!reopened?.ok,
-						{toast: true},
-					);
-				},
-			},
+		reportSessionSave(result, {
+			closeOnSave: settings.closeOnSave !== false,
+			showStatus,
+			reload,
 		});
 	}
 
@@ -1035,7 +1029,7 @@ function NewTab() {
 				: await send('ADD_BOOKMARK', {bookmark: fields});
 			if (!result?.ok) {
 				await reload();
-				showStatus(result?.error || 'Could not save that bookmark.', true);
+				showSaveFailure(showStatus, result, 'Could not save that bookmark.');
 				return;
 			}
 
@@ -1405,36 +1399,36 @@ function NewTab() {
 		}
 	}
 
-	async function moveBookmarkToColumn(event: SyntheticEvent<HTMLFormElement>) {
-		event.preventDefault();
-		if (!moveBookmark) {
-			return;
-		}
-
-		try {
-			const targetColumnId = await resolveBookmarkColumn(
-				moveBookmark.targetColumnId,
-				moveBookmarkColumnDraft,
-			);
-			if (!(await moveBookmarks(moveBookmark.bookmarkIds, targetColumnId))) {
-				return;
-			}
-
-			setDialog(null);
-			setMoveBookmark(null);
-			setMoveBookmarkColumnDraft({name: ''});
-		} catch (reason) {
-			showStatus((reason as Error).message, true);
-		}
+	function openBookmarkMove(bookmarkIds: string[], currentColumnId?: string) {
+		setTargetPicker({
+			title:
+				bookmarkIds.length === 1 ? 'Move bookmark to' : 'Move bookmarks to',
+			description:
+				'Bookmarks go to the end of the column you choose, in their current order.',
+			kind: 'column',
+			targets: columns,
+			currentId: currentColumnId,
+			onPick: (column) => void moveBookmarks(bookmarkIds, column.id),
+			create: {
+				label: 'New column',
+				run: (name) =>
+					void (async () => {
+						try {
+							const columnId = await resolveBookmarkColumn(
+								NEW_BOOKMARK_COLUMN,
+								{name},
+							);
+							await moveBookmarks(bookmarkIds, columnId);
+						} catch (reason) {
+							showStatus((reason as Error).message, true);
+						}
+					})(),
+			},
+		});
 	}
 
 	function openSelectedBookmarkMove() {
-		setMoveBookmarkColumnDraft({name: ''});
-		setMoveBookmark({
-			bookmarkIds: selectedBookmarkIds,
-			targetColumnId: columns[0]?.id || NEW_BOOKMARK_COLUMN,
-		});
-		setDialog('move');
+		openBookmarkMove(selectedBookmarkIds);
 	}
 
 	/**
@@ -1603,9 +1597,10 @@ function NewTab() {
 			links: [{url: bookmark.url, title: bookmark.title}],
 		});
 		if (!result?.ok) {
-			showStatus(
-				result?.error || 'Could not add the link to that session.',
-				true,
+			showSaveFailure(
+				showStatus,
+				result,
+				'Could not add the link to that session.',
 			);
 			return;
 		}
@@ -1624,7 +1619,6 @@ function NewTab() {
 		const archivedId = archivedFolderId(state?.folders ?? []);
 		return (state?.groups ?? [])
 			.filter((group) => group.folderId !== archivedId)
-			.slice(0, MAX_SESSION_TARGETS)
 			.map((group) => ({
 				id: group.id,
 				name: group.name.trim() || 'Untitled session',
@@ -1667,7 +1661,13 @@ function NewTab() {
 
 		await reload();
 		offerUndo(
-			`Added ${plural(result.added, 'link')} to “${name}”.${skippedNote(result.skipped)}`,
+			saveMessage({
+				kind: 'saved',
+				count: result.added,
+				skipped: result.skipped,
+				noun: 'link',
+				into: `“${name}”`,
+			}),
 			result.undoId,
 			showStatus,
 			reload,
@@ -1686,19 +1686,23 @@ function NewTab() {
 			links: selected,
 		});
 		if (!result?.ok) {
-			showStatus(
-				result?.error || 'Could not add bookmarks to that session.',
-				true,
+			showSaveFailure(
+				showStatus,
+				result,
+				'Could not add bookmarks to that session.',
 			);
 			return;
 		}
 
 		await reload();
-		const skipped = result.skipped
-			? ` ${plural(result.skipped, 'duplicate')} skipped.`
-			: '';
 		offerUndo(
-			`Added ${plural(result.added, 'link')} to “${target.name}”.${skipped}`,
+			saveMessage({
+				kind: 'saved',
+				count: result.added,
+				skipped: result.skipped,
+				noun: 'link',
+				into: `“${target.name}”`,
+			}),
 			result.undoId,
 			showStatus,
 			reload,
@@ -1746,15 +1750,7 @@ function NewTab() {
 		}
 
 		if (action === 'move') {
-			setMoveBookmarkColumnDraft({name: ''});
-			setMoveBookmark({
-				bookmarkIds: [bookmark.id],
-				targetColumnId:
-					bookmark.columnId === UNFILED_COLUMN.id
-						? columns[0]?.id || NEW_BOOKMARK_COLUMN
-						: bookmark.columnId,
-			});
-			setDialog('move');
+			openBookmarkMove([bookmark.id], bookmark.columnId);
 			return;
 		}
 
@@ -1854,13 +1850,24 @@ function NewTab() {
 			return;
 		}
 
+		// All is a view of every column: nothing is dropped on it.
+		if (column.id === ALL_BOOKMARKS_ID) {
+			return;
+		}
+
 		const targetCard = (event.target as Element).closest<HTMLElement>(
 			'[data-bookmark-id]',
 		);
-		const targetBookmarkId = targetCard?.dataset.bookmarkId || null;
+		// A sorted column shows no slots, so a drop goes to its end.
+		const targetBookmarkId = manualOrder
+			? targetCard?.dataset.bookmarkId || null
+			: null;
 		const rect = targetCard?.getBoundingClientRect();
 		const position: InsertPosition =
-			targetCard && rect && event.clientY < rect.top + rect.height / 2
+			manualOrder &&
+			targetCard &&
+			rect &&
+			event.clientY < rect.top + rect.height / 2
 				? 'before'
 				: 'after';
 		if (kind === 'bookmark') {
@@ -1872,7 +1879,22 @@ function NewTab() {
 			const ids = draggedBookmarksRef.current.includes(bookmarkId)
 				? draggedBookmarksRef.current
 				: [bookmarkId];
-			await moveBookmarks(ids, column.id, targetBookmarkId, position);
+			// In a sorted column, bookmarks already there keep their stored position.
+			const movable = manualOrder
+				? ids
+				: ids.filter(
+						(id) =>
+							bookmarks.find((entry) => entry.id === id)?.columnId !==
+							column.id,
+					);
+			if (movable.length === 0) {
+				showStatus(
+					`Bookmarks are sorted (${sortLabel(bookmarkSort)}). Choose Manual order in the sort menu to rearrange them.`,
+				);
+				return;
+			}
+
+			await moveBookmarks(movable, column.id, targetBookmarkId, position);
 
 			return;
 		}
@@ -1896,7 +1918,13 @@ function NewTab() {
 					true,
 				);
 				offerUndo(
-					`Added ${plural(result.count, 'link')} to “${column.name}”.${skippedNote(result.skipped)}`,
+					saveMessage({
+						kind: 'saved',
+						count: result.count,
+						skipped: result.skipped,
+						noun: 'link',
+						into: `“${column.name}”`,
+					}),
 					result.undoId,
 					showStatus,
 					reload,
@@ -2282,6 +2310,7 @@ function NewTab() {
 		moveColumn: moveColumnStep,
 		addToSession: addBookmarkToSession,
 		sessionTargets,
+		pickTarget: setTargetPicker,
 		remove(column) {
 			void requestDeleteColumn(column);
 		},
@@ -2443,6 +2472,12 @@ function NewTab() {
 						search={bookmarkSearch}
 						onSearch={setBookmarkSearch}
 					/>
+					<SortMenu
+						label="Sort bookmarks"
+						value={bookmarkSort}
+						options={BOOKMARK_SORT_OPTIONS}
+						onChange={(value) => void changeBookmarkSort(value)}
+					/>
 					<IconTooltip
 						label={
 							bookmarkView === 'board'
@@ -2594,32 +2629,24 @@ function NewTab() {
 							Share
 						</Button>
 						{sessionTargetsForBookmarks.length > 0 && (
-							<Select
-								value=""
+							<Button
+								variant="outline"
+								size="sm"
 								disabled={busy === 'bookmark-batch'}
-								onValueChange={(targetId) => {
-									const target = sessionTargetsForBookmarks.find(
-										(entry) => entry.id === targetId,
-									);
-									if (target) {
-										void addSelectedBookmarksToSession(target);
-									}
-								}}
+								onClick={() =>
+									setTargetPicker({
+										title: 'Add to session',
+										description: `Choose the session to add ${plural(selectedBookmarkIds.length, 'bookmark')} to.`,
+										kind: 'session',
+										targets: sessionTargetsForBookmarks,
+										onPick: (target) =>
+											void addSelectedBookmarksToSession(target),
+									})
+								}
 							>
-								<SelectTrigger
-									aria-label="Add selected bookmarks to session"
-									className="h-9 w-auto min-w-36 text-sm"
-								>
-									<SelectValue placeholder="Add to session" />
-								</SelectTrigger>
-								<SelectContent>
-									{sessionTargetsForBookmarks.map((target) => (
-										<SelectItem key={target.id} value={target.id}>
-											{target.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+								<ListPlus className="h-4 w-4" />
+								Add to session…
+							</Button>
 						)}
 						<Button
 							variant="outline"
@@ -2832,6 +2859,7 @@ function NewTab() {
 								autoLoadMore
 								scrollBody={settings.limitBookmarksPerColumn === true}
 								renderAll={settings.limitBookmarksPerColumn === true}
+								manualOrder={manualOrder && !activeFocus.all}
 								bodyMaxHeight={cappedColumnBodyHeight}
 								compact={compactBoard}
 								column={activeFocus.column}
@@ -2919,6 +2947,7 @@ function NewTab() {
 							siblings={columnBookmarks.all.get(column.id) ?? NO_BOOKMARKS}
 							pageSize={bookmarkPageSize}
 							renderAll={settings.limitBookmarksPerColumn === true}
+							manualOrder={manualOrder}
 							scrollBody={settings.limitBookmarksPerColumn === true}
 							bodyMaxHeight={cappedColumnBodyHeight}
 							compact={compactBoard}
@@ -2951,6 +2980,7 @@ function NewTab() {
 									: Math.max(unfiledFiltered.length, 1)
 							}
 							renderAll={settings.limitBookmarksPerColumn === true}
+							manualOrder={manualOrder}
 							scrollBody={settings.limitBookmarksPerColumn === true}
 							bodyMaxHeight={cappedColumnBodyHeight}
 							compact={compactBoard}
@@ -3642,83 +3672,14 @@ function NewTab() {
 						</form>
 					</DialogContent>
 				</Dialog>
-				<Dialog
-					open={dialog === 'move'}
-					onOpenChange={(open) => !open && setDialog(null)}
-				>
-					<DialogContent size="sm">
-						<form onSubmit={moveBookmarkToColumn}>
-							<DialogHeader>
-								<DialogTitle>
-									{moveBookmark?.bookmarkIds.length === 1
-										? 'Move bookmark to'
-										: 'Move bookmarks to'}
-								</DialogTitle>
-								<DialogDescription>
-									Bookmarks go to the end of the column you choose, in their
-									current order.
-								</DialogDescription>
-							</DialogHeader>
-							<DialogBody>
-								{movingBookmark ? (
-									<LinkSummary
-										settings={settings}
-										title={movingBookmark.title}
-										url={movingBookmark.url}
-									/>
-								) : (
-									<p className="text-sm">
-										{plural(moveBookmark?.bookmarkIds.length || 0, 'bookmark')}{' '}
-										selected
-									</p>
-								)}
-								<div className="space-y-1.5">
-									<Label htmlFor="move-bookmark-column">Column</Label>
-									<BookmarkColumnPicker
-										columns={columns}
-										value={
-											moveBookmark?.targetColumnId ||
-											columns[0]?.id ||
-											NEW_BOOKMARK_COLUMN
-										}
-										id="move-bookmark-column"
-										newColumnLabel="Add column"
-										draft={moveBookmarkColumnDraft}
-										onValueChange={(value) =>
-											setMoveBookmark(
-												(old) => old && {...old, targetColumnId: value},
-											)
-										}
-										onDraftChange={setMoveBookmarkColumnDraft}
-									/>
-								</div>
-							</DialogBody>
-							<DialogFooter>
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => setDialog(null)}
-								>
-									<X aria-hidden="true" />
-									Cancel
-								</Button>
-								<Button type="submit" disabled={busy === 'bookmark-batch'}>
-									<ArrowRight aria-hidden="true" />
-									{moveBookmark?.bookmarkIds.length === 1
-										? 'Move bookmark'
-										: 'Move bookmarks'}
-								</Button>
-							</DialogFooter>
-						</form>
-					</DialogContent>
-				</Dialog>
+				<TargetPickerDialog
+					request={targetPicker}
+					onClose={() => setTargetPicker(null)}
+				/>
 			</main>
 		</LinkPreviewProvider>
 	);
 }
-
-const skippedNote = (skipped: number) =>
-	skipped ? ` ${plural(skipped, 'duplicate')} skipped.` : '';
 
 /**
 Fills missing titles from open tabs showing the same page, then the domain.
@@ -3779,6 +3740,10 @@ type BoardActions = {
 	Sessions a bookmark can be added to (read when a menu opens, never while rendering).
 	*/
 	sessionTargets: () => Array<{id: string; name: string}>;
+	/**
+	Opens the shared searchable picker for an action whose targets can outgrow a menu.
+	*/
+	pickTarget: (request: TargetPickerRequest) => void;
 	remove: (column: BookmarkColumnData) => void;
 	pointerDown: (
 		event: ReactPointerEvent<HTMLElement>,
@@ -3894,6 +3859,10 @@ type BookmarkColumnProps = {
 	*/
 	renderAll?: boolean;
 	/**
+	The column shows the stored order, so a drop picks a slot between cards and Move up and Move down apply. False while a sort is on.
+	*/
+	manualOrder?: boolean;
+	/**
 	Tighter header, body, and row spacing (the compact bookmark density).
 	*/
 	compact?: boolean;
@@ -3912,14 +3881,14 @@ type BookmarkColumnProps = {
 	emptyMessage?: string;
 };
 
-const MAX_SESSION_TARGETS = 30;
-
 /**
 Default number of bookmarks first drawn in each column; Settings can use smaller manual batches.
 */
 const COLUMN_PAGE = 60;
-// Cards a scrolling column mounts first, and adds per step as its end nears.
 const SCROLL_WINDOW = 48;
+
+const sortLabel = (sort: BookmarkSort) =>
+	BOOKMARK_SORT_OPTIONS.find(([value]) => value === sort)?.[1] ?? sort;
 
 const BookmarkColumn = memo(
 	({
@@ -3941,6 +3910,7 @@ const BookmarkColumn = memo(
 		scrollBody = false,
 		bodyMaxHeight,
 		renderAll = false,
+		manualOrder = true,
 		compact = false,
 		simpleHeader = false,
 		headerIcon: HeaderIcon,
@@ -3983,7 +3953,8 @@ const BookmarkColumn = memo(
 		const colorVars = columnColorVars(column.color);
 		const bookmarkDrop =
 			dropIndicator && dropIndicator.kind !== 'column' ? dropIndicator : null;
-		const showEndInsertion = bookmarkDrop && !bookmarkDrop.targetBookmarkId;
+		const showEndInsertion =
+			manualOrder && bookmarkDrop && !bookmarkDrop.targetBookmarkId;
 		const header = simpleHeader ? (
 			<header
 				className={cn(
@@ -4093,8 +4064,8 @@ const BookmarkColumn = memo(
 									dropBefore={targeted && bookmarkDrop.position === 'before'}
 									dropAfter={targeted && bookmarkDrop.position === 'after'}
 									dropActive={targeted}
-									canMoveEarlier={bookmark.id !== firstSibling}
-									canMoveLater={bookmark.id !== lastSibling}
+									canMoveEarlier={manualOrder && bookmark.id !== firstSibling}
+									canMoveLater={manualOrder && bookmark.id !== lastSibling}
 									urlMode={urlMode}
 									clickOpensMenu={clickOpensMenu}
 									urlSettings={urlSettings}
@@ -4158,7 +4129,13 @@ const BookmarkColumn = memo(
 					)}
 					aria-label={ariaLabel ?? `${column.name} bookmark column`}
 					onDragOver={(event) =>
-						previewBookmarkDrop(event, column.id, onDropOver, allowColumnDrop)
+						previewBookmarkDrop(
+							event,
+							column.id,
+							onDropOver,
+							allowColumnDrop,
+							manualOrder,
+						)
 					}
 					onDragLeave={leaveColumn}
 					onDrop={(event) => {
@@ -4199,7 +4176,10 @@ type BookmarkCardProps = {
 	selected: boolean;
 	selectionMode: BookmarkSelectionMode;
 	onAction: OnBookmarkAction;
-	sessions: Pick<BoardActions, 'addToSession' | 'sessionTargets'>;
+	sessions: Pick<
+		BoardActions,
+		'addToSession' | 'sessionTargets' | 'pickTarget'
+	>;
 	urlMode: NonNullable<Settings['urlDisplayMode']>;
 	quickActions: BookmarkQuickAction[];
 	/**
@@ -4323,24 +4303,23 @@ const BookmarkCard = memo(
 			edit,
 			{
 				id: 'move',
-				label: 'Move to',
+				label: 'Move to column…',
 				icon: ACTION_ICONS.move,
 				onSelect: act('move'),
 			},
 			{
-				type: 'submenu',
 				id: 'add-to-session',
-				label: 'Add to session',
+				label: 'Add to session…',
 				icon: ListPlus,
 				hidden: sessions.sessionTargets().length === 0,
-				items: sessions.sessionTargets().map((target) => ({
-					id: `session-${target.id}`,
-					label:
-						target.name.length > 40
-							? `${target.name.slice(0, 39)}…`
-							: target.name,
-					onSelect: () => sessions.addToSession(bookmark, target),
-				})),
+				onSelect: () =>
+					sessions.pickTarget({
+						title: 'Add to session',
+						description: `Choose the session to add “${bookmark.title || siteName(bookmark.url)}” to.`,
+						kind: 'session',
+						targets: sessions.sessionTargets(),
+						onPick: (target) => sessions.addToSession(bookmark, target),
+					}),
 			},
 			{
 				id: 'move-up',

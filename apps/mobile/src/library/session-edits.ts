@@ -23,6 +23,10 @@ import {
 	passesOperators,
 	sessionFacets,
 } from '../../../extension/src/shared/search-query';
+import {
+	duplicateHandlingOf,
+	sessionDuplicates,
+} from '../../../extension/src/shared/save-rules';
 import {extractUrl, hostOf} from './store-shape';
 
 export const ALL_SESSIONS_ID = 'all';
@@ -366,7 +370,23 @@ export function addSession(
 	tabIds: readonly string[],
 	now: number,
 ): Store {
-	if (input.urls.length === 0) {
+	// In a new session only the duplicate setting applies (save-rules.ts); nothing left means no session.
+	const duplicates = sessionDuplicates(
+		store.groups,
+		undefined,
+		duplicateHandlingOf(store.settings),
+	);
+	const kept: number[] = [];
+	for (const [index, url] of input.urls.entries()) {
+		if (duplicates.isDuplicate(url)) {
+			continue;
+		}
+
+		duplicates.saved(url);
+		kept.push(index);
+	}
+
+	if (kept.length === 0) {
 		return store;
 	}
 
@@ -392,13 +412,13 @@ export function addSession(
 		sourceWindowName: 'Phone',
 		sourceWindowId: null,
 		...input.device,
-		tabs: input.urls.map((url, index) =>
+		tabs: kept.map((source, index) =>
 			savedTab(
-				url,
-				tabIds[index] ?? `${id}-${index}`,
+				input.urls[source],
+				tabIds[source] ?? `${id}-${index}`,
 				index,
 				now,
-				input.titles?.[index],
+				input.titles?.[source],
 			),
 		),
 	};
@@ -411,7 +431,7 @@ export function addSession(
 }
 
 /**
-Adds links to the end of an existing session.
+Adds links to the end of an existing session, skipping duplicates under the shared rule (`save-rules.ts`).
 */
 export function addTabsToSession(
 	store: Store,
@@ -426,17 +446,37 @@ export function addTabsToSession(
 		return store;
 	}
 
+	// A duplicate (save-rules.ts) is skipped, and the store comes back as it was when nothing is left.
+	const duplicates = sessionDuplicates(
+		store.groups,
+		sessionId,
+		duplicateHandlingOf(store.settings),
+	);
+	const fresh: number[] = [];
+	for (const [index, url] of urls.entries()) {
+		if (duplicates.isDuplicate(url)) {
+			continue;
+		}
+
+		duplicates.saved(url);
+		fresh.push(index);
+	}
+
+	if (fresh.length === 0) {
+		return store;
+	}
+
 	const start = session.tabs.length;
 	const changed: Session = {
 		...session,
 		updatedAt: now,
 		tabs: [
 			...session.tabs,
-			...urls.map((url, index) =>
+			...fresh.map((index, position) =>
 				savedTab(
-					url,
-					tabIds[index] ?? `${sessionId}-${start + index}`,
-					start + index,
+					urls[index],
+					tabIds[index] ?? `${sessionId}-${start + position}`,
+					start + position,
 					now,
 					titles[index],
 				),
