@@ -102,10 +102,6 @@ export const ROWS = {
 	tap: {label: 'Tap a bookmark'},
 	swipeRight: {label: 'Swipe a bookmark right'},
 	swipeLeft: {label: 'Swipe a bookmark left'},
-	cleanOnSave: {
-		label: 'Clean links when saving',
-		hint: 'Removes utm_source and similar',
-	},
 	siteIcons: {
 		label: 'Site icons',
 		hint: 'Through your server by default, or from the sites too',
@@ -120,7 +116,7 @@ export const ROWS = {
 	},
 	removeTracking: {
 		label: 'Remove tracking parameters',
-		hint: 'When opening links. Saved links stay as they are',
+		hint: 'Removes utm_source, fbclid and similar when opening or copying saved links. Stored links stay unchanged',
 	},
 	showUnder: {label: 'Under a bookmark title'},
 	shortenAddresses: {
@@ -144,6 +140,26 @@ export const ROWS = {
 	sortBookmarks: {
 		label: 'Sort bookmarks',
 		hint: 'Only Manual order can be rearranged',
+	},
+	sessionName: {
+		label: 'Session name',
+		hint: 'How a new session is named. The name field on the save sheet wins when you type one',
+	},
+	sessionNameFallback: {
+		label: 'Name to use when left empty',
+		hint: 'Used when the name is left empty, with Ask each time',
+	},
+	sessionNameTemplate: {
+		label: 'Session name template',
+		hint: 'Placeholders: {date}, {time}, {weekday}, {title}, {domain}, {count}',
+	},
+	archiveSessions: {
+		label: 'Archive sessions not opened for',
+		hint: 'Moves them to the Archived folder when the app starts. Nothing is deleted',
+	},
+	trashRetention: {
+		label: 'Keep items in the trash for',
+		hint: 'Then deleted items are removed for good',
 	},
 	licences: {
 		label: 'Open source licences',
@@ -220,6 +236,10 @@ export const SECTIONS = {
 		],
 		rows: [
 			ROWS.sortSessions,
+			ROWS.sessionName,
+			ROWS.sessionNameFallback,
+			ROWS.sessionNameTemplate,
+			ROWS.archiveSessions,
 			ROWS.sessionView,
 			ROWS.sessionTap,
 			ROWS.sessionMain,
@@ -268,7 +288,6 @@ export const SECTIONS = {
 			ROWS.shortenAddresses,
 			ROWS.markInsecure,
 			ROWS.markLocal,
-			ROWS.cleanOnSave,
 		],
 	},
 	openLinks: {
@@ -324,8 +343,9 @@ export const SECTIONS = {
 			'bin',
 			'undelete',
 			'empty trash',
+			'retention',
 		],
-		rows: [],
+		rows: [ROWS.trashRetention],
 	},
 	private: {
 		title: 'Private library',
