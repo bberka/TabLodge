@@ -13,6 +13,7 @@ import {
 	parseServerUrl,
 	SYNC_CONFIG_KEY,
 	SYNC_SETTINGS_KEY,
+	type SyncCodec,
 	SyncError,
 	type SyncSocket,
 } from '../../extension/src/shared/sync/client';
@@ -138,21 +139,23 @@ function makeServer(options: {legacy?: boolean} = {}) {
 				return response;
 			}
 
-			// A server from before the trash, notes, tags, and Sources: it lists none of them and refuses a kind it does not know.
+			// A server from before the trash, notes, tags, Sources, and newer settings: it lists none of them and refuses a kind it does not know.
 			if (new URL(url).pathname === '/v1/status') {
 				const body = (await response.json()) as {features: string[]};
 				return Response.json({
 					...body,
 					features: body.features.filter(
 						(feature) =>
-							!['trash', 'notes', 'tags', 'sources'].includes(feature),
+							!['trash', 'notes', 'tags', 'sources', 'settings'].includes(
+								feature,
+							),
 					),
 				});
 			}
 
 			if (
 				init.method === 'POST' &&
-				/"kind":"(?:trash|note|tag|source)"/.test(String(init.body))
+				/"kind":"(?:trash|note|tag|source|setting)"/.test(String(init.body))
 			) {
 				return Response.json({error: 'bad_change'}, {status: 400});
 			}
@@ -280,6 +283,7 @@ function makeDevice(
 		withSources = false,
 		beforeNotes = false,
 		storage = new Map<string, unknown>(),
+		codec = undefined as SyncCodec | undefined,
 	} = {},
 ) {
 	let queue = Promise.resolve();
@@ -302,6 +306,17 @@ function makeDevice(
 			},
 			async fetch(url, init) {
 				const response = await server.fetch(url, init);
+				if (beforeNotes && new URL(url).pathname === '/v1/status') {
+					// 0.3.0 has no `setting` kind: it neither sends nor takes one, which is what a missing feature does here.
+					const body = (await response.json()) as {features?: string[]};
+					return Response.json({
+						...body,
+						features: body.features?.filter(
+							(feature) => feature !== 'settings',
+						),
+					});
+				}
+
 				if (!beforeNotes || new URL(url).pathname !== '/v1/changes') {
 					return response;
 				}
@@ -313,7 +328,8 @@ function makeDevice(
 				return Response.json({
 					...body,
 					changes: body.changes?.filter(
-						(change) => !['note', 'tag', 'source'].includes(change.kind),
+						(change) =>
+							!['note', 'tag', 'source', 'setting'].includes(change.kind),
 					),
 				});
 			},
@@ -371,6 +387,7 @@ function makeDevice(
 			async backup(_store, reason) {
 				backups.push(reason);
 			},
+			codec,
 			randomId() {
 				deviceCount += 1;
 				return `device-${deviceCount}`;
@@ -657,6 +674,249 @@ test('settings sync by default and stay put when this device turns it off', asyn
 	assert.equal(a.store.settings.sessionSort, 'newest');
 });
 
+const withSettings = (settings: Partial<Settings>): Store => ({
+	...emptyStore(),
+	settings: {...emptyStore().settings, ...settings},
+});
+
+test('a setting added since 0.3.0 syncs like the others, and stays put while this device turns settings sync off', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, withSettings({snapshotKeep: 25}));
+	const b = makeDevice(server, withSettings({snapshotKeep: 25}));
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+
+	a.edit((store) => ({
+		...store,
+		settings: {...store.settings, snapshotKeep: 50, siteIcons: 'browser'},
+	}));
+	await until(() => b.store.settings.snapshotKeep === 50);
+	assert.equal(b.store.settings.siteIcons, 'browser');
+
+	b.storage.set(SYNC_SETTINGS_KEY, false);
+	a.edit((store) => ({
+		...store,
+		settings: {...store.settings, snapshotKeep: 10},
+	}));
+	await a.client.syncNow();
+	await b.client.syncNow();
+	assert.equal(b.store.settings.snapshotKeep, 50);
+	b.edit((store) => ({
+		...store,
+		settings: {...store.settings, snapshotKeep: 25},
+	}));
+	await b.client.syncNow();
+	await a.client.syncNow();
+	assert.equal(a.store.settings.snapshotKeep, 10);
+});
+
+test('a setting that stays on each device never leaves it', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, withSettings({autoBackupToDownloads: true}));
+	await a.client.connect(URL_BASE, TOKEN);
+	const b = makeDevice(server, withSettings({autoBackupToDownloads: false}));
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.equal(b.store.settings.autoBackupToDownloads, false);
+	assert.ok(
+		(await server.export()).every(
+			(line) => !line.includes('autoBackupToDownloads'),
+		),
+	);
+});
+
+test('when settings start to sync, the server wins over values that never synced: the first browser to sync sets them', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, withSettings({autoBackup: 'daily'}));
+	const b = makeDevice(server, withSettings({autoBackup: 'off'}));
+	await a.client.connect(URL_BASE, TOKEN);
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.equal(b.store.settings.autoBackup, 'off', 'kept local until now');
+
+	server.setLegacy(false);
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		await a.client.syncNow();
+		// B syncs last, with a value of its own that never synced: it takes A's instead of sending its own.
+		await b.client.syncNow();
+		await a.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.equal(b.store.settings.autoBackup, 'daily');
+	assert.equal(a.store.settings.autoBackup, 'daily');
+	assert.equal((await b.client.status()).pending, 0);
+});
+
+test("a new install that never changed a setting takes the server's values instead of sending its defaults", async () => {
+	const server = makeServer();
+	const a = makeDevice(
+		server,
+		withSettings({snapshotKeep: 50, browserBookmarkAction: 'ask'}),
+	);
+	await a.client.connect(URL_BASE, TOKEN);
+	// A phone or a new browser carries every default.
+	const fresh = makeDevice(
+		server,
+		withSettings({snapshotKeep: 25, browserBookmarkAction: 'off'}),
+	);
+	await fresh.client.connect(URL_BASE, TOKEN);
+	await fresh.client.syncNow();
+	await a.client.syncNow();
+	assert.equal(fresh.store.settings.snapshotKeep, 50);
+	assert.equal(fresh.store.settings.browserBookmarkAction, 'ask');
+	assert.equal(a.store.settings.snapshotKeep, 50);
+	assert.equal(a.store.settings.browserBookmarkAction, 'ask');
+});
+
+test('a device at the defaults that syncs first sends none of them, so the values another browser chose win', async () => {
+	const server = makeServer({legacy: true});
+	const a = makeDevice(server, withSettings({autoBackup: 'daily'}));
+	// A phone, or a browser nobody changed these settings in.
+	const phone = makeDevice(
+		server,
+		withSettings({autoBackup: 'off', snapshotKeep: 25}),
+	);
+	await a.client.connect(URL_BASE, TOKEN);
+	await phone.client.connect(URL_BASE, TOKEN);
+
+	server.setLegacy(false);
+	vi.useFakeTimers({now: Date.now() + 11 * 60 * 1000, toFake: ['Date']});
+	try {
+		await phone.client.syncNow();
+		assert.ok(
+			(await server.export()).every((line) => !line.includes('"setting"')),
+			'no defaults went out',
+		);
+		await a.client.syncNow();
+		await phone.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
+	assert.equal(a.store.settings.autoBackup, 'daily');
+	assert.equal(phone.store.settings.autoBackup, 'daily');
+
+	// Once synced, going back to the default is an edit like any other.
+	phone.edit((store) => ({
+		...store,
+		settings: {...store.settings, autoBackup: 'off'},
+	}));
+	await phone.client.syncNow();
+	await a.client.syncNow();
+	assert.equal(a.store.settings.autoBackup, 'off');
+});
+
+/**
+Wraps every value as `{sealed}`, the way the private library seals it; a value that arrived plain is resealed.
+*/
+const wrapCodec: SyncCodec = {
+	async prepare() {
+		// Nothing to fetch.
+	},
+	async seal(change) {
+		return change.deleted ? change : {...change, value: {sealed: change.value}};
+	},
+	async open(change) {
+		const value = change.value as {sealed?: unknown} | undefined;
+		return value && typeof value === 'object' && 'sealed' in value
+			? {change: {...change, value: value.sealed}, reseal: false}
+			: {change, reseal: true};
+	},
+};
+
+const settingLine = async (server: ReturnType<typeof makeServer>, id: string) =>
+	(await server.export()).find(
+		(line) =>
+			line.includes('"kind":"setting"') && line.includes(`"id":"${id}"`),
+	);
+
+test('a setting that synced and went back to its default is still resent, and resealed', async () => {
+	// Plain, then a device that seals: the default that arrived plain goes back sealed.
+	const server = makeServer();
+	const plain = makeDevice(server, withSettings({snapshotKeep: 50}));
+	await plain.client.connect(URL_BASE, TOKEN);
+	plain.edit((store) => ({
+		...store,
+		settings: {...store.settings, snapshotKeep: 25},
+	}));
+	await plain.client.syncNow();
+	const sealer = makeDevice(server, withSettings({snapshotKeep: 25}), {
+		codec: wrapCodec,
+	});
+	await sealer.client.connect(URL_BASE, TOKEN);
+	await sealer.client.syncNow();
+	assert.match(
+		(await settingLine(server, 'snapshotKeep')) ?? '',
+		/"sealed":25/,
+	);
+
+	// A server that lost everything gets the default back from resendAll.
+	const lost = makeServer();
+	const a = makeDevice(lost, withSettings({snapshotKeep: 50}));
+	await a.client.connect(URL_BASE, TOKEN);
+	a.edit((store) => ({
+		...store,
+		settings: {...store.settings, snapshotKeep: 25},
+	}));
+	await a.client.syncNow();
+	await lost.restore(await makeServer().export());
+	await a.client.resendAll();
+	assert.match((await settingLine(lost, 'snapshotKeep')) ?? '', /"value":25/);
+});
+
+test('a setting from a newer version is held and goes back unchanged', async () => {
+	const server = makeServer();
+	// A newer version sends a setting this one does not know, the way this version keeps one it holds.
+	const newer = makeDevice(
+		server,
+		withSettings({heldSettings: {fromNewer: {mode: 'x'}}}),
+	);
+	await newer.client.connect(URL_BASE, TOKEN);
+	const b = makeDevice(server);
+	await b.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(b.store.settings.heldSettings, {fromNewer: {mode: 'x'}});
+
+	const before = server.pushes.length;
+	b.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => ids(newer.store).length === 1);
+	await b.client.syncNow();
+	await b.client.syncNow();
+	assert.deepEqual(server.pushes.slice(before), [1], 'only the bookmark');
+
+	const fresh = makeDevice(server);
+	await fresh.client.connect(URL_BASE, TOKEN);
+	assert.deepEqual(fresh.store.settings.heldSettings, {
+		fromNewer: {mode: 'x'},
+	});
+});
+
+test('a version from 0.3.0 and a server without the feature keep newer settings where they are', async () => {
+	const server = makeServer();
+	const a = makeDevice(server, withSettings({snapshotKeep: 50}));
+	await a.client.connect(URL_BASE, TOKEN);
+	const old = makeDevice(server, withSettings({snapshotKeep: 10}), {
+		beforeNotes: true,
+	});
+	await old.client.connect(URL_BASE, TOKEN);
+	old.edit((store) => ({...store, bookmarks: [bookmark('b1')]}));
+	await until(() => ids(a.store).length === 1);
+	await old.client.syncNow();
+	await a.client.syncNow();
+	assert.equal(old.store.settings.snapshotKeep, 10);
+	assert.equal(a.store.settings.snapshotKeep, 50);
+	assert.equal((await old.client.status()).error, null);
+
+	const legacy = makeServer({legacy: true});
+	const c = makeDevice(legacy, withSettings({snapshotKeep: 50}));
+	const d = makeDevice(legacy, withSettings({snapshotKeep: 25}));
+	await c.client.connect(URL_BASE, TOKEN);
+	await d.client.connect(URL_BASE, TOKEN);
+	assert.equal(d.store.settings.snapshotKeep, 25);
+	assert.equal((await c.client.status()).error, null);
+	assert.equal((await c.client.status()).pending, 0);
+});
+
 const trashEntry = (id: string, extra = ''): TrashEntry => ({
 	id,
 	kind: 'bookmark',
@@ -941,7 +1201,7 @@ test('a server without some features keeps syncing and lists what stays on the d
 	// This test server keeps no shared pages either.
 	assert.deepEqual(
 		compat.missing.map(({name}) => name),
-		['notes', 'tags', 'sources', 'trash', 'shared-pages'],
+		['notes', 'tags', 'sources', 'settings', 'trash', 'shared-pages'],
 	);
 	assert.equal(problemBanner(compat)?.stopped, false);
 
@@ -1256,8 +1516,18 @@ test('a browser that updates from 0.3.0 still drops a record deleted elsewhere w
 		withSources: true,
 		storage: old.storage,
 	});
-	await updated.client.wake();
-	assert.deepEqual(ids(updated.store).toSorted(), ['b2', 'mine']);
-	await a.client.syncNow();
+	/*
+	A second on: the server refuses a record it never had whose stamp is not past the newest purged delete, and a stamp
+	from the same millisecond as that delete would be refused as stale.
+	*/
+	vi.useFakeTimers({now: Date.now() + 1000, toFake: ['Date']});
+	try {
+		await updated.client.wake();
+		assert.deepEqual(ids(updated.store).toSorted(), ['b2', 'mine']);
+		await a.client.syncNow();
+	} finally {
+		vi.useRealTimers();
+	}
+
 	assert.deepEqual(ids(a.store).toSorted(), ['b2', 'mine']);
 });

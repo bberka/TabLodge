@@ -3,11 +3,13 @@ What the phone's preferences are: each one's type, default, validation, and whet
 file holds no storage and no React Native, so every rule here runs under Node. `preferences.ts` keeps the current values
 and saves them.
 
-A preference is either `synced`, shared with the other phones through the library's `mobileApp` setting, or `device`,
-which stays on this phone. Adding one means one entry in `FIELDS`; the types and every reader follow from it.
+A preference syncs with the other phones through the library's `mobileApp` setting, unless `ANDROID_LOCAL_PREFERENCES`
+in the shared `local-settings.ts` lists it with the reason it stays on this phone. Adding one means one entry in
+`FIELDS`; the types and every reader follow from it, and it syncs by default.
 */
 import {isAccent} from '../../../extension/src/shared/accent-colors';
 import {cleanDeviceName} from '../../../extension/src/shared/device';
+import {ANDROID_LOCAL_PREFERENCES} from '../../../extension/src/shared/local-settings';
 
 const LOOKS = ['auto', 'material', 'ios'] as const;
 export type Look = (typeof LOOKS)[number];
@@ -96,7 +98,7 @@ export type Preferences = {
 	barLabels: BarLabels;
 	/**
 	With the iOS look: frost the floating bar and buttons with a blur of what scrolls behind them. Off draws them as solid
-	surfaces, which is lighter on a slow phone. Stays on this phone, because what a phone can draw smoothly is its own.
+	surfaces, which is lighter on a slow phone.
 	*/
 	glassEffect: boolean;
 	/**
@@ -113,18 +115,18 @@ export type Preferences = {
 	swipeRight: RowAction;
 	swipeLeft: RowAction;
 	/**
-	What swiping a session card to the right, and to the left, does. Sync with the rest of the app's look.
+	What swiping a session card to the right, and to the left, does.
 	*/
 	sessionSwipeRight: SessionAction;
 	sessionSwipeLeft: SessionAction;
 	/**
-	What swiping a link in an open session card to the right, and to the left, does. Sync with the rest of the app's look.
+	What swiping a link in an open session card to the right, and to the left, does.
 	*/
 	linkSwipeRight: LinkAction;
 	linkSwipeLeft: LinkAction;
 	/**
 	How the Bookmarks and Sessions screens list their columns and folders: a row of chips to swipe across, or a list of
-	all of them that opens one at a time. Sync with the rest of the app's look.
+	all of them that opens one at a time.
 	*/
 	bookmarkView: ListView;
 	sessionView: ListView;
@@ -141,48 +143,46 @@ export type Preferences = {
 	*/
 	cleanOnSave: boolean;
 	/**
-	Share the settings above, except this one, through sync, so phones that use one library look and behave alike.
-	On by default, like the extension's portable settings. This choice itself stays on this phone.
+	Share the synced preferences through sync, so phones that use one library behave alike. On by default, like the
+	extension's Sync settings.
 	*/
 	syncSettings: boolean;
 	/**
-	Keep the private library in step with the server. Off, it stays on this phone only. This choice stays on this phone.
+	Keep the private library in step with the server. Off, it stays on this phone only.
 	*/
 	syncPrivate: boolean;
 	/**
 	While a server is connected, sync the regular library about every 15 minutes with the app closed, and redraw the
-	Bookmarks widgets with what came in. On by default. Stays on this phone, whose battery it uses.
+	Bookmarks widgets with what came in. On by default.
 	*/
 	backgroundSync: boolean;
 	/**
 	Whether each site's own icon replaces its letter tile: `server` (the default) asks the connected sync server, which
 	fetches it, so the site never sees this phone and nothing is shown without a server; `direct` also asks the site
-	itself when there is no server; `off` shows letter tiles. Stays on this phone.
+	itself when there is no server; `off` shows letter tiles.
 	*/
 	siteIcons: SiteIcons;
 	/**
 	Look the page up while saving a link, to show its icon and fill in its title. Through the sync server when one is
-	connected, otherwise from the site itself. On by default, and stays on this phone.
+	connected, otherwise from the site itself. On by default.
 	*/
 	savePreview: boolean;
 	/**
-	The accent color: `default` (TabLodge's, the default), `system` (the phone's own), a preset id, or `#rrggbb`. Syncs with
-	the rest of the app's look.
+	The accent color: `default` (TabLodge's, the default), `system` (the phone's own), a preset id, or `#rrggbb`.
 	*/
 	accent: string;
 	/**
-	Light, dark, or the phone's own setting (the default). Syncs with the rest of the app's look.
+	Light, dark, or the phone's own setting (the default).
 	*/
 	theme: Theme;
 	/**
 	Show the button that opens the private library on Bookmarks and Sessions, while a server is connected. On by default,
-	though it tells anyone holding the phone that a private library exists. Stays on this phone.
+	though it tells anyone holding the phone that a private library exists.
 	*/
 	showPrivateButton: boolean;
 	/**
 	When the private library locks by itself: `manual` only by hand, `leave` when the app goes behind another one,
 	`screen` (the default) when the screen turns off, `timeout` after a while without use. Only a library with a password locks.
-	This stays on this phone.
 	*/
 	privateLockMode: 'manual' | 'leave' | 'screen' | 'timeout';
 	/**
@@ -190,7 +190,7 @@ export type Preferences = {
 	*/
 	privateLockMinutes: number;
 	/**
-	Where a link opens: the default browser, an in-app tab, or the browser in `openApp`. Stays on this phone.
+	Where a link opens: the default browser, an in-app tab, or the browser in `openApp`.
 	*/
 	openWith: OpenWith;
 	/**
@@ -204,16 +204,15 @@ export type Preferences = {
 	privateOpenWith: OpenWith | 'same';
 	privateOpenApp: string;
 	/**
-	Session cards without the tab icon strip and the saved-on line, and with tighter tab rows. Syncs with the rest of the
-	app's look.
+	Session cards without the tab icon strip and the saved-on line, and with tighter tab rows.
 	*/
 	compactSessions: boolean;
 	/**
-	Show which device saved a session on its card. Syncs with the rest of the app's look.
+	Show which device saved a session on its card.
 	*/
 	showSavedOn: boolean;
 	/**
-	The name this phone puts on the sessions it saves. Empty means the phone's own make and model. Stays on this phone.
+	The name this phone puts on the sessions it saves. Empty means the phone's own make and model.
 	*/
 	deviceName: string;
 };
@@ -223,7 +222,6 @@ How to read one preference: `read` returns the value, or `undefined` when the st
 */
 type Field<Value> = {
 	default: Value;
-	scope: 'synced' | 'device';
 	read: (raw: unknown) => Value | undefined;
 };
 
@@ -235,60 +233,56 @@ const oneOf =
 const bool = (raw: unknown) => (typeof raw === 'boolean' ? raw : undefined);
 const text = (raw: unknown) => (typeof raw === 'string' ? raw : undefined);
 
-const synced = <Value>(
+const field = <Value>(
 	defaultValue: Value,
 	read: Field<Value>['read'],
-): Field<Value> => ({default: defaultValue, scope: 'synced', read});
-const device = <Value>(
-	defaultValue: Value,
-	read: Field<Value>['read'],
-): Field<Value> => ({default: defaultValue, scope: 'device', read});
+): Field<Value> => ({default: defaultValue, read});
 
 const FIELDS: {[Key in keyof Preferences]: Field<Preferences[Key]>} = {
-	look: synced('auto', oneOf(LOOKS)),
-	floatingBar: synced(true, bool),
-	barSize: synced('scroll', oneOf(BAR_SIZES)),
-	barLabels: synced('active', oneOf(BAR_LABELS)),
-	glassEffect: device(true, bool),
-	lastColumnId: device('', text),
-	tapAction: synced('open', oneOf(['open', 'edit'])),
-	swipeRight: synced('delete', oneOf(ROW_ACTIONS)),
-	swipeLeft: synced('edit', oneOf(ROW_ACTIONS)),
-	sessionSwipeRight: synced('delete', oneOf(SESSION_ACTIONS)),
-	sessionSwipeLeft: synced('archive', oneOf(SESSION_ACTIONS)),
-	linkSwipeRight: synced('delete', oneOf(LINK_ACTIONS)),
-	linkSwipeLeft: synced('bookmark', oneOf(LINK_ACTIONS)),
-	bookmarkView: synced('chips', oneOf(LIST_VIEWS)),
-	sessionView: synced('chips', oneOf(LIST_VIEWS)),
-	sessionTap: synced('expand', oneOf(['expand', 'open'])),
+	look: field('auto', oneOf(LOOKS)),
+	floatingBar: field(true, bool),
+	barSize: field('scroll', oneOf(BAR_SIZES)),
+	barLabels: field('active', oneOf(BAR_LABELS)),
+	glassEffect: field(true, bool),
+	lastColumnId: field('', text),
+	tapAction: field('open', oneOf(['open', 'edit'])),
+	swipeRight: field('delete', oneOf(ROW_ACTIONS)),
+	swipeLeft: field('edit', oneOf(ROW_ACTIONS)),
+	sessionSwipeRight: field('delete', oneOf(SESSION_ACTIONS)),
+	sessionSwipeLeft: field('archive', oneOf(SESSION_ACTIONS)),
+	linkSwipeRight: field('delete', oneOf(LINK_ACTIONS)),
+	linkSwipeLeft: field('bookmark', oneOf(LINK_ACTIONS)),
+	bookmarkView: field('chips', oneOf(LIST_VIEWS)),
+	sessionView: field('chips', oneOf(LIST_VIEWS)),
+	sessionTap: field('expand', oneOf(['expand', 'open'])),
 	// The main button has to do something, so `none` is not a value.
-	sessionMain: synced(
+	sessionMain: field(
 		'open',
 		oneOf(SESSION_ACTIONS.filter((action) => action !== 'none')),
 	),
-	cleanOnSave: synced(true, bool),
-	syncSettings: device(true, bool),
-	syncPrivate: device(true, bool),
-	backgroundSync: device(true, bool),
+	cleanOnSave: field(true, bool),
+	syncSettings: field(true, bool),
+	syncPrivate: field(true, bool),
+	backgroundSync: field(true, bool),
 	// An earlier version stored a switch: on asked the server or the site, off showed none.
-	siteIcons: synced('server', (raw) =>
+	siteIcons: field('server', (raw) =>
 		raw === true ? 'direct' : oneOf(SITE_ICONS)(raw),
 	),
-	savePreview: synced(true, bool),
-	accent: synced('default', (raw) => (isAccent(raw) ? raw : undefined)),
-	theme: synced('system', oneOf(['system', 'light', 'dark'])),
-	showPrivateButton: device(true, bool),
-	privateLockMode: device('screen', oneOf(PRIVATE_LOCK_MODES)),
-	privateLockMinutes: device(5, (raw) =>
+	savePreview: field(true, bool),
+	accent: field('default', (raw) => (isAccent(raw) ? raw : undefined)),
+	theme: field('system', oneOf(['system', 'light', 'dark'])),
+	showPrivateButton: field(true, bool),
+	privateLockMode: field('screen', oneOf(PRIVATE_LOCK_MODES)),
+	privateLockMinutes: field(5, (raw) =>
 		PRIVATE_LOCK_MINUTES.find((minutes) => minutes === raw),
 	),
-	openWith: device('system', oneOf(OPEN_WITH)),
-	openApp: device('', text),
-	privateOpenWith: device('same', oneOf([...OPEN_WITH, 'same'])),
-	privateOpenApp: device('', text),
-	compactSessions: synced(false, bool),
-	showSavedOn: synced(true, bool),
-	deviceName: device('', (raw) => cleanDeviceName(raw)),
+	openWith: field('system', oneOf(OPEN_WITH)),
+	openApp: field('', text),
+	privateOpenWith: field('same', oneOf([...OPEN_WITH, 'same'])),
+	privateOpenApp: field('', text),
+	compactSessions: field(false, bool),
+	showSavedOn: field(true, bool),
+	deviceName: field('', (raw) => cleanDeviceName(raw)),
 };
 
 const KEYS = Object.keys(FIELDS) as Array<keyof Preferences>;
@@ -297,10 +291,15 @@ export const defaults = Object.fromEntries(
 	KEYS.map((key) => [key, FIELDS[key].default]),
 ) as Preferences;
 
+// A key in the shared list that is no preference here would be a reason for nothing; this fails to compile then.
+const listedLocal: ReadonlyArray<keyof Preferences> = Object.keys(
+	ANDROID_LOCAL_PREFERENCES,
+) as Array<keyof typeof ANDROID_LOCAL_PREFERENCES>;
+
 /**
-The keys that sync, which the extension keeps in the library's `mobileApp` setting.
+The keys that sync, which the extension keeps in the library's `mobileApp` setting: every one not listed as local.
 */
-export const SYNCED_KEYS = KEYS.filter((key) => FIELDS[key].scope === 'synced');
+export const SYNCED_KEYS = KEYS.filter((key) => !listedLocal.includes(key));
 
 /**
 An earlier size, Icons only, was full width without names. Stored or synced values in that form read as today's pair.

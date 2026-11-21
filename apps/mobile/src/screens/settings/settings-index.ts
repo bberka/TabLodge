@@ -34,7 +34,7 @@ export const ROWS = {
 	privateOpenApp: {label: 'Private browser', hint: 'The app for private links'},
 	syncSettings: {
 		label: 'Sync settings',
-		hint: 'Look and gestures follow your other devices',
+		hint: 'Gestures and choices follow your other phones; the look stays here',
 	},
 	syncPrivate: {
 		label: 'Sync the private library',

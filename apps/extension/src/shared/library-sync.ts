@@ -16,6 +16,7 @@ export type TombstoneKind =
 	| 'column'
 	| 'folder'
 	| 'preference'
+	| 'setting'
 	| 'trash'
 	| 'note'
 	| 'tag'
@@ -42,6 +43,7 @@ export const TOMBSTONE_KINDS: ReadonlySet<string> = new Set([
 	'column',
 	'folder',
 	'preference',
+	'setting',
 	'trash',
 	'note',
 	'tag',

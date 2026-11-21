@@ -61,10 +61,10 @@ export type SyncState = {
 	*/
 	held?: SyncChange[];
 	/**
-	The optional record kinds (trash, notes, tags, Sources) the last pull took. One it skipped is pulled from the start
+	The optional record kinds (trash, notes, tags, Sources, settings since 0.3.0) the last pull took. One it skipped is pulled from the start
 	once it is taken.
 	*/
-	pulled?: Array<'trash' | 'note' | 'tag' | 'source'>;
+	pulled?: Array<'trash' | 'note' | 'tag' | 'source' | 'setting'>;
 };
 
 export type Records = Map<string, LibraryRecord>;

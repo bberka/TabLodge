@@ -211,6 +211,7 @@ export const DEFAULT_SETTINGS = Object.freeze<Settings>({
 	sessionNameTemplate: '{date} · {title}',
 	sessionNameFallback: 'date-title',
 	mobileApp: {},
+	heldSettings: {},
 });
 
 export const ICON_ID_SET = new Set<unknown>(ICON_IDS);
@@ -861,9 +862,49 @@ export function normalizeMobileApp(value: unknown): Settings['mobileApp'] {
 	return Object.fromEntries(kept.slice(0, MOBILE_APP_KEYS_MAX));
 }
 
+/**
+How many settings from a newer version are held, and how long each value may be as JSON. Generous: a value cut here
+looks deleted and that delete syncs.
+*/
+export const HELD_SETTINGS_MAX = 200;
+const HELD_VALUE_MAX = 20_000;
+
+const isSettingKey = (key: string) => Object.hasOwn(DEFAULT_SETTINGS, key);
+
+/**
+Synced settings this version does not know, kept as plain JSON values.
+*/
+export function normalizeHeldSettings(
+	value: unknown,
+): Settings['heldSettings'] {
+	const kept: Array<[string, unknown]> = [];
+	for (const [key, item] of isRecord(value) ? Object.entries(value) : []) {
+		const size = item === undefined ? undefined : JSON.stringify(item)?.length;
+		if (
+			!isSettingKey(key) &&
+			key.length <= 64 &&
+			size !== undefined &&
+			size <= HELD_VALUE_MAX
+		) {
+			kept.push([key, item]);
+		}
+	}
+
+	return Object.fromEntries(kept.slice(0, HELD_SETTINGS_MAX));
+}
+
 export function normalizeSettings(input: RawSettings | null = {}): Settings {
 	// A missing, null or non-object stored value means "no saved preferences": every field falls back to its default.
-	const raw: RawSettings = isRecord(input) ? input : {};
+	const saved: RawSettings = isRecord(input) ? input : {};
+	// A setting held while this version was older, which it now knows: the held value stands in for a missing one.
+	const raw: RawSettings = {
+		...Object.fromEntries(
+			Object.entries(
+				isRecord(saved.heldSettings) ? saved.heldSettings : {},
+			).filter(([key]) => isSettingKey(key)),
+		),
+		...saved,
+	};
 	const savedActionMode = isOneOf(
 		[
 			'sidepanel',
@@ -1061,6 +1102,7 @@ export function normalizeSettings(input: RawSettings | null = {}): Settings {
 			SESSION_NAME_TEMPLATE_MAX,
 		),
 		mobileApp: normalizeMobileApp(raw.mobileApp),
+		heldSettings: normalizeHeldSettings(raw.heldSettings),
 	};
 	return settings;
 }

@@ -117,7 +117,7 @@ export function Group({row, children}: {row: Row; children: React.ReactNode}) {
 }
 
 /**
-What tapping and swiping a bookmark do, and how links are cleaned when saved. These stay on this phone.
+What tapping and swiping a bookmark do, and how links are cleaned when saved.
 */
 export function BookmarkBehaviourCard() {
 	const prefs = usePreferences();

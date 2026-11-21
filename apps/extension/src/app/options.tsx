@@ -388,13 +388,13 @@ const settingsGroups: Array<{
 			{
 				name: 'linkPreviews',
 				label: 'Preview links on hover',
-				help: 'Rest the pointer on a bookmark or saved tab, or focus it, to see its page image and description. Needs a sync server, which fetches the page, so the server and the site see its address. Off by default and kept on this browser.',
+				help: 'Rest the pointer on a bookmark or saved tab, or focus it, to see its page image and description. Needs a sync server, which fetches the page, so the server and the site see its address. Off by default.',
 				type: 'switch',
 			},
 			{
 				name: 'siteIcons',
 				label: 'Site icons',
-				help: 'For links the browser has no icon for, such as imported ones. Through my server asks your sync server, which fetches the icon, so sites never see this browser; without a server nothing is asked. Browser only shows just the icons the browser has. Kept on this browser.',
+				help: 'For links the browser has no icon for, such as imported ones. Through my server asks your sync server, which fetches the icon, so sites never see this browser; without a server nothing is asked. Browser only shows just the icons the browser has.',
 				type: 'select',
 				options: [
 					['server', 'Through my server'],

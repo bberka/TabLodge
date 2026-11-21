@@ -91,6 +91,11 @@ export const SERVER_FEATURES: ReadonlyArray<{
 		missing: 'Sources settings in the browser extension stay in each browser.',
 	},
 	{
+		name: 'settings',
+		since: '0.4.0',
+		missing: 'Settings added since 0.3.0 stay on this device.',
+	},
+	{
 		name: 'trash',
 		since: '0.2.2',
 		missing: 'The trash stays on this device.',

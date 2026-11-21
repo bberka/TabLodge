@@ -228,13 +228,13 @@ export type Settings = {
 	showSaveWindowButton: boolean;
 	/**
 	Show a page's image and description when a bookmark or saved tab is hovered or focused for a moment. Needs a sync
-	server, which fetches the page; the setting stays on this browser (default off).
+	server, which fetches the page (default off).
 	*/
 	linkPreviews: boolean;
 	/**
 	Where icons come from for links the browser has none for. `server` asks the connected sync server, which fetches
-	them; without a server it does nothing. `browser` uses only the browser's own icons. Stays on this browser
-	(default `server`, like the Android app).
+	them; without a server it does nothing. `browser` uses only the browser's own icons (default `server`, like the
+	Android app).
 	*/
 	siteIcons: SiteIconSource;
 	/**
@@ -357,6 +357,11 @@ export type Settings = {
 	share this library (plain strings, numbers, and booleans only).
 	*/
 	mobileApp: Record<string, string | number | boolean>;
+	/**
+	Synced settings from a newer version that this one does not know, kept as they arrived so they go back unchanged
+	instead of looking deleted. Once this version knows a key, it reads the value from here.
+	*/
+	heldSettings: Record<string, unknown>;
 };
 
 export type NativeGroup = {

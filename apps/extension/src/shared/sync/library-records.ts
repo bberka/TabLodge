@@ -8,6 +8,10 @@ sees one: it skips a kind it does not know, while it would drop an unknown field
 back. A server that cannot hold notes leaves them on the device (see the sync client). Tags and removed kinds travel
 the same way as a `tag` record ({tags, hiddenKinds}), for the same reason (ADR 8).
 
+Settings are `preference` records keyed by the setting, for the ones 0.3.0 already synced, and `setting` records for
+every other one: 0.3.0 drops a preference id it does not know and sends that loss back, while it skips a kind it does
+not know (ADR 10). A `setting` record this version does not know is held in `heldSettings` and sent back as it came.
+
 Sources settings (which sites are on, each one's column and save mode) are `source` records keyed by the site id, for
 the same reason. They live outside the library, so the host hands them in and takes them back as they are: a site or
 a field this version does not know still goes back unchanged.
@@ -26,15 +30,15 @@ import type {
 } from '../types';
 import type {TombstoneKind} from '../library-sync';
 import {tagFields} from '../bookmark-tags';
-import {bookmarkNotes} from '../library-normalize';
-import {isRecord} from '../library-values';
+import {bookmarkNotes, DEFAULT_SETTINGS} from '../library-normalize';
+import {EXTENSION_LOCAL_SETTINGS} from '../local-settings';
+import {canonicalJson, isRecord} from '../library-values';
 import {parseTrashEntry, syncedTrash, type TrashEntry} from '../trash';
 import {recordKey} from './changes';
 
 /**
-Settings that follow the user to every connected browser, unless settings sync is turned off on a device. Recovery
-snapshots, automatic backups, and browser bookmark monitoring stay per device: they depend on that browser's
-permissions, storage, and downloads folder.
+The settings 0.3.0 syncs, as `preference` records. This list is closed: a setting added later travels as a `setting`
+record (`SETTING_KEYS`), which 0.3.0 skips instead of erasing.
 */
 const PORTABLE_PREFERENCES = [
 	'closeOnSave',
@@ -106,6 +110,20 @@ const PORTABLE_PREFERENCES = [
 	'mobileApp',
 ] as const satisfies ReadonlyArray<keyof Settings>;
 
+/**
+Every other setting that syncs, as a `setting` record: each key of `DEFAULT_SETTINGS` that is neither a 0.3.0
+preference nor listed in `local-settings.ts`. A new setting lands here by itself. Like preferences, these follow
+the user to every connected browser unless settings sync is turned off on a device.
+*/
+export const SETTING_KEYS: ReadonlyArray<keyof Settings> = (
+	Object.keys(DEFAULT_SETTINGS) as Array<keyof Settings>
+).filter(
+	(key) =>
+		key !== 'heldSettings' &&
+		!(PORTABLE_PREFERENCES as readonly string[]).includes(key) &&
+		!Object.hasOwn(EXTENSION_LOCAL_SETTINGS, key),
+);
+
 const SESSION_LOCAL_FIELDS = [
 	'sourceWindowId',
 	'windowBounds',
@@ -118,6 +136,16 @@ export type LibraryRecord = {
 	parentId?: string;
 	value: unknown;
 };
+
+/**
+A `setting` record that still holds its default. Never synced, it is not sent: a phone or a new browser holds every
+default without anyone choosing it, and sent first it would overwrite the values another browser chose.
+*/
+export const isUntouchedDefault = (record: LibraryRecord) =>
+	record.kind === 'setting' &&
+	Object.hasOwn(DEFAULT_SETTINGS, record.id) &&
+	canonicalJson(record.value) ===
+		canonicalJson(DEFAULT_SETTINGS[record.id as keyof Settings]);
 
 /**
 The order group of a record kind; tabs are ordered within their session.
@@ -148,6 +176,7 @@ export function orderGroup(
 		}
 
 		case 'preference':
+		case 'setting':
 		case 'trash':
 		case 'note':
 		case 'tag':
@@ -207,6 +236,16 @@ export function splitLibrary(
 		// A missing value has nothing to send; a change always carries a value or a delete.
 		if (store.settings[key] !== undefined) {
 			add({kind: 'preference', id: key, value: store.settings[key]});
+		}
+	}
+
+	for (const [id, value] of Object.entries(store.settings.heldSettings ?? {})) {
+		add({kind: 'setting', id, value});
+	}
+
+	for (const key of SETTING_KEYS) {
+		if (store.settings[key] !== undefined) {
+			add({kind: 'setting', id: key, value: store.settings[key]});
 		}
 	}
 
@@ -274,12 +313,15 @@ export function assemble(
 	const notes = new Map<string, string>();
 	const tags = new Map<string, Pick<Bookmark, 'tags' | 'hiddenKinds'>>();
 	const settings: Record<string, unknown> = {...local.settings};
+	const held: Record<string, unknown> = {};
 
 	for (const record of records) {
 		if (
 			record.kind === 'trash' ||
 			record.kind === 'source' ||
-			(!isRecord(record.value) && record.kind !== 'preference')
+			(!isRecord(record.value) &&
+				record.kind !== 'preference' &&
+				record.kind !== 'setting')
 		) {
 			continue;
 		}
@@ -348,7 +390,25 @@ export function assemble(
 
 				break;
 			}
+
+			case 'setting': {
+				if (!syncSettings) {
+					break;
+				}
+
+				if ((SETTING_KEYS as readonly string[]).includes(record.id)) {
+					settings[record.id] = record.value;
+				} else if (!Object.hasOwn(DEFAULT_SETTINGS, record.id)) {
+					held[record.id] = record.value;
+				}
+
+				break;
+			}
 		}
+	}
+
+	if (syncSettings) {
+		settings.heldSettings = held;
 	}
 
 	for (const session of sessions) {

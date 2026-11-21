@@ -1164,7 +1164,10 @@ const syncClient = privateContext
 			sources: {read: readSyncSources, apply: applySyncSources},
 			async writeLibrary(store) {
 				// The records came from other devices: normalized like an import before they are stored.
-				await writeStore(normalizeStore(store));
+				const before = (await getStore()).settings;
+				const next = normalizeStore(store);
+				await writeStore(next);
+				await applySettingsChange(before, next);
 			},
 			async backup(store, reason) {
 				await safetyBackup(store, reason);
@@ -6385,46 +6388,45 @@ async function updateSettings(
 		const requested = {...store.settings, ...patch};
 		store.settings = normalizeSettings(requested);
 		await writeStore(store);
-		if (previousSettings.actionMode !== store.settings.actionMode) {
-			await syncToolbarAction(store.settings);
-		}
-
-		if (
-			previousSettings.snapshotsEnabled !== store.settings.snapshotsEnabled ||
-			previousSettings.snapshotIntervalMinutes !==
-				store.settings.snapshotIntervalMinutes ||
-			previousSettings.autoBackup !== store.settings.autoBackup ||
-			previousSettings.autoArchiveDays !== store.settings.autoArchiveDays
-		) {
-			await syncRecoveryAlarms(store.settings);
-			if (
-				store.settings.snapshotsEnabled &&
-				!previousSettings.snapshotsEnabled
-			) {
-				scheduleSnapshot();
-			}
-		}
-
-		if (store.settings.keepLodgePinned && !previousSettings.keepLodgePinned) {
-			lodgePaused.clear();
-			lodgeUndoneAt.clear();
-			scheduleLodgeCheck();
-		}
-
-		const sessions = menuSessions(store.groups, store.folders);
-		if (
-			contextMenuSignature(
-				previousSettings,
-				store.bookmarkColumns,
-				sessions,
-			) !==
-			contextMenuSignature(store.settings, store.bookmarkColumns, sessions)
-		) {
-			await rebuildContextMenus(store);
-		}
-
+		await applySettingsChange(previousSettings, store);
 		return {ok: true, settings: store.settings};
 	});
+}
+
+/**
+Brings the toolbar, alarms, pinned tab, and menus in line with settings that changed, here or through sync.
+*/
+async function applySettingsChange(previousSettings: Settings, store: Store) {
+	if (previousSettings.actionMode !== store.settings.actionMode) {
+		await syncToolbarAction(store.settings);
+	}
+
+	if (
+		previousSettings.snapshotsEnabled !== store.settings.snapshotsEnabled ||
+		previousSettings.snapshotIntervalMinutes !==
+			store.settings.snapshotIntervalMinutes ||
+		previousSettings.autoBackup !== store.settings.autoBackup ||
+		previousSettings.autoArchiveDays !== store.settings.autoArchiveDays
+	) {
+		await syncRecoveryAlarms(store.settings);
+		if (store.settings.snapshotsEnabled && !previousSettings.snapshotsEnabled) {
+			scheduleSnapshot();
+		}
+	}
+
+	if (store.settings.keepLodgePinned && !previousSettings.keepLodgePinned) {
+		lodgePaused.clear();
+		lodgeUndoneAt.clear();
+		scheduleLodgeCheck();
+	}
+
+	const sessions = menuSessions(store.groups, store.folders);
+	if (
+		contextMenuSignature(previousSettings, store.bookmarkColumns, sessions) !==
+		contextMenuSignature(store.settings, store.bookmarkColumns, sessions)
+	) {
+		await rebuildContextMenus(store);
+	}
 }
 
 async function resetSettings(): Promise<ActionResult<'RESET_SETTINGS'>> {

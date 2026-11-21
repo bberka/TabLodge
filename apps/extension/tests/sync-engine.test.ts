@@ -191,7 +191,7 @@ test('fields that belong to one device stay on it', () => {
 	assert.equal(b.store.groups[0].lastOpenedAt, 9);
 });
 
-test('only portable settings travel', () => {
+test('settings travel, the 0.3.0 ones and the later ones alike, except the ones that stay on each device', () => {
 	const log = new ChangeLog();
 	const a = device('a');
 	const b = device('b');
@@ -204,13 +204,15 @@ test('only portable settings travel', () => {
 			sessionSort: 'name',
 			closeOnSave: false,
 			snapshotKeep: 50,
+			autoBackupToDownloads: true,
 		},
 	};
 	sync(a, log, T0 + 1000);
 	sync(b, log, T0 + 2000);
 	assert.equal(b.store.settings.sessionSort, 'name');
 	assert.equal(b.store.settings.closeOnSave, false);
-	assert.notEqual(b.store.settings.snapshotKeep, 50);
+	assert.equal(b.store.settings.snapshotKeep, 50);
+	assert.equal(b.store.settings.autoBackupToDownloads, undefined);
 });
 
 test('a new device takes the server copy of shared records and adds its own', () => {
