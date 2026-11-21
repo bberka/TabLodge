@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import {test} from 'vite-plus/test';
 import {ImportFormatError} from '../src/shared/import-formats';
-import {importFromLink} from '../src/shared/import-link';
+import {
+	importFromLink,
+	ImportPasswordRequiredError,
+} from '../src/shared/import-link';
 import {shareHtmlPage} from '../src/shared/share-formats';
-import {isSharedPageUrl} from '../src/shared/sync/shared-pages';
+import {
+	isSharedPageUrl,
+	SHARED_PAGE_PASSWORD_HEADER,
+} from '../src/shared/sync/shared-pages';
 
 const PAGE_URL = 'https://sync.example.test/p/AAAAAAAAAAAAAAAAAAAAAA';
 const page = shareHtmlPage(
@@ -157,4 +163,43 @@ test('only an address ending in /p/ and a 22 character id looks like a shared pa
 	]) {
 		assert.equal(isSharedPageUrl(address), false, String(address));
 	}
+});
+
+test('a password-protected link asks for a password, reports wrong ones, and imports once unlocked', async () => {
+	const send: Parameters<typeof importFromLink>[0] = async (_url, init) => {
+		if (init?.method !== 'POST') {
+			return new Response('<form></form>', {
+				status: 401,
+				headers: {[SHARED_PAGE_PASSWORD_HEADER]: '1'},
+			});
+		}
+
+		const submitted = new URLSearchParams(String(init.body ?? '')).get(
+			'password',
+		);
+		if (submitted !== 'open-sesame') {
+			return new Response('<form></form>', {
+				status: 401,
+				headers: {[SHARED_PAGE_PASSWORD_HEADER]: '1'},
+			});
+		}
+
+		return new Response(page, {headers: {'Content-Type': 'text/html'}});
+	};
+
+	await assert.rejects(
+		importFromLink(send, PAGE_URL),
+		(error) =>
+			error instanceof ImportPasswordRequiredError && !error.wrongPassword,
+	);
+	await assert.rejects(
+		importFromLink(send, PAGE_URL, {password: 'wrong'}),
+		(error) =>
+			error instanceof ImportPasswordRequiredError && error.wrongPassword,
+	);
+	const parsed = await importFromLink(send, PAGE_URL, {
+		password: 'open-sesame',
+	});
+	assert.equal(parsed.kind, 'sessions');
+	assert.equal(parsed.sessions.length, 2);
 });

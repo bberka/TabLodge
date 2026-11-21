@@ -4,22 +4,57 @@ import {
 	parseImportFile,
 	type ParsedImport,
 } from './import-formats';
+import {SHARED_PAGE_PASSWORD_HEADER} from './sync/shared-pages';
 import {webUrl} from './web-url';
 
 const TIMEOUT_MS = 20_000;
 export const IMPORT_TOO_LARGE = 'That page is larger than 45 MB.';
 
+export class ImportPasswordRequiredError extends ImportFormatError {
+	readonly wrongPassword: boolean;
+
+	constructor(wrongPassword: boolean) {
+		super(
+			wrongPassword
+				? 'Incorrect password. Try again.'
+				: 'This shared page is password-protected.',
+		);
+		this.name = 'ImportPasswordRequiredError';
+		this.wrongPassword = wrongPassword;
+	}
+}
+
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+function allowsPasswordTransport(address: string): boolean {
+	try {
+		const parsed = new URL(address);
+		return (
+			parsed.protocol === 'https:' ||
+			(parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname))
+		);
+	} catch {
+		return false;
+	}
+}
 
 export async function importFromLink(
 	send: Fetch,
 	address: string,
-	{signal}: {signal?: AbortSignal} = {},
+	{signal, password}: {signal?: AbortSignal; password?: string} = {},
 ): Promise<ParsedImport> {
 	const url = webUrl(address);
 	if (!url) {
 		throw new ImportFormatError(
 			'Enter a web address that starts with https:// or http://.',
+		);
+	}
+
+	if (password !== undefined && !allowsPasswordTransport(url)) {
+		throw new ImportFormatError(
+			'Passwords can only be sent over HTTPS (or localhost).',
 		);
 	}
 
@@ -35,17 +70,37 @@ export async function importFromLink(
 	try {
 		let response: Response;
 		try {
-			response = await send(url, {
-				credentials: 'omit',
-				cache: 'no-store',
-				signal: controller.signal,
-			});
+			const init: RequestInit =
+				password === undefined
+					? {
+							credentials: 'omit',
+							cache: 'no-store',
+							signal: controller.signal,
+						}
+					: {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/x-www-form-urlencoded',
+							},
+							body: new URLSearchParams({password}).toString(),
+							credentials: 'omit',
+							cache: 'no-store',
+							signal: controller.signal,
+						};
+			response = await send(url, init);
 		} catch (error) {
 			throw error instanceof ImportFormatError
 				? error
 				: new ImportFormatError(
 						'Could not read that link. Check that the address is right and that you are online.',
 					);
+		}
+
+		if (
+			response.status === 401 &&
+			response.headers.get(SHARED_PAGE_PASSWORD_HEADER) === '1'
+		) {
+			throw new ImportPasswordRequiredError(password !== undefined);
 		}
 
 		if (response.status === 404) {

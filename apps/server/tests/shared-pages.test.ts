@@ -9,12 +9,17 @@ import {createApi, DEFAULT_LIMITS, type Limits} from '../src/api';
 import {sqlite} from '../src/node-sqlite';
 import {SqlChangeLog} from '../src/sql-change-log';
 import {SqlPageStore} from '../src/shared-pages';
-import {newSharedPageId} from '../../extension/src/shared/sync/shared-pages';
+import {
+	newSharedPageId,
+	SHARED_PAGE_PASSWORD_HEADER,
+} from '../../extension/src/shared/sync/shared-pages';
 import {shareHtmlPage} from '../../extension/src/shared/share-formats';
+import {refreshLiveSharedPages} from '../../extension/src/shared/live-shared-pages';
 import {
 	deleteSharedPage,
 	listSharedPages,
 	sharedPagesSupport,
+	updateSharedPage,
 	uploadSharedPage,
 } from '../../extension/src/shared/sync/shared-pages-client';
 import {startClock, tick} from '../../extension/src/shared/sync/clock';
@@ -311,7 +316,10 @@ test('a pages table from before sources upgrades on start and keeps its pages', 
 			title: 'Old',
 			size: 10,
 			createdAt: T0,
+			updatedAt: T0,
 			source: '',
+			mode: 'snapshot',
+			hasPassword: false,
 		},
 	]);
 	assert.equal(store.html('AAAAAAAAAAAAAAAAAAAAAA'), '<p>old</p>');
@@ -323,19 +331,165 @@ test('a server without shared pages says so, and has no page routes', async () =
 	assert.deepEqual(await sharedPagesSupport(fetch, target), {
 		server: 'old',
 		keepsIds: false,
+		supportsLivePassword: false,
 	});
 	assert.equal((await fetch(`${BASE}/v1/pages`, authorized())).status, 404);
 	assert.equal((await fetch(`${BASE}/p/AAAAAAAAAAAAAAAAAAAAAA`)).status, 404);
 	assert.deepEqual(await sharedPagesSupport(nodeServer().fetch, target), {
 		server: 'ready',
 		keepsIds: true,
+		supportsLivePassword: true,
 	});
 	assert.deepEqual(
 		await sharedPagesSupport(async () => {
 			throw new TypeError('Failed to fetch');
 		}, target),
-		{server: 'offline', keepsIds: false},
+		{server: 'offline', keepsIds: false, supportsLivePassword: false},
 	);
+});
+
+test('live links update in place, reject snapshot updates, and stop on delete', async () => {
+	const {fetch} = nodeServer();
+	const id = newSharedPageId();
+	const live = await uploadSharedPage(fetch, target, 'Shop', PAGE, {
+		id,
+		source: 'column:shop',
+		mode: 'live',
+	});
+	assert.equal(live.mode, 'live');
+	assert.equal(live.hasPassword, false);
+
+	const snapshot = await uploadSharedPage(fetch, target, 'Snap', PAGE);
+	await assert.rejects(
+		updateSharedPage(fetch, target, snapshot.id, 'Snap', '<p>new</p>'),
+		/snapshot/,
+	);
+
+	const fingerprints = new Map<string, string>();
+	const store = {
+		bookmarkColumns: [
+			{id: 'shop', name: 'Shop', createdAt: T0, isDefault: false},
+		],
+		bookmarks: [
+			{
+				id: 'b1',
+				title: 'Store A',
+				url: 'https://shop.example/a',
+				columnId: 'shop',
+				order: 0,
+				createdAt: T0,
+				updatedAt: T0,
+			},
+			{
+				id: 'b2',
+				title: 'Store B',
+				url: 'https://shop.example/b',
+				columnId: 'shop',
+				order: 1,
+				createdAt: T0,
+				updatedAt: T0,
+			},
+		],
+		groups: [],
+	};
+	assert.equal(
+		await refreshLiveSharedPages(
+			fetch,
+			target,
+			store,
+			'TabLodge',
+			fingerprints,
+		),
+		1,
+	);
+	assert.equal(
+		await refreshLiveSharedPages(
+			fetch,
+			target,
+			store,
+			'TabLodge',
+			fingerprints,
+		),
+		0,
+	);
+	const body = await (await fetch(`${BASE}${pathOf(live.url)}`)).text();
+	assert.match(body, /Store A/);
+	assert.match(body, /Store B/);
+
+	await deleteSharedPage(fetch, target, live.id);
+	assert.equal((await fetch(`${BASE}${pathOf(live.url)}`)).status, 404);
+});
+
+test('password-protected pages hash the password, prompt without links, unlock on POST, and throttle guesses', async () => {
+	const sql = sqlite(':memory:');
+	const log = new SqlChangeLog(sql);
+	const store = new SqlPageStore(sql);
+	const api = createApi({
+		token: TOKEN,
+		log: () => log,
+		pages: () => store,
+		now: () => T0,
+	});
+	const fetch: Fetch = async (url, init) => api.fetch(new Request(url, init));
+
+	const page = await uploadSharedPage(fetch, target, 'Secret', PAGE, {
+		id: newSharedPageId(),
+		source: 'column:secret',
+		mode: 'live',
+		password: 'correct-horse-battery',
+	});
+	assert.equal(page.hasPassword, true);
+	assert.equal(page.mode, 'live');
+
+	const rawRow = sql.all(
+		'SELECT password_hash FROM pages WHERE id = ?',
+		page.id,
+	)[0];
+	const storedHash = String(rawRow?.password_hash ?? '');
+	assert.match(storedHash, /^pbkdf2\$100000\$/);
+	assert.doesNotMatch(storedHash, /correct-horse-battery/);
+
+	const promptResponse = await fetch(`${BASE}${pathOf(page.url)}`);
+	assert.equal(promptResponse.status, 401);
+	assert.equal(promptResponse.headers.get(SHARED_PAGE_PASSWORD_HEADER), '1');
+	const promptHtml = await promptResponse.text();
+	assert.match(promptHtml, /<form method="post"/);
+	assert.doesNotMatch(promptHtml, /https:\/\/example\.com/);
+
+	const wrong = await fetch(`${BASE}${pathOf(page.url)}`, {
+		method: 'POST',
+		headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+		body: new URLSearchParams({password: 'wrong-pass'}).toString(),
+	});
+	assert.equal(wrong.status, 401);
+	assert.match(await wrong.text(), /Incorrect password/);
+
+	const unlocked = await fetch(`${BASE}${pathOf(page.url)}`, {
+		method: 'POST',
+		headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+		body: new URLSearchParams({password: 'correct-horse-battery'}).toString(),
+	});
+	assert.equal(unlocked.status, 200);
+	assert.equal(await unlocked.text(), PAGE);
+	assert.match(
+		unlocked.headers.get('content-security-policy') ?? '',
+		/sandbox allow-popups allow-popups-to-escape-sandbox$/,
+	);
+
+	const statuses: number[] = [];
+	for (let attempt = 0; attempt < 12; attempt += 1) {
+		statuses.push(
+			(
+				await fetch(`${BASE}${pathOf(page.url)}`, {
+					method: 'POST',
+					headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+					body: new URLSearchParams({password: 'wrong'}).toString(),
+				})
+			).status,
+		);
+	}
+
+	assert.ok(statuses.includes(429));
 });
 
 // The Cloudflare target: the real Worker and Durable Object in workerd, which is where a page is routed before the
@@ -371,6 +525,7 @@ test('on Cloudflare a page is public, strict, deletable, and absent from the pri
 	assert.deepEqual(await sharedPagesSupport(workerFetch, target), {
 		server: 'ready',
 		keepsIds: true,
+		supportsLivePassword: true,
 	});
 	const id = newSharedPageId();
 	const page = await uploadSharedPage(workerFetch, target, 'Reading', PAGE, {
@@ -411,6 +566,30 @@ test('on Cloudflare a page is public, strict, deletable, and absent from the pri
 		headers: {Authorization: `Bearer ${TOKEN}`, 'TabLodge-Library': 'private'},
 	});
 	assert.equal(spoofed.status, 200);
+
+	const protectedPage = await uploadSharedPage(
+		workerFetch,
+		target,
+		'Locked',
+		PAGE,
+		{
+			id: newSharedPageId(),
+			mode: 'live',
+			password: 'worker-password-ok',
+		},
+	);
+	assert.equal(protectedPage.hasPassword, true);
+	const prompt = await workerFetch(`${BASE}${pathOf(protectedPage.url)}`);
+	assert.equal(prompt.status, 401);
+	assert.equal(prompt.headers.get(SHARED_PAGE_PASSWORD_HEADER), '1');
+	const unlocked = await workerFetch(`${BASE}${pathOf(protectedPage.url)}`, {
+		method: 'POST',
+		headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+		body: new URLSearchParams({password: 'worker-password-ok'}).toString(),
+	});
+	assert.equal(unlocked.status, 200);
+	assert.equal(await unlocked.text(), PAGE);
+	await deleteSharedPage(workerFetch, target, protectedPage.id);
 
 	await deleteSharedPage(workerFetch, target, page.id);
 	const gone = await workerFetch(`${BASE}${pathOf(page.url)}`);

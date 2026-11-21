@@ -1,4 +1,4 @@
-import {useMemo, useState, useSyncExternalStore} from 'react';
+import {useEffect, useMemo, useState, useSyncExternalStore} from 'react';
 import {Share, StyleSheet, Text, View} from 'react-native';
 import {
 	buildExport,
@@ -12,7 +12,12 @@ import {
 	shareLinks,
 	shareMarkdown,
 } from '../../../../extension/src/shared/share-formats';
-import {LOST_CREDENTIAL_NOTE} from '../../../../extension/src/shared/passcode';
+import {
+	LOST_CREDENTIAL_NOTE,
+	validateCredential,
+	weakPasswordHint,
+} from '../../../../extension/src/shared/passcode';
+import type {SharedPageMode} from '../../../../extension/src/shared/sync/shared-pages';
 import type {Store} from '../../../../extension/src/shared/types';
 import {BottomSheet} from '../../ui/bottom-sheet';
 import {notify, showDialog} from '../../ui/dialog';
@@ -21,7 +26,10 @@ import {backupPasswordNote} from '../../transfer/backup-password';
 import {useView} from '../../library/view';
 import {shareBinaryFile, shareTextFile} from '../../transfer/files';
 import {useLibrary} from '../../library/library-store';
-import {uploadPage, useSharedPagesServer} from '../../library/shared-pages';
+import {
+	uploadPage,
+	useSharedPagesCapabilities,
+} from '../../library/shared-pages';
 import {copyLink} from '../../platform/copy-link';
 import {openLink} from '../../platform/open-links';
 import {useColors} from '../../ui/theme';
@@ -153,10 +161,24 @@ export function ShareSheet({
 	const [what, setWhat] = useState<What>('sessions');
 	const [way, setWay] = useState<Way>('page');
 	const [password, setPassword] = useState('');
+	const [shareMode, setShareMode] = useState<SharedPageMode>(
+		store.settings.defaultShareMode,
+	);
+	const [pagePassword, setPagePassword] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [uploading, setUploading] = useState(false);
 	// The private library is never uploaded.
-	const canUpload = useSharedPagesServer() === 'ready' && view === 'regular';
+	const capabilities = useSharedPagesCapabilities();
+	const canUpload = capabilities.server === 'ready' && view === 'regular';
+	useEffect(() => {
+		if (!visible) {
+			return;
+		}
+
+		setShareMode(store.settings.defaultShareMode);
+		setPagePassword('');
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- reset draft only when sheet opens
+	}, [visible]);
 	const sessions = store.groups.length;
 	const bookmarks = store.bookmarks.length;
 	const isBackup = scope === undefined && what === 'backup';
@@ -177,6 +199,24 @@ export function ShareSheet({
 		? (listed.pages ?? []).filter((page) => page.source === scope.source)
 		: [];
 	const {problem, hint: weak} = backupPasswordNote(isBackup, password);
+	const canLive =
+		capabilities.supportsLivePassword && scope?.source !== undefined;
+	const effectiveShareMode: SharedPageMode = canLive ? shareMode : 'snapshot';
+	const pagePasswordProblem =
+		!isBackup &&
+		way === 'page' &&
+		capabilities.supportsLivePassword &&
+		pagePassword !== ''
+			? validateCredential(pagePassword)
+			: null;
+	const pagePasswordWeak =
+		!isBackup &&
+		way === 'page' &&
+		capabilities.supportsLivePassword &&
+		pagePassword !== '' &&
+		!pagePasswordProblem
+			? weakPasswordHint(pagePassword)
+			: null;
 	const run = async () => {
 		setBusy(true);
 		try {
@@ -234,15 +274,44 @@ export function ShareSheet({
 	};
 
 	const upload = async () => {
+		if (pagePasswordProblem) {
+			notify('Password too short', pagePasswordProblem);
+			return;
+		}
+
 		setUploading(true);
 		try {
-			const page = await uploadPage(title, pageHtml, scope?.source);
+			const page = await uploadPage(title, pageHtml, {
+				source: scope?.source,
+				mode: capabilities.supportsLivePassword
+					? effectiveShareMode
+					: undefined,
+				password:
+					capabilities.supportsLivePassword && pagePassword !== ''
+						? pagePassword
+						: undefined,
+			});
+			setPagePassword('');
 			onClose();
 			await copyLink(page.url);
+			const summary = [
+				page.mode === 'live' ? 'Live link' : 'Snapshot',
+				...(page.hasPassword ? ['Password protected'] : []),
+			].join(' · ');
 			showDialog(
 				'Link ready',
-				`${page.url}\n\nThe link is copied. Anyone with it can open the page. Sharing again makes a new link. Delete old ones from Share or Shared pages.`,
+				`${page.url}\n\n${summary}. The link is copied. ${
+					page.mode === 'live'
+						? 'It updates after edits sync; stop it from Share or Shared pages.'
+						: 'Anyone with it can open the page. Delete old ones from Share or Shared pages.'
+				}`,
 				[
+					{
+						label: 'Copy',
+						run() {
+							void copyLink(page.url);
+						},
+					},
 					{
 						label: 'Open',
 						run() {
@@ -331,12 +400,80 @@ export function ShareSheet({
 					loading={busy}
 					onPress={() => void run()}
 				/>
+				{!isBackup &&
+					way === 'page' &&
+					links > 0 &&
+					view === 'regular' &&
+					capabilities.server === 'old' && (
+						<Text style={{color: colors.muted}}>
+							Update your sync server to share pages by link.
+						</Text>
+					)}
+				{!isBackup &&
+					way === 'page' &&
+					links > 0 &&
+					canUpload &&
+					!capabilities.keepsIds && (
+						<Text style={{color: colors.muted}}>
+							Update your sync server to include the Add to TabLodge panel and
+							list links made from this{' '}
+							{kind === 'bookmarks' ? 'column' : 'session'}.
+						</Text>
+					)}
+				{!isBackup &&
+					way === 'page' &&
+					links > 0 &&
+					canUpload &&
+					capabilities.keepsIds &&
+					!capabilities.supportsLivePassword && (
+						<Text style={{color: colors.muted}}>
+							Update your sync server to use live links and password protection.
+						</Text>
+					)}
+				{!isBackup &&
+					way === 'page' &&
+					links > 0 &&
+					canUpload &&
+					capabilities.supportsLivePassword && (
+						<>
+							{scope?.source ? (
+								<Chips
+									items={[
+										{id: 'snapshot', name: 'Snapshot'},
+										{id: 'live', name: 'Live link'},
+									]}
+									selected={shareMode}
+									onSelect={(id) => {
+										setShareMode(id as SharedPageMode);
+									}}
+								/>
+							) : (
+								<Text style={{color: colors.muted}}>
+									Snapshot. Live links are available for a single column or
+									session.
+								</Text>
+							)}
+							<Field
+								secureTextEntry
+								label="Password (optional)"
+								icon="lock-closed-outline"
+								value={pagePassword}
+								autoCapitalize="none"
+								autoCorrect={false}
+								error={pagePasswordProblem ?? undefined}
+								onChangeText={setPagePassword}
+							/>
+							{pagePasswordWeak && (
+								<Text style={{color: colors.muted}}>{pagePasswordWeak}</Text>
+							)}
+						</>
+					)}
 				{!isBackup && way === 'page' && links > 0 && canUpload && (
 					<Button
 						label="Get a link"
 						icon="cloud-upload-outline"
 						kind="plain"
-						disabled={busy}
+						disabled={busy || pagePasswordProblem !== null}
 						loading={uploading}
 						onPress={() => void upload()}
 					/>

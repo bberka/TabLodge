@@ -6,10 +6,13 @@ import {
 	IMPORT_TOO_LARGE,
 	utf8Bytes,
 } from '../../../extension/src/shared/import-link';
+import {SHARED_PAGE_PASSWORD_HEADER} from '../../../extension/src/shared/sync/shared-pages';
 
 export type ReadRequest = {
 	open(method: string, url: string): void;
-	send(): void;
+	setRequestHeader?(name: string, value: string): void;
+	getResponseHeader?(name: string): string | null;
+	send(body?: string | null): void;
 	abort(): void;
 	readonly status: number;
 	readonly responseText: string;
@@ -43,8 +46,13 @@ export function cappedFetch(
 			init.signal?.addEventListener('abort', () => {
 				stop(new TypeError('The read was cancelled.'));
 			});
-			request.open('GET', url);
+			request.open(init.method ?? 'GET', url);
 			request.withCredentials = false;
+			if (init.headers && request.setRequestHeader) {
+				for (const [name, value] of new Headers(init.headers).entries()) {
+					request.setRequestHeader(name, value);
+				}
+			}
 
 			let measured = 0;
 			let bytes = 0;
@@ -63,10 +71,20 @@ export function cappedFetch(
 					return;
 				}
 
-				resolve(new Response(request.responseText, {status: request.status}));
+				const passwordHeader = request.getResponseHeader?.(
+					SHARED_PAGE_PASSWORD_HEADER,
+				);
+				resolve(
+					new Response(request.responseText, {
+						status: request.status,
+						headers: passwordHeader
+							? {[SHARED_PAGE_PASSWORD_HEADER]: passwordHeader}
+							: undefined,
+					}),
+				);
 			});
 			request.addEventListener('error', failed);
 			request.addEventListener('timeout', failed);
-			request.send();
+			request.send(typeof init.body === 'string' ? init.body : undefined);
 		});
 }

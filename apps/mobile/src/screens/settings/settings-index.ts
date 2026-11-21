@@ -168,6 +168,10 @@ export const ROWS = {
 		label: 'Keep items in the trash for',
 		hint: 'Then deleted items are removed for good',
 	},
+	defaultShareMode: {
+		label: 'Default shared link type',
+		hint: 'Whether Get a link starts as a Snapshot or a Live link',
+	},
 	licences: {
 		label: 'Open source licences',
 		hint: 'The third party code this app is built from',
@@ -395,8 +399,16 @@ export const SECTIONS = {
 			'shared pages',
 			'share link',
 			'get a link',
+			'live link',
+			'snapshot',
+			'password',
 		],
-		rows: [ROWS.syncPrivate, ROWS.backgroundSync, ROWS.deviceName],
+		rows: [
+			ROWS.syncPrivate,
+			ROWS.backgroundSync,
+			ROWS.deviceName,
+			ROWS.defaultShareMode,
+		],
 	},
 	excluded: {
 		title: 'Excluded websites',

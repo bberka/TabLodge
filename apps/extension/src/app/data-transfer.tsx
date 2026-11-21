@@ -107,8 +107,16 @@ import {
 	type FullBackupContents,
 } from '../shared/full-backup';
 import type {SharedPage} from '../shared/sync/shared-pages-client';
-import {isSharedPageUrl, newSharedPageId} from '../shared/sync/shared-pages';
-import {importFromLink} from '../shared/import-link';
+import {
+	isSharedPageUrl,
+	newSharedPageId,
+	type SharedPageMode,
+} from '../shared/sync/shared-pages';
+import {
+	importFromLink,
+	ImportPasswordRequiredError,
+} from '../shared/import-link';
+import {validateCredential, weakPasswordHint} from '../shared/passcode';
 import {siteName} from '../shared/web-url';
 import {offerUndo} from './recovery-core';
 import {messageOf, send, type ShowStatus} from './common';
@@ -714,6 +722,10 @@ export function ShareDialog({
 	const server = shared.server ?? 'none';
 	const [uploading, setUploading] = useState(false);
 	const [uploaded, setUploaded] = useState<SharedPage>();
+	const [shareMode, setShareMode] = useState<SharedPageMode>('snapshot');
+	const [shareModePicked, setShareModePicked] = useState(false);
+	const [shareProtect, setShareProtect] = useState(false);
+	const [sharePassword, setSharePassword] = useState('');
 	// Optional password protection of the full backup ZIP; the secret lives only in this state.
 	const [protect, setProtect] = useState(false);
 	const [passcode, setPasscode] = useState<PasscodeDraft>(EMPTY_PASSCODE_DRAFT);
@@ -725,6 +737,7 @@ export function ShareDialog({
 		if (!open) {
 			// Drop the typed secret as soon as the dialog closes.
 			setPasscode((current) => ({...current, value: '', confirm: ''}));
+			setSharePassword('');
 			return;
 		}
 
@@ -733,12 +746,20 @@ export function ShareDialog({
 		);
 		setMethod('html');
 		setUploaded(undefined);
+		setShareModePicked(false);
+		setShareProtect(false);
+		setSharePassword('');
 		setProtect(false);
 		setSaving(false);
 		setPasscode(EMPTY_PASSCODE_DRAFT);
 		// Reset each time the dialog opens only.
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on `open` on purpose
 	}, [open]);
+	useEffect(() => {
+		if (open && !shareModePicked) {
+			setShareMode(shared.defaultShareMode);
+		}
+	}, [open, shareModePicked, shared.defaultShareMode]);
 	const source = all.find((entry) => entry.id === sourceId) ?? all[0];
 	const isBackup = source.backup === true;
 	const counts = shareCounts(source.groups);
@@ -747,6 +768,19 @@ export function ShareDialog({
 	);
 	const chosen = choices.find((entry) => entry.id === method) ?? choices[0];
 	const isFile = chosen.file === true;
+	const canLive = shared.supportsLivePassword && Boolean(source.pageSource);
+	const effectiveShareMode: SharedPageMode = canLive ? shareMode : 'snapshot';
+	const sharePasswordProblem =
+		chosen.id === 'html' && shared.supportsLivePassword && shareProtect
+			? validateCredential(sharePassword)
+			: null;
+	const sharePasswordWeak =
+		chosen.id === 'html' &&
+		shared.supportsLivePassword &&
+		shareProtect &&
+		!sharePasswordProblem
+			? weakPasswordHint(sharePassword)
+			: null;
 	const preview = sharePreview(
 		source.groups,
 		isFile ? 'links' : (chosen.id as ShareMethod),
@@ -899,6 +933,11 @@ export function ShareDialog({
 	}
 
 	async function upload() {
+		if (sharePasswordProblem) {
+			showStatus(sharePasswordProblem, true);
+			return;
+		}
+
 		setUploading(true);
 		const id = shared.linkBase ? newSharedPageId() : undefined;
 		const result = await send('UPLOAD_SHARED_PAGE', {
@@ -912,6 +951,9 @@ export function ShareDialog({
 			id,
 			linkBase: (id && shared.linkBase) ?? undefined,
 			source: id && source.pageSource,
+			mode: shared.supportsLivePassword ? effectiveShareMode : undefined,
+			password:
+				shared.supportsLivePassword && shareProtect ? sharePassword : undefined,
 		});
 		setUploading(false);
 		if (!result.ok) {
@@ -919,6 +961,7 @@ export function ShareDialog({
 			return;
 		}
 
+		setSharePassword('');
 		setUploaded(result.page);
 		await copyPageLink(result.page.url, showStatus);
 		await shared.reload();
@@ -929,11 +972,24 @@ export function ShareDialog({
 			<Dialog open={open} onOpenChange={onOpenChange}>
 				<DialogContent size="md">
 					<DialogHeader>
-						<DialogTitle>Link ready</DialogTitle>
+						<DialogTitle className="flex flex-wrap items-center gap-2">
+							<span>Link ready</span>
+							<Badge
+								variant={uploaded.mode === 'live' ? 'default' : 'secondary'}
+							>
+								{uploaded.mode === 'live' ? 'Live' : 'Snapshot'}
+							</Badge>
+							{uploaded.hasPassword && (
+								<Badge variant="outline" className="gap-1">
+									<Lock className="h-3 w-3" aria-hidden="true" />
+									Password
+								</Badge>
+							)}
+						</DialogTitle>
 						<DialogDescription>
-							The link is copied. Anyone with it can open the page. Sharing
-							again makes a new link; delete the ones you no longer want below
-							or in Shared pages.
+							{uploaded.mode === 'live'
+								? 'The link is copied. This live link updates after your edits sync; stop it below or in Shared pages.'
+								: 'The link is copied. Anyone with it can open the page. Sharing again makes a new link; delete the ones you no longer want below or in Shared pages.'}
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody>
@@ -1044,6 +1100,114 @@ export function ShareDialog({
 								formatLabel={chosen.title}
 								fileText={fileText}
 							/>
+							{chosen.id === 'html' && server === 'old' && (
+								<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+									<Info
+										className="mt-0.5 h-3.5 w-3.5 shrink-0"
+										aria-hidden="true"
+									/>
+									<span>Update your sync server to share pages by link.</span>
+								</p>
+							)}
+							{chosen.id === 'html' &&
+								server === 'ready' &&
+								!shared.linkBase && (
+									<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+										<Info
+											className="mt-0.5 h-3.5 w-3.5 shrink-0"
+											aria-hidden="true"
+										/>
+										<span>
+											Update your sync server to include the Add to{' '}
+											{PROJECT.name} panel on shared pages and list links made
+											from this {sourceNoun}.
+										</span>
+									</p>
+								)}
+							{chosen.id === 'html' &&
+								server === 'ready' &&
+								shared.linkBase &&
+								!shared.supportsLivePassword && (
+									<p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-5 text-muted-foreground">
+										<Info
+											className="mt-0.5 h-3.5 w-3.5 shrink-0"
+											aria-hidden="true"
+										/>
+										<span>
+											Update your sync server to use live links and password
+											protection.
+										</span>
+									</p>
+								)}
+							{chosen.id === 'html' &&
+								server === 'ready' &&
+								shared.supportsLivePassword && (
+									<div className="space-y-3 rounded-lg border border-border p-3">
+										<div className="space-y-1.5">
+											<Label>Link type</Label>
+											{source.pageSource ? (
+												<SegmentedControl
+													aria-label="Link type"
+													value={shareMode}
+													options={[
+														{value: 'snapshot', label: 'Snapshot'},
+														{value: 'live', label: 'Live link'},
+													]}
+													onValueChange={(value) => {
+														setShareMode(value);
+														setShareModePicked(true);
+													}}
+												/>
+											) : (
+												<p className="text-xs text-muted-foreground">
+													Snapshot. Live links are available when sharing a
+													single column or session.
+												</p>
+											)}
+										</div>
+										<div className="space-y-2">
+											<label className="flex items-center gap-2 text-sm font-medium">
+												<Checkbox
+													checked={shareProtect}
+													disabled={uploading}
+													onCheckedChange={(checked) => {
+														setShareProtect(checked === true);
+														if (checked !== true) {
+															setSharePassword('');
+														}
+													}}
+												/>
+												<span>Require a password</span>
+											</label>
+											{shareProtect && (
+												<div className="space-y-1">
+													<Label htmlFor="share-page-password">Password</Label>
+													<Input
+														id="share-page-password"
+														type="password"
+														autoComplete="new-password"
+														placeholder="4 to 128 characters"
+														value={sharePassword}
+														disabled={uploading}
+														onChange={(event) => {
+															setSharePassword(event.target.value);
+														}}
+													/>
+													{sharePasswordProblem && sharePassword.length > 0 && (
+														<p className="text-xs text-destructive">
+															{sharePasswordProblem}
+														</p>
+													)}
+													{sharePasswordWeak && (
+														<p className="text-xs text-muted-foreground">
+															{sharePasswordWeak}
+														</p>
+													)}
+												</div>
+											)}
+										</div>
+									</div>
+								)}
 							{server === 'ready' && sourcePages.length > 0 && (
 								<SourcePages
 									noun={sourceNoun}
@@ -1068,7 +1232,12 @@ export function ShareDialog({
 						<Button
 							type="button"
 							variant="outline"
-							disabled={counts.links === 0 || uploading || saving}
+							disabled={
+								counts.links === 0 ||
+								uploading ||
+								saving ||
+								sharePasswordProblem !== null
+							}
 							onClick={() => void upload()}
 						>
 							<CloudUpload aria-hidden="true" />
@@ -1184,6 +1353,8 @@ export function ImportDialog({
 	const [busy, setBusy] = useState(false);
 	const [dragging, setDragging] = useState(false);
 	const [link, setLink] = useState('');
+	const [linkNeedsPassword, setLinkNeedsPassword] = useState(false);
+	const [linkPassword, setLinkPassword] = useState('');
 	const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('skip');
 	const [titlePolicy, setTitlePolicy] = useState<TitlePolicy>('existing');
 	const [target, setTarget] = useState<BookmarkTarget>('folders');
@@ -1243,6 +1414,8 @@ export function ImportDialog({
 		setColumnId(columns[0]?.id ?? NEW_BOOKMARK_COLUMN);
 		setNewColumn({name: ''});
 		setLink(initialLink ?? '');
+		setLinkNeedsPassword(false);
+		setLinkPassword('');
 		if (initialLink && isSharedPageUrl(initialLink)) {
 			void readLink(initialLink);
 		}
@@ -1439,7 +1612,7 @@ export function ImportDialog({
 		linkReadRef.current = undefined;
 	}
 
-	async function readLink(address: string) {
+	async function readLink(address: string, password?: string) {
 		cancelLinkRead();
 		const controller = new AbortController();
 		linkReadRef.current = controller;
@@ -1449,11 +1622,14 @@ export function ImportDialog({
 		try {
 			const result = await importFromLink(fetch, address, {
 				signal: controller.signal,
+				password,
 			});
 			if (generation !== readGenerationRef.current) {
 				return;
 			}
 
+			setLinkNeedsPassword(false);
+			setLinkPassword('');
 			setParsed(result);
 			setSource({type: 'link', name: address.trim()});
 			setEverything(false);
@@ -1462,11 +1638,16 @@ export function ImportDialog({
 			}
 		} catch (reason) {
 			if (generation === readGenerationRef.current) {
-				setError(
-					reason instanceof ImportFormatError
-						? reason.message
-						: 'Could not read that link.',
-				);
+				if (reason instanceof ImportPasswordRequiredError) {
+					setLinkNeedsPassword(true);
+					setError(reason.wrongPassword ? reason.message : '');
+				} else {
+					setError(
+						reason instanceof ImportFormatError
+							? reason.message
+							: 'Could not read that link.',
+					);
+				}
 			}
 		} finally {
 			if (generation === readGenerationRef.current) {
@@ -1917,44 +2098,77 @@ export function ImportDialog({
 											columns or sessions come in as they were shared.
 										</p>
 										<form
-											className="mt-2 flex flex-col gap-2 sm:flex-row"
+											className="mt-2 space-y-2"
 											onSubmit={(event) => {
 												event.preventDefault();
-												void readLink(link);
+												void readLink(
+													link,
+													linkNeedsPassword ? linkPassword : undefined,
+												);
 											}}
 										>
-											<Label htmlFor="import-link" className="sr-only">
-												Shared page link
-											</Label>
-											<Input
-												id="import-link"
-												type="url"
-												inputMode="url"
-												autoComplete="off"
-												spellCheck={false}
-												placeholder="https://your-server/p/…"
-												value={link}
-												className="min-w-0 flex-1"
-												onChange={(event) => {
-													if (linkReadRef.current) {
-														cancelLinkRead();
-														readGenerationRef.current += 1;
-														setReading(false);
-													}
+											<div className="flex flex-col gap-2 sm:flex-row">
+												<Label htmlFor="import-link" className="sr-only">
+													Shared page link
+												</Label>
+												<Input
+													id="import-link"
+													type="url"
+													inputMode="url"
+													autoComplete="off"
+													spellCheck={false}
+													placeholder="https://your-server/p/…"
+													value={link}
+													className="min-w-0 flex-1"
+													onChange={(event) => {
+														if (linkReadRef.current) {
+															cancelLinkRead();
+															readGenerationRef.current += 1;
+															setReading(false);
+														}
 
-													setLink(event.target.value);
-												}}
-											/>
-											<Button
-												type="submit"
-												variant="secondary"
-												size="sm"
-												className="shrink-0 self-start sm:self-auto"
-												disabled={reading || link.trim() === ''}
-											>
-												<Link2 aria-hidden="true" />
-												{reading && link ? 'Reading' : 'Read link'}
-											</Button>
+														setLink(event.target.value);
+														setLinkNeedsPassword(false);
+														setLinkPassword('');
+													}}
+												/>
+												<Button
+													type="submit"
+													variant="secondary"
+													size="sm"
+													className="shrink-0 self-start sm:self-auto"
+													disabled={
+														reading ||
+														link.trim() === '' ||
+														(linkNeedsPassword && linkPassword === '')
+													}
+												>
+													<Link2 aria-hidden="true" />
+													{reading && link
+														? 'Reading'
+														: linkNeedsPassword
+															? 'Unlock'
+															: 'Read link'}
+												</Button>
+											</div>
+											{linkNeedsPassword && (
+												<div className="space-y-1">
+													<Label htmlFor="import-link-password">
+														Page password
+													</Label>
+													<Input
+														id="import-link-password"
+														type="password"
+														autoComplete="current-password"
+														placeholder="Enter the password for this shared page"
+														value={linkPassword}
+														disabled={reading}
+														onChange={(event) => {
+															setLinkPassword(event.target.value);
+														}}
+													/>
+												</div>
+											)}
 										</form>
 									</section>
 								)}

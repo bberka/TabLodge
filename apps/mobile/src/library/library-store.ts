@@ -12,6 +12,7 @@ import {
 	SYNC_STATUS_KEY,
 	type SyncStatus,
 } from '../../../extension/src/shared/sync/client';
+import {SHARED_PAGE_LIVE_PASSWORD_FEATURE} from '../../../extension/src/shared/sync/shared-pages';
 import {
 	disconnectPrivate,
 	editPrivate,
@@ -20,6 +21,7 @@ import {
 } from '../private/private-library';
 import {getPreferences} from '../settings/preferences';
 import {readJson, removeKeys, writeJson} from '../platform/storage';
+import {syncLiveSharedPages} from './shared-pages';
 import {emptyStore, isStore} from './store-shape';
 import {DEFAULTS as LINK_DEFAULTS, type LinkSettings} from './links';
 import {createLibraryCore} from './library-core';
@@ -73,6 +75,11 @@ export const syncClient = createSyncClient({
 	// Every write here is either the user's edit or a merge of the server's records; the extension keeps its own
 	// copy, so the phone has no backup to restore from.
 	async backup() {},
+	async onSynced(target, server) {
+		if (server?.features.includes(SHARED_PAGE_LIVE_PASSWORD_FEATURE)) {
+			await syncLiveSharedPages(target, core.store);
+		}
+	},
 	randomId: () => randomUUID(),
 	now: Date.now,
 });
