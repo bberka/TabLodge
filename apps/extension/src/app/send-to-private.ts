@@ -13,10 +13,13 @@ export {SEND_TO_PRIVATE_LABEL} from '../shared/send-to-private';
 let sendState: SendToPrivateState = 'hidden';
 const stateListeners = new Set<() => void>();
 let watching = false;
+let latestRequest = 0;
 
 async function loadSendState() {
+	latestRequest += 1;
+	const request = latestRequest;
 	const result = await send('SEND_TO_PRIVATE_STATE');
-	if (!result?.ok) {
+	if (!result?.ok || request !== latestRequest) {
 		return;
 	}
 

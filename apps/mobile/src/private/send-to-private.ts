@@ -55,7 +55,11 @@ function putBack(
 
 		const live = next.groups.find((group) => group.id === session.id);
 		if (!live) {
-			next = restoreSession(next, session, now);
+			next = restoreSession(
+				next,
+				{...session, tabs: session.tabs.filter((tab) => tabIds.has(tab.id))},
+				now,
+			);
 			continue;
 		}
 
@@ -92,7 +96,14 @@ export async function sendToPrivate(targets: SendTarget[]): Promise<boolean> {
 		return false;
 	}
 
-	const id = await queueSentLinks(taken.links);
+	let id: string;
+	try {
+		id = await queueSentLinks(taken.links);
+	} catch {
+		showSnack('Could not send that. Try again');
+		return false;
+	}
+
 	let removed = false;
 	try {
 		await editRegular((current) => {

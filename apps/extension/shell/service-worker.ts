@@ -9072,6 +9072,7 @@ async function sendToPrivate(
 				};
 			}
 
+			await library.set({[SEND_CLEANUP_KEY]: true});
 			try {
 				await writeStore(taken.store);
 			} catch (error) {
@@ -9079,8 +9080,10 @@ async function sendToPrivate(
 				throw error;
 			}
 
-			await library.set({[SEND_CLEANUP_KEY]: true});
-			await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
+			try {
+				await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 3});
+			} catch {}
+
 			return {ok: true, count: taken.links.length};
 		}),
 	);
@@ -9094,10 +9097,14 @@ async function finishSendCleanup(records: UndoRecord[]): Promise<void> {
 		return;
 	}
 
-	await mutate(async () => {
-		await libraryState.dropGarbage();
-		await library.remove([SEND_CLEANUP_KEY]);
-	});
+	try {
+		await mutate(async () => {
+			await libraryState.dropGarbage();
+			await library.remove([SEND_CLEANUP_KEY]);
+		});
+	} catch {
+		await chrome.alarms?.create?.(ALARM_UNDO, {delayInMinutes: 1});
+	}
 }
 
 async function dropUndo(id: string): Promise<ActionResult<'DROP_UNDO'>> {
@@ -9719,7 +9726,8 @@ async function handlePrivateLockMessage(
 				}
 
 				const {credential} = message;
-				await takeInSentLinks({ignoreHold: true}).catch(() => undefined);
+				await privateLock.checkCredential(credential);
+				await takeInSentLinks({ignoreHold: true});
 				await mutate(async () => {
 					await library.remove([INBOX_PRIVATE_KEY_NAME]);
 					await chrome.storage.local.remove([INBOX_PUBLIC_KEY]);

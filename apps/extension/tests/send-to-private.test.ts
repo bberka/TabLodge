@@ -218,7 +218,7 @@ test('the same address with a different note is still added; an identical replay
 	]);
 	assert.equal(replay.added, 0);
 	const other = addSentLinks(first.store, [
-		{title: 'Secret', url: 'https://secret.example/', notes: 'B', createdAt: 2},
+		{title: 'Secret', url: 'https://secret.example/', notes: 'B', createdAt: 1},
 	]);
 	assert.equal(other.added, 1);
 });

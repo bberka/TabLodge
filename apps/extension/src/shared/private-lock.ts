@@ -877,6 +877,10 @@ export function createPrivateLock(env: LockEnv) {
 		/**
 		Turns the lock off with the credential: opens every value, then deletes the record.
 		*/
+		async checkCredential(credential: string) {
+			await verify(await requireRecord(), credential);
+		},
+
 		async disable(credential: string) {
 			const record = await requireRecord();
 			const dataKey = await verify(record, credential);

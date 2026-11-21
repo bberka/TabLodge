@@ -716,8 +716,8 @@ async function eraseSteps(): Promise<void> {
 		PRIVATE_TRASH_KEY,
 		PRIVATE_KEY_KEY,
 		KEPT_KEY,
-		SENT_PENDING_KEY,
 	]);
+	await serialSend(async () => removeKeys([SENT_PENDING_KEY]));
 	await dropSafetyCopy('private');
 	await removeKeys([LIBRARY_KEY]);
 	await removeKeys([LOCK_KEY]);
@@ -1074,6 +1074,10 @@ export async function queueSentLinks(
 	{held = true}: {held?: boolean} = {},
 ): Promise<string> {
 	return serialSend(async () => {
+		if (!canReceiveSent() || erasing) {
+			throw new Error('There is no private library to send to.');
+		}
+
 		const id = randomUUID();
 		if (held) {
 			heldSends.add(id);
@@ -1097,9 +1101,17 @@ export async function withdrawSent(id: string): Promise<boolean> {
 	});
 }
 
+const SENT_RETRY_MS = 30_000;
+
 export async function releaseSent(id: string): Promise<void> {
 	heldSends.delete(id);
-	await takeInSent();
+	try {
+		await takeInSent();
+	} catch {
+		setTimeout(() => {
+			void takeInSent().catch(() => undefined);
+		}, SENT_RETRY_MS);
+	}
 }
 
 export async function takeInSent(): Promise<void> {

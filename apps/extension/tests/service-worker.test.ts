@@ -15535,14 +15535,21 @@ test('the wake takes a held entry in once its hold has passed, without the toast
 	const regular = regularBeside(privateWorker);
 	assert.equal((await sendSavedTab(regular)).ok, true);
 	const [entry] = inboxEntries(regular.extraStorage);
-	const expired = {
-		...(regular.extraStorage[entry] as Record<string, unknown>),
-		holdUntil: Date.now() - 1,
-	};
 	const live = restartPrivate({
 		...privateWorker,
-		extraStorage: {...privateWorker.extraStorage, [entry]: expired},
+		extraStorage: {
+			...privateWorker.extraStorage,
+			[entry]: regular.extraStorage[entry],
+		},
 	});
+	const wakes = () =>
+		live.alarmCalls.some((call) =>
+			call.startsWith('create:tablodge-send-to-private'),
+		);
+	await eventually(wakes);
+	assert.ok(wakes());
+	assert.equal(inboxEntries(live.extraStorage).length, 1, 'still held');
+	(live.extraStorage[entry] as {holdUntil: number}).holdUntil = Date.now() - 1;
 	await live.fire('alarm', {name: 'tablodge-send-to-private'});
 	await eventually(() => inboxEntries(live.extraStorage).length === 0);
 	assert.equal(inboxEntries(live.extraStorage).length, 0);
@@ -16025,4 +16032,25 @@ test('a selection over 500 links is refused with the limit', async () => {
 	});
 	assert.equal(refused.ok, false);
 	assert.match(String(refused.error), /at most 500/);
+});
+
+test('a wrong password leaves waiting links and the inbox key alone', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	assert.equal((await sendSavedTab(regular)).ok, true);
+	const [entry] = inboxEntries(regular.extraStorage);
+	const owner = restartPrivate({
+		...privateWorker,
+		extraStorage: {
+			...privateWorker.extraStorage,
+			[entry]: regular.extraStorage[entry],
+		},
+	});
+	const refused = await owner.sendMessage({
+		type: 'REMOVE_PRIVATE_LOCK',
+		credential: 'not the password',
+	});
+	assert.equal(refused.ok, false);
+	assert.equal(inboxEntries(owner.extraStorage).length, 1);
+	assert.ok(owner.extraStorage[INBOX_KEY]);
 });
