@@ -2,7 +2,10 @@ import {
 	ImportFormatError,
 	MAX_IMPORT_BYTES,
 } from '../../../extension/src/shared/import-formats';
-import {IMPORT_TOO_LARGE} from '../../../extension/src/shared/import-link';
+import {
+	IMPORT_TOO_LARGE,
+	utf8Bytes,
+} from '../../../extension/src/shared/import-link';
 
 export type ReadRequest = {
 	open(method: string, url: string): void;
@@ -11,7 +14,10 @@ export type ReadRequest = {
 	readonly status: number;
 	readonly responseText: string;
 	withCredentials: boolean;
-	onprogress: XMLHttpRequest['onprogress'];
+	addEventListener(
+		type: 'progress',
+		listener: (event: {loaded: number}) => void,
+	): void;
 	addEventListener(
 		type: 'load' | 'error' | 'timeout',
 		listener: () => void,
@@ -39,12 +45,17 @@ export function cappedFetch(
 			});
 			request.open('GET', url);
 			request.withCredentials = false;
-			// eslint-disable-next-line unicorn/prefer-add-event-listener -- React Native's XMLHttpRequest sends progress events only when onprogress is set before send()
-			request.onprogress = (event) => {
-				if (event.loaded > maxBytes) {
+
+			let measured = 0;
+			let bytes = 0;
+			request.addEventListener('progress', (event) => {
+				const text = request.responseText;
+				bytes += utf8Bytes(text.slice(measured));
+				measured = text.length;
+				if (Math.max(event.loaded, bytes) > maxBytes) {
 					stop(new ImportFormatError(IMPORT_TOO_LARGE));
 				}
-			};
+			});
 
 			request.addEventListener('load', () => {
 				if (request.status < 200) {

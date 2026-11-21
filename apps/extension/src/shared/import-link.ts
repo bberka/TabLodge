@@ -110,7 +110,7 @@ async function readCapped(response: Response): Promise<string> {
 	}
 }
 
-function utf8Bytes(text: string): number {
+export function utf8Bytes(text: string): number {
 	let bytes = 0;
 	for (const char of text) {
 		const code = char.codePointAt(0)!;

@@ -14,7 +14,6 @@ class FakeRequest implements ReadRequest {
 	status = 0;
 	responseText = '';
 	withCredentials = true;
-	onprogress: XMLHttpRequest['onprogress'] = null;
 	aborted = false;
 	url = '';
 
@@ -37,13 +36,6 @@ class FakeRequest implements ReadRequest {
 	}
 
 	emit(type: string, loaded = 0) {
-		if (type === 'progress') {
-			this.onprogress?.call(
-				this as unknown as XMLHttpRequest,
-				{loaded} as ProgressEvent,
-			);
-		}
-
 		for (const listener of this.listeners.get(type) ?? []) {
 			listener({loaded});
 		}
@@ -75,6 +67,21 @@ describe('the phone reads a link with a size cap', () => {
 			stopped = new FakeRequest((request) => {
 				request.emit('progress', 600);
 				request.emit('progress', 1200);
+			});
+			return stopped;
+		}, 1000);
+		await assert.rejects(importFromLink(send, PAGE), /larger than 45 MB/);
+		assert.equal(stopped?.aborted, true);
+	});
+
+	test('the cap counts the text that arrived when progress reports a stale byte count, as Android does', async () => {
+		let stopped: FakeRequest | undefined;
+		const send = cappedFetch(() => {
+			stopped = new FakeRequest((request) => {
+				request.responseText = '界'.repeat(200);
+				request.emit('progress', 0);
+				request.responseText += '界'.repeat(200);
+				request.emit('progress', 0);
 			});
 			return stopped;
 		}, 1000);
