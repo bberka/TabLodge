@@ -6,6 +6,7 @@ import {
 	columnNameProblem,
 	DEFAULT_BOOKMARK_COLUMN_ID,
 	landingColumnId,
+	sortBookmarks,
 } from '../src/shared/bookmark-rules';
 
 const columns = [
@@ -54,5 +55,39 @@ describe('column names', () => {
 		assert.match(columnNameProblem(columns, 'two') ?? '', /already exists/);
 		assert.equal(columnNameProblem(columns, 'Two', 'two'), undefined);
 		assert.equal(columnNameProblem(columns, 'Fresh'), undefined);
+	});
+});
+
+describe('sortBookmarks', () => {
+	const list = [
+		{title: 'Beta', url: 'https://www.zed.example/b', createdAt: 20},
+		{title: '', url: 'https://alpha.example/a', createdAt: 30},
+		{title: 'Gamma', url: 'https://mid.example/g', createdAt: 10},
+		{title: 'Delta', url: 'https://alpha.example/d', createdAt: 10},
+	];
+	const titles = (sort: Parameters<typeof sortBookmarks>[1]) =>
+		sortBookmarks(list, sort).map((entry) => entry.title);
+
+	test('manual returns the stored list itself', () => {
+		assert.equal(sortBookmarks(list, 'manual'), list);
+	});
+
+	test('newest and oldest go by creation time and keep ties in stored order', () => {
+		assert.deepEqual(titles('newest'), ['', 'Beta', 'Gamma', 'Delta']);
+		assert.deepEqual(titles('oldest'), ['Gamma', 'Delta', 'Beta', '']);
+	});
+
+	test('title falls back to the site, and site ignores www', () => {
+		assert.deepEqual(titles('title'), ['', 'Beta', 'Delta', 'Gamma']);
+		assert.deepEqual(titles('site'), ['', 'Delta', 'Gamma', 'Beta']);
+	});
+
+	test('a sort never reorders the list it was given', () => {
+		const before = list.map((entry) => entry.url);
+		sortBookmarks(list, 'title');
+		assert.deepEqual(
+			list.map((entry) => entry.url),
+			before,
+		);
 	});
 });
