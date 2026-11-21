@@ -923,3 +923,32 @@ test('an entry in the app state shape stamped with the current schema is still t
 	assert.equal(stateOf(backend)!.layout, 'records');
 	assert.equal(((await store.read())!.groups as Raw[]).length, 2);
 });
+
+test('dropping garbage deletes only unreferenced record keys', async () => {
+	const backend = new MemoryBackend();
+	const store = createLibraryState(backend);
+	await store.write(normalize(library()));
+	await store.write(normalize(library(6)));
+	const index = stateOf(backend)!;
+	const replaced = index.garbage as string[];
+	assert.ok(replaced.length > 0, 'the second write left garbage');
+	const live = [...backend.data.keys()].find(
+		(key) => key.startsWith(SESSION_KEY_PREFIX) && !replaced.includes(key),
+	)!;
+	backend.data.set('tablodge.state.premigration', {kept: true});
+	backend.data.set('tablodge.state', {
+		...index,
+		garbage: [...replaced, live, 'tablodge.state.premigration'],
+	});
+	await store.dropGarbage();
+	for (const key of replaced) {
+		assert.equal(backend.data.has(key), false, key);
+	}
+
+	assert.ok(backend.data.has(live), 'a referenced record stays');
+	assert.ok(
+		backend.data.has('tablodge.state.premigration'),
+		'a key that is not a record stays',
+	);
+	assert.deepEqual(stateOf(backend)!.garbage, []);
+});

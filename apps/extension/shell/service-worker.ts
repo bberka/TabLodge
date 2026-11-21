@@ -9046,6 +9046,10 @@ async function sendToPrivate(
 		};
 	}
 
+	if (state !== 'ready') {
+		return {ok: false, error: SEND_NEEDS_PRIVATE_WINDOW};
+	}
+
 	const id = makeId();
 	const key = inboxEntryKey(id);
 	return mutate(() =>

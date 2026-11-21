@@ -37,6 +37,7 @@ import {
 	batches,
 	bookmarksKey,
 	assertStableIds,
+	BOOKMARKS_KEY_PREFIX,
 	contentHash,
 	idsOf,
 	isRecordsEntry,
@@ -51,6 +52,7 @@ import {
 	planState,
 	PREMIGRATION_KEY,
 	referencedKeys,
+	SESSION_KEY_PREFIX,
 	SIDECAR,
 	sessionContent,
 	sessionKey,
@@ -871,7 +873,12 @@ export function createLibraryState(
 
 		const index = parseIndex(current);
 		const referenced = new Set(referencedKeys(index));
-		const garbage = index.garbage.filter((key) => !referenced.has(key));
+		const garbage = index.garbage.filter(
+			(key) =>
+				!referenced.has(key) &&
+				(key.startsWith(SESSION_KEY_PREFIX) ||
+					key.startsWith(BOOKMARKS_KEY_PREFIX)),
+		);
 		if (index.garbage.length === 0) {
 			return;
 		}
