@@ -13,10 +13,7 @@ var MAX_SHARED_PAGE_TITLE = 200;
 var MAX_SHARED_PAGE_SOURCE = 100;
 var SHARED_PAGE_ID = /^[\w-]{22}$/;
 var ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-var newSharedPageId = /* @__PURE__ */ __name(() => Array.from(
-  crypto.getRandomValues(new Uint8Array(22)),
-  (byte) => ID_ALPHABET[byte % 64]
-).join(""), "newSharedPageId");
+var newSharedPageId = /* @__PURE__ */ __name((randomBytes = (count) => crypto.getRandomValues(new Uint8Array(count))) => Array.from(randomBytes(22), (byte) => ID_ALPHABET[byte % 64]).join(""), "newSharedPageId");
 
 // ../../node_modules/.pnpm/hono@4.13.18/node_modules/hono/dist/http-exception.js
 var HTTPException = class extends Error {

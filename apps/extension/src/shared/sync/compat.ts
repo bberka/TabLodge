@@ -108,7 +108,7 @@ export const SERVER_FEATURES: ReadonlyArray<{
 	{
 		name: SHARED_PAGES_FEATURE,
 		since: '0.4.0',
-		missing: 'Upload to my server cannot share pages.',
+		missing: 'Get a link cannot share pages.',
 	},
 	{
 		name: SHARED_PAGE_IMPORT_FEATURE,

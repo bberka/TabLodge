@@ -266,9 +266,15 @@ function Help() {
 				},
 				{
 					title: 'Share a page by link',
-					body: 'With a sync server connected, Share › HTML page also offers Upload to my server. Your server keeps the page and gives it a link with random characters that cannot be guessed; the link is copied. Anyone who has the link can open the page, so send it only to people you mean to. To update the page, share again: each upload makes a new link. Settings › Sync › Shared pages lists every page on the server with its link, and Delete takes it down so the link stops working. Private windows never upload. An older server does not offer it; update the server first. On Cloudflare’s free plan, page views count against the same daily limit as sync.',
+					body: 'With a sync server connected, Share › HTML page also offers Get a link. Your server keeps the page and gives it a link with random characters that cannot be guessed; the link is copied. Anyone who has the link can open the page, so send it only to people you mean to. The page shows the date, a list of its columns or sessions to jump to, and an Add to TabLodge button for people who use TabLodge. To update the page, share again: each upload makes a new link. A column’s or session’s Share lists the links made from it, and Shared pages in the Bookmarks and Sessions menus (and Settings › Sync) lists every page on the server; Delete asks, then takes the page down so the link stops working. Private windows never upload. An older server does not offer it; update the server first. On Cloudflare’s free plan, page views count against the same daily limit as sync.',
 					searchText:
-						'share link upload server publish public web page html page shared pages delete copy link url',
+						'share link upload server publish public web page html page shared pages delete copy link url get a link',
+				},
+				{
+					title: 'Add a shared page to TabLodge',
+					body: 'Someone sent you a TabLodge shared page? Open it, click TabLodge in the toolbar, and choose Add this shared page. Or paste its address into Import › From a link on the dashboard. The review shows its columns or sessions before anything is saved, and links you already have are skipped. TabLodge fetches the page once from your browser, without your token.',
+					searchText:
+						'import from a link shared page add to tablodge paste address url receive friend',
 				},
 				{
 					title: 'Keep or remove restored tabs',

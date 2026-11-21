@@ -45,7 +45,15 @@ test('a server with every feature has no problem, and one without the newest nam
 	});
 	assert.deepEqual(
 		old.missing.map(({name}) => name),
-		['notes', 'tags', 'sources', 'settings', 'shared-pages', 'page-source'],
+		[
+			'notes',
+			'tags',
+			'sources',
+			'settings',
+			'shared-pages',
+			'shared-page-import',
+			'page-source',
+		],
 	);
 	assert.equal(old.server?.version, null);
 	assert.equal(releaseWithAll(old.missing), '0.4.0');
@@ -53,7 +61,7 @@ test('a server with every feature has no problem, and one without the newest nam
 		stopped: false,
 		title: 'Your sync server needs an update',
 		detail:
-			'Until it runs 0.4.0 or later: Bookmark notes stay on this device. Bookmark tags stay on this device. Sources settings in the browser extension stay in each browser. Settings added since 0.3.0 stay on this device. Upload to my server cannot share pages. Keep a copy on the phone fetches pages itself, not through the server.',
+			'Until it runs 0.4.0 or later: Bookmark notes stay on this device. Bookmark tags stay on this device. Sources settings in the browser extension stay in each browser. Settings added since 0.3.0 stay on this device. Get a link cannot share pages. Shared pages have no Add to TabLodge button, and Share does not list the links made from a column or session. Keep a copy on the phone fetches pages itself, not through the server.',
 	});
 });
 
