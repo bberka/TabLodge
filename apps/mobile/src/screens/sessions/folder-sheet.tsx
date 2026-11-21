@@ -10,7 +10,8 @@ import {
 	folderNameProblem,
 	updateFolder,
 } from '../../library/session-edits';
-import {edit, newId, useLibrary} from '../../library/library-store';
+import {newId, useLibrary} from '../../library/library-store';
+import {editDone, editWithUndo} from '../../library/undoable-edit';
 import {useColors} from '../../ui/theme';
 import {Button, Field, Switch} from '../../ui/widgets';
 
@@ -53,10 +54,12 @@ function FolderForm({
 		setSaving(true);
 		const values = {name, icon, color, colorSessions};
 		const id = folder?.id ?? newId();
-		await edit((current) =>
-			folder
-				? updateFolder(current, id, values, Date.now())
-				: addFolder(current, values, id, Date.now()),
+		await editWithUndo(
+			editDone(folder ? 'UPDATE_FOLDER' : 'CREATE_FOLDER'),
+			(current) =>
+				folder
+					? updateFolder(current, id, values, Date.now())
+					: addFolder(current, values, id, Date.now()),
 		);
 		setSaving(false);
 		onDone(id);
