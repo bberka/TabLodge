@@ -425,19 +425,23 @@ export async function columnCapCheck(env: Env, theme: Theme) {
 				'section[data-column-id="bookmark-unfiled"]',
 			);
 			const unfiledCards = unfiled.locator('[data-bookmark-id]');
+			// A capped column mounts a window of 48 cards (3 pages of 10 is less than the 48 floor) and adds more as its
+			// end nears, so a long list does not make the page slow to open (issue #415).
 			await until(
-				async () => (await cards.count()) === 65,
-				'all bookmarks in the capped column',
+				async () => (await cards.count()) === 48,
+				'the first window of the capped column',
 			);
 			await until(
-				async () => (await unfiledCards.count()) === 65,
-				'all unfiled bookmarks in the capped column',
+				async () => (await unfiledCards.count()) === 48,
+				'the first window of the unfiled column',
 			);
-			assert.equal(
-				await column.getByRole('button', {name: /^Show \d+ more$/}).count(),
-				0,
-				'a capped column draws every bookmark instead of asking to load more',
-			);
+			const unfiledBody = unfiled.locator('[role="region"]');
+			await until(async () => {
+				await unfiledBody.evaluate((element) => {
+					(element as {scrollTop: number}).scrollTop = 1e9;
+				});
+				return (await unfiledCards.count()) === 65;
+			}, 'scrolling to the end of the unfiled column to load the rest');
 			const columnBody = column.locator('[role="region"]');
 			await columnBody.focus();
 			await board.keyboard.press('PageDown');
@@ -448,6 +452,12 @@ export async function columnCapCheck(env: Env, theme: Theme) {
 					)) > 0,
 				'the capped column to scroll by keyboard',
 			);
+			await until(async () => {
+				await columnBody.evaluate((element) => {
+					(element as {scrollTop: number}).scrollTop = 1e9;
+				});
+				return (await cards.count()) === 65;
+			}, 'scrolling to the end of the capped column to load the rest');
 			await board.screenshot({
 				path: `.dev/evidence/bookmark-limit-${theme}.png`,
 			});
