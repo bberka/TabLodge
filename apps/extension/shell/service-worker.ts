@@ -9099,14 +9099,17 @@ async function receiveSentLinks(): Promise<void> {
 				continue;
 			}
 
-			taken.push(key);
-			links.push(
-				...((await openInboxEntry(
-					pair,
-					key.slice(INBOX_ENTRY_PREFIX.length),
-					value,
-				)) ?? []),
+			const opened = await openInboxEntry(
+				pair,
+				key.slice(INBOX_ENTRY_PREFIX.length),
+				value,
 			);
+			if (!opened) {
+				continue;
+			}
+
+			taken.push(key);
+			links.push(...opened);
 		}
 
 		if (links.length > 0) {
@@ -9126,18 +9129,30 @@ async function receiveSentLinks(): Promise<void> {
 	});
 }
 
-function purgeUndo(): Promise<void> {
-	return undoMutate(async () => {
+async function purgeUndo(): Promise<void> {
+	const sendExpired = await undoMutate(async () => {
 		const records = await readUndo();
 		const stored = await readKey<Raw>(UNDO_KEY);
 		if (
-			stored &&
-			(!Array.isArray(stored.records) ||
-				stored.records.length !== records.length)
+			!stored ||
+			(Array.isArray(stored.records) &&
+				stored.records.length === records.length)
 		) {
-			await writeUndo(records);
+			return false;
 		}
+
+		await writeUndo(records);
+		const kept = new Set(records.map((record) => record.id));
+		return (Array.isArray(stored.records) ? stored.records : []).some(
+			(record) =>
+				isUndoRecord(record) &&
+				!kept.has(record.id) &&
+				record.keys.some((key) => isInboxEntryKey(key)),
+		);
 	});
+	if (sendExpired) {
+		await mutate(async () => libraryState.dropGarbage());
+	}
 }
 
 function undoAction(id: string): Promise<ActionResult<'UNDO'>> {

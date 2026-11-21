@@ -15477,7 +15477,15 @@ test('a sent link reaches the regular server only as a delete and the private se
 	const page = server.log.pull(pushedBefore, 1000);
 	const after = page.resync ? [] : page.changes;
 	assert.ok(after.some((change) => change.deleted));
-	assert.equal(JSON.stringify(after).includes('saved.example'), false);
+	const history = server.log.pull(0, 1000);
+	assert.equal(history.resync, false);
+	assert.equal(
+		JSON.stringify(history.resync ? [] : history.changes).includes(
+			'saved.example',
+		),
+		false,
+		'the regular sync history keeps only the delete',
+	);
 
 	const [entry] = inboxEntries(regular.extraStorage);
 	const receiving = restartPrivate(
@@ -15496,7 +15504,7 @@ test('a sent link reaches the regular server only as a delete and the private se
 		credential: lockPassword,
 	});
 	assert.equal(unlocked.ok, true, unlocked.error);
-	await receiving.sendMessage({type: 'SYNC_NOW'});
+	await receiving.sendMessage({type: 'PRIVATE_SYNC_NOW'});
 	const privateValuesNow = privateValues(server.privateLog);
 	assert.ok(privateValuesNow.length > 0);
 	assert.ok(privateValuesNow.every((value) => isSealedValue(value)));
@@ -15531,6 +15539,71 @@ test('a sent link reaches the regular server only as a delete and the private se
 				bookmark.columnId === 'sent-from-regular-windows',
 		),
 	);
+
+	const deleted = await receiving.sendMessage({
+		type: 'DELETE_BOOKMARK_COLUMN',
+		columnId: 'sent-from-regular-windows',
+		discardBookmarks: true,
+	});
+	assert.equal(deleted.ok, true, deleted.error);
+	await receiving.sendMessage({type: 'PRIVATE_SYNC_NOW'});
+	await other.sendMessage({type: 'PRIVATE_SYNC_NOW'});
+	assert.equal(
+		(await other.sendMessage({type: 'GET_STATE'})).bookmarkColumns?.some(
+			(column) => column.id === 'sent-from-regular-windows',
+		),
+		false,
+	);
+
+	const regularAgain = regularBeside(receiving, {
+		fetch: server.fetch,
+		storage: regularSync,
+	});
+	const again = await regularAgain.sendMessage({
+		type: 'ADD_BOOKMARK',
+		bookmark: {title: 'Later', url: 'https://later.example/'},
+	});
+	assert.equal(again.ok, true, again.error);
+	const later = regularAgain.state.bookmarks.find(
+		(bookmark) => bookmark.url === 'https://later.example/',
+	);
+	const sentAgain = await regularAgain.sendMessage({
+		type: 'SEND_TO_PRIVATE',
+		targets: [{kind: 'bookmark', bookmarkId: String(later?.id)}],
+	});
+	assert.equal(sentAgain.ok, true, sentAgain.error);
+	await regularAgain.sendMessage({
+		type: 'DROP_UNDO',
+		id: String(sentAgain.undoId),
+	});
+	const [laterEntry] = inboxEntries(regularAgain.extraStorage);
+	receiving.extraStorage[laterEntry] = regularAgain.extraStorage[laterEntry];
+	assert.equal((await receiving.sendMessage({type: 'LOCK_PRIVATE'})).ok, true);
+	assert.equal(
+		(
+			await receiving.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: lockPassword,
+			})
+		).ok,
+		true,
+	);
+	await receiving.sendMessage({type: 'PRIVATE_SYNC_NOW'});
+	await other.sendMessage({type: 'PRIVATE_SYNC_NOW'});
+	const otherAgain = await other.sendMessage({type: 'GET_STATE'});
+	assert.ok(
+		otherAgain.bookmarkColumns?.some(
+			(column) => column.id === 'sent-from-regular-windows',
+		),
+		'a column deleted earlier comes back on the other device',
+	);
+	assert.ok(
+		otherAgain.bookmarks?.some(
+			(bookmark) =>
+				bookmark.url === 'https://later.example/' &&
+				bookmark.columnId === 'sent-from-regular-windows',
+		),
+	);
 });
 
 test('erasing the private library removes its public key and every sealed entry', async () => {
@@ -15549,4 +15622,51 @@ test('erasing the private library removes its public key and every sealed entry'
 	assert.equal(erased.ok, true, erased.error);
 	assert.equal(erasing.extraStorage[INBOX_KEY], undefined);
 	assert.equal(inboxEntries(erasing.extraStorage).length, 0);
+});
+
+test('a send whose toast never reports closing leaves no readable copy once its Undo expires', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const regular = regularBeside(privateWorker);
+	assert.equal((await sendSavedTab(regular)).ok, true);
+	const undo = regular.extraStorage['tablodge.undo'] as {
+		records: Array<{createdAt: number}>;
+	};
+	undo.records[0].createdAt -= 10 * 60_000;
+	await regular.fire('alarm', {name: 'tablodge-undo'});
+	await settle();
+	assert.equal(regular.extraStorage['tablodge.undo'], undefined);
+	assert.equal(
+		JSON.stringify(regular.extraStorage).includes('saved.example'),
+		false,
+	);
+});
+
+test('an entry the private library cannot open stays until the library is erased', async () => {
+	const privateWorker = await lockedPrivateLibrary();
+	const unreadable = `${INBOX_ENTRY}foreign`;
+	const locked = restartPrivate(
+		{
+			...privateWorker,
+			extraStorage: {
+				...privateWorker.extraStorage,
+				[unreadable]: {v: 1, epk: 'AAAA', iv: 'AAAA', ct: 'AAAA'},
+			},
+		},
+		{browserRestart: true},
+	);
+	assert.equal(
+		(
+			await locked.sendMessage({
+				type: 'UNLOCK_PRIVATE',
+				credential: lockPassword,
+			})
+		).ok,
+		true,
+	);
+	assert.ok(locked.extraStorage[unreadable]);
+	assert.equal(
+		(await locked.sendMessage({type: 'RESET_PRIVATE_LIBRARY'})).ok,
+		true,
+	);
+	assert.equal(locked.extraStorage[unreadable], undefined);
 });

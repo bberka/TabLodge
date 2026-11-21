@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {afterEach, beforeEach, describe, test, vi} from 'vite-plus/test';
 import {SENT_COLUMN_ID} from '../../extension/src/shared/send-to-private';
 import {SYNC_CONFIG_KEY} from '../../extension/src/shared/sync/client';
-import {addBookmark} from '../src/library/board-edits';
+import {addBookmark, deleteColumn} from '../src/library/board-edits';
 import {addSession} from '../src/library/session-edits';
 import type * as RegularModule from '../src/library/library-store';
 import type * as PrivateModule from '../src/private/private-library';
@@ -107,6 +107,20 @@ async function withRegularLinks(app: App) {
 }
 
 const pending = () => memory.get(PENDING_KEY);
+
+async function sentColumnOnServer(): Promise<boolean> {
+	const response = await server.fetch(
+		`${URL_BASE}/private/v1/changes?cursor=0&limit=1000`,
+		{headers: {Authorization: `Bearer ${TOKEN}`}},
+	);
+	const body = (await response.json()) as {
+		changes: Array<{kind: string; id: string; deleted?: boolean}>;
+	};
+	return body.changes.some(
+		(change) => change.id === SENT_COLUMN_ID && !change.deleted,
+	);
+}
+
 const lastSnack = () => snacks.at(-1);
 
 beforeEach(() => {
@@ -290,6 +304,35 @@ describe('Send to private storage on the phone', () => {
 		assert.ok(text.includes('"tlock"'), 'values are sealed');
 		assert.equal(text.includes('secret.example'), false);
 		assert.equal(text.includes('a private note'), false);
+
+		await app.privateLibrary.editPrivate((store) =>
+			deleteColumn(store, SENT_COLUMN_ID, null, Date.now()),
+		);
+		await app.privateLibrary.syncPrivate();
+		assert.equal(await sentColumnOnServer(), false);
+
+		await app.regular.editRegular((store) =>
+			addBookmark(
+				store,
+				{url: 'https://later.example/', title: 'Later', columnId: ''},
+				'bookmark-2',
+				Date.now(),
+			),
+		);
+		assert.equal(
+			await app.send.sendToPrivate([
+				{kind: 'bookmark', bookmarkId: 'bookmark-2'},
+			]),
+			true,
+		);
+		lastSnack()?.action?.closed?.();
+		await app.privateLibrary.takeInSent();
+		await app.privateLibrary.syncPrivate();
+		assert.equal(
+			await sentColumnOnServer(),
+			true,
+			'a column deleted earlier comes back on the server',
+		);
 	});
 
 	test('erasing the private library drops links waiting for it', async () => {
